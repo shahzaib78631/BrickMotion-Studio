@@ -19,7 +19,7 @@ function withSteps(p: Plan, m: ModelName, steps: Step[]): Plan {
 function mapItems(p: Plan, m: ModelName, ids: string[], fn: (i: PlanItem) => PlanItem): Plan {
   const set = new Set(ids);
   const steps = modelSteps(p, m).map((s) =>
-    s.pieces.some((i) => i.id && set.has(i.id)) ? { pieces: s.pieces.map((i) => (i.id && set.has(i.id) ? fn(i) : i)) } : s,
+    s.pieces.some((i) => i.id && set.has(i.id)) ? { ...s, pieces: s.pieces.map((i) => (i.id && set.has(i.id) ? fn(i) : i)) } : s,
   );
   return withSteps(p, m, steps);
 }
@@ -58,7 +58,7 @@ export function deleteItems(p: Plan, m: ModelName, ids: string[]): Plan {
   return withSteps(
     p,
     m,
-    modelSteps(p, m).map((s) => ({ pieces: s.pieces.filter((i) => !(i.id && set.has(i.id))) })),
+    modelSteps(p, m).map((s) => ({ ...s, pieces: s.pieces.filter((i) => !(i.id && set.has(i.id))) })),
   );
 }
 
@@ -73,7 +73,7 @@ export function setPart(p: Plan, m: ModelName, ids: string[], part: string): Pla
 export function addItem(p: Plan, m: ModelName, step: number, item: PlanItem): Plan {
   const steps = [...modelSteps(p, m)];
   if (step >= steps.length) steps.push({ pieces: [item] });
-  else steps[step] = { pieces: [...steps[step].pieces, item] };
+  else steps[step] = { ...steps[step], pieces: [...steps[step].pieces, item] };
   return withSteps(p, m, steps);
 }
 
@@ -81,6 +81,7 @@ export function moveItemsToStep(p: Plan, m: ModelName, ids: string[], step: numb
   const set = new Set(ids);
   const moving: PlanItem[] = [];
   const steps = modelSteps(p, m).map((s) => ({
+    ...s,
     pieces: s.pieces.filter((i) => {
       if (i.id && set.has(i.id)) {
         moving.push(i);
@@ -90,12 +91,14 @@ export function moveItemsToStep(p: Plan, m: ModelName, ids: string[], step: numb
     }),
   }));
   while (steps.length <= step) steps.push({ pieces: [] });
-  steps[step] = { pieces: [...steps[step].pieces, ...moving] };
+  steps[step] = { ...steps[step], pieces: [...steps[step].pieces, ...moving] };
   return withSteps(p, m, steps);
 }
 
+/** Move an entire step without changing the order of parts *inside* that step. */
 export function reorderStep(p: Plan, m: ModelName, from: number, to: number): Plan {
   const steps = [...modelSteps(p, m)];
+  if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < 0 || from >= steps.length || to >= steps.length || from === to) return p;
   const [s] = steps.splice(from, 1);
   steps.splice(to, 0, s);
   return withSteps(p, m, steps);
@@ -103,6 +106,7 @@ export function reorderStep(p: Plan, m: ModelName, from: number, to: number): Pl
 
 export function insertStep(p: Plan, m: ModelName, at: number): Plan {
   const steps = [...modelSteps(p, m)];
+  if (!Number.isInteger(at) || at < 0 || at > steps.length) return p;
   steps.splice(at, 0, { pieces: [] });
   return withSteps(p, m, steps);
 }
@@ -110,11 +114,87 @@ export function insertStep(p: Plan, m: ModelName, at: number): Plan {
 /** Removes a step; its pieces join the previous step (or the next one when it is the first). */
 export function deleteStep(p: Plan, m: ModelName, at: number): Plan {
   const steps = [...modelSteps(p, m)];
+  if (!Number.isInteger(at) || at < 0 || at >= steps.length || (steps.length === 1 && steps[0].pieces.length > 0)) return p;
   const [gone] = steps.splice(at, 1);
   if (gone.pieces.length && steps.length) {
     const target = at === 0 ? 0 : at - 1;
-    steps[target] = at === 0 ? { pieces: [...gone.pieces, ...steps[0].pieces] } : { pieces: [...steps[target].pieces, ...gone.pieces] };
+    const keep = steps[target];
+    steps[target] = {
+      ...keep,
+      pieces: at === 0 ? [...gone.pieces, ...keep.pieces] : [...keep.pieces, ...gone.pieces],
+      notes: at === 0
+        ? [gone.notes, keep.notes].filter(Boolean).join('\n') || undefined
+        : [keep.notes, gone.notes].filter(Boolean).join('\n') || undefined,
+      // Removing a step also removes any pause between it and its neighbour.
+      pauseAfter: at === 0 ? keep.pauseAfter : gone.pauseAfter,
+    };
   }
+  return withSteps(p, m, steps);
+}
+
+/** Update a step's editorial details. Empty text removes optional metadata. */
+export function updateStep(p: Plan, m: ModelName, at: number, fields: Pick<Step, 'title' | 'notes' | 'pauseAfter'>): Plan {
+  const steps = [...modelSteps(p, m)];
+  if (!steps[at]) return p;
+  const title = fields.title?.trim().slice(0, 80) || undefined;
+  const notes = fields.notes?.trim().slice(0, 1000) || undefined;
+  const pauseAfter = Number.isFinite(fields.pauseAfter)
+    ? Math.round(Math.min(10, Math.max(0, fields.pauseAfter ?? 0)) * 10) / 10
+    : 0;
+  const previous = steps[at];
+  const next = { ...previous, title, notes, pauseAfter: pauseAfter || undefined };
+  if (previous.title === next.title && previous.notes === next.notes && previous.pauseAfter === next.pauseAfter) return p;
+  steps[at] = next;
+  return withSteps(p, m, steps);
+}
+
+/** Reorder one piece inside its step (the build plays in the new order). */
+export function reorderItemInStep(p: Plan, m: ModelName, at: number, from: number, to: number): Plan {
+  const steps = [...modelSteps(p, m)];
+  const step = steps[at];
+  if (!step || !Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < 0 || from >= step.pieces.length || to >= step.pieces.length || from === to) return p;
+  const pieces = [...step.pieces];
+  const [item] = pieces.splice(from, 1);
+  pieces.splice(to, 0, item);
+  steps[at] = { ...step, pieces };
+  return withSteps(p, m, steps);
+}
+
+/** Split into this step and the step after it; select ids to choose the moved pieces,
+ * or automatically split at the midpoint. No part is duplicated or repositioned. */
+export function splitStep(p: Plan, m: ModelName, at: number, selectedIds: string[] = []): Plan {
+  const steps = [...modelSteps(p, m)];
+  const step = steps[at];
+  if (!step || step.pieces.length < 2) return p;
+  const selected = new Set(selectedIds);
+  let earlier: PlanItem[] = [];
+  let later: PlanItem[] = [];
+  if (selected.size) {
+    earlier = step.pieces.filter((i) => !i.id || !selected.has(i.id));
+    later = step.pieces.filter((i) => i.id && selected.has(i.id));
+  }
+  if (!earlier.length || !later.length) {
+    const mid = Math.ceil(step.pieces.length / 2);
+    earlier = step.pieces.slice(0, mid);
+    later = step.pieces.slice(mid);
+  }
+  // Keep the pause after the entire original step, not halfway through it.
+  steps.splice(at, 1, { ...step, pieces: earlier, pauseAfter: undefined }, { pieces: later, pauseAfter: step.pauseAfter });
+  return withSteps(p, m, steps);
+}
+
+/** Join two consecutive steps, retaining their parts and both sets of notes. */
+export function mergeSteps(p: Plan, m: ModelName, first: number): Plan {
+  const steps = [...modelSteps(p, m)];
+  if (!steps[first] || !steps[first + 1]) return p;
+  const a = steps[first], b = steps[first + 1];
+  steps.splice(first, 2, {
+    ...a,
+    pieces: [...a.pieces, ...b.pieces],
+    title: a.title || b.title,
+    notes: [a.notes, b.notes].filter(Boolean).join('\n') || undefined,
+    pauseAfter: b.pauseAfter,
+  });
   return withSteps(p, m, steps);
 }
 
@@ -140,6 +220,7 @@ export function duplicateItems(
   const steps = modelSteps(p, m).map((s) =>
     s.pieces.some((i) => i.id && set.has(i.id))
       ? {
+          ...s,
           pieces: s.pieces.flatMap((i) => {
             if (!i.id || !set.has(i.id)) return [i];
             const id = newId();

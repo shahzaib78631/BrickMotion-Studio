@@ -1,6 +1,6 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 
-const calls = vi.hoisted(() => ({ add: [] as number[], cancel: 0, finalize: 0 }));
+const calls = vi.hoisted(() => ({ add: [] as number[], cancel: 0, finalize: 0, encodeConfig: null as unknown }));
 vi.mock('mediabunny', () => {
   class Output {
     target: { buffer: ArrayBuffer | null };
@@ -26,17 +26,19 @@ vi.mock('mediabunny', () => {
   class BufferTarget {
     buffer: ArrayBuffer | null = null;
   }
-  return { Output, CanvasSource, Mp4OutputFormat, BufferTarget, QUALITY_HIGH: 'high', canEncodeVideo: async () => true };
+  return { Output, CanvasSource, Mp4OutputFormat, BufferTarget, QUALITY_HIGH: 'high', canEncodeVideo: async (_codec: string, config: unknown) => ((calls.encodeConfig = config), true) };
 });
 
 import { buildTimeline } from '../../src/anim/timeline';
-import { exportVideo, frameCount, drawLogo, type ExportOpts } from '../../src/export/exportVideo';
+import { canExportMp4, exportVideo, frameCount, drawLogo, type ExportOpts } from '../../src/export/exportVideo';
+import { FPS_OPTIONS, isExportFps } from '../../src/export/frameRates';
 import { measurePart } from '../../src/ldraw/metrics';
 
 beforeEach(() => {
   calls.add = [];
   calls.cancel = 0;
   calls.finalize = 0;
+  calls.encodeConfig = null;
 });
 
 const fakeCtx = () => ({ drawImage: vi.fn(), globalAlpha: 1, fillRect: vi.fn() });
@@ -108,6 +110,29 @@ test('aborting mid-export cancels the output', async () => {
   expect(calls.cancel).toBe(1);
 });
 
+
+test('export FPS presets include cinematic, broadcast and high frame rates', () => {
+  expect(FPS_OPTIONS).toEqual([24, 25, 30, 48, 50, 60, 90, 120]);
+  expect(isExportFps(60)).toBe(true);
+  expect(isExportFps(23)).toBe(false);
+  expect(frameCount(1, 60)).toBe(60);
+  expect(frameCount(1, 120)).toBe(120);
+});
+
+test('checks encoding support at the SELECTED size and frame rate', async () => {
+  expect(await canExportMp4(1080, 1920, 120)).toBe(true);
+  expect(calls.encodeConfig).toEqual({ width: 1080, height: 1920, frameRate: 120 });
+});
+
+test('exports all 60 FPS frames at uniform, exact media timestamps', async () => {
+  const s = fakeStudio();
+  const c = vi.fn(fakeCanvas);
+  const result = await exportVideo({ ...opts(new AbortController().signal), fps: 60 }, { createStudio: s.create as never, createCanvas: c });
+  expect(s.render).toHaveBeenCalledTimes(6);
+  expect(calls.add).toEqual(Array.from({ length: 6 }, (_, i) => i / 60));
+  expect(c).toHaveBeenCalledTimes(1); // no unnecessary full-HD composite without a logo
+  expect(result.type).toBe('video/mp4');
+});
 test('logo: 22% wide, 48 px margin, 90% opacity', () => {
   const ctx = fakeCtx();
   const img = { width: 200, height: 100 } as ImageBitmap;

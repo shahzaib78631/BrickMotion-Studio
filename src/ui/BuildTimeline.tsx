@@ -37,6 +37,8 @@ export function BuildTimeline({ timeline: tl }: { timeline: Timeline | null }) {
   const st = useStudio.getState;
   const pb = usePlayback.getState;
   const [zoom, setZoom] = useState(1);
+  const [dragStep, setDragStep] = useState<number | null>(null);
+  const [overStep, setOverStep] = useState<number | null>(null);
   const [width, setWidth] = useState(900);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -184,17 +186,44 @@ export function BuildTimeline({ timeline: tl }: { timeline: Timeline | null }) {
                     .filter((s) => s.model === '')
                     .map((s, i) => {
                       const sel = editingModel === '' && currentStep === s.index;
-                      const count = steps[s.index]?.pieces.length ?? 0;
+                      const data = steps[s.index];
+                      const count = data?.pieces.length ?? 0;
+                      const label = data?.title ? `Step ${s.index + 1} · ${data.title}` : `Step ${s.index + 1}`;
                       return (
                         <button
                           key={i}
-                          className={`nx-clip bm-step ${sel ? 'sel' : ''}`}
+                          draggable
+                          onDragStart={(e) => {
+                            setDragStep(s.index);
+                            e.dataTransfer.effectAllowed = 'move';
+                            e.dataTransfer.setData('text/plain', `brickmotion-step:${s.index}`);
+                          }}
+                          onDragOver={(e) => {
+                            if (dragStep === null) return;
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = 'move';
+                            setOverStep(s.index);
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            const text = e.dataTransfer.getData('text/plain');
+                            const from = dragStep ?? (text.startsWith('brickmotion-step:') ? Number(text.slice(17)) : NaN);
+                            setDragStep(null);
+                            setOverStep(null);
+                            if (!Number.isInteger(from) || from === s.index) return;
+                            pb().set({ playing: false, t: 0 });
+                            st().reorderBuildStep('', from, s.index);
+                            st().setMode('edit');
+                            st().setCurrentStep(s.index);
+                          }}
+                          onDragEnd={() => { setDragStep(null); setOverStep(null); }}
+                          className={`nx-clip bm-step ${sel ? 'sel' : ''} ${dragStep !== null && overStep === s.index ? 'bm-step-over' : ''}`}
                           style={{ left: X(s.start), width: Math.max(6, (s.end - s.start) * px - 2) }}
-                          aria-label={`Step ${s.index + 1} · ${count} piece${count === 1 ? '' : 's'}`}
-                          title={`Step ${s.index + 1}: ${count} piece${count === 1 ? '' : 's'}. Click to edit it.`}
+                          aria-label={`${label} · ${count} piece${count === 1 ? '' : 's'}`}
+                          title={`${label}: ${count} piece${count === 1 ? '' : 's'}. Click to edit, drag onto another step to reorder.`}
                           onClick={() => editStep(s)}
                         >
-                          <span className="lbl">Step {s.index + 1}</span>
+                          <span className="lbl">{label}</span>
                         </button>
                       );
                     })}

@@ -16,6 +16,7 @@ export function ensureIds(plan: Plan): Plan {
   const seen = new Set<string>();
   const fix = (steps: Step[]): Step[] =>
     steps.map((s) => ({
+      ...s,
       pieces: s.pieces.map((i) => {
         if (i.id && !seen.has(i.id)) {
           seen.add(i.id);

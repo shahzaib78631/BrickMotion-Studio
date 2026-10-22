@@ -47,7 +47,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
       {timeline && (
         <p className="nx-fine">
           This set comes out at <strong>{timeline.duration.toFixed(1)} s</strong>
-          {longer ? ': submodels that build one after another need the extra time.' : '.'}
+          {longer ? ': step pauses and submodels that build one after another add time.' : '.'}
         </p>
       )}
 

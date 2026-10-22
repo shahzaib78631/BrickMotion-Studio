@@ -8,7 +8,7 @@ import { isGrid, isSub, type Plan, type PlanItem, type Step } from '../plan/type
 
 export type Metrics = (part: string) => PartMetrics;
 
-type NodeBase = { itemId: string; model: string; step: number; order: number; local: Placement };
+type NodeBase = { itemId: string; model: string; step: number; order: number; pauseAfter?: number; local: Placement };
 export type ANode =
   | (NodeBase & { kind: 'piece'; part: string; color: number; placeholder: boolean; body: Box; grid: boolean })
   | (NodeBase & { kind: 'sub'; submodel: string; children: ANode[]; body: Box });
@@ -82,6 +82,7 @@ export function assemble(plan: Plan, metrics: Metrics, colors: Map<number, Color
     steps.forEach((step, si) => {
       step.pieces.forEach((item, order) => {
         const itemId = item.id ?? `${model}:${si}:${order}`;
+        const pauseAfter = step.pauseAfter;
         if (isSub(item)) {
           const def = plan.submodels?.[item.submodel];
           if (!def) {
@@ -94,7 +95,7 @@ export function assemble(plan: Plan, metrics: Metrics, colors: Map<number, Color
           }
           const children = buildModel(item.submodel, def.steps, [...stack, item.submodel]);
           const body = subBody(item.submodel, children);
-          nodes.push({ kind: 'sub', itemId, model, step: si, order, submodel: item.submodel, children, body, local: itemPlacement(item, body) });
+          nodes.push({ kind: 'sub', itemId, model, step: si, order, pauseAfter, submodel: item.submodel, children, body, local: itemPlacement(item, body) });
           return;
         }
         const m = metrics(item.part);
@@ -104,7 +105,7 @@ export function assemble(plan: Plan, metrics: Metrics, colors: Map<number, Color
           if (c === undefined) report({ kind: 'unknown-color', model, itemId, detail: String(item.color) });
           else color = c;
         }
-        nodes.push({ kind: 'piece', itemId, model, step: si, order, part: item.part, color, placeholder: m.placeholder, body: m.body, grid: isGrid(item), local: itemPlacement(item, m.body) });
+        nodes.push({ kind: 'piece', itemId, model, step: si, order, pauseAfter, part: item.part, color, placeholder: m.placeholder, body: m.body, grid: isGrid(item), local: itemPlacement(item, m.body) });
       });
     });
     return nodes;

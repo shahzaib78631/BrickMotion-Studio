@@ -150,7 +150,7 @@ function windowed(items: FloorItem[], bands: Region[]) {
 
 type PlayPiece = { kind: 'piece'; key: string; target: THREE.Matrix4; ctx: number; after?: PlayAttach[] };
 type PlayAttach = { kind: 'attach'; key: string; keys: string[]; from: THREE.Matrix4; to: THREE.Matrix4; sub: number; after?: PlayAttach[] };
-type PlayStep = { units: (PlayPiece | PlayAttach)[]; model: string; index: number };
+type PlayStep = { units: (PlayPiece | PlayAttach)[]; model: string; index: number; scope: string; pauseAfter: number };
 type Ctx = { bands: Region[]; pieces: string[]; group: Map<string, number>; after?: number };
 
 export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions): Timeline {
@@ -187,7 +187,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     for (const s of stepIds) {
       const inStep = nodes.filter((n) => n.step === s).sort((a, b) => a.order - b.order);
       const model = inStep[0]?.model ?? '';
-      let step: PlayStep = { units: [], model, index: s };
+      let step: PlayStep = { units: [], model, index: s, scope: prefix, pauseAfter: inStep[0]?.pauseAfter ?? 0 };
       const push = (u: PlayPiece | PlayAttach) => {
         if (pending.length) ((u.after = pending), (pending = []));
         step.units.push(u);
@@ -196,7 +196,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
         if (n.kind === 'sub') {
           // the submodel is built aside and attached right away; the rest of the step follows
           if (step.units.length) steps.push(step);
-          step = { units: [], model, index: s };
+          step = { units: [], model, index: s, scope: prefix, pauseAfter: inStep[0]?.pauseAfter ?? 0 };
           const a = buildSub(n, frame, prefix);
           if (a.keys.length) push(a);
           continue;
@@ -269,7 +269,14 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
   steps.forEach((s, si) => s.units.forEach((u) => flat.push({ u, step: si })));
   const pacing = choosePacing(flat.length, steps.length, opts);
   const { intro, outro, flight, slot, stepPause } = pacing;
-  const buildEnd = intro + pacing.build + (steps.length > 1 ? stepPause * (steps.length - 1) : 0);
+  // A parent step may be interrupted by a submodel build, so only pause after
+  // its LAST unit (rather than each of the step's separate timeline spans).
+  const stepKey = (s: PlayStep) => `${s.scope}\u0000${s.model}\u0000${s.index}`;
+  const lastOfStep = new Map<string, number>();
+  flat.forEach((f, i) => lastOfStep.set(stepKey(steps[f.step]), i));
+  const holdAfter = flat.map((f, i) => lastOfStep.get(stepKey(steps[f.step])) === i ? steps[f.step].pauseAfter : 0);
+  const totalHold = holdAfter.reduce((sum, n) => sum + n, 0);
+  const buildEnd = intro + pacing.build + (steps.length > 1 ? stepPause * (steps.length - 1) : 0) + totalHold;
 
   const raw: number[] = [];
   if (pacing.mode === 'piece') flat.forEach((f, i) => raw.push(intro + i * slot + f.step * stepPause));
@@ -306,15 +313,19 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
   const schedule = (c: number, dur: number) => {
     const s: number[] = [];
     let end = intro;
+    let completedHold = 0;
     flat.forEach((_, i) => {
-      let t = intro + (raw[i] - intro) * c;
+      if (i > 0) completedHold += holdAfter[i - 1];
+      let t = intro + (raw[i] - intro) * c + completedHold;
       if (i > 0) t = Math.max(t, s[i - 1]); // keep play order
+      // Start a pause only AFTER every earlier in-flight piece has landed.
+      if (i > 0 && holdAfter[i - 1] > 0) t = Math.max(t, end + holdAfter[i - 1]);
       for (const d of deps[i]) t = Math.max(t, s[d] + dur);
       if (holds.has(i)) t = Math.max(t, i > 0 ? end + CLOSE_EASE : CLOSE_EASE);
       s.push(t);
       end = Math.max(end, t + dur);
     });
-    return { s, end };
+    return { s, end: end + (holdAfter[holdAfter.length - 1] ?? 0) };
   };
   let starts: number[] = [];
   let actualEnd = buildEnd;

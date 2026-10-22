@@ -9,7 +9,14 @@ export type Raw = { ldu: Vec3; matrix: Mat3 };
 export type PieceItem = { id?: string; part: string; color: string | number } & (Grid | Raw);
 export type SubItem = { id?: string; submodel: string } & (Grid | Raw);
 export type PlanItem = PieceItem | SubItem;
-export type Step = { pieces: PlanItem[] };
+/** A step's editorial metadata is optional, keeping older saved projects compatible. */
+export type Step = {
+  pieces: PlanItem[];
+  title?: string;
+  notes?: string;
+  /** Extra seconds to hold on the completed step before the next action. */
+  pauseAfter?: number;
+};
 export type Submodel = { steps: Step[] };
 
 export type Plan = {

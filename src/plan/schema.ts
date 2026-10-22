@@ -28,7 +28,12 @@ const Item = z
     ]),
   );
 
-const StepSchema = z.object({ pieces: z.array(Item) });
+const StepSchema = z.object({
+  pieces: z.array(Item),
+  title: z.string().max(80).optional(),
+  notes: z.string().max(1000).optional(),
+  pauseAfter: num.min(0).max(10).optional(),
+});
 
 export const PlanSchema = z.object({
   format: z.literal('brickmotion-plan'),

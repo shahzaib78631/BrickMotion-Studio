@@ -47,6 +47,7 @@ const PATHS = {
   lower: '<path d="m7 6 5 5 5-5M7 13l5 5 5-5"/>',
   rotate: '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
   pointer: '<path d="M4.04 4.84a.5.5 0 0 1 .65-.65l15.6 6.03a.5.5 0 0 1-.06.95l-6.03 1.55a2 2 0 0 0-1.44 1.44l-1.55 6.03a.5.5 0 0 1-.95.06z"/>',
+  grip: '<circle cx="9" cy="5" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="19" r="1"/>',
   move: '<path d="M12 2v20M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M5 9l-3 3 3 3M9 5l3-3 3 3"/>',
 } as const;
 

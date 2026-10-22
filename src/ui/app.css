@@ -134,3 +134,52 @@ body { margin: 0; }
 .bm-pad-btn:hover { background: var(--hover) !important; }
 .bm-pad-row { display: flex; gap: 6px; flex-wrap: wrap; }
 .bm-pad-row .nx-btn { flex: 1; }
+
+/* Step editor: grab handles, drop markers, metadata and per-part build ordering. */
+.bm-steps { gap: 8px; }
+.bm-step-row { position: relative; padding: 5px; }
+.bm-step-row.bm-drop-before::before, .bm-step-row.bm-drop-after::after {
+  content: ''; position: absolute; left: 0; right: 0; height: 3px; border-radius: 4px;
+  background: var(--focus); z-index: 2; pointer-events: none;
+}
+.bm-step-row.bm-drop-before::before { top: -6px; }
+.bm-step-row.bm-drop-after::after { bottom: -6px; }
+.bm-drag-grip { color: var(--ink3); display: grid; place-items: center; width: 23px; height: 40px; flex: 0 0 23px; border-radius: 6px; touch-action: none; cursor: grab !important; }
+.bm-drag-grip:active { cursor: grabbing !important; background: var(--hover); }
+.bm-drag-grip:focus-visible { outline: 2px solid var(--focus); }
+.bm-drag-grip .ic { width: 15px; height: 15px; }
+.bm-step-btn { gap: 7px; padding: 5px 3px; }
+.bm-step-label { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+.bm-step-label strong { font-weight: 600; white-space: nowrap; }
+.bm-step-title { max-width: 100%; font-size: 11.5px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.bm-step-label .nx-hint { font-size: 10.5px; white-space: nowrap; }
+.bm-step-utilities { display: flex; align-items: center; gap: 5px 11px; flex-wrap: wrap; padding: 1px 0 3px 29px; }
+.bm-step-utilities .nx-link { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; color: var(--ink3); text-decoration: none; }
+.bm-step-utilities .nx-link:hover { color: var(--ink); }
+.bm-step-utilities .ic { width: 12px; height: 12px; }
+.bm-step-delete:hover { color: var(--danger) !important; }
+.bm-step-row button:disabled { cursor: not-allowed; opacity: .3; }
+.bm-step-editor { display: flex; flex-direction: column; gap: 9px; margin: 8px 3px 5px; padding: 11px; background: var(--surface); border: 1px solid var(--line2); border-radius: 10px; }
+.bm-step-editor form { display: flex; flex-direction: column; gap: 10px; }
+.bm-step-editor .nx-field { gap: 4px; font-size: 11.5px; }
+.bm-step-editor .nx-field input, .bm-step-editor .nx-field textarea { font-size: 12px; }
+.bm-step-hold { display: flex; align-items: center; gap: 8px; }
+.bm-step-hold input { width: 72px; flex-shrink: 0; }
+.bm-step-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.bm-step-actions .nx-btn { display: inline-flex; align-items: center; gap: 5px; }
+.bm-step-actions .nx-btn .ic { width: 13px; height: 13px; }
+.bm-step-editor-divider { border-top: 1px solid var(--line); }
+.bm-step-editor-heading { display: flex; align-items: center; gap: 7px; font-size: 11.5px; font-weight: 650; }
+.bm-step-pieces { max-height: 220px; overflow: auto; display: flex; flex-direction: column; gap: 3px; }
+.bm-step-piece { display: flex; align-items: center; gap: 4px; background: var(--surface2); border: 1px solid var(--line); border-radius: 7px; padding: 3px 4px; }
+.bm-piece-index { font-size: 10px; color: var(--ink3); width: 17px; flex: 0 0 17px; text-align: center; }
+.bm-piece-select { min-width: 0; flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: left; font-size: 11px; }
+.bm-piece-select:hover { text-decoration: underline; }
+.bm-step-piece .nx-icon { width: 22px; height: 22px; flex: 0 0 22px; }
+.bm-step-structure { margin-top: 2px; }
+.bm-step-structure .nx-btn { font-size: 10.5px; }
+.bm-add-step { margin-top: 5px; }
+.bm-step-reorder { flex-shrink: 0; }
+.bm-timeline .bm-step[draggable="true"] { cursor: grab; }
+.bm-timeline .bm-step[draggable="true"]:active { cursor: grabbing; }
+.bm-timeline .bm-step-over { box-shadow: inset 0 0 0 3px #fff, 0 0 0 3px var(--focus) !important; }

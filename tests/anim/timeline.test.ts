@@ -86,6 +86,7 @@ test('400 pieces still fit the target', () => {
   const asm = assemble(plan(steps), metrics, fixtureColors);
   const tl = buildTimeline(asm, metrics, opts);
   expect(tl.duration).toBeLessThanOrEqual(15.05);
+  expect(tl.units.filter((u) => u.hidden)).toHaveLength(0); // no popping/disappearing pieces
   const end = poseAt(tl, tl.duration);
   for (const inst of asm.instances.slice(0, 20)) expectMatClose(end(inst.key)!, inst.world);
   // later-window pieces are hidden at t=0 when the floor overflows, never stacked on top of each other
@@ -293,5 +294,60 @@ test('a close-up waits until earlier flights have landed and the camera has move
   for (const sb of tl.subBuilds.filter((b) => b.closeUp)) {
     const before = tl.units.filter((u) => u.start < sb.start - 1e-9);
     for (const u of before) expect(u.start + u.dur).toBeLessThanOrEqual(sb.start - 0.6 + 1e-6);
+  }
+});
+
+
+/** Checks motion, not just resting poses, at a 120 FPS export cadence. */
+const assertNoIntersections = (tl: ReturnType<typeof buildTimeline>, asm: ReturnType<typeof assemble>, rate = 120) => {
+  const instances = asm.instances;
+  const overlaps = (a: { min: number[]; max: number[] }, b: { min: number[]; max: number[] }) =>
+    [0, 1, 2].every((axis) => Math.min(a.max[axis], b.max[axis]) - Math.max(a.min[axis], b.min[axis]) > 2);
+  for (let f = 0; f <= Math.ceil(tl.buildEnd * rate); f++) {
+    const t = f / rate;
+    const pose = poseAt(tl, t);
+    const visible = instances.flatMap((inst) => {
+      const m = pose(inst.key);
+      return m ? [{ key: inst.key, box: transformBox(metrics(inst.part).body, m) }] : [];
+    });
+    for (let i = 0; i < visible.length; i++)
+      for (let j = i + 1; j < visible.length; j++)
+        expect(overlaps(visible[i].box, visible[j].box), `${visible[i].key} vs ${visible[j].key} at ${t.toFixed(4)}s`).toBe(false);
+  }
+};
+
+test('pieces do not pass through each other while flying in batches', () => {
+  const asm = assemble(
+    plan([
+      [brick(0, 0, 0), brick(6, 0, 0), brick(12, 0, 0)],
+      [brick(0, 3, 0), brick(6, 3, 0), brick(12, 3, 0)],
+      [brick(0, 6, 0), brick(6, 6, 0), brick(12, 6, 0)],
+    ]), metrics, fixtureColors,
+  );
+  const tl = buildTimeline(asm, metrics, { targetSeconds: 8, heroOrbit: true, mode: 'batch' });
+  assertNoIntersections(tl, asm);
+});
+
+test('repeated side staging areas clear before the next submodel appears', () => {
+  const asm = hangar();
+  const tl = buildTimeline(asm, metrics, opts);
+  const subs = [...tl.subBuilds].sort((a, b) => a.start - b.start);
+  for (let i = 1; i < subs.length; i++) {
+    const nextPieces = [...tl.tracks.entries()].filter(([key]) => key.startsWith(`${subs[i].key}/`));
+    for (const [, tr] of nextPieces) expect(tr.appear).toBeGreaterThanOrEqual(subs[i - 1].attachEnd - 1e-6);
+  }
+  assertNoIntersections(tl, asm);
+});
+
+test('camera has no jump at a framing key in the MP4 sequence', () => {
+  const asm = twinTowers();
+  const tl = buildTimeline(asm, metrics, opts);
+  for (let t = 1; t < tl.buildEnd - 1; t += 0.2) {
+    const h = 1 / 120;
+    const before = cameraAt(tl, t - h, 9 / 16).position;
+    const mid = cameraAt(tl, t, 9 / 16).position;
+    const after = cameraAt(tl, t + h, 9 / 16).position;
+    // The speed either side of a camera key should change gradually, not snap.
+    expect(before.clone().add(after).addScaledVector(mid, -2).length()).toBeLessThan(0.5);
   }
 });
