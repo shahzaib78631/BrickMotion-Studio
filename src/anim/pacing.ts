@@ -1,7 +1,11 @@
 import { clamp } from './easing';
 
 export type ArrivalMode = 'piece' | 'batch' | 'step';
-export type AnimOptions = { targetSeconds: number; heroOrbit: boolean; mode?: ArrivalMode };
+export type AnimOptions = {
+  targetSeconds: number; heroOrbit: boolean; mode?: ArrivalMode;
+  /** Optional clip-length overrides, seconds. Null follows the automatic video length. */
+  introSeconds?: number | null; buildSeconds?: number | null; outroSeconds?: number | null;
+};
 export type Pacing = {
   mode: ArrivalMode;
   intro: number;
@@ -21,9 +25,9 @@ const BATCH_SLOT = 0.6;
 
 /** Decides how fast pieces arrive so the build fits the target length. */
 export function choosePacing(units: number, steps: number, opts: AnimOptions): Pacing {
-  const intro = INTRO;
-  const outro = opts.heroOrbit ? 3.0 : 0.5;
-  const base = Math.max(1, opts.targetSeconds - intro - outro);
+  const intro = clamp(opts.introSeconds ?? INTRO, 0.2, 120);
+  const outro = clamp(opts.outroSeconds ?? (opts.heroOrbit ? 3.0 : 0.5), 0.2, 120);
+  const base = Math.max(1, opts.buildSeconds ?? (opts.targetSeconds - intro - outro));
   const pauseTotal = steps > 1 ? Math.min(0.25 * (steps - 1), 0.2 * base) : 0;
   const build = base - pauseTotal;
   const stepPause = steps > 1 ? pauseTotal / (steps - 1) : 0;

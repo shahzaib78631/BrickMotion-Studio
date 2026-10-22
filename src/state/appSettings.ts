@@ -11,6 +11,9 @@ export type AppSettings = {
   targetSeconds: number;
   fps: ExportFps;
   heroOrbit: boolean;
+  introSeconds: number | null;
+  buildSeconds: number | null;
+  outroSeconds: number | null;
   mode: 'auto' | ArrivalMode;
   logoEnabled: boolean;
   logoCorner: LogoCorner;
@@ -38,7 +41,7 @@ export const toSettings = (s: AppSettings): Settings => ({
   logo: s.logo,
   logoCorner: s.logoCorner,
   logoEnabled: s.logoEnabled,
-  video: { targetSeconds: s.targetSeconds, heroOrbit: s.heroOrbit, mode: s.mode, fps: s.fps },
+  video: { targetSeconds: s.targetSeconds, heroOrbit: s.heroOrbit, mode: s.mode, fps: s.fps, introSeconds: s.introSeconds, buildSeconds: s.buildSeconds, outroSeconds: s.outroSeconds },
 });
 
 export async function applySettings(s: Settings): Promise<void> {

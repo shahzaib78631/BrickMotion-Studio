@@ -52,6 +52,8 @@ const store = (k: string, v: string) => {
 function Studio() {
   const model = useModel();
   const mode = useStudio((s) => s.mode);
+  const gizmoEnabled = useStudio((s) => s.gizmoEnabled);
+  const gizmoMode = useStudio((s) => s.gizmoMode);
   const editingModel = useStudio((s) => s.editingModel);
   const setMode = useStudio((s) => s.setMode);
   const video = useAppSettings();
@@ -70,23 +72,39 @@ function Studio() {
             targetSeconds: video.targetSeconds,
             heroOrbit: video.heroOrbit,
             mode: video.mode === 'auto' ? undefined : video.mode,
+            introSeconds: video.introSeconds,
+            buildSeconds: video.buildSeconds,
+            outroSeconds: video.outroSeconds,
           })
         : null,
-    [model.ready, model.assembly, video.targetSeconds, video.heroOrbit, video.mode],
+    [model.ready, model.assembly, video.targetSeconds, video.heroOrbit, video.mode, video.introSeconds, video.buildSeconds, video.outroSeconds],
   );
   const canPreview = model.ready && model.assembly.instances.length > 0;
 
   const resize = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const oldSelection = document.body.style.userSelect;
+    document.body.style.userSelect = 'none';
     const y0 = e.clientY;
     const h0 = tlHeight;
-    const move = (ev: PointerEvent) => setTlHeight(Math.max(140, Math.min(window.innerHeight * 0.6, h0 + y0 - ev.clientY)));
-    const up = () => {
+    const move = (ev: PointerEvent) => {
+      ev.preventDefault();
+      setTlHeight(Math.max(140, Math.min(window.innerHeight * 0.6, h0 + y0 - ev.clientY)));
+    };
+    const finish = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', finish);
+      document.body.style.userSelect = oldSelection;
+    };
+    const up = () => {
+      finish();
       setTlHeight((h) => (store('bm-tl-h', String(Math.round(h))), h));
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', finish);
   };
 
   return (
@@ -150,6 +168,30 @@ function Studio() {
                     Preview
                   </button>
                 </div>
+                {mode === 'edit' && (
+                  <div className="bm-gizmo-bar" aria-label="Transform gizmo controls">
+                    <button className={`nx-btn nx-sm bm-gizmo-toggle ${gizmoEnabled ? 'on' : ''}`}
+                      aria-pressed={gizmoEnabled} aria-label="Enable transform gizmo" title="Show or hide the Blender-style transform gizmo (G)"
+                      onClick={() => useStudio.getState().setGizmo(!gizmoEnabled)}>
+                      <Ic name="move" /> Gizmo {gizmoEnabled ? 'On' : 'Off'}
+                    </button>
+                    {gizmoEnabled && (
+                      <div className="nx-seg bm-gizmo-modes" role="radiogroup" aria-label="Gizmo operation">
+                        {([
+                          ['translate', 'move', 'Move selected bricks (studs / plates)'],
+                          ['rotate', 'rotate', 'Rotate selection (90 degree snap)'],
+                          ['scale', 'scale', 'Scale selection (changes brick dimensions)'],
+                        ] as const).map(([id, icon, label]) => (
+                          <button key={id} role="radio" aria-label={label} title={label}
+                            aria-checked={gizmoMode === id} className={gizmoMode === id ? 'on' : ''}
+                            onClick={() => useStudio.getState().setGizmoMode(id)}>
+                            <Ic name={icon} />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <button
                   className="nx-icon"
                   title="Fit the model in view (F)"

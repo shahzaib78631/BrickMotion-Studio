@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as RPointerEvent, type KeyboardEvent as RKeyboardEvent } from 'react';
 import type { StepSpan, Timeline } from '../anim/timeline';
-import { modelSteps } from '../plan/ops';
+import { modelSteps, updateStep } from '../plan/ops';
+import { useAppSettings } from '../state/appSettings';
 import { usePlayback } from '../state/playback';
 import { useStudio } from '../state/store';
 import { Ic } from './icons';
@@ -8,6 +9,17 @@ import { Ic } from './icons';
 const RULER = 30;
 const LANE = 42;
 const PAD = 24;
+type TrimKind = 'intro' | 'build' | 'outro' | 'step';
+type TrimPreview = { kind: TrimKind; index?: number; seconds: number };
+const rounded = (v: number) => Math.round(v * 10) / 10;
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+/** During a drag, block browser text highlighting; always restore the old style. */
+function stopSelection() {
+  const prev = document.body.style.userSelect;
+  document.body.style.userSelect = 'none';
+  return () => { document.body.style.userSelect = prev; };
+}
 
 /** 00:01.5 */
 export const timecode = (s: number) => {
@@ -40,6 +52,8 @@ export function BuildTimeline({ timeline: tl }: { timeline: Timeline | null }) {
   const [dragStep, setDragStep] = useState<number | null>(null);
   const [overStep, setOverStep] = useState<number | null>(null);
   const [width, setWidth] = useState(900);
+  const [trimPreview, setTrimPreview] = useState<TrimPreview | null>(null);
+  const video = useAppSettings();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -53,6 +67,12 @@ export function BuildTimeline({ timeline: tl }: { timeline: Timeline | null }) {
   const dur = tl?.duration ?? 0;
   const px = (dur > 0 ? Math.max(20, (width - PAD * 2) / dur) : 60) * zoom;
   const X = (s: number) => PAD + s * px;
+  /** Draw only a trim preview during pointer movement; rebuilding hundreds of flight paths each pixel causes lag. */
+  const introEnd = trimPreview?.kind === 'intro' ? trimPreview.seconds : (tl?.intro ?? 0);
+  const buildLength = trimPreview?.kind === 'build' ? trimPreview.seconds : (tl ? tl.buildEnd - tl.intro : 0);
+  const buildEnd = introEnd + buildLength;
+  const outroLength = trimPreview?.kind === 'outro' ? trimPreview.seconds : (tl ? tl.duration - tl.buildEnd : 0);
+  const previewDuration = buildEnd + outroLength;
   const seek = (s: number) => pb().set({ t: Math.max(0, Math.min(dur, s)) });
 
   const editStep = (span: StepSpan) => {
@@ -88,23 +108,83 @@ export function BuildTimeline({ timeline: tl }: { timeline: Timeline | null }) {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const scrubFrom = (e: RPointerEvent<HTMLDivElement>) => {
+  const beginTrim = (e: RPointerEvent, kind: TrimKind, start: number, min: number, max: number, commit: (value: number) => void, index?: number) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const releaseSelection = stopSelection();
+    const x0 = e.clientX;
+    let next = start;
+    const move = (ev: PointerEvent) => {
+      next = rounded(clamp(start + (ev.clientX - x0) / px, min, max));
+      setTrimPreview({ kind, index, seconds: next });
+    };
+    const done = (ev: PointerEvent) => {
+      move(ev);
+      cleanup();
+      pb().set({ playing: false });
+      commit(next);
+    };
+    const cancel = () => cleanup();
+    const cleanup = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', done);
+      window.removeEventListener('pointercancel', cancel);
+      releaseSelection();
+      setTrimPreview(null);
+    };
+    setTrimPreview({ kind, index, seconds: start });
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', done);
+    window.addEventListener('pointercancel', cancel);
+  };
+
+  const trimCamera = (e: RPointerEvent, kind: 'intro' | 'build' | 'outro') => {
     if (!tl) return;
+    const seconds = kind === 'intro' ? tl.intro : kind === 'build' ? tl.buildEnd - tl.intro : tl.duration - tl.buildEnd;
+    const key = kind === 'intro' ? 'introSeconds' : kind === 'build' ? 'buildSeconds' : 'outroSeconds';
+    beginTrim(e, kind, seconds, kind === 'build' ? 1 : 0.2, 120, (value) => useAppSettings.getState().set({ [key]: value }));
+  };
+  const keyTrim = (e: RKeyboardEvent, kind: 'intro' | 'build' | 'outro', value: number) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault(); e.stopPropagation();
+    const key = kind === 'intro' ? 'introSeconds' : kind === 'build' ? 'buildSeconds' : 'outroSeconds';
+    useAppSettings.getState().set({ [key]: rounded(clamp(value + (e.key === 'ArrowLeft' ? -0.1 : 0.1), kind === 'build' ? 1 : 0.2, 120)) });
+  };
+  const trimStep = (e: RPointerEvent, span: StepSpan) => {
+    const data = steps[span.index];
+    if (!data) return;
+    const pause = data.pauseAfter ?? 0;
+    beginTrim(e, 'step', pause, 0, 10, (value) => {
+      st().apply((p) => updateStep(p, '', span.index, { title: data.title, notes: data.notes, pauseAfter: value }));
+    }, span.index);
+  };
+
+  const scrubFrom = (e: RPointerEvent<HTMLElement>) => {
+    if (!tl || e.button !== 0) return;
+    e.preventDefault();
+    const releaseSelection = stopSelection();
     const el = scrollRef.current!;
     const at = (clientX: number) => (clientX - el.getBoundingClientRect().left + el.scrollLeft - PAD) / px;
     pb().set({ playing: false });
     if (st().mode !== 'preview') st().setMode('preview');
     seek(at(e.clientX));
     const move = (ev: PointerEvent) => seek(at(ev.clientX));
-    const up = () => (window.removeEventListener('pointermove', move), window.removeEventListener('pointerup', up));
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      releaseSelection();
+    };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
   };
 
   const steps = modelSteps(plan, '');
   const step = tl ? tickStep(px) : 1;
   const ticks = tl ? Array.from({ length: Math.floor(dur / step) + 1 }, (_, i) => i * step) : [];
-  const contentWidth = X(dur) + PAD;
+  const contentWidth = X(Math.max(dur, previewDuration)) + PAD;
 
   return (
     <div className="nx-timeline bm-timeline">
@@ -165,6 +245,13 @@ export function BuildTimeline({ timeline: tl }: { timeline: Timeline | null }) {
               className="nx-ruler bm-ruler"
               style={{ width: contentWidth }}
               onPointerDown={scrubFrom}
+              onKeyDown={(e) => {
+                if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) {
+                  e.preventDefault();
+                  seek(e.key === 'Home' ? 0 : e.key === 'End' ? dur : t + (e.key === 'ArrowLeft' ? -0.1 : 0.1));
+                }
+              }}
+              tabIndex={0}
               aria-label="Scrub the build"
               role="slider"
               aria-valuenow={t}
@@ -218,12 +305,27 @@ export function BuildTimeline({ timeline: tl }: { timeline: Timeline | null }) {
                           }}
                           onDragEnd={() => { setDragStep(null); setOverStep(null); }}
                           className={`nx-clip bm-step ${sel ? 'sel' : ''} ${dragStep !== null && overStep === s.index ? 'bm-step-over' : ''}`}
-                          style={{ left: X(s.start), width: Math.max(6, (s.end - s.start) * px - 2) }}
+                          style={{ left: X(s.start), width: Math.max(6, ((s.end - s.start) + (trimPreview?.kind === 'step' && trimPreview.index === s.index ? trimPreview.seconds : data?.pauseAfter ?? 0)) * px - 2) }}
                           aria-label={`${label} · ${count} piece${count === 1 ? '' : 's'}`}
                           title={`${label}: ${count} piece${count === 1 ? '' : 's'}. Click to edit, drag onto another step to reorder.`}
                           onClick={() => editStep(s)}
                         >
                           <span className="lbl">{label}</span>
+                          <span
+                            className="bm-trim bm-step-trim"
+                            role="separator" tabIndex={0} aria-orientation="vertical"
+                            aria-label={`Change pause after step ${s.index + 1}`}
+                            title={`Extend this step's hold (${(data?.pauseAfter ?? 0).toFixed(1)} s)`}
+                            onPointerDown={(e) => trimStep(e, s)}
+                            onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => {
+                              if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+                              e.preventDefault(); e.stopPropagation();
+                              const value = rounded(clamp((data?.pauseAfter ?? 0) + (e.key === 'ArrowRight' ? 0.1 : -0.1), 0, 10));
+                              st().apply((p) => updateStep(p, '', s.index, { title: data?.title, notes: data?.notes, pauseAfter: value }));
+                            }}
+                          />
+                          {trimPreview?.kind === 'step' && trimPreview.index === s.index && <span className="bm-trim-value">+{trimPreview.seconds.toFixed(1)}s</span>}
                         </button>
                       );
                     })}
@@ -251,15 +353,21 @@ export function BuildTimeline({ timeline: tl }: { timeline: Timeline | null }) {
                   ))}
                 </div>
                 <div className="nx-lane" style={{ height: LANE }}>
-                  <span className="nx-clip bm-cam dim" style={{ left: X(0), width: Math.max(4, tl.intro * px - 2) }}>
+                  <div className="nx-clip bm-cam dim" style={{ left: X(0), width: Math.max(8, introEnd * px - 2) }} title="Drag the right edge to change the intro duration">
                     <span className="lbl">Intro</span>
-                  </span>
-                  <span className="nx-clip bm-cam" style={{ left: X(tl.intro), width: Math.max(4, (tl.buildEnd - tl.intro) * px - 2) }}>
+                    <span className="bm-trim" role="separator" tabIndex={0} aria-label="Resize Intro" onPointerDown={(e) => trimCamera(e, 'intro')} onKeyDown={(e) => keyTrim(e, 'intro', tl.intro)} />
+                  </div>
+                  <div className="nx-clip bm-cam" style={{ left: X(introEnd), width: Math.max(8, buildLength * px - 2) }} title="Drag either edge to adjust intro or build length">
+                    <span className="bm-trim bm-trim-left" role="separator" tabIndex={0} aria-label="Resize Intro at Build start" onPointerDown={(e) => trimCamera(e, 'intro')} onKeyDown={(e) => keyTrim(e, 'intro', tl.intro)} />
                     <span className="lbl">Build</span>
-                  </span>
-                  <span className="nx-clip bm-cam bm-hero" style={{ left: X(tl.buildEnd), width: Math.max(4, (dur - tl.buildEnd) * px - 2) }}>
+                    <span className="bm-trim" role="separator" tabIndex={0} aria-label="Resize Build" onPointerDown={(e) => trimCamera(e, 'build')} onKeyDown={(e) => keyTrim(e, 'build', tl.buildEnd - tl.intro)} />
+                  </div>
+                  <div className="nx-clip bm-cam bm-hero" style={{ left: X(buildEnd), width: Math.max(8, outroLength * px - 2) }} title="Drag either edge to adjust the build or ending duration">
+                    <span className="bm-trim bm-trim-left" role="separator" tabIndex={0} aria-label="Resize Build at Hero start" onPointerDown={(e) => trimCamera(e, 'build')} onKeyDown={(e) => keyTrim(e, 'build', tl.buildEnd - tl.intro)} />
                     <span className="lbl">{tl.heroOrbit ? 'Hero orbit' : 'Hold'}</span>
-                  </span>
+                    <span className="bm-trim" role="separator" tabIndex={0} aria-label="Resize Hero/ending" onPointerDown={(e) => trimCamera(e, 'outro')} onKeyDown={(e) => keyTrim(e, 'outro', tl.duration - tl.buildEnd)} />
+                  </div>
+                  {trimPreview && trimPreview.kind !== 'step' && <span className="bm-resize-bubble" style={{ left: X(trimPreview.kind === 'intro' ? introEnd : trimPreview.kind === 'build' ? buildEnd : previewDuration) }}>{trimPreview.seconds.toFixed(1)}s</span>}
                 </div>
               </div>
             )}

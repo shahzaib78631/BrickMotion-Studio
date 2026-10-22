@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { findItem, moveItems } from '../plan/ops';
+import { aroundPivot, transformPlanItems } from '../plan/gizmo';
+import type { ANode } from '../model/assemble';
 import { dragDelta } from '../state/drag';
 import { isSub } from '../plan/types';
 import { createStudio, worldBox } from '../render/studio';
@@ -35,6 +38,17 @@ export function Viewport({ model }: { model: ModelState }) {
   const focus = useStudio((s) => s.focus);
   const mode = useStudio((s) => s.mode);
   const tool = useStudio((s) => s.tool);
+  const gizmoEnabled = useStudio((s) => s.gizmoEnabled);
+  const gizmoMode = useStudio((s) => s.gizmoMode);
+  const gizmoRef = useRef<{ controls: TransformControls; proxy: THREE.Object3D } | null>(null);
+  const draggingGizmo = useRef(false);
+  const origin = useRef(new THREE.Vector3());
+  const gizmoPress = useRef(false);
+  const initialNodes = useRef<ANode[]>([]);
+  const initialIds = useRef<string[]>([]);
+  const initialModel = useRef('');
+  const modelRef = useRef(model);
+  modelRef.current = model;
 
   // mount: studio, controls, render loop, resize
   useEffect(() => {
@@ -47,6 +61,77 @@ export function Viewport({ model }: { model: ModelState }) {
     studio.camera.position.set(18, 22, 30);
     viewportApi.studio = studio;
     viewportApi.controls = controls;
+
+    // TransformControls' helper is not a brick. Its proxy is never exported.
+    const proxy = new THREE.Object3D();
+    studio.scene.add(proxy);
+    const transform = new TransformControls(studio.camera, canvas);
+    transform.setSize(0.86);
+    transform.setSpace('world');
+    transform.setRotationSnap(Math.PI / 2); // LEGO right-angle rotations
+    transform.setScaleSnap(0.1);
+    transform.setTranslationSnap(null); // X/Z studs and Y plates have different snap units
+    studio.scene.add(transform.getHelper());
+    transform.enabled = false;
+    gizmoRef.current = { controls: transform, proxy };
+    let lastTransform = '';
+    transform.addEventListener('dragging-changed', (ev) => {
+      const active = !!ev.value;
+      draggingGizmo.current = active;
+      controls.enabled = !active && useStudio.getState().mode === 'edit';
+      if (active) {
+        lastTransform = '';
+        const current = useStudio.getState();
+        if (current.selection.model !== current.editingModel || !current.selection.ids.length) return;
+        initialNodes.current = modelRef.current.view.nodes;
+        initialIds.current = [...current.selection.ids];
+        initialModel.current = current.editingModel;
+        origin.current.copy(proxy.position);
+        current.beginGesture();
+      } else {
+        useStudio.getState().endGesture();
+        // A snapped placement may differ from a raw drag by a fraction of a stud.
+        // Recenter the handles on the saved piece positions after release.
+        const current = useStudio.getState();
+        const ids = new Set(current.selection.ids);
+        const boxes = modelRef.current.view.instances.filter((inst) => ids.has(inst.key.split('/')[0]));
+        if (boxes.length) {
+          const bounds = new THREE.Box3();
+          boxes.forEach((inst) => bounds.union(worldBox(inst.worldBox)));
+          bounds.getCenter(proxy.position);
+          proxy.quaternion.identity();
+          proxy.scale.setScalar(1);
+        }
+      }
+    });
+    transform.addEventListener('objectChange', () => {
+      const original = useStudio.getState().gesture;
+      if (!draggingGizmo.current || !original || !initialNodes.current.length) return;
+      const currentMode = useStudio.getState().gizmoMode;
+      let delta: THREE.Matrix4;
+      if (currentMode === 'translate') {
+        const move = proxy.position.clone().sub(origin.current);
+        // World units: 1 stud = 1; one plate is 8/20 of a world unit.
+        const dx = Math.round(move.x), dy = Math.round(move.y / 0.4) * 0.4, dz = Math.round(move.z);
+        delta = new THREE.Matrix4().makeTranslation(dx, dy, dz);
+      } else if (currentMode === 'rotate') {
+        delta = aroundPivot(new THREE.Matrix4().makeRotationFromQuaternion(proxy.quaternion), origin.current);
+      } else {
+        // Free scaling stores an LDraw matrix. This changes LEGO part dimensions,
+        // so the UI requires an explicit switch to Scale mode.
+        const scale = new THREE.Vector3(
+          THREE.MathUtils.clamp(proxy.scale.x, 0.25, 4),
+          THREE.MathUtils.clamp(proxy.scale.y, 0.25, 4),
+          THREE.MathUtils.clamp(proxy.scale.z, 0.25, 4),
+        );
+        delta = aroundPivot(new THREE.Matrix4().makeScale(scale.x, scale.y, scale.z), origin.current);
+      }
+      const signature = delta.elements.map((n) => Math.round(n * 10000)).join(',');
+      if (signature === lastTransform) return;
+      lastTransform = signature;
+      const next = transformPlanItems(original, initialModel.current, initialIds.current, initialNodes.current, delta);
+      useStudio.getState().apply(() => next);
+    });
     let raf = 0;
     const loop = () => {
       raf = requestAnimationFrame(loop);
@@ -64,12 +149,40 @@ export function Viewport({ model }: { model: ModelState }) {
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
+      transform.detach();
+      studio.scene.remove(transform.getHelper());
+      transform.dispose();
+      studio.scene.remove(proxy);
+      gizmoRef.current = null;
       controls.dispose();
       studio.dispose();
       viewportApi.studio = null;
       viewportApi.controls = null;
     };
   }, []);
+
+  // Attach / hide the gizmo when selection or mode changes. Do not reset it
+  // midway through a drag, even though the plan re-renders on every snap.
+  useEffect(() => {
+    const entry = gizmoRef.current;
+    if (!entry || draggingGizmo.current) return;
+    const { controls: transform, proxy } = entry;
+    const ids = new Set(selection.model === editingModel ? selection.ids : []);
+    const boxes = model.view.instances.filter((inst) => ids.has(inst.key.split('/')[0]));
+    if (mode !== 'edit' || !gizmoEnabled || !boxes.length) {
+      transform.enabled = false;
+      transform.detach();
+      return;
+    }
+    const bounds = new THREE.Box3();
+    boxes.forEach((inst) => bounds.union(worldBox(inst.worldBox)));
+    bounds.getCenter(proxy.position);
+    proxy.quaternion.identity();
+    proxy.scale.setScalar(1);
+    transform.setMode(gizmoMode);
+    transform.enabled = true;
+    transform.attach(proxy);
+  }, [selection, editingModel, model.view, gizmoEnabled, gizmoMode, mode]);
 
   // which top-level step each top-level item belongs to
   const topStep = useMemo(() => new Map(model.view.nodes.map((n) => [n.itemId, n.step])), [model.view]);
@@ -130,6 +243,12 @@ export function Viewport({ model }: { model: ModelState }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isTyping(e.target) || useStudio.getState().mode !== 'edit') return;
+      if (e.key.toLowerCase() === 'g' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        const state = useStudio.getState();
+        state.setGizmo(!state.gizmoEnabled);
+        return;
+      }
       if (e.key === 'Escape') return useStudio.getState().select([]);
       if ((e.key === 'f' || e.key === 'F') && !e.metaKey && !e.ctrlKey) return fitAll();
       const az = viewportApi.controls ? (viewportApi.controls.getAzimuthalAngle() * 180) / Math.PI : 0;
@@ -162,7 +281,7 @@ export function Viewport({ model }: { model: ModelState }) {
   // Runs in the capture phase so the orbit controls are switched off before they see the press.
   const startDrag = (e: React.PointerEvent) => {
     const s = st();
-    if (s.mode !== 'edit' || s.tool !== 'move' || e.button !== 0 || !viewportApi.studio) return;
+    if (s.mode !== 'edit' || s.tool !== 'move' || (s.gizmoEnabled && s.selection.ids.length > 0) || e.button !== 0 || !viewportApi.studio) return;
     const key = pickAt(e);
     if (!key) return;
     const id = key.split('/')[0];
@@ -204,10 +323,19 @@ export function Viewport({ model }: { model: ModelState }) {
     <div className={`viewport ${tool === 'move' && mode === 'edit' ? 'bm-move' : ''}`} ref={wrapRef} onPointerDownCapture={startDrag}>
       <canvas
         ref={canvasRef}
-        onPointerDown={(e) => (down.current = { x: e.clientX, y: e.clientY })}
+        onPointerDown={(e) => {
+          down.current = { x: e.clientX, y: e.clientY };
+          // TransformControls can clear its hovered axis on pointer-up.
+          // Remember whether this press began on a handle so the subsequent
+          // canvas click cannot accidentally deselect the transformed brick.
+          gizmoPress.current = !!(st().gizmoEnabled && gizmoRef.current?.controls.axis);
+        }}
         onClick={(e) => {
+          if (gizmoPress.current) { gizmoPress.current = false; return; }
           if (st().mode !== 'edit') return;
           if (Math.hypot(e.clientX - down.current.x, e.clientY - down.current.y) > 4) return;
+          // Clicking an axis must not clear the selection because a brick ray missed.
+          if (gizmoRef.current?.controls.axis && st().gizmoEnabled) return;
           const key = pickAt(e);
           if (key) st().select([key.split('/')[0]], e.shiftKey);
           else if (!e.shiftKey) st().select([]);

@@ -37,9 +37,14 @@ export type StudioState = {
   paintColor: string | number;
   /** Select: dragging orbits the view. Move: dragging a piece moves it on the floor. */
   tool: Tool;
+  /** Optional three-axis Blender-like transform handles. */
+  gizmoEnabled: boolean;
+  gizmoMode: 'translate' | 'rotate' | 'scale';
   /** the plan before a drag; while set, edits replace the plan without adding undo steps */
   gesture: Plan | null;
   setTool(t: Tool): void;
+  setGizmo(enabled: boolean): void;
+  setGizmoMode(mode: 'translate' | 'rotate' | 'scale'): void;
   beginGesture(): void;
   endGesture(): void;
   apply(fn: (p: Plan) => Plan): void;
@@ -67,9 +72,17 @@ export const useStudio = create<StudioState>((set, get) => ({
   focus: { ids: [], tick: 0 },
   paintColor: 71,
   tool: 'select',
+  gizmoEnabled: false,
+  gizmoMode: 'translate',
   gesture: null,
   setTool(tool) {
     set({ tool });
+  },
+  setGizmo(enabled) {
+    set({ gizmoEnabled: enabled });
+  },
+  setGizmoMode(mode) {
+    set({ gizmoMode: mode, gizmoEnabled: true });
   },
   beginGesture() {
     set({ gesture: get().plan });

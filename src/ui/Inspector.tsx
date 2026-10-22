@@ -167,6 +167,7 @@ export function Inspector({ timeline, checks }: { timeline: Timeline | null; che
         </>
       )}
       <EditPad azimuth={() => ((viewportApi.controls?.getAzimuthalAngle() ?? 0) * 180) / Math.PI} />
+      <p className="nx-fine">For Blender-style handles, enable Gizmo above the 3D view and choose Move, Rotate, or Scale. Scale changes the actual LDraw part dimensions, so use it only for non-standard geometry.</p>
       {pieceIds.length > 0 && (
         <div className="nx-sub">
           Colour{' '}

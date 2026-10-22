@@ -50,6 +50,32 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
           {longer ? ': step pauses and submodels that build one after another add time.' : '.'}
         </p>
       )}
+      <div className="nx-field" aria-label="Timeline clip durations">
+        <div className="bm-timing-actions">
+          <strong>Timeline timing</strong>
+          <button className="nx-link" onClick={() => s.set({ introSeconds: null, buildSeconds: null, outroSeconds: null })}>Reset to auto</button>
+        </div>
+        <div className="bm-duration-fields">
+          {([
+            ['introSeconds', 'Intro', timeline?.intro ?? 1],
+            ['buildSeconds', 'Build', timeline ? timeline.buildEnd - timeline.intro : Math.max(1, s.targetSeconds - 4)],
+            ['outroSeconds', s.heroOrbit ? 'Hero orbit' : 'Hold', timeline ? timeline.duration - timeline.buildEnd : 3],
+          ] as const).map(([key, label, actual]) => (
+            <label className="nx-field" key={key}>
+              {label} (s)
+              <input aria-label={`${label} duration in seconds`} type="number" min={key === 'buildSeconds' ? 1 : 0.2} max={120} step={0.1}
+                placeholder={actual.toFixed(1)} value={s[key] ?? ''}
+                onChange={(e) => {
+                  const raw = e.currentTarget.value;
+                  if (!raw) return s.set({ [key]: null });
+                  const num = Number(raw);
+                  if (Number.isFinite(num)) s.set({ [key]: Math.min(120, Math.max(key === 'buildSeconds' ? 1 : 0.2, num)) });
+                }} />
+            </label>
+          ))}
+        </div>
+        <span className="nx-hint">Drag a camera clip's edge in the timeline, or enter exact seconds here. Empty fields follow Auto length. Extending a step clip adjusts its hold. A collision-safe build can exceed the requested time.</span>
+      </div>
 
       <label className="nx-field">
         Export frame rate

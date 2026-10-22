@@ -183,3 +183,50 @@ body { margin: 0; }
 .bm-timeline .bm-step[draggable="true"] { cursor: grab; }
 .bm-timeline .bm-step[draggable="true"]:active { cursor: grabbing; }
 .bm-timeline .bm-step-over { box-shadow: inset 0 0 0 3px #fff, 0 0 0 3px var(--focus) !important; }
+
+/* Timeline editor: handles are wide enough for a trackpad or touch, but stay
+   inside their respective clips. Scrubbing cannot select the ruler text. */
+.bm-timeline, .bm-timeline *, .bm-timeline .nx-ruler {
+  -webkit-user-select: none;
+  user-select: none;
+}
+.bm-timeline .bm-ruler { touch-action: none; cursor: ew-resize; }
+.bm-timeline .nx-playhead i { touch-action: none; }
+.bm-timeline .bm-cam { cursor: default !important; }
+.bm-timeline .bm-trim {
+  position: absolute; z-index: 4; right: 0; top: 0; bottom: 0;
+  width: 13px; cursor: ew-resize; touch-action: none;
+  border-right: 3px solid #ffffff9c;
+  border-radius: 0 7px 7px 0; opacity: .68;
+}
+.bm-timeline .bm-trim.bm-trim-left {
+  left: 0; right: auto; border-right: 0;
+  border-left: 3px solid #ffffff9c; border-radius: 7px 0 0 7px;
+}
+.bm-timeline .bm-trim:hover, .bm-timeline .bm-trim:focus-visible {
+  background: #ffffff4d; opacity: 1; outline: 1px solid white;
+}
+.bm-timeline .bm-step .lbl { margin-right: 8px; }
+.bm-timeline .bm-trim-value { position: absolute; right: 12px; top: 0; font-size: 10px; background: #0005; padding: 0 2px; pointer-events: none; }
+.bm-timeline .bm-resize-bubble {
+  position: absolute; bottom: 44px; z-index: 12; padding: 3px 6px; transform: translateX(-50%);
+  background: var(--ink); color: var(--surface); font: 600 11px ui-monospace, monospace;
+  border-radius: 5px; pointer-events: none;
+}
+.bm-duration-fields { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.bm-duration-fields .nx-field { min-width: 0; gap: 4px; }
+.bm-duration-fields input { min-width: 0; width: 100%; }
+.bm-duration-fields .bm-auto { font-size: 10px; }
+.bm-timing-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.bm-timing-actions button { white-space: nowrap; }
+
+/* Optional three-axis gizmo, never present in preview or exported frames. */
+.bm-gizmo-bar { display:flex; align-items:center; gap:6px; margin:0 5px; }
+.bm-gizmo-toggle { gap: 6px; white-space: nowrap; }
+.bm-gizmo-toggle.on { background: var(--hover); box-shadow: inset 0 0 0 1px var(--focus); }
+.bm-gizmo-bar .ic { width:14px; height:14px; }
+.bm-gizmo-modes { display:flex; }
+.bm-gizmo-modes button { display:grid; place-items:center; min-width:31px; }
+@media (max-width:1150px) { .bm-gizmo-toggle { font-size: 0; gap:0; padding: 0 8px !important; } .bm-gizmo-toggle .ic { font-size: 12px; } }
+
+.nx-resizer { touch-action:none; -webkit-user-select:none; user-select:none; }
