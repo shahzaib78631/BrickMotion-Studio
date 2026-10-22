@@ -82,8 +82,9 @@ export function parseLDraw(text: string, name = 'main.ldr'): LDrawFile {
 }
 
 /** Splits a multi-part document (MPD) into its files. Keys are lower-cased. */
-export function parseMpd(text: string): { main: string; files: Map<string, LDrawFile> } {
+export function parseMpd(text: string): { main: string; files: Map<string, LDrawFile>; raw: Map<string, string> } {
   const files = new Map<string, LDrawFile>();
+  const raw = new Map<string, string>();
   const lines = text.split(/\r?\n/);
   let current: { name: string; lines: string[] } | null = null;
   const blocks: { name: string; lines: string[] }[] = [];
@@ -106,8 +107,14 @@ export function parseMpd(text: string): { main: string; files: Map<string, LDraw
   }
   if (blocks.length === 0) {
     files.set('main.ldr', parseLDraw(text, 'main.ldr'));
-    return { main: 'main.ldr', files };
+    raw.set('main.ldr', text);
+    return { main: 'main.ldr', files, raw };
   }
-  for (const b of blocks) if (!files.has(b.name)) files.set(b.name, parseLDraw(b.lines.join('\n'), b.name));
-  return { main: blocks[0].name, files };
+  for (const b of blocks)
+    if (!files.has(b.name)) {
+      const t = b.lines.join('\n');
+      files.set(b.name, parseLDraw(t, b.name));
+      raw.set(b.name, t);
+    }
+  return { main: blocks[0].name, files, raw };
 }

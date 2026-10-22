@@ -22,6 +22,7 @@ const inst = (key: string, part: string, color: number, x: number): Instance => 
   world: new THREE.Matrix4().makeTranslation(x + 40, part === '3001' ? -24 : -8, 20),
   worldBox: { min: [x, part === '3001' ? -24 : -8, 0], max: [x + 80, 0, 40] },
   placeholder: false,
+  grid: true,
 });
 
 const make = () => new BrickRenderer((p) => geoms.get(p) ?? null, fixtureColors);

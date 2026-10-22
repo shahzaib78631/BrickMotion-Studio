@@ -60,3 +60,13 @@ test('export → import keeps every piece in place', () => {
   expect(back.steps).toHaveLength(2);
   expect(boxes(back)).toEqual(boxes(plan));
 });
+
+test('embedded .dat parts are kept as inline parts, not submodels', () => {
+  const p = importLDraw(
+    `0 FILE main.ldr\n1 4 0 0 0 1 0 0 0 1 0 0 0 1 custom.dat\n0 NOFILE\n0 FILE custom.dat\n0 Custom Part\n3 16 0 0 0 10 0 0 0 0 10\n0 NOFILE\n`,
+    'x.mpd',
+  );
+  expect(p.submodels).toBeUndefined();
+  expect(p.steps[0].pieces[0]).toMatchObject({ part: 'custom' });
+  expect(p.parts!['custom.dat']).toContain('3 16 0 0 0 10 0 0 0 0 10');
+});

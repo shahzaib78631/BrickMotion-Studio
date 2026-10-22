@@ -47,3 +47,8 @@ test('ensureIds gives unique ids across steps and submodels', () => {
   expect(ids).toContain('keep');
   expect(r.plan.steps[0].pieces[0].id).toBeUndefined(); // input not mutated
 });
+
+test('accepts inline part definitions', () => {
+  const r = parsePlan({ ...base, steps: [], parts: { 'custom.dat': '0 Custom\n' } });
+  expect(r.ok && r.plan.parts!['custom.dat']).toBe('0 Custom\n');
+});

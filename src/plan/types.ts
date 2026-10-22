@@ -18,6 +18,8 @@ export type Plan = {
   name: string;
   description?: string;
   submodels?: Record<string, Submodel>;
+  /** custom part definitions embedded in imported files: file name (e.g. "custom.dat") → LDraw text */
+  parts?: Record<string, string>;
   steps: Step[];
 };
 

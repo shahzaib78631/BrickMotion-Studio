@@ -10,7 +10,7 @@ export type Metrics = (part: string) => PartMetrics;
 
 type NodeBase = { itemId: string; model: string; step: number; order: number; local: Placement };
 export type ANode =
-  | (NodeBase & { kind: 'piece'; part: string; color: number; placeholder: boolean; body: Box })
+  | (NodeBase & { kind: 'piece'; part: string; color: number; placeholder: boolean; body: Box; grid: boolean })
   | (NodeBase & { kind: 'sub'; submodel: string; children: ANode[]; body: Box });
 
 export type Instance = {
@@ -23,6 +23,8 @@ export type Instance = {
   world: THREE.Matrix4;
   worldBox: Box;
   placeholder: boolean;
+  /** placed on the stud grid (editor/AI) rather than imported with an exact position */
+  grid: boolean;
 };
 
 export type AssemblyProblem = {
@@ -102,7 +104,7 @@ export function assemble(plan: Plan, metrics: Metrics, colors: Map<number, Color
           if (c === undefined) report({ kind: 'unknown-color', model, itemId, detail: String(item.color) });
           else color = c;
         }
-        nodes.push({ kind: 'piece', itemId, model, step: si, order, part: item.part, color, placeholder: m.placeholder, body: m.body, local: itemPlacement(item, m.body) });
+        nodes.push({ kind: 'piece', itemId, model, step: si, order, part: item.part, color, placeholder: m.placeholder, body: m.body, grid: isGrid(item), local: itemPlacement(item, m.body) });
       });
     });
     return nodes;
@@ -129,7 +131,7 @@ export function assemble(plan: Plan, metrics: Metrics, colors: Map<number, Color
       }
       const worldBox = transformBox(n.body, world);
       bounds = unionBox(bounds, worldBox);
-      instances.push({ key, itemId: n.itemId, model: n.model, part: n.part, color: n.color, world, worldBox, placeholder: n.placeholder });
+      instances.push({ key, itemId: n.itemId, model: n.model, part: n.part, color: n.color, world, worldBox, placeholder: n.placeholder, grid: n.grid });
     }
   };
   collect(nodes, new THREE.Matrix4(), '');

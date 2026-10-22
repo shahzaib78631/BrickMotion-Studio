@@ -64,3 +64,13 @@ test('3,000 bricks validate quickly', () => {
   expect(w).toEqual([]);
   expect(ms).toBeLessThan(300);
 });
+
+const raw = (x: number): PlanItem => ({ part: '3001', color: 4, ldu: [x + 40, -24, 20], matrix: [1, 0, 0, 0, 1, 0, 0, 0, 1] });
+
+test('imported (raw) pieces are trusted: no overlap between two raw pieces', () => {
+  expect(run([raw(0), raw(0)])).toEqual([]);
+});
+
+test('a grid piece overlapping an imported piece is still reported', () => {
+  expect(run([raw(0), brick(0, 0)]).map((x) => x.kind)).toEqual(['overlap']);
+});

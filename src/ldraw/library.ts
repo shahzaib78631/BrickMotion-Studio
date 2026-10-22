@@ -26,7 +26,11 @@ export class PartLibrary {
   constructor(private fetchText: FetchText) {}
 
   addInline(files: Map<string, LDrawFile>): void {
-    for (const [k, v] of files) this.inline.set(normalizeName(k), v);
+    for (const [k, v] of files) {
+      const n = normalizeName(k);
+      this.inline.set(n, v);
+      this.parts.delete(n.replace(/\.dat$/, ''));
+    }
   }
 
   getFile(name: string): Promise<LDrawFile | null> {

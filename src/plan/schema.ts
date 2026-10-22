@@ -36,6 +36,7 @@ export const PlanSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
   submodels: z.record(z.string(), z.object({ steps: z.array(StepSchema) })).optional(),
+  parts: z.record(z.string(), z.string()).optional(),
   steps: z.array(StepSchema),
 });
 

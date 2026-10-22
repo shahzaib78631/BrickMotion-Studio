@@ -72,6 +72,9 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
       floor.position.y = groundY - 0.001;
       const c = box.getCenter(new THREE.Vector3());
       const r = Math.max(8, box.getSize(new THREE.Vector3()).length() / 2);
+      const fog = scene.fog as THREE.Fog;
+      fog.near = r * 10;
+      fog.far = r * 24;
       key.target.position.copy(c);
       key.position.copy(c).add(new THREE.Vector3(-0.5, 1.2, 0.7).normalize().multiplyScalar(r * 3));
       const s = key.shadow.camera;

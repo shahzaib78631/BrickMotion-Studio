@@ -13,6 +13,10 @@ export type StudioState = {
   mode: 'edit' | 'preview';
   /** null = show every step */
   currentStep: number | null;
+  /** item ids the viewport should frame; tick changes on every request */
+  focus: { ids: string[]; tick: number };
+  /** color used for the next added piece */
+  paintColor: string | number;
   apply(fn: (p: Plan) => Plan): void;
   undo(): void;
   redo(): void;
@@ -21,6 +25,8 @@ export type StudioState = {
   setEditingModel(m: ModelName): void;
   setMode(mode: 'edit' | 'preview'): void;
   setCurrentStep(s: number | null): void;
+  requestFocus(ids: string[]): void;
+  setPaintColor(c: string | number): void;
 };
 
 export const useStudio = create<StudioState>((set, get) => ({
@@ -31,6 +37,8 @@ export const useStudio = create<StudioState>((set, get) => ({
   editingModel: '',
   mode: 'edit',
   currentStep: null,
+  focus: { ids: [], tick: 0 },
+  paintColor: 71,
   apply(fn) {
     const { plan, past } = get();
     const next = fn(plan);
@@ -66,5 +74,11 @@ export const useStudio = create<StudioState>((set, get) => ({
   },
   setCurrentStep(s) {
     set({ currentStep: s });
+  },
+  requestFocus(ids) {
+    set({ focus: { ids, tick: get().focus.tick + 1 } });
+  },
+  setPaintColor(c) {
+    set({ paintColor: c });
   },
 }));

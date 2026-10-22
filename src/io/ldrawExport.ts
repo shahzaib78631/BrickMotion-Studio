@@ -34,5 +34,6 @@ export function exportLDraw(plan: Plan, metrics: Metrics, colors: Map<number, Co
   };
   writeModel(`${plan.name}.ldr`, plan.name, plan.steps);
   for (const [name, sub] of Object.entries(plan.submodels ?? {})) writeModel(`${name}.ldr`, name, sub.steps);
+  for (const [name, text] of Object.entries(plan.parts ?? {})) lines.push(`0 FILE ${name}`, text.trimEnd(), '0 NOFILE');
   return lines.join('\n') + '\n';
 }

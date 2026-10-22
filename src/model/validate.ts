@@ -42,7 +42,8 @@ export function validate(asm: Assembly, names: (part: string) => string = (p) =>
     const a = inst[i].worldBox;
     const b = inst[j].worldBox;
     const o = [0, 1, 2].map((k) => axisOverlap(a, b, k));
-    if (o.every((v) => v > OVERLAP)) {
+    // imported pieces come from real designs whose parts legitimately interlock, so only check pairs involving grid pieces
+    if ((inst[i].grid || inst[j].grid) && o.every((v) => v > OVERLAP)) {
       out.push({
         kind: 'overlap',
         itemIds: [inst[i].itemId, inst[j].itemId],

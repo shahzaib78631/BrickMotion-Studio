@@ -23,15 +23,18 @@ function toSteps(file: LDrawFile, submodelNames: Set<string>): Step[] {
 
 /** Converts an LDraw .ldr/.mpd model into a plan. Every piece keeps its exact placement. */
 export function importLDraw(text: string, fileName: string): Plan {
-  const { main, files } = parseMpd(text);
-  const names = new Set(files.keys());
+  const { main, files, raw } = parseMpd(text);
+  const isDat = (n: string) => n.endsWith('.dat');
+  const names = new Set([...files.keys()].filter((n) => !isDat(n)));
   const plan: Plan = {
     format: 'brickmotion-plan',
     version: 1,
     name: stripExt(fileName.split(/[\\/]/).pop() ?? fileName),
     steps: toSteps(files.get(main)!, names),
   };
-  const subs = [...files.entries()].filter(([k]) => k !== main);
+  const subs = [...files.entries()].filter(([k]) => k !== main && !isDat(k));
+  const dats = [...raw.entries()].filter(([k]) => isDat(k));
+  if (dats.length) plan.parts = Object.fromEntries(dats);
   if (subs.length) plan.submodels = Object.fromEntries(subs.map(([k, f]) => [stripExt(k), { steps: toSteps(f, names) }]));
   return plan;
 }

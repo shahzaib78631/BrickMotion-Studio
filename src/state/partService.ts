@@ -3,6 +3,7 @@ import { parseLDConfig, type ColorDef } from '../ldraw/colors';
 import { buildPartGeometry, type PartGeometry } from '../ldraw/geometry';
 import { browserFetchText, PartLibrary, type FetchText } from '../ldraw/library';
 import { measurePart, type PartMetrics } from '../ldraw/metrics';
+import { normalizeName, parseLDraw, type LDrawFile } from '../ldraw/parse';
 
 /** App-wide cache of LDraw parts: colors, catalog, measurements and geometry. */
 let library = new PartLibrary(browserFetchText);
@@ -25,6 +26,25 @@ export async function initPartService(fetchText: FetchText = browserFetchText): 
     catalog = [];
   }
   catalogById = new Map(catalog.map((e) => [e.id, e]));
+}
+
+const registered = new Map<string, string>();
+
+/** Makes custom parts embedded in a plan (from imported files) loadable. */
+export function registerInlineParts(parts: Record<string, string> | undefined): void {
+  if (!parts) return;
+  const fresh = new Map<string, LDrawFile>();
+  for (const [name, text] of Object.entries(parts)) {
+    const n = normalizeName(name);
+    if (registered.get(n) === text) continue;
+    registered.set(n, text);
+    fresh.set(n, parseLDraw(text, n));
+    const id = n.replace(/\.dat$/, '');
+    metrics.delete(id);
+    geometry.delete(id);
+    pending.delete(id);
+  }
+  if (fresh.size) library.addInline(fresh);
 }
 
 export const getColors = () => colors;
