@@ -13,10 +13,8 @@ const ORBIT_DEG = 120;
 const ORBIT_EL = 30;
 const ORBIT_MARGIN = 1.25;
 const OUTRO_BLEND = 0.8;
-/** each camera key frames everything that is on the floor within ±KEY_REACH s… */
+/** each camera key frames everything nearby in time */
 const KEY_REACH = 0.6;
-/** …and the rig is the average of the keys within ±SMOOTH s, so it moves smoothly but never cuts a piece off */
-const SMOOTH = 0.4;
 const rad = THREE.MathUtils.degToRad;
 
 /** Direction from the target to the camera; azimuth from +Z towards +X. */
@@ -70,23 +68,76 @@ const mix = (a: Rig, b: Rig, u: number): Rig => ({
   el: lerp(a.el, b.el, u),
 });
 
+/** Camera framing is fitted and smoothed ONCE for each timeline and aspect.
+ * Recomputing the neighbouring-key average every video frame was expensive and
+ * caused sudden camera jumps whenever a key entered or left the time window. */
+const rigCache = new WeakMap<Timeline, Map<number, Rig[]>>();
+
+function frameRigs(tl: Timeline, aspect: number): Rig[] {
+  let byAspect = rigCache.get(tl);
+  if (!byAspect) rigCache.set(tl, (byAspect = new Map()));
+  const cached = byAspect.get(aspect);
+  if (cached) return cached;
+  const keys = tl.camKeys;
+  const raw = keys.map((key) => {
+    let box = key.box;
+    for (const other of keys) if (other !== key && Math.abs(other.t - key.t) <= KEY_REACH + 1e-9) box = unionBoxes(box, other.box);
+    const az = lerp(BUILD_AZ[0], BUILD_AZ[1], clamp01(key.t / Math.max(tl.buildEnd, 1e-6)));
+    return fitRig(box, aspect, az, BUILD_EL, BUILD_MARGIN);
+  });
+  // A tapered 5-key convolution removes tiny camera adjustments without
+  // changing motion from frame to frame; Catmull-Rom below gives C1 movement.
+  const smoothed = raw.map((r, i) => {
+    const target = new THREE.Vector3();
+    let dist = 0;
+    let weightSum = 0;
+    for (let d = -2; d <= 2; d++) {
+      const k = i + d;
+      if (k < 0 || k >= raw.length) continue;
+      const weight = 3 - Math.abs(d);
+      weightSum += weight;
+      target.addScaledVector(raw[k].target, weight);
+      dist += raw[k].dist * weight;
+    }
+    target.divideScalar(weightSum);
+    // Slightly conservative framing leaves room for interpolated positions.
+    return { target, dist: Math.max(dist / weightSum * 1.08, r.dist * 1.04), az: r.az, el: r.el };
+  });
+  byAspect.set(aspect, smoothed);
+  return smoothed;
+}
+
+const cubic = (p0: number, p1: number, p2: number, p3: number, u: number): number => {
+  const u2 = u * u;
+  const u3 = u2 * u;
+  return (2 * u3 - 3 * u2 + 1) * p1 + (u3 - 2 * u2 + u) * (p2 - p0) / 2
+    + (-2 * u3 + 3 * u2) * p2 + (u3 - u2) * (p3 - p1) / 2;
+};
+
 function floorRig(tl: Timeline, t: number, aspect: number, az: number): Rig {
   const keys = tl.camKeys;
   if (!keys.length) return fitRig(tl.buildBox, aspect, az, BUILD_EL, BUILD_MARGIN);
-  const near = keys.filter((k) => Math.abs(k.t - t) <= SMOOTH + 1e-9);
-  const around = near.length ? near : [keys.reduce((a, b) => (Math.abs(b.t - t) < Math.abs(a.t - t) ? b : a))];
-  const rigs = around.map((k) => {
-    let box: Box | null = null;
-    for (const o of keys) if (Math.abs(o.t - k.t) <= KEY_REACH + 1e-9) box = box ? unionBoxes(box, o.box) : o.box;
-    return fitRig(box!, aspect, az, BUILD_EL, BUILD_MARGIN);
-  });
-  const target = new THREE.Vector3();
-  let dist = 0;
-  for (const r of rigs) {
-    target.add(r.target);
-    dist += r.dist;
-  }
-  return { target: target.divideScalar(rigs.length), dist: dist / rigs.length, az, el: BUILD_EL };
+  const rigs = frameRigs(tl, aspect);
+  // Keys are uniformly spaced by CAM_KEY_STEP, except possibly the final one.
+  const step = keys.length > 1 ? keys[1].t - keys[0].t : 0.2;
+  const i = Math.min(keys.length - 1, Math.max(0, Math.floor(t / step)));
+  const j = Math.min(keys.length - 1, i + 1);
+  if (i === j) return { ...rigs[i], az };
+  const u = clamp01((t - keys[i].t) / (keys[j].t - keys[i].t));
+  const a = rigs[Math.max(0, i - 1)];
+  const b = rigs[i];
+  const c = rigs[j];
+  const d = rigs[Math.min(rigs.length - 1, j + 1)];
+  return {
+    target: new THREE.Vector3(
+      cubic(a.target.x, b.target.x, c.target.x, d.target.x, u),
+      cubic(a.target.y, b.target.y, c.target.y, d.target.y, u),
+      cubic(a.target.z, b.target.z, c.target.z, d.target.z, u),
+    ),
+    dist: Math.max(1, cubic(a.dist, b.dist, c.dist, d.dist, u)),
+    az,
+    el: BUILD_EL,
+  };
 }
 
 const unionBoxes = (a: Box, b: Box): Box => ({

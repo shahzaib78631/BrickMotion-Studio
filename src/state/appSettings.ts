@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { ArrivalMode } from '../anim/pacing';
 import type { LogoCorner } from '../export/exportVideo';
+import type { ExportFps } from '../export/frameRates';
 import { DEFAULT_SETTINGS, type Settings } from '../storage/settings';
 
 export type AppSettings = {
@@ -8,6 +9,7 @@ export type AppSettings = {
   apiKey: string;
   model: string;
   targetSeconds: number;
+  fps: ExportFps;
   heroOrbit: boolean;
   mode: 'auto' | ArrivalMode;
   logoEnabled: boolean;
@@ -36,7 +38,7 @@ export const toSettings = (s: AppSettings): Settings => ({
   logo: s.logo,
   logoCorner: s.logoCorner,
   logoEnabled: s.logoEnabled,
-  video: { targetSeconds: s.targetSeconds, heroOrbit: s.heroOrbit, mode: s.mode },
+  video: { targetSeconds: s.targetSeconds, heroOrbit: s.heroOrbit, mode: s.mode, fps: s.fps },
 });
 
 export async function applySettings(s: Settings): Promise<void> {

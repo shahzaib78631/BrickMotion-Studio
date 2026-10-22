@@ -61,6 +61,10 @@ export class BrickRenderer {
       }
       for (const p of parts) {
         const mesh = new THREE.InstancedMesh(p.geometry, p.material, group.length);
+        // Instances travel far from their assembled positions. Three.js would
+        // otherwise recalculate every moving mesh's bounding sphere on every
+        // frame, which is expensive and can cull parts mid-flight.
+        mesh.frustumCulled = false;
         mesh.castShadow = true;
         mesh.receiveShadow = true;
         group.forEach((inst, index) => {
@@ -81,19 +85,11 @@ export class BrickRenderer {
   }
 
   setMatrices(get: (key: string) => THREE.Matrix4 | null): void {
-    const touched = new Set<THREE.InstancedMesh>();
     for (const [key, slots] of this.slots) {
       const m = get(key) ?? HIDDEN;
-      for (const s of slots) {
-        s.mesh.setMatrixAt(s.index, m);
-        touched.add(s.mesh);
-      }
+      for (const s of slots) s.mesh.setMatrixAt(s.index, m);
     }
-    for (const mesh of touched) {
-      mesh.instanceMatrix.needsUpdate = true;
-      mesh.boundingSphere = null;
-      mesh.boundingBox = null;
-    }
+    for (const mesh of this.meshes) mesh.instanceMatrix.needsUpdate = true;
   }
 
   /** Restores every instance to its assembled position. */

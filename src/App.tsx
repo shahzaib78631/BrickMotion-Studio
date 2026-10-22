@@ -178,6 +178,7 @@ function Studio() {
           name={useStudio.getState().plan.name}
           timeline={timeline}
           instances={model.assembly.instances}
+          fps={video.fps}
           logo={video.logoEnabled && video.logoBitmap ? { image: video.logoBitmap, corner: video.logoCorner } : null}
           onClose={() => setDialog(null)}
         />

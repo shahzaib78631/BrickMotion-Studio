@@ -24,7 +24,7 @@ const LOGO_ALPHA = 0.9;
 
 export const frameCount = (duration: number, fps: number) => Math.max(1, Math.ceil(duration * fps - 1e-6));
 
-export const canExportMp4 = () => canEncodeVideo('avc');
+export const canExportMp4 = (width = 1080, height = 1920, fps = 30) => canEncodeVideo('avc', { width, height, frameRate: fps });
 
 const abortError = () => new DOMException('Export cancelled', 'AbortError');
 
@@ -51,11 +51,14 @@ export function drawLogo(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderin
 export async function exportVideo(opts: ExportOpts, deps: ExportDeps): Promise<Blob> {
   const { timeline: tl, width: w, height: h, fps, signal } = opts;
   if (signal.aborted) throw abortError();
+  if (!Number.isFinite(fps) || fps <= 0) throw new Error('Choose a valid FPS setting.');
   const makeCanvas = deps.createCanvas ?? defaultCanvas;
   const renderCanvas = makeCanvas(w, h);
-  const composite = makeCanvas(w, h);
-  const ctx = composite.getContext('2d') as CanvasRenderingContext2D | null;
-  if (!ctx) throw new Error('Could not create a 2D canvas for export.');
+  // With no logo, encode directly from the WebGL canvas. The old full-HD GPU
+  // readback to a second 2D canvas on EVERY frame was a major export bottleneck.
+  const composite = opts.logo ? makeCanvas(w, h) : renderCanvas;
+  const ctx = opts.logo ? (composite.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null) : null;
+  if (opts.logo && !ctx) throw new Error('Could not create a 2D canvas for the logo overlay.');
 
   const studio = deps.createStudio(renderCanvas, { preserveDrawingBuffer: true });
   const output = new Output({ format: new Mp4OutputFormat(), target: new BufferTarget() });
@@ -64,7 +67,7 @@ export async function exportVideo(opts: ExportOpts, deps: ExportDeps): Promise<B
     studio.setSize(w, h);
     studio.bricks.setInstances(opts.instances);
     studio.fitTo(worldBox3(tl.sceneBox), -tl.ground / 20);
-    const source = new CanvasSource(composite, { codec: 'avc', bitrate: QUALITY_HIGH });
+    const source = new CanvasSource(composite, { codec: 'avc', bitrate: QUALITY_HIGH, latencyMode: 'quality' });
     output.addVideoTrack(source, { frameRate: fps });
     await output.start();
     started = true;
@@ -79,8 +82,10 @@ export async function exportVideo(opts: ExportOpts, deps: ExportDeps): Promise<B
       studio.camera.fov = cam.fov;
       studio.camera.updateProjectionMatrix();
       studio.render();
-      ctx.drawImage(renderCanvas as CanvasImageSource, 0, 0, w, h);
-      if (opts.logo) drawLogo(ctx, opts.logo.image, opts.logo.corner, w, h);
+      if (opts.logo && ctx) {
+        ctx.drawImage(renderCanvas as CanvasImageSource, 0, 0, w, h);
+        drawLogo(ctx, opts.logo.image, opts.logo.corner, w, h);
+      }
       await source.add(i / fps, 1 / fps);
       opts.onProgress(i + 1, total);
     }

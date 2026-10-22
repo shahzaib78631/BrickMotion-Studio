@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Timeline } from '../anim/timeline';
 import { canExportMp4, exportVideo, type LogoCorner } from '../export/exportVideo';
 import type { Instance } from '../model/assemble';
+import type { ExportFps } from '../export/frameRates';
 import { createStudio } from '../render/studio';
 import { safeFileName, saveBlob } from './download';
 
@@ -9,11 +10,12 @@ type Props = {
   name: string;
   timeline: Timeline;
   instances: Instance[];
+  fps: ExportFps;
   logo: { image: ImageBitmap; corner: LogoCorner } | null;
   onClose(): void;
 };
 
-export function ExportDialog({ name, timeline, instances, logo, onClose }: Props) {
+export function ExportDialog({ name, timeline, instances, fps, logo, onClose }: Props) {
   const [state, setState] = useState<'checking' | 'unsupported' | 'running' | 'done' | 'error'>('checking');
   const [progress, setProgress] = useState({ done: 0, total: 1 });
   const [error, setError] = useState('');
@@ -26,7 +28,7 @@ export function ExportDialog({ name, timeline, instances, logo, onClose }: Props
     const ac = new AbortController();
     abort.current = ac;
     (async () => {
-      if (!(await canExportMp4().catch(() => false))) return alive && setState('unsupported');
+      if (!(await canExportMp4(1080, 1920, fps).catch(() => false))) return alive && setState('unsupported');
       if (!alive) return;
       setState('running');
       try {
@@ -36,10 +38,13 @@ export function ExportDialog({ name, timeline, instances, logo, onClose }: Props
             instances,
             width: 1080,
             height: 1920,
-            fps: 30,
+            fps,
             logo,
             signal: ac.signal,
-            onProgress: (done, total) => alive && setProgress({ done, total }),
+            onProgress: (done, total) => {
+              // Avoid re-rendering the modal for every 60/90/120-FPS frame.
+              if (alive && (done === total || done % Math.max(1, Math.round(fps / 3)) === 0)) setProgress({ done, total });
+            },
           },
           { createStudio },
         );
@@ -66,11 +71,11 @@ export function ExportDialog({ name, timeline, instances, logo, onClose }: Props
       <div className="dialog" role="dialog" aria-label="Export video">
         <h2>Export video</h2>
         {state === 'checking' && <p className="muted">Checking your browser…</p>}
-        {state === 'unsupported' && <p className="error">Your browser can't encode MP4. Use Chrome.</p>}
+        {state === 'unsupported' && <p className="error">Your browser can't encode 1080×1920 MP4 at {fps} fps. Try a lower FPS option or use a newer Chrome browser.</p>}
         {state === 'running' && (
           <>
             <p className="muted">
-              Rendering frame {progress.done} of {progress.total} (1080×1920, 30 fps)…
+              Rendering frame {progress.done} of {progress.total} (1080×1920, {fps} fps)…
             </p>
             <div className="progress">
               <div style={{ width: `${pct}%` }} />

@@ -10,7 +10,13 @@ const BRICK = 24;
 const FLOOR_MARGIN = 2; // studs around the model's footprint kept clear
 const SIDE_GAP = 4; // studs between the model area and a side spot
 const DROP_TIME = 0.3;
-const SETTLE = 0.12;
+// A flight first clears the work area, then travels above the existing pieces,
+// then lowers into position. Moving sideways while low caused parts to pass
+// through the finished model (and each other).
+const LIFT_END = 0.24;
+const LOWER_START = 0.76;
+const FLIGHT_CLEARANCE = 24; // LDraw units (one brick)
+const AIR_LANE = 80; // extra height when two airborne trajectories intersect
 const CAM_KEY_STEP = 0.2;
 const SIDE_REACH = 1.5;
 /** the camera needs this long to move into a submodel close-up (and out of it) */
@@ -24,7 +30,7 @@ export type SubBuild = { key: string; name: string; closeUp: boolean; start: num
 /** What the build camera must keep in view at time t (LDU): the model plus the pieces still on the floor. */
 export type CamKey = { t: number; box: Box };
 
-type Move = { unit: number; from: THREE.Matrix4; to: THREE.Matrix4; rel: THREE.Matrix4 | null; peak: number };
+type Move = { unit: number; from: THREE.Matrix4; to: THREE.Matrix4; rel: THREE.Matrix4 | null; skyY: number; hold: number };
 type Track = { appear: number; floor: THREE.Matrix4; floorBox: Box; ctx: number; moves: Move[]; final: THREE.Matrix4 };
 
 /** When one step of a model plays (a step split by a submodel build plays in parts). */
@@ -201,8 +207,17 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     const zMid = (modelBox.min[2] + modelBox.max[2]) / 2;
     const tx = sideRight + SIDE_GAP * STUD - b.min[0];
     const from = new THREE.Matrix4().makeTranslation(tx, ground - b.max[1], zMid - (b.min[2] + b.max[2]) / 2).multiply(basis);
-    const spot = transformBox(n.body, from);
-    const bands = bandsAround(spot, padArea(n.children));
+    let spot = transformBox(n.body, from);
+    let bands = bandsAround(spot, padArea(n.children));
+    // Reserve room for the submodel's FLOOR pieces as well as the assembled
+    // chunk. Otherwise the side staging band can overlap main-floor pieces.
+    const edge = Math.min(spot.min[0], ...bands.map((r) => r.x0 * STUD));
+    const shift = Math.max(0, sideRight + SIDE_GAP * STUD - edge);
+    if (shift) {
+      from.elements[12] += shift;
+      spot = transformBox(n.body, from);
+      bands = bandsAround(spot, padArea(n.children));
+    }
     const focus = unionBox(unionBox(spot, regionBox(bands[0], ground)), regionBox(bands[1], ground)); // the scene bounds; the camera uses the occupied part
     sceneBox = unionBox(sceneBox, focus);
     const savedRight = sideRight;
@@ -313,6 +328,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
 
   // --- floor poses, windows ---
   const tracks = new Map<string, Track>();
+  const windowVisibility: { ctx: number; windows: { ids: string[] }[] }[] = [];
   ctxs.forEach((ctx, ci) => {
     const items: (FloorItem & { color: number })[] = ctx.pieces.map((key) => {
       const inst = byKey.get(key)!;
@@ -335,9 +351,15 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
       [...ordered].sort((a, b) => playOrder.get(a.id)! - playOrder.get(b.id)!).map(({ id, w, d, group }) => ({ id, w, d, group })),
       ctx.bands,
     );
+    windowVisibility.push({ ctx: ci, windows });
     // re-layout each window in colour order so similar pieces sit together
     // a copy that reuses a side spot drops its pieces in once the previous copy's floor is empty
-    let appear = ctx.after === undefined ? -Infinity : ctxs[ctx.after].pieces.reduce((m, k) => Math.max(m, pieceStart.get(k) ?? 0), -Infinity);
+    // A repeated side spot is not free when the previous submodel's last
+    // constituent takes off: the assembled chunk remains there until its
+    // ATTACH flight completes. Do not drop the next batch on top of it.
+    const previousSub = subInfo.find((sub) => sub.ctx === ctx.after);
+    const previousAttach = previousSub ? flat.findIndex((f) => f.u.kind === 'attach' && f.u.key === previousSub.key) : -1;
+    let appear = previousAttach < 0 ? -Infinity : starts[previousAttach] + flightDur;
     windows.forEach((win, wi) => {
       const set = new Set(win.ids);
       const r = layoutBands(
@@ -365,7 +387,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
   flat.forEach((f, i) => {
     if (f.u.kind === 'piece') {
       const tr = tracks.get(f.u.key)!;
-      tr.moves.push({ unit: i, from: tr.floor, to: f.u.target, rel: null, peak: 0 });
+      tr.moves.push({ unit: i, from: tr.floor, to: f.u.target, rel: null, skyY: 0, hold: 0 });
       current.set(f.u.key, f.u.target);
       return;
     }
@@ -375,17 +397,94 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
       const tr = tracks.get(k);
       if (!cur || !tr) continue;
       const rel = inv.clone().multiply(cur);
-      tr.moves.push({ unit: i, from: f.u.from, to: f.u.to, rel, peak: 0 });
+      tr.moves.push({ unit: i, from: f.u.from, to: f.u.to, rel, skyY: 0, hold: 0 });
       current.set(k, f.u.to.clone().multiply(rel));
     }
   });
-  for (const tr of tracks.values()) {
-    for (const m of tr.moves) {
-      const a = new THREE.Vector3().setFromMatrixPosition(m.from);
-      const b = new THREE.Vector3().setFromMatrixPosition(m.to);
-      m.peak = Math.max(3 * BRICK, 0.15 * Math.hypot(b.x - a.x, b.z - a.z));
+  // A flight's safe cruise height is above everything already built and everything
+  // waiting on the floor. It is calculated in build order rather than against the
+  // *future* completed tower, which would force early pieces needlessly high.
+  let builtTop = Math.min(ground - BRICK, ...[...tracks.values()].map((tr) => tr.floorBox.min[1]));
+  const members = units.map(() => [] as { key: string; move: Move; body: Box }[]);
+  for (const [key, tr] of tracks)
+    for (const mv of tr.moves) members[mv.unit].push({ key, move: mv, body: metrics(byKey.get(key)!.part).body });
+  const sweptXY: Box[] = [];
+  for (let i = 0; i < units.length; i++) {
+    let top = builtTop;
+    let offset = Infinity;
+    let extent = 0;
+    let sweep: Box | null = null;
+    for (const { move: mv, body } of members[i]) {
+      const fromBox = transformBox(body, restPose(mv.from, mv.rel));
+      const toBox = transformBox(body, restPose(mv.to, mv.rel));
+      const fromY = mv.from.elements[13];
+      const toY = mv.to.elements[13];
+      top = Math.min(top, fromBox.min[1], toBox.min[1]);
+      offset = Math.min(offset, fromBox.min[1] - fromY, toBox.min[1] - toY);
+      extent = Math.max(extent, fromBox.max[1] - fromBox.min[1], toBox.max[1] - toBox.min[1]);
+      sweep = unionBox(sweep, unionBox(fromBox, toBox));
+    }
+    // Every member of an attaching submodel follows the same rigid-body path.
+    const skyY = top - FLIGHT_CLEARANCE - (Number.isFinite(offset) ? offset : 0);
+    for (const { move: mv } of members[i]) mv.skyY = skyY;
+    builtTop = Math.min(builtTop, top);
+    sweptXY[i] = sweep ?? EMPTY_BOX;
+    // When flight paths pass over another piece's launch position, a higher
+    // lane alone can make things WORSE: the lifting piece must pass through
+    // the lower lane. Small takeoff holds keep both paths separated without
+    // stretching the video. Sweep the rotated body boxes between samples.
+    const overlapping = [] as number[];
+    for (let j = 0; j < i; j++) {
+      if (units[j].start >= units[i].start + units[i].dur || units[j].start + units[j].dur <= units[i].start) continue;
+      if (!xyIntersects(sweptXY[i], sweptXY[j])) continue;
+      if (members[i].some((p) => members[j].some((q) => p.key === q.key))) continue;
+      overlapping.push(j);
+    }
+    let safe = false;
+    for (let lane = 0; lane < 12 && !safe; lane++) {
+      const laneHeight = skyY - lane * Math.max(AIR_LANE, extent + FLIGHT_CLEARANCE);
+      for (const hold of [0, 0.06, 0.12, 0.18, 0.24, 0.32]) {
+        for (const { move: mv } of members[i]) {
+          mv.skyY = laneHeight;
+          mv.hold = hold;
+        }
+        if (!overlapping.some((j) => flightsIntersect(units, members, i, j))) {
+          safe = true;
+          break;
+        }
+      }
+    }
+    if (!safe && overlapping.length) {
+      // Last resort: move this unit after the interfering airborne units.
+      // Models with genuinely impossible routes may require extra video time.
+      for (const j of overlapping) units[i].start = Math.max(units[i].start, units[j].start + units[j].dur);
+      starts[i] = units[i].start;
+      for (const { move: mv } of members[i]) {
+        mv.skyY = skyY;
+        mv.hold = 0;
+      }
     }
   }
+  // Recalculate when new pieces may safely occupy a reused floor band. A
+  // piece that has merely STARTED rising is still in the space where the next
+  // window drops in. The band isn't empty until the last piece clears it.
+  for (const { ctx, windows } of windowVisibility) {
+    const previousSub = subInfo.find((sub) => sub.ctx === ctxs[ctx].after);
+    const previousAttach = previousSub ? flat.findIndex((f) => f.u.kind === 'attach' && f.u.key === previousSub.key) : -1;
+    let appear = previousAttach < 0 ? -Infinity : units[previousAttach].start + units[previousAttach].dur;
+    for (const win of windows) {
+      for (const key of win.ids) tracks.get(key)!.appear = appear;
+      appear = win.ids.reduce((latest, key) => {
+        const move = tracks.get(key)!.moves[0];
+        const unit = units[move.unit];
+        return Math.max(latest, unit.start + unit.dur * (move.hold + (1 - move.hold) * LIFT_END) + 0.01);
+      }, -Infinity);
+    }
+  }
+  // Keep the remainder of the timeline, submodel labels and outro aligned if
+  // an exceptional collision forced a launch to be postponed.
+  for (let i = 0; i < units.length; i++) starts[i] = units[i].start;
+  actualEnd = Math.max(actualEnd, ...units.map((u) => u.start + u.dur));
 
   // --- what the camera must see ---
   const launch = (tr: Track) => (tr.moves.length ? units[tr.moves[0].unit].start : Infinity);
@@ -406,16 +505,16 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     };
   });
 
-  // the space each flight sweeps: both ends, raised by its arc
+  // Include the ascent, air lane and descent (not just the two endpoints)
+  // so a wide-shot camera doesn't cut off a high-flying brick.
   const flightBox: (Box | null)[] = units.map(() => null);
-  for (const [key, tr] of tracks) {
-    const body = metrics(byKey.get(key)!.part).body;
-    for (const mv of tr.moves) {
-      let b = unionBox(transformBox(body, restPose(mv.from, mv.rel)), transformBox(body, restPose(mv.to, mv.rel)));
-      b = { min: [b.min[0], b.min[1] - mv.peak, b.min[2]], max: [b.max[0], b.max[1] + 2, b.max[2]] };
-      flightBox[mv.unit] = flightBox[mv.unit] ? unionBox(flightBox[mv.unit]!, b) : b;
+  for (const group of members)
+    for (const { move: mv, body } of group) {
+      for (const u of [0, LIFT_END, 0.5, LOWER_START, 1]) {
+        const b = transformBox(body, flightPose(mv, u, new THREE.Matrix4()));
+        flightBox[mv.unit] = flightBox[mv.unit] ? unionBox(flightBox[mv.unit]!, b) : b;
+      }
     }
-  }
 
   units.forEach((u, i) => (u.box = flightBox[i]));
 
@@ -470,22 +569,71 @@ const _s0 = new THREE.Vector3();
 const _s1 = new THREE.Vector3();
 
 function flightPose(m: Move, u: number, out: THREE.Matrix4): THREE.Matrix4 {
+  // A locally delayed launch avoids crossing an earlier airborne lane while
+  // retaining the original unit start/end times.
+  u = clamp01((u - m.hold) / (1 - m.hold));
   m.from.decompose(_p0, _q0, _s0);
   m.to.decompose(_p1, _q1, _s1);
-  if (u < 1 - SETTLE) {
-    const e = easeInOutCubic(u / (1 - SETTLE));
-    const y = lerp(_p0.y, _p1.y, e) - 4 * e * (1 - e) * (m.peak + Math.abs(_p0.y - _p1.y) / 2);
-    _p0.set(lerp(_p0.x, _p1.x, e), y, lerp(_p0.z, _p1.z, e));
+  if (u < LIFT_END) {
+    // Rise straight up while keeping the initial orientation. No sweep through
+    // neighbouring bricks on the floor or already in the model.
+    _p0.y = lerp(_p0.y, m.skyY, easeInOutCubic(clamp01(u / LIFT_END)));
+    out.compose(_p0, _q0, _s0);
+  } else if (u < LOWER_START) {
+    // Only translate and rotate sideways once the entire unit has clearance.
+    const e = easeInOutCubic(clamp01((u - LIFT_END) / (LOWER_START - LIFT_END)));
+    _p0.set(lerp(_p0.x, _p1.x, e), m.skyY, lerp(_p0.z, _p1.z, e));
     _q0.slerp(_q1, e);
     _s0.lerp(_s1, e);
     out.compose(_p0, _q0, _s0);
   } else {
-    const s = (u - (1 - SETTLE)) / SETTLE;
-    _p1.y += 2 * Math.sin(Math.PI * s); // settle: dip 2 LDU (LDraw +y is down), then back
+    // Lower vertically, already aligned with the target. Do not dip into the
+    // bricks below (the old settling bounce intersected their geometry).
+    _p1.y = lerp(m.skyY, _p1.y, easeInOutCubic(clamp01((u - LOWER_START) / (1 - LOWER_START))));
     out.compose(_p1, _q1, _s1);
   }
   if (m.rel) out.multiply(m.rel);
   return out;
+}
+
+/** Ignore mere face contact / LDraw stud tolerance when checking body volumes. */
+const boxIntersects = (a: Box, b: Box, tolerance = 2) =>
+  [0, 1, 2].every((axis) => Math.min(a.max[axis], b.max[axis]) - Math.max(a.min[axis], b.min[axis]) > tolerance);
+
+const xyIntersects = (a: Box, b: Box) =>
+  [0, 2].every((axis) => Math.min(a.max[axis], b.max[axis]) - Math.max(a.min[axis], b.min[axis]) > 2);
+
+/** Check overlapping flight times and real member boxes, not group envelopes. */
+function flightsIntersect(
+  units: Unit[],
+  members: { key: string; move: Move; body: Box }[][],
+  i: number,
+  j: number,
+): boolean {
+  const a = units[i];
+  const b = units[j];
+  const t0 = Math.max(a.start, b.start);
+  const t1 = Math.min(a.start + a.dur, b.start + b.dur);
+  if (t1 <= t0) return false;
+  // Conservative swept-box checks between frames catch very brief contacts
+  // that point-sampling at even 120/240 fps can miss. Each interval includes
+  // both endpoint boxes, so two pieces cannot simply "swap places" between
+  // the inspected times without registering a conflict.
+  const samples = Math.max(24, Math.ceil((t1 - t0) * 160));
+  const boxesAt = (index: number, u: Unit, t: number) => members[index].map(({ move, body }) =>
+    transformBox(body, flightPose(move, clamp01((t - u.start) / u.dur), new THREE.Matrix4())),
+  );
+  let ba = boxesAt(i, a, t0);
+  let bb = boxesAt(j, b, t0);
+  for (let n = 1; n <= samples; n++) {
+    const t = lerp(t0, t1, n / samples);
+    const nextA = boxesAt(i, a, t);
+    const nextB = boxesAt(j, b, t);
+    if (ba.some((box, k) => nextB.some((other, m) => boxIntersects(unionBox(box, nextA[k]), unionBox(bb[m], other))))) return true;
+    ba = nextA;
+    bb = nextB;
+  }
+  return false;
 }
 
 const restPose = (m: THREE.Matrix4, rel: THREE.Matrix4 | null) => (rel ? m.clone().multiply(rel) : m.clone());

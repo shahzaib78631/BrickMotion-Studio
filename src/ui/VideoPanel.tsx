@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Timeline } from '../anim/timeline';
 import type { LogoCorner } from '../export/exportVideo';
+import { FPS_OPTIONS, type ExportFps } from '../export/frameRates';
 import { useAppSettings } from '../state/appSettings';
 import { Ic } from './icons';
 
@@ -36,7 +37,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
         <h3>
           <Ic name="video" /> Video
         </h3>
-        <span className="nx-chip">9:16 · 1080×1920 · 30 fps</span>
+        <span className="nx-chip">9:16 · 1080×1920 · {s.fps} fps</span>
       </div>
 
       <label className="nx-field">
@@ -49,6 +50,18 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
           {longer ? ': submodels that build one after another need the extra time.' : '.'}
         </p>
       )}
+
+      <label className="nx-field">
+        Export frame rate
+        <select aria-label="Export frame rate" value={s.fps} onChange={(e) => s.set({ fps: Number(e.target.value) as ExportFps })}>
+          {FPS_OPTIONS.map((fps) => (
+            <option key={fps} value={fps}>
+              {fps} fps{fps === 30 ? ' (standard)' : fps === 60 ? ' (smooth)' : fps === 120 ? ' (high FPS)' : ''}
+            </option>
+          ))}
+        </select>
+        <span className="nx-hint">Higher FPS makes movement smoother but takes longer to render and creates larger MP4s.</span>
+      </label>
 
       <div className="nx-field">
         Pieces arrive

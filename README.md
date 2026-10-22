@@ -22,8 +22,8 @@ npm run dev     # open http://localhost:5173
    - **Import…**: open a `.json` plan, or an LDraw `.ldr` / `.mpd` model (for example an official set from the LDraw OMR).
    - Or build by hand: pick parts on the left; arrow keys move, PageUp/PageDown change height, R rotates, Delete removes.
 2. **Fix it**: the **Checks** panel lists floating and overlapping pieces. Click a piece to move it, recolour it or swap the part. **✨ AI → Fix with Claude** sends the checks and your note back to Claude.
-3. **Preview**: **▶ Preview** plays the animation inside a 9:16 frame. Set the length (5–60 s), how pieces arrive (one by one, in batches, step by step), the hero orbit and an optional logo.
-4. **Export MP4**: 1080×1920, 30 fps, H.264, rendered frame by frame.
+3. **Preview**: **▶ Preview** plays the animation inside a 9:16 frame. Set the length (5–60 s), how pieces arrive (one by one, in batches, step by step), the export FPS, the hero orbit and an optional logo. Flights rise above already assembled pieces before crossing the scene, with swept-volume collision checks for simultaneous flights.
+4. **Export MP4**: 1080×1920, H.264 at a selectable 24, 25, 30, 48, 50, 60, 90 or 120 fps, rendered at fixed timestamps frame by frame. Browser support for high FPS varies.
 
 Projects save automatically (📁 Projects), and the last one reopens on load.
 

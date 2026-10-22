@@ -19,7 +19,7 @@ export type Studio = {
 
 export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: { preserveDrawingBuffer?: boolean } = {}): Studio {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: !!opts.preserveDrawingBuffer, alpha: false });
-  renderer.setPixelRatio(typeof window !== 'undefined' && canvas instanceof HTMLCanvasElement ? Math.min(window.devicePixelRatio, 2) : 1);
+  renderer.setPixelRatio(typeof window !== 'undefined' && canvas instanceof HTMLCanvasElement ? Math.min(window.devicePixelRatio, 1.5) : 1);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -46,7 +46,9 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
   scene.add(hemi);
   const key = new THREE.DirectionalLight(0xffffff, 2.2);
   key.castShadow = true;
-  key.shadow.mapSize.set(2048, 2048);
+  // Refreshing 2048² shadow maps for every moving export frame can overload
+  // integrated GPUs. 1024² is sufficient for the full-HD video export.
+  key.shadow.mapSize.set(opts.preserveDrawingBuffer ? 1024 : 1536, opts.preserveDrawingBuffer ? 1024 : 1536);
   key.shadow.radius = 4;
   key.shadow.bias = -0.0004;
   key.shadow.normalBias = 0.02;
