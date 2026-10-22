@@ -120,3 +120,50 @@ test('a small model shows every piece on the floor at t=0', () => {
   const at0 = poseAt(tl, 0);
   expect(asm.instances.filter((i) => !at0(i.key)).map((i) => i.key)).toEqual([]);
 });
+
+const twinTowers = () => {
+  const steps: PlanItem[][] = [];
+  for (let s = 0; s < 8; s++) steps.push([brick(0, s * 3, 0), brick(6, s * 3, 0)]);
+  return assemble(plan(steps), metrics, fixtureColors);
+};
+
+const ndcExtent = (tl: ReturnType<typeof buildTimeline>, asm: ReturnType<typeof assemble>, t: number) => {
+  const pose = poseAt(tl, t);
+  const c = cameraAt(tl, t, 9 / 16);
+  const cam = new THREE.PerspectiveCamera(c.fov, 9 / 16, 0.1, 5000);
+  cam.position.copy(c.position);
+  cam.lookAt(c.target);
+  cam.updateMatrixWorld();
+  let max = 0;
+  let width = 0;
+  const xs: number[] = [];
+  for (const i of asm.instances) {
+    const m = pose(i.key);
+    if (!m) continue;
+    const b = transformBox(metrics(i.part).body, m);
+    for (const x of [b.min[0], b.max[0]])
+      for (const y of [b.min[1], b.max[1]])
+        for (const z of [b.min[2], b.max[2]]) {
+          const p = new THREE.Vector3(x / 20, -y / 20, -z / 20).project(cam);
+          max = Math.max(max, Math.abs(p.x), Math.abs(p.y));
+          xs.push(p.x);
+        }
+  }
+  width = Math.max(...xs) - Math.min(...xs);
+  return { max, width, dist: c.position.distanceTo(c.target) };
+};
+
+test('every visible piece stays inside the 9:16 frame', () => {
+  const asm = twinTowers();
+  const tl = buildTimeline(asm, metrics, opts);
+  for (let t = 0; t <= tl.duration; t += 0.1) expect(ndcExtent(tl, asm, t).max).toBeLessThanOrEqual(1.0001);
+});
+
+test('the camera moves in as the floor empties, and the model fills the frame at the end of the build', () => {
+  const asm = twinTowers();
+  const tl = buildTimeline(asm, metrics, opts);
+  const start = ndcExtent(tl, asm, tl.intro);
+  const end = ndcExtent(tl, asm, tl.buildEnd - 0.05);
+  expect(end.dist).toBeLessThan(start.dist * 0.8);
+  expect(end.width).toBeGreaterThan(0.6);
+});

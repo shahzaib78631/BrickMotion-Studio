@@ -14,6 +14,10 @@ const ORBIT_EL = 30;
 const ORBIT_MARGIN = 1.25;
 const FOCUS_EASE = 0.6;
 const OUTRO_BLEND = 0.8;
+/** each camera key frames everything that is on the floor within ±KEY_REACH s… */
+const KEY_REACH = 0.6;
+/** …and the rig is the average of the keys within ±SMOOTH s, so it moves smoothly but never cuts a piece off */
+const SMOOTH = 0.4;
 
 const rad = THREE.MathUtils.degToRad;
 
@@ -68,9 +72,33 @@ const mix = (a: Rig, b: Rig, u: number): Rig => ({
   el: lerp(a.el, b.el, u),
 });
 
+function floorRig(tl: Timeline, t: number, aspect: number, az: number): Rig {
+  const keys = tl.camKeys;
+  if (!keys.length) return fitRig(tl.buildBox, aspect, az, BUILD_EL, BUILD_MARGIN);
+  const near = keys.filter((k) => Math.abs(k.t - t) <= SMOOTH + 1e-9);
+  const around = near.length ? near : [keys.reduce((a, b) => (Math.abs(b.t - t) < Math.abs(a.t - t) ? b : a))];
+  const rigs = around.map((k) => {
+    let box: Box | null = null;
+    for (const o of keys) if (Math.abs(o.t - k.t) <= KEY_REACH + 1e-9) box = box ? unionBoxes(box, o.box) : o.box;
+    return fitRig(box!, aspect, az, BUILD_EL, BUILD_MARGIN);
+  });
+  const target = new THREE.Vector3();
+  let dist = 0;
+  for (const r of rigs) {
+    target.add(r.target);
+    dist += r.dist;
+  }
+  return { target: target.divideScalar(rigs.length), dist: dist / rigs.length, az, el: BUILD_EL };
+}
+
+const unionBoxes = (a: Box, b: Box): Box => ({
+  min: [Math.min(a.min[0], b.min[0]), Math.min(a.min[1], b.min[1]), Math.min(a.min[2], b.min[2])],
+  max: [Math.max(a.max[0], b.max[0]), Math.max(a.max[1], b.max[1]), Math.max(a.max[2], b.max[2])],
+});
+
 function buildRig(tl: Timeline, t: number, aspect: number): Rig {
   const az = lerp(BUILD_AZ[0], BUILD_AZ[1], clamp01(t / Math.max(tl.buildEnd, 1e-6)));
-  let rig = fitRig(tl.buildBox, aspect, az, BUILD_EL, BUILD_MARGIN);
+  let rig = floorRig(tl, t, aspect, az);
   // the innermost submodel being built at its side spot pulls the camera over
   let active = null as Timeline['subBuilds'][number] | null;
   for (const s of tl.subBuilds) if (t >= s.start && t < s.attachStart + FOCUS_EASE && (!active || s.start >= active.start)) active = s;

@@ -11,13 +11,16 @@ const FLOOR_MARGIN = 2; // studs around the model's footprint kept clear
 const SIDE_GAP = 4; // studs between the model area and a side spot
 const DROP_TIME = 0.3;
 const SETTLE = 0.12;
+const CAM_KEY_STEP = 0.2;
 
 /** One thing that flies: a single piece, or a finished submodel chunk (the attach). */
 export type Unit = { kind: 'piece' | 'attach'; keys: string[]; start: number; dur: number; step: number };
 export type SubBuild = { key: string; start: number; attachStart: number; attachEnd: number; focus: Box };
+/** What the build camera must keep in view at time t (LDU): the model plus the pieces still on the floor. */
+export type CamKey = { t: number; box: Box };
 
 type Move = { unit: number; from: THREE.Matrix4; to: THREE.Matrix4; rel: THREE.Matrix4 | null; peak: number };
-type Track = { appear: number; floor: THREE.Matrix4; moves: Move[]; final: THREE.Matrix4 };
+type Track = { appear: number; floor: THREE.Matrix4; floorBox: Box; ctx: number; moves: Move[]; final: THREE.Matrix4 };
 
 export type Timeline = {
   duration: number;
@@ -32,6 +35,7 @@ export type Timeline = {
   modelBox: Box;
   /** everything the camera may show, LDU */
   sceneBox: Box;
+  camKeys: CamKey[];
   ground: number;
   tracks: Map<string, Track>;
 };
@@ -67,16 +71,28 @@ const regionBox = (r: Region, ground: number): Box => ({
   max: [(r.x0 + r.width) * STUD, ground, (r.z0 + r.depth) * STUD],
 });
 
+/**
+ * Packs the bands in order. Within a band the used rows are pushed against the
+ * model and flipped so the earliest pieces lie furthest out: the floor empties
+ * from the outside in, which lets the camera move in during the build.
+ * Band 0 lies in front (its edge nearest the model is its max z), band 1 behind.
+ */
 function layoutBands(items: FloorItem[], bands: Region[]) {
   const pos = new Map<string, { x: number; z: number }>();
   let rest = items;
-  for (const band of bands) {
-    if (!rest.length) break;
+  bands.forEach((band, bi) => {
+    if (!rest.length) return;
     const r = layoutFloor(rest, band);
-    r.pos.forEach((v, k) => pos.set(k, v));
+    const depthOf = new Map(rest.map((i) => [i.id, i.d]));
+    let used = 0;
+    r.pos.forEach((p, k) => (used = Math.max(used, p.z + depthOf.get(k)! - band.z0)));
+    r.pos.forEach((p, k) => {
+      const d = depthOf.get(k)!;
+      pos.set(k, { x: p.x, z: bi === 0 ? p.z + Math.max(0, band.depth - used) : band.z0 + used - (p.z - band.z0) - d });
+    });
     const left = new Set(r.overflow);
     rest = rest.filter((i) => left.has(i.id));
-  }
+  });
   return { pos, overflow: rest.map((i) => i.id) };
 }
 
@@ -119,7 +135,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
 
   const steps: PlayStep[] = [];
   const ctxs: Ctx[] = [{ bands: mainBands, pieces: [], group: new Map() }];
-  const subInfo: { key: string; firstStep: number; focus: Box }[] = [];
+  const subInfo: { key: string; firstStep: number; spot: Box; ctx: number }[] = [];
   let sceneBox: Box = unionBox(modelBox, regionBox(mainBands[0], ground));
   sceneBox = unionBox(sceneBox, regionBox(mainBands[1], ground));
   let sideRight = Math.max(modelBox.max[0], (mainBands[0].x0 + mainBands[0].width) * STUD);
@@ -167,14 +183,14 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     const from = new THREE.Matrix4().makeTranslation(tx, ground - b.max[1], zMid - (b.min[2] + b.max[2]) / 2).multiply(basis);
     const spot = transformBox(n.body, from);
     const bands = bandsAround(spot, padArea(n.children));
-    const focus = unionBox(unionBox(spot, regionBox(bands[0], ground)), regionBox(bands[1], ground));
+    const focus = unionBox(unionBox(spot, regionBox(bands[0], ground)), regionBox(bands[1], ground)); // the scene bounds; the camera uses the occupied part
     sceneBox = unionBox(sceneBox, focus);
     const savedRight = sideRight;
     sideRight = Math.max(spot.max[0], focus.max[0]);
     const ctx = ctxs.length;
     ctxs.push({ bands, pieces: [], group: new Map() });
     const sub = subInfo.length;
-    subInfo.push({ key, firstStep: steps.length, focus });
+    subInfo.push({ key, firstStep: steps.length, spot, ctx: ctxs.length - 1 });
     play(n.children, from, key, ctx);
     sideRight = savedRight;
     return { kind: 'attach', key, keys: keysUnder(n, prefix), from, to, sub };
@@ -255,7 +271,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
 
   // --- floor poses, windows ---
   const tracks = new Map<string, Track>();
-  for (const ctx of ctxs) {
+  ctxs.forEach((ctx, ci) => {
     const items: (FloorItem & { color: number })[] = ctx.pieces.map((key) => {
       const inst = byKey.get(key)!;
       const b = transformBox(metrics(inst.part).body, naturalBasis(inst.world));
@@ -290,10 +306,10 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
         const b = transformBox(metrics(inst.part).body, basis);
         const p = pos.get(key) ?? { x: ctx.bands[0].x0, z: ctx.bands[0].z0 };
         const floor = new THREE.Matrix4().makeTranslation(p.x * STUD - b.min[0], ground - b.max[1], p.z * STUD - b.min[2]).multiply(basis);
-        tracks.set(key, { appear, floor, moves: [], final: inst.world.clone() });
+        tracks.set(key, { appear, floor, floorBox: transformBox(metrics(inst.part).body, floor), ctx: ci, moves: [], final: inst.world.clone() });
       }
     });
-  }
+  });
 
   // --- moves ---
   const current = new Map<string, THREE.Matrix4>();
@@ -322,14 +338,28 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     }
   }
 
+  // --- what the camera must see ---
+  const launch = (tr: Track) => (tr.moves.length ? units[tr.moves[0].unit].start : Infinity);
+  const occupied = (ctx: number) => [...tracks.values()].filter((tr) => tr.ctx === ctx);
+  // every piece lying on the floor, side spots included, so nothing on screen is cut off
+  const mainFloor = [...tracks.values()];
+  let buildBox = modelBox;
+  for (const tr of mainFloor) buildBox = unionBox(buildBox, tr.floorBox);
+  const camKeys: CamKey[] = [];
+  const camEnd = flat.length ? actualEnd : intro;
+  for (let t = 0; t <= camEnd + 1e-9; t += CAM_KEY_STEP) {
+    let box = modelBox;
+    for (const tr of mainFloor) if (tr.appear <= t && t < launch(tr)) box = unionBox(box, tr.floorBox);
+    camKeys.push({ t, box });
+  }
+
   const subBuilds: SubBuild[] = subInfo.map((s) => {
     const attachIdx = flat.findIndex((f) => f.u.kind === 'attach' && f.u.key === s.key);
     const firstIdx = flat.findIndex((f) => f.step >= s.firstStep);
     const attachStart = attachIdx >= 0 ? starts[attachIdx] : buildEnd;
-    return { key: s.key, start: firstIdx >= 0 ? starts[firstIdx] : attachStart, attachStart, attachEnd: attachStart + flight, focus: s.focus };
+    return { key: s.key, start: firstIdx >= 0 ? starts[firstIdx] : attachStart, attachStart, attachEnd: attachStart + flight, focus: occupied(s.ctx).reduce((b, tr) => unionBox(b, tr.floorBox), s.spot) };
   });
 
-  const buildBox = unionBox(unionBox(modelBox, regionBox(mainBands[0], ground)), regionBox(mainBands[1], ground));
   return {
     duration: (flat.length ? actualEnd : intro) + outro,
     pacing,
@@ -341,6 +371,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     buildBox,
     modelBox,
     sceneBox,
+    camKeys,
     ground,
     tracks,
   };
