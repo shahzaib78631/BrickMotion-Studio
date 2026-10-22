@@ -95,15 +95,20 @@ export function Viewport({ model }: { model: ModelState }) {
     framed.current = false;
   }, [plan.name, editingModel]);
 
+  // the preview drives the camera itself
+  useEffect(() => {
+    if (viewportApi.controls) viewportApi.controls.enabled = mode === 'edit';
+  }, [mode]);
+
   // highlights
   useEffect(() => {
     const studio = viewportApi.studio;
-    if (!studio) return;
+    if (!studio || mode !== 'edit') return;
     const sel = new Set(selection.model === editingModel ? selection.ids : []);
     studio.bricks.setHighlight(new Set(visible.filter((i) => sel.has(i.key.split('/')[0])).map((i) => i.key)), 'select');
     const warnIds = new Set(model.warnings.flatMap((w) => w.itemIds));
     studio.bricks.setHighlight(new Set(visible.filter((i) => warnIds.has(i.itemId) || warnIds.has(i.key.split('/')[0])).map((i) => i.key)), 'warn');
-  }, [selection, model.warnings, visible, editingModel]);
+  }, [selection, model.warnings, visible, editingModel, mode]);
 
   // focus requests
   useEffect(() => {
@@ -159,12 +164,14 @@ export function Viewport({ model }: { model: ModelState }) {
         ref={canvasRef}
         onPointerDown={(e) => (down.current = { x: e.clientX, y: e.clientY })}
         onClick={(e) => {
+          if (st().mode !== 'edit') return;
           if (Math.hypot(e.clientX - down.current.x, e.clientY - down.current.y) > 4) return;
           const key = pickAt(e);
           if (key) st().select([key.split('/')[0]], e.shiftKey);
           else if (!e.shiftKey) st().select([]);
         }}
         onDoubleClick={(e) => {
+          if (st().mode !== 'edit') return;
           const key = pickAt(e);
           if (!key) return;
           const found = findItem(st().plan, st().editingModel, key.split('/')[0]);

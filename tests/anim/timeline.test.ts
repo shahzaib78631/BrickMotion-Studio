@@ -104,3 +104,19 @@ test('camera pose is finite throughout', () => {
     expect(c.fov).toBe(30);
   }
 });
+
+test('a small model shows every piece on the floor at t=0', () => {
+  const asm = assemble(
+    plan([
+      [brick(0, 0, 0), brick(4, 0, 0)],
+      [brick(0, 3, 0), brick(4, 3, 0)],
+      [brick(0, 6, 0), brick(4, 6, 0)],
+      [brick(2, 9, 0)],
+    ]),
+    metrics,
+    fixtureColors,
+  );
+  const tl = buildTimeline(asm, metrics, opts);
+  const at0 = poseAt(tl, 0);
+  expect(asm.instances.filter((i) => !at0(i.key)).map((i) => i.key)).toEqual([]);
+});

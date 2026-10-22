@@ -3,6 +3,8 @@ import { initPartService } from './state/partService';
 import { useModel } from './state/useModel';
 import { Inspector } from './ui/Inspector';
 import { PartsPanel } from './ui/PartsPanel';
+import { PreviewPlayer } from './ui/PreviewPlayer';
+import { useStudio } from './state/store';
 import { StepsTimeline } from './ui/StepsTimeline';
 import { TopBar } from './ui/TopBar';
 import { Viewport } from './ui/Viewport';
@@ -11,12 +13,21 @@ import './ui/app.css';
 
 function Studio() {
   const model = useModel();
+  const mode = useStudio((s) => s.mode);
+  const setMode = useStudio((s) => s.setMode);
   return (
     <div className="app">
-      <TopBar />
+      <TopBar
+        extra={
+          <button className={mode === 'preview' ? '' : 'primary'} disabled={!model.ready} onClick={() => setMode(mode === 'edit' ? 'preview' : 'edit')}>
+            {mode === 'edit' ? '▶ Preview' : '✎ Back to editor'}
+          </button>
+        }
+      />
       <PartsPanel />
       <main className="center">
         <Viewport model={model} />
+        {mode === 'preview' && <PreviewPlayer model={model} />}
       </main>
       <aside className="panel right">
         <Inspector />

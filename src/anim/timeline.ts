@@ -41,8 +41,12 @@ const EMPTY_BOX: Box = { min: [0, -24, 0], max: [20, 0, 20] };
 /** A rotation-free basis, mirrored when the target is mirrored so slerp stays valid. */
 const naturalBasis = (target: THREE.Matrix4) => (target.determinant() < 0 ? new THREE.Matrix4().makeScale(-1, 1, 1) : new THREE.Matrix4());
 
-/** The two floor bands in front of and behind a footprint, together 3× its area. */
-function bandsAround(box: Box): Region[] {
+/**
+ * The two floor bands in front of and behind a footprint, together 3× its area,
+ * deep enough for the pieces (`padArea` = their footprints plus gaps) unless that
+ * would make the floor more than twice the model's size; then windows take over.
+ */
+function bandsAround(box: Box, padArea = 0): Region[] {
   const bx0 = Math.floor(box.min[0] / STUD);
   const bx1 = Math.ceil(box.max[0] / STUD);
   const bz0 = Math.floor(box.min[2] / STUD);
@@ -50,7 +54,7 @@ function bandsAround(box: Box): Region[] {
   const W = Math.max(1, bx1 - bx0);
   const D = Math.max(1, bz1 - bz0);
   const width = Math.max(W + 2 * FLOOR_MARGIN, 12);
-  const depth = Math.max(4, Math.ceil((1.5 * W * D) / width));
+  const depth = Math.max(4, Math.ceil((1.5 * W * D) / width), Math.min(Math.ceil((0.65 * padArea) / width), 2 * Math.max(W, D, 8)));
   const x0 = Math.floor((bx0 + bx1) / 2 - width / 2);
   return [
     { x0, z0: bz0 - FLOOR_MARGIN - depth, width, depth }, // front (towards the camera)
@@ -104,7 +108,14 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
   const byKey = new Map<string, Instance>(asm.instances.map((i) => [i.key, i]));
   const ground = asm.instances.length ? Math.max(...asm.instances.map((i) => i.worldBox.max[1])) : 0;
   const modelBox = asm.bounds ?? EMPTY_BOX;
-  const mainBands = bandsAround(modelBox);
+  /** footprint plus a 1-stud gap of the pieces placed directly in these nodes */
+  const padArea = (nodes: ANode[]) =>
+    nodes.reduce((sum, n) => {
+      if (n.kind !== 'piece') return sum;
+      const b = metrics(n.part).body;
+      return sum + (Math.ceil((b.max[0] - b.min[0]) / STUD - 0.01) + 1) * (Math.ceil((b.max[2] - b.min[2]) / STUD - 0.01) + 1);
+    }, 0);
+  const mainBands = bandsAround(modelBox, padArea(asm.nodes));
 
   const steps: PlayStep[] = [];
   const ctxs: Ctx[] = [{ bands: mainBands, pieces: [], group: new Map() }];
@@ -155,7 +166,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     const tx = sideRight + SIDE_GAP * STUD - b.min[0];
     const from = new THREE.Matrix4().makeTranslation(tx, ground - b.max[1], zMid - (b.min[2] + b.max[2]) / 2).multiply(basis);
     const spot = transformBox(n.body, from);
-    const bands = bandsAround(spot);
+    const bands = bandsAround(spot, padArea(n.children));
     const focus = unionBox(unionBox(spot, regionBox(bands[0], ground)), regionBox(bands[1], ground));
     sceneBox = unionBox(sceneBox, focus);
     const savedRight = sideRight;
