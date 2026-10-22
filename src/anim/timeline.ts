@@ -15,6 +15,11 @@ const DROP_TIME = 0.3;
 // through the finished model (and each other).
 const LIFT_END = 0.24;
 const LOWER_START = 0.76;
+// A wheel, tyre or an overhung part may have to slide into its socket from
+// the side. Lowering everything from above is not collision free.
+const SIDE_CRUISE_END = 0.56;
+const SIDE_INSERT_START = 0.8;
+const ROUTE_SAMPLES = 48;
 const FLIGHT_CLEARANCE = 24; // LDraw units (one brick)
 const AIR_LANE = 80; // extra height when two airborne trajectories intersect
 const CAM_KEY_STEP = 0.2;
@@ -24,13 +29,26 @@ export const CLOSE_EASE = 0.6;
 
 /** One thing that flies: a single piece, or a finished submodel chunk (the attach). */
 /** `box`: the space the flight sweeps (LDU), for the camera */
-export type Unit = { kind: 'piece' | 'attach'; keys: string[]; start: number; dur: number; step: number; box?: Box | null };
+export type Unit = {
+  kind: 'piece' | 'attach'; keys: string[]; start: number; dur: number; step: number; box?: Box | null;
+  /** Only if every collision-free insertion is blocked: snap safely rather than visibly cross a brick. */
+  hidden?: boolean;
+};
 /** `closeUp`: the camera moves in close while this build runs (the first build of each top-level submodel) */
 export type SubBuild = { key: string; name: string; closeUp: boolean; start: number; attachStart: number; attachEnd: number; focus: Box };
 /** What the build camera must keep in view at time t (LDU): the model plus the pieces still on the floor. */
 export type CamKey = { t: number; box: Box };
 
-type Move = { unit: number; from: THREE.Matrix4; to: THREE.Matrix4; rel: THREE.Matrix4 | null; skyY: number; hold: number };
+type Move = {
+  unit: number;
+  from: THREE.Matrix4;
+  to: THREE.Matrix4;
+  rel: THREE.Matrix4 | null;
+  skyY: number;
+  hold: number;
+  /** World-space offset of the point from which the part is inserted. */
+  entry: [number, number, number];
+};
 type Track = { appear: number; floor: THREE.Matrix4; floorBox: Box; ctx: number; moves: Move[]; final: THREE.Matrix4 };
 
 /** When one step of a model plays (a step split by a submodel build plays in parts). */
@@ -369,7 +387,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
       const pos = r.overflow.length ? win.pos : r.pos;
       if (wi > 0) {
         const prev = windows[wi - 1].ids;
-        appear = prev.reduce((m, k) => Math.max(m, pieceStart.get(k) ?? 0), -Infinity);
+        appear = prev.reduce((m, k) => Math.max(m, (pieceStart.get(k) ?? 0) + flightDur * LIFT_END + 0.01), -Infinity);
       }
       for (const key of win.ids) {
         const inst = byKey.get(key)!;
@@ -387,7 +405,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
   flat.forEach((f, i) => {
     if (f.u.kind === 'piece') {
       const tr = tracks.get(f.u.key)!;
-      tr.moves.push({ unit: i, from: tr.floor, to: f.u.target, rel: null, skyY: 0, hold: 0 });
+      tr.moves.push({ unit: i, from: tr.floor, to: f.u.target, rel: null, skyY: 0, hold: 0, entry: [0, 0, 0] });
       current.set(f.u.key, f.u.target);
       return;
     }
@@ -397,7 +415,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
       const tr = tracks.get(k);
       if (!cur || !tr) continue;
       const rel = inv.clone().multiply(cur);
-      tr.moves.push({ unit: i, from: f.u.from, to: f.u.to, rel, skyY: 0, hold: 0 });
+      tr.moves.push({ unit: i, from: f.u.from, to: f.u.to, rel, skyY: 0, hold: 0, entry: [0, 0, 0] });
       current.set(k, f.u.to.clone().multiply(rel));
     }
   });
@@ -409,7 +427,19 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
   for (const [key, tr] of tracks)
     for (const mv of tr.moves) members[mv.unit].push({ key, move: mv, body: metrics(byKey.get(key)!.part).body });
   const sweptXY: Box[] = [];
+  // Cache the boxes at each assembled target, including the constituent
+  // relative transforms of an attach unit. Only contacts already present at
+  // the final target may be tolerated at the END of an insertion (e.g. a
+  // wheel rim inside the hollow tyre); other bricks must never be crossed.
+  const destinationBoxes = members.map((group) => group.map(({ move, body }) =>
+    transformBox(body, restPose(move.to, move.rel)),
+  ));
+  const restAfterMove = new Map<Move, Box>();
+  for (const group of members) for (const { move, body } of group)
+    restAfterMove.set(move, transformBox(body, restPose(move.to, move.rel)));
+
   for (let i = 0; i < units.length; i++) {
+    const u = units[i];
     let top = builtTop;
     let offset = Infinity;
     let extent = 0;
@@ -424,46 +454,123 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
       extent = Math.max(extent, fromBox.max[1] - fromBox.min[1], toBox.max[1] - toBox.min[1]);
       sweep = unionBox(sweep, unionBox(fromBox, toBox));
     }
-    // Every member of an attaching submodel follows the same rigid-body path.
     const skyY = top - FLIGHT_CLEARANCE - (Number.isFinite(offset) ? offset : 0);
-    for (const { move: mv } of members[i]) mv.skyY = skyY;
     builtTop = Math.min(builtTop, top);
-    sweptXY[i] = sweep ?? EMPTY_BOX;
-    // When flight paths pass over another piece's launch position, a higher
-    // lane alone can make things WORSE: the lifting piece must pass through
-    // the lower lane. Small takeoff holds keep both paths separated without
-    // stretching the video. Sweep the rotated body boxes between samples.
-    const overlapping = [] as number[];
-    for (let j = 0; j < i; j++) {
-      if (units[j].start >= units[i].start + units[i].dur || units[j].start + units[j].dur <= units[i].start) continue;
-      if (!xyIntersects(sweptXY[i], sweptXY[j])) continue;
-      if (members[i].some((p) => members[j].some((q) => p.key === q.key))) continue;
-      overlapping.push(j);
+    const dst = destinationBoxes[i].reduce<Box | null>((box, next) => unionBox(box, next), null) ?? EMPTY_BOX;
+
+    // Look at pieces that are NOT flying at this time. Previously the planner
+    // only called flightsIntersect(), so a tyre could fall straight THROUGH
+    // the already assembled car body without triggering any collision.
+    // A track may rest first on the floor, later on a submodel's side spot,
+    // and finally in the model. Preserve those time intervals individually.
+    const blockers: RestingBlock[] = [];
+    for (const [key, tr] of tracks) {
+      if (u.keys.includes(key)) continue;
+      let previousEnd = tr.appear;
+      let rest = tr.floorBox;
+      for (const mv of tr.moves) {
+        const flight = units[mv.unit];
+        if (flight.start > previousEnd && flight.start > u.start && previousEnd < u.start + u.dur)
+          blockers.push({ box: rest, start: previousEnd, end: flight.start });
+        previousEnd = flight.start + flight.dur;
+        rest = restAfterMove.get(mv)!;
+        if (previousEnd >= u.start + u.dur) break;
+      }
+      if (previousEnd < u.start + u.dur) blockers.push({ box: rest, start: previousEnd, end: Infinity });
     }
+
+    // A narrow upright round part (e.g. an LDraw tyre oriented on an axle)
+    // should be inserted along its thin horizontal axis, not dropped onto the
+    // axle from the roof. Prefer the nearer outer side of the model.
+    const spans = [0, 1, 2].map((axis) => dst.max[axis] - dst.min[axis]);
+    const narrowSide = [0, 2].find((axis) =>
+      spans[axis] < Math.min(spans[1], spans[axis === 0 ? 2 : 0]) * 0.7,
+    );
+    const directions: [number, number][] = [];
+    const orderedSide = (axis: 0 | 2) => {
+      const middle = (dst.min[axis] + dst.max[axis]) / 2;
+      const sceneMiddle = (modelBox.min[axis] + modelBox.max[axis]) / 2;
+      const outer = middle < sceneMiddle ? -1 : 1;
+      directions.push([axis, outer], [axis, -outer]);
+    };
+    if (narrowSide !== undefined) orderedSide(narrowSide as 0 | 2);
+    directions.push([1, -1]); // vertical, the traditional top-down assembly
+    if (narrowSide !== 0) orderedSide(0);
+    if (narrowSide !== 2) orderedSide(2);
+
+    const overlaps = [] as number[];
+    for (let j = 0; j < i; j++) {
+      if (units[j].start >= u.start + u.dur || units[j].start + units[j].dur <= u.start) continue;
+      if (members[i].some((p) => members[j].some((q) => p.key === q.key))) continue;
+      overlaps.push(j);
+    }
+
     let safe = false;
-    for (let lane = 0; lane < 12 && !safe; lane++) {
-      const laneHeight = skyY - lane * Math.max(AIR_LANE, extent + FLIGHT_CLEARANCE);
-      for (const hold of [0, 0.06, 0.12, 0.18, 0.24, 0.32]) {
-        for (const { move: mv } of members[i]) {
-          mv.skyY = laneHeight;
-          mv.hold = hold;
-        }
-        if (!overlapping.some((j) => flightsIntersect(units, members, i, j))) {
+    // Try sensible insertion sides, flight lanes and small takeoff holds.
+    // Check stationary as well as airborne parts on every candidate path.
+    for (const [axis, dir] of directions) {
+      const entry: [number, number, number] = [0, 0, 0];
+      if (axis !== 1) {
+        const farFace = dir < 0 ? modelBox.min[axis] : modelBox.max[axis];
+        const dist = dir < 0
+          ? dst.max[axis] - farFace + FLIGHT_CLEARANCE
+          : farFace - dst.min[axis] + FLIGHT_CLEARANCE;
+        entry[axis] = dir * Math.max(2 * STUD, dist);
+      }
+      const routeSweep = destinationBoxes[i].reduce<Box | null>((box, next, k) => {
+        const { move: mv, body } = members[i][k];
+        const approach = mv.to.clone();
+        approach.elements[12] += entry[0];
+        approach.elements[14] += entry[2];
+        const start = transformBox(body, restPose(mv.from, mv.rel));
+        return unionBox(unionBox(box, next), unionBox(start, transformBox(body, restPose(approach, mv.rel))));
+      }, null) ?? EMPTY_BOX;
+      // A rotating piece can protrude beyond the boxes at either endpoint.
+      const radius = members[i].reduce((r, { body, move }) => {
+        const a = move.from.elements, b = move.to.elements;
+        const turns = [0, 1, 2, 4, 5, 6, 8, 9, 10].some((k) => Math.abs(a[k] - b[k]) > 0.01);
+        if (!turns) return r;
+        const rel = move.rel ? transformBox(body, move.rel) : body;
+        const radius = Math.hypot(...rel.min.map((x, k) => Math.max(Math.abs(x), Math.abs(rel.max[k]))));
+        return Math.max(r, 2 * radius);
+      }, 0);
+      const expandedSweep = radius > 0 ? {
+        min: [routeSweep.min[0] - radius, routeSweep.min[1], routeSweep.min[2] - radius],
+        max: [routeSweep.max[0] + radius, routeSweep.max[1], routeSweep.max[2] + radius],
+      } as Box : routeSweep;
+      const near = blockers.filter((block) =>
+        block.end > u.start && block.start < u.start + u.dur && xyIntersects(block.box, expandedSweep),
+      );
+      for (let lane = 0; lane < 5 && !safe; lane++) {
+        const laneHeight = skyY - lane * Math.max(AIR_LANE, extent + FLIGHT_CLEARANCE);
+        for (const hold of [0, 0.12, 0.24, 0.36, 0.48, 0.6]) {
+          for (const { move: mv } of members[i]) {
+            mv.skyY = laneHeight;
+            mv.hold = hold;
+            mv.entry = entry;
+          }
+          if (routeHitsResting(u, members[i], destinationBoxes[i], near)) continue;
+          if (overlaps.some((j) => xyIntersects(expandedSweep, sweptXY[j]) && flightsIntersect(units, members, i, j))) continue;
+          sweep = expandedSweep;
           safe = true;
           break;
         }
       }
+      if (safe) break;
     }
-    if (!safe && overlapping.length) {
-      // Last resort: move this unit after the interfering airborne units.
-      // Models with genuinely impossible routes may require extra video time.
-      for (const j of overlapping) units[i].start = Math.max(units[i].start, units[j].start + units[j].dur);
-      starts[i] = units[i].start;
+    if (!safe) {
+      // A tightly enclosed or poorly modeled attachment may have NO clear
+      // rigid path (particularly with bounding boxes for hollow parts). Never
+      // display a penetrating fallback trajectory: keep it hidden while it
+      // snaps from the staging floor to its destination.
+      u.hidden = true;
       for (const { move: mv } of members[i]) {
+        mv.entry = [0, 0, 0];
         mv.skyY = skyY;
         mv.hold = 0;
       }
     }
+    sweptXY[i] = sweep ?? EMPTY_BOX;
   }
   // Recalculate when new pieces may safely occupy a reused floor band. A
   // piece that has merely STARTED rising is still in the space where the next
@@ -510,7 +617,8 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
   const flightBox: (Box | null)[] = units.map(() => null);
   for (const group of members)
     for (const { move: mv, body } of group) {
-      for (const u of [0, LIFT_END, 0.5, LOWER_START, 1]) {
+      if (units[mv.unit].hidden) continue;
+      for (const u of [0, LIFT_END, 0.5, SIDE_CRUISE_END, LOWER_START, SIDE_INSERT_START, 1]) {
         const b = transformBox(body, flightPose(mv, u, new THREE.Matrix4()));
         flightBox[mv.unit] = flightBox[mv.unit] ? unionBox(flightBox[mv.unit]!, b) : b;
       }
@@ -569,31 +677,100 @@ const _s0 = new THREE.Vector3();
 const _s1 = new THREE.Vector3();
 
 function flightPose(m: Move, u: number, out: THREE.Matrix4): THREE.Matrix4 {
-  // A locally delayed launch avoids crossing an earlier airborne lane while
-  // retaining the original unit start/end times.
   u = clamp01((u - m.hold) / (1 - m.hold));
   m.from.decompose(_p0, _q0, _s0);
   m.to.decompose(_p1, _q1, _s1);
+  const lateral = m.entry[0] !== 0 || m.entry[2] !== 0;
   if (u < LIFT_END) {
-    // Rise straight up while keeping the initial orientation. No sweep through
-    // neighbouring bricks on the floor or already in the model.
     _p0.y = lerp(_p0.y, m.skyY, easeInOutCubic(clamp01(u / LIFT_END)));
     out.compose(_p0, _q0, _s0);
+  } else if (lateral) {
+    if (u < SIDE_CRUISE_END) {
+      const e = easeInOutCubic(clamp01((u - LIFT_END) / (SIDE_CRUISE_END - LIFT_END)));
+      _p0.set(lerp(_p0.x, _p1.x + m.entry[0], e), m.skyY, lerp(_p0.z, _p1.z + m.entry[2], e));
+      _q0.slerp(_q1, e);
+      _s0.lerp(_s1, e);
+      out.compose(_p0, _q0, _s0);
+    } else if (u < SIDE_INSERT_START) {
+      const e = easeInOutCubic(clamp01((u - SIDE_CRUISE_END) / (SIDE_INSERT_START - SIDE_CRUISE_END)));
+      _p1.set(_p1.x + m.entry[0], lerp(m.skyY, _p1.y, e), _p1.z + m.entry[2]);
+      out.compose(_p1, _q1, _s1);
+    } else {
+      const e = easeInOutCubic(clamp01((u - SIDE_INSERT_START) / (1 - SIDE_INSERT_START)));
+      _p1.set(_p1.x + m.entry[0] * (1 - e), _p1.y, _p1.z + m.entry[2] * (1 - e));
+      out.compose(_p1, _q1, _s1);
+    }
   } else if (u < LOWER_START) {
-    // Only translate and rotate sideways once the entire unit has clearance.
     const e = easeInOutCubic(clamp01((u - LIFT_END) / (LOWER_START - LIFT_END)));
     _p0.set(lerp(_p0.x, _p1.x, e), m.skyY, lerp(_p0.z, _p1.z, e));
     _q0.slerp(_q1, e);
     _s0.lerp(_s1, e);
     out.compose(_p0, _q0, _s0);
   } else {
-    // Lower vertically, already aligned with the target. Do not dip into the
-    // bricks below (the old settling bounce intersected their geometry).
     _p1.y = lerp(m.skyY, _p1.y, easeInOutCubic(clamp01((u - LOWER_START) / (1 - LOWER_START))));
     out.compose(_p1, _q1, _s1);
   }
   if (m.rel) out.multiply(m.rel);
   return out;
+}
+
+/** Static time-window that a flying member must not cross. */
+type RestingBlock = { box: Box; start: number; end: number };
+
+function routeHitsResting(
+  unit: Unit,
+  members: { key: string; move: Move; body: Box }[],
+  destinations: Box[],
+  blockers: RestingBlock[],
+): boolean {
+  if (!blockers.length) return false;
+  // Most LEGO builds are top-down stacks whose settled pieces lie BELOW the
+  // last segment of the flight. A conservative phase-AABB check handles these
+  // quickly; fine swept samples run only near possible obstruction.
+  const lateral = members[0].move.entry[0] !== 0 || members[0].move.entry[2] !== 0;
+  const cuts = lateral ? [0, LIFT_END, SIDE_CRUISE_END, SIDE_INSERT_START, 1] : [0, LIFT_END, LOWER_START, 1];
+  const coarse: Box[] = [];
+  for (const { move, body } of members) {
+    let prev: Box | null = null;
+    for (const phase of cuts) {
+      const t = move.hold + (1 - move.hold) * phase;
+      const box = transformBox(body, flightPose(move, t, new THREE.Matrix4()));
+      if (prev) coarse.push(unionBox(prev, box));
+      prev = box;
+    }
+  }
+  // A slerping part may swing OUTSIDE the envelope of its endpoint boxes.
+  // The phase shortcut is therefore valid only for fixed orientation; rotating
+  // flights always run the swept samples (including rigid submodel members).
+  const rotates = members.some(({ move }) => {
+    const a = move.from.elements;
+    const b = move.to.elements;
+    return [0, 1, 2, 4, 5, 6, 8, 9, 10].some((j) => Math.abs(a[j] - b[j]) > 0.001);
+  });
+  if (!rotates && blockers.every(({ box }) => coarse.every((path) => !boxIntersects(box, path)))) return false;
+  const steps = ROUTE_SAMPLES;
+  let previous = members.map(({ move, body }) => transformBox(body, flightPose(move, 0, new THREE.Matrix4())));
+  for (let n = 1; n <= steps; n++) {
+    const u = n / steps;
+    const left = unit.start + (n - 1) / steps * unit.dur;
+    const right = unit.start + u * unit.dur;
+    const next = members.map(({ move, body }) => transformBox(body, flightPose(move, u, new THREE.Matrix4())));
+    for (const block of blockers) {
+      if (block.end <= left || block.start >= right) continue;
+      for (let k = 0; k < next.length; k++) {
+        if (!boxIntersects(unionBox(previous[k], next[k]), block.box)) continue;
+        // Existing intersections at the assembled target are connectors and
+        // hollow parts, not evidence of a collision (bbox cannot model holes).
+        // Allow these ONLY on the last, aligned insertion segment; a route
+        // still cannot pass through the rest of the car on the way there.
+        const insertion = members[k].move.entry.some((n) => n !== 0) ? SIDE_INSERT_START : LOWER_START;
+        if ((n - 1) / steps >= insertion - 1e-6 && boxIntersects(destinations[k], block.box)) continue;
+        return true;
+      }
+    }
+    previous = next;
+  }
+  return false;
 }
 
 /** Ignore mere face contact / LDraw stud tolerance when checking body volumes. */
@@ -612,6 +789,7 @@ function flightsIntersect(
 ): boolean {
   const a = units[i];
   const b = units[j];
+  if (a.hidden || b.hidden) return false;
   const t0 = Math.max(a.start, b.start);
   const t1 = Math.min(a.start + a.dur, b.start + b.dur);
   if (t1 <= t0) return false;
@@ -658,7 +836,7 @@ export function poseAt(tl: Timeline, t: number): (key: string) => THREE.Matrix4 
       const mv = tr.moves[i];
       const u = tl.units[mv.unit];
       if (t < u.start) return restPose(tr.moves[i - 1].to, tr.moves[i - 1].rel);
-      if (t < u.start + u.dur) return flightPose(mv, (t - u.start) / u.dur, new THREE.Matrix4());
+      if (t < u.start + u.dur) return u.hidden ? null : flightPose(mv, (t - u.start) / u.dur, new THREE.Matrix4());
     }
     return tr.final.clone();
   };
