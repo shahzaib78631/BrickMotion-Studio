@@ -1,0 +1,29 @@
+import type { Mat3, Vec3 } from '../ldraw/parse';
+
+export type Rot = 0 | 90 | 180 | 270;
+/** x, z in studs; y in plates (up is positive). Min corner of the rotated footprint, bottom of the piece. */
+export type Grid = { x: number; y: number; z: number; rot: Rot };
+/** Exact LDraw placement for imported pieces that are off the grid. */
+export type Raw = { ldu: Vec3; matrix: Mat3 };
+
+export type PieceItem = { id?: string; part: string; color: string | number } & (Grid | Raw);
+export type SubItem = { id?: string; submodel: string } & (Grid | Raw);
+export type PlanItem = PieceItem | SubItem;
+export type Step = { pieces: PlanItem[] };
+export type Submodel = { steps: Step[] };
+
+export type Plan = {
+  format: 'brickmotion-plan';
+  version: 1;
+  name: string;
+  description?: string;
+  submodels?: Record<string, Submodel>;
+  steps: Step[];
+};
+
+export const isSub = (i: PlanItem): i is SubItem => 'submodel' in i;
+export const isGrid = <T extends PlanItem>(i: T): i is T & Grid => 'rot' in i;
+
+export function emptyPlan(name = 'Untitled set'): Plan {
+  return { format: 'brickmotion-plan', version: 1, name, steps: [] };
+}
