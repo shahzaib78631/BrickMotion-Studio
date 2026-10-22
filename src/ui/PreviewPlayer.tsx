@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { cameraAt, worldBox3 } from '../anim/camera';
 import { buildTimeline, poseAt } from '../anim/timeline';
-import { useAnimSettings } from '../state/animSettings';
+import { useAppSettings } from '../state/appSettings';
 import { metricsOf } from '../state/partService';
 import { useStudio } from '../state/store';
 import type { ModelState } from '../state/useModel';
@@ -13,7 +13,7 @@ const ASPECT = 9 / 16;
 
 /** Plays the build animation on the editor's canvas inside a 9:16 frame. */
 export function PreviewPlayer({ model }: { model: ModelState }) {
-  const s = useAnimSettings();
+  const s = useAppSettings();
   const planName = useStudio((st) => st.plan.name);
   const asm = model.assembly;
   const tl = useMemo(

@@ -2,7 +2,10 @@ import { create } from 'zustand';
 import type { ArrivalMode } from '../anim/pacing';
 import type { LogoCorner } from '../export/exportVideo';
 
-export type AnimSettings = {
+export type AppSettings = {
+  /** Claude API key, stored only in this browser */
+  apiKey: string;
+  model: string;
   targetSeconds: number;
   heroOrbit: boolean;
   mode: 'auto' | ArrivalMode;
@@ -10,10 +13,12 @@ export type AnimSettings = {
   logoCorner: LogoCorner;
   /** decoded logo image; the PNG itself is kept by the settings store */
   logo: ImageBitmap | null;
-  set(p: Partial<Omit<AnimSettings, 'set'>>): void;
+  set(p: Partial<Omit<AppSettings, 'set'>>): void;
 };
 
-export const useAnimSettings = create<AnimSettings>((set) => ({
+export const useAppSettings = create<AppSettings>((set) => ({
+  apiKey: '',
+  model: 'claude-opus-5-5',
   targetSeconds: 15,
   heroOrbit: true,
   mode: 'auto',
