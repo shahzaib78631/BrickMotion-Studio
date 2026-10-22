@@ -1,0 +1,51 @@
+import { clamp } from './easing';
+
+export type ArrivalMode = 'piece' | 'batch' | 'step';
+export type AnimOptions = { targetSeconds: number; heroOrbit: boolean; mode?: ArrivalMode };
+export type Pacing = {
+  mode: ArrivalMode;
+  intro: number;
+  outro: number;
+  /** total build time, pauses excluded */
+  build: number;
+  stepPause: number;
+  slot: number;
+  flight: number;
+  batchSize: number;
+};
+
+export const INTRO = 1.0;
+const PIECE_MIN_SLOT = 0.18;
+const STEP_MIN_SLOT = 0.6;
+const BATCH_SLOT = 0.6;
+
+/** Decides how fast pieces arrive so the build fits the target length. */
+export function choosePacing(units: number, steps: number, opts: AnimOptions): Pacing {
+  const intro = INTRO;
+  const outro = opts.heroOrbit ? 3.0 : 0.5;
+  const base = Math.max(1, opts.targetSeconds - intro - outro);
+  const pauseTotal = steps > 1 ? Math.min(0.25 * (steps - 1), 0.2 * base) : 0;
+  const build = base - pauseTotal;
+  const stepPause = steps > 1 ? pauseTotal / (steps - 1) : 0;
+  const common = { intro, outro, build, stepPause };
+
+  const piece = (): Pacing => {
+    const slot = units > 0 ? build / units : build;
+    return { ...common, mode: 'piece', slot, flight: Math.min(build, clamp(slot * 2.5, 0.35, 0.9)), batchSize: 1 };
+  };
+  const step = (): Pacing => {
+    const slot = build / Math.max(1, steps);
+    return { ...common, mode: 'step', slot, flight: Math.min(0.9, 0.6 * slot), batchSize: 1 };
+  };
+  const batch = (): Pacing => {
+    const batches = Math.max(1, Math.floor(build / BATCH_SLOT));
+    return { ...common, mode: 'batch', slot: BATCH_SLOT, flight: 0.5, batchSize: Math.max(1, Math.ceil(units / batches)) };
+  };
+
+  if (opts.mode === 'piece') return piece();
+  if (opts.mode === 'step') return step();
+  if (opts.mode === 'batch') return batch();
+  if (units === 0 || build / units >= PIECE_MIN_SLOT) return piece();
+  if (build / Math.max(1, steps) >= STEP_MIN_SLOT) return step();
+  return batch();
+}
