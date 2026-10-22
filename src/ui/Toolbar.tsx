@@ -101,6 +101,7 @@ export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, ca
   const canUndo = useStudio((s) => s.past.length > 0);
   const canRedo = useStudio((s) => s.future.length > 0);
   const status = useSaveStatus((s) => s.status);
+  const tool = useStudio((s) => s.tool);
   const st = useStudio.getState();
   const fileRef = useRef<HTMLInputElement>(null);
   const pieces = pieceCount(plan);
@@ -162,6 +163,28 @@ export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, ca
             e.target.value = '';
           }}
         />
+      </div>
+      <div className="bm-tools" role="radiogroup" aria-label="Tools">
+        <button
+          className={`nx-icon ${tool === 'select' ? 'on' : ''}`}
+          role="radio"
+          aria-checked={tool === 'select'}
+          aria-label="Select tool"
+          title="Select (V): click to select, drag to turn the view"
+          onClick={() => st.setTool('select')}
+        >
+          <Ic name="pointer" />
+        </button>
+        <button
+          className={`nx-icon ${tool === 'move' ? 'on' : ''}`}
+          role="radio"
+          aria-checked={tool === 'move'}
+          aria-label="Move tool"
+          title="Move (M): drag a piece to move it on the floor"
+          onClick={() => st.setTool('move')}
+        >
+          <Ic name="move" />
+        </button>
       </div>
       <div className="nx-head-right">
         <button className="nx-icon" onClick={st.undo} disabled={!canUndo} title="Undo (⌘Z)" aria-label="Undo">

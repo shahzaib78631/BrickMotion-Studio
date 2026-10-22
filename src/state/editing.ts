@@ -1,7 +1,7 @@
 import type { Box } from '../ldraw/flatten';
 import { assemble, transformBox, placementMatrix, type Assembly } from '../model/assemble';
 import { newId } from '../plan/ids';
-import { addItem, deleteItems, findItem, modelSteps, moveItems, rotateItems, type ModelName } from '../plan/ops';
+import { addItem, deleteItems, duplicateItems, findItem, modelSteps, moveItems, rotateItems, type ModelName } from '../plan/ops';
 import { gridToPlacement } from '../plan/placement';
 import { isGrid, isSub, type Grid, type Plan, type PlanItem } from '../plan/types';
 import type { Command } from './keymap';
@@ -69,12 +69,33 @@ export function runCommand(cmd: Command): void {
   const { selection, editingModel } = st;
   if (cmd.kind === 'undo') return st.undo();
   if (cmd.kind === 'redo') return st.redo();
+  if (cmd.kind === 'tool') return st.setTool(cmd.tool);
   const ids = selection.model === editingModel ? selection.ids : [];
   if (!ids.length) return;
   const m: ModelName = editingModel;
   if (cmd.kind === 'move') st.apply((p) => moveItems(p, m, ids, cmd.d));
   else if (cmd.kind === 'rotate') st.apply((p) => rotateItems(p, m, ids, footprintFor(p), bodyFor(p)));
-  else if (cmd.kind === 'delete') {
+  else if (cmd.kind === 'duplicate') {
+    // the copy goes right beside the selection (+X), so it is easy to see and drag
+    const view = assemble({ ...st.plan, steps: modelSteps(st.plan, m) }, metricsOf, getColors());
+    const set = new Set(ids);
+    const boxes = view.instances.filter((i) => set.has(i.key.split('/')[0])).map((i) => i.worldBox);
+    const w = boxes.length ? Math.max(1, Math.ceil((Math.max(...boxes.map((b) => b.max[0])) - Math.min(...boxes.map((b) => b.min[0]))) / 20 - 1e-6)) : 1;
+    let copies: string[] = [];
+    const taken = new Set<string>();
+    st.apply((plan) => {
+      const fresh = () => {
+        let id = newId(plan);
+        while (taken.has(id)) id = newId(plan);
+        taken.add(id);
+        return id;
+      };
+      const r = duplicateItems(plan, m, ids, fresh, { x: w, y: 0, z: 0 });
+      copies = r.ids;
+      return r.plan;
+    });
+    st.select(copies);
+  } else if (cmd.kind === 'delete') {
     st.apply((p) => deleteItems(p, m, ids));
     st.select([]);
   }

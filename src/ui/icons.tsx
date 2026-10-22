@@ -39,6 +39,15 @@ const PATHS = {
   copy: '<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
   wand: '<path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72M14 7l3 3M5 6v4M19 14v4M10 2v2M7 8H3M21 16h-4M11 3H9"/>',
   paste: '<rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>',
+  arrowUp: '<path d="m5 12 7-7 7 7M12 19V5"/>',
+  arrowDown: '<path d="M12 5v14M19 12l-7 7-7-7"/>',
+  arrowLeft: '<path d="m12 19-7-7 7-7M19 12H5"/>',
+  arrowRight: '<path d="M5 12h14M12 5l7 7-7 7"/>',
+  raise: '<path d="m17 11-5-5-5 5M17 18l-5-5-5 5"/>',
+  lower: '<path d="m7 6 5 5 5-5M7 13l5 5 5-5"/>',
+  rotate: '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
+  pointer: '<path d="M4.04 4.84a.5.5 0 0 1 .65-.65l15.6 6.03a.5.5 0 0 1-.06.95l-6.03 1.55a2 2 0 0 0-1.44 1.44l-1.55 6.03a.5.5 0 0 1-.95.06z"/>',
+  move: '<path d="M12 2v20M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M5 9l-3 3 3 3M9 5l3-3 3 3"/>',
 } as const;
 
 export type IconName = keyof typeof PATHS;

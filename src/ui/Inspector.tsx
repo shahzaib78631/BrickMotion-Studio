@@ -6,7 +6,9 @@ import { isGrid, isSub } from '../plan/types';
 import { ensureParts, getCatalog, getColors, partName } from '../state/partService';
 import { useStudio } from '../state/store';
 import type { Timeline } from '../anim/timeline';
+import { EditPad } from './EditPad';
 import { Ic } from './icons';
+import { viewportApi } from './viewportApi';
 import { pieceCount } from './Toolbar';
 
 export function ColorSwatches({ value, onPick }: { value?: number; onPick: (code: number) => void }) {
@@ -162,11 +164,16 @@ export function Inspector({ timeline, checks }: { timeline: Timeline | null; che
               st.apply((p) => setPart(p, editingModel, [first.id!], id));
             }}
           />
-          <div className="nx-sub">
-            Colour{' '}
-            <span className="nx-hint">{firstColor !== undefined ? colors.get(firstColor)!.name.replace(/_/g, ' ') : `unknown (${String(first.color)})`}</span>
-          </div>
         </>
+      )}
+      <EditPad azimuth={() => ((viewportApi.controls?.getAzimuthalAngle() ?? 0) * 180) / Math.PI} />
+      {pieceIds.length > 0 && (
+        <div className="nx-sub">
+          Colour{' '}
+          {found.length === 1 && !isSub(first) && (
+            <span className="nx-hint">{firstColor !== undefined ? colors.get(firstColor)!.name.replace(/_/g, ' ') : `unknown (${String(first.color)})`}</span>
+          )}
+        </div>
       )}
       {pieceIds.length > 0 && <ColorSwatches value={firstColor} onPick={pickColor} />}
       <label className="nx-field">

@@ -40,3 +40,29 @@ test('selection', () => {
   s().select([]);
   expect(s().selection.ids).toEqual([]);
 });
+
+test('a drag gesture is one undo step', () => {
+  const s = useStudio.getState;
+  const p0 = s().plan;
+  s().beginGesture();
+  s().apply((p) => ({ ...p, name: 'a' }));
+  s().apply((p) => ({ ...p, name: 'ab' }));
+  s().endGesture();
+  expect(s().plan.name).toBe('ab');
+  expect(s().past).toHaveLength(1);
+  s().undo();
+  expect(s().plan).toBe(p0);
+});
+
+test('a gesture that changes nothing adds no undo step', () => {
+  const s = useStudio.getState;
+  s().beginGesture();
+  s().endGesture();
+  expect(s().past).toHaveLength(0);
+});
+
+test('the tool can be switched', () => {
+  useStudio.getState().setTool('move');
+  expect(useStudio.getState().tool).toBe('move');
+  useStudio.getState().setTool('select');
+});

@@ -26,9 +26,7 @@ function mapItems(p: Plan, m: ModelName, ids: string[], fn: (i: PlanItem) => Pla
 
 export function moveItems(p: Plan, m: ModelName, ids: string[], d: { x: number; y: number; z: number }): Plan {
   return mapItems(p, m, ids, (i) =>
-    isGrid(i)
-      ? { ...i, x: i.x + d.x, y: i.y + d.y, z: i.z + d.z }
-      : { ...i, ldu: [i.ldu[0] + 20 * d.x, i.ldu[1] - 8 * d.y, i.ldu[2] + 20 * d.z] as Vec3 },
+    isGrid(i) ? { ...i, x: i.x + d.x, y: i.y + d.y, z: i.z + d.z } : { ...i, ldu: [i.ldu[0] + 20 * d.x, i.ldu[1] - 8 * d.y, i.ldu[2] + 20 * d.z] as Vec3 },
   );
 }
 
@@ -57,7 +55,11 @@ export function rotateItems(p: Plan, m: ModelName, ids: string[], fp: Footprint,
 
 export function deleteItems(p: Plan, m: ModelName, ids: string[]): Plan {
   const set = new Set(ids);
-  return withSteps(p, m, modelSteps(p, m).map((s) => ({ pieces: s.pieces.filter((i) => !(i.id && set.has(i.id))) })));
+  return withSteps(
+    p,
+    m,
+    modelSteps(p, m).map((s) => ({ pieces: s.pieces.filter((i) => !(i.id && set.has(i.id))) })),
+  );
 }
 
 export function setColor(p: Plan, m: ModelName, ids: string[], color: string | number): Plan {
@@ -123,4 +125,29 @@ export function findItem(p: Plan, m: ModelName, id: string): { item: PlanItem; s
     if (item) return { item, step: s };
   }
   return null;
+}
+
+/** Copies items into the same step, each right after its original, shifted by `d` (studs, plates); returns the copies' ids. */
+export function duplicateItems(
+  p: Plan,
+  m: ModelName,
+  ids: string[],
+  newId: () => string,
+  d: { x: number; y: number; z: number },
+): { plan: Plan; ids: string[] } {
+  const set = new Set(ids);
+  const copies: string[] = [];
+  const steps = modelSteps(p, m).map((s) =>
+    s.pieces.some((i) => i.id && set.has(i.id))
+      ? {
+          pieces: s.pieces.flatMap((i) => {
+            if (!i.id || !set.has(i.id)) return [i];
+            const id = newId();
+            copies.push(id);
+            return [i, { ...i, id }];
+          }),
+        }
+      : s,
+  );
+  return { plan: moveItems(withSteps(p, m, steps), m, copies, d), ids: copies };
 }

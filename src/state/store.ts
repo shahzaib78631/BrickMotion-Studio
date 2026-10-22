@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { ModelName } from '../plan/ops';
+import type { Tool } from './keymap';
 import { emptyPlan, type Plan } from '../plan/types';
 
 const HISTORY_LIMIT = 200;
@@ -17,6 +18,13 @@ export type StudioState = {
   focus: { ids: string[]; tick: number };
   /** color used for the next added piece */
   paintColor: string | number;
+  /** Select: dragging orbits the view. Move: dragging a piece moves it on the floor. */
+  tool: Tool;
+  /** the plan before a drag; while set, edits replace the plan without adding undo steps */
+  gesture: Plan | null;
+  setTool(t: Tool): void;
+  beginGesture(): void;
+  endGesture(): void;
   apply(fn: (p: Plan) => Plan): void;
   undo(): void;
   redo(): void;
@@ -39,10 +47,25 @@ export const useStudio = create<StudioState>((set, get) => ({
   currentStep: null,
   focus: { ids: [], tick: 0 },
   paintColor: 71,
+  tool: 'select',
+  gesture: null,
+  setTool(tool) {
+    set({ tool });
+  },
+  beginGesture() {
+    set({ gesture: get().plan });
+  },
+  endGesture() {
+    const { gesture, plan, past } = get();
+    if (!gesture) return;
+    if (plan === gesture) return set({ gesture: null });
+    set({ gesture: null, past: [...past, gesture].slice(-HISTORY_LIMIT), future: [] });
+  },
   apply(fn) {
-    const { plan, past } = get();
+    const { plan, past, gesture } = get();
     const next = fn(plan);
     if (next === plan) return;
+    if (gesture) return set({ plan: next });
     set({ plan: next, past: [...past, plan].slice(-HISTORY_LIMIT), future: [] });
   },
   undo() {

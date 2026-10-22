@@ -1,6 +1,18 @@
 import { expect, test } from 'vitest';
 import type { Box } from '../../src/ldraw/flatten';
-import { deleteItems, deleteStep, insertStep, moveItems, moveItemsToStep, reorderStep, rotateItems, setColor, setPart, addItem } from '../../src/plan/ops';
+import {
+  duplicateItems,
+  deleteItems,
+  deleteStep,
+  insertStep,
+  moveItems,
+  moveItemsToStep,
+  reorderStep,
+  rotateItems,
+  setColor,
+  setPart,
+  addItem,
+} from '../../src/plan/ops';
 import type { Plan, PlanItem } from '../../src/plan/types';
 
 const g = (id: string, x = 0, z = 0): PlanItem => ({ id, part: '3001', color: 4, x, y: 0, z, rot: 0 });
@@ -52,7 +64,10 @@ test('step operations', () => {
   expect(reorderStep(plan(), '', 0, 2).steps.map((s) => s.pieces.map((i) => i.id))).toEqual([['c'], ['d'], ['a', 'b']]);
   expect(insertStep(plan(), '', 1).steps.map((s) => s.pieces.length)).toEqual([2, 0, 1, 1]);
   expect(deleteStep(plan(), '', 0).steps.map((s) => s.pieces.map((i) => i.id))).toEqual([['a', 'b', 'c'], ['d']]);
-  expect(deleteStep(plan(), '', 2).steps.map((s) => s.pieces.map((i) => i.id))).toEqual([['a', 'b'], ['c', 'd']]);
+  expect(deleteStep(plan(), '', 2).steps.map((s) => s.pieces.map((i) => i.id))).toEqual([
+    ['a', 'b'],
+    ['c', 'd'],
+  ]);
 });
 
 test('submodel ops leave the main model untouched', () => {
@@ -69,4 +84,14 @@ test('ops never mutate the input', () => {
   rotateItems(p0, '', ['a'], fp, body);
   deleteStep(p0, '', 0);
   expect(JSON.stringify(p0)).toBe(snap);
+});
+
+test('duplicate copies items into the same step, right after the originals, shifted', () => {
+  let n = 0;
+  const { plan: p, ids } = duplicateItems(plan(), '', ['a', 'c'], () => `n${++n}`, { x: 4, y: 0, z: 0 });
+  expect(ids).toEqual(['n1', 'n2']);
+  expect(p.steps[0].pieces.map((i) => i.id)).toEqual(['a', 'n1', 'b']);
+  expect(p.steps[1].pieces.map((i) => i.id)).toEqual(['c', 'n2']);
+  expect(p.steps[0].pieces[1]).toMatchObject({ part: '3001', color: 4, x: 4, z: 0 });
+  expect(duplicateItems(plan(), 'engine', ['e1'], () => 'x', { x: 0, y: 1, z: 0 }).plan.submodels!.engine.steps[0].pieces[1]).toMatchObject({ id: 'x', y: 1 });
 });

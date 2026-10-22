@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { findItem } from '../plan/ops';
+import { findItem, moveItems } from '../plan/ops';
+import { dragDelta } from '../state/drag';
 import { isSub } from '../plan/types';
 import { createStudio, worldBox } from '../render/studio';
 import { runCommand } from '../state/editing';
@@ -33,6 +34,7 @@ export function Viewport({ model }: { model: ModelState }) {
   const selection = useStudio((s) => s.selection);
   const focus = useStudio((s) => s.focus);
   const mode = useStudio((s) => s.mode);
+  const tool = useStudio((s) => s.tool);
 
   // mount: studio, controls, render loop, resize
   useEffect(() => {
@@ -147,20 +149,59 @@ export function Viewport({ model }: { model: ModelState }) {
     if (b && viewportApi.studio && viewportApi.controls) frame(viewportApi.studio.camera, viewportApi.controls, worldBox(b));
   };
 
-  const pickAt = (e: React.MouseEvent): string | null => {
-    const studio = viewportApi.studio;
-    if (!studio) return null;
+  const rayAt = (e: { clientX: number; clientY: number }) => {
     const r = canvasRef.current!.getBoundingClientRect();
     const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     const ray = new THREE.Raycaster();
-    ray.setFromCamera(ndc, studio.camera);
-    return studio.bricks.pick(ray);
+    ray.setFromCamera(ndc, viewportApi.studio!.camera);
+    return ray;
+  };
+  const pickAt = (e: { clientX: number; clientY: number }): string | null => (viewportApi.studio ? viewportApi.studio.bricks.pick(rayAt(e)) : null);
+
+  // Move tool: dragging a piece slides the selection over the floor in whole studs (one undo step).
+  // Runs in the capture phase so the orbit controls are switched off before they see the press.
+  const startDrag = (e: React.PointerEvent) => {
+    const s = st();
+    if (s.mode !== 'edit' || s.tool !== 'move' || e.button !== 0 || !viewportApi.studio) return;
+    const key = pickAt(e);
+    if (!key) return;
+    const id = key.split('/')[0];
+    const ids = s.selection.model === s.editingModel && s.selection.ids.includes(id) ? s.selection.ids : [id];
+    if (ids.length === 1 && ids[0] === id) s.select(ids);
+    const inst = model.view.instances.find((i) => i.key === key);
+    const top = inst ? -inst.worldBox.min[1] / 20 : 0;
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -top);
+    const hit = (ev: { clientX: number; clientY: number }) => rayAt(ev).ray.intersectPlane(plane, new THREE.Vector3());
+    const start = hit(e);
+    if (!start) return;
+    if (viewportApi.controls) viewportApi.controls.enabled = false;
+    s.beginGesture();
+    const model0 = s.editingModel;
+    let last = '0,0,0';
+    const move = (ev: PointerEvent) => {
+      const p = hit(ev);
+      const base = st().gesture;
+      if (!p || !base) return;
+      const d = dragDelta(start, p);
+      const sig = `${d.x},${d.y},${d.z}`;
+      if (sig === last) return;
+      last = sig;
+      st().apply(() => moveItems(base, model0, ids, d));
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      st().endGesture();
+      if (viewportApi.controls) viewportApi.controls.enabled = st().mode === 'edit';
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
   };
 
   const down = useRef({ x: 0, y: 0 });
   const st = useStudio.getState;
   return (
-    <div className="viewport" ref={wrapRef}>
+    <div className={`viewport ${tool === 'move' && mode === 'edit' ? 'bm-move' : ''}`} ref={wrapRef} onPointerDownCapture={startDrag}>
       <canvas
         ref={canvasRef}
         onPointerDown={(e) => (down.current = { x: e.clientX, y: e.clientY })}
