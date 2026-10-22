@@ -13,10 +13,14 @@ const DROP_TIME = 0.3;
 const SETTLE = 0.12;
 const CAM_KEY_STEP = 0.2;
 const SIDE_REACH = 1.5;
+/** the camera needs this long to move into a submodel close-up (and out of it) */
+export const CLOSE_EASE = 0.6;
 
 /** One thing that flies: a single piece, or a finished submodel chunk (the attach). */
-export type Unit = { kind: 'piece' | 'attach'; keys: string[]; start: number; dur: number; step: number };
-export type SubBuild = { key: string; name: string; start: number; attachStart: number; attachEnd: number; focus: Box };
+/** `box`: the space the flight sweeps (LDU), for the camera */
+export type Unit = { kind: 'piece' | 'attach'; keys: string[]; start: number; dur: number; step: number; box?: Box | null };
+/** `closeUp`: the camera moves in close while this build runs (the first build of each top-level submodel) */
+export type SubBuild = { key: string; name: string; closeUp: boolean; start: number; attachStart: number; attachEnd: number; focus: Box };
 /** What the build camera must keep in view at time t (LDU): the model plus the pieces still on the floor. */
 export type CamKey = { t: number; box: Box };
 
@@ -122,7 +126,7 @@ function windowed(items: FloorItem[], bands: Region[]) {
 
 type PlayPiece = { kind: 'piece'; key: string; target: THREE.Matrix4; ctx: number; after?: PlayAttach[] };
 type PlayAttach = { kind: 'attach'; key: string; keys: string[]; from: THREE.Matrix4; to: THREE.Matrix4; sub: number; after?: PlayAttach[] };
-type PlayStep = { units: (PlayPiece | PlayAttach)[] ; model: string; index: number };
+type PlayStep = { units: (PlayPiece | PlayAttach)[]; model: string; index: number };
 type Ctx = { bands: Region[]; pieces: string[]; group: Map<string, number>; after?: number };
 
 export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions): Timeline {
@@ -140,7 +144,8 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
 
   const steps: PlayStep[] = [];
   const ctxs: Ctx[] = [{ bands: mainBands, pieces: [], group: new Map() }];
-  const subInfo: { key: string; name: string; firstStep: number; spot: Box; ctx: number }[] = [];
+  const subInfo: { key: string; name: string; closeUp: boolean; firstStep: number; spot: Box; ctx: number }[] = [];
+  const closeNames = new Set<string>();
   let sceneBox: Box = unionBox(modelBox, regionBox(mainBands[0], ground));
   sceneBox = unionBox(sceneBox, regionBox(mainBands[1], ground));
   let sideRight = Math.max(modelBox.max[0], (mainBands[0].x0 + mainBands[0].width) * STUD);
@@ -205,7 +210,10 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     const ctx = ctxs.length;
     ctxs.push({ bands, pieces: [], group: new Map() });
     const sub = subInfo.length;
-    subInfo.push({ key, name: n.submodel, firstStep: steps.length, spot, ctx: ctxs.length - 1 });
+    // nested submodels are built inside their parent's close-up; copies are built in the wide shot
+    const closeUp = depth === 0 && !closeNames.has(n.submodel);
+    if (depth === 0) closeNames.add(n.submodel);
+    subInfo.push({ key, name: n.submodel, closeUp, firstStep: steps.length, spot, ctx: ctxs.length - 1 });
     const prev = lastAttachAtDepth[depth];
     if (prev) {
       pending = [...pending, prev];
@@ -260,6 +268,8 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     for (const a of f.u.after ?? []) if (indexOf.has(a)) d.add(indexOf.get(a)!); // its side spot must be free
     deps[i] = [...d];
   });
+  // a close-up's first piece waits until every earlier flight has landed and the camera has moved in
+  const holds = new Set(subInfo.filter((si) => si.closeUp).map((si) => flat.findIndex((f) => f.step >= si.firstStep)));
   const schedule = (c: number, dur: number) => {
     const s: number[] = [];
     let end = intro;
@@ -267,6 +277,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
       let t = intro + (raw[i] - intro) * c;
       if (i > 0) t = Math.max(t, s[i - 1]); // keep play order
       for (const d of deps[i]) t = Math.max(t, s[d] + dur);
+      if (holds.has(i)) t = Math.max(t, i > 0 ? end + CLOSE_EASE : CLOSE_EASE);
       s.push(t);
       end = Math.max(end, t + dur);
     });
@@ -387,6 +398,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     return {
       key: s.key,
       name: s.name,
+      closeUp: s.closeUp,
       start: firstIdx >= 0 ? starts[firstIdx] : attachStart,
       attachStart,
       attachEnd: attachStart + flightDur,
@@ -405,10 +417,12 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     }
   }
 
-  // The build camera never cuts to close-ups: it keeps the model, the pieces still on the
-  // floor, every flight in progress and any side spot in use in view. A side spot is kept
-  // from SIDE_REACH before its build until SIDE_REACH after its attach, so submodels built
-  // one after another widen the view once instead of pumping in and out.
+  units.forEach((u, i) => (u.box = flightBox[i]));
+
+  // The wide shot keeps the model, the pieces still on the floor, every flight in progress and
+  // any side spot in use in view. A side spot is kept from SIDE_REACH before its build until
+  // SIDE_REACH after its attach, so submodels built one after another widen the view once.
+  // (Submodel close-ups are chosen by the camera from subBuilds and the units' flight boxes.)
   let buildBox = modelBox;
   for (const tr of tracks.values()) buildBox = unionBox(buildBox, tr.floorBox);
   const camKeys: CamKey[] = [];

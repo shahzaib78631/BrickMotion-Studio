@@ -121,7 +121,7 @@ const twinTowers = () => {
   return assemble(plan(steps), metrics, fixtureColors);
 };
 
-const ndcExtent = (tl: ReturnType<typeof buildTimeline>, asm: ReturnType<typeof assemble>, t: number) => {
+const ndcExtent = (tl: ReturnType<typeof buildTimeline>, asm: ReturnType<typeof assemble>, t: number, only?: (key: string, m: THREE.Matrix4) => boolean) => {
   const pose = poseAt(tl, t);
   const c = cameraAt(tl, t, 9 / 16);
   const cam = new THREE.PerspectiveCamera(c.fov, 9 / 16, 0.1, 5000);
@@ -133,7 +133,7 @@ const ndcExtent = (tl: ReturnType<typeof buildTimeline>, asm: ReturnType<typeof 
   const xs: number[] = [];
   for (const i of asm.instances) {
     const m = pose(i.key);
-    if (!m) continue;
+    if (!m || (only && !only(i.key, m))) continue;
     const b = transformBox(metrics(i.part).body, m);
     for (const x of [b.min[0], b.max[0]])
       for (const y of [b.min[1], b.max[1]])
@@ -187,10 +187,22 @@ test('sibling submodels each attach before the next one is built at the side spo
   for (let i = 1; i < subs.length; i++) expect(subs[i].start).toBeGreaterThanOrEqual(subs[i - 1].attachEnd - 1e-6);
 });
 
-test('with submodels, every visible piece stays inside the frame', () => {
+test('with submodels, everything moving and the submodel being built stay inside the frame', () => {
   const asm = hangar();
   const tl = buildTimeline(asm, metrics, opts);
-  for (let t = 0; t <= tl.duration; t += 0.05) expect(ndcExtent(tl, asm, t).max).toBeLessThanOrEqual(1.0001);
+  const EASE = 0.6;
+  for (let t = 0; t <= tl.duration; t += 0.05) {
+    const near = tl.subBuilds.filter((b) => t >= b.start - EASE - 1.5 && t <= b.attachEnd + EASE + 1.5);
+    // a close-up may leave out pieces resting on the main floor and the finished part of the model
+    const only = near.length
+      ? (key: string, m: THREE.Matrix4) => {
+          const tr = tl.tracks.get(key)!;
+          const resting = m.equals(tr.floor) || m.equals(tr.final);
+          return !resting || near.some((b) => t >= b.start && t <= b.attachEnd && key.startsWith(`${b.key}/`));
+        }
+      : undefined;
+    expect(ndcExtent(tl, asm, t, only).max, `t=${t.toFixed(2)}`).toBeLessThanOrEqual(1.0001);
+  }
 });
 
 test('the camera does not zoom in and out for every submodel', () => {
@@ -245,4 +257,41 @@ test('the timeline lists when each step and each submodel build plays', () => {
   for (const s of tl.steps) expect(s.end).toBeGreaterThan(s.start);
   for (let i = 1; i < tl.steps.length; i++) expect(tl.steps[i].start).toBeGreaterThanOrEqual(tl.steps[i - 1].start - 1e-6);
   expect(tl.subBuilds.map((b) => b.name)).toEqual(['engine', 'engine', 'engine']);
+});
+
+const camDist = (tl: ReturnType<typeof buildTimeline>, t: number) => {
+  const c = cameraAt(tl, t, 9 / 16);
+  return c.position.distanceTo(c.target);
+};
+const minDist = (tl: ReturnType<typeof buildTimeline>, a: number, b: number) => {
+  let m = Infinity;
+  for (let t = a; t <= b; t += 1 / 30) m = Math.min(m, camDist(tl, t));
+  return m;
+};
+
+const firstBuild = (tl: ReturnType<typeof buildTimeline>) => [...tl.subBuilds].sort((a, b) => a.start - b.start)[0];
+
+test('the camera moves in close while a submodel is first built', () => {
+  const tl = buildTimeline(hangar(), metrics, opts);
+  const sb = firstBuild(tl);
+  expect(minDist(tl, sb.start, sb.attachStart)).toBeLessThan(camDist(tl, sb.start - 1) * 0.8);
+});
+
+test('the close-up is in place before the submodel’s first piece flies', () => {
+  const tl = buildTimeline(hangar(), metrics, opts);
+  const sb = firstBuild(tl);
+  for (let t = sb.start; t < sb.attachStart - 0.6; t += 1 / 30) expect(Math.abs(camDist(tl, t) / camDist(tl, sb.start) - 1)).toBeLessThan(0.01); // steady (only the slow drift)
+});
+
+test('only the first build of each top-level submodel gets a close-up', () => {
+  const tl = buildTimeline(hangar(), metrics, opts);
+  expect([...tl.subBuilds].sort((a, b) => a.start - b.start).map((b) => b.closeUp)).toEqual([true, false, false]);
+});
+
+test('a close-up waits until earlier flights have landed and the camera has moved in', () => {
+  const tl = buildTimeline(hangar(), metrics, opts);
+  for (const sb of tl.subBuilds.filter((b) => b.closeUp)) {
+    const before = tl.units.filter((u) => u.start < sb.start - 1e-9);
+    for (const u of before) expect(u.start + u.dur).toBeLessThanOrEqual(sb.start - 0.6 + 1e-6);
+  }
 });

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Box } from '../ldraw/flatten';
 import { clamp01, easeInOutCubic, lerp } from './easing';
-import type { Timeline } from './timeline';
+import { CLOSE_EASE, type Timeline } from './timeline';
 
 export type CamPose = { position: THREE.Vector3; target: THREE.Vector3; fov: number };
 
@@ -17,7 +17,6 @@ const OUTRO_BLEND = 0.8;
 const KEY_REACH = 0.6;
 /** …and the rig is the average of the keys within ±SMOOTH s, so it moves smoothly but never cuts a piece off */
 const SMOOTH = 0.4;
-
 const rad = THREE.MathUtils.degToRad;
 
 /** Direction from the target to the camera; azimuth from +Z towards +X. */
@@ -95,9 +94,47 @@ const unionBoxes = (a: Box, b: Box): Box => ({
   max: [Math.max(a.max[0], b.max[0]), Math.max(a.max[1], b.max[1]), Math.max(a.max[2], b.max[2])],
 });
 
+type CloseUp = { start: number; end: number; rig: (aspect: number, az: number) => Rig };
+const closeUpCache = new WeakMap<Timeline, CloseUp[]>();
+
+/**
+ * Submodel close-ups (the builds the timeline marks `closeUp`). Each holds one framing: the side spot
+ * plus every flight while it lasts, so nothing being built is out of frame. The timeline lets earlier
+ * flights land first, so the camera is fully in before the first piece flies; it has eased back out
+ * when the attach starts, so the attach plays in the wide shot.
+ */
+export function closeUps(tl: Timeline): CloseUp[] {
+  let list = closeUpCache.get(tl);
+  if (list) return list;
+  list = [];
+  for (const sb of tl.subBuilds) {
+    if (!sb.closeUp) continue;
+    const from = sb.start - CLOSE_EASE;
+    let box: Box = sb.focus;
+    for (const u of tl.units) if (u.box && u.start < sb.attachStart - 1e-6 && u.start + u.dur > from) box = unionBoxes(box, u.box);
+    list.push({ start: sb.start, end: sb.attachStart, rig: (aspect, az) => fitRig(box, aspect, az, BUILD_EL, BUILD_MARGIN) });
+  }
+  closeUpCache.set(tl, list);
+  return list;
+}
+
+/** 0 = wide shot, 1 = close-up. A build shorter than the ease eases out over the build itself. */
+function closeWeight(c: CloseUp, t: number) {
+  if (t < c.start) return easeInOutCubic(clamp01((t - (c.start - CLOSE_EASE)) / CLOSE_EASE));
+  const outFrom = Math.max(c.start, c.end - CLOSE_EASE);
+  return 1 - easeInOutCubic(clamp01((t - outFrom) / Math.max(c.end - outFrom, 1e-6)));
+}
+
 function buildRig(tl: Timeline, t: number, aspect: number): Rig {
   const az = lerp(BUILD_AZ[0], BUILD_AZ[1], clamp01(t / Math.max(tl.buildEnd, 1e-6)));
-  return floorRig(tl, t, aspect, az);
+  const wide = floorRig(tl, t, aspect, az);
+  let best: CloseUp | null = null;
+  let w = 0;
+  for (const c of closeUps(tl)) {
+    const cw = closeWeight(c, t);
+    if (cw > w) ((w = cw), (best = c));
+  }
+  return best && w > 0 ? mix(wide, best.rig(aspect, az), w) : wide;
 }
 
 export function cameraAt(tl: Timeline, t: number, aspect: number): CamPose {
