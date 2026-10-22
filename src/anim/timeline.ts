@@ -119,7 +119,7 @@ function windowed(items: FloorItem[], bands: Region[]) {
 type PlayPiece = { kind: 'piece'; key: string; target: THREE.Matrix4; ctx: number; after?: PlayAttach[] };
 type PlayAttach = { kind: 'attach'; key: string; keys: string[]; from: THREE.Matrix4; to: THREE.Matrix4; sub: number; after?: PlayAttach[] };
 type PlayStep = { units: (PlayPiece | PlayAttach)[] };
-type Ctx = { bands: Region[]; pieces: string[]; group: Map<string, number> };
+type Ctx = { bands: Region[]; pieces: string[]; group: Map<string, number>; after?: number };
 
 export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions): Timeline {
   const byKey = new Map<string, Instance>(asm.instances.map((i) => [i.key, i]));
@@ -155,7 +155,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
       const inStep = nodes.filter((n) => n.step === s).sort((a, b) => a.order - b.order);
       let step: PlayStep = { units: [] };
       const push = (u: PlayPiece | PlayAttach) => {
-        if (pending.length) (u.after = pending), (pending = []);
+        if (pending.length) ((u.after = pending), (pending = []));
         step.units.push(u);
       };
       for (const n of inStep) {
@@ -202,7 +202,10 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     const sub = subInfo.length;
     subInfo.push({ key, firstStep: steps.length, spot, ctx: ctxs.length - 1 });
     const prev = lastAttachAtDepth[depth];
-    if (prev) pending = [...pending, prev];
+    if (prev) {
+      pending = [...pending, prev];
+      ctxs[ctx].after = subInfo[prev.sub].ctx; // same side spot and floor: wait until that floor is cleared
+    }
     depth++;
     play(n.children, from, key, ctx);
     depth--;
@@ -228,7 +231,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     let i = 0;
     steps.forEach((s, si) => {
       const n = s.units.length;
-      s.units.forEach((_, k) => raw[i++] = intro + si * (slot + stepPause) + (n > 1 ? (k / (n - 1)) * 0.4 * slot : 0));
+      s.units.forEach((_, k) => (raw[i++] = intro + si * (slot + stepPause) + (n > 1 ? (k / (n - 1)) * 0.4 * slot : 0)));
     });
   } else {
     flat.forEach((f, i) => {
@@ -307,17 +310,24 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
       };
     });
     // colour order within ties: layoutFloor keeps the caller's order
-    const ordered = items.map((it, i) => ({ it, i })).sort((a, b) => a.it.group - b.it.group || a.it.color - b.it.color || a.i - b.i).map((e) => e.it);
+    const ordered = items
+      .map((it, i) => ({ it, i }))
+      .sort((a, b) => a.it.group - b.it.group || a.it.color - b.it.color || a.i - b.i)
+      .map((e) => e.it);
     const playOrder = new Map(ctx.pieces.map((k, i) => [k, i]));
     const windows = windowed(
       [...ordered].sort((a, b) => playOrder.get(a.id)! - playOrder.get(b.id)!).map(({ id, w, d, group }) => ({ id, w, d, group })),
       ctx.bands,
     );
     // re-layout each window in colour order so similar pieces sit together
-    let appear = -Infinity;
+    // a copy that reuses a side spot drops its pieces in once the previous copy's floor is empty
+    let appear = ctx.after === undefined ? -Infinity : ctxs[ctx.after].pieces.reduce((m, k) => Math.max(m, pieceStart.get(k) ?? 0), -Infinity);
     windows.forEach((win, wi) => {
       const set = new Set(win.ids);
-      const r = layoutBands(ordered.filter((it) => set.has(it.id)).map(({ id, w, d, group }) => ({ id, w, d, group })), ctx.bands);
+      const r = layoutBands(
+        ordered.filter((it) => set.has(it.id)).map(({ id, w, d, group }) => ({ id, w, d, group })),
+        ctx.bands,
+      );
       const pos = r.overflow.length ? win.pos : r.pos;
       if (wi > 0) {
         const prev = windows[wi - 1].ids;
@@ -369,7 +379,13 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     const attachIdx = flat.findIndex((f) => f.u.kind === 'attach' && f.u.key === s.key);
     const firstIdx = flat.findIndex((f) => f.step >= s.firstStep);
     const attachStart = attachIdx >= 0 ? starts[attachIdx] : buildEnd;
-    return { key: s.key, start: firstIdx >= 0 ? starts[firstIdx] : attachStart, attachStart, attachEnd: attachStart + flightDur, focus: occupied(s.ctx).reduce((b, tr) => unionBox(b, tr.floorBox), s.spot) };
+    return {
+      key: s.key,
+      start: firstIdx >= 0 ? starts[firstIdx] : attachStart,
+      attachStart,
+      attachEnd: attachStart + flightDur,
+      focus: occupied(s.ctx).reduce((b, tr) => unionBox(b, tr.floorBox), s.spot),
+    };
   });
 
   // the space each flight sweeps: both ends, raised by its arc

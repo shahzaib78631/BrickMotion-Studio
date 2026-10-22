@@ -23,8 +23,7 @@ const plan = (steps: PlanItem[][], submodels?: Record<string, PlanItem[][]>): Pl
 const opts = { targetSeconds: 15, heroOrbit: true };
 const brick = (x: number, y: number, z: number): PlanItem => ({ part: '3001', color: 4, x, y, z, rot: 0 });
 
-const expectMatClose = (a: THREE.Matrix4, b: THREE.Matrix4, eps = 1e-3) =>
-  a.elements.forEach((v, i) => expect(v).toBeCloseTo(b.elements[i], -Math.log10(eps)));
+const expectMatClose = (a: THREE.Matrix4, b: THREE.Matrix4, eps = 1e-3) => a.elements.forEach((v, i) => expect(v).toBeCloseTo(b.elements[i], -Math.log10(eps)));
 
 test('3-piece model: floor at t=0, final at the end, 15 s', () => {
   const asm = assemble(plan([[brick(0, 0, 0)], [brick(0, 3, 0)], [brick(0, 6, 0)]]), metrics, fixtureColors);
@@ -107,12 +106,7 @@ test('camera pose is finite throughout', () => {
 
 test('a small model shows every piece on the floor at t=0', () => {
   const asm = assemble(
-    plan([
-      [brick(0, 0, 0), brick(4, 0, 0)],
-      [brick(0, 3, 0), brick(4, 3, 0)],
-      [brick(0, 6, 0), brick(4, 6, 0)],
-      [brick(2, 9, 0)],
-    ]),
+    plan([[brick(0, 0, 0), brick(4, 0, 0)], [brick(0, 3, 0), brick(4, 3, 0)], [brick(0, 6, 0), brick(4, 6, 0)], [brick(2, 9, 0)]]),
     metrics,
     fixtureColors,
   );
@@ -173,7 +167,11 @@ const hangar = () =>
     plan(
       [
         [brick(0, 0, 0), brick(4, 0, 0), brick(8, 0, 0)],
-        [{ submodel: 'engine', x: 0, y: 3, z: 0, rot: 0 }, { submodel: 'engine', x: 4, y: 3, z: 0, rot: 0 }, { submodel: 'engine', x: 8, y: 3, z: 0, rot: 0 }],
+        [
+          { submodel: 'engine', x: 0, y: 3, z: 0, rot: 0 },
+          { submodel: 'engine', x: 4, y: 3, z: 0, rot: 0 },
+          { submodel: 'engine', x: 8, y: 3, z: 0, rot: 0 },
+        ],
         [brick(0, 7, 0), brick(8, 7, 0)],
       ],
       { engine: [[{ part: '3020', color: 72, x: 0, y: 0, z: 0, rot: 0 }], [brick(0, 1, 0)]] },
@@ -219,4 +217,22 @@ test('a long chain of submodels makes the video longer instead of rushing the fl
     expect(u.start + u.dur).toBeLessThanOrEqual(tl.buildEnd + 1e-6); // nothing flies during the hero orbit
   }
   expect(tl.duration - tl.buildEnd).toBeCloseTo(tl.pacing.outro, 6);
+});
+
+test('pieces lying on the floor never overlap, even for several copies of one submodel', () => {
+  const asm = hangar();
+  const tl = buildTimeline(asm, metrics, opts);
+  const overlap = (a: { min: number[]; max: number[] }, b: { min: number[]; max: number[] }) =>
+    [0, 1, 2].every((k) => Math.min(a.max[k], b.max[k]) - Math.max(a.min[k], b.min[k]) > 2);
+  for (let t = 0; t <= tl.duration; t += 0.1) {
+    const pose = poseAt(tl, t);
+    const resting = asm.instances.flatMap((i) => {
+      const m = pose(i.key);
+      const tr = tl.tracks.get(i.key);
+      return m && tr && m.equals(tr.floor) ? [{ key: i.key, box: transformBox(metrics(i.part).body, m) }] : [];
+    });
+    for (let a = 0; a < resting.length; a++)
+      for (let b = a + 1; b < resting.length; b++)
+        expect(overlap(resting[a].box, resting[b].box), `${resting[a].key} / ${resting[b].key} at t=${t.toFixed(1)}`).toBe(false);
+  }
 });
