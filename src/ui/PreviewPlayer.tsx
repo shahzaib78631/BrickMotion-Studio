@@ -91,10 +91,29 @@ export function PreviewPlayer({ model }: { model: ModelState }) {
     setPlaying(!playing);
   };
   const pieces = asm.instances.length;
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!s.logo) return setLogoUrl(null);
+    const u = URL.createObjectURL(s.logo);
+    setLogoUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [s.logo]);
 
   return (
     <div className="preview" ref={wrapRef}>
       <div className="frame-mask" style={{ left: frame.left, top: frame.top, width: frame.width, height: frame.height }} />
+      {s.logoEnabled && logoUrl && (
+        <img
+          className="frame-logo"
+          src={logoUrl}
+          alt=""
+          style={{
+            width: frame.width * 0.22,
+            left: s.logoCorner.endsWith('r') ? frame.left + frame.width * (1 - 0.22 - 48 / 1080) : frame.left + (frame.width * 48) / 1080,
+            ...(s.logoCorner.startsWith('t') ? { top: frame.top + (frame.width * 48) / 1080 } : { bottom: frame.top + (frame.width * 48) / 1080 }),
+          }}
+        />
+      )}
       <div className="preview-controls">
         <button onClick={togglePlay} title={playing ? 'Pause' : 'Play'}>
           {playing ? '❚❚' : '▶'}
@@ -128,8 +147,8 @@ export function PreviewPlayer({ model }: { model: ModelState }) {
         <label className="small">
           <input type="checkbox" checked={s.heroOrbit} onChange={(e) => s.set({ heroOrbit: e.target.checked })} /> Hero orbit
         </label>
-        <label className="small" title={s.logo ? '' : 'Choose a logo in Settings first'}>
-          <input type="checkbox" checked={s.logoEnabled} disabled={!s.logo} onChange={(e) => s.set({ logoEnabled: e.target.checked })} /> Logo
+        <label className="small" title={s.logoBitmap ? '' : 'Choose a logo in Settings first'}>
+          <input type="checkbox" checked={s.logoEnabled} disabled={!s.logoBitmap} onChange={(e) => s.set({ logoEnabled: e.target.checked })} /> Logo
         </label>
         <button className="primary" disabled={pieces === 0} title={pieces === 0 ? 'Add some pieces first' : 'Export MP4'} onClick={() => setExporting(true)}>
           ⬇ Export MP4
@@ -140,7 +159,7 @@ export function PreviewPlayer({ model }: { model: ModelState }) {
           name={planName}
           timeline={tl}
           instances={asm.instances}
-          logo={s.logoEnabled && s.logo ? { image: s.logo, corner: s.logoCorner } : null}
+          logo={s.logoEnabled && s.logoBitmap ? { image: s.logoBitmap, corner: s.logoCorner } : null}
           onClose={() => setExporting(false)}
         />
       )}

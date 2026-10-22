@@ -2,8 +2,8 @@ import { useRef, useState, type ReactNode } from 'react';
 import { exportLDraw } from '../io/ldrawExport';
 import { planToJson, readPlanFile } from '../io/planFile';
 import { ensureIds } from '../plan/ids';
-import { emptyPlan } from '../plan/types';
 import { getColors, metricsOf } from '../state/partService';
+import { newProject } from '../state/persistence';
 import { useStudio } from '../state/store';
 import { saveBlob, safeFileName } from './download';
 
@@ -46,13 +46,7 @@ export function TopBar({ extra }: { extra?: ReactNode }) {
     <header className="topbar">
       <span className="logo">🧱 BrickMotion</span>
       <input className="title" value={plan.name} aria-label="Set name" onChange={(e) => st.apply((p) => ({ ...p, name: e.target.value }))} />
-      <button
-        onClick={() => {
-          if (pieceCount() > 0 && !confirm('Start a new empty set? (You can undo.)')) return;
-          st.setPlan(emptyPlan());
-          st.setEditingModel('');
-        }}
-      >
+      <button title="Start a new project (the current one stays saved)" onClick={() => void newProject()}>
         New
       </button>
       <button onClick={() => fileRef.current?.click()}>Import…</button>
@@ -68,8 +62,21 @@ export function TopBar({ extra }: { extra?: ReactNode }) {
         }}
       />
       <Menu label="Export">
-        <button onClick={() => saveBlob(`${safeFileName(plan.name)}.plan.json`, new Blob([planToJson(plan)], { type: 'application/json' }))}>Plan (.json)</button>
-        <button onClick={() => saveBlob(`${safeFileName(plan.name)}.mpd`, new Blob([exportLDraw(plan, metricsOf, getColors())], { type: 'text/plain' }))}>LDraw (.mpd)</button>
+        <button onClick={() => saveBlob(`${safeFileName(plan.name)}.plan.json`, new Blob([planToJson(plan)], { type: 'application/json' }))}>
+          Plan (.json)
+        </button>
+        <button
+          onClick={() =>
+            saveBlob(
+              `${safeFileName(plan.name)}.mpd`,
+              new Blob([exportLDraw(plan, metricsOf, getColors())], {
+                type: 'text/plain',
+              }),
+            )
+          }
+        >
+          LDraw (.mpd)
+        </button>
       </Menu>
       <span className="sep" />
       <button onClick={st.undo} disabled={!canUndo} title="Undo (⌘Z)">

@@ -108,3 +108,11 @@ h3 { font-size: 12px; margin: 12px 0 6px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 button.link { background: none; border: none; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; }
 .warn-list { margin: 4px 0 0; padding-left: 18px; max-height: 140px; overflow: auto; color: var(--warn); }
+.dialog h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 16px 0 4px; }
+.project-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.project-list li { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.project-list li.current { border-color: var(--accent); background: var(--accent-soft); }
+.logo-row { display: flex; gap: 12px; align-items: center; }
+.logo-preview { width: 96px; height: 64px; object-fit: contain; border: 1px dashed var(--line); border-radius: 6px; display: grid; place-items: center; background: #f6f6f8; }
+.frame-logo { position: absolute; opacity: 0.9; pointer-events: none; }
+.project-list .spacer { flex: 1; }
