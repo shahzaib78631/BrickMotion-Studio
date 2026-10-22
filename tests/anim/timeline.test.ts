@@ -167,3 +167,56 @@ test('the camera moves in as the floor empties, and the model fills the frame at
   expect(end.dist).toBeLessThan(start.dist * 0.8);
   expect(end.width).toBeGreaterThan(0.6);
 });
+
+const hangar = () =>
+  assemble(
+    plan(
+      [
+        [brick(0, 0, 0), brick(4, 0, 0), brick(8, 0, 0)],
+        [{ submodel: 'engine', x: 0, y: 3, z: 0, rot: 0 }, { submodel: 'engine', x: 4, y: 3, z: 0, rot: 0 }, { submodel: 'engine', x: 8, y: 3, z: 0, rot: 0 }],
+        [brick(0, 7, 0), brick(8, 7, 0)],
+      ],
+      { engine: [[{ part: '3020', color: 72, x: 0, y: 0, z: 0, rot: 0 }], [brick(0, 1, 0)]] },
+    ),
+    metrics,
+    fixtureColors,
+  );
+
+test('sibling submodels each attach before the next one is built at the side spot', () => {
+  const tl = buildTimeline(hangar(), metrics, opts);
+  const subs = [...tl.subBuilds].sort((a, b) => a.start - b.start);
+  expect(subs).toHaveLength(3);
+  for (let i = 1; i < subs.length; i++) expect(subs[i].start).toBeGreaterThanOrEqual(subs[i - 1].attachEnd - 1e-6);
+});
+
+test('with submodels, every visible piece stays inside the frame', () => {
+  const asm = hangar();
+  const tl = buildTimeline(asm, metrics, opts);
+  for (let t = 0; t <= tl.duration; t += 0.05) expect(ndcExtent(tl, asm, t).max).toBeLessThanOrEqual(1.0001);
+});
+
+test('the camera does not zoom in and out for every submodel', () => {
+  const asm = hangar();
+  const tl = buildTimeline(asm, metrics, opts);
+  let reversals = 0;
+  let dir = 0;
+  let last = 0;
+  for (let t = 0; t <= tl.buildEnd; t += 1 / 30) {
+    const d = ndcExtent(tl, asm, t).dist;
+    const nd = last ? (d > last * 1.002 ? 1 : d < last / 1.002 ? -1 : 0) : 0;
+    if (nd && dir && nd !== dir) reversals++;
+    if (nd) dir = nd;
+    last = d;
+  }
+  expect(reversals).toBeLessThanOrEqual(2);
+});
+
+test('a long chain of submodels makes the video longer instead of rushing the flights', () => {
+  const tl = buildTimeline(hangar(), metrics, { targetSeconds: 5, heroOrbit: true });
+  expect(tl.duration).toBeGreaterThan(5.05);
+  for (const u of tl.units) {
+    expect(u.dur).toBeCloseTo(tl.pacing.flight, 6);
+    expect(u.start + u.dur).toBeLessThanOrEqual(tl.buildEnd + 1e-6); // nothing flies during the hero orbit
+  }
+  expect(tl.duration - tl.buildEnd).toBeCloseTo(tl.pacing.outro, 6);
+});

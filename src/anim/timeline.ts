@@ -12,6 +12,7 @@ const SIDE_GAP = 4; // studs between the model area and a side spot
 const DROP_TIME = 0.3;
 const SETTLE = 0.12;
 const CAM_KEY_STEP = 0.2;
+const SIDE_REACH = 1.5;
 
 /** One thing that flies: a single piece, or a finished submodel chunk (the attach). */
 export type Unit = { kind: 'piece' | 'attach'; keys: string[]; start: number; dur: number; step: number };
@@ -115,8 +116,8 @@ function windowed(items: FloorItem[], bands: Region[]) {
   return windows;
 }
 
-type PlayPiece = { kind: 'piece'; key: string; target: THREE.Matrix4; ctx: number };
-type PlayAttach = { kind: 'attach'; key: string; keys: string[]; from: THREE.Matrix4; to: THREE.Matrix4; sub: number };
+type PlayPiece = { kind: 'piece'; key: string; target: THREE.Matrix4; ctx: number; after?: PlayAttach[] };
+type PlayAttach = { kind: 'attach'; key: string; keys: string[]; from: THREE.Matrix4; to: THREE.Matrix4; sub: number; after?: PlayAttach[] };
 type PlayStep = { units: (PlayPiece | PlayAttach)[] };
 type Ctx = { bands: Region[]; pieces: string[]; group: Map<string, number> };
 
@@ -152,26 +153,35 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     const stepIds = [...new Set(nodes.map((n) => n.step))].sort((a, b) => a - b);
     for (const s of stepIds) {
       const inStep = nodes.filter((n) => n.step === s).sort((a, b) => a.order - b.order);
-      const attaches = new Map<ANode, PlayAttach>();
-      for (const n of inStep) if (n.kind === 'sub') attaches.set(n, buildSub(n, frame, prefix));
-      const step: PlayStep = { units: [] };
+      let step: PlayStep = { units: [] };
+      const push = (u: PlayPiece | PlayAttach) => {
+        if (pending.length) (u.after = pending), (pending = []);
+        step.units.push(u);
+      };
       for (const n of inStep) {
         if (n.kind === 'sub') {
-          const a = attaches.get(n)!;
-          if (a.keys.length) step.units.push(a);
+          // the submodel is built aside and attached right away; the rest of the step follows
+          if (step.units.length) steps.push(step);
+          step = { units: [] };
+          const a = buildSub(n, frame, prefix);
+          if (a.keys.length) push(a);
           continue;
         }
         const key = keyOf(prefix, n.itemId);
         const inst = byKey.get(key);
         if (!inst) continue;
         const target = ctx === 0 ? inst.world.clone() : frame.clone().multiply(placementMatrix(n.local));
-        step.units.push({ kind: 'piece', key, target, ctx });
+        push({ kind: 'piece', key, target, ctx });
         ctxs[ctx].pieces.push(key);
         ctxs[ctx].group.set(key, steps.length);
       }
       if (step.units.length) steps.push(step);
     }
   };
+  /** attach units the next unit played must wait for (the side spot it uses is still occupied) */
+  let pending: PlayAttach[] = [];
+  const lastAttachAtDepth: PlayAttach[] = [];
+  let depth = 0;
 
   const buildSub = (n: Extract<ANode, { kind: 'sub' }>, parentFrame: THREE.Matrix4, prefix: string): PlayAttach => {
     const key = keyOf(prefix, n.itemId);
@@ -191,9 +201,16 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     ctxs.push({ bands, pieces: [], group: new Map() });
     const sub = subInfo.length;
     subInfo.push({ key, firstStep: steps.length, spot, ctx: ctxs.length - 1 });
+    const prev = lastAttachAtDepth[depth];
+    if (prev) pending = [...pending, prev];
+    depth++;
     play(n.children, from, key, ctx);
+    depth--;
     sideRight = savedRight;
-    return { kind: 'attach', key, keys: keysUnder(n, prefix), from, to, sub };
+    const attach: PlayAttach = { kind: 'attach', key, keys: keysUnder(n, prefix), from, to, sub };
+    lastAttachAtDepth[depth] = attach;
+    lastAttachAtDepth.length = depth + 1; // deeper spots are free again for the next parent
+    return attach;
   };
 
   play(asm.nodes, new THREE.Matrix4(), '', 0);
@@ -220,9 +237,10 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     });
   }
 
-  // which units an attach waits for: every earlier unit that moves one of its keys
+  // what each unit waits for: earlier units that move the same pieces, and the attach that frees its side spot
   const deps: number[][] = flat.map(() => []);
   const lastUnitOf = new Map<string, number>();
+  const indexOf = new Map<PlayPiece | PlayAttach, number>(flat.map((f, i) => [f.u, i]));
   flat.forEach((f, i) => {
     const keys = f.u.kind === 'piece' ? [f.u.key] : f.u.keys;
     const d = new Set<number>();
@@ -231,31 +249,36 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
       if (prev !== undefined) d.add(prev);
       lastUnitOf.set(k, i);
     }
+    for (const a of f.u.after ?? []) if (indexOf.has(a)) d.add(indexOf.get(a)!); // its side spot must be free
     deps[i] = [...d];
   });
-  const schedule = (c: number) => {
+  const schedule = (c: number, dur: number) => {
     const s: number[] = [];
     let end = intro;
     flat.forEach((_, i) => {
       let t = intro + (raw[i] - intro) * c;
-      for (const d of deps[i]) t = Math.max(t, s[d] + flight);
+      if (i > 0) t = Math.max(t, s[i - 1]); // keep play order
+      for (const d of deps[i]) t = Math.max(t, s[d] + dur);
       s.push(t);
-      end = Math.max(end, t + flight);
+      end = Math.max(end, t + dur);
     });
     return { s, end };
   };
   let starts: number[] = [];
   let actualEnd = buildEnd;
+  // A chain of flights that wait on each other (a submodel's pieces, its attach, the next
+  // submodel) can be longer than the build; then the video runs longer instead of rushing.
+  const flightDur = flight;
   if (flat.length) {
     let lo = 0;
     let hi = 1;
-    while (schedule(hi).end < buildEnd && hi < 1e6) hi *= 2;
+    while (schedule(hi, flightDur).end < buildEnd && hi < 1e6) hi *= 2;
     for (let it = 0; it < 60; it++) {
       const mid = (lo + hi) / 2;
-      if (schedule(mid).end <= buildEnd) lo = mid;
+      if (schedule(mid, flightDur).end <= buildEnd) lo = mid;
       else hi = mid;
     }
-    const r = schedule(lo);
+    const r = schedule(lo, flightDur);
     starts = r.s;
     actualEnd = Math.max(buildEnd, r.end);
   }
@@ -263,7 +286,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     kind: f.u.kind,
     keys: f.u.kind === 'piece' ? [f.u.key] : f.u.keys,
     start: starts[i],
-    dur: flight,
+    dur: flightDur,
     step: f.step,
   }));
   const pieceStart = new Map<string, number>();
@@ -341,24 +364,42 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
   // --- what the camera must see ---
   const launch = (tr: Track) => (tr.moves.length ? units[tr.moves[0].unit].start : Infinity);
   const occupied = (ctx: number) => [...tracks.values()].filter((tr) => tr.ctx === ctx);
-  // every piece lying on the floor, side spots included, so nothing on screen is cut off
-  const mainFloor = [...tracks.values()];
-  let buildBox = modelBox;
-  for (const tr of mainFloor) buildBox = unionBox(buildBox, tr.floorBox);
-  const camKeys: CamKey[] = [];
-  const camEnd = flat.length ? actualEnd : intro;
-  for (let t = 0; t <= camEnd + 1e-9; t += CAM_KEY_STEP) {
-    let box = modelBox;
-    for (const tr of mainFloor) if (tr.appear <= t && t < launch(tr)) box = unionBox(box, tr.floorBox);
-    camKeys.push({ t, box });
-  }
 
   const subBuilds: SubBuild[] = subInfo.map((s) => {
     const attachIdx = flat.findIndex((f) => f.u.kind === 'attach' && f.u.key === s.key);
     const firstIdx = flat.findIndex((f) => f.step >= s.firstStep);
     const attachStart = attachIdx >= 0 ? starts[attachIdx] : buildEnd;
-    return { key: s.key, start: firstIdx >= 0 ? starts[firstIdx] : attachStart, attachStart, attachEnd: attachStart + flight, focus: occupied(s.ctx).reduce((b, tr) => unionBox(b, tr.floorBox), s.spot) };
+    return { key: s.key, start: firstIdx >= 0 ? starts[firstIdx] : attachStart, attachStart, attachEnd: attachStart + flightDur, focus: occupied(s.ctx).reduce((b, tr) => unionBox(b, tr.floorBox), s.spot) };
   });
+
+  // the space each flight sweeps: both ends, raised by its arc
+  const flightBox: (Box | null)[] = units.map(() => null);
+  for (const [key, tr] of tracks) {
+    const body = metrics(byKey.get(key)!.part).body;
+    for (const mv of tr.moves) {
+      let b = unionBox(transformBox(body, restPose(mv.from, mv.rel)), transformBox(body, restPose(mv.to, mv.rel)));
+      b = { min: [b.min[0], b.min[1] - mv.peak, b.min[2]], max: [b.max[0], b.max[1] + 2, b.max[2]] };
+      flightBox[mv.unit] = flightBox[mv.unit] ? unionBox(flightBox[mv.unit]!, b) : b;
+    }
+  }
+
+  // The build camera never cuts to close-ups: it keeps the model, the pieces still on the
+  // floor, every flight in progress and any side spot in use in view. A side spot is kept
+  // from SIDE_REACH before its build until SIDE_REACH after its attach, so submodels built
+  // one after another widen the view once instead of pumping in and out.
+  let buildBox = modelBox;
+  for (const tr of tracks.values()) buildBox = unionBox(buildBox, tr.floorBox);
+  const camKeys: CamKey[] = [];
+  const camEnd = flat.length ? actualEnd : intro;
+  for (let t = 0; t <= camEnd + 1e-9; t += CAM_KEY_STEP) {
+    let box = modelBox;
+    for (const tr of tracks.values()) if (tr.appear <= t && t < launch(tr)) box = unionBox(box, tr.floorBox);
+    units.forEach((u, i) => {
+      if (flightBox[i] && u.start < t + CAM_KEY_STEP && u.start + u.dur > t - CAM_KEY_STEP) box = unionBox(box, flightBox[i]!);
+    });
+    for (const sb of subBuilds) if (t >= sb.start - SIDE_REACH && t <= sb.attachEnd + SIDE_REACH) box = unionBox(box, sb.focus);
+    camKeys.push({ t, box });
+  }
 
   return {
     duration: (flat.length ? actualEnd : intro) + outro,

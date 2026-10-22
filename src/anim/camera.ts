@@ -12,7 +12,6 @@ const BUILD_MARGIN = 1.08;
 const ORBIT_DEG = 120;
 const ORBIT_EL = 30;
 const ORBIT_MARGIN = 1.25;
-const FOCUS_EASE = 0.6;
 const OUTRO_BLEND = 0.8;
 /** each camera key frames everything that is on the floor within ±KEY_REACH s… */
 const KEY_REACH = 0.6;
@@ -98,15 +97,7 @@ const unionBoxes = (a: Box, b: Box): Box => ({
 
 function buildRig(tl: Timeline, t: number, aspect: number): Rig {
   const az = lerp(BUILD_AZ[0], BUILD_AZ[1], clamp01(t / Math.max(tl.buildEnd, 1e-6)));
-  let rig = floorRig(tl, t, aspect, az);
-  // the innermost submodel being built at its side spot pulls the camera over
-  let active = null as Timeline['subBuilds'][number] | null;
-  for (const s of tl.subBuilds) if (t >= s.start && t < s.attachStart + FOCUS_EASE && (!active || s.start >= active.start)) active = s;
-  if (active) {
-    const w = easeInOutCubic(Math.min(clamp01((t - active.start) / FOCUS_EASE), 1 - clamp01((t - active.attachStart) / FOCUS_EASE)));
-    rig = mix(rig, fitRig(active.focus, aspect, az, BUILD_EL, BUILD_MARGIN), w);
-  }
-  return rig;
+  return floorRig(tl, t, aspect, az);
 }
 
 export function cameraAt(tl: Timeline, t: number, aspect: number): CamPose {
