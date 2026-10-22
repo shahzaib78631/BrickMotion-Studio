@@ -1,9 +1,4 @@
-export type Command =
-  | { kind: 'move'; d: { x: number; y: number; z: number } }
-  | { kind: 'rotate' }
-  | { kind: 'delete' }
-  | { kind: 'undo' }
-  | { kind: 'redo' };
+export type Command = { kind: 'move'; d: { x: number; y: number; z: number } } | { kind: 'rotate' } | { kind: 'delete' } | { kind: 'undo' } | { kind: 'redo' };
 
 type KeyLike = { key: string; shiftKey: boolean; metaKey: boolean; ctrlKey: boolean };
 

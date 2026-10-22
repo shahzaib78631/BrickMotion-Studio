@@ -236,3 +236,13 @@ test('pieces lying on the floor never overlap, even for several copies of one su
         expect(overlap(resting[a].box, resting[b].box), `${resting[a].key} / ${resting[b].key} at t=${t.toFixed(1)}`).toBe(false);
   }
 });
+
+test('the timeline lists when each step and each submodel build plays', () => {
+  const tl = buildTimeline(hangar(), metrics, opts);
+  const main = tl.steps.filter((s) => s.model === '');
+  expect([...new Set(main.map((s) => s.index))]).toEqual([0, 1, 2]);
+  expect(tl.steps.filter((s) => s.model === 'engine').map((s) => s.index)).toEqual([0, 1, 0, 1, 0, 1]);
+  for (const s of tl.steps) expect(s.end).toBeGreaterThan(s.start);
+  for (let i = 1; i < tl.steps.length; i++) expect(tl.steps[i].start).toBeGreaterThanOrEqual(tl.steps[i - 1].start - 1e-6);
+  expect(tl.subBuilds.map((b) => b.name)).toEqual(['engine', 'engine', 'engine']);
+});

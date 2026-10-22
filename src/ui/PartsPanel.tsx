@@ -12,7 +12,11 @@ export function PartsPanel() {
   const categories = useMemo(() => {
     const counts = new Map<string, number>();
     for (const e of catalog) counts.set(e.category, (counts.get(e.category) ?? 0) + 1);
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 60).map(([c]) => c).sort();
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 60)
+      .map(([c]) => c)
+      .sort();
   }, [catalog]);
   const results = useMemo(() => {
     if (!q.trim() && !cat) {
@@ -24,10 +28,13 @@ export function PartsPanel() {
   }, [catalog, q, cat]);
 
   return (
-    <aside className="panel parts">
-      <h2>Parts</h2>
-      <input type="search" placeholder="Search: 2x4, slope 45, 3001…" value={q} onChange={(e) => setQ(e.target.value)} />
-      <select value={cat} onChange={(e) => setCat(e.target.value)}>
+    <div className="nx-pane">
+      <div className="nx-pane-head">
+        <h3>Parts</h3>
+        <span className="nx-count">{catalog.length.toLocaleString()}</span>
+      </div>
+      <input type="search" aria-label="Search parts" placeholder="Search: 2x4, slope 45, 3001…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <select aria-label="Category" value={cat} onChange={(e) => setCat(e.target.value)}>
         <option value="">All categories</option>
         {categories.map((c) => (
           <option key={c} value={c}>
@@ -35,7 +42,7 @@ export function PartsPanel() {
           </option>
         ))}
       </select>
-      {!q.trim() && !cat && <p className="muted small">Common parts — search to see all {catalog.length.toLocaleString()}.</p>}
+      <div className="nx-sub">{!q.trim() && !cat ? 'Common parts' : `${results.length} found`}</div>
       <div className="part-grid">
         {results.map((e) => (
           <button key={e.id} className="part-tile" title={`${e.name} (${e.id}) — click to add`} onClick={() => addPart(e.id)}>
@@ -44,8 +51,9 @@ export function PartsPanel() {
             <span className="part-id">{e.id}</span>
           </button>
         ))}
-        {results.length === 0 && <p className="muted">No parts match.</p>}
+        {results.length === 0 && <p className="nx-hint">No parts match.</p>}
       </div>
-    </aside>
+      <p className="nx-fine">Click a part to add it in the selected colour. It lands in the current step.</p>
+    </div>
   );
 }

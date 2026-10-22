@@ -8,8 +8,7 @@ import { useStudio } from './store';
 
 export function allPartIds(plan: Plan): string[] {
   const ids = new Set<string>();
-  for (const s of [...plan.steps, ...Object.values(plan.submodels ?? {}).flatMap((m) => m.steps)])
-    for (const i of s.pieces) if (!isSub(i)) ids.add(i.part);
+  for (const s of [...plan.steps, ...Object.values(plan.submodels ?? {}).flatMap((m) => m.steps)]) for (const i of s.pieces) if (!isSub(i)) ids.add(i.part);
   return [...ids];
 }
 

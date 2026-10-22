@@ -4,6 +4,19 @@ import { lastProjectId, loadProject, newProjectId, saveProject } from '../storag
 import { loadSettings, saveSettings } from '../storage/settings';
 import { applySettings, toSettings, useAppSettings } from './appSettings';
 import { useStudio } from './store';
+import { create } from 'zustand';
+
+/** What the toolbar's save dot shows. */
+export const useSaveStatus = create<{ status: 'saved' | 'dirty' | 'error' }>(() => ({ status: 'saved' }));
+
+const save = (id: string, plan = useStudio.getState().plan) =>
+  saveProject(id, plan).then(
+    () => useSaveStatus.setState({ status: timer ? 'dirty' : 'saved' }),
+    (e) => {
+      useSaveStatus.setState({ status: 'error' });
+      throw e;
+    },
+  );
 
 const AUTOSAVE_MS = 1000;
 let projectId = newProjectId();
@@ -16,7 +29,7 @@ export const currentProjectId = () => projectId;
 export async function flushSave(): Promise<void> {
   if (timer) clearTimeout(timer);
   timer = undefined;
-  await saveProject(projectId, useStudio.getState().plan);
+  await save(projectId);
 }
 
 function show(id: string, plan = emptyPlan()) {
@@ -50,10 +63,11 @@ export async function initPersistence(): Promise<void> {
   useStudio.subscribe((s) => {
     if (s.plan === lastPlan) return;
     lastPlan = s.plan;
+    useSaveStatus.setState({ status: 'dirty' });
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => {
       timer = undefined;
-      void saveProject(projectId, lastPlan);
+      void save(projectId, lastPlan).catch(() => {});
     }, AUTOSAVE_MS);
   });
   let settingsTimer: ReturnType<typeof setTimeout> | undefined;

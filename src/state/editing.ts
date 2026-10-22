@@ -14,7 +14,10 @@ function subBounds(plan: Plan, name: string): Box {
   return assemble({ ...plan, steps: modelSteps(plan, name) }, metricsOf, getColors()).bounds ?? PLACEHOLDER;
 }
 
-export const bodyFor = (plan: Plan) => (item: PlanItem): Box => (isSub(item) ? subBounds(plan, item.submodel) : metricsOf(item.part).body);
+export const bodyFor =
+  (plan: Plan) =>
+  (item: PlanItem): Box =>
+    isSub(item) ? subBounds(plan, item.submodel) : metricsOf(item.part).body;
 
 export const footprintFor = (plan: Plan) => (item: PlanItem) => {
   const b = bodyFor(plan)(item);

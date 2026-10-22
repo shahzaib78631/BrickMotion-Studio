@@ -141,6 +141,7 @@ export function Viewport({ model }: { model: ModelState }) {
   }, []);
 
   const fitAllRef = useRef(() => {});
+  viewportApi.fit = () => fitAllRef.current();
   fitAllRef.current = () => {
     const b = model.view.bounds;
     if (b && viewportApi.studio && viewportApi.controls) frame(viewportApi.studio.camera, viewportApi.controls, worldBox(b));
@@ -178,18 +179,10 @@ export function Viewport({ model }: { model: ModelState }) {
           if (found && isSub(found.item)) st().setEditingModel(found.item.submodel);
         }}
       />
-      {mode === 'edit' && (
-        <button className="fit-btn" title="Fit model in view (F)" onClick={() => fitAllRef.current()}>
-          ⤢ Fit
-        </button>
-      )}
-      {editingModel && mode === 'edit' && (
-        <div className="breadcrumb">
-          <button onClick={() => st().setEditingModel('')}>Main</button> › <strong>{editingModel}</strong>
-        </div>
-      )}
       {!model.ready && <div className="overlay-note">Loading parts…</div>}
-      {model.ready && model.view.instances.length === 0 && mode === 'edit' && <div className="overlay-note">Empty floor — add parts from the left, import a file, or generate a set with AI.</div>}
+      {model.ready && model.view.instances.length === 0 && mode === 'edit' && (
+        <div className="overlay-note">Empty floor — add parts from the left, import a file, or generate a set with AI.</div>
+      )}
     </div>
   );
 }

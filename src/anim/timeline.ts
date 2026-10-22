@@ -16,15 +16,19 @@ const SIDE_REACH = 1.5;
 
 /** One thing that flies: a single piece, or a finished submodel chunk (the attach). */
 export type Unit = { kind: 'piece' | 'attach'; keys: string[]; start: number; dur: number; step: number };
-export type SubBuild = { key: string; start: number; attachStart: number; attachEnd: number; focus: Box };
+export type SubBuild = { key: string; name: string; start: number; attachStart: number; attachEnd: number; focus: Box };
 /** What the build camera must keep in view at time t (LDU): the model plus the pieces still on the floor. */
 export type CamKey = { t: number; box: Box };
 
 type Move = { unit: number; from: THREE.Matrix4; to: THREE.Matrix4; rel: THREE.Matrix4 | null; peak: number };
 type Track = { appear: number; floor: THREE.Matrix4; floorBox: Box; ctx: number; moves: Move[]; final: THREE.Matrix4 };
 
+/** When one step of a model plays (a step split by a submodel build plays in parts). */
+export type StepSpan = { model: string; index: number; start: number; end: number };
+
 export type Timeline = {
   duration: number;
+  steps: StepSpan[];
   pacing: Pacing;
   heroOrbit: boolean;
   intro: number;
@@ -118,7 +122,7 @@ function windowed(items: FloorItem[], bands: Region[]) {
 
 type PlayPiece = { kind: 'piece'; key: string; target: THREE.Matrix4; ctx: number; after?: PlayAttach[] };
 type PlayAttach = { kind: 'attach'; key: string; keys: string[]; from: THREE.Matrix4; to: THREE.Matrix4; sub: number; after?: PlayAttach[] };
-type PlayStep = { units: (PlayPiece | PlayAttach)[] };
+type PlayStep = { units: (PlayPiece | PlayAttach)[] ; model: string; index: number };
 type Ctx = { bands: Region[]; pieces: string[]; group: Map<string, number>; after?: number };
 
 export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions): Timeline {
@@ -136,7 +140,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
 
   const steps: PlayStep[] = [];
   const ctxs: Ctx[] = [{ bands: mainBands, pieces: [], group: new Map() }];
-  const subInfo: { key: string; firstStep: number; spot: Box; ctx: number }[] = [];
+  const subInfo: { key: string; name: string; firstStep: number; spot: Box; ctx: number }[] = [];
   let sceneBox: Box = unionBox(modelBox, regionBox(mainBands[0], ground));
   sceneBox = unionBox(sceneBox, regionBox(mainBands[1], ground));
   let sideRight = Math.max(modelBox.max[0], (mainBands[0].x0 + mainBands[0].width) * STUD);
@@ -153,7 +157,8 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     const stepIds = [...new Set(nodes.map((n) => n.step))].sort((a, b) => a - b);
     for (const s of stepIds) {
       const inStep = nodes.filter((n) => n.step === s).sort((a, b) => a.order - b.order);
-      let step: PlayStep = { units: [] };
+      const model = inStep[0]?.model ?? '';
+      let step: PlayStep = { units: [], model, index: s };
       const push = (u: PlayPiece | PlayAttach) => {
         if (pending.length) ((u.after = pending), (pending = []));
         step.units.push(u);
@@ -162,7 +167,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
         if (n.kind === 'sub') {
           // the submodel is built aside and attached right away; the rest of the step follows
           if (step.units.length) steps.push(step);
-          step = { units: [] };
+          step = { units: [], model, index: s };
           const a = buildSub(n, frame, prefix);
           if (a.keys.length) push(a);
           continue;
@@ -200,7 +205,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     const ctx = ctxs.length;
     ctxs.push({ bands, pieces: [], group: new Map() });
     const sub = subInfo.length;
-    subInfo.push({ key, firstStep: steps.length, spot, ctx: ctxs.length - 1 });
+    subInfo.push({ key, name: n.submodel, firstStep: steps.length, spot, ctx: ctxs.length - 1 });
     const prev = lastAttachAtDepth[depth];
     if (prev) {
       pending = [...pending, prev];
@@ -381,6 +386,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     const attachStart = attachIdx >= 0 ? starts[attachIdx] : buildEnd;
     return {
       key: s.key,
+      name: s.name,
       start: firstIdx >= 0 ? starts[firstIdx] : attachStart,
       attachStart,
       attachEnd: attachStart + flightDur,
@@ -417,8 +423,16 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     camKeys.push({ t, box });
   }
 
+  const stepSpans: StepSpan[] = steps.map((st) => ({ model: st.model, index: st.index, start: Infinity, end: -Infinity }));
+  units.forEach((u) => {
+    const sp = stepSpans[u.step];
+    sp.start = Math.min(sp.start, u.start);
+    sp.end = Math.max(sp.end, u.start + u.dur);
+  });
+
   return {
     duration: (flat.length ? actualEnd : intro) + outro,
+    steps: stepSpans.filter((sp) => sp.end > sp.start),
     pacing,
     heroOrbit: opts.heroOrbit,
     intro,

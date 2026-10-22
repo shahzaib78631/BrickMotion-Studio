@@ -20,7 +20,7 @@ export function ProjectsDialog({ onClose }: { onClose(): void }) {
   return (
     <div className="dialog-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="dialog" role="dialog" aria-label="Projects">
-        <h2>📁 Projects</h2>
+        <h2>Projects</h2>
         {!list && <p className="muted">Loading…</p>}
         {list?.length === 0 && <p className="muted">No saved projects yet.</p>}
         <ul className="project-list">
@@ -46,7 +46,7 @@ export function ProjectsDialog({ onClose }: { onClose(): void }) {
                   await refresh();
                 }}
               >
-                🗑
+                Delete
               </button>
             </li>
           ))}

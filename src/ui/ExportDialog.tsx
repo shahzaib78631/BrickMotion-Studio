@@ -31,7 +31,16 @@ export function ExportDialog({ name, timeline, instances, logo, onClose }: Props
       setState('running');
       try {
         const b = await exportVideo(
-          { timeline, instances, width: 1080, height: 1920, fps: 30, logo, signal: ac.signal, onProgress: (done, total) => alive && setProgress({ done, total }) },
+          {
+            timeline,
+            instances,
+            width: 1080,
+            height: 1920,
+            fps: 30,
+            logo,
+            signal: ac.signal,
+            onProgress: (done, total) => alive && setProgress({ done, total }),
+          },
           { createStudio },
         );
         if (!alive) return;

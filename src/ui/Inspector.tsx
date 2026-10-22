@@ -5,6 +5,9 @@ import { findItem, modelSteps, moveItemsToStep, setColor, setPart } from '../pla
 import { isGrid, isSub } from '../plan/types';
 import { ensureParts, getCatalog, getColors, partName } from '../state/partService';
 import { useStudio } from '../state/store';
+import type { Timeline } from '../anim/timeline';
+import { Ic } from './icons';
+import { pieceCount } from './Toolbar';
 
 export function ColorSwatches({ value, onPick }: { value?: number; onPick: (code: number) => void }) {
   const colors = useMemo(() => {
@@ -54,7 +57,8 @@ function PartPicker({ onPick }: { onPick: (id: string) => void }) {
   );
 }
 
-export function Inspector() {
+/** Right-hand inspector: the selection's part, colour and step, or the set's numbers when nothing is selected. */
+export function Inspector({ timeline, checks }: { timeline: Timeline | null; checks: number }) {
   const plan = useStudio((s) => s.plan);
   const selection = useStudio((s) => s.selection);
   const editingModel = useStudio((s) => s.editingModel);
@@ -67,13 +71,54 @@ export function Inspector() {
 
   if (found.length === 0) {
     const code = resolveColor(colors, paintColor);
+    const subs = Object.keys(plan.submodels ?? {}).length;
     return (
-      <section className="inspector">
-        <h2>Inspector</h2>
-        <p className="muted">Click a piece to select it. Shift+click adds to the selection. Arrow keys move, PageUp/PageDown change height, R rotates, Delete removes.</p>
-        <h3>Color for new pieces</h3>
+      <aside className="nx-inspector" aria-label="Inspector">
+        <div className="nx-insp-head">
+          <h4>{plan.name || 'Untitled set'}</h4>
+        </div>
+        <div className="nx-stat">
+          <div>
+            <b>{pieceCount(plan)}</b>
+            <small>Pieces</small>
+          </div>
+          <div>
+            <b>{plan.steps.length}</b>
+            <small>Steps</small>
+          </div>
+          <div>
+            <b>{subs}</b>
+            <small>Submodels</small>
+          </div>
+          <div>
+            <b>{timeline ? `${timeline.duration.toFixed(1)}s` : '–'}</b>
+            <small>Video</small>
+          </div>
+          <div>
+            <b className={checks ? 'bm-bad' : ''}>{checks}</b>
+            <small>Checks</small>
+          </div>
+        </div>
+        <div className="nx-sub">Colour for new pieces</div>
         <ColorSwatches value={code} onPick={(c) => st.setPaintColor(c)} />
-      </section>
+        <div className="nx-sub">Keys</div>
+        <div className="nx-kbd">
+          <kbd>Click</kbd>
+          <span>Select · Shift adds</span>
+          <kbd>← ↑ → ↓</kbd>
+          <span>Move one stud</span>
+          <kbd>PgUp PgDn</kbd>
+          <span>Up or down a plate</span>
+          <kbd>R</kbd>
+          <span>Rotate</span>
+          <kbd>Delete</kbd>
+          <span>Remove</span>
+          <kbd>F</kbd>
+          <span>Fit the view</span>
+          <kbd>⌘Z</kbd>
+          <span>Undo</span>
+        </div>
+      </aside>
     );
   }
 
@@ -86,35 +131,45 @@ export function Inspector() {
   };
 
   return (
-    <section className="inspector">
-      <h2>Inspector</h2>
+    <aside className="nx-inspector" aria-label="Inspector">
       {found.length > 1 ? (
-        <p>
-          <strong>{found.length} pieces selected</strong>
-        </p>
+        <div className="nx-insp-head">
+          <h4>{found.length} pieces selected</h4>
+          <button className="nx-icon" aria-label="Clear selection" title="Clear selection" onClick={() => st.select([])}>
+            <Ic name="x" />
+          </button>
+        </div>
       ) : isSub(first) ? (
         <>
-          <p>
-            <strong>Submodel “{first.submodel}”</strong>
-          </p>
-          <button onClick={() => st.setEditingModel(first.submodel)}>Edit submodel</button>
+          <div className="nx-insp-head">
+            <Ic name="box" />
+            <h4>Submodel “{first.submodel}”</h4>
+          </div>
+          <button className="nx-btn" onClick={() => st.setEditingModel(first.submodel)}>
+            <Ic name="edit" /> Edit submodel
+          </button>
         </>
       ) : (
         <>
-          <p>
-            <strong>{partName(first.part)}</strong> <span className="muted">{first.part}</span>
-          </p>
+          <div className="nx-insp-head">
+            <h4>{partName(first.part)}</h4>
+            <span className="nx-chip">{first.part}</span>
+          </div>
+          <div className="nx-sub">Part</div>
           <PartPicker
             onPick={async (id) => {
               await ensureParts([id]);
               st.apply((p) => setPart(p, editingModel, [first.id!], id));
             }}
           />
-          <p className="muted small">Color: {firstColor !== undefined ? colors.get(firstColor)!.name.replace(/_/g, ' ') : `unknown (${String(first.color)})`}</p>
+          <div className="nx-sub">
+            Colour{' '}
+            <span className="nx-hint">{firstColor !== undefined ? colors.get(firstColor)!.name.replace(/_/g, ' ') : `unknown (${String(first.color)})`}</span>
+          </div>
         </>
       )}
       {pieceIds.length > 0 && <ColorSwatches value={firstColor} onPick={pickColor} />}
-      <label className="row">
+      <label className="nx-field">
         Step
         <select value={found[0]!.step} onChange={(e) => st.apply((p) => moveItemsToStep(p, editingModel, ids, Number(e.target.value)))}>
           {steps.map((_, i) => (
@@ -126,13 +181,27 @@ export function Inspector() {
       </label>
       {found.length === 1 &&
         (isGrid(first) ? (
-          <p className="muted small mono">
-            x {first.x} · y {first.y} · z {first.z} · {first.rot}°
-          </p>
+          <div className="nx-stat bm-pos">
+            <div>
+              <b>{first.x}</b>
+              <small>X stud</small>
+            </div>
+            <div>
+              <b>{first.z}</b>
+              <small>Z stud</small>
+            </div>
+            <div>
+              <b>{first.y}</b>
+              <small>Height (plates)</small>
+            </div>
+            <div>
+              <b>{first.rot}°</b>
+              <small>Rotation</small>
+            </div>
+          </div>
         ) : (
-          <p className="muted small">Exact position (imported) — moves in whole studs and plates.</p>
+          <p className="nx-fine">Exact position (imported). Moves in whole studs and plates.</p>
         ))}
-    </section>
+    </aside>
   );
 }
-

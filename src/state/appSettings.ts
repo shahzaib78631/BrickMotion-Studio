@@ -41,5 +41,7 @@ export const toSettings = (s: AppSettings): Settings => ({
 
 export async function applySettings(s: Settings): Promise<void> {
   const logoBitmap = s.logo ? await createImageBitmap(s.logo).catch(() => null) : null;
-  useAppSettings.getState().set({ apiKey: s.apiKey, model: s.model, logo: s.logo, logoBitmap, logoCorner: s.logoCorner, logoEnabled: s.logoEnabled && !!logoBitmap, ...s.video });
+  useAppSettings
+    .getState()
+    .set({ apiKey: s.apiKey, model: s.model, logo: s.logo, logoBitmap, logoCorner: s.logoCorner, logoEnabled: s.logoEnabled && !!logoBitmap, ...s.video });
 }

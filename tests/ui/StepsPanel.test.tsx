@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test } from 'vitest';
 import type { Plan } from '../../src/plan/types';
 import { useStudio } from '../../src/state/store';
-import { StepsTimeline } from '../../src/ui/StepsTimeline';
+import { StepsPanel } from '../../src/ui/StepsPanel';
 
 const piece = (id: string) => ({ id, part: '3001', color: 4, x: 0, y: 0, z: 0, rot: 0 as const });
 const plan: Plan = {
@@ -18,13 +18,13 @@ beforeEach(() => useStudio.getState().setPlan(plan, { resetHistory: true }));
 afterEach(cleanup);
 
 test('renders one chip per step plus All', () => {
-  render(<StepsTimeline />);
+  render(<StepsPanel />);
   expect(screen.getAllByRole('button', { name: /^Step \d+/ })).toHaveLength(3);
   expect(screen.getByRole('button', { name: 'All' })).toBeTruthy();
 });
 
 test('clicking a chip shows the model up to that step', () => {
-  render(<StepsTimeline />);
+  render(<StepsPanel />);
   fireEvent.click(screen.getByRole('button', { name: /^Step 2/ }));
   expect(useStudio.getState().currentStep).toBe(1);
   fireEvent.click(screen.getByRole('button', { name: 'All' }));
@@ -32,7 +32,7 @@ test('clicking a chip shows the model up to that step', () => {
 });
 
 test('a submodel chip expands to show its own steps', () => {
-  render(<StepsTimeline />);
+  render(<StepsPanel />);
   expect(screen.queryByRole('button', { name: /^engine step/ })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Show steps of engine' }));
   expect(screen.getAllByRole('button', { name: /^engine step/ })).toHaveLength(2);
@@ -42,7 +42,7 @@ test('a submodel chip expands to show its own steps', () => {
 });
 
 test('selected pieces can be moved to another step', () => {
-  render(<StepsTimeline />);
+  render(<StepsPanel />);
   act(() => useStudio.getState().select(['a']));
   fireEvent.click(screen.getByRole('button', { name: 'Move selection to step 2' }));
   expect(useStudio.getState().plan.steps[1].pieces.map((i) => i.id)).toEqual(['b', 'c', 'a']);
