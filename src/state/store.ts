@@ -46,6 +46,17 @@ export type StudioState = {
   gesture: Plan | null;
   /** how the Build view shows the current step's new parts */
   stepView: StepView;
+  /**
+   * Pieces hidden in the Build view, per model (item ids). Only a viewing aid: not
+   * saved, not undoable, and the animation and video still build every piece.
+   */
+  hidden: Record<ModelName, string[]>;
+  /** Hides pieces of the model being edited (and drops them from the selection). */
+  hide(ids: string[]): void;
+  /** Hides every piece of the model being edited except these. */
+  isolate(ids: string[], all: string[]): void;
+  /** Shows every hidden piece of the model being edited. */
+  showAll(): void;
   setStepView(v: StepView): void;
   setTool(t: Tool): void;
   setGizmo(enabled: boolean): void;
@@ -58,6 +69,9 @@ export type StudioState = {
   undo(): void;
   redo(): void;
   setPlan(p: Plan, opts?: { resetHistory: boolean }): void;
+  /** Bumped to make the preview plan its animation again. */
+  replans: number;
+  replan(): void;
   select(ids: string[], additive?: boolean): void;
   setEditingModel(m: ModelName): void;
   setMode(mode: 'edit' | 'preview'): void;
@@ -72,6 +86,8 @@ export const useStudio = create<StudioState>((set, get) => ({
   future: [],
   selection: { model: '', ids: [] },
   editingModel: '',
+  replans: 0,
+  replan() { set({ replans: get().replans + 1 }); },
   mode: 'edit',
   currentStep: null,
   focus: { ids: [], tick: 0 },
@@ -81,6 +97,24 @@ export const useStudio = create<StudioState>((set, get) => ({
   gizmoMode: 'translate',
   gesture: null,
   stepView: 'separated',
+  hidden: {},
+  hide(ids) {
+    const { hidden, editingModel, selection } = get();
+    const next = [...new Set([...(hidden[editingModel] ?? []), ...ids])];
+    const gone = new Set(ids);
+    set({ hidden: { ...hidden, [editingModel]: next }, selection: { model: selection.model, ids: selection.ids.filter((i) => !gone.has(i)) } });
+  },
+  isolate(ids, all) {
+    const { hidden, editingModel } = get();
+    const keep = new Set(ids);
+    set({ hidden: { ...hidden, [editingModel]: all.filter((i) => !keep.has(i)) } });
+  },
+  showAll() {
+    const { hidden, editingModel } = get();
+    if (!hidden[editingModel]?.length) return;
+    const { [editingModel]: _, ...rest } = hidden;
+    set({ hidden: rest });
+  },
   setStepView(stepView) {
     set({ stepView });
   },
@@ -132,8 +166,12 @@ export const useStudio = create<StudioState>((set, get) => ({
     set({ plan: next, past: [...past, plan], future: future.slice(1), currentStep: remapStep(plan, next, editingModel, currentStep) });
   },
   setPlan(p, opts) {
-    if (opts?.resetHistory) set({ plan: p, past: [], future: [], selection: { model: '', ids: [] }, editingModel: '', currentStep: null });
-    else get().apply(() => p);
+    // a different set: its pieces may reuse ids, so nothing stays hidden
+    if (opts?.resetHistory) set({ plan: p, past: [], future: [], selection: { model: '', ids: [] }, editingModel: '', currentStep: null, hidden: {} });
+    else {
+      get().apply(() => p);
+      set({ hidden: {} });
+    }
   },
   select(ids, additive) {
     const { selection, editingModel } = get();

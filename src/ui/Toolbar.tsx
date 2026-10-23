@@ -3,7 +3,8 @@ import { exportLDraw } from '../io/ldrawExport';
 import { planToJson, readPlanFile } from '../io/planFile';
 import { isProjectFile, readProjectFile, PROJECT_EXTENSION } from '../io/projectFile';
 import { animOptions, useAppSettings } from '../state/appSettings';
-import { adoptTimeline, optsKey, settingsFromOptsKey } from '../state/timelineService';
+import { adoptTimeline, forgetTimelines, optsKey, settingsFromOptsKey } from '../state/timelineService';
+import { regenerateSteps } from '../plan/regenerate';
 import { saveProjectFile, type SaveProgress } from '../state/projectActions';
 import { splitPlanComponents } from '../plan/components';
 import { ensureIds } from '../plan/ids';
@@ -19,7 +20,7 @@ export function pieceCount(plan = useStudio.getState().plan): number {
   return [...plan.steps, ...Object.values(plan.submodels ?? {}).flatMap((s) => s.steps)].reduce((n, s) => n + s.pieces.length, 0);
 }
 
-export type MenuItem = { icon: IconName; label: string; onClick(): void; disabled?: boolean; hint?: string } | 'sep';
+export type MenuItem = { icon: IconName; label: string; onClick(): void; disabled?: boolean; hint?: string; danger?: boolean; current?: boolean } | 'sep';
 
 /** A button that opens a kit-style menu under it. */
 export function DropMenu({
@@ -113,6 +114,34 @@ export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, ca
   const fileRef = useRef<HTMLInputElement>(null);
   const [savingProject, setSavingProject] = useState<SaveProgress | null>(null);
   const pieces = pieceCount(plan);
+  const editingModel = useStudio((s) => s.editingModel);
+  const [regenerating, setRegenerating] = useState(false);
+  /**
+   * Plans the model being edited again: its build steps (undoable), its animation
+   * (the saved one is discarded), or both.
+   */
+  const regenerate = async (what: 'both' | 'steps' | 'animation') => {
+    if (regenerating) return;
+    setRegenerating(true);
+    try {
+      const s = useStudio.getState();
+      let next = s.plan;
+      if (what !== 'animation') {
+        registerInlineParts(next.parts);
+        await ensureParts(allPartIds(next));
+        next = regenerateSteps(next, s.editingModel, metricsOf, getColors());
+        s.apply(() => next);
+      }
+      if (what !== 'steps') {
+        await forgetTimelines(next, [s.editingModel], animOptions(useAppSettings.getState())).catch(() => {});
+        s.replan();
+      }
+    } catch (e) {
+      alert(`Couldn't regenerate:\n\n${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setRegenerating(false);
+    }
+  };
 
   const openProjectFile = async (f: File) => {
     const r = readProjectFile(await f.text());
@@ -176,7 +205,7 @@ export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, ca
           items={[
             { icon: 'plus', label: 'New project', onClick: () => void newProject() },
             { icon: 'folder', label: 'Open project…', onClick: onProjects },
-            { icon: 'upload', label: 'Import file…', hint: `.${PROJECT_EXTENSION} .json .ldr .mpd`, onClick: () => fileRef.current?.click() },
+            { icon: 'upload', label: 'Import file…', hint: `.${PROJECT_EXTENSION} .json .ldr .mpd .dat`, onClick: () => fileRef.current?.click() },
             'sep',
             { icon: 'download', label: savingProject ? `Planning animations to save (${savingProject.done + 1} of ${savingProject.total})…` : `Save project with animation (.${PROJECT_EXTENSION})`, disabled: pieces === 0 || !!savingProject, onClick: () => void downloadProject() },
             { icon: 'file', label: 'Download plan (.json)', onClick: downloadPlan },
@@ -195,7 +224,7 @@ export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, ca
         <input
           ref={fileRef}
           type="file"
-          accept={`.${PROJECT_EXTENSION},.json,.ldr,.mpd`}
+          accept={`.${PROJECT_EXTENSION},.json,.ldr,.mpd,.dat`}
           hidden
           onChange={(e) => {
             const f = e.target.files?.[0];
@@ -246,6 +275,21 @@ export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, ca
         <button className="nx-icon" onClick={onTheme} title={theme === 'dark' ? 'Light theme' : 'Dark theme'} aria-label="Toggle theme">
           <Ic name={theme === 'dark' ? 'sun' : 'moon'} />
         </button>
+        <DropMenu
+          className="nx-btn"
+          label="Regenerate"
+          align="right"
+          trigger={
+            <>
+              <Ic name="rotate" /> {regenerating ? 'Regenerating…' : 'Regenerate'} <Ic name="chevron" />
+            </>
+          }
+          items={[
+            { icon: 'rotate', label: `Steps and animation${editingModel ? ` of ${editingModel}` : ''}`, disabled: pieces === 0 || regenerating, onClick: () => void regenerate('both') },
+            { icon: 'steps', label: 'Build steps only', disabled: pieces === 0 || regenerating, onClick: () => void regenerate('steps') },
+            { icon: 'video', label: 'Animation only', disabled: pieces === 0 || regenerating, onClick: () => void regenerate('animation') },
+          ]}
+        />
         <button className="nx-btn" disabled={!canPreview} onClick={() => st.setMode(mode === 'edit' ? 'preview' : 'edit')}>
           <Ic name={mode === 'edit' ? 'eye' : 'edit'} /> {mode === 'edit' ? 'Preview' : 'Edit'}
         </button>

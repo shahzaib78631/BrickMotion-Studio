@@ -23,6 +23,12 @@ export type AnimOptions = {
    * gives the same build order on a fast or a busy machine. Default 1500, maximum 20000.
    */
   accessSearchWork?: number;
+  /**
+   * After the access search gives up, reorder every piece still blocked by a piece
+   * that does not hold it, and plan once more (off by default: one extra full plan,
+   * no gain measured on the jet, 5590 or 10001; see docs/diagnostics/assembler-port.md).
+   */
+  accessRepair?: boolean;
   /** Optional wall-clock cap on that re-planning (ms, maximum 10000). Unset by default: a time cap makes results depend on machine load. */
   accessSearchMilliseconds?: number;
 };

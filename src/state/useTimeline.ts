@@ -18,7 +18,9 @@ type State = {
 
 export function useTimeline(ready: boolean, plan: Plan, model: string, opts: AnimOptions): TimelineState {
   const dragging = useStudio((s) => s.gesture !== null);
-  const [attempt, setAttempt] = useState(0);
+  const [tries, setAttempt] = useState(0);
+  // Regenerate (in the toolbar) counts as a retry too
+  const attempt = tries + useStudio((s) => s.replans) * 1e6;
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
   const optsSig = JSON.stringify(opts);
   const [state, setState] = useState<State>({ model, plan: null, optsSig: '', attempt: -1, timeline: null, error: '', status: 'idle', progress: null });

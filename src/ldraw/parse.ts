@@ -3,7 +3,7 @@ export type Mat3 = [number, number, number, number, number, number, number, numb
 export type Vec3 = [number, number, number];
 
 export type LDrawCmd =
-  | { t: 'ref'; color: number; pos: Vec3; m: Mat3; file: string; invert: boolean }
+  | { t: 'ref'; color: number; pos: Vec3; m: Mat3; file: string; invert: boolean; /** editor group (MLCAD BTG, LeoCAD GROUP) */ group?: string }
   | { t: 'tri' | 'quad'; color: number; pts: number[] }
   /** type 2: an outline edge */
   | { t: 'line'; color: number; pts: number[] }
@@ -36,6 +36,8 @@ export function parseLDraw(text: string, name = 'main.ldr'): LDrawFile {
   const file: LDrawFile = { name: normalizeName(name), description: '', cmds: [] };
   let invertNext = false;
   let sawFirstLine = false;
+  let nextGroup: string | undefined;
+  const groups: string[] = [];
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim();
     if (!line) continue;
@@ -52,6 +54,13 @@ export function parseLDraw(text: string, name = 'main.ldr'): LDrawFile {
       }
       const key = rest[0]?.toUpperCase();
       if (key === 'STEP') file.cmds.push({ t: 'step' });
+      // MLCAD: "0 MLCAD BTG name" puts the next line in a group.
+      else if (key === 'MLCAD' && rest[1]?.toUpperCase() === 'BTG') nextGroup = rest.slice(2).join(' ').trim() || undefined;
+      // LeoCAD: "0 !LEOCAD GROUP BEGIN name" ... "0 !LEOCAD GROUP END"
+      else if (key === '!LEOCAD' && rest[1]?.toUpperCase() === 'GROUP') {
+        if (rest[2]?.toUpperCase() === 'BEGIN') groups.push(rest.slice(3).join(' ').trim());
+        else if (rest[2]?.toUpperCase() === 'END') groups.pop();
+      }
       else if (key === '!CATEGORY') file.category = rest.slice(1).join(' ');
       else if (key === 'BFC') {
         if (rest[1]?.toUpperCase() === 'INVERTNEXT') invertNext = true;
@@ -72,8 +81,10 @@ export function parseLDraw(text: string, name = 'main.ldr'): LDrawFile {
         m: [n[5], n[6], n[7], n[8], n[9], n[10], n[11], n[12], n[13]],
         file: normalizeName(tok.slice(14).join(' ')),
         invert: invertNext,
+        ...((nextGroup ?? groups.at(-1)) ? { group: nextGroup ?? groups.at(-1) } : {}),
       });
       invertNext = false;
+      nextGroup = undefined;
     } else if (type === '2' && tok.length >= 8) {
       file.cmds.push({ t: 'line', color: n[1], pts: n.slice(2, 8) });
     } else if (type === '3' && tok.length >= 11) {

@@ -66,11 +66,13 @@ test('singular transforms are rejected rather than taking an unintended flight',
   expect(() => buildTimeline(asm, metrics, options)).toThrow('invalid-transform');
 });
 
-test('missing model geometry fails early and names only the required parts', () => {
-  const missing: Metrics = (id) => ({ ...metrics(id), placeholder: true });
-  const asm = assemble(plan([[piece('missing-part', 'custom-123', 0)]]), missing, new Map());
-  expect(() => buildTimeline(asm, missing, options)).toThrow('missing-geometry');
-  expect(() => buildTimeline(asm, missing, options)).toThrow('custom-123');
+test('a part without geometry still animates, flagged uncertified, and the rest is certified as usual', () => {
+  const missing: Metrics = (id) => (id === 'custom-123' ? { ...metrics(id), placeholder: true } : metrics(id));
+  const asm = assemble(plan([[piece('base', 'base', 0)], [piece('missing-part', 'custom-123', 20)]]), missing, new Map());
+  const tl = buildTimeline(asm, missing, options);
+  const unitOf = (id: string) => tl.units[tl.tracks.get(asm.instances.find((i) => i.itemId === id)!.key)!.moves[0].unit];
+  expect(unitOf('missing-part').uncertified).toBe(true);
+  expect(unitOf('base').uncertified).toBeFalsy();
 });
 
 test('planning reports real unit progress before camera preparation', () => {

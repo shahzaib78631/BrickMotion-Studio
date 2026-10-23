@@ -2,7 +2,7 @@ import { planConstruction,modelFromNodes,compileConstruction } from './construct
 import { decodeTimeline } from './timelineCodec';
 import { pathOffset } from './construction/math';
 import type { ConstructionPlan } from './construction/types';
-import { searchAccessOrder, AccessBudgetExceeded, type AccessEdge } from './accessOrder';
+import { searchAccessOrder, repairEdges, AccessBudgetExceeded, type AccessEdge, type AccessFailure } from './accessOrder';
 import { rigidWheelPairs, type RigidHardware } from './rigidHardware';
 import { wristContact, hairContact, cupGripContact } from './jointContact';
 import { transformConnections, connectionGeometryFor } from '../ldraw/connectors';
@@ -54,6 +54,10 @@ export type Track = TrackData<THREE.Matrix4>;
 export type Timeline = TimelineData & { tracks: Map<string, Track> };
 
 const EMPTY_BOX: Box = { min: [0, -24, 0], max: [20, 0, 20] };
+/** reorder look-ahead: samples per flight, members per unit, units after the blocker, and LDU of real overlap */
+const HARM_SAMPLES = 16, HARM_MEMBERS = 24, HARM_UNITS = 400, HARM_DEPTH = 1;
+/** repair passes after the access search (each plans the whole build once more) */
+const REPAIR_ROUNDS = 2;
 
 /** Cached affine factors preserve rounded/sheared LDraw geometry throughout a flight. */
 const affineCache = new WeakMap<THREE.Matrix4, AffineFactors>();
@@ -195,23 +199,71 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
   } catch (error) {
     // No order gives every piece a certified route. Still animate: blocked pieces
     // take their least-obstructed route and are listed (Unit.uncertified).
-    if (!(error instanceof AssemblyPlanningError) || !error.issues.some((i) => i.code === 'blocked-route')) throw error;
+    if (!(error instanceof AssemblyPlanningError) || !error.issues.some((i) => i.code === 'blocked-route' || i.code === 'missing-geometry')) throw error;
     // Keep the reorder that got furthest, so only the pieces it could not fix fall back.
     const best = error.issues.find((i) => i.code === 'blocked-route')?.search?.edges ?? [];
-    try { return planTimeline(asm, metrics, opts, onProgress, best, true, memo); }
-    catch (retry) { if (!best.length || !(retry instanceof AssemblyPlanningError)) throw retry; }
-    return planTimeline(asm, metrics, opts, onProgress, [], true, memo);
+    const failures: AccessFailure[] = [];
+    let tl: Timeline, edges = best;
+    try { tl = planTimeline(asm, metrics, opts, onProgress, best, true, memo, failures); }
+    catch (retry) {
+      if (!best.length || !(retry instanceof AssemblyPlanningError)) throw retry;
+      failures.length = 0;
+      edges = [];
+      tl = planTimeline(asm, metrics, opts, onProgress, [], true, memo, failures);
+    }
+    return opts.accessRepair !== true ? tl : repairUncertified(asm, metrics, opts, onProgress, memo, tl, edges, failures);
   }
+}
+
+/** uncertified pieces in a timeline (attach units count every member) */
+const uncertifiedPieces = (tl: Timeline) => tl.units.reduce((n, u) => n + (u.uncertified ? u.keys.length : 0), 0);
+
+/**
+ * Repair pass, after the access search has stopped at a failure it cannot fix: the
+ * last pass planned everything, letting blocked pieces go uncertified, and recorded
+ * what blocked each. Every reorder that could help (a blocker the piece is not held
+ * by, cutting fewest certified flights) is applied at once and the build planned
+ * again; the result is kept only if fewer pieces stay uncertified.
+ */
+function repairUncertified(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProgress: ((p: PlanningProgress) => void) | undefined, memo: PlanMemo, tl: Timeline, edges: AccessEdge[], failures: AccessFailure[]): Timeline {
+  let best = tl, bestCount = uncertifiedPieces(tl), current = edges;
+  for (let round = 0; round < REPAIR_ROUNDS && bestCount > 0; round++) {
+    let extra = repairEdges(failures, current);
+    let seen: AccessFailure[] = [];
+    let candidate: Timeline | null = null;
+    // a reorder that contradicts how pieces hold each other makes a cycle: drop the
+    // reorders the cycle names and try again
+    for (let tries = 0; extra.length && !candidate && tries < 3; tries++) {
+      seen = [];
+      try { candidate = planTimeline(asm, metrics, opts, onProgress, [...current, ...extra], true, memo, seen); }
+      catch (error) {
+        if (!(error instanceof AssemblyPlanningError)) throw error;
+        const named = new Set(error.issues.filter((i) => i.code === 'dependency-cycle').flatMap((i) => i.items));
+        const kept = extra.filter((e) => !named.has(e.before) && !named.has(e.after));
+        if (!named.size || kept.length === extra.length) break;
+        extra = kept;
+      }
+    }
+    if (!candidate) break;
+    const next = [...current, ...extra];
+    const count = uncertifiedPieces(candidate);
+    if (count >= bestCount) break;
+    best = candidate; bestCount = count; current = next;
+    failures = seen;
+  }
+  return best;
 }
 
 /** Results of mesh checks, keyed by the exact poses involved; valid for one assembly. */
 type PartMetricsLike = ReturnType<Metrics>;
 type PlanMemo = { insertion: Map<string, boolean>; translation: Map<string, boolean> };
 
-function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProgress: ((p: PlanningProgress) => void) | undefined, access: AccessEdge[], allowUncertified = false, memo: PlanMemo = { insertion: new Map(), translation: new Map() }): Timeline {
+function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProgress: ((p: PlanningProgress) => void) | undefined, access: AccessEdge[], allowUncertified = false, memo: PlanMemo = { insertion: new Map(), translation: new Map() }, failures?: AccessFailure[]): Timeline {
   onProgress?.({ phase: 'preparing', completed: 0, total: asm.instances.length });
   const missing = [...new Set(asm.instances.filter((i) => i.placeholder).map((i) => i.part))];
-  if (missing.length) throw new AssemblyPlanningError([{
+  // Certified routes need every mesh. The last pass still animates the set: a part
+  // with no geometry flies in uncertified, like a blocked piece, and is listed.
+  if (missing.length && !allowUncertified) throw new AssemblyPlanningError([{
     code: 'missing-geometry', items: missing,
     message: `Cannot verify assembly without geometry for: ${missing.join(', ')}. Load these model parts and their referenced primitives, then retry. A complete parts-library download is not required.`,
   }]);
@@ -651,6 +703,47 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
    * blockers (below a chassis, behind a wall) and under their footprint: they
    * will be blocked the same way, so the access search reorders them together.
    */
+  /**
+   * Look-ahead for the access search: if unit i were moved before a blocker, how many
+   * flights already certified from that blocker on would its finished position cut
+   * through? Those pieces would then need a new way in, so such a reorder tends to
+   * move the failure instead of fixing it. Flights are sampled along their real path.
+   */
+  const reorderHarm = (i: number, blockers: string[]): Record<string, number> => {
+    const unitOf = new Map<string, number>();
+    for (let j = 0; j < i; j++) for (const m of members[j]) unitOf.set(m.key, j);
+    const requires = flat[i].u.requires ?? [];
+    const needed = (j: number) => units[j].keys.some((k) => requires.some((r) => k === r || k.startsWith(`${r}/`) || r.startsWith(`${k}/`)));
+    const mine = destinationBoxes[i];
+    const pose = new THREE.Matrix4();
+    const cuts = (j: number) => members[j].slice(0, HARM_MEMBERS).some(({ move, body }) => {
+      for (let s = 0; s < HARM_SAMPLES; s++) {
+        const box = transformBox(body, flightPose(move, s / HARM_SAMPLES, pose));
+        if (mine.some((d) => [0, 1, 2].every((k) => Math.min(d.max[k], box.max[k]) - Math.max(d.min[k], box.min[k]) > HARM_DEPTH))) return true;
+      }
+      return false;
+    });
+    const out: Record<string, number> = {};
+    const memo = new Map<number, boolean>();
+    for (const key of blockers) {
+      const from = unitOf.get(key);
+      if (from === undefined) continue;
+      let n = 0;
+      for (let j = from; j < i && j < from + HARM_UNITS; j++) {
+        if (needed(j)) continue;
+        let hit = memo.get(j);
+        if (hit === undefined) memo.set(j, (hit = cuts(j)));
+        if (hit) n++;
+      }
+      out[key] = n;
+    }
+    return out;
+  };
+  /** blockers unit i is attached to or rests on: it can never go before them */
+  const neededBlockers = (i: number, blockers: string[]): string[] => {
+    const requires = flat[i].u.requires ?? [];
+    return blockers.filter((key) => requires.some((r) => key === r || key.startsWith(`${r}/`) || r.startsWith(`${key}/`)));
+  };
   const blockedPeers = (i: number, blockers: string[]): string[] => {
     const own = byKey.get(units[i].keys[0])?.worldBox;
     if (!own) return [];
@@ -947,9 +1040,15 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
       for (let k = i; k < units.length; k++) units[k].start += delay;
       refreshAppear();
     }
+    // A clear route for a part with no geometry proves nothing: keep it, but flag it.
+    if (safe && allowUncertified && members[i].some((m) => byKey.get(m.key)?.placeholder)) u.uncertified = true;
     if (!safe && allowUncertified) {
       // Shown, never hidden: it flies at the top lane and enters the least-obstructed way.
       u.uncertified = true;
+      if (failures) {
+        const keys = [...accessBlockers];
+        failures.push({ moving: u.keys[0], blockers: keys, completed: i, total: units.length, harm: reorderHarm(i, keys), needs: neededBlockers(i, keys) });
+      }
       for (const { move: mv } of [...members[i], ...proxies[i]]) {
         mv.entry = fallback?.entry ?? [0, 0, 0];
         mv.skyY = skyY;
@@ -959,7 +1058,7 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
     }
     if (!safe) throw new AssemblyPlanningError([{
       code: 'blocked-route', items: u.keys,
-      access: { moving: u.keys[0], blockers: [...accessBlockers], completed: i, total: units.length, peers: blockedPeers(i, [...accessBlockers]) },
+      access: { moving: u.keys[0], blockers: [...accessBlockers], completed: i, total: units.length, peers: blockedPeers(i, [...accessBlockers]), harm: reorderHarm(i, [...accessBlockers]), needs: neededBlockers(i, [...accessBlockers]) },
       message: `No verified rigid insertion path for ${u.keys.map((key) => `${key} (part ${byKey.get(key)?.part ?? "subassembly"})`).join(', ')}. Check its final placement, parent, and insertionAxis; move enclosing parts to a later step or build a subassembly.${missingInsertionParts.size ? ` Missing collision meshes: ${[...missingInsertionParts].sort().join(', ')}. Overlapping connector bounds cannot be certified without these meshes.` : ' The available geometry did not certify any of the tested routes.'}${rejectedBy.size ? ` Blocking contacts: ${[...rejectedBy.values()].join('; ')}.` : ''} No part was hidden or teleported.`,
     }]);
     sweptXY[i] = sweep ?? EMPTY_BOX;

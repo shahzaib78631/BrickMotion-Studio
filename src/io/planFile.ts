@@ -23,5 +23,33 @@ export function readPlanFile(text: string, fileName: string): { ok: true; plan: 
     if (count === 0 && !plan.submodels) return { ok: false, errors: ['The file has no pieces'] };
     return { ok: true, plan };
   }
-  return { ok: false, errors: [`Unsupported file type ".${ext}" — use .json, .ldr or .mpd`] };
+  if (ext === 'dat') {
+    if (isPartFile(text)) return { ok: true, plan: singlePartPlan(text, fileName) };
+    return readPlanFile(text, fileName.replace(/\.dat$/i, '.ldr'));
+  }
+  return { ok: false, errors: [`Unsupported file type ".${ext}" — use .brickmotion, .json, .ldr, .mpd or .dat`] };
+}
+
+/**
+ * True when an LDraw .dat is a part (its own geometry) rather than a model built
+ * from parts. The !LDRAW_ORG header decides when present; otherwise any drawn
+ * line, triangle or quad makes it a part.
+ */
+export function isPartFile(text: string): boolean {
+  const org = /^\s*0\s+!LDRAW_ORG\s+(?:Unofficial_)?(\w+)/im.exec(text);
+  if (org) return !/^model$/i.test(org[1]);
+  return /^\s*[2-5]\s/m.test(text);
+}
+
+/** A set with one piece: the part in the file, kept inside the set so it draws without the library. */
+function singlePartPlan(text: string, fileName: string): Plan {
+  const base = (fileName.split(/[\\/]/).pop() ?? fileName).replace(/\.dat$/i, '').trim().toLowerCase() || 'part';
+  const title = /^\s*0\s+(?!!|FILE\b|Name:|Author:|BFC\b)(.+?)\s*$/im.exec(text)?.[1]?.replace(/\s+/g, ' ');
+  return {
+    format: 'brickmotion-plan',
+    version: 1,
+    name: title || base,
+    steps: [{ title: title || base, pieces: [{ part: base, color: 71, ldu: [0, 0, 0], matrix: [1, 0, 0, 0, 1, 0, 0, 0, 1] }] }],
+    parts: { [`${base}.dat`]: text },
+  };
 }

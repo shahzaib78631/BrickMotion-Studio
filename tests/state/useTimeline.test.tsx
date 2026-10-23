@@ -6,7 +6,7 @@ import type { Timeline } from '../../src/anim/timeline';
 import { useTimeline } from '../../src/state/useTimeline';
 
 const mocks = vi.hoisted(() => ({ run: vi.fn() }));
-vi.mock('../../src/state/store', () => ({ useStudio: (select: (s: { gesture: null }) => unknown) => select({ gesture: null }) }));
+vi.mock('../../src/state/store', () => ({ useStudio: (select: (s: { gesture: null; replans: number }) => unknown) => select({ gesture: null, replans: 0 }) }));
 vi.mock('../../src/state/timelineService', () => ({
   planTimeline: mocks.run,
   isAbandoned: (e: Error) => e.name === 'AbortError',

@@ -141,7 +141,7 @@ export function ModelsPanel({ model, onExport }: { model: ModelState; onExport(j
           Planning animations for {label(saving.name)}'s project file ({saving.progress.done + 1} of {saving.progress.total})…
         </p>
       )}
-      <input ref={fileInput} type="file" hidden accept={`.${PROJECT_EXTENSION},.json,.ldr,.mpd`} onChange={(e) => {
+      <input ref={fileInput} type="file" hidden accept={`.${PROJECT_EXTENSION},.json,.ldr,.mpd,.dat`} onChange={(e) => {
         const f = e.currentTarget.files?.[0];
         e.currentTarget.value = '';
         if (f) void importFile(f);

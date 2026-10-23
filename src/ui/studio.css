@@ -204,5 +204,10 @@
 .nx-dlg-foot .nx-hint{margin-right:auto}
 
 .bm-context{max-height:calc(100vh - 16px);overflow:auto}
+.nx-menu button.open{background:var(--hover)}
+.bm-hidden-chip{position:absolute;left:12px;bottom:12px;z-index:5;display:flex;align-items:center;gap:8px;padding:5px 6px 5px 10px;border-radius:999px;background:var(--surface);border:1px solid var(--line2);box-shadow:0 2px 8px #0000001a;font-size:12px;color:var(--ink2)}
+.bm-hidden-chip .ic{width:14px;height:14px}
+.bm-hidden-chip button{padding:3px 9px;border-radius:999px;background:var(--sunken);font-size:12px;color:var(--ink)}
+.bm-hidden-chip button:hover{background:var(--hover)}
 .bm-context-heading{padding:6px 9px 3px;font-size:11px;font-weight:600;letter-spacing:.02em;color:var(--ink3);text-transform:uppercase}
 .bm-model-row.menu-open{outline:2px solid var(--focus);outline-offset:-2px}

@@ -5,7 +5,7 @@ import type { PlanningProgress } from '../anim/planning';
 import type { AnimOptions } from '../anim/pacing';
 import type { Plan } from '../plan/types';
 import { getColors, hasShadowPack, metricsOf } from './partService';
-import { getCachedTimeline, putCachedTimeline, timelineFingerprint } from '../storage/timelineCache';
+import { deleteCachedTimeline, getCachedTimeline, putCachedTimeline, timelineFingerprint } from '../storage/timelineCache';
 import { allPartIds, scopedPlan } from './useModel';
 import { PlannerQueue, type PlannerPort } from './plannerQueue';
 
@@ -99,6 +99,19 @@ export function planTimeline(plan: Plan, model: string, opts: AnimOptions, lane:
   return entry.promise;
 }
 export const isAbandoned = (e: unknown) => (e as Error)?.name === 'AbortError';
+
+/**
+ * Drops the planned timelines of these models (this session's and the stored ones),
+ * so the next request plans them from scratch. An export already running finishes.
+ */
+export async function forgetTimelines(plan: Plan, models: string[], opts: AnimOptions): Promise<void> {
+  const id = `|${planKey(plan)}|`;
+  for (const [key, entry] of cache) if (key.includes(id) && entry.settled) cache.delete(key);
+  await Promise.all(models.map(async (model) => {
+    const fingerprint = await timelineFingerprint({ plan: scopedPlan(plan, model), model, opts: optsKey(opts), shadow: hasShadowPack() });
+    await deleteCachedTimeline(fingerprint);
+  }));
+}
 
 /** The saved (already planned) timeline for this model and options, if there is one. */
 export async function savedTimeline(plan: Plan, model: string, opts: AnimOptions): Promise<EncodedTimeline | null> {

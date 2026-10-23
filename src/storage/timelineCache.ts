@@ -37,6 +37,12 @@ export async function getCachedTimeline(key: string): Promise<EncodedTimeline | 
   return hit;
 }
 
+/** Forgets one stored timeline, so it is planned again. */
+export async function deleteCachedTimeline(key: string): Promise<void> {
+  await del(entryKey(key));
+  await set(INDEX, (await readIndex()).filter((e) => e.key !== key));
+}
+
 /** Stores a timeline and forgets the least recently used ones beyond MAX_ENTRIES. */
 export async function putCachedTimeline(key: string, timeline: EncodedTimeline): Promise<void> {
   await set(entryKey(key), timeline);

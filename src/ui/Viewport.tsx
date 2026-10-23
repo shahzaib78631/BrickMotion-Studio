@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
@@ -22,6 +22,9 @@ import { soundSnaps } from '../audio/snapSound';
 import { useAppSettings } from '../state/appSettings';
 import type { ModelState } from '../state/useModel';
 import { viewportApi } from './viewportApi';
+import { ContextMenu, type ContextItem } from './ContextMenu';
+import { emptyMenuItems, pieceMenuItems } from './PieceMenu';
+import { Ic } from './icons';
 
 /** Whether the camera sees all of `box` (its eight corners inside the view). */
 function inView(camera: THREE.PerspectiveCamera, box: THREE.Box3): boolean {
@@ -64,6 +67,8 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
   const gizmoEnabled = useStudio((s) => s.gizmoEnabled);
   const gizmoMode = useStudio((s) => s.gizmoMode);
   const stepView = useStudio((s) => s.stepView);
+  const hiddenIds = useStudio((s) => s.hidden[s.editingModel]);
+  const [menu, setMenu] = useState<{ x: number; y: number; items: ContextItem[]; label: string } | null>(null);
   const follow = usePlayback((s) => s.follow);
   /**
    * Placing pieces (the Move tool, or the gizmo with something selected): show every
@@ -252,9 +257,15 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
 
   // which top-level step each top-level item belongs to
   const topStep = useMemo(() => new Map(model.view.nodes.map((n) => [n.itemId, n.step])), [model.view]);
+  const hiddenSet = useMemo(() => new Set(hiddenIds ?? []), [hiddenIds]);
+  /** every piece the Build view draws: hidden pieces left out */
+  const drawn = useMemo(
+    () => (hiddenSet.size ? model.view.instances.filter((i) => !hiddenSet.has(i.key.split('/')[0])) : model.view.instances),
+    [model.view, hiddenSet],
+  );
   const visible = useMemo(
-    () => (currentStep === null ? model.view.instances : model.view.instances.filter((i) => (topStep.get(i.key.split('/')[0]) ?? 0) <= currentStep)),
-    [model.view, currentStep, topStep],
+    () => (currentStep === null ? drawn : drawn.filter((i) => (topStep.get(i.key.split('/')[0]) ?? 0) <= currentStep)),
+    [drawn, currentStep, topStep],
   );
 
   // a new project or submodel gets re-framed (declared before the instances
@@ -308,7 +319,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
         return at(key) ? inst.world : null;
       };
     };
-    studio.bricks.setInstances(model.view.instances);
+    studio.bricks.setInstances(drawn);
     const scene = worldBox3(tl.sceneBox);
     if (model.view.bounds) scene.union(worldBox(model.view.bounds));
     studio.fitTo(scene, -tl.ground / 20);
@@ -319,7 +330,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
       framed.current = true;
     }
     live.current = { tl, pose, dirty: true };
-  }, [engaged, timeline, model.view, editingModel]);
+  }, [engaged, timeline, model.view, editingModel, drawn]);
 
   // instances
   useEffect(() => {
@@ -352,12 +363,12 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
   useEffect(() => {
     const studio = viewportApi.studio;
     if (!studio || mode !== 'edit') return;
-    const shown = engaged ? model.view.instances : visible;
+    const shown = engaged ? drawn : visible;
     const sel = new Set(selection.model === editingModel ? selection.ids : []);
     studio.bricks.setHighlight(new Set(shown.filter((i) => sel.has(i.key.split('/')[0])).map((i) => i.key)), 'select');
     const warnIds = new Set(model.warnings.flatMap((w) => w.itemIds));
     studio.bricks.setHighlight(new Set(shown.filter((i) => warnIds.has(i.itemId) || warnIds.has(i.key.split('/')[0])).map((i) => i.key)), 'warn');
-  }, [selection, model.warnings, visible, editingModel, mode, engaged, model.view]);
+  }, [selection, model.warnings, visible, editingModel, mode, engaged, model.view, drawn]);
 
   // focus requests
   useEffect(() => {
@@ -384,6 +395,14 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
         return;
       }
       if (e.key === 'Escape') return useStudio.getState().select([]);
+      // H hides the selection, Shift+H shows every hidden piece again
+      if (e.key.toLowerCase() === 'h' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        const state = useStudio.getState();
+        if (e.shiftKey) return state.showAll();
+        if (state.selection.model === state.editingModel && state.selection.ids.length) state.hide(state.selection.ids);
+        return;
+      }
       // , and . step through the build (like Previous / Next step); / shows every step
       if ((e.key === ',' || e.key === '.' || e.key === '/') && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
@@ -468,12 +487,33 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
   };
 
   const down = useRef({ x: 0, y: 0 });
+  const closeMenu = useRef(() => setMenu(null)).current;
+  const rightDown = useRef<{ x: number; y: number } | null>(null);
   const st = useStudio.getState;
+  /** Right-click without dragging (a right-drag pans the view): the piece's menu, or the floor's. */
+  const openMenu = (e: { clientX: number; clientY: number }) => {
+    const s = st();
+    if (s.mode !== 'edit') return;
+    const key = pickAt(e);
+    if (!key) return setMenu({ x: e.clientX, y: e.clientY, items: emptyMenuItems(), label: 'View' });
+    const id = key.split('/')[0];
+    const ids = s.selection.model === s.editingModel && s.selection.ids.includes(id) ? s.selection.ids : [id];
+    if (ids.length === 1) s.select(ids);
+    const items = pieceMenuItems(ids);
+    if (items.length) setMenu({ x: e.clientX, y: e.clientY, items, label: 'Piece' });
+  };
   return (
     <div className={`viewport ${tool === 'move' && mode === 'edit' ? 'bm-move' : ''}`} ref={wrapRef} onPointerDownCapture={startDrag}>
       <canvas
         ref={canvasRef}
+        onContextMenu={(e) => e.preventDefault()}
+        onPointerUp={(e) => {
+          const start = rightDown.current;
+          rightDown.current = null;
+          if (e.button === 2 && start && Math.hypot(e.clientX - start.x, e.clientY - start.y) <= 4) openMenu(e);
+        }}
         onPointerDown={(e) => {
+          if (e.button === 2) rightDown.current = { x: e.clientX, y: e.clientY };
           down.current = { x: e.clientX, y: e.clientY };
           // TransformControls can clear its hovered axis on pointer-up.
           // Remember whether this press began on a handle so the subsequent
@@ -499,6 +539,14 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
         }}
       />
       {!model.ready && <div className="overlay-note">Loading parts…</div>}
+      {mode === 'edit' && hiddenSet.size > 0 && (
+        <div className="bm-hidden-chip" role="status">
+          <Ic name="eyeOff" />
+          {hiddenSet.size} hidden
+          <button onClick={() => st().showAll()} title="Show every hidden piece (⇧H)">Show all</button>
+        </div>
+      )}
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} label={menu.label} onClose={closeMenu} />}
       {model.ready && placing && follow && !!timeline && (
         <div className="overlay-note">Showing the model as built while you place pieces. {tool === 'move' ? 'Switch to the Select tool' : 'Press Esc'} to go back to the animation.</div>
       )}

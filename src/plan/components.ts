@@ -22,8 +22,11 @@ const MIN_COMPONENT = 3;
 /** the layer just above a roof cut must cover at least this share of the carrier */
 const CAP_COVERAGE = 0.5;
 /** the carrier must be this many times the median piece's footprint (a real base, not a brick) */
-const CARRIER_RATIO = 8;
+export const CARRIER_RATIO = 8;
 const MAX_CAPS = 4;
+/** a branch built aside holds at most this many items, and at most this share of the model */
+const MAX_BRANCH = 40;
+const MAX_BRANCH_SHARE = 0.25;
 /** LDU a piece may reach across a cut (stud height plus authoring slop) */
 const POKE = 6;
 
@@ -31,8 +34,8 @@ type Node = { item: PlanItem; index: number; box: Box };
 
 const overlap = (a: Box, b: Box, k: number) => Math.min(a.max[k], b.max[k]) - Math.max(a.min[k], b.min[k]);
 /** in contact: no gap on any axis, and a real contact area on at least two axes */
-const touching = (a: Box, b: Box) => [0, 1, 2].every((k) => overlap(a, b, k) >= -0.5) && [0, 1, 2].filter((k) => overlap(a, b, k) > 1).length >= 2;
-const footprint = (b: Box) => (b.max[0] - b.min[0]) * (b.max[2] - b.min[2]);
+export const touching = (a: Box, b: Box) => [0, 1, 2].every((k) => overlap(a, b, k) >= -0.5) && [0, 1, 2].filter((k) => overlap(a, b, k) > 1).length >= 2;
+export const footprint = (b: Box) => (b.max[0] - b.min[0]) * (b.max[2] - b.min[2]);
 /** LDraw +Y is down: a larger centre Y is lower */
 const centreY = (b: Box) => (b.min[1] + b.max[1]) / 2;
 
@@ -41,7 +44,7 @@ export function canSplitComponents(plan: Plan, model: string): boolean {
   const items = modelSteps(plan, model).flatMap((s) => s.pieces);
   // already split: its components are submodels named after it
   const own = `${model || plan.name || 'Model'} - `;
-  if (items.some((i) => isSub(i) && i.submodel.startsWith(own) && /^(underside|top) \d+$/.test(i.submodel.slice(own.length)))) return false;
+  if (items.some((i) => isSub(i) && i.submodel.startsWith(own) && /^(underside|top|branch) \d+$/.test(i.submodel.slice(own.length)))) return false;
   return items.length >= COMPONENT_MIN_ITEMS && items.every((i) => !isGrid(i) && !i.assembly);
 }
 
@@ -93,11 +96,12 @@ export function splitComponents(plan: Plan, model: string, metrics: Metrics, col
   // the carrier: the piece with the largest footprint (a train base, a baseplate)
   const pieces = nodes.filter((n) => !isSub(n.item));
   if (!pieces.length) return none;
-  const carrier = pieces.reduce((a, b) => (footprint(b.box) > footprint(a.box) ? b : a));
+  const widest = pieces.reduce((a, b) => (footprint(b.box) > footprint(a.box) ? b : a));
   const sizes = pieces.map((n) => footprint(n.box)).sort((a, b) => a - b);
-  if (footprint(carrier.box) < CARRIER_RATIO * sizes[sizes.length >> 1]) return none;
-  const groups: { kind: 'underside' | 'top'; nodes: Node[] }[] = [];
-  const taken = new Set<Node>([carrier]);
+  // without one, only branches are built aside
+  const carrier = footprint(widest.box) >= CARRIER_RATIO * sizes[sizes.length >> 1] ? widest : null;
+  const groups: { kind: 'underside' | 'top' | 'branch'; nodes: Node[] }[] = [];
+  const taken = new Set<Node>(carrier ? [carrier] : []);
 
   /** connected pieces of `pool`, starting from `start` */
   const connected = (start: Node, pool: Set<Node>): Node[] => {
@@ -106,6 +110,7 @@ export function splitComponents(plan: Plan, model: string, metrics: Metrics, col
     return [...seen];
   };
 
+  if (carrier) {
   // Below the carrier: each connected group (a bogie with its wheels and the
   // plates under the base) is built on the table, then the carrier comes down onto it.
   const below = new Set(nodes.filter((n) => n !== carrier && centreY(n.box) > centreY(carrier.box) + 1));
@@ -166,19 +171,27 @@ export function splitComponents(plan: Plan, model: string, metrics: Metrics, col
     groups.push({ kind: 'top', nodes: [...cap] });
     cap.forEach((n) => above.delete(n));
   }
+  }
+
+  // Branches: a group that touches the rest of the model at one single contact
+  // (a mirror arm, a crane hook, a wheel on its axle) is built aside and attached
+  // across that contact, so the rest of the model never stands in its way.
+  for (const g of groups) g.nodes.forEach((n) => taken.add(n));
+  const rest = nodes.filter((n) => !taken.has(n));
+  groups.push(...bridgeBranches(rest, near, Math.min(MAX_BRANCH, Math.floor(MAX_BRANCH_SHARE * nodes.length)), carrier ?? widest).map((b) => ({ kind: 'branch' as const, nodes: b })));
   if (!groups.length) return none;
 
   // Write each group as a submodel whose origin is its bottom centre.
   const base = model || plan.name || 'Model';
   const names = new Set(Object.keys(plan.submodels ?? {}));
   const usedIds = new Set(items.map((i) => i.id).filter((id): id is string => !!id));
-  const count = { underside: 0, top: 0 };
+  const count = { underside: 0, top: 0, branch: 0 };
   const submodels = { ...plan.submodels };
   const replace = new Map<PlanItem, SubItem | null>();
   const made: string[] = [];
   for (const g of groups) {
     let name: string;
-    do name = `${base} - ${g.kind === 'top' ? 'top' : 'underside'} ${++count[g.kind]}`;
+    do name = `${base} - ${g.kind} ${++count[g.kind]}`;
     while (names.has(name));
     names.add(name);
     const box = g.nodes.reduce((b, n) => ({
@@ -209,4 +222,74 @@ export function splitComponents(plan: Plan, model: string, metrics: Metrics, col
     ? { ...plan, steps: outSteps, submodels }
     : { ...plan, submodels: { ...submodels, [model]: { steps: outSteps } } };
   return { plan: next, components: made };
+}
+
+/**
+ * Groups of `pool` that touch the rest of it through exactly one contact (a
+ * bridge of the contact graph), from `MIN_COMPONENT` to `max` items. The
+ * branch is the side away from `keep` (the model's anchor piece). The biggest
+ * branch is taken first and branches never overlap.
+ */
+export function bridgeBranches<T>(pool: T[], near: Map<T, T[]>, max: number, keep: T | null = null): T[][] {
+  const inPool = new Set(pool);
+  const adj = new Map(pool.map((n) => [n, near.get(n)!.filter((m) => inPool.has(m))]));
+  // Tarjan's bridges, iteratively (deep chains of plates would overflow recursion)
+  const order = new Map<T, number>(), low = new Map<T, number>();
+  const bridges: [T, T][] = [];
+  let time = 0;
+  for (const root of pool) {
+    if (order.has(root)) continue;
+    const stack: { n: T; parent: T | null; next: number }[] = [{ n: root, parent: null, next: 0 }];
+    order.set(root, time); low.set(root, time++);
+    while (stack.length) {
+      const top = stack[stack.length - 1];
+      const list = adj.get(top.n)!;
+      if (top.next < list.length) {
+        const m = list[top.next++];
+        if (m === top.parent) continue;
+        if (order.has(m)) low.set(top.n, Math.min(low.get(top.n)!, order.get(m)!));
+        else {
+          order.set(m, time); low.set(m, time++);
+          stack.push({ n: m, parent: top.n, next: 0 });
+        }
+      } else {
+        stack.pop();
+        const parent = stack[stack.length - 1];
+        if (parent) {
+          low.set(parent.n, Math.min(low.get(parent.n)!, low.get(top.n)!));
+          if (low.get(top.n)! > order.get(parent.n)!) bridges.push([parent.n, top.n]);
+        }
+      }
+    }
+  }
+  /** the side of the cut a-b that holds `start` */
+  const side = (start: T, a: T, b: T): Set<T> => {
+    const seen = new Set<T>([start]), queue = [start];
+    while (queue.length) {
+      const n = queue.pop()!;
+      for (const m of adj.get(n)!) {
+        if ((n === a && m === b) || (n === b && m === a) || seen.has(m)) continue;
+        seen.add(m);
+        queue.push(m);
+      }
+    }
+    return seen;
+  };
+  const candidates: Set<T>[] = [];
+  for (const [a, b] of bridges) {
+    const sa = side(a, a, b), sb = side(b, a, b);
+    // the branch is the side without the anchor, else the smaller side
+    const branch = keep && sa.has(keep) ? sb : keep && sb.has(keep) ? sa : sa.size < sb.size ? sa : sb;
+    if (branch.size < MIN_COMPONENT || branch.size > max) continue;
+    candidates.push(branch);
+  }
+  candidates.sort((x, y) => y.size - x.size);
+  const used = new Set<T>();
+  const out: T[][] = [];
+  for (const c of candidates) {
+    if ([...c].some((n) => used.has(n))) continue;
+    c.forEach((n) => used.add(n));
+    out.push([...c]);
+  }
+  return out;
 }

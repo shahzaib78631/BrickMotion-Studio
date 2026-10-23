@@ -21,7 +21,7 @@ export type PlanningIssue = {
   items: string[];
   message: string;
   /** Structured route evidence for bounded access-order search. */
-  access?: { moving: string; blockers: string[]; completed: number; total: number; peers?: string[] };
+  access?: { moving: string; blockers: string[]; completed: number; total: number; peers?: string[]; harm?: Record<string, number>; needs?: string[] };
   search?: { attempts: number; limit: number; timedOut?: boolean; /** reorder that got furthest */ edges?: { before: string; after: string }[] };
 };
 
