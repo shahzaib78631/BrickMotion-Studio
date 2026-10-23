@@ -1,18 +1,59 @@
 import * as THREE from 'three';
 import type { Box } from '../ldraw/flatten';
 import { clamp01, easeInOutCubic, lerp } from './easing';
-import { CLOSE_EASE, type Timeline } from './timeline';
+import type { Timeline } from './timeline';
 
 export type CamPose = { position: THREE.Vector3; target: THREE.Vector3; fov: number };
 
-export const FOV = 30;
 export type CameraFraming = 'cinematic' | 'wide';
+export type CameraSettings = {
+  /** Blender-style focal length and sensor width. Three's PerspectiveCamera uses vertical FOV, derived for the output aspect. */
+  lensMm: number;
+  sensorWidthMm: number;
+  buildAzimuth: number;
+  buildElevation: number;
+  buildMargin: number;
+  /** 0 follows changing build bounds, 1 locks the aim to the finished model centre. */
+  targetLock: number;
+  /** 1 frames only the submodel being built; 0 keeps the main model in the shot as well. */
+  submodelFocus: number;
+  /** Maximum build-time azimuth drift, in degrees. */
+  buildDrift: number;
+  /** 0 reacts immediately, 1 heavily damps automatic target/zoom changes. */
+  damping: number;
+  heroOrbitDegrees: number;
+  heroElevation: number;
+  heroMargin: number;
+};
+
+export const DEFAULT_CAMERA_SETTINGS: CameraSettings = {
+  lensMm: 52,
+  sensorWidthMm: 36,
+  buildAzimuth: 16,
+  buildElevation: 60,
+  buildMargin: 1.10,
+  targetLock: 0.86,
+  submodelFocus: 1,
+  buildDrift: 5,
+  damping: 0.82,
+  heroOrbitDegrees: 120,
+  heroElevation: 30,
+  heroMargin: 1.14,
+};
+
+export function cameraFov(settings: CameraSettings, aspect: number) {
+  const lens = Math.max(1, settings.lensMm);
+  const sensorW = Math.max(1, settings.sensorWidthMm);
+  // Treat the configured sensor dimension as the vertical gate used by the video camera.
+  // This keeps portrait output from becoming ultra-wide while preserving familiar lens behaviour.
+  return THREE.MathUtils.radToDeg(2 * Math.atan(sensorW / (2 * lens)));
+}
 /** Cinematic follows the supplied reference: a nearly overhead, less
  * diagonal build shot and a closer, lower hero reveal. Wide is the previous
  * exact full-scene style, available if a project needs maximum coverage. */
 const CAMERA = {
-  cinematic: { az0: 16, az1: 30, buildEl: 56, buildMargin: 1.045, orbitDeg: 140, orbitEl: 29, orbitMargin: 1.12, smooth: 1.045 },
-  wide: { az0: 30, az1: 55, buildEl: 42, buildMargin: 1.08, orbitDeg: 120, orbitEl: 30, orbitMargin: 1.25, smooth: 1.08 },
+  cinematic: { smooth: 1.035 },
+  wide: { smooth: 1.08 },
 } as const;
 const OUTRO_BLEND = 0.8;
 /** each camera key frames everything nearby in time */
@@ -58,9 +99,27 @@ export function worldBox3(b: Box): THREE.Box3 {
 
 type Rig = { target: THREE.Vector3; dist: number; az: number; el: number };
 
-const fitRig = (b: Box, aspect: number, az: number, el: number, margin: number): Rig => {
+function fitDistanceAtTarget(box: THREE.Box3, target: THREE.Vector3, fovDeg: number, aspect: number, azimuthDeg: number, elevationDeg: number): number {
+  const z = viewDir(azimuthDeg, elevationDeg);
+  const x = new THREE.Vector3(0, 1, 0).cross(z).normalize();
+  const y = z.clone().cross(x);
+  const tanV = Math.tan(rad(fovDeg) / 2);
+  const tanH = tanV * aspect;
+  let d = 0;
+  const o = new THREE.Vector3();
+  for (const px of [box.min.x, box.max.x])
+    for (const py of [box.min.y, box.max.y])
+      for (const pz of [box.min.z, box.max.z]) {
+        o.set(px, py, pz).sub(target);
+        d = Math.max(d, o.dot(z) + Math.max(Math.abs(o.dot(x)) / tanH, Math.abs(o.dot(y)) / tanV));
+      }
+  return Math.max(d, 1);
+}
+
+const fitRig = (b: Box, aspect: number, az: number, el: number, margin: number, fov: number, target?: THREE.Vector3): Rig => {
   const box = worldBox3(b);
-  return { target: box.getCenter(new THREE.Vector3()), dist: fitDistance(box, FOV, aspect, az, el) * margin, az, el };
+  const aim = target?.clone() ?? box.getCenter(new THREE.Vector3());
+  return { target: aim, dist: fitDistanceAtTarget(box, aim, fov, aspect, az, el) * margin, az, el };
 };
 
 const mix = (a: Rig, b: Rig, u: number): Rig => ({
@@ -70,45 +129,212 @@ const mix = (a: Rig, b: Rig, u: number): Rig => ({
   el: lerp(a.el, b.el, u),
 });
 
+const unionBoxes = (a: Box, b: Box): Box => ({
+  min: [Math.min(a.min[0], b.min[0]), Math.min(a.min[1], b.min[1]), Math.min(a.min[2], b.min[2])],
+  max: [Math.max(a.max[0], b.max[0]), Math.max(a.max[1], b.max[1]), Math.max(a.max[2], b.max[2])],
+});
+const boxCentre = (b: Box): [number, number, number] => [0, 1, 2].map((k) => (b.min[k] + b.max[k]) / 2) as [number, number, number];
+const contains = (b: Box, p: [number, number, number], pad: number) => [0, 1, 2].every((k) => p[k] >= b.min[k] - pad && p[k] <= b.max[k] + pad);
+const volume = (b: Box) => (b.max[0] - b.min[0]) * (b.max[1] - b.min[1]) * (b.max[2] - b.min[2]);
+
+/** Spacing of the build camera's framing keys (seconds). */
+const FOCUS_STEP = 0.2;
+/** Frame where the next pieces will land this long before they arrive. */
+const LOOK_AHEAD = 1.2;
+/** Start moving to the next model or submodel this long before its first piece flies. */
+const SWITCH_LEAD = 0.5;
+/** Widest smoothing half-window (seconds); must match `reach` in frameRigs. */
+const SETTLE = 0.4;
+/** While a build is young, still show at least this share of its finished size (per axis). */
+const MIN_FILL = 0.6;
+
+/** One thing being assembled: the main model (index 0) or a submodel at its side spot. */
+type Focus = { finished: Box; lands: { start: number; land: Box }[] };
+/** `shots`: when the camera holds on each submodel; the main model has the rest of the time */
+type FocusPlan = { groups: Focus[]; shots: { from: number; to: number; group: number; size: number }[] };
+const focusCache = new WeakMap<Timeline, FocusPlan>();
+
+/** Sorts every flight into the model or submodel it lands on. Floor pieces are not part of any
+ * focus, so the camera frames what is being assembled and pieces fly in from outside the shot. */
+function focusPlan(tl: Timeline): FocusPlan {
+  const cached = focusCache.get(tl);
+  if (cached) return cached;
+  const subs = tl.subBuilds.map((sb, i) => ({ sb, group: i + 1 })).sort((a, b) => volume(a.sb.focus) - volume(b.sb.focus));
+  const groups: Focus[] = [{ finished: tl.modelBox, lands: [] }, ...tl.subBuilds.map((sb) => ({ finished: sb.focus, lands: [] }))];
+  // Legacy part keys are paths ("sub/nested/part"), so a piece belongs to the deepest submodel
+  // whose key prefixes it, and an attach lands on the submodel (or main model) around that one.
+  const byKey = new Map(tl.subBuilds.map((sb, i) => [sb.key, i + 1]));
+  const enclosing = (path: string): number => {
+    for (let cut = path.lastIndexOf('/'); cut > 0; cut = path.lastIndexOf('/', cut - 1)) {
+      const g = byKey.get(path.slice(0, cut));
+      if (g) return g;
+    }
+    return 0;
+  };
+  const groupOf = (u: Timeline['units'][number], land: Box): number => {
+    if (u.keys.length && u.keys.every((k) => byKey.size && enclosing(k) > 0)) {
+      let g = enclosing(u.keys[0]);
+      if (u.kind === 'attach') {
+        // the attached submodel is the deepest one holding every key; it lands on its parent
+        while (g && !u.keys.every((k) => k.startsWith(`${tl.subBuilds[g - 1].key}/`))) g = enclosing(tl.subBuilds[g - 1].key);
+        return g ? enclosing(tl.subBuilds[g - 1].key) : 0;
+      }
+      return g;
+    }
+    // other planners: the smallest submodel being built then whose spot holds the landing point
+    const c = boxCentre(land);
+    const hit = subs.find(({ sb }) => u.start >= sb.start - 1e-6 && u.start < sb.attachStart - 1e-6 && contains(sb.focus, c, 20));
+    return hit ? hit.group : 0;
+  };
+  const order: { start: number; end: number; group: number }[] = [];
+  const touched = new Set<number>();
+  for (const u of tl.units) {
+    const land = u.land ?? u.box;
+    if (!land || u.hidden) continue;
+    const group = groupOf(u, land);
+    const g = groups[group];
+    g.finished = touched.has(group) ? unionBoxes(g.finished, land) : land;
+    touched.add(group);
+    g.lands.push({ start: u.start, land });
+    order.push({ start: u.start, end: u.start + u.dur, group });
+  }
+  if (!touched.has(0)) groups[0].finished = tl.modelBox;
+  order.sort((a, b) => a.start - b.start);
+  // Each submodel holds the camera from its first flight until its last piece has landed, even
+  // when other flights happen meanwhile. It is entered a little early, but not before the
+  // previous landing is settled, and left SETTLE after its last landing, but early enough to
+  // show the next landing (usually the finished submodel being attached).
+  const shots: FocusPlan['shots'] = [];
+  for (let g = 1; g < groups.length; g++) {
+    const own = order.filter((o) => o.group === g);
+    if (!own.length) continue;
+    const first = own[0];
+    const lastEnd = Math.max(...own.map((o) => o.end));
+    const lastStart = Math.max(...own.map((o) => o.start));
+    const others = order.filter((o) => o.group !== g);
+    const prevLand = Math.max(-Infinity, ...others.filter((o) => o.start < first.start).map((o) => o.end));
+    const nextLand = Math.min(Infinity, ...others.filter((o) => o.start >= lastStart - 1e-6 && o.end > lastEnd).map((o) => o.end));
+    const enter = Math.max(first.start - SWITCH_LEAD, Math.min(prevLand + SETTLE, first.end - SETTLE - FOCUS_STEP));
+    const exit = Math.max(lastEnd, Math.min(lastEnd + SETTLE, nextLand - SETTLE - FOCUS_STEP));
+    shots.push({ from: enter, to: exit, group: g, size: volume(groups[g].finished) });
+  }
+  const plan = { groups, shots };
+  focusCache.set(tl, plan);
+  return plan;
+}
+
+/** The (sub)model being assembled around time t and the part of it the camera must show. */
+function focusAt(plan: FocusPlan, t: number): { group: number; box: Box; anchor: Box } {
+  const { groups, shots } = plan;
+  // every submodel held at t; a nested one is built while its parent still gets pieces, so show both
+  let group = 0;
+  let size = Infinity;
+  let held: Box | null = null;
+  for (const sh of shots)
+    if (t >= sh.from && t <= sh.to) {
+      held = held ? unionBoxes(held, groups[sh.group].finished) : groups[sh.group].finished;
+      if (sh.size < size) ((group = sh.group), (size = sh.size));
+    }
+  // a submodel is small: hold one steady framing of the whole thing while it is built
+  if (held) return { group, box: held, anchor: held };
+  const g = groups[0];
+  let box: Box | null = null;
+  for (const l of g.lands) if (l.start <= t + LOOK_AHEAD) box = box ? unionBoxes(box, l.land) : l.land;
+  box ??= g.lands[0]?.land ?? g.finished;
+  // grow a young build towards its finished size so the first bricks are not a macro shot
+  const min = [...box.min] as [number, number, number];
+  const max = [...box.max] as [number, number, number];
+  for (let k = 0; k < 3; k++) {
+    const want = (g.finished.max[k] - g.finished.min[k]) * MIN_FILL;
+    const grow = Math.max(0, want - (max[k] - min[k])) / 2;
+    min[k] = Math.max(g.finished.min[k], min[k] - grow);
+    max[k] = Math.min(g.finished.max[k], max[k] + grow);
+  }
+  return { group, box: { min, max }, anchor: g.finished };
+}
+
+type FrameKey = { t: number; box: Box; anchor: Box };
+
+/** Cinematic: only what is being assembled. Wide: the timeline's full-scene keys (floor included). */
+function frameKeys(tl: Timeline, framing: CameraFraming, settings: CameraSettings): FrameKey[] {
+  if (framing === 'wide') return tl.camKeys.map((k) => ({ t: k.t, box: k.box, anchor: tl.modelBox }));
+  const plan = focusPlan(tl);
+  if (!plan.groups.some((g) => g.lands.length)) return [];
+  const keys: FrameKey[] = [];
+  const main = plan.groups[0];
+  for (let t = 0; t <= tl.buildEnd + 1e-9; t += FOCUS_STEP) {
+    const f = focusAt(plan, t);
+    let { box, anchor } = f;
+    // below full submodel focus, keep the main model's built part in the shot too
+    const keepMain = f.group > 0 ? 1 - clamp01(settings.submodelFocus) : 0;
+    if (keepMain > 0) {
+      const built = focusAt({ groups: [main], shots: [] }, t).box;
+      const both = unionBoxes(box, built);
+      box = mixBox(box, both, keepMain);
+      anchor = mixBox(anchor, unionBoxes(anchor, main.finished), keepMain);
+    }
+    keys.push({ t, box, anchor });
+  }
+  return keys;
+}
+
+const mixBox = (a: Box, b: Box, u: number): Box => ({
+  min: [0, 1, 2].map((k) => lerp(a.min[k], b.min[k], u)) as [number, number, number],
+  max: [0, 1, 2].map((k) => lerp(a.max[k], b.max[k], u)) as [number, number, number],
+});
+
 /** Camera framing is fitted and smoothed ONCE for each timeline and aspect.
  * Recomputing the neighbouring-key average every video frame was expensive and
  * caused sudden camera jumps whenever a key entered or left the time window. */
-const rigCache = new WeakMap<Timeline, Map<string, Rig[]>>();
+const rigCache = new WeakMap<Timeline, Map<string, { keys: FrameKey[]; rigs: Rig[] }>>();
 
-function frameRigs(tl: Timeline, aspect: number, framing: CameraFraming): Rig[] {
+function frameRigs(tl: Timeline, aspect: number, framing: CameraFraming, settings: CameraSettings): { keys: FrameKey[]; rigs: Rig[] } {
   const cfg = CAMERA[framing];
-  const cacheKey = `${aspect}:${framing}`;
+  const fov = cameraFov(settings, aspect);
+  const cacheKey = `${aspect}:${framing}:${Object.values(settings).join(':')}`;
   let byAspect = rigCache.get(tl);
   if (!byAspect) rigCache.set(tl, (byAspect = new Map()));
   const cached = byAspect.get(cacheKey);
   if (cached) return cached;
-  const keys = tl.camKeys;
+  const keys = frameKeys(tl, framing, settings);
   const raw = keys.map((key) => {
     let box = key.box;
-    for (const other of keys) if (other !== key && Math.abs(other.t - key.t) <= KEY_REACH + 1e-9) box = unionBoxes(box, other.box);
-    const az = lerp(cfg.az0, cfg.az1, clamp01(key.t / Math.max(tl.buildEnd, 1e-6)));
-    return fitRig(box, aspect, az, cfg.buildEl, cfg.buildMargin);
+    if (framing === 'wide') for (const other of keys) if (other !== key && Math.abs(other.t - key.t) <= KEY_REACH + 1e-9) box = unionBoxes(box, other.box);
+    const u = clamp01(key.t / Math.max(tl.buildEnd, 1e-6));
+    const az = settings.buildAzimuth + settings.buildDrift * u;
+    const dynamic = worldBox3(box).getCenter(new THREE.Vector3());
+    const anchor = worldBox3(key.anchor).getCenter(new THREE.Vector3());
+    const target = dynamic.lerp(anchor, clamp01(settings.targetLock));
+    return fitRig(box, aspect, az, settings.buildElevation, settings.buildMargin, fov, target);
   });
-  // A tapered 5-key convolution removes tiny camera adjustments without
-  // changing motion from frame to frame; Catmull-Rom below gives C1 movement.
-  const smoothed = raw.map((r, i) => {
-    const target = new THREE.Vector3();
-    let dist = 0;
-    let weightSum = 0;
-    for (let d = -2; d <= 2; d++) {
-      const k = i + d;
-      if (k < 0 || k >= raw.length) continue;
-      const weight = 3 - Math.abs(d);
-      weightSum += weight;
-      target.addScaledVector(raw[k].target, weight);
-      dist += raw[k].dist * weight;
+  // Damping sets the smoothing window. Distance takes the window's maximum first, so the
+  // camera has already pulled back when a larger build (or a jump to another spot) arrives.
+  const reach = 1 + Math.round(clamp01(settings.damping) * (SETTLE / FOCUS_STEP - 1));
+  const tri = (i: number, value: (k: number) => number) => {
+    let sum = 0;
+    let wsum = 0;
+    for (let d = -reach; d <= reach; d++) {
+      const k = Math.min(raw.length - 1, Math.max(0, i + d));
+      const w = reach + 1 - Math.abs(d);
+      sum += value(k) * w;
+      wsum += w;
     }
-    target.divideScalar(weightSum);
-    // Slightly conservative framing leaves room for interpolated positions.
-    return { target, dist: Math.max(dist / weightSum * cfg.smooth, r.dist * 1.04), az: r.az, el: r.el };
+    return sum / wsum;
+  };
+  const peak = raw.map((_, i) => {
+    let m = 0;
+    for (let d = -reach; d <= reach; d++) m = Math.max(m, raw[Math.min(raw.length - 1, Math.max(0, i + d))].dist);
+    return m;
   });
-  byAspect.set(cacheKey, smoothed);
-  return smoothed;
+  const rigs = raw.map((r, i) => ({
+    target: new THREE.Vector3(tri(i, (k) => raw[k].target.x), tri(i, (k) => raw[k].target.y), tri(i, (k) => raw[k].target.z)),
+    dist: Math.max(tri(i, (k) => peak[k]) * cfg.smooth, r.dist * 1.02),
+    az: r.az,
+    el: r.el,
+  }));
+  const out = { keys, rigs };
+  byAspect.set(cacheKey, out);
+  return out;
 }
 
 const cubic = (p0: number, p1: number, p2: number, p3: number, u: number): number => {
@@ -118,16 +344,23 @@ const cubic = (p0: number, p1: number, p2: number, p3: number, u: number): numbe
     + (-2 * u3 + 3 * u2) * p2 + (u3 - u2) * (p3 - p1) / 2;
 };
 
-function floorRig(tl: Timeline, t: number, aspect: number, az: number, framing: CameraFraming): Rig {
-  const cfg = CAMERA[framing];
-  const keys = tl.camKeys;
-  if (!keys.length) return fitRig(tl.buildBox, aspect, az, cfg.buildEl, cfg.buildMargin);
-  const rigs = frameRigs(tl, aspect, framing);
-  // Keys are uniformly spaced by CAM_KEY_STEP, except possibly the final one.
-  const step = keys.length > 1 ? keys[1].t - keys[0].t : 0.2;
-  const i = Math.min(keys.length - 1, Math.max(0, Math.floor(t / step)));
+function buildRig(tl: Timeline, t: number, aspect: number, framing: CameraFraming, settings: CameraSettings): Rig {
+  const u0 = clamp01(t / Math.max(tl.buildEnd, 1e-6));
+  const az = settings.buildAzimuth + settings.buildDrift * u0;
+  const fov = cameraFov(settings, aspect);
+  const { keys, rigs } = frameRigs(tl, aspect, framing, settings);
+  if (!keys.length) return fitRig(tl.modelBox, aspect, az, settings.buildElevation, settings.buildMargin, fov);
+  // keys may be unevenly spaced (the construction planner's keys are), so search for t
+  let lo = 0;
+  let hi = keys.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (keys[mid].t <= t) lo = mid;
+    else hi = mid - 1;
+  }
+  const i = lo;
   const j = Math.min(keys.length - 1, i + 1);
-  if (i === j) return { ...rigs[i], az };
+  if (i === j || keys[j].t <= keys[i].t) return { ...rigs[i], az, el: settings.buildElevation };
   const u = clamp01((t - keys[i].t) / (keys[j].t - keys[i].t));
   const a = rigs[Math.max(0, i - 1)];
   const b = rigs[i];
@@ -141,70 +374,32 @@ function floorRig(tl: Timeline, t: number, aspect: number, az: number, framing: 
     ),
     dist: Math.max(1, cubic(a.dist, b.dist, c.dist, d.dist, u)),
     az,
-    el: cfg.buildEl,
+    el: settings.buildElevation,
   };
 }
 
-const unionBoxes = (a: Box, b: Box): Box => ({
-  min: [Math.min(a.min[0], b.min[0]), Math.min(a.min[1], b.min[1]), Math.min(a.min[2], b.min[2])],
-  max: [Math.max(a.max[0], b.max[0]), Math.max(a.max[1], b.max[1]), Math.max(a.max[2], b.max[2])],
-});
-
-type CloseUp = { start: number; end: number; box: Box };
-const closeUpCache = new WeakMap<Timeline, CloseUp[]>();
-
-/**
- * Submodel close-ups (the builds the timeline marks `closeUp`). Each holds one framing: the side spot
- * plus every flight while it lasts, so nothing being built is out of frame. The timeline lets earlier
- * flights land first, so the camera is fully in before the first piece flies; it has eased back out
- * when the attach starts, so the attach plays in the wide shot.
- */
-export function closeUps(tl: Timeline): CloseUp[] {
-  let list = closeUpCache.get(tl);
-  if (list) return list;
-  list = [];
-  for (const sb of tl.subBuilds) {
-    if (!sb.closeUp) continue;
-    const from = sb.start - CLOSE_EASE;
-    let box: Box = sb.focus;
-    for (const u of tl.units) if (u.box && u.start < sb.attachStart - 1e-6 && u.start + u.dur > from) box = unionBoxes(box, u.box);
-    list.push({ start: sb.start, end: sb.attachStart, box });
-  }
-  closeUpCache.set(tl, list);
-  return list;
-}
-
-/** 0 = wide shot, 1 = close-up. A build shorter than the ease eases out over the build itself. */
-function closeWeight(c: CloseUp, t: number) {
-  if (t < c.start) return easeInOutCubic(clamp01((t - (c.start - CLOSE_EASE)) / CLOSE_EASE));
-  const outFrom = Math.max(c.start, c.end - CLOSE_EASE);
-  return 1 - easeInOutCubic(clamp01((t - outFrom) / Math.max(c.end - outFrom, 1e-6)));
-}
-
-function buildRig(tl: Timeline, t: number, aspect: number, framing: CameraFraming): Rig {
-  const cfg = CAMERA[framing];
-  const az = lerp(cfg.az0, cfg.az1, clamp01(t / Math.max(tl.buildEnd, 1e-6)));
-  const wide = floorRig(tl, t, aspect, az, framing);
-  let best: CloseUp | null = null;
-  let w = 0;
-  for (const c of closeUps(tl)) {
-    const cw = closeWeight(c, t);
-    if (cw > w) ((w = cw), (best = c));
-  }
-  return best && w > 0 ? mix(wide, fitRig(best.box, aspect, az, cfg.buildEl, cfg.buildMargin), w) : wide;
-}
-
-export function cameraAt(tl: Timeline, t: number, aspect: number, framing: CameraFraming = 'cinematic'): CamPose {
-  const cfg = CAMERA[framing];
+export function cameraAt(
+  tl: Timeline,
+  t: number,
+  aspect: number,
+  framing: CameraFraming = 'cinematic',
+  camera: CameraSettings = DEFAULT_CAMERA_SETTINGS,
+): CamPose {
+  // Wide keeps the legacy spirit, while cinematic uses the photographic settings.
+  const settings: CameraSettings = framing === 'wide'
+    ? { ...camera, buildAzimuth: 30, buildElevation: 44, buildMargin: Math.max(camera.buildMargin, 1.22), targetLock: 0.45 }
+    : camera;
+  const fov = cameraFov(settings, aspect);
   let rig: Rig;
-  if (t <= tl.buildEnd) rig = buildRig(tl, Math.min(t, tl.buildEnd), aspect, framing);
+  if (t <= tl.buildEnd) rig = buildRig(tl, Math.min(t, tl.buildEnd), aspect, framing, settings);
   else if (tl.heroOrbit) {
-    const u = clamp01((t - tl.buildEnd) / (tl.duration - tl.buildEnd));
-    const az = cfg.az1 + cfg.orbitDeg * u;
-    const orbit = fitRig(tl.modelBox, aspect, az, cfg.orbitEl, cfg.orbitMargin);
-    const from = buildRig(tl, tl.buildEnd, aspect, framing);
+    const u = clamp01((t - tl.buildEnd) / Math.max(1e-6, tl.duration - tl.buildEnd));
+    const startAz = settings.buildAzimuth + settings.buildDrift;
+    const az = startAz + settings.heroOrbitDegrees * u;
+    const orbit = fitRig(tl.modelBox, aspect, az, settings.heroElevation, settings.heroMargin, fov);
+    const from = buildRig(tl, tl.buildEnd, aspect, framing, settings);
     from.az = az;
     rig = mix(from, orbit, easeInOutCubic(clamp01((t - tl.buildEnd) / OUTRO_BLEND)));
-  } else rig = buildRig(tl, tl.buildEnd, aspect, framing);
-  return { position: sphericalPosition(rig.target, rig.dist, rig.az, rig.el), target: rig.target, fov: FOV };
+  } else rig = buildRig(tl, tl.buildEnd, aspect, framing, settings);
+  return { position: sphericalPosition(rig.target, rig.dist, rig.az, rig.el), target: rig.target, fov };
 }

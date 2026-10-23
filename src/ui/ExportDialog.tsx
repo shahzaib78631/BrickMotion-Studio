@@ -59,6 +59,7 @@ export function ExportDialog({ plan, jobs, onClose }: { plan: Plan; jobs: Export
               fps,
               studioLook: settings.studioLook,
               cameraFraming: settings.cameraFraming,
+              camera: settings.camera,
               render: { edges: settings.edgeLines, linearColors: settings.linearColors },
               logo,
               snapSound: settings.snapSound,

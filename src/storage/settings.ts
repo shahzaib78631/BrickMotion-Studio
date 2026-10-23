@@ -3,7 +3,7 @@ import type { ArrivalMode } from '../anim/pacing';
 import type { LogoCorner } from '../export/exportVideo';
 import { isExportFps, type ExportFps } from '../export/frameRates';
 import type { StudioLook } from '../render/studio';
-import type { CameraFraming } from '../anim/camera';
+import { DEFAULT_CAMERA_SETTINGS, type CameraFraming, type CameraSettings } from '../anim/camera';
 import { isVideoFormat, type VideoFormat } from '../export/formats';
 
 export type Settings = {
@@ -12,7 +12,7 @@ export type Settings = {
   logo: Blob | null;
   logoCorner: LogoCorner;
   logoEnabled: boolean;
-  video: { targetSeconds: number; heroOrbit: boolean; mode: ArrivalMode | 'auto'; fps: ExportFps; introSeconds: number | null; buildSeconds: number | null; outroSeconds: number | null; studioLook: StudioLook; cameraFraming: CameraFraming; format: VideoFormat; edgeLines: boolean; linearColors: boolean; bottomUp: boolean; snapSound: boolean; planner?: 'legacy' | 'construction-v2'; constructionSupport?: 'fixture' | 'table' };
+  video: { targetSeconds: number; heroOrbit: boolean; mode: ArrivalMode | 'auto'; fps: ExportFps; introSeconds: number | null; buildSeconds: number | null; outroSeconds: number | null; studioLook: StudioLook; cameraFraming: CameraFraming; camera: CameraSettings; format: VideoFormat; edgeLines: boolean; linearColors: boolean; bottomUp: boolean; snapSound: boolean; planner?: 'legacy' | 'construction-v2'; constructionSupport?: 'fixture' | 'table' };
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -21,7 +21,7 @@ export const DEFAULT_SETTINGS: Settings = {
   logo: null,
   logoCorner: 'br',
   logoEnabled: false,
-  video: { targetSeconds: 15, heroOrbit: true, mode: 'auto', fps: 30, introSeconds: null, buildSeconds: null, outroSeconds: null, studioLook: 'soft', cameraFraming: 'cinematic', format: '9:16', edgeLines: true, linearColors: true, bottomUp: true, snapSound: true, planner: 'legacy', constructionSupport: 'fixture' },
+  video: { targetSeconds: 15, heroOrbit: true, mode: 'auto', fps: 30, introSeconds: null, buildSeconds: null, outroSeconds: null, studioLook: 'soft', cameraFraming: 'cinematic', camera: DEFAULT_CAMERA_SETTINGS, format: '9:16', edgeLines: true, linearColors: true, bottomUp: true, snapSound: true, planner: 'legacy', constructionSupport: 'fixture' },
 };
 
 const KEY = 'settings';
@@ -32,6 +32,18 @@ export async function loadSettings(): Promise<Settings> {
   if (!isExportFps(video.fps)) video.fps = DEFAULT_SETTINGS.video.fps;
   if (video.studioLook !== 'soft' && video.studioLook !== 'classic') video.studioLook = 'soft';
   if (video.cameraFraming !== 'cinematic' && video.cameraFraming !== 'wide') video.cameraFraming = 'cinematic';
+  video.camera = { ...DEFAULT_CAMERA_SETTINGS, ...(video.camera ?? {}) };
+  delete (video.camera as Partial<Record<string, number>>).closeUpStrength; // replaced by submodelFocus
+  const ranges: Record<keyof CameraSettings, [number, number]> = {
+    lensMm: [18, 200], sensorWidthMm: [12, 70], buildAzimuth: [-180, 180], buildElevation: [15, 89],
+    buildMargin: [1, 2], targetLock: [0, 1], submodelFocus: [0, 1], buildDrift: [-45, 45], damping: [0, 1],
+    heroOrbitDegrees: [-360, 360], heroElevation: [5, 85], heroMargin: [1, 2],
+  };
+  for (const key of Object.keys(ranges) as (keyof CameraSettings)[]) {
+    const [lo, hi] = ranges[key];
+    const value = Number(video.camera[key]);
+    video.camera[key] = Number.isFinite(value) ? Math.min(hi, Math.max(lo, value)) : DEFAULT_CAMERA_SETTINGS[key];
+  }
   if (!isVideoFormat(video.format)) video.format = '9:16';
   if (typeof video.edgeLines !== 'boolean') video.edgeLines = DEFAULT_SETTINGS.video.edgeLines;
   if (typeof video.linearColors !== 'boolean') video.linearColors = DEFAULT_SETTINGS.video.linearColors;

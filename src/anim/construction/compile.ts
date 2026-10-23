@@ -39,6 +39,7 @@ export function compileConstruction(plan: ConstructionPlan, opts: AnimOptions): 
             time = Math.max(time, units[j].start + units[j].dur + .03);
         const dur = Math.max(.35, pacing.build / Math.max(1, plan.operations.length));
         let travel: Box | null = null;
+        let land: Box | null = null;
         const translationPath = op.rigidPath ? undefined : op.path.map(p => sub(p, op.path[0]));
         for (const key of op.keys) {
             const p = parts.get(key), tr = tracks.get(key);
@@ -51,6 +52,8 @@ export function compileConstruction(plan: ConstructionPlan, opts: AnimOptions): 
             // Do not decompose/recompose these matrices: preserve exact source shear.
             tr.moves.push({ unit: index, from: ref(from), to: ref(to), rel: -1, hold: 0, skyY: 0, entry: [0, 0, 0], translationPath, posePath: posePath?.map(ref) });
             current.set(key, to);
+            const landed = op.rigidPath ? transformBox(p.bounds, op.rigidPath[op.rigidPath.length - 1]) : shiftBox(p.bounds, op.path[op.path.length - 1]);
+            land = land ? union(land, landed) : landed;
             if (op.rigidPath) {
                 for (const delta of op.rigidPath) {
                     const box = transformBox(p.bounds, delta);
@@ -60,7 +63,7 @@ export function compileConstruction(plan: ConstructionPlan, opts: AnimOptions): 
             else for (const offset of op.path)
                 travel = travel ? union(travel, shiftBox(p.bounds, offset)) : shiftBox(p.bounds, offset);
         }
-        units.push({ kind: op.kind === 'attach-subassembly' ? 'attach' : 'piece', keys: [...op.keys], start: time, dur, step: steps.length, dependsOn: requires, box: travel, operationId: op.id });
+        units.push({ kind: op.kind === 'attach-subassembly' ? 'attach' : 'piece', keys: [...op.keys], start: time, dur, step: steps.length, dependsOn: requires, box: travel, land, operationId: op.id });
         steps.push({ model: op.model, index: op.step, start: time, end: time + dur });
         let visible = plan.bounds;
         for (const p of plan.parts) {

@@ -63,7 +63,7 @@ export function PreviewPlayer({ model, timeline: tl }: { model: ModelState; time
       const fh = Math.min(H, W / ASPECT);
       const fw = fh * ASPECT;
       setFrame((f) => (f.width === fw && f.height === fh ? f : { left: (W - fw) / 2, top: (H - fh) / 2, width: fw, height: fh }));
-      const cam = cameraAt(tl, t, ASPECT, s.cameraFraming);
+      const cam = cameraAt(tl, t, ASPECT, s.cameraFraming, s.camera);
       studio.bricks.setMatrices(poseAt(tl, t));
       studio.camera.position.copy(cam.position);
       studio.camera.lookAt(cam.target);
@@ -74,7 +74,7 @@ export function PreviewPlayer({ model, timeline: tl }: { model: ModelState; time
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [tl, s.cameraFraming, ASPECT]);
+  }, [tl, s.cameraFraming, s.camera, ASPECT]);
 
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   useEffect(() => {

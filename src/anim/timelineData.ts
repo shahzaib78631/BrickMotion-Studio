@@ -14,6 +14,8 @@ export type Unit = {
     dur: number;
     step: number;
     box?: Box | null;
+    /** Where the flight ends (LDU): the spot the camera keeps in frame. */
+    land?: Box | null;
     /** Legacy serialized data only; new plans never hide blocked flights. */
     hidden?: boolean;
     /** No route could be certified collision-free; it takes the least-obstructed one. */

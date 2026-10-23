@@ -4,7 +4,7 @@ import { assemble, transformBox, type Metrics } from '../../src/model/assemble';
 import { ensureIds } from '../../src/plan/ids';
 import type { Plan, PlanItem } from '../../src/plan/types';
 import { buildTimeline, poseAt } from '../../src/anim/timeline';
-import { cameraAt } from '../../src/anim/camera';
+import { cameraAt, cameraFov, DEFAULT_CAMERA_SETTINGS } from '../../src/anim/camera';
 import { fixtureColors, fixtureMetrics } from '../helpers/fixtureMetrics';
 
 let metrics: Metrics;
@@ -106,7 +106,7 @@ test('camera pose is finite throughout', () => {
   for (let t = 0; t <= tl.duration; t += 0.25) {
     const c = cameraAt(tl, t, 9 / 16);
     expect(Number.isFinite(c.position.x + c.position.y + c.position.z)).toBe(true);
-    expect(c.fov).toBe(30);
+    expect(c.fov).toBe(cameraFov(DEFAULT_CAMERA_SETTINGS, 9 / 16));
   }
 });
 
@@ -153,20 +153,29 @@ const ndcExtent = (tl: ReturnType<typeof buildTimeline>, asm: ReturnType<typeof 
   return { max, width, dist: c.position.distanceTo(c.target) };
 };
 
-test('every visible piece stays inside the 9:16 frame', () => {
+/** Every piece is in the shot at the moment it lands, wherever it is being assembled. */
+const expectLandingsInFrame = (tl: ReturnType<typeof buildTimeline>, asm: ReturnType<typeof assemble>) => {
+  for (const u of tl.units) {
+    const t = u.start + u.dur + 0.02;
+    const keys = new Set(u.keys);
+    expect(ndcExtent(tl, asm, t, (key) => keys.has(key) || [...keys].some((k) => key.startsWith(`${k}/`))).max, `${u.keys.join(',')} at t=${t.toFixed(2)}`).toBeLessThanOrEqual(1.0001);
+  }
+};
+
+test('every piece is inside the 9:16 frame when it lands, and the built model stays in frame', () => {
   const asm = twinTowers();
   const tl = buildTimeline(asm, metrics, opts);
-  for (let t = 0; t <= tl.duration; t += 0.1) expect(ndcExtent(tl, asm, t).max).toBeLessThanOrEqual(1.0001);
+  expectLandingsInFrame(tl, asm);
+  for (let t = 0; t <= tl.duration; t += 0.1) expect(ndcExtent(tl, asm, t, (key, m) => m.equals(tl.tracks.get(key)!.final)).max).toBeLessThanOrEqual(1.0001);
 });
 
-test('the camera moves in as the floor empties, and the model fills the frame at the end of the build', () => {
+test('the camera frames the model being built, not the floor, and the model fills the frame at the end of the build', () => {
   const asm = twinTowers();
   const tl = buildTimeline(asm, metrics, opts);
   const start = ndcExtent(tl, asm, tl.intro);
   const end = ndcExtent(tl, asm, tl.buildEnd - 0.05);
-  // Compact staging bands keep the floor close to the model, so the push-in is
-  // smaller than with the old wide bands (~11 % here), but it must still happen.
-  expect(end.dist).toBeLessThan(start.dist * 0.93);
+  expect(start.dist).toBeLessThanOrEqual(end.dist * 1.001);
+  expect(start.max).toBeGreaterThan(1); // floor pieces may lie outside the shot
   expect(end.width).toBeGreaterThan(0.6);
 });
 
@@ -195,25 +204,24 @@ test('sibling submodels each attach before the next one is built at the side spo
   for (let i = 1; i < subs.length; i++) expect(subs[i].start).toBeGreaterThanOrEqual(subs[i - 1].attachEnd - 1e-6);
 });
 
-test('with submodels, everything moving and the submodel being built stay inside the frame', () => {
+test('with submodels, every piece is in frame where it lands: at the side spot or on the model', () => {
   const asm = hangar();
   const tl = buildTimeline(asm, metrics, opts);
-  const EASE = 0.6;
-  for (let t = 0; t <= tl.duration; t += 0.05) {
-    const near = tl.subBuilds.filter((b) => t >= b.start - EASE - 1.5 && t <= b.attachEnd + EASE + 1.5);
-    // a close-up may leave out pieces resting on the main floor and the finished part of the model
-    const only = near.length
-      ? (key: string, m: THREE.Matrix4) => {
-          const tr = tl.tracks.get(key)!;
-          const resting = m.equals(tr.floor) || m.equals(tr.final);
-          return !resting || near.some((b) => t >= b.start && t <= b.attachEnd && key.startsWith(`${b.key}/`));
-        }
-      : undefined;
-    expect(ndcExtent(tl, asm, t, only).max, `t=${t.toFixed(2)}`).toBeLessThanOrEqual(1.0001);
-  }
+  expectLandingsInFrame(tl, asm);
 });
 
-test('the camera does not zoom in and out for every submodel', () => {
+test('while a submodel is built the camera stays on it', () => {
+  const asm = hangar();
+  const tl = buildTimeline(asm, metrics, opts);
+  for (const sb of tl.subBuilds)
+    for (let t = sb.start + 0.9; t < sb.attachStart; t += 0.05) {
+      const landed = new Set(tl.units.filter((u) => u.kind === 'piece' && u.start + u.dur <= t).flatMap((u) => u.keys));
+      const built = (key: string) => key.startsWith(`${sb.key}/`) && landed.has(key);
+      expect(ndcExtent(tl, asm, t, built).max, `${sb.key} t=${t.toFixed(2)}`).toBeLessThanOrEqual(1.0001);
+    }
+});
+
+test('the camera zooms in and out once per submodel build, not for every piece', () => {
   const asm = hangar();
   const tl = buildTimeline(asm, metrics, opts);
   let reversals = 0;
@@ -226,7 +234,7 @@ test('the camera does not zoom in and out for every submodel', () => {
     if (nd) dir = nd;
     last = d;
   }
-  expect(reversals).toBeLessThanOrEqual(2);
+  expect(reversals).toBeLessThanOrEqual(2 * tl.subBuilds.length + 2);
 });
 
 test('a long chain of submodels makes the video longer instead of rushing the flights', () => {
@@ -285,10 +293,11 @@ test('the camera moves in close while a submodel is first built', () => {
   expect(minDist(tl, sb.start, sb.attachStart)).toBeLessThan(camDist(tl, sb.start - 1) * 0.8);
 });
 
-test('the close-up is in place before the submodel’s first piece flies', () => {
+test('the camera does not leave a submodel before its last piece has landed', () => {
   const tl = buildTimeline(hangar(), metrics, opts);
   const sb = firstBuild(tl);
-  for (let t = sb.start; t < sb.attachStart - 0.6; t += 1 / 30) expect(Math.abs(camDist(tl, t) / camDist(tl, sb.start) - 1)).toBeLessThan(0.01); // steady (only the slow drift)
+  const last = Math.max(...tl.units.filter((u) => u.kind === 'piece' && u.keys.every((k) => k.startsWith(`${sb.key}/`))).map((u) => u.start + u.dur));
+  expect(camDist(tl, last)).toBeLessThan(camDist(tl, sb.start - 1) * 0.9);
 });
 
 test('only the first build of each top-level submodel gets a close-up', () => {

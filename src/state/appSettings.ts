@@ -3,7 +3,7 @@ import type { AnimOptions, ArrivalMode } from '../anim/pacing';
 import type { LogoCorner } from '../export/exportVideo';
 import type { ExportFps } from '../export/frameRates';
 import type { StudioLook } from '../render/studio';
-import type { CameraFraming } from '../anim/camera';
+import type { CameraFraming, CameraSettings } from '../anim/camera';
 import { DEFAULT_SETTINGS, type Settings } from '../storage/settings';
 import type { VideoFormat } from '../export/formats';
 
@@ -16,6 +16,7 @@ export type AppSettings = {
   heroOrbit: boolean;
   studioLook: StudioLook;
   cameraFraming: CameraFraming;
+  camera: CameraSettings;
   /** output frame shape for the preview and MP4 */
   format: VideoFormat;
   /** faint LDraw outline edges on every brick */
@@ -58,7 +59,7 @@ export const toSettings = (s: AppSettings): Settings => ({
   logo: s.logo,
   logoCorner: s.logoCorner,
   logoEnabled: s.logoEnabled,
-  video: { targetSeconds: s.targetSeconds, heroOrbit: s.heroOrbit, mode: s.mode, fps: s.fps, introSeconds: s.introSeconds, buildSeconds: s.buildSeconds, outroSeconds: s.outroSeconds, studioLook: s.studioLook, cameraFraming: s.cameraFraming, format: s.format, edgeLines: s.edgeLines, linearColors: s.linearColors, bottomUp: s.bottomUp, snapSound: s.snapSound, planner: s.planner ?? 'legacy', constructionSupport: s.constructionSupport ?? 'fixture' },
+  video: { targetSeconds: s.targetSeconds, heroOrbit: s.heroOrbit, mode: s.mode, fps: s.fps, introSeconds: s.introSeconds, buildSeconds: s.buildSeconds, outroSeconds: s.outroSeconds, studioLook: s.studioLook, cameraFraming: s.cameraFraming, camera: s.camera, format: s.format, edgeLines: s.edgeLines, linearColors: s.linearColors, bottomUp: s.bottomUp, snapSound: s.snapSound, planner: s.planner ?? 'legacy', constructionSupport: s.constructionSupport ?? 'fixture' },
 });
 
 export async function applySettings(s: Settings): Promise<void> {

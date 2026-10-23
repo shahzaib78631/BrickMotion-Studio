@@ -4,7 +4,8 @@ import type { PlanRequest } from '../anim/timeline.worker';
 import type { PlanningProgress } from '../anim/planning';
 import type { AnimOptions } from '../anim/pacing';
 import type { Plan } from '../plan/types';
-import { getColors, metricsOf } from './partService';
+import { getColors, hasShadowPack, metricsOf } from './partService';
+import { getCachedTimeline, putCachedTimeline, timelineFingerprint } from '../storage/timelineCache';
 import { allPartIds, scopedPlan } from './useModel';
 import { PlannerQueue, type PlannerPort } from './plannerQueue';
 
@@ -19,7 +20,7 @@ const planKey = (p: Plan) => {
   if (!id) planIds.set(p, (id = nextPlanId++));
   return id;
 };
-const optsKey = (o: AnimOptions) =>
+export const optsKey = (o: AnimOptions) =>
   [o.targetSeconds, o.heroOrbit, o.mode ?? 'auto', o.introSeconds ?? '', o.buildSeconds ?? '', o.outroSeconds ?? '', o.bottomUp ?? true, o.preassembleKnownWheels ?? true, o.planner ?? 'legacy', o.constructionMaxStates ?? 2000, o.constructionMaxMilliseconds ?? 20000, o.constructionSupport ?? 'fixture', o.constructionMechanicalSubassemblies ?? true, o.accessSearchAttempts ?? 12, o.accessSearchMilliseconds ?? 4000].join('|');
 
 const createWorker = (): PlannerPort<EncodedTimeline> => {
@@ -48,10 +49,19 @@ export function planTimeline(plan: Plan, model: string, opts: AnimOptions, lane:
   const metrics = allPartIds(scoped).map((id) => [id, metricsOf(id)] as [string, ReturnType<typeof metricsOf>]);
   const listeners = new Set<(p: PlanningProgress) => void>(onProgress ? [onProgress] : []);
   const entry: Entry = { promise: null!, listeners, progress: null, settled: false };
-  entry.promise = lanes[lane].run({ plan: scoped, metrics, colors: [...getColors()], opts }, (p) => {
-    entry.progress = p;
-    for (const listener of listeners) listener(p);
-  }).then(decodeTimeline);
+  entry.promise = (async () => {
+    // A timeline planned before (this session, an earlier one, or loaded from a project file)
+    // is reused: planning a large set can take minutes. Storage failures just mean planning.
+    const fingerprint = await timelineFingerprint({ plan: scoped, model, opts: optsKey(opts), shadow: hasShadowPack() }).catch(() => null);
+    const saved = fingerprint ? await getCachedTimeline(fingerprint).catch(() => null) : null;
+    if (saved) return decodeTimeline(saved);
+    const encoded = await lanes[lane].run({ plan: scoped, metrics, colors: [...getColors()], opts }, (p) => {
+      entry.progress = p;
+      for (const listener of listeners) listener(p);
+    });
+    if (fingerprint) void putCachedTimeline(fingerprint, encoded).catch(() => {});
+    return decodeTimeline(encoded);
+  })();
   cache.set(key, entry);
   // Both handlers settle; do not create an unhandled rejected finally() promise.
   entry.promise.then(() => { entry.settled = true; listeners.clear(); }, () => {
@@ -63,3 +73,15 @@ export function planTimeline(plan: Plan, model: string, opts: AnimOptions, lane:
   return entry.promise;
 }
 export const isAbandoned = (e: unknown) => (e as Error)?.name === 'AbortError';
+
+/** The saved (already planned) timeline for this model and options, if there is one. */
+export async function savedTimeline(plan: Plan, model: string, opts: AnimOptions): Promise<EncodedTimeline | null> {
+  const fingerprint = await timelineFingerprint({ plan: scopedPlan(plan, model), model, opts: optsKey(opts), shadow: hasShadowPack() });
+  return getCachedTimeline(fingerprint);
+}
+
+/** Makes a timeline from a project file reusable, as if it had just been planned here. */
+export async function adoptTimeline(plan: Plan, model: string, opts: string, timeline: EncodedTimeline): Promise<void> {
+  const fingerprint = await timelineFingerprint({ plan: scopedPlan(plan, model), model, opts, shadow: hasShadowPack() });
+  await putCachedTimeline(fingerprint, timeline);
+}

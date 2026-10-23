@@ -985,16 +985,19 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
   // Include the ascent, air lane and descent (not just the two endpoints)
   // so a wide-shot camera doesn't cut off a high-flying brick.
   const flightBox: (Box | null)[] = units.map(() => null);
+  const landBox: (Box | null)[] = units.map(() => null);
   for (const group of members)
     for (const { move: mv, body } of group) {
       if (units[mv.unit].hidden) continue;
+      const end = transformBox(body, flightPose(mv, 1, new THREE.Matrix4()));
+      landBox[mv.unit] = landBox[mv.unit] ? unionBox(landBox[mv.unit]!, end) : end;
       for (const u of [0, LIFT_END, 0.5, SIDE_CRUISE_END, LOWER_START, SIDE_INSERT_START, 1]) {
         const b = transformBox(body, flightPose(mv, u, new THREE.Matrix4()));
         flightBox[mv.unit] = flightBox[mv.unit] ? unionBox(flightBox[mv.unit]!, b) : b;
       }
     }
 
-  units.forEach((u, i) => (u.box = flightBox[i]));
+  units.forEach((u, i) => ((u.box = flightBox[i]), (u.land = landBox[i])));
 
   // The wide shot keeps the model, the pieces still on the floor, every flight in progress and
   // any side spot in use in view. A side spot is kept from SIDE_REACH before its build until

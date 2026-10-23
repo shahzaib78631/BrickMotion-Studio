@@ -1,7 +1,7 @@
 import { AudioBufferSource, BufferTarget, CanvasSource, Mp4OutputFormat, Output, QUALITY_HIGH, QUALITY_MEDIUM, canEncodeAudio, canEncodeVideo } from 'mediabunny';
 import { snapsOf } from '../anim/snaps';
 import { renderSnapTrack } from '../audio/snapSound';
-import { cameraAt, worldBox3, type CameraFraming } from '../anim/camera';
+import { cameraAt, worldBox3, type CameraFraming, type CameraSettings } from '../anim/camera';
 import type { StudioLook, RenderOptions } from '../render/studio';
 import { poseAt, type Timeline } from '../anim/timeline';
 import type { Instance } from '../model/assemble';
@@ -16,6 +16,7 @@ export type ExportOpts = {
   fps: number;
   studioLook?: StudioLook;
   cameraFraming?: CameraFraming;
+  camera?: CameraSettings;
   /** edge lines and colour response; the studio's defaults when left out */
   render?: RenderOptions;
   logo: { image: ImageBitmap; corner: LogoCorner } | null;
@@ -104,7 +105,7 @@ export async function exportVideo(opts: ExportOpts, deps: ExportDeps): Promise<B
       if (signal.aborted) throw abortError();
       const t = Math.min(i / fps, tl.duration);
       studio.bricks.setMatrices(poseAt(tl, t));
-      const cam = cameraAt(tl, t, w / h, opts.cameraFraming ?? 'cinematic');
+      const cam = cameraAt(tl, t, w / h, opts.cameraFraming ?? 'cinematic', opts.camera);
       studio.camera.position.copy(cam.position);
       studio.camera.lookAt(cam.target);
       studio.camera.fov = cam.fov;

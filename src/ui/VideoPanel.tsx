@@ -6,6 +6,7 @@ import { VIDEO_FORMATS, type VideoFormat } from '../export/formats';
 import { useStudio } from '../state/store';
 import { useAppSettings } from '../state/appSettings';
 import { Ic } from './icons';
+import { DEFAULT_CAMERA_SETTINGS } from '../anim/camera';
 
 const CORNERS: [LogoCorner, string][] = [
   ['tl', 'Top left'],
@@ -34,6 +35,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
   const longer = timeline && timeline.duration > s.targetSeconds + 0.05;
   const editingModel = useStudio((st) => st.editingModel);
   const fmt = VIDEO_FORMATS[s.format];
+  const setCamera = (key: keyof typeof s.camera, value: number) => s.set({ camera: { ...s.camera, [key]: value } });
 
   return (
     <div className="nx-pane">
@@ -134,6 +136,34 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
             <option value="wide">Wide — original camera coverage</option>
           </select>
         </label>
+        <details className="bm-camera-settings" open>
+          <summary>Camera settings</summary>
+          <div className="bm-camera-actions">
+            <button type="button" className="nx-btn nx-sm" onClick={() => s.set({ camera: { ...DEFAULT_CAMERA_SETTINGS } })}>Reference preset</button>
+            <button type="button" className="nx-btn nx-sm" onClick={() => s.set({ camera: { ...s.camera, lensMm: 42, buildElevation: 54, buildMargin: 1.08, targetLock: 0.72, submodelFocus: 1 } })}>Closer</button>
+            <button type="button" className="nx-btn nx-sm" onClick={() => s.set({ camera: { ...s.camera, lensMm: 60, buildElevation: 64, buildMargin: 1.18, targetLock: 0.94, submodelFocus: 0.6 } })}>Stable overhead</button>
+          </div>
+          <div className="bm-camera-grid">
+            <label className="nx-field">Lens (mm)<input type="number" min={18} max={200} step={1} value={s.camera.lensMm} onChange={(e) => setCamera('lensMm', Number(e.target.value))} /></label>
+            <label className="nx-field">Sensor width (mm)<input type="number" min={12} max={70} step={1} value={s.camera.sensorWidthMm} onChange={(e) => setCamera('sensorWidthMm', Number(e.target.value))} /></label>
+            <label className="nx-field">Azimuth (°)<input type="number" min={-180} max={180} step={1} value={s.camera.buildAzimuth} onChange={(e) => setCamera('buildAzimuth', Number(e.target.value))} /></label>
+            <label className="nx-field">Elevation (°)<input type="number" min={15} max={89} step={1} value={s.camera.buildElevation} onChange={(e) => setCamera('buildElevation', Number(e.target.value))} /></label>
+            <label className="nx-field">Frame margin<input type="number" min={1} max={2} step={0.01} value={s.camera.buildMargin} onChange={(e) => setCamera('buildMargin', Number(e.target.value))} /></label>
+            <label className="nx-field">Build drift (°)<input type="number" min={-45} max={45} step={1} value={s.camera.buildDrift} onChange={(e) => setCamera('buildDrift', Number(e.target.value))} /></label>
+          </div>
+          <label className="nx-field">Target lock <b>{Math.round(s.camera.targetLock * 100)}%</b><input type="range" min={0} max={1} step={0.01} value={s.camera.targetLock} onChange={(e) => setCamera('targetLock', Number(e.target.value))} /></label>
+          <span className="nx-hint">Higher target lock keeps the shot centred on the finished (sub)model instead of chasing incoming pieces. The reference preset intentionally keeps this high.</span>
+          <label className="nx-field">Camera damping <b>{Math.round(s.camera.damping * 100)}%</b><input type="range" min={0} max={1} step={0.01} value={s.camera.damping} onChange={(e) => setCamera('damping', Number(e.target.value))} /></label>
+          <span className="nx-hint">Higher damping removes small zoom/pan corrections between placements, producing the calm tripod-like movement in the references.</span>
+          <label className="nx-field">Submodel focus <b>{Math.round(s.camera.submodelFocus * 100)}%</b><input type="range" min={0} max={1} step={0.01} value={s.camera.submodelFocus} onChange={(e) => setCamera('submodelFocus', Number(e.target.value))} /></label>
+          <span className="nx-hint">The camera frames the model or submodel being assembled, not the pieces waiting on the floor. At 100% a submodel fills the shot; lower values keep the main model in view too.</span>
+          <div className="bm-camera-grid">
+            <label className="nx-field">Hero orbit (°)<input type="number" min={-360} max={360} step={5} value={s.camera.heroOrbitDegrees} onChange={(e) => setCamera('heroOrbitDegrees', Number(e.target.value))} /></label>
+            <label className="nx-field">Hero elevation (°)<input type="number" min={5} max={85} step={1} value={s.camera.heroElevation} onChange={(e) => setCamera('heroElevation', Number(e.target.value))} /></label>
+            <label className="nx-field">Hero margin<input type="number" min={1} max={2} step={0.01} value={s.camera.heroMargin} onChange={(e) => setCamera('heroMargin', Number(e.target.value))} /></label>
+          </div>
+          <span className="nx-hint">Like Blender: lens changes perspective/compression, sensor width changes field of view, azimuth/elevation set the rig angle, and framing values control how tightly the subject fills the shot.</span>
+        </details>
         <label className="nx-check">
           <input type="checkbox" checked={s.edgeLines} onChange={(e) => s.set({ edgeLines: e.target.checked })} /> Edge lines — faint brick outlines
         </label>
