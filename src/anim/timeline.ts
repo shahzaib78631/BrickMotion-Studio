@@ -13,7 +13,7 @@ import type { Box } from '../ldraw/flatten';
 import { placementMatrix, transformBox, unionBox, type ANode, type Assembly, type Instance, type Metrics } from '../model/assemble';
 import { clamp01, easeInOutCubic, lerp } from './easing';
 import { layoutFloor, type FloorItem, type Region } from './floorLayout';
-import { choosePacing, type AnimOptions, type Pacing } from './pacing';
+import { choosePacing, SEQUENTIAL_GAP, type AnimOptions, type Pacing } from './pacing';
 import { AssemblyPlanningError, buildAssemblyGraph } from './assemblyGraph';
 import { intersects, sweptIntersects, rotationPadding } from './sweptBounds';
 import { mateAxes, plugAxes, worldSnaps, type WorldSnap } from './snapMates';
@@ -155,6 +155,9 @@ type PlayStep = { units: (PlayPiece | PlayAttach)[]; model: string; index: numbe
 /** `parent`: the context a nested submodel is built inside; its floor is not laid out before the parent's. */
 type Ctx = { bands: Region[]; pieces: string[]; group: Map<string, number>; after?: number; parent?: number };
 
+/** Re-planning work allowed after a failed original order (planner progress reports). */
+export const DEFAULT_ACCESS_WORK = 1500;
+
 export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProgress?: (p: PlanningProgress) => void): Timeline {
   if (opts.planner === 'construction-v2') {
     const model = modelFromNodes(asm.nodes, metrics);
@@ -169,16 +172,21 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
   }
 
   let retryStart: number | undefined;
+  let retryWork = 0;
   // mesh checks depend only on final poses, so every pass (each reorder, the fallback) shares them
   const memo: PlanMemo = { insertion: new Map(), translation: new Map() };
-  const requested = opts.accessSearchMilliseconds ?? 4000;
-  const milliseconds = Number.isFinite(requested) ? Math.max(0, Math.min(10000, requested)) : 0;
+  const work = Number.isFinite(opts.accessSearchWork) ? Math.max(0, Math.min(20000, opts.accessSearchWork!)) : DEFAULT_ACCESS_WORK;
+  const milliseconds = opts.accessSearchMilliseconds == null ? Infinity : Number.isFinite(opts.accessSearchMilliseconds) ? Math.max(0, Math.min(10000, opts.accessSearchMilliseconds)) : 0;
   try {
     return searchAccessOrder((edges) => {
       const progress = (p: PlanningProgress) => {
         if (edges.length) {
-          retryStart ??= performance.now();
-          if (performance.now() - retryStart >= milliseconds) throw new AccessBudgetExceeded();
+          // count work, not time, so the result is the same on any machine
+          if (++retryWork > work) throw new AccessBudgetExceeded();
+          if (milliseconds !== Infinity) {
+            retryStart ??= performance.now();
+            if (performance.now() - retryStart >= milliseconds) throw new AccessBudgetExceeded();
+          }
         }
         onProgress?.(p);
       };
@@ -451,6 +459,7 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
       if (i > 0) completedHold += holdAfter[i - 1];
       let t = intro + (raw[i] - intro) * c + completedHold;
       if (i > 0) t = Math.max(t, s[i - 1]); // keep play order
+      if (i > 0 && pacing.sequential) t = Math.max(t, s[i - 1] + dur + SEQUENTIAL_GAP); // one piece in the air at a time
       // Start a pause only AFTER every earlier in-flight piece has landed.
       if (i > 0 && holdAfter[i - 1] > 0) t = Math.max(t, end + holdAfter[i - 1]);
       for (const d of deps[i]) t = Math.max(t, s[d] + dur + SETTLE_TIME);

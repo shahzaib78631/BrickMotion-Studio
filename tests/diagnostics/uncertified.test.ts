@@ -333,7 +333,7 @@ describe('uncertified legacy routes', () => {
         targetSeconds: 15,
         heroOrbit: true,
         accessSearchAttempts: Number(process.env.ACCESS_ATTEMPTS ?? 12),
-        accessSearchMilliseconds: Number(process.env.ACCESS_MS ?? 4000),
+        accessSearchWork: Number(process.env.ACCESS_WORK ?? 1500),
       });
       const enc = encodeTimeline(tl);
       writeFileSync(CACHE, JSON.stringify({ ...enc, mats: Array.from(enc.mats) }));

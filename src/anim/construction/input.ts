@@ -1,7 +1,7 @@
 import type { ANode } from '../../model/assemblyTypes';
 import type { Plan, PlanItem } from '../../plan/types';
 import type { PartMetrics } from '../../ldraw/metrics';
-import { gridToPlacement } from '../../plan/placement';
+import { gridToPlacement, tidyPlacement } from '../../plan/placement';
 import { identity, multiply, placement, transformBox, union, validMatrix, vector, bounds } from './math';
 import type { M4 } from './math';
 import { ConstructionError, type ConstructionModel, type ConstructionNode } from './types';
@@ -59,10 +59,10 @@ export function modelFromPlan(plan: Plan, metrics: (id: string) => PartMetrics):
                 throw new ConstructionError('invalid-input', `Missing, recursive, or excessively nested submodel ${name}.`);
             const children = build(definition.steps, name, [...stack, name]);
             const body = children.length ? children.map(c => transformBox(c.body, placement(c.local))).reduce(union) : EMPTY;
-            const local = 'rot' in item ? gridToPlacement(item, body) : { pos: item.ldu, m: item.matrix };
+            const local = 'rot' in item ? gridToPlacement(item, body) : tidyPlacement({ pos: item.ldu, m: item.matrix });
             return { ...common, kind: 'sub' as const, submodel: name, children, body, local };
         }
-        const m = metrics(item.part), local = 'rot' in item ? gridToPlacement(item, m.body) : { pos: item.ldu, m: item.matrix };
+        const m = metrics(item.part), local = 'rot' in item ? gridToPlacement(item, m.body) : tidyPlacement({ pos: item.ldu, m: item.matrix });
         return { ...common, kind: 'piece' as const, part: item.part, color: 16, placeholder: m.placeholder, grid: 'rot' in item, body: m.body, local };
     }));
     return modelFromNodes(build(plan.steps, '', []), metrics);

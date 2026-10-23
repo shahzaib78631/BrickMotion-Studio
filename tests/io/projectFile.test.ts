@@ -39,3 +39,26 @@ test('a damaged timeline is skipped, a damaged plan or other file is refused', (
   expect(readProjectFile(JSON.stringify(plan)).ok).toBe(false);
   expect(readProjectFile('not json').ok).toBe(false);
 });
+
+test('a reopened project fingerprints the same, so its saved timelines are found', async () => {
+  const { timelineFingerprint } = await import('../../src/storage/timelineCache');
+  const r = readProjectFile(projectToJson(plan, []));
+  if (!r.ok) throw new Error(r.errors.join());
+  const reopened = ensureIds(r.plan);
+  expect(JSON.stringify(reopened)).not.toBe(JSON.stringify(plan)); // fields come back in schema order
+  const fp = (p: Plan) => timelineFingerprint({ plan: p, model: '', opts: 'k', shadow: true });
+  expect(await fp(reopened)).toBe(await fp(plan));
+  expect(await fp({ ...plan, name: 'other' })).not.toBe(await fp(plan));
+});
+
+test('the video settings a timeline was saved with are read back from its options key', async () => {
+  const { optsKey, settingsFromOptsKey } = await import('../../src/state/timelineService');
+  const { animOptions } = await import('../../src/state/appSettings');
+  const settings = { targetSeconds: 42, heroOrbit: false, mode: 'piece' as const, introSeconds: 1.5, buildSeconds: null, outroSeconds: 2, bottomUp: false, planner: 'legacy' as const, constructionSupport: 'table' as const };
+  const key = optsKey(animOptions(settings));
+  expect(settingsFromOptsKey(key)).toEqual(settings);
+  expect(optsKey(animOptions(settingsFromOptsKey(key)!))).toBe(key);
+  // a key from before today's options were added still gives its settings
+  expect(settingsFromOptsKey('30|true|auto||||true|true|legacy|2000|20000|fixture|true|12|4000')).toMatchObject({ targetSeconds: 30, mode: 'auto', planner: 'legacy' });
+  expect(settingsFromOptsKey('k')).toBeNull();
+});

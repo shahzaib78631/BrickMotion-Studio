@@ -3,7 +3,7 @@ import { resolveColor, type ColorDef } from '../ldraw/colors';
 import type { Box } from '../ldraw/flatten';
 import type { PartMetrics } from '../ldraw/metrics';
 import type { Vec3 } from '../ldraw/parse';
-import { gridToPlacement, type Placement } from '../plan/placement';
+import { gridToPlacement, tidyPlacement, type Placement } from '../plan/placement';
 import { isGrid, isSub, type Plan, type PlanItem, type Step, type AssemblyHints } from '../plan/types';
 
 export type Metrics = (part: string) => PartMetrics;
@@ -72,7 +72,7 @@ export function unionBox(a: Box | null, b: Box): Box {
 
 function itemPlacement(item: PlanItem, body: Box): Placement {
   if (isGrid(item)) return gridToPlacement(item, body);
-  return { pos: item.ldu, m: item.matrix };
+  return tidyPlacement({ pos: item.ldu, m: item.matrix });
 }
 
 export function assemble(plan: Plan, metrics: Metrics, colors: Map<number, ColorDef>): Assembly {

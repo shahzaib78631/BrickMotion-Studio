@@ -21,7 +21,33 @@ const planKey = (p: Plan) => {
   return id;
 };
 export const optsKey = (o: AnimOptions) =>
-  [o.targetSeconds, o.heroOrbit, o.mode ?? 'auto', o.introSeconds ?? '', o.buildSeconds ?? '', o.outroSeconds ?? '', o.bottomUp ?? true, o.preassembleKnownWheels ?? true, o.planner ?? 'legacy', o.constructionMaxStates ?? 2000, o.constructionMaxMilliseconds ?? 20000, o.constructionSupport ?? 'fixture', o.constructionMechanicalSubassemblies ?? true, o.accessSearchAttempts ?? 12, o.accessSearchMilliseconds ?? 4000].join('|');
+  [o.targetSeconds, o.heroOrbit, o.mode ?? 'auto', o.introSeconds ?? '', o.buildSeconds ?? '', o.outroSeconds ?? '', o.bottomUp ?? true, o.preassembleKnownWheels ?? true, o.planner ?? 'legacy', o.constructionMaxStates ?? 2000, o.constructionMaxMilliseconds ?? 20000, o.constructionSupport ?? 'fixture', o.constructionMechanicalSubassemblies ?? true, o.accessSearchAttempts ?? 12, o.accessSearchWork ?? 1500, o.accessSearchMilliseconds ?? ''].join('|');
+
+/**
+ * The video settings an options key was made with (the leading fields, which every
+ * saved project has, in this order since the format began). Null if it is not one.
+ */
+export type SavedVideoSettings = {
+  targetSeconds: number; heroOrbit: boolean; mode: 'auto' | NonNullable<AnimOptions['mode']>;
+  introSeconds: number | null; buildSeconds: number | null; outroSeconds: number | null;
+  bottomUp: boolean; planner: 'legacy' | 'construction-v2'; constructionSupport: 'fixture' | 'table';
+};
+export function settingsFromOptsKey(key: string): SavedVideoSettings | null {
+  const f = key.split('|');
+  const target = Number(f[0]);
+  const mode = f[2];
+  if (f.length < 9 || !Number.isFinite(target) || !['auto', 'piece', 'batch', 'step'].includes(mode)) return null;
+  const seconds = (v: string) => (v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+  return {
+    targetSeconds: target,
+    heroOrbit: f[1] === 'true',
+    mode: mode as 'auto' | NonNullable<AnimOptions['mode']>,
+    introSeconds: seconds(f[3]), buildSeconds: seconds(f[4]), outroSeconds: seconds(f[5]),
+    bottomUp: f[6] !== 'false',
+    planner: f[8] === 'construction-v2' ? 'construction-v2' : 'legacy',
+    constructionSupport: f[11] === 'table' ? 'table' : 'fixture',
+  };
+}
 
 const createWorker = (): PlannerPort<EncodedTimeline> => {
   if (typeof Worker === 'undefined') throw new Error('This browser cannot start the animation worker. Use a browser with Web Worker support. The model remains editable.');

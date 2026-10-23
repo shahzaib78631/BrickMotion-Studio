@@ -65,3 +65,28 @@ export function placementToGrid(p: Placement, body: Box): Grid | null {
   if (!near(x, 20) || !near(y, 8) || !near(z, 20)) return null;
   return { x: z0(Math.round(x)), y: z0(Math.round(y)), z: z0(Math.round(z)), rot };
 }
+
+/** a rotation entry this close to 0 or ±1 is rounding noise from the authoring tool */
+const ROT_NOISE = 2e-3;
+/** a position this close to a half-LDU value on a squared-up part is noise too */
+const POS_NOISE = 0.01;
+
+/**
+ * Exported models often carry tiny float noise (a 0.0003 tilt, 43.9948 for 44).
+ * Invisible, but it throws off exact checks such as sliding along an axle, so a
+ * placement that is square to within the noise is snapped to exact values.
+ * Deliberate angles (hoses, hinges) are well outside the noise and kept as they are.
+ */
+export function tidyPlacement(p: Placement): Placement {
+  const near = (v: number) => Math.round(v);
+  if (!p.m.every((v) => Math.abs(v - near(v)) <= ROT_NOISE && Math.abs(near(v)) <= 1)) return p;
+  const m = p.m.map((v) => near(v) || 0) as Placement['m'];
+  // must be a signed permutation (a 90° rotation, possibly mirrored)
+  for (let r = 0; r < 3; r++) if (Math.abs(m[r * 3]) + Math.abs(m[r * 3 + 1]) + Math.abs(m[r * 3 + 2]) !== 1) return p;
+  for (let c = 0; c < 3; c++) if (Math.abs(m[c]) + Math.abs(m[c + 3]) + Math.abs(m[c + 6]) !== 1) return p;
+  const pos = p.pos.map((v) => {
+    const half = Math.round(v * 2) / 2;
+    return Math.abs(v - half) <= POS_NOISE ? half || 0 : v;
+  }) as Placement['pos'];
+  return { pos, m };
+}

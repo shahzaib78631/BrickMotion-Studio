@@ -21,6 +21,8 @@ const MODES = [
   ['step', 'By step'],
 ] as const;
 
+const formatLength = (sec: number) => (sec < 90 ? `${sec.toFixed(0)} s` : `${Math.floor(sec / 60)} min ${Math.round(sec % 60)} s`);
+
 /** Video settings: length, how pieces arrive, the hero orbit and the logo. */
 export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; onExport(): void }) {
   const s = useAppSettings();
@@ -75,13 +77,13 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
       )}
 
       <label className="nx-field">
-        Length <b>{s.targetSeconds} s</b>
-        <input type="range" min={5} max={60} step={1} value={s.targetSeconds} onChange={(e) => s.set({ targetSeconds: Number(e.target.value) })} />
+        Length <b>{formatLength(s.targetSeconds)}</b>
+        <input type="range" min={5} max={600} step={5} value={s.targetSeconds} onChange={(e) => s.set({ targetSeconds: Number(e.target.value) })} />
       </label>
       <div className="nx-field">
         <button className="nx-btn nx-sm" type="button" onClick={() => s.set({
           targetSeconds: 14, introSeconds: 0.6, buildSeconds: 10.4,
-          outroSeconds: 3, heroOrbit: true, mode: 'auto',
+          outroSeconds: 3, heroOrbit: true,
         })}>
           Match reference pacing (14 s)
         </button>
@@ -106,13 +108,13 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
           ] as const).map(([key, label, actual]) => (
             <label className="nx-field" key={key}>
               {label} (s)
-              <input aria-label={`${label} duration in seconds`} type="number" min={key === 'buildSeconds' ? 1 : 0.2} max={120} step={0.1}
+              <input aria-label={`${label} duration in seconds`} type="number" min={key === 'buildSeconds' ? 1 : 0.2} max={key === 'buildSeconds' ? 1800 : 120} step={0.1}
                 placeholder={actual.toFixed(1)} value={s[key] ?? ''}
                 onChange={(e) => {
                   const raw = e.currentTarget.value;
                   if (!raw) return s.set({ [key]: null });
                   const num = Number(raw);
-                  if (Number.isFinite(num)) s.set({ [key]: Math.min(120, Math.max(key === 'buildSeconds' ? 1 : 0.2, num)) });
+                  if (Number.isFinite(num)) s.set({ [key]: Math.min(key === 'buildSeconds' ? 1800 : 120, Math.max(key === 'buildSeconds' ? 1 : 0.2, num)) });
                 }} />
             </label>
           ))}
@@ -213,6 +215,11 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
           ))}
         </div>
         {s.planner === 'construction-v2' && <span className="nx-hint">V2 schedules verified construction operations sequentially; attachment dependencies cannot be disabled.</span>}
+        {s.mode === 'piece' && (
+          <span className="nx-hint">
+            Each piece lands before the next one starts, so a big set makes a long video{timeline ? ` (${formatLength(timeline.duration)} here)` : ''}. Use Batches or Auto for a shorter one.
+          </span>
+        )}
         {s.mode === 'auto' && timeline && (
           <span className="nx-hint">
             Picked: {timeline.pacing.mode === 'piece' ? 'one by one' : timeline.pacing.mode === 'step' ? 'step by step' : 'in batches'}

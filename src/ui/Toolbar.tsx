@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { exportLDraw } from '../io/ldrawExport';
 import { planToJson, readPlanFile } from '../io/planFile';
-import { isProjectFile, projectToJson, readProjectFile, PROJECT_EXTENSION, type SavedTimeline } from '../io/projectFile';
+import { isProjectFile, readProjectFile, PROJECT_EXTENSION } from '../io/projectFile';
 import { animOptions, useAppSettings } from '../state/appSettings';
-import { adoptTimeline, optsKey, savedTimeline } from '../state/timelineService';
+import { adoptTimeline, optsKey, settingsFromOptsKey } from '../state/timelineService';
+import { saveProjectFile, type SaveProgress } from '../state/projectActions';
 import { splitPlanComponents } from '../plan/components';
 import { ensureIds } from '../plan/ids';
 import { autoStepPlan, modelsWithoutSteps } from '../plan/autoSteps';
@@ -110,6 +111,7 @@ export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, ca
   const tool = useStudio((s) => s.tool);
   const st = useStudio.getState();
   const fileRef = useRef<HTMLInputElement>(null);
+  const [savingProject, setSavingProject] = useState<SaveProgress | null>(null);
   const pieces = pieceCount(plan);
 
   const openProjectFile = async (f: File) => {
@@ -117,8 +119,15 @@ export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, ca
     if (!r.ok) return alert(`Couldn't open ${f.name}:\n\n${r.errors.slice(0, 8).join('\n')}`);
     if (pieceCount() > 0 && !confirm('Replace the current set with this project? (You can undo.)')) return;
     const plan = ensureIds(r.plan);
+    // Use the video settings the animations were planned with, or they would not match and be planned again.
+    const main = r.timelines.find((t) => t.model === '') ?? r.timelines[0];
+    const saved = main ? settingsFromOptsKey(main.opts) : null;
+    if (saved) useAppSettings.getState().set(saved);
+    const current = optsKey(animOptions(useAppSettings.getState()));
     // Store the planned timelines first, so the preview finds them instead of planning again.
-    await Promise.all(r.timelines.map((t) => adoptTimeline(plan, t.model, t.opts, t.timeline).catch(() => {})));
+    // A file saved by an older version keys its settings differently; also file it under today's key.
+    await Promise.all(r.timelines.flatMap((t) => [t.opts, ...(saved && t.opts === main!.opts && t.opts !== current ? [current] : [])]
+      .map((opts) => adoptTimeline(plan, t.model, opts, t.timeline).catch(() => {}))));
     st.setPlan(plan);
     st.setEditingModel('');
     if (r.skipped) alert(`${r.skipped} saved animation timeline(s) in ${f.name} were damaged and will be planned again.`);
@@ -141,18 +150,8 @@ export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, ca
     st.setPlan(plan);
     st.setEditingModel('');
   };
-  /** The model plus every build animation already planned for it with the current video settings. */
-  const downloadProject = async () => {
-    const opts = animOptions(useAppSettings.getState());
-    const models = ['', ...Object.keys(plan.submodels ?? {})];
-    const timelines: SavedTimeline[] = [];
-    for (const model of models) {
-      const timeline = await savedTimeline(plan, model, opts).catch(() => null);
-      if (timeline) timelines.push({ model, opts: optsKey(opts), timeline });
-    }
-    if (!timelines.some((t) => t.model === '') && !confirm('The build animation for this set has not been planned yet (open Preview first to plan it).\n\nSave the project without it? It will be planned when the file is opened.')) return;
-    saveBlob(`${safeFileName(plan.name)}.${PROJECT_EXTENSION}`, new Blob([projectToJson(plan, timelines)], { type: 'application/json' }));
-  };
+  /** The whole set with every build animation (planned now if needed). */
+  const downloadProject = () => saveProjectFile(plan, '', setSavingProject);
   const downloadPlan = () => saveBlob(`${safeFileName(plan.name)}.plan.json`, new Blob([planToJson(plan)], { type: 'application/json' }));
   const downloadLDraw = () => saveBlob(`${safeFileName(plan.name)}.mpd`, new Blob([exportLDraw(plan, metricsOf, getColors())], { type: 'text/plain' }));
 
@@ -179,7 +178,7 @@ export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, ca
             { icon: 'folder', label: 'Open project…', onClick: onProjects },
             { icon: 'upload', label: 'Import file…', hint: `.${PROJECT_EXTENSION} .json .ldr .mpd`, onClick: () => fileRef.current?.click() },
             'sep',
-            { icon: 'download', label: `Save project with animation (.${PROJECT_EXTENSION})`, disabled: pieces === 0, onClick: () => void downloadProject() },
+            { icon: 'download', label: savingProject ? `Planning animations to save (${savingProject.done + 1} of ${savingProject.total})…` : `Save project with animation (.${PROJECT_EXTENSION})`, disabled: pieces === 0 || !!savingProject, onClick: () => void downloadProject() },
             { icon: 'file', label: 'Download plan (.json)', onClick: downloadPlan },
             { icon: 'file', label: 'Download LDraw (.mpd)', onClick: downloadLDraw },
             'sep',
@@ -234,6 +233,12 @@ export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, ca
         <button className="nx-icon" onClick={st.redo} disabled={!canRedo} title="Redo (⇧⌘Z)" aria-label="Redo">
           <Ic name="redo" />
         </button>
+        {savingProject && (
+          <span className="nx-save dirty" role="status" title="The project file downloads once every animation is planned">
+            <span className="nx-dot" />
+            Planning animations for the project file ({savingProject.done + 1} of {savingProject.total})…
+          </span>
+        )}
         <span className={`nx-save ${status === 'saved' ? '' : status}`} title="Projects save in this browser">
           <span className="nx-dot" />
           {status === 'saved' ? 'Saved' : status === 'dirty' ? 'Saving…' : "Couldn't save"}
@@ -256,7 +261,7 @@ export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, ca
           items={[
             { icon: 'video', label: 'Video (MP4)…', disabled: pieces === 0, onClick: onExportVideo },
             'sep',
-            { icon: 'download', label: `Project with animation (.${PROJECT_EXTENSION})`, disabled: pieces === 0, onClick: () => void downloadProject() },
+            { icon: 'download', label: savingProject ? `Planning animations to save (${savingProject.done + 1} of ${savingProject.total})…` : `Project with animation (.${PROJECT_EXTENSION})`, disabled: pieces === 0 || !!savingProject, onClick: () => void downloadProject() },
             { icon: 'file', label: 'Plan (.json)', onClick: downloadPlan },
             { icon: 'file', label: 'LDraw (.mpd)', onClick: downloadLDraw },
           ]}

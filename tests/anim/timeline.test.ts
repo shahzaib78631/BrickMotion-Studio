@@ -379,3 +379,17 @@ test('within a step a piece flies in after the piece it rests on (unless bottom-
   const asListed = buildTimeline(asm, metrics, { ...opts, bottomUp: false });
   expect(firstFlight(asListed, top.key)).toBeLessThan(firstFlight(asListed, bottom.key));
 });
+
+test('one by one: only one piece is ever in the air, even when that outruns the target length', () => {
+  // 40 bricks side by side would need ~0.3 s each in 12 s; one-at-a-time flights take longer
+  const row = Array.from({ length: 40 }, (_, i) => brick((i % 8) * 4, 0, Math.floor(i / 8) * 2));
+  const asm = assemble(plan([row]), metrics, fixtureColors);
+  const tl = buildTimeline(asm, metrics, { targetSeconds: 15, heroOrbit: true, mode: 'piece' });
+  expect(tl.pacing.sequential).toBe(true);
+  const flights = [...tl.units].sort((a, b) => a.start - b.start);
+  for (let i = 1; i < flights.length; i++) expect(flights[i].start).toBeGreaterThanOrEqual(flights[i - 1].start + flights[i - 1].dur - 1e-6);
+  expect(tl.duration).toBeGreaterThan(15);
+  // Auto may overlap flights to keep to the requested length
+  const auto = buildTimeline(asm, metrics, { targetSeconds: 15, heroOrbit: true });
+  expect(auto.pacing.sequential).toBeFalsy();
+});

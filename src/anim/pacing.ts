@@ -17,7 +17,13 @@ export type AnimOptions = {
   preassembleKnownWheels?: boolean;
   /** Bounded re-planning of blocked access order. 1 disables reordering; maximum 32. */
   accessSearchAttempts?: number;
-  /** Total additional search budget after a failed original order (default 4000 ms, maximum 10000). */
+  /**
+   * Work budget for re-planning after a failed original order, counted in planner
+   * progress reports (one per piece and per route tried). Counting work, not time,
+   * gives the same build order on a fast or a busy machine. Default 1500, maximum 20000.
+   */
+  accessSearchWork?: number;
+  /** Optional wall-clock cap on that re-planning (ms, maximum 10000). Unset by default: a time cap makes results depend on machine load. */
   accessSearchMilliseconds?: number;
 };
 export type Pacing = {
@@ -30,12 +36,17 @@ export type Pacing = {
   slot: number;
   flight: number;
   batchSize: number;
+  /** each piece starts only after the previous one has landed (the video grows to fit) */
+  sequential?: boolean;
 };
 
 export const INTRO = 1.0;
 const PIECE_MIN_SLOT = 0.18;
 const STEP_MIN_SLOT = 0.6;
 const BATCH_SLOT = 0.6;
+const PIECE_MIN_FLIGHT = 0.35;
+/** gap between one piece landing and the next leaving, in one-by-one mode */
+export const SEQUENTIAL_GAP = 0.05;
 
 /** Decides how fast pieces arrive so the build fits the target length. */
 export function choosePacing(units: number, steps: number, opts: AnimOptions): Pacing {
@@ -60,7 +71,11 @@ export function choosePacing(units: number, steps: number, opts: AnimOptions): P
     return { ...common, mode: 'batch', slot: BATCH_SLOT, flight: 0.5, batchSize: Math.max(1, Math.ceil(units / batches)) };
   };
 
-  if (opts.mode === 'piece') return piece();
+  // Chosen explicitly, one by one means one piece in the air at a time, however long that takes.
+  if (opts.mode === 'piece') {
+    const slot = units > 0 ? build / units : build;
+    return { ...common, mode: 'piece', slot, flight: clamp(slot * 0.85, PIECE_MIN_FLIGHT, 0.9), batchSize: 1, sequential: true };
+  }
   if (opts.mode === 'step') return step();
   if (opts.mode === 'batch') return batch();
   if (units === 0 || build / units >= PIECE_MIN_SLOT) return piece();

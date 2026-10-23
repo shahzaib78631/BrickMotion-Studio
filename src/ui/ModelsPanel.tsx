@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { autoSplitSteps, LARGE_STEP } from '../plan/autoSteps';
 import { buildInComponents, canSplitComponents } from '../plan/components';
 import { modelSteps } from '../plan/ops';
@@ -9,6 +9,11 @@ import { useStudio } from '../state/store';
 import type { ModelState } from '../state/useModel';
 import type { ExportJob } from './ExportDialog';
 import { Ic } from './icons';
+import { ContextMenu, type ContextItem } from './ContextMenu';
+import { importAsSubmodel } from '../plan/modelFiles';
+import { isProjectFile, PROJECT_EXTENSION, readProjectFile } from '../io/projectFile';
+import { readPlanFile } from '../io/planFile';
+import { saveLDrawFile, saveProjectFile, type SaveProgress } from '../state/projectActions';
 
 type Row = { name: string; depth: number; steps: number; direct: number; total: number; uses: number; bigStep: boolean; used: boolean; splittable: boolean };
 
@@ -83,6 +88,39 @@ export function ModelsPanel({ model, onExport }: { model: ModelState; onExport(j
     useStudio.getState().apply((p) => autoSplitSteps(p, name, metricsOf, getColors()));
     open(name);
   };
+  const [menu, setMenu] = useState<{ x: number; y: number; name: string } | null>(null);
+  const closeMenu = useCallback(() => setMenu(null), []);
+  const [saving, setSaving] = useState<{ name: string; progress: SaveProgress } | null>(null);
+  const importInto = useRef('');
+  const fileInput = useRef<HTMLInputElement>(null);
+  const saveProject = (name: string) =>
+    void saveProjectFile(useStudio.getState().plan, name, (progress) => setSaving(progress ? { name, progress } : null));
+  const importFile = async (f: File) => {
+    const text = await f.text();
+    const read = isProjectFile(f.name) ? readProjectFile(text) : readPlanFile(text, f.name);
+    if (!read.ok) return alert(`Couldn't import ${f.name}:\n\n${read.errors.slice(0, 8).join('\n')}`);
+    const target = importInto.current;
+    const base = f.name.replace(/\.(brickmotion|plan\.json|json|mpd|ldr|dat)$/i, '');
+    const r = importAsSubmodel(useStudio.getState().plan, target, read.plan, base);
+    useStudio.getState().apply(() => r.plan);
+    open(target);
+  };
+  const menuItems = (name: string): ContextItem[] => {
+    const row = rows.find((r) => r.name === name);
+    const empty = !row || row.total === 0;
+    const others = rows.filter((r) => r.name !== name && r.name !== editingModel);
+    return [
+      { icon: 'eye', label: `Open ${label(name)}`, disabled: editingModel === name, onClick: () => open(name) },
+      { icon: 'play', label: 'Play its build', disabled: !model.ready || empty, onClick: () => play(name) },
+      'sep',
+      { icon: 'video', label: 'Export as MP4', disabled: !model.ready || empty, onClick: () => onExport([{ model: name, label: label(name) }]) },
+      { icon: 'download', label: `Save as project with animation (.${PROJECT_EXTENSION})`, disabled: !model.ready || empty || !!saving, onClick: () => saveProject(name) },
+      { icon: 'file', label: 'Save as LDraw (.mpd)', disabled: !model.ready || empty, onClick: () => saveLDrawFile(useStudio.getState().plan, name) },
+      'sep',
+      { icon: 'upload', label: `Import a file into ${label(name)}…`, onClick: () => { importInto.current = name; fileInput.current?.click(); } },
+      ...(others.length ? ['sep', { heading: 'Open another model' }, ...others.map((r): ContextItem => ({ icon: r.name ? 'box' : 'brick', label: label(r.name), onClick: () => open(r.name) }))] as ContextItem[] : []),
+    ];
+  };
   const components = (name: string) => {
     const r = buildInComponents(useStudio.getState().plan, name, metricsOf, getColors());
     if (!r.components.length) return alert(`${label(name)} has no separate parts to build aside (no underside group or roof was found).`);
@@ -97,12 +135,24 @@ export function ModelsPanel({ model, onExport }: { model: ModelState; onExport(j
           Models <span className="nx-count">{rows.length}</span>
         </h3>
       </div>
-      <p className="nx-fine">Each model has its own build timeline. Open one to edit, preview and export it on its own; the main model builds every submodel aside and attaches it.</p>
+      <p className="nx-fine">Each model has its own build timeline. Open one to edit, preview and export it on its own; the main model builds every submodel aside and attaches it. Right-click a model for more.</p>
+      {saving && (
+        <p className="nx-hint" role="status">
+          Planning animations for {label(saving.name)}'s project file ({saving.progress.done + 1} of {saving.progress.total})…
+        </p>
+      )}
+      <input ref={fileInput} type="file" hidden accept={`.${PROJECT_EXTENSION},.json,.ldr,.mpd`} onChange={(e) => {
+        const f = e.currentTarget.files?.[0];
+        e.currentTarget.value = '';
+        if (f) void importFile(f);
+      }} />
+      {menu && <ContextMenu x={menu.x} y={menu.y} label={`${label(menu.name)} menu`} items={menuItems(menu.name)} onClose={closeMenu} />}
       <ul className="bm-models" aria-label="Models in this set">
         {rows.map((r) => {
           const active = editingModel === r.name;
           return (
-            <li key={r.name || '(main)'} className={`bm-model-row ${active ? 'active' : ''} ${r.used ? '' : 'unused'}`} style={{ paddingLeft: 8 + r.depth * 14 }}>
+            <li key={r.name || '(main)'} className={`bm-model-row ${active ? 'active' : ''} ${r.used ? '' : 'unused'} ${menu?.name === r.name ? 'menu-open' : ''}`} style={{ paddingLeft: 8 + r.depth * 14 }}
+              onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, name: r.name }); }}>
               <button className="bm-model-main" onClick={() => open(r.name)} aria-current={active} title={`Open ${label(r.name)}`}>
                 <Ic name={r.name ? 'box' : 'brick'} />
                 <span className="bm-model-text">
