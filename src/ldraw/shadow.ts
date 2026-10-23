@@ -31,6 +31,8 @@ export type CylSnapDef = SnapBase & {
   slide: boolean;
 };
 export type ClipSnapDef = SnapBase & { kind: 'clp'; radius: number; length: number; center: boolean; slide: boolean };
+/** Radius for a SNAP_FGR without one: the library's most common finger radius. */
+export const DEFAULT_FINGER_RADIUS = 4;
 export type FingerSnapDef = SnapBase & { kind: 'fgr'; genderOfs: 'M' | 'F'; seq: number[]; radius: number; center: boolean };
 export type GenSnapDef = SnapBase & { kind: 'gen'; gender: 'M' | 'F'; bounding: string };
 export type SnapDef = CylSnapDef | ClipSnapDef | FingerSnapDef | GenSnapDef;
@@ -141,7 +143,8 @@ export function parseShadow(text: string): ShadowInfo {
     } else if (cmd === 'SNAP_FGR') {
       const g = gender(p.get('genderofs'));
       const seq = nums(p.get('seq')).filter(Number.isFinite);
-      const radius = Number(p.get('radius'));
+      // Some shadow files leave the radius out (every locking hinge, for one); keep those fingers.
+      const radius = p.has('radius') ? Number(p.get('radius')) : DEFAULT_FINGER_RADIUS;
       if (g && seq.length && Number.isFinite(radius)) info.snaps.push({ ...common, kind: 'fgr', genderOfs: g, seq, radius, center: bool(p.get('center')) });
     } else if (cmd === 'SNAP_GEN') {
       const g = gender(p.get('gender'));

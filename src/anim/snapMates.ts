@@ -39,7 +39,8 @@ export function worldSnaps(snaps: Snap[] | undefined, e: V): WorldSnap[] {
 /** Whether a male of these shapes/radius fits a female of these. */
 function fits(male: Snap, female: Snap): boolean {
   if (female.kind === 'clp') return male.kind === 'cyl' && male.shapes.some((s) => s === 'R' || s.includes('L'));
-  if (male.kind === 'fgr' || female.kind === 'fgr') return male.kind === 'fgr' && female.kind === 'fgr' && Math.abs(male.radius - female.radius) <= RADIUS_SLOP;
+  // fingers mate only within the same group (or both ungrouped), as LDCad does
+  if (male.kind === 'fgr' || female.kind === 'fgr') return male.kind === 'fgr' && female.kind === 'fgr' && (male.group ?? '').toLowerCase() === (female.group ?? '').toLowerCase() && Math.abs(male.radius - female.radius) <= RADIUS_SLOP;
   if (male.kind !== 'cyl' || female.kind !== 'cyl') return false;
   // square sockets only take square plugs; cross-shaped axle holes only take axles
   const fShapes = new Set(female.shapes), mShapes = new Set(male.shapes);

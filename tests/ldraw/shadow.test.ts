@@ -68,3 +68,13 @@ test('centred sections are spread around the position', () => {
   expect(s.axis.map((v) => Math.round(v))).toEqual([1, 0, 0]);
   expect(s.start.map((v) => Math.round(v))).toEqual([-10, 0, 0]);
 });
+
+test('a hinge finger without a radius is kept, with the default radius', async () => {
+  const { DEFAULT_FINGER_RADIUS } = await import('../../src/ldraw/shadow');
+  // 44570 (locking hinge plate) writes its fingers like this, with no [radius=]
+  const info = parseShadow('0 !LDCAD SNAP_FGR [group=lckHng] [genderOfs=M] [seq=4.5 8 4.5] [pos=-20 2 30] [ori=0 -1 0 1 0 0 0 0 1]');
+  expect(info.snaps).toHaveLength(1);
+  const fgr = info.snaps[0];
+  expect(fgr.kind === 'fgr' && fgr.radius).toBe(DEFAULT_FINGER_RADIUS);
+  expect(fgr.kind === 'fgr' && fgr.group).toBe('lckHng');
+});

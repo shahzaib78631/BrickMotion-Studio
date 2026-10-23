@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { placementMatrix, transformBox, unionBox, type ANode, type Metrics } from '../model/assemble';
 import type { Box } from '../ldraw/flatten';
 import { mateAxis, plugAxes, worldSnaps } from './snapMates';
+import { wheelSeatFor, wheelSeatTolerance } from '../data/connectorLibrary';
 
 type PieceNode = Extract<ANode, { kind: 'piece' }>;
 export type RigidMember = { node: PieceNode; rel: THREE.Matrix4 };
@@ -47,6 +48,49 @@ export function rigidWheelPairs(nodes: ANode[], metrics: Metrics): RigidHardware
       if (!female.some((f) => male.some((m) => mateAxis(m, f)))) continue;
       const a = metrics(rim.part), b = metrics(tyre.part);
       if (a.placeholder || b.placeholder || !a.mesh?.length || !b.mesh?.length) continue;
+      const rel = placementMatrix(rim.local).invert().multiply(placementMatrix(tyre.local));
+      candidates.push({ kind: 'wheel', root: rim, members: [{ node: rim, rel: new THREE.Matrix4() }, { node: tyre, rel }],
+        body: unionBox(a.body, transformBox(b.body, rel)), full: unionBox(a.full, transformBox(b.full, rel)) });
+    }
+  }
+  // A tyre with a supplementary seat (the two hand entries or a generated
+  // one) is still seated when the rim centre lies on the tyre's axis and the
+  // measured rim outer radius fits the tyre's bore. This is one-sided, like the
+  // window pane: it only uses the tyre's own connector and the measured seats,
+  // not a guessed part-name adjacency.
+  const hasPair = (a: PieceNode, b: PieceNode) => candidates.some((g) => {
+    const ids = g.members.map((m) => m.node.itemId);
+    return ids.includes(a.itemId) && ids.includes(b.itemId);
+  });
+  // Every other tyre/rim pair uses the seat measured from the meshes. LDCad
+  // parts never reach here (their seats are not generated), so nothing can
+  // override the authoritative shadow data. As with the two hand-measured
+  // wheels, this is one-sided: the tyre's own seat plus the measured rim radius.
+  for (const tyre of pieces) {
+    if (tyre.assembly || paired.has(tyre.itemId)) continue;
+    const tyreSeat = wheelSeatFor(tyre.part);
+    if (tyreSeat?.role !== 'tyre') continue;
+    const seats = worldSnaps(
+      metrics(tyre.part).snaps?.filter((s) => s.kind === 'gen' && s.gender === 'F' && /^(rim|measured)/i.test(s.group ?? '')),
+      placementMatrix(tyre.local).elements);
+    if (!seats.length) continue;
+    for (const rim of pieces) {
+      if (rim === tyre || rim.assembly || paired.has(rim.itemId) || hasPair(rim, tyre)) continue;
+      const rimSeat = wheelSeatFor(rim.part);
+      if (rimSeat?.role !== 'rim') continue;
+      if (Math.abs(rimSeat.radius - tyreSeat.radius) > wheelSeatTolerance) continue;
+      const a = metrics(rim.part), b = metrics(tyre.part);
+      if (a.placeholder || b.placeholder || !a.mesh?.length || !b.mesh?.length) continue;
+      const centre = [0, 1, 2].map((k) => (a.body.min[k] + a.body.max[k]) / 2);
+      const world = new THREE.Vector3(centre[0], centre[1], centre[2]).applyMatrix4(placementMatrix(rim.local));
+      const seated = seats.some(({ snap, start, axis: snapAxis }) => {
+        const w = new THREE.Vector3(world.x - start[0], world.y - start[1], world.z - start[2]);
+        const along = w.dot(new THREE.Vector3(snapAxis[0], snapAxis[1], snapAxis[2]));
+        const off = w.sub(new THREE.Vector3(snapAxis[0], snapAxis[1], snapAxis[2]).multiplyScalar(along)).length();
+        // `start` is one end of the seat, so the rim centre must lie within [0, length] along it
+        return off <= 1 && Math.abs(along - snap.length / 2) <= snap.length / 2 + 1;
+      });
+      if (!seated) continue;
       const rel = placementMatrix(rim.local).invert().multiply(placementMatrix(tyre.local));
       candidates.push({ kind: 'wheel', root: rim, members: [{ node: rim, rel: new THREE.Matrix4() }, { node: tyre, rel }],
         body: unionBox(a.body, transformBox(b.body, rel)), full: unionBox(a.full, transformBox(b.full, rel)) });

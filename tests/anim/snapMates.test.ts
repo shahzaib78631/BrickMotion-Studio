@@ -50,3 +50,13 @@ test('a part without connector data joins the socket it fills, not one beside it
   expect(axes[0][2]).toBeCloseTo(1);
   expect(plugAxes(front, { min: [0, -174, -58], max: [20, -41.6, -19] })).toHaveLength(0);
 });
+
+const finger = (gender: 'M' | 'F', group?: string): Snap =>
+  ({ kind: 'fgr', group, gender, start: [0, 0, 0], axis: [1, 0, 0], length: 16, radius: 4, shapes: ['FGR'], slide: false });
+
+test('hinge fingers mate only with fingers of the same group', () => {
+  const here = worldSnaps([finger('M', 'lckHng')], at(0, 0, 0));
+  expect(mateAxes(here, worldSnaps([finger('F', 'lckHng')], at(0, 0, 0)))).toHaveLength(1);
+  expect(mateAxes(here, worldSnaps([finger('F')], at(0, 0, 0)))).toHaveLength(0);
+  expect(mateAxes(worldSnaps([finger('M')], at(0, 0, 0)), worldSnaps([finger('F')], at(0, 0, 0)))).toHaveLength(1);
+});
