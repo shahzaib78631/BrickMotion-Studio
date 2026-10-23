@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": []
+  },
+  "files": [
+    "../src/anim/assemblyGraph.ts",
+    "../src/anim/sweptBounds.ts",
+    "../src/anim/affineTransform.ts",
+    "../src/anim/surfaceContact.ts",
+    "../src/ldraw/connectors.ts",
+    "../src/ldraw/metrics.ts",
+    "../src/ldraw/flatten.ts",
+    "../src/ldraw/library.ts"
+  ]
+}

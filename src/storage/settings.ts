@@ -12,7 +12,7 @@ export type Settings = {
   logo: Blob | null;
   logoCorner: LogoCorner;
   logoEnabled: boolean;
-  video: { targetSeconds: number; heroOrbit: boolean; mode: ArrivalMode | 'auto'; fps: ExportFps; introSeconds: number | null; buildSeconds: number | null; outroSeconds: number | null; studioLook: StudioLook; cameraFraming: CameraFraming; format: VideoFormat; edgeLines: boolean; linearColors: boolean; bottomUp: boolean; snapSound: boolean };
+  video: { targetSeconds: number; heroOrbit: boolean; mode: ArrivalMode | 'auto'; fps: ExportFps; introSeconds: number | null; buildSeconds: number | null; outroSeconds: number | null; studioLook: StudioLook; cameraFraming: CameraFraming; format: VideoFormat; edgeLines: boolean; linearColors: boolean; bottomUp: boolean; snapSound: boolean; planner?: 'legacy' | 'construction-v2'; constructionSupport?: 'fixture' | 'table' };
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -21,7 +21,7 @@ export const DEFAULT_SETTINGS: Settings = {
   logo: null,
   logoCorner: 'br',
   logoEnabled: false,
-  video: { targetSeconds: 15, heroOrbit: true, mode: 'auto', fps: 30, introSeconds: null, buildSeconds: null, outroSeconds: null, studioLook: 'soft', cameraFraming: 'cinematic', format: '9:16', edgeLines: true, linearColors: true, bottomUp: true, snapSound: true },
+  video: { targetSeconds: 15, heroOrbit: true, mode: 'auto', fps: 30, introSeconds: null, buildSeconds: null, outroSeconds: null, studioLook: 'soft', cameraFraming: 'cinematic', format: '9:16', edgeLines: true, linearColors: true, bottomUp: true, snapSound: true, planner: 'legacy', constructionSupport: 'fixture' },
 };
 
 const KEY = 'settings';
@@ -36,6 +36,8 @@ export async function loadSettings(): Promise<Settings> {
   if (typeof video.edgeLines !== 'boolean') video.edgeLines = DEFAULT_SETTINGS.video.edgeLines;
   if (typeof video.linearColors !== 'boolean') video.linearColors = DEFAULT_SETTINGS.video.linearColors;
   if (typeof video.bottomUp !== 'boolean') video.bottomUp = DEFAULT_SETTINGS.video.bottomUp;
+  if (video.constructionSupport !== 'table') video.constructionSupport = 'fixture';
+  if (video.planner !== 'construction-v2') video.planner = 'legacy';
   if (typeof video.snapSound !== 'boolean') video.snapSound = DEFAULT_SETTINGS.video.snapSound;
   for (const key of ['introSeconds', 'buildSeconds', 'outroSeconds'] as const) {
     const value = video[key];

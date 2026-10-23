@@ -1,5 +1,7 @@
 import * as THREE from 'three';
+import { inJointContact, type JointContact, type JointPair } from './jointContact';
 import type { Box } from '../ldraw/flatten';
+import { maximumLinearScale, segmentTouchesSurface } from './surfaceContact';
 
 /**
  * Real part shapes for working out how a piece goes on: a triangle soup in part space
@@ -110,17 +112,55 @@ function rayMeetsBox(o: number[], d: number[], min: number[], max: number[], max
  * whether it goes INTO the material (meets a counter-clockwise outer face, or a face
  * of unknown side). t = Infinity when nothing is hit.
  */
+/** reused traversal stack: nearestHit is the planner's innermost loop */
+let hitStack: TreeNode[] = new Array(64);
+
 function nearestHit(s: Shape, o: number[], d: number[], fromT: number, toT: number): { t: number; enters: boolean } {
-  const stack: TreeNode[] = [s.tree];
   const tr = s.tris;
+  const ox = o[0], oy = o[1], oz = o[2], dx = d[0], dy = d[1], dz = d[2];
+  // slab test with the inverse direction worked out once per ray (same result as rayMeetsBox)
+  const px0 = Math.abs(dx) < 1e-12, py0 = Math.abs(dy) < 1e-12, pz0 = Math.abs(dz) < 1e-12;
+  const ix = 1 / dx, iy = 1 / dy, iz = 1 / dz;
+  const meets = (min: number[], max: number[], maxT: number): boolean => {
+    let t0 = 0, t1 = maxT;
+    if (px0) { if (ox < min[0] || ox > max[0]) return false; }
+    else {
+      let a = (min[0] - ox) * ix, b = (max[0] - ox) * ix;
+      if (a > b) { const c = a; a = b; b = c; }
+      if (a > t0) t0 = a;
+      if (b < t1) t1 = b;
+      if (t0 > t1) return false;
+    }
+    if (py0) { if (oy < min[1] || oy > max[1]) return false; }
+    else {
+      let a = (min[1] - oy) * iy, b = (max[1] - oy) * iy;
+      if (a > b) { const c = a; a = b; b = c; }
+      if (a > t0) t0 = a;
+      if (b < t1) t1 = b;
+      if (t0 > t1) return false;
+    }
+    if (pz0) { if (oz < min[2] || oz > max[2]) return false; }
+    else {
+      let a = (min[2] - oz) * iz, b = (max[2] - oz) * iz;
+      if (a > b) { const c = a; a = b; b = c; }
+      if (a > t0) t0 = a;
+      if (b < t1) t1 = b;
+      if (t0 > t1) return false;
+    }
+    return true;
+  };
+  let stack = hitStack, top = 0;
+  stack[top++] = s.tree;
   let best = toT;
   let found = false;
   let enters = false;
-  while (stack.length) {
-    const nd = stack.pop()!;
-    if (!nd.count || !rayMeetsBox(o, d, nd.min, nd.max, best)) continue;
+  while (top) {
+    const nd = stack[--top];
+    if (!nd.count || !meets(nd.min, nd.max, best)) continue;
     if (nd.left) {
-      stack.push(nd.left, nd.right!);
+      if (top + 2 > stack.length) hitStack = stack = stack.concat(new Array(stack.length));
+      stack[top++] = nd.left;
+      stack[top++] = nd.right!;
       continue;
     }
     for (let j = nd.first; j < nd.first + nd.count; j++) {
@@ -128,15 +168,15 @@ function nearestHit(s: Shape, o: number[], d: number[], fromT: number, toT: numb
       // Möller–Trumbore, both faces
       const e1x = tr[i + 3] - tr[i], e1y = tr[i + 4] - tr[i + 1], e1z = tr[i + 5] - tr[i + 2];
       const e2x = tr[i + 6] - tr[i], e2y = tr[i + 7] - tr[i + 1], e2z = tr[i + 8] - tr[i + 2];
-      const px = d[1] * e2z - d[2] * e2y, py = d[2] * e2x - d[0] * e2z, pz = d[0] * e2y - d[1] * e2x;
-      const det = e1x * px + e1y * py + e1z * pz;
+      const qx0 = dy * e2z - dz * e2y, qy0 = dz * e2x - dx * e2z, qz0 = dx * e2y - dy * e2x;
+      const det = e1x * qx0 + e1y * qy0 + e1z * qz0;
       if (Math.abs(det) < 1e-9) continue;
       const inv = 1 / det;
-      const sx = o[0] - tr[i], sy = o[1] - tr[i + 1], sz = o[2] - tr[i + 2];
-      const u = (sx * px + sy * py + sz * pz) * inv;
+      const sx = ox - tr[i], sy = oy - tr[i + 1], sz = oz - tr[i + 2];
+      const u = (sx * qx0 + sy * qy0 + sz * qz0) * inv;
       if (u < 0 || u > 1) continue;
       const qx = sy * e1z - sz * e1y, qy = sz * e1x - sx * e1z, qz = sx * e1y - sy * e1x;
-      const v = (d[0] * qx + d[1] * qy + d[2] * qz) * inv;
+      const v = (dx * qx + dy * qy + dz * qz) * inv;
       if (v < 0 || u + v > 1) continue;
       const t = (e2x * qx + e2y * qy + e2z * qz) * inv;
       if (t > fromT && t <= best) {
@@ -158,11 +198,35 @@ const MIN_WALL = 0.8;
  * shape's material: it goes in, and stays in for more than a hair. Grazing a
  * surface tessellated a little differently (parts in contact) goes in and straight out.
  */
-function passesThrough(s: Shape, o: number[], d: number[], fromT: number, toT: number): boolean {
-  const hit = nearestHit(s, o, d, fromT, toT);
-  if (!hit.enters || !Number.isFinite(hit.t)) return false;
-  const out = nearestHit(s, o, d, hit.t + 1e-4, hit.t + MIN_WALL * 4);
-  return out.t - hit.t > MIN_WALL;
+export function passesThrough(s: Shape, o: number[], d: number[], fromT: number, toT: number, contactTolerance = CONTACT, joint?: JointContact): boolean {
+  const touching = (lo: number, hi: number): boolean =>
+    segmentTouchesSurface(s, o, d, lo, hi, contactTolerance) || !!(joint &&
+      inJointContact(joint, o, d, lo, hi) && segmentTouchesSurface(s, o, d, lo, hi, joint.tolerance, joint.normalRatio));
+  let cursor = fromT;
+  // Inspect subsequent walls too. The old first-hit-only test missed a thick
+  // wall after a grazing contact, and ignored a point that started in material.
+  for (let crossing = 0; crossing < 64 && cursor < toT; crossing++) {
+    const hit = nearestHit(s, o, d, cursor, toT);
+    if (!Number.isFinite(hit.t)) {
+      // A short segment entirely INSIDE a solid has no boundary hit. Look
+      // beyond the endpoint to distinguish it from a segment in free space.
+      const ahead = nearestHit(s, o, d, cursor, Infinity);
+      return Number.isFinite(ahead.t) && !ahead.enters &&
+        !touching(cursor, toT);
+    }
+    if (!hit.enters) {
+      if (hit.t - cursor > MIN_WALL && !touching(cursor, hit.t)) return true;
+      cursor = hit.t + 1e-4;
+      continue;
+    }
+    const out = nearestHit(s, o, d, hit.t + 1e-4, toT);
+    const end = Number.isFinite(out.t) ? out.t : toT;
+    if (end - hit.t > MIN_WALL && !touching(hit.t, end)) return true;
+    if (!Number.isFinite(out.t)) return false;
+    cursor = out.t + 1e-4;
+  }
+  // Unusually complicated geometry is not certified as clear after a budget cap.
+  return cursor < toT;
 }
 
 export type Placed = { shape: Shape; world: THREE.Matrix4; box: Box };
@@ -183,12 +247,20 @@ function clearDistance(a: Box, b: Box, d: number[]): number {
   return Math.max(0, best);
 }
 
+/** How far along `d` a sweep between these boxes looks (box clearance plus stud reach). */
+export function sweepReach(a: Box, b: Box, d: readonly number[]): number {
+  return clearDistance(a, b, d as number[]) + STUD_REACH;
+}
+
 /** points of `from` (its own space), moved into `into`'s space, swept along d (world) — count hits */
-function sweepHits(from: Placed, into: Placed, d: number[], maxT: number, toLocal: THREE.Matrix4, intoInv: THREE.Matrix4, limit: number): number {
+function sweepHits(from: Placed, into: Placed, d: number[], maxT: number, toLocal: THREE.Matrix4, intoInv: THREE.Matrix4, limit: number, joint?: JointContact): number {
   const m = toLocal.elements;
   const w = intoInv.elements;
   // the direction in `into`'s space (no translation; length kept so t stays in world LDU)
   const dl = [w[0] * d[0] + w[4] * d[1] + w[8] * d[2], w[1] * d[0] + w[5] * d[1] + w[9] * d[2], w[2] * d[0] + w[6] * d[1] + w[10] * d[2]];
+  // Keep the tolerance in world LDU even for scaled/sheared imported parts.
+  const scale = maximumLinearScale(into.world.elements);
+  const contactTolerance = Number.isFinite(scale) && scale > 0 ? CONTACT / scale : 0;
   const p = from.shape.points;
   const tree = into.shape.tree;
   let hits = 0;
@@ -198,11 +270,26 @@ function sweepHits(from: Placed, into: Placed, d: number[], maxT: number, toLoca
     o[1] = m[1] * p[i] + m[5] * p[i + 1] + m[9] * p[i + 2] + m[13];
     o[2] = m[2] * p[i] + m[6] * p[i + 1] + m[10] * p[i + 2] + m[14];
     if (!rayMeetsBox(o, dl, tree.min, tree.max, maxT)) continue;
-    if (passesThrough(into.shape, o, dl, CONTACT, maxT) && ++hits > limit) return hits;
+    if (passesThrough(into.shape, o, dl, maxT <= CONTACT ? 0 : CONTACT, maxT, contactTolerance, joint) && ++hits > limit) return hits;
   }
   return hits;
 }
 
+
+/** Actual finite translational sweep, used only after the AABB broad phase.
+ * Both surfaces are sampled, with no connector percentage allowance. Rotating
+ * intervals are NOT certified by this function. It remains a mesh-sample test.
+ */
+export function translationClear(piece: Placed, neighbour: Placed, delta: Way): boolean {
+  const length = Math.hypot(...delta);
+  if (!Number.isFinite(length) || length < 1e-7 || !piece.shape.points.length || !neighbour.shape.points.length) return false;
+  const d = delta.map((v) => v / length);
+  const inv = neighbour.world.clone().invert();
+  const rel = inv.clone().multiply(piece.world);
+  if (sweepHits(piece, neighbour, d, length, rel, inv, 0)) return false;
+  inv.copy(piece.world).invert(); rel.multiplyMatrices(inv, neighbour.world);
+  return sweepHits(neighbour, piece, d.map((v) => -v), length, rel, inv, 0) === 0;
+}
 
 /**
  * How much `piece` has to pass through its neighbours to leave its built spot along
@@ -213,24 +300,30 @@ function sweepHits(from: Placed, into: Placed, d: number[], maxT: number, toLoca
  * the right way scores low rather than 0, and a wrong way pushes a whole feature
  * (a peg, a stud, a wall) through and scores far higher. Infinity once above `cap`.
  */
-export function crossings(piece: Placed, neighbours: Placed[], d: Way, scratch: { inv: THREE.Matrix4; rel: THREE.Matrix4 }, cap = BLOCKED): number {
+export function crossings(piece: Placed, neighbours: Placed[], d: Way, scratch: { inv: THREE.Matrix4; rel: THREE.Matrix4 }, cap = BLOCKED, maxDistance = Infinity, joint?: JointPair): number {
+  if (!(maxDistance > 0) || Number.isNaN(maxDistance) || !Number.isFinite(cap) || cap < 0 ||
+      d.length !== 3 || !d.every(Number.isFinite) || Math.abs(Math.hypot(...d) - 1) > 1e-6) return Infinity;
   let total = 0;
   const ownPoints = piece.shape.points.length / 3;
+  if (!ownPoints || neighbours.some((n) => !n.shape.points.length)) return Infinity;
   for (const n of neighbours) {
     // a little past box clearance: studs and pins stick out of the body boxes
-    const maxT = clearDistance(piece.box, n.box, d) + STUD_REACH;
-    if (maxT <= STUD_REACH) continue;
+    const clearance = clearDistance(piece.box, n.box, d);
+    if (clearance <= 0) continue;
+    // Certify the segment actually flown, not an unperformed continuation.
+    // Keep the clearance check separate: a short entry must NOT bypass testing.
+    const maxT = Math.min(clearance + STUD_REACH, maxDistance);
     // piece points → neighbour space, moving along d
     scratch.inv.copy(n.world).invert();
     scratch.rel.multiplyMatrices(scratch.inv, piece.world);
-    const a = sweepHits(piece, n, d, maxT, scratch.rel, scratch.inv, Math.ceil((cap - total) * ownPoints)) / ownPoints;
+    const a = sweepHits(piece, n, d, maxT, scratch.rel, scratch.inv, Math.ceil((cap - total) * ownPoints), joint?.neighbour) / ownPoints;
     total += a;
     if (total > cap) return Infinity;
     // neighbour points → piece space, moving along −d (the same relative motion)
     const theirPoints = n.shape.points.length / 3;
     scratch.inv.copy(piece.world).invert();
     scratch.rel.multiplyMatrices(scratch.inv, n.world);
-    total += sweepHits(n, piece, [-d[0], -d[1], -d[2]], maxT, scratch.rel, scratch.inv, Math.ceil((cap - total) * theirPoints)) / theirPoints;
+    total += sweepHits(n, piece, [-d[0], -d[1], -d[2]], maxT, scratch.rel, scratch.inv, Math.ceil((cap - total) * theirPoints), joint?.piece) / theirPoints;
     if (total > cap) return Infinity;
   }
   return total;
@@ -256,7 +349,7 @@ export const UP: Way = [0, -1, 0];
 
 /**
  * The ways to try for a piece at `world`, in order: `preferred` first, then the
- * piece's own axes (a tilted hand's wrist peg), never from below the floor.
+ * piece's own axes (a tilted hand's wrist peg), including tilted axes; the route planner checks actual floor clearance.
  */
 export function waysFor(world: THREE.Matrix4, preferred: Way[]): Way[] {
   const e = world.elements;
@@ -265,7 +358,7 @@ export function waysFor(world: THREE.Matrix4, preferred: Way[]): Way[] {
     const len = Math.hypot(e[c], e[c + 1], e[c + 2]) || 1;
     for (const s of [1, -1]) {
       const w: Way = [(s * e[c]) / len, (s * e[c + 1]) / len, (s * e[c + 2]) / len];
-      if (w[1] > 0.2 || ways.some((o) => o[0] * w[0] + o[1] * w[1] + o[2] * w[2] > 0.995)) continue;
+      if (ways.some((o) => o[0] * w[0] + o[1] * w[1] + o[2] * w[2] > 1 - 1e-10)) continue;
       ways.push(w);
     }
   }
@@ -279,10 +372,9 @@ const SIDES: Way[] = [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
  * scoring at most CLEAR; the earliest that is about as good as the best leads.
  */
 export function rankWays(piece: Placed, neighbours: Placed[], ways: Way[], scratch = { inv: new THREE.Matrix4(), rel: new THREE.Matrix4() }): Way[] {
-  // the first way already about as clean as can be leads whatever the rest score
-  // (most bricks: straight down), so the rest are scored only when needed
-  if (ways.length && crossings(piece, neighbours, ways[0], scratch, AS_GOOD) <= AS_GOOD) return [ways[0]];
-  const scored = ways.map((w) => ({ w, s: neighbours.length ? crossings(piece, neighbours, w, scratch) : 0 })).filter((x) => x.s <= CLEAR);
+  // Keep alternative clean directions: the preferred insertion may be clear
+  // locally while its approach corridor is blocked by a distant overhang.
+  const scored = ways.map((w) => ({ w, s: neighbours.length ? crossings(piece, neighbours, w, scratch, CLEAR) : 0 })).filter((x) => x.s <= CLEAR);
   if (!scored.length) return [];
   const best = Math.min(...scored.map((x) => x.s));
   const lead = scored.find((x) => x.s <= best + AS_GOOD)!;
@@ -295,3 +387,34 @@ export function canLeave(piece: Placed, neighbours: Placed[], scratch = { inv: n
   return waysFor(piece.world, [UP, ...SIDES]).some((w) => crossings(piece, neighbours, w, scratch, CLEAR) <= CLEAR);
 }
 
+
+/**
+ * Hand-made LDraw files often place a part up to a unit off the stud grid, so it
+ * cuts about 1 LDU into a neighbour it only touches in the real set. A route is
+ * accepted when it is clear with the piece nudged this far ACROSS the way it moves
+ * (never along it), so authoring slop is forgiven but a part never passes through
+ * another one.
+ */
+export const AUTHORING_SLOP = 1;
+
+/** Sideways nudges to retry a blocked route with: across `d`, up to AUTHORING_SLOP, nearest first. */
+export function slopNudges(d: readonly number[]): Way[] {
+  const n = new THREE.Vector3(...d).normalize();
+  const helper = Math.abs(n.x) < 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
+  const a = new THREE.Vector3().crossVectors(n, helper).normalize();
+  const b = new THREE.Vector3().crossVectors(n, a).normalize();
+  const out: Way[] = [];
+  for (const s of [0.5, AUTHORING_SLOP])
+    for (const [u, v] of [[1, 0], [-1, 0], [0, 1], [0, -1], [Math.SQRT1_2, Math.SQRT1_2], [Math.SQRT1_2, -Math.SQRT1_2], [-Math.SQRT1_2, Math.SQRT1_2], [-Math.SQRT1_2, -Math.SQRT1_2]])
+      out.push([s * (u * a.x + v * b.x), s * (u * a.y + v * b.y), s * (u * a.z + v * b.z)]);
+  return out;
+}
+
+/** The same placed piece moved by `offset` (world LDU). */
+export function nudged(p: Placed, offset: readonly number[]): Placed {
+  const world = p.world.clone();
+  world.elements[12] += offset[0];
+  world.elements[13] += offset[1];
+  world.elements[14] += offset[2];
+  return { shape: p.shape, world, box: { min: p.box.min.map((v, k) => v + offset[k]) as Box['min'], max: p.box.max.map((v, k) => v + offset[k]) as Box['max'] } };
+}

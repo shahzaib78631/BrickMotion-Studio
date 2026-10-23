@@ -4,14 +4,12 @@ import type { Box } from '../ldraw/flatten';
 import type { PartMetrics } from '../ldraw/metrics';
 import type { Vec3 } from '../ldraw/parse';
 import { gridToPlacement, type Placement } from '../plan/placement';
-import { isGrid, isSub, type Plan, type PlanItem, type Step } from '../plan/types';
+import { isGrid, isSub, type Plan, type PlanItem, type Step, type AssemblyHints } from '../plan/types';
 
 export type Metrics = (part: string) => PartMetrics;
 
-type NodeBase = { itemId: string; model: string; step: number; order: number; pauseAfter?: number; local: Placement };
-export type ANode =
-  | (NodeBase & { kind: 'piece'; part: string; color: number; placeholder: boolean; body: Box; grid: boolean })
-  | (NodeBase & { kind: 'sub'; submodel: string; children: ANode[]; body: Box });
+import type { ANode } from './assemblyTypes';
+export type { ANode } from './assemblyTypes';
 
 export type Instance = {
   key: string;
@@ -96,6 +94,7 @@ export function assemble(plan: Plan, metrics: Metrics, colors: Map<number, Color
       step.pieces.forEach((item, order) => {
         const itemId = item.id ?? `${model}:${si}:${order}`;
         const pauseAfter = step.pauseAfter;
+        const autoStep = step.auto || undefined;
         if (isSub(item)) {
           const def = plan.submodels?.[item.submodel];
           if (!def) {
@@ -108,7 +107,7 @@ export function assemble(plan: Plan, metrics: Metrics, colors: Map<number, Color
           }
           const children = buildModel(item.submodel, def.steps, [...stack, item.submodel]);
           const body = subBody(item.submodel, children);
-          nodes.push({ kind: 'sub', itemId, model, step: si, order, pauseAfter, submodel: item.submodel, children, body, local: itemPlacement(item, body) });
+          nodes.push({ kind: 'sub', assembly: item.assembly, itemId, model, step: si, order, pauseAfter, autoStep, submodel: item.submodel, children, body, local: itemPlacement(item, body) });
           return;
         }
         const m = metrics(item.part);
@@ -118,7 +117,7 @@ export function assemble(plan: Plan, metrics: Metrics, colors: Map<number, Color
           if (c === undefined) report({ kind: 'unknown-color', model, itemId, detail: String(item.color) });
           else color = c;
         }
-        nodes.push({ kind: 'piece', itemId, model, step: si, order, pauseAfter, part: item.part, color, placeholder: m.placeholder, body: m.body, grid: isGrid(item), local: itemPlacement(item, m.body) });
+        nodes.push({ kind: 'piece', assembly: item.assembly, itemId, model, step: si, order, pauseAfter, autoStep, part: item.part, color, placeholder: m.placeholder, body: m.body, grid: isGrid(item), local: itemPlacement(item, m.body) });
       });
     });
     return nodes;

@@ -4,9 +4,11 @@ import { buildPartGeometry, type PartGeometry } from '../ldraw/geometry';
 import { browserFetchText, PartLibrary, type FetchText } from '../ldraw/library';
 import { measurePart, type PartMetrics } from '../ldraw/metrics';
 import { normalizeName, parseLDraw, type LDrawFile } from '../ldraw/parse';
+import { shadowLookupFrom, type ShadowLookup } from '../ldraw/shadow';
 
 /** App-wide cache of LDraw parts: colors, catalog, measurements and geometry. */
 let library = new PartLibrary(browserFetchText);
+let shadow: ShadowLookup | undefined;
 let colors = new Map<number, ColorDef>();
 let catalog: CatalogEntry[] = [];
 let catalogById = new Map<string, CatalogEntry>();
@@ -15,7 +17,7 @@ const geometry = new Map<string, PartGeometry | null>();
 const pending = new Map<string, Promise<void>>();
 
 export async function initPartService(fetchText: FetchText = browserFetchText): Promise<void> {
-  library = new PartLibrary(fetchText);
+  library = new PartLibrary(fetchText, shadow);
   const cfg = await fetchText('LDConfig.ldr');
   if (!cfg) throw new Error('LDraw library not found. Run "npm run setup" first.');
   colors = parseLDConfig(cfg);
@@ -26,7 +28,25 @@ export async function initPartService(fetchText: FetchText = browserFetchText): 
     catalog = [];
   }
   catalogById = new Map(catalog.map((e) => [e.id, e]));
+  // Optional connector metadata (npm run setup:shadow). Without it parts simply have no snaps.
+  try {
+    const res = await fetch('/data/ldcad-shadow.json');
+    if (res.ok) setShadowPack(((await res.json()) as { files: Record<string, string> }).files);
+  } catch {
+    /* not installed */
+  }
 }
+
+/** Installs LDCad shadow-library connector metadata (file name → snap lines); parts are re-measured. */
+export function setShadowPack(files: Record<string, string> | undefined): void {
+  shadow = files ? shadowLookupFrom(files) : undefined;
+  library.setShadow(shadow);
+  metrics.clear();
+  geometry.clear();
+  pending.clear();
+}
+
+export const hasShadowPack = () => !!shadow;
 
 const registered = new Map<string, string>();
 
@@ -67,6 +87,10 @@ export async function ensureParts(ids: string[]): Promise<void> {
       if (!p) {
         p = loadOne(id);
         pending.set(id, p);
+        const request = p;
+        const part = id;
+        request.then(() => { if (pending.get(part) === request) pending.delete(part); },
+          () => { if (pending.get(part) === request) pending.delete(part); });
       }
       await p;
     }

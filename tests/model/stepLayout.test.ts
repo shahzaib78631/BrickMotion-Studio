@@ -14,7 +14,7 @@ beforeAll(async () => {
 const brick = (x: number, y: number, z: number): PlanItem => ({ part: '3001', color: 4, x, y, z, rot: 0 });
 const asm = () =>
   assemble(
-    ensureIds({ format: 'brickmotion-plan', version: 1, name: 't', steps: [{ pieces: [brick(0, 0, 0), brick(4, 0, 0)] }, { pieces: [brick(0, 3, 0), brick(2, 3, 0)] }] }),
+    ensureIds({ format: 'brickmotion-plan', version: 1, name: 't', steps: [{ pieces: [brick(0, 0, 0), brick(4, 0, 0)] }, { pieces: [brick(0, 3, 0), brick(4, 3, 0)] }] }),
     metrics,
     fixtureColors,
   );

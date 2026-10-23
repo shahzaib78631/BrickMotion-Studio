@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "setup": "tsx scripts/setup-data.ts"
+    "setup": "tsx scripts/setup-data.ts",
+    "setup:shadow": "tsx scripts/import-shadow-metadata.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.1.0",

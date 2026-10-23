@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { animOptions, useAppSettings } from './state/appSettings';
 import { initPartService } from './state/partService';
 import { initPersistence } from './state/persistence';
@@ -72,15 +72,17 @@ function Studio() {
 
   // The timeline follows the model on screen: open a submodel and its own build
   // animation plays, scrubs and exports on its own. '' is the whole set.
-  const opts = useMemo(
-    () => animOptions(video),
-    [video.targetSeconds, video.heroOrbit, video.mode, video.introSeconds, video.buildSeconds, video.outroSeconds, video.bottomUp],
-  );
-  const { timeline, planning, error: planError } = useTimeline(model.ready && model.view.instances.length > 0, model.plan, editingModel, opts);
+  // useTimeline compares the serialized options. Recompute this small object so
+  // a new planner/support setting can never be omitted from a memo dependency list.
+  const opts = animOptions(video);
+  const { timeline, planning, error: planError, progress, retry } = useTimeline(model.ready && model.view.instances.length > 0, model.plan, editingModel, opts);
   // a different model has a different timeline: start it from the beginning
   useEffect(() => usePlayback.getState().set({ t: 0, playing: false, stopAt: null, loopFrom: null }), [editingModel]);
   const exportCurrent = () => setExportJobs([{ model: editingModel, label: editingModel || 'Main model' }]);
-  const canPreview = model.ready && model.view.instances.length > 0 && timeline !== null;
+  const canPreview = model.ready && model.view.instances.length > 0 && timeline !== null && !planning && !planError;
+  useEffect(() => {
+    if (planning || planError || model.error) usePlayback.getState().set({ playing: false });
+  }, [planning, planError, model.error]);
 
   const resize = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
@@ -216,7 +218,8 @@ function Studio() {
           <Inspector timeline={timeline} checks={model.warnings.length} stepCard={mode === 'edit' ? <StepCallout model={model} timeline={timeline} /> : null} />
         </div>
         <div className="nx-resizer" onPointerDown={resize} title="Drag to resize the timeline" />
-        <BuildTimeline timeline={timeline} planning={planning} />
+        <BuildTimeline timeline={timeline} planning={planning} error={model.error || planError}
+          progress={progress} loading={!model.ready && !model.error} onRetry={model.error ? undefined : retry} />
       </div>
       {dialog === 'projects' && <ProjectsDialog onClose={() => setDialog(null)} />}
       {dialog === 'about' && <AboutDialog onClose={() => setDialog(null)} />}

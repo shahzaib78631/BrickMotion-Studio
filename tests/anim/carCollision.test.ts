@@ -9,6 +9,7 @@ import { assemble, transformBox, type Metrics } from "../../src/model/assemble";
 import { ensureIds } from "../../src/plan/ids";
 import type { Plan } from "../../src/plan/types";
 import type { ColorDef } from "../../src/ldraw/colors";
+import { shadowLookupFrom } from "../../src/ldraw/shadow";
 
 // Real 61-piece LDraw demo car, including its hollow wheel rims and tyres.
 // This is a trimmed, redistributable copy of the LDraw files that accompanied
@@ -49,13 +50,16 @@ async function carFixture(): Promise<{
 }> {
   const text = readFileSync(join(root, "models", "car.ldr"), "utf8");
   const plan = ensureIds(importLDraw(text, "car.ldr"));
+  // Connector metadata, when installed (npm run setup:shadow), as the app uses it.
+  const pack = join(__dirname, "..", "..", "public", "data", "ldcad-shadow.json");
+  const shadow = existsSync(pack) ? shadowLookupFrom(JSON.parse(readFileSync(pack, "utf8")).files) : undefined;
   const lib = new PartLibrary(async (name) => {
     for (const prefix of ["parts", "p", "models", ""]) {
       const file = join(root, prefix, name);
       if (existsSync(file)) return readFileSync(file, "utf8");
     }
     return null;
-  });
+  }, shadow);
   const ids = [
     ...new Set(
       plan.steps.flatMap((s) =>
@@ -85,7 +89,9 @@ test.skipIf(!hasCar)("LDraw car tyres enter from the axle side and NEVER go thro
     const nearAxle = poseAt(tl, unit.start + unit.dur * 0.73)(tyre.key)!;
     const sideX = nearAxle.elements[12];
     const finalX = tyre.world.elements[12];
-    expect(Math.abs(sideX)).toBeGreaterThan(Math.abs(finalX) + 20);
+    // With the shadow library the tyre arrives already on its rim (they are paired
+    // as one wheel), so it only has to come in along the axle, clear of the holder.
+    expect(Math.abs(sideX)).toBeGreaterThan(Math.abs(finalX) + 10);
     for (let f = 0; f <= 120; f++) {
       const ratio = f / 120;
       const t = unit.start + unit.dur * ratio;
@@ -95,6 +101,8 @@ test.skipIf(!hasCar)("LDraw car tyres enter from the axle side and NEVER go thro
       const current = transformBox(metrics(tyre.part).body, tyrePose!);
       for (const other of asm.instances) {
         if (other.key === tyre.key) continue;
+        // its own rim flies with it as one rigid wheel
+        if (tl.tracks.get(other.key)?.moves[0].unit === move.unit) continue;
         // LDraw bricks genuinely fit together (e.g. rim inside the tyre).
         // Bounding boxes of holes/pegs therefore overlap at their targets;
         // that is permissible ONLY during the final aligned insertion.

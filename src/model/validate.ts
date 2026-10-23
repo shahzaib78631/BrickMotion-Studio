@@ -58,10 +58,19 @@ export function validate(asm: Assembly, names: (part: string) => string = (p) =>
   }
 
   if (inst.length) {
-    const ground = Math.max(...inst.map((i) => i.worldBox.max[1]));
+    // Each placed submodel is its own object resting on its own lowest point, so a
+    // minifig standing a few LDU lower than a truck's tyres does not make the truck
+    // float. Loose main-model pieces share the overall ground.
+    const objectOf = (i: (typeof inst)[number]) => (i.key.includes('/') ? i.key.slice(0, i.key.indexOf('/')) : '');
+    const overall = Math.max(...inst.map((i) => i.worldBox.max[1]));
+    const ground = new Map<string, number>();
+    for (const i of inst) {
+      const o = objectOf(i);
+      if (o) ground.set(o, Math.max(ground.get(o) ?? -Infinity, i.worldBox.max[1]));
+    }
     const grounded = new Set<number>();
     inst.forEach((i, idx) => {
-      if (ground - i.worldBox.max[1] <= CONTACT_GAP) grounded.add(find(idx));
+      if ((ground.get(objectOf(i)) ?? overall) - i.worldBox.max[1] <= CONTACT_GAP) grounded.add(find(idx));
     });
     inst.forEach((i, idx) => {
       if (!grounded.has(find(idx)) && !i.placeholder)

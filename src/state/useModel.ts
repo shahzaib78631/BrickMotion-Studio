@@ -29,6 +29,7 @@ export type ModelState = {
   /** warnings for the shown model */
   warnings: Warning[];
   ready: boolean;
+  error?: string;
 };
 
 const EMPTY: Assembly = { nodes: [], instances: [], bounds: null, problems: [] };
@@ -54,25 +55,32 @@ export function useModel(): ModelState {
   const plan = useStudio((s) => s.plan);
   const editingModel = useStudio((s) => s.editingModel);
   const [base, setBase] = useState<Base | null>(null);
+  const [failure, setFailure] = useState<{ plan: Plan; message: string } | null>(null);
   useEffect(() => {
     let cancelled = false;
-    registerInlineParts(plan.parts);
-    ensureParts(allPartIds(plan)).then(() => {
+    setFailure(null);
+    Promise.resolve().then(() => {
+      registerInlineParts(plan.parts);
+      return ensureParts(allPartIds(plan));
+    }).then(() => {
       if (cancelled) return;
       const assembly = assemble(plan, metricsOf, getColors());
       setBase({ plan, assembly, warnings: validate(assembly, partName) });
+    }).catch((error: unknown) => {
+      if (!cancelled) setFailure({ plan, message: error instanceof Error ? error.message : String(error) });
     });
     return () => {
       cancelled = true;
     };
   }, [plan]);
   return useMemo<ModelState>(() => {
-    if (!base) return { plan, assembly: EMPTY, view: EMPTY, viewPlan: plan, warnings: [], ready: false };
+    const error = failure?.plan === plan ? failure.message : '';
+    if (!base) return { plan, assembly: EMPTY, view: EMPTY, viewPlan: plan, warnings: [], ready: false, error };
     const viewPlan = scopedPlan(base.plan, editingModel);
     const view = editingModel ? assemble(viewPlan, metricsOf, getColors()) : base.assembly;
     const warnings = editingModel ? base.warnings.filter((w) => w.model === editingModel) : base.warnings;
-    return { plan: base.plan, assembly: base.assembly, view, viewPlan, warnings, ready: true };
+    return { plan: base.plan, assembly: base.assembly, view, viewPlan, warnings, ready: base.plan === plan && !error, error };
     // `plan` only matters before the first assembly; afterwards `base` carries it
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [base, editingModel]);
+  }, [base, editingModel, plan, failure]);
 }

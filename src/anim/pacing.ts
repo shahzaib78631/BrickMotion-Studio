@@ -3,10 +3,22 @@ import { clamp } from './easing';
 export type ArrivalMode = 'piece' | 'batch' | 'step';
 export type AnimOptions = {
   targetSeconds: number; heroOrbit: boolean; mode?: ArrivalMode;
+  /** V2 is explicit opt-in until articulated/flexible model coverage is ready. */
+  planner?: 'legacy' | 'construction-v2';
+  constructionMaxStates?: number;
+  constructionMaxMilliseconds?: number;
+  constructionSupport?: 'fixture' | 'table';
+  constructionMechanicalSubassemblies?: boolean;
   /** Optional clip-length overrides, seconds. Null follows the automatic video length. */
   introSeconds?: number | null; buildSeconds?: number | null; outroSeconds?: number | null;
-  /** Within a step, place each piece after what it rests on (default). False plays the plan order as is. */
+  /** Infer geometric support dependencies (default). False disables that inference, not explicit or anatomical dependencies. */
   bottomUp?: boolean;
+  /** Stage supported elastic tyre/rim pairs already joined. Default true. False requires rigid routes for every separate piece. */
+  preassembleKnownWheels?: boolean;
+  /** Bounded re-planning of blocked access order. 1 disables reordering; maximum 32. */
+  accessSearchAttempts?: number;
+  /** Total additional search budget after a failed original order (default 4000 ms, maximum 10000). */
+  accessSearchMilliseconds?: number;
 };
 export type Pacing = {
   mode: ArrivalMode;

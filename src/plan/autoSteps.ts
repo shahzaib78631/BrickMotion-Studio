@@ -53,7 +53,7 @@ export function autoSplitSteps(plan: Plan, model: string, metrics: Metrics, colo
   const out: Step[] = [];
   let cur: PlanItem[] = [];
   const flush = () => {
-    if (cur.length) out.push({ pieces: cur });
+    if (cur.length) out.push({ pieces: cur, auto: true });
     cur = [];
   };
   for (const layer of layers) {

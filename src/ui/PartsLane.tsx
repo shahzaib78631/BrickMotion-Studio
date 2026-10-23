@@ -1,8 +1,8 @@
-import { useState, type DragEvent as RDragEvent, type PointerEvent as RPointerEvent } from 'react';
-import { dropTarget, type PartClip } from '../anim/partClips';
+import { useEffect, useState, type DragEvent as RDragEvent, type PointerEvent as RPointerEvent } from 'react';
+import { dropTarget, pulledAhead, type PartClip } from '../anim/partClips';
 import type { Timeline } from '../anim/timeline';
 import { resolveColor } from '../ldraw/colors';
-import { moveItemTo } from '../plan/ops';
+import { modelSteps, moveItemTo } from '../plan/ops';
 import type { Step } from '../plan/types';
 import { addPart } from '../state/editing';
 import { getColors, partName } from '../state/partService';
@@ -21,6 +21,12 @@ const DRAG_START_PX = 4;
 export const partsLaneHeight = (rows: number) => rows * PART_ROW + LANE_PAD * 2;
 
 type Marker = { x: number; label: string };
+
+/**
+ * The last clip dropped, kept until the replanned timeline arrives (the lane is not
+ * shown while the build is planned again): which pieces were put after it.
+ */
+let pendingDrop: { model: string; id: string; later: Set<string>; tl: Timeline } | null = null;
 
 /**
  * One clip per piece of the open model, spanning its flight. Click to select a piece
@@ -50,8 +56,24 @@ export function PartsLane({
   const selected = new Set(selection.model === editingModel ? selection.ids : []);
   const [drag, setDrag] = useState<{ id: string; dx: number } | null>(null);
   const [marker, setMarker] = useState<Marker | null>(null);
+  const [note, setNote] = useState<{ text: string; at: number } | null>(null);
   const colors = getColors();
   const st = useStudio.getState;
+  const label = (c: PartClip) => c.submodel ?? c.part ?? 'piece';
+
+  // A dropped clip can't always go where it was dropped: what it rests on, or needs
+  // room from, is still built first. Say so instead of silently reshuffling.
+  useEffect(() => {
+    const drop = pendingDrop;
+    if (!drop || drop.tl === tl || drop.model !== editingModel || !clips.some((c) => c.id === drop.id)) return;
+    pendingDrop = null;
+    const moved = clips.find((c) => c.id === drop.id)!;
+    const ahead = pulledAhead(clips, drop.id, drop.later);
+    if (!ahead.length) return setNote(null);
+    const names = [...new Set(ahead.map(label))];
+    const list = names.length > 3 ? `${names.slice(0, 3).join(', ')} and ${names.length - 3} more` : names.join(', ');
+    setNote({ text: `${label(moved)} can only go on after ${list}, so ${ahead.length === 1 ? 'that piece still comes' : 'those pieces still come'} first.`, at: moved.start });
+  }, [clips, editingModel, tl]);
 
   const markerAt = (t: number, skip?: string): { target: { step: number; index: number }; marker: Marker } | null => {
     const target = dropTarget(tl, steps, clips, t, skip);
@@ -89,7 +111,16 @@ export function PartsLane({
       if (!last) return;
       const { step, index } = last.target;
       usePlayback.getState().set({ playing: false });
-      st().apply((p) => moveItemTo(p, st().editingModel, c.id, step, index));
+      const model = st().editingModel;
+      const before = st().plan;
+      st().apply((p) => moveItemTo(p, model, c.id, step, index));
+      const after = st().plan;
+      setNote(null);
+      if (after !== before) {
+        const pieces = modelSteps(after, model)[step]?.pieces ?? [];
+        const k = pieces.findIndex((i) => i.id === c.id);
+        pendingDrop = { model, id: c.id, later: new Set(pieces.slice(k + 1).map((i) => i.id).filter((id): id is string => !!id)), tl };
+      }
       st().select([c.id]);
       st().setCurrentStep(step);
     };
@@ -168,6 +199,12 @@ export function PartsLane({
         );
       })}
       {clips.length === 0 && <span className="nx-hint bm-empty">Drop parts here from the Parts panel.</span>}
+      {note && !marker && (
+        <span className="bm-part-note" role="status" style={{ left: X(note.at) }}>
+          {note.text}
+          <button type="button" aria-label="Dismiss" onClick={() => setNote(null)}><Ic name="x" /></button>
+        </span>
+      )}
       {marker && (
         <span className="bm-part-marker" style={{ left: marker.x }}>
           <b>{marker.label}</b>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { exportLDraw } from '../io/ldrawExport';
 import { planToJson, readPlanFile } from '../io/planFile';
+import { splitPlanComponents } from '../plan/components';
 import { ensureIds } from '../plan/ids';
 import { autoStepPlan, modelsWithoutSteps } from '../plan/autoSteps';
 import { ensureParts, getColors, metricsOf, registerInlineParts } from '../state/partService';
@@ -118,6 +119,8 @@ export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, ca
     if (modelsWithoutSteps(plan).length) {
       registerInlineParts(plan.parts);
       await ensureParts(allPartIds(plan));
+      // big step-less models (a train) build their bogies and roof aside first
+      plan = splitPlanComponents(plan, metricsOf, getColors()).plan;
       plan = autoStepPlan(plan, metricsOf, getColors()).plan;
     }
     st.setPlan(plan);

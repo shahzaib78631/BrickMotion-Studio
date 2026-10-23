@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { autoSplitSteps, LARGE_STEP } from '../plan/autoSteps';
+import { buildInComponents, canSplitComponents } from '../plan/components';
 import { modelSteps } from '../plan/ops';
 import { isSub, type Plan } from '../plan/types';
 import { getColors, metricsOf } from '../state/partService';
@@ -9,7 +10,7 @@ import type { ModelState } from '../state/useModel';
 import type { ExportJob } from './ExportDialog';
 import { Ic } from './icons';
 
-type Row = { name: string; depth: number; steps: number; direct: number; total: number; uses: number; bigStep: boolean; used: boolean };
+type Row = { name: string; depth: number; steps: number; direct: number; total: number; uses: number; bigStep: boolean; used: boolean; splittable: boolean };
 
 /** Main model first, then submodels in the order they are first built (nested ones indented); unused ones last. */
 export function modelOutline(plan: Plan): Row[] {
@@ -38,6 +39,7 @@ export function modelOutline(plan: Plan): Row[] {
       uses: uses.get(name) ?? 0,
       bigStep: filled.length === 1 && filled[0].pieces.length > LARGE_STEP,
       used,
+      splittable: canSplitComponents(plan, name),
     };
   };
   const rows: Row[] = [row('', 0, true)];
@@ -81,6 +83,12 @@ export function ModelsPanel({ model, onExport }: { model: ModelState; onExport(j
     useStudio.getState().apply((p) => autoSplitSteps(p, name, metricsOf, getColors()));
     open(name);
   };
+  const components = (name: string) => {
+    const r = buildInComponents(useStudio.getState().plan, name, metricsOf, getColors());
+    if (!r.components.length) return alert(`${label(name)} has no separate parts to build aside (no underside group or roof was found).`);
+    useStudio.getState().apply(() => r.plan);
+    open(name);
+  };
 
   return (
     <div className="nx-pane">
@@ -110,6 +118,11 @@ export function ModelsPanel({ model, onExport }: { model: ModelState; onExport(j
                 {r.bigStep && (
                   <button className="nx-icon" title={`All ${r.direct} parts are in one step. Split into bottom-up layer steps`} aria-label={`Auto-split ${label(r.name)} into steps`} onClick={() => split(r.name)}>
                     <Ic name="wand" />
+                  </button>
+                )}
+                {r.splittable && (
+                  <button className="nx-icon" title={`Build in components: the underside groups and the roof of ${label(r.name)} are built aside as their own submodels, then attached`} aria-label={`Build ${label(r.name)} in components`} disabled={!model.ready} onClick={() => components(r.name)}>
+                    <Ic name="components" />
                   </button>
                 )}
                 <button className="nx-icon" title={`Play ${label(r.name)}'s build on its own`} aria-label={`Play ${label(r.name)}`} disabled={!model.ready || r.total === 0} onClick={() => play(r.name)}>

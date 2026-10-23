@@ -1,4 +1,6 @@
 import type { LDrawFile, Mat3, Vec3 } from './parse';
+import type { StudConnector } from './connectors';
+import { ownSnaps, type ShadowLookup, type Snap } from './shadow';
 
 export type Box = { min: Vec3; max: Vec3 };
 
@@ -13,6 +15,11 @@ export type FlatPart = {
   /** bounds without stud geometry; null when the part has no non-stud geometry */
   bodyBox: Box | null;
   fullBox: Box | null;
+  /** Measured ordinary male studs, including those inside stug groups. */
+  studs?: StudConnector[];
+  /** LDCad shadow-library connectors (studs, holes, pins, axles, clips, hinges), part space */
+  snaps?: Snap[];
+  description?: string;
 };
 
 const MAX_DEPTH = 32;
@@ -52,8 +59,22 @@ export function baseName(file: string): string {
  * Flattens a part into triangles grouped by color. All sub-files must already be
  * available through `lookup`; missing ones are skipped (reported via `onMissing`).
  */
-export function flattenPart(id: string, root: LDrawFile, lookup: FileLookup, onMissing?: (name: string) => void): FlatPart {
-  const out: FlatPart = { id, tris: new Map(), doubleSided: new Map(), edges: [], bodyBox: null, fullBox: null };
+export function flattenPart(id: string, root: LDrawFile, lookup: FileLookup, onMissing?: (name: string) => void, shadow?: ShadowLookup): FlatPart {
+  const out: FlatPart = { id, tris: new Map(), doubleSided: new Map(), edges: [], bodyBox: null, fullBox: null, studs: [], description: root.description };
+  if (shadow) out.snaps = [];
+  /** A file's snaps, unless an including file's SNAP_CLEAR dropped them ('all' or by id). */
+  const collect = (name: string, m: Mat3, t: Vec3, dropped: 'all' | string[]) => {
+    if (!shadow || dropped === 'all') return;
+    for (const snap of ownSnaps(name, shadow, m, t))
+      if (!snap.id || !dropped.some((d) => d.toLowerCase() === snap.id!.toLowerCase())) out.snaps!.push(snap);
+  };
+  /** What a file's own SNAP_CLEAR adds to the drops for its sub-files. */
+  const dropsBelow = (name: string, dropped: 'all' | string[]): 'all' | string[] => {
+    if (!shadow || dropped === 'all') return dropped;
+    const info = shadow(name);
+    if (!info || info.clear === undefined) return dropped;
+    return info.clear === null ? 'all' : [...dropped, ...info.clear];
+  };
   const I: Mat3 = [1, 0, 0, 0, 1, 0, 0, 0, 1];
 
   const push = (map: Map<number, number[]>, color: number, pts: number[]) => {
@@ -62,8 +83,10 @@ export function flattenPart(id: string, root: LDrawFile, lookup: FileLookup, onM
     arr.push(...pts);
   };
 
-  const walk = (file: LDrawFile, m: Mat3, t: Vec3, color: number, invert: boolean, certifiedChain: boolean, inStud: boolean, depth: number) => {
+  const walk = (file: LDrawFile, m: Mat3, t: Vec3, color: number, invert: boolean, certifiedChain: boolean, inStud: boolean, depth: number, name: string, dropped: 'all' | string[]) => {
     if (depth > MAX_DEPTH) return;
+    collect(name, m, t, dropped);
+    const below = dropsBelow(name, dropped);
     const certified = certifiedChain && file.cmds.some((c) => c.t === 'bfc' && (c.cert === 'CCW' || c.cert === 'CW'));
     let winding: 'CCW' | 'CW' = 'CCW';
     for (const c of file.cmds) {
@@ -82,7 +105,13 @@ export function flattenPart(id: string, root: LDrawFile, lookup: FileLookup, onM
         const ct = apply(m, t, c.pos[0], c.pos[1], c.pos[2]);
         const cc = c.color === 16 ? color : c.color;
         const childInvert = invert !== c.invert; // matrix mirroring is handled via det(m) below
-        walk(child, cm, ct, cc, childInvert, certified, inStud || STUD_RE.test(baseName(c.file)), depth + 1);
+        // Only the ordinary solid/hollow TOP-stud primitives. stud3/stud4/etc.
+        // are underside structures and must not invent attachment dependencies.
+        if (!inStud && !childInvert && /^(?:stud|stud2)\.dat$/.test(baseName(c.file))) {
+          const radius = 6 * Math.max(Math.hypot(cm[0], cm[3], cm[6]), Math.hypot(cm[2], cm[5], cm[8]));
+          out.studs!.push({ base: [...ct], tip: apply(cm, ct, 0, -4, 0), radius });
+        }
+        walk(child, cm, ct, cc, childInvert, certified, inStud || STUD_RE.test(baseName(c.file)), depth + 1, c.file.trim().replace(/\\/g, '/').toLowerCase(), below);
         continue;
       }
       if (c.t === 'line') {
@@ -109,6 +138,6 @@ export function flattenPart(id: string, root: LDrawFile, lookup: FileLookup, onM
     }
   };
 
-  walk(root, I, [0, 0, 0], 16, false, true, false, 0);
+  walk(root, I, [0, 0, 0], 16, false, true, false, 0, `${id.toLowerCase()}.dat`, []);
   return out;
 }

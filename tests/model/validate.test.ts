@@ -74,3 +74,22 @@ test('imported (raw) pieces are trusted: no overlap between two raw pieces', () 
 test('a grid piece overlapping an imported piece is still reported', () => {
   expect(run([raw(0), brick(0, 0)]).map((x) => x.kind)).toEqual(['overlap']);
 });
+
+const sub = (name: string, x: number, y: number): PlanItem => ({ submodel: name, x, y, z: 0, rot: 0 });
+
+test('separate submodels each rest on their own lowest point', () => {
+  // A minifig beside a truck whose wheels sit one plate higher: neither floats.
+  const w = run([sub('truck', 0, 1), sub('fig', 10, 0)], {
+    truck: [brick(0, 0), brick(0, 3)],
+    fig: [brick(0, 0), brick(0, 3)],
+  });
+  expect(w).toEqual([]);
+});
+
+test('a piece hovering inside a submodel still floats', () => {
+  const w = run([sub('truck', 0, 1), sub('fig', 10, 0)], {
+    truck: [brick(0, 0), brick(0, 3), brick(0, 12)],
+    fig: [brick(0, 0)],
+  });
+  expect(w.map((x) => [x.kind, x.model])).toEqual([['floating', 'truck']]);
+});

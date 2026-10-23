@@ -1,10 +1,8 @@
 import * as THREE from 'three';
-import type { Move, Timeline, Track } from './timeline';
+import type { Timeline, Track } from './timeline';
 
-type EncMove = Omit<Move, 'from' | 'to' | 'rel'> & { from: number; to: number; rel: number };
-type EncTrack = Omit<Track, 'floor' | 'final' | 'moves'> & { floor: number; final: number; moves: EncMove[] };
-/** A timeline as plain data (structured-clone friendly). Matrices are shared through a table. */
-export type EncodedTimeline = Omit<Timeline, 'tracks'> & { mats: Float64Array; tracks: [string, EncTrack][] };
+import type { EncodedTimeline, EncTrack } from './timelineData';
+export type { EncodedTimeline } from './timelineData';
 
 export function encodeTimeline(tl: Timeline): EncodedTimeline {
   const index = new Map<THREE.Matrix4, number>();
@@ -29,7 +27,7 @@ export function encodeTimeline(tl: Timeline): EncodedTimeline {
         ctx: tr.ctx,
         floor: ref(tr.floor),
         final: ref(tr.final),
-        moves: tr.moves.map((mv) => ({ ...mv, from: ref(mv.from), to: ref(mv.to), rel: ref(mv.rel) })),
+        moves: tr.moves.map((mv) => ({ ...mv, from: ref(mv.from), to: ref(mv.to), rel: ref(mv.rel), posePath: mv.posePath?.map(ref) })),
       },
     ]);
   const mats = new Float64Array(list.length * 16);
@@ -53,7 +51,7 @@ export function decodeTimeline(enc: EncodedTimeline): Timeline {
       ctx: tr.ctx,
       floor: mat(tr.floor),
       final: mat(tr.final),
-      moves: tr.moves.map((mv) => ({ ...mv, from: mat(mv.from), to: mat(mv.to), rel: mv.rel < 0 ? null : mat(mv.rel) })),
+      moves: tr.moves.map((mv) => ({ ...mv, from: mat(mv.from), to: mat(mv.to), rel: mv.rel < 0 ? null : mat(mv.rel), posePath: mv.posePath?.map(mat) })),
     });
   const { mats: _m, tracks: _t, ...rest } = enc;
   return { ...rest, tracks };

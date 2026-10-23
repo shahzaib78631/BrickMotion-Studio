@@ -1,5 +1,6 @@
 import { flattenPart, type FlatPart } from './flatten';
 import { normalizeName, parseLDraw, type LDrawFile } from './parse';
+import type { ShadowLookup } from './shadow';
 
 export type FetchText = (path: string) => Promise<string | null>;
 
@@ -23,7 +24,13 @@ export class PartLibrary {
   private inline = new Map<string, LDrawFile>();
   private warned = new Set<string>();
 
-  constructor(private fetchText: FetchText) {}
+  constructor(private fetchText: FetchText, private shadow?: ShadowLookup) {}
+
+  /** Connector metadata (LDCad shadow library) for parts flattened from now on. */
+  setShadow(shadow: ShadowLookup | undefined): void {
+    this.shadow = shadow;
+    this.parts.clear();
+  }
 
   addInline(files: Map<string, LDrawFile>): void {
     for (const [k, v] of files) {
@@ -81,7 +88,7 @@ export class PartLibrary {
             this.warned.add(missing);
             console.warn(`LDraw: missing sub-file ${missing}`);
           }
-        });
+        }, this.shadow);
       })();
       this.parts.set(key, p);
     }

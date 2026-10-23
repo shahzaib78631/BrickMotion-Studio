@@ -7,6 +7,7 @@ import { useStudio } from '../state/store';
 import { Ic } from './icons';
 import { packRows, partClips } from '../anim/partClips';
 import { PART_MIN_PX, PartsLane, partsLaneHeight } from './PartsLane';
+import { planningLabel, type PlanningProgress } from '../anim/planning';
 
 const MAX_PART_ROWS = 6;
 
@@ -43,7 +44,10 @@ const mainSteps = (tl: Timeline) => {
  * The build animation as lanes (Rewind studio-kit timeline): main steps, submodel builds and the camera.
  * Clicking a step edits it; the ruler, play and step buttons drive the preview.
  */
-export function BuildTimeline({ timeline: tl, planning = false }: { timeline: Timeline | null; planning?: boolean }) {
+export function BuildTimeline({ timeline: tl, planning = false, error = '', progress = null, loading = false, onRetry }: {
+  timeline: Timeline | null; planning?: boolean; error?: string;
+  progress?: PlanningProgress | null; loading?: boolean; onRetry?: () => void;
+}) {
   const t = usePlayback((s) => s.t);
   const playing = usePlayback((s) => s.playing);
   const plan = useStudio((s) => s.plan);
@@ -70,6 +74,11 @@ export function BuildTimeline({ timeline: tl, planning = false }: { timeline: Ti
     return () => ro.disconnect();
   }, []);
 
+  const hardwareCount = tl?.units.filter((u) => u.preassembled).length ?? 0;
+  const windowCount = tl?.units.filter((u) => u.preassembled === 'window + glass').length ?? 0;
+  const wheelCount = hardwareCount - windowCount;
+  // pieces with no collision-free route found: they take the least-obstructed one
+  const uncertified = tl?.units.filter((u) => u.uncertified).flatMap((u) => u.keys) ?? [];
   const dur = tl?.duration ?? 0;
   const px = (dur > 0 ? Math.max(20, (width - PAD * 2) / dur) : 60) * zoom;
   const X = (s: number) => PAD + s * px;
@@ -203,7 +212,7 @@ export function BuildTimeline({ timeline: tl, planning = false }: { timeline: Ti
   };
   const step = tl ? tickStep(px) : 1;
   const ticks = tl ? Array.from({ length: Math.floor(dur / step) + 1 }, (_, i) => i * step) : [];
-  const contentWidth = X(Math.max(dur, previewDuration)) + PAD;
+  const contentWidth = Math.max(width, X(Math.max(dur, previewDuration)) + PAD);
 
   return (
     <div className="nx-timeline bm-timeline">
@@ -217,7 +226,7 @@ export function BuildTimeline({ timeline: tl, planning = false }: { timeline: Ti
           </span>
           {planning && (
             <span className="bm-planning" role="status" aria-live="polite">
-              <i /> Planning…
+              <i /> {planningLabel(progress)}
             </span>
           )}
         </div>
@@ -251,6 +260,19 @@ export function BuildTimeline({ timeline: tl, planning = false }: { timeline: Ti
           </button>
         </div>
       </div>
+      {uncertified.length > 0 && (
+        <div className="bm-hardware-note bm-uncertified-note" role="note" title={uncertified.join('\n')}>
+          {uncertified.length === 1 ? '1 piece has' : `${uncertified.length} pieces have`} no collision-free route, so {uncertified.length === 1 ? 'it takes' : 'they take'} the least-blocked one and may clip a neighbour. Check {uncertified.length === 1 ? 'it' : 'them'} in the preview.
+        </div>
+      )}
+      {hardwareCount > 0 && (
+        <div className="bm-hardware-note" role="note">
+          {[
+            wheelCount ? `${wheelCount} wheel assemblies start with tyre and rim connected on the staging table. Tyre fitting is not animated.` : '',
+            windowCount ? `${windowCount} window assemblies start with the glass already in the frame. Glass fitting is not animated.` : '',
+          ].filter(Boolean).join(' ')}
+        </div>
+      )}
       <div className="nx-tracks">
         <div className="nx-heads" ref={headsRef}>
           {(
@@ -299,8 +321,17 @@ export function BuildTimeline({ timeline: tl, planning = false }: { timeline: Ti
                 </span>
               ))}
             </div>
-            {!tl ? (
-              <p className="nx-hint bm-empty">Loading…</p>
+            {error ? (
+              <div className="bm-planner-error" role="alert">
+                <strong>Animation could not be planned</strong>
+                <p>{error}</p>
+                <p>The model is still editable. No blocked pieces were hidden or teleported.</p>
+                {onRetry && <button className="nx-btn nx-sm" onClick={onRetry}>Retry planning</button>}
+              </div>
+            ) : !tl ? (
+              <p className="nx-hint bm-empty" role="status">
+                {loading ? 'Loading model parts...' : planning ? planningLabel(progress) : 'Add or open a model to build its animation.'}
+              </p>
             ) : (
               <div className="nx-lanes">
                 <div className="nx-lane" style={{ height: LANE }}>

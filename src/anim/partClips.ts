@@ -25,15 +25,18 @@ export type PartClip = {
 export function partClips(tl: Timeline, steps: Step[]): PartClip[] {
   const flight = new Map<string, { start: number; end: number; size: number }>();
   for (const u of tl.units) {
-    const first = u.keys[0];
-    if (!first) continue;
-    const top = first.split('/')[0];
-    if (u.kind === 'piece' && first.includes('/')) continue;
-    // nested attaches (a sub inside a sub) are smaller: keep the outermost one
-    const size = u.kind === 'attach' ? u.keys.length : 0;
-    const had = flight.get(top);
-    if (had && had.size >= size && u.kind === 'attach') continue;
-    flight.set(top, { start: u.start, end: u.start + u.dur, size });
+    // A preassembled wheel is one flight but both part rows must remain
+    // selectable in the timeline. Outer submodel attaches still win by size.
+    const keys = u.kind === 'piece' ? u.keys : u.keys.slice(0, 1);
+    for (const first of keys) {
+      if (!first) continue;
+      const top = first.split('/')[0];
+      if (u.kind === 'piece' && first.includes('/')) continue;
+      const size = u.kind === 'attach' ? u.keys.length : 0;
+      const had = flight.get(top);
+      if (had && had.size >= size && u.kind === 'attach') continue;
+      flight.set(top, { start: u.start, end: u.start + u.dur, size });
+    }
   }
   const out: PartClip[] = [];
   steps.forEach((s, step) =>
@@ -100,4 +103,15 @@ export function stepRange(tl: Timeline | null, index: number): [number, number] 
   const spans = tl?.steps.filter((s) => s.model === '' && s.index === index) ?? [];
   if (!spans.length) return null;
   return [Math.min(...spans.map((s) => s.start)), Math.max(...spans.map((s) => s.end))];
+}
+
+/**
+ * After a clip is dropped at a new place, the pieces the user put after it that the
+ * replanned build still brings in first: the planner pulls in what a piece rests on
+ * or needs room from before the piece itself.
+ */
+export function pulledAhead(clips: PartClip[], moved: string, later: ReadonlySet<string>): PartClip[] {
+  const c = clips.find((x) => x.id === moved);
+  if (!c) return [];
+  return clips.filter((x) => later.has(x.id) && x.start < c.start - 1e-6).sort((a, b) => a.start - b.start);
 }

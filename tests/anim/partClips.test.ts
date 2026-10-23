@@ -1,6 +1,6 @@
 import { beforeAll, expect, test } from 'vitest';
 import { buildTimeline } from '../../src/anim/timeline';
-import { dropTarget, packRows, partClips } from '../../src/anim/partClips';
+import { dropTarget, packRows, partClips, pulledAhead, type PartClip } from '../../src/anim/partClips';
 import { assemble, type Metrics } from '../../src/model/assemble';
 import { ensureIds } from '../../src/plan/ids';
 import { insertItem, modelSteps, moveItemTo } from '../../src/plan/ops';
@@ -62,4 +62,15 @@ test('moveItemTo reorders within a step and moves across steps; insertItem place
   expect(moveItemTo(p, '', a, 0, 0)).toBe(p); // no change, same plan
   const added = insertItem(p, '', 1, { id: 'new', ...brick(8, 0, 0) }, 1);
   expect(modelSteps(added, '')[1].pieces.map((i) => i.id)[1]).toBe('new');
+});
+
+test('a dropped clip reports the pieces put after it that the build still brings in first', () => {
+  const clip = (id: string, start: number): PartClip => ({ id, step: 0, index: 0, start, end: start + 1, part: id, row: 0 });
+  // dropped "top" first, but the replanned build still lays "base" before it
+  const clips = [clip('base', 0), clip('top', 1), clip('side', 2)];
+  expect(pulledAhead(clips, 'top', new Set(['base', 'side'])).map((c) => c.id)).toEqual(['base']);
+  // everything after it really comes after it: nothing to explain
+  expect(pulledAhead(clips, 'base', new Set(['top', 'side']))).toEqual([]);
+  // the moved clip is gone (deleted meanwhile): nothing to say
+  expect(pulledAhead(clips, 'gone', new Set(['base']))).toEqual([]);
 });

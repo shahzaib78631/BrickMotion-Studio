@@ -65,8 +65,14 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
   const gizmoMode = useStudio((s) => s.gizmoMode);
   const stepView = useStudio((s) => s.stepView);
   const follow = usePlayback((s) => s.follow);
+  /**
+   * Placing pieces (the Move tool, or the gizmo with something selected): show every
+   * piece where it really is, so the handles sit on the piece they move. The animation
+   * pose at the playhead has pieces waiting elsewhere on the staging table.
+   */
+  const placing = mode === 'edit' && (tool === 'move' || (gizmoEnabled && selection.model === editingModel && selection.ids.length > 0));
   /** the Build view shows the build animation at the playhead, with the editor's own camera */
-  const engaged = mode === 'edit' && follow && !!timeline;
+  const engaged = mode === 'edit' && follow && !!timeline && !placing;
   /** what the render loop needs while engaged: the timeline and the pose at a time */
   const live = useRef<{ tl: Timeline; pose: (t: number) => (key: string) => THREE.Matrix4 | null; dirty: boolean } | null>(null);
   const studioLook = useAppSettings((s) => s.studioLook);
@@ -266,10 +272,10 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     [model.view, currentStep, timeline],
   );
   const poses = useMemo(() => {
-    if (currentStep === null) return new Map<string, THREE.Matrix4>();
+    if (currentStep === null || placing) return new Map<string, THREE.Matrix4>();
     if (stepView === 'separated' && planned) return planned.poses;
     return stepPoses(model.view, currentStep, stepView);
-  }, [model.view, currentStep, stepView, planned]);
+  }, [model.view, currentStep, stepView, planned, placing]);
 
   // Following the timeline: every piece, posed as the animation has it at the playhead.
   // Pieces edited since the timeline was planned show where they are now (a move shows
@@ -493,6 +499,9 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
         }}
       />
       {!model.ready && <div className="overlay-note">Loading parts…</div>}
+      {model.ready && placing && follow && !!timeline && (
+        <div className="overlay-note">Showing the model as built while you place pieces. {tool === 'move' ? 'Switch to the Select tool' : 'Press Esc'} to go back to the animation.</div>
+      )}
       {model.ready && model.view.instances.length === 0 && mode === 'edit' && (
         <div className="overlay-note">Empty floor — add parts from the left, import a file, or generate a set with AI.</div>
       )}

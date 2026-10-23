@@ -45,6 +45,34 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
       </div>
 
       <label className="nx-field">
+        Assembly planner
+        <select aria-label="Assembly planner" value={s.planner ?? 'legacy'} onChange={(e) => s.set({ planner: e.target.value as 'legacy' | 'construction-v2' })}>
+          <option value="legacy">Existing planner</option>
+          <option value="construction-v2">Construction V2 (experimental)</option>
+        </select>
+        <span className="nx-hint">V2 searches backward, builds subassemblies on separate work areas, and plays checked paths sequentially. It assumes held workpieces where marked. Articulation and deformation are not implemented; unresolved models stop without falling back.</span>
+      </label>
+      {s.planner === 'construction-v2' && <label className="nx-field">
+        Workpiece support
+        <select value={s.constructionSupport ?? 'fixture'} onChange={(e) => s.set({ constructionSupport: e.target.value as 'fixture' | 'table' })}>
+          <option value="fixture">Allow held workpieces (virtual fixtures)</option>
+          <option value="table">Require table contact or an existing connection</option>
+        </select>
+        <span className="nx-hint">Virtual fixtures are not rendered. Neither mode simulates gravity or proves physical stability.</span>
+      </label>}
+      {timeline?.construction && (
+        <div className="nx-field">
+          <strong>Construction V2: {timeline.construction.operations.length} operations</strong>
+          <span className="nx-hint">{timeline.construction.stats.states} search states. Contact and fixture assumptions are included in the plan report.</span>
+          <details><summary>Validation limits and assumptions</summary>{timeline.construction.warnings.map((w, i) => <p key={i} className="nx-hint">{w}</p>)}</details>
+          <button type="button" className="nx-btn nx-sm" onClick={() => {
+            const blob = new Blob([JSON.stringify(timeline.construction, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'construction-plan-v2.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+          }}>Download construction plan</button>
+        </div>
+      )}
+
+      <label className="nx-field">
         Length <b>{s.targetSeconds} s</b>
         <input type="range" min={5} max={60} step={1} value={s.targetSeconds} onChange={(e) => s.set({ targetSeconds: Number(e.target.value) })} />
       </label>
@@ -113,7 +141,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
           <input type="checkbox" checked={s.linearColors} onChange={(e) => s.set({ linearColors: e.target.checked })} /> True LEGO colours — linear tone mapping instead of filmic
         </label>
         <label className="nx-check">
-          <input type="checkbox" checked={s.bottomUp} onChange={(e) => s.set({ bottomUp: e.target.checked })} /> Build bottom-up — within a step, each piece waits for what it rests on
+          <input type="checkbox" disabled={s.planner === 'construction-v2'} checked={s.bottomUp} onChange={(e) => s.set({ bottomUp: e.target.checked })} /> Build bottom-up — within a step, each piece waits for what it rests on
         </label>
         <label className="nx-check">
           <input type="checkbox" checked={s.snapSound} onChange={(e) => s.set({ snapSound: e.target.checked })} /> Snap sound — a click each time pieces connect
@@ -149,11 +177,12 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
         Pieces arrive
         <div className="nx-seg" role="radiogroup" aria-label="Pieces arrive">
           {MODES.map(([v, l]) => (
-            <button key={v} role="radio" aria-checked={s.mode === v} className={s.mode === v ? 'on' : ''} onClick={() => s.set({ mode: v })}>
+            <button key={v} role="radio" disabled={s.planner === 'construction-v2'} aria-checked={s.mode === v} className={s.mode === v ? 'on' : ''} onClick={() => s.set({ mode: v })}>
               {l}
             </button>
           ))}
         </div>
+        {s.planner === 'construction-v2' && <span className="nx-hint">V2 schedules verified construction operations sequentially; attachment dependencies cannot be disabled.</span>}
         {s.mode === 'auto' && timeline && (
           <span className="nx-hint">
             Picked: {timeline.pacing.mode === 'piece' ? 'one by one' : timeline.pacing.mode === 'step' ? 'step by step' : 'in batches'}

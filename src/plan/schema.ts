@@ -15,16 +15,24 @@ const RawShape = {
 const id = z.string().optional();
 const color = z.union([z.string().min(1), num]);
 
+const AssemblySchema = z.object({
+  attachTo: z.string().min(1).optional(),
+  after: z.array(z.string().min(1)).optional(),
+  insertionAxis: z.tuple([num, num, num]).refine((v) => Math.hypot(...v) > 1e-8, 'insertionAxis must be non-zero').optional(),
+  role: z.enum(['base', 'hips', 'leg', 'torso', 'arm', 'hand', 'head', 'headwear', 'generic']).optional(),
+  root: z.boolean().optional(),
+}).optional();
+
 const Item = z
   .custom<unknown>((v) => !(v && typeof v === 'object' && 'part' in v && 'submodel' in v), {
     message: 'an item cannot have both "part" and "submodel"',
   })
   .pipe(
     z.union([
-      z.object({ id, part: z.string().min(1), color, ...GridShape }),
-      z.object({ id, part: z.string().min(1), color, ...RawShape }),
-      z.object({ id, submodel: z.string().min(1), ...GridShape }),
-      z.object({ id, submodel: z.string().min(1), ...RawShape }),
+      z.object({ id, assembly: AssemblySchema, part: z.string().min(1), color, ...GridShape }),
+      z.object({ id, assembly: AssemblySchema, part: z.string().min(1), color, ...RawShape }),
+      z.object({ id, assembly: AssemblySchema, submodel: z.string().min(1), ...GridShape }),
+      z.object({ id, assembly: AssemblySchema, submodel: z.string().min(1), ...RawShape }),
     ]),
   );
 
@@ -33,6 +41,7 @@ const StepSchema = z.object({
   title: z.string().max(80).optional(),
   notes: z.string().max(1000).optional(),
   pauseAfter: num.min(0).max(10).optional(),
+  auto: z.boolean().optional(),
 });
 
 export const PlanSchema = z.object({

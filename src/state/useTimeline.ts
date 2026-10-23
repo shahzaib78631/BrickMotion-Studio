@@ -1,43 +1,52 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Timeline } from '../anim/timeline';
+import type { PlanningProgress } from '../anim/planning';
 import type { AnimOptions } from '../anim/pacing';
 import type { Plan } from '../plan/types';
 import { useStudio } from './store';
 import { isAbandoned, planTimeline } from './timelineService';
 
-export type TimelineState = { timeline: Timeline | null; planning: boolean; error: string };
+export type TimelineState = {
+  timeline: Timeline | null; planning: boolean; error: string;
+  progress: PlanningProgress | null; retry(): void;
+};
+type State = {
+  model: string; plan: Plan | null; optsSig: string; attempt: number;
+  timeline: Timeline | null; error: string; status: 'idle' | 'planning' | 'ready' | 'error';
+  progress: PlanningProgress | null;
+};
 
-/**
- * The build animation of `model` ('' = the whole set), planned in the background.
- * While a newer plan is computed the previous timeline of the SAME model stays
- * visible; edits during a drag are not planned until the drag ends.
- */
 export function useTimeline(ready: boolean, plan: Plan, model: string, opts: AnimOptions): TimelineState {
   const dragging = useStudio((s) => s.gesture !== null);
-  const [state, setState] = useState<{ model: string; plan: Plan | null; timeline: Timeline | null; error: string }>({ model, plan: null, timeline: null, error: '' });
+  const [attempt, setAttempt] = useState(0);
+  const retry = useCallback(() => setAttempt((n) => n + 1), []);
   const optsSig = JSON.stringify(opts);
+  const [state, setState] = useState<State>({ model, plan: null, optsSig: '', attempt: -1, timeline: null, error: '', status: 'idle', progress: null });
   useEffect(() => {
     if (!ready || dragging) return;
     let alive = true;
-    // Debounce bursts of edits (typing a value, nudging with arrow keys).
+    const request = { model, plan, optsSig, attempt };
+    setState((prev) => ({ ...request, timeline: prev.model === model ? prev.timeline : null, error: '', status: 'planning', progress: null }));
     const timer = setTimeout(() => {
-      planTimeline(plan, model, opts)
-        .then((timeline) => alive && setState({ model, plan, timeline, error: '' }))
-        .catch((e) => {
-          if (alive && !isAbandoned(e)) setState({ model, plan, timeline: null, error: (e as Error).message });
-        });
+      // The promise boundary also catches synchronous request/metrics failures.
+      Promise.resolve().then(() => planTimeline(plan, model, opts, 'ui', (progress) => {
+        if (alive) setState((prev) => ({ ...prev, progress }));
+      })).then((timeline) => {
+        if (alive) setState({ ...request, timeline, error: '', status: 'ready', progress: null });
+      }).catch((e: unknown) => {
+        if (alive) setState({ ...request, timeline: null, status: 'error', progress: null,
+          error: isAbandoned(e) ? 'Planning was cancelled by a newer request. Retry this model.' : (e instanceof Error ? e.message : String(e)) });
+      });
     }, 120);
-    return () => {
-      alive = false;
-      clearTimeout(timer);
-    };
-    // opts is compared by value
+    return () => { alive = false; clearTimeout(timer); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, dragging, plan, model, optsSig]);
-  const sameModel = state.model === model;
+  }, [ready, dragging, plan, model, optsSig, attempt]);
+  const current = state.model === model && state.plan === plan && state.optsSig === optsSig && state.attempt === attempt;
   return {
-    timeline: sameModel ? state.timeline : null,
-    planning: ready && (!sameModel || state.plan !== plan || state.timeline === null) && !state.error,
-    error: sameModel ? state.error : '',
+    timeline: ready && current && state.status === 'ready' ? state.timeline : null,
+    planning: ready && !dragging && (!current || state.status === 'planning'),
+    error: current ? state.error : '',
+    progress: current ? state.progress : null,
+    retry,
   };
 }

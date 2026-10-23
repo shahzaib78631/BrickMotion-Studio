@@ -92,3 +92,31 @@ test('the Parts lane shows each piece of the open model and clicking one selects
   expect(usePlayback.getState().t).toBe(4.5);
   expect(engine.getAttribute('aria-pressed')).toBe('true');
 });
+
+test('a failed planner displays the actual error in Build view instead of Loading', () => {
+  let retries = 0;
+  render(<BuildTimeline timeline={null} error="blocked-route: hand-2" onRetry={() => { retries++; }} />);
+  expect(screen.getByRole('alert').textContent).toContain('blocked-route: hand-2');
+  expect(screen.queryByText('Loading...')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry planning' }));
+  expect(retries).toBe(1);
+});
+
+test('an empty idle timeline is not presented as a running load', () => {
+  render(<BuildTimeline timeline={null} />);
+  expect(screen.getByRole('status').textContent).toContain('Add or open a model');
+  expect(screen.queryByText('Loading...')).toBeNull();
+});
+
+test('routing progress includes a completed count and the current item', () => {
+  render(<BuildTimeline timeline={null} planning progress={{ phase: 'routing', completed: 17, total: 400, item: 'arm-1' }} />);
+  expect(screen.getAllByText(/17 \/ 400.*arm-1/).length).toBeGreaterThan(0);
+});
+
+
+test('discloses hardware that starts preassembled instead of depicting tyre fitting', () => {
+  const hardwareTimeline = { ...tl, units: tl.units.map((u, i) => i === 0 ? { ...u, preassembled: '6014 rim + 6015 tyre' } : u) };
+  render(<BuildTimeline timeline={hardwareTimeline} />);
+  expect(screen.getByRole('note').textContent).toContain('1 wheel assemblies start');
+  expect(screen.getByRole('note').textContent).toContain('Tyre fitting is not animated');
+});

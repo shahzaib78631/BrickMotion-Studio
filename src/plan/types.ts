@@ -6,8 +6,20 @@ export type Grid = { x: number; y: number; z: number; rot: Rot };
 /** Exact LDraw placement for imported pieces that are off the grid. */
 export type Raw = { ldu: Vec3; matrix: Mat3 };
 
-export type PieceItem = { id?: string; part: string; color: string | number } & (Grid | Raw);
-export type SubItem = { id?: string; submodel: string } & (Grid | Raw);
+export type AssemblyRole = 'base' | 'hips' | 'leg' | 'torso' | 'arm' | 'hand' | 'head' | 'headwear' | 'neckwear' | 'generic';
+/** References are sibling item IDs within the containing model, never part IDs. */
+export type AssemblyHints = {
+  attachTo?: string;
+  after?: string[];
+  /** Outward direction from the seated pose, in the containing model's frame. */
+  insertionAxis?: Vec3;
+  role?: AssemblyRole;
+  /** Explicitly allow an independent/standalone foundation. */
+  root?: boolean;
+};
+
+export type PieceItem = { assembly?: AssemblyHints; id?: string; part: string; color: string | number } & (Grid | Raw);
+export type SubItem = { assembly?: AssemblyHints; id?: string; submodel: string } & (Grid | Raw);
 export type PlanItem = PieceItem | SubItem;
 /** A step's editorial metadata is optional, keeping older saved projects compatible. */
 export type Step = {
@@ -16,6 +28,8 @@ export type Step = {
   notes?: string;
   /** Extra seconds to hold on the completed step before the next action. */
   pauseAfter?: number;
+  /** made by auto-steps (layers of a step-less file), not by the author: no editorial order inside it */
+  auto?: boolean;
 };
 export type Submodel = { steps: Step[] };
 

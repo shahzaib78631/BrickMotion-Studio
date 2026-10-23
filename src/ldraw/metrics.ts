@@ -1,6 +1,8 @@
 import type { Box, FlatPart } from './flatten';
+import { bottomSocketFace, type ConnectionGeometry } from './connectors';
+import type { Snap } from './shadow';
 
-export type PartMetrics = {
+export type PartMetrics = ConnectionGeometry & {
   id: string;
   body: Box;
   full: Box;
@@ -15,31 +17,21 @@ export type PartMetrics = {
   mesh?: Float32Array;
   /** triangles from this index on (in `mesh`) have no known front face */
   meshTwoSidedFrom?: number;
+  /** LDCad shadow-library connectors in part space; absent when the shadow pack is not installed */
+  snaps?: Snap[];
 };
 
-/** very detailed parts are thinned to this many triangles for planning */
-const MAX_MESH_TRIS = 40000;
-
+/** Collision geometry must retain every surface; dropping triangles creates holes. */
 function meshOf(flat: FlatPart): { mesh: Float32Array; twoSidedFrom: number } | undefined {
-  const one = [...flat.tris.values()];
-  const two = [...flat.doubleSided.values()];
-  const total = [...one, ...two].reduce((n, l) => n + l.length / 9, 0);
-  if (!total) return undefined;
-  const stride = Math.max(1, total / MAX_MESH_TRIS);
-  const out = new Float32Array(Math.min(total, MAX_MESH_TRIS) * 9);
-  let j = 0, i = 0, twoSidedFrom = 0;
-  const take = (lists: number[][]) => {
-    for (const l of lists)
-      for (let t = 0; t < l.length; t += 9, i++) {
-        if (Math.floor(j * stride) !== i || j * 9 >= out.length) continue;
-        out.set(l.slice(t, t + 9), j * 9);
-        j++;
-      }
-  };
-  take(one);
-  twoSidedFrom = j;
-  take(two);
-  return { mesh: out.subarray(0, j * 9), twoSidedFrom };
+  const one = [...flat.tris.values()], two = [...flat.doubleSided.values()];
+  const floats = [...one, ...two].reduce((n, list) => n + list.length, 0);
+  if (!floats) return undefined;
+  const mesh = new Float32Array(floats);
+  let offset = 0;
+  for (const list of one) { mesh.set(list, offset); offset += list.length; }
+  const twoSidedFrom = offset / 9;
+  for (const list of two) { mesh.set(list, offset); offset += list.length; }
+  return { mesh, twoSidedFrom };
 }
 
 const PLACEHOLDER_BOX: Box = { min: [0, 0, 0], max: [20, 24, 20] };
@@ -60,6 +52,9 @@ export function measurePart(flat: FlatPart | null, id: string): PartMetrics {
     },
     heightPlates: Math.max(1, Math.round((body.max[1] - body.min[1]) / 8)),
     placeholder: false,
+    studs: flat.studs,
+    ...(flat.snaps ? { snaps: flat.snaps } : {}),
+    socketFace: bottomSocketFace(body, flat.description ?? ''),
     ...(() => {
       const m = meshOf(flat);
       return m ? { mesh: m.mesh, meshTwoSidedFrom: m.twoSidedFrom } : {};
