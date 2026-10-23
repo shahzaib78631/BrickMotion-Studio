@@ -1,0 +1,1538 @@
+{
+  "scope": "Read-only LDCad shadow-library connector coverage gap analysis for the official LDraw library",
+  "inputs": {
+    "ldrawParts": 24856,
+    "ldrawNewestUpdate": "2026-09",
+    "shadowPackSource": "https://github.com/RolandMelkert/LDCadShadowLibrary",
+    "shadowPackCommit": "9b1131fb1991f8c0bfc072325e4e12f6271aba35",
+    "shadowPackLicense": "CC BY-SA 4.0, LDCad Shadow Library (Roland Melkert and contributors)",
+    "shadowFilesInPack": 4162,
+    "vendorShadowCommit": "9b1131fb1991f8c0bfc072325e4e12f6271aba35",
+    "upstreamHead": "9b1131fb1991f8c0bfc072325e4e12f6271aba35",
+    "upstreamStatus": "same as checkout",
+    "primitiveFamilies": [
+      {
+        "id": "antistud",
+        "label": "anti-stud / stud4",
+        "expected": false,
+        "defaultClass": "cylF"
+      },
+      {
+        "id": "stud",
+        "label": "stud",
+        "expected": true,
+        "defaultClass": "cylM"
+      },
+      {
+        "id": "peghole",
+        "label": "peg hole (peghole/npeghol)",
+        "expected": true,
+        "defaultClass": "cylF"
+      },
+      {
+        "id": "beam-hole",
+        "label": "Technic beam hole",
+        "expected": true,
+        "defaultClass": "cylF"
+      },
+      {
+        "id": "conn-hole",
+        "label": "Technic connector hole",
+        "expected": true,
+        "defaultClass": "cylF"
+      },
+      {
+        "id": "axle-hole",
+        "label": "axle hole",
+        "expected": true,
+        "defaultClass": "cylF"
+      },
+      {
+        "id": "axle",
+        "label": "axle",
+        "expected": true,
+        "defaultClass": "cylM"
+      },
+      {
+        "id": "pin",
+        "label": "Technic pin",
+        "expected": true,
+        "defaultClass": "cylM"
+      },
+      {
+        "id": "clip",
+        "label": "clip",
+        "expected": true,
+        "defaultClass": "clp"
+      },
+      {
+        "id": "hinge",
+        "label": "hinge finger",
+        "expected": true,
+        "defaultClass": "fgr"
+      },
+      {
+        "id": "joint",
+        "label": "joint / generic",
+        "expected": true,
+        "defaultClass": "genM"
+      },
+      {
+        "id": "bar",
+        "label": "bar / handle",
+        "expected": true,
+        "defaultClass": "cylM"
+      }
+    ],
+    "unmappedSeedPrimitives": []
+  },
+  "rules": {
+    "effectiveSnaps": "ownSnaps + SNAP_INCL expansion + SNAP_CLEAR, exactly as src/ldraw/flatten.ts",
+    "expectedSnaps": "per referenced connector primitive: active shadow snaps; otherwise one inferred snap for a leaf unannotated variant; per class, annotated evidence overrides unannotated evidence",
+    "tolerance": "25% missing allowed for stud/hole/clip families; 50% for pins, axles, hinges and generic joints; sole-source peghole/axle-hole families use 50%; hinge fingers need at least one finger snap; axle-hole primitives inside an axle body are not expected holes",
+    "buckets": "covered; redirect/alias (moved, alias, physical colour, all shortcuts); inheritance gap; geometry-only gap; no connectors expected (stickers/sheets/baseplate special); unknown"
+  },
+  "totals": {
+    "parts": 24856,
+    "bucketsWithSupplementary": {
+      "covered": 12186,
+      "redirect/alias": 7045,
+      "inheritance gap": 482,
+      "geometry-only gap": 1343,
+      "no connectors expected": 2924,
+      "unknown": 876
+    },
+    "bucketsShadowOnly": {
+      "covered": 12087,
+      "redirect/alias": 7045,
+      "inheritance gap": 482,
+      "geometry-only gap": 1442,
+      "no connectors expected": 2924,
+      "unknown": 876
+    },
+    "statusWithSupplementary": {
+      "covered": 18593,
+      "inheritance gap": 704,
+      "geometry-only gap": 1503,
+      "no connectors expected": 3115,
+      "unknown": 932,
+      "target missing": 9
+    },
+    "statusShadowOnly": {
+      "covered": 18483,
+      "inheritance gap": 704,
+      "geometry-only gap": 1613,
+      "no connectors expected": 3115,
+      "unknown": 932,
+      "target missing": 9
+    },
+    "shortcuts": {
+      "parts": 5264,
+      "statusWithSupplementary": {
+        "covered": 4904,
+        "inheritance gap": 188,
+        "geometry-only gap": 85,
+        "no connectors expected": 55,
+        "unknown": 32,
+        "target missing": 0
+      }
+    }
+  },
+  "corpus": {
+    "files": 13,
+    "models": 13,
+    "pieceInstances": 3813,
+    "distinctPartsUsed": 280,
+    "unresolvedRefs": [],
+    "filesScanned": [
+      "/Users/mac/Downloads/10156-1 (1).mpd",
+      "/Users/mac/Downloads/10156-1.mpd",
+      "/Users/mac/Downloads/31039 Blue Power Jet [Model A] Jet.mpd",
+      "/Users/mac/Downloads/31039_Blue_Power_Jet_LOGICAL_SUBMODELS_v4.mpd",
+      "/Users/mac/Downloads/31039_Blue_Power_Jet_SUBMODEL_BUILD_v3.mpd",
+      "/Users/mac/Downloads/31039_Blue_Power_Jet_ultra_detailed_steps.mpd",
+      "/Users/mac/Downloads/BrickMotion-Route-Order-Fix-Patch/tests/fixtures/models/10156-1.mpd",
+      "/Users/mac/Downloads/BrickMotion_camera_fixed/tests/fixtures/ldraw/models/car.ldr",
+      "/Users/mac/Downloads/Untitled set.mpd",
+      "/Users/mac/Downloads/modern_fighter_jet.mpd",
+      "/Users/mac/Projects/BrickMotion-Studio/public/data/test-10001.mpd",
+      "/Users/mac/Projects/BrickMotion-Studio/public/ldraw/models/car.ldr",
+      "/Users/mac/Projects/BrickMotion-Studio/public/ldraw/models/pyramid.ldr"
+    ],
+    "caveat": "Small local corpus (downloads, samples and bundled models). The LDraw Official Model Repository (OMR) would make usage ranking representative; it was not downloaded."
+  },
+  "topGaps": [
+    {
+      "id": "70720c01",
+      "title": "~Axle Steel 5 x 112 LDU with Conical Ends with Two Train Wheels with Open Centres",
+      "category": "Wheel",
+      "bucket": "redirect/alias",
+      "status": "geometry-only gap",
+      "instances": 10,
+      "models": 1,
+      "missing": "no effective snaps",
+      "expected": 0,
+      "effective": 0
+    },
+    {
+      "id": "85984",
+      "title": "Slope Brick 31 1 x 2 x 0.667",
+      "category": "",
+      "bucket": "inheritance gap",
+      "status": "inheritance gap",
+      "instances": 8,
+      "models": 4,
+      "missing": "cyl M 0/1",
+      "expected": 1,
+      "effective": 2
+    },
+    {
+      "id": "70023",
+      "title": "~Magnet Cylindrical (Obsolete)",
+      "category": "Obsolete",
+      "bucket": "geometry-only gap",
+      "status": "geometry-only gap",
+      "instances": 4,
+      "models": 1,
+      "missing": "no effective snaps",
+      "expected": 0,
+      "effective": 0
+    },
+    {
+      "id": "4588",
+      "title": "Brick 1 x 1 Round with Fins",
+      "category": "",
+      "bucket": "inheritance gap",
+      "status": "inheritance gap",
+      "instances": 1,
+      "models": 1,
+      "missing": "cyl F 1/6",
+      "expected": 7,
+      "effective": 2
+    },
+    {
+      "id": "2894c01",
+      "title": "Electric Train Motor 9V (Complete)",
+      "category": "",
+      "bucket": "redirect/alias",
+      "status": "inheritance gap",
+      "instances": 1,
+      "models": 1,
+      "missing": "cyl F 0/1",
+      "expected": 18,
+      "effective": 17
+    },
+    {
+      "id": "23324",
+      "title": "~Electric Motor Unit 6 x 18 x 4 - Bottom",
+      "category": "",
+      "bucket": "inheritance gap",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 0/64",
+      "expected": 70,
+      "effective": 6
+    },
+    {
+      "id": "95646",
+      "title": "Electric Mindstorms EV3",
+      "category": "",
+      "bucket": "redirect/alias",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 32/80",
+      "expected": 80,
+      "effective": 40
+    },
+    {
+      "id": "95646c01",
+      "title": "Electric Mindstorms EV3 with Rechargeable Battery",
+      "category": "",
+      "bucket": "redirect/alias",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 32/80",
+      "expected": 80,
+      "effective": 40
+    },
+    {
+      "id": "99141c01",
+      "title": "Electric Mindstorms EV3 without Bottom Lid",
+      "category": "",
+      "bucket": "redirect/alias",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 32/80",
+      "expected": 80,
+      "effective": 40
+    },
+    {
+      "id": "43446c01",
+      "title": "~Electric RC Receiver Unit with Auxiliary Output Body",
+      "category": "",
+      "bucket": "redirect/alias",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 32/76",
+      "expected": 84,
+      "effective": 40
+    },
+    {
+      "id": "43446",
+      "title": "~Electric RC Race Buggy Battery Top",
+      "category": "",
+      "bucket": "inheritance gap",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 20/54",
+      "expected": 62,
+      "effective": 28
+    },
+    {
+      "id": "99141",
+      "title": "~Electric Mindstorms EV3 Shell Top",
+      "category": "",
+      "bucket": "inheritance gap",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 20/52",
+      "expected": 52,
+      "effective": 20
+    },
+    {
+      "id": "99141p01",
+      "title": "~Electric Mindstorms EV3 Shell Top with LEGO Logo Pattern",
+      "category": "",
+      "bucket": "inheritance gap",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 20/52",
+      "expected": 52,
+      "effective": 20
+    },
+    {
+      "id": "32065",
+      "title": "Technic Beam 7 x 0.5",
+      "category": "",
+      "bucket": "inheritance gap",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 7/38",
+      "expected": 38,
+      "effective": 7
+    },
+    {
+      "id": "54734",
+      "title": "Electric 9V Battery Box with Pegholes (Complete)",
+      "category": "",
+      "bucket": "redirect/alias",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 20/48",
+      "expected": 54,
+      "effective": 26
+    },
+    {
+      "id": "923",
+      "title": "~Electric 9V Battery Box with Pegholes Case",
+      "category": "",
+      "bucket": "inheritance gap",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 20/48",
+      "expected": 52,
+      "effective": 24
+    },
+    {
+      "id": "32063",
+      "title": "Technic Beam 6 x 0.5",
+      "category": "",
+      "bucket": "inheritance gap",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 6/32",
+      "expected": 32,
+      "effective": 6
+    },
+    {
+      "id": "42924",
+      "title": "Technic Pin Long with Friction Type 2",
+      "category": "",
+      "bucket": "inheritance gap",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl M 1/24",
+      "expected": 24,
+      "effective": 1
+    },
+    {
+      "id": "65414c01",
+      "title": "Technic Differential with Red 28 Tooth Drive Gear and Tan Satellites",
+      "category": "",
+      "bucket": "redirect/alias",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 2/23",
+      "expected": 23,
+      "effective": 2
+    },
+    {
+      "id": "7222",
+      "title": "Technic Axle with 4 Wheel Pins",
+      "category": "",
+      "bucket": "inheritance gap",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl M 0/21",
+      "expected": 21,
+      "effective": 0
+    },
+    {
+      "id": "32289a",
+      "title": "Electric Technic Motor 4.5V 6 x 17 x 5 Base Type 1",
+      "category": "",
+      "bucket": "inheritance gap",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 0/20",
+      "expected": 20,
+      "effective": 0
+    },
+    {
+      "id": "11214",
+      "title": "Technic Axle Pin Long with Friction with 2L Pin",
+      "category": "",
+      "bucket": "inheritance gap",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl M 1/18",
+      "expected": 18,
+      "effective": 1
+    },
+    {
+      "id": "12782",
+      "title": "~Pullback Motor 6 x 5 x 3 Threaded Side",
+      "category": "Technic",
+      "bucket": "inheritance gap",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 7/24",
+      "expected": 24,
+      "effective": 7
+    },
+    {
+      "id": "12787",
+      "title": "~Pullback Motor 6 x 5 x 3 Screw Head Side",
+      "category": "Technic",
+      "bucket": "inheritance gap",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 7/24",
+      "expected": 24,
+      "effective": 7
+    },
+    {
+      "id": "11025",
+      "title": "~Electric Mindstorms EV3 Bottom Shell",
+      "category": "",
+      "bucket": "inheritance gap",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 12/28",
+      "expected": 28,
+      "effective": 12
+    },
+    {
+      "id": "11025p01",
+      "title": "~Electric Mindstorms EV3 Bottom Shell with Port Id. Pattern",
+      "category": "",
+      "bucket": "inheritance gap",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 12/28",
+      "expected": 28,
+      "effective": 12
+    },
+    {
+      "id": "53791",
+      "title": "~Electric Mindstorms NXT Battery Case (Needs Work)",
+      "category": "",
+      "bucket": "inheritance gap",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 12/28",
+      "expected": 28,
+      "effective": 12
+    },
+    {
+      "id": "65304",
+      "title": "Technic Pin Long with Stop Bush Type 2",
+      "category": "",
+      "bucket": "inheritance gap",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl M 1/17",
+      "expected": 18,
+      "effective": 3
+    },
+    {
+      "id": "72156",
+      "title": "Electric Mindstorms EV3 IR-Beacon / Remote Handset",
+      "category": "",
+      "bucket": "redirect/alias",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 10/26",
+      "expected": 26,
+      "effective": 10
+    },
+    {
+      "id": "76607",
+      "title": "~Electric Mindstorms EV3 IR-Beacon Case Top",
+      "category": "",
+      "bucket": "inheritance gap",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 10/26",
+      "expected": 26,
+      "effective": 10
+    },
+    {
+      "id": "76607c01",
+      "title": "Electric Mindstorms EV3 IR-Beacon / Remote Handset Case",
+      "category": "",
+      "bucket": "redirect/alias",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 10/26",
+      "expected": 26,
+      "effective": 10
+    },
+    {
+      "id": "76607p01",
+      "title": "~Electric Mindstorms EV3 IR-Beacon Case Top, Colour Marks Pattern",
+      "category": "",
+      "bucket": "inheritance gap",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 10/26",
+      "expected": 26,
+      "effective": 10
+    },
+    {
+      "id": "53792",
+      "title": "Electric Mindstorms NXT Ultrasonic Sensor",
+      "category": "",
+      "bucket": "redirect/alias",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 3/18",
+      "expected": 18,
+      "effective": 4
+    },
+    {
+      "id": "53793c00",
+      "title": "Electric Mindstorms NXT Touch Sensor Case",
+      "category": "",
+      "bucket": "redirect/alias",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 3/18",
+      "expected": 18,
+      "effective": 4
+    },
+    {
+      "id": "55816",
+      "title": "~Electric Mindstorms NXT Sensor Shell Back",
+      "category": "",
+      "bucket": "inheritance gap",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 3/18",
+      "expected": 18,
+      "effective": 3
+    },
+    {
+      "id": "55963",
+      "title": "Electric Mindstorms NXT Sound Sensor",
+      "category": "",
+      "bucket": "redirect/alias",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 3/18",
+      "expected": 18,
+      "effective": 4
+    },
+    {
+      "id": "55969",
+      "title": "Electric Mindstorms NXT Light Sensor",
+      "category": "",
+      "bucket": "redirect/alias",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 3/18",
+      "expected": 18,
+      "effective": 4
+    },
+    {
+      "id": "62840",
+      "title": "Electric Mindstorms NXT Temperature Sensor",
+      "category": "",
+      "bucket": "redirect/alias",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 3/18",
+      "expected": 18,
+      "effective": 3
+    },
+    {
+      "id": "64892",
+      "title": "Electric Mindstorms NXT Colour Sensor / Colour Lamp",
+      "category": "",
+      "bucket": "redirect/alias",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 3/18",
+      "expected": 18,
+      "effective": 4
+    },
+    {
+      "id": "ms1034",
+      "title": "Electric Mindstorms NXT Compass Sensor",
+      "category": "",
+      "bucket": "redirect/alias",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 3/18",
+      "expected": 18,
+      "effective": 4
+    },
+    {
+      "id": "ms1038",
+      "title": "Electric Mindstorms NXT Colour Sensor",
+      "category": "",
+      "bucket": "redirect/alias",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 3/18",
+      "expected": 18,
+      "effective": 4
+    },
+    {
+      "id": "ms1040",
+      "title": "Electric Mindstorms NXT Accelerometer Sensor",
+      "category": "",
+      "bucket": "redirect/alias",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 3/18",
+      "expected": 18,
+      "effective": 4
+    },
+    {
+      "id": "ms1042",
+      "title": "Electric Mindstorms NXT InfraRed Seeker Sensor",
+      "category": "",
+      "bucket": "redirect/alias",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 3/18",
+      "expected": 18,
+      "effective": 4
+    },
+    {
+      "id": "ms1044",
+      "title": "Electric Mindstorms NXT Gyroscopic Sensor",
+      "category": "",
+      "bucket": "redirect/alias",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 3/18",
+      "expected": 18,
+      "effective": 4
+    },
+    {
+      "id": "ms1048",
+      "title": "Electric Mindstorms NXT RFID Sensor",
+      "category": "",
+      "bucket": "redirect/alias",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 3/18",
+      "expected": 18,
+      "effective": 4
+    },
+    {
+      "id": "32289b",
+      "title": "Electric Technic Motor 4.5V 6 x 17 x 5 Base Type 2",
+      "category": "",
+      "bucket": "inheritance gap",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 0/14",
+      "expected": 14,
+      "effective": 0
+    },
+    {
+      "id": "4586",
+      "title": "Technic Beam 9 x 0.5 with 3 Holes",
+      "category": "",
+      "bucket": "inheritance gap",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 0/14",
+      "expected": 14,
+      "effective": 0
+    },
+    {
+      "id": "39888",
+      "title": "Technic Pin Long without Friction Type 2",
+      "category": "",
+      "bucket": "inheritance gap",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl M 1/14",
+      "expected": 14,
+      "effective": 3
+    },
+    {
+      "id": "41670",
+      "title": "Technic Bionicle Leg 4 x 4 with Two Ball Joints",
+      "category": "",
+      "bucket": "inheritance gap",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl F 1/14",
+      "expected": 14,
+      "effective": 3
+    },
+    {
+      "id": "501ac01",
+      "title": "Electric Train Motor 12V with 2-Hole Sockets (Complete)",
+      "category": "",
+      "bucket": "redirect/alias",
+      "status": "inheritance gap",
+      "instances": 0,
+      "models": 0,
+      "missing": "cyl M 17/28; cyl F 4/6",
+      "expected": 34,
+      "effective": 21
+    }
+  ],
+  "familyGroups": [
+    {
+      "family": "Wheel",
+      "parts": 24,
+      "usageInstances": 10,
+      "missingOrUnmodelled": 25
+    },
+    {
+      "family": "Brick",
+      "parts": 82,
+      "usageInstances": 9,
+      "missingOrUnmodelled": 162
+    },
+    {
+      "family": "Obsolete",
+      "parts": 2,
+      "usageInstances": 4,
+      "missingOrUnmodelled": 2
+    },
+    {
+      "family": "Uncategorised",
+      "parts": 441,
+      "usageInstances": 1,
+      "missingOrUnmodelled": 1443
+    },
+    {
+      "family": "Technic",
+      "parts": 292,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 773
+    },
+    {
+      "family": "Minifig Accessory",
+      "parts": 195,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 208
+    },
+    {
+      "family": "Minifig Headwear",
+      "parts": 137,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 137
+    },
+    {
+      "family": "Electric",
+      "parts": 126,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 139
+    },
+    {
+      "family": "Sticker Shortcut",
+      "parts": 99,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 182
+    },
+    {
+      "family": "Minifig",
+      "parts": 75,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 118
+    },
+    {
+      "family": "Minifig Neckwear",
+      "parts": 74,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 75
+    },
+    {
+      "family": "Figure Accessory",
+      "parts": 65,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 65
+    },
+    {
+      "family": "Wheel/Tyre",
+      "parts": 62,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 112
+    },
+    {
+      "family": "Bar/Clip",
+      "parts": 49,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 59
+    },
+    {
+      "family": "Hose",
+      "parts": 47,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 47
+    },
+    {
+      "family": "Tile",
+      "parts": 47,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 53
+    },
+    {
+      "family": "Vehicle",
+      "parts": 42,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 43
+    },
+    {
+      "family": "Hinge",
+      "parts": 39,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 39
+    },
+    {
+      "family": "Window",
+      "parts": 36,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 36
+    },
+    {
+      "family": "Door",
+      "parts": 26,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 26
+    },
+    {
+      "family": "Constraction Accessory",
+      "parts": 17,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 27
+    },
+    {
+      "family": "Plate",
+      "parts": 15,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 18
+    },
+    {
+      "family": "Train",
+      "parts": 14,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 17
+    },
+    {
+      "family": "Minifig Hipwear",
+      "parts": 11,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 11
+    },
+    {
+      "family": "Plant",
+      "parts": 8,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 8
+    },
+    {
+      "family": "Container",
+      "parts": 6,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 8
+    },
+    {
+      "family": "Crane",
+      "parts": 5,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 6
+    },
+    {
+      "family": "Figure",
+      "parts": 5,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 7
+    },
+    {
+      "family": "Animal",
+      "parts": 3,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 3
+    },
+    {
+      "family": "Bar",
+      "parts": 3,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 3
+    },
+    {
+      "family": "Constraction",
+      "parts": 3,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 6
+    },
+    {
+      "family": "Sphere",
+      "parts": 3,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 3
+    },
+    {
+      "family": "Turntable",
+      "parts": 3,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 7
+    },
+    {
+      "family": "Car",
+      "parts": 2,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 2
+    },
+    {
+      "family": "Cone",
+      "parts": 2,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 3
+    },
+    {
+      "family": "Dish",
+      "parts": 2,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 2
+    },
+    {
+      "family": "Fence",
+      "parts": 2,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 3
+    },
+    {
+      "family": "Propeller",
+      "parts": 2,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 2
+    },
+    {
+      "family": "Slope",
+      "parts": 2,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 6
+    },
+    {
+      "family": "Staircase",
+      "parts": 2,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 12
+    },
+    {
+      "family": "Support",
+      "parts": 2,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 5
+    },
+    {
+      "family": "Windscreen",
+      "parts": 2,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 2
+    },
+    {
+      "family": "Antenna",
+      "parts": 1,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 1
+    },
+    {
+      "family": "Belville",
+      "parts": 1,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 1
+    },
+    {
+      "family": "Boat",
+      "parts": 1,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 1
+    },
+    {
+      "family": "Minifig Footwear",
+      "parts": 1,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 1
+    },
+    {
+      "family": "Minifig Leg",
+      "parts": 1,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 1
+    },
+    {
+      "family": "Plane",
+      "parts": 1,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 1
+    },
+    {
+      "family": "Screw",
+      "parts": 1,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 1
+    },
+    {
+      "family": "Sticker",
+      "parts": 1,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 1
+    },
+    {
+      "family": "Tap",
+      "parts": 1,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 1
+    },
+    {
+      "family": "Tyre",
+      "parts": 1,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 1
+    },
+    {
+      "family": "Winch",
+      "parts": 1,
+      "usageInstances": 0,
+      "missingOrUnmodelled": 1
+    }
+  ],
+  "inheritanceByPrimitive": [
+    {
+      "family": "peghole",
+      "label": "peg hole (peghole/npeghol)",
+      "parts": 109,
+      "missing": 1111,
+      "usageWeightedMissing": 1111
+    },
+    {
+      "family": "stud",
+      "label": "stud",
+      "parts": 352,
+      "missing": 621,
+      "usageWeightedMissing": 628
+    },
+    {
+      "family": "axle-hole",
+      "label": "axle hole",
+      "parts": 113,
+      "missing": 474,
+      "usageWeightedMissing": 474
+    },
+    {
+      "family": "pin",
+      "label": "Technic pin",
+      "parts": 28,
+      "missing": 168,
+      "usageWeightedMissing": 168
+    },
+    {
+      "family": "axle",
+      "label": "axle",
+      "parts": 62,
+      "missing": 82,
+      "usageWeightedMissing": 82
+    },
+    {
+      "family": "conn-hole",
+      "label": "Technic connector hole",
+      "parts": 8,
+      "missing": 58,
+      "usageWeightedMissing": 58
+    },
+    {
+      "family": "clip",
+      "label": "clip",
+      "parts": 18,
+      "missing": 34,
+      "usageWeightedMissing": 34
+    },
+    {
+      "family": "hinge",
+      "label": "hinge finger",
+      "parts": 30,
+      "missing": 30,
+      "usageWeightedMissing": 30
+    },
+    {
+      "family": "joint",
+      "label": "joint / generic",
+      "parts": 7,
+      "missing": 7,
+      "usageWeightedMissing": 7
+    },
+    {
+      "family": "antistud",
+      "label": "anti-stud / stud4",
+      "parts": 1,
+      "missing": 1,
+      "usageWeightedMissing": 1
+    }
+  ],
+  "nextTasks": [
+    {
+      "kind": "primitive",
+      "title": "Add/repair peg hole (peghole/npeghol) connectors (primitive family \"peghole\")",
+      "parts": 109,
+      "missing": 1111,
+      "usageWeighted": 1111,
+      "examples": [
+        "10124",
+        "10154",
+        "11025",
+        "11025p01"
+      ],
+      "upstream": "yes — directly useful to the LDCad Shadow Library"
+    },
+    {
+      "kind": "primitive",
+      "title": "Add/repair stud connectors (primitive family \"stud\")",
+      "parts": 352,
+      "missing": 621,
+      "usageWeighted": 628,
+      "examples": [
+        "85984",
+        "10354",
+        "10354c01",
+        "10355"
+      ],
+      "upstream": "yes — directly useful to the LDCad Shadow Library"
+    },
+    {
+      "kind": "primitive",
+      "title": "Add/repair axle hole connectors (primitive family \"axle-hole\")",
+      "parts": 113,
+      "missing": 474,
+      "usageWeighted": 474,
+      "examples": [
+        "4588",
+        "10124",
+        "10152",
+        "10154"
+      ],
+      "upstream": "yes — directly useful to the LDCad Shadow Library"
+    },
+    {
+      "kind": "primitive",
+      "title": "Add/repair Technic pin connectors (primitive family \"pin\")",
+      "parts": 28,
+      "missing": 168,
+      "usageWeighted": 168,
+      "examples": [
+        "2894c01",
+        "10042",
+        "100943",
+        "100943p01"
+      ],
+      "upstream": "yes — directly useful to the LDCad Shadow Library"
+    },
+    {
+      "kind": "supplementary",
+      "title": "Promote the app-measured tyre/rim seat connectors into shadow data",
+      "parts": 100,
+      "missing": 100,
+      "usageWeighted": 127,
+      "examples": [
+        "11209",
+        "11957",
+        "15413",
+        "18450",
+        "1872",
+        "18977"
+      ],
+      "upstream": "not ready — app-specific measured fallback; propose SNAP_GEN/SNAP_CYL upstream after review"
+    },
+    {
+      "kind": "primitive",
+      "title": "Add/repair axle connectors (primitive family \"axle\")",
+      "parts": 62,
+      "missing": 82,
+      "usageWeighted": 82,
+      "examples": [
+        "11214",
+        "11305",
+        "11641",
+        "15107"
+      ],
+      "upstream": "yes — directly useful to the LDCad Shadow Library"
+    },
+    {
+      "kind": "primitive",
+      "title": "Add/repair Technic connector hole connectors (primitive family \"conn-hole\")",
+      "parts": 8,
+      "missing": 58,
+      "usageWeighted": 58,
+      "examples": [
+        "15458",
+        "15458d01",
+        "15458d02",
+        "15458d03"
+      ],
+      "upstream": "yes — directly useful to the LDCad Shadow Library"
+    },
+    {
+      "kind": "primitive",
+      "title": "Add/repair clip connectors (primitive family \"clip\")",
+      "parts": 18,
+      "missing": 34,
+      "usageWeighted": 34,
+      "examples": [
+        "11055",
+        "11055d02",
+        "11055d03",
+        "11055d04"
+      ],
+      "upstream": "yes — directly useful to the LDCad Shadow Library"
+    },
+    {
+      "kind": "primitive",
+      "title": "Add/repair hinge finger connectors (primitive family \"hinge\")",
+      "parts": 30,
+      "missing": 30,
+      "usageWeighted": 30,
+      "examples": [
+        "13358",
+        "13359",
+        "13359p01",
+        "15449"
+      ],
+      "upstream": "yes — directly useful to the LDCad Shadow Library"
+    },
+    {
+      "kind": "primitive",
+      "title": "Add/repair joint / generic connectors (primitive family \"joint\")",
+      "parts": 7,
+      "missing": 7,
+      "usageWeighted": 7,
+      "examples": [
+        "14418",
+        "14704",
+        "23922",
+        "23922c01"
+      ],
+      "upstream": "yes — directly useful to the LDCad Shadow Library"
+    }
+  ],
+  "sanityChecks": [
+    {
+      "id": "3001",
+      "title": "Brick 2 x 4",
+      "category": "",
+      "bucket": "covered",
+      "status": "covered",
+      "expected": "covered",
+      "ok": true,
+      "expectedSnaps": 8,
+      "effectiveSnaps": 16,
+      "missing": "",
+      "note": "2x4 brick: 8 top studs and 8 underside receptacles inherited from s/3001s01."
+    },
+    {
+      "id": "3023b",
+      "title": "Plate 1 x 2",
+      "category": "",
+      "bucket": "covered",
+      "status": "covered",
+      "expected": "covered",
+      "ok": true,
+      "expectedSnaps": 3,
+      "effectiveSnaps": 5,
+      "missing": "",
+      "note": "1x2 plate: stud3 + two studs via stug-1x2; 2 underside receptacles from s/3023bs01."
+    },
+    {
+      "id": "3673",
+      "title": "Technic Pin",
+      "category": "",
+      "bucket": "covered",
+      "status": "covered",
+      "expected": "covered",
+      "ok": true,
+      "expectedSnaps": 2,
+      "effectiveSnaps": 2,
+      "missing": "",
+      "note": "Technic pin: SNAP_CLEAR drops two inherited connect snaps; one long M + one F consolidate them."
+    },
+    {
+      "id": "32316",
+      "title": "Technic Beam 5",
+      "category": "",
+      "bucket": "covered",
+      "status": "covered",
+      "expected": "covered",
+      "ok": true,
+      "expectedSnaps": 5,
+      "effectiveSnaps": 7,
+      "missing": "",
+      "note": "Technic beam 5: four beamhole snaps + connhole + own SNAP_INCL."
+    },
+    {
+      "id": "6558",
+      "title": "Technic Pin Long with Friction and Slot",
+      "category": "",
+      "bucket": "covered",
+      "status": "covered",
+      "expected": "covered",
+      "ok": true,
+      "expectedSnaps": 1,
+      "effectiveSnaps": 2,
+      "missing": "",
+      "note": "Long friction pin: SNAP_CLEAR + consolidated M/F; pin tolerance accepts it."
+    },
+    {
+      "id": "42610",
+      "title": "Wheel Rim 8 x 11.2 with Centre Groove",
+      "category": "",
+      "bucket": "covered",
+      "status": "covered",
+      "expected": "covered",
+      "ok": true,
+      "expectedSnaps": 0,
+      "effectiveSnaps": 2,
+      "missing": "",
+      "note": "Wheel rim: shadow F hole; supplementary adds measured M seat."
+    },
+    {
+      "id": "51011",
+      "title": "Tyre 6.4/ 75 x 8 Shallow Offset Tread",
+      "category": "",
+      "bucket": "covered",
+      "status": "covered",
+      "expected": "covered",
+      "ok": true,
+      "expectedSnaps": 0,
+      "effectiveSnaps": 1,
+      "missing": "",
+      "note": "Tyre: no shadow; supplementary F seat makes it covered (geometry-only without supplement)."
+    },
+    {
+      "id": "61254",
+      "title": "Tyre 7/ 45 x 17 Offset Tread with Middle Band",
+      "category": "",
+      "bucket": "covered",
+      "status": "covered",
+      "expected": "covered",
+      "ok": true,
+      "expectedSnaps": 0,
+      "effectiveSnaps": 1,
+      "missing": "",
+      "note": "Large tyre: no shadow; supplementary F seat makes it covered (geometry-only without supplement)."
+    },
+    {
+      "id": "13971",
+      "title": "Wheel Rim 8 x 18 with Deep Centre Groove, Deep Spokes and Peghole",
+      "category": "",
+      "bucket": "covered",
+      "status": "covered",
+      "expected": "covered",
+      "ok": true,
+      "expectedSnaps": 1,
+      "effectiveSnaps": 2,
+      "missing": "",
+      "note": "Wheel rim: shadow connhole F; supplementary adds measured M seat."
+    },
+    {
+      "id": "6014c01",
+      "title": "~Moved to 6014bc01",
+      "category": "",
+      "bucket": "redirect/alias",
+      "status": "inheritance gap",
+      "expected": "inheritance gap",
+      "ok": true,
+      "expectedSnaps": 1,
+      "effectiveSnaps": 0,
+      "missing": "cyl F 0/1",
+      "note": "~Moved to shortcut 6014bc01; target exposes an axle-hole primitive but has no shadow, so the redirect inherits an inheritance-gap status."
+    },
+    {
+      "id": "6014bc01",
+      "title": "Wheel Rim 12 x 11 with Notched Hole with Tyre 12/ 40 x 11 Wide",
+      "category": "",
+      "bucket": "redirect/alias",
+      "status": "inheritance gap",
+      "expected": "inheritance gap",
+      "ok": true,
+      "expectedSnaps": 1,
+      "effectiveSnaps": 0,
+      "missing": "cyl F 0/1",
+      "note": "Wheel assembly shortcut: 6014b contains wpinhol2.dat (axle hole) but no shadow data covers it."
+    },
+    {
+      "id": "10",
+      "title": "~Moved to 10a",
+      "category": "",
+      "bucket": "redirect/alias",
+      "status": "covered",
+      "expected": "covered",
+      "ok": true,
+      "expectedSnaps": 764,
+      "effectiveSnaps": 764,
+      "missing": "",
+      "note": "~Moved to 10a; target baseplate has full stud coverage."
+    },
+    {
+      "id": "973p34",
+      "title": "Minifig Torso with Open Jacket over Striped Vest Pattern",
+      "category": "",
+      "bucket": "covered",
+      "status": "covered",
+      "expected": "covered",
+      "ok": true,
+      "expectedSnaps": 0,
+      "effectiveSnaps": 5,
+      "missing": "",
+      "note": "Printed minifig torso: printed suffix, but inherits the base torso subpart s/973s01."
+    },
+    {
+      "id": "973",
+      "title": "Minifig Torso",
+      "category": "",
+      "bucket": "covered",
+      "status": "covered",
+      "expected": "covered",
+      "ok": true,
+      "expectedSnaps": 0,
+      "effectiveSnaps": 5,
+      "missing": "",
+      "note": "Minifig torso base: 4 F + 1 M inherited from s/973s01."
+    },
+    {
+      "id": "3811",
+      "title": "Baseplate 32 x 32",
+      "category": "",
+      "bucket": "covered",
+      "status": "covered",
+      "expected": "covered",
+      "ok": true,
+      "expectedSnaps": 1024,
+      "effectiveSnaps": 1024,
+      "missing": "",
+      "note": "32x32 baseplate: 1024 stud.dat instances -> 1024 M snaps."
+    },
+    {
+      "id": "3069b",
+      "title": "Tile 1 x 2 with Groove",
+      "category": "",
+      "bucket": "covered",
+      "status": "covered",
+      "expected": "covered",
+      "ok": true,
+      "expectedSnaps": 0,
+      "effectiveSnaps": 2,
+      "missing": "",
+      "note": "1x2 tile: two F underside receptacles from s/3069bs01."
+    },
+    {
+      "id": "22678",
+      "title": "Technic Ribbed Hose 31L",
+      "category": "Hose",
+      "bucket": "geometry-only gap",
+      "status": "geometry-only gap",
+      "expected": "geometry-only gap",
+      "ok": true,
+      "expectedSnaps": 0,
+      "effectiveSnaps": 0,
+      "missing": "no effective snaps",
+      "note": "31L ribbed hose: no shadow and no connector primitives; hand-modelled flexible part."
+    },
+    {
+      "id": "10202d01",
+      "title": "Tile 6 x 6 with Dark Bluish Grey Line and Light Bluish Grey Open Rectangle Right Panel Sticker",
+      "category": "Sticker Shortcut",
+      "bucket": "redirect/alias",
+      "status": "covered",
+      "expected": "covered",
+      "ok": true,
+      "expectedSnaps": 0,
+      "effectiveSnaps": 36,
+      "missing": "",
+      "note": "Sticker shortcut keeps the base 6x6 tile underside: 36 F snaps from s/10202s01; the sticker itself adds no connectors."
+    }
+  ]
+}
