@@ -6,12 +6,14 @@ import { CLOSE_EASE, type Timeline } from './timeline';
 export type CamPose = { position: THREE.Vector3; target: THREE.Vector3; fov: number };
 
 export const FOV = 30;
-const BUILD_AZ: [number, number] = [30, 55];
-const BUILD_EL = 42;
-const BUILD_MARGIN = 1.08;
-const ORBIT_DEG = 120;
-const ORBIT_EL = 30;
-const ORBIT_MARGIN = 1.25;
+export type CameraFraming = 'cinematic' | 'wide';
+/** Cinematic follows the supplied reference: a nearly overhead, less
+ * diagonal build shot and a closer, lower hero reveal. Wide is the previous
+ * exact full-scene style, available if a project needs maximum coverage. */
+const CAMERA = {
+  cinematic: { az0: 16, az1: 30, buildEl: 56, buildMargin: 1.045, orbitDeg: 140, orbitEl: 29, orbitMargin: 1.12, smooth: 1.045 },
+  wide: { az0: 30, az1: 55, buildEl: 42, buildMargin: 1.08, orbitDeg: 120, orbitEl: 30, orbitMargin: 1.25, smooth: 1.08 },
+} as const;
 const OUTRO_BLEND = 0.8;
 /** each camera key frames everything nearby in time */
 const KEY_REACH = 0.6;
@@ -71,19 +73,21 @@ const mix = (a: Rig, b: Rig, u: number): Rig => ({
 /** Camera framing is fitted and smoothed ONCE for each timeline and aspect.
  * Recomputing the neighbouring-key average every video frame was expensive and
  * caused sudden camera jumps whenever a key entered or left the time window. */
-const rigCache = new WeakMap<Timeline, Map<number, Rig[]>>();
+const rigCache = new WeakMap<Timeline, Map<string, Rig[]>>();
 
-function frameRigs(tl: Timeline, aspect: number): Rig[] {
+function frameRigs(tl: Timeline, aspect: number, framing: CameraFraming): Rig[] {
+  const cfg = CAMERA[framing];
+  const cacheKey = `${aspect}:${framing}`;
   let byAspect = rigCache.get(tl);
   if (!byAspect) rigCache.set(tl, (byAspect = new Map()));
-  const cached = byAspect.get(aspect);
+  const cached = byAspect.get(cacheKey);
   if (cached) return cached;
   const keys = tl.camKeys;
   const raw = keys.map((key) => {
     let box = key.box;
     for (const other of keys) if (other !== key && Math.abs(other.t - key.t) <= KEY_REACH + 1e-9) box = unionBoxes(box, other.box);
-    const az = lerp(BUILD_AZ[0], BUILD_AZ[1], clamp01(key.t / Math.max(tl.buildEnd, 1e-6)));
-    return fitRig(box, aspect, az, BUILD_EL, BUILD_MARGIN);
+    const az = lerp(cfg.az0, cfg.az1, clamp01(key.t / Math.max(tl.buildEnd, 1e-6)));
+    return fitRig(box, aspect, az, cfg.buildEl, cfg.buildMargin);
   });
   // A tapered 5-key convolution removes tiny camera adjustments without
   // changing motion from frame to frame; Catmull-Rom below gives C1 movement.
@@ -101,9 +105,9 @@ function frameRigs(tl: Timeline, aspect: number): Rig[] {
     }
     target.divideScalar(weightSum);
     // Slightly conservative framing leaves room for interpolated positions.
-    return { target, dist: Math.max(dist / weightSum * 1.08, r.dist * 1.04), az: r.az, el: r.el };
+    return { target, dist: Math.max(dist / weightSum * cfg.smooth, r.dist * 1.04), az: r.az, el: r.el };
   });
-  byAspect.set(aspect, smoothed);
+  byAspect.set(cacheKey, smoothed);
   return smoothed;
 }
 
@@ -114,10 +118,11 @@ const cubic = (p0: number, p1: number, p2: number, p3: number, u: number): numbe
     + (-2 * u3 + 3 * u2) * p2 + (u3 - u2) * (p3 - p1) / 2;
 };
 
-function floorRig(tl: Timeline, t: number, aspect: number, az: number): Rig {
+function floorRig(tl: Timeline, t: number, aspect: number, az: number, framing: CameraFraming): Rig {
+  const cfg = CAMERA[framing];
   const keys = tl.camKeys;
-  if (!keys.length) return fitRig(tl.buildBox, aspect, az, BUILD_EL, BUILD_MARGIN);
-  const rigs = frameRigs(tl, aspect);
+  if (!keys.length) return fitRig(tl.buildBox, aspect, az, cfg.buildEl, cfg.buildMargin);
+  const rigs = frameRigs(tl, aspect, framing);
   // Keys are uniformly spaced by CAM_KEY_STEP, except possibly the final one.
   const step = keys.length > 1 ? keys[1].t - keys[0].t : 0.2;
   const i = Math.min(keys.length - 1, Math.max(0, Math.floor(t / step)));
@@ -136,7 +141,7 @@ function floorRig(tl: Timeline, t: number, aspect: number, az: number): Rig {
     ),
     dist: Math.max(1, cubic(a.dist, b.dist, c.dist, d.dist, u)),
     az,
-    el: BUILD_EL,
+    el: cfg.buildEl,
   };
 }
 
@@ -145,7 +150,7 @@ const unionBoxes = (a: Box, b: Box): Box => ({
   max: [Math.max(a.max[0], b.max[0]), Math.max(a.max[1], b.max[1]), Math.max(a.max[2], b.max[2])],
 });
 
-type CloseUp = { start: number; end: number; rig: (aspect: number, az: number) => Rig };
+type CloseUp = { start: number; end: number; box: Box };
 const closeUpCache = new WeakMap<Timeline, CloseUp[]>();
 
 /**
@@ -163,7 +168,7 @@ export function closeUps(tl: Timeline): CloseUp[] {
     const from = sb.start - CLOSE_EASE;
     let box: Box = sb.focus;
     for (const u of tl.units) if (u.box && u.start < sb.attachStart - 1e-6 && u.start + u.dur > from) box = unionBoxes(box, u.box);
-    list.push({ start: sb.start, end: sb.attachStart, rig: (aspect, az) => fitRig(box, aspect, az, BUILD_EL, BUILD_MARGIN) });
+    list.push({ start: sb.start, end: sb.attachStart, box });
   }
   closeUpCache.set(tl, list);
   return list;
@@ -176,28 +181,30 @@ function closeWeight(c: CloseUp, t: number) {
   return 1 - easeInOutCubic(clamp01((t - outFrom) / Math.max(c.end - outFrom, 1e-6)));
 }
 
-function buildRig(tl: Timeline, t: number, aspect: number): Rig {
-  const az = lerp(BUILD_AZ[0], BUILD_AZ[1], clamp01(t / Math.max(tl.buildEnd, 1e-6)));
-  const wide = floorRig(tl, t, aspect, az);
+function buildRig(tl: Timeline, t: number, aspect: number, framing: CameraFraming): Rig {
+  const cfg = CAMERA[framing];
+  const az = lerp(cfg.az0, cfg.az1, clamp01(t / Math.max(tl.buildEnd, 1e-6)));
+  const wide = floorRig(tl, t, aspect, az, framing);
   let best: CloseUp | null = null;
   let w = 0;
   for (const c of closeUps(tl)) {
     const cw = closeWeight(c, t);
     if (cw > w) ((w = cw), (best = c));
   }
-  return best && w > 0 ? mix(wide, best.rig(aspect, az), w) : wide;
+  return best && w > 0 ? mix(wide, fitRig(best.box, aspect, az, cfg.buildEl, cfg.buildMargin), w) : wide;
 }
 
-export function cameraAt(tl: Timeline, t: number, aspect: number): CamPose {
+export function cameraAt(tl: Timeline, t: number, aspect: number, framing: CameraFraming = 'cinematic'): CamPose {
+  const cfg = CAMERA[framing];
   let rig: Rig;
-  if (t <= tl.buildEnd) rig = buildRig(tl, Math.min(t, tl.buildEnd), aspect);
+  if (t <= tl.buildEnd) rig = buildRig(tl, Math.min(t, tl.buildEnd), aspect, framing);
   else if (tl.heroOrbit) {
     const u = clamp01((t - tl.buildEnd) / (tl.duration - tl.buildEnd));
-    const az = BUILD_AZ[1] + ORBIT_DEG * u;
-    const orbit = fitRig(tl.modelBox, aspect, az, ORBIT_EL, ORBIT_MARGIN);
-    const from = buildRig(tl, tl.buildEnd, aspect);
+    const az = cfg.az1 + cfg.orbitDeg * u;
+    const orbit = fitRig(tl.modelBox, aspect, az, cfg.orbitEl, cfg.orbitMargin);
+    const from = buildRig(tl, tl.buildEnd, aspect, framing);
     from.az = az;
     rig = mix(from, orbit, easeInOutCubic(clamp01((t - tl.buildEnd) / OUTRO_BLEND)));
-  } else rig = buildRig(tl, tl.buildEnd, aspect);
+  } else rig = buildRig(tl, tl.buildEnd, aspect, framing);
   return { position: sphericalPosition(rig.target, rig.dist, rig.az, rig.el), target: rig.target, fov: FOV };
 }

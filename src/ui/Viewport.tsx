@@ -11,8 +11,29 @@ import { createStudio, worldBox } from '../render/studio';
 import { runCommand } from '../state/editing';
 import { commandForKey } from '../state/keymap';
 import { useStudio } from '../state/store';
+import { metricsOf } from '../state/partService';
+import { modelSteps } from '../plan/ops';
+import { posedBounds, stepPoses, timelineStep } from '../model/stepLayout';
+import { poseAt, type Timeline } from '../anim/timeline';
+import { worldBox3 } from '../anim/camera';
+import { stepAt } from '../anim/partClips';
+import { advancePlayback, usePlayback } from '../state/playback';
+import { soundSnaps } from '../audio/snapSound';
+import { useAppSettings } from '../state/appSettings';
 import type { ModelState } from '../state/useModel';
 import { viewportApi } from './viewportApi';
+
+/** Whether the camera sees all of `box` (its eight corners inside the view). */
+function inView(camera: THREE.PerspectiveCamera, box: THREE.Box3): boolean {
+  camera.updateMatrixWorld();
+  const frustum = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+  const p = new THREE.Vector3();
+  for (let i = 0; i < 8; i++) {
+    p.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z);
+    if (!frustum.containsPoint(p)) return false;
+  }
+  return true;
+}
 
 function frame(camera: THREE.PerspectiveCamera, controls: OrbitControls, box: THREE.Box3) {
   const sphere = box.getBoundingSphere(new THREE.Sphere());
@@ -27,10 +48,12 @@ function frame(camera: THREE.PerspectiveCamera, controls: OrbitControls, box: TH
 
 const isTyping = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName));
 
-export function Viewport({ model }: { model: ModelState }) {
+export function Viewport({ model, timeline = null }: { model: ModelState; timeline?: Timeline | null }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const framed = useRef(false);
+  /** the model the Build view is following the timeline of (null: not following) */
+  const followFor = useRef<string | null>(null);
   const plan = useStudio((s) => s.plan);
   const editingModel = useStudio((s) => s.editingModel);
   const currentStep = useStudio((s) => s.currentStep);
@@ -40,6 +63,15 @@ export function Viewport({ model }: { model: ModelState }) {
   const tool = useStudio((s) => s.tool);
   const gizmoEnabled = useStudio((s) => s.gizmoEnabled);
   const gizmoMode = useStudio((s) => s.gizmoMode);
+  const stepView = useStudio((s) => s.stepView);
+  const follow = usePlayback((s) => s.follow);
+  /** the Build view shows the build animation at the playhead, with the editor's own camera */
+  const engaged = mode === 'edit' && follow && !!timeline;
+  /** what the render loop needs while engaged: the timeline and the pose at a time */
+  const live = useRef<{ tl: Timeline; pose: (t: number) => (key: string) => THREE.Matrix4 | null; dirty: boolean } | null>(null);
+  const studioLook = useAppSettings((s) => s.studioLook);
+  const edgeLines = useAppSettings((s) => s.edgeLines);
+  const linearColors = useAppSettings((s) => s.linearColors);
   const gizmoRef = useRef<{ controls: TransformControls; proxy: THREE.Object3D } | null>(null);
   const draggingGizmo = useRef(false);
   const origin = useRef(new THREE.Vector3());
@@ -133,14 +165,33 @@ export function Viewport({ model }: { model: ModelState }) {
       useStudio.getState().apply(() => next);
     });
     let raf = 0;
-    const loop = () => {
+    let last = performance.now();
+    let shownT = -1;
+    const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
       if (useStudio.getState().mode === 'edit') {
+        const run = live.current;
+        if (run) {
+          // play / scrub in the Build view: the same animation as the preview, our camera
+          const wasPlaying = usePlayback.getState().playing;
+          const t = advancePlayback(dt, run.tl.duration);
+          soundSnaps(run.tl, t, wasPlaying, useAppSettings.getState().snapSound);
+          if (t !== shownT || run.dirty) {
+            studio.bricks.setMatrices(run.pose(t));
+            shownT = t;
+            run.dirty = false;
+            // the step card and Steps panel follow the step being built
+            const step = stepAt(run.tl, t);
+            if (step !== null && useStudio.getState().currentStep !== step) useStudio.setState({ currentStep: step });
+          }
+        }
         controls.update();
         studio.render();
       }
     };
-    loop();
+    raf = requestAnimationFrame(loop);
     const ro = new ResizeObserver(() => {
       const r = wrapRef.current!.getBoundingClientRect();
       studio.setSize(Math.max(1, r.width), Math.max(1, r.height));
@@ -160,6 +211,15 @@ export function Viewport({ model }: { model: ModelState }) {
       viewportApi.controls = null;
     };
   }, []);
+
+  // Video and live viewer use the same lighting preset. A changed preset is
+  // applied to the EXISTING WebGL scene, never recreating the renderer.
+  useEffect(() => {
+    viewportApi.studio?.setLook?.(studioLook);
+  }, [studioLook]);
+  useEffect(() => {
+    viewportApi.studio?.setRenderOptions?.({ edges: edgeLines, linearColors });
+  }, [edgeLines, linearColors]);
 
   // Attach / hide the gizmo when selection or mode changes. Do not reset it
   // midway through a drag, even though the plan re-renders on every snap.
@@ -191,24 +251,91 @@ export function Viewport({ model }: { model: ModelState }) {
     [model.view, currentStep, topStep],
   );
 
+  // a new project or submodel gets re-framed (declared before the instances
+  // effect so the reset happens first in the same commit)
+  useEffect(() => {
+    framed.current = false;
+  }, [plan.name, editingModel]);
+
+  // While a step is selected its new parts can be shown separated from the model
+  // (laid out on the floor, as the video stages them) or exploded above it.
+  // Once the build animation is planned, the step uses it: parts wait where the video
+  // stages them and fly in along the same collision-safe paths as the Preview.
+  const planned = useMemo(
+    () => (currentStep === null || !timeline ? null : timelineStep(model.view, currentStep, timeline)),
+    [model.view, currentStep, timeline],
+  );
+  const poses = useMemo(() => {
+    if (currentStep === null) return new Map<string, THREE.Matrix4>();
+    if (stepView === 'separated' && planned) return planned.poses;
+    return stepPoses(model.view, currentStep, stepView);
+  }, [model.view, currentStep, stepView, planned]);
+
+  // Following the timeline: every piece, posed as the animation has it at the playhead.
+  // Pieces edited since the timeline was planned show where they are now (a move shows
+  // at once; the replanned animation takes over a moment later).
+  useEffect(() => {
+    const studio = viewportApi.studio;
+    if (!studio || !engaged || !timeline) {
+      live.current = null;
+      followFor.current = null;
+      return;
+    }
+    // only when following starts (or another model opens) — never after an edit
+    const starting = followFor.current !== editingModel;
+    followFor.current = editingModel;
+    const tl = timeline;
+    const byKey = new Map(model.view.instances.map((i) => [i.key, i]));
+    const changed = new Set<string>();
+    for (const inst of model.view.instances) {
+      const tr = tl.tracks.get(inst.key);
+      if (!tr || tr.final.elements.some((v, k) => Math.abs(v - inst.world.elements[k]) > 1e-3)) changed.add(inst.key);
+    }
+    const pose = (t: number) => {
+      const at = poseAt(tl, t);
+      return (key: string) => {
+        const inst = byKey.get(key);
+        if (!inst) return null;
+        if (!changed.has(key)) return at(key);
+        // new since the plan: show it placed; edited: placed once the animation has it built
+        if (!tl.tracks.has(key)) return inst.world;
+        return at(key) ? inst.world : null;
+      };
+    };
+    studio.bricks.setInstances(model.view.instances);
+    const scene = worldBox3(tl.sceneBox);
+    if (model.view.bounds) scene.union(worldBox(model.view.bounds));
+    studio.fitTo(scene, -tl.ground / 20);
+    // Keep the user's camera, unless it can't see where this build happens (e.g. it was
+    // close in on the assembled model, with the waiting pieces out of frame).
+    if (viewportApi.controls && (!framed.current || (starting && !inView(studio.camera, scene)))) {
+      frame(studio.camera, viewportApi.controls, scene);
+      framed.current = true;
+    }
+    live.current = { tl, pose, dirty: true };
+  }, [engaged, timeline, model.view, editingModel]);
+
   // instances
   useEffect(() => {
     const studio = viewportApi.studio;
-    if (!studio || mode !== 'edit') return;
+    if (!studio || mode !== 'edit' || engaged) return;
     studio.bricks.setInstances(visible);
-    const b = model.view.bounds;
+    if (poses.size) {
+      const world = new Map(visible.map((i) => [i.key, i.world]));
+      studio.bricks.setMatrices((k) => poses.get(k) ?? world.get(k) ?? null);
+    }
+    const b = poses.size ? posedBounds(visible, poses, (p) => metricsOf(p).body) : model.view.bounds;
     const box = b ? worldBox(b) : new THREE.Box3(new THREE.Vector3(-5, 0, -5), new THREE.Vector3(5, 1, 5));
-    studio.fitTo(box, b ? -b.max[1] / 20 : 0);
+    // light and shadows cover both where the step's parts wait and where they end up
+    // (playing the step moves them in place), so no shadow gets cut off
+    const built = poses.size ? posedBounds(visible, new Map(), (p) => metricsOf(p).body) : null;
+    const lit = built ? box.clone().union(worldBox(built)) : box;
+    studio.fitTo(lit, b ? -b.max[1] / 20 : 0);
     if (b && !framed.current && viewportApi.controls) {
       frame(studio.camera, viewportApi.controls, box);
       framed.current = true;
     }
-  }, [visible, model.view, mode]);
-
-  // a new project or submodel gets re-framed
-  useEffect(() => {
-    framed.current = false;
-  }, [plan.name, editingModel]);
+  }, [visible, model.view, mode, poses, engaged]);
 
   // the preview drives the camera itself
   useEffect(() => {
@@ -219,11 +346,12 @@ export function Viewport({ model }: { model: ModelState }) {
   useEffect(() => {
     const studio = viewportApi.studio;
     if (!studio || mode !== 'edit') return;
+    const shown = engaged ? model.view.instances : visible;
     const sel = new Set(selection.model === editingModel ? selection.ids : []);
-    studio.bricks.setHighlight(new Set(visible.filter((i) => sel.has(i.key.split('/')[0])).map((i) => i.key)), 'select');
+    studio.bricks.setHighlight(new Set(shown.filter((i) => sel.has(i.key.split('/')[0])).map((i) => i.key)), 'select');
     const warnIds = new Set(model.warnings.flatMap((w) => w.itemIds));
-    studio.bricks.setHighlight(new Set(visible.filter((i) => warnIds.has(i.itemId) || warnIds.has(i.key.split('/')[0])).map((i) => i.key)), 'warn');
-  }, [selection, model.warnings, visible, editingModel, mode]);
+    studio.bricks.setHighlight(new Set(shown.filter((i) => warnIds.has(i.itemId) || warnIds.has(i.key.split('/')[0])).map((i) => i.key)), 'warn');
+  }, [selection, model.warnings, visible, editingModel, mode, engaged, model.view]);
 
   // focus requests
   useEffect(() => {
@@ -250,6 +378,17 @@ export function Viewport({ model }: { model: ModelState }) {
         return;
       }
       if (e.key === 'Escape') return useStudio.getState().select([]);
+      // , and . step through the build (like Previous / Next step); / shows every step
+      if ((e.key === ',' || e.key === '.' || e.key === '/') && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        const st = useStudio.getState();
+        const count = modelSteps(st.plan, st.editingModel).length;
+        if (!count || e.key === '/') return st.setCurrentStep(null);
+        const cur = st.currentStep;
+        if (e.key === ',') st.setCurrentStep(cur === null ? count - 1 : Math.max(0, cur - 1));
+        else st.setCurrentStep(cur === null ? 0 : Math.min(count - 1, cur + 1));
+        return;
+      }
       if ((e.key === 'f' || e.key === 'F') && !e.metaKey && !e.ctrlKey) return fitAll();
       const az = viewportApi.controls ? (viewportApi.controls.getAzimuthalAngle() * 180) / Math.PI : 0;
       const cmd = commandForKey(e, az);
@@ -264,8 +403,13 @@ export function Viewport({ model }: { model: ModelState }) {
   const fitAllRef = useRef(() => {});
   viewportApi.fit = () => fitAllRef.current();
   fitAllRef.current = () => {
-    const b = model.view.bounds;
-    if (b && viewportApi.studio && viewportApi.controls) frame(viewportApi.studio.camera, viewportApi.controls, worldBox(b));
+    // frame what is on screen: a step's parts laid out on the floor and where they end up
+    const b = poses.size ? posedBounds(visible, poses, (p) => metricsOf(p).body) : model.view.bounds;
+    if (!b || !viewportApi.studio || !viewportApi.controls) return;
+    const box = worldBox(b);
+    const built = poses.size ? posedBounds(visible, new Map(), (p) => metricsOf(p).body) : null;
+    if (built) box.union(worldBox(built));
+    frame(viewportApi.studio.camera, viewportApi.controls, box);
   };
 
   const rayAt = (e: { clientX: number; clientY: number }) => {

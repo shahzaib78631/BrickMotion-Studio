@@ -160,6 +160,32 @@ export function reorderItemInStep(p: Plan, m: ModelName, at: number, from: numbe
   return withSteps(p, m, steps);
 }
 
+/**
+ * Moves one piece to `index` (in arrival order) of step `to`: a reorder within its own
+ * step or a move into another step. The index counts the target step's other pieces.
+ */
+export function moveItemTo(p: Plan, m: ModelName, id: string, to: number, index: number): Plan {
+  const found = findItem(p, m, id);
+  if (!found || !Number.isInteger(to) || to < 0) return p;
+  const steps = modelSteps(p, m).map((s, k) => (k === found.step ? { ...s, pieces: s.pieces.filter((i) => i.id !== id) } : s));
+  while (steps.length <= to) steps.push({ pieces: [] });
+  const pieces = [...steps[to].pieces];
+  pieces.splice(Math.max(0, Math.min(pieces.length, Math.round(index))), 0, found.item);
+  steps[to] = { ...steps[to], pieces };
+  const unchanged = found.step === to && modelSteps(p, m)[to].pieces.every((i, k) => i === pieces[k]);
+  return unchanged ? p : withSteps(p, m, steps);
+}
+
+/** Adds a piece to step `step` at arrival position `index` (the end when left out). */
+export function insertItem(p: Plan, m: ModelName, step: number, item: PlanItem, index?: number): Plan {
+  const steps = [...modelSteps(p, m)];
+  while (steps.length <= step) steps.push({ pieces: [] });
+  const pieces = [...steps[step].pieces];
+  pieces.splice(index === undefined ? pieces.length : Math.max(0, Math.min(pieces.length, index)), 0, item);
+  steps[step] = { ...steps[step], pieces };
+  return withSteps(p, m, steps);
+}
+
 /** Split into this step and the step after it; select ids to choose the moved pieces,
  * or automatically split at the midpoint. No part is duplicated or repositioned. */
 export function splitStep(p: Plan, m: ModelName, at: number, selectedIds: string[] = []): Plan {

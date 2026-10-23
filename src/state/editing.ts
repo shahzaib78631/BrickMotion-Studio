@@ -1,7 +1,7 @@
 import type { Box } from '../ldraw/flatten';
 import { assemble, transformBox, placementMatrix, type Assembly } from '../model/assemble';
 import { newId } from '../plan/ids';
-import { addItem, deleteItems, duplicateItems, findItem, modelSteps, moveItems, rotateItems, type ModelName } from '../plan/ops';
+import { addItem, deleteItems, duplicateItems, findItem, modelSteps, moveItems, rotateItems, type ModelName, insertItem } from '../plan/ops';
 import { gridToPlacement } from '../plan/placement';
 import { isGrid, isSub, type Grid, type Plan, type PlanItem } from '../plan/types';
 import type { Command } from './keymap';
@@ -51,7 +51,12 @@ export function findFreeSpot(view: Assembly, body: Box): Grid {
 }
 
 /** Adds a part to the current step (or a new last step) at a free spot and selects it. */
-export async function addPart(part: string): Promise<void> {
+/**
+ * Adds a part in the paint colour at a free spot. It lands in the current step (or the
+ * last one), or exactly where `at` says: a step and an arrival position in it, e.g. where
+ * it was dropped on the timeline.
+ */
+export async function addPart(part: string, at?: { step: number; index: number }): Promise<void> {
   await ensureParts([part]);
   const st = useStudio.getState();
   const { plan, editingModel, currentStep, paintColor } = st;
@@ -59,8 +64,12 @@ export async function addPart(part: string): Promise<void> {
   const spot = findFreeSpot(view, metricsOf(part).body);
   const id = newId(plan);
   const steps = modelSteps(plan, editingModel);
-  const step = currentStep ?? Math.max(0, steps.length - 1);
-  st.apply((p) => addItem(p, editingModel, steps.length === 0 ? 0 : step, { id, part, color: paintColor, ...spot }));
+  const item = { id, part, color: paintColor, ...spot };
+  if (at) st.apply((p) => insertItem(p, editingModel, at.step, item, at.index));
+  else {
+    const step = currentStep ?? Math.max(0, steps.length - 1);
+    st.apply((p) => addItem(p, editingModel, steps.length === 0 ? 0 : step, item));
+  }
   st.select([id]);
 }
 

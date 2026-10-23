@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
-import { buildTimeline, type Timeline } from './anim/timeline';
-import { useAppSettings } from './state/appSettings';
-import { initPartService, metricsOf } from './state/partService';
+import { animOptions, useAppSettings } from './state/appSettings';
+import { initPartService } from './state/partService';
 import { initPersistence } from './state/persistence';
 import { useStudio } from './state/store';
 import { useModel } from './state/useModel';
+import { useTimeline } from './state/useTimeline';
+import { usePlayback } from './state/playback';
 import { AboutDialog } from './ui/AboutDialog';
 import { AiPanel } from './ui/AiPanel';
 import { BuildTimeline } from './ui/BuildTimeline';
 import { ChecksPanel } from './ui/ChecksPanel';
-import { ExportDialog } from './ui/ExportDialog';
+import { ExportDialog, type ExportJob } from './ui/ExportDialog';
 import { Ic, type IconName } from './ui/icons';
 import { Inspector } from './ui/Inspector';
+import { ModelsPanel } from './ui/ModelsPanel';
+import { StepCallout } from './ui/StepCallout';
 import { PartsPanel } from './ui/PartsPanel';
 import { PreviewPlayer } from './ui/PreviewPlayer';
 import { ProjectsDialog } from './ui/ProjectsDialog';
@@ -24,8 +27,9 @@ import { viewportApi } from './ui/viewportApi';
 import './ui/studio.css';
 import './ui/app.css';
 
-type Tab = 'parts' | 'steps' | 'checks' | 'ai' | 'video' | 'settings';
+type Tab = 'models' | 'parts' | 'steps' | 'checks' | 'ai' | 'video' | 'settings';
 const TABS: [Tab, IconName, string][] = [
+  ['models', 'box', 'Models'],
   ['parts', 'parts', 'Parts'],
   ['steps', 'steps', 'Steps'],
   ['checks', 'checks', 'Checks'],
@@ -60,26 +64,23 @@ function Studio() {
   const [tab, setTab] = useState<Tab>(() => (load('bm-tab') as Tab) ?? 'parts');
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (load('bm-theme') === 'dark' ? 'dark' : 'light'));
   const [tlHeight, setTlHeight] = useState(() => Number(load('bm-tl-h')) || 236);
-  const [dialog, setDialog] = useState<'projects' | 'about' | 'export' | null>(null);
+  const [dialog, setDialog] = useState<'projects' | 'about' | null>(null);
+  const [exportJobs, setExportJobs] = useState<ExportJob[] | null>(null);
 
   useEffect(() => store('bm-tab', tab), [tab]);
   useEffect(() => store('bm-theme', theme), [theme]);
 
-  const timeline: Timeline | null = useMemo(
-    () =>
-      model.ready
-        ? buildTimeline(model.assembly, metricsOf, {
-            targetSeconds: video.targetSeconds,
-            heroOrbit: video.heroOrbit,
-            mode: video.mode === 'auto' ? undefined : video.mode,
-            introSeconds: video.introSeconds,
-            buildSeconds: video.buildSeconds,
-            outroSeconds: video.outroSeconds,
-          })
-        : null,
-    [model.ready, model.assembly, video.targetSeconds, video.heroOrbit, video.mode, video.introSeconds, video.buildSeconds, video.outroSeconds],
+  // The timeline follows the model on screen: open a submodel and its own build
+  // animation plays, scrubs and exports on its own. '' is the whole set.
+  const opts = useMemo(
+    () => animOptions(video),
+    [video.targetSeconds, video.heroOrbit, video.mode, video.introSeconds, video.buildSeconds, video.outroSeconds, video.bottomUp],
   );
-  const canPreview = model.ready && model.assembly.instances.length > 0;
+  const { timeline, planning, error: planError } = useTimeline(model.ready && model.view.instances.length > 0, model.plan, editingModel, opts);
+  // a different model has a different timeline: start it from the beginning
+  useEffect(() => usePlayback.getState().set({ t: 0, playing: false, stopAt: null, loopFrom: null }), [editingModel]);
+  const exportCurrent = () => setExportJobs([{ model: editingModel, label: editingModel || 'Main model' }]);
+  const canPreview = model.ready && model.view.instances.length > 0 && timeline !== null;
 
   const resize = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
@@ -115,7 +116,7 @@ function Studio() {
           onTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
           onProjects={() => setDialog('projects')}
           onAbout={() => setDialog('about')}
-          onExportVideo={() => setDialog('export')}
+          onExportVideo={exportCurrent}
           canPreview={canPreview}
         />
         <div className="nx-work">
@@ -129,18 +130,21 @@ function Studio() {
             ))}
           </nav>
           <section className="nx-panel">
+            {tab === 'models' && <ModelsPanel model={model} onExport={setExportJobs} />}
             {tab === 'parts' && <PartsPanel />}
-            {tab === 'steps' && <StepsPanel />}
+            {tab === 'steps' && <StepsPanel timeline={timeline} />}
             {tab === 'checks' && <ChecksPanel warnings={model.warnings} />}
             {tab === 'ai' && <AiPanel warnings={model.warnings} onOpenSettings={() => setTab('settings')} />}
-            {tab === 'video' && <VideoPanel timeline={timeline} onExport={() => setDialog('export')} />}
+            {tab === 'video' && <VideoPanel timeline={timeline} onExport={exportCurrent} />}
             {tab === 'settings' && <SettingsPanel onAbout={() => setDialog('about')} />}
           </section>
           <section className="nx-viewer">
             <div className="nx-viewer-bar">
               <div className="nx-row">
                 {mode === 'preview' ? (
-                  <span className="nx-chip">Preview · 9:16</span>
+                  <span className="nx-chip">
+                    Preview · {editingModel || 'Main model'} · {video.format}
+                  </span>
                 ) : editingModel ? (
                   <span className="bm-crumb">
                     <button className="nx-link" onClick={() => useStudio.getState().setEditingModel('')}>
@@ -204,27 +208,19 @@ function Studio() {
               </div>
             </div>
             <div className="nx-stage bm-stage">
-              <Viewport model={model} />
+              <Viewport model={model} timeline={timeline} />
               {mode === 'preview' && timeline && <PreviewPlayer model={model} timeline={timeline} />}
+              {mode === 'preview' && !timeline && <div className="overlay-note">{planError ? `Couldn't plan the animation: ${planError}` : 'Planning the build animation…'}</div>}
             </div>
           </section>
-          <Inspector timeline={timeline} checks={model.warnings.length} />
+          <Inspector timeline={timeline} checks={model.warnings.length} stepCard={mode === 'edit' ? <StepCallout model={model} timeline={timeline} /> : null} />
         </div>
         <div className="nx-resizer" onPointerDown={resize} title="Drag to resize the timeline" />
-        <BuildTimeline timeline={timeline} />
+        <BuildTimeline timeline={timeline} planning={planning} />
       </div>
       {dialog === 'projects' && <ProjectsDialog onClose={() => setDialog(null)} />}
       {dialog === 'about' && <AboutDialog onClose={() => setDialog(null)} />}
-      {dialog === 'export' && timeline && (
-        <ExportDialog
-          name={useStudio.getState().plan.name}
-          timeline={timeline}
-          instances={model.assembly.instances}
-          fps={video.fps}
-          logo={video.logoEnabled && video.logoBitmap ? { image: video.logoBitmap, corner: video.logoCorner } : null}
-          onClose={() => setDialog(null)}
-        />
-      )}
+      {exportJobs && exportJobs.length > 0 && <ExportDialog plan={model.plan} jobs={exportJobs} onClose={() => setExportJobs(null)} />}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { searchCatalog } from '../catalog/catalog';
 import { resolveColor } from '../ldraw/colors';
 import { findItem, modelSteps, moveItemsToStep, setColor, setPart } from '../plan/ops';
@@ -59,8 +59,11 @@ function PartPicker({ onPick }: { onPick: (id: string) => void }) {
   );
 }
 
-/** Right-hand inspector: the selection's part, colour and step, or the set's numbers when nothing is selected. */
-export function Inspector({ timeline, checks }: { timeline: Timeline | null; checks: number }) {
+/**
+ * Right-hand inspector: the selected step's card (when given) on top, then the selection's
+ * part, colour and step, or the set's numbers when nothing is selected.
+ */
+export function Inspector({ timeline, checks, stepCard }: { timeline: Timeline | null; checks: number; stepCard?: ReactNode }) {
   const plan = useStudio((s) => s.plan);
   const selection = useStudio((s) => s.selection);
   const editingModel = useStudio((s) => s.editingModel);
@@ -76,6 +79,7 @@ export function Inspector({ timeline, checks }: { timeline: Timeline | null; che
     const subs = Object.keys(plan.submodels ?? {}).length;
     return (
       <aside className="nx-inspector" aria-label="Inspector">
+        {stepCard}
         <div className="nx-insp-head">
           <h4>{plan.name || 'Untitled set'}</h4>
         </div>
@@ -134,6 +138,7 @@ export function Inspector({ timeline, checks }: { timeline: Timeline | null; che
 
   return (
     <aside className="nx-inspector" aria-label="Inspector">
+      {stepCard}
       {found.length > 1 ? (
         <div className="nx-insp-head">
           <h4>{found.length} pieces selected</h4>

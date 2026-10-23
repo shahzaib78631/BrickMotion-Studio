@@ -6,6 +6,8 @@ export type PartGeometry = {
   main: THREE.BufferGeometry | null;
   mainDoubleSided: THREE.BufferGeometry | null;
   fixed: { color: number; geometry: THREE.BufferGeometry; doubleSided: boolean }[];
+  /** outline edges as line-segment positions (LDU), or null when the part has none */
+  edges: THREE.BufferGeometry | null;
 };
 
 const CREASE = Math.PI / 6;
@@ -38,5 +40,6 @@ export function buildPartGeometry(flat: FlatPart): PartGeometry {
     main: toGeometry(flat.tris.get(16)),
     mainDoubleSided: toGeometry(flat.doubleSided.get(16)),
     fixed,
+    edges: flat.edges?.length ? new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(flat.edges, 3)) : null,
   };
 }

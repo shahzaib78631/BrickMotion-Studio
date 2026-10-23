@@ -5,6 +5,8 @@ export type Vec3 = [number, number, number];
 export type LDrawCmd =
   | { t: 'ref'; color: number; pos: Vec3; m: Mat3; file: string; invert: boolean }
   | { t: 'tri' | 'quad'; color: number; pts: number[] }
+  /** type 2: an outline edge */
+  | { t: 'line'; color: number; pts: number[] }
   | { t: 'step' }
   | { t: 'bfc'; cert?: 'CCW' | 'CW' | 'NOCERTIFY'; winding?: 'CCW' | 'CW'; clip?: boolean };
 
@@ -72,6 +74,8 @@ export function parseLDraw(text: string, name = 'main.ldr'): LDrawFile {
         invert: invertNext,
       });
       invertNext = false;
+    } else if (type === '2' && tok.length >= 8) {
+      file.cmds.push({ t: 'line', color: n[1], pts: n.slice(2, 8) });
     } else if (type === '3' && tok.length >= 11) {
       file.cmds.push({ t: 'tri', color: n[1], pts: n.slice(2, 11) });
     } else if (type === '4' && tok.length >= 14) {

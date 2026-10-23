@@ -5,6 +5,8 @@ export type AnimOptions = {
   targetSeconds: number; heroOrbit: boolean; mode?: ArrivalMode;
   /** Optional clip-length overrides, seconds. Null follows the automatic video length. */
   introSeconds?: number | null; buildSeconds?: number | null; outroSeconds?: number | null;
+  /** Within a step, place each piece after what it rests on (default). False plays the plan order as is. */
+  bottomUp?: boolean;
 };
 export type Pacing = {
   mode: ArrivalMode;

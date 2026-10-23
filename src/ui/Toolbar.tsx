@@ -2,7 +2,9 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { exportLDraw } from '../io/ldrawExport';
 import { planToJson, readPlanFile } from '../io/planFile';
 import { ensureIds } from '../plan/ids';
-import { getColors, metricsOf } from '../state/partService';
+import { autoStepPlan, modelsWithoutSteps } from '../plan/autoSteps';
+import { ensureParts, getColors, metricsOf, registerInlineParts } from '../state/partService';
+import { allPartIds } from '../state/useModel';
 import { newProject, useSaveStatus } from '../state/persistence';
 import { useStudio } from '../state/store';
 import { saveBlob, safeFileName } from './download';
@@ -110,7 +112,15 @@ export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, ca
     const r = readPlanFile(await f.text(), f.name);
     if (!r.ok) return alert(`Couldn't open ${f.name}:\n\n${r.errors.slice(0, 8).join('\n')}`);
     if (pieceCount() > 0 && !confirm('Replace the current set with this file? (You can undo.)')) return;
-    st.setPlan(ensureIds(r.plan));
+    let plan = ensureIds(r.plan);
+    // LDraw files without STEP lines put hundreds of parts in one step. Give those
+    // models bottom-up layer steps so the build reads like real instructions.
+    if (modelsWithoutSteps(plan).length) {
+      registerInlineParts(plan.parts);
+      await ensureParts(allPartIds(plan));
+      plan = autoStepPlan(plan, metricsOf, getColors()).plan;
+    }
+    st.setPlan(plan);
     st.setEditingModel('');
   };
   const downloadPlan = () => saveBlob(`${safeFileName(plan.name)}.plan.json`, new Blob([planToJson(plan)], { type: 'application/json' }));
@@ -213,7 +223,7 @@ export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, ca
             </>
           }
           items={[
-            { icon: 'video', label: 'Video (MP4, 1080×1920)…', disabled: pieces === 0, onClick: onExportVideo },
+            { icon: 'video', label: 'Video (MP4)…', disabled: pieces === 0, onClick: onExportVideo },
             'sep',
             { icon: 'file', label: 'Plan (.json)', onClick: downloadPlan },
             { icon: 'file', label: 'LDraw (.mpd)', onClick: downloadLDraw },

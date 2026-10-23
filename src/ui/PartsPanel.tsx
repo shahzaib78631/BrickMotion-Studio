@@ -4,6 +4,7 @@ import { COMMON_PARTS } from '../catalog/common';
 import { addPart } from '../state/editing';
 import { getCatalog } from '../state/partService';
 import { PartThumb } from './PartThumb';
+import { PART_DRAG_TYPE } from './PartsLane';
 
 export function PartsPanel() {
   const [q, setQ] = useState('');
@@ -45,7 +46,17 @@ export function PartsPanel() {
       <div className="nx-sub">{!q.trim() && !cat ? 'Common parts' : `${results.length} found`}</div>
       <div className="part-grid">
         {results.map((e) => (
-          <button key={e.id} className="part-tile" title={`${e.name} (${e.id}) — click to add`} onClick={() => addPart(e.id)}>
+          <button
+            key={e.id}
+            className="part-tile"
+            title={`${e.name} (${e.id}) — click to add, or drag onto the timeline's Parts lane to add it at that moment`}
+            onClick={() => addPart(e.id)}
+            draggable
+            onDragStart={(ev) => {
+              ev.dataTransfer.setData(PART_DRAG_TYPE, e.id);
+              ev.dataTransfer.effectAllowed = 'copy';
+            }}
+          >
             <PartThumb id={e.id} />
             <span className="part-name">{e.name}</span>
             <span className="part-id">{e.id}</span>
@@ -53,7 +64,7 @@ export function PartsPanel() {
         ))}
         {results.length === 0 && <p className="nx-hint">No parts match.</p>}
       </div>
-      <p className="nx-fine">Click a part to add it in the selected colour. It lands in the current step.</p>
+      <p className="nx-fine">Click a part to add it in the selected colour. It lands in the current step. Or drag it onto the timeline's Parts lane to add it at that moment of the build.</p>
     </div>
   );
 }

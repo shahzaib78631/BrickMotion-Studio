@@ -1,8 +1,11 @@
 import { create } from 'zustand';
-import type { ArrivalMode } from '../anim/pacing';
+import type { AnimOptions, ArrivalMode } from '../anim/pacing';
 import type { LogoCorner } from '../export/exportVideo';
 import type { ExportFps } from '../export/frameRates';
+import type { StudioLook } from '../render/studio';
+import type { CameraFraming } from '../anim/camera';
 import { DEFAULT_SETTINGS, type Settings } from '../storage/settings';
+import type { VideoFormat } from '../export/formats';
 
 export type AppSettings = {
   /** Claude API key, stored only in this browser */
@@ -11,6 +14,18 @@ export type AppSettings = {
   targetSeconds: number;
   fps: ExportFps;
   heroOrbit: boolean;
+  studioLook: StudioLook;
+  cameraFraming: CameraFraming;
+  /** output frame shape for the preview and MP4 */
+  format: VideoFormat;
+  /** faint LDraw outline edges on every brick */
+  edgeLines: boolean;
+  /** linear tone mapping (truer LEGO colours) instead of filmic */
+  linearColors: boolean;
+  /** within a step, each piece is placed after what it rests on */
+  bottomUp: boolean;
+  /** a click each time pieces connect, in playback and the MP4 */
+  snapSound: boolean;
   introSeconds: number | null;
   buildSeconds: number | null;
   outroSeconds: number | null;
@@ -41,7 +56,7 @@ export const toSettings = (s: AppSettings): Settings => ({
   logo: s.logo,
   logoCorner: s.logoCorner,
   logoEnabled: s.logoEnabled,
-  video: { targetSeconds: s.targetSeconds, heroOrbit: s.heroOrbit, mode: s.mode, fps: s.fps, introSeconds: s.introSeconds, buildSeconds: s.buildSeconds, outroSeconds: s.outroSeconds },
+  video: { targetSeconds: s.targetSeconds, heroOrbit: s.heroOrbit, mode: s.mode, fps: s.fps, introSeconds: s.introSeconds, buildSeconds: s.buildSeconds, outroSeconds: s.outroSeconds, studioLook: s.studioLook, cameraFraming: s.cameraFraming, format: s.format, edgeLines: s.edgeLines, linearColors: s.linearColors, bottomUp: s.bottomUp, snapSound: s.snapSound },
 });
 
 export async function applySettings(s: Settings): Promise<void> {
@@ -50,3 +65,14 @@ export async function applySettings(s: Settings): Promise<void> {
     .getState()
     .set({ apiKey: s.apiKey, model: s.model, logo: s.logo, logoBitmap, logoCorner: s.logoCorner, logoEnabled: s.logoEnabled && !!logoBitmap, ...s.video });
 }
+
+/** The animation options the timeline planner needs, taken from the video settings. */
+export const animOptions = (s: Pick<AppSettings, 'targetSeconds' | 'heroOrbit' | 'mode' | 'introSeconds' | 'buildSeconds' | 'outroSeconds' | 'bottomUp'>): AnimOptions => ({
+  targetSeconds: s.targetSeconds,
+  heroOrbit: s.heroOrbit,
+  mode: s.mode === 'auto' ? undefined : s.mode,
+  introSeconds: s.introSeconds,
+  buildSeconds: s.buildSeconds,
+  outroSeconds: s.outroSeconds,
+  bottomUp: s.bottomUp,
+});

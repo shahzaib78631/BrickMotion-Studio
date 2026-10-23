@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState, type PointerEvent as RPointerEvent, type KeyboardEvent as RKeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type KeyboardEvent as RKeyboardEvent } from 'react';
 import type { StepSpan, Timeline } from '../anim/timeline';
 import { modelSteps, updateStep } from '../plan/ops';
 import { useAppSettings } from '../state/appSettings';
 import { usePlayback } from '../state/playback';
 import { useStudio } from '../state/store';
 import { Ic } from './icons';
+import { packRows, partClips } from '../anim/partClips';
+import { PART_MIN_PX, PartsLane, partsLaneHeight } from './PartsLane';
+
+const MAX_PART_ROWS = 6;
 
 const RULER = 30;
 const LANE = 42;
@@ -39,11 +43,12 @@ const mainSteps = (tl: Timeline) => {
  * The build animation as lanes (Rewind studio-kit timeline): main steps, submodel builds and the camera.
  * Clicking a step edits it; the ruler, play and step buttons drive the preview.
  */
-export function BuildTimeline({ timeline: tl }: { timeline: Timeline | null }) {
+export function BuildTimeline({ timeline: tl, planning = false }: { timeline: Timeline | null; planning?: boolean }) {
   const t = usePlayback((s) => s.t);
   const playing = usePlayback((s) => s.playing);
   const plan = useStudio((s) => s.plan);
   const mode = useStudio((s) => s.mode);
+  const follow = usePlayback((s) => s.follow);
   const currentStep = useStudio((s) => s.currentStep);
   const editingModel = useStudio((s) => s.editingModel);
   const st = useStudio.getState;
@@ -55,6 +60,7 @@ export function BuildTimeline({ timeline: tl }: { timeline: Timeline | null }) {
   const [trimPreview, setTrimPreview] = useState<TrimPreview | null>(null);
   const video = useAppSettings();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const headsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -75,9 +81,15 @@ export function BuildTimeline({ timeline: tl }: { timeline: Timeline | null }) {
   const previewDuration = buildEnd + outroLength;
   const seek = (s: number) => pb().set({ t: Math.max(0, Math.min(dur, s)) });
 
+  // The timeline always shows the model on screen, so a step clip is a step of THAT model.
+  // In the Build view the timeline drives the canvas: playing, scrubbing or jumping shows the
+  // build at the playhead there (follow), and stopping leaves it at that moment, ready to edit.
+  const inBuild = () => st().mode === 'edit';
   const editStep = (span: StepSpan) => {
-    if (st().editingModel !== '') st().setEditingModel('');
-    st().setCurrentStep(span.index);
+    if (inBuild()) {
+      useStudio.setState({ currentStep: span.index });
+      pb().set({ playing: false, follow: true });
+    } else st().setCurrentStep(span.index);
     seek(span.start);
   };
   const jump = (dir: 1 | -1) => {
@@ -85,14 +97,12 @@ export function BuildTimeline({ timeline: tl }: { timeline: Timeline | null }) {
     const list = mainSteps(tl);
     const target = dir > 0 ? list.find((s) => s.start > t + 1e-3) : [...list].reverse().find((s) => s.start < t - 0.05);
     if (!target) return seek(dir > 0 ? dur : 0);
-    if (st().mode === 'edit') editStep(target);
-    else seek(target.start);
+    editStep(target);
   };
   const togglePlay = () => {
     if (!tl) return;
     if (playing) return pb().set({ playing: false });
-    if (st().mode !== 'preview') st().setMode('preview');
-    pb().set({ t: t >= dur - 1e-3 ? 0 : t, playing: true });
+    pb().set({ t: t >= dur - 1e-3 ? 0 : t, playing: true, stopAt: null, loopFrom: null, follow: inBuild() || pb().follow });
   };
 
   const playRef = useRef(togglePlay);
@@ -156,7 +166,7 @@ export function BuildTimeline({ timeline: tl }: { timeline: Timeline | null }) {
     if (!data) return;
     const pause = data.pauseAfter ?? 0;
     beginTrim(e, 'step', pause, 0, 10, (value) => {
-      st().apply((p) => updateStep(p, '', span.index, { title: data.title, notes: data.notes, pauseAfter: value }));
+      st().apply((p) => updateStep(p, st().editingModel, span.index, { title: data.title, notes: data.notes, pauseAfter: value }));
     }, span.index);
   };
 
@@ -166,8 +176,7 @@ export function BuildTimeline({ timeline: tl }: { timeline: Timeline | null }) {
     const releaseSelection = stopSelection();
     const el = scrollRef.current!;
     const at = (clientX: number) => (clientX - el.getBoundingClientRect().left + el.scrollLeft - PAD) / px;
-    pb().set({ playing: false });
-    if (st().mode !== 'preview') st().setMode('preview');
+    pb().set({ playing: false, stopAt: null, loopFrom: null, follow: inBuild() || pb().follow });
     seek(at(e.clientX));
     const move = (ev: PointerEvent) => seek(at(ev.clientX));
     const up = () => {
@@ -181,7 +190,17 @@ export function BuildTimeline({ timeline: tl }: { timeline: Timeline | null }) {
     window.addEventListener('pointercancel', up);
   };
 
-  const steps = modelSteps(plan, '');
+  const steps = modelSteps(plan, editingModel);
+  // one clip per piece; rows depend on the zoom (short flights get a readable minimum width)
+  const parts = useMemo(() => {
+    if (!tl) return { clips: [], rows: 1 };
+    const clips = partClips(tl, steps);
+    return { clips, rows: packRows(clips, PART_MIN_PX / px, MAX_PART_ROWS) };
+  }, [tl, steps, px]);
+  const timeAt = (clientX: number) => {
+    const el = scrollRef.current!;
+    return (clientX - el.getBoundingClientRect().left + el.scrollLeft - PAD) / px;
+  };
   const step = tl ? tickStep(px) : 1;
   const ticks = tl ? Array.from({ length: Math.floor(dur / step) + 1 }, (_, i) => i * step) : [];
   const contentWidth = X(Math.max(dur, previewDuration)) + PAD;
@@ -193,6 +212,14 @@ export function BuildTimeline({ timeline: tl }: { timeline: Timeline | null }) {
           <span className="nx-tc">
             <b>{timecode(t)}</b> / {timecode(dur)}
           </span>
+          <span className="nx-chip bm-scope" title="The timeline, preview and MP4 export follow the model you have open">
+            <Ic name={editingModel ? 'box' : 'brick'} /> {editingModel || 'Main model'}
+          </span>
+          {planning && (
+            <span className="bm-planning" role="status" aria-live="polite">
+              <i /> Planning…
+            </span>
+          )}
         </div>
         <div className="nx-tr-center">
           <button className="nx-icon" aria-label="Previous step" title="Previous step" disabled={!tl} onClick={() => jump(-1)}>
@@ -225,21 +252,29 @@ export function BuildTimeline({ timeline: tl }: { timeline: Timeline | null }) {
         </div>
       </div>
       <div className="nx-tracks">
-        <div className="nx-heads">
+        <div className="nx-heads" ref={headsRef}>
           {(
             [
-              ['steps', 'Steps'],
-              ['box', 'Submodels'],
-              ['camera', 'Camera'],
+              ['steps', 'Steps', LANE],
+              ['brick', 'Parts', partsLaneHeight(parts.rows)],
+              ['box', 'Submodels', LANE],
+              ['camera', 'Camera', LANE],
             ] as const
-          ).map(([icon, label]) => (
-            <div key={label} className="nx-head-row" style={{ height: LANE }}>
+          ).map(([icon, label, height]) => (
+            <div key={label} className="nx-head-row" style={{ height }}>
               <Ic name={icon} />
               <span>{label}</span>
             </div>
           ))}
         </div>
-        <div className="nx-scroll" ref={scrollRef}>
+        <div
+          className="nx-scroll"
+          ref={scrollRef}
+          // the lane names follow the lanes when the Parts lane makes them taller than the panel
+          onScroll={(e) => {
+            if (headsRef.current) headsRef.current.scrollTop = e.currentTarget.scrollTop;
+          }}
+        >
           <div className="nx-content" style={{ width: contentWidth }}>
             <div
               className="nx-ruler bm-ruler"
@@ -272,7 +307,7 @@ export function BuildTimeline({ timeline: tl }: { timeline: Timeline | null }) {
                   {tl.steps
                     .filter((s) => s.model === '')
                     .map((s, i) => {
-                      const sel = editingModel === '' && currentStep === s.index;
+                      const sel = currentStep === s.index;
                       const data = steps[s.index];
                       const count = data?.pieces.length ?? 0;
                       const label = data?.title ? `Step ${s.index + 1} · ${data.title}` : `Step ${s.index + 1}`;
@@ -299,7 +334,7 @@ export function BuildTimeline({ timeline: tl }: { timeline: Timeline | null }) {
                             setOverStep(null);
                             if (!Number.isInteger(from) || from === s.index) return;
                             pb().set({ playing: false, t: 0 });
-                            st().reorderBuildStep('', from, s.index);
+                            st().reorderBuildStep(st().editingModel, from, s.index);
                             st().setMode('edit');
                             st().setCurrentStep(s.index);
                           }}
@@ -322,7 +357,7 @@ export function BuildTimeline({ timeline: tl }: { timeline: Timeline | null }) {
                               if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
                               e.preventDefault(); e.stopPropagation();
                               const value = rounded(clamp((data?.pauseAfter ?? 0) + (e.key === 'ArrowRight' ? 0.1 : -0.1), 0, 10));
-                              st().apply((p) => updateStep(p, '', s.index, { title: data?.title, notes: data?.notes, pauseAfter: value }));
+                              st().apply((p) => updateStep(p, st().editingModel, s.index, { title: data?.title, notes: data?.notes, pauseAfter: value }));
                             }}
                           />
                           {trimPreview?.kind === 'step' && trimPreview.index === s.index && <span className="bm-trim-value">+{trimPreview.seconds.toFixed(1)}s</span>}
@@ -331,17 +366,19 @@ export function BuildTimeline({ timeline: tl }: { timeline: Timeline | null }) {
                     })}
                   {tl.steps.length === 0 && <span className="nx-hint bm-empty">Add pieces and the steps show up here.</span>}
                 </div>
+                <PartsLane tl={tl} steps={steps} clips={parts.clips} rows={parts.rows} px={px} X={X} timeAt={timeAt} />
                 <div className="nx-lane" style={{ height: LANE }}>
                   {tl.subBuilds.map((b) => (
                     <button
                       key={b.key}
-                      className={`nx-clip bm-sub ${editingModel === b.name ? 'sel' : ''}`}
+                      // a submodel built inside another one (a minifig in a train) sits under its parent's clip
+                      className={`nx-clip bm-sub ${b.key.includes('/') ? 'bm-sub-nested' : ''} ${editingModel === b.name ? 'sel' : ''}`}
                       style={{ left: X(b.start), width: Math.max(6, (b.attachEnd - b.start) * px - 2) }}
                       aria-label={`Build ${b.name}, attach at ${b.attachStart.toFixed(1)} s`}
-                      title={`${b.name}: built aside, attached at ${b.attachStart.toFixed(1)} s. Click to edit it.`}
+                      title={`${b.name}: built aside, attached at ${b.attachStart.toFixed(1)} s. Click to open it with its own timeline.`}
                       onClick={() => {
+                        pb().set({ playing: false, t: 0, stopAt: null, loopFrom: null });
                         st().setEditingModel(b.name);
-                        seek(b.start);
                       }}
                     >
                       <span className="av">
@@ -372,7 +409,7 @@ export function BuildTimeline({ timeline: tl }: { timeline: Timeline | null }) {
               </div>
             )}
             {tl && (
-              <div className={`nx-playhead ${mode === 'preview' ? '' : 'bm-idle'}`} style={{ left: X(t) }}>
+              <div className={`nx-playhead ${mode === 'preview' || follow ? '' : 'bm-idle'}`} style={{ left: X(t) }}>
                 <i onPointerDown={scrubFrom} />
               </div>
             )}

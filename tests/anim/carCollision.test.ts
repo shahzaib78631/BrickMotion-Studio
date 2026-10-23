@@ -13,7 +13,12 @@ import type { ColorDef } from "../../src/ldraw/colors";
 // Real 61-piece LDraw demo car, including its hollow wheel rims and tyres.
 // This is a trimmed, redistributable copy of the LDraw files that accompanied
 // the app; dependent subparts are needed to measure REAL part body bounds.
-const root = join(__dirname, "..", "fixtures", "car-ldraw");
+// The car fixture can live next to the tests or come from the local LDraw library
+// (public/ldraw, installed by `npm run setup`). Without either, the test is skipped.
+const fixtureRoot = join(__dirname, "..", "fixtures", "car-ldraw");
+const libraryRoot = join(__dirname, "..", "..", "public", "ldraw");
+const root = existsSync(join(fixtureRoot, "models", "car.ldr")) ? fixtureRoot : libraryRoot;
+const hasCar = existsSync(join(root, "models", "car.ldr"));
 const boxIntersects = (
   a: { min: number[]; max: number[] },
   b: { min: number[]; max: number[] },
@@ -64,7 +69,7 @@ async function carFixture(): Promise<{
   return { metrics, asm: assemble(plan, metrics, colors) };
 }
 
-test("LDraw car tyres enter from the axle side and NEVER go through the assembled body", async () => {
+test.skipIf(!hasCar)("LDraw car tyres enter from the axle side and NEVER go through the assembled body", async () => {
   const { asm, metrics } = await carFixture();
   expect(asm.instances).toHaveLength(61);
   const tl = buildTimeline(asm, metrics, {

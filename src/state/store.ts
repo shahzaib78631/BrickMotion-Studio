@@ -1,6 +1,8 @@
 import { create } from 'zustand';
+import { usePlayback } from './playback';
 import { modelSteps, reorderStep, type ModelName } from '../plan/ops';
 import type { Tool } from './keymap';
+import type { StepView } from '../model/stepLayout';
 import { emptyPlan, type Plan } from '../plan/types';
 
 const HISTORY_LIMIT = 200;
@@ -42,6 +44,9 @@ export type StudioState = {
   gizmoMode: 'translate' | 'rotate' | 'scale';
   /** the plan before a drag; while set, edits replace the plan without adding undo steps */
   gesture: Plan | null;
+  /** how the Build view shows the current step's new parts */
+  stepView: StepView;
+  setStepView(v: StepView): void;
   setTool(t: Tool): void;
   setGizmo(enabled: boolean): void;
   setGizmoMode(mode: 'translate' | 'rotate' | 'scale'): void;
@@ -75,6 +80,10 @@ export const useStudio = create<StudioState>((set, get) => ({
   gizmoEnabled: false,
   gizmoMode: 'translate',
   gesture: null,
+  stepView: 'separated',
+  setStepView(stepView) {
+    set({ stepView });
+  },
   setTool(tool) {
     set({ tool });
   },
@@ -134,12 +143,17 @@ export const useStudio = create<StudioState>((set, get) => ({
     set({ selection: { model: editingModel, ids: [...cur] } });
   },
   setEditingModel(m) {
+    usePlayback.getState().set({ follow: false, playing: false });
     set({ editingModel: m, selection: { model: m, ids: [] }, currentStep: null });
   },
   setMode(mode) {
+    // coming back to Build while the preview plays: keep playing, now in the Build view
+    if (mode === 'edit') usePlayback.getState().set({ follow: usePlayback.getState().playing });
     set({ mode });
   },
   setCurrentStep(s) {
+    // picking a step lays it out (separated/exploded/assembled) instead of following the timeline
+    usePlayback.getState().set({ follow: false, playing: false });
     set({ currentStep: s });
   },
   requestFocus(ids) {

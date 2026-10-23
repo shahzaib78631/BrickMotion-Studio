@@ -26,3 +26,18 @@ test('non-certified main color goes to the double-sided geometry', async () => {
   expect(g.main).toBeNull();
   expect(g.mainDoubleSided!.getAttribute('position').count).toBe(3);
 });
+
+test('outline edges come through as line segments in part space', async () => {
+  const flat = (await lib.loadPart('3938'))!;
+  expect(flat.edges.length).toBeGreaterThan(0);
+  expect(flat.edges.length % 6).toBe(0); // xyz pairs
+  const g = buildPartGeometry(flat);
+  expect(g.edges!.getAttribute('position').count).toBe(flat.edges.length / 3);
+  // edges sit on the part: inside its (full) bounds
+  const b = flat.fullBox!;
+  for (let i = 0; i < flat.edges.length; i += 3)
+    for (let a = 0; a < 3; a++) {
+      expect(flat.edges[i + a]).toBeGreaterThanOrEqual(b.min[a] - 1e-6);
+      expect(flat.edges[i + a]).toBeLessThanOrEqual(b.max[a] + 1e-6);
+    }
+});

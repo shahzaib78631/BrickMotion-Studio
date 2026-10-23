@@ -8,6 +8,8 @@ export type FlatPart = {
   tris: Map<number, number[]>;
   /** triangles from files that are not BFC certified (render double sided) */
   doubleSided: Map<number, number[]>;
+  /** outline edges (LDraw type 2 lines) as xyz pairs in part space, for the faint edge-line look */
+  edges: number[];
   /** bounds without stud geometry; null when the part has no non-stud geometry */
   bodyBox: Box | null;
   fullBox: Box | null;
@@ -51,7 +53,7 @@ export function baseName(file: string): string {
  * available through `lookup`; missing ones are skipped (reported via `onMissing`).
  */
 export function flattenPart(id: string, root: LDrawFile, lookup: FileLookup, onMissing?: (name: string) => void): FlatPart {
-  const out: FlatPart = { id, tris: new Map(), doubleSided: new Map(), bodyBox: null, fullBox: null };
+  const out: FlatPart = { id, tris: new Map(), doubleSided: new Map(), edges: [], bodyBox: null, fullBox: null };
   const I: Mat3 = [1, 0, 0, 0, 1, 0, 0, 0, 1];
 
   const push = (map: Map<number, number[]>, color: number, pts: number[]) => {
@@ -81,6 +83,12 @@ export function flattenPart(id: string, root: LDrawFile, lookup: FileLookup, onM
         const cc = c.color === 16 ? color : c.color;
         const childInvert = invert !== c.invert; // matrix mirroring is handled via det(m) below
         walk(child, cm, ct, cc, childInvert, certified, inStud || STUD_RE.test(baseName(c.file)), depth + 1);
+        continue;
+      }
+      if (c.t === 'line') {
+        const a = apply(m, t, c.pts[0], c.pts[1], c.pts[2]);
+        const b = apply(m, t, c.pts[3], c.pts[4], c.pts[5]);
+        out.edges.push(a[0], a[1], a[2], b[0], b[1], b[2]);
         continue;
       }
       if (c.t !== 'tri' && c.t !== 'quad') continue;

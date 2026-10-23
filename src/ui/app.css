@@ -172,6 +172,8 @@ body { margin: 0; }
 .bm-step-editor-heading { display: flex; align-items: center; gap: 7px; font-size: 11.5px; font-weight: 650; }
 .bm-step-pieces { max-height: 220px; overflow: auto; display: flex; flex-direction: column; gap: 3px; }
 .bm-step-piece { display: flex; align-items: center; gap: 4px; background: var(--surface2); border: 1px solid var(--line); border-radius: 7px; padding: 3px 4px; }
+.bm-step-piece.sel { border-color: var(--focus); background: color-mix(in srgb, var(--focus) 12%, var(--surface2)); box-shadow: inset 3px 0 0 var(--focus); }
+.bm-step-piece.sel .bm-piece-select { color: var(--focus); font-weight: 600; }
 .bm-piece-index { font-size: 10px; color: var(--ink3); width: 17px; flex: 0 0 17px; text-align: center; }
 .bm-piece-select { min-width: 0; flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: left; font-size: 11px; }
 .bm-piece-select:hover { text-decoration: underline; }
@@ -230,3 +232,81 @@ body { margin: 0; }
 @media (max-width:1150px) { .bm-gizmo-toggle { font-size: 0; gap:0; padding: 0 8px !important; } .bm-gizmo-toggle .ic { font-size: 12px; } }
 
 .nx-resizer { touch-action:none; -webkit-user-select:none; user-select:none; }
+
+/* ---- timeline scope & background planning ---- */
+.bm-scope { display: inline-flex; align-items: center; gap: 5px; margin-left: 10px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bm-scope .ic { width: 12px; height: 12px; }
+.bm-planning { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; font-size: 11.5px; color: var(--ink3); }
+.bm-planning i { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--line2); border-top-color: var(--ink2); animation: bmSpin 0.8s linear infinite; }
+@keyframes bmSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .bm-planning i { animation: none; } }
+
+/* ---- models panel ---- */
+.bm-models { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.bm-model-row { display: flex; align-items: center; gap: 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface2); padding: 3px 4px 3px 8px; }
+.bm-model-row.active { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+.bm-model-row.unused { opacity: 0.7; }
+.bm-model-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; text-align: left; padding: 4px 2px; border-radius: 7px; }
+.bm-model-main:hover { background: var(--hover); }
+.bm-model-main > .ic { width: 15px; height: 15px; color: var(--ink2); flex-shrink: 0; }
+.bm-model-text { display: flex; flex-direction: column; min-width: 0; }
+.bm-model-text strong { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bm-model-actions { display: flex; gap: 1px; flex-shrink: 0; }
+.bm-model-actions .nx-icon { width: 26px; height: 26px; }
+.bm-model-actions .nx-icon .ic { width: 14px; height: 14px; }
+.bm-models-batch { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+
+/* ---- step parts callout (Build view) ---- */
+.bm-callout { flex-shrink: 0; background: var(--surface); border: 1px solid var(--line2); border-radius: 12px; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+.bm-callout-head { display: flex; align-items: center; gap: 2px; }
+.bm-callout-head .nx-icon { width: 26px; height: 26px; }
+.bm-callout-head .nx-icon .ic { width: 14px; height: 14px; }
+.bm-callout-title { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; line-height: 1.2; }
+.bm-callout-title strong { font-size: 13px; font-weight: 650; }
+.bm-callout-sub { font-size: 11.5px; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.bm-callout-notes { margin: 0; font-size: 11.5px; color: var(--ink2); white-space: pre-wrap; }
+.bm-callout-parts { display: flex; flex-wrap: wrap; gap: 6px; max-height: 196px; overflow: auto; padding: 6px; background: var(--sunken); border-radius: 8px; }
+.bm-callout-part { position: relative; display: flex; flex-direction: column; align-items: center; min-width: 40px; cursor: pointer; border-radius: 8px; padding: 2px; border: 2px solid transparent; }
+.bm-callout-part:hover { background: var(--hover); }
+.bm-callout-part.sel { border-color: var(--focus); background: color-mix(in srgb, var(--focus) 12%, var(--surface)); }
+.bm-callout-part.sel .bm-callout-count { color: var(--focus); }
+.bm-callout-part img, .bm-callout-part .thumb-wait { border-radius: 6px; background: var(--surface); }
+.bm-callout-count { font-size: 11px; font-weight: 650; color: var(--ink); }
+.bm-callout-sub-ic { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 6px; background: var(--surface); border: 1px dashed var(--line2); }
+.bm-callout-subname { font-size: 10px; color: var(--ink3); max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bm-callout-views { width: 100%; }
+.bm-callout-views button { flex: 1; }
+
+/* ---- notices ---- */
+.bm-banner { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; margin: 4px 0 10px; padding: 10px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--mark) 45%, var(--line)); background: color-mix(in srgb, var(--mark) 9%, var(--surface)); font-size: 12px; color: var(--ink2); }
+.nx-fine kbd { font: 600 10px ui-monospace, Menlo, monospace; border: 1px solid var(--line2); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; background: var(--sunken); }
+
+/* ---- batch export dialog ---- */
+.bm-export-jobs { list-style: none; margin: 0; padding: 0 !important; display: flex; flex-direction: column; gap: 4px; max-height: 46vh; overflow: auto; }
+.bm-export-job { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: var(--sunken); font-size: 12.5px; color: var(--ink); }
+.bm-export-job > .ic { width: 14px; height: 14px; color: var(--ink3); flex-shrink: 0; }
+.bm-export-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 550; }
+.bm-export-state { color: var(--ink3); font-size: 11.5px; white-space: nowrap; }
+.bm-export-job.done .bm-export-state { color: var(--ok); }
+.bm-export-job.rendering, .bm-export-job.planning { box-shadow: inset 0 0 0 1px var(--line2); background: var(--surface); }
+.bm-timeline .nx-clip.bm-sub-nested { top: auto; bottom: 2px; height: 9px; padding: 0; border-radius: 4px; opacity: 0.85; z-index: 1; }
+.bm-timeline .nx-clip.bm-sub-nested .av, .bm-timeline .nx-clip.bm-sub-nested .lbl, .bm-timeline .nx-clip.bm-sub-nested .bm-attach { display: none; }
+.bm-timeline .nx-clip.bm-sub:not(.bm-sub-nested) { bottom: 13px; }
+.bm-callout-play { display: flex; gap: 6px; }
+.bm-callout-play .nx-btn { flex: 1; height: 30px; }
+.bm-callout-follow { margin: 6px 0 0; }
+.bm-callout-play .ic { width: 13px; height: 13px; }
+
+/* ---- timeline: Parts lane (one clip per piece's flight) ---- */
+.bm-parts-lane { position: relative; }
+.bm-timeline .nx-heads { overflow-y: hidden; }
+.bm-part-clip { position: absolute; height: 17px; display: flex; align-items: center; gap: 4px; padding: 0 5px; min-width: 14px; overflow: hidden; border-radius: 5px; border: 1px solid var(--line2); background: var(--surface); color: var(--ink2); font: 600 10px/1 ui-monospace, Menlo, monospace; cursor: grab; white-space: nowrap; touch-action: none; }
+.bm-part-clip:hover { border-color: var(--ink3); color: var(--ink); z-index: 2; }
+.bm-part-clip .lbl { overflow: hidden; text-overflow: ellipsis; }
+.bm-part-clip .ic { width: 11px; height: 11px; flex-shrink: 0; }
+.bm-part-clip.sub { background: color-mix(in srgb, var(--src, #2f7d75) 14%, var(--surface)); }
+.bm-part-clip.sel { border-color: var(--focus); background: color-mix(in srgb, var(--focus) 16%, var(--surface)); color: var(--focus); box-shadow: 0 0 0 1px var(--focus); z-index: 3; }
+.bm-part-clip.dragging { cursor: grabbing; opacity: .85; box-shadow: var(--shadow); z-index: 5; }
+.bm-part-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; box-shadow: inset 0 0 0 1px #0003; }
+.bm-part-marker { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--focus); pointer-events: none; z-index: 6; }
+.bm-part-marker b { position: absolute; top: 2px; left: 5px; padding: 1px 5px; border-radius: 4px; background: var(--focus); color: #fff; font: 600 10px/1.4 system-ui, sans-serif; white-space: nowrap; }

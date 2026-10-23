@@ -45,17 +45,30 @@ export function placementMatrix(p: Placement): THREE.Matrix4 {
   return new THREE.Matrix4().set(m[0], m[1], m[2], p.pos[0], m[3], m[4], m[5], p.pos[1], m[6], m[7], m[8], p.pos[2], 0, 0, 0, 1);
 }
 
+/**
+ * Axis-aligned bounds of an affinely transformed box. Uses the centre/extent form
+ * (|M| · half-size) — the same result as transforming all eight corners, but with
+ * no allocations. The animation planner calls this millions of times.
+ */
 export function transformBox(b: Box, mat: THREE.Matrix4): Box {
-  const box = new THREE.Box3(new THREE.Vector3(...b.min), new THREE.Vector3(...b.max)).applyMatrix4(mat);
-  const r = (n: number) => Math.round(n * 1000) / 1000 || 0;
-  return { min: [r(box.min.x), r(box.min.y), r(box.min.z)], max: [r(box.max.x), r(box.max.y), r(box.max.z)] };
+  const e = mat.elements;
+  const cx = (b.min[0] + b.max[0]) / 2, cy = (b.min[1] + b.max[1]) / 2, cz = (b.min[2] + b.max[2]) / 2;
+  const hx = (b.max[0] - b.min[0]) / 2, hy = (b.max[1] - b.min[1]) / 2, hz = (b.max[2] - b.min[2]) / 2;
+  const nx = e[0] * cx + e[4] * cy + e[8] * cz + e[12];
+  const ny = e[1] * cx + e[5] * cy + e[9] * cz + e[13];
+  const nz = e[2] * cx + e[6] * cy + e[10] * cz + e[14];
+  const ex = Math.abs(e[0]) * hx + Math.abs(e[4]) * hy + Math.abs(e[8]) * hz;
+  const ey = Math.abs(e[1]) * hx + Math.abs(e[5]) * hy + Math.abs(e[9]) * hz;
+  const ez = Math.abs(e[2]) * hx + Math.abs(e[6]) * hy + Math.abs(e[10]) * hz;
+  return { min: [round3(nx - ex), round3(ny - ey), round3(nz - ez)], max: [round3(nx + ex), round3(ny + ey), round3(nz + ez)] };
 }
+const round3 = (n: number) => Math.round(n * 1000) / 1000 || 0;
 
 export function unionBox(a: Box | null, b: Box): Box {
-  if (!a) return { min: [...b.min] as Vec3, max: [...b.max] as Vec3 };
+  if (!a) return { min: [b.min[0], b.min[1], b.min[2]], max: [b.max[0], b.max[1], b.max[2]] };
   return {
-    min: a.min.map((v, i) => Math.min(v, b.min[i])) as Vec3,
-    max: a.max.map((v, i) => Math.max(v, b.max[i])) as Vec3,
+    min: [Math.min(a.min[0], b.min[0]), Math.min(a.min[1], b.min[1]), Math.min(a.min[2], b.min[2])],
+    max: [Math.max(a.max[0], b.max[0]), Math.max(a.max[1], b.max[1]), Math.max(a.max[2], b.max[2])],
   };
 }
 

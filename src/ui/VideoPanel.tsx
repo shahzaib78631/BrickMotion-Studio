@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import type { Timeline } from '../anim/timeline';
 import type { LogoCorner } from '../export/exportVideo';
 import { FPS_OPTIONS, type ExportFps } from '../export/frameRates';
+import { VIDEO_FORMATS, type VideoFormat } from '../export/formats';
+import { useStudio } from '../state/store';
 import { useAppSettings } from '../state/appSettings';
 import { Ic } from './icons';
 
@@ -30,6 +32,8 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
     return () => URL.revokeObjectURL(u);
   }, [s.logo]);
   const longer = timeline && timeline.duration > s.targetSeconds + 0.05;
+  const editingModel = useStudio((st) => st.editingModel);
+  const fmt = VIDEO_FORMATS[s.format];
 
   return (
     <div className="nx-pane">
@@ -37,13 +41,22 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
         <h3>
           <Ic name="video" /> Video
         </h3>
-        <span className="nx-chip">9:16 · 1080×1920 · {s.fps} fps</span>
+        <span className="nx-chip">{s.format} · {fmt.width}×{fmt.height} · {s.fps} fps</span>
       </div>
 
       <label className="nx-field">
         Length <b>{s.targetSeconds} s</b>
         <input type="range" min={5} max={60} step={1} value={s.targetSeconds} onChange={(e) => s.set({ targetSeconds: Number(e.target.value) })} />
       </label>
+      <div className="nx-field">
+        <button className="nx-btn nx-sm" type="button" onClick={() => s.set({
+          targetSeconds: 14, introSeconds: 0.6, buildSeconds: 10.4,
+          outroSeconds: 3, heroOrbit: true, mode: 'auto',
+        })}>
+          Match reference pacing (14 s)
+        </button>
+        <span className="nx-hint">The reference videos are about 14 seconds long. This preset increases the pace while preserving collision-safe movement. The build may run longer if parts cannot move safely in parallel.</span>
+      </div>
       {timeline && (
         <p className="nx-fine">
           This set comes out at <strong>{timeline.duration.toFixed(1)} s</strong>
@@ -76,6 +89,49 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
         </div>
         <span className="nx-hint">Drag a camera clip's edge in the timeline, or enter exact seconds here. Empty fields follow Auto length. Extending a step clip adjusts its hold. A collision-safe build can exceed the requested time.</span>
       </div>
+
+      <div className="nx-field">
+        <div className="nx-sub">Studio appearance</div>
+        <label className="nx-field">
+          Environment &amp; lighting
+          <select aria-label="Studio appearance" value={s.studioLook} onChange={(e) => s.set({ studioLook: e.target.value as typeof s.studioLook })}>
+            <option value="soft">Reference soft studio (grey, contact shadows)</option>
+            <option value="classic">Original bright studio (white)</option>
+          </select>
+        </label>
+        <label className="nx-field">
+          Camera direction &amp; framing
+          <select aria-label="Camera framing" value={s.cameraFraming} onChange={(e) => s.set({ cameraFraming: e.target.value as typeof s.cameraFraming })}>
+            <option value="cinematic">Cinematic — closer, more overhead assembly</option>
+            <option value="wide">Wide — original camera coverage</option>
+          </select>
+        </label>
+        <label className="nx-check">
+          <input type="checkbox" checked={s.edgeLines} onChange={(e) => s.set({ edgeLines: e.target.checked })} /> Edge lines — faint brick outlines
+        </label>
+        <label className="nx-check">
+          <input type="checkbox" checked={s.linearColors} onChange={(e) => s.set({ linearColors: e.target.checked })} /> True LEGO colours — linear tone mapping instead of filmic
+        </label>
+        <label className="nx-check">
+          <input type="checkbox" checked={s.bottomUp} onChange={(e) => s.set({ bottomUp: e.target.checked })} /> Build bottom-up — within a step, each piece waits for what it rests on
+        </label>
+        <label className="nx-check">
+          <input type="checkbox" checked={s.snapSound} onChange={(e) => s.set({ snapSound: e.target.checked })} /> Snap sound — a click each time pieces connect
+        </label>
+        <span className="nx-hint">These choices apply to both the live preview and exported MP4. Use Wide if a large submodel leaves the frame.</span>
+      </div>
+
+      <label className="nx-field">
+        Format
+        <select aria-label="Video format" value={s.format} onChange={(e) => s.set({ format: e.target.value as VideoFormat })}>
+          {(Object.keys(VIDEO_FORMATS) as VideoFormat[]).map((f) => (
+            <option key={f} value={f}>
+              {VIDEO_FORMATS[f].label}
+            </option>
+          ))}
+        </select>
+        <span className="nx-hint">The preview frame and the camera framing follow this shape.</span>
+      </label>
 
       <label className="nx-field">
         Export frame rate
@@ -158,9 +214,9 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
       </label>
 
       <button className="nx-btn nx-primary" disabled={!timeline || timeline.units.length === 0} onClick={onExport}>
-        <Ic name="download" /> Export MP4
+        <Ic name="download" /> Export {editingModel ? `“${editingModel}”` : 'main model'} as MP4
       </button>
-      <p className="nx-fine">Rendered frame by frame in this browser (Chrome), so it can take a minute.</p>
+      <p className="nx-fine">Rendered frame by frame in this browser (Chrome), so it can take a minute. To export submodels on their own (or all at once), use the Models panel.</p>
     </div>
   );
 }

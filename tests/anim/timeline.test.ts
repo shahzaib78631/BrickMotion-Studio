@@ -159,7 +159,9 @@ test('the camera moves in as the floor empties, and the model fills the frame at
   const tl = buildTimeline(asm, metrics, opts);
   const start = ndcExtent(tl, asm, tl.intro);
   const end = ndcExtent(tl, asm, tl.buildEnd - 0.05);
-  expect(end.dist).toBeLessThan(start.dist * 0.8);
+  // Compact staging bands keep the floor close to the model, so the push-in is
+  // smaller than with the old wide bands (~11 % here), but it must still happen.
+  expect(end.dist).toBeLessThan(start.dist * 0.93);
   expect(end.width).toBeGreaterThan(0.6);
 });
 
@@ -350,4 +352,16 @@ test('camera has no jump at a framing key in the MP4 sequence', () => {
     // The speed either side of a camera key should change gradually, not snap.
     expect(before.clone().add(after).addScaledVector(mid, -2).length()).toBeLessThan(0.5);
   }
+});
+
+test('within a step a piece flies in after the piece it rests on (unless bottom-up is off)', () => {
+  // the top brick is listed first
+  const asm = assemble(plan([[brick(0, 3, 0), brick(0, 0, 0)]]), metrics, fixtureColors);
+  const [top, bottom] = asm.instances;
+  expect(top.worldBox.max[1]).toBeLessThan(bottom.worldBox.max[1]);
+  const firstFlight = (tl: ReturnType<typeof buildTimeline>, key: string) => tl.units[tl.tracks.get(key)!.moves[0].unit].start;
+  const tl = buildTimeline(asm, metrics, opts);
+  expect(firstFlight(tl, bottom.key)).toBeLessThan(firstFlight(tl, top.key));
+  const asListed = buildTimeline(asm, metrics, { ...opts, bottomUp: false });
+  expect(firstFlight(asListed, top.key)).toBeLessThan(firstFlight(asListed, bottom.key));
 });

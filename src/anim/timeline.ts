@@ -4,6 +4,8 @@ import { placementMatrix, transformBox, unionBox, type ANode, type Assembly, typ
 import { clamp01, easeInOutCubic, easeOutCubic, lerp } from './easing';
 import { layoutFloor, type FloorItem, type Region } from './floorLayout';
 import { choosePacing, type AnimOptions, type Pacing } from './pacing';
+import { assemblyOrder, bottomUpOrder } from './buildOrder';
+import { canLeave, rankWays, shapeOf, UP, waysFor, type Placed, type Way } from './shapes';
 
 const STUD = 20;
 const BRICK = 24;
@@ -24,6 +26,11 @@ const FLIGHT_CLEARANCE = 24; // LDraw units (one brick)
 const AIR_LANE = 80; // extra height when two airborne trajectories intersect
 const CAM_KEY_STEP = 0.2;
 const SIDE_REACH = 1.5;
+/** a blocked flight waits up to MAX_POSTPONE × POSTPONE_STEP of its duration before it is hidden */
+const MAX_POSTPONE = 6;
+/** attempts that try only the ways a piece's real shape allows */
+const CLEAN_TRIES = 2;
+const POSTPONE_STEP = 0.35;
 /** the camera needs this long to move into a submodel close-up (and out of it) */
 export const CLOSE_EASE = 0.6;
 
@@ -39,7 +46,7 @@ export type SubBuild = { key: string; name: string; closeUp: boolean; start: num
 /** What the build camera must keep in view at time t (LDU): the model plus the pieces still on the floor. */
 export type CamKey = { t: number; box: Box };
 
-type Move = {
+export type Move = {
   unit: number;
   from: THREE.Matrix4;
   to: THREE.Matrix4;
@@ -49,7 +56,7 @@ type Move = {
   /** World-space offset of the point from which the part is inserted. */
   entry: [number, number, number];
 };
-type Track = { appear: number; floor: THREE.Matrix4; floorBox: Box; ctx: number; moves: Move[]; final: THREE.Matrix4 };
+export type Track = { appear: number; floor: THREE.Matrix4; floorBox: Box; ctx: number; moves: Move[]; final: THREE.Matrix4 };
 
 /** When one step of a model plays (a step split by a submodel build plays in parts). */
 export type StepSpan = { model: string; index: number; start: number; end: number };
@@ -79,9 +86,11 @@ const EMPTY_BOX: Box = { min: [0, -24, 0], max: [20, 0, 20] };
 const naturalBasis = (target: THREE.Matrix4) => (target.determinant() < 0 ? new THREE.Matrix4().makeScale(-1, 1, 1) : new THREE.Matrix4());
 
 /**
- * The two floor bands in front of and behind a footprint, together 3× its area,
- * deep enough for the pieces (`padArea` = their footprints plus gaps) unless that
- * would make the floor more than twice the model's size; then windows take over.
+ * Compact staging like the reference videos. The previous bands often spread a
+ * small car's pieces across a huge empty floor; fitting all that empty space in
+ * a vertical camera made the actual assembly tiny. Use smaller, tidy staging
+ * bands, and let the existing collision-safe windows replenish them as pieces
+ * are picked up. The windows NEVER overlap in time on the same floor space.
  */
 function bandsAround(box: Box, padArea = 0): Region[] {
   const bx0 = Math.floor(box.min[0] / STUD);
@@ -91,7 +100,10 @@ function bandsAround(box: Box, padArea = 0): Region[] {
   const W = Math.max(1, bx1 - bx0);
   const D = Math.max(1, bz1 - bz0);
   const width = Math.max(W + 2 * FLOOR_MARGIN, 12);
-  const depth = Math.max(4, Math.ceil((1.5 * W * D) / width), Math.min(Math.ceil((0.65 * padArea) / width), 2 * Math.max(W, D, 8)));
+  const depth = Math.max(6, Math.min(
+    Math.max(6, Math.ceil(0.9 * Math.max(W, D))),
+    Math.max(Math.ceil((1.05 * W * D) / width), Math.ceil((0.33 * padArea) / width)),
+  ));
   const x0 = Math.floor((bx0 + bx1) / 2 - width / 2);
   return [
     { x0, z0: bz0 - FLOOR_MARGIN - depth, width, depth }, // front (towards the camera)
@@ -151,7 +163,8 @@ function windowed(items: FloorItem[], bands: Region[]) {
 type PlayPiece = { kind: 'piece'; key: string; target: THREE.Matrix4; ctx: number; after?: PlayAttach[] };
 type PlayAttach = { kind: 'attach'; key: string; keys: string[]; from: THREE.Matrix4; to: THREE.Matrix4; sub: number; after?: PlayAttach[] };
 type PlayStep = { units: (PlayPiece | PlayAttach)[]; model: string; index: number; scope: string; pauseAfter: number };
-type Ctx = { bands: Region[]; pieces: string[]; group: Map<string, number>; after?: number };
+/** `parent`: the context a nested submodel is built inside; its floor is not laid out before the parent's. */
+type Ctx = { bands: Region[]; pieces: string[]; group: Map<string, number>; after?: number; parent?: number };
 
 export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions): Timeline {
   const byKey = new Map<string, Instance>(asm.instances.map((i) => [i.key, i]));
@@ -181,11 +194,47 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     return n.children.flatMap((c) => keysUnder(c, k));
   };
 
+  /** a piece's real shape where it sits in its own model's frame (null: submodel or no mesh) */
+  const placedCache = new Map<ANode, Placed | null>();
+  const placedOf = (n: ANode): Placed | null => {
+    let p = placedCache.get(n);
+    if (p === undefined) {
+      const m = n.kind === 'piece' ? metrics(n.part) : null;
+      if (!m?.mesh) p = null;
+      else {
+        const world = placementMatrix(n.local);
+        p = { shape: shapeOf(m.mesh, m.meshTwoSidedFrom), world, box: transformBox(m.full, world) };
+      }
+      placedCache.set(n, p);
+    }
+    return p;
+  };
+
   /** Plays a model's nodes into `frame`; submodels are built aside first. */
   const play = (nodes: ANode[], frame: THREE.Matrix4, prefix: string, ctx: number) => {
     const stepIds = [...new Set(nodes.map((n) => n.step))].sort((a, b) => a - b);
     for (const s of stepIds) {
-      const inStep = nodes.filter((n) => n.step === s).sort((a, b) => a.order - b.order);
+      const planned = nodes.filter((n) => n.step === s).sort((a, b) => a.order - b.order);
+      // In the model's own frame (a submodel is built upright aside): each piece after
+      // what it rests on, then made buildable on the real part shapes.
+      const items = planned.map((n) => ({ id: n.itemId, box: transformBox(n.body, placementMatrix(n.local)), n }));
+      const preferred = opts.bottomUp === false ? items : bottomUpOrder(items);
+      const earlier = nodes.filter((n) => n.step < s && n.kind === 'piece');
+      const inStep = assemblyOrder(preferred, (item, others) => {
+        const me = placedOf(item.n);
+        if (!me) return true;
+        const around: Placed[] = [];
+        for (const o of others) {
+          const p = placedOf(o.n);
+          if (!p) return true; // a submodel or a part without a shape: no way to tell
+          around.push(p);
+        }
+        for (const o of earlier) {
+          const p = placedOf(o);
+          if (p && boxesTouch(p.box, me.box)) around.push(p);
+        }
+        return canLeave(me, around);
+      }).map((e) => e.n);
       const model = inStep[0]?.model ?? '';
       let step: PlayStep = { units: [], model, index: s, scope: prefix, pauseAfter: inStep[0]?.pauseAfter ?? 0 };
       const push = (u: PlayPiece | PlayAttach) => {
@@ -197,7 +246,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
           // the submodel is built aside and attached right away; the rest of the step follows
           if (step.units.length) steps.push(step);
           step = { units: [], model, index: s, scope: prefix, pauseAfter: inStep[0]?.pauseAfter ?? 0 };
-          const a = buildSub(n, frame, prefix);
+          const a = buildSub(n, frame, prefix, ctx);
           if (a.keys.length) push(a);
           continue;
         }
@@ -217,7 +266,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
   const lastAttachAtDepth: PlayAttach[] = [];
   let depth = 0;
 
-  const buildSub = (n: Extract<ANode, { kind: 'sub' }>, parentFrame: THREE.Matrix4, prefix: string): PlayAttach => {
+  const buildSub = (n: Extract<ANode, { kind: 'sub' }>, parentFrame: THREE.Matrix4, prefix: string, parentCtx: number): PlayAttach => {
     const key = keyOf(prefix, n.itemId);
     const to = parentFrame.clone().multiply(placementMatrix(n.local));
     const basis = naturalBasis(to);
@@ -241,7 +290,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     const savedRight = sideRight;
     sideRight = Math.max(spot.max[0], focus.max[0]);
     const ctx = ctxs.length;
-    ctxs.push({ bands, pieces: [], group: new Map() });
+    ctxs.push({ bands, pieces: [], group: new Map(), parent: parentCtx === 0 ? undefined : parentCtx });
     const sub = subInfo.length;
     // nested submodels are built inside their parent's close-up; copies are built in the wide shot
     const closeUp = depth === 0 && !closeNames.has(n.submodel);
@@ -358,6 +407,8 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
   // --- floor poses, windows ---
   const tracks = new Map<string, Track>();
   const windowVisibility: { ctx: number; windows: { ids: string[] }[] }[] = [];
+  /** when each context's first floor window drops in */
+  const firstAppear: number[] = [];
   ctxs.forEach((ctx, ci) => {
     const items: (FloorItem & { color: number })[] = ctx.pieces.map((key) => {
       const inst = byKey.get(key)!;
@@ -381,6 +432,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
       ctx.bands,
     );
     windowVisibility.push({ ctx: ci, windows });
+    // ctxs are created parent first, so the parent's first appearance is known here
     // re-layout each window in colour order so similar pieces sit together
     // a copy that reuses a side spot drops its pieces in once the previous copy's floor is empty
     // A repeated side spot is not free when the previous submodel's last
@@ -389,6 +441,8 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     const previousSub = subInfo.find((sub) => sub.ctx === ctx.after);
     const previousAttach = previousSub ? flat.findIndex((f) => f.u.kind === 'attach' && f.u.key === previousSub.key) : -1;
     let appear = previousAttach < 0 ? -Infinity : starts[previousAttach] + flightDur;
+    if (ctx.parent !== undefined) appear = Math.max(appear, firstAppear[ctx.parent] ?? -Infinity);
+    firstAppear[ci] = appear;
     windows.forEach((win, wi) => {
       const set = new Set(win.ids);
       const r = layoutBands(
@@ -448,7 +502,43 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
   const restAfterMove = new Map<Move, Box>();
   for (const group of members) for (const { move, body } of group)
     restAfterMove.set(move, transformBox(body, restPose(move.to, move.rel)));
+  // An attach moves a whole submodel rigidly. Checking its hundreds of member
+  // boxes one by one made large models (a train, a building) take minutes to
+  // plan. Collision checks use ONE conservative box for the rigid group: the
+  // union of every member box expressed in the attach's own frame.
+  const proxies: Member[][] = members.map((group, i) => {
+    if (units[i].kind !== 'attach' || group.length <= 1) return group;
+    const first = group[0].move;
+    let local: Box | null = null;
+    for (const { move, body } of group) local = unionBox(local, move.rel ? transformBox(body, move.rel) : body);
+    const move: Move = { unit: i, from: first.from, to: first.to, rel: null, skyY: 0, hold: 0, entry: [0, 0, 0] };
+    return [{ key: group[0].key, move, body: local ?? EMPTY_BOX }];
+  });
+  const proxyDestinations = proxies.map((group) => group.map(({ move, body }) => transformBox(body, restPose(move.to, move.rel))));
+  /** coarse swept boxes of units whose flight is already decided (they never change again) */
+  const settledPhases: (PhaseBox[] | null)[] = units.map(() => null);
 
+  // Recalculate when new pieces may safely occupy a reused floor band. A
+  // piece that has merely STARTED rising is still in the space where the next
+  // window drops in. The band isn't empty until the last piece clears it.
+  const refreshAppear = () => {
+  for (const { ctx, windows } of windowVisibility) {
+    const previousSub = subInfo.find((sub) => sub.ctx === ctxs[ctx].after);
+    const previousAttach = previousSub ? flat.findIndex((f) => f.u.kind === 'attach' && f.u.key === previousSub.key) : -1;
+    let appear = previousAttach < 0 ? -Infinity : units[previousAttach].start + units[previousAttach].dur;
+    const parent = ctxs[ctx].parent;
+    if (parent !== undefined) appear = Math.max(appear, firstAppear[parent] ?? -Infinity);
+    firstAppear[ctx] = appear;
+    for (const win of windows) {
+      for (const key of win.ids) tracks.get(key)!.appear = appear;
+      appear = win.ids.reduce((latest, key) => {
+        const move = tracks.get(key)!.moves[0];
+        const unit = units[move.unit];
+        return Math.max(latest, unit.start + unit.dur * (move.hold + (1 - move.hold) * LIFT_END) + 0.01);
+      }, -Infinity);
+    }
+  }
+  };
   for (let i = 0; i < units.length; i++) {
     const u = units[i];
     let top = builtTop;
@@ -474,108 +564,163 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     // the already assembled car body without triggering any collision.
     // A track may rest first on the floor, later on a submodel's side spot,
     // and finally in the model. Preserve those time intervals individually.
-    const blockers: RestingBlock[] = [];
-    for (const [key, tr] of tracks) {
-      if (u.keys.includes(key)) continue;
-      let previousEnd = tr.appear;
-      let rest = tr.floorBox;
-      for (const mv of tr.moves) {
-        const flight = units[mv.unit];
-        if (flight.start > previousEnd && flight.start > u.start && previousEnd < u.start + u.dur)
-          blockers.push({ box: rest, start: previousEnd, end: flight.start });
-        previousEnd = flight.start + flight.dur;
-        rest = restAfterMove.get(mv)!;
-        if (previousEnd >= u.start + u.dur) break;
-      }
-      if (previousEnd < u.start + u.dur) blockers.push({ box: rest, start: previousEnd, end: Infinity });
-    }
-
-    // A narrow upright round part (e.g. an LDraw tyre oriented on an axle)
-    // should be inserted along its thin horizontal axis, not dropped onto the
-    // axle from the roof. Prefer the nearer outer side of the model.
-    const spans = [0, 1, 2].map((axis) => dst.max[axis] - dst.min[axis]);
-    const narrowSide = [0, 2].find((axis) =>
-      spans[axis] < Math.min(spans[1], spans[axis === 0 ? 2 : 0]) * 0.7,
-    );
-    const directions: [number, number][] = [];
-    const orderedSide = (axis: 0 | 2) => {
-      const middle = (dst.min[axis] + dst.max[axis]) / 2;
-      const sceneMiddle = (modelBox.min[axis] + modelBox.max[axis]) / 2;
-      const outer = middle < sceneMiddle ? -1 : 1;
-      directions.push([axis, outer], [axis, -outer]);
-    };
-    if (narrowSide !== undefined) orderedSide(narrowSide as 0 | 2);
-    directions.push([1, -1]); // vertical, the traditional top-down assembly
-    if (narrowSide !== 0) orderedSide(0);
-    if (narrowSide !== 2) orderedSide(2);
-
-    const overlaps = [] as number[];
-    for (let j = 0; j < i; j++) {
-      if (units[j].start >= u.start + u.dur || units[j].start + units[j].dur <= u.start) continue;
-      if (members[i].some((p) => members[j].some((q) => p.key === q.key))) continue;
-      overlaps.push(j);
-    }
-
     let safe = false;
-    // Try sensible insertion sides, flight lanes and small takeoff holds.
-    // Check stationary as well as airborne parts on every candidate path.
-    for (const [axis, dir] of directions) {
-      const entry: [number, number, number] = [0, 0, 0];
-      if (axis !== 1) {
-        const farFace = dir < 0 ? modelBox.min[axis] : modelBox.max[axis];
-        const dist = dir < 0
-          ? dst.max[axis] - farFace + FLIGHT_CLEARANCE
-          : farFace - dst.min[axis] + FLIGHT_CLEARANCE;
-        entry[axis] = dir * Math.max(2 * STUD, dist);
+    let shifted = 0;
+    /** the clean ways in on real shapes, worked out once per flight (undefined: not yet) */
+    let shaped: Way[] | null | undefined;
+    // If every route is blocked right now (typically: too many parts in the air
+    // at once), wait a little and try again rather than hiding the part. The rest
+    // of the build shifts with it, so the step order is kept.
+    for (let attempt = 0; ; attempt++) {
+      const blockers: RestingBlock[] = [];
+      for (const [key, tr] of tracks) {
+        if (u.keys.includes(key)) continue;
+        let previousEnd = tr.appear;
+        let rest = tr.floorBox;
+        let restAt: Move | null = null;
+        for (const mv of tr.moves) {
+          const flight = units[mv.unit];
+          if (flight.start > previousEnd && flight.start > u.start && previousEnd < u.start + u.dur)
+            blockers.push({ box: rest, start: previousEnd, end: flight.start });
+          previousEnd = flight.start + flight.dur;
+          rest = restAfterMove.get(mv)!;
+          restAt = mv;
+          if (previousEnd >= u.start + u.dur) break;
+        }
+        if (previousEnd < u.start + u.dur)
+          blockers.push({ box: rest, start: previousEnd, end: Infinity, pose: restAt ? restPose(restAt.to, restAt.rel) : tr.floor, part: byKey.get(key)?.part });
       }
-      const routeSweep = destinationBoxes[i].reduce<Box | null>((box, next, k) => {
-        const { move: mv, body } = members[i][k];
-        const approach = mv.to.clone();
-        approach.elements[12] += entry[0];
-        approach.elements[14] += entry[2];
-        const start = transformBox(body, restPose(mv.from, mv.rel));
-        return unionBox(unionBox(box, next), unionBox(start, transformBox(body, restPose(approach, mv.rel))));
-      }, null) ?? EMPTY_BOX;
-      // A rotating piece can protrude beyond the boxes at either endpoint.
-      const radius = members[i].reduce((r, { body, move }) => {
-        const a = move.from.elements, b = move.to.elements;
-        const turns = [0, 1, 2, 4, 5, 6, 8, 9, 10].some((k) => Math.abs(a[k] - b[k]) > 0.01);
-        if (!turns) return r;
-        const rel = move.rel ? transformBox(body, move.rel) : body;
-        const radius = Math.hypot(...rel.min.map((x, k) => Math.max(Math.abs(x), Math.abs(rel.max[k]))));
-        return Math.max(r, 2 * radius);
-      }, 0);
-      const expandedSweep = radius > 0 ? {
-        min: [routeSweep.min[0] - radius, routeSweep.min[1], routeSweep.min[2] - radius],
-        max: [routeSweep.max[0] + radius, routeSweep.max[1], routeSweep.max[2] + radius],
-      } as Box : routeSweep;
-      const near = blockers.filter((block) =>
-        block.end > u.start && block.start < u.start + u.dur && xyIntersects(block.box, expandedSweep),
+
+      // A narrow upright round part (e.g. an LDraw tyre oriented on an axle)
+      // should be inserted along its thin horizontal axis, not dropped onto the
+      // axle from the roof. Prefer the nearer outer side of the model.
+      const spans = [0, 1, 2].map((axis) => dst.max[axis] - dst.min[axis]);
+      // ...but a piece seated on top of something already built (a minifig torso on
+      // the hips) goes on from above, however thin it is.
+      const resting = blockers.filter((b) => b.end === Infinity).map((b) => b.box);
+      const narrowSide = u.kind === 'piece' && seatedOn(dst, resting) ? undefined : [0, 2].find((axis) =>
+        spans[axis] < Math.min(spans[1], spans[axis === 0 ? 2 : 0]) * 0.7,
       );
-      for (let lane = 0; lane < 5 && !safe; lane++) {
-        const laneHeight = skyY - lane * Math.max(AIR_LANE, extent + FLIGHT_CLEARANCE);
-        for (const hold of [0, 0.12, 0.24, 0.36, 0.48, 0.6]) {
-          for (const { move: mv } of members[i]) {
-            mv.skyY = laneHeight;
-            mv.hold = hold;
-            mv.entry = entry;
+      /** the way a piece comes in from (unit vector; it moves along the opposite way to land) */
+      type Dir = [number, number, number];
+      const axisDir = (axis: number, dir: number): Dir => [axis === 0 ? dir : 0, axis === 1 ? dir : 0, axis === 2 ? dir : 0];
+      const sides: Dir[] = [];
+      const orderedSide = (axis: 0 | 2) => {
+        const middle = (dst.min[axis] + dst.max[axis]) / 2;
+        const sceneMiddle = (modelBox.min[axis] + modelBox.max[axis]) / 2;
+        const outer = middle < sceneMiddle ? -1 : 1;
+        sides.push(axisDir(axis, outer), axisDir(axis, -outer));
+      };
+      if (narrowSide !== undefined) orderedSide(narrowSide as 0 | 2);
+      if (narrowSide !== 0) orderedSide(0);
+      if (narrowSide !== 2) orderedSide(2);
+      // Real shapes: of the ways in (from above, the sides, the piece's own axes), keep
+      // those its surface can travel without crossing a touching neighbour's.
+      if (shaped === undefined) shaped = u.kind === 'piece' ? freeWays(members[i][0], blockers, metrics, byKey, dst, [UP, ...sides]) : null;
+      // No shapes to go on (placeholders) or nothing is clean: the box rules. A piece
+      // that sinks deep into what holds it slides in from the side it sticks out on.
+      const slide = u.kind === 'piece' ? slideAxis(dst, resting) : null;
+      const boxWays: Dir[] = [...(slide ? [axisDir(slide[0], slide[1])] : []), ...(narrowSide !== undefined ? sides.slice(0, 2) : []), UP, ...sides];
+      // Clean ways first; if waiting a little has not freed them, the box rules as
+      // well (better than a piece popping into place).
+      const directions: Dir[] = shaped && shaped.length ? (attempt < CLEAN_TRIES ? shaped : [...shaped, ...boxWays]) : boxWays;
+
+      const overlaps = [] as number[];
+      for (let j = 0; j < i; j++) {
+        if (units[j].start >= u.start + u.dur || units[j].start + units[j].dur <= u.start) continue;
+        if (members[i].some((p) => members[j].some((q) => p.key === q.key))) continue;
+        overlaps.push(j);
+      }
+
+      // Try sensible insertion sides, flight lanes and small takeoff holds.
+      // Check stationary as well as airborne parts on every candidate path.
+      // Where each final slide starts: outside the whole model along the way (clear
+      // of everything), else just clear of the touching pieces (a tilted minifig hand
+      // slides a short way into its wrist). Never from under the floor.
+      const entries: [number, number, number][] = [];
+      for (const way of directions) {
+        if (way[0] === 0 && way[2] === 0) {
+          entries.push([0, 0, 0]);
+          continue;
+        }
+        const clearOf = (boxes: Box[]) => boxes.reduce((far, b) => {
+          let d = Infinity;
+          for (let k = 0; k < 3; k++) {
+            if (way[k] > 1e-6) d = Math.min(d, (b.max[k] - dst.min[k]) / way[k]);
+            else if (way[k] < -1e-6) d = Math.min(d, (dst.max[k] - b.min[k]) / -way[k]);
           }
-          if (routeHitsResting(u, members[i], destinationBoxes[i], near)) continue;
-          if (overlaps.some((j) => xyIntersects(expandedSweep, sweptXY[j]) && flightsIntersect(units, members, i, j))) continue;
-          sweep = expandedSweep;
-          safe = true;
-          break;
+          return Math.max(far, d);
+        }, 0);
+        const around = blockers.filter((b) => b.end === Infinity && boxesTouch(dst, b.box)).map((b) => b.box);
+        for (const len of [clearOf([modelBox]), clearOf(around)].map((d) => Math.max(2 * STUD, d + FLIGHT_CLEARANCE))) {
+          if (dst.max[1] + way[1] * len > ground + 0.5) continue;
+          if (entries.some((e) => Math.hypot(e[0] - way[0] * len, e[1] - way[1] * len, e[2] - way[2] * len) < 1)) continue;
+          entries.push([way[0] * len, way[1] * len, way[2] * len]);
         }
       }
-      if (safe) break;
+      for (const entry of entries) {
+        const routeSweep = destinationBoxes[i].reduce<Box | null>((box, next, k) => {
+          const { move: mv, body } = members[i][k];
+          const approach = mv.to.clone();
+          approach.elements[12] += entry[0];
+          approach.elements[13] += entry[1];
+          approach.elements[14] += entry[2];
+          const start = transformBox(body, restPose(mv.from, mv.rel));
+          return unionBox(unionBox(box, next), unionBox(start, transformBox(body, restPose(approach, mv.rel))));
+        }, null) ?? EMPTY_BOX;
+        // A rotating piece can protrude beyond the boxes at either endpoint.
+        const radius = members[i].reduce((r, { body, move }) => {
+          const a = move.from.elements, b = move.to.elements;
+          const turns = [0, 1, 2, 4, 5, 6, 8, 9, 10].some((k) => Math.abs(a[k] - b[k]) > 0.01);
+          if (!turns) return r;
+          const rel = move.rel ? transformBox(body, move.rel) : body;
+          const radius = Math.hypot(...rel.min.map((x, k) => Math.max(Math.abs(x), Math.abs(rel.max[k]))));
+          return Math.max(r, 2 * radius);
+        }, 0);
+        const expandedSweep = radius > 0 ? {
+          min: [routeSweep.min[0] - radius, routeSweep.min[1], routeSweep.min[2] - radius],
+          max: [routeSweep.max[0] + radius, routeSweep.max[1], routeSweep.max[2] + radius],
+        } as Box : routeSweep;
+        const near = blockers.filter((block) =>
+          block.end > u.start && block.start < u.start + u.dur && xyIntersects(block.box, expandedSweep),
+        );
+        for (let lane = 0; lane < 5 && !safe; lane++) {
+          const laneHeight = skyY - lane * Math.max(AIR_LANE, extent + FLIGHT_CLEARANCE);
+          for (const hold of [0, 0.12, 0.24, 0.36, 0.48, 0.6]) {
+            for (const { move: mv } of [...members[i], ...proxies[i]]) {
+              mv.skyY = laneHeight;
+              mv.hold = hold;
+              mv.entry = entry;
+            }
+            if (routeHitsResting(u, proxies[i], proxyDestinations[i], near)) continue;
+            const phases = phaseBoxes(u, proxies[i]);
+            if (overlaps.some((j) =>
+              xyIntersects(expandedSweep, sweptXY[j]) &&
+              phasesIntersect(phases, (settledPhases[j] ??= phaseBoxes(units[j], proxies[j]))) &&
+              flightsIntersect(units, proxies, i, j))) continue;
+            sweep = expandedSweep;
+            safe = true;
+            break;
+          }
+        }
+        if (safe) break;
+      }
+      if (safe || attempt >= MAX_POSTPONE) break;
+      const delay = u.dur * POSTPONE_STEP;
+      shifted += delay;
+      for (let k = i; k < units.length; k++) units[k].start += delay;
+      refreshAppear();
     }
     if (!safe) {
+      // waiting did not help: do not lengthen the video for nothing
+      for (let k = i; k < units.length; k++) units[k].start -= shifted;
+      if (shifted) refreshAppear();
       // A tightly enclosed or poorly modeled attachment may have NO clear
       // rigid path (particularly with bounding boxes for hollow parts). Never
       // display a penetrating fallback trajectory: keep it hidden while it
       // snaps from the staging floor to its destination.
       u.hidden = true;
-      for (const { move: mv } of members[i]) {
+      for (const { move: mv } of [...members[i], ...proxies[i]]) {
         mv.entry = [0, 0, 0];
         mv.skyY = skyY;
         mv.hold = 0;
@@ -583,22 +728,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     }
     sweptXY[i] = sweep ?? EMPTY_BOX;
   }
-  // Recalculate when new pieces may safely occupy a reused floor band. A
-  // piece that has merely STARTED rising is still in the space where the next
-  // window drops in. The band isn't empty until the last piece clears it.
-  for (const { ctx, windows } of windowVisibility) {
-    const previousSub = subInfo.find((sub) => sub.ctx === ctxs[ctx].after);
-    const previousAttach = previousSub ? flat.findIndex((f) => f.u.kind === 'attach' && f.u.key === previousSub.key) : -1;
-    let appear = previousAttach < 0 ? -Infinity : units[previousAttach].start + units[previousAttach].dur;
-    for (const win of windows) {
-      for (const key of win.ids) tracks.get(key)!.appear = appear;
-      appear = win.ids.reduce((latest, key) => {
-        const move = tracks.get(key)!.moves[0];
-        const unit = units[move.unit];
-        return Math.max(latest, unit.start + unit.dur * (move.hold + (1 - move.hold) * LIFT_END) + 0.01);
-      }, -Infinity);
-    }
-  }
+  refreshAppear();
   // Keep the remainder of the timeline, submodel labels and outro aligned if
   // an exceptional collision forced a launch to be postponed.
   for (let i = 0; i < units.length; i++) starts[i] = units[i].start;
@@ -687,10 +817,108 @@ const _q1 = new THREE.Quaternion();
 const _s0 = new THREE.Vector3();
 const _s1 = new THREE.Vector3();
 
+type Decomposed = { p0: THREE.Vector3; q0: THREE.Quaternion; s0: THREE.Vector3; p1: THREE.Vector3; q1: THREE.Quaternion; s1: THREE.Vector3 };
+/** A move's endpoints never change after planning; decompose them once. */
+const decomposed = new WeakMap<THREE.Matrix4, WeakMap<THREE.Matrix4, Decomposed>>();
+/** blockers touching a piece's spot this closely (LDU) are checked with real shapes */
+const NEAR = 1;
+const boxesTouch = (a: Box, b: Box) => [0, 1, 2].every((k) => Math.min(a.max[k], b.max[k]) - Math.max(a.min[k], b.min[k]) > -NEAR);
+
+/**
+ * The ways a piece can come in by, best first, judged on the real part shapes: from
+ * above, from the sides, or along the piece's own axes (a tilted minifig hand slides
+ * into its wrist). A way is free when, leaving the built spot along it, no surface
+ * crosses a touching neighbour's. Null when shapes are missing; empty when none is free.
+ */
+function freeWays(
+  member: Member,
+  blockers: RestingBlock[],
+  metrics: Metrics,
+  byKey: Map<string, Instance>,
+  dst: Box,
+  preferred: [number, number, number][],
+): [number, number, number][] | null {
+  const ownMetrics = metrics(byKey.get(member.key)?.part ?? '');
+  const own = ownMetrics.mesh;
+  if (!own) return null;
+  const world = restPose(member.move.to, member.move.rel);
+  // full boxes (studs and pins included), like the build order uses
+  const piece: Placed = { shape: shapeOf(own, ownMetrics.meshTwoSidedFrom), world, box: transformBox(ownMetrics.full, world) };
+  const neighbours: Placed[] = [];
+  for (const b of blockers) {
+    if (b.end !== Infinity || !b.pose || !b.part) continue;
+    if (!boxesTouch(dst, b.box)) continue;
+    const m = metrics(b.part);
+    if (!m.mesh) return null;
+    neighbours.push({ shape: shapeOf(m.mesh, m.meshTwoSidedFrom), world: b.pose, box: transformBox(m.full, b.pose) });
+  }
+  if (!neighbours.length) return null;
+  const ways = waysFor(world, preferred);
+  const scratch = { inv: new THREE.Matrix4(), rel: new THREE.Matrix4() };
+  return rankWays(piece, neighbours, ways, scratch);
+}
+
+/**
+ * Whether a piece at `dst` sits on top of one of the `built` boxes: they overlap, and
+ * that piece lies clearly lower (LDraw −Y is up) — not level with it, like a rim inside a tyre.
+ */
+export function seatedOn(dst: Box, built: Box[]): boolean {
+  const mid = (dst.min[1] + dst.max[1]) / 2;
+  const quarter = (dst.max[1] - dst.min[1]) / 4;
+  return built.some((b) =>
+    [0, 1, 2].every((k) => Math.min(dst.max[k], b.max[k]) - Math.max(dst.min[k], b.min[k]) > 1) &&
+    (b.min[1] + b.max[1]) / 2 > mid + quarter,
+  );
+}
+
+/** stud height: a piece clipped on by its studs overlaps what holds it by no more than this */
+const STUD_GRIP = 8;
+
+/**
+ * The side to slide a piece in from when it sits deep inside the piece holding it
+ * (overlapping it by more than a stud's grip): along the axis it sticks out of that
+ * holder most, from that side. Null for ordinary stacked bricks (they go on from
+ * above) and for pieces hanging below their holder.
+ */
+export function slideAxis(dst: Box, built: Box[]): [number, number] | null {
+  let best: { box: Box; volume: number } | null = null;
+  for (const box of built) {
+    const o = [0, 1, 2].map((k) => Math.min(dst.max[k], box.max[k]) - Math.max(dst.min[k], box.min[k]));
+    if (o.some((v) => v <= 1)) continue;
+    const deep = o[1] > STUD_GRIP && o[1] > 0.5 * Math.min(dst.max[1] - dst.min[1], box.max[1] - box.min[1]);
+    if (!deep) continue;
+    const volume = o[0] * o[1] * o[2];
+    if (!best || volume > best.volume) best = { box, volume };
+  }
+  if (!best) return null;
+  const d = [0, 1, 2].map((k) => (dst.min[k] + dst.max[k]) / 2 - (best!.box.min[k] + best!.box.max[k]) / 2);
+  const axis = [0, 1, 2].reduce((a, k) => (Math.abs(d[k]) > Math.abs(d[a]) ? k : a), 0);
+  if (axis === 1) return d[1] < 0 ? [1, -1] : null;
+  return [axis, Math.sign(d[axis]) || 1];
+}
+
+function endpoints(m: Move): Decomposed {
+  let inner = decomposed.get(m.from);
+  if (!inner) decomposed.set(m.from, (inner = new WeakMap()));
+  let d = inner.get(m.to);
+  if (!d) {
+    d = { p0: new THREE.Vector3(), q0: new THREE.Quaternion(), s0: new THREE.Vector3(), p1: new THREE.Vector3(), q1: new THREE.Quaternion(), s1: new THREE.Vector3() };
+    m.from.decompose(d.p0, d.q0, d.s0);
+    m.to.decompose(d.p1, d.q1, d.s1);
+    inner.set(m.to, d);
+  }
+  return d;
+}
+
 function flightPose(m: Move, u: number, out: THREE.Matrix4): THREE.Matrix4 {
   u = clamp01((u - m.hold) / (1 - m.hold));
-  m.from.decompose(_p0, _q0, _s0);
-  m.to.decompose(_p1, _q1, _s1);
+  const d = endpoints(m);
+  _p0.copy(d.p0);
+  _q0.copy(d.q0);
+  _s0.copy(d.s0);
+  _p1.copy(d.p1);
+  _q1.copy(d.q1);
+  _s1.copy(d.s1);
   const lateral = m.entry[0] !== 0 || m.entry[2] !== 0;
   if (u < LIFT_END) {
     _p0.y = lerp(_p0.y, m.skyY, easeInOutCubic(clamp01(u / LIFT_END)));
@@ -704,11 +932,11 @@ function flightPose(m: Move, u: number, out: THREE.Matrix4): THREE.Matrix4 {
       out.compose(_p0, _q0, _s0);
     } else if (u < SIDE_INSERT_START) {
       const e = easeInOutCubic(clamp01((u - SIDE_CRUISE_END) / (SIDE_INSERT_START - SIDE_CRUISE_END)));
-      _p1.set(_p1.x + m.entry[0], lerp(m.skyY, _p1.y, e), _p1.z + m.entry[2]);
+      _p1.set(_p1.x + m.entry[0], lerp(m.skyY, _p1.y + m.entry[1], e), _p1.z + m.entry[2]);
       out.compose(_p1, _q1, _s1);
     } else {
       const e = easeInOutCubic(clamp01((u - SIDE_INSERT_START) / (1 - SIDE_INSERT_START)));
-      _p1.set(_p1.x + m.entry[0] * (1 - e), _p1.y, _p1.z + m.entry[2] * (1 - e));
+      _p1.set(_p1.x + m.entry[0] * (1 - e), _p1.y + m.entry[1] * (1 - e), _p1.z + m.entry[2] * (1 - e));
       out.compose(_p1, _q1, _s1);
     }
   } else if (u < LOWER_START) {
@@ -726,7 +954,51 @@ function flightPose(m: Move, u: number, out: THREE.Matrix4): THREE.Matrix4 {
 }
 
 /** Static time-window that a flying member must not cross. */
-type RestingBlock = { box: Box; start: number; end: number };
+/** `pose`/`part`: where the resting piece is and what it is, for real-shape checks */
+type RestingBlock = { box: Box; start: number; end: number; pose?: THREE.Matrix4; part?: string };
+type Member = { key: string; move: Move; body: Box };
+/** A conservative box that a unit's members stay inside between two times. */
+type PhaseBox = { t0: number; t1: number; box: Box };
+
+/**
+ * Conservative swept boxes for each phase of a flight (hold, lift, cruise, lower /
+ * insert). Translation is monotone inside a phase, so the endpoint boxes bound it;
+ * a part that turns can reach up to twice its radius beyond them.
+ */
+function phaseBoxes(u: Unit, members: Member[]): PhaseBox[] {
+  if (u.hidden) return [];
+  const out: PhaseBox[] = [];
+  for (const { move, body } of members) {
+    const lateral = move.entry[0] !== 0 || move.entry[2] !== 0;
+    const cuts = lateral ? [0, LIFT_END, SIDE_CRUISE_END, SIDE_INSERT_START, 1] : [0, LIFT_END, LOWER_START, 1];
+    const a = move.from.elements, b = move.to.elements;
+    const turns = [0, 1, 2, 4, 5, 6, 8, 9, 10].some((k) => Math.abs(a[k] - b[k]) > 0.001);
+    let pad = 0;
+    if (turns) {
+      const rel = move.rel ? transformBox(body, move.rel) : body;
+      pad = 2 * Math.hypot(...rel.min.map((x, k) => Math.max(Math.abs(x), Math.abs(rel.max[k]))));
+    }
+    const at = (phase: number) => move.hold + (1 - move.hold) * phase;
+    let prevT = u.start;
+    let prev = transformBox(body, flightPose(move, 0, new THREE.Matrix4()));
+    for (const phase of cuts.slice(1)) {
+      const t = u.start + at(phase) * u.dur;
+      const next = transformBox(body, flightPose(move, at(phase), new THREE.Matrix4()));
+      const box = unionBox(prev, next);
+      if (pad) for (let k = 0; k < 3; k++) ((box.min[k] -= pad), (box.max[k] += pad));
+      out.push({ t0: prevT, t1: t, box });
+      prevT = t;
+      prev = next;
+    }
+  }
+  return out;
+}
+
+function phasesIntersect(a: PhaseBox[], b: PhaseBox[]): boolean {
+  for (const p of a)
+    for (const q of b) if (p.t0 < q.t1 && q.t0 < p.t1 && boxIntersects(p.box, q.box)) return true;
+  return false;
+}
 
 function routeHitsResting(
   unit: Unit,
@@ -794,7 +1066,7 @@ const xyIntersects = (a: Box, b: Box) =>
 /** Check overlapping flight times and real member boxes, not group envelopes. */
 function flightsIntersect(
   units: Unit[],
-  members: { key: string; move: Move; body: Box }[][],
+  members: Member[][],
   i: number,
   j: number,
 ): boolean {
@@ -804,26 +1076,60 @@ function flightsIntersect(
   const t0 = Math.max(a.start, b.start);
   const t1 = Math.min(a.start + a.dur, b.start + b.dur);
   if (t1 <= t0) return false;
-  // Conservative swept-box checks between frames catch very brief contacts
-  // that point-sampling at even 120/240 fps can miss. Each interval includes
-  // both endpoint boxes, so two pieces cannot simply "swap places" between
-  // the inspected times without registering a conflict.
-  const samples = Math.max(24, Math.ceil((t1 - t0) * 160));
-  const boxesAt = (index: number, u: Unit, t: number) => members[index].map(({ move, body }) =>
-    transformBox(body, flightPose(move, clamp01((t - u.start) / u.dur), new THREE.Matrix4())),
-  );
-  let ba = boxesAt(i, a, t0);
-  let bb = boxesAt(j, b, t0);
-  for (let n = 1; n <= samples; n++) {
-    const t = lerp(t0, t1, n / samples);
-    const nextA = boxesAt(i, a, t);
-    const nextB = boxesAt(j, b, t);
-    if (ba.some((box, k) => nextB.some((other, m) => boxIntersects(unionBox(box, nextA[k]), unionBox(bb[m], other))))) return true;
-    ba = nextA;
-    bb = nextB;
-  }
+  // Swept-box checks between times catch very brief contacts that point
+  // sampling misses: each interval's box includes both endpoint boxes, so two
+  // pieces cannot "swap places" unnoticed. Rather than scanning the whole
+  // overlap at a fixed rate, split the time range only where the two swept
+  // boxes touch (finest interval ≈ the old 1/160 s). Inside one flight phase a
+  // part's translation is monotone, so endpoint boxes bound the interval.
+  const cutTimes = (u: Unit, mv: Move) => {
+    const lateral = mv.entry[0] !== 0 || mv.entry[2] !== 0;
+    const cuts = lateral ? [0, LIFT_END, SIDE_CRUISE_END, SIDE_INSERT_START, 1] : [0, LIFT_END, LOWER_START, 1];
+    return cuts.map((c) => u.start + (mv.hold + (1 - mv.hold) * c) * u.dur);
+  };
+  const times = [...new Set([t0, t1, ...cutTimes(a, members[i][0].move), ...cutTimes(b, members[j][0].move)])]
+    .filter((t) => t >= t0 && t <= t1)
+    .sort((x, y) => x - y);
+  const pads = (index: number) => members[index].map(({ move, body }) => {
+    const p = move.from.elements, q = move.to.elements;
+    if (![0, 1, 2, 4, 5, 6, 8, 9, 10].some((k) => Math.abs(p[k] - q[k]) > 0.001)) return 0;
+    const rel = move.rel ? transformBox(body, move.rel) : body;
+    return 2 * Math.hypot(...rel.min.map((x, k) => Math.max(Math.abs(x), Math.abs(rel.max[k]))));
+  });
+  const padA = pads(i), padB = pads(j);
+  const cache = new Map<number, [Box[], Box[]]>();
+  const boxesAt = (t: number): [Box[], Box[]] => {
+    let hit = cache.get(t);
+    if (!hit) {
+      const at = (index: number, u: Unit) => members[index].map(({ move, body }) =>
+        transformBox(body, flightPose(move, clamp01((t - u.start) / u.dur), _pose)));
+      cache.set(t, (hit = [at(i, a), at(j, b)]));
+    }
+    return hit;
+  };
+  const swept = (x: Box[], y: Box[], pad: number[], usePad: boolean) => x.map((box, k) => {
+    const s = unionBox(box, y[k]);
+    if (usePad && pad[k]) for (let m = 0; m < 3; m++) ((s.min[m] -= pad[k]), (s.max[m] += pad[k]));
+    return s;
+  });
+  const LEAF = 1 / 160;
+  const hits = (ta: number, tb: number): boolean => {
+    const [a0, b0] = boxesAt(ta);
+    const [a1, b1] = boxesAt(tb);
+    const leaf = tb - ta <= LEAF;
+    // A turning part can bulge past its endpoint boxes. Pad on coarse intervals;
+    // at the finest level use the plain swept boxes, as the fixed-rate scan did.
+    const sa = swept(a0, a1, padA, !leaf);
+    const sb = swept(b0, b1, padB, !leaf);
+    if (!sa.some((x) => sb.some((y) => boxIntersects(x, y)))) return false;
+    if (leaf) return true;
+    const mid = (ta + tb) / 2;
+    return hits(ta, mid) || hits(mid, tb);
+  };
+  for (let k = 1; k < times.length; k++) if (times[k] > times[k - 1] && hits(times[k - 1], times[k])) return true;
   return false;
 }
+const _pose = new THREE.Matrix4();
 
 const restPose = (m: THREE.Matrix4, rel: THREE.Matrix4 | null) => (rel ? m.clone().multiply(rel) : m.clone());
 

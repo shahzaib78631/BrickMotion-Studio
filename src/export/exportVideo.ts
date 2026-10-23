@@ -1,5 +1,8 @@
-import { BufferTarget, CanvasSource, Mp4OutputFormat, Output, QUALITY_HIGH, canEncodeVideo } from 'mediabunny';
-import { cameraAt, worldBox3 } from '../anim/camera';
+import { AudioBufferSource, BufferTarget, CanvasSource, Mp4OutputFormat, Output, QUALITY_HIGH, QUALITY_MEDIUM, canEncodeAudio, canEncodeVideo } from 'mediabunny';
+import { snapsOf } from '../anim/snaps';
+import { renderSnapTrack } from '../audio/snapSound';
+import { cameraAt, worldBox3, type CameraFraming } from '../anim/camera';
+import type { StudioLook, RenderOptions } from '../render/studio';
 import { poseAt, type Timeline } from '../anim/timeline';
 import type { Instance } from '../model/assemble';
 import type { createStudio } from '../render/studio';
@@ -11,7 +14,13 @@ export type ExportOpts = {
   width: number;
   height: number;
   fps: number;
+  studioLook?: StudioLook;
+  cameraFraming?: CameraFraming;
+  /** edge lines and colour response; the studio's defaults when left out */
+  render?: RenderOptions;
   logo: { image: ImageBitmap; corner: LogoCorner } | null;
+  /** a click each time pieces connect, as an AAC audio track (left out where the browser can't encode AAC) */
+  snapSound?: boolean;
   onProgress: (done: number, total: number) => void;
   signal: AbortSignal;
 };
@@ -37,17 +46,28 @@ function defaultCanvas(w: number, h: number): AnyCanvas {
 }
 
 export function drawLogo(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, img: ImageBitmap, corner: LogoCorner, w: number, h: number) {
-  const lw = w * LOGO_WIDTH;
+  // Size and inset follow the short side, so a landscape video gets the same logo as a vertical one.
+  const unit = Math.min(w, h);
+  const lw = unit * LOGO_WIDTH;
   const lh = (lw * img.height) / Math.max(1, img.width);
-  const x = corner.endsWith('r') ? w - LOGO_MARGIN - lw : LOGO_MARGIN;
-  const y = corner.startsWith('t') ? LOGO_MARGIN : h - LOGO_MARGIN - lh;
+  const margin = (LOGO_MARGIN * unit) / 1080;
+  const x = corner.endsWith('r') ? w - margin - lw : margin;
+  const y = corner.startsWith('t') ? margin : h - margin - lh;
   const prev = ctx.globalAlpha;
   ctx.globalAlpha = LOGO_ALPHA;
   ctx.drawImage(img, x, y, lw, lh);
   ctx.globalAlpha = prev;
 }
 
-/** Renders the timeline frame by frame into an H.264 MP4. */
+/** The connect clicks as audio, or null where AAC can't be encoded (the video is then silent). */
+async function snapAudio(tl: Timeline): Promise<AudioBuffer | null> {
+  if (typeof OfflineAudioContext === 'undefined') return null;
+  const ok = await canEncodeAudio('aac', { numberOfChannels: 2, sampleRate: 48000 }).catch(() => false);
+  if (!ok) return null;
+  return renderSnapTrack(snapsOf(tl), tl.duration).catch(() => null);
+}
+
+/** Renders the timeline frame by frame into an H.264 MP4 (with the snap sound when asked). */
 export async function exportVideo(opts: ExportOpts, deps: ExportDeps): Promise<Blob> {
   const { timeline: tl, width: w, height: h, fps, signal } = opts;
   if (signal.aborted) throw abortError();
@@ -61,6 +81,8 @@ export async function exportVideo(opts: ExportOpts, deps: ExportDeps): Promise<B
   if (opts.logo && !ctx) throw new Error('Could not create a 2D canvas for the logo overlay.');
 
   const studio = deps.createStudio(renderCanvas, { preserveDrawingBuffer: true });
+  studio.setLook?.(opts.studioLook ?? 'soft');
+  if (opts.render) studio.setRenderOptions?.(opts.render);
   const output = new Output({ format: new Mp4OutputFormat(), target: new BufferTarget() });
   let started = false;
   try {
@@ -69,14 +91,20 @@ export async function exportVideo(opts: ExportOpts, deps: ExportDeps): Promise<B
     studio.fitTo(worldBox3(tl.sceneBox), -tl.ground / 20);
     const source = new CanvasSource(composite, { codec: 'avc', bitrate: QUALITY_HIGH, latencyMode: 'quality' });
     output.addVideoTrack(source, { frameRate: fps });
+    const sound = opts.snapSound ? await snapAudio(tl) : null;
+    const audio = sound ? new AudioBufferSource({ codec: 'aac', bitrate: QUALITY_MEDIUM }) : null;
+    if (audio) output.addAudioTrack(audio);
     await output.start();
     started = true;
+    // queued now and finished with the frames: the muxer interleaves the two tracks
+    const audioDone = audio && sound ? audio.add(sound) : null;
+    audioDone?.catch(() => {});
     const total = frameCount(tl.duration, fps);
     for (let i = 0; i < total; i++) {
       if (signal.aborted) throw abortError();
       const t = Math.min(i / fps, tl.duration);
       studio.bricks.setMatrices(poseAt(tl, t));
-      const cam = cameraAt(tl, t, w / h);
+      const cam = cameraAt(tl, t, w / h, opts.cameraFraming ?? 'cinematic');
       studio.camera.position.copy(cam.position);
       studio.camera.lookAt(cam.target);
       studio.camera.fov = cam.fov;
@@ -90,6 +118,7 @@ export async function exportVideo(opts: ExportOpts, deps: ExportDeps): Promise<B
       opts.onProgress(i + 1, total);
     }
     if (signal.aborted) throw abortError();
+    await audioDone;
     await output.finalize();
     return new Blob([output.target.buffer!], { type: 'video/mp4' });
   } catch (e) {

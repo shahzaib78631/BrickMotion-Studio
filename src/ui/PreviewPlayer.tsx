@@ -2,17 +2,19 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { cameraAt, worldBox3 } from '../anim/camera';
 import { poseAt, type Timeline } from '../anim/timeline';
+import { formatAspect } from '../export/formats';
 import { useAppSettings } from '../state/appSettings';
-import { usePlayback } from '../state/playback';
+import { advancePlayback, usePlayback } from '../state/playback';
+import { soundSnaps } from '../audio/snapSound';
 import type { ModelState } from '../state/useModel';
 import { viewportApi } from './viewportApi';
 
-const ASPECT = 9 / 16;
-
-/** Plays the build animation on the editor's canvas inside a 9:16 frame; the timeline below drives play and scrub. */
+/** Plays the build animation on the editor's canvas inside the output frame (9:16, 1:1, …); the timeline below drives play and scrub. */
 export function PreviewPlayer({ model, timeline: tl }: { model: ModelState; timeline: Timeline }) {
   const s = useAppSettings();
-  const asm = model.assembly;
+  // the model on screen: the whole set, or the open submodel on its own
+  const asm = model.view;
+  const ASPECT = formatAspect(s.format);
   const [frame, setFrame] = useState({ left: 0, top: 0, width: 0, height: 0 });
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -52,19 +54,16 @@ export function PreviewPlayer({ model, timeline: tl }: { model: ModelState; time
       if (!studio || !wrap) return;
       const dt = (now - last) / 1000;
       last = now;
-      const pb = usePlayback.getState();
-      let t = Math.min(pb.t, tl.duration);
-      if (pb.playing) {
-        t = Math.min(tl.duration, t + dt);
-        pb.set({ t, playing: t < tl.duration });
-      }
+      const wasPlaying = usePlayback.getState().playing;
+      const t = advancePlayback(dt, tl.duration);
+      soundSnaps(tl, t, wasPlaying, useAppSettings.getState().snapSound);
       // the 9:16 frame fills the height (or the width on very narrow screens)
       const W = wrap.clientWidth;
       const H = wrap.clientHeight;
       const fh = Math.min(H, W / ASPECT);
       const fw = fh * ASPECT;
       setFrame((f) => (f.width === fw && f.height === fh ? f : { left: (W - fw) / 2, top: (H - fh) / 2, width: fw, height: fh }));
-      const cam = cameraAt(tl, t, ASPECT);
+      const cam = cameraAt(tl, t, ASPECT, s.cameraFraming);
       studio.bricks.setMatrices(poseAt(tl, t));
       studio.camera.position.copy(cam.position);
       studio.camera.lookAt(cam.target);
@@ -75,7 +74,7 @@ export function PreviewPlayer({ model, timeline: tl }: { model: ModelState; time
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [tl]);
+  }, [tl, s.cameraFraming, ASPECT]);
 
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   useEffect(() => {
@@ -85,6 +84,7 @@ export function PreviewPlayer({ model, timeline: tl }: { model: ModelState; time
     return () => URL.revokeObjectURL(u);
   }, [s.logo]);
 
+  const unit = Math.min(frame.width, frame.height);
   return (
     <div className="preview" ref={wrapRef}>
       <div className="frame-mask" style={{ left: frame.left, top: frame.top, width: frame.width, height: frame.height }} />
@@ -94,9 +94,10 @@ export function PreviewPlayer({ model, timeline: tl }: { model: ModelState; time
           src={logoUrl}
           alt=""
           style={{
-            width: frame.width * 0.22,
-            left: s.logoCorner.endsWith('r') ? frame.left + frame.width * (1 - 0.22 - 48 / 1080) : frame.left + (frame.width * 48) / 1080,
-            ...(s.logoCorner.startsWith('t') ? { top: frame.top + (frame.width * 48) / 1080 } : { bottom: frame.top + (frame.width * 48) / 1080 }),
+            // matches drawLogo(): sized and inset relative to the frame's short side
+            width: unit * 0.22,
+            left: s.logoCorner.endsWith('r') ? frame.left + frame.width - unit * (0.22 + 48 / 1080) : frame.left + (unit * 48) / 1080,
+            ...(s.logoCorner.startsWith('t') ? { top: frame.top + (unit * 48) / 1080 } : { bottom: frame.top + (unit * 48) / 1080 }),
           }}
         />
       )}

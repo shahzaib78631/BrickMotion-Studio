@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { assemble, type Assembly } from '../model/assemble';
 import { validate, type Warning } from '../model/validate';
 import { modelSteps } from '../plan/ops';
@@ -12,11 +12,20 @@ export function allPartIds(plan: Plan): string[] {
   return [...ids];
 }
 
+/** The plan seen from one model: its steps become the top level. '' is the whole set. */
+export function scopedPlan(plan: Plan, model: string): Plan {
+  return model ? { ...plan, steps: modelSteps(plan, model) } : plan;
+}
+
 export type ModelState = {
+  /** the plan that was assembled (it can lag the store's plan while parts load) */
+  plan: Plan;
   /** the whole model */
   assembly: Assembly;
   /** what the viewport shows: the whole model or the submodel being edited */
   view: Assembly;
+  /** the plan `view` was assembled from (equal to the plan for the main model) */
+  viewPlan: Plan;
   /** warnings for the shown model */
   warnings: Warning[];
   ready: boolean;
@@ -28,25 +37,42 @@ export function computeModel(plan: Plan, editingModel: string): Omit<ModelState,
   const colors = getColors();
   const assembly = assemble(plan, metricsOf, colors);
   const all = validate(assembly, partName);
-  const view = editingModel ? assemble({ ...plan, steps: modelSteps(plan, editingModel) }, metricsOf, colors) : assembly;
+  const viewPlan = scopedPlan(plan, editingModel);
+  const view = editingModel ? assemble(viewPlan, metricsOf, colors) : assembly;
   const warnings = editingModel ? all.filter((w) => w.model === editingModel) : all;
-  return { assembly, view, warnings };
+  return { plan, assembly, view, viewPlan, warnings };
 }
 
-/** Loads the parts a plan needs, then assembles and validates it whenever it changes. */
+type Base = { plan: Plan; assembly: Assembly; warnings: Warning[] };
+
+/**
+ * Loads the parts a plan needs, then assembles and validates it whenever it changes.
+ * Opening a submodel only assembles that submodel: the whole set is not rebuilt or
+ * re-validated, which kept large imports (hundreds of parts) unresponsive.
+ */
 export function useModel(): ModelState {
   const plan = useStudio((s) => s.plan);
   const editingModel = useStudio((s) => s.editingModel);
-  const [state, setState] = useState<ModelState>({ assembly: EMPTY, view: EMPTY, warnings: [], ready: false });
+  const [base, setBase] = useState<Base | null>(null);
   useEffect(() => {
     let cancelled = false;
     registerInlineParts(plan.parts);
     ensureParts(allPartIds(plan)).then(() => {
-      if (!cancelled) setState({ ...computeModel(plan, editingModel), ready: true });
+      if (cancelled) return;
+      const assembly = assemble(plan, metricsOf, getColors());
+      setBase({ plan, assembly, warnings: validate(assembly, partName) });
     });
     return () => {
       cancelled = true;
     };
-  }, [plan, editingModel]);
-  return state;
+  }, [plan]);
+  return useMemo<ModelState>(() => {
+    if (!base) return { plan, assembly: EMPTY, view: EMPTY, viewPlan: plan, warnings: [], ready: false };
+    const viewPlan = scopedPlan(base.plan, editingModel);
+    const view = editingModel ? assemble(viewPlan, metricsOf, getColors()) : base.assembly;
+    const warnings = editingModel ? base.warnings.filter((w) => w.model === editingModel) : base.warnings;
+    return { plan: base.plan, assembly: base.assembly, view, viewPlan, warnings, ready: true };
+    // `plan` only matters before the first assembly; afterwards `base` carries it
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [base, editingModel]);
 }

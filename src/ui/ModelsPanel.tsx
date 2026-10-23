@@ -1,0 +1,139 @@
+import { useMemo } from 'react';
+import { autoSplitSteps, LARGE_STEP } from '../plan/autoSteps';
+import { modelSteps } from '../plan/ops';
+import { isSub, type Plan } from '../plan/types';
+import { getColors, metricsOf } from '../state/partService';
+import { usePlayback } from '../state/playback';
+import { useStudio } from '../state/store';
+import type { ModelState } from '../state/useModel';
+import type { ExportJob } from './ExportDialog';
+import { Ic } from './icons';
+
+type Row = { name: string; depth: number; steps: number; direct: number; total: number; uses: number; bigStep: boolean; used: boolean };
+
+/** Main model first, then submodels in the order they are first built (nested ones indented); unused ones last. */
+export function modelOutline(plan: Plan): Row[] {
+  const totals = new Map<string, number>();
+  const total = (m: string, stack: string[] = []): number => {
+    if (totals.has(m)) return totals.get(m)!;
+    if (stack.includes(m)) return 0;
+    let n = 0;
+    for (const s of modelSteps(plan, m))
+      for (const i of s.pieces) n += isSub(i) ? (plan.submodels?.[i.submodel] ? total(i.submodel, [...stack, m]) : 0) : 1;
+    totals.set(m, n);
+    return n;
+  };
+  const uses = new Map<string, number>();
+  for (const m of ['', ...Object.keys(plan.submodels ?? {})])
+    for (const s of modelSteps(plan, m)) for (const i of s.pieces) if (isSub(i)) uses.set(i.submodel, (uses.get(i.submodel) ?? 0) + 1);
+  const row = (name: string, depth: number, used: boolean): Row => {
+    const steps = modelSteps(plan, name);
+    const filled = steps.filter((s) => s.pieces.length);
+    return {
+      name,
+      depth,
+      steps: steps.length,
+      direct: steps.reduce((n, s) => n + s.pieces.length, 0),
+      total: total(name),
+      uses: uses.get(name) ?? 0,
+      bigStep: filled.length === 1 && filled[0].pieces.length > LARGE_STEP,
+      used,
+    };
+  };
+  const rows: Row[] = [row('', 0, true)];
+  const seen = new Set<string>(['']);
+  const walk = (m: string, depth: number) => {
+    for (const s of modelSteps(plan, m))
+      for (const i of s.pieces) {
+        if (!isSub(i) || seen.has(i.submodel) || !plan.submodels?.[i.submodel]) continue;
+        seen.add(i.submodel);
+        rows.push(row(i.submodel, depth, true));
+        walk(i.submodel, depth + 1);
+      }
+  };
+  walk('', 1);
+  for (const name of Object.keys(plan.submodels ?? {})) if (!seen.has(name)) rows.push(row(name, 1, false));
+  return rows;
+}
+
+/**
+ * Every model of the set with its own build: open it, play its assembly on its own,
+ * or export it as a separate MP4 (one at a time or all submodels in one go).
+ */
+export function ModelsPanel({ model, onExport }: { model: ModelState; onExport(jobs: ExportJob[]): void }) {
+  const plan = useStudio((s) => s.plan);
+  const editingModel = useStudio((s) => s.editingModel);
+  const rows = useMemo(() => modelOutline(plan), [plan]);
+  const subs = rows.filter((r) => r.name && r.total > 0);
+  const label = (name: string) => name || 'Main model';
+  const open = (name: string) => {
+    usePlayback.getState().set({ playing: false, t: 0, stopAt: null, loopFrom: null });
+    const st = useStudio.getState();
+    st.setMode('edit');
+    if (st.editingModel !== name) st.setEditingModel(name);
+  };
+  const play = (name: string) => {
+    open(name);
+    useStudio.getState().setMode('preview');
+    usePlayback.getState().set({ t: 0, playing: true });
+  };
+  const split = (name: string) => {
+    useStudio.getState().apply((p) => autoSplitSteps(p, name, metricsOf, getColors()));
+    open(name);
+  };
+
+  return (
+    <div className="nx-pane">
+      <div className="nx-pane-head">
+        <h3>
+          Models <span className="nx-count">{rows.length}</span>
+        </h3>
+      </div>
+      <p className="nx-fine">Each model has its own build timeline. Open one to edit, preview and export it on its own; the main model builds every submodel aside and attaches it.</p>
+      <ul className="bm-models" aria-label="Models in this set">
+        {rows.map((r) => {
+          const active = editingModel === r.name;
+          return (
+            <li key={r.name || '(main)'} className={`bm-model-row ${active ? 'active' : ''} ${r.used ? '' : 'unused'}`} style={{ paddingLeft: 8 + r.depth * 14 }}>
+              <button className="bm-model-main" onClick={() => open(r.name)} aria-current={active} title={`Open ${label(r.name)}`}>
+                <Ic name={r.name ? 'box' : 'brick'} />
+                <span className="bm-model-text">
+                  <strong>{label(r.name)}</strong>
+                  <span className="nx-hint">
+                    {r.total} part{r.total === 1 ? '' : 's'} · {r.steps} step{r.steps === 1 ? '' : 's'}
+                    {r.name && r.uses > 1 ? ` · used ×${r.uses}` : ''}
+                    {!r.used ? ' · not used' : ''}
+                  </span>
+                </span>
+              </button>
+              <div className="bm-model-actions">
+                {r.bigStep && (
+                  <button className="nx-icon" title={`All ${r.direct} parts are in one step. Split into bottom-up layer steps`} aria-label={`Auto-split ${label(r.name)} into steps`} onClick={() => split(r.name)}>
+                    <Ic name="wand" />
+                  </button>
+                )}
+                <button className="nx-icon" title={`Play ${label(r.name)}'s build on its own`} aria-label={`Play ${label(r.name)}`} disabled={!model.ready || r.total === 0} onClick={() => play(r.name)}>
+                  <Ic name="play" />
+                </button>
+                <button className="nx-icon" title={`Export ${label(r.name)} as its own MP4`} aria-label={`Export ${label(r.name)} as MP4`} disabled={!model.ready || r.total === 0} onClick={() => onExport([{ model: r.name, label: label(r.name) }])}>
+                  <Ic name="download" />
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      {subs.length > 0 && (
+        <div className="bm-models-batch">
+          <button className="nx-btn nx-sm" disabled={!model.ready} onClick={() => onExport(subs.map((r) => ({ model: r.name, label: r.name })))}>
+            <Ic name="video" /> Export all {subs.length} submodels
+          </button>
+          <button className="nx-btn nx-sm" disabled={!model.ready} onClick={() => onExport([{ model: '', label: 'Main model' }, ...subs.map((r) => ({ model: r.name, label: r.name }))])}>
+            <Ic name="download" /> Export everything
+          </button>
+          <p className="nx-fine">One MP4 per model, rendered one after another with your Video settings.</p>
+        </div>
+      )}
+    </div>
+  );
+}

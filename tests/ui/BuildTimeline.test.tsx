@@ -26,6 +26,12 @@ const tl = {
     { model: '', index: 1, start: 4, end: 7 },
   ],
   subBuilds: [{ key: 's', name: 'engine', start: 3, attachStart: 4.5, attachEnd: 5 }],
+  units: [
+    { kind: 'piece', keys: ['a'], start: 1.5, dur: 0.6, step: 0 },
+    { kind: 'piece', keys: ['s/e1'], start: 3.2, dur: 0.6, step: 0 }, // inside the engine's own build
+    { kind: 'piece', keys: ['b'], start: 4.1, dur: 0.6, step: 1 },
+    { kind: 'attach', keys: ['s/e1'], start: 4.5, dur: 0.5, step: 1 },
+  ],
 } as unknown as Timeline;
 
 beforeEach(() => {
@@ -56,11 +62,13 @@ test('clicking a submodel block opens that submodel', () => {
   expect(useStudio.getState().editingModel).toBe('engine');
 });
 
-test('play switches to the preview and starts playback', () => {
+test('play in the Build view plays there (following the playhead)', () => {
+  useStudio.setState({ mode: 'edit' });
   render(<BuildTimeline timeline={tl} />);
   fireEvent.click(screen.getByRole('button', { name: 'Play' }));
-  expect(useStudio.getState().mode).toBe('preview');
+  expect(useStudio.getState().mode).toBe('edit');
   expect(usePlayback.getState().playing).toBe(true);
+  expect(usePlayback.getState().follow).toBe(true);
 });
 
 test('next step jumps the playhead to the next step', () => {
@@ -68,4 +76,19 @@ test('next step jumps the playhead to the next step', () => {
   render(<BuildTimeline timeline={tl} />);
   fireEvent.click(screen.getByRole('button', { name: 'Next step' }));
   expect(usePlayback.getState().t).toBe(4);
+});
+
+test('the Parts lane shows each piece of the open model and clicking one selects it', () => {
+  render(<BuildTimeline timeline={tl} />);
+  const lane = screen.getByLabelText('Parts: when each piece arrives');
+  const clips = lane.querySelectorAll('.bm-part-clip');
+  // a, b and the attached engine; the engine's own pieces stay in its own timeline
+  expect(clips).toHaveLength(3);
+  const engine = screen.getByRole('button', { name: /^engine, step 2, piece 2/ });
+  fireEvent.pointerDown(engine, { button: 0, clientX: 10 });
+  fireEvent.pointerUp(window, { clientX: 10 });
+  expect(useStudio.getState().selection.ids).toEqual(['s']);
+  expect(useStudio.getState().currentStep).toBe(1);
+  expect(usePlayback.getState().t).toBe(4.5);
+  expect(engine.getAttribute('aria-pressed')).toBe('true');
 });

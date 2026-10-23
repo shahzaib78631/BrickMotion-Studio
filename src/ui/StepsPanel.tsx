@@ -1,7 +1,11 @@
 import { Fragment, useRef, useState, type FormEvent, type PointerEvent as RPointerEvent } from 'react';
 import { deleteStep, insertStep, mergeSteps, modelSteps, moveItemsToStep, reorderItemInStep, splitStep, updateStep } from '../plan/ops';
 import { isSub, type Step } from '../plan/types';
-import { usePlayback } from '../state/playback';
+import type { Timeline } from '../anim/timeline';
+import { autoSplitSteps, LARGE_STEP } from '../plan/autoSteps';
+import { getColors, metricsOf } from '../state/partService';
+import { playRange, usePlayback } from '../state/playback';
+import { stepRange } from '../anim/partClips';
 import { useStudio } from '../state/store';
 import { Ic } from './icons';
 
@@ -69,7 +73,7 @@ function StepEditor({ step, index, model, hasNext, selectedIds, onClose }: StepE
       <p className="nx-fine">Use the arrows to change the arrival order. Select pieces in the 3D view to move or split them.</p>
       <div className="bm-step-pieces">
         {step.pieces.map((item, k) => (
-          <div className="bm-step-piece" key={item.id ?? k}>
+          <div className={`bm-step-piece ${item.id && selectedIds.includes(item.id) ? 'sel' : ''}`} key={item.id ?? k} aria-selected={!!item.id && selectedIds.includes(item.id)}>
             <span className="bm-piece-index">{k + 1}</span>
             <button
               className="bm-piece-select"
@@ -125,7 +129,7 @@ export function destinationForDrop(from: number, spot: DropSpot): number {
 }
 
 /** Steps can be rearranged by mouse/touch drag handles or by accessible up/down buttons. */
-export function StepsPanel() {
+export function StepsPanel({ timeline = null }: { timeline?: Timeline | null }) {
   const plan = useStudio((s) => s.plan);
   const editingModel = useStudio((s) => s.editingModel);
   const currentStep = useStudio((s) => s.currentStep);
@@ -203,7 +207,17 @@ export function StepsPanel() {
           <Ic name="right" /><strong>{editingModel}</strong>
         </div>
       )}
-      <p className="nx-fine">Drag the grip to change the build sequence. Use the pencil to edit titles, timing, notes or piece order.</p>
+      <p className="nx-fine">Drag the grip to change the build sequence. Use the pencil to edit titles, timing, notes or piece order. Keys: <kbd>,</kbd> / <kbd>.</kbd> previous / next step.</p>
+      {steps.some((s) => s.pieces.length > LARGE_STEP) && (
+        <div className="bm-banner" role="note">
+          <span>
+            {steps.length === 1 ? 'All parts are in one step.' : 'Some steps have many parts.'} Builds read better (and animate more smoothly) with smaller steps.
+          </span>
+          <button className="nx-btn nx-sm" onClick={() => { pause(); setEditAt(null); apply((p) => autoSplitSteps(p, editingModel, metricsOf, getColors())); setCurrentStep(null); }}>
+            <Ic name="wand" /> Auto-split into layers
+          </button>
+        </div>
+      )}
       <ol className="bm-steps" aria-label="Build steps">
         {steps.map((step, i) => {
           const subs = subsIn(step);
@@ -235,6 +249,19 @@ export function StepsPanel() {
                     <span className="nx-hint">{step.pieces.length} piece{step.pieces.length === 1 ? '' : 's'}{step.pauseAfter ? ` · +${step.pauseAfter}s hold` : ''}</span>
                   </span>
                 </button>
+                <button
+                  className="nx-icon"
+                  title="Play this step"
+                  aria-label={`Play step ${i + 1}`}
+                  disabled={!stepRange(timeline, i)}
+                  onClick={() => {
+                    const r = stepRange(timeline, i);
+                    if (!r) return;
+                    setCurrentStep(i);
+                    // plays where you are: in the Build view with your camera, or in the preview
+                    playRange(r[0] - 0.25, r[1] + (step.pauseAfter ?? 0) + 0.35);
+                  }}
+                ><Ic name="play" /></button>
                 <button className="nx-icon bm-step-edit" title="Edit this step" aria-label={`Edit step ${i + 1}`} aria-expanded={editing} onClick={() => { setCurrentStep(i); setEditAt(editing ? null : `${editingModel}:${i}`); }}><Ic name="edit" /></button>
                 {hasSelection && (
                   <button className="nx-icon" title="Move selected pieces here" aria-label={`Move selection to step ${i + 1}`} onClick={() => { pause(); apply((p) => moveItemsToStep(p, editingModel, selection.ids, i)); setCurrentStep(i); }}><Ic name="moveHere" /></button>

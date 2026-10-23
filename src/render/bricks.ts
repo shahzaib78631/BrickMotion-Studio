@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { ColorDef } from '../ldraw/colors';
 import type { PartGeometry } from '../ldraw/geometry';
 import type { Instance } from '../model/assemble';
-import { materialFor, placeholderMaterial } from './materials';
+import { edgeMaterialFor, materialFor, placeholderMaterial } from './materials';
 
 /** World scale: 1 world unit = 1 stud (20 LDU), +Y up. */
 export const LDU = 1 / 20;
@@ -26,7 +26,12 @@ type Slot = { mesh: THREE.InstancedMesh; index: number };
 export class BrickRenderer {
   readonly root = new THREE.Group();
   private meshes: THREE.InstancedMesh[] = [];
+  /** faint outline edges, one per (part, color) group, sharing that group's instance matrices */
+  private edges: THREE.LineSegments[] = [];
+  private edgesOn = true;
   private slots = new Map<string, Slot[]>();
+  /** mesh → instance index → key, for picking */
+  private keyAt = new Map<THREE.InstancedMesh, string[]>();
   private instances: Instance[] = [];
   private highlight = new Map<string, 'select' | 'warn'>();
 
@@ -59,6 +64,7 @@ export class BrickRenderer {
         if (geo.mainDoubleSided) parts.push({ geometry: geo.mainDoubleSided, material: materialFor(main, true) });
         for (const f of geo.fixed) parts.push({ geometry: f.geometry, material: materialFor(this.colors.get(f.color), f.doubleSided) });
       }
+      let groupMesh: THREE.InstancedMesh | null = null;
       for (const p of parts) {
         const mesh = new THREE.InstancedMesh(p.geometry, p.material, group.length);
         // Instances travel far from their assembled positions. Three.js would
@@ -67,7 +73,10 @@ export class BrickRenderer {
         mesh.frustumCulled = false;
         mesh.castShadow = true;
         mesh.receiveShadow = true;
+        const keys: string[] = [];
+        this.keyAt.set(mesh, keys);
         group.forEach((inst, index) => {
+          keys[index] = inst.key;
           mesh.setMatrixAt(index, inst.world);
           mesh.setColorAt(index, TINT.none);
           let s = this.slots.get(inst.key);
@@ -79,6 +88,20 @@ export class BrickRenderer {
         mesh.computeBoundingSphere();
         this.meshes.push(mesh);
         this.root.add(mesh);
+        groupMesh ??= mesh;
+      }
+      if (geo?.edges && groupMesh) {
+        // the same instance matrices as the bricks: hidden or flying bricks take their edges along
+        const g = new THREE.InstancedBufferGeometry();
+        g.setAttribute('position', geo.edges.getAttribute('position'));
+        g.setAttribute('instanceMatrix', groupMesh.instanceMatrix);
+        g.instanceCount = group.length;
+        const lines = new THREE.LineSegments(g, edgeMaterialFor(this.colors.get(first.color)));
+        lines.frustumCulled = false;
+        lines.visible = this.edgesOn;
+        lines.renderOrder = 1;
+        this.edges.push(lines);
+        this.root.add(lines);
       }
     }
     this.applyHighlight();
@@ -89,7 +112,11 @@ export class BrickRenderer {
       const m = get(key) ?? HIDDEN;
       for (const s of slots) s.mesh.setMatrixAt(s.index, m);
     }
-    for (const mesh of this.meshes) mesh.instanceMatrix.needsUpdate = true;
+    for (const mesh of this.meshes) {
+      mesh.instanceMatrix.needsUpdate = true;
+      // picking recomputes it from the new matrices when needed
+      mesh.boundingSphere = null;
+    }
   }
 
   /** Restores every instance to its assembled position. */
@@ -122,9 +149,16 @@ export class BrickRenderer {
     const hits = raycaster.intersectObjects(this.meshes, false);
     for (const h of hits) {
       if (h.instanceId === undefined) continue;
-      for (const [key, slots] of this.slots) if (slots.some((s) => s.mesh === h.object && s.index === h.instanceId)) return key;
+      const key = this.keyAt.get(h.object as THREE.InstancedMesh)?.[h.instanceId];
+      if (key) return key;
     }
     return null;
+  }
+
+  /** Shows or hides the faint outline edges. */
+  setEdges(on: boolean): void {
+    this.edgesOn = on;
+    for (const l of this.edges) l.visible = on;
   }
 
   meshCount(): number {
@@ -137,7 +171,13 @@ export class BrickRenderer {
       m.dispose();
     }
     this.meshes = [];
+    for (const l of this.edges) {
+      this.root.remove(l);
+      l.geometry.dispose(); // only the wrapper: the position and matrix buffers belong to the part and its mesh
+    }
+    this.edges = [];
     this.slots.clear();
+    this.keyAt.clear();
   }
 
   dispose(): void {
