@@ -10,6 +10,7 @@ import { buildMechanicalConstraintGraph, explainMissingMechanicalMate } from './
 import { mechanicalSubassemblies } from './subassemblies';
 import { semanticComposites } from './semanticComposites';
 import { recognizedGearMesh } from './meshingContacts';
+import { REVIEWED_5590_SURFACES, verifyReviewedSurface } from './reviewedSurfaceContacts';
 import { possibleFinalContacts } from './contactBroadphase';
 import { ScopeSceneIndex } from './sceneIndex';
 import { guidedDirections, nearDistances, farExits } from './nearFar';
@@ -209,7 +210,14 @@ export function planConstruction(model: ConstructionModel, options: Construction
     // Audit the supplied completed placement before spending a search budget on
     // access routes. Unmodelled mesh contact is NOT declared physically invalid.
     const finalContacts: Blockage[] = [], contactWarnings: string[] = [], leaves = [...model.parts.values()];
-    let certifiedSurfaceContacts = 0, certifiedMechanicalContacts = 0, recognizedGearContacts = 0;
+    let certifiedSurfaceContacts = 0, certifiedMechanicalContacts = 0, recognizedGearContacts = 0, reviewedSurfaceContacts = 0;
+    const reviewed = [...(options.disableBundledSurfaceReviews ? [] : REVIEWED_5590_SURFACES), ...(options.reviewedSurfaces ?? [])];
+    const reviewedByPair = new Map<string, typeof reviewed>();
+    for (const review of reviewed) {
+        const key = directed(review.moving, review.obstacle);
+        const list = reviewedByPair.get(key) ?? [];
+        list.push(review); reviewedByPair.set(key, list);
+    }
     audit: for (const [a, b] of possibleFinalContacts(leaves)) {
             pulse();
             if (compositeOwners.has(a.id) && compositeOwners.get(a.id) === compositeOwners.get(b.id)) continue;
@@ -323,6 +331,20 @@ export function planConstruction(model: ConstructionModel, options: Construction
                 certifiedMechanicalContacts++;
                 continue;
             }
+            // Pose-bound, human-reviewed surface witnesses are separate from
+            // joints. Their exact relative transforms and live geometry must
+            // match; neither a part-number pair nor a generic 2.1 LDU threshold
+            // can grant this certificate. No insertion or transport exemptions.
+            const reviewedCandidates = [
+                ...(reviewedByPair.get(directed(a.id, b.id)) ?? []),
+                ...(reviewedByPair.get(directed(b.id, a.id)) ?? []),
+            ];
+            const reviewedContact = reviewedCandidates.map(r => verifyReviewedSurface(model, r, oracle)).find(Boolean);
+            if (reviewedContact) {
+                addPolicy(reviewedContact);
+                reviewedSurfaceContacts++;
+                continue;
+            }
             // Gear teeth are intentionally engaged at final pose in many LDraw
             // models. Classify only a measured, shallow, non-contained mesh
             // between explicitly described gear parts. Never allow an unchecked
@@ -351,9 +373,11 @@ export function planConstruction(model: ConstructionModel, options: Construction
     if (recognizedGearContacts) contactWarnings.push(`${recognizedGearContacts} shallow final-pose gear-tooth mesh contacts were recognized from part descriptions and measured separation. These are not route certificates: each insertion still requires strict swept-mesh verification. Gear articulation is not simulated.`);
     if (certifiedMechanicalContacts)
         contactWarnings.push(`${certifiedMechanicalContacts} previously unresolved completed-pose contacts match localized LDCad mechanical cylinders. The corresponding certifications are final-pose-only and do not relax animation route checks.`);
+    if (reviewedSurfaceContacts) contactWarnings.push(`${reviewedSurfaceContacts} exact-relative-pose reviewed surface contact(s) passed re-measurement against the supplied meshes. They are static-only, not mechanical joints or collision-free insertion certificates.`);
     if (certifiedSurfaceContacts)
         contactWarnings.push(`${certifiedSurfaceContacts} final-pose contacts were classified as bounded directional surface contact. Recognised stud residuals may use up to 6.0 LDU; thin decorations are bounded by their measured thickness; authored anatomical scene contacts use role-specific final-pose bounds (hand 16.05, headwear 8.05, head/leg 4.05 LDU); other unrecognised contacts remain <= 2.0 LDU. These inferred surface certificates are static-only: assembly paths still undergo continuous collision checks and none create part-wide motion tolerances.`);
     stats.contactAuditMilliseconds = Math.round(performance.now() - auditStarted);
+    if (!finalContacts.length) options.onContactAuditComplete?.({ reviewedSurfaceContacts, contactAuditMilliseconds: stats.contactAuditMilliseconds });
     if (finalContacts.length) {
         const partsOf = (b: Blockage) => [model.parts.get(b.moving)?.part, model.parts.get(b.obstacle)?.part]
             .map(p => p?.toLowerCase().replace(/\.dat$/, '') ?? '');

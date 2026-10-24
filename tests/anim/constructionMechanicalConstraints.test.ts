@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { placeSnap, type CylSnapDef, type Snap } from '../../src/ldraw/shadow';
-import { profiledCylinderMate, worldSnaps } from '../../src/anim/snapMates';
+import { worldSnaps } from '../../src/anim/snapMates';
+import { profiledCylinderMate } from '../../src/anim/construction/profiledCylinderMate';
 import { buildMechanicalConstraintGraph, explainMissingMechanicalMate } from '../../src/anim/construction/mechanicalConstraintGraph';
 import { MeshOracle } from '../../src/anim/construction/collision';
 import { modelFromNodes } from '../../src/anim/construction/input';

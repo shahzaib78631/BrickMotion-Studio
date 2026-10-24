@@ -2,6 +2,7 @@ import type { Box } from '../../ldraw/flatten';
 import type { AssemblyHints } from '../../plan/types';
 import type { PartMetrics } from '../../ldraw/metrics';
 import type { M4, V3 } from './math';
+import type { ReviewedSurfaceContact } from './reviewedSurfaceContacts';
 export type ConstructionNode = {
     id: string;
     part?: string;
@@ -94,6 +95,12 @@ export type SearchStats = {
 export type ConstructionOptions = {
     /** Guided V3 optimizes proposal order and broad phase but shares exact certificates. */
     algorithm?: 'exhaustive-v2' | 'guided-v3';
+    /** Additional explicitly reviewed exact-pose surface contacts (never motion waivers). */
+    reviewedSurfaces?: readonly ReviewedSurfaceContact[];
+    /** Diagnostic switch: disable the bundled, narrowly scoped LEGO 5590 reviews. */
+    disableBundledSurfaceReviews?: boolean;
+    /** Called only after final-pose contact checking completes without blockers. */
+    onContactAuditComplete?: (result: { reviewedSurfaceContacts: number; contactAuditMilliseconds: number }) => void;
     maxStates?: number;
     maxMilliseconds?: number;
     maxCandidates?: number;

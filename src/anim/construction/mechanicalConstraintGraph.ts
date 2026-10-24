@@ -9,7 +9,8 @@
 import { possibleFinalContacts } from './contactBroadphase';
 import { dot, mul, norm, sub } from './math';
 import type { V3 } from './math';
-import { mateAxis, profiledCylinderMate, worldSnaps, type WorldSnap } from '../snapMates';
+import { mateAxis, worldSnaps, type WorldSnap } from '../snapMates';
+import { profiledCylinderMate } from './profiledCylinderMate';
 import type { ConstructionModel, Connection, ContactRegion, ConstructionNode } from './types';
 
 export type MechanicalJointType = 'stud-socket' | 'pin-hole' | 'axle-hole' | 'hinge' | 'clip' | 'ball-socket' | 'cylindrical';

@@ -1,0 +1,29 @@
+{
+  "success": true,
+  "contactAuditOnly": true,
+  "fullPlanCertified": false,
+  "engine": "v3",
+  "budget": "extended",
+  "scope": "full",
+  "pieces": 1258,
+  "contactAudit": {
+    "reviewedSurfaceContacts": 2,
+    "contactAuditMilliseconds": 24134
+  },
+  "stats": {
+    "states": 1,
+    "candidates": 0,
+    "backtracks": 0,
+    "meshPairs": 8134,
+    "trianglePairs": 5532529,
+    "cacheHits": 418,
+    "milliseconds": 28299,
+    "guidedCandidates": 0,
+    "exhaustiveCandidates": 0,
+    "broadphaseQueries": 0,
+    "broadphaseHits": 0,
+    "contactAuditMilliseconds": 24135
+  },
+  "note": "Final-pose audit passed. Route search and animation replay were deliberately not run.",
+  "elapsedMs": 28301
+}
