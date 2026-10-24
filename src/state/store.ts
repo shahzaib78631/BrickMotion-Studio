@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { usePlayback } from './playback';
+import { useKeyframePlayback } from './keyframePlayback';
 import { modelSteps, reorderStep, type ModelName } from '../plan/ops';
 import { setAssemblySpot, setLoosePiecesFollow, setSubmodelBuildSpot } from '../plan/pieceActions';
 import { isMainSpot, type SpotRef } from '../plan/assemblySpots';
@@ -42,6 +43,9 @@ export type StudioState = {
   setShowModelAtSpot(show: boolean): void;
   editingModel: ModelName;
   mode: 'edit' | 'preview';
+  /** Build clips and Dope Sheet remain independent workflows. */
+  timelineEditor: 'build' | 'timeline';
+  setTimelineEditor(mode: 'build' | 'timeline'): void;
   /** null = show every step */
   currentStep: number | null;
   /** item ids the viewport should frame; tick changes on every request */
@@ -106,10 +110,9 @@ export const useStudio = create<StudioState>((set, get) => ({
     set(ref ? { spot: ref, selection: { model: get().editingModel, ids: [] } } : { spot: null });
   },
   setSpot(ref, spot) {
-    // When explicitly previewing the main model at its assembly spot, a floor
-    // drop should visibly reposition the finished model, not keep rendering a
-    // stale animation frame at the playhead. Playback can be restarted normally.
-    if (isMainSpot(ref) && get().plan.showModelAtSpot)
+    // Any manually dropped model, including a nested submodel, must become
+    // visible at its new workbench immediately, even after a prior scrub.
+    if (get().plan.showModelAtSpot)
       usePlayback.getState().set({ follow: false, playing: false });
     get().apply((p) => (isMainSpot(ref) ? setAssemblySpot(p, spot) : setSubmodelBuildSpot(p, ref.model, ref.id, spot)));
   },
@@ -129,6 +132,13 @@ export const useStudio = create<StudioState>((set, get) => ({
   replans: 0,
   replan() { set({ replans: get().replans + 1 }); },
   mode: 'edit',
+  timelineEditor: 'build',
+  setTimelineEditor(timelineEditor) {
+    if (get().timelineEditor === timelineEditor) return;
+    usePlayback.getState().set({ playing: false, follow: false });
+    useKeyframePlayback.getState().set({ playing: false });
+    set({ timelineEditor, mode: 'edit', currentStep: null, laidOut: false, spot: null });
+  },
   currentStep: null,
   focus: { ids: [], tick: 0 },
   paintColor: 71,
@@ -228,9 +238,11 @@ export const useStudio = create<StudioState>((set, get) => ({
   },
   setEditingModel(m) {
     usePlayback.getState().set({ follow: false, playing: false });
+    useKeyframePlayback.getState().set({ playing: false });
     set({ editingModel: m, selection: { model: m, ids: [] }, spot: null, currentStep: null, laidOut: false });
   },
   setMode(mode) {
+    if (mode === 'preview') useKeyframePlayback.getState().set({ playing: false });
     // coming back to Build while the preview plays: keep playing, now in the Build view
     if (mode === 'edit') usePlayback.getState().set({ follow: usePlayback.getState().playing });
     set({ mode });

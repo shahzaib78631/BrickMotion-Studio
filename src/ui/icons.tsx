@@ -11,6 +11,8 @@ const PATHS = {
   redo: '<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>',
   moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
+  key: '<path d="m14 6 4-4 4 4-4 4"/><circle cx="8" cy="16" r="5"/><path d="m11.5 12.5 7-7L17 1"/>',
+  repeat: '<path d="m17 2 4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3"/>',
   play: '<path d="M7 4.5v15l12.5-7.5z" fill="currentColor"/>',
   pause: '<rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor"/><rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor"/>',
   prev: '<path d="M19 20 9 12l10-8z"/><path d="M5 19V5"/>',

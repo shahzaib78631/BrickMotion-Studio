@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { assemble, type Assembly } from '../model/assemble';
 import { validate, type Warning } from '../model/validate';
 import { modelSteps } from '../plan/ops';
 import { isSub, type Plan } from '../plan/types';
+import { sameGeometry } from './modelChange';
 import { ensureParts, getColors, metricsOf, partName, registerInlineParts } from './partService';
 import { useStudio } from './store';
 
@@ -54,10 +55,6 @@ export function computeModel(plan: Plan, editingModel: string): Omit<ModelState,
 
 type Base = { plan: Plan; assembly: Assembly; warnings: Warning[] };
 
-/** Metadata-only scene edits cannot invalidate the assembled source geometry. */
-const sameGeometry = (a: Plan, b: Plan) => a.steps === b.steps &&
-  a.submodels === b.submodels && a.parts === b.parts &&
-  a.name === b.name && a.description === b.description;
 
 /**
  * Loads the parts a plan needs, then assembles and validates it whenever it changes.
@@ -68,6 +65,9 @@ export function useModel(): ModelState {
   const plan = useStudio((s) => s.plan);
   const editingModel = useStudio((s) => s.editingModel);
   const [base, setBase] = useState<Base | null>(null);
+  // Editing object keyframes (or assembly markers) must not re-assemble a
+  // hundred-brick submodel on every transform change. Cache by geometry identity.
+  const viewCache = useRef<{ assembly: Assembly; model: string; view: Assembly } | null>(null);
   const [failure, setFailure] = useState<{ plan: Plan; message: string } | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -101,7 +101,15 @@ export function useModel(): ModelState {
     // disabled and loses the active animation while a marker is committed.
     const current = sameGeometry(base.plan, plan) ? { ...base, plan } : base;
     const viewPlan = scopedPlan(current.plan, editingModel);
-    const view = editingModel ? assemble(viewPlan, metricsOf, getColors()) : current.assembly;
+    let view = current.assembly;
+    if (editingModel) {
+      const cached = viewCache.current;
+      if (cached?.assembly === current.assembly && cached.model === editingModel) view = cached.view;
+      else {
+        view = assemble(viewPlan, metricsOf, getColors());
+        viewCache.current = { assembly: current.assembly, model: editingModel, view };
+      }
+    }
     const warnings = editingModel ? current.warnings.filter((w) => w.model === editingModel) : current.warnings;
     return { plan: current.plan, assembly: current.assembly, view, viewPlan, warnings, ready: current.plan === plan && !error, error };
     // `plan` only matters before the first assembly; afterwards `base` carries it

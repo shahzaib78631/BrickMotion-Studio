@@ -11,6 +11,9 @@ import { usePlayback } from './state/playback';
 import { AboutDialog } from './ui/AboutDialog';
 import { AiPanel } from './ui/AiPanel';
 import { BuildTimeline } from './ui/BuildTimeline';
+import { KeyframeTimeline } from './ui/KeyframeTimeline';
+import { animationOf } from './anim/keyframes';
+import { linkBuildLayer } from './anim/buildLayer';
 import { ChecksPanel } from './ui/ChecksPanel';
 import { ExportDialog, type ExportJob } from './ui/ExportDialog';
 import { Ic, type IconName } from './ui/icons';
@@ -28,6 +31,7 @@ import { Viewport } from './ui/Viewport';
 import { viewportApi } from './ui/viewportApi';
 import './ui/studio.css';
 import './ui/app.css';
+import './ui/keyframes.css';
 
 type Tab = 'models' | 'parts' | 'assembly' | 'steps' | 'checks' | 'ai' | 'video' | 'settings';
 const TABS: [Tab, IconName, string][] = [
@@ -59,6 +63,7 @@ const store = (k: string, v: string) => {
 function Studio() {
   const model = useModel();
   const mode = useStudio((s) => s.mode);
+  const timelineEditor = useStudio((s) => s.timelineEditor);
   const gizmoEnabled = useStudio((s) => s.gizmoEnabled);
   const gizmoMode = useStudio((s) => s.gizmoMode);
   const editingModel = useStudio((s) => s.editingModel);
@@ -225,12 +230,35 @@ function Studio() {
           <Inspector timeline={timeline} checks={warnings.length} stepCard={mode === 'edit' ? <StepCallout model={model} timeline={timeline} /> : null} />
         </div>
         <div className="nx-resizer" onPointerDown={resize} title="Drag to resize the timeline" />
-        <BuildTimeline timeline={timeline} planning={planning} error={model.error || planError}
-          progress={progress} loading={!model.ready && !model.error} onRetry={model.error ? undefined : retry} />
+        <div className="bm-timeline-shell">
+          <div className="bm-timeline-modebar">
+            <span className="bm-timeline-mode-label"><Ic name="steps" /> Animation editor</span>
+            <div className="bm-timeline-mode-switch" role="tablist" aria-label="Timeline workspace">
+              <button role="tab" aria-selected={timelineEditor === 'build'} className={timelineEditor === 'build' ? 'active' : ''}
+                onClick={() => useStudio.getState().setTimelineEditor('build')}><Ic name="brick" /> Build</button>
+              <button role="tab" aria-selected={timelineEditor === 'timeline'} className={timelineEditor === 'timeline' ? 'active' : ''}
+                onClick={() => { useStudio.getState().setTimelineEditor('timeline'); setTlHeight((h) => Math.max(340, h)); }}><Ic name="key" /> Timeline</button>
+            </div>
+          <span className="bm-timeline-mode-hint">{timelineEditor === 'build' ? 'Automatic assembly & steps' : 'Dope Sheet · Object keyframes'}</span>
+          {timelineEditor === 'build' && timeline && !planning && !planError && <button className="bm-link-build" title="Keep the generated Build as a procedural base and keyframe offsets on top of its motion"
+            onClick={() => {
+              try {
+                const s = useStudio.getState();
+                s.apply((p) => ({ ...p, animation: linkBuildLayer(animationOf(p.animation), s.editingModel, timeline.duration) }));
+                s.setTimelineEditor('timeline');
+                setTlHeight((h) => Math.max(340, h));
+              } catch (error) { alert(error instanceof Error ? error.message : String(error)); }
+            }}><Ic name="key" /> Edit Build in Timeline</button>}
+          </div>
+          {timelineEditor === 'build'
+            ? <BuildTimeline timeline={timeline} planning={planning} error={model.error || planError}
+                progress={progress} loading={!model.ready && !model.error} onRetry={model.error ? undefined : retry} />
+            : <KeyframeTimeline timeline={timeline} planning={planning} buildError={planError} />}
+        </div>
       </div>
       {dialog === 'projects' && <ProjectsDialog onClose={() => setDialog(null)} />}
       {dialog === 'about' && <AboutDialog onClose={() => setDialog(null)} />}
-      {exportJobs && exportJobs.length > 0 && <ExportDialog plan={model.plan} jobs={exportJobs} onClose={() => setExportJobs(null)} />}
+      {exportJobs && exportJobs.length > 0 && <ExportDialog plan={model.plan} jobs={exportJobs} mode={timelineEditor} onClose={() => setExportJobs(null)} />}
     </div>
   );
 }

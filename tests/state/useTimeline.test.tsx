@@ -68,3 +68,21 @@ test('synchronous request errors become visible instead of escaping the effect',
   expect(result.current.error).toBe('metrics unavailable');
   expect(result.current.planning).toBe(false);
 });
+
+
+test('editing object keyframes preserves the construction timeline and does not replan', async () => {
+  mocks.run.mockResolvedValue(timeline);
+  const { result, rerender } = renderHook(({ editedPlan }) => useTimeline(true, editedPlan, '', opts),
+    { initialProps: { editedPlan: plan } });
+  await runDebounce();
+  expect(result.current.timeline).toBe(timeline);
+  const keyed = { ...plan, animation: { fps: 24, startFrame: 1, endFrame: 250,
+    tracks: [{ kind: 'object' as const, model: '', target: 'i0', channels: {
+      'location.x': [{ frame: 1, value: 0, interpolation: 'bezier' as const }],
+    } }],
+  } };
+  rerender({ editedPlan: keyed });
+  expect(result.current.timeline).toBe(timeline);
+  await runDebounce();
+  expect(mocks.run).toHaveBeenCalledTimes(1);
+});

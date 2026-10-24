@@ -8,6 +8,9 @@ import { resetFloorShifts } from '../plan/pieceActions';
 import { useAppSettings } from '../state/appSettings';
 import { Ic } from './icons';
 import { DEFAULT_CAMERA_SETTINGS } from '../anim/camera';
+import { animationOf } from '../anim/keyframes';
+import { buildLayerAt } from '../anim/buildLayer';
+import { animationDuration } from '../export/exportVideo';
 
 const CORNERS: [LogoCorner, string][] = [
   ['tl', 'Top left'],
@@ -37,6 +40,10 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
   }, [s.logo]);
   const longer = timeline && timeline.duration > s.targetSeconds + 0.05;
   const editingModel = useStudio((st) => st.editingModel);
+  const timelineEditor = useStudio((st) => st.timelineEditor);
+  const animation = useStudio((st) => animationOf(st.plan.animation));
+  const manual = timelineEditor === 'timeline';
+  const linked = !!buildLayerAt(animation, editingModel);
   /** pieces dragged to another waiting spot */
   const moved = useStudio((st) => [...st.plan.steps, ...Object.values(st.plan.submodels ?? {}).flatMap((m) => m.steps)].reduce((n, step) => n + step.pieces.filter((i) => i.assembly?.floorShift).length, 0));
   const fmt = VIDEO_FORMATS[s.format];
@@ -60,16 +67,22 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
         <span className="nx-chip">{s.format} · {fmt.width}×{fmt.height} · {s.fps} fps</span>
       </div>
 
-      <label className="nx-field">
+      {manual && <p className="nx-fine"><strong>Timeline export</strong> · {animationDuration(animation).toFixed(2)} s
+        · {animation.fps} authored fps · frames {animation.startFrame}–{animation.endFrame}.
+        {linked ? ' Generated Build motion and your keyed offsets are both rendered.' : ' No construction planning is required.'}
+        The output FPS below controls video sampling, not key timing.
+      </p>}
+      {!manual && <label className="nx-field">
         Length <b>{formatLength(s.targetSeconds)}</b>
         <input type="range" min={5} max={600} step={5} value={s.targetSeconds} onChange={(e) => s.set({ targetSeconds: Number(e.target.value) })} />
-      </label>
-      {timeline && (
+      </label>}
+      {!manual && timeline && (
         <p className="nx-fine">
           Comes out at <strong>{timeline.duration.toFixed(1)} s</strong>
           {longer ? ': step pauses and submodels built one after another add time.' : '.'}
         </p>
       )}
+      {!manual && <>
       <div className="nx-field">
         Pieces arrive
         <div className="nx-seg" role="radiogroup" aria-label="Pieces arrive">
@@ -126,6 +139,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
         <span className="nx-hint">Empty fields follow Length. You can also drag a clip's edge in the timeline.</span>
       </details>
 
+      </>}
       <details className="nx-group bm-vsec">
         <summary>Camera<span className="bm-vsec-val">{s.cameraFraming === 'wide' ? 'Wide' : 'Cinematic'} · {s.camera.lensMm} mm</span></summary>
         <label className="nx-field">
@@ -135,6 +149,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
             <option value="wide">Wide — whole model in frame</option>
           </select>
         </label>
+        {manual && <p className="nx-hint">Timeline videos use a stable camera at the chosen azimuth, elevation and lens. Build drift, damping, focus and the hero orbit do not apply to manually keyed motion.</p>}
         <div className="bm-camera-actions">
           <button type="button" className="nx-btn nx-sm" onClick={() => s.set({ camera: { ...DEFAULT_CAMERA_SETTINGS } })}>Reference</button>
           <button type="button" className="nx-btn nx-sm" onClick={() => s.set({ camera: { ...s.camera, lensMm: 42, buildElevation: 54, buildMargin: 1.08, targetLock: 0.72, submodelFocus: 1 } })}>Closer</button>
@@ -173,6 +188,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
         <label className="nx-check" title="A click each time pieces connect"><input type="checkbox" checked={s.snapSound} onChange={(e) => s.set({ snapSound: e.target.checked })} /> Snap sound</label>
       </details>
 
+      {!manual && <>
       <details className="nx-group bm-vsec">
         <summary>Waiting pieces<span className="bm-vsec-val">{moved ? `${moved} moved` : ''}</span></summary>
         <div className="nx-grid2">
@@ -206,6 +222,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
         </label>
       </details>
 
+      </>}
       <details className="nx-group bm-vsec">
         <summary>Logo<span className="bm-vsec-val">{s.logoEnabled && s.logoBitmap ? 'On' : 'Off'}</span></summary>
         <div className="bm-logo-row">
@@ -241,6 +258,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
         </label>
       </details>
 
+      {!manual && <>
       <details className="nx-group bm-vsec">
         <summary>Planner<span className="bm-vsec-val">{v2 ? 'Construction V2' : 'Standard'}</span></summary>
         <label className="nx-field">
@@ -271,6 +289,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
         )}
       </details>
 
+      </>}
       <div className="bm-video-export">
         <div className="nx-grid2">
           <label className="nx-field">
@@ -290,10 +309,10 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
             </select>
           </label>
         </div>
-        <button className="nx-btn nx-primary" disabled={!timeline || timeline.units.length === 0} onClick={onExport}>
-          <Ic name="download" /> Export {editingModel ? `“${editingModel}”` : 'main model'} as MP4
+        <button className="nx-btn nx-primary" disabled={!manual && (!timeline || timeline.units.length === 0)} onClick={onExport}>
+          <Ic name="download" /> Export {manual ? 'Timeline' : 'Build'} · {editingModel ? `“${editingModel}”` : 'main model'} MP4
         </button>
-        <p className="nx-fine">Rendered in this browser, so it can take a minute. Export submodels from the Models panel.</p>
+        <p className="nx-fine">Renders in your browser with the selected video resolution, frame rate and logo. Export submodels from the Models panel.</p>
       </div>
     </div>
   );

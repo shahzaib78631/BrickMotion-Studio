@@ -5,6 +5,7 @@ import { loadSettings, saveSettings } from '../storage/settings';
 import { applySettings, toSettings, useAppSettings } from './appSettings';
 import { useStudio } from './store';
 import { create } from 'zustand';
+import { useKeyframePlayback } from './keyframePlayback';
 
 /** What the toolbar's save dot shows. */
 export const useSaveStatus = create<{ status: 'saved' | 'dirty' | 'error' }>(() => ({ status: 'saved' }));
@@ -37,6 +38,7 @@ function show(id: string, plan = emptyPlan()) {
   const st = useStudio.getState();
   st.setPlan(ensureIds(plan), { resetHistory: true });
   st.setMode('edit');
+  useKeyframePlayback.getState().set({ frame: plan.animation?.startFrame ?? 1, playing: false });
 }
 
 export async function openProject(id: string): Promise<void> {

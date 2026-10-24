@@ -87,7 +87,7 @@ export function AssemblyPanel({ model, timeline }: { model: ModelState; timeline
         <div className="bm-spot-section-title">VIEW &amp; ANIMATION</div>
         <label className="bm-spot-follow">
           <input type="checkbox" checked={plan.showModelAtSpot === true} onChange={(e) => useStudio.getState().setShowModelAtSpot(e.target.checked)} />
-          <span><strong>Show model at placement in viewport</strong><small>Display the assembled model at its dropped position when editing. Original brick coordinates stay unchanged.</small></span>
+          <span><strong>Show models at build spots in viewport</strong><small>Display each placed main model or submodel on its own build footprint while editing. Final brick connections remain unchanged; the video still uses the chosen build spots.</small></span>
         </label>
         <label className="bm-spot-follow">
           <input type="checkbox" checked={plan.loosePiecesFollow !== false} onChange={(e) => useStudio.getState().setFollow(e.target.checked)} />

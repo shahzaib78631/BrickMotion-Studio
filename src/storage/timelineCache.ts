@@ -23,7 +23,11 @@ const canonical = (v: unknown): unknown =>
  * plan is compared by content, not by key order.
  */
 export async function timelineFingerprint(inputs: TimelineInputs): Promise<string> {
-  const text = JSON.stringify({ v: TIMELINE_CACHE_VERSION, model: inputs.model, opts: inputs.opts, shadow: inputs.shadow, plan: canonical(inputs.plan) });
+  // Object/action keyframes are editorial animation, entirely separate from
+  // construction routing. Changing them must never invalidate saved build
+  // timelines (including when reopening an exported .brickmotion project).
+  const { animation: _animation, ...constructionPlan } = inputs.plan;
+  const text = JSON.stringify({ v: TIMELINE_CACHE_VERSION, model: inputs.model, opts: inputs.opts, shadow: inputs.shadow, plan: canonical(constructionPlan) });
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }

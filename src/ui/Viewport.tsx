@@ -3,19 +3,18 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { findItem, moveItems } from '../plan/ops';
-import { shiftOnFloor } from '../plan/pieceActions';
+import { setAssemblySpot, setSubmodelBuildSpot, shiftOnFloor } from '../plan/pieceActions';
 import { aroundPivot, transformPlanItems } from '../plan/gizmo';
 import type { ANode } from '../model/assemble';
 import { dragDelta } from '../state/drag';
 import { isSub } from '../plan/types';
-import { markers, sameSpot, sceneSpot, storedSpot, sceneOffset, planOffset, spotOfRef, type SpotRef } from '../plan/assemblySpots';
+import { isMainSpot, markers, sameSpot, sceneSpot, storedSpot, sceneOffset, planOffset, spotOfRef, type SpotRef } from '../plan/assemblySpots';
 import { SPOT_DRAG_TYPE, draggedSpot } from './AssemblyPanel';
 import { SpotMarkers } from './spotMarkers';
 import { createStudio, worldBox } from '../render/studio';
-import { transformBox } from '../model/assemble';
 import { selectionForHit } from '../plan/groups';
 import { createSubmodel } from '../plan/createSubmodel';
-import { modelPlacement, sourceEditDelta, viewPlacement } from './modelPlacement';
+import { instancePlacements, itemPlacement, placedBox, placedMatrix, sourceEditDelta, viewPlacement } from './modelPlacement';
 import { NewSubmodelDialog } from './NewSubmodelDialog';
 import { runCommand } from '../state/editing';
 import { commandForKey } from '../state/keymap';
@@ -27,6 +26,10 @@ import { poseAt, spotTransform, type Timeline } from '../anim/timeline';
 import { worldBox3 } from '../anim/camera';
 import { stepAt } from '../anim/partClips';
 import { advancePlayback, usePlayback } from '../state/playback';
+import { animationOf, insertKeys, valuesAt, type ChannelValues, type KeyUpdate } from '../anim/keyframes';
+import { makeKeyframePose } from '../anim/keyframePose';
+import { advanceKeyframePlayback, useKeyframePlayback } from '../state/keyframePlayback';
+import type { Plan } from '../plan/types';
 import { soundSnaps } from '../audio/snapSound';
 import { useAppSettings } from '../state/appSettings';
 import type { ModelState } from '../state/useModel';
@@ -70,6 +73,11 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
   const selection = useStudio((s) => s.selection);
   const focus = useStudio((s) => s.focus);
   const mode = useStudio((s) => s.mode);
+  const timelineEditor = useStudio((s) => s.timelineEditor);
+  const autoKey = useKeyframePlayback((s) => s.autoKey);
+  // Avoid 60 React rerenders/sec while keyframe playback runs. The RAF owns it.
+  // Paused frame changes refresh transform handles only when someone scrubs.
+  const keyframeAtRest = useKeyframePlayback((s) => s.playing ? -1 : Math.round(s.frame));
   const tool = useStudio((s) => s.tool);
   const spotSel = useStudio((s) => s.spot);
   const gizmoEnabled = useStudio((s) => s.gizmoEnabled);
@@ -84,11 +92,14 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
    * piece where it really is, so the handles sit on the piece they move. The animation
    * pose at the playhead has pieces waiting elsewhere on the staging table.
    */
-  const placing = mode === 'edit' && (tool === 'move' || (gizmoEnabled && selection.model === editingModel && selection.ids.length > 0));
+  const placing = mode === 'edit' && timelineEditor === 'build' && (tool === 'move' || (gizmoEnabled && selection.model === editingModel && selection.ids.length > 0));
   /** the Build view shows the build animation at the playhead, with the editor's own camera */
-  const engaged = mode === 'edit' && follow && !!timeline && !placing;
+  const engaged = mode === 'edit' && timelineEditor === 'build' && follow && !!timeline && !placing;
   /** what the render loop needs while engaged: the timeline and the pose at a time */
   const live = useRef<{ tl: Timeline; pose: (t: number) => (key: string) => THREE.Matrix4 | null; dirty: boolean; override?: Map<string, THREE.Matrix4> } | null>(null);
+  /** Timeline mode uses a separate, non-destructive matrix sampler. */
+  const keyScene = useRef<{ at: (frame: number) => Map<string, THREE.Matrix4 | null>; bases: Map<string, THREE.Matrix4>; dirty: boolean } | null>(null);
+  const keyGesture = useRef<{ base: Plan; ids: string[]; model: string; frame: number; values: Map<string, ChannelValues> } | null>(null);
   const studioLook = useAppSettings((s) => s.studioLook);
   const edgeLines = useAppSettings((s) => s.edgeLines);
   const linearColors = useAppSettings((s) => s.linearColors);
@@ -109,8 +120,25 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
   const modelRef = useRef(model);
   modelRef.current = model;
 
-  /** Draw a live, editor-only ghost without editing the plan or starting a worker.
-   * The result is persisted once, at pointer release. */
+  /** Update the static GPU matrices without touching saved LDraw placements,
+   * undo history, or the planner. Used while a build spot is being dragged. */
+  const previewMatrices = (previewPlan: typeof plan) => {
+    if (useStudio.getState().timelineEditor !== 'build') return;
+    const state = useStudio.getState();
+    if (!state.plan.showModelAtSpot || state.editingModel || state.currentStep !== null || state.laidOut || state.mode !== 'edit') return;
+    const studio = viewportApi.studio;
+    if (!studio) return;
+    const asm = modelRef.current.assembly;
+    const placements = instancePlacements(previewPlan, '', asm);
+    const instances = new Map(modelRef.current.view.instances.map(inst => [inst.key, inst]));
+    studio.bricks.setMatrices(key => {
+      const inst = instances.get(key);
+      return inst ? placedMatrix(inst, placements) : null;
+    });
+  };
+
+  /** Drag the floor footprint AND its assembled contents in real time. The
+   * candidate is preview-only until pointer release (one undoable plan edit). */
   const previewSpot = (ref: SpotRef, candidate: import('../plan/types').AssemblySpot) => {
     const state = useStudio.getState();
     const assembled = modelRef.current.assembly;
@@ -119,6 +147,10 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
       sameSpot(m.ref, ref) ? { ...m, centre: [spot.x * 20, spot.z * 20] as [number, number], angle: spot.angle, placed: true } : m);
     const ground = timelineRef.current?.ground ?? assembled.bounds?.max[1] ?? 0;
     markersRef.current?.update(data, ref, -ground / 20);
+    const previewPlan = isMainSpot(ref)
+      ? setAssemblySpot(state.plan, candidate)
+      : setSubmodelBuildSpot(state.plan, ref.model, ref.id, candidate);
+    previewMatrices(previewPlan);
   };
 
   // mount: studio, controls, render loop, resize
@@ -175,11 +207,26 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
         lastTransform = '';
         const current = useStudio.getState();
         origin.current.copy(proxy.position);
+        if (current.timelineEditor === 'timeline') {
+          if (!useKeyframePlayback.getState().autoKey || !current.selection.ids.length) return;
+          useKeyframePlayback.getState().set({ playing: false });
+          const at = Math.round(useKeyframePlayback.getState().frame);
+          const ids = [...current.selection.ids];
+          keyGesture.current = {
+            base: current.plan, model: current.editingModel, ids, frame: at,
+            values: new Map(ids.map((id) => [id, valuesAt(current.plan.animation, current.editingModel, id, at)])),
+          };
+          current.beginGesture();
+          return;
+        }
         if (current.selection.model === current.editingModel && current.selection.ids.length) {
           initialNodes.current = modelRef.current.view.nodes;
           initialIds.current = [...current.selection.ids];
           initialModel.current = current.editingModel;
         } else if (current.spot) {
+          // The placed model follows the gizmo immediately, without waiting
+          // for the planner. A scrubbed timeline must not override this edit.
+          if (current.plan.showModelAtSpot) usePlayback.getState().set({ follow: false, playing: false });
           // the gizmo drives a floor marker, not bricks
           initialNodes.current = [];
           initialIds.current = [];
@@ -190,6 +237,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
         if (!spotDrag.current) current.beginGesture();
       } else {
         if (readoutRef.current) readoutRef.current.hidden = true;
+        keyGesture.current = null;
         // A spot drag is a single undoable commit. No replanning during motion.
         if (spotDrag.current?.pending) {
           const { ref, pending } = spotDrag.current;
@@ -205,8 +253,19 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
         const boxes = modelRef.current.view.instances.filter((inst) => ids.has(inst.key.split('/')[0]));
         if (boxes.length) {
           const bounds = new THREE.Box3();
-          const shown = modelPlacement(current.plan, current.editingModel, modelRef.current.assembly);
-          boxes.forEach((inst) => bounds.union(worldBox(shown ? transformBox(inst.worldBox, shown) : inst.worldBox)));
+          const shown = instancePlacements(current.plan, current.editingModel, modelRef.current.assembly);
+          if (current.timelineEditor === 'timeline') {
+            const at = makeKeyframePose(modelRef.current.view.instances, shown, current.plan.animation, current.editingModel, timelineRef.current)(useKeyframePlayback.getState().frame);
+            for (const inst of boxes) {
+              const pose = at.get(inst.key);
+              if (!pose) bounds.union(worldBox(placedBox(inst, shown)));
+              else {
+                const shift = pose.clone().multiply(inst.world.clone().invert());
+                const box = new THREE.Box3(new THREE.Vector3(...inst.worldBox.min), new THREE.Vector3(...inst.worldBox.max));
+                bounds.union(box.applyMatrix4(shift).applyMatrix4(new THREE.Matrix4().makeScale(1 / 20, -1 / 20, -1 / 20)));
+              }
+            }
+          } else boxes.forEach((inst) => bounds.union(worldBox(placedBox(inst, shown))));
           bounds.getCenter(proxy.position);
           proxy.quaternion.identity();
           proxy.scale.setScalar(1);
@@ -217,6 +276,30 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
       const state = useStudio.getState();
       const original = state.gesture;
       if (!draggingGizmo.current) return;
+      const keyed = keyGesture.current;
+      if (keyed && state.timelineEditor === 'timeline') {
+        const updates: KeyUpdate[] = [];
+        for (const id of keyed.ids) {
+          const base = keyed.values.get(id)!;
+          if (state.gizmoMode === 'translate') {
+            const move = proxy.position.clone().sub(origin.current);
+            const offsets = { x: Math.round(move.x * 10) / 10, y: Math.round(move.y * 10) / 10, z: Math.round(move.z * 10) / 10 };
+            for (const axis of ['x', 'y', 'z'] as const)
+              updates.push({ model: keyed.model, target: id, channel: `location.${axis}`, value: Math.round((base[`location.${axis}`] + offsets[axis]) * 1000) / 1000 });
+          } else if (state.gizmoMode === 'rotate') {
+            const rot = new THREE.Euler().setFromQuaternion(proxy.quaternion, 'XYZ');
+            for (const axis of ['x', 'y', 'z'] as const)
+              updates.push({ model: keyed.model, target: id, channel: `rotation.${axis}`, value: Math.round((base[`rotation.${axis}`] + THREE.MathUtils.radToDeg(rot[axis])) * 1000) / 1000 });
+          } else {
+            for (const axis of ['x', 'y', 'z'] as const)
+              updates.push({ model: keyed.model, target: id, channel: `scale.${axis}`, value: Math.round(base[`scale.${axis}`] * proxy.scale[axis] * 1000) / 1000 });
+          }
+        }
+        const nextAnimation = insertKeys(animationOf(keyed.base.animation), keyed.frame, updates);
+        state.apply((p) => ({ ...p, animation: nextAnimation }));
+        return;
+      }
+      if (state.timelineEditor === 'timeline') return;
       if (spotDrag.current) {
         // A marker stays on the floor: translate is X/Z in whole studs, rotate is about Y only.
         const ref = spotDrag.current.ref;
@@ -277,18 +360,39 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
       const signature = delta.elements.map((n) => Math.round(n * 10000)).join(',');
       if (signature === lastTransform) return;
       lastTransform = signature;
-      const shown = modelPlacement(state.plan, initialModel.current, modelRef.current.assembly);
-      const next = transformPlanItems(original, initialModel.current, initialIds.current, initialNodes.current, sourceEditDelta(delta, shown));
+      const shown = instancePlacements(state.plan, initialModel.current, modelRef.current.assembly);
+      // Different selected submodel uses may be previewed at different bays.
+      // Conjugate the gizmo delta separately for each authored top-level item,
+      // keeping a multi-selection transform visually consistent.
+      let next = original;
+      for (const id of initialIds.current) {
+        const placement = itemPlacement(modelRef.current.view.instances, shown, id);
+        next = transformPlanItems(next, initialModel.current, [id], initialNodes.current, sourceEditDelta(delta, placement));
+      }
       useStudio.getState().apply(() => next);
     });
     let raf = 0;
     let last = performance.now();
     let shownT = -1;
+    let shownKeyFrame = Number.NaN;
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
       if (useStudio.getState().mode === 'edit') {
+        if (useStudio.getState().timelineEditor === 'timeline') {
+          const scene = keyScene.current;
+          if (scene) {
+            const a = animationOf(useStudio.getState().plan.animation);
+            const atFrame = advanceKeyframePlayback(dt, a.fps, a.startFrame, a.endFrame);
+            if (atFrame !== shownKeyFrame || scene.dirty) {
+              const poses = scene.at(atFrame);
+              studio.bricks.setMatrices((key) => poses.has(key) ? poses.get(key)! : scene.bases.get(key) ?? null);
+              scene.dirty = false;
+              shownKeyFrame = atFrame;
+            }
+          }
+        }
         const run = live.current;
         if (run) {
           // play / scrub in the Build view: the same animation as the preview, our camera
@@ -356,7 +460,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     const { controls: transform, proxy } = entry;
     const ids = new Set(selection.model === editingModel ? selection.ids : []);
     const boxes = model.view.instances.filter((inst) => ids.has(inst.key.split('/')[0]));
-    const chosen = spotSel && !editingModel ? spotOfRef(plan, spotSel) : null;
+    const chosen = timelineEditor === 'build' && spotSel && !editingModel ? spotOfRef(plan, spotSel) : null;
     const spot = chosen && spotSel ? sceneSpot(plan, model.assembly.bounds, spotSel, chosen) : null;
     if (mode === 'edit' && gizmoEnabled && spot && !boxes.length) {
       // A selected spot is a planar X/Z object; rotate exposes only the Y ring.
@@ -375,29 +479,40 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     transform.showX = true;
     transform.showY = true;
     transform.showZ = true;
-    if (mode !== 'edit' || !gizmoEnabled || !boxes.length) {
+    if (mode !== 'edit' || !gizmoEnabled || !boxes.length || (timelineEditor === 'timeline' && (!autoKey || keyframeAtRest < 0))) {
       transform.enabled = false;
       transform.detach();
       return;
     }
     const bounds = new THREE.Box3();
-    const shown = modelPlacement(plan, editingModel, model.assembly);
-    boxes.forEach((inst) => bounds.union(worldBox(shown ? transformBox(inst.worldBox, shown) : inst.worldBox)));
+    const shown = instancePlacements(plan, editingModel, model.assembly);
+    if (timelineEditor === 'timeline') {
+      const at = makeKeyframePose(model.view.instances, shown, plan.animation, editingModel, timeline)(keyframeAtRest);
+      boxes.forEach((inst) => {
+        const pose = at.get(inst.key);
+        if (!pose) bounds.union(worldBox(placedBox(inst, shown)));
+        else {
+          const offset = pose.clone().multiply(inst.world.clone().invert());
+          const box = new THREE.Box3(new THREE.Vector3(...inst.worldBox.min), new THREE.Vector3(...inst.worldBox.max));
+          bounds.union(box.applyMatrix4(offset).applyMatrix4(new THREE.Matrix4().makeScale(1 / 20, -1 / 20, -1 / 20)));
+        }
+      });
+    } else boxes.forEach((inst) => bounds.union(worldBox(placedBox(inst, shown))));
     bounds.getCenter(proxy.position);
     proxy.quaternion.identity();
     proxy.scale.setScalar(1);
     transform.setMode(gizmoMode);
     transform.enabled = true;
     transform.attach(proxy);
-  }, [selection, editingModel, model.view, gizmoEnabled, gizmoMode, mode, spotSel, plan, timeline]);
+  }, [selection, editingModel, model.view, gizmoEnabled, gizmoMode, mode, spotSel, plan, timeline, timelineEditor, autoKey, keyframeAtRest]);
 
   // Assembly-spot markers: Build view only, for the whole set (never in preview or export).
   useEffect(() => {
     const spotMarkers = markersRef.current;
     if (!spotMarkers) return;
-    if (mode !== 'edit' || editingModel !== '' || !model.ready) spotMarkers.clear();
+    if (mode !== 'edit' || timelineEditor !== 'build' || editingModel !== '' || !model.ready) spotMarkers.clear();
     else spotMarkers.update(markers(plan, model.assembly, timeline), spotSel, -(timeline?.ground ?? model.assembly.bounds?.max[1] ?? 0) / 20);
-  }, [plan, model.assembly, model.ready, timeline, mode, editingModel, spotSel]);
+  }, [plan, model.assembly, model.ready, timeline, mode, timelineEditor, editingModel, spotSel]);
 
   // which top-level step each top-level item belongs to
   const topStep = useMemo(() => new Map(model.view.nodes.map((n) => [n.itemId, n.step])), [model.view]);
@@ -434,21 +549,48 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     return stepPoses(model.view, currentStep, stepView);
   }, [model.view, currentStep, stepView, planned, placing, laidOut]);
 
-  // Placement only affects the editor's *static* view. Animation tracks have already
-  // had their root transform applied by the planner, and must never receive it twice.
-  const editorPlacement = useMemo(() => modelPlacement(plan, editingModel, model.assembly),
-    [plan.showModelAtSpot, plan.assemblySpot, editingModel, model.assembly]);
+  // Each submodel use can have an independent workbench transform. Unlike the
+  // previous root-only preview, the chosen bay is applied to every descendant
+  // brick, even when there is no (or a failed) animation timeline.
+  // Timeline poses are ALREADY in their planned positions: never apply the
+  // editor-only spot preview to those poses a second time.
+  const editorPlacements = useMemo(() => instancePlacements(plan, editingModel, model.assembly),
+    [plan, editingModel, model.assembly]);
+  // Cache the entire installed-model preview bounds once per placement edit;
+  // camera fitting and studio lighting should not rescan every part each frame.
+  const finalDisplayedBounds = useMemo(() => {
+    if (!editorPlacements.size) return model.view.bounds;
+    const finalPoses = new Map(model.view.instances
+      .filter((i) => editorPlacements.has(i.key))
+      .map((i) => [i.key, placedMatrix(i, editorPlacements)]));
+    return posedBounds(model.view.instances, finalPoses, (p) => metricsOf(p).body);
+  }, [editorPlacements, model.view]);
   const alreadyPlanned = !!(currentStep !== null && stepView === 'separated' && planned && !placing);
   const shownPoses = useMemo(() => {
-    if (!editorPlacement) return poses;
+    if (!editorPlacements.size) return poses;
     const positioned = new Map<string, THREE.Matrix4>();
     for (const inst of visible) {
       const prior = poses.get(inst.key);
-      // A separated-step timeline pose already includes the main-spot transform.
-      positioned.set(inst.key, prior && alreadyPlanned ? prior : editorPlacement.clone().multiply(prior ?? inst.world));
+      const delta = editorPlacements.get(inst.key);
+      if (prior && alreadyPlanned) positioned.set(inst.key, prior);
+      else if (delta) positioned.set(inst.key, delta.clone().multiply(prior ?? inst.world));
+      else if (prior) positioned.set(inst.key, prior);
     }
     return positioned;
-  }, [poses, visible, editorPlacement, alreadyPlanned]);
+  }, [poses, visible, editorPlacements, alreadyPlanned]);
+
+  /** Keyframe poses are intentionally independent of planner success. The render loop
+   * samples them directly at the active animation frame, without a React rerender. */
+  const keyframePose = useMemo(() => makeKeyframePose(visible, editorPlacements, plan.animation, editingModel, timeline),
+    [visible, editorPlacements, plan.animation, editingModel, timeline]);
+  useEffect(() => {
+    if (mode !== 'edit' || timelineEditor !== 'timeline') { keyScene.current = null; return; }
+    keyScene.current = {
+      at: keyframePose,
+      bases: new Map(visible.map((inst) => [inst.key, shownPoses.get(inst.key) ?? inst.world])),
+      dirty: true,
+    };
+  }, [mode, timelineEditor, keyframePose, visible, shownPoses]);
 
   // Following the timeline: every piece, posed as the animation has it at the playhead.
   // Pieces edited since the timeline was planned show where they are now (a move shows
@@ -515,22 +657,23 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     const b = shownPoses.size ? posedBounds(visible, shownPoses, (p) => metricsOf(p).body) : model.view.bounds;
     const box = b ? worldBox(b) : new THREE.Box3(new THREE.Vector3(-5, 0, -5), new THREE.Vector3(5, 1, 5));
     // Include the installed model when staging a step for consistent lighting.
-    const built = poses.size ? (editorPlacement && model.view.bounds
-      ? transformBox(model.view.bounds, editorPlacement)
-      : posedBounds(visible, new Map(), (p) => metricsOf(p).body)) : null;
+    const built = poses.size ? finalDisplayedBounds : null;
     const lit = built ? box.clone().union(worldBox(built)) : box;
     studio.fitTo(lit, b ? -b.max[1] / 20 : 0);
-    const placementKey = editorPlacement?.elements.map(n => n.toFixed(4)).join(',') ?? '';
+    // Multiple bricks share one group delta. Only serialize distinct transforms
+    // rather than a copy of the same 16 floats for every single brick.
+    const placementKey = [...new Set(editorPlacements.values())]
+      .map(delta => delta.elements.map(n => n.toFixed(4)).join(',')).join('|');
     const placementChanged = placementKey !== lastShownPlacement.current;
     lastShownPlacement.current = placementKey;
     if (b && viewportApi.controls && (!framed.current ||
-      (placementChanged && editorPlacement && !inView(studio.camera, box)))) {
+      (placementChanged && editorPlacements.size > 0 && !inView(studio.camera, box)))) {
       // A newly dropped spot may be well outside the current camera. Only
       // refit on a *placement change*, never as the user intentionally zooms.
       frame(studio.camera, viewportApi.controls, box);
       framed.current = true;
     }
-  }, [visible, model.view, mode, poses, shownPoses, editorPlacement, engaged]);
+  }, [visible, model.view, mode, poses, shownPoses, editorPlacements, finalDisplayedBounds, engaged, timelineEditor]);
 
   // the preview drives the camera itself
   useEffect(() => {
@@ -558,8 +701,8 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     const boxes = model.view.instances.filter((i) => ids.has(i.itemId) || ids.has(i.key.split('/')[0]));
     if (!boxes.length) return;
     const box = new THREE.Box3();
-    const shown = modelPlacement(useStudio.getState().plan, useStudio.getState().editingModel, model.assembly);
-    for (const i of boxes) box.union(worldBox(shown ? transformBox(i.worldBox, shown) : i.worldBox));
+    const shown = instancePlacements(useStudio.getState().plan, useStudio.getState().editingModel, model.assembly);
+    for (const i of boxes) box.union(worldBox(placedBox(i, shown)));
     frame(studio.camera, viewportApi.controls, box);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus.tick]);
@@ -575,6 +718,13 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
         state.setGizmo(!state.gizmoEnabled);
         return;
       }
+      // The Dope Sheet owns Delete, arrows, rotation, duplication and undo while
+      // animating. Never let the underlying brick-edit shortcuts mutate LDraw
+      // geometry when a keyframe operation is intended.
+      if (useStudio.getState().timelineEditor === 'timeline') {
+        if ((e.key === 'f' || e.key === 'F') && !e.metaKey && !e.ctrlKey) fitAll();
+        return;
+      }
       if (e.key === 'Escape') return useStudio.getState().select([]);
       // H hides the selection, Shift+H shows every hidden piece again
       if (e.key.toLowerCase() === 'h' && !e.metaKey && !e.ctrlKey && !e.altKey) {
@@ -585,7 +735,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
         return;
       }
       // , and . step through the build (like Previous / Next step); / shows every step
-      if ((e.key === ',' || e.key === '.' || e.key === '/') && !e.metaKey && !e.ctrlKey) {
+      if (useStudio.getState().timelineEditor === 'build' && (e.key === ',' || e.key === '.' || e.key === '/') && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
         const st = useStudio.getState();
         const count = modelSteps(st.plan, st.editingModel).length;
@@ -619,12 +769,15 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
   viewportApi.fit = () => fitAllRef.current();
   fitAllRef.current = () => {
     // frame what is on screen: a step's parts laid out on the floor and where they end up
-    const b = shownPoses.size ? posedBounds(visible, shownPoses, (p) => metricsOf(p).body) : model.view.bounds;
+    const keyframes = useStudio.getState().timelineEditor === 'timeline' && keyScene.current
+      ? keyScene.current.at(useKeyframePlayback.getState().frame) : null;
+    const combined = keyframes
+      ? new Map(visible.map((inst) => [inst.key, keyframes.get(inst.key) ?? placedMatrix(inst, editorPlacements)]))
+      : shownPoses;
+    const b = combined.size ? posedBounds(visible, combined, (p) => metricsOf(p).body) : model.view.bounds;
     if (!b || !viewportApi.studio || !viewportApi.controls) return;
     const box = worldBox(b);
-    const built = poses.size ? (editorPlacement && model.view.bounds
-      ? transformBox(model.view.bounds, editorPlacement)
-      : posedBounds(visible, new Map(), (p) => metricsOf(p).body)) : null;
+    const built = poses.size ? finalDisplayedBounds : null;
     if (built) box.union(worldBox(built));
     frame(viewportApi.studio.camera, viewportApi.controls, box);
   };
@@ -638,14 +791,15 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
   };
   const pickAt = (e: { clientX: number; clientY: number }): string | null => (viewportApi.studio ? viewportApi.studio.bricks.pick(rayAt(e)) : null);
   /** The assembly marker under the pointer, if the Build view draws them. */
-  const pickSpotAt = (e: { clientX: number; clientY: number }): SpotRef | null => (markersRef.current && viewportApi.studio ? markersRef.current.pick(rayAt(e)) : null);
+  const pickSpotAt = (e: { clientX: number; clientY: number }): SpotRef | null => (useStudio.getState().timelineEditor === 'build' && markersRef.current && viewportApi.studio ? markersRef.current.pick(rayAt(e)) : null);
   /** The floor plane the viewport currently uses (world Y), for dropping and dragging markers. */
   const floorPlane = () => new THREE.Plane(new THREE.Vector3(0, 1, 0), (timeline?.ground ?? model.assembly.bounds?.max[1] ?? 0) / 20);
 
   // Assembly markers (Build view, main model): dragging one slides it on X/Z, in whole studs.
   const startSpotDrag = (e: React.PointerEvent, ref: SpotRef): boolean => {
     const s = st();
-    if (s.mode !== 'edit' || e.button !== 0 || !viewportApi.studio) return false;
+    if (s.mode !== 'edit' || s.timelineEditor !== 'build' || e.button !== 0 || !viewportApi.studio) return false;
+    if (s.plan.showModelAtSpot) usePlayback.getState().set({ follow: false, playing: false });
     const spot = spotOfRef(s.plan, ref);
     const shown = markers(s.plan, model.assembly, timeline).find((m) => sameSpot(m.ref, ref));
     const angle = spot?.angle ?? 0;
@@ -673,8 +827,13 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', cancel);
       if (commit && pending) st().setSpot(ref, pending);
-      else markersRef.current?.update(markers(st().plan, modelRef.current.assembly, timelineRef.current), st().spot,
-        -(timelineRef.current?.ground ?? modelRef.current.assembly.bounds?.max[1] ?? 0) / 20);
+      else {
+        markersRef.current?.update(markers(st().plan, modelRef.current.assembly, timelineRef.current), st().spot,
+          -(timelineRef.current?.ground ?? modelRef.current.assembly.bounds?.max[1] ?? 0) / 20);
+        // Cancellation (Escape/pointercancel) must also restore the bricks, not
+        // leave a temporary GPU-only pose until some unrelated state change.
+        previewMatrices(st().plan);
+      }
       if (viewportApi.controls) viewportApi.controls.enabled = st().mode === 'edit';
     };
     const up = () => finish(true);
@@ -697,6 +856,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     }
     if (startFloorDrag(e)) return;
     const s = st();
+    if (s.timelineEditor === 'timeline') return;
     if (s.mode !== 'edit' || s.tool !== 'move' || (s.gizmoEnabled && s.selection.ids.length > 0) || e.button !== 0 || !viewportApi.studio) return;
     const key = pickAt(e);
     if (!key) return;
@@ -705,8 +865,8 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
       ? s.selection.ids : selectionForHit(s.plan, s.editingModel, id, e.altKey);
     if (!(s.selection.model === s.editingModel && ids.every(i => s.selection.ids.includes(i)))) s.select(ids);
     const inst = model.view.instances.find((i) => i.key === key);
-    const placement = modelPlacement(s.plan, s.editingModel, model.assembly);
-    const top = inst ? -(placement ? transformBox(inst.worldBox, placement) : inst.worldBox).min[1] / 20 : 0;
+    const placements = instancePlacements(s.plan, s.editingModel, model.assembly);
+    const top = inst ? -placedBox(inst, placements).min[1] / 20 : 0;
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -top);
     const hit = (ev: { clientX: number; clientY: number }) => rayAt(ev).ray.intersectPlane(plane, new THREE.Vector3());
     const start = hit(e);
@@ -719,13 +879,19 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
       const p = hit(ev);
       const base = st().gesture;
       if (!p || !base) return;
-      const displayed = placement ? viewPlacement(placement).clone().invert() : null;
-      const d = dragDelta(displayed ? start.clone().applyMatrix4(displayed) : start,
-        displayed ? p.clone().applyMatrix4(displayed) : p);
-      const sig = `${d.x},${d.y},${d.z}`;
+      // A drag in display coordinates must be inverted through the specific
+      // placed submodel's yaw. Two selected groups may have different bays.
+      const changes = ids.map(id => {
+        const placement = itemPlacement(model.view.instances, placements, id);
+        const inverse = placement ? viewPlacement(placement).clone().invert() : null;
+        const d = dragDelta(inverse ? start.clone().applyMatrix4(inverse) : start,
+          inverse ? p.clone().applyMatrix4(inverse) : p);
+        return { id, d };
+      });
+      const sig = changes.map(c => `${c.id}:${c.d.x},${c.d.y},${c.d.z}`).join('|');
       if (sig === last) return;
       last = sig;
-      st().apply(() => moveItems(base, model0, ids, d));
+      st().apply(() => changes.reduce((next, { id, d }) => moveItems(next, model0, [id], d), base));
     };
     const up = () => {
       window.removeEventListener('pointermove', move);
@@ -835,7 +1001,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
       }}
       onDrop={(e) => {
         const ref = draggedSpot(e);
-        if (!ref || !viewportApi.studio) return;
+        if (!ref || useStudio.getState().timelineEditor !== 'build' || !viewportApi.studio) return;
         e.preventDefault();
         const p = rayAt(e).ray.intersectPlane(floorPlane(), new THREE.Vector3());
         if (!p) return;
