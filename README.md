@@ -112,3 +112,14 @@ The new [MECHANICAL_CONSTRAINT_ENGINE.md](MECHANICAL_CONSTRAINT_ENGINE.md) docum
 On the real LEGO 5590, the new connector match resolves the previously rejected 4073/4349 helicopter pair. **Two helicopter contacts remain unresolved and the complete model still does not produce a certified animation.** With the same 20-second truck budget, V3 advanced from 35 to 37 removed planning units and reduced candidate tests from 63,793 to 30,419; the truck still times out. Metadata and joint labels are *not* full kinematic simulation or mesh certification.
 
 For exact-pose LEGO 5590 surface-contact reviews and the corrected V3 connector-matcher module path, see [CONSTRUCTION_V3_EXACT_SURFACE_CERTIFICATES.md](CONSTRUCTION_V3_EXACT_SURFACE_CERTIFICATES.md).
+
+### Construction V3 incremental search improvements (2026-10-24)
+
+Construction V3 now prunes obstructed withdrawal prefixes, caches **negative**
+ray checks only while the same obstacle stays fixed, chooses blocker-guided
+removal order, and attempts direct overhead transfers before detours. The Web
+Worker's planning progress updates are throttled, and the editor reports a
+plan's deepest verified removal sequence during V3 fallback. Existing continuous
+collision checks and forward replay remain mandatory. See
+[`CONSTRUCTION_V3_SCALABILITY.md`](CONSTRUCTION_V3_SCALABILITY.md) for reproducible
+LEGO 5590 benchmarks and unsupported rigid-joint cases.

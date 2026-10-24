@@ -88,6 +88,22 @@ export type SearchStats = {
     exhaustiveCandidates?: number;
     broadphaseQueries?: number;
     broadphaseHits?: number;
+    /** Rejected shortest prefix => every longer withdrawal on the same ray is blocked. */
+    blockedNearRays?: number;
+    avoidedNearDepthChecks?: number;
+    /** FAR motion that ascends straight to the upper free corridor. */
+    directSkyAttempts?: number;
+    directSkySuccesses?: number;
+    /** Blocked withdrawal rays reused only while their concrete obstacle witness stays put. */
+    cachedNearRayRejects?: number;
+    /** Guided candidates retried after being ranked by earlier obstruction witnesses. */
+    deferredPreviouslyBlockedNodes?: number;
+    /** Large-scope exhaustive branch limits reached; search retried alternative orders. */
+    boundedExhaustiveBranches?: number;
+    /** Deepest verified sequence reached within the active assembly scope. */
+    peakRemovals?: number;
+    peakScopeUnits?: number;
+    peakScope?: string;
     contactAuditMilliseconds?: number;
     routeMilliseconds?: number;
     replayMilliseconds?: number;

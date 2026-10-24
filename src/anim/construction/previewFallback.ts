@@ -19,6 +19,10 @@ export function previewProvenance(error: ConstructionError, planner: 'constructi
     planner, mode: 'uncertified-preview',
     code: error.code, message: error.message,
     scope: error.details.scope, phase: error.details.phase, searchStates: error.details.stats?.states,
+    peakRemovals: error.details.stats?.peakRemovals,
+    peakScopeUnits: error.details.stats?.peakScopeUnits,
+    searchCandidates: error.details.stats?.candidates,
+    searchBacktracks: error.details.stats?.backtracks,
     contacts: error.details.blockages?.slice(0, 12).map(({ moving, obstacle, stage }) => ({ moving, obstacle, stage })),
   };
 }

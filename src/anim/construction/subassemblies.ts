@@ -121,7 +121,11 @@ export function mechanicalSubassemblies(nodes: ConstructionNode[], connections: 
     // Phase 2: upper-body connected components anchored at a torso. Generic
     // accessories (cups, tools, backpacks not explicitly classified as neckwear,
     // scenery) stay outside and are attached only after the body exists.
-    const upperRoles = new Set(['torso', 'arm', 'hand', 'head', 'headwear', 'neckwear']);
+    // Hands also stay outside: their only withdrawal axis follows the posed
+    // wrist, so a hanging hand would force the entire torso fixture off the
+    // bench. The arm -> hand dependency already orders them after the torso in
+    // forward construction, so they attach once the upper body is in place.
+    const upperRoles = new Set(['torso', 'arm', 'head', 'headwear', 'neckwear']);
     const eligible = (n: ConstructionNode) => n.leaves.length > 0 && n.leaves.every(id => upperRoles.has(roles.get(id) ?? 'generic'));
     const upperNodes = first.filter(eligible), consumedUpper = new Set<ConstructionNode>(), replacements = new Map<ConstructionNode, ConstructionNode>();
     const adjacency = new Map(upperNodes.map(n => [n, new Set<ConstructionNode>()]));

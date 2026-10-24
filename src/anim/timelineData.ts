@@ -87,6 +87,10 @@ export type PlanningFallback = {
     scope?: string;
     phase?: 'connections' | 'final-contact-audit' | 'route-search' | 'forward-replay';
     searchStates?: number;
+    peakRemovals?: number;
+    peakScopeUnits?: number;
+    searchCandidates?: number;
+    searchBacktracks?: number;
     /** A few relevant blocker pairs make the failure diagnosable after saving. */
     contacts?: { moving: string; obstacle: string; stage: string }[];
 };

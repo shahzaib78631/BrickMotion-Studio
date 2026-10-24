@@ -58,7 +58,10 @@ export const optsKey = (o: AnimOptions) =>
     // added later: only when changed, so keys (and saved animations) made before stay valid
     ...((o.floorSort ?? 'step') !== 'step' ? [`floor-sort:${o.floorSort}`] : []),
     ...((o.floorSides ?? 'front-back') !== 'front-back' ? [`floor-sides:${o.floorSides}`] : []),
-    ...((o.constructionMaxCandidates ?? 100000) !== 100000 ? [`v2-candidates:${o.constructionMaxCandidates}`] : [])].join('|');
+    ...((o.constructionMaxCandidates ?? 100000) !== 100000 ? [`v2-candidates:${o.constructionMaxCandidates}`] : []),
+    // Route candidate ordering is part of the planning output. Do not silently
+    // reuse a previously timed-out/uncertified V3 preview after an engine fix.
+    ...((o.planner === 'construction-v3' || o.planner === 'construction-v3-auto') ? ['v3-routing:incremental-r2'] : [])].join('|');
 
 /**
  * The video settings an options key was made with (the leading fields, which every

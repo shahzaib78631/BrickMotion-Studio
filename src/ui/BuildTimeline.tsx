@@ -257,7 +257,7 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
           </span>
           {tl?.fallback && (
             <TimelineNote id="fallback" open={note} onOpen={setNote} tone="warn" label="Uncertified preview" title={tl.fallback.message}>
-              Construction V2 stopped ({tl.fallback.code}). This is a Standard-planner VISUAL preview, not collision-certified. All flights require review. {tl.fallback.phase ? `Stage: ${tl.fallback.phase}. ` : ''}{tl.fallback.scope ? `Scope: ${tl.fallback.scope}. ` : ''}{tl.fallback.searchStates != null ? `Searched ${tl.fallback.searchStates} states. ` : ''}{tl.fallback.message}
+              {tl.fallback.planner === 'construction-v3' ? 'Construction V3' : 'Construction V2'} stopped ({tl.fallback.code}). This is a Standard-planner VISUAL preview, not collision-certified. All flights require review. {tl.fallback.phase ? `Stage: ${tl.fallback.phase}. ` : ''}{tl.fallback.scope ? `Scope: ${tl.fallback.scope}. ` : ''}{tl.fallback.peakRemovals != null && tl.fallback.peakScopeUnits != null ? `Deepest removal: ${tl.fallback.peakRemovals}/${tl.fallback.peakScopeUnits}. ` : ''}{tl.fallback.searchStates != null ? `Explored ${tl.fallback.searchStates} states. ` : ''}{tl.fallback.message}
             </TimelineNote>
           )}
           {!tl?.fallback && uncertified.length > 0 && (

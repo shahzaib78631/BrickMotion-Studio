@@ -274,7 +274,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
             <option value="construction-auto">Adaptive V2 — then uncertified preview</option>
             <option value="construction-v2">Construction V2 — certified only</option>
           </select>
-          <span className="nx-hint">V3 uses connector-guided NEAR disengagement, open-air FAR transport and scope-local spatial indexing; all accepted paths must pass exact collision checking and forward replay. V3 falls back to the exhaustive V2 candidate generator when necessary. Adaptive modes clearly mark Standard previews as <strong>uncertified</strong>. Articulation and true flex deformation remain unsupported.</span>
+          <span className="nx-hint">V3 uses connector-guided disengagement, overhead transport, obstacle-witness search ordering and scoped spatial collision checks. Large-model fallback is effort-bounded so alternative build orders can be explored. Every accepted route requires exact collision checking and forward replay. Adaptive previews are <strong>uncertified</strong>; articulation and true flex deformation remain unsupported.</span>
         </label>
         {v2 && <label className="nx-field">
           Workpiece support
@@ -298,6 +298,11 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
           <div className="nx-field">
             <strong>{timeline.construction.operations.length} operations · {timeline.construction.stats.states} search states</strong>
             <span className="nx-hint">{v3 ? "V3 guided near/far routing with continuous-mesh certification" : "V2 exhaustive routing with continuous-mesh certification"}</span>
+            {v3 && <details>
+              <summary>Search performance</summary>
+              <p className="nx-hint">{timeline.construction.stats.candidates.toLocaleString()} candidates · {(timeline.construction.stats.cachedNearRayRejects ?? 0).toLocaleString()} witnessed blocked rays reused · {timeline.construction.stats.backtracks.toLocaleString()} backtracks</p>
+              <p className="nx-hint">{(timeline.construction.stats.avoidedNearDepthChecks ?? 0).toLocaleString()} redundant withdrawal depths avoided · {(timeline.construction.stats.directSkySuccesses ?? 0).toLocaleString()} direct overhead routes</p>
+            </details>}
             <details><summary>Limits and assumptions</summary>{timeline.construction.warnings.map((w, i) => <p key={i} className="nx-hint">{w}</p>)}</details>
             <button type="button" className="nx-btn nx-sm" onClick={() => {
               const blob = new Blob([JSON.stringify(timeline.construction, null, 2)], { type: 'application/json' });
@@ -311,8 +316,9 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
       {!manual && timeline?.fallback && (
         <div className="nx-field" role="alert" style={{ border: '1px solid var(--border, #a86b35)', borderRadius: 6, padding: 10 }}>
           <strong>Uncertified animation preview</strong>
-          <p className="nx-hint">Construction V2 could not certify this model ({timeline.fallback.phase ?? 'planner'}: {timeline.fallback.code}). Standard produced a visual animation; collisions and attachment paths are <strong>not verified</strong>. Inspect the motion before exporting.</p>
-          <details><summary>Why V2 stopped</summary><p className="nx-hint">{timeline.fallback.message}</p>{timeline.fallback.contacts?.map((c, i) => <p className="nx-hint" key={i}>{c.moving} / {c.obstacle} · {c.stage}</p>)}</details>
+          <p className="nx-hint">{timeline.fallback.planner === 'construction-v3' ? 'Construction V3' : 'Construction V2'} could not certify this model ({timeline.fallback.phase ?? 'planner'}: {timeline.fallback.code}). Standard produced a visual animation; collisions and attachment paths are <strong>not verified</strong>. Inspect the motion before exporting.</p>
+          {timeline.fallback.peakRemovals != null && timeline.fallback.peakScopeUnits != null && <p className="nx-hint">Deepest verified disassembly: {timeline.fallback.peakRemovals}/{timeline.fallback.peakScopeUnits} units · {timeline.fallback.searchCandidates?.toLocaleString() ?? '—'} candidates · {timeline.fallback.searchBacktracks?.toLocaleString() ?? '—'} backtracks.</p>}
+          <details><summary>Why {timeline.fallback.planner === 'construction-v3' ? 'V3' : 'V2'} stopped</summary><p className="nx-hint">{timeline.fallback.message}</p>{timeline.fallback.contacts?.map((c, i) => <p className="nx-hint" key={i}>{c.moving} / {c.obstacle} · {c.stage}</p>)}</details>
         </div>
       )}
       <div className="bm-video-export">
