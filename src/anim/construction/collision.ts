@@ -164,6 +164,10 @@ export function triangleInterval(a: Tri, b: Tri, offset: V3, delta: V3): [
     }
     if (hi < 1e-9 || lo > 1 - 1e-9)
         return null;
+    // A contact that is gone within the skin of the start is the starting pose's own
+    // flush touch being left (a plate face on a brick face, separating along its normal).
+    if (norm(delta) > 1e-9 && hi * norm(delta) <= SKIN)
+        return null;
     return [Math.max(0, lo), Math.min(1, hi)];
 }
 function insideRegion(box: Box, r: NonNullable<Connection['region']>): boolean {
@@ -356,7 +360,8 @@ export class MeshOracle {
                 return true;
         }
         const rawRegions = activePolicy ? [...(activePolicy.region ? [activePolicy.region] : []), ...(activePolicy.regions ?? [])] : [];
-        const allowed = rawRegions.length > 0 && activePolicy!.child === aKey && (norm(delta) < 1e-9 || (activePolicy!.outward && dot(unit(delta), activePolicy!.outward) > .9999));
+        const along = norm(delta) < 1e-9 || !activePolicy?.outward ? 0 : dot(unit(delta), activePolicy.outward);
+        const allowed = rawRegions.length > 0 && activePolicy!.child === aKey && (norm(delta) < 1e-9 || along > .9999 || (!!activePolicy!.axial && along < -.9999));
         const regions = allowed ? rawRegions.map(region => ({ ...region, origin: add(region.origin, bOffset) })) : [];
         const key = [a.key, b.key, relative.join(','), delta.join(','), regions.length ? JSON.stringify(regions) : ''].join('|');
         const cached = this.results.get(key);

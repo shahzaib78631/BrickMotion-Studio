@@ -156,7 +156,7 @@ function Studio() {
                     <strong>{editingModel}</strong>
                   </span>
                 ) : (
-                  <span className="nx-chip">Build view</span>
+                  <span className="bm-crumb"><strong>Main model</strong></span>
                 )}
               </div>
               <div className="nx-row">
@@ -185,7 +185,7 @@ function Studio() {
                       <div className="nx-seg bm-gizmo-modes" role="radiogroup" aria-label="Gizmo operation">
                         {([
                           ['translate', 'move', 'Move selected bricks (studs / plates)'],
-                          ['rotate', 'rotate', 'Rotate selection (90 degree snap)'],
+                          ['rotate', 'rotate', 'Rotate selection (15° steps, Shift: free)'],
                           ['scale', 'scale', 'Scale selection (changes brick dimensions)'],
                         ] as const).map(([id, icon, label]) => (
                           <button key={id} role="radio" aria-label={label} title={label}

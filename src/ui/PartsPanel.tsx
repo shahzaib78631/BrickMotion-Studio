@@ -3,6 +3,7 @@ import { searchCatalog } from '../catalog/catalog';
 import { COMMON_PARTS } from '../catalog/common';
 import { addPart } from '../state/editing';
 import { getCatalog } from '../state/partService';
+import { PaneHead } from './PaneHead';
 import { PartThumb } from './PartThumb';
 import { PART_DRAG_TYPE } from './PartsLane';
 
@@ -30,10 +31,8 @@ export function PartsPanel() {
 
   return (
     <div className="nx-pane">
-      <div className="nx-pane-head">
-        <h3>Parts</h3>
-        <span className="nx-count">{catalog.length.toLocaleString()}</span>
-      </div>
+      <PaneHead id="parts" title="Parts" count={catalog.length.toLocaleString()}
+        help="Click a part to add it in the selected colour. It lands in the current step. Or drag it onto the timeline's Parts lane to add it at that moment of the build." />
       <input type="search" aria-label="Search parts" placeholder="Search: 2x4, slope 45, 3001…" value={q} onChange={(e) => setQ(e.target.value)} />
       <select aria-label="Category" value={cat} onChange={(e) => setCat(e.target.value)}>
         <option value="">All categories</option>
@@ -64,7 +63,6 @@ export function PartsPanel() {
         ))}
         {results.length === 0 && <p className="nx-hint">No parts match.</p>}
       </div>
-      <p className="nx-fine">Click a part to add it in the selected colour. It lands in the current step. Or drag it onto the timeline's Parts lane to add it at that moment of the build.</p>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type KeyboardEvent as RKeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type KeyboardEvent as RKeyboardEvent } from 'react';
 import type { StepSpan, Timeline } from '../anim/timeline';
 import { modelSteps, updateStep } from '../plan/ops';
 import { useAppSettings } from '../state/appSettings';
@@ -58,6 +58,7 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
   const st = useStudio.getState;
   const pb = usePlayback.getState;
   const [zoom, setZoom] = useState(1);
+  const [note, setNote] = useState<string | null>(null);
   const [dragStep, setDragStep] = useState<number | null>(null);
   const [overStep, setOverStep] = useState<number | null>(null);
   const [width, setWidth] = useState(900);
@@ -89,6 +90,36 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
   const outroLength = trimPreview?.kind === 'outro' ? trimPreview.seconds : (tl ? tl.duration - tl.buildEnd : 0);
   const previewDuration = buildEnd + outroLength;
   const seek = (s: number) => pb().set({ t: Math.max(0, Math.min(dur, s)) });
+
+  // Ctrl/⌘ + wheel (or a trackpad pinch), Alt + wheel, or any wheel over the ruler zooms
+  // the timeline around the pointer, like a video editor
+  const zoomAnchor = useRef<{ t: number; offset: number } | null>(null);
+  const wheelState = useRef({ px, zoom });
+  wheelState.current = { px, zoom };
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      const overRuler = (e.target as Element | null)?.closest?.('.nx-ruler');
+      if (!(e.ctrlKey || e.metaKey || e.altKey || overRuler)) return;
+      e.preventDefault();
+      const { px: curPx, zoom: z } = wheelState.current;
+      const delta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+      const next = Math.min(16, Math.max(1, z * Math.exp(-delta * (e.ctrlKey && !e.metaKey ? 0.01 : 0.0025))));
+      if (next === z) return;
+      const offset = e.clientX - el.getBoundingClientRect().left;
+      zoomAnchor.current = { t: (offset + el.scrollLeft - PAD) / curPx, offset };
+      setZoom(next);
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
+  useLayoutEffect(() => {
+    const a = zoomAnchor.current;
+    const el = scrollRef.current;
+    zoomAnchor.current = null;
+    if (a && el) el.scrollLeft = Math.max(0, PAD + a.t * px - a.offset);
+  }, [px]);
 
   // The timeline always shows the model on screen, so a step clip is a step of THAT model.
   // In the Build view the timeline drives the canvas: playing, scrubbing or jumping shows the
@@ -224,6 +255,19 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
           <span className="nx-chip bm-scope" title="The timeline, preview and MP4 export follow the model you have open">
             <Ic name={editingModel ? 'box' : 'brick'} /> {editingModel || 'Main model'}
           </span>
+          {uncertified.length > 0 && (
+            <TimelineNote id="route" open={note} onOpen={setNote} tone="warn" label={`${uncertified.length} rough route${uncertified.length === 1 ? '' : 's'}`} title={uncertified.join('\n')}>
+              {uncertified.length === 1 ? '1 piece has' : `${uncertified.length} pieces have`} no collision-free route, so {uncertified.length === 1 ? 'it takes' : 'they take'} the least-blocked one and may clip a neighbour. Check {uncertified.length === 1 ? 'it' : 'them'} in the preview.
+            </TimelineNote>
+          )}
+          {hardwareCount > 0 && (
+            <TimelineNote id="hardware" open={note} onOpen={setNote} label={`${hardwareCount} preassembled`}>
+              {[
+                wheelCount ? `${wheelCount} wheel assemblies start with tyre and rim connected on the staging table. Tyre fitting is not animated.` : '',
+                windowCount ? `${windowCount} window assemblies start with the glass already in the frame. Glass fitting is not animated.` : '',
+              ].filter(Boolean).join(' ')}
+            </TimelineNote>
+          )}
           {planning && (
             <span className="bm-planning" role="status" aria-live="polite">
               <i /> {planningLabel(progress)}
@@ -248,11 +292,11 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
           </button>
         </div>
         <div className="nx-tr-right">
-          <button className="nx-icon" aria-label="Zoom out" title="Zoom out" disabled={zoom <= 1} onClick={() => setZoom((z) => Math.max(1, z / 1.5))}>
+          <button className="nx-icon" aria-label="Zoom out" title="Zoom out (Ctrl/⌘ + scroll)" disabled={zoom <= 1} onClick={() => setZoom((z) => Math.max(1, z / 1.5))}>
             <Ic name="zoomOut" />
           </button>
           <span className="nx-zoom">{Math.round(zoom * 100)}%</span>
-          <button className="nx-icon" aria-label="Zoom in" title="Zoom in" disabled={zoom >= 16} onClick={() => setZoom((z) => Math.min(16, z * 1.5))}>
+          <button className="nx-icon" aria-label="Zoom in" title="Zoom in (Ctrl/⌘ + scroll)" disabled={zoom >= 16} onClick={() => setZoom((z) => Math.min(16, z * 1.5))}>
             <Ic name="zoomIn" />
           </button>
           <button className="nx-icon" aria-label="Fit timeline" title="Fit the whole video" onClick={() => setZoom(1)}>
@@ -260,19 +304,6 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
           </button>
         </div>
       </div>
-      {uncertified.length > 0 && (
-        <div className="bm-hardware-note bm-uncertified-note" role="note" title={uncertified.join('\n')}>
-          {uncertified.length === 1 ? '1 piece has' : `${uncertified.length} pieces have`} no collision-free route, so {uncertified.length === 1 ? 'it takes' : 'they take'} the least-blocked one and may clip a neighbour. Check {uncertified.length === 1 ? 'it' : 'them'} in the preview.
-        </div>
-      )}
-      {hardwareCount > 0 && (
-        <div className="bm-hardware-note" role="note">
-          {[
-            wheelCount ? `${wheelCount} wheel assemblies start with tyre and rim connected on the staging table. Tyre fitting is not animated.` : '',
-            windowCount ? `${windowCount} window assemblies start with the glass already in the frame. Glass fitting is not animated.` : '',
-          ].filter(Boolean).join(' ')}
-        </div>
-      )}
       <div className="nx-tracks">
         <div className="nx-heads" ref={headsRef}>
           {(
@@ -448,5 +479,27 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
         </div>
       </div>
     </div>
+  );
+}
+
+/** A small chip in the transport bar; its explanation opens under it on click. */
+function TimelineNote({ id, open, onOpen, label, title, tone, children }: { id: string; open: string | null; onOpen(id: string | null): void; label: string; title?: string; tone?: 'warn'; children: React.ReactNode }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const isOpen = open === id;
+  useEffect(() => {
+    if (!isOpen) return;
+    const away = (e: PointerEvent) => { if (!ref.current?.contains(e.target as Node)) onOpen(null); };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onOpen(null); };
+    window.addEventListener('pointerdown', away);
+    window.addEventListener('keydown', esc);
+    return () => { window.removeEventListener('pointerdown', away); window.removeEventListener('keydown', esc); };
+  }, [isOpen, onOpen]);
+  return (
+    <span className="bm-tl-note-wrap" ref={ref}>
+      <button className={`bm-tl-chip ${tone ?? ''} ${isOpen ? 'on' : ''}`} aria-expanded={isOpen} onClick={() => onOpen(isOpen ? null : id)}>
+        <Ic name="info" /> {label}
+      </button>
+      <span className={`bm-tl-pop ${isOpen ? 'open' : ''}`} role="note" title={title}>{children}</span>
+    </span>
   );
 }

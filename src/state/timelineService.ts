@@ -6,7 +6,7 @@ import type { PlanRequest } from '../anim/timeline.worker';
 import type { PlanningProgress } from '../anim/planning';
 import type { AnimOptions, FloorSides, FloorSort } from '../anim/pacing';
 import type { Plan } from '../plan/types';
-import { getColors, hasShadowPack, metricsOf } from './partService';
+import { ensureParts, getColors, hasShadowPack, metricsOf } from './partService';
 import { deleteCachedTimeline, getCachedTimeline, putCachedTimeline, timelineFingerprint } from '../storage/timelineCache';
 import { allPartIds, scopedPlan } from './useModel';
 import { PlannerQueue, type PlannerPort } from './plannerQueue';
@@ -99,7 +99,6 @@ function planBase(plan: Plan, model: string, opts: AnimOptions, lane: Lane, onPr
     return hit.promise;
   }
   const scoped = scopedPlan(plan, model);
-  const metrics = allPartIds(scoped).map((id) => [id, metricsOf(id)] as [string, ReturnType<typeof metricsOf>]);
   const listeners = new Set<(p: PlanningProgress) => void>(onProgress ? [onProgress] : []);
   const entry: Entry = { promise: null!, listeners, progress: null, settled: false };
   entry.promise = (async () => {
@@ -108,6 +107,11 @@ function planBase(plan: Plan, model: string, opts: AnimOptions, lane: Lane, onPr
     const fingerprint = await timelineFingerprint({ plan: scoped, model, opts: optsKey(opts), shadow: hasShadowPack() }).catch(() => null);
     const saved = fingerprint ? await getCachedTimeline(fingerprint).catch(() => null) : null;
     if (saved) return decodeTimeline(saved);
+    // every part measured first: an unloaded part would reach the planner as an empty
+    // placeholder (Construction V2 then stops with "missing collision mesh")
+    const ids = allPartIds(scoped);
+    await ensureParts(ids);
+    const metrics = ids.map((id) => [id, metricsOf(id)] as [string, ReturnType<typeof metricsOf>]);
     const encoded = await lanes[lane].run({ plan: scoped, metrics, colors: [...getColors()], opts }, (p) => {
       entry.progress = p;
       for (const listener of listeners) listener(p);

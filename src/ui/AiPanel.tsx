@@ -106,9 +106,7 @@ export function AiPanel({ warnings, onOpenSettings }: { warnings: Warning[]; onO
   return (
     <div className="nx-pane" aria-label="AI">
       <div className="nx-pane-head">
-        <h3>
-          <Ic name="ai" /> AI build plans
-        </h3>
+        <h3>AI build plans</h3>
       </div>
       <div className="nx-seg" role="tablist">
         {TABS.map(([id, label]) => (

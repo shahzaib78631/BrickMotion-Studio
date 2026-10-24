@@ -83,6 +83,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
   const linearColors = useAppSettings((s) => s.linearColors);
   const gizmoRef = useRef<{ controls: TransformControls; proxy: THREE.Object3D } | null>(null);
   const draggingGizmo = useRef(false);
+  const readoutRef = useRef<HTMLDivElement>(null);
   const origin = useRef(new THREE.Vector3());
   const gizmoPress = useRef(false);
   const initialNodes = useRef<ANode[]>([]);
@@ -109,7 +110,14 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     const transform = new TransformControls(studio.camera, canvas);
     transform.setSize(0.86);
     transform.setSpace('world');
-    transform.setRotationSnap(Math.PI / 2); // LEGO right-angle rotations
+    // 15° steps (90° is a few steps away, not one twitch of the mouse); hold Shift to turn freely
+    const ROT_SNAP = THREE.MathUtils.degToRad(15);
+    transform.setRotationSnap(ROT_SNAP);
+    const onShift = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') transform.setRotationSnap(e.type === 'keydown' ? null : ROT_SNAP);
+    };
+    window.addEventListener('keydown', onShift);
+    window.addEventListener('keyup', onShift);
     transform.setScaleSnap(0.1);
     transform.setTranslationSnap(null); // X/Z studs and Y plates have different snap units
     studio.scene.add(transform.getHelper());
@@ -140,6 +148,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
         origin.current.copy(proxy.position);
         current.beginGesture();
       } else {
+        if (readoutRef.current) readoutRef.current.hidden = true;
         useStudio.getState().endGesture();
         // A snapped placement may differ from a raw drag by a fraction of a stud.
         // Recenter the handles on the saved piece positions after release.
@@ -166,7 +175,19 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
         const dx = Math.round(move.x), dy = Math.round(move.y / 0.4) * 0.4, dz = Math.round(move.z);
         delta = new THREE.Matrix4().makeTranslation(dx, dy, dz);
       } else if (currentMode === 'rotate') {
-        delta = aroundPivot(new THREE.Matrix4().makeRotationFromQuaternion(proxy.quaternion), origin.current);
+        // round off float noise so 90° steps land exactly square
+        const q = proxy.quaternion;
+        const angle = 2 * Math.acos(Math.min(1, Math.abs(q.w)));
+        const axis = new THREE.Vector3(q.x, q.y, q.z);
+        if (axis.lengthSq() > 1e-12) axis.normalize().multiplyScalar(Math.sign(q.w) || 1);
+        const deg = Math.round(THREE.MathUtils.radToDeg(angle) * 100) / 100;
+        const rot = axis.lengthSq() > 1e-12 ? new THREE.Matrix4().makeRotationAxis(axis, THREE.MathUtils.degToRad(deg)) : new THREE.Matrix4();
+        delta = aroundPivot(rot, origin.current);
+        const main = Math.abs(axis.x) > Math.abs(axis.y) && Math.abs(axis.x) > Math.abs(axis.z) ? ['X', axis.x] as const : Math.abs(axis.z) > Math.abs(axis.y) ? ['Z', axis.z] as const : ['Y', axis.y] as const;
+        if (readoutRef.current) {
+          readoutRef.current.textContent = `Rotate ${main[0]}  ${main[1] < 0 ? '−' : ''}${Math.round(deg)}°`;
+          readoutRef.current.hidden = false;
+        }
       } else {
         // Free scaling stores an LDraw matrix. This changes LEGO part dimensions,
         // so the UI requires an explicit switch to Scale mode.
@@ -222,6 +243,8 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
+      window.removeEventListener('keydown', onShift);
+      window.removeEventListener('keyup', onShift);
       transform.detach();
       studio.scene.remove(transform.getHelper());
       transform.dispose();
@@ -432,6 +455,15 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
         return;
       }
       if ((e.key === 'f' || e.key === 'F') && !e.metaKey && !e.ctrlKey) return fitAll();
+      // A selects every piece you can see (hidden ones stay out); Alt+A clears, like Blender
+      if ((e.code === 'KeyA' || e.key.toLowerCase() === 'a') && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
+        e.preventDefault();
+        const st = useStudio.getState();
+        if (e.altKey) return st.select([]);
+        const hidden = new Set(st.hidden[st.editingModel] ?? []);
+        st.select(modelSteps(st.plan, st.editingModel).flatMap((step) => step.pieces.flatMap((i) => (i.id && !hidden.has(i.id) ? [i.id] : []))));
+        return;
+      }
       const az = viewportApi.controls ? (viewportApi.controls.getAzimuthalAngle() * 180) / Math.PI : 0;
       const cmd = commandForKey(e, az);
       if (!cmd) return;
@@ -628,6 +660,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} label={menu.label} onClose={closeMenu} />}
       <ViewMenu />
       <NavGizmo />
+      <div className="bm-gizmo-readout" ref={readoutRef} hidden aria-live="polite" />
       <ViewLabel />
       {model.ready && placing && follow && !!timeline && (
         <div className="overlay-note">Showing the model as built while you place pieces. {tool === 'move' ? 'Switch to the Select tool' : 'Press Esc'} to go back to the animation.</div>

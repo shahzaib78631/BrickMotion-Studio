@@ -8,6 +8,7 @@ import { useStudio } from '../state/store';
 import type { Timeline } from '../anim/timeline';
 import { EditPad } from './EditPad';
 import { Ic } from './icons';
+import { HelpNote } from './PaneHead';
 import { viewportApi } from './viewportApi';
 import { pieceCount } from './Toolbar';
 
@@ -119,6 +120,8 @@ export function Inspector({ timeline, checks, stepCard }: { timeline: Timeline |
           <span>Rotate</span>
           <kbd>Delete</kbd>
           <span>Remove</span>
+          <kbd>A</kbd>
+          <span>Select all · Alt+A none</span>
           <kbd>F</kbd>
           <span>Fit the view</span>
           <kbd>⌘Z</kbd>
@@ -171,8 +174,6 @@ export function Inspector({ timeline, checks, stepCard }: { timeline: Timeline |
           />
         </>
       )}
-      <EditPad azimuth={() => ((viewportApi.controls?.getAzimuthalAngle() ?? 0) * 180) / Math.PI} />
-      <p className="nx-fine">For Blender-style handles, enable Gizmo above the 3D view and choose Move, Rotate, or Scale. Scale changes the actual LDraw part dimensions, so use it only for non-standard geometry.</p>
       {pieceIds.length > 0 && (
         <div className="nx-sub">
           Colour{' '}
@@ -215,6 +216,11 @@ export function Inspector({ timeline, checks, stepCard }: { timeline: Timeline |
         ) : (
           <p className="nx-fine">Exact position (imported). Moves in whole studs and plates.</p>
         ))}
+      <EditPad azimuth={() => ((viewportApi.controls?.getAzimuthalAngle() ?? 0) * 180) / Math.PI} />
+      <HelpNote id="inspector">
+        Arrows move one stud relative to the view; <kbd>PgUp</kbd> / <kbd>PgDn</kbd> one plate. Or pick the Move tool (M) and drag the piece.
+        For Blender-style handles, turn on Gizmo above the 3D view. Scale changes the real LDraw part size, so use it only for non-standard geometry.
+      </HelpNote>
     </aside>
   );
 }

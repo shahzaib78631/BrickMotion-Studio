@@ -103,7 +103,13 @@ export function planConstruction(model: ConstructionModel, options: Construction
     const hasContactPolicy = (c: Connection) => !!(c.region || c.regions?.length || c.surfaceTolerance);
     const hasMotionPolicy = (c: Connection) => hasContactPolicy(c) && !c.staticOnly;
     const staticPolicyFor = (a: string, b: string) => graph.connections.find(c => c.child === a && c.parent === b && hasContactPolicy(c));
-    const motionPolicyFor = (a: string, b: string) => graph.connections.find(c => c.child === a && c.parent === b && hasMotionPolicy(c));
+    // A pair can carry several certificates (a stud connector plus the measured
+    // lift-off of a seat sunk into its base); the withdrawal is certified when any one does.
+    const motionPoliciesFor = (a: string, b: string) => graph.connections.filter(c => c.child === a && c.parent === b && hasMotionPolicy(c));
+    const clearWithPolicies = (a: string, b: string, from: V3, offset: V3, delta: V3) => {
+        const policies = motionPoliciesFor(a, b);
+        return policies.length ? policies.some(p => oracle.clear(a, b, from, offset, delta, p)) : oracle.clear(a, b, from, offset, delta);
+    };
     const nodeRole = (n: ConstructionNode) => n.hints?.role ?? assemblyRole(n.part);
     // Posed hands and legs in authored scenes can intentionally touch seats,
     // controls or vehicle bodywork without being mechanically attached to those
@@ -289,7 +295,7 @@ export function planConstruction(model: ConstructionModel, options: Construction
                 continue;
             for (const a of node.leaves)
                 for (const b of other.leaves) {
-                    if (!oracle.clear(a, b, from, scopeOffset, delta, first ? motionPolicyFor(a, b) : undefined)) {
+                    if (!(first ? clearWithPolicies(a, b, from, scopeOffset, delta) : oracle.clear(a, b, from, scopeOffset, delta))) {
                         remember({ moving: node.id, obstacle: other.id, stage: first ? 'withdrawal' : 'transport', detail: `Swept collision between ${a} (part ${model.parts.get(a)!.part}) and ${b} (part ${model.parts.get(b)!.part}); no connector policy certified this contact.` });
                         return false;
                     }
@@ -361,7 +367,7 @@ export function planConstruction(model: ConstructionModel, options: Construction
     const route = (node: ConstructionNode, remaining: ConstructionNode[], staged: StagedObstacle[], offset: V3, scopeId: string): RouteResult | null => {
         const target = slots.get(node.id)!.offset;
         const connected = graph.connections.filter(c => owns(node, c.child) && remaining.some(n => n !== node && owns(n, c.parent)));
-        const preferred = connected.flatMap(c => c.outward ? [c.outward] : []);
+        const preferred = connected.flatMap(c => c.outward ? (c.axial ? [c.outward, mul(c.outward, -1)] : [c.outward]) : []);
         const directions = node.hints?.insertionAxis ? [unit(node.hints.insertionAxis)] : unique([...preferred, ...AXES, ...axisDirections(node.matrix)]);
         // Known wrist/shoulder/head axes constrain an operation, rather than merely
         // allowing an unrelated low collision score to choose the wrong joint motion.
@@ -378,7 +384,11 @@ export function planConstruction(model: ConstructionModel, options: Construction
                 const entry = add(offset, mul(dir, distance));
                 if (!segmentClear(node, offset, entry, remaining, staged, offset, scopeId, true))
                     continue;
-                const exits: V3[] = [entry,
+                // Try short sideways slides before running to the work-area edge:
+                // a part tucked under an overhang (a windscreen over a steering
+                // wheel) should slide only as far as it must, then rise.
+                const slides: V3[] = [8, 16, 24, 32, 48, 64].flatMap(d => ([[d, 0, 0], [-d, 0, 0], [0, 0, d], [0, 0, -d]] as V3[]).map(v => add(entry, v)));
+                const exits: V3[] = [entry, ...slides,
                     [entry[0] + work.min[0] - shiftBox(node.bounds, entry).max[0] - gap, entry[1], entry[2]],
                     [entry[0] + work.max[0] - shiftBox(node.bounds, entry).min[0] + gap, entry[1], entry[2]],
                     [entry[0], entry[1], entry[2] + work.min[2] - shiftBox(node.bounds, entry).max[2] - gap],
@@ -565,7 +575,7 @@ export function planConstruction(model: ConstructionModel, options: Construction
                     const ma = model.parts.get(a)!, mb = model.parts.get(b)!;
                     if (!sweptBox(shiftBox(ma.bounds, to), shiftBox(mb.bounds, where), sub(from, to), -1e-6))
                         continue;
-                    if (!oracle.clear(a, b, to, where, sub(from, to), i === op.path.length - 1 ? motionPolicyFor(a, b) : undefined))
+                    if (!(i === op.path.length - 1 ? clearWithPolicies(a, b, to, where, sub(from, to)) : oracle.clear(a, b, to, where, sub(from, to))))
                         throw new ConstructionError('invalid-plan', `Replay detected an unchecked collision for ${a} against ${b}.`, { scope: op.scope, blockages: [{ moving: a, obstacle: b, stage: 'transport', detail: 'Actual staged-scene replay rejected this operation.' }], stats: { ...stats } });
                 }
         }

@@ -40,6 +40,8 @@ export type Connection = {
     regions?: ContactRegion[];
     /** Maximum initially-overlapping travel that may be certified as render-mesh surface contact. */
     surfaceTolerance?: number;
+    /** The joint separates either way along `outward` (a hinge sliding off its pin), not only outward. */
+    axial?: boolean;
     /**
      * Final-pose contact metadata only. A static-only policy may explain why two
      * completed parts touch, but it must never exempt any portion of an animated

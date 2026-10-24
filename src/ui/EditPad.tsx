@@ -47,7 +47,6 @@ export function EditPad({ azimuth }: { azimuth(): number }) {
           <Ic name="trash" /> Delete
         </button>
       </div>
-      <p className="nx-fine">Arrows move one stud relative to the view. Or pick the Move tool (M) and drag the piece.</p>
     </div>
   );
 }

@@ -8,6 +8,8 @@ import { playRange, usePlayback } from '../state/playback';
 import { stepRange } from '../anim/partClips';
 import { useStudio } from '../state/store';
 import { Ic } from './icons';
+import { ContextMenu } from './ContextMenu';
+import { PaneHead } from './PaneHead';
 
 function subsIn(step: Step): string[] {
   return [...new Set(step.pieces.filter(isSub).map((i) => i.submodel))];
@@ -137,6 +139,7 @@ export function StepsPanel({ timeline = null }: { timeline?: Timeline | null }) 
   const { apply, setCurrentStep, setEditingModel, reorderBuildStep } = useStudio.getState();
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [editAt, setEditAt] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; i: number } | null>(null);
   const [dropSpot, setDropSpot] = useState<DropSpot | null>(null);
   const drag = useRef<DragState | null>(null);
   const dropRef = useRef<DropSpot | null>(null);
@@ -197,17 +200,16 @@ export function StepsPanel({ timeline = null }: { timeline?: Timeline | null }) 
 
   return (
     <div className="nx-pane">
-      <div className="nx-pane-head">
-        <h3>Steps <span className="nx-count">{steps.length}</span></h3>
-        <button className={`nx-btn nx-sm ${currentStep === null ? 'nx-primary' : ''}`} onClick={() => setCurrentStep(null)}>All</button>
-      </div>
+      <PaneHead id="steps" title="Steps" count={steps.length}
+        help={<>Drag the grip to change the build sequence. Use the pencil to edit titles, timing, notes or piece order. Keys: <kbd>,</kbd> / <kbd>.</kbd> previous / next step. All changes are undoable; the timeline and MP4 follow the new sequence.</>}>
+        <button className={`nx-btn nx-sm ${currentStep === null ? 'nx-primary' : ''}`} title="Show every step" onClick={() => setCurrentStep(null)}>All</button>
+      </PaneHead>
       {editingModel && (
         <div className="bm-crumb">
           <button className="nx-link" onClick={() => { setEditingModel(''); setEditAt(null); }}>Main model</button>
           <Ic name="right" /><strong>{editingModel}</strong>
         </div>
       )}
-      <p className="nx-fine">Drag the grip to change the build sequence. Use the pencil to edit titles, timing, notes or piece order. Keys: <kbd>,</kbd> / <kbd>.</kbd> previous / next step.</p>
       {steps.some((s) => s.pieces.length > LARGE_STEP) && (
         <div className="bm-banner" role="note">
           <span>
@@ -229,7 +231,8 @@ export function StepsPanel({ timeline = null }: { timeline?: Timeline | null }) 
             <li
               key={`${editingModel}:${i}`}
               data-bm-step-index={i}
-              className={`bm-step-row ${active ? 'active' : ''} ${before ? 'bm-drop-before' : ''} ${after ? 'bm-drop-after' : ''}`}
+              className={`bm-step-row ${active ? 'active' : ''} ${editing ? 'editing' : ''} ${menu?.i === i ? 'menu-open' : ''} ${before ? 'bm-drop-before' : ''} ${after ? 'bm-drop-after' : ''}`}
+              onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, i }); }}
             >
               <div className="bm-step-main">
                 <button
@@ -241,44 +244,35 @@ export function StepsPanel({ timeline = null }: { timeline?: Timeline | null }) 
                   onPointerUp={onPointerUp}
                   onPointerCancel={() => { drag.current = null; setDrop(null); }}
                 ><Ic name="grip" /></button>
-                <button className="bm-step-btn" aria-label={`Step ${i + 1} · ${step.pieces.length} pieces`} onClick={() => setCurrentStep(i)}>
+                <button className="bm-step-btn" aria-label={`Step ${i + 1} · ${step.pieces.length} pieces`} title={step.title ? `Step ${i + 1} · ${step.title}` : `Step ${i + 1}`} onClick={() => setCurrentStep(i)}>
                   <span className="bm-step-no" aria-hidden="true">{i + 1}</span>
                   <span className="bm-step-label">
-                    <strong>Step {i + 1}</strong>
-                    {step.title && <span className="bm-step-title">{step.title}</span>}
-                    <span className="nx-hint">{step.pieces.length} piece{step.pieces.length === 1 ? '' : 's'}{step.pauseAfter ? ` · +${step.pauseAfter}s hold` : ''}</span>
+                    <strong>{step.title || `Step ${i + 1}`}</strong>
+                    {step.pauseAfter ? <span className="nx-hint">+{step.pauseAfter}s hold</span> : null}
                   </span>
+                  <span className="bm-step-count" title={`${step.pieces.length} piece${step.pieces.length === 1 ? '' : 's'}`}>{step.pieces.length}</span>
                 </button>
-                <button
-                  className="nx-icon"
-                  title="Play this step"
-                  aria-label={`Play step ${i + 1}`}
-                  disabled={!stepRange(timeline, i)}
-                  onClick={() => {
-                    const r = stepRange(timeline, i);
-                    if (!r) return;
-                    setCurrentStep(i);
-                    // plays where you are: in the Build view with your camera, or in the preview
-                    playRange(r[0] - 0.25, r[1] + (step.pauseAfter ?? 0) + 0.35);
-                  }}
-                ><Ic name="play" /></button>
-                <button className="nx-icon bm-step-edit" title="Edit this step" aria-label={`Edit step ${i + 1}`} aria-expanded={editing} onClick={() => { setCurrentStep(i); setEditAt(editing ? null : `${editingModel}:${i}`); }}><Ic name="edit" /></button>
-                {hasSelection && (
-                  <button className="nx-icon" title="Move selected pieces here" aria-label={`Move selection to step ${i + 1}`} onClick={() => { pause(); apply((p) => moveItemsToStep(p, editingModel, selection.ids, i)); setCurrentStep(i); }}><Ic name="moveHere" /></button>
-                )}
-                <button className="nx-icon bm-step-reorder" title="Move step up" aria-label={`Move step ${i + 1} earlier`} disabled={i === 0} onClick={() => move(i, i - 1)}><Ic name="arrowUp" /></button>
-                <button className="nx-icon bm-step-reorder" title="Move step down" aria-label={`Move step ${i + 1} later`} disabled={i === steps.length - 1} onClick={() => move(i, i + 1)}><Ic name="arrowDown" /></button>
-              </div>
-              <div className="bm-step-utilities">
-                <button className="nx-link" aria-label={`Insert step before step ${i + 1}`} onClick={() => add(i)}><Ic name="plus" /> Insert before</button>
-                <button className="nx-link" aria-label={`Select pieces in step ${i + 1}`} onClick={() => { useStudio.getState().select(step.pieces.flatMap((item) => item.id ? [item.id] : [])); setCurrentStep(i); }}>Select parts</button>
-                <button
-                  className="nx-link bm-step-delete"
-                  title={steps.length <= 1 && step.pieces.length > 0 ? 'Cannot remove the only non-empty step' : 'Pieces join the previous step (or the next if first)'}
-                  aria-label={`Delete step ${i + 1}`}
-                  disabled={steps.length <= 1 && step.pieces.length > 0}
-                  onClick={() => remove(i)}
-                ><Ic name="trash" /> Delete / merge</button>
+                <div className="bm-step-tools">
+                  {hasSelection && (
+                    <button className="nx-icon bm-step-here" title="Move selected pieces here" aria-label={`Move selection to step ${i + 1}`} onClick={() => { pause(); apply((p) => moveItemsToStep(p, editingModel, selection.ids, i)); setCurrentStep(i); }}><Ic name="moveHere" /></button>
+                  )}
+                  <button
+                    className="nx-icon"
+                    title="Play this step"
+                    aria-label={`Play step ${i + 1}`}
+                    disabled={!stepRange(timeline, i)}
+                    onClick={() => {
+                      const r = stepRange(timeline, i);
+                      if (!r) return;
+                      setCurrentStep(i);
+                      // plays where you are: in the Build view with your camera, or in the preview
+                      playRange(r[0] - 0.25, r[1] + (step.pauseAfter ?? 0) + 0.35);
+                    }}
+                  ><Ic name="play" /></button>
+                  <button className="nx-icon bm-step-edit" title="Edit this step" aria-label={`Edit step ${i + 1}`} aria-expanded={editing} onClick={() => { setCurrentStep(i); setEditAt(editing ? null : `${editingModel}:${i}`); }}><Ic name="edit" /></button>
+                  <button className="nx-icon" title="More" aria-label={`More for step ${i + 1}`} aria-haspopup="menu"
+                    onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ x: r.left, y: r.bottom + 4, i }); }}><Ic name="more" /></button>
+                </div>
               </div>
               {editing && (
                 <StepEditor key={`${editingModel}:${i}`} step={step} index={i} model={editingModel} hasNext={i < steps.length - 1} selectedIds={hasSelection ? selection.ids : []} onClose={() => setEditAt(null)} />
@@ -307,9 +301,23 @@ export function StepsPanel({ timeline = null }: { timeline?: Timeline | null }) 
           );
         })}
       </ol>
+      {menu && steps[menu.i] && (
+        <ContextMenu x={menu.x} y={menu.y} label={`Step ${menu.i + 1} menu`} onClose={() => setMenu(null)} items={[
+          { heading: steps[menu.i].title ? `Step ${menu.i + 1} · ${steps[menu.i].title}` : `Step ${menu.i + 1}` },
+          { icon: 'pointer', label: 'Select its pieces', disabled: !steps[menu.i].pieces.length, onClick: () => { useStudio.getState().select(steps[menu.i].pieces.flatMap((item) => item.id ? [item.id] : [])); setCurrentStep(menu.i); } },
+          { icon: 'edit', label: 'Edit…', onClick: () => { setCurrentStep(menu.i); setEditAt(`${editingModel}:${menu.i}`); } },
+          'sep',
+          { icon: 'plus', label: 'Insert a step before', onClick: () => add(menu.i) },
+          { icon: 'plus', label: 'Insert a step after', onClick: () => add(menu.i + 1) },
+          'sep',
+          { icon: 'arrowUp', label: 'Move earlier', disabled: menu.i === 0, onClick: () => move(menu.i, menu.i - 1) },
+          { icon: 'arrowDown', label: 'Move later', disabled: menu.i === steps.length - 1, onClick: () => move(menu.i, menu.i + 1) },
+          'sep',
+          { icon: 'trash', label: steps.length > 1 ? 'Delete (pieces join the step before)' : 'Delete', danger: true, disabled: steps.length <= 1 && steps[menu.i].pieces.length > 0, onClick: () => remove(menu.i) },
+        ]} />
+      )}
       {steps.length === 0 && <p className="nx-fine">No steps yet. Add a step, then insert parts from the Parts panel.</p>}
       <button className="nx-btn bm-add-step" aria-label="Add a step at the end" onClick={() => add(steps.length)}><Ic name="plus" /> Add step</button>
-      <p className="nx-fine">All changes are undoable. The timeline and MP4 use your updated sequence automatically.</p>
     </div>
   );
 }

@@ -1,6 +1,8 @@
 import { assemblyRole } from '../assemblyGraph';
 import { connectionGeometryFor, transformConnections, studFitsFace } from '../../ldraw/connectors';
 import { cupGripFits, wristContact } from '../jointContact';
+import { mateAxis, worldSnaps } from '../snapMates';
+import type { Snap } from '../../ldraw/shadow';
 import { add, sub, mul, unit, norm, point, vector, invert, multiply, dot } from './math';
 import type { V3 } from './math';
 import { ConstructionError, type Connection, type ConstructionNode, type ConstructionModel, type Dependency } from './types';
@@ -12,6 +14,12 @@ const contactTube = (origin: V3, axis: V3, length: number, radius: number, minRa
 const near = (a: number, b: number, eps = .35) => Math.abs(a - b) <= eps;
 const relBasisNear = (r: readonly number[], expected: readonly number[], eps = 1e-3) => [0, 1, 2, 4, 5, 6, 8, 9, 10].every((k, i) => near(r[k], expected[i], eps));
 const ID_BASIS = [1, 0, 0, 0, 1, 0, 0, 0, 1] as const;
+/** a plain round stud (radius 6 LDU), or a round socket that takes one: an anti-stud or a hinge tube such as a car door's */
+const isStudSnap = (s: Snap) => s.kind === 'cyl' && s.length > 0 && s.length <= (s.gender === 'M' ? 8 : 32) && s.shapes.length > 0
+    // a round stud also seats in a square socket: the underside of 1-wide plates (4315) and special bases
+    && s.shapes.every(x => x === 'R' || (s.gender === 'F' && x === 'S')) && Math.abs(s.radius - 6) <= .6;
+const STUD_PARALLEL = Math.cos(4 * Math.PI / 180);
+const volume = (n: ConstructionNode) => [0, 1, 2].reduce((v, k) => v * Math.max(0, n.body.max[k] - n.body.min[k]), 1);
 const FLIP_XZ_BASIS = [-1, 0, 0, 0, 1, 0, 0, 0, -1] as const;
 const Y_POS_90_BASIS = [0, 0, 1, 0, 1, 0, -1, 0, 0] as const;
 const Y_NEG_90_BASIS = [0, 0, -1, 0, 1, 0, 1, 0, 0] as const;
@@ -23,6 +31,51 @@ export function discoverConnections(model: ConstructionModel): {
     warnings: string[];
 } {
     const connections: Connection[] = [], dependencies: Dependency[] = [], warnings: string[] = [];
+    /**
+     * Studs of `parent` seated in `child`. First the child's flat underside (socket
+     * face). Parts without one (a minifig seat, whose anti-stud sockets sit in a
+     * shaped base) fall back to the LDCad shadow snaps: a round stud-sized male
+     * of the parent coaxial with, and engaged in, a matching female of the child.
+     * Either way the result only names the connector; the contact regions are the
+     * stud cylinders themselves and every route is still swept against the meshes.
+     */
+    const studFit = (parent: ConstructionNode, child: ConstructionNode): Pick<Connection, 'outward' | 'regions'> | null => {
+        if (parent === child || !parent.part || !child.part || gap(parent, child) > 36)
+            return null;
+        const tube = (base: V3, tip: V3, radius: number) => {
+            const a = unit(sub(tip, base)), h = norm(sub(tip, base));
+            return contactTube(add(base, mul(a, -.45)), a, h + .9, radius + .8);
+        };
+        const childGeo = transformConnections(connectionGeometryFor(child.part, model.metrics(child.part)), child.matrix);
+        if (childGeo.socketFace) {
+            const geo = transformConnections(connectionGeometryFor(parent.part, model.metrics(parent.part)), parent.matrix);
+            const fits = geo.studs?.filter(s => studFitsFace(s, childGeo.socketFace!)) ?? [];
+            if (fits.length)
+                return { outward: unit(sub(fits[0].tip, fits[0].base)), regions: fits.map(s => tube(s.base, s.tip, s.radius)) };
+        }
+        const female = worldSnaps(model.metrics(child.part).snaps?.filter(s => s.gender === 'F' && isStudSnap(s)), child.matrix);
+        if (!female.length)
+            return null;
+        const male = worldSnaps(model.metrics(parent.part).snaps?.filter(s => s.gender === 'M' && isStudSnap(s)), parent.matrix);
+        // the stud must point INTO the socket (same direction), not merely share its line
+        // both ends are already stud-sized, so only the geometry is checked here: a square
+        // socket (the underside of a 1x1 plate on a headlight brick's side stud) takes a round stud
+        const seated = (m: (typeof male)[number], f: (typeof female)[number]) => {
+            if (dot(m.axis, f.axis) <= STUD_PARALLEL)
+                return false;
+            const w = sub(f.start, m.start), along = dot(w, m.axis);
+            if (norm(sub(w, mul(m.axis, along))) > .5)
+                return false;
+            return Math.min(m.snap.length, along + f.snap.length) - Math.max(0, along) >= -.5;
+        };
+        const fits = male.filter(m => female.some(f => seated(m, f)));
+        if (!fits.length)
+            return null;
+        return {
+            outward: fits[0].axis,
+            regions: fits.map(m => tube(m.start, add(m.start, mul(m.axis, m.snap.length)), m.snap.radius)),
+        };
+    };
     const addEdge = (parent: ConstructionNode, child: ConstructionNode, kind: Connection['kind'], extra: Partial<Connection> = {}, hard = true) => {
         const id = 'connection:' + JSON.stringify([parent.id, child.id, kind]);
         if (connections.some(c => c.id === id))
@@ -127,27 +180,12 @@ export function discoverConnections(model: ConstructionModel): {
         }
         // Studs are connection candidates, not a guessed mandatory build direction.
         // Only authored/anatomical ordering is hard. Backward extraction determines access.
-        for (const child of nodes) {
-            if (!child.part)
-                continue;
-            const childGeo = transformConnections(connectionGeometryFor(child.part, model.metrics(child.part)), child.matrix);
-            if (!childGeo.socketFace)
-                continue;
+        for (const child of nodes)
             for (const parent of nodes) {
-                if (parent === child || !parent.part || gap(parent, child) > 36)
-                    continue;
-                const geo = transformConnections(connectionGeometryFor(parent.part, model.metrics(parent.part)), parent.matrix);
-                const fits = geo.studs?.filter(s => studFitsFace(s, childGeo.socketFace!)) ?? [];
-                if (fits.length) {
-                    const axis = unit(sub(fits[0].tip, fits[0].base));
-                    const regions = fits.map(stud => {
-                        const a = unit(sub(stud.tip, stud.base)), h = norm(sub(stud.tip, stud.base));
-                        return contactTube(add(stud.base, mul(a, -.45)), a, h + .9, stud.radius + .8);
-                    });
-                    addEdge(parent, child, 'stud', { outward: axis, regions }, false);
-                }
+                const fit = studFit(parent, child);
+                if (fit)
+                    addEdge(parent, child, 'stud', fit, false);
             }
-        }
         for (const cup of nodes)
             if (canonical(cup.part) === '3899') {
                 const hands = nodes.filter(n => role(n) === 'hand' && cupGripFits(cup.matrix, n.matrix));
@@ -240,27 +278,12 @@ export function discoverConnections(model: ConstructionModel): {
     // still used for construction scopes, but the connector graph must be built
     // from the actual leaf parts in the completed placement.
     const leaves = [...model.parts.values()];
-    for (const child of leaves) {
-        if (!child.part)
-            continue;
-        const childGeo = transformConnections(connectionGeometryFor(child.part, model.metrics(child.part)), child.matrix);
-        if (!childGeo.socketFace)
-            continue;
+    for (const child of leaves)
         for (const parent of leaves) {
-            if (parent === child || !parent.part || gap(parent, child) > 36)
-                continue;
-            const geo = transformConnections(connectionGeometryFor(parent.part, model.metrics(parent.part)), parent.matrix);
-            const fits = geo.studs?.filter(s => studFitsFace(s, childGeo.socketFace!)) ?? [];
-            if (!fits.length)
-                continue;
-            const axis = unit(sub(fits[0].tip, fits[0].base));
-            const regions = fits.map(stud => {
-                const a = unit(sub(stud.tip, stud.base)), h = norm(sub(stud.tip, stud.base));
-                return contactTube(add(stud.base, mul(a, -.45)), a, h + .9, stud.radius + .8);
-            });
-            addEdge(parent, child, 'stud', { outward: axis, regions }, false);
+            const fit = studFit(parent, child);
+            if (fit)
+                addEdge(parent, child, 'stud', fit, false);
         }
-    }
     for (const cup of leaves)
         if (canonical(cup.part) === '3899') {
             const hands = leaves.filter(n => role(n) === 'hand' && cupGripFits(cup.matrix, n.matrix));
@@ -453,6 +476,78 @@ export function discoverConnections(model: ConstructionModel): {
             if (!relBasisNear(r, ID_BASIS) || !near(r[12], 0, .25) || !near(r[13], -8, .25) || !near(r[14], -29, .35)) continue;
             addEdge(slope, tile, 'surface', { outward: unit(vector(tile.matrix, [0, -1, 0])), surfaceTolerance: 4.25 }, false);
         }
+
+    // Finger hinges described by the LDCad shadow library (4213 car roof on
+    // 4315 hinge plate, 3937/3938, 4275/4276 ...): interleaved fingers on one pin
+    // line. They come apart only by sliding along the pin, either way, so the
+    // pair is a hard mechanical module (built at its own bay, then placed as one
+    // piece) with contact certified only in a tube around the pin.
+    for (const a of leaves) {
+        if (!a.part) continue;
+        const fa = worldSnaps(model.metrics(a.part).snaps?.filter(s => s.kind === 'fgr' && s.gender === 'M' && s.length > 0), a.matrix);
+        if (!fa.length) continue;
+        for (const b of leaves) {
+            if (b === a || !b.part || gap(a, b) > 36) continue;
+            const fb = worldSnaps(model.metrics(b.part).snaps?.filter(s => s.kind === 'fgr' && s.gender === 'F' && s.length > 0), b.matrix);
+            const pair = fa.flatMap(m => fb.filter(f => mateAxis(m, f)).map(f => ({ m, f })))[0];
+            if (!pair) continue;
+            // a finger snap's start is its middle; it runs half its length each way
+            const axis = pair.m.axis, half = Math.max(pair.m.snap.length, pair.f.snap.length) / 2 + 1;
+            const radius = Math.max(pair.m.snap.radius, pair.f.snap.radius) + 4;
+            // the larger part is the module's base; the other clips onto its pin.
+            // Interleaved fingers cannot slide apart along the pin (each finger
+            // meets the next), so the clip comes off sideways: straight away from
+            // the pin toward the child's body. A child centred on the pin keeps
+            // the axial slide.
+            const [parent, child] = volume(a) >= volume(b) ? [a, b] : [b, a];
+            const centre = [0, 1, 2].map(k => (child.bounds.min[k] + child.bounds.max[k]) / 2) as V3;
+            const d = sub(centre, pair.m.start), radial = sub(d, mul(axis, dot(d, axis)));
+            const sideways = norm(radial) > 1;
+            addEdge(parent, child, 'mechanical', {
+                outward: sideways ? unit(radial) : axis,
+                ...(sideways ? {} : { axial: true }),
+                region: contactTube(sub(pair.m.start, mul(axis, half)), axis, 2 * half, radius),
+            });
+        }
+    }
+
+    // A tyre (LDCad generic "rim" socket) pushed onto a wheel hub. Many old wheel
+    // parts (122c01's built-in wheels) expose only a plain hub stud, so the rim
+    // group never pairs; a hub stud on the tyre's own axis line is enough. The
+    // tyre slides off along the axle, away from the hub's part; the region is the
+    // tyre's own envelope around that axle, for this pair only.
+    for (const tyre of leaves) {
+        if (!tyre.part) continue;
+        const rims = worldSnaps(model.metrics(tyre.part).snaps?.filter(s => s.kind === 'gen' && s.gender === 'F' && s.shapes[0] === 'GEN:cyl'), tyre.matrix);
+        if (!rims.length) continue;
+        for (const hub of leaves) {
+            if (hub === tyre || !hub.part || gap(tyre, hub) > 8) continue;
+            const males = worldSnaps(model.metrics(hub.part).snaps?.filter(s => s.gender === 'M' && (s.kind === 'cyl' || s.kind === 'gen')), hub.matrix);
+            const pair = rims.flatMap(r => males.filter(m => {
+                if (m.snap.kind === 'gen') return !!mateAxis(m, r);
+                if (Math.abs(dot(m.axis, r.axis)) < STUD_PARALLEL) return false;
+                const w = sub(r.start, m.start), along = dot(w, m.axis);
+                return norm(sub(w, mul(m.axis, along))) <= .5 && Math.abs(along) <= r.snap.length + m.snap.length + 8;
+            }).map(m => ({ r, m })))[0];
+            if (!pair) continue;
+            const centre = (b: { min: V3; max: V3 }) => [0, 1, 2].map(k => (b.min[k] + b.max[k]) / 2) as V3;
+            let axis = unit(pair.m.axis);
+            if (dot(sub(centre(tyre.bounds), centre(hub.bounds)), axis) < 0) axis = mul(axis, -1);
+            // the tyre's envelope around the axle line
+            let lo = Infinity, hi = -Infinity, radius = 0;
+            for (const x of [tyre.bounds.min[0], tyre.bounds.max[0]])
+                for (const y of [tyre.bounds.min[1], tyre.bounds.max[1]])
+                    for (const z of [tyre.bounds.min[2], tyre.bounds.max[2]]) {
+                        const d = sub([x, y, z], pair.r.start), t = dot(d, axis);
+                        lo = Math.min(lo, t); hi = Math.max(hi, t);
+                        radius = Math.max(radius, norm(sub(d, mul(axis, t))));
+                    }
+            addEdge(hub, tyre, 'mechanical', {
+                outward: axis,
+                region: contactTube(add(pair.r.start, mul(axis, lo - 1)), axis, hi - lo + 2, radius + 1),
+            }, false);
+        }
+    }
 
     // 2923/2922a pantograph joints are interleaved finger hinges. Axial
     // extraction along the hinge pin direction is a valid rigid disassembly

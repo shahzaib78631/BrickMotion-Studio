@@ -9,6 +9,7 @@ import { useStudio } from '../state/store';
 import type { ModelState } from '../state/useModel';
 import type { ExportJob } from './ExportDialog';
 import { Ic } from './icons';
+import { PaneHead } from './PaneHead';
 import { ContextMenu, type ContextItem } from './ContextMenu';
 import { importAsSubmodel } from '../plan/modelFiles';
 import { isProjectFile, PROJECT_EXTENSION, readProjectFile } from '../io/projectFile';
@@ -131,12 +132,8 @@ export function ModelsPanel({ model, onExport }: { model: ModelState; onExport(j
 
   return (
     <div className="nx-pane">
-      <div className="nx-pane-head">
-        <h3>
-          Models <span className="nx-count">{rows.length}</span>
-        </h3>
-      </div>
-      <p className="nx-fine">Each model has its own build timeline. Open one to edit, preview and export it on its own; the main model builds every submodel aside and attaches it. Right-click a model for more.</p>
+      <PaneHead id="models" title="Models" count={rows.length}
+        help="Each model has its own build timeline. Open one to edit, preview and export it on its own; the main model builds every submodel aside and attaches it. Right-click a model for more." />
       {saving && (
         <p className="nx-hint" role="status">
           Planning animations for {label(saving.name)}'s project file ({saving.progress.done + 1} of {saving.progress.total})…

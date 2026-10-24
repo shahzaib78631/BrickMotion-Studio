@@ -8,9 +8,7 @@ export function SettingsPanel({ onAbout }: { onAbout(): void }) {
   return (
     <div className="nx-pane" aria-label="Settings">
       <div className="nx-pane-head">
-        <h3>
-          <Ic name="settings" /> Settings
-        </h3>
+        <h3>Settings</h3>
       </div>
       <div className="nx-sub">Claude</div>
       <label className="nx-field">
