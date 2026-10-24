@@ -1,6 +1,8 @@
 import { clamp } from './easing';
 
 export type ArrivalMode = 'piece' | 'batch' | 'step';
+export type FloorSort = 'step' | 'colour' | 'part' | 'size';
+export type FloorSides = 'front-back' | 'front' | 'behind' | 'sides';
 export type AnimOptions = {
   targetSeconds: number; heroOrbit: boolean; mode?: ArrivalMode;
   /** V2 is explicit opt-in until articulated/flexible model coverage is ready. */
@@ -29,6 +31,13 @@ export type AnimOptions = {
    * no gain measured on the jet, 5590 or 10001; see docs/diagnostics/assembler-port.md).
    */
   accessRepair?: boolean;
+  /**
+   * How pieces waiting on the floor are grouped: by build step (default: the
+   * earliest pieces lie furthest out), by colour, by part, or by size only.
+   */
+  floorSort?: FloorSort;
+  /** Where they wait around the model: in front and behind (default), only in front, only behind, or at its left and right. */
+  floorSides?: FloorSides;
   /** Optional wall-clock cap on that re-planning (ms, maximum 10000). Unset by default: a time cap makes results depend on machine load. */
   accessSearchMilliseconds?: number;
 };

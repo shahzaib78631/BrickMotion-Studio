@@ -54,10 +54,16 @@ test('a reopened project fingerprints the same, so its saved timelines are found
 test('the video settings a timeline was saved with are read back from its options key', async () => {
   const { optsKey, settingsFromOptsKey } = await import('../../src/state/timelineService');
   const { animOptions } = await import('../../src/state/appSettings');
-  const settings = { targetSeconds: 42, heroOrbit: false, mode: 'piece' as const, introSeconds: 1.5, buildSeconds: null, outroSeconds: 2, bottomUp: false, planner: 'legacy' as const, constructionSupport: 'table' as const };
+  const settings = { targetSeconds: 42, heroOrbit: false, mode: 'piece' as const, introSeconds: 1.5, buildSeconds: null, outroSeconds: 2, bottomUp: false, planner: 'legacy' as const, constructionSupport: 'table' as const, floorSort: 'step' as const, floorSides: 'front-back' as const };
   const key = optsKey(animOptions(settings));
   expect(settingsFromOptsKey(key)).toEqual(settings);
   expect(optsKey(animOptions(settingsFromOptsKey(key)!))).toBe(key);
+  // the floor layout options only change the key when they are not the default, so older keys stay valid
+  expect(key.split('|')).toHaveLength(16);
+  const floor = { ...settings, floorSort: 'colour' as const, floorSides: 'sides' as const };
+  const floorKey = optsKey(animOptions(floor));
+  expect(floorKey).not.toBe(key);
+  expect(settingsFromOptsKey(floorKey)).toEqual(floor);
   // a key from before today's options were added still gives its settings
   expect(settingsFromOptsKey('30|true|auto||||true|true|legacy|2000|20000|fixture|true|12|4000')).toMatchObject({ targetSeconds: 30, mode: 'auto', planner: 'legacy' });
   expect(settingsFromOptsKey('k')).toBeNull();

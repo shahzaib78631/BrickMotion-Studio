@@ -1,6 +1,10 @@
 export type FloorItem = { id: string; w: number; d: number; group: number };
 /** A rectangle on the floor, in studs (LDraw x/z axes). */
-export type Region = { x0: number; z0: number; width: number; depth: number };
+export type Region = {
+  x0: number; z0: number; width: number; depth: number;
+  /** which edge faces the model, so the used rows are pushed against it: its max z (in front), its min z (behind), or neither (a side) */
+  near?: 'front' | 'behind';
+};
 
 /**
  * Shelf-packs items into rows, left to right, grouped by `group` and then

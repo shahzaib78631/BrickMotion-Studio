@@ -28,7 +28,8 @@ export async function saveProjectFile(plan: Plan, model: string, onProgress: (p:
       let timeline = await savedTimeline(plan, source, opts).catch(() => null);
       if (!timeline) {
         onProgress({ done: i, total: models.length });
-        try { timeline = encodeTimeline(await planTimeline(plan, source, opts, 'export')); }
+        // saved as planned: the dragged waiting spots are in the saved plan and applied on opening
+        try { timeline = encodeTimeline(await planTimeline(plan, source, opts, 'export', undefined, false)); }
         catch { failed.push(source || 'the whole set'); }
       }
       if (timeline) timelines.push({ model: saved, opts: optsKey(opts), timeline });

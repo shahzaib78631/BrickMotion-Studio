@@ -1,5 +1,5 @@
 import { get, set } from 'idb-keyval';
-import type { ArrivalMode } from '../anim/pacing';
+import type { ArrivalMode, FloorSides, FloorSort } from '../anim/pacing';
 import type { LogoCorner } from '../export/exportVideo';
 import { isExportFps, type ExportFps } from '../export/frameRates';
 import type { StudioLook } from '../render/studio';
@@ -12,7 +12,7 @@ export type Settings = {
   logo: Blob | null;
   logoCorner: LogoCorner;
   logoEnabled: boolean;
-  video: { targetSeconds: number; heroOrbit: boolean; mode: ArrivalMode | 'auto'; fps: ExportFps; introSeconds: number | null; buildSeconds: number | null; outroSeconds: number | null; studioLook: StudioLook; cameraFraming: CameraFraming; camera: CameraSettings; format: VideoFormat; edgeLines: boolean; linearColors: boolean; bottomUp: boolean; snapSound: boolean; planner?: 'legacy' | 'construction-v2'; constructionSupport?: 'fixture' | 'table' };
+  video: { targetSeconds: number; heroOrbit: boolean; mode: ArrivalMode | 'auto'; fps: ExportFps; introSeconds: number | null; buildSeconds: number | null; outroSeconds: number | null; studioLook: StudioLook; cameraFraming: CameraFraming; camera: CameraSettings; format: VideoFormat; edgeLines: boolean; linearColors: boolean; bottomUp: boolean; snapSound: boolean; planner?: 'legacy' | 'construction-v2'; constructionSupport?: 'fixture' | 'table'; floorSort: FloorSort; floorSides: FloorSides };
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -21,7 +21,7 @@ export const DEFAULT_SETTINGS: Settings = {
   logo: null,
   logoCorner: 'br',
   logoEnabled: false,
-  video: { targetSeconds: 15, heroOrbit: true, mode: 'auto', fps: 30, introSeconds: null, buildSeconds: null, outroSeconds: null, studioLook: 'soft', cameraFraming: 'cinematic', camera: DEFAULT_CAMERA_SETTINGS, format: '9:16', edgeLines: true, linearColors: true, bottomUp: true, snapSound: true, planner: 'legacy', constructionSupport: 'fixture' },
+  video: { targetSeconds: 15, heroOrbit: true, mode: 'auto', fps: 30, introSeconds: null, buildSeconds: null, outroSeconds: null, studioLook: 'soft', cameraFraming: 'cinematic', camera: DEFAULT_CAMERA_SETTINGS, format: '9:16', edgeLines: true, linearColors: true, bottomUp: true, snapSound: true, planner: 'legacy', constructionSupport: 'fixture', floorSort: 'step', floorSides: 'front-back' },
 };
 
 const KEY = 'settings';
@@ -50,6 +50,8 @@ export async function loadSettings(): Promise<Settings> {
   if (typeof video.bottomUp !== 'boolean') video.bottomUp = DEFAULT_SETTINGS.video.bottomUp;
   if (video.constructionSupport !== 'table') video.constructionSupport = 'fixture';
   if (video.planner !== 'construction-v2') video.planner = 'legacy';
+  if (!['step', 'colour', 'part', 'size'].includes(video.floorSort)) video.floorSort = 'step';
+  if (!['front-back', 'front', 'behind', 'sides'].includes(video.floorSides)) video.floorSides = 'front-back';
   if (typeof video.snapSound !== 'boolean') video.snapSound = DEFAULT_SETTINGS.video.snapSound;
   for (const key of ['introSeconds', 'buildSeconds', 'outroSeconds'] as const) {
     const value = video[key];

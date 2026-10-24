@@ -300,6 +300,23 @@ test('the camera does not leave a submodel before its last piece has landed', ()
   expect(camDist(tl, last)).toBeLessThan(camDist(tl, sb.start - 1) * 0.9);
 });
 
+test('the camera holds still through a close-up until its last piece has landed', () => {
+  // a submodel of three pieces built fast, like the undersides of an imported car
+  const tl = buildTimeline(hangar(), metrics, { ...opts, targetSeconds: 8 });
+  for (const sb of tl.subBuilds.filter((b) => b.closeUp)) {
+    const own = tl.units.filter((u) => u.kind === 'piece' && u.keys.every((k) => k.startsWith(`${sb.key}/`)));
+    if (!own.length) continue;
+    const first = Math.min(...own.map((u) => u.start)), last = Math.max(...own.map((u) => u.start + u.dur));
+    const ref = cameraAt(tl, first, 9 / 16);
+    const d0 = ref.position.distanceTo(ref.target);
+    for (let t = first; t <= last + 1e-9; t += 1 / 30) {
+      const c = cameraAt(tl, t, 9 / 16);
+      expect(c.target.distanceTo(ref.target)).toBeLessThan(d0 * 0.01);
+      expect(Math.abs(c.position.distanceTo(c.target) - d0)).toBeLessThan(d0 * 0.02);
+    }
+  }
+});
+
 test('only the first build of each top-level submodel gets a close-up', () => {
   const tl = buildTimeline(hangar(), metrics, opts);
   expect([...tl.subBuilds].sort((a, b) => a.start - b.start).map((b) => b.closeUp)).toEqual([true, false, false]);

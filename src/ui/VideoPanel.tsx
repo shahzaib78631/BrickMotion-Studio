@@ -4,6 +4,7 @@ import type { LogoCorner } from '../export/exportVideo';
 import { FPS_OPTIONS, type ExportFps } from '../export/frameRates';
 import { VIDEO_FORMATS, type VideoFormat } from '../export/formats';
 import { useStudio } from '../state/store';
+import { resetFloorShifts } from '../plan/pieceActions';
 import { useAppSettings } from '../state/appSettings';
 import { Ic } from './icons';
 import { DEFAULT_CAMERA_SETTINGS } from '../anim/camera';
@@ -36,6 +37,8 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
   }, [s.logo]);
   const longer = timeline && timeline.duration > s.targetSeconds + 0.05;
   const editingModel = useStudio((st) => st.editingModel);
+  /** pieces dragged to another waiting spot */
+  const moved = useStudio((st) => [...st.plan.steps, ...Object.values(st.plan.submodels ?? {}).flatMap((m) => m.steps)].reduce((n, step) => n + step.pieces.filter((i) => i.assembly?.floorShift).length, 0));
   const fmt = VIDEO_FORMATS[s.format];
   const setCamera = (key: keyof typeof s.camera, value: number) => s.set({ camera: { ...s.camera, [key]: value } });
 
@@ -172,6 +175,32 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
         <label className="nx-check">
           <input type="checkbox" checked={s.linearColors} onChange={(e) => s.set({ linearColors: e.target.checked })} /> True LEGO colours — linear tone mapping instead of filmic
         </label>
+        <div className="nx-grid2">
+          <label className="nx-field">
+            Waiting pieces
+            <select aria-label="Group waiting pieces" disabled={s.planner === 'construction-v2'} value={s.floorSort} onChange={(e) => s.set({ floorSort: e.target.value as typeof s.floorSort })}>
+              <option value="step">By step</option>
+              <option value="colour">By colour</option>
+              <option value="part">By part</option>
+              <option value="size">By size</option>
+            </select>
+          </label>
+          <label className="nx-field">
+            Wait
+            <select aria-label="Where waiting pieces lie" disabled={s.planner === 'construction-v2'} value={s.floorSides} onChange={(e) => s.set({ floorSides: e.target.value as typeof s.floorSides })}>
+              <option value="front-back">In front and behind</option>
+              <option value="front">In front</option>
+              <option value="behind">Behind</option>
+              <option value="sides">Left and right</option>
+            </select>
+          </label>
+        </div>
+        <span className="nx-hint">How the pieces lie on the floor before they fly in. To move one piece, drag it while it waits on the floor in the build view.</span>
+        {moved > 0 && (
+          <button className="nx-btn" onClick={() => useStudio.getState().apply(resetFloorShifts)}>
+            <Ic name="undo" /> Put {moved} moved piece{moved === 1 ? '' : 's'} back
+          </button>
+        )}
         <label className="nx-check">
           <input type="checkbox" disabled={s.planner === 'construction-v2'} checked={s.bottomUp} onChange={(e) => s.set({ bottomUp: e.target.checked })} /> Build bottom-up — within a step, each piece waits for what it rests on
         </label>

@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { findItem, moveItems } from '../plan/ops';
+import { shiftOnFloor } from '../plan/pieceActions';
 import { aroundPivot, transformPlanItems } from '../plan/gizmo';
 import type { ANode } from '../model/assemble';
 import { dragDelta } from '../state/drag';
@@ -79,7 +80,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
   /** the Build view shows the build animation at the playhead, with the editor's own camera */
   const engaged = mode === 'edit' && follow && !!timeline && !placing;
   /** what the render loop needs while engaged: the timeline and the pose at a time */
-  const live = useRef<{ tl: Timeline; pose: (t: number) => (key: string) => THREE.Matrix4 | null; dirty: boolean } | null>(null);
+  const live = useRef<{ tl: Timeline; pose: (t: number) => (key: string) => THREE.Matrix4 | null; dirty: boolean; override?: Map<string, THREE.Matrix4> } | null>(null);
   const studioLook = useAppSettings((s) => s.studioLook);
   const edgeLines = useAppSettings((s) => s.edgeLines);
   const linearColors = useAppSettings((s) => s.linearColors);
@@ -190,7 +191,9 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
           const t = advancePlayback(dt, run.tl.duration);
           soundSnaps(run.tl, t, wasPlaying, useAppSettings.getState().snapSound);
           if (t !== shownT || run.dirty) {
-            studio.bricks.setMatrices(run.pose(t));
+            const at = run.pose(t);
+            const over = run.override;
+            studio.bricks.setMatrices(over?.size ? (k) => over.get(k) ?? at(k) : at);
             shownT = t;
             run.dirty = false;
             // the step card and Steps panel follow the step being built
@@ -449,6 +452,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
   // Move tool: dragging a piece slides the selection over the floor in whole studs (one undo step).
   // Runs in the capture phase so the orbit controls are switched off before they see the press.
   const startDrag = (e: React.PointerEvent) => {
+    if (startFloorDrag(e)) return;
     const s = st();
     if (s.mode !== 'edit' || s.tool !== 'move' || (s.gizmoEnabled && s.selection.ids.length > 0) || e.button !== 0 || !viewportApi.studio) return;
     const key = pickAt(e);
@@ -484,6 +488,58 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+  };
+
+  /**
+   * Build view, following the animation: dragging a piece that is still waiting on
+   * the floor moves where it waits, in whole studs. A wheel waiting with its tyre on
+   * moves as one. Letting go saves the offset on the piece and the animation is
+   * planned again.
+   */
+  const startFloorDrag = (e: React.PointerEvent): boolean => {
+    const run = live.current;
+    const s = st();
+    if (!run || s.mode !== 'edit' || s.tool === 'move' || e.button !== 0 || e.shiftKey || !viewportApi.studio) return false;
+    const key = pickAt(e);
+    const tl = run.tl;
+    const tr = key ? tl.tracks.get(key) : undefined;
+    const t = usePlayback.getState().t;
+    if (!key || !tr?.moves.length || t < tr.appear || t >= tl.units[tr.moves[0].unit].start) return false;
+    const unit = tr.moves[0].unit;
+    const root = tl.units[unit].keys[0] ?? key;
+    const group = [...tl.tracks].filter(([, o]) => o.moves[0]?.unit === unit).map(([k, o]) => [k, o.floor] as const);
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), tl.ground / 20);
+    const hit = (ev: { clientX: number; clientY: number }) => rayAt(ev).ray.intersectPlane(plane, new THREE.Vector3());
+    const start = hit(e);
+    if (!start) return false;
+    if (viewportApi.controls) viewportApi.controls.enabled = false;
+    const model0 = s.editingModel;
+    let d: [number, number] = [0, 0];
+    const move = (ev: PointerEvent) => {
+      const p = hit(ev);
+      if (!p || !live.current) return;
+      // studs along LDraw x and z (world z is LDraw −z)
+      const next: [number, number] = [Math.round(p.x - start.x) || 0, Math.round(-(p.z - start.z)) || 0];
+      if (next[0] === d[0] && next[1] === d[1]) return;
+      d = next;
+      const shift = new THREE.Matrix4().makeTranslation(d[0] * 20, 0, d[1] * 20);
+      live.current.override = new Map(group.map(([k, floor]) => [k, shift.clone().multiply(floor)]));
+      live.current.dirty = true;
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      if (viewportApi.controls) viewportApi.controls.enabled = st().mode === 'edit';
+      if (!d[0] && !d[1]) {
+        if (live.current) ((live.current.override = undefined), (live.current.dirty = true));
+        return;
+      }
+      const next = shiftOnFloor(st().plan, model0, root, d);
+      if (next) st().apply(() => next);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    return true;
   };
 
   const down = useRef({ x: 0, y: 0 });

@@ -13,7 +13,7 @@ import type { Box } from '../ldraw/flatten';
 import { placementMatrix, transformBox, unionBox, type ANode, type Assembly, type Instance, type Metrics } from '../model/assemble';
 import { clamp01, easeInOutCubic, lerp } from './easing';
 import { layoutFloor, type FloorItem, type Region } from './floorLayout';
-import { choosePacing, SEQUENTIAL_GAP, type AnimOptions, type Pacing } from './pacing';
+import { choosePacing, SEQUENTIAL_GAP, type AnimOptions, type FloorSides, type Pacing } from './pacing';
 import { AssemblyPlanningError, buildAssemblyGraph } from './assemblyGraph';
 import { intersects, sweptIntersects, rotationPadding } from './sweptBounds';
 import { mateAxes, plugAxes, worldSnaps, type WorldSnap } from './snapMates';
@@ -84,7 +84,7 @@ function assertDecomposable(matrix: THREE.Matrix4, key: string): void { affine(m
  * bands, and let the existing collision-safe windows replenish them as pieces
  * are picked up. The windows NEVER overlap in time on the same floor space.
  */
-function bandsAround(box: Box, padArea = 0): Region[] {
+function bandsAround(box: Box, padArea = 0, sides: FloorSides = 'front-back'): Region[] {
   const bx0 = Math.floor(box.min[0] / STUD);
   const bx1 = Math.ceil(box.max[0] / STUD);
   const bz0 = Math.floor(box.min[2] / STUD);
@@ -97,9 +97,21 @@ function bandsAround(box: Box, padArea = 0): Region[] {
     Math.max(Math.ceil((1.05 * W * D) / width), Math.ceil((0.33 * padArea) / width)),
   ));
   const x0 = Math.floor((bx0 + bx1) / 2 - width / 2);
+  if (sides === 'front') return [{ x0, z0: bz0 - FLOOR_MARGIN - 2 * depth, width, depth: 2 * depth, near: 'front' }];
+  if (sides === 'behind') return [{ x0, z0: bz1 + FLOOR_MARGIN, width, depth: 2 * depth, near: 'behind' }];
+  if (sides === 'sides') {
+    // the same floor area, as two strips at the model's left and right
+    const long = Math.max(D + 2 * FLOOR_MARGIN, 12);
+    const wide = Math.max(4, Math.ceil((width * depth) / long));
+    const z0 = Math.floor((bz0 + bz1) / 2 - long / 2);
+    return [
+      { x0: bx0 - FLOOR_MARGIN - wide, z0, width: wide, depth: long },
+      { x0: bx1 + FLOOR_MARGIN, z0, width: wide, depth: long },
+    ];
+  }
   return [
-    { x0, z0: bz0 - FLOOR_MARGIN - depth, width, depth }, // front (towards the camera)
-    { x0, z0: bz1 + FLOOR_MARGIN, width, depth }, // behind
+    { x0, z0: bz0 - FLOOR_MARGIN - depth, width, depth, near: 'front' }, // front (towards the camera)
+    { x0, z0: bz1 + FLOOR_MARGIN, width, depth, near: 'behind' }, // behind
   ];
 }
 
@@ -117,7 +129,7 @@ const regionBox = (r: Region, ground: number): Box => ({
 function layoutBands(items: FloorItem[], bands: Region[]) {
   const pos = new Map<string, { x: number; z: number }>();
   let rest = items;
-  bands.forEach((band, bi) => {
+  bands.forEach((band) => {
     if (!rest.length) return;
     const r = layoutFloor(rest, band);
     const depthOf = new Map(rest.map((i) => [i.id, i.d]));
@@ -125,7 +137,7 @@ function layoutBands(items: FloorItem[], bands: Region[]) {
     r.pos.forEach((p, k) => (used = Math.max(used, p.z + depthOf.get(k)! - band.z0)));
     r.pos.forEach((p, k) => {
       const d = depthOf.get(k)!;
-      pos.set(k, { x: p.x, z: bi === 0 ? p.z + Math.max(0, band.depth - used) : band.z0 + used - (p.z - band.z0) - d });
+      pos.set(k, { x: p.x, z: band.near === 'front' ? p.z + Math.max(0, band.depth - used) : band.near === 'behind' ? band.z0 + used - (p.z - band.z0) - d : p.z });
     });
     const left = new Set(r.overflow);
     rest = rest.filter((i) => left.has(i.id));
@@ -307,15 +319,15 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
       const b = metrics(n.part).body;
       return sum + (Math.ceil((b.max[0] - b.min[0]) / STUD - 0.01) + 1) * (Math.ceil((b.max[2] - b.min[2]) / STUD - 0.01) + 1);
     }, 0);
-  const mainBands = bandsAround(modelBox, padArea(asm.nodes));
+  const sides = opts.floorSides ?? 'front-back';
+  const mainBands = bandsAround(modelBox, padArea(asm.nodes), sides);
 
   const steps: PlayStep[] = [];
   const ctxs: Ctx[] = [{ bands: mainBands, pieces: [], group: new Map() }];
   const subInfo: { key: string; name: string; closeUp: boolean; firstStep: number; spot: Box; ctx: number }[] = [];
   const closeNames = new Set<string>();
-  let sceneBox: Box = unionBox(modelBox, regionBox(mainBands[0], ground));
-  sceneBox = unionBox(sceneBox, regionBox(mainBands[1], ground));
-  let sideRight = Math.max(modelBox.max[0], (mainBands[0].x0 + mainBands[0].width) * STUD);
+  let sceneBox: Box = mainBands.reduce((b, r) => unionBox(b, regionBox(r, ground)), modelBox);
+  let sideRight = Math.max(modelBox.max[0], ...mainBands.map((r) => (r.x0 + r.width) * STUD));
 
   const keyOf = (prefix: string, id: string) => (prefix ? `${prefix}/${id}` : id);
   const keysUnder = (n: ANode, prefix: string): string[] => {
@@ -410,7 +422,7 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
     const tx = sideRight + SIDE_GAP * STUD - b.min[0];
     const from = new THREE.Matrix4().makeTranslation(tx, ground - b.max[1], zMid - (b.min[2] + b.max[2]) / 2).multiply(basis);
     let spot = transformBox(n.body, from);
-    let bands = bandsAround(spot, padArea(n.children));
+    let bands = bandsAround(spot, padArea(n.children), sides);
     // Reserve room for the submodel's FLOOR pieces as well as the assembled
     // chunk. Otherwise the side staging band can overlap main-floor pieces.
     const edge = Math.min(spot.min[0], ...bands.map((r) => r.x0 * STUD));
@@ -418,9 +430,9 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
     if (shift) {
       from.elements[12] += shift;
       spot = transformBox(n.body, from);
-      bands = bandsAround(spot, padArea(n.children));
+      bands = bandsAround(spot, padArea(n.children), sides);
     }
-    const focus = unionBox(unionBox(spot, regionBox(bands[0], ground)), regionBox(bands[1], ground)); // the scene bounds; the camera uses the occupied part
+    const focus = bands.reduce((b, r) => unionBox(b, regionBox(r, ground)), spot); // the scene bounds; the camera uses the occupied part
     sceneBox = unionBox(sceneBox, focus);
     const savedRight = sideRight;
     sideRight = Math.max(spot.max[0], focus.max[0]);
@@ -556,6 +568,9 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
   const windowVisibility: { ctx: number; windows: { ids: string[] }[] }[] = [];
   /** when each context's first floor window drops in */
   const firstAppear: number[] = [];
+  const sortBy = opts.floorSort ?? 'step';
+  /** the order groups are laid out in when sorting by part */
+  const partRank = new Map([...new Set(asm.instances.map((i) => i.part))].sort().map((p, i) => [p, i]));
   ctxs.forEach((ctx, ci) => {
     const items: (FloorItem & { color: number })[] = ctx.pieces.map((key) => {
       const inst = byKey.get(key)!;
@@ -564,7 +579,8 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
         id: key,
         w: Math.max(1, Math.ceil((b.max[0] - b.min[0]) / STUD - 0.01)),
         d: Math.max(1, Math.ceil((b.max[2] - b.min[2]) / STUD - 0.01)),
-        group: ctx.group.get(key) ?? 0,
+        // pieces of one group lie together on the floor
+        group: sortBy === 'step' ? ctx.group.get(key) ?? 0 : sortBy === 'colour' ? inst.color : sortBy === 'part' ? partRank.get(inst.part) ?? 0 : 0,
         color: inst.color,
       };
     });
@@ -1607,4 +1623,36 @@ export function poseAt(tl: Timeline, t: number): (key: string) => THREE.Matrix4 
     }
     return tr.final.clone();
   };
+}
+
+/**
+ * Pieces the user dragged to another waiting spot (studs along LDraw x and z, by
+ * key). Applied to a planned timeline, never planned: moving where a piece waits
+ * only moves its floor pose and the start of its first flight, so it never costs
+ * a new plan. A piece waiting with others it flies with (a tyre on its rim) moves
+ * with them. The original timeline is not changed.
+ */
+export function applyFloorShifts(tl: Timeline, shifts: Map<string, [number, number]>): Timeline {
+  if (!shifts.size) return tl;
+  const byUnit = new Map<number, [number, number]>();
+  for (const [key, d] of shifts) {
+    const unit = tl.tracks.get(key)?.moves[0]?.unit;
+    if (unit !== undefined && tl.units[unit]?.kind === 'piece') byUnit.set(unit, d);
+  }
+  if (!byUnit.size) return tl;
+  const tracks = new Map(tl.tracks);
+  for (const [key, tr] of tl.tracks) {
+    const d = tr.moves.length ? byUnit.get(tr.moves[0].unit) : undefined;
+    if (!d) continue;
+    const t = new THREE.Matrix4().makeTranslation(d[0] * STUD, 0, d[1] * STUD);
+    const floor = t.clone().multiply(tr.floor);
+    const box = tr.floorBox;
+    tracks.set(key, {
+      ...tr,
+      floor,
+      floorBox: { min: [box.min[0] + d[0] * STUD, box.min[1], box.min[2] + d[1] * STUD], max: [box.max[0] + d[0] * STUD, box.max[1], box.max[2] + d[1] * STUD] },
+      moves: tr.moves.map((mv, i) => (i === 0 ? { ...mv, from: t.clone().multiply(mv.from) } : mv)),
+    });
+  }
+  return { ...tl, tracks };
 }

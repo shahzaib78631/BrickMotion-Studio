@@ -1,8 +1,10 @@
+import { applyFloorShifts } from '../anim/timeline';
+import { floorShiftsByKey, resetFloorShifts } from '../plan/pieceActions';
 import type { Timeline } from '../anim/timeline';
 import { decodeTimeline, type EncodedTimeline } from '../anim/timelineCodec';
 import type { PlanRequest } from '../anim/timeline.worker';
 import type { PlanningProgress } from '../anim/planning';
-import type { AnimOptions } from '../anim/pacing';
+import type { AnimOptions, FloorSides, FloorSort } from '../anim/pacing';
 import type { Plan } from '../plan/types';
 import { getColors, hasShadowPack, metricsOf } from './partService';
 import { deleteCachedTimeline, getCachedTimeline, putCachedTimeline, timelineFingerprint } from '../storage/timelineCache';
@@ -13,15 +15,29 @@ export type Lane = 'ui' | 'export';
 const CACHE_SIZE = 16;
 type Entry = { promise: Promise<Timeline>; listeners: Set<(p: PlanningProgress) => void>; progress: PlanningProgress | null; settled: boolean };
 const cache = new Map<string, Entry>();
-const planIds = new WeakMap<Plan, number>();
-let nextPlanId = 1;
-const planKey = (p: Plan) => {
-  let id = planIds.get(p);
-  if (!id) planIds.set(p, (id = nextPlanId++));
-  return id;
-};
+/**
+ * A plan's planning content: the plan without the waiting spots pieces were dragged
+ * to (those are applied to the planned timeline, see applyFloorShifts), and a
+ * short signature of it, so a drag finds the animation already planned.
+ */
+const bases = new WeakMap<Plan, { plan: Plan; key: string }>();
+function baseOf(p: Plan): { plan: Plan; key: string } {
+  let b = bases.get(p);
+  if (!b) {
+    const plan = resetFloorShifts(p);
+    const text = JSON.stringify(plan);
+    let h = 0x811c9dc5;
+    for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
+    bases.set(p, (b = { plan, key: `${text.length.toString(36)}.${(h >>> 0).toString(36)}` }));
+  }
+  return b;
+}
+const planKey = (p: Plan) => baseOf(p).key;
 export const optsKey = (o: AnimOptions) =>
-  [o.targetSeconds, o.heroOrbit, o.mode ?? 'auto', o.introSeconds ?? '', o.buildSeconds ?? '', o.outroSeconds ?? '', o.bottomUp ?? true, o.preassembleKnownWheels ?? true, o.planner ?? 'legacy', o.constructionMaxStates ?? 2000, o.constructionMaxMilliseconds ?? 20000, o.constructionSupport ?? 'fixture', o.constructionMechanicalSubassemblies ?? true, o.accessSearchAttempts ?? 12, o.accessSearchWork ?? 1500, o.accessSearchMilliseconds ?? ''].join('|');
+  [o.targetSeconds, o.heroOrbit, o.mode ?? 'auto', o.introSeconds ?? '', o.buildSeconds ?? '', o.outroSeconds ?? '', o.bottomUp ?? true, o.preassembleKnownWheels ?? true, o.planner ?? 'legacy', o.constructionMaxStates ?? 2000, o.constructionMaxMilliseconds ?? 20000, o.constructionSupport ?? 'fixture', o.constructionMechanicalSubassemblies ?? true, o.accessSearchAttempts ?? 12, o.accessSearchWork ?? 1500, o.accessSearchMilliseconds ?? '',
+    // added later: only when changed, so keys (and saved animations) made before stay valid
+    ...((o.floorSort ?? 'step') !== 'step' ? [`floor-sort:${o.floorSort}`] : []),
+    ...((o.floorSides ?? 'front-back') !== 'front-back' ? [`floor-sides:${o.floorSides}`] : [])].join('|');
 
 /**
  * The video settings an options key was made with (the leading fields, which every
@@ -31,6 +47,7 @@ export type SavedVideoSettings = {
   targetSeconds: number; heroOrbit: boolean; mode: 'auto' | NonNullable<AnimOptions['mode']>;
   introSeconds: number | null; buildSeconds: number | null; outroSeconds: number | null;
   bottomUp: boolean; planner: 'legacy' | 'construction-v2'; constructionSupport: 'fixture' | 'table';
+  floorSort: FloorSort; floorSides: FloorSides;
 };
 export function settingsFromOptsKey(key: string): SavedVideoSettings | null {
   const f = key.split('|');
@@ -46,6 +63,8 @@ export function settingsFromOptsKey(key: string): SavedVideoSettings | null {
     bottomUp: f[6] !== 'false',
     planner: f[8] === 'construction-v2' ? 'construction-v2' : 'legacy',
     constructionSupport: f[11] === 'table' ? 'table' : 'fixture',
+    floorSort: (['colour', 'part', 'size'] as const).find((v) => f.includes(`floor-sort:${v}`)) ?? 'step',
+    floorSides: (['front', 'behind', 'sides'] as const).find((v) => f.includes(`floor-sides:${v}`)) ?? 'front-back',
   };
 }
 
@@ -59,7 +78,15 @@ const lanes = {
 };
 
 /** Parts must be loaded first. UI replacement never cancels an export's request. */
-export function planTimeline(plan: Plan, model: string, opts: AnimOptions, lane: Lane = 'ui', onProgress?: (p: PlanningProgress) => void): Promise<Timeline> {
+export function planTimeline(plan: Plan, model: string, opts: AnimOptions, lane: Lane = 'ui', onProgress?: (p: PlanningProgress) => void, withShifts = true): Promise<Timeline> {
+  const planned = planBase(baseOf(plan).plan, model, opts, lane, onProgress);
+  if (!withShifts) return planned;
+  const shifts = floorShiftsByKey(plan, model);
+  return shifts.size ? planned.then((tl) => applyFloorShifts(tl, shifts)) : planned;
+}
+
+/** Plans (or finds) the timeline of a plan without dragged waiting spots. */
+function planBase(plan: Plan, model: string, opts: AnimOptions, lane: Lane, onProgress?: (p: PlanningProgress) => void): Promise<Timeline> {
   const key = `${lane}|${planKey(plan)}|${model}|${optsKey(opts)}`;
   const hit = cache.get(key);
   if (hit) {
@@ -108,19 +135,19 @@ export async function forgetTimelines(plan: Plan, models: string[], opts: AnimOp
   const id = `|${planKey(plan)}|`;
   for (const [key, entry] of cache) if (key.includes(id) && entry.settled) cache.delete(key);
   await Promise.all(models.map(async (model) => {
-    const fingerprint = await timelineFingerprint({ plan: scopedPlan(plan, model), model, opts: optsKey(opts), shadow: hasShadowPack() });
+    const fingerprint = await timelineFingerprint({ plan: scopedPlan(baseOf(plan).plan, model), model, opts: optsKey(opts), shadow: hasShadowPack() });
     await deleteCachedTimeline(fingerprint);
   }));
 }
 
 /** The saved (already planned) timeline for this model and options, if there is one. */
 export async function savedTimeline(plan: Plan, model: string, opts: AnimOptions): Promise<EncodedTimeline | null> {
-  const fingerprint = await timelineFingerprint({ plan: scopedPlan(plan, model), model, opts: optsKey(opts), shadow: hasShadowPack() });
+  const fingerprint = await timelineFingerprint({ plan: scopedPlan(baseOf(plan).plan, model), model, opts: optsKey(opts), shadow: hasShadowPack() });
   return getCachedTimeline(fingerprint);
 }
 
 /** Makes a timeline from a project file reusable, as if it had just been planned here. */
 export async function adoptTimeline(plan: Plan, model: string, opts: string, timeline: EncodedTimeline): Promise<void> {
-  const fingerprint = await timelineFingerprint({ plan: scopedPlan(plan, model), model, opts, shadow: hasShadowPack() });
+  const fingerprint = await timelineFingerprint({ plan: scopedPlan(baseOf(plan).plan, model), model, opts, shadow: hasShadowPack() });
   await putCachedTimeline(fingerprint, timeline);
 }

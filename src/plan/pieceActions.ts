@@ -84,3 +84,66 @@ export function stepsOf(p: Plan, m: ModelName, ids: string[]): number[] {
   }
   return [...out].sort((a, b) => a - b);
 }
+
+/**
+ * Moves where a piece waits on the floor before it flies in, by whole studs (LDraw
+ * x and z). `path` is the piece's key in `m` ("sub/piece" for a piece of a
+ * submodel): the offset is stored on its item in the submodel itself, so every
+ * copy of that submodel lays the piece out the same way. Null if it is not found.
+ */
+export function shiftOnFloor(p: Plan, m: ModelName, path: string, d: [number, number]): Plan | null {
+  const segs = path.split('/');
+  let model = m;
+  for (const seg of segs.slice(0, -1)) {
+    const found = findItem(p, model, seg);
+    if (!found || !isSub(found.item)) return null;
+    model = found.item.submodel;
+  }
+  const id = segs[segs.length - 1];
+  if (!findItem(p, model, id)) return null;
+  const steps = modelSteps(p, model).map((s) => (!s.pieces.some((i) => i.id === id) ? s : {
+    ...s,
+    pieces: s.pieces.map((i) => {
+      if (i.id !== id) return i;
+      const old = i.assembly?.floorShift ?? [0, 0];
+      const next: [number, number] = [old[0] + d[0], old[1] + d[1]];
+      const { floorShift: _, ...rest } = i.assembly ?? {};
+      const assembly = next[0] || next[1] ? { ...rest, floorShift: next } : rest;
+      const out = { ...i, assembly } as PlanItem;
+      if (!Object.keys(assembly).length) delete out.assembly;
+      return out;
+    }),
+  }));
+  return model === '' ? { ...p, steps } : { ...p, submodels: { ...p.submodels, [model]: { ...p.submodels![model], steps } } };
+}
+
+/** Puts every piece of a model (and its submodels) back where the automatic floor layout puts it. */
+export function resetFloorShifts(p: Plan): Plan {
+  const clear = (steps: Step[]) => steps.map((s) => (!s.pieces.some((i) => i.assembly?.floorShift) ? s : {
+    ...s,
+    pieces: s.pieces.map((i) => {
+      if (!i.assembly?.floorShift) return i;
+      const { floorShift: _, ...rest } = i.assembly;
+      const out = { ...i, assembly: rest } as PlanItem;
+      if (!Object.keys(rest).length) delete out.assembly;
+      return out;
+    }),
+  }));
+  return { ...p, steps: clear(p.steps), ...(p.submodels ? { submodels: Object.fromEntries(Object.entries(p.submodels).map(([k, v]) => [k, { ...v, steps: clear(v.steps) }])) } : {}) };
+}
+
+/** Every dragged waiting spot in a model and the submodels it uses, by piece key ("sub/piece"). */
+export function floorShiftsByKey(p: Plan, m: ModelName): Map<string, [number, number]> {
+  const out = new Map<string, [number, number]>();
+  const walk = (model: string, prefix: string, depth: number) => {
+    if (depth > 16) return;
+    for (const s of modelSteps(p, model))
+      for (const i of s.pieces) {
+        if (!i.id) continue;
+        if (isSub(i)) walk(i.submodel, `${prefix}${i.id}/`, depth + 1);
+        else if (i.assembly?.floorShift) out.set(prefix + i.id, i.assembly.floorShift);
+      }
+  };
+  walk(m, '', 0);
+  return out;
+}

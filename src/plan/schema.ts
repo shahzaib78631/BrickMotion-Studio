@@ -21,6 +21,7 @@ const AssemblySchema = z.object({
   insertionAxis: z.tuple([num, num, num]).refine((v) => Math.hypot(...v) > 1e-8, 'insertionAxis must be non-zero').optional(),
   role: z.enum(['base', 'hips', 'leg', 'torso', 'arm', 'hand', 'head', 'headwear', 'generic']).optional(),
   root: z.boolean().optional(),
+  floorShift: z.tuple([num, num]).optional(),
 }).optional();
 
 const Item = z

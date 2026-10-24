@@ -86,7 +86,7 @@
 .nx-row{display:flex;gap:8px;align-items:center}.nx-wrap{flex-wrap:wrap}.nx-grow{flex:1}
 .nx-field{display:flex;flex-direction:column;gap:5px;font-size:11.5px;font-weight:550;color:var(--ink2);letter-spacing:0;min-width:0}
 .nx-field b{font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;margin-left:auto}
-.nx-field:has(b){display:grid;grid-template-columns:1fr auto;align-items:center;row-gap:3px}
+.nx-field:has(> b){display:grid;grid-template-columns:1fr auto;align-items:center;row-gap:3px}
 .nx-field:has(b)>input,.nx-field:has(b)>select{grid-column:1/-1}
 .nx-check{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--ink2);font-weight:450;cursor:pointer;letter-spacing:0}
 .nx-grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}

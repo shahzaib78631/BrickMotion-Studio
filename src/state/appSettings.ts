@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AnimOptions, ArrivalMode } from '../anim/pacing';
+import type { AnimOptions, ArrivalMode, FloorSides, FloorSort } from '../anim/pacing';
 import type { LogoCorner } from '../export/exportVideo';
 import type { ExportFps } from '../export/frameRates';
 import type { StudioLook } from '../render/studio';
@@ -27,6 +27,9 @@ export type AppSettings = {
   bottomUp: boolean;
   planner?: 'legacy' | 'construction-v2';
   constructionSupport?: 'fixture' | 'table';
+  /** how pieces waiting on the floor are grouped, and where around the model */
+  floorSort: FloorSort;
+  floorSides: FloorSides;
   /** a click each time pieces connect, in playback and the MP4 */
   snapSound: boolean;
   introSeconds: number | null;
@@ -59,7 +62,7 @@ export const toSettings = (s: AppSettings): Settings => ({
   logo: s.logo,
   logoCorner: s.logoCorner,
   logoEnabled: s.logoEnabled,
-  video: { targetSeconds: s.targetSeconds, heroOrbit: s.heroOrbit, mode: s.mode, fps: s.fps, introSeconds: s.introSeconds, buildSeconds: s.buildSeconds, outroSeconds: s.outroSeconds, studioLook: s.studioLook, cameraFraming: s.cameraFraming, camera: s.camera, format: s.format, edgeLines: s.edgeLines, linearColors: s.linearColors, bottomUp: s.bottomUp, snapSound: s.snapSound, planner: s.planner ?? 'legacy', constructionSupport: s.constructionSupport ?? 'fixture' },
+  video: { targetSeconds: s.targetSeconds, heroOrbit: s.heroOrbit, mode: s.mode, fps: s.fps, introSeconds: s.introSeconds, buildSeconds: s.buildSeconds, outroSeconds: s.outroSeconds, studioLook: s.studioLook, cameraFraming: s.cameraFraming, camera: s.camera, format: s.format, edgeLines: s.edgeLines, linearColors: s.linearColors, bottomUp: s.bottomUp, snapSound: s.snapSound, planner: s.planner ?? 'legacy', constructionSupport: s.constructionSupport ?? 'fixture', floorSort: s.floorSort, floorSides: s.floorSides },
 });
 
 export async function applySettings(s: Settings): Promise<void> {
@@ -70,7 +73,7 @@ export async function applySettings(s: Settings): Promise<void> {
 }
 
 /** The animation options the timeline planner needs, taken from the video settings. */
-export const animOptions = (s: Pick<AppSettings, 'targetSeconds' | 'heroOrbit' | 'mode' | 'introSeconds' | 'buildSeconds' | 'outroSeconds' | 'bottomUp' | 'planner' | 'constructionSupport'>): AnimOptions => ({
+export const animOptions = (s: Pick<AppSettings, 'targetSeconds' | 'heroOrbit' | 'mode' | 'introSeconds' | 'buildSeconds' | 'outroSeconds' | 'bottomUp' | 'planner' | 'constructionSupport'> & Partial<Pick<AppSettings, 'floorSort' | 'floorSides'>>): AnimOptions => ({
   targetSeconds: s.targetSeconds,
   heroOrbit: s.heroOrbit,
   mode: s.mode === 'auto' ? undefined : s.mode,
@@ -80,4 +83,6 @@ export const animOptions = (s: Pick<AppSettings, 'targetSeconds' | 'heroOrbit' |
   bottomUp: s.bottomUp,
   planner: s.planner ?? 'legacy',
   constructionSupport: s.constructionSupport ?? 'fixture',
+  floorSort: s.floorSort ?? 'step',
+  floorSides: s.floorSides ?? 'front-back',
 });

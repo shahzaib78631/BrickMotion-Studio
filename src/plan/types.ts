@@ -16,6 +16,11 @@ export type AssemblyHints = {
   role?: AssemblyRole;
   /** Explicitly allow an independent/standalone foundation. */
   root?: boolean;
+  /**
+   * Moves where the piece waits on the floor before it flies in, in studs along
+   * x and z, from the spot the automatic layout gives it. Set by dragging it.
+   */
+  floorShift?: [number, number];
 };
 
 export type PieceItem = { assembly?: AssemblyHints; id?: string; part: string; color: string | number } & (Grid | Raw);

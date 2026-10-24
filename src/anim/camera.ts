@@ -147,11 +147,15 @@ const SWITCH_LEAD = 0.5;
 const SETTLE = 0.4;
 /** While a build is young, still show at least this share of its finished size (per axis). */
 const MIN_FILL = 0.6;
+/** how long the camera takes to move into a close-up or out of it; the planner leaves this much time before one (CLOSE_EASE in timeline.ts) */
+const CLOSE_EASE = 0.6;
+/** never quicker than this: a cut, not a move */
+const MIN_EASE = 0.2;
 
 /** One thing being assembled: the main model (index 0) or a submodel at its side spot. */
 type Focus = { finished: Box; lands: { start: number; land: Box }[] };
 /** `shots`: when the camera holds on each submodel; the main model has the rest of the time */
-type FocusPlan = { groups: Focus[]; shots: { from: number; to: number; group: number; size: number }[] };
+type FocusPlan = { groups: Focus[]; shots: { from: number; to: number; group: number; size: number; easeIn: number; easeOut: number }[] };
 const focusCache = new WeakMap<Timeline, FocusPlan>();
 
 /** Sorts every flight into the model or submodel it lands on. Floor pieces are not part of any
@@ -216,7 +220,10 @@ function focusPlan(tl: Timeline): FocusPlan {
     const nextLand = Math.min(Infinity, ...others.filter((o) => o.start >= lastStart - 1e-6 && o.end > lastEnd).map((o) => o.end));
     const enter = Math.max(first.start - SWITCH_LEAD, Math.min(prevLand + SETTLE, first.end - SETTLE - FOCUS_STEP));
     const exit = Math.max(lastEnd, Math.min(lastEnd + SETTLE, nextLand - SETTLE - FOCUS_STEP));
-    shots.push({ from: enter, to: exit, group: g, size: volume(groups[g].finished) });
+    // the moves in and out are quicker when a landing elsewhere must be shown sooner
+    const easeIn = Math.max(MIN_EASE, Math.min(CLOSE_EASE, enter - prevLand));
+    const easeOut = Math.max(MIN_EASE, Math.min(CLOSE_EASE, nextLand - exit - 0.05));
+    shots.push({ from: enter, to: exit, group: g, size: volume(groups[g].finished), easeIn, easeOut });
   }
   const plan = { groups, shots };
   focusCache.set(tl, plan);
@@ -224,19 +231,24 @@ function focusPlan(tl: Timeline): FocusPlan {
 }
 
 /** The (sub)model being assembled around time t and the part of it the camera must show. */
-function focusAt(plan: FocusPlan, t: number): { group: number; box: Box; anchor: Box } {
+function focusAt(plan: FocusPlan, t: number): { group: number; box: Box; anchor: Box; hold: string; easeIn?: number; easeOut?: number } {
   const { groups, shots } = plan;
   // every submodel held at t; a nested one is built while its parent still gets pieces, so show both
   let group = 0;
   let size = Infinity;
   let held: Box | null = null;
+  const holding: number[] = [];
+  let easeIn = CLOSE_EASE, easeOut = CLOSE_EASE;
   for (const sh of shots)
-    if (t >= sh.from && t <= sh.to) {
+    if (t >= sh.from - 1e-9 && t <= sh.to + 1e-9) {
+      holding.push(sh.group);
+      easeIn = Math.min(easeIn, sh.easeIn);
+      easeOut = Math.min(easeOut, sh.easeOut);
       held = held ? unionBoxes(held, groups[sh.group].finished) : groups[sh.group].finished;
       if (sh.size < size) ((group = sh.group), (size = sh.size));
     }
   // a submodel is small: hold one steady framing of the whole thing while it is built
-  if (held) return { group, box: held, anchor: held };
+  if (held) return { group, box: held, anchor: held, hold: holding.join(','), easeIn, easeOut };
   const g = groups[0];
   let box: Box | null = null;
   for (const l of g.lands) if (l.start <= t + LOOK_AHEAD) box = box ? unionBoxes(box, l.land) : l.land;
@@ -250,10 +262,15 @@ function focusAt(plan: FocusPlan, t: number): { group: number; box: Box; anchor:
     min[k] = Math.max(g.finished.min[k], min[k] - grow);
     max[k] = Math.min(g.finished.max[k], max[k] + grow);
   }
-  return { group, box: { min, max }, anchor: g.finished };
+  return { group, box: { min, max }, anchor: g.finished, hold: '' };
 }
 
-type FrameKey = { t: number; box: Box; anchor: Box };
+/**
+ * `hold`: the submodel close-up(s) this key belongs to ('' for none). The camera
+ * holds still for a whole close-up: it is smoothed only with keys of the same
+ * close-up, so it moves out after the last piece has landed, never while it flies.
+ */
+type FrameKey = { t: number; box: Box; anchor: Box; hold?: string; easeIn?: number; easeOut?: number };
 
 /** Cinematic: only what is being assembled. Wide: the timeline's full-scene keys (floor included). */
 function frameKeys(tl: Timeline, framing: CameraFraming, settings: CameraSettings): FrameKey[] {
@@ -262,7 +279,12 @@ function frameKeys(tl: Timeline, framing: CameraFraming, settings: CameraSetting
   if (!plan.groups.some((g) => g.lands.length)) return [];
   const keys: FrameKey[] = [];
   const main = plan.groups[0];
-  for (let t = 0; t <= tl.buildEnd + 1e-9; t += FOCUS_STEP) {
+  // a key at each close-up's start and end, so the camera holds right up to them
+  const times = new Set<number>();
+  for (let t = 0; t <= tl.buildEnd + 1e-9; t += FOCUS_STEP) times.add(t);
+  for (const sh of plan.shots) for (const t of [sh.from, sh.to]) if (t >= 0 && t <= tl.buildEnd) times.add(t);
+  const sorted = [...times].sort((a, b) => a - b).filter((t, i, all) => i === 0 || t - all[i - 1] > 1e-6);
+  for (const t of sorted) {
     const f = focusAt(plan, t);
     let { box, anchor } = f;
     // below full submodel focus, keep the main model's built part in the shot too
@@ -273,7 +295,7 @@ function frameKeys(tl: Timeline, framing: CameraFraming, settings: CameraSetting
       box = mixBox(box, both, keepMain);
       anchor = mixBox(anchor, unionBoxes(anchor, main.finished), keepMain);
     }
-    keys.push({ t, box, anchor });
+    keys.push({ t, box, anchor, hold: f.hold, easeIn: f.easeIn, easeOut: f.easeOut });
   }
   return keys;
 }
@@ -310,11 +332,16 @@ function frameRigs(tl: Timeline, aspect: number, framing: CameraFraming, setting
   // Damping sets the smoothing window. Distance takes the window's maximum first, so the
   // camera has already pulled back when a larger build (or a jump to another spot) arrives.
   const reach = 1 + Math.round(clamp01(settings.damping) * (SETTLE / FOCUS_STEP - 1));
+  /** a close-up's keys and the keys outside close-ups are smoothed apart; buildRig eases between them */
+  const near = (i: number, d: number) => {
+    const k = Math.min(raw.length - 1, Math.max(0, i + d));
+    return (keys[k].hold ?? '') !== (keys[i].hold ?? '') ? i : k;
+  };
   const tri = (i: number, value: (k: number) => number) => {
     let sum = 0;
     let wsum = 0;
     for (let d = -reach; d <= reach; d++) {
-      const k = Math.min(raw.length - 1, Math.max(0, i + d));
+      const k = near(i, d);
       const w = reach + 1 - Math.abs(d);
       sum += value(k) * w;
       wsum += w;
@@ -323,7 +350,7 @@ function frameRigs(tl: Timeline, aspect: number, framing: CameraFraming, setting
   };
   const peak = raw.map((_, i) => {
     let m = 0;
-    for (let d = -reach; d <= reach; d++) m = Math.max(m, raw[Math.min(raw.length - 1, Math.max(0, i + d))].dist);
+    for (let d = -reach; d <= reach; d++) m = Math.max(m, raw[near(i, d)].dist);
     return m;
   });
   const rigs = raw.map((r, i) => ({
@@ -344,28 +371,22 @@ const cubic = (p0: number, p1: number, p2: number, p3: number, u: number): numbe
     + (-2 * u3 + 3 * u2) * p2 + (u3 - u2) * (p3 - p1) / 2;
 };
 
-function buildRig(tl: Timeline, t: number, aspect: number, framing: CameraFraming, settings: CameraSettings): Rig {
-  const u0 = clamp01(t / Math.max(tl.buildEnd, 1e-6));
-  const az = settings.buildAzimuth + settings.buildDrift * u0;
-  const fov = cameraFov(settings, aspect);
-  const { keys, rigs } = frameRigs(tl, aspect, framing, settings);
-  if (!keys.length) return fitRig(tl.modelBox, aspect, az, settings.buildElevation, settings.buildMargin, fov);
-  // keys may be unevenly spaced (the construction planner's keys are), so search for t
+/** Catmull-Rom through `rigs` at the keys `idx` (sorted by time), at time t. */
+function splineRig(keys: FrameKey[], rigs: Rig[], idx: number[], t: number): Rig {
   let lo = 0;
-  let hi = keys.length - 1;
+  let hi = idx.length - 1;
   while (lo < hi) {
     const mid = (lo + hi + 1) >> 1;
-    if (keys[mid].t <= t) lo = mid;
+    if (keys[idx[mid]].t <= t) lo = mid;
     else hi = mid - 1;
   }
-  const i = lo;
-  const j = Math.min(keys.length - 1, i + 1);
-  if (i === j || keys[j].t <= keys[i].t) return { ...rigs[i], az, el: settings.buildElevation };
-  const u = clamp01((t - keys[i].t) / (keys[j].t - keys[i].t));
-  const a = rigs[Math.max(0, i - 1)];
-  const b = rigs[i];
-  const c = rigs[j];
-  const d = rigs[Math.min(rigs.length - 1, j + 1)];
+  const j = Math.min(idx.length - 1, lo + 1);
+  if (lo === j || keys[idx[j]].t <= keys[idx[lo]].t) return rigs[idx[lo]];
+  const u = clamp01((t - keys[idx[lo]].t) / (keys[idx[j]].t - keys[idx[lo]].t));
+  const a = rigs[idx[Math.max(0, lo - 1)]];
+  const b = rigs[idx[lo]];
+  const c = rigs[idx[j]];
+  const d = rigs[idx[Math.min(idx.length - 1, j + 1)]];
   return {
     target: new THREE.Vector3(
       cubic(a.target.x, b.target.x, c.target.x, d.target.x, u),
@@ -373,9 +394,67 @@ function buildRig(tl: Timeline, t: number, aspect: number, framing: CameraFramin
       cubic(a.target.z, b.target.z, c.target.z, d.target.z, u),
     ),
     dist: Math.max(1, cubic(a.dist, b.dist, c.dist, d.dist, u)),
-    az,
-    el: settings.buildElevation,
+    az: b.az,
+    el: b.el,
   };
+}
+
+/** a close-up: from its first key to its last, and its keys */
+type Hold = { from: number; to: number; idx: number[]; easeIn: number; easeOut: number };
+const holdCache = new WeakMap<FrameKey[], { free: number[]; holds: Hold[] }>();
+function holdsOf(keys: FrameKey[]) {
+  let out = holdCache.get(keys);
+  if (out) return out;
+  const free: number[] = [];
+  const holds: Hold[] = [];
+  keys.forEach((k, i) => {
+    if (!k.hold) return void free.push(i);
+    const last = holds[holds.length - 1];
+    if (last && keys[last.idx[last.idx.length - 1]].hold === k.hold && last.idx[last.idx.length - 1] === i - 1) {
+      last.idx.push(i);
+      last.to = k.t;
+      last.easeOut = k.easeOut ?? CLOSE_EASE;
+    } else holds.push({ from: k.t, to: k.t, idx: [i], easeIn: k.easeIn ?? CLOSE_EASE, easeOut: k.easeOut ?? CLOSE_EASE });
+  });
+  holdCache.set(keys, (out = { free, holds }));
+  return out;
+}
+
+function buildRig(tl: Timeline, t: number, aspect: number, framing: CameraFraming, settings: CameraSettings): Rig {
+  const u0 = clamp01(t / Math.max(tl.buildEnd, 1e-6));
+  const az = settings.buildAzimuth + settings.buildDrift * u0;
+  const el = settings.buildElevation;
+  const fov = cameraFov(settings, aspect);
+  const { keys, rigs } = frameRigs(tl, aspect, framing, settings);
+  if (!keys.length) return fitRig(tl.modelBox, aspect, az, el, settings.buildMargin, fov);
+  const { free, holds } = holdsOf(keys);
+  const base = free.length ? splineRig(keys, rigs, free, t) : fitRig(tl.modelBox, aspect, az, el, settings.buildMargin, fov);
+  // A close-up holds still from its first key to its last (its last piece has landed by
+  // then), and the camera eases in before it and out after it, never while it is held.
+  let total = 0;
+  const parts: { w: number; rig: Rig }[] = [];
+  for (const h of holds) {
+    const ramp = t < h.from ? 1 - (h.from - t) / h.easeIn : t > h.to ? 1 - (t - h.to) / h.easeOut : 1;
+    if (ramp <= 0) continue;
+    const w = easeInOutCubic(clamp01(ramp));
+    const at = Math.min(h.to, Math.max(h.from, t));
+    let k = 0;
+    while (k + 1 < h.idx.length && keys[h.idx[k + 1]].t <= at) k++;
+    const i = h.idx[k], j = h.idx[Math.min(h.idx.length - 1, k + 1)];
+    const rig = j === i ? rigs[i] : mix(rigs[i], rigs[j], clamp01((at - keys[i].t) / (keys[j].t - keys[i].t)));
+    parts.push({ w, rig });
+    total += w;
+  }
+  if (!parts.length) return { ...base, az, el };
+  // overlapping eases share the weight, so the camera never jumps between two close-ups
+  const scale = Math.min(1, total) / total;
+  const target = base.target.clone().multiplyScalar(1 - Math.min(1, total));
+  let dist = base.dist * (1 - Math.min(1, total));
+  for (const p of parts) {
+    target.addScaledVector(p.rig.target, p.w * scale);
+    dist += p.rig.dist * p.w * scale;
+  }
+  return { target, dist: Math.max(1, dist), az, el };
 }
 
 export function cameraAt(
