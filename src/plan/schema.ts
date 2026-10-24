@@ -15,6 +15,12 @@ const RawShape = {
 const id = z.string().optional();
 const color = z.union([z.string().min(1), num]);
 
+const AssemblySpotSchema = z.object({
+  x: num,
+  z: num,
+  angle: num,
+});
+
 const AssemblySchema = z.object({
   attachTo: z.string().min(1).optional(),
   after: z.array(z.string().min(1)).optional(),
@@ -22,6 +28,7 @@ const AssemblySchema = z.object({
   role: z.enum(['base', 'hips', 'leg', 'torso', 'arm', 'hand', 'head', 'headwear', 'generic']).optional(),
   root: z.boolean().optional(),
   floorShift: z.tuple([num, num]).optional(),
+  buildSpot: AssemblySpotSchema.optional(),
 }).optional();
 
 const Item = z
@@ -53,6 +60,8 @@ export const PlanSchema = z.object({
   submodels: z.record(z.string(), z.object({ steps: z.array(StepSchema) })).optional(),
   parts: z.record(z.string(), z.string()).optional(),
   steps: z.array(StepSchema),
+  assemblySpot: AssemblySpotSchema.optional(),
+  loosePiecesFollow: z.boolean().optional(),
 });
 
 export function parsePlan(json: unknown): { ok: true; plan: Plan } | { ok: false; errors: string[] } {

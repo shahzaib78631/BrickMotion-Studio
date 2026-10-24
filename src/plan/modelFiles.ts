@@ -21,8 +21,11 @@ export function reachableSubmodels(plan: Plan, model: string): string[] {
 export function standalonePlan(plan: Plan, model: string): Plan {
   if (!model) return plan;
   const subs = reachableSubmodels(plan, model);
+  // A submodel on its own is built at its origin: the main spot and the "loose pieces
+  // follow" switch belong to the root model and do not come along.
+  const { assemblySpot: _a, loosePiecesFollow: _f, ...rest } = plan;
   return {
-    ...plan,
+    ...rest,
     name: model,
     steps: modelSteps(plan, model),
     submodels: subs.length ? Object.fromEntries(subs.map((s) => [s, plan.submodels![s]])) : undefined,

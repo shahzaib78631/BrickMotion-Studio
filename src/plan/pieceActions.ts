@@ -3,7 +3,7 @@ import type { Box } from '../ldraw/flatten';
 import { assemble, placementMatrix, transformBox, type Metrics } from '../model/assemble';
 import { CARRIER_RATIO, footprint, touching } from './components';
 import { findItem, insertStep, modelSteps, moveItemsToStep, type ModelName } from './ops';
-import { isSub, type Plan, type PlanItem, type Step } from './types';
+import { isSub, type AssemblySpot, type Plan, type PlanItem, type Step } from './types';
 
 /**
  * Moves pieces into step `target`. A step the move empties is removed (steps that
@@ -146,4 +146,48 @@ export function floorShiftsByKey(p: Plan, m: ModelName): Map<string, [number, nu
   };
   walk(m, '', 0);
   return out;
+}
+
+/**
+ * The main model's assembly spot (floor position in studs and facing in degrees), or
+ * null for Auto. Changing it re-applies the rigid transform `S` to the timeline; with
+ * "loose pieces follow" on it is not part of the planning cache key, so the build is
+ * not planned again.
+ */
+export function setAssemblySpot(p: Plan, spot: AssemblySpot | null): Plan {
+  if (spot === null) {
+    const { assemblySpot: _, ...rest } = p;
+    return rest as Plan;
+  }
+  return { ...p, assemblySpot: spot };
+}
+
+/** Whether the loose floor layout moves and turns with the main spot. On is the default (no key). */
+export function setLoosePiecesFollow(p: Plan, loosePiecesFollow: boolean): Plan {
+  if (loosePiecesFollow) {
+    const { loosePiecesFollow: _, ...rest } = p;
+    return rest as Plan;
+  }
+  return { ...p, loosePiecesFollow: false };
+}
+
+/**
+ * The build spot of one submodel use, or null for Auto. Stored on the SubItem, so it
+ * applies to every copy of the submodel that contains it, like `floorShift`.
+ */
+export function setSubmodelBuildSpot(p: Plan, modelName: ModelName, subId: string, spot: AssemblySpot | null): Plan {
+  const steps = modelSteps(p, modelName).map((s) => (!s.pieces.some((i) => isSub(i) && i.id === subId) ? s : {
+    ...s,
+    pieces: s.pieces.map((i) => {
+      if (!isSub(i) || i.id !== subId) return i;
+      if (spot === null) {
+        const { buildSpot: _, ...rest } = i.assembly ?? {};
+        const out = { ...i, assembly: { ...rest } } as PlanItem;
+        if (!Object.keys(rest).length) delete out.assembly;
+        return out;
+      }
+      return { ...i, assembly: { ...(i.assembly ?? {}), buildSpot: spot } } as PlanItem;
+    }),
+  }));
+  return modelName === '' ? { ...p, steps } : { ...p, submodels: { ...(p.submodels ?? {}), [modelName]: { ...(p.submodels?.[modelName] ?? { steps: [] }), steps } } };
 }

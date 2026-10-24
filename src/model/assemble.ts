@@ -75,6 +75,40 @@ function itemPlacement(item: PlanItem, body: Box): Placement {
   return tidyPlacement({ pos: item.ldu, m: item.matrix });
 }
 
+/**
+ * A copy of the assembly with a rigid transform applied at its root: every final pose is
+ * multiplied by `S` (this moves the whole model to a chosen assembly spot before
+ * planning). Node bodies and submodel frames keep their own local space; instances and
+ * bounds are recomputed exactly, so collision checks see the real, moved model.
+ */
+export function moveAssembly(asm: Assembly, S: THREE.Matrix4): Assembly {
+  const place = (p: Placement): Placement => {
+    const m = S.clone().multiply(placementMatrix(p));
+    const e = m.elements;
+    // Placement.m is row-major: its first three numbers are the matrix's first row.
+    return { pos: [e[12], e[13], e[14]], m: [e[0], e[4], e[8], e[1], e[5], e[9], e[2], e[6], e[10]] };
+  };
+  const nodes = asm.nodes.map((n) => ({ ...n, local: place(n.local) }) as ANode);
+  const source = new Map(asm.instances.map((i) => [i.key, i]));
+  const instances: Instance[] = [];
+  let bounds: Box | null = null;
+  const collect = (list: ANode[], parent: THREE.Matrix4, prefix: string) => {
+    for (const n of list) {
+      const world = parent.clone().multiply(placementMatrix(n.local));
+      const key = prefix ? `${prefix}/${n.itemId}` : n.itemId;
+      if (n.kind === 'sub') {
+        collect(n.children, world, key);
+        continue;
+      }
+      const worldBox = transformBox(n.body, world);
+      bounds = unionBox(bounds, worldBox);
+      instances.push({ ...source.get(key)!, world, worldBox });
+    }
+  };
+  collect(nodes, new THREE.Matrix4(), '');
+  return { nodes, instances, bounds, problems: asm.problems };
+}
+
 export function assemble(plan: Plan, metrics: Metrics, colors: Map<number, ColorDef>): Assembly {
   const problems: AssemblyProblem[] = [];
   const reported = new Set<string>();

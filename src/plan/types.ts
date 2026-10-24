@@ -7,6 +7,8 @@ export type Grid = { x: number; y: number; z: number; rot: Rot };
 export type Raw = { ldu: Vec3; matrix: Mat3 };
 
 export type AssemblyRole = 'base' | 'hips' | 'leg' | 'torso' | 'arm' | 'hand' | 'head' | 'headwear' | 'neckwear' | 'generic';
+/** Floor position in studs (x, z) and facing in degrees about the vertical axis. */
+export type AssemblySpot = { x: number; z: number; angle: number };
 /** References are sibling item IDs within the containing model, never part IDs. */
 export type AssemblyHints = {
   attachTo?: string;
@@ -21,6 +23,8 @@ export type AssemblyHints = {
    * x and z, from the spot the automatic layout gives it. Set by dragging it.
    */
   floorShift?: [number, number];
+  /** Build spot for a submodel use (absolute in main model's unmoved frame). */
+  buildSpot?: AssemblySpot;
 };
 
 export type PieceItem = { assembly?: AssemblyHints; id?: string; part: string; color: string | number } & (Grid | Raw);
@@ -47,6 +51,9 @@ export type Plan = {
   /** custom part definitions embedded in imported files: file name (e.g. "custom.dat") → LDraw text */
   parts?: Record<string, string>;
   steps: Step[];
+  assemblySpot?: AssemblySpot;
+  /** default true: loose pieces move and turn with the main spot */
+  loosePiecesFollow?: boolean;
 };
 
 export const isSub = (i: PlanItem): i is SubItem => 'submodel' in i;

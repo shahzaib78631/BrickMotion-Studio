@@ -1,4 +1,4 @@
-import { applyFloorShifts } from '../anim/timeline';
+import { applyFloorShifts, applyAssemblySpotTransform } from '../anim/timeline';
 import { floorShiftsByKey, resetFloorShifts } from '../plan/pieceActions';
 import type { Timeline } from '../anim/timeline';
 import { decodeTimeline, type EncodedTimeline } from '../anim/timelineCodec';
@@ -24,7 +24,15 @@ const bases = new WeakMap<Plan, { plan: Plan; key: string }>();
 function baseOf(p: Plan): { plan: Plan; key: string } {
   let b = bases.get(p);
   if (!b) {
-    const plan = resetFloorShifts(p);
+    let plan = resetFloorShifts(p);
+    // "Loose pieces follow on" (the default): the main spot is applied to the planned
+    // timeline as one rigid transform, so it is not part of the planning cache key —
+    // changing it re-applies `S` without planning again. "Follow off" moves the model
+    // before planning, so the spot stays in the key.
+    if (plan.loosePiecesFollow !== false) {
+      const { assemblySpot: _s, loosePiecesFollow: _f, ...rest } = plan;
+      plan = rest as Plan;
+    }
     const text = JSON.stringify(plan);
     let h = 0x811c9dc5;
     for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
@@ -79,10 +87,18 @@ const lanes = {
 
 /** Parts must be loaded first. UI replacement never cancels an export's request. */
 export function planTimeline(plan: Plan, model: string, opts: AnimOptions, lane: Lane = 'ui', onProgress?: (p: PlanningProgress) => void, withShifts = true): Promise<Timeline> {
-  const planned = planBase(baseOf(plan).plan, model, opts, lane, onProgress);
+  const base = baseOf(plan).plan;
+  const planned = planBase(base, model, opts, lane, onProgress);
   if (!withShifts) return planned;
   const shifts = floorShiftsByKey(plan, model);
-  return shifts.size ? planned.then((tl) => applyFloorShifts(tl, shifts)) : planned;
+  let res = shifts.size ? planned.then((tl) => applyFloorShifts(tl, shifts)) : planned;
+  // "Loose pieces follow on" (default): the whole scene turns with the main spot. The
+  // spot applies only to the root model; a submodel rendered alone keeps its origin.
+  if (model === '' && plan.assemblySpot && plan.loosePiecesFollow !== false) {
+    const spot = plan.assemblySpot;
+    res = res.then((tl) => applyAssemblySpotTransform(tl, spot));
+  }
+  return res;
 }
 
 /** Plans (or finds) the timeline of a plan without dragged waiting spots. */

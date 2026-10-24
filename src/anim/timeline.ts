@@ -10,7 +10,8 @@ import * as THREE from 'three';
 import type { PlanningProgress } from './planning';
 import { factorAffine, type AffineFactors } from './affineTransform';
 import type { Box } from '../ldraw/flatten';
-import { placementMatrix, transformBox, unionBox, type ANode, type Assembly, type Instance, type Metrics } from '../model/assemble';
+import { moveAssembly, placementMatrix, transformBox, unionBox, type ANode, type Assembly, type Instance, type Metrics } from '../model/assemble';
+import type { AssemblySpot, Plan } from '../plan/types';
 import { clamp01, easeInOutCubic, lerp } from './easing';
 import { layoutFloor, type FloorItem, type Region } from './floorLayout';
 import { choosePacing, SEQUENTIAL_GAP, type AnimOptions, type FloorSides, type Pacing } from './pacing';
@@ -174,7 +175,12 @@ type Ctx = { bands: Region[]; pieces: string[]; group: Map<string, number>; afte
 /** Re-planning work allowed after a failed original order (planner progress reports). */
 export const DEFAULT_ACCESS_WORK = 1500;
 
-export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProgress?: (p: PlanningProgress) => void): Timeline {
+/**
+ * `layoutBox`: the model box the floor is laid out around, when it differs from the
+ * model's own (a moved main spot with "loose pieces follow" off keeps the automatic
+ * floor where it was). Null = lay out around the model itself, as always.
+ */
+export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProgress?: (p: PlanningProgress) => void, layoutBox: Box | null = null): Timeline {
   if (opts.planner === 'construction-v2') {
     const model = modelFromNodes(asm.nodes, metrics);
     const construction = planConstruction(model, {
@@ -182,6 +188,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
       maxMilliseconds: opts.constructionMaxMilliseconds,
       supportMode: opts.constructionSupport ?? 'fixture',
       mechanicalSubassemblies: opts.constructionMechanicalSubassemblies,
+      layoutBounds: layoutBox ?? undefined,
       onProgress: (p) => onProgress?.({ ...p, phase: p.phase === 'connections' ? 'connections' : p.phase === 'validation' ? 'validation' : 'disassembly' }),
     });
     return decodeTimeline(compileConstruction(construction, opts));
@@ -206,7 +213,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
         }
         onProgress?.(p);
       };
-      return planTimeline(asm, metrics, opts, progress, edges, false, memo);
+      return planTimeline(asm, metrics, opts, progress, edges, false, memo, undefined, layoutBox);
     }, opts.accessSearchAttempts ?? 12);
   } catch (error) {
     // No order gives every piece a certified route. Still animate: blocked pieces
@@ -216,14 +223,14 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
     const best = error.issues.find((i) => i.code === 'blocked-route')?.search?.edges ?? [];
     const failures: AccessFailure[] = [];
     let tl: Timeline, edges = best;
-    try { tl = planTimeline(asm, metrics, opts, onProgress, best, true, memo, failures); }
+    try { tl = planTimeline(asm, metrics, opts, onProgress, best, true, memo, failures, layoutBox); }
     catch (retry) {
       if (!best.length || !(retry instanceof AssemblyPlanningError)) throw retry;
       failures.length = 0;
       edges = [];
-      tl = planTimeline(asm, metrics, opts, onProgress, [], true, memo, failures);
+      tl = planTimeline(asm, metrics, opts, onProgress, [], true, memo, failures, layoutBox);
     }
-    return opts.accessRepair !== true ? tl : repairUncertified(asm, metrics, opts, onProgress, memo, tl, edges, failures);
+    return opts.accessRepair !== true ? tl : repairUncertified(asm, metrics, opts, onProgress, memo, tl, edges, failures, layoutBox);
   }
 }
 
@@ -237,7 +244,7 @@ const uncertifiedPieces = (tl: Timeline) => tl.units.reduce((n, u) => n + (u.unc
  * by, cutting fewest certified flights) is applied at once and the build planned
  * again; the result is kept only if fewer pieces stay uncertified.
  */
-function repairUncertified(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProgress: ((p: PlanningProgress) => void) | undefined, memo: PlanMemo, tl: Timeline, edges: AccessEdge[], failures: AccessFailure[]): Timeline {
+function repairUncertified(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProgress: ((p: PlanningProgress) => void) | undefined, memo: PlanMemo, tl: Timeline, edges: AccessEdge[], failures: AccessFailure[], layout: Box | null = null): Timeline {
   let best = tl, bestCount = uncertifiedPieces(tl), current = edges;
   for (let round = 0; round < REPAIR_ROUNDS && bestCount > 0; round++) {
     let extra = repairEdges(failures, current);
@@ -247,7 +254,7 @@ function repairUncertified(asm: Assembly, metrics: Metrics, opts: AnimOptions, o
     // reorders the cycle names and try again
     for (let tries = 0; extra.length && !candidate && tries < 3; tries++) {
       seen = [];
-      try { candidate = planTimeline(asm, metrics, opts, onProgress, [...current, ...extra], true, memo, seen); }
+      try { candidate = planTimeline(asm, metrics, opts, onProgress, [...current, ...extra], true, memo, seen, layout); }
       catch (error) {
         if (!(error instanceof AssemblyPlanningError)) throw error;
         const named = new Set(error.issues.filter((i) => i.code === 'dependency-cycle').flatMap((i) => i.items));
@@ -270,7 +277,7 @@ function repairUncertified(asm: Assembly, metrics: Metrics, opts: AnimOptions, o
 type PartMetricsLike = ReturnType<Metrics>;
 type PlanMemo = { insertion: Map<string, boolean>; translation: Map<string, boolean> };
 
-function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProgress: ((p: PlanningProgress) => void) | undefined, access: AccessEdge[], allowUncertified = false, memo: PlanMemo = { insertion: new Map(), translation: new Map() }, failures?: AccessFailure[]): Timeline {
+function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProgress: ((p: PlanningProgress) => void) | undefined, access: AccessEdge[], allowUncertified = false, memo: PlanMemo = { insertion: new Map(), translation: new Map() }, failures?: AccessFailure[], layout: Box | null = null): Timeline {
   onProgress?.({ phase: 'preparing', completed: 0, total: asm.instances.length });
   const missing = [...new Set(asm.instances.filter((i) => i.placeholder).map((i) => i.part))];
   // Certified routes need every mesh. The last pass still animates the set: a part
@@ -312,6 +319,8 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
   };
   const ground = asm.instances.length ? Math.max(...asm.instances.map((i) => i.worldBox.max[1])) : 0;
   const modelBox = asm.bounds ?? EMPTY_BOX;
+  /** the box the floor bands are laid out around; a moved model with "follow off" keeps the automatic floor */
+  const layoutBox = layout ?? modelBox;
   /** footprint plus a 1-stud gap of the pieces placed directly in these nodes */
   const padArea = (nodes: ANode[]) =>
     nodes.reduce((sum, n) => {
@@ -320,14 +329,14 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
       return sum + (Math.ceil((b.max[0] - b.min[0]) / STUD - 0.01) + 1) * (Math.ceil((b.max[2] - b.min[2]) / STUD - 0.01) + 1);
     }, 0);
   const sides = opts.floorSides ?? 'front-back';
-  const mainBands = bandsAround(modelBox, padArea(asm.nodes), sides);
+  const mainBands = bandsAround(layoutBox, padArea(asm.nodes), sides);
 
   const steps: PlayStep[] = [];
   const ctxs: Ctx[] = [{ bands: mainBands, pieces: [], group: new Map() }];
   const subInfo: { key: string; name: string; closeUp: boolean; firstStep: number; spot: Box; ctx: number }[] = [];
   const closeNames = new Set<string>();
   let sceneBox: Box = mainBands.reduce((b, r) => unionBox(b, regionBox(r, ground)), modelBox);
-  let sideRight = Math.max(modelBox.max[0], ...mainBands.map((r) => (r.x0 + r.width) * STUD));
+  let sideRight = Math.max(layoutBox.max[0], ...mainBands.map((r) => (r.x0 + r.width) * STUD));
 
   const keyOf = (prefix: string, id: string) => (prefix ? `${prefix}/${id}` : id);
   const keysUnder = (n: ANode, prefix: string): string[] => {
@@ -418,19 +427,34 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
     const to = parentFrame.clone().multiply(placementMatrix(n.local));
     const basis = naturalBasis(to);
     const b = transformBox(n.body, basis);
-    const zMid = (modelBox.min[2] + modelBox.max[2]) / 2;
-    const tx = sideRight + SIDE_GAP * STUD - b.min[0];
-    const from = new THREE.Matrix4().makeTranslation(tx, ground - b.max[1], zMid - (b.min[2] + b.max[2]) / 2).multiply(basis);
-    let spot = transformBox(n.body, from);
-    let bands = bandsAround(spot, padArea(n.children), sides);
-    // Reserve room for the submodel's FLOOR pieces as well as the assembled
-    // chunk. Otherwise the side staging band can overlap main-floor pieces.
-    const edge = Math.min(spot.min[0], ...bands.map((r) => r.x0 * STUD));
-    const shift = Math.max(0, sideRight + SIDE_GAP * STUD - edge);
-    if (shift) {
-      from.elements[12] += shift;
+    let from: THREE.Matrix4;
+    let spot: Box;
+    let bands: Region[];
+    const buildSpot = n.assembly?.buildSpot;
+    if (buildSpot) {
+      // A chosen spot: open the submodel there, in its natural orientation turned by the spot's angle.
+      const oriented = yaw(buildSpot.angle).multiply(basis);
+      const ob = transformBox(n.body, oriented);
+      from = new THREE.Matrix4()
+        .makeTranslation(buildSpot.x * STUD - (ob.min[0] + ob.max[0]) / 2, ground - ob.max[1], buildSpot.z * STUD - (ob.min[2] + ob.max[2]) / 2)
+        .multiply(oriented);
       spot = transformBox(n.body, from);
       bands = bandsAround(spot, padArea(n.children), sides);
+    } else {
+      const zMid = (layoutBox.min[2] + layoutBox.max[2]) / 2;
+      const tx = sideRight + SIDE_GAP * STUD - b.min[0];
+      from = new THREE.Matrix4().makeTranslation(tx, ground - b.max[1], zMid - (b.min[2] + b.max[2]) / 2).multiply(basis);
+      spot = transformBox(n.body, from);
+      bands = bandsAround(spot, padArea(n.children), sides);
+      // Reserve room for the submodel's FLOOR pieces as well as the assembled
+      // chunk. Otherwise the side staging band can overlap main-floor pieces.
+      const edge = Math.min(spot.min[0], ...bands.map((r) => r.x0 * STUD));
+      const shift = Math.max(0, sideRight + SIDE_GAP * STUD - edge);
+      if (shift) {
+        from.elements[12] += shift;
+        spot = transformBox(n.body, from);
+        bands = bandsAround(spot, padArea(n.children), sides);
+      }
     }
     const focus = bands.reduce((b, r) => unionBox(b, regionBox(r, ground)), spot); // the scene bounds; the camera uses the occupied part
     sceneBox = unionBox(sceneBox, focus);
@@ -1623,6 +1647,72 @@ export function poseAt(tl: Timeline, t: number): (key: string) => THREE.Matrix4 
     }
     return tr.final.clone();
   };
+}
+
+/** A yaw of `deg` about the vertical axis (the direction the plan's piece rotation uses). */
+export function yaw(deg: number): THREE.Matrix4 {
+  const r = (deg * Math.PI) / 180;
+  const c = Math.cos(r), s = Math.sin(r);
+  return new THREE.Matrix4().set(c, 0, s, 0, 0, 1, 0, 0, -s, 0, c, 0, 0, 0, 0, 1);
+}
+
+/**
+ * The rigid transform a main spot applies to the whole scene: turn about the vertical
+ * axis around the model's footprint centre, then move that centre onto the spot (studs).
+ * `{x: centre.x, z: centre.z, angle: 0}` is the identity.
+ */
+export function spotTransform(spot: AssemblySpot, box: Box): THREE.Matrix4 {
+  const cx = (box.min[0] + box.max[0]) / 2;
+  const cz = (box.min[2] + box.max[2]) / 2;
+  return new THREE.Matrix4()
+    .makeTranslation(spot.x * STUD, 0, spot.z * STUD)
+    .multiply(yaw(spot.angle))
+    .multiply(new THREE.Matrix4().makeTranslation(-cx, 0, -cz));
+}
+
+const through = (m: THREE.Matrix4, t: THREE.Matrix4) => t.clone().multiply(m);
+const boxThrough = (b: Box | null | undefined, t: THREE.Matrix4): Box | null => (b ? transformBox(b, t) : null);
+
+/**
+ * "Loose pieces follow on" (the default): plan exactly as today, then multiply every
+ * pose in the timeline by `S` — final poses, floor poses, flight paths, `floorShift`
+ * results, the camera boxes and keys. The scene turns rigidly, so any angle is fine and
+ * the main spot is never part of the planning cache key.
+ */
+export function applyAssemblySpotTransform(tl: Timeline, spot: AssemblySpot): Timeline {
+  const S = spotTransform(spot, tl.modelBox);
+  const tracks = new Map<string, Track>();
+  for (const [key, tr] of tl.tracks) {
+    tracks.set(key, {
+      ...tr,
+      floor: through(tr.floor, S),
+      floorBox: transformBox(tr.floorBox, S),
+      moves: tr.moves.map((mv) => ({ ...mv, from: through(mv.from, S), to: through(mv.to, S) })),
+      final: through(tr.final, S),
+    });
+  }
+  return {
+    ...tl,
+    tracks,
+    units: tl.units.map((u) => ({ ...u, box: boxThrough(u.box, S), land: boxThrough(u.land, S) })),
+    subBuilds: tl.subBuilds.map((sb) => ({ ...sb, focus: transformBox(sb.focus, S) })),
+    camKeys: tl.camKeys.map((k) => ({ ...k, box: transformBox(k.box, S) })),
+    modelBox: transformBox(tl.modelBox, S),
+    buildBox: transformBox(tl.buildBox, S),
+    sceneBox: transformBox(tl.sceneBox, S),
+  };
+}
+
+/**
+ * "Loose pieces follow off": move the model's final poses by `S` before planning, but
+ * keep the automatic floor where it was by laying it out around the box `S` is measured
+ * from. Returns the moved assembly and the box the floor is laid out around.
+ */
+export function rootSpotLayout(asm: Assembly, plan: Plan): { asm: Assembly; layoutBox: Box | null } {
+  const spot = plan.assemblySpot;
+  if (!spot || plan.loosePiecesFollow !== false || !asm.bounds) return { asm, layoutBox: null };
+  const layoutBox = asm.bounds;
+  return { asm: moveAssembly(asm, spotTransform(spot, layoutBox)), layoutBox };
 }
 
 /**

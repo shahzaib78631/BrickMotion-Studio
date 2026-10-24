@@ -9,6 +9,7 @@ const KIND: Record<Warning['kind'], string> = {
   'unknown-color': 'Unknown colour',
   'missing-submodel': 'Missing submodel',
   'submodel-cycle': 'Loop',
+  'assembly-spot': 'Assembly spot',
 };
 
 /** Problems in the set (floating, overlapping, unknown pieces); clicking one selects and frames it. */

@@ -91,6 +91,9 @@ export type ConstructionOptions = {
     }) => void; /** First release requires a table or a declared virtual fixture. */
     supportMode?: 'fixture' | 'table';
     mechanicalSubassemblies?: boolean;
+    /** Box the automatic work bays are laid out around, when it differs from the model's own
+     * (a model moved to its assembly spot with "loose pieces follow" off). */
+    layoutBounds?: Box;
 };
 export type Operation = {
     id: string;

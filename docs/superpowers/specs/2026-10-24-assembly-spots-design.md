@@ -182,6 +182,55 @@ transform `S` (a turn about Y, then a move on the floor), applied consistently:
   - "Reset to auto" removes the marker.
   - After playing the video, the car is built at the marker.
 
+## Decisions after builder review (these override anything above that conflicts)
+
+1. **When the main spot is applied.**
+   - **Loose pieces follow ON (default): after planning, as one rigid transform `S`.** Plan exactly
+     as today, with no spot. Then multiply every pose in the resulting timeline by `S`: final poses,
+     floor/staging poses, flight paths, `floorShift` results, `modelBox`, `buildBox`, `subBuilds`
+     focus boxes and camera keys. This works the same way as `applyFloorShifts`. The main spot is
+     not part of the planning cache key in this mode, so changing it re-applies `S` without
+     re-planning. Any angle works, because the whole scene turns rigidly.
+   - **Loose pieces follow OFF: before planning.** The model's final poses are moved by `S` and the
+     planner runs. The floor layout must still be computed around the **unmoved** model's box: pass
+     that box to the layout code as the area to lay out around, and keep the moved model as the
+     real obstacle. In this mode the spot is part of the cache key. Bounding boxes of a model turned
+     by an angle that isn't a multiple of 90° may be loose; that's acceptable.
+2. **Angles:** any angle is allowed. The UI snaps to 15° and Shift frees it. Store degrees as a
+   number.
+3. **Spot coordinates are absolute, not relative to Auto.** This replaces "relative to Auto" above.
+   - `assemblySpot`: the floor position (studs, x/z) of the main model's footprint centre, plus its
+     angle. The reference is the model's own unmoved frame, so `{x: c.x, z: c.z, angle: 0}`, where
+     `c` is the footprint centre of the unmoved model, means "unchanged". On first drop, store the
+     drop point. "Auto" means the field is absent.
+   - `buildSpot`: the absolute floor position (studs) of the submodel's footprint centre and its
+     angle about Y, **in the main model's own (unmoved) frame**. So when the main spot moves with
+     follow ON, the submodel spots move and turn with it (they are post-transformed by `S` like
+     everything else). The angle is relative to the submodel's natural build orientation (Standard:
+     `naturalBasis(to)`; V2: the bay orientation, which is unrotated).
+   - **Auto positions** for markers come from the latest planned timeline (`subBuilds[].focus`
+     centre, `modelBox` centre). Until a timeline exists, Auto spots draw no marker and the tile
+     says "Auto".
+   - **A placed spot never moves** because another spot moved. Planners lay automatic bays around
+     the fixed ones.
+4. **Spot that can't be used** (it overlaps the main model, another placed spot, or a bay):
+   - The video **still plans with the spot as given**. Every route is still collision-checked as
+     today. If that makes planning fail, the usual planner error shows, as it does now.
+   - The overlap is found **statically in the UI from bounding boxes** (the model's assembled box
+     at its spot vs the others). It's listed in the Assembly panel on the affected tile and as a
+     Checks entry: add an `assembly-spot` kind to the warnings shown by `ChecksPanel`, computed on
+     the main thread. No new channel from the worker is needed.
+5. **Nested submodel uses:** one spot per `SubItem`, applied to every use of its parent (the same
+   rule as `floorShift`). The panel lists one tile per `SubItem` that is a submodel use, under its
+   parent's name.
+6. **Animating or exporting a submodel on its own:** the main spot and follow switch apply only
+   when the target is the root model. A submodel rendered alone is built at its origin as today,
+   and its nested `buildSpot`s still apply. `scopedPlan` must carry the nested `buildSpot` hints and
+   should not carry `assemblySpot` into a submodel target.
+7. **Dragged pieces (`floorShift`):** with follow ON they move and turn with `S`, like everything
+   else. With follow OFF they stay where they are, and they count as floor pieces in the static
+   overlap check.
+
 ## Calls made (not discussed; easy to change)
 
 - "Loose pieces move with the model" defaults to **on**.

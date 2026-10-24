@@ -414,3 +414,47 @@ body { margin: 0; }
 .bm-help-note > .nx-link .ic { width: 13px; height: 13px; }
 .bm-gizmo-readout { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 6; padding: 4px 11px; border-radius: 999px; background: var(--ink); color: var(--surface); font: 600 12px ui-monospace, Menlo, monospace; white-space: pre; pointer-events: none; }
 .bm-gizmo-readout[hidden] { display: none; }
+
+/* ===== Assembly spots ===== */
+.bm-assembly { gap: 10px; }
+.bm-spots { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.bm-spot-row { border: 1px solid var(--line); border-radius: 10px; background: var(--surface2); padding: 3px; }
+.bm-spot-row.active { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+.bm-spot-row.bad { border-color: color-mix(in srgb, var(--mark) 60%, var(--line)); }
+.bm-spot-main { width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; padding: 5px 6px; border-radius: 7px; min-width: 0; }
+.bm-spot-main:hover { background: var(--hover); }
+.bm-spot-main > .ic { width: 15px; height: 15px; color: var(--ink2); flex-shrink: 0; }
+.bm-spot-text { display: flex; flex-direction: column; min-width: 0; }
+.bm-spot-text strong { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bm-spot-text .nx-hint { font-size: 10.5px; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bm-spot-bad { color: color-mix(in srgb, var(--mark) 72%, var(--ink)); font-weight: 600; }
+.bm-spot-editor { display: flex; flex-direction: column; gap: 9px; margin-top: 4px; padding: 11px; background: var(--surface); border: 1px solid var(--line2); border-radius: 10px; }
+.bm-spot-editor .nx-sub { margin: 0; }
+.bm-spot-fields { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.bm-spot-fields .nx-field { min-width: 0; gap: 3px; }
+.bm-spot-fields .nx-field b { font-size: 10.5px; }
+.bm-spot-fields input { min-width: 0; width: 100%; }
+.bm-spot-actions { display: flex; gap: 6px; }
+.bm-spot-actions .nx-btn { display: inline-flex; align-items: center; gap: 5px; }
+.bm-spot-actions .ic { width: 13px; height: 13px; }
+
+/* the compact assembly strip over the viewport (Build view) */
+.bm-spot-bar { position: absolute; left: 24px; top: 12px; right: 24px; z-index: 5; display: flex; align-items: center; gap: 8px;
+  padding: 5px 6px 5px 10px; border-radius: 12px; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: blur(8px); box-shadow: var(--shadow); overflow: hidden; }
+.bm-spot-bar-title { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 650; color: var(--ink2); white-space: nowrap; flex-shrink: 0; }
+.bm-spot-bar-title .ic { width: 14px; height: 14px; }
+.bm-spot-bar-chips { display: flex; align-items: center; gap: 5px; overflow-x: auto; flex: 1; min-width: 0; scrollbar-width: none; }
+.bm-spot-bar-chips::-webkit-scrollbar { display: none; }
+.bm-spot-bar-hint { font-size: 10.5px; color: var(--ink3); white-space: nowrap; flex-shrink: 0; }
+@media (max-width: 900px) { .bm-spot-bar-hint { display: none; } }
+.bm-spot-chip { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; border-radius: 999px; cursor: grab;
+  border: 1px solid var(--line2) !important; background: var(--surface) !important; color: var(--ink2); font-size: 11.5px; font-weight: 550; white-space: nowrap; }
+.bm-spot-chip:hover { background: var(--hover) !important; color: var(--ink); }
+.bm-spot-chip:active { cursor: grabbing; }
+.bm-spot-chip.placed { border-color: color-mix(in srgb, var(--step) 55%, var(--line2)) !important; color: var(--ink); }
+.bm-spot-chip.sel { border-color: var(--focus) !important; box-shadow: 0 0 0 1px var(--focus); color: var(--focus); }
+.bm-spot-chip-state { font-size: 10px; color: var(--ink3); font-variant-numeric: tabular-nums; }
+.bm-spot-chip.placed .bm-spot-chip-state { color: color-mix(in srgb, var(--step) 70%, var(--ink)); }
+
+.bm-checks .bm-kind.assembly-spot, .bm-kind.assembly-spot { background: color-mix(in srgb, var(--mark) 65%, var(--danger)); }

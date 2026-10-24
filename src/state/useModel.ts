@@ -14,7 +14,12 @@ export function allPartIds(plan: Plan): string[] {
 
 /** The plan seen from one model: its steps become the top level. '' is the whole set. */
 export function scopedPlan(plan: Plan, model: string): Plan {
-  return model ? { ...plan, steps: modelSteps(plan, model) } : plan;
+  if (!model) return plan;
+  // A submodel rendered on its own is built at its origin: the main spot and the
+  // "loose pieces follow" switch apply only to the root model. Its nested `buildSpot`
+  // hints stay with the steps.
+  const { assemblySpot: _a, loosePiecesFollow: _f, ...rest } = plan;
+  return { ...rest, steps: modelSteps(plan, model) };
 }
 
 export type ModelState = {

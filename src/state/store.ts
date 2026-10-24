@@ -1,9 +1,11 @@
 import { create } from 'zustand';
 import { usePlayback } from './playback';
 import { modelSteps, reorderStep, type ModelName } from '../plan/ops';
+import { setAssemblySpot, setLoosePiecesFollow, setSubmodelBuildSpot } from '../plan/pieceActions';
+import { isMainSpot, type SpotRef } from '../plan/assemblySpots';
 import type { Tool } from './keymap';
 import type { StepView } from '../model/stepLayout';
-import { emptyPlan, type Plan } from '../plan/types';
+import { emptyPlan, type AssemblySpot, type Plan } from '../plan/types';
 
 const HISTORY_LIMIT = 200;
 
@@ -29,6 +31,13 @@ export type StudioState = {
   past: Plan[];
   future: Plan[];
   selection: { model: ModelName; ids: string[] };
+  /** the Assembly tile whose spot is selected (null: none) */
+  spot: SpotRef | null;
+  selectSpot(ref: SpotRef | null): void;
+  /** Sets one assembly spot (null = Auto) as a single undoable edit. */
+  setSpot(ref: SpotRef, spot: AssemblySpot | null): void;
+  /** The main model's "loose pieces move with the model" switch. */
+  setFollow(follow: boolean): void;
   editingModel: ModelName;
   mode: 'edit' | 'preview';
   /** null = show every step */
@@ -89,6 +98,17 @@ export const useStudio = create<StudioState>((set, get) => ({
   past: [],
   future: [],
   selection: { model: '', ids: [] },
+  spot: null,
+  selectSpot(ref) {
+    // selecting a spot also makes it the transform gizmo's target, not the pieces
+    set(ref ? { spot: ref, selection: { model: get().editingModel, ids: [] } } : { spot: null });
+  },
+  setSpot(ref, spot) {
+    get().apply((p) => (isMainSpot(ref) ? setAssemblySpot(p, spot) : setSubmodelBuildSpot(p, ref.model, ref.id, spot)));
+  },
+  setFollow(follow) {
+    get().apply((p) => setLoosePiecesFollow(p, follow));
+  },
   editingModel: '',
   replans: 0,
   replan() { set({ replans: get().replans + 1 }); },
@@ -177,7 +197,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   },
   setPlan(p, opts) {
     // a different set: its pieces may reuse ids, so nothing stays hidden
-    if (opts?.resetHistory) set({ plan: p, past: [], future: [], selection: { model: '', ids: [] }, editingModel: '', currentStep: null, hidden: {} });
+    if (opts?.resetHistory) set({ plan: p, past: [], future: [], selection: { model: '', ids: [] }, spot: null, editingModel: '', currentStep: null, hidden: {} });
     else {
       get().apply(() => p);
       set({ hidden: {} });
@@ -192,7 +212,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   },
   setEditingModel(m) {
     usePlayback.getState().set({ follow: false, playing: false });
-    set({ editingModel: m, selection: { model: m, ids: [] }, currentStep: null, laidOut: false });
+    set({ editingModel: m, selection: { model: m, ids: [] }, spot: null, currentStep: null, laidOut: false });
   },
   setMode(mode) {
     // coming back to Build while the preview plays: keep playing, now in the Build view

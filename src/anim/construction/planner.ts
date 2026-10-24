@@ -60,13 +60,26 @@ export function planConstruction(model: ConstructionModel, options: Construction
     // visible and physical once occupied; only their abstract empty boxes are
     // non-obstacles.
     const groupNodes = all.filter(n => !!n.children?.length), leafNodes = all.filter(n => !n.children?.length);
+    // A chosen build spot fixes a group bay. The automatic bays are laid out around it,
+    // and it never moves because another spot moved.
+    const layoutModel = options.layoutBounds ?? model.bounds;
+    for (const n of groupNodes) {
+        const spot = n.hints?.buildSpot;
+        if (!spot)
+            continue;
+        const c = centre(n.bounds);
+        const offset: V3 = [spot.x * 20 - c[0], ground - n.bounds.max[1], spot.z * 20 - c[2]];
+        slots.set(n.id, { id: n.id, offset, box: shiftBox(n.bounds, offset) });
+    }
     const pack = (nodes: ConstructionNode[], originX: number): number => {
         if (!nodes.length) return originX;
         const area = nodes.reduce((s, n) => s + (size(n.bounds)[0] + gap) * (size(n.bounds)[2] + gap), 0);
         const rowWidth = Math.max(240, Math.sqrt(area) * 1.25, ...nodes.map(n => size(n.bounds)[0] + gap));
-        const originZ = model.bounds.min[2];
+        const originZ = layoutModel.min[2];
         let x = originX, z = originZ, rowDepth = 0, maxX = originX;
         for (const n of nodes) {
+            if (slots.has(n.id))
+                continue;
             const d = size(n.bounds);
             if (x > originX && x + d[0] > originX + rowWidth) {
                 x = originX;
@@ -82,7 +95,7 @@ export function planConstruction(model: ConstructionModel, options: Construction
         }
         return maxX;
     };
-    const workOriginX = model.bounds.max[0] + gap;
+    const workOriginX = Math.max(layoutModel.max[0] + gap, ...[...slots.values()].map(s => s.box.max[0] + gap));
     const workMaxX = pack(groupNodes, workOriginX);
     // Two gaps provide a clear transport aisle between active workbenches and
     // stored loose pieces. The continuous scene replay still checks every real

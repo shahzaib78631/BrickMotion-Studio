@@ -54,6 +54,7 @@ const PATHS = {
   move: '<path d="M12 2v20M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M5 9l-3 3 3 3M9 5l3-3 3 3"/>',
   scale: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><path d="M10 10 14 14M15 10V4h6M9 14v7H3"/>',
   view: '<circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/>',
+  spot: '<ellipse cx="12" cy="15" rx="8" ry="4"/><path d="M12 13V3M9 6l3-3 3 3"/>',
 } as const;
 
 export type IconName = keyof typeof PATHS;

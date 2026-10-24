@@ -8,6 +8,9 @@ import { aroundPivot, transformPlanItems } from '../plan/gizmo';
 import type { ANode } from '../model/assemble';
 import { dragDelta } from '../state/drag';
 import { isSub } from '../plan/types';
+import { markers, sameSpot, spotOfRef, type SpotRef } from '../plan/assemblySpots';
+import { SPOT_DRAG_TYPE, draggedSpot } from './AssemblyPanel';
+import { SpotMarkers } from './spotMarkers';
 import { createStudio, worldBox } from '../render/studio';
 import { runCommand } from '../state/editing';
 import { commandForKey } from '../state/keymap';
@@ -62,6 +65,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
   const focus = useStudio((s) => s.focus);
   const mode = useStudio((s) => s.mode);
   const tool = useStudio((s) => s.tool);
+  const spotSel = useStudio((s) => s.spot);
   const gizmoEnabled = useStudio((s) => s.gizmoEnabled);
   const gizmoMode = useStudio((s) => s.gizmoMode);
   const stepView = useStudio((s) => s.stepView);
@@ -86,6 +90,10 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
   const readoutRef = useRef<HTMLDivElement>(null);
   const origin = useRef(new THREE.Vector3());
   const gizmoPress = useRef(false);
+  /** the floor markers of the Assembly tab (Build view only) */
+  const markersRef = useRef<SpotMarkers | null>(null);
+  /** the spot a marker drag started on, and its facing, kept while dragging */
+  const spotDrag = useRef<{ ref: SpotRef; angle: number } | null>(null);
   const initialNodes = useRef<ANode[]>([]);
   const initialIds = useRef<string[]>([]);
   const initialModel = useRef('');
@@ -107,6 +115,10 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     // TransformControls' helper is not a brick. Its proxy is never exported.
     const proxy = new THREE.Object3D();
     studio.scene.add(proxy);
+    // Assembly-spot markers live in the editor scene only, never in preview or export.
+    const spotMarkers = new SpotMarkers();
+    studio.scene.add(spotMarkers.group);
+    markersRef.current = spotMarkers;
     const transform = new TransformControls(studio.camera, canvas);
     transform.setSize(0.86);
     transform.setSpace('world');
@@ -141,14 +153,21 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
       if (active) {
         lastTransform = '';
         const current = useStudio.getState();
-        if (current.selection.model !== current.editingModel || !current.selection.ids.length) return;
-        initialNodes.current = modelRef.current.view.nodes;
-        initialIds.current = [...current.selection.ids];
-        initialModel.current = current.editingModel;
         origin.current.copy(proxy.position);
+        if (current.selection.model === current.editingModel && current.selection.ids.length) {
+          initialNodes.current = modelRef.current.view.nodes;
+          initialIds.current = [...current.selection.ids];
+          initialModel.current = current.editingModel;
+        } else if (current.spot) {
+          // the gizmo drives a floor marker, not bricks
+          initialNodes.current = [];
+          initialIds.current = [];
+          spotDrag.current = { ref: current.spot, angle: spotOfRef(current.plan, current.spot)?.angle ?? 0 };
+        } else return;
         current.beginGesture();
       } else {
         if (readoutRef.current) readoutRef.current.hidden = true;
+        spotDrag.current = null;
         useStudio.getState().endGesture();
         // A snapped placement may differ from a raw drag by a fraction of a stud.
         // Recenter the handles on the saved piece positions after release.
@@ -165,9 +184,34 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
       }
     });
     transform.addEventListener('objectChange', () => {
-      const original = useStudio.getState().gesture;
-      if (!draggingGizmo.current || !original || !initialNodes.current.length) return;
-      const currentMode = useStudio.getState().gizmoMode;
+      const state = useStudio.getState();
+      const original = state.gesture;
+      if (!draggingGizmo.current || !original) return;
+      if (spotDrag.current) {
+        // A marker stays on the floor: translate is X/Z in whole studs, rotate is about Y only.
+        const ref = spotDrag.current.ref;
+        if (state.gizmoMode === 'rotate') {
+          const deg = Math.round(-THREE.MathUtils.radToDeg(new THREE.Euler().setFromQuaternion(proxy.quaternion, 'YXZ').y) * 100) / 100;
+          const sig = `r${deg}`;
+          if (sig === lastTransform) return;
+          lastTransform = sig;
+          const prev = spotOfRef(state.plan, ref);
+          state.setSpot(ref, { x: prev?.x ?? 0, z: prev?.z ?? 0, angle: deg });
+          if (readoutRef.current) {
+            readoutRef.current.textContent = `Rotate Y  ${deg < 0 ? '−' : ''}${Math.abs(deg)}°`;
+            readoutRef.current.hidden = false;
+          }
+        } else {
+          const x = Math.round(proxy.position.x), z = Math.round(-proxy.position.z);
+          const sig = `t${x},${z}`;
+          if (sig === lastTransform) return;
+          lastTransform = sig;
+          state.setSpot(ref, { x, z, angle: spotDrag.current.angle });
+        }
+        return;
+      }
+      if (!initialNodes.current.length) return;
+      const currentMode = state.gizmoMode;
       let delta: THREE.Matrix4;
       if (currentMode === 'translate') {
         const move = proxy.position.clone().sub(origin.current);
@@ -249,6 +293,9 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
       studio.scene.remove(transform.getHelper());
       transform.dispose();
       studio.scene.remove(proxy);
+      spotMarkers.dispose();
+      studio.scene.remove(spotMarkers.group);
+      markersRef.current = null;
       gizmoRef.current = null;
       viewportApi.views?.dispose();
       viewportApi.views = null;
@@ -276,6 +323,24 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     const { controls: transform, proxy } = entry;
     const ids = new Set(selection.model === editingModel ? selection.ids : []);
     const boxes = model.view.instances.filter((inst) => ids.has(inst.key.split('/')[0]));
+    const spot = spotSel && !editingModel ? spotOfRef(plan, spotSel) : null;
+    if (mode === 'edit' && gizmoEnabled && spot && !boxes.length) {
+      // An assembly spot: the gizmo moves it on X/Z or turns it about Y only.
+      const y = timeline ? -timeline.ground / 20 : 0;
+      proxy.position.set(spot.x, y, -spot.z);
+      proxy.quaternion.identity();
+      proxy.scale.setScalar(1);
+      transform.setMode(gizmoMode === 'rotate' ? 'rotate' : 'translate');
+      transform.showX = true;
+      transform.showZ = true;
+      transform.showY = gizmoMode === 'rotate';
+      transform.enabled = true;
+      transform.attach(proxy);
+      return;
+    }
+    transform.showX = true;
+    transform.showY = true;
+    transform.showZ = true;
     if (mode !== 'edit' || !gizmoEnabled || !boxes.length) {
       transform.enabled = false;
       transform.detach();
@@ -289,7 +354,15 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     transform.setMode(gizmoMode);
     transform.enabled = true;
     transform.attach(proxy);
-  }, [selection, editingModel, model.view, gizmoEnabled, gizmoMode, mode]);
+  }, [selection, editingModel, model.view, gizmoEnabled, gizmoMode, mode, spotSel, plan, timeline]);
+
+  // Assembly-spot markers: Build view only, for the whole set (never in preview or export).
+  useEffect(() => {
+    const spotMarkers = markersRef.current;
+    if (!spotMarkers) return;
+    if (mode !== 'edit' || editingModel !== '' || !model.ready) spotMarkers.clear();
+    else spotMarkers.update(markers(plan, model.assembly, timeline), spotSel);
+  }, [plan, model.assembly, model.ready, timeline, mode, editingModel, spotSel]);
 
   // which top-level step each top-level item belongs to
   const topStep = useMemo(() => new Map(model.view.nodes.map((n) => [n.itemId, n.step])), [model.view]);
@@ -494,12 +567,52 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     return ray;
   };
   const pickAt = (e: { clientX: number; clientY: number }): string | null => (viewportApi.studio ? viewportApi.studio.bricks.pick(rayAt(e)) : null);
+  /** The assembly marker under the pointer, if the Build view draws them. */
+  const pickSpotAt = (e: { clientX: number; clientY: number }): SpotRef | null => (markersRef.current && viewportApi.studio ? markersRef.current.pick(rayAt(e)) : null);
+  /** The floor plane the viewport currently uses (world Y), for dropping and dragging markers. */
+  const floorPlane = () => new THREE.Plane(new THREE.Vector3(0, 1, 0), timeline ? timeline.ground / 20 : 0);
+
+  // Assembly markers (Build view, main model): dragging one slides it on X/Z, in whole studs.
+  const startSpotDrag = (e: React.PointerEvent, ref: SpotRef): boolean => {
+    const s = st();
+    if (s.mode !== 'edit' || e.button !== 0 || !viewportApi.studio) return false;
+    const angle = spotOfRef(s.plan, ref)?.angle ?? 0;
+    const plane = floorPlane();
+    const hit = (ev: { clientX: number; clientY: number }) => rayAt(ev).ray.intersectPlane(plane, new THREE.Vector3());
+    if (!hit(e)) return false;
+    if (!sameSpot(s.spot, ref)) s.selectSpot(ref);
+    if (viewportApi.controls) viewportApi.controls.enabled = false;
+    s.beginGesture();
+    let last = '';
+    const move = (ev: PointerEvent) => {
+      const p = hit(ev);
+      if (!p) return;
+      const x = Math.round(p.x), z = Math.round(-p.z);
+      if (`${x},${z}` === last) return;
+      last = `${x},${z}`;
+      st().setSpot(ref, { x, z, angle });
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      st().endGesture();
+      if (viewportApi.controls) viewportApi.controls.enabled = st().mode === 'edit';
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    return true;
+  };
 
   // Move tool: dragging a piece slides the selection over the floor in whole studs (one undo step).
   // Runs in the capture phase so the orbit controls are switched off before they see the press.
   const startDrag = (e: React.PointerEvent) => {
     // overlay UI (menus, the nav gizmo) must never pick or drag a brick behind it
     if (e.target !== canvasRef.current) return;
+    // a marker under the pointer wins over the bricks behind it (a gizmo handle still has priority)
+    if (!(gizmoEnabled && gizmoRef.current?.controls.axis)) {
+      const ref = pickSpotAt(e);
+      if (ref && startSpotDrag(e, ref)) return;
+    }
     if (startFloorDrag(e)) return;
     const s = st();
     if (s.mode !== 'edit' || s.tool !== 'move' || (s.gizmoEnabled && s.selection.ids.length > 0) || e.button !== 0 || !viewportApi.studio) return;
@@ -598,6 +711,18 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
   const openMenu = (e: { clientX: number; clientY: number }) => {
     const s = st();
     if (s.mode !== 'edit') return;
+    const ref = pickSpotAt(e);
+    if (ref) {
+      const placed = !!spotOfRef(s.plan, ref);
+      s.selectSpot(ref);
+      setMenu({
+        x: e.clientX, y: e.clientY, label: 'Assembly spot',
+        items: [
+          { icon: 'spot', label: placed ? 'Reset to auto' : 'Placed automatically', disabled: !placed, onClick: () => st().setSpot(ref, null) },
+        ],
+      });
+      return;
+    }
     const key = pickAt(e);
     if (!key) return setMenu({ x: e.clientX, y: e.clientY, items: emptyMenuItems(), label: 'View' });
     const id = key.split('/')[0];
@@ -607,7 +732,27 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     if (items.length) setMenu({ x: e.clientX, y: e.clientY, items, label: 'Piece' });
   };
   return (
-    <div className={`viewport ${tool === 'move' && mode === 'edit' ? 'bm-move' : ''}`} ref={wrapRef} onPointerDownCapture={startDrag}>
+    <div
+      className={`viewport ${tool === 'move' && mode === 'edit' ? 'bm-move' : ''}`}
+      ref={wrapRef}
+      onPointerDownCapture={startDrag}
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes(SPOT_DRAG_TYPE)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+      }}
+      onDrop={(e) => {
+        const ref = draggedSpot(e);
+        if (!ref || !viewportApi.studio) return;
+        e.preventDefault();
+        const p = rayAt(e).ray.intersectPlane(floorPlane(), new THREE.Vector3());
+        if (!p) return;
+        const prev = spotOfRef(st().plan, ref);
+        st().selectSpot(ref);
+        // snap to the stud grid; keep the facing from the previous drop (0° on the first)
+        st().setSpot(ref, { x: Math.round(p.x), z: Math.round(-p.z), angle: prev?.angle ?? 0 });
+      }}
+    >
       <canvas
         ref={canvasRef}
         onContextMenu={(e) => e.preventDefault()}

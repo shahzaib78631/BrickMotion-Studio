@@ -4,7 +4,7 @@ import { SpatialHash } from './spatialHash';
 import type { Snap } from '../ldraw/shadow';
 import { mateAxes, worldSnaps, type WorldSnap } from '../anim/snapMates';
 
-export type WarningKind = 'unknown-part' | 'unknown-color' | 'missing-submodel' | 'submodel-cycle' | 'overlap' | 'floating';
+export type WarningKind = 'unknown-part' | 'unknown-color' | 'missing-submodel' | 'submodel-cycle' | 'overlap' | 'floating' | 'assembly-spot';
 export type Warning = { kind: WarningKind; itemIds: string[]; instanceKeys: string[]; model: string; message: string };
 
 const OVERLAP = 2; // LDU of interpenetration on every axis before it counts as an overlap

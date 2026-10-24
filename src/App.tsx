@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { animOptions, useAppSettings } from './state/appSettings';
+import { spotWarnings } from './plan/assemblySpots';
+import { AssemblyPanel, AssemblyToolbar } from './ui/AssemblyPanel';
 import { initPartService } from './state/partService';
 import { initPersistence } from './state/persistence';
 import { useStudio } from './state/store';
@@ -27,10 +29,11 @@ import { viewportApi } from './ui/viewportApi';
 import './ui/studio.css';
 import './ui/app.css';
 
-type Tab = 'models' | 'parts' | 'steps' | 'checks' | 'ai' | 'video' | 'settings';
+type Tab = 'models' | 'parts' | 'assembly' | 'steps' | 'checks' | 'ai' | 'video' | 'settings';
 const TABS: [Tab, IconName, string][] = [
   ['models', 'box', 'Models'],
   ['parts', 'parts', 'Parts'],
+  ['assembly', 'spot', 'Assembly'],
   ['steps', 'steps', 'Steps'],
   ['checks', 'checks', 'Checks'],
   ['ai', 'ai', 'AI'],
@@ -80,6 +83,9 @@ function Studio() {
   useEffect(() => usePlayback.getState().set({ t: 0, playing: false, stopAt: null, loopFrom: null }), [editingModel]);
   const exportCurrent = () => setExportJobs([{ model: editingModel, label: editingModel || 'Main model' }]);
   const canPreview = model.ready && model.view.instances.length > 0 && timeline !== null && !planning && !planError;
+  // Assembly-spot overlaps are found statically on the main thread and shown in Checks.
+  const spotIssues = useMemo(() => spotWarnings(model.plan, model.assembly, timeline), [model.plan, model.assembly, timeline]);
+  const warnings = useMemo(() => [...model.warnings, ...spotIssues], [model.warnings, spotIssues]);
   useEffect(() => {
     if (planning || planError || model.error) usePlayback.getState().set({ playing: false });
   }, [planning, planError, model.error]);
@@ -127,16 +133,17 @@ function Studio() {
               <button key={id} className={`nx-tab ${tab === id ? 'active' : ''}`} aria-pressed={tab === id} onClick={() => setTab(id)}>
                 <Ic name={icon} />
                 {label}
-                {id === 'checks' && model.warnings.length > 0 && <span className="bm-rail-badge">{model.warnings.length}</span>}
+                {id === 'checks' && warnings.length > 0 && <span className="bm-rail-badge">{warnings.length}</span>}
               </button>
             ))}
           </nav>
           <section className="nx-panel">
             {tab === 'models' && <ModelsPanel model={model} onExport={setExportJobs} />}
             {tab === 'parts' && <PartsPanel />}
+            {tab === 'assembly' && <AssemblyPanel model={model} timeline={timeline} />}
             {tab === 'steps' && <StepsPanel timeline={timeline} />}
-            {tab === 'checks' && <ChecksPanel warnings={model.warnings} />}
-            {tab === 'ai' && <AiPanel warnings={model.warnings} onOpenSettings={() => setTab('settings')} />}
+            {tab === 'checks' && <ChecksPanel warnings={warnings} />}
+            {tab === 'ai' && <AiPanel warnings={warnings} onOpenSettings={() => setTab('settings')} />}
             {tab === 'video' && <VideoPanel timeline={timeline} onExport={exportCurrent} />}
             {tab === 'settings' && <SettingsPanel onAbout={() => setDialog('about')} />}
           </section>
@@ -210,12 +217,13 @@ function Studio() {
               </div>
             </div>
             <div className="nx-stage bm-stage">
+              {mode === 'edit' && <AssemblyToolbar timeline={timeline} />}
               <Viewport model={model} timeline={timeline} />
               {mode === 'preview' && timeline && <PreviewPlayer model={model} timeline={timeline} />}
               {mode === 'preview' && !timeline && <div className="overlay-note">{planError ? `Couldn't plan the animation: ${planError}` : 'Planning the build animation…'}</div>}
             </div>
           </section>
-          <Inspector timeline={timeline} checks={model.warnings.length} stepCard={mode === 'edit' ? <StepCallout model={model} timeline={timeline} /> : null} />
+          <Inspector timeline={timeline} checks={warnings.length} stepCard={mode === 'edit' ? <StepCallout model={model} timeline={timeline} /> : null} />
         </div>
         <div className="nx-resizer" onPointerDown={resize} title="Drag to resize the timeline" />
         <BuildTimeline timeline={timeline} planning={planning} error={model.error || planError}
