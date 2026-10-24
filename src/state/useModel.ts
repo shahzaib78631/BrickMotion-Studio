@@ -32,12 +32,15 @@ export type ModelState = {
   error?: string;
 };
 
+/** the parts' LDCad connectors, so the floating check sees real stud and clip joints */
+const snapsOf = (part: string) => metricsOf(part).snaps;
+
 const EMPTY: Assembly = { nodes: [], instances: [], bounds: null, problems: [] };
 
 export function computeModel(plan: Plan, editingModel: string): Omit<ModelState, 'ready'> {
   const colors = getColors();
   const assembly = assemble(plan, metricsOf, colors);
-  const all = validate(assembly, partName);
+  const all = validate(assembly, partName, snapsOf);
   const viewPlan = scopedPlan(plan, editingModel);
   const view = editingModel ? assemble(viewPlan, metricsOf, colors) : assembly;
   const warnings = editingModel ? all.filter((w) => w.model === editingModel) : all;
@@ -65,7 +68,7 @@ export function useModel(): ModelState {
     }).then(() => {
       if (cancelled) return;
       const assembly = assemble(plan, metricsOf, getColors());
-      setBase({ plan, assembly, warnings: validate(assembly, partName) });
+      setBase({ plan, assembly, warnings: validate(assembly, partName, snapsOf) });
     }).catch((error: unknown) => {
       if (!cancelled) setFailure({ plan, message: error instanceof Error ? error.message : String(error) });
     });

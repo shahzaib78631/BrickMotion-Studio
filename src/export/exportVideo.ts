@@ -106,10 +106,10 @@ export async function exportVideo(opts: ExportOpts, deps: ExportDeps): Promise<B
       const t = Math.min(i / fps, tl.duration);
       studio.bricks.setMatrices(poseAt(tl, t));
       const cam = cameraAt(tl, t, w / h, opts.cameraFraming ?? 'cinematic', opts.camera);
-      studio.camera.position.copy(cam.position);
-      studio.camera.lookAt(cam.target);
-      studio.camera.fov = cam.fov;
-      studio.camera.updateProjectionMatrix();
+      studio.perspective.position.copy(cam.position);
+      studio.perspective.lookAt(cam.target);
+      studio.perspective.fov = cam.fov;
+      studio.perspective.updateProjectionMatrix();
       studio.render();
       if (opts.logo && ctx) {
         ctx.drawImage(renderCanvas as CanvasImageSource, 0, 0, w, h);

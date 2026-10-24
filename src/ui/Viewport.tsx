@@ -25,10 +25,14 @@ import type { ModelState } from '../state/useModel';
 import { viewportApi } from './viewportApi';
 import { ContextMenu, type ContextItem } from './ContextMenu';
 import { emptyMenuItems, pieceMenuItems } from './PieceMenu';
+import { NavGizmo } from './NavGizmo';
+import { ViewLabel, ViewMenu } from './ViewMenu';
+import { createViewControls } from './viewControls';
+import { frameBox } from '../render/viewPresets';
 import { Ic } from './icons';
 
 /** Whether the camera sees all of `box` (its eight corners inside the view). */
-function inView(camera: THREE.PerspectiveCamera, box: THREE.Box3): boolean {
+function inView(camera: THREE.Camera, box: THREE.Box3): boolean {
   camera.updateMatrixWorld();
   const frustum = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
   const p = new THREE.Vector3();
@@ -39,15 +43,8 @@ function inView(camera: THREE.PerspectiveCamera, box: THREE.Box3): boolean {
   return true;
 }
 
-function frame(camera: THREE.PerspectiveCamera, controls: OrbitControls, box: THREE.Box3) {
-  const sphere = box.getBoundingSphere(new THREE.Sphere());
-  const r = Math.max(sphere.radius, 3);
-  const fov = (camera.fov * Math.PI) / 180;
-  const dist = (r / Math.sin(Math.min(fov, fov * camera.aspect) / 2)) * 1.15;
-  const dir = camera.position.clone().sub(controls.target).normalize();
-  controls.target.copy(sphere.center);
-  camera.position.copy(sphere.center).add(dir.multiplyScalar(dist));
-  controls.update();
+function frame(camera: THREE.PerspectiveCamera | THREE.OrthographicCamera, controls: OrbitControls, box: THREE.Box3) {
+  frameBox(camera, controls, box, (h) => viewportApi.studio?.setOrthoHeight(h));
 }
 
 const isTyping = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName));
@@ -118,6 +115,16 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     studio.scene.add(transform.getHelper());
     transform.enabled = false;
     gizmoRef.current = { controls: transform, proxy };
+    // Blender-style view presets: the keyboard handler, ortho toggle and the
+    // camera the nav gizmo and view menu drive. It must exist before the
+    // editor's own key handler so Numpad . and / never double-fire.
+    viewportApi.views = createViewControls({
+      studio,
+      controls,
+      onCameraChange: (cam) => {
+        transform.camera = cam;
+      },
+    });
     let lastTransform = '';
     transform.addEventListener('dragging-changed', (ev) => {
       const active = !!ev.value;
@@ -201,6 +208,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
             if (step !== null && useStudio.getState().currentStep !== step) useStudio.setState({ currentStep: step });
           }
         }
+        viewportApi.views?.update(dt);
         controls.update();
         studio.render();
       }
@@ -219,6 +227,8 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
       transform.dispose();
       studio.scene.remove(proxy);
       gizmoRef.current = null;
+      viewportApi.views?.dispose();
+      viewportApi.views = null;
       controls.dispose();
       studio.dispose();
       viewportApi.studio = null;
@@ -285,11 +295,13 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     () => (currentStep === null || !timeline ? null : timelineStep(model.view, currentStep, timeline)),
     [model.view, currentStep, timeline],
   );
+  const laidOut = useStudio((s) => s.laidOut);
   const poses = useMemo(() => {
-    if (currentStep === null || placing) return new Map<string, THREE.Matrix4>();
+    if (placing) return new Map<string, THREE.Matrix4>();
+    if (currentStep === null) return laidOut ? stepPoses(model.view, 'all', 'laidout') : new Map<string, THREE.Matrix4>();
     if (stepView === 'separated' && planned) return planned.poses;
     return stepPoses(model.view, currentStep, stepView);
-  }, [model.view, currentStep, stepView, planned, placing]);
+  }, [model.view, currentStep, stepView, planned, placing, laidOut]);
 
   // Following the timeline: every piece, posed as the animation has it at the playhead.
   // Pieces edited since the timeline was planned show where they are now (a move shows
@@ -360,6 +372,8 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
   // the preview drives the camera itself
   useEffect(() => {
     if (viewportApi.controls) viewportApi.controls.enabled = mode === 'edit';
+    // the preview renders through the perspective camera; restore the editor's own projection
+    if (mode === 'edit') viewportApi.views?.applyProjection();
   }, [mode]);
 
   // highlights
@@ -452,6 +466,8 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
   // Move tool: dragging a piece slides the selection over the floor in whole studs (one undo step).
   // Runs in the capture phase so the orbit controls are switched off before they see the press.
   const startDrag = (e: React.PointerEvent) => {
+    // overlay UI (menus, the nav gizmo) must never pick or drag a brick behind it
+    if (e.target !== canvasRef.current) return;
     if (startFloorDrag(e)) return;
     const s = st();
     if (s.mode !== 'edit' || s.tool !== 'move' || (s.gizmoEnabled && s.selection.ids.length > 0) || e.button !== 0 || !viewportApi.studio) return;
@@ -602,7 +618,17 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
           <button onClick={() => st().showAll()} title="Show every hidden piece (⇧H)">Show all</button>
         </div>
       )}
+      {mode === 'edit' && laidOut && currentStep === null && (
+        <div className="bm-hidden-chip bm-laidout-chip" role="status">
+          <Ic name="steps" />
+          All parts laid out
+          <button onClick={() => st().setLaidOut(false)} title="Put every piece back in the model">Put back</button>
+        </div>
+      )}
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} label={menu.label} onClose={closeMenu} />}
+      <ViewMenu />
+      <NavGizmo />
+      <ViewLabel />
       {model.ready && placing && follow && !!timeline && (
         <div className="overlay-note">Showing the model as built while you place pieces. {tool === 'move' ? 'Switch to the Select tool' : 'Press Esc'} to go back to the animation.</div>
       )}

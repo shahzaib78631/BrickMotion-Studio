@@ -7,6 +7,9 @@ import { studioGradientPixels } from './studioPalette';
 /** The soft, neutral set closely matches the supplied reference footage. */
 export type StudioLook = 'soft' | 'classic';
 
+/** Which camera renders the editor viewport: Blender-style projection toggle. */
+export type Projection = 'perspective' | 'ortho';
+
 /**
  * Optional looks, each with its own switch:
  * - edges: faint LDraw outline edges, so neighbouring bricks and plates stay readable
@@ -21,7 +24,16 @@ export const STUDIO_BG = '#EDEDEF';
 export type Studio = {
   renderer: THREE.WebGLRenderer;
   scene: THREE.Scene;
-  camera: THREE.PerspectiveCamera;
+  /** the camera render() draws with: the perspective one, or its orthographic twin */
+  readonly camera: THREE.PerspectiveCamera | THREE.OrthographicCamera;
+  /** the perspective camera itself; the preview and MP4 export always drive this one */
+  readonly perspective: THREE.PerspectiveCamera;
+  readonly ortho: THREE.OrthographicCamera;
+  /** which camera render() draws with */
+  readonly projection: Projection;
+  setProjection(p: Projection): void;
+  /** Full ortho frustum height in world units at zoom 1; the width follows the aspect. */
+  setOrthoHeight(h: number): void;
   bricks: BrickRenderer;
   setSize(w: number, h: number): void;
   /** Switch the entire rendering setup; preview and MP4 export must agree. */
@@ -92,6 +104,22 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
   const camera = new THREE.PerspectiveCamera(30, 9 / 16, 0.1, 2000);
   camera.position.set(20, 25, 40);
 
+  // Orthographic twin for Blender-style ortho views. The pose is copied from the
+  // perspective camera when switched, the view height comes from that framing,
+  // and OrbitControls' dolly becomes a zoom.
+  const ortho = new THREE.OrthographicCamera(-9, 9, 16, -16, 0.1, 4000);
+  let aspect = 9 / 16;
+  let orthoH = 32;
+  const applyOrtho = () => {
+    ortho.left = (-orthoH / 2) * aspect;
+    ortho.right = (orthoH / 2) * aspect;
+    ortho.top = orthoH / 2;
+    ortho.bottom = -orthoH / 2;
+    ortho.updateProjectionMatrix();
+  };
+  applyOrtho();
+  let active: THREE.PerspectiveCamera | THREE.OrthographicCamera = camera;
+
   const bricks = new BrickRenderer(geometryOf, getColors());
   scene.add(bricks.root);
 
@@ -132,14 +160,30 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
   return {
     renderer,
     scene,
-    camera,
+    get camera() {
+      return active;
+    },
+    perspective: camera,
+    ortho,
+    get projection(): Projection {
+      return active === ortho ? 'ortho' : 'perspective';
+    },
+    setProjection(p) {
+      active = p === 'ortho' ? ortho : camera;
+    },
+    setOrthoHeight(h) {
+      orthoH = Math.max(h, 1e-3);
+      applyOrtho();
+    },
     bricks,
     setLook,
     setRenderOptions,
     setSize(w, h) {
       renderer.setSize(w, h, false);
-      camera.aspect = w / h;
+      aspect = w / h;
+      camera.aspect = aspect;
       camera.updateProjectionMatrix();
+      applyOrtho();
     },
     fitTo(box, groundY) {
       floor.position.y = groundY - 0.001;
@@ -155,7 +199,7 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
       s.updateProjectionMatrix();
     },
     render() {
-      renderer.render(scene, camera);
+      renderer.render(scene, active);
     },
     dispose() {
       bricks.dispose();

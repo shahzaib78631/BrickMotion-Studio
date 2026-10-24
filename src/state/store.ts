@@ -46,6 +46,8 @@ export type StudioState = {
   gesture: Plan | null;
   /** how the Build view shows the current step's new parts */
   stepView: StepView;
+  /** every piece of the open model laid out on the floor (no step selected) */
+  laidOut: boolean;
   /**
    * Pieces hidden in the Build view, per model (item ids). Only a viewing aid: not
    * saved, not undoable, and the animation and video still build every piece.
@@ -58,6 +60,8 @@ export type StudioState = {
   /** Shows every hidden piece of the model being edited. */
   showAll(): void;
   setStepView(v: StepView): void;
+  /** Lay every piece of the open model out on the floor, or put them back. */
+  setLaidOut(on: boolean): void;
   setTool(t: Tool): void;
   setGizmo(enabled: boolean): void;
   setGizmoMode(mode: 'translate' | 'rotate' | 'scale'): void;
@@ -97,6 +101,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   gizmoMode: 'translate',
   gesture: null,
   stepView: 'separated',
+  laidOut: false,
   hidden: {},
   hide(ids) {
     const { hidden, editingModel, selection } = get();
@@ -117,6 +122,11 @@ export const useStudio = create<StudioState>((set, get) => ({
   },
   setStepView(stepView) {
     set({ stepView });
+  },
+  setLaidOut(laidOut) {
+    // laying out stops following the timeline, like picking a step view
+    if (laidOut) usePlayback.getState().set({ follow: false, playing: false });
+    set(laidOut ? { laidOut, currentStep: null } : { laidOut });
   },
   setTool(tool) {
     set({ tool });
@@ -182,7 +192,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   },
   setEditingModel(m) {
     usePlayback.getState().set({ follow: false, playing: false });
-    set({ editingModel: m, selection: { model: m, ids: [] }, currentStep: null });
+    set({ editingModel: m, selection: { model: m, ids: [] }, currentStep: null, laidOut: false });
   },
   setMode(mode) {
     // coming back to Build while the preview plays: keep playing, now in the Build view
@@ -192,7 +202,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   setCurrentStep(s) {
     // picking a step lays it out (separated/exploded/assembled) instead of following the timeline
     usePlayback.getState().set({ follow: false, playing: false });
-    set({ currentStep: s });
+    set({ currentStep: s, laidOut: false });
   },
   requestFocus(ids) {
     set({ focus: { ids, tick: get().focus.tick + 1 } });

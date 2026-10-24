@@ -79,6 +79,10 @@ export function pieceMenuItems(ids: string[]): ContextItem[] {
       ? [{ icon: 'box' as const, label: `Open submodel “${first.item.submodel}”`, onClick: () => st.setEditingModel((first.item as { submodel: string }).submodel) }]
       : []),
     { icon: 'steps', label: 'Show its step', disabled: only === null, onClick: () => only !== null && st.setCurrentStep(only) },
+    { icon: 'steps', label: 'Lay out its step', disabled: only === null, onClick: () => { if (only === null) return; st.setCurrentStep(only); st.setStepView('laidout'); } },
+    st.laidOut
+      ? { icon: 'steps', label: 'Put all parts back', onClick: () => st.setLaidOut(false) }
+      : { icon: 'steps', label: 'Lay out all parts', onClick: () => st.setLaidOut(true) },
     'sep',
     { icon: 'steps', label: 'Move to step', items: moveSteps, disabled: steps.length < 2 && only !== null },
     { icon: 'plus', label: 'Move to a new step', items: newStep },
@@ -114,5 +118,8 @@ export function emptyMenuItems(): ContextItem[] {
     'sep',
     { icon: 'eye', label: hiddenCount ? `Show ${hiddenCount} hidden` : 'Show hidden', hint: '⇧H', disabled: !hiddenCount, onClick: () => st.showAll() },
     { icon: 'steps', label: 'Show every step', hint: '/', disabled: st.currentStep === null, onClick: () => st.setCurrentStep(null) },
+    st.laidOut
+      ? { icon: 'steps', label: 'Put all parts back', onClick: () => st.setLaidOut(false) }
+      : { icon: 'steps', label: 'Lay out all parts', disabled: !all.length, onClick: () => st.setLaidOut(true) },
   ];
 }

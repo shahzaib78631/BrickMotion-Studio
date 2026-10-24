@@ -49,6 +49,7 @@ const fakeStudio = () => {
     renderer: {},
     scene: {},
     camera: { position: { copy: vi.fn() }, lookAt: vi.fn(), fov: 30, updateProjectionMatrix: vi.fn() },
+    perspective: { position: { copy: vi.fn() }, lookAt: vi.fn(), fov: 30, updateProjectionMatrix: vi.fn() },
     bricks: { setInstances: vi.fn(), setMatrices: vi.fn() },
     setSize: vi.fn(),
     fitTo: vi.fn(),

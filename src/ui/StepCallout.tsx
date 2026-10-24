@@ -40,6 +40,7 @@ export function stepParts(step: Step): Entry[] {
 
 const VIEWS: [StepView, string, string][] = [
   ['separated', 'Separated', 'New parts wait on the floor in front of the model'],
+  ['laidout', 'Laid out', 'Every piece on the floor in tidy rows by colour, submodels taken apart'],
   ['exploded', 'Exploded', 'New parts float just above where they go'],
   ['assembled', 'Assembled', 'Everything in place'],
 ];

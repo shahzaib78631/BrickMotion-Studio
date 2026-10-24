@@ -93,3 +93,22 @@ test('a piece hovering inside a submodel still floats', () => {
   });
   expect(w.map((x) => [x.kind, x.model])).toEqual([['floating', 'truck']]);
 });
+
+test('a piece joined only by a real stud (its box meeting a neighbour along a thin strip) is not floating; without the joint it is', () => {
+  // a plate beside a brick's top edge: the boxes share just a 1 LDU strip, like 10156's sideways headlights
+  const brickAt: PlanItem = { id: 'b', part: '3001', color: 4, ldu: [0, 0, 0], matrix: [1, 0, 0, 0, 1, 0, 0, 0, 1] };
+  const bb = assemble(ensureIds({ format: 'brickmotion-plan', version: 1, name: 't', steps: [{ pieces: [brickAt] }] }), metrics, fixtureColors).bounds!;
+  const pb = metrics('3020').body;
+  const plateLdu: [number, number, number] = [bb.max[0] - pb.min[0], bb.min[1] + 1 - pb.max[1], (bb.min[2] + bb.max[2]) / 2 - (pb.min[2] + pb.max[2]) / 2];
+  const plate: PlanItem = { id: 'p', part: '3020', color: 1, ldu: plateLdu, matrix: [1, 0, 0, 0, 1, 0, 0, 0, 1] };
+  const asm = assemble(ensureIds({ format: 'brickmotion-plan', version: 1, name: 't', steps: [{ pieces: [brickAt, plate] }] }), metrics, fixtureColors);
+  const joint = [bb.max[0], bb.min[1] + 0.5, (bb.min[2] + bb.max[2]) / 2];
+  const snap = (gender: 'M' | 'F', origin: number[]) => ({ kind: 'cyl' as const, gender, start: joint.map((v, k) => v - origin[k]) as [number, number, number], axis: [1, 0, 0] as [number, number, number], length: 4, radius: 6, shapes: ['R'], slide: false });
+  const snaps = (part: string) => (part === '3001' ? [snap('M', [0, 0, 0])] : [snap('F', plateLdu)]);
+  expect(validate(asm).some((w) => w.kind === 'floating')).toBe(true);
+  expect(validate(asm, (p) => p, snaps).filter((w) => w.kind === 'floating')).toEqual([]);
+  // snaps that do not meet join nothing: a plate in mid-air still floats
+  const far: PlanItem = { ...plate, id: 'f', ldu: [plateLdu[0] + 200, plateLdu[1] - 100, plateLdu[2]] };
+  const asm2 = assemble(ensureIds({ format: 'brickmotion-plan', version: 1, name: 't', steps: [{ pieces: [brickAt, far] }] }), metrics, fixtureColors);
+  expect(validate(asm2, (p) => p, snaps).filter((w) => w.kind === 'floating').map((w) => w.itemIds[0])).toEqual(['f']);
+});

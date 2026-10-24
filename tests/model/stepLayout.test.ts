@@ -66,3 +66,53 @@ test('the Build view lays a step out where the planned animation starts it', () 
   const other = assemble(ensureIds({ format: 'brickmotion-plan', version: 1, name: 't', steps: [{ pieces: [brick(0, 0, 0)] }, { pieces: [brick(8, 3, 0)] }] }), metrics, fixtureColors);
   expect(timelineStep(a, 1, buildTimeline(other, metrics, { targetSeconds: 15, heroOrbit: true }))).toBeNull();
 });
+
+test('laid out: every piece of the step, submodels taken apart, on the floor in front, none overlapping, by colour', () => {
+  const piece = (part: string, color: number, x: number, y: number, z: number): PlanItem => ({ part, color, x, y, z, rot: 0 });
+  // a submodel of six stacked pieces (they overlap in plan view where they stand)
+  const a = assemble(
+    ensureIds({
+      format: 'brickmotion-plan', version: 1, name: 't',
+      submodels: { tower: { steps: [{ pieces: [piece('3001', 4, 0, 0, 0), piece('3020', 1, 0, 3, 0), piece('3001', 4, 0, 4, 0), piece('3020', 1, 0, 7, 0), piece('3001', 4, 0, 8, 0), piece('3020', 1, 0, 11, 0)] }] } },
+      steps: [{ pieces: [brick(0, 0, 0)] }, { pieces: [{ submodel: 'tower', ldu: [200, -24, 0], matrix: [1, 0, 0, 0, 1, 0, 0, 0, 1] }, brick(8, 0, 0)] }],
+    }),
+    metrics,
+    fixtureColors,
+  );
+  const poses = stepPoses(a, 1, 'laidout');
+  const fresh = a.instances.filter((i) => a.nodes.find((n) => n.itemId === i.key.split('/')[0])!.step === 1);
+  expect(fresh).toHaveLength(7);
+  expect([...poses.keys()].sort()).toEqual(fresh.map((i) => i.key).sort());
+  const ground = a.bounds!.max[1];
+  const boxes = fresh.map((i) => transformBox(metrics(i.part).body, poses.get(i.key)!));
+  for (const b of boxes) {
+    expect(b.max[1]).toBeCloseTo(ground, 3);
+    expect(b.max[2]).toBeLessThan(a.bounds!.min[2]);
+  }
+  for (let i = 0; i < boxes.length; i++)
+    for (let j = i + 1; j < boxes.length; j++) {
+      const p = boxes[i], q = boxes[j];
+      const apart = [0, 2].some((k) => Math.min(p.max[k], q.max[k]) - Math.max(p.min[k], q.min[k]) <= 0);
+      expect(apart).toBe(true);
+    }
+  // one colour after the other: walking the rows, the colour changes once
+  const order = fresh
+    .map((i, k) => ({ c: i.color, z: -boxes[k].max[2], x: boxes[k].min[0] }))
+    .sort((p, q) => p.z - q.z || p.x - q.x)
+    .map((e) => e.c);
+  expect(order.filter((c, i) => i > 0 && c !== order[i - 1]).length).toBe(1);
+});
+
+test('laid out, whole model: every piece of every step on the floor, none overlapping', () => {
+  const a = asm();
+  const poses = stepPoses(a, 'all', 'laidout');
+  expect(poses.size).toBe(a.instances.length);
+  const ground = a.bounds!.max[1];
+  const boxes = a.instances.map((i) => transformBox(metrics(i.part).body, poses.get(i.key)!));
+  for (const b of boxes) expect(b.max[1]).toBeCloseTo(ground, 3);
+  for (let i = 0; i < boxes.length; i++)
+    for (let j = i + 1; j < boxes.length; j++) {
+      const p = boxes[i], q = boxes[j];
+      expect([0, 2].some((k) => Math.min(p.max[k], q.max[k]) - Math.max(p.min[k], q.min[k]) <= 0)).toBe(true);
+    }
+});

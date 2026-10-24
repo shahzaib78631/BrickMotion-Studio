@@ -1,18 +1,26 @@
 import type { Box } from '../ldraw/flatten';
 import type { Assembly } from './assemble';
 import { SpatialHash } from './spatialHash';
+import type { Snap } from '../ldraw/shadow';
+import { mateAxes, worldSnaps, type WorldSnap } from '../anim/snapMates';
 
 export type WarningKind = 'unknown-part' | 'unknown-color' | 'missing-submodel' | 'submodel-cycle' | 'overlap' | 'floating';
 export type Warning = { kind: WarningKind; itemIds: string[]; instanceKeys: string[]; model: string; message: string };
 
 const OVERLAP = 2; // LDU of interpenetration on every axis before it counts as an overlap
 const CONTACT_GAP = 1; // LDU gap still treated as touching
+const SNAP_REACH = 8; // LDU: how far apart two boxes may be and still be joined by a stud or clip
 
 function axisOverlap(a: Box, b: Box, i: number): number {
   return Math.min(a.max[i], b.max[i]) - Math.max(a.min[i], b.min[i]);
 }
 
-export function validate(asm: Assembly, names: (part: string) => string = (p) => p): Warning[] {
+/**
+ * `snapsOf` (the parts' LDCad connectors) lets pieces joined by a real stud, clip or
+ * pin count as connected even when their boxes barely meet: a 1 x 1 round plate
+ * mounted sideways as a headlight touches its neighbour along a 1 LDU strip only.
+ */
+export function validate(asm: Assembly, names: (part: string) => string = (p) => p, snapsOf?: (part: string) => Snap[] | undefined): Warning[] {
   const out: Warning[] = [];
   const inst = asm.instances;
 
@@ -30,7 +38,13 @@ export function validate(asm: Assembly, names: (part: string) => string = (p) =>
   }
 
   const hash = new SpatialHash(40);
-  inst.forEach((i, idx) => hash.insert(idx, i.worldBox, CONTACT_GAP));
+  inst.forEach((i, idx) => hash.insert(idx, i.worldBox, snapsOf ? SNAP_REACH / 2 : CONTACT_GAP));
+  const placed = new Map<number, WorldSnap[]>();
+  const snapsAt = (idx: number) => {
+    let w = placed.get(idx);
+    if (!w) placed.set(idx, (w = worldSnaps(snapsOf!(inst[idx].part), inst[idx].world.elements)));
+    return w;
+  };
 
   const parent = inst.map((_, i) => i);
   const find = (i: number): number => {
@@ -55,6 +69,7 @@ export function validate(asm: Assembly, names: (part: string) => string = (p) =>
     // touching: small gap (or overlap) on one axis, real contact area on the other two
     const touching = [0, 1, 2].some((k) => o[k] >= -CONTACT_GAP && o.filter((_, m) => m !== k).every((v) => v > OVERLAP));
     if (touching) parent[find(i)] = find(j);
+    else if (snapsOf && find(i) !== find(j) && mateAxes(snapsAt(i), snapsAt(j)).length) parent[find(i)] = find(j);
   }
 
   if (inst.length) {

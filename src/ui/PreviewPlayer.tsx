@@ -22,14 +22,21 @@ export function PreviewPlayer({ model, timeline: tl }: { model: ModelState; time
   useEffect(() => {
     const studio = viewportApi.studio;
     if (!studio) return;
-    const saved = { pos: studio.camera.position.clone(), target: viewportApi.controls?.target.clone(), fov: studio.camera.fov };
+    // the preview renders through the perspective camera; if the editor was in an
+    // ortho view, carry its pose over so leaving the preview restores it exactly
+    if (studio.projection === 'ortho') {
+      studio.perspective.position.copy(studio.ortho.position);
+      studio.perspective.quaternion.copy(studio.ortho.quaternion);
+    }
+    studio.setProjection('perspective');
+    const saved = { pos: studio.perspective.position.clone(), target: viewportApi.controls?.target.clone(), fov: studio.perspective.fov };
     studio.bricks.setHighlight(new Set(), 'select');
     studio.bricks.setHighlight(new Set(), 'warn');
     return () => {
       usePlayback.getState().set({ playing: false });
-      studio.camera.position.copy(saved.pos);
-      studio.camera.fov = saved.fov;
-      studio.camera.updateProjectionMatrix();
+      studio.perspective.position.copy(saved.pos);
+      studio.perspective.fov = saved.fov;
+      studio.perspective.updateProjectionMatrix();
       if (saved.target && viewportApi.controls) viewportApi.controls.target.copy(saved.target);
     };
   }, []);
@@ -65,11 +72,11 @@ export function PreviewPlayer({ model, timeline: tl }: { model: ModelState; time
       setFrame((f) => (f.width === fw && f.height === fh ? f : { left: (W - fw) / 2, top: (H - fh) / 2, width: fw, height: fh }));
       const cam = cameraAt(tl, t, ASPECT, s.cameraFraming, s.camera);
       studio.bricks.setMatrices(poseAt(tl, t));
-      studio.camera.position.copy(cam.position);
-      studio.camera.lookAt(cam.target);
+      studio.perspective.position.copy(cam.position);
+      studio.perspective.lookAt(cam.target);
       const half = THREE.MathUtils.degToRad(cam.fov) / 2;
-      studio.camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan((Math.tan(half) * H) / fh));
-      studio.camera.updateProjectionMatrix();
+      studio.perspective.fov = THREE.MathUtils.radToDeg(2 * Math.atan((Math.tan(half) * H) / fh));
+      studio.perspective.updateProjectionMatrix();
       studio.render();
     };
     raf = requestAnimationFrame(loop);

@@ -112,6 +112,7 @@ export function ModelsPanel({ model, onExport }: { model: ModelState; onExport(j
     return [
       { icon: 'eye', label: `Open ${label(name)}`, disabled: editingModel === name, onClick: () => open(name) },
       { icon: 'play', label: 'Play its build', disabled: !model.ready || empty, onClick: () => play(name) },
+      { icon: 'steps', label: 'Lay out all parts', disabled: !model.ready || empty, onClick: () => { open(name); useStudio.getState().setLaidOut(true); } },
       'sep',
       { icon: 'video', label: 'Export as MP4', disabled: !model.ready || empty, onClick: () => onExport([{ model: name, label: label(name) }]) },
       { icon: 'download', label: `Save as project with animation (.${PROJECT_EXTENSION})`, disabled: !model.ready || empty || !!saving, onClick: () => saveProject(name) },

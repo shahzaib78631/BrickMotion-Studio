@@ -95,3 +95,29 @@ test('duplicate copies items into the same step, right after the originals, shif
   expect(p.steps[0].pieces[1]).toMatchObject({ part: '3001', color: 4, x: 4, z: 0 });
   expect(duplicateItems(plan(), 'engine', ['e1'], () => 'x', { x: 0, y: 1, z: 0 }).plan.submodels!.engine.steps[0].pieces[1]).toMatchObject({ id: 'x', y: 1 });
 });
+
+test('rotate turns an imported piece at an odd angle to the next square angle first', () => {
+  // 10156's truck: placed turned 30° (cos 30° = 0.86603), so 90° steps never faced front
+  const m30 = [0.86603, 0, -0.499992, 0, 1, 0, 0.499992, 0, 0.86603] as const;
+  const truck: Plan = { ...plan(), steps: [{ pieces: [{ id: 't', part: '3001', color: 4, ldu: [128, -24, 53], matrix: [...m30] }] }] };
+  const box: Box = { min: [-40, -60, -100], max: [60, 0, 80] };
+  const centre = (i: PlanItem) => {
+    if (!('matrix' in i)) throw new Error('raw item expected');
+    const c = [10, -30, -10];
+    return [0, 1, 2].map((k) => i.ldu[k] + i.matrix[k * 3] * c[0] + i.matrix[k * 3 + 1] * c[1] + i.matrix[k * 3 + 2] * c[2]);
+  };
+  const c0 = centre(truck.steps[0].pieces[0]);
+  let q = rotateItems(truck, '', ['t'], fp, () => box);
+  const first = q.steps[0].pieces[0];
+  expect('matrix' in first && first.matrix).toEqual([1, 0, 0, 0, 1, 0, 0, 0, 1]);
+  centre(first).forEach((v, k) => expect(v).toBeCloseTo(c0[k], 3));
+  const seen = [JSON.stringify((first as { matrix: number[] }).matrix)];
+  for (let k = 0; k < 3; k++) {
+    q = rotateItems(q, '', ['t'], fp, () => box);
+    seen.push(JSON.stringify((q.steps[0].pieces[0] as { matrix: number[] }).matrix));
+  }
+  // four exact square angles, then back to facing front
+  expect(new Set(seen).size).toBe(4);
+  q = rotateItems(q, '', ['t'], fp, () => box);
+  expect((q.steps[0].pieces[0] as { matrix: number[] }).matrix).toEqual([1, 0, 0, 0, 1, 0, 0, 0, 1]);
+});

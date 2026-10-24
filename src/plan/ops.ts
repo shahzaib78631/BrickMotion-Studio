@@ -36,6 +36,30 @@ function mul(a: Mat3, b: Mat3): Mat3 {
   return r.map((v) => (Object.is(v, -0) ? 0 : v)) as Mat3;
 }
 
+/** Turn about the vertical axis by `deg` (any angle), in rotMatrix's direction. */
+function yawMatrix(deg: number): Mat3 {
+  const r = (deg * Math.PI) / 180;
+  const c = Math.cos(r), s = Math.sin(r);
+  return [c, 0, s, 0, 1, 0, -s, 0, c];
+}
+
+/** Snaps float noise (0.866 * 0.866 + …) back to exact 0 / ±1 where it is that close. */
+const tidy = (m: Mat3): Mat3 => m.map((v) => (Math.abs(v - Math.round(v)) < 1e-3 ? Math.round(v) || 0 : v)) as Mat3;
+
+/**
+ * One press of Rotate: a quarter turn about the vertical axis. A piece an imported
+ * file left at an odd angle (a truck at 30°) first turns to the next square angle,
+ * so pressing Rotate always reaches 0°, 90°, 180° and 270°: facing front included.
+ */
+export function nextQuarterTurn(m: Mat3): Mat3 {
+  // only an upright piece has a yaw to snap; anything tilted keeps the plain 90° step
+  if (Math.abs(m[4] - 1) > 1e-3) return mul(rotMatrix(90), m);
+  const yaw = (Math.atan2(m[2], m[0]) * 180) / Math.PI;
+  const off = ((yaw % 90) + 90) % 90;
+  const step = off < 0.5 || off > 89.5 ? 90 : 90 - off;
+  return tidy(mul(yawMatrix(step), m));
+}
+
 const center = (b: Box): Vec3 => [0, 1, 2].map((k) => (b.min[k] + b.max[k]) / 2) as Vec3;
 
 export function rotateItems(p: Plan, m: ModelName, ids: string[], fp: Footprint, body: (i: PlanItem) => Box): Plan {
@@ -46,7 +70,7 @@ export function rotateItems(p: Plan, m: ModelName, ids: string[], fp: Footprint,
     }
     const b = body(i);
     const c0 = center(rotatedBox(b, i.matrix));
-    const matrix = mul(rotMatrix(90), i.matrix);
+    const matrix = nextQuarterTurn(i.matrix);
     const c1 = center(rotatedBox(b, matrix));
     const ldu = [0, 1, 2].map((k) => i.ldu[k] + c0[k] - c1[k] || 0) as Vec3;
     return { ...i, matrix, ldu };

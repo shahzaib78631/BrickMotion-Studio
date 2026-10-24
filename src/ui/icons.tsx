@@ -52,6 +52,7 @@ const PATHS = {
   grip: '<circle cx="9" cy="5" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="19" r="1"/>',
   move: '<path d="M12 2v20M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M5 9l-3 3 3 3M9 5l3-3 3 3"/>',
   scale: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><path d="M10 10 14 14M15 10V4h6M9 14v7H3"/>',
+  view: '<circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/>',
 } as const;
 
 export type IconName = keyof typeof PATHS;
