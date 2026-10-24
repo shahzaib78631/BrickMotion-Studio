@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
-import type * as THREE from 'three';
+import * as THREE from 'three';
 import { applyAssemblySpotTransform, buildTimeline, poseAt, spotTransform } from '../../src/anim/timeline';
 import type { Timeline } from '../../src/anim/timeline';
 import { readProjectFile } from '../../src/io/projectFile';
@@ -92,4 +92,25 @@ test.skipIf(!ready)('a submodel build spot builds that submodel there and keeps 
     const end = poseAt(tl, tl.duration);
     for (const inst of pieces) expectMat(end(inst.key)!, inst.world, 1e-2);
   }
+}, 240000);
+
+
+test.skipIf(!ready)('Construction V2 carries a turned police-car wheel subassembly without changing any part pose', async () => {
+  const l = await load();
+  const spot = { ...SUB_SPOT, angle: 30 };
+  const p = setSubmodelBuildSpot(l.plan, '', l.subId, spot);
+  const { tl, asm } = plan(l, 'construction-v2', p);
+  const op = tl.construction!.operations.find(o => o.id === `construct:${l.subId}`)!;
+  expect(op).toBeDefined();
+  expect(op.rigidPath).toBeDefined();
+  const sb = tl.subBuilds.find(s => s.key === l.subId)!;
+  expect(centre2(sb.focus)[0]).toBeCloseTo(spot.x * 20, 0);
+  expect(centre2(sb.focus)[1]).toBeCloseTo(spot.z * 20, 0);
+  const pieces = asm.instances.filter(i => i.model === underside1);
+  const atBay = poseAt(tl, sb.attachStart - 1e-3);
+  const rigid = new THREE.Matrix4().fromArray(op.rigidPath![0]);
+  for (const part of pieces) expectMat(atBay(part.key)!, rigid.clone().multiply(part.world));
+  const end = poseAt(tl, tl.duration);
+  for (const part of pieces) expectMat(end(part.key)!, part.world);
+  expect(tl.units.filter(unit => unit.uncertified)).toEqual([]);
 }, 240000);

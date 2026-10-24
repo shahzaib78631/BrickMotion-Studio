@@ -66,3 +66,19 @@ test('the tool can be switched', () => {
   expect(useStudio.getState().tool).toBe('move');
   useStudio.getState().setTool('select');
 });
+
+test('spot transform is one undoable edit and unchanged edits do not pollute history', () => {
+  const s = useStudio.getState;
+  s().setSpot({ model: '', id: '' }, { x: 10, z: -5, angle: 32 });
+  const saved = s().plan;
+  expect(saved.assemblySpot).toEqual({ x: 10, z: -5, angle: 32 });
+  s().setSpot({ model: '', id: '' }, { x: 10, z: -5, angle: 32 });
+  expect(s().past).toHaveLength(1);
+  s().setFollow(false);
+  s().undo();
+  expect(s().plan).toBe(saved);
+  s().undo();
+  expect(s().plan.assemblySpot).toBeUndefined();
+  s().redo();
+  expect(s().plan.assemblySpot).toEqual({ x: 10, z: -5, angle: 32 });
+});

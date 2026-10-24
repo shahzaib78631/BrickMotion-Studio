@@ -40,6 +40,20 @@ test('a damaged timeline is skipped, a damaged plan or other file is refused', (
   expect(readProjectFile('not json').ok).toBe(false);
 });
 
+test('a saved rigid flight validates its new matrix references and pivot', () => {
+  const tl = buildTimeline(assemble(plan, metrics, fixtureColors), metrics, { targetSeconds: 10, heroOrbit: true });
+  const file = JSON.parse(projectToJson(plan, [{ model: '', opts: 'k', timeline: encodeTimeline(tl) }]));
+  const move = file.timelines[0].timeline.tracks[0][1].moves[0];
+  move.rigidDeltas = [move.from, move.to];
+  move.rigidBase = move.to;
+  move.rigidPivot = [0, 0, 0];
+  const valid = readProjectFile(JSON.stringify(file));
+  expect(valid.ok && valid.skipped).toBe(0);
+  move.rigidDeltas[0] = 999999;
+  const damaged = readProjectFile(JSON.stringify(file));
+  expect(damaged.ok && damaged.skipped).toBe(1);
+});
+
 test('a reopened project fingerprints the same, so its saved timelines are found', async () => {
   const { timelineFingerprint } = await import('../../src/storage/timelineCache');
   const r = readProjectFile(projectToJson(plan, []));

@@ -65,7 +65,13 @@ export function readProjectFile(text: string): { ok: true; plan: Plan; timelines
       if (typeof t.model !== 'string' || typeof t.opts !== 'string' || typeof t.timeline?.mats !== 'string' || !Array.isArray(t.timeline.tracks) || !Array.isArray(t.timeline.units)) throw new Error('bad shape');
       const mats = fromBase64(t.timeline.mats);
       const count = mats.length / 16;
-      const refsOk = t.timeline.tracks.every(([, tr]) => [tr.floor, tr.final, ...tr.moves.flatMap((m) => [m.from, m.to, ...(m.posePath ?? [])])].every((i) => Number.isInteger(i) && i >= 0 && i < count));
+      const validRef = (i: number) => Number.isInteger(i) && i >= 0 && i < count;
+      const refsOk = t.timeline.tracks.every(([, tr]) =>
+        [tr.floor, tr.final].every(validRef) && tr.moves.every((m) =>
+          [m.from, m.to, ...(m.posePath ?? []), ...(m.rigidDeltas ?? []),
+            ...(m.rigidBase === undefined ? [] : [m.rigidBase])].every(validRef) &&
+          (m.rigidDeltas === undefined || (m.rigidDeltas.length >= 2 &&
+            m.rigidBase !== undefined && m.rigidPivot?.length === 3 && m.rigidPivot.every(Number.isFinite)))));
       if (!refsOk || !mats.every(Number.isFinite)) throw new Error('bad matrices');
       timelines.push({ model: t.model, opts: t.opts, timeline: { ...t.timeline, mats } });
     } catch {

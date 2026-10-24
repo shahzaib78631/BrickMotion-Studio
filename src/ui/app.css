@@ -415,46 +415,80 @@ body { margin: 0; }
 .bm-gizmo-readout { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 6; padding: 4px 11px; border-radius: 999px; background: var(--ink); color: var(--surface); font: 600 12px ui-monospace, Menlo, monospace; white-space: pre; pointer-events: none; }
 .bm-gizmo-readout[hidden] { display: none; }
 
-/* ===== Assembly spots ===== */
-.bm-assembly { gap: 10px; }
-.bm-spots { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.bm-spot-row { border: 1px solid var(--line); border-radius: 10px; background: var(--surface2); padding: 3px; }
-.bm-spot-row.active { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
-.bm-spot-row.bad { border-color: color-mix(in srgb, var(--mark) 60%, var(--line)); }
-.bm-spot-main { width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; padding: 5px 6px; border-radius: 7px; min-width: 0; }
+/* ===== Assembly workspace · restrained CAD-style outliner / properties ===== */
+.bm-assembly { gap: 12px; }
+.bm-assembly-overview { display: flex; align-items: center; gap: 10px; padding: 13px 12px; background: var(--surface2); border: 1px solid var(--line); border-radius: 10px; }
+.bm-assembly-overview-icon { width: 34px; height: 34px; border-radius: 8px; flex: none; background: color-mix(in srgb, var(--focus) 12%, var(--surface)); color: var(--focus); display: grid; place-items: center; }
+.bm-assembly-overview-icon .ic { width: 19px; height: 19px; }
+.bm-assembly-overview > div { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; }
+.bm-assembly-overview strong { color: var(--ink); font-size: 12px; }
+.bm-assembly-overview div > span { color: var(--ink3); font-size: 11px; font-variant-numeric: tabular-nums; }
+.bm-assembly-count { border: 1px solid var(--line2); border-radius: 6px; padding: 5px 7px; font: 600 11px ui-monospace, monospace; color: var(--ink2); }
+.bm-spot-section-title { display: flex; align-items: center; justify-content: space-between; color: var(--ink3); letter-spacing: .085em; font-size: 10px; font-weight: 750; }
+.bm-spot-section-title > span { font-size: 9px; font-weight: 500; letter-spacing: .04em; }
+.bm-spots { list-style: none; margin: 0; padding: 4px; display: flex; flex-direction: column; gap: 3px; border: 1px solid var(--line); background: var(--surface2); border-radius: 10px; max-height: 42vh; overflow-y: auto; }
+.bm-spot-row { position: relative; border-radius: 6px; overflow: hidden; }
+.bm-spot-row.active { background: color-mix(in srgb, var(--focus) 9%, var(--surface2)); }
+.bm-spot-row.bad { box-shadow: inset 2px 0 var(--danger); }
+.bm-spot-main { width: 100%; display: flex; align-items: center; gap: 9px; min-width: 0; text-align: left; padding: 9px 9px; border-radius: 6px; cursor: grab; }
+.bm-spot-main:active { cursor: grabbing; }
 .bm-spot-main:hover { background: var(--hover); }
-.bm-spot-main > .ic { width: 15px; height: 15px; color: var(--ink2); flex-shrink: 0; }
-.bm-spot-text { display: flex; flex-direction: column; min-width: 0; }
-.bm-spot-text strong { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bm-spot-text .nx-hint { font-size: 10.5px; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bm-spot-bad { color: color-mix(in srgb, var(--mark) 72%, var(--ink)); font-weight: 600; }
-.bm-spot-editor { display: flex; flex-direction: column; gap: 9px; margin-top: 4px; padding: 11px; background: var(--surface); border: 1px solid var(--line2); border-radius: 10px; }
-.bm-spot-editor .nx-sub { margin: 0; }
-.bm-spot-fields { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
-.bm-spot-fields .nx-field { min-width: 0; gap: 3px; }
-.bm-spot-fields .nx-field b { font-size: 10.5px; }
-.bm-spot-fields input { min-width: 0; width: 100%; }
-.bm-spot-actions { display: flex; gap: 6px; }
-.bm-spot-actions .nx-btn { display: inline-flex; align-items: center; gap: 5px; }
-.bm-spot-actions .ic { width: 13px; height: 13px; }
-
-/* the compact assembly strip over the viewport (Build view) */
-.bm-spot-bar { position: absolute; left: 24px; top: 12px; right: 24px; z-index: 5; display: flex; align-items: center; gap: 8px;
-  padding: 5px 6px 5px 10px; border-radius: 12px; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 88%, transparent);
-  backdrop-filter: blur(8px); box-shadow: var(--shadow); overflow: hidden; }
-.bm-spot-bar-title { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 650; color: var(--ink2); white-space: nowrap; flex-shrink: 0; }
-.bm-spot-bar-title .ic { width: 14px; height: 14px; }
-.bm-spot-bar-chips { display: flex; align-items: center; gap: 5px; overflow-x: auto; flex: 1; min-width: 0; scrollbar-width: none; }
+.bm-spot-row.active .bm-spot-main { box-shadow: inset 2px 0 var(--focus); }
+.bm-spot-drag { flex-shrink: 0; opacity: .35; display: grid; place-items: center; }
+.bm-spot-drag .ic { width: 13px; height: 13px; }
+.bm-spot-object { flex-shrink: 0; width: 26px; height: 26px; border: 1px solid var(--line2); border-radius: 6px; background: var(--surface); display: grid; place-items: center; color: var(--ink2); }
+.bm-spot-object.root { color: var(--focus); }
+.bm-spot-object .ic { width: 15px; height: 15px; }
+.bm-spot-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.bm-spot-text strong { color: var(--ink); font-weight: 630; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bm-spot-text > span { color: var(--ink3); font: 10px ui-monospace, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bm-spot-status { color: var(--ink3); background: var(--surface); border: 1px solid var(--line); font-size: 10px; line-height: 1; padding: 4px 5px; border-radius: 4px; }
+.bm-spot-status.placed { color: var(--focus); border-color: color-mix(in srgb, var(--focus) 35%, var(--line)); }
+.bm-spot-warning { display: flex; align-items: flex-start; gap: 5px; margin: 0 8px 7px 29px; color: var(--danger); font-size: 10px; line-height: 1.4; }
+.bm-spot-warning .ic { width: 12px; height: 12px; flex: none; }
+.bm-spot-tree-line { display: none; }
+.bm-spot-empty { border: 1px dashed var(--line2); border-radius: 10px; color: var(--ink3); padding: 23px 16px; text-align: center; display: grid; justify-items: center; gap: 7px; }
+.bm-spot-empty .ic { width: 22px; height: 22px; }
+.bm-spot-empty strong { font-size: 12px; color: var(--ink2); }
+.bm-spot-empty span { font-size: 11px; max-width: 210px; }
+.bm-spot-editor { background: var(--surface); border: 1px solid var(--line2); border-radius: 10px; padding: 13px; display: grid; gap: 13px; }
+.bm-spot-editor-head { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.bm-spot-editor-head > div { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.bm-spot-editor-head strong { font-size: 12px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bm-spot-editor-state { display: inline-flex; align-items: center; gap: 6px; padding: 5px 7px; border: 1px solid var(--line); border-radius: 5px; color: var(--ink3); font-size: 10px; }
+.bm-spot-editor-state > span { width: 5px; height: 5px; border-radius: 50%; background: var(--ink3); }
+.bm-spot-editor-state.on { color: var(--focus); border-color: color-mix(in srgb, var(--focus) 30%, var(--line)); }
+.bm-spot-editor-state.on > span { background: var(--focus); }
+.bm-spot-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.bm-spot-number { min-width: 0; display: flex; flex-direction: column; gap: 5px; color: var(--ink3); font-size: 9px; font-weight: 650; letter-spacing: .04em; }
+.bm-spot-number-entry { display: flex; align-items: center; gap: 2px; border-radius: 6px; background: var(--surface2); border: 1px solid var(--line2); min-width: 0; padding: 0 5px; transition: border-color .12s; }
+.bm-spot-number-entry:focus-within { border-color: var(--focus); }
+.bm-spot-number-entry input { border: 0 !important; background: transparent !important; box-shadow: none !important; outline: none !important; width: 100%; min-width: 0; padding: 8px 1px; font: 12px ui-monospace, monospace; color: var(--ink); }
+.bm-spot-number-entry > span { font-size: 9px; font-weight: 500; letter-spacing: 0; color: var(--ink3); }
+.bm-spot-error { color: var(--danger); font-size: 11px; margin: 0; }
+.bm-spot-actions { display: flex; align-items: center; gap: 7px; }
+.bm-spot-actions .nx-btn { display: flex; align-items: center; justify-content: center; gap: 5px; }
+.bm-spot-actions .nx-btn .ic { width: 13px; height: 13px; }
+.bm-spot-apply { flex: 1; }
+.bm-spot-follow { display: flex; align-items: flex-start; gap: 10px; border-top: 1px solid var(--line); padding: 12px 1px 2px; cursor: pointer; }
+.bm-spot-follow input { margin-top: 2px; accent-color: var(--focus); }
+.bm-spot-follow > span { display: flex; flex-direction: column; gap: 4px; }
+.bm-spot-follow strong { color: var(--ink2); font-size: 11px; font-weight: 620; }
+.bm-spot-follow small { color: var(--ink3); font-size: 10px; line-height: 1.5; }
+.bm-spot-bar { position: absolute; top: 12px; left: 18px; right: 18px; z-index: 5; display: flex; align-items: center; gap: 9px; padding: 6px 8px 6px 11px; border-radius: 9px; border: 1px solid var(--line2); background: color-mix(in srgb, var(--surface) 93%, transparent); backdrop-filter: blur(14px); box-shadow: var(--shadow); }
+.bm-spot-bar-title { display: inline-flex; align-items: center; gap: 6px; flex: none; font-size: 11px; font-weight: 700; color: var(--ink2); padding-right: 9px; border-right: 1px solid var(--line); }
+.bm-spot-bar-title .ic { color: var(--focus); width: 15px; height: 15px; }
+.bm-spot-bar-chips { display: flex; gap: 5px; align-items: center; overflow-x: auto; flex: 1; min-width: 0; scrollbar-width: none; }
 .bm-spot-bar-chips::-webkit-scrollbar { display: none; }
-.bm-spot-bar-hint { font-size: 10.5px; color: var(--ink3); white-space: nowrap; flex-shrink: 0; }
-@media (max-width: 900px) { .bm-spot-bar-hint { display: none; } }
-.bm-spot-chip { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; border-radius: 999px; cursor: grab;
-  border: 1px solid var(--line2) !important; background: var(--surface) !important; color: var(--ink2); font-size: 11.5px; font-weight: 550; white-space: nowrap; }
-.bm-spot-chip:hover { background: var(--hover) !important; color: var(--ink); }
+.bm-spot-chip { display: inline-flex; align-items: center; gap: 6px; flex: none; max-width: 220px; padding: 6px 8px; background: var(--surface2) !important; border: 1px solid var(--line) !important; border-radius: 6px; color: var(--ink2); font-size: 10.5px; font-weight: 550; white-space: nowrap; cursor: grab; }
+.bm-spot-chip .ic { width: 12px; height: 12px; flex: none; }
 .bm-spot-chip:active { cursor: grabbing; }
-.bm-spot-chip.placed { border-color: color-mix(in srgb, var(--step) 55%, var(--line2)) !important; color: var(--ink); }
-.bm-spot-chip.sel { border-color: var(--focus) !important; box-shadow: 0 0 0 1px var(--focus); color: var(--focus); }
-.bm-spot-chip-state { font-size: 10px; color: var(--ink3); font-variant-numeric: tabular-nums; }
-.bm-spot-chip.placed .bm-spot-chip-state { color: color-mix(in srgb, var(--step) 70%, var(--ink)); }
-
-.bm-checks .bm-kind.assembly-spot, .bm-kind.assembly-spot { background: color-mix(in srgb, var(--mark) 65%, var(--danger)); }
+.bm-spot-chip:hover { background: var(--hover) !important; }
+.bm-spot-chip.placed .bm-spot-chip-state { color: var(--focus); }
+.bm-spot-chip.sel { border-color: var(--focus) !important; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--focus) 24%, transparent); }
+.bm-spot-chip-state { padding-left: 5px; border-left: 1px solid var(--line2); color: var(--ink3); font-size: 9px; font-weight: 600; }
+.bm-spot-bar-hint { display: inline-flex; align-items: center; gap: 5px; flex: none; color: var(--ink3); font-size: 10px; }
+.bm-spot-bar-hint .ic { width: 13px; height: 13px; }
+@media (max-width: 1000px) { .bm-spot-bar-hint { display: none; } }
+@media (max-width: 640px) { .bm-spot-bar { left: 8px; right: 8px; } .bm-spot-bar-title span { display: none; } }
+.bm-kind.assembly-spot { background: color-mix(in srgb, var(--danger) 50%, var(--mark)); }

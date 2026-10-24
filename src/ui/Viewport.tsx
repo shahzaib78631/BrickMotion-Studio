@@ -8,7 +8,7 @@ import { aroundPivot, transformPlanItems } from '../plan/gizmo';
 import type { ANode } from '../model/assemble';
 import { dragDelta } from '../state/drag';
 import { isSub } from '../plan/types';
-import { markers, sameSpot, spotOfRef, type SpotRef } from '../plan/assemblySpots';
+import { markers, sameSpot, sceneSpot, storedSpot, sceneOffset, planOffset, spotOfRef, type SpotRef } from '../plan/assemblySpots';
 import { SPOT_DRAG_TYPE, draggedSpot } from './AssemblyPanel';
 import { SpotMarkers } from './spotMarkers';
 import { createStudio, worldBox } from '../render/studio';
@@ -18,7 +18,7 @@ import { useStudio } from '../state/store';
 import { metricsOf } from '../state/partService';
 import { modelSteps } from '../plan/ops';
 import { posedBounds, stepPoses, timelineStep } from '../model/stepLayout';
-import { poseAt, type Timeline } from '../anim/timeline';
+import { poseAt, spotTransform, type Timeline } from '../anim/timeline';
 import { worldBox3 } from '../anim/camera';
 import { stepAt } from '../anim/partClips';
 import { advancePlayback, usePlayback } from '../state/playback';
@@ -93,12 +93,26 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
   /** the floor markers of the Assembly tab (Build view only) */
   const markersRef = useRef<SpotMarkers | null>(null);
   /** the spot a marker drag started on, and its facing, kept while dragging */
-  const spotDrag = useRef<{ ref: SpotRef; angle: number } | null>(null);
+  const spotDrag = useRef<{ ref: SpotRef; angle: number; pending: import('../plan/types').AssemblySpot | null } | null>(null);
+  const timelineRef = useRef(timeline);
+  timelineRef.current = timeline;
   const initialNodes = useRef<ANode[]>([]);
   const initialIds = useRef<string[]>([]);
   const initialModel = useRef('');
   const modelRef = useRef(model);
   modelRef.current = model;
+
+  /** Draw a live, editor-only ghost without editing the plan or starting a worker.
+   * The result is persisted once, at pointer release. */
+  const previewSpot = (ref: SpotRef, candidate: import('../plan/types').AssemblySpot) => {
+    const state = useStudio.getState();
+    const assembled = modelRef.current.assembly;
+    const spot = sceneSpot(state.plan, assembled.bounds, ref, candidate);
+    const data = markers(state.plan, assembled, timelineRef.current).map((m) =>
+      sameSpot(m.ref, ref) ? { ...m, centre: [spot.x * 20, spot.z * 20] as [number, number], angle: spot.angle, placed: true } : m);
+    const ground = timelineRef.current?.ground ?? assembled.bounds?.max[1] ?? 0;
+    markersRef.current?.update(data, ref, -ground / 20);
+  };
 
   // mount: studio, controls, render loop, resize
   useEffect(() => {
@@ -162,11 +176,19 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
           // the gizmo drives a floor marker, not bricks
           initialNodes.current = [];
           initialIds.current = [];
-          spotDrag.current = { ref: current.spot, angle: spotOfRef(current.plan, current.spot)?.angle ?? 0 };
+          const chosen = spotOfRef(current.plan, current.spot);
+          const shown = chosen && sceneSpot(current.plan, modelRef.current.assembly.bounds, current.spot, chosen);
+          spotDrag.current = { ref: current.spot, angle: shown?.angle ?? 0, pending: null };
         } else return;
-        current.beginGesture();
+        if (!spotDrag.current) current.beginGesture();
       } else {
         if (readoutRef.current) readoutRef.current.hidden = true;
+        // A spot drag is a single undoable commit. No replanning during motion.
+        if (spotDrag.current?.pending) {
+          const { ref, pending } = spotDrag.current;
+          const state = useStudio.getState();
+          state.setSpot(ref, storedSpot(state.plan, modelRef.current.assembly.bounds, ref, pending));
+        }
         spotDrag.current = null;
         useStudio.getState().endGesture();
         // A snapped placement may differ from a raw drag by a fraction of a stud.
@@ -186,7 +208,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     transform.addEventListener('objectChange', () => {
       const state = useStudio.getState();
       const original = state.gesture;
-      if (!draggingGizmo.current || !original) return;
+      if (!draggingGizmo.current) return;
       if (spotDrag.current) {
         // A marker stays on the floor: translate is X/Z in whole studs, rotate is about Y only.
         const ref = spotDrag.current.ref;
@@ -195,8 +217,9 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
           const sig = `r${deg}`;
           if (sig === lastTransform) return;
           lastTransform = sig;
-          const prev = spotOfRef(state.plan, ref);
-          state.setSpot(ref, { x: prev?.x ?? 0, z: prev?.z ?? 0, angle: deg });
+          const prev = spotDrag.current.pending ?? sceneSpot(state.plan, modelRef.current.assembly.bounds, ref, spotOfRef(state.plan, ref)!);
+          spotDrag.current.pending = { ...prev, angle: deg };
+          previewSpot(ref, storedSpot(state.plan, modelRef.current.assembly.bounds, ref, spotDrag.current.pending));
           if (readoutRef.current) {
             readoutRef.current.textContent = `Rotate Y  ${deg < 0 ? '−' : ''}${Math.abs(deg)}°`;
             readoutRef.current.hidden = false;
@@ -206,11 +229,12 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
           const sig = `t${x},${z}`;
           if (sig === lastTransform) return;
           lastTransform = sig;
-          state.setSpot(ref, { x, z, angle: spotDrag.current.angle });
+          spotDrag.current.pending = { x, z, angle: spotDrag.current.angle };
+          previewSpot(ref, storedSpot(state.plan, modelRef.current.assembly.bounds, ref, spotDrag.current.pending));
         }
         return;
       }
-      if (!initialNodes.current.length) return;
+      if (!original || !initialNodes.current.length) return;
       const currentMode = state.gizmoMode;
       let delta: THREE.Matrix4;
       if (currentMode === 'translate') {
@@ -323,16 +347,17 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     const { controls: transform, proxy } = entry;
     const ids = new Set(selection.model === editingModel ? selection.ids : []);
     const boxes = model.view.instances.filter((inst) => ids.has(inst.key.split('/')[0]));
-    const spot = spotSel && !editingModel ? spotOfRef(plan, spotSel) : null;
+    const chosen = spotSel && !editingModel ? spotOfRef(plan, spotSel) : null;
+    const spot = chosen && spotSel ? sceneSpot(plan, model.assembly.bounds, spotSel, chosen) : null;
     if (mode === 'edit' && gizmoEnabled && spot && !boxes.length) {
-      // An assembly spot: the gizmo moves it on X/Z or turns it about Y only.
-      const y = timeline ? -timeline.ground / 20 : 0;
+      // A selected spot is a planar X/Z object; rotate exposes only the Y ring.
+      const y = -(timeline?.ground ?? model.assembly.bounds?.max[1] ?? 0) / 20;
       proxy.position.set(spot.x, y, -spot.z);
-      proxy.quaternion.identity();
+      proxy.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -THREE.MathUtils.degToRad(spot.angle));
       proxy.scale.setScalar(1);
       transform.setMode(gizmoMode === 'rotate' ? 'rotate' : 'translate');
-      transform.showX = true;
-      transform.showZ = true;
+      transform.showX = gizmoMode !== 'rotate';
+      transform.showZ = gizmoMode !== 'rotate';
       transform.showY = gizmoMode === 'rotate';
       transform.enabled = true;
       transform.attach(proxy);
@@ -361,7 +386,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     const spotMarkers = markersRef.current;
     if (!spotMarkers) return;
     if (mode !== 'edit' || editingModel !== '' || !model.ready) spotMarkers.clear();
-    else spotMarkers.update(markers(plan, model.assembly, timeline), spotSel);
+    else spotMarkers.update(markers(plan, model.assembly, timeline), spotSel, -(timeline?.ground ?? model.assembly.bounds?.max[1] ?? 0) / 20);
   }, [plan, model.assembly, model.ready, timeline, mode, editingModel, spotSel]);
 
   // which top-level step each top-level item belongs to
@@ -415,9 +440,16 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     const tl = timeline;
     const byKey = new Map(model.view.instances.map((i) => [i.key, i]));
     const changed = new Set<string>();
+    // Root assembly spots move the finished model without editing the LDraw
+    // source matrices. Compare against that *expected* final pose, otherwise
+    // every brick is mistaken for a live edit and drawn at its old position.
+    const S = !editingModel && plan.assemblySpot && model.assembly.bounds
+      ? spotTransform(plan.assemblySpot, model.assembly.bounds) : null;
+    const expected = (inst: (typeof model.view.instances)[number]) => S ? S.clone().multiply(inst.world) : inst.world;
     for (const inst of model.view.instances) {
       const tr = tl.tracks.get(inst.key);
-      if (!tr || tr.final.elements.some((v, k) => Math.abs(v - inst.world.elements[k]) > 1e-3)) changed.add(inst.key);
+      const final = expected(inst);
+      if (!tr || tr.final.elements.some((v, k) => Math.abs(v - final.elements[k]) > 1e-3)) changed.add(inst.key);
     }
     const pose = (t: number) => {
       const at = poseAt(tl, t);
@@ -426,8 +458,8 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
         if (!inst) return null;
         if (!changed.has(key)) return at(key);
         // new since the plan: show it placed; edited: placed once the animation has it built
-        if (!tl.tracks.has(key)) return inst.world;
-        return at(key) ? inst.world : null;
+        if (!tl.tracks.has(key)) return expected(inst);
+        return at(key) ? expected(inst) : null;
       };
     };
     studio.bricks.setInstances(drawn);
@@ -441,7 +473,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
       framed.current = true;
     }
     live.current = { tl, pose, dirty: true };
-  }, [engaged, timeline, model.view, editingModel, drawn]);
+  }, [engaged, timeline, model.view, model.assembly.bounds, plan.assemblySpot, editingModel, drawn]);
 
   // instances
   useEffect(() => {
@@ -570,36 +602,48 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
   /** The assembly marker under the pointer, if the Build view draws them. */
   const pickSpotAt = (e: { clientX: number; clientY: number }): SpotRef | null => (markersRef.current && viewportApi.studio ? markersRef.current.pick(rayAt(e)) : null);
   /** The floor plane the viewport currently uses (world Y), for dropping and dragging markers. */
-  const floorPlane = () => new THREE.Plane(new THREE.Vector3(0, 1, 0), timeline ? timeline.ground / 20 : 0);
+  const floorPlane = () => new THREE.Plane(new THREE.Vector3(0, 1, 0), (timeline?.ground ?? model.assembly.bounds?.max[1] ?? 0) / 20);
 
   // Assembly markers (Build view, main model): dragging one slides it on X/Z, in whole studs.
   const startSpotDrag = (e: React.PointerEvent, ref: SpotRef): boolean => {
     const s = st();
     if (s.mode !== 'edit' || e.button !== 0 || !viewportApi.studio) return false;
-    const angle = spotOfRef(s.plan, ref)?.angle ?? 0;
+    const spot = spotOfRef(s.plan, ref);
+    const shown = markers(s.plan, model.assembly, timeline).find((m) => sameSpot(m.ref, ref));
+    const angle = spot?.angle ?? 0;
     const plane = floorPlane();
     const hit = (ev: { clientX: number; clientY: number }) => rayAt(ev).ray.intersectPlane(plane, new THREE.Vector3());
-    if (!hit(e)) return false;
+    const start = hit(e);
+    if (!start) return false;
     if (!sameSpot(s.spot, ref)) s.selectSpot(ref);
     if (viewportApi.controls) viewportApi.controls.enabled = false;
-    s.beginGesture();
-    let last = '';
+    const originalX = (shown?.centre[0] ?? start.x * 20) / 20;
+    const originalZ = (shown?.centre[1] ?? -start.z * 20) / 20;
+    let pending: import('../plan/types').AssemblySpot | null = null;
     const move = (ev: PointerEvent) => {
       const p = hit(ev);
       if (!p) return;
-      const x = Math.round(p.x), z = Math.round(-p.z);
-      if (`${x},${z}` === last) return;
-      last = `${x},${z}`;
-      st().setSpot(ref, { x, z, angle });
+      const moved = { x: originalX + p.x - start.x, z: originalZ - (p.z - start.z), angle: shown?.angle ?? angle };
+      const local = storedSpot(st().plan, modelRef.current.assembly.bounds, ref, moved);
+      const next = { x: Math.round(local.x), z: Math.round(local.z), angle };
+      if (pending && pending.x === next.x && pending.z === next.z) return;
+      pending = next;
+      previewSpot(ref, next);
     };
-    const up = () => {
+    const finish = (commit: boolean) => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
-      st().endGesture();
+      window.removeEventListener('pointercancel', cancel);
+      if (commit && pending) st().setSpot(ref, pending);
+      else markersRef.current?.update(markers(st().plan, modelRef.current.assembly, timelineRef.current), st().spot,
+        -(timelineRef.current?.ground ?? modelRef.current.assembly.bounds?.max[1] ?? 0) / 20);
       if (viewportApi.controls) viewportApi.controls.enabled = st().mode === 'edit';
     };
+    const up = () => finish(true);
+    const cancel = () => finish(false);
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', cancel);
     return true;
   };
 
@@ -680,10 +724,15 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
       const p = hit(ev);
       if (!p || !live.current) return;
       // studs along LDraw x and z (world z is LDraw −z)
-      const next: [number, number] = [Math.round(p.x - start.x) || 0, Math.round(-(p.z - start.z)) || 0];
+      const worldDelta: [number, number] = [p.x - start.x, -(p.z - start.z)];
+      // Drag in the visible scene but store in the unrotated model frame.
+      // Otherwise a waiting brick jumps to another location on replanning.
+      const local = model0 === '' ? planOffset(st().plan, worldDelta) : worldDelta;
+      const next: [number, number] = [Math.round(local[0]) || 0, Math.round(local[1]) || 0];
       if (next[0] === d[0] && next[1] === d[1]) return;
       d = next;
-      const shift = new THREE.Matrix4().makeTranslation(d[0] * 20, 0, d[1] * 20);
+      const world = model0 === '' ? sceneOffset(st().plan, d) : d;
+      const shift = new THREE.Matrix4().makeTranslation(world[0] * 20, 0, world[1] * 20);
       live.current.override = new Map(group.map(([k, floor]) => [k, shift.clone().multiply(floor)]));
       live.current.dirty = true;
     };
@@ -750,7 +799,8 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
         const prev = spotOfRef(st().plan, ref);
         st().selectSpot(ref);
         // snap to the stud grid; keep the facing from the previous drop (0° on the first)
-        st().setSpot(ref, { x: Math.round(p.x), z: Math.round(-p.z), angle: prev?.angle ?? 0 });
+        const local = storedSpot(st().plan, modelRef.current.assembly.bounds, ref, { x: p.x, z: -p.z, angle: 0 });
+        st().setSpot(ref, { x: Math.round(local.x), z: Math.round(local.z), angle: prev?.angle ?? 0 });
       }}
     >
       <canvas
@@ -775,6 +825,8 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
           if (Math.hypot(e.clientX - down.current.x, e.clientY - down.current.y) > 4) return;
           // Clicking an axis must not clear the selection because a brick ray missed.
           if (gizmoRef.current?.controls.axis && st().gizmoEnabled) return;
+          const mark = pickSpotAt(e);
+          if (mark) { st().selectSpot(mark); return; }
           const key = pickAt(e);
           if (key) st().select([key.split('/')[0]], e.shiftKey);
           else if (!e.shiftKey) st().select([]);

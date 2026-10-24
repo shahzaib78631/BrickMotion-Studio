@@ -50,6 +50,12 @@ export type MoveData<M> = {
     /** Exact checked affine poses for rigid-rotation V2 operations. The source
      * scale/shear/reflection is unchanged; only world rigid motion varies. */
     posePath?: M[];
+    /** A shared world-rigid delta per waypoint for a V2 assembly operation.
+     * Interpolate about `rigidPivot` and apply to `rigidBase` so every member
+     * follows the SAME rigid motion through a turn (no per-brick chord shrink). */
+    rigidDeltas?: M[];
+    rigidBase?: M;
+    rigidPivot?: [number, number, number];
     unit: number;
     from: M;
     to: M;

@@ -1270,6 +1270,28 @@ export function flightPose(m: Move, u: number, out: THREE.Matrix4): THREE.Matrix
     if (m.rel) out.multiply(m.rel);
     return out;
   }
+  if (m.rigidDeltas?.length && m.rigidBase && m.rigidPivot) {
+    // All members of a V2 rigid group must rotate about ONE shared pivot.
+    // Interpolating each brick's position independently shrinks/deforms the
+    // group mid-turn even when its endpoint matrices are individually correct.
+    const scaled = easeInOutCubic(u) * (m.rigidDeltas.length - 1);
+    const i = Math.min(m.rigidDeltas.length - 2, Math.floor(scaled));
+    const local = Math.max(0, Math.min(1, scaled - i));
+    const a = m.rigidDeltas[i], b = m.rigidDeltas[i + 1];
+    _p0.fromArray(m.rigidPivot).applyMatrix4(a);
+    _p1.fromArray(m.rigidPivot).applyMatrix4(b);
+    _p0.lerp(_p1, local);
+    _q0.setFromRotationMatrix(a).normalize();
+    _q1.setFromRotationMatrix(b).normalize();
+    _q0.slerp(_q1, local);
+    // Translation of (T(pivotWorld) * R * T(-pivotLocal)) * original.
+    // Compose directly to avoid two Matrix4 allocations per brick per frame.
+    _p1.fromArray(m.rigidPivot).applyQuaternion(_q0);
+    _p0.sub(_p1);
+    out.compose(_p0, _q0, _unitScale).multiply(m.rigidBase);
+    if (m.rel) out.multiply(m.rel);
+    return out;
+  }
   if (m.translationPath) {
     const offset = pathOffset(m.translationPath, easeInOutCubic(u));
     out.copy(m.from);
@@ -1681,13 +1703,32 @@ const boxThrough = (b: Box | null | undefined, t: THREE.Matrix4): Box | null => 
  */
 export function applyAssemblySpotTransform(tl: Timeline, spot: AssemblySpot): Timeline {
   const S = spotTransform(spot, tl.modelBox);
+  const SInv = S.clone().invert();
   const tracks = new Map<string, Track>();
   for (const [key, tr] of tl.tracks) {
     tracks.set(key, {
       ...tr,
       floor: through(tr.floor, S),
       floorBox: transformBox(tr.floorBox, S),
-      moves: tr.moves.map((mv) => ({ ...mv, from: through(mv.from, S), to: through(mv.to, S) })),
+      moves: tr.moves.map((mv) => {
+        // Explicit V2 waypoints are absolute world matrices; translation paths
+        // and legacy insertion offsets are vectors in that same frame. Moving
+        // only the endpoints made the mid-flight interpolation leave the spot.
+        const rotate = (v: [number, number, number]): [number, number, number] => {
+          const e = S.elements;
+          return [e[0] * v[0] + e[4] * v[1] + e[8] * v[2],
+                  e[1] * v[0] + e[5] * v[1] + e[9] * v[2],
+                  e[2] * v[0] + e[6] * v[1] + e[10] * v[2]];
+        };
+        return { ...mv, from: through(mv.from, S), to: through(mv.to, S),
+          entry: rotate(mv.entry),
+          translationPath: mv.translationPath?.map(rotate),
+          posePath: mv.posePath?.map((p) => through(p, S)),
+          rigidBase: mv.rigidBase ? through(mv.rigidBase, S) : undefined,
+          rigidDeltas: mv.rigidDeltas?.map((d) => S.clone().multiply(d).multiply(SInv)),
+          rigidPivot: mv.rigidPivot ? new THREE.Vector3(...mv.rigidPivot).applyMatrix4(S).toArray() as [number, number, number] : undefined,
+        };
+      }),
       final: through(tr.final, S),
     });
   }
@@ -1741,7 +1782,22 @@ export function applyFloorShifts(tl: Timeline, shifts: Map<string, [number, numb
       ...tr,
       floor,
       floorBox: { min: [box.min[0] + d[0] * STUD, box.min[1], box.min[2] + d[1] * STUD], max: [box.max[0] + d[0] * STUD, box.max[1], box.max[2] + d[1] * STUD] },
-      moves: tr.moves.map((mv, i) => (i === 0 ? { ...mv, from: t.clone().multiply(mv.from) } : mv)),
+      moves: tr.moves.map((mv, i) => {
+        if (i !== 0) return mv;
+        const from = t.clone().multiply(mv.from);
+        const shift: [number, number, number] = [d[0] * STUD, 0, d[1] * STUD];
+        // An edited inventory pose needs an explicit first leg back to the
+        // planner's certified start. Otherwise waypoint-driven flights ignore
+        // their changed `from` and visibly teleport on departure. This short
+        // manual repositioning leg is not a new collision-certified route.
+        const translationPath: Move['translationPath'] = mv.translationPath
+          ? [[0, 0, 0], ...mv.translationPath.map((p): [number, number, number] =>
+              [p[0] - shift[0], p[1] - shift[1], p[2] - shift[2]])]
+          : undefined;
+        const posePath = mv.posePath?.length ? [from, ...mv.posePath] : undefined;
+        const rigidDeltas = mv.rigidDeltas?.length ? [t.clone().multiply(mv.rigidDeltas[0]), ...mv.rigidDeltas] : undefined;
+        return { ...mv, from, translationPath, posePath, rigidDeltas };
+      }),
     });
   }
   return { ...tl, tracks };

@@ -3,7 +3,7 @@ import { assemble, type Metrics } from '../../src/model/assemble';
 import type { Box } from '../../src/ldraw/flatten';
 import { ensureIds } from '../../src/plan/ids';
 import { setAssemblySpot, setLoosePiecesFollow, setSubmodelBuildSpot } from '../../src/plan/pieceActions';
-import { boxesOverlap, facing, formatSpot, outline, overlaps, spotWarnings, submodelUses } from '../../src/plan/assemblySpots';
+import { boxesOverlap, facing, formatSpot, outline, overlaps, spotWarnings, submodelUses, scenePoint, planPoint, sceneSpot, storedSpot, planOffset, sceneOffset } from '../../src/plan/assemblySpots';
 import { parsePlan } from '../../src/plan/schema';
 import type { Plan, PlanItem } from '../../src/plan/types';
 import { fixtureColors, fixtureMetrics } from '../helpers/fixtureMetrics';
@@ -121,6 +121,31 @@ describe('spot geometry', () => {
     expect(boxesOverlap(box([0, 0, 0], [20, 20, 20]), box([10, 0, 0], [30, 20, 20]))).toBe(true);
     expect(boxesOverlap(box([0, 0, 0], [20, 20, 20]), box([40, 0, 0], [60, 20, 20]))).toBe(false);
     expect(overlaps([{ ref: { model: '', id: '' }, label: 'A', box: box([0, 0, 0], [20, 20, 20]), placed: true }, { ref: { model: '', id: 'x' }, label: 'B', box: box([5, 0, 0], [25, 20, 20]), placed: true }])).toHaveLength(1);
+  });
+
+  it('round-trips nested spot coordinates when the entire scene is rotated', () => {
+    const original = box([0, -24, 0], [40, 0, 20]);
+    const plan = { ...withUse(), assemblySpot: { x: 10, z: -5, angle: 37 } };
+    const source: [number, number] = [170, -90];
+    const world = scenePoint(plan, original, source);
+    const restored = planPoint(plan, original, world);
+    expect(restored[0]).toBeCloseTo(source[0], 7);
+    expect(restored[1]).toBeCloseTo(source[1], 7);
+    const delta: [number, number] = [4, -2];
+    const moved = sceneOffset(plan, delta);
+    const unmoved = planOffset(plan, moved);
+    expect(unmoved[0]).toBeCloseTo(delta[0], 7);
+    expect(unmoved[1]).toBeCloseTo(delta[1], 7);
+    const ref = { model: '', id: 's1' };
+    const chosen = { x: 9, z: -3, angle: 15 };
+    const display = sceneSpot(plan, original, ref, chosen);
+    const saved = storedSpot(plan, original, ref, display);
+    expect(saved.x).toBeCloseTo(chosen.x, 7);
+    expect(saved.z).toBeCloseTo(chosen.z, 7);
+    expect(saved.angle).toBeCloseTo(chosen.angle, 7);
+    const off = { ...plan, loosePiecesFollow: false };
+    expect(sceneSpot(off, original, ref, chosen)).toEqual(chosen);
+    expect(sceneSpot(plan, original, { model: '', id: '' }, plan.assemblySpot)).toEqual(plan.assemblySpot);
   });
 
   it('formats a spot in studs and degrees', () => {

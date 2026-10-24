@@ -19,7 +19,7 @@ const AUTO = 0x9aa0a8;
 const SELECTED = 0x2f6fe0;
 const LIFT = 0.06; // world units above the floor, so it never z-fights the bricks
 
-const toWorld = ([x, z]: [number, number]) => new THREE.Vector3(x / 20, LIFT, -z / 20);
+const toWorld = ([x, z]: [number, number], floorY: number) => new THREE.Vector3(x / 20, floorY + LIFT, -z / 20);
 
 function labelSprite(text: string, color: number): THREE.Sprite {
   const scale = 2;
@@ -63,6 +63,7 @@ export class SpotMarkers {
   readonly group = new THREE.Group();
   private items: { hit: THREE.Object3D; ref: SpotRef }[] = [];
   private trash: { dispose(): void }[] = [];
+  private floorY = 0;
 
   constructor() {
     this.group.name = 'assembly-spots';
@@ -75,7 +76,8 @@ export class SpotMarkers {
     return ref ? { model: ref.model, id: ref.id } : null;
   }
 
-  update(list: SpotMarkerInfo[], selected: SpotRef | null): void {
+  update(list: SpotMarkerInfo[], selected: SpotRef | null, floorY = 0): void {
+    this.floorY = floorY;
     this.clear();
     for (const m of list) this.add(m, sameSpot(selected, m.ref));
   }
@@ -94,8 +96,8 @@ export class SpotMarkers {
   private add(m: SpotMarkerInfo, selected: boolean): void {
     const color = m.placed ? (selected ? SELECTED : PLACED) : AUTO;
     const opacity = m.placed ? (selected ? 1 : 0.92) : 0.4;
-    const corners = outline(m.raw, m.centre[0], m.centre[1], m.angle).map(toWorld);
-    const centre = toWorld(m.centre);
+    const corners = outline(m.raw, m.centre[0], m.centre[1], m.angle).map((pt) => toWorld(pt, this.floorY));
+    const centre = toWorld(m.centre, this.floorY);
 
     const lineGeom = new THREE.BufferGeometry().setFromPoints(corners);
     const lineMat = m.placed
@@ -121,16 +123,31 @@ export class SpotMarkers {
     }
 
     const sprite = labelSprite(m.label, color);
-    sprite.position.copy(centre).setY(0.52);
+    sprite.position.copy(centre).setY(this.floorY + 0.52);
     this.group.add(sprite);
     const spriteMat = sprite.material as THREE.SpriteMaterial;
     this.trash.push(spriteMat);
     if (spriteMat.map) this.trash.push(spriteMat.map);
 
-    // Pickable plate: the exact footprint quad, invisible but raycastable.
+    // Pick only the perimeter and the centre grip, not an invisible solid
+    // plate covering the entire model. Otherwise a spot makes every brick
+    // inside its footprint impossible to select with the mouse.
     const hitGeom = new THREE.BufferGeometry();
-    const quad = [corners[0], corners[1], corners[2], corners[0], corners[2], corners[3]];
-    hitGeom.setAttribute('position', new THREE.Float32BufferAttribute(quad.flatMap((p) => [p.x, p.y, p.z]), 3));
+    const triangles: number[] = [];
+    const strip = (a: THREE.Vector3, b: THREE.Vector3, halfWidth: number) => {
+      const side = new THREE.Vector3(b.z - a.z, 0, a.x - b.x).normalize().multiplyScalar(halfWidth);
+      const p = a.clone().add(side), q = a.clone().sub(side),
+        r = b.clone().sub(side), t = b.clone().add(side);
+      for (const v of [p, q, r, p, r, t]) triangles.push(v.x, v.y, v.z);
+    };
+    for (let i = 0; i < corners.length; i++) strip(corners[i], corners[(i + 1) % corners.length], 0.105);
+    const size = 0.28;
+    const a = centre.clone().add(new THREE.Vector3(-size, 0, -size));
+    const b = centre.clone().add(new THREE.Vector3(size, 0, -size));
+    const c = centre.clone().add(new THREE.Vector3(size, 0, size));
+    const d = centre.clone().add(new THREE.Vector3(-size, 0, size));
+    for (const v of [a, b, c, a, c, d]) triangles.push(v.x, v.y, v.z);
+    hitGeom.setAttribute('position', new THREE.Float32BufferAttribute(triangles, 3));
     const hitMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
     const hit = new THREE.Mesh(hitGeom, hitMat);
     hit.userData.ref = m.ref;

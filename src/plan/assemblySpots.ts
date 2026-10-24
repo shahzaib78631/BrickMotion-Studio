@@ -78,6 +78,56 @@ export function autoCentre(tl: Timeline | null, use: SpotUse): [number, number] 
 
 export const centre2 = (b: Box): [number, number] => [(b.min[0] + b.max[0]) / 2, (b.min[2] + b.max[2]) / 2];
 
+/** Convert a submodel's *saved* coordinates (the original model frame) to
+ * displayed/world coordinates. Follow-off deliberately leaves the bays still. */
+export function scenePoint(plan: Plan, original: Box | null, point: [number, number]): [number, number] {
+  if (!original || !plan.assemblySpot || plan.loosePiecesFollow === false) return [...point];
+  const [cx, cz] = centre2(original);
+  const a = plan.assemblySpot.angle * Math.PI / 180;
+  const dx = point[0] - cx, dz = point[1] - cz;
+  return [plan.assemblySpot.x * STUD + Math.cos(a) * dx + Math.sin(a) * dz,
+          plan.assemblySpot.z * STUD - Math.sin(a) * dx + Math.cos(a) * dz];
+}
+
+/** Floor-shift vectors use the same local-to-scene rotation as spot centres,
+ * but must never inherit the main spot's translation. */
+export function sceneOffset(plan: Plan, delta: [number, number]): [number, number] {
+  if (!plan.assemblySpot || plan.loosePiecesFollow === false) return [...delta];
+  const a = plan.assemblySpot.angle * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+  return [c * delta[0] + s * delta[1], -s * delta[0] + c * delta[1]];
+}
+export function planOffset(plan: Plan, delta: [number, number]): [number, number] {
+  if (!plan.assemblySpot || plan.loosePiecesFollow === false) return [...delta];
+  const a = plan.assemblySpot.angle * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+  return [c * delta[0] - s * delta[1], s * delta[0] + c * delta[1]];
+}
+
+/** Inverse of scenePoint, used for dropping a tile onto the *visible* floor. */
+export function planPoint(plan: Plan, original: Box | null, point: [number, number]): [number, number] {
+  if (!original || !plan.assemblySpot || plan.loosePiecesFollow === false) return [...point];
+  const [cx, cz] = centre2(original);
+  const a = plan.assemblySpot.angle * Math.PI / 180;
+  const dx = point[0] - plan.assemblySpot.x * STUD, dz = point[1] - plan.assemblySpot.z * STUD;
+  return [cx + Math.cos(a) * dx - Math.sin(a) * dz,
+          cz + Math.sin(a) * dx + Math.cos(a) * dz];
+}
+
+/** A submodel spot is not stored in the post-rotation/world frame. */
+export function sceneSpot(plan: Plan, original: Box | null, ref: SpotRef, spot: AssemblySpot): AssemblySpot {
+  if (isMainSpot(ref)) return spot;
+  const [x, z] = scenePoint(plan, original, [spot.x * STUD, spot.z * STUD]);
+  return { x: x / STUD, z: z / STUD,
+    angle: spot.angle + (original && plan.assemblySpot && plan.loosePiecesFollow !== false ? plan.assemblySpot.angle : 0) };
+}
+
+export function storedSpot(plan: Plan, original: Box | null, ref: SpotRef, spot: AssemblySpot): AssemblySpot {
+  if (isMainSpot(ref)) return spot;
+  const [x, z] = planPoint(plan, original, [spot.x * STUD, spot.z * STUD]);
+  return { x: x / STUD, z: z / STUD,
+    angle: spot.angle - (original && plan.assemblySpot && plan.loosePiecesFollow !== false ? plan.assemblySpot.angle : 0) };
+}
+
+
 /** The assembled bounding box of one use, in the whole set's own frame. */
 export function useBox(asm: Assembly, path: string): Box | null {
   let box: Box | null = null;
@@ -138,10 +188,14 @@ export function markers(plan: Plan, asm: Assembly, tl: Timeline | null, uses = s
     const raw = useBox(asm, use.path);
     if (!raw) continue;
     const spot = spotOf(plan, use);
-    if (spot) out.push({ ref: use.ref, label: use.label, raw, centre: [spot.x * STUD, spot.z * STUD], angle: spot.angle, placed: true });
-    else {
+    if (spot) {
+      const shown = sceneSpot(plan, asm.bounds, use.ref, spot);
+      out.push({ ref: use.ref, label: use.label, raw, centre: [shown.x * STUD, shown.z * STUD], angle: shown.angle, placed: true });
+    } else {
       const auto = autoCentre(tl, use);
-      if (auto) out.push({ ref: use.ref, label: use.label, raw, centre: auto, angle: 0, placed: false });
+      if (auto) out.push({ ref: use.ref, label: use.label, raw, centre: auto,
+        angle: !isMainSpot(use.ref) && plan.assemblySpot && plan.loosePiecesFollow !== false ? plan.assemblySpot.angle : 0,
+        placed: false });
     }
   }
   return out;
@@ -152,12 +206,21 @@ export type SpotFootprint = { ref: SpotRef; label: string; box: Box; placed: boo
 
 /** The build areas as boxes, for the static overlap check (a placed spot's box is turned by its angle). */
 export function footprints(plan: Plan, asm: Assembly, tl: Timeline | null): SpotFootprint[] {
-  return markers(plan, asm, tl).map((m) => ({
-    ref: m.ref,
-    label: m.label,
-    box: m.placed ? spotBox(m.raw, { x: m.centre[0] / STUD, z: m.centre[1] / STUD, angle: m.angle }) : boxAt(m.raw, m.centre[0], m.centre[1]),
-    placed: m.placed,
-  }));
+  // All work areas occupy the same floor. A submodel's assembled geometry may
+  // sit *above* the floor in its final attached pose; checking its original Y
+  // interval would miss two bays whose floor footprints physically coincide.
+  const ground = tl?.ground ?? asm.bounds?.max[1] ?? 0;
+  return markers(plan, asm, tl).map((m) => {
+    const height = m.raw.max[1] - m.raw.min[1];
+    const floorBox: Box = { min: [m.raw.min[0], ground - height, m.raw.min[2]],
+      max: [m.raw.max[0], ground, m.raw.max[2]] };
+    return {
+      ref: m.ref,
+      label: m.label,
+      box: spotBox(floorBox, { x: m.centre[0] / STUD, z: m.centre[1] / STUD, angle: m.angle }),
+      placed: m.placed,
+    };
+  });
 }
 
 /** The four footprint corners of a box swung about the vertical axis, with its centre at (x, z) LDU. */

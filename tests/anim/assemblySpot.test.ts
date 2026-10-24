@@ -1,6 +1,8 @@
-import type * as THREE from 'three';
+import * as THREE from 'three';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { applyAssemblySpotTransform, buildTimeline, poseAt, rootSpotLayout, spotTransform } from '../../src/anim/timeline';
+import { applyAssemblySpotTransform, applyFloorShifts, buildTimeline, flightPose, poseAt, rootSpotLayout, spotTransform } from '../../src/anim/timeline';
+import { decodeTimeline, encodeTimeline } from '../../src/anim/timelineCodec';
+import { projectToJson, readProjectFile } from '../../src/io/projectFile';
 import type { Timeline } from '../../src/anim/timeline';
 import { assemble, transformBox, unionBox, type Assembly, type Metrics } from '../../src/model/assemble';
 import type { Box } from '../../src/ldraw/flatten';
@@ -52,6 +54,19 @@ describe('main spot, loose pieces follow on (after planning)', () => {
       for (const [key, tr] of plain.tracks) {
         expectMat(moved.tracks.get(key)!.final, S.clone().multiply(tr.final));
         expectMat(moved.tracks.get(key)!.floor, S.clone().multiply(tr.floor));
+      }
+      // Animation must transform *every frame*, not just its endpoints. This
+      // catches stale V2 translationPath/posePath and legacy insertion vectors.
+      for (const unit of plain.units) {
+        for (const fraction of [0.15, 0.37, 0.68, 0.92]) {
+          const t = unit.start + fraction * unit.dur;
+          const original = poseAt(plain, t);
+          const transformed = poseAt(moved, t);
+          for (const key of unit.keys) {
+            const a = original(key), b = transformed(key);
+            if (a && b) expectMat(b, S.clone().multiply(a), 1e-2);
+          }
+        }
       }
       // the finished model's footprint centre lands on the spot
       expect(centre2(moved.modelBox)[0]).toBeCloseTo(spot.x * 20, 3);
@@ -148,6 +163,77 @@ describe('submodel build spot', () => {
     expect(centre2(sb.focus)[1]).toBeCloseTo(-6 * 20, 0);
     const end = poseAt(tl, tl.duration);
     for (const inst of asm.instances.filter((i) => i.model === 'wheel')) expectMat(end(inst.key)!, inst.world);
+  });
+
+  it('construction-v2: a 30-degree submodel spot is built, carried rigidly, then attached', () => {
+    const spot = { x: 14, z: -6, angle: 30 };
+    const p = setSubmodelBuildSpot(sub(), '', 's1', spot);
+    const asm = assemble(p, metrics, fixtureColors);
+    const tl = buildTimeline(asm, metrics, v2);
+    const attach = tl.units.find(u => u.operationId === 'construct:s1')!;
+    const op = tl.construction!.operations.find(o => o.id === 'construct:s1')!;
+    expect(op.rigidPath).toBeDefined();
+    const delta = new THREE.Matrix4().fromArray(op.rigidPath![0]);
+    const pieces = asm.instances.filter(i => i.model === 'wheel');
+    const built = poseAt(tl, attach.start - 0.001);
+    const footprint = boxOf(pieces, built)!;
+    expect(centre2(footprint)[0]).toBeCloseTo(spot.x * 20, 1);
+    expect(centre2(footprint)[1]).toBeCloseTo(spot.z * 20, 1);
+    for (const inst of pieces) expectMat(built(inst.key)!, delta.clone().multiply(inst.world));
+    // The member-to-member matrix MUST remain constant at intermediate frames.
+    // Interpolating each brick's own yaw/position separately deforms the group.
+    const a = pieces[0].key, b = pieces[1].key;
+    const relative = (get: (key: string) => THREE.Matrix4 | null) => get(a)!.clone().invert().multiply(get(b)!);
+    const finalRelative = pieces[0].world.clone().invert().multiply(pieces[1].world);
+    for (const f of [0.1, 0.37, 0.5, 0.75, 0.9]) {
+      const time = attach.start + f * attach.dur;
+      expectMat(relative(poseAt(tl, time)), finalRelative, 1e-2);
+    }
+    const end = poseAt(tl, tl.duration);
+    for (const inst of pieces) expectMat(end(inst.key)!, inst.world);
+  });
+
+  it('construction-v2: main-spot rotation and timeline codec preserve the turned flight at every frame', () => {
+    const p = setSubmodelBuildSpot(sub(), '', 's1', { x: 14, z: -6, angle: 45 });
+    const asm = assemble(p, metrics, fixtureColors);
+    const tl = buildTimeline(asm, metrics, v2);
+    const main = { x: -8, z: 9, angle: 90 };
+    const S = spotTransform(main, tl.modelBox);
+    const moved = applyAssemblySpotTransform(tl, main);
+    const decoded = decodeTimeline(structuredClone(encodeTimeline(moved)));
+    const saved = readProjectFile(projectToJson(p, [{ model: '', opts: 'rotated-v2', timeline: encodeTimeline(moved) }]));
+    if (!saved.ok) throw new Error(saved.errors.join('; '));
+    expect(saved.skipped).toBe(0);
+    const reopened = decodeTimeline(saved.timelines[0].timeline);
+    const op = tl.units.find(u => u.operationId === 'construct:s1')!;
+    expect(op).toBeDefined();
+    for (const fraction of [0, 0.05, 0.2, 0.39, 0.5, 0.7, 0.88, 0.999, 1]) {
+      const t = op.start + fraction * op.dur;
+      const before = poseAt(tl, t), after = poseAt(moved, t), roundTrip = poseAt(decoded, t), fromFile = poseAt(reopened, t);
+      for (const key of op.keys) {
+        const a = before(key), b = after(key), c = roundTrip(key);
+        expect(b === null).toBe(a === null);
+        if (a && b && c) {
+          expectMat(b, S.clone().multiply(a), 1e-2);
+          expectMat(c, b, 1e-3);
+          expectMat(fromFile(key)!, b, 1e-3);
+        }
+      }
+    }
+  });
+
+  it('construction-v2: dragging a loose part does not teleport when its rigid flight starts', () => {
+    const p = setSubmodelBuildSpot(sub(), '', 's1', { x: 14, z: -6, angle: 30 });
+    const asm = assemble(p, metrics, fixtureColors);
+    const tl = buildTimeline(asm, metrics, v2);
+    const key = asm.instances.find(i => i.model === 'wheel')!.key;
+    const original = tl.tracks.get(key)!.moves[0];
+    const shifted = applyFloorShifts(tl, new Map<string, [number, number]>([[key, [3, -2]]]));
+    const moved = shifted.tracks.get(key)!.moves[0];
+    expect(moved.rigidDeltas!.length).toBe(original.rigidDeltas!.length + 1);
+    expectMat(moved.from, new THREE.Matrix4().makeTranslation(60, 0, -40).multiply(original.from));
+    expectMat(flightPose(moved, 0.0001, new THREE.Matrix4()), moved.from, 1e-3);
+    expectMat(flightPose(moved, 1, new THREE.Matrix4()), moved.to, 1e-6);
   });
 
   it('with no build spot the submodel keeps its automatic side spot', () => {

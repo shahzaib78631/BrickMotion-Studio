@@ -103,11 +103,15 @@ export type Operation = {
     model: string;
     step: number;
     requires: string[];
-    connections: string[]; /** World translation offsets relative to the members' exact imported placements. */
+    connections: string[];
+    /** Position of each world delta's translation component. With no rigidPath
+     * these are ordinary translation offsets, as in previous V2 plans. */
     path: V3[];
-    /** Optional checked world-rigid deltas, one per `path` waypoint. Each delta
-     * left-multiplies every member's exact imported placement. Endpoints remain
-     * translation-only so staging/final transforms stay exact. */
+    /** Fully checked WORLD-rigid deltas, one per waypoint, left-multiplied onto
+     * every member's imported final matrix. Endpoints may have different yaws:
+     * staged submodels are rotated in the bay and are unrotated as they attach.
+     * Each turn is certified by a continuous enclosing sphere; no collision
+     * exemptions are granted to cross-orientation sweeps. */
     rigidPath?: M4[];
     check: {
         method: 'continuous-triangle-sat';

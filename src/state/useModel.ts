@@ -54,6 +54,11 @@ export function computeModel(plan: Plan, editingModel: string): Omit<ModelState,
 
 type Base = { plan: Plan; assembly: Assembly; warnings: Warning[] };
 
+/** Metadata-only scene edits cannot invalidate the assembled source geometry. */
+const sameGeometry = (a: Plan, b: Plan) => a.steps === b.steps &&
+  a.submodels === b.submodels && a.parts === b.parts &&
+  a.name === b.name && a.description === b.description;
+
 /**
  * Loads the parts a plan needs, then assembles and validates it whenever it changes.
  * Opening a submodel only assembles that submodel: the whole set is not rebuilt or
@@ -67,6 +72,13 @@ export function useModel(): ModelState {
   useEffect(() => {
     let cancelled = false;
     setFailure(null);
+    // Main spot edits move the timeline, NOT the source geometry. Reuse the
+    // assembled set and its warnings instead of unloading the viewer on every
+    // position/angle edit (and avoid a needless full model rebuild).
+    if (base && sameGeometry(base.plan, plan)) {
+      setBase({ ...base, plan });
+      return () => { cancelled = true; };
+    }
     Promise.resolve().then(() => {
       registerInlineParts(plan.parts);
       return ensureParts(allPartIds(plan));
@@ -84,10 +96,14 @@ export function useModel(): ModelState {
   return useMemo<ModelState>(() => {
     const error = failure?.plan === plan ? failure.message : '';
     if (!base) return { plan, assembly: EMPTY, view: EMPTY, viewPlan: plan, warnings: [], ready: false, error };
-    const viewPlan = scopedPlan(base.plan, editingModel);
-    const view = editingModel ? assemble(viewPlan, metricsOf, getColors()) : base.assembly;
-    const warnings = editingModel ? base.warnings.filter((w) => w.model === editingModel) : base.warnings;
-    return { plan: base.plan, assembly: base.assembly, view, viewPlan, warnings, ready: base.plan === plan && !error, error };
+    // The render immediately after a spot edit must stay ready, even before the
+    // metadata-only effect synchronises Base. Otherwise useTimeline is briefly
+    // disabled and loses the active animation while a marker is committed.
+    const current = sameGeometry(base.plan, plan) ? { ...base, plan } : base;
+    const viewPlan = scopedPlan(current.plan, editingModel);
+    const view = editingModel ? assemble(viewPlan, metricsOf, getColors()) : current.assembly;
+    const warnings = editingModel ? current.warnings.filter((w) => w.model === editingModel) : current.warnings;
+    return { plan: current.plan, assembly: current.assembly, view, viewPlan, warnings, ready: current.plan === plan && !error, error };
     // `plan` only matters before the first assembly; afterwards `base` carries it
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [base, editingModel, plan, failure]);

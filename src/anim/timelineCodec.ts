@@ -27,7 +27,7 @@ export function encodeTimeline(tl: Timeline): EncodedTimeline {
         ctx: tr.ctx,
         floor: ref(tr.floor),
         final: ref(tr.final),
-        moves: tr.moves.map((mv) => ({ ...mv, from: ref(mv.from), to: ref(mv.to), rel: ref(mv.rel), posePath: mv.posePath?.map(ref) })),
+        moves: tr.moves.map((mv) => ({ ...mv, from: ref(mv.from), to: ref(mv.to), rel: ref(mv.rel), posePath: mv.posePath?.map(ref), rigidDeltas: mv.rigidDeltas?.map(ref), rigidBase: mv.rigidBase == null ? undefined : ref(mv.rigidBase) })),
       },
     ]);
   const mats = new Float64Array(list.length * 16);
@@ -51,7 +51,7 @@ export function decodeTimeline(enc: EncodedTimeline): Timeline {
       ctx: tr.ctx,
       floor: mat(tr.floor),
       final: mat(tr.final),
-      moves: tr.moves.map((mv) => ({ ...mv, from: mat(mv.from), to: mat(mv.to), rel: mv.rel < 0 ? null : mat(mv.rel), posePath: mv.posePath?.map(mat) })),
+      moves: tr.moves.map((mv) => ({ ...mv, from: mat(mv.from), to: mat(mv.to), rel: mv.rel < 0 ? null : mat(mv.rel), posePath: mv.posePath?.map(mat), rigidDeltas: mv.rigidDeltas?.map(mat), rigidBase: mv.rigidBase == null ? undefined : mat(mv.rigidBase) })),
     });
   const { mats: _m, tracks: _t, ...rest } = enc;
   return { ...rest, tracks };

@@ -4,9 +4,9 @@ import type { EncodedTimeline } from '../timelineData';
 import type { AnimOptions } from '../pacing';
 import { choosePacing } from '../pacing';
 import type { Box } from '../../ldraw/flatten';
+import { sameOrientation, turningSphere } from './rigidStaging';
 import { ConstructionError, type ConstructionPlan } from './types';
-import { sub, translated, shiftBox, union, norm, validMatrix, multiply, transformBox } from './math';
-import type { V3 } from './math';
+import { sub, translated, shiftBox, union, validMatrix, multiply, transformBox, invert, centre } from './math';
 export function compileConstruction(plan: ConstructionPlan, opts: AnimOptions): EncodedTimeline {
     if (!Number.isFinite(opts.targetSeconds) || opts.targetSeconds <= 0 || [opts.introSeconds, opts.buildSeconds, opts.outroSeconds].some(v => v != null && !Number.isFinite(v)))
         throw new ConstructionError('invalid-input', 'Animation timing must be finite and targetSeconds must be positive.');
@@ -17,11 +17,17 @@ export function compileConstruction(plan: ConstructionPlan, opts: AnimOptions): 
         throw new ConstructionError('invalid-plan', 'Duplicate part keys in construction output.');
     type ETrack = EncodedTimeline['tracks'][number][1];
     const tracks = new Map<string, ETrack>();
+    // Camera framing visits every part after every operation. Cache affine
+    // inverses once rather than inverting a thousand matrices per frame key.
+    const inverseFinal = new Map<string, number[]>();
     for (const p of plan.parts) {
         if (!validMatrix(p.final) || !validMatrix(p.staged))
             throw new ConstructionError('invalid-plan', `Invalid matrix for ${p.key}.`);
-        const offset: V3 = [p.staged[12] - p.final[12], p.staged[13] - p.final[13], p.staged[14] - p.final[14]];
-        tracks.set(p.key, { appear: 0, floor: ref(p.staged), final: ref(p.final), floorBox: shiftBox(p.bounds, offset), ctx: 0, moves: [] });
+        inverseFinal.set(p.key, invert(p.final));
+        // Stage bounds must use the actual rigid orientation. A translated
+        // AABB misses the angled ends of a long sideways submodel.
+        const delta = multiply(p.staged, inverseFinal.get(p.key)!);
+        tracks.set(p.key, { appear: 0, floor: ref(p.staged), final: ref(p.final), floorBox: transformBox(p.bounds, delta), ctx: 0, moves: [] });
     }
     const units: EncodedTimeline['units'] = [], steps: EncodedTimeline['steps'] = [], camKeys: EncodedTimeline['camKeys'] = [], subBuilds: EncodedTimeline['subBuilds'] = [];
     let time = pacing.intro;
@@ -30,6 +36,8 @@ export function compileConstruction(plan: ConstructionPlan, opts: AnimOptions): 
     for (const op of plan.operations) {
         if (operationIndex.has(op.id) || op.keys.length !== new Set(op.keys).size || !op.keys.length || op.path.length < 2 || op.path.some(p => p.length !== 3 || !p.every(Number.isFinite)) || (op.rigidPath && (op.rigidPath.length !== op.path.length || op.rigidPath.some(m => !validMatrix(m)))))
             throw new ConstructionError('invalid-plan', `Malformed operation ${op.id}.`);
+        for (const key of op.keys) if (!parts.has(key))
+            throw new ConstructionError('invalid-plan', `Unknown moving part ${key} in ${op.id}.`);
         const index = units.length, requires = op.requires.map(id => { const n = operationIndex.get(id); if (n === undefined)
             throw new ConstructionError('invalid-plan', `Unfinished prerequisite ${id}.`); return n; });
         operationIndex.set(op.id, index);
@@ -41,6 +49,8 @@ export function compileConstruction(plan: ConstructionPlan, opts: AnimOptions): 
         let travel: Box | null = null;
         let land: Box | null = null;
         const translationPath = op.rigidPath ? undefined : op.path.map(p => sub(p, op.path[0]));
+        const rigidPivot = op.rigidPath ? centre(op.keys.map(key => parts.get(key)!.bounds).reduce(union)) : undefined;
+        const rigidDeltas = op.rigidPath?.map(ref);
         for (const key of op.keys) {
             const p = parts.get(key), tr = tracks.get(key);
             if (!p || !tr)
@@ -50,7 +60,8 @@ export function compileConstruction(plan: ConstructionPlan, opts: AnimOptions): 
             if (from.some((v, k) => Math.abs(v - current.get(key)![k]) > 1e-8))
                 throw new ConstructionError('invalid-plan', `Discontinuous operation at ${key}.`);
             // Do not decompose/recompose these matrices: preserve exact source shear.
-            tr.moves.push({ unit: index, from: ref(from), to: ref(to), rel: -1, hold: 0, skyY: 0, entry: [0, 0, 0], translationPath, posePath: posePath?.map(ref) });
+            tr.moves.push({ unit: index, from: ref(from), to: ref(to), rel: -1, hold: 0, skyY: 0, entry: [0, 0, 0], translationPath,
+                posePath: posePath?.map(ref), rigidDeltas, rigidBase: op.rigidPath ? ref(p.final) : undefined, rigidPivot });
             current.set(key, to);
             const landed = op.rigidPath ? transformBox(p.bounds, op.rigidPath[op.rigidPath.length - 1]) : shiftBox(p.bounds, op.path[op.path.length - 1]);
             land = land ? union(land, landed) : landed;
@@ -63,19 +74,30 @@ export function compileConstruction(plan: ConstructionPlan, opts: AnimOptions): 
             else for (const offset of op.path)
                 travel = travel ? union(travel, shiftBox(p.bounds, offset)) : shiftBox(p.bounds, offset);
         }
+        if (op.rigidPath) {
+            // Waypoint boxes do not enclose the intermediate yaw of a long
+            // assembly. Include each continuously certified rotation envelope
+            // so the camera cannot cut off the part halfway through its turn.
+            const bounds = op.keys.map(key => parts.get(key)!.bounds).reduce(union);
+            for (let i = 1; i < op.rigidPath.length; i++)
+                if (!sameOrientation(op.rigidPath[i - 1], op.rigidPath[i]))
+                    travel = travel ? union(travel, turningSphere(bounds, op.rigidPath[i - 1])) : turningSphere(bounds, op.rigidPath[i - 1]);
+        }
         units.push({ kind: op.kind === 'attach-subassembly' ? 'attach' : 'piece', keys: [...op.keys], start: time, dur, step: steps.length, dependsOn: requires, box: travel, land, operationId: op.id });
         steps.push({ model: op.model, index: op.step, start: time, end: time + dur });
         let visible = plan.bounds;
         for (const p of plan.parts) {
             const at = current.get(p.key)!;
-            visible = union(visible, shiftBox(p.bounds, [at[12] - p.final[12], at[13] - p.final[13], at[14] - p.final[14]]));
+            visible = union(visible, transformBox(p.bounds, multiply(at, inverseFinal.get(p.key)!)));
         }
         if (travel)
             visible = union(visible, travel);
         camKeys.push({ t: time, box: visible }, { t: time + dur, box: visible });
         if (op.kind === 'attach-subassembly') {
             const earlier = plan.operations.slice(0, index).map((o, i) => ({ o, i })).filter(({ o }) => o.keys.some(k => op.keys.includes(k)));
-            const focus = op.keys.map(k => shiftBox(parts.get(k)!.bounds, op.path[0])).reduce(union);
+            const focus = op.keys.map(k => op.rigidPath
+                ? transformBox(parts.get(k)!.bounds, op.rigidPath[0])
+                : shiftBox(parts.get(k)!.bounds, op.path[0])).reduce(union);
             subBuilds.push({ key: op.id.slice('construct:'.length), name: op.id.includes('$mechanical:') ? 'Mechanical subassembly' : op.scope, closeUp: false, start: earlier.length ? units[earlier[0].i].start : time, attachStart: time, attachEnd: time + dur, focus });
         }
         time += dur;

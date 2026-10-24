@@ -154,7 +154,16 @@ export function floorShiftsByKey(p: Plan, m: ModelName): Map<string, [number, nu
  * "loose pieces follow" on it is not part of the planning cache key, so the build is
  * not planned again.
  */
+function safeSpot(spot: AssemblySpot | null): void {
+  if (spot && (![spot.x, spot.z, spot.angle].every(Number.isFinite)))
+    throw new RangeError('Assembly spot coordinates and angle must be finite numbers.');
+}
+const equalSpot = (a: AssemblySpot | undefined, b: AssemblySpot | null) =>
+  (!a && !b) || (!!a && !!b && a.x === b.x && a.z === b.z && a.angle === b.angle);
+
 export function setAssemblySpot(p: Plan, spot: AssemblySpot | null): Plan {
+  safeSpot(spot);
+  if (equalSpot(p.assemblySpot, spot)) return p;
   if (spot === null) {
     const { assemblySpot: _, ...rest } = p;
     return rest as Plan;
@@ -164,6 +173,7 @@ export function setAssemblySpot(p: Plan, spot: AssemblySpot | null): Plan {
 
 /** Whether the loose floor layout moves and turns with the main spot. On is the default (no key). */
 export function setLoosePiecesFollow(p: Plan, loosePiecesFollow: boolean): Plan {
+  if ((p.loosePiecesFollow !== false) === loosePiecesFollow) return p;
   if (loosePiecesFollow) {
     const { loosePiecesFollow: _, ...rest } = p;
     return rest as Plan;
@@ -176,6 +186,9 @@ export function setLoosePiecesFollow(p: Plan, loosePiecesFollow: boolean): Plan 
  * applies to every copy of the submodel that contains it, like `floorShift`.
  */
 export function setSubmodelBuildSpot(p: Plan, modelName: ModelName, subId: string, spot: AssemblySpot | null): Plan {
+  safeSpot(spot);
+  const item = modelSteps(p, modelName).flatMap(s => s.pieces).find(i => isSub(i) && i.id === subId);
+  if (!item || !isSub(item) || equalSpot(item.assembly?.buildSpot, spot)) return p;
   const steps = modelSteps(p, modelName).map((s) => (!s.pieces.some((i) => isSub(i) && i.id === subId) ? s : {
     ...s,
     pieces: s.pieces.map((i) => {

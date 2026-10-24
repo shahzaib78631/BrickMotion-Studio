@@ -41,6 +41,14 @@ export function ChecksPanel({ warnings }: { warnings: Warning[] }) {
                   <button
                     title={w.message}
                     onClick={() => {
+                      if (w.kind === 'assembly-spot') {
+                        // Spots are selected in the root Build scene, even if a
+                        // nested SubItem owns their plan entry. Selecting parts
+                        // here used to clear the warning without showing its marker.
+                        if (st.editingModel) st.setEditingModel('');
+                        st.selectSpot({ model: w.model, id: w.itemIds[0] ?? '' });
+                        return;
+                      }
                       if (w.model !== st.editingModel) st.setEditingModel(w.model);
                       st.select(w.itemIds);
                       st.requestFocus(w.itemIds);
