@@ -59,9 +59,10 @@ const AnimationKeySchema = z.object({
   value: num,
   interpolation: KeyInterpolationSchema,
 });
-const AnimationChannels = ['location.x', 'location.y', 'location.z', 'rotation.x', 'rotation.y', 'rotation.z', 'scale.x', 'scale.y', 'scale.z'] as const;
+const AnimationChannels = ['location.x', 'location.y', 'location.z', 'rotation.x', 'rotation.y', 'rotation.z', 'scale.x', 'scale.y', 'scale.z', 'visibility'] as const;
 const AnimationTrackSchema = z.object({
   kind: z.literal('object'),
+  source: z.literal('baked-flight').optional(),
   model: z.string(),
   target: z.string().min(1),
   channels: z.object(Object.fromEntries(AnimationChannels.map((channel) => [channel, z.array(AnimationKeySchema).max(5000).optional()]))).superRefine((channels, ctx) => {
@@ -91,6 +92,8 @@ const AnimationSchema = z.object({
   const seen = new Set<string>();
   for (let i = 0; i < animation.tracks.length; i++) {
     const track = animation.tracks[i];
+    if (track.source === 'baked-flight' && track.channels.visibility?.some((key) => key.value !== 0 && key.value !== 1))
+      ctx.addIssue({ code: 'custom', path: ['tracks', i, 'channels', 'visibility'], message: 'Baked visibility keys must be 0 or 1' });
     const id = JSON.stringify([track.model, track.target]);
     if (seen.has(id)) ctx.addIssue({ code: 'custom', path: ['tracks', i], message: 'Duplicate animation target' });
     seen.add(id);

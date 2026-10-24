@@ -63,6 +63,10 @@ export function readProjectFile(text: string): { ok: true; plan: Plan; timelines
   for (const t of Array.isArray(json.timelines) ? json.timelines : []) {
     try {
       if (typeof t.model !== 'string' || typeof t.opts !== 'string' || typeof t.timeline?.mats !== 'string' || !Array.isArray(t.timeline.tracks) || !Array.isArray(t.timeline.units)) throw new Error('bad shape');
+      // Older 'certified' V2 clips were checked with outdated connector and
+      // swept-contact logic. Never silently reuse an obsolete safety claim:
+      // replan after loading instead. Standard visual clips remain compatible.
+      if (t.timeline.construction && (t.timeline.certificationVersion ?? 0) < 2) throw new Error('old collision certificate');
       const mats = fromBase64(t.timeline.mats);
       const count = mats.length / 16;
       const validRef = (i: number) => Number.isInteger(i) && i >= 0 && i < count;

@@ -1,4 +1,5 @@
-import { planConstruction,modelFromNodes,compileConstruction } from './construction';
+import { planConstruction,modelFromNodes,compileConstruction,ConstructionError } from './construction';
+import { eligibleForPreview, previewProvenance } from './construction/previewFallback';
 import { decodeTimeline } from './timelineCodec';
 import { pathOffset } from './construction/math';
 import type { ConstructionPlan } from './construction/types';
@@ -181,17 +182,33 @@ export const DEFAULT_ACCESS_WORK = 1500;
  * floor where it was). Null = lay out around the model itself, as always.
  */
 export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProgress?: (p: PlanningProgress) => void, layoutBox: Box | null = null): Timeline {
-  if (opts.planner === 'construction-v2') {
-    const model = modelFromNodes(asm.nodes, metrics);
-    const construction = planConstruction(model, {
-      maxStates: opts.constructionMaxStates,
-      maxMilliseconds: opts.constructionMaxMilliseconds,
-      supportMode: opts.constructionSupport ?? 'fixture',
-      mechanicalSubassemblies: opts.constructionMechanicalSubassemblies,
-      layoutBounds: layoutBox ?? undefined,
-      onProgress: (p) => onProgress?.({ ...p, phase: p.phase === 'connections' ? 'connections' : p.phase === 'validation' ? 'validation' : 'disassembly' }),
-    });
-    return decodeTimeline(compileConstruction(construction, opts));
+  if (opts.planner === 'construction-v2' || opts.planner === 'construction-auto' || opts.planner === 'construction-v3' || opts.planner === 'construction-v3-auto') {
+    try {
+      const model = modelFromNodes(asm.nodes, metrics);
+      const construction = planConstruction(model, {
+        algorithm: opts.planner === 'construction-v3' || opts.planner === 'construction-v3-auto' ? 'guided-v3' : 'exhaustive-v2',
+        maxStates: opts.constructionMaxStates,
+        maxCandidates: opts.constructionMaxCandidates,
+        maxMilliseconds: opts.constructionMaxMilliseconds,
+        supportMode: opts.constructionSupport ?? 'fixture',
+        mechanicalSubassemblies: opts.constructionMechanicalSubassemblies,
+        layoutBounds: layoutBox ?? undefined,
+        onProgress: (p) => onProgress?.({ ...p, phase: p.phase === 'connections' ? 'connections' : p.phase === 'validation' ? 'validation' : 'disassembly' }),
+      });
+      return decodeTimeline(compileConstruction(construction, opts));
+    } catch (error) {
+      // Adaptive mode is explicitly non-certifying. Only recover from a KNOWN
+      // geometric or search limitation. Malformed projects, missing meshes,
+      // cancellation and arbitrary programming bugs are never concealed.
+      if (opts.planner !== 'construction-auto' && opts.planner !== 'construction-v3-auto' || !(error instanceof ConstructionError) || !eligibleForPreview(error.code)) throw error;
+      const fallback = previewProvenance(error, opts.planner === 'construction-v3-auto' ? 'construction-v3' : 'construction-v2');
+      onProgress?.({ phase: 'preparing', completed: 0, total: 1, item: 'Building uncertified preview' });
+      const timeline = buildTimeline(asm, metrics, { ...opts, planner: 'legacy' }, onProgress, layoutBox);
+      // Standard's own uncertified flags only identify routes IT could not
+      // certify; they cannot validate the entire failed V2 scene. Mark every
+      // operation, and retain the original V2 failure for review/export.
+      return { ...timeline, units: timeline.units.map(unit => ({ ...unit, uncertified: true })), fallback };
+    }
   }
 
   let retryStart: number | undefined;

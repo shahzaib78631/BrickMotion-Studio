@@ -3,7 +3,7 @@ import type { EncodedTimeline } from '../anim/timelineData';
 import type { Plan } from '../plan/types';
 
 /** Bump when the planner's output changes, so stale timelines are planned again. */
-export const TIMELINE_CACHE_VERSION = 4;
+export const TIMELINE_CACHE_VERSION = 7;
 const MAX_ENTRIES = 40;
 const INDEX = 'timelines:index';
 const entryKey = (k: string) => `timeline:${k}`;

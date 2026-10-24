@@ -5,7 +5,14 @@ import { fixedBayPose, isIdentityOrientation, oracleOffsets, poseMoved, poseWith
 import { discoverConnections } from './connections';
 import { assemblyRole } from '../assemblyGraph';
 import { MeshOracle, SKIN } from './collision';
+import { certifiedMechanicalContact } from './mechanicalContacts';
+import { buildMechanicalConstraintGraph, explainMissingMechanicalMate } from './mechanicalConstraintGraph';
 import { mechanicalSubassemblies } from './subassemblies';
+import { semanticComposites } from './semanticComposites';
+import { recognizedGearMesh } from './meshingContacts';
+import { possibleFinalContacts } from './contactBroadphase';
+import { ScopeSceneIndex } from './sceneIndex';
+import { guidedDirections, nearDistances, farExits } from './nearFar';
 import { ConstructionError, type ConstructionModel, type ConstructionNode, type ConstructionPlan, type ConstructionOptions, type Blockage, type Operation, type SearchStats, type Connection } from './types';
 type Slot = {
     id: string;
@@ -31,22 +38,34 @@ function positive(value: number | undefined, fallback: number, max: number): num
  * contact limits when a search budget is exhausted.
  */
 export function planConstruction(model: ConstructionModel, options: ConstructionOptions = {}): ConstructionPlan {
-    const start = performance.now(), stats: SearchStats = { states: 0, candidates: 0, backtracks: 0, meshPairs: 0, trianglePairs: 0, cacheHits: 0, milliseconds: 0 };
+    const start = performance.now(), stats: SearchStats = { states: 0, candidates: 0, backtracks: 0, meshPairs: 0, trianglePairs: 0, cacheHits: 0, milliseconds: 0, guidedCandidates: 0, exhaustiveCandidates: 0, broadphaseQueries: 0, broadphaseHits: 0 };
+    const guided = options.algorithm === 'guided-v3';
     const maxStates = positive(options.maxStates, 2000, 100000), maxMilliseconds = positive(options.maxMilliseconds, 20000, 120000), maxCandidates = positive(options.maxCandidates, 100000, 2000000);
-    let scope = '', lastBlockages: Blockage[] = [];
+    let scope = '', phase: NonNullable<ConstructionError['details']['phase']> = 'connections', lastBlockages: Blockage[] = [];
     const pulse = () => {
         stats.milliseconds = Math.round(performance.now() - start);
         if (options.cancelled?.())
-            throw new ConstructionError('cancelled', 'Construction planning was cancelled.', { scope, stats: { ...stats } });
+            throw new ConstructionError('cancelled', 'Construction planning was cancelled.', { scope, phase, stats: { ...stats } });
         if (stats.milliseconds > maxMilliseconds || stats.states > maxStates || stats.candidates > maxCandidates)
-            throw new ConstructionError('search-budget-exhausted', 'The bounded search did not finish. This does not establish physical impossibility.', { scope, blockages: lastBlockages.slice(-12), stats: { ...stats } });
+            throw new ConstructionError('search-budget-exhausted', 'The bounded search did not finish. This does not establish physical impossibility.', { scope, phase, blockages: lastBlockages.slice(-12), stats: { ...stats } });
     };
     options.onProgress?.({ phase: 'connections', completed: 0, total: model.parts.size });
     const graph = discoverConnections(model), ground = model.bounds.max[1];
     pulse();
-    const rootNodes = options.mechanicalSubassemblies === false ? model.nodes : mechanicalSubassemblies(model.nodes, graph.connections, graph.dependencies);
+    const mechanicallyGrouped = options.mechanicalSubassemblies === false ? model.nodes : mechanicalSubassemblies(model.nodes, graph.connections, graph.dependencies);
+    const composite = semanticComposites(mechanicallyGrouped, model.metrics);
+    const rootNodes = composite.nodes;
+    // These are one pre-shaped part, not already-assembled independent bricks.
+    // Keep each rendered segment in the model/animation, but make one atomic
+    // stage/flight. All external collisions still use every original triangle.
+    const compositeOwners = new Map<string, string>();
+    const locateComposites = (nodes: ConstructionNode[]) => nodes.forEach(n => {
+        if (n.atomic) n.leaves.forEach(key => compositeOwners.set(key, n.id));
+        else if (n.children) locateComposites(n.children);
+    });
+    locateComposites(rootNodes);
     const all: ConstructionNode[] = [];
-    const collect = (nodes: ConstructionNode[]) => nodes.forEach(n => { all.push(n); if (n.children)
+    const collect = (nodes: ConstructionNode[]) => nodes.forEach(n => { all.push(n); if (n.children && !n.atomic)
         collect(n.children); });
     collect(rootNodes);
     const slots = new Map<string, Slot>(), gap = 24;
@@ -58,7 +77,7 @@ export function planConstruction(model: ConstructionModel, options: Construction
     // individually staged leaf in a separate inventory zone. Both zones remain
     // visible and physical once occupied; only their abstract empty boxes are
     // non-obstacles.
-    const groupNodes = all.filter(n => !!n.children?.length), leafNodes = all.filter(n => !n.children?.length);
+    const groupNodes = all.filter(n => !!n.children?.length && !n.atomic), leafNodes = all.filter(n => !n.children?.length || !!n.atomic);
     // A chosen build spot fixes a group bay. The automatic bays are laid out around it,
     // and it never moves because another spot moved.
     const layoutModel = options.layoutBounds ?? model.bounds;
@@ -103,6 +122,10 @@ export function planConstruction(model: ConstructionModel, options: Construction
     // stored loose pieces. The continuous scene replay still checks every real
     // staged mesh, so this is spatial planning rather than a collision bypass.
     pack(leafNodes, Math.max(workOriginX, workMaxX + 2 * gap));
+    for (const node of leafNodes) if (node.atomic) {
+        const staged = slots.get(node.id)!;
+        for (const key of node.leaves) slots.set(key, staged);
+    }
     // Work areas are planning coordinates, not physical obstacles. A group bay
     // is empty until that subassembly is actually moved there. Treating every
     // work area as solid made nested scopes (for example $upper/$lower minifig
@@ -114,13 +137,29 @@ export function planConstruction(model: ConstructionModel, options: Construction
     const sceneBounds = layoutAreas.map(s => s.box).reduce(union, model.bounds);
     const ceiling = Math.min(...layoutAreas.map(s => s.box.min[1])) - 32;
     const oracle = new MeshOracle(model, stats, pulse);
+    // Typed snap topology is inferred independently of construction order.
+    // Never infer an animation collision exception from a snap match alone.
+    const mechanicalGraph = guided ? buildMechanicalConstraintGraph(model, pulse) : undefined;
+    if (mechanicalGraph) graph.connections.push(...mechanicalGraph.connections);
     pulse();
     const hasContactPolicy = (c: Connection) => !!(c.region || c.regions?.length || c.surfaceTolerance);
     const hasMotionPolicy = (c: Connection) => hasContactPolicy(c) && !c.staticOnly;
-    const staticPolicyFor = (a: string, b: string) => graph.connections.find(c => c.child === a && c.parent === b && hasContactPolicy(c));
-    // A pair can carry several certificates (a stud connector plus the measured
-    // lift-off of a seat sunk into its base); the withdrawal is certified when any one does.
-    const motionPoliciesFor = (a: string, b: string) => graph.connections.filter(c => c.child === a && c.parent === b && hasMotionPolicy(c));
+    // Collision checks may consult contact policies millions of times. A
+    // per-pair map avoids repeatedly scanning every model connection for each
+    // leaf-vs-leaf swept test. Keep it updated as the final-contact audit adds
+    // narrow static-only certificates.
+    const directed = (a: string, b: string) => `${a.length}:${a}${b.length}:${b}`;
+    const policyIndex = new Map<string, Connection[]>();
+    const register = (c: Connection) => {
+        const key = directed(c.child, c.parent);
+        const list = policyIndex.get(key) ?? [];
+        list.push(c);
+        policyIndex.set(key, list);
+    };
+    graph.connections.forEach(register);
+    const addPolicy = (c: Connection) => { graph.connections.push(c); register(c); };
+    const staticPolicyFor = (a: string, b: string) => (policyIndex.get(directed(a, b)) ?? []).find(hasContactPolicy);
+    const motionPoliciesFor = (a: string, b: string) => (policyIndex.get(directed(a, b)) ?? []).filter(hasMotionPolicy);
     const clearWithPolicies = (a: string, b: string, from: V3, offset: V3, delta: V3) => {
         const policies = motionPoliciesFor(a, b);
         return policies.length ? policies.some(p => oracle.clear(a, b, from, offset, delta, p)) : oracle.clear(a, b, from, offset, delta);
@@ -164,16 +203,16 @@ export function planConstruction(model: ConstructionModel, options: Construction
         const basis: V3[] = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
         return { axis: unit(vector(n.matrix, basis[k])), thickness: d[k] };
     };
+    phase = 'final-contact-audit';
+    const auditStarted = performance.now();
+    scope = '$root';
     // Audit the supplied completed placement before spending a search budget on
     // access routes. Unmodelled mesh contact is NOT declared physically invalid.
     const finalContacts: Blockage[] = [], contactWarnings: string[] = [], leaves = [...model.parts.values()];
-    let certifiedSurfaceContacts = 0;
-    audit: for (let i = 0; i < leaves.length; i++)
-        for (let j = i + 1; j < leaves.length; j++) {
+    let certifiedSurfaceContacts = 0, certifiedMechanicalContacts = 0, recognizedGearContacts = 0;
+    audit: for (const [a, b] of possibleFinalContacts(leaves)) {
             pulse();
-            const a = leaves[i], b = leaves[j];
-            if (!overlaps(a.bounds, b.bounds, -1e-6))
-                continue;
+            if (compositeOwners.has(a.id) && compositeOwners.get(a.id) === compositeOwners.get(b.id)) continue;
             const ab = staticPolicyFor(a.id, b.id), ba = staticPolicyFor(b.id, a.id);
             const ta = thinSurface(a), tb = thinSurface(b);
             const ra = nodeRole(a), rb = nodeRole(b);
@@ -260,22 +299,76 @@ export function planConstruction(model: ConstructionModel, options: Construction
                     // certificate even when a real connector also exists.
                     const id = 'surface:' + JSON.stringify([obstacle.id, moving.id, outward.map(v => Math.round(v * 1e6) / 1e6)]);
                     if (!graph.connections.some(c => c.id === id))
-                        graph.connections.push({ id, parent: obstacle.id, child: moving.id, kind: 'surface', confidence: 'inferred', outward, surfaceTolerance: distance, staticOnly });
+                        addPolicy({ id, parent: obstacle.id, child: moving.id, kind: 'surface', confidence: 'inferred', outward, surfaceTolerance: distance, staticOnly });
                     certifiedSurfaceContacts++;
                 }
+                continue;
+            }
+            // Resolve otherwise unexplained completed-pose mechanical joints
+            // using LDCad cylinders AND the exact static triangle/containment
+            // oracle. This does not waive any insertion, extraction or flight.
+            // Reuse the directed contact-policy index. Filtering the entire
+            // mechanical topology for every touched pair is quadratic in the
+            // number of nearby connector proposals on large Technic models.
+            const candidates = mechanicalGraph ? [
+                ...(policyIndex.get(directed(moving.id, obstacle.id)) ?? []),
+                ...(policyIndex.get(directed(obstacle.id, moving.id)) ?? []),
+            ].filter(c => c.id.startsWith('profiled:') && c.staticOnly) : [];
+            const mechanical = candidates.find(c =>
+                oracle.clear(c.child, c.parent, ZERO, ZERO, ZERO, c))
+                ?? certifiedMechanicalContact(model, moving, obstacle, oracle)
+                ?? certifiedMechanicalContact(model, obstacle, moving, oracle);
+            if (mechanical) {
+                addPolicy(mechanical);
+                certifiedMechanicalContacts++;
+                continue;
+            }
+            // Gear teeth are intentionally engaged at final pose in many LDraw
+            // models. Classify only a measured, shallow, non-contained mesh
+            // between explicitly described gear parts. Never allow an unchecked
+            // arrival or departure: this certificate is static-only.
+            const meshing = recognizedGearMesh(model, moving, obstacle, oracle);
+            if (meshing) {
+                addPolicy(meshing);
+                recognizedGearContacts++;
                 continue;
             }
             const reason = relation.kind === 'penetration'
                 ? 'representative geometry is contained inside the other part'
                 : `the contact persists beyond the bounded ${contactProbe.toFixed(1)} LDU ${policy?.kind === 'stud' ? 'stud-residual' : 'render-surface'} probe`;
-            finalContacts.push({ moving: a.id, obstacle: b.id, stage: 'final-placement', detail: `Final mesh contact between ${a.part} and ${b.part} is unresolved: ${reason}. Add/repair connector metadata or correct the final placement; access order alone cannot certify it.` });
+            const connectorDiagnosis = mechanicalGraph ? ` ${explainMissingMechanicalMate(a, b, mechanicalGraph)}` : '';
+            const witness = relation.failure as { contactPolygon?: V3[]; point?: V3 } | undefined;
+            const contactPoint = witness?.contactPolygon?.[0] ?? witness?.point;
+            const position = contactPoint?.every(Number.isFinite)
+                ? ` Mesh witness near (${contactPoint.map(x => x.toFixed(2)).join(', ')}) LDU.` : '';
+            finalContacts.push({ moving: a.id, obstacle: b.id, stage: 'final-placement',
+                detail: `Final mesh contact between ${a.part} and ${b.part} is unresolved: ${reason}.${connectorDiagnosis}${position} Access order cannot certify it.`,
+                ...(position ? { contactPoint } : {}) });
             if (finalContacts.length >= 12)
                 break audit;
         }
+    if (mechanicalGraph?.joints.length) contactWarnings.push(`The LDCad constraint graph identified ${mechanicalGraph.joints.length} typed mechanical interface(s) across ${mechanicalGraph.pairsExamined} close part pairs. These are planning hints; only separately checked mesh contacts and swept paths can receive collision certification.`);
+    if (recognizedGearContacts) contactWarnings.push(`${recognizedGearContacts} shallow final-pose gear-tooth mesh contacts were recognized from part descriptions and measured separation. These are not route certificates: each insertion still requires strict swept-mesh verification. Gear articulation is not simulated.`);
+    if (certifiedMechanicalContacts)
+        contactWarnings.push(`${certifiedMechanicalContacts} previously unresolved completed-pose contacts match localized LDCad mechanical cylinders. The corresponding certifications are final-pose-only and do not relax animation route checks.`);
     if (certifiedSurfaceContacts)
         contactWarnings.push(`${certifiedSurfaceContacts} final-pose contacts were classified as bounded directional surface contact. Recognised stud residuals may use up to 6.0 LDU; thin decorations are bounded by their measured thickness; authored anatomical scene contacts use role-specific final-pose bounds (hand 16.05, headwear 8.05, head/leg 4.05 LDU); other unrecognised contacts remain <= 2.0 LDU. These inferred surface certificates are static-only: assembly paths still undergo continuous collision checks and none create part-wide motion tolerances.`);
-    if (finalContacts.length)
-        throw new ConstructionError('unresolved-final-contact', 'The completed model contains contacts that remain unexplained after connector and bounded surface-contact classification. Check connector metadata or the final placement; changing access order alone cannot certify them.', { scope: '$root', blockages: finalContacts, stats: { ...stats } });
+    stats.contactAuditMilliseconds = Math.round(performance.now() - auditStarted);
+    if (finalContacts.length) {
+        const partsOf = (b: Blockage) => [model.parts.get(b.moving)?.part, model.parts.get(b.obstacle)?.part]
+            .map(p => p?.toLowerCase().replace(/\.dat$/, '') ?? '');
+        const flexible = finalContacts.some(b => partsOf(b).some(p => p === '755' || p === '756'));
+        const meshing = finalContacts.some(b => partsOf(b).every(p => ['3647', '3743', '4143'].includes(p)));
+        const note = [
+            flexible ? 'This model includes overlapping 755/756 flexible-hose segments; these are not independent rigid brick joints and must be treated as one flex/composite element before a rigid route can be certified.' : '',
+            meshing ? 'Some gear/rack or gear/gear contacts are also unresolved; their mesh engagement needs connector-specific handling rather than a general collision exemption.' : '',
+        ].filter(Boolean).join(' ');
+        throw new ConstructionError('unresolved-final-contact',
+            'The completed model contains contacts that remain unexplained after connector and bounded surface-contact classification. ' +
+            (note || 'Check connector metadata or the final placement; changing access order alone cannot certify them.'),
+            { scope: '$root', blockages: finalContacts, stats: { ...stats } });
+    }
+    stats.contactAuditMilliseconds = Math.round(performance.now() - auditStarted);
     const remember = (b: Blockage) => { if (!lastBlockages.some(x => x.moving === b.moving && x.obstacle === b.obstacle && x.stage === b.stage))
         lastBlockages.push(b); if (lastBlockages.length > 64)
         lastBlockages.shift(); };
@@ -289,8 +382,13 @@ export function planConstruction(model: ConstructionModel, options: Construction
         const ma = model.parts.get(a)!, mb = model.parts.get(b)!;
         if (!sweptBox(stagedBounds(ma.bounds, from), stagedBounds(mb.bounds, obstacle), delta, -1e-6))
             return true;
-        if (!sameOrientation(from, to) || !sameOrientation(from, obstacle))
-            return false;
+        if (!sameOrientation(from, to)) return false;
+        if (!sameOrientation(from, obstacle)) {
+            const policies = withPolicy ? motionPoliciesFor(a, b) : [];
+            return policies.length
+                ? policies.some(p => oracle.clearPosed(a, b, from, obstacle, delta, p))
+                : oracle.clearPosed(a, b, from, obstacle, delta);
+        }
         const local = oracleOffsets(from, obstacle, delta);
         return withPolicy
             ? clearWithPolicies(a, b, local.a, local.b, local.delta)
@@ -298,9 +396,12 @@ export function planConstruction(model: ConstructionModel, options: Construction
     };
     const rememberSweep = (moving: ConstructionNode, obstacle: ConstructionNode, stage: Blockage['stage']) => {
         remember({ moving: moving.id, obstacle: obstacle.id, stage,
-            detail: 'Swept mesh collision or conservative cross-orientation bound. No unchecked transport is allowed between differently oriented build bays.' });
+            detail: 'Continuous triangle-mesh collision detected along the swept translation segment.' });
     };
-    const segmentClear = (node: ConstructionNode, from: M4, to: M4, remaining: ConstructionNode[], staged: StagedObstacle[], scopePose: M4, first: boolean): boolean => {
+    // The scene index is immutable for a search state. Every reported possible
+    // obstacle is still sent to the EXACT same MeshOracle as Construction V2.
+    // A conservative broad phase is never treated as a clearance certificate.
+    const segmentClear = (node: ConstructionNode, from: M4, to: M4, remaining: ConstructionNode[], staged: StagedObstacle[], scopePose: M4, first: boolean, index?: ScopeSceneIndex): boolean => {
         pulse();
         if (!sameOrientation(from, to))
             throw new ConstructionError('invalid-input', 'A translation segment cannot change its rigid orientation.');
@@ -311,20 +412,15 @@ export function planConstruction(model: ConstructionModel, options: Construction
             remember({ moving: node.id, obstacle: 'floor', stage: 'floor', detail: 'A swept endpoint lies below the table.' });
             return false;
         }
-        for (const placed of staged) {
-            if (placed.node === node || !sweptBox(at, stagedBounds(placed.node.bounds, placed.pose), delta, -1e-6)) continue;
-            for (const a of node.leaves) for (const b of placed.node.leaves) {
-                if (!clearSweep(a, b, from, to, placed.pose, false)) {
-                    rememberSweep(node, placed.node, 'transport');
-                    return false;
-                }
-            }
-        }
-        for (const other of remaining) {
-            if (other === node || !sweptBox(at, stagedBounds(other.bounds, scopePose), delta, -1e-6)) continue;
-            for (const a of node.leaves) for (const b of other.leaves) {
-                if (!clearSweep(a, b, from, to, scopePose, first)) {
-                    rememberSweep(node, other, first ? 'withdrawal' : 'transport');
+        const possible = index
+            ? index.swept(at, delta, node.id).map(hit => ({ node: hit.node, pose: hit.pose, staged: hit.staged }))
+            : [...staged.map(hit => ({ ...hit, staged: true })), ...remaining.map(other => ({ node: other, pose: scopePose, staged: false }))]
+                .filter(hit => hit.node !== node && sweptBox(at, stagedBounds(hit.node.bounds, hit.pose), delta, -1e-6));
+        if (index) { stats.broadphaseQueries!++; stats.broadphaseHits! += possible.length; }
+        for (const other of possible) {
+            for (const a of node.leaves) for (const b of other.node.leaves) {
+                if (!clearSweep(a, b, from, to, other.pose, first && !other.staged)) {
+                    rememberSweep(node, other.node, other.staged ? 'transport' : first ? 'withdrawal' : 'transport');
                     return false;
                 }
             }
@@ -334,7 +430,7 @@ export function planConstruction(model: ConstructionModel, options: Construction
     /** A rotation can only be made at a stationary world-space centre and when
      * the enclosing sphere is free. This is a continuous proof for ANY yaw,
      * including arbitrary 15/30/45-degree facing angles, not sampled frames. */
-    const rotationEnvelopeClear = (node: ConstructionNode, from: M4, to: M4, remaining: ConstructionNode[], staged: StagedObstacle[], scopePose: M4): boolean => {
+    const rotationEnvelopeClear = (node: ConstructionNode, from: M4, to: M4, remaining: ConstructionNode[], staged: StagedObstacle[], scopePose: M4, index?: ScopeSceneIndex): boolean => {
         pulse();
         const before = point(from, centre(node.bounds)), after = point(to, centre(node.bounds));
         if (norm(sub(before, after)) > 1e-6) return false;
@@ -343,27 +439,25 @@ export function planConstruction(model: ConstructionModel, options: Construction
             remember({ moving: node.id, obstacle: 'floor', stage: 'floor', detail: 'The conservative rotation envelope crosses the table.' });
             return false;
         }
-        for (const placed of staged) {
-            if (placed.node !== node && overlaps(envelope, stagedBounds(placed.node.bounds, placed.pose))) {
-                remember({ moving: node.id, obstacle: placed.node.id, stage: 'transport', detail: 'Continuous rotation envelope intersects an occupied staging part.' });
-                return false;
-            }
-        }
-        for (const other of remaining) {
-            if (other !== node && overlaps(envelope, stagedBounds(other.bounds, scopePose))) {
-                remember({ moving: node.id, obstacle: other.id, stage: 'transport', detail: 'Continuous rotation envelope intersects assembled geometry.' });
-                return false;
-            }
+        const possible = index
+            ? index.touching(envelope, node.id).map(hit => ({ node: hit.node, staged: hit.staged }))
+            : [...staged.map(hit => ({ node: hit.node, staged: true })), ...remaining.map(node => ({ node, staged: false }))]
+                .filter(hit => hit.node !== node && overlaps(envelope, stagedBounds(hit.node.bounds, hit.staged ? staged.find(p => p.node === hit.node)!.pose : scopePose)));
+        for (const other of possible) {
+            remember({ moving: node.id, obstacle: other.node.id, stage: 'transport', detail: other.staged
+                ? 'Continuous rotation envelope intersects an occupied staging part.'
+                : 'Continuous rotation envelope intersects assembled geometry.' });
+            return false;
         }
         return true;
     };
     const support = (node: ConstructionNode, remaining: ConstructionNode[], pose: M4): Removal['support'] | null => {
         if (Math.abs(stagedBounds(node.bounds, pose).max[1] - ground) <= SKIN) return 'table';
-        if (graph.connections.some(c => c.kind !== 'surface' && ((owns(node, c.child) && remaining.some(n => owns(n, c.parent))) || (owns(node, c.parent) && remaining.some(n => owns(n, c.child))))))
+        if (graph.connections.some(c => c.kind !== 'surface' && !c.staticOnly && ((owns(node, c.child) && remaining.some(n => owns(n, c.parent))) || (owns(node, c.parent) && remaining.some(n => owns(n, c.child))))))
             return 'connected';
         return options.supportMode === 'table' ? null : 'virtual-fixture';
     };
-    const route = (node: ConstructionNode, remaining: ConstructionNode[], staged: StagedObstacle[], scopePose: M4, scopeId: string): RouteResult | null => {
+    const route = (node: ConstructionNode, remaining: ConstructionNode[], staged: StagedObstacle[], scopePose: M4, scopeId: string, index?: ScopeSceneIndex, allowExhaustive = true, connected: Connection[] = []): RouteResult | null => {
         const target = slots.get(node.id)!.pose;
         // If a manually placed submodel bay already coincides with its installed
         // pose, its children assemble in place. There is no group carry flight,
@@ -373,7 +467,6 @@ export function planConstruction(model: ConstructionModel, options: Construction
         if (node.children?.length && node.hints?.buildSpot &&
             scopePose.every((v, k) => Math.abs(v - target[k]) < 1e-6))
             return { poses: [scopePose, target] };
-        const connected = graph.connections.filter(c => owns(node, c.child) && remaining.some(n => n !== node && owns(n, c.parent)));
         const preferred = connected.flatMap(c => c.outward ? (c.axial ? [c.outward, mul(c.outward, -1)] : [c.outward]) : []);
         const directions = node.hints?.insertionAxis ? [unit(node.hints.insertionAxis)] : unique([...preferred, ...AXES, ...axisDirections(node.matrix)]);
         const anatomical = connected.filter(c => c.kind === 'anatomical' && c.outward);
@@ -383,11 +476,62 @@ export function planConstruction(model: ConstructionModel, options: Construction
         const work = workAreas.get(scopeId)!.box;
         const rotatedBay = !sameOrientation(scopePose, target);
         const radius = norm(mul(size(node.bounds), .5));
+        // V3 NEAR/FAR: the small and meaningful search is run BEFORE V2's
+        // combinatorial fallback. It produces no certificates itself; every
+        // step uses the exact segment/turn validators and forward replay.
+        if (guided) {
+            const transformed = stagedBounds(node.bounds, scopePose);
+            const remainingBoxes = remaining.filter(n => n !== node).map(n => stagedBounds(n.bounds, scopePose));
+            const movingNode: ConstructionNode = { ...node, bounds: transformed,
+                hints: node.hints?.insertionAxis ? { ...node.hints, insertionAxis: unit(vector(scopePose, node.hints.insertionAxis)) } : node.hints };
+            const worldConnections = connected.map(c => ({ ...c, outward: c.outward ? unit(vector(scopePose, c.outward)) : undefined }));
+            const guidedAxes = guidedDirections(movingNode, worldConnections, dirs, remainingBoxes);
+            for (const dir of guidedAxes) {
+                // Each direction has only a handful of physically relevant
+                // extraction lengths, instead of a large cartesian candidate grid.
+                const depthCandidates = nearDistances(movingNode, dir, worldConnections, remainingBoxes, work);
+                for (const distance of depthCandidates) {
+                    stats.candidates++; stats.guidedCandidates!++; pulse();
+                    const entry = poseMoved(scopePose, mul(dir, distance));
+                    if (!segmentClear(node, scopePose, entry, remaining, staged, scopePose, true, index)) continue;
+                    const entryBox = stagedBounds(node.bounds, entry);
+                    for (const offset of farExits(entryBox, work, gap)) {
+                        const exit = poseMoved(entry, offset);
+                        if (!segmentClear(node, entry, exit, remaining, staged, scopePose, false, index)) continue;
+                        if (rotatedBay) {
+                            const skyCentreY = ceiling - radius;
+                            const exitCentre = point(exit, centre(node.bounds));
+                            const air = poseMoved(exit, [0, skyCentreY - exitCentre[1], 0]);
+                            if (!segmentClear(node, exit, air, remaining, staged, scopePose, false, index)) continue;
+                            const turned = poseWithCentreAndYaw(node.bounds, point(air, centre(node.bounds)), yawOf(target));
+                            if (!rotationEnvelopeClear(node, air, turned, remaining, staged, scopePose, index)) continue;
+                            const targetCentre = point(target, centre(node.bounds));
+                            const targetAir = poseMoved(target, [0, skyCentreY - targetCentre[1], 0]);
+                            if (!segmentClear(node, turned, targetAir, remaining, staged, scopePose, false, index)) continue;
+                            if (!segmentClear(node, targetAir, target, remaining, staged, scopePose, false, index)) continue;
+                            return { poses: compactPoses([scopePose, entry, exit, air, turned, targetAir, target]) };
+                        }
+                        const high = ceiling - node.bounds.max[1];
+                        const skyExit = poseMoved(exit, [0, high - pos(exit)[1], 0]);
+                        const skyTarget = poseMoved(target, [0, high - pos(target)[1], 0]);
+                        if (!segmentClear(node, exit, skyExit, remaining, staged, scopePose, false, index)) continue;
+                        if (!segmentClear(node, skyExit, skyTarget, remaining, staged, scopePose, false, index)) continue;
+                        if (!segmentClear(node, skyTarget, target, remaining, staged, scopePose, false, index)) continue;
+                        return { poses: compactPoses([scopePose, entry, exit, skyExit, skyTarget, target]) };
+                    }
+                }
+            }
+        }
+        // Exhaustive routing is deferred until EVERY eligible piece in the
+        // current search state has been tried using short guided NEAR/FAR paths.
+        // Failed near-route candidates are not proof of impossibility; the old
+        // method is still available as the second pass when necessary.
+        if (!allowExhaustive) return null;
         for (const dir of dirs) for (const distance of distances) {
-            stats.candidates++;
+            stats.candidates++; stats.exhaustiveCandidates!++;
             pulse();
             const entry = poseMoved(scopePose, mul(dir, distance));
-            if (!segmentClear(node, scopePose, entry, remaining, staged, scopePose, true)) continue;
+            if (!segmentClear(node, scopePose, entry, remaining, staged, scopePose, true, index)) continue;
             const p = pos(entry), entryBox = stagedBounds(node.bounds, entry);
             const slides: V3[] = [8, 16, 24, 32, 48, 64].flatMap(d => ([[d, 0, 0], [-d, 0, 0], [0, 0, d], [0, 0, -d]] as V3[]));
             const exits: M4[] = [entry, ...slides.map(d => poseMoved(entry, d)),
@@ -396,7 +540,7 @@ export function planConstruction(model: ConstructionModel, options: Construction
                 poseMoved(entry, [0, 0, work.min[2] - entryBox.max[2] - gap]),
                 poseMoved(entry, [0, 0, work.max[2] - entryBox.min[2] + gap])];
             for (const exit of exits) {
-                if (!segmentClear(node, entry, exit, remaining, staged, scopePose, false)) continue;
+                if (!segmentClear(node, entry, exit, remaining, staged, scopePose, false, index)) continue;
                 if (rotatedBay) {
                     // Lift ABOVE the full 3D turning sphere before yawing. Rotation
                     // is applied to the entire finished group, not its individual
@@ -404,21 +548,21 @@ export function planConstruction(model: ConstructionModel, options: Construction
                     const skyCentreY = ceiling - radius;
                     const exitCentre = point(exit, centre(node.bounds));
                     const air = poseMoved(exit, [0, skyCentreY - exitCentre[1], 0]);
-                    if (!segmentClear(node, exit, air, remaining, staged, scopePose, false)) continue;
+                    if (!segmentClear(node, exit, air, remaining, staged, scopePose, false, index)) continue;
                     const turned = poseWithCentreAndYaw(node.bounds, point(air, centre(node.bounds)), yawOf(target));
-                    if (!rotationEnvelopeClear(node, air, turned, remaining, staged, scopePose)) continue;
+                    if (!rotationEnvelopeClear(node, air, turned, remaining, staged, scopePose, index)) continue;
                     const targetCentre = point(target, centre(node.bounds));
                     const targetAir = poseMoved(target, [0, skyCentreY - targetCentre[1], 0]);
-                    if (!segmentClear(node, turned, targetAir, remaining, staged, scopePose, false)) continue;
-                    if (!segmentClear(node, targetAir, target, remaining, staged, scopePose, false)) continue;
+                    if (!segmentClear(node, turned, targetAir, remaining, staged, scopePose, false, index)) continue;
+                    if (!segmentClear(node, targetAir, target, remaining, staged, scopePose, false, index)) continue;
                     return { poses: compactPoses([scopePose, entry, exit, air, turned, targetAir, target]) };
                 }
                 const high = ceiling - node.bounds.max[1];
                 const skyExit = poseMoved(exit, [0, high - pos(exit)[1], 0]);
                 const skyTarget = poseMoved(target, [0, high - pos(target)[1], 0]);
-                if (!segmentClear(node, exit, skyExit, remaining, staged, scopePose, false)) continue;
-                if (!segmentClear(node, skyExit, skyTarget, remaining, staged, scopePose, false)) continue;
-                if (!segmentClear(node, skyTarget, target, remaining, staged, scopePose, false)) continue;
+                if (!segmentClear(node, exit, skyExit, remaining, staged, scopePose, false, index)) continue;
+                if (!segmentClear(node, skyExit, skyTarget, remaining, staged, scopePose, false, index)) continue;
+                if (!segmentClear(node, skyTarget, target, remaining, staged, scopePose, false, index)) continue;
                 return { poses: compactPoses([scopePose, entry, exit, skyExit, skyTarget, target]) };
             }
         }
@@ -429,10 +573,10 @@ export function planConstruction(model: ConstructionModel, options: Construction
             const pivot = centre(node.bounds), rotationAxes = unique([[1, 0, 0], [0, 1, 0], [0, 0, 1], ...axisDirections(node.matrix)] as V3[]);
             const rotationDistances = [...new Set([...distances, 64, 96, Math.max(96, extent * 2 + gap)])];
             for (const dir of dirs) for (const distance of rotationDistances) {
-                stats.candidates++;
+                stats.candidates++; stats.exhaustiveCandidates!++;
                 pulse();
                 const entry = poseMoved(scopePose, mul(dir, distance));
-                if (!segmentClear(node, scopePose, entry, remaining, staged, scopePose, true)) continue;
+                if (!segmentClear(node, scopePose, entry, remaining, staged, scopePose, true, index)) continue;
                 const entryCentre = point(entry, pivot);
                 const radius = norm(mul(size(node.bounds), .5)), skyY = ceiling - radius;
                 const skyEntry = poseMoved(entry, [0, skyY - entryCentre[1], 0]);
@@ -446,19 +590,19 @@ export function planConstruction(model: ConstructionModel, options: Construction
                     // after a certified withdrawal. This can clear an overhang
                     // that would obstruct an unrotated vertical ascent.
                     const rotatedEntry = turn(entry), rotatedSkyEntry = turn(skyEntry);
-                    if (rotationEnvelopeClear(node, entry, rotatedEntry, remaining, staged, scopePose) &&
-                        segmentClear(node, rotatedEntry, rotatedSkyEntry, remaining, staged, scopePose, false) &&
-                        segmentClear(node, rotatedSkyEntry, rotatedTarget, remaining, staged, scopePose, false) &&
-                        rotationEnvelopeClear(node, rotatedTarget, skyTarget, remaining, staged, scopePose) &&
-                        segmentClear(node, skyTarget, target, remaining, staged, scopePose, false))
+                    if (rotationEnvelopeClear(node, entry, rotatedEntry, remaining, staged, scopePose, index) &&
+                        segmentClear(node, rotatedEntry, rotatedSkyEntry, remaining, staged, scopePose, false, index) &&
+                        segmentClear(node, rotatedSkyEntry, rotatedTarget, remaining, staged, scopePose, false, index) &&
+                        rotationEnvelopeClear(node, rotatedTarget, skyTarget, remaining, staged, scopePose, index) &&
+                        segmentClear(node, skyTarget, target, remaining, staged, scopePose, false, index))
                         return { poses: compactPoses([scopePose, entry, rotatedEntry, rotatedSkyEntry, rotatedTarget, skyTarget, target]) };
                     // Additional safe escape: climb into an empty air lane first,
                     // then rotate inside the sphere above the entire scene.
-                    if (!segmentClear(node, entry, skyEntry, remaining, staged, scopePose, false)) continue;
-                    if (!rotationEnvelopeClear(node, skyEntry, rotatedSkyEntry, remaining, staged, scopePose)) continue;
-                    if (!segmentClear(node, rotatedSkyEntry, rotatedTarget, remaining, staged, scopePose, false)) continue;
-                    if (!rotationEnvelopeClear(node, rotatedTarget, skyTarget, remaining, staged, scopePose)) continue;
-                    if (!segmentClear(node, skyTarget, target, remaining, staged, scopePose, false)) continue;
+                    if (!segmentClear(node, entry, skyEntry, remaining, staged, scopePose, false, index)) continue;
+                    if (!rotationEnvelopeClear(node, skyEntry, rotatedSkyEntry, remaining, staged, scopePose, index)) continue;
+                    if (!segmentClear(node, rotatedSkyEntry, rotatedTarget, remaining, staged, scopePose, false, index)) continue;
+                    if (!rotationEnvelopeClear(node, rotatedTarget, skyTarget, remaining, staged, scopePose, index)) continue;
+                    if (!segmentClear(node, skyTarget, target, remaining, staged, scopePose, false, index)) continue;
                     return { poses: compactPoses([scopePose, entry, skyEntry, rotatedSkyEntry, rotatedTarget, skyTarget, target]) };
                 }
             }
@@ -466,24 +610,83 @@ export function planConstruction(model: ConstructionModel, options: Construction
         return null;
     };
     const solve = (nodes: ConstructionNode[], pose: M4, scopeId: string): Removal[] => {
+        phase = 'route-search';
         scope = scopeId;
         lastBlockages = [];
-        type Frame = { remaining: ConstructionNode[]; candidates: ConstructionNode[]; next: number };
+        type Frame = { remaining: ConstructionNode[]; candidates: ConstructionNode[]; next: number; exhaustive: boolean; support: Map<string, Removal['support']>; staged: StagedObstacle[]; index?: ScopeSceneIndex };
         const failed = new Set<string>(), stateKey = (r: ConstructionNode[]) => JSON.stringify(r.map(n => n.id));
-        const frame = (remaining: ConstructionNode[]): Frame => {
+        // Resolve graph edges ONCE per scope. Testing every candidate against
+        // every dependency, then scanning all remaining siblings for every edge,
+        // had cubic-ish cost on large authored models before route search even ran.
+        const owner = new Map<string, string>();
+        for (const n of nodes) { owner.set(n.id, n.id); n.leaves.forEach(id => owner.set(id, n.id)); }
+        const dependencies = new Map<string, Set<string>>();
+        const neighbours = new Map<string, Set<string>>();
+        const link = (map: Map<string, Set<string>>, a: string, b: string) => {
+            const list = map.get(a) ?? new Set<string>(); list.add(b); map.set(a, list);
+        };
+        for (const d of graph.dependencies) {
+            const a = owner.get(d.parent), b = owner.get(d.child);
+            if (a && b && a !== b) link(dependencies, a, b);
+        }
+        const outgoing = new Map<string, { connection: Connection; parentId: string }[]>();
+        // Matched shadow joints are useful direction hints, but static-only
+        // metadata must NOT create a support dependency or a motion exemption.
+        const guidedOutgoing = new Map<string, { connection: Connection; parentId: string }[]>();
+        for (const c of graph.connections) {
+            if (c.staticOnly && c.id.startsWith('profiled:') && c.outward) {
+                const a = owner.get(c.parent), b = owner.get(c.child);
+                if (a && b && a !== b) {
+                    const hints = guidedOutgoing.get(b) ?? [];
+                    hints.push({ connection: c, parentId: a });
+                    guidedOutgoing.set(b, hints);
+                }
+            }
+            if (c.kind === 'surface' || c.staticOnly) continue;
+            const a = owner.get(c.parent), b = owner.get(c.child);
+            if (a && b && a !== b) {
+                link(neighbours, a, b); link(neighbours, b, a);
+                const bucket = outgoing.get(b) ?? [];
+                bucket.push({ connection: c, parentId: a });
+                outgoing.set(b, bucket);
+            }
+        }
+        let closestUnresolved = nodes.map(n => n.id);
+        const frame = (remaining: ConstructionNode[], chosen: Removal[]): Frame => {
+            if (remaining.length < closestUnresolved.length)
+                closestUnresolved = remaining.map(n => n.id);
             stats.states++;
             pulse();
-            const candidates = remaining.filter(n => !graph.dependencies.some(d => owns(n, d.parent) && remaining.some(o => o !== n && owns(o, d.child))) && support(n, remaining.filter(o => o !== n), pose));
-            candidates.sort((a, b) => Number(a.bounds.max[1] + pose[13] >= ground - SKIN) - Number(b.bounds.max[1] + pose[13] >= ground - SKIN) || a.bounds.min[1] - b.bounds.min[1] || b.step - a.step || b.order - a.order || a.id.localeCompare(b.id));
-            return { remaining, candidates, next: 0 };
+            const present = new Set(remaining.map(n => n.id));
+            const supportKinds = new Map<string, Removal['support']>();
+            const candidates = remaining.filter(n => {
+                if ([...(dependencies.get(n.id) ?? [])].some(id => present.has(id))) return false;
+                const table = Math.abs(stagedBounds(n.bounds, pose).max[1] - ground) <= SKIN;
+                const attached = [...(neighbours.get(n.id) ?? [])].some(id => present.has(id));
+                if (!table && !attached && options.supportMode === 'table') return false;
+                supportKinds.set(n.id, table ? 'table' : attached ? 'connected' : 'virtual-fixture');
+                return true;
+            });
+            candidates.sort((a, b) => guided
+                ? b.step - a.step || b.order - a.order || a.id.localeCompare(b.id)
+                : Number(a.bounds.max[1] + pose[13] >= ground - SKIN) - Number(b.bounds.max[1] + pose[13] >= ground - SKIN) || a.bounds.min[1] - b.bounds.min[1] || b.step - a.step || b.order - a.order || a.id.localeCompare(b.id));
+            const staged = chosen.map(r => ({ node: r.node, pose: slots.get(r.node.id)!.pose }));
+            return { remaining, candidates, next: 0, exhaustive: !guided, support: supportKinds, staged, index: new ScopeSceneIndex(remaining, staged, pose) };
         };
-        const stack: Frame[] = [frame(nodes)], chosen: Removal[] = [];
+        const chosen: Removal[] = [], stack: Frame[] = [frame(nodes, chosen)];
         while (stack.length) {
             pulse();
             const f = stack[stack.length - 1];
             options.onProgress?.({ phase: 'disassembly', completed: chosen.length, total: nodes.length, item: scopeId });
             if (!f.remaining.length) return chosen;
             if (f.next >= f.candidates.length) {
+                if (guided && !f.exhaustive && f.candidates.length) {
+                    // Near/far search was attempted for every eligible piece.
+                    // Reuse exactly the same indexed scene for legacy fallbacks.
+                    f.exhaustive = true;
+                    f.next = 0;
+                    continue;
+                }
                 failed.add(stateKey(f.remaining)); stack.pop();
                 if (chosen.length) chosen.pop();
                 stats.backtracks++;
@@ -491,16 +694,31 @@ export function planConstruction(model: ConstructionModel, options: Construction
             }
             const node = f.candidates[f.next++], remaining = f.remaining.filter(n => n !== node);
             if (failed.has(stateKey(remaining))) continue;
-            const staged = chosen.map(r => ({ node: r.node, pose: slots.get(r.node.id)!.pose }));
-            const result = route(node, f.remaining, staged, pose, scopeId);
+            // Retain only the ACTIVE search state's broad-phase tree. Keeping
+            // a tree for every level of a thousand-brick DFS would consume
+            // quadratic memory. Rebuild a previous level only on backtracking.
+            f.index ??= new ScopeSceneIndex(f.remaining, f.staged, pose);
+            const present = new Set(f.remaining.map(n => n.id));
+            const connected = [...(outgoing.get(node.id) ?? []), ...(guided ? guidedOutgoing.get(node.id) ?? [] : [])]
+                .filter(c => present.has(c.parentId)).map(c => c.connection);
+            const result = route(node, f.remaining, f.staged, pose, scopeId, f.index, f.exhaustive, connected);
             if (!result) continue;
-            const connections = graph.connections.filter(c => c.kind !== 'surface' && c.kind !== 'support' && ((owns(node, c.child) && remaining.some(n => owns(n, c.parent))) || (owns(node, c.parent) && remaining.some(n => owns(n, c.child))))).map(c => c.id);
-            chosen.push({ node, poses: result.poses, connections, support: support(node, remaining, pose)! });
-            stack.push(frame(remaining));
+            const connections = graph.connections.filter(c => !c.staticOnly && c.kind !== 'surface' && c.kind !== 'support' && ((owns(node, c.child) && remaining.some(n => owns(n, c.parent))) || (owns(node, c.parent) && remaining.some(n => owns(n, c.child))))).map(c => c.id);
+            chosen.push({ node, poses: result.poses, connections, support: f.support.get(node.id)! });
+            f.index = undefined;
+            stack.push(frame(remaining, chosen));
         }
-        throw new ConstructionError('no-supported-rigid-route', 'No collision-certified rigid path was found for this assembly. Angled bays are never silently ignored or moved.', { scope, blockages: lastBlockages.slice(-12), stats: { ...stats } });
+        // Floor rejections routinely come from deliberately probing a downward
+        // axis. They should not hide the true mesh withdrawal obstruction.
+        const meaningful = lastBlockages.filter(b => b.stage !== 'floor');
+        const diagnostics = meaningful.length ? meaningful : lastBlockages;
+        throw new ConstructionError('no-supported-rigid-route',
+            `No collision-certified rigid path was found in ${scopeId}; route search reached ${nodes.length - closestUnresolved.length}/${nodes.length} placed-removal candidates before failing. The listed contacts are search obstructions, not proof the model is impossible.`,
+            { scope: scopeId, items: closestUnresolved, blockages: diagnostics.slice(0, 12), stats: { ...stats } });
     };
     const operations: Operation[] = [], warnings = [...graph.warnings, ...contactWarnings];
+    if (guided) warnings.push('Construction V3 used connector-guided NEAR/FAR paths and a scope-local spatial index. Each search state considers all eligible guided routes before attempting exhaustive V2 fallback. Accepted routes undergo continuous mesh checks and independent forward replay.');
+    if (composite.groups) warnings.push(`${composite.segments} LDraw flexible render segments grouped into ${composite.groups} pre-shaped composite parts. The composites move as one rigid shape; bending or manufacturing the hose is not simulated. All contacts with OTHER parts remain collision-checked.`);
     const unoriented = [...new Set([...model.parts.values()].map(n => n.part!))].filter(id => { const m = model.metrics(id); return m.meshTwoSidedFrom !== undefined && m.meshTwoSidedFrom < m.mesh!.length / 9; });
     if (unoriented.length)
         warnings.push(`Some mesh faces have unknown orientation (${unoriented.join(', ')}); containment assumes reasonably consistent winding and is not a solid-CAD certificate.`);
@@ -508,7 +726,7 @@ export function planConstruction(model: ConstructionModel, options: Construction
         const removals = solve(nodes, pose, scopeId);
         for (const removal of [...removals].reverse()) {
             const n = removal.node;
-            if (n.children?.length)
+            if (n.children?.length && !n.atomic)
                 compile(n.children, slots.get(n.id)!.pose, n.id);
             const id = `construct:${n.id}`, previous = operations[operations.length - 1];
             const poses = [...removal.poses].reverse();
@@ -516,18 +734,22 @@ export function planConstruction(model: ConstructionModel, options: Construction
             // waypoint is in the imported orientation. Angled scopes use full
             // rigid matrices, including at their staging/attachment endpoints.
             const rigid = poses.some(p => !isIdentityOrientation(p));
-            operations.push({ id, kind: n.children ? 'attach-subassembly' : removal.connections.length ? 'connect' : 'place', keys: [...n.leaves], scope: scopeId, model: n.model, step: n.step,
+            operations.push({ id, kind: n.children && !n.atomic ? 'attach-subassembly' : removal.connections.length ? 'connect' : 'place', keys: [...n.leaves], scope: scopeId, model: n.model, step: n.step,
                 requires: previous ? [previous.id] : [], connections: removal.connections,
                 path: poses.map(pos), rigidPath: rigid ? poses : undefined,
                 check: { method: 'continuous-triangle-sat', contactPolicies: graph.connections.filter(c => hasMotionPolicy(c) && owns(n, c.child)).map(c => c.id), support: removal.support } });
         }
     };
+    const routeStarted = performance.now();
     if (model.parts.size)
         compile(rootNodes, rigidDelta(ZERO), '$root');
+    stats.routeMilliseconds = Math.round(performance.now() - routeStarted);
 
     // Verify the whole FORWARD scene with true staged orientations. The earlier
     // algorithm replayed only translation offsets and therefore could not tell
     // whether an angled group's members really ended in their correct bay pose.
+    phase = 'forward-replay';
+    const replayStarted = performance.now();
     const current = new Map([...model.parts.keys()].map(key => [key, slots.get(key)!.pose]));
     const closePose = (a: readonly number[], b: readonly number[]) => a.every((v, i) => Math.abs(v - b[i]) < 1e-6);
     for (const [index, op] of operations.entries()) {
@@ -568,7 +790,7 @@ export function planConstruction(model: ConstructionModel, options: Construction
                 // final insertion segment, never to earlier transport.
                 if (!clearSweep(a, b, to, from, where, i === poses.length - 1))
                     throw new ConstructionError('invalid-plan', `Replay rejected collision of ${a} with ${b} during ${op.id}.`, {
-                        scope: op.scope, blockages: [{ moving: a, obstacle: b, stage: 'transport', detail: 'Continuous mesh sweep or cross-orientation conservative broad phase rejected the actual scene.' }], stats: { ...stats } });
+                        scope: op.scope, blockages: [{ moving: a, obstacle: b, stage: 'transport', detail: 'Continuous swept-mesh collision rejected the actual scene.' }], stats: { ...stats } });
             }
         }
         for (const key of op.keys) current.set(key, last);
@@ -582,6 +804,7 @@ export function planConstruction(model: ConstructionModel, options: Construction
         warnings.push('Rotated group transfers preserve each member\'s rigid relative pose. Every turn has a continuous obstacle-free sphere certificate and every translation is checked against the staged scene.');
     warnings.push('Automatic articulated-joint search and flexible/snap-fit deformation are not implemented; these fail explicitly rather than bypassing collision checks.');
     warnings.push('Mesh validation uses a 0.02 LDU numerical skin and oriented-mesh winding-number containment assumptions. Connector contact allowances are localized metadata, not a tolerance-free mechanical proof.');
+    stats.replayMilliseconds = Math.round(performance.now() - replayStarted);
     stats.milliseconds = Math.round(performance.now() - start);
     return { schema: 'brickmotion-construction/v2', operations,
         parts: [...model.parts.values()].map(n => ({ key: n.id, part: n.part!, final: [...n.matrix], staged: multiply(slots.get(n.id)!.pose, n.matrix), bounds: n.bounds })),

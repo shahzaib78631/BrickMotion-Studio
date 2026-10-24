@@ -82,3 +82,22 @@ test('the video settings a timeline was saved with are read back from its option
   expect(settingsFromOptsKey('30|true|auto||||true|true|legacy|2000|20000|fixture|true|12|4000')).toMatchObject({ targetSeconds: 30, mode: 'auto', planner: 'legacy' });
   expect(settingsFromOptsKey('k')).toBeNull();
 });
+
+test('old V2 collision certificates are not silently trusted after the planner is upgraded', () => {
+  const tl = buildTimeline(assemble(plan, metrics, fixtureColors), metrics, { targetSeconds: 10, heroOrbit: true });
+  const encoded = encodeTimeline(tl);
+  const stored = JSON.parse(projectToJson(plan, [{ model: '', opts: 'k', timeline: encoded }]));
+  stored.timelines[0].timeline.construction = { schema: 'brickmotion-construction/v2' };
+  stored.timelines[0].timeline.certificationVersion = 1;
+  const outdated = readProjectFile(JSON.stringify(stored));
+  expect(outdated.ok && outdated.skipped).toBe(1);
+  stored.timelines[0].timeline.certificationVersion = 2;
+  const current = readProjectFile(JSON.stringify(stored));
+  expect(current.ok && current.skipped).toBe(0);
+});
+
+test('adaptive planner mode round-trips through the persisted video options key', async () => {
+  const { optsKey, settingsFromOptsKey } = await import('../../src/state/timelineService');
+  const key = optsKey({ targetSeconds: 20, heroOrbit: false, planner: 'construction-auto' });
+  expect(settingsFromOptsKey(key)?.planner).toBe('construction-auto');
+});

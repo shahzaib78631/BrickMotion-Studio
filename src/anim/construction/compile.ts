@@ -10,7 +10,11 @@ import { sub, translated, shiftBox, union, validMatrix, multiply, transformBox, 
 export function compileConstruction(plan: ConstructionPlan, opts: AnimOptions): EncodedTimeline {
     if (!Number.isFinite(opts.targetSeconds) || opts.targetSeconds <= 0 || [opts.introSeconds, opts.buildSeconds, opts.outroSeconds].some(v => v != null && !Number.isFinite(v)))
         throw new ConstructionError('invalid-input', 'Animation timing must be finite and targetSeconds must be positive.');
-    const pacing = choosePacing(plan.operations.length, plan.operations.length, { ...opts, mode: 'piece' });
+    // Construction operations are not authored build steps. Counting every
+    // brick as its own step reserved up to 20% of the build clip for pauses that
+    // V2 never scheduled, producing a large unexplained idle tail.
+    const authoredSteps = new Set(plan.operations.map(op => `${op.model}\0${op.step}`)).size;
+    const pacing = choosePacing(plan.operations.length, authoredSteps, { ...opts, mode: 'piece' });
     const matrices: number[][] = [], ref = (m: number[]) => { matrices.push(m); return matrices.length - 1; };
     const parts = new Map(plan.parts.map(p => [p.key, p]));
     if (parts.size !== plan.parts.length)
@@ -30,6 +34,12 @@ export function compileConstruction(plan: ConstructionPlan, opts: AnimOptions): 
         tracks.set(p.key, { appear: 0, floor: ref(p.staged), final: ref(p.final), floorBox: transformBox(p.bounds, delta), ctx: 0, moves: [] });
     }
     const units: EncodedTimeline['units'] = [], steps: EncodedTimeline['steps'] = [], camKeys: EncodedTimeline['camKeys'] = [], subBuilds: EncodedTimeline['subBuilds'] = [];
+    // Guarantee that operation durations AND their sequential gaps fit into
+    // the selected build-time allocation. A fixed 0.35s minimum per operation
+    // previously made a 20s request take nearly 40s for 100 moving pieces.
+    const opCount = plan.operations.length;
+    const gap = opCount > 1 ? Math.min(.03, pacing.build / (2 * (opCount - 1))) : 0;
+    const operationDuration = opCount ? Math.max(1e-6, (pacing.build - gap * (opCount - 1)) / opCount) : 0;
     let time = pacing.intro;
     const current = new Map(plan.parts.map(p => [p.key, p.staged]));
     const operationIndex = new Map<string, number>();
@@ -42,10 +52,10 @@ export function compileConstruction(plan: ConstructionPlan, opts: AnimOptions): 
             throw new ConstructionError('invalid-plan', `Unfinished prerequisite ${id}.`); return n; });
         operationIndex.set(op.id, index);
         if (index)
-            time = Math.max(time, units[index - 1].start + units[index - 1].dur + .03);
+            time = Math.max(time, units[index - 1].start + units[index - 1].dur + gap);
         for (const j of requires)
-            time = Math.max(time, units[j].start + units[j].dur + .03);
-        const dur = Math.max(.35, pacing.build / Math.max(1, plan.operations.length));
+            time = Math.max(time, units[j].start + units[j].dur + gap);
+        const dur = operationDuration;
         let travel: Box | null = null;
         let land: Box | null = null;
         const translationPath = op.rigidPath ? undefined : op.path.map(p => sub(p, op.path[0]));
@@ -110,5 +120,5 @@ export function compileConstruction(plan: ConstructionPlan, opts: AnimOptions): 
     const buildEnd = time, duration = Math.max(Number.isFinite(opts.targetSeconds) ? opts.targetSeconds : 0, buildEnd + pacing.outro);
     camKeys.unshift({ t: 0, box: plan.sceneBounds });
     camKeys.push({ t: buildEnd, box: plan.bounds });
-    return { mats, tracks: [...tracks], duration, steps, pacing, heroOrbit: opts.heroOrbit, intro: pacing.intro, buildEnd, units, subBuilds, buildBox: plan.sceneBounds, modelBox: plan.bounds, sceneBox: plan.sceneBounds, camKeys, ground: plan.ground, construction: plan };
+    return { certificationVersion: 2, mats, tracks: [...tracks], duration, steps, pacing, heroOrbit: opts.heroOrbit, intro: pacing.intro, buildEnd, units, subBuilds, buildBox: plan.sceneBounds, modelBox: plan.bounds, sceneBox: plan.sceneBounds, camKeys, ground: plan.ground, construction: plan };
 }

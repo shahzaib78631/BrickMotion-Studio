@@ -5,7 +5,9 @@ export const CHANNELS = [
   'location.x', 'location.y', 'location.z',
   'rotation.x', 'rotation.y', 'rotation.z',
   'scale.x', 'scale.y', 'scale.z',
+  'visibility',
 ] as const satisfies readonly AnimationChannel[];
+export const TRANSFORM_CHANNELS: readonly AnimationChannel[] = CHANNELS.filter((channel) => channel !== 'visibility');
 export const TRANSFORM_SECTIONS = ['location', 'rotation', 'scale'] as const;
 export type ChannelGroup = typeof TRANSFORM_SECTIONS[number];
 export type KeyRef = { model: string; target: string; channel: AnimationChannel; frame: number };
@@ -18,14 +20,14 @@ export function emptyAnimation(): KeyframeAnimation {
 export function animationOf(animation: KeyframeAnimation | undefined): KeyframeAnimation {
   return animation ?? DEFAULT_ANIMATION;
 }
-export const defaultValue = (channel: AnimationChannel): number => channel.startsWith('scale.') ? 1 : 0;
+export const defaultValue = (channel: AnimationChannel): number => channel === 'visibility' || channel.startsWith('scale.') ? 1 : 0;
 export const refId = (ref: KeyRef): string => JSON.stringify([ref.model, ref.target, ref.channel, ref.frame]);
 export const trackId = (model: string, target: string): string => JSON.stringify([model, target]);
 export const boundedFrame = (frame: number, animation: KeyframeAnimation): number =>
   Math.max(animation.startFrame, Math.min(animation.endFrame, Math.round(Number.isFinite(frame) ? frame : animation.startFrame)));
 
 /** Strictly sorted, unique frames. Bezier is cubic Hermite with automatic zero-slope handles. */
-export function channelAt(keys: readonly AnimationKey[] | undefined, frame: number, fallback: number): number {
+export function channelAt(keys: readonly AnimationKey[] | undefined, frame: number, fallback: number, discrete = false): number {
   if (!keys?.length) return fallback;
   if (frame <= keys[0].frame) return keys[0].value;
   const last = keys.length - 1;
@@ -39,7 +41,7 @@ export function channelAt(keys: readonly AnimationKey[] | undefined, frame: numb
   const from = keys[lo], to = keys[hi];
   const t = (frame - from.frame) / (to.frame - from.frame);
   const smooth = from.interpolation === 'bezier' ? t * t * (3 - 2 * t) : t;
-  return from.interpolation === 'constant' ? from.value : from.value + (to.value - from.value) * smooth;
+  return from.interpolation === 'constant' || discrete ? from.value : from.value + (to.value - from.value) * smooth;
 }
 
 export function trackOf(animation: KeyframeAnimation | undefined, model: string, target: string): ObjectAnimationTrack | undefined {
@@ -47,7 +49,7 @@ export function trackOf(animation: KeyframeAnimation | undefined, model: string,
 }
 export function valuesAt(animation: KeyframeAnimation | undefined, model: string, target: string, frame: number): ChannelValues {
   const track = trackOf(animation, model, target);
-  return Object.fromEntries(CHANNELS.map((channel) => [channel, channelAt(track?.channels[channel], frame, defaultValue(channel))])) as ChannelValues;
+  return Object.fromEntries(CHANNELS.map((channel) => [channel, channelAt(track?.channels[channel], frame, defaultValue(channel), channel === 'visibility')])) as ChannelValues;
 }
 
 export type KeyUpdate = { model: string; target: string; channel: AnimationChannel; value: number };
@@ -84,7 +86,7 @@ function updateChannels(channels: ObjectAnimationTrack['channels'], updates: Map
   for (const [channel, value] of updates) {
     const old = channels[channel] ?? [];
     const existing = old.find((key) => key.frame === frame);
-    const key: AnimationKey = { frame, value, interpolation: existing?.interpolation ?? interpolation };
+    const key: AnimationKey = { frame, value, interpolation: channel === 'visibility' ? 'constant' : existing?.interpolation ?? interpolation };
     next[channel] = [...old.filter((k) => k.frame !== frame), key].sort((a, b) => a.frame - b.frame);
   }
   return next;
@@ -119,7 +121,7 @@ export function deleteKeys(animation: KeyframeAnimation, refs: readonly KeyRef[]
       }
     }
     return updated === track.channels ? track : { ...track, channels: updated };
-  }).filter((track) => CHANNELS.some((channel) => (track.channels[channel]?.length ?? 0) > 0));
+  }).filter((track) => track.source === 'baked-flight' || CHANNELS.some((channel) => (track.channels[channel]?.length ?? 0) > 0));
   return changed ? { ...animation, tracks } : animation;
 }
 
@@ -157,7 +159,7 @@ export function setInterpolation(animation: KeyframeAnimation, refs: readonly Ke
     const channels = { ...track.channels };
     for (const channel of CHANNELS) if (channels[channel]) {
       channels[channel] = channels[channel]!.map((key) => {
-        if (!chosen.has(refId({ model: track.model, target: track.target, channel, frame: key.frame })) || key.interpolation === interpolation) return key;
+        if (channel === 'visibility' || !chosen.has(refId({ model: track.model, target: track.target, channel, frame: key.frame })) || key.interpolation === interpolation) return key;
         changed = true;
         return { ...key, interpolation };
       });

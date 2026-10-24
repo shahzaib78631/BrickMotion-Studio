@@ -48,12 +48,15 @@ export type Submodel = { steps: Step[] };
 export type AnimationChannel =
   | 'location.x' | 'location.y' | 'location.z'
   | 'rotation.x' | 'rotation.y' | 'rotation.z'
-  | 'scale.x' | 'scale.y' | 'scale.z';
+  | 'scale.x' | 'scale.y' | 'scale.z'
+  | 'visibility';
 export type KeyInterpolation = 'bezier' | 'linear' | 'constant';
 export type AnimationKey = { frame: number; value: number; interpolation: KeyInterpolation };
 /** One object action per authored item. `model` scopes the ID to its original hierarchy. */
 export type ObjectAnimationTrack = {
   kind: 'object'; model: string; target: string;
+  /** A baked leaf instance owns its own motion and visibility instead of sampling its live Build route. */
+  source?: 'baked-flight';
   channels: Partial<Record<AnimationChannel, AnimationKey[]>>;
 };
 /** Live, non-destructive construction layer under manually keyed object offsets.

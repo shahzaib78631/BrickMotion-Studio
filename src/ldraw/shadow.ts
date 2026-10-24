@@ -172,6 +172,10 @@ export type Snap = {
   radius: number;
   /** section shapes, in order (R, A, S, ...) */
   shapes: string[];
+  /** Actual coaxial section profile measured from `start`, including each section radius.
+   * A single max-radius approximation can reject a valid tapered stud, or worse,
+   * accept two incompatible profiles. Legacy cached metrics may omit this. */
+  sections?: { shape: string; radius: number; start: number; length: number }[];
   slide: boolean;
 };
 
@@ -188,12 +192,18 @@ export function placeSnap(def: SnapDef, m: Mat3, t: Vec3): Snap[] {
     const scale = Math.hypot(...raw) || 1;
     const axis: Vec3 = [raw[0] / scale, raw[1] / scale, raw[2] / scale];
     // lengths scale with the reference (e.g. a stretched axle hole primitive)
-    let length = 0, radius = 0, shapes: string[] = [], g: 'M' | 'F' = 'M', centred = false, slide = false;
+    let length = 0, radius = 0, shapes: string[] = [], sections: Snap['sections'] = [], g: 'M' | 'F' = 'M', centred = false, slide = false;
     const side = Math.max(Math.hypot(fm[0], fm[3], fm[6]), Math.hypot(fm[2], fm[5], fm[8]));
     if (def.kind === 'cyl') {
       length = def.secs.reduce((s, x) => s + x.length, 0) * scale;
       radius = Math.max(...def.secs.map((x) => x.radius)) * side;
       shapes = def.secs.map((x) => x.shape);
+      let cursor = 0;
+      sections = def.secs.map(x => {
+        const result = { shape: x.shape, radius: x.radius * side, start: cursor, length: x.length * scale };
+        cursor += result.length;
+        return result;
+      });
       g = def.gender; centred = def.center; slide = def.slide;
     } else if (def.kind === 'clp') {
       length = def.length * scale; radius = def.radius * side; shapes = ['CLP']; g = 'F'; centred = def.center; slide = def.slide;
@@ -208,7 +218,7 @@ export function placeSnap(def: SnapDef, m: Mat3, t: Vec3): Snap[] {
       length = shape?.toLowerCase() === 'cyl' ? (Number(b) || 0) * scale : 0;
     }
     const start: Vec3 = centred ? [o[0] - axis[0] * length / 2, o[1] - axis[1] * length / 2, o[2] - axis[2] * length / 2] : o;
-    out.push({ kind: def.kind, id: def.id, group: def.group, gender: g, start, axis, length, radius, shapes, slide });
+    out.push({ kind: def.kind, id: def.id, group: def.group, gender: g, start, axis, length, radius, shapes, ...(sections.length ? { sections } : {}), slide });
   }
   return out;
 }

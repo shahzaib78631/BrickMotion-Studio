@@ -44,9 +44,9 @@ const mainSteps = (tl: Timeline) => {
  * The build animation as lanes (Rewind studio-kit timeline): main steps, submodel builds and the camera.
  * Clicking a step edits it; the ruler, play and step buttons drive the preview.
  */
-export function BuildTimeline({ timeline: tl, planning = false, error = '', progress = null, loading = false, onRetry }: {
+export function BuildTimeline({ timeline: tl, planning = false, error = '', progress = null, loading = false, onRetry, onUseStandard }: {
   timeline: Timeline | null; planning?: boolean; error?: string;
-  progress?: PlanningProgress | null; loading?: boolean; onRetry?: () => void;
+  progress?: PlanningProgress | null; loading?: boolean; onRetry?: () => void; onUseStandard?: () => void;
 }) {
   const t = usePlayback((s) => s.t);
   const playing = usePlayback((s) => s.playing);
@@ -255,7 +255,12 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
           <span className="nx-chip bm-scope" title="The timeline, preview and MP4 export follow the model you have open">
             <Ic name={editingModel ? 'box' : 'brick'} /> {editingModel || 'Main model'}
           </span>
-          {uncertified.length > 0 && (
+          {tl?.fallback && (
+            <TimelineNote id="fallback" open={note} onOpen={setNote} tone="warn" label="Uncertified preview" title={tl.fallback.message}>
+              Construction V2 stopped ({tl.fallback.code}). This is a Standard-planner VISUAL preview, not collision-certified. All flights require review. {tl.fallback.phase ? `Stage: ${tl.fallback.phase}. ` : ''}{tl.fallback.scope ? `Scope: ${tl.fallback.scope}. ` : ''}{tl.fallback.searchStates != null ? `Searched ${tl.fallback.searchStates} states. ` : ''}{tl.fallback.message}
+            </TimelineNote>
+          )}
+          {!tl?.fallback && uncertified.length > 0 && (
             <TimelineNote id="route" open={note} onOpen={setNote} tone="warn" label={`${uncertified.length} rough route${uncertified.length === 1 ? '' : 's'}`} title={uncertified.join('\n')}>
               {uncertified.length === 1 ? '1 piece has' : `${uncertified.length} pieces have`} no collision-free route, so {uncertified.length === 1 ? 'it takes' : 'they take'} the least-blocked one and may clip a neighbour. Check {uncertified.length === 1 ? 'it' : 'them'} in the preview.
             </TimelineNote>
@@ -355,9 +360,23 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
             {error ? (
               <div className="bm-planner-error" role="alert">
                 <strong>Animation could not be planned</strong>
-                <p>{error}</p>
+                <p>{error.split(' Contacts: ')[0]}</p>
+                {error.includes(' Contacts: ') && (
+                  <details style={{ marginBottom: 10 }}>
+                    <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Technical contact details</summary>
+                    <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                      {error.split(' Contacts: ').slice(1).join(' Contacts: ').replaceAll('; ', '\n')}
+                    </p>
+                  </details>
+                )}
                 <p>The model is still editable. No blocked pieces were hidden or teleported.</p>
-                {onRetry && <button className="nx-btn nx-sm" onClick={onRetry}>Retry planning</button>}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button className="nx-btn nx-sm" title="Copy the planner error and connector diagnostics" onClick={() => {
+                    if (navigator.clipboard?.writeText) void navigator.clipboard.writeText(error);
+                  }} disabled={typeof navigator === 'undefined' || !navigator.clipboard?.writeText}>Copy diagnostics</button>
+                  {onRetry && <button className="nx-btn nx-sm" onClick={onRetry}>Retry planning</button>}
+                  {onUseStandard && <button className="nx-btn nx-sm" onClick={onUseStandard} title="Standard planning can create routes that are not collision-certified. Any uncertified routes are flagged in the timeline.">Try Standard planner (may be uncertified)</button>}
+                </div>
               </div>
             ) : !tl ? (
               <p className="nx-hint bm-empty" role="status">

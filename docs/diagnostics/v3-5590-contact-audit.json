@@ -1,0 +1,61 @@
+{
+  "success": false,
+  "engine": "v3",
+  "budget": "extended",
+  "limits": {
+    "maxMilliseconds": 60000,
+    "maxStates": 10000,
+    "maxCandidates": 500000
+  },
+  "scope": "full",
+  "pieces": 1258,
+  "code": "unresolved-final-contact",
+  "message": "unresolved-final-contact: The completed model contains contacts that remain unexplained after connector and bounded surface-contact classification. Check connector metadata or the final placement; changing access order alone cannot certify them. Contacts: :2:0/helicopter:9:4 / :2:0/helicopter:10:0 (final-placement): Final mesh contact between 4349 and 2462 is unresolved: the contact persists beyond the bounded 2.0 LDU render-surface probe. The available connector axes do not align at this final pose; an articulated joint or a corrected placement may be required. Mesh witness near (-319.61, -192.08, 406.47) LDU. Access order cannot certify it.; :2:0/helicopter:9:3 / :2:0/helicopter:10:0 (final-placement): Final mesh contact between 4073 and 2462 is unresolved: the contact persists beyond the bounded 2.0 LDU render-surface probe. The available connector axes do not align at this final pose; an articulated joint or a corrected placement may be required. Mesh witness near (-311.13, -189.52, 397.99) LDU. Access order cannot certify it.",
+  "stats": {
+    "states": 0,
+    "candidates": 0,
+    "backtracks": 0,
+    "meshPairs": 8100,
+    "trianglePairs": 5529351,
+    "cacheHits": 414,
+    "milliseconds": 28254,
+    "guidedCandidates": 0,
+    "exhaustiveCandidates": 0,
+    "broadphaseQueries": 0,
+    "broadphaseHits": 0,
+    "contactAuditMilliseconds": 24094
+  },
+  "blockages": [
+    {
+      "moving": ":2:0/helicopter:9:4",
+      "obstacle": ":2:0/helicopter:10:0",
+      "stage": "final-placement",
+      "detail": "Final mesh contact between 4349 and 2462 is unresolved: the contact persists beyond the bounded 2.0 LDU render-surface probe. The available connector axes do not align at this final pose; an articulated joint or a corrected placement may be required. Mesh witness near (-319.61, -192.08, 406.47) LDU. Access order cannot certify it.",
+      "contactPoint": [
+        -319.60643423582553,
+        -192.08481390773787,
+        406.4683142358256
+      ],
+      "parts": [
+        "4349",
+        "2462"
+      ]
+    },
+    {
+      "moving": ":2:0/helicopter:9:3",
+      "obstacle": ":2:0/helicopter:10:0",
+      "stage": "final-placement",
+      "detail": "Final mesh contact between 4073 and 2462 is unresolved: the contact persists beyond the bounded 2.0 LDU render-surface probe. The available connector axes do not align at this final pose; an articulated joint or a corrected placement may be required. Mesh witness near (-311.13, -189.52, 397.99) LDU. Access order cannot certify it.",
+      "contactPoint": [
+        -311.127395,
+        -189.51626011644098,
+        397.98927499999996
+      ],
+      "parts": [
+        "4073",
+        "2462"
+      ]
+    }
+  ],
+  "elapsedMs": 28258
+}

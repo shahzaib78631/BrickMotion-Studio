@@ -12,8 +12,10 @@ import { AboutDialog } from './ui/AboutDialog';
 import { AiPanel } from './ui/AiPanel';
 import { BuildTimeline } from './ui/BuildTimeline';
 import { KeyframeTimeline } from './ui/KeyframeTimeline';
+import { instancePlacements } from './ui/modelPlacement';
 import { animationOf } from './anim/keyframes';
 import { linkBuildLayer } from './anim/buildLayer';
+import { checkEditedMotion } from './anim/motionDiagnostics';
 import { ChecksPanel } from './ui/ChecksPanel';
 import { ExportDialog, type ExportJob } from './ui/ExportDialog';
 import { Ic, type IconName } from './ui/icons';
@@ -86,7 +88,29 @@ function Studio() {
   const { timeline, planning, error: planError, progress, retry } = useTimeline(model.ready && model.view.instances.length > 0, model.plan, editingModel, opts);
   // a different model has a different timeline: start it from the beginning
   useEffect(() => usePlayback.getState().set({ t: 0, playing: false, stopAt: null, loopFrom: null }), [editingModel]);
-  const exportCurrent = () => setExportJobs([{ model: editingModel, label: editingModel || 'Main model' }]);
+  const exportCurrent = () => {
+    // The construction planner certifies its own generated paths, not arbitrary
+    // hand-edited keyframes. Give authored Timeline videos an automatic sampled
+    // preflight so a likely new collision isn't silently exported.
+    if (timelineEditor === 'timeline' && model.plan.animation?.tracks.some((track) =>
+      track.model === editingModel && Object.values(track.channels).some((keys) => keys?.length))) {
+      try {
+        const report = checkEditedMotion(model.view.instances,
+          instancePlacements(model.plan, editingModel, model.assembly),
+          model.plan.animation, editingModel, timeline, 120);
+        if (report.warnings.length || !report.complete) {
+          const message = report.warnings.length
+            ? `Motion preflight found ${report.warnings.length} possible swept-bounds contact(s). First: frame ${report.warnings[0].frame}, ${report.warnings[0].first} / ${report.warnings[0].second}.`
+            : `Motion preflight could not check every requested sample (${report.checkedFrames} examined).`;
+          if (!window.confirm(`${message}\n\nThese broad-phase results are not collision certification. Inspect the Dope Sheet's Check motion diagnostics before exporting. Export anyway?`)) return;
+        }
+      } catch (error) {
+        alert(`Motion preflight could not run: ${error instanceof Error ? error.message : String(error)}. Review the animation before exporting.`);
+        return;
+      }
+    }
+    setExportJobs([{ model: editingModel, label: editingModel || 'Main model' }]);
+  };
   const canPreview = model.ready && model.view.instances.length > 0 && timeline !== null && !planning && !planError;
   // Assembly-spot overlaps are found statically on the main thread and shown in Checks.
   const spotIssues = useMemo(() => spotWarnings(model.plan, model.assembly, timeline), [model.plan, model.assembly, timeline]);
@@ -252,8 +276,14 @@ function Studio() {
           </div>
           {timelineEditor === 'build'
             ? <BuildTimeline timeline={timeline} planning={planning} error={model.error || planError}
-                progress={progress} loading={!model.ready && !model.error} onRetry={model.error ? undefined : retry} />
-            : <KeyframeTimeline timeline={timeline} planning={planning} buildError={planError} />}
+                progress={progress} loading={!model.ready && !model.error} onRetry={model.error ? undefined : retry}
+                onUseStandard={!model.error && !!planError && (video.planner === 'construction-v2' || video.planner === 'construction-v3') ? () => {
+                  if (window.confirm('Standard planning may include paths that are NOT collision-certified. Unsafe or blocked routes will be flagged. Switch to Standard planner?')) {
+                    useAppSettings.getState().set({ planner: 'legacy' });
+                  }
+                } : undefined} />
+            : <KeyframeTimeline timeline={timeline} planning={planning} buildError={planError}
+                instances={model.view.instances} placements={instancePlacements(model.plan, editingModel, model.assembly)} />}
         </div>
       </div>
       {dialog === 'projects' && <ProjectsDialog onClose={() => setDialog(null)} />}

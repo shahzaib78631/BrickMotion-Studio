@@ -1,10 +1,14 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import {
-  allKeyRefs, animationOf, boundedFrame, CHANNELS, copyKeys, deleteKeys, insertKeys,
+  allKeyRefs, animationOf, boundedFrame, CHANNELS, TRANSFORM_CHANNELS, copyKeys, deleteKeys, insertKeys,
   moveKeys, pasteKeys, refId, selectedKeys, setInterpolation, trackOf, valuesAt,
   type KeyClipboard, type KeyRef,
 } from '../anim/keyframes';
 import { buildLayerAt, linkBuildLayer, unlinkBuildLayer, updateBuildLayer } from '../anim/buildLayer';
+import { bakeBuildFlights } from '../anim/bakeBuild';
+import { checkEditedMotion, type MotionReport } from '../anim/motionDiagnostics';
+import type { Instance } from '../model/assemble';
+import * as THREE from 'three';
 import type { Timeline } from '../anim/timeline';
 import { modelSteps } from '../plan/ops';
 import { isSub, type AnimationChannel, type KeyframeAnimation, type KeyInterpolation } from '../plan/types';
@@ -17,7 +21,7 @@ const PAD = 26;
 const ROW = 25;
 const MAX_WIDTH = 140000;
 const FRAME_STEPS = [1, 2, 5, 10, 20, 25, 50, 100, 200, 500, 1000];
-const channelLabel = (c: AnimationChannel) => `${c.split('.')[1].toUpperCase()} ${c.split('.')[0] === 'location' ? 'Location' : c.split('.')[0] === 'rotation' ? 'Euler Rotation' : 'Scale'}`;
+const channelLabel = (c: AnimationChannel) => c === 'visibility' ? 'Visible / Hidden' : `${c.split('.')[1].toUpperCase()} ${c.split('.')[0] === 'location' ? 'Location' : c.split('.')[0] === 'rotation' ? 'Euler Rotation' : 'Scale'}`;
 const isTyping = (target: EventTarget | null) => target instanceof HTMLElement &&
   (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
 const numValue = (value: number) => Number.isInteger(value) ? String(value) : Number(value.toFixed(3)).toString();
@@ -67,13 +71,16 @@ function LayerNumberField({ value, label, min, max, step, onCommit }: {
 }
 
 /** Dope Sheet: procedural construction layer and non-destructive object motion. */
-export function KeyframeTimeline({ timeline, planning, buildError }: { timeline: Timeline | null; planning: boolean; buildError: string }) {
+export function KeyframeTimeline({ timeline, planning, buildError, instances, placements }: { timeline: Timeline | null; planning: boolean; buildError: string; instances: readonly Instance[]; placements: ReadonlyMap<string, THREE.Matrix4> }) {
   const plan = useStudio((s) => s.plan);
   const editingModel = useStudio((s) => s.editingModel);
   const selection = useStudio((s) => s.selection);
   const animation = animationOf(plan.animation);
   const buildLayer = buildLayerAt(animation, editingModel);
   const [layerError, setLayerError] = useState('');
+  const [bakeMessage, setBakeMessage] = useState('');
+  const [motionReport, setMotionReport] = useState<MotionReport | null>(null);
+  const [scrollState, setScrollState] = useState({ left: 0, width: 700 });
   const fps = animation.fps;
   const frame = useKeyframePlayback((s) => Math.round(s.frame));
   const playing = useKeyframePlayback((s) => s.playing);
@@ -97,15 +104,27 @@ export function KeyframeTimeline({ timeline, planning, buildError }: { timeline:
   const keysSelected = new Set(selected.map(refId));
   const frameRounded = boundedFrame(frame, animation);
 
-  const objects = useMemo(() => modelSteps(plan, editingModel).flatMap((step) => step.pieces.map((item) => ({
-    id: item.id ?? '', label: isSub(item) ? item.submodel : item.part,
-    isSubmodel: isSub(item),
-  }))).filter((item) => item.id), [plan, editingModel]);
+  const objects = useMemo(() => {
+    const top = modelSteps(plan, editingModel).flatMap((step) => step.pieces.map((item) => ({
+      id: item.id ?? '', label: isSub(item) ? item.submodel : item.part,
+      isSubmodel: isSub(item), nested: false,
+    }))).filter((item) => item.id);
+    const known = new Set(top.map((obj) => obj.id));
+    // Baked flights inside a placed submodel have their OWN selectable channels.
+    // Keep the unbaked hierarchy folded to avoid flooding the sheet with leaves.
+    const nested = instances.filter((inst) => !known.has(inst.key) &&
+      plan.animation?.tracks.some((t) => t.model === editingModel && t.target === inst.key))
+      .map((inst) => ({ id: inst.key, label: `${inst.key.split('/').slice(0, -1).join(' › ')} › ${inst.part}`,
+        isSubmodel: false, nested: true }));
+    return [...top, ...nested];
+  }, [plan, editingModel, instances]);
   const selectedObjects = selection.model === editingModel ? selection.ids : [];
-  const activeObject = (selectedObjects.includes(focused ?? '') ? focused : null) ?? selectedObjects[0] ?? focused;
+  const activeObject = focused && (selectedObjects.includes(focused) || (focused.includes('/') && selectedObjects.includes(focused.split('/')[0])))
+    ? focused : selectedObjects[0] ?? focused;
   const available = useMemo(() => new Set(objects.map((o) => o.id)), [objects]);
 
   useEffect(() => {
+    setMotionReport(null); setBakeMessage('');
     setSelected([]); setFocused(null); setExpanded(new Set()); setMarquee(null); setClipboard([]);
     useKeyframePlayback.getState().set({ playing: false, frame: animation.startFrame });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -129,7 +148,7 @@ export function KeyframeTimeline({ timeline, planning, buildError }: { timeline:
   const rows: Row[] = [{ id: 'summary', kind: 'summary', label: 'Summary', depth: 0 }];
   if (buildLayer) rows.push({ id: 'build', kind: 'build', label: 'Generated Build', depth: 0 });
   for (const item of shownObjects) {
-    rows.push({ id: `object:${item.id}`, kind: 'object', target: item.id, label: item.label, depth: 0 });
+    rows.push({ id: `object:${item.id}`, kind: 'object', target: item.id, label: item.label, depth: item.nested ? 1 : 0 });
     if (expanded.has(item.id)) {
       rows.push({ id: `section:${item.id}`, kind: 'section', target: item.id, label: 'Object Transforms', depth: 1 });
       for (const channel of CHANNELS) rows.push({ id: `channel:${item.id}:${channel}`, kind: 'channel', target: item.id, channel, label: channelLabel(channel), depth: 2 });
@@ -164,6 +183,8 @@ export function KeyframeTimeline({ timeline, planning, buildError }: { timeline:
   const px = base * zoom;
   const X = (f: number) => PAD + (f - animation.startFrame) * px;
   const widthPx = Math.min(MAX_WIDTH, Math.max(width, X(animation.endFrame) + PAD));
+  const visibleFirst = animation.startFrame + Math.floor((scrollState.left - PAD - 28) / px);
+  const visibleLast = animation.startFrame + Math.ceil((scrollState.left + scrollState.width - PAD + 28) / px);
   useEffect(() => {
     const el = editorRef.current;
     if (!el || !playing) return;
@@ -184,6 +205,7 @@ export function KeyframeTimeline({ timeline, planning, buildError }: { timeline:
     : refsByChannel.get(JSON.stringify([row.target, row.channel])) ?? [];
 
   const applyAnimation = (fn: (animation: KeyframeAnimation) => KeyframeAnimation) => {
+    setMotionReport(null);
     useStudio.getState().apply((p) => {
       const next = fn(animationOf(p.animation));
       return next === p.animation ? p : { ...p, animation: next };
@@ -195,9 +217,9 @@ export function KeyframeTimeline({ timeline, planning, buildError }: { timeline:
     catch (error) { setLayerError(error instanceof Error ? error.message : String(error)); }
   };
   const insert = (channels?: readonly AnimationChannel[], targets?: readonly string[], atFrame = frameRounded) => {
-    const ids = [...new Set(targets ?? (selectedObjects.length ? selectedObjects : activeObject ? [activeObject] : []))].filter((id) => available.has(id));
+    const ids = [...new Set(targets ?? (activeObject ? [activeObject] : selectedObjects))].filter((id) => available.has(id));
     if (!ids.length) return;
-    const fields = channels ?? CHANNELS;
+    const fields = channels ?? TRANSFORM_CHANNELS;
     const updates = ids.flatMap((id) => {
       const values = valuesAt(animation, editingModel, id, atFrame);
       return fields.map((channel) => ({ model: editingModel, target: id, channel, value: values[channel] }));
@@ -281,7 +303,7 @@ export function KeyframeTimeline({ timeline, planning, buildError }: { timeline:
     setSelected(picked);
     if (refs[0].target) {
       setFocused(refs[0].target);
-      useStudio.getState().select([refs[0].target]);
+      useStudio.getState().select([refs[0].target.split('/')[0]]);
     }
     seek(refs[0].frame);
     const x0 = e.clientX;
@@ -382,10 +404,40 @@ export function KeyframeTimeline({ timeline, planning, buildError }: { timeline:
     { heading: 'Interpolation' },
     ...(['bezier', 'linear', 'constant'] as const).map((kind) => ({ icon: 'key', label: kind === 'bezier' ? 'Bezier / Ease' : kind === 'linear' ? 'Linear' : 'Constant / Hold', onClick: () => applyAnimation((a) => setInterpolation(a, refs, kind)) } as const)),
   ];
+  const checkMotion = () => {
+    try {
+      const report = checkEditedMotion(instances, placements, animation, editingModel, timeline);
+      setMotionReport(report);
+      setLayerError('');
+    } catch (error) { setLayerError(error instanceof Error ? error.message : String(error)); }
+  };
+  const doBake = (entire: boolean) => {
+    setMotionReport(null);
+    if (!timeline || !canBake) { setLayerError('Generate a valid Build route before baking flights.'); return; }
+    const targets = entire ? undefined : [activeObject ?? ''].filter(Boolean);
+    if (!entire && !targets?.length) { setLayerError('Select a piece or submodel to bake its flight.'); return; }
+    const hit = instances.filter((inst) => !targets || targets.some((id) => inst.key === id || inst.key.startsWith(`${id}/`)));
+    const overwritten = hit.filter((inst) => animation.tracks.some((t) => t.model === editingModel && t.target === inst.key &&
+      Object.values(t.channels).some((keys) => !!keys?.length)));
+    if (overwritten.length && !window.confirm(`Baking replaces existing keys on ${overwritten.length} selected piece(s), including manual changes to previously baked flights. You can undo the operation. Continue?`)) return;
+    try {
+      const result = bakeBuildFlights(animation, editingModel, instances, placements, timeline,
+        { targets, detach: entire });
+      useStudio.getState().apply((p) => ({ ...p, animation: result.animation }));
+      setLayerError('');
+      setBakeMessage(`${result.count} flight${result.count === 1 ? '' : 's'} baked into ${result.keys.toLocaleString()} editable keys.${entire ? ' Procedural Build detached.' : ' Other flights remain linked.'}`);
+      setFilter('animated');
+      const ids = hit.map((inst) => inst.key);
+      setExpanded((old) => new Set([...old, ...ids.slice(0, 8)]));
+      if (!entire && ids.length === 1) setFocused(ids[0]);
+    } catch (error) { setLayerError(error instanceof Error ? error.message : String(error)); }
+  };
   const propertyId = activeObject && available.has(activeObject) ? activeObject : null;
   const propertyObject = objects.find((obj) => obj.id === propertyId);
   const propertyValues = propertyId ? valuesAt(animation, editingModel, propertyId, frameRounded) : null;
   const propertyTrack = propertyId ? trackOf(animation, editingModel, propertyId) : undefined;
+  const bakedCount = instances.filter((inst) => animation.tracks.some((track) => track.model === editingModel && track.target === inst.key && track.source === 'baked-flight')).length;
+  const canBake = !!timeline && !planning && !buildError;
   const activeInterpolation = selectedKeys(animation, selected).map((s) => s.key.interpolation);
   const interpolation: KeyInterpolation | '' = activeInterpolation.length && activeInterpolation.every((v) => v === activeInterpolation[0]) ? activeInterpolation[0] : '';
 
@@ -428,18 +480,46 @@ export function KeyframeTimeline({ timeline, planning, buildError }: { timeline:
               onCommit={(speed) => { if (timeline) changeLayer((a) => updateBuildLayer(a, editingModel, { ...buildLayer, speed }, timeline.duration)); }} />×</label>
             <label>Start <LayerNumberField value={buildLayer.startFrame} label="Build layer start frame" min={animation.startFrame} max={animation.endFrame} step={1}
               onCommit={(startFrame) => { if (timeline) changeLayer((a) => updateBuildLayer(a, editingModel, { ...buildLayer, startFrame }, timeline.duration)); }} /></label>
-            <button className="bm-key-unlink" title="Unlink the Build layer but keep all manual keyframes" onClick={() => changeLayer((a) => unlinkBuildLayer(a, editingModel))}><Ic name="x" /> Unlink</button>
+            <button className="bm-key-unlink" title="Unlink the Build layer (unbaked bricks will become static)" onClick={() => {
+              if (bakedCount < instances.length && !window.confirm('Unlinking Build will make every unbaked brick static. Bake all flights first if you want to keep their motion. Unlink anyway?')) return;
+              changeLayer((a) => unlinkBuildLayer(a, editingModel));
+            }}><Ic name="x" /> Unlink</button>
+            <button className="bm-key-bake" disabled={!canBake} title="Turn selected Build flights into independent editable object keys" onClick={() => doBake(false)}><Ic name="key" /> Bake selected</button>
+            <button className="bm-key-bake" disabled={!canBake} title="Bake every brick, preserve appearance timing, and detach this model from its planner" onClick={() => doBake(true)}>Bake all & detach</button>
           </>
         ) : (
           <>
-            <strong>Static model</strong><span className="bm-key-buildnote">Keyframe freely, or place an editable motion layer over the generated Build.</span>
+            <strong>{bakedCount ? 'Baked keyframes' : 'Static model'}</strong><span className="bm-key-buildnote">Keyframe freely, or place an editable motion layer over the generated Build.</span>
             <button className="bm-key-build-link" disabled={!timeline || planning || !!buildError} onClick={() => {
               if (timeline) changeLayer((a) => linkBuildLayer(a, editingModel, timeline.duration));
             }}><Ic name="key" /> Use Build as base</button>
+            {bakedCount > 0 && <span className="bm-key-buildnote">{bakedCount} individual flights baked · independent of Build</span>}
+            {bakedCount > 0 && <button className="bm-key-bake" disabled={!canBake} title="Bake current generated motion for every item and remove the Build source" onClick={() => doBake(true)}>Rebake all</button>}
           </>
         )}
         {(layerError || (buildLayer && (buildError || planning || !timeline))) &&
           <span className="bm-key-layer-error" role="status" title={layerError || buildError}>{layerError || (planning ? 'Updating Build…' : buildError || 'Build animation unavailable')}</span>}
+        <button className="bm-key-motion-check" title="Conservative broad-phase motion overlap diagnostics (not mesh collision certification)" onClick={checkMotion} disabled={!animation.tracks.some((t) => t.model === editingModel)}><Ic name="check" /> Check motion</button>
+        {motionReport && <span className={`bm-key-motion-result ${motionReport.warnings.length ? 'warning' : 'clear'}`} role="status"
+          title="Broad-phase swept-bounds advisory, not a mesh collision certificate. Check any reported contacts manually.">
+          {motionReport.warnings.length ? `${motionReport.warnings.length}+ potential contacts at frames ${motionReport.warnings.slice(0, 3).map((w) => w.frame).join(', ')}${motionReport.complete ? '' : ' · partial scan'}` : `No new bounds overlaps in ${motionReport.checkedFrames} samples${motionReport.complete ? '' : ' · partial scan'}`}
+        </span>}
+        {motionReport && motionReport.warnings.length > 0 && (
+          <details className="bm-key-motion-details">
+            <summary>Review contacts</summary>
+            <div className="bm-key-motion-list" role="group" aria-label="Potential motion contacts">
+              {motionReport.warnings.map((warning, i) => (
+                <button key={`${warning.frame}:${warning.first}:${warning.second}:${i}`} type="button"
+                  title="Jump to the suspected contact frame and inspect the viewport"
+                  onClick={() => seek(warning.frame)}>
+                  <strong>F{warning.frame}</strong> {warning.first} / {warning.second}
+                </button>
+              ))}
+              <p>AABB / swept-bounds advisory only. A reported contact may be an intentional LEGO connection; an empty report is not collision certification.</p>
+            </div>
+          </details>
+        )}
+        {bakeMessage && <span className="bm-key-bake-success" role="status" title={bakeMessage}>{bakeMessage}</span>}
       </div>
       <div className="bm-key-layout">
         <div className="bm-key-outliner">
@@ -456,10 +536,10 @@ export function KeyframeTimeline({ timeline, planning, buildError }: { timeline:
                 <div key={row.id} className={`bm-key-outline-row kind-${row.kind} ${active ? 'active' : ''}`} style={{ height: ROW, paddingLeft: 7 + row.depth * 13 }}
                   title={row.label} onClick={() => {
                     if (row.kind === 'summary') return;
-                    if (row.target) { useStudio.getState().select([row.target]); setFocused(row.target); }
+                    if (row.target) { useStudio.getState().select([row.target.split('/')[0]]); setFocused(row.target); }
                     if (row.kind === 'object' && row.target) setExpanded((old) => { const next = new Set(old); if (next.has(row.target!)) next.delete(row.target!); else next.add(row.target!); return next; });
                   }}>
-                  {row.kind === 'object' ? <button className="bm-key-disclose" aria-label={`${expanded.has(row.target!) ? 'Collapse' : 'Expand'} ${row.label}`} onClick={(e) => { e.stopPropagation(); setExpanded((old) => { const next = new Set(old); if (next.has(row.target!)) next.delete(row.target!); else next.add(row.target!); return next; }); }}><Ic name={expanded.has(row.target!) ? 'chevron' : 'right'} /></button> : row.kind === 'channel' ? <span className={`bm-key-axis axis-${row.channel!.split('.')[1]}`}>{row.channel!.split('.')[1].toUpperCase()}</span> : <Ic name={row.kind === 'summary' ? 'steps' : row.kind === 'build' ? 'brick' : 'move'} />}
+                  {row.kind === 'object' ? <button className="bm-key-disclose" aria-label={`${expanded.has(row.target!) ? 'Collapse' : 'Expand'} ${row.label}`} onClick={(e) => { e.stopPropagation(); setExpanded((old) => { const next = new Set(old); if (next.has(row.target!)) next.delete(row.target!); else next.add(row.target!); return next; }); }}><Ic name={expanded.has(row.target!) ? 'chevron' : 'right'} /></button> : row.kind === 'channel' ? <span className={`bm-key-axis axis-${row.channel!.split('.')[1]}`}>{(row.channel === 'visibility' ? 'V' : row.channel!.split('.')[1].toUpperCase())}</span> : <Ic name={row.kind === 'summary' ? 'steps' : row.kind === 'build' ? 'brick' : 'move'} />}
                   <span className="bm-key-trackname">{row.label}</span>
                   {num > 0 && row.kind !== 'channel' && <span className="bm-key-trackcount">{num}</span>}
                   {row.kind === 'channel' && <button className="bm-key-addchannel" title={`Insert ${row.label} keyframe at frame ${frameRounded}`} aria-label={`Insert keyframe in ${row.label}`} onClick={(e) => { e.stopPropagation(); insert([row.channel!], [row.target!]); }}><Ic name="plus" /></button>}
@@ -468,14 +548,16 @@ export function KeyframeTimeline({ timeline, planning, buildError }: { timeline:
             })}
           </div>
         </div>
-        <div className="bm-key-editor" ref={editorRef} onScroll={(e) => { if (headsRef.current) headsRef.current.scrollTop = e.currentTarget.scrollTop; }}>
+        <div className="bm-key-editor" ref={editorRef} onScroll={(e) => { if (headsRef.current) headsRef.current.scrollTop = e.currentTarget.scrollTop; setScrollState({ left: e.currentTarget.scrollLeft, width: e.currentTarget.clientWidth }); }}>
           <div className="bm-key-content" style={{ width: widthPx }}>
             <div className="bm-key-ruler" onPointerDown={startScrub} role="slider" tabIndex={0} aria-label="Keyframe ruler" aria-valuemin={animation.startFrame} aria-valuemax={animation.endFrame} aria-valuenow={frameRounded} onKeyDown={(e) => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); seek(frameRounded + (e.key === 'ArrowRight' ? 1 : -1)); } }}>
               {ticks.map((tick) => <span key={tick} className="bm-key-tick" style={{ left: X(tick) }}><i />{tick}</span>)}
             </div>
             <div className="bm-key-body" ref={bodyRef} style={{ minHeight: Math.max(rows.length * ROW, 120), backgroundSize: `${tickStep * px}px 100%` }} onPointerDown={startMarquee}>
               {rows.map((row, i) => {
-                const refs = keyFor(row);
+                // Only render diamonds close to the visible horizontal viewport.
+                // Full baked models can have tens of thousands of channel keys.
+                const refs = keyFor(row).filter((ref) => ref.frame >= visibleFirst && ref.frame <= visibleLast);
                 const displayed = new Map<number, KeyRef[]>();
                 for (const ref of refs) displayed.set(ref.frame, [...(displayed.get(ref.frame) ?? []), ref]);
                 return (
@@ -536,7 +618,11 @@ export function KeyframeTimeline({ timeline, planning, buildError }: { timeline:
             <div className="bm-key-property-empty"><Ic name="pointer" /><strong>Select an object</strong><p>Select a piece or submodel in the viewport to edit its animated transforms.</p><button onClick={() => setFilter('all')}>Browse all objects</button></div>
           )}
           <div className="bm-key-properties-bottom">
-            {buildLayer && <div className="bm-key-layer-explainer"><Ic name="brick" /> Values here offset the generated Build. Edit construction steps in Build; adjust movement here with keys.</div>}
+            {buildLayer && <div className="bm-key-layer-explainer"><Ic name="brick" /> Unbaked parts follow Build. Baked flights are independently editable; group keys offset both.</div>}
+            {propertyTrack?.source === 'baked-flight' && <div className="bm-key-baked-explainer">Baked flight · edit or retime the yellow diamonds directly. These keys replace this brick's generated motion.</div>}
+            {propertyObject && <section className="bm-key-property-section"><div className="bm-key-section-title">Visibility <span>step / hold</span></div>
+              <label className="bm-key-visibility"><input type="checkbox" checked={!!propertyValues && propertyValues.visibility >= .5}
+                onChange={(e) => updateChannel(propertyObject.id, 'visibility', e.target.checked ? 1 : 0)} /> Visible at frame {frameRounded}</label></section>}
             <div className="bm-key-section-title">Keyframe tools</div>
             <label className="bm-key-select-label">Interpolation <select value={interpolation} onChange={(e) => { if (e.target.value) applyAnimation((a) => setInterpolation(a, selected, e.target.value as KeyInterpolation)); }} disabled={!selected.length}>
               <option value="">{selected.length ? 'Mixed' : 'Select a key'}</option>

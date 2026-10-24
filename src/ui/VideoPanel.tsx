@@ -32,6 +32,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
   const s = useAppSettings();
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [acceptUncertified, setAcceptUncertified] = useState(false);
   useEffect(() => {
     if (!s.logo) return setLogoUrl(null);
     const u = URL.createObjectURL(s.logo);
@@ -39,6 +40,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
     return () => URL.revokeObjectURL(u);
   }, [s.logo]);
   const longer = timeline && timeline.duration > s.targetSeconds + 0.05;
+  useEffect(() => setAcceptUncertified(false), [timeline?.fallback?.code, timeline?.fallback?.message]);
   const editingModel = useStudio((st) => st.editingModel);
   const timelineEditor = useStudio((st) => st.timelineEditor);
   const animation = useStudio((st) => animationOf(st.plan.animation));
@@ -58,7 +60,9 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
       setError("That image couldn't be read. Try a PNG.");
     }
   };
-  const v2 = s.planner === 'construction-v2';
+  const v2 = ['construction-v2', 'construction-auto', 'construction-v3', 'construction-v3-auto'].includes(s.planner ?? '');
+  const v3 = s.planner === 'construction-v3' || s.planner === 'construction-v3-auto';
+  const previewNeedsConsent = !!timeline?.fallback && (!manual || linked);
 
   return (
     <div className="nx-pane bm-video">
@@ -260,14 +264,17 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
 
       {!manual && <>
       <details className="nx-group bm-vsec">
-        <summary>Planner<span className="bm-vsec-val">{v2 ? 'Construction V2' : 'Standard'}</span></summary>
+        <summary>Planner<span className="bm-vsec-val">{s.planner === 'construction-v3-auto' ? 'V3 Adaptive' : s.planner === 'construction-auto' ? 'V2 Adaptive' : v3 ? 'Construction V3' : v2 ? 'Construction V2' : 'Standard'}</span></summary>
         <label className="nx-field">
           Assembly planner
-          <select aria-label="Assembly planner" value={s.planner ?? 'legacy'} onChange={(e) => s.set({ planner: e.target.value as 'legacy' | 'construction-v2' })}>
-            <option value="legacy">Standard</option>
-            <option value="construction-v2">Construction V2 (experimental)</option>
+          <select aria-label="Assembly planner" value={s.planner ?? 'legacy'} onChange={(e) => s.set({ planner: e.target.value as NonNullable<typeof s.planner> })}>
+            <option value="legacy">Standard — flexible preview</option>
+            <option value="construction-v3">Construction V3 — guided, certified only</option>
+            <option value="construction-v3-auto">Construction V3 — guided, preview fallback</option>
+            <option value="construction-auto">Adaptive V2 — then uncertified preview</option>
+            <option value="construction-v2">Construction V2 — certified only</option>
           </select>
-          <span className="nx-hint">V2 searches backward and builds subassemblies on separate work areas. No articulation or deformation; models it can't solve stop instead of falling back.</span>
+          <span className="nx-hint">V3 uses connector-guided NEAR disengagement, open-air FAR transport and scope-local spatial indexing; all accepted paths must pass exact collision checking and forward replay. V3 falls back to the exhaustive V2 candidate generator when necessary. Adaptive modes clearly mark Standard previews as <strong>uncertified</strong>. Articulation and true flex deformation remain unsupported.</span>
         </label>
         {v2 && <label className="nx-field">
           Workpiece support
@@ -277,19 +284,37 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
           </select>
           <span className="nx-hint">Fixtures aren't drawn. Neither mode simulates gravity.</span>
         </label>}
+        {v2 && <label className="nx-field">
+          Construction search budget
+          <select aria-label="Construction search budget" value={s.constructionBudget ?? 'standard'}
+            onChange={(e) => s.set({ constructionBudget: e.target.value as 'standard' | 'extended' | 'diagnostic' })}>
+            <option value="standard">Standard — 20 s · 2,000 states · 100k candidates</option>
+            <option value="extended">Extended — 60 s · 10,000 states · 500k candidates</option>
+            <option value="diagnostic">Diagnostic — 120 s · 50,000 states · 1m candidates</option>
+          </select>
+          <span className="nx-hint">Higher budgets use more CPU and memory. They do not bypass missing connector geometry or collision checks. In large models, the result may still be a contact error or timeout.</span>
+        </label>}
         {timeline?.construction && (
           <div className="nx-field">
             <strong>{timeline.construction.operations.length} operations · {timeline.construction.stats.states} search states</strong>
+            <span className="nx-hint">{v3 ? "V3 guided near/far routing with continuous-mesh certification" : "V2 exhaustive routing with continuous-mesh certification"}</span>
             <details><summary>Limits and assumptions</summary>{timeline.construction.warnings.map((w, i) => <p key={i} className="nx-hint">{w}</p>)}</details>
             <button type="button" className="nx-btn nx-sm" onClick={() => {
               const blob = new Blob([JSON.stringify(timeline.construction, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'construction-plan-v2.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+              const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = v3 ? 'construction-plan-v3.json' : 'construction-plan-v2.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
             }}>Download construction plan</button>
           </div>
         )}
       </details>
 
       </>}
+      {!manual && timeline?.fallback && (
+        <div className="nx-field" role="alert" style={{ border: '1px solid var(--border, #a86b35)', borderRadius: 6, padding: 10 }}>
+          <strong>Uncertified animation preview</strong>
+          <p className="nx-hint">Construction V2 could not certify this model ({timeline.fallback.phase ?? 'planner'}: {timeline.fallback.code}). Standard produced a visual animation; collisions and attachment paths are <strong>not verified</strong>. Inspect the motion before exporting.</p>
+          <details><summary>Why V2 stopped</summary><p className="nx-hint">{timeline.fallback.message}</p>{timeline.fallback.contacts?.map((c, i) => <p className="nx-hint" key={i}>{c.moving} / {c.obstacle} · {c.stage}</p>)}</details>
+        </div>
+      )}
       <div className="bm-video-export">
         <div className="nx-grid2">
           <label className="nx-field">
@@ -309,7 +334,10 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
             </select>
           </label>
         </div>
-        <button className="nx-btn nx-primary" disabled={!manual && (!timeline || timeline.units.length === 0)} onClick={onExport}>
+        {previewNeedsConsent && <label className="nx-field">
+          <span><input type="checkbox" checked={acceptUncertified} onChange={(e) => setAcceptUncertified(e.target.checked)} /> I understand the adaptive animation has not been collision-certified.</span>
+        </label>}
+        <button className="nx-btn nx-primary" disabled={(!manual && (!timeline || timeline.units.length === 0)) || (previewNeedsConsent && !acceptUncertified)} onClick={onExport}>
           <Ic name="download" /> Export {manual ? 'Timeline' : 'Build'} · {editingModel ? `“${editingModel}”` : 'main model'} MP4
         </button>
         <p className="nx-fine">Renders in your browser with the selected video resolution, frame rate and logo. Export submodels from the Models panel.</p>

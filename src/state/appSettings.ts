@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { AnimOptions, ArrivalMode, FloorSides, FloorSort } from '../anim/pacing';
+import { CONSTRUCTION_BUDGET_PRESETS, type ConstructionBudgetPreset } from '../anim/construction/budgetPresets';
 import type { LogoCorner } from '../export/exportVideo';
 import type { ExportFps } from '../export/frameRates';
 import type { StudioLook } from '../render/studio';
@@ -25,8 +26,9 @@ export type AppSettings = {
   linearColors: boolean;
   /** within a step, each piece is placed after what it rests on */
   bottomUp: boolean;
-  planner?: 'legacy' | 'construction-v2';
+  planner?: 'legacy' | 'construction-v2' | 'construction-auto' | 'construction-v3' | 'construction-v3-auto';
   constructionSupport?: 'fixture' | 'table';
+  constructionBudget?: ConstructionBudgetPreset;
   /** how pieces waiting on the floor are grouped, and where around the model */
   floorSort: FloorSort;
   floorSides: FloorSides;
@@ -62,7 +64,7 @@ export const toSettings = (s: AppSettings): Settings => ({
   logo: s.logo,
   logoCorner: s.logoCorner,
   logoEnabled: s.logoEnabled,
-  video: { targetSeconds: s.targetSeconds, heroOrbit: s.heroOrbit, mode: s.mode, fps: s.fps, introSeconds: s.introSeconds, buildSeconds: s.buildSeconds, outroSeconds: s.outroSeconds, studioLook: s.studioLook, cameraFraming: s.cameraFraming, camera: s.camera, format: s.format, edgeLines: s.edgeLines, linearColors: s.linearColors, bottomUp: s.bottomUp, snapSound: s.snapSound, planner: s.planner ?? 'legacy', constructionSupport: s.constructionSupport ?? 'fixture', floorSort: s.floorSort, floorSides: s.floorSides },
+  video: { targetSeconds: s.targetSeconds, heroOrbit: s.heroOrbit, mode: s.mode, fps: s.fps, introSeconds: s.introSeconds, buildSeconds: s.buildSeconds, outroSeconds: s.outroSeconds, studioLook: s.studioLook, cameraFraming: s.cameraFraming, camera: s.camera, format: s.format, edgeLines: s.edgeLines, linearColors: s.linearColors, bottomUp: s.bottomUp, snapSound: s.snapSound, planner: s.planner ?? 'legacy', constructionSupport: s.constructionSupport ?? 'fixture', constructionBudget: s.constructionBudget ?? 'standard', floorSort: s.floorSort, floorSides: s.floorSides },
 });
 
 export async function applySettings(s: Settings): Promise<void> {
@@ -73,7 +75,7 @@ export async function applySettings(s: Settings): Promise<void> {
 }
 
 /** The animation options the timeline planner needs, taken from the video settings. */
-export const animOptions = (s: Pick<AppSettings, 'targetSeconds' | 'heroOrbit' | 'mode' | 'introSeconds' | 'buildSeconds' | 'outroSeconds' | 'bottomUp' | 'planner' | 'constructionSupport'> & Partial<Pick<AppSettings, 'floorSort' | 'floorSides'>>): AnimOptions => ({
+export const animOptions = (s: Pick<AppSettings, 'targetSeconds' | 'heroOrbit' | 'mode' | 'introSeconds' | 'buildSeconds' | 'outroSeconds' | 'bottomUp' | 'planner' | 'constructionSupport'> & Partial<Pick<AppSettings, 'constructionBudget' | 'floorSort' | 'floorSides'>>): AnimOptions => ({
   targetSeconds: s.targetSeconds,
   heroOrbit: s.heroOrbit,
   mode: s.mode === 'auto' ? undefined : s.mode,
@@ -83,6 +85,9 @@ export const animOptions = (s: Pick<AppSettings, 'targetSeconds' | 'heroOrbit' |
   bottomUp: s.bottomUp,
   planner: s.planner ?? 'legacy',
   constructionSupport: s.constructionSupport ?? 'fixture',
+  constructionMaxMilliseconds: CONSTRUCTION_BUDGET_PRESETS[s.constructionBudget ?? 'standard'].maxMilliseconds,
+  constructionMaxStates: CONSTRUCTION_BUDGET_PRESETS[s.constructionBudget ?? 'standard'].maxStates,
+  constructionMaxCandidates: CONSTRUCTION_BUDGET_PRESETS[s.constructionBudget ?? 'standard'].maxCandidates,
   floorSort: s.floorSort ?? 'step',
   floorSides: s.floorSides ?? 'front-back',
 });

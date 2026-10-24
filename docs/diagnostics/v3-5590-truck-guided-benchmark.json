@@ -1,0 +1,151 @@
+{
+  "success": false,
+  "engine": "v3",
+  "budget": "standard",
+  "limits": {
+    "maxMilliseconds": 20000,
+    "maxStates": 2000,
+    "maxCandidates": 100000
+  },
+  "scope": "truck",
+  "pieces": 554,
+  "code": "search-budget-exhausted",
+  "message": "search-budget-exhausted: The bounded search did not finish. This does not establish physical impossibility. Contacts: :13:0 / :7:11 (withdrawal): Continuous triangle-mesh collision detected along the swept translation segment.; :13:0 / :1:2 (withdrawal): Continuous triangle-mesh collision detected along the swept translation segment.; :13:0 / :0:2 (withdrawal): Continuous triangle-mesh collision detected along the swept translation segment.",
+  "stats": {
+    "states": 38,
+    "candidates": 30419,
+    "backtracks": 0,
+    "meshPairs": 13294,
+    "trianglePairs": 2995504,
+    "cacheHits": 103677,
+    "milliseconds": 20001,
+    "guidedCandidates": 30419,
+    "exhaustiveCandidates": 0,
+    "broadphaseQueries": 31890,
+    "broadphaseHits": 413713,
+    "contactAuditMilliseconds": 5216
+  },
+  "blockages": [
+    {
+      "moving": ":13:3",
+      "obstacle": ":17:1",
+      "stage": "withdrawal",
+      "detail": "Continuous triangle-mesh collision detected along the swept translation segment.",
+      "parts": [
+        "3023",
+        "3004"
+      ]
+    },
+    {
+      "moving": ":13:2",
+      "obstacle": ":11:0",
+      "stage": "withdrawal",
+      "detail": "Continuous triangle-mesh collision detected along the swept translation segment.",
+      "parts": [
+        "3023",
+        "3020"
+      ]
+    },
+    {
+      "moving": ":13:2",
+      "obstacle": ":10:9",
+      "stage": "withdrawal",
+      "detail": "Continuous triangle-mesh collision detected along the swept translation segment.",
+      "parts": [
+        "3023",
+        "4442"
+      ]
+    },
+    {
+      "moving": ":13:2",
+      "obstacle": ":0:6",
+      "stage": "withdrawal",
+      "detail": "Continuous triangle-mesh collision detected along the swept translation segment.",
+      "parts": [
+        "3023",
+        "4442"
+      ]
+    },
+    {
+      "moving": ":13:2",
+      "obstacle": ":17:0",
+      "stage": "withdrawal",
+      "detail": "Continuous triangle-mesh collision detected along the swept translation segment.",
+      "parts": [
+        "3023",
+        "3004"
+      ]
+    },
+    {
+      "moving": ":13:1",
+      "obstacle": ":18:6",
+      "stage": "withdrawal",
+      "detail": "Continuous triangle-mesh collision detected along the swept translation segment.",
+      "parts": [
+        "3023",
+        "3700"
+      ]
+    },
+    {
+      "moving": ":13:1",
+      "obstacle": ":16:7",
+      "stage": "withdrawal",
+      "detail": "Continuous triangle-mesh collision detected along the swept translation segment.",
+      "parts": [
+        "3023",
+        "3707"
+      ]
+    },
+    {
+      "moving": ":13:1",
+      "obstacle": ":11:1",
+      "stage": "withdrawal",
+      "detail": "Continuous triangle-mesh collision detected along the swept translation segment.",
+      "parts": [
+        "3023",
+        "3023"
+      ]
+    },
+    {
+      "moving": ":13:1",
+      "obstacle": ":0:2",
+      "stage": "withdrawal",
+      "detail": "Continuous triangle-mesh collision detected along the swept translation segment.",
+      "parts": [
+        "3023",
+        "3035"
+      ]
+    },
+    {
+      "moving": ":13:0",
+      "obstacle": ":7:11",
+      "stage": "withdrawal",
+      "detail": "Continuous triangle-mesh collision detected along the swept translation segment.",
+      "parts": [
+        "3004",
+        "3709b"
+      ]
+    },
+    {
+      "moving": ":13:0",
+      "obstacle": ":1:2",
+      "stage": "withdrawal",
+      "detail": "Continuous triangle-mesh collision detected along the swept translation segment.",
+      "parts": [
+        "3004",
+        "3032"
+      ]
+    },
+    {
+      "moving": ":13:0",
+      "obstacle": ":0:2",
+      "stage": "withdrawal",
+      "detail": "Continuous triangle-mesh collision detected along the swept translation segment.",
+      "parts": [
+        "3004",
+        "3035"
+      ]
+    }
+  ],
+  "elapsedMs": 20004
+}

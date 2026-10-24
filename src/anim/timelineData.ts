@@ -78,7 +78,22 @@ export type TrackData<M> = {
     moves: MoveData<M>[];
     final: M;
 };
+/** Non-certified preview provenance: never present an adaptive fallback as a certified V2 plan. */
+export type PlanningFallback = {
+    planner: 'construction-v2' | 'construction-v3';
+    mode: 'uncertified-preview';
+    code: string;
+    message: string;
+    scope?: string;
+    phase?: 'connections' | 'final-contact-audit' | 'route-search' | 'forward-replay';
+    searchStates?: number;
+    /** A few relevant blocker pairs make the failure diagnosable after saving. */
+    contacts?: { moving: string; obstacle: string; stage: string }[];
+};
 export type TimelineData = {
+    /** Bump when rigid collision-certification algorithms change. */
+    certificationVersion?: number;
+    fallback?: PlanningFallback;
     construction?: ConstructionPlan;
     duration: number;
     steps: StepSpan[];

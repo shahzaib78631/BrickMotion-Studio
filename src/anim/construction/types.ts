@@ -13,6 +13,8 @@ export type ConstructionNode = {
     body: Box;
     hints?: AssemblyHints;
     children?: ConstructionNode[];
+    /** Render segments which represent one already-shaped physical part; never individually staged. */
+    atomic?: 'preformed-flexible';
     leaves: string[];
 };
 export type ConstructionModel = {
@@ -60,14 +62,17 @@ export type Blockage = {
     obstacle: string;
     stage: 'final-placement' | 'withdrawal' | 'transport' | 'floor';
     detail: string;
+    /** Approximate WORLD-space mesh witness point for viewport debugging (LDU). */
+    contactPoint?: V3;
 };
 export class ConstructionError extends Error {
     constructor(public code: PlannerFailureCode, message: string, public details: {
         scope?: string;
+        phase?: 'connections' | 'final-contact-audit' | 'route-search' | 'forward-replay';
         blockages?: Blockage[];
         stats?: SearchStats;
         items?: string[];
-    } = {}) { super(`${code}: ${message}${details.blockages?.length ? ' Contacts: ' + details.blockages.slice(-4).map(b => `${b.moving} / ${b.obstacle} (${b.stage})`).join('; ') : ''}`); this.name = 'ConstructionError'; }
+    } = {}) { super(`${code}: ${message}${details.blockages?.length ? ' Contacts: ' + details.blockages.slice(-3).map(b => `${b.moving} / ${b.obstacle} (${b.stage}): ${b.detail}`).join('; ') : ''}`); this.name = 'ConstructionError'; }
 }
 export type SearchStats = {
     states: number;
@@ -77,8 +82,18 @@ export type SearchStats = {
     trianglePairs: number;
     cacheHits: number;
     milliseconds: number;
+    /** Optional V3 profiling, including fallback candidates and early broad-phase rejects. */
+    guidedCandidates?: number;
+    exhaustiveCandidates?: number;
+    broadphaseQueries?: number;
+    broadphaseHits?: number;
+    contactAuditMilliseconds?: number;
+    routeMilliseconds?: number;
+    replayMilliseconds?: number;
 };
 export type ConstructionOptions = {
+    /** Guided V3 optimizes proposal order and broad phase but shares exact certificates. */
+    algorithm?: 'exhaustive-v2' | 'guided-v3';
     maxStates?: number;
     maxMilliseconds?: number;
     maxCandidates?: number;

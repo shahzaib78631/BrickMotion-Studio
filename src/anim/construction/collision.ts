@@ -4,7 +4,8 @@
  */
 import type { Box } from '../../ldraw/flatten';
 import type { Connection, ConstructionModel, ConstructionNode, SearchStats } from './types';
-import { add, sub, mul, dot, cross, norm, unit, vector, pos, bounds, union, shiftBox, overlaps, sweptBox, point } from './math';
+import { add, sub, mul, dot, cross, norm, unit, vector, pos, bounds, union, shiftBox, overlaps, sweptBox, point, multiply } from './math';
+import type { M4 } from './math';
 import type { V3 } from './math';
 export const SKIN = 0.02;
 type Tri = {
@@ -100,7 +101,7 @@ export function makeSolid(mesh: Float32Array, matrix: readonly number[], pulse: 
         let chosen = p;
         for (const sign of [-1, 1]) {
             const probe = add(p, mul(t.normal, sign * SKIN * 4));
-            if (contains(solid, probe)) {
+            if (contains(solid, probe, pulse)) {
                 chosen = probe;
                 break;
             }
@@ -249,6 +250,10 @@ function localizedContact(a: Tri, b: Tri, offset: V3, delta: V3, interval: [
     number
 ], region: NonNullable<Connection['region']>, obstaclePosition: V3): boolean {
     const polygon = contactPolygon(a, b, offset, delta, interval);
+    // A numerical SAT interval does not prove an actual contact polygon exists.
+    // Treat an empty clipping result as unverified, never as an exemption
+    // (Array.every would otherwise accept it vacuously).
+    if (!polygon.length) return false;
     if (!polygon.every(p => { const world = add(p, obstaclePosition); return insideRegion({ min: world, max: world }, region); }))
         return false;
     if (region.minRadius && polygon.length) {
@@ -271,9 +276,11 @@ function localizedContact(a: Tri, b: Tri, offset: V3, delta: V3, interval: [
     }
     return true;
 }
-function nearSurface(s: Solid, p: V3): boolean {
+function nearSurface(s: Solid, p: V3, pulse: () => void = () => {}): boolean {
     const stack = [s.tree], limit = SKIN * SKIN;
+    let visited = 0;
     while (stack.length) {
+        if ((++visited & 255) === 0) pulse();
         const n = stack.pop()!;
         const distance = n.box.min.reduce((sum, lo, k) => sum + Math.max(lo - p[k], p[k] - n.box.max[k], 0) ** 2, 0);
         if (distance > limit)
@@ -305,9 +312,10 @@ function nearSurface(s: Solid, p: V3): boolean {
  * solids. See Jacobson, Kavan & Sorkine-Hornung (SIGGRAPH 2013),
  * https://igl.ethz.ch/projects/winding-number/
  */
-export function windingNumber(s: Solid, p: V3): number {
-    let sum = 0, correction = 0;
+export function windingNumber(s: Solid, p: V3, pulse: () => void = () => {}): number {
+    let sum = 0, correction = 0, visited = 0;
     for (const t of s.triangles) {
+        if ((++visited & 255) === 0) pulse();
         const a = sub(t.p[0], p), b = sub(t.p[1], p), c = sub(t.p[2], p);
         const na = norm(a), nb = norm(b), nc = norm(c);
         const angle = 2 * Math.atan2(dot(a, cross(b, c)), na * nb * nc + dot(a, b) * nc + dot(b, c) * na + dot(c, a) * nb);
@@ -317,17 +325,17 @@ export function windingNumber(s: Solid, p: V3): number {
     }
     return sum / (4 * Math.PI);
 }
-export function contains(s: Solid, p: V3): boolean {
-    if (!overlaps({ min: p, max: p }, s.box, -SKIN) || nearSurface(s, p))
+export function contains(s: Solid, p: V3, pulse: () => void = () => {}): boolean {
+    if (!overlaps({ min: p, max: p }, s.box, -SKIN) || nearSurface(s, p, pulse))
         return false;
-    return Math.abs(windingNumber(s, p)) > .5;
+    return Math.abs(windingNumber(s, p, pulse)) > .5;
 }
 export class MeshOracle {
     private solids = new Map<string, Solid>();
     private results = new Map<string, boolean>();
     readonly bodies = new Map<string, Body>();
     lastFailure: unknown = null;
-    constructor(model: ConstructionModel, private stats: SearchStats, private pulse: () => void = () => { }) {
+    constructor(private model: ConstructionModel, private stats: SearchStats, private pulse: () => void = () => { }) {
         for (const n of model.parts.values()) {
             this.pulse();
             const key = n.part + '|' + n.matrix.slice(0, 12).join(',');
@@ -339,8 +347,43 @@ export class MeshOracle {
             this.bodies.set(n.id, { key, solid, position: pos(n.matrix), axes: [[1, 0, 0], [0, 1, 0], [0, 0, 1]].map(a => unit(vector(n.matrix, a as V3))) });
         }
     }
+    /** Exact continuous translation of meshes in DIFFERENT rotated work bays.
+     * Rotating only their AABBs caused false "blocked" results for safe paths.
+     * Meshes are transformed at the fixed endpoint orientations; the segment
+     * itself must be a translation. Rotations still use the separate full
+     * enclosing-sphere proof in the planner.
+     */
+    clearPosed(aKey: string, bKey: string, aPose: M4, bPose: M4, worldDelta: V3, policy?: Connection): boolean {
+        this.pulse();
+        const moving = this.posedBody(aKey, aPose), obstacle = this.posedBody(bKey, bPose);
+        const adapted = policy ? { ...policy,
+            outward: policy.outward ? unit(vector(bPose, policy.outward)) : undefined,
+            region: policy.region ? this.rotatedRegion(policy.region, bPose) : undefined,
+            regions: policy.regions?.map(r => this.rotatedRegion(r, bPose)),
+        } : undefined;
+        return this.testBodies(aKey, bKey, moving, obstacle, [0, 0, 0], [0, 0, 0], worldDelta, adapted);
+    }
+    private rotatedRegion(r: NonNullable<Connection['region']>, m: M4): NonNullable<Connection['region']> {
+        return { ...r, origin: point(m, r.origin), axis: unit(vector(m, r.axis)) };
+    }
+    private posedBody(id: string, pose: M4): Body {
+        const n = this.model.parts.get(id)!;
+        const matrix = multiply(pose, n.matrix);
+        // Cached by shape and linear transform, NOT translation. A single mesh
+        // is shared by thousands of differently positioned identical bricks.
+        const key = n.part + '|' + matrix.slice(0, 12).join(',');
+        let solid = this.solids.get(key);
+        if (!solid) {
+            solid = makeSolid(this.model.metrics(n.part!).mesh!, matrix, this.pulse);
+            this.solids.set(key, solid);
+        }
+        return { key, solid, position: pos(matrix), axes: [[1, 0, 0], [0, 1, 0], [0, 0, 1]].map(a => unit(vector(matrix, a as V3))) };
+    }
     clear(aKey: string, bKey: string, aOffset: V3, bOffset: V3, delta: V3, policy?: Connection): boolean {
-        const a = this.bodies.get(aKey)!, b = this.bodies.get(bKey)!;
+        this.pulse();
+        return this.testBodies(aKey, bKey, this.bodies.get(aKey)!, this.bodies.get(bKey)!, aOffset, bOffset, delta, policy);
+    }
+    private testBodies(aKey: string, bKey: string, a: Body, b: Body, aOffset: V3, bOffset: V3, delta: V3, policy?: Connection): boolean {
         const pa = add(a.position, aOffset), pb = add(b.position, bOffset), relative = sub(pa, pb);
         if (!sweptBox(shiftBox(a.solid.box, pa), shiftBox(b.solid.box, pb), delta, -1e-6))
             return true;
@@ -350,15 +393,12 @@ export class MeshOracle {
         // exemption. Zero-length checks retain the metadata so staticContact()
         // can classify the completed pose itself.
         const activePolicy = policy?.staticOnly && norm(delta) > 1e-9 ? undefined : policy;
-        // A surface certificate is only valid while EXITING the tiny final-pose
-        // overlap that was independently measured by staticContact(). It never
-        // exempts transit through the obstacle and it is bounded in LDU.
-        if (activePolicy?.surfaceTolerance && activePolicy.child === aKey && activePolicy.outward && norm(delta) > 1e-9 && dot(unit(delta), activePolicy.outward) > .9999) {
-            const distance = Math.min(activePolicy.surfaceTolerance, norm(delta));
-            const step = mul(unit(delta), distance);
-            if (distance > 1e-9 && this.clear(aKey, bKey, add(aOffset, step), bOffset, sub(delta, step)))
-                return true;
-        }
+        // surfaceTolerance is a measurement of an existing final-pose overlap,
+        // NOT a certificate to skip that many LDU of actual movement. Skipping
+        // the first interval could accept an arbitrary path THROUGH an obstacle.
+        // Only explicit, localized contact regions (validated below) can relax
+        // mesh collisions on a swept path. Static-only metadata remains limited
+        // to the stationary completed pose.
         const rawRegions = activePolicy ? [...(activePolicy.region ? [activePolicy.region] : []), ...(activePolicy.regions ?? [])] : [];
         const along = norm(delta) < 1e-9 || !activePolicy?.outward ? 0 : dot(unit(delta), activePolicy.outward);
         const allowed = rawRegions.length > 0 && activePolicy!.child === aKey && (norm(delta) < 1e-9 || along > .9999 || (!!activePolicy!.axial && along < -.9999));
@@ -375,8 +415,9 @@ export class MeshOracle {
             Tree,
             Tree
         ][] = [[a.solid.tree, b.solid.tree]];
-        let clear = true;
+        let clear = true, iterations = 0;
         while (stack.length && clear) {
+            if ((++iterations & 255) === 0) this.pulse();
             const [an, bn] = stack.pop()!;
             if (!sweptBox(shiftBox(an.box, relative), bn.box, delta, -1e-6))
                 continue;
@@ -415,7 +456,7 @@ export class MeshOracle {
                     const q = add(p, off), world = add(q, pb);
                     if (regions.some(region => insideRegion({ min: world, max: world }, region)))
                         continue;
-                    if (contains(b.solid, q)) {
+                    if (contains(b.solid, q, this.pulse)) {
                         this.lastFailure = { kind: 'contained-a', a: aKey, b: bKey, point: world, regions };
                         clear = false;
                         break;
@@ -427,7 +468,7 @@ export class MeshOracle {
                     const world = add(p, pb);
                     if (regions.some(region => insideRegion({ min: world, max: world }, region)))
                         continue;
-                    if (contains(a.solid, sub(p, off))) {
+                    if (contains(a.solid, sub(p, off), this.pulse)) {
                         this.lastFailure = { kind: 'contained-b', a: aKey, b: bKey, point: world, regions };
                         clear = false;
                         break;
@@ -492,6 +533,7 @@ export class MeshOracle {
             if (!dirs.some(e => dot(d, e) > 1 - 1e-8)) dirs.push(d);
         }
         for (const d of dirs) {
+            this.pulse();
             // Clear space along a non-convex render mesh is not necessarily
             // monotonic with displacement: a shallow contact can clear and then
             // hit an unrelated surface farther along the same direction. Probe
@@ -500,6 +542,7 @@ export class MeshOracle {
             const samples = policy?.surfaceTolerance !== undefined ? 16 : 4;
             let lo = 0, hi: number | undefined;
             for (let i = 1; i <= samples; i++) {
+                this.pulse();
                 const distance = tolerance * i / samples;
                 if (this.clear(aKey, bKey, mul(d, distance), zero, zero, policy)) {
                     hi = distance;
@@ -510,6 +553,7 @@ export class MeshOracle {
             if (hi === undefined) continue;
             let upper: number = hi;
             for (let i = 0; i < 8; i++) {
+                this.pulse();
                 const mid = (lo + upper) / 2;
                 if (this.clear(aKey, bKey, mul(d, mid), zero, zero, policy)) upper = mid; else lo = mid;
             }

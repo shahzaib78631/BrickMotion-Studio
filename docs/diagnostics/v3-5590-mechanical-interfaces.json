@@ -1,0 +1,224 @@
+{
+  "inspection": "ldcad-mechanical-interfaces/v1",
+  "scope": "full",
+  "pieces": 1258,
+  "closePairs": 7137,
+  "typedJoints": 3467,
+  "jointTypes": {
+    "stud-socket": 3335,
+    "axle-hole": 34,
+    "cylindrical": 76,
+    "ball-socket": 4,
+    "hinge": 12,
+    "pin-hole": 2,
+    "clip": 4
+  },
+  "selectedPairs": [
+    {
+      "a": {
+        "id": ":1:0/trailer:14:5",
+        "part": "4073"
+      },
+      "b": {
+        "id": ":1:0/trailer:14:7",
+        "part": "4073"
+      },
+      "joints": [],
+      "explanation": "Coaxial male/female connectors are present, but their engaged section profiles or axial ranges are incompatible. Check exact part placement and geometry."
+    },
+    {
+      "a": {
+        "id": ":1:0/trailer:3:3",
+        "part": "4073"
+      },
+      "b": {
+        "id": ":1:0/trailer:3:5",
+        "part": "4073"
+      },
+      "joints": [],
+      "explanation": "Nearby connector axes are offset by at least 20.00 LDU (supported matching tolerance: 1.20 LDU)."
+    },
+    {
+      "a": {
+        "id": ":1:0/trailer:3:4",
+        "part": "4073"
+      },
+      "b": {
+        "id": ":1:0/trailer:3:6",
+        "part": "4073"
+      },
+      "joints": [],
+      "explanation": "Nearby connector axes are offset by at least 20.00 LDU (supported matching tolerance: 1.20 LDU)."
+    },
+    {
+      "a": {
+        "id": ":1:0/trailer:14:6",
+        "part": "4073"
+      },
+      "b": {
+        "id": ":1:0/trailer:14:8",
+        "part": "4073"
+      },
+      "joints": [],
+      "explanation": "Coaxial male/female connectors are present, but their engaged section profiles or axial ranges are incompatible. Check exact part placement and geometry."
+    },
+    {
+      "a": {
+        "id": ":2:0/helicopter:14:2",
+        "part": "2462"
+      },
+      "b": {
+        "id": ":2:0/helicopter:14:3",
+        "part": "2462"
+      },
+      "joints": [],
+      "explanation": "Nearby connector axes are offset by at least 60.00 LDU (supported matching tolerance: 1.20 LDU)."
+    },
+    {
+      "a": {
+        "id": ":2:0/helicopter:9:3",
+        "part": "4073"
+      },
+      "b": {
+        "id": ":2:0/helicopter:9:4",
+        "part": "4349"
+      },
+      "joints": [
+        {
+          "type": "cylindrical",
+          "axis": [
+            -0.7071067811865475,
+            0,
+            0.7071067811865475
+          ],
+          "engagement": 3.9999990716531113,
+          "motion": "sliding",
+          "region": {
+            "origin": [
+              -318.87255010309997,
+              -194,
+              394.48676189689996
+            ],
+            "axis": [
+              -0.7071067811865475,
+              0,
+              0.7071067811865475
+            ],
+            "length": 3.9999990716531113,
+            "radius": 6.2
+          }
+        }
+      ],
+      "explanation": "Compatible connection metadata exists. A separate triangle-mesh check is required before this contact can be certified."
+    },
+    {
+      "a": {
+        "id": ":2:0/helicopter:9:4",
+        "part": "4349"
+      },
+      "b": {
+        "id": ":2:0/helicopter:10:0",
+        "part": "2462"
+      },
+      "joints": [],
+      "explanation": "The available connector axes do not align at this final pose; an articulated joint or a corrected placement may be required."
+    },
+    {
+      "a": {
+        "id": ":2:0/helicopter:9:3",
+        "part": "4073"
+      },
+      "b": {
+        "id": ":2:0/helicopter:10:0",
+        "part": "2462"
+      },
+      "joints": [],
+      "explanation": "The available connector axes do not align at this final pose; an articulated joint or a corrected placement may be required."
+    },
+    {
+      "a": {
+        "id": ":2:0/helicopter:10:0",
+        "part": "2462"
+      },
+      "b": {
+        "id": ":2:0/helicopter:13:5",
+        "part": "4073"
+      },
+      "joints": [],
+      "explanation": "The available connector axes do not align at this final pose; an articulated joint or a corrected placement may be required."
+    },
+    {
+      "a": {
+        "id": ":2:0/helicopter:10:0",
+        "part": "2462"
+      },
+      "b": {
+        "id": ":2:0/helicopter:10:1",
+        "part": "2462"
+      },
+      "joints": [],
+      "explanation": "Nearby connector axes are offset by at least 60.00 LDU (supported matching tolerance: 1.20 LDU)."
+    },
+    {
+      "a": {
+        "id": ":2:0/helicopter:10:1",
+        "part": "2462"
+      },
+      "b": {
+        "id": ":2:0/helicopter:13:6",
+        "part": "4073"
+      },
+      "joints": [],
+      "explanation": "The available connector axes do not align at this final pose; an articulated joint or a corrected placement may be required."
+    },
+    {
+      "a": {
+        "id": ":0:0/truck:3:11",
+        "part": "4073"
+      },
+      "b": {
+        "id": ":0:0/truck:4:0",
+        "part": "4073"
+      },
+      "joints": [],
+      "explanation": "Nearby connector axes are offset by at least 20.00 LDU (supported matching tolerance: 1.20 LDU)."
+    },
+    {
+      "a": {
+        "id": ":0:0/truck:3:7",
+        "part": "4073"
+      },
+      "b": {
+        "id": ":0:0/truck:3:11",
+        "part": "4073"
+      },
+      "joints": [],
+      "explanation": "Nearby connector axes are offset by at least 20.00 LDU (supported matching tolerance: 1.20 LDU)."
+    },
+    {
+      "a": {
+        "id": ":0:0/truck:3:8",
+        "part": "4073"
+      },
+      "b": {
+        "id": ":0:0/truck:3:12",
+        "part": "4073"
+      },
+      "joints": [],
+      "explanation": "Nearby connector axes are offset by at least 20.00 LDU (supported matching tolerance: 1.20 LDU)."
+    },
+    {
+      "a": {
+        "id": ":0:0/truck:3:12",
+        "part": "4073"
+      },
+      "b": {
+        "id": ":0:0/truck:4:1",
+        "part": "4073"
+      },
+      "joints": [],
+      "explanation": "Nearby connector axes are offset by at least 20.00 LDU (supported matching tolerance: 1.20 LDU)."
+    }
+  ],
+  "note": "Joint classification is metadata-based. No static contact or swept-motion collision has been certified by this inspection."
+}

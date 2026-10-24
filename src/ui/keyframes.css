@@ -159,3 +159,27 @@
 .bm-key-lane.kind-build { background:#25372d; border-bottom:1px solid #42604d; }
 .bm-key-buildstrip { position:absolute; top:4px; bottom:4px; box-sizing:border-box; border-radius:3px; border:1px solid #619070; background:repeating-linear-gradient(130deg,#3c6149,#3c6149 12px,#476e54 12px,#476e54 24px); display:flex; align-items:center; padding:0 8px; white-space:nowrap; overflow:hidden; color:#d4f5dc; font-size:9px; font-weight:700; letter-spacing:.01em; pointer-events:none; }
 .bm-key-buildstrip.unavailable { background:repeating-linear-gradient(135deg,#775132,#775132 8px,#50382e 8px,#50382e 16px); border-color:#b68b4a; color:#f5d7af; }
+
+/* Individually baked Build flights and conservative motion review. */
+.bm-key-bake,.bm-key-motion-check { font-size:10px; font-weight:650; color:#f2dbab!important; background:#433c2e; border:1px solid #857147; padding:5px 8px; border-radius:5px; display:flex; align-items:center; gap:5px; white-space:nowrap; }
+.bm-key-bake:hover:not(:disabled),.bm-key-motion-check:hover:not(:disabled) { background:#615036; border-color:#cba563; }
+.bm-key-bake:disabled,.bm-key-motion-check:disabled { opacity:.4; cursor:not-allowed; }
+.bm-key-motion-check { color:#c9e6dc!important; border-color:#558477; background:#2c4844; }
+.bm-key-motion-check:hover:not(:disabled) { background:#366057; border-color:#81bea4; }
+.bm-key-bake-success { font-size:10px; color:#a9e4ba; overflow:hidden; text-overflow:ellipsis; max-width:280px; white-space:nowrap; }
+.bm-key-motion-result { font-size:10px; max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bm-key-motion-result.warning { color:#ffcc8e; }.bm-key-motion-result.clear { color:#93cbb6; }
+.bm-key-baked-explainer { margin:7px 0; padding:7px; border:1px solid #806a3a; border-radius:4px; background:#433722; font-size:10px; line-height:1.5; color:#f0d69e; }
+.bm-key-visibility { display:flex; align-items:center; gap:7px; font-size:10px; color:#e6e8ee; }
+.bm-key-visibility input { accent-color:#e1ba69; }
+.bm-key-outline-row.kind-object:has(.bm-key-trackname) { min-width:0; }
+.bm-key-outline-row .bm-key-axis.axis-undefined { color:#a8ceb3; }
+
+/* Reviewable, frame-addressable diagnostics instead of a non-actionable badge. */
+.bm-key-motion-details { position:relative; align-self:center; font-size:10px; color:#f3d6a3; }
+.bm-key-motion-details summary { cursor:pointer; list-style-position:inside; border:1px solid #795e37; border-radius:5px; padding:4px 6px; background:#433b2d; white-space:nowrap; }
+.bm-key-motion-details[open] summary { background:#5b4b31; }
+.bm-key-motion-list { position:absolute; top:calc(100% + 5px); right:0; z-index:36; display:flex; flex-direction:column; gap:2px; max-height:230px; overflow-y:auto; width:min(340px,80vw); padding:6px; border:1px solid #80663a; border-radius:7px; background:#242831; box-shadow:0 8px 25px #0007; }
+.bm-key-motion-list button { justify-content:flex-start; overflow:hidden; text-overflow:ellipsis; width:100%; color:#e6e9ee; padding:6px 7px; text-align:left; white-space:nowrap; }
+.bm-key-motion-list button strong { color:#ffcc8e; margin-right:7px; }
+.bm-key-motion-list p { margin:5px; color:#aeb9c5; line-height:1.4; font-size:10px; }

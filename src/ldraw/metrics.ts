@@ -4,6 +4,8 @@ import type { Snap } from './shadow';
 
 export type PartMetrics = ConnectionGeometry & {
   id: string;
+  /** Human-readable LDraw header; used for conservative semantic part families. */
+  description?: string;
   body: Box;
   full: Box;
   footprint: { w: number; d: number };
@@ -44,6 +46,7 @@ export function measurePart(flat: FlatPart | null, id: string): PartMetrics {
   }
   return {
     id,
+    description: flat.description,
     body,
     full: flat.fullBox ?? body,
     footprint: {

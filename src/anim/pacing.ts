@@ -6,8 +6,9 @@ export type FloorSides = 'front-back' | 'front' | 'behind' | 'sides';
 export type AnimOptions = {
   targetSeconds: number; heroOrbit: boolean; mode?: ArrivalMode;
   /** V2 is explicit opt-in until articulated/flexible model coverage is ready. */
-  planner?: 'legacy' | 'construction-v2';
+  planner?: 'legacy' | 'construction-v2' | 'construction-auto' | 'construction-v3' | 'construction-v3-auto';
   constructionMaxStates?: number;
+  constructionMaxCandidates?: number;
   constructionMaxMilliseconds?: number;
   constructionSupport?: 'fixture' | 'table';
   constructionMechanicalSubassemblies?: boolean;
