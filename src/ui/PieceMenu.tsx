@@ -1,4 +1,5 @@
 import { runCommand } from '../state/editing';
+import { nextGroupName, setGroup, ungroupSelection, membersOfGroup } from '../plan/groups';
 import { findItem, modelSteps } from '../plan/ops';
 import { connectedIds, movePiecesToNewStep, movePiecesToStep, similarIds, stepsOf } from '../plan/pieceActions';
 import { isSub, type Plan, type PlanItem } from '../plan/types';
@@ -32,7 +33,7 @@ function moveTo(ids: string[], where: { step: number } | { newAt: number }) {
  * The right-click menu for pieces in the Build view: `ids` are the pieces it acts on
  * (the selection, which includes the piece clicked).
  */
-export function pieceMenuItems(ids: string[]): ContextItem[] {
+export function pieceMenuItems(ids: string[], onCreateSubmodel?: (ids: string[]) => void): ContextItem[] {
   const st = useStudio.getState();
   const { plan, editingModel: m } = st;
   const steps = modelSteps(plan, m);
@@ -43,6 +44,19 @@ export function pieceMenuItems(ids: string[]): ContextItem[] {
   const only = inSteps.length === 1 ? inSteps[0] : null;
   const all = steps.flatMap((s) => s.pieces.map((i) => i.id).filter((x): x is string => !!x));
   const hiddenCount = st.hidden[m]?.length ?? 0;
+  const group = first.item.assembly?.group;
+  const hasGroup = ids.some(id => !!findItem(plan, m, id)?.item.assembly?.group);
+  const hierarchyActions: ContextItem[] = [
+    { icon: 'components', label: `Group ${ids.length} selected pieces`, disabled: ids.length < 2,
+      onClick: () => { const name = nextGroupName(st.plan, m); st.apply(p => setGroup(p, m, ids, name)); st.select(ids); } },
+    { icon: 'box', label: 'Create submodel from selection…', disabled: ids.length < 2 || !onCreateSubmodel,
+      onClick: () => onCreateSubmodel?.(ids) },
+    ...(hasGroup ? [
+      { icon: 'pointer' as const, label: group ? `Select ${group}` : 'Select entire group',
+        disabled: !group, onClick: () => group && st.select(membersOfGroup(st.plan, m, group)) },
+      { icon: 'x' as const, label: 'Ungroup selected', onClick: () => { st.apply(p => ungroupSelection(p, m, ids)); st.select(ids); } },
+    ] : []),
+  ];
   const where = only === null ? `in steps ${inSteps.map((s) => s + 1).join(', ')}` : `in step ${only + 1}`;
 
   const moveSteps: ContextItem[] = steps.map((_, i) => ({
@@ -84,6 +98,9 @@ export function pieceMenuItems(ids: string[]): ContextItem[] {
       ? { icon: 'steps', label: 'Put all parts back', onClick: () => st.setLaidOut(false) }
       : { icon: 'steps', label: 'Lay out all parts', onClick: () => st.setLaidOut(true) },
     'sep',
+    { heading: 'ORGANIZE' },
+    ...hierarchyActions,
+    'sep',
     { icon: 'steps', label: 'Move to step', items: moveSteps, disabled: steps.length < 2 && only !== null },
     { icon: 'plus', label: 'Move to a new step', items: newStep },
     'sep',
@@ -106,15 +123,24 @@ export function pieceMenuItems(ids: string[]): ContextItem[] {
 }
 
 /** The right-click menu on empty space in the Build view. */
-export function emptyMenuItems(): ContextItem[] {
+export function emptyMenuItems(onCreateSubmodel?: (ids: string[]) => void): ContextItem[] {
   const st = useStudio.getState();
   const { plan, editingModel: m } = st;
   const all = modelSteps(plan, m).flatMap((s) => s.pieces.map((i) => i.id).filter((x): x is string => !!x));
   const hiddenCount = st.hidden[m]?.length ?? 0;
+  const selected = st.selection.model === m ? st.selection.ids : [];
   return [
     { icon: 'fit', label: 'Fit everything in view', hint: 'F', onClick: () => viewportApi.fit() },
     { icon: 'components', label: 'Select everything', disabled: !all.length, onClick: () => st.select(all) },
     { icon: 'x', label: 'Clear selection', hint: 'Esc', disabled: !st.selection.ids.length, onClick: () => st.select([]) },
+    ...(selected.length >= 2 ? [
+      'sep' as const,
+      { icon: 'components' as const, label: `Group ${selected.length} selected pieces`, onClick: () => {
+        st.apply(p => setGroup(p, m, selected, nextGroupName(p, m))); st.select(selected);
+      } },
+      { icon: 'box' as const, label: 'Create submodel from selection…', disabled: !onCreateSubmodel,
+        onClick: () => onCreateSubmodel?.(selected) },
+    ] : []),
     'sep',
     { icon: 'eye', label: hiddenCount ? `Show ${hiddenCount} hidden` : 'Show hidden', hint: '⇧H', disabled: !hiddenCount, onClick: () => st.showAll() },
     { icon: 'steps', label: 'Show every step', hint: '/', disabled: st.currentStep === null, onClick: () => st.setCurrentStep(null) },

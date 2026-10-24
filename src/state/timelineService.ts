@@ -25,6 +25,9 @@ function baseOf(p: Plan): { plan: Plan; key: string } {
   let b = bases.get(p);
   if (!b) {
     let plan = resetFloorShifts(p);
+    // Editor-only viewing state and selection groups never invalidate a timeline.
+    const { showModelAtSpot: _view, ...withoutView } = plan;
+    plan = withoutView as Plan;
     // "Loose pieces follow on" (the default): the main spot is applied to the planned
     // timeline as one rigid transform, so it is not part of the planning cache key —
     // changing it re-applies `S` without planning again. "Follow off" moves the model
@@ -33,6 +36,14 @@ function baseOf(p: Plan): { plan: Plan; key: string } {
       const { assemblySpot: _s, loosePiecesFollow: _f, ...rest } = plan;
       plan = rest as Plan;
     }
+    const omitGroups = (steps: Plan['steps']) => steps.map(step => ({ ...step, pieces: step.pieces.map(item => {
+      if (!item.assembly?.group) return item;
+      const { group: _group, ...assembly } = item.assembly;
+      const out = { ...item, assembly: Object.keys(assembly).length ? assembly : undefined };
+      return out;
+    }) }));
+    plan = { ...plan, steps: omitGroups(plan.steps), submodels: plan.submodels && Object.fromEntries(
+      Object.entries(plan.submodels).map(([name, sub]) => [name, { ...sub, steps: omitGroups(sub.steps) }])) };
     const text = JSON.stringify(plan);
     let h = 0x811c9dc5;
     for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);

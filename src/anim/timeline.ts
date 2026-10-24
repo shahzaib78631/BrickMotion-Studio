@@ -167,7 +167,7 @@ function windowed(items: FloorItem[], bands: Region[]) {
 
 type PlayHints = { requires?: string[]; entryWay?: Way };
 type PlayPiece = PlayHints & { kind: 'piece'; rigid?: { key: string; rel: THREE.Matrix4 }[]; rigidKind?: RigidHardware['kind']; key: string; target: THREE.Matrix4; ctx: number; after?: PlayAttach[] };
-type PlayAttach = PlayHints & { kind: 'attach'; key: string; keys: string[]; from: THREE.Matrix4; to: THREE.Matrix4; sub: number; after?: PlayAttach[] };
+type PlayAttach = PlayHints & { kind: 'attach'; key: string; keys: string[]; from: THREE.Matrix4; to: THREE.Matrix4; sub: number; stationary?: boolean; after?: PlayAttach[] };
 type PlayStep = { units: (PlayPiece | PlayAttach)[]; model: string; index: number; scope: string; pauseAfter: number };
 /** `parent`: the context a nested submodel is built inside; its floor is not laid out before the parent's. */
 type Ctx = { bands: Region[]; pieces: string[]; group: Map<string, number>; after?: number; parent?: number };
@@ -476,7 +476,8 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
     play(n.children, from, key, ctx);
     depth--;
     sideRight = savedRight;
-    const attach: PlayAttach = { kind: 'attach', key, keys: keysUnder(n, prefix), from, to, sub };
+    const stationary = !!buildSpot && from.elements.every((v, k) => Math.abs(v - to.elements[k]) < 1e-6);
+    const attach: PlayAttach = { kind: 'attach', key, keys: keysUnder(n, prefix), from, to, sub, stationary };
     lastAttachAtDepth[depth] = attach;
     lastAttachAtDepth.length = depth + 1; // deeper spots are free again for the next parent
     return attach;
@@ -676,7 +677,7 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
       const tr = tracks.get(k);
       if (!cur || !tr) continue;
       const rel = inv.clone().multiply(cur);
-      tr.moves.push({ unit: i, from: f.u.from, to: f.u.to, rel, skyY: 0, hold: 0, entry: [0, 0, 0] });
+      tr.moves.push({ unit: i, from: f.u.from, to: f.u.to, rel, stationary: f.u.stationary, skyY: 0, hold: 0, entry: [0, 0, 0] });
       current.set(k, f.u.to.clone().multiply(rel));
     }
   });
@@ -823,6 +824,13 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
       const delay = ready - u.start;
       for (let k = i; k < units.length; k++) units[k].start += delay;
       refreshAppear();
+    }
+    // A submodel assembled on its final studs has no transport. Its completed
+    // pieces are still collision obstacles for subsequent units (via tracks),
+    // but it must not be routed as a fictitious airborne object.
+    if (u.kind === 'attach' && members[i].length && members[i].every(({ move }) => move.stationary)) {
+      sweptXY[i] = EMPTY_BOX;
+      continue;
     }
     let top = builtTop;
     let bottomOffset = -Infinity;
@@ -1264,6 +1272,11 @@ function endpointPair(from: THREE.Matrix4, to: THREE.Matrix4): Decomposed {
 function endpoints(m: Move): Decomposed { return endpointPair(m.from, m.to); }
 
 export function flightPose(m: Move, u: number, out: THREE.Matrix4): THREE.Matrix4 {
+  if (m.stationary) {
+    out.copy(m.from);
+    if (m.rel) out.multiply(m.rel);
+    return out;
+  }
   u = clamp01((u - m.hold) / (1 - m.hold));
   if (u <= 0 || u >= 1) {
     out.copy(u <= 0 ? m.from : m.to);

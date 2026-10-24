@@ -365,6 +365,14 @@ export function planConstruction(model: ConstructionModel, options: Construction
     };
     const route = (node: ConstructionNode, remaining: ConstructionNode[], staged: StagedObstacle[], scopePose: M4, scopeId: string): RouteResult | null => {
         const target = slots.get(node.id)!.pose;
+        // If a manually placed submodel bay already coincides with its installed
+        // pose, its children assemble in place. There is no group carry flight,
+        // no clearance corridor to certify and no reason to lift it off its studs.
+        // Require the full matrix (including height and rotation) to match:
+        // matching just the floor X/Z footprint would be unsafe.
+        if (node.children?.length && node.hints?.buildSpot &&
+            scopePose.every((v, k) => Math.abs(v - target[k]) < 1e-6))
+            return { poses: [scopePose, target] };
         const connected = graph.connections.filter(c => owns(node, c.child) && remaining.some(n => n !== node && owns(n, c.parent)));
         const preferred = connected.flatMap(c => c.outward ? (c.axial ? [c.outward, mul(c.outward, -1)] : [c.outward]) : []);
         const directions = node.hints?.insertionAxis ? [unit(node.hints.insertionAxis)] : unique([...preferred, ...AXES, ...axisDirections(node.matrix)]);
@@ -534,6 +542,9 @@ export function planConstruction(model: ConstructionModel, options: Construction
         const movingBounds = op.keys.map(key => model.parts.get(key)!.bounds).reduce(union);
         for (let i = 1; i < poses.length; i++) {
             const from = poses[i - 1], to = poses[i];
+            // An assembly constructed on its final studs never travels. Do not
+            // run a motion-collision certificate for a zero-length segment.
+            if (closePose(from, to)) continue;
             if (!sameOrientation(from, to)) {
                 const before = point(from, centre(movingBounds)), after = point(to, centre(movingBounds));
                 const sphere = turningSphere(movingBounds, from);

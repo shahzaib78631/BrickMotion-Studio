@@ -38,6 +38,8 @@ export type StudioState = {
   setSpot(ref: SpotRef, spot: AssemblySpot | null): void;
   /** The main model's "loose pieces move with the model" switch. */
   setFollow(follow: boolean): void;
+  /** Controls only the Build editor preview; never edits original LDraw poses. */
+  setShowModelAtSpot(show: boolean): void;
   editingModel: ModelName;
   mode: 'edit' | 'preview';
   /** null = show every step */
@@ -104,10 +106,24 @@ export const useStudio = create<StudioState>((set, get) => ({
     set(ref ? { spot: ref, selection: { model: get().editingModel, ids: [] } } : { spot: null });
   },
   setSpot(ref, spot) {
+    // When explicitly previewing the main model at its assembly spot, a floor
+    // drop should visibly reposition the finished model, not keep rendering a
+    // stale animation frame at the playhead. Playback can be restarted normally.
+    if (isMainSpot(ref) && get().plan.showModelAtSpot)
+      usePlayback.getState().set({ follow: false, playing: false });
     get().apply((p) => (isMainSpot(ref) ? setAssemblySpot(p, spot) : setSubmodelBuildSpot(p, ref.model, ref.id, spot)));
   },
   setFollow(follow) {
     get().apply((p) => setLoosePiecesFollow(p, follow));
+  },
+  setShowModelAtSpot(show) {
+    if (show) {
+      // Switching to a finished-model placement preview must not appear inert
+      // merely because the user previously scrubbed the animation.
+      usePlayback.getState().set({ follow: false, playing: false });
+      set({ currentStep: null, laidOut: false });
+    }
+    get().apply((p) => p.showModelAtSpot === show ? p : { ...p, showModelAtSpot: show });
   },
   editingModel: '',
   replans: 0,

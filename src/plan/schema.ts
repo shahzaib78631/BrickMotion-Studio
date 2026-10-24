@@ -28,6 +28,7 @@ const AssemblySchema = z.object({
   role: z.enum(['base', 'hips', 'leg', 'torso', 'arm', 'hand', 'head', 'headwear', 'generic']).optional(),
   root: z.boolean().optional(),
   floorShift: z.tuple([num, num]).optional(),
+  group: z.string().min(1).max(80).optional(),
   buildSpot: AssemblySpotSchema.optional(),
 }).optional();
 
@@ -62,6 +63,7 @@ export const PlanSchema = z.object({
   steps: z.array(StepSchema),
   assemblySpot: AssemblySpotSchema.optional(),
   loosePiecesFollow: z.boolean().optional(),
+  showModelAtSpot: z.boolean().optional(),
 });
 
 export function parsePlan(json: unknown): { ok: true; plan: Plan } | { ok: false; errors: string[] } {

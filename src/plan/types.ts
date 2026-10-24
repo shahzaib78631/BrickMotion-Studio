@@ -23,6 +23,8 @@ export type AssemblyHints = {
    * x and z, from the spot the automatic layout gives it. Set by dragging it.
    */
   floorShift?: [number, number];
+  /** Editorial selection group, scoped to one model; independent of the build hierarchy. */
+  group?: string;
   /** Build spot for a submodel use (absolute in main model's unmoved frame). */
   buildSpot?: AssemblySpot;
 };
@@ -54,6 +56,8 @@ export type Plan = {
   assemblySpot?: AssemblySpot;
   /** default true: loose pieces move and turn with the main spot */
   loosePiecesFollow?: boolean;
+  /** Show the finished main model at its chosen assembly spot in the Build editor. */
+  showModelAtSpot?: boolean;
 };
 
 export const isSub = (i: PlanItem): i is SubItem => 'submodel' in i;

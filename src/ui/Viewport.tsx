@@ -12,6 +12,11 @@ import { markers, sameSpot, sceneSpot, storedSpot, sceneOffset, planOffset, spot
 import { SPOT_DRAG_TYPE, draggedSpot } from './AssemblyPanel';
 import { SpotMarkers } from './spotMarkers';
 import { createStudio, worldBox } from '../render/studio';
+import { transformBox } from '../model/assemble';
+import { selectionForHit } from '../plan/groups';
+import { createSubmodel } from '../plan/createSubmodel';
+import { modelPlacement, sourceEditDelta, viewPlacement } from './modelPlacement';
+import { NewSubmodelDialog } from './NewSubmodelDialog';
 import { runCommand } from '../state/editing';
 import { commandForKey } from '../state/keymap';
 import { useStudio } from '../state/store';
@@ -56,6 +61,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const framed = useRef(false);
+  const lastShownPlacement = useRef('');
   /** the model the Build view is following the timeline of (null: not following) */
   const followFor = useRef<string | null>(null);
   const plan = useStudio((s) => s.plan);
@@ -71,6 +77,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
   const stepView = useStudio((s) => s.stepView);
   const hiddenIds = useStudio((s) => s.hidden[s.editingModel]);
   const [menu, setMenu] = useState<{ x: number; y: number; items: ContextItem[]; label: string } | null>(null);
+  const [submodelDialog, setSubmodelDialog] = useState<{ model: string; ids: string[] } | null>(null);
   const follow = usePlayback((s) => s.follow);
   /**
    * Placing pieces (the Move tool, or the gizmo with something selected): show every
@@ -198,7 +205,8 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
         const boxes = modelRef.current.view.instances.filter((inst) => ids.has(inst.key.split('/')[0]));
         if (boxes.length) {
           const bounds = new THREE.Box3();
-          boxes.forEach((inst) => bounds.union(worldBox(inst.worldBox)));
+          const shown = modelPlacement(current.plan, current.editingModel, modelRef.current.assembly);
+          boxes.forEach((inst) => bounds.union(worldBox(shown ? transformBox(inst.worldBox, shown) : inst.worldBox)));
           bounds.getCenter(proxy.position);
           proxy.quaternion.identity();
           proxy.scale.setScalar(1);
@@ -269,7 +277,8 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
       const signature = delta.elements.map((n) => Math.round(n * 10000)).join(',');
       if (signature === lastTransform) return;
       lastTransform = signature;
-      const next = transformPlanItems(original, initialModel.current, initialIds.current, initialNodes.current, delta);
+      const shown = modelPlacement(state.plan, initialModel.current, modelRef.current.assembly);
+      const next = transformPlanItems(original, initialModel.current, initialIds.current, initialNodes.current, sourceEditDelta(delta, shown));
       useStudio.getState().apply(() => next);
     });
     let raf = 0;
@@ -372,7 +381,8 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
       return;
     }
     const bounds = new THREE.Box3();
-    boxes.forEach((inst) => bounds.union(worldBox(inst.worldBox)));
+    const shown = modelPlacement(plan, editingModel, model.assembly);
+    boxes.forEach((inst) => bounds.union(worldBox(shown ? transformBox(inst.worldBox, shown) : inst.worldBox)));
     bounds.getCenter(proxy.position);
     proxy.quaternion.identity();
     proxy.scale.setScalar(1);
@@ -423,6 +433,22 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     if (stepView === 'separated' && planned) return planned.poses;
     return stepPoses(model.view, currentStep, stepView);
   }, [model.view, currentStep, stepView, planned, placing, laidOut]);
+
+  // Placement only affects the editor's *static* view. Animation tracks have already
+  // had their root transform applied by the planner, and must never receive it twice.
+  const editorPlacement = useMemo(() => modelPlacement(plan, editingModel, model.assembly),
+    [plan.showModelAtSpot, plan.assemblySpot, editingModel, model.assembly]);
+  const alreadyPlanned = !!(currentStep !== null && stepView === 'separated' && planned && !placing);
+  const shownPoses = useMemo(() => {
+    if (!editorPlacement) return poses;
+    const positioned = new Map<string, THREE.Matrix4>();
+    for (const inst of visible) {
+      const prior = poses.get(inst.key);
+      // A separated-step timeline pose already includes the main-spot transform.
+      positioned.set(inst.key, prior && alreadyPlanned ? prior : editorPlacement.clone().multiply(prior ?? inst.world));
+    }
+    return positioned;
+  }, [poses, visible, editorPlacement, alreadyPlanned]);
 
   // Following the timeline: every piece, posed as the animation has it at the playhead.
   // Pieces edited since the timeline was planned show where they are now (a move shows
@@ -480,22 +506,31 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     const studio = viewportApi.studio;
     if (!studio || mode !== 'edit' || engaged) return;
     studio.bricks.setInstances(visible);
-    if (poses.size) {
-      const world = new Map(visible.map((i) => [i.key, i.world]));
-      studio.bricks.setMatrices((k) => poses.get(k) ?? world.get(k) ?? null);
+    // setInstances resets the GPU matrices; always supply the visible pose when
+    // the preview is enabled, including with no step or animation selected.
+    if (shownPoses.size) {
+      const originals = new Map(visible.map((i) => [i.key, i.world]));
+      studio.bricks.setMatrices((k) => shownPoses.get(k) ?? originals.get(k) ?? null);
     }
-    const b = poses.size ? posedBounds(visible, poses, (p) => metricsOf(p).body) : model.view.bounds;
+    const b = shownPoses.size ? posedBounds(visible, shownPoses, (p) => metricsOf(p).body) : model.view.bounds;
     const box = b ? worldBox(b) : new THREE.Box3(new THREE.Vector3(-5, 0, -5), new THREE.Vector3(5, 1, 5));
-    // light and shadows cover both where the step's parts wait and where they end up
-    // (playing the step moves them in place), so no shadow gets cut off
-    const built = poses.size ? posedBounds(visible, new Map(), (p) => metricsOf(p).body) : null;
+    // Include the installed model when staging a step for consistent lighting.
+    const built = poses.size ? (editorPlacement && model.view.bounds
+      ? transformBox(model.view.bounds, editorPlacement)
+      : posedBounds(visible, new Map(), (p) => metricsOf(p).body)) : null;
     const lit = built ? box.clone().union(worldBox(built)) : box;
     studio.fitTo(lit, b ? -b.max[1] / 20 : 0);
-    if (b && !framed.current && viewportApi.controls) {
+    const placementKey = editorPlacement?.elements.map(n => n.toFixed(4)).join(',') ?? '';
+    const placementChanged = placementKey !== lastShownPlacement.current;
+    lastShownPlacement.current = placementKey;
+    if (b && viewportApi.controls && (!framed.current ||
+      (placementChanged && editorPlacement && !inView(studio.camera, box)))) {
+      // A newly dropped spot may be well outside the current camera. Only
+      // refit on a *placement change*, never as the user intentionally zooms.
       frame(studio.camera, viewportApi.controls, box);
       framed.current = true;
     }
-  }, [visible, model.view, mode, poses, engaged]);
+  }, [visible, model.view, mode, poses, shownPoses, editorPlacement, engaged]);
 
   // the preview drives the camera itself
   useEffect(() => {
@@ -523,7 +558,8 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     const boxes = model.view.instances.filter((i) => ids.has(i.itemId) || ids.has(i.key.split('/')[0]));
     if (!boxes.length) return;
     const box = new THREE.Box3();
-    for (const i of boxes) box.union(worldBox(i.worldBox));
+    const shown = modelPlacement(useStudio.getState().plan, useStudio.getState().editingModel, model.assembly);
+    for (const i of boxes) box.union(worldBox(shown ? transformBox(i.worldBox, shown) : i.worldBox));
     frame(studio.camera, viewportApi.controls, box);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus.tick]);
@@ -583,10 +619,12 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
   viewportApi.fit = () => fitAllRef.current();
   fitAllRef.current = () => {
     // frame what is on screen: a step's parts laid out on the floor and where they end up
-    const b = poses.size ? posedBounds(visible, poses, (p) => metricsOf(p).body) : model.view.bounds;
+    const b = shownPoses.size ? posedBounds(visible, shownPoses, (p) => metricsOf(p).body) : model.view.bounds;
     if (!b || !viewportApi.studio || !viewportApi.controls) return;
     const box = worldBox(b);
-    const built = poses.size ? posedBounds(visible, new Map(), (p) => metricsOf(p).body) : null;
+    const built = poses.size ? (editorPlacement && model.view.bounds
+      ? transformBox(model.view.bounds, editorPlacement)
+      : posedBounds(visible, new Map(), (p) => metricsOf(p).body)) : null;
     if (built) box.union(worldBox(built));
     frame(viewportApi.studio.camera, viewportApi.controls, box);
   };
@@ -663,10 +701,12 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     const key = pickAt(e);
     if (!key) return;
     const id = key.split('/')[0];
-    const ids = s.selection.model === s.editingModel && s.selection.ids.includes(id) ? s.selection.ids : [id];
-    if (ids.length === 1 && ids[0] === id) s.select(ids);
+    const ids = s.selection.model === s.editingModel && s.selection.ids.includes(id)
+      ? s.selection.ids : selectionForHit(s.plan, s.editingModel, id, e.altKey);
+    if (!(s.selection.model === s.editingModel && ids.every(i => s.selection.ids.includes(i)))) s.select(ids);
     const inst = model.view.instances.find((i) => i.key === key);
-    const top = inst ? -inst.worldBox.min[1] / 20 : 0;
+    const placement = modelPlacement(s.plan, s.editingModel, model.assembly);
+    const top = inst ? -(placement ? transformBox(inst.worldBox, placement) : inst.worldBox).min[1] / 20 : 0;
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -top);
     const hit = (ev: { clientX: number; clientY: number }) => rayAt(ev).ray.intersectPlane(plane, new THREE.Vector3());
     const start = hit(e);
@@ -679,7 +719,9 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
       const p = hit(ev);
       const base = st().gesture;
       if (!p || !base) return;
-      const d = dragDelta(start, p);
+      const displayed = placement ? viewPlacement(placement).clone().invert() : null;
+      const d = dragDelta(displayed ? start.clone().applyMatrix4(displayed) : start,
+        displayed ? p.clone().applyMatrix4(displayed) : p);
       const sig = `${d.x},${d.y},${d.z}`;
       if (sig === last) return;
       last = sig;
@@ -773,11 +815,12 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
       return;
     }
     const key = pickAt(e);
-    if (!key) return setMenu({ x: e.clientX, y: e.clientY, items: emptyMenuItems(), label: 'View' });
+    if (!key) return setMenu({ x: e.clientX, y: e.clientY, items: emptyMenuItems((ids) => setSubmodelDialog({ model: s.editingModel, ids })), label: 'View' });
     const id = key.split('/')[0];
-    const ids = s.selection.model === s.editingModel && s.selection.ids.includes(id) ? s.selection.ids : [id];
-    if (ids.length === 1) s.select(ids);
-    const items = pieceMenuItems(ids);
+    const ids = s.selection.model === s.editingModel && s.selection.ids.includes(id)
+      ? s.selection.ids : selectionForHit(s.plan, s.editingModel, id);
+    if (!(s.selection.model === s.editingModel && ids.every(i => s.selection.ids.includes(i)))) s.select(ids);
+    const items = pieceMenuItems(ids, (chosen) => setSubmodelDialog({ model: s.editingModel, ids: chosen }));
     if (items.length) setMenu({ x: e.clientX, y: e.clientY, items, label: 'Piece' });
   };
   return (
@@ -828,7 +871,10 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
           const mark = pickSpotAt(e);
           if (mark) { st().selectSpot(mark); return; }
           const key = pickAt(e);
-          if (key) st().select([key.split('/')[0]], e.shiftKey);
+          if (key) {
+            const state = st();
+            st().select(selectionForHit(state.plan, state.editingModel, key.split('/')[0], e.altKey), e.shiftKey);
+          }
           else if (!e.shiftKey) st().select([]);
         }}
         onDoubleClick={(e) => {
@@ -855,6 +901,19 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
         </div>
       )}
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} label={menu.label} onClose={closeMenu} />}
+      {submodelDialog && <NewSubmodelDialog plan={plan} count={submodelDialog.ids.length}
+        onClose={() => setSubmodelDialog(null)}
+        onCreate={(name) => {
+          const state = st();
+          if (state.editingModel !== submodelDialog.model || !model.ready) return false;
+          const result = createSubmodel(state.plan, submodelDialog.model, submodelDialog.ids, model.view.nodes, name);
+          if (!result) return false;
+          state.apply(() => result.plan);
+          state.select([result.referenceId]);
+          state.setCurrentStep(null);
+          return true;
+        }} />}
+
       <ViewMenu />
       <NavGizmo />
       <div className="bm-gizmo-readout" ref={readoutRef} hidden aria-live="polite" />

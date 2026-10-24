@@ -475,20 +475,21 @@ body { margin: 0; }
 .bm-spot-follow > span { display: flex; flex-direction: column; gap: 4px; }
 .bm-spot-follow strong { color: var(--ink2); font-size: 11px; font-weight: 620; }
 .bm-spot-follow small { color: var(--ink3); font-size: 10px; line-height: 1.5; }
-.bm-spot-bar { position: absolute; top: 12px; left: 18px; right: 18px; z-index: 5; display: flex; align-items: center; gap: 9px; padding: 6px 8px 6px 11px; border-radius: 9px; border: 1px solid var(--line2); background: color-mix(in srgb, var(--surface) 93%, transparent); backdrop-filter: blur(14px); box-shadow: var(--shadow); }
-.bm-spot-bar-title { display: inline-flex; align-items: center; gap: 6px; flex: none; font-size: 11px; font-weight: 700; color: var(--ink2); padding-right: 9px; border-right: 1px solid var(--line); }
-.bm-spot-bar-title .ic { color: var(--focus); width: 15px; height: 15px; }
-.bm-spot-bar-chips { display: flex; gap: 5px; align-items: center; overflow-x: auto; flex: 1; min-width: 0; scrollbar-width: none; }
-.bm-spot-bar-chips::-webkit-scrollbar { display: none; }
-.bm-spot-chip { display: inline-flex; align-items: center; gap: 6px; flex: none; max-width: 220px; padding: 6px 8px; background: var(--surface2) !important; border: 1px solid var(--line) !important; border-radius: 6px; color: var(--ink2); font-size: 10.5px; font-weight: 550; white-space: nowrap; cursor: grab; }
-.bm-spot-chip .ic { width: 12px; height: 12px; flex: none; }
-.bm-spot-chip:active { cursor: grabbing; }
-.bm-spot-chip:hover { background: var(--hover) !important; }
-.bm-spot-chip.placed .bm-spot-chip-state { color: var(--focus); }
-.bm-spot-chip.sel { border-color: var(--focus) !important; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--focus) 24%, transparent); }
-.bm-spot-chip-state { padding-left: 5px; border-left: 1px solid var(--line2); color: var(--ink3); font-size: 9px; font-weight: 600; }
-.bm-spot-bar-hint { display: inline-flex; align-items: center; gap: 5px; flex: none; color: var(--ink3); font-size: 10px; }
-.bm-spot-bar-hint .ic { width: 13px; height: 13px; }
-@media (max-width: 1000px) { .bm-spot-bar-hint { display: none; } }
-@media (max-width: 640px) { .bm-spot-bar { left: 8px; right: 8px; } .bm-spot-bar-title span { display: none; } }
 .bm-kind.assembly-spot { background: color-mix(in srgb, var(--danger) 50%, var(--mark)); }
+
+/* Dedicated Assembly options and non-blocking editor dialog. */
+.bm-spot-options { display: flex; flex-direction: column; border-top: 1px solid var(--line); margin-top: 8px; }
+.bm-spot-options .bm-spot-follow { border-top: 0; padding: 12px 1px 3px; }
+.bm-modal-overlay { position: fixed; inset: 0; background: rgba(14, 18, 28, 0.43); z-index: 1000; display: grid; place-items: center; padding: 20px; }
+.bm-submodel-dialog { width: min(100%, 420px); border: 1px solid var(--line2); border-radius: 13px; padding: 20px; display: flex; flex-direction: column; gap: 16px; background: var(--surface); box-shadow: 0 28px 68px rgba(0,0,0,.24); color: var(--ink); }
+.bm-submodel-dialog-top { display: flex; gap: 12px; align-items: flex-start; }
+.bm-submodel-dialog-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 8px; color: var(--focus); background: color-mix(in srgb, var(--focus) 12%, var(--surface)); flex-shrink: 0; }
+.bm-submodel-dialog-top > div { flex: 1; min-width: 0; }
+.bm-submodel-dialog h3 { margin: 0 0 5px; font-size: 16px; }
+.bm-submodel-dialog p { margin: 0; }
+.bm-submodel-dialog-top p { color: var(--ink3); font-size: 12px; line-height: 1.5; }
+.bm-submodel-dialog .nx-field { display: flex; flex-direction: column; gap: 7px; font-size: 12px; }
+.bm-submodel-dialog input { min-height: 36px; border-radius: 7px; border: 1px solid var(--line2); padding: 7px 10px; background: var(--surface2); color: var(--ink); font: inherit; }
+.bm-submodel-dialog input:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
+.bm-submodel-dialog-actions { display: flex; justify-content: flex-end; gap: 9px; padding-top: 4px; }
+.bm-submodel-dialog-actions .nx-btn { display: inline-flex; gap: 6px; align-items: center; }

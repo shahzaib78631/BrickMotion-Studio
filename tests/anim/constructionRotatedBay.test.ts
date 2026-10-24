@@ -82,6 +82,34 @@ describe('Construction V2 independently rotated build bays', () => {
     expect(video.units.filter(u => u.uncertified)).toEqual([]);
   });
 
+  it('does not lift a built submodel when its bay is exactly its installation pose', () => {
+    const model = make();
+    const b = model.nodes[0].bounds;
+    const spot = { x: (b.min[0] + b.max[0]) / 40, z: (b.min[2] + b.max[2]) / 40, angle: 0 };
+    expect(model.bounds.max[1]).toBe(b.max[1]); // exactly the same floor plane
+    model.nodes[0].hints = { buildSpot: spot };
+    const construction = planConstruction(model, { mechanicalSubassemblies: false });
+    const attach = construction.operations.find(op => op.id === 'construct:wheel')!;
+    expect(attach.kind).toBe('attach-subassembly');
+    expect(attach.path).toEqual([[0, 0, 0], [0, 0, 0]]);
+    expect(attach.rigidPath).toBeUndefined();
+    const video = compileConstruction(construction, { targetSeconds: 20, heroOrbit: false });
+    expect(video.units.some(unit => unit.kind === 'attach')).toBe(true);
+    expect(video.units.filter(unit => unit.uncertified)).toEqual([]);
+  });
+
+  it('still transports a coincident X/Z bay when its height is different', () => {
+    const model = make();
+    const b = model.nodes[0].bounds;
+    model.nodes[0].hints = { buildSpot: { x: (b.min[0] + b.max[0]) / 40, z: (b.min[2] + b.max[2]) / 40, angle: 0 } };
+    // Elevate the bay model in Y via a higher root box; a coincident 2D
+    // footprint must not incorrectly bypass the required vertical transfer.
+    model.bounds.max[1] += 24;
+    const construction = planConstruction(model, { mechanicalSubassemblies: false });
+    const attach = construction.operations.find(op => op.id === 'construct:wheel')!;
+    expect(attach.path.some(p => Math.abs(p[1]) > 1e-6)).toBe(true);
+  });
+
   it('keeps the previous translation-only plan when no spot is requested', () => {
     const { construction } = run();
     expect(construction.operations.every(o => !o.rigidPath)).toBe(true);

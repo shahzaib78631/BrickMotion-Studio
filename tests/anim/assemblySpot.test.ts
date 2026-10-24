@@ -4,7 +4,7 @@ import { applyAssemblySpotTransform, applyFloorShifts, buildTimeline, flightPose
 import { decodeTimeline, encodeTimeline } from '../../src/anim/timelineCodec';
 import { projectToJson, readProjectFile } from '../../src/io/projectFile';
 import type { Timeline } from '../../src/anim/timeline';
-import { assemble, transformBox, unionBox, type Assembly, type Metrics } from '../../src/model/assemble';
+import { assemble, placementMatrix, transformBox, unionBox, type Assembly, type Metrics } from '../../src/model/assemble';
 import type { Box } from '../../src/ldraw/flatten';
 import { centre2 } from '../../src/plan/assemblySpots';
 import { ensureIds } from '../../src/plan/ids';
@@ -151,6 +151,36 @@ describe('submodel build spot', () => {
     // the finished submodel still attaches exactly where it belongs
     const end = poseAt(tl, tl.duration);
     for (const inst of pieces) expectMat(end(inst.key)!, inst.world);
+  });
+
+  it('legacy: a submodel built at its exact installed pose does not lift and return', () => {
+    const original = plan([
+      [{ id: 's1', submodel: 'wheel', x: 0, y: 0, z: 0, rot: 0 }],
+      [brick(12, 0, 0)],
+    ], { wheel: [[brick(0, 0, 0), brick(3, 0, 0)]] });
+    const asm0 = assemble(original, metrics, fixtureColors);
+    const node = asm0.nodes.find(n => n.itemId === 's1')!;
+    const footprint = transformBox(node.body, placementMatrix(node.local));
+    expect(footprint.max[1]).toBeCloseTo(asm0.bounds!.max[1], 4);
+    const samePlace = { x: (footprint.min[0] + footprint.max[0]) / 40,
+      z: (footprint.min[2] + footprint.max[2]) / 40, angle: 0 };
+    const p = setSubmodelBuildSpot(original, '', 's1', samePlace);
+    const tl = buildTimeline(assemble(p, metrics, fixtureColors), metrics, opts);
+    const unitIndex = tl.units.findIndex(u => u.kind === 'attach' && u.keys.every(k => k.startsWith('s1/')));
+    expect(unitIndex).toBeGreaterThanOrEqual(0);
+    const unit = tl.units[unitIndex];
+    for (const [key, track] of tl.tracks) {
+      if (!key.startsWith('s1/')) continue;
+      const move = track.moves.find(m => m.unit === unitIndex)!;
+      expect(move.stationary).toBe(true);
+      expectMat(move.from.clone().multiply(move.rel!), move.to.clone().multiply(move.rel!), 1e-6);
+      for (const fraction of [0, 0.12, 0.33, 0.65, 0.98, 1])
+        expectMat(poseAt(tl, unit.start + unit.dur * fraction)(key)!, track.final, 1e-5);
+    }
+    // An encoded/reopened timeline must keep the in-place behavior.
+    const reopened = decodeTimeline(encodeTimeline(tl));
+    for (const key of [...tl.tracks.keys()].filter(k => k.startsWith('s1/')))
+      expectMat(poseAt(reopened, unit.start + unit.dur * 0.5)(key)!, reopened.tracks.get(key)!.final, 1e-5);
   });
 
   it('construction-v2: the submodel is staged at the spot', () => {

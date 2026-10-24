@@ -57,6 +57,8 @@ export type MoveData<M> = {
     rigidBase?: M;
     rigidPivot?: [number, number, number];
     unit: number;
+    /** The built group is already in its installed pose; skip the lift and flight. */
+    stationary?: boolean;
     from: M;
     to: M;
     rel: M | null;

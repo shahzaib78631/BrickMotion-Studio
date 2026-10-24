@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { animOptions, useAppSettings } from './state/appSettings';
 import { spotWarnings } from './plan/assemblySpots';
-import { AssemblyPanel, AssemblyToolbar } from './ui/AssemblyPanel';
+import { AssemblyPanel } from './ui/AssemblyPanel';
 import { initPartService } from './state/partService';
 import { initPersistence } from './state/persistence';
 import { useStudio } from './state/store';
@@ -217,7 +217,6 @@ function Studio() {
               </div>
             </div>
             <div className="nx-stage bm-stage">
-              {mode === 'edit' && <AssemblyToolbar timeline={timeline} />}
               <Viewport model={model} timeline={timeline} />
               {mode === 'preview' && timeline && <PreviewPlayer model={model} timeline={timeline} />}
               {mode === 'preview' && !timeline && <div className="overlay-note">{planError ? `Couldn't plan the animation: ${planError}` : 'Planning the build animation…'}</div>}
