@@ -6,6 +6,7 @@ import { cameraAt, cameraFov, fitDistance, sphericalPosition, worldBox3, DEFAULT
 import { buildLayerAt } from '../anim/buildLayer';
 import { makeKeyframePose } from '../anim/keyframePose';
 import type { StudioLook, RenderOptions } from '../render/studio';
+import { applySceneCamera, applyCameraCrop, type SceneSetup } from '../render/sceneSetup';
 import { poseAt, type Timeline } from '../anim/timeline';
 import type { Instance } from '../model/assemble';
 import type { KeyframeAnimation } from '../plan/types';
@@ -20,6 +21,7 @@ type CommonExportOpts = {
   studioLook?: StudioLook;
   cameraFraming?: CameraFraming;
   camera?: CameraSettings;
+  sceneSetup?: SceneSetup;
   /** Edge lines and colour response; the studio's defaults when left out. */
   render?: RenderOptions;
   logo: { image: ImageBitmap; corner: LogoCorner } | null;
@@ -111,6 +113,7 @@ async function encodeMp4(opts: CommonExportOpts, deps: ExportDeps, samples: Fram
   try {
     studio.setLook?.(opts.studioLook ?? 'soft');
     if (opts.render) studio.setRenderOptions?.(opts.render);
+    studio.setSceneSetup(opts.sceneSetup, false, null, w / h);
     studio.setSize(w, h);
     studio.bricks.setInstances(opts.instances);
     studio.fitTo(samples.box, samples.groundY);
@@ -133,6 +136,7 @@ async function encodeMp4(opts: CommonExportOpts, deps: ExportDeps, samples: Fram
       studio.perspective.lookAt(cam.target);
       studio.perspective.fov = cam.fov;
       studio.perspective.updateProjectionMatrix();
+      if (!applySceneCamera(studio.perspective, opts.sceneSetup)) applyCameraCrop(studio.perspective, opts.sceneSetup);
       studio.render();
       if (opts.logo && ctx) {
         ctx.drawImage(renderCanvas as CanvasImageSource, 0, 0, w, h);

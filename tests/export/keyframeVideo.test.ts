@@ -31,8 +31,9 @@ const studio = () => {
   const positions: THREE.Vector3[] = [];
   const stub = { createStudio: vi.fn(() => ({
     bricks: { setInstances: vi.fn(), setMatrices: (at: (key: string) => THREE.Matrix4 | null) => { const pose = at('brick'); matrices.push(pose?.elements[12] ?? null); } },
-    perspective: { position: { copy: vi.fn((v: THREE.Vector3) => positions.push(v.clone())) }, lookAt: vi.fn(), fov: 30, updateProjectionMatrix: vi.fn() },
-    setSize: vi.fn(), fitTo: vi.fn(), render: vi.fn(), dispose: vi.fn(),
+    perspective: { position: { copy: vi.fn((v: THREE.Vector3) => positions.push(v.clone())) }, lookAt: vi.fn(), fov: 30, updateProjectionMatrix: vi.fn(),
+      clearViewOffset: vi.fn(), setViewOffset: vi.fn() },
+    setSize: vi.fn(), setSceneSetup: vi.fn(), fitTo: vi.fn(), render: vi.fn(), dispose: vi.fn(),
   })), createCanvas: canvas };
   return { stub: stub as unknown as Parameters<typeof exportKeyframeVideo>[1], matrices, positions };
 };

@@ -18,7 +18,9 @@
     "test:v4:collision-autodetect": "vitest run tests/anim/standardMotionV4AutoCollision.test.ts",
     "verify:v4:collision-autodetect:offline": "node scripts/verify-v4-enhancement-offline.cjs",
     "typecheck:v4:collision-autodetect:offline": "node scripts/check-v4-enhancement-types.cjs",
-    "audit:v4:5590": "node scripts/audit-v4-5590-mechanics.cjs"
+    "audit:v4:5590": "node scripts/audit-v4-5590-mechanics.cjs",
+    "test:scene": "vitest run tests/render/sceneSetup.test.ts",
+    "verify:scene:offline": "node scripts/verify-scene-studio-offline.cjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.1.0",

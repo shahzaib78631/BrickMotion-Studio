@@ -107,6 +107,35 @@ const AnimationSchema = z.object({
   }
 });
 
+const PositionSchema = z.tuple([num, num, num]);
+const SceneCameraSchema = z.object({
+  kind: z.literal('camera'), id: z.string().min(1), name: z.string().min(1).max(100),
+  position: PositionSchema, target: PositionSchema,
+  fov: num.min(8).max(130), near: num.min(0.001).max(100), far: num.min(1).max(100000),
+}).refine((c) => c.far > c.near, 'Camera far clip must exceed near clip')
+  .refine((c) => Math.hypot(...c.position.map((n, i) => n - c.target[i])) > 1e-4, 'Camera must not sit at its look-at target');
+const SceneLightSchema = z.object({
+  kind: z.literal('light'), id: z.string().min(1), name: z.string().min(1).max(100),
+  type: z.enum(['sun', 'point', 'spot', 'ambient']),
+  position: PositionSchema, target: PositionSchema,
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/), intensity: num.min(0).max(2000),
+  angle: num.min(1).max(179), distance: num.min(0).max(10000),
+  castShadow: z.boolean(), enabled: z.boolean(),
+});
+const RegionSchema = z.object({ x: num.min(0).max(1), y: num.min(0).max(1), width: num.min(0.025).max(1), height: num.min(0.025).max(1) })
+  .refine((r) => r.x + r.width <= 1 + 1e-9 && r.y + r.height <= 1 + 1e-9, 'Render region exceeds frame');
+const SceneSetupSchema = z.object({
+  cameras: z.array(SceneCameraSchema).max(24), lights: z.array(SceneLightSchema).max(64),
+  activeCameraId: z.string().nullable(), useCameraForVideo: z.boolean(), useLightsForVideo: z.boolean(),
+  includeStudioLights: z.boolean(), region: RegionSchema.nullable(), cropToRegion: z.boolean(),
+  exposure: num.min(0.1).max(5),
+}).superRefine((s, ctx) => {
+  const ids = [...s.cameras, ...s.lights].map((o) => o.id);
+  if (ids.length !== new Set(ids).size) ctx.addIssue({ code: 'custom', message: 'Scene object IDs must be unique' });
+  if (s.activeCameraId && !s.cameras.some((c) => c.id === s.activeCameraId))
+    ctx.addIssue({ code: 'custom', path: ['activeCameraId'], message: 'Active camera does not exist' });
+});
+
 export const PlanSchema = z.object({
   format: z.literal('brickmotion-plan'),
   version: z.literal(1),
@@ -116,6 +145,7 @@ export const PlanSchema = z.object({
   parts: z.record(z.string(), z.string()).optional(),
   steps: z.array(StepSchema),
   animation: AnimationSchema.optional(),
+  sceneSetup: SceneSetupSchema.optional(),
   assemblySpot: AssemblySpotSchema.optional(),
   workBaySpots: z.record(z.string().min(1), AssemblySpotSchema).optional(),
   loosePiecesFollow: z.boolean().optional(),

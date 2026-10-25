@@ -75,6 +75,7 @@ export function ExportDialog({ plan, jobs, mode = 'build', onClose }: { plan: Pl
               studioLook: settings.studioLook,
               cameraFraming: settings.cameraFraming,
               camera: settings.camera,
+              sceneSetup: plan.sceneSetup,
               render: { edges: settings.edgeLines, linearColors: settings.linearColors },
               logo,
               snapSound: settings.snapSound,

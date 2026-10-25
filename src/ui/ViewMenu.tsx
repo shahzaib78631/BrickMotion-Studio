@@ -4,6 +4,7 @@ import { useStudio } from '../state/store';
 import { Ic } from './icons';
 import { viewportApi } from './viewportApi';
 import { useViewState, viewLabel } from './viewState';
+import { useSceneView } from './sceneViewState';
 
 const VIEWS: { label: string; hint: string; view: ViewName }[] = [
   { label: 'Front', hint: '1', view: 'front' },
@@ -87,6 +88,7 @@ export function ViewLabel() {
   const mode = useStudio((s) => s.mode);
   const view = useViewState((s) => s.view);
   const projection = useViewState((s) => s.projection);
+  const cameraView = useSceneView((s) => s.cameraView);
   if (mode !== 'edit') return null;
-  return <div className="bm-view-label">{viewLabel(view, projection)}</div>;
+  return <div className="bm-view-label">{cameraView ? 'Camera Perspective' : viewLabel(view, projection)}</div>;
 }

@@ -67,6 +67,7 @@ export function createViewControls(deps: Deps): ViewControls {
   };
 
   const snapTo = (view: ViewName) => {
+    viewportApi.scene?.enterCameraView(false);
     const from = sphericalOf(offset());
     const d = VIEW_DIRS[view];
     const pol = Math.acos(d[1]);
@@ -78,6 +79,7 @@ export function createViewControls(deps: Deps): ViewControls {
   };
 
   const orbit = (dAzDeg: number, dUpDeg: number) => {
+    viewportApi.scene?.enterCameraView(false);
     stopAnim();
     const rad = Math.PI / 180;
     controls.object.position.copy(controls.target).add(orbitOffset(offset(), dAzDeg * rad, dUpDeg * rad, 0, Math.PI));
@@ -87,6 +89,7 @@ export function createViewControls(deps: Deps): ViewControls {
   };
 
   const flip = () => {
+    viewportApi.scene?.enterCameraView(false);
     const cur = useViewState.getState().view;
     if (cur !== 'user') return snapTo(OPPOSITE_VIEW[cur]);
     stopAnim();
@@ -97,6 +100,7 @@ export function createViewControls(deps: Deps): ViewControls {
   };
 
   const activate = (p: Projection) => {
+    viewportApi.scene?.enterCameraView(false);
     if (studio.projection === p) {
       useViewState.setState({ projection: p });
       return;

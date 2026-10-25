@@ -18,14 +18,14 @@ type State = {
 
 export function useTimeline(ready: boolean, plan: Plan, model: string, opts: AnimOptions): TimelineState {
   const dragging = useStudio((s) => s.gesture !== null);
-  // Keyframe editing is metadata, not a change to build geometry or routes.
-  // Keep the construction plan reference stable across animation-only edits so
-  // dragging diamonds does not cancel/restart a potentially expensive planner.
+  // Keyframe and scene-production editing are not changes to assembly geometry.
+  // In particular, dragging a camera must NEVER interrupt an expensive V4 build.
+  // Keep the plan reference stable across those metadata-only edits.
   const previous = useRef(plan);
   if (plan !== previous.current) {
     const old = previous.current;
     const keys = new Set([...Object.keys(plan), ...Object.keys(old)]);
-    const animationOnly = [...keys].every((key) => key === 'animation' ||
+    const animationOnly = [...keys].every((key) => key === 'animation' || key === 'sceneSetup' ||
       (plan as unknown as Record<string, unknown>)[key] === (old as unknown as Record<string, unknown>)[key]);
     if (!animationOnly) previous.current = plan;
   }

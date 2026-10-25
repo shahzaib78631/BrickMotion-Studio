@@ -27,7 +27,7 @@ function baseOf(p: Plan): { plan: Plan; key: string } {
   if (!b) {
     let plan = resetFloorShifts(p);
     // Editor-only viewing state and selection groups never invalidate a timeline.
-    const { showModelAtSpot: _view, ...withoutView } = plan;
+    const { showModelAtSpot: _view, sceneSetup: _scene, ...withoutView } = plan;
     plan = withoutView as Plan;
     // "Loose pieces follow on" (the default): the main spot is applied to the planned
     // timeline as one rigid transform, so it is not part of the planning cache key —

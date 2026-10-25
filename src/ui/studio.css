@@ -1,3 +1,4 @@
+@import './sceneTools.css';
 /* Ported from Rewind Studio's studio kit (rewind_studio-kit/assets/kit/studio.css). Keep it in step with the kit; */
 /* BrickMotion-only rules live in app.css. */
 /* Studio kit — the shared look of every full-viewport studio (Narration, Clips, Voice). Put class="studio" on the pane root;

@@ -41,6 +41,11 @@ import { ViewLabel, ViewMenu } from './ViewMenu';
 import { createViewControls } from './viewControls';
 import { frameBox } from '../render/viewPresets';
 import { Ic } from './icons';
+import { SceneTools, CameraRegionOverlay } from './SceneTools';
+import { useSceneView } from './sceneViewState';
+import { createSceneControls } from './sceneControls';
+import { cameraFrame, sceneSetupOf } from '../render/sceneSetup';
+import { formatAspect } from '../export/formats';
 
 /** Whether the camera sees all of `box` (its eight corners inside the view). */
 function inView(camera: THREE.Camera, box: THREE.Box3): boolean {
@@ -103,6 +108,12 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
   const studioLook = useAppSettings((s) => s.studioLook);
   const edgeLines = useAppSettings((s) => s.edgeLines);
   const linearColors = useAppSettings((s) => s.linearColors);
+  const sceneSetup = useStudio((s) => s.plan.sceneSetup);
+  const sceneSelected = useSceneView((s) => s.selectedId);
+  const sceneCameraView = useSceneView((s) => s.cameraView);
+  const sceneHelpers = useSceneView((s) => s.showHelpers);
+  const sceneLock = useSceneView((s) => s.lockCamera);
+  const outputFormat = useAppSettings((s) => s.format);
   const gizmoRef = useRef<{ controls: TransformControls; proxy: THREE.Object3D } | null>(null);
   const draggingGizmo = useRef(false);
   const readoutRef = useRef<HTMLDivElement>(null);
@@ -164,6 +175,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     studio.camera.position.set(18, 22, 30);
     viewportApi.studio = studio;
     viewportApi.controls = controls;
+    viewportApi.frameAspect = () => formatAspect(useAppSettings.getState().format);
 
     // TransformControls' helper is not a brick. Its proxy is never exported.
     const proxy = new THREE.Object3D();
@@ -198,6 +210,23 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
         transform.camera = cam;
       },
     });
+    viewportApi.scene = createSceneControls(studio, controls, canvas);
+    viewportApi.scene.sync(useStudio.getState().plan.sceneSetup);
+    const onSceneKey = (e: KeyboardEvent) => {
+      if (useStudio.getState().mode !== 'edit' || isTyping(e.target)) return;
+      if (e.code === 'Numpad0') {
+        if (e.ctrlKey && e.altKey) viewportApi.scene?.alignCamera();
+        else if (!e.ctrlKey && !e.altKey && !e.metaKey) viewportApi.scene?.enterCameraView();
+        else return;
+      } else if (e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'b' && !e.altKey) {
+        if (!useSceneView.getState().cameraView) return;
+        useSceneView.setState({ regionTool: true });
+      } else if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'b') {
+        useStudio.getState().apply((p) => ({ ...p, sceneSetup: { ...sceneSetupOf(p.sceneSetup), region: null } }));
+      } else return;
+      e.preventDefault(); e.stopImmediatePropagation();
+    };
+    window.addEventListener('keydown', onSceneKey, true);
     let lastTransform = '';
     transform.addEventListener('dragging-changed', (ev) => {
       const active = !!ev.value;
@@ -412,13 +441,14 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
         }
         viewportApi.views?.update(dt);
         controls.update();
-        studio.render();
+        studio.render(viewportApi.scene?.prepareRender());
       }
     };
     raf = requestAnimationFrame(loop);
     const ro = new ResizeObserver(() => {
       const r = wrapRef.current!.getBoundingClientRect();
       studio.setSize(Math.max(1, r.width), Math.max(1, r.height));
+      useSceneView.setState({ width: Math.max(1, r.width), height: Math.max(1, r.height) });
     });
     ro.observe(wrapRef.current!);
     return () => {
@@ -426,6 +456,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
       ro.disconnect();
       window.removeEventListener('keydown', onShift);
       window.removeEventListener('keyup', onShift);
+      window.removeEventListener('keydown', onSceneKey, true);
       transform.detach();
       studio.scene.remove(transform.getHelper());
       transform.dispose();
@@ -436,12 +467,17 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
       gizmoRef.current = null;
       viewportApi.views?.dispose();
       viewportApi.views = null;
+      viewportApi.scene?.dispose();
+      viewportApi.scene = null;
+      viewportApi.frameAspect = null;
       controls.dispose();
       studio.dispose();
       viewportApi.studio = null;
       viewportApi.controls = null;
     };
   }, []);
+
+  useEffect(() => { viewportApi.scene?.sync(sceneSetup); }, [sceneSetup, sceneSelected, sceneCameraView, sceneHelpers, sceneLock, outputFormat, mode]);
 
   // Video and live viewer use the same lighting preset. A changed preset is
   // applied to the EXISTING WebGL scene, never recreating the renderer.
@@ -479,7 +515,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     transform.showX = true;
     transform.showY = true;
     transform.showZ = true;
-    if (mode !== 'edit' || !gizmoEnabled || !boxes.length || (timelineEditor === 'timeline' && (!autoKey || keyframeAtRest < 0))) {
+    if (sceneSelected || mode !== 'edit' || !gizmoEnabled || !boxes.length || (timelineEditor === 'timeline' && (!autoKey || keyframeAtRest < 0))) {
       transform.enabled = false;
       transform.detach();
       return;
@@ -504,7 +540,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     transform.setMode(gizmoMode);
     transform.enabled = true;
     transform.attach(proxy);
-  }, [selection, editingModel, model.view, gizmoEnabled, gizmoMode, mode, spotSel, plan, timeline, timelineEditor, autoKey, keyframeAtRest]);
+  }, [selection, editingModel, model.view, gizmoEnabled, gizmoMode, mode, spotSel, plan, timeline, timelineEditor, autoKey, keyframeAtRest, sceneSelected]);
 
   // Assembly-spot markers: Build view only, for the whole set (never in preview or export).
   useEffect(() => {
@@ -784,7 +820,11 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
 
   const rayAt = (e: { clientX: number; clientY: number }) => {
     const r = canvasRef.current!.getBoundingClientRect();
-    const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    const cameraMode = useSceneView.getState().cameraView;
+    const shown = cameraMode ? cameraFrame(r.width, r.height, formatAspect(useAppSettings.getState().format)) : null;
+    const rx = e.clientX - r.left - (shown?.x ?? 0);
+    const ry = e.clientY - r.top - (shown?.y ?? 0);
+    const ndc = new THREE.Vector2((rx / (shown?.width ?? r.width)) * 2 - 1, -(ry / (shown?.height ?? r.height)) * 2 + 1);
     const ray = new THREE.Raycaster();
     ray.setFromCamera(ndc, viewportApi.studio!.camera);
     return ray;
@@ -848,7 +888,9 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
   // Runs in the capture phase so the orbit controls are switched off before they see the press.
   const startDrag = (e: React.PointerEvent) => {
     // overlay UI (menus, the nav gizmo) must never pick or drag a brick behind it
-    if (e.target !== canvasRef.current) return;
+    if (e.target !== canvasRef.current || viewportApi.scene?.isHandlingPointer()) return;
+    if (viewportApi.scene?.pick(rayAt(e))) return;
+    if (useSceneView.getState().selectedId) return;
     // a marker under the pointer wins over the bricks behind it (a gizmo handle still has priority)
     if (!(gizmoEnabled && gizmoRef.current?.controls.axis)) {
       const ref = pickSpotAt(e);
@@ -1030,10 +1072,16 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
         }}
         onClick={(e) => {
           if (gizmoPress.current) { gizmoPress.current = false; return; }
-          if (st().mode !== 'edit') return;
+          if (st().mode !== 'edit' || viewportApi.scene?.isHandlingPointer()) return;
           if (Math.hypot(e.clientX - down.current.x, e.clientY - down.current.y) > 4) return;
           // Clicking an axis must not clear the selection because a brick ray missed.
           if (gizmoRef.current?.controls.axis && st().gizmoEnabled) return;
+          const selectedScene = viewportApi.scene?.pick(rayAt(e));
+          if (selectedScene) {
+            useSceneView.setState({ selectedId: selectedScene, panelOpen: true });
+            st().select([]);
+            return;
+          }
           const mark = pickSpotAt(e);
           if (mark) { st().selectSpot(mark); return; }
           const key = pickAt(e);
@@ -1041,7 +1089,10 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
             const state = st();
             st().select(selectionForHit(state.plan, state.editingModel, key.split('/')[0], e.altKey), e.shiftKey);
           }
-          else if (!e.shiftKey) st().select([]);
+          else if (!e.shiftKey) {
+            st().select([]);
+            useSceneView.setState({ selectedId: null });
+          }
         }}
         onDoubleClick={(e) => {
           if (st().mode !== 'edit') return;
@@ -1082,6 +1133,8 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
 
       <ViewMenu />
       <NavGizmo />
+      <SceneTools />
+      <CameraRegionOverlay />
       <div className="bm-gizmo-readout" ref={readoutRef} hidden aria-live="polite" />
       <ViewLabel />
       {model.ready && placing && follow && !!timeline && (

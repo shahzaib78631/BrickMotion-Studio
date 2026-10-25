@@ -1,4 +1,5 @@
 import type { Mat3, Vec3 } from '../ldraw/parse';
+import type { SceneSetup } from '../render/sceneSetup';
 
 export type Rot = 0 | 90 | 180 | 270;
 /** x, z in studs; y in plates (up is positive). Min corner of the rotated footprint, bottom of the piece. */
@@ -81,6 +82,8 @@ export type Plan = {
   steps: Step[];
   /** Independent Dope Sheet animation; ignored by construction and LDraw export. */
   animation?: KeyframeAnimation;
+  /** Project-local cameras, lamps, and render border. */
+  sceneSetup?: SceneSetup;
   assemblySpot?: AssemblySpot;
   /**
    * Overrides for planner-generated work bays (Construction V2/V3 anatomical

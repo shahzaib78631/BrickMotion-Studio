@@ -14,6 +14,22 @@ npm run dev     # open http://localhost:5173
 
 `npm run setup` puts the parts in `public/ldraw/` and the catalog in `public/data/`. Both are git-ignored. `npm run build` copies them into `dist/` too (≈700 MB), so the app is meant to run locally.
 
+## Scene cameras, lighting and region-based preview
+
+BrickMotion now includes a **Scene** panel in the 3D viewport. Add and select
+multiple cameras, and add Sun / Point / Spot / Ambient lights with real scene
+shadows, adjustable brightness, color, targeting and exposure. Align a camera to
+the editor view, lock it to view, or use **Numpad 0** to see its output-aspect
+frame. Use **Ctrl+B** inside camera view to draw a camera region, and optionally
+**Crop Preview & MP4 to region**; **Ctrl+Alt+B** clears it. Toggle thirds and
+safe-area guides, duplicate or delete objects, and save all settings with the
+project. A selected camera replaces the procedural video camera only if **Use
+active camera in Preview & MP4** is enabled; older projects stay unchanged.
+
+**Camera and light edits do not restart Standard Motion v4 planning.** See
+[SCENE_CAMERA_LIGHTING_VIEWPORT.md](SCENE_CAMERA_LIGHTING_VIEWPORT.md) for a full
+feature list, controls, compatibility notes and current testing limitations.
+
 ## Workflow
 
 1. **Get a plan**

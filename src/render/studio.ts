@@ -3,6 +3,8 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { geometryOf, getColors } from '../state/partService';
 import { BrickRenderer } from './bricks';
 import { studioGradientPixels } from './studioPalette';
+import { SceneLighting } from './sceneLights';
+import type { SceneSetup } from './sceneSetup';
 
 /** The soft, neutral set closely matches the supplied reference footage. */
 export type StudioLook = 'soft' | 'classic';
@@ -35,6 +37,9 @@ export type Studio = {
   /** Full ortho frustum height in world units at zoom 1; the width follows the aspect. */
   setOrthoHeight(h: number): void;
   bricks: BrickRenderer;
+  lighting: SceneLighting;
+  /** Apply custom lamps and toggle the traditional studio lighting. */
+  setSceneSetup(setup?: SceneSetup, helpers?: boolean, selectedId?: string | null, frameAspect?: number): void;
   setSize(w: number, h: number): void;
   /** Switch the entire rendering setup; preview and MP4 export must agree. */
   setLook?(look: StudioLook): void;
@@ -42,7 +47,8 @@ export type Studio = {
   setRenderOptions?(o: RenderOptions): void;
   /** Floor height and light/shadow framing for a world-space box (studs, +Y up). */
   fitTo(box: THREE.Box3, groundY: number): void;
-  render(): void;
+  /** Optionally render only inside a camera frame (CSS pixel coordinates, top-left origin). */
+  render(frame?: { x: number; y: number; width: number; height: number }): void;
   dispose(): void;
 };
 
@@ -122,12 +128,18 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
 
   const bricks = new BrickRenderer(geometryOf, getColors());
   scene.add(bricks.root);
+  const lighting = new SceneLighting(scene, typeof HTMLCanvasElement !== 'undefined' && canvas instanceof HTMLCanvasElement);
+  let sceneSetup: SceneSetup | undefined;
+  let lightBounds: THREE.Box3 | null = null;
+  let sizeW = 1;
+  let sizeH = 1;
 
   let exposure = 1;
+  let lookEnv = 0.75;
   let render: RenderOptions = { ...DEFAULT_RENDER };
   const applyExposure = () => {
     renderer.toneMapping = render.linearColors ? THREE.LinearToneMapping : THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = exposure * (render.linearColors ? LINEAR_EXPOSURE : 1);
+    renderer.toneMappingExposure = exposure * (sceneSetup?.exposure ?? 1) * (render.linearColors ? LINEAR_EXPOSURE : 1);
   };
   const setRenderOptions = (o: RenderOptions) => {
     render = { ...o };
@@ -139,7 +151,7 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
       scene.background = bg;
       floor.material = classicFloor;
       exposure = 1.05;
-      scene.environmentIntensity = 0.6;
+      lookEnv = 0.6;
       hemi.intensity = 1.1;
       key.intensity = 2.2;
       fill.intensity = 0;
@@ -147,12 +159,21 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
       scene.background = gradient;
       floor.material = shadowFloor;
       exposure = 1.0;
-      scene.environmentIntensity = 0.75;
+      lookEnv = 0.75;
       hemi.intensity = 0.85;
       key.intensity = 2.35;
       fill.intensity = 0.38;
     }
     applyExposure();
+    syncStudioLights();
+  };
+  const syncStudioLights = () => {
+    const enabled = !sceneSetup?.lights.length || !sceneSetup.useLightsForVideo || sceneSetup.includeStudioLights;
+    hemi.visible = enabled;
+    key.visible = enabled;
+    fill.visible = enabled;
+    // Keep just a small environment fill when the authored scene lights replace the studio.
+    scene.environmentIntensity = enabled ? lookEnv : 0.12;
   };
   setLook('soft');
   setRenderOptions(DEFAULT_RENDER);
@@ -176,10 +197,19 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
       applyOrtho();
     },
     bricks,
+    lighting,
+    setSceneSetup(setup, helpers = false, selectedId = null, frameAspect = aspect) {
+      sceneSetup = setup;
+      lighting.apply(setup, helpers, selectedId, frameAspect);
+      if (lightBounds) lighting.fitTo(lightBounds);
+      syncStudioLights();
+      applyExposure();
+    },
     setLook,
     setRenderOptions,
     setSize(w, h) {
       renderer.setSize(w, h, false);
+      sizeW = w; sizeH = h;
       aspect = w / h;
       camera.aspect = aspect;
       camera.updateProjectionMatrix();
@@ -197,11 +227,35 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
       s.near = 0.1;
       s.far = r * 6;
       s.updateProjectionMatrix();
+      lightBounds = box.clone();
+      lighting.fitTo(box);
     },
-    render() {
-      renderer.render(scene, active);
+    render(frame) {
+      if (frame) {
+        // Render to the true output aspect ratio, not a squeezed full-width canvas.
+        // Scissor coordinates are bottom-left in Three.js, CSS coordinates top-left.
+        const x = Math.round(frame.x);
+        const y = Math.round(sizeH - frame.y - frame.height);
+        const w = Math.max(1, Math.round(frame.width));
+        const h = Math.max(1, Math.round(frame.height));
+        renderer.setScissorTest(false);
+        renderer.setViewport(0, 0, sizeW, sizeH);
+        renderer.setClearColor(0x1b1c22, 1);
+        renderer.clear(true, true, true);
+        renderer.setViewport(x, y, w, h);
+        renderer.setScissor(x, y, w, h);
+        renderer.setScissorTest(true);
+        renderer.render(scene, active);
+        renderer.setScissorTest(false);
+        renderer.setViewport(0, 0, sizeW, sizeH);
+      } else {
+        renderer.setViewport(0, 0, sizeW, sizeH);
+        renderer.setScissorTest(false);
+        renderer.render(scene, active);
+      }
     },
     dispose() {
+      lighting.dispose();
       bricks.dispose();
       gradient.dispose();
       classicFloor.dispose();
