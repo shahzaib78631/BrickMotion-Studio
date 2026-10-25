@@ -10,7 +10,7 @@ import * as THREE from 'three';
 import type { Box } from '../../ldraw/flatten';
 import { factorAffine } from '../affineTransform';
 import { buildMechanicalConstraintGraph, type MechanicalJoint } from '../construction/mechanicalConstraintGraph';
-import { clearanceApproaches, connectionApproaches, mechanicalApproaches, type MotionCandidate } from './kinematicCandidates';
+import { adaptiveClearanceApproaches, clearanceApproaches, connectionApproaches, mechanicalApproaches, type MotionCandidate } from './kinematicCandidates';
 import { logicalAssemblyProposals, type LogicalProposal } from './logicalConnections';
 import { InstalledRouteIndex, type RouteAssessment } from './routeSelection';
 import type { ConstructionModel, ConstructionNode } from '../construction/types';
@@ -87,14 +87,18 @@ export function articulateStandardTimeline(tl: Timeline, asm: Assembly, metrics:
   }
   const byKey = new Map(asm.instances.map(i => [i.key, i]));
   const partByKey = new Map(asm.instances.map(i => [i.key, i.part]));
-  const index = new InstalledRouteIndex(asm, tl);
+  const index = new InstalledRouteIndex(asm, tl, metrics);
   let articulated = 0, checked = 0, obstructed = 0, interferenceScore = 0;
   const issues: NonNullable<NonNullable<Timeline['motion']>['issues']> = [];
-  // Iterate in stable time order for deterministic issue ordering and choice.
-  for (const [key, track] of [...tl.tracks].sort((a, b) => {
+  // Route in time order, then review all tracks AFTER every modification.
+  // Otherwise an earlier part can retain a stale collision report about a
+  // later part whose route has subsequently moved out of the way.
+  const selectedHosts = new Map<string, string>();
+  const orderedTracks = [...tl.tracks].sort((a, b) => {
     const av = a[1].moves[0], bv = b[1].moves[0];
     return (av ? tl.units[av.unit]?.start ?? 0 : 0) - (bv ? tl.units[bv.unit]?.start ?? 0 : 0) || a[0].localeCompare(b[0]);
-  })) {
+  });
+  for (const [key, track] of orderedTracks) {
     const part = partByKey.get(key);
     if (!part || !track.moves.length) continue;
     // Only individual free leaves are articulated; groups and attaches retain
@@ -102,7 +106,6 @@ export function articulateStandardTimeline(tl: Timeline, asm: Assembly, metrics:
     const firstMove = track.moves[0];
     const firstUnit = tl.units[firstMove.unit];
     if (!firstUnit) continue;
-    let selectedHost: string | undefined;
     const free = (track.ctx ?? 0) === 0 && firstUnit.kind === 'piece' && firstUnit.keys.length === 1 &&
       firstUnit.keys[0] === key && !firstMove.rel && !firstMove.stationary && !firstMove.rigidDeltas?.length;
     if (free) {
@@ -115,12 +118,12 @@ export function articulateStandardTimeline(tl: Timeline, asm: Assembly, metrics:
         return rank(a.joint) - rank(b.joint) || b.joint.engagement - a.joint.engagement;
       }).slice(0, 4);
       const samples = asm.instances.length > 2500 ? 12 : asm.instances.length > 600 ? 18 : 30;
-      // A connector-informed route must overlap its mating part while the pin
-      // or axle seats. Compare only interference with OTHER installed bricks,
-      // otherwise a mechanically correct side entry always loses to a straight
-      // drop that happens to keep its coarse AABB clear until the final frames.
+      // Connector seats may overlap the host's AABB close to the final pose;
+      // they may not fly through that host earlier in the route.
       const allowedMate = guides.get(key);
-      const baseline = index.assess(firstMove, key, part, firstUnit.start, metrics, samples, allowedMate, true);
+      // Never excuse an early path straight through the mating host: only a
+      // close-to-target connector seat is allowed to share its coarse AABB.
+      const baseline = index.assess(firstMove, key, part, firstUnit.start, metrics, samples, allowedMate);
       let winner: { candidate: MotionCandidate; assessment: RouteAssessment } | null = null;
       let bestHits = baseline.hits, bestPreference = 0;
       const test = (c: MotionCandidate) => {
@@ -147,7 +150,19 @@ export function articulateStandardTimeline(tl: Timeline, asm: Assembly, metrics:
             winner = test({ ...c, host: guidedHost }) ?? winner;
         }
       }
-      if (baseline.hits > 0 && !winner) {
+      if (bestHits > 0) {
+        // First try corridors sized to the actual occupied scene. This can
+        // clear an obstruction hundreds of LDU tall/wide, where a fixed
+        // sidestep would still tunnel through its middle. It also sees parts
+        // currently staged or in-flight (the scorer tests their true timing).
+        const obstacles = index.obstacleBoxes(firstUnit.start, firstUnit.start + firstUnit.dur, key);
+        for (const c of adaptiveClearanceApproaches(firstMove, metrics(part).full, obstacles)) {
+          winner = test(c) ?? winner;
+          if (bestHits === 0) break;
+        }
+      }
+      if (bestHits > 0 && !winner) {
+        // Retain the original inexpensive guesses as a last visual fallback.
         const b = metrics(part).full;
         const extent = Math.max(...[0, 1, 2].map(k => b.max[k] - b.min[k]));
         for (const c of clearanceApproaches(firstMove, extent)) winner = test(c) ?? winner;
@@ -157,26 +172,36 @@ export function articulateStandardTimeline(tl: Timeline, asm: Assembly, metrics:
         // flightPose prioritises translationPath before posePath: clear it so
         // the chosen kinematic path is ACTUALLY played/baked/exported.
         firstMove.translationPath = undefined;
+        index.noteUpdatedMove(key, firstMove);
         firstUnit.motion = winner.candidate.motion;
         firstUnit.uncertified = true;
         if (winner.candidate.host) {
           if (winner.candidate.motion !== 'clearance-route') articulated++;
-          selectedHost = winner.candidate.host;
+          selectedHosts.set(key, winner.candidate.host);
         }
         widenMotionCamera(tl, firstUnit, firstMove, metrics(part).full);
       }
     }
-    // Inspect each move of a leaf, including later moves of a subassembly.
-    // These are conservative hints, not a rigid-mesh clearance guarantee.
+  }
+  // Re-evaluate the final, consistent set of flights, including later attach
+  // operations, and build diagnostics from ACTUAL chosen playback trajectories.
+  for (const [key, track] of orderedTracks) {
+    const part = partByKey.get(key);
+    const firstMove = track.moves[0];
+    if (!part || !firstMove) continue;
+    const firstUnit = tl.units[firstMove.unit];
+    const mate = selectedHosts.get(key) ?? guides.get(key);
+    const installedMate = mate && firstUnit &&
+      (installed.get(mate)?.end ?? Infinity) <= firstUnit.start + EPS ? mate : undefined;
     let worst: RouteAssessment | null = null;
     let failedUnit = firstMove.unit;
     for (const move of track.moves) {
       const u = tl.units[move.unit];
       if (!u) continue;
       const samples = asm.instances.length > 2500 ? 12 : 20;
-      const guided = move === firstMove && !!selectedHost;
+      const guided = move === firstMove && !!installedMate;
       const result = index.assess(move, key, part, u.start, metrics, samples,
-        guided ? selectedHost : undefined, guided);
+        guided ? installedMate : undefined, guided);
       if (result.assessed !== false) checked++;
       if (result.assessed !== false && (!worst || result.hits > worst.hits)) { worst = result; failedUnit = move.unit; }
     }

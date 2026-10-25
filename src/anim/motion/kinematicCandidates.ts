@@ -4,6 +4,8 @@
  * that constrained phase remains a visual estimate for manual keyframing.
  */
 import * as THREE from 'three';
+import type { Box } from '../../ldraw/flatten';
+import { transformBox } from '../../model/assemble';
 import type { MechanicalJoint } from '../construction/mechanicalConstraintGraph';
 import type { Move } from '../timeline';
 import type { Unit } from '../timelineData';
@@ -127,4 +129,68 @@ export function connectionApproaches(move: Move, movingBox: {min: number[]; max:
         shifted(dest, offset.clone().multiplyScalar(0.67)),
         shifted(dest, offset.clone().multiplyScalar(0.25)), dest.clone()] };
   });
+}
+
+/**
+ * Obstacle-sized, rigid-translation detours for ordinary free leaves. Fixed
+ * 30-90 LDU sidesteps are too short around tall towers, walls and long beams.
+ * Move above the local obstacle envelope, then approach the exact destination
+ * from one of six open faces. Score every candidate against the timed scene;
+ * none of these suggestions bypasses the collision reviewer.
+ *
+ * Matrix multiplication preserves the part's authored shear/reflection. Only
+ * the flight's free-air phase may rotate to its final orientation.
+ */
+export function adaptiveClearanceApproaches(move: Move, body: Box,
+  obstacles: readonly Box[]): MotionCandidate[] {
+  if (move.stationary || move.rel || move.rigidDeltas?.length) return [];
+  const from = move.from.clone(), dest = move.to.clone();
+  const goal = transformBox(body, dest), start = transformBox(body, from);
+  const extent = Math.max(...[0, 1, 2].map(k => Math.max(start.max[k] - start.min[k], goal.max[k] - goal.min[k])));
+  const margin = Math.max(12, Math.min(28, extent * 0.25));
+  // Only overhead obstacles between launch and landing determine cruise
+  // altitude. A tower far across the scene must not send this brick skyward.
+  const corridor = { min: [Math.min(start.min[0], goal.min[0]), Math.min(start.min[2], goal.min[2])],
+    max: [Math.max(start.max[0], goal.max[0]), Math.max(start.max[2], goal.max[2])] };
+  let top = Infinity;
+  for (const b of obstacles) {
+    if (b.min[0] < corridor.max[0] + margin && b.max[0] > corridor.min[0] - margin &&
+        b.min[2] < corridor.max[1] + margin && b.max[2] > corridor.min[1] - margin)
+      top = Math.min(top, b.min[1]);
+  }
+  const below = Math.max(start.max[1] - from.elements[13], goal.max[1] - dest.elements[13]);
+  const sky = Math.min(move.skyY, from.elements[13] - 48, dest.elements[13] - 48,
+    Number.isFinite(top) ? top - below - margin : Infinity);
+  const candidates: MotionCandidate[] = [];
+  // The cheapest successful solution is often simply going OVER the obstacle,
+  // without adding an unnecessary side insertion.
+  candidates.push({ motion: 'clearance-route', preference: 0.4,
+    poses: [from.clone(), elevated(from, sky), elevated(dest, sky), dest.clone()] });
+
+  // Side approach distances are sized using neighboring geometry, not a
+  // constant. The swept checker decides whether the chosen face is actually
+  // open. Keep a 600-LDU cap so malformed giant bounds cannot explode paths.
+  const dirs = [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1],
+    [0, -1, 0], [0, 1, 0], [1, 0, 1], [1, 0, -1], [-1, 0, 1], [-1, 0, -1]];
+  const minimum = Math.max(34, extent * 1.15 + margin);
+  for (const [x, y, z] of dirs) {
+    const axis = x ? 0 : y ? 1 : 2;
+    const sign = [x, y, z][axis];
+    let distance = minimum;
+    for (const b of obstacles) {
+      // Only a wall in the immediate insertion neighborhood matters for
+      // calculating a face-clearance distance. Far walls are tested later.
+      if (![0, 1, 2].every(k => b.min[k] < goal.max[k] + margin &&
+        b.max[k] > goal.min[k] - margin)) continue;
+      distance = Math.max(distance, sign > 0
+        ? b.max[axis] - goal.min[axis] + margin
+        : goal.max[axis] - b.min[axis] + margin);
+    }
+    distance = Math.min(600, distance);
+    const unit = new THREE.Vector3(x, y, z).normalize().multiplyScalar(distance);
+    const prep = shifted(dest, unit);
+    candidates.push({ motion: 'clearance-route', preference: 0.6,
+      poses: [from.clone(), elevated(from, sky), elevated(prep, sky), prep, dest.clone()] });
+  }
+  return candidates;
 }
