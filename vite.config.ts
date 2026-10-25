@@ -7,5 +7,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.{ts,tsx}'],
+    // React's act() refuses to run against a production build, so pin the test
+    // env regardless of the NODE_ENV the shell happens to export.
+    env: { NODE_ENV: 'test' },
   },
 });

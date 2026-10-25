@@ -12,6 +12,7 @@ import { factorAffine } from '../affineTransform';
 import { buildMechanicalConstraintGraph, type MechanicalJoint } from '../construction/mechanicalConstraintGraph';
 import { adaptiveClearanceApproaches, clearanceApproaches, connectionApproaches, mechanicalApproaches, type MotionCandidate } from './kinematicCandidates';
 import { logicalAssemblyProposals, type LogicalProposal } from './logicalConnections';
+import { jointApproachIsCompatible } from './jointKinematics';
 import { InstalledRouteIndex, type RouteAssessment } from './routeSelection';
 import type { ConstructionModel, ConstructionNode } from '../construction/types';
 import { AssemblyPlanningError } from '../assemblyGraph';
@@ -33,7 +34,7 @@ const translate = (pose: Pose, x: number, y: number, z: number): Pose =>
 const atHeight = (pose: Pose, sky: number): Pose => translate(pose, 0, sky - pose.elements[13], 0);
 
 /** Works with connector geometry even when triangle meshes are absent. */
-function jointsFor(asm: Assembly, metrics: Metrics): MechanicalJoint[] {
+export function jointsFor(asm: Assembly, metrics: Metrics): MechanicalJoint[] {
   const parts = new Map<string, ConstructionNode>();
   for (const inst of asm.instances) {
     parts.set(inst.key, {
@@ -89,6 +90,7 @@ export function articulateStandardTimeline(tl: Timeline, asm: Assembly, metrics:
   const partByKey = new Map(asm.instances.map(i => [i.key, i.part]));
   const index = new InstalledRouteIndex(asm, tl, metrics);
   let articulated = 0, checked = 0, obstructed = 0, interferenceScore = 0;
+  let pivotArcs = 0, axialInsertions = 0, overconstrained = 0;
   const issues: NonNullable<NonNullable<Timeline['motion']>['issues']> = [];
   // Route in time order, then review all tracks AFTER every modification.
   // Otherwise an earlier part can retain a stale collision report about a
@@ -109,14 +111,20 @@ export function articulateStandardTimeline(tl: Timeline, asm: Assembly, metrics:
     const free = (track.ctx ?? 0) === 0 && firstUnit.kind === 'piece' && firstUnit.keys.length === 1 &&
       firstUnit.keys[0] === key && !firstMove.rel && !firstMove.stationary && !firstMove.rigidDeltas?.length;
     if (free) {
-      const near = (candidates.get(key) ?? []).filter(c => {
+      const engaged = (candidates.get(key) ?? []).filter(c => {
         const host = installed.get(c.other);
         return host && host.end <= firstUnit.start + EPS && host.firstUnit !== firstMove.unit;
-      }).sort((a, b) => {
+      });
+      // A pivot is not free when another installed connector locks the leaf
+      // against that pivot (e.g. a hinge plus an attached stud). Likewise,
+      // multiple sliders require parallel axes, and hinges must be coaxial.
+      const installedJoints = engaged.map(entry => entry.joint);
+      const near = engaged.filter(c => jointApproachIsCompatible(c.joint, key, installedJoints)).sort((a, b) => {
         const rank = (j: MechanicalJoint) => j.type === 'hinge' ? 0 : j.type === 'clip' ? 1 :
           j.type === 'ball-socket' ? 2 : j.type === 'axle-hole' ? 3 : j.type === 'pin-hole' ? 4 : 5;
         return rank(a.joint) - rank(b.joint) || b.joint.engagement - a.joint.engagement;
       }).slice(0, 4);
+      if (engaged.length && !near.length) overconstrained++;
       const samples = asm.instances.length > 2500 ? 12 : asm.instances.length > 600 ? 18 : 30;
       // Connector seats may overlap the host's AABB close to the final pose;
       // they may not fly through that host earlier in the route.
@@ -127,7 +135,8 @@ export function articulateStandardTimeline(tl: Timeline, asm: Assembly, metrics:
       let winner: { candidate: MotionCandidate; assessment: RouteAssessment } | null = null;
       let bestHits = baseline.hits, bestPreference = 0;
       const test = (c: MotionCandidate) => {
-        const move: Move = { ...firstMove, translationPath: undefined, posePath: c.poses };
+        const move: Move = { ...firstMove, translationPath: undefined, posePath: c.poses,
+          kinematicSegments: c.kinematicSegments };
         const assessment = index.assess(move, key, part, firstUnit.start, metrics, samples, c.host, true);
         // Prefer real connector pivots to an equally good generic route;
         // never accept a joint hint with MORE AABB interference than Standard.
@@ -169,6 +178,9 @@ export function articulateStandardTimeline(tl: Timeline, asm: Assembly, metrics:
       }
       if (winner) {
         firstMove.posePath = winner.candidate.poses;
+        firstMove.kinematicSegments = winner.candidate.kinematicSegments;
+        if (winner.candidate.kinematicSegments?.some(s => s.kind === 'revolute')) pivotArcs++;
+        if (winner.candidate.kinematicSegments?.some(s => s.kind === 'prismatic')) axialInsertions++;
         // flightPose prioritises translationPath before posePath: clear it so
         // the chosen kinematic path is ACTUALLY played/baked/exported.
         firstMove.translationPath = undefined;
@@ -218,6 +230,7 @@ export function articulateStandardTimeline(tl: Timeline, asm: Assembly, metrics:
   }
   tl.motion = { engine: 'standard-motion', articulated, parts: tl.tracks.size,
     checked, obstructed, interferenceScore, issues,
+    kinematics: { pivotArcs, axialInsertions, overconstrained },
     // There is no triangle-mesh or multibody certification, even on routes
     // whose sampled AABBs appeared clear. All parts remain user-editable.
     review: tl.tracks.size, fallback: tl.motion?.fallback };

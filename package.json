@@ -9,7 +9,9 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "setup": "tsx scripts/setup-data.ts",
-    "setup:shadow": "tsx scripts/import-shadow-metadata.ts"
+    "setup:shadow": "tsx scripts/import-shadow-metadata.ts",
+    "test:v4": "vitest run tests/anim/standardMotionV4.test.ts",
+    "verify:v4:offline": "node scripts/verify-v4-offline.cjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.1.0",

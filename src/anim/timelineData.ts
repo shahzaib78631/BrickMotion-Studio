@@ -20,7 +20,7 @@ export type Unit = {
     hidden?: boolean;
     /** No route could be certified collision-free; it takes the least-obstructed one. */
     uncertified?: boolean;
-    /** Editable Standard Motion preview: this is a visual joint hint, NOT a certified sweep. */
+    /** Editable Standard Motion preview: even exact pivot kinematics do NOT certify a sweep. */
     motion?: 'hinge' | 'clip' | 'pin-hole' | 'axle-hole' | 'cylindrical' | 'stud-socket' | 'ball-socket' | 'clearance-route' | 'preview';
 };
 export type SubBuild = {
@@ -42,6 +42,18 @@ export type StepSpan = {
     start: number;
     end: number;
 };
+/** Exact local DOF between successive posePath[i] -> posePath[i+1].
+ * Revolute motion keeps the world-space pivot fixed; prismatic motion never
+ * rotates or drifts from the declared axis. All numbers serialize as plain
+ * timeline data and are replayed identically by worker, preview and baker. */
+export type KinematicSegment = {
+    index: number;
+    kind: 'revolute' | 'prismatic';
+    axis: [number, number, number];
+    pivot?: [number, number, number];
+    /** Radians for revolute, LDraw units for prismatic. Signed displacement. */
+    travel: number;
+};
 export type MoveData<M> = {
     /** Exact checked polyline, offsets from `from`; only its timing may be eased. */
     translationPath?: [
@@ -52,6 +64,8 @@ export type MoveData<M> = {
     /** Exact checked affine poses for rigid-rotation V2 operations. The source
      * scale/shear/reflection is unchanged; only world rigid motion varies. */
     posePath?: M[];
+    /** Joint-space interpolation overrides the indicated posePath segments. */
+    kinematicSegments?: KinematicSegment[];
     /** A shared world-rigid delta per waypoint for a V2 assembly operation.
      * Interpolate about `rigidPivot` and apply to `rigidBase` so every member
      * follows the SAME rigid motion through a turn (no per-brick chord shrink). */
@@ -99,17 +113,30 @@ export type PlanningFallback = {
 export type TimelineData = {
     /** A permissive, non-physics preview; all paths remain editable in the Dope Sheet. */
     motion?: {
-        engine: 'standard-motion'; parts: number; articulated: number; review: number;
-        /** Advisory AABB checks against pieces installed before each flight. */
+        engine: 'standard-motion' | 'standard-motion-v4'; parts: number; articulated: number; review: number;
+        /** Advisory AABB checks against installed, staged and simultaneously moving pieces. */
         checked?: number;
         /** Routes with sampled possible obstructions, including legacy/fallback ones. */
         obstructed?: number;
         /** Summed sampled route-overlap severity across reviewed leaves. */
         interferenceScore?: number;
+        /** Exact joint-space arcs/axial insertions actually chosen, and leaves
+         * whose conflicting installed joint hints prevented such an approach. */
+        kinematics?: { pivotArcs: number; axialInsertions: number; overconstrained: number };
         /** A new connected-part assembly order, with per-joint host guides. */
         logical?: { chains: number; strategy: string; attempts: number; order: string[][] };
         /** Capped actionable per-leaf reports; never a collision certificate. */
-        issues?: { key: string; unit: number; time: number; blockers: string[]; firstHit?: number }[];
+        issues?: { key: string; unit: number; time: number; blockers: string[]; firstHit?: number;
+          status?: 'blocked' | 'unverified'; reason?: string }[];
+        /** Per-phase provenance: never promote an unverified path to certified. */
+        v4?: {
+          version: number; phases: number[];
+          graph: { edges: number; rigidClusters: number; constrainedBodies: number; unknownBodies: number };
+          mesh: { certified: number; blocked: number; unverified: number; exactChecks: number;
+            candidateChecks: number; pairsExamined: number; rerouted: number };
+          limits: { rules: number; matches: number; checked: number; adjusted: number; rejected: number;
+            conflicts: number; unspecified: number };
+        };
         fallback?: string;
     };
     /** Bump when rigid collision-certification algorithms change. */

@@ -47,7 +47,7 @@ export function assemblyRole(part = ''): AssemblyRole {
 }
 
 const HOLDER: Partial<Record<AssemblyRole, AssemblyRole>> = {
-  hand: 'arm', arm: 'torso', torso: 'hips', head: 'torso', headwear: 'head', neckwear: 'torso',
+  hand: 'arm', arm: 'torso', leg: 'hips', torso: 'hips', head: 'torso', headwear: 'head', neckwear: 'torso',
 };
 const overlaps = (a: Box, b: Box, k: number) => Math.min(a.max[k], b.max[k]) - Math.max(a.min[k], b.min[k]);
 const gapSquared = (a: Box, b: Box) => [0, 1, 2].reduce((d, k) => d + Math.max(0, -overlaps(a, b, k)) ** 2, 0);

@@ -13,6 +13,7 @@ import { transformBox, unionBox, type Assembly, type Metrics } from '../../model
 import { SpatialHash } from '../../model/spatialHash';
 import { intersects, sweptIntersects } from '../sweptBounds';
 import { flightPose, poseAt, type Move, type Timeline, type Track } from '../timeline';
+import { interpolateJointSegment } from './jointKinematics';
 
 const EPS = 1e-5;
 const SKIN = 0.5;
@@ -92,6 +93,18 @@ export class InstalledRouteIndex {
     // Include exact interpolation corners, which a fixed time grid may miss.
     for (const waypoint of move.posePath ?? [])
       envelope = unionBox(envelope, transformBox(body, move.rel ? waypoint.clone().multiply(move.rel) : waypoint));
+    // A hinge arc bows OUTSIDE the bounding boxes of its endpoint poses.
+    // Keep intermediate world-rigid FK poses in the flight spatial index so
+    // nearby moving pieces are discovered even along a thin, long arm.
+    for (const segment of move.kinematicSegments ?? []) {
+      const from = move.posePath?.[segment.index];
+      if (!from) continue;
+      for (const fraction of [0.25, 0.5, 0.75]) {
+        const sample = new THREE.Matrix4();
+        if (!interpolateJointSegment(from, segment, fraction, sample)) continue;
+        envelope = unionBox(envelope, transformBox(body, move.rel ? sample.multiply(move.rel) : sample));
+      }
+    }
     // The unit envelope already includes the full shared rigid-body sweep.
     if (move.rigidDeltas?.length && u.box) envelope = unionBox(envelope, u.box);
     if (envelope) {
@@ -154,8 +167,10 @@ export class InstalledRouteIndex {
     let hits = 0, firstHit: number | undefined;
     // Evaluate every multi-phase route finely enough that a fast eased
     // segment cannot skip its own corner between adjacent score samples.
-    const count = Math.max(12, Math.min(64, Math.max(Math.round(samples),
-      3 * (move.posePath?.length ?? 0))));
+    const angularTravel = (move.kinematicSegments ?? []).reduce((sum, segment) =>
+      sum + (segment.kind === 'revolute' && Number.isFinite(segment.travel) ? Math.abs(segment.travel) : 0), 0);
+    const count = Math.max(12, Math.min(128, Math.max(Math.round(samples),
+      3 * (move.posePath?.length ?? 0), Math.ceil(angularTravel * 65))));
     const dur = this.timeline.units[move.unit]?.dur ?? 1;
     const pose = new THREE.Matrix4();
     const goalBox = transformBox(body, move.to);

@@ -385,7 +385,7 @@ test('camera has no jump at a framing key in the MP4 sequence', () => {
   }
 });
 
-test('within a step a piece flies in after the piece it rests on (unless bottom-up is off)', () => {
+test('within a step a piece flies in after the piece it rests on, and a blocked file order is repaired', () => {
   // the top brick is listed first
   const asm = assemble(plan([[brick(0, 3, 0), brick(0, 0, 0)]]), metrics, fixtureColors);
   const [top, bottom] = asm.instances;
@@ -393,8 +393,14 @@ test('within a step a piece flies in after the piece it rests on (unless bottom-
   const firstFlight = (tl: ReturnType<typeof buildTimeline>, key: string) => tl.units[tl.tracks.get(key)!.moves[0].unit].start;
   const tl = buildTimeline(asm, metrics, opts);
   expect(firstFlight(tl, bottom.key)).toBeLessThan(firstFlight(tl, top.key));
-  const asListed = buildTimeline(asm, metrics, { ...opts, bottomUp: false });
+  // Bottom-up off keeps the editorial order and does not infer support...
+  const asListed = buildTimeline(asm, metrics, { ...opts, bottomUp: false, accessSearchAttempts: 0, accessSearchWork: 0 });
   expect(firstFlight(asListed, top.key)).toBeLessThan(firstFlight(asListed, bottom.key));
+  // ...but this stack cannot be entered without passing through the brick below,
+  // so the access search repairs the order instead of shipping an uncertified flight.
+  const repaired = buildTimeline(asm, metrics, { ...opts, bottomUp: false });
+  expect(firstFlight(repaired, bottom.key)).toBeLessThan(firstFlight(repaired, top.key));
+  expect(repaired.units.every((u) => !u.uncertified)).toBe(true);
 });
 
 test('one by one: only one piece is ever in the air, even when that outruns the target length', () => {

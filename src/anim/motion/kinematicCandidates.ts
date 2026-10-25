@@ -8,12 +8,14 @@ import type { Box } from '../../ldraw/flatten';
 import { transformBox } from '../../model/assemble';
 import type { MechanicalJoint } from '../construction/mechanicalConstraintGraph';
 import type { Move } from '../timeline';
-import type { Unit } from '../timelineData';
+import type { KinematicSegment, Unit } from '../timelineData';
 
 const CLEARANCE = 50;
 const POS = (m: THREE.Matrix4) => new THREE.Vector3().setFromMatrixPosition(m);
 export type MotionCandidate = {
   poses: THREE.Matrix4[];
+  /** Exact joint-space interpolation for final seating, never for free flight. */
+  kinematicSegments?: KinematicSegment[];
   motion: NonNullable<Unit['motion']>;
   /** Installed joint partner. */
   host?: string;
@@ -44,7 +46,8 @@ export function mechanicalApproaches(move: Move, joint: MechanicalJoint, movingK
   const axis = new THREE.Vector3(...joint.axis).normalize();
   const host = joint.male === movingKey ? joint.female : joint.male;
   const start = move.from.clone(), dest = move.to.clone();
-  if (joint.type === 'hinge' || joint.type === 'clip' || joint.type === 'ball-socket') {
+  if ((joint.type === 'hinge' || joint.type === 'clip') && joint.motion === 'revolute' ||
+      joint.type === 'ball-socket' && joint.motion === 'ball') {
     // Hinges and clips can swing about their connector axis. A ball-joint
     // tilts around a perpendicular tangent through the ball centre.
     let rotationAxis = axis;
@@ -58,24 +61,33 @@ export function mechanicalApproaches(move: Move, joint: MechanicalJoint, movingK
     return [-1, 1].map((sign): MotionCandidate => {
       const a = angle * sign;
       const open = swung(dest, joint, a, rotationAxis);
-      return { motion: joint.type, host, preference: -1.5, poses: [
-        start.clone(), elevated(start, sky), elevated(open, sky), open,
-        swung(dest, joint, a * 0.70, rotationAxis),
-        swung(dest, joint, a * 0.37, rotationAxis),
-        swung(dest, joint, a * 0.12, rotationAxis), dest.clone(),
-      ] };
+      const angles = [a, a * 0.70, a * 0.37, a * 0.12, 0];
+      const poses = [start.clone(), elevated(start, sky), elevated(open, sky),
+        ...angles.map(value => value === 0 ? dest.clone() : swung(dest, joint, value, rotationAxis))];
+      // Quaternion/translation lerp traces a chord through the hinge, shifting
+      // its pivot and potentially tunnelling through the host. A true revolute
+      // DOF keeps that pivot fixed at EVERY evaluated frame, not just keys.
+      const kinematicSegments: KinematicSegment[] = angles.slice(0, -1).map((angle, i) => ({
+        index: 3 + i, kind: 'revolute', axis: [rotationAxis.x, rotationAxis.y, rotationAxis.z],
+        pivot: [...joint.centre], travel: angles[i + 1] - angle,
+      }));
+      return { motion: joint.type, host, preference: -1.5, poses, kinematicSegments };
     });
   }
   if (!['pin-hole', 'axle-hole', 'cylindrical', 'stud-socket'].includes(joint.type)) return [];
   const depth = Math.min(70, Math.max(24, joint.engagement + 20));
-  // Keyed axles and studs must NOT screw into their destination. Only round
-  // pins and round cylindrical joints admit a small axial correction.
-  const twist = joint.type === 'pin-hole' ? Math.PI / 7 : joint.type === 'cylindrical' ? Math.PI / 9 : 0;
+  // No invented screw thread: even nominally round pins are inserted axially.
+  // Keyed axles/studs retain their exact authored orientation throughout the
+  // constrained phase. Free-flight orientation may still change before it.
   return [-1, 1].map((sign): MotionCandidate => {
     const offset = axis.clone().multiplyScalar(depth * sign);
-    const prep = shifted(swung(dest, joint, sign * twist), offset);
-    const middle = shifted(swung(dest, joint, sign * twist * .35), offset.clone().multiplyScalar(.35));
-    return { motion: joint.type, host, preference: -1.2, poses: [
+    const prep = shifted(dest, offset);
+    const middle = shifted(dest, offset.clone().multiplyScalar(.35));
+    const kinematicSegments: KinematicSegment[] = [
+      { index: 3, kind: 'prismatic', axis: [...joint.axis] as [number, number, number], travel: -depth * sign * .65 },
+      { index: 4, kind: 'prismatic', axis: [...joint.axis] as [number, number, number], travel: -depth * sign * .35 },
+    ];
+    return { motion: joint.type, host, preference: -1.2, kinematicSegments, poses: [
       start.clone(), elevated(start, sky), elevated(prep, sky), prep, middle, dest.clone(),
     ] };
   });

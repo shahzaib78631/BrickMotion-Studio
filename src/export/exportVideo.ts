@@ -214,7 +214,7 @@ export function keyframeSceneBounds(opts: Pick<KeyframeExportOpts, 'animation' |
 
 /** Renders manually authored transforms, or authored offsets on top of Build,
  * without needing construction planning for static-scene keyframes. */
-export function exportKeyframeVideo(opts: KeyframeExportOpts, deps: ExportDeps): Promise<Blob> {
+export async function exportKeyframeVideo(opts: KeyframeExportOpts, deps: ExportDeps): Promise<Blob> {
   if (opts.signal.aborted) return Promise.reject(abortError());
   const { animation, instances, editingModel, buildTimeline } = opts;
   const bounds = keyframeSceneBounds(opts);

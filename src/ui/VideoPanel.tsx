@@ -6,6 +6,7 @@ import { VIDEO_FORMATS, type VideoFormat } from '../export/formats';
 import { useStudio } from '../state/store';
 import { resetFloorShifts } from '../plan/pieceActions';
 import { useAppSettings } from '../state/appSettings';
+import { validateJointLimitRules, type JointLimitRule } from '../anim/motion/v4/jointLimits';
 import { Ic } from './icons';
 import { DEFAULT_CAMERA_SETTINGS } from '../anim/camera';
 import { animationOf } from '../anim/keyframes';
@@ -33,6 +34,8 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [acceptUncertified, setAcceptUncertified] = useState(false);
+  const [limitDraft, setLimitDraft] = useState<string | null>(null);
+  const [limitError, setLimitError] = useState('');
   useEffect(() => {
     if (!s.logo) return setLogoUrl(null);
     const u = URL.createObjectURL(s.logo);
@@ -40,7 +43,8 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
     return () => URL.revokeObjectURL(u);
   }, [s.logo]);
   const longer = timeline && timeline.duration > s.targetSeconds + 0.05;
-  useEffect(() => setAcceptUncertified(false), [timeline?.fallback?.code, timeline?.fallback?.message]);
+  useEffect(() => setAcceptUncertified(false), [timeline?.fallback?.code, timeline?.fallback?.message,
+    timeline?.motion?.v4?.mesh.blocked, timeline?.motion?.v4?.mesh.unverified]);
   const editingModel = useStudio((st) => st.editingModel);
   const timelineEditor = useStudio((st) => st.timelineEditor);
   const animation = useStudio((st) => animationOf(st.plan.animation));
@@ -63,10 +67,13 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
   const v2 = ['construction-v2', 'construction-auto', 'construction-v3', 'construction-v3-auto', 'construction-v4'].includes(s.planner ?? '');
   const v3 = s.planner === 'construction-v3' || s.planner === 'construction-v3-auto';
   const v4 = s.planner === 'construction-v4';
-  const motion = s.planner === 'standard-motion';
+  const motionV4 = s.planner === 'standard-motion-v4';
+  const motion = s.planner === 'standard-motion' || motionV4;
   const artifactPlanner = s.planner === 'assembly-artifact';
   const hasArtifact = useStudio((st) => st.plan.assemblyPlan != null);
-  const previewNeedsConsent = !!timeline?.fallback && (!manual || linked);
+  const v4NeedsReview = !!timeline?.motion?.v4 &&
+    timeline.motion.v4.mesh.blocked + timeline.motion.v4.mesh.unverified > 0;
+  const previewNeedsConsent = (!!timeline?.fallback || v4NeedsReview) && (!manual || linked);
 
   return (
     <div className="nx-pane bm-video">
@@ -268,12 +275,13 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
 
       {!manual && <>
       <details className="nx-group bm-vsec">
-        <summary>Planner<span className="bm-vsec-val">{s.planner === 'construction-v3-auto' ? 'V3 Adaptive' : s.planner === 'construction-auto' ? 'V2 Adaptive' : artifactPlanner ? 'Assembly artifact' : v3 ? 'Construction V3' : v4 ? 'Construction V4' : v2 ? 'Construction V2' : motion ? 'Standard Motion' : 'Standard'}</span></summary>
+        <summary>Planner<span className="bm-vsec-val">{s.planner === 'construction-v3-auto' ? 'V3 Adaptive' : s.planner === 'construction-auto' ? 'V2 Adaptive' : artifactPlanner ? 'Assembly artifact' : v3 ? 'Construction V3' : v4 ? 'Construction V4' : v2 ? 'Construction V2' : motionV4 ? 'Standard Motion V4' : motion ? 'Standard Motion V3' : 'Standard'}</span></summary>
         <label className="nx-field">
           Assembly planner
           <select aria-label="Assembly planner" value={s.planner ?? 'legacy'} onChange={(e) => s.set({ planner: e.target.value as NonNullable<typeof s.planner> })}>
             <option value="legacy">Standard — flexible preview</option>
-            <option value="standard-motion">Standard Motion v3 — logical connections + editable keys (preview)</option>
+            <option value="standard-motion">Standard Motion v3 — mechanics + kinematics (editable preview)</option>
+            <option value="standard-motion-v4">Standard Motion v4 — mechanical graph, mesh verification, joint stops</option>
             <option value="construction-v4">Construction V4 — global scene, articulation-aware (experimental)</option>
             <option value="construction-v3">Construction V3 — guided, certified only</option>
             <option value="construction-v3-auto">Construction V3 — guided, preview fallback</option>
@@ -282,9 +290,31 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
             <option value="assembly-artifact">Assembly artifact — Python-engine certified plan</option>
           </select>
           <span className="nx-hint">{artifactPlanner
-            ? 'Plays a pre-planned, certified assembly from the Python engine. The artifact must be attached to this model and must still match every piece of it: edits to the model, or an artifact for another model, are rejected instead of mis-animated.'
-            : 'Standard Motion compares connected-part orders before it builds, for example one leg → hips → other leg, and evaluates alternative joint-axis approaches (hinges, clips, ball joints, studs, pins and axles) against already-installed part bounds. It also tries clearances if a standard path appears obstructed. It completes the visual build even when support ordering is unresolved and generates editable motion keys for each brick. Use Timeline to correct paths. This is a visual preview, not rigid collision certification or a dynamics simulation. V4 plans one global scene of rigid clusters, uses connector and articulated-joint policies, certifies translation and rotation certificates against every installed or staged part, and replays every accepted operation. It has no uncertified fallback. Large-model coverage is still experimental; V3/V2 are available for comparison. Neither engine simulates true flexible-part deformation.'}</span>
+            ? 'Requires a model-matched assembly artifact from the Python planning engine.'
+            : motionV4
+              ? 'Standard Motion V4 checks the connector constraint graph, certifies supported continuous triangle-mesh translations and hinge arcs, and enforces explicitly configured joint limits. It tries alternative routes when obstructed. Each move is CLEAR, BLOCKED, or UNVERIFIED; unsupported motion and connector seating are never marked clear. Existing V3 remains separate. The final brick placements and editable keyframes are preserved.'
+              : motion
+                ? 'Standard Motion V3 is an editable connector-guided preview with sampled AABB collision advisories, exact hinge pivots and axial insertions; it is not mesh-certified.'
+                : 'Construction engines apply their own planning and certification policies. No mode simulates gravity or gear-tooth dynamics.'}</span>
         </label>
+        {motionV4 && <div className="nx-field">
+          <strong>V4 joint limits (assembled position = zero)</strong>
+          <span className="nx-hint">Provide a JSON array of signed radians for hinge travel or LDraw units for axial travel. Specify exact moving and host instance keys. An empty array leaves physical stops unknown — v4 never invents them.</span>
+          <textarea aria-label="V4 joint limit rules JSON" rows={4}
+            value={limitDraft ?? JSON.stringify(s.motionV4Limits ?? [],null,2)}
+            onChange={e=>setLimitDraft(e.target.value)} spellCheck={false} />
+          <button className="nx-link" type="button" onClick={()=>{
+            try{
+              const parsed:unknown=JSON.parse(limitDraft ?? JSON.stringify(s.motionV4Limits ?? []));
+              if(!Array.isArray(parsed))throw new Error('Expected a JSON array of joint limit rules.');
+              const problems=validateJointLimitRules(parsed as JointLimitRule[]);
+              if(problems.length)throw new Error(problems.join('; '));
+              s.set({motionV4Limits:parsed as JointLimitRule[]});setLimitDraft(null);setLimitError('');
+            }catch(e){setLimitError(e instanceof Error?e.message:String(e));}
+          }}>Apply joint limits</button>
+          <span className="nx-hint">{(s.motionV4Limits??[]).length} active rule(s). Units: radians or LDraw units. No default limits are assumed.</span>
+          {limitError && <p className="error" role="alert">{limitError}</p>}
+        </div>}
         {artifactPlanner && !hasArtifact && (
           <div className="nx-field" role="alert">
             <strong>This model has no assembly artifact.</strong>
@@ -318,8 +348,15 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
         {motion && timeline?.motion && (
           <div className="nx-field" role="status">
             <strong>{timeline.motion.parts.toLocaleString()} part tracks · {timeline.motion.articulated} joint-guided motions</strong>
-            {timeline.motion.logical && <span className="nx-hint">Connection-aware ordering: {timeline.motion.logical.chains} group(s), {timeline.motion.logical.strategy}. Example order: {timeline.motion.logical.order[0]?.join(' → ')}. Original project order was not changed.</span>}
-            <span className="nx-hint">{timeline.motion.obstructed ?? 0} possible sampled AABB conflicts across {timeline.motion.checked ?? 0} assessed flights. These are advisory, not physically certified. Open Timeline → Review routes to jump directly to a suspect brick, expand all nine channels and correct its keys.</span>
+            {motionV4 && timeline.motion.v4 ? <>
+              <span className="nx-hint">Mesh review: {timeline.motion.v4.mesh.certified} certified clear · {timeline.motion.v4.mesh.blocked} blocked · {timeline.motion.v4.mesh.unverified} unverified. {timeline.motion.v4.mesh.rerouted} re-routed flight(s).</span>
+              <span className="nx-hint">Graph: {timeline.motion.v4.graph.edges} joints, {timeline.motion.v4.graph.rigidClusters} rigid groups, {timeline.motion.v4.graph.unknownBodies} bodies without matched connector metadata.</span>
+              <span className="nx-hint">Limits: {timeline.motion.v4.limits.rules} user/verified rules · {timeline.motion.v4.limits.adjusted} approaches adjusted · {timeline.motion.v4.limits.rejected} candidate motions rejected. Unknown limits are NOT physical certifications.</span>
+            </> : <>
+              {timeline.motion.kinematics && <span className="nx-hint">Kinematics: {timeline.motion.kinematics.pivotArcs} exact-pivot swings · {timeline.motion.kinematics.axialInsertions} axis-locked insertions · {timeline.motion.kinematics.overconstrained} conflicting joint hints.</span>}
+              {timeline.motion.logical && <span className="nx-hint">Connection-aware ordering: {timeline.motion.logical.chains} group(s), {timeline.motion.logical.strategy}. Original project order was not changed.</span>}
+              <span className="nx-hint">{timeline.motion.obstructed ?? 0} possible sampled AABB conflicts across {timeline.motion.checked ?? 0} assessed flights. These are advisory, not physically certified.</span>
+            </>}
             {timeline.motion.fallback && <details><summary>Standard assembly issue (editable fallback used)</summary><p className="nx-hint">{timeline.motion.fallback}</p></details>}
           </div>
         )}
@@ -376,8 +413,10 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
             </select>
           </label>
         </div>
-        {previewNeedsConsent && <label className="nx-field">
-          <span><input type="checkbox" checked={acceptUncertified} onChange={(e) => setAcceptUncertified(e.target.checked)} /> I understand the adaptive animation has not been collision-certified.</span>
+        {previewNeedsConsent && <label className="nx-field" role="alert">
+          <span><input type="checkbox" checked={acceptUncertified} onChange={(e) => setAcceptUncertified(e.target.checked)} /> {v4NeedsReview
+            ? `I have reviewed the ${timeline!.motion!.v4!.mesh.blocked} blocked and ${timeline!.motion!.v4!.mesh.unverified} unverified v4 route(s), and understand that exporting may show pieces passing through others.`
+            : 'I understand the adaptive animation has not been collision-certified.'}</span>
         </label>}
         <button className="nx-btn nx-primary" disabled={(!manual && (!timeline || timeline.units.length === 0)) || (previewNeedsConsent && !acceptUncertified)} onClick={onExport}>
           <Ic name="download" /> Export {manual ? 'Timeline' : 'Build'} · {editingModel ? `“${editingModel}”` : 'main model'} MP4

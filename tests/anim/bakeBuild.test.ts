@@ -46,8 +46,9 @@ describe('editable generated flights', () => {
     const playback = makeKeyframePose(originals, new Map(), result.animation, '', generated);
     expect(playback(1).get('brick')).toBeNull();
     expect(playback(1).get('other')).toBeNull();
-    expect(getX(playback(24).get('brick'))).toBeCloseTo(0, 3);
-    expect(getX(playback(24).get('other'))).toBeCloseTo(100, 3);
+    // The clip includes both ends, so the 1 s Build linked at frame 1 lands on frame 25.
+    expect(getX(playback(25).get('brick'))).toBeCloseTo(0, 3);
+    expect(getX(playback(25).get('other'))).toBeCloseTo(100, 3);
     expect(originalClip.tracks).toEqual([]);
     expect(originals[0].world.elements[12]).toBe(0);
   });
@@ -58,7 +59,9 @@ describe('editable generated flights', () => {
     expect(a.buildLayers).toBeUndefined();
     const sample = makeKeyframePose(parts, new Map(), a, '', null);
     expect(sample(1).get('brick')).toBeNull();
-    expect(getX(sample(7).get('brick'))).toBeCloseTo(100, 3);
+    // A parked piece holds its floor pose; the channel is compressed to the
+    // documented 0.004-stud tolerance (0.08 LDU), so it is near-, not exactly, 100.
+    expect(Math.abs(getX(sample(7).get('brick'))! - 100)).toBeLessThan(0.08);
     expect(getX(sample(25).get('brick'))).toBeCloseTo(0, 3);
     expect(getX(sample(25).get('other'))).toBeCloseTo(100, 3);
   });

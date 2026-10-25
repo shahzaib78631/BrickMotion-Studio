@@ -1,4 +1,5 @@
 import { get, set } from 'idb-keyval';
+import { validateJointLimitRules, type JointLimitRule } from '../anim/motion/v4/jointLimits';
 import type { ArrivalMode, FloorSides, FloorSort } from '../anim/pacing';
 import { isConstructionBudgetPreset, type ConstructionBudgetPreset } from '../anim/construction/budgetPresets';
 import type { LogoCorner } from '../export/exportVideo';
@@ -13,7 +14,7 @@ export type Settings = {
   logo: Blob | null;
   logoCorner: LogoCorner;
   logoEnabled: boolean;
-  video: { targetSeconds: number; heroOrbit: boolean; mode: ArrivalMode | 'auto'; fps: ExportFps; introSeconds: number | null; buildSeconds: number | null; outroSeconds: number | null; studioLook: StudioLook; cameraFraming: CameraFraming; camera: CameraSettings; format: VideoFormat; edgeLines: boolean; linearColors: boolean; bottomUp: boolean; snapSound: boolean; planner?: 'legacy' | 'construction-v2' | 'construction-auto' | 'construction-v3' | 'construction-v3-auto' | 'construction-v4' | 'standard-motion' | 'assembly-artifact'; constructionSupport?: 'fixture' | 'table'; constructionBudget?: ConstructionBudgetPreset; constructionStepModules?: boolean; floorSort: FloorSort; floorSides: FloorSides };
+  video: { targetSeconds: number; heroOrbit: boolean; mode: ArrivalMode | 'auto'; fps: ExportFps; introSeconds: number | null; buildSeconds: number | null; outroSeconds: number | null; studioLook: StudioLook; cameraFraming: CameraFraming; camera: CameraSettings; format: VideoFormat; edgeLines: boolean; linearColors: boolean; bottomUp: boolean; snapSound: boolean; planner?: 'legacy' | 'construction-v2' | 'construction-auto' | 'construction-v3' | 'construction-v3-auto' | 'construction-v4' | 'standard-motion' | 'standard-motion-v4' | 'assembly-artifact'; constructionSupport?: 'fixture' | 'table'; constructionBudget?: ConstructionBudgetPreset; constructionStepModules?: boolean; motionV4Limits?: JointLimitRule[]; floorSort: FloorSort; floorSides: FloorSides };
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -22,7 +23,7 @@ export const DEFAULT_SETTINGS: Settings = {
   logo: null,
   logoCorner: 'br',
   logoEnabled: false,
-  video: { targetSeconds: 15, heroOrbit: true, mode: 'auto', fps: 30, introSeconds: null, buildSeconds: null, outroSeconds: null, studioLook: 'soft', cameraFraming: 'cinematic', camera: DEFAULT_CAMERA_SETTINGS, format: '9:16', edgeLines: true, linearColors: true, bottomUp: true, snapSound: true, planner: 'legacy', constructionSupport: 'fixture', constructionBudget: 'standard', constructionStepModules: false, floorSort: 'step', floorSides: 'front-back' },
+  video: { targetSeconds: 15, heroOrbit: true, mode: 'auto', fps: 30, introSeconds: null, buildSeconds: null, outroSeconds: null, studioLook: 'soft', cameraFraming: 'cinematic', camera: DEFAULT_CAMERA_SETTINGS, format: '9:16', edgeLines: true, linearColors: true, bottomUp: true, snapSound: true, planner: 'legacy', constructionSupport: 'fixture', constructionBudget: 'standard', constructionStepModules: false, motionV4Limits: [], floorSort: 'step', floorSides: 'front-back' },
 };
 
 const KEY = 'settings';
@@ -52,7 +53,8 @@ export async function loadSettings(): Promise<Settings> {
   if (video.constructionSupport !== 'table') video.constructionSupport = 'fixture';
   if (!isConstructionBudgetPreset(video.constructionBudget)) video.constructionBudget = 'standard';
   if (typeof video.constructionStepModules !== 'boolean') video.constructionStepModules = false;
-  if (!['construction-v2', 'construction-auto', 'construction-v3', 'construction-v3-auto', 'construction-v4', 'standard-motion', 'assembly-artifact'].includes(video.planner ?? '')) video.planner = 'legacy';
+  if (!Array.isArray(video.motionV4Limits) || validateJointLimitRules(video.motionV4Limits).length > 0) video.motionV4Limits = [];
+  if (!['construction-v2', 'construction-auto', 'construction-v3', 'construction-v3-auto', 'construction-v4', 'standard-motion', 'standard-motion-v4', 'assembly-artifact'].includes(video.planner ?? '')) video.planner = 'legacy';
   if (!['step', 'colour', 'part', 'size'].includes(video.floorSort)) video.floorSort = 'step';
   if (!['front-back', 'front', 'behind', 'sides'].includes(video.floorSides)) video.floorSides = 'front-back';
   if (typeof video.snapSound !== 'boolean') video.snapSound = DEFAULT_SETTINGS.video.snapSound;

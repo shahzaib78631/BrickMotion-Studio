@@ -479,8 +479,9 @@ export class MeshOracle {
             // arcs; this avoids rejecting a long part whose bounding sector merely
             // grazes an obstacle elsewhere.
             for (const t of a.triangles) {
-                const tb = shiftBox(t.box, moving.position);
-                if (!overlaps(tb, obstacleBox, SKIN * 4) && !overlaps(box, tb, SKIN * 4)) continue;
+                // Do not cull a triangle using its INITIAL AABB: a triangle
+                // can start far away and enter the obstacle late in an arc.
+                // Only its exact continuous sub-arc envelope is safe here.
                 const arc = triangleArcBox(t, u, pivot, lo, hi, moving.position);
                 for (const ob of obstacleTris) if (overlaps(arc, ob, SKIN)) return false;
             }

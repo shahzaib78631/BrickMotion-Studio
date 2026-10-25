@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Metrics } from '../../src/model/assemble';
 import { assemble } from '../../src/model/assemble';
 import type { PieceItem, Plan, Raw } from '../../src/plan/types';
-import { buildTimeline, poseAt } from '../../src/anim/timeline';
+import { buildTimeline, flightPose, poseAt } from '../../src/anim/timeline';
+import { encodeTimeline, decodeTimeline } from '../../src/anim/timelineCodec';
 
 // A connector-derived hinge is injected so joint integration is tested even
 // without the user's optional Shadow Library connector metadata installed.
@@ -39,6 +40,18 @@ describe('Standard Motion — mechanical hints', () => {
     const u = tl.units[moved.unit];
     expect(u.motion).toBe('hinge');
     expect(u.uncertified).toBe(true);
+    expect(tl.motion?.kinematics?.pivotArcs).toBe(1);
+    expect(moved.kinematicSegments?.length).toBe(4);
+    // The connector pivot is the SAME world point in the middle of the
+    // swing, not just at the deliberately authored waypoint matrices.
+    const pivot = new THREE.Vector3(10, 0, 0);
+    const pivotInPiece = pivot.clone().applyMatrix4(moved.to.clone().invert());
+    const sample = flightPose(moved, 0.5, new THREE.Matrix4());
+    expect(pivotInPiece.clone().applyMatrix4(sample).distanceTo(pivot)).toBeLessThan(1e-5);
+    const restored = decodeTimeline(encodeTimeline(tl)).tracks.get('child')!.moves[0];
+    expect(restored.kinematicSegments).toEqual(moved.kinematicSegments);
+    const encodedMidpoint = flightPose(restored, .5, new THREE.Matrix4());
+    sample.elements.forEach((value, i) => expect(value).toBeCloseTo(encodedMidpoint.elements[i], 7));
     const opened = moved.posePath![3];
     expect(opened.elements[12]).not.toBeCloseTo(moved.to.elements[12]);
     const final = poseAt(tl, tl.duration)('child')!;

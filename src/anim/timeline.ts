@@ -53,6 +53,8 @@ export const CLOSE_EASE = 0.6;
 /** `box`: the space the flight sweeps (LDU), for the camera */
 import type { Unit, SubBuild, CamKey, StepSpan, MoveData, TrackData, TimelineData } from './timelineData';
 import { buildStandardMotionTimeline } from './motion/standardMotion';
+import { buildStandardMotionV4Timeline } from './motion/v4/standardMotionV4';
+import { interpolateJointSegment } from './motion/jointKinematics';
 export type { Unit, SubBuild, CamKey, StepSpan } from './timelineData';
 export type Move = MoveData<THREE.Matrix4>;
 export type Track = TrackData<THREE.Matrix4>;
@@ -186,6 +188,7 @@ export const DEFAULT_ACCESS_WORK = 1500;
  */
 export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProgress?: (p: PlanningProgress) => void, layoutBox: Box | null = null, workBaySpots: Record<string, AssemblySpot> = {}): Timeline {
   if (opts.planner === 'standard-motion') return buildStandardMotionTimeline(asm, metrics, opts, onProgress, layoutBox, workBaySpots);
+  if (opts.planner === 'standard-motion-v4') return buildStandardMotionV4Timeline(asm, metrics, opts, onProgress, layoutBox, workBaySpots);
   if (opts.planner === 'assembly-artifact') {
     // Certified-only: the artifact (from the Python engine) carries every step,
     // its corridor certificate decides acceptance, and nothing falls back.
@@ -1361,6 +1364,14 @@ export function flightPose(m: Move, u: number, out: THREE.Matrix4): THREE.Matrix
     const scaled = easeInOutCubic(u) * (m.posePath.length - 1);
     const i = Math.min(m.posePath.length - 2, Math.floor(scaled));
     const local = Math.max(0, Math.min(1, scaled - i));
+    const segment = m.kinematicSegments?.find(s => s.index === i);
+    // Ordinary endpoint lerp would cut a straight CHORD between two hinge
+    // keyframes. Use exact forward kinematics while the joint is engaged,
+    // holding its pivot fixed throughout preview, bake and export.
+    if (segment && interpolateJointSegment(m.posePath[i], segment, local, out)) {
+      if (m.rel) out.multiply(m.rel);
+      return out;
+    }
     const d = endpointPair(m.posePath[i], m.posePath[i + 1]);
     _p0.copy(d.p0).lerp(d.p1, local);
     _q0.copy(d.q0).slerp(d.q1, local);

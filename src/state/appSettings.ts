@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { AnimOptions, ArrivalMode, FloorSides, FloorSort } from '../anim/pacing';
+import type { JointLimitRule } from '../anim/motion/v4/jointLimits';
 import { CONSTRUCTION_BUDGET_PRESETS, type ConstructionBudgetPreset } from '../anim/construction/budgetPresets';
 import type { LogoCorner } from '../export/exportVideo';
 import type { ExportFps } from '../export/frameRates';
@@ -26,10 +27,11 @@ export type AppSettings = {
   linearColors: boolean;
   /** within a step, each piece is placed after what it rests on */
   bottomUp: boolean;
-  planner?: 'legacy' | 'construction-v2' | 'construction-auto' | 'construction-v3' | 'construction-v3-auto' | 'construction-v4' | 'standard-motion' | 'assembly-artifact';
+  planner?: 'legacy' | 'construction-v2' | 'construction-auto' | 'construction-v3' | 'construction-v3-auto' | 'construction-v4' | 'standard-motion' | 'standard-motion-v4' | 'assembly-artifact';
   constructionSupport?: 'fixture' | 'table';
   constructionBudget?: ConstructionBudgetPreset;
   constructionStepModules?: boolean;
+  motionV4Limits?: JointLimitRule[];
   /** how pieces waiting on the floor are grouped, and where around the model */
   floorSort: FloorSort;
   floorSides: FloorSides;
@@ -65,7 +67,7 @@ export const toSettings = (s: AppSettings): Settings => ({
   logo: s.logo,
   logoCorner: s.logoCorner,
   logoEnabled: s.logoEnabled,
-  video: { targetSeconds: s.targetSeconds, heroOrbit: s.heroOrbit, mode: s.mode, fps: s.fps, introSeconds: s.introSeconds, buildSeconds: s.buildSeconds, outroSeconds: s.outroSeconds, studioLook: s.studioLook, cameraFraming: s.cameraFraming, camera: s.camera, format: s.format, edgeLines: s.edgeLines, linearColors: s.linearColors, bottomUp: s.bottomUp, snapSound: s.snapSound, planner: s.planner ?? 'legacy', constructionSupport: s.constructionSupport ?? 'fixture', constructionBudget: s.constructionBudget ?? 'standard', constructionStepModules: s.constructionStepModules === true, floorSort: s.floorSort, floorSides: s.floorSides },
+  video: { targetSeconds: s.targetSeconds, heroOrbit: s.heroOrbit, mode: s.mode, fps: s.fps, introSeconds: s.introSeconds, buildSeconds: s.buildSeconds, outroSeconds: s.outroSeconds, studioLook: s.studioLook, cameraFraming: s.cameraFraming, camera: s.camera, format: s.format, edgeLines: s.edgeLines, linearColors: s.linearColors, bottomUp: s.bottomUp, snapSound: s.snapSound, planner: s.planner ?? 'legacy', constructionSupport: s.constructionSupport ?? 'fixture', constructionBudget: s.constructionBudget ?? 'standard', constructionStepModules: s.constructionStepModules === true, motionV4Limits: s.motionV4Limits ?? [], floorSort: s.floorSort, floorSides: s.floorSides },
 });
 
 export async function applySettings(s: Settings): Promise<void> {
@@ -76,7 +78,7 @@ export async function applySettings(s: Settings): Promise<void> {
 }
 
 /** The animation options the timeline planner needs, taken from the video settings. */
-export const animOptions = (s: Pick<AppSettings, 'targetSeconds' | 'heroOrbit' | 'mode' | 'introSeconds' | 'buildSeconds' | 'outroSeconds' | 'bottomUp' | 'planner' | 'constructionSupport'> & Partial<Pick<AppSettings, 'constructionBudget' | 'constructionStepModules' | 'floorSort' | 'floorSides'>>): AnimOptions => ({
+export const animOptions = (s: Pick<AppSettings, 'targetSeconds' | 'heroOrbit' | 'mode' | 'introSeconds' | 'buildSeconds' | 'outroSeconds' | 'bottomUp' | 'planner' | 'constructionSupport'> & Partial<Pick<AppSettings, 'constructionBudget' | 'constructionStepModules' | 'motionV4Limits' | 'floorSort' | 'floorSides'>>): AnimOptions => ({
   targetSeconds: s.targetSeconds,
   heroOrbit: s.heroOrbit,
   mode: s.mode === 'auto' ? undefined : s.mode,
@@ -87,6 +89,7 @@ export const animOptions = (s: Pick<AppSettings, 'targetSeconds' | 'heroOrbit' |
   planner: s.planner ?? 'legacy',
   constructionSupport: s.constructionSupport ?? 'fixture',
   constructionStepModules: s.constructionStepModules === true,
+  motionV4Limits: s.motionV4Limits ?? [],
   constructionMaxMilliseconds: CONSTRUCTION_BUDGET_PRESETS[s.constructionBudget ?? 'standard'].maxMilliseconds,
   constructionMaxStates: CONSTRUCTION_BUDGET_PRESETS[s.constructionBudget ?? 'standard'].maxStates,
   constructionMaxCandidates: CONSTRUCTION_BUDGET_PRESETS[s.constructionBudget ?? 'standard'].maxCandidates,

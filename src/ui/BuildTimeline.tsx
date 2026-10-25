@@ -260,16 +260,22 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
               {tl.fallback.planner === 'construction-v3' ? 'Construction V3' : 'Construction V2'} stopped ({tl.fallback.code}). This is a Standard-planner VISUAL preview, not collision-certified. All flights require review. {tl.fallback.phase ? `Stage: ${tl.fallback.phase}. ` : ''}{tl.fallback.scope ? `Scope: ${tl.fallback.scope}. ` : ''}{tl.fallback.peakRemovals != null && tl.fallback.peakScopeUnits != null ? `Deepest removal: ${tl.fallback.peakRemovals}/${tl.fallback.peakScopeUnits}. ` : ''}{tl.fallback.searchStates != null ? `Explored ${tl.fallback.searchStates} states. ` : ''}{tl.fallback.message}
             </TimelineNote>
           )}
-          {tl?.motion && (
+          {tl?.motion && (tl.motion.v4 ? (
+            <TimelineNote id="standard-motion" open={note} onOpen={setNote}
+              tone={tl.motion.v4.mesh.blocked || tl.motion.v4.mesh.unverified ? 'warn' : undefined}
+              label={`Standard Motion V4 · ${tl.motion.parts.toLocaleString()} parts`}
+              title="Continuous mesh verification: proven clear / blocked / unverified">
+              {tl.motion.v4.graph.edges} mechanical joints · {tl.motion.v4.mesh.certified} proven-clear flights · {tl.motion.v4.mesh.blocked} blocked · {tl.motion.v4.mesh.unverified} unverified. {tl.motion.v4.limits.rules} explicit joint-limit rules; unprovided stops remain unknown. Routes marked unverified are NOT certified. Review flagged routes in the Timeline.
+            </TimelineNote>
+          ) : (
             <TimelineNote id="standard-motion" open={note} onOpen={setNote} tone="warn"
-              label={`Standard Motion · ${tl.motion.parts.toLocaleString()} parts`}
+              label={`Standard Motion V3 · ${tl.motion.parts.toLocaleString()} parts`}
               title={tl.motion.fallback ?? 'Every motion is an editable preview, not a collision-certified path'}>
               {tl.motion.logical ? `${tl.motion.logical.chains} connected group${tl.motion.logical.chains === 1 ? '' : 's'} resequenced (${tl.motion.logical.strategy}). ` : ''}
-              {tl.motion.articulated} connector-guided motion{tl.motion.articulated === 1 ? '' : 's'} · {tl.motion.obstructed ?? 0} potentially obstructed parts in a sampled AABB check. All {tl.motion.review} paths remain unverified.
-              {' '}Switch to Timeline → Review routes to jump to flagged parts and adjust their individual keyframes.
-              {tl.motion.fallback ? ` Standard support ordering was unresolved: ${tl.motion.fallback}` : ''}
+              {tl.motion.articulated} connector-guided motions · {tl.motion.kinematics?.pivotArcs ?? 0} true-pivot swings · {tl.motion.kinematics?.axialInsertions ?? 0} axial insertions · {tl.motion.obstructed ?? 0} potentially obstructed parts in an advisory AABB check. All {tl.motion.review} paths remain unverified.
+              {' '}Switch to Timeline → Review routes to jump to flagged parts and adjust keyframes.
             </TimelineNote>
-          )}
+          ))}
           {!tl?.fallback && !tl?.motion && uncertified.length > 0 && (
             <TimelineNote id="route" open={note} onOpen={setNote} tone="warn" label={`${uncertified.length} rough route${uncertified.length === 1 ? '' : 's'}`} title={uncertified.join('\n')}>
               {uncertified.length === 1 ? '1 piece has' : `${uncertified.length} pieces have`} no collision-free route, so {uncertified.length === 1 ? 'it takes' : 'they take'} the least-blocked one and may clip a neighbour. Check {uncertified.length === 1 ? 'it' : 'them'} in the preview.

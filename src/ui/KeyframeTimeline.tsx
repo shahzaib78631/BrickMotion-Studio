@@ -541,9 +541,11 @@ export function KeyframeTimeline({ timeline, planning, buildError, instances, pl
           <details className="bm-key-motion-details" aria-label="Generated assembly route review">
             <summary title="Opens every suspected conflict and jumps the playhead to the first one"
               onClick={() => gotoFirstConflict()}>
-              {(timeline.motion.obstructed ?? 0) > 0
-                ? <>Review routes · <b className="bm-key-conflict-count">{timeline.motion.obstructed}</b> possible conflicts</>
-                : `Review routes · ${timeline.motion.obstructed ?? 0} possible conflicts`}
+              {timeline.motion.v4
+                ? `Review v4 · ${timeline.motion.v4.mesh.blocked} blocked · ${timeline.motion.v4.mesh.unverified} unverified`
+                : (timeline.motion.obstructed ?? 0) > 0
+                  ? <>Review routes · <b className="bm-key-conflict-count">{timeline.motion.obstructed}</b> possible conflicts</>
+                  : `Review routes · ${timeline.motion.obstructed ?? 0} possible conflicts`}
             </summary>
             <div className="bm-key-motion-list" role="group" aria-label="Generated motion review list">
               {timeline.motion.logical && <p>Connected-part build order ({timeline.motion.logical.strategy}): {timeline.motion.logical.order.map(chain => chain.join(' → ')).join(' · ')}. Routes and keyframes remain editable.</p>}
@@ -551,13 +553,14 @@ export function KeyframeTimeline({ timeline, planning, buildError, instances, pl
                 <button key={`${issue.key}:${issue.unit}:${i}`} type="button"
                   title={`Jump to ${issue.key} near ${issue.time.toFixed(2)}s and expand all nine channels`}
                   onClick={() => jumpToConflict(issue.key, issue.time)}>
-                  <strong>{issue.key}</strong> near {(issue.time).toFixed(2)}s · {issue.blockers.join(', ') || 'unknown obstacle'}
+                  <strong>{issue.key}</strong> near {(issue.time).toFixed(2)}s · {issue.status ?? 'possible overlap'} · {issue.blockers.join(', ') || issue.reason || 'unknown obstacle'}
                 </button>
               ))}
               {(timeline.motion.obstructed ?? 0) > (timeline.motion.issues?.length ?? 0) &&
                 <p>Only the first {timeline.motion.issues?.length ?? 0} potential conflicts are listed. All parts remain searchable.</p>}
-              {!timeline.motion.obstructed && <p>No overlaps found in sampled installed-part AABBs. This does not prove collision-free motion.</p>}
-              <p>These are advisory checks against installed bricks only. Simultaneous flights, flexible geometry and connector contacts require manual inspection.</p>
+              {timeline.motion.v4 ? <p>Continuous mesh review includes installed, staged, and simultaneous flights. Only CLEAR is certified; contacts and unsupported interpolation remain UNVERIFIED. After changing keyframes, regenerate or revalidate the motion.</p> : <>
+                {!timeline.motion.obstructed && <p>No overlaps found in sampled installed-part AABBs. This does not prove collision-free motion.</p>}
+                <p>These are advisory checks only. Simultaneous flights, flexible geometry and connector contacts require manual inspection.</p></>}
             </div>
           </details>
         )}

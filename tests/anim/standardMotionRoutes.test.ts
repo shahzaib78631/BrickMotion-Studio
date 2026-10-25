@@ -37,19 +37,23 @@ describe('Standard Motion v2 — genuine joint paths', () => {
     expect(swings[0].poses[3].elements[14]).toBeCloseTo(-swings[1].poses[3].elements[14], 5);
   });
 
-  it('seats axles without a fictional screw, but permits guided cylindrical twists', () => {
-    const axle = mechanicalApproaches(raw, joint('axle-hole'), 'moving');
-    const pin = mechanicalApproaches(raw, joint('pin-hole'), 'moving');
-    for (const route of axle) {
-      expect(route.motion).toBe('axle-hole');
-      exact(route.poses.at(-1)!, raw.to);
-      // The keyed axle's orientation is fixed throughout its final insertion.
-      for (const frame of route.poses.slice(3)) {
-        expect(frame.elements[0]).toBeCloseTo(raw.to.elements[0], 6);
-        expect(frame.elements[10]).toBeCloseTo(raw.to.elements[10], 6);
+  it('seats axles and pins without a fictional screw', () => {
+    // Round pins are inserted axially too: no invented screw thread, and no
+    // rotation the connector does not describe.
+    for (const [expected, routes] of [['axle-hole', mechanicalApproaches(raw, joint('axle-hole'), 'moving')],
+      ['pin-hole', mechanicalApproaches(raw, joint('pin-hole'), 'moving')]] as const) {
+      expect(routes).toHaveLength(2);
+      for (const route of routes) {
+        expect(route.motion).toBe(expected);
+        expect(route.kinematicSegments?.every((s) => s.kind === 'prismatic')).toBe(true);
+        exact(route.poses.at(-1)!, raw.to);
+        // The keyed part's orientation is fixed throughout its final insertion.
+        for (const frame of route.poses.slice(3)) {
+          expect(frame.elements[0]).toBeCloseTo(raw.to.elements[0], 6);
+          expect(frame.elements[10]).toBeCloseTo(raw.to.elements[10], 6);
+        }
       }
     }
-    expect(pin[0].poses[3].elements[0]).not.toBeCloseTo(raw.to.elements[0], 6);
     expect(mechanicalApproaches(raw, joint('stud-socket'), 'moving')).toHaveLength(2);
     expect(mechanicalApproaches(raw, joint('ball-socket'), 'moving')).toHaveLength(2);
     expect(clearanceApproaches(raw, 24)).toHaveLength(4);
