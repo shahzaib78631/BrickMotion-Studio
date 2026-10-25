@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { exportLDraw } from '../io/ldrawExport';
-import { planToJson, readPlanFile } from '../io/planFile';
+import { planToJson, readPlanFile, attachAssemblyArtifact } from '../io/planFile';
+import { isAssemblyArtifact } from '../anim/assemblyPlan/artifact';
 import { isProjectFile, readProjectFile, PROJECT_EXTENSION } from '../io/projectFile';
 import { animOptions, useAppSettings } from '../state/appSettings';
 import { adoptTimeline, forgetTimelines, optsKey, settingsFromOptsKey } from '../state/timelineService';
@@ -163,7 +164,25 @@ export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, ca
   };
   const importFile = async (f: File) => {
     if (isProjectFile(f.name)) return openProjectFile(f);
-    const r = readPlanFile(await f.text(), f.name);
+    const text = await f.text();
+    // An artifact arriving on its own attaches to the open plan instead of
+    // replacing it, so the user can keep their waiting spots and animation.
+    if (f.name.toLowerCase().endsWith('.json')) {
+      let json: unknown;
+      try { json = JSON.parse(text); } catch { /* readPlanFile reports it */ }
+      if (isAssemblyArtifact(json)) {
+        const current = useStudio.getState().plan;
+        if (pieceCount(current) === 0) {
+          const embedded = (json as { appPlan?: unknown })?.appPlan;
+          if (!embedded || typeof embedded !== 'object') return alert(`Open the model plan first, then import ${f.name} to attach it.`);
+        } else if (!confirm(`Attach the assembly artifact to the current set? (You can undo.)`)) return;
+        const r = attachAssemblyArtifact(current, json);
+        if (!r.ok) return alert(`Couldn't attach ${f.name}:\n\n${r.errors.slice(0, 8).join('\n')}`);
+        st.apply(() => r.plan);
+        return;
+      }
+    }
+    const r = readPlanFile(text, f.name);
     if (!r.ok) return alert(`Couldn't open ${f.name}:\n\n${r.errors.slice(0, 8).join('\n')}`);
     if (pieceCount() > 0 && !confirm('Replace the current set with this file? (You can undo.)')) return;
     let plan = ensureIds(r.plan);

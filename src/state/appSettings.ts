@@ -26,7 +26,7 @@ export type AppSettings = {
   linearColors: boolean;
   /** within a step, each piece is placed after what it rests on */
   bottomUp: boolean;
-  planner?: 'legacy' | 'construction-v2' | 'construction-auto' | 'construction-v3' | 'construction-v3-auto' | 'construction-v4' | 'standard-motion';
+  planner?: 'legacy' | 'construction-v2' | 'construction-auto' | 'construction-v3' | 'construction-v3-auto' | 'construction-v4' | 'standard-motion' | 'assembly-artifact';
   constructionSupport?: 'fixture' | 'table';
   constructionBudget?: ConstructionBudgetPreset;
   constructionStepModules?: boolean;

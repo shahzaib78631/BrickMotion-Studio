@@ -64,6 +64,8 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
   const v3 = s.planner === 'construction-v3' || s.planner === 'construction-v3-auto';
   const v4 = s.planner === 'construction-v4';
   const motion = s.planner === 'standard-motion';
+  const artifactPlanner = s.planner === 'assembly-artifact';
+  const hasArtifact = useStudio((st) => st.plan.assemblyPlan != null);
   const previewNeedsConsent = !!timeline?.fallback && (!manual || linked);
 
   return (
@@ -266,7 +268,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
 
       {!manual && <>
       <details className="nx-group bm-vsec">
-        <summary>Planner<span className="bm-vsec-val">{s.planner === 'construction-v3-auto' ? 'V3 Adaptive' : s.planner === 'construction-auto' ? 'V2 Adaptive' : v3 ? 'Construction V3' : v4 ? 'Construction V4' : v2 ? 'Construction V2' : motion ? 'Standard Motion' : 'Standard'}</span></summary>
+        <summary>Planner<span className="bm-vsec-val">{s.planner === 'construction-v3-auto' ? 'V3 Adaptive' : s.planner === 'construction-auto' ? 'V2 Adaptive' : artifactPlanner ? 'Assembly artifact' : v3 ? 'Construction V3' : v4 ? 'Construction V4' : v2 ? 'Construction V2' : motion ? 'Standard Motion' : 'Standard'}</span></summary>
         <label className="nx-field">
           Assembly planner
           <select aria-label="Assembly planner" value={s.planner ?? 'legacy'} onChange={(e) => s.set({ planner: e.target.value as NonNullable<typeof s.planner> })}>
@@ -277,9 +279,18 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
             <option value="construction-v3-auto">Construction V3 — guided, preview fallback</option>
             <option value="construction-auto">Adaptive V2 — then uncertified preview</option>
             <option value="construction-v2">Construction V2 — certified only</option>
+            <option value="assembly-artifact">Assembly artifact — Python-engine certified plan</option>
           </select>
-          <span className="nx-hint">Standard Motion compares connected-part orders before it builds, for example one leg → hips → other leg, and evaluates alternative joint-axis approaches (hinges, clips, ball joints, studs, pins and axles) against already-installed part bounds. It also tries clearances if a standard path appears obstructed. It completes the visual build even when support ordering is unresolved and generates editable motion keys for each brick. Use Timeline to correct paths. This is a visual preview, not rigid collision certification or a dynamics simulation. V4 plans one global scene of rigid clusters, uses connector and articulated-joint policies, certifies translation and rotation certificates against every installed or staged part, and replays every accepted operation. It has no uncertified fallback. Large-model coverage is still experimental; V3/V2 are available for comparison. Neither engine simulates true flexible-part deformation.</span>
+          <span className="nx-hint">{artifactPlanner
+            ? 'Plays a pre-planned, certified assembly from the Python engine. The artifact must be attached to this model and must still match every piece of it: edits to the model, or an artifact for another model, are rejected instead of mis-animated.'
+            : 'Standard Motion compares connected-part orders before it builds, for example one leg → hips → other leg, and evaluates alternative joint-axis approaches (hinges, clips, ball joints, studs, pins and axles) against already-installed part bounds. It also tries clearances if a standard path appears obstructed. It completes the visual build even when support ordering is unresolved and generates editable motion keys for each brick. Use Timeline to correct paths. This is a visual preview, not rigid collision certification or a dynamics simulation. V4 plans one global scene of rigid clusters, uses connector and articulated-joint policies, certifies translation and rotation certificates against every installed or staged part, and replays every accepted operation. It has no uncertified fallback. Large-model coverage is still experimental; V3/V2 are available for comparison. Neither engine simulates true flexible-part deformation.'}</span>
         </label>
+        {artifactPlanner && !hasArtifact && (
+          <div className="nx-field" role="alert">
+            <strong>This model has no assembly artifact.</strong>
+            <span className="nx-hint">Plan the same model with the Python engine (`brickmotion-assembly plan --model model.mpd`), then open the resulting artifact file (.assembly.json) here — it attaches to the plan automatically. Every piece of the artifact must still be at its planned position.</span>
+          </div>
+        )}
         {v2 && <label className="nx-field">
           Workpiece support
           <select value={s.constructionSupport ?? 'fixture'} onChange={(e) => s.set({ constructionSupport: e.target.value as 'fixture' | 'table' })}>
@@ -314,8 +325,12 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
         )}
         {timeline?.construction && (
           <div className="nx-field">
-            <strong>{timeline.construction.operations.length} operations · {timeline.construction.stats.states} search states</strong>
-            <span className="nx-hint">{v4 ? "V4 global-scene routing with continuous-mesh, arc and annulus certification" : v3 ? "V3 guided near/far routing with continuous-mesh certification" : "V2 exhaustive routing with continuous-mesh certification"}</span>
+            <strong>{artifactPlanner
+              ? `${timeline.construction.operations.length} certified placements · ${(timeline.construction.stats.milliseconds / 1000).toFixed(1)} s planning`
+              : `${timeline.construction.operations.length} operations · ${timeline.construction.stats.states} search states`}</strong>
+            <span className="nx-hint">{artifactPlanner
+              ? "Pre-planned by the Python engine: swept-corridor certified insertions, matched piece-by-piece to this exact model"
+              : v4 ? "V4 global-scene routing with continuous-mesh, arc and annulus certification" : v3 ? "V3 guided near/far routing with continuous-mesh certification" : "V2 exhaustive routing with continuous-mesh certification"}</span>
             {v3 && <details>
               <summary>Search performance</summary>
               <p className="nx-hint">{timeline.construction.stats.candidates.toLocaleString()} candidates · {(timeline.construction.stats.cachedNearRayRejects ?? 0).toLocaleString()} witnessed blocked rays reused · {timeline.construction.stats.backtracks.toLocaleString()} backtracks</p>
@@ -327,7 +342,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
             <details><summary>Limits and assumptions</summary>{timeline.construction.warnings.map((w, i) => <p key={i} className="nx-hint">{w}</p>)}</details>
             <button type="button" className="nx-btn nx-sm" onClick={() => {
               const blob = new Blob([JSON.stringify(timeline.construction, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = v4 ? 'construction-plan-v4.json' : v3 ? 'construction-plan-v3.json' : 'construction-plan-v2.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+              const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = artifactPlanner ? 'assembly-artifact-plan.json' : v4 ? 'construction-plan-v4.json' : v3 ? 'construction-plan-v3.json' : 'construction-plan-v2.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
             }}>Download construction plan</button>
           </div>
         )}

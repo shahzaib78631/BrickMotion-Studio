@@ -12,6 +12,9 @@ dev = ["pytest>=8"]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[project.scripts]
+brickmotion-assembly = "assembly_model.cli:main"
+
 [tool.hatch.build.targets.wheel]
 packages = ["assembly_model"]
 

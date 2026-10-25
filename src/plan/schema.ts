@@ -120,6 +120,8 @@ export const PlanSchema = z.object({
   workBaySpots: z.record(z.string().min(1), AssemblySpotSchema).optional(),
   loosePiecesFollow: z.boolean().optional(),
   showModelAtSpot: z.boolean().optional(),
+  // assembly plan artifact (opaque cold JSON; validated by the assembly-artifact planner)
+  assemblyPlan: z.unknown().optional(),
 });
 
 export function parsePlan(json: unknown): { ok: true; plan: Plan } | { ok: false; errors: string[] } {

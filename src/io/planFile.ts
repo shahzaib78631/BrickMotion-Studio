@@ -1,5 +1,6 @@
 import { parsePlan } from '../plan/schema';
 import type { Plan } from '../plan/types';
+import { isAssemblyArtifact, parseAssemblyArtifact } from '../anim/assemblyPlan/artifact';
 import { importLDraw } from './ldrawImport';
 
 export function planToJson(plan: Plan): string {
@@ -15,6 +16,16 @@ export function readPlanFile(text: string, fileName: string): { ok: true; plan: 
     } catch (e) {
       return { ok: false, errors: [`Not valid JSON: ${(e as Error).message}`] };
     }
+    if (isAssemblyArtifact(json)) {
+      // An artifact may carry the model plan it was planned for (`--app-plan`);
+      // then one file opens the whole thing. Without it, artifacts attach to
+      // the already open plan (see attachAssemblyArtifact below).
+      const wrapped = (json as { appPlan?: unknown })?.appPlan;
+      if (!wrapped || typeof wrapped !== 'object') return { ok: false, errors: ['This is an assembly plan artifact. Import the matching model first, then import this artifact to attach it — or plan it with `--app-plan` so the artifact carries the model inside.'] };
+      const parsed = parsePlan(wrapped);
+      if (!parsed.ok) return { ok: false, errors: [`The attached model plan is damaged: ${parsed.errors[0]}`] };
+      return { ok: true, plan: { ...parsed.plan, assemblyPlan: json } };
+    }
     return parsePlan(json);
   }
   if (ext === 'ldr' || ext === 'mpd') {
@@ -28,6 +39,17 @@ export function readPlanFile(text: string, fileName: string): { ok: true; plan: 
     return readPlanFile(text, fileName.replace(/\.dat$/i, '.ldr'));
   }
   return { ok: false, errors: [`Unsupported file type ".${ext}" — use .brickmotion, .json, .ldr, .mpd or .dat`] };
+}
+
+/**
+ * Attaches an assembly artifact to the plan that is already open. Importing the
+ * model first, then the artifact, keeps the artifact's identity (the exact world
+ * placements it was certified against) while the user keeps editing timelines.
+ */
+export function attachAssemblyArtifact(plan: Plan, json: unknown): { ok: true; plan: Plan } | { ok: false; errors: string[] } {
+  const parsed = parseAssemblyArtifact(json);
+  if (!parsed.ok) return { ok: false, errors: parsed.errors };
+  return { ok: true, plan: { ...plan, assemblyPlan: json } };
 }
 
 /**

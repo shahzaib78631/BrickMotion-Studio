@@ -6,7 +6,7 @@ export type FloorSides = 'front-back' | 'front' | 'behind' | 'sides';
 export type AnimOptions = {
   targetSeconds: number; heroOrbit: boolean; mode?: ArrivalMode;
   /** V2 is explicit opt-in until articulated/flexible model coverage is ready. */
-  planner?: 'legacy' | 'construction-v2' | 'construction-auto' | 'construction-v3' | 'construction-v3-auto' | 'construction-v4' | 'standard-motion';
+  planner?: 'legacy' | 'construction-v2' | 'construction-auto' | 'construction-v3' | 'construction-v3-auto' | 'construction-v4' | 'standard-motion' | 'assembly-artifact';
   constructionMaxStates?: number;
   constructionMaxCandidates?: number;
   constructionMaxMilliseconds?: number;
@@ -22,6 +22,12 @@ export type AnimOptions = {
   preassembleKnownWheels?: boolean;
   /** Bounded re-planning of blocked access order. 1 disables reordering; maximum 32. */
   accessSearchAttempts?: number;
+  /**
+   * Assembly plan artifact (`brickmotion-assembly-plan` v1 JSON, from the Python
+   * engine) for the `assembly-artifact` planner. It is carried alongside the
+   * model plan (`plan.assemblyPlan`) — not set by hand.
+   */
+  assemblyPlan?: unknown;
   /**
    * Work budget for re-planning after a failed original order, counted in planner
    * progress reports (one per piece and per route tried). Counting work, not time,

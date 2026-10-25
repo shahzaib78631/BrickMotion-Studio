@@ -4,6 +4,8 @@ import { decodeTimeline } from './timelineCodec';
 import { pathOffset } from './construction/math';
 import type { ConstructionPlan } from './construction/types';
 import { searchAccessOrder, repairEdges, AccessBudgetExceeded, type AccessEdge, type AccessFailure } from './accessOrder';
+import { parseAssemblyArtifact } from './assemblyPlan/artifact';
+import { assemblyArtifactPlan } from './assemblyPlan/construction';
 import { rigidWheelPairs, type RigidHardware } from './rigidHardware';
 import { wristContact, hairContact, cupGripContact } from './jointContact';
 import { transformConnections, connectionGeometryFor } from '../ldraw/connectors';
@@ -184,6 +186,15 @@ export const DEFAULT_ACCESS_WORK = 1500;
  */
 export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProgress?: (p: PlanningProgress) => void, layoutBox: Box | null = null, workBaySpots: Record<string, AssemblySpot> = {}): Timeline {
   if (opts.planner === 'standard-motion') return buildStandardMotionTimeline(asm, metrics, opts, onProgress, layoutBox, workBaySpots);
+  if (opts.planner === 'assembly-artifact') {
+    // Certified-only: the artifact (from the Python engine) carries every step,
+    // its corridor certificate decides acceptance, and nothing falls back.
+    const artifact = parseAssemblyArtifact(opts.assemblyPlan);
+    if (!artifact.ok) {
+      throw new ConstructionError('invalid-plan', `Assembly artifact is malformed: ${artifact.errors[0]}${artifact.errors.length > 1 ? ` (+${artifact.errors.length - 1} more)` : ''}`);
+    }
+    return decodeTimeline(compileConstruction(assemblyArtifactPlan(artifact.artifact, asm), opts));
+  }
   if (opts.planner === 'construction-v2' || opts.planner === 'construction-auto' || opts.planner === 'construction-v3' || opts.planner === 'construction-v3-auto' || opts.planner === 'construction-v4') {
     try {
       const model = modelFromNodes(asm.nodes, metrics);

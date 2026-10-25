@@ -95,6 +95,13 @@ export type Plan = {
   loosePiecesFollow?: boolean;
   /** Preview the main model and each placed submodel at its own build spot in the Build editor. */
   showModelAtSpot?: boolean;
+  /**
+   * Assembly plan artifact (BrickMotion assembly plan v1, cold JSON) planned by
+   * the Python engine for this exact model. Shapes and validity are checked by
+   * the `assembly-artifact` planner; stored as an opaque value so projects keep
+   * working even when the artifact could not be parsed.
+   */
+  assemblyPlan?: unknown;
 };
 
 export const isSub = (i: PlanItem): i is SubItem => 'submodel' in i;
