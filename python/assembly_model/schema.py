@@ -85,6 +85,10 @@ class AssemblyPlan:
     stats: dict[str, Any] = field(default_factory=dict)
     joints_certain: int = 0
     app_plan: dict[str, Any] | None = None
+    # Optional authored build animation (choreo.py): staging floor poses,
+    # certified flight legs and a fractional schedule per piece. Opaque dict:
+    # the studio's zod mirror validates the exact contract.
+    animation: dict[str, Any] | None = None
 
     def to_json(self) -> dict[str, Any]:
         pieces = []
@@ -122,6 +126,9 @@ class AssemblyPlan:
             # Optional embedded studio plan so one file carries the whole model.
             # Consumers ignore what they do not know; loaders keep the artifact itself.
             out["appPlan"] = self.app_plan
+        if self.animation is not None:
+            # Optional authored build animation (staged keyframes; see choreo.py).
+            out["animation"] = self.animation
         return out
 
     def write(self, path: str) -> None:
@@ -163,6 +170,7 @@ class AssemblyPlan:
             for p in raw["pieces"]
         ]
         joints = [Joint(**j) for j in raw["joints"]]
+        animation = raw.get("animation")
         return AssemblyPlan(
             model=raw["model"],
             pieces=pieces,
@@ -170,4 +178,5 @@ class AssemblyPlan:
             steps=steps,
             stats=raw.get("stats", {}),
             joints_certain=int(raw.get("jointsCertain", 0)),
+            animation=dict(animation) if isinstance(animation, dict) else None,
         )

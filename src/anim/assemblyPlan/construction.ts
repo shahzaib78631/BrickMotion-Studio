@@ -12,6 +12,7 @@ import type { M4 } from '../construction/math';
 import type { Box } from '../../ldraw/flatten';
 import { unionBox, type Assembly, type Instance } from '../../model/assemble';
 import type { AssemblyArtifact, ArtifactStep } from './artifact';
+import { invert, multiply, transformBox } from '../construction/math';
 
 /** Tolerance for matching an artifact matrix to a studio instance. */
 const POS_TOL = 0.06;
@@ -125,25 +126,90 @@ type PartEntry = { key: string; part: string; final: M4; staged: M4; bounds: Box
 /** Staged poses are straight certified-corridor rays back to the final pose. */
 const FINAL_OFFSET: V3 = [0, 0, 0];
 
+/** Validated python flight block: one flight per step, in artifact step order. */
+type AuthoredAnim = { pathOf: Map<string, V3[]>; scheduleOf: Map<string, { appearF: number; startF: number; durF: number }> };
+
+/**
+ * Accepts the artifact's optional `animation` block only when it is complete,
+ * consistent with the artifact's own step order and fully certified (every
+ * `route === true`). Anything else returns null: the plan then falls back to
+ * plain corridor pacing, which remains a valid rendering of the artifact.
+ */
+function authoredAnimation(artifact: AssemblyArtifact): AuthoredAnim | null {
+  const anim = artifact.animation;
+  if (!anim || anim.pieces.length === 0) return null;
+  const pieces = anim.pieces;
+  if (anim.kind !== 'flight-v1') return null;
+  if (pieces.length !== artifact.steps.length || pieces.length !== artifact.pieces.length) return null;
+  const keyedOrder = artifact.steps.map((s) => s.pieces[0]);
+  const flightKeys = pieces.map((p) => p.key);
+  if (keyedOrder.some((k, i) => k !== flightKeys[i])) return null;
+  const problems: string[] = [];
+  let prevStart = -1;
+  pieces.forEach((p, i) => {
+    if (!p.route) problems.push(`piece ${p.key} flight is not certified (route: false)`);
+    if (p.path.some((pt) => pt.some((v) => !Number.isFinite(v)))) problems.push(`piece ${p.key} path is not finite`);
+    if (p.path[p.path.length - 1].some((v) => Math.abs(v) > 1e-6)) problems.push(`piece ${p.key} path does not end at the final pose`);
+    if (!(p.appearF >= 0 && p.appearF <= p.startF && p.startF + p.durF <= 1 + 1e-3 && p.durF > 0))
+      problems.push(`piece ${p.key} schedule fractions are out of order`);
+    if (p.startF < prevStart) problems.push(`piece ${p.key} flights leave the staging strip out of build order`);
+    prevStart = p.startF;
+  });
+  const last = pieces[pieces.length - 1];
+  if (Math.abs(last.startF + last.durF - 1) > 1e-3) problems.push('the last flight does not end the authored build window');
+  if (problems.length) return null;
+
+  const pathOf = new Map<string, V3[]>();
+  const scheduleOf = new Map<string, { appearF: number; startF: number; durF: number }>();
+  for (const p of pieces) {
+    pathOf.set(p.key, p.path.map((pt) => pt as V3));
+    scheduleOf.set(p.key, { appearF: p.appearF, startF: p.startF, durF: p.durF });
+  }
+  return { pathOf, scheduleOf };
+}
+
 export function assemblyArtifactPlan(artifact: AssemblyArtifact, asm: Assembly): ConstructionPlan {
   if (!asm.instances.length) {
     throw new ConstructionError('invalid-input', 'Assembly artifact planner needs a model with pieces.');
   }
   const matches = matchPieces(artifact, asm);
   const ordered = placements(artifact);
+  const anim = authoredAnimation(artifact);
 
   const parts = new Map<string, PartEntry>();
   let bounds: Box | null = null;
+  let sceneBounds: Box | null = null;
   for (const placement of ordered) {
     const inst = matches.get(placement.key)!.instance;
     const final = Array.from(inst.world.elements) as M4;
-    parts.set(inst.key, {
+    const path = anim ? anim.pathOf.get(placement.key)! : [placement.offset, FINAL_OFFSET];
+    const staged = translated(final, path[0]);
+    const entry: PartEntry = {
       key: inst.key,
       part: inst.part,
       final,
-      staged: translated(final, placement.offset),
+      staged,
       bounds: inst.worldBox,
-    });
+    };
+    // The authored staging floor must be a pure translation of the final pose:
+    // rotations differ only if the piece was re-exported after planning.
+    if (anim) {
+      const floor = artifact.animation!.pieces.find((p) => p.key === placement.key)!.floor;
+      for (let i = 0; i < 12; i++) {
+        if (i % 4 === 3) continue;
+        if (Math.abs(floor[i] - final[i]) > ROT_TOL) {
+          throw new ConstructionError('invalid-plan', `Assembly animation staging pose for ${inst.key} is rotated differently from its final pose. Re-plan the artifact.`);
+        }
+      }
+      const floorPos = [floor[12], floor[13], floor[14]];
+      if (dist3(floorPos, staged.slice(12, 15)) > POS_TOL) {
+        throw new ConstructionError('invalid-plan', `Assembly animation staging pose for ${inst.key} does not match the flight waypoints. Re-plan the artifact.`);
+      }
+      // The staging floor is part of the visible scene from its own appear
+      // moment; keep the automatic framing ready for it.
+      sceneBounds = unionBox(sceneBounds, transformBox(inst.worldBox, multiply(staged, invert(final))));
+    }
+    parts.set(inst.key, entry);
     bounds = unionBox(bounds, inst.worldBox);
   }
   const planBounds: Box = bounds ?? { min: [0, -24, 0], max: [20, 0, 20] };
@@ -155,6 +221,7 @@ export function assemblyArtifactPlan(artifact: AssemblyArtifact, asm: Assembly):
     const inst = matches.get(placement.key)!.instance;
     const model = artifact.pieces[matches.get(placement.key)!.pieceIndex].submodel ?? inst.model ?? '';
     const id = placement.step.id;
+    const path = anim ? anim.pathOf.get(placement.key)! : [placement.offset, FINAL_OFFSET];
     ops.push({
       id,
       kind: 'place',
@@ -164,9 +231,13 @@ export function assemblyArtifactPlan(artifact: AssemblyArtifact, asm: Assembly):
       step: i,
       requires: prevId ? [prevId] : [],
       connections: [],
-      path: [placement.offset, FINAL_OFFSET],
+      path,
       check: { method: 'continuous-triangle-sat', contactPolicies: ['assembly-plan-external-certification'], support: 'connected' },
     });
+    if (anim) {
+      const schedule = anim.scheduleOf.get(placement.key)!;
+      ops[ops.length - 1].schedule = schedule;
+    }
     prevId = id;
   }
   const connections: Connection[] = [];
@@ -178,7 +249,9 @@ export function assemblyArtifactPlan(artifact: AssemblyArtifact, asm: Assembly):
     parts: [...parts.values()],
     connections,
     dependencies,
-    warnings: [],
+    warnings: anim
+      ? ['Python-authored animation block (flight-v1) is included: staging, flight legs and timing come from the planning engine.']
+      : [],
     stats: {
       states: 0,
       candidates: ordered.length,
@@ -190,7 +263,7 @@ export function assemblyArtifactPlan(artifact: AssemblyArtifact, asm: Assembly):
     },
     ground: planBounds.max[1],
     bounds: planBounds,
-    sceneBounds: grew(planBounds, 320),
+    sceneBounds: anim && sceneBounds ? grew(unionBox(planBounds, sceneBounds), 320) : grew(planBounds, 320),
     capabilities: {
       rigidTranslation: true,
       rigidRotation: false,

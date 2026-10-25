@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .assembly import Assembly, supported
+from .assembly import Assembly, supported, interlock_engaged
 from .certify import swept_corridor
 from .geometry import BoxGrid
 from .prior import vectorize
@@ -27,6 +27,7 @@ from .schema import Insertion, Step, StepCertificate
 
 DOWN = np.array([0.0, 1.0, 0.0])
 BASE_DIST = 48.0
+LATERAL_DIST = 16.0
 
 
 @dataclass
@@ -49,6 +50,7 @@ class Cand:
     contacts: int
     area: float
     mates: set[str] = field(default_factory=set)
+    exact: int = 0
 
 
 @dataclass
@@ -69,10 +71,18 @@ def plan(asm: Assembly, options: Options = Options()) -> Result:
     traces: list[dict] = []
     started = time.perf_counter()
     by_piece = asm.by_key
-    inputs: dict[str, set[str]] = {}
+    # Partner -> how strongly the piece is connected to it: 0 = a recorded
+    # connector (stud/clip axle snap), 1 = inferred facades (interlocks).
+    # Anchor bumps below use it to pull real-joined pieces first; keys only.
+    inputs: dict[str, dict[str, int]] = {}
     for j in asm.joints:
-        inputs.setdefault(j.child, set()).add(j.parent)
-        inputs.setdefault(j.parent, set()).add(j.child)
+        rank = 0 if j.confidence.startswith("snap") else 1
+        c_dict = inputs.setdefault(j.child, {})
+        if c_dict.get(j.parent, 1) > rank:
+            c_dict[j.parent] = rank
+        p_dict = inputs.setdefault(j.parent, {})
+        if p_dict.get(j.child, 1) > rank:
+            p_dict[j.child] = rank
     queue: deque = deque(p for p in asm.pieces)
     retry_pool: deque = deque()
     attempts: dict[str, int] = {}
@@ -107,7 +117,7 @@ def plan(asm: Assembly, options: Options = Options()) -> Result:
         attempts.pop(key, None)
         tested_at.pop(key, None)
         failed_rows.pop(key, None)
-        for anchor in inputs.get(key, ()):
+        for anchor in sorted(inputs.get(key, {})):
             anchor_piece = by_piece.get(anchor)
             if anchor not in placed and anchor_piece is not None:
                 queue.append(anchor_piece)
@@ -145,7 +155,7 @@ def plan(asm: Assembly, options: Options = Options()) -> Result:
                 "supported": 1 if sup else 0,
                 "features": {k: round(v, 4) for k, v in f.items()},
             })
-            if cert.clear and sup:
+            if cert.clear and sup and _lateral_ok(asm, key, c, placed):
                 feasible.append((c, _step(asm, c, cert, len(steps))))
         if not feasible:
             failed_rows[key] = rows[0]
@@ -161,10 +171,19 @@ def plan(asm: Assembly, options: Options = Options()) -> Result:
         attempts.pop(key, None)
         tested_at.pop(key, None)
         failed_rows.pop(key, None)
-        for anchor in inputs.get(key, ()):
+        # Partners of the piece that just landed jump the queue. Iterating
+        # REVERSED (strong connector rank down to weak, lex index) because
+        # every appendleft pushes its anchor to the absolute front: the last
+        # appendleft wins, so the strongest partner is committed next.
+        # Explicit sort (vs set order) keeps the run reproducible.
+        partners = sorted(inputs.get(key, {}).items(), key=lambda kv: (kv[1], kv[0]), reverse=True)
+        for anchor, _rank in partners:
             anchor_piece = by_piece.get(anchor)
             if anchor not in placed and anchor_piece is not None:
-                retry_pool.append(anchor_piece)
+                # Cert-ready pieces whose partner just landed must not wait
+                # behind the whole initial queue (a topper whose cup-mate
+                # placed at 13 otherwise commits near the end).
+                queue.appendleft(anchor_piece)
 
     while len(placed) < len(asm.pieces) and (time.perf_counter() - started) * 1000.0 < options.max_ms:
         if not stall_breaker():
@@ -191,9 +210,36 @@ def _pick(feasible: list[tuple[Cand, Step]], prior) -> tuple[Cand, Step]:
     def rank(t: tuple[Cand, Step]) -> tuple:
         c = t[0]
         score = prior.score(vectorize(c)) if prior else 0.0
-        return (c.tier, -score, -c.area, c.contacts, c.piece)
+        # The ground is the low reference plane for the viewer: a corridor that
+        # descends into place reads as a build step, one that rises from below
+        # final pose tunnels up through the build plate. Among snapping joints,
+        # the recorded connector axis (arm tube, stud hole) is the intended
+        # geometry and outranks a generic interlock facade.
+        descending = 0 if c.tier == 0 and c.axis[1] > 0.5 else 1
+        return (c.tier, -score, 1 - c.exact, descending, -c.area, c.contacts, c.piece)
 
     return sorted(feasible, key=rank)[0]
+
+
+def _lateral_ok(asm: Assembly, key: str, c, placed: set[str]) -> bool:
+    """A lateral snap must land in a socket that is already in the build
+    (an engaged interlock or real connector). Leg pieces outside sockets
+    can slide in from nowhere while their cup partner is unbuilt."""
+    if c.tier != 0 or abs(c.axis[1]) >= 0.5:
+        return True
+    lo, hi = asm.boxes.get(key, (None, None))
+    if lo is None or abs(hi[1] - asm.ground_y) < 2.5:
+        return True
+    for j in list(asm.joints_by_child.get(key, ())) + list(asm.joints_by_parent.get(key, ())):
+        other = j.parent if j.child == key else j.child
+        if other not in placed:
+            continue
+        if j.confidence.startswith("interlock") and not interlock_engaged(asm, key, other):
+            continue
+        if j.confidence.startswith("interlock") and abs(j.axis[1]) >= 0.5:
+            continue
+        return True
+    return False
 
 
 def _cands(asm: Assembly, piece, placed: set[str]) -> list[Cand]:
@@ -206,15 +252,25 @@ def _cands(asm: Assembly, piece, placed: set[str]) -> list[Cand]:
     cands: list[Cand] = []
     seen: set[tuple] = set()
 
-    def push(axis: np.ndarray, tier: int, tier_name: str, dist: float = BASE_DIST) -> None:
+    def push(axis: np.ndarray, tier: int, tier_name: str, dist: float = BASE_DIST, exact: int = 0) -> None:
         ax = _snap_axis(axis)
         if tuple(np.round(ax, 3)) in seen:
             return
         seen.add(tuple(np.round(ax, 3)))
-        cands.append(Cand(piece=key, axis=ax, tier=tier, tier_name=tier_name, dist=dist, contacts=contacts, area=area, mates=mates))
+        cands.append(Cand(piece=key, axis=ax, tier=tier, tier_name=tier_name, dist=dist, contacts=contacts, area=area, mates=mates, exact=exact))
 
     for j in joints + reverse:
-        push(-np.array(j.axis), 0, "snap")
+        ax = -np.array(j.axis)
+        # Lateral sockets (arm tubes, side holes) must not hover a full 48 LDU
+        # off the build; a short press-in reads as the click instead of wiping
+        # the piece sideways across the neighbour wall.
+        dist = BASE_DIST if abs(ax[1]) > 0.5 else LATERAL_DIST
+        push(ax, 0, "snap", dist, 1 if j.confidence.startswith("snap") else 0)
+    grounded = abs(asm.boxes[key][1][1] - asm.ground_y) < 2.5
+    if grounded and not any(abs(cand.axis[1]) > 0.5 for cand in cands):
+        # Grounded pieces must always be allowed to simply drop on their
+        # stack, even when the only joint records are lateral interlocks.
+        push(DOWN, 2 if not contacts else 1, "drop" if not contacts else "face")
     if not cands:
         if contacts or area > 0:
             push(DOWN, 1, "face")
@@ -267,7 +323,7 @@ def _certify(asm: Assembly, grid: BoxGrid, c: Cand, placed: set[str], options: O
         forgive_after=forgive_t,
         forgive=forgive_set,
     )
-    return StepCertificate(kind="swept-aabb", frames=res.frames, margin=res.margin, clear=res.clear, blockers=res.blockers[:8])
+    return StepCertificate(kind="swept-aabb", frames=res.frames, margin=res.margin, clear=res.clear, blockers=sorted(res.blockers[:8]))
 
 
 def _step(asm: Assembly, c: Cand, cert: StepCertificate, order: int) -> Step:

@@ -61,6 +61,8 @@ describe('assembly artifact matching', () => {
       expect(parsed.artifact.pieces.length).toBe(111);
       expect(parsed.artifact.steps.length).toBe(111);
       expect(parsed.artifact.steps.every((s) => s.insertion && s.certificate?.clear)).toBe(true);
+      expect(parsed.artifact.animation?.kind).toBe('flight-v1');
+      expect(parsed.artifact.animation?.pieces.length).toBe(111);
     }
   });
 
@@ -81,8 +83,10 @@ describe('assembly artifact matching', () => {
     construction.operations.forEach((op, i) => {
       const step = artifact.steps[i];
       expect(op.id).toBe(step.id);
-      expect(op.path.length).toBe(2);
-      expect(op.path).toEqual([op.path[0], [0, 0, 0]]);
+      // authored flights carry the python waypoint path; plain artifacts keep
+      // the single corridor start -> final pose ray
+      expect(op.path.length).toBeGreaterThanOrEqual(2);
+      expect(op.path[op.path.length - 1]).toEqual([0, 0, 0]);
     });
     // artifact tier vocabulary maps to the studio's construction contract
     expect(construction.schema).toBe('brickmotion-construction/v2');
@@ -172,5 +176,70 @@ describe('compile of artifact construction plans', () => {
     expect(timeline.units.length).toBe(2);
     expect(timeline.steps.length).toBe(2);
     expect(timeline.ground).toBeCloseTo(0);
+  });
+});
+
+describe('python-authored flight animation (flight-v1)', () => {
+  const studio = () => {
+    const plan = ensureIds(importLDraw(readFileSync(modelPath, 'utf8'), '10156-1.mpd'));
+    return assemble(plan, metrics, colors);
+  };
+
+  it('drives units, staging and appears from the authored fractions', () => {
+    if (!hasFixture || !artifact.animation) return;
+    const anim = artifact.animation;
+    const construction = assemblyArtifactPlan(artifact, studio());
+    expect(construction.operations.every((op) => op.schedule !== undefined)).toBe(true);
+    expect(construction.warnings.join(' ')).toContain('flight-v1');
+    // staged pose = final + first flight waypoint
+    const op0 = construction.operations[0];
+    const part0 = construction.parts.find((p) => p.key === op0.keys[0])!;
+    const stagedDelta = part0.staged.slice(12, 15).map((v, i) => v - part0.final.slice(12, 15)[i]);
+    anim.pieces[0].path[0].forEach((v, i) => expect(stagedDelta[i]).toBeCloseTo(v, 3));
+    // compile: build window = targetSeconds - intro - outro (1.0 / 0.5 by default)
+    const target = 15, build = (target - 1.0 - 0.5);
+    const encoded = compileConstruction(construction, { targetSeconds: target, heroOrbit: false });
+    encoded.units.forEach((u, i) => {
+      const piece = anim.pieces[i];
+      expect(u.start).toBeCloseTo(1.0 + piece.startF * build, 2);
+      expect(u.dur).toBeCloseTo(piece.durF * build, 2);
+      expect(u.start).toBeGreaterThanOrEqual(1.0);
+    });
+    // last flight lands exactly at the end of the build window
+    const last = encoded.units[encoded.units.length - 1];
+    expect(last.start + last.dur).toBeCloseTo(1.0 + build, 2);
+    // the first part materialises on its staging floor at its own appear time
+    const key0 = encoded.units[0].keys[0];
+    const track0 = encoded.tracks.find(([k]) => k === key0)![1];
+    expect(track0.appear).toBeCloseTo(1.0 + anim.pieces[0].appearF * build, 2);
+    expect(track0.moves.length).toBe(1);
+  });
+
+  it('renders the authored choreography with the buildTimeline integration', () => {
+    if (!hasFixture || !artifact.animation) return;
+    const tl = buildTimeline(studio(), metrics, { targetSeconds: 15, heroOrbit: false, planner: 'assembly-artifact', assemblyPlan: artifact });
+    expect(tl.fallback).toBeUndefined();
+    expect(tl.units.length).toBe(111);
+    // no extra gaps: python already pressed them into the fractions
+    let prev = -Infinity;
+    for (const u of tl.units) {
+      expect(u.start).toBeGreaterThanOrEqual(prev);
+      prev = u.start + u.dur;
+    }
+  });
+
+  it('falls back to corridor pacing when the animation block is damaged', () => {
+    if (!hasFixture || !artifact.animation) return;
+    const damaged: AssemblyArtifact = {
+      ...artifact,
+      animation: { ...artifact.animation, pieces: artifact.animation.pieces.map((p, i) => (i === 7 ? { ...p, route: false } : p)) },
+    };
+    const construction = assemblyArtifactPlan(damaged, studio());
+    expect(construction.operations.every((op) => op.schedule === undefined)).toBe(true);
+    expect(construction.operations.every((op) => op.path.length === 2)).toBe(true);
+    expect(construction.warnings).toEqual([]);
+    // and it still compiles end to end
+    const encoded = compileConstruction(construction, { targetSeconds: 12, heroOrbit: false });
+    expect(encoded.units.length).toBe(111);
   });
 });

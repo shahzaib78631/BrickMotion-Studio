@@ -102,3 +102,68 @@ def test_prior_reorders(asm):
     prior = Prior({"tier0": 2.0, "tier1": 0.1, "tier2": -1.0}, 0.0)
     res = p2(asm, Options())
     assert res.stats["placed"] == 111
+
+
+def test_animation_block(asm):
+    from assembly_model.choreo import build_animation
+
+    result = plan(asm, Options(max_ms=15000))
+    anim = build_animation(asm, result)
+    assert anim is not None and anim["kind"] == "flight-v1"
+    assert len(anim["pieces"]) == 111
+    pieces = {p["key"]: p for p in anim["pieces"]}
+    assert set(pieces) == {p.key for p in asm.pieces}
+    for p in anim["pieces"]:
+        # every flight is a poly-line that lands on the final pose
+        assert len(p["path"]) >= 2 and p["path"][-1] == [0.0, 0.0, 0.0]
+        assert all(len(pt) == 3 for pt in p["path"])
+        m = p["floor"]
+        assert len(m) == 16 and m[15] == 1.0
+        assert 0 <= p["appearF"] <= p["startF"] < 1
+        assert p["durF"] > 0
+    starts = [p["startF"] for p in anim["pieces"]]
+    assert starts == sorted(starts)
+    last = anim["pieces"][-1]
+    assert abs(last["startF"] + last["durF"] - 1.0) < 1e-3
+    # the approach legs are certified for this model
+    assert all(p["route"] for p in anim["pieces"])
+
+
+def test_animation_staging_field(asm):
+    from assembly_model.choreo import build_animation
+
+    result = plan(asm, Options(max_ms=15000))
+    anim = build_animation(asm, result)
+    final_matrix = {p.key: np.asarray(p.matrix, dtype=float) for p in asm.pieces}
+    floor_boxes = {}
+    for p in anim["pieces"]:
+        offset = np.array(p["floor"][12:15]) - final_matrix[p["key"]][:3, 3]
+        lo, hi = asm.boxes[p["key"]]
+        floor_boxes[p["key"]] = (lo + offset, hi + offset)
+    keys = list(floor_boxes)
+    for i, a in enumerate(keys):
+        la, ha = floor_boxes[a]
+        for b in keys[i + 1:]:
+            lb, hb = floor_boxes[b]
+            overlap = np.minimum(ha, hb) - np.maximum(la, lb)
+            # staged cells sit on the same ground plane: their x/z may not collide
+            assert not (overlap[0] > 2.0 and overlap[2] > 2.0)
+    # nothing sits inside the model footprint
+    for la, ha in floor_boxes.values():
+        for lo, hi in asm.boxes.values():
+            overlap = np.minimum(ha, hi) - np.maximum(la, lo)
+            assert not all(o > 2.0 for o in overlap)
+
+
+def test_plan_with_animation_roundtrip(tmp_path, asm):
+    from assembly_model.choreo import build_animation
+    from assembly_model.export import build_plan
+
+    result = plan(asm, Options(max_ms=15000))
+    plan_json = build_plan(asm, result, model="10156-1.mpd")
+    plan_json.animation = build_animation(asm, result)
+    path = str(tmp_path / "plan.json")
+    plan_json.write(path)
+    loaded = AssemblyPlan.load(path)
+    assert loaded == plan_json
+    assert loaded.animation is not None

@@ -28,6 +28,10 @@ def cmd_plan(args: argparse.Namespace) -> int:
     asm = build_assembly(lib, model.pieces)
     result = plan(asm, Options(max_ms=args.max_ms, prior_path=args.prior, trace_path=args.trace))
     plan_json = build_plan(asm, result, model=args.model)
+    if not args.no_timeline:
+        from .choreo import build_animation
+
+        plan_json.animation = build_animation(asm, result)
     if args.app_plan:
         with open(args.app_plan) as f:
             plan_json.app_plan = json.load(f)
@@ -55,6 +59,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--prior", default=None)
     p.add_argument("--app-plan", default=None, dest="app_plan",
                    help="studio plan JSON (.plan.json) embedded into the artifact for the app")
+    p.add_argument("--no-timeline", action="store_true", dest="no_timeline",
+                   help="omit the authored animation block (certified corridors only)")
     p.add_argument("--max-ms", type=int, default=30_000)
     p.set_defaults(func=cmd_plan)
 

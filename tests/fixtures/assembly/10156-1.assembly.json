@@ -18999,13 +18999,13 @@
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      -100.0,
-     13.0,
+     -83.0,
      10.0
     ],
     "priority": "0",
@@ -19027,43 +19027,9 @@
   {
    "id": "s4",
    "pieces": [
-    "10156 - minifig.ldr/9"
-   ],
-   "order": 3,
-   "dependsOn": [],
-   "insertion": {
-    "axis": [
-     -1.0,
-     0.0,
-     0.0
-    ],
-    "distance": 48.0,
-    "origin": [
-     -76.7,
-     -45.5,
-     -1.6
-    ],
-    "priority": "0",
-    "tier": "snap"
-   },
-   "certificate": {
-    "kind": "swept-aabb",
-    "frames": 32,
-    "margin": 1.5,
-    "clear": true,
-    "blockers": [
-     "10156 - minifig.ldr/3"
-    ]
-   },
-   "uncertified": false,
-   "reason": null
-  },
-  {
-   "id": "s5",
-   "pieces": [
     "10156 - truck.ldr/97"
    ],
-   "order": 4,
+   "order": 3,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -19091,11 +19057,11 @@
    "reason": null
   },
   {
-   "id": "s6",
+   "id": "s5",
    "pieces": [
     "10156 - truck.ldr/99"
    ],
-   "order": 5,
+   "order": 4,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -19123,11 +19089,11 @@
    "reason": null
   },
   {
-   "id": "s7",
+   "id": "s6",
    "pieces": [
     "10156 - truck.ldr/101"
    ],
-   "order": 6,
+   "order": 5,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -19155,11 +19121,11 @@
    "reason": null
   },
   {
-   "id": "s8",
+   "id": "s7",
    "pieces": [
     "10156 - truck.ldr/103"
    ],
-   "order": 7,
+   "order": 6,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -19187,11 +19153,11 @@
    "reason": null
   },
   {
-   "id": "s9",
+   "id": "s8",
    "pieces": [
     "10156 - truck.ldr/105"
    ],
-   "order": 8,
+   "order": 7,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -19199,9 +19165,9 @@
      0.0,
      0.0
     ],
-    "distance": 48.0,
+    "distance": 16.0,
     "origin": [
-     238.5,
+     206.5,
      -27.0,
      144.6
     ],
@@ -19221,11 +19187,11 @@
    "reason": null
   },
   {
-   "id": "s10",
+   "id": "s9",
    "pieces": [
     "10156 - truck.ldr/107"
    ],
-   "order": 9,
+   "order": 8,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -19233,9 +19199,9 @@
      0.0,
      0.0
     ],
-    "distance": 48.0,
+    "distance": 16.0,
     "origin": [
-     286.5,
+     254.5,
      -27.0,
      61.4
     ],
@@ -19255,22 +19221,22 @@
    "reason": null
   },
   {
-   "id": "s11",
+   "id": "s10",
    "pieces": [
     "10156 - minifig.ldr/0"
    ],
-   "order": 10,
+   "order": 9,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      -100.0,
-     -14.0,
+     -110.0,
      10.0
     ],
     "priority": "0",
@@ -19282,19 +19248,18 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - minifig.ldr/8",
-     "10156 - minifig.ldr/9"
+     "10156 - minifig.ldr/8"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s12",
+   "id": "s11",
    "pieces": [
     "10156 - minifig.ldr/1"
    ],
-   "order": 11,
+   "order": 10,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -19302,9 +19267,9 @@
      0.0,
      0.0
     ],
-    "distance": 48.0,
+    "distance": 16.0,
     "origin": [
-     -27.3,
+     -59.3,
      -45.5,
      -1.6
     ],
@@ -19317,30 +19282,30 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - minifig.ldr/6",
-     "10156 - minifig.ldr/0"
+     "10156 - minifig.ldr/0",
+     "10156 - minifig.ldr/6"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s13",
+   "id": "s12",
    "pieces": [
     "10156 - minifig.ldr/2"
    ],
-   "order": 12,
+   "order": 11,
    "dependsOn": [],
    "insertion": {
     "axis": [
-     -1.0,
      0.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
-     -33.7,
-     -56.4,
+     -81.7,
+     -104.4,
      6.5
     ],
     "priority": "0",
@@ -19352,31 +19317,31 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - minifig.ldr/8",
      "10156 - minifig.ldr/0",
-     "10156 - minifig.ldr/1"
+     "10156 - minifig.ldr/1",
+     "10156 - minifig.ldr/8"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s14",
+   "id": "s13",
    "pieces": [
     "10156 - minifig.ldr/5"
    ],
-   "order": 13,
+   "order": 12,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      -100.0,
-     -38.0,
+     -134.0,
      10.0
     ],
     "priority": "0",
@@ -19389,6 +19354,40 @@
     "clear": true,
     "blockers": [
      "10156 - minifig.ldr/0"
+    ]
+   },
+   "uncertified": false,
+   "reason": null
+  },
+  {
+   "id": "s14",
+   "pieces": [
+    "10156 - minifig.ldr/4"
+   ],
+   "order": 13,
+   "dependsOn": [],
+   "insertion": {
+    "axis": [
+     0.0,
+     1.0,
+     0.0
+    ],
+    "distance": 48.0,
+    "origin": [
+     -100.0,
+     -145.0,
+     3.0
+    ],
+    "priority": "0",
+    "tier": "snap"
+   },
+   "certificate": {
+    "kind": "swept-aabb",
+    "frames": 32,
+    "margin": 1.5,
+    "clear": true,
+    "blockers": [
+     "10156 - minifig.ldr/5"
     ]
    },
    "uncertified": false,
@@ -19403,14 +19402,14 @@
    "dependsOn": [],
    "insertion": {
     "axis": [
-     -1.0,
      0.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
-     -70.3,
-     -56.4,
+     -118.3,
+     -104.4,
      6.5
     ],
     "priority": "0",
@@ -19422,9 +19421,8 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - minifig.ldr/8",
      "10156 - minifig.ldr/0",
-     "10156 - minifig.ldr/9"
+     "10156 - minifig.ldr/8"
     ]
    },
    "uncertified": false,
@@ -19433,7 +19431,7 @@
   {
    "id": "s16",
    "pieces": [
-    "10156 - truck.ldr/10"
+    "10156 - minifig.ldr/9"
    ],
    "order": 15,
    "dependsOn": [],
@@ -19443,10 +19441,46 @@
      0.0,
      0.0
     ],
+    "distance": 16.0,
+    "origin": [
+     -108.7,
+     -45.5,
+     -1.6
+    ],
+    "priority": "0",
+    "tier": "snap"
+   },
+   "certificate": {
+    "kind": "swept-aabb",
+    "frames": 32,
+    "margin": 1.5,
+    "clear": true,
+    "blockers": [
+     "10156 - minifig.ldr/0",
+     "10156 - minifig.ldr/3",
+     "10156 - minifig.ldr/7"
+    ]
+   },
+   "uncertified": false,
+   "reason": null
+  },
+  {
+   "id": "s17",
+   "pieces": [
+    "10156 - truck.ldr/10"
+   ],
+   "order": 16,
+   "dependsOn": [],
+   "insertion": {
+    "axis": [
+     0.0,
+     1.0,
+     0.0
+    ],
     "distance": 48.0,
     "origin": [
-     170.9,
-     -38.0,
+     122.9,
+     -86.0,
      61.7
     ],
     "priority": "0",
@@ -19458,10 +19492,10 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/97",
      "10156 - truck.ldr/103",
-     "10156 - truck.ldr/107",
      "10156 - truck.ldr/105",
+     "10156 - truck.ldr/107",
+     "10156 - truck.ldr/97",
      "10156 - truck.ldr/99"
     ]
    },
@@ -19469,11 +19503,11 @@
    "reason": null
   },
   {
-   "id": "s17",
+   "id": "s18",
    "pieces": [
     "10156 - truck.ldr/11"
    ],
-   "order": 16,
+   "order": 17,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -19496,23 +19530,23 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/97",
+     "10156 - truck.ldr/10",
      "10156 - truck.ldr/103",
-     "10156 - truck.ldr/107",
-     "10156 - truck.ldr/99",
      "10156 - truck.ldr/105",
-     "10156 - truck.ldr/10"
+     "10156 - truck.ldr/107",
+     "10156 - truck.ldr/97",
+     "10156 - truck.ldr/99"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s18",
+   "id": "s19",
    "pieces": [
     "10156 - truck.ldr/12"
    ],
-   "order": 17,
+   "order": 18,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -19535,20 +19569,20 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/11",
      "10156 - truck.ldr/10",
-     "10156 - truck.ldr/101"
+     "10156 - truck.ldr/101",
+     "10156 - truck.ldr/11"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s19",
+   "id": "s20",
    "pieces": [
     "10156 - truck.ldr/13"
    ],
-   "order": 18,
+   "order": 19,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -19571,33 +19605,33 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/11",
-     "10156 - truck.ldr/103",
-     "10156 - truck.ldr/12",
      "10156 - truck.ldr/10",
-     "10156 - truck.ldr/101"
+     "10156 - truck.ldr/101",
+     "10156 - truck.ldr/103",
+     "10156 - truck.ldr/11",
+     "10156 - truck.ldr/12"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s20",
+   "id": "s21",
    "pieces": [
     "10156 - truck.ldr/14"
    ],
-   "order": 19,
+   "order": 20,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      -9.4,
-     0.0,
+     -96.0,
      -28.0
     ],
     "priority": "0",
@@ -19609,30 +19643,64 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/11",
-     "10156 - truck.ldr/10"
+     "10156 - truck.ldr/10",
+     "10156 - truck.ldr/11"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s21",
+   "id": "s22",
    "pieces": [
-    "10156 - truck.ldr/15"
+    "10156 - truck.ldr/52"
    ],
-   "order": 20,
+   "order": 21,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
+     0.0
+    ],
+    "distance": 48.0,
+    "origin": [
+     -2.0,
+     -110.0,
+     -22.0
+    ],
+    "priority": "0",
+    "tier": "snap"
+   },
+   "certificate": {
+    "kind": "swept-aabb",
+    "frames": 32,
+    "margin": 1.5,
+    "clear": true,
+    "blockers": [
+     "10156 - truck.ldr/14"
+    ]
+   },
+   "uncertified": false,
+   "reason": null
+  },
+  {
+   "id": "s23",
+   "pieces": [
+    "10156 - truck.ldr/15"
+   ],
+   "order": 22,
+   "dependsOn": [],
+   "insertion": {
+    "axis": [
+     0.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      214.5,
-     24.0,
+     -72.0,
      103.0
     ],
     "priority": "0",
@@ -19644,32 +19712,32 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/11",
-     "10156 - truck.ldr/107",
      "10156 - truck.ldr/10",
-     "10156 - truck.ldr/105"
+     "10156 - truck.ldr/105",
+     "10156 - truck.ldr/107",
+     "10156 - truck.ldr/11"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s22",
+   "id": "s24",
    "pieces": [
     "10156 - truck.ldr/16"
    ],
-   "order": 21,
+   "order": 23,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      266.5,
-     24.0,
+     -72.0,
      133.0
     ],
     "priority": "0",
@@ -19681,34 +19749,34 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/11",
-     "10156 - truck.ldr/103",
-     "10156 - truck.ldr/15",
-     "10156 - truck.ldr/12",
      "10156 - truck.ldr/10",
-     "10156 - truck.ldr/101"
+     "10156 - truck.ldr/101",
+     "10156 - truck.ldr/103",
+     "10156 - truck.ldr/11",
+     "10156 - truck.ldr/12",
+     "10156 - truck.ldr/15"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s23",
+   "id": "s25",
    "pieces": [
     "10156 - truck.ldr/17"
    ],
-   "order": 22,
+   "order": 24,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      24.0,
-     24.0,
+     -72.0,
      -7.0
     ],
     "priority": "0",
@@ -19720,21 +19788,21 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
+     "10156 - truck.ldr/10",
      "10156 - truck.ldr/11",
-     "10156 - truck.ldr/99",
      "10156 - truck.ldr/97",
-     "10156 - truck.ldr/10"
+     "10156 - truck.ldr/99"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s24",
+   "id": "s26",
    "pieces": [
     "10156 - truck.ldr/18"
    ],
-   "order": 23,
+   "order": 25,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -19757,31 +19825,31 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
+     "10156 - truck.ldr/10",
      "10156 - truck.ldr/11",
-     "10156 - truck.ldr/14",
-     "10156 - truck.ldr/10"
+     "10156 - truck.ldr/14"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s25",
+   "id": "s27",
    "pieces": [
     "10156 - truck.ldr/19"
    ],
-   "order": 24,
+   "order": 26,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      136.6,
-     26.0,
+     -70.0,
      58.0
     ],
     "priority": "0",
@@ -19793,19 +19861,19 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/11",
-     "10156 - truck.ldr/10"
+     "10156 - truck.ldr/10",
+     "10156 - truck.ldr/11"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s26",
+   "id": "s28",
    "pieces": [
     "10156 - truck.ldr/20"
    ],
-   "order": 25,
+   "order": 27,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -19828,21 +19896,21 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
+     "10156 - truck.ldr/10",
      "10156 - truck.ldr/11",
      "10156 - truck.ldr/17",
-     "10156 - truck.ldr/19",
-     "10156 - truck.ldr/10"
+     "10156 - truck.ldr/19"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s27",
+   "id": "s29",
    "pieces": [
     "10156 - truck.ldr/21"
    ],
-   "order": 26,
+   "order": 28,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -19865,21 +19933,21 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
+     "10156 - truck.ldr/10",
      "10156 - truck.ldr/11",
-     "10156 - truck.ldr/19",
      "10156 - truck.ldr/15",
-     "10156 - truck.ldr/10"
+     "10156 - truck.ldr/19"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s28",
+   "id": "s30",
    "pieces": [
     "10156 - truck.ldr/22"
    ],
-   "order": 27,
+   "order": 29,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -19902,8 +19970,8 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/11",
      "10156 - truck.ldr/10",
+     "10156 - truck.ldr/11",
      "10156 - truck.ldr/20"
     ]
    },
@@ -19911,11 +19979,11 @@
    "reason": null
   },
   {
-   "id": "s29",
+   "id": "s31",
    "pieces": [
     "10156 - truck.ldr/23"
    ],
-   "order": 28,
+   "order": 30,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -19938,21 +20006,21 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/11",
-     "10156 - truck.ldr/22",
      "10156 - truck.ldr/10",
-     "10156 - truck.ldr/20"
+     "10156 - truck.ldr/11",
+     "10156 - truck.ldr/20",
+     "10156 - truck.ldr/22"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s30",
+   "id": "s32",
    "pieces": [
     "10156 - truck.ldr/24"
    ],
-   "order": 29,
+   "order": 31,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -19975,20 +20043,20 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
+     "10156 - truck.ldr/10",
      "10156 - truck.ldr/11",
-     "10156 - truck.ldr/19",
-     "10156 - truck.ldr/10"
+     "10156 - truck.ldr/19"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s31",
+   "id": "s33",
    "pieces": [
     "10156 - truck.ldr/25"
    ],
-   "order": 30,
+   "order": 32,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -20011,8 +20079,8 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/11",
      "10156 - truck.ldr/10",
+     "10156 - truck.ldr/11",
      "10156 - truck.ldr/20"
     ]
    },
@@ -20020,11 +20088,11 @@
    "reason": null
   },
   {
-   "id": "s32",
+   "id": "s34",
    "pieces": [
     "10156 - truck.ldr/26"
    ],
-   "order": 31,
+   "order": 33,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -20047,22 +20115,22 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
+     "10156 - truck.ldr/10",
      "10156 - truck.ldr/11",
      "10156 - truck.ldr/17",
-     "10156 - truck.ldr/25",
-     "10156 - truck.ldr/10",
-     "10156 - truck.ldr/20"
+     "10156 - truck.ldr/20",
+     "10156 - truck.ldr/25"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s33",
+   "id": "s35",
    "pieces": [
     "10156 - truck.ldr/27"
    ],
-   "order": 32,
+   "order": 34,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -20085,20 +20153,20 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
+     "10156 - truck.ldr/10",
      "10156 - truck.ldr/11",
-     "10156 - truck.ldr/19",
-     "10156 - truck.ldr/10"
+     "10156 - truck.ldr/19"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s34",
+   "id": "s36",
    "pieces": [
     "10156 - truck.ldr/28"
    ],
-   "order": 33,
+   "order": 35,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -20121,23 +20189,24 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/97",
-     "10156 - truck.ldr/99",
+     "10156 - truck.ldr/10",
      "10156 - truck.ldr/11",
-     "10156 - truck.ldr/18",
      "10156 - truck.ldr/14",
-     "10156 - truck.ldr/10"
+     "10156 - truck.ldr/18",
+     "10156 - truck.ldr/52",
+     "10156 - truck.ldr/97",
+     "10156 - truck.ldr/99"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s35",
+   "id": "s37",
    "pieces": [
     "10156 - truck.ldr/29"
    ],
-   "order": 34,
+   "order": 36,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -20160,20 +20229,20 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
+     "10156 - truck.ldr/10",
      "10156 - truck.ldr/11",
-     "10156 - truck.ldr/24",
-     "10156 - truck.ldr/10"
+     "10156 - truck.ldr/24"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s36",
+   "id": "s38",
    "pieces": [
     "10156 - truck.ldr/30"
    ],
-   "order": 35,
+   "order": 37,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -20196,21 +20265,21 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
+     "10156 - truck.ldr/10",
      "10156 - truck.ldr/11",
      "10156 - truck.ldr/22",
-     "10156 - truck.ldr/23",
-     "10156 - truck.ldr/10"
+     "10156 - truck.ldr/23"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s37",
+   "id": "s39",
    "pieces": [
     "10156 - truck.ldr/31"
    ],
-   "order": 36,
+   "order": 38,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -20233,9 +20302,9 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
+     "10156 - truck.ldr/10",
      "10156 - truck.ldr/11",
      "10156 - truck.ldr/25",
-     "10156 - truck.ldr/10",
      "10156 - truck.ldr/26"
     ]
    },
@@ -20243,11 +20312,11 @@
    "reason": null
   },
   {
-   "id": "s38",
+   "id": "s40",
    "pieces": [
     "10156 - truck.ldr/32"
    ],
-   "order": 37,
+   "order": 39,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -20270,20 +20339,20 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
+     "10156 - truck.ldr/10",
      "10156 - truck.ldr/11",
-     "10156 - truck.ldr/27",
-     "10156 - truck.ldr/10"
+     "10156 - truck.ldr/27"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s39",
+   "id": "s41",
    "pieces": [
     "10156 - truck.ldr/33"
    ],
-   "order": 38,
+   "order": 40,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -20306,19 +20375,19 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/11",
-     "10156 - truck.ldr/10"
+     "10156 - truck.ldr/10",
+     "10156 - truck.ldr/11"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s40",
+   "id": "s42",
    "pieces": [
     "10156 - truck.ldr/34"
    ],
-   "order": 39,
+   "order": 41,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -20341,33 +20410,33 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/11",
      "10156 - truck.ldr/10",
-     "10156 - truck.ldr/30",
+     "10156 - truck.ldr/11",
+     "10156 - truck.ldr/22",
      "10156 - truck.ldr/23",
-     "10156 - truck.ldr/22"
+     "10156 - truck.ldr/30"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s41",
+   "id": "s43",
    "pieces": [
     "10156 - truck.ldr/35"
    ],
-   "order": 40,
+   "order": 42,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      183.1,
-     10.0,
+     -86.0,
      26.7
     ],
     "priority": "0",
@@ -20379,21 +20448,21 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
+     "10156 - truck.ldr/10",
      "10156 - truck.ldr/11",
      "10156 - truck.ldr/24",
-     "10156 - truck.ldr/29",
-     "10156 - truck.ldr/10"
+     "10156 - truck.ldr/29"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s42",
+   "id": "s44",
    "pieces": [
     "10156 - truck.ldr/36"
    ],
-   "order": 41,
+   "order": 43,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -20416,33 +20485,33 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/11",
-     "10156 - truck.ldr/31",
-     "10156 - truck.ldr/25",
      "10156 - truck.ldr/10",
-     "10156 - truck.ldr/26"
+     "10156 - truck.ldr/11",
+     "10156 - truck.ldr/25",
+     "10156 - truck.ldr/26",
+     "10156 - truck.ldr/31"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s43",
+   "id": "s45",
    "pieces": [
     "10156 - truck.ldr/37"
    ],
-   "order": 42,
+   "order": 44,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      133.1,
-     10.0,
+     -86.0,
      113.3
     ],
     "priority": "0",
@@ -20454,31 +20523,31 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
+     "10156 - truck.ldr/10",
      "10156 - truck.ldr/11",
-     "10156 - truck.ldr/32",
-     "10156 - truck.ldr/10"
+     "10156 - truck.ldr/32"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s44",
+   "id": "s46",
    "pieces": [
     "10156 - truck.ldr/38"
    ],
-   "order": 43,
+   "order": 45,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      121.6,
-     2.0,
+     -94.0,
      84.0
     ],
     "priority": "0",
@@ -20490,31 +20559,31 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
+     "10156 - truck.ldr/10",
      "10156 - truck.ldr/11",
-     "10156 - truck.ldr/32",
-     "10156 - truck.ldr/10"
+     "10156 - truck.ldr/32"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s45",
+   "id": "s47",
    "pieces": [
     "10156 - truck.ldr/39"
    ],
-   "order": 44,
+   "order": 46,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      151.6,
-     2.0,
+     -94.0,
      32.0
     ],
     "priority": "0",
@@ -20526,21 +20595,21 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
+     "10156 - truck.ldr/10",
      "10156 - truck.ldr/11",
-     "10156 - truck.ldr/35",
      "10156 - truck.ldr/29",
-     "10156 - truck.ldr/10"
+     "10156 - truck.ldr/35"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s46",
+   "id": "s48",
    "pieces": [
     "10156 - truck.ldr/40"
    ],
-   "order": 45,
+   "order": 47,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -20563,25 +20632,25 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/97",
      "10156 - truck.ldr/10",
-     "10156 - truck.ldr/99",
-     "10156 - truck.ldr/28",
      "10156 - truck.ldr/11",
-     "10156 - truck.ldr/25",
+     "10156 - truck.ldr/23",
+     "10156 - truck.ldr/28",
      "10156 - truck.ldr/38",
-     "10156 - truck.ldr/23"
+     "10156 - truck.ldr/52",
+     "10156 - truck.ldr/97",
+     "10156 - truck.ldr/99"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s47",
+   "id": "s49",
    "pieces": [
     "10156 - truck.ldr/41"
    ],
-   "order": 46,
+   "order": 48,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -20611,22 +20680,22 @@
    "reason": null
   },
   {
-   "id": "s48",
+   "id": "s50",
    "pieces": [
     "10156 - truck.ldr/42"
    ],
-   "order": 47,
+   "order": 49,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      146.5,
-     10.0,
+     -86.0,
      5.8
     ],
     "priority": "0",
@@ -20638,21 +20707,21 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
+     "10156 - truck.ldr/10",
      "10156 - truck.ldr/11",
-     "10156 - truck.ldr/35",
      "10156 - truck.ldr/29",
-     "10156 - truck.ldr/10"
+     "10156 - truck.ldr/35"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s49",
+   "id": "s51",
    "pieces": [
     "10156 - truck.ldr/43"
    ],
-   "order": 48,
+   "order": 50,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -20660,9 +20729,9 @@
      0.0,
      0.0
     ],
-    "distance": 48.0,
+    "distance": 16.0,
     "origin": [
-     252.4,
+     220.4,
      -38.0,
      39.6
     ],
@@ -20675,32 +20744,32 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/11",
-     "10156 - truck.ldr/35",
+     "10156 - truck.ldr/10",
      "10156 - truck.ldr/107",
-     "10156 - truck.ldr/10"
+     "10156 - truck.ldr/11",
+     "10156 - truck.ldr/35"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s50",
+   "id": "s52",
    "pieces": [
     "10156 - truck.ldr/44"
    ],
-   "order": 49,
+   "order": 51,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      96.5,
-     10.0,
+     -86.0,
      92.4
     ],
     "priority": "0",
@@ -20712,23 +20781,23 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
+     "10156 - truck.ldr/10",
      "10156 - truck.ldr/11",
+     "10156 - truck.ldr/27",
      "10156 - truck.ldr/32",
      "10156 - truck.ldr/37",
-     "10156 - truck.ldr/38",
-     "10156 - truck.ldr/27",
-     "10156 - truck.ldr/10"
+     "10156 - truck.ldr/38"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s51",
+   "id": "s53",
    "pieces": [
     "10156 - truck.ldr/45"
    ],
-   "order": 50,
+   "order": 52,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -20736,9 +20805,9 @@
      0.0,
      0.0
     ],
-    "distance": 48.0,
+    "distance": 16.0,
     "origin": [
-     202.4,
+     170.4,
      -38.0,
      126.2
     ],
@@ -20751,21 +20820,21 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/11",
-     "10156 - truck.ldr/37",
      "10156 - truck.ldr/10",
-     "10156 - truck.ldr/105"
+     "10156 - truck.ldr/105",
+     "10156 - truck.ldr/11",
+     "10156 - truck.ldr/37"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s52",
+   "id": "s54",
    "pieces": [
     "10156 - truck.ldr/46"
    ],
-   "order": 51,
+   "order": 53,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -20790,18 +20859,19 @@
     "blockers": [
      "10156 - truck.ldr/14",
      "10156 - truck.ldr/28",
-     "10156 - truck.ldr/40"
+     "10156 - truck.ldr/40",
+     "10156 - truck.ldr/52"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s53",
+   "id": "s55",
    "pieces": [
     "10156 - truck.ldr/47"
    ],
-   "order": 52,
+   "order": 54,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -20824,20 +20894,20 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/46",
      "10156 - truck.ldr/28",
-     "10156 - truck.ldr/40"
+     "10156 - truck.ldr/40",
+     "10156 - truck.ldr/46"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s54",
+   "id": "s56",
    "pieces": [
     "10156 - truck.ldr/48"
    ],
-   "order": 53,
+   "order": 55,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -20860,19 +20930,19 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/47",
-     "10156 - truck.ldr/40"
+     "10156 - truck.ldr/40",
+     "10156 - truck.ldr/47"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s55",
+   "id": "s57",
    "pieces": [
     "10156 - truck.ldr/49"
    ],
-   "order": 54,
+   "order": 56,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -20895,36 +20965,36 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/47",
-     "10156 - truck.ldr/39",
+     "10156 - truck.ldr/105",
      "10156 - truck.ldr/11",
-     "10156 - truck.ldr/38",
      "10156 - truck.ldr/23",
-     "10156 - truck.ldr/22",
-     "10156 - truck.ldr/10",
-     "10156 - truck.ldr/40"
+     "10156 - truck.ldr/25",
+     "10156 - truck.ldr/39",
+     "10156 - truck.ldr/40",
+     "10156 - truck.ldr/41",
+     "10156 - truck.ldr/48"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s56",
+   "id": "s58",
    "pieces": [
     "10156 - truck.ldr/50"
    ],
-   "order": 55,
+   "order": 57,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      87.0,
-     -22.0,
+     -118.0,
      64.0
     ],
     "priority": "0",
@@ -20936,30 +21006,30 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/49",
-     "10156 - truck.ldr/40"
+     "10156 - truck.ldr/40",
+     "10156 - truck.ldr/49"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s57",
+   "id": "s59",
    "pieces": [
     "10156 - truck.ldr/51"
    ],
-   "order": 56,
+   "order": 58,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      117.0,
-     -22.0,
+     -118.0,
      12.0
     ],
     "priority": "0",
@@ -20971,78 +21041,7 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/49",
-     "10156 - truck.ldr/40"
-    ]
-   },
-   "uncertified": false,
-   "reason": null
-  },
-  {
-   "id": "s58",
-   "pieces": [
-    "10156 - truck.ldr/52"
-   ],
-   "order": 57,
-   "dependsOn": [],
-   "insertion": {
-    "axis": [
-     0.0,
-     -1.0,
-     0.0
-    ],
-    "distance": 48.0,
-    "origin": [
-     -2.0,
-     -14.0,
-     -22.0
-    ],
-    "priority": "0",
-    "tier": "snap"
-   },
-   "certificate": {
-    "kind": "swept-aabb",
-    "frames": 32,
-    "margin": 1.5,
-    "clear": true,
-    "blockers": [
-     "10156 - truck.ldr/46",
-     "10156 - truck.ldr/14",
-     "10156 - truck.ldr/28",
-     "10156 - truck.ldr/40"
-    ]
-   },
-   "uncertified": false,
-   "reason": null
-  },
-  {
-   "id": "s59",
-   "pieces": [
-    "10156 - truck.ldr/53"
-   ],
-   "order": 58,
-   "dependsOn": [],
-   "insertion": {
-    "axis": [
-     0.0,
-     -1.0,
-     0.0
-    ],
-    "distance": 48.0,
-    "origin": [
-     120.3,
-     -22.0,
-     106.3
-    ],
-    "priority": "0",
-    "tier": "snap"
-   },
-   "certificate": {
-    "kind": "swept-aabb",
-    "frames": 32,
-    "margin": 1.5,
-    "clear": true,
-    "blockers": [
+     "10156 - truck.ldr/40",
      "10156 - truck.ldr/49"
     ]
    },
@@ -21052,21 +21051,21 @@
   {
    "id": "s60",
    "pieces": [
-    "10156 - truck.ldr/54"
+    "10156 - truck.ldr/53"
    ],
    "order": 59,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
-     170.3,
-     -22.0,
-     19.7
+     120.3,
+     -118.0,
+     106.3
     ],
     "priority": "0",
     "tier": "snap"
@@ -21086,9 +21085,43 @@
   {
    "id": "s61",
    "pieces": [
-    "10156 - truck.ldr/55"
+    "10156 - truck.ldr/54"
    ],
    "order": 60,
+   "dependsOn": [],
+   "insertion": {
+    "axis": [
+     0.0,
+     1.0,
+     0.0
+    ],
+    "distance": 48.0,
+    "origin": [
+     170.3,
+     -118.0,
+     19.7
+    ],
+    "priority": "0",
+    "tier": "snap"
+   },
+   "certificate": {
+    "kind": "swept-aabb",
+    "frames": 32,
+    "margin": 1.5,
+    "clear": true,
+    "blockers": [
+     "10156 - truck.ldr/49"
+    ]
+   },
+   "uncertified": false,
+   "reason": null
+  },
+  {
+   "id": "s62",
+   "pieces": [
+    "10156 - truck.ldr/55"
+   ],
+   "order": 61,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -21111,24 +21144,24 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/51",
+     "10156 - truck.ldr/40",
      "10156 - truck.ldr/47",
+     "10156 - truck.ldr/48",
      "10156 - truck.ldr/49",
      "10156 - truck.ldr/50",
-     "10156 - truck.ldr/40",
-     "10156 - truck.ldr/54",
-     "10156 - truck.ldr/48"
+     "10156 - truck.ldr/51",
+     "10156 - truck.ldr/54"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s62",
+   "id": "s63",
    "pieces": [
     "10156 - truck.ldr/56"
    ],
-   "order": 61,
+   "order": 62,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -21152,19 +21185,19 @@
     "clear": true,
     "blockers": [
      "10156 - truck.ldr/46",
-     "10156 - truck.ldr/52",
-     "10156 - truck.ldr/47"
+     "10156 - truck.ldr/47",
+     "10156 - truck.ldr/52"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s63",
+   "id": "s64",
    "pieces": [
     "10156 - truck.ldr/57"
    ],
-   "order": 62,
+   "order": 63,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -21187,8 +21220,8 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/52",
      "10156 - truck.ldr/46",
+     "10156 - truck.ldr/52",
      "10156 - truck.ldr/56"
     ]
    },
@@ -21196,11 +21229,11 @@
    "reason": null
   },
   {
-   "id": "s64",
+   "id": "s65",
    "pieces": [
     "10156 - truck.ldr/58"
    ],
-   "order": 63,
+   "order": 64,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -21223,8 +21256,8 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/52",
      "10156 - truck.ldr/46",
+     "10156 - truck.ldr/52",
      "10156 - truck.ldr/56"
     ]
    },
@@ -21232,22 +21265,22 @@
    "reason": null
   },
   {
-   "id": "s65",
+   "id": "s66",
    "pieces": [
     "10156 - truck.ldr/59"
    ],
-   "order": 64,
+   "order": 65,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      -8.3,
-     -28.0,
+     -124.0,
      9.0
     ],
     "priority": "0",
@@ -21268,22 +21301,22 @@
    "reason": null
   },
   {
-   "id": "s66",
+   "id": "s67",
    "pieces": [
     "10156 - truck.ldr/60"
    ],
-   "order": 65,
+   "order": 66,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      21.7,
-     -28.0,
+     -124.0,
      -43.0
     ],
     "priority": "0",
@@ -21296,30 +21329,30 @@
     "clear": true,
     "blockers": [
      "10156 - truck.ldr/46",
-     "10156 - truck.ldr/58",
-     "10156 - truck.ldr/56"
+     "10156 - truck.ldr/56",
+     "10156 - truck.ldr/58"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s67",
+   "id": "s68",
    "pieces": [
     "10156 - truck.ldr/61"
    ],
-   "order": 66,
+   "order": 67,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      50.0,
-     -47.4,
+     -143.4,
      8.0
     ],
     "priority": "0",
@@ -21339,11 +21372,11 @@
    "reason": null
   },
   {
-   "id": "s68",
+   "id": "s69",
    "pieces": [
     "10156 - truck.ldr/62"
    ],
-   "order": 67,
+   "order": 68,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -21366,23 +21399,23 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/56",
-     "10156 - truck.ldr/60",
      "10156 - truck.ldr/46",
-     "10156 - truck.ldr/61",
+     "10156 - truck.ldr/56",
+     "10156 - truck.ldr/58",
      "10156 - truck.ldr/59",
-     "10156 - truck.ldr/58"
+     "10156 - truck.ldr/60",
+     "10156 - truck.ldr/61"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s69",
+   "id": "s70",
    "pieces": [
     "10156 - truck.ldr/63"
    ],
-   "order": 68,
+   "order": 69,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -21412,11 +21445,11 @@
    "reason": null
   },
   {
-   "id": "s70",
+   "id": "s71",
    "pieces": [
     "10156 - truck.ldr/64"
    ],
-   "order": 69,
+   "order": 70,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -21447,22 +21480,22 @@
    "reason": null
   },
   {
-   "id": "s71",
+   "id": "s72",
    "pieces": [
     "10156 - truck.ldr/65"
    ],
-   "order": 70,
+   "order": 71,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      102.0,
-     -46.0,
+     -142.0,
      38.0
     ],
     "priority": "0",
@@ -21474,20 +21507,20 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
+     "10156 - truck.ldr/50",
      "10156 - truck.ldr/51",
-     "10156 - truck.ldr/55",
-     "10156 - truck.ldr/50"
+     "10156 - truck.ldr/55"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s72",
+   "id": "s73",
    "pieces": [
     "10156 - truck.ldr/66"
    ],
-   "order": 71,
+   "order": 72,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -21510,13 +21543,13 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
+     "10156 - truck.ldr/14",
      "10156 - truck.ldr/52",
      "10156 - truck.ldr/56",
-     "10156 - truck.ldr/60",
      "10156 - truck.ldr/57",
-     "10156 - truck.ldr/46",
-     "10156 - truck.ldr/14",
+     "10156 - truck.ldr/58",
      "10156 - truck.ldr/59",
+     "10156 - truck.ldr/60",
      "10156 - truck.ldr/62"
     ]
    },
@@ -21524,11 +21557,11 @@
    "reason": null
   },
   {
-   "id": "s73",
+   "id": "s74",
    "pieces": [
     "10156 - truck.ldr/67"
    ],
-   "order": 72,
+   "order": 73,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -21558,11 +21591,11 @@
    "reason": null
   },
   {
-   "id": "s74",
+   "id": "s75",
    "pieces": [
     "10156 - truck.ldr/68"
    ],
-   "order": 73,
+   "order": 74,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -21592,11 +21625,11 @@
    "reason": null
   },
   {
-   "id": "s75",
+   "id": "s76",
    "pieces": [
     "10156 - truck.ldr/69"
    ],
-   "order": 74,
+   "order": 75,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -21628,22 +21661,22 @@
    "reason": null
   },
   {
-   "id": "s76",
+   "id": "s77",
    "pieces": [
     "10156 - truck.ldr/70"
    ],
-   "order": 75,
+   "order": 76,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      84.2,
-     -34.0,
+     -130.0,
      -13.0
     ],
     "priority": "0",
@@ -21655,36 +21688,36 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/51",
-     "10156 - truck.ldr/56",
+     "10156 - truck.ldr/40",
      "10156 - truck.ldr/47",
      "10156 - truck.ldr/49",
-     "10156 - truck.ldr/40",
-     "10156 - truck.ldr/46",
-     "10156 - truck.ldr/65",
-     "10156 - truck.ldr/61"
+     "10156 - truck.ldr/51",
+     "10156 - truck.ldr/56",
+     "10156 - truck.ldr/61",
+     "10156 - truck.ldr/62",
+     "10156 - truck.ldr/65"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s77",
+   "id": "s78",
    "pieces": [
     "10156 - truck.ldr/71"
    ],
-   "order": 76,
+   "order": 77,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      50.2,
-     -34.0,
+     -130.0,
      46.0
     ],
     "priority": "0",
@@ -21696,25 +21729,25 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/56",
-     "10156 - truck.ldr/47",
-     "10156 - truck.ldr/50",
      "10156 - truck.ldr/40",
-     "10156 - truck.ldr/46",
-     "10156 - truck.ldr/65",
+     "10156 - truck.ldr/47",
      "10156 - truck.ldr/48",
-     "10156 - truck.ldr/61"
+     "10156 - truck.ldr/50",
+     "10156 - truck.ldr/56",
+     "10156 - truck.ldr/61",
+     "10156 - truck.ldr/62",
+     "10156 - truck.ldr/65"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s78",
+   "id": "s79",
    "pieces": [
     "10156 - truck.ldr/72"
    ],
-   "order": 77,
+   "order": 78,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -21737,25 +21770,25 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/63",
-     "10156 - truck.ldr/49",
      "10156 - truck.ldr/33",
-     "10156 - truck.ldr/67",
-     "10156 - truck.ldr/54",
-     "10156 - truck.ldr/53",
      "10156 - truck.ldr/41",
-     "10156 - truck.ldr/64"
+     "10156 - truck.ldr/49",
+     "10156 - truck.ldr/54",
+     "10156 - truck.ldr/63",
+     "10156 - truck.ldr/64",
+     "10156 - truck.ldr/67",
+     "10156 - truck.ldr/68"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s79",
+   "id": "s80",
    "pieces": [
     "10156 - truck.ldr/73"
    ],
-   "order": 78,
+   "order": 79,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -21778,8 +21811,8 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/52",
      "10156 - truck.ldr/46",
+     "10156 - truck.ldr/52",
      "10156 - truck.ldr/56",
      "10156 - truck.ldr/66"
     ]
@@ -21788,23 +21821,23 @@
    "reason": null
   },
   {
-   "id": "s80",
+   "id": "s81",
    "pieces": [
     "10156 - truck.ldr/74"
    ],
-   "order": 79,
+   "order": 80,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     0.0,
-     -1.0
+     1.0,
+     0.0
     ],
     "distance": 48.0,
     "origin": [
      -3.3,
-     -70.0,
-     -9.0
+     -118.0,
+     -57.0
     ],
     "priority": "0",
     "tier": "snap"
@@ -21815,23 +21848,23 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/52",
      "10156 - truck.ldr/46",
-     "10156 - truck.ldr/60",
-     "10156 - truck.ldr/73",
+     "10156 - truck.ldr/52",
      "10156 - truck.ldr/58",
-     "10156 - truck.ldr/66"
+     "10156 - truck.ldr/60",
+     "10156 - truck.ldr/66",
+     "10156 - truck.ldr/73"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s81",
+   "id": "s82",
    "pieces": [
     "10156 - truck.ldr/75"
    ],
-   "order": 80,
+   "order": 81,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -21839,9 +21872,9 @@
      0.0,
      0.0
     ],
-    "distance": 48.0,
+    "distance": 16.0,
     "origin": [
-     14.7,
+     -17.3,
      -70.0,
      -5.0
     ],
@@ -21855,32 +21888,32 @@
     "clear": true,
     "blockers": [
      "10156 - truck.ldr/52",
-     "10156 - truck.ldr/73",
      "10156 - truck.ldr/57",
      "10156 - truck.ldr/59",
-     "10156 - truck.ldr/66"
+     "10156 - truck.ldr/66",
+     "10156 - truck.ldr/73"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s82",
+   "id": "s83",
    "pieces": [
     "10156 - truck.ldr/76"
    ],
-   "order": 81,
+   "order": 82,
    "dependsOn": [],
    "insertion": {
     "axis": [
-     -1.0,
      0.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
-     23.3,
-     -70.0,
+     -24.7,
+     -118.0,
      -35.2
     ],
     "priority": "0",
@@ -21892,23 +21925,23 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/52",
      "10156 - truck.ldr/46",
+     "10156 - truck.ldr/52",
      "10156 - truck.ldr/56",
+     "10156 - truck.ldr/66",
      "10156 - truck.ldr/73",
-     "10156 - truck.ldr/74",
-     "10156 - truck.ldr/66"
+     "10156 - truck.ldr/74"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s83",
+   "id": "s84",
    "pieces": [
     "10156 - truck.ldr/77"
    ],
-   "order": 82,
+   "order": 83,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -21931,23 +21964,23 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/69",
-     "10156 - truck.ldr/71",
-     "10156 - truck.ldr/66",
-     "10156 - truck.ldr/70",
      "10156 - truck.ldr/61",
-     "10156 - truck.ldr/62"
+     "10156 - truck.ldr/62",
+     "10156 - truck.ldr/66",
+     "10156 - truck.ldr/69",
+     "10156 - truck.ldr/70",
+     "10156 - truck.ldr/71"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s84",
+   "id": "s85",
    "pieces": [
     "10156 - truck.ldr/78"
    ],
-   "order": 83,
+   "order": 84,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -21971,19 +22004,19 @@
     "clear": true,
     "blockers": [
      "10156 - truck.ldr/67",
-     "10156 - truck.ldr/72",
-     "10156 - truck.ldr/68"
+     "10156 - truck.ldr/68",
+     "10156 - truck.ldr/72"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s85",
+   "id": "s86",
    "pieces": [
     "10156 - truck.ldr/79"
    ],
-   "order": 84,
+   "order": 85,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -22006,19 +22039,19 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/78",
-     "10156 - truck.ldr/68"
+     "10156 - truck.ldr/68",
+     "10156 - truck.ldr/78"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s86",
+   "id": "s87",
    "pieces": [
     "10156 - truck.ldr/80"
    ],
-   "order": 85,
+   "order": 86,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -22049,11 +22082,11 @@
    "reason": null
   },
   {
-   "id": "s87",
+   "id": "s88",
    "pieces": [
     "10156 - truck.ldr/81"
    ],
-   "order": 86,
+   "order": 87,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -22076,34 +22109,34 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/69",
-     "10156 - truck.ldr/65",
-     "10156 - truck.ldr/70",
      "10156 - truck.ldr/61",
-     "10156 - truck.ldr/77",
-     "10156 - truck.ldr/71"
+     "10156 - truck.ldr/65",
+     "10156 - truck.ldr/69",
+     "10156 - truck.ldr/70",
+     "10156 - truck.ldr/71",
+     "10156 - truck.ldr/77"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s88",
+   "id": "s89",
    "pieces": [
     "10156 - truck.ldr/82"
    ],
-   "order": 87,
+   "order": 88,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      201.7,
-     -110.0,
+     -206.0,
      37.2
     ],
     "priority": "0",
@@ -22122,11 +22155,11 @@
    "reason": null
   },
   {
-   "id": "s89",
+   "id": "s90",
    "pieces": [
     "10156 - truck.ldr/83"
    ],
-   "order": 88,
+   "order": 89,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -22134,9 +22167,9 @@
      0.0,
      0.0
     ],
-    "distance": 48.0,
+    "distance": 16.0,
     "origin": [
-     261.6,
+     229.6,
      -120.0,
      44.7
     ],
@@ -22150,32 +22183,32 @@
     "clear": true,
     "blockers": [
      "10156 - truck.ldr/54",
-     "10156 - truck.ldr/82",
      "10156 - truck.ldr/64",
+     "10156 - truck.ldr/68",
      "10156 - truck.ldr/78",
-     "10156 - truck.ldr/68"
+     "10156 - truck.ldr/82"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s90",
+   "id": "s91",
    "pieces": [
     "10156 - truck.ldr/84"
    ],
-   "order": 89,
+   "order": 90,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      151.7,
-     -110.0,
+     -206.0,
      123.8
     ],
     "priority": "0",
@@ -22194,11 +22227,11 @@
    "reason": null
   },
   {
-   "id": "s91",
+   "id": "s92",
    "pieces": [
     "10156 - truck.ldr/85"
    ],
-   "order": 90,
+   "order": 91,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -22206,9 +22239,9 @@
      0.0,
      0.0
     ],
-    "distance": 48.0,
+    "distance": 16.0,
     "origin": [
-     211.6,
+     179.6,
      -120.0,
      131.3
     ],
@@ -22221,9 +22254,9 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/67",
-     "10156 - truck.ldr/63",
      "10156 - truck.ldr/53",
+     "10156 - truck.ldr/63",
+     "10156 - truck.ldr/67",
      "10156 - truck.ldr/78",
      "10156 - truck.ldr/84"
     ]
@@ -22232,22 +22265,22 @@
    "reason": null
   },
   {
-   "id": "s92",
+   "id": "s93",
    "pieces": [
     "10156 - truck.ldr/86"
    ],
-   "order": 91,
+   "order": 92,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      162.6,
-     -118.0,
+     -214.0,
      73.0
     ],
     "priority": "0",
@@ -22259,8 +22292,8 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/82",
      "10156 - truck.ldr/78",
+     "10156 - truck.ldr/82",
      "10156 - truck.ldr/84"
     ]
    },
@@ -22268,11 +22301,11 @@
    "reason": null
   },
   {
-   "id": "s93",
+   "id": "s94",
    "pieces": [
     "10156 - truck.ldr/87"
    ],
-   "order": 92,
+   "order": 93,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -22295,21 +22328,21 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/86",
-     "10156 - truck.ldr/82",
+     "10156 - truck.ldr/78",
      "10156 - truck.ldr/79",
-     "10156 - truck.ldr/78"
+     "10156 - truck.ldr/82",
+     "10156 - truck.ldr/86"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s94",
+   "id": "s95",
    "pieces": [
     "10156 - truck.ldr/88"
    ],
-   "order": 93,
+   "order": 94,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -22332,32 +22365,32 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/86",
-     "10156 - truck.ldr/80",
      "10156 - truck.ldr/78",
-     "10156 - truck.ldr/84"
+     "10156 - truck.ldr/80",
+     "10156 - truck.ldr/84",
+     "10156 - truck.ldr/86"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s95",
+   "id": "s96",
    "pieces": [
     "10156 - truck.ldr/89"
    ],
-   "order": 94,
+   "order": 95,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      171.2,
-     -134.0,
+     -230.0,
      78.0
     ],
     "priority": "0",
@@ -22376,11 +22409,11 @@
    "reason": null
   },
   {
-   "id": "s96",
+   "id": "s97",
    "pieces": [
     "10156 - truck.ldr/90"
    ],
-   "order": 95,
+   "order": 96,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -22403,19 +22436,19 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/89",
-     "10156 - truck.ldr/86"
+     "10156 - truck.ldr/86",
+     "10156 - truck.ldr/89"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s97",
+   "id": "s98",
    "pieces": [
     "10156 - truck.ldr/91"
    ],
-   "order": 96,
+   "order": 97,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -22438,19 +22471,19 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/89",
-     "10156 - truck.ldr/86"
+     "10156 - truck.ldr/86",
+     "10156 - truck.ldr/89"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s98",
+   "id": "s99",
    "pieces": [
     "10156 - truck.ldr/92"
    ],
-   "order": 97,
+   "order": 98,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -22473,9 +22506,9 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/90",
-     "10156 - truck.ldr/89",
      "10156 - truck.ldr/86",
+     "10156 - truck.ldr/89",
+     "10156 - truck.ldr/90",
      "10156 - truck.ldr/91"
     ]
    },
@@ -22483,11 +22516,11 @@
    "reason": null
   },
   {
-   "id": "s99",
+   "id": "s100",
    "pieces": [
     "10156 - truck.ldr/93"
    ],
-   "order": 98,
+   "order": 99,
    "dependsOn": [],
    "insertion": {
     "axis": [
@@ -22510,36 +22543,36 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/92",
-     "10156 - truck.ldr/88",
+     "10156 - truck.ldr/78",
      "10156 - truck.ldr/80",
      "10156 - truck.ldr/81",
-     "10156 - truck.ldr/87",
-     "10156 - truck.ldr/89",
      "10156 - truck.ldr/86",
-     "10156 - truck.ldr/79"
+     "10156 - truck.ldr/87",
+     "10156 - truck.ldr/88",
+     "10156 - truck.ldr/89",
+     "10156 - truck.ldr/91"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s100",
+   "id": "s101",
    "pieces": [
     "10156 - truck.ldr/94"
    ],
-   "order": 99,
+   "order": 100,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      129.6,
-     -138.2,
+     -234.2,
      110.0
     ],
     "priority": "0",
@@ -22551,10 +22584,10 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/89",
-     "10156 - truck.ldr/92",
      "10156 - truck.ldr/86",
+     "10156 - truck.ldr/89",
      "10156 - truck.ldr/91",
+     "10156 - truck.ldr/92",
      "10156 - truck.ldr/93"
     ]
    },
@@ -22562,22 +22595,22 @@
    "reason": null
   },
   {
-   "id": "s101",
+   "id": "s102",
    "pieces": [
     "10156 - truck.ldr/95"
    ],
-   "order": 100,
+   "order": 101,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      179.6,
-     -138.2,
+     -234.2,
      23.4
     ],
     "priority": "0",
@@ -22589,32 +22622,32 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/92",
      "10156 - truck.ldr/86",
-     "10156 - truck.ldr/93",
-     "10156 - truck.ldr/90"
+     "10156 - truck.ldr/90",
+     "10156 - truck.ldr/92",
+     "10156 - truck.ldr/93"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s102",
+   "id": "s103",
    "pieces": [
     "10156 - truck.ldr/96"
    ],
-   "order": 101,
+   "order": 102,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      0.0,
-     21.0,
+     -75.0,
      34.6
     ],
     "priority": "0",
@@ -22626,32 +22659,32 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
+     "10156 - truck.ldr/10",
      "10156 - truck.ldr/11",
      "10156 - truck.ldr/17",
-     "10156 - truck.ldr/97",
-     "10156 - truck.ldr/10"
+     "10156 - truck.ldr/97"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s103",
+   "id": "s104",
    "pieces": [
     "10156 - truck.ldr/98"
    ],
-   "order": 102,
+   "order": 103,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      48.0,
-     21.0,
+     -75.0,
      -48.6
     ],
     "priority": "0",
@@ -22672,22 +22705,22 @@
    "reason": null
   },
   {
-   "id": "s104",
+   "id": "s105",
    "pieces": [
     "10156 - truck.ldr/100"
    ],
-   "order": 103,
+   "order": 104,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      242.5,
-     21.0,
+     -75.0,
      174.6
     ],
     "priority": "0",
@@ -22699,31 +22732,31 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
+     "10156 - truck.ldr/101",
      "10156 - truck.ldr/12",
-     "10156 - truck.ldr/16",
-     "10156 - truck.ldr/101"
+     "10156 - truck.ldr/16"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s105",
+   "id": "s106",
    "pieces": [
     "10156 - truck.ldr/102"
    ],
-   "order": 104,
+   "order": 105,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      290.5,
-     21.0,
+     -75.0,
      91.4
     ],
     "priority": "0",
@@ -22735,8 +22768,8 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/11",
      "10156 - truck.ldr/103",
+     "10156 - truck.ldr/11",
      "10156 - truck.ldr/16"
     ]
    },
@@ -22744,22 +22777,22 @@
    "reason": null
   },
   {
-   "id": "s106",
+   "id": "s107",
    "pieces": [
     "10156 - truck.ldr/104"
    ],
-   "order": 105,
+   "order": 106,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      190.5,
-     21.0,
+     -75.0,
      144.6
     ],
     "priority": "0",
@@ -22771,32 +22804,32 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/11",
+     "10156 - truck.ldr/10",
      "10156 - truck.ldr/105",
-     "10156 - truck.ldr/15",
-     "10156 - truck.ldr/10"
+     "10156 - truck.ldr/11",
+     "10156 - truck.ldr/15"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s107",
+   "id": "s108",
    "pieces": [
     "10156 - truck.ldr/106"
    ],
-   "order": 106,
+   "order": 107,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      238.5,
-     21.0,
+     -75.0,
      61.4
     ],
     "priority": "0",
@@ -22808,32 +22841,32 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/11",
+     "10156 - truck.ldr/10",
      "10156 - truck.ldr/107",
-     "10156 - truck.ldr/15",
-     "10156 - truck.ldr/10"
+     "10156 - truck.ldr/11",
+     "10156 - truck.ldr/15"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s108",
+   "id": "s109",
    "pieces": [
     "10156 - truck.ldr/108"
    ],
-   "order": 107,
+   "order": 108,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      81.2,
-     -83.8,
+     -179.8,
      72.6
     ],
     "priority": "0",
@@ -22845,36 +22878,36 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - truck.ldr/63",
-     "10156 - truck.ldr/71",
      "10156 - truck.ldr/50",
+     "10156 - truck.ldr/63",
+     "10156 - truck.ldr/65",
+     "10156 - truck.ldr/67",
+     "10156 - truck.ldr/71",
      "10156 - truck.ldr/80",
      "10156 - truck.ldr/81",
-     "10156 - truck.ldr/93",
-     "10156 - truck.ldr/67",
-     "10156 - truck.ldr/65"
+     "10156 - truck.ldr/93"
     ]
    },
    "uncertified": false,
    "reason": null
   },
   {
-   "id": "s109",
+   "id": "s110",
    "pieces": [
     "10156 - truck.ldr/109"
    ],
-   "order": 108,
+   "order": 109,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
      121.7,
-     -83.8,
+     -179.8,
      5.1
     ],
     "priority": "0",
@@ -22887,49 +22920,13 @@
     "clear": true,
     "blockers": [
      "10156 - truck.ldr/51",
-     "10156 - truck.ldr/93",
      "10156 - truck.ldr/54",
-     "10156 - truck.ldr/65",
-     "10156 - truck.ldr/70",
-     "10156 - truck.ldr/79",
      "10156 - truck.ldr/64",
-     "10156 - truck.ldr/55"
-    ]
-   },
-   "uncertified": false,
-   "reason": null
-  },
-  {
-   "id": "s110",
-   "pieces": [
-    "10156 - truck.ldr/110"
-   ],
-   "order": 109,
-   "dependsOn": [],
-   "insertion": {
-    "axis": [
-     0.0,
-     0.0,
-     -1.0
-    ],
-    "distance": 48.0,
-    "origin": [
-     75.9,
-     -161.4,
-     71.0
-    ],
-    "priority": "0",
-    "tier": "snap"
-   },
-   "certificate": {
-    "kind": "swept-aabb",
-    "frames": 32,
-    "margin": 1.5,
-    "clear": true,
-    "blockers": [
-     "10156 - truck.ldr/93",
-     "10156 - truck.ldr/108",
-     "10156 - truck.ldr/109"
+     "10156 - truck.ldr/65",
+     "10156 - truck.ldr/68",
+     "10156 - truck.ldr/70",
+     "10156 - truck.ldr/78",
+     "10156 - truck.ldr/79"
     ]
    },
    "uncertified": false,
@@ -22938,21 +22935,21 @@
   {
    "id": "s111",
    "pieces": [
-    "10156 - minifig.ldr/4"
+    "10156 - truck.ldr/110"
    ],
    "order": 110,
    "dependsOn": [],
    "insertion": {
     "axis": [
      0.0,
-     -1.0,
+     1.0,
      0.0
     ],
     "distance": 48.0,
     "origin": [
-     -100.0,
-     -49.0,
-     3.0
+     75.9,
+     -209.4,
+     23.0
     ],
     "priority": "0",
     "tier": "snap"
@@ -22963,7 +22960,9 @@
     "margin": 1.5,
     "clear": true,
     "blockers": [
-     "10156 - minifig.ldr/5"
+     "10156 - truck.ldr/108",
+     "10156 - truck.ldr/109",
+     "10156 - truck.ldr/93"
     ]
    },
    "uncertified": false,
@@ -22975,8 +22974,5755 @@
   "placed": 111,
   "certified": 111,
   "forced": 0,
-  "tests": 464,
-  "ms": 63.7,
+  "tests": 466,
+  "ms": 81.3,
   "uncertified": 0
+ },
+ "animation": {
+  "kind": "flight-v1",
+  "pieces": [
+   {
+    "key": "10156 - minifig.ldr/3",
+    "floor": [
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     -111.72,
+     -28.0,
+     328.46,
+     1.0
+    ],
+    "path": [
+     [
+      -11.72,
+      0.0,
+      318.46
+     ],
+     [
+      -11.72,
+      -143.4,
+      318.46
+     ],
+     [
+      -0.0,
+      -143.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.0,
+    "startF": 0.0046,
+    "durF": 0.0043,
+    "route": true
+   },
+   {
+    "key": "10156 - minifig.ldr/6",
+    "floor": [
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     -106.72,
+     -28.0,
+     328.46,
+     1.0
+    ],
+    "path": [
+     [
+      -6.72,
+      0.0,
+      318.46
+     ],
+     [
+      -6.72,
+      -143.4,
+      318.46
+     ],
+     [
+      -0.0,
+      -143.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.0049,
+    "startF": 0.0095,
+    "durF": 0.0043,
+    "route": true
+   },
+   {
+    "key": "10156 - minifig.ldr/8",
+    "floor": [
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     -61.22,
+     -21.0,
+     327.46,
+     1.0
+    ],
+    "path": [
+     [
+      38.78,
+      19.0,
+      317.46
+     ],
+     [
+      38.78,
+      -129.4,
+      317.46
+     ],
+     [
+      -0.0,
+      -129.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.0097,
+    "startF": 0.0143,
+    "durF": 0.0043,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/97",
+    "floor": [
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     -7.57,
+     -25.0,
+     340.35,
+     1.0
+    ],
+    "path": [
+     [
+      -7.59,
+      2.0,
+      305.78
+     ],
+     [
+      -7.59,
+      -128.4,
+      305.78
+     ],
+     [
+      -0.0,
+      -128.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.0146,
+    "startF": 0.0192,
+    "durF": 0.0041,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/99",
+    "floor": [
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     55.73,
+     -25.0,
+     340.35,
+     1.0
+    ],
+    "path": [
+     [
+      7.71,
+      2.0,
+      388.92
+     ],
+     [
+      7.71,
+      -128.4,
+      388.92
+     ],
+     [
+      -0.0,
+      -128.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.0192,
+    "startF": 0.0238,
+    "durF": 0.0045,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/101",
+    "floor": [
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     119.03,
+     -25.0,
+     340.35,
+     1.0
+    ],
+    "path": [
+     [
+      -123.47,
+      2.0,
+      165.78
+     ],
+     [
+      -123.47,
+      -128.4,
+      165.78
+     ],
+     [
+      -0.0,
+      -128.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.0243,
+    "startF": 0.0289,
+    "durF": 0.0036,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/103",
+    "floor": [
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     182.33,
+     -25.0,
+     340.35,
+     1.0
+    ],
+    "path": [
+     [
+      -108.17,
+      2.0,
+      248.92
+     ],
+     [
+      -108.17,
+      -128.4,
+      248.92
+     ],
+     [
+      -0.0,
+      -128.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.0285,
+    "startF": 0.0331,
+    "durF": 0.0039,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/105",
+    "floor": [
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     245.63,
+     -25.0,
+     340.35,
+     1.0
+    ],
+    "path": [
+     [
+      55.09,
+      2.0,
+      195.78
+     ],
+     [
+      55.09,
+      -128.4,
+      195.78
+     ],
+     [
+      16.0,
+      -128.4,
+      -0.0
+     ],
+     [
+      16.0,
+      -0.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.033,
+    "startF": 0.0376,
+    "durF": 0.0028,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/107",
+    "floor": [
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     -103.57,
+     -25.0,
+     394.13,
+     1.0
+    ],
+    "path": [
+     [
+      -342.11,
+      2.0,
+      332.7
+     ],
+     [
+      -342.11,
+      -128.4,
+      332.7
+     ],
+     [
+      16.0,
+      -128.4,
+      -0.0
+     ],
+     [
+      16.0,
+      -0.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.0363,
+    "startF": 0.0409,
+    "durF": 0.0043,
+    "route": true
+   },
+   {
+    "key": "10156 - minifig.ldr/0",
+    "floor": [
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     -48.92,
+     -32.0,
+     381.24,
+     1.0
+    ],
+    "path": [
+     [
+      51.08,
+      40.0,
+      371.24
+     ],
+     [
+      51.08,
+      -96.4,
+      371.24
+     ],
+     [
+      -0.0,
+      -96.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.0412,
+    "startF": 0.0458,
+    "durF": 0.0043,
+    "route": true
+   },
+   {
+    "key": "10156 - minifig.ldr/1",
+    "floor": [
+     1.0,
+     -0.17,
+     0.0,
+     0.0,
+     0.12,
+     0.7,
+     0.71,
+     0.0,
+     -0.12,
+     -0.7,
+     0.71,
+     0.0,
+     -16.53,
+     -12.15,
+     385.39,
+     1.0
+    ],
+    "path": [
+     [
+      59.81,
+      34.0,
+      385.39
+     ],
+     [
+      59.81,
+      -123.42,
+      385.39
+     ],
+     [
+      16.0,
+      -123.42,
+      -0.0
+     ],
+     [
+      16.0,
+      -0.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.0461,
+    "startF": 0.0507,
+    "durF": 0.0039,
+    "route": true
+   },
+   {
+    "key": "10156 - minifig.ldr/2",
+    "floor": [
+     1.0,
+     -0.17,
+     0.0,
+     0.0,
+     0.17,
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     6.71,
+     -21.64,
+     384.68,
+     1.0
+    ],
+    "path": [
+     [
+      91.21,
+      42.36,
+      374.68
+     ],
+     [
+      91.21,
+      -109.9,
+      374.68
+     ],
+     [
+      -0.0,
+      -109.9,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.0505,
+    "startF": 0.0551,
+    "durF": 0.0045,
+    "route": true
+   },
+   {
+    "key": "10156 - minifig.ldr/5",
+    "floor": [
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     40.92,
+     -24.0,
+     384.24,
+     1.0
+    ],
+    "path": [
+     [
+      140.92,
+      72.0,
+      374.24
+     ],
+     [
+      140.92,
+      -80.4,
+      374.24
+     ],
+     [
+      -0.0,
+      -80.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.0556,
+    "startF": 0.0602,
+    "durF": 0.0045,
+    "route": true
+   },
+   {
+    "key": "10156 - minifig.ldr/4",
+    "floor": [
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     75.92,
+     -9.0,
+     399.24,
+     1.0
+    ],
+    "path": [
+     [
+      175.92,
+      87.0,
+      389.24
+     ],
+     [
+      175.92,
+      -73.4,
+      389.24
+     ],
+     [
+      -0.0,
+      -73.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.0606,
+    "startF": 0.0652,
+    "durF": 0.0046,
+    "route": true
+   },
+   {
+    "key": "10156 - minifig.ldr/7",
+    "floor": [
+     1.0,
+     0.17,
+     0.0,
+     0.0,
+     -0.17,
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     111.13,
+     -21.64,
+     384.68,
+     1.0
+    ],
+    "path": [
+     [
+      226.63,
+      42.36,
+      374.68
+     ],
+     [
+      226.63,
+      -109.9,
+      374.68
+     ],
+     [
+      -0.0,
+      -109.9,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.0658,
+    "startF": 0.0704,
+    "durF": 0.0048,
+    "route": true
+   },
+   {
+    "key": "10156 - minifig.ldr/9",
+    "floor": [
+     1.0,
+     0.17,
+     0.0,
+     0.0,
+     -0.12,
+     0.7,
+     0.71,
+     0.0,
+     0.12,
+     -0.7,
+     0.71,
+     0.0,
+     134.37,
+     -12.15,
+     385.39,
+     1.0
+    ],
+    "path": [
+     [
+      258.03,
+      34.0,
+      385.39
+     ],
+     [
+      258.03,
+      -123.42,
+      385.39
+     ],
+     [
+      16.0,
+      -123.42,
+      -0.0
+     ],
+     [
+      16.0,
+      -0.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.0712,
+    "startF": 0.0758,
+    "durF": 0.0042,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/10",
+    "floor": [
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     12.34,
+     -24.0,
+     513.68,
+     1.0
+    ],
+    "path": [
+     [
+      -110.6,
+      24.0,
+      452.02
+     ],
+     [
+      -110.6,
+      -128.4,
+      452.02
+     ],
+     [
+      -0.0,
+      -128.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.076,
+    "startF": 0.0806,
+    "durF": 0.005,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/11",
+    "floor": [
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     12.34,
+     -24.0,
+     699.0,
+     1.0
+    ],
+    "path": [
+     [
+      -120.6,
+      24.0,
+      654.66
+     ],
+     [
+      -120.6,
+      -128.4,
+      654.66
+     ],
+     [
+      -0.0,
+      -128.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.0815,
+    "startF": 0.0861,
+    "durF": 0.0061,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/12",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     182.56,
+     -24.0,
+     632.66,
+     1.0
+    ],
+    "path": [
+     [
+      -92.6,
+      24.0,
+      494.66
+     ],
+     [
+      -92.6,
+      -128.4,
+      494.66
+     ],
+     [
+      -0.0,
+      -128.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.0882,
+    "startF": 0.0928,
+    "durF": 0.0052,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/13",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     236.54,
+     -8.0,
+     637.66,
+     1.0
+    ],
+    "path": [
+     [
+      -29.96,
+      48.0,
+      504.66
+     ],
+     [
+      -29.96,
+      -124.4,
+      504.66
+     ],
+     [
+      -0.0,
+      -124.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.0939,
+    "startF": 0.0985,
+    "durF": 0.0053,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/14",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     -97.64,
+     -20.0,
+     837.3,
+     1.0
+    ],
+    "path": [
+     [
+      -95.68,
+      36.0,
+      859.3
+     ],
+     [
+      -95.68,
+      -120.4,
+      859.3
+     ],
+     [
+      -0.0,
+      -120.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.0998,
+    "startF": 0.1044,
+    "durF": 0.0071,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/52",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     -42.32,
+     -8.0,
+     835.3,
+     1.0
+    ],
+    "path": [
+     [
+      -40.36,
+      56.0,
+      857.3
+     ],
+     [
+      -40.36,
+      -112.4,
+      857.3
+     ],
+     [
+      -0.0,
+      -112.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.1074,
+    "startF": 0.112,
+    "durF": 0.007,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/15",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     22.66,
+     -16.0,
+     835.93,
+     1.0
+    ],
+    "path": [
+     [
+      -191.88,
+      16.0,
+      732.93
+     ],
+     [
+      -191.88,
+      -148.4,
+      732.93
+     ],
+     [
+      -0.0,
+      -148.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.115,
+    "startF": 0.1196,
+    "durF": 0.0067,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/16",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     87.3,
+     -16.0,
+     835.93,
+     1.0
+    ],
+    "path": [
+     [
+      -179.2,
+      16.0,
+      702.93
+     ],
+     [
+      -179.2,
+      -148.4,
+      702.93
+     ],
+     [
+      -0.0,
+      -148.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.1223,
+    "startF": 0.1269,
+    "durF": 0.0065,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/17",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     151.94,
+     -16.0,
+     835.93,
+     1.0
+    ],
+    "path": [
+     [
+      127.92,
+      16.0,
+      842.93
+     ],
+     [
+      127.92,
+      -148.4,
+      842.93
+     ],
+     [
+      -0.0,
+      -148.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.1293,
+    "startF": 0.1339,
+    "durF": 0.0072,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/18",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     0.0,
+     -1.0,
+     0.0,
+     0.0,
+     208.26,
+     -10.0,
+     830.3,
+     1.0
+    ],
+    "path": [
+     [
+      229.27,
+      36.0,
+      863.3
+     ],
+     [
+      229.27,
+      -124.4,
+      863.3
+     ],
+     [
+      -0.0,
+      -124.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.1371,
+    "startF": 0.1417,
+    "durF": 0.0072,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/19",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     271.35,
+     -8.0,
+     835.3,
+     1.0
+    ],
+    "path": [
+     [
+      134.75,
+      16.0,
+      777.3
+     ],
+     [
+      134.75,
+      -152.4,
+      777.3
+     ],
+     [
+      -0.0,
+      -152.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.1449,
+    "startF": 0.1495,
+    "durF": 0.0069,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/20",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     -93.9,
+     -8.0,
+     928.84,
+     1.0
+    ],
+    "path": [
+     [
+      -169.88,
+      16.0,
+      905.84
+     ],
+     [
+      -169.88,
+      -152.4,
+      905.84
+     ],
+     [
+      -0.0,
+      -152.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.1523,
+    "startF": 0.1569,
+    "durF": 0.0076,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/21",
+    "floor": [
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     -12.6,
+     -8.0,
+     916.52,
+     1.0
+    ],
+    "path": [
+     [
+      -183.84,
+      16.0,
+      838.52
+     ],
+     [
+      -183.84,
+      -152.4,
+      838.52
+     ],
+     [
+      -0.0,
+      -152.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.1604,
+    "startF": 0.165,
+    "durF": 0.0073,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/22",
+    "floor": [
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     45.04,
+     -24.0,
+     897.86,
+     1.0
+    ],
+    "path": [
+     [
+      -37.28,
+      24.0,
+      905.84
+     ],
+     [
+      -37.28,
+      -128.4,
+      905.84
+     ],
+     [
+      -0.0,
+      -128.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.1682,
+    "startF": 0.1728,
+    "durF": 0.0073,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/23",
+    "floor": [
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     80.36,
+     -24.0,
+     897.86,
+     1.0
+    ],
+    "path": [
+     [
+      -19.28,
+      24.0,
+      895.84
+     ],
+     [
+      -19.28,
+      -128.4,
+      895.84
+     ],
+     [
+      -0.0,
+      -128.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.1761,
+    "startF": 0.1807,
+    "durF": 0.0072,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/24",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     111.93,
+     -8.0,
+     894.11,
+     1.0
+    ],
+    "path": [
+     [
+      -39.67,
+      24.0,
+      862.09
+     ],
+     [
+      -39.67,
+      -144.4,
+      862.09
+     ],
+     [
+      -0.0,
+      -144.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.1839,
+    "startF": 0.1885,
+    "durF": 0.0072,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/25",
+    "floor": [
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     143.51,
+     -24.0,
+     897.86,
+     1.0
+    ],
+    "path": [
+     [
+      73.87,
+      24.0,
+      843.88
+     ],
+     [
+      73.87,
+      -128.4,
+      843.88
+     ],
+     [
+      -0.0,
+      -128.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.1917,
+    "startF": 0.1963,
+    "durF": 0.007,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/26",
+    "floor": [
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     178.83,
+     -24.0,
+     897.86,
+     1.0
+    ],
+    "path": [
+     [
+      126.51,
+      24.0,
+      853.88
+     ],
+     [
+      126.51,
+      -128.4,
+      853.88
+     ],
+     [
+      -0.0,
+      -128.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.1992,
+    "startF": 0.2038,
+    "durF": 0.0071,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/27",
+    "floor": [
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     210.4,
+     -8.0,
+     894.11,
+     1.0
+    ],
+    "path": [
+     [
+      88.8,
+      24.0,
+      810.13
+     ],
+     [
+      88.8,
+      -144.4,
+      810.13
+     ],
+     [
+      -0.0,
+      -144.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.2068,
+    "startF": 0.2114,
+    "durF": 0.007,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/28",
+    "floor": [
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     255.64,
+     -8.0,
+     911.52,
+     1.0
+    ],
+    "path": [
+     [
+      231.62,
+      48.0,
+      918.52
+     ],
+     [
+      231.62,
+      -120.4,
+      918.52
+     ],
+     [
+      -0.0,
+      -120.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.2144,
+    "startF": 0.219,
+    "durF": 0.0075,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/29",
+    "floor": [
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     -117.56,
+     -10.0,
+     1008.0,
+     1.0
+    ],
+    "path": [
+     [
+      -269.16,
+      30.0,
+      975.98
+     ],
+     [
+      -269.16,
+      -134.4,
+      975.98
+     ],
+     [
+      -0.0,
+      -134.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.2225,
+    "startF": 0.2271,
+    "durF": 0.0079,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/30",
+    "floor": [
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     0.0,
+     -1.0,
+     0.0,
+     0.0,
+     -68.31,
+     -10.0,
+     992.95,
+     1.0
+    ],
+    "path": [
+     [
+      -166.29,
+      28.0,
+      1008.05
+     ],
+     [
+      -166.29,
+      -132.4,
+      1008.05
+     ],
+     [
+      -0.0,
+      -132.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.2309,
+    "startF": 0.2355,
+    "durF": 0.0079,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/31",
+    "floor": [
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     -1.0,
+     0.0,
+     0.0,
+     -25.67,
+     -10.0,
+     998.4,
+     1.0
+    ],
+    "path": [
+     [
+      -79.65,
+      28.0,
+      937.3
+     ],
+     [
+      -79.65,
+      -132.4,
+      937.3
+     ],
+     [
+      -0.0,
+      -132.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.2394,
+    "startF": 0.244,
+    "durF": 0.0075,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/32",
+    "floor": [
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     23.57,
+     -10.0,
+     995.14,
+     1.0
+    ],
+    "path": [
+     [
+      -98.03,
+      30.0,
+      911.16
+     ],
+     [
+      -98.03,
+      -134.4,
+      911.16
+     ],
+     [
+      -0.0,
+      -134.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.2475,
+    "startF": 0.2521,
+    "durF": 0.0074,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/33",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     63.89,
+     -8.0,
+     1003.8,
+     1.0
+    ],
+    "path": [
+     [
+      -124.67,
+      48.0,
+      915.8
+     ],
+     [
+      -124.67,
+      -120.4,
+      915.8
+     ],
+     [
+      -0.0,
+      -120.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.2555,
+    "startF": 0.2601,
+    "durF": 0.0074,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/34",
+    "floor": [
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     0.0,
+     -1.0,
+     0.0,
+     0.0,
+     111.37,
+     -10.0,
+     991.48,
+     1.0
+    ],
+    "path": [
+     [
+      9.39,
+      28.0,
+      1013.51
+     ],
+     [
+      9.39,
+      -132.4,
+      1013.51
+     ],
+     [
+      -0.0,
+      -132.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.2635,
+    "startF": 0.2681,
+    "durF": 0.0079,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/35",
+    "floor": [
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     176.33,
+     -10.0,
+     1010.14,
+     1.0
+    ],
+    "path": [
+     [
+      -23.38,
+      28.0,
+      973.44
+     ],
+     [
+      -23.38,
+      -132.4,
+      973.44
+     ],
+     [
+      -0.0,
+      -132.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.2719,
+    "startF": 0.2765,
+    "durF": 0.0077,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/36",
+    "floor": [
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     -1.0,
+     0.0,
+     0.0,
+     208.11,
+     -10.0,
+     997.91,
+     1.0
+    ],
+    "path": [
+     [
+      158.13,
+      28.0,
+      929.88
+     ],
+     [
+      158.13,
+      -132.4,
+      929.88
+     ],
+     [
+      -0.0,
+      -132.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.2802,
+    "startF": 0.2848,
+    "durF": 0.0075,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/37",
+    "floor": [
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     276.57,
+     -10.0,
+     1010.14,
+     1.0
+    ],
+    "path": [
+     [
+      126.86,
+      28.0,
+      886.84
+     ],
+     [
+      126.86,
+      -132.4,
+      886.84
+     ],
+     [
+      -0.0,
+      -132.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.2883,
+    "startF": 0.2929,
+    "durF": 0.0073,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/38",
+    "floor": [
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     300.94,
+     -8.0,
+     991.39,
+     1.0
+    ],
+    "path": [
+     [
+      179.34,
+      40.0,
+      907.41
+     ],
+     [
+      179.34,
+      -128.4,
+      907.41
+     ],
+     [
+      -0.0,
+      -128.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.2961,
+    "startF": 0.3007,
+    "durF": 0.0075,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/39",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     -121.31,
+     -8.0,
+     1044.03,
+     1.0
+    ],
+    "path": [
+     [
+      -272.91,
+      40.0,
+      1012.01
+     ],
+     [
+      -272.91,
+      -128.4,
+      1012.01
+     ],
+     [
+      -0.0,
+      -128.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.3041,
+    "startF": 0.3087,
+    "durF": 0.0081,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/40",
+    "floor": [
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     -48.75,
+     -8.0,
+     1088.76,
+     1.0
+    ],
+    "path": [
+     [
+      -124.73,
+      48.0,
+      1065.76
+     ],
+     [
+      -124.73,
+      -120.4,
+      1065.76
+     ],
+     [
+      -0.0,
+      -120.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.3128,
+    "startF": 0.3174,
+    "durF": 0.0082,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/41",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     32.55,
+     -8.0,
+     1056.44,
+     1.0
+    ],
+    "path": [
+     [
+      -156.01,
+      56.0,
+      968.44
+     ],
+     [
+      -156.01,
+      -116.4,
+      968.44
+     ],
+     [
+      -0.0,
+      -116.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.3215,
+    "startF": 0.3261,
+    "durF": 0.0077,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/42",
+    "floor": [
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     65.68,
+     -10.0,
+     1042.78,
+     1.0
+    ],
+    "path": [
+     [
+      -71.68,
+      28.0,
+      1042.08
+     ],
+     [
+      -71.68,
+      -132.4,
+      1042.08
+     ],
+     [
+      -0.0,
+      -132.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.3298,
+    "startF": 0.3344,
+    "durF": 0.0081,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/43",
+    "floor": [
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     109.39,
+     -10.0,
+     1045.05,
+     1.0
+    ],
+    "path": [
+     [
+      -97.25,
+      28.0,
+      1004.35
+     ],
+     [
+      -97.25,
+      -132.4,
+      1004.35
+     ],
+     [
+      16.0,
+      -132.4,
+      -0.0
+     ],
+     [
+      16.0,
+      -0.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.3384,
+    "startF": 0.343,
+    "durF": 0.0071,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/44",
+    "floor": [
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     130.32,
+     -10.0,
+     1042.78,
+     1.0
+    ],
+    "path": [
+     [
+      42.96,
+      28.0,
+      955.48
+     ],
+     [
+      42.96,
+      -132.4,
+      955.48
+     ],
+     [
+      -0.0,
+      -132.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.3461,
+    "startF": 0.3507,
+    "durF": 0.0076,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/45",
+    "floor": [
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     174.03,
+     -10.0,
+     1045.05,
+     1.0
+    ],
+    "path": [
+     [
+      17.39,
+      28.0,
+      917.75
+     ],
+     [
+      17.39,
+      -132.4,
+      917.75
+     ],
+     [
+      16.0,
+      -132.4,
+      -0.0
+     ],
+     [
+      16.0,
+      -0.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.3542,
+    "startF": 0.3588,
+    "durF": 0.0067,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/46",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     225.81,
+     -16.0,
+     1078.76,
+     1.0
+    ],
+    "path": [
+     [
+      201.79,
+      56.0,
+      1085.76
+     ],
+     [
+      201.79,
+      -104.4,
+      1085.76
+     ],
+     [
+      -0.0,
+      -104.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.3615,
+    "startF": 0.3661,
+    "durF": 0.0082,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/47",
+    "floor": [
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     -103.9,
+     -8.0,
+     1178.72,
+     1.0
+    ],
+    "path": [
+     [
+      -162.56,
+      56.0,
+      1165.72
+     ],
+     [
+      -162.56,
+      -112.4,
+      1165.72
+     ],
+     [
+      -0.0,
+      -112.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.3702,
+    "startF": 0.3748,
+    "durF": 0.0087,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/48",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     -49.92,
+     -8.0,
+     1173.72,
+     1.0
+    ],
+    "path": [
+     [
+      -134.56,
+      56.0,
+      1145.72
+     ],
+     [
+      -134.56,
+      -116.4,
+      1145.72
+     ],
+     [
+      -0.0,
+      -116.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.3795,
+    "startF": 0.3841,
+    "durF": 0.0086,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/49",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     41.38,
+     -8.0,
+     1223.36,
+     1.0
+    ],
+    "path": [
+     [
+      -103.88,
+      48.0,
+      1160.36
+     ],
+     [
+      -103.88,
+      -120.4,
+      1160.36
+     ],
+     [
+      -0.0,
+      -120.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.3886,
+    "startF": 0.3932,
+    "durF": 0.0087,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/50",
+    "floor": [
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     127.68,
+     -24.0,
+     1165.06,
+     1.0
+    ],
+    "path": [
+     [
+      40.72,
+      56.0,
+      1101.08
+     ],
+     [
+      40.72,
+      -96.4,
+      1101.08
+     ],
+     [
+      -0.0,
+      -96.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.3978,
+    "startF": 0.4024,
+    "durF": 0.0081,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/51",
+    "floor": [
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     163.0,
+     -24.0,
+     1165.06,
+     1.0
+    ],
+    "path": [
+     [
+      46.04,
+      56.0,
+      1153.04
+     ],
+     [
+      46.04,
+      -96.4,
+      1153.04
+     ],
+     [
+      -0.0,
+      -96.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.4065,
+    "startF": 0.4111,
+    "durF": 0.0084,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/53",
+    "floor": [
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     224.3,
+     -24.0,
+     1180.06,
+     1.0
+    ],
+    "path": [
+     [
+      104.04,
+      56.0,
+      1073.76
+     ],
+     [
+      104.04,
+      -96.4,
+      1073.76
+     ],
+     [
+      -0.0,
+      -96.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.4154,
+    "startF": 0.42,
+    "durF": 0.008,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/54",
+    "floor": [
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     -91.58,
+     -24.0,
+     1331.98,
+     1.0
+    ],
+    "path": [
+     [
+      -261.84,
+      56.0,
+      1312.28
+     ],
+     [
+      -261.84,
+      -96.4,
+      1312.28
+     ],
+     [
+      -0.0,
+      -96.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.424,
+    "startF": 0.4286,
+    "durF": 0.0093,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/55",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     -16.62,
+     -24.0,
+     1330.64,
+     1.0
+    ],
+    "path": [
+     [
+      -127.24,
+      56.0,
+      1287.64
+     ],
+     [
+      -127.24,
+      -96.4,
+      1287.64
+     ],
+     [
+      -0.0,
+      -96.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.4339,
+    "startF": 0.4385,
+    "durF": 0.0091,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/56",
+    "floor": [
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     63.34,
+     -8.0,
+     1340.64,
+     1.0
+    ],
+    "path": [
+     [
+      39.32,
+      64.0,
+      1347.64
+     ],
+     [
+      39.32,
+      -104.4,
+      1347.64
+     ],
+     [
+      -0.0,
+      -104.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.4435,
+    "startF": 0.4481,
+    "durF": 0.0095,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/57",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     125.89,
+     -8.0,
+     1313.23,
+     1.0
+    ],
+    "path": [
+     [
+      142.85,
+      64.0,
+      1309.25
+     ],
+     [
+      142.85,
+      -104.4,
+      1309.25
+     ],
+     [
+      -0.0,
+      -104.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.4536,
+    "startF": 0.4582,
+    "durF": 0.0093,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/58",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     153.72,
+     -8.0,
+     1313.23,
+     1.0
+    ],
+    "path": [
+     [
+      140.68,
+      64.0,
+      1361.21
+     ],
+     [
+      140.68,
+      -104.4,
+      1361.21
+     ],
+     [
+      -0.0,
+      -104.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.4635,
+    "startF": 0.4681,
+    "durF": 0.0096,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/59",
+    "floor": [
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     193.96,
+     -8.0,
+     1321.98,
+     1.0
+    ],
+    "path": [
+     [
+      202.26,
+      72.0,
+      1313.0
+     ],
+     [
+      202.26,
+      -100.4,
+      1313.0
+     ],
+     [
+      -0.0,
+      -100.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.4737,
+    "startF": 0.4783,
+    "durF": 0.0094,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/60",
+    "floor": [
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     246.6,
+     -8.0,
+     1321.98,
+     1.0
+    ],
+    "path": [
+     [
+      224.9,
+      72.0,
+      1364.96
+     ],
+     [
+      224.9,
+      -100.4,
+      1364.96
+     ],
+     [
+      -0.0,
+      -100.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.4836,
+    "startF": 0.4882,
+    "durF": 0.0097,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/61",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     295.58,
+     -8.0,
+     1325.64,
+     1.0
+    ],
+    "path": [
+     [
+      245.58,
+      72.0,
+      1317.64
+     ],
+     [
+      245.58,
+      -61.68,
+      1317.64
+     ],
+     [
+      -0.0,
+      -61.68,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.4939,
+    "startF": 0.4985,
+    "durF": 0.0091,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/62",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     -102.56,
+     -8.0,
+     1425.6,
+     1.0
+    ],
+    "path": [
+     [
+      -135.24,
+      72.0,
+      1427.6
+     ],
+     [
+      -135.24,
+      -96.4,
+      1427.6
+     ],
+     [
+      -0.0,
+      -96.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.5035,
+    "startF": 0.5081,
+    "durF": 0.0099,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/63",
+    "floor": [
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     -26.26,
+     -24.0,
+     1414.62,
+     1.0
+    ],
+    "path": [
+     [
+      -146.52,
+      80.0,
+      1308.32
+     ],
+     [
+      -146.52,
+      -72.4,
+      1308.32
+     ],
+     [
+      -0.0,
+      -72.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.5139,
+    "startF": 0.5185,
+    "durF": 0.0091,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/64",
+    "floor": [
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     61.02,
+     -24.0,
+     1414.62,
+     1.0
+    ],
+    "path": [
+     [
+      -109.24,
+      80.0,
+      1394.92
+     ],
+     [
+      -109.24,
+      -72.4,
+      1394.92
+     ],
+     [
+      -0.0,
+      -72.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.5236,
+    "startF": 0.5282,
+    "durF": 0.0095,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/65",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     137.32,
+     -24.0,
+     1425.6,
+     1.0
+    ],
+    "path": [
+     [
+      35.36,
+      80.0,
+      1387.6
+     ],
+     [
+      35.36,
+      -72.4,
+      1387.6
+     ],
+     [
+      -0.0,
+      -72.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.5337,
+    "startF": 0.5383,
+    "durF": 0.0095,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/66",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     207.56,
+     -20.0,
+     1427.6,
+     1.0
+    ],
+    "path": [
+     [
+      209.52,
+      60.0,
+      1449.6
+     ],
+     [
+      209.52,
+      -96.4,
+      1449.6
+     ],
+     [
+      -0.0,
+      -96.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.5437,
+    "startF": 0.5483,
+    "durF": 0.01,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/67",
+    "floor": [
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     273.86,
+     -24.0,
+     1414.62,
+     1.0
+    ],
+    "path": [
+     [
+      153.6,
+      104.0,
+      1308.32
+     ],
+     [
+      153.6,
+      -48.4,
+      1308.32
+     ],
+     [
+      -0.0,
+      -48.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.5542,
+    "startF": 0.5588,
+    "durF": 0.009,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/68",
+    "floor": [
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     -91.58,
+     -24.0,
+     1501.9,
+     1.0
+    ],
+    "path": [
+     [
+      -261.84,
+      104.0,
+      1482.2
+     ],
+     [
+      -261.84,
+      -48.4,
+      1482.2
+     ],
+     [
+      -0.0,
+      -48.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.5638,
+    "startF": 0.5684,
+    "durF": 0.0099,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/69",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     -25.28,
+     -24.0,
+     1495.56,
+     1.0
+    ],
+    "path": [
+     [
+      -57.96,
+      80.0,
+      1497.56
+     ],
+     [
+      -57.96,
+      -72.4,
+      1497.56
+     ],
+     [
+      -0.0,
+      -72.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.5743,
+    "startF": 0.5789,
+    "durF": 0.01,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/70",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     11.29,
+     -48.0,
+     1483.15,
+     1.0
+    ],
+    "path": [
+     [
+      -53.71,
+      56.0,
+      1501.13
+     ],
+     [
+      -53.71,
+      -152.4,
+      1501.13
+     ],
+     [
+      -0.0,
+      -152.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.5848,
+    "startF": 0.5894,
+    "durF": 0.0107,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/71",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     77.5,
+     -48.0,
+     1483.15,
+     1.0
+    ],
+    "path": [
+     [
+      42.5,
+      56.0,
+      1449.17
+     ],
+     [
+      42.5,
+      -72.4,
+      1449.17
+     ],
+     [
+      -0.0,
+      -72.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.5961,
+    "startF": 0.6007,
+    "durF": 0.0097,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/72",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     154.46,
+     -72.0,
+     1512.88,
+     1.0
+    ],
+    "path": [
+     [
+      -16.78,
+      56.0,
+      1434.88
+     ],
+     [
+      -16.78,
+      -48.4,
+      1434.88
+     ],
+     [
+      -0.0,
+      -48.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.6063,
+    "startF": 0.6109,
+    "durF": 0.0093,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/73",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     0.0,
+     -1.0,
+     0.0,
+     0.0,
+     202.58,
+     -10.0,
+     1490.56,
+     1.0
+    ],
+    "path": [
+     [
+      223.59,
+      60.0,
+      1523.56
+     ],
+     [
+      223.59,
+      -100.4,
+      1523.56
+     ],
+     [
+      -0.0,
+      -100.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.6162,
+    "startF": 0.6208,
+    "durF": 0.0104,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/74",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     0.0,
+     -1.0,
+     0.0,
+     0.0,
+     233.97,
+     -10.0,
+     1481.9,
+     1.0
+    ],
+    "path": [
+     [
+      239.98,
+      60.0,
+      1540.88
+     ],
+     [
+      239.98,
+      -100.4,
+      1540.88
+     ],
+     [
+      -0.0,
+      -100.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.6272,
+    "startF": 0.6318,
+    "durF": 0.0105,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/75",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     0.0,
+     -1.0,
+     0.0,
+     0.0,
+     260.36,
+     -10.0,
+     1481.9,
+     1.0
+    ],
+    "path": [
+     [
+      296.37,
+      60.0,
+      1488.92
+     ],
+     [
+      296.37,
+      -100.4,
+      1488.92
+     ],
+     [
+      16.0,
+      -100.4,
+      -0.0
+     ],
+     [
+      16.0,
+      -0.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.6383,
+    "startF": 0.6429,
+    "durF": 0.0096,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/76",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     0.0,
+     -1.0,
+     0.0,
+     0.0,
+     290.29,
+     -10.0,
+     1490.56,
+     1.0
+    ],
+    "path": [
+     [
+      318.23,
+      60.0,
+      1527.56
+     ],
+     [
+      318.23,
+      -100.4,
+      1527.56
+     ],
+     [
+      -0.0,
+      -100.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.6484,
+    "startF": 0.653,
+    "durF": 0.0105,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/77",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     -60.6,
+     -24.0,
+     1612.84,
+     1.0
+    ],
+    "path": [
+     [
+      -93.28,
+      80.0,
+      1614.84
+     ],
+     [
+      -93.28,
+      -72.4,
+      1614.84
+     ],
+     [
+      -0.0,
+      -72.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.6595,
+    "startF": 0.6641,
+    "durF": 0.0106,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/78",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     23.38,
+     -24.0,
+     1622.48,
+     1.0
+    ],
+    "path": [
+     [
+      -139.2,
+      128.0,
+      1549.48
+     ],
+     [
+      -139.2,
+      -24.4,
+      1549.48
+     ],
+     [
+      -0.0,
+      -24.4,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.6707,
+    "startF": 0.6753,
+    "durF": 0.0103,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/79",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     109.68,
+     -24.0,
+     1584.18,
+     1.0
+    ],
+    "path": [
+     [
+      -51.92,
+      128.0,
+      1569.48
+     ],
+     [
+      -51.92,
+      -48.0,
+      1569.48
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.6815,
+    "startF": 0.6861,
+    "durF": 0.0104,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/80",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     162.32,
+     -24.0,
+     1584.18,
+     1.0
+    ],
+    "path": [
+     [
+      50.72,
+      128.0,
+      1482.88
+     ],
+     [
+      50.72,
+      -48.0,
+      1482.88
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.6925,
+    "startF": 0.6971,
+    "durF": 0.01,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/81",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     226.21,
+     -32.0,
+     1606.41,
+     1.0
+    ],
+    "path": [
+     [
+      176.21,
+      104.0,
+      1598.41
+     ],
+     [
+      176.21,
+      -64.0,
+      1598.41
+     ],
+     [
+      -0.0,
+      -64.0,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.703,
+    "startF": 0.7076,
+    "durF": 0.0106,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/82",
+    "floor": [
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     -117.56,
+     -8.0,
+     1706.1,
+     1.0
+    ],
+    "path": [
+     [
+      -313.8,
+      152.0,
+      1671.4
+     ],
+     [
+      -313.8,
+      -40.0,
+      1671.4
+     ],
+     [
+      -0.0,
+      -40.0,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.7142,
+    "startF": 0.7188,
+    "durF": 0.0112,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/83",
+    "floor": [
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     -79.03,
+     0.0,
+     1698.39,
+     1.0
+    ],
+    "path": [
+     [
+      -292.59,
+      72.0,
+      1653.69
+     ],
+     [
+      -292.59,
+      -44.0,
+      1653.69
+     ],
+     [
+      16.0,
+      -44.0,
+      -0.0
+     ],
+     [
+      16.0,
+      -0.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.7259,
+    "startF": 0.7305,
+    "durF": 0.0099,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/84",
+    "floor": [
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     -51.42,
+     -8.0,
+     1706.1,
+     1.0
+    ],
+    "path": [
+     [
+      -197.66,
+      152.0,
+      1584.8
+     ],
+     [
+      -197.66,
+      -52.0,
+      1584.8
+     ],
+     [
+      -0.0,
+      -52.0,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.7363,
+    "startF": 0.7409,
+    "durF": 0.0107,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/85",
+    "floor": [
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     -12.89,
+     0.0,
+     1698.39,
+     1.0
+    ],
+    "path": [
+     [
+      -176.45,
+      72.0,
+      1567.09
+     ],
+     [
+      -176.45,
+      -48.0,
+      1567.09
+     ],
+     [
+      16.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      16.0,
+      -0.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.7476,
+    "startF": 0.7522,
+    "durF": 0.0094,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/86",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     38.38,
+     -24.0,
+     1737.08,
+     1.0
+    ],
+    "path": [
+     [
+      -124.2,
+      152.0,
+      1664.08
+     ],
+     [
+      -124.2,
+      -36.0,
+      1664.08
+     ],
+     [
+      -0.0,
+      -36.0,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.7576,
+    "startF": 0.7622,
+    "durF": 0.011,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/87",
+    "floor": [
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     106.02,
+     -8.0,
+     1711.1,
+     1.0
+    ],
+    "path": [
+     [
+      -64.24,
+      152.0,
+      1691.4
+     ],
+     [
+      -64.24,
+      -68.0,
+      1691.4
+     ],
+     [
+      -0.0,
+      -68.0,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.7691,
+    "startF": 0.7737,
+    "durF": 0.0113,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/88",
+    "floor": [
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     158.66,
+     -8.0,
+     1711.1,
+     1.0
+    ],
+    "path": [
+     [
+      38.4,
+      152.0,
+      1604.8
+     ],
+     [
+      38.4,
+      -68.0,
+      1604.8
+     ],
+     [
+      -0.0,
+      -68.0,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.781,
+    "startF": 0.7856,
+    "durF": 0.0109,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/89",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     207.64,
+     -8.0,
+     1714.76,
+     1.0
+    ],
+    "path": [
+     [
+      36.4,
+      176.0,
+      1636.76
+     ],
+     [
+      36.4,
+      -40.0,
+      1636.76
+     ],
+     [
+      -0.0,
+      -40.0,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.7925,
+    "startF": 0.7971,
+    "durF": 0.011,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/90",
+    "floor": [
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     247.96,
+     -8.0,
+     1717.02,
+     1.0
+    ],
+    "path": [
+     [
+      61.72,
+      176.0,
+      1665.0
+     ],
+     [
+      61.72,
+      -48.0,
+      1665.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.804,
+    "startF": 0.8086,
+    "durF": 0.0111,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/91",
+    "floor": [
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     293.09,
+     -8.0,
+     1706.1,
+     1.0
+    ],
+    "path": [
+     [
+      136.85,
+      176.0,
+      1602.12
+     ],
+     [
+      136.85,
+      -48.0,
+      1602.12
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.8157,
+    "startF": 0.8203,
+    "durF": 0.0108,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/92",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     -95.64,
+     -8.0,
+     1833.36,
+     1.0
+    ],
+    "path": [
+     [
+      -249.56,
+      176.0,
+      1765.36
+     ],
+     [
+      -249.56,
+      -48.0,
+      1765.36
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.8271,
+    "startF": 0.8317,
+    "durF": 0.0117,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/93",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     61.48,
+     -44.0,
+     1882.36,
+     1.0
+    ],
+    "path": [
+     [
+      -80.32,
+      135.0,
+      1821.36
+     ],
+     [
+      -80.32,
+      -53.0,
+      1821.36
+     ],
+     [
+      -0.0,
+      -53.0,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.8393,
+    "startF": 0.8439,
+    "durF": 0.0118,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/94",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     137.16,
+     -22.0,
+     1821.31,
+     1.0
+    ],
+    "path": [
+     [
+      -9.08,
+      170.0,
+      1700.01
+     ],
+     [
+      -9.08,
+      -33.5,
+      1700.01
+     ],
+     [
+      -0.0,
+      -33.5,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.8517,
+    "startF": 0.8563,
+    "durF": 0.0113,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/95",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     200.29,
+     -22.0,
+     1821.31,
+     1.0
+    ],
+    "path": [
+     [
+      4.05,
+      170.0,
+      1786.61
+     ],
+     [
+      4.05,
+      -48.0,
+      1786.61
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.8635,
+    "startF": 0.8681,
+    "durF": 0.0117,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/96",
+    "floor": [
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     240.45,
+     -13.0,
+     1803.15,
+     1.0
+    ],
+    "path": [
+     [
+      237.43,
+      14.0,
+      1773.78
+     ],
+     [
+      237.43,
+      -210.5,
+      1773.78
+     ],
+     [
+      -0.0,
+      -210.5,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.8757,
+    "startF": 0.8803,
+    "durF": 0.0126,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/98",
+    "floor": [
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     278.96,
+     -13.0,
+     1813.54,
+     1.0
+    ],
+    "path": [
+     [
+      233.94,
+      14.0,
+      1856.91
+     ],
+     [
+      233.94,
+      -210.5,
+      1856.91
+     ],
+     [
+      -0.0,
+      -210.5,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.8889,
+    "startF": 0.8935,
+    "durF": 0.013,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/100",
+    "floor": [
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     -109.97,
+     -13.0,
+     1940.43,
+     1.0
+    ],
+    "path": [
+     [
+      -355.47,
+      14.0,
+      1771.06
+     ],
+     [
+      -355.47,
+      -210.5,
+      1771.06
+     ],
+     [
+      -0.0,
+      -210.5,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.9024,
+    "startF": 0.907,
+    "durF": 0.0127,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/102",
+    "floor": [
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     -71.46,
+     -13.0,
+     1950.82,
+     1.0
+    ],
+    "path": [
+     [
+      -358.96,
+      14.0,
+      1854.19
+     ],
+     [
+      -358.96,
+      -210.5,
+      1854.19
+     ],
+     [
+      -0.0,
+      -210.5,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.9157,
+    "startF": 0.9203,
+    "durF": 0.0131,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/104",
+    "floor": [
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     -20.95,
+     -13.0,
+     1940.43,
+     1.0
+    ],
+    "path": [
+     [
+      -214.49,
+      14.0,
+      1801.06
+     ],
+     [
+      -214.49,
+      -210.5,
+      1801.06
+     ],
+     [
+      -0.0,
+      -210.5,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.9293,
+    "startF": 0.9339,
+    "durF": 0.0127,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/106",
+    "floor": [
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     17.56,
+     -13.0,
+     1950.82,
+     1.0
+    ],
+    "path": [
+     [
+      -217.98,
+      14.0,
+      1884.19
+     ],
+     [
+      -217.98,
+      -210.5,
+      1884.19
+     ],
+     [
+      -0.0,
+      -210.5,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.9426,
+    "startF": 0.9472,
+    "durF": 0.0131,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/108",
+    "floor": [
+     0.87,
+     0.0,
+     0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     -0.5,
+     0.0,
+     0.87,
+     0.0,
+     55.74,
+     -4.4,
+     1954.98,
+     1.0
+    ],
+    "path": [
+     [
+      -20.72,
+      65.6,
+      1872.81
+     ],
+     [
+      -20.72,
+      -52.5,
+      1872.81
+     ],
+     [
+      -0.0,
+      -52.5,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.9563,
+    "startF": 0.9609,
+    "durF": 0.0117,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/109",
+    "floor": [
+     -0.87,
+     0.0,
+     -0.5,
+     0.0,
+     0.0,
+     1.0,
+     0.0,
+     0.0,
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     100.67,
+     -4.4,
+     1935.93,
+     1.0
+    ],
+    "path": [
+     [
+      -25.79,
+      65.6,
+      1940.36
+     ],
+     [
+      -25.79,
+      -212.5,
+      1940.36
+     ],
+     [
+      -0.0,
+      -212.5,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.9685,
+    "startF": 0.9731,
+    "durF": 0.0136,
+    "route": true
+   },
+   {
+    "key": "10156 - truck.ldr/110",
+    "floor": [
+     0.5,
+     0.0,
+     -0.87,
+     0.0,
+     0.41,
+     0.88,
+     0.23,
+     0.0,
+     0.76,
+     -0.47,
+     0.44,
+     0.0,
+     151.05,
+     -11.27,
+     1963.63,
+     1.0
+    ],
+    "path": [
+     [
+      75.07,
+      150.06,
+      1940.63
+     ],
+     [
+      75.07,
+      -77.68,
+      1940.63
+     ],
+     [
+      -0.0,
+      -77.68,
+      -0.0
+     ],
+     [
+      -0.0,
+      -48.0,
+      -0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
+    ],
+    "appearF": 0.9827,
+    "startF": 0.9873,
+    "durF": 0.0127,
+    "route": true
+   }
+  ]
  }
 }

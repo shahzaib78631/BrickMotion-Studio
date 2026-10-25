@@ -18,16 +18,17 @@ class CorridorResult:
 
 def swept_corridor(
     grid: BoxGrid,
-    piece_id: tuple[str, int],
+    piece_id: "tuple[str, int] | list[tuple[str, int]] | None",
     lo_start: np.ndarray,
     hi_start: np.ndarray,
     lo_end: np.ndarray,
     hi_end: np.ndarray,
     frames: int = 48,
     margin: float = 2.0,
-    allow_final: set[tuple[str, int]] | None = None,
+    allow_final: "set[tuple[str, int]] | None" = None,
     forgive_after: float = 1.0,
     forgive: set | None = None,
+    skip: "set[tuple[str, int]] | None" = None,
 ) -> CorridorResult:
     """Swept-AABB corridor test with three contact phases.
 
@@ -37,9 +38,11 @@ def swept_corridor(
     Socket forgiveness (forgive_after < 1): socket mates also stop blocking
     during the final plunge phase, because their boxes legitimately
     interpenetrate when sockets close.
+    `skip` payloads are exempt everywhere (a flying piece's joint mates).
     """
     allow_final = allow_final or set()
     forgive = forgive or set()
+    skip = skip or set()
     blockers: list[str] = []
     for i in range(frames + 1):
         t = i / frames
@@ -51,6 +54,8 @@ def swept_corridor(
             continue
         m = margin if i != frames else 0.0
         for payload, blo, _bhi in grid.hits(lo, hi, exclude=piece_id, margin=m if m > 0 else 0.0):
+            if payload in skip:
+                continue
             if i == frames:
                 if payload in allow_final:
                     continue

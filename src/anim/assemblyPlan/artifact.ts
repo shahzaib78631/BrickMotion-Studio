@@ -59,6 +59,36 @@ export const ArtifactStepSchema = z.object({
   prior: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
+/**
+ * Optional python-authored build animation (flight-v1): one flight per step,
+ * in artifact step order. `floor` is the staged pose (column-major, pure
+ * translation of the matched final pose); `path` holds the flight waypoints
+ * as offsets relative to the final pose, last one exactly the origin.
+ * The `F` fields are fractions of the authored build window, so the studio's
+ * targetSeconds scales the choreography: a piece materialises at `appearF`,
+ * takes off at `startF` and stays airborne for `durF` (arc-length proportional
+ * along `path`, with the final insert travel rendered visibly slower).
+ * `route: false` marks a flight the engine could not certify — such a block
+ * is refused as a whole by the studio (certified-only).
+ */
+export const ArtifactFlightPieceSchema = z.object({
+  key: z.string().min(1),
+  floor: Matrix,
+  path: z.array(V3).min(2),
+  appearF: z.number().finite().min(0).max(1),
+  startF: z.number().finite().min(0).max(1),
+  durF: z.number().finite().min(0).max(1),
+  route: z.boolean(),
+});
+
+export const ArtifactAnimationSchema = z.object({
+  kind: z.literal('flight-v1'),
+  pieces: z.array(ArtifactFlightPieceSchema),
+});
+
+export type ArtifactFlightPiece = z.infer<typeof ArtifactFlightPieceSchema>;
+export type ArtifactAnimation = z.infer<typeof ArtifactAnimationSchema>;
+
 export type ArtifactPiece = z.infer<typeof ArtifactPieceSchema>;
 export type ArtifactJoint = z.infer<typeof ArtifactJointSchema>;
 export type ArtifactInsertion = z.infer<typeof ArtifactInsertionSchema>;
@@ -76,6 +106,7 @@ export const AssemblyArtifactSchema = z.object({
   joints: z.array(ArtifactJointSchema),
   steps: z.array(ArtifactStepSchema),
   stats: z.record(z.string(), z.unknown()),
+  animation: ArtifactAnimationSchema.nullable().optional(),
 });
 
 export function parseAssemblyArtifact(json: unknown): { ok: true; artifact: AssemblyArtifact } | { ok: false; errors: string[] } {

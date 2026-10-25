@@ -229,16 +229,42 @@ def _contacts(asm: Assembly) -> list[Joint]:
     return out
 
 
+def interlock_engaged(asm: Assembly, a: str, b: str) -> bool:
+    """True when an AABB interlock pair reads as a real socket.
+    Interlock joints come from loose box overlap; only pairs sharing a big
+    volume of the *smaller piece's own cross-section* are physical sockets
+    (a pin sitting mostly inside a hole, an arm inside a torso cup).
+    Grazes like an arm brushing past a leg are incidental and must never
+    carry build causality."""
+    la, ha = asm.boxes.get(a, (None, None))
+    lb, hb = asm.boxes.get(b, (None, None))
+    if la is None or lb is None:
+        return False
+    ov = np.minimum(ha, hb) - np.maximum(la, lb)
+    if (ov <= 0).any():
+        return False
+    k = int(np.argmin(ov))
+    dim = np.maximum(np.minimum(ha - la, hb - lb), 1.0)
+    for i in range(3):
+        if i == k:
+            continue
+        if float(ov[i]) < 0.4 * float(dim[i]):
+            return False
+    return True
+
+
 def supported(asm: Assembly, key: str, placed: set[str]) -> bool:
     lo, hi = asm.boxes[key]
     if abs(hi[1] - asm.ground_y) < 2.5:
         return True
     for j in asm.joints_by_child.get(key, ()):
-        if j.parent in placed:
-            return True
+        if not j.confidence.startswith("interlock") or interlock_engaged(asm, key, j.parent):
+            if j.parent in placed:
+                return True
     for j in asm.joints_by_parent.get(key, ()):
-        if j.child in placed:
-            return True
+        if not j.confidence.startswith("interlock") or interlock_engaged(asm, key, j.child):
+            if j.child in placed:
+                return True
     for other in placed:
         if other == key or other not in asm.boxes:
             continue

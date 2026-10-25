@@ -12,14 +12,28 @@ export function compileConstruction(plan: ConstructionPlan, opts: AnimOptions): 
         throw new ConstructionError('invalid-input', 'Animation timing must be finite and targetSeconds must be positive.');
     // Construction operations are not authored build steps. Counting every
     // brick as its own step reserved up to 20% of the build clip for pauses that
-    // V2 never scheduled, producing a large unexplained idle tail.
-    const authoredSteps = new Set(plan.operations.map(op => `${op.model}\0${op.step}`)).size;
+    // V2 never scheduled, producing a large unexplained idle tail. Authored
+    // (python flight-v1) plans interleave their own pauses in the fractions, so
+    // no compiler-added pause budget is deducted for them.
+    const authored = plan.operations.length > 0 && plan.operations.every(op => op.schedule !== undefined);
+    const authoredSteps = authored ? 0 : new Set(plan.operations.map(op => `${op.model}\0${op.step}`)).size;
     const pacing = choosePacing(plan.operations.length, authoredSteps, { ...opts, mode: 'piece' });
     const matrices: number[][] = [], ref = (m: number[]) => { matrices.push(m); return matrices.length - 1; };
     const parts = new Map(plan.parts.map(p => [p.key, p]));
     if (parts.size !== plan.parts.length)
         throw new ConstructionError('invalid-plan', 'Duplicate part keys in construction output.');
     type ETrack = EncodedTimeline['tracks'][number][1];
+    // Authored schedule: a part materialises on the staging floor at its own
+    // appear moment (seconds over the build window), stays hidden before that.
+    const appearOf = new Map<string, number>();
+    if (authored) for (const op of plan.operations) {
+        const s = op.schedule!;
+        for (const key of op.keys) {
+            if (![s.appearF, s.startF, s.durF].every(Number.isFinite) || !(0 <= s.appearF && s.appearF <= s.startF) || s.durF <= 0)
+                throw new ConstructionError('invalid-plan', `Operation ${op.id} has an out-of-order authored schedule.`);
+            appearOf.set(key, Math.max(0, pacing.intro + s.appearF * pacing.build));
+        }
+    }
     const tracks = new Map<string, ETrack>();
     // Camera framing visits every part after every operation. Cache affine
     // inverses once rather than inverting a thousand matrices per frame key.
@@ -31,14 +45,14 @@ export function compileConstruction(plan: ConstructionPlan, opts: AnimOptions): 
         // Stage bounds must use the actual rigid orientation. A translated
         // AABB misses the angled ends of a long sideways submodel.
         const delta = multiply(p.staged, inverseFinal.get(p.key)!);
-        tracks.set(p.key, { appear: 0, floor: ref(p.staged), final: ref(p.final), floorBox: transformBox(p.bounds, delta), ctx: 0, moves: [] });
+        tracks.set(p.key, { appear: appearOf.get(p.key) ?? 0, floor: ref(p.staged), final: ref(p.final), floorBox: transformBox(p.bounds, delta), ctx: 0, moves: [] });
     }
     const units: EncodedTimeline['units'] = [], steps: EncodedTimeline['steps'] = [], camKeys: EncodedTimeline['camKeys'] = [], subBuilds: EncodedTimeline['subBuilds'] = [];
     // Guarantee that operation durations AND their sequential gaps fit into
     // the selected build-time allocation. A fixed 0.35s minimum per operation
     // previously made a 20s request take nearly 40s for 100 moving pieces.
     const opCount = plan.operations.length;
-    const gap = opCount > 1 ? Math.min(.03, pacing.build / (2 * (opCount - 1))) : 0;
+    const gap = opCount > 1 && !authored ? Math.min(.03, pacing.build / (2 * (opCount - 1))) : 0;
     const operationDuration = opCount ? Math.max(1e-6, (pacing.build - gap * (opCount - 1)) / opCount) : 0;
     let time = pacing.intro;
     const current = new Map(plan.parts.map(p => [p.key, p.staged]));
@@ -51,11 +65,15 @@ export function compileConstruction(plan: ConstructionPlan, opts: AnimOptions): 
         const index = units.length, requires = op.requires.map(id => { const n = operationIndex.get(id); if (n === undefined)
             throw new ConstructionError('invalid-plan', `Unfinished prerequisite ${id}.`); return n; });
         operationIndex.set(op.id, index);
+        let prevEnd = -Infinity;
         if (index)
-            time = Math.max(time, units[index - 1].start + units[index - 1].dur + gap);
+            prevEnd = Math.max(prevEnd, units[index - 1].start + units[index - 1].dur + gap);
         for (const j of requires)
-            time = Math.max(time, units[j].start + units[j].dur + gap);
-        const dur = operationDuration;
+            prevEnd = Math.max(prevEnd, units[j].start + units[j].dur + gap);
+        time = Math.max(time, prevEnd);
+        const dur = authored && op.schedule ? Math.max(1e-6, op.schedule.durF * pacing.build) : operationDuration;
+        const start = authored && op.schedule ? Math.max(time, pacing.intro + op.schedule.startF * pacing.build) : time;
+        time = start;
         let travel: Box | null = null;
         let land: Box | null = null;
         const translationPath = op.rigidPath ? undefined : op.path.map(p => sub(p, op.path[0]));
@@ -93,22 +111,29 @@ export function compileConstruction(plan: ConstructionPlan, opts: AnimOptions): 
                 if (!sameOrientation(op.rigidPath[i - 1], op.rigidPath[i]))
                     travel = travel ? union(travel, turningSphere(bounds, op.rigidPath[i - 1])) : turningSphere(bounds, op.rigidPath[i - 1]);
         }
-        units.push({ kind: op.kind === 'attach-subassembly' ? 'attach' : 'piece', keys: [...op.keys], start: time, dur, step: steps.length, dependsOn: requires, box: travel, land, operationId: op.id });
-        steps.push({ model: op.model, index: op.step, start: time, end: time + dur });
+        units.push({ kind: op.kind === 'attach-subassembly' ? 'attach' : 'piece', keys: [...op.keys], start, dur, step: steps.length, dependsOn: requires, box: travel, land, operationId: op.id });
+        steps.push({ model: op.model, index: op.step, start, end: start + dur });
         let visible = plan.bounds;
         for (const p of plan.parts) {
+            if (authored) {
+                const appearT = appearOf.get(p.key) ?? 0;
+                // Staged parts that have not materialised yet are hidden; the
+                // camera frames only what the viewer can actually see.
+                if (appearT > start + 1e-6)
+                    continue;
+            }
             const at = current.get(p.key)!;
             visible = union(visible, transformBox(p.bounds, multiply(at, inverseFinal.get(p.key)!)));
         }
         if (travel)
             visible = union(visible, travel);
-        camKeys.push({ t: time, box: visible }, { t: time + dur, box: visible });
+        camKeys.push({ t: start, box: visible }, { t: start + dur, box: visible });
         if (op.kind === 'attach-subassembly') {
             const earlier = plan.operations.slice(0, index).map((o, i) => ({ o, i })).filter(({ o }) => o.keys.some(k => op.keys.includes(k)));
             const focus = op.keys.map(k => op.rigidPath
                 ? transformBox(parts.get(k)!.bounds, op.rigidPath[0])
                 : shiftBox(parts.get(k)!.bounds, op.path[0])).reduce(union);
-            subBuilds.push({ key: op.id.slice('construct:'.length), name: op.id.includes('$mechanical:') ? 'Mechanical subassembly' : op.scope, closeUp: false, start: earlier.length ? units[earlier[0].i].start : time, attachStart: time, attachEnd: time + dur, focus });
+            subBuilds.push({ key: op.id.slice('construct:'.length), name: op.id.includes('$mechanical:') ? 'Mechanical subassembly' : op.scope, closeUp: false, start: earlier.length ? units[earlier[0].i].start : start, attachStart: start, attachEnd: start + dur, focus });
         }
         time += dur;
     }

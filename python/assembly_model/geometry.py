@@ -45,8 +45,9 @@ class BoxGrid:
                     self.cells.setdefault((x, y, z), []).append(idx)
         return idx
 
-    def hits(self, lo: np.ndarray, hi: np.ndarray, exclude: tuple[str, int] | None = None,
+    def hits(self, lo: np.ndarray, hi: np.ndarray, exclude: "tuple[str, int] | list[tuple[str, int]] | None" = None,
              margin: float = 0.0):
+        excl = None if exclude is None else (exclude if isinstance(exclude, list) else [exclude])
         get = self.cells.get
         ga = np.floor((lo - margin) / self.cell).astype(int)
         gb = np.floor((hi + margin) / self.cell).astype(int)
@@ -60,7 +61,7 @@ class BoxGrid:
                             continue
                         seen.add(idx)
                         blo, bhi, payload = self.boxes[idx]
-                        if exclude is not None and payload == exclude:
+                        if excl is not None and payload in excl:
                             continue
                         if np.all(lo - margin < bhi + EPS) and np.all(blo < hi + margin + EPS):
                             out.append((payload, blo, bhi))

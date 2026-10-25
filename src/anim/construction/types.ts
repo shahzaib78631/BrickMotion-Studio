@@ -200,6 +200,13 @@ export type Operation = {
     rigidPath?: M4[];
     /** Optional world pivot for a rigid-rotation path (joint hinge/rotor). */
     pivot?: V3;
+    /**
+     * Python-authored fractional schedule over the build window
+     * (`animation.kind = 'flight-v1'`): appear/take-off/airtime as fractions
+     * so any targetSeconds rescales the same choreography. Either every
+     * operation is authored or none is (all-or-nothing per artifact).
+     */
+    schedule?: { appearF: number; startF: number; durF: number };
     check: {
         method: 'continuous-triangle-sat';
         contactPolicies: string[];

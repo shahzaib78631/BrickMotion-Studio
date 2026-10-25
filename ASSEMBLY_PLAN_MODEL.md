@@ -149,6 +149,49 @@ The app consumes artifacts through the existing construction pipeline:
   "111 certified placements" planned through the real worker → playback
   advanced over the 15 s timeline in the build view.
 
+### Python-authored build animation (`animation`, `kind: flight-v1`)
+
+`plan` (and the CLI, unless `--no-timeline`) additionally writes an `animation`
+block that carries a complete staged-build choreography, authored in Python and
+compiled by the studio directly — no studio-side pacing re-derivation:
+
+- **Piece schema** — one entry per step, in step order:
+  `key`, `floor` (staged pose, column-major 16, a pure translation of the
+  matched final pose), `path` (flight waypoints as offsets relative to the
+  final pose; last is exactly `[0,0,0]`), `appearF` / `startF` / `durF`
+  (fractions of the authored build window) and `route`.
+- **Staging** — every piece starts packed on the ground beside the model
+  (shelf packing in build order behind the footprint, `+z`, gap 8 LDU, ≥120 LDU
+  off the footprint). A piece materialises there at `appearF` (= `startF − 1s`,
+  normalized), so the viewer sees the waiting pile grow.
+- **Choreography** (`python/assembly_model/choreo.py`) — rise → cruise above
+  the static world → descend to the corridor start → the certified corridor
+  insert (arc-length-proportional along `path`, insert rendered slower:
+  900 vs 150 LDU/s). Flight legs are swept against the per-step world
+  (placed pieces + unflown staging cells) with the engine's contact semantics:
+  axis-shared joint mates are skipped, ≤2.5 LDU overlaps are grazes, and snap
+  (tier-0) descend/insert stretches follow the engine's trust contract instead
+  of a sweep — tier-0 corridors are certified outside the sweep by design.
+  A leg that still sweeps as blocked marks the flight `route: false`.
+- **Fractional schedule** — the studio maps `F` over its build window
+  (`targetSeconds − intro − outro`), so any clip length rescales the same
+  choreography. Python's inter-piece breathing gaps are already baked into the
+  fractions (sum `durF` ≈ 0.94 on 10156); the compiler adds nothing.
+- **Studio contract** (`src/anim/assemblyPlan/construction.ts`,
+  `src/anim/construction/compile.ts`, zod in `artifact.ts`) — accepted
+  all-or-nothing: piece/step counts and order must agree, every `route ===
+  true`, path finite and origin-terminated, fractions sorted with
+  `appearF ≤ startF`, `startF + durF ≤ 1`. Staged floors must be pure
+  translations of the matched studio pose. Anything else (or any `route:
+  false`) falls back to plain corridor pacing with no warning shown — the
+  artifact remains animatable. Accepted blocks set `Operation.schedule`
+  (appear/take-off/airtime seconds) and per-track `appear`, and the camera
+  visibility filter hides parts that have not materialised yet.
+- **Verified** — 10156: 111/111 flights `route: true`, pytest 10/10,
+  vitest assemblyPlanner tests green, headless-Chrome playback advanced over
+  the full timeline; 5590 (1258 pieces): choreography built in ~9 s,
+  1258/1258 certified.
+
 ## Studio integration path (historical note)
 
 `steps[]` maps 1:1 into the existing timeline planning pipeline
