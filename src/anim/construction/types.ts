@@ -107,8 +107,21 @@ export type SearchStats = {
     deferredPreviouslyBlockedNodes?: number;
     /** Large-scope exhaustive branch limits reached; search retried alternative orders. */
     boundedExhaustiveBranches?: number;
+    configurationDetourAttempts?: number;
+    configurationDetourSuccesses?: number;
+    configurationDetourStates?: number;
+    configurationDetourEdges?: number;
+    /** First-edge-only contact policies in a bounded assembled-pose detour. */
+    engagedDetourAttempts?: number;
+    engagedDetourSuccesses?: number;
+    authoredStepModules?: number;
+    authoredStepModuleMembers?: number;
+    mechanicalJointHints?: number;
+    articulatedJointHints?: number;
     /** Deepest verified sequence reached within the active assembly scope. */
     peakRemovals?: number;
+    peakRemovedLeaves?: number;
+    peakScopeLeaves?: number;
     peakScopeUnits?: number;
     peakScope?: string;
     contactAuditMilliseconds?: number;
@@ -136,6 +149,10 @@ export type ConstructionOptions = {
     }) => void; /** First release requires a table or a declared virtual fixture. */
     supportMode?: 'fixture' | 'table';
     mechanicalSubassemblies?: boolean;
+    /** Debug switch to compare V3 against the previous straight/side-exit search. */
+    enableConfigurationDetours?: boolean;
+    /** Group only connected, same-step mates into separately planned work modules. */
+    enableStepModules?: boolean;
     /** Box the automatic work bays are laid out around, when it differs from the model's own
      * (a model moved to its assembly spot with "loose pieces follow" off). */
     layoutBounds?: Box;

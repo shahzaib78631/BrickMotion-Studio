@@ -12,6 +12,8 @@ export type AnimOptions = {
   constructionMaxMilliseconds?: number;
   constructionSupport?: 'fixture' | 'table';
   constructionMechanicalSubassemblies?: boolean;
+  /** Opt-in authored-step preassembly of genuinely matched mechanical neighbours. */
+  constructionStepModules?: boolean;
   /** Optional clip-length overrides, seconds. Null follows the automatic video length. */
   introSeconds?: number | null; buildSeconds?: number | null; outroSeconds?: number | null;
   /** Infer geometric support dependencies (default). False disables that inference, not explicit or anatomical dependencies. */

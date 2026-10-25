@@ -192,6 +192,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
         maxMilliseconds: opts.constructionMaxMilliseconds,
         supportMode: opts.constructionSupport ?? 'fixture',
         mechanicalSubassemblies: opts.constructionMechanicalSubassemblies,
+        enableStepModules: opts.constructionStepModules === true,
         layoutBounds: layoutBox ?? undefined,
         workBaySpots,
         onProgress: (p) => onProgress?.({ ...p, phase: p.phase === 'connections' ? 'connections' : p.phase === 'validation' ? 'validation' : 'disassembly' }),

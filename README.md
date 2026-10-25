@@ -123,3 +123,13 @@ plan's deepest verified removal sequence during V3 fallback. Existing continuous
 collision checks and forward replay remain mandatory. See
 [`CONSTRUCTION_V3_SCALABILITY.md`](CONSTRUCTION_V3_SCALABILITY.md) for reproducible
 LEGO 5590 benchmarks and unsupported rigid-joint cases.
+
+### Construction V3 constrained departures
+
+V3 includes a bounded multi-turn configuration-space fallback. The latest
+extension can start from the assembled pose for verified first-edge connector
+release and uses strict swept-mesh checks on all subsequent edges. Search
+budgets, explicit uncertified fallback, and V2 mode remain available. See
+`CONSTRUCTION_V3_CONSTRAINED_MOTION.md` for the benchmark and unsupported
+articulated-motion cases. No collision-certified LEGO 5590 timeline has been
+produced yet.

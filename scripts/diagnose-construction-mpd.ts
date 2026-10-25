@@ -22,6 +22,8 @@ import { possibleFinalContacts } from '../src/anim/construction/contactBroadphas
 const args = process.argv.slice(2);
 const inspectInterfaces = args.includes('--inspect-interfaces');
 const auditOnly = args.includes('--audit-only');
+const noConfigDetours = args.includes('--no-config-detours');
+const useStepModules = args.includes('--step-modules') && !args.includes('--no-step-modules');
 const noReviewedSurfaces = args.includes('--no-reviewed-surfaces');
 const focusFlag = args.find(value => value.startsWith('--focus-parts='));
 const focusParts = focusFlag?.slice('--focus-parts='.length).toLowerCase().split(',').filter(Boolean);
@@ -33,7 +35,7 @@ if (budgetFlags.length > 1) throw new Error('Specify --budget only once.');
 const requestedBudget = budgetFlags[0]?.slice('--budget='.length) ?? 'standard';
 if (!isConstructionBudgetPreset(requestedBudget)) throw new Error('Unknown budget preset. Use --budget=standard, --budget=extended or --budget=diagnostic.');
 const limits = CONSTRUCTION_BUDGET_PRESETS[requestedBudget];
-const [mpdArg, libraryArg, modelScope = 'full', reportArg] = args.filter(value => !value.startsWith('--budget=') && !value.startsWith('--engine=') && value !== '--inspect-interfaces' && value !== '--audit-only' && value !== '--no-reviewed-surfaces' && !value.startsWith('--focus-parts='));
+const [mpdArg, libraryArg, modelScope = 'full', reportArg] = args.filter(value => !value.startsWith('--budget=') && !value.startsWith('--engine=') && value !== '--inspect-interfaces' && value !== '--audit-only' && value !== '--no-config-detours' && value !== '--no-step-modules' && value !== '--step-modules' && value !== '--no-reviewed-surfaces' && !value.startsWith('--focus-parts='));
 if (!mpdArg || !libraryArg) {
   console.error('Usage: npx tsx scripts/diagnose-construction-mpd.ts <model.mpd> <ldraw-dir> [scope|full] [report.json] [--budget=standard|extended|diagnostic] [--engine=v2|v3] [--audit-only] [--no-reviewed-surfaces] [--inspect-interfaces] [--focus-parts=4073,4349]');
   process.exit(1);
@@ -114,7 +116,7 @@ const model = modelFromPlan(plan, id => {
   return item;
 });
 console.log(`Loaded ${model.parts.size} piece instances and ${refs.size} unique parts; ${files.size} LDraw DAT files; ${Object.keys(shadowFiles).length} shadow definitions.`);
-console.log(`Engine: ${engine}; budget: ${requestedBudget} — ${limits.maxMilliseconds/1000}s, ${limits.maxStates} states, ${limits.maxCandidates} candidates.`);
+console.log(`Engine: ${engine}; config detours: ${!noConfigDetours}; step modules: ${useStepModules}; budget: ${requestedBudget} — ${limits.maxMilliseconds/1000}s, ${limits.maxStates} states, ${limits.maxCandidates} candidates.`);
 const start = performance.now();
 if (inspectInterfaces) {
   const graph = buildMechanicalConstraintGraph(model);
@@ -147,7 +149,7 @@ let report: Record<string, unknown>;
 try {
   const result = planConstruction(model, {
     ...limits, algorithm: engine === 'v3' ? 'guided-v3' : 'exhaustive-v2', supportMode: 'fixture',
-    disableBundledSurfaceReviews: noReviewedSurfaces,
+    disableBundledSurfaceReviews: noReviewedSurfaces, enableConfigurationDetours: !noConfigDetours, enableStepModules: useStepModules,
     onContactAuditComplete: result => { contactAudit = result; },
     cancelled: () => auditOnly && contactAudit !== undefined,
     onProgress: p => {
@@ -155,7 +157,7 @@ try {
       if (t-last>2000) { console.log(`  ${p.phase} ${p.completed}/${p.total} ${p.item??''}`); last=t; }
     },
   });
-  report = { success: true, engine, budget: requestedBudget, limits, scope: modelScope, pieces: model.parts.size, operations: result.operations.length, contactAudit, stats: result.stats, warnings: result.warnings };
+  report = { success: true, engine, enableConfigurationDetours: !noConfigDetours, enableStepModules: useStepModules, budget: requestedBudget, limits, scope: modelScope, pieces: model.parts.size, operations: result.operations.length, contactAudit, stats: result.stats, warnings: result.warnings };
   console.log(`Planned ${result.operations.length} operations.`);
 } catch (error) {
   const e = error as Error & { code?: string; details?: {blockages?: {moving:string;obstacle:string;stage:string;detail:string}[];stats?:unknown} };
@@ -166,7 +168,7 @@ try {
       note:'Final-pose audit passed. Route search and animation replay were deliberately not run.' };
   } else {
   const blockages = e.details?.blockages?.map(c => ({ ...c, parts: [model.parts.get(c.moving)?.part, model.parts.get(c.obstacle)?.part] }));
-  report = { success:false, engine, budget: requestedBudget, limits, scope:modelScope, pieces:model.parts.size, code:e.code??e.name, message:e.message, stats:e.details?.stats, blockages };
+  report = { success:false, engine, enableConfigurationDetours: !noConfigDetours, enableStepModules: useStepModules, budget: requestedBudget, limits, scope:modelScope, pieces:model.parts.size, code:e.code??e.name, message:e.message, stats:e.details?.stats, blockages };
   console.error(e.code ?? e.name, e.message);
   for (const b of blockages ?? []) console.error(`  ${b.parts.join(' / ')} | ${b.moving} / ${b.obstacle} | ${b.stage}`);
   process.exitCode = 2;

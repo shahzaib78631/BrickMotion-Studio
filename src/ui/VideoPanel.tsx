@@ -274,7 +274,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
             <option value="construction-auto">Adaptive V2 — then uncertified preview</option>
             <option value="construction-v2">Construction V2 — certified only</option>
           </select>
-          <span className="nx-hint">V3 uses connector-guided disengagement, overhead transport, obstacle-witness search ordering and scoped spatial collision checks. Large-model fallback is effort-bounded so alternative build orders can be explored. Every accepted route requires exact collision checking and forward replay. Adaptive previews are <strong>uncertified</strong>; articulation and true flex deformation remain unsupported.</span>
+          <span className="nx-hint">V3 uses connector-guided disengagement, overhead transport, obstacle-witness search ordering, bounded multi-turn detour search, and scoped spatial collision checks. Large-model fallback is effort-bounded so alternative build orders can be explored. Every accepted route requires exact collision checking and forward replay. Adaptive previews are <strong>uncertified</strong>; articulation and true flex deformation remain unsupported.</span>
         </label>
         {v2 && <label className="nx-field">
           Workpiece support
@@ -283,6 +283,11 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
             <option value="table">Require table contact or a connection</option>
           </select>
           <span className="nx-hint">Fixtures aren't drawn. Neither mode simulates gravity.</span>
+        </label>}
+        {v3 && <label className="nx-field">
+          <span><input type="checkbox" checked={s.constructionStepModules === true}
+            onChange={e => s.set({ constructionStepModules: e.target.checked })} /> Connected build-step modules (experimental)</span>
+          <span className="nx-hint">Groups only LDCad-matched pieces in the same authored STEP. Every part must still assemble individually at a work area, and the complete module must pass strict motion checks. This can help trapped connections but may cost more search time on some models. Off by default.</span>
         </label>}
         {v2 && <label className="nx-field">
           Construction search budget
@@ -302,6 +307,9 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
               <summary>Search performance</summary>
               <p className="nx-hint">{timeline.construction.stats.candidates.toLocaleString()} candidates · {(timeline.construction.stats.cachedNearRayRejects ?? 0).toLocaleString()} witnessed blocked rays reused · {timeline.construction.stats.backtracks.toLocaleString()} backtracks</p>
               <p className="nx-hint">{(timeline.construction.stats.avoidedNearDepthChecks ?? 0).toLocaleString()} redundant withdrawal depths avoided · {(timeline.construction.stats.directSkySuccesses ?? 0).toLocaleString()} direct overhead routes</p>
+              <p className="nx-hint">{(timeline.construction.stats.configurationDetourSuccesses ?? 0).toLocaleString()} certified multi-turn detours / {(timeline.construction.stats.configurationDetourAttempts ?? 0).toLocaleString()} attempts · {(timeline.construction.stats.authoredStepModules ?? 0).toLocaleString()} connected STEP modules</p>
+              <p className="nx-hint">{(timeline.construction.stats.engagedDetourAttempts ?? 0).toLocaleString()} assembled-pose constrained departures tried · {(timeline.construction.stats.engagedDetourSuccesses ?? 0).toLocaleString()} accepted after full collision checks. Mechanical articulation is not simulated.</p>
+              <p className="nx-hint">{(timeline.construction.stats.mechanicalJointHints ?? 0).toLocaleString()} metadata joint hints ({(timeline.construction.stats.articulatedJointHints ?? 0).toLocaleString()} potentially articulated). These are not proof of a valid motion.</p>
             </details>}
             <details><summary>Limits and assumptions</summary>{timeline.construction.warnings.map((w, i) => <p key={i} className="nx-hint">{w}</p>)}</details>
             <button type="button" className="nx-btn nx-sm" onClick={() => {

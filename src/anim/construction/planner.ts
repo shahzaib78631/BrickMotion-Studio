@@ -15,6 +15,8 @@ import { possibleFinalContacts } from './contactBroadphase';
 import { ScopeSceneIndex } from './sceneIndex';
 import { guidedDirections, nearDistances, farExits } from './nearFar';
 import { mayReuseBlockedNearRay, type BlockedNearRay } from './routePruning';
+import { findCertifiedDetour } from './configurationSpace';
+import { authoredStepModules } from './stepModules';
 import { isGeneratedWorkBay, workBayAnchorId, workBayKey, workBayKind, workBayLabel } from './workBays';
 import { ConstructionError, type ConstructionModel, type ConstructionNode, type ConstructionPlan, type ConstructionOptions, type Blockage, type Operation, type SearchStats, type Connection, type WorkBay } from './types';
 type Slot = {
@@ -41,7 +43,7 @@ function positive(value: number | undefined, fallback: number, max: number): num
  * contact limits when a search budget is exhausted.
  */
 export function planConstruction(model: ConstructionModel, options: ConstructionOptions = {}): ConstructionPlan {
-    const start = performance.now(), stats: SearchStats = { states: 0, candidates: 0, backtracks: 0, meshPairs: 0, trianglePairs: 0, cacheHits: 0, milliseconds: 0, guidedCandidates: 0, exhaustiveCandidates: 0, broadphaseQueries: 0, broadphaseHits: 0, blockedNearRays: 0, avoidedNearDepthChecks: 0, directSkyAttempts: 0, directSkySuccesses: 0, cachedNearRayRejects: 0, deferredPreviouslyBlockedNodes: 0, boundedExhaustiveBranches: 0 };
+    const start = performance.now(), stats: SearchStats = { states: 0, candidates: 0, backtracks: 0, meshPairs: 0, trianglePairs: 0, cacheHits: 0, milliseconds: 0, guidedCandidates: 0, exhaustiveCandidates: 0, broadphaseQueries: 0, broadphaseHits: 0, blockedNearRays: 0, avoidedNearDepthChecks: 0, directSkyAttempts: 0, directSkySuccesses: 0, cachedNearRayRejects: 0, deferredPreviouslyBlockedNodes: 0, boundedExhaustiveBranches: 0, configurationDetourAttempts: 0, configurationDetourSuccesses: 0, configurationDetourStates: 0, configurationDetourEdges: 0, engagedDetourAttempts: 0, engagedDetourSuccesses: 0 };
     const guided = options.algorithm === 'guided-v3';
     const maxStates = positive(options.maxStates, 2000, 100000), maxMilliseconds = positive(options.maxMilliseconds, 20000, 120000), maxCandidates = positive(options.maxCandidates, 100000, 2000000);
     let scope = '', phase: NonNullable<ConstructionError['details']['phase']> = 'connections', lastBlockages: Blockage[] = [];
@@ -55,9 +57,22 @@ export function planConstruction(model: ConstructionModel, options: Construction
     options.onProgress?.({ phase: 'connections', completed: 0, total: model.parts.size });
     const graph = discoverConnections(model), ground = model.bounds.max[1];
     pulse();
+    // Classify genuine profiled connections before selecting physical workbench
+    // modules. This graph is also reused by the later final-contact audit.
+    const mechanicalGraph = guided ? buildMechanicalConstraintGraph(model, pulse) : undefined;
+    stats.mechanicalJointHints = mechanicalGraph?.joints.length ?? 0;
+    stats.articulatedJointHints = mechanicalGraph?.joints.filter(j => j.motion === 'revolute' || j.motion === 'ball').length ?? 0;
     const mechanicallyGrouped = options.mechanicalSubassemblies === false ? model.nodes : mechanicalSubassemblies(model.nodes, graph.connections, graph.dependencies);
-    const composite = semanticComposites(mechanicallyGrouped, model.metrics);
+    // Preserve V3's existing declared hard-module grouping. Newly inferred
+    // static-only joints guide only authored-step modules and route proposals.
+    if (mechanicalGraph) graph.connections.push(...mechanicalGraph.connections);
+    const stepModules = guided && options.enableStepModules === true
+        ? authoredStepModules(mechanicallyGrouped, mechanicalGraph?.connections ?? [], graph.dependencies)
+        : { nodes: mechanicallyGrouped, modules: 0, members: 0 };
+    const composite = semanticComposites(stepModules.nodes, model.metrics);
     const rootNodes = composite.nodes;
+    stats.authoredStepModules = stepModules.modules;
+    stats.authoredStepModuleMembers = stepModules.members;
     // These are one pre-shaped part, not already-assembled independent bricks.
     // Keep each rendered segment in the model/animation, but make one atomic
     // stage/flight. All external collisions still use every original triangle.
@@ -199,10 +214,7 @@ export function planConstruction(model: ConstructionModel, options: Construction
     const sceneBounds = layoutAreas.map(s => s.box).reduce(union, model.bounds);
     const ceiling = Math.min(...layoutAreas.map(s => s.box.min[1])) - 32;
     const oracle = new MeshOracle(model, stats, pulse);
-    // Typed snap topology is inferred independently of construction order.
-    // Never infer an animation collision exception from a snap match alone.
-    const mechanicalGraph = guided ? buildMechanicalConstraintGraph(model, pulse) : undefined;
-    if (mechanicalGraph) graph.connections.push(...mechanicalGraph.connections);
+    // Joint metadata is planning topology, not a collision certificate.
     pulse();
     const hasContactPolicy = (c: Connection) => !!(c.region || c.regions?.length || c.surfaceTolerance);
     const hasMotionPolicy = (c: Connection) => hasContactPolicy(c) && !c.staticOnly;
@@ -565,7 +577,7 @@ export function planConstruction(model: ConstructionModel, options: Construction
             return 'connected';
         return options.supportMode === 'table' ? null : 'virtual-fixture';
     };
-    const route = (node: ConstructionNode, remaining: ConstructionNode[], staged: StagedObstacle[], scopePose: M4, scopeId: string, index?: ScopeSceneIndex, allowExhaustive = true, connected: Connection[] = []): RouteResult | null => {
+    const route = (node: ConstructionNode, remaining: ConstructionNode[], staged: StagedObstacle[], scopePose: M4, scopeId: string, index?: ScopeSceneIndex, allowExhaustive = true, connected: Connection[] = [], mayDetour = false): RouteResult | null => {
         const target = slots.get(node.id)!.pose;
         // If a manually placed submodel bay already coincides with its installed
         // pose, its children assemble in place. There is no group carry flight,
@@ -587,6 +599,7 @@ export function planConstruction(model: ConstructionModel, options: Construction
         // V3 NEAR/FAR: the small and meaningful search is run BEFORE V2's
         // combinatorial fallback. It produces no certificates itself; every
         // step uses the exact segment/turn validators and forward replay.
+        let detourSeed: { entry: M4; finish: (at: M4) => RouteResult | null } | undefined;
         if (guided) {
             const transformed = stagedBounds(node.bounds, scopePose);
             const remainingBoxes = remaining.filter(n => n !== node).map(n => stagedBounds(n.bounds, scopePose));
@@ -655,6 +668,20 @@ export function planConstruction(model: ConstructionModel, options: Construction
                     // The direct overhead lane is the cheapest possible FAR
                     // transfer for exposed bricks. Try it BEFORE side exits,
                     // all with the same collision and final replay certificates.
+                    // Defer expensive configuration-space routing until the
+                    // ordinary guided pass has tried every eligible component.
+                    // The first certified NEAR pose is a valid starting state
+                    // only after every remaining connector has disengaged.
+                    if (!detourSeed && !rotatedBay) {
+                        const engagement = worldConnections.flatMap(c => [
+                            ...(c.region ? [c.region.length] : []),
+                            ...(c.regions ?? []).map(r => r.length),
+                        ]).reduce((a, b) => Math.max(a, b), 0);
+                        const matching = worldConnections.every(c => !c.outward ||
+                            dot(dir, c.outward) > .98 || (c.axial && dot(dir, c.outward) < -.98));
+                        if (matching && distance + SKIN >= engagement)
+                            detourSeed = { entry, finish: tryFinish };
+                    }
                     stats.directSkyAttempts!++;
                     const direct = tryFinish(entry);
                     if (direct) {
@@ -670,6 +697,108 @@ export function planConstruction(model: ConstructionModel, options: Construction
                         if (finished) return finished;
                     }
                 }
+            }
+        }
+        // A difficult Technic component may have a certified axial withdrawal
+        // but no direct overhead/one-turn exit. Before the combinatorial V2
+        // fallback, search a SMALL nonuniform configuration-space roadmap.
+        // Every graph edge uses segmentClear(); the winning route is replayed
+        // against the complete staged scene like every other V3 operation.
+        // This search never rotates an engaged joint or bypasses its geometry.
+        if (guided && mayDetour && options.enableConfigurationDetours !== false && detourSeed) {
+            const seed = detourSeed;
+            const moving = stagedBounds(node.bounds, seed.entry);
+            const original = pos(seed.entry);
+            const range: V3 = [240, 128, 240];
+            const nearby = index?.touching({
+                min: sub(moving.min, range), max: add(moving.max, range),
+            }, node.id).map(item => item.box) ?? [
+                ...remaining.filter(n => n !== node).map(n => stagedBounds(n.bounds, scopePose)),
+                ...staged.map(s => stagedBounds(s.node.bounds, s.pose)),
+            ];
+            const tailHolder: { result: RouteResult | null } = { result: null };
+            stats.configurationDetourAttempts!++;
+            const search = findCertifiedDetour({
+                start: original, moving, obstacles: nearby, scope: work, floor: ground,
+                sky: ceiling, pulse, maxExpanded: 64, maxEdges: 210, maxFinishChecks: 48, maxMilliseconds: 350,
+                clearEdge: (from, to) => segmentClear(node,
+                    poseMoved(seed.entry, sub(from, original)),
+                    poseMoved(seed.entry, sub(to, original)),
+                    remaining, staged, scopePose, false, index),
+                complete: (at) => {
+                    tailHolder.result = seed.finish(poseMoved(seed.entry, sub(at, original)));
+                    return tailHolder.result ? [] : null;
+                },
+                report: result => {
+                    stats.configurationDetourStates! += result.expanded;
+                    stats.configurationDetourEdges! += result.edges;
+                },
+            });
+            if (search && tailHolder.result) {
+                const tail = tailHolder.result;
+                stats.configurationDetourSuccesses!++;
+                return { poses: compactPoses([
+                    scopePose, seed.entry,
+                    ...search.waypoints.slice(1).map(at => poseMoved(seed.entry, sub(at, original))),
+                    ...tail.poses.slice(3),
+                ]) };
+            }
+        }
+        // A connector-guided straight departure can be impossible even when a
+        // short *bent* disengagement exists. Search from the ASSEMBLED pose as
+        // a separate bounded fallback. Only the FIRST edge receives existing
+        // verified departure/contact policies; all later edges use ordinary
+        // swept collision queries. This is deliberately not a joint solver:
+        // parts that need simultaneous articulation remain unsupported.
+        if (guided && mayDetour &&
+            options.enableConfigurationDetours !== false && !detourSeed && !rotatedBay) {
+            const moving = stagedBounds(node.bounds, scopePose);
+            const original = pos(scopePose);
+            const range: V3 = [180, 96, 180];
+            const nearby = index?.touching({
+                min: sub(moving.min, range), max: add(moving.max, range),
+            }, node.id).map(item => item.box) ?? [
+                ...remaining.filter(n => n !== node).map(n => stagedBounds(n.bounds, scopePose)),
+                ...staged.map(s => stagedBounds(s.node.bounds, s.pose)),
+            ];
+            const tailHolder: { poses: M4[] } = { poses: [] };
+            stats.configurationDetourAttempts!++;
+            stats.engagedDetourAttempts = (stats.engagedDetourAttempts ?? 0) + 1;
+            const result = findCertifiedDetour({
+                start: original, moving, obstacles: nearby, scope: work,
+                floor: ground, sky: ceiling, pulse,
+                maxExpanded: 56, maxEdges: 190, maxFinishChecks: 36, maxMilliseconds: 300,
+                clearEdge: (from, to) => segmentClear(node,
+                    poseMoved(scopePose, sub(from, original)),
+                    poseMoved(scopePose, sub(to, original)),
+                    remaining, staged, scopePose,
+                    // No surface/mate policy persists after the very first
+                    // segment; allowing one later would be unsafe.
+                    norm(sub(from, original)) < 1e-7, index),
+                complete: at => {
+                    const exit = poseMoved(scopePose, sub(at, original));
+                    const high = ceiling - node.bounds.max[1];
+                    const skyExit = poseMoved(exit, [0, high - pos(exit)[1], 0]);
+                    const skyTarget = poseMoved(target, [0, high - pos(target)[1], 0]);
+                    if (!segmentClear(node, exit, skyExit, remaining, staged, scopePose, false, index) ||
+                        !segmentClear(node, skyExit, skyTarget, remaining, staged, scopePose, false, index) ||
+                        !segmentClear(node, skyTarget, target, remaining, staged, scopePose, false, index)) return null;
+                    tailHolder.poses = [skyExit, skyTarget, target];
+                    return [];
+                },
+                report: result => {
+                    stats.configurationDetourStates! += result.expanded;
+                    stats.configurationDetourEdges! += result.edges;
+                },
+            });
+            if (result && tailHolder.poses.length) {
+                stats.configurationDetourSuccesses!++;
+                stats.engagedDetourSuccesses = (stats.engagedDetourSuccesses ?? 0) + 1;
+                return { poses: compactPoses([
+                    scopePose,
+                    ...result.waypoints.slice(1).map(at => poseMoved(scopePose, sub(at, original))),
+                    ...tailHolder.poses,
+                ]) };
             }
         }
         // Exhaustive routing is deferred until EVERY eligible piece in the
@@ -763,7 +892,7 @@ export function planConstruction(model: ConstructionModel, options: Construction
         phase = 'route-search';
         scope = scopeId;
         lastBlockages = [];
-        type Frame = { remaining: ConstructionNode[]; candidates: ConstructionNode[]; next: number; exhaustive: boolean; exhaustiveAttempted?: number; support: Map<string, Removal['support']>; staged: StagedObstacle[]; index?: ScopeSceneIndex };
+        type Frame = { remaining: ConstructionNode[]; candidates: ConstructionNode[]; next: number; exhaustive: boolean; detouring?: boolean; detourCandidates?: ConstructionNode[]; savedGuidedNext?: number; partialDetourDone?: boolean; enteredAt: number; exhaustiveAttempted?: number; detoursAttempted?: number; support: Map<string, Removal['support']>; staged: StagedObstacle[]; index?: ScopeSceneIndex };
         // An earlier guided failure is useful order information, not proof of
         // impossibility: moving another part can free a previously blocked
         // route. Prioritize never-tried nodes and nodes with changed witnesses;
@@ -822,6 +951,9 @@ export function planConstruction(model: ConstructionModel, options: Construction
                 closestUnresolved = remaining.map(n => n.id);
                 stats.peakRemovals = nodes.length - remaining.length;
                 stats.peakScopeUnits = nodes.length;
+                const totalLeaves = nodes.reduce((total,n)=>total+n.leaves.length, 0);
+                stats.peakRemovedLeaves = totalLeaves - remaining.reduce((total,n)=>total+n.leaves.length, 0);
+                stats.peakScopeLeaves = totalLeaves;
                 stats.peakScope = scopeId;
             }
             stats.states++;
@@ -862,7 +994,7 @@ export function planConstruction(model: ConstructionModel, options: Construction
                     (unblockCounts.get(b.id) ?? 0) - (unblockCounts.get(a.id) ?? 0) ||
                     b.step - a.step || b.order - a.order || a.id.localeCompare(b.id)
                 : Number(a.bounds.max[1] + pose[13] >= ground - SKIN) - Number(b.bounds.max[1] + pose[13] >= ground - SKIN) || a.bounds.min[1] - b.bounds.min[1] || b.step - a.step || b.order - a.order || a.id.localeCompare(b.id));
-            return { remaining, candidates, next: 0, exhaustive: !guided, support: supportKinds, staged, index: new ScopeSceneIndex(remaining, staged, pose) };
+            return { remaining, candidates, next: 0, exhaustive: !guided, enteredAt: stats.milliseconds, support: supportKinds, staged, index: new ScopeSceneIndex(remaining, staged, pose) };
         };
         // Exhaustive 90-degree/sidestep searches can otherwise occupy the full
         // budget in one irreducible large-model state. V3 gives that fallback a
@@ -872,6 +1004,11 @@ export function planConstruction(model: ConstructionModel, options: Construction
         // (up to user limits) exhaustive fallback for backward compatibility.
         const exhaustiveBranchAllowance = guided && nodes.length >= 120
             ? Math.min(1536, Math.max(384, nodes.length * 3)) : Infinity;
+        // Bound costly C-space exploration across ALL states, not only each
+        // individual route. Deep, ordinary brick assemblies must retain enough
+        // time for candidate ordering and local straight-line withdrawals.
+        const detourAllowance = Math.max(2, Math.min(16, Math.floor(maxMilliseconds / 6000)));
+        let detoursSpent = 0;
         let scopeBranchCuts = 0;
         const chosen: Removal[] = [], stack: Frame[] = [frame(nodes, chosen)];
         // Candidate search can test tens of thousands of short rays. Publishing
@@ -896,10 +1033,57 @@ export function planConstruction(model: ConstructionModel, options: Construction
                 stats.boundedExhaustiveBranches!++;
                 scopeBranchCuts++;
             }
-            if (f.next >= f.candidates.length) {
+            // A large scope can spend its entire budget walking the guided
+            // candidate list without EVER reaching the exhaustive phase. After
+            // a measured stall, run a small number of constrained detours now,
+            // then resume the normal list at precisely the saved cursor.
+            if (guided && !f.exhaustive && !f.detouring && !f.partialDetourDone &&
+                options.enableConfigurationDetours !== false && detoursSpent < detourAllowance &&
+                f.next >= 32 && stats.milliseconds - f.enteredAt >= 500) {
+                f.partialDetourDone = true;
+                const present = new Set(f.remaining.map(n => n.id));
+                const coupled = (n: ConstructionNode) =>
+                    [...(outgoing.get(n.id) ?? []), ...(guidedOutgoing.get(n.id) ?? [])]
+                        .some(link => present.has(link.parentId));
+                const attempted = f.candidates.slice(0, f.next);
+                f.detourCandidates = attempted.filter(n => guidedFailures.has(n.id) && coupled(n)).slice(0, 2);
+                if (f.detourCandidates.length) {
+                    f.savedGuidedNext = f.next;
+                    f.detouring = true;
+                    f.next = 0;
+                    continue;
+                }
+            }
+            const activeCandidates = f.detouring ? (f.detourCandidates ?? []) : f.candidates;
+            if (f.next >= activeCandidates.length) {
+                if (f.detouring && f.savedGuidedNext !== undefined) {
+                    // Restore the exact guided cursor, so the detour experiment
+                    // never skips an eligible candidate or removes the fallback.
+                    f.detouring = false;
+                    f.next = f.savedGuidedNext;
+                    f.savedGuidedNext = undefined;
+                    continue;
+                }
                 if (guided && !f.exhaustive && f.candidates.length) {
-                    // Near/far search was attempted for every eligible piece.
-                    // Reuse exactly the same indexed scene for legacy fallbacks.
+                    if (!f.detouring && options.enableConfigurationDetours !== false && detoursSpent < detourAllowance) {
+                        // The guided phase failed for *every* available piece.
+                        // Before trying hundreds of arbitrary V2 paths, examine
+                        // up to two blocked mechanical parts in full 3D. This
+                        // phase never suppresses the subsequent V2 fallback.
+                        const available = new Set(f.remaining.map(n => n.id));
+                        const hasJoint = (node: ConstructionNode) =>
+                            [...(outgoing.get(node.id) ?? []), ...(guidedOutgoing.get(node.id) ?? [])]
+                              .some(link => available.has(link.parentId));
+                        f.detourCandidates = f.candidates.filter(n => guidedFailures.has(n.id) && hasJoint(n)).slice(0, 2);
+                        if (f.detourCandidates.length) {
+                            f.detouring = true;
+                            f.next = 0;
+                            continue;
+                        }
+                    }
+                    // C-space exploration is bounded; the original detailed
+                    // V2 proposal search is still available when it fails.
+                    f.detouring = false;
                     f.exhaustive = true;
                     f.exhaustiveAttempted = 0;
                     f.next = 0;
@@ -910,7 +1094,7 @@ export function planConstruction(model: ConstructionModel, options: Construction
                 stats.backtracks++;
                 continue;
             }
-            const node = f.candidates[f.next++], remaining = f.remaining.filter(n => n !== node);
+            const node = activeCandidates[f.next++], remaining = f.remaining.filter(n => n !== node);
             if (failed.has(stateKey(remaining))) continue;
             // Retain only the ACTIVE search state's broad-phase tree. Keeping
             // a tree for every level of a thousand-brick DFS would consume
@@ -923,7 +1107,17 @@ export function planConstruction(model: ConstructionModel, options: Construction
             if (previouslyBlocked) stats.deferredPreviouslyBlockedNodes!++;
             activeRouteWitnesses = guided && !f.exhaustive ? new Set<string>() : undefined;
             const exhaustiveBefore = stats.exhaustiveCandidates ?? 0;
-            const result = route(node, f.remaining, f.staged, pose, scopeId, f.index, f.exhaustive, connected);
+            // Roadmap fallback is more expensive than ordinary connector-guided
+            // motion. Bound it per search state so a mechanically interlocked
+            // candidate cannot starve all the other valid removal orders.
+            const tryDetour = !!(guided && detoursSpent < detourAllowance &&
+                (f.detouring || (f.exhaustive && (f.detoursAttempted ?? 0) < 2 &&
+                (connected.length > 0 || (f.detoursAttempted ?? 0) === 0))));
+            if (tryDetour) {
+                detoursSpent++;
+                f.detoursAttempted = (f.detoursAttempted ?? 0) + 1;
+            }
+            const result = route(node, f.remaining, f.staged, pose, scopeId, f.index, f.exhaustive, connected, tryDetour);
             if (f.exhaustive) f.exhaustiveAttempted = (f.exhaustiveAttempted ?? 0) + (stats.exhaustiveCandidates! - exhaustiveBefore);
             const observed = activeRouteWitnesses;
             activeRouteWitnesses = undefined;
@@ -950,6 +1144,7 @@ export function planConstruction(model: ConstructionModel, options: Construction
     };
     const operations: Operation[] = [], warnings = [...graph.warnings, ...contactWarnings];
     if (guided) warnings.push('Construction V3 uses connector-guided NEAR/FAR paths, scoped swept-collision indexing, witnessed blocked-ray reuse, and bounded exhaustive fallback on large scopes. Only candidate search is pruned: every accepted route undergoes the existing continuous mesh checks and independent forward replay.');
+    if (stepModules.modules) warnings.push(`${stepModules.members} bricks organized into ${stepModules.modules} authored-step connected workbench modules. Every individual brick is still assembled and swept-collision-verified within its module; module attachment is checked as a rigid group.`);
     if (composite.groups) warnings.push(`${composite.segments} LDraw flexible render segments grouped into ${composite.groups} pre-shaped composite parts. The composites move as one rigid shape; bending or manufacturing the hose is not simulated. All contacts with OTHER parts remain collision-checked.`);
     const unoriented = [...new Set([...model.parts.values()].map(n => n.part!))].filter(id => { const m = model.metrics(id); return m.meshTwoSidedFrom !== undefined && m.meshTwoSidedFrom < m.mesh!.length / 9; });
     if (unoriented.length)

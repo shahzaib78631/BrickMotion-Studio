@@ -64,7 +64,7 @@ export const optsKey = (o: AnimOptions) =>
     ...((o.planner === 'construction-v2' || o.planner === 'construction-auto' || o.planner === 'construction-v3' || o.planner === 'construction-v3-auto') ? ['work-bays:1'] : []),
     // Route candidate ordering is part of the planning output. Do not silently
     // reuse a previously timed-out/uncertified V3 preview after an engine fix.
-    ...((o.planner === 'construction-v3' || o.planner === 'construction-v3-auto') ? ['v3-routing:incremental-r2'] : [])].join('|');
+    ...((o.planner === 'construction-v3' || o.planner === 'construction-v3-auto') ? ['v3-routing:mechanical-escape-r1', ...(o.constructionStepModules ? ['v3-step-modules:on'] : [])] : [])].join('|');
 
 /**
  * The video settings an options key was made with (the leading fields, which every
