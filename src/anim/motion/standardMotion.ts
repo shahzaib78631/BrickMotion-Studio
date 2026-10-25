@@ -376,9 +376,14 @@ export function buildStandardMotionTimeline(asm: Assembly, metrics: Metrics, opt
   }
   // Every scene size gets its connection-first plan. On huge sets, limit the
   // number of full Standard retries rather than disabling correct ordering.
-  const choices: (LogicalProposal | null)[] = singlePass ? [proposals[0] ?? null] : [
-    ...proposals.slice(0, asm.instances.length > 3000 ? 1 : asm.instances.length > 1000 ? 2 : 3), null,
-  ];
+  // A large-model pass (v4) still needs the unchanged original order behind its
+  // one reordered attempt: an unbuildable reorder (for example one whose added
+  // constraints close a dependency cycle) must not discard the whole baseline.
+  const choices: (LogicalProposal | null)[] = singlePass
+    ? (proposals[0] ? [proposals[0], null] : [null])
+    : [
+      ...proposals.slice(0, asm.instances.length > 3000 ? 1 : asm.instances.length > 1000 ? 2 : 3), null,
+    ];
   let best: { timeline: Timeline; score: number; proposal: LogicalProposal | null } | null = null;
   let failed: Error | null = null;
   let tested = 0;
@@ -408,6 +413,9 @@ export function buildStandardMotionTimeline(asm: Assembly, metrics: Metrics, opt
         (timeline.motion?.obstructed ?? 0) * 8 + (proposal?.preference ?? 0) * 4 +
         (!proposal && isBadLegacy ? 1_000_000 : 0);
       if (!best || score < best.score) best = { timeline, score, proposal };
+      // Single pass: a buildable first choice is the answer. Only an unbuildable
+      // one falls through to the unchanged original order behind it.
+      if (singlePass) break;
     } catch (error) {
       if (error instanceof AssemblyPlanningError && error.issues.some(issue =>
         issue.code === 'invalid-transform' || issue.code === 'duplicate-id')) throw error;

@@ -977,7 +977,13 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
               for (const a of matesOf(member.key, block.key))
                 for (const w of [a, [-a[0], -a[1], -a[2]] as Dir])
                   if (!connectorWays.some((o) => o[0] * w[0] + o[1] * w[1] + o[2] * w[2] > 1 - 1e-6)) connectorWays.push(w);
-      const boxWays: Dir[] = [...(slide ? [axisDir(slide[0], slide[1])] : []), ...connectorWays, ...(narrowSide !== undefined ? sides.slice(0, 2) : []), UP, ...sides];
+      // Preference order only: the per-pair predicate below is the sole judge.
+      // `slideAxis` infers "this piece is tucked, so slide it in" from AABBs, and
+      // a hollow underside (a bracket, a wedge, a tyre) overlaps its neighbour's
+      // box without any real interlock. Offering the vertical way first lets the
+      // mesh test reject that false tuck; a piece that truly cannot come down
+      // still falls through to the slide, exactly as before.
+      const boxWays: Dir[] = [...connectorWays, ...(narrowSide !== undefined ? sides.slice(0, 2) : []), UP, ...(slide ? [axisDir(slide[0], slide[1])] : []), ...sides];
       const explicitWay = flat[i].u.entryWay;
       const directions: Iterable<Dir> = explicitWay ? [explicitWay] : u.kind === 'piece'
         ? waysFor(restPose(members[i][0].move.to, members[i][0].move.rel), boxWays) : boxWays;
