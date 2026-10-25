@@ -21,7 +21,7 @@ self.onmessage = (e: MessageEvent<PlanRequest>) => {
     // "Loose pieces follow off" moves the model onto its spot before planning, while the
     // automatic floor stays where it was (layoutBox). "Follow on" is a post-transform.
     const { asm, layoutBox } = rootSpotLayout(assemble(plan, metrics, new Map(e.data.colors)), plan);
-    const tl = buildTimeline(asm, metrics, opts, (progress) => post({ id, progress }), layoutBox);
+    const tl = buildTimeline(asm, metrics, opts, (progress) => post({ id, progress }), layoutBox, plan.workBaySpots);
     post({ id, ok: true, result: encodeTimeline(tl) });
   } catch (err) {
     post({ id, ok: false, error: (err as Error)?.message ?? String(err) });

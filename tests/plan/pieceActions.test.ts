@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { modelSteps } from '../../src/plan/ops';
-import { movePiecesToNewStep, movePiecesToStep, similarIds, stepsOf } from '../../src/plan/pieceActions';
+import { movePiecesToNewStep, movePiecesToStep, setWorkBaySpot, similarIds, stepsOf } from '../../src/plan/pieceActions';
 import type { Plan } from '../../src/plan/types';
 
 const piece = (id: string, part = '3001', color: number = 4) => ({ id, part, color, x: 0, y: 0, z: 0, rot: 0 as const });
@@ -60,5 +60,26 @@ describe('selecting similar pieces', () => {
     expect(similarIds(p, '', 'a', 'all')).toHaveLength(5);
     expect(similarIds(p, '', 'nope', 'all')).toEqual([]);
     expect(stepsOf(p, '', ['e', 'a', 'b'])).toEqual([0, 2]);
+  });
+});
+
+describe('generated work-bay spots', () => {
+  const bay = { x: 4, z: -2, angle: 15 };
+
+  it('stores, replaces and removes overrides without mutating the plan', () => {
+    const p = plan();
+    const added = setWorkBaySpot(p, '$upper:a', bay);
+    expect(added.workBaySpots).toEqual({ '$upper:a': bay });
+    expect(p.workBaySpots).toBeUndefined();
+    const replaced = setWorkBaySpot(added, '$upper:a', { ...bay, angle: 30 });
+    expect(replaced.workBaySpots!['$upper:a'].angle).toBe(30);
+    expect(added.workBaySpots!['$upper:a'].angle).toBe(15);
+    expect(setWorkBaySpot(added, '$upper:a', null).workBaySpots).toBeUndefined();
+  });
+
+  it('is a no-op for identical values and rejects non-finite coordinates', () => {
+    const p = setWorkBaySpot(plan(), '$upper:a', bay);
+    expect(setWorkBaySpot(p, '$upper:a', { ...bay })).toBe(p);
+    expect(() => setWorkBaySpot(p, '$upper:a', { x: NaN, z: 0, angle: 0 })).toThrow(RangeError);
   });
 });

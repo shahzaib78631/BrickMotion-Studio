@@ -204,3 +204,19 @@ export function setSubmodelBuildSpot(p: Plan, modelName: ModelName, subId: strin
   }));
   return modelName === '' ? { ...p, steps } : { ...p, submodels: { ...(p.submodels ?? {}), [modelName]: { ...(p.submodels?.[modelName] ?? { steps: [] }), steps } } };
 }
+
+/**
+ * One planner-generated work bay (Construction V2/V3), or null for Auto.
+ * The key is the exact planned group ID; groups already carry their nesting
+ * path, so two uses of the same submodel keep independent bays.
+ */
+export function setWorkBaySpot(p: Plan, key: string, spot: AssemblySpot | null): Plan {
+  safeSpot(spot);
+  if (!key || equalSpot(p.workBaySpots?.[key], spot)) return p;
+  const next = { ...(p.workBaySpots ?? {}) };
+  if (spot === null) delete next[key];
+  else next[key] = spot;
+  if (Object.keys(next).length) return { ...p, workBaySpots: next };
+  const { workBaySpots: _, ...rest } = p;
+  return rest as Plan;
+}

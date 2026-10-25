@@ -15,7 +15,8 @@ import { possibleFinalContacts } from './contactBroadphase';
 import { ScopeSceneIndex } from './sceneIndex';
 import { guidedDirections, nearDistances, farExits } from './nearFar';
 import { mayReuseBlockedNearRay, type BlockedNearRay } from './routePruning';
-import { ConstructionError, type ConstructionModel, type ConstructionNode, type ConstructionPlan, type ConstructionOptions, type Blockage, type Operation, type SearchStats, type Connection } from './types';
+import { isGeneratedWorkBay, workBayAnchorId, workBayKey, workBayKind, workBayLabel } from './workBays';
+import { ConstructionError, type ConstructionModel, type ConstructionNode, type ConstructionPlan, type ConstructionOptions, type Blockage, type Operation, type SearchStats, type Connection, type WorkBay } from './types';
 type Slot = {
     id: string;
     pose: M4;
@@ -103,14 +104,19 @@ export function planConstruction(model: ConstructionModel, options: Construction
     // and it never moves because another spot moved.
     const layoutModel = options.layoutBounds ?? model.bounds;
     for (const n of groupNodes) {
-        const spot = n.hints?.buildSpot;
+        // An authored submodel spot wins over a saved generated-bay placement.
+        const authored = n.hints?.buildSpot;
+        const override = isGeneratedWorkBay(n.id) ? options.workBaySpots?.[n.id] : undefined;
+        const spot = authored ?? override;
         if (!spot)
             continue;
         // Manual bays are global positions and orientations. Never shift or turn
-        // a chosen bay just because its parent assembly is itself rotated.
+        // a chosen bay just because its parent assembly is itself rotated. The
+        // fixture clearance keeps downward anatomical withdrawals above the
+        // table exactly as it does for automatic bays.
         if (![spot.x, spot.z, spot.angle].every(Number.isFinite))
-            throw new ConstructionError('invalid-input', `Invalid coordinates or angle on the build spot for ${n.id}.`, { items: [n.id] });
-        const pose = fixedBayPose(n.bounds, spot, ground);
+            throw new ConstructionError('invalid-input', `Invalid coordinates or angle on the work bay for ${n.id}.`, { items: [n.id] });
+        const pose = poseMoved(fixedBayPose(n.bounds, spot, ground), [0, -benchLift(n), 0]);
         slots.set(n.id, { id: n.id, pose, box: stagedBounds(n.bounds, pose) });
     }
     const pack = (nodes: ConstructionNode[], originX: number, clearance: (n: ConstructionNode) => number = () => 0): number => {
@@ -146,6 +152,41 @@ export function planConstruction(model: ConstructionModel, options: Construction
     for (const node of leafNodes) if (node.atomic) {
         const staged = slots.get(node.id)!;
         for (const key of node.leaves) slots.set(key, staged);
+    }
+    // Report every generated bay to the editor. Labels stay deterministic even
+    // when two uses of the same submodel produce identical kind/part pairs.
+    const generatedGroups = groupNodes.filter(n => isGeneratedWorkBay(n.id));
+    const baseLabels = new Map<string, string>(), labelTotals = new Map<string, number>();
+    for (const n of generatedGroups) {
+        const label = workBayLabel(n.id, model.parts.get(workBayAnchorId(n.id))?.part);
+        baseLabels.set(n.id, label);
+        labelTotals.set(label, (labelTotals.get(label) ?? 0) + 1);
+    }
+    const labelSeen = new Map<string, number>(), workBays: WorkBay[] = [];
+    const tidy = (value: number): number => { const rounded = Math.round(value * 1e6) / 1e6; return Object.is(rounded, -0) ? 0 : rounded; };
+    for (const n of generatedGroups) {
+        const slot = slots.get(n.id);
+        if (!slot)
+            continue;
+        const base = baseLabels.get(n.id)!, duplicates = labelTotals.get(base)!;
+        const seen = (labelSeen.get(base) ?? 0) + 1;
+        labelSeen.set(base, seen);
+        const override = options.workBaySpots?.[n.id];
+        const auto = {
+            x: tidy((slot.box.min[0] + slot.box.max[0]) / 40),
+            z: tidy((slot.box.min[2] + slot.box.max[2]) / 40),
+            angle: tidy(yawOf(slot.pose) * 180 / Math.PI),
+        };
+        workBays.push({
+            id: n.id,
+            key: workBayKey(n.id),
+            kind: workBayKind(n.id)!,
+            label: duplicates > 1 ? `${base} ${seen}` : base,
+            model: n.model,
+            parts: [...new Set(n.leaves.map(key => model.parts.get(key)?.part).filter((part): part is string => !!part))],
+            spot: override ? { ...override } : auto,
+            placed: !!override,
+        });
     }
     // Work areas are planning coordinates, not physical obstacles. A group bay
     // is empty until that subassembly is actually moved there. Treating every
@@ -334,7 +375,14 @@ export function planConstruction(model: ConstructionModel, options: Construction
                     // certificate even when a real connector also exists.
                     const id = 'surface:' + JSON.stringify([obstacle.id, moving.id, outward.map(v => Math.round(v * 1e6) / 1e6)]);
                     if (!graph.connections.some(c => c.id === id))
-                        addPolicy({ id, parent: obstacle.id, child: moving.id, kind: 'surface', confidence: 'inferred', outward, surfaceTolerance: distance, staticOnly });
+                        // The guided separation above was certified through the
+                        // original connector's localized material. Keep those
+                        // regions on the motion certificate so the route oracle
+                        // can reproduce exactly the same checked contact; the
+                        // generic surfaceTolerance is never a blind skip.
+                        addPolicy({ id, parent: obstacle.id, child: moving.id, kind: 'surface', confidence: 'inferred', outward, surfaceTolerance: distance, staticOnly,
+                            region: policy?.region, regions: policy?.regions,
+                            ...(staticOnly ? {} : { surfaceAnchor: sub(pos(moving.matrix), pos(obstacle.matrix)) })});
                     certifiedSurfaceContacts++;
                 }
                 continue;
@@ -992,6 +1040,6 @@ export function planConstruction(model: ConstructionModel, options: Construction
     stats.milliseconds = Math.round(performance.now() - start);
     return { schema: 'brickmotion-construction/v2', operations,
         parts: [...model.parts.values()].map(n => ({ key: n.id, part: n.part!, final: [...n.matrix], staged: multiply(slots.get(n.id)!.pose, n.matrix), bounds: n.bounds })),
-        connections: graph.connections, dependencies: graph.dependencies, warnings, stats, ground, bounds: model.bounds, sceneBounds,
+        connections: graph.connections, dependencies: graph.dependencies, warnings, stats, workBays, ground, bounds: model.bounds, sceneBounds,
         capabilities: { rigidTranslation: true, rigidRotation: true, hierarchicalSubassemblies: true, articulation: false, deformation: false, physicalStability: false } };
 }

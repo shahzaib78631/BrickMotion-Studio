@@ -56,5 +56,37 @@ describe.skipIf(!ready)('posed minifig subassembly certification', () => {
     expect(handOps.length).toBeGreaterThan(0);
     const upperIndex = construction.operations.indexOf(upperOp!);
     expect(handOps.every(op => construction.operations.indexOf(op) > upperIndex)).toBe(true);
+
+    // Generated bays are reported to the editor and accept saved overrides.
+    const bays = construction.workBays ?? [];
+    expect(bays.map(bay => bay.kind).sort()).toEqual(['head', 'lower', 'upper']);
+    const upperBay = bays.find(bay => bay.kind === 'upper')!;
+    expect(upperBay.placed).toBe(false);
+    expect([upperBay.spot.x, upperBay.spot.z, upperBay.spot.angle].every(Number.isFinite)).toBe(true);
+    expect(upperBay.parts).toContain('973p1u');
+
+    const override = { x: upperBay.spot.x + 12, z: upperBay.spot.z + 8, angle: 15 };
+    const moved = planConstruction(model, {
+      algorithm: 'guided-v3', maxMilliseconds: 10_000,
+      workBaySpots: { [upperBay.key]: override },
+    });
+    const movedBay = moved.workBays!.find(bay => bay.key === upperBay.key)!;
+    expect(movedBay.placed).toBe(true);
+    expect(movedBay.spot).toEqual(override);
+    const movedOp = moved.operations.find(op => op.id === `construct:${upperBay.id}`)!;
+    expect(movedOp).toBeDefined();
+    const movedStart = movedOp.rigidPath?.[0] ?? movedOp.path[0];
+    const bounds = movedOp.keys.map(key => model.parts.get(key)!.bounds);
+    const centreX = (Math.min(...bounds.map(box => box.min[0])) + Math.max(...bounds.map(box => box.max[0]))) / 2;
+    const centreZ = (Math.min(...bounds.map(box => box.min[2])) + Math.max(...bounds.map(box => box.max[2]))) / 2;
+    // The bay can be yawed: apply the full pose to the box centre, not just its
+    // translation column.
+    const pose = movedStart.length === 16 ? movedStart : [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, ...movedStart, 1];
+    expect((pose[0] * centreX + pose[8] * centreZ + pose[12]) / 20).toBeCloseTo(override.x, 3);
+    expect((pose[2] * centreX + pose[10] * centreZ + pose[14]) / 20).toBeCloseTo(override.z, 3);
+    expect(() => planConstruction(model, {
+      algorithm: 'guided-v3', maxMilliseconds: 10_000,
+      workBaySpots: { [upperBay.key]: { x: NaN, z: 0, angle: 0 } },
+    })).toThrowError(/invalid-input/);
   }, 30_000);
 });

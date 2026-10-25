@@ -393,6 +393,26 @@ export class MeshOracle {
         // exemption. Zero-length checks retain the metadata so staticContact()
         // can classify the completed pose itself.
         const activePolicy = policy?.staticOnly && norm(delta) > 1e-9 ? undefined : policy;
+        // A measured snap-fit disengagement is certified ONLY at the exact
+        // relative pose where the final-contact audit measured it, along the
+        // connector axis, and only for the measured distance. The separated
+        // endpoint is re-checked under the localized policy; every remaining
+        // part of this segment is then checked with no exemption at all.
+        // A policy without an anchor (or a pair that has since moved) gets no
+        // relaxation from surfaceTolerance.
+        const anchor = activePolicy?.surfaceAnchor;
+        if (anchor && activePolicy!.surfaceTolerance && activePolicy!.child === aKey && activePolicy!.outward &&
+            norm(delta) > 1e-9 && dot(unit(delta), activePolicy!.outward) > .9999) {
+            const relative = sub(pa, pb);
+            if (norm(sub(relative, anchor)) <= 1e-3) {
+                const distance = Math.min(activePolicy!.surfaceTolerance, norm(delta));
+                const step = mul(unit(delta), distance);
+                if (distance > 1e-9 &&
+                    this.testBodies(aKey, bKey, a, b, add(aOffset, step), bOffset, [0, 0, 0], activePolicy) &&
+                    this.testBodies(aKey, bKey, a, b, add(aOffset, step), bOffset, sub(delta, step)))
+                    return true;
+            }
+        }
         // surfaceTolerance is a measurement of an existing final-pose overlap,
         // NOT a certificate to skip that many LDU of actual movement. Skipping
         // the first interval could accept an arbitrary path THROUGH an obstacle.

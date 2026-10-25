@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { usePlayback } from './playback';
 import { useKeyframePlayback } from './keyframePlayback';
 import { modelSteps, reorderStep, type ModelName } from '../plan/ops';
-import { setAssemblySpot, setLoosePiecesFollow, setSubmodelBuildSpot } from '../plan/pieceActions';
+import { setAssemblySpot, setLoosePiecesFollow, setSubmodelBuildSpot, setWorkBaySpot as applyWorkBaySpot } from '../plan/pieceActions';
 import { isMainSpot, type SpotRef } from '../plan/assemblySpots';
 import type { Tool } from './keymap';
 import type { StepView } from '../model/stepLayout';
@@ -37,6 +37,8 @@ export type StudioState = {
   selectSpot(ref: SpotRef | null): void;
   /** Sets one assembly spot (null = Auto) as a single undoable edit. */
   setSpot(ref: SpotRef, spot: AssemblySpot | null): void;
+  /** Places one planner-generated work bay (null = Auto) as an undoable edit. */
+  setWorkBaySpot(key: string, spot: AssemblySpot | null): void;
   /** The main model's "loose pieces move with the model" switch. */
   setFollow(follow: boolean): void;
   /** Controls only the Build editor preview; never edits original LDraw poses. */
@@ -115,6 +117,9 @@ export const useStudio = create<StudioState>((set, get) => ({
     if (get().plan.showModelAtSpot)
       usePlayback.getState().set({ follow: false, playing: false });
     get().apply((p) => (isMainSpot(ref) ? setAssemblySpot(p, spot) : setSubmodelBuildSpot(p, ref.model, ref.id, spot)));
+  },
+  setWorkBaySpot(key, spot) {
+    get().apply((p) => applyWorkBaySpot(p, key, spot));
   },
   setFollow(follow) {
     get().apply((p) => setLoosePiecesFollow(p, follow));

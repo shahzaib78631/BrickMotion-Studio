@@ -82,6 +82,15 @@ export type Plan = {
   /** Independent Dope Sheet animation; ignored by construction and LDraw export. */
   animation?: KeyframeAnimation;
   assemblySpot?: AssemblySpot;
+  /**
+   * Overrides for planner-generated work bays (Construction V2/V3 anatomical
+   * and mechanical subassemblies), keyed by the exact planned group ID.
+   * Group IDs include their nesting path, so duplicate submodel uses never
+   * share an entry. IDs are scoped to the model being planned, so editing a
+   * submodel alone and the full set keep independent bay placements.
+   * Missing entries use the automatic bay.
+   */
+  workBaySpots?: Record<string, AssemblySpot>;
   /** default true: loose pieces move and turn with the main spot */
   loosePiecesFollow?: boolean;
   /** Preview the main model and each placed submodel at its own build spot in the Build editor. */

@@ -117,6 +117,7 @@ export const PlanSchema = z.object({
   steps: z.array(StepSchema),
   animation: AnimationSchema.optional(),
   assemblySpot: AssemblySpotSchema.optional(),
+  workBaySpots: z.record(z.string().min(1), AssemblySpotSchema).optional(),
   loosePiecesFollow: z.boolean().optional(),
   showModelAtSpot: z.boolean().optional(),
 });

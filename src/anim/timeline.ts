@@ -181,7 +181,7 @@ export const DEFAULT_ACCESS_WORK = 1500;
  * model's own (a moved main spot with "loose pieces follow" off keeps the automatic
  * floor where it was). Null = lay out around the model itself, as always.
  */
-export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProgress?: (p: PlanningProgress) => void, layoutBox: Box | null = null): Timeline {
+export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProgress?: (p: PlanningProgress) => void, layoutBox: Box | null = null, workBaySpots: Record<string, AssemblySpot> = {}): Timeline {
   if (opts.planner === 'construction-v2' || opts.planner === 'construction-auto' || opts.planner === 'construction-v3' || opts.planner === 'construction-v3-auto') {
     try {
       const model = modelFromNodes(asm.nodes, metrics);
@@ -193,6 +193,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
         supportMode: opts.constructionSupport ?? 'fixture',
         mechanicalSubassemblies: opts.constructionMechanicalSubassemblies,
         layoutBounds: layoutBox ?? undefined,
+        workBaySpots,
         onProgress: (p) => onProgress?.({ ...p, phase: p.phase === 'connections' ? 'connections' : p.phase === 'validation' ? 'validation' : 'disassembly' }),
       });
       return decodeTimeline(compileConstruction(construction, opts));
@@ -203,7 +204,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
       if (opts.planner !== 'construction-auto' && opts.planner !== 'construction-v3-auto' || !(error instanceof ConstructionError) || !eligibleForPreview(error.code)) throw error;
       const fallback = previewProvenance(error, opts.planner === 'construction-v3-auto' ? 'construction-v3' : 'construction-v2');
       onProgress?.({ phase: 'preparing', completed: 0, total: 1, item: 'Building uncertified preview' });
-      const timeline = buildTimeline(asm, metrics, { ...opts, planner: 'legacy' }, onProgress, layoutBox);
+      const timeline = buildTimeline(asm, metrics, { ...opts, planner: 'legacy' }, onProgress, layoutBox, workBaySpots);
       // Standard's own uncertified flags only identify routes IT could not
       // certify; they cannot validate the entire failed V2 scene. Mark every
       // operation, and retain the original V2 failure for review/export.

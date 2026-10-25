@@ -432,6 +432,8 @@ body { margin: 0; }
 .bm-spot-row.bad { box-shadow: inset 2px 0 var(--danger); }
 .bm-spot-main { width: 100%; display: flex; align-items: center; gap: 9px; min-width: 0; text-align: left; padding: 9px 9px; border-radius: 6px; cursor: grab; }
 .bm-spot-main:active { cursor: grabbing; }
+/* Generated work bays are placed with numeric fields; there is no viewport drag. */
+.bm-spot-main-static, .bm-spot-main-static:active { cursor: default; }
 .bm-spot-main:hover { background: var(--hover); }
 .bm-spot-row.active .bm-spot-main { box-shadow: inset 2px 0 var(--focus); }
 .bm-spot-drag { flex-shrink: 0; opacity: .35; display: grid; place-items: center; }

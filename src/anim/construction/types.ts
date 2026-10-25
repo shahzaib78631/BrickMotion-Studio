@@ -1,5 +1,5 @@
 import type { Box } from '../../ldraw/flatten';
-import type { AssemblyHints } from '../../plan/types';
+import type { AssemblyHints, AssemblySpot } from '../../plan/types';
 import type { PartMetrics } from '../../ldraw/metrics';
 import type { M4, V3 } from './math';
 import type { ReviewedSurfaceContact } from './reviewedSurfaceContacts';
@@ -43,6 +43,13 @@ export type Connection = {
     regions?: ContactRegion[];
     /** Maximum initially-overlapping travel that may be certified as render-mesh surface contact. */
     surfaceTolerance?: number;
+    /**
+     * Final-pose relative child-minus-parent position at which `surfaceTolerance`
+     * was measured. A bounded disengagement may skip that overlap ONLY while the
+     * pair is still at this exact pose; the endpoint and every remaining segment
+     * are re-checked normally.
+     */
+    surfaceAnchor?: V3;
     /** The joint separates either way along `outward` (a hinge sliding off its pin), not only outward. */
     axial?: boolean;
     /**
@@ -132,6 +139,29 @@ export type ConstructionOptions = {
     /** Box the automatic work bays are laid out around, when it differs from the model's own
      * (a model moved to its assembly spot with "loose pieces follow" off). */
     layoutBounds?: Box;
+    /** Saved placements for planner-generated work bays, keyed by exact group ID. */
+    workBaySpots?: Record<string, AssemblySpot>;
+};
+
+/** Construction-generated subassembly kinds that get a work bay of their own. */
+export type WorkBayKind = 'upper' | 'lower' | 'head' | 'mechanical';
+
+/**
+ * One planner-generated work bay, reported to the editor after planning.
+ * `spot` uses the same plan-frame stud coordinates the planner consumes;
+ * `placed` distinguishes a saved override from the automatic packed position.
+ */
+export type WorkBay = {
+    id: string;
+    /** Persistence key in `Plan.workBaySpots`. Kept exact: nested uses can share item suffixes. */
+    key: string;
+    kind: WorkBayKind;
+    label: string;
+    model: string;
+    /** Unique part IDs in this group, for the Assembly panel summary. */
+    parts: string[];
+    spot: AssemblySpot;
+    placed: boolean;
 };
 export type Operation = {
     id: string;
@@ -171,6 +201,8 @@ export type ConstructionPlan = {
     dependencies: Dependency[];
     warnings: string[];
     stats: SearchStats;
+    /** Generated subassembly bays in planning order. Absent in older cached plans. */
+    workBays?: WorkBay[];
     ground: number;
     bounds: Box;
     sceneBounds: Box;

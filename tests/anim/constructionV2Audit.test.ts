@@ -26,6 +26,22 @@ describe('Construction V2 release-blocking regressions', () => {
     expect(oracle.clear('a','b',[-4,0,0],[0,0,0],[8,0,0],policy)).toBe(false);
   });
 
+  test('a measured snap-fit disengagement only applies at its anchored relative pose', () => {
+    const oracle = new MeshOracle(modelFromNodes([piece('a',[0,0,0]), piece('b',[0,0,0])], metrics), stats());
+    const policy: Connection = {
+      id:'snap-fit', parent:'b', child:'a', kind:'surface', confidence:'inferred',
+      outward:[1,0,0], surfaceTolerance:8, surfaceAnchor:[0,0,0],
+    };
+    // At the audited pose the verified 8 LDU prefix is skipped, the separated
+    // endpoint is re-checked with the localized policy, and the remaining
+    // 12 LDU are checked with no exemption.
+    expect(oracle.clear('a','b',[0,0,0],[0,0,0],[20,0,0], policy)).toBe(true);
+    // Moved away from the audited relative pose: no relaxation at all.
+    expect(oracle.clear('a','b',[1,0,0],[0,0,0],[20,0,0], policy)).toBe(false);
+    // A static-only certificate never relaxes a moving sweep.
+    expect(oracle.clear('a','b',[0,0,0],[0,0,0],[20,0,0], { ...policy, staticOnly:true })).toBe(false);
+  });
+
   test('100 operations respect 20 seconds without inventing 100 authored build steps', () => {
     const opCount = 100;
     const pos = (x:number) => [1,0,0,0,0,1,0,0,0,0,1,0,x,0,0,1];

@@ -52,3 +52,12 @@ test('accepts inline part definitions', () => {
   const r = parsePlan({ ...base, steps: [], parts: { 'custom.dat': '0 Custom\n' } });
   expect(r.ok && r.plan.parts!['custom.dat']).toBe('0 Custom\n');
 });
+
+test('accepts and validates generated work-bay spots', () => {
+  const spots = { '$upper:i0/i2': { x: 4, z: -2, angle: 15 } };
+  const r = parsePlan({ ...base, steps: [], workBaySpots: spots });
+  expect(r.ok).toBe(true);
+  if (r.ok) expect(r.plan.workBaySpots).toEqual(spots);
+  expect(parsePlan({ ...base, steps: [], workBaySpots: { '': { x: 0, z: 0, angle: 0 } } }).ok).toBe(false);
+  expect(parsePlan({ ...base, steps: [], workBaySpots: { bay: { x: 0, z: 0 } } }).ok).toBe(false);
+});
