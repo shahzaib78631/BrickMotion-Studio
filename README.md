@@ -156,3 +156,16 @@ budgets, explicit uncertified fallback, and V2 mode remain available. See
 `CONSTRUCTION_V3_CONSTRAINED_MOTION.md` for the benchmark and unsupported
 articulated-motion cases. No collision-certified LEGO 5590 timeline has been
 produced yet.
+
+## Standard Motion v4 — mechanical stages (phases 4–6)
+
+Standard Motion v4 can now optionally append deterministic gear-coupled, articulated closed-loop and reduced-coordinate gravity demonstrations **after** the v4 assembly. Motion is authored by per-instance JSON, saved as world-rigid timeline samples, and can be rebaked to editable keyframes. Post-build demonstration now receives a conservative saved **CLEAR / BLOCKED / UNVERIFIED** continuous triangle-surface verdict; incomplete or closely contacting geometry remains **UNVERIFIED**. The gravity preview is **not** full rigid-body/contact simulation. See [STANDARD_MOTION_V4_PHASES_4_6.md](STANDARD_MOTION_V4_PHASES_4_6.md) and `samples/mechanisms/` for setup examples and limitations. Legacy v3 and all Construction planners are unchanged.
+
+
+## Standard Motion v4 — continuous mechanism clearance and automatic mechanics
+
+This experimental enhancement checks the **saved mechanism playback** between keyframes for moving/moving and moving/parked mesh collisions, reporting CLEAR, BLOCKED or UNVERIFIED with pair/time diagnostics. LDraw headers and matched LDCad Shadow connectors can also automatically identify hinges, shafts, gears and turntables; where the constraints permit, the editor offers an **opt-in** one-click mechanism suggestion. It never invents tooth counts, measured stops or masses. It does not certify physical gear contact clearance or replace a production-grade rigid-body solver. See [STANDARD_MOTION_V4_COLLISION_AUTODETECTION.md](STANDARD_MOTION_V4_COLLISION_AUTODETECTION.md). The 5590 static coverage audit is in `samples/5590-v4-mechanical-coverage.json`.
+
+### Standard Motion v4 planning repair (helicopter)
+
+See [STANDARD_MOTION_V4_PLANNING_REPAIR.md](STANDARD_MOTION_V4_PLANNING_REPAIR.md) for the large-model planning-stall fix, conservative collision-review policy, real-geometry helicopter regression, and installation/verification steps. Use `npm run verify:v4:helicopter:offline` to reproduce the 305-piece motion-postprocessor test. Large-model v4 uses a single-pass Standard baseline; **Standard Motion v3 behavior is unchanged**.

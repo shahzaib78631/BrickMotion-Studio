@@ -346,7 +346,10 @@ export function buildLooseMotionTimeline(asm: Assembly, metrics: Metrics, opts: 
 
 export function buildStandardMotionTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions,
   onProgress?: (p: PlanningProgress) => void, layoutBox: Box | null = null,
-  workBaySpots: Record<string, AssemblySpot> = {}): Timeline {
+  workBaySpots: Record<string, AssemblySpot> = {},
+  /** Internal v4 option. Generate one valid Standard timeline, then let v4
+   * score routes once. V3 callers retain the full multi-proposal search. */
+  singlePass = false): Timeline {
   // A visual fallback must never conceal duplicate instances or manufacture
   // transforms from corrupt LDraw matrices. Validate BEFORE allowing a broad
   // "Standard failed" recovery so keys aren't silently dropped by Map.set.
@@ -363,10 +366,17 @@ export function buildStandardMotionTimeline(asm: Assembly, metrics: Metrics, opt
   // original plan remains a candidate, and every attempt is a cloned graph.
   let joints: MechanicalJoint[] = [];
   try { joints = jointsFor(asm, metrics); } catch { /* Connector-free minifigs still work. */ }
-  const proposals = logicalAssemblyProposals(asm, joints);
+  let proposals: LogicalProposal[] = [];
+  try { proposals = logicalAssemblyProposals(asm, joints); }
+  catch (error) {
+    // V4's large-model fast path is an editable *preview*. Uncertain connector
+    // topology must not suppress every LDraw leaf. The normal V3 planner keeps
+    // its existing strict failure behavior.
+    if (!singlePass) throw error;
+  }
   // Every scene size gets its connection-first plan. On huge sets, limit the
   // number of full Standard retries rather than disabling correct ordering.
-  const choices: (LogicalProposal | null)[] = [
+  const choices: (LogicalProposal | null)[] = singlePass ? [proposals[0] ?? null] : [
     ...proposals.slice(0, asm.instances.length > 3000 ? 1 : asm.instances.length > 1000 ? 2 : 3), null,
   ];
   let best: { timeline: Timeline; score: number; proposal: LogicalProposal | null } | null = null;
@@ -378,7 +388,11 @@ export function buildStandardMotionTimeline(asm: Assembly, metrics: Metrics, opt
         onProgress, layoutBox, workBaySpots);
       if (candidate.tracks.size !== asm.instances.length || asm.instances.some(i => !candidate.tracks.has(i.key)))
         throw new Error('Standard returned an incomplete assembly.');
-      const timeline = articulateStandardTimeline(candidate, asm, metrics, proposal?.guides, joints);
+      const timeline = singlePass ? candidate :
+        articulateStandardTimeline(candidate, asm, metrics, proposal?.guides, joints);
+      if (singlePass) timeline.motion = { ...timeline.motion, engine: 'standard-motion',
+        parts: timeline.tracks.size, articulated: 0, checked: 0, obstructed: 0,
+        interferenceScore: 0, issues: [], review: timeline.tracks.size };
       tested++;
       // Prefer short, connected access routes, while allowing a centre-first
       // build when the reverse insertion is significantly less obstructed.
@@ -410,8 +424,8 @@ export function buildStandardMotionTimeline(asm: Assembly, metrics: Metrics, opt
     const fallback = buildLooseMotionTimeline(asm, metrics, opts,
       `${failed?.name ?? 'PlanningError'}: ${failed?.message ?? 'No complete build sequence'}`,
       primary?.guides);
-    best = { timeline: articulateStandardTimeline(fallback, asm, metrics, primary?.guides, joints), score: Infinity,
-      proposal: primary ?? null };
+    best = { timeline: singlePass ? fallback : articulateStandardTimeline(fallback, asm, metrics, primary?.guides, joints),
+      score: Infinity, proposal: primary ?? null };
   }
   if (best.proposal) {
     best.timeline.motion = { ...best.timeline.motion!, logical: {

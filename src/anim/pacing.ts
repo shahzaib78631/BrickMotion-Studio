@@ -1,5 +1,6 @@
 import { clamp } from './easing';
 import type { JointLimitRule } from './motion/v4/jointLimits';
+import type { MechanismProgram } from './motion/v4/mechanismProgram';
 
 export type ArrivalMode = 'piece' | 'batch' | 'step';
 export type FloorSort = 'step' | 'colour' | 'part' | 'size';
@@ -10,6 +11,8 @@ export type AnimOptions = {
   planner?: 'legacy' | 'construction-v2' | 'construction-auto' | 'construction-v3' | 'construction-v3-auto' | 'construction-v4' | 'standard-motion' | 'standard-motion-v4' | 'assembly-artifact';
   /** v4 verified/user-defined signed joint stops. Never guessed from render meshes. */
   motionV4Limits?: JointLimitRule[];
+  /** Explicit postassembly gear, linkage or reduced-gravity demonstration. */
+  motionV4Mechanism?: MechanismProgram | null;
   constructionMaxStates?: number;
   constructionMaxCandidates?: number;
   constructionMaxMilliseconds?: number;

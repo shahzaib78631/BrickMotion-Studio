@@ -1,0 +1,53 @@
+{
+  "mode": "kinematic",
+  "duration": 4,
+  "sampleHz": 60,
+  "joints": [
+    {
+      "id": "gear-a",
+      "body": "GEAR_INSTANCE_A",
+      "kind": "revolute",
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "pivot": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "gear-b",
+      "body": "GEAR_INSTANCE_B",
+      "kind": "revolute",
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "pivot": [
+        8,
+        0,
+        0
+      ]
+    }
+  ],
+  "gears": [
+    {
+      "a": "gear-a",
+      "b": "gear-b",
+      "teethA": 8,
+      "teethB": 24,
+      "mesh": "external",
+      "moduleLdu": 0.5,
+      "source": "user"
+    }
+  ],
+  "driver": {
+    "joint": "gear-a",
+    "amplitude": 1.5707963267948966,
+    "cycles": 1
+  }
+}

@@ -11,7 +11,14 @@
     "setup": "tsx scripts/setup-data.ts",
     "setup:shadow": "tsx scripts/import-shadow-metadata.ts",
     "test:v4": "vitest run tests/anim/standardMotionV4.test.ts",
-    "verify:v4:offline": "node scripts/verify-v4-offline.cjs"
+    "verify:v4:offline": "node scripts/verify-v4-offline.cjs",
+    "verify:v4:helicopter:offline": "node scripts/verify-v4-helicopter-offline.cjs",
+    "test:v4:mechanisms": "vitest run tests/anim/standardMotionV4Mechanisms.test.ts",
+    "verify:v4:mechanisms:offline": "node scripts/verify-v4-mechanisms-offline.cjs",
+    "test:v4:collision-autodetect": "vitest run tests/anim/standardMotionV4AutoCollision.test.ts",
+    "verify:v4:collision-autodetect:offline": "node scripts/verify-v4-enhancement-offline.cjs",
+    "typecheck:v4:collision-autodetect:offline": "node scripts/check-v4-enhancement-types.cjs",
+    "audit:v4:5590": "node scripts/audit-v4-5590-mechanics.cjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.1.0",

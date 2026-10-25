@@ -110,7 +110,31 @@ export type PlanningFallback = {
     /** A few relevant blocker pairs make the failure diagnosable after saving. */
     contacts?: { moving: string; obstacle: string; stage: string }[];
 };
+/** Phase 4-6 postassembly motion, encoded as rigid world deltas from the
+ * exact authored final pose. Standard timeline codec stores it unchanged. */
+export type MechanismStage = {
+    start: number;
+    duration: number;
+    frames: number;
+    sampleHz: number;
+    mode: 'kinematic' | 'gravity';
+    /** Conservative interval certificate for rendered triangle surfaces. */
+    collisionStatus: 'clear' | 'blocked' | 'unverified';
+    tracks: { key: string; deltas: number[][] }[];
+    diagnostics: {
+      joints: number; gearPairs: number; loopClosures: number; rigidFollowers: number;
+      maxClosureErrorLdu: number; physicsSteps: number; approximateInertias: number;
+      sampledAabbOverlapAdvisories: number;
+      /** Mechanism-induced collisions, not stationary assembly contacts. */
+      continuousCollision?: { checkedPairs: number; clearPairs: number; blockedPairs: number;
+        unverifiedPairs: number; testedIntervals: number; triangleNodeTests: number;
+        staticWitnesses: number; issues: {a:string;b:string;time:number;
+          status:'blocked'|'unverified';reason:string}[] };
+    };
+};
 export type TimelineData = {
+    /** Optional post-build mechanism demonstration; regular Build is unchanged. */
+    mechanismStage?: MechanismStage;
     /** A permissive, non-physics preview; all paths remain editable in the Dope Sheet. */
     motion?: {
         engine: 'standard-motion' | 'standard-motion-v4'; parts: number; articulated: number; review: number;
@@ -131,11 +155,24 @@ export type TimelineData = {
         /** Per-phase provenance: never promote an unverified path to certified. */
         v4?: {
           version: number; phases: number[];
+          planning?: {mode:'mesh-reviewed'|'bounded-preview'; warnings:string[];
+            retainedMoves:number; limitedVerification:boolean; deferredRoutes?:number; deferredCertificates?:number};
           graph: { edges: number; rigidClusters: number; constrainedBodies: number; unknownBodies: number };
           mesh: { certified: number; blocked: number; unverified: number; exactChecks: number;
             candidateChecks: number; pairsExamined: number; rerouted: number };
           limits: { rules: number; matches: number; checked: number; adjusted: number; rejected: number;
             conflicts: number; unspecified: number };
+          detection?: { scanned:number; described:number; connectors:number; movableJoints:number;
+            kinds: Record<'gear'|'turntable'|'hinge'|'axle'|'pin'|'shaft'|'wheel'|'other',number>;
+            matchedJoints:number; gearMeshes:number;
+            jointDetails: {a:string;b:string;kind:string;motion:'revolute'|'prismatic'|'fixed'|'ball';evidence:'ldcad-shadow'|'turntable-inferred'}[];
+            gearDetails: {a:string;b:string;teethA:number;teethB:number;moduleLdu:number;evidence:'inferred-pitch';confidence:'review-required'}[];
+            suggestions: {title:string;program:import('./motion/v4/mechanismProgram').MechanismProgram;
+              evidence:'ldcad-shadow'|'inferred-gear-mesh';warnings:string[]}[];
+            warnings:string[] };
+          demonstration?: { mode: 'kinematic' | 'gravity'; bodies: number; frames: number;
+            gearPairs: number; loopClosures: number; maxClosureErrorLdu: number;
+            collisionStatus: 'clear' | 'blocked' | 'unverified'; approximateInertias: number };
         };
         fallback?: string;
     };

@@ -54,7 +54,7 @@ function baseOf(p: Plan): { plan: Plan; key: string } {
 }
 const planKey = (p: Plan) => baseOf(p).key;
 const stableRuleHash = (o: AnimOptions) => {
-  const source = JSON.stringify(o.motionV4Limits ?? []);
+  const source = JSON.stringify([o.motionV4Limits ?? [],o.motionV4Mechanism ?? null]);
   let hash = 0x811c9dc5;
   for (let i=0;i<source.length;i++) hash=Math.imul(hash^source.charCodeAt(i),0x01000193);
   return `${source.length.toString(36)}.${(hash>>>0).toString(36)}`;
@@ -73,7 +73,7 @@ export const optsKey = (o: AnimOptions) =>
     ...((o.planner === 'construction-v3' || o.planner === 'construction-v3-auto') ? ['v3-routing:mechanical-escape-r1', ...(o.constructionStepModules ? ['v3-step-modules:on'] : [])] : []),
     ...((o.planner === 'construction-v4') ? ['v4-global-scene:r1'] : []),
     ...((o.planner === 'standard-motion') ? ['standard-motion:kinematic-constraints-v3-r3'] : []),
-    ...((o.planner === 'standard-motion-v4') ? ['standard-motion-v4:mesh-graph-limits-r1', `rules:${stableRuleHash(o)}`] : []),
+    ...((o.planner === 'standard-motion-v4') ? ['standard-motion-v4:bounded-assembly-fix-r3', `rules:${stableRuleHash(o)}`] : []),
     // Artifact source of truth changes with the plan itself; tag the certificate
     // acceptance policy once so older files never silently count as certified.
     ...((o.planner === 'assembly-artifact') ? ['assembly-artifact:v1'] : [])].join('|');

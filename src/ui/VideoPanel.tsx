@@ -7,6 +7,7 @@ import { useStudio } from '../state/store';
 import { resetFloorShifts } from '../plan/pieceActions';
 import { useAppSettings } from '../state/appSettings';
 import { validateJointLimitRules, type JointLimitRule } from '../anim/motion/v4/jointLimits';
+import { validateMechanismProgram, type MechanismProgram } from '../anim/motion/v4/mechanismProgram';
 import { Ic } from './icons';
 import { DEFAULT_CAMERA_SETTINGS } from '../anim/camera';
 import { animationOf } from '../anim/keyframes';
@@ -36,6 +37,8 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
   const [acceptUncertified, setAcceptUncertified] = useState(false);
   const [limitDraft, setLimitDraft] = useState<string | null>(null);
   const [limitError, setLimitError] = useState('');
+  const [mechanismDraft, setMechanismDraft] = useState<string | null>(null);
+  const [mechanismError, setMechanismError] = useState('');
   useEffect(() => {
     if (!s.logo) return setLogoUrl(null);
     const u = URL.createObjectURL(s.logo);
@@ -44,7 +47,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
   }, [s.logo]);
   const longer = timeline && timeline.duration > s.targetSeconds + 0.05;
   useEffect(() => setAcceptUncertified(false), [timeline?.fallback?.code, timeline?.fallback?.message,
-    timeline?.motion?.v4?.mesh.blocked, timeline?.motion?.v4?.mesh.unverified]);
+    timeline?.motion?.v4?.mesh.blocked, timeline?.motion?.v4?.mesh.unverified, timeline?.mechanismStage]);
   const editingModel = useStudio((st) => st.editingModel);
   const timelineEditor = useStudio((st) => st.timelineEditor);
   const animation = useStudio((st) => animationOf(st.plan.animation));
@@ -71,8 +74,8 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
   const motion = s.planner === 'standard-motion' || motionV4;
   const artifactPlanner = s.planner === 'assembly-artifact';
   const hasArtifact = useStudio((st) => st.plan.assemblyPlan != null);
-  const v4NeedsReview = !!timeline?.motion?.v4 &&
-    timeline.motion.v4.mesh.blocked + timeline.motion.v4.mesh.unverified > 0;
+  const v4NeedsReview = ((timeline?.motion?.v4?.mesh.blocked ?? 0) +
+    (timeline?.motion?.v4?.mesh.unverified ?? 0) > 0) || !!(timeline?.mechanismStage && timeline.mechanismStage.collisionStatus !== 'clear');
   const previewNeedsConsent = (!!timeline?.fallback || v4NeedsReview) && (!manual || linked);
 
   return (
@@ -281,7 +284,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
           <select aria-label="Assembly planner" value={s.planner ?? 'legacy'} onChange={(e) => s.set({ planner: e.target.value as NonNullable<typeof s.planner> })}>
             <option value="legacy">Standard — flexible preview</option>
             <option value="standard-motion">Standard Motion v3 — mechanics + kinematics (editable preview)</option>
-            <option value="standard-motion-v4">Standard Motion v4 — mechanical graph, mesh verification, joint stops</option>
+            <option value="standard-motion-v4">Standard Motion v4 — mechanical graph, collision checks, gears, linkages, gravity</option>
             <option value="construction-v4">Construction V4 — global scene, articulation-aware (experimental)</option>
             <option value="construction-v3">Construction V3 — guided, certified only</option>
             <option value="construction-v3-auto">Construction V3 — guided, preview fallback</option>
@@ -292,11 +295,17 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
           <span className="nx-hint">{artifactPlanner
             ? 'Requires a model-matched assembly artifact from the Python planning engine.'
             : motionV4
-              ? 'Standard Motion V4 checks the connector constraint graph, certifies supported continuous triangle-mesh translations and hinge arcs, and enforces explicitly configured joint limits. It tries alternative routes when obstructed. Each move is CLEAR, BLOCKED, or UNVERIFIED; unsupported motion and connector seating are never marked clear. Existing V3 remains separate. The final brick placements and editable keyframes are preserved.'
+              ? 'Standard Motion V4 checks the connector constraint graph, certifies supported continuous triangle-mesh translations and hinge arcs, and enforces explicitly configured joint limits. It tries alternative routes when obstructed. Each move is CLEAR, BLOCKED, or UNVERIFIED; unsupported motion and connector seating are never marked clear. Existing V3 remains separate. The final brick placements and editable keyframes are preserved. Opt-in mechanism demonstrations support gear ratios, loop closures and constrained gravity. Their moving meshes are checked between playback frames; uncertain contacts remain UNVERIFIED. Gear and turntable detection produces opt-in suggestions, never invented joint stops.'
               : motion
                 ? 'Standard Motion V3 is an editable connector-guided preview with sampled AABB collision advisories, exact hinge pivots and axial insertions; it is not mesh-certified.'
                 : 'Construction engines apply their own planning and certification policies. No mode simulates gravity or gear-tooth dynamics.'}</span>
         </label>
+        {motionV4 && timeline?.motion?.v4?.planning && <div className="nx-field" aria-live="polite">
+          <strong>V4 assembly planning and collision review</strong>
+          <span className="nx-hint">Generated {timeline.motion.v4.planning.retainedMoves} editable tracks · {timeline.motion.v4.mesh.certified} CLEAR · {timeline.motion.v4.mesh.blocked} BLOCKED · {timeline.motion.v4.mesh.unverified} UNVERIFIED.</span>
+          {timeline.motion.v4.planning.limitedVerification && <span className="nx-hint">Large-model verification uses bounded work limits. A route that reaches a limit stays playable but is marked UNVERIFIED, never certified.</span>}
+          {timeline.motion.v4.planning.warnings.map((warning,i)=><p key={i} className="nx-hint" role="status">{warning}</p>)}
+        </div>}
         {motionV4 && <div className="nx-field">
           <strong>V4 joint limits (assembled position = zero)</strong>
           <span className="nx-hint">Provide a JSON array of signed radians for hinge travel or LDraw units for axial travel. Specify exact moving and host instance keys. An empty array leaves physical stops unknown — v4 never invents them.</span>
@@ -314,6 +323,58 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
           }}>Apply joint limits</button>
           <span className="nx-hint">{(s.motionV4Limits??[]).length} active rule(s). Units: radians or LDraw units. No default limits are assumed.</span>
           {limitError && <p className="error" role="alert">{limitError}</p>}
+        </div>}
+        {motionV4 && <div className="nx-field">
+          <strong>V4 mechanical demonstration — phases 4, 5 and 6</strong>
+          {timeline?.motion?.v4?.detection && <div className="nx-field">
+            <strong>Automatic LDraw mechanical detection</strong>
+            <span className="nx-hint">Scanned {timeline.motion.v4.detection.scanned} instances · {timeline.motion.v4.detection.kinds.gear} gears · {timeline.motion.v4.detection.kinds.hinge} hinges · {timeline.motion.v4.detection.kinds.turntable} turntables · {timeline.motion.v4.detection.kinds.axle + timeline.motion.v4.detection.kinds.shaft} axle/shaft pieces · {timeline.motion.v4.detection.matchedJoints} matched joint interfaces ({timeline.motion.v4.detection.movableJoints} movable) · {timeline.motion.v4.detection.gearMeshes} inferred gear contacts.</span>
+            {timeline.motion.v4.detection.suggestions.length > 0 ? <>
+              <span className="nx-hint">Opt-in suggestions use exact instance keys. Activate one to populate a working editable mechanism program; inspect its collision status after rebuilding.</span>
+              {timeline.motion.v4.detection.suggestions.map((proposal,i)=><div key={i}>
+                <button className="nx-link" type="button" onClick={()=>{
+                  const errors=validateMechanismProgram(proposal.program);
+                  if(errors.length){setMechanismError(errors.join('; '));return;}
+                  s.set({motionV4Mechanism:proposal.program});setMechanismDraft(null);setMechanismError('');
+                }}>Use detected motion: {proposal.title}</button>
+                <span className="nx-hint">{proposal.warnings.join(' ')}</span>
+              </div>)}
+            </> : <span className="nx-hint">No isolated mechanism was sufficiently constrained for an automatic animation suggestion. You can still use the editable program below.</span>}
+            <details><summary>Detected mechanical interfaces and evidence</summary>
+              {(timeline.motion.v4.detection.jointDetails??[]).map((joint,i)=><p key={i} className="nx-hint">
+                {joint.kind} · {joint.motion} · {joint.a} ↔ {joint.b} ({joint.evidence})
+              </p>)}
+              {(timeline.motion.v4.detection.gearDetails??[]).map((pair,i)=><p key={`gear-${i}`} className="nx-hint">
+                Inferred spur-gear pitch: {pair.teethA}:{pair.teethB} teeth · {pair.a} ↔ {pair.b} · REVIEW REQUIRED
+              </p>)}
+              {timeline.motion.v4.detection.matchedJoints>40 && <p className="nx-hint">Only the first 40 mechanical interfaces are shown.</p>}
+            </details>
+            <details><summary>Detection limitations and missing metadata</summary>
+              {timeline.motion.v4.detection.warnings.map((warning,i)=><p key={i} className="nx-hint">{warning}</p>)}
+            </details>
+          </div>}
+          <span className="nx-hint">Optional, post-assembly only. Configure exact instance keys, world-space pivots, shaft axes, gear tooth counts, optional loop-closure anchors and measured masses. Detectable gear tooth counts and compatible connections are reported from LDraw headers and LDCad connector data; inferred gear engagement is explicitly marked provisional. Real mass, joint stops and physics properties are never guessed from render meshes. The mechanism plays after Build and can be baked into ordinary editable keyframes.</span>
+          <textarea aria-label="V4 mechanical program JSON" rows={7} spellCheck={false}
+            placeholder={'{\n  "mode": "kinematic", "duration": 4, "sampleHz": 60,\n  "joints": [{ "id":"shaft-a", "body":"INSTANCE_KEY", "kind":"revolute", "pivot":[0,0,0], "axis":[0,1,0] }],\n  "driver":{"joint":"shaft-a","amplitude":0.7853981634,"cycles":1}\n}'}
+            value={mechanismDraft ?? (s.motionV4Mechanism ? JSON.stringify(s.motionV4Mechanism,null,2) : '')}
+            onChange={e=>setMechanismDraft(e.target.value)} />
+          <div className="bm-timing-actions">
+            <button className="nx-link" type="button" onClick={()=>{
+              try{
+                const text=mechanismDraft ?? (s.motionV4Mechanism?JSON.stringify(s.motionV4Mechanism):'');
+                if(!text.trim()) {s.set({motionV4Mechanism:null});setMechanismDraft(null);setMechanismError('');return;}
+                const parsed:unknown=JSON.parse(text);
+                const problems=validateMechanismProgram(parsed);
+                if(problems.length)throw new Error(problems.join('; '));
+                s.set({motionV4Mechanism:parsed as MechanismProgram});setMechanismDraft(null);setMechanismError('');
+              }catch(e){setMechanismError(e instanceof Error?e.message:String(e));}
+            }}>Apply mechanical program</button>
+            <button className="nx-link" type="button" onClick={()=>{
+              s.set({motionV4Mechanism:null});setMechanismDraft(null);setMechanismError('');
+            }}>Disable demonstration</button>
+          </div>
+          <span className="nx-hint">{s.motionV4Mechanism ? `${s.motionV4Mechanism.mode} · ${s.motionV4Mechanism.joints.length} joint(s) · ${s.motionV4Mechanism.duration}s` : 'No demo configured — v4 assembly is unchanged.'} Gravity uses constrained reduced-coordinate dynamics, NOT free rigid-body collision physics. Continuous mechanism mesh clearance is reported as CLEAR, BLOCKED or UNVERIFIED, and unresolved contacts require review.</span>
+          {mechanismError && <p className="error" role="alert">{mechanismError}</p>}
         </div>}
         {artifactPlanner && !hasArtifact && (
           <div className="nx-field" role="alert">
@@ -352,6 +413,15 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
               <span className="nx-hint">Mesh review: {timeline.motion.v4.mesh.certified} certified clear · {timeline.motion.v4.mesh.blocked} blocked · {timeline.motion.v4.mesh.unverified} unverified. {timeline.motion.v4.mesh.rerouted} re-routed flight(s).</span>
               <span className="nx-hint">Graph: {timeline.motion.v4.graph.edges} joints, {timeline.motion.v4.graph.rigidClusters} rigid groups, {timeline.motion.v4.graph.unknownBodies} bodies without matched connector metadata.</span>
               <span className="nx-hint">Limits: {timeline.motion.v4.limits.rules} user/verified rules · {timeline.motion.v4.limits.adjusted} approaches adjusted · {timeline.motion.v4.limits.rejected} candidate motions rejected. Unknown limits are NOT physical certifications.</span>
+              {timeline.mechanismStage && <>
+                <span className="nx-hint">Mechanical demo: {timeline.mechanismStage.mode} · {timeline.mechanismStage.tracks.length} driven/follower bodies · {timeline.mechanismStage.diagnostics.gearPairs} gear pairs · {timeline.mechanismStage.diagnostics.loopClosures} link closures · {timeline.mechanismStage.frames} playback frames. Continuous triangle-surface clearance: <strong>{timeline.mechanismStage.collisionStatus.toUpperCase()}</strong>.</span>
+                {timeline.mechanismStage.diagnostics.continuousCollision && <>
+                  <span className="nx-hint">Moving mesh pairs: {timeline.mechanismStage.diagnostics.continuousCollision.clearPairs} continuously clear · {timeline.mechanismStage.diagnostics.continuousCollision.blockedPairs} blocked · {timeline.mechanismStage.diagnostics.continuousCollision.unverifiedPairs} unverified; {timeline.mechanismStage.diagnostics.continuousCollision.triangleNodeTests} conservative triangle-BVH tests.</span>
+                  {timeline.mechanismStage.diagnostics.continuousCollision.issues.length>0 && <details><summary>Review mechanism collisions</summary>
+                    {timeline.mechanismStage.diagnostics.continuousCollision.issues.slice(0,16).map((issue,i)=><p key={i} className="nx-hint"><strong>{issue.status.toUpperCase()}</strong> at {issue.time.toFixed(3)} s · {issue.a} / {issue.b}: {issue.reason}</p>)}
+                  </details>}
+                </>}
+              </>}
             </> : <>
               {timeline.motion.kinematics && <span className="nx-hint">Kinematics: {timeline.motion.kinematics.pivotArcs} exact-pivot swings · {timeline.motion.kinematics.axialInsertions} axis-locked insertions · {timeline.motion.kinematics.overconstrained} conflicting joint hints.</span>}
               {timeline.motion.logical && <span className="nx-hint">Connection-aware ordering: {timeline.motion.logical.chains} group(s), {timeline.motion.logical.strategy}. Original project order was not changed.</span>}
@@ -415,7 +485,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
         </div>
         {previewNeedsConsent && <label className="nx-field" role="alert">
           <span><input type="checkbox" checked={acceptUncertified} onChange={(e) => setAcceptUncertified(e.target.checked)} /> {v4NeedsReview
-            ? `I have reviewed the ${timeline!.motion!.v4!.mesh.blocked} blocked and ${timeline!.motion!.v4!.mesh.unverified} unverified v4 route(s), and understand that exporting may show pieces passing through others.`
+            ? `I have reviewed the ${timeline?.motion?.v4?.mesh.blocked ?? 0} blocked and ${timeline?.motion?.v4?.mesh.unverified ?? 0} unverified v4 assembly route(s)${timeline!.mechanismStage?.collisionStatus !== 'clear' && timeline!.mechanismStage ? ', plus the blocked/unverified post-build mechanical demo' : ''}, and understand that exporting may show pieces passing through others.`
             : 'I understand the adaptive animation has not been collision-certified.'}</span>
         </label>}
         <button className="nx-btn nx-primary" disabled={(!manual && (!timeline || timeline.units.length === 0)) || (previewNeedsConsent && !acceptUncertified)} onClick={onExport}>

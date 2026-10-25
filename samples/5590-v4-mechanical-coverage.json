@@ -1,0 +1,284 @@
+{
+  "schema": "brickmotion-v4-mechanical-coverage-1",
+  "geometry": {
+    "mpdPartReferences": 1258,
+    "uniqueDatParts": 133,
+    "missingDat": []
+  },
+  "metadata": {
+    "directShadowInstances": 696,
+    "shadowReachableInstances": 1043,
+    "note": "Shadow reachability is only a candidate; effective connector inheritance, matching and restrictions must be checked in the assembled model."
+  },
+  "categories": {
+    "other": 1118,
+    "hinge": 42,
+    "pin": 23,
+    "wheel-or-tyre": 40,
+    "turntable": 2,
+    "spur-gear": 2,
+    "axle": 22,
+    "gear-rack": 1,
+    "bevel-gear": 8
+  },
+  "relevant": [
+    {
+      "part": "2440.dat",
+      "instances": 1,
+      "category": "hinge",
+      "description": "Hinge  6 x  3 Radar/Blade/Spoiler/Panel",
+      "shadowDirect": false,
+      "shadowPossiblyInherited": true,
+      "shadowMissingFromHierarchy": false
+    },
+    {
+      "part": "2458.dat",
+      "instances": 1,
+      "category": "pin",
+      "description": "Brick  1 x  2 with Pin",
+      "shadowDirect": false,
+      "shadowPossiblyInherited": true,
+      "shadowMissingFromHierarchy": false
+    },
+    {
+      "part": "2695.dat",
+      "instances": 19,
+      "category": "wheel-or-tyre",
+      "description": "Wheel Rim 12.7 x 30 Stepped",
+      "shadowDirect": true,
+      "shadowPossiblyInherited": false,
+      "shadowMissingFromHierarchy": false
+    },
+    {
+      "part": "2696.dat",
+      "instances": 19,
+      "category": "wheel-or-tyre",
+      "description": "Tyre 12.7/ 51 x 30",
+      "shadowDirect": false,
+      "shadowPossiblyInherited": false,
+      "shadowMissingFromHierarchy": true
+    },
+    {
+      "part": "2780.dat",
+      "instances": 12,
+      "category": "pin",
+      "description": "Technic Pin with Friction and Slots",
+      "shadowDirect": true,
+      "shadowPossiblyInherited": false,
+      "shadowMissingFromHierarchy": false
+    },
+    {
+      "part": "3403.dat",
+      "instances": 1,
+      "category": "turntable",
+      "description": "Turntable  4 x  4 Base",
+      "shadowDirect": true,
+      "shadowPossiblyInherited": false,
+      "shadowMissingFromHierarchy": false
+    },
+    {
+      "part": "3404.dat",
+      "instances": 1,
+      "category": "turntable",
+      "description": "Turntable  4 x  4 Top",
+      "shadowDirect": true,
+      "shadowPossiblyInherited": false,
+      "shadowMissingFromHierarchy": false
+    },
+    {
+      "part": "3482.dat",
+      "instances": 2,
+      "category": "wheel-or-tyre",
+      "description": "Wheel Rim  8 x 17.5 with Axlehole",
+      "shadowDirect": false,
+      "shadowPossiblyInherited": true,
+      "shadowMissingFromHierarchy": false
+    },
+    {
+      "part": "3647.dat",
+      "instances": 2,
+      "category": "spur-gear",
+      "description": "Technic Gear  8 Tooth",
+      "shadowDirect": false,
+      "shadowPossiblyInherited": true,
+      "shadowMissingFromHierarchy": false
+    },
+    {
+      "part": "3651.dat",
+      "instances": 2,
+      "category": "pin",
+      "description": "Technic Connector (Pin/Bush) with 2 Studs",
+      "shadowDirect": true,
+      "shadowPossiblyInherited": false,
+      "shadowMissingFromHierarchy": false
+    },
+    {
+      "part": "3704.dat",
+      "instances": 2,
+      "category": "axle",
+      "description": "Technic Axle  2",
+      "shadowDirect": true,
+      "shadowPossiblyInherited": false,
+      "shadowMissingFromHierarchy": false
+    },
+    {
+      "part": "3705.dat",
+      "instances": 5,
+      "category": "axle",
+      "description": "Technic Axle  4",
+      "shadowDirect": true,
+      "shadowPossiblyInherited": false,
+      "shadowMissingFromHierarchy": false
+    },
+    {
+      "part": "3706.dat",
+      "instances": 2,
+      "category": "axle",
+      "description": "Technic Axle  6",
+      "shadowDirect": true,
+      "shadowPossiblyInherited": false,
+      "shadowMissingFromHierarchy": false
+    },
+    {
+      "part": "3707.dat",
+      "instances": 1,
+      "category": "axle",
+      "description": "Technic Axle  8",
+      "shadowDirect": true,
+      "shadowPossiblyInherited": false,
+      "shadowMissingFromHierarchy": false
+    },
+    {
+      "part": "3708.dat",
+      "instances": 6,
+      "category": "axle",
+      "description": "Technic Axle 12",
+      "shadowDirect": true,
+      "shadowPossiblyInherited": false,
+      "shadowMissingFromHierarchy": false
+    },
+    {
+      "part": "3743.dat",
+      "instances": 1,
+      "category": "gear-rack",
+      "description": "Technic Gear Rack  1 x  4",
+      "shadowDirect": true,
+      "shadowPossiblyInherited": false,
+      "shadowMissingFromHierarchy": false
+    },
+    {
+      "part": "3749.dat",
+      "instances": 5,
+      "category": "axle",
+      "description": "Technic Axle Pin",
+      "shadowDirect": true,
+      "shadowPossiblyInherited": false,
+      "shadowMissingFromHierarchy": false
+    },
+    {
+      "part": "3937.dat",
+      "instances": 1,
+      "category": "hinge",
+      "description": "Hinge  1 x  2 Base",
+      "shadowDirect": true,
+      "shadowPossiblyInherited": false,
+      "shadowMissingFromHierarchy": false
+    },
+    {
+      "part": "3938.dat",
+      "instances": 2,
+      "category": "hinge",
+      "description": "Hinge  1 x  2 Top",
+      "shadowDirect": true,
+      "shadowPossiblyInherited": false,
+      "shadowMissingFromHierarchy": false
+    },
+    {
+      "part": "4143.dat",
+      "instances": 8,
+      "category": "bevel-gear",
+      "description": "Technic Gear 14 Tooth Bevel",
+      "shadowDirect": true,
+      "shadowPossiblyInherited": false,
+      "shadowMissingFromHierarchy": false
+    },
+    {
+      "part": "4274.dat",
+      "instances": 8,
+      "category": "pin",
+      "description": "Technic Pin  1/2",
+      "shadowDirect": true,
+      "shadowPossiblyInherited": false,
+      "shadowMissingFromHierarchy": false
+    },
+    {
+      "part": "4275a.dat",
+      "instances": 4,
+      "category": "hinge",
+      "description": "Hinge Plate  1 x  2 with 3 Fingers and Solid Studs",
+      "shadowDirect": true,
+      "shadowPossiblyInherited": false,
+      "shadowMissingFromHierarchy": false
+    },
+    {
+      "part": "4275b.dat",
+      "instances": 8,
+      "category": "hinge",
+      "description": "Hinge Plate  1 x  2 with 3 Fingers and Hollow Studs",
+      "shadowDirect": true,
+      "shadowPossiblyInherited": false,
+      "shadowMissingFromHierarchy": false
+    },
+    {
+      "part": "4276b.dat",
+      "instances": 8,
+      "category": "hinge",
+      "description": "Hinge Plate  1 x  2 with 2 Fingers and Hollow Studs",
+      "shadowDirect": true,
+      "shadowPossiblyInherited": false,
+      "shadowMissingFromHierarchy": false
+    },
+    {
+      "part": "4519.dat",
+      "instances": 1,
+      "category": "axle",
+      "description": "Technic Axle  3",
+      "shadowDirect": true,
+      "shadowPossiblyInherited": false,
+      "shadowMissingFromHierarchy": false
+    },
+    {
+      "part": "4531.dat",
+      "instances": 4,
+      "category": "hinge",
+      "description": "Hinge Tile  1 x  2 with 2 Fingers",
+      "shadowDirect": true,
+      "shadowPossiblyInherited": false,
+      "shadowMissingFromHierarchy": false
+    },
+    {
+      "part": "4592.dat",
+      "instances": 7,
+      "category": "hinge",
+      "description": "Hinge Control Stick Base",
+      "shadowDirect": true,
+      "shadowPossiblyInherited": false,
+      "shadowMissingFromHierarchy": false
+    },
+    {
+      "part": "4593.dat",
+      "instances": 7,
+      "category": "hinge",
+      "description": "Hinge Control Stick",
+      "shadowDirect": true,
+      "shadowPossiblyInherited": false,
+      "shadowMissingFromHierarchy": false
+    }
+  ],
+  "limits": [
+    "Bevel gears (4143.dat) and gear racks (3743.dat) are recognized but not coupled automatically; they need authoritative gear geometry and an engagement solver.",
+    "No automatically inferred physical angular joint stops, friction coefficients, tolerances, or masses.",
+    "Gear 3647.dat has no direct shadow, but axlehole.dat is referenced and has a shadow; effective inherited axle-hole snaps require application-runtime confirmation.",
+    "This is a static MPD/header and shadow coverage audit; it is NOT a running 5590 collision benchmark."
+  ]
+}

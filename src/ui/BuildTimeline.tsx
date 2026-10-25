@@ -262,7 +262,7 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
           )}
           {tl?.motion && (tl.motion.v4 ? (
             <TimelineNote id="standard-motion" open={note} onOpen={setNote}
-              tone={tl.motion.v4.mesh.blocked || tl.motion.v4.mesh.unverified ? 'warn' : undefined}
+              tone={tl.motion.v4.mesh.blocked || tl.motion.v4.mesh.unverified || tl.mechanismStage ? 'warn' : undefined}
               label={`Standard Motion V4 · ${tl.motion.parts.toLocaleString()} parts`}
               title="Continuous mesh verification: proven clear / blocked / unverified">
               {tl.motion.v4.graph.edges} mechanical joints · {tl.motion.v4.mesh.certified} proven-clear flights · {tl.motion.v4.mesh.blocked} blocked · {tl.motion.v4.mesh.unverified} unverified. {tl.motion.v4.limits.rules} explicit joint-limit rules; unprovided stops remain unknown. Routes marked unverified are NOT certified. Review flagged routes in the Timeline.
@@ -276,6 +276,15 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
               {' '}Switch to Timeline → Review routes to jump to flagged parts and adjust keyframes.
             </TimelineNote>
           ))}
+          {tl?.mechanismStage && (
+            <TimelineNote id="v4-mechanism" open={note} onOpen={setNote} tone="warn"
+              label={`V4 ${tl.mechanismStage.mode} · ${tl.mechanismStage.duration.toFixed(1)}s`}
+              title="Postassembly mechanical animation — motion clearance not certified">
+              {tl.mechanismStage.diagnostics.gearPairs} gear couplings, {tl.mechanismStage.diagnostics.loopClosures} closed-link constraints, {tl.mechanismStage.diagnostics.rigidFollowers} rigid followers.
+              {' '}Starts at {tl.mechanismStage.start.toFixed(2)}s. Maximum closure residual {tl.mechanismStage.diagnostics.maxClosureErrorLdu.toFixed(3)} LDU.
+              {' '}The demonstration is kinematically constrained but not certified collision-free. Review the moving mechanism before export.
+            </TimelineNote>
+          )}
           {!tl?.fallback && !tl?.motion && uncertified.length > 0 && (
             <TimelineNote id="route" open={note} onOpen={setNote} tone="warn" label={`${uncertified.length} rough route${uncertified.length === 1 ? '' : 's'}`} title={uncertified.join('\n')}>
               {uncertified.length === 1 ? '1 piece has' : `${uncertified.length} pieces have`} no collision-free route, so {uncertified.length === 1 ? 'it takes' : 'they take'} the least-blocked one and may clip a neighbour. Check {uncertified.length === 1 ? 'it' : 'them'} in the preview.

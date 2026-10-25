@@ -53,6 +53,7 @@ export const CLOSE_EASE = 0.6;
 /** `box`: the space the flight sweeps (LDU), for the camera */
 import type { Unit, SubBuild, CamKey, StepSpan, MoveData, TrackData, TimelineData } from './timelineData';
 import { buildStandardMotionTimeline } from './motion/standardMotion';
+import { mechanismPoseAt } from './motion/v4/mechanismPlayback';
 import { buildStandardMotionV4Timeline } from './motion/v4/standardMotionV4';
 import { interpolateJointSegment } from './motion/jointKinematics';
 export type { Unit, SubBuild, CamKey, StepSpan } from './timelineData';
@@ -1718,6 +1719,12 @@ export function poseAt(tl: Timeline, t: number): (key: string) => THREE.Matrix4 
     const tr = tl.tracks.get(key);
     if (!tr) return null;
     if (t < tr.appear) return null;
+    // The mechanism stage overlays only the fully assembled interval. After
+    // the demonstration the authored final matrix remains the exact rest pose.
+    if (tl.mechanismStage && t >= tl.mechanismStage.start) {
+      const staged = mechanismPoseAt(tl.mechanismStage, t, key, tr.final);
+      if (staged) return staged;
+    }
     if (!tr.moves.length) return tr.final.clone();
     const first = tl.units[tr.moves[0].unit];
     if (t < first.start) {
@@ -1802,6 +1809,10 @@ export function applyAssemblySpotTransform(tl: Timeline, spot: AssemblySpot): Ti
     units: tl.units.map((u) => ({ ...u, box: boxThrough(u.box, S), land: boxThrough(u.land, S) })),
     subBuilds: tl.subBuilds.map((sb) => ({ ...sb, focus: transformBox(sb.focus, S) })),
     camKeys: tl.camKeys.map((k) => ({ ...k, box: transformBox(k.box, S) })),
+    mechanismStage: tl.mechanismStage ? { ...tl.mechanismStage,
+      tracks: tl.mechanismStage.tracks.map(track => ({ ...track,
+        deltas: track.deltas.map(e => S.clone().multiply(new THREE.Matrix4().fromArray(e)).multiply(SInv).elements.slice()),
+      })) } : undefined,
     modelBox: transformBox(tl.modelBox, S),
     buildBox: transformBox(tl.buildBox, S),
     sceneBox: transformBox(tl.sceneBox, S),

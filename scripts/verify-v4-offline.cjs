@@ -207,4 +207,35 @@ const c=(actual,expected)=>assert.equal(actual,expected,JSON.stringify(actual));
  c(actual.posePath.at(-1).equals(m.to),true);
  console.log('PASS v4 reroutes an actually obstructed flight and preserves final placement');
 }
+{
+ // A saved mechanism from a DIFFERENT MPD must not suppress the assembly
+ // timeline. The old v4 release threw and left the editor without a Build.
+ const a=asm(['moving','wall']),m=move(at(-10),at(-5));
+ const makeBase=()=>{
+  const t=scene([{key:'moving',floor:m.from,final:m.to,move:m},
+    {key:'wall',floor:at(40),final:at(40)}]);
+  t.motion={engine:'standard-motion',parts:2,articulated:0,review:0};
+  t.buildEnd=2;t.pacing={outro:1};t.sceneBox=box();t.buildBox=box();
+  t.camKeys=[];return t;
+ };
+ const obsolete={duration:1,mode:'kinematic',
+  joints:[{id:'old-hinge',body:'old-model/removed-part',kind:'revolute',
+    axis:[0,0,1],pivot:[0,0,0]}],
+  driver:{joint:'old-hinge',amplitude:0.4,cycles:1}};
+ const v4=load('src/anim/motion/v4/standardMotionV4.ts');
+ fakeV3Timeline=makeBase();fakeV3Joints=[];
+ const salvaged=v4.buildStandardMotionV4Timeline(a,met(),
+  {targetSeconds:12,heroOrbit:false,planner:'standard-motion-v4',motionV4Mechanism:obsolete});
+ c(salvaged.tracks.size,2);
+ c(salvaged.motion.engine,'standard-motion-v4');
+ c(!!salvaged.mechanismStage,false);
+ assert(salvaged.motion.v4.planning.warnings.some(v=>v.includes('Optional mechanism was not run')));
+ fakeV3Timeline=makeBase();
+ const invalid=v4.buildStandardMotionV4Timeline(a,met(),
+  {targetSeconds:12,heroOrbit:false,planner:'standard-motion-v4',
+   motionV4Limits:[{moving:'moving',host:'wall',kind:'revolute',min:2,max:1,source:'user'}]});
+ c(invalid.tracks.size,2);
+ assert(invalid.motion.v4.planning.warnings.some(v=>v.includes('Invalid joint-limit rules disabled')));
+ console.log('PASS stale optional model program and invalid joint stops cannot block Build');
+}
 console.log('ALL V4 offline safety checks passed (not a full application build)');

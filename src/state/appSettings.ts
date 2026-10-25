@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { AnimOptions, ArrivalMode, FloorSides, FloorSort } from '../anim/pacing';
 import type { JointLimitRule } from '../anim/motion/v4/jointLimits';
+import type { MechanismProgram } from '../anim/motion/v4/mechanismProgram';
 import { CONSTRUCTION_BUDGET_PRESETS, type ConstructionBudgetPreset } from '../anim/construction/budgetPresets';
 import type { LogoCorner } from '../export/exportVideo';
 import type { ExportFps } from '../export/frameRates';
@@ -32,6 +33,7 @@ export type AppSettings = {
   constructionBudget?: ConstructionBudgetPreset;
   constructionStepModules?: boolean;
   motionV4Limits?: JointLimitRule[];
+  motionV4Mechanism?: MechanismProgram | null;
   /** how pieces waiting on the floor are grouped, and where around the model */
   floorSort: FloorSort;
   floorSides: FloorSides;
@@ -67,7 +69,7 @@ export const toSettings = (s: AppSettings): Settings => ({
   logo: s.logo,
   logoCorner: s.logoCorner,
   logoEnabled: s.logoEnabled,
-  video: { targetSeconds: s.targetSeconds, heroOrbit: s.heroOrbit, mode: s.mode, fps: s.fps, introSeconds: s.introSeconds, buildSeconds: s.buildSeconds, outroSeconds: s.outroSeconds, studioLook: s.studioLook, cameraFraming: s.cameraFraming, camera: s.camera, format: s.format, edgeLines: s.edgeLines, linearColors: s.linearColors, bottomUp: s.bottomUp, snapSound: s.snapSound, planner: s.planner ?? 'legacy', constructionSupport: s.constructionSupport ?? 'fixture', constructionBudget: s.constructionBudget ?? 'standard', constructionStepModules: s.constructionStepModules === true, motionV4Limits: s.motionV4Limits ?? [], floorSort: s.floorSort, floorSides: s.floorSides },
+  video: { targetSeconds: s.targetSeconds, heroOrbit: s.heroOrbit, mode: s.mode, fps: s.fps, introSeconds: s.introSeconds, buildSeconds: s.buildSeconds, outroSeconds: s.outroSeconds, studioLook: s.studioLook, cameraFraming: s.cameraFraming, camera: s.camera, format: s.format, edgeLines: s.edgeLines, linearColors: s.linearColors, bottomUp: s.bottomUp, snapSound: s.snapSound, planner: s.planner ?? 'legacy', constructionSupport: s.constructionSupport ?? 'fixture', constructionBudget: s.constructionBudget ?? 'standard', constructionStepModules: s.constructionStepModules === true, motionV4Limits: s.motionV4Limits ?? [], motionV4Mechanism: s.motionV4Mechanism ?? null, floorSort: s.floorSort, floorSides: s.floorSides },
 });
 
 export async function applySettings(s: Settings): Promise<void> {
@@ -78,7 +80,7 @@ export async function applySettings(s: Settings): Promise<void> {
 }
 
 /** The animation options the timeline planner needs, taken from the video settings. */
-export const animOptions = (s: Pick<AppSettings, 'targetSeconds' | 'heroOrbit' | 'mode' | 'introSeconds' | 'buildSeconds' | 'outroSeconds' | 'bottomUp' | 'planner' | 'constructionSupport'> & Partial<Pick<AppSettings, 'constructionBudget' | 'constructionStepModules' | 'motionV4Limits' | 'floorSort' | 'floorSides'>>): AnimOptions => ({
+export const animOptions = (s: Pick<AppSettings, 'targetSeconds' | 'heroOrbit' | 'mode' | 'introSeconds' | 'buildSeconds' | 'outroSeconds' | 'bottomUp' | 'planner' | 'constructionSupport'> & Partial<Pick<AppSettings, 'constructionBudget' | 'constructionStepModules' | 'motionV4Limits' | 'motionV4Mechanism' | 'floorSort' | 'floorSides'>>): AnimOptions => ({
   targetSeconds: s.targetSeconds,
   heroOrbit: s.heroOrbit,
   mode: s.mode === 'auto' ? undefined : s.mode,
@@ -90,6 +92,7 @@ export const animOptions = (s: Pick<AppSettings, 'targetSeconds' | 'heroOrbit' |
   constructionSupport: s.constructionSupport ?? 'fixture',
   constructionStepModules: s.constructionStepModules === true,
   motionV4Limits: s.motionV4Limits ?? [],
+  motionV4Mechanism: s.motionV4Mechanism ?? null,
   constructionMaxMilliseconds: CONSTRUCTION_BUDGET_PRESETS[s.constructionBudget ?? 'standard'].maxMilliseconds,
   constructionMaxStates: CONSTRUCTION_BUDGET_PRESETS[s.constructionBudget ?? 'standard'].maxStates,
   constructionMaxCandidates: CONSTRUCTION_BUDGET_PRESETS[s.constructionBudget ?? 'standard'].maxCandidates,

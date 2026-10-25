@@ -1,0 +1,79 @@
+{
+  "mode": "kinematic",
+  "duration": 3,
+  "sampleHz": 60,
+  "joints": [
+    {
+      "id": "crank",
+      "body": "CRANK_INSTANCE",
+      "kind": "revolute",
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "pivot": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "coupler",
+      "body": "COUPLER_INSTANCE",
+      "parent": "CRANK_INSTANCE",
+      "kind": "revolute",
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "pivot": [
+        2,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "rocker",
+      "body": "ROCKER_INSTANCE",
+      "kind": "revolute",
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "pivot": [
+        5,
+        0,
+        0
+      ]
+    }
+  ],
+  "closures": [
+    {
+      "a": {
+        "body": "COUPLER_INSTANCE",
+        "local": [
+          2,
+          2,
+          0
+        ]
+      },
+      "b": {
+        "body": "ROCKER_INSTANCE",
+        "local": [
+          -1,
+          2,
+          0
+        ]
+      },
+      "toleranceLdu": 0.05
+    }
+  ],
+  "driver": {
+    "joint": "crank",
+    "amplitude": 0.2,
+    "cycles": 1
+  }
+}

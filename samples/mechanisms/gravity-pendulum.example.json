@@ -1,0 +1,52 @@
+{
+  "mode": "gravity",
+  "duration": 4,
+  "sampleHz": 60,
+  "joints": [
+    {
+      "id": "pendulum",
+      "body": "PENDULUM_INSTANCE",
+      "kind": "revolute",
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "pivot": [
+        0,
+        0,
+        0
+      ],
+      "limits": {
+        "min": -0.7,
+        "max": 0.7,
+        "source": "user"
+      }
+    }
+  ],
+  "driver": {
+    "joint": "pendulum",
+    "amplitude": 0.3
+  },
+  "gravity": {
+    "acceleration": [
+      0,
+      9.81,
+      0
+    ],
+    "bodies": [
+      {
+        "body": "PENDULUM_INSTANCE",
+        "massKg": 0.1,
+        "centreLocal": [
+          5,
+          0,
+          0
+        ],
+        "inertiaKgM2": 0.001
+      }
+    ],
+    "damping": 0.002,
+    "releaseAt": 0.3
+  }
+}

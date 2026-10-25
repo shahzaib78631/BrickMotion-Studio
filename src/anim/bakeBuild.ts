@@ -84,6 +84,12 @@ function relevantFrames(timeline: Timeline, key: string, scene: KeyframeAnimatio
   const add = (n: number) => { if (n >= scene.startFrame && n <= scene.endFrame) result.add(n); };
   const appear = Math.ceil(f(tr.appear) - 1e-8);
   add(appear - 1); add(appear);
+  const mechanism = timeline.mechanismStage;
+  if (mechanism?.tracks.some((p) => p.key === key)) {
+    const lo = Math.ceil(f(mechanism.start)), hi = Math.ceil(f(mechanism.start + mechanism.duration));
+    add(lo - 1); add(lo); add(hi); add(hi + 1);
+    for (let frame = Math.max(scene.startFrame, lo); frame <= Math.min(scene.endFrame, hi); frame++) add(frame);
+  }
   for (const move of tr.moves) {
     const u = timeline.units[move.unit];
     if (!u) throw new Error(`Build timeline has an invalid move reference for ${key}.`);

@@ -11,6 +11,7 @@
  */
 import * as THREE from 'three';
 import type { Box } from '../../../ldraw/flatten';
+import { SpatialHash } from '../../../model/spatialHash';
 import { transformBox, unionBox, type Assembly, type Metrics } from '../../../model/assemble';
 import { MeshOracle } from '../../construction/collision';
 import type { ConstructionModel, ConstructionNode, SearchStats } from '../../construction/types';
@@ -260,12 +261,22 @@ function splitTimes(tl:Timeline,key:string,lo:number,hi:number):number[] {
   return result;
 }
 
-export type VerificationBudget = { maxExactPairs?: number; maxDepth?: number; maxIntervals?: number };
+export type VerificationBudget = {
+  maxExactPairs?: number; maxDepth?: number; maxIntervals?: number;
+  /** Limits the amount of geometric proof attempted on crowded flights. */
+  maxCandidatePairs?: number;
+  /** A verifier budget is NOT permission to certify an unvisited pair. */
+  maxMilliseconds?: number;
+};
 export class TimedMeshCertifier {
   private pieces: Piece[];
   private missingTracks: string[]=[];
   private byKey=new Map<string,Piece>();
   private oracles=new Map<string,PairOracle>();
+  /** All-time conservative occupancy: safe for querying at any flight time.
+   * Unlike a frame sample this cannot miss a piece flying between keyframes. */
+  private globalIndex=new SpatialHash(192);
+  private globallyUnknown:number[]=[];
   private exactPairsInFlight=0;
   constructor(private asm:Assembly, private tl:Timeline, private metrics:Metrics,
     private graph:MechanismGraph, private budget:VerificationBudget={}) {
@@ -276,7 +287,28 @@ export class TimedMeshCertifier {
       return [{key:inst.key,part:inst.part,track,bounds:pm.full,
         hasMesh:!pm.placeholder&&validBounds(pm.full)&&!!pm.mesh?.length}];
     });
-    for(const p of this.pieces)this.byKey.set(p.key,p);
+    this.pieces.forEach((p,i)=>{
+      this.byKey.set(p.key,p);
+      const tr=p.track;
+      let swept:Box|null=unionBox(transformBox(p.bounds,tr.final),transformBox(p.bounds,tr.floor));
+      let supported=validBounds(swept) && (tr.ctx??0)===0 && p.hasMesh;
+      for(const move of tr.moves){
+        const b=moveEnvelope(move,p.bounds,0,1);
+        if(!b){supported=false;break;}
+        swept=unionBox(swept,b);
+      }
+      if(supported&&swept&&validBounds(swept))this.globalIndex.insert(i,swept);
+      else this.globallyUnknown.push(i); // Never spatially cull unsupported movement.
+    });
+  }
+  /** Extend, never shrink, the broad phase after a route edit. Stale entries
+   * can produce extra work, but cannot hide a collision. */
+  noteUpdatedMove(key:string,move:Move):void {
+    const i=this.pieces.findIndex(p=>p.key===key);
+    if(i<0)return;
+    const b=moveEnvelope(move,this.pieces[i].bounds,0,1);
+    if(b&&validBounds(b))this.globalIndex.insert(i,b);
+    else if(!this.globallyUnknown.includes(i))this.globallyUnknown.push(i);
   }
   private state(key:string,lo:number,hi:number,alternative?:Move): State {
     const p=this.byKey.get(key);
@@ -362,6 +394,15 @@ export class TimedMeshCertifier {
     if(end<=start)return {...report,status:'unverified',reason:'Invalid flight duration'};
     const full=this.state(key,start,end,flight);
     if(!full.bounds)return {...report,status:'unverified',reason:'Unsupported motion geometry'};
+    const maxCandidatePairs=this.budget.maxCandidatePairs??Infinity;
+    const now=()=>typeof performance==='undefined'?Date.now():performance.now();
+    const deadline=this.budget.maxMilliseconds==null?Infinity:now()+this.budget.maxMilliseconds;
+    const budgetExceeded=()=>now()>deadline;
+    const outOfBudget=(reason:string):Certificate=>({ ...report,
+      status:report.status==='blocked'?'blocked':'unverified',
+      reason:report.status==='blocked'?report.reason:reason,
+      blockers:report.blockers.length?report.blockers:['(verification budget)'],
+    });
     const maxDepth=this.budget.maxDepth??8,maxIntervals=this.budget.maxIntervals??160;
     const intervalWork={n:0};
     const record=(status:Verdict,other:string,t:number,reason:string) => {
@@ -372,8 +413,16 @@ export class TimedMeshCertifier {
         if(status==='blocked' || report.reason===undefined)report.reason=reason;
       }
     };
-    for(const other of this.pieces){
-      if(other.key===key)continue;
+    // Spatially prune only by envelopes that cover each part's ENTIRE
+    // staging, flight and installed lifetime. Unbounded motions are always
+    // examined; a current-time AABB or keyframe sample would be unsound.
+    const candidates=new Set(this.globalIndex.query(full.bounds));
+    for(const i of this.globallyUnknown)candidates.add(i);
+    for(const i of candidates){
+      const other=this.pieces[i];
+      if(!other||other.key===key)continue;
+      if(budgetExceeded())return outOfBudget('Time budget reached before all candidate bodies could be certified');
+      if(report.examinedPairs>=maxCandidatePairs)return outOfBudget('Pair budget reached before all candidate bodies could be certified');
       // The pieces of one rigid attach unit preserve their authored relative
       // transform. The joint is not waived: absence of a pairwise independent
       // motion proof means the *whole unit* remains unverified instead.
@@ -392,7 +441,7 @@ export class TimedMeshCertifier {
         .sort((a,b)=>a-b).filter((t,i,arr)=>i===0||t-arr[i-1]>EPS);
       const mate=this.graph.isMate(key,other.key);
       const check=(lo:number,hi:number,depth:number):Verdict=>{
-        if(++intervalWork.n>maxIntervals)return 'unverified';
+        if(budgetExceeded()||++intervalWork.n>maxIntervals)return 'unverified';
         const a=this.state(key,lo,hi,flight),b=this.state(other.key,lo,hi);
         if(!a.bounds||!b.bounds)return a.supported&&b.supported?'clear':'unverified';
         if(!overlap(a.bounds,b.bounds))return 'clear';
@@ -443,6 +492,8 @@ export class TimedMeshCertifier {
           'Mesh intersection during occupied motion');break;}
         if(status==='unverified')pairStatus='unverified';
       }
+      if(budgetExceeded() || intervalWork.n>maxIntervals)
+        return outOfBudget('Interval/time budget reached before the full flight could be certified');
       if(pairStatus==='clear')report.verifiedPairs++;
       else if(pairStatus==='unverified')record('unverified',other.key,0,
         mate?'Connector seating cannot be waived without verified contact geometry':

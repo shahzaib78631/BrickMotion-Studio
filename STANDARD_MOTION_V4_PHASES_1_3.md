@@ -109,3 +109,8 @@ npm run build
 ```
 
 **Validation performed in this delivery environment:** focused offline TypeScript-transpiled numerical and geometry checks passed for graph mobility, signed joint limits, analytical hinge envelopes, continuous triangle sweeps, parked pieces, concurrent motion, missing meshes, translated hinge pivots, and the v4 planner's alternative-route selection. Previous v3 hinge/playback/worker-codec and path-regression checks also passed. The new Vitest source is included and syntax transpiled. **A complete application TypeScript typecheck, Vitest suite, browser export run, or full 5590 runtime planning benchmark could not be performed** because Node dependencies were not available to install here. Those checks should be completed in a dependency-enabled environment before production use.
+
+
+## Subsequent phases
+
+Phases 4–6 are implemented as optional post-assembly mechanisms; see [STANDARD_MOTION_V4_PHASES_4_6.md](STANDARD_MOTION_V4_PHASES_4_6.md). Earlier phase-1-to-3 collision certification continues to cover assembly flights, not post-assembly gear/linkage/gravity motion, whose collision status remains unverified.
