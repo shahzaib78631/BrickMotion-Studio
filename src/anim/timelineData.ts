@@ -20,6 +20,8 @@ export type Unit = {
     hidden?: boolean;
     /** No route could be certified collision-free; it takes the least-obstructed one. */
     uncertified?: boolean;
+    /** Editable Standard Motion preview: this is a visual joint hint, NOT a certified sweep. */
+    motion?: 'hinge' | 'clip' | 'pin-hole' | 'axle-hole' | 'cylindrical' | 'stud-socket' | 'ball-socket' | 'clearance-route' | 'preview';
 };
 export type SubBuild = {
     key: string;
@@ -95,6 +97,21 @@ export type PlanningFallback = {
     contacts?: { moving: string; obstacle: string; stage: string }[];
 };
 export type TimelineData = {
+    /** A permissive, non-physics preview; all paths remain editable in the Dope Sheet. */
+    motion?: {
+        engine: 'standard-motion'; parts: number; articulated: number; review: number;
+        /** Advisory AABB checks against pieces installed before each flight. */
+        checked?: number;
+        /** Routes with sampled possible obstructions, including legacy/fallback ones. */
+        obstructed?: number;
+        /** Summed sampled route-overlap severity across reviewed leaves. */
+        interferenceScore?: number;
+        /** A new connected-part assembly order, with per-joint host guides. */
+        logical?: { chains: number; strategy: string; attempts: number; order: string[][] };
+        /** Capped actionable per-leaf reports; never a collision certificate. */
+        issues?: { key: string; unit: number; time: number; blockers: string[]; firstHit?: number }[];
+        fallback?: string;
+    };
     /** Bump when rigid collision-certification algorithms change. */
     certificationVersion?: number;
     fallback?: PlanningFallback;

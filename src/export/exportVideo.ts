@@ -228,6 +228,18 @@ export function exportKeyframeVideo(opts: KeyframeExportOpts, deps: ExportDeps):
   const dist = fitDistance(bounds, fov, opts.width / opts.height, az, el) * margin;
   const cam: CamPose = { position: sphericalPosition(target, dist, az, el), target, fov };
   const layer = buildLayerAt(animation, editingModel);
+  /** Motion baked from a Build (or still linked to one) follows the Build camera:
+   * it frames the assembled model instead of the whole staging floor and keeps
+   * the configured hero orbit. Fully hand-keyed clips stay on the stable camera. */
+  const cameraAtTime = buildTimeline
+    ? (seconds: number, aspect: number) => {
+        const frame = animation.startFrame + seconds * animation.fps;
+        const buildSeconds = layer
+          ? Math.max(0, ((frame - layer.startFrame) / animation.fps) * layer.speed)
+          : seconds;
+        return cameraAt(buildTimeline, buildSeconds, aspect, opts.cameraFraming ?? 'cinematic', opts.camera);
+      }
+    : () => cam;
   const snaps = layer && buildTimeline ? snapsOf(buildTimeline).map((s) => ({
     ...s, t: (layer.startFrame - animation.startFrame) / animation.fps + s.t / layer.speed,
   })).filter((s) => s.t >= 0 && s.t < animationDuration(animation)) : undefined;
@@ -248,7 +260,7 @@ export function exportKeyframeVideo(opts: KeyframeExportOpts, deps: ExportDeps):
       const evaluated = pose(animationFrameAtVideoTime(animation, seconds));
       return (key) => evaluated.has(key) ? evaluated.get(key)! : base.get(key) ?? null;
     },
-    camera: () => cam,
+    camera: cameraAtTime,
     snaps,
   });
 }

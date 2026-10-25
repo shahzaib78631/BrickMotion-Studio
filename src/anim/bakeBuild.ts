@@ -8,12 +8,15 @@ export { simplifyChannel } from './bakeCurves';
 import { poseAt, type Timeline } from './timeline';
 import { placedMatrix } from '../ui/modelPlacement';
 
-export type BakeResult = { animation: KeyframeAnimation; count: number; keys: number };
+export type BakeResult = { animation: KeyframeAnimation; count: number; keys: number; warnings?: string[] };
 export type BakeOptions = {
   /** Top-level item ID, full nested use path, or all leaves (undefined). */
   targets?: readonly string[];
   /** Remove the procedural Build only if every leaf has been baked. */
   detach?: boolean;
+  /** Use an editable best-effort pose for anomalous affine frames instead of
+   * aborting every other part. Report those frames for manual review. */
+  bestEffort?: boolean;
 };
 const TRANSFORMS = [
   'location.x', 'location.y', 'location.z',
@@ -117,6 +120,12 @@ export function bakeBuildFlights(
   const matrices = new Map<number, ReturnType<typeof poseAt>>();
   let total = next.tracks.reduce((sum, track) => sum + Object.values(track.channels).reduce((n, keys) => n + (keys?.length ?? 0), 0), 0);
   let sampledPoses = 0;
+  const warnings: string[] = [];
+  // This mode must support large per-leaf dope sheets. Keep hard safety limits,
+  // but do not inherit the ordinary interactive 2,000-part bake cap.
+  const sampleBudget = options.bestEffort ? 1_500_000 : MAX_SAMPLED_POSES;
+  const keyBudget = options.bestEffort ? 1_500_000 : MAX_TOTAL_KEYS;
+  const trackBudget = options.bestEffort ? 10_000 : 2_000;
   for (const inst of chosen) {
     const source = timeline.tracks.get(inst.key);
     if (!source) throw new Error(`Missing generated flight for ${inst.key}. Replan Build before baking.`);
@@ -129,7 +138,7 @@ export function bakeBuildFlights(
     const visibility: { frame: number; value: number; interpolation: 'constant' }[] = [];
     let lastVisible: number | undefined;
     for (const frame of frames) {
-      if (++sampledPoses > MAX_SAMPLED_POSES) throw new Error('Bake requires over 300,000 flight samples. Bake fewer pieces or shorten the animation.');
+      if (++sampledPoses > sampleBudget) throw new Error(`Bake exceeds the ${sampleBudget.toLocaleString()}-sample safety limit. Shorten the scene or reduce FPS.`);
       let sample = matrices.get(frame);
       if (!sample) {
         const seconds = Math.max(0, Math.min(timeline.duration, (frame - layer.startFrame) / next.fps * layer.speed));
@@ -146,7 +155,15 @@ export function bakeBuildFlights(
       }
       // An invisible part still retains a harmless independent floor matrix.
       const desired = actual ?? source.floor;
-      const converted = offsetForPose(base, desired, pivot, previous);
+      let converted: number[];
+      try { converted = offsetForPose(base, desired, pivot, previous); }
+      catch (error) {
+        if (!options.bestEffort) throw error;
+        if (!warnings.includes(inst.key)) warnings.push(inst.key);
+        // A missed sample stays at its previous pose until the user corrects
+        // that part's keyframes. Never create NaNs or drop the part's track.
+        converted = previous?.slice() ?? [0, 0, 0, 0, 0, 0, 1, 1, 1];
+      }
       converted.forEach((value, i) => values[i].push({ frame, value }));
       previous = converted;
     }
@@ -165,18 +182,18 @@ export function bakeBuildFlights(
     // in timelines saved by older planner versions.
     channels.visibility = visibility;
     total += channels.visibility.length;
-    if (total > MAX_TOTAL_KEYS) throw new Error('Bake would exceed the 380,000-key safety budget. Bake fewer pieces or shorten the scene.');
+    if (total > keyBudget) throw new Error(`Bake exceeds the ${keyBudget.toLocaleString()}-key safety budget. Shorten the scene or reduce FPS.`);
     fresh.push({ kind: 'object', source: 'baked-flight', model: editingModel, target: inst.key, channels });
   }
-  if (next.tracks.length + fresh.length > 2000) {
+  if (next.tracks.length + fresh.length > trackBudget) {
     const duplicates = fresh.filter((t) => next.tracks.some((old) => old.model === t.model && old.target === t.target));
-    if (next.tracks.length + fresh.length - duplicates.length > 2000)
-      throw new Error('Bake would exceed the 2,000-track project limit.');
+    if (next.tracks.length + fresh.length - duplicates.length > trackBudget)
+      throw new Error(`Bake would exceed the ${trackBudget.toLocaleString()}-track project safety limit.`);
   }
   const replacing = new Set(fresh.map((t) => JSON.stringify([t.model, t.target])));
   next = { ...next, tracks: [...next.tracks.filter((t) => !replacing.has(JSON.stringify([t.model, t.target]))), ...fresh] };
   if (options.detach) next = unlinkBuildLayer(next, editingModel);
-  return { animation: next, count: chosen.length, keys: fresh.reduce((n, t) => n + Object.values(t.channels).reduce((sum, keys) => sum + (keys?.length ?? 0), 0), 0) };
+  return { animation: next, count: chosen.length, keys: fresh.reduce((n, t) => n + Object.values(t.channels).reduce((sum, keys) => sum + (keys?.length ?? 0), 0), 0), warnings };
 }
 
 export const isBakedFlight = (animation: KeyframeAnimation | undefined, model: string, key: string): boolean =>

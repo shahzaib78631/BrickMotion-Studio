@@ -51,8 +51,18 @@ export function ExportDialog({ plan, jobs, mode = 'build', onClose }: { plan: Pl
         try {
           update(i, { s: 'planning' });
           const animation = animationOf(plan.animation);
-          const sourceBuild = mode === 'build' || !!buildLayerAt(animation, job.model);
-          const timeline = sourceBuild ? await planTimeline(plan, job.model, animOptions(settings), 'export') : null;
+          const linkedBuild = !!buildLayerAt(animation, job.model);
+          // Fully baked Standard Motion tracks no longer have a Build layer, but
+          // their camera should still follow the assembly and its hero orbit.
+          const bakedBuild = animation.tracks.some((track) => track.model === job.model && track.source === 'baked-flight');
+          let timeline: Awaited<ReturnType<typeof planTimeline>> | null = null;
+          if (mode === 'build' || linkedBuild || bakedBuild) {
+            try { timeline = await planTimeline(plan, job.model, animOptions(settings), 'export'); }
+            catch (error) {
+              // A camera-only plan must never block an already-baked Timeline.
+              if (mode === 'build' || linkedBuild) throw error;
+            }
+          }
           const asm = assemble(scopedPlan(plan, job.model), metricsOf, getColors());
           const instances = asm.instances;
           if (!instances.length) throw new Error('This model has no parts.');

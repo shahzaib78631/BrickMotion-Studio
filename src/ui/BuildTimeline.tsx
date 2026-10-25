@@ -260,7 +260,17 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
               {tl.fallback.planner === 'construction-v3' ? 'Construction V3' : 'Construction V2'} stopped ({tl.fallback.code}). This is a Standard-planner VISUAL preview, not collision-certified. All flights require review. {tl.fallback.phase ? `Stage: ${tl.fallback.phase}. ` : ''}{tl.fallback.scope ? `Scope: ${tl.fallback.scope}. ` : ''}{tl.fallback.peakRemovals != null && tl.fallback.peakScopeUnits != null ? `Deepest removal: ${tl.fallback.peakRemovals}/${tl.fallback.peakScopeUnits}. ` : ''}{tl.fallback.searchStates != null ? `Explored ${tl.fallback.searchStates} states. ` : ''}{tl.fallback.message}
             </TimelineNote>
           )}
-          {!tl?.fallback && uncertified.length > 0 && (
+          {tl?.motion && (
+            <TimelineNote id="standard-motion" open={note} onOpen={setNote} tone="warn"
+              label={`Standard Motion · ${tl.motion.parts.toLocaleString()} parts`}
+              title={tl.motion.fallback ?? 'Every motion is an editable preview, not a collision-certified path'}>
+              {tl.motion.logical ? `${tl.motion.logical.chains} connected group${tl.motion.logical.chains === 1 ? '' : 's'} resequenced (${tl.motion.logical.strategy}). ` : ''}
+              {tl.motion.articulated} connector-guided motion{tl.motion.articulated === 1 ? '' : 's'} · {tl.motion.obstructed ?? 0} potentially obstructed parts in a sampled AABB check. All {tl.motion.review} paths remain unverified.
+              {' '}Switch to Timeline → Review routes to jump to flagged parts and adjust their individual keyframes.
+              {tl.motion.fallback ? ` Standard support ordering was unresolved: ${tl.motion.fallback}` : ''}
+            </TimelineNote>
+          )}
+          {!tl?.fallback && !tl?.motion && uncertified.length > 0 && (
             <TimelineNote id="route" open={note} onOpen={setNote} tone="warn" label={`${uncertified.length} rough route${uncertified.length === 1 ? '' : 's'}`} title={uncertified.join('\n')}>
               {uncertified.length === 1 ? '1 piece has' : `${uncertified.length} pieces have`} no collision-free route, so {uncertified.length === 1 ? 'it takes' : 'they take'} the least-blocked one and may clip a neighbour. Check {uncertified.length === 1 ? 'it' : 'them'} in the preview.
             </TimelineNote>

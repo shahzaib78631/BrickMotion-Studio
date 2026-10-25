@@ -19,6 +19,8 @@ vi.mock('mediabunny', () => {
 });
 
 import { emptyAnimation, insertKeys } from '../../src/anim/keyframes';
+import { buildTimeline } from '../../src/anim/timeline';
+import { measurePart } from '../../src/ldraw/metrics';
 import { animationDuration, animationFrameAtVideoTime, exportKeyframeVideo, keyframeSceneBounds } from '../../src/export/exportVideo';
 
 const brick = (): Instance => ({ key: 'brick', itemId: 'brick', model: '', part: '3001', color: 4,
@@ -26,12 +28,13 @@ const brick = (): Instance => ({ key: 'brick', itemId: 'brick', model: '', part:
 const canvas = () => ({ width: 100, height: 100, getContext: () => ({ drawImage: vi.fn(), globalAlpha: 1 }) }) as unknown as OffscreenCanvas;
 const studio = () => {
   const matrices: Array<number | null> = [];
+  const positions: THREE.Vector3[] = [];
   const stub = { createStudio: vi.fn(() => ({
     bricks: { setInstances: vi.fn(), setMatrices: (at: (key: string) => THREE.Matrix4 | null) => { const pose = at('brick'); matrices.push(pose?.elements[12] ?? null); } },
-    perspective: { position: { copy: vi.fn() }, lookAt: vi.fn(), fov: 30, updateProjectionMatrix: vi.fn() },
+    perspective: { position: { copy: vi.fn((v: THREE.Vector3) => positions.push(v.clone())) }, lookAt: vi.fn(), fov: 30, updateProjectionMatrix: vi.fn() },
     setSize: vi.fn(), fitTo: vi.fn(), render: vi.fn(), dispose: vi.fn(),
   })), createCanvas: canvas };
-  return { stub: stub as unknown as Parameters<typeof exportKeyframeVideo>[1], matrices };
+  return { stub: stub as unknown as Parameters<typeof exportKeyframeVideo>[1], matrices, positions };
 };
 const options = (animation = emptyAnimation(), signal = new AbortController().signal) => ({
   animation, editingModel: '', placements: new Map(), buildTimeline: null,
@@ -62,7 +65,11 @@ describe('Timeline MP4 export', () => {
     expect(matrices).toEqual([0, 0, 0, 0]); // no missing planner dependency
   });
   it('preserves invisible pieces and layers animated offsets over the Build result', async () => {
-    const source = { duration: 1, ground: 0, sceneBox: { min: [0, -24, 0], max: [120, 0, 20] },
+    // A real timeline keeps the Build camera available; only its flights are simplified.
+    const built = buildTimeline({ nodes: [], instances: [], bounds: null, problems: [] },
+      (p) => measurePart(null, p), { targetSeconds: 15, heroOrbit: false });
+    const source = { ...built, duration: 1,
+      sceneBox: { min: [0, -24, 0], max: [120, 0, 20] },
       units: [], tracks: new Map([['brick', { appear: 0.5, floor: new THREE.Matrix4(),
         floorBox: { min: [0, -24, 0], max: [20, 0, 20] }, ctx: 0, moves: [], final: new THREE.Matrix4().makeTranslation(100, 0, 0) }]]) } as unknown as Timeline;
     const a = insertKeys({ ...emptyAnimation(), endFrame: 25, buildLayers: { '': { startFrame: 1, speed: 1 } } }, 14,
@@ -78,6 +85,17 @@ describe('Timeline MP4 export', () => {
     const linked = { ...emptyAnimation(), buildLayers: { '': { startFrame: 1, speed: 1 } } };
     const { stub } = studio();
     await expect(exportKeyframeVideo(options(linked), stub)).rejects.toThrow('construction planning failed');
+  });
+  it('follows the Build camera and its hero orbit for build-derived motion', async () => {
+    const built = buildTimeline({ nodes: [], instances: [], bounds: null, problems: [] },
+      (p) => measurePart(null, p), { targetSeconds: 15, heroOrbit: true });
+    const source = { ...built, buildEnd: 0.2, duration: 2, heroOrbit: true,
+      modelBox: { min: [-20, -20, -20] as [number, number, number], max: [20, 20, 20] as [number, number, number] } };
+    const { stub, positions } = studio();
+    await exportKeyframeVideo({ ...options({ ...emptyAnimation(), endFrame: 25 }), buildTimeline: source }, stub);
+    expect(positions.length).toBeGreaterThan(1);
+    // A static fit would show the identical camera in every frame.
+    expect(positions[0].distanceTo(positions[positions.length - 1])).toBeGreaterThan(0.1);
   });
   it('includes distant animated positions in camera framing', () => {
     const clip = insertKeys(emptyAnimation(), 10, [{ model: '', target: 'brick', channel: 'location.z', value: 40 }]);

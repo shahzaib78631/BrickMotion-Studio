@@ -50,6 +50,7 @@ export const CLOSE_EASE = 0.6;
 /** One thing that flies: a single piece, or a finished submodel chunk (the attach). */
 /** `box`: the space the flight sweeps (LDU), for the camera */
 import type { Unit, SubBuild, CamKey, StepSpan, MoveData, TrackData, TimelineData } from './timelineData';
+import { buildStandardMotionTimeline } from './motion/standardMotion';
 export type { Unit, SubBuild, CamKey, StepSpan } from './timelineData';
 export type Move = MoveData<THREE.Matrix4>;
 export type Track = TrackData<THREE.Matrix4>;
@@ -182,6 +183,7 @@ export const DEFAULT_ACCESS_WORK = 1500;
  * floor where it was). Null = lay out around the model itself, as always.
  */
 export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProgress?: (p: PlanningProgress) => void, layoutBox: Box | null = null, workBaySpots: Record<string, AssemblySpot> = {}): Timeline {
+  if (opts.planner === 'standard-motion') return buildStandardMotionTimeline(asm, metrics, opts, onProgress, layoutBox, workBaySpots);
   if (opts.planner === 'construction-v2' || opts.planner === 'construction-auto' || opts.planner === 'construction-v3' || opts.planner === 'construction-v3-auto' || opts.planner === 'construction-v4') {
     try {
       const model = modelFromNodes(asm.nodes, metrics);

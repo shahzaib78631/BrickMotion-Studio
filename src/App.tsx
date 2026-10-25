@@ -15,6 +15,7 @@ import { KeyframeTimeline } from './ui/KeyframeTimeline';
 import { instancePlacements } from './ui/modelPlacement';
 import { animationOf } from './anim/keyframes';
 import { linkBuildLayer } from './anim/buildLayer';
+import { fillMotionKeyframes, missingMotionKeyTargets } from './anim/motion/autoBake';
 import { checkEditedMotion } from './anim/motionDiagnostics';
 import { ChecksPanel } from './ui/ChecksPanel';
 import { ExportDialog, type ExportJob } from './ui/ExportDialog';
@@ -76,6 +77,8 @@ function Studio() {
   const [tlHeight, setTlHeight] = useState(() => Number(load('bm-tl-h')) || 236);
   const [dialog, setDialog] = useState<'projects' | 'about' | null>(null);
   const [exportJobs, setExportJobs] = useState<ExportJob[] | null>(null);
+  const [motionKeyError, setMotionKeyError] = useState('');
+  const [motionKeyStatus, setMotionKeyStatus] = useState('');
 
   useEffect(() => store('bm-tab', tab), [tab]);
   useEffect(() => store('bm-theme', theme), [theme]);
@@ -86,6 +89,34 @@ function Studio() {
   // a new planner/support setting can never be omitted from a memo dependency list.
   const opts = animOptions(video);
   const { timeline, planning, error: planError, progress, retry } = useTimeline(model.ready && model.view.instances.length > 0, model.plan, editingModel, opts);
+  // Standard Motion creates actual editable leaf keyframes the first time the
+  // user opens Timeline. Never re-bake an existing track automatically: those
+  // may contain the user's hand corrections, even after model re-planning.
+  useEffect(() => {
+    if (video.planner !== 'standard-motion' || timelineEditor !== 'timeline' ||
+      !timeline || !model.ready || planning || planError) return;
+    const missing = missingMotionKeyTargets(model.plan.animation, editingModel, model.view.instances);
+    if (!missing.length) return;
+    const timer = window.setTimeout(() => {
+      try {
+        const current = useStudio.getState();
+        const freshMissing = missingMotionKeyTargets(current.plan.animation, editingModel, model.view.instances);
+        if (!freshMissing.length) return;
+        const result = fillMotionKeyframes(current.plan.animation, editingModel, model.view.instances,
+          instancePlacements(current.plan, editingModel, model.assembly), timeline);
+        if (!result.count) return;
+        current.apply(p => ({ ...p, animation: result.animation }));
+        setMotionKeyError('');
+        setMotionKeyStatus(`${result.count.toLocaleString()} individual part tracks · ${result.keys.toLocaleString()} editable keyframes` +
+          (result.warnings?.length ? ` · ${result.warnings.length} affine motions need review` : ''));
+      } catch (error) {
+        setMotionKeyError(`Could not generate every editable part track: ${error instanceof Error ? error.message : String(error)}. The generated Build remains available; use Bake all in Timeline or shorten the scene.`);
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [video.planner, timelineEditor, timeline, planning, planError, model.ready,
+      model.plan.animation, model.view.instances, model.assembly, editingModel]);
+
   // a different model has a different timeline: start it from the beginning
   useEffect(() => usePlayback.getState().set({ t: 0, playing: false, stopAt: null, loopFrom: null }), [editingModel]);
   const exportCurrent = () => {
@@ -263,16 +294,21 @@ function Studio() {
               <button role="tab" aria-selected={timelineEditor === 'timeline'} className={timelineEditor === 'timeline' ? 'active' : ''}
                 onClick={() => { useStudio.getState().setTimelineEditor('timeline'); setTlHeight((h) => Math.max(340, h)); }}><Ic name="key" /> Timeline</button>
             </div>
-          <span className="bm-timeline-mode-hint">{timelineEditor === 'build' ? 'Automatic assembly & steps' : 'Dope Sheet · Object keyframes'}</span>
-          {timelineEditor === 'build' && timeline && !planning && !planError && <button className="bm-link-build" title="Keep the generated Build as a procedural base and keyframe offsets on top of its motion"
+          <span className="bm-timeline-mode-hint">{timelineEditor === 'build' ? 'Automatic assembly & steps' : video.planner === 'standard-motion' ? 'Every part has editable motion tracks' : 'Dope Sheet · Object keyframes'}</span>
+          {video.planner === 'standard-motion' && timelineEditor === 'timeline' && (motionKeyError || motionKeyStatus) &&
+            <span role="status" title={motionKeyError || motionKeyStatus} className="bm-timeline-mode-hint">{motionKeyError || motionKeyStatus}</span>}
+          {timelineEditor === 'build' && timeline && !planning && !planError && <button className="bm-link-build"
+            title={video.planner === 'standard-motion' ? 'Generate all independent per-brick motion and visibility keyframes; existing corrected keys are preserved' : 'Keep the generated Build as a procedural base and keyframe offsets on top of its motion'}
             onClick={() => {
               try {
                 const s = useStudio.getState();
-                s.apply((p) => ({ ...p, animation: linkBuildLayer(animationOf(p.animation), s.editingModel, timeline.duration) }));
+                if (video.planner !== 'standard-motion')
+                  s.apply((p) => ({ ...p, animation: linkBuildLayer(animationOf(p.animation), s.editingModel, timeline.duration) }));
+                setMotionKeyError(''); setMotionKeyStatus('');
                 s.setTimelineEditor('timeline');
                 setTlHeight((h) => Math.max(340, h));
               } catch (error) { alert(error instanceof Error ? error.message : String(error)); }
-            }}><Ic name="key" /> Edit Build in Timeline</button>}
+            }}><Ic name="key" /> {video.planner === 'standard-motion' ? 'Edit all part keyframes' : 'Edit Build in Timeline'}</button>}
           </div>
           {timelineEditor === 'build'
             ? <BuildTimeline timeline={timeline} planning={planning} error={model.error || planError}

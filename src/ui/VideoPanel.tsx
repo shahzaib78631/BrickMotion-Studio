@@ -63,6 +63,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
   const v2 = ['construction-v2', 'construction-auto', 'construction-v3', 'construction-v3-auto', 'construction-v4'].includes(s.planner ?? '');
   const v3 = s.planner === 'construction-v3' || s.planner === 'construction-v3-auto';
   const v4 = s.planner === 'construction-v4';
+  const motion = s.planner === 'standard-motion';
   const previewNeedsConsent = !!timeline?.fallback && (!manual || linked);
 
   return (
@@ -154,7 +155,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
             <option value="wide">Wide — whole model in frame</option>
           </select>
         </label>
-        {manual && <p className="nx-hint">Timeline videos use a stable camera at the chosen azimuth, elevation and lens. Build drift, damping, focus and the hero orbit do not apply to manually keyed motion.</p>}
+        {manual && <p className="nx-hint">Timeline videos generated from Build (including fully baked Standard Motion tracks) follow the Build camera, its framing and the hero orbit. Fully hand-keyed clips use a stable camera at the chosen azimuth, elevation and lens; Build drift and damping do not apply to them.</p>}
         <div className="bm-camera-actions">
           <button type="button" className="nx-btn nx-sm" onClick={() => s.set({ camera: { ...DEFAULT_CAMERA_SETTINGS } })}>Reference</button>
           <button type="button" className="nx-btn nx-sm" onClick={() => s.set({ camera: { ...s.camera, lensMm: 42, buildElevation: 54, buildMargin: 1.08, targetLock: 0.72, submodelFocus: 1 } })}>Closer</button>
@@ -265,18 +266,19 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
 
       {!manual && <>
       <details className="nx-group bm-vsec">
-        <summary>Planner<span className="bm-vsec-val">{s.planner === 'construction-v3-auto' ? 'V3 Adaptive' : s.planner === 'construction-auto' ? 'V2 Adaptive' : v3 ? 'Construction V3' : v4 ? 'Construction V4' : v2 ? 'Construction V2' : 'Standard'}</span></summary>
+        <summary>Planner<span className="bm-vsec-val">{s.planner === 'construction-v3-auto' ? 'V3 Adaptive' : s.planner === 'construction-auto' ? 'V2 Adaptive' : v3 ? 'Construction V3' : v4 ? 'Construction V4' : v2 ? 'Construction V2' : motion ? 'Standard Motion' : 'Standard'}</span></summary>
         <label className="nx-field">
           Assembly planner
           <select aria-label="Assembly planner" value={s.planner ?? 'legacy'} onChange={(e) => s.set({ planner: e.target.value as NonNullable<typeof s.planner> })}>
             <option value="legacy">Standard — flexible preview</option>
+            <option value="standard-motion">Standard Motion v3 — logical connections + editable keys (preview)</option>
             <option value="construction-v4">Construction V4 — global scene, articulation-aware (experimental)</option>
             <option value="construction-v3">Construction V3 — guided, certified only</option>
             <option value="construction-v3-auto">Construction V3 — guided, preview fallback</option>
             <option value="construction-auto">Adaptive V2 — then uncertified preview</option>
             <option value="construction-v2">Construction V2 — certified only</option>
           </select>
-          <span className="nx-hint">V4 plans one global scene of rigid clusters, uses connector and articulated-joint policies, certifies translation and rotation certificates against every installed or staged part, and replays every accepted operation. It has no uncertified fallback. Large-model coverage is still experimental; V3/V2 are available for comparison. Neither engine simulates true flexible-part deformation.</span>
+          <span className="nx-hint">Standard Motion compares connected-part orders before it builds, for example one leg → hips → other leg, and evaluates alternative joint-axis approaches (hinges, clips, ball joints, studs, pins and axles) against already-installed part bounds. It also tries clearances if a standard path appears obstructed. It completes the visual build even when support ordering is unresolved and generates editable motion keys for each brick. Use Timeline to correct paths. This is a visual preview, not rigid collision certification or a dynamics simulation. V4 plans one global scene of rigid clusters, uses connector and articulated-joint policies, certifies translation and rotation certificates against every installed or staged part, and replays every accepted operation. It has no uncertified fallback. Large-model coverage is still experimental; V3/V2 are available for comparison. Neither engine simulates true flexible-part deformation.</span>
         </label>
         {v2 && <label className="nx-field">
           Workpiece support
@@ -302,6 +304,14 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
           </select>
           <span className="nx-hint">Higher budgets use more CPU and memory. They do not bypass missing connector geometry or collision checks. In large models, the result may still be a contact error or timeout.</span>
         </label>}
+        {motion && timeline?.motion && (
+          <div className="nx-field" role="status">
+            <strong>{timeline.motion.parts.toLocaleString()} part tracks · {timeline.motion.articulated} joint-guided motions</strong>
+            {timeline.motion.logical && <span className="nx-hint">Connection-aware ordering: {timeline.motion.logical.chains} group(s), {timeline.motion.logical.strategy}. Example order: {timeline.motion.logical.order[0]?.join(' → ')}. Original project order was not changed.</span>}
+            <span className="nx-hint">{timeline.motion.obstructed ?? 0} possible sampled AABB conflicts across {timeline.motion.checked ?? 0} assessed flights. These are advisory, not physically certified. Open Timeline → Review routes to jump directly to a suspect brick, expand all nine channels and correct its keys.</span>
+            {timeline.motion.fallback && <details><summary>Standard assembly issue (editable fallback used)</summary><p className="nx-hint">{timeline.motion.fallback}</p></details>}
+          </div>
+        )}
         {timeline?.construction && (
           <div className="nx-field">
             <strong>{timeline.construction.operations.length} operations · {timeline.construction.stats.states} search states</strong>
