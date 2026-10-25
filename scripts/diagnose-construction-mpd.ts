@@ -14,6 +14,7 @@ import { flattenPart } from '../src/ldraw/flatten';
 import { measurePart } from '../src/ldraw/metrics';
 import { shadowLookupFrom } from '../src/ldraw/shadow';
 import { modelFromPlan, planConstruction } from '../src/anim/construction';
+import { planConstructionV4 } from '../src/anim/construction/v4/planner';
 import type { Plan, Step } from '../src/plan/types';
 import { CONSTRUCTION_BUDGET_PRESETS, isConstructionBudgetPreset } from '../src/anim/construction/budgetPresets';
 import { buildMechanicalConstraintGraph, explainMissingMechanicalMate } from '../src/anim/construction/mechanicalConstraintGraph';
@@ -27,15 +28,19 @@ const useStepModules = args.includes('--step-modules') && !args.includes('--no-s
 const noReviewedSurfaces = args.includes('--no-reviewed-surfaces');
 const focusFlag = args.find(value => value.startsWith('--focus-parts='));
 const focusParts = focusFlag?.slice('--focus-parts='.length).toLowerCase().split(',').filter(Boolean);
+const debugClusterFlag = args.find(value => value.startsWith('--debug-cluster='));
+const debugCluster = debugClusterFlag?.slice('--debug-cluster='.length);
+const maxCandidatesFlag = args.find(value => value.startsWith('--max-candidates='));
+const maxCandidatesPerState = maxCandidatesFlag ? Number(maxCandidatesFlag.split('=')[1]) : undefined;
 const engineFlag = args.find(value => value.startsWith('--engine='));
 const engine = engineFlag?.split('=')[1] ?? 'v2';
-if (engine !== 'v2' && engine !== 'v3') throw new Error('Specify --engine=v2 or --engine=v3');
+if (engine !== 'v2' && engine !== 'v3' && engine !== 'v4') throw new Error('Specify --engine=v2, --engine=v3 or --engine=v4');
 const budgetFlags = args.filter(value => value.startsWith('--budget='));
 if (budgetFlags.length > 1) throw new Error('Specify --budget only once.');
 const requestedBudget = budgetFlags[0]?.slice('--budget='.length) ?? 'standard';
 if (!isConstructionBudgetPreset(requestedBudget)) throw new Error('Unknown budget preset. Use --budget=standard, --budget=extended or --budget=diagnostic.');
 const limits = CONSTRUCTION_BUDGET_PRESETS[requestedBudget];
-const [mpdArg, libraryArg, modelScope = 'full', reportArg] = args.filter(value => !value.startsWith('--budget=') && !value.startsWith('--engine=') && value !== '--inspect-interfaces' && value !== '--audit-only' && value !== '--no-config-detours' && value !== '--no-step-modules' && value !== '--step-modules' && value !== '--no-reviewed-surfaces' && !value.startsWith('--focus-parts='));
+const [mpdArg, libraryArg, modelScope = 'full', reportArg] = args.filter(value => !value.startsWith('--budget=') && !value.startsWith('--engine=') && value !== '--inspect-interfaces' && value !== '--audit-only' && value !== '--no-config-detours' && value !== '--no-step-modules' && value !== '--step-modules' && value !== '--no-reviewed-surfaces' && !value.startsWith('--focus-parts=') && !value.startsWith('--debug-cluster=') && !value.startsWith('--max-candidates='));
 if (!mpdArg || !libraryArg) {
   console.error('Usage: npx tsx scripts/diagnose-construction-mpd.ts <model.mpd> <ldraw-dir> [scope|full] [report.json] [--budget=standard|extended|diagnostic] [--engine=v2|v3] [--audit-only] [--no-reviewed-surfaces] [--inspect-interfaces] [--focus-parts=4073,4349]');
   process.exit(1);
@@ -147,20 +152,28 @@ let last = start;
 let contactAudit: { reviewedSurfaceContacts: number; contactAuditMilliseconds: number } | undefined;
 let report: Record<string, unknown>;
 try {
-  const result = planConstruction(model, {
-    ...limits, algorithm: engine === 'v3' ? 'guided-v3' : 'exhaustive-v2', supportMode: 'fixture',
-    disableBundledSurfaceReviews: noReviewedSurfaces, enableConfigurationDetours: !noConfigDetours, enableStepModules: useStepModules,
-    onContactAuditComplete: result => { contactAudit = result; },
-    cancelled: () => auditOnly && contactAudit !== undefined,
-    onProgress: p => {
-      const t = performance.now();
-      if (t-last>2000) { console.log(`  ${p.phase} ${p.completed}/${p.total} ${p.item??''}`); last=t; }
-    },
-  });
-  report = { success: true, engine, enableConfigurationDetours: !noConfigDetours, enableStepModules: useStepModules, budget: requestedBudget, limits, scope: modelScope, pieces: model.parts.size, operations: result.operations.length, contactAudit, stats: result.stats, warnings: result.warnings };
+  const progress = (p: { phase: string; completed: number; total: number; item?: string }) => {
+    const t = performance.now();
+    if (t-last>2000) { console.log(`  ${p.phase} ${p.completed}/${p.total} ${p.item??''}`); last=t; }
+  };
+  const cancelled = () => auditOnly && contactAudit !== undefined;
+  const result = engine === 'v4'
+    ? planConstructionV4(model, {
+        maxMilliseconds: limits.maxMilliseconds, maxStates: limits.maxStates, supportMode: 'fixture',
+        debugCluster, maxCandidatesPerState, onProgress: progress, cancelled,
+      })
+    : planConstruction(model, {
+        ...limits, algorithm: engine === 'v3' ? 'guided-v3' : 'exhaustive-v2', supportMode: 'fixture',
+        disableBundledSurfaceReviews: noReviewedSurfaces, enableConfigurationDetours: !noConfigDetours, enableStepModules: useStepModules,
+        onContactAuditComplete: result => { contactAudit = result; },
+        cancelled,
+        onProgress: progress,
+      });
+  report = { success: true, engine, budget: requestedBudget, limits, scope: modelScope, pieces: model.parts.size, operations: result.operations.length, contactAudit, stats: result.stats, warnings: result.warnings };
+  if (engine === 'v4') report.v4 = (result as { v4?: unknown }).v4;
   console.log(`Planned ${result.operations.length} operations.`);
 } catch (error) {
-  const e = error as Error & { code?: string; details?: {blockages?: {moving:string;obstacle:string;stage:string;detail:string}[];stats?:unknown} };
+  const e = error as Error & { code?: string; details?: {blockages?: {moving:string;obstacle:string;stage:string;detail:string}[];items?:string[];stats?:unknown} };
   if (auditOnly && e.code === 'cancelled' && contactAudit) {
     report = { success:true, contactAuditOnly:true, fullPlanCertified:false, engine,
       budget:requestedBudget, scope:modelScope, pieces:model.parts.size,
@@ -168,9 +181,10 @@ try {
       note:'Final-pose audit passed. Route search and animation replay were deliberately not run.' };
   } else {
   const blockages = e.details?.blockages?.map(c => ({ ...c, parts: [model.parts.get(c.moving)?.part, model.parts.get(c.obstacle)?.part] }));
-  report = { success:false, engine, enableConfigurationDetours: !noConfigDetours, enableStepModules: useStepModules, budget: requestedBudget, limits, scope:modelScope, pieces:model.parts.size, code:e.code??e.name, message:e.message, stats:e.details?.stats, blockages };
+  report = { success:false, engine, enableConfigurationDetours: !noConfigDetours, enableStepModules: useStepModules, budget: requestedBudget, limits, scope:modelScope, pieces:model.parts.size, code:e.code??e.name, message:e.message, stats:e.details?.stats, items:e.details?.items, blockages };
   console.error(e.code ?? e.name, e.message);
   for (const b of blockages ?? []) console.error(`  ${b.parts.join(' / ')} | ${b.moving} / ${b.obstacle} | ${b.stage}`);
+  for (const item of e.details?.items ?? []) console.error(`  unresolved ${item} ${model.parts.get(item)?.part ?? ''}`);
   process.exitCode = 2;
   }
 }

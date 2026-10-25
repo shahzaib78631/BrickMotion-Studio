@@ -60,8 +60,9 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
       setError("That image couldn't be read. Try a PNG.");
     }
   };
-  const v2 = ['construction-v2', 'construction-auto', 'construction-v3', 'construction-v3-auto'].includes(s.planner ?? '');
+  const v2 = ['construction-v2', 'construction-auto', 'construction-v3', 'construction-v3-auto', 'construction-v4'].includes(s.planner ?? '');
   const v3 = s.planner === 'construction-v3' || s.planner === 'construction-v3-auto';
+  const v4 = s.planner === 'construction-v4';
   const previewNeedsConsent = !!timeline?.fallback && (!manual || linked);
 
   return (
@@ -264,17 +265,18 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
 
       {!manual && <>
       <details className="nx-group bm-vsec">
-        <summary>Planner<span className="bm-vsec-val">{s.planner === 'construction-v3-auto' ? 'V3 Adaptive' : s.planner === 'construction-auto' ? 'V2 Adaptive' : v3 ? 'Construction V3' : v2 ? 'Construction V2' : 'Standard'}</span></summary>
+        <summary>Planner<span className="bm-vsec-val">{s.planner === 'construction-v3-auto' ? 'V3 Adaptive' : s.planner === 'construction-auto' ? 'V2 Adaptive' : v3 ? 'Construction V3' : v4 ? 'Construction V4' : v2 ? 'Construction V2' : 'Standard'}</span></summary>
         <label className="nx-field">
           Assembly planner
           <select aria-label="Assembly planner" value={s.planner ?? 'legacy'} onChange={(e) => s.set({ planner: e.target.value as NonNullable<typeof s.planner> })}>
             <option value="legacy">Standard — flexible preview</option>
+            <option value="construction-v4">Construction V4 — global scene, articulation-aware (experimental)</option>
             <option value="construction-v3">Construction V3 — guided, certified only</option>
             <option value="construction-v3-auto">Construction V3 — guided, preview fallback</option>
             <option value="construction-auto">Adaptive V2 — then uncertified preview</option>
             <option value="construction-v2">Construction V2 — certified only</option>
           </select>
-          <span className="nx-hint">V3 uses connector-guided disengagement, overhead transport, obstacle-witness search ordering, bounded multi-turn detour search, and scoped spatial collision checks. Large-model fallback is effort-bounded so alternative build orders can be explored. Every accepted route requires exact collision checking and forward replay. Adaptive previews are <strong>uncertified</strong>; articulation and true flex deformation remain unsupported.</span>
+          <span className="nx-hint">V4 plans one global scene of rigid clusters, uses connector and articulated-joint policies, certifies translation and rotation certificates against every installed or staged part, and replays every accepted operation. It has no uncertified fallback. Large-model coverage is still experimental; V3/V2 are available for comparison. Neither engine simulates true flexible-part deformation.</span>
         </label>
         {v2 && <label className="nx-field">
           Workpiece support
@@ -292,17 +294,18 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
         {v2 && <label className="nx-field">
           Construction search budget
           <select aria-label="Construction search budget" value={s.constructionBudget ?? 'standard'}
-            onChange={(e) => s.set({ constructionBudget: e.target.value as 'standard' | 'extended' | 'diagnostic' })}>
+            onChange={(e) => s.set({ constructionBudget: e.target.value as 'standard' | 'extended' | 'diagnostic' | 'v4' })}>
             <option value="standard">Standard — 20 s · 2,000 states · 100k candidates</option>
             <option value="extended">Extended — 60 s · 10,000 states · 500k candidates</option>
             <option value="diagnostic">Diagnostic — 120 s · 50,000 states · 1m candidates</option>
+            {v4 && <option value="v4">V4 extended — 300 s · 100k states</option>}
           </select>
           <span className="nx-hint">Higher budgets use more CPU and memory. They do not bypass missing connector geometry or collision checks. In large models, the result may still be a contact error or timeout.</span>
         </label>}
         {timeline?.construction && (
           <div className="nx-field">
             <strong>{timeline.construction.operations.length} operations · {timeline.construction.stats.states} search states</strong>
-            <span className="nx-hint">{v3 ? "V3 guided near/far routing with continuous-mesh certification" : "V2 exhaustive routing with continuous-mesh certification"}</span>
+            <span className="nx-hint">{v4 ? "V4 global-scene routing with continuous-mesh, arc and annulus certification" : v3 ? "V3 guided near/far routing with continuous-mesh certification" : "V2 exhaustive routing with continuous-mesh certification"}</span>
             {v3 && <details>
               <summary>Search performance</summary>
               <p className="nx-hint">{timeline.construction.stats.candidates.toLocaleString()} candidates · {(timeline.construction.stats.cachedNearRayRejects ?? 0).toLocaleString()} witnessed blocked rays reused · {timeline.construction.stats.backtracks.toLocaleString()} backtracks</p>
@@ -314,7 +317,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
             <details><summary>Limits and assumptions</summary>{timeline.construction.warnings.map((w, i) => <p key={i} className="nx-hint">{w}</p>)}</details>
             <button type="button" className="nx-btn nx-sm" onClick={() => {
               const blob = new Blob([JSON.stringify(timeline.construction, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = v3 ? 'construction-plan-v3.json' : 'construction-plan-v2.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+              const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = v4 ? 'construction-plan-v4.json' : v3 ? 'construction-plan-v3.json' : 'construction-plan-v2.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
             }}>Download construction plan</button>
           </div>
         )}

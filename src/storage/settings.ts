@@ -13,7 +13,7 @@ export type Settings = {
   logo: Blob | null;
   logoCorner: LogoCorner;
   logoEnabled: boolean;
-  video: { targetSeconds: number; heroOrbit: boolean; mode: ArrivalMode | 'auto'; fps: ExportFps; introSeconds: number | null; buildSeconds: number | null; outroSeconds: number | null; studioLook: StudioLook; cameraFraming: CameraFraming; camera: CameraSettings; format: VideoFormat; edgeLines: boolean; linearColors: boolean; bottomUp: boolean; snapSound: boolean; planner?: 'legacy' | 'construction-v2' | 'construction-auto' | 'construction-v3' | 'construction-v3-auto'; constructionSupport?: 'fixture' | 'table'; constructionBudget?: ConstructionBudgetPreset; constructionStepModules?: boolean; floorSort: FloorSort; floorSides: FloorSides };
+  video: { targetSeconds: number; heroOrbit: boolean; mode: ArrivalMode | 'auto'; fps: ExportFps; introSeconds: number | null; buildSeconds: number | null; outroSeconds: number | null; studioLook: StudioLook; cameraFraming: CameraFraming; camera: CameraSettings; format: VideoFormat; edgeLines: boolean; linearColors: boolean; bottomUp: boolean; snapSound: boolean; planner?: 'legacy' | 'construction-v2' | 'construction-auto' | 'construction-v3' | 'construction-v3-auto' | 'construction-v4'; constructionSupport?: 'fixture' | 'table'; constructionBudget?: ConstructionBudgetPreset; constructionStepModules?: boolean; floorSort: FloorSort; floorSides: FloorSides };
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -52,7 +52,7 @@ export async function loadSettings(): Promise<Settings> {
   if (video.constructionSupport !== 'table') video.constructionSupport = 'fixture';
   if (!isConstructionBudgetPreset(video.constructionBudget)) video.constructionBudget = 'standard';
   if (typeof video.constructionStepModules !== 'boolean') video.constructionStepModules = false;
-  if (!['construction-v2', 'construction-auto', 'construction-v3', 'construction-v3-auto'].includes(video.planner ?? '')) video.planner = 'legacy';
+  if (!['construction-v2', 'construction-auto', 'construction-v3', 'construction-v3-auto', 'construction-v4'].includes(video.planner ?? '')) video.planner = 'legacy';
   if (!['step', 'colour', 'part', 'size'].includes(video.floorSort)) video.floorSort = 'step';
   if (!['front-back', 'front', 'behind', 'sides'].includes(video.floorSides)) video.floorSides = 'front-back';
   if (typeof video.snapSound !== 'boolean') video.snapSound = DEFAULT_SETTINGS.video.snapSound;

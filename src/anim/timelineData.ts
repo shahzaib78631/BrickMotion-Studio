@@ -85,7 +85,7 @@ export type PlanningFallback = {
     code: string;
     message: string;
     scope?: string;
-    phase?: 'connections' | 'final-contact-audit' | 'route-search' | 'forward-replay';
+    phase?: 'connections' | 'final-contact-audit' | 'route-search' | 'forward-replay' | 'disassembly' | 'validation';
     searchStates?: number;
     peakRemovals?: number;
     peakScopeUnits?: number;

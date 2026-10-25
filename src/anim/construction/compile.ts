@@ -59,7 +59,7 @@ export function compileConstruction(plan: ConstructionPlan, opts: AnimOptions): 
         let travel: Box | null = null;
         let land: Box | null = null;
         const translationPath = op.rigidPath ? undefined : op.path.map(p => sub(p, op.path[0]));
-        const rigidPivot = op.rigidPath ? centre(op.keys.map(key => parts.get(key)!.bounds).reduce(union)) : undefined;
+        const rigidPivot = op.rigidPath ? (op.pivot ? [...op.pivot] as [number, number, number] : centre(op.keys.map(key => parts.get(key)!.bounds).reduce(union))) : undefined;
         const rigidDeltas = op.rigidPath?.map(ref);
         for (const key of op.keys) {
             const p = parts.get(key), tr = tracks.get(key);

@@ -61,10 +61,11 @@ export const optsKey = (o: AnimOptions) =>
     ...((o.constructionMaxCandidates ?? 100000) !== 100000 ? [`v2-candidates:${o.constructionMaxCandidates}`] : []),
     // Bays are part of the construction payload consumed by the Assembly panel.
     // Invalidate timelines cached before they were reported.
-    ...((o.planner === 'construction-v2' || o.planner === 'construction-auto' || o.planner === 'construction-v3' || o.planner === 'construction-v3-auto') ? ['work-bays:1'] : []),
+    ...((o.planner === 'construction-v2' || o.planner === 'construction-auto' || o.planner === 'construction-v3' || o.planner === 'construction-v3-auto' || o.planner === 'construction-v4') ? ['work-bays:1'] : []),
     // Route candidate ordering is part of the planning output. Do not silently
     // reuse a previously timed-out/uncertified V3 preview after an engine fix.
-    ...((o.planner === 'construction-v3' || o.planner === 'construction-v3-auto') ? ['v3-routing:mechanical-escape-r1', ...(o.constructionStepModules ? ['v3-step-modules:on'] : [])] : [])].join('|');
+    ...((o.planner === 'construction-v3' || o.planner === 'construction-v3-auto') ? ['v3-routing:mechanical-escape-r1', ...(o.constructionStepModules ? ['v3-step-modules:on'] : [])] : []),
+    ...((o.planner === 'construction-v4') ? ['v4-global-scene:r1'] : [])].join('|');
 
 /**
  * The video settings an options key was made with (the leading fields, which every
@@ -73,7 +74,7 @@ export const optsKey = (o: AnimOptions) =>
 export type SavedVideoSettings = {
   targetSeconds: number; heroOrbit: boolean; mode: 'auto' | NonNullable<AnimOptions['mode']>;
   introSeconds: number | null; buildSeconds: number | null; outroSeconds: number | null;
-  bottomUp: boolean; planner: 'legacy' | 'construction-v2' | 'construction-auto' | 'construction-v3' | 'construction-v3-auto'; constructionSupport: 'fixture' | 'table'; constructionBudget?: ConstructionBudgetPreset;
+  bottomUp: boolean; planner: 'legacy' | 'construction-v2' | 'construction-auto' | 'construction-v3' | 'construction-v3-auto' | 'construction-v4'; constructionSupport: 'fixture' | 'table'; constructionBudget?: ConstructionBudgetPreset;
   floorSort: FloorSort; floorSides: FloorSides;
 };
 export function settingsFromOptsKey(key: string): SavedVideoSettings | null {
@@ -88,9 +89,9 @@ export function settingsFromOptsKey(key: string): SavedVideoSettings | null {
     mode: mode as 'auto' | NonNullable<AnimOptions['mode']>,
     introSeconds: seconds(f[3]), buildSeconds: seconds(f[4]), outroSeconds: seconds(f[5]),
     bottomUp: f[6] !== 'false',
-    planner: f[8] === 'construction-v2' ? 'construction-v2' : f[8] === 'construction-auto' ? 'construction-auto' : f[8] === 'construction-v3' ? 'construction-v3' : f[8] === 'construction-v3-auto' ? 'construction-v3-auto' : 'legacy',
+    planner: f[8] === 'construction-v2' ? 'construction-v2' : f[8] === 'construction-auto' ? 'construction-auto' : f[8] === 'construction-v3' ? 'construction-v3' : f[8] === 'construction-v3-auto' ? 'construction-v3-auto' : f[8] === 'construction-v4' ? 'construction-v4' : 'legacy',
     constructionSupport: f[11] === 'table' ? 'table' : 'fixture',
-    constructionBudget: f[10] === '120000' ? 'diagnostic' : f[10] === '60000' ? 'extended' : 'standard',
+    constructionBudget: f[10] === '300000' ? 'v4' : f[10] === '120000' ? 'diagnostic' : f[10] === '60000' ? 'extended' : 'standard',
     floorSort: (['colour', 'part', 'size'] as const).find((v) => f.includes(`floor-sort:${v}`)) ?? 'step',
     floorSides: (['front', 'behind', 'sides'] as const).find((v) => f.includes(`floor-sides:${v}`)) ?? 'front-back',
   };

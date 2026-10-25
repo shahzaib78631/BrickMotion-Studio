@@ -1,4 +1,4 @@
-import { planConstruction,modelFromNodes,compileConstruction,ConstructionError } from './construction';
+import { planConstruction, planConstructionV4, modelFromNodes, compileConstruction, ConstructionError } from './construction';
 import { eligibleForPreview, previewProvenance } from './construction/previewFallback';
 import { decodeTimeline } from './timelineCodec';
 import { pathOffset } from './construction/math';
@@ -182,21 +182,29 @@ export const DEFAULT_ACCESS_WORK = 1500;
  * floor where it was). Null = lay out around the model itself, as always.
  */
 export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProgress?: (p: PlanningProgress) => void, layoutBox: Box | null = null, workBaySpots: Record<string, AssemblySpot> = {}): Timeline {
-  if (opts.planner === 'construction-v2' || opts.planner === 'construction-auto' || opts.planner === 'construction-v3' || opts.planner === 'construction-v3-auto') {
+  if (opts.planner === 'construction-v2' || opts.planner === 'construction-auto' || opts.planner === 'construction-v3' || opts.planner === 'construction-v3-auto' || opts.planner === 'construction-v4') {
     try {
       const model = modelFromNodes(asm.nodes, metrics);
-      const construction = planConstruction(model, {
-        algorithm: opts.planner === 'construction-v3' || opts.planner === 'construction-v3-auto' ? 'guided-v3' : 'exhaustive-v2',
-        maxStates: opts.constructionMaxStates,
-        maxCandidates: opts.constructionMaxCandidates,
-        maxMilliseconds: opts.constructionMaxMilliseconds,
-        supportMode: opts.constructionSupport ?? 'fixture',
-        mechanicalSubassemblies: opts.constructionMechanicalSubassemblies,
-        enableStepModules: opts.constructionStepModules === true,
-        layoutBounds: layoutBox ?? undefined,
-        workBaySpots,
-        onProgress: (p) => onProgress?.({ ...p, phase: p.phase === 'connections' ? 'connections' : p.phase === 'validation' ? 'validation' : 'disassembly' }),
-      });
+      const construction = opts.planner === 'construction-v4'
+        ? planConstructionV4(model, {
+            maxStates: opts.constructionMaxStates,
+            maxMilliseconds: opts.constructionMaxMilliseconds,
+            supportMode: opts.constructionSupport ?? 'fixture',
+            layoutBounds: layoutBox ?? undefined,
+            onProgress: (p) => onProgress?.({ ...p, phase: p.phase === 'connections' ? 'connections' : p.phase === 'validation' ? 'validation' : 'disassembly' }),
+          })
+        : planConstruction(model, {
+            algorithm: opts.planner === 'construction-v3' || opts.planner === 'construction-v3-auto' ? 'guided-v3' : 'exhaustive-v2',
+            maxStates: opts.constructionMaxStates,
+            maxCandidates: opts.constructionMaxCandidates,
+            maxMilliseconds: opts.constructionMaxMilliseconds,
+            supportMode: opts.constructionSupport ?? 'fixture',
+            mechanicalSubassemblies: opts.constructionMechanicalSubassemblies,
+            enableStepModules: opts.constructionStepModules === true,
+            layoutBounds: layoutBox ?? undefined,
+            workBaySpots,
+            onProgress: (p) => onProgress?.({ ...p, phase: p.phase === 'connections' ? 'connections' : p.phase === 'validation' ? 'validation' : 'disassembly' }),
+          });
       return decodeTimeline(compileConstruction(construction, opts));
     } catch (error) {
       // Adaptive mode is explicitly non-certifying. Only recover from a KNOWN

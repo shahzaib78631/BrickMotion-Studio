@@ -105,6 +105,12 @@ Video → Planner now also offers **Construction V3 — guided, certified only**
 
 For architecture, executable diagnostics, measured LEGO 5590 benchmark results, supported behavior, and remaining limitations, see [CONSTRUCTION_V3_IMPLEMENTATION.md](CONSTRUCTION_V3_IMPLEMENTATION.md). The supplied 1,258-piece 5590 model is **not yet fully certified**: the original V3 contact audit found three unexplained helicopter geometry relationships; the subsequent mechanical-interface upgrade reduces that to two. The 554-piece truck still exceeds a 20-second strict planning budget. These failures are surfaced instead of being silently waived.
 
+## Construction V4: global-scene articulated planning (experimental)
+
+Video → Planner now also offers **Construction V4 — global scene, articulation-aware**. V4 plans one global scene of rigid clusters, builds a typed joint graph from LDCad connector evidence, carries localized pose-anchored connector policies, measures residual final-pose render surfaces, and adds continuous arc/annulus rotation certificates. Its forward step-module search and global backward search share a deterministic work budget. V4 is **certified only**: it never emits a partial or uncertified animation.
+
+V4's helicopter final-contact audit passes with zero unresolved contacts, and it fully plans small fixtures, but the 305-piece helicopter and 1,258-piece 5590 do not yet complete within the 300-second acceptance budget. The remaining blocker is search over a truly interleaved part order, not a collision-check waiver. See [docs/diagnostics/construction-v4.md](docs/diagnostics/construction-v4.md) for the architecture, measured status and known limitations.
+
 ## Construction V3 mechanical-interface upgrade
 
 The new [MECHANICAL_CONSTRAINT_ENGINE.md](MECHANICAL_CONSTRAINT_ENGINE.md) documents the LDCad profile-aware connector matcher, typed world-space joint topology, guided insertion axes, scoped static-contact certificates, and model-specific diagnostics. `scripts/diagnose-construction-mpd.ts` accepts `--inspect-interfaces` and `--focus-parts=...` to explain nearby connectors. The **Build** footer now exposes detailed contact rejection reasons and lets you copy them for debugging.

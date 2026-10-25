@@ -110,6 +110,76 @@ export function makeSolid(mesh: Float32Array, matrix: readonly number[], pulse: 
     }
     return solid;
 }
+/** Orthonormal basis of the plane perpendicular to a unit axis. */
+function arcBasis(axis: V3): [V3, V3] {
+    const helper: V3 = Math.abs(axis[0]) < .9 ? [1, 0, 0] : [0, 1, 0];
+    const e1 = unit(cross(axis, helper)), e2 = cross(axis, e1);
+    return [e1, e2];
+}
+function boxOfPoints(points: V3[]): Box {
+    const min: V3 = [Infinity, Infinity, Infinity], max: V3 = [-Infinity, -Infinity, -Infinity];
+    for (const p of points) for (let k = 0; k < 3; k++) { min[k] = Math.min(min[k], p[k]); max[k] = Math.max(max[k], p[k]); }
+    return { min, max };
+}
+/** Exact AABB of one point's circular arc about `axis` through `pivot`. */
+function pointArcBox(p: V3, axis: V3, pivot: V3, e1: V3, e2: V3, lo: number, hi: number, offset: V3): Box {
+    const d = sub(p, pivot), h = dot(d, axis), radial = sub(d, mul(axis, h)), r = norm(radial);
+    if (r < 1e-9) return boxOfPoints([add(add(pivot, mul(axis, h)), offset)]);
+    const phi = Math.atan2(dot(radial, e2), dot(radial, e1));
+    const base = add(pivot, mul(axis, h));
+    const angles = new Set<number>([lo, hi]);
+    for (let k = 0; k < 3; k++) {
+        const a = r * (e1[k] * Math.cos(phi) + e2[k] * Math.sin(phi));
+        const b = r * (-e1[k] * Math.sin(phi) + e2[k] * Math.cos(phi));
+        if (Math.hypot(a, b) < 1e-12) continue;
+        const critical = Math.atan2(b, a);
+        for (const turn of [-Math.PI, 0, Math.PI, 2 * Math.PI])
+            if (critical + turn > lo && critical + turn < hi) angles.add(critical + turn);
+    }
+    const points: V3[] = [];
+    for (const theta of angles) {
+        const t = theta;
+        points.push(add(offset, add(base, add(mul(e1, r * Math.cos(phi + t)), mul(e2, r * Math.sin(phi + t))))));
+    }
+    return boxOfPoints(points);
+}
+function triangleArcBox(t: Tri, axis: V3, pivot: V3, lo: number, hi: number, offset: V3): Box {
+    const [e1, e2] = arcBasis(axis);
+    return union(union(pointArcBox(t.p[0], axis, pivot, e1, e2, lo, hi, offset), pointArcBox(t.p[1], axis, pivot, e1, e2, lo, hi, offset)), pointArcBox(t.p[2], axis, pivot, e1, e2, lo, hi, offset));
+}
+function solidArcBox(s: Solid, axis: V3, pivot: V3, lo: number, hi: number, offset: V3): Box {
+    const [e1, e2] = arcBasis(axis);
+    let box: Box | null = null;
+    for (const t of s.triangles) {
+        const b = union(union(pointArcBox(t.p[0], axis, pivot, e1, e2, lo, hi, offset), pointArcBox(t.p[1], axis, pivot, e1, e2, lo, hi, offset)), pointArcBox(t.p[2], axis, pivot, e1, e2, lo, hi, offset));
+        box = box ? union(box, b) : b;
+    }
+    return box!;
+}
+/** Exact radial/axial interval covered by a solid around an axis. */
+function solidAnnulusRange(s: Solid, axis: V3, pivot: V3, offset: V3): { rmin: number; rmax: number; hmin: number; hmax: number } {
+    let rmin = Infinity, rmax = 0, hmin = Infinity, hmax = -Infinity;
+    for (const t of s.triangles) for (const p of t.p) {
+        const d = sub(add(p, offset), pivot), h = dot(d, axis), r = norm(sub(d, mul(axis, h)));
+        rmin = Math.min(rmin, r); rmax = Math.max(rmax, r);
+        hmin = Math.min(hmin, h); hmax = Math.max(hmax, h);
+    }
+    return { rmin, rmax, hmin, hmax };
+}
+/** Conservative full-turn annular cylinder AABB of a solid. */
+function solidAnnulusBox(s: Solid, axis: V3, pivot: V3, offset: V3): Box {
+    const [e1, e2] = arcBasis(axis);
+    let rmax = 0, hmin = Infinity, hmax = -Infinity;
+    for (const t of s.triangles) for (const p of t.p) {
+        const d = sub(add(p, offset), pivot), h = dot(d, axis);
+        rmax = Math.max(rmax, norm(sub(d, mul(axis, h))));
+        hmin = Math.min(hmin, h); hmax = Math.max(hmax, h);
+    }
+    const points: V3[] = [];
+    for (const h of [hmin, hmax]) for (const x of [-rmax, rmax]) for (const y of [-rmax, rmax])
+        points.push(add(pivot, add(mul(axis, h), add(mul(e1, x), mul(e2, y)))));
+    return boxOfPoints(points);
+}
 function project(p: [
     V3,
     V3,
@@ -382,6 +452,63 @@ export class MeshOracle {
     clear(aKey: string, bKey: string, aOffset: V3, bOffset: V3, delta: V3, policy?: Connection): boolean {
         this.pulse();
         return this.testBodies(aKey, bKey, this.bodies.get(aKey)!, this.bodies.get(bKey)!, aOffset, bOffset, delta, policy);
+    }
+    /**
+     * Conservative continuous rotation certificate for one rigid part pair.
+     * Every triangle of the moving body gets the exact bounding box of its
+     * circular arc; if none overlaps the obstacle triangle boxes the rotation
+     * is certified. Overlaps are subdivided; a surviving overlap is rejected,
+     * never sampled into acceptance. This may reject a safe tight turn, but it
+     * cannot accept a colliding one.
+     */
+    arcClear(aKey: string, bKey: string, aPose: M4, bPose: M4, pivot: V3, axis: V3, angle: number, slices = 16): boolean {
+        this.pulse();
+        if (!Number.isFinite(angle) || Math.abs(angle) < 1e-9) return this.clearPosed(aKey, bKey, aPose, bPose, [0, 0, 0]);
+        const moving = this.posedBody(aKey, aPose), obstacle = this.posedBody(bKey, bPose);
+        const u = unit(axis), a = moving.solid, b = obstacle.solid;
+        const obstacleBox = shiftBox(b.box, obstacle.position), obstacleTris = b.triangles.map(o => shiftBox(o.box, obstacle.position));
+        const sector = union(solidArcBox(a, u, pivot, 0, angle, moving.position), solidArcBox(a, u, pivot, angle, 0, moving.position));
+        if (!overlaps(sector, obstacleBox, SKIN * 4)) return true;
+        const parts = Math.max(1, Math.min(64, Math.ceil(slices)));
+        for (let i = 0; i < parts; i++) {
+            this.pulse();
+            const lo = angle * i / parts, hi = angle * (i + 1) / parts;
+            const box = solidArcBox(a, u, pivot, lo, hi, moving.position);
+            if (!overlaps(box, obstacleBox, SKIN * 4)) continue;
+            // A body-level overlap is only a prefilter. Test the actual triangle
+            // arcs; this avoids rejecting a long part whose bounding sector merely
+            // grazes an obstacle elsewhere.
+            for (const t of a.triangles) {
+                const tb = shiftBox(t.box, moving.position);
+                if (!overlaps(tb, obstacleBox, SKIN * 4) && !overlaps(box, tb, SKIN * 4)) continue;
+                const arc = triangleArcBox(t, u, pivot, lo, hi, moving.position);
+                for (const ob of obstacleTris) if (overlaps(arc, ob, SKIN)) return false;
+            }
+        }
+        return true;
+    }
+    /**
+     * Full-turn annulus certificate: if the rotation-invariant annular bounding
+     * volume of the moving part is clear of the obstacle body, any angle is
+     * certified. This is the cheap path for rotors, turntables and free wheels.
+     */
+    /** Diagnostic: exact conservative sector bounds used by arcClear. */
+    arcSector(aKey: string, aPose: M4, pivot: V3, axis: V3, angle: number): Box {
+        const moving = this.posedBody(aKey, aPose);
+        return union(solidArcBox(moving.solid, unit(axis), pivot, 0, angle, moving.position), solidArcBox(moving.solid, unit(axis), pivot, angle, 0, moving.position));
+    }
+    annulusClear(aKey: string, bKey: string, aPose: M4, bPose: M4, pivot: V3, axis: V3): boolean {
+        this.pulse();
+        const moving = this.posedBody(aKey, aPose), obstacle = this.posedBody(bKey, bPose);
+        const u = unit(axis);
+        const a = solidAnnulusRange(moving.solid, u, pivot, moving.position), b = solidAnnulusRange(obstacle.solid, u, pivot, obstacle.position);
+        // A central mast inside the rotor's inner radius is not in the swept
+        // annulus. Radial and axial interval separation is exact and therefore
+        // a positive free-turn certificate.
+        if (a.rmax + SKIN < b.rmin || b.rmax + SKIN < a.rmin ||
+            a.hmax + SKIN < b.hmin || b.hmax + SKIN < a.hmin) return true;
+        const box = solidAnnulusBox(moving.solid, u, pivot, moving.position);
+        return !overlaps(box, shiftBox(obstacle.solid.box, obstacle.position), SKIN * 4);
     }
     private testBodies(aKey: string, bKey: string, a: Body, b: Body, aOffset: V3, bOffset: V3, delta: V3, policy?: Connection): boolean {
         const pa = add(a.position, aOffset), pb = add(b.position, bOffset), relative = sub(pa, pb);

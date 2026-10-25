@@ -76,7 +76,7 @@ export type Blockage = {
 export class ConstructionError extends Error {
     constructor(public code: PlannerFailureCode, message: string, public details: {
         scope?: string;
-        phase?: 'connections' | 'final-contact-audit' | 'route-search' | 'forward-replay';
+        phase?: 'connections' | 'final-contact-audit' | 'route-search' | 'forward-replay' | 'disassembly' | 'validation';
         blockages?: Blockage[];
         stats?: SearchStats;
         items?: string[];
@@ -198,6 +198,8 @@ export type Operation = {
      * Each turn is certified by a continuous enclosing sphere; no collision
      * exemptions are granted to cross-orientation sweeps. */
     rigidPath?: M4[];
+    /** Optional world pivot for a rigid-rotation path (joint hinge/rotor). */
+    pivot?: V3;
     check: {
         method: 'continuous-triangle-sat';
         contactPolicies: string[];
@@ -227,8 +229,8 @@ export type ConstructionPlan = {
         rigidTranslation: true;
         rigidRotation: boolean;
         hierarchicalSubassemblies: true;
-        articulation: false;
-        deformation: false;
-        physicalStability: false;
+        articulation: boolean;
+        deformation: boolean;
+        physicalStability: boolean;
     };
 };

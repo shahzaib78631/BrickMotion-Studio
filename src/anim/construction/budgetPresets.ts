@@ -6,6 +6,8 @@ export const CONSTRUCTION_BUDGET_PRESETS = {
   standard: { maxMilliseconds: 20_000, maxStates: 2_000, maxCandidates: 100_000 },
   extended: { maxMilliseconds: 60_000, maxStates: 10_000, maxCandidates: 500_000 },
   diagnostic: { maxMilliseconds: 120_000, maxStates: 50_000, maxCandidates: 1_000_000 },
+  /** V4 acceptance budget: the full 5590 may use the product's five-minute limit. */
+  v4: { maxMilliseconds: 300_000, maxStates: 100_000, maxCandidates: 2_000_000 },
 } as const;
 
 export type ConstructionBudgetPreset = keyof typeof CONSTRUCTION_BUDGET_PRESETS;

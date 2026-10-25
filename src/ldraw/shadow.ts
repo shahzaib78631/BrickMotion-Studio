@@ -29,12 +29,23 @@ export type CylSnapDef = SnapBase & {
   center: boolean;
   /** may slide along its axis (pin holes, axle holes) */
   slide: boolean;
+  /** LDCad axis scaling qualifier (e.g. "YOnly" for axle/axle-hole primitives). */
+  scale?: string;
+  /** LDCad match qualifier (e.g. "size"). */
+  match?: string;
 };
 export type ClipSnapDef = SnapBase & { kind: 'clp'; radius: number; length: number; center: boolean; slide: boolean };
 /** Radius for a SNAP_FGR without one: the library's most common finger radius. */
 export const DEFAULT_FINGER_RADIUS = 4;
 export type FingerSnapDef = SnapBase & { kind: 'fgr'; genderOfs: 'M' | 'F'; seq: number[]; radius: number; center: boolean };
-export type GenSnapDef = SnapBase & { kind: 'gen'; gender: 'M' | 'F'; bounding: string };
+export type GenSnapDef = SnapBase & {
+  kind: 'gen';
+  gender: 'M' | 'F';
+  bounding: string;
+  /** "free" permits an unconstrained mate (ball joints). */
+  placement?: string;
+  match?: string;
+};
 export type SnapDef = CylSnapDef | ClipSnapDef | FingerSnapDef | GenSnapDef;
 
 export type ShadowInfo = {
@@ -136,7 +147,8 @@ export function parseShadow(text: string): ShadowInfo {
     } else if (cmd === 'SNAP_CYL') {
       const g = gender(p.get('gender'));
       const secs = parseSections(p.get('secs'));
-      if (g && secs.length) info.snaps.push({ ...common, kind: 'cyl', gender: g, caps: p.get('caps')?.toLowerCase() ?? 'one', secs, center: bool(p.get('center')), slide: bool(p.get('slide')) });
+      if (g && secs.length) info.snaps.push({ ...common, kind: 'cyl', gender: g, caps: p.get('caps')?.toLowerCase() ?? 'one', secs, center: bool(p.get('center')), slide: bool(p.get('slide')),
+        ...(p.get('scale') ? { scale: p.get('scale') } : {}), ...(p.get('match') ? { match: p.get('match') } : {}) });
     } else if (cmd === 'SNAP_CLP') {
       const radius = Number(p.get('radius')), length = Number(p.get('length') ?? 0);
       if (Number.isFinite(radius)) info.snaps.push({ ...common, kind: 'clp', radius, length: Number.isFinite(length) ? length : 0, center: bool(p.get('center')), slide: bool(p.get('slide')) });
@@ -148,7 +160,8 @@ export function parseShadow(text: string): ShadowInfo {
       if (g && seq.length && Number.isFinite(radius)) info.snaps.push({ ...common, kind: 'fgr', genderOfs: g, seq, radius, center: bool(p.get('center')) });
     } else if (cmd === 'SNAP_GEN') {
       const g = gender(p.get('gender'));
-      if (g) info.snaps.push({ ...common, kind: 'gen', gender: g, bounding: p.get('bounding') ?? '' });
+      if (g) info.snaps.push({ ...common, kind: 'gen', gender: g, bounding: p.get('bounding') ?? '',
+        ...(p.get('placement') ? { placement: p.get('placement') } : {}), ...(p.get('match') ? { match: p.get('match') } : {}) });
     }
   }
   return info;
@@ -177,6 +190,13 @@ export type Snap = {
    * accept two incompatible profiles. Legacy cached metrics may omit this. */
   sections?: { shape: string; radius: number; start: number; length: number }[];
   slide: boolean;
+  /** Raw LDCad semantics retained for kinematic inference (V4). */
+  caps?: string;
+  center?: boolean;
+  seq?: number[];
+  scale?: string;
+  match?: string;
+  placement?: string;
 };
 
 const DOWN_LOCAL: Vec3 = [0, -1, 0];
@@ -193,6 +213,7 @@ export function placeSnap(def: SnapDef, m: Mat3, t: Vec3): Snap[] {
     const axis: Vec3 = [raw[0] / scale, raw[1] / scale, raw[2] / scale];
     // lengths scale with the reference (e.g. a stretched axle hole primitive)
     let length = 0, radius = 0, shapes: string[] = [], sections: Snap['sections'] = [], g: 'M' | 'F' = 'M', centred = false, slide = false;
+    let caps: string | undefined, seq: number[] | undefined, scaleQ: string | undefined, match: string | undefined, placement: string | undefined;
     const side = Math.max(Math.hypot(fm[0], fm[3], fm[6]), Math.hypot(fm[2], fm[5], fm[8]));
     if (def.kind === 'cyl') {
       length = def.secs.reduce((s, x) => s + x.length, 0) * scale;
@@ -205,10 +226,12 @@ export function placeSnap(def: SnapDef, m: Mat3, t: Vec3): Snap[] {
         return result;
       });
       g = def.gender; centred = def.center; slide = def.slide;
+      caps = def.caps; scaleQ = def.scale; match = def.match;
     } else if (def.kind === 'clp') {
       length = def.length * scale; radius = def.radius * side; shapes = ['CLP']; g = 'F'; centred = def.center; slide = def.slide;
     } else if (def.kind === 'fgr') {
       length = def.seq.reduce((s, x) => s + x, 0) * scale; radius = def.radius * side; shapes = ['FGR']; g = def.genderOfs; centred = def.center;
+      seq = def.seq;
     } else {
       // bounding=cyl <radius> <length> | sph <radius> | box …: centred on the position
       const [shape, a, b] = def.bounding.trim().split(/\s+/);
@@ -216,9 +239,11 @@ export function placeSnap(def: SnapDef, m: Mat3, t: Vec3): Snap[] {
       shapes = [`GEN:${(shape ?? '').toLowerCase()}`];
       radius = (Number(a) || 0) * side;
       length = shape?.toLowerCase() === 'cyl' ? (Number(b) || 0) * scale : 0;
+      match = def.match; placement = def.placement;
     }
     const start: Vec3 = centred ? [o[0] - axis[0] * length / 2, o[1] - axis[1] * length / 2, o[2] - axis[2] * length / 2] : o;
-    out.push({ kind: def.kind, id: def.id, group: def.group, gender: g, start, axis, length, radius, shapes, ...(sections.length ? { sections } : {}), slide });
+    out.push({ kind: def.kind, id: def.id, group: def.group, gender: g, start, axis, length, radius, shapes, ...(sections.length ? { sections } : {}), slide,
+      ...(caps ? { caps } : {}), ...(centred ? { center: true } : {}), ...(seq ? { seq } : {}), ...(scaleQ ? { scale: scaleQ } : {}), ...(match ? { match } : {}), ...(placement ? { placement } : {}) });
   }
   return out;
 }

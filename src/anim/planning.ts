@@ -13,9 +13,9 @@ export type PlannerReply<T> =
 
 export function planningLabel(p: PlanningProgress | null): string {
   if (!p || p.phase === 'preparing') return 'Preparing assembly dependencies...';
-  if (p.phase === 'connections') return 'V2: discovering connections and work areas...';
-  if (p.phase === 'disassembly') return `V2: searching removal order ${p.completed} / ${p.total}${p.item ? ` (${p.item})` : ''}`;
-  if (p.phase === 'validation') return `V2: replaying construction ${p.completed} / ${p.total}`;
+  if (p.phase === 'connections') return 'Discovering connections and work areas...';
+  if (p.phase === 'disassembly') return `Searching assembly order ${p.completed} / ${p.total}${p.item ? ` (${p.item})` : ''}`;
+  if (p.phase === 'validation') return `Replaying construction ${p.completed} / ${p.total}`;
   if (p.phase === 'camera') return 'Preparing camera and playback...';
   return `Checking assembly paths: ${p.completed} / ${p.total}${p.item ? ` (${p.item})` : ''}`;
 }
