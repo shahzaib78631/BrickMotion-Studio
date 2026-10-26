@@ -53,6 +53,50 @@ export function gridToPlacement(g: Grid, body: Box): Placement {
 
 const ROTS: Rot[] = [0, 90, 180, 270];
 
+/** `a` then `b`: the pose of something placed by `b` inside a frame placed by `a`. */
+export function composePlacement(a: Placement, b: Placement): Placement {
+  const [a0, a1, a2, a3, a4, a5, a6, a7, a8] = a.m;
+  const [b0, b1, b2, b3, b4, b5, b6, b7, b8] = b.m;
+  const p = b.pos;
+  return {
+    pos: [
+      z0(a0 * p[0] + a1 * p[1] + a2 * p[2] + a.pos[0]),
+      z0(a3 * p[0] + a4 * p[1] + a5 * p[2] + a.pos[1]),
+      z0(a6 * p[0] + a7 * p[1] + a8 * p[2] + a.pos[2]),
+    ],
+    m: [
+      a0 * b0 + a1 * b3 + a2 * b6, a0 * b1 + a1 * b4 + a2 * b7, a0 * b2 + a1 * b5 + a2 * b8,
+      a3 * b0 + a4 * b3 + a5 * b6, a3 * b1 + a4 * b4 + a5 * b7, a3 * b2 + a4 * b5 + a5 * b8,
+      a6 * b0 + a7 * b3 + a8 * b6, a6 * b1 + a7 * b4 + a8 * b7, a6 * b2 + a7 * b5 + a8 * b8,
+    ].map(z0) as Mat3,
+  };
+}
+
+/**
+ * The inverse frame. LDraw placements are orthonormal (a rotation, possibly
+ * mirrored), so the transpose is the inverse; anything with a real shear is
+ * already an invalid model (`factorAffine` rejects it), so report null rather
+ * than invert something meaningless.
+ */
+export function invertPlacement(p: Placement): Placement | null {
+  const m = p.m;
+  for (let c = 0; c < 3; c++)
+    for (let d = 0; d < 3; d++) {
+      const dot = m[c] * m[d] + m[c + 3] * m[d + 3] + m[c + 6] * m[d + 6];
+      if (Math.abs(dot - (c === d ? 1 : 0)) > 1e-6) return null;
+    }
+  const t = [m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]] as Mat3;
+  const pos = p.pos;
+  return {
+    pos: [
+      z0(-(t[0] * pos[0] + t[1] * pos[1] + t[2] * pos[2])),
+      z0(-(t[3] * pos[0] + t[4] * pos[1] + t[5] * pos[2])),
+      z0(-(t[6] * pos[0] + t[7] * pos[1] + t[8] * pos[2])),
+    ],
+    m: t,
+  };
+}
+
 export function placementToGrid(p: Placement, body: Box): Grid | null {
   const rot = ROTS.find((r) => rotMatrix(r).every((v, i) => Math.abs(v - p.m[i]) < 1e-6));
   if (rot === undefined) return null;

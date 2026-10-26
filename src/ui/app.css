@@ -495,3 +495,43 @@ body { margin: 0; }
 .bm-submodel-dialog input:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
 .bm-submodel-dialog-actions { display: flex; justify-content: flex-end; gap: 9px; padding-top: 4px; }
 .bm-submodel-dialog-actions .nx-btn { display: inline-flex; gap: 6px; align-items: center; }
+
+/* Parts of a model: the bulk surface for grouping, submodels and step moves. */
+.bm-parts-dialog { width: min(100%, 760px); max-height: min(84vh, 760px); border: 1px solid var(--line2); border-radius: 13px; display: flex; flex-direction: column; gap: 12px; padding: 18px; background: var(--surface); box-shadow: 0 28px 68px rgba(0,0,0,.24); color: var(--ink); }
+.bm-parts-dialog:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.bm-parts-top { display: flex; gap: 12px; align-items: flex-start; }
+.bm-parts-heading { flex: 1; min-width: 0; }
+.bm-parts-heading h3 { margin: 0 0 4px; font-size: 16px; }
+.bm-parts-crumbs { display: flex; flex-wrap: wrap; gap: 2px; font-size: 12px; color: var(--ink3); }
+.bm-parts-crumbs .nx-link { font-size: 12px; padding: 0; }
+.bm-parts-crumbs .nx-link:disabled { color: var(--ink); font-weight: 600; }
+.bm-parts-list { list-style: none; margin: 0; padding: 0; overflow: auto; flex: 1; min-height: 120px; display: flex; flex-direction: column; gap: 10px; }
+.bm-parts-step { border: 1px solid var(--line); border-radius: 9px; background: var(--surface2); padding: 6px 8px; }
+.bm-parts-step-head { display: flex; align-items: center; gap: 7px; font-size: 11.5px; font-weight: 650; }
+.bm-parts-step-head .nx-icon { width: 22px; height: 22px; flex: 0 0 22px; }
+.bm-parts-step-name { flex: 1; }
+.bm-parts-step-pick { display: inline-flex; align-items: center; gap: 5px; font-weight: 500; font-size: 11px; color: var(--ink3); }
+.bm-parts-entries, .bm-parts-instances { list-style: none; margin: 5px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.bm-parts-instances { margin-left: 26px; }
+.bm-parts-row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 7px; padding: 3px 5px; background: var(--surface); }
+.bm-parts-row.sel { border-color: var(--focus); background: color-mix(in srgb, var(--focus) 12%, var(--surface)); box-shadow: inset 3px 0 0 var(--focus); }
+.bm-parts-pick { display: flex; align-items: center; gap: 7px; flex: 1; min-width: 0; cursor: pointer; font-size: 11.5px; }
+.bm-parts-pick input { flex: 0 0 auto; }
+.bm-parts-pick img, .bm-parts-pick .thumb-wait { border-radius: 4px; flex: 0 0 auto; }
+.bm-parts-sub-icon { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 4px; color: var(--focus); background: color-mix(in srgb, var(--focus) 12%, var(--surface2)); flex: 0 0 auto; }
+.bm-parts-name { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.bm-parts-dot { width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--line2); flex: 0 0 auto; }
+.bm-parts-count { color: var(--ink3); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+.bm-parts-id { color: var(--ink3); font-family: ui-monospace, monospace; font-size: 11px; }
+.bm-parts-row .nx-icon { width: 22px; height: 22px; flex: 0 0 22px; }
+.bm-parts-actions { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 10px; }
+.bm-parts-actions .nx-btn { display: inline-flex; gap: 6px; align-items: center; }
+.bm-parts-spacer { flex: 1; }
+.bm-parts-move { flex-direction: row; align-items: center; gap: 6px; font-size: 11.5px; }
+.bm-parts-move select { min-height: 30px; border-radius: 7px; border: 1px solid var(--line2); padding: 3px 8px; background: var(--surface2); color: var(--ink); font: inherit; }
+.bm-parts-move select:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
+/* Drop targets: the hovered step, submodel row or breadcrumb crumb. */
+.bm-parts-step.bm-parts-over, .bm-parts-row.bm-parts-over, .bm-parts-crumbs > span.bm-parts-over { outline: 2px solid var(--focus); outline-offset: 1px; border-radius: 7px; }
+.bm-parts-row { cursor: grab; }
+.bm-parts-row.dragging { cursor: grabbing; opacity: .55; }
+.bm-parts-notice { color: var(--danger); }

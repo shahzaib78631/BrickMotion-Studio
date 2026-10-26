@@ -70,7 +70,7 @@ export function unionBox(a: Box | null, b: Box): Box {
   };
 }
 
-function itemPlacement(item: PlanItem, body: Box): Placement {
+export function itemPlacement(item: PlanItem, body: Box): Placement {
   if (isGrid(item)) return gridToPlacement(item, body);
   return tidyPlacement({ pos: item.ldu, m: item.matrix });
 }

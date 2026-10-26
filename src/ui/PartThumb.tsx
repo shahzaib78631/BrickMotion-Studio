@@ -5,7 +5,8 @@ export function PartThumb({ id, color = 71, size = 64 }: { id: string; color?: n
   const [url, setUrl] = useState<string>('');
   useEffect(() => {
     let alive = true;
-    getThumbnail(id, color).then((u) => alive && setUrl(u));
+    // A part that cannot be drawn (or a canvas-less environment) keeps the placeholder.
+    getThumbnail(id, color).then((u) => alive && setUrl(u), () => undefined);
     return () => {
       alive = false;
     };

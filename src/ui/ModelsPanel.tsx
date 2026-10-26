@@ -11,6 +11,7 @@ import type { ExportJob } from './ExportDialog';
 import { Ic } from './icons';
 import { PaneHead } from './PaneHead';
 import { ContextMenu, type ContextItem } from './ContextMenu';
+import { PartsDialog } from './PartsDialog';
 import { importAsSubmodel } from '../plan/modelFiles';
 import { isProjectFile, PROJECT_EXTENSION, readProjectFile } from '../io/projectFile';
 import { readPlanFile } from '../io/planFile';
@@ -91,6 +92,8 @@ export function ModelsPanel({ model, onExport }: { model: ModelState; onExport(j
   };
   const [menu, setMenu] = useState<{ x: number; y: number; name: string } | null>(null);
   const closeMenu = useCallback(() => setMenu(null), []);
+  /** `View parts` browses the editing model, so the row's model is opened first. */
+  const [partsFor, setPartsFor] = useState<string | null>(null);
   const [saving, setSaving] = useState<{ name: string; progress: SaveProgress } | null>(null);
   const importInto = useRef('');
   const fileInput = useRef<HTMLInputElement>(null);
@@ -114,6 +117,7 @@ export function ModelsPanel({ model, onExport }: { model: ModelState; onExport(j
       { icon: 'eye', label: `Open ${label(name)}`, disabled: editingModel === name, onClick: () => open(name) },
       { icon: 'play', label: 'Play its build', disabled: !model.ready || empty, onClick: () => play(name) },
       { icon: 'steps', label: 'Lay out all parts', disabled: !model.ready || empty, onClick: () => { open(name); useStudio.getState().setLaidOut(true); } },
+      { icon: 'parts', label: 'View parts', disabled: !model.ready || empty, onClick: () => { open(name); setPartsFor(name); } },
       'sep',
       { icon: 'video', label: 'Export as MP4', disabled: !model.ready || empty, onClick: () => onExport([{ model: name, label: label(name) }]) },
       { icon: 'download', label: `Save as project with animation (.${PROJECT_EXTENSION})`, disabled: !model.ready || empty || !!saving, onClick: () => saveProject(name) },
@@ -145,6 +149,7 @@ export function ModelsPanel({ model, onExport }: { model: ModelState; onExport(j
         if (f) void importFile(f);
       }} />
       {menu && <ContextMenu x={menu.x} y={menu.y} label={`${label(menu.name)} menu`} items={menuItems(menu.name)} onClose={closeMenu} />}
+      {partsFor !== null && <PartsDialog model={model} onClose={() => setPartsFor(null)} />}
       <ul className="bm-models" aria-label="Models in this set">
         {rows.map((r) => {
           const active = editingModel === r.name;
