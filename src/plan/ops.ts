@@ -1,7 +1,7 @@
 import type { Box } from '../ldraw/flatten';
 import type { Mat3, Vec3 } from '../ldraw/parse';
 import { rotatedBox, rotMatrix } from './placement';
-import { isGrid, type Plan, type PlanItem, type Rot, type Step } from './types';
+import { isGrid, type AssemblyHints, type Plan, type PlanItem, type Rot, type Step } from './types';
 
 /** '' is the main model; anything else names a submodel. */
 export type ModelName = string;
@@ -22,6 +22,23 @@ function mapItems(p: Plan, m: ModelName, ids: string[], fn: (i: PlanItem) => Pla
     s.pieces.some((i) => i.id && set.has(i.id)) ? { ...s, pieces: s.pieces.map((i) => (i.id && set.has(i.id) ? fn(i) : i)) } : s,
   );
   return withSteps(p, m, steps);
+}
+
+/**
+ * Mark pieces as their own foundation, or clear it. The build graph derives "must be built
+ * first" from what a piece rests on; `root` is the author saying that derivation is wrong
+ * here — the escape hatch that lets a piece be forced earlier in the timeline.
+ */
+export function setRootHint(p: Plan, m: ModelName, ids: string[], root = true): Plan {
+  return mapItems(p, m, ids, (item) => {
+    const hints: AssemblyHints = { ...item.assembly };
+    if (root) hints.root = true;
+    else delete hints.root;
+    const out = { ...item } as PlanItem;
+    if (Object.keys(hints).length) out.assembly = hints;
+    else delete out.assembly;
+    return out;
+  });
 }
 
 export function moveItems(p: Plan, m: ModelName, ids: string[], d: { x: number; y: number; z: number }): Plan {

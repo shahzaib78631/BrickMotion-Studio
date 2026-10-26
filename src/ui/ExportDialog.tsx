@@ -10,6 +10,9 @@ import { animOptions, useAppSettings } from '../state/appSettings';
 import { getColors, metricsOf } from '../state/partService';
 import { planTimeline } from '../state/timelineService';
 import { scopedPlan } from '../state/useModel';
+import { useStudio } from '../state/store';
+import { sceneSetupOf } from '../render/sceneSetup';
+import { viewportApi } from './viewportApi';
 import { instancePlacements } from './modelPlacement';
 import { safeFileName, saveBlob } from './download';
 import { Ic } from './icons';
@@ -110,6 +113,11 @@ export function ExportDialog({ plan, jobs, mode = 'build', onClose }: { plan: Pl
   const doneCount = states.filter((s) => s.s === 'done' || s.s === 'error').length;
   const current = states.find((s) => s.s === 'rendering') as Extract<JobState, { s: 'rendering' }> | undefined;
   const overall = (doneCount + (current ? current.done / current.total : 0)) / Math.max(1, jobs.length);
+  // A saved scene camera overrides the video camera frame by frame, so the MP4 is one fixed
+  // shot: no intro, no hero orbit. Say so before the export starts, with the way out.
+  const scene = useStudio((s) => s.plan.sceneSetup);
+  const sceneCameraInCharge = scene?.useCameraForVideo === true && !!scene.activeCameraId;
+  const sceneCameraName = scene?.cameras.find((c) => c.id === scene.activeCameraId)?.name ?? 'Camera';
 
   return (
     <div className="dialog-backdrop">
@@ -119,6 +127,22 @@ export function ExportDialog({ plan, jobs, mode = 'build', onClose }: { plan: Pl
           {width}×{height} · {fps} fps · MP4 (H.264) · {mode === 'timeline' ? 'keyframed motion' : 'automatic construction'}
         </p>
         {phase === 'checking' && <p className="muted">Checking your browser…</p>}
+        {sceneCameraInCharge && (
+          <div className="bm-banner" role="note">
+            <span>
+              This project&rsquo;s video uses the saved scene camera <b>{sceneCameraName}</b>, so the MP4 is one fixed
+              shot — <b>the intro and the hero orbit do not appear</b>.
+            </span>
+            {phase !== 'checking' && phase !== 'running' && (
+              <button className="nx-btn nx-sm" onClick={() => useStudio.getState().apply((p) => ({
+                ...p,
+                sceneSetup: { ...sceneSetupOf(p.sceneSetup), useCameraForVideo: false },
+              }))}>
+                <Ic name="camera" /> Use the automatic camera
+              </button>
+            )}
+          </div>
+        )}
         {phase === 'unsupported' && (
           <p className="error">
             Your browser can't encode {width}×{height} MP4 at {fps} fps. Try a lower frame rate or another format in the Video panel, or use a recent Chrome.
@@ -175,3 +199,4 @@ export function ExportDialog({ plan, jobs, mode = 'build', onClose }: { plan: Pl
     </div>
   );
 }
+

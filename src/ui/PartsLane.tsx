@@ -2,7 +2,7 @@ import { useEffect, useState, type DragEvent as RDragEvent, type PointerEvent as
 import { dropTarget, pulledAhead, type PartClip } from '../anim/partClips';
 import type { Timeline } from '../anim/timeline';
 import { resolveColor } from '../ldraw/colors';
-import { modelSteps, moveItemTo } from '../plan/ops';
+import { modelSteps, moveItemTo, setRootHint } from '../plan/ops';
 import type { Step } from '../plan/types';
 import { addPart } from '../state/editing';
 import { getColors, partName } from '../state/partService';
@@ -20,7 +20,9 @@ const DRAG_START_PX = 4;
 
 export const partsLaneHeight = (rows: number) => rows * PART_ROW + LANE_PAD * 2;
 
-type Marker = { x: number; label: string };
+type Marker = { x: number; label: string; at: number };
+/** How far the clips at the insertion point slide aside while a drag hovers over them. */
+const OPEN_PX = 12;
 
 /**
  * The last clip dropped, kept until the replanned timeline arrives (the lane is not
@@ -54,9 +56,9 @@ export function PartsLane({
   const selection = useStudio((s) => s.selection);
   const editingModel = useStudio((s) => s.editingModel);
   const selected = new Set(selection.model === editingModel ? selection.ids : []);
-  const [drag, setDrag] = useState<{ id: string; dx: number } | null>(null);
+  const [drag, setDrag] = useState<{ ids: string[]; dx: number } | null>(null);
   const [marker, setMarker] = useState<Marker | null>(null);
-  const [note, setNote] = useState<{ text: string; at: number } | null>(null);
+  const [note, setNote] = useState<{ text: string; at: number; id: string } | null>(null);
   const colors = getColors();
   const st = useStudio.getState;
   const label = (c: PartClip) => c.submodel ?? c.part ?? 'piece';
@@ -72,13 +74,13 @@ export function PartsLane({
     if (!ahead.length) return setNote(null);
     const names = [...new Set(ahead.map(label))];
     const list = names.length > 3 ? `${names.slice(0, 3).join(', ')} and ${names.length - 3} more` : names.join(', ');
-    setNote({ text: `${label(moved)} can only go on after ${list}, so ${ahead.length === 1 ? 'that piece still comes' : 'those pieces still come'} first.`, at: moved.start });
+    setNote({ text: `${label(moved)} can only go on after ${list}, so ${ahead.length === 1 ? 'that piece still comes' : 'those pieces still come'} first.`, at: moved.start, id: drop.id });
   }, [clips, editingModel, tl]);
 
   const markerAt = (t: number, skip?: string): { target: { step: number; index: number }; marker: Marker } | null => {
     const target = dropTarget(tl, steps, clips, t, skip);
     if (!target) return null;
-    return { target, marker: { x: X(Math.max(0, t)), label: `Step ${target.step + 1} · #${target.index + 1}` } };
+    return { target, marker: { x: X(Math.max(0, t)), label: `Step ${target.step + 1} · #${target.index + 1}`, at: t } };
   };
 
   const select = (c: PartClip, additive: boolean) => {
@@ -94,6 +96,11 @@ export function PartsLane({
     e.preventDefault();
     e.stopPropagation();
     const x0 = e.clientX;
+    // Dragging a clip that is part of a multi-selection takes the whole selection, in the
+    // order the step already has, so a shift-drag moves a group without shuffling it.
+    const ids = selected.has(c.id) && selected.size > 1
+      ? clips.filter((clip) => selected.has(clip.id)).map((clip) => clip.id)
+      : [c.id];
     let moved = false;
     let last: ReturnType<typeof markerAt> = null;
     const prevSelect = document.body.style.userSelect;
@@ -101,7 +108,7 @@ export function PartsLane({
     const move = (ev: PointerEvent) => {
       if (!moved && Math.abs(ev.clientX - x0) < DRAG_START_PX) return;
       moved = true;
-      setDrag({ id: c.id, dx: ev.clientX - x0 });
+      setDrag({ ids, dx: ev.clientX - x0 });
       last = markerAt(timeAt(ev.clientX), c.id);
       setMarker(last?.marker ?? null);
     };
@@ -113,15 +120,22 @@ export function PartsLane({
       usePlayback.getState().set({ playing: false });
       const model = st().editingModel;
       const before = st().plan;
-      st().apply((p) => moveItemTo(p, model, c.id, step, index));
+      // a block keeps its own order: each piece goes in after the one before it
+      st().apply((p) => {
+        let next = p;
+        ids.forEach((id, k) => { next = moveItemTo(next, model, id, step, index + k); });
+        return next;
+      });
       const after = st().plan;
       setNote(null);
       if (after !== before) {
         const pieces = modelSteps(after, model)[step]?.pieces ?? [];
         const k = pieces.findIndex((i) => i.id === c.id);
-        pendingDrop = { model, id: c.id, later: new Set(pieces.slice(k + 1).map((i) => i.id).filter((id): id is string => !!id)), tl };
+        if (k >= 0) {
+          pendingDrop = { model, id: c.id, later: new Set(pieces.slice(k + 1).map((i) => i.id).filter((id): id is string => !!id)), tl };
+        }
       }
-      st().select([c.id]);
+      st().select(ids);
       st().setCurrentStep(step);
     };
     const cleanup = () => {
@@ -172,13 +186,15 @@ export function PartsLane({
         const code = c.color === undefined ? undefined : resolveColor(colors, c.color);
         const hex = code === undefined ? undefined : colors.get(code)?.hex;
         const name = c.submodel ? c.submodel : partName(c.part!);
-        const dragging = drag?.id === c.id;
+        const dragging = drag?.ids.includes(c.id) ?? false;
+        // the clips the drop would push back slide aside, so the gap it opens is visible
+        const opens = !!marker && !dragging && c.start >= marker.at - 1e-6;
         return (
           <button
             key={c.id}
             className={`bm-part-clip ${selected.has(c.id) ? 'sel' : ''} ${c.submodel ? 'sub' : ''} ${dragging ? 'dragging' : ''}`}
             style={{
-              left: X(c.start) + (dragging ? drag.dx : 0),
+              left: X(c.start) + (dragging ? drag!.dx : opens ? OPEN_PX : 0),
               top: LANE_PAD + c.row * PART_ROW,
               width: Math.max(PART_MIN_PX - 2, (c.end - c.start) * px - 1),
             }}
@@ -202,13 +218,28 @@ export function PartsLane({
       {note && !marker && (
         <span className="bm-part-note" role="status" style={{ left: X(note.at) }}>
           {note.text}
+          <button
+            type="button"
+            className="bm-part-note-force"
+            title="Take the placement as correct: this piece is marked as its own foundation, so the planner stops requiring what it thinks has to be built first — the animation then keeps your order."
+            onClick={() => {
+              const model = st().editingModel;
+              st().apply((p) => setRootHint(p, model, [note.id], true));
+              setNote(null);
+            }}
+          >
+            Force order
+          </button>
           <button type="button" aria-label="Dismiss" onClick={() => setNote(null)}><Ic name="x" /></button>
         </span>
       )}
       {marker && (
-        <span className="bm-part-marker" style={{ left: marker.x }}>
-          <b>{marker.label}</b>
-        </span>
+        <>
+          <span className="bm-part-drop" style={{ left: marker.x }} aria-hidden="true" />
+          <span className="bm-part-marker" style={{ left: marker.x }}>
+            <b>{drag && drag.ids.length > 1 ? `${drag.ids.length} pieces → ` : ''}{marker.label}</b>
+          </span>
+        </>
       )}
     </div>
   );
