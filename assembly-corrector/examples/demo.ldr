@@ -1,0 +1,7 @@
+0 Demo: connector evidence and a missing part
+0 Name: demo.ldr
+1 4 0 0 0 1 0 0 0 1 0 0 0 1 male.dat
+0 // This part has a compatible female snap connector.
+1 7 0 0 0 1 0 0 0 1 0 0 0 1 female.dat
+0 // The missing faraway file must appear in diagnostic JSON.
+1 14 100 0 0 1 0 0 0 1 0 0 0 1 absent_demo.dat

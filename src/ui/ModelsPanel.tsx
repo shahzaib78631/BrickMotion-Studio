@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { autoSplitSteps, LARGE_STEP } from '../plan/autoSteps';
 import { buildInComponents, canSplitComponents } from '../plan/components';
 import { modelSteps } from '../plan/ops';
@@ -17,6 +17,8 @@ import { importAsSubmodel } from '../plan/modelFiles';
 import { isProjectFile, PROJECT_EXTENSION, readProjectFile } from '../io/projectFile';
 import { readPlanFile } from '../io/planFile';
 import { saveLDrawFile, saveProjectFile, type SaveProgress } from '../state/projectActions';
+import { correctorStatus, disableCorrectorForModel, runCorrectorForModel, type CorrectorResult } from '../state/correctorActions';
+import type { CorrectorHealth } from '../plan/corrector';
 
 type Row = { name: string; depth: number; steps: number; direct: number; total: number; uses: number; bigStep: boolean; used: boolean; splittable: boolean };
 
@@ -121,6 +123,26 @@ export function ModelsPanel({ model, onExport, onMakeSubmodel }: { model: ModelS
   };
   const [menu, setMenu] = useState<{ x: number; y: number; name: string } | null>(null);
   const closeMenu = useCallback(() => setMenu(null), []);
+  // The Assembly Corrector runs on the dev server (see scripts/assembly-corrector-bridge.ts),
+  // so the panel asks whether the engine is there before offering it.
+  const marks = useStudio((s) => s.plan.assemblyCorrector);
+  const [engine, setEngine] = useState<CorrectorHealth | null>(null);
+  const [running, setRunning] = useState<string | null>(null);
+  const [note, setNote] = useState<{ model: string; result: CorrectorResult } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void correctorStatus().then((health) => { if (alive) setEngine(health); }, () => undefined);
+    return () => { alive = false; };
+  }, []);
+  const correct = async (name: string) => {
+    setRunning(name);
+    setNote(null);
+    const result = await runCorrectorForModel(name);
+    setNote({ model: name, result });
+    setRunning(null);
+  };
+  const stopCorrecting = (name: string) => setNote({ model: name, result: disableCorrectorForModel(name) });
+  const mark = marks?.[editingModel];
   /** `View parts` browses the editing model, so the row's model is opened first. */
   const [partsFor, setPartsFor] = useState<string | null>(null);
   const [saving, setSaving] = useState<{ name: string; progress: SaveProgress } | null>(null);
@@ -147,6 +169,16 @@ export function ModelsPanel({ model, onExport, onMakeSubmodel }: { model: ModelS
       { icon: 'play', label: 'Play its build', disabled: !model.ready || empty, onClick: () => play(name) },
       { icon: 'steps', label: 'Lay out all parts', disabled: !model.ready || empty, onClick: () => { open(name); useStudio.getState().setLaidOut(true); } },
       { icon: 'parts', label: 'View parts', disabled: !model.ready || empty, onClick: () => { open(name); setPartsFor(name); } },
+      'sep',
+      {
+        icon: 'checks',
+        label: 'Assembly Corrector',
+        hint: marks?.[name] ? `on · ${marks[name].steps} steps` : 'off',
+        current: !!marks?.[name],
+        disabled: !empty && (!engine?.ready || !!running),
+        onClick: () => { void (marks?.[name] ? stopCorrecting(name) : correct(name)); },
+      },
+      ...(marks?.[name] ? [{ icon: 'repeat' as const, label: 'Run the corrector again', disabled: !engine?.ready || !!running, onClick: () => void correct(name) }] : []),
       'sep',
       { icon: 'video', label: 'Export as MP4', disabled: !model.ready || empty, onClick: () => onExport([{ model: name, label: label(name) }]) },
       { icon: 'download', label: `Save as project with animation (.${PROJECT_EXTENSION})`, disabled: !model.ready || empty || !!saving, onClick: () => saveProject(name) },
@@ -229,6 +261,33 @@ export function ModelsPanel({ model, onExport, onMakeSubmodel }: { model: ModelS
           {matches.length === 0 && <li className="bm-model-empty"><Ic name="zoomIn" /><strong>No models found</strong><span>Try another search or create a submodule.</span></li>}
         </ul>
         {rows.length === 1 && rows[0].total === 0 && <p className="bm-model-intro">Start a project by importing a model from Projects, or add a part from the Parts panel.</p>}
+      </div>
+      <div className="bm-corrector" aria-label="Assembly Corrector">
+        <div className="bm-corrector-head">
+          <h4>Assembly Corrector</h4>
+          <span className={`bm-corrector-state ${engine?.ready ? 'on' : 'off'}`}>{engine ? (engine.ready ? 'ready' : 'unavailable') : 'checking…'}</span>
+        </div>
+        <label className="bm-corrector-switch">
+          <input type="checkbox" checked={!!mark} disabled={!mark && (!engine?.ready || !!running)}
+            onChange={(e) => { if (e.currentTarget.checked) void correct(editingModel); else stopCorrecting(editingModel); }} />
+          <span>Plan <strong>{label(editingModel)}</strong> with the Python engine</span>
+        </label>
+        <p className="nx-hint">{engine ? engine.message : 'looking for the local engine…'}</p>
+        {mark && <p className="nx-hint bm-corrector-on" role="status">
+          Engine-planned: {mark.steps} step{mark.steps === 1 ? '' : 's'}{typeof mark.units === 'number' ? ` · ${mark.units.toLocaleString()} parts` : ''} · {mark.issues ? `${mark.issues} issue${mark.issues === 1 ? '' : 's'} reported` : 'no issues reported'}
+        </p>}
+        <div className="bm-corrector-actions">
+          <button className="nx-btn nx-sm" disabled={!engine?.ready || !!running} onClick={() => void correct(editingModel)}>
+            <Ic name={running === editingModel ? 'repeat' : 'checks'} /> {running === editingModel ? 'Planning…' : 'Run the corrector'}
+          </button>
+          {mark && <button className="nx-btn nx-sm" disabled={!!running} onClick={() => stopCorrecting(editingModel)}><Ic name="undo" /> Stop using it</button>}
+        </div>
+        {note && <p className={`bm-corrector-note ${note.result.ok ? 'ok' : 'bad'}`} role="status">
+          {note.model === editingModel ? '' : `${label(note.model)}: `}
+          {note.result.message}
+          {note.result.ok && note.result.summary ? ` · ${note.result.summary.units} parts, ${note.result.summary.floating} floating, ${note.result.summary.issues.length} issue${note.result.summary.issues.length === 1 ? '' : 's'}` : ''}
+          {note.result.summary?.issues.length ? ` — first: ${note.result.summary.issues[0]}` : ''}
+        </p>}
       </div>
       <div className="bm-models-batch">
         <h4>Quick actions</h4>

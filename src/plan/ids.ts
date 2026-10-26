@@ -34,11 +34,19 @@ export function ensureIds(plan: Plan): Plan {
 
 /** Creates an id not used anywhere in the plan. */
 export function newId(plan: Plan): string {
+  return idFactory(plan)();
+}
+
+/** A generator of ids that nothing in `plan` uses, and that never repeats itself. */
+export function idFactory(plan: Plan): () => string {
   const used = new Set<string>();
   for (const s of [...plan.steps, ...Object.values(plan.submodels ?? {}).flatMap((x) => x.steps)])
     for (const i of s.pieces) if (i.id) used.add(i.id);
-  let id: string;
-  do id = 'n' + Math.random().toString(36).slice(2, 8);
-  while (used.has(id));
-  return id;
+  return () => {
+    let id: string;
+    do id = 'n' + Math.random().toString(36).slice(2, 8);
+    while (used.has(id));
+    used.add(id);
+    return id;
+  };
 }

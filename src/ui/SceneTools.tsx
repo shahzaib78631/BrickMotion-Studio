@@ -9,12 +9,20 @@ import { Ic } from './icons';
 import { viewportApi } from './viewportApi';
 import { useSceneView } from './sceneViewState';
 
+/** LDraw units per stud, the scale every length in the viewport is measured in. */
+const LDU_PER_STUD = 20;
+
 /** Camera and light outliner plus inspector. All edits use the project's normal
  * undo/autosave path and therefore survive project export/import. */
 export function SceneTools() {
   const mode = useStudio((s) => s.mode);
   const source = useStudio((s) => s.plan.sceneSetup);
   const setup = sceneSetupOf(source);
+  // Scene objects store LDraw units (the viewport's own world), but the fields are
+  // labelled studs: 1 stud is 20 LDU, and mixing the two put a typed camera inside
+  // the model, which reads as an empty Preview and a field of view that does nothing.
+  const toStuds = (ldu: number) => Number((ldu / LDU_PER_STUD).toFixed(3));
+  const fromStuds = (studs: number) => studs * LDU_PER_STUD;
   const outputAspect = formatAspect(useAppSettings((s) => s.format));
   const v = useSceneView();
   const selected = sceneObject(setup, v.selectedId);
@@ -49,10 +57,11 @@ export function SceneTools() {
     const old = selected[name];
     return <label key={name + axis} className="bm-scene-coordinate"><span>{'XYZ'[axis]}</span>
       <input aria-label={`${selected.name} ${name} ${'XYZ'[axis]}`} type="number" step="0.25"
-        value={Number(old[axis].toFixed(3))} onChange={(e) => {
+        value={toStuds(old[axis])} onChange={(e) => {
           const n = Number(e.target.value);
           if (!e.target.value || !Number.isFinite(n)) return;
-          const vec = [...old] as XYZ; vec[axis] = n;
+          const vec = [...old] as XYZ;
+          vec[axis] = fromStuds(n);
           edit({ [name]: vec });
         }} /></label>;
   };

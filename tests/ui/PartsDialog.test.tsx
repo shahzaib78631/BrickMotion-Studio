@@ -161,8 +161,11 @@ test('Extract all replaces a submodel use with its parts', () => {
   renderDialog();
   fireEvent.click(screen.getByRole('button', { name: 'Extract engine into Main model' }));
   const plan = useStudio.getState().plan;
-  expect(plan.steps[2].pieces.map((item) => item.id)).toEqual(['e1']);
-  expect(plan.steps[2].pieces.some((item) => 'submodel' in item)).toBe(false);
+  const extracted = plan.steps[2].pieces;
+  // the extracted copy gets its own id: the definition it came from owned `e1`
+  expect(extracted).toHaveLength(1);
+  expect(extracted[0].id).not.toBe('e1');
+  expect(extracted.some((item) => 'submodel' in item)).toBe(false);
   expect(plan.submodels?.engine).toBeUndefined();
 });
 

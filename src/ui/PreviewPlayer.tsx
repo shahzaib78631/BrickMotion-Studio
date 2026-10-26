@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import * as THREE from 'three';
 import { cameraAt, worldBox3 } from '../anim/camera';
 import { poseAt, type Timeline } from '../anim/timeline';
 import { formatAspect } from '../export/formats';
 import { useAppSettings } from '../state/appSettings';
 import { useStudio } from '../state/store';
-import { applySceneCamera, applyCameraCrop } from '../render/sceneSetup';
+import { applySceneCamera, applyCameraCrop, sceneSetupOf } from '../render/sceneSetup';
 import { advancePlayback, usePlayback } from '../state/playback';
 import { soundSnaps } from '../audio/snapSound';
 import type { ModelState } from '../state/useModel';
@@ -66,6 +67,7 @@ export function PreviewPlayer({ model, timeline: tl }: { model: ModelState; time
   useEffect(() => {
     let raf = 0;
     let last = performance.now();
+    const placed = new Map(asm.instances.map((inst) => [inst.key, inst.world]));
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
       const studio = viewportApi.studio;
@@ -83,18 +85,23 @@ export function PreviewPlayer({ model, timeline: tl }: { model: ModelState; time
       const fw = fh * ASPECT;
       setFrame((f) => (f.width === fw && f.height === fh ? f : { left: (W - fw) / 2, top: (H - fh) / 2, width: fw, height: fh }));
       const cam = cameraAt(tl, t, ASPECT, s.cameraFraming, s.camera);
-      studio.bricks.setMatrices(poseAt(tl, t));
+      // A piece the timeline does not know (the plan changed under it) is shown in place rather
+      // than dropped: a preview that silently draws nothing is impossible to diagnose. Pieces
+      // the timeline does know still arrive, wait and hide as it says.
+      const at = poseAt(tl, t);
+      studio.bricks.setMatrices((key) => at(key) ?? (tl.tracks.has(key) ? null : placed.get(key) ?? null));
       studio.perspective.position.copy(cam.position);
       studio.perspective.lookAt(cam.target);
       studio.perspective.fov = cam.fov;
       studio.perspective.aspect = ASPECT;
       studio.perspective.updateProjectionMatrix();
-      if (!applySceneCamera(studio.perspective, setup)) applyCameraCrop(studio.perspective, setup);
+      const sceneCamera = applySceneCamera(studio.perspective, setup);
+      if (!sceneCamera) applyCameraCrop(studio.perspective, setup);
       studio.render({ x: (W - fw) / 2, y: (H - fh) / 2, width: fw, height: fh });
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [tl, s.cameraFraming, s.camera, ASPECT, setup]);
+  }, [asm, tl, s.cameraFraming, s.camera, ASPECT, setup]);
 
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   useEffect(() => {
@@ -105,6 +112,10 @@ export function PreviewPlayer({ model, timeline: tl }: { model: ModelState; time
   }, [s.logo]);
 
   const unit = Math.min(frame.width, frame.height);
+  /** A saved scene camera is meant to be the video's camera. */
+  const sceneInCharge = setup?.useCameraForVideo === true && !!setup?.activeCameraId;
+  /** Pieces this timeline has no track for: the plan changed under it. */
+  const missingTracks = useMemo(() => asm.instances.filter((inst) => !tl.tracks.has(inst.key)).length, [asm, tl]);
   return (
     <div className="preview" ref={wrapRef}>
       <div className="frame-mask" style={{ left: frame.left, top: frame.top, width: frame.width, height: frame.height }} />
@@ -121,6 +132,32 @@ export function PreviewPlayer({ model, timeline: tl }: { model: ModelState; time
           }}
         />
       )}
+      {sceneInCharge || missingTracks > 0 ? (
+        <div className="preview-notes">
+          {sceneInCharge && (
+            <div className="preview-scene-camera" role="status">
+              <span>
+                The video uses the saved scene camera <b>{setup?.cameras.find((c) => c.id === setup.activeCameraId)?.name ?? 'Camera'}</b>.
+                If the frame looks empty, that camera is probably inside the model or aimed away from it.
+              </span>
+              <div className="preview-scene-camera-actions">
+                <button className="nx-btn nx-sm" onClick={() => useStudio.getState().apply((p) => ({
+                  ...p,
+                  sceneSetup: { ...sceneSetupOf(p.sceneSetup), useCameraForVideo: false },
+                }))}>Use the video camera</button>
+              </div>
+            </div>
+          )}
+          {missingTracks > 0 && (
+            <div className="preview-scene-camera" role="status">
+              <span>
+                <b>{missingTracks.toLocaleString()}</b> of {asm.instances.length.toLocaleString()} pieces are not in this
+                timeline, so they are shown where they belong. Press <b>Play</b> in the Animation Editor to plan the build again.
+              </span>
+            </div>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

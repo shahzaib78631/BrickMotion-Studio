@@ -64,6 +64,7 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
   const [width, setWidth] = useState(900);
   const [trimPreview, setTrimPreview] = useState<TrimPreview | null>(null);
   const video = useAppSettings();
+  const cameraFollows = useAppSettings((s) => s.cameraFollowsPlayback);
   const scrollRef = useRef<HTMLDivElement>(null);
   const headsRef = useRef<HTMLDivElement>(null);
 
@@ -322,6 +323,14 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
           </button>
         </div>
         <div className="nx-tr-right">
+          {/* The intro shot and the hero orbit are camera moves: off keeps your own angle. */}
+          <button className={`nx-icon bm-camera-follow ${cameraFollows ? 'on' : ''}`} aria-pressed={cameraFollows}
+            aria-label="Camera follows playback" title={cameraFollows
+              ? 'The camera plays the intro shot and hero orbit while it plays — click to keep your own angle'
+              : 'Playing keeps your own angle — click to play the intro shot and hero orbit'}
+            onClick={() => useAppSettings.getState().set({ cameraFollowsPlayback: !cameraFollows })}>
+            <Ic name="camera" />
+          </button>
           <button className="nx-icon" aria-label="Zoom out" title="Zoom out (Ctrl/⌘ + scroll)" disabled={zoom <= 1} onClick={() => setZoom((z) => Math.max(1, z / 1.5))}>
             <Ic name="zoomOut" />
           </button>

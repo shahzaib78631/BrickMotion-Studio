@@ -23,7 +23,7 @@ import { metricsOf } from '../state/partService';
 import { modelSteps } from '../plan/ops';
 import { posedBounds, stepPoses, timelineStep } from '../model/stepLayout';
 import { poseAt, spotTransform, type Timeline } from '../anim/timeline';
-import { worldBox3 } from '../anim/camera';
+import { cameraAt, worldBox3, type CamPose } from '../anim/camera';
 import { stepAt } from '../anim/partClips';
 import { advancePlayback, usePlayback } from '../state/playback';
 import { animationOf, insertKeys, valuesAt, type ChannelValues, type KeyUpdate } from '../anim/keyframes';
@@ -404,10 +404,36 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     let last = performance.now();
     let shownT = -1;
     let shownKeyFrame = Number.NaN;
+    /**
+     * The intro and the hero orbit are camera moves, so the Build view plays them. They keep
+     * the editor's own zoom and lens though — the shot supplies the direction and the centre,
+     * never the distance — and they ease in from wherever the editor camera is, so pressing
+     * play never snaps or zooms.
+     */
+    let shotFrom: { at: number; position: THREE.Vector3; target: THREE.Vector3; radius: number } | null = null;
+    const shotAt = (want: CamPose, t: number): CamPose => {
+      if (!shotFrom) {
+        const position = studio.camera.position.clone();
+        const target = controls.target.clone();
+        shotFrom = { at: t, position, target, radius: position.distanceTo(target) || 1 };
+      }
+      const dir = want.position.clone().sub(want.target);
+      const pinned = want.target.clone().addScaledVector(dir, shotFrom.radius / (dir.length() || 1));
+      const u = Math.min(1, (t - shotFrom.at) / 0.6);
+      const k = u * u * (3 - 2 * u);
+      return {
+        position: shotFrom.position.clone().lerp(pinned, k),
+        target: shotFrom.target.clone().lerp(want.target, k),
+        fov: want.fov,
+      };
+    };
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
+      // The intro establishing shot and the hero orbit are camera moves: play them here
+      // too, or pressing play in the Build view shows the poses without the shots.
+      let shot: CamPose | null = null;
       if (useStudio.getState().mode === 'edit') {
         if (useStudio.getState().timelineEditor === 'timeline') {
           const scene = keyScene.current;
@@ -424,7 +450,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
         }
         const run = live.current;
         if (run) {
-          // play / scrub in the Build view: the same animation as the preview, our camera
+          // play / scrub in the Build view: the same animation as the preview
           const wasPlaying = usePlayback.getState().playing;
           const t = advancePlayback(dt, run.tl.duration);
           soundSnaps(run.tl, t, wasPlaying, useAppSettings.getState().snapSound);
@@ -437,10 +463,26 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
             // the step card and Steps panel follow the step being built
             const step = stepAt(run.tl, t);
             if (step !== null && useStudio.getState().currentStep !== step) useStudio.setState({ currentStep: step });
+            // The intro shot and the hero orbit are camera moves the video plays, and only
+            // they: the build in between stays the editor's own view, so playing never zooms
+            // under you. The transport's camera switch turns both off completely.
+            const settings = useAppSettings.getState();
+            const inHero = t >= run.tl.buildEnd;
+            if (settings.cameraFollowsPlayback !== false && (inHero || t < run.tl.intro)) {
+              const view = useSceneView.getState();
+              shot = shotAt(cameraAt(run.tl, t, view.width / Math.max(1, view.height), settings.cameraFraming, settings.camera), t);
+            } else shotFrom = null;
           }
         }
         viewportApi.views?.update(dt);
         controls.update();
+        if (shot) {
+          const active = studio.camera;
+          active.position.copy(shot.position);
+          active.lookAt(shot.target);
+          // keep the editor's orbit behaving around the shot, not the old centre
+          controls.target.copy(shot.target);
+        }
         studio.render(viewportApi.scene?.prepareRender());
       }
     };
@@ -580,9 +622,9 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
   const laidOut = useStudio((s) => s.laidOut);
   const poses = useMemo(() => {
     if (placing) return new Map<string, THREE.Matrix4>();
-    if (currentStep === null) return laidOut ? stepPoses(model.view, 'all', 'laidout') : new Map<string, THREE.Matrix4>();
+    if (currentStep === null) return laidOut ? stepPoses(model.view, 'all', 'laidout', metricsOf) : new Map<string, THREE.Matrix4>();
     if (stepView === 'separated' && planned) return planned.poses;
-    return stepPoses(model.view, currentStep, stepView);
+    return stepPoses(model.view, currentStep, stepView, metricsOf);
   }, [model.view, currentStep, stepView, planned, placing, laidOut]);
 
   // Each submodel use can have an independent workbench transform. Unlike the

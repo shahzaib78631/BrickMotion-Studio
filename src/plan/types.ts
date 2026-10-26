@@ -45,6 +45,19 @@ export type Step = {
 };
 export type Submodel = { steps: Step[] };
 
+/** Step metadata worth keeping when a step grouping is rewritten. */
+export type StepMeta = Pick<Step, 'title' | 'notes' | 'pauseAfter'>;
+
+/** What the Assembly Corrector changed for one model, and how to put it back. */
+export type CorrectorMark = {
+  at: number;
+  steps: number;
+  units?: number;
+  issues?: number;
+  /** the step order before the correction: item ids per step, plus the step fields */
+  previous?: { ids: (string | undefined)[][]; meta: StepMeta[] };
+};
+
 /** Frames are integer and animation is non-destructive: keyed offsets never alter LDraw placements. */
 export type AnimationChannel =
   | 'location.x' | 'location.y' | 'location.z'
@@ -105,6 +118,11 @@ export type Plan = {
    * working even when the artifact could not be parsed.
    */
   assemblyPlan?: unknown;
+  /**
+   * Models whose steps came from the Assembly Corrector (the Python LDraw step
+   * planner), with the grouping they had before, so disabling it can put them back.
+   */
+  assemblyCorrector?: Record<string, CorrectorMark>;
 };
 
 export const isSub = (i: PlanItem): i is SubItem => 'submodel' in i;

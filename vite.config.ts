@@ -1,9 +1,10 @@
 /// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { assemblyCorrectorBridge } from './scripts/assembly-corrector-bridge';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), assemblyCorrectorBridge()],
   test: {
     environment: 'node',
     include: ['tests/**/*.test.{ts,tsx}'],

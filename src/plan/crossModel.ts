@@ -16,6 +16,7 @@ import type { Vec3 } from '../ldraw/parse';
 import type { Assembly } from '../model/assemble';
 import type { ANode } from '../model/assemblyTypes';
 import { modelFrames, modelNodes } from './modelFrames';
+import { idFactory } from './ids';
 import { findItem, modelSteps, type ModelName } from './ops';
 import { composePlacement, invertPlacement, placementToGrid, tidyPlacement, type Placement } from './placement';
 import { isGrid, isSub, type AssemblyHints, type Plan, type PlanItem, type Step } from './types';
@@ -77,6 +78,38 @@ function repairHints(item: PlanItem, moving: ReadonlySet<string>, rel: Placement
   if (Object.keys(hints).length) out.assembly = hints;
   else delete out.assembly;
   return out;
+}
+
+/**
+ * Items that now exist twice — an extracted copy next to the submodel definition that still
+ * owns the original — need their own ids. Sharing one id makes two visible leaves with the
+ * same key, which the build graph refuses with "Duplicate visible leaf". Sibling references
+ * that move with them are remapped, so the order they express survives.
+ */
+function freshCopies(items: PlanItem[], plan: Plan): { items: PlanItem[]; ids: string[] } {
+  const nextId = idFactory(plan);
+  const renamed = new Map<string, string>();
+  for (const item of items) if (item.id) renamed.set(item.id, nextId());
+  const out = items.map((item) => {
+    const hints: AssemblyHints = { ...item.assembly };
+    if (hints.attachTo) {
+      const to = renamed.get(hints.attachTo);
+      if (to) hints.attachTo = to;
+      else delete hints.attachTo;
+    }
+    if (hints.after) {
+      const after = [...new Set(hints.after.flatMap((id) => (renamed.get(id) ? [renamed.get(id)!] : [])))];
+      if (after.length) hints.after = after;
+      else delete hints.after;
+    }
+    const copy = { ...item } as PlanItem;
+    const id = item.id ? renamed.get(item.id) : undefined;
+    if (id) copy.id = id;
+    if (Object.keys(hints).length) copy.assembly = hints;
+    else delete copy.assembly;
+    return copy;
+  });
+  return { items: out, ids: out.flatMap((item) => (item.id ? [item.id] : [])) };
 }
 
 /**
@@ -207,8 +240,10 @@ export function inlineSubmodelUse(plan: Plan, assembly: Assembly, model: ModelNa
     placed.push(placeItem(repairHints(item, inside, node.local), composePlacement(node.local, child.local), child.body));
   }
   if (!placed.length) return failed(`Submodel "${sub}" has no parts to extract.`);
-  const firstPiece = placed.find((item) => item.id)?.id;
-  const pieceIds = placed.flatMap((item) => (item.id ? [item.id] : []));
+  // The definition keeps its own items, so the copies taken out of it cannot keep their ids.
+  const copies = freshCopies(placed, plan);
+  const firstPiece = copies.items.find((item) => item.id)?.id;
+  const pieceIds = copies.ids;
 
   /** References to the use must follow the parts that replaced it. */
   const remap = (item: PlanItem): PlanItem => {
@@ -233,7 +268,7 @@ export function inlineSubmodelUse(plan: Plan, assembly: Assembly, model: ModelNa
     if (at < 0) return step;
     return {
       ...step,
-      pieces: [...step.pieces.slice(0, at), ...placed, ...step.pieces.slice(at + 1)].map(remap),
+      pieces: [...step.pieces.slice(0, at), ...copies.items, ...step.pieces.slice(at + 1)].map(remap),
     };
   });
 

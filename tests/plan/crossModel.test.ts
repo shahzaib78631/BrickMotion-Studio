@@ -19,7 +19,7 @@ const fixture = (): Plan => ({
   submodels: {
     engine: { steps: [{ pieces: [piece('e1')] }] },
     trailer: { steps: [{ pieces: [piece('t1')] }] },
-    twin: { steps: [{ pieces: [piece('w1')] }] },
+    twin: { steps: [{ pieces: [piece('tw1')] }] },
     tilted: { steps: [{ pieces: [piece('g1')] }] },
     spare: { steps: [{ pieces: [piece('s1')] }] },
   },
@@ -43,6 +43,14 @@ const worldOf = (assembly: Assembly, itemId: string) => {
 };
 const samePose = (a: { elements: number[] }, b: { elements: number[] }) =>
   expect(a.elements.every((v, i) => Math.abs(v - b.elements[i]) < 1e-6)).toBe(true);
+
+/** Every item id in the plan is its own: the build graph refuses two leaves with one id. */
+const uniqueIds = (plan: Plan): boolean => {
+  const ids = [...plan.steps, ...Object.values(plan.submodels ?? {}).flatMap((s) => s.steps)]
+    .flatMap((step) => step.pieces.map((piece) => piece.id))
+    .filter((id): id is string => !!id);
+  return new Set(ids).size === ids.length;
+};
 
 describe('model frames', () => {
   test('composes nested uses, counts repeats and ignores unused models', () => {
@@ -151,12 +159,17 @@ describe('inlineSubmodelUse', () => {
     const before = worldOf(build(plan), 'e1');
     const result = inlineSubmodelUse(plan, build(plan), '', 'u1');
     if ('error' in result) throw new Error(result.error);
-    // the use is gone, its piece took its slot in step 2
-    expect(result.plan.steps[1].pieces.map((i) => i.id)).toEqual(['e1']);
-    expect(result.plan.steps[1].pieces.some((i) => 'submodel' in i)).toBe(false);
-    samePose(worldOf(build(result.plan), 'e1'), before);
+    // the use is gone, its piece took its slot in step 2 — under its own id, because the
+    // definition it came from keeps `e1` for itself
+    const extracted = result.plan.steps[1].pieces;
+    expect(extracted).toHaveLength(1);
+    expect('submodel' in extracted[0]).toBe(false);
+    expect(extracted[0].id).not.toBe('e1');
+    expect(result.moved).toEqual([extracted[0].id]);
+    samePose(worldOf(build(result.plan), extracted[0].id!), before);
     // nothing uses engine any more, so the definition goes too
     expect(result.plan.submodels!.engine).toBeUndefined();
+    expect(uniqueIds(result.plan)).toBe(true);
   });
 
   test('keeps the definition when another use remains', () => {
@@ -165,5 +178,19 @@ describe('inlineSubmodelUse', () => {
     const result = inlineSubmodelUse(plan, build(plan), '', 'u1');
     if ('error' in result) throw new Error(result.error);
     expect(result.plan.submodels!.engine).toBeDefined();
+  });
+
+  test('an extracted copy never shares its id with the use that is still there', () => {
+    // the reported case: `engine` is used twice, one use is extracted, and the remaining use
+    // still brings `e1` in. Two visible leaves with one key is what "duplicate-id" refuses.
+    const plan = fixture();
+    plan.steps[2].pieces.push({ id: 'u4', submodel: 'engine', x: 44, y: 0, z: 0, rot: 0 } as never);
+    const result = inlineSubmodelUse(plan, build(plan), '', 'u1');
+    if ('error' in result) throw new Error(result.error);
+    expect(uniqueIds(result.plan)).toBe(true);
+    const keys = build(result.plan).instances.map((inst) => inst.key);
+    expect(new Set(keys).size).toBe(keys.length);
+    // and the pieces that stayed in the definition are untouched
+    expect(result.plan.submodels!.engine.steps[0].pieces.map((i) => i.id)).toEqual(['e1']);
   });
 });

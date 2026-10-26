@@ -152,6 +152,17 @@ export const PlanSchema = z.object({
   showModelAtSpot: z.boolean().optional(),
   // assembly plan artifact (opaque cold JSON; validated by the assembly-artifact planner)
   assemblyPlan: z.unknown().optional(),
+  // which models were planned by the Assembly Corrector, and the order to put back
+  assemblyCorrector: z.record(z.string(), z.object({
+    at: z.number(),
+    steps: z.number(),
+    units: z.number().optional(),
+    issues: z.number().optional(),
+    previous: z.object({
+      ids: z.array(z.array(z.string().optional())),
+      meta: z.array(z.object({ title: z.string().optional(), notes: z.string().optional(), pauseAfter: z.number().optional() })),
+    }).optional(),
+  })).optional(),
 });
 
 export function parsePlan(json: unknown): { ok: true; plan: Plan } | { ok: false; errors: string[] } {

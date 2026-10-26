@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { layoutFloor, type FloorItem } from '../anim/floorLayout';
 import type { Box } from '../ldraw/flatten';
 import { poseAt, type Timeline } from '../anim/timeline';
-import { transformBox, unionBox, type Assembly, type Instance } from './assemble';
+import { transformBox, unionBox, type Assembly, type Instance, type Metrics } from './assemble';
 
 /**
  * How the Build view shows the step being edited:
@@ -32,10 +32,12 @@ const boxOf = (list: Instance[]) => list.reduce<Box | null>((b, i) => unionBox(b
 
 /**
  * World (LDU) matrices for the instances of `step`'s items under the chosen view; the
- * rest of the model stays where it is. Parts keep their orientation so they read like
- * an instruction booklet's parts callout. Returns an empty map when nothing moves.
+ * rest of the model stays where it is. Separated and exploded keep each part's pose;
+ * the laid-out views stand every piece up in its own orientation instead, so a part
+ * that is bolted on its side in the model still reads like an instruction callout.
+ * Returns an empty map when nothing moves.
  */
-export function stepPoses(asm: Assembly, step: number | 'all', view: StepView): Map<string, THREE.Matrix4> {
+export function stepPoses(asm: Assembly, step: number | 'all', view: StepView, metrics: Metrics): Map<string, THREE.Matrix4> {
   const out = new Map<string, THREE.Matrix4>();
   if (view === 'assembled' || !asm.bounds) return out;
   const groups = groupsOf(asm);
@@ -61,9 +63,8 @@ export function stepPoses(asm: Assembly, step: number | 'all', view: StepView): 
     return out;
   }
 
-  const items: (FloorItem & { box: Box; list: Instance[] })[] = [];
-  const add = (id: string, list: Instance[], group: number) => {
-    const box = boxOf(list);
+  const items: (FloorItem & { box: Box; list: Instance[]; flat: boolean })[] = [];
+  const add = (id: string, list: Instance[], group: number, box: Box | null = boxOf(list), flat = false) => {
     if (!box) return;
     items.push({
       id,
@@ -72,15 +73,18 @@ export function stepPoses(asm: Assembly, step: number | 'all', view: StepView): 
       group,
       box,
       list,
+      flat,
     });
   };
   if (view === 'laidout') {
-    // every piece on its own, like a parts callout: one colour after another
+    // Every piece on its own, like a parts callout: one colour after another. The box
+    // is the part's own (unrotated) body, so the cell fits the piece as you see it and
+    // the row spacing does not depend on how it happens to be angled in the model.
     const colours = new Map<string, number>();
     for (const inst of fresh.flatMap((n) => groups.get(n.itemId) ?? [])) {
       const c = String(inst.color);
       if (!colours.has(c)) colours.set(c, colours.size);
-      add(inst.key, [inst], colours.get(c)!);
+      add(inst.key, [inst], colours.get(c)!, metrics(inst.part).body, true);
     }
   } else {
     fresh.forEach((n) => add(n.itemId, groups.get(n.itemId) ?? [], 0)); // arrival order: first part on the left
@@ -99,7 +103,14 @@ export function stepPoses(asm: Assembly, step: number | 'all', view: StepView): 
     const p = pos.get(it.id);
     if (!p) continue;
     const zMin = (front - p.z - it.d) * STUD;
-    move(it.list, p.x * STUD - it.box.min[0], ground - it.box.max[1], zMin - it.box.min[2]);
+    const dx = p.x * STUD - it.box.min[0];
+    const dy = ground - it.box.max[1];
+    const dz = zMin - it.box.min[2];
+    // A staged piece drops the rotation it carries in the model and sits flat on the
+    // floor, resting on its own body: resting the AABB of a tilted part on the ground
+    // leaves it standing on an edge, which reads as a floating, mis-rotated piece.
+    if (it.flat) for (const inst of it.list) out.set(inst.key, new THREE.Matrix4().makeTranslation(dx, dy, dz));
+    else move(it.list, dx, dy, dz);
   }
   return out;
 }

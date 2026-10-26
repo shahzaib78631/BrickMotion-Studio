@@ -178,6 +178,22 @@
 .bm-model-row.active .nx-hint{color:#6337d4}
 .bm-model-tag{font-style:normal;padding:1px 8px;line-height:17px;border-radius:99px;font-size:10px;font-weight:650;flex-shrink:0;color:#946119;background:#fff0d3}
 .bm-model-tag.motion{color:#197a93;background:#d8f3fb}
+/* Assembly Corrector: the local Python step planner, run through the dev server. */
+.bm-corrector{display:flex;flex-direction:column;gap:6px;margin-top:10px;padding:11px 10px 12px;border:1px solid var(--line);border-radius:11px;background:var(--surface2)}
+.bm-corrector-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.bm-corrector-head h4{margin:0;font-size:11px;font-weight:760;letter-spacing:.02em;text-transform:uppercase;color:var(--ink2)}
+.bm-corrector-state{font-size:9.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:99px;background:var(--surface);border:1px solid var(--line2);color:var(--ink3)}
+.bm-corrector-state.on{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 40%,var(--line))}
+.bm-corrector-switch{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--ink2);cursor:pointer}
+.bm-corrector-switch strong{color:var(--ink)}
+.bm-corrector-switch input{accent-color:var(--accent);flex:none}
+.bm-corrector-switch input:disabled{cursor:default}
+.bm-corrector-on{color:var(--ink2)!important}
+.bm-corrector-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+.bm-corrector-actions .nx-btn{display:inline-flex;align-items:center;gap:5px}
+.bm-corrector-note{margin:0;font-size:10.5px;line-height:1.45;color:var(--ink2);background:var(--surface);border:1px solid var(--line2);border-radius:7px;padding:6px 8px}
+.bm-corrector-note.bad{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 35%,var(--line))}
+.bm-corrector-note.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 35%,var(--line))}
 .bm-model-actions{display:flex;align-items:center;gap:0;flex-shrink:0}
 .bm-model-actions .nx-icon{height:25px;width:24px;border-radius:7px}
 .bm-model-actions .nx-icon .ic{width:15px;height:15px}
@@ -402,6 +418,14 @@
 .bm-timeline-shell .nx-tr-right{gap:9px;font-size:11px}
 .bm-timeline-shell .nx-tr-right .nx-btn{height:27px;border-radius:8px!important}
 .bm-timeline-shell .nx-tr-right .nx-icon{height:25px;width:26px;border:1px solid var(--line);border-radius:7px}
+.bm-timeline-shell .nx-tr-right .bm-camera-follow.on{border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--surface))}
+/* Which camera the video uses, with the switch right there — the preview is the one place
+   an empty frame makes no sense with no explanation. */
+.preview-notes{position:absolute;left:50%;top:16px;transform:translateX(-50%);z-index:6;width:min(430px,calc(100% - 24px));display:flex;flex-direction:column;gap:8px}
+.preview-scene-camera{display:flex;flex-direction:column;gap:7px;padding:10px 12px;border:1px solid var(--line2);border-radius:11px;background:color-mix(in srgb,var(--surface) 92%,transparent);box-shadow:0 10px 30px #141c4d1f;backdrop-filter:blur(6px)}
+.preview-scene-camera span{font-size:11.5px;line-height:1.5;color:var(--ink2)}
+.preview-scene-camera b{color:var(--ink)}
+.preview-scene-camera-actions{display:flex;gap:6px;flex-wrap:wrap}
 .bm-timeline-shell .nx-rate{height:27px;background:#fafbff}
 .bm-timeline-shell .nx-tracks{grid-template-columns:270px minmax(0,1fr);background:#fafbff}
 .bm-timeline-shell .nx-heads{background:#fff;border-right:1px solid var(--line);padding-top:26px}

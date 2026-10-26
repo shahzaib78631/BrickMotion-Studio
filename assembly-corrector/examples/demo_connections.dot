@@ -1,0 +1,11 @@
+graph ldraw_autostep {
+  graph [fontname="Arial", overlap=false, splines=true];
+  node [shape=box, style=rounded, fontname="Arial", fontsize=10];
+  subgraph cluster_0 {
+    label="main";
+    m0_p0 [label="#0 male.dat\\nstep 1", color="#506274"];
+    m0_p1 [label="#1 female.dat\\nstep 1", color="#506274"];
+    m0_p2 [label="#2 absent_demo.dat\\nstep 2", color="#c63737"];
+    m0_p0 -- m0_p1 [label="snap", style=solid, color="#1676a5"];
+  }
+}

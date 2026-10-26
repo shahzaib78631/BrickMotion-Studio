@@ -1,0 +1,253 @@
+[
+  {
+    "name": "main",
+    "units": 3,
+    "steps": 2,
+    "notes": [
+      "missing part geometry for 1 unique part(s): absent_demo.dat",
+      "unconnected part placed by proximity: absent_demo.dat (line 7)"
+    ],
+    "dropped": 0,
+    "missing_geometry": 1,
+    "geometry_stats": {
+      "parsed_files": 2,
+      "bounds_evaluations": 3,
+      "bounds_cache_hits": 2,
+      "bounds_cache_evictions": 0
+    },
+    "floating": 1,
+    "unsupported": 0,
+    "snap_links": 1,
+    "fallback_links": 0,
+    "sub": [],
+    "analysis_stats": {
+      "aabb_possible_pairs": 3,
+      "aabb_candidate_pairs": 1,
+      "aabb_contact_pairs": 1,
+      "contact_mode": "obb",
+      "obb_rejected_false_contacts": 0,
+      "snap_possible_connector_pairs": 1,
+      "snap_candidate_connector_pairs": 1,
+      "snap_links": 1,
+      "heuristic_links": 0,
+      "caveat": "Contact and insertion use bounding-box approximations, not a solid collision solver."
+    },
+    "parts": [
+      {
+        "id": 0,
+        "part": "male.dat",
+        "kind": "part",
+        "source_line": 3,
+        "original_index": 0,
+        "step": 1,
+        "color": "4",
+        "bounds": {
+          "min": [
+            -10.0,
+            -10.0,
+            -10.0
+          ],
+          "max": [
+            10.0,
+            10.0,
+            10.0
+          ]
+        },
+        "geometry_status": "resolved",
+        "geometry_issues": [],
+        "connector_count": 1,
+        "shadow_file_present": true
+      },
+      {
+        "id": 1,
+        "part": "female.dat",
+        "kind": "part",
+        "source_line": 5,
+        "original_index": 1,
+        "step": 1,
+        "color": "7",
+        "bounds": {
+          "min": [
+            -10.0,
+            -10.0,
+            -10.0
+          ],
+          "max": [
+            10.0,
+            10.0,
+            10.0
+          ]
+        },
+        "geometry_status": "resolved",
+        "geometry_issues": [],
+        "connector_count": 1,
+        "shadow_file_present": true
+      },
+      {
+        "id": 2,
+        "part": "absent_demo.dat",
+        "kind": "part",
+        "source_line": 7,
+        "original_index": 2,
+        "step": 2,
+        "color": "14",
+        "bounds": {
+          "min": [
+            99.0,
+            -1.0,
+            -1.0
+          ],
+          "max": [
+            101.0,
+            1.0,
+            1.0
+          ]
+        },
+        "geometry_status": "unavailable_or_partial",
+        "geometry_issues": [
+          {
+            "code": "missing_part",
+            "path": [
+              "absent_demo.dat"
+            ]
+          }
+        ],
+        "connector_count": 0,
+        "shadow_file_present": false
+      }
+    ],
+    "connections": [
+      {
+        "a": 0,
+        "b": 1,
+        "source": "snap",
+        "rigid": false,
+        "connector_matches": 1,
+        "aabb_overlap": [
+          20.0,
+          20.0,
+          20.0
+        ],
+        "confidence": "higher"
+      }
+    ],
+    "steps_detail": [
+      {
+        "step": 1,
+        "unit_ids": [
+          0,
+          1
+        ],
+        "placements": [
+          {
+            "id": 0,
+            "part": "male.dat",
+            "selection_reason": "foundation",
+            "connected_to_earlier": [],
+            "connected_in_same_step": [
+              1
+            ],
+            "resting_on_earlier": [],
+            "insertion": {
+              "clear": null,
+              "chosen_axis": null,
+              "attempts": []
+            }
+          },
+          {
+            "id": 1,
+            "part": "female.dat",
+            "selection_reason": "bonded_companion",
+            "connected_to_earlier": [
+              0
+            ],
+            "connected_in_same_step": [
+              0
+            ],
+            "resting_on_earlier": [],
+            "insertion": {
+              "clear": true,
+              "attempts": [
+                {
+                  "axis": [
+                    0.0,
+                    1.0,
+                    0.0
+                  ],
+                  "clear": true,
+                  "blocker_count": 0,
+                  "blocked_by": []
+                },
+                {
+                  "axis": [
+                    -0.0,
+                    -1.0,
+                    -0.0
+                  ],
+                  "clear": true,
+                  "blocker_count": 0,
+                  "blocked_by": []
+                }
+              ],
+              "chosen_axis": [
+                0.0,
+                1.0,
+                0.0
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "step": 2,
+        "unit_ids": [
+          2
+        ],
+        "placements": [
+          {
+            "id": 2,
+            "part": "absent_demo.dat",
+            "selection_reason": "unconnected_proximity_fallback",
+            "connected_to_earlier": [],
+            "connected_in_same_step": [],
+            "resting_on_earlier": [],
+            "insertion": {
+              "clear": null,
+              "chosen_axis": null,
+              "attempts": []
+            }
+          }
+        ]
+      }
+    ],
+    "issues": [
+      {
+        "severity": "error",
+        "code": "missing_part",
+        "unit": 2,
+        "step": 2,
+        "detail": {
+          "code": "missing_part",
+          "path": [
+            "absent_demo.dat"
+          ]
+        },
+        "action": "Supply or repair the named LDraw part / subpart file."
+      },
+      {
+        "severity": "error",
+        "code": "floating",
+        "unit": 2,
+        "step": 2,
+        "action": "Check connectors, position and the chosen foundation."
+      },
+      {
+        "severity": "warning",
+        "code": "unconnected_proximity_fallback",
+        "unit": 2,
+        "step": 2,
+        "action": "Review insertion attempts and connection provenance."
+      }
+    ]
+  }
+]

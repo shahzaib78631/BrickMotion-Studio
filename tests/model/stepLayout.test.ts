@@ -1,4 +1,5 @@
 import { beforeAll, expect, test } from 'vitest';
+import * as THREE from 'three';
 import { assemble, transformBox, type Metrics } from '../../src/model/assemble';
 import { stepPoses, timelineStep } from '../../src/model/stepLayout';
 import { buildTimeline, poseAt } from '../../src/anim/timeline';
@@ -21,7 +22,7 @@ const asm = () =>
 
 test('separated: the step\'s new parts lie on the floor in front of the model, apart from it and each other', () => {
   const a = asm();
-  const poses = stepPoses(a, 1, 'separated');
+  const poses = stepPoses(a, 1, 'separated', metrics);
   const fresh = a.instances.filter((i) => a.nodes.find((n) => n.itemId === i.itemId)!.step === 1);
   expect([...poses.keys()].sort()).toEqual(fresh.map((i) => i.key).sort());
   const ground = a.bounds!.max[1];
@@ -37,14 +38,14 @@ test('separated: the step\'s new parts lie on the floor in front of the model, a
 
 test('exploded lifts the new parts straight up; assembled moves nothing', () => {
   const a = asm();
-  const poses = stepPoses(a, 1, 'exploded');
+  const poses = stepPoses(a, 1, 'exploded', metrics);
   for (const [key, m] of poses) {
     const inst = a.instances.find((i) => i.key === key)!;
     expect(m.elements[12]).toBeCloseTo(inst.world.elements[12]);
     expect(m.elements[13]).toBeLessThan(inst.world.elements[13]); // LDraw −Y is up
   }
-  expect(stepPoses(a, 1, 'assembled').size).toBe(0);
-  expect(stepPoses(a, 0, 'separated').size).toBe(2);
+  expect(stepPoses(a, 1, 'assembled', metrics).size).toBe(0);
+  expect(stepPoses(a, 0, 'separated', metrics).size).toBe(2);
 });
 
 test('the Build view lays a step out where the planned animation starts it', () => {
@@ -79,7 +80,7 @@ test('laid out: every piece of the step, submodels taken apart, on the floor in 
     metrics,
     fixtureColors,
   );
-  const poses = stepPoses(a, 1, 'laidout');
+  const poses = stepPoses(a, 1, 'laidout', metrics);
   const fresh = a.instances.filter((i) => a.nodes.find((n) => n.itemId === i.key.split('/')[0])!.step === 1);
   expect(fresh).toHaveLength(7);
   expect([...poses.keys()].sort()).toEqual(fresh.map((i) => i.key).sort());
@@ -105,7 +106,7 @@ test('laid out: every piece of the step, submodels taken apart, on the floor in 
 
 test('laid out, whole model: every piece of every step on the floor, none overlapping', () => {
   const a = asm();
-  const poses = stepPoses(a, 'all', 'laidout');
+  const poses = stepPoses(a, 'all', 'laidout', metrics);
   expect(poses.size).toBe(a.instances.length);
   const ground = a.bounds!.max[1];
   const boxes = a.instances.map((i) => transformBox(metrics(i.part).body, poses.get(i.key)!));
@@ -115,4 +116,28 @@ test('laid out, whole model: every piece of every step on the floor, none overla
       const p = boxes[i], q = boxes[j];
       expect([0, 2].some((k) => Math.min(p.max[k], q.max[k]) - Math.max(p.min[k], q.min[k]) <= 0)).toBe(true);
     }
+});
+
+test('laid out: a piece that is turned in the model is staged flat on the floor', () => {
+  const straight: PlanItem = { part: '3001', color: 4, x: 0, y: 0, z: 0, rot: 0 };
+  const turned: PlanItem = { part: '3001', color: 4, x: 4, y: 0, z: 0, rot: 90 };
+  const a = assemble(
+    ensureIds({ format: 'brickmotion-plan', version: 1, name: 't', steps: [{ pieces: [straight, turned] }] }),
+    metrics,
+    fixtureColors,
+  );
+  const poses = stepPoses(a, 'all', 'laidout', metrics);
+  const ground = a.bounds!.max[1];
+  const upright = new THREE.Matrix4().extractRotation(new THREE.Matrix4()); // identity
+  for (const inst of a.instances) {
+    const pose = poses.get(inst.key)!;
+    // staged in the orientation the part is drawn in, whatever pose it has in the model
+    expect(new THREE.Matrix4().extractRotation(pose).equals(upright)).toBe(true);
+    // resting on its own body, not on the AABB of a tilted one
+    expect(transformBox(metrics(inst.part).body, pose).max[1]).toBeCloseTo(ground, 3);
+  }
+  // the turned piece really is turned in the model, so flat staging changed it
+  const turnedInst = a.instances.find((i) => !new THREE.Matrix4().extractRotation(i.world).equals(upright))!;
+  expect(turnedInst).toBeDefined();
+  expect(new THREE.Matrix4().extractRotation(poses.get(turnedInst.key)!).equals(upright)).toBe(true);
 });
