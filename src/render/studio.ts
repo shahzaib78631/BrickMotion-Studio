@@ -65,8 +65,10 @@ export function studioBackground(): THREE.DataTexture {
   return texture;
 }
 
-export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: { preserveDrawingBuffer?: boolean } = {}): Studio {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: !!opts.preserveDrawingBuffer, alpha: false });
+export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: { preserveDrawingBuffer?: boolean; transparent?: boolean } = {}): Studio {
+  const transparent = !!opts.transparent;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: !!opts.preserveDrawingBuffer, alpha: transparent });
+  if (transparent) renderer.setClearColor(0x000000, 0);
   renderer.setPixelRatio(typeof window !== 'undefined' && canvas instanceof HTMLCanvasElement ? Math.min(window.devicePixelRatio, 1.5) : 1);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -147,8 +149,10 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
     applyExposure();
   };
   const setLook = (look: StudioLook) => {
+    // A transparent studio keeps an empty background and no shadow floor, so an
+    // exported still has no studio backdrop baked into its alpha channel.
     if (look === 'classic') {
-      scene.background = bg;
+      if (!transparent) scene.background = bg;
       floor.material = classicFloor;
       exposure = 1.05;
       lookEnv = 0.6;
@@ -156,7 +160,7 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
       key.intensity = 2.2;
       fill.intensity = 0;
     } else {
-      scene.background = gradient;
+      if (!transparent) scene.background = gradient;
       floor.material = shadowFloor;
       exposure = 1.0;
       lookEnv = 0.75;
@@ -164,6 +168,7 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
       key.intensity = 2.35;
       fill.intensity = 0.38;
     }
+    floor.visible = !transparent;
     applyExposure();
     syncStudioLights();
   };
@@ -251,6 +256,8 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
       } else {
         renderer.setViewport(0, 0, sizeW, sizeH);
         renderer.setScissorTest(false);
+        // A previous letterboxed render may have left an opaque clear colour behind.
+        if (transparent) renderer.setClearColor(0x000000, 0);
         renderer.render(scene, active);
       }
     },

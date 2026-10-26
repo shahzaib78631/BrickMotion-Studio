@@ -86,7 +86,9 @@ async function snapAudio(snaps: Snap[], duration: number): Promise<AudioBuffer |
   return renderSnapTrack(snaps, duration).catch(() => null);
 }
 
-type FrameSampler = {
+/** What to render for a video: a pose per second and a camera per second. The
+ * Build export, the keyframe export and a viewport turntable differ only in this. */
+export type FrameSampler = {
   duration: number;
   box: THREE.Box3;
   groundY: number;
@@ -97,7 +99,7 @@ type FrameSampler = {
 
 /** Shared H.264 pipeline: Build and Timeline use identical encoder, lighting,
  * logo, cancellation, timestamps and video settings. Only the pose source differs. */
-async function encodeMp4(opts: CommonExportOpts, deps: ExportDeps, samples: FrameSampler): Promise<Blob> {
+export async function encodeMp4(opts: CommonExportOpts, deps: ExportDeps, samples: FrameSampler): Promise<Blob> {
   const { width: w, height: h, fps, signal } = opts;
   if (signal.aborted) throw abortError();
   if (!Number.isFinite(fps) || fps <= 0) throw new Error('Choose a valid FPS setting.');

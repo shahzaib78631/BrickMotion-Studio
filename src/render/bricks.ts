@@ -125,6 +125,19 @@ export class BrickRenderer {
     this.setMatrices((k) => byKey.get(k) ?? null);
   }
 
+  /** The matrices currently on the GPU (null = hidden). Lets an offscreen still
+   * replay exactly what the viewport is showing, whatever pose produced it. */
+  readMatrices(): Map<string, THREE.Matrix4 | null> {
+    const out = new Map<string, THREE.Matrix4 | null>();
+    const m = new THREE.Matrix4();
+    for (const [key, slots] of this.slots) {
+      slots[0].mesh.getMatrixAt(slots[0].index, m);
+      const hidden = m.elements.every((v, i) => v === HIDDEN.elements[i]);
+      out.set(key, hidden ? null : m.clone());
+    }
+    return out;
+  }
+
   setHighlight(keys: Set<string>, kind: 'select' | 'warn'): void {
     for (const [k, v] of [...this.highlight]) if (v === kind) this.highlight.delete(k);
     for (const k of keys) if (this.highlight.get(k) !== 'select') this.highlight.set(k, kind);
