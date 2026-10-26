@@ -18,7 +18,10 @@ import { ContextMenu, type ContextItem } from './ContextMenu';
 import { Ic } from './icons';
 
 const PAD = 26;
-const ROW = 25;
+/** One row height for the object outliner and its lanes. Sized to match the rest of
+ * the editor (the Build lanes are 42) instead of the cramped 25 that made the
+ * assembly items look shrunken the moment you switched to the Timeline view. */
+const ROW = 36;
 const MAX_WIDTH = 140000;
 const FRAME_STEPS = [1, 2, 5, 10, 20, 25, 50, 100, 200, 500, 1000];
 const channelLabel = (c: AnimationChannel) => c === 'visibility' ? 'Visible / Hidden' : `${c.split('.')[1].toUpperCase()} ${c.split('.')[0] === 'location' ? 'Location' : c.split('.')[0] === 'rotation' ? 'Euler Rotation' : 'Scale'}`;
@@ -573,7 +576,11 @@ export function KeyframeTimeline({ timeline, planning, buildError, instances, pl
             <button className="bm-key-icon" title={filter === 'animated' ? 'Showing keyed and selected objects; show all objects' : 'Showing all objects; show keyed only'} aria-label="Toggle animated-only filter"
               aria-pressed={filter === 'animated'} onClick={() => setFilter(filter === 'animated' ? 'all' : 'animated')}><Ic name={filter === 'animated' ? 'key' : 'box'} /></button>
           </div>
-          <div className="bm-key-outline-scroll" ref={headsRef}>
+          <div className="bm-key-outline-scroll" ref={headsRef} onScroll={(e) => {
+            // Two-way: the object list and the tracks scroll together either way round.
+            const to = editorRef.current;
+            if (to && to.scrollTop !== e.currentTarget.scrollTop) to.scrollTop = e.currentTarget.scrollTop;
+          }}>
             {rows.map((row) => {
               const active = row.target && (selectedObjects.includes(row.target) || focused === row.target);
               const num = keyFor(row).length;
@@ -593,7 +600,11 @@ export function KeyframeTimeline({ timeline, planning, buildError, instances, pl
             })}
           </div>
         </div>
-        <div className="bm-key-editor" ref={editorRef} onScroll={(e) => { if (headsRef.current) headsRef.current.scrollTop = e.currentTarget.scrollTop; setScrollState({ left: e.currentTarget.scrollLeft, width: e.currentTarget.clientWidth }); }}>
+        <div className="bm-key-editor" ref={editorRef} onScroll={(e) => {
+          const to = headsRef.current;
+          if (to && to.scrollTop !== e.currentTarget.scrollTop) to.scrollTop = e.currentTarget.scrollTop;
+          setScrollState({ left: e.currentTarget.scrollLeft, width: e.currentTarget.clientWidth });
+        }}>
           <div className="bm-key-content" style={{ width: widthPx }}>
             <div className="bm-key-ruler" onPointerDown={startScrub} role="slider" tabIndex={0} aria-label="Keyframe ruler" aria-valuemin={animation.startFrame} aria-valuemax={animation.endFrame} aria-valuenow={frameRounded} onKeyDown={(e) => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); seek(frameRounded + (e.key === 'ArrowRight' ? 1 : -1)); } }}>
               {ticks.map((tick) => <span key={tick} className="bm-key-tick" style={{ left: X(tick) }}><i />{tick}</span>)}

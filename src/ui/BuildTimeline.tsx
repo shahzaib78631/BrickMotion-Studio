@@ -335,7 +335,12 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
         </div>
       </div>
       <div className="nx-tracks">
-        <div className="nx-heads" ref={headsRef}>
+        <div className="nx-heads" ref={headsRef} onScroll={(e) => {
+          // Two-way: wheeling the lane names moves the lanes, and the lanes move the
+          // names, so a label can never drift away from its own lane.
+          const to = scrollRef.current;
+          if (to && to.scrollTop !== e.currentTarget.scrollTop) to.scrollTop = e.currentTarget.scrollTop;
+        }}>
           {(
             [
               ['steps', 'Steps', LANE],
@@ -355,7 +360,8 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
           ref={scrollRef}
           // the lane names follow the lanes when the Parts lane makes them taller than the panel
           onScroll={(e) => {
-            if (headsRef.current) headsRef.current.scrollTop = e.currentTarget.scrollTop;
+            const to = headsRef.current;
+            if (to && to.scrollTop !== e.currentTarget.scrollTop) to.scrollTop = e.currentTarget.scrollTop;
           }}
         >
           <div className="nx-content" style={{ width: contentWidth }}>

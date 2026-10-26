@@ -136,7 +136,8 @@
 .nx-meter i{width:4px;height:100%;border-radius:2px;background:linear-gradient(to top,var(--line2) var(--lvl,0%),var(--sunken) var(--lvl,0%))}
 .nx-zoom{font:500 12px ui-monospace,Menlo,monospace;color:var(--ink2);min-width:46px;text-align:center}
 .nx-tracks{display:grid;grid-template-columns:118px minmax(0,1fr);flex:1;min-height:0;overflow:hidden}
-.nx-heads{border-right:1px solid var(--line);padding-top:30px;overflow:hidden;background:var(--surface)}
+.nx-heads{border-right:1px solid var(--line);padding-top:30px;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;background:var(--surface)}
+.nx-heads::-webkit-scrollbar{display:none}
 .nx-head-row{display:flex;align-items:center;gap:2px;padding:0 6px 0 10px;border-bottom:1px solid var(--line);font-size:11px;font-weight:600;color:var(--ink2)}
 .nx-head-row span{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .nx-head-row .nx-icon{width:24px;height:24px;border-radius:6px}
