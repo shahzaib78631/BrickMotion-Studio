@@ -45,6 +45,8 @@ export type AppSettings = {
   mode: 'auto' | ArrivalMode;
   logoEnabled: boolean;
   logoCorner: LogoCorner;
+  /** the floating quick-action bar over the viewport when parts are selected */
+  showSelectionBar: boolean;
   /** the logo file as stored */
   logo: Blob | null;
   /** the decoded logo, ready to draw */
@@ -58,6 +60,7 @@ export const useAppSettings = create<AppSettings>((set) => ({
   ...DEFAULT_SETTINGS.video,
   logoEnabled: DEFAULT_SETTINGS.logoEnabled,
   logoCorner: DEFAULT_SETTINGS.logoCorner,
+  showSelectionBar: DEFAULT_SETTINGS.showSelectionBar,
   logo: null,
   logoBitmap: null,
   set: (p) => set(p),
@@ -69,6 +72,7 @@ export const toSettings = (s: AppSettings): Settings => ({
   logo: s.logo,
   logoCorner: s.logoCorner,
   logoEnabled: s.logoEnabled,
+  showSelectionBar: s.showSelectionBar,
   video: { targetSeconds: s.targetSeconds, heroOrbit: s.heroOrbit, mode: s.mode, fps: s.fps, introSeconds: s.introSeconds, buildSeconds: s.buildSeconds, outroSeconds: s.outroSeconds, studioLook: s.studioLook, cameraFraming: s.cameraFraming, camera: s.camera, format: s.format, edgeLines: s.edgeLines, linearColors: s.linearColors, bottomUp: s.bottomUp, snapSound: s.snapSound, planner: s.planner ?? 'legacy', constructionSupport: s.constructionSupport ?? 'fixture', constructionBudget: s.constructionBudget ?? 'standard', constructionStepModules: s.constructionStepModules === true, motionV4Limits: s.motionV4Limits ?? [], motionV4Mechanism: s.motionV4Mechanism ?? null, floorSort: s.floorSort, floorSides: s.floorSides },
 });
 
@@ -76,7 +80,7 @@ export async function applySettings(s: Settings): Promise<void> {
   const logoBitmap = s.logo ? await createImageBitmap(s.logo).catch(() => null) : null;
   useAppSettings
     .getState()
-    .set({ apiKey: s.apiKey, model: s.model, logo: s.logo, logoBitmap, logoCorner: s.logoCorner, logoEnabled: s.logoEnabled && !!logoBitmap, ...s.video });
+    .set({ apiKey: s.apiKey, model: s.model, logo: s.logo, logoBitmap, logoCorner: s.logoCorner, logoEnabled: s.logoEnabled && !!logoBitmap, showSelectionBar: s.showSelectionBar, ...s.video });
 }
 
 /** The animation options the timeline planner needs, taken from the video settings. */

@@ -27,6 +27,13 @@ export function SettingsPanel({ onAbout }: { onAbout(): void }) {
         </select>
       </label>
       <p className="nx-fine">The logo, video length and arrival style are under Video.</p>
+      <div className="nx-sub">Viewport</div>
+      <label className="nx-check">
+        <input type="checkbox" checked={s.showSelectionBar}
+          onChange={(e) => s.set({ showSelectionBar: e.currentTarget.checked })} />
+        Show the selection toolbar
+      </label>
+      <p className="nx-fine">The floating quick-action bar (Make Submodule, Extract, Group…) that appears over the model when parts are selected. Turn it off if it covers the build.</p>
       <div className="nx-sub">App</div>
       <button className="nx-btn" onClick={onAbout}>
         <Ic name="info" /> About and credits
