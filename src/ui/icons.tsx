@@ -1,5 +1,7 @@
 /** Line icons (Lucide shapes, MIT) drawn like the Rewind studio kit's `.ic`. */
 const PATHS = {
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>',
+  history: '<path d="M3 12a9 9 0 1 0 2.6-6.36L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>',
   parts:
     '<rect width="7" height="7" x="14" y="3" rx="1"/><path d="M10 21V8a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H3"/>',
   steps: '<path d="M10 12h11M10 18h11M10 6h11M4 10h2M4 6h1v4M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/>',

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { viewportApi } from './viewportApi';
 import { exportLDraw } from '../io/ldrawExport';
 import { planToJson, readPlanFile, attachAssemblyArtifact } from '../io/planFile';
 import { isAssemblyArtifact } from '../anim/assemblyPlan/artifact';
@@ -102,21 +103,31 @@ type Props = {
   onAbout(): void;
   onExportVideo(): void;
   canPreview: boolean;
+  onNavigate(panel: 'models' | 'parts' | 'assembly' | 'steps' | 'checks' | 'ai' | 'video' | 'settings'): void;
 };
 
-export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, canPreview }: Props) {
+export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, canPreview, onNavigate }: Props) {
   const plan = useStudio((s) => s.plan);
   const mode = useStudio((s) => s.mode);
   const canUndo = useStudio((s) => s.past.length > 0);
   const canRedo = useStudio((s) => s.future.length > 0);
   const status = useSaveStatus((s) => s.status);
-  const tool = useStudio((s) => s.tool);
   const st = useStudio.getState();
   const fileRef = useRef<HTMLInputElement>(null);
   const [savingProject, setSavingProject] = useState<SaveProgress | null>(null);
   const pieces = pieceCount(plan);
   const editingModel = useStudio((s) => s.editingModel);
   const [regenerating, setRegenerating] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [commandQuery, setCommandQuery] = useState('');
+  useEffect(() => {
+    const onKeys = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setCommandOpen((x) => !x); }
+      if (e.key === 'Escape') setCommandOpen(false);
+    };
+    window.addEventListener('keydown', onKeys);
+    return () => window.removeEventListener('keydown', onKeys);
+  }, []);
   /**
    * Plans the model being edited again: its build steps (undoable), its animation
    * (the saved one is discarded), or both.
@@ -203,133 +214,117 @@ export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, ca
   const downloadPlan = () => saveBlob(`${safeFileName(plan.name)}.plan.json`, new Blob([planToJson(plan)], { type: 'application/json' }));
   const downloadLDraw = () => saveBlob(`${safeFileName(plan.name)}.mpd`, new Blob([exportLDraw(plan, metricsOf, getColors())], { type: 'text/plain' }));
 
+  const commands: { icon: IconName; label: string; subtitle: string; action(): void }[] = [
+    { icon: 'box', label: 'Go to Models', subtitle: 'Browse the project hierarchy', action: () => onNavigate('models') },
+    { icon: 'parts', label: 'Go to Parts', subtitle: 'Search and place bricks', action: () => onNavigate('parts') },
+    { icon: 'spot', label: 'Go to Assembly', subtitle: 'Set how the model fits together', action: () => onNavigate('assembly') },
+    { icon: 'steps', label: 'Go to Animation', subtitle: 'Edit build steps', action: () => onNavigate('steps') },
+    { icon: 'video', label: 'Go to Render', subtitle: 'Export settings and video', action: () => onNavigate('video') },
+    { icon: 'folder', label: 'Open Assets & AI', subtitle: 'Assisted workflows and assets', action: () => onNavigate('ai') },
+    { icon: 'checks', label: 'Review model checks', subtitle: 'Warnings and verification', action: () => onNavigate('checks') },
+    { icon: 'settings', label: 'Open Settings', subtitle: 'Workspace and animation preferences', action: () => onNavigate('settings') },
+    { icon: 'upload', label: 'Import a model', subtitle: 'LDraw, MPD, JSON, project file', action: () => fileRef.current?.click() },
+    { icon: 'folder', label: 'Browse projects', subtitle: 'Open a saved project', action: onProjects },
+    { icon: 'fit', label: 'Fit the viewport', subtitle: 'Frame all model pieces', action: () => viewportApi.fit() },
+    { icon: 'components', label: 'Lay out all parts', subtitle: 'Organize the parts on the grid', action: () => st.setLaidOut(true) },
+    { icon: 'rotate', label: 'Regenerate steps & animation', subtitle: 'Rebuild the construction timeline', action: () => void regenerate('both') },
+    { icon: 'moon', label: 'Switch color theme', subtitle: 'Light or dark workspace', action: onTheme },
+  ];
+  const filteredCommands = commands.filter((c) => `${c.label} ${c.subtitle}`.toLowerCase().includes(commandQuery.toLowerCase()));
+  const runPaletteCommand = (action: () => void) => { setCommandOpen(false); setCommandQuery(''); action(); };
+
   return (
-    <header className="nx-head">
-      <div className="nx-head-left">
-        <span className="nx-brand">
-          <span className="nx-brand-mark">
-            <Ic name="brick" />
+    <>
+      <header className="nx-head bm-reference-head">
+        <div className="nx-head-left">
+          <span className="nx-brand" aria-label="BrickMotion">
+            <span className="nx-brand-mark"><Ic name="box" /></span>
+            <span className="nx-brand-name">BrickMotion</span>
+            <span className="bm-pro-badge">Pro</span>
           </span>
-          <span>BrickMotion</span>
-        </span>
-        <span className="nx-sep" />
-        <DropMenu
-          className="nx-file"
-          label="Project menu"
-          trigger={
-            <>
-              <Ic name="folder" /> Projects <Ic name="chevron" />
-            </>
-          }
-          items={[
-            { icon: 'plus', label: 'New project', onClick: () => void newProject() },
-            { icon: 'folder', label: 'Open project…', onClick: onProjects },
-            { icon: 'upload', label: 'Import file…', hint: `.${PROJECT_EXTENSION} .json .ldr .mpd .dat`, onClick: () => fileRef.current?.click() },
-            'sep',
-            { icon: 'download', label: savingProject ? `Planning animations to save (${savingProject.done + 1} of ${savingProject.total})…` : `Save project with animation (.${PROJECT_EXTENSION})`, disabled: pieces === 0 || !!savingProject, onClick: () => void downloadProject() },
-            { icon: 'file', label: 'Download plan (.json)', onClick: downloadPlan },
-            { icon: 'file', label: 'Download LDraw (.mpd)', onClick: downloadLDraw },
-            'sep',
-            { icon: 'info', label: 'About BrickMotion', onClick: onAbout },
-          ]}
-        />
-        <input
-          className="nx-title"
-          value={plan.name}
-          aria-label="Set name"
-          placeholder="Untitled set"
-          onChange={(e) => st.apply((p) => ({ ...p, name: e.target.value }))}
-        />
-        <input
-          ref={fileRef}
-          type="file"
-          accept={`.${PROJECT_EXTENSION},.json,.ldr,.mpd,.dat`}
-          hidden
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) void importFile(f);
-            e.target.value = '';
-          }}
-        />
-      </div>
-      <div className="bm-tools" role="radiogroup" aria-label="Tools">
-        <button
-          className={`nx-icon ${tool === 'select' ? 'on' : ''}`}
-          role="radio"
-          aria-checked={tool === 'select'}
-          aria-label="Select tool"
-          title="Select (V): click to select, drag to turn the view"
-          onClick={() => st.setTool('select')}
-        >
-          <Ic name="pointer" />
-        </button>
-        <button
-          className={`nx-icon ${tool === 'move' ? 'on' : ''}`}
-          role="radio"
-          aria-checked={tool === 'move'}
-          aria-label="Move tool"
-          title="Move (M): drag a piece to move it on the floor"
-          onClick={() => st.setTool('move')}
-        >
-          <Ic name="move" />
-        </button>
-      </div>
-      <div className="nx-head-right">
-        <button className="nx-icon" onClick={st.undo} disabled={!canUndo} title="Undo (⌘Z)" aria-label="Undo">
-          <Ic name="undo" />
-        </button>
-        <button className="nx-icon" onClick={st.redo} disabled={!canRedo} title="Redo (⇧⌘Z)" aria-label="Redo">
-          <Ic name="redo" />
-        </button>
-        {savingProject && (
-          <span className="nx-save dirty" role="status" title="The project file downloads once every animation is planned">
+          <span className="nx-sep" />
+          <DropMenu
+            className="nx-file bm-project-nav"
+            label="Project menu"
+            trigger={<>Projects <Ic name="right" /></>}
+            items={[
+              { icon: 'plus', label: 'New project', onClick: () => void newProject() },
+              { icon: 'folder', label: 'Open projects…', onClick: onProjects },
+              { icon: 'upload', label: 'Import model or project…', hint: `.${PROJECT_EXTENSION} .mpd .ldr`, onClick: () => fileRef.current?.click() },
+              'sep',
+              { icon: 'download', label: `Save project (.${PROJECT_EXTENSION})`, disabled: pieces === 0 || !!savingProject, onClick: () => void downloadProject() },
+              { icon: 'file', label: 'Download plan (.json)', onClick: downloadPlan },
+              { icon: 'file', label: 'Download LDraw (.mpd)', onClick: downloadLDraw },
+              'sep',
+              { icon: 'info', label: 'About BrickMotion', onClick: onAbout },
+            ]}
+          />
+          <input className="nx-title" value={plan.name} aria-label="Project name" title="Click to rename this project"
+            placeholder="Untitled project" onChange={(e) => st.apply((p) => ({ ...p, name: e.target.value }))} />
+          <span className={`nx-save bm-header-save ${status === 'saved' ? '' : status}`} role="status"
+            title="Changes save automatically on this device">
             <span className="nx-dot" />
-            Planning animations for the project file ({savingProject.done + 1} of {savingProject.total})…
+            {status === 'saved' ? 'Autosaved' : status === 'dirty' ? 'Saving…' : 'Save error'}
+            {status === 'saved' && <Ic name="check" />}
           </span>
-        )}
-        <span className={`nx-save ${status === 'saved' ? '' : status}`} title="Projects save in this browser">
-          <span className="nx-dot" />
-          {status === 'saved' ? 'Saved' : status === 'dirty' ? 'Saving…' : "Couldn't save"}
-        </span>
-        <button className="nx-icon" onClick={onTheme} title={theme === 'dark' ? 'Light theme' : 'Dark theme'} aria-label="Toggle theme">
-          <Ic name={theme === 'dark' ? 'sun' : 'moon'} />
+          <input ref={fileRef} type="file" accept={`.${PROJECT_EXTENSION},.json,.ldr,.mpd,.dat`} hidden
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) void importFile(f); e.target.value = ''; }} />
+        </div>
+        <button className="bm-command-trigger" aria-label="Search or run a command (Command K)"
+          onClick={() => setCommandOpen(true)}>
+          <Ic name="search" /> <span>Search or run a command…</span> <kbd>⌘K</kbd>
         </button>
-        <DropMenu
-          className="nx-btn"
-          label="Regenerate"
-          align="right"
-          trigger={
-            <>
-              <Ic name="rotate" /> {regenerating ? 'Regenerating…' : 'Regenerate'} <Ic name="chevron" />
-            </>
-          }
-          items={[
-            { icon: 'rotate', label: `Steps and animation${editingModel ? ` of ${editingModel}` : ''}`, disabled: pieces === 0 || regenerating, onClick: () => void regenerate('both') },
-            { icon: 'steps', label: 'Build steps only', disabled: pieces === 0 || regenerating, onClick: () => void regenerate('steps') },
-            { icon: 'video', label: 'Animation only', disabled: pieces === 0 || regenerating, onClick: () => void regenerate('animation') },
-          ]}
-        />
-        <button className="nx-btn" disabled={!canPreview} onClick={() => st.setMode(mode === 'edit' ? 'preview' : 'edit')}>
-          <Ic name={mode === 'edit' ? 'eye' : 'edit'} /> {mode === 'edit' ? 'Preview' : 'Edit'}
-        </button>
-        <DropMenu
-          className="nx-btn nx-primary"
-          label="Export"
-          align="right"
-          trigger={
-            <>
-              <Ic name="download" /> Export <Ic name="chevron" />
-            </>
-          }
-          items={[
-            { icon: 'video', label: 'Video (MP4)…', disabled: pieces === 0, onClick: onExportVideo },
-            'sep',
-            { icon: 'download', label: savingProject ? `Planning animations to save (${savingProject.done + 1} of ${savingProject.total})…` : `Project with animation (.${PROJECT_EXTENSION})`, disabled: pieces === 0 || !!savingProject, onClick: () => void downloadProject() },
-            { icon: 'file', label: 'Plan (.json)', onClick: downloadPlan },
-            { icon: 'file', label: 'LDraw (.mpd)', onClick: downloadLDraw },
-          ]}
-        />
-      </div>
-    </header>
+        <div className="nx-head-right">
+          {savingProject && <span className="bm-saving-progress" role="status">Saving {savingProject.done + 1}/{savingProject.total}…</span>}
+          <DropMenu className="nx-icon bm-history-button" label="Project tools" align="right"
+            trigger={<Ic name="history" />} items={[
+              { icon: 'undo', label: 'Undo', disabled: !canUndo, onClick: st.undo, hint: '⌘Z' },
+              { icon: 'redo', label: 'Redo', disabled: !canRedo, onClick: st.redo, hint: '⇧⌘Z' },
+              'sep',
+              { icon: 'rotate', label: 'Rebuild steps and animation', disabled: !pieces || regenerating, onClick: () => void regenerate('both') },
+              { icon: 'steps', label: 'Regenerate steps only', disabled: !pieces || regenerating, onClick: () => void regenerate('steps') },
+              { icon: 'video', label: 'Regenerate animation only', disabled: !pieces || regenerating, onClick: () => void regenerate('animation') },
+              'sep',
+              { icon: theme === 'dark' ? 'sun' : 'moon', label: theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme', onClick: onTheme },
+            ]} />
+          <span className="bm-head-divider" />
+          <button className="nx-icon" disabled={!canUndo} onClick={st.undo} title="Undo (⌘Z)" aria-label="Undo"><Ic name="undo" /></button>
+          <button className="nx-icon" disabled={!canRedo} onClick={st.redo} title="Redo (⇧⌘Z)" aria-label="Redo"><Ic name="redo" /></button>
+          <span className="bm-head-divider" />
+          <button className="nx-btn bm-preview-button" disabled={!canPreview}
+            onClick={() => st.setMode(mode === 'edit' ? 'preview' : 'edit')}>
+            <Ic name={mode === 'edit' ? 'play' : 'edit'} />{mode === 'edit' ? 'Preview' : 'Back to editor'} <Ic name="right" />
+          </button>
+          <DropMenu className="nx-btn nx-primary bm-export-button" label="Export" align="right"
+            trigger={<><Ic name="download" /> Export <Ic name="chevron" /></>}
+            items={[
+              { icon: 'video', label: 'Export video (MP4)…', disabled: pieces === 0, onClick: onExportVideo },
+              'sep',
+              { icon: 'download', label: `Project with animation (.${PROJECT_EXTENSION})`, disabled: pieces === 0 || !!savingProject, onClick: () => void downloadProject() },
+              { icon: 'file', label: 'Plan (.json)', onClick: downloadPlan },
+              { icon: 'file', label: 'LDraw (.mpd)', onClick: downloadLDraw },
+            ]} />
+        </div>
+      </header>
+      {commandOpen && <div className="bm-command-backdrop" role="presentation" onMouseDown={(e) => {
+        if (e.target === e.currentTarget) { setCommandOpen(false); setCommandQuery(''); }
+      }}>
+        <div className="bm-command-dialog" role="dialog" aria-modal="true" aria-label="Search or run a command">
+          <div className="bm-command-search-row"><Ic name="search" /><input autoFocus aria-label="Search commands"
+            placeholder="Where would you like to go?" value={commandQuery} onChange={(e) => setCommandQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && filteredCommands[0]) runPaletteCommand(filteredCommands[0].action); }} />
+            <kbd>ESC</kbd></div>
+          <div className="bm-command-results"><span className="bm-command-results-label">{commandQuery ? 'Matching commands' : 'Quick actions'}</span>
+            {filteredCommands.map((c) => <button key={c.label} onClick={() => runPaletteCommand(c.action)}>
+              <span className="bm-command-result-icon"><Ic name={c.icon} /></span>
+              <span><strong>{c.label}</strong><small>{c.subtitle}</small></span>
+              <Ic name="right" />
+            </button>)}
+            {!filteredCommands.length && <div className="bm-command-no-results">No matching actions. Try “import”, “models”, or “export”.</div>}
+          </div>
+          <footer>Use <kbd>Enter</kbd> to open the first result <span>BrickMotion Command Center</span></footer>
+        </div>
+      </div>}
+    </>
   );
 }

@@ -17,10 +17,14 @@ import { animationOf } from './anim/keyframes';
 import { linkBuildLayer } from './anim/buildLayer';
 import { fillMotionKeyframes, missingMotionKeyTargets } from './anim/motion/autoBake';
 import { checkEditedMotion } from './anim/motionDiagnostics';
+import { CapturePanel } from './ui/CapturePanel';
 import { ChecksPanel } from './ui/ChecksPanel';
 import { ExportDialog, type ExportJob } from './ui/ExportDialog';
 import { Ic, type IconName } from './ui/icons';
 import { Inspector } from './ui/Inspector';
+import { ViewportChrome } from './ui/ViewportChrome';
+import { NewSubmodelDialog } from './ui/NewSubmodelDialog';
+import { createSubmodel } from './plan/createSubmodel';
 import { ModelsPanel } from './ui/ModelsPanel';
 import { StepCallout } from './ui/StepCallout';
 import { PartsPanel } from './ui/PartsPanel';
@@ -35,16 +39,17 @@ import { viewportApi } from './ui/viewportApi';
 import './ui/studio.css';
 import './ui/app.css';
 import './ui/keyframes.css';
+import './ui/reference.css';
 
-type Tab = 'models' | 'parts' | 'assembly' | 'steps' | 'checks' | 'ai' | 'video' | 'settings';
+type Tab = 'models' | 'parts' | 'assembly' | 'steps' | 'checks' | 'ai' | 'video' | 'capture' | 'settings';
 const TABS: [Tab, IconName, string][] = [
   ['models', 'box', 'Models'],
   ['parts', 'parts', 'Parts'],
   ['assembly', 'spot', 'Assembly'],
-  ['steps', 'steps', 'Steps'],
-  ['checks', 'checks', 'Checks'],
-  ['ai', 'ai', 'AI'],
-  ['video', 'video', 'Video'],
+  ['steps', 'steps', 'Animation'],
+  ['video', 'camera', 'Render'],
+  ['capture', 'video', 'Capture'],
+  ['ai', 'folder', 'Assets'],
   ['settings', 'settings', 'Settings'],
 ];
 
@@ -67,14 +72,14 @@ function Studio() {
   const model = useModel();
   const mode = useStudio((s) => s.mode);
   const timelineEditor = useStudio((s) => s.timelineEditor);
-  const gizmoEnabled = useStudio((s) => s.gizmoEnabled);
-  const gizmoMode = useStudio((s) => s.gizmoMode);
   const editingModel = useStudio((s) => s.editingModel);
-  const setMode = useStudio((s) => s.setMode);
+  const selection = useStudio((s) => s.selection);
+  const currentStep = useStudio((s) => s.currentStep);
   const video = useAppSettings();
-  const [tab, setTab] = useState<Tab>(() => (load('bm-tab') as Tab) ?? 'parts');
+  const [tab, setTab] = useState<Tab>(() => (load('bm-tab') as Tab) ?? 'models');
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (load('bm-theme') === 'dark' ? 'dark' : 'light'));
-  const [tlHeight, setTlHeight] = useState(() => Number(load('bm-tl-h')) || 236);
+  const [tlHeight, setTlHeight] = useState(() => Number(load('bm-tl-h')) || 176);
+  const [newSubmodelOpen, setNewSubmodelOpen] = useState(false);
   const [dialog, setDialog] = useState<'projects' | 'about' | null>(null);
   const [exportJobs, setExportJobs] = useState<ExportJob[] | null>(null);
   const [motionKeyError, setMotionKeyError] = useState('');
@@ -143,6 +148,16 @@ function Studio() {
     setExportJobs([{ model: editingModel, label: editingModel || 'Main model' }]);
   };
   const canPreview = model.ready && model.view.instances.length > 0 && timeline !== null && !planning && !planError;
+  const selectedIds = selection.model === editingModel ? selection.ids : [];
+  const makeSubmodel = () => { if (selectedIds.length >= 2) setNewSubmodelOpen(true); };
+  const onCreateSubmodel = (name: string): boolean => {
+    const current = useStudio.getState();
+    const result = createSubmodel(current.plan, current.editingModel, current.selection.ids, model.view.nodes, name);
+    if (!result) return false;
+    current.apply(() => result.plan);
+    current.select([result.referenceId]);
+    return true;
+  };
   // Assembly-spot overlaps are found statically on the main thread and shown in Checks.
   const spotIssues = useMemo(() => spotWarnings(model.plan, model.assembly, timeline), [model.plan, model.assembly, timeline]);
   const warnings = useMemo(() => [...model.warnings, ...spotIssues], [model.warnings, spotIssues]);
@@ -178,7 +193,7 @@ function Studio() {
 
   return (
     <div className="studio" data-theme={theme}>
-      <div className="nx" style={{ '--tl-h': `${tlHeight}px` } as React.CSSProperties}>
+      <div className={`nx ${selectedIds.length ? 'has-sel' : ''}`} style={{ '--tl-h': `${tlHeight}px` } as React.CSSProperties}>
         <Toolbar
           theme={theme}
           onTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
@@ -186,11 +201,12 @@ function Studio() {
           onAbout={() => setDialog('about')}
           onExportVideo={exportCurrent}
           canPreview={canPreview}
+          onNavigate={(panel) => setTab(panel)}
         />
         <div className="nx-work">
           <nav className="nx-rail" aria-label="Panels">
             {TABS.map(([id, icon, label]) => (
-              <button key={id} className={`nx-tab ${tab === id ? 'active' : ''}`} aria-pressed={tab === id} onClick={() => setTab(id)}>
+              <button key={id} className={`nx-tab ${tab === id ? 'active' : ''}`} aria-pressed={tab === id} title={label} onClick={() => setTab(id)}>
                 <Ic name={icon} />
                 {label}
                 {id === 'checks' && warnings.length > 0 && <span className="bm-rail-badge">{warnings.length}</span>}
@@ -198,103 +214,51 @@ function Studio() {
             ))}
           </nav>
           <section className="nx-panel">
-            {tab === 'models' && <ModelsPanel model={model} onExport={setExportJobs} />}
+            {tab === 'models' && <ModelsPanel model={model} onExport={setExportJobs} onMakeSubmodel={makeSubmodel} />}
             {tab === 'parts' && <PartsPanel />}
             {tab === 'assembly' && <AssemblyPanel model={model} timeline={timeline} />}
             {tab === 'steps' && <StepsPanel timeline={timeline} />}
             {tab === 'checks' && <ChecksPanel warnings={warnings} />}
             {tab === 'ai' && <AiPanel warnings={warnings} onOpenSettings={() => setTab('settings')} />}
             {tab === 'video' && <VideoPanel timeline={timeline} onExport={exportCurrent} />}
+            {tab === 'capture' && <CapturePanel model={model} />}
             {tab === 'settings' && <SettingsPanel onAbout={() => setDialog('about')} />}
           </section>
           <section className="nx-viewer">
             <div className="nx-viewer-bar">
-              <div className="nx-row">
-                {mode === 'preview' ? (
-                  <span className="nx-chip">
-                    Preview · {editingModel || 'Main model'} · {video.format}
-                  </span>
-                ) : editingModel ? (
-                  <span className="bm-crumb">
-                    <button className="nx-link" onClick={() => useStudio.getState().setEditingModel('')}>
-                      Main model
-                    </button>
-                    <Ic name="right" />
-                    <strong>{editingModel}</strong>
-                  </span>
-                ) : (
-                  <span className="bm-crumb"><strong>Main model</strong></span>
-                )}
+              <div className="bm-crumb" aria-label="Current model">
+                {editingModel ? <>
+                  <button className="bm-crumb-parent" onClick={() => useStudio.getState().setEditingModel('')}>Main model</button>
+                  <Ic name="right" />
+                  <strong>{editingModel}</strong>
+                </> : <><span>Main model</span><Ic name="right" /><strong>{mode === 'preview' ? 'Preview' : 'Workspace'}</strong></>}
               </div>
-              <div className="nx-row">
-                <div className="nx-seg" role="radiogroup" aria-label="View">
-                  <button role="radio" aria-checked={mode === 'edit'} className={mode === 'edit' ? 'on' : ''} onClick={() => setMode('edit')}>
-                    Build
-                  </button>
-                  <button
-                    role="radio"
-                    aria-checked={mode === 'preview'}
-                    className={mode === 'preview' ? 'on' : ''}
-                    disabled={!canPreview}
-                    onClick={() => setMode('preview')}
-                  >
-                    Preview
-                  </button>
-                </div>
-                {mode === 'edit' && (
-                  <div className="bm-gizmo-bar" aria-label="Transform gizmo controls">
-                    <button className={`nx-btn nx-sm bm-gizmo-toggle ${gizmoEnabled ? 'on' : ''}`}
-                      aria-pressed={gizmoEnabled} aria-label="Enable transform gizmo" title="Show or hide the Blender-style transform gizmo (G)"
-                      onClick={() => useStudio.getState().setGizmo(!gizmoEnabled)}>
-                      <Ic name="move" /> Gizmo {gizmoEnabled ? 'On' : 'Off'}
-                    </button>
-                    {gizmoEnabled && (
-                      <div className="nx-seg bm-gizmo-modes" role="radiogroup" aria-label="Gizmo operation">
-                        {([
-                          ['translate', 'move', 'Move selected bricks (studs / plates)'],
-                          ['rotate', 'rotate', 'Rotate selection (15° steps, Shift: free)'],
-                          ['scale', 'scale', 'Scale selection (changes brick dimensions)'],
-                        ] as const).map(([id, icon, label]) => (
-                          <button key={id} role="radio" aria-label={label} title={label}
-                            aria-checked={gizmoMode === id} className={gizmoMode === id ? 'on' : ''}
-                            onClick={() => useStudio.getState().setGizmoMode(id)}>
-                            <Ic name={icon} />
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-                <button
-                  className="nx-icon"
-                  title="Fit the model in view (F)"
-                  aria-label="Fit view"
-                  disabled={mode !== 'edit'}
-                  onClick={() => viewportApi.fit()}
-                >
-                  <Ic name="fit" />
-                </button>
+              <div className="bm-workspace-top-help">
+                {warnings.length > 0 && <button title="View model warnings" onClick={() => setTab('checks')}><Ic name="checks" /> {warnings.length} warnings</button>}
+                <button onClick={() => viewportApi.fit()} title="Fit viewport"><Ic name="fit" /> Fit</button>
               </div>
             </div>
             <div className="nx-stage bm-stage">
               <Viewport model={model} timeline={timeline} />
+              <ViewportChrome model={model} onMakeSubmodel={makeSubmodel} />
               {mode === 'preview' && timeline && <PreviewPlayer model={model} timeline={timeline} />}
               {mode === 'preview' && !timeline && <div className="overlay-note">{planError ? `Couldn't plan the animation: ${planError}` : 'Planning the build animation…'}</div>}
             </div>
           </section>
-          <Inspector timeline={timeline} checks={warnings.length} stepCard={mode === 'edit' ? <StepCallout model={model} timeline={timeline} /> : null} />
+          <Inspector model={model} onMakeSubmodel={makeSubmodel} timeline={timeline} checks={warnings.length} stepCard={mode === 'edit' ? <StepCallout model={model} timeline={timeline} /> : null} />
         </div>
         <div className="nx-resizer" onPointerDown={resize} title="Drag to resize the timeline" />
         <div className="bm-timeline-shell">
           <div className="bm-timeline-modebar">
-            <span className="bm-timeline-mode-label"><Ic name="steps" /> Animation editor</span>
+            <span className="bm-timeline-mode-label"><Ic name="video" /> Animation Editor</span>
             <div className="bm-timeline-mode-switch" role="tablist" aria-label="Timeline workspace">
               <button role="tab" aria-selected={timelineEditor === 'build'} className={timelineEditor === 'build' ? 'active' : ''}
                 onClick={() => useStudio.getState().setTimelineEditor('build')}><Ic name="brick" /> Build</button>
               <button role="tab" aria-selected={timelineEditor === 'timeline'} className={timelineEditor === 'timeline' ? 'active' : ''}
                 onClick={() => { useStudio.getState().setTimelineEditor('timeline'); setTlHeight((h) => Math.max(340, h)); }}><Ic name="key" /> Timeline</button>
+              <button role="tab" aria-selected={false} title="Open motion keyframes" className="bm-motion-tab" onClick={() => { useStudio.getState().setTimelineEditor('timeline'); setTlHeight((h) => Math.max(320, h)); }}>Motion</button>
             </div>
-          <span className="bm-timeline-mode-hint">{timelineEditor === 'build' ? 'Automatic assembly & steps' : video.planner === 'standard-motion' ? 'Every part has editable motion tracks' : 'Dope Sheet · Object keyframes'}</span>
+          <span className="bm-timeline-step-name"><strong>Step {Math.min((currentStep ?? 0) + 1, Math.max(1, timeline?.steps.length ?? 1))} of {timeline?.steps.length ?? '—'}</strong><span>·</span><span>{timelineEditor === 'build' ? 'Building ' + (editingModel || 'main model') : 'Editing motion keyframes'}</span><Ic name="edit" /></span>
           {video.planner === 'standard-motion' && timelineEditor === 'timeline' && (motionKeyError || motionKeyStatus) &&
             <span role="status" title={motionKeyError || motionKeyStatus} className="bm-timeline-mode-hint">{motionKeyError || motionKeyStatus}</span>}
           {timelineEditor === 'build' && timeline && !planning && !planError && <button className="bm-link-build"
@@ -322,6 +286,7 @@ function Studio() {
                 instances={model.view.instances} placements={instancePlacements(model.plan, editingModel, model.assembly)} />}
         </div>
       </div>
+      {newSubmodelOpen && <NewSubmodelDialog plan={model.plan} count={selectedIds.length} onCreate={onCreateSubmodel} onClose={() => setNewSubmodelOpen(false)} />}
       {dialog === 'projects' && <ProjectsDialog onClose={() => setDialog(null)} />}
       {dialog === 'about' && <AboutDialog onClose={() => setDialog(null)} />}
       {exportJobs && exportJobs.length > 0 && <ExportDialog plan={model.plan} jobs={exportJobs} mode={timelineEditor} onClose={() => setExportJobs(null)} />}

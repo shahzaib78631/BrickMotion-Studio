@@ -9,7 +9,8 @@ import { useStudio } from '../state/store';
 import type { ModelState } from '../state/useModel';
 import type { ExportJob } from './ExportDialog';
 import { Ic } from './icons';
-import { PaneHead } from './PaneHead';
+import { availableSubmodelName } from '../plan/createSubmodel';
+import { newProject } from '../state/persistence';
 import { ContextMenu, type ContextItem } from './ContextMenu';
 import { PartsDialog } from './PartsDialog';
 import { importAsSubmodel } from '../plan/modelFiles';
@@ -69,10 +70,38 @@ export function modelOutline(plan: Plan): Row[] {
  * Every model of the set with its own build: open it, play its assembly on its own,
  * or export it as a separate MP4 (one at a time or all submodels in one go).
  */
-export function ModelsPanel({ model, onExport }: { model: ModelState; onExport(jobs: ExportJob[]): void }) {
+export function ModelsPanel({ model, onExport, onMakeSubmodel }: { model: ModelState; onExport(jobs: ExportJob[]): void; onMakeSubmodel(): void }) {
   const plan = useStudio((s) => s.plan);
   const editingModel = useStudio((s) => s.editingModel);
   const rows = useMemo(() => modelOutline(plan), [plan]);
+  const [query, setQuery] = useState('');
+  const [newOpen, setNewOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const selection = useStudio((s) => s.selection);
+  const selectedCount = selection.model === editingModel ? selection.ids.length : 0;
+  const toggleModel = (name: string) => setCollapsed((old) => {
+    const next = new Set(old);
+    if (next.has(name)) next.delete(name);
+    else next.add(name);
+    return next;
+  });
+  const matches = rows.filter((r, index) => {
+    if (query.trim()) return (r.name || 'Main model').toLowerCase().includes(query.trim().toLowerCase());
+    let depth = r.depth;
+    for (let at = index - 1; at >= 0 && depth > 0; at--) {
+      if (rows[at].depth >= depth) continue;
+      if (collapsed.has(rows[at].name)) return false;
+      depth = rows[at].depth;
+    }
+    return true;
+  });
+  const hasChildren = (index: number) => index < rows.length - 1 && rows[index + 1].depth > rows[index].depth;
+  const createBlankSubmodel = () => {
+    const name = availableSubmodelName(useStudio.getState().plan);
+    useStudio.getState().apply((p) => ({ ...p, submodels: { ...p.submodels, [name]: { steps: [{ pieces: [] }] } } }));
+    setNewOpen(false);
+    open(name);
+  };
   const subs = rows.filter((r) => r.name && r.total > 0);
   const label = (name: string) => name || 'Main model';
   const open = (name: string) => {
@@ -135,71 +164,91 @@ export function ModelsPanel({ model, onExport }: { model: ModelState; onExport(j
   };
 
   return (
-    <div className="nx-pane">
-      <PaneHead id="models" title="Models" count={rows.length}
-        help="Each model has its own build timeline. Open one to edit, preview and export it on its own; the main model builds every submodel aside and attaches it. Right-click a model for more." />
-      {saving && (
-        <p className="nx-hint" role="status">
-          Planning animations for {label(saving.name)}'s project file ({saving.progress.done + 1} of {saving.progress.total})…
-        </p>
-      )}
+    <div className="nx-pane bm-models-pane">
+      <div className="nx-pane-head bm-models-heading">
+        <h3>Models <span className="nx-count">{rows.length}</span></h3>
+        <div className="bm-new-wrap">
+          <button className={`nx-btn nx-primary bm-new-model ${newOpen ? 'on' : ''}`} onClick={() => setNewOpen((open) => !open)}
+            aria-haspopup="menu" aria-expanded={newOpen} aria-label="Create a model or submodule">
+            <Ic name="plus" /> New <Ic name="chevron" />
+          </button>
+          {newOpen && <>
+            <button className="bm-menu-scrim" aria-label="Close new model menu" onClick={() => setNewOpen(false)} />
+            <div className="nx-menu bm-new-menu" role="menu" aria-label="New model">
+              <button role="menuitem" onClick={() => { setNewOpen(false); void newProject(); }}><Ic name="box" /> New Model</button>
+              <button role="menuitem" onClick={createBlankSubmodel}><Ic name="components" /> New Submodule</button>
+              <button role="menuitem" disabled={selectedCount < 2} onClick={() => { setNewOpen(false); onMakeSubmodel(); }}>
+                <Ic name="fit" /> From Selection ({selectedCount} parts)
+              </button>
+            </div>
+          </>}
+        </div>
+      </div>
+      <label className="bm-model-search"><Ic name="zoomIn" />
+        <input type="search" value={query} onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search models, submodules…" aria-label="Search models and submodules" />
+        {query && <button className="nx-icon" title="Clear search" aria-label="Clear search" onClick={() => setQuery('')}><Ic name="x" /></button>}
+      </label>
+      {saving && <p className="nx-hint" role="status">Planning animations for {label(saving.name)}'s project file ({saving.progress.done + 1} of {saving.progress.total})…</p>}
       <input ref={fileInput} type="file" hidden accept={`.${PROJECT_EXTENSION},.json,.ldr,.mpd,.dat`} onChange={(e) => {
-        const f = e.currentTarget.files?.[0];
-        e.currentTarget.value = '';
-        if (f) void importFile(f);
+        const f = e.currentTarget.files?.[0]; e.currentTarget.value = ''; if (f) void importFile(f);
       }} />
       {menu && <ContextMenu x={menu.x} y={menu.y} label={`${label(menu.name)} menu`} items={menuItems(menu.name)} onClose={closeMenu} />}
       {partsFor !== null && <PartsDialog model={model} onClose={() => setPartsFor(null)} />}
-      <ul className="bm-models" aria-label="Models in this set">
-        {rows.map((r) => {
-          const active = editingModel === r.name;
-          return (
-            <li key={r.name || '(main)'} className={`bm-model-row ${active ? 'active' : ''} ${r.used ? '' : 'unused'} ${menu?.name === r.name ? 'menu-open' : ''}`} style={{ paddingLeft: 8 + r.depth * 14 }}
+      <div className="bm-models-scroll">
+        <ul className="bm-models" aria-label="Models in this set">
+          {matches.map((r) => {
+            const active = editingModel === r.name;
+            const at = rows.indexOf(r);
+            const expandable = hasChildren(at);
+            const chip = /frame/i.test(r.name) ? 'Core' : /rotor|motor|motion/i.test(r.name) ? 'Motion' : null;
+            return <li key={r.name || '(main)'}
+              className={`bm-model-row ${active ? 'active' : ''} ${r.used ? '' : 'unused'} ${menu?.name === r.name ? 'menu-open' : ''}`}
+              style={{ paddingLeft: `${3 + r.depth * 14}px` }}
               onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, name: r.name }); }}>
+              <button className={`bm-model-expand ${expandable ? '' : 'is-leaf'} ${collapsed.has(r.name) ? 'is-collapsed' : ''}`}
+                aria-label={expandedLabel(r.name, collapsed.has(r.name))} aria-expanded={expandable ? !collapsed.has(r.name) : undefined}
+                onClick={() => expandable && toggleModel(r.name)} tabIndex={expandable ? 0 : -1}>
+                {expandable && <Ic name="chevron" />}
+              </button>
               <button className="bm-model-main" onClick={() => open(r.name)} aria-current={active} title={`Open ${label(r.name)}`}>
-                <Ic name={r.name ? 'box' : 'brick'} />
+                <span className="bm-model-cube"><Ic name={r.name ? 'box' : 'brick'} /></span>
                 <span className="bm-model-text">
-                  <strong>{label(r.name)}</strong>
-                  <span className="nx-hint">
-                    {r.total} part{r.total === 1 ? '' : 's'} · {r.steps} step{r.steps === 1 ? '' : 's'}
-                    {r.name && r.uses > 1 ? ` · used ×${r.uses}` : ''}
-                    {!r.used ? ' · not used' : ''}
-                  </span>
+                  <span className="bm-model-title"><strong>{label(r.name)}</strong>{chip && <em className={`bm-model-tag ${chip.toLowerCase()}`}>{chip}</em>}</span>
+                  <span className="nx-hint">{r.total.toLocaleString()} parts <b>·</b> {r.steps} steps{r.uses > 1 ? ` · ×${r.uses}` : ''}</span>
                 </span>
               </button>
               <div className="bm-model-actions">
-                {r.bigStep && (
-                  <button className="nx-icon" title={`All ${r.direct} parts are in one step. Split into bottom-up layer steps`} aria-label={`Auto-split ${label(r.name)} into steps`} onClick={() => split(r.name)}>
-                    <Ic name="wand" />
-                  </button>
-                )}
-                {r.splittable && (
-                  <button className="nx-icon" title={`Build in components: the underside groups and the roof of ${label(r.name)} are built aside as their own submodels, then attached`} aria-label={`Build ${label(r.name)} in components`} disabled={!model.ready} onClick={() => components(r.name)}>
-                    <Ic name="components" />
-                  </button>
-                )}
-                <button className="nx-icon" title={`Play ${label(r.name)}'s build on its own`} aria-label={`Play ${label(r.name)}`} disabled={!model.ready || r.total === 0} onClick={() => play(r.name)}>
-                  <Ic name="play" />
-                </button>
-                <button className="nx-icon" title={`Export ${label(r.name)} as its own MP4`} aria-label={`Export ${label(r.name)} as MP4`} disabled={!model.ready || r.total === 0} onClick={() => onExport([{ model: r.name, label: label(r.name) }])}>
-                  <Ic name="download" />
-                </button>
+                <button className="nx-icon bm-model-eye" title={`View ${label(r.name)} in the viewport`}
+                  aria-label={`Show ${label(r.name)} in viewport`} onClick={() => { open(r.name); viewportFitSoon(); }}><Ic name="eye" /></button>
+                <button className="nx-icon bm-model-more" title={`Actions for ${label(r.name)}`} aria-label={`Actions for ${label(r.name)}`}
+                  onClick={(e) => { const rect = e.currentTarget.getBoundingClientRect(); setMenu({ x: rect.left, y: rect.bottom + 4, name: r.name }); }}><Ic name="more" /></button>
               </div>
-            </li>
-          );
-        })}
-      </ul>
-      {subs.length > 0 && (
-        <div className="bm-models-batch">
-          <button className="nx-btn nx-sm" disabled={!model.ready} onClick={() => onExport(subs.map((r) => ({ model: r.name, label: r.name })))}>
-            <Ic name="video" /> Export all {subs.length} submodels
-          </button>
-          <button className="nx-btn nx-sm" disabled={!model.ready} onClick={() => onExport([{ model: '', label: 'Main model' }, ...subs.map((r) => ({ model: r.name, label: r.name }))])}>
-            <Ic name="download" /> Export everything
-          </button>
-          <p className="nx-fine">One MP4 per model, rendered one after another with your Video settings.</p>
-        </div>
-      )}
+            </li>;
+          })}
+          {matches.length === 0 && <li className="bm-model-empty"><Ic name="zoomIn" /><strong>No models found</strong><span>Try another search or create a submodule.</span></li>}
+        </ul>
+        {rows.length === 1 && rows[0].total === 0 && <p className="bm-model-intro">Start a project by importing a model from Projects, or add a part from the Parts panel.</p>}
+      </div>
+      <div className="bm-models-batch">
+        <h4>Quick actions</h4>
+        <button className="nx-btn" disabled={!model.ready || !rows.find((r) => r.name === editingModel)?.total}
+          onClick={() => onExport([{ model: editingModel, label: label(editingModel) }])}>
+          <Ic name="download" /> Export selected ({(rows.find((r) => r.name === editingModel)?.total || 0).toLocaleString()} parts)
+        </button>
+        <button className="nx-btn" disabled={!model.ready || !subs.length}
+          onClick={() => onExport(subs.map((r) => ({ model: r.name, label: r.name })))}>
+          <Ic name="components" /> Export all submodules
+        </button>
+      </div>
     </div>
   );
+}
+
+function expandedLabel(name: string, collapsed: boolean) {
+  return `${collapsed ? 'Expand' : 'Collapse'} ${name || 'Main model'}`;
+}
+
+function viewportFitSoon() {
+  requestAnimationFrame(() => import('./viewportApi').then(({ viewportApi }) => viewportApi.fit()));
 }
