@@ -18,14 +18,14 @@ const planWith = (useCameraForVideo: boolean): Plan => ({
 
 afterEach(cleanup);
 
-test('warns that a saved scene camera replaces the intro and hero orbit, and can switch it off', async () => {
+test('says a saved scene camera takes over after the intro, and can switch it off', async () => {
   const plan = planWith(true);
   useStudio.getState().setPlan(plan, { resetHistory: true });
   render(<ExportDialog plan={plan} jobs={[{ model: '', label: 'Main model' }]} onClose={() => undefined} />);
   // the warning names the camera and says what is missing
   const banner = await screen.findByRole('note');
   expect(banner.textContent).toContain('Hero cam');
-  expect(banner.textContent).toContain('the intro and the hero orbit do not appear');
+  expect(banner.textContent).toContain('the intro moves into its shot');
   // one click restores the automatic video camera
   const button = await screen.findByRole('button', { name: /Use the automatic camera/i });
   button.click();

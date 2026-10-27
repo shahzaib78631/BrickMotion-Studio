@@ -2,11 +2,11 @@ import * as THREE from 'three';
 import { AudioBufferSource, BufferTarget, CanvasSource, Mp4OutputFormat, Output, QUALITY_HIGH, QUALITY_MEDIUM, canEncodeAudio, canEncodeVideo } from 'mediabunny';
 import { snapsOf, type Snap } from '../anim/snaps';
 import { renderSnapTrack } from '../audio/snapSound';
-import { buildViewCamera, cameraAt, cameraFov, fitDistance, sphericalPosition, worldBox3, DEFAULT_CAMERA_SETTINGS, type CamPose, type CameraFraming, type CameraSettings, type EditorCamera } from '../anim/camera';
+import { buildViewCamera, cameraAt, introInto, cameraFov, fitDistance, sphericalPosition, worldBox3, DEFAULT_CAMERA_SETTINGS, type CamPose, type CameraFraming, type CameraSettings, type EditorCamera } from '../anim/camera';
 import { buildLayerAt } from '../anim/buildLayer';
 import { makeKeyframePose } from '../anim/keyframePose';
-import type { StudioLook, RenderOptions } from '../render/studio';
-import { applySceneCamera, applyCameraCrop, type SceneSetup } from '../render/sceneSetup';
+import type { StudioLook, RenderOptions, Materials } from '../render/studio';
+import { applySceneCamera, applyCameraCrop, sceneCameraPose, type SceneSetup } from '../render/sceneSetup';
 import { poseAt, type Timeline } from '../anim/timeline';
 import type { Instance } from '../model/assemble';
 import type { KeyframeAnimation } from '../plan/types';
@@ -26,6 +26,8 @@ type CommonExportOpts = {
   sceneSetup?: SceneSetup;
   /** Edge lines and colour response; the studio's defaults when left out. */
   render?: RenderOptions;
+  /** Brick finish, texture and floor; the studio's defaults when left out. */
+  materials?: Materials;
   logo: { image: ImageBitmap; corner: LogoCorner } | null;
   snapSound?: boolean;
   onProgress: (done: number, total: number) => void;
@@ -96,6 +98,10 @@ export type FrameSampler = {
   groundY: number;
   at: (seconds: number) => (key: string) => THREE.Matrix4 | null;
   camera: (seconds: number, aspect: number) => CamPose;
+  /** the camera above is the final shot (viewport or scene camera): only the render crop is added */
+  ownsCamera?: boolean;
+  /** clipping planes of that shot, when it has its own */
+  near?: { near: number; far: number };
   snaps?: Snap[];
 };
 
@@ -117,6 +123,7 @@ export async function encodeMp4(opts: CommonExportOpts, deps: ExportDeps, sample
   try {
     studio.setLook?.(opts.studioLook ?? 'soft');
     if (opts.render) studio.setRenderOptions?.(opts.render);
+    if (opts.materials) studio.setMaterials?.(opts.materials);
     studio.setSceneSetup(opts.sceneSetup, false, null, w / h);
     studio.setSize(w, h);
     studio.bricks.setInstances(opts.instances);
@@ -139,8 +146,9 @@ export async function encodeMp4(opts: CommonExportOpts, deps: ExportDeps, sample
       studio.perspective.position.copy(cam.position);
       studio.perspective.lookAt(cam.target);
       studio.perspective.fov = cam.fov;
+      if (samples.near) { studio.perspective.near = samples.near.near; studio.perspective.far = samples.near.far; }
       studio.perspective.updateProjectionMatrix();
-      if (opts.buildView) applyCameraCrop(studio.perspective, opts.sceneSetup);
+      if (opts.buildView || samples.ownsCamera) applyCameraCrop(studio.perspective, opts.sceneSetup);
       else if (!applySceneCamera(studio.perspective, opts.sceneSetup)) applyCameraCrop(studio.perspective, opts.sceneSetup);
       studio.render();
       if (opts.logo && ctx) {
@@ -165,14 +173,20 @@ export async function encodeMp4(opts: CommonExportOpts, deps: ExportDeps, sample
 /** Existing collision-certified construction video, unchanged in semantics. */
 export function exportVideo(opts: ExportOpts, deps: ExportDeps): Promise<Blob> {
   const tl = opts.timeline;
+  const scene = opts.buildView ? null : sceneCameraPose(opts.sceneSetup);
   return encodeMp4(opts, deps, {
     duration: tl.duration,
     box: worldBox3(tl.sceneBox),
     groundY: -tl.ground / 20,
     at: (seconds) => poseAt(tl, seconds),
     camera: opts.buildView
-      ? (seconds, aspect) => buildViewCamera(tl, opts.buildView!, aspect, opts.camera ?? DEFAULT_CAMERA_SETTINGS)(seconds)
-      : (seconds, aspect) => cameraAt(tl, seconds, aspect, opts.cameraFraming ?? 'cinematic', opts.camera),
+      ? (seconds, aspect) => buildViewCamera(tl, opts.buildView!, aspect, opts.camera ?? DEFAULT_CAMERA_SETTINGS, opts.cameraFraming ?? 'cinematic')(seconds)
+      : scene
+        // the scene camera holds its shot, after the same intro the Build view plays
+        ? (seconds, aspect) => introInto(tl, scene, aspect, opts.cameraFraming ?? 'cinematic', opts.camera ?? DEFAULT_CAMERA_SETTINGS)(seconds)
+        : (seconds, aspect) => cameraAt(tl, seconds, aspect, opts.cameraFraming ?? 'cinematic', opts.camera),
+    ownsCamera: !opts.buildView && !!scene,
+    near: scene ? { near: scene.near, far: scene.far } : undefined,
     snaps: snapsOf(tl),
   });
 }

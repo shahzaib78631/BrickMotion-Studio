@@ -1,11 +1,11 @@
 import { create } from 'zustand';
-import type { AnimOptions, ArrivalMode, FloorSides, FloorSort } from '../anim/pacing';
+import type { AnimOptions, ArrivalMode, FloorSides, FloorSort, FloorStyle, FloorMatch } from '../anim/pacing';
 import type { JointLimitRule } from '../anim/motion/v4/jointLimits';
 import type { MechanismProgram } from '../anim/motion/v4/mechanismProgram';
 import { CONSTRUCTION_BUDGET_PRESETS, type ConstructionBudgetPreset } from '../anim/construction/budgetPresets';
 import type { LogoCorner } from '../export/exportVideo';
 import type { ExportFps } from '../export/frameRates';
-import type { StudioLook } from '../render/studio';
+import type { Materials, StudioLook } from '../render/looks';
 import type { CameraFraming, CameraSettings } from '../anim/camera';
 import { DEFAULT_SETTINGS, type Settings } from '../storage/settings';
 import type { VideoFormat } from '../export/formats';
@@ -37,6 +37,11 @@ export type AppSettings = {
   /** how pieces waiting on the floor are grouped, and where around the model */
   floorSort: FloorSort;
   floorSides: FloorSides;
+  floorStyle: FloorStyle;
+  /** waiting pieces fill the bands in order, or wait on the side they are built on */
+  floorMatch: FloorMatch;
+  /** brick finish, surface texture and floor surface */
+  materials: Materials;
   /** a click each time pieces connect, in playback and the MP4 */
   snapSound: boolean;
   introSeconds: number | null;
@@ -81,7 +86,7 @@ export const toSettings = (s: AppSettings): Settings => ({
   showSelectionBar: s.showSelectionBar,
   cameraFollowsPlayback: s.cameraFollowsPlayback,
   exportCamera: s.exportCamera ?? 'automatic',
-  video: { targetSeconds: s.targetSeconds, heroOrbit: s.heroOrbit, mode: s.mode, fps: s.fps, introSeconds: s.introSeconds, buildSeconds: s.buildSeconds, outroSeconds: s.outroSeconds, studioLook: s.studioLook, cameraFraming: s.cameraFraming, camera: s.camera, format: s.format, edgeLines: s.edgeLines, linearColors: s.linearColors, bottomUp: s.bottomUp, snapSound: s.snapSound, planner: s.planner ?? 'legacy', constructionSupport: s.constructionSupport ?? 'fixture', constructionBudget: s.constructionBudget ?? 'standard', constructionStepModules: s.constructionStepModules === true, motionV4Limits: s.motionV4Limits ?? [], motionV4Mechanism: s.motionV4Mechanism ?? null, floorSort: s.floorSort, floorSides: s.floorSides },
+  video: { targetSeconds: s.targetSeconds, heroOrbit: s.heroOrbit, mode: s.mode, fps: s.fps, introSeconds: s.introSeconds, buildSeconds: s.buildSeconds, outroSeconds: s.outroSeconds, studioLook: s.studioLook, cameraFraming: s.cameraFraming, camera: s.camera, format: s.format, edgeLines: s.edgeLines, linearColors: s.linearColors, bottomUp: s.bottomUp, snapSound: s.snapSound, planner: s.planner ?? 'legacy', constructionSupport: s.constructionSupport ?? 'fixture', constructionBudget: s.constructionBudget ?? 'standard', constructionStepModules: s.constructionStepModules === true, motionV4Limits: s.motionV4Limits ?? [], motionV4Mechanism: s.motionV4Mechanism ?? null, floorSort: s.floorSort, floorSides: s.floorSides, floorStyle: s.floorStyle ?? 'packed', floorMatch: s.floorMatch ?? 'fill', materials: s.materials },
 });
 
 export async function applySettings(s: Settings): Promise<void> {
@@ -92,7 +97,7 @@ export async function applySettings(s: Settings): Promise<void> {
 }
 
 /** The animation options the timeline planner needs, taken from the video settings. */
-export const animOptions = (s: Pick<AppSettings, 'targetSeconds' | 'heroOrbit' | 'mode' | 'introSeconds' | 'buildSeconds' | 'outroSeconds' | 'bottomUp' | 'planner' | 'constructionSupport'> & Partial<Pick<AppSettings, 'constructionBudget' | 'constructionStepModules' | 'motionV4Limits' | 'motionV4Mechanism' | 'floorSort' | 'floorSides'>>): AnimOptions => ({
+export const animOptions = (s: Pick<AppSettings, 'targetSeconds' | 'heroOrbit' | 'mode' | 'introSeconds' | 'buildSeconds' | 'outroSeconds' | 'bottomUp' | 'planner' | 'constructionSupport'> & Partial<Pick<AppSettings, 'constructionBudget' | 'constructionStepModules' | 'motionV4Limits' | 'motionV4Mechanism' | 'floorSort' | 'floorSides' | 'floorStyle' | 'floorMatch'>>): AnimOptions => ({
   targetSeconds: s.targetSeconds,
   heroOrbit: s.heroOrbit,
   mode: s.mode === 'auto' ? undefined : s.mode,
@@ -110,4 +115,6 @@ export const animOptions = (s: Pick<AppSettings, 'targetSeconds' | 'heroOrbit' |
   constructionMaxCandidates: CONSTRUCTION_BUDGET_PRESETS[s.constructionBudget ?? 'standard'].maxCandidates,
   floorSort: s.floorSort ?? 'step',
   floorSides: s.floorSides ?? 'front-back',
+  floorStyle: s.floorStyle ?? 'packed',
+  floorMatch: s.floorMatch ?? 'fill',
 });

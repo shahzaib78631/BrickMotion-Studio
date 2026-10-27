@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { cameraAt, worldBox3 } from '../anim/camera';
+import { cameraAt, introInto, worldBox3 } from '../anim/camera';
 import { poseAt, type Timeline } from '../anim/timeline';
 import { formatAspect } from '../export/formats';
 import { useAppSettings } from '../state/appSettings';
 import { useStudio } from '../state/store';
-import { applySceneCamera, applyCameraCrop, sceneSetupOf } from '../render/sceneSetup';
+import { applyCameraCrop, sceneCameraPose, sceneSetupOf } from '../render/sceneSetup';
 import { advancePlayback, usePlayback } from '../state/playback';
 import { soundSnaps } from '../audio/snapSound';
 import type { ModelState } from '../state/useModel';
@@ -87,7 +87,9 @@ export function PreviewPlayer({ model, timeline: tl }: { model: ModelState; time
       const fh = Math.min(H, W / ASPECT);
       const fw = fh * ASPECT;
       setFrame((f) => (f.width === fw && f.height === fh ? f : { left: (W - fw) / 2, top: (H - fh) / 2, width: fw, height: fh }));
-      const cam = cameraAt(tl, t, ASPECT, s.cameraFraming, s.camera);
+      // a scene camera in charge holds its shot after the same intro the Build view plays
+      const scene = sceneCameraPose(setup);
+      const cam = scene ? introInto(tl, scene, ASPECT, s.cameraFraming, s.camera)(t) : cameraAt(tl, t, ASPECT, s.cameraFraming, s.camera);
       // A piece the timeline does not know (the plan changed under it) is shown in place rather
       // than dropped: a preview that silently draws nothing is impossible to diagnose. Pieces
       // the timeline does know still arrive, wait and hide as it says.
@@ -97,9 +99,9 @@ export function PreviewPlayer({ model, timeline: tl }: { model: ModelState; time
       studio.perspective.lookAt(cam.target);
       studio.perspective.fov = cam.fov;
       studio.perspective.aspect = ASPECT;
+      if (scene) { studio.perspective.near = scene.near; studio.perspective.far = scene.far; }
       studio.perspective.updateProjectionMatrix();
-      const sceneCamera = applySceneCamera(studio.perspective, setup);
-      if (!sceneCamera) applyCameraCrop(studio.perspective, setup);
+      applyCameraCrop(studio.perspective, setup);
       studio.render({ x: (W - fw) / 2, y: (H - fh) / 2, width: fw, height: fh });
     };
     raf = requestAnimationFrame(loop);

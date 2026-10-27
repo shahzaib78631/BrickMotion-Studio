@@ -483,6 +483,36 @@ export function cameraAt(
   return { position: sphericalPosition(rig.target, rig.dist, rig.az, rig.el), target: rig.target, fov };
 }
 
+const spherical = (p: CamPose) => {
+  const d = p.position.clone().sub(p.target);
+  const r = d.length() || 1;
+  return { r, az: Math.atan2(d.x, d.z), el: Math.asin(Math.min(1, Math.max(-1, d.y / r))) };
+};
+const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+
+/**
+ * The automatic intro (the wide establishing shot the Build view plays while it opens),
+ * bent so that it lands exactly on `end` when the intro is over instead of on the
+ * automatic build camera. At t = 0 it is the automatic intro unchanged, so the video
+ * opens on the same frame the viewport does, and there is no jump into `end`.
+ */
+export function introInto(tl: Timeline, end: CamPose, aspect: number, framing: CameraFraming = 'cinematic', settings: CameraSettings = DEFAULT_CAMERA_SETTINGS): (t: number) => CamPose {
+  const intro = Math.max(1e-6, tl.intro);
+  const landing = cameraAt(tl, tl.intro, aspect, framing, settings);
+  const a = spherical(landing), b = spherical(end);
+  const dTarget = end.target.clone().sub(landing.target);
+  const dR = b.r / a.r, dAz = wrapAngle(b.az - a.az), dEl = b.el - a.el, dFov = end.fov - landing.fov;
+  return (t: number) => {
+    if (t >= tl.intro) return { position: end.position.clone(), target: end.target.clone(), fov: end.fov };
+    const k = easeInOutCubic(clamp01(t / intro));
+    const at = cameraAt(tl, Math.max(0, t), aspect, framing, settings);
+    const s = spherical(at);
+    const target = at.target.clone().addScaledVector(dTarget, k);
+    const r = s.r * Math.pow(dR, k);
+    return { position: sphericalPosition(target, r, THREE.MathUtils.radToDeg(s.az + dAz * k), THREE.MathUtils.radToDeg(s.el + dEl * k)), target, fov: at.fov + dFov * k };
+  };
+}
+
 /** The camera the viewport is showing: its pose and its lens. */
 export type EditorCamera = {
   position: [number, number, number];
@@ -504,6 +534,7 @@ export function buildViewCamera(
   editor: EditorCamera,
   aspect = 9 / 16,
   settings: CameraSettings = DEFAULT_CAMERA_SETTINGS,
+  framing: CameraFraming = 'cinematic',
 ): (t: number) => CamPose {
   const target = new THREE.Vector3(...editor.target);
   const offset = new THREE.Vector3(...editor.position).sub(target);
@@ -534,11 +565,8 @@ export function buildViewCamera(
   };
   const heroDegrees = (settings.heroOrbitDegrees ?? 120) * (Math.PI / 180);
   return (t: number) => {
-    if (t < tl.intro) {
-      // a slow push-in to your own shot: no re-framing, no lens change
-      const k = ease(t / Math.max(0.3, Math.min(1.5, tl.intro)));
-      return pose(radius * (1.14 - 0.14 * k), azimuth0);
-    }
+    // the same establishing shot the Build view plays, landing on your own shot
+    if (t < tl.intro) return introInto(tl, pose(radius, azimuth0), aspect, framing, settings)(t);
     if (t < tl.buildEnd || !tl.heroOrbit) return pose(radius, azimuth0);
     const u = Math.min(1, Math.max(0, (t - tl.buildEnd) / Math.max(1e-6, tl.duration - tl.buildEnd)));
     return pose(radius, azimuth0 + heroDegrees * u * ease((t - tl.buildEnd) / 0.6));

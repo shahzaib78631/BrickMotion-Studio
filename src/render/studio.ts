@@ -6,8 +6,12 @@ import { studioGradientPixels } from './studioPalette';
 import { SceneLighting } from './sceneLights';
 import type { SceneSetup } from './sceneSetup';
 
-/** The soft, neutral set closely matches the supplied reference footage. */
-export type StudioLook = 'soft' | 'classic';
+import { DEFAULT_MATERIALS, floorFor, sceneOf, scenePixels, type Materials, type StudioLook } from './looks';
+import { setBrickMaterials } from './materials';
+import { concreteTexture, createFade, createReflection, fadingFloorMaterial, woodTexture } from './floorSurfaces';
+
+/** A scene preset (see SCENES in looks.ts); 'soft' matches the supplied reference footage. */
+export type { StudioLook, Materials } from './looks';
 
 /** Which camera renders the editor viewport: Blender-style projection toggle. */
 export type Projection = 'perspective' | 'ortho';
@@ -45,6 +49,8 @@ export type Studio = {
   setLook?(look: StudioLook): void;
   /** Edge lines and colour response; preview and MP4 export must agree. */
   setRenderOptions?(o: RenderOptions): void;
+  /** Brick finish, surface texture and floor; preview and MP4 export must agree. */
+  setMaterials?(m: Materials): void;
   /** Floor height and light/shadow framing for a world-space box (studs, +Y up). */
   fitTo(box: THREE.Box3, groundY: number): void;
   /** Optionally render only inside a camera frame (CSS pixel coordinates, top-left origin). */
@@ -77,7 +83,7 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
 
   const scene = new THREE.Scene();
   const gradient = studioBackground();
-  const bg = new THREE.Color(STUDIO_BG);
+  let backdrop: THREE.DataTexture | null = null;
   const pmrem = new THREE.PMREMGenerator(renderer);
   const env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
   scene.environment = env;
@@ -86,13 +92,31 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
   // reference-style contact shadows imperceptible. A transparent shadow-only
   // receiver keeps the studio gradient intact while still catching the REAL
   // brick shadow silhouettes (not a fake ellipse baked into the video).
-  const classicFloor = new THREE.MeshStandardMaterial({ color: STUDIO_BG, roughness: 0.92, metalness: 0 });
+  // Lit floors (matte, wood, concrete) fade into the backdrop around the model, and
+  // the reflective floor is a faded mirror under the same shadow catcher.
+  const fade = createFade();
+  const litFloor = fadingFloorMaterial(fade, { color: STUDIO_BG, roughness: 0.92, metalness: 0 });
+  let woodMap: THREE.DataTexture | null = null;
+  let concreteMap: THREE.DataTexture | null = null;
   const shadowFloor = new THREE.ShadowMaterial({ color: new THREE.Color('#262630'), opacity: 0.42 });
   shadowFloor.depthWrite = false;
   const floor = new THREE.Mesh<THREE.PlaneGeometry, THREE.Material>(new THREE.PlaneGeometry(1000, 1000), shadowFloor);
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
+  // transparent floors draw in order: lit floor or mirror, then the shadow catcher
+  floor.renderOrder = -3;
   scene.add(floor);
+  let groundLevel = 0;
+  // the shadow catcher drawn over a lit or mirrored floor
+  const shadowOver = new THREE.Mesh(floor.geometry, shadowFloor);
+  shadowOver.rotation.x = -Math.PI / 2;
+  shadowOver.receiveShadow = true;
+  shadowOver.renderOrder = -1;
+  shadowOver.visible = false;
+  scene.add(shadowOver);
+  let reflection: ReturnType<typeof createReflection> | null = null;
+  let look: StudioLook = 'soft';
+  let materials: Materials = { ...DEFAULT_MATERIALS };
 
   const hemi = new THREE.HemisphereLight(0xffffff, 0xc5c6ce, 0.85);
   scene.add(hemi);
@@ -148,29 +172,68 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
     bricks.setEdges(o.edges);
     applyExposure();
   };
-  const setLook = (look: StudioLook) => {
+  /** The floor for the current scene and material choice. */
+  const applyFloor = () => {
+    const preset = sceneOf(look);
+    const kind = floorFor(look, materials.floor);
+    shadowFloor.color.set(preset.shadowColor);
+    shadowFloor.opacity = preset.shadowOpacity;
+    litFloor.color.set(kind === 'wood' || kind === 'concrete' ? '#ffffff' : preset.floorColor);
+    litFloor.roughness = kind === 'concrete' ? 0.85 : kind === 'wood' ? 0.6 : 0.92;
+    if (kind === 'wood') litFloor.map = (woodMap ??= woodTexture());
+    else if (kind === 'concrete') litFloor.map = (concreteMap ??= concreteTexture());
+    else litFloor.map = null;
+    litFloor.needsUpdate = true;
+    const lit = kind === 'matte' || kind === 'wood' || kind === 'concrete';
+    floor.material = lit ? litFloor : shadowFloor;
+    floor.visible = !transparent && kind !== 'none' && kind !== 'reflective';
+    // a lit floor or a mirror still gets the real contact shadows on top
+    shadowOver.visible = !transparent && (lit || kind === 'reflective') && preset.shadowOpacity > 0;
+    if (kind === 'reflective' && !transparent) {
+      if (!reflection) {
+        reflection = createReflection(fade, opts.preserveDrawingBuffer ? 1024 : 768);
+        reflection.position.y = groundLevel - 0.002;
+        scene.add(reflection);
+      }
+      const mat = reflection.material as THREE.ShaderMaterial;
+      mat.uniforms.strength.value = preset.reflection;
+      // the mirror shows the backdrop's floor colour through its faded edge
+      reflection.visible = true;
+    } else if (reflection) reflection.visible = false;
+  };
+  const setLook = (next: StudioLook) => {
+    look = sceneOf(next).id;
+    const preset = sceneOf(look);
     // A transparent studio keeps an empty background and no shadow floor, so an
     // exported still has no studio backdrop baked into its alpha channel.
-    if (look === 'classic') {
-      if (!transparent) scene.background = bg;
-      floor.material = classicFloor;
-      exposure = 1.05;
-      lookEnv = 0.6;
-      hemi.intensity = 1.1;
-      key.intensity = 2.2;
-      fill.intensity = 0;
-    } else {
-      if (!transparent) scene.background = gradient;
-      floor.material = shadowFloor;
-      exposure = 1.0;
-      lookEnv = 0.75;
-      hemi.intensity = 0.85;
-      key.intensity = 2.35;
-      fill.intensity = 0.38;
+    if (!transparent) {
+      if (look === 'soft') scene.background = gradient;
+      else {
+        backdrop?.dispose();
+        backdrop = new THREE.DataTexture(scenePixels(preset), 64, 128, THREE.RGBAFormat);
+        backdrop.colorSpace = THREE.SRGBColorSpace;
+        backdrop.minFilter = THREE.LinearFilter;
+        backdrop.magFilter = THREE.LinearFilter;
+        backdrop.generateMipmaps = false;
+        backdrop.needsUpdate = true;
+        scene.background = backdrop;
+      }
     }
-    floor.visible = !transparent;
+    exposure = preset.exposure;
+    lookEnv = preset.env;
+    hemi.intensity = preset.hemi;
+    hemi.groundColor.set(preset.hemiGround);
+    key.intensity = preset.key;
+    key.color.set(preset.keyColor);
+    fill.intensity = preset.fill;
+    applyFloor();
     applyExposure();
     syncStudioLights();
+  };
+  const setMaterials = (m: Materials) => {
+    materials = { ...m };
+    setBrickMaterials(m);
+    applyFloor();
   };
   const syncStudioLights = () => {
     const enabled = !sceneSetup?.lights.length || !sceneSetup.useLightsForVideo || sceneSetup.includeStudioLights;
@@ -212,6 +275,7 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
     },
     setLook,
     setRenderOptions,
+    setMaterials,
     setSize(w, h) {
       renderer.setSize(w, h, false);
       sizeW = w; sizeH = h;
@@ -221,7 +285,12 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
       applyOrtho();
     },
     fitTo(box, groundY) {
+      groundLevel = groundY;
       floor.position.y = groundY - 0.001;
+      shadowOver.position.y = groundY - 0.0005;
+      if (reflection) reflection.position.y = groundY - 0.002;
+      fade.center.value.copy(box.getCenter(new THREE.Vector3()));
+      fade.radius.value = Math.max(24, box.getSize(new THREE.Vector3()).length() * 1.6);
       const c = box.getCenter(new THREE.Vector3());
       const r = Math.max(8, box.getSize(new THREE.Vector3()).length() / 2);
       key.target.position.copy(c);
@@ -265,7 +334,14 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
       lighting.dispose();
       bricks.dispose();
       gradient.dispose();
-      classicFloor.dispose();
+      backdrop?.dispose();
+      litFloor.dispose();
+      woodMap?.dispose();
+      concreteMap?.dispose();
+      if (reflection) {
+        reflection.getRenderTarget().dispose();
+        (reflection.material as THREE.Material).dispose();
+      }
       shadowFloor.dispose();
       env.dispose();
       pmrem.dispose();

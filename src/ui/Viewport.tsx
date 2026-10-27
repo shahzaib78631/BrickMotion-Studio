@@ -106,6 +106,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
   const keyScene = useRef<{ at: (frame: number) => Map<string, THREE.Matrix4 | null>; bases: Map<string, THREE.Matrix4>; dirty: boolean } | null>(null);
   const keyGesture = useRef<{ base: Plan; ids: string[]; model: string; frame: number; values: Map<string, ChannelValues> } | null>(null);
   const studioLook = useAppSettings((s) => s.studioLook);
+  const materials = useAppSettings((s) => s.materials);
   const edgeLines = useAppSettings((s) => s.edgeLines);
   const linearColors = useAppSettings((s) => s.linearColors);
   const sceneSetup = useStudio((s) => s.plan.sceneSetup);
@@ -526,6 +527,9 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
   useEffect(() => {
     viewportApi.studio?.setLook?.(studioLook);
   }, [studioLook]);
+  useEffect(() => {
+    if (materials) viewportApi.studio?.setMaterials?.(materials);
+  }, [materials]);
   useEffect(() => {
     viewportApi.studio?.setRenderOptions?.({ edges: edgeLines, linearColors });
   }, [edgeLines, linearColors]);

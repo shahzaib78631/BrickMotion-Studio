@@ -103,7 +103,7 @@ type Props = {
   onAbout(): void;
   onExportVideo(): void;
   canPreview: boolean;
-  onNavigate(panel: 'models' | 'parts' | 'assembly' | 'steps' | 'checks' | 'ai' | 'video' | 'settings'): void;
+  onNavigate(panel: 'models' | 'parts' | 'assembly' | 'steps' | 'checks' | 'ai' | 'video' | 'materials' | 'staging' | 'settings'): void;
 };
 
 export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, canPreview, onNavigate }: Props) {
@@ -220,6 +220,8 @@ export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, ca
     { icon: 'spot', label: 'Go to Assembly', subtitle: 'Set how the model fits together', action: () => onNavigate('assembly') },
     { icon: 'steps', label: 'Go to Animation', subtitle: 'Edit build steps', action: () => onNavigate('steps') },
     { icon: 'video', label: 'Go to Render', subtitle: 'Export settings and video', action: () => onNavigate('video') },
+    { icon: 'palette', label: 'Go to Materials', subtitle: 'Scenes, brick finishes, textures and floors', action: () => onNavigate('materials') },
+    { icon: 'layout', label: 'Go to Staging', subtitle: 'How waiting pieces are laid out, and the build order', action: () => onNavigate('staging') },
     { icon: 'folder', label: 'Open Assets & AI', subtitle: 'Assisted workflows and assets', action: () => onNavigate('ai') },
     { icon: 'checks', label: 'Review model checks', subtitle: 'Warnings and verification', action: () => onNavigate('checks') },
     { icon: 'settings', label: 'Open Settings', subtitle: 'Workspace and animation preferences', action: () => onNavigate('settings') },
@@ -229,6 +231,7 @@ export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, ca
     { icon: 'components', label: 'Lay out all parts', subtitle: 'Organize the parts on the grid', action: () => st.setLaidOut(true) },
     { icon: 'rotate', label: 'Regenerate steps & animation', subtitle: 'Rebuild the construction timeline', action: () => void regenerate('both') },
     { icon: 'moon', label: 'Switch color theme', subtitle: 'Light or dark workspace', action: onTheme },
+    { icon: 'palette', label: 'Theme and accent colour', subtitle: 'Light, dark or system; accent colour; surface tone', action: () => onNavigate('settings') },
   ];
   const filteredCommands = commands.filter((c) => `${c.label} ${c.subtitle}`.toLowerCase().includes(commandQuery.toLowerCase()));
   const runPaletteCommand = (action: () => void) => { setCommandOpen(false); setCommandQuery(''); action(); };

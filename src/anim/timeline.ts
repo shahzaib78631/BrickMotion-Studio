@@ -16,7 +16,7 @@ import type { Box } from '../ldraw/flatten';
 import { moveAssembly, placementMatrix, transformBox, unionBox, type ANode, type Assembly, type Instance, type Metrics } from '../model/assemble';
 import type { AssemblySpot, Plan } from '../plan/types';
 import { clamp01, easeInOutCubic, lerp } from './easing';
-import { layoutFloor, type FloorItem, type Region } from './floorLayout';
+import { hash01, layoutFloor, STYLE_AREA, type FloorItem, type LayoutStyle, type Region } from './floorLayout';
 import { choosePacing, SEQUENTIAL_GAP, type AnimOptions, type FloorSides, type Pacing } from './pacing';
 import { AssemblyPlanningError, buildAssemblyGraph } from './assemblyGraph';
 import { intersects, sweptIntersects, rotationPadding } from './sweptBounds';
@@ -117,6 +117,20 @@ function bandsAround(box: Box, padArea = 0, sides: FloorSides = 'front-back'): R
       { x0: bx1 + FLOOR_MARGIN, z0, width: wide, depth: long },
     ];
   }
+  if (sides === 'around') {
+    // the same floor area on all four sides: shallower bands in front and behind,
+    // and strips at the left and right that fill the gap between them
+    const fb = Math.max(4, Math.ceil(depth * 0.6));
+    const long = Math.max(D + 2 * FLOOR_MARGIN, 8);
+    const wide = Math.max(4, Math.ceil((width * depth * 0.8) / long));
+    const z0 = bz0 - FLOOR_MARGIN;
+    return [
+      { x0, z0: bz0 - FLOOR_MARGIN - fb, width, depth: fb, near: 'front' },
+      { x0, z0: bz1 + FLOOR_MARGIN, width, depth: fb, near: 'behind' },
+      { x0: Math.min(x0, bx0 - FLOOR_MARGIN) - wide, z0, width: wide, depth: long },
+      { x0: Math.max(x0 + width, bx1 + FLOOR_MARGIN), z0, width: wide, depth: long },
+    ];
+  }
   return [
     { x0, z0: bz0 - FLOOR_MARGIN - depth, width, depth, near: 'front' }, // front (towards the camera)
     { x0, z0: bz1 + FLOOR_MARGIN, width, depth, near: 'behind' }, // behind
@@ -134,27 +148,98 @@ const regionBox = (r: Region, ground: number): Box => ({
  * from the outside in, which lets the camera move in during the build.
  * Band 0 lies in front (its edge nearest the model is its max z), band 1 behind.
  */
-function layoutBands(items: FloorItem[], bands: Region[]) {
-  const pos = new Map<string, { x: number; z: number }>();
-  let rest = items;
-  bands.forEach((band) => {
-    if (!rest.length) return;
-    const r = layoutFloor(rest, band);
-    const depthOf = new Map(rest.map((i) => [i.id, i.d]));
-    let used = 0;
-    r.pos.forEach((p, k) => (used = Math.max(used, p.z + depthOf.get(k)! - band.z0)));
-    r.pos.forEach((p, k) => {
-      const d = depthOf.get(k)!;
-      pos.set(k, { x: p.x, z: band.near === 'front' ? p.z + Math.max(0, band.depth - used) : band.near === 'behind' ? band.z0 + used - (p.z - band.z0) - d : p.z });
-    });
-    const left = new Set(r.overflow);
-    rest = rest.filter((i) => left.has(i.id));
+/** Packs one band, its used rows pushed against the model. */
+function layoutBand(items: FloorItem[], band: Region, style: LayoutStyle, pos: Map<string, { x: number; z: number }>): string[] {
+  const r = layoutFloor(items, band, 1, style);
+  const depthOf = new Map(items.map((i) => [i.id, i.d]));
+  let used = 0;
+  r.pos.forEach((p, k) => (used = Math.max(used, p.z + depthOf.get(k)! - band.z0)));
+  r.pos.forEach((p, k) => {
+    const d = depthOf.get(k)!;
+    pos.set(k, { x: p.x, z: band.near === 'front' ? p.z + Math.max(0, band.depth - used) : band.near === 'behind' ? band.z0 + used - (p.z - band.z0) - d : p.z });
   });
-  return { pos, overflow: rest.map((i) => i.id) };
+  return r.overflow;
+}
+
+/**
+ * `prefer`: each piece's bands, best first (see bandPreference). Without it the bands
+ * are simply filled in order. With it a piece waits on its own side of the model
+ * and only spills to the next-best side when its own is full.
+ */
+function layoutBands(items: FloorItem[], bands: Region[], style: LayoutStyle = 'packed', prefer?: ReadonlyMap<string, number[]>) {
+  const pos = new Map<string, { x: number; z: number }>();
+  if (!prefer || bands.length < 2) {
+    let rest = items;
+    bands.forEach((band) => {
+      if (!rest.length) return;
+      const left = new Set(layoutBand(rest, band, style, pos));
+      rest = rest.filter((i) => left.has(i.id));
+    });
+    return { pos, overflow: rest.map((i) => i.id) };
+  }
+  // choice[i]: how far down its preference list piece i has spilled
+  const choice = new Map(items.map((it) => [it.id, 0]));
+  const bandOf = (id: string) => prefer.get(id)?.[choice.get(id)!] ?? choice.get(id)!;
+  let overflow: string[] = [];
+  for (let round = 0; round < bands.length; round++) {
+    pos.clear();
+    overflow = [];
+    const spilled: string[] = [];
+    bands.forEach((band, b) => {
+      const mine = items.filter((it) => choice.get(it.id)! < bands.length && bandOf(it.id) === b);
+      if (mine.length) spilled.push(...layoutBand(mine, band, style, pos));
+    });
+    if (!spilled.length) break;
+    for (const id of spilled) {
+      choice.set(id, choice.get(id)! + 1);
+      if (choice.get(id)! >= bands.length) overflow.push(id);
+    }
+    if (round === bands.length - 1) for (const id of spilled) if (!overflow.includes(id)) overflow.push(id);
+  }
+  // an item that has run out of sides is never placed in a later round
+  for (const id of overflow) pos.delete(id);
+  return { pos, overflow };
+}
+
+/**
+ * For each piece, the bands ordered by how well they face the place it is built:
+ * a piece that attaches at the back of the model waits behind it, one on the left
+ * at the left. Directions are taken from the centre of the (sub)model and of its bands.
+ */
+function bandPreference(items: { id: string; at: [number, number] }[], bands: Region[]): Map<string, number[]> {
+  const centres = bands.map((r) => [r.x0 + r.width / 2, r.z0 + r.depth / 2] as const);
+  const bx = centres.reduce((s, c) => s + c[0], 0) / centres.length, bz = centres.reduce((s, c) => s + c[1], 0) / centres.length;
+  const mx = items.reduce((s, it) => s + it.at[0], 0) / Math.max(1, items.length), mz = items.reduce((s, it) => s + it.at[1], 0) / Math.max(1, items.length);
+  const out = new Map<string, number[]>();
+  for (const it of items) {
+    const dx = it.at[0] - mx, dz = it.at[1] - mz;
+    const score = centres.map(([cx, cz]) => {
+      const ux = cx - bx, uz = cz - bz;
+      const len = Math.hypot(ux, uz) || 1;
+      return (dx * ux + dz * uz) / len;
+    });
+    out.set(it.id, bands.map((_, i) => i).sort((a, b) => score[b] - score[a] || a - b));
+  }
+  return out;
+}
+
+/** Grows every band away from the model (studs), keeping its edge nearest the model. */
+function growBands(bands: Region[], box: Box, by: number): Region[] {
+  const cz = (box.min[2] + box.max[2]) / 2 / STUD;
+  return bands.map((r) => {
+    const rz = r.z0 + r.depth / 2;
+    if (r.near) {
+      const extra = Math.ceil(r.depth * (by - 1));
+      return rz < cz ? { ...r, z0: r.z0 - extra, depth: r.depth + extra } : { ...r, depth: r.depth + extra };
+    }
+    // side strips grow lengthwise, both ways: sideways they could reach a submodel's work spot
+    const extra = Math.ceil(r.depth * (by - 1));
+    return { ...r, z0: r.z0 - Math.ceil(extra / 2), depth: r.depth + extra };
+  });
 }
 
 /** Splits pieces (in play order) into windows that each fit the bands. */
-function windowed(items: FloorItem[], bands: Region[]) {
+function windowed(items: FloorItem[], bands: Region[], style: LayoutStyle = 'packed', prefer?: ReadonlyMap<string, number[]>) {
   const windows: { ids: string[]; pos: Map<string, { x: number; z: number }> }[] = [];
   let i = 0;
   while (i < items.length) {
@@ -162,10 +247,10 @@ function windowed(items: FloorItem[], bands: Region[]) {
     let hi = items.length - i;
     while (lo < hi) {
       const mid = Math.ceil((lo + hi) / 2);
-      if (layoutBands(items.slice(i, i + mid), bands).overflow.length === 0) lo = mid;
+      if (layoutBands(items.slice(i, i + mid), bands, style, prefer).overflow.length === 0) lo = mid;
       else hi = mid - 1;
     }
-    const best = layoutBands(items.slice(i, i + lo), bands);
+    const best = layoutBands(items.slice(i, i + lo), bands, style, prefer);
     windows.push({ ids: items.slice(i, i + lo).map((it) => it.id), pos: best.pos });
     i += lo;
   }
@@ -373,7 +458,10 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
       return sum + (Math.ceil((b.max[0] - b.min[0]) / STUD - 0.01) + 1) * (Math.ceil((b.max[2] - b.min[2]) / STUD - 0.01) + 1);
     }, 0);
   const sides = opts.floorSides ?? 'front-back';
-  const mainBands = bandsAround(layoutBox, padArea(asm.nodes), sides);
+  /** how the waiting pieces are arranged; airier styles get proportionally more floor */
+  const floorStyle: LayoutStyle = opts.floorStyle ?? 'packed';
+  const floorArea = STYLE_AREA[floorStyle];
+  const mainBands = bandsAround(layoutBox, padArea(asm.nodes) * floorArea, sides);
 
   const steps: PlayStep[] = [];
   const ctxs: Ctx[] = [{ bands: mainBands, pieces: [], group: new Map() }];
@@ -409,7 +497,8 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
       let assembly: ANode['assembly'] = n.assembly ? { ...n.assembly,
         after: n.assembly.after?.map(canonicalId),
         attachTo: n.assembly.attachTo ? canonicalId(n.assembly.attachTo) : undefined } : undefined;
-      const accessParents = access.filter((e) => e.after === keyOf(prefix, n.itemId)).map((e) => canonicalId(e.before.slice(prefix ? prefix.length + 1 : 0)));
+      // A forced piece (root) keeps the author's order: the access search may not hold it back either.
+      const accessParents = n.assembly?.root ? [] : access.filter((e) => e.after === keyOf(prefix, n.itemId)).map((e) => canonicalId(e.before.slice(prefix ? prefix.length + 1 : 0)));
       if (accessParents.length) assembly = { ...assembly, after: [...(assembly?.after ?? []), ...accessParents] };
       return { id: n.itemId, n, part: n.kind === 'piece' ? n.part : undefined,
         step: n.step, order: n.order, assembly, world: placementMatrix(n.local).elements,
@@ -483,13 +572,13 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
         .makeTranslation(buildSpot.x * STUD - (ob.min[0] + ob.max[0]) / 2, ground - ob.max[1], buildSpot.z * STUD - (ob.min[2] + ob.max[2]) / 2)
         .multiply(oriented);
       spot = transformBox(n.body, from);
-      bands = bandsAround(spot, padArea(n.children), sides);
+      bands = bandsAround(spot, padArea(n.children) * floorArea, sides);
     } else {
       const zMid = (layoutBox.min[2] + layoutBox.max[2]) / 2;
       const tx = sideRight + SIDE_GAP * STUD - b.min[0];
       from = new THREE.Matrix4().makeTranslation(tx, ground - b.max[1], zMid - (b.min[2] + b.max[2]) / 2).multiply(basis);
       spot = transformBox(n.body, from);
-      bands = bandsAround(spot, padArea(n.children), sides);
+      bands = bandsAround(spot, padArea(n.children) * floorArea, sides);
       // Reserve room for the submodel's FLOOR pieces as well as the assembled
       // chunk. Otherwise the side staging band can overlap main-floor pieces.
       const edge = Math.min(spot.min[0], ...bands.map((r) => r.x0 * STUD));
@@ -497,7 +586,7 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
       if (shift) {
         from.elements[12] += shift;
         spot = transformBox(n.body, from);
-        bands = bandsAround(spot, padArea(n.children), sides);
+        bands = bandsAround(spot, padArea(n.children) * floorArea, sides);
       }
     }
     const focus = bands.reduce((b, r) => unionBox(b, regionBox(r, ground)), spot); // the scene bounds; the camera uses the occupied part
@@ -659,9 +748,24 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
       .sort((a, b) => a.it.group - b.it.group || a.it.color - b.it.color || a.i - b.i)
       .map((e) => e.it);
     const playOrder = new Map(ctx.pieces.map((k, i) => [k, i]));
+    // each piece on the side of the model it is built on, when asked
+    const prefer = opts.floorMatch === 'nearest' ? bandPreference(ctx.pieces.map((key) => {
+      const b = byKey.get(key)!.worldBox;
+      return { id: key, at: [(b.min[0] + b.max[0]) / 2 / STUD, (b.min[2] + b.max[2]) / 2 / STUD] as [number, number] };
+    }), ctx.bands) : undefined;
+    if (sortBy === 'all' && items.length) {
+      // every piece on the floor from the start: grow the bands until one window holds them all
+      // the bands surround their (sub)model, so their union is centred on it
+      const around = ci === 0 ? layoutBox : ctx.bands.slice(1).reduce((b, r) => unionBox(b, regionBox(r, ground)), regionBox(ctx.bands[0], ground));
+      for (let tries = 0; tries < 8 && layoutBands(ordered.map(({ id, w, d, group }) => ({ id, w, d, group })), ctx.bands, floorStyle, prefer).overflow.length; tries++)
+        ctx.bands = growBands(ctx.bands, around, 1.35);
+      for (const r of ctx.bands) sceneBox = unionBox(sceneBox, regionBox(r, ground));
+    }
     const windows = windowed(
       [...ordered].sort((a, b) => playOrder.get(a.id)! - playOrder.get(b.id)!).map(({ id, w, d, group }) => ({ id, w, d, group })),
       ctx.bands,
+      floorStyle,
+      prefer,
     );
     windowVisibility.push({ ctx: ci, windows });
     // ctxs are created parent first, so the parent's first appearance is known here
@@ -680,6 +784,8 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
       const r = layoutBands(
         ordered.filter((it) => set.has(it.id)).map(({ id, w, d, group }) => ({ id, w, d, group })),
         ctx.bands,
+        floorStyle,
+        prefer,
       );
       const pos = r.overflow.length ? win.pos : r.pos;
       if (wi > 0) {
@@ -691,7 +797,14 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
         const basis = naturalBasis(inst.world);
         const b = transformBox(hardware.get(key)?.body ?? metrics(inst.part).body, basis);
         const p = pos.get(key) ?? { x: ctx.bands[0].x0, z: ctx.bands[0].z0 };
-        const floor = new THREE.Matrix4().makeTranslation(p.x * STUD - b.min[0], ground - b.max[1], p.z * STUD - b.min[2]).multiply(basis);
+        let floor = new THREE.Matrix4().makeTranslation(p.x * STUD - b.min[0], ground - b.max[1], p.z * STUD - b.min[2]).multiply(basis);
+        if (floorStyle === 'scattered') {
+          // a gentle, repeatable turn about the piece's own centre (LDraw Y is vertical)
+          const cx = p.x * STUD + (b.max[0] - b.min[0]) / 2, cz = p.z * STUD + (b.max[2] - b.min[2]) / 2;
+          const yaw = (hash01(key, 3) - 0.5) * THREE.MathUtils.degToRad(28);
+          floor = new THREE.Matrix4().makeTranslation(cx, 0, cz).multiply(new THREE.Matrix4().makeRotationY(yaw))
+            .multiply(new THREE.Matrix4().makeTranslation(-cx, 0, -cz)).multiply(floor);
+        }
         const rigid = hardware.get(key);
         const entries = rigid?.members.map(({ node, rel }) => ({ key: key.slice(0, key.length - rigid.root.itemId.length) + node.itemId, rel }))
           ?? [{ key, rel: new THREE.Matrix4() }];

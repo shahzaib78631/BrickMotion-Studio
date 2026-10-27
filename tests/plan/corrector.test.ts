@@ -107,7 +107,7 @@ describe('applying the corrected grouping', () => {
 
   test('disabling puts the remembered order back', () => {
     const before = plan();
-    const mark = correctorMark(before, '', { units: 4, steps: 2, floating: 0, unsupported: 0, missingGeometry: 0, dropped: 0, snapLinks: 0, fallbackLinks: 0, issues: [] });
+    const mark = correctorMark(before, '', { units: 4, steps: 2, floating: 0, unsupported: 0, missingGeometry: 0, dropped: 0, snapLinks: 0, fallbackLinks: 0, issues: [], findings: [] });
     const [a, b, c, d] = modelSteps(before, '').flatMap((step) => step.pieces.map((piece) => piece.id!));
     const corrected = withCorrectorSteps(before, '', [[d, c], [b, a]]);
     const restored = withoutCorrectorSteps(corrected, '', mark)!;
@@ -129,4 +129,21 @@ test('summariseDiagnosis flattens the engine report', () => {
   expect(summary).toMatchObject({ units: 151, steps: 47, floating: 2, unsupported: 1, dropped: 2, snapLinks: 88, fallbackLinks: 4 });
   expect(summary!.issues).toEqual(['floating_unit: unit 12 is not supported', 'missing_part']);
   expect(summariseDiagnosis(null)).toBeNull();
+});
+
+test('the engine issues are grouped into plain findings, worst first', () => {
+  const summary = summariseDiagnosis([{
+    units: 10, steps: 3, snap_links: 9, fallback_links: 1,
+    issues: [
+      { severity: 'warning', code: 'insertion_unverified', unit: 3 },
+      { severity: 'warning', code: 'insertion_unverified', unit: 4 },
+      { severity: 'error', code: 'missing_part', units: [5, 6, 7] },
+      { severity: 'warning', code: 'brand_new_code' },
+    ],
+  }]);
+  expect(summary!.findings.map((f) => [f.code, f.count, f.severity])).toEqual([
+    ['missing_part', 3, 'error'], ['insertion_unverified', 2, 'warning'], ['brand_new_code', 1, 'warning'],
+  ]);
+  expect(summary!.findings[1].label).toMatch(/way in/);
+  expect(summary!.findings[2].label).toBe('brand new code');
 });

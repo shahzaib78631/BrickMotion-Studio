@@ -1,4 +1,9 @@
-import { beforeAll, expect, test } from 'vitest';
+import { beforeAll, describe, expect, test } from 'vitest';
+import { assemble, type Metrics } from '../../src/model/assemble';
+import { ensureIds } from '../../src/plan/ids';
+import { buildTimeline } from '../../src/anim/timeline';
+import { partClips } from '../../src/anim/partClips';
+import { fixtureColors, fixtureMetrics } from '../helpers/fixtureMetrics';
 import { buildAssemblyGraph, type AssemblyItem } from '../../src/anim/assemblyGraph';
 import { setRootHint } from '../../src/plan/ops';
 import type { AssemblyHints, Plan } from '../../src/plan/types';
@@ -35,4 +40,31 @@ test('setRootHint marks and clears it, keeping the rest of the hints', () => {
   // and a piece with nothing else loses the whole hint object again
   const bare: Plan = { format: 'brickmotion-plan', version: 1, name: 't', steps: [{ pieces: [{ id: 'a', part: '3001', color: 4, x: 0, y: 0, z: 0, rot: 0 }] }] };
   expect(setRootHint(setRootHint(bare, '', ['a'], true), '', ['a'], false).steps[0].pieces[0].assembly).toBeUndefined();
+});
+
+describe('forcing the order on a whole build', () => {
+  let metrics: Metrics;
+  beforeAll(async () => { metrics = await fixtureMetrics(); });
+  // the top brick is listed first, though it rests on the two below it
+  const stacked = (): Plan => ensureIds({ format: 'brickmotion-plan', version: 1, name: 'stack', steps: [{ pieces: [
+    { part: '3001', color: 1, x: 2, y: 3, z: 0, rot: 0 },
+    { part: '3001', color: 4, x: 0, y: 0, z: 0, rot: 0 },
+    { part: '3001', color: 4, x: 4, y: 0, z: 0, rot: 0 },
+  ] }] });
+  const order = (p: Plan) => {
+    const tl = buildTimeline(assemble(p, metrics, fixtureColors), metrics, { targetSeconds: 10, heroOrbit: false });
+    return partClips(tl, p.steps).sort((a, b) => a.start - b.start).map((c) => c.id);
+  };
+
+  test('the planner pulls what a piece rests on ahead of it', () => {
+    const p = stacked();
+    const top = p.steps[0].pieces[0].id!;
+    expect(order(p).indexOf(top)).toBeGreaterThan(0);
+  });
+
+  test('forced, every piece goes on exactly in the order it is listed', () => {
+    const p = stacked();
+    const ids = p.steps[0].pieces.map((i) => i.id!);
+    expect(order(setRootHint(p, '', ids, true))).toEqual(ids);
+  });
 });

@@ -31,28 +31,33 @@ import { StepCallout } from './ui/StepCallout';
 import { PartsPanel } from './ui/PartsPanel';
 import { PreviewPlayer } from './ui/PreviewPlayer';
 import { ProjectsDialog } from './ui/ProjectsDialog';
+import { themeAttrs, useTheme, useThemeAttrs } from './state/theme';
 import { SettingsPanel } from './ui/SettingsPanel';
 import { StepsPanel } from './ui/StepsPanel';
 import { Toolbar } from './ui/Toolbar';
 import { VideoPanel } from './ui/VideoPanel';
+import { MaterialsPanel } from './ui/MaterialsPanel';
+import { StagingPanel } from './ui/StagingPanel';
 import { Viewport } from './ui/Viewport';
 import { viewportApi } from './ui/viewportApi';
 import './ui/studio.css';
 import './ui/app.css';
 import './ui/keyframes.css';
 import './ui/reference.css';
+import './ui/themes.css';
+import './ui/layout.css';
 
-type Tab = 'models' | 'parts' | 'assembly' | 'steps' | 'checks' | 'ai' | 'video' | 'capture' | 'settings';
-const TABS: [Tab, IconName, string][] = [
-  ['models', 'box', 'Models'],
-  ['parts', 'parts', 'Parts'],
-  ['assembly', 'spot', 'Assembly'],
-  ['steps', 'steps', 'Animation'],
-  ['video', 'camera', 'Render'],
-  ['capture', 'video', 'Capture'],
-  ['ai', 'folder', 'Assets'],
-  ['settings', 'settings', 'Settings'],
+type Tab = 'models' | 'parts' | 'assembly' | 'steps' | 'checks' | 'ai' | 'video' | 'materials' | 'staging' | 'capture' | 'settings';
+/** The rail, in groups: building the model, how the video looks, then assets; Settings sits at the bottom. */
+const TAB_GROUPS: [Tab, IconName, string][][] = [
+  [['models', 'box', 'Models'], ['parts', 'parts', 'Parts'], ['assembly', 'spot', 'Assembly'], ['steps', 'steps', 'Animation']],
+  [['video', 'camera', 'Render'], ['materials', 'palette', 'Materials'], ['staging', 'layout', 'Staging'], ['capture', 'video', 'Capture']],
+  [['ai', 'folder', 'Assets']],
+  [['settings', 'settings', 'Settings']],
 ];
+/** the side panel can be dragged between these widths */
+const PANEL_MIN = 240;
+const PANEL_MAX = 560;
 
 const load = (k: string) => {
   try {
@@ -79,8 +84,38 @@ function Studio() {
   const currentStep = useStudio((s) => s.currentStep);
   const video = useAppSettings();
   const [tab, setTab] = useState<Tab>(() => (load('bm-tab') as Tab) ?? 'models');
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => (load('bm-theme') === 'dark' ? 'dark' : 'light'));
+  const themeAttrs = useThemeAttrs();
+  const theme = themeAttrs['data-theme'];
   const [tlHeight, setTlHeight] = useState(() => Number(load('bm-tl-h')) || 176);
+  // null: the width each screen size picks; a number once the panel edge was dragged
+  const [panelW, setPanelW] = useState<number | null>(() => Number(load('bm-panel-w')) || null);
+  const [panelClosed, setPanelClosed] = useState(() => load('bm-panel-closed') === '1');
+  useEffect(() => store('bm-panel-closed', panelClosed ? '1' : '0'), [panelClosed]);
+  /** a rail button opens its panel; the active one folds the panel away to give the viewport room */
+  const pickTab = (id: Tab) => {
+    if (id === tab && !panelClosed) return setPanelClosed(true);
+    setTab(id);
+    setPanelClosed(false);
+  };
+  const startPanelResize = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const panel = e.currentTarget.parentElement!;
+    const left = panel.getBoundingClientRect().left;
+    let w = panel.getBoundingClientRect().width;
+    const move = (ev: PointerEvent) => {
+      w = Math.max(PANEL_MIN, Math.min(PANEL_MAX, ev.clientX - left));
+      setPanelW(w);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      document.body.style.cursor = '';
+      store('bm-panel-w', String(Math.round(w)));
+    };
+    document.body.style.cursor = 'col-resize';
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
   const [newSubmodelOpen, setNewSubmodelOpen] = useState(false);
   const [dialog, setDialog] = useState<'projects' | 'about' | null>(null);
   const [exportJobs, setExportJobs] = useState<ExportJob[] | null>(null);
@@ -88,7 +123,6 @@ function Studio() {
   const [motionKeyStatus, setMotionKeyStatus] = useState('');
 
   useEffect(() => store('bm-tab', tab), [tab]);
-  useEffect(() => store('bm-theme', theme), [theme]);
 
   // The timeline follows the model on screen: open a submodel and its own build
   // animation plays, scrubs and exports on its own. '' is the whole set.
@@ -194,28 +228,37 @@ function Studio() {
   };
 
   return (
-    <div className="studio" data-theme={theme}>
+    <div className="studio" {...themeAttrs}>
       <div className={`nx ${selectedIds.length ? 'has-sel' : ''}`} style={{ '--tl-h': `${tlHeight}px` } as React.CSSProperties}>
         <Toolbar
           theme={theme}
-          onTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+          onTheme={() => useTheme.getState().set({ mode: theme === 'dark' ? 'light' : 'dark' })}
           onProjects={() => setDialog('projects')}
           onAbout={() => setDialog('about')}
           onExportVideo={exportCurrent}
           canPreview={canPreview}
-          onNavigate={(panel) => setTab(panel)}
+          onNavigate={(panel) => { setTab(panel); setPanelClosed(false); }}
         />
-        <div className="nx-work">
+        <div className={`nx-work ${panelClosed ? 'panel-closed' : ''}`}
+          style={panelClosed ? { '--panel-w': '0px' } as React.CSSProperties : panelW ? { '--panel-w': `${panelW}px` } as React.CSSProperties : undefined}>
           <nav className="nx-rail" aria-label="Panels">
-            {TABS.map(([id, icon, label]) => (
-              <button key={id} className={`nx-tab ${tab === id ? 'active' : ''}`} aria-pressed={tab === id} title={label} onClick={() => setTab(id)}>
-                <Ic name={icon} />
-                {label}
-                {id === 'checks' && warnings.length > 0 && <span className="bm-rail-badge">{warnings.length}</span>}
-              </button>
+            {TAB_GROUPS.map((group, g) => (
+              <div key={g} className={`bm-rail-group ${g === TAB_GROUPS.length - 1 ? 'end' : ''}`} role="group">
+                {group.map(([id, icon, label]) => (
+                  <button key={id} className={`nx-tab ${tab === id && !panelClosed ? 'active' : ''}`} aria-pressed={tab === id && !panelClosed}
+                    title={tab === id && !panelClosed ? `${label} — click to hide the panel` : label} onClick={() => pickTab(id)}>
+                    <Ic name={icon} />
+                    <span className="bm-rail-label">{label}</span>
+                    {id === 'checks' && warnings.length > 0 && <span className="bm-rail-badge">{warnings.length}</span>}
+                  </button>
+                ))}
+              </div>
             ))}
           </nav>
-          <section className="nx-panel">
+          <section className="nx-panel" aria-hidden={panelClosed || undefined}>
+            <div className="bm-panel-resizer" role="separator" aria-orientation="vertical" aria-label="Resize the side panel"
+              title="Drag to resize · double-click to reset" onPointerDown={startPanelResize}
+              onDoubleClick={() => { setPanelW(null); store('bm-panel-w', ''); }} />
             {tab === 'models' && <ModelsPanel model={model} onExport={setExportJobs} onMakeSubmodel={makeSubmodel} />}
             {tab === 'parts' && <PartsPanel />}
             {tab === 'assembly' && <AssemblyPanel model={model} timeline={timeline} />}
@@ -223,6 +266,8 @@ function Studio() {
             {tab === 'checks' && <ChecksPanel warnings={warnings} />}
             {tab === 'ai' && <AiPanel warnings={warnings} onOpenSettings={() => setTab('settings')} />}
             {tab === 'video' && <VideoPanel timeline={timeline} onExport={exportCurrent} />}
+            {tab === 'materials' && <MaterialsPanel />}
+            {tab === 'staging' && <StagingPanel />}
             {tab === 'capture' && <CapturePanel model={model} />}
             {tab === 'settings' && <SettingsPanel onAbout={() => setDialog('about')} />}
           </section>
@@ -236,7 +281,7 @@ function Studio() {
                 </> : <><span>Main model</span><Ic name="right" /><strong>{mode === 'preview' ? 'Preview' : 'Workspace'}</strong></>}
               </div>
               <div className="bm-workspace-top-help">
-                {warnings.length > 0 && <button title="View model warnings" onClick={() => setTab('checks')}><Ic name="checks" /> {warnings.length} warnings</button>}
+                {warnings.length > 0 && <button title="View model warnings" onClick={() => { setTab('checks'); setPanelClosed(false); }}><Ic name="checks" /> {warnings.length} warnings</button>}
                 {mode === 'preview' && <button
                   aria-pressed={sceneCameraForVideo}
                   title={sceneCameraForVideo
@@ -317,7 +362,7 @@ export function App() {
   }, []);
   if (state === 'ready') return <Studio />;
   return (
-    <div className="studio bm-splash" data-theme={load('bm-theme') === 'dark' ? 'dark' : 'light'}>
+    <div className="studio bm-splash" {...themeAttrs()}>
       <div className="nx-brand">
         <span className="nx-brand-mark">
           <Ic name="brick" />

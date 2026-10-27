@@ -32,14 +32,6 @@ test('the build is the editor shot exactly: same angle, distance and lens', () =
   }
 });
 
-test('the intro pushes in to the editor shot instead of re-framing it', () => {
-  const at = buildViewCamera(timeline(), editor);
-  const first = at(0);
-  expect(radius(first)).toBeGreaterThan(editorRadius * 1.1);
-  expect(azimuth(first)).toBeCloseTo(azimuth(at(1.2)), 6);
-  expect(first.fov).toBe(33);
-});
-
 test('the outro orbits your shot by the hero angle at your zoom', () => {
   const at = buildViewCamera(timeline(), editor);
   const end = at(12);

@@ -1,11 +1,11 @@
 import { get, set } from 'idb-keyval';
 import { validateJointLimitRules, type JointLimitRule } from '../anim/motion/v4/jointLimits';
 import { validateMechanismProgram, type MechanismProgram } from '../anim/motion/v4/mechanismProgram';
-import type { ArrivalMode, FloorSides, FloorSort } from '../anim/pacing';
+import { FLOOR_STYLES, type ArrivalMode, type FloorMatch, type FloorSides, type FloorSort, type FloorStyle } from '../anim/pacing';
 import { isConstructionBudgetPreset, type ConstructionBudgetPreset } from '../anim/construction/budgetPresets';
 import type { LogoCorner } from '../export/exportVideo';
 import { isExportFps, type ExportFps } from '../export/frameRates';
-import type { StudioLook } from '../render/studio';
+import { DEFAULT_MATERIALS, isStudioLook, sanitizeMaterials, type Materials, type StudioLook } from '../render/looks';
 import { DEFAULT_CAMERA_SETTINGS, type CameraFraming, type CameraSettings } from '../anim/camera';
 import { isVideoFormat, type VideoFormat } from '../export/formats';
 
@@ -21,7 +21,7 @@ export type Settings = {
   exportCamera: 'automatic' | 'buildView';
   /** the Build viewport plays the intro shot and hero orbit while it plays */
   cameraFollowsPlayback: boolean;
-  video: { targetSeconds: number; heroOrbit: boolean; mode: ArrivalMode | 'auto'; fps: ExportFps; introSeconds: number | null; buildSeconds: number | null; outroSeconds: number | null; studioLook: StudioLook; cameraFraming: CameraFraming; camera: CameraSettings; format: VideoFormat; edgeLines: boolean; linearColors: boolean; bottomUp: boolean; snapSound: boolean; planner?: 'legacy' | 'construction-v2' | 'construction-auto' | 'construction-v3' | 'construction-v3-auto' | 'construction-v4' | 'standard-motion' | 'standard-motion-v4' | 'assembly-artifact'; constructionSupport?: 'fixture' | 'table'; constructionBudget?: ConstructionBudgetPreset; constructionStepModules?: boolean; motionV4Limits?: JointLimitRule[]; motionV4Mechanism?: MechanismProgram | null; floorSort: FloorSort; floorSides: FloorSides };
+  video: { targetSeconds: number; heroOrbit: boolean; mode: ArrivalMode | 'auto'; fps: ExportFps; introSeconds: number | null; buildSeconds: number | null; outroSeconds: number | null; studioLook: StudioLook; cameraFraming: CameraFraming; camera: CameraSettings; format: VideoFormat; edgeLines: boolean; linearColors: boolean; bottomUp: boolean; snapSound: boolean; planner?: 'legacy' | 'construction-v2' | 'construction-auto' | 'construction-v3' | 'construction-v3-auto' | 'construction-v4' | 'standard-motion' | 'standard-motion-v4' | 'assembly-artifact'; constructionSupport?: 'fixture' | 'table'; constructionBudget?: ConstructionBudgetPreset; constructionStepModules?: boolean; motionV4Limits?: JointLimitRule[]; motionV4Mechanism?: MechanismProgram | null; floorSort: FloorSort; floorSides: FloorSides; floorStyle: FloorStyle; floorMatch: FloorMatch; materials: Materials };
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -33,7 +33,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showSelectionBar: true,
   exportCamera: 'automatic',
   cameraFollowsPlayback: true,
-  video: { targetSeconds: 15, heroOrbit: true, mode: 'auto', fps: 30, introSeconds: null, buildSeconds: null, outroSeconds: null, studioLook: 'soft', cameraFraming: 'cinematic', camera: DEFAULT_CAMERA_SETTINGS, format: '9:16', edgeLines: true, linearColors: true, bottomUp: true, snapSound: true, planner: 'legacy', constructionSupport: 'fixture', constructionBudget: 'standard', constructionStepModules: false, motionV4Limits: [], motionV4Mechanism: null, floorSort: 'step', floorSides: 'front-back' },
+  video: { targetSeconds: 15, heroOrbit: true, mode: 'auto', fps: 30, introSeconds: null, buildSeconds: null, outroSeconds: null, studioLook: 'soft', cameraFraming: 'cinematic', camera: DEFAULT_CAMERA_SETTINGS, format: '9:16', edgeLines: true, linearColors: true, bottomUp: true, snapSound: true, planner: 'legacy', constructionSupport: 'fixture', constructionBudget: 'standard', constructionStepModules: false, motionV4Limits: [], motionV4Mechanism: null, floorSort: 'step', floorSides: 'front-back', floorStyle: 'packed', floorMatch: 'fill', materials: DEFAULT_MATERIALS },
 };
 
 const KEY = 'settings';
@@ -42,7 +42,10 @@ export async function loadSettings(): Promise<Settings> {
   const s = (await get<Partial<Settings>>(KEY)) ?? {};
   const video = { ...DEFAULT_SETTINGS.video, ...(s.video ?? {}) };
   if (!isExportFps(video.fps)) video.fps = DEFAULT_SETTINGS.video.fps;
-  if (video.studioLook !== 'soft' && video.studioLook !== 'classic') video.studioLook = 'soft';
+  if (!isStudioLook(video.studioLook)) video.studioLook = 'soft';
+  video.materials = sanitizeMaterials(video.materials);
+  if (!FLOOR_STYLES.includes(video.floorStyle)) video.floorStyle = 'packed';
+  if (video.floorMatch !== 'nearest') video.floorMatch = 'fill';
   if (video.cameraFraming !== 'cinematic' && video.cameraFraming !== 'wide') video.cameraFraming = 'cinematic';
   video.camera = { ...DEFAULT_CAMERA_SETTINGS, ...(video.camera ?? {}) };
   delete (video.camera as Partial<Record<string, number>>).closeUpStrength; // replaced by submodelFocus
@@ -66,8 +69,8 @@ export async function loadSettings(): Promise<Settings> {
   if (!Array.isArray(video.motionV4Limits) || validateJointLimitRules(video.motionV4Limits).length > 0) video.motionV4Limits = [];
   if (video.motionV4Mechanism != null && validateMechanismProgram(video.motionV4Mechanism).length) video.motionV4Mechanism = null;
   if (!['construction-v2', 'construction-auto', 'construction-v3', 'construction-v3-auto', 'construction-v4', 'standard-motion', 'standard-motion-v4', 'assembly-artifact'].includes(video.planner ?? '')) video.planner = 'legacy';
-  if (!['step', 'colour', 'part', 'size'].includes(video.floorSort)) video.floorSort = 'step';
-  if (!['front-back', 'front', 'behind', 'sides'].includes(video.floorSides)) video.floorSides = 'front-back';
+  if (!['step', 'colour', 'part', 'size', 'all'].includes(video.floorSort)) video.floorSort = 'step';
+  if (!['front-back', 'front', 'behind', 'sides', 'around'].includes(video.floorSides)) video.floorSides = 'front-back';
   if (typeof video.snapSound !== 'boolean') video.snapSound = DEFAULT_SETTINGS.video.snapSound;
   if (typeof s.showSelectionBar !== 'boolean') s.showSelectionBar = DEFAULT_SETTINGS.showSelectionBar;
   if (typeof s.cameraFollowsPlayback !== 'boolean') s.cameraFollowsPlayback = DEFAULT_SETTINGS.cameraFollowsPlayback;

@@ -115,3 +115,10 @@ export function pulledAhead(clips: PartClip[], moved: string, later: ReadonlySet
   if (!c) return [];
   return clips.filter((x) => later.has(x.id) && x.start < c.start - 1e-6).sort((a, b) => a.start - b.start);
 }
+
+/** Pieces put BEFORE the moved one that now go on after it: they rest on it, so they follow it. */
+export function pushedBack(clips: PartClip[], moved: string, earlier: ReadonlySet<string>): PartClip[] {
+  const c = clips.find((x) => x.id === moved);
+  if (!c) return [];
+  return clips.filter((x) => earlier.has(x.id) && x.start > c.start + 1e-6).sort((a, b) => a.start - b.start);
+}

@@ -14,7 +14,7 @@ import {
   DEFAULT_CAMERA_SETTINGS, type CameraSettings,
 } from '../anim/camera';
 import type { SceneSetup } from '../render/sceneSetup';
-import { createStudio, type RenderOptions, type Studio, type StudioLook } from '../render/studio';
+import { createStudio, type RenderOptions, type Studio, type StudioLook, type Materials } from '../render/studio';
 import { safeFileName } from '../ui/download';
 import { encodeMp4, type ExportDeps, type FrameSampler } from './exportVideo';
 
@@ -85,6 +85,7 @@ export type TransparentStillOpts = {
   type?: StillType;
   studioLook?: StudioLook;
   render?: RenderOptions;
+  materials?: Materials;
   sceneSetup?: SceneSetup;
 };
 
@@ -121,6 +122,7 @@ export async function captureTransparentStill(opts: TransparentStillOpts, deps: 
   try {
     studio.setLook?.(opts.studioLook ?? 'soft');
     if (opts.render) studio.setRenderOptions?.(opts.render);
+    if (opts.materials) studio.setMaterials?.(opts.materials);
     studio.setSceneSetup(opts.sceneSetup, false, null, opts.width / opts.height);
     studio.setSize(opts.width, opts.height);
     studio.bricks.setInstances(opts.instances);
@@ -154,6 +156,7 @@ export type TurntableOpts = {
   camera?: CameraSettings;
   studioLook?: StudioLook;
   render?: RenderOptions;
+  materials?: Materials;
   sceneSetup?: SceneSetup;
   signal: AbortSignal;
   onProgress?: (done: number, total: number) => void;
@@ -200,6 +203,7 @@ export function exportTurntable(opts: TurntableOpts, deps: ExportDeps): Promise<
     camera: opts.camera,
     sceneSetup: opts.sceneSetup,
     render: opts.render,
+    materials: opts.materials,
     logo: null,
     snapSound: false,
     onProgress: opts.onProgress ?? (() => {}),

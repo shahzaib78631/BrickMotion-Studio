@@ -26,8 +26,13 @@ export type CorrectorHealth = {
   ldraw?: string;
   version?: string;
   offline?: boolean;
+  /** the LDCad snap library is there, so parts are linked by real connectors */
+  shadow?: boolean;
   message: string;
 };
+
+/** One kind of problem the engine reported, in plain words, with how many pieces have it. */
+export type CorrectorFinding = { code: string; label: string; count: number; severity: 'error' | 'warning' | 'info' };
 
 export type CorrectorSummary = {
   units: number;
@@ -39,7 +44,28 @@ export type CorrectorSummary = {
   snapLinks: number;
   fallbackLinks: number;
   issues: string[];
+  /** the issues grouped by kind, worst first */
+  findings: CorrectorFinding[];
 };
+
+const FINDING_LABELS: Record<string, string> = {
+  insertion_unverified: 'no clear way in was found (check that these can really go on)',
+  support_order_unverified: 'may go on before what holds them up',
+  floating_unit: 'touch nothing built before them (floating)',
+  floating: 'touch nothing built before them (floating)',
+  unsupported: 'go on before what holds them up',
+  missing_part: 'have no part geometry, so their size is guessed',
+  missing_subpart: 'have incomplete part geometry',
+  partial_geometry: 'have incomplete part geometry',
+  geometry_cycle: 'have part files that include themselves',
+  invalid_geometry_line: 'have damaged lines in their part files',
+  contact_fallback: 'are linked by touching boxes, not real connectors',
+  component_bridge: 'join separate groups only by touching',
+  unconnected_proximity_fallback: 'were placed by nearness only',
+};
+const SEVERITY_RANK = { error: 0, warning: 1, info: 2 } as const;
+/** "insertion_unverified" → the plain phrase, or the code made readable. */
+export const findingLabel = (code: string) => FINDING_LABELS[code] ?? code.replace(/_/g, ' ');
 
 export type CorrectorRun = {
   ok: boolean;
@@ -114,6 +140,19 @@ export function summariseDiagnosis(diagnosis: unknown): CorrectorSummary | null 
     return Number.isFinite(value) ? Number(value) : 0;
   };
   const issues = Array.isArray(entry.issues) ? entry.issues : [];
+  const byCode = new Map<string, CorrectorFinding>();
+  for (const issue of issues) {
+    const one = issue as Record<string, unknown>;
+    const code = String(one.code ?? one.kind ?? 'issue');
+    const severity = one.severity === 'error' || one.severity === 'info' ? one.severity : 'warning';
+    const units = Array.isArray(one.units) ? one.units.length : 1;
+    const found = byCode.get(code);
+    if (found) {
+      found.count += units;
+      if (SEVERITY_RANK[severity] < SEVERITY_RANK[found.severity]) found.severity = severity;
+    } else byCode.set(code, { code, label: findingLabel(code), count: units, severity });
+  }
+  const findings = [...byCode.values()].sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] || b.count - a.count);
   return {
     units: count('units'),
     steps: count('steps'),
@@ -129,6 +168,7 @@ export function summariseDiagnosis(diagnosis: unknown): CorrectorSummary | null 
       const detail = one.message ?? one.detail ?? one.suggestion;
       return typeof detail === 'string' && detail ? `${code}: ${detail}` : code;
     }).slice(0, 8),
+    findings,
   };
 }
 

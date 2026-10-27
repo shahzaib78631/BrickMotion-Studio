@@ -1,0 +1,42 @@
+/* BRICKMOTION — FRAME LAYOUT
+   Loaded last. The rail is grouped and shrinks on short windows, the side panel can be
+   resized by its right edge or folded away by clicking the active rail button. */
+
+.nx-rail{gap:0}
+.bm-rail-group{display:flex;flex-direction:column;gap:3px}
+.bm-rail-group + .bm-rail-group{margin-top:7px;padding-top:7px;border-top:1px solid var(--line)}
+.bm-rail-group.end{margin-top:auto;border-top:0}
+.bm-rail-group.end::before{content:'';display:block;height:1px;margin:0 8px 7px;background:var(--line)}
+
+/* the panel and its resize edge */
+.nx-panel{position:relative}
+.bm-panel-resizer{position:absolute;top:0;right:-4px;bottom:0;width:8px;z-index:25;cursor:col-resize;touch-action:none}
+.bm-panel-resizer::after{content:'';position:absolute;top:0;bottom:0;left:3px;width:2px;border-radius:2px;background:transparent;transition:background-color .12s}
+.bm-panel-resizer:hover::after,.bm-panel-resizer:active::after{background:var(--accent)}
+.nx-work.panel-closed .nx-panel{visibility:hidden;overflow:hidden;border-right:0;box-shadow:none}
+.nx-work{transition:grid-template-columns .16s ease}
+
+/* shorter windows: tighter rail buttons, then icons only */
+@media (max-height:900px) and (min-width:761px){
+  .nx-rail{padding-top:9px}
+  .nx-tab{min-height:54px;gap:4px;padding:6px 1px 5px;font-size:10px}
+  .nx-tab .ic{width:19px;height:19px}
+  .bm-rail-group + .bm-rail-group{margin-top:5px;padding-top:5px}
+}
+@media (max-height:740px) and (min-width:761px){
+  .nx-tab{min-height:40px;padding:0}
+  .nx-tab .bm-rail-label{display:none}
+  .nx-tab .ic{width:19px;height:19px}
+}
+@media (max-width:760px){
+  .bm-rail-group,.bm-rail-group.end{flex-direction:row;margin:0;padding:0;border:0}
+  .bm-rail-group.end::before{display:none}
+  .bm-panel-resizer{display:none}
+  .nx-work.panel-closed .nx-panel{display:none}
+}
+
+/* hints inside collapsible sections are blocks, so every wrapped line keeps the same left edge */
+.bm-vsec > .nx-hint,.bm-vsec > .nx-fine{display:block}
+/* a row of buttons that wraps instead of overflowing a narrow panel */
+.bm-btn-row{display:flex;flex-wrap:wrap;gap:6px}
+.bm-btn-row .nx-btn{display:inline-flex;align-items:center;gap:5px}

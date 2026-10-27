@@ -204,3 +204,12 @@ def test_large_fixture_fast_fallback_preserves_original_lines(tmp_path):
     assert result['analysis_stats']['aabb_candidate_pairs'] < 100
     assert 'geometry_stats' in result
     assert 'parts' not in result  # verbose explanation is opt-in
+
+
+def test_explain_report_writes_numpy_values_as_plain_json():
+    # --explain records carry numpy ids and bounds; the report must still serialize
+    record = {'id': np.int64(4), 'z': np.float32(1.5), 'ok': np.bool_(True), 'box': np.arange(3), 'tags': {'b', 'a'}}
+    back = json.loads(json.dumps(record, default=A._json_default))
+    assert back == {'id': 4, 'z': 1.5, 'ok': True, 'box': [0, 1, 2], 'tags': ['a', 'b']}
+    with pytest.raises(TypeError):
+        json.dumps({'x': object()}, default=A._json_default)

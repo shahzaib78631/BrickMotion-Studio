@@ -4,7 +4,7 @@ import type { Timeline } from '../anim/timeline';
 import { decodeTimeline, type EncodedTimeline } from '../anim/timelineCodec';
 import type { PlanRequest } from '../anim/timeline.worker';
 import type { PlanningProgress } from '../anim/planning';
-import type { AnimOptions, FloorSides, FloorSort } from '../anim/pacing';
+import type { AnimOptions, FloorSides, FloorStyle, FloorMatch, FloorSort } from '../anim/pacing';
 import type { ConstructionBudgetPreset } from '../anim/construction/budgetPresets';
 import type { Plan } from '../plan/types';
 import { ensureParts, getColors, hasShadowPack, metricsOf } from './partService';
@@ -64,6 +64,8 @@ export const optsKey = (o: AnimOptions) =>
     // added later: only when changed, so keys (and saved animations) made before stay valid
     ...((o.floorSort ?? 'step') !== 'step' ? [`floor-sort:${o.floorSort}`] : []),
     ...((o.floorSides ?? 'front-back') !== 'front-back' ? [`floor-sides:${o.floorSides}`] : []),
+    ...((o.floorStyle ?? 'packed') !== 'packed' ? [`floor-style:${o.floorStyle}`] : []),
+    ...((o.floorMatch ?? 'fill') !== 'fill' ? [`floor-match:${o.floorMatch}`] : []),
     ...((o.constructionMaxCandidates ?? 100000) !== 100000 ? [`v2-candidates:${o.constructionMaxCandidates}`] : []),
     // Bays are part of the construction payload consumed by the Assembly panel.
     // Invalidate timelines cached before they were reported.
@@ -86,7 +88,7 @@ export type SavedVideoSettings = {
   targetSeconds: number; heroOrbit: boolean; mode: 'auto' | NonNullable<AnimOptions['mode']>;
   introSeconds: number | null; buildSeconds: number | null; outroSeconds: number | null;
   bottomUp: boolean; planner: 'legacy' | 'construction-v2' | 'construction-auto' | 'construction-v3' | 'construction-v3-auto' | 'construction-v4' | 'standard-motion' | 'standard-motion-v4' | 'assembly-artifact'; constructionSupport: 'fixture' | 'table'; constructionBudget?: ConstructionBudgetPreset;
-  floorSort: FloorSort; floorSides: FloorSides;
+  floorSort: FloorSort; floorSides: FloorSides; floorStyle: FloorStyle; floorMatch: FloorMatch;
 };
 export function settingsFromOptsKey(key: string): SavedVideoSettings | null {
   const f = key.split('|');
@@ -106,8 +108,10 @@ export function settingsFromOptsKey(key: string): SavedVideoSettings | null {
     planner: f[8] === 'construction-v2' ? 'construction-v2' : f[8] === 'construction-auto' ? 'construction-auto' : f[8] === 'construction-v3' ? 'construction-v3' : f[8] === 'construction-v3-auto' ? 'construction-v3-auto' : f[8] === 'construction-v4' ? 'construction-v4' : f[8] === 'standard-motion' ? 'standard-motion' : f[8] === 'standard-motion-v4' ? 'standard-motion-v4' : f[8] === 'assembly-artifact' ? 'assembly-artifact' : 'legacy',
     constructionSupport: f[11] === 'table' ? 'table' : 'fixture',
     ...(budget ? { constructionBudget: budget } : {}),
-    floorSort: (['colour', 'part', 'size'] as const).find((v) => f.includes(`floor-sort:${v}`)) ?? 'step',
-    floorSides: (['front', 'behind', 'sides'] as const).find((v) => f.includes(`floor-sides:${v}`)) ?? 'front-back',
+    floorSort: (['colour', 'part', 'size', 'all'] as const).find((v) => f.includes(`floor-sort:${v}`)) ?? 'step',
+    floorSides: (['front', 'behind', 'sides', 'around'] as const).find((v) => f.includes(`floor-sides:${v}`)) ?? 'front-back',
+    floorStyle: (['spaced', 'grid', 'rows', 'scattered'] as const).find((v) => f.includes(`floor-style:${v}`)) ?? 'packed',
+    floorMatch: f.includes('floor-match:nearest') ? 'nearest' : 'fill',
   };
 }
 

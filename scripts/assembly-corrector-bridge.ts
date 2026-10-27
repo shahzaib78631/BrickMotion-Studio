@@ -27,6 +27,8 @@ export function assemblyCorrectorBridge(options: BridgeOptions = {}): Plugin {
   const timeoutMs = options.timeoutMs ?? 240_000;
   const script = process.env.CORRECTOR_SCRIPT ?? join(root, 'assembly-corrector', 'ldraw_autostep.py');
   const ldraw = process.env.CORRECTOR_LDRAW ?? join(root, 'public', 'ldraw');
+  // LDCad snap data: with it the engine links parts by real connectors instead of guessing from boxes
+  const shadow = process.env.CORRECTOR_SHADOW ?? join(root, 'vendor', 'LDCadShadowLibrary');
   const venvPython = join(root, 'python', '.venv', 'bin', 'python');
   const python = process.env.CORRECTOR_PYTHON ?? (existsSync(venvPython) ? venvPython : 'python3');
   let cached: Record<string, unknown> | null = null;
@@ -58,12 +60,16 @@ export function assemblyCorrectorBridge(options: BridgeOptions = {}): Plugin {
       });
     }
     const version = probe.stdout.trim();
+    const snaps = existsSync(shadow);
     return (cached = {
       ready: true, python, script, ldraw, version,
       offline: existsSync(ldraw),
-      message: existsSync(ldraw)
-        ? `python ${version} · local LDraw library`
-        : `python ${version} · no local LDraw library (the engine will download parts)`,
+      shadow: snaps,
+      message: [
+        `python ${version}`,
+        existsSync(ldraw) ? 'local LDraw library' : 'no local LDraw library (the engine will download parts)',
+        snaps ? 'LDCad snap data' : existsSync(ldraw) ? 'no snap data (links are guessed from part boxes)' : 'snap data downloaded as needed',
+      ].join(' · '),
     });
   };
 
@@ -93,6 +99,7 @@ export function assemblyCorrectorBridge(options: BridgeOptions = {}): Plugin {
       const maxStep = Number(body.maxStep);
       if (Number.isFinite(maxStep) && maxStep > 0) args.push('--max-step', String(Math.round(maxStep)));
       if (existsSync(ldraw)) args.push('--ldraw', ldraw, '--offline');
+      if (existsSync(shadow)) args.push('--shadow-dir', shadow);
       const result = await spawnOnce(args);
       const mpd = existsSync(outPath) ? await readFile(outPath, 'utf8') : null;
       const diagnosis = existsSync(jsonPath) ? await readFile(jsonPath, 'utf8') : null;

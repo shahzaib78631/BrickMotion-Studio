@@ -129,6 +129,8 @@ export function ModelsPanel({ model, onExport, onMakeSubmodel }: { model: ModelS
   const [engine, setEngine] = useState<CorrectorHealth | null>(null);
   const [running, setRunning] = useState<string | null>(null);
   const [note, setNote] = useState<{ model: string; result: CorrectorResult } | null>(null);
+  /** the engine's target number of parts in one step */
+  const [perStep, setPerStep] = useState(8);
   useEffect(() => {
     let alive = true;
     void correctorStatus().then((health) => { if (alive) setEngine(health); }, () => undefined);
@@ -137,7 +139,7 @@ export function ModelsPanel({ model, onExport, onMakeSubmodel }: { model: ModelS
   const correct = async (name: string) => {
     setRunning(name);
     setNote(null);
-    const result = await runCorrectorForModel(name);
+    const result = await runCorrectorForModel(name, { maxStep: perStep });
     setNote({ model: name, result });
     setRunning(null);
   };
@@ -282,12 +284,12 @@ export function ModelsPanel({ model, onExport, onMakeSubmodel }: { model: ModelS
           </button>
           {mark && <button className="nx-btn nx-sm" disabled={!!running} onClick={() => stopCorrecting(editingModel)}><Ic name="undo" /> Stop using it</button>}
         </div>
-        {note && <p className={`bm-corrector-note ${note.result.ok ? 'ok' : 'bad'}`} role="status">
-          {note.model === editingModel ? '' : `${label(note.model)}: `}
-          {note.result.message}
-          {note.result.ok && note.result.summary ? ` · ${note.result.summary.units} parts, ${note.result.summary.floating} floating, ${note.result.summary.issues.length} issue${note.result.summary.issues.length === 1 ? '' : 's'}` : ''}
-          {note.result.summary?.issues.length ? ` — first: ${note.result.summary.issues[0]}` : ''}
-        </p>}
+        <label className="nx-field bm-corrector-per">
+          Parts per step
+          <input type="number" min={2} max={30} step={1} value={perStep} disabled={!!running}
+            onChange={(e) => setPerStep(Math.max(2, Math.min(30, Math.round(Number(e.target.value)) || 8)))} />
+        </label>
+        {note && <CorrectorReport note={note.result} model={note.model === editingModel ? '' : label(note.model)} />}
       </div>
       <div className="bm-models-batch">
         <h4>Quick actions</h4>
@@ -310,4 +312,36 @@ function expandedLabel(name: string, collapsed: boolean) {
 
 function viewportFitSoon() {
   requestAnimationFrame(() => import('./viewportApi').then(({ viewportApi }) => viewportApi.fit()));
+}
+
+/** What one corrector run did, and how sure the engine was: links from real connectors vs guesses, grouped findings. */
+function CorrectorReport({ note, model }: { note: CorrectorResult; model: string }) {
+  const sum = note.summary;
+  const links = sum ? sum.snapLinks + sum.fallbackLinks : 0;
+  const sure = links ? Math.round((100 * (sum?.snapLinks ?? 0)) / links) : 0;
+  return (
+    <div className={`bm-corrector-note ${note.ok ? 'ok' : 'bad'}`} role="status">
+      <strong>{model ? `${model}: ` : ''}{note.message}</strong>
+      {sum && <span className="bm-corrector-facts">
+        {sum.units.toLocaleString()} parts · {sum.floating} floating · {sum.unsupported} before their support
+        {sum.missingGeometry ? ` · ${sum.missingGeometry} without geometry` : ''}
+      </span>}
+      {links > 0 && <>
+        <span className="bm-corrector-meter" aria-hidden="true"><i style={{ width: `${sure}%` }} /></span>
+        <span className="bm-corrector-facts">
+          {sure}% of {links.toLocaleString()} links come from real connectors{sum!.fallbackLinks ? `, ${sum!.fallbackLinks} are guessed from touching parts` : ''}.
+        </span>
+      </>}
+      {sum && sum.findings.length > 0 && (
+        <details className="bm-corrector-findings">
+          <summary>{sum.findings.reduce((n, f) => n + f.count, 0)} piece{sum.findings.reduce((n, f) => n + f.count, 0) === 1 ? '' : 's'} to check</summary>
+          <ul>
+            {sum.findings.map((f) => (
+              <li key={f.code} className={f.severity}><b>{f.count}</b> {f.label}</li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
 }

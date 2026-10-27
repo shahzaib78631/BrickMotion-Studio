@@ -1,0 +1,62 @@
+/* BRICKMOTION — THEMES
+   Loaded after reference.css. data-theme is light/dark, data-accent the highlight colour,
+   data-surface the tone of the neutrals. Every rule here only sets tokens. */
+
+/* derived from the accent in every theme */
+.studio{
+  --hover:color-mix(in srgb,var(--accent) 7%,var(--surface));
+  --focus:color-mix(in srgb,var(--accent) 82%,white);
+  --mark:var(--accent);
+  /* what the accent is darkened or lightened toward: flips in dark mode so text stays readable */
+  --accent-shade:black;--accent-lift:white;
+}
+.studio[data-theme=dark]{--accent-shade:white;--accent-lift:var(--surface);--hover:color-mix(in srgb,var(--accent) 14%,var(--surface));--focus:color-mix(in srgb,var(--accent) 75%,white)}
+.studio ::selection{background:color-mix(in srgb,var(--accent) 22%,var(--surface));color:var(--ink)}
+
+.studio[data-accent=blue]{--accent:#2563eb;--accent-ink:#fff;--clip:color-mix(in srgb,#2563eb 75%,white);--clip2:color-mix(in srgb,#2563eb 35%,white);--el:#2563eb;--sub:color-mix(in srgb,#2563eb 70%,white)}
+.studio[data-theme=dark][data-accent=blue]{--accent:#4f8cff;--clip:color-mix(in srgb,#4f8cff 80%,black);--clip2:color-mix(in srgb,#4f8cff 55%,black);--el:#4f8cff;--sub:#4f8cff}
+.studio[data-accent=teal]{--accent:#0f8a82;--accent-ink:#fff;--clip:color-mix(in srgb,#0f8a82 75%,white);--clip2:color-mix(in srgb,#0f8a82 35%,white);--el:#0f8a82;--sub:color-mix(in srgb,#0f8a82 70%,white)}
+.studio[data-theme=dark][data-accent=teal]{--accent:#2bb3a8;--clip:color-mix(in srgb,#2bb3a8 80%,black);--clip2:color-mix(in srgb,#2bb3a8 55%,black);--el:#2bb3a8;--sub:#2bb3a8}
+.studio[data-accent=green]{--accent:#1d8f4e;--accent-ink:#fff;--clip:color-mix(in srgb,#1d8f4e 75%,white);--clip2:color-mix(in srgb,#1d8f4e 35%,white);--el:#1d8f4e;--sub:color-mix(in srgb,#1d8f4e 70%,white)}
+.studio[data-theme=dark][data-accent=green]{--accent:#34c172;--clip:color-mix(in srgb,#34c172 80%,black);--clip2:color-mix(in srgb,#34c172 55%,black);--el:#34c172;--sub:#34c172}
+.studio[data-accent=orange]{--accent:#d9590f;--accent-ink:#fff;--clip:color-mix(in srgb,#d9590f 75%,white);--clip2:color-mix(in srgb,#d9590f 35%,white);--el:#d9590f;--sub:color-mix(in srgb,#d9590f 70%,white)}
+.studio[data-theme=dark][data-accent=orange]{--accent:#ff8a3d;--clip:color-mix(in srgb,#ff8a3d 80%,black);--clip2:color-mix(in srgb,#ff8a3d 55%,black);--el:#ff8a3d;--sub:#ff8a3d}
+.studio[data-accent=rose]{--accent:#d4245e;--accent-ink:#fff;--clip:color-mix(in srgb,#d4245e 75%,white);--clip2:color-mix(in srgb,#d4245e 35%,white);--el:#d4245e;--sub:color-mix(in srgb,#d4245e 70%,white)}
+.studio[data-theme=dark][data-accent=rose]{--accent:#ff5c8d;--clip:color-mix(in srgb,#ff5c8d 80%,black);--clip2:color-mix(in srgb,#ff5c8d 55%,black);--el:#ff5c8d;--sub:#ff5c8d}
+.studio[data-accent=mono]{--accent:#18181b;--accent-ink:#fff;--clip:#52525b;--clip2:#a1a1aa;--el:#3f3f46;--sub:#71717a;--focus:#6366f1}
+.studio[data-theme=dark][data-accent=mono]{--accent:#f4f4f5;--accent-ink:#111;--clip:#71717a;--clip2:#52525b;--el:#d4d4d8;--sub:#a1a1aa;--focus:#a5b4fc}
+
+/* the primary button stays readable on a pale accent (Graphite in dark mode) */
+.studio .nx-btn.nx-primary{color:var(--accent-ink)}
+
+/* surfaces */
+.studio[data-surface=neutral]{--bg:#f5f5f4;--surface:#fff;--surface2:#fafafa;--sunken:#f1f1f0;--line:#e7e7e5;--line2:#dbdbd8;--ink:#18181b;--ink2:#4b4b53;--ink3:#8a8a93;--cam:#8a8a93;
+  --shadow:0 3px 12px #0000000c,0 1px 4px #0000000a}
+.studio[data-theme=dark][data-surface=neutral]{--bg:#0f0f11;--surface:#18181b;--surface2:#1d1d21;--sunken:#232328;--line:#2b2b31;--line2:#37373e;--ink:#f4f4f5;--ink2:#babac2;--ink3:#83838d;--cam:#52525b;
+  --shadow:0 3px 14px #0005,0 2px 6px #0003}
+.studio[data-surface=warm]{--bg:#f7f3ec;--surface:#fffdf9;--surface2:#fbf8f2;--sunken:#f2ede4;--line:#ebe4d8;--line2:#ddd4c5;--ink:#211b14;--ink2:#5a5243;--ink3:#978c79;--cam:#a1937c;
+  --shadow:0 3px 12px #3a2a100d,0 1px 4px #3a2a100a}
+.studio[data-theme=dark][data-surface=warm]{--bg:#14110e;--surface:#1c1915;--surface2:#221e19;--sunken:#29241e;--line:#342e26;--line2:#41392f;--ink:#f7f2ea;--ink2:#c9c0b1;--ink3:#958a7a;--cam:#5c5246;
+  --shadow:0 3px 14px #0005,0 2px 6px #0003}
+
+
+/* the picker in Settings */
+.bm-theme-modes{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;padding:3px;border:1px solid var(--line);border-radius:10px;background:var(--sunken)}
+.bm-theme-modes button{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:6px 4px;border-radius:7px;font-size:11.5px;font-weight:600;color:var(--ink2)}
+.bm-theme-modes button .ic{width:13px;height:13px}
+.bm-theme-modes button.on{background:var(--surface);color:var(--accent);box-shadow:var(--shadow)}
+.bm-theme-label{margin:10px 0 5px;font-size:11px;font-weight:650;color:var(--ink2)}
+.bm-theme-accents{display:flex;flex-wrap:wrap;gap:8px}
+.bm-theme-accents button{width:26px;height:26px;border-radius:50%;background:var(--sw);display:grid;place-items:center;color:#fff;box-shadow:inset 0 0 0 1px #0000001a}
+.bm-theme-accents button.on{outline:2px solid var(--sw);outline-offset:2px}
+.bm-theme-accents button .ic{width:13px;height:13px;stroke-width:2.6;color:#fff;filter:drop-shadow(0 0 1px #000a)}
+.bm-theme-surfaces{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.bm-theme-surfaces button{display:flex;flex-direction:column;gap:5px;padding:5px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:11px;font-weight:600;color:var(--ink2)}
+.bm-theme-surfaces button.on{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.bm-theme-swatch{position:relative;display:block;height:34px;border-radius:6px;overflow:hidden;box-shadow:inset 0 0 0 1px #00000014}
+.bm-theme-swatch i{position:absolute;left:6px;top:6px;bottom:6px;width:42%;border-radius:4px;box-shadow:0 1px 2px #0000001f}
+.bm-theme-swatch b{position:absolute;right:6px;top:8px;width:26%;height:5px;border-radius:3px;background:var(--accent)}
+
+/* filled accent controls keep a lit-from-above gradient in every mode */
+.studio .nx-btn.nx-primary{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 86%,white) 0%,color-mix(in srgb,var(--accent) 88%,black) 100%)!important;color:var(--accent-ink)}
+.studio .nx-btn.nx-primary:hover:not(:disabled){background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 76%,white) 0%,var(--accent) 100%)!important}

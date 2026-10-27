@@ -134,6 +134,7 @@ export function CapturePanel({ model }: { model: ModelState }) {
         type: 'image/png',
         studioLook: settings.studioLook,
         render: { edges: settings.edgeLines, linearColors: settings.linearColors },
+        materials: settings.materials,
         sceneSetup: plan.sceneSetup,
       }, deps);
       saveBlob(name('capture-transparent', 'png'), blob);
@@ -179,6 +180,7 @@ export function CapturePanel({ model }: { model: ModelState }) {
         camera: settings.camera,
         studioLook: settings.studioLook,
         render: { edges: settings.edgeLines, linearColors: settings.linearColors },
+        materials: settings.materials,
         sceneSetup: plan.sceneSetup,
         signal: ac.signal,
         onProgress: (done, total) => setProgress({ done, total }),

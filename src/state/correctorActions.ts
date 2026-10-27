@@ -43,7 +43,8 @@ export async function runCorrectorForModel(model: string, opts: { maxStep?: numb
   const existing = plan.assemblyCorrector?.[model];
   // Re-running keeps the order from before the first correction, so disabling it still
   // puts the model back the way its author had it.
-  const remembered = existing?.previous ? { ...mark, previous: existing.previous, at: existing.at } : mark;
+  // the badge shows the engine's step count; `previous` keeps the author's order
+  const remembered = { ...(existing?.previous ? { ...mark, previous: existing.previous, at: existing.at } : mark), steps: groups.length };
   useStudio.getState().apply((p) => ({
     ...withCorrectorSteps(p, model, groups),
     assemblyCorrector: { ...(p.assemblyCorrector ?? {}), [model]: remembered },

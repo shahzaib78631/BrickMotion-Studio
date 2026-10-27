@@ -3,8 +3,14 @@ import type { JointLimitRule } from './motion/v4/jointLimits';
 import type { MechanismProgram } from './motion/v4/mechanismProgram';
 
 export type ArrivalMode = 'piece' | 'batch' | 'step';
-export type FloorSort = 'step' | 'colour' | 'part' | 'size';
-export type FloorSides = 'front-back' | 'front' | 'behind' | 'sides';
+/** 'all': every piece waits on the floor from the start, none dropped in later. */
+export type FloorSort = 'step' | 'colour' | 'part' | 'size' | 'all';
+export type FloorSides = 'front-back' | 'front' | 'behind' | 'sides' | 'around';
+/** How waiting pieces are arranged on the floor: tightly packed (default), with room around them, in an even grid, one row per group, or loosely scattered. */
+export type FloorStyle = 'packed' | 'spaced' | 'grid' | 'rows' | 'scattered';
+export const FLOOR_STYLES: readonly FloorStyle[] = ['packed', 'spaced', 'grid', 'rows', 'scattered'];
+/** Which side a piece waits on: the bands filled in order (default), or the side of the model it is built on. */
+export type FloorMatch = 'fill' | 'nearest';
 export type AnimOptions = {
   targetSeconds: number; heroOrbit: boolean; mode?: ArrivalMode;
   /** V2 is explicit opt-in until articulated/flexible model coverage is ready. */
@@ -53,6 +59,10 @@ export type AnimOptions = {
   floorSort?: FloorSort;
   /** Where they wait around the model: in front and behind (default), only in front, only behind, or at its left and right. */
   floorSides?: FloorSides;
+  /** How they are arranged there (default 'packed'). */
+  floorStyle?: FloorStyle;
+  /** Which side each piece waits on (default 'fill'). */
+  floorMatch?: FloorMatch;
   /** Optional wall-clock cap on that re-planning (ms, maximum 10000). Unset by default: a time cap makes results depend on machine load. */
   accessSearchMilliseconds?: number;
 };

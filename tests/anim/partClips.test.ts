@@ -1,6 +1,6 @@
 import { beforeAll, expect, test } from 'vitest';
 import { buildTimeline } from '../../src/anim/timeline';
-import { dropTarget, packRows, partClips, pulledAhead, type PartClip } from '../../src/anim/partClips';
+import { dropTarget, packRows, partClips, pulledAhead, pushedBack, type PartClip } from '../../src/anim/partClips';
 import { assemble, type Metrics } from '../../src/model/assemble';
 import { ensureIds } from '../../src/plan/ids';
 import { insertItem, modelSteps, moveItemTo } from '../../src/plan/ops';
@@ -73,4 +73,12 @@ test('a dropped clip reports the pieces put after it that the build still brings
   expect(pulledAhead(clips, 'base', new Set(['top', 'side']))).toEqual([]);
   // the moved clip is gone (deleted meanwhile): nothing to say
   expect(pulledAhead(clips, 'gone', new Set(['base']))).toEqual([]);
+});
+
+test('a base moved later reports the pieces put before it that now follow it', () => {
+  const clip = (id: string, start: number): PartClip => ({ id, step: 0, index: 0, start, end: start + 1, part: id, row: 0 });
+  // "base" was dropped after "top", which rests on it, so "top" now goes on after it
+  const clips = [clip('side', 0), clip('base', 1), clip('top', 2)];
+  expect(pushedBack(clips, 'base', new Set(['side', 'top'])).map((c) => c.id)).toEqual(['top']);
+  expect(pushedBack(clips, 'top', new Set(['side', 'base']))).toEqual([]);
 });

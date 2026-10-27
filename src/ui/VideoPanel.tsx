@@ -4,7 +4,7 @@ import type { LogoCorner } from '../export/exportVideo';
 import { FPS_OPTIONS, type ExportFps } from '../export/frameRates';
 import { VIDEO_FORMATS, type VideoFormat } from '../export/formats';
 import { useStudio } from '../state/store';
-import { resetFloorShifts } from '../plan/pieceActions';
+import { SCENES, sceneOf } from '../render/looks';
 import { useAppSettings } from '../state/appSettings';
 import { validateJointLimitRules, type JointLimitRule } from '../anim/motion/v4/jointLimits';
 import { validateMechanismProgram, type MechanismProgram } from '../anim/motion/v4/mechanismProgram';
@@ -54,7 +54,6 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
   const manual = timelineEditor === 'timeline';
   const linked = !!buildLayerAt(animation, editingModel);
   /** pieces dragged to another waiting spot */
-  const moved = useStudio((st) => [...st.plan.steps, ...Object.values(st.plan.submodels ?? {}).flatMap((m) => m.steps)].reduce((n, step) => n + step.pieces.filter((i) => i.assembly?.floorShift).length, 0));
   const fmt = VIDEO_FORMATS[s.format];
   const setCamera = (key: keyof typeof s.camera, value: number) => s.set({ camera: { ...s.camera, [key]: value } });
 
@@ -167,7 +166,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
             <option value="buildView">My viewport — what I see when I press play, intro to hero</option>
           </select>
         </label>
-        {s.exportCamera === 'buildView' && <p className="nx-hint">The MP4 keeps your viewport's angle and zoom, re-fitted to the chosen format: the intro settles out of your view, the build holds that view still, and the outro is the hero orbit at your zoom. Frame the model in the viewport before exporting.</p>}
+        {s.exportCamera === 'buildView' && <p className="nx-hint">The MP4 keeps your viewport's angle and zoom, re-fitted to the chosen format: the intro is the same establishing shot the Build view plays and ends on your view, the build holds that view still, and the outro is the hero orbit at your zoom. Frame the model in the viewport before exporting.</p>}
         <label className="nx-field">
           Framing
           <select aria-label="Camera framing" value={s.cameraFraming} onChange={(e) => s.set({ cameraFraming: e.target.value as typeof s.cameraFraming })}>
@@ -201,12 +200,11 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
       </details>
 
       <details className="nx-group bm-vsec">
-        <summary>Look &amp; sound<span className="bm-vsec-val">{s.studioLook === 'soft' ? 'Soft studio' : 'Bright studio'}</span></summary>
+        <summary>Look &amp; sound<span className="bm-vsec-val">{sceneOf(s.studioLook).label}</span></summary>
         <label className="nx-field">
           Studio
           <select aria-label="Studio appearance" value={s.studioLook} onChange={(e) => s.set({ studioLook: e.target.value as typeof s.studioLook })}>
-            <option value="soft">Soft studio — grey, contact shadows</option>
-            <option value="classic">Bright studio — white</option>
+            {SCENES.map((sc) => <option key={sc.id} value={sc.id}>{sc.label} — {sc.hint.toLowerCase()}</option>)}
           </select>
         </label>
         <label className="nx-check"><input type="checkbox" checked={s.edgeLines} onChange={(e) => s.set({ edgeLines: e.target.checked })} /> Edge lines</label>
@@ -214,41 +212,6 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
         <label className="nx-check" title="A click each time pieces connect"><input type="checkbox" checked={s.snapSound} onChange={(e) => s.set({ snapSound: e.target.checked })} /> Snap sound</label>
       </details>
 
-      {!manual && <>
-      <details className="nx-group bm-vsec">
-        <summary>Waiting pieces<span className="bm-vsec-val">{moved ? `${moved} moved` : ''}</span></summary>
-        <div className="nx-grid2">
-          <label className="nx-field">
-            Group
-            <select aria-label="Group waiting pieces" disabled={v2} value={s.floorSort} onChange={(e) => s.set({ floorSort: e.target.value as typeof s.floorSort })}>
-              <option value="step">By step</option>
-              <option value="colour">By colour</option>
-              <option value="part">By part</option>
-              <option value="size">By size</option>
-            </select>
-          </label>
-          <label className="nx-field">
-            Where
-            <select aria-label="Where waiting pieces lie" disabled={v2} value={s.floorSides} onChange={(e) => s.set({ floorSides: e.target.value as typeof s.floorSides })}>
-              <option value="front-back">In front and behind</option>
-              <option value="front">In front</option>
-              <option value="behind">Behind</option>
-              <option value="sides">Left and right</option>
-            </select>
-          </label>
-        </div>
-        <span className="nx-hint">Drag a waiting piece in the Build view to move it.</span>
-        {moved > 0 && (
-          <button className="nx-btn nx-sm" onClick={() => useStudio.getState().apply(resetFloorShifts)}>
-            <Ic name="undo" /> Put {moved} moved piece{moved === 1 ? '' : 's'} back
-          </button>
-        )}
-        <label className="nx-check" title="Within a step, each piece waits for what it rests on">
-          <input type="checkbox" disabled={v2} checked={s.bottomUp} onChange={(e) => s.set({ bottomUp: e.target.checked })} /> Build bottom-up
-        </label>
-      </details>
-
-      </>}
       <details className="nx-group bm-vsec">
         <summary>Logo<span className="bm-vsec-val">{s.logoEnabled && s.logoBitmap ? 'On' : 'Off'}</span></summary>
         <div className="bm-logo-row">

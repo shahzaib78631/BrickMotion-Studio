@@ -94,6 +94,14 @@ export function applyCameraCrop(camera: THREE.PerspectiveCamera, setup?: SceneSe
       crop.width * fullWidth, crop.height * fullHeight);
   }
 }
+/** The scene camera's pose when it is in charge of the video, else null. */
+export function sceneCameraPose(setup?: SceneSetup): { position: THREE.Vector3; target: THREE.Vector3; fov: number; near: number; far: number } | null {
+  const active = setup?.useCameraForVideo ? activeSceneCamera(setup) : null;
+  if (!active) return null;
+  const position = new THREE.Vector3(...active.position), target = new THREE.Vector3(...active.target);
+  if (target.distanceToSquared(position) < 1e-8) return null;
+  return { position, target, fov: active.fov, near: active.near, far: active.far };
+}
 /** Scene camera applies a fixed pose; the procedural camera is used otherwise. */
 export function applySceneCamera(camera: THREE.PerspectiveCamera, setup?: SceneSetup): boolean {
   const active = setup?.useCameraForVideo ? activeSceneCamera(setup) : null;

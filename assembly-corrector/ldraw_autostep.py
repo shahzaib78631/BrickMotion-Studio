@@ -31,6 +31,15 @@ def safe_library_name(name):
                 and all(p not in ('', '.', '..') for p in n.split('/'))
                 and not any(ord(c) < 32 for c in n))
 
+def _json_default(o):
+    """numpy scalars and arrays leak into the --explain records; write them as plain JSON."""
+    if isinstance(o, np.integer): return int(o)
+    if isinstance(o, np.floating): return float(o)
+    if isinstance(o, np.bool_): return bool(o)
+    if isinstance(o, np.ndarray): return o.tolist()
+    if isinstance(o, (set, frozenset)): return sorted(o)
+    raise TypeError('Object of type %s is not JSON serializable' % type(o).__name__)
+
 class Library:
     def __init__(self, ldraw_dir=None, shadow_dir=None, cache_dir=None, offline=False):
         self.ldraw_dir, self.shadow_dir = ldraw_dir, shadow_dir
@@ -1261,7 +1270,7 @@ def main(argv=None):
         ap.exit(2, 'error: %s\n' % exc)
     if opt.report_json:
         try:
-            atomic_write(opt.report_json, json.dumps(reps, indent=2, ensure_ascii=False) + '\n')
+            atomic_write(opt.report_json, json.dumps(reps, indent=2, ensure_ascii=False, default=_json_default) + '\n')
         except OSError as exc:
             ap.exit(2, 'error writing JSON report: %s\n' % exc)
     for r in reps:
