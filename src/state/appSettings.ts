@@ -47,6 +47,8 @@ export type AppSettings = {
   logoCorner: LogoCorner;
   /** the floating quick-action bar over the viewport when parts are selected */
   showSelectionBar: boolean;
+  /** MP4 camera: the automatic cinematics, or the camera the viewport plays. */
+  exportCamera: 'automatic' | 'buildView';
   /** play the intro shot and hero orbit in the Build viewport as well as in the video */
   cameraFollowsPlayback: boolean;
   /** the logo file as stored */
@@ -63,6 +65,7 @@ export const useAppSettings = create<AppSettings>((set) => ({
   logoEnabled: DEFAULT_SETTINGS.logoEnabled,
   logoCorner: DEFAULT_SETTINGS.logoCorner,
   showSelectionBar: DEFAULT_SETTINGS.showSelectionBar,
+  exportCamera: DEFAULT_SETTINGS.exportCamera,
   cameraFollowsPlayback: DEFAULT_SETTINGS.cameraFollowsPlayback,
   logo: null,
   logoBitmap: null,
@@ -77,6 +80,7 @@ export const toSettings = (s: AppSettings): Settings => ({
   logoEnabled: s.logoEnabled,
   showSelectionBar: s.showSelectionBar,
   cameraFollowsPlayback: s.cameraFollowsPlayback,
+  exportCamera: s.exportCamera ?? 'automatic',
   video: { targetSeconds: s.targetSeconds, heroOrbit: s.heroOrbit, mode: s.mode, fps: s.fps, introSeconds: s.introSeconds, buildSeconds: s.buildSeconds, outroSeconds: s.outroSeconds, studioLook: s.studioLook, cameraFraming: s.cameraFraming, camera: s.camera, format: s.format, edgeLines: s.edgeLines, linearColors: s.linearColors, bottomUp: s.bottomUp, snapSound: s.snapSound, planner: s.planner ?? 'legacy', constructionSupport: s.constructionSupport ?? 'fixture', constructionBudget: s.constructionBudget ?? 'standard', constructionStepModules: s.constructionStepModules === true, motionV4Limits: s.motionV4Limits ?? [], motionV4Mechanism: s.motionV4Mechanism ?? null, floorSort: s.floorSort, floorSides: s.floorSides },
 });
 
@@ -84,7 +88,7 @@ export async function applySettings(s: Settings): Promise<void> {
   const logoBitmap = s.logo ? await createImageBitmap(s.logo).catch(() => null) : null;
   useAppSettings
     .getState()
-    .set({ apiKey: s.apiKey, model: s.model, logo: s.logo, logoBitmap, logoCorner: s.logoCorner, logoEnabled: s.logoEnabled && !!logoBitmap, showSelectionBar: s.showSelectionBar, cameraFollowsPlayback: s.cameraFollowsPlayback, ...s.video });
+    .set({ apiKey: s.apiKey, model: s.model, logo: s.logo, logoBitmap, logoCorner: s.logoCorner, logoEnabled: s.logoEnabled && !!logoBitmap, showSelectionBar: s.showSelectionBar, cameraFollowsPlayback: s.cameraFollowsPlayback, exportCamera: s.exportCamera ?? 'automatic', ...s.video });
 }
 
 /** The animation options the timeline planner needs, taken from the video settings. */

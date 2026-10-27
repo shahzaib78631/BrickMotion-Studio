@@ -17,6 +17,8 @@ export type Settings = {
   logoEnabled: boolean;
   /** the floating quick-action bar over the viewport when parts are selected */
   showSelectionBar: boolean;
+  /** MP4 camera: automatic cinematics, or the camera the viewport plays. */
+  exportCamera: 'automatic' | 'buildView';
   /** the Build viewport plays the intro shot and hero orbit while it plays */
   cameraFollowsPlayback: boolean;
   video: { targetSeconds: number; heroOrbit: boolean; mode: ArrivalMode | 'auto'; fps: ExportFps; introSeconds: number | null; buildSeconds: number | null; outroSeconds: number | null; studioLook: StudioLook; cameraFraming: CameraFraming; camera: CameraSettings; format: VideoFormat; edgeLines: boolean; linearColors: boolean; bottomUp: boolean; snapSound: boolean; planner?: 'legacy' | 'construction-v2' | 'construction-auto' | 'construction-v3' | 'construction-v3-auto' | 'construction-v4' | 'standard-motion' | 'standard-motion-v4' | 'assembly-artifact'; constructionSupport?: 'fixture' | 'table'; constructionBudget?: ConstructionBudgetPreset; constructionStepModules?: boolean; motionV4Limits?: JointLimitRule[]; motionV4Mechanism?: MechanismProgram | null; floorSort: FloorSort; floorSides: FloorSides };
@@ -29,6 +31,7 @@ export const DEFAULT_SETTINGS: Settings = {
   logoCorner: 'br',
   logoEnabled: false,
   showSelectionBar: true,
+  exportCamera: 'automatic',
   cameraFollowsPlayback: true,
   video: { targetSeconds: 15, heroOrbit: true, mode: 'auto', fps: 30, introSeconds: null, buildSeconds: null, outroSeconds: null, studioLook: 'soft', cameraFraming: 'cinematic', camera: DEFAULT_CAMERA_SETTINGS, format: '9:16', edgeLines: true, linearColors: true, bottomUp: true, snapSound: true, planner: 'legacy', constructionSupport: 'fixture', constructionBudget: 'standard', constructionStepModules: false, motionV4Limits: [], motionV4Mechanism: null, floorSort: 'step', floorSides: 'front-back' },
 };
@@ -68,6 +71,7 @@ export async function loadSettings(): Promise<Settings> {
   if (typeof video.snapSound !== 'boolean') video.snapSound = DEFAULT_SETTINGS.video.snapSound;
   if (typeof s.showSelectionBar !== 'boolean') s.showSelectionBar = DEFAULT_SETTINGS.showSelectionBar;
   if (typeof s.cameraFollowsPlayback !== 'boolean') s.cameraFollowsPlayback = DEFAULT_SETTINGS.cameraFollowsPlayback;
+  if (s.exportCamera !== 'automatic' && s.exportCamera !== 'buildView') s.exportCamera = 'automatic';
   for (const key of ['introSeconds', 'buildSeconds', 'outroSeconds'] as const) {
     const value = video[key];
     if (value !== null && (!Number.isFinite(value) || value < (key === 'buildSeconds' ? 1 : 0.2) || value > 120)) video[key] = null;

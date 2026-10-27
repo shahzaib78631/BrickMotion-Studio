@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { AudioBufferSource, BufferTarget, CanvasSource, Mp4OutputFormat, Output, QUALITY_HIGH, QUALITY_MEDIUM, canEncodeAudio, canEncodeVideo } from 'mediabunny';
 import { snapsOf, type Snap } from '../anim/snaps';
 import { renderSnapTrack } from '../audio/snapSound';
-import { cameraAt, cameraFov, fitDistance, sphericalPosition, worldBox3, DEFAULT_CAMERA_SETTINGS, type CamPose, type CameraFraming, type CameraSettings } from '../anim/camera';
+import { buildViewCamera, cameraAt, cameraFov, fitDistance, sphericalPosition, worldBox3, DEFAULT_CAMERA_SETTINGS, type CamPose, type CameraFraming, type CameraSettings, type EditorCamera } from '../anim/camera';
 import { buildLayerAt } from '../anim/buildLayer';
 import { makeKeyframePose } from '../anim/keyframePose';
 import type { StudioLook, RenderOptions } from '../render/studio';
@@ -21,6 +21,8 @@ type CommonExportOpts = {
   studioLook?: StudioLook;
   cameraFraming?: CameraFraming;
   camera?: CameraSettings;
+  /** Shoot the build from the editor camera instead of the automatic one. */
+  buildView?: EditorCamera;
   sceneSetup?: SceneSetup;
   /** Edge lines and colour response; the studio's defaults when left out. */
   render?: RenderOptions;
@@ -138,7 +140,8 @@ export async function encodeMp4(opts: CommonExportOpts, deps: ExportDeps, sample
       studio.perspective.lookAt(cam.target);
       studio.perspective.fov = cam.fov;
       studio.perspective.updateProjectionMatrix();
-      if (!applySceneCamera(studio.perspective, opts.sceneSetup)) applyCameraCrop(studio.perspective, opts.sceneSetup);
+      if (opts.buildView) applyCameraCrop(studio.perspective, opts.sceneSetup);
+      else if (!applySceneCamera(studio.perspective, opts.sceneSetup)) applyCameraCrop(studio.perspective, opts.sceneSetup);
       studio.render();
       if (opts.logo && ctx) {
         ctx.drawImage(renderCanvas as CanvasImageSource, 0, 0, w, h);
@@ -167,7 +170,9 @@ export function exportVideo(opts: ExportOpts, deps: ExportDeps): Promise<Blob> {
     box: worldBox3(tl.sceneBox),
     groundY: -tl.ground / 20,
     at: (seconds) => poseAt(tl, seconds),
-    camera: (seconds, aspect) => cameraAt(tl, seconds, aspect, opts.cameraFraming ?? 'cinematic', opts.camera),
+    camera: opts.buildView
+      ? (seconds, aspect) => buildViewCamera(tl, opts.buildView!, aspect, opts.camera ?? DEFAULT_CAMERA_SETTINGS)(seconds)
+      : (seconds, aspect) => cameraAt(tl, seconds, aspect, opts.cameraFraming ?? 'cinematic', opts.camera),
     snaps: snapsOf(tl),
   });
 }

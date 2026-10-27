@@ -482,3 +482,48 @@ export function cameraAt(
   } else rig = buildRig(tl, tl.buildEnd, aspect, framing, settings);
   return { position: sphericalPosition(rig.target, rig.dist, rig.az, rig.el), target: rig.target, fov };
 }
+
+/** The camera the viewport is showing: its pose and its lens. */
+export type EditorCamera = { position: [number, number, number]; target: [number, number, number]; fov: number };
+
+/**
+ * The camera the Build tab plays, as a video sampler. It is *your* shot: the same direction,
+ * distance and lens the viewport has, with the intro pushing in from slightly further out and
+ * the outro orbiting around the model by the hero angle — no re-framing, no zoom change.
+ */
+export function buildViewCamera(
+  tl: Timeline,
+  editor: EditorCamera,
+  _aspect = 9 / 16,
+  settings: CameraSettings = DEFAULT_CAMERA_SETTINGS,
+): (t: number) => CamPose {
+  const target = new THREE.Vector3(...editor.target);
+  const offset = new THREE.Vector3(...editor.position).sub(target);
+  const radius = offset.length() || 1;
+  const azimuth0 = Math.atan2(offset.x, offset.z);
+  const elevation = Math.asin(Math.min(1, Math.max(-1, offset.y / radius)));
+  const ease = (u: number) => { const k = Math.min(1, Math.max(0, u)); return k * k * (3 - 2 * k); };
+  const pose = (r: number, az: number): CamPose => {
+    const cosEl = Math.cos(elevation);
+    return {
+      position: new THREE.Vector3(
+        target.x + r * cosEl * Math.sin(az),
+        target.y + r * Math.sin(elevation),
+        target.z + r * cosEl * Math.cos(az),
+      ),
+      target: target.clone(),
+      fov: editor.fov,
+    };
+  };
+  const heroDegrees = (settings.heroOrbitDegrees ?? 120) * (Math.PI / 180);
+  return (t: number) => {
+    if (t < tl.intro) {
+      // a slow push-in to your own shot: no re-framing, no lens change
+      const k = ease(t / Math.max(0.3, Math.min(1.5, tl.intro)));
+      return pose(radius * (1.14 - 0.14 * k), azimuth0);
+    }
+    if (t < tl.buildEnd || !tl.heroOrbit) return pose(radius, azimuth0);
+    const u = Math.min(1, Math.max(0, (t - tl.buildEnd) / Math.max(1e-6, tl.duration - tl.buildEnd)));
+    return pose(radius, azimuth0 + heroDegrees * u * ease((t - tl.buildEnd) / 0.6));
+  };
+}

@@ -12,7 +12,9 @@ import { planTimeline } from '../state/timelineService';
 import { scopedPlan } from '../state/useModel';
 import { useStudio } from '../state/store';
 import { sceneSetupOf } from '../render/sceneSetup';
+import type { EditorCamera } from '../anim/camera';
 import { viewportApi } from './viewportApi';
+import { useSceneView } from './sceneViewState';
 import { instancePlacements } from './modelPlacement';
 import { safeFileName, saveBlob } from './download';
 import { Ic } from './icons';
@@ -34,7 +36,13 @@ export const jobFileName = (setName: string, model: string, mode: 'build' | 'tim
 export function ExportDialog({ plan, jobs, mode = 'build', onClose }: { plan: Plan; jobs: ExportJob[]; mode?: 'build' | 'timeline'; onClose(): void }) {
   const settings = useAppSettings.getState();
   const { fps, format } = settings;
-  const { width, height } = VIDEO_FORMATS[format];
+  const formatSize = VIDEO_FORMATS[format];
+  // "My viewport": the MP4 keeps the composition you are looking at, so the frame takes the
+  // viewport's own aspect at the chosen size's height.
+  const viewportMode = settings.exportCamera === 'buildView';
+  const viewport = viewportFrame();
+  const width = viewportMode && viewport ? viewport.width : formatSize.width;
+  const height = formatSize.height;
   const [phase, setPhase] = useState<'checking' | 'unsupported' | 'running' | 'finished' | 'cancelled'>('checking');
   const [states, setStates] = useState<JobState[]>(() => jobs.map(() => ({ s: 'queued' })));
   const abort = useRef<AbortController | null>(null);
@@ -78,6 +86,7 @@ export function ExportDialog({ plan, jobs, mode = 'build', onClose }: { plan: Pl
               studioLook: settings.studioLook,
               cameraFraming: settings.cameraFraming,
               camera: settings.camera,
+              buildView: viewportMode ? editorCamera() : undefined,
               sceneSetup: plan.sceneSetup,
               render: { edges: settings.edgeLines, linearColors: settings.linearColors },
               logo,
@@ -125,6 +134,7 @@ export function ExportDialog({ plan, jobs, mode = 'build', onClose }: { plan: Pl
         <h2>{jobs.length > 1 ? `Export ${jobs.length} ${mode === 'timeline' ? 'Timeline' : 'Build'} videos` : `Export ${jobs[0]?.label ?? 'video'} · ${mode === 'timeline' ? 'Timeline' : 'Build'}`}</h2>
         <p className="muted">
           {width}×{height} · {fps} fps · MP4 (H.264) · {mode === 'timeline' ? 'keyframed motion' : 'automatic construction'}
+          {viewportMode ? ' · from your viewport camera' : ' · from the automatic camera'}
         </p>
         {phase === 'checking' && <p className="muted">Checking your browser…</p>}
         {sceneCameraInCharge && (
@@ -200,3 +210,29 @@ export function ExportDialog({ plan, jobs, mode = 'build', onClose }: { plan: Pl
   );
 }
 
+/** The camera the viewport is showing: the scene camera when it is in charge, else the editor's. */
+function editorCamera(): EditorCamera | undefined {
+  const setup = useStudio.getState().plan.sceneSetup;
+  if (setup?.useCameraForVideo) {
+    const active = setup.cameras.find((camera) => camera.id === setup.activeCameraId);
+    if (active) return { position: [...active.position], target: [...active.target], fov: active.fov };
+  }
+  const studio = viewportApi.studio;
+  const target = viewportApi.controls?.target;
+  const cam = studio?.perspective;
+  if (!studio || !target || !cam) return undefined;
+  return { position: [cam.position.x, cam.position.y, cam.position.z], target: [target.x, target.y, target.z], fov: cam.fov };
+}
+
+/** The viewport's shape as an even-sized frame at the chosen height — the crop region when one is in use. */
+function viewportFrame(): { width: number } | null {
+  const canvas = viewportApi.studio?.renderer.domElement as HTMLCanvasElement | undefined;
+  const w = canvas?.clientWidth ?? 0;
+  const h = canvas?.clientHeight ?? 0;
+  if (!w || !h) return null;
+  const setup = useStudio.getState().plan.sceneSetup;
+  const region = setup?.cropToRegion ? setup.region : null;
+  const aspect = region && region.width > 0 && region.height > 0 ? (region.width * w) / (region.height * h) : w / h;
+  const height = VIDEO_FORMATS[useAppSettings.getState().format].height;
+  return { width: Math.max(2, Math.round((height * aspect) / 2) * 2) };
+}
