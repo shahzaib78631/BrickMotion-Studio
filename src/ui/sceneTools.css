@@ -47,3 +47,9 @@
 .bm-thirds i:nth-child(4){top:66.666%;left:0;right:0;height:1px}
 .bm-camera-safe{position:absolute;inset:8%;border:1px dashed #ffffff8c;pointer-events:none}
 .bm-region-border{position:absolute;border:2px dashed #ffba55;box-shadow:0 0 0 1px #000b,inset 0 0 0 999px #ffffff06;pointer-events:none}
+
+/* Quick photographic rigs: accessible controls in the editor's narrow panel. */
+.bm-photo-rigs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.bm-photo-rig{display:flex;align-items:center;gap:7px;min-width:0;padding:6px;border:1px solid var(--line2);border-radius:8px;background:var(--surface2);color:var(--ink2);font-size:10.5px;text-align:left;cursor:pointer}
+.bm-photo-rig:hover,.bm-photo-rig:focus-visible{background:var(--hover);border-color:var(--accent);color:var(--ink)}
+.bm-photo-rig-chip{width:25px;height:22px;flex:0 0 25px;border-radius:5px;box-shadow:inset 0 1px 2px #fff5,0 2px 3px #0003}

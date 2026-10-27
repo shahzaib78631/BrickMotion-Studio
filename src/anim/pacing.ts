@@ -7,8 +7,8 @@ export type ArrivalMode = 'piece' | 'batch' | 'step';
 export type FloorSort = 'step' | 'colour' | 'part' | 'size' | 'all';
 export type FloorSides = 'front-back' | 'front' | 'behind' | 'sides' | 'around';
 /** How waiting pieces are arranged on the floor: tightly packed (default), with room around them, in an even grid, one row per group, or loosely scattered. */
-export type FloorStyle = 'packed' | 'spaced' | 'grid' | 'rows' | 'scattered';
-export const FLOOR_STYLES: readonly FloorStyle[] = ['packed', 'spaced', 'grid', 'rows', 'scattered'];
+export type FloorStyle = 'packed' | 'spaced' | 'grid' | 'rows' | 'scattered' | 'showcase' | 'gallery' | 'fan' | 'camera-frame';
+export const FLOOR_STYLES: readonly FloorStyle[] = ['packed', 'spaced', 'grid', 'rows', 'scattered', 'showcase', 'gallery', 'fan', 'camera-frame'];
 /** Which side a piece waits on: the bands filled in order (default), or the side of the model it is built on. */
 export type FloorMatch = 'fill' | 'nearest';
 export type AnimOptions = {
@@ -61,6 +61,8 @@ export type AnimOptions = {
   floorSides?: FloorSides;
   /** How they are arranged there (default 'packed'). */
   floorStyle?: FloorStyle;
+  /** Output aspect ratio; only changes floor packing in camera-frame mode. */
+  floorAspect?: number;
   /** Which side each piece waits on (default 'fill'). */
   floorMatch?: FloorMatch;
   /** Optional wall-clock cap on that re-planning (ms, maximum 10000). Unset by default: a time cap makes results depend on machine load. */

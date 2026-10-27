@@ -70,13 +70,23 @@ export function MaterialsPanel() {
       <div className="nx-pane-head"><h3>Materials</h3></div>
 
       <Section title="Scene" value={scene.label}>
+        <div className="nx-sub">Photo tabletop scenes</div>
         <div className="bm-mat-grid bm-mat-scenes">
-          {SCENES.map((sc) => (
+          {SCENES.filter((sc) => sc.collection === 'photo').map((sc) => (
+            <Card key={sc.id} selected={s.studioLook === sc.id} label={sc.label} hint={sc.hint} onClick={() => s.set({ studioLook: sc.id })}
+              swatch={<span className="bm-mat-swatch bm-mat-scene bm-mat-photo-scene" style={{ background: sceneBackground(sc) }}>
+                <em className="bm-photo-part-a" /><em className="bm-photo-part-b" /><em className="bm-photo-part-c" />
+              </span>} />
+          ))}
+        </div>
+        <div className="nx-sub">Classic studio scenes</div>
+        <div className="bm-mat-grid bm-mat-scenes">
+          {SCENES.filter((sc) => sc.collection !== 'photo').map((sc) => (
             <Card key={sc.id} selected={s.studioLook === sc.id} label={sc.label} hint={sc.hint} onClick={() => s.set({ studioLook: sc.id })}
               swatch={<span className="bm-mat-swatch bm-mat-scene" style={{ background: sceneBackground(sc) }}><i style={{ background: sc.floor === 'none' ? 'transparent' : sc.floorColor }} /></span>} />
           ))}
         </div>
-        <span className="nx-hint">{scene.hint}.</span>
+        <span className="nx-hint">{scene.hint}. Photo scenes include a directional key, a color-tuned fill and a rim light. Custom Scene lights can replace this rig.</span>
       </Section>
 
       <Section title="Brick finish" value={finishOf(m.finish).label}>

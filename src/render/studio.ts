@@ -130,8 +130,11 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
   key.shadow.normalBias = 0.016;
   scene.add(key, key.target);
   const fill = new THREE.DirectionalLight(0xf3f5ff, 0.38);
-  fill.position.set(15, 24, -18);
-  scene.add(fill);
+  scene.add(fill, fill.target);
+  // A non-shadow-casting back/edge light separates dark bricks from photo backdrops.
+  // It is zero-strength on legacy scenes, so existing projects keep their look.
+  const rim = new THREE.DirectionalLight(0xffffff, 0);
+  scene.add(rim, rim.target);
 
   const camera = new THREE.PerspectiveCamera(30, 9 / 16, 0.1, 2000);
   camera.position.set(20, 25, 40);
@@ -162,6 +165,19 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
 
   let exposure = 1;
   let lookEnv = 0.75;
+  const lightCenter = new THREE.Vector3();
+  let lightRadius = 20;
+  const aimStudioRig = () => {
+    const preset = sceneOf(look);
+    const aim = (lamp: THREE.DirectionalLight, dir: readonly [number, number, number]) => {
+      lamp.target.position.copy(lightCenter);
+      lamp.position.copy(lightCenter).add(new THREE.Vector3(...dir).normalize().multiplyScalar(lightRadius * 3));
+      lamp.target.updateMatrixWorld();
+    };
+    aim(key, preset.keyDirection ?? [-0.5, 1.2, 0.7]);
+    aim(fill, preset.fillDirection ?? [0.8, 1.2, -0.9]);
+    aim(rim, preset.rimDirection ?? [0.5, 1.2, -1.1]);
+  };
   let render: RenderOptions = { ...DEFAULT_RENDER };
   const applyExposure = () => {
     renderer.toneMapping = render.linearColors ? THREE.LinearToneMapping : THREE.ACESFilmicToneMapping;
@@ -207,8 +223,11 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
     // A transparent studio keeps an empty background and no shadow floor, so an
     // exported still has no studio backdrop baked into its alpha channel.
     if (!transparent) {
-      if (look === 'soft') scene.background = gradient;
-      else {
+      if (look === 'soft') {
+        backdrop?.dispose();
+        backdrop = null;
+        scene.background = gradient;
+      } else {
         backdrop?.dispose();
         backdrop = new THREE.DataTexture(scenePixels(preset), 64, 128, THREE.RGBAFormat);
         backdrop.colorSpace = THREE.SRGBColorSpace;
@@ -226,6 +245,10 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
     key.intensity = preset.key;
     key.color.set(preset.keyColor);
     fill.intensity = preset.fill;
+    fill.color.set(preset.fillColor ?? '#f3f5ff');
+    rim.intensity = preset.rim ?? 0;
+    rim.color.set(preset.rimColor ?? '#ffffff');
+    aimStudioRig();
     applyFloor();
     applyExposure();
     syncStudioLights();
@@ -240,6 +263,7 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
     hemi.visible = enabled;
     key.visible = enabled;
     fill.visible = enabled;
+    rim.visible = enabled && rim.intensity > 0;
     // Keep just a small environment fill when the authored scene lights replace the studio.
     scene.environmentIntensity = enabled ? lookEnv : 0.12;
   };
@@ -293,8 +317,9 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
       fade.radius.value = Math.max(24, box.getSize(new THREE.Vector3()).length() * 1.6);
       const c = box.getCenter(new THREE.Vector3());
       const r = Math.max(8, box.getSize(new THREE.Vector3()).length() / 2);
-      key.target.position.copy(c);
-      key.position.copy(c).add(new THREE.Vector3(-0.5, 1.2, 0.7).normalize().multiplyScalar(r * 3));
+      lightCenter.copy(c);
+      lightRadius = r;
+      aimStudioRig();
       const s = key.shadow.camera;
       s.left = s.bottom = -r * 1.3;
       s.right = s.top = r * 1.3;

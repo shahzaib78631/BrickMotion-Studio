@@ -12,6 +12,10 @@ const STAGING: { id: FloorStyle; label: string; hint: string }[] = [
   { id: 'grid', label: 'Grid', hint: 'An even grid, centred in cells' },
   { id: 'rows', label: 'Rows', hint: 'One row per group (colour, part…)' },
   { id: 'scattered', label: 'Scattered', hint: 'Loosely laid, slightly turned' },
+  { id: 'showcase', label: 'Showcase', hint: 'Balanced, centred product-shot rows' },
+  { id: 'gallery', label: 'Gallery', hint: 'Centred rows separated by part or colour' },
+  { id: 'fan', label: 'Camera fan', hint: 'A gentle curved spread around the centre' },
+  { id: 'camera-frame', label: 'Camera frame', hint: 'Centered rows that adapt to the selected video aspect ratio' },
 ];
 /** A tiny diagram of each staging style. */
 function StagingDiagram({ id }: { id: FloorStyle }) {
@@ -21,6 +25,10 @@ function StagingDiagram({ id }: { id: FloorStyle }) {
   else if (id === 'spaced') [[0, 0, 7, 4], [11, 0, 5, 4], [0, 8, 5, 4], [9, 8, 8, 4], [3, 15, 6, 3], [13, 15, 5, 3]].forEach((c, i) => cells.push([...c, i % 5] as never));
   else if (id === 'grid') for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) cells.push([c * 6 + 1, r * 6 + 1, 4, 4, (r + c) % 5]);
   else if (id === 'rows') [0, 1, 2].forEach((r) => [0, 1, 2, 3].forEach((c) => cells.push([c * 6, r * 6 + 1, 5, 4, r])));
+  else if (id === 'showcase') [[6, 1, 5, 4], [13, 1, 6, 4], [2, 8, 5, 4], [9, 8, 7, 4], [18, 8, 5, 4], [6, 15, 5, 3], [13, 15, 6, 3]].forEach((c, i) => cells.push([...c, i % 5] as never));
+  else if (id === 'gallery') [[6, 1, 5, 4], [13, 1, 5, 4], [3, 8, 5, 4], [10, 8, 5, 4], [17, 8, 5, 4], [7, 15, 5, 3], [14, 15, 5, 3]].forEach((c, i) => cells.push([...c, i < 2 ? 0 : i < 5 ? 2 : 1] as never));
+  else if (id === 'camera-frame') [[8, 1, 7, 3], [6, 6, 5, 4], [13, 6, 5, 4], [4, 12, 6, 4], [12, 12, 7, 4], [8, 17, 7, 2]].forEach((c, i) => cells.push([...c, i % 5] as never));
+  else if (id === 'fan') [[9, 1, 6, 4], [3, 5, 5, 4], [16, 5, 5, 4], [0, 12, 5, 4], [7, 10, 5, 4], [14, 10, 5, 4], [21, 12, 4, 4]].forEach((c, i) => cells.push([...c, i % 5] as never));
   else [[1, 1, 5, 4], [9, 3, 6, 3], [17, 0, 5, 4], [3, 9, 6, 4], [12, 10, 4, 4], [18, 8, 5, 3], [6, 15, 5, 3], [15, 15, 6, 3]].forEach((c, i) => cells.push([...c, i % 5] as never));
   const rot = (i: number) => (id === 'scattered' ? ((i * 37) % 24) - 12 : 0);
   return (
@@ -55,6 +63,7 @@ export function StagingPanel() {
               swatch={<span className="bm-mat-swatch bm-mat-staging"><StagingDiagram id={st.id} /></span>} />
           ))}
         </div>
+        {s.floorStyle === 'camera-frame' && <span className="nx-hint">Using video frame {s.format}. Change the format in Video settings to reshape the staging rows. The model stays centered; final framing still depends on camera angle and zoom.</span>}
         <div className="nx-grid2">
           <label className="nx-field">
             Group
@@ -86,7 +95,7 @@ export function StagingPanel() {
         </div>
         <span className="nx-hint">{v2
           ? 'The construction planners lay out their own work bays, so staging applies to the standard planners only.'
-          : 'How the pieces wait on the floor before they fly in. Rows with "By colour" or "By part" give tidy product-shot rows. Changing this plans the build again.'}</span>
+          : 'How the pieces wait on the floor before they fly in. Rows with "By colour" or "By part" give tidy product-shot rows. Showcase, Gallery and Camera fan centre the pieces around the build. Camera frame adapts the row proportions to the selected video aspect ratio. Changing this plans the build again.'}</span>
       </Section>
 
       <Section title="Waiting pieces" value={moved ? `${moved} moved` : undefined}>

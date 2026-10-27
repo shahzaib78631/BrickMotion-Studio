@@ -8,7 +8,7 @@ import type { ExportFps } from '../export/frameRates';
 import type { Materials, StudioLook } from '../render/looks';
 import type { CameraFraming, CameraSettings } from '../anim/camera';
 import { DEFAULT_SETTINGS, type Settings } from '../storage/settings';
-import type { VideoFormat } from '../export/formats';
+import { formatAspect, type VideoFormat } from '../export/formats';
 
 export type AppSettings = {
   /** Claude API key, stored only in this browser */
@@ -97,7 +97,7 @@ export async function applySettings(s: Settings): Promise<void> {
 }
 
 /** The animation options the timeline planner needs, taken from the video settings. */
-export const animOptions = (s: Pick<AppSettings, 'targetSeconds' | 'heroOrbit' | 'mode' | 'introSeconds' | 'buildSeconds' | 'outroSeconds' | 'bottomUp' | 'planner' | 'constructionSupport'> & Partial<Pick<AppSettings, 'constructionBudget' | 'constructionStepModules' | 'motionV4Limits' | 'motionV4Mechanism' | 'floorSort' | 'floorSides' | 'floorStyle' | 'floorMatch'>>): AnimOptions => ({
+export const animOptions = (s: Pick<AppSettings, 'targetSeconds' | 'heroOrbit' | 'mode' | 'introSeconds' | 'buildSeconds' | 'outroSeconds' | 'bottomUp' | 'planner' | 'constructionSupport'> & Partial<Pick<AppSettings, 'constructionBudget' | 'constructionStepModules' | 'motionV4Limits' | 'motionV4Mechanism' | 'floorSort' | 'floorSides' | 'floorStyle' | 'floorMatch' | 'format'>>): AnimOptions => ({
   targetSeconds: s.targetSeconds,
   heroOrbit: s.heroOrbit,
   mode: s.mode === 'auto' ? undefined : s.mode,
@@ -116,5 +116,6 @@ export const animOptions = (s: Pick<AppSettings, 'targetSeconds' | 'heroOrbit' |
   floorSort: s.floorSort ?? 'step',
   floorSides: s.floorSides ?? 'front-back',
   floorStyle: s.floorStyle ?? 'packed',
+  floorAspect: formatAspect(s.format ?? '9:16'),
   floorMatch: s.floorMatch ?? 'fill',
 });

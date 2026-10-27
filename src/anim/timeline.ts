@@ -149,8 +149,8 @@ const regionBox = (r: Region, ground: number): Box => ({
  * Band 0 lies in front (its edge nearest the model is its max z), band 1 behind.
  */
 /** Packs one band, its used rows pushed against the model. */
-function layoutBand(items: FloorItem[], band: Region, style: LayoutStyle, pos: Map<string, { x: number; z: number }>): string[] {
-  const r = layoutFloor(items, band, 1, style);
+function layoutBand(items: FloorItem[], band: Region, style: LayoutStyle, aspect: number, pos: Map<string, { x: number; z: number }>): string[] {
+  const r = layoutFloor(items, band, 1, style, aspect);
   const depthOf = new Map(items.map((i) => [i.id, i.d]));
   let used = 0;
   r.pos.forEach((p, k) => (used = Math.max(used, p.z + depthOf.get(k)! - band.z0)));
@@ -166,13 +166,13 @@ function layoutBand(items: FloorItem[], band: Region, style: LayoutStyle, pos: M
  * are simply filled in order. With it a piece waits on its own side of the model
  * and only spills to the next-best side when its own is full.
  */
-function layoutBands(items: FloorItem[], bands: Region[], style: LayoutStyle = 'packed', prefer?: ReadonlyMap<string, number[]>) {
+function layoutBands(items: FloorItem[], bands: Region[], style: LayoutStyle = 'packed', prefer?: ReadonlyMap<string, number[]>, aspect = 1) {
   const pos = new Map<string, { x: number; z: number }>();
   if (!prefer || bands.length < 2) {
     let rest = items;
     bands.forEach((band) => {
       if (!rest.length) return;
-      const left = new Set(layoutBand(rest, band, style, pos));
+      const left = new Set(layoutBand(rest, band, style, aspect, pos));
       rest = rest.filter((i) => left.has(i.id));
     });
     return { pos, overflow: rest.map((i) => i.id) };
@@ -187,7 +187,7 @@ function layoutBands(items: FloorItem[], bands: Region[], style: LayoutStyle = '
     const spilled: string[] = [];
     bands.forEach((band, b) => {
       const mine = items.filter((it) => choice.get(it.id)! < bands.length && bandOf(it.id) === b);
-      if (mine.length) spilled.push(...layoutBand(mine, band, style, pos));
+      if (mine.length) spilled.push(...layoutBand(mine, band, style, aspect, pos));
     });
     if (!spilled.length) break;
     for (const id of spilled) {
@@ -239,7 +239,7 @@ function growBands(bands: Region[], box: Box, by: number): Region[] {
 }
 
 /** Splits pieces (in play order) into windows that each fit the bands. */
-function windowed(items: FloorItem[], bands: Region[], style: LayoutStyle = 'packed', prefer?: ReadonlyMap<string, number[]>) {
+function windowed(items: FloorItem[], bands: Region[], style: LayoutStyle = 'packed', prefer?: ReadonlyMap<string, number[]>, aspect = 1) {
   const windows: { ids: string[]; pos: Map<string, { x: number; z: number }> }[] = [];
   let i = 0;
   while (i < items.length) {
@@ -247,10 +247,10 @@ function windowed(items: FloorItem[], bands: Region[], style: LayoutStyle = 'pac
     let hi = items.length - i;
     while (lo < hi) {
       const mid = Math.ceil((lo + hi) / 2);
-      if (layoutBands(items.slice(i, i + mid), bands, style, prefer).overflow.length === 0) lo = mid;
+      if (layoutBands(items.slice(i, i + mid), bands, style, prefer, aspect).overflow.length === 0) lo = mid;
       else hi = mid - 1;
     }
-    const best = layoutBands(items.slice(i, i + lo), bands, style, prefer);
+    const best = layoutBands(items.slice(i, i + lo), bands, style, prefer, aspect);
     windows.push({ ids: items.slice(i, i + lo).map((it) => it.id), pos: best.pos });
     i += lo;
   }
@@ -461,6 +461,7 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
   /** how the waiting pieces are arranged; airier styles get proportionally more floor */
   const floorStyle: LayoutStyle = opts.floorStyle ?? 'packed';
   const floorArea = STYLE_AREA[floorStyle];
+  const floorAspect = opts.floorAspect ?? 1;
   const mainBands = bandsAround(layoutBox, padArea(asm.nodes) * floorArea, sides);
 
   const steps: PlayStep[] = [];
@@ -757,7 +758,7 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
       // every piece on the floor from the start: grow the bands until one window holds them all
       // the bands surround their (sub)model, so their union is centred on it
       const around = ci === 0 ? layoutBox : ctx.bands.slice(1).reduce((b, r) => unionBox(b, regionBox(r, ground)), regionBox(ctx.bands[0], ground));
-      for (let tries = 0; tries < 8 && layoutBands(ordered.map(({ id, w, d, group }) => ({ id, w, d, group })), ctx.bands, floorStyle, prefer).overflow.length; tries++)
+      for (let tries = 0; tries < 8 && layoutBands(ordered.map(({ id, w, d, group }) => ({ id, w, d, group })), ctx.bands, floorStyle, prefer, floorAspect).overflow.length; tries++)
         ctx.bands = growBands(ctx.bands, around, 1.35);
       for (const r of ctx.bands) sceneBox = unionBox(sceneBox, regionBox(r, ground));
     }
@@ -766,6 +767,7 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
       ctx.bands,
       floorStyle,
       prefer,
+      floorAspect,
     );
     windowVisibility.push({ ctx: ci, windows });
     // ctxs are created parent first, so the parent's first appearance is known here
@@ -786,6 +788,7 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
         ctx.bands,
         floorStyle,
         prefer,
+        floorAspect,
       );
       const pos = r.overflow.length ? win.pos : r.pos;
       if (wi > 0) {

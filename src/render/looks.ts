@@ -2,7 +2,8 @@
  * the viewport, the preview, MP4 export and still capture so they always agree. */
 
 /** A scene preset: the studio around the model. */
-export type StudioLook = 'soft' | 'classic' | 'white' | 'dark' | 'warm' | 'sky' | 'night' | 'chroma';
+export type StudioLook = 'soft' | 'classic' | 'white' | 'dark' | 'warm' | 'sky' | 'night' | 'chroma'
+  | 'photo-grey' | 'slate-blue' | 'porcelain' | 'sage' | 'sandstone' | 'graphite';
 /** What the model stands on. 'auto' is the scene's own choice. */
 export type FloorSurface = 'auto' | 'shadow' | 'reflective' | 'matte' | 'wood' | 'concrete' | 'none';
 /** How the plastic itself responds to light. */
@@ -14,10 +15,14 @@ export type Materials = { finish: BrickFinish; texture: BrickTexture; floor: Flo
 export const DEFAULT_MATERIALS: Materials = { finish: 'studio', texture: 'none', floor: 'auto' };
 
 type RGB = readonly [number, number, number];
+/** Relative direction from the subject towards each studio light (Y is up). */
+export type LightDirection = readonly [number, number, number];
 export type ScenePreset = {
   id: StudioLook;
   label: string;
   hint: string;
+  /** Photo presets are separated in the chooser but use the same rendering path. */
+  collection?: 'photo';
   /** Screen-space backdrop: bottom (0) to top (1) colour stops, sRGB bytes. */
   stops: readonly { at: number; rgb: RGB }[];
   /** An optional soft pool of light on the backdrop (0..1 screen coordinates, top-left origin). */
@@ -32,7 +37,15 @@ export type ScenePreset = {
   hemiGround: string;
   key: number;
   keyColor: string;
+  /** Directional studio rig: lights follow the subject's bounds as it moves. */
+  keyDirection?: LightDirection;
   fill: number;
+  fillColor?: string;
+  fillDirection?: LightDirection;
+  /** Optional non-shadow-casting edge light, opposite the key. */
+  rim?: number;
+  rimColor?: string;
+  rimDirection?: LightDirection;
   env: number;
   exposure: number;
   /** How strongly a reflective floor mirrors the model. */
@@ -40,6 +53,45 @@ export type ScenePreset = {
 };
 
 export const SCENES: readonly ScenePreset[] = [
+  // Seamless tabletop looks inspired by overhead brick-part photography. Their
+  // shadows come from the real directional key light, not a painted image.
+  { id: 'photo-grey', label: 'Reference grey', hint: 'Mid-grey tabletop, angled softbox and short contact shadows', collection: 'photo',
+    stops: [{ at: 0, rgb: [153, 155, 158] }, { at: 0.55, rgb: [160, 162, 165] }, { at: 1, rgb: [171, 173, 175] }],
+    floorColor: '#a0a2a5', floor: 'shadow', shadowColor: '#25282c', shadowOpacity: 0.39,
+    hemi: 0.95, hemiGround: '#b3b6b9', key: 2.5, keyColor: '#fffdfa', keyDirection: [-0.85, 1.9, 0.95],
+    fill: 0.52, fillColor: '#e8efff', fillDirection: [1.1, 1.4, -0.45], rim: 0.26, rimColor: '#ffffff', rimDirection: [0.5, 1.2, -1.1],
+    env: 0.7, exposure: 1, reflection: 0.1 },
+  { id: 'slate-blue', label: 'Slate blue', hint: 'Blue paper backdrop with cool fill and sculpted shadows', collection: 'photo',
+    stops: [{ at: 0, rgb: [72, 89, 121] }, { at: 0.6, rgb: [79, 96, 129] }, { at: 1, rgb: [89, 108, 142] }],
+    floorColor: '#506282', floor: 'shadow', shadowColor: '#101b2f', shadowOpacity: 0.43,
+    hemi: 0.7, hemiGround: '#526985', key: 2.85, keyColor: '#fff7e8', keyDirection: [-0.9, 1.6, 0.7],
+    fill: 0.5, fillColor: '#dceaff', fillDirection: [1.15, 1.1, -0.4], rim: 0.75, rimColor: '#c9ddff', rimDirection: [0.6, 1.4, -1.1],
+    env: 0.55, exposure: 1.06, reflection: 0.08 },
+  { id: 'porcelain', label: 'Porcelain', hint: 'Light neutral sweep with high-key diffused illumination', collection: 'photo',
+    stops: [{ at: 0, rgb: [207, 208, 207] }, { at: 0.55, rgb: [221, 221, 219] }, { at: 1, rgb: [232, 231, 228] }],
+    floorColor: '#d9d9d6', floor: 'shadow', shadowColor: '#3c3d3f', shadowOpacity: 0.28,
+    hemi: 1.15, hemiGround: '#d1d0d0', key: 2.25, keyColor: '#ffffff', keyDirection: [-0.6, 2, 0.7],
+    fill: 0.72, fillColor: '#f3f5ff', fillDirection: [1.2, 1.5, -0.35], rim: 0.28, rimColor: '#ffffff', rimDirection: [0.4, 1.3, -1.2],
+    env: 0.85, exposure: 0.98, reflection: 0.1 },
+  { id: 'sage', label: 'Sage paper', hint: 'Muted olive backdrop with clean daylight and soft edge light', collection: 'photo',
+    stops: [{ at: 0, rgb: [150, 157, 138] }, { at: 0.55, rgb: [170, 177, 155] }, { at: 1, rgb: [191, 196, 177] }],
+    floorColor: '#abb39e', floor: 'shadow', shadowColor: '#333a30', shadowOpacity: 0.36,
+    hemi: 0.9, hemiGround: '#b0b7a4', key: 2.6, keyColor: '#fff8e9', keyDirection: [-0.85, 1.7, 1.15],
+    fill: 0.55, fillColor: '#e2efff', fillDirection: [1, 1.2, -0.6], rim: 0.3, rimColor: '#f2ffe5', rimDirection: [0.7, 1.3, -1],
+    env: 0.7, exposure: 1.02, reflection: 0.08 },
+  { id: 'sandstone', label: 'Warm catalog', hint: 'Beige tabletop with a warm key and subtle cool bounce', collection: 'photo',
+    stops: [{ at: 0, rgb: [193, 175, 153] }, { at: 0.55, rgb: [211, 196, 174] }, { at: 1, rgb: [224, 213, 193] }],
+    floorColor: '#d4c2a9', floor: 'shadow', shadowColor: '#493827', shadowOpacity: 0.34,
+    hemi: 0.82, hemiGround: '#c7b69d', key: 2.75, keyColor: '#ffe6c5', keyDirection: [-1.1, 1.65, 0.55],
+    fill: 0.55, fillColor: '#e3eeff', fillDirection: [0.9, 1.3, -0.8], rim: 0.32, rimColor: '#fff4d8', rimDirection: [0.65, 1.1, -1.25],
+    env: 0.65, exposure: 1, reflection: 0.08 },
+  { id: 'graphite', label: 'Graphite', hint: 'Dark matte editorial set with bright rim separation', collection: 'photo',
+    stops: [{ at: 0, rgb: [54, 59, 68] }, { at: 0.5, rgb: [47, 53, 62] }, { at: 1, rgb: [37, 43, 52] }],
+    spot: { x: 0.47, y: 0.38, radius: 0.86, rgb: [77, 84, 97] },
+    floorColor: '#343b45', floor: 'shadow', shadowColor: '#080b12', shadowOpacity: 0.58,
+    hemi: 0.35, hemiGround: '#303b48', key: 3.25, keyColor: '#fff3e4', keyDirection: [-1.0, 1.6, 0.6],
+    fill: 0.22, fillColor: '#d0e4ff', fillDirection: [1.1, 1.1, 0], rim: 1.05, rimColor: '#b7d6ff', rimDirection: [0.7, 1.1, -1.2],
+    env: 0.4, exposure: 1.07, reflection: 0.1 },
   { id: 'soft', label: 'Soft studio', hint: 'Neutral grey, soft contact shadows',
     stops: [{ at: 0, rgb: [172, 171, 180] }, { at: 0.3, rgb: [179, 178, 187] }, { at: 0.58, rgb: [184, 183, 192] }, { at: 0.83, rgb: [199, 198, 207] }, { at: 1, rgb: [207, 206, 214] }],
     floorColor: '#b8b7c0', floor: 'shadow', shadowColor: '#262630', shadowOpacity: 0.42,
@@ -76,7 +128,8 @@ export const SCENES: readonly ScenePreset[] = [
     hemi: 1.0, hemiGround: '#c5c6ce', key: 2.2, keyColor: '#ffffff', fill: 0.38, env: 0.75, exposure: 1, reflection: 0 },
 ];
 
-export const sceneOf = (id: string | undefined): ScenePreset => SCENES.find((s) => s.id === id) ?? SCENES[0];
+// Keep the legacy fallback stable even though photographic presets lead the chooser.
+export const sceneOf = (id: string | undefined): ScenePreset => SCENES.find((s) => s.id === id) ?? SCENES.find((s) => s.id === 'soft')!;
 export const isStudioLook = (v: unknown): v is StudioLook => typeof v === 'string' && SCENES.some((s) => s.id === v);
 
 export type FinishPreset = {

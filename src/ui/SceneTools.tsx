@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import { createCamera, createLight, freshSceneId, sceneObject, sceneSetupOf, updateObject, removeObject,
   regionFromDrag, cameraCrop, cameraFrame, type SceneSetup, type SceneCamera, type SceneLight, type SceneObject, type LightType, type XYZ, type Region } from '../render/sceneSetup';
 import { perspectiveEquivalent } from '../render/studio';
+import { PHOTO_RIGS, createPhotoRigLights, type PhotoRigId } from '../render/photoRigs';
+import { sceneOf } from '../render/looks';
 import { formatAspect } from '../export/formats';
 import { useAppSettings } from '../state/appSettings';
 import { useStudio } from '../state/store';
@@ -51,6 +53,19 @@ export function SceneTools() {
     update((s) => ({ ...s, lights: [...s.lights, lamp] }));
     useSceneView.setState({ selectedId: lamp.id, panelOpen: true });
   };
+  const applyPhotoRig = (rigId: PhotoRigId) => {
+    const orbit = viewportApi.controls;
+    if (!orbit) return;
+    const rig = PHOTO_RIGS.find((p) => p.id === rigId)!;
+    if (setup.lights.length && !window.confirm(`Replace your ${setup.lights.length} existing scene light(s) with the ${rig.label} rig?`)) return;
+    const focus = orbit.target.toArray() as XYZ;
+    // The orbit distance follows model size even for a distant/large assembly.
+    const radius = orbit.getDistance() * 0.45;
+    const lights = createPhotoRigLights(rigId, focus, radius);
+    update((s) => ({ ...s, lights, includeStudioLights: false, useLightsForVideo: true }));
+    useAppSettings.getState().set({ studioLook: rig.look });
+    useSceneView.setState({ selectedId: lights[0].id, panelOpen: true });
+  };
   const active = setup.cameras.find((c) => c.id === setup.activeCameraId);
   const isActive = selected?.kind === 'camera' && setup.activeCameraId === selected.id;
   if (mode !== 'edit') return null;
@@ -82,6 +97,15 @@ export function SceneTools() {
             <button onClick={() => addLight('spot')}>◉ Spot</button>
             <button onClick={() => addLight('ambient')}>☼ Ambient</button>
           </div>
+        </div>
+        <div className="bm-scene-section"><label>Photo scene + editable lighting</label>
+          <div className="bm-photo-rigs">
+            {PHOTO_RIGS.map((rig) => <button key={rig.id} className="bm-photo-rig" onClick={() => applyPhotoRig(rig.id)} title={rig.hint}>
+              <span className="bm-photo-rig-chip" style={{ background: sceneOf(rig.look).floorColor }} />
+              <span>{rig.label}</span>
+            </button>)}
+          </div>
+          <p className="bm-scene-help">Applies a matching backdrop and four editable key/fill/rim/ambient lights. Replaces existing lights (after confirmation), but keeps your cameras and staging. For automatic lighting without custom objects, just pick a look in Materials.</p>
         </div>
         <div className="bm-scene-section"><label>Scene objects <span>{setup.cameras.length + setup.lights.length}</span></label>
           {!setup.cameras.length && !setup.lights.length && <p className="bm-scene-help">Add a camera to frame a shot, or a light to shape the preview.</p>}

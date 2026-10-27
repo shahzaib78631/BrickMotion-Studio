@@ -65,6 +65,7 @@ export const optsKey = (o: AnimOptions) =>
     ...((o.floorSort ?? 'step') !== 'step' ? [`floor-sort:${o.floorSort}`] : []),
     ...((o.floorSides ?? 'front-back') !== 'front-back' ? [`floor-sides:${o.floorSides}`] : []),
     ...((o.floorStyle ?? 'packed') !== 'packed' ? [`floor-style:${o.floorStyle}`] : []),
+    ...(o.floorStyle === 'camera-frame' ? [`frame-ratio:${(o.floorAspect ?? 1).toFixed(5)}`] : []),
     ...((o.floorMatch ?? 'fill') !== 'fill' ? [`floor-match:${o.floorMatch}`] : []),
     ...((o.constructionMaxCandidates ?? 100000) !== 100000 ? [`v2-candidates:${o.constructionMaxCandidates}`] : []),
     // Bays are part of the construction payload consumed by the Assembly panel.
@@ -110,7 +111,7 @@ export function settingsFromOptsKey(key: string): SavedVideoSettings | null {
     ...(budget ? { constructionBudget: budget } : {}),
     floorSort: (['colour', 'part', 'size', 'all'] as const).find((v) => f.includes(`floor-sort:${v}`)) ?? 'step',
     floorSides: (['front', 'behind', 'sides', 'around'] as const).find((v) => f.includes(`floor-sides:${v}`)) ?? 'front-back',
-    floorStyle: (['spaced', 'grid', 'rows', 'scattered'] as const).find((v) => f.includes(`floor-style:${v}`)) ?? 'packed',
+    floorStyle: (['spaced', 'grid', 'rows', 'scattered', 'showcase', 'gallery', 'fan', 'camera-frame'] as const).find((v) => f.includes(`floor-style:${v}`)) ?? 'packed',
     floorMatch: f.includes('floor-match:nearest') ? 'nearest' : 'fill',
   };
 }
