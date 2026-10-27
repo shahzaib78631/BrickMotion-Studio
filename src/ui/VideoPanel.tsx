@@ -167,7 +167,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
             <option value="buildView">My viewport — what I see when I press play, intro to hero</option>
           </select>
         </label>
-        {s.exportCamera === 'buildView' && <p className="nx-hint">The MP4 is framed like the viewport (its own aspect) and plays what you see there: the intro settles out of your view, the build holds that view still, and the outro is the hero orbit at your zoom. Frame the model in the viewport before exporting.</p>}
+        {s.exportCamera === 'buildView' && <p className="nx-hint">The MP4 keeps your viewport's angle and zoom, re-fitted to the chosen format: the intro settles out of your view, the build holds that view still, and the outro is the hero orbit at your zoom. Frame the model in the viewport before exporting.</p>}
         <label className="nx-field">
           Framing
           <select aria-label="Camera framing" value={s.cameraFraming} onChange={(e) => s.set({ cameraFraming: e.target.value as typeof s.cameraFraming })}>

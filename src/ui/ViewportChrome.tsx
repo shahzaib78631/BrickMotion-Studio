@@ -10,6 +10,7 @@ import { nextGroupName, setGroup } from '../plan/groups';
 import { modelSteps } from '../plan/ops';
 import { movePartsToModel } from '../plan/crossModel';
 import { Ic } from './icons';
+import { ViewsDropdown } from './ViewMenu';
 
 /** Lightweight editing chrome drawn over the REAL WebGL viewport.
  * The controls talk to the existing camera / selection / undoable plan actions. */
@@ -76,8 +77,8 @@ export function ViewportChrome({ model, onMakeSubmodel }: { model: ModelState; o
   return <div className="bm-viewport-chrome" style={{ '--grid-step': `${grid * 5}px` } as React.CSSProperties}>
     {showGrid && <div className="bm-screen-grid" aria-hidden="true" />}
     <div className="bm-viewport-top-left bm-floating-group" role="group" aria-label="Viewport display">
-      <button className={view === 'top' ? 'selected' : ''} onClick={() => { viewportApi.views?.setProjection('ortho'); viewportApi.views?.snapTo('top'); }}>Top</button>
-      <button className={view !== 'top' ? 'selected' : ''} onClick={() => { viewportApi.views?.setProjection('perspective'); if (view === 'top') viewportApi.views?.orbit(34, -46); else viewportApi.views?.orbit(18, 8); }}>3D</button>
+      <ViewsDropdown />
+      <button className={view === 'user' ? 'selected' : ''} onClick={() => { viewportApi.views?.setProjection('perspective'); if (view === 'top') viewportApi.views?.orbit(34, -46); else if (view === 'bottom') viewportApi.views?.orbit(34, 46); else viewportApi.views?.orbit(18, 8); }}>3D</button>
       <button className={laidOut ? 'selected' : ''} aria-pressed={laidOut} title="Lay out every part on the floor" onClick={toggleSplit}>Split</button>
     </div>
     <div className="bm-viewport-top-center bm-floating-group" role="toolbar" aria-label="Selection and transform tools">

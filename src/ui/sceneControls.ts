@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import type { Projection, Studio } from '../render/studio';
+import { perspectiveEquivalent, type Projection, type Studio } from '../render/studio';
 import { activeSceneCamera, createCamera, sceneObject, sceneSetupOf, updateObject, type SceneCamera, type SceneSetup, type XYZ } from '../render/sceneSetup';
 import { useStudio } from '../state/store';
 import { useViewState } from './viewState';
@@ -133,6 +133,14 @@ export function createSceneControls(studio: Studio, orbit: OrbitControls, canvas
       orbit.target.copy(remembered.target);
       useViewState.setState({ projection: remembered.projection, view: 'user' });
     }
+    if (!on) {
+      // Camera view draws through the output frame's aspect (prepareRender); the
+      // editor view must go back to the canvas's own shape or everything stretches.
+      const { width, height } = useSceneView.getState();
+      studio.perspective.aspect = Math.max(1, width) / Math.max(1, height);
+      studio.perspective.clearViewOffset();
+      studio.perspective.updateProjectionMatrix();
+    }
     transform.camera = studio.camera;
     useSceneView.setState({ cameraView: on, regionTool: false });
     orbit.enabled = !on || current.lockCamera;
@@ -147,11 +155,13 @@ export function createSceneControls(studio: Studio, orbit: OrbitControls, canvas
     if (useSceneView.getState().cameraView) return;
     const setup = sceneSetupOf(activeSetup);
     const camera = activeSceneCamera(setup);
-    const position = studio.camera.position.toArray() as XYZ;
+    // an ortho view's zoom is not a camera move: turn it into the matching distance
+    const view = perspectiveEquivalent(studio, orbit.target);
+    const position = view.position.toArray() as XYZ;
     const target = orbit.target.toArray() as XYZ;
-    const fov = studio.projection === 'perspective' ? studio.perspective.fov : 42;
+    const fov = view.fov;
     if (!camera) {
-      const created = createCamera(studio.camera.position, orbit.target, fov, setup.cameras.length + 1);
+      const created = createCamera(view.position, orbit.target, fov, setup.cameras.length + 1);
       commit({ ...setup, cameras: [...setup.cameras, created], activeCameraId: created.id });
       useSceneView.setState({ selectedId: created.id });
     } else commit(updateObject<SceneCamera>(setup, camera.id, (c) => ({ ...c, position, target, fov })));

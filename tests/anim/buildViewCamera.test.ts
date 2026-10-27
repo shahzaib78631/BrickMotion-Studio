@@ -52,3 +52,16 @@ test('without a hero orbit the outro still holds the editor shot', () => {
   const at = buildViewCamera(timeline({ heroOrbit: false }), editor);
   expect(at(11.5).position.distanceTo(at(9).position)).toBeLessThan(1e-6);
 });
+
+test('a landscape viewport shot is re-fitted to a portrait video at the same zoom', () => {
+  // a long, low model: its width is what limits a portrait frame
+  const tl = timeline({ modelBox: { min: [-3000, -60, -400], max: [3000, 0, 400] } } as Partial<Timeline>);
+  const wide = { ...editor, aspect: 16 / 9 };
+  const same = buildViewCamera(tl, wide, 16 / 9)(5);
+  expect(radius(same)).toBeCloseTo(editorRadius, 3);
+  const portrait = buildViewCamera(tl, wide, 9 / 16)(5);
+  // a narrower frame must back off to keep the model's width in view, from the same angle
+  expect(radius(portrait)).toBeGreaterThan(editorRadius * 1.2);
+  expect(azimuth(portrait)).toBeCloseTo(azimuth(same), 6);
+  expect(portrait.fov).toBe(33);
+});

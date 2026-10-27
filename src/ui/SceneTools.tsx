@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import * as THREE from 'three';
 import { createCamera, createLight, freshSceneId, sceneObject, sceneSetupOf, updateObject, removeObject,
   regionFromDrag, cameraCrop, cameraFrame, type SceneSetup, type SceneCamera, type SceneLight, type SceneObject, type LightType, type XYZ, type Region } from '../render/sceneSetup';
+import { perspectiveEquivalent } from '../render/studio';
 import { formatAspect } from '../export/formats';
 import { useAppSettings } from '../state/appSettings';
 import { useStudio } from '../state/store';
@@ -37,7 +38,8 @@ export function SceneTools() {
     const studio = viewportApi.studio;
     const orbit = viewportApi.controls;
     if (!studio || !orbit) return;
-    const cam = createCamera(studio.camera.position, orbit.target, studio.projection === 'perspective' ? studio.perspective.fov : 42, setup.cameras.length + 1);
+    const view = perspectiveEquivalent(studio, orbit.target);
+    const cam = createCamera(view.position, orbit.target, view.fov, setup.cameras.length + 1);
     update((s) => ({ ...s, cameras: [...s.cameras, cam], activeCameraId: cam.id }));
     useSceneView.setState({ selectedId: cam.id, panelOpen: true });
   };

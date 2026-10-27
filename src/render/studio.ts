@@ -278,3 +278,16 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
 export function worldBox(b: { min: number[]; max: number[] }): THREE.Box3 {
   return new THREE.Box3(new THREE.Vector3(b.min[0] / 20, -b.max[1] / 20, -b.max[2] / 20), new THREE.Vector3(b.max[0] / 20, -b.min[1] / 20, -b.min[2] / 20));
 }
+
+/** The perspective pose that shows what the editor is showing. In an ortho view the
+ * camera never moves when zooming (the zoom scales the frustum), so its position
+ * alone is far too distant: the ortho zoom becomes a camera distance instead. */
+export function perspectiveEquivalent(studio: Pick<Studio, 'projection' | 'perspective' | 'ortho'>, target: THREE.Vector3): { position: THREE.Vector3; fov: number } {
+  const fov = studio.perspective.fov;
+  if (studio.projection !== 'ortho') return { position: studio.perspective.position.clone(), fov };
+  const o = studio.ortho;
+  const halfHeight = (o.top - o.bottom) / 2 / Math.max(o.zoom, 1e-6);
+  const dist = Math.max(halfHeight / Math.tan(THREE.MathUtils.degToRad(fov) / 2), 0.5);
+  const back = new THREE.Vector3(0, 0, 1).applyQuaternion(o.quaternion);
+  return { position: target.clone().addScaledVector(back, dist), fov };
+}

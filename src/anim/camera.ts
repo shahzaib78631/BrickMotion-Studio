@@ -484,7 +484,15 @@ export function cameraAt(
 }
 
 /** The camera the viewport is showing: its pose and its lens. */
-export type EditorCamera = { position: [number, number, number]; target: [number, number, number]; fov: number };
+export type EditorCamera = {
+  position: [number, number, number];
+  target: [number, number, number];
+  fov: number;
+  /** Width / height of the view this shot was framed in. When it differs from the
+   * video's, the distance is re-fitted so the model fills the video as much as it
+   * filled that view (a landscape viewport shot would otherwise be cropped or tiny in 9:16). */
+  aspect?: number;
+};
 
 /**
  * The camera the Build tab plays, as a video sampler. It is *your* shot: the same direction,
@@ -494,14 +502,23 @@ export type EditorCamera = { position: [number, number, number]; target: [number
 export function buildViewCamera(
   tl: Timeline,
   editor: EditorCamera,
-  _aspect = 9 / 16,
+  aspect = 9 / 16,
   settings: CameraSettings = DEFAULT_CAMERA_SETTINGS,
 ): (t: number) => CamPose {
   const target = new THREE.Vector3(...editor.target);
   const offset = new THREE.Vector3(...editor.position).sub(target);
-  const radius = offset.length() || 1;
+  let radius = offset.length() || 1;
   const azimuth0 = Math.atan2(offset.x, offset.z);
   const elevation = Math.asin(Math.min(1, Math.max(-1, offset.y / radius)));
+  if (editor.aspect && aspect > 0 && Math.abs(editor.aspect - aspect) > 1e-3) {
+    // same zoom relative to the finished model, for the video's frame shape
+    const box = worldBox3(tl.modelBox);
+    const azDeg = THREE.MathUtils.radToDeg(azimuth0);
+    const elDeg = THREE.MathUtils.radToDeg(elevation);
+    const fitView = fitDistanceAtTarget(box, target, editor.fov, editor.aspect, azDeg, elDeg);
+    const fitVideo = fitDistanceAtTarget(box, target, editor.fov, aspect, azDeg, elDeg);
+    if (fitView > 0 && fitVideo > 0) radius *= fitVideo / fitView;
+  }
   const ease = (u: number) => { const k = Math.min(1, Math.max(0, u)); return k * k * (3 - 2 * k); };
   const pose = (r: number, az: number): CamPose => {
     const cosEl = Math.cos(elevation);

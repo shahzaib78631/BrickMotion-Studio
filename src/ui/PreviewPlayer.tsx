@@ -42,7 +42,10 @@ export function PreviewPlayer({ model, timeline: tl }: { model: ModelState; time
       usePlayback.getState().set({ playing: false });
       studio.perspective.position.copy(saved.pos);
       studio.perspective.fov = saved.fov;
-      studio.perspective.aspect = saved.aspect;
+      // The canvas's own shape, not the one saved on entry: that may be the camera
+      // view's output frame, and the window may have been resized meanwhile.
+      const canvas = studio.renderer.domElement as HTMLCanvasElement;
+      studio.perspective.aspect = canvas.clientWidth && canvas.clientHeight ? canvas.clientWidth / canvas.clientHeight : saved.aspect;
       studio.perspective.near = saved.near;
       studio.perspective.far = saved.far;
       studio.perspective.clearViewOffset();
