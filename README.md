@@ -189,3 +189,18 @@ This experimental enhancement checks the **saved mechanism playback** between ke
 ### Standard Motion v4 planning repair (helicopter)
 
 See [STANDARD_MOTION_V4_PLANNING_REPAIR.md](STANDARD_MOTION_V4_PLANNING_REPAIR.md) for the large-model planning-stall fix, conservative collision-review policy, real-geometry helicopter regression, and installation/verification steps. Use `npm run verify:v4:helicopter:offline` to reproduce the 305-piece motion-postprocessor test. Large-model v4 uses a single-pass Standard baseline; **Standard Motion v3 behavior is unchanged**.
+
+## Instruction PDFs → MPD
+
+Turn official LEGO building-instruction booklets into an MPD with the right parts, colours and
+official step order (Phase 1: each step's new parts are laid out beside the model, ready to place):
+
+```bash
+export REBRICKABLE_API_KEY=…   # free key from your Rebrickable account settings
+npm run instructions -- --name 40859 --set 40859-1 --pdf 6668730 --pdf 6668732
+```
+
+`--pdf` takes a LEGO booklet id, a URL or a local file. Booklets of one figure continue their
+step numbers; a booklet that starts again at step 1 becomes another figure (a submodel). The
+result and a `report.md` listing everything to check go to `.cache/instructions/<name>/`.
+Needs the Python tools once: `cd python && uv sync`.
