@@ -14,6 +14,10 @@ npm run dev     # open http://localhost:5173
 
 `npm run setup` puts the parts in `public/ldraw/` and the catalog in `public/data/`. Both are git-ignored. `npm run build` copies them into `dist/` too (≈700 MB), so the app is meant to run locally.
 
+### LDraw data
+
+The parts library is downloaded on demand. To fetch it manually, official parts are at <https://library.ldraw.org/library/updates/complete.zip> and unofficial parts at <https://library.ldraw.org/library/unofficial/ldrawunf.zip>. Unzip them into `public/ldraw/`.
+
 ## Scene cameras, lighting and region-based preview
 
 BrickMotion now includes a **Scene** panel in the 3D viewport. Add and select

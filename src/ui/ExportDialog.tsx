@@ -65,7 +65,7 @@ export function ExportDialog({ plan, jobs, mode = 'build', onClose }: { plan: Pl
           const bakedBuild = animation.tracks.some((track) => track.model === job.model && track.source === 'baked-flight');
           let timeline: Awaited<ReturnType<typeof planTimeline>> | null = null;
           if (mode === 'build' || linkedBuild || bakedBuild) {
-            try { timeline = await planTimeline(plan, job.model, animOptions(settings), 'export'); }
+            try { timeline = await planTimeline(plan, job.model, animOptions(settings, plan.sceneSetup), 'export'); }
             catch (error) {
               // A camera-only plan must never block an already-baked Timeline.
               if (mode === 'build' || linkedBuild) throw error;
@@ -85,10 +85,12 @@ export function ExportDialog({ plan, jobs, mode = 'build', onClose }: { plan: Pl
               camera: settings.camera,
               buildView: viewportMode ? editorCamera() : undefined,
               sceneSetup: plan.sceneSetup,
+              stageCameraFixed: settings.floorStyle === 'camera-frame',
               render: { edges: settings.edgeLines, linearColors: settings.linearColors },
         materials: settings.materials,
               logo,
               snapSound: settings.snapSound,
+              sound: settings.sound,
               signal: ac.signal,
               onProgress: (done: number, total: number) => {
                 // Avoid re-rendering the modal for every 60/90/120-FPS frame.
@@ -120,8 +122,8 @@ export function ExportDialog({ plan, jobs, mode = 'build', onClose }: { plan: Pl
   const doneCount = states.filter((s) => s.s === 'done' || s.s === 'error').length;
   const current = states.find((s) => s.s === 'rendering') as Extract<JobState, { s: 'rendering' }> | undefined;
   const overall = (doneCount + (current ? current.done / current.total : 0)) / Math.max(1, jobs.length);
-  // A saved scene camera takes over after the intro: the MP4 then holds its shot (with "My
-  // viewport" it also gets the hero orbit). Say so before the export starts, with the way out.
+  // A saved scene camera takes over after the intro: the MP4 holds its shot, and the hero
+  // orbit swings around it. Say so before the export starts, with the way out.
   const scene = useStudio((s) => s.plan.sceneSetup);
   const sceneCameraInCharge = scene?.useCameraForVideo === true && !!scene.activeCameraId;
   const sceneCameraName = scene?.cameras.find((c) => c.id === scene.activeCameraId)?.name ?? 'Camera';
@@ -139,7 +141,7 @@ export function ExportDialog({ plan, jobs, mode = 'build', onClose }: { plan: Pl
           <div className="bm-banner" role="note">
             <span>
               This project&rsquo;s video uses the saved scene camera <b>{sceneCameraName}</b>: the intro moves into its
-              shot{viewportMode ? ', the build holds it and the outro orbits around it' : <>, then the MP4 holds that shot — <b>the hero orbit does not appear</b></>}.
+              shot{viewportMode || settings.heroOrbit ? ', the build holds it and the outro orbits around it' : ' and the MP4 holds that shot'}.
             </span>
             {phase !== 'checking' && phase !== 'running' && (
               <button className="nx-btn nx-sm" onClick={() => useStudio.getState().apply((p) => ({

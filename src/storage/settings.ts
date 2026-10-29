@@ -5,6 +5,7 @@ import { FLOOR_STYLES, type ArrivalMode, type FloorMatch, type FloorSides, type 
 import { isConstructionBudgetPreset, type ConstructionBudgetPreset } from '../anim/construction/budgetPresets';
 import type { LogoCorner } from '../export/exportVideo';
 import { isExportFps, type ExportFps } from '../export/frameRates';
+import { DEFAULT_SOUND, sanitizeSound, type SoundSettings } from '../audio/soundSettings';
 import { DEFAULT_MATERIALS, isStudioLook, sanitizeMaterials, type Materials, type StudioLook } from '../render/looks';
 import { DEFAULT_CAMERA_SETTINGS, type CameraFraming, type CameraSettings } from '../anim/camera';
 import { isVideoFormat, type VideoFormat } from '../export/formats';
@@ -21,7 +22,9 @@ export type Settings = {
   exportCamera: 'automatic' | 'buildView';
   /** the Build viewport plays the intro shot and hero orbit while it plays */
   cameraFollowsPlayback: boolean;
-  video: { targetSeconds: number; heroOrbit: boolean; mode: ArrivalMode | 'auto'; fps: ExportFps; introSeconds: number | null; buildSeconds: number | null; outroSeconds: number | null; studioLook: StudioLook; cameraFraming: CameraFraming; camera: CameraSettings; format: VideoFormat; edgeLines: boolean; linearColors: boolean; bottomUp: boolean; snapSound: boolean; planner?: 'legacy' | 'construction-v2' | 'construction-auto' | 'construction-v3' | 'construction-v3-auto' | 'construction-v4' | 'standard-motion' | 'standard-motion-v4' | 'assembly-artifact'; constructionSupport?: 'fixture' | 'table'; constructionBudget?: ConstructionBudgetPreset; constructionStepModules?: boolean; motionV4Limits?: JointLimitRule[]; motionV4Mechanism?: MechanismProgram | null; floorSort: FloorSort; floorSides: FloorSides; floorStyle: FloorStyle; floorMatch: FloorMatch; materials: Materials };
+  /** Refit the saved camera to the initial loose pieces when playing Camera frame staging. */
+  autoFitStaging: boolean;
+  video: { targetSeconds: number; heroOrbit: boolean; mode: ArrivalMode | 'auto'; fps: ExportFps; introSeconds: number | null; buildSeconds: number | null; outroSeconds: number | null; studioLook: StudioLook; cameraFraming: CameraFraming; camera: CameraSettings; format: VideoFormat; edgeLines: boolean; linearColors: boolean; bottomUp: boolean; snapSound: boolean; planner?: 'legacy' | 'construction-v2' | 'construction-auto' | 'construction-v3' | 'construction-v3-auto' | 'construction-v4' | 'standard-motion' | 'standard-motion-v4' | 'assembly-artifact'; constructionSupport?: 'fixture' | 'table'; constructionBudget?: ConstructionBudgetPreset; constructionStepModules?: boolean; motionV4Limits?: JointLimitRule[]; motionV4Mechanism?: MechanismProgram | null; floorSort: FloorSort; floorSides: FloorSides; floorStyle: FloorStyle; floorMatch: FloorMatch; materials: Materials; sound: SoundSettings };
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -33,7 +36,8 @@ export const DEFAULT_SETTINGS: Settings = {
   showSelectionBar: true,
   exportCamera: 'automatic',
   cameraFollowsPlayback: true,
-  video: { targetSeconds: 15, heroOrbit: true, mode: 'auto', fps: 30, introSeconds: null, buildSeconds: null, outroSeconds: null, studioLook: 'soft', cameraFraming: 'cinematic', camera: DEFAULT_CAMERA_SETTINGS, format: '9:16', edgeLines: true, linearColors: true, bottomUp: true, snapSound: true, planner: 'legacy', constructionSupport: 'fixture', constructionBudget: 'standard', constructionStepModules: false, motionV4Limits: [], motionV4Mechanism: null, floorSort: 'step', floorSides: 'front-back', floorStyle: 'packed', floorMatch: 'fill', materials: DEFAULT_MATERIALS },
+  autoFitStaging: false,
+  video: { targetSeconds: 15, heroOrbit: true, mode: 'auto', fps: 30, introSeconds: null, buildSeconds: null, outroSeconds: null, studioLook: 'soft', cameraFraming: 'cinematic', camera: DEFAULT_CAMERA_SETTINGS, format: '9:16', edgeLines: true, linearColors: true, bottomUp: true, snapSound: true, planner: 'legacy', constructionSupport: 'fixture', constructionBudget: 'standard', constructionStepModules: false, motionV4Limits: [], motionV4Mechanism: null, floorSort: 'step', floorSides: 'front-back', floorStyle: 'packed', floorMatch: 'fill', materials: DEFAULT_MATERIALS, sound: DEFAULT_SOUND },
 };
 
 const KEY = 'settings';
@@ -44,6 +48,7 @@ export async function loadSettings(): Promise<Settings> {
   if (!isExportFps(video.fps)) video.fps = DEFAULT_SETTINGS.video.fps;
   if (!isStudioLook(video.studioLook)) video.studioLook = 'soft';
   video.materials = sanitizeMaterials(video.materials);
+  video.sound = sanitizeSound(video.sound);
   if (!FLOOR_STYLES.includes(video.floorStyle)) video.floorStyle = 'packed';
   if (video.floorMatch !== 'nearest') video.floorMatch = 'fill';
   if (video.cameraFraming !== 'cinematic' && video.cameraFraming !== 'wide') video.cameraFraming = 'cinematic';
@@ -74,6 +79,7 @@ export async function loadSettings(): Promise<Settings> {
   if (typeof video.snapSound !== 'boolean') video.snapSound = DEFAULT_SETTINGS.video.snapSound;
   if (typeof s.showSelectionBar !== 'boolean') s.showSelectionBar = DEFAULT_SETTINGS.showSelectionBar;
   if (typeof s.cameraFollowsPlayback !== 'boolean') s.cameraFollowsPlayback = DEFAULT_SETTINGS.cameraFollowsPlayback;
+  if (typeof s.autoFitStaging !== 'boolean') s.autoFitStaging = DEFAULT_SETTINGS.autoFitStaging;
   if (s.exportCamera !== 'automatic' && s.exportCamera !== 'buildView') s.exportCamera = 'automatic';
   for (const key of ['introSeconds', 'buildSeconds', 'outroSeconds'] as const) {
     const value = video[key];

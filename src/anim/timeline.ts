@@ -17,6 +17,7 @@ import { moveAssembly, placementMatrix, transformBox, unionBox, type ANode, type
 import type { AssemblySpot, Plan } from '../plan/types';
 import { clamp01, easeInOutCubic, lerp } from './easing';
 import { hash01, layoutFloor, STYLE_AREA, type FloorItem, type LayoutStyle, type Region } from './floorLayout';
+import { createFrameStagingSpace } from './cameraFrameLayout';
 import { choosePacing, SEQUENTIAL_GAP, type AnimOptions, type FloorSides, type Pacing } from './pacing';
 import { AssemblyPlanningError, buildAssemblyGraph } from './assemblyGraph';
 import { intersects, sweptIntersects, rotationPadding } from './sweptBounds';
@@ -137,6 +138,39 @@ function bandsAround(box: Box, padArea = 0, sides: FloorSides = 'front-back'): R
   ];
 }
 
+/**
+ * Camera-frame staging gets its own *portrait/landscape-shaped footprint*, not
+ * just a different number of bricks per row. The older fixed 12-stud strips
+ * grew only in Z and eventually made 9:16 builds a hairline of tiny pieces.
+ * Reserve a clear central opening for the assembled model, with the waiting
+ * pieces in non-overlapping front/back/side bays around that opening.
+ */
+export function cameraFrameBands(box: Box, padArea: number, sides: FloorSides, aspect: number): Region[] {
+  const bx0 = Math.floor(box.min[0] / STUD), bx1 = Math.ceil(box.max[0] / STUD);
+  const bz0 = Math.floor(box.min[2] / STUD), bz1 = Math.ceil(box.max[2] / STUD);
+  const W = Math.max(1, bx1 - bx0), D = Math.max(1, bz1 - bz0);
+  const clear = FLOOR_MARGIN + 1;
+  const ratio = Math.max(0.4, Math.min(2.5, Number.isFinite(aspect) ? aspect : 1));
+  const minW = W + 2 * clear + 8, minD = D + 2 * clear + 8;
+  const area = Math.max(padArea * 1.1, minW * minD);
+  const outerW = Math.max(minW, Math.ceil(Math.sqrt(area * ratio)));
+  const outerD = Math.max(minD, Math.ceil(area / outerW));
+  const centreX = (bx0 + bx1) / 2;
+  const x0 = Math.floor(centreX - outerW / 2);
+  const frontD = Math.max(4, Math.floor((outerD - D - 2 * clear) / 2));
+  const backD = Math.max(4, outerD - D - 2 * clear - frontD);
+  const sideW = Math.max(4, Math.floor((outerW - W - 2 * clear) / 2));
+  const left: Region = { x0: bx0 - clear - sideW, z0: bz0 - clear, width: sideW, depth: D + 2 * clear };
+  const right: Region = { x0: bx1 + clear, z0: bz0 - clear, width: sideW, depth: D + 2 * clear };
+  const front: Region = { x0, z0: bz0 - clear - frontD, width: outerW, depth: frontD, near: 'front' };
+  const behind: Region = { x0, z0: bz1 + clear, width: outerW, depth: backD, near: 'behind' };
+  if (sides === 'front') return [{ ...front, z0: front.z0 - backD, depth: frontD + backD }];
+  if (sides === 'behind') return [{ ...behind, depth: backD + frontD }];
+  if (sides === 'sides') return [left, right];
+  if (sides === 'around') return [front, behind, left, right];
+  return [front, behind];
+}
+
 const regionBox = (r: Region, ground: number): Box => ({
   min: [r.x0 * STUD, ground - BRICK, r.z0 * STUD],
   max: [(r.x0 + r.width) * STUD, ground, (r.z0 + r.depth) * STUD],
@@ -150,7 +184,10 @@ const regionBox = (r: Region, ground: number): Box => ({
  */
 /** Packs one band, its used rows pushed against the model. */
 function layoutBand(items: FloorItem[], band: Region, style: LayoutStyle, aspect: number, pos: Map<string, { x: number; z: number }>): string[] {
-  const r = layoutFloor(items, band, 1, style, aspect);
+  // camera-frame's aspect is already encoded by the photo-shaped set of bays.
+  // Do not shrink each bay a second time to sqrt(pieceArea * aspect): that is
+  // what previously created the extremely thin, over-long rows in 9:16 shots.
+  const r = layoutFloor(items, band, 1, style === 'camera-frame' ? 'showcase' : style, aspect);
   const depthOf = new Map(items.map((i) => [i.id, i.d]));
   let used = 0;
   r.pos.forEach((p, k) => (used = Math.max(used, p.z + depthOf.get(k)! - band.z0)));
@@ -166,8 +203,35 @@ function layoutBand(items: FloorItem[], band: Region, style: LayoutStyle, aspect
  * are simply filled in order. With it a piece waits on its own side of the model
  * and only spills to the next-best side when its own is full.
  */
-function layoutBands(items: FloorItem[], bands: Region[], style: LayoutStyle = 'packed', prefer?: ReadonlyMap<string, number[]>, aspect = 1) {
+function layoutBands(items: FloorItem[], bands: Region[], style: LayoutStyle = 'packed', prefer?: ReadonlyMap<string, number[]>, aspect = 1,
+  frame?: ReturnType<typeof createFrameStagingSpace>) {
+  // The frame itself is the hard boundary; never grow or fit the camera just
+  // because the staging bands are too small. Overflow goes into later windows.
+  if (frame) return frame.place(items);
   const pos = new Map<string, { x: number; z: number }>();
+  if (style === 'camera-frame' && !prefer && bands.length > 1) {
+    // An equal-quality photograph has pieces on both sides of the build, not
+    // one full strip followed by three empty strips. Allocate by actual bay
+    // capacity, while preserving stable order within each bay.
+    const queues = bands.map(() => [] as FloorItem[]);
+    const loads = bands.map(() => 0);
+    const capacity = bands.map((b) => Math.max(1, b.width * b.depth));
+    const missing: string[] = [];
+    for (const it of items) {
+      let best = -1, score = Infinity;
+      for (let i = 0; i < bands.length; i++) {
+        if (it.w > bands[i].width || it.d > bands[i].depth) continue;
+        const demand = loads[i] / capacity[i];
+        if (demand < score) { score = demand; best = i; }
+      }
+      if (best < 0) { missing.push(it.id); continue; }
+      queues[best].push(it);
+      loads[best] += (it.w + 3) * (it.d + 3);
+    }
+    for (let i = 0; i < bands.length; i++) missing.push(...layoutBand(queues[i], bands[i], style, aspect, pos));
+    for (const id of missing) pos.delete(id);
+    return { pos, overflow: missing };
+  }
   if (!prefer || bands.length < 2) {
     let rest = items;
     bands.forEach((band) => {
@@ -224,13 +288,19 @@ function bandPreference(items: { id: string; at: [number, number] }[], bands: Re
 }
 
 /** Grows every band away from the model (studs), keeping its edge nearest the model. */
-function growBands(bands: Region[], box: Box, by: number): Region[] {
+function growBands(bands: Region[], box: Box, by: number, cameraFrame = false): Region[] {
   const cz = (box.min[2] + box.max[2]) / 2 / STUD;
+  const cx = (box.min[0] + box.max[0]) / 2 / STUD;
   return bands.map((r) => {
     const rz = r.z0 + r.depth / 2;
     if (r.near) {
       const extra = Math.ceil(r.depth * (by - 1));
       return rz < cz ? { ...r, z0: r.z0 - extra, depth: r.depth + extra } : { ...r, depth: r.depth + extra };
+    }
+    if (cameraFrame) {
+      // Expand sideways away from the model, never into the front/back corners.
+      const extra = Math.max(2, Math.ceil(r.width * (by - 1)));
+      return r.x0 + r.width / 2 < cx ? { ...r, x0: r.x0 - extra, width: r.width + extra } : { ...r, width: r.width + extra };
     }
     // side strips grow lengthwise, both ways: sideways they could reach a submodel's work spot
     const extra = Math.ceil(r.depth * (by - 1));
@@ -239,7 +309,8 @@ function growBands(bands: Region[], box: Box, by: number): Region[] {
 }
 
 /** Splits pieces (in play order) into windows that each fit the bands. */
-function windowed(items: FloorItem[], bands: Region[], style: LayoutStyle = 'packed', prefer?: ReadonlyMap<string, number[]>, aspect = 1) {
+function windowed(items: FloorItem[], bands: Region[], style: LayoutStyle = 'packed', prefer?: ReadonlyMap<string, number[]>, aspect = 1,
+  frame?: ReturnType<typeof createFrameStagingSpace>) {
   const windows: { ids: string[]; pos: Map<string, { x: number; z: number }> }[] = [];
   let i = 0;
   while (i < items.length) {
@@ -247,10 +318,13 @@ function windowed(items: FloorItem[], bands: Region[], style: LayoutStyle = 'pac
     let hi = items.length - i;
     while (lo < hi) {
       const mid = Math.ceil((lo + hi) / 2);
-      if (layoutBands(items.slice(i, i + mid), bands, style, prefer, aspect).overflow.length === 0) lo = mid;
+      if (layoutBands(items.slice(i, i + mid), bands, style, prefer, aspect, frame).overflow.length === 0) lo = mid;
       else hi = mid - 1;
     }
-    const best = layoutBands(items.slice(i, i + lo), bands, style, prefer, aspect);
+    const best = layoutBands(items.slice(i, i + lo), bands, style, prefer, aspect, frame);
+    if (frame && !best.pos.has(items[i].id)) {
+      throw new Error(`The active camera is too tight to stage part ${items[i].id} inside the shot. Widen its lens or move it back, or use “Fit camera to pieces” explicitly.`);
+    }
     windows.push({ ids: items.slice(i, i + lo).map((it) => it.id), pos: best.pos });
     i += lo;
   }
@@ -462,13 +536,17 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
   const floorStyle: LayoutStyle = opts.floorStyle ?? 'packed';
   const floorArea = STYLE_AREA[floorStyle];
   const floorAspect = opts.floorAspect ?? 1;
-  const mainBands = bandsAround(layoutBox, padArea(asm.nodes) * floorArea, sides);
+  const initialBands = (b: Box, a: number) => floorStyle === 'camera-frame'
+    ? cameraFrameBands(b, a, sides, floorAspect)
+    : bandsAround(b, a, sides);
+  const mainBands = initialBands(layoutBox, padArea(asm.nodes) * (opts.floorCamera && floorStyle === 'camera-frame' ? 0.18 : floorArea));
 
   const steps: PlayStep[] = [];
   const ctxs: Ctx[] = [{ bands: mainBands, pieces: [], group: new Map() }];
   const subInfo: { key: string; name: string; closeUp: boolean; firstStep: number; spot: Box; ctx: number }[] = [];
   const closeNames = new Set<string>();
-  let sceneBox: Box = mainBands.reduce((b, r) => unionBox(b, regionBox(r, ground)), modelBox);
+  let sceneBox: Box = floorStyle === 'camera-frame' && opts.floorCamera ? modelBox
+    : mainBands.reduce((b, r) => unionBox(b, regionBox(r, ground)), modelBox);
   let sideRight = Math.max(layoutBox.max[0], ...mainBands.map((r) => (r.x0 + r.width) * STUD));
 
   const keyOf = (prefix: string, id: string) => (prefix ? `${prefix}/${id}` : id);
@@ -573,13 +651,13 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
         .makeTranslation(buildSpot.x * STUD - (ob.min[0] + ob.max[0]) / 2, ground - ob.max[1], buildSpot.z * STUD - (ob.min[2] + ob.max[2]) / 2)
         .multiply(oriented);
       spot = transformBox(n.body, from);
-      bands = bandsAround(spot, padArea(n.children) * floorArea, sides);
+      bands = initialBands(spot, padArea(n.children) * floorArea);
     } else {
       const zMid = (layoutBox.min[2] + layoutBox.max[2]) / 2;
       const tx = sideRight + SIDE_GAP * STUD - b.min[0];
       from = new THREE.Matrix4().makeTranslation(tx, ground - b.max[1], zMid - (b.min[2] + b.max[2]) / 2).multiply(basis);
       spot = transformBox(n.body, from);
-      bands = bandsAround(spot, padArea(n.children) * floorArea, sides);
+      bands = initialBands(spot, padArea(n.children) * floorArea);
       // Reserve room for the submodel's FLOOR pieces as well as the assembled
       // chunk. Otherwise the side staging band can overlap main-floor pieces.
       const edge = Math.min(spot.min[0], ...bands.map((r) => r.x0 * STUD));
@@ -587,7 +665,7 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
       if (shift) {
         from.elements[12] += shift;
         spot = transformBox(n.body, from);
-        bands = bandsAround(spot, padArea(n.children) * floorArea, sides);
+        bands = initialBands(spot, padArea(n.children) * floorArea);
       }
     }
     const focus = bands.reduce((b, r) => unionBox(b, regionBox(r, ground)), spot); // the scene bounds; the camera uses the occupied part
@@ -731,13 +809,18 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
   /** the order groups are laid out in when sorting by part */
   const partRank = new Map([...new Set(asm.instances.map((i) => i.part))].sort().map((p, i) => [p, i]));
   ctxs.forEach((ctx, ci) => {
+    // For the main staged build, use the ACTUAL saved camera projection rather
+    // than a portrait-shaped floor estimate. Submodels keep their own bays.
+    const frame = floorStyle === 'camera-frame' && opts.floorCamera && ci === 0
+      ? createFrameStagingSpace(opts.floorCamera, ground, layoutBox, sides) : undefined;
     const items: (FloorItem & { color: number })[] = ctx.pieces.map((key) => {
       const inst = byKey.get(key)!;
-      const b = transformBox(hardware.get(key)?.body ?? metrics(inst.part).body, naturalBasis(inst.world));
+      const b = transformBox(hardware.get(key)?.body ?? (frame ? metrics(inst.part).full : metrics(inst.part).body), naturalBasis(inst.world));
       return {
         id: key,
         w: Math.max(1, Math.ceil((b.max[0] - b.min[0]) / STUD - 0.01)),
         d: Math.max(1, Math.ceil((b.max[2] - b.min[2]) / STUD - 0.01)),
+        h: Math.max(0.25, (b.max[1] - b.min[1]) / STUD),
         // pieces of one group lie together on the floor
         group: sortBy === 'step' ? ctx.group.get(key) ?? 0 : sortBy === 'colour' ? inst.color : sortBy === 'part' ? partRank.get(inst.part) ?? 0 : 0,
         color: inst.color,
@@ -754,20 +837,24 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
       const b = byKey.get(key)!.worldBox;
       return { id: key, at: [(b.min[0] + b.max[0]) / 2 / STUD, (b.min[2] + b.max[2]) / 2 / STUD] as [number, number] };
     }), ctx.bands) : undefined;
-    if (sortBy === 'all' && items.length) {
+    if (sortBy === 'all' && items.length && !frame) {
+      // Fixed-frustum staging is intentionally the exception: if a lens
+      // cannot show all pieces legibly, use consecutive floor windows rather
+      // than expanding the floor beyond the shot or moving the camera.
       // every piece on the floor from the start: grow the bands until one window holds them all
       // the bands surround their (sub)model, so their union is centred on it
       const around = ci === 0 ? layoutBox : ctx.bands.slice(1).reduce((b, r) => unionBox(b, regionBox(r, ground)), regionBox(ctx.bands[0], ground));
       for (let tries = 0; tries < 8 && layoutBands(ordered.map(({ id, w, d, group }) => ({ id, w, d, group })), ctx.bands, floorStyle, prefer, floorAspect).overflow.length; tries++)
-        ctx.bands = growBands(ctx.bands, around, 1.35);
+        ctx.bands = growBands(ctx.bands, around, 1.35, floorStyle === 'camera-frame');
       for (const r of ctx.bands) sceneBox = unionBox(sceneBox, regionBox(r, ground));
     }
     const windows = windowed(
-      [...ordered].sort((a, b) => playOrder.get(a.id)! - playOrder.get(b.id)!).map(({ id, w, d, group }) => ({ id, w, d, group })),
+      [...ordered].sort((a, b) => playOrder.get(a.id)! - playOrder.get(b.id)!).map(({ id, w, d, h, group }) => ({ id, w, d, h, group })),
       ctx.bands,
       floorStyle,
       prefer,
       floorAspect,
+      frame,
     );
     windowVisibility.push({ ctx: ci, windows });
     // ctxs are created parent first, so the parent's first appearance is known here
@@ -784,11 +871,12 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
     windows.forEach((win, wi) => {
       const set = new Set(win.ids);
       const r = layoutBands(
-        ordered.filter((it) => set.has(it.id)).map(({ id, w, d, group }) => ({ id, w, d, group })),
+        ordered.filter((it) => set.has(it.id)).map(({ id, w, d, h, group }) => ({ id, w, d, h, group })),
         ctx.bands,
         floorStyle,
         prefer,
         floorAspect,
+        frame,
       );
       const pos = r.overflow.length ? win.pos : r.pos;
       if (wi > 0) {
@@ -798,7 +886,7 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
       for (const key of win.ids) {
         const inst = byKey.get(key)!;
         const basis = naturalBasis(inst.world);
-        const b = transformBox(hardware.get(key)?.body ?? metrics(inst.part).body, basis);
+        const b = transformBox(hardware.get(key)?.body ?? (frame ? metrics(inst.part).full : metrics(inst.part).body), basis);
         const p = pos.get(key) ?? { x: ctx.bands[0].x0, z: ctx.bands[0].z0 };
         let floor = new THREE.Matrix4().makeTranslation(p.x * STUD - b.min[0], ground - b.max[1], p.z * STUD - b.min[2]).multiply(basis);
         if (floorStyle === 'scattered') {
@@ -813,7 +901,9 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
           ?? [{ key, rel: new THREE.Matrix4() }];
         for (const member of entries) {
           const child = byKey.get(member.key)!, pose = floor.clone().multiply(member.rel);
-          tracks.set(member.key, { appear, floor: pose, floorBox: transformBox(metrics(child.part).full, pose), ctx: ci, moves: [], final: child.world.clone() });
+          const floorBox = transformBox(metrics(child.part).full, pose);
+          sceneBox = unionBox(sceneBox, floorBox);
+          tracks.set(member.key, { appear, floor: pose, floorBox, ctx: ci, moves: [], final: child.world.clone() });
         }
       }
     });

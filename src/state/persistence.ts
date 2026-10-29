@@ -35,6 +35,9 @@ export async function flushSave(): Promise<void> {
 
 function show(id: string, plan = emptyPlan()) {
   projectId = id;
+  // Draft staging belongs to the editor session for the previous project,
+  // never to a newly opened camera or build.
+  useAppSettings.getState().set({ frameStagingPending: false, frameStagingPrevious: null });
   const st = useStudio.getState();
   st.setPlan(ensureIds(plan), { resetHistory: true });
   st.setMode('edit');

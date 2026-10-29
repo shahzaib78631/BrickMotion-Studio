@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { AudioBufferSource, BufferTarget, CanvasSource, Mp4OutputFormat, Output, QUALITY_HIGH, QUALITY_MEDIUM, canEncodeAudio, canEncodeVideo } from 'mediabunny';
 import { snapsOf, type Snap } from '../anim/snaps';
 import { renderSnapTrack } from '../audio/snapSound';
-import { buildViewCamera, cameraAt, introInto, cameraFov, fitDistance, sphericalPosition, worldBox3, DEFAULT_CAMERA_SETTINGS, type CamPose, type CameraFraming, type CameraSettings, type EditorCamera } from '../anim/camera';
+import type { SoundSettings } from '../audio/soundSettings';
+import { buildViewCamera, cameraAt, heroAround, introInto, cameraFov, fitDistance, sphericalPosition, worldBox3, DEFAULT_CAMERA_SETTINGS, type CamPose, type CameraFraming, type CameraSettings, type EditorCamera } from '../anim/camera';
 import { buildLayerAt } from '../anim/buildLayer';
 import { makeKeyframePose } from '../anim/keyframePose';
 import type { StudioLook, RenderOptions, Materials } from '../render/studio';
@@ -24,12 +25,16 @@ type CommonExportOpts = {
   /** Shoot the build from the editor camera instead of the automatic one. */
   buildView?: EditorCamera;
   sceneSetup?: SceneSetup;
+  /** Camera-frame staging holds the fitted tabletop camera from the first frame. */
+  stageCameraFixed?: boolean;
   /** Edge lines and colour response; the studio's defaults when left out. */
   render?: RenderOptions;
   /** Brick finish, texture and floor; the studio's defaults when left out. */
   materials?: Materials;
   logo: { image: ImageBitmap; corner: LogoCorner } | null;
   snapSound?: boolean;
+  /** how the clicks sound; the defaults when left out */
+  sound?: SoundSettings;
   onProgress: (done: number, total: number) => void;
   signal: AbortSignal;
 };
@@ -83,11 +88,11 @@ export function drawLogo(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderin
 }
 
 /** Connect clicks as audio, or null where AAC can't be encoded. */
-async function snapAudio(snaps: Snap[], duration: number): Promise<AudioBuffer | null> {
+async function snapAudio(snaps: Snap[], duration: number, sound?: SoundSettings): Promise<AudioBuffer | null> {
   if (typeof OfflineAudioContext === 'undefined') return null;
   const ok = await canEncodeAudio('aac', { numberOfChannels: 2, sampleRate: 48000 }).catch(() => false);
   if (!ok) return null;
-  return renderSnapTrack(snaps, duration).catch(() => null);
+  return renderSnapTrack(snaps, duration, 48000, sound).catch(() => null);
 }
 
 /** What to render for a video: a pose per second and a camera per second. The
@@ -124,13 +129,14 @@ export async function encodeMp4(opts: CommonExportOpts, deps: ExportDeps, sample
     studio.setLook?.(opts.studioLook ?? 'soft');
     if (opts.render) studio.setRenderOptions?.(opts.render);
     if (opts.materials) studio.setMaterials?.(opts.materials);
+    await studio.ready?.();
     studio.setSceneSetup(opts.sceneSetup, false, null, w / h);
     studio.setSize(w, h);
     studio.bricks.setInstances(opts.instances);
     studio.fitTo(samples.box, samples.groundY);
     const source = new CanvasSource(composite, { codec: 'avc', bitrate: QUALITY_HIGH, latencyMode: 'quality' });
     output.addVideoTrack(source, { frameRate: fps });
-    const sound = opts.snapSound && samples.snaps ? await snapAudio(samples.snaps, samples.duration) : null;
+    const sound = opts.snapSound && samples.snaps ? await snapAudio(samples.snaps, samples.duration, opts.sound) : null;
     const audio = sound ? new AudioBufferSource({ codec: 'aac', bitrate: QUALITY_MEDIUM }) : null;
     if (audio) output.addAudioTrack(audio);
     await output.start();
@@ -182,8 +188,13 @@ export function exportVideo(opts: ExportOpts, deps: ExportDeps): Promise<Blob> {
     camera: opts.buildView
       ? (seconds, aspect) => buildViewCamera(tl, opts.buildView!, aspect, opts.camera ?? DEFAULT_CAMERA_SETTINGS, opts.cameraFraming ?? 'cinematic')(seconds)
       : scene
-        // the scene camera holds its shot, after the same intro the Build view plays
-        ? (seconds, aspect) => introInto(tl, scene, aspect, opts.cameraFraming ?? 'cinematic', opts.camera ?? DEFAULT_CAMERA_SETTINGS)(seconds)
+        // the scene camera holds its shot (after the same intro the Build view plays), and
+        // the hero orbit swings around it at the end, as the Build view plays it
+        ? opts.stageCameraFixed
+          ? (seconds) => heroAround(tl, scene, opts.camera ?? DEFAULT_CAMERA_SETTINGS)(seconds)
+          : (seconds, aspect) => seconds >= tl.buildEnd
+            ? heroAround(tl, scene, opts.camera ?? DEFAULT_CAMERA_SETTINGS)(seconds)
+            : introInto(tl, scene, aspect, opts.cameraFraming ?? 'cinematic', opts.camera ?? DEFAULT_CAMERA_SETTINGS)(seconds)
         : (seconds, aspect) => cameraAt(tl, seconds, aspect, opts.cameraFraming ?? 'cinematic', opts.camera),
     ownsCamera: !opts.buildView && !!scene,
     near: scene ? { near: scene.near, far: scene.far } : undefined,

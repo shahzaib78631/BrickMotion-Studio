@@ -65,7 +65,10 @@ export const optsKey = (o: AnimOptions) =>
     ...((o.floorSort ?? 'step') !== 'step' ? [`floor-sort:${o.floorSort}`] : []),
     ...((o.floorSides ?? 'front-back') !== 'front-back' ? [`floor-sides:${o.floorSides}`] : []),
     ...((o.floorStyle ?? 'packed') !== 'packed' ? [`floor-style:${o.floorStyle}`] : []),
-    ...(o.floorStyle === 'camera-frame' ? [`frame-ratio:${(o.floorAspect ?? 1).toFixed(5)}`] : []),
+    ...(o.floorStyle === 'camera-frame' ? [
+      `frame-ratio:${(o.floorAspect ?? 1).toFixed(5)}`, 'camera-frame-layout:v3',
+      ...(o.floorCamera ? [`fixed-frustum:${JSON.stringify(o.floorCamera)}`] : []),
+    ] : []),
     ...((o.floorMatch ?? 'fill') !== 'fill' ? [`floor-match:${o.floorMatch}`] : []),
     ...((o.constructionMaxCandidates ?? 100000) !== 100000 ? [`v2-candidates:${o.constructionMaxCandidates}`] : []),
     // Bays are part of the construction payload consumed by the Assembly panel.

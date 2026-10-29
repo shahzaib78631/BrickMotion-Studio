@@ -1,4 +1,4 @@
-import { flattenPart, type FlatPart } from './flatten';
+import { flattenPart, LOGO_STUDS, type FlatPart } from './flatten';
 import { normalizeName, parseLDraw, type LDrawFile } from './parse';
 import type { ShadowLookup, Snap } from './shadow';
 import { embeddedPartId, sameGeometry } from './partAlias';
@@ -28,7 +28,19 @@ export class PartLibrary {
   private inline = new Map<string, LDrawFile>();
   private warned = new Set<string>();
 
+  private studLogos = false;
+
   constructor(private fetchText: FetchText, private shadow?: ShadowLookup) {}
+
+  /** Raised LEGO logos on studs, for parts flattened from now on. */
+  setStudLogos(on: boolean): void {
+    if (on === this.studLogos) return;
+    this.studLogos = on;
+    this.parts.clear();
+  }
+  get logos(): boolean {
+    return this.studLogos;
+  }
 
   /** Connector metadata (LDCad shadow library) for parts flattened from now on. */
   setShadow(shadow: ShadowLookup | undefined): void {
@@ -113,6 +125,8 @@ export class PartLibrary {
         const rootName = `${key}.dat`;
         const root = await this.preload(rootName);
         if (!root) return null;
+        const options = { studLogos: this.studLogos };
+        if (options.studLogos) await Promise.all(Object.values(LOGO_STUDS).map((f) => this.preload(f)));
         const lookup = (n: string) => this.inline.get(n) ?? this.resolved.get(n) ?? null;
         const warn = (missing: string) => {
           if (!this.warned.has(missing)) {
@@ -120,7 +134,7 @@ export class PartLibrary {
             console.warn(`LDraw: missing sub-file ${missing}`);
           }
         };
-        let flat = flattenPart(key, root, lookup, warn, this.shadow);
+        let flat = flattenPart(key, root, lookup, warn, this.shadow, options);
         // Embedded copies (e.g. "31039 - 13971.dat") are not library ids, so
         // their shadow and supplementary data is keyed to the part they copy.
         let alias: string | null = null;
@@ -128,14 +142,15 @@ export class PartLibrary {
           const base = embeddedPartId(rootName);
           if (base && base !== key) {
             const baseRoot = await this.preloadRemote(`${base}.dat`);
+            if (options.studLogos) await Promise.all(Object.values(LOGO_STUDS).map((f) => this.preloadRemote(f)));
             if (baseRoot) {
-              const baseFlat = flattenPart(base, baseRoot, (n) => this.remoteResolved.get(n) ?? null, undefined, undefined);
+              const baseFlat = flattenPart(base, baseRoot, (n) => this.remoteResolved.get(n) ?? null, undefined, undefined, options);
               if (sameGeometry(flat, baseFlat)) {
                 alias = base;
                 if (this.shadow) {
                   const shadow = this.shadow;
                   const aliasShadow: ShadowLookup = (file) => shadow(file) ?? (normalizeName(file) === rootName ? shadow(`${base}.dat`) : null);
-                  flat = flattenPart(key, root, lookup, warn, aliasShadow);
+                  flat = flattenPart(key, root, lookup, warn, aliasShadow, options);
                 }
               }
             }

@@ -1,8 +1,14 @@
-/** Project-local camera and lighting objects. Coordinates use BrickMotion world units
- * (studs, Y up). This document is independent of generated assembly motion. */
+/** Project-local camera and lighting objects. Coordinates use Three.js world
+ * studs (1 world unit = 1 stud), not LDraw units. */
 import * as THREE from 'three';
+import type { FloorMatch, FloorSides, FloorSort, FrameStagingCamera } from '../anim/pacing';
+import type { VideoFormat } from '../export/formats';
 
 export type XYZ = [number, number, number];
+/** The inspector and camera use the SAME world-stud coordinates. Never multiply
+ * these by the 20 LDraw units/stud scale when editing a camera or a light. */
+export const sceneCoordinateToStuds = (world: number) => Number(world.toFixed(3));
+export const sceneCoordinateFromStuds = (studs: number) => studs;
 export type Region = { x: number; y: number; width: number; height: number };
 export type SceneCamera = {
   kind: 'camera'; id: string; name: string; position: XYZ; target: XYZ;
@@ -15,6 +21,18 @@ export type SceneLight = {
   angle: number; distance: number; castShadow: boolean; enabled: boolean;
 };
 export type SceneObject = SceneCamera | SceneLight;
+/** Explicitly applied, project-local staging snapshot. Camera changes do not
+ * change this until the user presses 'Arrange pieces in frame' again. */
+export type AppliedFrameStaging = {
+  version: 1;
+  cameraId: string;
+  cameraName: string;
+  format: VideoFormat;
+  camera: FrameStagingCamera;
+  floorSort: FloorSort;
+  floorSides: FloorSides;
+  floorMatch: FloorMatch;
+};
 export type SceneSetup = {
   cameras: SceneCamera[];
   lights: SceneLight[];
@@ -28,6 +46,8 @@ export type SceneSetup = {
   region: Region | null;
   /** Optional zoom/crop of Preview and MP4 to the render border. */
   cropToRegion: boolean;
+  /** Camera and layout controls captured by explicit user action only. */
+  frameStaging?: AppliedFrameStaging;
   exposure: number;
 };
 export const EMPTY_SCENE_SETUP: SceneSetup = {

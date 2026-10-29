@@ -1,4 +1,4 @@
-export type FloorItem = { id: string; w: number; d: number; group: number };
+export type FloorItem = { id: string; w: number; d: number; group: number; h?: number };
 /** A rectangle on the floor, in studs (LDraw x/z axes). */
 export type Region = {
   x0: number; z0: number; width: number; depth: number;

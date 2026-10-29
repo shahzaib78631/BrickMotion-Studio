@@ -89,7 +89,7 @@ export type TransparentStillOpts = {
   sceneSetup?: SceneSetup;
 };
 
-function applyStillCamera(studio: Studio, camera: StillCamera): void {
+export function applyStillCamera(studio: Studio, camera: StillCamera): void {
   studio.setProjection(camera.ortho ? 'ortho' : 'perspective');
   const target = camera.ortho ? studio.ortho : studio.perspective;
   target.position.copy(camera.position);
@@ -123,6 +123,7 @@ export async function captureTransparentStill(opts: TransparentStillOpts, deps: 
     studio.setLook?.(opts.studioLook ?? 'soft');
     if (opts.render) studio.setRenderOptions?.(opts.render);
     if (opts.materials) studio.setMaterials?.(opts.materials);
+    await studio.ready?.();
     studio.setSceneSetup(opts.sceneSetup, false, null, opts.width / opts.height);
     studio.setSize(opts.width, opts.height);
     studio.bricks.setInstances(opts.instances);

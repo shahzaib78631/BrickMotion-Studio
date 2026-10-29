@@ -5,8 +5,9 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { findItem, moveItems } from '../plan/ops';
 import { setAssemblySpot, setSubmodelBuildSpot, shiftOnFloor } from '../plan/pieceActions';
 import { aroundPivot, transformPlanItems } from '../plan/gizmo';
-import type { ANode } from '../model/assemble';
+import type { ANode, Instance } from '../model/assemble';
 import { dragDelta } from '../state/drag';
+import { studSnapper, type SnapPart, type StudSnapper } from '../plan/studSnap';
 import { isSub } from '../plan/types';
 import { isMainSpot, markers, sameSpot, sceneSpot, storedSpot, sceneOffset, planOffset, spotOfRef, type SpotRef } from '../plan/assemblySpots';
 import { SPOT_DRAG_TYPE, draggedSpot } from './AssemblyPanel';
@@ -23,13 +24,13 @@ import { metricsOf } from '../state/partService';
 import { modelSteps } from '../plan/ops';
 import { posedBounds, stepPoses, timelineStep } from '../model/stepLayout';
 import { poseAt, spotTransform, type Timeline } from '../anim/timeline';
-import { cameraAt, worldBox3, type CamPose } from '../anim/camera';
+import { cameraAt, heroAround, worldBox3, type CamPose } from '../anim/camera';
 import { stepAt } from '../anim/partClips';
 import { advancePlayback, usePlayback } from '../state/playback';
 import { animationOf, insertKeys, valuesAt, type ChannelValues, type KeyUpdate } from '../anim/keyframes';
 import { makeKeyframePose } from '../anim/keyframePose';
 import { advanceKeyframePlayback, useKeyframePlayback } from '../state/keyframePlayback';
-import type { Plan } from '../plan/types';
+import type { Plan, PlanItem } from '../plan/types';
 import { soundSnaps } from '../audio/snapSound';
 import { useAppSettings } from '../state/appSettings';
 import type { ModelState } from '../state/useModel';
@@ -65,6 +66,18 @@ function frame(camera: THREE.PerspectiveCamera | THREE.OrthographicCamera, contr
 
 const isTyping = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName));
 
+/** A drag's stud snapper: the selected items' parts against every other part (LDraw frame). */
+function snapperFor(instances: readonly Instance[], ids: readonly string[]): StudSnapper {
+  const chosen = new Set(ids);
+  const moving: SnapPart[] = [], others: SnapPart[] = [];
+  for (const inst of instances) {
+    if (inst.placeholder) continue;
+    const m = metricsOf(inst.part);
+    (chosen.has(inst.key.split('/')[0]) ? moving : others).push({ world: inst.world.elements, body: m.body, studs: m.studs });
+  }
+  return studSnapper(moving, others);
+}
+
 export function Viewport({ model, timeline = null }: { model: ModelState; timeline?: Timeline | null }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -92,6 +105,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
   const [menu, setMenu] = useState<{ x: number; y: number; items: ContextItem[]; label: string } | null>(null);
   const [submodelDialog, setSubmodelDialog] = useState<{ model: string; ids: string[] } | null>(null);
   const follow = usePlayback((s) => s.follow);
+  const playing = usePlayback((s) => s.playing);
   /**
    * Placing pieces (the Move tool, or the gizmo with something selected): show every
    * piece where it really is, so the handles sit on the piece they move. The animation
@@ -229,8 +243,10 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     };
     window.addEventListener('keydown', onSceneKey, true);
     let lastTransform = '';
+    let gizmoSnap: StudSnapper | null = null;
     transform.addEventListener('dragging-changed', (ev) => {
       const active = !!ev.value;
+      gizmoSnap = null;
       draggingGizmo.current = active;
       controls.enabled = !active && useStudio.getState().mode === 'edit';
       if (active) {
@@ -361,7 +377,12 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
       if (currentMode === 'translate') {
         const move = proxy.position.clone().sub(origin.current);
         // World units: 1 stud = 1; one plate is 8/20 of a world unit.
-        const dx = Math.round(move.x), dy = Math.round(move.y / 0.4) * 0.4, dz = Math.round(move.z);
+        // Whole studs, or a half stud when that seats the selection on a stud (jumper plates).
+        gizmoSnap ??= snapperFor(modelRef.current.view.instances, initialIds.current);
+        const flat = gizmoSnap({ x: move.x, z: -move.z });
+        // the seat height applies only while the gizmo is not lifting the part itself
+        const lift = Math.round(move.y / 0.4) * 0.4;
+        const dx = flat.x, dy = lift || flat.y * 0.4, dz = -flat.z || 0;
         delta = new THREE.Matrix4().makeTranslation(dx, dy, dz);
       } else if (currentMode === 'rotate') {
         // round off float noise so 90° steps land exactly square
@@ -428,6 +449,23 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
         fov: want.fov,
       };
     };
+    /**
+     * Looking through a scene camera (or with camera-frame staging) the build holds that
+     * shot, and the hero orbit swings around it — the shot's own distance and lens, so the
+     * framing never jumps. `heroBase` is the pose the orbit started from; scrubbing back
+     * before the outro puts the camera exactly there again.
+     */
+    let heroBase: { shot: CamPose; cameraView: boolean } | null = null;
+    let heldShot = false;
+    // grabbing the view mid-orbit starts from the held shot, never from the orbit
+    const onGrab = () => {
+      if (!heroBase) return;
+      studio.camera.position.copy(heroBase.shot.position);
+      studio.camera.lookAt(heroBase.shot.target);
+      controls.target.copy(heroBase.shot.target);
+      heroBase = null;
+    };
+    controls.addEventListener('start', onGrab);
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
       const dt = Math.min(0.1, (now - last) / 1000);
@@ -454,7 +492,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
           // play / scrub in the Build view: the same animation as the preview
           const wasPlaying = usePlayback.getState().playing;
           const t = advancePlayback(dt, run.tl.duration);
-          soundSnaps(run.tl, t, wasPlaying, useAppSettings.getState().snapSound);
+          soundSnaps(run.tl, t, wasPlaying, useAppSettings.getState().snapSound, useAppSettings.getState().sound);
           if (t !== shownT || run.dirty) {
             const at = run.pose(t);
             const over = run.override;
@@ -469,14 +507,37 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
             // under you. The transport's camera switch turns both off completely.
             const settings = useAppSettings.getState();
             const inHero = t >= run.tl.buildEnd;
-            if (settings.cameraFollowsPlayback !== false && (inHero || t < run.tl.intro)) {
+            // Camera-frame staging holds its fitted tabletop shot through playback;
+            // the procedural intro/hero orbit would otherwise restore a huge
+            // old editor radius and make every loose piece tiny again.
+            const cameraView = useSceneView.getState().cameraView;
+            const holdsShot = cameraView || settings.floorStyle === 'camera-frame';
+            const follows = !settings.frameStagingPending && settings.cameraFollowsPlayback !== false;
+            if (heroBase && heroBase.cameraView !== cameraView) heroBase = null;
+            if (!holdsShot && follows && (inHero || t < run.tl.intro)) {
               const view = useSceneView.getState();
               shot = shotAt(cameraAt(run.tl, t, view.width / Math.max(1, view.height), settings.cameraFraming, settings.camera), t);
-            } else shotFrom = null;
+            } else if (holdsShot && follows && inHero && run.tl.heroOrbit) {
+              shotFrom = null;
+              heroBase ??= { cameraView, shot: { position: studio.camera.position.clone(), target: controls.target.clone(), fov: studio.perspective.fov } };
+              shot = heroAround(run.tl, heroBase.shot, settings.camera)(t);
+              heldShot = true;
+            } else {
+              shotFrom = null;
+              if (heroBase) {
+                // back before the outro: the held shot again, exactly
+                shot = heroBase.shot;
+                heroBase = null;
+                heldShot = true;
+              }
+            }
           }
         }
         viewportApi.views?.update(dt);
-        controls.update();
+        // While the hero orbits a held shot the controls must not see the move as a
+        // gesture: with "lock camera to view" that would write the orbit into the camera.
+        // They catch up once the camera is back on the held shot.
+        if (!heldShot && !heroBase) controls.update();
         if (shot) {
           const active = studio.camera;
           active.position.copy(shot.position);
@@ -484,6 +545,8 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
           // keep the editor's orbit behaving around the shot, not the old centre
           controls.target.copy(shot.target);
         }
+        if (heldShot && !heroBase) controls.update();
+        heldShot = false;
         studio.render(viewportApi.scene?.prepareRender());
       }
     };
@@ -496,6 +559,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     ro.observe(wrapRef.current!);
     return () => {
       cancelAnimationFrame(raf);
+      controls.removeEventListener('start', onGrab);
       ro.disconnect();
       window.removeEventListener('keydown', onShift);
       window.removeEventListener('keyup', onShift);
@@ -718,12 +782,19 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     studio.fitTo(scene, -tl.ground / 20);
     // Keep the user's camera, unless it can't see where this build happens (e.g. it was
     // close in on the assembled model, with the waiting pieces out of frame).
-    if (viewportApi.controls && (!framed.current || (starting && !inView(studio.camera, scene)))) {
+    // The user is composing a fixed shot. A newly planned timeline must not
+    // invoke the editor's normal automatic Fit (which zoomed away from the shot).
+    const holdingFrame = useAppSettings.getState().frameStagingPending ||
+      useAppSettings.getState().floorStyle === 'camera-frame';
+    if (!holdingFrame && viewportApi.controls && (!framed.current || (starting && !inView(studio.camera, scene)))) {
       frame(studio.camera, viewportApi.controls, scene);
       framed.current = true;
     }
     live.current = { tl, pose, dirty: true };
   }, [engaged, timeline, model.view, model.assembly.bounds, plan.assemblySpot, editingModel, drawn]);
+
+  // Fixed-camera staging NEVER changes camera position or lens on Play.
+  // The separate Staging > Fit camera button remains an explicit opt-in.
 
   // instances
   useEffect(() => {
@@ -748,7 +819,9 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
       .map(delta => delta.elements.map(n => n.toFixed(4)).join(',')).join('|');
     const placementChanged = placementKey !== lastShownPlacement.current;
     lastShownPlacement.current = placementKey;
-    if (b && viewportApi.controls && (!framed.current ||
+    const holdingFrame = useAppSettings.getState().frameStagingPending ||
+      useAppSettings.getState().floorStyle === 'camera-frame';
+    if (!holdingFrame && b && viewportApi.controls && (!framed.current ||
       (placementChanged && editorPlacements.size > 0 && !inView(studio.camera, box)))) {
       // A newly dropped spot may be well outside the current camera. Only
       // refit on a *placement change*, never as the user intentionally zooms.
@@ -962,6 +1035,8 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     if (viewportApi.controls) viewportApi.controls.enabled = false;
     s.beginGesture();
     const model0 = s.editingModel;
+    const snap = snapperFor(model.view.instances, ids);
+    const bodyOf = (item: PlanItem) => ('part' in item ? metricsOf(item.part).body : undefined);
     let last = '0,0,0';
     const move = (ev: PointerEvent) => {
       const p = hit(ev);
@@ -973,13 +1048,13 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
         const placement = itemPlacement(model.view.instances, placements, id);
         const inverse = placement ? viewPlacement(placement).clone().invert() : null;
         const d = dragDelta(inverse ? start.clone().applyMatrix4(inverse) : start,
-          inverse ? p.clone().applyMatrix4(inverse) : p);
+          inverse ? p.clone().applyMatrix4(inverse) : p, snap);
         return { id, d };
       });
       const sig = changes.map(c => `${c.id}:${c.d.x},${c.d.y},${c.d.z}`).join('|');
       if (sig === last) return;
       last = sig;
-      st().apply(() => changes.reduce((next, { id, d }) => moveItems(next, model0, [id], d), base));
+      st().apply(() => changes.reduce((next, { id, d }) => moveItems(next, model0, [id], d, bodyOf), base));
     };
     const up = () => {
       window.removeEventListener('pointermove', move);

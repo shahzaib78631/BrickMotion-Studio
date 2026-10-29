@@ -16,3 +16,16 @@ test('snapsBetween takes the landings after `from`, up to and including `to`', (
   expect(snapsBetween(snaps, 0.5, 0.9)).toEqual([]);
   expect(snapsBetween(snaps, 3, 1)).toEqual([]);
 });
+
+test('each snap knows how big the landing part is, so it can sound like it', () => {
+  const land = (w: number, h: number, d: number) => ({ min: [0, -h, 0], max: [w, 0, d] });
+  const tl = { units: [
+    { kind: 'piece', keys: ['a'], start: 0, dur: 1, step: 0, land: land(20, 8, 20) },   // 1x1 plate
+    { kind: 'piece', keys: ['b'], start: 1, dur: 1, step: 0, land: land(80, 24, 40) },  // 2x4 brick
+    { kind: 'piece', keys: ['c'], start: 1.01, dur: 1, step: 0, land: land(40, 8, 20) }, // lands with it
+  ] } as unknown as Timeline;
+  expect(snapsOf(tl)).toEqual([
+    { t: 1, count: 1, studs: 1, height: 8 },
+    { t: 2, count: 2, studs: 10, height: 24 },
+  ]);
+});

@@ -1,10 +1,15 @@
-import { useAppSettings } from '../state/appSettings';
+import { animOptions, useAppSettings } from '../state/appSettings';
 import { useStudio } from '../state/store';
 import type { FloorStyle } from '../anim/pacing';
+import type { Timeline } from '../anim/timeline';
+import { fitAndApplyStagingCamera } from './stagingCameraActions';
+import { formatAspect } from '../export/formats';
 import { modelSteps, setRootHint } from '../plan/ops';
 import { resetFloorShifts } from '../plan/pieceActions';
 import { Card, Section } from './MaterialsPanel';
 import { Ic } from './icons';
+import { activeSceneCamera, sceneSetupOf } from '../render/sceneSetup';
+import { captureFrameStaging, isFrameStagingCurrent } from '../state/frameStaging';
 
 const STAGING: { id: FloorStyle; label: string; hint: string }[] = [
   { id: 'packed', label: 'Packed', hint: 'Tight rows, the least floor' },
@@ -15,7 +20,7 @@ const STAGING: { id: FloorStyle; label: string; hint: string }[] = [
   { id: 'showcase', label: 'Showcase', hint: 'Balanced, centred product-shot rows' },
   { id: 'gallery', label: 'Gallery', hint: 'Centred rows separated by part or colour' },
   { id: 'fan', label: 'Camera fan', hint: 'A gentle curved spread around the centre' },
-  { id: 'camera-frame', label: 'Camera frame', hint: 'Centered rows that adapt to the selected video aspect ratio' },
+  { id: 'camera-frame', label: 'Camera frame', hint: 'Arrange pieces inside the current camera without zooming' },
 ];
 /** A tiny diagram of each staging style. */
 function StagingDiagram({ id }: { id: FloorStyle }) {
@@ -27,7 +32,7 @@ function StagingDiagram({ id }: { id: FloorStyle }) {
   else if (id === 'rows') [0, 1, 2].forEach((r) => [0, 1, 2, 3].forEach((c) => cells.push([c * 6, r * 6 + 1, 5, 4, r])));
   else if (id === 'showcase') [[6, 1, 5, 4], [13, 1, 6, 4], [2, 8, 5, 4], [9, 8, 7, 4], [18, 8, 5, 4], [6, 15, 5, 3], [13, 15, 6, 3]].forEach((c, i) => cells.push([...c, i % 5] as never));
   else if (id === 'gallery') [[6, 1, 5, 4], [13, 1, 5, 4], [3, 8, 5, 4], [10, 8, 5, 4], [17, 8, 5, 4], [7, 15, 5, 3], [14, 15, 5, 3]].forEach((c, i) => cells.push([...c, i < 2 ? 0 : i < 5 ? 2 : 1] as never));
-  else if (id === 'camera-frame') [[8, 1, 7, 3], [6, 6, 5, 4], [13, 6, 5, 4], [4, 12, 6, 4], [12, 12, 7, 4], [8, 17, 7, 2]].forEach((c, i) => cells.push([...c, i % 5] as never));
+  else if (id === 'camera-frame') [[6, 1, 5, 3], [13, 1, 5, 3], [1, 8, 5, 4], [19, 8, 5, 4], [6, 15, 5, 3], [13, 15, 5, 3]].forEach((c, i) => cells.push([...c, i % 5] as never));
   else if (id === 'fan') [[9, 1, 6, 4], [3, 5, 5, 4], [16, 5, 5, 4], [0, 12, 5, 4], [7, 10, 5, 4], [14, 10, 5, 4], [21, 12, 4, 4]].forEach((c, i) => cells.push([...c, i % 5] as never));
   else [[1, 1, 5, 4], [9, 3, 6, 3], [17, 0, 5, 4], [3, 9, 6, 4], [12, 10, 4, 4], [18, 8, 5, 3], [6, 15, 5, 3], [15, 15, 6, 3]].forEach((c, i) => cells.push([...c, i % 5] as never));
   const rot = (i: number) => (id === 'scattered' ? ((i * 37) % 24) - 12 : 0);
@@ -42,28 +47,88 @@ function StagingDiagram({ id }: { id: FloorStyle }) {
 
 
 /** Staging: how pieces wait on the floor before they fly in, and the order they go on. */
-export function StagingPanel() {
+export function StagingPanel({ timeline, planning, planError, onRetry }: { timeline?: Timeline | null; planning?: boolean; planError?: string; onRetry?: () => void }) {
   const s = useAppSettings();
   const v2 = ['construction-v2', 'construction-auto', 'construction-v3', 'construction-v3-auto', 'construction-v4'].includes(s.planner ?? '');
   const model = useStudio((st) => st.editingModel);
   const plan = useStudio((st) => st.plan);
   const pieces = modelSteps(plan, model).flatMap((step) => step.pieces);
+  const savedCamera = activeSceneCamera(plan.sceneSetup);
+  const selectedStyle = s.frameStagingPending ? 'camera-frame' : s.floorStyle;
+  const captured = plan.sceneSetup?.frameStaging;
+  const applied = s.floorStyle === 'camera-frame' && !s.frameStagingPending && !!captured;
+  const needsApply = !isFrameStagingCurrent(captured, s, plan.sceneSetup);
+  const frameBeingPlanned = planning && applied;
+  const inFirstShot = timeline ? [...timeline.tracks.values()].filter((tr) => tr.appear <= 0).length : null;
+  const totalStaged = timeline?.tracks.size ?? 0;
   const moved = [...plan.steps, ...Object.values(plan.submodels ?? {}).flatMap((m) => m.steps)].reduce((n, step) => n + step.pieces.filter((i) => i.assembly?.floorShift).length, 0);
   const ids = pieces.map((i) => i.id).filter((id): id is string => !!id);
   const forced = pieces.filter((i) => i.assembly?.root).length;
+  const framePieces = () => {
+    if (!timeline) return;
+    const aspect = formatAspect(useAppSettings.getState().format);
+    fitAndApplyStagingCamera(timeline, aspect);
+  };
+  /** An explicit transaction: snapshot the live camera and only THEN change
+   * the effective layout. Exactly one user action causes one planner request. */
+  const arrangeFrame = () => {
+    if (frameBeingPlanned || v2) return;
+    const current = useStudio.getState();
+    const settings = useAppSettings.getState();
+    const next = captureFrameStaging(settings, current.plan.sceneSetup);
+    if (!next) return;
+    current.apply((p) => ({ ...p, sceneSetup: { ...sceneSetupOf(p.sceneSetup), frameStaging: next, useCameraForVideo: true } }));
+    settings.set({ floorStyle: 'camera-frame', frameStagingPending: false, frameStagingPrevious: null, autoFitStaging: false });
+    // Retries a failed, unchanged snapshot too. The UI's hook batches this
+    // with the options change into a single request.
+    onRetry?.();
+  };
+  const chooseStyle = (style: FloorStyle) => {
+    if (v2) return;
+    if (style === 'camera-frame') {
+      if (s.frameStagingPending) return; // Re-clicking a tile must not shift the frozen baseline.
+      const before = animOptions(s, plan.sceneSetup);
+      // Freeze the ALREADY PLANNED floor options while the user edits the
+      // camera, output ratio, Group/Where/Side. No interim plan is started.
+      s.set({ frameStagingPending: true, autoFitStaging: false, frameStagingPrevious: {
+        style: before.floorStyle ?? 'packed', sort: before.floorSort ?? 'step',
+        sides: before.floorSides ?? 'front-back', match: before.floorMatch ?? 'fill',
+        aspect: before.floorAspect ?? formatAspect(s.format),
+        ...(before.floorCamera ? { camera: before.floorCamera } : {}),
+      } });
+    } else s.set({ floorStyle: style, frameStagingPending: false, frameStagingPrevious: null });
+  };
   const force = (root: boolean) => useStudio.getState().apply((p) => setRootHint(p, model, ids, root));
   return (
     <div className="nx-pane bm-materials bm-staging" aria-label="Staging">
       <div className="nx-pane-head"><h3>Staging</h3></div>
 
-      <Section title="Layout" value={STAGING.find((st) => st.id === s.floorStyle)?.label}>
+      <Section title="Layout" value={STAGING.find((st) => st.id === selectedStyle)?.label}>
         <div className="bm-mat-grid">
           {STAGING.map((st) => (
-            <Card key={st.id} selected={s.floorStyle === st.id} label={st.label} hint={st.hint} onClick={() => !v2 && s.set({ floorStyle: st.id })}
+            <Card key={st.id} selected={selectedStyle === st.id} label={st.label} hint={st.hint} onClick={() => chooseStyle(st.id)}
               swatch={<span className="bm-mat-swatch bm-mat-staging"><StagingDiagram id={st.id} /></span>} />
           ))}
         </div>
-        {s.floorStyle === 'camera-frame' && <span className="nx-hint">Using video frame {s.format}. Change the format in Video settings to reshape the staging rows. The model stays centered; final framing still depends on camera angle and zoom.</span>}
+        {selectedStyle === 'camera-frame' && <>
+          <span className="nx-hint"><b>Manual camera-frame staging.</b> First set the camera position, tilt, focal length and output ratio. Selecting this tile does not move the camera or start planning.</span>
+          {!savedCamera && <span className="nx-hint" role="alert">Add and activate a camera in Scene before arranging pieces. No frame staging will be planned until then.</span>}
+          {savedCamera && <span className="nx-hint">Active: <b>{savedCamera.name}</b> · {s.format}. Set Group, Where and Side below, then press the button to capture this exact shot.</span>}
+          <button type="button" className="nx-btn nx-sm nx-primary" style={{ width: '100%' }} disabled={!savedCamera || !!frameBeingPlanned || v2} onClick={arrangeFrame}
+            title="Capture the current camera and arrange the waiting pieces once. Does not move or zoom the camera.">
+            <Ic name="camera" /> {frameBeingPlanned ? 'Arranging pieces…' : 'Arrange pieces in frame'}
+          </button>
+          {applied && !needsApply && <span className="nx-hint" role="status">Applied to <b>{captured?.cameraName}</b> ({captured?.format}). The arrangement stays frozen while you edit the camera. Press Arrange again to update it.</span>}
+          {applied && needsApply && <span className="nx-hint" role="status">Camera or staging options changed since the last arrangement. Your existing plan stays unchanged until you press <b>Arrange pieces in frame</b> again.</span>}
+          {!applied && <span className="nx-hint" role="status">Ready to arrange. Until you press the button, your previous staging layout remains active; there is no camera-triggered planning.</span>}
+          {applied && planError && <span className="nx-hint" role="alert">{planError} Adjust the camera to make more room, then press Arrange again. Planning will not retry automatically as you move the camera.</span>}
+          {applied && !needsApply && inFirstShot !== null && inFirstShot < totalStaged && <span className="nx-hint">{inFirstShot} of {totalStaged} parts fit in the first shot; other parts use later batches.</span>}
+          <button type="button" className="nx-btn nx-sm" disabled={!timeline || !!planning} onClick={framePieces}
+            title="Optional separate action: moves/zooms the camera, without rearranging the pieces">
+            <Ic name="camera" /> Fit camera to starting pieces (optional)
+          </button>
+          <span className="nx-hint">The Fit button is the only action here that moves/zooms the camera. It is never run automatically.</span>
+        </>}
         <div className="nx-grid2">
           <label className="nx-field">
             Group
@@ -95,7 +160,7 @@ export function StagingPanel() {
         </div>
         <span className="nx-hint">{v2
           ? 'The construction planners lay out their own work bays, so staging applies to the standard planners only.'
-          : 'How the pieces wait on the floor before they fly in. Rows with "By colour" or "By part" give tidy product-shot rows. Showcase, Gallery and Camera fan centre the pieces around the build. Camera frame adapts the row proportions to the selected video aspect ratio. Changing this plans the build again.'}</span>
+          : 'How the pieces wait on the floor before they fly in. Rows with "By colour" or "By part" give tidy product-shot rows. Showcase, Gallery and Camera fan centre the pieces around the build. Camera frame uses the captured camera projection, only after you press Arrange pieces in frame. Camera adjustments and staging controls stay as drafts until then. Other layouts update immediately.'}</span>
       </Section>
 
       <Section title="Waiting pieces" value={moved ? `${moved} moved` : undefined}>

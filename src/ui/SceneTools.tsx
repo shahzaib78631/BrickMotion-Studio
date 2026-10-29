@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import * as THREE from 'three';
-import { createCamera, createLight, freshSceneId, sceneObject, sceneSetupOf, updateObject, removeObject,
+import { createCamera, createLight, freshSceneId, sceneObject, sceneSetupOf, updateObject, removeObject, sceneCoordinateToStuds, sceneCoordinateFromStuds,
   regionFromDrag, cameraCrop, cameraFrame, type SceneSetup, type SceneCamera, type SceneLight, type SceneObject, type LightType, type XYZ, type Region } from '../render/sceneSetup';
 import { perspectiveEquivalent } from '../render/studio';
 import { PHOTO_RIGS, createPhotoRigLights, type PhotoRigId } from '../render/photoRigs';
@@ -12,8 +12,6 @@ import { Ic } from './icons';
 import { viewportApi } from './viewportApi';
 import { useSceneView } from './sceneViewState';
 
-/** LDraw units per stud, the scale every length in the viewport is measured in. */
-const LDU_PER_STUD = 20;
 
 /** Camera and light outliner plus inspector. All edits use the project's normal
  * undo/autosave path and therefore survive project export/import. */
@@ -21,11 +19,10 @@ export function SceneTools() {
   const mode = useStudio((s) => s.mode);
   const source = useStudio((s) => s.plan.sceneSetup);
   const setup = sceneSetupOf(source);
-  // Scene objects store LDraw units (the viewport's own world), but the fields are
-  // labelled studs: 1 stud is 20 LDU, and mixing the two put a typed camera inside
-  // the model, which reads as an empty Preview and a field of view that does nothing.
-  const toStuds = (ldu: number) => Number((ldu / LDU_PER_STUD).toFixed(3));
-  const fromStuds = (studs: number) => studs * LDU_PER_STUD;
+  // Camera/light transforms are already in world studs. Previously multiplying
+  // numeric inputs by 20 pushed cameras far away and made the staged parts tiny.
+  const toStuds = sceneCoordinateToStuds;
+  const fromStuds = sceneCoordinateFromStuds;
   const outputAspect = formatAspect(useAppSettings((s) => s.format));
   const v = useSceneView();
   const selected = sceneObject(setup, v.selectedId);

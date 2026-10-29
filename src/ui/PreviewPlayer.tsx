@@ -80,7 +80,7 @@ export function PreviewPlayer({ model, timeline: tl }: { model: ModelState; time
       last = now;
       const wasPlaying = usePlayback.getState().playing;
       const t = advancePlayback(dt, tl.duration);
-      soundSnaps(tl, t, wasPlaying, useAppSettings.getState().snapSound);
+      soundSnaps(tl, t, wasPlaying, useAppSettings.getState().snapSound, useAppSettings.getState().sound);
       // the 9:16 frame fills the height (or the width on very narrow screens)
       const W = wrap.clientWidth;
       const H = wrap.clientHeight;
@@ -89,7 +89,9 @@ export function PreviewPlayer({ model, timeline: tl }: { model: ModelState; time
       setFrame((f) => (f.width === fw && f.height === fh ? f : { left: (W - fw) / 2, top: (H - fh) / 2, width: fw, height: fh }));
       // a scene camera in charge holds its shot after the same intro the Build view plays
       const scene = sceneCameraPose(setup);
-      const cam = scene ? introInto(tl, scene, ASPECT, s.cameraFraming, s.camera)(t) : cameraAt(tl, t, ASPECT, s.cameraFraming, s.camera);
+      const cam = scene
+        ? (s.floorStyle === 'camera-frame' || s.frameStagingPending) ? scene : introInto(tl, scene, ASPECT, s.cameraFraming, s.camera)(t)
+        : cameraAt(tl, t, ASPECT, s.cameraFraming, s.camera);
       // A piece the timeline does not know (the plan changed under it) is shown in place rather
       // than dropped: a preview that silently draws nothing is impossible to diagnose. Pieces
       // the timeline does know still arrive, wait and hide as it says.
@@ -106,7 +108,7 @@ export function PreviewPlayer({ model, timeline: tl }: { model: ModelState; time
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [asm, tl, s.cameraFraming, s.camera, ASPECT, setup]);
+  }, [asm, tl, s.cameraFraming, s.camera, s.floorStyle, s.frameStagingPending, ASPECT, setup]);
 
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   useEffect(() => {

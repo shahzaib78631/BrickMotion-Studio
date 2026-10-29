@@ -37,6 +37,7 @@ import { StepsPanel } from './ui/StepsPanel';
 import { Toolbar } from './ui/Toolbar';
 import { VideoPanel } from './ui/VideoPanel';
 import { MaterialsPanel } from './ui/MaterialsPanel';
+import { SoundPanel } from './ui/SoundPanel';
 import { StagingPanel } from './ui/StagingPanel';
 import { Viewport } from './ui/Viewport';
 import { viewportApi } from './ui/viewportApi';
@@ -47,11 +48,11 @@ import './ui/reference.css';
 import './ui/themes.css';
 import './ui/layout.css';
 
-type Tab = 'models' | 'parts' | 'assembly' | 'steps' | 'checks' | 'ai' | 'video' | 'materials' | 'staging' | 'capture' | 'settings';
+type Tab = 'models' | 'parts' | 'assembly' | 'steps' | 'checks' | 'ai' | 'video' | 'materials' | 'sound' | 'staging' | 'capture' | 'settings';
 /** The rail, in groups: building the model, how the video looks, then assets; Settings sits at the bottom. */
 const TAB_GROUPS: [Tab, IconName, string][][] = [
   [['models', 'box', 'Models'], ['parts', 'parts', 'Parts'], ['assembly', 'spot', 'Assembly'], ['steps', 'steps', 'Animation']],
-  [['video', 'camera', 'Render'], ['materials', 'palette', 'Materials'], ['staging', 'layout', 'Staging'], ['capture', 'video', 'Capture']],
+  [['video', 'camera', 'Render'], ['materials', 'palette', 'Materials'], ['sound', 'sound', 'Sound'], ['staging', 'layout', 'Staging'], ['capture', 'video', 'Capture']],
   [['ai', 'folder', 'Assets']],
   [['settings', 'settings', 'Settings']],
 ];
@@ -128,7 +129,7 @@ function Studio() {
   // animation plays, scrubs and exports on its own. '' is the whole set.
   // useTimeline compares the serialized options. Recompute this small object so
   // a new planner/support setting can never be omitted from a memo dependency list.
-  const opts = animOptions(video);
+  const opts = animOptions(video, model.plan.sceneSetup);
   const { timeline, planning, error: planError, progress, retry } = useTimeline(model.ready && model.view.instances.length > 0, model.plan, editingModel, opts);
   // Standard Motion creates actual editable leaf keyframes the first time the
   // user opens Timeline. Never re-bake an existing track automatically: those
@@ -267,7 +268,8 @@ function Studio() {
             {tab === 'ai' && <AiPanel warnings={warnings} onOpenSettings={() => setTab('settings')} />}
             {tab === 'video' && <VideoPanel timeline={timeline} onExport={exportCurrent} />}
             {tab === 'materials' && <MaterialsPanel />}
-            {tab === 'staging' && <StagingPanel />}
+            {tab === 'sound' && <SoundPanel />}
+            {tab === 'staging' && <StagingPanel timeline={timeline} planning={planning} planError={planError} onRetry={retry} />}
             {tab === 'capture' && <CapturePanel model={model} />}
             {tab === 'settings' && <SettingsPanel onAbout={() => setDialog('about')} />}
           </section>

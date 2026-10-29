@@ -1,12 +1,16 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { geometryOf, getColors } from '../state/partService';
+import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
+import { geometryOf, getColors, onGeometryChange, setStudLogos } from '../state/partService';
+import { useSmoothSoftShadows } from './softShadows';
+import { StudioAO } from './ambientOcclusion';
+import { ContactShadows } from './contactShadows';
 import { BrickRenderer } from './bricks';
 import { studioGradientPixels } from './studioPalette';
 import { SceneLighting } from './sceneLights';
 import type { SceneSetup } from './sceneSetup';
 
-import { DEFAULT_MATERIALS, floorFor, sceneOf, scenePixels, type Materials, type StudioLook } from './looks';
+import { DEFAULT_MATERIALS, ENVIRONMENTS, aoFor, floorFor, sceneOf, scenePixels, type Materials, type StudioLook } from './looks';
 import { setBrickMaterials } from './materials';
 import { concreteTexture, createFade, createReflection, fadingFloorMaterial, woodTexture } from './floorSurfaces';
 
@@ -22,7 +26,7 @@ export type Projection = 'perspective' | 'ortho';
  * - linearColors: plain linear tone mapping instead of filmic (ACES), which mutes
  *   saturated LEGO colours; exposure is lowered a little so whites don't clip
  */
-export type RenderOptions = { edges: boolean; linearColors: boolean };
+export type RenderOptions = { edges: boolean; linearColors: boolean; /** ambient occlusion on scenes that use it (default on) */ ao?: boolean };
 export const DEFAULT_RENDER: RenderOptions = { edges: true, linearColors: true };
 const LINEAR_EXPOSURE = 0.85;
 export const STUDIO_BG = '#EDEDEF';
@@ -51,6 +55,8 @@ export type Studio = {
   setRenderOptions?(o: RenderOptions): void;
   /** Brick finish, surface texture and floor; preview and MP4 export must agree. */
   setMaterials?(m: Materials): void;
+  /** Resolves once everything the materials need (an HDR environment) has loaded. */
+  ready?(): Promise<void>;
   /** Floor height and light/shadow framing for a world-space box (studs, +Y up). */
   fitTo(box: THREE.Box3, groundY: number): void;
   /** Optionally render only inside a camera frame (CSS pixel coordinates, top-left origin). */
@@ -71,13 +77,18 @@ export function studioBackground(): THREE.DataTexture {
   return texture;
 }
 
+useSmoothSoftShadows();
+
+/** How bright the fake rounded-edge highlight is (see ambientOcclusion.ts). */
+const ROUNDED_EDGE_LIGHT = 0.18;
+
 export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: { preserveDrawingBuffer?: boolean; transparent?: boolean } = {}): Studio {
   const transparent = !!opts.transparent;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: !!opts.preserveDrawingBuffer, alpha: transparent });
   if (transparent) renderer.setClearColor(0x000000, 0);
   renderer.setPixelRatio(typeof window !== 'undefined' && canvas instanceof HTMLCanvasElement ? Math.min(window.devicePixelRatio, 1.5) : 1);
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
@@ -85,8 +96,54 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
   const gradient = studioBackground();
   let backdrop: THREE.DataTexture | null = null;
   const pmrem = new THREE.PMREMGenerator(renderer);
-  const env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  let env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
   scene.environment = env;
+  // photo environments, loaded on first use and kept for this renderer
+  const photoEnvs = new Map<string, Promise<THREE.Texture | null>>();
+  let envGain = 1;
+  let envLoad: Promise<unknown> = Promise.resolve();
+  let disposed = false;
+  const applyEnvironment = (id: Materials['environment']) => {
+    const choice = ENVIRONMENTS.find((e) => e.id === id) ?? ENVIRONMENTS[0];
+    if (!choice.file) {
+      scene.environment = env;
+      envGain = 1;
+      syncStudioLights();
+      envLoad = Promise.resolve();
+      return;
+    }
+    const file = choice.file;
+    let tex = photoEnvs.get(file);
+    if (!tex) {
+      const base = (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
+      tex = new HDRLoader().loadAsync(`${base}hdri/${file}`).then((hdr) => {
+        if (disposed) return null;
+        const t = pmrem.fromEquirectangular(hdr).texture;
+        hdr.dispose();
+        return t;
+      }).catch(() => null);
+      photoEnvs.set(file, tex);
+    }
+    envLoad = tex.then((t) => {
+      // only if still the chosen one when it arrives; a failed load keeps the room
+      if (disposed || materials.environment !== id) return;
+      scene.environment = t ?? env;
+      envGain = t ? choice.gain : 1;
+      syncStudioLights();
+    });
+  };
+
+  // A GPU reset (another heavy WebGL job, a driver hiccup) wipes render-target
+  // contents: the PMREM environments come back black and every brick goes dark.
+  // three re-uploads geometry and textures itself; the generated maps are redone here.
+  const onRestored = () => {
+    if (disposed) return;
+    env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    photoEnvs.clear();
+    scene.environment = env;
+    applyEnvironment(materials.environment);
+  };
+  canvas.addEventListener('webglcontextrestored', onRestored as EventListener);
 
   // An ordinary lit floor washed the background almost white and made the
   // reference-style contact shadows imperceptible. A transparent shadow-only
@@ -115,6 +172,8 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
   shadowOver.visible = false;
   scene.add(shadowOver);
   let reflection: ReturnType<typeof createReflection> | null = null;
+  const contact = new ContactShadows(opts.preserveDrawingBuffer ? 512 : 384);
+  scene.add(contact.plane);
   let look: StudioLook = 'soft';
   let materials: Materials = { ...DEFAULT_MATERIALS };
 
@@ -157,6 +216,16 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
 
   const bricks = new BrickRenderer(geometryOf, getColors());
   scene.add(bricks.root);
+  // part geometry rebuilt (stud logos switched): redraw the same instances in the same pose
+  const stopGeometry = onGeometryChange(() => bricks.refresh());
+  const ao = new StudioAO(scene, camera, () => [bricks.root, floor, shadowOver]);
+  const aoOn = () => ao.active(render.ao !== false);
+  const keyDir = new THREE.Vector3();
+  const finish = (pr: number, w: number, h: number) => {
+    ao.setSize(w * pr, h * pr);
+    keyDir.copy(key.position).sub(key.target.position).normalize();
+    ao.render(renderer, active, keyDir, render.ao !== false);
+  };
   const lighting = new SceneLighting(scene, typeof HTMLCanvasElement !== 'undefined' && canvas instanceof HTMLCanvasElement);
   let sceneSetup: SceneSetup | undefined;
   let lightBounds: THREE.Box3 | null = null;
@@ -185,9 +254,12 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
   };
   const setRenderOptions = (o: RenderOptions) => {
     render = { ...o };
-    bricks.setEdges(o.edges);
+    applyEdges();
     applyExposure();
   };
+  /** Outline edges: the user's switch, unless the scene is a product render without them. */
+  // the user's edge-lines toggle decides; a scene's `outlines` is only the default it suggests when picked
+  const applyEdges = () => bricks.setEdges(render.edges);
   /** The floor for the current scene and material choice. */
   const applyFloor = () => {
     const preset = sceneOf(look);
@@ -205,6 +277,8 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
     floor.visible = !transparent && kind !== 'none' && kind !== 'reflective';
     // a lit floor or a mirror still gets the real contact shadows on top
     shadowOver.visible = !transparent && (lit || kind === 'reflective') && preset.shadowOpacity > 0;
+    contact.plane.visible = !transparent && kind !== 'none';
+    contact.set(materials.contactShadows, preset.shadowColor);
     if (kind === 'reflective' && !transparent) {
       if (!reflection) {
         reflection = createReflection(fade, opts.preserveDrawingBuffer ? 1024 : 768);
@@ -248,14 +322,26 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
     fill.color.set(preset.fillColor ?? '#f3f5ff');
     rim.intensity = preset.rim ?? 0;
     rim.color.set(preset.rimColor ?? '#ffffff');
+    // Soft scenes widen the PCF filter (16 samples, see softShadows.ts). Variance shadow
+    // maps were tried: their half-float depth draws contour steps around parts.
+    key.shadow.radius = Math.max(4, preset.shadowSoftness ?? 4);
+    applyAO();
+    applyEdges();
     aimStudioRig();
     applyFloor();
     applyExposure();
     syncStudioLights();
   };
+  /** The scene's occlusion, with the user's on/off and strength/reach overrides. */
+  const applyAO = () => ao.set(aoFor(look, materials.ao));
   const setMaterials = (m: Materials) => {
+    const envChanged = m.environment !== materials.environment;
     materials = { ...m };
+    if (envChanged) applyEnvironment(m.environment);
     setBrickMaterials(m);
+    void setStudLogos(m.studLogos);
+    ao.setRoundedEdges(m.roundedEdges ? ROUNDED_EDGE_LIGHT : 0);
+    applyAO();
     applyFloor();
   };
   const syncStudioLights = () => {
@@ -265,10 +351,11 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
     fill.visible = enabled;
     rim.visible = enabled && rim.intensity > 0;
     // Keep just a small environment fill when the authored scene lights replace the studio.
-    scene.environmentIntensity = enabled ? lookEnv : 0.12;
+    scene.environmentIntensity = (enabled ? lookEnv : 0.12) * envGain;
   };
   setLook('soft');
   setRenderOptions(DEFAULT_RENDER);
+  ao.setRoundedEdges(materials.roundedEdges ? ROUNDED_EDGE_LIGHT : 0);
 
   return {
     renderer,
@@ -300,6 +387,7 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
     setLook,
     setRenderOptions,
     setMaterials,
+    ready: () => envLoad.then(() => undefined),
     setSize(w, h) {
       renderer.setSize(w, h, false);
       sizeW = w; sizeH = h;
@@ -328,8 +416,10 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
       s.updateProjectionMatrix();
       lightBounds = box.clone();
       lighting.fitTo(box);
+      contact.fitTo(box, groundY);
     },
     render(frame) {
+      contact.update(renderer, bricks.root);
       if (frame) {
         // Render to the true output aspect ratio, not a squeezed full-width canvas.
         // Scissor coordinates are bottom-left in Three.js, CSS coordinates top-left.
@@ -345,6 +435,7 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
         renderer.setScissor(x, y, w, h);
         renderer.setScissorTest(true);
         renderer.render(scene, active);
+        if (aoOn()) finish(renderer.getPixelRatio(), w, h);
         renderer.setScissorTest(false);
         renderer.setViewport(0, 0, sizeW, sizeH);
       } else {
@@ -353,9 +444,13 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
         // A previous letterboxed render may have left an opaque clear colour behind.
         if (transparent) renderer.setClearColor(0x000000, 0);
         renderer.render(scene, active);
+        if (aoOn()) finish(renderer.getPixelRatio(), sizeW, sizeH);
       }
     },
     dispose() {
+      stopGeometry();
+      contact.dispose();
+      ao.dispose();
       lighting.dispose();
       bricks.dispose();
       gradient.dispose();
@@ -368,8 +463,11 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
         (reflection.material as THREE.Material).dispose();
       }
       shadowFloor.dispose();
+      disposed = true;
       env.dispose();
+      for (const t of photoEnvs.values()) void t.then((x) => x?.dispose());
       pmrem.dispose();
+      canvas.removeEventListener('webglcontextrestored', onRestored as EventListener);
       renderer.dispose();
     },
   };

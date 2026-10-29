@@ -103,7 +103,7 @@ type Props = {
   onAbout(): void;
   onExportVideo(): void;
   canPreview: boolean;
-  onNavigate(panel: 'models' | 'parts' | 'assembly' | 'steps' | 'checks' | 'ai' | 'video' | 'materials' | 'staging' | 'settings'): void;
+  onNavigate(panel: 'models' | 'parts' | 'assembly' | 'steps' | 'checks' | 'ai' | 'video' | 'materials' | 'sound' | 'staging' | 'settings'): void;
 };
 
 export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, canPreview, onNavigate }: Props) {
@@ -145,7 +145,7 @@ export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, ca
         s.apply(() => next);
       }
       if (what !== 'steps') {
-        await forgetTimelines(next, [s.editingModel], animOptions(useAppSettings.getState())).catch(() => {});
+        await forgetTimelines(next, [s.editingModel], animOptions(useAppSettings.getState(), s.plan.sceneSetup)).catch(() => {});
         s.replan();
       }
     } catch (e) {
@@ -164,7 +164,7 @@ export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, ca
     const main = r.timelines.find((t) => t.model === '') ?? r.timelines[0];
     const saved = main ? settingsFromOptsKey(main.opts) : null;
     if (saved) useAppSettings.getState().set(saved);
-    const current = optsKey(animOptions(useAppSettings.getState()));
+    const current = optsKey(animOptions(useAppSettings.getState(), plan.sceneSetup));
     // Store the planned timelines first, so the preview finds them instead of planning again.
     // A file saved by an older version keys its settings differently; also file it under today's key.
     await Promise.all(r.timelines.flatMap((t) => [t.opts, ...(saved && t.opts === main!.opts && t.opts !== current ? [current] : [])]
@@ -221,6 +221,7 @@ export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, ca
     { icon: 'steps', label: 'Go to Animation', subtitle: 'Edit build steps', action: () => onNavigate('steps') },
     { icon: 'video', label: 'Go to Render', subtitle: 'Export settings and video', action: () => onNavigate('video') },
     { icon: 'palette', label: 'Go to Materials', subtitle: 'Scenes, brick finishes, textures and floors', action: () => onNavigate('materials') },
+    { icon: 'sound', label: 'Go to Sound', subtitle: 'Snap click, body thump, room echo and volume', action: () => onNavigate('sound') },
     { icon: 'layout', label: 'Go to Staging', subtitle: 'How waiting pieces are laid out, and the build order', action: () => onNavigate('staging') },
     { icon: 'folder', label: 'Open Assets & AI', subtitle: 'Assisted workflows and assets', action: () => onNavigate('ai') },
     { icon: 'checks', label: 'Review model checks', subtitle: 'Warnings and verification', action: () => onNavigate('checks') },

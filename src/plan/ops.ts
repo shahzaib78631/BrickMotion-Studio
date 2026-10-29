@@ -1,6 +1,6 @@
 import type { Box } from '../ldraw/flatten';
 import type { Mat3, Vec3 } from '../ldraw/parse';
-import { rotatedBox, rotMatrix } from './placement';
+import { gridToPlacement, rotatedBox, rotMatrix } from './placement';
 import { isGrid, type AssemblyHints, type Plan, type PlanItem, type Rot, type Step } from './types';
 
 /** '' is the main model; anything else names a submodel. */
@@ -41,10 +41,23 @@ export function setRootHint(p: Plan, m: ModelName, ids: string[], root = true): 
   });
 }
 
-export function moveItems(p: Plan, m: ModelName, ids: string[], d: { x: number; y: number; z: number }): Plan {
-  return mapItems(p, m, ids, (i) =>
-    isGrid(i) ? { ...i, x: i.x + d.x, y: i.y + d.y, z: i.z + d.z } : { ...i, ldu: [i.ldu[0] + 20 * d.x, i.ldu[1] - 8 * d.y, i.ldu[2] + 20 * d.z] as Vec3 },
-  );
+/**
+ * Moves items by `d` (x, z in studs, y in plates). Grid items stay on the grid for
+ * whole-stud moves; a half-stud move (snapping onto a jumper stud) turns a grid
+ * piece into an exact LDraw placement, which needs `bodyOf` to know its footprint.
+ * Without a body, grid items fall back to the nearest whole stud.
+ */
+export function moveItems(p: Plan, m: ModelName, ids: string[], d: { x: number; y: number; z: number }, bodyOf?: (item: PlanItem) => Box | undefined): Plan {
+  const whole = Number.isInteger(d.x) && Number.isInteger(d.y) && Number.isInteger(d.z);
+  return mapItems(p, m, ids, (i) => {
+    if (!isGrid(i)) return { ...i, ldu: [i.ldu[0] + 20 * d.x, i.ldu[1] - 8 * d.y, i.ldu[2] + 20 * d.z] as Vec3 };
+    const body = whole ? undefined : bodyOf?.(i);
+    if (!body) return { ...i, x: i.x + Math.round(d.x), y: i.y + Math.round(d.y), z: i.z + Math.round(d.z) };
+    const at = gridToPlacement(i, body);
+    const out: Record<string, unknown> = { ...i };
+    for (const key of ['x', 'y', 'z', 'rot']) delete out[key];
+    return { ...out, ldu: [at.pos[0] + 20 * d.x, at.pos[1] - 8 * d.y, at.pos[2] + 20 * d.z] as Vec3, matrix: at.m } as PlanItem;
+  });
 }
 
 function mul(a: Mat3, b: Mat3): Mat3 {

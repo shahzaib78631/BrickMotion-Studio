@@ -81,6 +81,9 @@ function style(m: THREE.MeshPhysicalMaterial, c: ColorDef) {
   m.clearcoat = f.clearcoat;
   m.clearcoatRoughness = f.clearcoatRoughness;
   m.iridescence = special ? 0 : f.iridescence ?? 0;
+  m.sheen = special ? 0 : f.sheen ?? 0;
+  m.sheenRoughness = 0.6;
+  m.sheenColor.set(f.tint && c.finish !== 'trans' ? f.tint : c.hex).lerp(new THREE.Color('#ffffff'), 0.5);
   if (!f.tint || c.finish === 'trans') {
     if (c.finish === 'trans') Object.assign(m, { transparent: true, opacity: c.alpha / 255, depthWrite: false, transmission: 0.6, roughness: 0.1, thickness: 0.5 });
     else if (c.finish === 'chrome') Object.assign(m, { metalness: 1, roughness: 0.15 });

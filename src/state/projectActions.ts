@@ -17,7 +17,7 @@ export type SaveProgress = { done: number; total: number };
  * straight into them. Returns false if the user cancelled.
  */
 export async function saveProjectFile(plan: Plan, model: string, onProgress: (p: SaveProgress | null) => void): Promise<boolean> {
-  const opts = animOptions(useAppSettings.getState());
+  const opts = animOptions(useAppSettings.getState(), plan.sceneSetup);
   const standalone = standalonePlan(plan, model);
   // models as named in the saved file, with the model of the current set each one is
   const models: [saved: string, source: string][] = [['', model], ...reachableSubmodels(plan, model).map((s) => [s, s] as [string, string])];

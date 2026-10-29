@@ -1,0 +1,11 @@
+Brick snap recordings used for the connect sound.
+
+oga-brick-*.wav
+  "Lego Bricks" by zq, OpenGameArt.org, 2016
+  https://opengameart.org/content/lego-bricks
+  License: CC0 1.0 (public domain dedication). No attribution required; credited anyway.
+
+fs-*.wav
+  "LEGO Sound FX" pack by rioforce, Freesound.org (sounds 233646–233658)
+  https://freesound.org/people/rioforce/packs/14369/
+  License: CC0 1.0 (public domain dedication). No attribution required; credited anyway.

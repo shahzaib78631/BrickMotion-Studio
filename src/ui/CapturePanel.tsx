@@ -6,6 +6,7 @@ import {
   startViewportRecording, type StillCamera, type StillType,
 } from '../export/capture';
 import { canExportMp4 } from '../export/exportVideo';
+import { capturePathTracedStill } from '../export/pathTracedStill';
 import { FPS_OPTIONS } from '../export/frameRates';
 import { VIDEO_FORMATS, type VideoFormat } from '../export/formats';
 import { createStudio, type Studio } from '../render/studio';
@@ -69,7 +70,10 @@ export function CapturePanel({ model }: { model: ModelState }) {
   const [fps, setFps] = useState<number>(settings.fps);
   const [seconds, setSeconds] = useState(6);
   const [elevation, setElevation] = useState(28);
-  const [busy, setBusy] = useState<'still' | 'transparent' | 'turntable' | null>(null);
+  const [busy, setBusy] = useState<'still' | 'transparent' | 'turntable' | 'final' | null>(null);
+  const [finalSamples, setFinalSamples] = useState(256);
+  const [finalSize, setFinalSize] = useState(STILL_SIZES[0].key);
+  const [finalAlpha, setFinalAlpha] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [mp4, setMp4] = useState<boolean | null>(null);
   const [recording, setRecording] = useState<{ stop(): Promise<Blob>; startedAt: number; mime: string } | null>(null);
@@ -78,8 +82,18 @@ export function CapturePanel({ model }: { model: ModelState }) {
   const [notice, setNotice] = useState('');
   const abort = useRef<AbortController | null>(null);
 
-  // The renderer is a live singleton, so pick the canvas up after mount.
-  useEffect(() => { setCanvas((viewportApi.studio?.renderer.domElement ?? null) as HTMLCanvasElement | null); }, []);
+  // The renderer is a live singleton, so pick the canvas up after mount. When the app opens
+  // on this panel the viewport may not have created it yet: keep looking until it has.
+  useEffect(() => {
+    let frame = 0;
+    const find = () => {
+      const found = (viewportApi.studio?.renderer.domElement ?? null) as HTMLCanvasElement | null;
+      if (found) setCanvas(found);
+      else frame = requestAnimationFrame(find);
+    };
+    find();
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   const video = VIDEO_FORMATS[format];
   const size = STILL_SIZES.find((entry) => entry.key === stillSize) ?? STILL_SIZES[0];
@@ -194,6 +208,45 @@ export function CapturePanel({ model }: { model: ModelState }) {
     }
   };
 
+  const renderFinal = async () => {
+    setError(''); setNotice(''); setProgress(null);
+    const studio = viewportApi.studio;
+    if (!studio) return setError('The viewport is not ready yet.');
+    const bounds = model.view.bounds ?? model.assembly.bounds;
+    if (!bounds) return setError('This model has nothing to capture yet.');
+    const out = STILL_SIZES.find((entry) => entry.key === finalSize) ?? STILL_SIZES[0];
+    const ac = new AbortController();
+    abort.current = ac;
+    setBusy('final');
+    const started = performance.now();
+    try {
+      const blob = await capturePathTracedStill({
+        instances: model.view.instances,
+        width: out.width,
+        height: out.height,
+        pose: studio.bricks.readMatrices(),
+        camera: liveCamera(studio),
+        box: worldBox3(bounds),
+        groundY: -bounds.max[1] / 20,
+        type: 'image/png',
+        studioLook: settings.studioLook,
+        render: { edges: settings.edgeLines, linearColors: settings.linearColors },
+        materials: settings.materials,
+        sceneSetup: plan.sceneSetup,
+        samples: finalSamples,
+        transparent: finalAlpha,
+        signal: ac.signal,
+        onProgress: (done, total) => setProgress({ done, total }),
+      }, deps);
+      saveBlob(name('final-render', 'png'), blob);
+      setNotice(`Saved a path-traced ${out.width} × ${out.height} PNG (${finalSamples} samples, ${Math.round((performance.now() - started) / 1000)}s).`);
+    } catch (e) {
+      if ((e as Error).name !== 'AbortError') setError((e as Error).message);
+    } finally {
+      setBusy(null); setProgress(null); abort.current = null;
+    }
+  };
+
   const stopRecording = async () => {
     const current = recording;
     if (!current) return;
@@ -286,6 +339,36 @@ export function CapturePanel({ model }: { model: ModelState }) {
         )}
       </section>
 
+      <section className="bm-capture-group" aria-label="Final render">
+        <h4>Final render (path traced)</h4>
+        <p className="nx-hint">Traces real light bounces from the current view, like Blender's Cycles: soft area-light shadows, colour bleeding between parts and true reflections of the environment. Takes from a few seconds to a minute.</p>
+        <div className="bm-capture-row">
+          <label className="nx-field">Quality
+            <select aria-label="Final render quality" value={finalSamples} disabled={working} onChange={(e) => setFinalSamples(Number(e.currentTarget.value))}>
+              <option value={64}>Draft · 64 samples</option>
+              <option value={256}>Good · 256 samples</option>
+              <option value={1024}>Best · 1024 samples</option>
+            </select>
+          </label>
+          <label className="nx-field">Size
+            <select aria-label="Final render size" value={finalSize} disabled={working} onChange={(e) => setFinalSize(e.currentTarget.value)}>
+              {STILL_SIZES.map((entry) => <option key={entry.key} value={entry.key}>{entry.label}</option>)}
+            </select>
+          </label>
+        </div>
+        <label className="nx-check">
+          <input type="checkbox" checked={finalAlpha} disabled={working} onChange={(e) => setFinalAlpha(e.currentTarget.checked)} />
+          Transparent background (keeps the floor shadow)
+        </label>
+        <div className="bm-capture-row">
+          <button type="button" className="nx-btn nx-primary" disabled={working || !canvas} onClick={() => void renderFinal()}>
+            {busy === 'final' ? 'Rendering…' : 'Render final PNG'}
+          </button>
+          {busy === 'final' && <button type="button" className="nx-btn" onClick={() => abort.current?.abort()}>Cancel</button>}
+          {busy === 'final' && progress && <span className="nx-hint">{Math.round((progress.done / progress.total) * 100)}%</span>}
+        </div>
+      </section>
+
       <section className="bm-capture-group" aria-label="Turntable video">
         <h4><Ic name="video" /> Turntable video</h4>
         <p className="nx-hint">One full turn of the finished model, rendered frame by frame.</p>
@@ -319,7 +402,7 @@ export function CapturePanel({ model }: { model: ModelState }) {
           {busy === 'turntable' && (
             <button type="button" className="nx-btn" onClick={() => abort.current?.abort()}>Cancel</button>
           )}
-          {progress && <span className="nx-hint">{Math.round((progress.done / progress.total) * 100)}%</span>}
+          {busy === 'turntable' && progress && <span className="nx-hint">{Math.round((progress.done / progress.total) * 100)}%</span>}
         </div>
       </section>
 

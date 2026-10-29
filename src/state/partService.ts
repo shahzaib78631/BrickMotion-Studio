@@ -18,6 +18,7 @@ const pending = new Map<string, Promise<void>>();
 
 export async function initPartService(fetchText: FetchText = browserFetchText): Promise<void> {
   library = new PartLibrary(fetchText, shadow);
+  library.setStudLogos(studLogos);
   const cfg = await fetchText('LDConfig.ldr');
   if (!cfg) throw new Error('LDraw library not found. Run "npm run setup" first.');
   colors = parseLDConfig(cfg);
@@ -47,6 +48,38 @@ export function setShadowPack(files: Record<string, string> | undefined): void {
 }
 
 export const hasShadowPack = () => !!shadow;
+
+/** Raised LEGO logos on studs (Materials). On by default, like product renders. */
+let studLogos = true;
+const geometryListeners = new Set<() => void>();
+/** Called after loaded part geometry was rebuilt (e.g. logos switched); returns an unsubscribe. */
+export function onGeometryChange(cb: () => void): () => void {
+  geometryListeners.add(cb);
+  return () => { geometryListeners.delete(cb); };
+}
+let logoSwitch: Promise<void> = Promise.resolve();
+/** Switches stud logos and rebuilds the geometry of every part already loaded. */
+export function setStudLogos(on: boolean): Promise<void> {
+  if (on === studLogos) return logoSwitch;
+  studLogos = on;
+  library.setStudLogos(on);
+  const ids = [...geometry.keys()];
+  logoSwitch = logoSwitch.then(async () => {
+    const old: PartGeometry[] = [];
+    for (const id of ids) {
+      const flat = await library.loadPart(id);
+      if (studLogos !== on) return; // switched again meanwhile; that run rebuilds
+      const prev = geometry.get(id);
+      if (prev) old.push(prev);
+      geometry.set(id, flat ? buildPartGeometry(flat) : null);
+    }
+    for (const cb of geometryListeners) cb();
+    // only now nothing draws the old buffers any more
+    for (const g of old) for (const b of [g.main, g.mainDoubleSided, g.edges, ...g.fixed.map((f) => f.geometry)]) b?.dispose();
+  });
+  return logoSwitch;
+}
+export const studLogosOn = () => studLogos;
 
 const registered = new Map<string, string>();
 

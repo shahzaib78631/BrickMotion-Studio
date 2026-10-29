@@ -24,6 +24,8 @@ import { useViewState } from './viewState';
 const HORIZON = Math.PI * 0.49;
 /** Blender's view snaps take about this long. */
 const SNAP_S = 0.25;
+/** The flat-lay angle of the reference product shots (camera direction from the model). */
+export const FLAT_LAY = { azimuthDeg: 32, elevationDeg: 50 } as const;
 
 type Deps = {
   studio: Studio;
@@ -34,6 +36,8 @@ type Deps = {
 
 export type ViewControls = {
   snapTo(view: ViewName): void;
+  /** The product-shot angle: diagonal and high, like overhead brick photography. */
+  flatLay(): void;
   setProjection(p: Projection): void;
   toggleProjection(): void;
   /** Orbit by degrees around the target; up > 0 rises toward Top. */
@@ -76,6 +80,14 @@ export function createViewControls(deps: Deps): ViewControls {
     anim = { from, dAz: wrapPi(az - from.az), toPol: pol, t: 0 };
     useViewState.setState({ view });
     controls.maxPolarAngle = Math.PI; // the transition may pass the floor horizon
+  };
+
+  const flatLay = () => {
+    viewportApi.scene?.enterCameraView(false);
+    const from = sphericalOf(offset());
+    const { azimuthDeg, elevationDeg } = FLAT_LAY;
+    anim = { from, dAz: wrapPi(THREE.MathUtils.degToRad(azimuthDeg) - from.az), toPol: THREE.MathUtils.degToRad(90 - elevationDeg), t: 0 };
+    useViewState.setState({ view: 'user' });
   };
 
   const orbit = (dAzDeg: number, dUpDeg: number) => {
@@ -268,6 +280,7 @@ export function createViewControls(deps: Deps): ViewControls {
 
   return {
     snapTo,
+    flatLay,
     setProjection: activate,
     toggleProjection,
     orbit,

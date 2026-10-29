@@ -1,0 +1,9 @@
+HDR environments used for lighting and reflections (Materials → Environment).
+
+All from Poly Haven (https://polyhaven.com), CC0 1.0 (public domain). No attribution required; credited anyway.
+
+studio_small_09_1k.hdr     https://polyhaven.com/a/studio_small_09
+potsdamer_platz_1k.hdr     https://polyhaven.com/a/potsdamer_platz
+venice_sunset_1k.hdr       https://polyhaven.com/a/venice_sunset
+dikhololo_night_1k.hdr     https://polyhaven.com/a/dikhololo_night
+empty_warehouse_01_1k.hdr  https://polyhaven.com/a/empty_warehouse_01

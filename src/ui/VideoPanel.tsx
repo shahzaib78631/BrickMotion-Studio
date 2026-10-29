@@ -9,7 +9,7 @@ import { useAppSettings } from '../state/appSettings';
 import { validateJointLimitRules, type JointLimitRule } from '../anim/motion/v4/jointLimits';
 import { validateMechanismProgram, type MechanismProgram } from '../anim/motion/v4/mechanismProgram';
 import { Ic } from './icons';
-import { DEFAULT_CAMERA_SETTINGS } from '../anim/camera';
+import { DEFAULT_CAMERA_SETTINGS, FLAT_LAY_CAMERA } from '../anim/camera';
 import { animationOf } from '../anim/keyframes';
 import { buildLayerAt } from '../anim/buildLayer';
 import { animationDuration } from '../export/exportVideo';
@@ -179,6 +179,8 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
           <button type="button" className="nx-btn nx-sm" onClick={() => s.set({ camera: { ...DEFAULT_CAMERA_SETTINGS } })}>Reference</button>
           <button type="button" className="nx-btn nx-sm" onClick={() => s.set({ camera: { ...s.camera, lensMm: 42, buildElevation: 54, buildMargin: 1.08, targetLock: 0.72, submodelFocus: 1 } })}>Closer</button>
           <button type="button" className="nx-btn nx-sm" onClick={() => s.set({ camera: { ...s.camera, lensMm: 60, buildElevation: 64, buildMargin: 1.18, targetLock: 0.94, submodelFocus: 0.6 } })}>Stable overhead</button>
+          <button type="button" className="nx-btn nx-sm" title="Long lens, high diagonal angle and a calm camera, like overhead product photos"
+            onClick={() => s.set({ camera: { ...s.camera, ...FLAT_LAY_CAMERA } })}>Flat-lay</button>
         </div>
         <div className="bm-camera-grid">
           <label className="nx-field">Lens (mm)<input type="number" min={18} max={200} step={1} value={s.camera.lensMm} onChange={(e) => setCamera('lensMm', Number(e.target.value))} /></label>
@@ -209,7 +211,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
         </label>
         <label className="nx-check"><input type="checkbox" checked={s.edgeLines} onChange={(e) => s.set({ edgeLines: e.target.checked })} /> Edge lines</label>
         <label className="nx-check" title="Linear tone mapping instead of filmic"><input type="checkbox" checked={s.linearColors} onChange={(e) => s.set({ linearColors: e.target.checked })} /> True LEGO colours</label>
-        <label className="nx-check" title="A click each time pieces connect"><input type="checkbox" checked={s.snapSound} onChange={(e) => s.set({ snapSound: e.target.checked })} /> Snap sound</label>
+        <label className="nx-check" title="A click each time pieces connect; tune it in the Sound panel"><input type="checkbox" checked={s.snapSound} onChange={(e) => s.set({ snapSound: e.target.checked })} /> Snap sound</label>
       </details>
 
       <details className="nx-group bm-vsec">

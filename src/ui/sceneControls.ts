@@ -5,7 +5,7 @@ import { perspectiveEquivalent, type Projection, type Studio } from '../render/s
 import { activeSceneCamera, createCamera, sceneObject, sceneSetupOf, updateObject, type SceneCamera, type SceneSetup, type XYZ } from '../render/sceneSetup';
 import { useStudio } from '../state/store';
 import { useViewState } from './viewState';
-import { useSceneView } from './sceneViewState';
+import { shouldFollowSceneCamera, useSceneView } from './sceneViewState';
 import { viewportApi } from './viewportApi';
 
 export type SceneController = {
@@ -80,17 +80,30 @@ export function createSceneControls(studio: Studio, orbit: OrbitControls, canvas
 
   const snapCamera = () => {
     const camera = activeSceneCamera(activeSetup);
-    if (!camera || !useSceneView.getState().cameraView || useSceneView.getState().lockCamera) return;
+    const view = useSceneView.getState();
+    if (!camera || !shouldFollowSceneCamera(view)) return;
+    // "Lock camera to view" means viewport navigation edits the scene camera.
+    // It must NOT block saved-camera updates (especially Fit/Auto-fit on Play).
+    // Skipping an identical pose avoids fighting the user's orbit gestures.
+    const samePosition = camera.position.every((n, i) => Math.abs(studio.perspective.position.getComponent(i) - n) < 1e-5);
+    const sameTarget = camera.target.every((n, i) => Math.abs(orbit.target.getComponent(i) - n) < 1e-5);
+    if (samePosition && sameTarget && Math.abs(studio.perspective.fov - camera.fov) < 1e-5
+      && studio.perspective.near === camera.near && studio.perspective.far === camera.far) return;
     syncingView = true;
-    studio.perspective.position.fromArray(camera.position);
-    orbit.target.fromArray(camera.target);
-    studio.perspective.fov = camera.fov;
-    studio.perspective.near = camera.near;
-    studio.perspective.far = camera.far;
-    studio.perspective.clearViewOffset();
-    studio.perspective.updateProjectionMatrix();
-    orbit.update();
-    syncingView = false;
+    try {
+      studio.perspective.position.fromArray(camera.position);
+      orbit.target.fromArray(camera.target);
+      studio.perspective.fov = camera.fov;
+      studio.perspective.near = camera.near;
+      studio.perspective.far = camera.far;
+      studio.perspective.clearViewOffset();
+      studio.perspective.updateProjectionMatrix();
+      orbit.update();
+    } finally {
+      // The programmatic OrbitControls update must never be treated as a user
+      // gesture and written back over the newly fitted scene camera.
+      syncingView = false;
+    }
   };
   const sync = (setup?: SceneSetup) => {
     activeSetup = setup;

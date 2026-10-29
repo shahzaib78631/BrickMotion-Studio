@@ -29,6 +29,8 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "three": "^0.186.1",
+    "three-gpu-pathtracer": "^0.0.27",
+    "three-mesh-bvh": "^0.9.17",
     "zod": "^4.6.7",
     "zustand": "^5.0.16"
   },

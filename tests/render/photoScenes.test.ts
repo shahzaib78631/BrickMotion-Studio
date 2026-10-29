@@ -54,3 +54,21 @@ describe('photographic scenes', () => {
     expect(big[0].id).not.toBe(small[0].id);
   });
 });
+
+describe('render studio scenes', () => {
+  const renderLooks = SCENES.filter((scene) => scene.collection === 'render');
+  it('adds pastel and grey seamless looks with soft overhead shadows', () => {
+    expect(renderLooks.map((scene) => scene.id)).toEqual([
+      'lavender', 'render-grey', 'steel-grey', 'powder-blue', 'mint', 'peach', 'blush', 'butter', 'cobalt',
+    ]);
+    for (const scene of renderLooks) {
+      expect(scene.floor).toBe('shadow');
+      expect(scene.shadowOpacity).toBeGreaterThan(0.2);
+      // the key comes mostly from above, so shadows stay short
+      const [x, y, z] = scene.keyDirection!;
+      expect(y).toBeGreaterThan(2 * Math.hypot(x, z));
+      expect(scenePixels(scene, 4, 6)).toHaveLength(4 * 6 * 4);
+      expect(sceneOf(scene.id).id).toBe(scene.id);
+    }
+  });
+});

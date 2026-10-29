@@ -27,6 +27,14 @@ const STUD_RE = /^stud.*\.dat$/;
 
 export type FileLookup = (name: string) => LDrawFile | null;
 
+/** Plain studs and their LEGO-logo twins (3D logo with a rounded top). */
+export const LOGO_STUDS: Readonly<Record<string, string>> = { 'stud.dat': 'stud-logo4.dat', 'stud2.dat': 'stud2-logo4.dat' };
+export type FlattenOptions = {
+  /** Draw the raised LEGO logo on ordinary top studs. Stud detection is unchanged. */
+  studLogos?: boolean;
+};
+const LOGO_RE = /^logo\d*\.dat$/;
+
 function det(m: Mat3): number {
   return m[0] * (m[4] * m[8] - m[5] * m[7]) - m[1] * (m[3] * m[8] - m[5] * m[6]) + m[2] * (m[3] * m[7] - m[4] * m[6]);
 }
@@ -59,7 +67,7 @@ export function baseName(file: string): string {
  * Flattens a part into triangles grouped by color. All sub-files must already be
  * available through `lookup`; missing ones are skipped (reported via `onMissing`).
  */
-export function flattenPart(id: string, root: LDrawFile, lookup: FileLookup, onMissing?: (name: string) => void, shadow?: ShadowLookup): FlatPart {
+export function flattenPart(id: string, root: LDrawFile, lookup: FileLookup, onMissing?: (name: string) => void, shadow?: ShadowLookup, options: FlattenOptions = {}): FlatPart {
   const out: FlatPart = { id, tris: new Map(), doubleSided: new Map(), edges: [], bodyBox: null, fullBox: null, studs: [], description: root.description };
   if (shadow) out.snaps = [];
   /** A file's snaps, unless an including file's SNAP_CLEAR dropped them ('all' or by id). */
@@ -83,7 +91,8 @@ export function flattenPart(id: string, root: LDrawFile, lookup: FileLookup, onM
     arr.push(...pts);
   };
 
-  const walk = (file: LDrawFile, m: Mat3, t: Vec3, color: number, invert: boolean, certifiedChain: boolean, inStud: boolean, depth: number, name: string, dropped: 'all' | string[]) => {
+  // `quiet`: inside a stud logo, whose dozens of outline edges would clutter the faint edge-line look
+  const walk = (file: LDrawFile, m: Mat3, t: Vec3, color: number, invert: boolean, certifiedChain: boolean, inStud: boolean, depth: number, name: string, dropped: 'all' | string[], quiet = false) => {
     if (depth > MAX_DEPTH) return;
     collect(name, m, t, dropped);
     const below = dropsBelow(name, dropped);
@@ -96,7 +105,9 @@ export function flattenPart(id: string, root: LDrawFile, lookup: FileLookup, onM
         continue;
       }
       if (c.t === 'ref') {
-        const child = lookup(c.file);
+        const plain = baseName(c.file).toLowerCase();
+        const logo = options.studLogos && !inStud ? LOGO_STUDS[plain] : undefined;
+        const child = (logo ? lookup(logo) : null) ?? lookup(c.file);
         if (!child) {
           onMissing?.(c.file);
           continue;
@@ -111,10 +122,14 @@ export function flattenPart(id: string, root: LDrawFile, lookup: FileLookup, onM
           const radius = 6 * Math.max(Math.hypot(cm[0], cm[3], cm[6]), Math.hypot(cm[2], cm[5], cm[8]));
           out.studs!.push({ base: [...ct], tip: apply(cm, ct, 0, -4, 0), radius });
         }
-        walk(child, cm, ct, cc, childInvert, certified, inStud || STUD_RE.test(baseName(c.file)), depth + 1, c.file.trim().replace(/\\/g, '/').toLowerCase(), below);
+        // A stud primitive that points DOWN is the underside of the part (the lower
+        // half of a 1x1 round plate is stud4 flipped), so it counts toward the body.
+        const upStud = STUD_RE.test(baseName(c.file)) && cm[4] > 0;
+        walk(child, cm, ct, cc, childInvert, certified, inStud || upStud, depth + 1, c.file.trim().replace(/\\/g, '/').toLowerCase(), below, quiet || LOGO_RE.test(plain));
         continue;
       }
       if (c.t === 'line') {
+        if (quiet) continue;
         const a = apply(m, t, c.pts[0], c.pts[1], c.pts[2]);
         const b = apply(m, t, c.pts[3], c.pts[4], c.pts[5]);
         out.edges.push(a[0], a[1], a[2], b[0], b[1], b[2]);

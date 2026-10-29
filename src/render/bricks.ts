@@ -119,6 +119,14 @@ export class BrickRenderer {
     }
   }
 
+  /** Rebuilds the meshes from fresh part geometry (stud logos switched), keeping the current pose. */
+  refresh(): void {
+    const pose = this.readMatrices();
+    this.setInstances(this.instances);
+    const rest = new Map(this.instances.map((i) => [i.key, i.world]));
+    this.setMatrices((k) => (pose.has(k) ? pose.get(k) ?? HIDDEN : rest.get(k) ?? null));
+  }
+
   /** Restores every instance to its assembled position. */
   resetMatrices(): void {
     const byKey = new Map(this.instances.map((i) => [i.key, i.world]));

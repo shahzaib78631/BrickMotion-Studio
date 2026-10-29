@@ -41,6 +41,13 @@ export const DEFAULT_CAMERA_SETTINGS: CameraSettings = {
   heroMargin: 1.14,
 };
 
+/** The reference product-shot camera: a long lens looking down at a high diagonal,
+ * steady through the build and with a short, gentle hero orbit. */
+export const FLAT_LAY_CAMERA: Partial<CameraSettings> = {
+  lensMm: 100, buildAzimuth: 32, buildElevation: 50, buildMargin: 1.12, buildDrift: 0,
+  targetLock: 1, damping: 0.95, heroOrbitDegrees: 40, heroElevation: 46, heroMargin: 1.12,
+};
+
 export function cameraFov(settings: CameraSettings, aspect: number) {
   const lens = Math.max(1, settings.lensMm);
   const sensorW = Math.max(1, settings.sensorWidthMm);
@@ -99,7 +106,7 @@ export function worldBox3(b: Box): THREE.Box3 {
 
 type Rig = { target: THREE.Vector3; dist: number; az: number; el: number };
 
-function fitDistanceAtTarget(box: THREE.Box3, target: THREE.Vector3, fovDeg: number, aspect: number, azimuthDeg: number, elevationDeg: number): number {
+export function fitDistanceAtTarget(box: THREE.Box3, target: THREE.Vector3, fovDeg: number, aspect: number, azimuthDeg: number, elevationDeg: number): number {
   const z = viewDir(azimuthDeg, elevationDeg);
   const x = new THREE.Vector3(0, 1, 0).cross(z).normalize();
   const y = z.clone().cross(x);
@@ -523,6 +530,24 @@ export type EditorCamera = {
    * filled that view (a landscape viewport shot would otherwise be cropped or tiny in 9:16). */
   aspect?: number;
 };
+
+/**
+ * The hero orbit around a fixed shot: before the outro (or with the orbit off) the shot
+ * itself; during it, the shot swung around its own target by the hero angle at the same
+ * distance, height and lens — so a saved scene camera keeps its framing while it orbits.
+ */
+export function heroAround(tl: Pick<Timeline, 'buildEnd' | 'duration' | 'heroOrbit'>, shot: CamPose, settings: Pick<CameraSettings, 'heroOrbitDegrees'> = DEFAULT_CAMERA_SETTINGS): (t: number) => CamPose {
+  const offset = shot.position.clone().sub(shot.target);
+  const degrees = (settings.heroOrbitDegrees ?? 120) * (Math.PI / 180);
+  const ease = (u: number) => { const k = Math.min(1, Math.max(0, u)); return k * k * (3 - 2 * k); };
+  const up = new THREE.Vector3(0, 1, 0);
+  return (t: number) => {
+    if (t < tl.buildEnd || !tl.heroOrbit) return { position: shot.position.clone(), target: shot.target.clone(), fov: shot.fov };
+    const u = Math.min(1, Math.max(0, (t - tl.buildEnd) / Math.max(1e-6, tl.duration - tl.buildEnd)));
+    const angle = degrees * u * ease((t - tl.buildEnd) / 0.6);
+    return { position: shot.target.clone().add(offset.clone().applyAxisAngle(up, angle)), target: shot.target.clone(), fov: shot.fov };
+  };
+}
 
 /**
  * The camera the Build tab plays, as a video sampler. It is *your* shot: the same direction,

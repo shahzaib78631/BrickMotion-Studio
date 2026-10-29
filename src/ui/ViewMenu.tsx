@@ -67,6 +67,11 @@ export function ViewMenu() {
               <kbd>{v.hint}</kbd>
             </button>
           ))}
+          <button role="menuitem" title="High diagonal angle, like overhead product photos" onClick={() => pick(() => viewportApi.views?.flatLay())}>
+            <Ic name="camera" />
+            <span>Flat-lay</span>
+            <kbd></kbd>
+          </button>
           <hr />
           <button role="menuitem" aria-current={projection === 'perspective' || undefined} onClick={() => pick(() => viewportApi.views?.setProjection('perspective'))}>
             <Ic name="camera" />
@@ -144,6 +149,11 @@ export function ViewsDropdown() {
               <kbd>{v.hint}</kbd>
             </button>
           ))}
+          <button role="menuitem" title="High diagonal angle, like overhead product photos" onClick={() => pick(() => viewportApi.views?.flatLay())}>
+            <Ic name="camera" />
+            <span>Flat-lay</span>
+            <kbd></kbd>
+          </button>
           <hr />
           <button role="menuitem" aria-current={projection === 'perspective' || undefined} onClick={() => pick(() => viewportApi.views?.setProjection('perspective'))}>
             <Ic name="camera" />

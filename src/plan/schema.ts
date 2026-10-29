@@ -124,10 +124,25 @@ const SceneLightSchema = z.object({
 });
 const RegionSchema = z.object({ x: num.min(0).max(1), y: num.min(0).max(1), width: num.min(0.025).max(1), height: num.min(0.025).max(1) })
   .refine((r) => r.x + r.width <= 1 + 1e-9 && r.y + r.height <= 1 + 1e-9, 'Render region exceeds frame');
+const FrameStagingSchema = z.object({
+  version: z.literal(1),
+  cameraId: z.string().min(1).max(200), cameraName: z.string().min(1).max(100),
+  format: z.enum(['9:16', '4:5', '1:1', '16:9']),
+  floorSort: z.enum(['step', 'colour', 'part', 'size', 'all']),
+  floorSides: z.enum(['front-back', 'front', 'behind', 'sides', 'around']),
+  floorMatch: z.enum(['fill', 'nearest']),
+  camera: z.object({
+    position: PositionSchema, target: PositionSchema,
+    fov: num.min(8).max(130), aspect: num.min(0.1).max(5),
+    near: num.min(0.001).max(100).optional(), far: num.min(1).max(100000).optional(),
+    crop: RegionSchema.optional(),
+  }).refine((c) => Math.hypot(...c.position.map((n, i) => n - c.target[i])) > 1e-4, 'Camera must not sit at its target'),
+});
 const SceneSetupSchema = z.object({
   cameras: z.array(SceneCameraSchema).max(24), lights: z.array(SceneLightSchema).max(64),
   activeCameraId: z.string().nullable(), useCameraForVideo: z.boolean(), useLightsForVideo: z.boolean(),
   includeStudioLights: z.boolean(), region: RegionSchema.nullable(), cropToRegion: z.boolean(),
+  frameStaging: FrameStagingSchema.optional(),
   exposure: num.min(0.1).max(5),
 }).superRefine((s, ctx) => {
   const ids = [...s.cameras, ...s.lights].map((o) => o.id);

@@ -6,6 +6,13 @@ export type ArrivalMode = 'piece' | 'batch' | 'step';
 /** 'all': every piece waits on the floor from the start, none dropped in later. */
 export type FloorSort = 'step' | 'colour' | 'part' | 'size' | 'all';
 export type FloorSides = 'front-back' | 'front' | 'behind' | 'sides' | 'around';
+/** Locked, project-authored scene-camera view used by Camera frame staging.
+ * All values are in Three.js world studs, except the normalized crop. */
+export type FrameStagingCamera = {
+  position: [number, number, number]; target: [number, number, number];
+  fov: number; aspect: number; near?: number; far?: number;
+  crop?: { x: number; y: number; width: number; height: number };
+};
 /** How waiting pieces are arranged on the floor: tightly packed (default), with room around them, in an even grid, one row per group, or loosely scattered. */
 export type FloorStyle = 'packed' | 'spaced' | 'grid' | 'rows' | 'scattered' | 'showcase' | 'gallery' | 'fan' | 'camera-frame';
 export const FLOOR_STYLES: readonly FloorStyle[] = ['packed', 'spaced', 'grid', 'rows', 'scattered', 'showcase', 'gallery', 'fan', 'camera-frame'];
@@ -61,8 +68,11 @@ export type AnimOptions = {
   floorSides?: FloorSides;
   /** How they are arranged there (default 'packed'). */
   floorStyle?: FloorStyle;
-  /** Output aspect ratio; only changes floor packing in camera-frame mode. */
+  /** Output aspect ratio used by Camera frame staging. */
   floorAspect?: number;
+  /** When present, restrict actual loose-piece footprints to THIS fixed
+   * camera projection; the planner must never move or zoom this camera. */
+  floorCamera?: FrameStagingCamera;
   /** Which side each piece waits on (default 'fill'). */
   floorMatch?: FloorMatch;
   /** Optional wall-clock cap on that re-planning (ms, maximum 10000). Unset by default: a time cap makes results depend on machine load. */
