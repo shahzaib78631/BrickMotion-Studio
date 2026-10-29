@@ -3,7 +3,10 @@ name = "brickmotion-assembly"
 version = "0.1.0"
 description = "Hybrid assembly-plan model: certified corridor planning with a learned ordering prior"
 requires-python = ">=3.11"
-dependencies = ["numpy>=1.26"]
+dependencies = [
+    "numpy>=1.26",
+    "pymupdf>=1.26",
+]
 
 [dependency-groups]
 dev = ["pytest>=8"]
@@ -16,7 +19,7 @@ build-backend = "hatchling.build"
 brickmotion-assembly = "assembly_model.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["assembly_model"]
+packages = ["assembly_model", "instructions_pdf"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
