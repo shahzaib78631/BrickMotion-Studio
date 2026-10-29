@@ -18,6 +18,7 @@ export type Resolved = { part: string; color: number | null; flags: string[] };
 export type FetchJson = (url: string, headers: Record<string, string>) => Promise<unknown>;
 
 const API = 'https://rebrickable.com/api/v3/lego/sets/';
+const ELEMENTS = 'https://rebrickable.com/api/v3/lego/elements/';
 
 const defaultFetchJson: FetchJson = async (url, headers) => {
   const res = await fetch(url, { headers });
@@ -75,6 +76,12 @@ export async function fetchSubSets(setNum: string, apiKey: string, fetchJson: Fe
   });
 }
 
+/** One element id looked up on its own (booklets sometimes print an alternate id); quantity 0. */
+export async function fetchElement(id: string, apiKey: string, fetchJson: FetchJson = defaultFetchJson): Promise<SetPart> {
+  const row = (await fetchJson(`${ELEMENTS}${id}/`, { Authorization: `key ${apiKey}` })) as Row;
+  return { ...toSetPart({ ...row, quantity: 0 }), element: id };
+}
+
 /** The set's own parts plus every sub-set's parts (times how many of that sub-set), merged by element. */
 export async function fetchSetInventory(setNum: string, apiKey: string, fetchJson: FetchJson = defaultFetchJson): Promise<SetPart[]> {
   const merged = new Map<string, SetPart>();
@@ -109,14 +116,31 @@ export function resolveSetPart(p: SetPart, hasPart: (id: string) => boolean): Re
   return { part, color: p.color, flags };
 }
 
+function apiKey(): string {
+  const key = process.env.REBRICKABLE_API_KEY?.trim();
+  if (!key) throw new Error(KEY_HELP);
+  return key;
+}
+
+/** Looks up element ids missing from the set list, cached in cacheFile (id → SetPart). */
+export async function loadElements(ids: string[], cacheFile: string): Promise<Map<string, SetPart>> {
+  const cache: Record<string, SetPart> = existsSync(cacheFile) ? JSON.parse(readFileSync(cacheFile, 'utf8')) : {};
+  const missing = ids.filter((id) => !cache[id]);
+  if (missing.length) {
+    const key = apiKey();
+    for (const id of missing) cache[id] = await fetchElement(id, key);
+    mkdirSync(dirname(cacheFile), { recursive: true });
+    writeFileSync(cacheFile, JSON.stringify(cache, null, 1));
+  }
+  return new Map(ids.map((id) => [id, cache[id]]));
+}
+
 const KEY_HELP = 'Set REBRICKABLE_API_KEY (free key from rebrickable.com/users/<you>/settings/#api)';
 
 /** The set's inventory, from the cache file when present, else from the API (key from the environment only). */
 export async function loadSetParts(setNum: string, cacheFile: string): Promise<SetPart[]> {
   if (existsSync(cacheFile)) return JSON.parse(readFileSync(cacheFile, 'utf8')) as SetPart[];
-  const key = process.env.REBRICKABLE_API_KEY?.trim();
-  if (!key) throw new Error(KEY_HELP);
-  const parts = await fetchSetInventory(setNum, key);
+  const parts = await fetchSetInventory(setNum, apiKey());
   mkdirSync(dirname(cacheFile), { recursive: true });
   writeFileSync(cacheFile, JSON.stringify(parts, null, 1));
   return parts;

@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
-import { fetchSetInventory, fetchSetParts, loadSetParts, resolveSetPart, toSetPart } from '../../src/instructions/rebrickable';
+import { fetchElement, fetchSetInventory, fetchSetParts, loadSetParts, resolveSetPart, toSetPart } from '../../src/instructions/rebrickable';
 
 const row = {
   element_id: '6572522', quantity: 29, is_spare: false,
@@ -81,4 +81,12 @@ test('loadSetParts explains how to set the key when it is missing', async () => 
   delete process.env.REBRICKABLE_API_KEY;
   const file = join(mkdtempSync(join(tmpdir(), 'rb-')), 'parts.json');
   await expect(loadSetParts('40859-1', file)).rejects.toThrow('Set REBRICKABLE_API_KEY (free key from rebrickable.com/users/<you>/settings/#api)');
+});
+
+test('fetchElement looks up an element id outside the set list', async () => {
+  const calls: string[] = [];
+  const el = { element_id: '302223', part: { part_num: '3022', part_img_url: null, external_ids: { LDraw: ['3022'] } }, color: { name: 'Blue', external_ids: { LDraw: { ext_ids: [1] } } } };
+  const p = await fetchElement('302223', 'k', async (u) => { calls.push(u); return el; });
+  expect(calls).toEqual(['https://rebrickable.com/api/v3/lego/elements/302223/']);
+  expect(p).toMatchObject({ element: '302223', ldrawPart: '3022', color: 1, quantity: 0 });
 });

@@ -100,3 +100,9 @@ test('report lists flags and over-use', () => {
   expect(md).toContain('step 2: callout part 1 not identified');
   expect(md).toMatch(/Steps: 3 · Pieces: 5 · Flags: \d+/);
 });
+
+test('a step with no new parts is flagged, since BrickMotion merges empty steps', () => {
+  const b: Booklet = { ...booklet, steps: [...booklet.steps, { page: 30, number: 4, picture: null, callout: [], substeps: [] }] };
+  const { flags } = planFromBooklets('superman', [[b]], matches, resolve);
+  expect(flags).toContainEqual({ step: 4, message: 'step 4 adds no new parts (attaches a sub-build or turns the model); BrickMotion merges it into the next step until Phase 2 places sub-builds' });
+});

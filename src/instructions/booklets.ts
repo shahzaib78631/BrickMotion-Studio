@@ -12,6 +12,9 @@ export function bookletUrl(idOrPath: string): string | null {
 
 const first = (b: Booklet) => b.steps[0];
 
+/** What a booklet instructs, independent of its language/region text: steps, sections, part counts. */
+const signature = (b: Booklet) => JSON.stringify(b.steps.map((s) => [s.number, s.section ?? 0, s.callout.map((c) => c.count)]));
+
 /**
  * Drops regional duplicates (same text), orders booklets, and groups them into models:
  * a booklet whose steps start again at 1 is another figure, ordered by its first section
@@ -22,7 +25,7 @@ export function orderBooklets(list: Booklet[]): { booklets: Booklet[]; models: s
   const unique: Booklet[] = [];
   for (const b of list) {
     if (!b.steps.length) throw new Error(`no instruction steps found in ${b.id}`);
-    const dup = unique.find((u) => u.textHash === b.textHash);
+    const dup = unique.find((u) => u.textHash === b.textHash || signature(u) === signature(b));
     if (dup) flags.push(`${b.id} is a duplicate of ${dup.id}; skipped`);
     else unique.push(b);
   }

@@ -17,7 +17,8 @@ import { parseLDraw, type LDrawFile } from '../src/ldraw/parse';
 import type { Plan } from '../src/plan/types';
 import { bookletUrl, orderBooklets } from '../src/instructions/booklets';
 import { planFromBooklets, type Flag } from '../src/instructions/buildPlan';
-import { loadSetParts, resolveSetPart, type Resolved, type SetPart } from '../src/instructions/rebrickable';
+import { inventoryDiffs } from '../src/instructions/inventory';
+import { loadElements, loadSetParts, resolveSetPart, type Resolved } from '../src/instructions/rebrickable';
 import { instructionsReport } from '../src/instructions/report';
 import type { Booklet, Matches } from '../src/instructions/types';
 import { runPython } from './instructions/pythonBridge';
@@ -91,22 +92,6 @@ function partMetrics(plan: Plan): (part: string) => PartMetrics {
   return (part) => map.get(part) ?? measurePart(null, part);
 }
 
-/** Booklet inventory counts vs the Rebrickable inventory (spares ignored). */
-function inventoryDiffs(booklets: Booklet[], parts: SetPart[]): Flag[] {
-  const booklet = new Map<string, number>();
-  for (const b of booklets) for (const e of b.inventory) booklet.set(e.element, (booklet.get(e.element) ?? 0) + e.count);
-  if (!booklet.size) return [];
-  const api = new Map<string, number>();
-  for (const p of parts) if (!p.spare && p.element) api.set(p.element, (api.get(p.element) ?? 0) + p.quantity);
-  const flags: Flag[] = [];
-  for (const e of new Set([...booklet.keys(), ...api.keys()])) {
-    const a = booklet.get(e) ?? 0;
-    const b = api.get(e) ?? 0;
-    if (a !== b) flags.push({ message: `inventory: element ${e} is ${a}× in the booklet but ${b}× on Rebrickable` });
-  }
-  return flags;
-}
-
 async function main() {
   const { name, set, pdfs, out } = parseArgs(process.argv.slice(2));
   const work = join(ROOT, '.cache', 'instructions', name);
@@ -134,14 +119,22 @@ async function main() {
   const matches = JSON.parse(readFileSync(join(bookletDir, 'matches.json'), 'utf8')) as Matches;
 
   const byElement = new Map(parts.filter((p) => p.element).map((p) => [p.element!, p]));
+  // booklets sometimes print an alternate element id for a piece in the set: look those up
+  const unknown = [...new Set([...matches.matches.flatMap((m) => (m.element ? [m.element] : [])), ...booklets.flatMap((b) => b.inventory.map((e) => e.element))])]
+    .filter((e) => !byElement.has(e));
+  const extra = await loadElements(unknown, join(work, 'rebrickable-elements.json'));
+  const inSet = new Set(parts.map((p) => `${p.ldrawPart}|${p.color}`));
   const hasPart = (id: string) => existsSync(join(LDRAW, 'parts', `${id.toLowerCase()}.dat`));
   const resolveElement = (element: string): Resolved => {
-    const p = byElement.get(element);
-    return p ? resolveSetPart(p, hasPart) : { part: '', color: null, flags: [`element ${element} not in Rebrickable inventory for ${set}`] };
+    const p = byElement.get(element) ?? extra.get(element);
+    if (!p) return { part: '', color: null, flags: [`element ${element} not found on Rebrickable`] };
+    const r = resolveSetPart(p, hasPart);
+    if (!byElement.has(element) && !inSet.has(`${p.ldrawPart}|${p.color}`)) r.flags.push(`element ${element} (${p.ldrawPart} ${p.colorName}) is not in the Rebrickable inventory for ${set}`);
+    return r;
   };
   const byId = new Map(booklets.map((b) => [b.id, b]));
   const { plan, flags } = planFromBooklets(name, models.map((m) => m.map((id) => byId.get(id)!)), matches, resolveElement);
-  const allFlags = [...orderFlags.map((message) => ({ message })), ...inventoryDiffs(booklets, parts), ...flags];
+  const allFlags = [...orderFlags.map((message) => ({ message })), ...inventoryDiffs(booklets, parts, extra), ...flags];
 
   const colors = parseLDConfig(readFileSync(join(LDRAW, 'LDConfig.ldr'), 'utf8'));
   const mpdPath = resolve(out || join(work, `${name}.mpd`));

@@ -41,6 +41,9 @@ function modelSteps(booklets: Booklet[], matches: Matches, resolve: (element: st
           x += PITCH;
         }
       });
+      if (!s.callout.length) {
+        flags.push({ step: s.number, message: `step ${s.number} adds no new parts (attaches a sub-build or turns the model); BrickMotion merges it into the next step until Phase 2 places sub-builds` });
+      }
       if (s.substeps.length) {
         flags.push({ step: s.number, message: `step ${s.number} has a sub-build (sub-steps ${s.substeps.join(', ')}${s.repeat ? `, built ${s.repeat}×` : ''}) kept inline` });
       }

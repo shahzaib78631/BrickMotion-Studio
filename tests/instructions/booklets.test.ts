@@ -35,3 +35,11 @@ test('gaps in the step numbers are flagged', () => {
 test('a PDF without instruction steps is refused', () => {
   expect(() => orderBooklets([booklet('6668733', [])])).toThrow('no instruction steps found in 6668733');
 });
+
+test('regional copies with different text but the same steps are duplicates', () => {
+  const a = booklet('6668730', range(1, 45), 'text-en');
+  const b = booklet('6668729', range(1, 45), 'text-other-region');
+  const r = orderBooklets([a, b]);
+  expect(r.models).toEqual([['6668730']]);
+  expect(r.flags).toEqual(['6668729 is a duplicate of 6668730; skipped']);
+});
