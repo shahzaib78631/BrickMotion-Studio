@@ -181,3 +181,30 @@ or duplicate parts.
 - Booklet camera estimation for `score` (e.g. fit from the first steps' known geometry).
 - Retry limits and the score threshold (tune on 40859).
 - Exact prompt wording for both agents, and work-folder layout.
+
+## Phase 2 update (2026-10-29, after the agent test)
+
+Tested on Superman step 4 (two yellow 1×1 tiles):
+- DeepSeek (CommandCode) described the placement correctly from the before/after step pictures
+  (front row, both ends; confidence 0.72, ~90 s).
+- Given that description and the model as text coordinates, **Big Pickle returned nothing in
+  several minutes; DeepSeek (CommandCode) returned both correct `place` lines in 9 s.**
+
+Decided by the user: **CommandCode DeepSeek Flash does both describing and placing.** OpenCode /
+Big Pickle is no longer used.
+
+My calls (user should check):
+- **Phase 2 ships in two parts.** *2a:* describe → place → `check` (overlap/floating via the app's
+  `validate`), bounded retries, resumable, logged; a step is accepted when its pieces are all placed
+  and `check` is clean, else accepted as flagged. *2b:* headless render + image `score` against the
+  booklet picture and real sub-build submodels. 2a alone gives the user placed models to fix;
+  rendering and camera fitting are the riskiest work and get their own plan after 2a shows where
+  placement goes wrong.
+- **Parts drawn only in a step picture** (no callout, e.g. the red 4×4 base of Superman step 1,
+  reported "left over" by Phase 1) are offered to step 1 of each model as possible extra parts; the
+  agent places them or says they are absent; any still unplaced stay flagged.
+- **Sub-builds stay inline in 2a**: their parts are placed in their final position in the parent
+  step (the prompt says the step builds and attaches a sub-assembly). Empty "attach" steps keep no
+  pieces and are skipped.
+- **Sideways (SNOT) parts:** `place` takes an optional facing (`up` = `y+` default, `y-`, `x+`, `x-`,
+  `z+`, `z-`) stored as an exact LDraw placement.
