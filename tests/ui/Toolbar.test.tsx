@@ -17,7 +17,7 @@ beforeAll(() => useStudio.getState().setPlan(plan, { resetHistory: true }));
 afterEach(cleanup);
 
 test('renders the global bar with a project name and the command palette', () => {
-  render(<Toolbar theme="light" onTheme={noop} onProjects={noop} onAbout={noop}
+  render(<Toolbar theme="light" onTheme={noop} onProjects={noop} onTemplates={noop} onAbout={noop}
     onExportVideo={noop} canPreview onNavigate={noop} />);
   expect((screen.getByLabelText('Project name') as HTMLInputElement).value).toBe('t');
   expect(screen.getByLabelText('Search or run a command (Command K)')).toBeTruthy();

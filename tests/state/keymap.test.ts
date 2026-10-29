@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { commandForKey } from '../../src/state/keymap';
 
-const k = (key: string, mods: Partial<{ shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }> = {}) => ({
+const k = (key: string, mods: Partial<{ shiftKey: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean }> = {}) => ({
   key,
   shiftKey: false,
   metaKey: false,
@@ -35,4 +35,14 @@ test('duplicate and tool keys', () => {
   expect(commandForKey(k('d', { ctrlKey: true }), 0)).toEqual({ kind: 'duplicate' });
   expect(commandForKey(k('v'), 0)).toEqual({ kind: 'tool', tool: 'select' });
   expect(commandForKey(k('m'), 0)).toEqual({ kind: 'tool', tool: 'move' });
+});
+
+test('Shift+Up/Down and E/Q raise and lower; Alt adds a full brick', () => {
+  expect(commandForKey(k('ArrowUp', { shiftKey: true }), 90)).toEqual({ kind: 'move', d: { x: 0, y: 1, z: 0 } });
+  expect(commandForKey(k('ArrowDown', { shiftKey: true }), 0)).toEqual({ kind: 'move', d: { x: 0, y: -1, z: 0 } });
+  expect(commandForKey(k('ArrowUp', { shiftKey: true, altKey: true }), 0)).toEqual({ kind: 'move', d: { x: 0, y: 3, z: 0 } });
+  expect(commandForKey(k('ArrowDown', { shiftKey: true, altKey: true }), 0)).toEqual({ kind: 'move', d: { x: 0, y: -3, z: 0 } });
+  expect(commandForKey(k('e'), 0)).toEqual({ kind: 'move', d: { x: 0, y: 1, z: 0 } });
+  expect(commandForKey(k('Q'), 0)).toEqual({ kind: 'move', d: { x: 0, y: -1, z: 0 } });
+  expect(commandForKey(k('ArrowRight', { shiftKey: true }), 0)).toEqual({ kind: 'move', d: { x: 1, y: 0, z: 0 } });
 });

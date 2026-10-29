@@ -13,7 +13,7 @@ import {
   cameraFov, fitDistance, sphericalPosition, worldBox3,
   DEFAULT_CAMERA_SETTINGS, type CameraSettings,
 } from '../anim/camera';
-import type { SceneSetup } from '../render/sceneSetup';
+import { activeSceneCamera, applyCameraCrop, type SceneSetup } from '../render/sceneSetup';
 import { createStudio, type RenderOptions, type Studio, type StudioLook, type Materials } from '../render/studio';
 import { safeFileName } from '../ui/download';
 import { encodeMp4, type ExportDeps, type FrameSampler } from './exportVideo';
@@ -114,12 +114,23 @@ export function applyStillCamera(studio: Studio, camera: StillCamera): void {
  * live pose and camera are replayed so it matches the viewport, minus the studio
  * backdrop (there is no shadow floor and no scene background).
  */
-export async function captureTransparentStill(opts: TransparentStillOpts, deps: ExportDeps): Promise<Blob> {
+export function captureTransparentStill(opts: TransparentStillOpts, deps: ExportDeps): Promise<Blob> {
+  return captureOffscreenStill(opts, deps, true);
+}
+
+/**
+ * A still rendered offscreen at an explicit size from `opts.camera`, with the studio
+ * backdrop and floor (or, `transparent`, on an alpha background). Used for shots
+ * through a scene camera, which the viewport may not be showing.
+ */
+export async function captureOffscreenStill(opts: TransparentStillOpts, deps: ExportDeps, transparent = false): Promise<Blob> {
   const type = opts.type ?? 'image/png';
   const makeCanvas = deps.createCanvas ?? defaultStillCanvas;
   const canvas = makeCanvas(opts.width, opts.height);
-  const studio = deps.createStudio(canvas, { preserveDrawingBuffer: true, transparent: true });
+  const studio = deps.createStudio(canvas, { preserveDrawingBuffer: true, transparent });
   try {
+    // exactly the asked size: the screen's pixel ratio would scale the canvas up
+    studio.renderer.setPixelRatio?.(1);
     studio.setLook?.(opts.studioLook ?? 'soft');
     if (opts.render) studio.setRenderOptions?.(opts.render);
     if (opts.materials) studio.setMaterials?.(opts.materials);
@@ -135,6 +146,32 @@ export async function captureTransparentStill(opts: TransparentStillOpts, deps: 
   } finally {
     studio.dispose();
   }
+}
+
+/**
+ * The active scene camera as a still pose for an image of `aspect`, with the render
+ * border's crop when "crop to border" is on — the shot the MP4 takes through it.
+ * Null when the project has no usable scene camera.
+ */
+export function sceneCameraStill(setup: SceneSetup | undefined, aspect: number): StillCamera | null {
+  const active = activeSceneCamera(setup);
+  if (!active) return null;
+  const position = new THREE.Vector3(...active.position);
+  const target = new THREE.Vector3(...active.target);
+  if (position.distanceToSquared(target) < 1e-8) return null;
+  const camera = new THREE.PerspectiveCamera(active.fov, aspect, active.near, active.far);
+  camera.position.copy(position);
+  camera.lookAt(target);
+  applyCameraCrop(camera, setup);
+  const view = camera.view?.enabled ? camera.view : null;
+  return {
+    ortho: false, position, quaternion: camera.quaternion.clone(), fov: active.fov,
+    near: active.near, far: active.far, orthoHeight: 0,
+    view: view && {
+      enabled: true, fullWidth: view.fullWidth, fullHeight: view.fullHeight,
+      offsetX: view.offsetX, offsetY: view.offsetY, width: view.width, height: view.height,
+    },
+  };
 }
 
 function defaultStillCanvas(width: number, height: number): HTMLCanvasElement {

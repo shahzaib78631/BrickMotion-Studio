@@ -2,13 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { worldBox3 } from '../anim/camera';
 import {
-  canRecordViewport, captureFileName, captureTransparentStill, captureViewportStill, exportTurntable,
-  startViewportRecording, type StillCamera, type StillType,
+  canRecordViewport, captureFileName, captureOffscreenStill, captureTransparentStill, captureViewportStill, exportTurntable,
+  sceneCameraStill, startViewportRecording, type StillCamera, type StillType,
 } from '../export/capture';
 import { canExportMp4 } from '../export/exportVideo';
 import { capturePathTracedStill } from '../export/pathTracedStill';
 import { FPS_OPTIONS } from '../export/frameRates';
 import { VIDEO_FORMATS, type VideoFormat } from '../export/formats';
+import { activeSceneCamera } from '../render/sceneSetup';
 import { createStudio, type Studio } from '../render/studio';
 import { useAppSettings } from '../state/appSettings';
 import { useStudio } from '../state/store';
@@ -79,6 +80,8 @@ export function CapturePanel({ model }: { model: ModelState }) {
   const [recording, setRecording] = useState<{ stop(): Promise<Blob>; startedAt: number; mime: string } | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState('');
+  /** where stills are taken from: what the viewport shows, or the active scene camera */
+  const [source, setSource] = useState<'viewport' | 'camera'>('viewport');
   const [notice, setNotice] = useState('');
   const abort = useRef<AbortController | null>(null);
 
@@ -96,8 +99,22 @@ export function CapturePanel({ model }: { model: ModelState }) {
   }, []);
 
   const video = VIDEO_FORMATS[format];
+  const sceneCamera = activeSceneCamera(plan.sceneSetup);
+  const fromCamera = source === 'camera' && !!sceneCamera;
+  // through the camera, stills come out at the video's output size (times the scale)
+  const output = VIDEO_FORMATS[settings.format];
+  /** The camera a still is taken from, framed for an image of `aspect`. */
+  const stillCamera = (studio: Studio, aspect: number): StillCamera => {
+    if (!fromCamera) return liveCamera(studio);
+    const shot = sceneCameraStill(plan.sceneSetup, aspect);
+    if (!shot) throw new Error('The scene camera has no usable view: set a camera in Scene first.');
+    return shot;
+  };
   const size = STILL_SIZES.find((entry) => entry.key === stillSize) ?? STILL_SIZES[0];
-  const stillSizePx = useMemo(() => ({ width: Math.max(1, Math.round((canvas?.width ?? 1) * scale)), height: Math.max(1, Math.round((canvas?.height ?? 1) * scale)) }), [canvas, scale]);
+  const stillSizePx = useMemo(() => fromCamera
+    ? { width: output.width * scale, height: output.height * scale }
+    : { width: Math.max(1, Math.round((canvas?.width ?? 1) * scale)), height: Math.max(1, Math.round((canvas?.height ?? 1) * scale)) },
+  [canvas, scale, fromCamera, output.width, output.height]);
 
   useEffect(() => {
     let alive = true;
@@ -115,15 +132,33 @@ export function CapturePanel({ model }: { model: ModelState }) {
   const name = (suffix: string, ext: string) => captureFileName(plan.name, editingModel, suffix, ext);
   const stillExt = type === 'image/jpeg' ? 'jpg' : 'png';
 
+  /** The still as chosen: the viewport's own pixels, or rendered through the scene camera. */
+  const takeStill = async (studio: Studio, as: StillType) => {
+    if (!fromCamera) return captureViewportStill(studio, scale, as);
+    const bounds = model.view.bounds ?? model.assembly.bounds;
+    if (!bounds) throw new Error('This model has nothing to capture yet.');
+    const { width, height } = stillSizePx;
+    const blob = await captureOffscreenStill({
+      instances: model.view.instances, width, height,
+      pose: studio.bricks.readMatrices(),
+      camera: stillCamera(studio, width / height),
+      box: worldBox3(bounds), groundY: -bounds.max[1] / 20,
+      type: as, studioLook: settings.studioLook,
+      render: { edges: settings.edgeLines, linearColors: settings.linearColors },
+      materials: settings.materials, sceneSetup: plan.sceneSetup,
+    }, deps);
+    return { blob, width, height };
+  };
+
   const saveStill = async () => {
     setError(''); setNotice('');
     const studio = viewportApi.studio;
     if (!studio) return setError('The viewport is not ready yet.');
     setBusy('still');
     try {
-      const { blob, width, height } = await captureViewportStill(studio, scale, type);
-      saveBlob(name('capture', stillExt), blob);
-      setNotice(`Saved a ${width} × ${height} ${stillExt.toUpperCase()} of the viewport.`);
+      const { blob, width, height } = await takeStill(studio, type);
+      saveBlob(name(fromCamera ? 'camera' : 'capture', stillExt), blob);
+      setNotice(`Saved a ${width} × ${height} ${stillExt.toUpperCase()} ${fromCamera ? `through ${sceneCamera!.name}` : 'of the viewport'}.`);
     } catch (e) {
       setError((e as Error).message);
     } finally { setBusy(null); }
@@ -142,7 +177,7 @@ export function CapturePanel({ model }: { model: ModelState }) {
         width: size.width,
         height: size.height,
         pose: studio.bricks.readMatrices(),
-        camera: liveCamera(studio),
+        camera: stillCamera(studio, size.width / size.height),
         box: worldBox3(bounds),
         groundY: -bounds.max[1] / 20,
         type: 'image/png',
@@ -151,7 +186,7 @@ export function CapturePanel({ model }: { model: ModelState }) {
         materials: settings.materials,
         sceneSetup: plan.sceneSetup,
       }, deps);
-      saveBlob(name('capture-transparent', 'png'), blob);
+      saveBlob(name(fromCamera ? 'camera-transparent' : 'capture-transparent', 'png'), blob);
       setNotice(`Saved a transparent ${size.width} × ${size.height} PNG.`);
     } catch (e) {
       setError((e as Error).message);
@@ -167,9 +202,9 @@ export function CapturePanel({ model }: { model: ModelState }) {
     }
     setBusy('still');
     try {
-      const { blob } = await captureViewportStill(studio, scale, 'image/png');
+      const { blob } = await takeStill(studio, 'image/png');
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-      setNotice('Copied the viewport image to the clipboard.');
+      setNotice(`Copied the ${fromCamera ? `${sceneCamera!.name} view` : 'viewport image'} to the clipboard.`);
     } catch (e) {
       setError((e as Error).message);
     } finally { setBusy(null); }
@@ -225,7 +260,7 @@ export function CapturePanel({ model }: { model: ModelState }) {
         width: out.width,
         height: out.height,
         pose: studio.bricks.readMatrices(),
-        camera: liveCamera(studio),
+        camera: stillCamera(studio, out.width / out.height),
         box: worldBox3(bounds),
         groundY: -bounds.max[1] / 20,
         type: 'image/png',
@@ -286,14 +321,34 @@ export function CapturePanel({ model }: { model: ModelState }) {
   return (
     <div className="nx-pane">
       <PaneHead id="capture" title="Capture"
-        help="Save a still of exactly what the viewport shows, copy it, render a deterministic 360° turntable MP4, or record the live viewport. Stills use the viewport's own pixels; transparent stills are rendered offscreen with an alpha background." />
+        help="Save a still of exactly what the viewport shows or through the scene camera, copy it, render a deterministic 360° turntable MP4, or record the live viewport. Stills use the viewport's own pixels; transparent stills are rendered offscreen with an alpha background." />
 
       {error && <p className="bm-spot-error" role="alert">{error}</p>}
       {notice && <p className="nx-hint" role="status">{notice}</p>}
 
+      <section className="bm-capture-group" aria-label="Capture from">
+        <h4>Capture from</h4>
+        <div className="bm-capture-row" role="radiogroup" aria-label="Capture from">
+          <button type="button" role="radio" aria-checked={!fromCamera} className={`nx-btn${!fromCamera ? ' bm-capture-on' : ''}`}
+            disabled={working} onClick={() => setSource('viewport')}>Viewport</button>
+          <button type="button" role="radio" aria-checked={fromCamera} className={`nx-btn${fromCamera ? ' bm-capture-on' : ''}`}
+            disabled={working || !sceneCamera} title={sceneCamera ? undefined : 'Add a camera in Scene first'}
+            onClick={() => setSource('camera')}><Ic name="camera" /> {sceneCamera?.name ?? 'Camera'}</button>
+        </div>
+        <p className="nx-hint">
+          {!sceneCamera
+            ? 'Add a camera from the viewport\'s Scene menu to capture through it.'
+            : fromCamera
+              ? `Stills, transparent stills and final renders are taken through ${sceneCamera.name}, framed like the video (${settings.format}${plan.sceneSetup?.cropToRegion && plan.sceneSetup.region ? ', cropped to the render border' : ''}), whatever the viewport shows.`
+              : 'Stills, transparent stills and final renders are taken from what the viewport shows.'}
+        </p>
+      </section>
+
       <section className="bm-capture-group" aria-label="Still image">
         <h4><Ic name="camera" /> Still image</h4>
-        <p className="nx-hint">The viewport as drawn, at 1×, 2× or 3× its pixel size.</p>
+        <p className="nx-hint">{fromCamera
+          ? `Through ${sceneCamera!.name} at the video size (${output.width} × ${output.height}), 1×, 2× or 3×.`
+          : 'The viewport as drawn, at 1×, 2× or 3× its pixel size.'}</p>
         <div className="bm-capture-row">
           {SCALES.map((value) => (
             <button key={value} type="button" className={`nx-btn${scale === value ? ' bm-capture-on' : ''}`}

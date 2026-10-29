@@ -17,19 +17,9 @@ import { HelpNote } from './PaneHead';
 import { PartThumb } from './PartThumb';
 import { viewportApi } from './viewportApi';
 import { pieceCount } from './Toolbar';
+import { ColorSwatches } from './ColorSwatches';
 
-export function ColorSwatches({ value, onPick }: { value?: number; onPick: (code: number) => void }) {
-  const colors = useMemo(() => {
-    const all = [...getColors().values()].filter((c) => c.code !== 16 && c.code !== 24 && c.code < 10000);
-    const order = { solid: 0, trans: 1, pearl: 2, metal: 2, chrome: 2, rubber: 3 } as const;
-    return all.sort((a, b) => order[a.finish] - order[b.finish] || a.name.localeCompare(b.name));
-  }, []);
-  return <div className="swatches">
-    {colors.map((c) => <button key={c.code} className={`swatch ${value === c.code ? 'active' : ''} ${c.finish}`}
-      style={{ background: c.hex }} title={`${c.name.replace(/_/g, ' ')} (${c.code})`}
-      aria-label={c.name.replace(/_/g, ' ')} onClick={() => onPick(c.code)} />)}
-  </div>;
-}
+export { ColorSwatches };
 
 function PartPicker({ onPick }: { onPick: (id: string) => void }) {
   const [q, setQ] = useState('');
@@ -205,6 +195,13 @@ export function Inspector({ timeline, checks, stepCard, model, onMakeSubmodel }:
           <section className="bm-inspector-section">
             <h4>Transform <small>(relative)</small></h4>
             <div className="bm-transform-row"><span>Move</span><div className="bm-axis-group">{axis('X', 'x')}{axis('Y', 'y')}{axis('Z', 'z')}</div></div>
+            <div className="bm-transform-row"><span>Height</span><div className="bm-height-group">
+              <button className="nx-btn nx-sm" aria-label="Raise one plate" title="Raise one plate (Shift+↑ or E) · Alt+Shift+↑ raises a full brick"
+                onClick={() => runCommand({ kind: 'move', d: { x: 0, y: 1, z: 0 } })}><Ic name="raise" /> Raise</button>
+              <button className="nx-btn nx-sm" aria-label="Lower one plate" title="Lower one plate (Shift+↓ or Q) · Alt+Shift+↓ lowers a full brick"
+                onClick={() => runCommand({ kind: 'move', d: { x: 0, y: -1, z: 0 } })}><Ic name="lower" /> Lower</button>
+            </div></div>
+            <p className="bm-height-hint"><kbd>⇧</kbd><kbd>↑</kbd>/<kbd>↓</kbd> or <kbd>E</kbd>/<kbd>Q</kbd> one plate · add <kbd>Alt</kbd> for a brick</p>
             <div className="bm-transform-row"><span>Rotate</span><div className="bm-axis-group">
               <label className="bm-axis-field"><span>X</span><button title="For arbitrary axis rotation, use the viewport gizmo" onClick={() => st.setGizmoMode('rotate')}>0°</button></label>
               <label className="bm-axis-field"><span>Y</span><button title="Rotate by 90 degrees" onClick={() => runCommand({ kind: 'rotate' })}>{first && isGrid(first) && ids.length === 1 ? first.rot : 0}°</button></label>
@@ -256,7 +253,7 @@ export function Inspector({ timeline, checks, stepCard, model, onMakeSubmodel }:
             <div><strong>{singlePart ? partName(singlePart.part) : 'Multiple parts'}</strong><small>{singlePart ? singlePart.part : `${pieceIds.length} pieces · ${selectedParts.length} types`}</small></div>
           </div>
           {pieceIds.length === 1 && <><h4>Replace part</h4><PartPicker onPick={async (id) => { await ensureParts([id]); st.apply((p) => setPart(p, editingModel, pieceIds, id)); }} /></>}
-          <h4>Part color {firstColor !== undefined && <small>{getColors().get(firstColor)?.name.replace(/_/g, ' ')}</small>}</h4>
+          <h4>Part color</h4>
           <ColorSwatches value={firstColor} onPick={pickColor} />
           <label className="nx-field">Step<select value={found[0]?.step ?? 0} onChange={(e) => st.apply((p) => moveItemsToStep(p, editingModel, ids, Number(e.target.value)))}>{steps.map((_, i) => <option key={i} value={i}>Step {i + 1}</option>)}</select></label>
         </div> : <div className="bm-empty-inspector"><Ic name="brick" /><strong>No part selected</strong><p>Select a brick in the viewport to change its geometry, color or build step.</p>

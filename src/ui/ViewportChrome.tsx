@@ -58,6 +58,8 @@ export function ViewportChrome({ model, onMakeSubmodel }: { model: ModelState; o
       camera.position.sub(orbit.target).multiplyScalar(direction > 0 ? 0.83 : 1.2).add(orbit.target);
     }
     orbit.update();
+    // looking through the scene camera, zooming moves that camera: the shot stays what you see
+    viewportApi.scene?.saveViewToCamera();
     setZoom((z) => Math.max(25, Math.min(400, Math.round(z * (direction > 0 ? 1.2 : 1 / 1.2)))));
   };
   const extract = () => {

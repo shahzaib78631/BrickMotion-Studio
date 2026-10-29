@@ -31,6 +31,7 @@ import { StepCallout } from './ui/StepCallout';
 import { PartsPanel } from './ui/PartsPanel';
 import { PreviewPlayer } from './ui/PreviewPlayer';
 import { ProjectsDialog } from './ui/ProjectsDialog';
+import { TemplatesDialog } from './ui/TemplatesDialog';
 import { themeAttrs, useTheme, useThemeAttrs } from './state/theme';
 import { SettingsPanel } from './ui/SettingsPanel';
 import { StepsPanel } from './ui/StepsPanel';
@@ -40,6 +41,7 @@ import { MaterialsPanel } from './ui/MaterialsPanel';
 import { SoundPanel } from './ui/SoundPanel';
 import { StagingPanel } from './ui/StagingPanel';
 import { Viewport } from './ui/Viewport';
+import { ViewportBoundary } from './ui/ViewportBoundary';
 import { viewportApi } from './ui/viewportApi';
 import './ui/studio.css';
 import './ui/app.css';
@@ -118,7 +120,7 @@ function Studio() {
     window.addEventListener('pointerup', up);
   };
   const [newSubmodelOpen, setNewSubmodelOpen] = useState(false);
-  const [dialog, setDialog] = useState<'projects' | 'about' | null>(null);
+  const [dialog, setDialog] = useState<'projects' | 'templates' | 'about' | null>(null);
   const [exportJobs, setExportJobs] = useState<ExportJob[] | null>(null);
   const [motionKeyError, setMotionKeyError] = useState('');
   const [motionKeyStatus, setMotionKeyStatus] = useState('');
@@ -235,6 +237,7 @@ function Studio() {
           theme={theme}
           onTheme={() => useTheme.getState().set({ mode: theme === 'dark' ? 'light' : 'dark' })}
           onProjects={() => setDialog('projects')}
+          onTemplates={() => setDialog('templates')}
           onAbout={() => setDialog('about')}
           onExportVideo={exportCurrent}
           canPreview={canPreview}
@@ -299,7 +302,7 @@ function Studio() {
               </div>
             </div>
             <div className="nx-stage bm-stage">
-              <Viewport model={model} timeline={timeline} />
+              <ViewportBoundary><Viewport model={model} timeline={timeline} /></ViewportBoundary>
               <ViewportChrome model={model} onMakeSubmodel={makeSubmodel} />
               {mode === 'preview' && timeline && <PreviewPlayer model={model} timeline={timeline} />}
               {mode === 'preview' && !timeline && <div className="overlay-note">{planError ? `Couldn't plan the animation: ${planError}` : 'Planning the build animation…'}</div>}
@@ -348,6 +351,7 @@ function Studio() {
       </div>
       {newSubmodelOpen && <NewSubmodelDialog plan={model.plan} count={selectedIds.length} onCreate={onCreateSubmodel} onClose={() => setNewSubmodelOpen(false)} />}
       {dialog === 'projects' && <ProjectsDialog onClose={() => setDialog(null)} />}
+      {dialog === 'templates' && <TemplatesDialog onClose={() => setDialog(null)} />}
       {dialog === 'about' && <AboutDialog onClose={() => setDialog(null)} />}
       {exportJobs && exportJobs.length > 0 && <ExportDialog plan={model.plan} jobs={exportJobs} mode={timelineEditor} onClose={() => setExportJobs(null)} />}
     </div>

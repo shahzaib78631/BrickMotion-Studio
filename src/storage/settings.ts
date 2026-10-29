@@ -43,7 +43,12 @@ export const DEFAULT_SETTINGS: Settings = {
 const KEY = 'settings';
 
 export async function loadSettings(): Promise<Settings> {
-  const s = (await get<Partial<Settings>>(KEY)) ?? {};
+  return sanitizeSettings((await get<Partial<Settings>>(KEY)) ?? {});
+}
+
+/** Fills in and range-checks stored settings (also used for project templates). */
+export function sanitizeSettings(stored: Partial<Settings>): Settings {
+  const s = { ...stored };
   const video = { ...DEFAULT_SETTINGS.video, ...(s.video ?? {}) };
   if (!isExportFps(video.fps)) video.fps = DEFAULT_SETTINGS.video.fps;
   if (!isStudioLook(video.studioLook)) video.studioLook = 'soft';

@@ -16,6 +16,11 @@ export type SceneController = {
   pick(ray: THREE.Raycaster): string | null;
   prepareRender(): { x: number; y: number; width: number; height: number } | undefined;
   isHandlingPointer(): boolean;
+  /**
+   * In camera view, writes the view into the scene camera, so a zoom or fit made there
+   * changes the shot the video and captures use, not just the editor's picture of it.
+   */
+  saveViewToCamera(): void;
   dispose(): void;
 };
 
@@ -180,7 +185,11 @@ export function createSceneControls(studio: Studio, orbit: OrbitControls, canvas
     } else commit(updateObject<SceneCamera>(setup, camera.id, (c) => ({ ...c, position, target, fov })));
   };
   const onOrbitChanged = () => {
-    if (syncingView || !useSceneView.getState().cameraView || !useSceneView.getState().lockCamera || !activeSetup) return;
+    if (!useSceneView.getState().lockCamera) return;
+    saveViewToCamera();
+  };
+  const saveViewToCamera = () => {
+    if (syncingView || !useSceneView.getState().cameraView || !activeSetup) return;
     const camera = activeSceneCamera(activeSetup);
     if (!camera) return;
     const position = studio.perspective.position.toArray() as XYZ;
@@ -196,6 +205,7 @@ export function createSceneControls(studio: Studio, orbit: OrbitControls, canvas
     setTransformMode(next) { mode = next; attachSelection(); },
     pick(ray) { return studio.lighting.pick(ray); },
     isHandlingPointer() { return dragging || !!transform.axis; },
+    saveViewToCamera,
     prepareRender() {
       if (!useSceneView.getState().cameraView || useStudio.getState().mode !== 'edit') return undefined;
       const { width, height } = useSceneView.getState();

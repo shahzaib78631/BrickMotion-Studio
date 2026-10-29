@@ -10,8 +10,8 @@ export function EditPad({ azimuth }: { azimuth(): number }) {
     const cmd = commandForKey(key(k), azimuth());
     if (cmd) runCommand(cmd);
   };
-  const btn = (icon: IconName, label: string, onClick: () => void, cls = '') => (
-    <button className={`nx-icon bm-pad-btn ${cls}`} aria-label={label} title={label} onClick={onClick}>
+  const btn = (icon: IconName, label: string, onClick: () => void, cls = '', title = label) => (
+    <button className={`nx-icon bm-pad-btn ${cls}`} aria-label={label} title={title} onClick={onClick}>
       <Ic name={icon} />
     </button>
   );
@@ -32,8 +32,8 @@ export function EditPad({ azimuth }: { azimuth(): number }) {
           <span />
         </div>
         <div className="bm-updown">
-          {btn('raise', 'Raise one plate', () => run('PageUp'))}
-          {btn('lower', 'Lower one plate', () => run('PageDown'))}
+          {btn('raise', 'Raise one plate', () => run('PageUp'), '', 'Raise one plate (Shift+↑ or E)')}
+          {btn('lower', 'Lower one plate', () => run('PageDown'), '', 'Lower one plate (Shift+↓ or Q)')}
         </div>
       </div>
       <div className="bm-pad-row">

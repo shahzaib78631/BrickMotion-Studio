@@ -14,6 +14,7 @@ import { autoStepPlan, modelsWithoutSteps } from '../plan/autoSteps';
 import { ensureParts, getColors, metricsOf, registerInlineParts } from '../state/partService';
 import { allPartIds } from '../state/useModel';
 import { newProject, useSaveStatus } from '../state/persistence';
+import { applyImportTemplate } from '../state/templates';
 import { useStudio } from '../state/store';
 import { saveBlob, safeFileName } from './download';
 import { Ic, type IconName } from './icons';
@@ -100,13 +101,14 @@ type Props = {
   theme: 'light' | 'dark';
   onTheme(): void;
   onProjects(): void;
+  onTemplates(): void;
   onAbout(): void;
   onExportVideo(): void;
   canPreview: boolean;
   onNavigate(panel: 'models' | 'parts' | 'assembly' | 'steps' | 'checks' | 'ai' | 'video' | 'materials' | 'sound' | 'staging' | 'settings'): void;
 };
 
-export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, canPreview, onNavigate }: Props) {
+export function Toolbar({ theme, onTheme, onProjects, onTemplates, onAbout, onExportVideo, canPreview, onNavigate }: Props) {
   const plan = useStudio((s) => s.plan);
   const mode = useStudio((s) => s.mode);
   const canUndo = useStudio((s) => s.past.length > 0);
@@ -115,6 +117,12 @@ export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, ca
   const st = useStudio.getState();
   const fileRef = useRef<HTMLInputElement>(null);
   const [savingProject, setSavingProject] = useState<SaveProgress | null>(null);
+  const [templateNote, setTemplateNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (!templateNote) return;
+    const id = setTimeout(() => setTemplateNote(null), 4000);
+    return () => clearTimeout(id);
+  }, [templateNote]);
   const pieces = pieceCount(plan);
   const editingModel = useStudio((s) => s.editingModel);
   const [regenerating, setRegenerating] = useState(false);
@@ -208,6 +216,13 @@ export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, ca
     }
     st.setPlan(plan);
     st.setEditingModel('');
+    // the template chosen "for imports" dresses every newly imported model
+    try {
+      const applied = await applyImportTemplate(plan);
+      if (applied) setTemplateNote(`Template "${applied}" applied`);
+    } catch (e) {
+      alert(`The import template could not be applied:\n\n${e instanceof Error ? e.message : String(e)}`);
+    }
   };
   /** The whole set with every build animation (planned now if needed). */
   const downloadProject = () => saveProjectFile(plan, '', setSavingProject);
@@ -228,6 +243,7 @@ export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, ca
     { icon: 'settings', label: 'Open Settings', subtitle: 'Workspace and animation preferences', action: () => onNavigate('settings') },
     { icon: 'upload', label: 'Import a model', subtitle: 'LDraw, MPD, JSON, project file', action: () => fileRef.current?.click() },
     { icon: 'folder', label: 'Browse projects', subtitle: 'Open a saved project', action: onProjects },
+    { icon: 'layout', label: 'Templates', subtitle: 'Save this project as a template, or apply one to this model', action: onTemplates },
     { icon: 'fit', label: 'Fit the viewport', subtitle: 'Frame all model pieces', action: () => viewportApi.fit() },
     { icon: 'components', label: 'Lay out all parts', subtitle: 'Organize the parts on the grid', action: () => st.setLaidOut(true) },
     { icon: 'rotate', label: 'Regenerate steps & animation', subtitle: 'Rebuild the construction timeline', action: () => void regenerate('both') },
@@ -260,6 +276,8 @@ export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, ca
               { icon: 'file', label: 'Download plan (.json)', onClick: downloadPlan },
               { icon: 'file', label: 'Download LDraw (.mpd)', onClick: downloadLDraw },
               'sep',
+              { icon: 'layout', label: 'Templates…', hint: 'save or apply a look', onClick: onTemplates },
+              'sep',
               { icon: 'info', label: 'About BrickMotion', onClick: onAbout },
             ]}
           />
@@ -279,6 +297,7 @@ export function Toolbar({ theme, onTheme, onProjects, onAbout, onExportVideo, ca
           <Ic name="search" /> <span>Search or run a command…</span> <kbd>⌘K</kbd>
         </button>
         <div className="nx-head-right">
+          {templateNote && <span className="bm-saving-progress" role="status">{templateNote}</span>}
           {savingProject && <span className="bm-saving-progress" role="status">Saving {savingProject.done + 1}/{savingProject.total}…</span>}
           <DropMenu className="nx-icon bm-history-button" label="Project tools" align="right"
             trigger={<Ic name="history" />} items={[

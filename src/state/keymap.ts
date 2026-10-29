@@ -8,7 +8,11 @@ export type Command =
   | { kind: 'redo' }
   | { kind: 'tool'; tool: Tool };
 
-type KeyLike = { key: string; shiftKey: boolean; metaKey: boolean; ctrlKey: boolean };
+type KeyLike = { key: string; shiftKey: boolean; metaKey: boolean; ctrlKey: boolean; altKey?: boolean };
+
+/** Plates in one brick height: Alt+Shift+arrow moves a whole brick. */
+const BRICK_PLATES = 3;
+const vertical = (plates: number): Command => ({ kind: 'move', d: { x: 0, y: plates, z: 0 } });
 
 /** Snaps a horizontal direction to the nearest grid axis. */
 function snap(x: number, z: number) {
@@ -28,6 +32,11 @@ export function commandForKey(e: KeyLike, cameraAzimuthDeg: number): Command | n
   if (mod) return null;
   const a = (cameraAzimuthDeg * Math.PI) / 180;
   const fwd = { x: -Math.sin(a), z: Math.cos(a) };
+  // Shift+Up/Down raise or lower (laptops have no PageUp/PageDown); add Alt for a full brick
+  if (e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+    const n = e.altKey ? BRICK_PLATES : 1;
+    return vertical(e.key === 'ArrowUp' ? n : -n);
+  }
   const right = { x: Math.cos(a), z: Math.sin(a) };
   switch (e.key) {
     case 'ArrowUp':
@@ -39,9 +48,13 @@ export function commandForKey(e: KeyLike, cameraAzimuthDeg: number): Command | n
     case 'ArrowLeft':
       return { kind: 'move', d: snap(-right.x, -right.z) };
     case 'PageUp':
-      return { kind: 'move', d: { x: 0, y: 1, z: 0 } };
+    case 'e':
+    case 'E':
+      return vertical(1);
     case 'PageDown':
-      return { kind: 'move', d: { x: 0, y: -1, z: 0 } };
+    case 'q':
+    case 'Q':
+      return vertical(-1);
     case 'r':
     case 'R':
       return { kind: 'rotate' };

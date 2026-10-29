@@ -935,6 +935,7 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     const built = poses.size ? finalDisplayedBounds : null;
     if (built) box.union(worldBox(built));
     frame(viewportApi.studio.camera, viewportApi.controls, box);
+    viewportApi.scene?.saveViewToCamera();
   };
 
   const rayAt = (e: { clientX: number; clientY: number }) => {
