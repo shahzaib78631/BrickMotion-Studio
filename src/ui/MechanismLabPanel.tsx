@@ -95,7 +95,19 @@ export function MechanismLabPanel({ model, onRender }: { model: ModelState; onRe
   const ratios = report?.detection.gearMeshes ?? [];
   const geometryReady = (report?.geometryCandidates??[]).filter(c=>c.status==='plausible');
   const geometryRejected = (report?.geometryCandidates??[]).filter(c=>c.status==='rejected');
-  const spatialEdges = (report?.graph.edges??[]).filter(e=>e.motion==='revolute'||e.motion==='sliding');
+  // Two connectors joining the same parts the same way (e.g. a clip on two
+  // studs) are one joint to a user picking a driver; keep the first.
+  const spatialEdges = useMemo(() => {
+    const seen = new Set<string>();
+    return (report?.graph.edges??[]).filter(e => {
+      if (e.motion!=='revolute' && e.motion!=='sliding') return false;
+      const id = `${[e.a,e.b].sort().join('|')}|${e.motion}`;
+      if (seen.has(id)) return false;
+      seen.add(id); return true;
+    });
+  }, [report]);
+  const partOf = useMemo(() => new Map(model.view.instances.map(i => [i.key, i.part.replace(/\.dat$/i, '')])), [model.view]);
+  const partLabel = (key: string) => partOf.has(key) ? `${partOf.get(key)} (${key})` : key;
   const selectedSpatialEdge = spatialEdges.find(e=>e.id===spatialEdge)??spatialEdges[0];
   const selectedGround = spatialGround===selectedSpatialEdge?.a||spatialGround===selectedSpatialEdge?.b
     ?spatialGround:selectedSpatialEdge?.a;
@@ -387,13 +399,13 @@ export function MechanismLabPanel({ model, onRender }: { model: ModelState; onRe
           {selectedSpatialEdge ? <>
             <label className="nx-field">Driven detected joint
               <select value={selectedSpatialEdge.id} onChange={e=>{setSpatialEdge(e.target.value);setSpatialGround('');setSpatialError('');}}>
-                {spatialEdges.slice(0,100).map(e=><option value={e.id} key={e.id}>{e.motion} · {e.a} ↔ {e.b}</option>)}
+                {spatialEdges.slice(0,100).map(e=><option value={e.id} key={e.id}>{e.motion} · {partLabel(e.a)} ↔ {partLabel(e.b)}</option>)}
               </select>
             </label>
             <label className="nx-field">Explicitly grounded part / fixed cluster
               <select value={selectedGround} onChange={e=>{setSpatialGround(e.target.value);setSpatialError('');}}>
-                <option value={selectedSpatialEdge.a}>{selectedSpatialEdge.a}</option>
-                <option value={selectedSpatialEdge.b}>{selectedSpatialEdge.b}</option>
+                <option value={selectedSpatialEdge.a}>{partLabel(selectedSpatialEdge.a)}</option>
+                <option value={selectedSpatialEdge.b}>{partLabel(selectedSpatialEdge.b)}</option>
               </select>
             </label>
             <div className="nx-row nx-wrap">

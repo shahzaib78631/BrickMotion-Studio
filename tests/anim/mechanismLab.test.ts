@@ -17,7 +17,7 @@ const metrics: Metrics = () => ({
   full: { min: [-1,-1,-1], max: [1,1,1] },
   body: { min: [-1,-1,-1], max: [1,1,1] },
   snaps: [],
-} as ReturnType<Metrics>);
+} as unknown as ReturnType<Metrics>);
 const program = (): MechanismProgram => ({
   mode: 'kinematic', duration: 3,
   joints: [{ id: 'hinge', body: 'body', kind: 'revolute', axis: [0,0,1], pivot: [0,0,0] }],
