@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { inventoryDiffs } from '../../src/instructions/inventory';
+import { calloutUseDiffs, inventoryDiffs } from '../../src/instructions/inventory';
 import type { SetPart } from '../../src/instructions/rebrickable';
 import type { Booklet } from '../../src/instructions/types';
 
@@ -23,4 +23,17 @@ test('real count differences are reported by part and colour', () => {
 
 test('booklets without an inventory page give no differences', () => {
   expect(inventoryDiffs([booklet([])], [sp('1', '3001', 4, 2)], new Map())).toEqual([]);
+});
+
+test('without an inventory page, callout use is checked against Rebrickable quantities', () => {
+  const b: Booklet = { id: 'b', textHash: 'h', pages: 1, inventory: [], steps: [
+    { page: 1, number: 1, picture: null, substeps: [], callout: [{ crop: 'c', count: 3, countFound: true, box: [0, 0, 1, 1] }, { crop: 'd', count: 1, countFound: true, box: [0, 0, 1, 1] }] },
+  ] };
+  const matches = [{ booklet: 'b', step: 1, index: 0, element: '6572522' }, { booklet: 'b', step: 1, index: 1, element: '302223' }];
+  const set = [sp('6572522', '22885', 72, 2), sp('4211398', '3022', 1, 1), sp('77', '3001', 4, 5)];
+  const extra = new Map([['302223', sp('302223', '3022', 1, 0)]]);
+  expect(calloutUseDiffs([b], matches, set, extra)).toEqual([
+    { message: 'inventory: 22885 colour 72 is used 3× in the steps but the set has 2×' },
+    { message: 'inventory: 3001 colour 4 is used 0× in the steps but the set has 5×' },
+  ]);
 });

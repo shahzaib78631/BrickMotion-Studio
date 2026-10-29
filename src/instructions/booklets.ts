@@ -35,8 +35,10 @@ export function orderBooklets(list: Booklet[]): { booklets: Booklet[]; models: s
   starts.sort((a, b) => (first(a).section ?? Infinity) - (first(b).section ?? Infinity));
   const models: Booklet[][] = starts.map((b) => [b]);
   for (const b of rest) {
-    // joins the model whose last step it continues; otherwise its own model
-    const host = models.find((m) => m[m.length - 1].steps.at(-1)!.number < first(b).number);
+    // joins the model it continues exactly; else the one ending closest below its first step
+    const last = (m: Booklet[]) => m[m.length - 1].steps.at(-1)!.number;
+    const below = models.filter((m) => last(m) < first(b).number);
+    const host = below.find((m) => last(m) === first(b).number - 1) ?? below.sort((x, y) => last(y) - last(x))[0];
     if (host) host.push(b);
     else models.push([b]);
   }
@@ -52,4 +54,20 @@ export function orderBooklets(list: Booklet[]): { booklets: Booklet[]; models: s
   }
   const booklets = models.flat();
   return { booklets, models: models.map((m) => m.map((b) => b.id)), flags };
+}
+
+/**
+ * One extraction per distinct file: the same path given twice is extracted once, and different
+ * files that share a name get distinct ids, so no booklet's folder is shared or deleted under it.
+ */
+export function bookletSources(paths: string[]): { path: string; id: string }[] {
+  const out: { path: string; id: string }[] = [];
+  for (const path of paths) {
+    if (out.some((o) => o.path === path)) continue;
+    const base = (path.split(/[\\/]/).pop() ?? path).replace(/\.pdf$/i, '');
+    let id = base;
+    for (let n = 2; out.some((o) => o.id === id); n++) id = `${base}-${n}`;
+    out.push({ path, id });
+  }
+  return out;
 }

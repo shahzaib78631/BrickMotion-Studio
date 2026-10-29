@@ -15,9 +15,9 @@ import { flattenPart } from '../src/ldraw/flatten';
 import { measurePart, type PartMetrics } from '../src/ldraw/metrics';
 import { parseLDraw, type LDrawFile } from '../src/ldraw/parse';
 import type { Plan } from '../src/plan/types';
-import { bookletUrl, orderBooklets } from '../src/instructions/booklets';
+import { bookletSources, bookletUrl, orderBooklets } from '../src/instructions/booklets';
 import { planFromBooklets, type Flag } from '../src/instructions/buildPlan';
-import { inventoryDiffs } from '../src/instructions/inventory';
+import { calloutUseDiffs, inventoryDiffs } from '../src/instructions/inventory';
 import { loadElements, loadSetParts, resolveSetPart, type Resolved } from '../src/instructions/rebrickable';
 import { instructionsReport } from '../src/instructions/report';
 import type { Booklet, Matches } from '../src/instructions/types';
@@ -100,17 +100,18 @@ async function main() {
   mkdirSync(bookletDir, { recursive: true });
 
   const extracted: Booklet[] = [];
-  for (const spec of pdfs) {
-    const pdf = await localPdf(spec);
-    const id = basename(pdf).replace(/\.pdf$/i, '');
+  const files: string[] = [];
+  for (const spec of pdfs) files.push(await localPdf(spec));
+  for (const { path: pdf, id } of bookletSources(files)) {
     await python(['-m', 'instructions_pdf', 'extract', pdf, join(bookletDir, id)]);
-    extracted.push(JSON.parse(readFileSync(join(bookletDir, id, 'booklet.json'), 'utf8')) as Booklet);
+    extracted.push({ ...(JSON.parse(readFileSync(join(bookletDir, id, 'booklet.json'), 'utf8')) as Booklet), id });
   }
   const { booklets, models, flags: orderFlags } = orderBooklets(extracted);
   for (const b of extracted) if (!booklets.includes(b)) rmSync(join(bookletDir, b.id), { recursive: true, force: true });
 
   const parts = await loadSetParts(set, join(work, 'rebrickable-parts.json'));
-  if (!booklets.some((b) => b.inventory.length)) {
+  const inventoryPage = booklets.some((b) => b.inventory.length > 0);
+  if (!inventoryPage) {
     const dir = join(bookletDir, 'rb-images');
     mkdirSync(dir, { recursive: true });
     for (const p of parts) if (!p.spare && p.element && p.image) await download(p.image, join(dir, `${p.element}.jpg`));
@@ -134,13 +135,13 @@ async function main() {
   };
   const byId = new Map(booklets.map((b) => [b.id, b]));
   const { plan, flags } = planFromBooklets(name, models.map((m) => m.map((id) => byId.get(id)!)), matches, resolveElement);
-  const allFlags = [...orderFlags.map((message) => ({ message })), ...inventoryDiffs(booklets, parts, extra), ...flags];
+  const allFlags = [...orderFlags.map((message) => ({ message })), ...(inventoryPage ? inventoryDiffs(booklets, parts, extra) : calloutUseDiffs(booklets, matches.matches, parts, extra)), ...flags];
 
   const colors = parseLDConfig(readFileSync(join(LDRAW, 'LDConfig.ldr'), 'utf8'));
   const mpdPath = resolve(out || join(work, `${name}.mpd`));
   writeFileSync(mpdPath, exportLDraw(plan, partMetrics(plan), colors));
   const reportPath = join(work, 'report.md');
-  writeFileSync(reportPath, instructionsReport(name, plan, allFlags, matches));
+  writeFileSync(reportPath, instructionsReport(name, plan, allFlags, matches, { inventoryPage }));
   const steps = models.length > 1 ? Object.values(plan.submodels ?? {}).reduce((n, s) => n + s.steps.length, 0) : plan.steps.length;
   console.log(`✓ ${name}: ${models.length} model(s), ${steps} steps, ${allFlags.length} flags`);
   console.log(`  MPD:    ${mpdPath}`);

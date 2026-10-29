@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
-import { fetchElement, fetchSetInventory, fetchSetParts, loadSetParts, resolveSetPart, toSetPart } from '../../src/instructions/rebrickable';
+import { fetchElement, fetchSetInventory, fetchSetParts, HttpError, loadElements, loadSetParts, resolveSetPart, toSetPart } from '../../src/instructions/rebrickable';
 
 const row = {
   element_id: '6572522', quantity: 29, is_spare: false,
@@ -89,4 +89,17 @@ test('fetchElement looks up an element id outside the set list', async () => {
   const p = await fetchElement('302223', 'k', async (u) => { calls.push(u); return el; });
   expect(calls).toEqual(['https://rebrickable.com/api/v3/lego/elements/302223/']);
   expect(p).toMatchObject({ element: '302223', ldrawPart: '3022', color: 1, quantity: 0 });
+});
+
+test('an element id Rebrickable does not know is left out instead of crashing the run', async () => {
+  process.env.REBRICKABLE_API_KEY = 'k';
+  const file = join(mkdtempSync(join(tmpdir(), 'rb-')), 'elements.json');
+  const el = { element_id: '302223', part: { part_num: '3022', part_img_url: null, external_ids: { LDraw: ['3022'] } }, color: { name: 'Blue', external_ids: { LDraw: { ext_ids: [1] } } } };
+  const fetchJson = async (u: string) => {
+    if (u.includes('/302223/')) return el;
+    throw new HttpError(404, u);
+  };
+  const map = await loadElements(['302223', '9999999'], file, fetchJson);
+  expect([...map.keys()]).toEqual(['302223']);
+  await expect(loadElements(['1'], file, async () => { throw new HttpError(500, 'x'); })).rejects.toThrow('500');
 });

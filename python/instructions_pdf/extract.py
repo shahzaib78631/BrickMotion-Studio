@@ -76,8 +76,15 @@ def _boxes(page) -> list[tuple]:
         r = d["rect"]
         if r.width < 20 or r.height < 15 or r.width * r.height > 0.6 * area:
             continue
-        out.append((r.x0, r.y0, r.x1, r.y1))
+        out.append(((r.x0, r.y0, r.x1, r.y1), tuple(d["fill"])))
     return out
+
+
+CALLOUT_FILL = (0.70, 0.84, 0.95)
+
+
+def _callout_fill(fill) -> bool:
+    return len(fill) >= 3 and all(abs(a - b) < 0.04 for a, b in zip(fill, CALLOUT_FILL))
 
 
 def _clip(page, box, dpi: int, path: str) -> None:
@@ -168,11 +175,13 @@ def extract_booklet(pdf_path: str, out_dir: str) -> dict:
         # callout boxes: same image set seen once (fill and outline paths overlap)
         callout_images: set[int] = set()
         seen_sets: set[frozenset] = set()
-        for box in _boxes(page):
+        for box, fill in _boxes(page):
             inside = [i for i, b in enumerate(images) if _inside(b, box)
                       and b[2] - b[0] >= MIN_PART_SIDE and b[3] - b[1] >= MIN_PART_SIDE]
             box_counts = [c for c in counts if _inside(c["bbox"], box)]
-            if not inside or not box_counts or frozenset(inside) in seen_sets:
+            # a one-part callout may print no count: the pale-blue fill still marks it (several
+            # pictures in a count-less pale-blue box are a tip panel, not a callout)
+            if not inside or not (box_counts or (_callout_fill(fill) and len(inside) == 1)) or frozenset(inside) in seen_sets:
                 continue
             seen_sets.add(frozenset(inside))
             callout_images.update(inside)

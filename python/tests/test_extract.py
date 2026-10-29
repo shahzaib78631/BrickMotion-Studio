@@ -125,3 +125,16 @@ def test_inventory(booklet):
 def test_text_hash_identifies_identical_content(booklet, tmp_path):
     b, _ = booklet
     assert len(b["textHash"]) == 64
+
+
+def test_single_part_callout_without_count_is_kept(tmp_path):
+    doc = pymupdf.open()
+    p = page(doc)
+    p.draw_rect(pymupdf.Rect(15, 15, 167, 62), color=None, fill=CALLOUT)
+    p.insert_image(pymupdf.Rect(80, 25, 100, 40), stream=png((1, 0.8, 0)))
+    text(p, 14, 92, "1", 26)
+    p.insert_image(pymupdf.Rect(40, 140, 140, 230), stream=png((0.8, 0.1, 0.1), 100, 90))
+    pdf = tmp_path / "x.pdf"
+    doc.save(pdf)
+    b = extract_booklet(str(pdf), str(tmp_path / "o"))
+    assert [(c["count"], c["countFound"]) for c in b["steps"][0]["callout"]] == [(1, False)]

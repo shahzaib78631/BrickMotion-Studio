@@ -155,7 +155,10 @@ def match_work_dir(work_dir: str, min_score: float = 0.7) -> dict:
     booklets = []
     for path in sorted(glob.glob(os.path.join(work_dir, "*", "booklet.json"))):
         with open(path) as f:
-            booklets.append(json.load(f))
+            b = json.load(f)
+        # the folder name is the booklet's id (two PDFs with one file name get distinct folders)
+        b["id"] = os.path.basename(os.path.dirname(path))
+        booklets.append(b)
     result = match_callouts(booklets, work_dir, min_score)
     with open(os.path.join(work_dir, "matches.json"), "w") as f:
         json.dump(result, f, indent=1)

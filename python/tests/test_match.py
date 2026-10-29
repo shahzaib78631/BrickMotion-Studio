@@ -126,3 +126,10 @@ def test_inventory_counts_limit_assignment(tmp_path):
     m = match_callouts(booklets, str(work))
     assert sorted(x["element"] for x in m["matches"][2:]) == ["A", "B"]
     assert m["overUse"] == []
+
+
+def test_match_work_dir_names_booklets_by_folder(tmp_path):
+    work, _ = make_work(tmp_path, [("bar", (30, 160, 50), 1)])
+    os.rename(work / "b1", work / "b1-2")
+    match_work_dir(str(work))
+    assert json.loads((work / "matches.json").read_text())["matches"][0]["booklet"] == "b1-2"

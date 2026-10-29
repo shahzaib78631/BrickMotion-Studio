@@ -106,3 +106,10 @@ test('a step with no new parts is flagged, since BrickMotion merges empty steps'
   const { flags } = planFromBooklets('superman', [[b]], matches, resolve);
   expect(flags).toContainEqual({ step: 4, message: 'step 4 adds no new parts (attaches a sub-build or turns the model); BrickMotion merges it into the next step until Phase 2 places sub-builds' });
 });
+
+test('report says plainly when no inventory page was available', () => {
+  const { plan, flags } = one();
+  const md = instructionsReport('superman', plan, flags, { matches: [], overUse: [], unused: [] }, { inventoryPage: false });
+  expect(md).toContain('No inventory page in these booklets: part counts were checked against Rebrickable instead (see Flags).');
+  expect(md).not.toContain('Every inventory part is used exactly');
+});

@@ -20,9 +20,15 @@ export type FetchJson = (url: string, headers: Record<string, string>) => Promis
 const API = 'https://rebrickable.com/api/v3/lego/sets/';
 const ELEMENTS = 'https://rebrickable.com/api/v3/lego/elements/';
 
+export class HttpError extends Error {
+  constructor(readonly status: number, url: string) {
+    super(`Rebrickable request failed (${status}) for ${url.replace(/\?.*$/, '')}`);
+  }
+}
+
 const defaultFetchJson: FetchJson = async (url, headers) => {
   const res = await fetch(url, { headers });
-  if (!res.ok) throw new Error(`Rebrickable request failed (${res.status}) for ${url.replace(/\?.*$/, '')}`);
+  if (!res.ok) throw new HttpError(res.status, url);
   return res.json();
 };
 
@@ -122,17 +128,27 @@ function apiKey(): string {
   return key;
 }
 
-/** Looks up element ids missing from the set list, cached in cacheFile (id → SetPart). */
-export async function loadElements(ids: string[], cacheFile: string): Promise<Map<string, SetPart>> {
-  const cache: Record<string, SetPart> = existsSync(cacheFile) ? JSON.parse(readFileSync(cacheFile, 'utf8')) : {};
-  const missing = ids.filter((id) => !cache[id]);
+/**
+ * Looks up element ids missing from the set list, cached in cacheFile (id → SetPart). An id
+ * Rebrickable does not know (404) is left out of the result; other errors stop the run.
+ */
+export async function loadElements(ids: string[], cacheFile: string, fetchJson: FetchJson = defaultFetchJson): Promise<Map<string, SetPart>> {
+  const cache: Record<string, SetPart | null> = existsSync(cacheFile) ? JSON.parse(readFileSync(cacheFile, 'utf8')) : {};
+  const missing = ids.filter((id) => !(id in cache));
   if (missing.length) {
     const key = apiKey();
-    for (const id of missing) cache[id] = await fetchElement(id, key);
+    for (const id of missing) {
+      try {
+        cache[id] = await fetchElement(id, key, fetchJson);
+      } catch (e) {
+        if (!(e instanceof HttpError && e.status === 404)) throw e;
+        cache[id] = null;
+      }
+    }
     mkdirSync(dirname(cacheFile), { recursive: true });
     writeFileSync(cacheFile, JSON.stringify(cache, null, 1));
   }
-  return new Map(ids.map((id) => [id, cache[id]]));
+  return new Map(ids.flatMap((id) => (cache[id] ? [[id, cache[id]] as const] : [])));
 }
 
 const KEY_HELP = 'Set REBRICKABLE_API_KEY (free key from rebrickable.com/users/<you>/settings/#api)';

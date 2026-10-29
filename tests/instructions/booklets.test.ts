@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { bookletUrl, orderBooklets } from '../../src/instructions/booklets';
+import { bookletSources, bookletUrl, orderBooklets } from '../../src/instructions/booklets';
 import type { Booklet } from '../../src/instructions/types';
 
 const booklet = (id: string, numbers: number[], textHash = id, section?: number): Booklet => ({
@@ -42,4 +42,18 @@ test('regional copies with different text but the same steps are duplicates', ()
   const r = orderBooklets([a, b]);
   expect(r.models).toEqual([['6668730']]);
   expect(r.flags).toEqual(['6668729 is a duplicate of 6668730; skipped']);
+});
+
+test('a continuing booklet joins the figure it continues, not the first one that fits', () => {
+  const r = orderBooklets([booklet('A', range(1, 20), 'a', 1), booklet('B1', range(1, 30), 'b1', 2), booklet('B2', range(31, 60), 'b2')]);
+  expect(r.models).toEqual([['A'], ['B1', 'B2']]);
+  expect(r.flags).toEqual([]);
+});
+
+test('the same file given twice is extracted once; different files with one name get distinct ids', () => {
+  expect(bookletSources(['/x/6668730.pdf', '/x/6668730.pdf', '/y/6668730.pdf', '/x/6668732.pdf'])).toEqual([
+    { path: '/x/6668730.pdf', id: '6668730' },
+    { path: '/y/6668730.pdf', id: '6668730-2' },
+    { path: '/x/6668732.pdf', id: '6668732' },
+  ]);
 });
