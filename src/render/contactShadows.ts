@@ -98,10 +98,18 @@ export class ContactShadows {
     renderer.setScissorTest(false);
     renderer.autoClear = true;
     renderer.setClearColor(0x000000, 0);
+    // Only solid parts cast. The outline edges take their per-piece placement from their
+    // own material, which the override replaces, so they would all land at the model's
+    // origin and darken the floor there, hidden (not yet built) pieces included.
+    const lines: THREE.Object3D[] = [];
+    bricks.traverse((o) => {
+      if (((o as THREE.Line).isLine || (o as THREE.Points).isPoints) && o.visible) { o.visible = false; lines.push(o); }
+    });
     this.stage.add(bricks);
     renderer.setRenderTarget(this.target);
     renderer.render(this.stage, this.camera);
     parent?.add(bricks);
+    for (const o of lines) o.visible = true;
     // two blur passes each way: target → blurTarget → target
     for (let i = 0; i < 2; i++) {
       const spread = this.blur * (i ? 0.6 : 1);

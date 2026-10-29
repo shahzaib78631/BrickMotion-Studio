@@ -302,7 +302,7 @@ function Studio() {
               </div>
             </div>
             <div className="nx-stage bm-stage">
-              <ViewportBoundary><Viewport model={model} timeline={timeline} /></ViewportBoundary>
+              <ViewportBoundary><Viewport model={model} timeline={timeline} showSpots={tab === 'assembly'} /></ViewportBoundary>
               <ViewportChrome model={model} onMakeSubmodel={makeSubmodel} />
               {mode === 'preview' && timeline && <PreviewPlayer model={model} timeline={timeline} />}
               {mode === 'preview' && !timeline && <div className="overlay-note">{planError ? `Couldn't plan the animation: ${planError}` : 'Planning the build animation…'}</div>}

@@ -78,7 +78,12 @@ function snapperFor(instances: readonly Instance[], ids: readonly string[]): Stu
   return studSnapper(moving, others);
 }
 
-export function Viewport({ model, timeline = null }: { model: ModelState; timeline?: Timeline | null }) {
+export function Viewport({ model, timeline = null, showSpots = true }: {
+  model: ModelState;
+  timeline?: Timeline | null;
+  /** draw the assembly-spot markers (the Assembly tab is open) */
+  showSpots?: boolean;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const framed = useRef(false);
@@ -652,13 +657,15 @@ export function Viewport({ model, timeline = null }: { model: ModelState; timeli
     transform.attach(proxy);
   }, [selection, editingModel, model.view, gizmoEnabled, gizmoMode, mode, spotSel, plan, timeline, timelineEditor, autoKey, keyframeAtRest, sceneSelected]);
 
-  // Assembly-spot markers: Build view only, for the whole set (never in preview or export).
+  // Assembly-spot markers: Build view only, for the whole set (never in preview or export),
+  // and only while the Assembly tab is open. Elsewhere their floating
+  // name tags read as dark shadows on the floor where nothing is built yet.
   useEffect(() => {
     const spotMarkers = markersRef.current;
     if (!spotMarkers) return;
-    if (mode !== 'edit' || timelineEditor !== 'build' || editingModel !== '' || !model.ready) spotMarkers.clear();
+    if (mode !== 'edit' || timelineEditor !== 'build' || editingModel !== '' || !model.ready || !showSpots) spotMarkers.clear();
     else spotMarkers.update(markers(plan, model.assembly, timeline), spotSel, -(timeline?.ground ?? model.assembly.bounds?.max[1] ?? 0) / 20);
-  }, [plan, model.assembly, model.ready, timeline, mode, timelineEditor, editingModel, spotSel]);
+  }, [plan, model.assembly, model.ready, timeline, mode, timelineEditor, editingModel, spotSel, showSpots]);
 
   // which top-level step each top-level item belongs to
   const topStep = useMemo(() => new Map(model.view.nodes.map((n) => [n.itemId, n.step])), [model.view]);
