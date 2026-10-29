@@ -1,0 +1,144 @@
+{
+  "format": "brickmotion-v8-mechanics-rig",
+  "version": 3,
+  "model": {
+    "bodies": [
+      {
+        "id": "ground",
+        "rest": {
+          "p": [
+            0,
+            0,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "fixed": true
+      },
+      {
+        "id": "driveBody",
+        "rest": {
+          "p": [
+            0,
+            0,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "fixed": false
+      },
+      {
+        "id": "drivenBody",
+        "rest": {
+          "p": [
+            0,
+            0,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "fixed": false
+      }
+    ],
+    "constraints": [
+      {
+        "id": "drive",
+        "kind": "hinge",
+        "a": {
+          "body": "ground",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "b": {
+          "body": "driveBody",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "axisA": [
+          0,
+          0,
+          1
+        ],
+        "axisB": [
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "id": "driven",
+        "kind": "hinge",
+        "a": {
+          "body": "ground",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "b": {
+          "body": "drivenBody",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "axisA": [
+          0,
+          0,
+          1
+        ],
+        "axisB": [
+          0,
+          0,
+          1
+        ]
+      }
+    ],
+    "mechanics": [
+      {
+        "id": "mesh",
+        "kind": "backlash-gear",
+        "input": "drive",
+        "output": "driven",
+        "inputTeeth": 12,
+        "outputTeeth": 36,
+        "clearanceRad": 0.06
+      }
+    ]
+  },
+  "members": {
+    "ground": [
+      "REPLACE_WITH_GROUNDED_LDRAW_INSTANCE_KEY"
+    ],
+    "driveBody": [
+      "REPLACE_WITH_DRIVE_LDRAW_INSTANCE_KEY"
+    ],
+    "drivenBody": [
+      "REPLACE_WITH_DRIVEN_LDRAW_INSTANCE_KEY"
+    ]
+  },
+  "driver": "drive"
+}

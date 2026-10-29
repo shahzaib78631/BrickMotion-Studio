@@ -1,0 +1,303 @@
+{
+  "format": "brickmotion-v7-mechanics-rig",
+  "version": 2,
+  "model": {
+    "bodies": [
+      {
+        "id": "ground",
+        "rest": {
+          "p": [
+            0,
+            0,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "fixed": true
+      },
+      {
+        "id": "column",
+        "rest": {
+          "p": [
+            0,
+            0,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        }
+      },
+      {
+        "id": "left",
+        "rest": {
+          "p": [
+            0,
+            0,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        }
+      },
+      {
+        "id": "right",
+        "rest": {
+          "p": [
+            0,
+            0,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        }
+      },
+      {
+        "id": "drive",
+        "rest": {
+          "p": [
+            0,
+            0,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        }
+      },
+      {
+        "id": "translation",
+        "rest": {
+          "p": [
+            0,
+            0,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        }
+      }
+    ],
+    "constraints": [
+      {
+        "id": "steerColumn",
+        "kind": "hinge",
+        "a": {
+          "body": "ground",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "b": {
+          "body": "column",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "axisA": [
+          0,
+          0,
+          1
+        ],
+        "axisB": [
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "id": "steerLeft",
+        "kind": "hinge",
+        "a": {
+          "body": "ground",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "b": {
+          "body": "left",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "axisA": [
+          0,
+          0,
+          1
+        ],
+        "axisB": [
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "id": "steerRight",
+        "kind": "hinge",
+        "a": {
+          "body": "ground",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "b": {
+          "body": "right",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "axisA": [
+          0,
+          0,
+          1
+        ],
+        "axisB": [
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "id": "wheelDrive",
+        "kind": "hinge",
+        "a": {
+          "body": "ground",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "b": {
+          "body": "drive",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "axisA": [
+          0,
+          0,
+          1
+        ],
+        "axisB": [
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "id": "chassisTravel",
+        "kind": "slider",
+        "a": {
+          "body": "ground",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "b": {
+          "body": "translation",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "axisA": [
+          1,
+          0,
+          0
+        ],
+        "axisB": [
+          1,
+          0,
+          0
+        ]
+      }
+    ],
+    "mechanics": [
+      {
+        "id": "ideal-Ackermann",
+        "kind": "ackermann-steering",
+        "input": "steerColumn",
+        "left": "steerLeft",
+        "right": "steerRight",
+        "wheelbaseLdu": 100,
+        "trackWidthLdu": 50
+      },
+      {
+        "id": "ideal-straight-rolling",
+        "kind": "wheel-rolling",
+        "rotary": "wheelDrive",
+        "linear": "chassisTravel",
+        "wheelRadiusLdu": 20
+      },
+      {
+        "id": "steering-safety-stop",
+        "kind": "stop",
+        "joint": "steerColumn",
+        "min": -0.55,
+        "max": 0.55
+      }
+    ]
+  },
+  "members": {
+    "ground": [
+      "REPLACE-WITH-CHASSIS-FRAME-KEY"
+    ],
+    "column": [
+      "REPLACE-WITH-STEERING-COLUMN-KEY"
+    ],
+    "left": [
+      "REPLACE-WITH-LEFT-KINGPIN-KEY"
+    ],
+    "right": [
+      "REPLACE-WITH-RIGHT-KINGPIN-KEY"
+    ],
+    "drive": [
+      "REPLACE-WITH-DRIVEN-TIRE-KEY"
+    ],
+    "translation": [
+      "REPLACE-WITH-ROLLING-CHASSIS-KEY"
+    ]
+  },
+  "driver": "steerColumn"
+}

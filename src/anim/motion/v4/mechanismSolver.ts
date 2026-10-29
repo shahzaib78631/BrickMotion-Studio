@@ -7,6 +7,8 @@ import type { Assembly } from '../../../model/assemble';
 import type { JointLimitRule } from './jointLimits';
 import type { MechanismProgram, JointDrive, Vec3 } from './mechanismProgram';
 import { validateMechanismProgram } from './mechanismProgram';
+import { prepareTransmissionEquations, intoRootEquation, projectLimitedNetwork,
+  type LinearEquation } from './transmissionNetwork';
 
 const UNIT = (v: Vec3) => new THREE.Vector3(...v).normalize();
 const EPS = 1e-8;
@@ -24,6 +26,9 @@ export type SolvedFrame = {
   maxClosureErrorLdu: number;
   /** Independent closure gaps, in the same order as program.closures. */
   closureErrorsLdu: number[];
+  /** Max normalized algebraic transmission error, when V5 constraints are used. */
+  transmissionResidual?: number;
+  activeTransmissions?: number;
 };
 
 type RootRatio = { root: string; ratio: number };
@@ -38,6 +43,7 @@ export class MechanismSolver {
   readonly freeRoots: readonly string[];
   private readonly factors: ReadonlyMap<string, RootRatio>;
   private readonly bounds: ReadonlyMap<string, { min: number; max: number }>;
+  private readonly rootBounds: ReadonlyMap<string, { min: number; max: number }>;
   private readonly jointsById = new Map<string, JointDrive>();
   private previousRoots = new Map<string, number>();
 
@@ -115,6 +121,17 @@ export class MechanismSolver {
       bounds.set(j.id,{min,max});
     }
     this.bounds=bounds;
+    const rootBounds=new Map(this.roots.map(id=>[id,{min:-Infinity,max:Infinity}]));
+    for(const [id,f] of this.factors){
+      const b=bounds.get(id)!;
+      const x=b.min/f.ratio,y=b.max/f.ratio;
+      const r=rootBounds.get(f.root)!;
+      r.min=Math.max(r.min,Math.min(x,y));r.max=Math.min(r.max,Math.max(x,y));
+      if(r.min>r.max)throw Error(`Contradictory joint limits within gear group ${f.root}`);
+    }
+    this.rootBounds=rootBounds;
+    // Also validate the dimensionality of every V5 relation at construction time.
+    prepareTransmissionEquations(program.transmissions??[],this.jointsById);
     // The zero-reference must physically close before any motion can start.
     const assembled=this.evaluateRoots(new Map(this.roots.map(r=>[r,0])));
     for(const [i,c] of (program.closures??[]).entries()) {
@@ -224,6 +241,8 @@ export class MechanismSolver {
    * flips. A failure reports unreachable rather than jumping through geometry. */
   solve(driverPosition:number, seed?: ReadonlyMap<string,number>): SolvedFrame {
     if(!Number.isFinite(driverPosition))throw Error('Nonfinite mechanism input');
+    if(this.program.transmissions?.length)
+      return this.solveInputs({[this.driver]:driverPosition},{seed});
     const roots=new Map(this.roots.map(r=>[r,seed?.get(r)??this.previousRoots.get(r)??0]));
     roots.set(this.driver,driverPosition);
     if(!this.withinLimits(roots))throw Error('The requested driver position violates a physical joint stop');
@@ -269,6 +288,96 @@ export class MechanismSolver {
     this.previousRoots=roots;
     return solved;
   }
+
+  /** V5: solve multiple independent motor inputs against ideal gear, belt,
+   * chain, worm, rack, screw, differential and engaged-clutch constraints.
+   * This is a minimum-change kinematic solution, NOT a dynamic force solver.
+   * Controls are named JOINT coordinates (radians or LDU). Omitted joints
+   * inherit the nearest feasible value from the previous solved frame.
+   *
+   * All algebraic constraints are projected exactly before evaluating FK;
+   * when the result is impossible, throws rather than silently slipping.
+   * Overrides allow gear selectors/clutches to change state at runtime.
+   */
+  solveInputs(
+    controls: Readonly<Record<string,number>> | ReadonlyMap<string,number>,
+    options: { engagements?: Readonly<Record<string,boolean>>; seed?: ReadonlyMap<string,number> } = {},
+  ): SolvedFrame {
+    const inputs=new Map(controls instanceof Map ? controls : Object.entries(controls));
+    if (!inputs.size) throw Error('At least one independent motor input is required');
+    if(inputs.size>this.roots.length)throw Error('Too many independently driven joints');
+    const algebra=prepareTransmissionEquations(this.program.transmissions??[],this.jointsById,options.engagements)
+      .map(e=>intoRootEquation(e,this.factors));
+    for(const [id,value] of [...inputs].sort(([a],[b])=>a.localeCompare(b))){
+      const factor=this.factors.get(id);
+      if(!factor || !Number.isFinite(value))throw Error(`Invalid motor input ${id}`);
+      algebra.push({id:`drive:${id}`,coefficients:new Map([[factor.root,factor.ratio]]),rhs:value});
+    }
+    const project=(guess:ReadonlyMap<string,number>)=>
+      projectLimitedNetwork(this.roots,algebra,guess,this.rootBounds);
+    const initial=new Map(this.roots.map(id=>[id,options.seed?.get(id)??this.previousRoots.get(id)??0]));
+    let projected=project(initial);
+    const roots=projected.roots;
+    const closures=this.program.closures??[];
+    if(closures.length){
+      let error=this.residual(roots);
+      let norm=Math.hypot(...error);
+      const tolerance=Math.min(...closures.map(c=>c.toleranceLdu??.1));
+      // The algebraic manifold is projected into after every IK perturbation.
+      // This prevents a closure correction from breaking a transmission ratio.
+      const controlled=new Set([...inputs.keys()].map(id=>this.factors.get(id)!.root));
+      const free=this.roots.filter(id=>!controlled.has(id));
+      for(let iteration=0;norm>tolerance&&iteration<48;iteration++){
+        if(!free.length)break;
+        const jac=free.map(id=>{
+          const h=Math.max(1e-5,Math.abs(roots.get(id)??0)*1e-5);
+          const perturb=new Map(roots);perturb.set(id,(perturb.get(id)??0)+h);
+          try{
+            const feasible=project(perturb).roots;
+            const movement=Math.hypot(...this.roots.map(root=>(feasible.get(root)??0)-(roots.get(root)??0)));
+            if(movement<1e-9)return error.map(()=>0);
+            return this.residual(feasible).map((x,i)=>(x-error[i])/h);
+          }catch{return error.map(()=>0);}
+        });
+        const lambda=.005;
+        const M=free.map((_,i)=>free.map((__,j)=>jac[i].reduce((sum,v,k)=>sum+v*jac[j][k],0)+(i===j?lambda*lambda:0)));
+        const rhs=jac.map(column=>-column.reduce((sum,v,k)=>sum+v*error[k],0));
+        const delta=this.solveNormal(M,rhs);
+        if(!delta)break;
+        let accepted=false;
+        for(const alpha of [1,.5,.25,.125,.0625,.03125]){
+          const candidate=new Map(roots);
+          free.forEach((id,i)=>candidate.set(id,(roots.get(id)??0)+clamp(delta[i]*alpha,-.35,.35)));
+          try{
+            const feasible=project(candidate).roots;
+            const nextError=this.residual(feasible),nextNorm=Math.hypot(...nextError);
+            if(nextNorm<norm-1e-9){
+              roots.clear();for(const [id,v]of feasible)roots.set(id,v);
+              error=nextError;norm=nextNorm;accepted=true;break;
+            }
+          }catch{/* infeasible joint stop or closure */}
+        }
+        if(!accepted)break;
+      }
+      const frame=this.evaluateRoots(roots);
+      if(closures.some((c,i)=>frame.closureErrorsLdu[i]>(c.toleranceLdu??.1)+1e-7))
+        throw Error(`Unreachable V5 closed mechanism; closure gap ${frame.maxClosureErrorLdu.toFixed(4)} LDU`);
+    }
+    projected=project(roots);
+    const frame=this.evaluateRoots(projected.roots);
+    // Recompute residual strictly in joint space and include exact drive equations.
+    const equations: LinearEquation[]=algebra;
+    const maxResidual=equations.reduce((max,e)=>{
+      let gap=-e.rhs;
+      for(const [id,f] of e.coefficients)gap+=f*(projected.roots.get(id)??0);
+      return Math.max(max,Math.abs(gap)/Math.max(1,Math.hypot(...e.coefficients.values())));
+    },0);
+    if(maxResidual>1e-6)throw Error('Transmission residual exceeds tolerance');
+    this.previousRoots=new Map(projected.roots);
+    return {...frame,transmissionResidual:maxResidual,
+      activeTransmissions:algebra.filter(e=>!e.id.startsWith('drive:')).length};
+  }
+
   reset(){this.previousRoots.clear();}
   /** Exact assembled frame is returned for q=0; also resets IK continuation. */
   assembled():SolvedFrame{this.reset();return this.solve(0);}

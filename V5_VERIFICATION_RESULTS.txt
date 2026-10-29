@@ -1,0 +1,46 @@
+
+> brickmotion-studio@0.1.0 verify:v5:offline
+> node scripts/verify-v5-transmissions-offline.cjs
+
+PASS program validation
+PASS gear ratio and fixed world pivot
+PASS contradictory gear cycle
+PASS closed linkage solves and unreachable report
+PASS reduced gravity produces finite constrained swing
+PASS stage playback and exact reset
+PASS fixed connection cannot separate
+PASS carrier separation invalidates gear pitch engagement
+PASS gravity requires explicit distinct masses for driven followers
+PASS gravity stage compiles to sampled playback and exact final rest
+PASS V5 external gear ratio 12:36
+PASS V5 belt drive uncrossed and crossed preserves signed ratio
+PASS V5 chain sprocket ratio
+PASS V5 multi-start worm drive 2:40
+PASS V5 rack and pinion converts radians to LDU
+PASS V5 screw lead converts revolutions to travel
+PASS V5 open differential single motor shares motion between outputs
+PASS V5 differential supports TWO independently driven shafts
+PASS V5 differential cannot obey three contradictory motor commands
+PASS V5 clutch engagement toggle preserves unconstrained shaft pose
+PASS V5 contradictory network cycles fail closed
+PASS V5 coupled joint stop preserves exact ratios or rejects motion
+PASS V5 rejects wrong joint dimension, duplicate bodies and invalid ratios
+PASS V5 regularizes underdetermined motion using minimum-change continuation
+PASS V5 projection detects dependent contradictions and rank
+PASS V5 active bound projection gives feasible compensated motion
+PASS V5 exact q=0 returns imported assembly despite clutch changes
+PASS V5 49-frame sweep passes sampled ideal differential and reports DOFs
+PASS V5 sweep identifies exact joint stop failure point without claiming clearance
+PASS V5 sweep rejects a fixed pair forcibly split by authored program
+PASS V5 transmission demo compiles into same non-destructive stage pipeline
+PASS V5 network exact-ratio long repeated seek has no drift
+PASS V5 workshop composes two gear trains sharing one exact shaft
+PASS V5 workshop composes gearbox into open differential
+PASS V5 workshop rejects contradictory shaft type reuse
+PASS V5 workshop does not split the same fixed rigid component
+PASS V5 workshop estimates rack sliding direction tangent to pinion axis
+PASS V5 workshop prevents incompatible axes on a shared shaft
+PASS V5 workshop reports impossible mechanically closed transmission graph
+PASS V5 multi-motor stage bakes independent differential motor sine tracks
+PASS V5 saved independent drives reject physically inconsistent gear commands
+PASS V5 secondary motor schema rejects duplicate/unknown/primary motors and gravity

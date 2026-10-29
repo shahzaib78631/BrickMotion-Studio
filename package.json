@@ -21,7 +21,21 @@
     "audit:v4:5590": "node scripts/audit-v4-5590-mechanics.cjs",
     "test:scene": "vitest run tests/render/sceneSetup.test.ts",
     "verify:scene:offline": "node scripts/verify-scene-studio-offline.cjs",
-    "instructions": "tsx scripts/instructions-to-mpd.ts"
+    "instructions": "tsx scripts/instructions-to-mpd.ts",
+    "verify:v5:offline": "node scripts/verify-v5-transmissions-offline.cjs",
+    "test:v5:kinematics": "vitest run tests/anim/transmissionV5.test.ts",
+    "typecheck:v5:core": "tsc -p tsconfig.transmission.json",
+    "verify:v6:offline": "node scripts/verify-v6-offline.cjs",
+    "typecheck:v6:math": "tsc -p tsconfig.v6.json",
+    "verify:v7:offline": "node scripts/verify-v7-mechanics-offline.cjs",
+    "typecheck:v7:math": "tsc -p tsconfig.v7.json",
+    "verify:v7:all": "npm run verify:v4:mechanisms:offline && npm run verify:v5:offline && npm run verify:v6:offline && npm run verify:v7:offline && npm run typecheck:v7:math && npm run verify:v7:syntax",
+    "verify:v7:syntax": "node scripts/verify-v7-integration-syntax.cjs",
+    "verify:v8:offline": "node scripts/verify-v8-iterations-offline.cjs",
+    "verify:v8:properties": "node scripts/verify-v8-properties-offline.cjs",
+    "typecheck:v8:math": "tsc -p tsconfig.v8.json",
+    "verify:v8:syntax": "node scripts/verify-v8-syntax.cjs",
+    "verify:v8:all": "npm run verify:v4:mechanisms:offline && npm run verify:v5:offline && npm run verify:v6:offline && npm run verify:v7:offline && npm run verify:v8:offline && npm run verify:v8:properties && npm run typecheck:v8:math && npm run verify:v8:syntax"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.1.0",

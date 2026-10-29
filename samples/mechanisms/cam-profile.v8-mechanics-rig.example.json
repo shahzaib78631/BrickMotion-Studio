@@ -1,0 +1,150 @@
+{
+  "format": "brickmotion-v8-mechanics-rig",
+  "version": 3,
+  "model": {
+    "bodies": [
+      {
+        "id": "ground",
+        "rest": {
+          "p": [
+            0,
+            0,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "fixed": true
+      },
+      {
+        "id": "shaftBody",
+        "rest": {
+          "p": [
+            0,
+            0,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "fixed": false
+      },
+      {
+        "id": "followerBody",
+        "rest": {
+          "p": [
+            0,
+            0,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "fixed": false
+      }
+    ],
+    "constraints": [
+      {
+        "id": "shaft",
+        "kind": "hinge",
+        "a": {
+          "body": "ground",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "b": {
+          "body": "shaftBody",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "axisA": [
+          0,
+          0,
+          1
+        ],
+        "axisB": [
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "id": "follower",
+        "kind": "slider",
+        "a": {
+          "body": "ground",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "b": {
+          "body": "followerBody",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "axisA": [
+          1,
+          0,
+          0
+        ],
+        "axisB": [
+          1,
+          0,
+          0
+        ]
+      }
+    ],
+    "mechanics": [
+      {
+        "id": "lift",
+        "kind": "cam-profile",
+        "cam": "shaft",
+        "follower": "follower",
+        "profileLdu": [
+          0,
+          2,
+          8,
+          10,
+          7,
+          1
+        ],
+        "lobes": 1
+      }
+    ]
+  },
+  "members": {
+    "ground": [
+      "REPLACE_WITH_GROUNDED_LDRAW_INSTANCE_KEY"
+    ],
+    "shaftBody": [
+      "REPLACE_WITH_SHAFT_LDRAW_INSTANCE_KEY"
+    ],
+    "followerBody": [
+      "REPLACE_WITH_FOLLOWER_LDRAW_INSTANCE_KEY"
+    ]
+  },
+  "driver": "shaft"
+}

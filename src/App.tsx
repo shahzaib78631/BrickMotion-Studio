@@ -20,6 +20,7 @@ import { fillMotionKeyframes, missingMotionKeyTargets } from './anim/motion/auto
 import { checkEditedMotion } from './anim/motionDiagnostics';
 import { CapturePanel } from './ui/CapturePanel';
 import { ChecksPanel } from './ui/ChecksPanel';
+import { MechanismLabPanel } from './ui/MechanismLabPanel';
 import { ExportDialog, type ExportJob } from './ui/ExportDialog';
 import { Ic, type IconName } from './ui/icons';
 import { Inspector } from './ui/Inspector';
@@ -50,10 +51,10 @@ import './ui/reference.css';
 import './ui/themes.css';
 import './ui/layout.css';
 
-type Tab = 'models' | 'parts' | 'assembly' | 'steps' | 'checks' | 'ai' | 'video' | 'materials' | 'sound' | 'staging' | 'capture' | 'settings';
+type Tab = 'models' | 'parts' | 'assembly' | 'steps' | 'checks' | 'mechanisms' | 'ai' | 'video' | 'materials' | 'sound' | 'staging' | 'capture' | 'settings';
 /** The rail, in groups: building the model, how the video looks, then assets; Settings sits at the bottom. */
 const TAB_GROUPS: [Tab, IconName, string][][] = [
-  [['models', 'box', 'Models'], ['parts', 'parts', 'Parts'], ['assembly', 'spot', 'Assembly'], ['steps', 'steps', 'Animation']],
+  [['models', 'box', 'Models'], ['parts', 'parts', 'Parts'], ['assembly', 'spot', 'Assembly'], ['steps', 'steps', 'Animation'], ['mechanisms', 'rotate', 'Mechanisms']],
   [['video', 'camera', 'Render'], ['materials', 'palette', 'Materials'], ['sound', 'sound', 'Sound'], ['staging', 'layout', 'Staging'], ['capture', 'video', 'Capture']],
   [['ai', 'folder', 'Assets']],
   [['settings', 'settings', 'Settings']],
@@ -268,6 +269,7 @@ function Studio() {
             {tab === 'assembly' && <AssemblyPanel model={model} timeline={timeline} />}
             {tab === 'steps' && <StepsPanel timeline={timeline} />}
             {tab === 'checks' && <ChecksPanel warnings={warnings} />}
+            {tab === 'mechanisms' && <MechanismLabPanel model={model} onRender={() => { setTab('video'); setPanelClosed(false); }} />}
             {tab === 'ai' && <AiPanel warnings={warnings} onOpenSettings={() => setTab('settings')} />}
             {tab === 'video' && <VideoPanel timeline={timeline} onExport={exportCurrent} />}
             {tab === 'materials' && <MaterialsPanel />}

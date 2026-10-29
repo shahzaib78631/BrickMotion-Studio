@@ -83,7 +83,7 @@ export function buildStandardMotionV4Timeline(asm:Assembly,metrics:Metrics,opts:
     warnings.push(`Automatic mechanics could not be inferred: ${String((error as Error)?.message??error)}`);
     detection={scanned:asm.instances.length,described:0,connectors:0,movableJoints:0,
       kinds:{gear:0,turntable:0,hinge:0,axle:0,pin:0,shaft:0,wheel:0,other:asm.instances.length},
-      joints:[],gearMeshes:[],suggestions:[],warnings:['Detector failed; manual mechanisms remain available.']};
+      parts:[],joints:[],gearMeshes:[],functionalHints:[],suggestions:[],warnings:['Detector failed; manual mechanisms remain available.']};
   }
   const now=()=>typeof performance==='undefined'?Date.now():performance.now();
   // A standard animation is always deliverable: exact verification is an

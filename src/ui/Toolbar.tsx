@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { viewportApi } from './viewportApi';
 import { exportLDraw } from '../io/ldrawExport';
+import { readStudioIo } from '../io/studioIo';
 import { planToJson, readPlanFile, attachAssemblyArtifact } from '../io/planFile';
 import { isAssemblyArtifact } from '../anim/assemblyPlan/artifact';
 import { isProjectFile, readProjectFile, PROJECT_EXTENSION } from '../io/projectFile';
@@ -105,7 +106,7 @@ type Props = {
   onAbout(): void;
   onExportVideo(): void;
   canPreview: boolean;
-  onNavigate(panel: 'models' | 'parts' | 'assembly' | 'steps' | 'checks' | 'ai' | 'video' | 'materials' | 'sound' | 'staging' | 'settings'): void;
+  onNavigate(panel: 'models' | 'parts' | 'assembly' | 'steps' | 'checks' | 'mechanisms' | 'ai' | 'video' | 'materials' | 'sound' | 'staging' | 'settings'): void;
 };
 
 export function Toolbar({ theme, onTheme, onProjects, onTemplates, onAbout, onExportVideo, canPreview, onNavigate }: Props) {
@@ -183,7 +184,9 @@ export function Toolbar({ theme, onTheme, onProjects, onTemplates, onAbout, onEx
   };
   const importFile = async (f: File) => {
     if (isProjectFile(f.name)) return openProjectFile(f);
-    const text = await f.text();
+    let text: string;
+    try { text = f.name.toLowerCase().endsWith('.io') ? await readStudioIo(await f.arrayBuffer()) : await f.text(); }
+    catch (e) { return alert(`Couldn't extract ${f.name}:\n\n${e instanceof Error ? e.message : String(e)}`); }
     // An artifact arriving on its own attaches to the open plan instead of
     // replacing it, so the user can keep their waiting spots and animation.
     if (f.name.toLowerCase().endsWith('.json')) {
@@ -201,7 +204,7 @@ export function Toolbar({ theme, onTheme, onProjects, onTemplates, onAbout, onEx
         return;
       }
     }
-    const r = readPlanFile(text, f.name);
+    const r = readPlanFile(text, f.name.toLowerCase().endsWith('.io') ? f.name.replace(/\.io$/i, '.ldr') : f.name);
     if (!r.ok) return alert(`Couldn't open ${f.name}:\n\n${r.errors.slice(0, 8).join('\n')}`);
     if (pieceCount() > 0 && !confirm('Replace the current set with this file? (You can undo.)')) return;
     let plan = ensureIds(r.plan);
@@ -234,6 +237,7 @@ export function Toolbar({ theme, onTheme, onProjects, onTemplates, onAbout, onEx
     { icon: 'parts', label: 'Go to Parts', subtitle: 'Search and place bricks', action: () => onNavigate('parts') },
     { icon: 'spot', label: 'Go to Assembly', subtitle: 'Set how the model fits together', action: () => onNavigate('assembly') },
     { icon: 'steps', label: 'Go to Animation', subtitle: 'Edit build steps', action: () => onNavigate('steps') },
+    { icon: 'rotate', label: 'Open Mechanism Lab', subtitle: 'Inspect connectors, joints and gears; preview motion', action: () => onNavigate('mechanisms') },
     { icon: 'video', label: 'Go to Render', subtitle: 'Export settings and video', action: () => onNavigate('video') },
     { icon: 'palette', label: 'Go to Materials', subtitle: 'Scenes, brick finishes, textures and floors', action: () => onNavigate('materials') },
     { icon: 'sound', label: 'Go to Sound', subtitle: 'Snap click, body thump, room echo and volume', action: () => onNavigate('sound') },
@@ -241,7 +245,7 @@ export function Toolbar({ theme, onTheme, onProjects, onTemplates, onAbout, onEx
     { icon: 'folder', label: 'Open Assets & AI', subtitle: 'Assisted workflows and assets', action: () => onNavigate('ai') },
     { icon: 'checks', label: 'Review model checks', subtitle: 'Warnings and verification', action: () => onNavigate('checks') },
     { icon: 'settings', label: 'Open Settings', subtitle: 'Workspace and animation preferences', action: () => onNavigate('settings') },
-    { icon: 'upload', label: 'Import a model', subtitle: 'LDraw, MPD, JSON, project file', action: () => fileRef.current?.click() },
+    { icon: 'upload', label: 'Import a model', subtitle: 'Studio .io, LDraw, MPD, JSON, project file', action: () => fileRef.current?.click() },
     { icon: 'folder', label: 'Browse projects', subtitle: 'Open a saved project', action: onProjects },
     { icon: 'layout', label: 'Templates', subtitle: 'Save this project as a template, or apply one to this model', action: onTemplates },
     { icon: 'fit', label: 'Fit the viewport', subtitle: 'Frame all model pieces', action: () => viewportApi.fit() },
@@ -270,7 +274,7 @@ export function Toolbar({ theme, onTheme, onProjects, onTemplates, onAbout, onEx
             items={[
               { icon: 'plus', label: 'New project', onClick: () => void newProject() },
               { icon: 'folder', label: 'Open projects…', onClick: onProjects },
-              { icon: 'upload', label: 'Import model or project…', hint: `.${PROJECT_EXTENSION} .mpd .ldr`, onClick: () => fileRef.current?.click() },
+              { icon: 'upload', label: 'Import model or project…', hint: `.${PROJECT_EXTENSION} .io .mpd .ldr`, onClick: () => fileRef.current?.click() },
               'sep',
               { icon: 'download', label: `Save project (.${PROJECT_EXTENSION})`, disabled: pieces === 0 || !!savingProject, onClick: () => void downloadProject() },
               { icon: 'file', label: 'Download plan (.json)', onClick: downloadPlan },
@@ -289,7 +293,7 @@ export function Toolbar({ theme, onTheme, onProjects, onTemplates, onAbout, onEx
             {status === 'saved' ? 'Autosaved' : status === 'dirty' ? 'Saving…' : 'Save error'}
             {status === 'saved' && <Ic name="check" />}
           </span>
-          <input ref={fileRef} type="file" accept={`.${PROJECT_EXTENSION},.json,.ldr,.mpd,.dat`} hidden
+          <input ref={fileRef} type="file" accept={`.${PROJECT_EXTENSION},.json,.ldr,.mpd,.dat,.io`} hidden
             onChange={(e) => { const f = e.target.files?.[0]; if (f) void importFile(f); e.target.value = ''; }} />
         </div>
         <button className="bm-command-trigger" aria-label="Search or run a command (Command K)"

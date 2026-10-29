@@ -1,0 +1,245 @@
+{
+  "format": "brickmotion-v8-mechanics-rig",
+  "version": 3,
+  "model": {
+    "bodies": [
+      {
+        "id": "ground",
+        "rest": {
+          "p": [
+            0,
+            0,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "fixed": true
+      },
+      {
+        "id": "leftBody",
+        "rest": {
+          "p": [
+            0,
+            0,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "fixed": false
+      },
+      {
+        "id": "rightBody",
+        "rest": {
+          "p": [
+            0,
+            0,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "fixed": false
+      },
+      {
+        "id": "forwardBody",
+        "rest": {
+          "p": [
+            0,
+            0,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "fixed": false
+      },
+      {
+        "id": "yawBody",
+        "rest": {
+          "p": [
+            0,
+            0,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "fixed": false
+      }
+    ],
+    "constraints": [
+      {
+        "id": "left",
+        "kind": "hinge",
+        "a": {
+          "body": "ground",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "b": {
+          "body": "leftBody",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "axisA": [
+          0,
+          0,
+          1
+        ],
+        "axisB": [
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "id": "right",
+        "kind": "hinge",
+        "a": {
+          "body": "ground",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "b": {
+          "body": "rightBody",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "axisA": [
+          0,
+          0,
+          1
+        ],
+        "axisB": [
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "id": "forward",
+        "kind": "slider",
+        "a": {
+          "body": "ground",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "b": {
+          "body": "forwardBody",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "axisA": [
+          1,
+          0,
+          0
+        ],
+        "axisB": [
+          1,
+          0,
+          0
+        ]
+      },
+      {
+        "id": "yaw",
+        "kind": "hinge",
+        "a": {
+          "body": "ground",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "b": {
+          "body": "yawBody",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "axisA": [
+          0,
+          0,
+          1
+        ],
+        "axisB": [
+          0,
+          0,
+          1
+        ]
+      }
+    ],
+    "mechanics": [
+      {
+        "id": "vehicle",
+        "kind": "differential-drive",
+        "left": "left",
+        "right": "right",
+        "forward": "forward",
+        "yaw": "yaw",
+        "wheelRadiusLdu": 24,
+        "trackWidthLdu": 100
+      }
+    ]
+  },
+  "members": {
+    "ground": [
+      "REPLACE_WITH_GROUNDED_LDRAW_INSTANCE_KEY"
+    ],
+    "leftBody": [
+      "REPLACE_WITH_LEFT_LDRAW_INSTANCE_KEY"
+    ],
+    "rightBody": [
+      "REPLACE_WITH_RIGHT_LDRAW_INSTANCE_KEY"
+    ],
+    "forwardBody": [
+      "REPLACE_WITH_FORWARD_LDRAW_INSTANCE_KEY"
+    ],
+    "yawBody": [
+      "REPLACE_WITH_YAW_LDRAW_INSTANCE_KEY"
+    ]
+  },
+  "driver": "left"
+}

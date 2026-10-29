@@ -33,6 +33,13 @@ import { advanceKeyframePlayback, useKeyframePlayback } from '../state/keyframeP
 import type { Plan, PlanItem } from '../plan/types';
 import { soundSnaps } from '../audio/snapSound';
 import { useAppSettings } from '../state/appSettings';
+import { useMechanismLab } from '../state/mechanismLab';
+import { MechanismSolver } from '../anim/motion/v4/mechanismSolver';
+import { solveLabFrame } from '../anim/motion/v4/mechanismLab';
+import { SpatialMechanismSolver } from '../anim/motion/v6/spatialConstraints';
+import type { SpatialLinkagePreview } from '../anim/motion/v6/spatialAdapter';
+import type { MechanismProgram } from '../anim/motion/v4/mechanismProgram';
+import type { Assembly } from '../model/assemble';
 import type { ModelState } from '../state/useModel';
 import { viewportApi } from './viewportApi';
 import { ContextMenu, type ContextItem } from './ContextMenu';
@@ -109,6 +116,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
   const hiddenIds = useStudio((s) => s.hidden[s.editingModel]);
   const [menu, setMenu] = useState<{ x: number; y: number; items: ContextItem[]; label: string } | null>(null);
   const [submodelDialog, setSubmodelDialog] = useState<{ model: string; ids: string[] } | null>(null);
+  const labActive = useMechanismLab(s => s.active);
   const follow = usePlayback((s) => s.follow);
   const playing = usePlayback((s) => s.playing);
   /**
@@ -150,6 +158,10 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
   const initialModel = useRef('');
   const modelRef = useRef(model);
   modelRef.current = model;
+  // Base editor poses, captured independently of the live mechanism. The RAF
+  // composes mechanical deltas on top of stage/spot placement, never the other
+  // way round. Using a ref avoids stale closure positions during playback.
+  const labBaseRef = useRef(new Map<string, THREE.Matrix4>());
 
   /** Update the static GPU matrices without touching saved LDraw placements,
    * undo history, or the planner. Used while a build spot is being dragged. */
@@ -471,6 +483,18 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       heroBase = null;
     };
     controls.addEventListener('start', onGrab);
+    // The mechanism inspector owns neither source matrices nor a render
+    // timeline. Its solver and work buffers are confined to this viewport's
+    // lifetime; switching projects invalidates them without leaking state.
+    let labSolver: MechanismSolver | null = null;
+    let spatialSolver: SpatialMechanismSolver | null = null;
+    let spatialPreview: SpatialLinkagePreview | null = null;
+    let labAssembly: Assembly | null = null;
+    let labProgram: MechanismProgram | null = null;
+    let labPreviewWasActive = false;
+    let labClock = 0, labDrawnPosition = Number.NaN, labLastUI = 0;
+    let labInputSignature = '';
+    let labRestInverse = new Map<string, THREE.Matrix4>();
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
       const dt = Math.min(0.1, (now - last) / 1000);
@@ -491,6 +515,92 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
               shownKeyFrame = atFrame;
             }
           }
+        }
+        // Live mechanism preview, deliberately exclusive with generated Build
+        // playback, authored keyframes, placement drags and transform handles.
+        // The solver uses an opt-in, conservative input range; no source plan
+        // is mutated by these GPU-only matrix overrides.
+        const editor = useStudio.getState();
+        const lab = useMechanismLab.getState();
+        const canDrive = lab.active && (!!lab.program || !!lab.spatial) && !lab.error &&
+          lab.model === editor.editingModel && editor.timelineEditor === 'build' &&
+          editor.mode === 'edit' && editor.currentStep === null && !editor.laidOut &&
+          !live.current && !usePlayback.getState().follow &&
+          editor.tool !== 'move' && !draggingGizmo.current &&
+          !(editor.gizmoEnabled && editor.selection.ids.length > 0);
+        if (canDrive) {
+          try {
+            const assembly = modelRef.current.view;
+            if(lab.spatial){
+              if(!spatialSolver||labAssembly!==assembly||spatialPreview!==lab.spatial){
+                spatialSolver=new SpatialMechanismSolver(lab.spatial.model);
+                spatialPreview=lab.spatial;labSolver=null;labProgram=null;
+                labAssembly=assembly;labClock=0;labDrawnPosition=Number.NaN;labInputSignature='';
+              }
+            }else if (!labSolver || labAssembly !== assembly || labProgram !== lab.program) {
+              labSolver = new MechanismSolver(assembly, lab.program!);
+              labSolver.assembled();
+              spatialSolver=null;spatialPreview=null;
+              labAssembly = assembly;
+              labProgram = lab.program;
+              labRestInverse = new Map([...labSolver.rest].map(([k, m]) => [k, m.clone().invert()]));
+              labClock = 0;
+              labDrawnPosition = Number.NaN;
+              labInputSignature = '';
+            }
+            if (lab.playing) labClock += dt;
+            const drive = lab.playing
+              ? Math.sin(labClock * 2 * Math.PI * lab.rpm / 60) * lab.amplitude
+              : lab.position;
+            const inputSignature = JSON.stringify([lab.additionalInputs,lab.engagements]);
+            if (drive !== labDrawnPosition || inputSignature !== labInputSignature || !labPreviewWasActive) {
+              const bases = labBaseRef.current;
+              const animated = new Map<string, THREE.Matrix4>();
+              if(lab.spatial && spatialSolver){
+                const solved=spatialSolver.solve({...lab.additionalInputs,[lab.spatial.driver]:drive});
+                if(solved.status!=='converged')throw Error(solved.warning??'Spatial linkage does not close');
+                for(const body of lab.spatial.model.bodies){
+                  const pose=solved.poses.get(body.id)!;
+                  // Full rest-pose inverse is required for user-authored
+                  // spatial rigs with non-identity rest quaternions. A pure
+                  // negative translation would rotate those bricks at q=0.
+                  const scale=new THREE.Vector3(1,1,1);
+                  const rest=new THREE.Matrix4().compose(
+                    new THREE.Vector3(...body.rest.p),new THREE.Quaternion(...body.rest.q),scale);
+                  const transform=new THREE.Matrix4().compose(
+                    new THREE.Vector3(...pose.p),new THREE.Quaternion(...pose.q),scale)
+                    .multiply(rest.invert());
+                  for(const key of lab.spatial.members[body.id]??[]){
+                    const base=bases.get(key);if(base)animated.set(key,transform.clone().multiply(base));
+                  }
+                }
+              }else if(labSolver){
+                const frames=solveLabFrame(labSolver,drive,lab.additionalInputs,lab.engagements);
+                for (const [key,pose] of frames) {
+                  const base=bases.get(key),inverse=labRestInverse.get(key);
+                  if(base&&inverse)animated.set(key,pose.clone().multiply(inverse).multiply(base));
+                }
+              }
+              studio.bricks.setMatrices(key => animated.get(key) ?? bases.get(key) ?? null);
+              labDrawnPosition = drive;
+              labInputSignature = inputSignature;
+            }
+            if (lab.playing && now - labLastUI >= 120) {
+              labLastUI = now;
+              useMechanismLab.setState({ position: drive });
+            }
+            labPreviewWasActive = true;
+          } catch (error) {
+            useMechanismLab.getState().setError(error instanceof Error ? error.message : String(error));
+          }
+        } else if (labPreviewWasActive) {
+          labPreviewWasActive = false;
+          labSolver = null; spatialSolver=null; spatialPreview=null; labAssembly = null; labProgram = null;
+          labDrawnPosition = Number.NaN;
+          labInputSignature = '';
+          // A generated timeline may have taken over; never overwrite it.
+          if (editor.timelineEditor === 'build' && !live.current)
+            studio.bricks.setMatrices(key => labBaseRef.current.get(key) ?? null);
         }
         const run = live.current;
         if (run) {
@@ -732,6 +842,8 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     return positioned;
   }, [poses, visible, editorPlacements, alreadyPlanned]);
 
+  labBaseRef.current = new Map(visible.map(inst => [inst.key, shownPoses.get(inst.key) ?? inst.world]));
+
   /** Keyframe poses are intentionally independent of planner success. The render loop
    * samples them directly at the active animation frame, without a React rerender. */
   const keyframePose = useMemo(() => makeKeyframePose(visible, editorPlacements, plan.animation, editingModel, timeline),
@@ -835,7 +947,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       frame(studio.camera, viewportApi.controls, box);
       framed.current = true;
     }
-  }, [visible, model.view, mode, poses, shownPoses, editorPlacements, finalDisplayedBounds, engaged, timelineEditor]);
+  }, [visible, model.view, mode, poses, shownPoses, editorPlacements, finalDisplayedBounds, engaged, timelineEditor, labActive]);
 
   // the preview drives the camera itself
   useEffect(() => {

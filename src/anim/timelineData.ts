@@ -123,6 +123,8 @@ export type MechanismStage = {
     tracks: { key: string; deltas: number[][] }[];
     diagnostics: {
       joints: number; gearPairs: number; loopClosures: number; rigidFollowers: number;
+      /** V5 ideal transmissions (separate from V4 pitch-verified gear pairs). */
+      transmissionConstraints?: number; maxTransmissionResidual?: number; secondaryMotorTracks?: number;
       maxClosureErrorLdu: number; physicsSteps: number; approximateInertias: number;
       sampledAabbOverlapAdvisories: number;
       /** Mechanism-induced collisions, not stationary assembly contacts. */

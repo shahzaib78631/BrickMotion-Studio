@@ -23,6 +23,23 @@ export type GearPair = {
   moduleLdu?: number;
   source: 'user' | 'verified' | 'inferred';
 };
+
+/** Explicit, idealized mechanical transmissions. All ratios are relative to
+ * the assembled q=0 position. These are authored links, NOT automatic proof
+ * of teeth engagement, force transmission, backlash, or collision clearance.
+ * `a` is the rotating input, `b` the output (or sliding member for rack/lead).
+ */
+export type TransmissionConstraint = (
+  | { kind: 'gear' | 'belt' | 'chain'; a: string; b: string; teethA: number; teethB: number; crossed?: boolean }
+  | { kind: 'worm'; a: string; b: string; starts: number; wheelTeeth: number; reversed?: boolean }
+  | { kind: 'rack-pinion'; a: string; b: string; pitchRadiusLdu: number; reversed?: boolean }
+  /** Ideal straight-line, no-slip wheel roll: b is a sliding chassis, a a wheel. */
+  | { kind: 'wheel-ground'; a: string; b: string; radiusLdu: number; reversed?: boolean }
+  | { kind: 'linear-actuator'; a: string; b: string; leadLduPerTurn: number; reversed?: boolean }
+  | { kind: 'differential'; carrier: string; left: string; right: string }
+  | { kind: 'clutch'; a: string; b: string; engaged: boolean; reversed?: boolean }
+) & { id: string; source: 'user' | 'verified' | 'inferred' };
+
 export type ClosurePoint = { body: string; local: Vec3 };
 export type LoopClosure = {
   a: ClosurePoint; b: ClosurePoint;
@@ -46,11 +63,18 @@ export type MechanismProgram = {
   mode: 'kinematic' | 'gravity';
   joints: JointDrive[];
   gears?: GearPair[];
+  /** V5: ideal transmission constraints and optionally engaged clutches. */
+  transmissions?: TransmissionConstraint[];
   closures?: LoopClosure[];
   /** Bodies welded to a driven leaf; inherit exactly its rigid world delta. */
   rigidFollowers?: { leader: string; bodies: string[] }[];
-  /** Exactly ONE independently controlled joint. Derived joints follow constraints. */
+  /** Primary motor; periodic travel is zero at both assembled stage endpoints. */
   driver: { joint: string; amplitude: number; cycles?: number };
+  /** V5: additional independent periodic motors for baked scene/video output.
+   * All positions are measured from the assembled frame, units per joint kind.
+   * Conflicting commanded coordinates fail the exact algebraic projection.
+   */
+  secondaryMotors?: { joint: string; amplitude: number; cycles?: number }[];
   gravity?: GravitySpec;
 };
 
@@ -89,6 +113,47 @@ export function validateMechanismProgram(raw: unknown): string[] {
       errors.push(`Gear pair ${i+1}: invalid tooth counts, mesh type, or evidence`);
     else if (!byId.has(g.a) || !byId.has(g.b)) errors.push(`Gear pair ${i+1}: unknown joint`);
   }
+  if (p.transmissions !== undefined && !Array.isArray(p.transmissions))
+    errors.push('Transmissions must be an array');
+  if ((p.transmissions?.length ?? 0) > 64) errors.push('Maximum 64 transmissions');
+  const transmissionIds = new Set<string>();
+  for (const [i,t] of (Array.isArray(p.transmissions) ? p.transmissions : []).entries()) {
+    if (!t || !key(t.id) || transmissionIds.has(t.id) ||
+        !['gear','belt','chain','worm','rack-pinion','wheel-ground','linear-actuator','differential','clutch'].includes(t.kind) ||
+        !['user','verified','inferred'].includes(t.source)) {
+      errors.push(`Transmission ${i+1}: invalid or duplicate ID/kind/source`); continue;
+    }
+    transmissionIds.add(t.id);
+    const ids = t.kind === 'differential' ? [t.carrier,t.left,t.right] : [t.a,t.b];
+    if (ids.some(id=>!key(id)||!byId.has(id)) || new Set(ids).size !== ids.length) {
+      errors.push(`Transmission ${t.id}: joints must be distinct and exist`); continue;
+    }
+    const kindOf = (id:string) => (Array.isArray(p.joints) ? p.joints : []).find(j=>j.id===id)?.kind;
+    if (t.kind === 'differential' ? ids.some(id=>kindOf(id)!=='revolute') :
+        (kindOf(t.a)!=='revolute' || kindOf(t.b) !==
+          (t.kind === 'rack-pinion' || t.kind === 'wheel-ground' || t.kind === 'linear-actuator' ? 'prismatic' : 'revolute')))
+      errors.push(`Transmission ${t.id}: incompatible rotational/linear joint types`);
+    const positive = (v:unknown, max:number) => finite(v) && v > 0 && v <= max;
+    if ((t.kind === 'gear' || t.kind === 'belt' || t.kind === 'chain') &&
+        (!whole(t.teethA) || !whole(t.teethB) || t.teethA > 500 || t.teethB > 500))
+      errors.push(`Transmission ${t.id}: invalid tooth counts`);
+    if (t.kind === 'worm' && (!whole(t.starts) || t.starts > 8 || !whole(t.wheelTeeth) || t.wheelTeeth > 500))
+      errors.push(`Transmission ${t.id}: invalid worm starts or wheel teeth`);
+    if (t.kind === 'wheel-ground' && !positive(t.radiusLdu, 1e5))
+      errors.push(`Transmission ${t.id}: invalid wheel radius`);
+    if (t.kind === 'rack-pinion' && !positive(t.pitchRadiusLdu, 1e5))
+      errors.push(`Transmission ${t.id}: invalid pitch radius`);
+    if (t.kind === 'linear-actuator' && !positive(t.leadLduPerTurn, 1e5))
+      errors.push(`Transmission ${t.id}: invalid screw lead`);
+    if (t.kind === 'clutch' && typeof t.engaged !== 'boolean')
+      errors.push(`Transmission ${t.id}: clutch engagement must be Boolean`);
+    if ('reversed' in t && t.reversed !== undefined && typeof t.reversed !== 'boolean')
+      errors.push(`Transmission ${t.id}: reversed flag must be Boolean`);
+    if ('crossed' in t && t.crossed !== undefined && typeof t.crossed !== 'boolean')
+      errors.push(`Transmission ${t.id}: crossed flag must be Boolean`);
+  }
+  if (p.mode === 'gravity' && p.transmissions?.length)
+    errors.push('V5 transmission networks currently require kinematic mode; reduced gravity mode does not handle multiple coupled motor coordinates');
   if (p.gears !== undefined && !Array.isArray(p.gears)) errors.push('Gear pairs must be an array');
   if ((p.gears?.length ?? 0) > 48) errors.push('Maximum 48 gear pairs');
   for (const [i,c] of (Array.isArray(p.closures) ? p.closures : []).entries()) {
@@ -113,6 +178,19 @@ export function validateMechanismProgram(raw: unknown): string[] {
       !finite(p.driver.amplitude) || Math.abs(p.driver.amplitude) > 500 ||
       (p.driver.cycles !== undefined && (!whole(p.driver.cycles) || p.driver.cycles > 8)))
     errors.push('Driver must name an existing joint and have finite amplitude');
+  if(p.secondaryMotors !== undefined && !Array.isArray(p.secondaryMotors))
+    errors.push('Secondary motors must be an array');
+  if((p.secondaryMotors?.length ?? 0)>8)errors.push('Maximum 8 secondary motors');
+  const motorNames=new Set<string>();
+  for(const [i,m] of (Array.isArray(p.secondaryMotors)?p.secondaryMotors:[]).entries()){
+    if(!m || !key(m.joint) || !byId.has(m.joint) || m.joint===p.driver?.joint || motorNames.has(m.joint) ||
+      !finite(m.amplitude) || Math.abs(m.amplitude)>500 ||
+      (m.cycles!==undefined && (!whole(m.cycles) || m.cycles>8)))
+      errors.push(`Secondary motor ${i+1}: invalid or duplicate motor joint/amplitude/cycles`);
+    else motorNames.add(m.joint);
+  }
+  if(p.mode==='gravity' && p.secondaryMotors?.length)
+    errors.push('Secondary motors require kinematic mode');
   if (p.mode === 'gravity') {
     const g = p.gravity;
     if (!g || !vec(g.acceleration) || Math.hypot(...g.acceleration) > 100 ||

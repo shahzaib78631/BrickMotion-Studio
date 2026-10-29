@@ -1,0 +1,149 @@
+{
+  "format": "brickmotion-v7-mechanics-rig",
+  "version": 2,
+  "model": {
+    "bodies": [
+      {
+        "id": "frame",
+        "rest": {
+          "p": [
+            0,
+            0,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "fixed": true
+      },
+      {
+        "id": "cam",
+        "rest": {
+          "p": [
+            0,
+            0,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        }
+      },
+      {
+        "id": "follower",
+        "rest": {
+          "p": [
+            0,
+            0,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        }
+      }
+    ],
+    "constraints": [
+      {
+        "id": "camAxle",
+        "kind": "hinge",
+        "a": {
+          "body": "frame",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "b": {
+          "body": "cam",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "axisA": [
+          0,
+          0,
+          1
+        ],
+        "axisB": [
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "id": "guide",
+        "kind": "slider",
+        "a": {
+          "body": "frame",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "b": {
+          "body": "follower",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "axisA": [
+          1,
+          0,
+          0
+        ],
+        "axisB": [
+          1,
+          0,
+          0
+        ]
+      }
+    ],
+    "mechanics": [
+      {
+        "id": "cam-contact-ideal",
+        "kind": "cam-follower",
+        "cam": "camAxle",
+        "follower": "guide",
+        "liftLdu": 8,
+        "lobes": 2
+      },
+      {
+        "id": "follower-stop",
+        "kind": "stop",
+        "joint": "guide",
+        "min": 0,
+        "max": 8
+      }
+    ]
+  },
+  "members": {
+    "frame": [
+      "REPLACE-WITH-FRAME-INSTANCE-KEY"
+    ],
+    "cam": [
+      "REPLACE-WITH-CAM-INSTANCE-KEY"
+    ],
+    "follower": [
+      "REPLACE-WITH-FOLLOWER-INSTANCE-KEY"
+    ]
+  },
+  "driver": "camAxle",
+  "note": "Authored ideal cosine cam: follower stays attached; no spring force, contact loss or true cam outline. Replace instance keys before importing."
+}

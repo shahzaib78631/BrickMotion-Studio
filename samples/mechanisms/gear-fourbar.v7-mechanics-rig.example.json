@@ -1,0 +1,277 @@
+{
+  "format": "brickmotion-v7-mechanics-rig",
+  "version": 2,
+  "model": {
+    "bodies": [
+      {
+        "id": "base",
+        "rest": {
+          "p": [
+            0,
+            0,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "fixed": true
+      },
+      {
+        "id": "crank",
+        "rest": {
+          "p": [
+            0,
+            10,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        }
+      },
+      {
+        "id": "coupler",
+        "rest": {
+          "p": [
+            30,
+            20,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        }
+      },
+      {
+        "id": "rocker",
+        "rest": {
+          "p": [
+            60,
+            10,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        }
+      },
+      {
+        "id": "driveShaft",
+        "rest": {
+          "p": [
+            0,
+            0,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        }
+      }
+    ],
+    "constraints": [
+      {
+        "id": "motor",
+        "kind": "hinge",
+        "a": {
+          "body": "base",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "b": {
+          "body": "crank",
+          "local": [
+            0,
+            -10,
+            0
+          ]
+        },
+        "axisA": [
+          0,
+          0,
+          1
+        ],
+        "axisB": [
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "id": "crank-coupler",
+        "kind": "hinge",
+        "a": {
+          "body": "crank",
+          "local": [
+            0,
+            10,
+            0
+          ]
+        },
+        "b": {
+          "body": "coupler",
+          "local": [
+            -30,
+            0,
+            0
+          ]
+        },
+        "axisA": [
+          0,
+          0,
+          1
+        ],
+        "axisB": [
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "id": "coupler-rocker",
+        "kind": "hinge",
+        "a": {
+          "body": "coupler",
+          "local": [
+            30,
+            0,
+            0
+          ]
+        },
+        "b": {
+          "body": "rocker",
+          "local": [
+            0,
+            10,
+            0
+          ]
+        },
+        "axisA": [
+          0,
+          0,
+          1
+        ],
+        "axisB": [
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "id": "rocker-ground",
+        "kind": "hinge",
+        "a": {
+          "body": "rocker",
+          "local": [
+            0,
+            -10,
+            0
+          ]
+        },
+        "b": {
+          "body": "base",
+          "local": [
+            60,
+            0,
+            0
+          ]
+        },
+        "axisA": [
+          0,
+          0,
+          1
+        ],
+        "axisB": [
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "id": "handwheel",
+        "kind": "hinge",
+        "a": {
+          "body": "base",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "b": {
+          "body": "driveShaft",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "axisA": [
+          0,
+          0,
+          1
+        ],
+        "axisB": [
+          0,
+          0,
+          1
+        ]
+      }
+    ],
+    "mechanics": [
+      {
+        "id": "gear-train",
+        "kind": "gear",
+        "input": "handwheel",
+        "output": "motor",
+        "inputTeeth": 12,
+        "outputTeeth": 24
+      },
+      {
+        "id": "crank-endstops",
+        "kind": "stop",
+        "joint": "motor",
+        "min": -0.2,
+        "max": 0.2
+      }
+    ]
+  },
+  "members": {
+    "base": [
+      "REPLACE-WITH-BASE-INSTANCE-KEY"
+    ],
+    "crank": [
+      "REPLACE-WITH-CRANK-INSTANCE-KEY"
+    ],
+    "coupler": [
+      "REPLACE-WITH-COUPLER-INSTANCE-KEY"
+    ],
+    "rocker": [
+      "REPLACE-WITH-ROCKER-INSTANCE-KEY"
+    ],
+    "driveShaft": [
+      "REPLACE-WITH-DRIVE-SHAFT-INSTANCE-KEY"
+    ]
+  },
+  "driver": "handwheel",
+  "note": "Synthetic gearbox-driven spatial four-bar. Replace all member keys with actual placed part keys. Geometry, tooth contact and collision validity require independent review."
+}

@@ -3,7 +3,23 @@
 const fs=require('fs'),path=require('path'),assert=require('assert/strict'),Module=require('module');
 // esbuild ships with Vite; the `typescript` package here is the native 7.x
 // preview, which no longer exposes transpileModule/ModuleKind/ScriptTarget.
-const esbuild=require('esbuild');
+let esbuild;
+try { esbuild=require('esbuild'); }
+catch {
+  // Offline fallback: use a locally resolvable TypeScript installation, then
+  // the global npm module root; no developer-specific absolute paths.
+  let ts;
+  try { ts=require('typescript'); }
+  catch {
+    const {execFileSync}=require('child_process');
+    const globalRoot=execFileSync('npm',['root','-g'],{encoding:'utf8',timeout:5000}).trim();
+    try { ts=require(path.join(globalRoot,'typescript')); }
+    catch { throw Error('Offline verifier requires npm esbuild or TypeScript (local/global); run npm install first.'); }
+  }
+  esbuild={transformSync(src){return {code:ts.transpileModule(src,{compilerOptions:{
+    module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,
+  }}).outputText}}};
+}
 const ROOT=path.resolve(__dirname,'..');
 class Matrix4{
   constructor(){this.elements=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];}
@@ -112,3 +128,5 @@ test('gravity stage compiles to sampled playback and exact final rest',()=>{
  pose.elements.forEach((v,i)=>approx(v,tl.tracks.get('arm').final.elements[i],1e-9));
 });
 if(process.exitCode)process.exit(process.exitCode);
+
+module.exports={test,assert,approx,load,assembly,scene,metrics,timeline,Matrix4,Vector3};

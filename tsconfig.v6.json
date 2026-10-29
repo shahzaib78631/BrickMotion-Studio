@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "types": [],
+    "noEmit": true
+  },
+  "include": [
+    "src/anim/motion/v6/spatialConstraints.ts",
+    "src/anim/motion/v6/geometryScreen.ts",
+    "src/anim/motion/v6/spatialSweep.ts"
+  ]
+}

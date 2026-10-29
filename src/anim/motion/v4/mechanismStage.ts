@@ -49,7 +49,7 @@ export function compileMechanismStage(asm:Assembly,metrics:Metrics,tl:Timeline,p
   const frames=animated.map(key=>({key,deltas:[] as number[][]}));
   const originals=new Map(animated.map(key=>[key,solver.rest.get(key)!]));
   const inverse=new Map(animated.map(key=>[key,solver.rest.get(key)!.clone().invert()]));
-  let worstClosure=0, inertiaApproximations=0;
+  let worstClosure=0, worstTransmissionResidual=0, inertiaApproximations=0;
   let engine:ReducedGravityPreview|null=null;
   if(program.mode==='gravity'){
     engine=new ReducedGravityPreview(solver,asm,metrics);
@@ -60,9 +60,15 @@ export function compileMechanismStage(asm:Assembly,metrics:Metrics,tl:Timeline,p
   const instances=new Map(asm.instances.map(i=>[i.key,i]));
   const restBoxes=asm.instances.map(i=>({key:i.key,box:i.worldBox}));
   let cameraBounds=tl.sceneBox;
-  const frameAt=(q:number)=>{
-    const result=solver.solve(q);
+  const frameAt=(q:number,progress:number,endpoint:boolean)=>{
+    const independent=program.mode==='kinematic' ? (program.secondaryMotors??[]) : [];
+    const result=independent.length
+      ? solver.solveInputs({[program.driver.joint]:q,
+          ...Object.fromEntries(independent.map(m=>[m.joint,
+            endpoint?0:m.amplitude*Math.sin(2*Math.PI*(m.cycles??1)*progress)]))})
+      : solver.solve(q);
     worstClosure=Math.max(worstClosure,result.maxClosureErrorLdu);
+    worstTransmissionResidual=Math.max(worstTransmissionResidual,result.transmissionResidual??0);
     const all=new Map(result.poses);
     for(const [body,leader] of followers){
       const leaderPose=all.get(leader)!;
@@ -99,7 +105,7 @@ export function compileMechanismStage(asm:Assembly,metrics:Metrics,tl:Timeline,p
       }
       if(i===0||i===count-1)q=0;
     }
-    const all=frameAt(q);
+    const all=frameAt(q,progress,i===0||i===count-1);
     for(const track of frames){
       const delta=(all.get(track.key)??originals.get(track.key)!).clone().multiply(inverse.get(track.key)!);
       if(delta.elements.some(v=>!Number.isFinite(v)))throw Error(`Nonfinite mechanism transform: ${track.key}`);
@@ -135,6 +141,8 @@ export function compileMechanismStage(asm:Assembly,metrics:Metrics,tl:Timeline,p
   const stage:MechanismStage={start:tl.buildEnd+.2,duration:program.duration,frames:count,sampleHz,mode:program.mode,
     collisionStatus:'unverified',tracks:frames,
     diagnostics:{joints:program.joints.length,gearPairs:program.gears?.length??0,
+      transmissionConstraints:program.transmissions?.filter(t=>t.kind!=='clutch'||t.engaged).length??0,
+      maxTransmissionResidual:worstTransmissionResidual,secondaryMotorTracks:program.secondaryMotors?.length??0,
       loopClosures:program.closures?.length??0,rigidFollowers:followers.size,
       maxClosureErrorLdu:worstClosure,physicsSteps,approximateInertias:inertiaApproximations,
       sampledAabbOverlapAdvisories:collisionHints}};

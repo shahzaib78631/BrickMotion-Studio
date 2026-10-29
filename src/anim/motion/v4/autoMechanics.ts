@@ -29,10 +29,20 @@ export type SuggestedMechanism = {
   evidence:'ldcad-shadow'|'inferred-gear-mesh';
   warnings:string[];
 };
+/** Review-only functional hypotheses, never used as physical mates or
+ * auto-render programs without a user explicitly selecting the parts. */
+export type FunctionalHint = {
+  id:string;kind:'worm'|'rack-pinion'|'belt'|'chain';a:string;b:string;
+  distanceLdu:number; evidence:'part-description-proximity';
+  warning:string;
+};
 export type AutoMechanicsReport = {
   scanned:number; described:number; connectors:number; movableJoints:number;
   kinds:Record<PartCategory,number>;
+  /** Complete per-instance inspection for the guided transmission designer. */
+  parts:DetectedPart[];
   joints:DetectedJoint[]; gearMeshes:DetectedGearMesh[];
+  functionalHints:FunctionalHint[];
   suggestions:SuggestedMechanism[];
   warnings:string[];
 };
@@ -195,6 +205,42 @@ function gearCandidate(asm:Assembly,graph:MechanismGraph,pair:DetectedGearMesh,
   return validSuggestion(asm,graph,program)?program:null;
 }
 
+/** Lightweight semantic discovery: rank likely families for USER REVIEW.
+ * Part names are weak evidence, so these do not create simulated joints.
+ * We deliberately do not assume a nearby gear actually meshes a rack/worm.
+ */
+export function proposeFunctionalHints(parts: readonly DetectedPart[],
+  worldCentres: ReadonlyMap<string, Vec3>): FunctionalHint[] {
+  const worm=parts.filter(p=>/\bworm\b/i.test(p.description));
+  const rack=parts.filter(p=>/\brack\b/i.test(p.description));
+  const pulley=parts.filter(p=>/\bpulley\b/i.test(p.description));
+  const sprocket=parts.filter(p=>/\bsprocket\b|\bchain wheel\b/i.test(p.description));
+  const gear=parts.filter(p=>p.category==='gear'&&p.teeth&&p.axis&&
+    !/\bworm|rack|bevel\b/i.test(p.description));
+  const found:FunctionalHint[]=[];
+  const groups: [FunctionalHint['kind'],readonly DetectedPart[],readonly DetectedPart[]][]=[
+    ['worm',worm,gear],['rack-pinion',rack,gear],['belt',pulley,pulley],['chain',sprocket,sprocket],
+  ];
+  for(const [kind,inputs,outputs] of groups)for(const a of inputs.slice(0,100)){
+    let best:{b:DetectedPart;distance:number}|null=null;
+    const origin=worldCentres.get(a.key);
+    if(!origin)continue;
+    for(const b of outputs.slice(0,150)){
+      if(a.key===b.key)continue;
+      if((kind==='belt'||kind==='chain')&&a.key>b.key)continue; // avoid duplicate pairs
+      const dest=worldCentres.get(b.key);if(!dest)continue;
+      const distance=norm(sub(origin,dest));
+      if(distance>120||best&&distance>=best.distance)continue;
+      best={b,distance};
+    }
+    if(best)found.push({id:`${kind}:${a.key}:${best.b.key}`,kind,
+      a:kind==='rack-pinion'?best.b.key:a.key,b:kind==='rack-pinion'?a.key:best.b.key,
+      distanceLdu:best.distance,evidence:'part-description-proximity',
+      warning:'Review required: nearby part descriptions do not prove bearings, engagement, pitch, motion direction or collision clearance.'});
+  }
+  return found.sort((a,b)=>a.distanceLdu-b.distanceLdu).slice(0,24);
+}
+
 export function detectAutomaticMechanics(asm:Assembly,metrics:Metrics,graph:MechanismGraph):AutoMechanicsReport {
   const count:Record<PartCategory,number>={gear:0,turntable:0,hinge:0,axle:0,pin:0,shaft:0,wheel:0,other:0};
   let described=0,connectors=0;
@@ -202,7 +248,9 @@ export function detectAutomaticMechanics(asm:Assembly,metrics:Metrics,graph:Mech
     const m=metrics(i.part),desc=m.description?.trim()??'',snaps=m.snaps??[];
     if(desc)described++;if(snaps.length)connectors++;
     const category=classify(desc,i.part,snaps);count[category]++;
-    const axis=category==='gear'?gearAxis(i,metrics):null;
+    // Wheels, sprockets and pulleys also need shaft axes for the V6 geometry
+    // screen; an A-profile connector is evidence of an axle, not of rolling.
+    const axis=category==='gear'||category==='wheel'||/\b(sprocket|pulley|worm)\b/i.test(desc)?gearAxis(i,metrics):null;
     const teeth=category==='gear'?countGearTeeth(desc):null;
     return {key:i.key,part:i.part,category,description:desc,
       evidence:desc?'ldraw-description':snaps.length?'ldcad-connector':'unknown',
@@ -210,6 +258,7 @@ export function detectAutomaticMechanics(asm:Assembly,metrics:Metrics,graph:Mech
     };
   });
   const byKey=new Map(parts.map(p=>[p.key,p]));
+  const functionalHints=proposeFunctionalHints(parts,new Map(asm.instances.map(i=>[i.key,boxCentre(i.worldBox)])));
   const joints:DetectedJoint[]=graph.edges.filter(e=>e.motion!=='fixed' ||
     ['hinge','ball-socket','axle-hole','pin-hole'].includes(e.type)).slice(0,128).map(e=>({
     a:e.a,b:e.b,motion:e.motion==='sliding'?'prismatic':e.motion,
@@ -259,6 +308,6 @@ export function detectAutomaticMechanics(asm:Assembly,metrics:Metrics,graph:Mech
   }
   // Paired gear metadata is surfaced even when an automatic *whole connected*
   // assembly proposal cannot safely be isolated from shafts and bearings.
-  return {scanned:parts.length,described,connectors,movableJoints:joints.filter(j=>j.motion!=='fixed').length,kinds:count,joints,gearMeshes:pairs,
+  return {scanned:parts.length,described,connectors,movableJoints:joints.filter(j=>j.motion!=='fixed').length,kinds:count,parts,joints,gearMeshes:pairs,functionalHints,
     suggestions,warnings:warnings.slice(0,12)};
 }

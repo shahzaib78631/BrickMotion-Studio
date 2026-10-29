@@ -1,3 +1,24 @@
+# BrickMotion Studio — V8 twenty-iteration kinematics and mechanics upgrade
+
+**Newest upgrade:** 10 robustness/fix iterations followed by 10 researched mechanics and integration iterations, with 20 targeted offline regressions and 6 additional property checks. See [`V8_20_ITERATION_REPORT.md`](V8_20_ITERATION_REPORT.md), [`V8_MECHANICS_GUIDE.md`](V8_MECHANICS_GUIDE.md), and [`V8_VERIFICATION_RESULTS.md`](V8_VERIFICATION_RESULTS.md).
+
+**New V8:** offset slider-cranks, Scotch yokes, signed linear coupling, hydraulic-piston displacement, backlash gears, detents, sampled cam profiles, indexed dwell mechanisms, ideal two-wheel differential drive, and sampled spatial motion-clip JSON. Existing V4/V5/V6/V7 mechanics remain supported. Real-set collision/physics and direct saved-video integration are not yet certified. Full production build requires dependency download and remains unverified in the offline environment.
+
+```bash
+npm ci
+npm run setup
+npm run dev
+npm run verify:v8:all
+```
+
+---
+
+> **V7 mechanics + kinematics integration:** The **Mechanisms** panel now solves real spatial linkages and authored mechanical transmissions **together**, with spur, bevel, planetary and internal gears, worm drives, belts/chains, CV/Hooke drives, racks, lead screws, winches, differentials, Ackermann steering, ideal wheel rolling, cam followers, clutches, holding brakes, joint stops and ratchets. New cylindrical/planar/universal spatial joints, multi-turn continuation, independently locked spatial motors, safe geometry proposals, V7 rig import/export and sampled sweep controls are included. This is *ideal kinematics*, not certified contact/forces, and the full browser build is still unverified. See [V7_MECHANICS_KINEMATICS.md](V7_MECHANICS_KINEMATICS.md) and [V7_VERIFICATION_RESULTS.md](V7_VERIFICATION_RESULTS.md).
+
+> **V6 spatial linkage and geometry upgrade:** The **Mechanisms** panel now offers a bounded, experimental 6-DOF spatial linkage solver (hinge/slider/ball/weld/link constraints with explicit ground and closed-loop correction), a 33-position forward/reverse linkage sweep with evidence export, geometry-screened mechanism hypotheses, and ideal straight-line wheel rolling. Original V4/V5 planners, keyframe editing, and transmission networks remain intact. These are sampled/ideal kinematics, not contact physics, collision certification, or independently benchmarked real LEGO-set results. See [V6_SPATIAL_KINEMATICS.md](V6_SPATIAL_KINEMATICS.md).
+
+> **V5 transmission network update:** Mechanism Lab now includes an authorable multi-input ideal transmission solver (gears, belts, chains, worm drives, racks, screws, differentials and clutches), a multi-coupling network composer, independent secondary-motor animation tracks, review-only mechanism hints, and a sampled kinematic sweep report. See [V5_TRANSMISSION_ENGINE.md](V5_TRANSMISSION_ENGINE.md) for exact scope, equations, instructions and validation limits. The V4 collision pipeline remains separate; full automatic whole-set mechanism reconstruction is **not yet implemented**.
+
 # 🧱 BrickMotion Studio
 
 Design brick-built sets, or have Claude invent them, then export a vertical (9:16) build animation for TikTok, Reels or Shorts. Parts start laid out on a white studio floor, fly into place in build order, and the video ends on a hero orbit.
@@ -17,6 +38,19 @@ npm run dev     # open http://localhost:5173
 ### LDraw data
 
 The parts library is downloaded on demand. To fetch it manually, official parts are at <https://library.ldraw.org/library/updates/complete.zip> and unofficial parts at <https://library.ldraw.org/library/unofficial/ldrawunf.zip>. Unzip them into `public/ldraw/`.
+
+## Kinebrick-inspired Mechanism Lab + BrickLink Studio import
+
+The left rail now includes **Mechanisms**, an interactive, non-destructive
+inspector for LDraw/Technic connections, hinge and gear candidates, a live
+scrubbable kinematic driver, manual rotate/slide experimentation, and JSON/
+Graphviz diagnostic exports. The existing Standard Motion V4 solver drives
+supported mechanisms; normal build playback and keyframe editing remain
+independent. The project import menu also supports BrickLink Studio **`.io`**
+files (including conventional encrypted Studio archives). Mechanical inference
+is advisory and does not establish physical collision clearance or forces.
+Read [MECHANISM_LAB_UPGRADE.md](MECHANISM_LAB_UPGRADE.md) for the full workflow,
+limitations and tests.
 
 ## Scene cameras, lighting and region-based preview
 
@@ -39,7 +73,7 @@ feature list, controls, compatibility notes and current testing limitations.
 1. **Get a plan**
    - **✨ AI → Generate with Claude**: describe a set ("a tiny orange seaplane with twin floats"). Needs your Claude API key in **☰ → Settings**. The key stays in this browser.
    - **✨ AI → Copy AI prompt**: copies a prompt for any chat assistant (ChatGPT, Claude.ai…). Paste its answer under **✨ AI → Paste plan**.
-   - **Import…**: open a `.json` plan, or an LDraw `.ldr` / `.mpd` model (for example an official set from the LDraw OMR).
+   - **Import…**: open a `.json` plan, an LDraw `.ldr` / `.mpd` model, or a BrickLink Studio `.io` file (for example a model from the LDraw OMR).
    - Or build by hand: pick parts on the left; arrow keys move, PageUp/PageDown change height, R rotates, Delete removes.
 2. **Fix it**: the **Checks** panel lists floating and overlapping pieces. Click a piece to move it, recolour it or swap the part. **✨ AI → Fix with Claude** sends the checks and your note back to Claude.
 3. **Place assemblies**: Open **Assembly** in the left rail. Each nested submodel use has its own row. Drag a model row onto the Build viewport floor to set a spot, or select a row and enter X/Z in studs and an angle in degrees. The old model-name chip strip has been removed from the viewport. Select and drag a floor marker to reposition it; enable the transform gizmo to translate or rotate around Y (15° increments, Shift for free rotation). The **Auto** action restores automatic placement. Enable **Show models at build spots in viewport** to display each placed main model and submodel directly on its selected floor footprint in Build mode, including during marker dragging. This is an editor-only preview; source brick coordinates and the animation’s final installed geometry are never changed. **Loose pieces follow the model** is a separate animation option: turning it off keeps waiting parts at their original floor locations. Spot edits are undoable (Ctrl/Cmd+Z) and stored in your project. After a Construction V2/V3 plan succeeds, the panel also lists the generated **construction subassemblies** (upper body, lower body, head module, mechanical preassembly); select one and enter X/Z/angle or **Auto** to place its work bay. The **Checks** tab lists overlapping build areas without moving any manual spots.

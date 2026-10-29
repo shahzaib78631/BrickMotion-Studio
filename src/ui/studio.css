@@ -224,3 +224,29 @@
 .bm-view-btn .ic{width:13px;height:13px}
 .bm-view-btn .ic:last-child{width:11px;height:11px}
 .bm-view-pop{position:absolute;top:132px;right:12px;z-index:60;min-width:170px}
+
+/* Mechanism Lab: non-destructive topology browser and live V4 driver. */
+.bm-mechanism-lab .nx-card{gap:9px}
+.bm-lab-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+.bm-lab-option,.bm-lab-relation{display:flex;flex-direction:column;text-align:left;gap:3px;padding:9px 10px;border:1px solid var(--line);border-radius:9px;background:var(--surface);width:100%;min-width:0;overflow-wrap:anywhere}
+.bm-lab-option:hover,.bm-lab-relation:hover{background:var(--hover);border-color:var(--line2)}
+.bm-lab-option.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.bm-lab-option strong,.bm-lab-relation strong{font-size:12px;font-weight:650;color:var(--ink)}
+.bm-lab-option span,.bm-lab-relation span{font-size:11px;color:var(--ink2)}
+.bm-lab-relation small{font-size:10px;color:var(--ink3)}
+.bm-lab-drive{display:flex;flex-direction:column;gap:12px;padding-top:12px;border-top:1px solid var(--line)}
+.bm-mechanism-lab .nx-group>.nx-field{margin-top:4px}
+.bm-mechanism-lab .nx-group>.bm-lab-relation{width:calc(100% - 24px)}
+
+.bm-lab-categories{display:flex;flex-direction:column;gap:7px}
+.bm-lab-category{display:grid;grid-template-columns:72px minmax(0,1fr) 28px;align-items:center;gap:8px;font-size:11px;color:var(--ink2)}
+.bm-lab-category>span{text-transform:capitalize}
+.bm-lab-category>div{height:6px;border-radius:999px;background:var(--sunken);overflow:hidden}
+.bm-lab-category>div>span{display:block;height:100%;border-radius:999px;background:var(--accent)}
+.bm-lab-category>b{text-align:right;color:var(--ink);font-variant-numeric:tabular-nums}
+.bm-lab-manual{padding-top:6px;padding-bottom:10px}
+.bm-lab-manual>.nx-row{padding:0 12px}
+.bm-lab-manual>.nx-row .bm-lab-field{flex:1;min-width:0}
+.bm-lab-manual>.nx-field,.bm-lab-manual>.nx-btn,.bm-lab-manual>.nx-hint{margin-left:12px;margin-right:12px}
+.bm-lab-manual select{min-width:0;width:100%;max-width:100%}
+.bm-lab-manual .nx-field{font-size:11px}

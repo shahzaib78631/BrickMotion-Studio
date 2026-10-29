@@ -281,7 +281,7 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
             <TimelineNote id="v4-mechanism" open={note} onOpen={setNote} tone="warn"
               label={`V4 ${tl.mechanismStage.mode} · ${tl.mechanismStage.duration.toFixed(1)}s`}
               title="Postassembly mechanical animation — motion clearance not certified">
-              {tl.mechanismStage.diagnostics.gearPairs} gear couplings, {tl.mechanismStage.diagnostics.loopClosures} closed-link constraints, {tl.mechanismStage.diagnostics.rigidFollowers} rigid followers.
+              {tl.mechanismStage.diagnostics.gearPairs} gear couplings, {tl.mechanismStage.diagnostics.transmissionConstraints??0} V5 transmissions, {tl.mechanismStage.diagnostics.loopClosures} closed-link constraints, {tl.mechanismStage.diagnostics.rigidFollowers} rigid followers.
               {' '}Starts at {tl.mechanismStage.start.toFixed(2)}s. Maximum closure residual {tl.mechanismStage.diagnostics.maxClosureErrorLdu.toFixed(3)} LDU.
               {' '}The demonstration is kinematically constrained but not certified collision-free. Review the moving mechanism before export.
             </TimelineNote>

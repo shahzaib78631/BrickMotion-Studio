@@ -1,0 +1,144 @@
+{
+  "format": "brickmotion-v8-mechanics-rig",
+  "version": 3,
+  "model": {
+    "bodies": [
+      {
+        "id": "ground",
+        "rest": {
+          "p": [
+            0,
+            0,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "fixed": true
+      },
+      {
+        "id": "crankBody",
+        "rest": {
+          "p": [
+            0,
+            0,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "fixed": false
+      },
+      {
+        "id": "pistonBody",
+        "rest": {
+          "p": [
+            0,
+            0,
+            0
+          ],
+          "q": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "fixed": false
+      }
+    ],
+    "constraints": [
+      {
+        "id": "crank",
+        "kind": "hinge",
+        "a": {
+          "body": "ground",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "b": {
+          "body": "crankBody",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "axisA": [
+          0,
+          0,
+          1
+        ],
+        "axisB": [
+          0,
+          0,
+          1
+        ]
+      },
+      {
+        "id": "piston",
+        "kind": "slider",
+        "a": {
+          "body": "ground",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "b": {
+          "body": "pistonBody",
+          "local": [
+            0,
+            0,
+            0
+          ]
+        },
+        "axisA": [
+          1,
+          0,
+          0
+        ],
+        "axisB": [
+          1,
+          0,
+          0
+        ]
+      }
+    ],
+    "mechanics": [
+      {
+        "id": "piston-drive",
+        "kind": "slider-crank",
+        "crank": "crank",
+        "slider": "piston",
+        "crankRadiusLdu": 6,
+        "rodLengthLdu": 35,
+        "guideOffsetLdu": 2
+      }
+    ]
+  },
+  "members": {
+    "ground": [
+      "REPLACE_WITH_GROUNDED_LDRAW_INSTANCE_KEY"
+    ],
+    "crankBody": [
+      "REPLACE_WITH_CRANK_LDRAW_INSTANCE_KEY"
+    ],
+    "pistonBody": [
+      "REPLACE_WITH_PISTON_LDRAW_INSTANCE_KEY"
+    ]
+  },
+  "driver": "crank"
+}
