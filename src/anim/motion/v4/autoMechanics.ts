@@ -27,8 +27,10 @@ export type DetectedGearMesh = { a:string;b:string;teethA:number;teethB:number;
   moduleLdu:number; evidence:'inferred-pitch'; confidence:'review-required' };
 export type SuggestedMechanism = {
   title:string; program:MechanismProgram;
-  evidence:'ldcad-shadow'|'inferred-gear-mesh'|'measured-gear-train';
+  evidence:'ldcad-shadow'|'inferred-gear-mesh'|'measured-gear-train'|'classified';
   warnings:string[];
+  /** The named mechanism this suggestion runs (classify/patterns.ts). */
+  mechanism?:{kind:string;name:string};
 };
 /** Review-only functional hypotheses, never used as physical mates or
  * auto-render programs without a user explicitly selecting the parts. */

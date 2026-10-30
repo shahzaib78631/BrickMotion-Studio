@@ -165,6 +165,12 @@
       "total": 1
     }
   ],
+  "byPhase": {
+    "3": {
+      "hit": 17,
+      "total": 17
+    }
+  },
   "score": {
     "hit": 17,
     "total": 17,

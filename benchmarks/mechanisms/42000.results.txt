@@ -1,0 +1,35 @@
+Mechanism benchmark — LEGO 42000 Grand Prix Racer (LDraw OMR)
+Checks passed: 0/20 (0%) · mechanisms fully found: 0/7
+  phase 3: 0/18 (0%)
+  phase 4: 0/2 (0%)
+
+· steering [review] 0/6
+    missing      steering wheel turns both front hubs, rear hubs stay — no suggestion named rack-steering / steering
+    missing      column 20T double bevel drives the vertical 12T bevel — no bevel mesh considered
+    missing      vertical 12T bevel drives the forward 20T double bevel — no bevel mesh considered
+    missing      12T double bevel pinion drives the 1x7 rack — no rack-and-pinion considered
+    missing      right front hub steers about its kingpin — no movable joint on axis [0,1,0] (1 on other axes)
+    missing      left front hub steers about its kingpin — no movable joint on axis [0,1,0] (1 on other axes)
+· engine [review] 0/6
+    missing      right rear wheel turns the crankshaft and the pistons — no suggestion named piston-engine / differential / gear-train
+    missing      differential 28T bevel drives the 20T double bevel — no bevel mesh considered
+    missing      20T double bevel drives the 12T on the crank axle (side by side) — no spur mesh considered
+    rejected     right side gear meshes the differential's planet — geometry screen rejected: No measured cone geometry for bevel part i0/i7o; bevel meshes are not guessed from boxes; Pulley / sprocket shafts are not parallel; Pulley / sprocket planes are not aligned
+    rejected     left side gear meshes the differential's planet — geometry screen rejected: No measured cone geometry for bevel part i0/i7p; bevel meshes are not guessed from boxes; Pulley / sprocket shafts are not parallel; Pulley / sprocket planes are not aligned
+    wrong-motion piston slides in its cylinder — found cylindrical/revolute on this axis, wanted sliding
+· front-suspension [review] 0/2
+    missing      left front wishbone works the rocker and its shock — no suggestion named suspension
+    missing      front shock rod slides in its cylinder — no movable joint on axis [0,0,1] (1 on other axes)
+· rear-suspension [review] 0/2
+    missing      left rear wishbone works the rocker and its shock — no suggestion named suspension
+    missing      rear shock rod slides in its cylinder — no movable joint on axis [0,0,1] (1 on other axes)
+· front-wheels [review] 0/2
+    missing      right front rim turns on its hub axis — no movable joint on axis [1,0,0] (0 on other axes)
+    missing      left front tyre turns on its hub axis — no movable joint on axis [1,0,0] (0 on other axes)
+· selector-wing [review] 0/1
+    missing      knob drives the rear wing actuator — no suggestion named linear-actuator / gearbox
+· selector-cover [review] 0/1
+    missing      knob drives both engine cover actuators — no suggestion named linear-actuator / gearbox
+
+Noise: 395 movable joints {"revolute":393,"ball":2} by type {"cylindrical":252,"axle-hole":140,"ball-socket":2,"clip":1}
+Suggestions: 6, unrelated to any expected mechanism: 4

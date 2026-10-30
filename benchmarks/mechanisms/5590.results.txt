@@ -1,5 +1,6 @@
 Mechanism benchmark — LEGO 5590 Whirl 'n Wheel Super Truck (MLCad, unofficial)
 Checks passed: 17/17 (100%) · mechanisms fully found: 6/6
+  phase 3: 17/17 (100%)
 
 ✓ truck-steering [posed] 8/8
     hit          vertical steering input shaft — axle-hole revolute joint i0/i5r ↔ i0/ix

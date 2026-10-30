@@ -7,7 +7,10 @@
  * located by part number + world position, so internal ids can change.
  */
 import type { Assembly } from '../../../model/assemble';
-import type { LabReport } from '../v4/mechanismLab';
+import * as THREE from 'three';
+import { solveLabFrame, type LabReport } from '../v4/mechanismLab';
+import { MechanismSolver } from '../v4/mechanismSolver';
+import type { SuggestedMechanism } from '../v4/autoMechanics';
 import type { MechanismEdge } from '../v4/mechanismGraph';
 
 type V3 = [number, number, number];
@@ -19,9 +22,14 @@ export type BenchmarkCheck =
   | { type: 'suggested'; label: string; parts: PartRef[] }
   /** A link carried between two arms that pivot on a common frame (steering
    * tie rod, parallelogram lift): it moves on an arc, not along a slide. */
-  | { type: 'fourBar'; label: string; coupler: PartRef; arms: [PartRef, PartRef]; axis: V3 };
+  | { type: 'fourBar'; label: string; coupler: PartRef; arms: [PartRef, PartRef]; axis: V3 }
+  /** A whole function: a suggestion named as one of `kinds`, driven at `driver`,
+   * must move every `moves` part and leave every `stays` part where it is. */
+  | { type: 'function'; label: string; kinds: string[]; driver: PartRef; moves: PartRef[]; stays?: PartRef[] };
 export type ExpectedMechanism = {
   id: string; title: string; evidence: 'posed' | 'geometry' | 'review'; why?: string;
+  /** Spec phase that is expected to find it (default 3); later phases are scored apart. */
+  phase?: number;
   checks: BenchmarkCheck[];
 };
 export type BenchmarkSpec = {
@@ -46,6 +54,8 @@ export type BenchmarkResult = {
   checks: CheckResult[];
   mechanisms: { id: string; title: string; evidence: string; hit: number; total: number }[];
   score: { hit: number; total: number; recall: number; mechanismsComplete: number; mechanisms: number };
+  /** Checks by the phase expected to find them. */
+  byPhase: Record<number, { hit: number; total: number }>;
   noise: {
     movableEdges: number;
     byMotion: Record<string, number>;
@@ -112,6 +122,40 @@ export function scoreMechanismBenchmark(spec: BenchmarkSpec, asm: Assembly, repo
       : { ok: false, detail: 'arms do not pivot on a shared frame body' };
   };
 
+  const cluster = (k: string) => new Set(clusterOf.get(k) ?? [k]);
+  const label = (k: string) => { const i = asm.instances.find(x => x.key === k); return i ? bare(i.part) : k; };
+  /** Drive the suggestion to both ends of its travel and see what moves. */
+  const functionVerdict = (s: SuggestedMechanism, driver: string, moves: string[], stays: string[]): { ok: boolean; detail: string } => {
+    const p = s.program, joint = p.joints.find(j => j.id === p.driver.joint);
+    if (!joint) return { ok: false, detail: 'driver joint missing' };
+    const driven = new Set([joint.body, ...(p.rigidFollowers ?? []).filter(f => f.leader === joint.body).flatMap(f => f.bodies)]);
+    if (![...cluster(driver)].some(k => driven.has(k))) return { ok: false, detail: `driven at ${label(joint.body)}, not at ${label(driver)}` };
+    const moved = new Map<string, number>();
+    try {
+      const solver = new MechanismSolver(asm, p);
+      for (const end of [1, -1]) {
+        solver.assembled();
+        let poses = new Map<string, THREE.Matrix4>();
+        for (let i = 1; i <= 8; i++) poses = solveLabFrame(solver, end * p.driver.amplitude * i / 8);
+        for (const k of [...moves, ...stays]) moved.set(k, Math.max(moved.get(k) ?? 0, motionOf(k, poses, solver.rest)));
+      }
+    } catch (e) { return { ok: false, detail: `does not solve: ${(e as Error).message}` }; }
+    const still = moves.filter(k => moved.get(k)! < 1);
+    if (still.length) return { ok: false, detail: `${still.map(label).join(', ')} did not move` };
+    const wrong = stays.filter(k => moved.get(k)! >= 1);
+    if (wrong.length) return { ok: false, detail: `${wrong.map(label).join(', ')} moved but should stay` };
+    return { ok: true, detail: '' };
+  };
+  /** Motion score of one part: LDU its box centre travels, or degrees it turns, whichever is larger (1 = moved). */
+  const motionOf = (k: string, poses: ReadonlyMap<string, THREE.Matrix4>, rest: ReadonlyMap<string, THREE.Matrix4>) => {
+    const pose = poses.get(k), r = rest.get(k), inst = asm.instances.find(i => i.key === k);
+    if (!pose || !r || !inst) return 0;
+    const delta = pose.clone().multiply(r.clone().invert()), c = new THREE.Vector3(...centre(inst.worldBox));
+    const travel = c.clone().applyMatrix4(delta).distanceTo(c);
+    const q = new THREE.Quaternion().setFromRotationMatrix(delta), turn = 2 * Math.acos(Math.min(1, Math.abs(q.w))) * 180 / Math.PI;
+    return Math.max(travel / 0.5, turn);
+  };
+
   const results: CheckResult[] = [];
   const expectedParts = new Set<string>();
   for (const mech of spec.mechanisms) {
@@ -147,6 +191,22 @@ export function scoreMechanismBenchmark(spec: BenchmarkSpec, asm: Assembly, repo
         [coupler!, ...arms as string[]].forEach(k => expectedParts.add(k));
         const verdict = fourBar(coupler!, arms as [string, string], check.axis);
         push(verdict.ok ? 'hit' : 'missing', verdict.detail);
+      } else if (check.type === 'function') {
+        const refs = [check.driver, ...check.moves, ...(check.stays ?? [])], keys = refs.map(resolve);
+        const lost = keys.indexOf(null);
+        if (lost >= 0) { push('unresolved', `cannot find ${fmt(refs[lost])}`); continue; }
+        const [driver, ...rest] = keys as string[], moves = rest.slice(0, check.moves.length), stays = rest.slice(check.moves.length);
+        [driver, ...moves].forEach(k => expectedParts.add(k));
+        const named = report.detection.suggestions.filter(s => s.mechanism && check.kinds.includes(s.mechanism.kind));
+        if (!named.length) { push('missing', `no suggestion named ${check.kinds.join(' / ')}`); continue; }
+        const why: string[] = [];
+        const good = named.find(s => {
+          const v = functionVerdict(s, driver, moves, stays);
+          if (!v.ok) why.push(`"${s.title}": ${v.detail}`);
+          return v.ok;
+        });
+        if (good) push('hit', `${good.mechanism!.kind} "${good.title}" moves every expected part`);
+        else push('missing', why.join('; '));
       } else if (check.type === 'suggested') {
         const keys = check.parts.map(resolve);
         if (keys.some(k => !k)) { push('unresolved', `cannot find ${fmt(check.parts[keys.indexOf(null)])}`); continue; }
@@ -165,6 +225,11 @@ export function scoreMechanismBenchmark(spec: BenchmarkSpec, asm: Assembly, repo
     return { id: m.id, title: m.title, evidence: m.evidence, hit: mine.filter(r => r.status === 'hit').length, total: mine.length };
   });
   const hit = results.filter(r => r.status === 'hit').length;
+  const byPhase: BenchmarkResult['byPhase'] = {};
+  for (const m of spec.mechanisms) {
+    const phase = m.phase ?? 3, mine = results.filter(r => r.mechanism === m.id), b = byPhase[phase] ??= { hit: 0, total: 0 };
+    b.hit += mine.filter(r => r.status === 'hit').length; b.total += mine.length;
+  }
   const movable = report.graph.edges.filter(e => e.motion !== 'fixed');
   const tally = (xs: string[]) => xs.reduce<Record<string, number>>((o, x) => (o[x] = (o[x] ?? 0) + 1, o), {});
   const expandedExpected = new Set([...expectedParts].flatMap(k => [...(clusterOf.get(k) ?? [k])]));
@@ -174,6 +239,7 @@ export function scoreMechanismBenchmark(spec: BenchmarkSpec, asm: Assembly, repo
     model: spec.model.name,
     checks: results,
     mechanisms,
+    byPhase,
     score: { hit, total: results.length, recall: results.length ? hit / results.length : 0,
       mechanismsComplete: mechanisms.filter(m => m.hit === m.total).length, mechanisms: mechanisms.length },
     noise: {
@@ -189,7 +255,8 @@ export function scoreMechanismBenchmark(spec: BenchmarkSpec, asm: Assembly, repo
 /** Plain-text table for the console and committed baselines. */
 export function formatBenchmark(r: BenchmarkResult): string {
   const lines = [`Mechanism benchmark — ${r.model}`,
-    `Checks passed: ${r.score.hit}/${r.score.total} (${(r.score.recall * 100).toFixed(0)}%) · mechanisms fully found: ${r.score.mechanismsComplete}/${r.score.mechanisms}`, ''];
+    `Checks passed: ${r.score.hit}/${r.score.total} (${(r.score.recall * 100).toFixed(0)}%) · mechanisms fully found: ${r.score.mechanismsComplete}/${r.score.mechanisms}`,
+    ...Object.entries(r.byPhase ?? {}).map(([p, b]) => `  phase ${p}: ${b.hit}/${b.total} (${(b.total ? b.hit / b.total * 100 : 0).toFixed(0)}%)`), ''];
   for (const m of r.mechanisms) {
     lines.push(`${m.hit === m.total ? '✓' : '·'} ${m.id} [${m.evidence}] ${m.hit}/${m.total}`);
     for (const c of r.checks.filter(c => c.mechanism === m.id))

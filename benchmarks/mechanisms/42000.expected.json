@@ -1,0 +1,110 @@
+{
+  "schema": "brickmotion-mechanism-benchmark-1",
+  "model": {
+    "name": "LEGO 42000 Grand Prix Racer (LDraw OMR)",
+    "file": "samples/42000-1.mpd",
+    "sha256": "ee4abd2799c32979b5de5d427a55718a3d11617a0ce2e5749bc0a7ca5c2ab6c0"
+  },
+  "notes": [
+    "Model: LDraw Official Model Repository file '42000-1 Grand Prix Racer.mpd', CC BY 2.0 (see its header). Not redistributed here; place it at samples/42000-1.mpd.",
+    "Ground truth: the curated functions of Kinebrick's data/sets/42000-1.json (erik-larsen/kinebrick, commit 516e176, CC BY-SA 4.0), which cite the set's three instruction books. Its part references (pN = the N-th part line of the model) were resolved to the box centres used here.",
+    "Phase 3 scores every mechanism without a phase; 'phase': 4 marks the function selector (driving ring + changeover catch), which belongs to gearbox modes.",
+    "Not expected: the shock absorbers' springs (they only push back under the model's weight; Kinebrick skips them too).",
+    "Parts are located by part number and world-box centre (LDU, LDraw axes: -Y is up). The front of the car is -Z."
+  ],
+  "toleranceLdu": 6,
+  "mechanisms": [
+    {
+      "id": "steering",
+      "title": "Steering wheel -> column -> bevels under the nose -> 12T pinion -> 1x7 rack -> both front hubs",
+      "evidence": "review",
+      "why": "Kinebrick function 1 (rack-steering): the column runs forward under the nose through bevel gears to a gear on the steering rack, which pushes the track rods out to both front uprights.",
+      "checks": [
+        { "type": "function", "label": "steering wheel turns both front hubs, rear hubs stay", "kinds": ["rack-steering", "steering"],
+          "driver": { "part": "32138", "at": [0, -100, 101] },
+          "moves": [ { "part": "32269", "at": [0, -100, 0] }, { "part": "32270", "at": [0, -100, -320] }, { "part": "92909", "at": [247, -60, -280] }, { "part": "92909", "at": [-247, -60, -280] } ],
+          "stays": [ { "part": "92909", "at": [247, -60, 640] }, { "part": "92909", "at": [-247, -60, 640] } ] },
+        { "type": "gearMesh", "label": "column 20T double bevel drives the vertical 12T bevel", "a": { "part": "32269", "at": [0, -100, 0] }, "b": { "part": "6589", "at": [0, -75, -20] }, "kind": "bevel", "ratio": 0.6 },
+        { "type": "gearMesh", "label": "vertical 12T bevel drives the forward 20T double bevel", "a": { "part": "6589", "at": [0, -75, -20] }, "b": { "part": "32269", "at": [0, -100, -40] }, "kind": "bevel", "ratio": 1.667 },
+        { "type": "rackPinion", "label": "12T double bevel pinion drives the 1x7 rack", "pinion": { "part": "32270", "at": [0, -100, -320] }, "rack": { "part": "87761", "at": [0, -80, -320] } },
+        { "type": "rotates", "label": "right front hub steers about its kingpin", "part": { "part": "11949", "at": [231, -60, -280] }, "axis": [0, 1, 0] },
+        { "type": "rotates", "label": "left front hub steers about its kingpin", "part": { "part": "11949", "at": [-230, -60, -280] }, "axis": [0, 1, 0] }
+      ]
+    },
+    {
+      "id": "engine",
+      "title": "Rear wheels -> half-shafts -> differential -> 20T/12T -> V8 crankshaft -> pistons",
+      "evidence": "review",
+      "why": "Kinebrick function 2 (piston-engine: V8, differential): rolling the car turns the V8; turning one rear wheel with the other held turns the engine at half speed; the pistons slide in fixed cylinders.",
+      "checks": [
+        { "type": "function", "label": "right rear wheel turns the crankshaft and the pistons", "kinds": ["piston-engine", "differential", "gear-train"],
+          "driver": { "part": "92909", "at": [247, -60, 640] },
+          "moves": [ { "part": "62821", "at": [0, -60, 640] }, { "part": "2853", "at": [-5, -100, 470] }, { "part": "2852", "at": [-23, -114, 471] }, { "part": "2852", "at": [-7, -109, 431] }, { "part": "2851", "at": [28, -121, 470] } ],
+          "stays": [ { "part": "32278", "at": [0, 0, 0] } ] },
+        { "type": "gearMesh", "label": "differential 28T bevel drives the 20T double bevel", "a": { "part": "62821", "at": [0, -60, 640] }, "b": { "part": "32269", "at": [0, -60, 600] }, "kind": "bevel", "ratio": 0.714 },
+        { "type": "gearMesh", "label": "20T double bevel drives the 12T on the crank axle (side by side)", "a": { "part": "32269", "at": [0, -60, 560] }, "b": { "part": "32270", "at": [0, -100, 560] }, "kind": "spur", "ratio": 0.6 },
+        { "type": "gearMesh", "label": "right side gear meshes the differential's planet", "a": { "part": "6589", "at": [15, -60, 640] }, "b": { "part": "6589", "at": [0, -60, 655] }, "kind": "bevel", "ratio": 1 },
+        { "type": "gearMesh", "label": "left side gear meshes the differential's planet", "a": { "part": "6589", "at": [-15, -60, 640] }, "b": { "part": "6589", "at": [0, -60, 655] }, "kind": "bevel", "ratio": 1 },
+        { "type": "slides", "label": "piston slides in its cylinder", "part": { "part": "2851", "at": [28, -121, 470] }, "axis": [0.8, -0.6, 0] }
+      ]
+    },
+    {
+      "id": "front-suspension",
+      "title": "Front pushrod suspension: wishbone -> pushrod -> rocker -> shock absorber",
+      "evidence": "review",
+      "why": "Kinebrick function 4 (pushrod-suspension).",
+      "checks": [
+        { "type": "function", "label": "left front wishbone works the rocker and its shock", "kinds": ["suspension"],
+          "driver": { "part": "32294", "at": [-100, -100, -325] },
+          "moves": [ { "part": "32056", "at": [-40, -85, -280] }, { "part": "4255", "at": [-20, -120, -236] } ] },
+        { "type": "slides", "label": "front shock rod slides in its cylinder", "part": { "part": "4254", "at": [-20, -120, -195] }, "axis": [0, 0, 1] }
+      ]
+    },
+    {
+      "id": "rear-suspension",
+      "title": "Rear pushrod suspension: wishbone -> pushrod -> rocker -> shock absorber",
+      "evidence": "review",
+      "why": "Kinebrick function 5 (pushrod-suspension).",
+      "checks": [
+        { "type": "function", "label": "left rear wishbone works the rocker and its shock", "kinds": ["suspension"],
+          "driver": { "part": "32294", "at": [-140, -40, 685] },
+          "moves": [ { "part": "87083", "at": [-60, -110, 620] }, { "part": "4254", "at": [-20, -120, 585] } ] },
+        { "type": "slides", "label": "rear shock rod slides in its cylinder", "part": { "part": "4254", "at": [-20, -120, 585] }, "axis": [0, 0, 1] }
+      ]
+    },
+    {
+      "id": "front-wheels",
+      "title": "Front wheels roll freely",
+      "evidence": "review",
+      "why": "Kinebrick function 7 (free-wheels).",
+      "checks": [
+        { "type": "rotates", "label": "right front rim turns on its hub axis", "part": { "part": "44772", "at": [269, -60, -280] }, "axis": [1, 0, 0] },
+        { "type": "rotates", "label": "left front tyre turns on its hub axis", "part": { "part": "44771", "at": [-270, -60, -280] }, "axis": [1, 0, 0] }
+      ]
+    },
+    {
+      "id": "selector-wing",
+      "phase": 4,
+      "title": "Function selector, one position: knob -> clutch gear -> rear linear actuator -> wing flap",
+      "evidence": "review",
+      "why": "Kinebrick function 3 (function-selector: 2 functions, linear-actuator: rear wing flap). Which lever position selects which function is not stated plainly.",
+      "checks": [
+        { "type": "function", "label": "knob drives the rear wing actuator", "kinds": ["linear-actuator", "gearbox"],
+          "driver": { "part": "32270", "at": [-250, -40, 450] },
+          "moves": [ { "part": "92693c01", "at": [0, 0, 650] }, { "part": "3706", "at": [-30, -40, 740] } ] }
+      ]
+    },
+    {
+      "id": "selector-cover",
+      "phase": 4,
+      "title": "Function selector, other position: knob -> clutch gear -> two linear actuators -> engine cover",
+      "evidence": "review",
+      "why": "Kinebrick function 3 (linear-actuator: engine cover).",
+      "checks": [
+        { "type": "function", "label": "knob drives both engine cover actuators", "kinds": ["linear-actuator", "gearbox"],
+          "driver": { "part": "32270", "at": [-250, -40, 450] },
+          "moves": [ { "part": "92693c01", "at": [100, -81, 241] }, { "part": "92693c01", "at": [-100, -81, 241] } ] }
+      ]
+    }
+  ]
+}
