@@ -118,6 +118,12 @@ points.
    loops. A joint in no loop moves with its own DOF. Inside a block a spanning
    tree gives every body a pose as a product of exponentials of the joint
    twists (spatial POE); each non-tree joint closes a loop with 12 equations.
+   This is the cut-body form of Müller ([cutjoint], read from the full-text
+   XML): γ = N − M + 1 fundamental cycles, joint signs from the root-directed
+   tree, closure f_l = I. Müller leaves redundant loop equations to the
+   solver, which is what step 3 handles. For Phase 3: when a loop contains a
+   higher pair (gear mesh, cam, pin-in-slot), pick the tree so that pair is
+   the cut joint (his Fig. 8), so every tree joint stays a lower pair.
 2. **First-order bound.** The closure Jacobian at the assembled pose is the
    signed sum of joint twists around each loop. Its corank c bounds mobility
    from above and also counts shaky (infinitesimal) freedoms.
@@ -329,8 +335,8 @@ On top of that, this design adds:
 
 ## 10. Caveats on sources
 
-Xiong et al. 2016, Wampler–Hauenstein–Sommese and the hypo-paradoxical
-linkages paper were read in full (Phase 1 is built on them). The other papers
+Xiong et al. 2016, Wampler–Hauenstein–Sommese, Müller 2015 (cut joints)
+and the hypo-paradoxical linkages paper were read in full (Phase 1 is built on them). The other papers
 were read from abstracts and published summaries. The formulas above are standard kinematics, written for this design.
 One web formula for camber gain (Firgelli blog) has inconsistent units and was
 not used.
