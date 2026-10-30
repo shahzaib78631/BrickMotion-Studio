@@ -75,4 +75,38 @@ describe.skipIf(!installed)('toothed features from LDraw geometry', () => {
       expect(gears(await teeth(id)), id).toEqual([]);
     }
   });
+
+  it('worm: one start, lead of one gear tooth per turn', async () => {
+    const w = (await teeth('4716')).find(x => x.kind === 'worm');
+    expect(w, 'a worm feature').toBeDefined();
+    expect(w!.teeth).toBe(1);
+    expect(sameAxis(w!.axis, [0, 0, 1])).toBe(true);
+    expect(Math.abs(w!.lead!)).toBeGreaterThan(2 * Math.PI * 1.25 - 0.3);
+    expect(Math.abs(w!.lead!)).toBeLessThan(2 * Math.PI * 1.25 + 0.3);
+    expect(Math.abs(w!.pitchRadius - 10)).toBeLessThanOrEqual(1);
+    expect(near(w!.centre, [0, 0, 0])).toBe(true);
+  });
+
+  it('racks: teeth, pitch line and the side the teeth face', async () => {
+    // 87761: Kinebrick's corrections give 6 teeth over 48 LDU; its LDraw shape
+    // draws 8 tooth tips 8 LDU apart (x = ±3 .. ±29), so we expect 8 over 64.
+    for (const [id, n, length, y] of [['3743', 10, 80, -4], ['87761', 8, 64, -5.5]] as const) {
+      const racks = (await teeth(id)).filter(x => x.kind === 'rack');
+      expect(racks, id).toHaveLength(1);
+      const r = racks[0];
+      expect(r.teeth, id).toBe(n);
+      expect(Math.abs(r.length! - length), `${id} length ${r.length}`).toBeLessThanOrEqual(2);
+      expect(sameAxis(r.axis, [1, 0, 0]), id).toBe(true);
+      expect(r.face, id).toEqual([0, -1, 0]);
+      expect(near(r.centre, [0, y, 0]), `${id} pitch line at ${r.centre}`).toBe(true);
+      expect(r.pitchRadius).toBe(0);
+    }
+  });
+
+  it('no worm or rack on plain parts', async () => {
+    for (const id of ['3647', '3706', '3713', '32524', '3700', '3703', '2780']) {
+      expect((await teeth(id)).filter(x => x.kind === 'worm' || x.kind === 'rack'), id).toEqual([]);
+    }
+  });
 });
+

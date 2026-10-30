@@ -18,7 +18,7 @@
  * 1.5 LDU.
  */
 import type { FlatPart } from '../../../ldraw/flatten';
-import { PointGrid, rotationalOrder, rotationShare, type P3 } from './meshSymmetry';
+import { PointGrid, rotationalOrder, rotationShare, screwLead, type P3 } from './meshSymmetry';
 
 export type V3 = [number, number, number];
 export type ToothedFeature = {
@@ -80,11 +80,12 @@ export function measureTeeth(flat: FlatPart): ToothedFeature[] {
       const band = rest.filter(p => radius(p) > top - BAND);
       rest = rest.filter(p => radius(p) <= top - BAND);
       for (const piece of splitAlong(band)) {
-        const f = gearOf(piece, axis, from);
+        const f = gearOf(piece, axis, from) ?? wormOf(piece, axis, from);
         if (f) out.push(f);
       }
     }
   }
+  out.push(...racks(verts));
   return out;
 }
 
@@ -122,4 +123,66 @@ function gearOf(piece: P3[], axis: V3, from: (u: number, v: number, w: number) =
     return { ...base, kind: 'bevel', facing: from(0, 0, s), tip: at(mid + s * R) };
   }
   return { ...base, kind: 'spur' };
+}
+
+/**
+ * A worm: its thread maps onto itself under a turn plus a shift along the
+ * axis (a screw). One start; it meshes like an 8 tooth gear, so its pitch
+ * radius is the tip radius less the same 2.4 LDU as a spur gear's.
+ */
+function wormOf(piece: P3[], axis: V3, from: (u: number, v: number, w: number) => V3): ToothedFeature | null {
+  if (spread(piece) < 1.5) return null;
+  const lead = screwLead(piece);
+  if (lead === null || Math.abs(lead) < 4 || Math.abs(lead) > 20) return null;
+  const top = Math.max(...piece.map(radius)), zs = piece.map(p => p[2]), lo = Math.min(...zs), hi = Math.max(...zs);
+  return { kind: 'worm', teeth: 1, axis, centre: from(0, 0, (lo + hi) / 2), pitchRadius: top - 2.4, width: hi - lo, lead };
+}
+
+const UNIT: V3[] = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+const dotV = (a: readonly number[], b: readonly number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+/**
+ * Racks: on some face of the part, a layer of flat tooth tips spaced evenly
+ * 6.5 to 9.5 LDU apart along a straight line (LDraw draws rack teeth 8 LDU
+ * apart), at least four, with a root 2 to 5 LDU below between every two. The pitch line is 2 LDU below the tips
+ * (3743: tips at y = -6, pitch line at -4).
+ */
+function racks(verts: readonly P3[]): ToothedFeature[] {
+  const out: ToothedFeature[] = [];
+  for (let fi = 0; fi < 3; fi++) for (const sign of [1, -1]) {
+    const face = UNIT[fi].map(x => x * sign + 0) as V3, height = (p: P3) => dotV(p, face);
+    const levels = [...new Set(verts.map(p => Math.round(height(p) * 100) / 100))].sort((a, b) => b - a);
+    const topH = levels[0];
+    for (const di of [0, 1, 2].filter(i => i !== fi)) {
+      const dir = UNIT[di], wi = 3 - fi - di, side = UNIT[wi];
+      // The highest level (within 8 LDU of the top) that is a row of tooth tips.
+      for (const h of levels.filter(l => l >= topH - 8)) {
+        const layer = verts.filter(p => Math.abs(height(p) - h) < 0.02), r = toothRow(layer.map(p => dotV(p, dir)));
+        if (!r) continue;
+        // A root between every two tips.
+        const roots = verts.filter(p => { const d = h - height(p); return d >= 2 && d <= 5.05; }).map(p => dotV(p, dir));
+        if (!r.gaps.every(([a, b]) => roots.some(x => x > a + 0.1 && x < b - 0.1))) continue;
+        const ws = layer.map(p => dotV(p, side)), wMid = (Math.min(...ws) + Math.max(...ws)) / 2, mid = (r.from + r.to) / 2;
+        const centre = [0, 1, 2].map(i => dir[i] * mid + side[i] * wMid + face[i] * (h - 2)) as V3;
+        out.push({ kind: 'rack', teeth: r.teeth, axis: dir, centre, pitchRadius: 0, width: Math.max(...ws) - Math.min(...ws),
+          length: r.teeth * r.period, face });
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+/** Positions along a line that form evenly spaced flats (tooth tips): at least 4, 6.5-9.5 apart, each at most 4 wide. */
+function toothRow(positions: number[]): { teeth: number; period: number; from: number; to: number; gaps: [number, number][] } | null {
+  const s = [...new Set(positions.map(x => Math.round(x * 100) / 100))].sort((a, b) => a - b);
+  if (s.length < 4) return null;
+  const flats: number[][] = [];
+  for (const x of s) { const last = flats.at(-1); if (last && x - last[last.length - 1] <= 2.5) last.push(x); else flats.push([x]); }
+  if (flats.length < 4 || flats.some(f => f[f.length - 1] - f[0] > 4)) return null;
+  const centres = flats.map(f => (f[0] + f[f.length - 1]) / 2), gaps = centres.slice(1).map((c, i) => c - centres[i]);
+  const period = (centres[centres.length - 1] - centres[0]) / gaps.length;
+  if (period < 6.5 || period > 9.5 || gaps.some(g => Math.abs(g - period) > 0.3)) return null;
+  return { teeth: flats.length, period, from: centres[0] - period / 2, to: centres[centres.length - 1] + period / 2,
+    gaps: flats.slice(1).map((f, i) => [flats[i][flats[i].length - 1], f[0]] as [number, number]) };
 }

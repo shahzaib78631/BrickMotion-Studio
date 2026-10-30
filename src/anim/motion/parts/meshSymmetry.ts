@@ -54,3 +54,34 @@ export function rotationShare(points: readonly P3[], grid: PointGrid, n: number,
   const c = Math.cos(2 * Math.PI / n), s = Math.sin(2 * Math.PI / n);
   return mappedShare(points, grid, p => [p[0] * c - p[1] * s, p[0] * s + p[1] * c, p[2]], need);
 }
+
+/**
+ * Advance per turn of a screw (z is the axis): the lead L for which a turn by
+ * 2π/m with a shift of L/m maps at least `need` of the points onto the set,
+ * for some m from 8 to 48. Null when only plain rotations (no shift) fit.
+ */
+export function screwLead(points: readonly P3[], tol = 0.05, need = 0.75): number | null {
+  if (points.length < 8) return null;
+  const grid = new PointGrid(points, tol);
+  // Points by (x, y) cell, to find what lies above or below a turned point.
+  const columns = new Map<string, P3[]>(), cell = (x: number, y: number) => `${Math.round(x / 0.2)},${Math.round(y / 0.2)}`;
+  for (const p of points) { const k = cell(p[0], p[1]); (columns.get(k) ?? columns.set(k, []).get(k)!).push(p); }
+  let best: { lead: number; share: number } | null = null;
+  for (let m = 8; m <= 48; m++) {
+    const c = Math.cos(2 * Math.PI / m), s = Math.sin(2 * Math.PI / m), votes = new Map<number, number>();
+    for (const p of points) {
+      const x = p[0] * c - p[1] * s, y = p[0] * s + p[1] * c;
+      for (const q of columns.get(cell(x, y)) ?? []) {
+        if (Math.hypot(q[0] - x, q[1] - y) > 0.1) continue;
+        const dz = Math.round((q[2] - p[2]) / tol);
+        if (dz !== 0) votes.set(dz, (votes.get(dz) ?? 0) + 1);
+      }
+    }
+    // The shift most points agree on; the smallest such shift on a tie.
+    const [dz] = [...votes].sort((a, b) => b[1] - a[1] || Math.abs(a[0]) - Math.abs(b[0]))[0] ?? [0];
+    if (!dz) continue;
+    const t = dz * tol, share = mappedShare(points, grid, p => [p[0] * c - p[1] * s, p[0] * s + p[1] * c, p[2] + t]);
+    if (share >= need && (!best || share > best.share + 0.02)) best = { lead: t * m, share };
+  }
+  return best?.lead ?? null;
+}
