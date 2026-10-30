@@ -31,6 +31,15 @@ A mechanism may carry `phase` (default 3): the spec phase expected to find
 it. Scores are also reported per phase, so a gearbox (phase 4) does not count
 as a phase 3 miss.
 
+## Results
+
+Current scores are in `<id>.results.txt`. Phase 3 (classifier and
+suggestions): 5590 17/17; 42000 phase 3 14/18. The 42000 misses are
+connector-data gaps, not loosened tolerances: the rear CV ball sits 5 LDU
+from the hub socket (so the rear wheel does not reach the engine; the drive
+train is driven at the axle), the front pushrods are 6.8 LDU off their
+balls, and rim 44772's LDCad shadow has no pin holes.
+
 ## Sources
 
 - 5590: hand-checked against the posed model file (see each `why`).

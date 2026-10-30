@@ -31,7 +31,7 @@ kinematics, tracks, chains and ropes.
 | Measured gear table, spur/bevel/rack meshing | `gears/` | Seed of the higher-pair library (stage C) |
 | Joint-coordinate solver with closures, transmissions, rack-on-arc contact | `v4/mechanismSolver.ts` | Now a front end of the unified solver (Phase 2 ✓) |
 | 6-DOF spatial solver with Ackermann, winch and differential-drive laws | was `v6/spatialConstraints.ts` | Retired in Phase 2: its API is `kinematics/spatialModel.ts`, its laws `kinematics/laws.ts` |
-| Rack steering assembler, 5590 benchmark | `v4/drivetrainSuggestions.ts`, `benchmarks/mechanisms/` | Becomes one pattern in the classifier (stage E) |
+| Rack steering assembler, 5590 benchmark | `v4/drivetrainSuggestions.ts`, `benchmarks/mechanisms/` | Kept as the measured rack-steering builder; it leads the ranked suggestions, and the classifier (stage E) names the same mechanism (Phase 3) |
 
 Two solvers with overlapping features were the main structural debt. Since
 Phase 2 there is one (`src/anim/motion/kinematics/`). This
@@ -107,6 +107,15 @@ The data source for measurements is the Kinebrick corrections set (CC BY-SA,
 credited) plus our own measurement of each part's LDraw geometry. Each entry
 gets a unit test placing it from its matrix.
 
+*Phase 3:* the part-function table (`parts/partFunctions.ts`, built by
+scanning every LDraw part: 11517 of 29577 parts have a function) supplies
+teeth, seats, slides and tyres; `pairs/higherPairs.ts` finds spur, bevel,
+crown, rack, worm, screw and clutch pairs between bodies with an engagement
+test per frame. Fits accepted only within a tolerance (a section misfit up
+to 0.5 LDU, ball play up to half the ball radius, mesh error) are listed per
+part pair in the Lab and the JSON export, worst first, so the model file can
+be corrected (`construction/toleratedFit.ts`).
+
 ### D. Mobility discovery (the core)
 
 Implemented in `src/anim/motion/mobility/` (Phase 1). Grounded in the full
@@ -173,6 +182,14 @@ joints and loops:
 Each match is a named mechanism with its drivers, which is what the UI lists
 and the benchmark scores.
 
+*Phase 3* (`classify/loops.ts`, `classify/patterns.ts`): loops are taken at
+their shortest through each joint (pattern matching wants the smallest loop),
+and whole functions absorb their pieces (an engine its slider-cranks, a
+suspension its wishbone four-bars, steering its gear train). Found in 42000:
+the V8 (8 pistons on one crankshaft), the differential, rack steering with
+both front hubs, four suspensions, three gear trains; in 5590: rack steering
+on a four-bar tie rod and the trailer turntable.
+
 ### F. Drivers and suggestions
 
 A suggestion = one finite motion from D with its classified mechanism from E,
@@ -180,6 +197,17 @@ proven over its whole travel by the solver (as `provenSuggestion` does today),
 carrying everything attached to its bodies (`carriedBodies`). Ranking: named
 whole-function mechanisms (steering, gearbox, crane) > single named joints
 (turntable) > generic hinges.
+
+*Phase 3* (`classify/suggest.ts`): each named mechanism becomes a solver
+program — a joint tree grown from the frame (slides, then hinges, then balls;
+a ball in the tree turns as a universal joint on its pin or about its planar
+loop's axis), point closures for the joints left over, gear and rack laws
+signed by the measured contact point, and carried parts as followers. It is
+offered only after solving over the largest of ±90°…±6° that works with every
+loop closed and every mesh engaged. An engine, its gears and a differential
+join into one drive train driven at the axle with the differential turning
+as one (driving straight). A suspension is driven at the lowest arm its hub
+hangs from.
 
 ## 3. Unified solver
 
@@ -325,7 +353,7 @@ require ([MotionSolve tutorial][altair]).
 |---|---|---|
 | 1 ✓ | Wrench joints (A–B), loop basis, local-dimension mobility (D) | Done: 5590 movable connector edges 314 → 129 (92 body joints), still 17/17; mobility suite passes (incl. Wampler Table 2 and Bennett) |
 | 2 ✓ | Unified solver: analytic Jacobian, predictor-corrector, singularity stop, several drivers; port v6 laws | Done: v6 deleted; vitest 893 pass (only the pre-existing minifig failure), verify:v8:all 192/192, 5590 17/17 at unchanged speed (≈1.55 s); new solver suite covers full-turn crank, 3 rad jump on one branch, dead-point stop, redundant parallelogram, two drivers, stops, Bennett |
-| 3 | Higher-pair library (C) and classifier (E); suggestions from mobility | 5590 17/17; first added official model ≥ 80 % |
+| 3 ◐ | Higher-pair library (C) and classifier (E); suggestions from mobility | 5590 17/17 ✓. 42000 phase 3: 14/18 (78 %, was 12/18), short of 80 %: steering, rear suspension and the V8 drive train work; the four misses are connector-data gaps, listed rather than loosened (rear CV ball 5 LDU from its hub socket, front pushrods 6.8 LDU off, rim 44772 has no pin holes in its LDCad shadow). vitest 963 pass (only the pre-existing minifig failure), verify:v8:all pass, tsc and vite build clean |
 | 4 | Gearbox modes | Ratio table matches the set's manual on the gearbox benchmark; a shift during playback never jumps |
 | 5 | Vehicle mode: rolling, ICR, scrub, differential, suspension | 5590 drives a circle with correct wheel spins; tandem-axle scrub reported; suspension sweep gives bump steer |
 | 6 | Tracks, chains, ropes | Track links never stretch (pitch error < 0.01 LDU); hook height = winch maths to 0.1 LDU |
