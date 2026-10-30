@@ -42,6 +42,31 @@ describe('V5 multi-degree ideal transmission network',()=>{
     expect(s.solve(.2).joints.get('b')).toBeCloseTo(.2,8);
     expect(s.solveInputs({a:.4},{engagements:{clutch1:false}}).joints.get('b')).toBeCloseTo(.2,8);
   });
+  it('engaging mid-motion keeps the output where it is',()=>{
+    const s=new MechanismSolver(assembly(),p({id:'c',source,kind:'clutch',a:'a',b:'b',engaged:false,dogs:4}));
+    s.solveInputs({a:.5}); // b stays at 0: 0.5 rad from alignment, more than a quarter pitch (π/8)
+    expect(s.shift({c:true})).toEqual({engaged:[],stalled:['c']});
+    s.solveInputs({a:Math.PI/2+.1}); // 0.1 rad from alignment
+    expect(s.shift({c:true})).toEqual({engaged:['c'],stalled:[]});
+    expect(s.solveInputs({a:Math.PI/2+.1}).joints.get('b')).toBeCloseTo(0,8); // no jump at engagement
+    expect(s.solveInputs({a:Math.PI/2+.6}).joints.get('b')).toBeCloseTo(.5,6); // then it follows
+    expect(s.solve(Math.PI/2+.7).joints.get('b')).toBeCloseTo(.6,6);
+    expect(s.shift({c:false})).toEqual({engaged:[],stalled:[]});
+    expect(s.solveInputs({a:2}).joints.get('b')).toBeCloseTo(.6,6); // released: b keeps its pose
+  });
+  it('a clutch that fights a gear pair is a lock-up, by name',()=>{
+    const prog:MechanismProgram={...p({id:'g',source,kind:'gear',a:'a',b:'b',teethA:8,teethB:24}),
+      transmissions:[{id:'g',source,kind:'gear',a:'a',b:'b',teethA:8,teethB:24},{id:'c',source,kind:'clutch',a:'a',b:'b',engaged:false}]};
+    const s=new MechanismSolver(assembly(),prog);
+    s.solve(.3);
+    expect(()=>s.shift({c:true})).toThrow(/Gear lock-up: c/);
+    expect(s.solve(.4).joints.get('b')).toBeCloseTo(-.4/3,8); // the refused clutch stays released
+  });
+  it('rejects a non-finite clutch phase and a dog count below 1',()=>{
+    expect(validateMechanismProgram(p({id:'c',source,kind:'clutch',a:'a',b:'b',engaged:true,phase:Number.NaN}))).toEqual([expect.stringMatching(/phase/)]);
+    expect(validateMechanismProgram(p({id:'c',source,kind:'clutch',a:'a',b:'b',engaged:true,dogs:0}))).toEqual([expect.stringMatching(/dogs/)]);
+    expect(validateMechanismProgram(p({id:'c',source,kind:'clutch',a:'a',b:'b',engaged:true,phase:7.5,dogs:4}))).toEqual([]);
+  });
   it('keeps old V4 data valid and rejects incorrect dimensions',()=>{
     const legacy:MechanismProgram={mode:'kinematic',duration:2,
       joints:[{id:'a',body:'a',kind:'revolute',axis:[0,0,1],pivot:[0,0,0]}],

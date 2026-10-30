@@ -39,7 +39,10 @@ export type TransmissionConstraint = (
   | { kind: 'wheel-ground'; a: string; b: string; radiusLdu: number; reversed?: boolean }
   | { kind: 'linear-actuator'; a: string; b: string; leadLduPerTurn: number; reversed?: boolean }
   | { kind: 'differential'; carrier: string; left: string; right: string }
-  | { kind: 'clutch'; a: string; b: string; engaged: boolean; reversed?: boolean }
+  /** A dog clutch: engaged, b − a = phase (radians; b + a with `reversed`). `phase` is the
+   * angle between the shafts when it engaged, so engaging never jumps; `dogs` sets the
+   * alignment pitch (2π/dogs) that `MechanismSolver.shift` checks. */
+  | { kind: 'clutch'; a: string; b: string; engaged: boolean; reversed?: boolean; phase?: number; dogs?: number }
 ) & { id: string; source: 'user' | 'verified' | 'inferred' };
 
 export type ClosurePoint = { body: string; local: Vec3 };
@@ -183,6 +186,10 @@ export function validateMechanismProgram(raw: unknown): string[] {
       errors.push(`Transmission ${t.id}: invalid screw lead`);
     if (t.kind === 'clutch' && typeof t.engaged !== 'boolean')
       errors.push(`Transmission ${t.id}: clutch engagement must be Boolean`);
+    if (t.kind === 'clutch' && t.phase !== undefined && !finite(t.phase))
+      errors.push(`Transmission ${t.id}: clutch phase must be a finite angle`);
+    if (t.kind === 'clutch' && t.dogs !== undefined && (!whole(t.dogs) || t.dogs > 64))
+      errors.push(`Transmission ${t.id}: clutch dogs must be a whole number from 1 to 64`);
     if ('reversed' in t && t.reversed !== undefined && typeof t.reversed !== 'boolean')
       errors.push(`Transmission ${t.id}: reversed flag must be Boolean`);
     if ('crossed' in t && t.crossed !== undefined && typeof t.crossed !== 'boolean')

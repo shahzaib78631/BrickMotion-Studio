@@ -31,7 +31,7 @@ export function transmissionEquation(t: TransmissionConstraint): LinearEquation 
     case 'wheel-ground': return eq(t.id, [[t.b, 1], [t.a, signed(t.reversed) * t.radiusLdu]]);
     case 'linear-actuator': return eq(t.id, [[t.b, 1], [t.a, -signed(t.reversed) * t.leadLduPerTurn / TPI]]);
     case 'differential': return eq(t.id, [[t.left, 1], [t.right, 1], [t.carrier, -2]]);
-    case 'clutch': return t.engaged ? eq(t.id, [[t.b, 1], [t.a, -signed(t.reversed)]]) : null;
+    case 'clutch': return t.engaged ? { ...eq(t.id, [[t.b, 1], [t.a, -signed(t.reversed)]]), rhs: t.phase ?? 0 } : null;
   }
 }
 

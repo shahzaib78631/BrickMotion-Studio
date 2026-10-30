@@ -11,7 +11,7 @@
 import * as THREE from 'three';
 import type { Assembly } from '../../../model/assemble';
 import type { JointLimitRule } from './jointLimits';
-import type { MechanismProgram, JointDrive, Vec3 } from './mechanismProgram';
+import type { MechanismProgram, JointDrive, TransmissionConstraint, Vec3 } from './mechanismProgram';
 import { validateMechanismProgram } from './mechanismProgram';
 import { prepareTransmissionEquations, intoRootEquation, projectLinearConstraints,
   type LinearEquation } from './transmissionNetwork';
@@ -67,6 +67,8 @@ export class MechanismSolver {
   private readonly tolerance: number;
   /** Last accepted pose: the continuation start of the next solve. */
   private state: State;
+  /** Clutches changed by `shift`: engagement and the phase they engaged at. */
+  private readonly clutches = new Map<string, { engaged: boolean; phase?: number }>();
   /** Rack contacts in each rack's own assembled frame. */
   private readonly contacts: {
     id: string; pinion: JointDrive; rack: string; sign: number; radius: number;
@@ -355,7 +357,7 @@ export class MechanismSolver {
     const inputs=new Map(controls instanceof Map ? controls : Object.entries(controls));
     if (!inputs.size) throw Error('At least one independent motor input is required');
     if(inputs.size>this.roots.length)throw Error('Too many independently driven joints');
-    const engaged=prepareTransmissionEquations(this.program.transmissions??[],this.jointsById,options.engagements);
+    const engaged=prepareTransmissionEquations(this.transmissions(),this.jointsById,options.engagements);
     const algebra=engaged.map(e=>intoRootEquation(e,this.factors));
     for(const [id,value] of [...inputs].sort(([a],[b])=>a.localeCompare(b))){
       const factor=this.factors.get(id);
@@ -377,6 +379,60 @@ export class MechanismSolver {
     },0);
     if(maxResidual>1e-6)throw Error('Transmission residual exceeds tolerance');
     return {...frame,transmissionResidual:maxResidual,activeTransmissions:engaged.length};
+  }
+
+  /** The program's transmissions with the clutch states `shift` has set. */
+  private transmissions(): TransmissionConstraint[] {
+    return (this.program.transmissions ?? []).map(t => {
+      const c = t.kind === 'clutch' ? this.clutches.get(t.id) : undefined;
+      return c ? { ...t, engaged: c.engaged, phase: c.phase ?? (t as { phase?: number }).phase } as TransmissionConstraint : t;
+    });
+  }
+
+  /**
+   * Engage or release clutches at the current pose (spec §4.3-4.4). A newly
+   * engaged clutch keeps the present angle between its shafts as its phase,
+   * so nothing jumps. One whose dogs are more than a quarter pitch
+   * (2π/dogs/4, half a dog's width) from alignment is not engaged and comes
+   * back in `stalled`: retry once the shafts have turned into line. An
+   * engagement that would leave the driver unable to move throws
+   * `Gear lock-up: <ids>` and changes nothing.
+   */
+  shift(engagements: Readonly<Record<string, boolean>>): { engaged: string[]; stalled: string[] } {
+    const engaged: string[] = [], stalled: string[] = [];
+    const next = new Map(this.clutches);
+    const value = (id: string) => this.system.value(this.state, id);
+    for (const [id, want] of Object.entries(engagements)) {
+      const t = this.program.transmissions?.find(x => x.id === id);
+      if (!t || t.kind !== 'clutch') throw Error(`No clutch ${id}`);
+      const now = next.get(id)?.engaged ?? t.engaged;
+      if (!want) { next.set(id, { engaged: false }); continue; }
+      if (now) continue;
+      const phase = value(t.b) - (t.reversed ? -1 : 1) * value(t.a);
+      if (t.dogs) {
+        const pitch = 2 * Math.PI / t.dogs, off = phase - pitch * Math.round(phase / pitch);
+        if (Math.abs(off) > pitch / 4 + 1e-9) { stalled.push(id); continue; }
+      }
+      next.set(id, { engaged: true, phase });
+      engaged.push(id);
+    }
+    if (engaged.length) {
+      // Lock-up: with these clutches in, the driver can no longer turn.
+      const before = new Map(this.clutches);
+      for (const [id, c] of next) this.clutches.set(id, c);
+      try {
+        const algebra = prepareTransmissionEquations(this.transmissions(), this.jointsById).map(e => intoRootEquation(e, this.factors));
+        const f = this.factors.get(this.driver)!;
+        algebra.push({ id: 'drive', coefficients: new Map([[f.root, f.ratio]]), rhs: value(this.driver) + 1 });
+        projectLinearConstraints(this.roots, algebra, new Map());
+      } catch {
+        this.clutches.clear();
+        for (const [id, c] of before) this.clutches.set(id, c);
+        throw Error(`Gear lock-up: ${engaged.join(', ')}`);
+      }
+    }
+    for (const [id, c] of next) this.clutches.set(id, c);
+    return { engaged, stalled };
   }
 
   reset(){this.state=this.system.zeroState();}
