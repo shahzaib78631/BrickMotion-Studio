@@ -1,0 +1,168 @@
+/**
+ * Scores the mechanism detector against a hand-checked list of the
+ * mechanisms a real model actually has (benchmarks/mechanisms/*.expected.json).
+ *
+ * Pure: takes an assembly and the detector's LabReport, never re-runs the
+ * detector, so the same scorer measures every detector change. Parts are
+ * located by part number + world position, so internal ids can change.
+ */
+import type { Assembly } from '../../../model/assemble';
+import type { LabReport } from '../v4/mechanismLab';
+import type { MechanismEdge } from '../v4/mechanismGraph';
+
+type V3 = [number, number, number];
+export type PartRef = { part: string; at: V3 };
+export type BenchmarkCheck =
+  | { type: 'rotates' | 'slides'; label: string; part: PartRef; axis: V3 }
+  | { type: 'gearMesh'; label: string; a: PartRef; b: PartRef; kind: 'spur' | 'bevel'; ratio?: number }
+  | { type: 'rackPinion'; label: string; pinion: PartRef; rack: PartRef }
+  | { type: 'suggested'; label: string; parts: PartRef[] };
+export type ExpectedMechanism = {
+  id: string; title: string; evidence: 'posed' | 'geometry' | 'review'; why?: string;
+  checks: BenchmarkCheck[];
+};
+export type BenchmarkSpec = {
+  schema: 'brickmotion-mechanism-benchmark-1';
+  model: { name: string; file: string; sha256?: string };
+  toleranceLdu?: number;
+  mechanisms: ExpectedMechanism[];
+};
+
+/**
+ * hit           – detected as expected
+ * wrong-motion  – a joint with the right axis exists, but with another motion
+ *                 (e.g. an axle reported as sliding when it should turn)
+ * rejected      – the detector considered it and turned it down
+ * missing       – no trace of it
+ * unresolved    – the benchmark file points at a part that is not there
+ */
+export type CheckStatus = 'hit' | 'wrong-motion' | 'rejected' | 'missing' | 'unresolved';
+export type CheckResult = { mechanism: string; type: BenchmarkCheck['type']; label: string; status: CheckStatus; detail: string };
+export type BenchmarkResult = {
+  model: string;
+  checks: CheckResult[];
+  mechanisms: { id: string; title: string; evidence: string; hit: number; total: number }[];
+  score: { hit: number; total: number; recall: number; mechanismsComplete: number; mechanisms: number };
+  noise: {
+    movableEdges: number;
+    byMotion: Record<string, number>;
+    byType: Record<string, number>;
+    suggestions: number;
+    /** Suggestions whose driven parts belong to no expected mechanism. */
+    unrelatedSuggestions: number;
+  };
+};
+
+const centre = (b: { min: readonly number[]; max: readonly number[] }): V3 =>
+  [0, 1, 2].map(i => (b.min[i] + b.max[i]) / 2) as V3;
+const dist = (a: readonly number[], b: readonly number[]) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+const unit = (v: readonly number[]): V3 => { const l = Math.hypot(...v) || 1; return v.map(x => x / l) as V3; };
+/** Axes are lines: opposite directions count as the same axis. */
+const sameAxis = (a: readonly number[], b: readonly number[], minDot = 0.95) => {
+  const u = unit(a), w = unit(b);
+  return Math.abs(u[0] * w[0] + u[1] * w[1] + u[2] * w[2]) >= minDot;
+};
+const bare = (part: string) => part.toLowerCase().replace(/\.dat$/, '').replace(/^.*[\\/]/, '');
+
+export function scoreMechanismBenchmark(spec: BenchmarkSpec, asm: Assembly, report: LabReport): BenchmarkResult {
+  const tol = spec.toleranceLdu ?? 12;
+  const resolve = (ref: PartRef): string | null => {
+    let best: { key: string; d: number } | null = null;
+    for (const inst of asm.instances) {
+      if (bare(inst.part) !== bare(ref.part)) continue;
+      const d = dist(centre(inst.worldBox), ref.at);
+      if (d <= tol && (!best || d < best.d)) best = { key: inst.key, d };
+    }
+    return best?.key ?? null;
+  };
+  const clusterOf = new Map<string, readonly string[]>();
+  for (const c of report.graph.rigidClusters) for (const k of c) clusterOf.set(k, c);
+  /** Edges that let this part (or what it is welded to) move against something else. */
+  const edgesFor = (key: string): MechanismEdge[] => {
+    const cluster = new Set(clusterOf.get(key) ?? [key]);
+    return report.graph.edges.filter(e => e.motion !== 'fixed' &&
+      (cluster.has(e.a) !== cluster.has(e.b)));
+  };
+  const pairIs = (x: string, y: string, a: string, b: string) => (x === a && y === b) || (x === b && y === a);
+  const fmt = (r: PartRef) => `${r.part}@[${r.at.join(',')}]`;
+
+  const results: CheckResult[] = [];
+  const expectedParts = new Set<string>();
+  for (const mech of spec.mechanisms) {
+    for (const check of mech.checks) {
+      const push = (status: CheckStatus, detail: string) =>
+        results.push({ mechanism: mech.id, type: check.type, label: check.label, status, detail });
+      if (check.type === 'rotates' || check.type === 'slides') {
+        const key = resolve(check.part);
+        if (!key) { push('unresolved', `no ${fmt(check.part)} within ${tol} LDU`); continue; }
+        expectedParts.add(key);
+        const want = check.type === 'rotates' ? ['revolute'] : ['sliding'];
+        const aligned = edgesFor(key).filter(e => sameAxis(e.axis, check.axis));
+        const good = aligned.find(e => want.includes(e.motion));
+        if (good) push('hit', `${good.type} ${good.motion} joint ${good.a} ↔ ${good.b}`);
+        else if (aligned.length) push('wrong-motion', `found ${[...new Set(aligned.map(e => `${e.type}/${e.motion}`))].join(', ')} on this axis, wanted ${want[0]}`);
+        else push('missing', `no movable joint on axis [${check.axis.join(',')}] (${edgesFor(key).length} on other axes)`);
+      } else if (check.type === 'gearMesh' || check.type === 'rackPinion') {
+        const [ra, rb] = check.type === 'gearMesh' ? [check.a, check.b] : [check.pinion, check.rack];
+        const a = resolve(ra), b = resolve(rb);
+        if (!a || !b) { push('unresolved', `cannot find ${!a ? fmt(ra) : fmt(rb)}`); continue; }
+        expectedParts.add(a); expectedParts.add(b);
+        const mesh = check.type === 'gearMesh' && report.detection.gearMeshes.find(m => pairIs(m.a, m.b, a, b));
+        const geo = report.geometryCandidates.find(c => pairIs(c.a, c.b, a, b) &&
+          (check.type === 'gearMesh' ? c.kind === 'gear' : c.kind === 'rack-pinion'));
+        if (mesh) push('hit', `gear mesh ${mesh.teethA}:${mesh.teethB}`);
+        else if (geo?.status === 'plausible') push('hit', `geometry screen: plausible ${geo.kind}`);
+        else if (geo) push('rejected', `geometry screen rejected: ${geo.reasons.join('; ')}`);
+        else push('missing', check.type === 'gearMesh' ? `no ${check.kind} mesh considered` : 'no rack-and-pinion considered');
+      } else if (check.type === 'suggested') {
+        const keys = check.parts.map(resolve);
+        if (keys.some(k => !k)) { push('unresolved', `cannot find ${fmt(check.parts[keys.indexOf(null)])}`); continue; }
+        const want = new Set(keys as string[]);
+        for (const k of want) expectedParts.add(k);
+        const hit = report.detection.suggestions.find(s => s.program.joints.some(j => want.has(j.body)) ||
+          (s.program.rigidFollowers ?? []).some(f => want.has(f.leader) || f.bodies.some(b => want.has(b))));
+        if (hit) push('hit', `suggested as "${hit.title}"`);
+        else push('missing', `${report.detection.suggestions.length} suggestions, none drive these parts`);
+      }
+    }
+  }
+
+  const mechanisms = spec.mechanisms.map(m => {
+    const mine = results.filter(r => r.mechanism === m.id);
+    return { id: m.id, title: m.title, evidence: m.evidence, hit: mine.filter(r => r.status === 'hit').length, total: mine.length };
+  });
+  const hit = results.filter(r => r.status === 'hit').length;
+  const movable = report.graph.edges.filter(e => e.motion !== 'fixed');
+  const tally = (xs: string[]) => xs.reduce<Record<string, number>>((o, x) => (o[x] = (o[x] ?? 0) + 1, o), {});
+  const expandedExpected = new Set([...expectedParts].flatMap(k => [...(clusterOf.get(k) ?? [k])]));
+  const unrelated = report.detection.suggestions.filter(s =>
+    !s.program.joints.some(j => expandedExpected.has(j.body))).length;
+  return {
+    model: spec.model.name,
+    checks: results,
+    mechanisms,
+    score: { hit, total: results.length, recall: results.length ? hit / results.length : 0,
+      mechanismsComplete: mechanisms.filter(m => m.hit === m.total).length, mechanisms: mechanisms.length },
+    noise: {
+      movableEdges: movable.length,
+      byMotion: tally(movable.map(e => e.motion)),
+      byType: tally(movable.map(e => e.type)),
+      suggestions: report.detection.suggestions.length,
+      unrelatedSuggestions: unrelated,
+    },
+  };
+}
+
+/** Plain-text table for the console and committed baselines. */
+export function formatBenchmark(r: BenchmarkResult): string {
+  const lines = [`Mechanism benchmark — ${r.model}`,
+    `Checks passed: ${r.score.hit}/${r.score.total} (${(r.score.recall * 100).toFixed(0)}%) · mechanisms fully found: ${r.score.mechanismsComplete}/${r.score.mechanisms}`, ''];
+  for (const m of r.mechanisms) {
+    lines.push(`${m.hit === m.total ? '✓' : '·'} ${m.id} [${m.evidence}] ${m.hit}/${m.total}`);
+    for (const c of r.checks.filter(c => c.mechanism === m.id))
+      lines.push(`    ${c.status.padEnd(12)} ${c.label} — ${c.detail}`);
+  }
+  lines.push('', `Noise: ${r.noise.movableEdges} movable joints ${JSON.stringify(r.noise.byMotion)} by type ${JSON.stringify(r.noise.byType)}`,
+    `Suggestions: ${r.noise.suggestions}, unrelated to any expected mechanism: ${r.noise.unrelatedSuggestions}`);
+  return lines.join('\n');
+}

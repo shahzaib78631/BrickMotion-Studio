@@ -1,0 +1,194 @@
+{
+  "model": "LEGO 5590 Whirl 'n Wheel Super Truck (MLCad, unofficial)",
+  "checks": [
+    {
+      "mechanism": "truck-steering",
+      "type": "rotates",
+      "label": "vertical steering input shaft",
+      "status": "wrong-motion",
+      "detail": "found axle-hole/sliding on this axis, wanted revolute"
+    },
+    {
+      "mechanism": "truck-steering",
+      "type": "gearMesh",
+      "label": "input bevel pair",
+      "status": "missing",
+      "detail": "no bevel mesh considered"
+    },
+    {
+      "mechanism": "truck-steering",
+      "type": "rotates",
+      "label": "lengthwise steering shaft",
+      "status": "wrong-motion",
+      "detail": "found axle-hole/sliding on this axis, wanted revolute"
+    },
+    {
+      "mechanism": "truck-steering",
+      "type": "rackPinion",
+      "label": "8T pinion drives 1x4 rack",
+      "status": "rejected",
+      "detail": "geometry screen rejected: Rack length does not follow the pinion tangent"
+    },
+    {
+      "mechanism": "truck-steering",
+      "type": "slides",
+      "label": "steering rack slides sideways",
+      "status": "missing",
+      "detail": "no movable joint on axis [1,0,0] (4 on other axes)"
+    },
+    {
+      "mechanism": "truck-steering",
+      "type": "rotates",
+      "label": "right kingpin",
+      "status": "wrong-motion",
+      "detail": "found axle-hole/sliding on this axis, wanted revolute"
+    },
+    {
+      "mechanism": "truck-steering",
+      "type": "rotates",
+      "label": "left kingpin",
+      "status": "wrong-motion",
+      "detail": "found axle-hole/sliding on this axis, wanted revolute"
+    },
+    {
+      "mechanism": "truck-steering",
+      "type": "suggested",
+      "label": "offered as a ready-to-drive mechanism",
+      "status": "missing",
+      "detail": "4 suggestions, none drive these parts"
+    },
+    {
+      "mechanism": "trailer-hitch",
+      "type": "rotates",
+      "label": "turntable top",
+      "status": "missing",
+      "detail": "no movable joint on axis [0,1,0] (0 on other axes)"
+    },
+    {
+      "mechanism": "trailer-hitch",
+      "type": "suggested",
+      "label": "offered as a ready-to-drive mechanism",
+      "status": "missing",
+      "detail": "4 suggestions, none drive these parts"
+    },
+    {
+      "mechanism": "truck-front-wheels",
+      "type": "rotates",
+      "label": "right front wheel axle",
+      "status": "wrong-motion",
+      "detail": "found axle-hole/sliding on this axis, wanted revolute"
+    },
+    {
+      "mechanism": "truck-front-wheels",
+      "type": "rotates",
+      "label": "left front wheel axle",
+      "status": "wrong-motion",
+      "detail": "found axle-hole/sliding on this axis, wanted revolute"
+    },
+    {
+      "mechanism": "truck-rear-axles",
+      "type": "rotates",
+      "label": "first rear axle",
+      "status": "wrong-motion",
+      "detail": "found axle-hole/sliding on this axis, wanted revolute"
+    },
+    {
+      "mechanism": "truck-rear-axles",
+      "type": "rotates",
+      "label": "second rear axle",
+      "status": "wrong-motion",
+      "detail": "found axle-hole/sliding on this axis, wanted revolute"
+    },
+    {
+      "mechanism": "trailer-axles",
+      "type": "rotates",
+      "label": "trailer axle 1",
+      "status": "missing",
+      "detail": "no movable joint on axis [0.707,0,0.707] (0 on other axes)"
+    },
+    {
+      "mechanism": "trailer-axles",
+      "type": "rotates",
+      "label": "trailer axle 2",
+      "status": "missing",
+      "detail": "no movable joint on axis [0.707,0,0.707] (0 on other axes)"
+    },
+    {
+      "mechanism": "helicopter-rotor",
+      "type": "rotates",
+      "label": "rotor shaft",
+      "status": "wrong-motion",
+      "detail": "found axle-hole/sliding on this axis, wanted revolute"
+    }
+  ],
+  "mechanisms": [
+    {
+      "id": "truck-steering",
+      "title": "Truck steering: top knob -> bevel pair -> lengthwise shaft -> 8T pinion -> rack",
+      "evidence": "posed",
+      "hit": 0,
+      "total": 8
+    },
+    {
+      "id": "trailer-hitch",
+      "title": "Fifth-wheel turntable: trailer pivots on the truck",
+      "evidence": "posed",
+      "hit": 0,
+      "total": 2
+    },
+    {
+      "id": "truck-front-wheels",
+      "title": "Truck front wheels roll on their axles",
+      "evidence": "geometry",
+      "hit": 0,
+      "total": 2
+    },
+    {
+      "id": "truck-rear-axles",
+      "title": "Truck tandem rear axles (dual wheels) roll",
+      "evidence": "geometry",
+      "hit": 0,
+      "total": 2
+    },
+    {
+      "id": "trailer-axles",
+      "title": "Trailer rear axles roll",
+      "evidence": "geometry",
+      "hit": 0,
+      "total": 2
+    },
+    {
+      "id": "helicopter-rotor",
+      "title": "Helicopter main rotor shaft turns",
+      "evidence": "review",
+      "hit": 0,
+      "total": 1
+    }
+  ],
+  "score": {
+    "hit": 0,
+    "total": 17,
+    "recall": 0,
+    "mechanismsComplete": 0,
+    "mechanisms": 6
+  },
+  "noise": {
+    "movableEdges": 133,
+    "byMotion": {
+      "sliding": 90,
+      "ball": 27,
+      "revolute": 16
+    },
+    "byType": {
+      "axle-hole": 34,
+      "stud-socket": 16,
+      "ball-socket": 27,
+      "hinge": 12,
+      "cylindrical": 38,
+      "pin-hole": 2,
+      "clip": 4
+    },
+    "suggestions": 4,
+    "unrelatedSuggestions": 4
+  }
+}

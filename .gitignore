@@ -5,3 +5,6 @@ public/ldraw
 public/data
 .superpowers
 vendor/
+
+# Real-model benchmark inputs (not redistributed; see benchmarks/mechanisms)
+samples/5590_-_whirl_n_wheel_super_truck.mpd

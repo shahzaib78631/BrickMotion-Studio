@@ -35,7 +35,8 @@
     "verify:v8:properties": "node scripts/verify-v8-properties-offline.cjs",
     "typecheck:v8:math": "tsc -p tsconfig.v8.json",
     "verify:v8:syntax": "node scripts/verify-v8-syntax.cjs",
-    "verify:v8:all": "npm run verify:v4:mechanisms:offline && npm run verify:v5:offline && npm run verify:v6:offline && npm run verify:v7:offline && npm run verify:v8:offline && npm run verify:v8:properties && npm run typecheck:v8:math && npm run verify:v8:syntax"
+    "verify:v8:all": "npm run verify:v4:mechanisms:offline && npm run verify:v5:offline && npm run verify:v6:offline && npm run verify:v7:offline && npm run verify:v8:offline && npm run verify:v8:properties && npm run typecheck:v8:math && npm run verify:v8:syntax",
+    "bench:mechanisms": "vitest run tests/diagnostics/mechanismBenchmark.test.ts --silent=false"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.1.0",

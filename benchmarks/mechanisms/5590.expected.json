@@ -1,0 +1,79 @@
+{
+  "schema": "brickmotion-mechanism-benchmark-1",
+  "model": {
+    "name": "LEGO 5590 Whirl 'n Wheel Super Truck (MLCad, unofficial)",
+    "file": "samples/5590_-_whirl_n_wheel_super_truck.mpd",
+    "sha256": "f7c0c925a9ca6213414a4f3fab53c71f324c360d79225225bd6acf541aa65546"
+  },
+  "notes": [
+    "Parts are located by part number and world-box centre (LDU, LDraw axes: -Y is up), not by internal ids.",
+    "Evidence: 'posed' = the model file itself shows the motion (e.g. wheels turned); 'geometry' = gears/axles line up; 'review' = plausible but needs a person who knows the set to confirm.",
+    "Axes are compared as lines: [0,1,0] and [0,-1,0] are the same axis."
+  ],
+  "toleranceLdu": 12,
+  "mechanisms": [
+    {
+      "id": "truck-steering",
+      "title": "Truck steering: top knob -> bevel pair -> lengthwise shaft -> 8T pinion -> rack",
+      "evidence": "posed",
+      "why": "Front wheel axles are posed turned ~21 deg; a wheel rim sits on top of the vertical shaft as a knob; the 8T pinion and 1x4 rack sit together at the front axle.",
+      "checks": [
+        { "type": "rotates", "label": "vertical steering input shaft", "part": { "part": "3706", "at": [0, -76, 80] }, "axis": [0, 1, 0] },
+        { "type": "gearMesh", "label": "input bevel pair", "a": { "part": "4143", "at": [0, -76, 80] }, "b": { "part": "4143", "at": [0, -62, 65] }, "kind": "bevel", "ratio": 1 },
+        { "type": "rotates", "label": "lengthwise steering shaft", "part": { "part": "3707", "at": [0, -62, -10] }, "axis": [0, 0, 1] },
+        { "type": "rackPinion", "label": "8T pinion drives 1x4 rack", "pinion": { "part": "3647", "at": [0, -62, -50] }, "rack": { "part": "3743", "at": [14, -49, -53] } },
+        { "type": "slides", "label": "steering rack slides sideways", "part": { "part": "3743", "at": [14, -49, -53] }, "axis": [1, 0, 0] },
+        { "type": "rotates", "label": "right kingpin", "part": { "part": "3749", "at": [84, -24, -53] }, "axis": [0, 1, 0] },
+        { "type": "rotates", "label": "left kingpin", "part": { "part": "3749", "at": [-56, -24, -53] }, "axis": [0, 1, 0] },
+        { "type": "suggested", "label": "offered as a ready-to-drive mechanism", "parts": [
+          { "part": "3706", "at": [0, -76, 80] }, { "part": "3707", "at": [0, -62, -10] }, { "part": "3743", "at": [14, -49, -53] } ] }
+      ]
+    },
+    {
+      "id": "trailer-hitch",
+      "title": "Fifth-wheel turntable: trailer pivots on the truck",
+      "evidence": "posed",
+      "why": "Trailer is posed at 45 deg around the turntable; the file's own ROTATION CENTER is named 'Trailer Pivot' at the same spot.",
+      "checks": [
+        { "type": "rotates", "label": "turntable top", "part": { "part": "3404", "at": [0, -103, 200] }, "axis": [0, 1, 0] },
+        { "type": "suggested", "label": "offered as a ready-to-drive mechanism", "parts": [ { "part": "3404", "at": [0, -103, 200] }, { "part": "3403", "at": [0, -98, 200] } ] }
+      ]
+    },
+    {
+      "id": "truck-front-wheels",
+      "title": "Truck front wheels roll on their axles",
+      "evidence": "geometry",
+      "checks": [
+        { "type": "rotates", "label": "right front wheel axle", "part": { "part": "3705", "at": [89, -14, -97] }, "axis": [-0.93, 0, 0.36] },
+        { "type": "rotates", "label": "left front wheel axle", "part": { "part": "3705", "at": [-89, -14, -83] }, "axis": [-0.93, 0, 0.36] }
+      ]
+    },
+    {
+      "id": "truck-rear-axles",
+      "title": "Truck tandem rear axles (dual wheels) roll",
+      "evidence": "geometry",
+      "checks": [
+        { "type": "rotates", "label": "first rear axle", "part": { "part": "3708", "at": [0, -14, 140] }, "axis": [1, 0, 0] },
+        { "type": "rotates", "label": "second rear axle", "part": { "part": "3708", "at": [0, -14, 260] }, "axis": [1, 0, 0] }
+      ]
+    },
+    {
+      "id": "trailer-axles",
+      "title": "Trailer rear axles roll",
+      "evidence": "geometry",
+      "checks": [
+        { "type": "rotates", "label": "trailer axle 1", "part": { "part": "3708", "at": [-481, -14, 681] }, "axis": [0.707, 0, 0.707] },
+        { "type": "rotates", "label": "trailer axle 2", "part": { "part": "3708", "at": [-566, -14, 766] }, "axis": [0.707, 0, 0.707] }
+      ]
+    },
+    {
+      "id": "helicopter-rotor",
+      "title": "Helicopter main rotor shaft turns",
+      "evidence": "review",
+      "why": "Vertical axle carrying an 8T gear and a 14T bevel at the top of the helicopter; no meshing partner gear was found, so the drive (if any) needs confirming.",
+      "checks": [
+        { "type": "rotates", "label": "rotor shaft", "part": { "part": "3705", "at": [-364, -348, 564] }, "axis": [0, 1, 0] }
+      ]
+    }
+  ]
+}
