@@ -1,0 +1,28 @@
+Mechanism benchmark — LEGO 8880 Super Car (LDraw OMR)
+Checks passed: 12/16 (75%) · mechanisms fully found: 1/4
+  phase 3: 7/9 (78%)
+  phase 4: 5/7 (71%)
+
+· gearbox [review] 5/7
+    hit          left driving ring couples both its clutch gears — slides -12.0..12.0 LDU, couples 2 gears
+    hit          right driving ring couples both its clutch gears — slides -12.0..12.0 LDU, couples 2 gears
+    hit          neutral at rest — neutral at rest
+    hit          1st: 2.25 engine turns per wheel turn — gear 2.25:1 of 2.25, 0.75
+    missing      2nd: 1.5 engine turns per wheel turn — drive ratios 2.25, 0.75
+    hit          3rd: 0.75 engine turns per wheel turn — gear 0.75:1 of 2.25, 0.75
+    missing      4th: 0.5 engine turns per wheel turn — drive ratios 2.25, 0.75
+✓ gearbox-meshes [geometry] 3/3
+    hit          clutch gears mesh across the two shafts — measured spur pair 16:16
+    hit          24T and 8T join the two gearbox shafts — gear mesh 24:8
+    hit          16T drives the rear differential — measured spur pair 16:24
+· steering [review] 2/3
+    missing      steering wheel moves the front and rear racks — no suggestion named rack-steering / steering
+    hit          front pinion drives the front rack — measured rack pair 16:10
+    hit          steering column 24T drives the 24T beside it — measured spur pair 24:24
+· engine [review] 2/3
+    hit          crankshaft turns — axle-hole revolute joint ic9/im5/ikr ↔ ic9/im5/ikq
+    hit          piston slides in its cylinder — cylindrical sliding joint ic9/im5/ikt ↔ ic9/im7/ilf
+    missing      crankshaft drives the pistons — no suggestion named piston-engine
+
+Noise: 421 movable joints {"ball":23,"revolute":390,"sliding":8} by type {"ball-socket":23,"cylindrical":149,"axle-hole":149,"pin-hole":44,"hinge":10,"clip":46}
+Suggestions: 6, unrelated to any expected mechanism: 5

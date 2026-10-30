@@ -1,0 +1,72 @@
+{
+  "schema": "brickmotion-mechanism-benchmark-1",
+  "model": {
+    "name": "LEGO 8880 Super Car (LDraw OMR)",
+    "file": "samples/8880-1.mpd",
+    "sha256": "68c6bfffe183cdf552024dda7651dcfcdad2fbd99cbd47eb533234b5f9a6f3ce"
+  },
+  "notes": [
+    "Model: LDraw Official Model Repository file '8880-1.mpd' (Orion Pobursky), CC BY 2.0, https://library.ldraw.org/omr/sets/908. Not redistributed here; place it at samples/8880-1.mpd.",
+    "Gear ratios: Kinebrick's tests/sets/8880-super-car.test.ts (erik-larsen/kinebrick, CC BY-SA 4.0), used as an oracle: the engine turns 2.25, 1.5, 0.75 and 0.5 times per wheel turn in the four gears, neutral in the middle of the H gate.",
+    "The engine reaches the gearbox through a chain (3711 links) from the crank's 16T gear to 4019 on the gearbox input shaft, 16:16. Chains are phase 6, so the ratios are measured from that 4019, which turns 1:1 with the crank.",
+    "Model-file defect: the 8T gear 3647 at [-60,-14,-70] is on no axle, so 2nd (1.5) and 4th (0.5) never reach the wheels. Fix in the file: an Axle 8 (3707) centred at (-60,-14,0) along z. The checks keep the manual's four ratios and report these two as misses.",
+    "Ratios are read to the rear differential case with every differential locked, as when the car drives straight (wheel turns = case turns).",
+    "Parts are located by part number and world-box centre (LDU, LDraw axes: -Y is up)."
+  ],
+  "toleranceLdu": 6,
+  "mechanisms": [
+    {
+      "id": "gearbox",
+      "phase": 4,
+      "title": "4-speed gearbox: two driving rings between clutch gears, neutral in the middle",
+      "evidence": "review",
+      "why": "Kinebrick 8880 test: 4-speed driving-ring box with ratios 2.25, 1.5, 0.75, 0.5 engine turns per wheel turn.",
+      "checks": [
+        { "type": "shifts", "label": "left driving ring couples both its clutch gears", "ring": { "part": "6539", "at": [-20, -54, 60] },
+          "gears": [ { "part": "6542a", "at": [-20, -54, 30] }, { "part": "6542a", "at": [-20, -54, 90] } ] },
+        { "type": "shifts", "label": "right driving ring couples both its clutch gears", "ring": { "part": "6539", "at": [20, -54, 60] },
+          "gears": [ { "part": "6542a", "at": [20, -54, 30] }, { "part": "6542a", "at": [20, -54, 90] } ] },
+        { "type": "shiftMode", "label": "neutral at rest", "input": { "part": "4019", "at": [20, -54, 390] }, "output": { "part": "6573", "at": [0, -54, 500] }, "ratio": null },
+        { "type": "shiftMode", "label": "1st: 2.25 engine turns per wheel turn", "input": { "part": "4019", "at": [20, -54, 390] }, "output": { "part": "6573", "at": [0, -54, 500] }, "ratio": 2.25 },
+        { "type": "shiftMode", "label": "2nd: 1.5 engine turns per wheel turn", "input": { "part": "4019", "at": [20, -54, 390] }, "output": { "part": "6573", "at": [0, -54, 500] }, "ratio": 1.5 },
+        { "type": "shiftMode", "label": "3rd: 0.75 engine turns per wheel turn", "input": { "part": "4019", "at": [20, -54, 390] }, "output": { "part": "6573", "at": [0, -54, 500] }, "ratio": 0.75 },
+        { "type": "shiftMode", "label": "4th: 0.5 engine turns per wheel turn", "input": { "part": "4019", "at": [20, -54, 390] }, "output": { "part": "6573", "at": [0, -54, 500] }, "ratio": 0.5 }
+      ]
+    },
+    {
+      "id": "gearbox-meshes",
+      "title": "Gearbox and final drive meshes",
+      "evidence": "geometry",
+      "checks": [
+        { "type": "gearMesh", "label": "clutch gears mesh across the two shafts", "a": { "part": "6542a", "at": [20, -54, 30] }, "b": { "part": "6542a", "at": [-20, -54, 30] }, "kind": "spur" },
+        { "type": "gearMesh", "label": "24T and 8T join the two gearbox shafts", "a": { "part": "3648a", "at": [-20, -54, -10] }, "b": { "part": "3647", "at": [20, -54, -10] }, "kind": "spur" },
+        { "type": "gearMesh", "label": "16T drives the rear differential", "a": { "part": "4019", "at": [30, -14, 470] }, "b": { "part": "6573", "at": [0, -54, 500] }, "kind": "spur" }
+      ]
+    },
+    {
+      "id": "steering",
+      "title": "Four-wheel steering: steering wheel -> 24T gears -> pinions -> front and rear racks",
+      "evidence": "review",
+      "why": "8880 steers all four wheels; one shaft carries the front and the rear pinions.",
+      "checks": [
+        { "type": "function", "label": "steering wheel moves the front and rear racks", "kinds": ["rack-steering", "steering"],
+          "driver": { "part": "2741", "at": [120, -183, 52] },
+          "moves": [ { "part": "3743", "at": [-40, -67, -110] }, { "part": "3743", "at": [-40, -71, 430] } ] },
+        { "type": "rackPinion", "label": "front pinion drives the front rack", "pinion": { "part": "4019", "at": [-30, -94, -110] }, "rack": { "part": "3743", "at": [-40, -67, -110] } },
+        { "type": "gearMesh", "label": "steering column 24T drives the 24T beside it", "a": { "part": "3650c", "at": [120, -122, -38] }, "b": { "part": "3650c", "at": [60, -122, -39] }, "kind": "spur" }
+      ]
+    },
+    {
+      "id": "engine",
+      "title": "V8: crankshaft -> rods -> pistons in fixed cylinders",
+      "evidence": "review",
+      "checks": [
+        { "type": "rotates", "label": "crankshaft turns", "part": { "part": "2853", "at": [5, -134, 440] }, "axis": [0, 0, 1] },
+        { "type": "slides", "label": "piston slides in its cylinder", "part": { "part": "2851", "at": [46, -159, 440] }, "axis": [0.92, -0.4, 0] },
+        { "type": "function", "label": "crankshaft drives the pistons", "kinds": ["piston-engine"],
+          "driver": { "part": "2853", "at": [5, -134, 440] },
+          "moves": [ { "part": "2851", "at": [46, -159, 440] }, { "part": "2851", "at": [-30, -152, 440] } ] }
+      ]
+    }
+  ]
+}

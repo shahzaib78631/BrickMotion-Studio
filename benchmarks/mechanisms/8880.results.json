@@ -1,0 +1,182 @@
+{
+  "model": "LEGO 8880 Super Car (LDraw OMR)",
+  "checks": [
+    {
+      "mechanism": "gearbox",
+      "type": "shifts",
+      "label": "left driving ring couples both its clutch gears",
+      "status": "hit",
+      "detail": "slides -12.0..12.0 LDU, couples 2 gears"
+    },
+    {
+      "mechanism": "gearbox",
+      "type": "shifts",
+      "label": "right driving ring couples both its clutch gears",
+      "status": "hit",
+      "detail": "slides -12.0..12.0 LDU, couples 2 gears"
+    },
+    {
+      "mechanism": "gearbox",
+      "type": "shiftMode",
+      "label": "neutral at rest",
+      "status": "hit",
+      "detail": "neutral at rest"
+    },
+    {
+      "mechanism": "gearbox",
+      "type": "shiftMode",
+      "label": "1st: 2.25 engine turns per wheel turn",
+      "status": "hit",
+      "detail": "gear 2.25:1 of 2.25, 0.75"
+    },
+    {
+      "mechanism": "gearbox",
+      "type": "shiftMode",
+      "label": "2nd: 1.5 engine turns per wheel turn",
+      "status": "missing",
+      "detail": "drive ratios 2.25, 0.75"
+    },
+    {
+      "mechanism": "gearbox",
+      "type": "shiftMode",
+      "label": "3rd: 0.75 engine turns per wheel turn",
+      "status": "hit",
+      "detail": "gear 0.75:1 of 2.25, 0.75"
+    },
+    {
+      "mechanism": "gearbox",
+      "type": "shiftMode",
+      "label": "4th: 0.5 engine turns per wheel turn",
+      "status": "missing",
+      "detail": "drive ratios 2.25, 0.75"
+    },
+    {
+      "mechanism": "gearbox-meshes",
+      "type": "gearMesh",
+      "label": "clutch gears mesh across the two shafts",
+      "status": "hit",
+      "detail": "measured spur pair 16:16"
+    },
+    {
+      "mechanism": "gearbox-meshes",
+      "type": "gearMesh",
+      "label": "24T and 8T join the two gearbox shafts",
+      "status": "hit",
+      "detail": "gear mesh 24:8"
+    },
+    {
+      "mechanism": "gearbox-meshes",
+      "type": "gearMesh",
+      "label": "16T drives the rear differential",
+      "status": "hit",
+      "detail": "measured spur pair 16:24"
+    },
+    {
+      "mechanism": "steering",
+      "type": "function",
+      "label": "steering wheel moves the front and rear racks",
+      "status": "missing",
+      "detail": "no suggestion named rack-steering / steering"
+    },
+    {
+      "mechanism": "steering",
+      "type": "rackPinion",
+      "label": "front pinion drives the front rack",
+      "status": "hit",
+      "detail": "measured rack pair 16:10"
+    },
+    {
+      "mechanism": "steering",
+      "type": "gearMesh",
+      "label": "steering column 24T drives the 24T beside it",
+      "status": "hit",
+      "detail": "measured spur pair 24:24"
+    },
+    {
+      "mechanism": "engine",
+      "type": "rotates",
+      "label": "crankshaft turns",
+      "status": "hit",
+      "detail": "axle-hole revolute joint ic9/im5/ikr ↔ ic9/im5/ikq"
+    },
+    {
+      "mechanism": "engine",
+      "type": "slides",
+      "label": "piston slides in its cylinder",
+      "status": "hit",
+      "detail": "cylindrical sliding joint ic9/im5/ikt ↔ ic9/im7/ilf"
+    },
+    {
+      "mechanism": "engine",
+      "type": "function",
+      "label": "crankshaft drives the pistons",
+      "status": "missing",
+      "detail": "no suggestion named piston-engine"
+    }
+  ],
+  "mechanisms": [
+    {
+      "id": "gearbox",
+      "title": "4-speed gearbox: two driving rings between clutch gears, neutral in the middle",
+      "evidence": "review",
+      "hit": 5,
+      "total": 7
+    },
+    {
+      "id": "gearbox-meshes",
+      "title": "Gearbox and final drive meshes",
+      "evidence": "geometry",
+      "hit": 3,
+      "total": 3
+    },
+    {
+      "id": "steering",
+      "title": "Four-wheel steering: steering wheel -> 24T gears -> pinions -> front and rear racks",
+      "evidence": "review",
+      "hit": 2,
+      "total": 3
+    },
+    {
+      "id": "engine",
+      "title": "V8: crankshaft -> rods -> pistons in fixed cylinders",
+      "evidence": "review",
+      "hit": 2,
+      "total": 3
+    }
+  ],
+  "byPhase": {
+    "3": {
+      "hit": 7,
+      "total": 9
+    },
+    "4": {
+      "hit": 5,
+      "total": 7
+    }
+  },
+  "score": {
+    "hit": 12,
+    "total": 16,
+    "recall": 0.75,
+    "mechanismsComplete": 1,
+    "mechanisms": 4
+  },
+  "noise": {
+    "movableEdges": 421,
+    "byMotion": {
+      "ball": 23,
+      "revolute": 390,
+      "sliding": 8
+    },
+    "byType": {
+      "ball-socket": 23,
+      "cylindrical": 149,
+      "axle-hole": 149,
+      "pin-hole": 44,
+      "hinge": 10,
+      "clip": 46
+    },
+    "suggestions": 6,
+    "unrelatedSuggestions": 5
+  }
+}

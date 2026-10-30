@@ -5,6 +5,8 @@
  * detector and bounded solver as Standard Motion V4, without first planning
  * or rewriting any construction flights. All evidence remains provisional.
  */
+import { findShiftElements, type ShiftElement } from '../gearbox/shiftElements';
+import { rateNetwork, type RateNetwork } from '../gearbox/shiftModes';
 import * as THREE from 'three';
 import type { Assembly, Metrics } from '../../../model/assemble';
 import type { ConstructionModel, ConstructionNode } from '../../construction/types';
@@ -36,6 +38,8 @@ export type LabReport = {
   higherPairs: HigherPair[];
   /** Fits accepted only within a tolerance, worst first: what to correct in the model file. */
   tolerances: TolerancedPair[];
+  /** Driving rings with their clutch gears, and the gear network the mode table is read from (spec §4). */
+  gearbox: { shifts: ShiftElement[]; network: RateNetwork };
 };
 /** One part pair's accepted placement errors. */
 export type TolerancedPair = { a: string; b: string; partA: string; partB: string; fits: ToleratedFit[] };
@@ -79,9 +83,12 @@ export function inspectMechanisms(asm: Assembly, metrics: Metrics): LabReport {
   const steering = suggestRackSteering(asm, graph, geometryCandidates, measured)
     .map(s => ({ ...s, mechanism: { kind: 'rack-steering', name: s.title } }));
   const named = graph.recognition ? classify(graph.recognition, higherPairs, screws, asm, metrics) : [];
+  const rec = graph.recognition;
+  const gearbox = rec ? { shifts: findShiftElements(asm, rec), network: rateNetwork(rec, higherPairs, named) }
+    : { shifts: [], network: { meshes: [], locks: [] } };
   detection.suggestions = rankSuggestions([...steering, ...suggestMechanisms(asm, graph, named, higherPairs, screws), ...detection.suggestions]);
   return {
-    graph,detection,geometryCandidates,higherPairs,
+    graph,detection,geometryCandidates,higherPairs,gearbox,
     tolerances: toleratedPairs(asm, withLibraryConnectors(known, measuredJoints), higherPairs),
     pairsExamined: matched.pairsExamined,
     connectorPairs: matched.matesByPair.size,

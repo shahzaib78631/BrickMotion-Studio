@@ -12,6 +12,7 @@ import { solveLabFrame, type LabReport } from '../v4/mechanismLab';
 import { MechanismSolver } from '../v4/mechanismSolver';
 import type { SuggestedMechanism } from '../v4/autoMechanics';
 import type { MechanismEdge } from '../v4/mechanismGraph';
+import { shiftModes } from '../gearbox/shiftModes';
 
 type V3 = [number, number, number];
 export type PartRef = { part: string; at: V3 };
@@ -25,7 +26,12 @@ export type BenchmarkCheck =
   | { type: 'fourBar'; label: string; coupler: PartRef; arms: [PartRef, PartRef]; axis: V3 }
   /** A whole function: a suggestion named as one of `kinds`, driven at `driver`,
    * must move every `moves` part and leave every `stays` part where it is. */
-  | { type: 'function'; label: string; kinds: string[]; driver: PartRef; moves: PartRef[]; stays?: PartRef[] };
+  | { type: 'function'; label: string; kinds: string[]; driver: PartRef; moves: PartRef[]; stays?: PartRef[] }
+  /** A driving ring recognised as a shift element that couples every one of `gears`. */
+  | { type: 'shifts'; label: string; ring: PartRef; gears: PartRef[] }
+  /** The gearbox mode table from `input` to `output` has a one-ring gear of this ratio
+   * (input turns per output turn, within 2 %), or with `null`, is in neutral at rest. */
+  | { type: 'shiftMode'; label: string; input: PartRef; output: PartRef; ratio: number | null };
 export type ExpectedMechanism = {
   id: string; title: string; evidence: 'posed' | 'geometry' | 'review'; why?: string;
   /** Spec phase that is expected to find it (default 3); later phases are scored apart. */
@@ -156,6 +162,7 @@ export function scoreMechanismBenchmark(spec: BenchmarkSpec, asm: Assembly, repo
     return Math.max(travel / 0.5, turn);
   };
 
+  const gearbox = report.gearbox ?? { shifts: [], network: { meshes: [], locks: [] } };
   const results: CheckResult[] = [];
   const expectedParts = new Set<string>();
   for (const mech of spec.mechanisms) {
@@ -210,6 +217,34 @@ export function scoreMechanismBenchmark(spec: BenchmarkSpec, asm: Assembly, repo
         });
         if (good) push('hit', `${good.mechanism!.kind} "${good.title}" moves every expected part`);
         else push('missing', why.join('; '));
+      } else if (check.type === 'shifts') {
+        const refs = [check.ring, ...check.gears], keys = refs.map(resolve), lost = keys.indexOf(null);
+        if (lost >= 0) { push('unresolved', `cannot find ${fmt(refs[lost])}`); continue; }
+        const [ring, ...gears] = keys as string[];
+        [ring, ...gears].forEach(k => expectedParts.add(k));
+        const el = gearbox.shifts.find(e => e.ring === ring);
+        if (!el) { push('missing', gearbox.shifts.length ? `${label(ring)} is not one of the ${gearbox.shifts.length} shift elements` : 'no shift elements'); continue; }
+        const absent = gears.filter(g => !el.couplings.some(c => c.gear === g));
+        if (absent.length) push('missing', `ring couples ${el.couplings.map(c => label(c.gear)).join(', ') || 'nothing'}, not ${absent.map(label).join(', ')}`);
+        else push('hit', `slides ${el.travel[0].toFixed(1)}..${el.travel[1].toFixed(1)} LDU, couples ${el.couplings.length} gear${el.couplings.length > 1 ? 's' : ''}`);
+      } else if (check.type === 'shiftMode') {
+        const input = resolve(check.input), output = resolve(check.output);
+        if (!input || !output) { push('unresolved', `cannot find ${fmt(!input ? check.input : check.output)}`); continue; }
+        expectedParts.add(input); expectedParts.add(output);
+        if (!gearbox.shifts.length) { push('missing', 'no shift elements'); continue; }
+        const bodyOf = report.graph.recognition?.bodyOf, a = bodyOf?.get(input), b = bodyOf?.get(output);
+        if (a === undefined || b === undefined) { push('missing', 'input or output is in no body'); continue; }
+        const modes = shiftModes(gearbox.network, gearbox.shifts, a, b);
+        const gears = modes.filter(m => m.state === 'drive' && m.engaged.length === 1).map(m => m.ratio!);
+        if (check.ratio === null) {
+          const rest = modes[0];
+          if (rest.state === 'neutral') push('hit', 'neutral at rest');
+          else push('missing', `at rest the box is ${rest.state}${rest.ratio ? ` (${rest.ratio.toFixed(2)})` : ''}`);
+          continue;
+        }
+        const want = check.ratio, hit = gears.find(r => Math.abs(r - want) <= 0.02 * want);
+        if (hit !== undefined) push('hit', `gear ${hit.toFixed(2)}:1 of ${gears.map(r => r.toFixed(2)).join(', ')}`);
+        else push('missing', gears.length ? `drive ratios ${gears.map(r => r.toFixed(2)).join(', ')}` : 'output not reached in any mode');
       } else if (check.type === 'suggested') {
         const keys = check.parts.map(resolve);
         if (keys.some(k => !k)) { push('unresolved', `cannot find ${fmt(check.parts[keys.indexOf(null)])}`); continue; }

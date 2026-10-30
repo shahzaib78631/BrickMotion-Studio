@@ -47,3 +47,12 @@ come from a local patch (`src/ldraw/shadowPatches.ts`).
 - 42000: the functions curated by [Kinebrick](https://github.com/erik-larsen/kinebrick)
   in `data/sets/42000-1.json` (commit 516e176), CC BY-SA 4.0, which cite the
   set's instruction books; resolved here to part positions.
+- 8880: LDraw OMR `8880-1.mpd` (Orion Pobursky, CC BY 2.0,
+  <https://library.ldraw.org/omr/sets/908>). Gear ratios from
+  [Kinebrick](https://github.com/erik-larsen/kinebrick)'s
+  `tests/sets/8880-super-car.test.ts` (CC BY-SA 4.0), used as an oracle.
+  The ratios are measured from the gearbox input gear `4019@[20,-54,390]`,
+  which the crank drives 1:1 through a chain (chains are phase 6).
+  **Model-file defect:** the 8T gear `3647` at [-60,-14,-70] has no axle, so
+  2nd and 4th never reach the wheels; adding an Axle 8 (`3707`) centred at
+  (-60,-14,0) along z fixes it.
