@@ -7,7 +7,7 @@ import { setAssemblySpot, setSubmodelBuildSpot, shiftOnFloor } from '../plan/pie
 import { aroundPivot, transformPlanItems } from '../plan/gizmo';
 import type { ANode, Instance } from '../model/assemble';
 import { dragDelta } from '../state/drag';
-import { studSnapper, type SnapPart, type StudSnapper } from '../plan/studSnap';
+import type { StudSnapper } from '../plan/studSnap';
 import { isSub } from '../plan/types';
 import { isMainSpot, markers, sameSpot, sceneSpot, storedSpot, sceneOffset, planOffset, spotOfRef, type SpotRef } from '../plan/assemblySpots';
 import { SPOT_DRAG_TYPE, draggedSpot } from './AssemblyPanel';
@@ -17,7 +17,7 @@ import { selectionForHit } from '../plan/groups';
 import { createSubmodel } from '../plan/createSubmodel';
 import { instancePlacements, itemPlacement, placedBox, placedMatrix, sourceEditDelta, viewPlacement } from './modelPlacement';
 import { NewSubmodelDialog } from './NewSubmodelDialog';
-import { runCommand } from '../state/editing';
+import { runCommand, snapperFor } from '../state/editing';
 import { commandForKey } from '../state/keymap';
 import { useStudio } from '../state/store';
 import { metricsOf } from '../state/partService';
@@ -75,17 +75,6 @@ function frame(camera: THREE.PerspectiveCamera | THREE.OrthographicCamera, contr
 
 const isTyping = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName));
 
-/** A drag's stud snapper: the selected items' parts against every other part (LDraw frame). */
-function snapperFor(instances: readonly Instance[], ids: readonly string[]): StudSnapper {
-  const chosen = new Set(ids);
-  const moving: SnapPart[] = [], others: SnapPart[] = [];
-  for (const inst of instances) {
-    if (inst.placeholder) continue;
-    const m = metricsOf(inst.part);
-    (chosen.has(inst.key.split('/')[0]) ? moving : others).push({ world: inst.world.elements, body: m.body, studs: m.studs });
-  }
-  return studSnapper(moving, others);
-}
 
 export function Viewport({ model, timeline = null, showSpots = true }: {
   model: ModelState;
@@ -398,9 +387,10 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
         // World units: 1 stud = 1; one plate is 8/20 of a world unit.
         // Whole studs, or a half stud when that seats the selection on a stud (jumper plates).
         gizmoSnap ??= snapperFor(modelRef.current.view.instances, initialIds.current);
-        const flat = gizmoSnap({ x: move.x, z: -move.z });
-        // the seat height applies only while the gizmo is not lifting the part itself
-        const lift = Math.round(move.y / 0.4) * 0.4;
+        const flat = gizmoSnap({ x: move.x, z: -move.z, y: move.y });
+        // the seat height applies only while the gizmo is not lifting the part itself;
+        // a sideways part's height comes from the snapper, which steps it a stud row at a time
+        const lift = gizmoSnap.sideways ? 0 : Math.round(move.y / 0.4) * 0.4;
         const dx = flat.x, dy = lift || flat.y * 0.4, dz = -flat.z || 0;
         delta = new THREE.Matrix4().makeTranslation(dx, dy, dz);
       } else if (currentMode === 'rotate') {

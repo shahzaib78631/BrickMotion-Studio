@@ -1,9 +1,10 @@
 import type { Box } from '../ldraw/flatten';
-import { assemble, transformBox, placementMatrix, type Assembly } from '../model/assemble';
+import { assemble, transformBox, placementMatrix, type Assembly, type Instance } from '../model/assemble';
 import { newId } from '../plan/ids';
 import { addItem, deleteItems, duplicateItems, findItem, modelSteps, moveItems, rotateItems, type ModelName, insertItem } from '../plan/ops';
 import { gridToPlacement } from '../plan/placement';
 import { isGrid, isSub, type Grid, type Plan, type PlanItem } from '../plan/types';
+import { studSnapper, type SnapPart, type StudSnapper } from '../plan/studSnap';
 import type { Command } from './keymap';
 import { ensureParts, getColors, metricsOf } from './partService';
 import { useStudio } from './store';
@@ -73,6 +74,29 @@ export async function addPart(part: string, at?: { step: number; index: number }
   st.select([id]);
 }
 
+/** A move's stud snapper: the selected items' parts against every other part (LDraw frame). */
+export function snapperFor(instances: readonly Instance[], ids: readonly string[]): StudSnapper {
+  const chosen = new Set(ids);
+  const moving: SnapPart[] = [], others: SnapPart[] = [];
+  for (const inst of instances) {
+    if (inst.placeholder) continue;
+    const m = metricsOf(inst.part);
+    (chosen.has(inst.key.split('/')[0]) ? moving : others).push({ world: inst.world.elements, body: m.body, studs: m.studs, snaps: m.snaps, mesh: m.mesh });
+  }
+  return studSnapper(moving, others);
+}
+
+/**
+ * A sideways selection (studs pointing along X or Z) sits on stud rows a stud apart
+ * vertically, so a plate-sized nudge can never land it. Raise/Lower then step one stud
+ * row, and every nudge seats the parts onto the studs it reaches. Upright parts are unchanged.
+ */
+function sidewaysMove(plan: Plan, m: ModelName, ids: readonly string[], d: { x: number; y: number; z: number }) {
+  const view = assemble({ ...plan, steps: modelSteps(plan, m) }, metricsOf, getColors());
+  const snap = snapperFor(view.instances, ids);
+  return snap.sideways ? snap({ x: d.x, z: d.z, y: Math.sign(d.y) }) : null;
+}
+
 export function runCommand(cmd: Command): void {
   const st = useStudio.getState();
   const { selection, editingModel } = st;
@@ -82,7 +106,10 @@ export function runCommand(cmd: Command): void {
   const ids = selection.model === editingModel ? selection.ids : [];
   if (!ids.length) return;
   const m: ModelName = editingModel;
-  if (cmd.kind === 'move') st.apply((p) => moveItems(p, m, ids, cmd.d));
+  if (cmd.kind === 'move') st.apply((p) => {
+    const seated = sidewaysMove(p, m, ids, cmd.d);
+    return seated ? moveItems(p, m, ids, seated, bodyFor(p)) : moveItems(p, m, ids, cmd.d);
+  });
   else if (cmd.kind === 'rotate') st.apply((p) => rotateItems(p, m, ids, footprintFor(p), bodyFor(p)));
   else if (cmd.kind === 'duplicate') {
     // the copy goes right beside the selection (+X), so it is easy to see and drag
