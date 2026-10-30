@@ -16,13 +16,13 @@
       "id": "truck-steering",
       "title": "Truck steering: top knob -> bevel pair -> lengthwise shaft -> 8T pinion -> rack",
       "evidence": "posed",
-      "why": "Front wheel axles are posed turned ~21 deg; a wheel rim sits on top of the vertical shaft as a knob; the 8T pinion and 1x4 rack sit together at the front axle.",
+      "why": "Front wheel axles are posed turned ~21 deg; a wheel rim sits on top of the vertical shaft as a knob; the 8T pinion and 1x4 rack sit together at the front axle. The rack is welded to a 1x8 Technic plate (4442) pinned by axle pins (3749) to both steering arms (4261), which pivot between the frame plates: a parallelogram four-bar, so the rack shifts sideways on a short arc (about 2.7 LDU of fore-aft drift at the posed 14 LDU / 22 deg), not along a slide. Earlier versions of this file wrongly expected a sideways slide joint.",
       "checks": [
         { "type": "rotates", "label": "vertical steering input shaft", "part": { "part": "3706", "at": [0, -76, 80] }, "axis": [0, 1, 0] },
         { "type": "gearMesh", "label": "input bevel pair", "a": { "part": "4143", "at": [0, -76, 80] }, "b": { "part": "4143", "at": [0, -62, 65] }, "kind": "bevel", "ratio": 1 },
         { "type": "rotates", "label": "lengthwise steering shaft", "part": { "part": "3707", "at": [0, -62, -10] }, "axis": [0, 0, 1] },
         { "type": "rackPinion", "label": "8T pinion drives 1x4 rack", "pinion": { "part": "3647", "at": [0, -62, -50] }, "rack": { "part": "3743", "at": [14, -49, -53] } },
-        { "type": "slides", "label": "steering rack slides sideways", "part": { "part": "3743", "at": [14, -49, -53] }, "axis": [1, 0, 0] },
+        { "type": "fourBar", "label": "rack rides on a tie rod between the steering arms (moves on an arc, not a slide)", "coupler": { "part": "3743", "at": [14, -49, -53] }, "arms": [ { "part": "4261", "at": [77, -12, -71] }, { "part": "4261", "at": [-63, -12, -71] } ], "axis": [0, 1, 0] },
         { "type": "rotates", "label": "right kingpin", "part": { "part": "3749", "at": [84, -24, -53] }, "axis": [0, 1, 0] },
         { "type": "rotates", "label": "left kingpin", "part": { "part": "3749", "at": [-56, -24, -53] }, "axis": [0, 1, 0] },
         { "type": "suggested", "label": "offered as a ready-to-drive mechanism", "parts": [

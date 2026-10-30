@@ -15,6 +15,11 @@ export type TransmissionDraft = {
   c?: string;
   /** World-frame fallback orientation if no trustworthy connector axis exists. */
   axis: Vec3;
+  /** Measured shaft axes (and rack direction). When given they define the
+   * joints, so `reversed` is stated against exactly these directions. */
+  axisA?: Vec3;
+  axisB?: Vec3;
+  slideAxis?: Vec3;
   teethA?: number;
   teethB?: number;
   starts?: number;
@@ -78,9 +83,10 @@ export function composeTransmissionProgram(assembly:Assembly,graph:MechanismGrap
       (spec.kind==='differential'&&(!spec.c||spec.c===spec.a||spec.c===spec.b)))
       throw Error(`Coupling ${i+1}: select distinct real model parts`);
     const fallback=normalized(spec.axis);
-    const a=shaft(spec.a,'revolute',fallback);
+    const a=shaft(spec.a,'revolute',fallback,spec.axisA);
     let estimatedSlideAxis:Vec3|undefined;
-    if(spec.kind==='rack-pinion'){
+    if(spec.kind==='rack-pinion'&&spec.slideAxis)estimatedSlideAxis=normalized(spec.slideAxis);
+    else if(spec.kind==='rack-pinion'){
       // Tangent to the pinion axis in the radial direction toward the rack.
       // This is a geometric estimate, not a guarantee of gear/rack contact.
       const pinion=byPart.get(spec.a)!;
@@ -99,7 +105,7 @@ export function composeTransmissionProgram(assembly:Assembly,graph:MechanismGrap
       if(Math.abs(byPart.get(spec.a)!.axis.reduce((sum,n,i)=>sum+n*estimatedSlideAxis![i],0))>.02)
         throw Error('Wheel rotation axis must be perpendicular to chassis travel');
     }
-    const b=shaft(spec.b,slide(spec.kind)?'prismatic':'revolute',fallback,estimatedSlideAxis);
+    const b=shaft(spec.b,slide(spec.kind)?'prismatic':'revolute',fallback,estimatedSlideAxis??spec.axisB);
     if(spec.kind==='wheel-ground'){
       // Rotate the wheel about its *moving* chassis pivot; otherwise a rolling
       // wheel spins in place while the chassis slides away from it.
@@ -114,7 +120,8 @@ export function composeTransmissionProgram(assembly:Assembly,graph:MechanismGrap
     switch(spec.kind){
       case 'gear':case 'belt':case 'chain':
         t={...common,kind:spec.kind,a,b,teethA:spec.teethA??12,teethB:spec.teethB??24,
-          ...(spec.kind==='belt'?{crossed:spec.crossed??false}:{})};break;
+          ...(spec.kind==='belt'?{crossed:spec.crossed??false}:{}),
+          ...(spec.kind==='gear'&&spec.reversed?{reversed:true}:{})};break;
       case 'worm':t={...common,kind:spec.kind,a,b,starts:spec.starts??1,
         wheelTeeth:spec.teethB??24,reversed:spec.reversed??false};break;
       case 'wheel-ground':t={...common,kind:spec.kind,a,b,radiusLdu:spec.radiusLdu??20,

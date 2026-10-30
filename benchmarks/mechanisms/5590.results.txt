@@ -1,12 +1,12 @@
 Mechanism benchmark — LEGO 5590 Whirl 'n Wheel Super Truck (MLCad, unofficial)
-Checks passed: 12/17 (71%) · mechanisms fully found: 4/6
+Checks passed: 15/17 (88%) · mechanisms fully found: 4/6
 
-· truck-steering [posed] 4/8
+· truck-steering [posed] 7/8
     hit          vertical steering input shaft — axle-hole revolute joint i0/i5r ↔ i0/i6p
-    missing      input bevel pair — no bevel mesh considered
+    hit          input bevel pair — geometry screen: plausible bevel
     hit          lengthwise steering shaft — axle-hole revolute joint i0/i2z ↔ i0/i2t
-    rejected     8T pinion drives 1x4 rack — geometry screen rejected: Rack length does not follow the pinion tangent
-    missing      steering rack slides sideways — no movable joint on axis [1,0,0] (4 on other axes)
+    hit          8T pinion drives 1x4 rack — geometry screen: plausible rack-pinion
+    hit          rack rides on a tie rod between the steering arms (moves on an arc, not a slide) — four-bar loop: frame i0/i10 – arms i0/ih, i0/ii – coupler i0/i2y
     hit          right kingpin — axle-hole revolute joint i0/ij ↔ i0/i2x
     hit          left kingpin — axle-hole revolute joint i0/ik ↔ i0/i2x
     missing      offered as a ready-to-drive mechanism — 4 suggestions, none drive these parts

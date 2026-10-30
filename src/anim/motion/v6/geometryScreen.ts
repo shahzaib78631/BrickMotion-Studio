@@ -7,11 +7,12 @@
  * All measurements are in assembled world LDraw units. No filename guessing.
  */
 // Structural inputs keep the screening math independent of Three.js.
+import { bevelMesh, rackMesh, spurMesh, type WorldGear } from '../gears/gearGeometry';
 export type Vec3 = [number,number,number];
 export type ScreenPart = { key:string; category:string; description:string; axis?:Vec3; pivot?:Vec3; teeth?:number };
 
 export type SpatialBounds = { min: Vec3; max: Vec3 };
-export type GeometryMechanismKind = 'gear'|'rack-pinion'|'worm'|'belt'|'chain';
+export type GeometryMechanismKind = 'gear'|'bevel'|'rack-pinion'|'worm'|'belt'|'chain';
 export type GeometryCandidate = {
   id: string; kind: GeometryMechanismKind; a:string;b:string;
   evidence: 'axis-and-bounds-screen'; status: 'plausible'|'rejected';
@@ -20,7 +21,10 @@ export type GeometryCandidate = {
   metrics: { separationLdu: number; axisDot?: number; pitchErrorLdu?: number; axialSeparationLdu?: number };
   reasons: string[];
   /** Suggested authoring values, NOT confirmed tooth contacts / load transfer. */
-  draft?: { teethA?:number;teethB?:number;starts?:number;pitchRadiusLdu?:number;axis:Vec3 };
+  draft?: { teethA?:number;teethB?:number;starts?:number;pitchRadiusLdu?:number;axis:Vec3;
+    /** Measured geometry only: both shaft axes / rack direction, and whether the
+     * output turns the same way as the input about these exact axes. */
+    axisA?:Vec3;axisB?:Vec3;slideAxis?:Vec3;reversed?:boolean };
 };
 const dot=(a:Vec3,b:Vec3)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
 const sub=(a:Vec3,b:Vec3):Vec3=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]];
@@ -43,28 +47,33 @@ const family=(p:ScreenPart)=>{
  if(/\bworm\b/.test(s))return 'worm';
  if(/\b(sprocket|chain wheel)\b/.test(s))return 'chain';
  if(/\bpulley\b/.test(s))return 'belt';
+ if(p.category==='gear'&&p.teeth&&/\bbevel\b/.test(s)&&!/\bdouble\b/.test(s))return 'bevel';
  if(p.category==='gear'&&p.teeth&&!/\b(bevel|crown|worm)\b/.test(s))return 'spur';
  return 'other';
 };
 const clustered=(a:string,b:string,clusters:readonly (readonly string[])[])=>clusters.some(c=>c.length>1&&c.includes(a)&&c.includes(b));
-export const GEOMETRY_SCREEN_VERSION='v6.1';
+export const GEOMETRY_SCREEN_VERSION='v6.2';
 
 /** A distance-first ranked list. Rejected entries are included deliberately:
  * users can see WHY apparently adjacent pieces were excluded. */
 export function screenMechanismGeometry(parts:readonly ScreenPart[],
  boxes:ReadonlyMap<string,SpatialBounds>,
- rigidClusters:readonly (readonly string[])[]=[]):GeometryCandidate[] {
+ rigidClusters:readonly (readonly string[])[]=[],
+ /** Measured tooth geometry (gears/gearTable). Where both parts have it, it
+  * decides the pair; bounding boxes are only a fallback. */
+ measured:ReadonlyMap<string,WorldGear>=new Map()):GeometryCandidate[] {
  const used=new Set<string>();
  const selected=parts.filter(p=>{
   if(typeof p?.key!=='string'||!p.key||used.has(p.key))return false;
   used.add(p.key);return typeof p.description==='string'&&
-   ['spur','worm','rack','belt','chain'].includes(family(p));
+   ['spur','bevel','worm','rack','belt','chain'].includes(family(p));
  }).slice(0,280);
  const results:GeometryCandidate[]=[];
  for(let i=0;i<selected.length;i++)for(let j=i+1;j<selected.length;j++){
   const aa=selected[i],bb=selected[j],fa=family(aa),fb=family(bb);
   let kind:GeometryMechanismKind|null=null,a=aa,b=bb;
   if(fa==='spur'&&fb==='spur')kind='gear';
+  else if(fa==='bevel'&&fb==='bevel')kind='bevel';
   else if((fa==='spur'&&fb==='rack')||(fb==='spur'&&fa==='rack')){
    kind='rack-pinion';if(fb==='spur'){a=bb;b=aa;}
   }else if((fa==='worm'&&fb==='spur')||(fb==='worm'&&fa==='spur')){
@@ -78,6 +87,27 @@ export function screenMechanismGeometry(parts:readonly ScreenPart[],
   if(distance>155)continue;
   const reasons:string[]=[],reject=(reason:string)=>reasons.push(reason);
   if(clustered(a.key,b.key,rigidClusters))reject('Both parts are fixed in the same rigid cluster');
+  const ga=measured.get(a.key),gb=measured.get(b.key);
+  if(kind==='bevel'&&(!ga||!gb))
+   reject(`No measured cone geometry for bevel part ${!ga?a.key:b.key}; bevel meshes are not guessed from boxes`);
+  if(ga&&gb&&(kind==='gear'||kind==='bevel'||kind==='rack-pinion')){
+   const verdict=kind==='gear'?spurMesh(ga,gb):kind==='bevel'?bevelMesh(ga,gb):rackMesh(ga,gb);
+   if(!verdict.meshes)reject(`Measured teeth: ${verdict.reason}`);
+   const plausible=!reasons.length,axisA=ga.kind==='rack'?ga.direction:ga.axis;
+   results.push({id:`${kind}:${a.key}:${b.key}`,kind,a:a.key,b:b.key,
+     evidence:'axis-and-bounds-screen',status:plausible?'plausible':'rejected',
+     confidence:plausible?'geometry-consistent-review-required':'rejected',
+     metrics:{separationLdu:distance,...(verdict.errorLdu===undefined?{}:{pitchErrorLdu:verdict.errorLdu})},
+     reasons:plausible?['Measured tooth geometry meshes within the tolerance seen in official models; bearings, clearance and forces still UNVERIFIED.']:reasons,
+     ...(plausible?{draft:{axis:axisA,axisA,teethA:ga.teeth,
+       ...(gb.kind!=='rack'?{teethB:gb.teeth,axisB:gb.axis}:{}),
+       ...(kind==='rack-pinion'&&ga.kind!=='rack'?{pitchRadiusLdu:ga.radius,slideAxis:(verdict as {slide?:Vec3}).slide}:{}),
+       // The solver's rack ratio is +r per turn and its gear ratio -teeth, so
+       // flag the pairs that go the other way about these axes.
+       reversed:kind==='rack-pinion'?verdict.sign===-1:verdict.sign===1}}:{}),
+   });
+   continue;
+  }
   if((fa==='spur'&&(!Number.isSafeInteger(aa.teeth)||aa.teeth!<4||aa.teeth!>200))||
      (fb==='spur'&&(!Number.isSafeInteger(bb.teeth)||bb.teeth!<4||bb.teeth!>200)))
     reject('Gear tooth counts must be finite whole numbers in the supported range 4–200');

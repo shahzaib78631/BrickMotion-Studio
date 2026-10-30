@@ -238,7 +238,9 @@ export function MechanismLabPanel({ model, onRender }: { model: ModelState; onRe
         (!candidate.draft.teethA||!candidate.draft.teethB))
         throw Error('Pulley or sprocket pitch ratio is not known. Author both effective pitch counts in the Transmission Workshop before preview. No ratio was invented.');
       const program=composeTransmissionProgram(model.view,report.graph,report.detection.parts,[{
-        kind:candidate.kind,a:candidate.a,b:candidate.b,
+        // A measured bevel pair is a gear pair whose shafts cross; the draft
+        // carries both axes and the turning direction.
+        kind:candidate.kind==='bevel'?'gear':candidate.kind,a:candidate.a,b:candidate.b,
         ...candidate.draft,origin:'inferred',
       }]);
       new MechanismSolver(model.view,program).solve(.1);

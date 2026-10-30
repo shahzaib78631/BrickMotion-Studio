@@ -16,7 +16,10 @@ export type BenchmarkCheck =
   | { type: 'rotates' | 'slides'; label: string; part: PartRef; axis: V3 }
   | { type: 'gearMesh'; label: string; a: PartRef; b: PartRef; kind: 'spur' | 'bevel'; ratio?: number }
   | { type: 'rackPinion'; label: string; pinion: PartRef; rack: PartRef }
-  | { type: 'suggested'; label: string; parts: PartRef[] };
+  | { type: 'suggested'; label: string; parts: PartRef[] }
+  /** A link carried between two arms that pivot on a common frame (steering
+   * tie rod, parallelogram lift): it moves on an arc, not along a slide. */
+  | { type: 'fourBar'; label: string; coupler: PartRef; arms: [PartRef, PartRef]; axis: V3 };
 export type ExpectedMechanism = {
   id: string; title: string; evidence: 'posed' | 'geometry' | 'review'; why?: string;
   checks: BenchmarkCheck[];
@@ -86,6 +89,29 @@ export function scoreMechanismBenchmark(spec: BenchmarkSpec, asm: Assembly, repo
   const pairIs = (x: string, y: string, a: string, b: string) => (x === a && y === b) || (x === b && y === a);
   const fmt = (r: PartRef) => `${r.part}@[${r.at.join(',')}]`;
 
+  /**
+   * Coupler and both arms are separate bodies; each arm reaches the coupler
+   * through joints that all turn (or slide) about the loop axis, and both arms
+   * turn about that axis against one shared frame body.
+   */
+  const fourBar = (coupler: string, arms: [string, string], axis: V3): { ok: boolean; detail: string } => {
+    const body = (k: string) => clusterOf.get(k) ?? [k];
+    const id = (k: string) => body(k)[0];
+    const onAxis = report.graph.edges.filter(e => e.motion !== 'fixed' && sameAxis(e.axis, axis) && id(e.a) !== id(e.b));
+    const near = (k: string) => new Set(onAxis.flatMap(e => id(e.a) === id(k) ? [id(e.b)] : id(e.b) === id(k) ? [id(e.a)] : []));
+    if (new Set([id(coupler), ...arms.map(id)]).size !== 3) return { ok: false, detail: 'coupler and arms are welded together' };
+    // Arm to coupler: directly, or through one connector (an axle pin) that only turns/slides on the axis.
+    const reaches = (arm: string) => { const n = near(arm); return n.has(id(coupler)) || [...n].some(m => near(m).has(id(coupler))); };
+    const unreached = arms.filter(a => !reaches(a));
+    if (unreached.length) return { ok: false, detail: `no joint chain on the loop axis from ${unreached.join(', ')} to the coupler` };
+    const pivots = (arm: string) => new Set(onAxis.filter(e => e.motion === 'revolute' && (id(e.a) === id(arm) || id(e.b) === id(arm)))
+      .map(e => id(e.a) === id(arm) ? id(e.b) : id(e.a)));
+    const [p, q] = arms.map(pivots);
+    const frame = [...p].find(f => q.has(f) && f !== id(coupler));
+    return frame ? { ok: true, detail: `four-bar loop: frame ${frame} – arms ${arms.join(', ')} – coupler ${coupler}` }
+      : { ok: false, detail: 'arms do not pivot on a shared frame body' };
+  };
+
   const results: CheckResult[] = [];
   const expectedParts = new Set<string>();
   for (const mech of spec.mechanisms) {
@@ -109,11 +135,18 @@ export function scoreMechanismBenchmark(spec: BenchmarkSpec, asm: Assembly, repo
         expectedParts.add(a); expectedParts.add(b);
         const mesh = check.type === 'gearMesh' && report.detection.gearMeshes.find(m => pairIs(m.a, m.b, a, b));
         const geo = report.geometryCandidates.find(c => pairIs(c.a, c.b, a, b) &&
-          (check.type === 'gearMesh' ? c.kind === 'gear' : c.kind === 'rack-pinion'));
+          (check.type === 'gearMesh' ? c.kind === (check.kind === 'bevel' ? 'bevel' : 'gear') : c.kind === 'rack-pinion'));
         if (mesh) push('hit', `gear mesh ${mesh.teethA}:${mesh.teethB}`);
         else if (geo?.status === 'plausible') push('hit', `geometry screen: plausible ${geo.kind}`);
         else if (geo) push('rejected', `geometry screen rejected: ${geo.reasons.join('; ')}`);
         else push('missing', check.type === 'gearMesh' ? `no ${check.kind} mesh considered` : 'no rack-and-pinion considered');
+      } else if (check.type === 'fourBar') {
+        const coupler = resolve(check.coupler), arms = check.arms.map(resolve);
+        const lost = [check.coupler, ...check.arms][[coupler, ...arms].indexOf(null)];
+        if (lost) { push('unresolved', `cannot find ${fmt(lost)}`); continue; }
+        [coupler!, ...arms as string[]].forEach(k => expectedParts.add(k));
+        const verdict = fourBar(coupler!, arms as [string, string], check.axis);
+        push(verdict.ok ? 'hit' : 'missing', verdict.detail);
       } else if (check.type === 'suggested') {
         const keys = check.parts.map(resolve);
         if (keys.some(k => !k)) { push('unresolved', `cannot find ${fmt(check.parts[keys.indexOf(null)])}`); continue; }

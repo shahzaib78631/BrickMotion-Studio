@@ -14,6 +14,8 @@ import { refineKnownMechanicalJoints, detectAutomaticMechanics, type AutoMechani
 import { MechanismSolver } from './mechanismSolver';
 import type { MechanismProgram } from './mechanismProgram';
 import { screenMechanismGeometry, type GeometryCandidate } from '../v6/geometryScreen';
+import { worldGear } from '../gears/gearTable';
+import type { WorldGear } from '../gears/gearGeometry';
 
 export type LabReport = {
   graph: MechanismGraph;
@@ -45,7 +47,8 @@ export function inspectMechanisms(asm: Assembly, metrics: Metrics): LabReport {
   const graph = buildMotionMechanismGraph(asm, refineKnownMechanicalJoints(matched.joints, asm));
   const detection = detectAutomaticMechanics(asm, metrics, graph);
   const geometryCandidates = screenMechanismGeometry(detection.parts,
-    new Map(asm.instances.map(i=>[i.key,i.worldBox])),graph.rigidClusters);
+    new Map(asm.instances.map(i=>[i.key,i.worldBox])),graph.rigidClusters,
+    new Map(asm.instances.flatMap(i => { const g = worldGear(i.key, i.part, i.world); return g ? [[i.key, g] as [string, WorldGear]] : []; })));
   return {
     graph,detection,geometryCandidates,
     pairsExamined: matched.pairsExamined,

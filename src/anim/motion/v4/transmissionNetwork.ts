@@ -23,7 +23,7 @@ const eq = (id: string, items: readonly (readonly [string, number])[]): LinearEq
  * geometry must be checked separately in a later geometric verifier. */
 export function transmissionEquation(t: TransmissionConstraint): LinearEquation | null {
   switch (t.kind) {
-    case 'gear': return eq(t.id, [[t.b, t.teethB], [t.a, t.teethA]]);
+    case 'gear': return eq(t.id, [[t.b, t.teethB], [t.a, signed(t.reversed) * t.teethA]]);
     case 'belt': return eq(t.id, [[t.b, t.teethB], [t.a, (t.crossed ? 1 : -1) * t.teethA]]);
     case 'chain': return eq(t.id, [[t.b, t.teethB], [t.a, -t.teethA]]);
     case 'worm': return eq(t.id, [[t.b, t.wheelTeeth], [t.a, -signed(t.reversed) * t.starts]]);

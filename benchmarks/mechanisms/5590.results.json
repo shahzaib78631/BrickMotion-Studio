@@ -12,8 +12,8 @@
       "mechanism": "truck-steering",
       "type": "gearMesh",
       "label": "input bevel pair",
-      "status": "missing",
-      "detail": "no bevel mesh considered"
+      "status": "hit",
+      "detail": "geometry screen: plausible bevel"
     },
     {
       "mechanism": "truck-steering",
@@ -26,15 +26,15 @@
       "mechanism": "truck-steering",
       "type": "rackPinion",
       "label": "8T pinion drives 1x4 rack",
-      "status": "rejected",
-      "detail": "geometry screen rejected: Rack length does not follow the pinion tangent"
+      "status": "hit",
+      "detail": "geometry screen: plausible rack-pinion"
     },
     {
       "mechanism": "truck-steering",
-      "type": "slides",
-      "label": "steering rack slides sideways",
-      "status": "missing",
-      "detail": "no movable joint on axis [1,0,0] (4 on other axes)"
+      "type": "fourBar",
+      "label": "rack rides on a tie rod between the steering arms (moves on an arc, not a slide)",
+      "status": "hit",
+      "detail": "four-bar loop: frame i0/i10 – arms i0/ih, i0/ii – coupler i0/i2y"
     },
     {
       "mechanism": "truck-steering",
@@ -126,7 +126,7 @@
       "id": "truck-steering",
       "title": "Truck steering: top knob -> bevel pair -> lengthwise shaft -> 8T pinion -> rack",
       "evidence": "posed",
-      "hit": 4,
+      "hit": 7,
       "total": 8
     },
     {
@@ -166,9 +166,9 @@
     }
   ],
   "score": {
-    "hit": 12,
+    "hit": 15,
     "total": 17,
-    "recall": 0.7058823529411765,
+    "recall": 0.8823529411764706,
     "mechanismsComplete": 4,
     "mechanisms": 6
   },

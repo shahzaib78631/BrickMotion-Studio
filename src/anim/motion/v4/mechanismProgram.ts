@@ -30,7 +30,9 @@ export type GearPair = {
  * `a` is the rotating input, `b` the output (or sliding member for rack/lead).
  */
 export type TransmissionConstraint = (
-  | { kind: 'gear' | 'belt' | 'chain'; a: string; b: string; teethA: number; teethB: number; crossed?: boolean }
+  /** `reversed`: both shafts turn the same way about their own axes (e.g. a
+   * bevel pair, depending on how its shafts point); spur pairs leave it unset. */
+  | { kind: 'gear' | 'belt' | 'chain'; a: string; b: string; teethA: number; teethB: number; crossed?: boolean; reversed?: boolean }
   | { kind: 'worm'; a: string; b: string; starts: number; wheelTeeth: number; reversed?: boolean }
   | { kind: 'rack-pinion'; a: string; b: string; pitchRadiusLdu: number; reversed?: boolean }
   /** Ideal straight-line, no-slip wheel roll: b is a sliding chassis, a a wheel. */
