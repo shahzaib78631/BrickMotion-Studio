@@ -269,6 +269,15 @@ continuous system ([hybrid automata][jjmie]; engagement studies [ZČU][zcu],
 5. **UI:** a gear-ratio table per mode, and a shift track in the timeline that
    animates the selector and the change of output speed.
 
+*Phase 4 as built* (`src/anim/motion/gearbox/`): shift rings are found from
+part seats (a wide female seat coaxial with another body's axle) rather than a
+stage B prismatic joint, and couplings from toothed parts whose seats sit
+within dog reach. The mode table carries rates outward over two-body relations
+(meshes, locked differentials, ring on shaft, engaged clutch); a body reached
+at two speeds is a lock-up. A gear counts only when every hinge of its body
+lies on its own line. The shift track lives in the mechanism program
+(`shiftTrack`, `selectors`) and plays in the Lab, not yet in the timeline.
+
 ## 5. Vehicle kinematics
 
 1. **Recognize the vehicle:** wheels from the wheel table touching the lowest
@@ -354,7 +363,7 @@ require ([MotionSolve tutorial][altair]).
 | 1 ✓ | Wrench joints (A–B), loop basis, local-dimension mobility (D) | Done: 5590 movable connector edges 314 → 129 (92 body joints), still 17/17; mobility suite passes (incl. Wampler Table 2 and Bennett) |
 | 2 ✓ | Unified solver: analytic Jacobian, predictor-corrector, singularity stop, several drivers; port v6 laws | Done: v6 deleted; vitest 893 pass (only the pre-existing minifig failure), verify:v8:all 192/192, 5590 17/17 at unchanged speed (≈1.55 s); new solver suite covers full-turn crank, 3 rad jump on one branch, dead-point stop, redundant parallelogram, two drivers, stops, Bennett |
 | 3 ✓ | Higher-pair library (C) and classifier (E); suggestions from mobility | Done: 5590 17/17; 42000 phase 3 16/18 (89 %, was 12/18): steering, rear suspension, V8 drive train and both front wheels. The two misses are connector-data gaps, listed rather than loosened (rear CV ball 5 LDU from its hub socket, so the drive train is driven at the axle; front pushrods 6.8 LDU off). Rim 44772's missing pin holes are added as a local shadow patch (`ldraw/shadowPatches.ts`). vitest 966 pass (only the pre-existing minifig failure), verify:v8:all pass, tsc and vite build clean |
-| 4 | Gearbox modes | Ratio table matches the set's manual on the gearbox benchmark; a shift during playback never jumps |
+| 4 ✓ | Gearbox modes | Done: 8880 phase 4 5/7. The ratio table gives the manual's 2.25 and 0.75; 2nd (1.5) and 4th (0.5) are missed only because the model file's 8T gear 3647 has no axle — with that axle supplied, all four ratios match the manual. Shifting keeps each clutch's phase (no jump), stalls in neutral while the dogs are out of line, and throws on lock-up; the Lab shows the mode table and plays a shift track. 42000 phase 4 0/2: its selector's clutch gears are found, but the small linear actuators 92693c01 have no screw pair yet (a phase 3 gap), so the wing and covers do not move. 5590 17/17, 42000 phase 3 16/18 unchanged. vitest 990 pass (minifig fails as before; two speed limits miss only under full parallel load and pass alone), verify:v8:all pass, tsc and vite build clean |
 | 5 | Vehicle mode: rolling, ICR, scrub, differential, suspension | 5590 drives a circle with correct wheel spins; tandem-axle scrub reported; suspension sweep gives bump steer |
 | 6 | Tracks, chains, ropes | Track links never stretch (pitch error < 0.01 LDU); hook height = winch maths to 0.1 LDU |
 

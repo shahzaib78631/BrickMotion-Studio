@@ -13,7 +13,8 @@ BENCH_WRITE=1 npm run bench:mechanisms  # refresh <id>.results.json / .txt
 The model files are not committed. Put them at the path named in
 `model.file` (for 5590: copy `5590_-_whirl_n_wheel_super_truck.mpd`, the
 original MLCad file, into `samples/`; for 42000: the LDraw OMR file
-`42000-1 Grand Prix Racer.mpd`, CC BY 2.0, saved as `samples/42000-1.mpd`). The sha256 check makes sure the same
+`42000-1 Grand Prix Racer.mpd`, CC BY 2.0, saved as `samples/42000-1.mpd`; for
+8880: the LDraw OMR `8880-1.mpd`, saved as `samples/8880-1.mpd`). The sha256 check makes sure the same
 file is scored every time. LDraw part data (`npm run setup`, `npm run setup:shadow`)
 is also needed; without it the benchmark is skipped.
 
@@ -40,6 +41,14 @@ from the hub socket (so the rear wheel does not reach the engine; the drive
 train is driven at the axle), and the front pushrods are 6.8 LDU off their
 balls. Rim 44772's pin holes, missing from the upstream LDCad shadow file,
 come from a local patch (`src/ldraw/shadowPatches.ts`).
+
+Phase 4 (gearbox modes): 8880 5/7 — both driving rings and their clutch
+gears, neutral at rest, 1st 2.25:1 and 3rd 0.75:1 as in the manual. 2nd
+(1.5:1) and 4th (0.5:1) are missed because of the model-file defect below;
+with the missing axle supplied the mode table gives all four ratios (see
+`tests/anim/gearbox/shiftModes.test.ts`). 8880 phase 3: 7/9. 42000 phase 4:
+0/2 — the clutch gears are found, but the small linear actuators 92693c01 are
+not yet recognised as screws, so the wing and covers do not move.
 
 ## Sources
 
