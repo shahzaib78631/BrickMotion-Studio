@@ -8,6 +8,14 @@ export type Grid = { x: number; y: number; z: number; rot: Rot };
 export type Raw = { ldu: Vec3; matrix: Mat3 };
 
 export type AssemblyRole = 'base' | 'hips' | 'leg' | 'torso' | 'arm' | 'hand' | 'head' | 'headwear' | 'neckwear' | 'generic';
+/** How a flight eases along its path. */
+export type MotionEase = 'smooth' | 'gentle' | 'soft' | 'linear';
+/**
+ * How pieces fly in. `time` multiplies the flight time (2 = twice as slow),
+ * `landing` is the share of the flight spent seating into place, `hover` the share
+ * spent pausing just above it. Unset fields fall back to the step, then the global style.
+ */
+export type MotionStyle = { time?: number; landing?: number; hover?: number; ease?: MotionEase };
 /** Floor position in studs (x, z) and facing in degrees about the vertical axis. */
 export type AssemblySpot = { x: number; z: number; angle: number };
 /** References are sibling item IDs within the containing model, never part IDs. */
@@ -28,6 +36,8 @@ export type AssemblyHints = {
   group?: string;
   /** Build spot for a submodel use (absolute in main model's unmoved frame). */
   buildSpot?: AssemblySpot;
+  /** This piece's own flight style (wins over its step's). */
+  motion?: MotionStyle;
 };
 
 export type PieceItem = { assembly?: AssemblyHints; id?: string; part: string; color: string | number } & (Grid | Raw);
@@ -42,6 +52,8 @@ export type Step = {
   pauseAfter?: number;
   /** made by auto-steps (layers of a step-less file), not by the author: no editorial order inside it */
   auto?: boolean;
+  /** Flight style for every piece in this step. */
+  motion?: MotionStyle;
 };
 export type Submodel = { steps: Step[] };
 
@@ -111,6 +123,8 @@ export type Plan = {
   loosePiecesFollow?: boolean;
   /** Preview the main model and each placed submodel at its own build spot in the Build editor. */
   showModelAtSpot?: boolean;
+  /** Project-wide flight style; steps and pieces can override it. */
+  motion?: MotionStyle;
   /**
    * Assembly plan artifact (BrickMotion assembly plan v1, cold JSON) planned by
    * the Python engine for this exact model. Shapes and validity are checked by

@@ -43,6 +43,7 @@ export function PartsLane({
   px,
   X,
   timeAt,
+  onClipMenu,
 }: {
   tl: Timeline;
   steps: Step[];
@@ -52,6 +53,8 @@ export function PartsLane({
   X: (s: number) => number;
   /** seconds under a viewport x (clientX) */
   timeAt: (clientX: number) => number;
+  /** right-click on a clip: `ids` are the clips it acts on */
+  onClipMenu?: (e: React.MouseEvent, ids: string[]) => void;
 }) {
   const selection = useStudio((s) => s.selection);
   const editingModel = useStudio((s) => s.editingModel);
@@ -202,7 +205,7 @@ export function PartsLane({
         return (
           <button
             key={c.id}
-            className={`bm-part-clip ${selected.has(c.id) ? 'sel' : ''} ${c.submodel ? 'sub' : ''} ${dragging ? 'dragging' : ''} ${forced.has(c.id) ? 'forced' : ''}`}
+            className={`bm-part-clip ${selected.has(c.id) ? 'sel' : ''} ${c.submodel ? 'sub' : ''} ${dragging ? 'dragging' : ''} ${forced.has(c.id) ? 'forced' : ''} ${steps[c.step]?.pieces[c.index]?.assembly?.motion ? 'bm-has-motion' : ''}`}
             style={{
               left: X(c.start) + (dragging ? drag!.dx : opens ? OPEN_PX : 0),
               top: LANE_PAD + c.row * PART_ROW,
@@ -212,6 +215,14 @@ export function PartsLane({
             aria-label={`${name}, step ${c.step + 1}, piece ${c.index + 1}`}
             aria-pressed={selected.has(c.id)}
             onPointerDown={(e) => onPointerDown(e, c)}
+            onContextMenu={(e) => {
+              if (!onClipMenu) return;
+              e.preventDefault();
+              e.stopPropagation();
+              const ids = selected.has(c.id) && selected.size > 1 ? clips.filter((clip) => selected.has(clip.id)).map((clip) => clip.id) : [c.id];
+              if (!selected.has(c.id)) st().select([c.id]);
+              onClipMenu(e, ids);
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();

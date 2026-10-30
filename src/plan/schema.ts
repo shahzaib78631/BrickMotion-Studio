@@ -21,6 +21,13 @@ const AssemblySpotSchema = z.object({
   angle: num,
 });
 
+const MotionSchema = z.object({
+  time: num.min(0.25).max(4).optional(),
+  landing: num.min(0.1).max(0.7).optional(),
+  hover: num.min(0).max(0.4).optional(),
+  ease: z.enum(['smooth', 'gentle', 'soft', 'linear']).optional(),
+}).optional();
+
 const AssemblySchema = z.object({
   attachTo: z.string().min(1).optional(),
   after: z.array(z.string().min(1)).optional(),
@@ -30,6 +37,7 @@ const AssemblySchema = z.object({
   floorShift: z.tuple([num, num]).optional(),
   group: z.string().min(1).max(80).optional(),
   buildSpot: AssemblySpotSchema.optional(),
+  motion: MotionSchema,
 }).optional();
 
 const Item = z
@@ -51,6 +59,7 @@ const StepSchema = z.object({
   notes: z.string().max(1000).optional(),
   pauseAfter: num.min(0).max(10).optional(),
   auto: z.boolean().optional(),
+  motion: MotionSchema,
 });
 
 const KeyInterpolationSchema = z.enum(['bezier', 'linear', 'constant']);
@@ -165,6 +174,7 @@ export const PlanSchema = z.object({
   workBaySpots: z.record(z.string().min(1), AssemblySpotSchema).optional(),
   loosePiecesFollow: z.boolean().optional(),
   showModelAtSpot: z.boolean().optional(),
+  motion: MotionSchema,
   // assembly plan artifact (opaque cold JSON; validated by the assembly-artifact planner)
   assemblyPlan: z.unknown().optional(),
   // which models were planned by the Assembly Corrector, and the order to put back

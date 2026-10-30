@@ -8,6 +8,10 @@ import { Ic } from './icons';
 import { packRows, partClips } from '../anim/partClips';
 import { PART_MIN_PX, PartsLane, partsLaneHeight } from './PartsLane';
 import { planningLabel, type PlanningProgress } from '../anim/planning';
+import { createPortal } from 'react-dom';
+import { ContextMenu, type ContextItem } from './ContextMenu';
+import { MotionEditor, type MotionTarget } from './MotionEditor';
+import { partClipMenu, stepClipMenu } from './timelineMenus';
 
 const MAX_PART_ROWS = 6;
 
@@ -63,6 +67,9 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
   const [overStep, setOverStep] = useState<number | null>(null);
   const [width, setWidth] = useState(900);
   const [trimPreview, setTrimPreview] = useState<TrimPreview | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; items: ContextItem[]; label: string } | null>(null);
+  const [motion, setMotion] = useState<{ x: number; y: number; target: MotionTarget } | null>(null);
+  const openMotion = (x: number, y: number) => (target: MotionTarget) => setMotion({ x, y, target });
   const video = useAppSettings();
   const cameraFollows = useAppSettings((s) => s.cameraFollowsPlayback);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -331,6 +338,10 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
             onClick={() => useAppSettings.getState().set({ cameraFollowsPlayback: !cameraFollows })}>
             <Ic name="camera" />
           </button>
+          <button className="nx-btn nx-sm bm-motion-btn" title="How pieces fly in: flight time, landing, hover and easing for the whole build"
+            onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMotion({ x: r.left, y: r.bottom + 6, target: { kind: 'project' } }); }}>
+            <Ic name="settings" /> Motion
+          </button>
           <button className="nx-icon" aria-label="Zoom out" title="Zoom out (Ctrl/⌘ + scroll)" disabled={zoom <= 1} onClick={() => setZoom((z) => Math.max(1, z / 1.5))}>
             <Ic name="zoomOut" />
           </button>
@@ -460,11 +471,15 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
                             st().setCurrentStep(s.index);
                           }}
                           onDragEnd={() => { setDragStep(null); setOverStep(null); }}
-                          className={`nx-clip bm-step ${sel ? 'sel' : ''} ${dragStep !== null && overStep === s.index ? 'bm-step-over' : ''}`}
+                          className={`nx-clip bm-step ${sel ? 'sel' : ''} ${data?.motion ? 'bm-has-motion' : ''} ${dragStep !== null && overStep === s.index ? 'bm-step-over' : ''}`}
                           style={{ left: X(s.start), width: Math.max(6, ((s.end - s.start) + (trimPreview?.kind === 'step' && trimPreview.index === s.index ? trimPreview.seconds : data?.pauseAfter ?? 0)) * px - 2) }}
                           aria-label={`${label} · ${count} piece${count === 1 ? '' : 's'}`}
                           title={`${label}: ${count} piece${count === 1 ? '' : 's'}. Click to edit, drag onto another step to reorder.`}
                           onClick={() => editStep(s)}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            setMenu({ x: e.clientX, y: e.clientY, label: `Step ${s.index + 1} menu`, items: stepClipMenu(s.index, openMotion(e.clientX, e.clientY)) });
+                          }}
                         >
                           <span className="lbl">{label}</span>
                           <span
@@ -487,7 +502,8 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
                     })}
                   {tl.steps.length === 0 && <span className="nx-hint bm-empty">Add pieces and the steps show up here.</span>}
                 </div>
-                <PartsLane tl={tl} steps={steps} clips={parts.clips} rows={parts.rows} px={px} X={X} timeAt={timeAt} />
+                <PartsLane tl={tl} steps={steps} clips={parts.clips} rows={parts.rows} px={px} X={X} timeAt={timeAt}
+                  onClipMenu={(e, ids) => setMenu({ x: e.clientX, y: e.clientY, label: 'Part menu', items: partClipMenu(ids, openMotion(e.clientX, e.clientY)) })} />
                 <div className="nx-lane" style={{ height: LANE }}>
                   {tl.subBuilds.map((b) => (
                     <button
@@ -537,6 +553,9 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
           </div>
         </div>
       </div>
+      {/* at the page root: a transformed ancestor would offset fixed-position popups */}
+      {menu && createPortal(<ContextMenu x={menu.x} y={menu.y} items={menu.items} label={menu.label} onClose={() => setMenu(null)} />, document.querySelector(".studio") ?? document.body)}
+      {motion && createPortal(<MotionEditor x={motion.x} y={motion.y} target={motion.target} onClose={() => setMotion(null)} />, document.querySelector(".studio") ?? document.body)}
     </div>
   );
 }

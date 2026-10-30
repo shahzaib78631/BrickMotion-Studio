@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import type { ViewName } from '../render/viewPresets';
 import { useStudio } from '../state/store';
 import { Ic } from './icons';
+import { centreModelOnFloor } from '../state/editing';
 import { viewportApi } from './viewportApi';
 import { useViewState, viewLabel } from './viewState';
 import { useSceneView } from './sceneViewState';
@@ -70,6 +71,11 @@ export function ViewMenu() {
           <button role="menuitem" title="High diagonal angle, like overhead product photos" onClick={() => pick(() => viewportApi.views?.flatLay())}>
             <Ic name="camera" />
             <span>Flat-lay</span>
+            <kbd></kbd>
+          </button>
+          <button role="menuitem" title="Move the model so its footprint is centred and its base sits on the floor (undoable)" onClick={() => pick(() => { if (centreModelOnFloor()) viewportApi.fit(); })}>
+            <Ic name="spot" />
+            <span>Centre on floor</span>
             <kbd></kbd>
           </button>
           <hr />
@@ -152,6 +158,11 @@ export function ViewsDropdown() {
           <button role="menuitem" title="High diagonal angle, like overhead product photos" onClick={() => pick(() => viewportApi.views?.flatLay())}>
             <Ic name="camera" />
             <span>Flat-lay</span>
+            <kbd></kbd>
+          </button>
+          <button role="menuitem" title="Move the model so its footprint is centred and its base sits on the floor (undoable)" onClick={() => pick(() => { if (centreModelOnFloor()) viewportApi.fit(); })}>
+            <Ic name="spot" />
+            <span>Centre on floor</span>
             <kbd></kbd>
           </button>
           <hr />
