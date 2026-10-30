@@ -24,12 +24,12 @@ import { engaged } from '../pairs/higherPairs';
 import type { Screw } from '../parts/actuators';
 import { worldFeatures } from '../gears/gearTable';
 import type { MechanismGraph } from '../v4/mechanismGraph';
-import type { JointDrive, LoopClosure, MechanismProgram, TransmissionConstraint, Vec3 } from '../v4/mechanismProgram';
+import type { JointDrive, LoopClosure, MechanismProgram, Selector, ShiftMark, TransmissionConstraint, Vec3 } from '../v4/mechanismProgram';
 import { MechanismSolver } from '../v4/mechanismSolver';
 import { provenSuggestion, MAX_HINGE_CARRIED, type SuggestedMechanism } from '../v4/autoMechanics';
 import type { NamedMechanism } from './patterns';
-import type { ShiftElement } from '../gearbox/shiftElements';
-import { shiftModes, type RateNetwork } from '../gearbox/shiftModes';
+import { ENGAGE_MIN, type ShiftCoupling, type ShiftElement } from '../gearbox/shiftElements';
+import { shiftModes, type GearMode, type GearRow, type RateNetwork } from '../gearbox/shiftModes';
 
 type V3 = [number, number, number];
 const dot = (a: readonly number[], b: readonly number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -63,6 +63,9 @@ type Plan = {
   lift?: boolean;
   /** Dog clutches between a shaft and a gear on it, by body, engaged as this plan's gear says. */
   clutches?: { id: string; shaft: number; gear: number; engaged: boolean; dogs: number }[];
+  /** A gearbox's shift track and shift rings, by clutch id. */
+  shift?: { track: ShiftMark[]; selectors: Selector[] };
+  gears?: GearRow[];
   /** The mechanism's own frame (a four-bar's fixed link, a turntable's base) when it is not the model's main body. */
   frame?: number;
   warnings: string[];
@@ -77,7 +80,7 @@ export function suggestMechanisms(asm: Assembly, graph: MechanismGraph, named: r
   const out: SuggestedMechanism[] = [];
   for (const plan of [...plans(rec, named, byId), ...gearPlans(asm, rec, named, byId, gearbox)]) {
     const s = build(asm, graph, rec, plan);
-    if (s) out.push(s);
+    if (s) out.push(plan.gears ? { ...s, gears: plan.gears } : s);
   }
   return sided(asm, out);
 }
@@ -183,12 +186,38 @@ function gearPlans(asm: Assembly, rec: Recognition, named: readonly NamedMechani
     const at = carriers.map(c => shiftModes(network, shifts, input, c).find(x => x.id === m.id)!).find(x => x.state === 'drive');
     return { m, ratio: at?.ratio };
   }).sort((a, b) => (b.ratio ?? -1) - (a.ratio ?? -1));
+  const clutchId = (ring: string, gear: string) => `clutch:${ring}:${gear}`;
+  const engagements = (m: GearMode) => Object.fromEntries(shifts.flatMap(e => e.couplings.map(c =>
+    [clutchId(e.ring, c.gear), m.engaged.some(x => x.ring === e.ring && x.gear === c.gear)])));
+  // Each ring slides from neutral to its gear: neutral between the edges of its couplings.
+  const selectors: Selector[] = shifts.map(e => {
+    const waiting = (c: ShiftCoupling) => c.engageAt - c.side * ENGAGE_MIN;
+    const minus = e.couplings.filter(c => c.side < 0).map(waiting), plus = e.couplings.filter(c => c.side > 0).map(waiting);
+    const lo = minus.length ? Math.max(...minus) : Math.min(...plus) - 2 * ENGAGE_MIN, hi = plus.length ? Math.min(...plus) : Math.max(...minus) + 2 * ENGAGE_MIN;
+    return { ring: e.ring, axis: e.axis as [number, number, number], neutral: (lo + hi) / 2,
+      at: Object.fromEntries(e.couplings.map(c => [clutchId(e.ring, c.gear), { engaged: e.travel[c.side > 0 ? 1 : 0], waiting: waiting(c) }])) };
+  });
+  // The table: every ring state, read to the first differential (or, with none, whether the box turns at all).
+  const name = new Map(gears.map(({ m }, i) => [m.id, ordinal(i + 1)]));
+  // A ring on one gear goes by that gear's name, so two rings in at once read '1st + 3rd'.
+  const gearName = new Map(gears.map(({ m }, i) => [`${m.engaged[0].ring}|${m.engaged[0].gear}`, ordinal(i + 1)]));
+  const rows: GearRow[] = shiftModes(network, shifts, input, carriers[0] ?? input).map(x => ({
+    id: x.id, state: x.state, engagements: engagements(x),
+    label: name.get(x.id) ?? (x.engaged.length ? x.engaged.map(e => gearName.get(`${e.ring}|${e.gear}`) ?? bareName(asm, e.gear)).join(' + ') : 'neutral'),
+    ...(x.ratio !== undefined && carriers.length ? { ratio: x.ratio } : {}),
+  }));
   return gears.map(({ m, ratio }, i) => {
+    // Shown in its own gear, through neutral, into the next (the last gear shifts back down).
+    const other = gears[i + 1] ?? gears[i - 1];
+    const track: ShiftMark[] = [{ at: 0, label: ordinal(i + 1), engagements: engagements(m) },
+      { at: 0.45, label: 'neutral', engagements: engagements({ ...m, engaged: [] }) },
+      ...(other ? [{ at: 0.55, label: ordinal(gears.indexOf(other) + 1), engagements: engagements(other.m) }] : [])];
     const title = `Gearbox — ${ordinal(i + 1)}${ratio !== undefined ? ` (${ratio.toFixed(2)}:1)` : ''}: ${m.engaged.map(e => `${bareName(asm, e.ring)} → ${bareName(asm, e.gear)}`).join(' + ')}`;
     return {
       title, mechanism: { kind: 'gearbox', name: title }, bodies, pairs, driver: input, outputs: carriers.length ? carriers : bodies,
       locks, lift: true,
-      clutches: shifts.flatMap(e => e.couplings.map(c => ({ id: `clutch:${e.ring}:${c.gear}`, shaft: e.shaftBody, gear: c.gearBody,
+      shift: { track, selectors }, gears: rows,
+      clutches: shifts.flatMap(e => e.couplings.map(c => ({ id: clutchId(e.ring, c.gear), shaft: e.shaftBody, gear: c.gearBody,
         engaged: m.engaged.some(x => x.ring === e.ring && x.gear === c.gear), dogs: e.dogs }))),
       warnings: [
         `Shown in one gear: ${m.engaged.map(e => bareName(asm, e.ring)).join(', ')} engaged with ${m.engaged.map(e => bareName(asm, e.gear)).join(', ')}.`,
@@ -461,7 +490,8 @@ function build(asm: Assembly, graph: MechanismGraph, rec: Recognition, plan: Pla
   for (const amplitude of driverJoint.kind === 'revolute' ? TURNS : SLIDES) {
     const p: MechanismProgram = { mode: 'kinematic', duration: 4, sampleHz: 60, joints: program,
       ...(transmissions.length ? { transmissions } : {}), ...(closures.length ? { closures } : {}),
-      ...(rigidFollowers.length ? { rigidFollowers } : {}), driver: { joint: driverJoint.id, amplitude, cycles: 1 } };
+      ...(rigidFollowers.length ? { rigidFollowers } : {}), driver: { joint: driverJoint.id, amplitude, cycles: 1 },
+      ...(plan.shift ? { shiftTrack: plan.shift.track, selectors: plan.shift.selectors } : {}) };
     if (!provenSuggestion(asm, graph, p) || !meshesHold(asm, p, meshes)) continue;
     const travel = driverJoint.kind === 'revolute' ? `±${Math.round(amplitude * 180 / Math.PI)}°` : `±${amplitude} LDU`;
     return {

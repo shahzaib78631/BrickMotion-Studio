@@ -112,7 +112,17 @@ export type MechanismProgram = {
    */
   secondaryMotors?: { joint: string; amplitude: number; cycles?: number }[];
   gravity?: GravitySpec;
+  /** Gear changes during playback (spec §4.5): from each mark's `at` (0..1 of the
+   * cycle, ascending) the named clutches are engaged or released. */
+  shiftTrack?: ShiftMark[];
+  /** Shift rings to slide along their axis as their clutches engage (LDU along `axis`). */
+  selectors?: Selector[];
 };
+export type ShiftMark = { at: number; label: string; engagements: Record<string, boolean> };
+/** Slides of a shift ring from its assembled place, LDU along `axis`. `engaged`: with that
+ * clutch in; `waiting`: while its dogs wait to line up (the edge of engagement);
+ * `neutral`: with no clutch in (default 0). */
+export type Selector = { ring: string; axis: Vec3; neutral?: number; at: Record<string, { engaged: number; waiting: number }> };
 
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const vec = (v: unknown): v is Vec3 => Array.isArray(v) && v.length === 3 && v.every(finite) && v.every(n => Math.abs(n) <= 1e7);
@@ -272,5 +282,20 @@ export function validateMechanismProgram(raw: unknown): string[] {
     for(const name of assigned) if(!massNames.has(name))
       errors.push(`Explicit mass required for moving body ${name}`);
   } else if (p.gravity) errors.push('Gravity parameters are only valid in gravity mode');
+  const clutches = new Set((Array.isArray(p.transmissions) ? p.transmissions : []).filter(t => t?.kind === 'clutch').map(t => t.id));
+  if (p.shiftTrack !== undefined) {
+    const track = Array.isArray(p.shiftTrack) ? p.shiftTrack : [];
+    const ok = Array.isArray(p.shiftTrack) && track.length > 0 && track.length <= 64 && track.every((m, i) =>
+      m && finite(m.at) && m.at >= 0 && m.at <= 1 && (i === 0 || m.at > track[i - 1].at) && typeof m.label === 'string'
+      && m.engagements && typeof m.engagements === 'object'
+      && Object.entries(m.engagements).every(([id, v]) => clutches.has(id) && typeof v === 'boolean'));
+    if (!ok) errors.push('Shift track: 1–64 marks at ascending times 0..1, each engaging only known clutches');
+  }
+  if (p.selectors !== undefined) {
+    const ok = Array.isArray(p.selectors) && p.selectors.length <= 16 && p.selectors.every(s =>
+      s && key(s.ring) && vec(s.axis) && Math.hypot(...s.axis) > 1e-9 && (s.neutral === undefined || finite(s.neutral)) && s.at && typeof s.at === 'object'
+      && Object.entries(s.at).every(([id, v]) => clutches.has(id) && v && finite(v.engaged) && finite(v.waiting)));
+    if (!ok) errors.push('Selectors: each needs a ring, an axis and slides for known clutches');
+  }
   return errors;
 }

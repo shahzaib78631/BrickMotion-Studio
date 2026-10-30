@@ -28,6 +28,9 @@ export type GearMode = {
   ratio?: number;
 };
 
+/** One row of a gearbox's table as the Lab shows it: the clutches each mode engages, by clutch id. */
+export type GearRow = { id: string; label: string; state: GearMode['state']; ratio?: number; engagements: Record<string, boolean> };
+
 /** Rings beyond this many are left in neutral (3^4 = 81 rows). */
 const MAX_RINGS = 4;
 const TOLERANCE = 1e-6;

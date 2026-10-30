@@ -10,6 +10,7 @@ import type { MechanismProgram } from '../anim/motion/v4/mechanismProgram';
 import { saveBlob, safeFileName } from './download';
 import { Ic } from './icons';
 import { TransmissionDesigner } from './TransmissionDesigner';
+import { GearboxTable } from './GearboxTable';
 import { sweepMechanism, type SweepResult } from '../anim/motion/v4/mechanismSweep';
 import { composeTransmissionProgram } from '../anim/motion/v4/transmissionComposer';
 import { MechanismSolver } from '../anim/motion/v4/mechanismSolver';
@@ -90,6 +91,7 @@ export function MechanismLabPanel({ model, onRender }: { model: ModelState; onRe
   }, [editingModel, lab.active, lab.model]);
 
   const candidates = report?.detection.suggestions ?? [];
+  const gearbox = lab.program?.shiftTrack ? candidates.find(s => s.program === lab.program) : undefined;
   const joints = useMemo(() => (report?.detection.joints ?? []).filter(j =>
     `${j.a} ${j.b} ${j.kind} ${j.motion}`.toLowerCase().includes(query.toLowerCase())), [report, query]);
   const ratios = report?.detection.gearMeshes ?? [];
@@ -345,7 +347,17 @@ export function MechanismLabPanel({ model, onRender }: { model: ModelState; onRe
               <input aria-label="Mechanism cycles per minute" type="range" min={1} max={120} step={1} value={lab.rpm}
                 onChange={e => lab.setRpm(Number(e.target.value))} />
             </label>
-            {lab.program?.transmissions?.filter(t=>t.kind==='clutch').map(t=>t.kind==='clutch'&&
+            {gearbox?.gears && <div className="nx-field">
+              <span>Gears · now <b>{lab.gear || '—'}</b>{lab.shift ? ' (chosen by hand)' : ''}</span>
+              <GearboxTable rows={gearbox.gears} current={gearbox.gears.find(r => r.label === lab.gear)?.id}
+                onShift={r => lab.setShift({ label: r.label, engagements: r.engagements })} />
+              <div className="nx-row nx-wrap bm-shift-track" aria-label="Shift track">
+                {lab.program?.shiftTrack?.map(m => <span className="nx-chip" key={m.at}>{Math.round(m.at * 100)}% · {m.label}</span>)}
+                {lab.shift && <button className="nx-link" onClick={() => lab.setShift(null)}>Follow the shift track</button>}
+              </div>
+              <p className="nx-hint">Shifting keeps the present angle between shaft and gear, so nothing jumps. A clutch whose dogs are out of line waits in neutral until the input turns them into line.</p>
+            </div>}
+            {!lab.program?.shiftTrack && lab.program?.transmissions?.filter(t=>t.kind==='clutch').map(t=>t.kind==='clutch'&&
               <label className="nx-row nx-wrap" key={t.id}>
                 <input type="checkbox" checked={lab.engagements[t.id]??t.engaged}
                   onChange={e=>lab.setEngagement(t.id,e.target.checked)}/>

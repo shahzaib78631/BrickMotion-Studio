@@ -36,6 +36,7 @@ import { useAppSettings } from '../state/appSettings';
 import { useMechanismLab } from '../state/mechanismLab';
 import { MechanismSolver } from '../anim/motion/v4/mechanismSolver';
 import { solveLabFrame } from '../anim/motion/v4/mechanismLab';
+import { playShiftTrack } from '../anim/motion/gearbox/shiftPlayback';
 import { SpatialMechanismSolver } from '../anim/motion/kinematics/spatialModel';
 import type { SpatialLinkagePreview } from '../anim/motion/spatial/spatialAdapter';
 import type { MechanismProgram } from '../anim/motion/v4/mechanismProgram';
@@ -549,11 +550,15 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
               labInputSignature = '';
             }
             if (lab.playing) labClock += dt;
-            const drive = lab.playing
-              ? Math.sin(labClock * 2 * Math.PI * lab.rpm / 60) * lab.amplitude
+            // A gearbox with a shift track runs one way through its cycle, shifting as it goes;
+            // it redraws every frame so shift rings finish sliding while paused.
+            const shifting = !!labSolver?.program.shiftTrack && !lab.spatial && !!lab.amplitude;
+            const cycle = lab.playing ? (labClock * lab.rpm / 60) % 1 : Math.min(1, Math.max(0, (lab.position / lab.amplitude + 1) / 2));
+            const drive = shifting ? lab.amplitude * (2 * cycle - 1)
+              : lab.playing ? Math.sin(labClock * 2 * Math.PI * lab.rpm / 60) * lab.amplitude
               : lab.position;
             const inputSignature = JSON.stringify([lab.additionalInputs,lab.engagements]);
-            if (drive !== labDrawnPosition || inputSignature !== labInputSignature || !labPreviewWasActive) {
+            if (shifting || drive !== labDrawnPosition || inputSignature !== labInputSignature || !labPreviewWasActive) {
               const bases = labBaseRef.current;
               const animated = new Map<string, THREE.Matrix4>();
               if(lab.spatial && spatialSolver){
@@ -575,7 +580,12 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
                   }
                 }
               }else if(labSolver){
-                const frames=solveLabFrame(labSolver,drive,lab.additionalInputs,lab.engagements);
+                let frames:Map<string,THREE.Matrix4>;
+                if(shifting){
+                  const f=playShiftTrack(labSolver,cycle,lab.shift??undefined,lab.amplitude);
+                  frames=f.poses;
+                  if(f.mode!==lab.gear)useMechanismLab.setState({gear:f.mode});
+                }else frames=solveLabFrame(labSolver,drive,lab.additionalInputs,lab.engagements);
                 for (const [key,pose] of frames) {
                   const base=bases.get(key),inverse=labRestInverse.get(key);
                   if(base&&inverse)animated.set(key,pose.clone().multiply(inverse).multiply(base));

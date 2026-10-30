@@ -14,6 +14,7 @@ import type { MechanismProgram, GearPair, JointDrive, Vec3 } from './mechanismPr
 import { validateMechanismProgram } from './mechanismProgram';
 import { bodyGraph, carriedBodies, type BodyGraph } from './bodyGraph';
 import { MechanismSolver } from './mechanismSolver';
+import type { GearRow } from '../gearbox/shiftModes';
 
 export type PartCategory = 'gear'|'turntable'|'hinge'|'axle'|'pin'|'shaft'|'wheel'|'other';
 export type DetectedPart = {
@@ -31,6 +32,8 @@ export type SuggestedMechanism = {
   warnings:string[];
   /** The named mechanism this suggestion runs (classify/patterns.ts). */
   mechanism?:{kind:string;name:string};
+  /** A gearbox's mode table (spec §4.2), for the Lab to shift between. */
+  gears?:GearRow[];
 };
 /** Review-only functional hypotheses, never used as physical mates or
  * auto-render programs without a user explicitly selecting the parts. */

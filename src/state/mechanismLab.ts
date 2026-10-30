@@ -2,6 +2,7 @@
 import { create } from 'zustand';
 import type { MechanismProgram } from '../anim/motion/v4/mechanismProgram';
 import type { SpatialLinkagePreview } from '../anim/motion/spatial/spatialAdapter';
+import type { ShiftOverride } from '../anim/motion/gearbox/shiftPlayback';
 
 export type MechanismLabState = {
   active: boolean;
@@ -17,6 +18,10 @@ export type MechanismLabState = {
   additionalInputs: Readonly<Record<string, number>>;
   /** Optional interactive engagement overrides for V5 clutches. */
   engagements: Readonly<Record<string, boolean>>;
+  /** A gearbox gear chosen by hand, in place of the program's shift track. */
+  shift: ShiftOverride | null;
+  /** The gearbox mode the viewport last drew ('neutral' while dogs wait to line up). */
+  gear: string;
   error: string;
   start(model: string, program: MechanismProgram, amplitude: number): void;
   startSpatial(model: string, preview: SpatialLinkagePreview, amplitude: number): void;
@@ -27,18 +32,19 @@ export type MechanismLabState = {
   setPlaying(value: boolean): void;
   setAdditionalInput(id: string, value: number | null): void;
   setEngagement(id: string, engaged: boolean): void;
+  setShift(shift: ShiftOverride | null): void;
   setError(message: string): void;
 };
 export const useMechanismLab = create<MechanismLabState>((set) => ({
   active: false, program: null, spatial: null, model: '', position: 0,
-  amplitude: Math.PI / 12, rpm: 15, playing: false, error: '', additionalInputs: {}, engagements: {},
+  amplitude: Math.PI / 12, rpm: 15, playing: false, error: '', additionalInputs: {}, engagements: {}, shift: null, gear: '',
   start: (model, program, amplitude) => set({
-    model, program, spatial: null, amplitude, position: 0, active: true, playing: false, error: '', additionalInputs: {}, engagements: {},
+    model, program, spatial: null, amplitude, position: 0, active: true, playing: false, error: '', additionalInputs: {}, engagements: {}, shift: null, gear: '',
   }),
   startSpatial: (model, spatial, amplitude) => set({
-    model, spatial, program: null, amplitude, position: 0, active: true, playing: false, error: '', additionalInputs: {}, engagements: {},
+    model, spatial, program: null, amplitude, position: 0, active: true, playing: false, error: '', additionalInputs: {}, engagements: {}, shift: null, gear: '',
   }),
-  stop: () => set({ active: false, playing: false, position: 0, error: '', additionalInputs: {}, engagements: {} }),
+  stop: () => set({ active: false, playing: false, position: 0, error: '', additionalInputs: {}, engagements: {}, shift: null, gear: '' }),
   setPosition: (position) => set({ position, playing: false, error: '' }),
   setAmplitude: (amplitude) => set({ amplitude, position: 0, playing: false, error: '' }),
   setRpm: (rpm) => set({ rpm }),
@@ -57,5 +63,6 @@ export const useMechanismLab = create<MechanismLabState>((set) => ({
     if(!state.program?.transmissions?.some(t=>t.kind==='clutch'&&t.id===id))return {};
     return {engagements:{...state.engagements,[id]:engaged},playing:false,error:''};
   }),
+  setShift: (shift) => set({ shift, error: '' }),
   setError: (error) => set({ error, playing: false }),
 }));

@@ -250,3 +250,9 @@
 .bm-lab-manual>.nx-field,.bm-lab-manual>.nx-btn,.bm-lab-manual>.nx-hint{margin-left:12px;margin-right:12px}
 .bm-lab-manual select{min-width:0;width:100%;max-width:100%}
 .bm-lab-manual .nx-field{font-size:11px}
+.bm-gearbox{width:100%;border-collapse:collapse;font-size:12px}
+.bm-gearbox th{text-align:left;font-weight:600;color:var(--ink2);font-size:11px;padding:4px 6px;border-bottom:1px solid var(--line)}
+.bm-gearbox td{padding:4px 6px;border-bottom:1px solid var(--line);color:var(--ink);overflow-wrap:anywhere}
+.bm-gearbox td:last-child{text-align:right;width:1%}
+.bm-gearbox tr.on td{background:var(--hover);font-weight:650}
+.bm-gearbox tr.locked td{color:var(--ink3)}

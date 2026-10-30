@@ -11,6 +11,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { Assembly } from '../../src/model/assemble';
 import { inspectMechanisms, solveLabFrame, type LabReport } from '../../src/anim/motion/v4/mechanismLab';
 import { MechanismSolver } from '../../src/anim/motion/v4/mechanismSolver';
+import { validateMechanismProgram } from '../../src/anim/motion/v4/mechanismProgram';
+import { playShiftTrack } from '../../src/anim/motion/gearbox/shiftPlayback';
 import type { SuggestedMechanism } from '../../src/anim/motion/v4/autoMechanics';
 import { loadRealModel, partDataInstalled } from '../diagnostics/loadRealModel';
 
@@ -75,6 +77,31 @@ describe.skipIf(!partDataInstalled() || !existsSync(M8880))('8880 suggestions', 
     expect(titles.some(t => /\(2\.25:1\)/.test(t)), titles.join('\n')).toBe(true);
     expect(titles.some(t => /\(0\.75:1\)/.test(t)), titles.join('\n')).toBe(true);
     expect(new Set(titles).size).toBe(titles.length);
+  }, 600_000);
+  it('plays each gear through neutral into the next, the shift ring sliding', async () => {
+    const { asm, metrics } = await loadRealModel(M8880);
+    const boxes = inspectMechanisms(asm, metrics).detection.suggestions.filter(s => s.mechanism?.kind === 'gearbox');
+    expect(boxes.length).toBeGreaterThan(0);
+    for (const s of boxes) {
+      const p = s.program!;
+      expect(validateMechanismProgram(p)).toEqual([]);
+      expect(p.shiftTrack!.map(m => m.at)).toEqual([0, 0.45, 0.55]);
+      // One row per ring state, each named once: '1st', '1st + 3rd', … and two rings on one shaft lock up.
+      const labels = s.gears!.map(r => r.label);
+      expect(new Set(labels).size, labels.join(', ')).toBe(labels.length);
+      expect(s.gears![0]).toMatchObject({ label: 'neutral', state: 'neutral' });
+      const solver = new MechanismSolver(asm, p), modes: string[] = [];
+      const rings = p.selectors!.map(x => x.ring), at = (m: THREE.Matrix4) => new THREE.Vector3().setFromMatrixPosition(m);
+      let slid = 0;
+      for (let i = 0; i <= 120; i++) {
+        const f = playShiftTrack(solver, i / 120);
+        modes.push(f.mode);
+        slid = Math.max(slid, ...rings.map(r => at(f.poses.get(r)!).distanceTo(at(solver.rest.get(r)!))));
+      }
+      expect(modes[0], s.title).toBe(p.shiftTrack![0].label);
+      expect(modes.at(-1), s.title).toBe(p.shiftTrack![2].label);
+      expect(slid, s.title).toBeGreaterThan(1);
+    }
   }, 600_000);
 });
 
