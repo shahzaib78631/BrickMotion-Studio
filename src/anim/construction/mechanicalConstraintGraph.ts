@@ -24,6 +24,10 @@ export type MechanicalJoint = {
   engagement: number;
   /** Kinematic hint, not evidence that the final model can be articulated safely. */
   motion: 'fixed' | 'sliding' | 'revolute' | 'ball';
+  /** The two parts can turn about this connector's axis (an axle or pin in a
+   * round hole, a turntable ring). Kept apart from `motion`, which the build
+   * planner reads; the mechanism graph combines it per part pair. */
+  rotates?: boolean;
   /** A tightly scoped contact tube, only for exact profiled cylindrical mates. */
   region?: ContactRegion;
 };
@@ -54,6 +58,22 @@ const motionOf = (type: MechanicalJointType, a: WorldSnap, b: WorldSnap): Mechan
   if (a.snap.slide || b.snap.slide) return 'sliding';
   return 'fixed';
 };
+/** A cylinder connection can turn unless BOTH sides are non-round (axle
+ * cross or square), e.g. an axle in a gear's cross hole is locked but an axle
+ * in a Technic brick's round hole turns. Lock and spacer sections ('L', '_')
+ * do not decide it. */
+const NON_ROUND = new Set(['A', 'S']);
+export function cylinderCanRotate(male: readonly string[], female: readonly string[]): boolean {
+  return !(male.some(s => NON_ROUND.has(s)) && female.some(s => NON_ROUND.has(s)));
+}
+const rotatesOf = (type: MechanicalJointType, a: WorldSnap, b: WorldSnap): boolean => {
+  // Studs are left out on purpose: a single stud can turn, but real models
+  // hold almost every plate by several, and that is decided per part pair.
+  if (type !== 'axle-hole' && type !== 'pin-hole' && type !== 'cylindrical') return false;
+  if (a.snap.kind !== 'cyl' || b.snap.kind !== 'cyl') return false;
+  const male = a.snap.gender === 'M' ? a.snap : b.snap, female = male === a.snap ? b.snap : a.snap;
+  return cylinderCanRotate(male.shapes, female.shapes);
+};
 const centreOf = (a: WorldSnap,b: WorldSnap): V3 => [0,1,2].map(k=>
   (a.start[k]+a.axis[k]*a.snap.length/2+b.start[k]+b.axis[k]*b.snap.length/2)/2) as V3;
 
@@ -81,7 +101,7 @@ export function buildMechanicalConstraintGraph(model: ConstructionModel, pulse: 
       const male = x.snap.gender==='M' ? a : b, female=male===a?b:a;
       if (profiled) region={origin:profiled.origin,axis:profiled.axis,length:profiled.length,radius:profiled.radius+0.2};
       const type=typeOf(x,y);
-      const joint:MechanicalJoint={id:`joint:${male.id}:${female.id}:${found.length}`,male:male.id,female:female.id,type,axis:unitAxis(axis),centre:profiled ? [0,1,2].map(k=>profiled.origin[k]+profiled.axis[k]*profiled.length/2) as V3:centreOf(x,y),engagement:profiled?.length??0,motion:motionOf(type,x,y),...(region?{region}:{})};
+      const joint:MechanicalJoint={id:`joint:${male.id}:${female.id}:${found.length}`,male:male.id,female:female.id,type,axis:unitAxis(axis),centre:profiled ? [0,1,2].map(k=>profiled.origin[k]+profiled.axis[k]*profiled.length/2) as V3:centreOf(x,y),engagement:profiled?.length??0,motion:motionOf(type,x,y),...(rotatesOf(type,x,y)?{rotates:true}:{}),...(region?{region}:{})};
       found.push(joint); joints.push(joint);
       if (!region) continue;
       const dkey=`${male.id.length}:${male.id}${female.id.length}:${female.id}`;

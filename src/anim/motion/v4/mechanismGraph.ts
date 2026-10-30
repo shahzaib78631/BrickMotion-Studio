@@ -44,6 +44,34 @@ const typeDOF = (joint: MechanicalJoint): Mobility['dof'] => joint.motion === 'r
   : joint.motion === 'ball' ? 'ball' : joint.motion === 'sliding' ? 'prismatic' : 'fixed';
 const pair = (a: string, b: string) => a < b ? `${a.length}:${a}|${b}` : `${b.length}:${b}|${a}`;
 
+/**
+ * Connectors that can turn (an axle or pin in a round hole) only make a real
+ * joint when nothing else holds the same two parts: a fixed connector, or a
+ * second turning connector on a different axis line, makes the pair rigid.
+ * Pairs without any turning connector keep their connectors' own motion.
+ */
+function effectiveMotions(hints: readonly MechanicalJoint[]): Map<MechanicalJoint, MechanicalJoint['motion']> {
+  const byPair = new Map<string, MechanicalJoint[]>();
+  for (const j of hints) { const k = pair(j.male, j.female); const list = byPair.get(k) ?? []; list.push(j); byPair.set(k, list); }
+  const out = new Map<MechanicalJoint, MechanicalJoint['motion']>();
+  for (const list of byPair.values()) {
+    const turning = list.filter(j => j.rotates);
+    if (!turning.length) continue;
+    const held = list.some(j => !j.rotates && j.motion === 'fixed') || !turning.every(j => sameLine(turning[0], j));
+    for (const j of list) out.set(j, held ? 'fixed' : j.rotates ? 'revolute' : j.motion);
+  }
+  return out;
+}
+const sameLine = (a: MechanicalJoint, b: MechanicalJoint) => {
+  const la = Math.hypot(...a.axis), lb = Math.hypot(...b.axis);
+  if (!la || !lb) return false;
+  const u = a.axis.map(x => x / la), w = b.axis.map(x => x / lb);
+  if (Math.abs(u[0] * w[0] + u[1] * w[1] + u[2] * w[2]) < Math.cos((4 * Math.PI) / 180)) return false;
+  const d = b.centre.map((x, k) => x - a.centre[k]);
+  const along = d[0] * u[0] + d[1] * u[1] + d[2] * u[2];
+  return Math.hypot(...d.map((x, k) => x - u[k] * along)) <= 2;
+};
+
 export function buildMotionMechanismGraph(asm: Assembly, hints: readonly MechanicalJoint[]): MechanismGraph {
   const parts = new Set(asm.instances.map(i => i.key));
   const all = new Map<string, MechanismEdge[]>();
@@ -58,20 +86,21 @@ export function buildMotionMechanismGraph(asm: Assembly, hints: readonly Mechani
     return r;
   };
   const join = (a: string, b: string) => { const ra = root(a), rb = root(b); if (ra !== rb) parent.set(rb, ra); };
+  const effective = effectiveMotions(hints);
   for (const j of hints) {
     if (!parts.has(j.male) || !parts.has(j.female) || j.male === j.female ||
         !finite3(j.centre) || !finite3(j.axis)) continue;
     const len = Math.hypot(...j.axis);
     if (len < 0.9 || !Number.isFinite(j.engagement) || j.engagement < 0) continue;
     const edge: MechanismEdge = { id: j.id, a: j.male, b: j.female, type: j.type,
-      motion: j.motion, centre: [...j.centre] as V3,
+      motion: effective.get(j) ?? j.motion, centre: [...j.centre] as V3,
       axis: j.axis.map(x => x / len) as V3, source: 'ldcad-shadow', joint: j };
     edges.push(edge);
     all.get(j.male)!.push(edge); all.get(j.female)!.push(edge);
     known.add(j.male); known.add(j.female);
     // Only explicitly rigid joints connect rigid clusters. A pin or axle
     // with sliding metadata is not promoted to a weld.
-    if (j.motion === 'fixed') join(j.male, j.female);
+    if (edge.motion === 'fixed') join(j.male, j.female);
   }
   const groups = new Map<string, string[]>();
   for (const id of parts) { const key = root(id); const list = groups.get(key) ?? []; list.push(id); groups.set(key, list); }

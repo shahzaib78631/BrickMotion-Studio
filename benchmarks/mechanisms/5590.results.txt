@@ -1,29 +1,29 @@
 Mechanism benchmark — LEGO 5590 Whirl 'n Wheel Super Truck (MLCad, unofficial)
-Checks passed: 0/17 (0%) · mechanisms fully found: 0/6
+Checks passed: 12/17 (71%) · mechanisms fully found: 4/6
 
-· truck-steering [posed] 0/8
-    wrong-motion vertical steering input shaft — found axle-hole/sliding on this axis, wanted revolute
+· truck-steering [posed] 4/8
+    hit          vertical steering input shaft — axle-hole revolute joint i0/i5r ↔ i0/i6p
     missing      input bevel pair — no bevel mesh considered
-    wrong-motion lengthwise steering shaft — found axle-hole/sliding on this axis, wanted revolute
+    hit          lengthwise steering shaft — axle-hole revolute joint i0/i2z ↔ i0/i2t
     rejected     8T pinion drives 1x4 rack — geometry screen rejected: Rack length does not follow the pinion tangent
     missing      steering rack slides sideways — no movable joint on axis [1,0,0] (4 on other axes)
-    wrong-motion right kingpin — found axle-hole/sliding on this axis, wanted revolute
-    wrong-motion left kingpin — found axle-hole/sliding on this axis, wanted revolute
+    hit          right kingpin — axle-hole revolute joint i0/ij ↔ i0/i2x
+    hit          left kingpin — axle-hole revolute joint i0/ik ↔ i0/i2x
     missing      offered as a ready-to-drive mechanism — 4 suggestions, none drive these parts
-· trailer-hitch [posed] 0/2
-    missing      turntable top — no movable joint on axis [0,1,0] (0 on other axes)
+· trailer-hitch [posed] 1/2
+    hit          turntable top — axle-hole revolute joint i1/inq ↔ i0/i66
     missing      offered as a ready-to-drive mechanism — 4 suggestions, none drive these parts
-· truck-front-wheels [geometry] 0/2
-    wrong-motion right front wheel axle — found axle-hole/sliding on this axis, wanted revolute
-    wrong-motion left front wheel axle — found axle-hole/sliding on this axis, wanted revolute
-· truck-rear-axles [geometry] 0/2
-    wrong-motion first rear axle — found axle-hole/sliding on this axis, wanted revolute
-    wrong-motion second rear axle — found axle-hole/sliding on this axis, wanted revolute
-· trailer-axles [geometry] 0/2
-    missing      trailer axle 1 — no movable joint on axis [0.707,0,0.707] (0 on other axes)
-    missing      trailer axle 2 — no movable joint on axis [0.707,0,0.707] (0 on other axes)
-· helicopter-rotor [review] 0/1
-    wrong-motion rotor shaft — found axle-hole/sliding on this axis, wanted revolute
+✓ truck-front-wheels [geometry] 2/2
+    hit          right front wheel axle — axle-hole revolute joint i0/il ↔ i0/ih
+    hit          left front wheel axle — axle-hole revolute joint i0/im ↔ i0/i9q
+✓ truck-rear-axles [geometry] 2/2
+    hit          first rear axle — axle-hole revolute joint i0/i33 ↔ i0/icm
+    hit          second rear axle — axle-hole revolute joint i0/i32 ↔ i0/icj
+✓ trailer-axles [geometry] 2/2
+    hit          trailer axle 1 — axle-hole revolute joint i1/iks ↔ i1/ike
+    hit          trailer axle 2 — axle-hole revolute joint i1/ikt ↔ i1/il0
+✓ helicopter-rotor [review] 1/1
+    hit          rotor shaft — axle-hole revolute joint i2/ix4 ↔ i2/iwt
 
-Noise: 133 movable joints {"sliding":90,"ball":27,"revolute":16} by type {"axle-hole":34,"stud-socket":16,"ball-socket":27,"hinge":12,"cylindrical":38,"pin-hole":2,"clip":4}
-Suggestions: 4, unrelated to any expected mechanism: 4
+Noise: 268 movable joints {"revolute":147,"sliding":94,"ball":27} by type {"axle-hole":159,"stud-socket":16,"ball-socket":27,"hinge":12,"cylindrical":48,"pin-hole":2,"clip":4}
+Suggestions: 4, unrelated to any expected mechanism: 2

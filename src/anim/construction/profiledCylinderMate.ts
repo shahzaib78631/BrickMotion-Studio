@@ -34,7 +34,10 @@ const sectionsOf = (snap: Snap): Section[] => snap.sections?.length
 const sectionFits = (male: Section, female: Section): boolean => {
   if (!Number.isFinite(male.radius) || !Number.isFinite(female.radius) || male.radius <= 0 || female.radius <= 0) return false;
   const m = male.shape.toUpperCase(), f = female.shape.toUpperCase();
-  if (f === 'A' || m === 'A') return f === 'A' && m === 'A' && male.radius <= female.radius + RADIUS_SLOP;
+  // A cross hole only takes an axle; an axle also passes through a round
+  // Technic hole (where it can turn).
+  if (f === 'A') return m === 'A' && male.radius <= female.radius + RADIUS_SLOP;
+  if (m === 'A') return f === 'R' && male.radius <= female.radius + RADIUS_SLOP;
   if (m === 'S') return f === 'S' && male.radius <= female.radius + RADIUS_SLOP;
   // Classic square anti-studs accept a round standard stud, not an arbitrary cylinder.
   if (f === 'S') return m === 'R' && male.radius >= 5.4 && male.radius <= 6.6 && male.radius <= female.radius + RADIUS_SLOP;
