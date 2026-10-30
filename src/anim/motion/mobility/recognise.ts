@@ -105,6 +105,9 @@ export function recogniseMechanism(parts: readonly string[], connectors: readonl
         for (const e of block.joints) merged = union(bodies[joints[e].a][0], bodies[joints[e].b][0]) || merged;
         continue;
       }
+      // Without the exact test, "still to first order" is not proof of locked
+      // (a joint may move at second order), so such a block merges nothing.
+      if (!block.exact) continue;
       const lockedCoords = new Map<number, number>();
       for (const l of block.locked) lockedCoords.set(l.joint, (lockedCoords.get(l.joint) ?? 0) + 1);
       for (const [e, n] of lockedCoords) if (n === joints[e].joint.dof) merged = union(bodies[joints[e].a][0], bodies[joints[e].b][0]) || merged;

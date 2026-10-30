@@ -124,10 +124,17 @@ function designedSlides(placed: Placed[], joined: Set<string>): MechanicalJoint[
   return out;
 }
 
+/**
+ * A tyre: a part with a female round seat and no connectors of its own beyond
+ * generic ones. Only such a part is held by a seat (a turntable's rings also
+ * match by radius, but they have real connectors and must keep turning).
+ */
+export const isTyre = (part: string, metrics: Metrics) =>
+  !!partFunctions(part)?.seats.some(s => s.gender === 'F') && (metrics(part).snaps ?? []).every(s => s.kind === 'gen');
+
 function seats(placed: Placed[], metrics: Metrics): MechanicalJoint[] {
   const out: MechanicalJoint[] = [];
-  // Only a part with no connectors of its own beyond generic seats (a tyre) is held by a seat.
-  const loose = placed.filter(p => p.f.seats.some(s => s.gender === 'F') && (metrics(p.part).snaps ?? []).every(s => s.kind === 'gen'));
+  const loose = placed.filter(p => isTyre(p.part, metrics));
   const seated = new Set<string>();
   for (const tyre of loose) for (const f of tyre.f.seats) {
     if (f.gender !== 'F') continue;
