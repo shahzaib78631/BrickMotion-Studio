@@ -105,6 +105,27 @@
           "driver": { "part": "32270", "at": [-250, -40, 450] },
           "moves": [ { "part": "92693c01", "at": [100, -81, 241] }, { "part": "92693c01", "at": [-100, -81, 241] } ] }
       ]
+    },
+    {
+      "id": "driving",
+      "title": "The car drives: 4 wheels on 2 axles, front axle steered",
+      "evidence": "geometry",
+      "phase": 5,
+      "why": "Phase 5 (spec §5). Measured 2026-10-30: wheels 44771 at x = ±270, front axle z = -280 steered, rear z = 640; as posed the steering is straight (no slip).",
+      "checks": [
+        { "type": "vehicle", "label": "4 wheels on 2 axles, 1 steered", "wheels": 4, "axles": 2, "steered": 1 }
+      ]
+    },
+    {
+      "id": "rear-suspension-sweep",
+      "title": "Each rear suspension sweeps its wheel with no bump steer",
+      "evidence": "geometry",
+      "phase": 5,
+      "why": "Phase 5 (spec §5.6). Measured 2026-10-30: each rear arm swings about a pivot square to the car, so bump steer 0.000° and camber gain 0.0000°/LDU over 31.4 LDU of wheel travel; the 4254-in-4255 shock's stroke is -24..+18 LDU from its parts. maxDeg = measured + 0.5°.",
+      "checks": [
+        { "type": "bumpSteer", "label": "right rear wheel", "wheel": { "part": "44771", "at": [270, -60, 640] }, "maxDeg": 0.5 },
+        { "type": "bumpSteer", "label": "left rear wheel", "wheel": { "part": "44771", "at": [-270, -60, 640] }, "maxDeg": 0.5 }
+      ]
     }
   ]
 }

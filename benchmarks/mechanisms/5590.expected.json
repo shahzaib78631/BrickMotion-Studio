@@ -74,6 +74,18 @@
       "checks": [
         { "type": "rotates", "label": "rotor shaft", "part": { "part": "3705", "at": [-364, -348, 564] }, "axis": [0, 1, 0] }
       ]
+    },
+    {
+      "id": "truck-driving",
+      "title": "The truck drives a circle: 10 tyres on 3 axles, front axle steered; the tandem rear axles scrub",
+      "evidence": "geometry",
+      "phase": 5,
+      "why": "Phase 5 (spec §5). Measured 2026-10-30 as posed (front wheels at 21°): turning radius 755 LDU; the tandem axles at z = 140 and z = 260 sit 60 LDU either side of the turning centre's line and slip -4.58° and +4.58° (mean of each axle; atan(60 / 755) = 4.54°). Ranges are the measured value ±50 %. The 8 trailer tyres are towed, not counted.",
+      "checks": [
+        { "type": "vehicle", "label": "10 wheels on 3 axles, 1 steered", "wheels": 10, "axles": 3, "steered": 1 },
+        { "type": "scrub", "label": "front tandem axle (z = 140) slips one way", "axle": { "part": "2696", "at": [63, -14, 140] }, "sign": -1, "minDeg": 2.3, "maxDeg": 6.9 },
+        { "type": "scrub", "label": "rear tandem axle (z = 260) slips the other way", "axle": { "part": "2696", "at": [63, -14, 260] }, "sign": 1, "minDeg": 2.3, "maxDeg": 6.9 }
+      ]
     }
   ]
 }

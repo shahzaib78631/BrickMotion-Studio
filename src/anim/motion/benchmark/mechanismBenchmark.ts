@@ -13,6 +13,8 @@ import { MechanismSolver } from '../v4/mechanismSolver';
 import type { SuggestedMechanism } from '../v4/autoMechanics';
 import type { MechanismEdge } from '../v4/mechanismGraph';
 import { shiftModes } from '../gearbox/shiftModes';
+import { steeringFor, vehicleReport } from '../vehicle/vehicleReport';
+import { sweepSuspension } from '../vehicle/suspension';
 
 type V3 = [number, number, number];
 export type PartRef = { part: string; at: V3 };
@@ -31,7 +33,13 @@ export type BenchmarkCheck =
   | { type: 'shifts'; label: string; ring: PartRef; gears: PartRef[] }
   /** The gearbox mode table from `input` to `output` has a one-ring gear of this ratio
    * (input turns per output turn, within 2 %), or with `null`, is in neutral at rest. */
-  | { type: 'shiftMode'; label: string; input: PartRef; output: PartRef; ratio: number | null };
+  | { type: 'shiftMode'; label: string; input: PartRef; output: PartRef; ratio: number | null }
+  /** The model is recognised as a vehicle with this many wheels, axles and steered axles. */
+  | { type: 'vehicle'; label: string; wheels: number; axles: number; steered: number }
+  /** The mean slip of the axle carrying tyre `axle`, as posed, has this sign and a size in minDeg..maxDeg. */
+  | { type: 'scrub'; label: string; axle: PartRef; sign: 1 | -1; minDeg: number; maxDeg: number }
+  /** A suspension suggestion carrying `wheel` sweeps with bump steer at most maxDeg. */
+  | { type: 'bumpSteer'; label: string; wheel: PartRef; maxDeg: number };
 export type ExpectedMechanism = {
   id: string; title: string; evidence: 'posed' | 'geometry' | 'review'; why?: string;
   /** Spec phase that is expected to find it (default 3); later phases are scored apart. */
@@ -245,6 +253,40 @@ export function scoreMechanismBenchmark(spec: BenchmarkSpec, asm: Assembly, repo
         const want = check.ratio, hit = gears.find(r => Math.abs(r - want) <= 0.02 * want);
         if (hit !== undefined) push('hit', `gear ${hit.toFixed(2)}:1 of ${gears.map(r => r.toFixed(2)).join(', ')}`);
         else push('missing', gears.length ? `drive ratios ${gears.map(r => r.toFixed(2)).join(', ')}` : 'output not reached in any mode');
+      } else if (check.type === 'vehicle') {
+        const v = report.vehicle;
+        if (!v) { push('missing', 'no vehicle'); continue; }
+        const steered = v.axles.filter(a => a.steered).length;
+        const found = `found ${v.wheels.length} wheels on ${v.axles.length} axles (${steered} steered)`;
+        push(v.wheels.length === check.wheels && v.axles.length === check.axles && steered === check.steered ? 'hit' : 'missing', found);
+      } else if (check.type === 'scrub') {
+        const key = resolve(check.axle);
+        if (!key) { push('unresolved', `no ${fmt(check.axle)} within ${tol} LDU`); continue; }
+        expectedParts.add(key);
+        const v = report.vehicle;
+        if (!v) { push('missing', 'no vehicle'); continue; }
+        const wheel = v.wheels.find(w => w.tyre === key);
+        if (!wheel) { push('missing', `${label(key)} is not a vehicle wheel`); continue; }
+        const steering = steeringFor(v, report.detection.suggestions);
+        let slip: number;
+        try {
+          const r = vehicleReport(v, steering ? new MechanismSolver(asm, steering.program) : null, 0);
+          const mine = r.wheels.filter((_, i) => v.wheels[i].axle === wheel.axle);
+          slip = mine.reduce((t, w) => t + w.slipDeg, 0) / mine.length;
+        } catch (e) { push('missing', `does not solve: ${(e as Error).message}`); continue; }
+        const [lo, hi] = check.sign > 0 ? [check.minDeg, check.maxDeg] : [-check.maxDeg, -check.minDeg];
+        push(slip >= lo && slip <= hi ? 'hit' : 'missing', `slip ${slip.toFixed(2)}° ${slip >= lo && slip <= hi ? 'within' : 'outside'} ${lo}..${hi}`);
+      } else if (check.type === 'bumpSteer') {
+        const key = resolve(check.wheel);
+        if (!key) { push('unresolved', `no ${fmt(check.wheel)} within ${tol} LDU`); continue; }
+        expectedParts.add(key);
+        const s = report.detection.suggestions.find(x => x.mechanism?.kind === 'suspension' && x.wheel === key);
+        if (!s) { push('missing', 'no suspension carries this wheel'); continue; }
+        try {
+          const w = sweepSuspension(asm, s.program, key);
+          const what = `bump steer ${w.bumpSteerDeg.toFixed(3)}° over ${w.travelLdu.toFixed(1)} LDU, camber gain ${w.camberGainDegPerLdu.toFixed(4)}°/LDU`;
+          push(w.travelLdu > 0 && w.bumpSteerDeg <= check.maxDeg ? 'hit' : 'missing', what);
+        } catch (e) { push('missing', `does not solve: ${(e as Error).message}`); }
       } else if (check.type === 'suggested') {
         const keys = check.parts.map(resolve);
         if (keys.some(k => !k)) { push('unresolved', `cannot find ${fmt(check.parts[keys.indexOf(null)])}`); continue; }
