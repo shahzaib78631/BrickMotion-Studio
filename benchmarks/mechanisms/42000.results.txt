@@ -1,7 +1,8 @@
 Mechanism benchmark — LEGO 42000 Grand Prix Racer (LDraw OMR)
-Checks passed: 16/20 (80%) · mechanisms fully found: 3/7
+Checks passed: 19/23 (83%) · mechanisms fully found: 5/9
   phase 3: 16/18 (89%)
   phase 4: 0/2 (0%)
+  phase 5: 3/3 (100%)
 
 ✓ steering [review] 6/6
     hit          steering wheel turns both front hubs, rear hubs stay — rack-steering "Rack steering — 32270 → 87761 on tie rods, 2 hubs" moves every expected part
@@ -30,6 +31,11 @@ Checks passed: 16/20 (80%) · mechanisms fully found: 3/7
     missing      knob drives the rear wing actuator — "Gearbox — 1st: 6539 → 6542b": 92693c01, 3706 did not move; "Gearbox — 2nd: 6539 → 6542b": 92693c01, 3706 did not move
 · selector-cover [review] 0/1
     missing      knob drives both engine cover actuators — "Gearbox — 1st: 6539 → 6542b": 92693c01, 92693c01 did not move; "Gearbox — 2nd: 6539 → 6542b": 92693c01, 92693c01 did not move
+✓ driving [geometry] 1/1
+    hit          4 wheels on 2 axles, 1 steered — found 4 wheels on 2 axles (1 steered)
+✓ rear-suspension-sweep [geometry] 2/2
+    hit          right rear wheel — bump steer 0.000° over 31.4 LDU, camber gain -0.0000°/LDU
+    hit          left rear wheel — bump steer 0.000° over 31.4 LDU, camber gain -0.0000°/LDU
 
 Noise: 392 movable joints {"revolute":358,"ball":22,"sliding":12} by type {"cylindrical":225,"axle-hole":141,"ball-socket":22,"clip":4}
-Suggestions: 9, unrelated to any expected mechanism: 3
+Suggestions: 10, unrelated to any expected mechanism: 3

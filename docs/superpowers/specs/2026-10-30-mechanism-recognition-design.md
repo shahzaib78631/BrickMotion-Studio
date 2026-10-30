@@ -309,6 +309,22 @@ lies on its own line. The shift track lives in the mechanism program
    steer (toe change caused by the steering link's arc). Analytic cross-checks
    follow Tanik's double-wishbone formulation ([Hacettepe][tanik]).
 
+*Phase 5 as built* (`src/anim/motion/vehicle/`): ground tyres are found from
+tyre parts with a horizontal seat axis whose bottoms share the lowest ground
+line; the chassis is the largest body, and wheels reached only through a
+non-steering vertical hinge are towed (the 5590 trailer's 8 tyres: carried
+rigidly, articulation not modelled). The ICR is the least-squares point of
+the axle lines; each wheel's slip and spin follow from it, solid axles report
+longitudinal scrub, and a bicycle model stands in when no steering mechanism
+is recognised. The vehicle suggestion reuses the steering program: its slider
+steers and Play drives the chassis round the ICR with each wheel spinning by
+its own rolling distance. A shock's stroke comes from its parts (piston rod in
+the bore, collar to the outer part's end; 42000 4254-in-4255: −24..+18 LDU)
+and becomes the suspension slide's verified limits; sweeping the driver gives
+camber gain and bump steer. Not built: terrain height (sweeps drive the
+suspension directly), differential wheel coupling (wheels are free), trailer
+articulation, Tanik cross-check.
+
 ## 6. Tracks, chains, ropes and cables
 
 **Recognition.** Chain and tread links (3711, 3873, 57518) whose pins connect
@@ -364,7 +380,7 @@ require ([MotionSolve tutorial][altair]).
 | 2 ✓ | Unified solver: analytic Jacobian, predictor-corrector, singularity stop, several drivers; port v6 laws | Done: v6 deleted; vitest 893 pass (only the pre-existing minifig failure), verify:v8:all 192/192, 5590 17/17 at unchanged speed (≈1.55 s); new solver suite covers full-turn crank, 3 rad jump on one branch, dead-point stop, redundant parallelogram, two drivers, stops, Bennett |
 | 3 ✓ | Higher-pair library (C) and classifier (E); suggestions from mobility | Done: 5590 17/17; 42000 phase 3 16/18 (89 %, was 12/18): steering, rear suspension, V8 drive train and both front wheels. The two misses are connector-data gaps, listed rather than loosened (rear CV ball 5 LDU from its hub socket, so the drive train is driven at the axle; front pushrods 6.8 LDU off). Rim 44772's missing pin holes are added as a local shadow patch (`ldraw/shadowPatches.ts`). vitest 966 pass (only the pre-existing minifig failure), verify:v8:all pass, tsc and vite build clean |
 | 4 ✓ | Gearbox modes | Done: 8880 phase 4 5/7. The ratio table gives the manual's 2.25 and 0.75; 2nd (1.5) and 4th (0.5) are missed only because the model file's 8T gear 3647 has no axle — with that axle supplied, all four ratios match the manual. Shifting keeps each clutch's phase (no jump), stalls in neutral while the dogs are out of line, and throws on lock-up; the Lab shows the mode table and plays a shift track. 42000 phase 4 0/2: its selector's clutch gears are found, but the small linear actuators 92693c01 have no screw pair yet (a phase 3 gap), so the wing and covers do not move. 5590 17/17, 42000 phase 3 16/18 unchanged. vitest 990 pass (minifig fails as before; two speed limits miss only under full parallel load and pass alone), verify:v8:all pass, tsc and vite build clean |
-| 5 | Vehicle mode: rolling, ICR, scrub, differential, suspension | 5590 drives a circle with correct wheel spins; tandem-axle scrub reported; suspension sweep gives bump steer |
+| 5 ✓ | Vehicle mode: rolling, ICR, scrub, differential, suspension | Done: 5590 phase 5 3/3 — 10 tyres on 3 axles (front steered, 8 trailer tyres towed), drives a 755 LDU circle as posed with each wheel at its own spin (outer 3.29, inner 2.61 turns per 1000 LDU); tandem axles scrub −4.58° / +4.58° (atan(60/755) = 4.54°); its parallel steering leaves a 54.8 LDU Ackermann error. 42000 phase 5 3/3 — 4 wheels on 2 axles; both rear suspensions sweep 31.4 LDU with 0.000° bump steer and no camber gain, shock stroke −24..+18 LDU from the parts. 5590 phase 3 17/17, 42000 phase 3 16/18, 8880 phase 4 5/7 unchanged. vitest 1014 pass (minifig fails as before; four timing tests miss only under full parallel load and pass alone), verify:v8:all pass, tsc and vite build clean |
 | 6 | Tracks, chains, ropes | Track links never stretch (pitch error < 0.01 LDU); hook height = winch maths to 0.1 LDU |
 
 ## 9. Where this goes beyond Kinebrick

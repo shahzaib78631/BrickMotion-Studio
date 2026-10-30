@@ -119,6 +119,27 @@
       "label": "rotor shaft",
       "status": "hit",
       "detail": "cylindrical revolute joint i2/ixw ↔ i2/ixv"
+    },
+    {
+      "mechanism": "truck-driving",
+      "type": "vehicle",
+      "label": "10 wheels on 3 axles, 1 steered",
+      "status": "hit",
+      "detail": "found 10 wheels on 3 axles (1 steered)"
+    },
+    {
+      "mechanism": "truck-driving",
+      "type": "scrub",
+      "label": "front tandem axle (z = 140) slips one way",
+      "status": "hit",
+      "detail": "slip -4.58° within -6.9..-2.3"
+    },
+    {
+      "mechanism": "truck-driving",
+      "type": "scrub",
+      "label": "rear tandem axle (z = 260) slips the other way",
+      "status": "hit",
+      "detail": "slip 4.58° within 2.3..6.9"
     }
   ],
   "mechanisms": [
@@ -163,20 +184,31 @@
       "evidence": "review",
       "hit": 1,
       "total": 1
+    },
+    {
+      "id": "truck-driving",
+      "title": "The truck drives a circle: 10 tyres on 3 axles, front axle steered; the tandem rear axles scrub",
+      "evidence": "geometry",
+      "hit": 3,
+      "total": 3
     }
   ],
   "byPhase": {
     "3": {
       "hit": 17,
       "total": 17
+    },
+    "5": {
+      "hit": 3,
+      "total": 3
     }
   },
   "score": {
-    "hit": 17,
-    "total": 17,
+    "hit": 20,
+    "total": 20,
     "recall": 1,
-    "mechanismsComplete": 6,
-    "mechanisms": 6
+    "mechanismsComplete": 7,
+    "mechanisms": 7
   },
   "noise": {
     "movableEdges": 110,
@@ -192,7 +224,7 @@
       "pin-hole": 10,
       "clip": 2
     },
-    "suggestions": 5,
+    "suggestions": 6,
     "unrelatedSuggestions": 2
   }
 }

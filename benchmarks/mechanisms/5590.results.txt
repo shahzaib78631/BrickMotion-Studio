@@ -1,6 +1,7 @@
 Mechanism benchmark — LEGO 5590 Whirl 'n Wheel Super Truck (MLCad, unofficial)
-Checks passed: 17/17 (100%) · mechanisms fully found: 6/6
+Checks passed: 20/20 (100%) · mechanisms fully found: 7/7
   phase 3: 17/17 (100%)
+  phase 5: 3/3 (100%)
 
 ✓ truck-steering [posed] 8/8
     hit          vertical steering input shaft — axle-hole revolute joint i0/i5r ↔ i0/ix
@@ -25,6 +26,10 @@ Checks passed: 17/17 (100%) · mechanisms fully found: 6/6
     hit          trailer axle 2 — axle-hole revolute joint i1/ikt ↔ i1/il0
 ✓ helicopter-rotor [review] 1/1
     hit          rotor shaft — cylindrical revolute joint i2/ixw ↔ i2/ixv
+✓ truck-driving [geometry] 3/3
+    hit          10 wheels on 3 axles, 1 steered — found 10 wheels on 3 axles (1 steered)
+    hit          front tandem axle (z = 140) slips one way — slip -4.58° within -6.9..-2.3
+    hit          rear tandem axle (z = 260) slips the other way — slip 4.58° within 2.3..6.9
 
 Noise: 110 movable joints {"revolute":102,"ball":8} by type {"axle-hole":52,"ball-socket":8,"hinge":12,"cylindrical":26,"pin-hole":10,"clip":2}
-Suggestions: 5, unrelated to any expected mechanism: 2
+Suggestions: 6, unrelated to any expected mechanism: 2

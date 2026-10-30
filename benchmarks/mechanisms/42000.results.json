@@ -140,6 +140,27 @@
       "label": "knob drives both engine cover actuators",
       "status": "missing",
       "detail": "\"Gearbox — 1st: 6539 → 6542b\": 92693c01, 92693c01 did not move; \"Gearbox — 2nd: 6539 → 6542b\": 92693c01, 92693c01 did not move"
+    },
+    {
+      "mechanism": "driving",
+      "type": "vehicle",
+      "label": "4 wheels on 2 axles, 1 steered",
+      "status": "hit",
+      "detail": "found 4 wheels on 2 axles (1 steered)"
+    },
+    {
+      "mechanism": "rear-suspension-sweep",
+      "type": "bumpSteer",
+      "label": "right rear wheel",
+      "status": "hit",
+      "detail": "bump steer 0.000° over 31.4 LDU, camber gain -0.0000°/LDU"
+    },
+    {
+      "mechanism": "rear-suspension-sweep",
+      "type": "bumpSteer",
+      "label": "left rear wheel",
+      "status": "hit",
+      "detail": "bump steer 0.000° over 31.4 LDU, camber gain -0.0000°/LDU"
     }
   ],
   "mechanisms": [
@@ -191,6 +212,20 @@
       "evidence": "review",
       "hit": 0,
       "total": 1
+    },
+    {
+      "id": "driving",
+      "title": "The car drives: 4 wheels on 2 axles, front axle steered",
+      "evidence": "geometry",
+      "hit": 1,
+      "total": 1
+    },
+    {
+      "id": "rear-suspension-sweep",
+      "title": "Each rear suspension sweeps its wheel with no bump steer",
+      "evidence": "geometry",
+      "hit": 2,
+      "total": 2
     }
   ],
   "byPhase": {
@@ -201,14 +236,18 @@
     "4": {
       "hit": 0,
       "total": 2
+    },
+    "5": {
+      "hit": 3,
+      "total": 3
     }
   },
   "score": {
-    "hit": 16,
-    "total": 20,
-    "recall": 0.8,
-    "mechanismsComplete": 3,
-    "mechanisms": 7
+    "hit": 19,
+    "total": 23,
+    "recall": 0.8260869565217391,
+    "mechanismsComplete": 5,
+    "mechanisms": 9
   },
   "noise": {
     "movableEdges": 392,
@@ -223,7 +262,7 @@
       "ball-socket": 22,
       "clip": 4
     },
-    "suggestions": 9,
+    "suggestions": 10,
     "unrelatedSuggestions": 3
   }
 }

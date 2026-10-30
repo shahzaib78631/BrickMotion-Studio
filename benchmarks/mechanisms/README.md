@@ -50,6 +50,15 @@ with the missing axle supplied the mode table gives all four ratios (see
 0/2 — the clutch gears are found, but the small linear actuators 92693c01 are
 not yet recognised as screws, so the wing and covers do not move.
 
+Phase 5 (vehicle mode): 5590 3/3 — 10 tyres on 3 axles, 1 steered; as posed
+the truck turns about a centre 755 LDU away and its tandem axles (z = 140,
+z = 260) slip −4.58° and +4.58° (checks accept ±50 %). 42000 3/3 — 4 wheels on
+2 axles, and both rear suspensions sweep 31.4 LDU with 0.000° bump steer and
+0.0000°/LDU camber gain (checks accept up to 0.5°). The 4254-in-4255 shock's
+stroke, measured from its parts, is −24..+18 LDU: extension is the rod left in
+the bore less 4 LDU, since the part geometry has no internal stop — a sprung
+shock really rests near full extension, so the +18 may be generous.
+
 ## Sources
 
 - 5590: hand-checked against the posed model file (see each `why`).
