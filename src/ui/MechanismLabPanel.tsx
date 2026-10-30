@@ -510,6 +510,15 @@ export function MechanismLabPanel({ model, onRender }: { model: ModelState; onRe
           {report.graph.uncertainBodies.slice(0, 40).map(key => <button key={key} className="bm-lab-relation" onClick={() => selectPart(key)}>{key}</button>)}
           {report.graph.uncertainBodies.length > 40 && <p className="nx-hint">Export JSON for all uncertain parts.</p>}
         </details>
+        <details className="nx-group">
+          <summary>Placement tolerances accepted · {report.tolerances.length}</summary>
+          <p className="nx-hint">These parts are slightly off in the model file. They were accepted within the limits shown so the mechanism still works; correct them in the file for an exact model. Closest to the limit first.</p>
+          {report.tolerances.slice(0, 40).map(t => <button key={`${t.a}|${t.b}`} className="bm-lab-relation" onClick={() => selectPart(t.a)}>
+            <strong>{t.partA} ↔ {t.partB}</strong><span>{t.a} ↔ {t.b}</span>
+            {t.fits.map((f, i) => <small key={i}>{f.rule}: {f.measured.toFixed(2)} of {f.allowed} {f.unit} — {f.detail}</small>)}
+          </button>)}
+          {report.tolerances.length > 40 && <p className="nx-hint">Export JSON for all {report.tolerances.length} accepted tolerances.</p>}
+        </details>
         <details className="nx-group"><summary>Evidence & limitations</summary>
           <p className="nx-hint">{report.missingMetadata} of {count} parts lack LDCad snaps. {report.pairsExamined} nearby part pairs examined; {report.graph.rigidClusters.length} fixed-connectivity clusters.</p>
           {report.detection.warnings.map((w,i) => <p className="nx-hint" key={i}>{w}</p>)}

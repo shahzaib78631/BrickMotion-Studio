@@ -7,10 +7,13 @@
  */
 import type { Snap } from '../../ldraw/shadow';
 import type { WorldSnap } from '../snapMates';
+import { axisLineFits, type ToleratedFit } from './toleratedFit';
 
 const RADIUS_SLOP = 0.6;
 const AXIS_SLOP = 1.2;
 const PARALLEL = Math.cos((4 * Math.PI) / 180);
+/** A misfit shorter than this (LDU) is hand-placement rounding, not a shoulder in the way. */
+const MISFIT_SLOP = 0.5;
 const dot = (a: readonly number[], b: readonly number[]): number =>
   a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
@@ -26,6 +29,8 @@ export type ProfiledCylinderMate = {
   male: WorldSnap;
   female: WorldSnap;
   profile: 'sectional' | 'legacy';
+  /** Placement errors accepted for this fit (empty when the file is exact). */
+  tolerated: ToleratedFit[];
 };
 
 type Section = { shape: string; radius: number; start: number; length: number };
@@ -61,7 +66,7 @@ export function profiledCylinderMate(a: WorldSnap, b: WorldSnap): ProfiledCylind
   const along = dot(delta, male.axis);
   if (Math.hypot(...delta.map((x,k)=>x - male.axis[k]*along)) > AXIS_SLOP) return null;
   const facing = dot(male.axis, female.axis);
-  let first = Infinity, last = -Infinity, radius = 0;
+  let first = Infinity, last = -Infinity, radius = 0, misfit = 0;
   for (const m of sectionsOf(male.snap)) for (const f of sectionsOf(female.snap)) {
     if (m.length <= 0 || f.length <= 0) continue;
     const fm = along + facing * f.start, fn = along + facing * (f.start + f.length);
@@ -69,11 +74,14 @@ export function profiledCylinderMate(a: WorldSnap, b: WorldSnap): ProfiledCylind
     const hi = Math.min(m.start + m.length, Math.max(fm,fn));
     if (hi - lo <= 1e-4) continue;
     // Reject the entire joint if ANY physically engaged section cannot fit.
-    if (!sectionFits(m, f)) return null;
+    if (!sectionFits(m, f)) { if (hi - lo <= MISFIT_SLOP) { misfit += hi - lo; continue; } return null; }
     first = Math.min(first, lo); last = Math.max(last, hi);
     radius = Math.max(radius, m.radius, f.radius);
   }
   if (!Number.isFinite(first) || last - first < 0.1) return null;
+  const tolerated = axisLineFits(male.start, male.axis, female.start, female.axis, AXIS_SLOP, 4, 'pin/axle and hole');
+  if (misfit > 0) tolerated.push({ rule: 'section-misfit', measured: misfit, allowed: MISFIT_SLOP, unit: 'LDU',
+    detail: `a ${misfit.toFixed(2)} LDU stretch of the inserted part is wider than the hole (accepted up to ${MISFIT_SLOP}); slide one part ${misfit.toFixed(2)} LDU along the axis` });
   return {
     axis: [...male.axis] as [number,number,number],
     origin: male.start.map((x,k)=> x+first*male.axis[k]) as [number,number,number],
@@ -81,5 +89,6 @@ export function profiledCylinderMate(a: WorldSnap, b: WorldSnap): ProfiledCylind
     radius,
     male, female,
     profile: male.snap.sections?.length && female.snap.sections?.length ? 'sectional' : 'legacy',
+    tolerated,
   };
 }

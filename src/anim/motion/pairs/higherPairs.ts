@@ -7,7 +7,7 @@
  */
 import * as THREE from 'three';
 import type { Assembly } from '../../../model/assemble';
-import { bevelMesh, MESH_TOLERANCE, rackMesh, spurMesh, type MeshVerdict, type WorldGear } from '../gears/gearGeometry';
+import { BEVEL_TOLERANCE, bevelMesh, MESH_TOLERANCE, RACK_TOLERANCE, rackMesh, spurMesh, type MeshVerdict, type WorldGear } from '../gears/gearGeometry';
 import { worldFeatures, type WorldFeature } from '../gears/gearTable';
 import type { SpatialMechanic } from '../kinematics/laws';
 import type { Screw } from '../parts/actuators';
@@ -28,7 +28,10 @@ export type HigherPair = {
   /** Screw: LDU of travel per turn. */
   lead?: number;
   errorLdu?: number;
+  /** The most error the mesh test accepts for this kind, LDU. */
+  allowedLdu?: number;
 };
+const ALLOWED: Partial<Record<HigherPairKind, number>> = { spur: MESH_TOLERANCE, worm: MESH_TOLERANCE, rack: RACK_TOLERANCE, bevel: 2 * BEVEL_TOLERANCE };
 
 const dot = (a: readonly number[], b: readonly number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const sub = (a: readonly number[], b: readonly number[]): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -106,7 +109,7 @@ export function findHigherPairs(asm: Assembly, bodyOf?: ReadonlyMap<string, numb
     const [x, y] = m.swap ? [q, p] : [p, q];
     const pair: HigherPair = {
       id: `${m.kind}:${x.f.key}#${x.n}:${y.f.key}#${y.n}`, kind: m.kind, a: x.f.key, b: y.f.key, partA: x.part, partB: y.part,
-      featureA: x.n, featureB: y.n, teethA: x.f.teeth, teethB: y.f.teeth, errorLdu: m.verdict.errorLdu,
+      featureA: x.n, featureB: y.n, teethA: x.f.teeth, teethB: y.f.teeth, errorLdu: m.verdict.errorLdu, allowedLdu: ALLOWED[m.kind],
     };
     if (m.kind === 'rack') Object.assign(pair, { pitchRadius: x.f.pitchRadius, reversed: m.verdict.sign === -1 });
     else Object.assign(pair, { ratio: x.f.teeth / y.f.teeth, reversed: m.verdict.sign === -1 });

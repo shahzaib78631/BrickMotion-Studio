@@ -30,6 +30,11 @@ describe('Construction V3: profile-aware mechanical constraints',()=>{
     const bad=placeSnap(def('F',[{shape:'R',radius:6,length:5}],[0,0,0]),[...M],[0,0,0])[0];
     expect(profiledCylinderMate(single(male),single(bad))).toBeNull();
   });
+  it('tolerates a misfit shorter than placement rounding (a shock eye 0.4 LDU onto a pin ridge, 42000)',()=>{
+    const at=(y:number)=>placeSnap(def('F',[{shape:'R',radius:6,length:5}],[0,y,0]),[...M],[0,0,0])[0];
+    expect(profiledCylinderMate(single(male),single(at(-2.6)))).not.toBeNull();
+    expect(profiledCylinderMate(single(male),single(at(-2.4)))).toBeNull();
+  });
   it('rejects gender, axis-offset and incompatible section shapes',()=>{
     const f=single(female);
     expect(profiledCylinderMate(f,f)).toBeNull();

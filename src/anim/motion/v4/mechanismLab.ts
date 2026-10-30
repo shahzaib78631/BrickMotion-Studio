@@ -18,6 +18,8 @@ import { worldGear } from '../gears/gearTable';
 import { libraryConnectors, withLibraryConnectors } from '../parts/libraryConnectors';
 import { findLinearActuators } from '../parts/actuators';
 import { findHigherPairs, type HigherPair } from '../pairs/higherPairs';
+import type { ToleratedFit } from '../../construction/toleratedFit';
+import type { MechanicalJoint } from '../../construction/mechanicalConstraintGraph';
 import { suggestRackSteering } from './drivetrainSuggestions';
 import type { WorldGear } from '../gears/gearGeometry';
 
@@ -30,7 +32,16 @@ export type LabReport = {
   geometryCandidates: GeometryCandidate[];
   /** Gear, bevel, rack, worm and screw pairs between bodies, from measured part features. */
   higherPairs: HigherPair[];
+  /** Fits accepted only within a tolerance, worst first: what to correct in the model file. */
+  tolerances: TolerancedPair[];
 };
+/** One part pair's accepted placement errors. */
+export type TolerancedPair = { a: string; b: string; partA: string; partB: string; fits: ToleratedFit[] };
+/**
+ * A gear mesh error above this is listed. Pitch radii are measured from the
+ * part's teeth, so a small error may be ours rather than the file's.
+ */
+const REPORT_MESH_LDU = 0.5;
 
 /** A safety bound for an interactive inspector; full V4 planning supports larger assemblies. */
 export const MAX_LAB_PARTS = 2500;
@@ -65,6 +76,7 @@ export function inspectMechanisms(asm: Assembly, metrics: Metrics): LabReport {
   detection.suggestions.splice(MAX_SUGGESTIONS);
   return {
     graph,detection,geometryCandidates,higherPairs,
+    tolerances: toleratedPairs(asm, withLibraryConnectors(known, measuredJoints), higherPairs),
     pairsExamined: matched.pairsExamined,
     connectorPairs: matched.matesByPair.size,
     missingMetadata: asm.instances.filter(i => !(metrics(i.part).snaps?.length)).length,
@@ -97,6 +109,23 @@ export function solveLabFrame(solver: MechanismSolver, position: number,
   return poses;
 }
 
+/** Every accepted placement error, grouped per part pair, worst (closest to its limit) first. */
+export function toleratedPairs(asm: Assembly, joints: readonly MechanicalJoint[], pairs: readonly HigherPair[]): TolerancedPair[] {
+  const part = new Map(asm.instances.map(i => [i.key, i.part.replace(/\.dat$/, '')]));
+  const byPair = new Map<string, TolerancedPair>();
+  const add = (a: string, b: string, fits: readonly ToleratedFit[]) => {
+    if (!fits.length) return;
+    const [x, y] = a < b ? [a, b] : [b, a], k = `${x}|${y}`;
+    const entry = byPair.get(k) ?? byPair.set(k, { a: x, b: y, partA: part.get(x) ?? x, partB: part.get(y) ?? y, fits: [] }).get(k)!;
+    for (const f of fits) if (!entry.fits.some(e => e.rule === f.rule && Math.abs(e.measured - f.measured) < 1e-6)) entry.fits.push(f);
+  };
+  for (const j of joints) add(j.male, j.female, j.tolerated ?? []);
+  for (const p of pairs) if (p.allowedLdu && (p.errorLdu ?? 0) > REPORT_MESH_LDU) add(p.a, p.b, [{ rule: 'mesh-error', measured: p.errorLdu!, allowed: p.allowedLdu, unit: 'LDU',
+    detail: `${p.kind} mesh ${p.errorLdu!.toFixed(2)} LDU from exact (accepted up to ${p.allowedLdu}); check the spacing between the two gears, or our measured pitch for these parts` }]);
+  const worst = (t: TolerancedPair) => Math.max(...t.fits.map(f => f.measured / f.allowed));
+  return [...byPair.values()].sort((p, q) => worst(q) - worst(p));
+}
+
 /** Data-only inspection export; no browser UI state or circular graph structures. */
 export function mechanismReportJson(report: LabReport, modelName: string): string {
   return JSON.stringify({
@@ -122,6 +151,8 @@ export function mechanismReportJson(report: LabReport, modelName: string): strin
     gearPairs: report.detection.gearMeshes,
     functionalHints: report.detection.functionalHints,
     geometryCandidates: report.geometryCandidates,
+    // Placement errors we accepted: correct these in the model file.
+    tolerances: report.tolerances,
     suggestions: report.detection.suggestions,
     unconnected: report.graph.uncertainBodies,
     warnings: report.detection.warnings,

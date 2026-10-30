@@ -128,7 +128,8 @@ describe.skipIf(!partDataInstalled() || !existsSync(MODEL))('42000: slides, seat
   it('in the recognised mechanism, rods slide in cylinders and tyres ride with rims', () => {
     const { graph } = inspectMechanisms(asm, metrics);
     const r = graph.recognition!;
-    const rod = at('4254', 20, -120, 620), cyl = at('4255', 20, -120, 520);
+    // A front shock: the rear ones close their loop through a wishbone that is still locked (Task 7).
+    const rod = at('4254', 20, -120, -160), cyl = at('4255', 20, -120, -260);
     expect(r.bodyOf.get(rod)).not.toBe(r.bodyOf.get(cyl));
     const joint = r.joints.find(j => [j.a, j.b].sort().join() === [r.bodyOf.get(rod)!, r.bodyOf.get(cyl)!].sort().join());
     expect(joint?.joint.kind).toBe('prismatic');

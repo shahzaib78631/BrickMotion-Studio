@@ -6,6 +6,7 @@
  * oracle independently certifies final contacts and all animated sweeps.
  * Unknown, orthogonal, or physically oversized profiles remain unresolved.
  */
+import { axisLineFits, type ToleratedFit } from './toleratedFit';
 import { possibleFinalContacts } from './contactBroadphase';
 import { dot, mul, norm, sub } from './math';
 import type { V3 } from './math';
@@ -36,6 +37,8 @@ export type MechanicalJoint = {
   designedSlide?: boolean;
   /** How far the male may move along `axis` from where it was built, LDU. */
   travel?: [number, number];
+  /** Placement errors accepted to make this connection; reported so the file can be fixed. */
+  tolerated?: ToleratedFit[];
 };
 export type MechanicalConstraintGraph = {
   joints: MechanicalJoint[];
@@ -107,7 +110,8 @@ export function buildMechanicalConstraintGraph(model: ConstructionModel, pulse: 
       const male = x.snap.gender==='M' ? a : b, female=male===a?b:a;
       if (profiled) region={origin:profiled.origin,axis:profiled.axis,length:profiled.length,radius:profiled.radius+0.2};
       const type=typeOf(x,y);
-      const joint:MechanicalJoint={id:`joint:${male.id}:${female.id}:${found.length}`,male:male.id,female:female.id,type,axis:unitAxis(axis),centre:profiled ? [0,1,2].map(k=>profiled.origin[k]+profiled.axis[k]*profiled.length/2) as V3:centreOf(x,y),engagement:profiled?.length??0,motion:motionOf(type,x,y),...(rotatesOf(type,x,y)?{rotates:true}:{}),...(region?{region}:{})};
+      const tolerated=profiled ? profiled.tolerated : nonCylinderFits(x,y);
+      const joint:MechanicalJoint={id:`joint:${male.id}:${female.id}:${found.length}`,male:male.id,female:female.id,type,axis:unitAxis(axis),centre:profiled ? [0,1,2].map(k=>profiled.origin[k]+profiled.axis[k]*profiled.length/2) as V3:centreOf(x,y),engagement:profiled?.length??0,motion:motionOf(type,x,y),...(rotatesOf(type,x,y)?{rotates:true}:{}),...(region?{region}:{}),...(tolerated.length?{tolerated}:{})};
       found.push(joint); joints.push(joint);
       if (!region) continue;
       const dkey=`${male.id.length}:${male.id}${female.id.length}:${female.id}`;
@@ -129,6 +133,18 @@ export function buildMechanicalConstraintGraph(model: ConstructionModel, pulse: 
       ...(axis?{outward:axis}:{}),regions:entry.regions,staticOnly:true});
   }
   return {joints,connections,pairsExamined,matesByPair,snapsByPart};
+}
+
+/** Placement errors accepted by mateAxis for fingers, clips and generic snaps (same slop: 1.2 LDU, 4 degrees). */
+function nonCylinderFits(x: WorldSnap, y: WorldSnap): ToleratedFit[] {
+  const what = `${x.snap.kind}/${y.snap.kind} connectors`;
+  if (x.snap.kind === 'gen' && y.snap.kind === 'gen' && x.snap.shapes[0] !== 'GEN:cyl') {
+    const centre = (s: WorldSnap) => [0, 1, 2].map(k => s.start[k] + (s.axis[k] * s.snap.length) / 2);
+    const a = centre(x), b = centre(y), off = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    return off > 0.1 ? [{ rule: 'axis-offset', measured: off, allowed: 1.2, unit: 'LDU',
+      detail: `${what}: centres ${off.toFixed(2)} LDU apart (accepted up to 1.2); move one part so the centres meet` }] : [];
+  }
+  return axisLineFits(x.start, x.axis, y.start, y.axis, 1.2, 4, what);
 }
 
 /** Human-readable evidence for a rejected final contact. NEVER changes collision rules. */
