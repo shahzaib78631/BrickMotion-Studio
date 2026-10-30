@@ -62,6 +62,8 @@ const AXES: { axis: V3; to: (p: P3) => P3; from: (u: number, v: number, w: numbe
   { axis: [0, 0, 1], to: p => [p[0], p[1], p[2]], from: (u, v, w) => [u, v, w] },
 ];
 const radius = (p: P3) => Math.hypot(p[0], p[1]);
+/** Angle about the axis in half-degree bins. */
+const angleBin = (p: P3) => Math.round(((Math.atan2(p[1], p[0]) * 180 / Math.PI) + 360) % 360 * 2) % 720;
 /** Vertices grouped into rings by position along the axis (0.25 LDU). */
 function rows(ps: readonly P3[]): Map<number, P3[]> {
   const out = new Map<number, P3[]>();
@@ -105,6 +107,9 @@ function gearOf(piece: P3[], axis: V3, from: (u: number, v: number, w: number) =
   if (n < 6 || top - TOOTH_RADIUS * n < 0.5 || top - TOOTH_RADIUS * n > 3.5 || spread(piece) < 1.5) return null;
   const R = TOOTH_RADIUS * n;
   const crest = piece.filter(p => radius(p) > top - CREST), zs = crest.map(p => p[2]);
+  // Teeth have a tip land: at least two angles per tooth out at the tips. A
+  // rim drawn from n-sided circles has only n (3482).
+  if (new Set(crest.map(angleBin)).size < 2 * n) return null;
   const lo = Math.min(...zs), hi = Math.max(...zs), mid = (lo + hi) / 2;
   // A taper: past the crest each tooth's ridge carries on at a smaller radius,
   // drawn as a ring of one or two vertices per tooth with the gear's own
@@ -131,7 +136,8 @@ function gearOf(piece: P3[], axis: V3, from: (u: number, v: number, w: number) =
  * radius is the tip radius less the same 2.4 LDU as a spur gear's.
  */
 function wormOf(piece: P3[], axis: V3, from: (u: number, v: number, w: number) => V3): ToothedFeature | null {
-  if (spread(piece) < 1.5) return null;
+  const zs0 = piece.map(p => p[2]);
+  if (spread(piece) < 1.5 || Math.max(...zs0) - Math.min(...zs0) < 8 || new Set(piece.map(p => Math.floor(angleBin(p) / 45))).size < 14) return null;
   const lead = screwLead(piece);
   if (lead === null || Math.abs(lead) < 4 || Math.abs(lead) > 20) return null;
   const top = Math.max(...piece.map(radius)), zs = piece.map(p => p[2]), lo = Math.min(...zs), hi = Math.max(...zs);
@@ -143,7 +149,7 @@ const dotV = (a: readonly number[], b: readonly number[]) => a[0] * b[0] + a[1] 
 
 /**
  * Racks: on some face of the part, a layer of flat tooth tips spaced evenly
- * 6.5 to 9.5 LDU apart along a straight line (LDraw draws rack teeth 8 LDU
+ * 7.5 to 8.5 LDU apart along a straight line (LDraw draws rack teeth 8 LDU
  * apart), at least four, with a root 2 to 5 LDU below between every two. The pitch line is 2 LDU below the tips
  * (3743: tips at y = -6, pitch line at -4).
  */
@@ -151,13 +157,14 @@ function racks(verts: readonly P3[]): ToothedFeature[] {
   const out: ToothedFeature[] = [];
   for (let fi = 0; fi < 3; fi++) for (const sign of [1, -1]) {
     const face = UNIT[fi].map(x => x * sign + 0) as V3, height = (p: P3) => dotV(p, face);
-    const levels = [...new Set(verts.map(p => Math.round(height(p) * 100) / 100))].sort((a, b) => b - a);
-    const topH = levels[0];
+    const byLevel = new Map<number, P3[]>();
+    for (const p of verts) { const k = Math.round(height(p) * 100) / 100; (byLevel.get(k) ?? byLevel.set(k, []).get(k)!).push(p); }
+    const levels = [...byLevel.keys()].sort((a, b) => b - a), topH = levels[0];
     for (const di of [0, 1, 2].filter(i => i !== fi)) {
       const dir = UNIT[di], wi = 3 - fi - di, side = UNIT[wi];
       // The highest level (within 8 LDU of the top) that is a row of tooth tips.
       for (const h of levels.filter(l => l >= topH - 8)) {
-        const layer = verts.filter(p => Math.abs(height(p) - h) < 0.02), r = toothRow(layer.map(p => dotV(p, dir)));
+        const layer = byLevel.get(h)!, r = toothRow(layer.map(p => dotV(p, dir)));
         if (!r) continue;
         // A root between every two tips.
         const roots = verts.filter(p => { const d = h - height(p); return d >= 2 && d <= 5.05; }).map(p => dotV(p, dir));
@@ -173,16 +180,20 @@ function racks(verts: readonly P3[]): ToothedFeature[] {
   return out;
 }
 
-/** Positions along a line that form evenly spaced flats (tooth tips): at least 4, 6.5-9.5 apart, each at most 4 wide. */
+/**
+ * Positions along a line that form evenly spaced tooth-tip flats: at least 4,
+ * 7.5-8.5 apart, each 1 to 4 wide (the points of a drawn hole or stud circle
+ * are single positions, not flats).
+ */
 function toothRow(positions: number[]): { teeth: number; period: number; from: number; to: number; gaps: [number, number][] } | null {
   const s = [...new Set(positions.map(x => Math.round(x * 100) / 100))].sort((a, b) => a - b);
   if (s.length < 4) return null;
   const flats: number[][] = [];
   for (const x of s) { const last = flats.at(-1); if (last && x - last[last.length - 1] <= 2.5) last.push(x); else flats.push([x]); }
-  if (flats.length < 4 || flats.some(f => f[f.length - 1] - f[0] > 4)) return null;
+  if (flats.length < 4 || flats.some(f => f[f.length - 1] - f[0] > 4 || f[f.length - 1] - f[0] < 1)) return null;
   const centres = flats.map(f => (f[0] + f[f.length - 1]) / 2), gaps = centres.slice(1).map((c, i) => c - centres[i]);
   const period = (centres[centres.length - 1] - centres[0]) / gaps.length;
-  if (period < 6.5 || period > 9.5 || gaps.some(g => Math.abs(g - period) > 0.3)) return null;
+  if (period < 7.5 || period > 8.5 || gaps.some(g => Math.abs(g - period) > 0.3)) return null;
   return { teeth: flats.length, period, from: centres[0] - period / 2, to: centres[centres.length - 1] + period / 2,
     gaps: flats.slice(1).map((f, i) => [flats[i][flats[i].length - 1], f[0]] as [number, number]) };
 }

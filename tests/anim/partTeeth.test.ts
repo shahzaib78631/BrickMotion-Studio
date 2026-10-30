@@ -12,7 +12,7 @@ import { measureTeeth, type ToothedFeature } from '../../src/anim/motion/parts/t
 const LDRAW = join(__dirname, '..', '..', 'public', 'ldraw');
 const installed = existsSync(join(LDRAW, 'parts', '3647.dat'));
 const lib = new PartLibrary(async p => { const f = join(LDRAW, p); return existsSync(f) ? readFileSync(f, 'utf8') : null; });
-const teeth = async (id: string) => measureTeeth(await lib.loadPart(`${id}.dat`));
+const teeth = async (id: string) => measureTeeth((await lib.loadPart(`${id}.dat`))!);
 type V = [number, number, number];
 const near = (a: readonly number[], b: readonly number[], tol = 1.5) => a.every((x, i) => Math.abs(x - b[i]) <= tol);
 /** Axes compare as lines, within 4 degrees. */

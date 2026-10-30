@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "setup": "tsx scripts/setup-data.ts",
     "setup:shadow": "tsx scripts/import-shadow-metadata.ts",
+    "data:part-functions": "tsx scripts/measure-part-functions.ts",
     "test:v4": "vitest run tests/anim/standardMotionV4.test.ts",
     "verify:v4:offline": "node scripts/verify-v4-offline.cjs",
     "verify:v4:helicopter:offline": "node scripts/verify-v4-helicopter-offline.cjs",

@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { bevelMesh, rackMesh, spurMesh, type WorldGear } from '../../src/anim/motion/gears/gearGeometry';
 import { hasMeasuredGear, worldGear } from '../../src/anim/motion/gears/gearTable';
+import { ldrawInstalled, measureParts } from '../helpers/measuredParts';
 import { screenMechanismGeometry, type ScreenPart } from '../../src/anim/motion/spatial/geometryScreen';
 import { proposeSpatialMechanic } from '../../src/anim/motion/spatial/spatialMechanicProposal';
 import { SpatialMechanismSolver, type Q4, type SpatialModel, type V3 } from '../../src/anim/motion/kinematics/spatialModel';
@@ -20,10 +21,12 @@ const place = (axis: V3, at: V3, spin = 0) => {
   q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), spin));
   return new THREE.Matrix4().compose(new THREE.Vector3(...at), q, new THREE.Vector3(1, 1, 1));
 };
+// Gears are measured from the LDraw library; without it there is nothing to place.
+await measureParts(['3647', '3648', '4143', '3743', '32270', '3001']);
 const g = (key: string, part: string, m: THREE.Matrix4) => worldGear(key, part, m)!;
 const near = (a: readonly number[], b: readonly number[], eps = 1e-6) => a.every((x, i) => Math.abs(x - b[i]) < eps);
 
-describe('measured gear table', () => {
+describe.skipIf(!ldrawInstalled)('measured gear table', () => {
   it('places an 8T gear with its 10 LDU pitch circle on the part Z axis', () => {
     const w = g('p', '3647.dat', new THREE.Matrix4());
     expect(w).toMatchObject({ kind: 'spur', teeth: 8, radius: 10 });
@@ -33,18 +36,18 @@ describe('measured gear table', () => {
     const w = g('b', '4143.dat', place([0, -1, 0], [5, 6, 7]));
     if (w.kind !== 'bevel') throw Error('expected bevel');
     expect(near(w.axis, [0, -1, 0])).toBe(true);
-    // Tip is 17 LDU from the centre, on the side the teeth face.
-    expect(Math.hypot(...w.tip!.map((x, i) => x - w.centre[i]))).toBeCloseTo(17, 6);
+    // Tip is about 17 LDU from the centre (the old hand-measured table), on the side the teeth face.
+    expect(Math.abs(Math.hypot(...w.tip!.map((x, i) => x - w.centre[i])) - 17)).toBeLessThanOrEqual(1.5);
     expect(near(w.facing!, [0, 1, 0])).toBe(true);
   });
   it('knows only parts it has measurements for', () => {
     expect(hasMeasuredGear('parts/3743.dat')).toBe(true);
-    expect(hasMeasuredGear('32270')).toBe(false); // double bevel: not yet measured
+    expect(hasMeasuredGear('32270')).toBe(true); // double bevel, measured since Phase 3
     expect(worldGear('x', '3001.dat', new THREE.Matrix4())).toBeNull();
   });
 });
 
-describe('spur gears', () => {
+describe.skipIf(!ldrawInstalled)('spur gears', () => {
   const a = g('a', '3647', place([0, 0, 1], [0, 0, 0]));
   it('mesh when pitch circles touch, turning opposite ways', () => {
     const v = spurMesh(a, g('b', '3648', place([0, 0, 1], [40, 0, 0])));
@@ -65,10 +68,12 @@ describe('spur gears', () => {
 // input above it (part +Z pointing up, -Y) and the lengthwise one in front of
 // it at z=63 (part +Z pointing -Z), as in the model.
 const CROSS: V3 = [0, -62, 80];
-const upBevel = (dx = 0) => g('up', '4143', place([0, -1, 0], [dx, -62 - 17, 80]));
-const alongBevel = (dz = 0) => g('along', '4143', place([0, 0, -1], [0, -62, 80 - 17 + dz]));
+/** 4143's measured cone tip distance from its centre (about 17 LDU). */
+const TIP = ldrawInstalled ? (() => { const w = g('t', '4143', new THREE.Matrix4()); return w.kind === 'bevel' ? Math.hypot(...w.tip!) : 17; })() : 17;
+const upBevel = (dx = 0) => g('up', '4143', place([0, -1, 0], [dx, -62 - TIP, 80]));
+const alongBevel = (dz = 0) => g('along', '4143', place([0, 0, -1], [0, -62, 80 - TIP + dz]));
 
-describe('bevel gears', () => {
+describe.skipIf(!ldrawInstalled)('bevel gears', () => {
   it('mesh when both cone tips sit where the shafts cross', () => {
     const up = upBevel(), along = alongBevel();
     if (up.kind !== 'bevel') throw Error();
@@ -79,7 +84,7 @@ describe('bevel gears', () => {
     // Compare in world terms: sign is about each gear's own axis, and the far
     // gear's own axis points the other way (+Z instead of -Z).
     const nearWorldZ = bevelMesh(upBevel(), alongBevel()).sign! * -1;
-    const far = g('along', '4143', place([0, 0, 1], [0, -62, 80 + 17]));
+    const far = g('along', '4143', place([0, 0, 1], [0, -62, 80 + TIP]));
     const v = bevelMesh(upBevel(), far);
     expect(v.meshes).toBe(true);
     expect(v.sign! * 1).toBe(-nearWorldZ);
@@ -104,7 +109,7 @@ const rack = (x: number, y = -62 + 10 + 4, flip = false) =>
     flip ? new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI) : new THREE.Quaternion(),
     new THREE.Vector3(1, 1, 1)));
 
-describe('rack and pinion', () => {
+describe.skipIf(!ldrawInstalled)('rack and pinion', () => {
   it('meshes with the rack shifted 14 LDU along its length', () => {
     const v = rackMesh(pinion, rack(14));
     expect(v).toMatchObject({ meshes: true });
@@ -131,7 +136,7 @@ const part = (key: string, description: string, teeth?: number): ScreenPart =>
   ({ key, category: 'gear', description, ...(teeth ? { teeth } : {}) });
 const boxOf = (w: WorldGear) => ({ min: w.centre.map(x => x - 12) as V3, max: w.centre.map(x => x + 12) as V3 });
 
-describe('geometry screen with measured teeth', () => {
+describe.skipIf(!ldrawInstalled)('geometry screen with measured teeth', () => {
   const BEVEL = 'Technic Gear 14 Tooth Bevel';
   it('accepts the bevel pair with both axes and a turning direction', () => {
     const up = upBevel(), along = alongBevel();
@@ -168,7 +173,7 @@ describe('geometry screen with measured teeth', () => {
 /** Angle a pose has turned about a world axis (small angles). */
 const turned = (q: Q4, axis: readonly number[]) => 2 * Math.atan2(q[0] * axis[0] + q[1] * axis[1] + q[2] * axis[2], q[3]);
 
-describe('end to end: proposed mechanic turns the parts the physical way', () => {
+describe.skipIf(!ldrawInstalled)('end to end: proposed mechanic turns the parts the physical way', () => {
   /** Each part is its own body on a joint to ground; `flip` authors the joint axis backwards. */
   const rig = (bodies: { id: string; kind: 'hinge' | 'slider'; axis: V3; at: V3; flip: boolean }[]): SpatialLinkagePreview => {
     const model: SpatialModel = {

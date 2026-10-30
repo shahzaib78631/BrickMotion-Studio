@@ -11,6 +11,7 @@ import type { MechanismEdge, MechanismGraph } from '../../src/anim/motion/v4/mec
 import type { GeometryCandidate } from '../../src/anim/motion/spatial/geometryScreen';
 import { bevelMesh, rackMesh, type WorldGear } from '../../src/anim/motion/gears/gearGeometry';
 import { worldGear } from '../../src/anim/motion/gears/gearTable';
+import { ldrawInstalled, measureParts } from '../helpers/measuredParts';
 import { suggestRackSteering } from '../../src/anim/motion/v4/drivetrainSuggestions';
 import { detectAutomaticMechanics } from '../../src/anim/motion/v4/autoMechanics';
 import { MechanismSolver } from '../../src/anim/motion/v4/mechanismSolver';
@@ -26,6 +27,8 @@ let edgeId = 0;
 const edge = (a: string, b: string, motion: MechanismEdge['motion'], axis: V3, centre: V3,
   type: MechanismEdge['type'] = 'axle-hole'): MechanismEdge =>
   ({ id: `e${++edgeId}`, a, b, type, motion, axis, centre, source: 'ldcad-shadow', joint: {} as MechanismEdge['joint'] });
+
+await measureParts(['3647', '3743', '4143']);
 
 type Fixture = { parts: Record<string, { part: string; world: THREE.Matrix4 }>; edges: MechanismEdge[]; clusters: string[][] };
 const build = (f: Fixture) => {
@@ -83,7 +86,7 @@ const candidatesFor = (m: ReadonlyMap<string, WorldGear>, bevels = true) => [
 const position = (frame: { poses: Map<string, THREE.Matrix4> }, key: string, asm: Assembly) =>
   new THREE.Vector3().setFromMatrixPosition(frame.poses.get(key) ?? asm.instances.find(i => i.key === key)!.world);
 
-describe('rack steering on a four-bar tie rod', () => {
+describe.skipIf(!ldrawInstalled)('rack steering on a four-bar tie rod', () => {
   const { asm, graph, measured } = build(steering());
   it('the fixture meshes as measured', () => {
     expect(bevelMesh(measured.get('inBevel')!, measured.get('lenBevel')!).meshes).toBe(true);
@@ -144,7 +147,7 @@ describe('rack steering on a four-bar tie rod', () => {
   });
 });
 
-describe('rack on a straight guide', () => {
+describe.skipIf(!ldrawInstalled)('rack on a straight guide', () => {
   const { asm, graph, measured } = build(steering({}, true));
   const [s] = suggestRackSteering(asm, graph, candidatesFor(measured), measured);
   it('slides the rack by pitch radius x pinion turn, in the measured direction', () => {
@@ -159,7 +162,7 @@ describe('rack on a straight guide', () => {
   });
 });
 
-describe('turntable hitch', () => {
+describe.skipIf(!ldrawInstalled)('turntable hitch', () => {
   const metrics = ((part: string) => ({ description: /3404/.test(part) ? 'Turntable 4 x 4 Top' : /3403/.test(part) ? 'Turntable 4 x 4 Base' : 'Brick',
     snaps: [], body: undefined })) as unknown as Metrics;
   const hitch = (closed: boolean): Fixture => ({

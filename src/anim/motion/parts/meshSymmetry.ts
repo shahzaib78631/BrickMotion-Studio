@@ -67,9 +67,11 @@ export function screwLead(points: readonly P3[], tol = 0.05, need = 0.75): numbe
   const columns = new Map<string, P3[]>(), cell = (x: number, y: number) => `${Math.round(x / 0.2)},${Math.round(y / 0.2)}`;
   for (const p of points) { const k = cell(p[0], p[1]); (columns.get(k) ?? columns.set(k, []).get(k)!).push(p); }
   let best: { lead: number; share: number } | null = null;
+  // Vote on a sample; check the winner on every point.
+  const step = Math.max(1, Math.floor(points.length / 300)), sample = points.filter((_, i) => i % step === 0);
   for (let m = 8; m <= 48; m++) {
     const c = Math.cos(2 * Math.PI / m), s = Math.sin(2 * Math.PI / m), votes = new Map<number, number>();
-    for (const p of points) {
+    for (const p of sample) {
       const x = p[0] * c - p[1] * s, y = p[0] * s + p[1] * c;
       for (const q of columns.get(cell(x, y)) ?? []) {
         if (Math.hypot(q[0] - x, q[1] - y) > 0.1) continue;
@@ -80,7 +82,7 @@ export function screwLead(points: readonly P3[], tol = 0.05, need = 0.75): numbe
     // The shift most points agree on; the smallest such shift on a tie.
     const [dz] = [...votes].sort((a, b) => b[1] - a[1] || Math.abs(a[0]) - Math.abs(b[0]))[0] ?? [0];
     if (!dz) continue;
-    const t = dz * tol, share = mappedShare(points, grid, p => [p[0] * c - p[1] * s, p[0] * s + p[1] * c, p[2] + t]);
+    const t = dz * tol, share = mappedShare(points, grid, p => [p[0] * c - p[1] * s, p[0] * s + p[1] * c, p[2] + t], need);
     if (share >= need && (!best || share > best.share + 0.02)) best = { lead: t * m, share };
   }
   return best?.lead ?? null;

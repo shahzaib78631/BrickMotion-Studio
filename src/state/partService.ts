@@ -5,6 +5,7 @@ import { browserFetchText, PartLibrary, type FetchText } from '../ldraw/library'
 import { measurePart, type PartMetrics } from '../ldraw/metrics';
 import { normalizeName, parseLDraw, type LDrawFile } from '../ldraw/parse';
 import { shadowLookupFrom, type ShadowLookup } from '../ldraw/shadow';
+import { ensurePartFunctions, forgetPartFunctions, loadPartFunctionTable, type PartFunctionTable } from '../anim/motion/parts/partFunctions';
 
 /** App-wide cache of LDraw parts: colors, catalog, measurements and geometry. */
 let library = new PartLibrary(browserFetchText);
@@ -33,6 +34,14 @@ export async function initPartService(fetchText: FetchText = browserFetchText): 
   try {
     const res = await fetch('/data/ldcad-shadow.json');
     if (res.ok) setShadowPack(((await res.json()) as { files: Record<string, string> }).files);
+  } catch {
+    /* not installed */
+  }
+  // Optional measured gears and racks for the whole library (npm run data:part-functions).
+  // Without it each part's functions are measured from its geometry when it loads.
+  try {
+    const res = await fetch('/data/part-functions.json');
+    if (res.ok) loadPartFunctionTable((await res.json()) as PartFunctionTable);
   } catch {
     /* not installed */
   }
@@ -82,6 +91,8 @@ export function setStudLogos(on: boolean): Promise<void> {
 export const studLogosOn = () => studLogos;
 
 const registered = new Map<string, string>();
+/** Ids of parts defined inside imported model files (never in the packed function table). */
+const embedded = new Set<string>();
 
 /** Makes custom parts embedded in a plan (from imported files) loadable. */
 export function registerInlineParts(parts: Record<string, string> | undefined): void {
@@ -96,6 +107,8 @@ export function registerInlineParts(parts: Record<string, string> | undefined): 
     metrics.delete(id);
     geometry.delete(id);
     pending.delete(id);
+    forgetPartFunctions(id);
+    embedded.add(id);
   }
   if (fresh.size) library.addInline(fresh);
 }
@@ -107,6 +120,7 @@ export const getLibrary = () => library;
 async function loadOne(id: string): Promise<void> {
   const flat = await library.loadPart(id);
   metrics.set(id, measurePart(flat, id));
+  ensurePartFunctions(id, flat, embedded.has(id.replace(/\.dat$/i, '')));
   geometry.set(id, flat ? buildPartGeometry(flat) : null);
 }
 
