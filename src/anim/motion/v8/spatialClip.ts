@@ -2,7 +2,7 @@
  * Exports body positions/orientations and explicit members mapping, not
  * collision-verified or dynamics-certified keyframes. No Three/browser APIs.
  */
-import {SpatialMechanismSolver,type SpatialModel,type SpatialPose} from '../v6/spatialConstraints';
+import {SpatialMechanismSolver,type SpatialModel,type SpatialPose} from '../kinematics/spatialModel';
 export type SpatialClipRig={model:SpatialModel;members:Readonly<Record<string,readonly string[]>>};
 export type SpatialClipOptions={
   driver:string;amplitude:number;mode:'forward'|'oscillate';

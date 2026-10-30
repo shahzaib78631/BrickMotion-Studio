@@ -3,11 +3,11 @@
  * All tests are ideal/analytic, not real-set or physical-collision certificates.
  */
 const {test,assert,approx,load}=require('./verify-v4-mechanisms-offline.cjs');
-const {SpatialMechanismSolver,validateSpatialModel}=load('src/anim/motion/v6/spatialConstraints.ts');
-const {screenMechanismGeometry}=load('src/anim/motion/v6/geometryScreen.ts');
-const {sweepSpatialLinkage}=load('src/anim/motion/v6/spatialSweep.ts');
-const {parseSpatialRig,serializeSpatialRig}=load('src/anim/motion/v6/spatialRig.ts');
-const {createSpatialLinkagePreview}=load('src/anim/motion/v6/spatialAdapter.ts');
+const {SpatialMechanismSolver,validateSpatialModel}=load('src/anim/motion/kinematics/spatialModel.ts');
+const {screenMechanismGeometry}=load('src/anim/motion/spatial/geometryScreen.ts');
+const {sweepSpatialLinkage}=load('src/anim/motion/spatial/spatialSweep.ts');
+const {parseSpatialRig,serializeSpatialRig}=load('src/anim/motion/spatial/spatialRig.ts');
+const {createSpatialLinkagePreview}=load('src/anim/motion/spatial/spatialAdapter.ts');
 const I=[0,0,0,1],P=(x=0,y=0,z=0)=>[x,y,z],anchor=(id)=>({body:id,local:P()});
 const body=(id,fixed=false)=>({id,rest:{p:P(),q:I},fixed});
 const motor=(id,kind='hinge')=>({id,kind,a:anchor('ground'),b:anchor(id+'Body'),axisA:P(0,0,1),axisB:P(0,0,1)});

@@ -1,11 +1,11 @@
 /** Offline V6 mathematical/geometry regression suite. No browser/WebGL/npm dependency.
  * Tests synthetic known configurations, NOT the real Kinebrick official-set corpus. */
 const {test,assert,approx,load,assembly}=require('./verify-v4-mechanisms-offline.cjs');
-const {SpatialMechanismSolver,validateSpatialModel}=load('src/anim/motion/v6/spatialConstraints.ts');
-const {screenMechanismGeometry}=load('src/anim/motion/v6/geometryScreen.ts');
-const {createSpatialLinkagePreview}=load('src/anim/motion/v6/spatialAdapter.ts');
-const {sweepSpatialLinkage}=load('src/anim/motion/v6/spatialSweep.ts');
-const {parseSpatialRig,serializeSpatialRig}=load('src/anim/motion/v6/spatialRig.ts');
+const {SpatialMechanismSolver,validateSpatialModel}=load('src/anim/motion/kinematics/spatialModel.ts');
+const {screenMechanismGeometry}=load('src/anim/motion/spatial/geometryScreen.ts');
+const {createSpatialLinkagePreview}=load('src/anim/motion/spatial/spatialAdapter.ts');
+const {sweepSpatialLinkage}=load('src/anim/motion/spatial/spatialSweep.ts');
+const {parseSpatialRig,serializeSpatialRig}=load('src/anim/motion/spatial/spatialRig.ts');
 const {MechanismSolver}=load('src/anim/motion/v4/mechanismSolver.ts');
 const {composeTransmissionProgram}=load('src/anim/motion/v4/transmissionComposer.ts');
 const {validateMechanismProgram}=load('src/anim/motion/v4/mechanismProgram.ts');

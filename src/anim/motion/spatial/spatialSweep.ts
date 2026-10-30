@@ -4,7 +4,7 @@
  * dynamics, stability, or motion between samples. Failed frames are never
  * reported as certified motion.
  */
-import { SpatialMechanismSolver, type SpatialModel } from './spatialConstraints';
+import { SpatialMechanismSolver, type SpatialModel } from '../kinematics/spatialModel';
 
 export type SpatialSweepReport = {
   kind: 'brickmotion-v6-sampled-spatial-sweep';

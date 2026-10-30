@@ -40,7 +40,7 @@ export type SolveResult = {
   state: State;
   iterations: number;
   maxResidual: number;
-  /** Residual norm per constraint id (cut joint, equation, law, `drive:c`). */
+  /** Residual norm per constraint id (cut joint, equation, law, `drive:c`); on failure, of the attempt at the full driver move. */
   residuals: Map<string, number>;
   /** Relative r0-th singular value of the driven Jacobian (1 = well conditioned). */
   conditioning: number;
@@ -84,7 +84,10 @@ export function solve(sys: KinematicSystem, from: State, drivers: Drivers, opts:
     }
     for (const { law, idx } of laws) {
       const { values, grad } = evaluateLaw(law, idx.map(i => s.q[i]));
-      values.forEach((v, k) => { const g = new Float64Array(n); idx.forEach((i, j) => { g[i] += grad[k][j]; }); ids.push(law.id); r.push(v); J.push(g); });
+      values.forEach((v, k) => {
+        const g = new Float64Array(n); idx.forEach((i, j) => { g[i] += grad[k][j]; });
+        ids.push(law.rows?.[k] ? `${law.id}:${law.rows[k]}` : law.id); r.push(v); J.push(g);
+      });
     }
     for (const d of driven) {
       const g = new Float64Array(n); g[d.i] = d.scale;
@@ -178,11 +181,12 @@ export function solve(sys: KinematicSystem, from: State, drivers: Drivers, opts:
     return m;
   };
 
-  type Leg = { ok: boolean; s: State; b: Built; active: Active[]; cond: number; failure?: { stop: boolean; cond: number } };
+  type Leg = { ok: boolean; s: State; b: Built; active: Active[]; cond: number; failure?: { stop: boolean; cond: number; b: Built } };
   const startBuilt = build(from, 0, []);
   const cond0 = conditioning(startBuilt);
   function advance(s: State, cond: number, ta: number, tb: number, depth: number, last: Leg): Leg {
     const res = substep(s, tb);
+    if (depth === 0 && !res.ok) attempt = res.b;
     let bad = !res.ok;
     let c = cond;
     if (res.ok) {
@@ -190,16 +194,18 @@ export function solve(sys: KinematicSystem, from: State, drivers: Drivers, opts:
       if (change(s, res.s) > MAX_STEP || c < SINGULAR || (c < cond / 10 && depth < maxSub)) bad = true;
     }
     if (!bad) return { ok: true, s: res.s, b: res.b, active: res.active, cond: c };
-    if (depth >= maxSub) return { ...last, ok: false, failure: { stop: res.stop, cond: res.ok ? c : 0 } };
+    if (depth >= maxSub) return { ...last, ok: false, failure: { stop: res.stop, cond: res.ok ? c : 0, b: res.b } };
     const mid = (ta + tb) / 2;
     const left = advance(s, cond, ta, mid, depth + 1, last);
     if (!left.ok) return left;
     return advance(left.s, left.cond, mid, tb, depth + 1, left);
   }
   const first: Leg = { ok: true, s: from, b: startBuilt, active: [], cond: cond0 };
+  let attempt: Built | undefined; // the full move, when it could not close
   const leg = advance(from, cond0, 0, 1, 0, first);
 
-  const final = leg.ok ? leg.b : build(leg.s, 0, []);
+  // On failure: the residuals of the attempt that could not close (state stays at the last good substep).
+  const final = leg.ok ? leg.b : attempt ?? leg.failure!.b;
   const residuals = new Map<string, number>();
   final.ids.forEach((id, i) => residuals.set(id, Math.hypot(residuals.get(id) ?? 0, final.r[i] / final.w[i])));
   const geometry = [...residuals].filter(([id]) => !id.startsWith('drive:'));

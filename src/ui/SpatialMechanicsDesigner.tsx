@@ -2,9 +2,9 @@
  * Uses real detected/JSON hinge and slider joint IDs; it never creates fake
  * contact connections or changes source LDraw geometry. */
 import {useState} from 'react';
-import type {SpatialLinkagePreview} from '../anim/motion/v6/spatialAdapter';
+import type {SpatialLinkagePreview} from '../anim/motion/spatial/spatialAdapter';
 import {SpatialMechanismSolver,validateSpatialModel,
-  type SpatialMechanic, type SpatialModel} from '../anim/motion/v6/spatialConstraints';
+  type SpatialMechanic, type SpatialModel} from '../anim/motion/kinematics/spatialModel';
 
 type Kind=SpatialMechanic['kind'];
 const KINDS:{kind:Kind;label:string;hint:string}[]=[

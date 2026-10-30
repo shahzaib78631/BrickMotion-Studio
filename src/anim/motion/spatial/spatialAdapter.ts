@@ -4,7 +4,7 @@
  */
 import type { Assembly } from '../../../model/assemble';
 import type { MechanismGraph, MechanismEdge } from '../v4/mechanismGraph';
-import type { SpatialConstraint, SpatialModel, V3 } from './spatialConstraints';
+import type { SpatialConstraint, SpatialModel, V3 } from '../kinematics/spatialModel';
 
 export type SpatialLinkagePreview = {
   model: SpatialModel;

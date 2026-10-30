@@ -12,7 +12,7 @@
  * is offered.
  */
 import type { Assembly } from '../../../model/assemble';
-import type { GeometryCandidate } from '../v6/geometryScreen';
+import type { GeometryCandidate } from '../spatial/geometryScreen';
 import { rackMesh, type WorldGear } from '../gears/gearGeometry';
 import { bodyGraph, carriedBodies, type BodyGraph, type BodyLink } from './bodyGraph';
 import type { MechanismGraph } from './mechanismGraph';

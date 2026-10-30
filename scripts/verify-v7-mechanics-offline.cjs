@@ -1,7 +1,7 @@
 /** V7 mechanics-in-spatial-linkages regressions. Offline mathematical tests;
  * not force, material, rendering or contact verification. */
 const {test,assert,approx,load}=require('./verify-v4-mechanisms-offline.cjs');
-const {SpatialMechanismSolver,validateSpatialModel}=load('src/anim/motion/v6/spatialConstraints.ts');
+const {SpatialMechanismSolver,validateSpatialModel}=load('src/anim/motion/kinematics/spatialModel.ts');
 const I=[0,0,0,1],P=(x=0,y=0,z=0)=>[x,y,z];
 const body=(id,p=P(),fixed=false)=>({id,rest:{p,q:I},fixed});
 const anchor=(id,local=P())=>({body:id,local});
@@ -142,14 +142,14 @@ test('V7 cam-follower sample sweeps forward and backward without false contact c
  const path=require('path'),fs=require('fs');
  const example=JSON.parse(fs.readFileSync(path.join(__dirname,'../samples/mechanisms/cam-follower.v7-mechanics-rig.example.json'),'utf8'));
  const m=example.model;
- const {sweepSpatialLinkage}=load('src/anim/motion/v6/spatialSweep.ts');
+ const {sweepSpatialLinkage}=load('src/anim/motion/spatial/spatialSweep.ts');
  const sweep=sweepSpatialLinkage(m,'camAxle',.9,4);
  assert.equal(sweep.status,'sampled-pass',sweep.failures[0]?.reason);
  assert.equal(sweep.checkedSamples,17);
  assert.match(sweep.disclaimer,/rope tension/);
 });
 test('V7 ratchet sweep detects reversal but can pass a forward-only sweep',()=>{
- const {sweepSpatialLinkage}=load('src/anim/motion/v6/spatialSweep.ts');
+ const {sweepSpatialLinkage}=load('src/anim/motion/spatial/spatialSweep.ts');
  const m=model([['pawl','hinge','ratchetWheel']],[{id:'oneway',kind:'ratchet',joint:'pawl',direction:'positive'}]);
  const reverse=sweepSpatialLinkage(m,'pawl',.2,4);
  assert.equal(reverse.status,'sampled-fail');
@@ -159,7 +159,7 @@ test('V7 ratchet sweep detects reversal but can pass a forward-only sweep',()=>{
  assert.equal(forward.checkedSamples,5);
 });
 test('V7 sweep supports secondary motors and catches contradictory commands',()=>{
- const {sweepSpatialLinkage}=load('src/anim/motion/v6/spatialSweep.ts');
+ const {sweepSpatialLinkage}=load('src/anim/motion/spatial/spatialSweep.ts');
  const m=two();m.mechanics=[{id:'cv',kind:'cv-joint',input:'in',output:'out'}];
  const impossible=sweepSpatialLinkage(m,'in',.2,4,{additionalMotors:{out:0}});
  assert.equal(impossible.status,'sampled-fail');
@@ -171,7 +171,7 @@ test('V7 JSON fixture rejects unsupported or bogus mechanisms through core valid
  assert.match(validateSpatialModel(bad).join(';'),/absent-shaft must reference/);
 });
 test('V7 geometry-screened spur gears attach to unambiguous spatial shaft bodies only',()=>{
- const {proposeSpatialMechanic}=load('src/anim/motion/v6/spatialMechanicProposal.ts');
+ const {proposeSpatialMechanic}=load('src/anim/motion/spatial/spatialMechanicProposal.ts');
  const m=two();
  const p={model:m,members:{ground:['frame'],shaft1:['tooth12'],shaft2:['tooth24']},driver:'in',kind:'hinge',source:'user-authored-json',warning:'review'};
  const candidate={id:'gear:tooth12:tooth24',kind:'gear',a:'tooth12',b:'tooth24',status:'plausible',confidence:'geometry-consistent-review-required',draft:{teethA:12,teethB:24,axis:P(0,0,1)},metrics:{separationLdu:45},reasons:[],evidence:'axis-and-bounds-screen'};
@@ -184,7 +184,7 @@ test('V7 geometry-screened spur gears attach to unambiguous spatial shaft bodies
  assert.throws(()=>proposeSpatialMechanic({...candidate,b:'unknown'},p),/outside the active spatial rig/);
 });
 test('V7 spatial relation proposal refuses ambiguous same-body joints',()=>{
- const {proposeSpatialMechanic}=load('src/anim/motion/v6/spatialMechanicProposal.ts');
+ const {proposeSpatialMechanic}=load('src/anim/motion/spatial/spatialMechanicProposal.ts');
  const m=two();m.constraints.push({id:'duplicate',kind:'hinge',a:anchor('ground'),b:anchor('shaft1'),axisA:P(0,0,1),axisB:P(0,0,1)});
  const p={model:m,members:{ground:['frame'],shaft1:['tooth12'],shaft2:['tooth24']},driver:'in',kind:'hinge',source:'user-authored-json',warning:'review'};
  const c={id:'pair',kind:'gear',a:'tooth12',b:'tooth24',status:'plausible',confidence:'geometry-consistent-review-required',draft:{teethA:12,teethB:24}};
@@ -236,7 +236,7 @@ test('V7 single-universal Cardan drive traverses one turn with varying angle rat
  }
 });
 test('V7 forward-only sweep follows negative-direction pawl on a driven hinge',()=>{
- const {sweepSpatialLinkage}=load('src/anim/motion/v6/spatialSweep.ts');
+ const {sweepSpatialLinkage}=load('src/anim/motion/spatial/spatialSweep.ts');
  const m=model([['pawl','hinge','ratchetWheel']],[{id:'oneway',kind:'ratchet',joint:'pawl',direction:'negative'}]);
  const report=sweepSpatialLinkage(m,'pawl',.2,4,{mode:'forward'});
  assert.equal(report.status,'sampled-pass',report.failures[0]?.reason);
@@ -244,7 +244,7 @@ test('V7 forward-only sweep follows negative-direction pawl on a driven hinge',(
 });
 test('V7 fixture import preserves mechanical relations and V6 legacy files remain valid',()=>{
  const {assembly}=require('./verify-v4-mechanisms-offline.cjs');
- const {parseSpatialRig,serializeSpatialRig}=load('src/anim/motion/v6/spatialRig.ts');
+ const {parseSpatialRig,serializeSpatialRig}=load('src/anim/motion/spatial/spatialRig.ts');
  const legacy=JSON.parse(require('fs').readFileSync(require('path').join(__dirname,
   '../samples/mechanisms/four-bar.spatial-rig.example.json'),'utf8'));
  const modern=JSON.parse(require('fs').readFileSync(require('path').join(__dirname,

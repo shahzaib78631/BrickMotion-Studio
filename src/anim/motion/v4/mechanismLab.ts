@@ -13,7 +13,7 @@ import { buildMotionMechanismGraph, type MechanismGraph } from './mechanismGraph
 import { refineKnownMechanicalJoints, detectAutomaticMechanics, MAX_SUGGESTIONS, type AutoMechanicsReport } from './autoMechanics';
 import { MechanismSolver } from './mechanismSolver';
 import type { MechanismProgram } from './mechanismProgram';
-import { screenMechanismGeometry, type GeometryCandidate } from '../v6/geometryScreen';
+import { screenMechanismGeometry, type GeometryCandidate } from '../spatial/geometryScreen';
 import { worldGear } from '../gears/gearTable';
 import { suggestRackSteering } from './drivetrainSuggestions';
 import type { WorldGear } from '../gears/gearGeometry';

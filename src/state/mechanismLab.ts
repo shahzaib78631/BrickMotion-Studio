@@ -1,7 +1,7 @@
 /** Ephemeral, opt-in mechanism exploration. Never saved to a project. */
 import { create } from 'zustand';
 import type { MechanismProgram } from '../anim/motion/v4/mechanismProgram';
-import type { SpatialLinkagePreview } from '../anim/motion/v6/spatialAdapter';
+import type { SpatialLinkagePreview } from '../anim/motion/spatial/spatialAdapter';
 
 export type MechanismLabState = {
   active: boolean;

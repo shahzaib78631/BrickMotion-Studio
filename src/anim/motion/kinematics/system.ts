@@ -20,7 +20,8 @@ import {
   orthonormalize, rotationAbout, scale, sub, transpose, unit, add, type Frame, type M3, type V3,
 } from './rigid';
 
-export type JointKind = 'revolute' | 'prismatic' | 'cylindrical' | 'universal' | 'spherical' | 'planar' | 'fixed';
+/** `free`: three slides along world x, y, z, then a ball rotation (a body held only by equations). */
+export type JointKind = 'revolute' | 'prismatic' | 'cylindrical' | 'universal' | 'spherical' | 'planar' | 'fixed' | 'free';
 export type JointSpec = {
   id: string;
   /** null = ground. */
@@ -51,12 +52,14 @@ export type Coord = string;
 export type Row = { id: string; value: number; grad: Float64Array; tolerance?: number };
 export type State = { readonly q: Float64Array; readonly rot: ReadonlyMap<string, M3> };
 
-const DOF: Record<JointKind, number> = { revolute: 1, prismatic: 1, cylindrical: 2, universal: 2, spherical: 3, planar: 3, fixed: 0 };
+const DOF: Record<JointKind, number> = { revolute: 1, prismatic: 1, cylindrical: 2, universal: 2, spherical: 3, planar: 3, fixed: 0, free: 6 };
 const ANGULAR: Record<JointKind, boolean[]> = {
   revolute: [true], prismatic: [false], cylindrical: [true, false], universal: [true, true],
-  spherical: [true, true, true], planar: [false, false, true], fixed: [],
+  spherical: [true, true, true], planar: [false, false, true], fixed: [], free: [false, false, false, true, true, true],
 };
 type Twist = { w: V3; v: V3 };
+/** Joints with a ball rotation stored as a matrix: index of its first rotation coordinate. */
+const ROTATION: Partial<Record<JointKind, number>> = { spherical: 0, free: 3 };
 type Contribution = { k: number; w: V3; v: V3 };
 type Prepared = JointSpec & { offset: number; dof: number; e1: V3; e2: V3 };
 
@@ -145,13 +148,13 @@ export class KinematicSystem {
   jointOf(id: string): Prepared | undefined { return this.byId.get(id); }
 
   zeroState(): State {
-    return { q: new Float64Array(this.coords.length), rot: new Map(this.joints.filter(j => j.kind === 'spherical').map(j => [j.id, [1, 0, 0, 0, 1, 0, 0, 0, 1]])) };
+    return { q: new Float64Array(this.coords.length), rot: new Map(this.joints.filter(j => ROTATION[j.kind] !== undefined).map(j => [j.id, [1, 0, 0, 0, 1, 0, 0, 0, 1]])) };
   }
 
   value(s: State, c: Coord): number {
     const i = this.coordIndex(c);
     const j = this.joints.find(x => i >= x.offset && i < x.offset + x.dof)!;
-    if (j.kind === 'spherical') throw Error(`Coordinate ${c} of a ball joint has no value`);
+    if (ROTATION[j.kind] !== undefined && i >= j.offset + ROTATION[j.kind]!) throw Error(`Coordinate ${c} is a ball rotation and has no value`);
     return s.q[i];
   }
 
@@ -159,8 +162,8 @@ export class KinematicSystem {
   step(s: State, delta: ArrayLike<number>): State {
     const q = Float64Array.from(s.q, (x, i) => x + delta[i]);
     const rot = new Map(s.rot);
-    for (const j of this.joints) if (j.kind === 'spherical') {
-      const o = j.offset;
+    for (const j of this.joints) if (ROTATION[j.kind] !== undefined) {
+      const o = j.offset + ROTATION[j.kind]!;
       q[o] = q[o + 1] = q[o + 2] = 0;
       rot.set(j.id, orthonormalize(mulMM(expSO3([delta[o], delta[o + 1], delta[o + 2]]), s.rot.get(j.id)!)));
     }
@@ -186,6 +189,12 @@ export class KinematicSystem {
       case 'spherical': {
         const R = s.rot.get(j.id)!;
         return { M: { R, p: sub(c, mulMV(R, c)) }, twists: [turn([1, 0, 0]), turn([0, 1, 0]), turn([0, 0, 1])] };
+      }
+      case 'free': {
+        const R = s.rot.get(j.id)!, t: V3 = [q[o], q[o + 1], q[o + 2]], at = add(c, t);
+        const slide = (v: V3): Twist => ({ w: [0, 0, 0], v });
+        const spin = (w: V3): Twist => ({ w, v: cross(at, w) });
+        return { M: { R, p: add(sub(c, mulMV(R, c)), t) }, twists: [slide([1, 0, 0]), slide([0, 1, 0]), slide([0, 0, 1]), spin([1, 0, 0]), spin([0, 1, 0]), spin([0, 0, 1])] };
       }
       case 'planar': {
         const t = add(scale(j.e1, q[o]), scale(j.e2, q[o + 1])), M = rotationAbout(a, c, q[o + 2]);

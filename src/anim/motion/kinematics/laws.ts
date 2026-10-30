@@ -41,8 +41,8 @@ export type SpatialMechanic = (
   | { kind: 'differential-drive'; left: string; right: string; forward: string; yaw: string; wheelRadiusLdu: number; trackWidthLdu: number }
 ) & { id: string };
 
-/** f(x) = 0 over `coords`; `grad` (rows x coords) when known in closed form. */
-export type Law = { id: string; coords: Coord[]; f(x: readonly number[]): number[]; grad?(x: readonly number[]): number[][] };
+/** f(x) = 0 over `coords`; `grad` (rows x coords) when known in closed form; `rows` names each row (`id:name`). */
+export type Law = { id: string; coords: Coord[]; f(x: readonly number[]): number[]; grad?(x: readonly number[]): number[][]; rows?: string[] };
 /** lo <= a . x <= hi; `scale` converts the row to LDU. */
 export type Inequality = { id: string; coords: Coord[]; a: number[]; lo: number; hi: number; scale: number };
 
@@ -120,7 +120,7 @@ export function lawsFromMechanics(mechanics: readonly SpatialMechanic[], ctx: La
         };
         const L = side(-1), R = side(1), dL = dside(-1), dR = dside(1);
         laws.push({
-          id: m.id, coords: [c(m.input), c(m.left), c(m.right)],
+          id: m.id, coords: [c(m.input), c(m.left), c(m.right)], rows: ['left', 'right'],
           f: x => [UNIT * wrap(x[1] - L(x[0])), UNIT * wrap(x[2] - R(x[0]))],
           grad: x => [[-UNIT * dL(x[0]), UNIT, 0], [-UNIT * dR(x[0]), 0, UNIT]],
         });
@@ -185,7 +185,7 @@ export function lawsFromMechanics(mechanics: readonly SpatialMechanic[], ctx: La
       case 'differential-drive': {
         const r = m.wheelRadiusLdu, w = m.trackWidthLdu;
         laws.push({
-          id: m.id, coords: [c(m.left), c(m.right), c(m.forward), c(m.yaw)],
+          id: m.id, coords: [c(m.left), c(m.right), c(m.forward), c(m.yaw)], rows: ['forward', 'yaw'],
           f: x => { const t = differentialDriveTravel(x[0], x[1], r, w); return [x[2] - t.forward, UNIT * (x[3] - t.yaw)]; },
           grad: () => [[-r / 2, -r / 2, 1, 0], [UNIT * r / w, -UNIT * r / w, 0, UNIT]],
         });

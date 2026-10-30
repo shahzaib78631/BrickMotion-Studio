@@ -9,10 +9,10 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { bevelMesh, rackMesh, spurMesh, type WorldGear } from '../../src/anim/motion/gears/gearGeometry';
 import { hasMeasuredGear, worldGear } from '../../src/anim/motion/gears/gearTable';
-import { screenMechanismGeometry, type ScreenPart } from '../../src/anim/motion/v6/geometryScreen';
-import { proposeSpatialMechanic } from '../../src/anim/motion/v6/spatialMechanicProposal';
-import { SpatialMechanismSolver, type Q4, type SpatialModel, type V3 } from '../../src/anim/motion/v6/spatialConstraints';
-import type { SpatialLinkagePreview } from '../../src/anim/motion/v6/spatialAdapter';
+import { screenMechanismGeometry, type ScreenPart } from '../../src/anim/motion/spatial/geometryScreen';
+import { proposeSpatialMechanic } from '../../src/anim/motion/spatial/spatialMechanicProposal';
+import { SpatialMechanismSolver, type Q4, type SpatialModel, type V3 } from '../../src/anim/motion/kinematics/spatialModel';
+import type { SpatialLinkagePreview } from '../../src/anim/motion/spatial/spatialAdapter';
 
 /** Place a part so its own +Z (the gear shaft) points along `axis`, at `at`. */
 const place = (axis: V3, at: V3, spin = 0) => {

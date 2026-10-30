@@ -13,14 +13,14 @@ import { TransmissionDesigner } from './TransmissionDesigner';
 import { sweepMechanism, type SweepResult } from '../anim/motion/v4/mechanismSweep';
 import { composeTransmissionProgram } from '../anim/motion/v4/transmissionComposer';
 import { MechanismSolver } from '../anim/motion/v4/mechanismSolver';
-import type { GeometryCandidate } from '../anim/motion/v6/geometryScreen';
-import { createSpatialLinkagePreview } from '../anim/motion/v6/spatialAdapter';
-import { SpatialMechanismSolver } from '../anim/motion/v6/spatialConstraints';
-import { sweepSpatialLinkage, type SpatialSweepReport } from '../anim/motion/v6/spatialSweep';
-import { parseSpatialRig,serializeSpatialRig } from '../anim/motion/v6/spatialRig';
-import type { SpatialModel } from '../anim/motion/v6/spatialConstraints';
+import type { GeometryCandidate } from '../anim/motion/spatial/geometryScreen';
+import { createSpatialLinkagePreview } from '../anim/motion/spatial/spatialAdapter';
+import { SpatialMechanismSolver } from '../anim/motion/kinematics/spatialModel';
+import { sweepSpatialLinkage, type SpatialSweepReport } from '../anim/motion/spatial/spatialSweep';
+import { parseSpatialRig,serializeSpatialRig } from '../anim/motion/spatial/spatialRig';
+import type { SpatialModel } from '../anim/motion/kinematics/spatialModel';
 import { SpatialMechanicsDesigner } from './SpatialMechanicsDesigner';
-import { proposeSpatialMechanic } from '../anim/motion/v6/spatialMechanicProposal';
+import { proposeSpatialMechanic } from '../anim/motion/spatial/spatialMechanicProposal';
 import { bakeSpatialClip } from '../anim/motion/v8/spatialClip';
 
 function selectPart(key: string) {

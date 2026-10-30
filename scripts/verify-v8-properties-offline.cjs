@@ -55,7 +55,7 @@ test('V8-P05 differential-drive forward/yaw mapping is invertible and symmetric'
  }
 });
 test('V8-P06 model-level invalid gear/cam/drive geometry rejected at rig boundary',()=>{
- const {validateSpatialModel}=load('src/anim/motion/v6/spatialConstraints.ts');
+ const {validateSpatialModel}=load('src/anim/motion/kinematics/spatialModel.ts');
  const p=[0,0,0],q=[0,0,0,1];
  const bodies=['ground','cam','slide'].map((id,i)=>({id,rest:{p,q},fixed:i===0}));
  const constraints=[{id:'c',kind:'hinge',a:{body:'ground',local:p},b:{body:'cam',local:p},axisA:[0,0,1],axisB:[0,0,1]},

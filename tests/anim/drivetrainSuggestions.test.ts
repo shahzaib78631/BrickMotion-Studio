@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import type { Assembly, Metrics } from '../../src/model/assemble';
 import type { MechanismEdge, MechanismGraph } from '../../src/anim/motion/v4/mechanismGraph';
-import type { GeometryCandidate } from '../../src/anim/motion/v6/geometryScreen';
+import type { GeometryCandidate } from '../../src/anim/motion/spatial/geometryScreen';
 import { bevelMesh, rackMesh, type WorldGear } from '../../src/anim/motion/gears/gearGeometry';
 import { worldGear } from '../../src/anim/motion/gears/gearTable';
 import { suggestRackSteering } from '../../src/anim/motion/v4/drivetrainSuggestions';

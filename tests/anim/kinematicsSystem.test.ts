@@ -23,19 +23,19 @@ function ring(seed: number): { joints: JointSpec[]; equations: Equation[]; bodie
   const rnd = random(seed), v = (): V3 => [rnd() * 40 - 20, rnd() * 40 - 20, rnd() * 40 - 20];
   const unit = (): V3 => { const a = v(), l = Math.hypot(...a); return a.map(x => x / l) as V3; };
   // Rotate the kinds with the seed so a different kind ends up as the cut joint.
-  const base: JointSpec['kind'][] = ['revolute', 'universal', 'spherical', 'cylindrical', 'planar', 'prismatic', 'revolute'];
+  const base: JointSpec['kind'][] = ['revolute', 'universal', 'spherical', 'cylindrical', 'free', 'planar', 'prismatic', 'revolute'];
   const kinds = base.map((_, i) => base[(i + seed) % base.length]);
-  const bodies = ['b1', 'b2', 'b3', 'b4', 'b5', 'b6'];
+  const last = kinds.length - 1, bodies = kinds.slice(1).map((_, i) => `b${i + 1}`);
   const joints = kinds.map((kind, i): JointSpec => {
     const a = unit(), t = unit();
     const c: V3 = [a[1] * t[2] - a[2] * t[1], a[2] * t[0] - a[0] * t[2], a[0] * t[1] - a[1] * t[0]], l = Math.hypot(...c);
     const axis2 = kind === 'universal' ? c.map(x => x / l) as V3 : undefined;
-    // j0..j5 chain ground -> b1 -> ... -> b6; j6 closes b6 back to ground.
-    const parent = i === 0 || i === 6 ? null : `b${i}`, child = i === 6 ? 'b6' : `b${i + 1}`;
+    // j0.. chain ground -> b1 -> ... -> b(last); the last joint closes it back to ground.
+    const parent = i === 0 || i === last ? null : `b${i}`, child = i === last ? `b${last}` : `b${i + 1}`;
     return { id: `j${i}`, parent, child, kind, point: v(), axis: a, axis2 };
   });
   const equations: Equation[] = [
-    { kind: 'distance', id: 'rod', a: 'b2', pa: v(), b: 'b5', pb: v(), length: 0 },
+    { kind: 'distance', id: 'rod', a: 'b2', pa: v(), b: 'b5', pb: v(), length: 3 },
     { kind: 'point', id: 'pin', a: 'b3', b: 'b4', point: v() },
     { kind: 'rolling', id: 'rack', carrier: 'b1', frame: 'b4', point: v(), along: unit(), coord: `j${kinds.indexOf('prismatic')}`, ratio: 3 },
   ];

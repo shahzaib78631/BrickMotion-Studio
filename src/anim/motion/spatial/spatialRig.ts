@@ -4,7 +4,7 @@
  * Explicit member mapping allows custom hinges when LDCad metadata is absent.
  */
 import type { Assembly } from '../../../model/assemble';
-import { SpatialMechanismSolver, validateSpatialModel, type SpatialModel } from './spatialConstraints';
+import { SpatialMechanismSolver, validateSpatialModel, type SpatialModel } from '../kinematics/spatialModel';
 import type { SpatialLinkagePreview } from './spatialAdapter';
 
 export const SPATIAL_RIG_FORMAT='brickmotion-v7-mechanics-rig';

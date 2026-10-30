@@ -4,7 +4,7 @@
  */
 import type {GeometryCandidate} from './geometryScreen';
 import type {SpatialLinkagePreview} from './spatialAdapter';
-import type {Q4,SpatialMechanic,V3} from './spatialConstraints';
+import type {Q4,SpatialMechanic,V3} from '../kinematics/spatialModel';
 
 const rotate=(q:Q4,v:V3):V3=>{
   const [x,y,z,w]=q,[vx,vy,vz]=v;
