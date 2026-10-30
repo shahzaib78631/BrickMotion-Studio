@@ -36,17 +36,19 @@ export type JointSpec = {
 };
 /** Equations that never form part of the tree (closures between bodies). */
 export type Equation =
-  | { kind: 'point'; id: string; a: string | null; b: string | null; point: V3 }
+  /** Point `point` on a meets point `pb` (default the same) on b; an authored gap stays as residual. */
+  | { kind: 'point'; id: string; a: string | null; b: string | null; point: V3; pb?: V3; tolerance?: number }
   | { kind: 'distance'; id: string; a: string | null; pa: V3; b: string | null; pb: V3; length: number }
   /**
    * A point fixed on `carrier` (rest-world `point`), seen from `frame`'s own
    * rest frame, moves by -along . offset = ratio * coord (a rack rolling on
    * a pinion whose rack can also swing).
    */
-  | { kind: 'rolling'; id: string; carrier: string | null; frame: string; point: V3; along: V3; coord: Coord; ratio: number };
+  | { kind: 'rolling'; id: string; carrier: string | null; frame: string | null; point: V3; along: V3; coord: Coord; ratio: number; tolerance?: number };
 /** A scalar coordinate: 'joint' (its first) or 'joint:k'. */
 export type Coord = string;
-export type Row = { id: string; value: number; grad: Float64Array };
+/** `tolerance`: largest residual norm (over all rows of the same id) kept when the solve stalls (authored gaps). */
+export type Row = { id: string; value: number; grad: Float64Array; tolerance?: number };
 export type State = { readonly q: Float64Array; readonly rot: ReadonlyMap<string, M3> };
 
 const DOF: Record<JointKind, number> = { revolute: 1, prismatic: 1, cylindrical: 2, universal: 2, spherical: 3, planar: 3, fixed: 0 };
@@ -242,11 +244,11 @@ export class KinematicSystem {
     }
     for (const e of this.equations) {
       if (e.kind === 'point') {
-        const ya = apply(D.get(e.a)!, e.point), yb = apply(D.get(e.b)!, e.point), d = sub(yb, ya);
+        const ya = apply(D.get(e.a)!, e.point), yb = apply(D.get(e.b)!, e.pb ?? e.point), d = sub(yb, ya);
         const grads = [g(), g(), g()];
         for (const c of anc.get(e.b)!) { const u = velocity(c, yb); for (let i = 0; i < 3; i++) grads[i][c.k] += u[i]; }
         for (const c of anc.get(e.a)!) { const u = velocity(c, ya); for (let i = 0; i < 3; i++) grads[i][c.k] -= u[i]; }
-        for (let i = 0; i < 3; i++) rows.push({ id: e.id, value: d[i], grad: grads[i] });
+        for (let i = 0; i < 3; i++) rows.push({ id: e.id, value: d[i], grad: grads[i], tolerance: e.tolerance });
       } else if (e.kind === 'distance') {
         const ya = apply(D.get(e.a)!, e.pa), yb = apply(D.get(e.b)!, e.pb), d = sub(ya, yb), L = Math.hypot(...d);
         const u = L > 1e-12 ? scale(d, 1 / L) : [0, 0, 0] as V3, grad = g();
@@ -260,7 +262,7 @@ export class KinematicSystem {
         for (const c of anc.get(e.carrier)!) grad[c.k] -= dot(along, mulMtV(Df.R, velocity(c, y)));
         for (const c of anc.get(e.frame)!) grad[c.k] += dot(along, mulMtV(Df.R, velocity(c, y)));
         grad[ci] -= e.ratio;
-        rows.push({ id: e.id, value: -dot(along, sub(z, e.point)) - e.ratio * s.q[ci], grad });
+        rows.push({ id: e.id, value: -dot(along, sub(z, e.point)) - e.ratio * s.q[ci], grad, tolerance: e.tolerance });
       }
     }
     D.delete(null);

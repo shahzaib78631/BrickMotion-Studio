@@ -1,21 +1,33 @@
 /** Phase 4: deterministic hierarchical FK, gear ratios, and closed-chain IK.
  * Unsupported or inconsistent constraints fail closed. No geometry-only guess
  * is promoted to an authoritative joint or gear engagement.
+ *
+ * The numerics run on the unified kinematic solver (kinematics/): joints are
+ * coordinates, closures and rack contacts are equations with analytic
+ * Jacobians, gears and transmissions are laws, stops are an active set, and
+ * the driver move is continued on one branch. This class keeps the program
+ * validation, the engagement checks and the error messages.
  */
 import * as THREE from 'three';
 import type { Assembly } from '../../../model/assemble';
 import type { JointLimitRule } from './jointLimits';
 import type { MechanismProgram, JointDrive, Vec3 } from './mechanismProgram';
 import { validateMechanismProgram } from './mechanismProgram';
-import { prepareTransmissionEquations, intoRootEquation, projectLimitedNetwork,
+import { prepareTransmissionEquations, intoRootEquation, projectLinearConstraints,
   type LinearEquation } from './transmissionNetwork';
+import { KinematicSystem, type Equation, type State } from '../kinematics/system';
+import { solve as solveKinematics } from '../kinematics/solve';
+import type { Inequality, Law } from '../kinematics/laws';
+import type { Frame } from '../kinematics/rigid';
+import { UNIT as LDU_PER_RAD } from '../mobility/screw';
 
 const UNIT = (v: Vec3) => new THREE.Vector3(...v).normalize();
-const EPS = 1e-8;
 const at = (p: Vec3) => new THREE.Matrix4().makeTranslation(...p);
-const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 const finiteMatrix = (m: THREE.Matrix4) => m.elements.every(Number.isFinite);
 const localPoint = (m: THREE.Matrix4, p: Vec3) => new THREE.Vector3(...p).applyMatrix4(m);
+/** Column-major, as three.js stores it. */
+const toMatrix = (f: Frame) => new THREE.Matrix4().fromArray([
+  f.R[0], f.R[3], f.R[6], 0, f.R[1], f.R[4], f.R[7], 0, f.R[2], f.R[5], f.R[8], 0, f.p[0], f.p[1], f.p[2], 1]);
 export const LDU_METRES = 0.0004;
 
 export type SolvedFrame = {
@@ -47,11 +59,16 @@ export class MechanismSolver {
   private readonly bounds: ReadonlyMap<string, { min: number; max: number }>;
   private readonly rootBounds: ReadonlyMap<string, { min: number; max: number }>;
   private readonly jointsById = new Map<string, JointDrive>();
-  private previousRoots = new Map<string, number>();
+  private readonly system: KinematicSystem;
+  private readonly gearLaws: Law[] = [];
+  private readonly stops: Inequality[] = [];
+  private readonly tolerance: number;
+  /** Last accepted pose: the continuation start of the next solve. */
+  private state: State;
   /** Rack contacts in each rack's own assembled frame. */
   private readonly contacts: {
     id: string; pinion: JointDrive; rack: string; sign: number; radius: number;
-    world: THREE.Vector3; local: THREE.Vector3; along: THREE.Vector3; normal: THREE.Vector3;
+    world: THREE.Vector3; local: THREE.Vector3; along: THREE.Vector3; normal: THREE.Vector3; direction: THREE.Vector3;
     travel: { min: number; max: number }; tolerance: number; engagement: number;
   }[] = [];
 
@@ -88,7 +105,7 @@ export class MechanismSolver {
       const direction = UNIT(c.direction);
       if (Math.abs(direction.dot(axis)) > .05) throw Error(`Rack contact ${c.id}: rack does not run across the pinion shaft`);
       const toLocal = rack.clone().invert(), turn = new THREE.Matrix3().setFromMatrix4(toLocal);
-      this.contacts.push({ id: c.id, pinion, rack: c.rack, sign: c.reversed ? -1 : 1, radius: c.pitchRadiusLdu, world,
+      this.contacts.push({ id: c.id, pinion, rack: c.rack, sign: c.reversed ? -1 : 1, radius: c.pitchRadiusLdu, world, direction: direction.clone(),
         local: world.clone().applyMatrix4(toLocal),
         along: direction.clone().applyMatrix3(turn).normalize(),
         normal: out.normalize().negate().applyMatrix3(turn).normalize(),
@@ -114,6 +131,9 @@ export class MechanismSolver {
       const orientation=Math.sign(aa.dot(bb));
       const ratio=(g.mesh==='external'?-1:1)*g.teethA/g.teethB*orientation;
       neighbours.get(g.a)!.push({to:g.b,factor:ratio});
+      this.gearLaws.push({ id: `gear:${g.a}/${g.b}`, coords: [g.a, g.b],
+        f: x => [LDU_PER_RAD * (x[1] - ratio * x[0]) / Math.max(1, Math.abs(ratio))],
+        grad: () => [[-LDU_PER_RAD * ratio / Math.max(1, Math.abs(ratio)), LDU_PER_RAD / Math.max(1, Math.abs(ratio))]] });
       neighbours.get(g.b)!.push({to:g.a,factor:1/ratio});
     }
     const factors=new Map<string,RootRatio>();
@@ -158,38 +178,53 @@ export class MechanismSolver {
     this.rootBounds=rootBounds;
     // Also validate the dimensionality of every V5 relation at construction time.
     prepareTransmissionEquations(program.transmissions??[],this.jointsById);
-    // The zero-reference must physically close before any motion can start.
-    const assembled=this.evaluateRoots(new Map(this.roots.map(r=>[r,0])));
     for(const [i,c] of (program.closures??[]).entries()) {
       const a=this.rest.get(c.a.body),b=this.rest.get(c.b.body);
       if(!a||!b)throw Error(`Closure ${i+1} refers to unknown body`);
       const sep=localPoint(a,c.a.local).distanceTo(localPoint(b,c.b.local));
       if(sep>(c.toleranceLdu??.1))throw Error(`Closure ${i+1} is not closed in the authored assembled pose (${sep.toFixed(3)} LDU)`);
     }
+    // The unified solver's model. A joint parent that is not itself a joint
+    // body is static; closures and racks on rigid followers move with the leader.
+    const moving=new Set(program.joints.map(j=>j.body));
+    const leader=new Map<string,string>();
+    for(const group of program.rigidFollowers??[])for(const b of group.bodies)if(!moving.has(b))leader.set(b,group.leader);
+    const owner=(b:string):string|null=>{const l=leader.get(b)??b;return moving.has(l)?l:null;};
+    const v3=(v:THREE.Vector3)=>v.toArray() as Vec3;
+    const equations:Equation[]=[
+      ...(program.closures??[]).map((c,i):Equation=>({kind:'point',id:`closure:${i}`,a:owner(c.a.body),b:owner(c.b.body),
+        point:v3(localPoint(this.rest.get(c.a.body)!,c.a.local)),pb:v3(localPoint(this.rest.get(c.b.body)!,c.b.local)),
+        tolerance:c.toleranceLdu??.1})),
+      ...this.contacts.map((c):Equation=>({kind:'rolling',id:`rack:${c.id}`,carrier:c.pinion.parent?owner(c.pinion.parent):null,
+        frame:owner(c.rack),point:v3(c.world),along:v3(c.direction),coord:c.pinion.id,ratio:c.sign*c.radius,tolerance:c.tolerance})),
+    ];
+    this.system=new KinematicSystem({bodies:[...moving],equations,joints:program.joints.map(j=>({
+      id:j.id,parent:j.parent&&moving.has(j.parent)?j.parent:null,child:j.body,kind:j.kind,point:j.pivot??[0,0,0],axis:j.axis}))});
+    for(const j of program.joints){
+      const b=bounds.get(j.id)!;
+      if(Number.isFinite(b.min)||Number.isFinite(b.max))
+        this.stops.push({id:`stop:${j.id}`,coords:[j.id],a:[1],lo:b.min,hi:b.max,scale:j.kind==='revolute'?LDU_PER_RAD:1});
+    }
+    this.tolerance=Math.min(.1,...(program.closures??[]).map(c=>c.toleranceLdu??.1),...this.contacts.map(c=>c.tolerance));
+    this.state=this.system.zeroState();
+    const assembled=this.frameOf(this.state);
     if(!Number.isFinite(assembled.maxClosureErrorLdu))throw Error('Invalid assembly closure');
   }
 
-  /** A frame is regenerated from immutable rest transforms, not accumulated
-   * incremental matrices, so looping doesn't introduce mechanical drift. */
-  private evaluateRoots(rootValues: ReadonlyMap<string, number>): SolvedFrame {
-    const q = new Map<string,number>();
-    for(const [id,{root,ratio}]of this.factors) {
-      const value=(rootValues.get(root)??0)*ratio;
-      const bound=this.bounds.get(id)!;
-      if (!Number.isFinite(value)||value<bound.min-1e-6||value>bound.max+1e-6)
-        throw Error(`Joint stop exceeded: ${id} (${value.toFixed(4)})`);
-      q.set(id,value);
+  /** Poses of every animated body from a solved state. Regenerated from the
+   * immutable rest transforms, so looping never accumulates drift. */
+  private frameOf(state: State): SolvedFrame {
+    const D=this.system.deltas(state);
+    const q=new Map<string,number>();
+    for(const j of this.order){
+      const value=this.system.value(state,j.id),bound=this.bounds.get(j.id)!;
+      if(!Number.isFinite(value)||value<bound.min-1e-6||value>bound.max+1e-6)
+        throw Error(`Joint stop exceeded: ${j.id} (${value.toFixed(4)})`);
+      q.set(j.id,value);
     }
     const poses=new Map<string,THREE.Matrix4>();
-    for(const j of this.order) {
-      const parentRest=j.parent?this.rest.get(j.parent)!:null;
-      const parentWorld=j.parent?(poses.get(j.parent)??parentRest!):null;
-      const deltaParent=parentWorld?parentWorld.clone().multiply(parentRest!.clone().invert()):new THREE.Matrix4();
-      const amount=q.get(j.id)!;
-      const action=j.kind==='revolute'
-        ? at(j.pivot!).multiply(new THREE.Matrix4().makeRotationAxis(UNIT(j.axis),amount)).multiply(at(j.pivot!).invert())
-        : new THREE.Matrix4().makeTranslation(...(UNIT(j.axis).multiplyScalar(amount).toArray() as Vec3));
-      const next=deltaParent.multiply(action).multiply(this.rest.get(j.body)!);
+    for(const j of this.order){
+      const next=toMatrix(D.get(j.body)!).multiply(this.rest.get(j.body)!);
       if(!finiteMatrix(next))throw Error(`Invalid kinematic pose: ${j.body} (${JSON.stringify(next.elements)})`);
       poses.set(j.body,next);
     }
@@ -264,95 +299,51 @@ export class MechanismSolver {
     if (state.length) frame.rackContactErrorsLdu = state.map(x => Math.abs(x.rolling));
     return frame;
   }
-  private residual(roots: ReadonlyMap<string,number>): number[] {
-    const frame=this.evaluateRoots(roots),error:number[]=[];
-    for(const x of this.contactState(frame))error.push(x.rolling);
-    for(const c of this.program.closures??[]) {
-      const a=frame.poses.get(c.a.body)??this.rest.get(c.a.body)!;
-      const b=frame.poses.get(c.b.body)??this.rest.get(c.b.body)!;
-      const diff=localPoint(a,c.a.local).sub(localPoint(b,c.b.local));
-      error.push(diff.x,diff.y,diff.z);
+  /** Joint values from a root seed (gear groups share a root). */
+  private seeded(seed: ReadonlyMap<string,number>): State {
+    const q=Float64Array.from(this.system.zeroState().q);
+    for(const [id,{root,ratio}] of this.factors)q[this.system.coordIndex(id)]=(seed.get(root)??0)*ratio;
+    return {q,rot:new Map()};
+  }
+  /** Drive the unified solver; failures keep the last accepted pose. */
+  private run(drivers: ReadonlyMap<string,number>, laws: readonly Law[], seed: ReadonlyMap<string,number>|undefined,
+    label: string, stopMessage: string): SolvedFrame {
+    const from=seed?this.seeded(seed):this.state;
+    const result=solveKinematics(this.system,from,drivers,{laws,inequalities:this.stops,tolerance:this.tolerance});
+    if(result.status!=='converged'){
+      if(/joint stop/.test(result.reason??''))throw Error(stopMessage);
+      // Name the closure or rack that fails just past the last good pose.
+      this.assertClosed(this.frameOf(result.state),label);
+      throw Error(`${label}; ${result.reason}`);
     }
-    return error;
+    const frame=this.assertClosed(this.frameOf(result.state),label);
+    this.state=result.state;
+    return frame;
   }
-  private withinLimits(roots: ReadonlyMap<string,number>): boolean {
-    for (const [id,{root,ratio}]of this.factors){const q=(roots.get(root)??0)*ratio,lim=this.bounds.get(id)!;
-      if(q<lim.min-1e-8||q>lim.max+1e-8)return false;}
-    return true;
-  }
-  private solveNormal(matrix: number[][],rhs:number[]):number[]|null {
-    const n=rhs.length;
-    const a=matrix.map((row,i)=>[...row,rhs[i]]);
-    for(let col=0;col<n;col++){
-      let pivot=col;
-      for(let row=col+1;row<n;row++)if(Math.abs(a[row][col])>Math.abs(a[pivot][col]))pivot=row;
-      if(Math.abs(a[pivot][col])<1e-15)return null;
-      [a[pivot],a[col]]=[a[col],a[pivot]];
-      const v=a[col][col];for(let j=col;j<=n;j++)a[col][j]/=v;
-      for(let row=0;row<n;row++)if(row!==col){const f=a[row][col];for(let j=col;j<=n;j++)a[row][j]-=f*a[col][j];}
-    }
-    return a.map(row=>row[n]);
-  }
+
   /** Continuation from the preceding solved pose prevents arbitrary IK branch
    * flips. A failure reports unreachable rather than jumping through geometry. */
   solve(driverPosition:number, seed?: ReadonlyMap<string,number>): SolvedFrame {
     if(!Number.isFinite(driverPosition))throw Error('Nonfinite mechanism input');
     if(this.program.transmissions?.length)
       return this.solveInputs({[this.driver]:driverPosition},{seed});
-    const roots=new Map(this.roots.map(r=>[r,seed?.get(r)??this.previousRoots.get(r)??0]));
-    roots.set(this.driver,driverPosition);
-    if(!this.withinLimits(roots))throw Error('The requested driver position violates a physical joint stop');
-    const constraints=this.program.closures??[];
-    if(constraints.length||this.contacts.length) {
-      let err=this.residual(roots);
-      let norm=Math.hypot(...err);
-      const tolerance=Math.min(...constraints.map(c=>c.toleranceLdu??.1),...this.contacts.map(c=>c.tolerance));
-      for(let iteration=0;norm>tolerance*1e-3&&iteration<48;iteration++) {
-        const free=this.freeRoots;
-        if(!free.length)break;
-        const jac=free.map(id=>{
-          const h=Math.max(1e-5,Math.abs(roots.get(id)??0)*1e-5);
-          const perturbed=new Map(roots);perturbed.set(id,(roots.get(id)??0)+h);
-          if(!this.withinLimits(perturbed)){perturbed.set(id,(roots.get(id)??0)-h);}
-          const signedH=(perturbed.get(id)??0)-(roots.get(id)??0);
-          if(!signedH||!this.withinLimits(perturbed))return err.map(()=>0);
-          try{return this.residual(perturbed).map((e,i)=>(e-err[i])/signedH);}
-          catch{return err.map(()=>0);}
-        });
-        const lambda=.005;
-        const M=free.map((_,i)=>free.map((__,j)=>jac[i].reduce((s,v,k)=>s+v*jac[j][k],0)+(i===j?lambda*lambda:0)));
-        const rhs=jac.map(column=>-column.reduce((s,v,k)=>s+v*err[k],0));
-        const delta=this.solveNormal(M,rhs);
-        if(!delta)break;
-        let accepted=false;
-        for(const alpha of [1,.5,.25,.125,.0625,.03125]){
-          const cand=new Map(roots);
-          free.forEach((id,i)=>cand.set(id,(roots.get(id)??0)+clamp(delta[i]*alpha,-.35,.35)));
-          if(!this.withinLimits(cand))continue;
-          try{
-            const residual=this.residual(cand),newNorm=Math.hypot(...residual);
-            if(newNorm<norm-1e-9){roots.clear();for(const [id,v] of cand)roots.set(id,v);err=residual;norm=newNorm;accepted=true;break;}
-          }catch{/* excluded by physical joint limits or invalid transform */}
-        }
-        if(!accepted)break;
-      }
-      this.assertClosed(this.evaluateRoots(roots),`Unreachable closed linkage at ${driverPosition.toFixed(4)}`);
+    for(const [id,{root,ratio}] of this.factors)if(root===this.driver){
+      const v=driverPosition*ratio,b=this.bounds.get(id)!;
+      if(v<b.min-1e-8||v>b.max+1e-8)throw Error('The requested driver position violates a physical joint stop');
     }
-    const solved=this.evaluateRoots(roots);
-    if(this.contacts.length)this.assertClosed(solved,`Rack contact failed at ${driverPosition.toFixed(4)}`);
-    this.previousRoots=roots;
-    return solved;
+    const label=this.program.closures?.length?`Unreachable closed linkage at ${driverPosition.toFixed(4)}`:`Rack contact failed at ${driverPosition.toFixed(4)}`;
+    return this.run(new Map([[this.driver,driverPosition]]),this.gearLaws,seed,label,'The requested driver position violates a physical joint stop');
   }
 
   /** V5: solve multiple independent motor inputs against ideal gear, belt,
    * chain, worm, rack, screw, differential and engaged-clutch constraints.
    * This is a minimum-change kinematic solution, NOT a dynamic force solver.
    * Controls are named JOINT coordinates (radians or LDU). Omitted joints
-   * inherit the nearest feasible value from the previous solved frame.
+   * keep their previous value as far as the constraints allow.
    *
-   * All algebraic constraints are projected exactly before evaluating FK;
-   * when the result is impossible, throws rather than silently slipping.
-   * Overrides allow gear selectors/clutches to change state at runtime.
+   * Contradictory commands are rejected by exact linear algebra first; an
+   * impossible pose throws rather than silently slipping. Overrides allow
+   * gear selectors/clutches to change state at runtime.
    */
   solveInputs(
     controls: Readonly<Record<string,number>> | ReadonlyMap<string,number>,
@@ -361,78 +352,31 @@ export class MechanismSolver {
     const inputs=new Map(controls instanceof Map ? controls : Object.entries(controls));
     if (!inputs.size) throw Error('At least one independent motor input is required');
     if(inputs.size>this.roots.length)throw Error('Too many independently driven joints');
-    const algebra=prepareTransmissionEquations(this.program.transmissions??[],this.jointsById,options.engagements)
-      .map(e=>intoRootEquation(e,this.factors));
+    const engaged=prepareTransmissionEquations(this.program.transmissions??[],this.jointsById,options.engagements);
+    const algebra=engaged.map(e=>intoRootEquation(e,this.factors));
     for(const [id,value] of [...inputs].sort(([a],[b])=>a.localeCompare(b))){
       const factor=this.factors.get(id);
       if(!factor || !Number.isFinite(value))throw Error(`Invalid motor input ${id}`);
       algebra.push({id:`drive:${id}`,coefficients:new Map([[factor.root,factor.ratio]]),rhs:value});
     }
-    const project=(guess:ReadonlyMap<string,number>)=>
-      projectLimitedNetwork(this.roots,algebra,guess,this.rootBounds);
-    const initial=new Map(this.roots.map(id=>[id,options.seed?.get(id)??this.previousRoots.get(id)??0]));
-    let projected=project(initial);
-    const roots=projected.roots;
-    const closures=this.program.closures??[];
-    if(closures.length||this.contacts.length){
-      let error=this.residual(roots);
-      let norm=Math.hypot(...error);
-      const tolerance=Math.min(...closures.map(c=>c.toleranceLdu??.1),...this.contacts.map(c=>c.tolerance));
-      // The algebraic manifold is projected into after every IK perturbation.
-      // This prevents a closure correction from breaking a transmission ratio.
-      const controlled=new Set([...inputs.keys()].map(id=>this.factors.get(id)!.root));
-      const free=this.roots.filter(id=>!controlled.has(id));
-      for(let iteration=0;norm>tolerance*1e-3&&iteration<48;iteration++){
-        if(!free.length)break;
-        const jac=free.map(id=>{
-          const h=Math.max(1e-5,Math.abs(roots.get(id)??0)*1e-5);
-          const perturb=new Map(roots);perturb.set(id,(perturb.get(id)??0)+h);
-          try{
-            const feasible=project(perturb).roots;
-            const movement=Math.hypot(...this.roots.map(root=>(feasible.get(root)??0)-(roots.get(root)??0)));
-            if(movement<1e-9)return error.map(()=>0);
-            return this.residual(feasible).map((x,i)=>(x-error[i])/h);
-          }catch{return error.map(()=>0);}
-        });
-        const lambda=.005;
-        const M=free.map((_,i)=>free.map((__,j)=>jac[i].reduce((sum,v,k)=>sum+v*jac[j][k],0)+(i===j?lambda*lambda:0)));
-        const rhs=jac.map(column=>-column.reduce((sum,v,k)=>sum+v*error[k],0));
-        const delta=this.solveNormal(M,rhs);
-        if(!delta)break;
-        let accepted=false;
-        for(const alpha of [1,.5,.25,.125,.0625,.03125]){
-          const candidate=new Map(roots);
-          free.forEach((id,i)=>candidate.set(id,(roots.get(id)??0)+clamp(delta[i]*alpha,-.35,.35)));
-          try{
-            const feasible=project(candidate).roots;
-            const nextError=this.residual(feasible),nextNorm=Math.hypot(...nextError);
-            if(nextNorm<norm-1e-9){
-              roots.clear();for(const [id,v]of feasible)roots.set(id,v);
-              error=nextError;norm=nextNorm;accepted=true;break;
-            }
-          }catch{/* infeasible joint stop or closure */}
-        }
-        if(!accepted)break;
-      }
-      this.assertClosed(this.evaluateRoots(roots),'Unreachable V5 closed mechanism');
-    }
-    projected=project(roots);
-    const frame=this.evaluateRoots(projected.roots);
-    if(this.contacts.length)this.assertClosed(frame,'Rack contact failed');
-    // Recompute residual strictly in joint space and include exact drive equations.
-    const equations: LinearEquation[]=algebra;
+    // Exact algebra first: contradictory commands fail by name, not by residual.
+    projectLinearConstraints(this.roots,algebra,new Map());
+    const laws=[...this.gearLaws,...engaged.map((e):Law=>{
+      const ids=[...e.coefficients.keys()],k=ids.map(id=>e.coefficients.get(id)!),s=LDU_PER_RAD/Math.max(1,Math.hypot(...k));
+      return {id:`transmission:${e.id}`,coords:ids,f:x=>[s*(x.reduce((t,v,i)=>t+k[i]*v,0)-e.rhs)],grad:()=>[k.map(v=>s*v)]};
+    })];
+    const frame=this.run(inputs,laws,options.seed,'Unreachable V5 closed mechanism','Transmission motion exceeds a physical joint stop');
+    const equations: LinearEquation[]=[...engaged,...[...inputs].map(([id,value])=>({id:`drive:${id}`,coefficients:new Map([[id,1]]),rhs:value}))];
     const maxResidual=equations.reduce((max,e)=>{
       let gap=-e.rhs;
-      for(const [id,f] of e.coefficients)gap+=f*(projected.roots.get(id)??0);
+      for(const [id,f] of e.coefficients)gap+=f*(frame.joints.get(id)??0);
       return Math.max(max,Math.abs(gap)/Math.max(1,Math.hypot(...e.coefficients.values())));
     },0);
     if(maxResidual>1e-6)throw Error('Transmission residual exceeds tolerance');
-    this.previousRoots=new Map(projected.roots);
-    return {...frame,transmissionResidual:maxResidual,
-      activeTransmissions:algebra.filter(e=>!e.id.startsWith('drive:')).length};
+    return {...frame,transmissionResidual:maxResidual,activeTransmissions:engaged.length};
   }
 
-  reset(){this.previousRoots.clear();}
+  reset(){this.state=this.system.zeroState();}
   /** Exact assembled frame is returned for q=0; also resets IK continuation. */
   assembled():SolvedFrame{this.reset();return this.solve(0);}
 }

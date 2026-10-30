@@ -52,10 +52,13 @@ export type SolveResult = {
 };
 
 const MAX_STEP = 10; // weighted: 10 LDU or 0.5 rad per substep
+/** Weight of rows with their own tolerance (authored gaps): minimised inside the exact rows, never against them. */
+const SOFT = 1e-4;
 const SINGULAR = 1e-4;
 
 type Active = { ineq: Inequality; bound: number };
-type Built = { ids: string[]; r: Float64Array; J: Float64Array[] };
+/** r and J are weighted; w is each row's weight, tol its allowance (unweighted). */
+type Built = { ids: string[]; r: Float64Array; J: Float64Array[]; tol: Float64Array; w: Float64Array };
 
 export function solve(sys: KinematicSystem, from: State, drivers: Drivers, opts: SolveOptions = {}): SolveResult {
   const n = sys.coords.length;
@@ -74,8 +77,11 @@ export function solve(sys: KinematicSystem, from: State, drivers: Drivers, opts:
   const ineqValue = (s: State, x: (typeof ineqs)[number]) => x.idx.reduce((t, i, k) => t + x.q.a[k] * s.q[i], 0);
 
   function build(s: State, t: number, active: readonly Active[]): Built {
-    const ids: string[] = [], r: number[] = [], J: Float64Array[] = [];
-    for (const row of sys.constraints(s).rows) { ids.push(row.id); r.push(row.value); J.push(row.grad); }
+    const ids: string[] = [], r: number[] = [], J: Float64Array[] = [], tol: number[] = [], w: number[] = [];
+    for (const row of sys.constraints(s).rows) {
+      const k = row.tolerance === undefined ? 1 : SOFT;
+      ids.push(row.id); r.push(k * row.value); J.push(k === 1 ? row.grad : row.grad.map(v => v * k)); tol[r.length - 1] = row.tolerance ?? tolerance; w[r.length - 1] = k;
+    }
     for (const { law, idx } of laws) {
       const { values, grad } = evaluateLaw(law, idx.map(i => s.q[i]));
       values.forEach((v, k) => { const g = new Float64Array(n); idx.forEach((i, j) => { g[i] += grad[k][j]; }); ids.push(law.id); r.push(v); J.push(g); });
@@ -89,7 +95,7 @@ export function solve(sys: KinematicSystem, from: State, drivers: Drivers, opts:
       x.idx.forEach((i, k) => { g[i] += a.ineq.scale * a.ineq.a[k]; });
       ids.push(a.ineq.id); r.push(a.ineq.scale * (ineqValue(s, x) - a.bound)); J.push(g);
     }
-    return { ids, r: Float64Array.from(r), J };
+    return { ids, r: Float64Array.from(r), J, tol: Float64Array.from(r, (_, i) => tol[i] ?? tolerance), w: Float64Array.from(r, (_, i) => w[i] ?? 1) };
   }
   const weighted = (J: readonly Float64Array[]) => J.map(row => Float64Array.from(row, (v, k) => v / W[k]));
   const normal = (Jz: readonly Float64Array[]) => {
@@ -97,13 +103,21 @@ export function solve(sys: KinematicSystem, from: State, drivers: Drivers, opts:
     for (const row of Jz) for (let i = 0; i < n; i++) { const ri = row[i]; if (ri === 0) continue; for (let j = 0; j < n; j++) A[i][j] += ri * row[j]; }
     return A;
   };
+  /** Each constraint's residual norm (all its rows) within its own allowance. */
+  const withinTolerance = (b: Built) => {
+    const norms = new Map<string, { v: number; tol: number }>();
+    b.ids.forEach((id, i) => { const e = norms.get(id) ?? { v: 0, tol: b.tol[i] }; e.v = Math.hypot(e.v, b.r[i] / b.w[i]); norms.set(id, e); });
+    return [...norms.values()].every(e => e.v <= e.tol);
+  };
   const maxAbs = (r: Float64Array) => r.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
   const sq = (r: Float64Array) => r.reduce((m, v) => m + v * v, 0);
 
   /** Singular values (descending) of the weighted Jacobian. */
   function singular(b: Built): number[] {
     if (!n) return [];
-    return symmetricEigen(normal(weighted(b.J)).map(r => [...r])).values.map(v => Math.sqrt(Math.max(0, v))).reverse();
+    // Unweighted rows: a soft row is still a constraint for rank and conditioning.
+    const rows = b.J.map((row, i) => (b.w[i] === 1 ? row : row.map(v => v / b.w[i])));
+    return symmetricEigen(normal(weighted(rows)).map(r => [...r])).values.map(v => Math.sqrt(Math.max(0, v))).reverse();
   }
   const rankOf = (sv: number[]) => sv.filter(v => v > 1e-7 * Math.max(sv[0] ?? 0, 1e-12)).length;
   const r0 = rankOf(singular(build(from, 0, [])));
@@ -117,11 +131,11 @@ export function solve(sys: KinematicSystem, from: State, drivers: Drivers, opts:
   function correct(start: State, t: number, active: readonly Active[]) {
     let s = start, b = build(s, t, active), cost = sq(b.r), mu = -1;
     for (let it = 0; it < maxIter; it++) {
-      if (maxAbs(b.r) < 1e-10) return { ok: true, s, b };
+      if (maxAbs(b.r) < 1e-10 * SOFT) return { ok: true, s, b };
       iterations++;
       const Jz = weighted(b.J), A = normal(Jz), g = new Float64Array(n);
       Jz.forEach((row, i) => { for (let k = 0; k < n; k++) g[k] += row[k] * b.r[i]; });
-      if (mu < 0) mu = 1e-9 * Math.max(1e-12, ...A.map((row, i) => row[i]));
+      if (mu < 0) mu = 1e-12 * Math.max(1e-12, ...A.map((row, i) => row[i]));
       let accepted = false;
       for (let tries = 0; tries < 12 && !accepted; tries++) {
         const z = cholesky(A, g, mu);
@@ -133,7 +147,7 @@ export function solve(sys: KinematicSystem, from: State, drivers: Drivers, opts:
       }
       if (!accepted) break;
     }
-    return { ok: maxAbs(b.r) <= tolerance, s, b };
+    return { ok: withinTolerance(b), s, b };
   }
 
   /** One substep with the active set. */
@@ -187,7 +201,7 @@ export function solve(sys: KinematicSystem, from: State, drivers: Drivers, opts:
 
   const final = leg.ok ? leg.b : build(leg.s, 0, []);
   const residuals = new Map<string, number>();
-  final.ids.forEach((id, i) => residuals.set(id, Math.hypot(residuals.get(id) ?? 0, final.r[i])));
+  final.ids.forEach((id, i) => residuals.set(id, Math.hypot(residuals.get(id) ?? 0, final.r[i] / final.w[i])));
   const geometry = [...residuals].filter(([id]) => !id.startsWith('drive:'));
   const sv = singular(final);
   const result: SolveResult = {
