@@ -48,6 +48,35 @@ export type LoopClosure = {
   /** Solver tolerance in LDU. Not a claim about manufactured tolerance. */
   toleranceLdu?: number;
 };
+/**
+ * A rack on a link that can also swing (a steering tie rod between two arms)
+ * rolling on a pinion. Exact for any rack pose: the rack's travel along its
+ * own length, measured where the fixed pitch-circle contact falls in the
+ * rack's frame, equals pitch radius x pinion angle. The linear 'rack-pinion'
+ * transmission only holds when the rack slides on a straight guide.
+ * Reference: Kinebrick treats a rack on a four-bar coupler the same way.
+ */
+export type RackContact = {
+  id: string;
+  /** Revolute joint of the pinion (its axis is the positive turn). */
+  pinion: string;
+  /** Body the rack teeth belong to. */
+  rack: string;
+  /** World contact point at the assembled pose: on the pinion's pitch circle and the rack's pitch line. */
+  contact: Vec3;
+  /** World direction of the rack's length at the assembled pose. */
+  direction: Vec3;
+  pitchRadiusLdu: number;
+  /** Rack moves toward -direction when the pinion turns positively. */
+  reversed?: boolean;
+  /** Allowed rack travel (LDU, along direction) before the pinion runs off the teeth. */
+  travel?: { min: number; max: number };
+  /** Rolling solver tolerance, LDU. */
+  toleranceLdu?: number;
+  /** How far the rack may drift away from / into the pinion while it swings, LDU. */
+  engagementLdu?: number;
+  source: 'user' | 'verified' | 'inferred';
+};
 export type MassSpec = { body: string; massKg: number; centreLocal?: Vec3; inertiaKgM2?: number };
 export type GravitySpec = {
   /** Physics acceleration, m/s^2, LDraw positive Y is down. */
@@ -68,6 +97,8 @@ export type MechanismProgram = {
   /** V5: ideal transmission constraints and optionally engaged clutches. */
   transmissions?: TransmissionConstraint[];
   closures?: LoopClosure[];
+  /** Racks on swinging links rolling on pinions (see RackContact). */
+  rackContacts?: RackContact[];
   /** Bodies welded to a driven leaf; inherit exactly its rigid world delta. */
   rigidFollowers?: { leader: string; bodies: string[] }[];
   /** Primary motor; periodic travel is zero at both assembled stage endpoints. */
@@ -83,6 +114,9 @@ export type MechanismProgram = {
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const vec = (v: unknown): v is Vec3 => Array.isArray(v) && v.length === 3 && v.every(finite) && v.every(n => Math.abs(n) <= 1e7);
 const whole = (n: unknown): n is number => Number.isSafeInteger(n) && (n as number) > 0;
+/** A follower costs one matrix product per frame; a trailer or boom carries
+ * hundreds of parts, so the cap only guards against runaway input. */
+const MAX_FOLLOWERS = 2500;
 const key = (s: unknown): s is string => typeof s === 'string' && s.length > 0 && s.length <= 300;
 
 export function validateMechanismProgram(raw: unknown): string[] {
@@ -164,10 +198,27 @@ export function validateMechanismProgram(raw: unknown): string[] {
       errors.push(`Loop closure ${i+1}: invalid endpoints/tolerance`);
   }
   if (p.closures !== undefined && !Array.isArray(p.closures)) errors.push('Loop closures must be an array');
+  if (p.rackContacts !== undefined && !Array.isArray(p.rackContacts)) errors.push('Rack contacts must be an array');
+  if ((p.rackContacts?.length ?? 0) > 16) errors.push('Maximum 16 rack contacts');
+  if (p.mode === 'gravity' && p.rackContacts?.length) errors.push('Rack contacts require kinematic mode');
+  for (const [i,c] of (Array.isArray(p.rackContacts) ? p.rackContacts : []).entries()) {
+    const label = `Rack contact ${c?.id ?? i+1}`;
+    const pin = (Array.isArray(p.joints) ? p.joints : []).find(j => j?.id === c?.pinion);
+    if (!c || !key(c.id) || !key(c.rack) || !vec(c.contact) || !vec(c.direction)) { errors.push(`${label}: invalid fields`); continue; }
+    if (!pin || pin.kind !== 'revolute') errors.push(`${label}: pinion must be a revolute joint`);
+    if (pin && pin.body === c.rack) errors.push(`${label}: rack and pinion are the same body`);
+    if (Math.hypot(...c.direction) < 1e-6) errors.push(`${label}: zero rack direction`);
+    if (!finite(c.pitchRadiusLdu) || c.pitchRadiusLdu <= 0 || c.pitchRadiusLdu > 400) errors.push(`${label}: invalid pitch radius`);
+    if (c.reversed !== undefined && typeof c.reversed !== 'boolean') errors.push(`${label}: reversed must be Boolean`);
+    if (c.travel !== undefined && (!finite(c.travel.min) || !finite(c.travel.max) || c.travel.min > 0 || c.travel.max < 0))
+      errors.push(`${label}: travel must include the assembled pose`);
+    if (c.toleranceLdu !== undefined && (!finite(c.toleranceLdu) || c.toleranceLdu < 0.01 || c.toleranceLdu > 1)) errors.push(`${label}: invalid tolerance`);
+    if (c.engagementLdu !== undefined && (!finite(c.engagementLdu) || c.engagementLdu < 0.01 || c.engagementLdu > 10)) errors.push(`${label}: invalid engagement allowance`);
+  }
   if ((p.closures?.length ?? 0) > 16) errors.push('Maximum 16 loop closures');
   const assigned=new Set([...byBody]);
   for(const [i,f] of (Array.isArray(p.rigidFollowers)?p.rigidFollowers:[]).entries()){
-    if(!f || !key(f.leader) || !byBody.has(f.leader) || !Array.isArray(f.bodies) || !f.bodies.length || f.bodies.length>32)
+    if(!f || !key(f.leader) || !byBody.has(f.leader) || !Array.isArray(f.bodies) || !f.bodies.length || f.bodies.length>MAX_FOLLOWERS)
       {errors.push(`Rigid follower group ${i+1}: invalid leader or members`);continue;}
     for(const b of f.bodies){
       if(!key(b) || assigned.has(b))errors.push(`Rigid follower ${String(b)}: duplicate or driven by another joint`);

@@ -37,6 +37,14 @@ describe('Construction V3: profile-aware mechanical constraints',()=>{
     const axle=placeSnap(def('F',[{shape:'A',radius:6,length:5}],[0,-3,0]),[...M],[0,0,0])[0];
     expect(profiledCylinderMate(single(male),single(axle))).toBeNull();
   });
+  it('accepts LDCad chamfered round edges (_L) on both sides, as on a 3403/3404 turntable',()=>{
+    // Turntable ring: plain round for 11 LDU, then a 4 LDU chamfered lip.
+    const ring=(gender:'M'|'F')=>placeSnap(def(gender,[{shape:'R',radius:10,length:11},{shape:'_L',radius:11,length:4}]),[...M],[0,0,0])[0];
+    expect(profiledCylinderMate(single(ring('M')),single(ring('F')))?.length).toBeCloseTo(15);
+    // Still round only: a chamfered lip never fits a cross hole.
+    const cross=placeSnap(def('F',[{shape:'A',radius:12,length:15}]),[...M],[0,0,0])[0];
+    expect(profiledCylinderMate(single(ring('M')),single(cross))).toBeNull();
+  });
   it('transforms connector frames before generating a world-space joint',()=>{
     const turned=[0,0,-1,0,0,1,0,0,1,0,0,0,34,20,-60,1];
     const a=single(male,turned),b=single(female,turned);

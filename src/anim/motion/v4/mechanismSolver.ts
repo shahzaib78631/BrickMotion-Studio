@@ -29,6 +29,8 @@ export type SolvedFrame = {
   /** Max normalized algebraic transmission error, when V5 constraints are used. */
   transmissionResidual?: number;
   activeTransmissions?: number;
+  /** Rolling error of each rack contact, in program.rackContacts order. */
+  rackContactErrorsLdu?: number[];
 };
 
 type RootRatio = { root: string; ratio: number };
@@ -46,6 +48,12 @@ export class MechanismSolver {
   private readonly rootBounds: ReadonlyMap<string, { min: number; max: number }>;
   private readonly jointsById = new Map<string, JointDrive>();
   private previousRoots = new Map<string, number>();
+  /** Rack contacts in each rack's own assembled frame. */
+  private readonly contacts: {
+    id: string; pinion: JointDrive; rack: string; sign: number; radius: number;
+    world: THREE.Vector3; local: THREE.Vector3; along: THREE.Vector3; normal: THREE.Vector3;
+    travel: { min: number; max: number }; tolerance: number; engagement: number;
+  }[] = [];
 
   constructor(asm: Assembly, program: MechanismProgram, limits: readonly JointLimitRule[] = []) {
     const errors = validateMechanismProgram(program);
@@ -68,6 +76,24 @@ export class MechanismSolver {
       sorted.push(j);visited.add(j.body);
     }
     this.order = sorted;
+    for (const c of program.rackContacts ?? []) {
+      const pinion = this.jointsById.get(c.pinion)!, rack = this.rest.get(c.rack);
+      if (!rack) throw Error(`Rack contact ${c.id}: missing rack body ${c.rack}`);
+      if (!pinion.pivot) throw Error(`Rack contact ${c.id}: pinion needs a pivot`);
+      const axis = UNIT(pinion.axis), world = new THREE.Vector3(...c.contact);
+      const out = world.clone().sub(new THREE.Vector3(...pinion.pivot));
+      out.addScaledVector(axis, -out.dot(axis));
+      if (Math.abs(out.length() - c.pitchRadiusLdu) > 1)
+        throw Error(`Rack contact ${c.id}: contact is ${out.length().toFixed(2)} LDU from the pinion axis, not on its ${c.pitchRadiusLdu} LDU pitch circle`);
+      const direction = UNIT(c.direction);
+      if (Math.abs(direction.dot(axis)) > .05) throw Error(`Rack contact ${c.id}: rack does not run across the pinion shaft`);
+      const toLocal = rack.clone().invert(), turn = new THREE.Matrix3().setFromMatrix4(toLocal);
+      this.contacts.push({ id: c.id, pinion, rack: c.rack, sign: c.reversed ? -1 : 1, radius: c.pitchRadiusLdu, world,
+        local: world.clone().applyMatrix4(toLocal),
+        along: direction.clone().applyMatrix3(turn).normalize(),
+        normal: out.normalize().negate().applyMatrix3(turn).normalize(),
+        travel: c.travel ?? { min: -Infinity, max: Infinity }, tolerance: c.toleranceLdu ?? .1, engagement: c.engagementLdu ?? 1 });
+    }
 
     const neighbours = new Map(program.joints.map(j=>[j.id,[] as {to:string; factor:number}[]]));
     for (const g of program.gears ?? []) {
@@ -209,8 +235,38 @@ export class MechanismSolver {
     }
     return {poses,joints:q,maxClosureErrorLdu:max,closureErrorsLdu};
   }
+  /** For each rack contact: rolling error (rack travel minus pitch radius x
+   * pinion angle), the travel itself, and how far the rack has drifted toward
+   * (+) or away from (-) the pinion, all LDU, measured in the rack's frame. */
+  private contactState(frame: SolvedFrame) {
+    return this.contacts.map(c => {
+      const parent = c.pinion.parent;
+      const carrier = parent ? (frame.poses.get(parent) ?? this.rest.get(parent)!).clone().multiply(this.rest.get(parent)!.clone().invert()) : new THREE.Matrix4();
+      const rack = frame.poses.get(c.rack) ?? this.rest.get(c.rack)!;
+      const offset = c.world.clone().applyMatrix4(carrier).applyMatrix4(rack.clone().invert()).sub(c.local);
+      // The fixed contact moves backwards through the rack as the rack advances.
+      const travel = -offset.dot(c.along);
+      return { rolling: travel - c.sign * c.radius * (frame.joints.get(c.pinion.id) ?? 0), travel, drift: offset.dot(c.normal) };
+    });
+  }
+  /** Throws when a closure or rack contact fails in a solved frame. */
+  private assertClosed(frame: SolvedFrame, label: string): SolvedFrame {
+    const closures = this.program.closures ?? [];
+    if (closures.some((c,i)=>frame.closureErrorsLdu[i]>(c.toleranceLdu??.1)+1e-7))
+      throw Error(`${label}; closure gap ${frame.maxClosureErrorLdu.toFixed(4)} LDU`);
+    const state = this.contactState(frame);
+    state.forEach((x, i) => {
+      const c = this.contacts[i];
+      if (Math.abs(x.rolling) > c.tolerance + 1e-7) throw Error(`${label}; rack ${c.id} slips ${x.rolling.toFixed(4)} LDU on its pinion`);
+      if (x.travel < c.travel.min - 1e-6 || x.travel > c.travel.max + 1e-6) throw Error(`${label}; pinion runs off the end of rack ${c.id}`);
+      if (Math.abs(x.drift) > c.engagement) throw Error(`${label}; rack ${c.id} swings ${x.drift.toFixed(2)} LDU ${x.drift > 0 ? 'into' : 'away from'} its pinion`);
+    });
+    if (state.length) frame.rackContactErrorsLdu = state.map(x => Math.abs(x.rolling));
+    return frame;
+  }
   private residual(roots: ReadonlyMap<string,number>): number[] {
     const frame=this.evaluateRoots(roots),error:number[]=[];
+    for(const x of this.contactState(frame))error.push(x.rolling);
     for(const c of this.program.closures??[]) {
       const a=frame.poses.get(c.a.body)??this.rest.get(c.a.body)!;
       const b=frame.poses.get(c.b.body)??this.rest.get(c.b.body)!;
@@ -247,11 +303,11 @@ export class MechanismSolver {
     roots.set(this.driver,driverPosition);
     if(!this.withinLimits(roots))throw Error('The requested driver position violates a physical joint stop');
     const constraints=this.program.closures??[];
-    if(constraints.length) {
+    if(constraints.length||this.contacts.length) {
       let err=this.residual(roots);
       let norm=Math.hypot(...err);
-      const tolerance=Math.min(...constraints.map(c=>c.toleranceLdu??.1));
-      for(let iteration=0;norm>tolerance&&iteration<48;iteration++) {
+      const tolerance=Math.min(...constraints.map(c=>c.toleranceLdu??.1),...this.contacts.map(c=>c.tolerance));
+      for(let iteration=0;norm>tolerance*1e-3&&iteration<48;iteration++) {
         const free=this.freeRoots;
         if(!free.length)break;
         const jac=free.map(id=>{
@@ -280,11 +336,10 @@ export class MechanismSolver {
         }
         if(!accepted)break;
       }
-      const frame=this.evaluateRoots(roots);
-      if(constraints.some((c,i)=>frame.closureErrorsLdu[i]>(c.toleranceLdu??.1)+1e-7))
-        throw Error(`Unreachable closed linkage at ${driverPosition.toFixed(4)}; closure gap ${frame.maxClosureErrorLdu.toFixed(4)} LDU`);
+      this.assertClosed(this.evaluateRoots(roots),`Unreachable closed linkage at ${driverPosition.toFixed(4)}`);
     }
     const solved=this.evaluateRoots(roots);
+    if(this.contacts.length)this.assertClosed(solved,`Rack contact failed at ${driverPosition.toFixed(4)}`);
     this.previousRoots=roots;
     return solved;
   }
@@ -319,15 +374,15 @@ export class MechanismSolver {
     let projected=project(initial);
     const roots=projected.roots;
     const closures=this.program.closures??[];
-    if(closures.length){
+    if(closures.length||this.contacts.length){
       let error=this.residual(roots);
       let norm=Math.hypot(...error);
-      const tolerance=Math.min(...closures.map(c=>c.toleranceLdu??.1));
+      const tolerance=Math.min(...closures.map(c=>c.toleranceLdu??.1),...this.contacts.map(c=>c.tolerance));
       // The algebraic manifold is projected into after every IK perturbation.
       // This prevents a closure correction from breaking a transmission ratio.
       const controlled=new Set([...inputs.keys()].map(id=>this.factors.get(id)!.root));
       const free=this.roots.filter(id=>!controlled.has(id));
-      for(let iteration=0;norm>tolerance&&iteration<48;iteration++){
+      for(let iteration=0;norm>tolerance*1e-3&&iteration<48;iteration++){
         if(!free.length)break;
         const jac=free.map(id=>{
           const h=Math.max(1e-5,Math.abs(roots.get(id)??0)*1e-5);
@@ -359,12 +414,11 @@ export class MechanismSolver {
         }
         if(!accepted)break;
       }
-      const frame=this.evaluateRoots(roots);
-      if(closures.some((c,i)=>frame.closureErrorsLdu[i]>(c.toleranceLdu??.1)+1e-7))
-        throw Error(`Unreachable V5 closed mechanism; closure gap ${frame.maxClosureErrorLdu.toFixed(4)} LDU`);
+      this.assertClosed(this.evaluateRoots(roots),'Unreachable V5 closed mechanism');
     }
     projected=project(roots);
     const frame=this.evaluateRoots(projected.roots);
+    if(this.contacts.length)this.assertClosed(frame,'Rack contact failed');
     // Recompute residual strictly in joint space and include exact drive equations.
     const equations: LinearEquation[]=algebra;
     const maxResidual=equations.reduce((max,e)=>{

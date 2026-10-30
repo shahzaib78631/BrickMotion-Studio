@@ -1,7 +1,7 @@
 Mechanism benchmark — LEGO 5590 Whirl 'n Wheel Super Truck (MLCad, unofficial)
-Checks passed: 15/17 (88%) · mechanisms fully found: 4/6
+Checks passed: 17/17 (100%) · mechanisms fully found: 6/6
 
-· truck-steering [posed] 7/8
+✓ truck-steering [posed] 8/8
     hit          vertical steering input shaft — axle-hole revolute joint i0/i5r ↔ i0/i6p
     hit          input bevel pair — geometry screen: plausible bevel
     hit          lengthwise steering shaft — axle-hole revolute joint i0/i2z ↔ i0/i2t
@@ -9,10 +9,10 @@ Checks passed: 15/17 (88%) · mechanisms fully found: 4/6
     hit          rack rides on a tie rod between the steering arms (moves on an arc, not a slide) — four-bar loop: frame i0/i10 – arms i0/ih, i0/ii – coupler i0/i2y
     hit          right kingpin — axle-hole revolute joint i0/ij ↔ i0/i2x
     hit          left kingpin — axle-hole revolute joint i0/ik ↔ i0/i2x
-    missing      offered as a ready-to-drive mechanism — 4 suggestions, none drive these parts
-· trailer-hitch [posed] 1/2
-    hit          turntable top — axle-hole revolute joint i1/inq ↔ i0/i66
-    missing      offered as a ready-to-drive mechanism — 4 suggestions, none drive these parts
+    hit          offered as a ready-to-drive mechanism — suggested as "Rack steering — 4143 → 3647 → 3743 on a four-bar tie rod"
+✓ trailer-hitch [posed] 2/2
+    hit          turntable top — cylindrical revolute joint i0/i66 ↔ i0/i65
+    hit          offered as a ready-to-drive mechanism — suggested as "Turntable — 3404 / 3403 (swings 298 parts)"
 ✓ truck-front-wheels [geometry] 2/2
     hit          right front wheel axle — axle-hole revolute joint i0/il ↔ i0/ih
     hit          left front wheel axle — axle-hole revolute joint i0/im ↔ i0/i9q
@@ -25,5 +25,5 @@ Checks passed: 15/17 (88%) · mechanisms fully found: 4/6
 ✓ helicopter-rotor [review] 1/1
     hit          rotor shaft — axle-hole revolute joint i2/ix4 ↔ i2/iwt
 
-Noise: 268 movable joints {"revolute":147,"sliding":94,"ball":27} by type {"axle-hole":159,"stud-socket":16,"ball-socket":27,"hinge":12,"cylindrical":48,"pin-hole":2,"clip":4}
-Suggestions: 4, unrelated to any expected mechanism: 2
+Noise: 314 movable joints {"revolute":193,"sliding":94,"ball":27} by type {"axle-hole":159,"stud-socket":16,"ball-socket":27,"hinge":12,"cylindrical":86,"pin-hole":10,"clip":4}
+Suggestions: 6, unrelated to any expected mechanism: 3

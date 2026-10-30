@@ -313,7 +313,7 @@ export function MechanismLabPanel({ model, onRender }: { model: ModelState; onRe
             {candidates.map((s, i) => <button key={i}
               className={`bm-lab-option ${lab.active && lab.program === s.program ? 'on' : ''}`}
               onClick={() => start(s.program)}>
-              <strong>{s.title}</strong><span>{s.evidence === 'inferred-gear-mesh' ? 'Gear pair · inferred pitch' : 'Joint · LDCad connectors'}</span>
+              <strong>{s.title}</strong><span>{s.evidence === 'inferred-gear-mesh' ? 'Gear pair · inferred pitch' : s.evidence === 'measured-gear-train' ? 'Drive train · measured gears' : 'Joint · LDCad connectors'}</span>
             </button>)}
           </> : <p className="nx-hint">No isolated, safely constrained demonstration was found. Missing connectors or rigid links can prevent inference. V4 manual programs remain available in Render.</p>}
           {settings.motionV4Mechanism && <button className="nx-link" onClick={() => start(settings.motionV4Mechanism!)}>Preview configured V4 program</button>}

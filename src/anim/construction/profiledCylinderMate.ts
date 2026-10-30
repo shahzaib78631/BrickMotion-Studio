@@ -31,6 +31,8 @@ export type ProfiledCylinderMate = {
 type Section = { shape: string; radius: number; start: number; length: number };
 const sectionsOf = (snap: Snap): Section[] => snap.sections?.length
   ? snap.sections : [{ shape: snap.shapes[0] ?? 'R', radius: snap.radius, start: 0, length: snap.length }];
+/** Round sections: plain (R) and LDCad's chamfered lead-in edges (L, _L, L_). */
+const round = (shape: string) => shape === 'R' || /^_?L_?$/.test(shape);
 const sectionFits = (male: Section, female: Section): boolean => {
   if (!Number.isFinite(male.radius) || !Number.isFinite(female.radius) || male.radius <= 0 || female.radius <= 0) return false;
   const m = male.shape.toUpperCase(), f = female.shape.toUpperCase();
@@ -41,7 +43,7 @@ const sectionFits = (male: Section, female: Section): boolean => {
   if (m === 'S') return f === 'S' && male.radius <= female.radius + RADIUS_SLOP;
   // Classic square anti-studs accept a round standard stud, not an arbitrary cylinder.
   if (f === 'S') return m === 'R' && male.radius >= 5.4 && male.radius <= 6.6 && male.radius <= female.radius + RADIUS_SLOP;
-  if (f !== 'R' || (m !== 'R' && !m.startsWith('L'))) return false;
+  if (!round(f) || !round(m)) return false;
   return male.radius <= female.radius + RADIUS_SLOP;
 };
 

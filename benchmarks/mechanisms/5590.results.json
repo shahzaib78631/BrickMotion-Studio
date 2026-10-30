@@ -54,22 +54,22 @@
       "mechanism": "truck-steering",
       "type": "suggested",
       "label": "offered as a ready-to-drive mechanism",
-      "status": "missing",
-      "detail": "4 suggestions, none drive these parts"
+      "status": "hit",
+      "detail": "suggested as \"Rack steering — 4143 → 3647 → 3743 on a four-bar tie rod\""
     },
     {
       "mechanism": "trailer-hitch",
       "type": "rotates",
       "label": "turntable top",
       "status": "hit",
-      "detail": "axle-hole revolute joint i1/inq ↔ i0/i66"
+      "detail": "cylindrical revolute joint i0/i66 ↔ i0/i65"
     },
     {
       "mechanism": "trailer-hitch",
       "type": "suggested",
       "label": "offered as a ready-to-drive mechanism",
-      "status": "missing",
-      "detail": "4 suggestions, none drive these parts"
+      "status": "hit",
+      "detail": "suggested as \"Turntable — 3404 / 3403 (swings 298 parts)\""
     },
     {
       "mechanism": "truck-front-wheels",
@@ -126,14 +126,14 @@
       "id": "truck-steering",
       "title": "Truck steering: top knob -> bevel pair -> lengthwise shaft -> 8T pinion -> rack",
       "evidence": "posed",
-      "hit": 7,
+      "hit": 8,
       "total": 8
     },
     {
       "id": "trailer-hitch",
       "title": "Fifth-wheel turntable: trailer pivots on the truck",
       "evidence": "posed",
-      "hit": 1,
+      "hit": 2,
       "total": 2
     },
     {
@@ -166,16 +166,16 @@
     }
   ],
   "score": {
-    "hit": 15,
+    "hit": 17,
     "total": 17,
-    "recall": 0.8823529411764706,
-    "mechanismsComplete": 4,
+    "recall": 1,
+    "mechanismsComplete": 6,
     "mechanisms": 6
   },
   "noise": {
-    "movableEdges": 268,
+    "movableEdges": 314,
     "byMotion": {
-      "revolute": 147,
+      "revolute": 193,
       "sliding": 94,
       "ball": 27
     },
@@ -184,11 +184,11 @@
       "stud-socket": 16,
       "ball-socket": 27,
       "hinge": 12,
-      "cylindrical": 48,
-      "pin-hole": 2,
+      "cylindrical": 86,
+      "pin-hole": 10,
       "clip": 4
     },
-    "suggestions": 4,
-    "unrelatedSuggestions": 2
+    "suggestions": 6,
+    "unrelatedSuggestions": 3
   }
 }

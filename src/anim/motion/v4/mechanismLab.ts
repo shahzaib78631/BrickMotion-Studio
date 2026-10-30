@@ -10,11 +10,12 @@ import type { Assembly, Metrics } from '../../../model/assemble';
 import type { ConstructionModel, ConstructionNode } from '../../construction/types';
 import { buildMechanicalConstraintGraph } from '../../construction/mechanicalConstraintGraph';
 import { buildMotionMechanismGraph, type MechanismGraph } from './mechanismGraph';
-import { refineKnownMechanicalJoints, detectAutomaticMechanics, type AutoMechanicsReport } from './autoMechanics';
+import { refineKnownMechanicalJoints, detectAutomaticMechanics, MAX_SUGGESTIONS, type AutoMechanicsReport } from './autoMechanics';
 import { MechanismSolver } from './mechanismSolver';
 import type { MechanismProgram } from './mechanismProgram';
 import { screenMechanismGeometry, type GeometryCandidate } from '../v6/geometryScreen';
 import { worldGear } from '../gears/gearTable';
+import { suggestRackSteering } from './drivetrainSuggestions';
 import type { WorldGear } from '../gears/gearGeometry';
 
 export type LabReport = {
@@ -46,9 +47,13 @@ export function inspectMechanisms(asm: Assembly, metrics: Metrics): LabReport {
   const matched = buildMechanicalConstraintGraph(model);
   const graph = buildMotionMechanismGraph(asm, refineKnownMechanicalJoints(matched.joints, asm));
   const detection = detectAutomaticMechanics(asm, metrics, graph);
+  const measured = new Map(asm.instances.flatMap(i => { const g = worldGear(i.key, i.part, i.world); return g ? [[i.key, g] as [string, WorldGear]] : []; }));
   const geometryCandidates = screenMechanismGeometry(detection.parts,
-    new Map(asm.instances.map(i=>[i.key,i.worldBox])),graph.rigidClusters,
-    new Map(asm.instances.flatMap(i => { const g = worldGear(i.key, i.part, i.world); return g ? [[i.key, g] as [string, WorldGear]] : []; })));
+    new Map(asm.instances.map(i=>[i.key,i.worldBox])),graph.rigidClusters,measured);
+  // Whole drive trains built from measured meshes come first: they are the
+  // model's purpose-built functions, not incidental hinges.
+  detection.suggestions.unshift(...suggestRackSteering(asm, graph, geometryCandidates, measured));
+  detection.suggestions.splice(MAX_SUGGESTIONS);
   return {
     graph,detection,geometryCandidates,
     pairsExamined: matched.pairsExamined,
@@ -132,5 +137,10 @@ export function mechanismReportDot(report: LabReport): string {
 export function previewAmplitude(program: MechanismProgram): number {
   // Small by default so an inferred mechanism is not assumed to tolerate full turns.
   const joint = program.joints.find(j => j.id === program.driver.joint);
-  return joint?.kind === 'prismatic' ? 8 : Math.PI / 12;
+  const fallback = joint?.kind === 'prismatic' ? 8 : Math.PI / 12;
+  // Assembled drive trains are solved over their whole travel before they are
+  // offered (rack kept on its teeth, loop closed), so their range is known.
+  if (program.rackContacts?.length && Number.isFinite(program.driver.amplitude) && program.driver.amplitude > 0)
+    return Math.min(program.driver.amplitude, joint?.kind === 'prismatic' ? 50 : Math.PI / 2);
+  return fallback;
 }

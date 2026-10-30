@@ -170,7 +170,7 @@ export type TimelineData = {
             jointDetails: {a:string;b:string;kind:string;motion:'revolute'|'prismatic'|'fixed'|'ball';evidence:'ldcad-shadow'|'turntable-inferred'}[];
             gearDetails: {a:string;b:string;teethA:number;teethB:number;moduleLdu:number;evidence:'inferred-pitch';confidence:'review-required'}[];
             suggestions: {title:string;program:import('./motion/v4/mechanismProgram').MechanismProgram;
-              evidence:'ldcad-shadow'|'inferred-gear-mesh';warnings:string[]}[];
+              evidence:'ldcad-shadow'|'inferred-gear-mesh'|'measured-gear-train';warnings:string[]}[];
             warnings:string[] };
           demonstration?: { mode: 'kinematic' | 'gravity'; bodies: number; frames: number;
             gearPairs: number; loopClosures: number; maxClosureErrorLdu: number;

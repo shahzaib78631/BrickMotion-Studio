@@ -12,6 +12,7 @@ import type { MechanicalJoint } from '../../construction/mechanicalConstraintGra
 import type { MechanismGraph, MechanismEdge } from './mechanismGraph';
 import type { MechanismProgram, GearPair, JointDrive, Vec3 } from './mechanismProgram';
 import { validateMechanismProgram } from './mechanismProgram';
+import { bodyGraph, carriedBodies, type BodyGraph } from './bodyGraph';
 import { MechanismSolver } from './mechanismSolver';
 
 export type PartCategory = 'gear'|'turntable'|'hinge'|'axle'|'pin'|'shaft'|'wheel'|'other';
@@ -26,7 +27,7 @@ export type DetectedGearMesh = { a:string;b:string;teethA:number;teethB:number;
   moduleLdu:number; evidence:'inferred-pitch'; confidence:'review-required' };
 export type SuggestedMechanism = {
   title:string; program:MechanismProgram;
-  evidence:'ldcad-shadow'|'inferred-gear-mesh';
+  evidence:'ldcad-shadow'|'inferred-gear-mesh'|'measured-gear-train';
   warnings:string[];
 };
 /** Review-only functional hypotheses, never used as physical mates or
@@ -157,14 +158,21 @@ function gearPairs(parts:readonly DetectedPart[]):DetectedGearMesh[] {
   }
   return results.slice(0,32);
 }
+/** Most suggestions offered at once; whole drive trains are added on top by the lab. */
+export const MAX_SUGGESTIONS=6;
 const groupOf=(graph:MechanismGraph,key:string)=>graph.rigidClusters.find(g=>g.includes(key))??[key];
 /** Propose small connected rigid groups, excluding any that would sever a
  * fixed LDCad connector or propose a driver without a sound connector axis. */
-function validSuggestion(asm:Assembly,graph:MechanismGraph,p:MechanismProgram):boolean {
+export function provenSuggestion(asm:Assembly,graph:MechanismGraph,p:MechanismProgram):boolean {
   if(validateMechanismProgram(p).length)return false;
   try{
     const solver=new MechanismSolver(asm,p);
-    solver.solve(.15);solver.solve(-.15);solver.assembled();
+    // Walk out to each end of the travel so closed loops follow one branch.
+    for(const end of [1,-1]){
+      solver.assembled();
+      for(let step=1;step<=8;step++)solver.solve(end*p.driver.amplitude*step/8);
+    }
+    solver.assembled();
     const followers=p.rigidFollowers??[];
     const driven=new Set([...p.joints.map(j=>j.body),...followers.flatMap(f=>f.bodies)]);
     const owner=(key:string)=>followers.find(f=>f.bodies.includes(key))?.leader??(driven.has(key)?key:null);
@@ -172,15 +180,32 @@ function validSuggestion(asm:Assembly,graph:MechanismGraph,p:MechanismProgram):b
     return true;
   }catch{return false;}
 }
-function hingeCandidate(asm:Assembly,graph:MechanismGraph,edge:MechanismEdge,move:string):MechanismProgram|null {
-  const connected=groupOf(graph,move);
-  if(connected.length>24 || connected.includes(edge.a===move?edge.b:edge.a))return null;
-  const joint:JointDrive={id:'auto-joint-1',body:move,kind:'revolute',axis:v(edge.axis),pivot:v(edge.centre)};
-  const follower=connected.filter(x=>x!==move);
+/** Most parts a hinge or turntable may swing (a whole trailer, a crane boom). */
+export const MAX_HINGE_CARRIED=600;
+/**
+ * Swing everything one side of the joint carries. `move` is the part on the
+ * side that turns (the turntable top); otherwise the side carrying fewer
+ * parts moves. A side whose carried parts also connect back to the other
+ * side is a closed loop or a locked joint, so it is not offered as a hinge.
+ */
+function hingeCandidate(asm:Assembly,graph:MechanismGraph,bodies:BodyGraph,edge:MechanismEdge,move:string|null):MechanismProgram|null {
+  const A=bodies.of(edge.a),B=bodies.of(edge.b);
+  if(A===B)return null;
+  const side=(key:string)=>{
+    const start=bodies.of(key),other=start===A?B:A;
+    const carried=carriedBodies(bodies,start,new Set([other]),MAX_HINGE_CARRIED);
+    return carried&&!carried.loops.length?{key,carried}:null;
+  };
+  const options=(move?[move]:[edge.a,edge.b]).map(side).filter(x=>x!==null)
+    .sort((x,y)=>x.carried.parts.length-y.carried.parts.length);
+  if(!options.length)return null;
+  const {key,carried}=options[0];
+  const joint:JointDrive={id:'auto-joint-1',body:key,kind:'revolute',axis:v(edge.axis),pivot:v(edge.centre)};
+  const follower=carried.parts.filter(x=>x!==key);
   const program:MechanismProgram={mode:'kinematic',duration:3,sampleHz:60,joints:[joint],
-    ...(follower.length?{rigidFollowers:[{leader:move,bodies:follower}]}:{}),
+    ...(follower.length?{rigidFollowers:[{leader:key,bodies:follower}]}:{}),
     driver:{joint:joint.id,amplitude:.15,cycles:1}};
-  return validSuggestion(asm,graph,program)?program:null;
+  return provenSuggestion(asm,graph,program)?program:null;
 }
 function gearCandidate(asm:Assembly,graph:MechanismGraph,pair:DetectedGearMesh,
   byKey:ReadonlyMap<string,DetectedPart>):MechanismProgram|null {
@@ -202,7 +227,7 @@ function gearCandidate(asm:Assembly,graph:MechanismGraph,pair:DetectedGearMesh,
     ...(followers.length?{rigidFollowers:followers}:{}),
     driver:{joint:'auto-gear-1',amplitude:.15,cycles:1},
   };
-  return validSuggestion(asm,graph,program)?program:null;
+  return provenSuggestion(asm,graph,program)?program:null;
 }
 
 /** Lightweight semantic discovery: rank likely families for USER REVIEW.
@@ -287,25 +312,33 @@ export function detectAutomaticMechanics(asm:Assembly,metrics:Metrics,graph:Mech
       ]});
     if(suggestions.length>=2)break;
   }
+
+  // Turntables first (purpose-built rotation), then gear pairs, then hinges.
+  const bodies=bodyGraph(graph);
+  const turntables:SuggestedMechanism[]=[],hinges:SuggestedMechanism[]=[];
   const seen=new Set<string>();
   for(const edge of graph.edges){
     if(edge.motion!=='revolute')continue;
     const a=byKey.get(edge.a),b=byKey.get(edge.b);
-    // Prefer explicit hinge/turntable tops to rigid structural counterparts.
-    const move=catalogueTurntable(a?.part??'',b?.part??'')?
-      (canonical(a?.part??'')==='3404'?edge.a:edge.b):edge.a;
-    const id=groupOf(graph,move).join('\0');
-    if(seen.has(id))continue;
-    const p=hingeCandidate(asm,graph,edge,move);
+    const turntable=catalogueTurntable(a?.part??'',b?.part??'');
+    if(!turntable&&hinges.length>=MAX_SUGGESTIONS)continue;
+    const pair=[bodies.of(edge.a),bodies.of(edge.b)].sort().join('\0');
+    if(seen.has(pair))continue;
+    seen.add(pair);
+    // A turntable's top turns on its base; any other hinge moves its lighter side.
+    const move=turntable?(canonical(a?.part??'')==='3404'?edge.a:edge.b):null;
+    const p=hingeCandidate(asm,graph,bodies,edge,move);
     if(!p)continue;
-    seen.add(id);
-    suggestions.push({title:`${a?.category==='turntable'||b?.category==='turntable'?'Turntable':'Hinge'} — ${a?.part} / ${b?.part}`,
+    const carried=1+(p.rigidFollowers?.[0]?.bodies.length??0);
+    (turntable?turntables:hinges).push({title:`${turntable?'Turntable':'Hinge'} — ${a?.part} / ${b?.part}${carried>1?` (swings ${carried} parts)`:''}`,
       program:p,evidence:'ldcad-shadow',warnings:[
         'Rotation amplitude is a conservative illustration, NOT a measured joint limit.',
         'Review the mesh collision verdict before exporting.',
       ]});
-    if(suggestions.length>=4)break;
   }
+  suggestions.unshift(...turntables);
+  suggestions.push(...hinges);
+  suggestions.splice(MAX_SUGGESTIONS);
   // Paired gear metadata is surfaced even when an automatic *whole connected*
   // assembly proposal cannot safely be isolated from shafts and bearings.
   return {scanned:parts.length,described,connectors,movableJoints:joints.filter(j=>j.motion!=='fixed').length,kinds:count,parts,joints,gearMeshes:pairs,functionalHints,
