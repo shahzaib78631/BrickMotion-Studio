@@ -64,4 +64,7 @@ not yet recognised as screws, so the wing and covers do not move.
   which the crank drives 1:1 through a chain (chains are phase 6).
   **Model-file defect:** the 8T gear `3647` at [-60,-14,-70] has no axle, so
   2nd and 4th never reach the wheels; adding an Axle 8 (`3707`) centred at
-  (-60,-14,0) along z fixes it.
+  (-60,-14,0) along z fixes it. `samples/8880-1-axle-fix.mpd` is that copy (one
+  line after the 3647 in the main model:
+  `1 0 -60 -14 0 0 0 -1 0 1 0 1 0 0 3707.dat`); on it the mode table gives all
+  four ratios, 2.25, 1.5, 0.75 and 0.5.

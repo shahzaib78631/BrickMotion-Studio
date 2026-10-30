@@ -53,6 +53,23 @@ describe.skipIf(!partDataInstalled() || !existsSync(M8880))('8880 Super Car', ()
   }, 600_000);
 });
 
+// The same model with the missing Axle 8 under 3647 added (samples/8880-1-axle-fix.mpd).
+const M8880_FIXED = join(__dirname, '..', '..', '..', 'samples', '8880-1-axle-fix.mpd');
+describe.skipIf(!partDataInstalled() || !existsSync(M8880_FIXED))('8880 Super Car, axle fixed', () => {
+  it('gives all four of the manual\'s ratios as modelled', async () => {
+    const { asm, metrics } = await loadRealModel(M8880_FIXED);
+    const report = inspectMechanisms(asm, metrics), rec = report.graph.recognition!;
+    const bodyOf = (part: string, at: number[]) => rec.bodyOf.get(asm.instances.find(i => i.part.startsWith(part)
+      && Math.hypot(...[0, 1, 2].map(n => (i.worldBox.min[n] + i.worldBox.max[n]) / 2 - at[n])) < 3)!.key)!;
+    const net = rateNetwork(rec, report.higherPairs, classify(rec, report.higherPairs, [], asm, metrics as Metrics), asm);
+    const modes = shiftModes(net, findShiftElements(asm, rec), bodyOf('4019', [20, -54, 390]), bodyOf('6573', [0, -54, 500]));
+    expect(modes.filter(m => m.engaged.length === 1 && m.state === 'drive').map(m => m.ratio))
+      .toEqual([2.25, 1.5, 0.75, 0.5].map(r => expect.closeTo(r, 3)));
+    const titles = report.detection.suggestions.filter(s => s.mechanism?.kind === 'gearbox').map(s => s.title);
+    expect(titles.filter(t => /\(\d\.\d\d:1\)/.test(t)), titles.join('\n')).toHaveLength(4);
+  }, 600_000);
+});
+
 const M42000 = join(__dirname, '..', '..', '..', 'samples', '42000-1.mpd');
 describe.skipIf(!partDataInstalled() || !existsSync(M42000))('42000 gear network', () => {
   it('leaves out a gear that does not turn on a bearing of its own body', async () => {
