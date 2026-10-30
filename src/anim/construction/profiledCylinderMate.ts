@@ -47,7 +47,8 @@ const sectionFits = (male: Section, female: Section): boolean => {
   if (m === 'A') return f === 'R' && male.radius <= female.radius + RADIUS_SLOP;
   if (m === 'S') return f === 'S' && male.radius <= female.radius + RADIUS_SLOP;
   // Classic square anti-studs accept a round standard stud, not an arbitrary cylinder.
-  if (f === 'S') return m === 'R' && male.radius >= 5.4 && male.radius <= 6.6 && male.radius <= female.radius + RADIUS_SLOP;
+  // (a pin's chamfered round end counts as round).
+  if (f === 'S') return round(m) && male.radius >= 5.4 && male.radius <= 6.6 && male.radius <= female.radius + RADIUS_SLOP;
   if (!round(f) || !round(m)) return false;
   return male.radius <= female.radius + RADIUS_SLOP;
 };

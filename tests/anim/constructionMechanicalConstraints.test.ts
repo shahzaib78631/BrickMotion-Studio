@@ -35,6 +35,11 @@ describe('Construction V3: profile-aware mechanical constraints',()=>{
     expect(profiledCylinderMate(single(male),single(at(-2.6)))).not.toBeNull();
     expect(profiledCylinderMate(single(male),single(at(-2.4)))).toBeNull();
   });
+  it('a pin chamfer (_L r6.25) reaching a square relief (S r8) still fits, as in the 42000 steering hub 11949',()=>{
+    const pin=placeSnap(def('M',[{shape:'R',radius:6,length:4},{shape:'_L',radius:6.25,length:2}]),[...M],[0,0,0])[0];
+    const hole=placeSnap(def('F',[{shape:'R',radius:6,length:4},{shape:'S',radius:8,length:4}]),[...M],[0,0,0])[0];
+    expect(profiledCylinderMate(single(pin),single(hole))?.length).toBeCloseTo(6);
+  });
   it('rejects gender, axis-offset and incompatible section shapes',()=>{
     const f=single(female);
     expect(profiledCylinderMate(f,f)).toBeNull();
