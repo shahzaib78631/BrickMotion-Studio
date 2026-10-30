@@ -16,6 +16,8 @@ import type { MechanismProgram } from './mechanismProgram';
 import { screenMechanismGeometry, type GeometryCandidate } from '../spatial/geometryScreen';
 import { worldGear } from '../gears/gearTable';
 import { libraryConnectors, withLibraryConnectors } from '../parts/libraryConnectors';
+import { findLinearActuators } from '../parts/actuators';
+import { findHigherPairs, type HigherPair } from '../pairs/higherPairs';
 import { suggestRackSteering } from './drivetrainSuggestions';
 import type { WorldGear } from '../gears/gearGeometry';
 
@@ -26,6 +28,8 @@ export type LabReport = {
   connectorPairs: number;
   missingMetadata: number;
   geometryCandidates: GeometryCandidate[];
+  /** Gear, bevel, rack, worm and screw pairs between bodies, from measured part features. */
+  higherPairs: HigherPair[];
 };
 
 /** A safety bound for an interactive inspector; full V4 planning supports larger assemblies. */
@@ -48,7 +52,9 @@ export function inspectMechanisms(asm: Assembly, metrics: Metrics): LabReport {
   const matched = buildMechanicalConstraintGraph(model);
   // LDCad connectors, plus slides and seats measured from part geometry.
   const known = refineKnownMechanicalJoints(matched.joints, asm);
-  const graph = buildMotionMechanismGraph(asm, withLibraryConnectors(known, libraryConnectors(asm, metrics, known)));
+  const measuredJoints = libraryConnectors(asm, metrics, known);
+  const graph = buildMotionMechanismGraph(asm, withLibraryConnectors(known, measuredJoints));
+  const higherPairs = findHigherPairs(asm, graph.recognition?.bodyOf, findLinearActuators(asm, measuredJoints));
   const detection = detectAutomaticMechanics(asm, metrics, graph);
   const measured = new Map(asm.instances.flatMap(i => { const g = worldGear(i.key, i.part, i.world); return g ? [[i.key, g] as [string, WorldGear]] : []; }));
   const geometryCandidates = screenMechanismGeometry(detection.parts,
@@ -58,7 +64,7 @@ export function inspectMechanisms(asm: Assembly, metrics: Metrics): LabReport {
   detection.suggestions.unshift(...suggestRackSteering(asm, graph, geometryCandidates, measured));
   detection.suggestions.splice(MAX_SUGGESTIONS);
   return {
-    graph,detection,geometryCandidates,
+    graph,detection,geometryCandidates,higherPairs,
     pairsExamined: matched.pairsExamined,
     connectorPairs: matched.matesByPair.size,
     missingMetadata: asm.instances.filter(i => !(metrics(i.part).snaps?.length)).length,

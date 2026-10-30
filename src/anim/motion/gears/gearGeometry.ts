@@ -2,14 +2,13 @@
  * Measured gear geometry: where a gear's teeth are, not a guess from its box.
  *
  * Pure meshing math (no Three.js): pitch circles, cone tips and pitch lines
- * of gears already placed in the model. The measured per-part table that
- * produces them is gearTable.ts.
+ * of gears already placed in the model, placed by gearTable.ts.
  *
  * Tooth size: every LEGO Technic gear has a 1.25 LDU pitch radius per tooth
- * (8T = 10, 24T = 30). Bevel cone tips and rack pitch lines are measured
- * values from the Kinebrick project's connection corrections
- * (github.com/erik-larsen/kinebrick, data/corrections.ldr, CC BY-SA 4.0),
- * cross-checked against official models; tolerances are its observed ones.
+ * (8T = 10, 24T = 30). Cone tips and rack pitch lines are measured from each
+ * part's LDraw shape (parts/teeth.ts). The tolerances are those observed in
+ * official models by the Kinebrick project (github.com/erik-larsen/kinebrick,
+ * CC BY-SA 4.0).
  */
 type V3 = [number, number, number];
 export const TOOTH_PITCH_RADIUS = 1.25;
@@ -76,14 +75,25 @@ function crossing(a: { centre: V3; axis: V3 }, b: { centre: V3; axis: V3 }): V3 
   return add(a.centre, a.axis, s).map((x, i) => (x + b.centre[i] + b.axis[i] * t) / 2) as V3;
 }
 
-/** Bevel gears: shafts that cross, both cone tips at the crossing. */
+/**
+ * Bevel gears: shafts that cross and pitch cones that touch along a line.
+ * LEGO bevels of different sizes (a 28T ring on a 20T double bevel) do not
+ * put both cone tips at the crossing; what holds is that one tip lies as far
+ * past the crossing as the other falls short of it, each measured along the
+ * way its teeth face. Equal bevels, tips at the crossing, are the special case.
+ */
 export function bevelMesh(a: WorldGear, b: WorldGear): MeshVerdict {
   if (a.kind !== 'bevel' || b.kind !== 'bevel') return { meshes: false, reason: 'not two bevel gears' };
   if (Math.abs(a.radius / a.teeth - b.radius / b.teeth) > 0.01) return { meshes: false, reason: 'different tooth sizes' };
   const x = crossing(a, b);
   if (!x) return { meshes: false, reason: 'shafts do not cross' };
-  const error = Math.max(len(sub(a.tip!, x)), len(sub(b.tip!, x)));
-  if (error > BEVEL_TOLERANCE) return { meshes: false, errorLdu: error, reason: `cone tips ${error.toFixed(1)} LDU from where the shafts cross` };
+  if (dot(sub(x, a.centre), a.facing!) <= 0 || dot(sub(x, b.centre), b.facing!) <= 0) return { meshes: false, reason: 'teeth face away from where the shafts cross' };
+  // A sum of two tips' offsets: each is held to BEVEL_TOLERANCE, as tips at the crossing were.
+  const error = Math.abs(dot(sub(a.tip!, x), a.facing!) + dot(sub(b.tip!, x), b.facing!));
+  if (error > 2 * BEVEL_TOLERANCE) return { meshes: false, errorLdu: error, reason: `cone tips ${error.toFixed(1)} LDU from meeting where the shafts cross` };
+  // Each gear sits about the other's pitch radius from the crossing, so its teeth reach the other's.
+  const short = Math.max(Math.abs(dot(sub(a.centre, x), a.axis)) - b.radius, Math.abs(dot(sub(b.centre, x), b.axis)) - a.radius);
+  if (short > 2 * BEVEL_TOLERANCE) return { meshes: false, errorLdu: short, reason: `teeth ${short.toFixed(1)} LDU short of the other gear` };
   // Contact: on each pitch circle, toward the other gear's teeth.
   const back = (g: WorldGear) => (g.kind === 'rack' ? [0, 0, 0] : g.facing!.map(v => -v)) as V3;
   const contact = add(add(x, back(a), b.radius), back(b), a.radius);

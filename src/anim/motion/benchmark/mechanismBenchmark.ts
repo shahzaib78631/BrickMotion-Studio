@@ -180,7 +180,10 @@ export function scoreMechanismBenchmark(spec: BenchmarkSpec, asm: Assembly, repo
         const mesh = check.type === 'gearMesh' && report.detection.gearMeshes.find(m => pairIs(m.a, m.b, a, b));
         const geo = report.geometryCandidates.find(c => pairIs(c.a, c.b, a, b) &&
           (check.type === 'gearMesh' ? c.kind === (check.kind === 'bevel' ? 'bevel' : 'gear') : c.kind === 'rack-pinion'));
+        const pair = report.higherPairs?.find(p => pairIs(p.a, p.b, a, b) &&
+          (check.type === 'gearMesh' ? p.kind === check.kind : p.kind === 'rack'));
         if (mesh) push('hit', `gear mesh ${mesh.teethA}:${mesh.teethB}`);
+        else if (pair) push('hit', `measured ${pair.kind} pair ${pair.teethA}:${pair.teethB}`);
         else if (geo?.status === 'plausible') push('hit', `geometry screen: plausible ${geo.kind}`);
         else if (geo) push('rejected', `geometry screen rejected: ${geo.reasons.join('; ')}`);
         else push('missing', check.type === 'gearMesh' ? `no ${check.kind} mesh considered` : 'no rack-and-pinion considered');
