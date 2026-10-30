@@ -53,3 +53,22 @@ describe('local dimension test (Wampler et al. 2011, Table 2)', () => {
     expect(macaulayCorank(f, 1) - 1).toBe(2);
   });
 });
+
+describe('LocalDimFinder manual example: f = x y^2, g = x z (Hauenstein 2010, Table 3)', () => {
+  // Real stand-ins for the manual's complex points; the local structure is the same.
+  const at = (z: [number, number, number]) => {
+    const s = new SeriesSpace(3, 4);
+    const [x, y, w] = [0, 1, 2].map(k => s.constant(z[k]).plus(s.variable(k)));
+    return [x.mul(y).mul(y), x.mul(w)];
+  };
+  it('on the plane x = 0 away from the line: dimension 2, multiplicity 1, depth 0', () => {
+    const r = localDimension(at([0, 1, -1]), 0, 2, 3);
+    expect(r.sequences.map(q => q.coranks)).toEqual([[1, 3, 6, 10], [1, 2, 3, 4], [1, 1]]);
+    expect(r).toMatchObject({ dimension: 2, multiplicity: 1, depth: 0 });
+  });
+  it('on the double line y = z = 0: dimension 1, multiplicity 2, depth 1', () => {
+    const r = localDimension(at([2, 0, 0]), 0, 2, 3);
+    expect(r.sequences.map(q => q.coranks)).toEqual([[1, 3, 5, 7], [1, 2, 2]]);
+    expect(r).toMatchObject({ dimension: 1, multiplicity: 2, depth: 1 });
+  });
+});

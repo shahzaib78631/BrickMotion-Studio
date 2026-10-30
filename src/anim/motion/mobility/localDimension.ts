@@ -15,6 +15,13 @@
  *    dimension") that only tightens with more depth; a non-stabilised
  *    sequence is reported as such rather than guessed.
  *
+ * Rank: the LocalDimFinder manual (Hauenstein 2010, app. A) zeroes singular
+ * values below SINGVALZEROTOL (1e-12 at 96-bit precision) and, since its test
+ * points are approximate, compares ranks at perturbed copies of the point.
+ * Our test point is the assembled pose, where every closure holds exactly by
+ * construction, so one rank-revealing QR in double precision with a pivot
+ * threshold of 1e-8 is used.
+ *
  * Here the system is a set of truncated power series around z = 0, so the
  * Macaulay entry for column a and row (j, b) is the coefficient of x^(a-b) in
  * f_j (columns scaled by 1/a!, which does not change rank).
@@ -26,6 +33,8 @@ export type DimensionResult = {
   dimension: number | null;
   /** Multiplicity of the sliced isolated point at that dimension. */
   multiplicity: number | null;
+  /** Steps the corank sequence took to stabilise after the first (0 = regular point). */
+  depth: number | null;
   /** Corank sequences c_(k,d) for every k tried. */
   sequences: { k: number; coranks: number[]; stabilised: boolean }[];
 };
@@ -139,7 +148,7 @@ export function localDimension(system: readonly Series[], lo: number, hi: number
     const sliced = [...system, ...slices(space, k, seed + k)];
     const { coranks, stabilised } = corankSequence(sliced, depth, tol);
     sequences.push({ k, coranks, stabilised });
-    if (stabilised) return { dimension: k, multiplicity: coranks[coranks.length - 1], sequences };
+    if (stabilised) return { dimension: k, multiplicity: coranks[coranks.length - 1], depth: coranks.length - 2, sequences };
   }
-  return { dimension: null, multiplicity: null, sequences };
+  return { dimension: null, multiplicity: null, depth: null, sequences };
 }
