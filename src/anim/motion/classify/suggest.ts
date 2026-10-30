@@ -148,6 +148,25 @@ function build(asm: Assembly, graph: MechanismGraph, rec: Recognition, plan: Pla
   const moving = new Set(plan.bodies.filter(b => b !== ground && b !== plan.frame).map(b => unitOf[b]));
   if (!moving.size) return null;
   const inMoving = (b: number) => moving.has(unitOf[b]);
+  // A body hanging off one other moving body, with no mesh on it (a wheel on its hub), would spin
+  // freely with nothing to drive it: it is carried by that body instead.
+  const meshed = new Set(plan.pairs.flatMap(p => [p.a, p.b]).flatMap(k => { const b = rec.bodyOf.get(k); return b === undefined ? [] : [unitOf[b]]; }));
+  const carrier = new Map<number, number>();
+  for (let pruned = true; pruned;) {
+    pruned = false;
+    for (const u of moving) {
+      if (meshed.has(u) || moving.size < 2) continue;
+      const next = new Set<number>();
+      for (const j of rec.joints) {
+        const [x, y] = unitOf[j.a] === u ? [j.a, j.b] : unitOf[j.b] === u ? [j.b, j.a] : [-1, -1];
+        if (x >= 0 && unitOf[y] !== u) next.add(inMoving(y) ? unitOf[y] : -1 - y);
+      }
+      const [only] = next;
+      if (next.size !== 1 || only < 0) continue;
+      moving.delete(u); carrier.set(u, only); pruned = true;
+    }
+  }
+  const carriedTo = (u: number): number => (carrier.has(u) ? carriedTo(carrier.get(u)!) : u);
 
   // --- Everything else: carried by one moving unit, or static.
   const carriedBy = new Map<number, number>();
@@ -197,7 +216,7 @@ function build(asm: Assembly, graph: MechanismGraph, rec: Recognition, plan: Pla
   // from (a wheel hub is driven at its lower wishbone, where the road pushes); else the nearest body toward
   // the outputs that turns on the frame.
   const onFrame = (u: number) => joints.find(j => (j.a === u || j.b === u) && (j.a === STATIC || j.b === STATIC) && j.kind !== 'spherical');
-  let driver = unitOf[plan.driver];
+  let driver = carriedTo(unitOf[plan.driver]);
   if (!moving.has(driver)) return null;
   const arms = joints.filter(j => j.a === driver || j.b === driver).map(j => (j.a === driver ? j.b : j.a))
     .filter(u => u !== STATIC && onFrame(u)?.point).map(u => ({ u, joint: onFrame(u)! }))

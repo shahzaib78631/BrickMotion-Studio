@@ -34,11 +34,12 @@ as a phase 3 miss.
 ## Results
 
 Current scores are in `<id>.results.txt`. Phase 3 (classifier and
-suggestions): 5590 17/17; 42000 phase 3 14/18. The 42000 misses are
+suggestions): 5590 17/17; 42000 phase 3 16/18. The two 42000 misses are
 connector-data gaps, not loosened tolerances: the rear CV ball sits 5 LDU
 from the hub socket (so the rear wheel does not reach the engine; the drive
-train is driven at the axle), the front pushrods are 6.8 LDU off their
-balls, and rim 44772's LDCad shadow has no pin holes.
+train is driven at the axle), and the front pushrods are 6.8 LDU off their
+balls. Rim 44772's pin holes, missing from the upstream LDCad shadow file,
+come from a local patch (`src/ldraw/shadowPatches.ts`).
 
 ## Sources
 

@@ -95,20 +95,24 @@ export function classify(rec: Recognition, pairs: readonly HigherPair[], screws:
   }));
   const tyreBodies = new Map<number, string[]>();
   for (const t of tyres) { const b = rec.bodyOf.get(t.key); if (b !== undefined) (tyreBodies.get(b) ?? tyreBodies.set(b, []).get(b)!).push(t.key); }
-  /** Tyres a body carries: in it, two joints away (hub, axle, wheel), or on the line of one of its turning joints. */
-  const wheelsOf = (b: number): string[] => {
+  /**
+   * Tyres a body carries: in it, up to `reach` joints away (2: hub, axle, wheel), or on the line of one
+   * of its turning joints. Joints `skip` passes are not followed.
+   */
+  const wheelsOf = (b: number, skip: (e: number) => boolean = () => false, reach = 2): string[] => {
     if (b === ground) return [];
     const found = new Set(tyreBodies.get(b) ?? []);
     for (const e of around[b]) {
+      if (skip(e)) continue;
       const x = other(e, b);
       if (x === ground) continue;
       for (const k of tyreBodies.get(x) ?? []) found.add(k);
-      for (const f of around[x]) { const y = other(f, x); if (y !== ground && y !== b) for (const k of tyreBodies.get(y) ?? []) found.add(k); }
+      if (reach > 1) for (const f of around[x]) { const y = other(f, x); if (y !== ground && y !== b) for (const k of tyreBodies.get(y) ?? []) found.add(k); }
     }
     // A wheel with no connector of its own (a rim the connector data misses) on a turning joint's line.
     for (const e of around[b]) {
       const j = J[e].joint;
-      if (j.kind !== 'revolute' || !j.axis || !j.point) continue;
+      if (skip(e) || j.kind !== 'revolute' || !j.axis || !j.point) continue;
       for (const [key, t] of tyreAxis) {
         if (Math.abs(dot(j.axis, t.axis)) < PARALLEL) continue;
         const d = sub(t.centre, j.point), along = dot(d, j.axis);
@@ -117,8 +121,10 @@ export function classify(rec: Recognition, pairs: readonly HigherPair[], screws:
     }
     return [...found].sort();
   };
-  const kingpin = (b: number) => around[b].some(e => kind(e) === 'revolute' && Math.abs(J[e].joint.axis?.[1] ?? 0) >= KINGPIN);
-  const isHub = (b: number) => b !== ground && kingpin(b) && wheelsOf(b).length > 0;
+  const steers = (e: number) => kind(e) === 'revolute' && Math.abs(J[e].joint.axis?.[1] ?? 0) >= KINGPIN;
+  const kingpin = (b: number) => around[b].some(steers);
+  /** A hub turns on a kingpin and carries a wheel itself: the arm it turns on reaches the same wheel only through the kingpin. */
+  const isHub = (b: number) => b !== ground && kingpin(b) && wheelsOf(b, steers).length > 0;
 
   // --- Four-bars and parallelograms: four revolutes on parallel axes.
   const fourBars: NamedMechanism[] = [];
@@ -170,7 +176,8 @@ export function classify(rec: Recognition, pairs: readonly HigherPair[], screws:
   // --- Suspension: a strut, and the wheel its loop reaches.
   for (const [s, c] of struts) {
     const strut = [J[s].a, J[s].b], others = new Set([...struts.keys()].filter(t => t !== s).flatMap(t => [J[t].a, J[t].b]));
-    const path = nearest(c.bodies.filter(b => b !== ground && !strut.includes(b)), b => wheelsOf(b).length > 0, WHEEL_REACH, new Set([ground, ...others]));
+    // The wheel's own body or the one it turns on (an upright), not an arm two joints from the tyre.
+    const path = nearest(c.bodies.filter(b => b !== ground && !strut.includes(b)), b => wheelsOf(b, undefined, 1).length > 0, WHEEL_REACH, new Set([ground, ...others]));
     const wheelBody = path?.[path.length - 1];
     const bodies = [...new Set([...c.bodies, ...(path ?? [])])];
     out.push({ kind: 'suspension', name: `Suspension — ${label(J[s].a)} in ${label(J[s].b)}${wheelBody === undefined ? ' (no wheel reached)' : ` for ${bare(wheelsOf(wheelBody)[0])}`}`,
@@ -248,7 +255,7 @@ export function classify(rec: Recognition, pairs: readonly HigherPair[], screws:
     const carriage = fourBar ? 'on a four-bar tie rod' : slide !== undefined ? 'on a slide' : 'on tie rods';
     out.push({ kind: 'rack-steering', name: `Rack steering — ${bare(x.p.a)} → ${bare(x.p.b)} ${carriage}, ${hubs.length} hubs`,
       bodies, joints: [...(fourBar?.joints ?? []), ...(slide !== undefined ? [slide] : [])], pairs: [x.p.id, ...(upstream?.pairs ?? [])].sort(),
-      drivers: [driver], outputs: hubs, parts: { pinion: [x.p.a], rack: rec.bodies[R], hubs: partsOf(hubs), wheels: [...new Set(hubs.flatMap(wheelsOf))] } });
+      drivers: [driver], outputs: hubs, parts: { pinion: [x.p.a], rack: rec.bodies[R], hubs: partsOf(hubs), wheels: [...new Set(hubs.flatMap(b => wheelsOf(b)))] } });
   }
 
   /** Bodies within `reach` joints of `from`, not through `stop`, with their paths. */
@@ -275,7 +282,7 @@ export function classify(rec: Recognition, pairs: readonly HigherPair[], screws:
     members.forEach(b => grouped.add(b));
     const bodies = [...new Set([h, ...linked.flatMap(x => x.path)])];
     out.push({ kind: 'steering', name: `Steering — ${members.length} hubs on kingpins`, bodies, joints: [], pairs: [], drivers: [h], outputs: members.slice(1),
-      parts: { hubs: partsOf(members), wheels: [...new Set(members.flatMap(wheelsOf))] } });
+      parts: { hubs: partsOf(members), wheels: [...new Set(members.flatMap(b => wheelsOf(b)))] } });
   }
 
   // --- Gear trains not absorbed by steering.

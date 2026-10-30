@@ -1,6 +1,6 @@
 Mechanism benchmark — LEGO 42000 Grand Prix Racer (LDraw OMR)
-Checks passed: 14/20 (70%) · mechanisms fully found: 2/7
-  phase 3: 14/18 (78%)
+Checks passed: 16/20 (80%) · mechanisms fully found: 3/7
+  phase 3: 16/18 (89%)
   phase 4: 0/2 (0%)
 
 ✓ steering [review] 6/6
@@ -23,9 +23,9 @@ Checks passed: 14/20 (70%) · mechanisms fully found: 2/7
 ✓ rear-suspension [review] 2/2
     hit          left rear wishbone works the rocker and its shock — suspension "Suspension — 4254 in 4255 for 44771 — left" moves every expected part
     hit          rear shock rod slides in its cylinder — cylindrical sliding joint i0/icx ↔ i0/icz
-· front-wheels [review] 0/2
-    missing      right front rim turns on its hub axis — no movable joint on axis [1,0,0] (0 on other axes)
-    missing      left front tyre turns on its hub axis — no movable joint on axis [1,0,0] (0 on other axes)
+✓ front-wheels [review] 2/2
+    hit          right front rim turns on its hub axis — cylindrical revolute joint i0/iga ↔ i0/igb
+    hit          left front tyre turns on its hub axis — cylindrical revolute joint i0/igd ↔ i0/igc
 · selector-wing [review] 0/1
     missing      knob drives the rear wing actuator — no suggestion named linear-actuator / gearbox
 · selector-cover [review] 0/1

@@ -1,4 +1,5 @@
 import type { Mat3, Vec3 } from './parse';
+import { withShadowPatches } from './shadowPatches';
 
 /**
  * LDCad shadow library snap metadata (https://www.melkert.net/LDCad/tech/meta).
@@ -275,10 +276,11 @@ export function clears(info: ShadowInfo | null, id: string | undefined): boolean
   return !!id && [...info.clear].some((c) => c.toLowerCase() === id.toLowerCase());
 }
 
-/** Parses a JSON pack of raw shadow files (name → text) into a lookup. */
+/** Parses a JSON pack of raw shadow files (name → text) into a lookup, local patches included. */
 export function shadowLookupFrom(files: Record<string, string>): ShadowLookup {
   const parsed = new Map<string, ShadowInfo>();
-  const index = new Map(Object.entries(files).map(([k, v]) => [k.toLowerCase().replace(/\\/g, '/'), v]));
+  // Local connector additions (shadowPatches.ts) ride on top of the upstream pack.
+  const index = new Map(Object.entries(withShadowPatches(files)));
   return (file) => {
     const n = file.toLowerCase().replace(/\\/g, '/');
     let info = parsed.get(n);

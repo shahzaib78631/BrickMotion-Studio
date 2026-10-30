@@ -117,15 +117,15 @@
       "mechanism": "front-wheels",
       "type": "rotates",
       "label": "right front rim turns on its hub axis",
-      "status": "missing",
-      "detail": "no movable joint on axis [1,0,0] (0 on other axes)"
+      "status": "hit",
+      "detail": "cylindrical revolute joint i0/iga ↔ i0/igb"
     },
     {
       "mechanism": "front-wheels",
       "type": "rotates",
       "label": "left front tyre turns on its hub axis",
-      "status": "missing",
-      "detail": "no movable joint on axis [1,0,0] (0 on other axes)"
+      "status": "hit",
+      "detail": "cylindrical revolute joint i0/igd ↔ i0/igc"
     },
     {
       "mechanism": "selector-wing",
@@ -175,7 +175,7 @@
       "id": "front-wheels",
       "title": "Front wheels roll freely",
       "evidence": "review",
-      "hit": 0,
+      "hit": 2,
       "total": 2
     },
     {
@@ -195,7 +195,7 @@
   ],
   "byPhase": {
     "3": {
-      "hit": 14,
+      "hit": 16,
       "total": 18
     },
     "4": {
@@ -204,10 +204,10 @@
     }
   },
   "score": {
-    "hit": 14,
+    "hit": 16,
     "total": 20,
-    "recall": 0.7,
-    "mechanismsComplete": 2,
+    "recall": 0.8,
+    "mechanismsComplete": 3,
     "mechanisms": 7
   },
   "noise": {
