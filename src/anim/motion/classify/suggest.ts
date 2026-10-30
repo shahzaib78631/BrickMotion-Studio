@@ -26,6 +26,7 @@ import { worldFeatures } from '../gears/gearTable';
 import type { MechanismGraph } from '../v4/mechanismGraph';
 import type { JointDrive, LoopClosure, MechanismProgram, Selector, ShiftMark, TransmissionConstraint, Vec3 } from '../v4/mechanismProgram';
 import { MechanismSolver } from '../v4/mechanismSolver';
+import { shockStroke } from '../vehicle/suspension';
 import { provenSuggestion, MAX_HINGE_CARRIED, type SuggestedMechanism } from '../v4/autoMechanics';
 import type { NamedMechanism } from './patterns';
 import { ENGAGE_MIN, type ShiftCoupling, type ShiftElement } from '../gearbox/shiftElements';
@@ -68,6 +69,8 @@ type Plan = {
   gears?: GearRow[];
   /** The mechanism's own frame (a four-bar's fixed link, a turntable's base) when it is not the model's main body. */
   frame?: number;
+  /** A suspension's wheel (tyre instance key). */
+  wheel?: string;
   warnings: string[];
 };
 
@@ -80,7 +83,7 @@ export function suggestMechanisms(asm: Assembly, graph: MechanismGraph, named: r
   const out: SuggestedMechanism[] = [];
   for (const plan of [...plans(rec, named, byId), ...gearPlans(asm, rec, named, byId, gearbox)]) {
     const s = build(asm, graph, rec, plan);
-    if (s) out.push(plan.gears ? { ...s, gears: plan.gears } : s);
+    if (s) out.push({ ...s, ...(plan.gears ? { gears: plan.gears } : {}), ...(plan.wheel ? { wheel: plan.wheel } : {}) });
   }
   return sided(asm, out);
 }
@@ -139,7 +142,8 @@ function plans(rec: Recognition, named: readonly NamedMechanism[], byId: Readonl
     if (driver === undefined) continue;
     const fixed = m.kind === 'turntable' ? m.bodies.find(b => b !== driver) : m.parts?.frame ? rec.bodyOf.get(m.parts.frame[0]) : undefined;
     out.push({ title: m.name, mechanism: { kind: m.kind, name: m.name }, bodies: m.bodies, pairs: pairsOf(m), driver, outputs: m.outputs,
-      ...(fixed !== undefined && fixed !== ground ? { frame: fixed } : {}), warnings: [] });
+      ...(fixed !== undefined && fixed !== ground ? { frame: fixed } : {}),
+      ...(m.kind === 'suspension' && m.parts?.wheels?.length ? { wheel: m.parts.wheels[0] } : {}), warnings: [] });
   }
   return out;
 }
@@ -389,7 +393,24 @@ function build(asm: Assembly, graph: MechanismGraph, rec: Recognition, plan: Pla
     if (!axis || (kind === 'revolute' && !j.point)) return null;
     const drive: JointDrive = { id: `named-${program.length + 1}`, body: leader(u), kind, axis: unit(axis) as Vec3,
       ...(kind === 'revolute' ? { pivot: [...j.point!] as Vec3 } : {}), ...(parent === STATIC ? {} : { parent: leader(parent) }) };
+    if (kind === 'prismatic' && plan.mechanism.kind === 'suspension') {
+      const limits = strokeLimits(j, u, drive.axis);
+      if (limits) drive.limits = limits;
+    }
     program.push(drive); jointOf.set(u, drive);
+  }
+  /** A shock's stroke from its parts, as the joint's own coordinate: the child moving along the joint axis. */
+  function strokeLimits(j: Joint, child: number, axis: Vec3): { min: number; max: number; source: 'verified' } | null {
+    const childSide = node(j.ka) === child ? j.ka : j.kb, other = childSide === j.ka ? j.kb : j.ka;
+    for (const a of rec.bodies[childSide]) for (const b of rec.bodies[other]) {
+      const s = shockStroke(asm, a, b, axis);
+      if (!s) continue;
+      // The inner part moves along `out` as the shock extends; the joint moves the child along `axis`.
+      const sense = dot(s.out, axis) * (rec.bodies[childSide].includes(s.inner) ? 1 : -1) > 0 ? 1 : -1;
+      const [min, max] = sense > 0 ? [s.min, s.max] : [-s.max, -s.min];
+      return max > min ? { min, max, source: 'verified' } : null;
+    }
+    return null;
   }
   /** A ball in the tree turns as a hinge: square to its pin and the link (a ball on a pin is a universal joint), or about its planar loop's axis. */
   function ballAxis(j: Joint, child: number, parent: number): V3 | null {

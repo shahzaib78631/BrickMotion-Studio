@@ -34,6 +34,8 @@ export type SuggestedMechanism = {
   mechanism?:{kind:string;name:string};
   /** A gearbox's mode table (spec §4.2), for the Lab to shift between. */
   gears?:GearRow[];
+  /** A suspension's wheel (tyre instance key), for the sweep (spec §5.6). */
+  wheel?:string;
 };
 /** Review-only functional hypotheses, never used as physical mates or
  * auto-render programs without a user explicitly selecting the parts. */
