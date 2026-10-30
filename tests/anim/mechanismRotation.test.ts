@@ -68,8 +68,18 @@ describe('motion graph from turning connectors', () => {
     const g = buildMotionMechanismGraph(asm, [hint('a', 'b', [0, 0, 0]), hint('a', 'b', [5, 0, 0], { type: 'stud-socket', motion: 'fixed', rotates: false })]);
     expect(cluster(g, 'a')).toContain('b');
   });
-  it('leaves connectors without the turning flag as they were', () => {
+  it('holds an axle in a cross hole axially (friction fit): no joint', () => {
     const g = buildMotionMechanismGraph(asm, [hint('a', 'b', [0, 0, 0], { rotates: false })]);
-    expect(g.edges[0].motion).toBe('sliding');
+    expect(g.edges[0].motion).toBe('fixed');
+  });
+  it('keeps a ball joint', () => {
+    const g = buildMotionMechanismGraph(asm, [hint('a', 'b', [0, 0, 0], { type: 'ball-socket', motion: 'ball', rotates: false })]);
+    expect(g.edges[0].motion).toBe('ball');
+  });
+  it('welds a pinned triangle into one body (a locked loop)', () => {
+    const pinZ = (m: string, f: string, c: V3) => hint(m, f, c, { axis: [0, 0, 1], type: 'pin-hole' });
+    const g = buildMotionMechanismGraph(asm, [pinZ('a', 'b', [0, 0, 0]), pinZ('b', 'c', [40, 60, 0]), pinZ('c', 'a', [80, 0, 0])]);
+    expect(cluster(g, 'a')).toEqual(['a', 'b', 'c']);
+    expect(g.edges.every(e => e.motion === 'fixed')).toBe(true);
   });
 });

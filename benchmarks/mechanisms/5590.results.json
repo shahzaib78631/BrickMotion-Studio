@@ -6,7 +6,7 @@
       "type": "rotates",
       "label": "vertical steering input shaft",
       "status": "hit",
-      "detail": "axle-hole revolute joint i0/i5r ↔ i0/i6p"
+      "detail": "axle-hole revolute joint i0/i5r ↔ i0/ix"
     },
     {
       "mechanism": "truck-steering",
@@ -41,14 +41,14 @@
       "type": "rotates",
       "label": "right kingpin",
       "status": "hit",
-      "detail": "axle-hole revolute joint i0/ij ↔ i0/i2x"
+      "detail": "cylindrical revolute joint i0/ih ↔ i0/i5"
     },
     {
       "mechanism": "truck-steering",
       "type": "rotates",
       "label": "left kingpin",
       "status": "hit",
-      "detail": "axle-hole revolute joint i0/ik ↔ i0/i2x"
+      "detail": "cylindrical revolute joint i0/ii ↔ i0/i5"
     },
     {
       "mechanism": "truck-steering",
@@ -118,7 +118,7 @@
       "type": "rotates",
       "label": "rotor shaft",
       "status": "hit",
-      "detail": "axle-hole revolute joint i2/ix4 ↔ i2/iwt"
+      "detail": "cylindrical revolute joint i2/ixw ↔ i2/ixv"
     }
   ],
   "mechanisms": [
@@ -173,20 +173,18 @@
     "mechanisms": 6
   },
   "noise": {
-    "movableEdges": 314,
+    "movableEdges": 129,
     "byMotion": {
-      "revolute": 193,
-      "sliding": 94,
+      "revolute": 102,
       "ball": 27
     },
     "byType": {
-      "axle-hole": 159,
-      "stud-socket": 16,
+      "axle-hole": 52,
       "ball-socket": 27,
       "hinge": 12,
-      "cylindrical": 86,
+      "cylindrical": 26,
       "pin-hole": 10,
-      "clip": 4
+      "clip": 2
     },
     "suggestions": 6,
     "unrelatedSuggestions": 3

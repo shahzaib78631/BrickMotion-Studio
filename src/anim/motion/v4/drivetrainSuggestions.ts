@@ -60,13 +60,15 @@ function findFourBar(g: BodyGraph, coupler: string): FourBar | null {
     const onAxis = (l: BodyLink) => turning(l) && parallel(l.edge.axis, axis);
     // Arms reached from the coupler: direct, or via a connector touching only coupler + arm.
     const reach: Arm[] = [];
+    // Direct arms first; a small body may also be just a connector to the real arm.
+    for (const l of g.links(coupler).filter(onAxis)) if (!reach.some(r => r.body === l.to)) reach.push({ body: l.to, pin: l, pivot: l });
     for (const l of g.links(coupler).filter(onAxis)) {
       const near = g.links(l.to).filter(onAxis).filter(x => x.to !== coupler);
       const others = new Set(near.map(x => x.to));
       if (g.members(l.to).length <= 2 && others.size === 1) {
         const arm = [...others][0];
         if (!reach.some(r => r.body === arm)) reach.push({ body: arm, connector: l.to, pin: l, pivot: near[0] });
-      } else if (!reach.some(r => r.body === l.to)) reach.push({ body: l.to, pin: l, pivot: l });
+      }
     }
     for (let i = 0; i < reach.length; i++) for (let j = i + 1; j < reach.length; j++) {
       const exclude = new Set([coupler, reach[i].body, reach[j].body, reach[i].connector, reach[j].connector]);

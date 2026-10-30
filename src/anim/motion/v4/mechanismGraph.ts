@@ -9,6 +9,8 @@
 import type { Assembly } from '../../../model/assemble';
 import type { MechanicalJoint, MechanicalJointType } from '../../construction/mechanicalConstraintGraph';
 import { jointApproachIsCompatible } from '../jointKinematics';
+import { recogniseMechanism, type Recognition } from '../mobility/recognise';
+import type { JointKind, ScrewJoint } from '../mobility/screw';
 
 type V3 = [number, number, number];
 export type MechanismEdge = {
@@ -35,6 +37,8 @@ export type MechanismGraph = {
   readonly byBody: ReadonlyMap<string, readonly MechanismEdge[]>;
   readonly rigidClusters: readonly (readonly string[])[];
   readonly uncertainBodies: readonly string[];
+  /** Screw-theory bodies, joints and loop mobility behind rigidClusters. */
+  readonly recognition?: Recognition;
   mobility(moving: string, host: string, installed: ReadonlySet<string>,
     kind: 'revolute' | 'prismatic'): Mobility;
   isMate(a: string, b: string): boolean;
@@ -44,70 +48,38 @@ const typeDOF = (joint: MechanicalJoint): Mobility['dof'] => joint.motion === 'r
   : joint.motion === 'ball' ? 'ball' : joint.motion === 'sliding' ? 'prismatic' : 'fixed';
 const pair = (a: string, b: string) => a < b ? `${a.length}:${a}|${b}` : `${b.length}:${b}|${a}`;
 
-/**
- * Connectors that can turn (an axle or pin in a round hole) only make a real
- * joint when nothing else holds the same two parts: a fixed connector, or a
- * second turning connector on a different axis line, makes the pair rigid.
- * Pairs without any turning connector keep their connectors' own motion.
- */
-function effectiveMotions(hints: readonly MechanicalJoint[]): Map<MechanicalJoint, MechanicalJoint['motion']> {
-  const byPair = new Map<string, MechanicalJoint[]>();
-  for (const j of hints) { const k = pair(j.male, j.female); const list = byPair.get(k) ?? []; list.push(j); byPair.set(k, list); }
-  const out = new Map<MechanicalJoint, MechanicalJoint['motion']>();
-  for (const list of byPair.values()) {
-    const turning = list.filter(j => j.rotates);
-    if (!turning.length) continue;
-    const held = list.some(j => !j.rotates && j.motion === 'fixed') || !turning.every(j => sameLine(turning[0], j));
-    for (const j of list) out.set(j, held ? 'fixed' : j.rotates ? 'revolute' : j.motion);
-  }
-  return out;
-}
-const sameLine = (a: MechanicalJoint, b: MechanicalJoint) => {
-  const la = Math.hypot(...a.axis), lb = Math.hypot(...b.axis);
-  if (!la || !lb) return false;
-  const u = a.axis.map(x => x / la), w = b.axis.map(x => x / lb);
-  if (Math.abs(u[0] * w[0] + u[1] * w[1] + u[2] * w[2]) < Math.cos((4 * Math.PI) / 180)) return false;
-  const d = b.centre.map((x, k) => x - a.centre[k]);
-  const along = d[0] * u[0] + d[1] * u[1] + d[2] * u[2];
-  return Math.hypot(...d.map((x, k) => x - u[k] * along)) <= 2;
-};
+/** Joint kind from the screw analysis -> the motion hint the v4 pipeline reads. */
+const motionOfKind = (kind: JointKind, own: MechanicalJoint['motion']): MechanicalJoint['motion'] =>
+  kind === 'revolute' || kind === 'cylindrical' ? 'revolute' : kind === 'spherical' ? 'ball'
+    : kind === 'prismatic' ? 'sliding' : kind === 'fixed' ? 'fixed' : own;
 
 export function buildMotionMechanismGraph(asm: Assembly, hints: readonly MechanicalJoint[]): MechanismGraph {
   const parts = new Set(asm.instances.map(i => i.key));
   const all = new Map<string, MechanismEdge[]>();
   for (const id of parts) all.set(id, []);
   const edges: MechanismEdge[] = [], known = new Set<string>();
-  const parent = new Map([...parts].map(id => [id, id]));
-  const root = (id: string): string => {
-    let r = id;
-    while (parent.get(r) !== r) r = parent.get(r)!;
-    let v = id;
-    while (v !== r) { const next = parent.get(v)!; parent.set(v, r); v = next; }
-    return r;
-  };
-  const join = (a: string, b: string) => { const ra = root(a), rb = root(b); if (ra !== rb) parent.set(rb, ra); };
-  const effective = effectiveMotions(hints);
-  for (const j of hints) {
-    if (!parts.has(j.male) || !parts.has(j.female) || j.male === j.female ||
-        !finite3(j.centre) || !finite3(j.axis)) continue;
+  const valid = hints.filter(j => parts.has(j.male) && parts.has(j.female) && j.male !== j.female &&
+    finite3(j.centre) && finite3(j.axis) && Math.hypot(...j.axis) >= 0.9 && Number.isFinite(j.engagement) && j.engagement >= 0);
+  // Bodies and joints from the connectors' constraint wrenches and the loops
+  // they form (mobility/recognise.ts); fixed pairs and locked loops merge.
+  const recognition = recogniseMechanism([...parts], valid);
+  const pairJoint = new Map<string, ScrewJoint>();
+  for (const j of recognition.joints) for (const c of j.connectors) pairJoint.set(c.id, j.joint);
+  for (const j of valid) {
     const len = Math.hypot(...j.axis);
-    if (len < 0.9 || !Number.isFinite(j.engagement) || j.engagement < 0) continue;
+    const same = recognition.bodyOf.get(j.male) === recognition.bodyOf.get(j.female);
+    const kind = same ? 'fixed' : pairJoint.get(j.id)?.kind;
     const edge: MechanismEdge = { id: j.id, a: j.male, b: j.female, type: j.type,
-      motion: effective.get(j) ?? j.motion, centre: [...j.centre] as V3,
+      motion: kind ? motionOfKind(kind, j.motion) : j.motion, centre: [...j.centre] as V3,
       axis: j.axis.map(x => x / len) as V3, source: 'ldcad-shadow', joint: j };
     edges.push(edge);
     all.get(j.male)!.push(edge); all.get(j.female)!.push(edge);
     known.add(j.male); known.add(j.female);
-    // Only explicitly rigid joints connect rigid clusters. A pin or axle
-    // with sliding metadata is not promoted to a weld.
-    if (edge.motion === 'fixed') join(j.male, j.female);
   }
-  const groups = new Map<string, string[]>();
-  for (const id of parts) { const key = root(id); const list = groups.get(key) ?? []; list.push(id); groups.set(key, list); }
-  const rigidClusters = [...groups.values()].map(g => g.sort()).sort((a,b)=>a[0].localeCompare(b[0]));
+  const rigidClusters = recognition.bodies.map(b => [...b]).sort((a,b)=>a[0].localeCompare(b[0]));
   const matePairs = new Set(edges.map(e => pair(e.a, e.b)));
   return {
-    edges, byBody: all, rigidClusters, uncertainBodies: [...parts].filter(p => !known.has(p)).sort(),
+    edges, byBody: all, rigidClusters, recognition, uncertainBodies: [...parts].filter(p => !known.has(p)).sort(),
     isMate: (a, b) => matePairs.has(pair(a,b)),
     mobility(moving, host, installed, kind): Mobility {
       const engaged = (all.get(moving) ?? []).filter(e => installed.has(e.a === moving ? e.b : e.a));
