@@ -19,7 +19,8 @@ import { screwJoint, type ConnectorFreedom, type ScrewJoint, type V3 } from './s
  * What a connector leaves free. Studs are friction fits: never a joint on
  * their own. Axles and pins are held along their axis by friction, bushes and
  * cross holes, so an axial slide counts only with `axialSlides` (a builder
- * does not intend a wheel to slide off its axle).
+ * does not intend a wheel to slide off its axle), or where the parts were
+ * designed to slide (`designedSlide`: a rod in its cylinder).
  */
 export function connectorFreedom(j: MechanicalJoint, axialSlides = false): ConnectorFreedom | null {
   const len = Math.hypot(...j.axis);
@@ -27,7 +28,7 @@ export function connectorFreedom(j: MechanicalJoint, axialSlides = false): Conne
   const axis = j.axis.map(x => x / len) as V3, centre = [...j.centre] as V3;
   if (j.type === 'ball-socket' || j.motion === 'ball') return { centre, axis, ball: true, turns: true, slides: false };
   if (j.type === 'stud-socket') return { centre, axis, turns: false, slides: false };
-  return { centre, axis, turns: !!j.rotates || j.motion === 'revolute', slides: axialSlides && j.motion === 'sliding' };
+  return { centre, axis, turns: !!j.rotates || j.motion === 'revolute', slides: (axialSlides || !!j.designedSlide) && j.motion === 'sliding' };
 }
 
 export type RecognisedPair = { a: string; b: string; joint: ScrewJoint; connectors: MechanicalJoint[] };

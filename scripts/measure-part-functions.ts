@@ -1,5 +1,6 @@
 /**
- * Measures what every LDraw part does mechanically (gear teeth, worms, racks)
+ * Measures what every LDraw part does mechanically (gear teeth, worms, racks,
+ * bores, rods, round seats, linear actuators)
  * from its geometry and writes public/data/part-functions.json, which the app
  * loads at start-up instead of measuring each part as it loads.
  *
@@ -10,6 +11,7 @@ import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PartLibrary } from '../src/ldraw/library';
 import { measurePartFunctions, packPartFunctions, type PartFunctions } from '../src/anim/motion/parts/partFunctions';
+import { measureActuator } from '../src/anim/motion/parts/actuators';
 
 const ROOT = process.cwd();
 const LDRAW = join(ROOT, 'public', 'ldraw');
@@ -31,7 +33,7 @@ async function main() {
     const t = Date.now();
     if (i % 400 === 0) lib = new PartLibrary(fetchText);
     try {
-      measured[id] = measurePartFunctions(await lib.loadPart(`${id}.dat`));
+      measured[id] = measurePartFunctions(await lib.loadPart(`${id}.dat`), await measureActuator(id, n => lib.getFile(n)));
     } catch (e) {
       console.warn(`${id}: ${(e as Error).message}`);
     }

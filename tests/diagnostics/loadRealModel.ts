@@ -12,6 +12,7 @@ import { parseLDraw, normalizeName } from '../../src/ldraw/parse';
 import { shadowLookupFrom } from '../../src/ldraw/shadow';
 import { allPartIds } from '../../src/state/useModel';
 import { ensurePartFunctions, loadPartFunctionTable } from '../../src/anim/motion/parts/partFunctions';
+import { measureActuator } from '../../src/anim/motion/parts/actuators';
 
 const LDRAW = join(__dirname, '..', '..', 'public', 'ldraw');
 const SHADOW = join(__dirname, '..', '..', 'public', 'data', 'ldcad-shadow.json');
@@ -32,7 +33,7 @@ export async function loadRealModel(file: string): Promise<{ asm: Assembly; metr
     const flat = await lib.loadPart(id);
     map.set(id, measurePart(flat, id));
     // Gears and racks: from the packed table, or measured from geometry as the app does without it.
-    ensurePartFunctions(id, flat, embedded.has(id.replace(/\.dat$/i, '')));
+    ensurePartFunctions(id, flat, embedded.has(id.replace(/\.dat$/i, '')), await measureActuator(id, n => lib.getFile(n)));
   }
   const metrics: Metrics = (p) => map.get(p) ?? measurePart(null, p);
   return { asm: assemble(plan, metrics, parseLDConfig(readFileSync(join(LDRAW, 'LDConfig.ldr'), 'utf8'))), metrics };

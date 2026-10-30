@@ -123,9 +123,20 @@ function genericMate(
     a.snap.gender === b.snap.gender
   )
     return null;
+  // Same group; or, with no group on either, LDCad's match=size: the same
+  // bounding shape and size (an engine piston on its connecting rod).
+  const bySize =
+    !a.snap.group &&
+    !b.snap.group &&
+    a.snap.match?.toLowerCase() === "size" &&
+    b.snap.match?.toLowerCase() === "size" &&
+    a.snap.shapes[0] === b.snap.shapes[0] &&
+    Math.abs(a.snap.radius - b.snap.radius) <= 0.1 &&
+    Math.abs(a.snap.length - b.snap.length) <= 0.1;
   if (
-    !a.snap.group ||
-    a.snap.group.toLowerCase() !== b.snap.group?.toLowerCase()
+    !bySize &&
+    (!a.snap.group ||
+      a.snap.group.toLowerCase() !== b.snap.group?.toLowerCase())
   )
     return null;
   const centre = (s: WorldSnap) =>

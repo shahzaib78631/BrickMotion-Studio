@@ -6,6 +6,7 @@ import { measurePart, type PartMetrics } from '../ldraw/metrics';
 import { normalizeName, parseLDraw, type LDrawFile } from '../ldraw/parse';
 import { shadowLookupFrom, type ShadowLookup } from '../ldraw/shadow';
 import { ensurePartFunctions, forgetPartFunctions, loadPartFunctionTable, type PartFunctionTable } from '../anim/motion/parts/partFunctions';
+import { measureActuator } from '../anim/motion/parts/actuators';
 
 /** App-wide cache of LDraw parts: colors, catalog, measurements and geometry. */
 let library = new PartLibrary(browserFetchText);
@@ -120,7 +121,7 @@ export const getLibrary = () => library;
 async function loadOne(id: string): Promise<void> {
   const flat = await library.loadPart(id);
   metrics.set(id, measurePart(flat, id));
-  ensurePartFunctions(id, flat, embedded.has(id.replace(/\.dat$/i, '')));
+  ensurePartFunctions(id, flat, embedded.has(id.replace(/\.dat$/i, '')), await measureActuator(id, (n) => library.getFile(n)));
   geometry.set(id, flat ? buildPartGeometry(flat) : null);
 }
 

@@ -15,6 +15,7 @@ import { MechanismSolver } from './mechanismSolver';
 import type { MechanismProgram } from './mechanismProgram';
 import { screenMechanismGeometry, type GeometryCandidate } from '../spatial/geometryScreen';
 import { worldGear } from '../gears/gearTable';
+import { libraryConnectors, withLibraryConnectors } from '../parts/libraryConnectors';
 import { suggestRackSteering } from './drivetrainSuggestions';
 import type { WorldGear } from '../gears/gearGeometry';
 
@@ -45,7 +46,9 @@ export function inspectMechanisms(asm: Assembly, metrics: Metrics): LabReport {
     metrics,
   };
   const matched = buildMechanicalConstraintGraph(model);
-  const graph = buildMotionMechanismGraph(asm, refineKnownMechanicalJoints(matched.joints, asm));
+  // LDCad connectors, plus slides and seats measured from part geometry.
+  const known = refineKnownMechanicalJoints(matched.joints, asm);
+  const graph = buildMotionMechanismGraph(asm, withLibraryConnectors(known, libraryConnectors(asm, metrics, known)));
   const detection = detectAutomaticMechanics(asm, metrics, graph);
   const measured = new Map(asm.instances.flatMap(i => { const g = worldGear(i.key, i.part, i.world); return g ? [[i.key, g] as [string, WorldGear]] : []; }));
   const geometryCandidates = screenMechanismGeometry(detection.parts,

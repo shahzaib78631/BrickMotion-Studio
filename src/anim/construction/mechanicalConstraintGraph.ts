@@ -30,6 +30,12 @@ export type MechanicalJoint = {
   rotates?: boolean;
   /** A tightly scoped contact tube, only for exact profiled cylindrical mates. */
   region?: ContactRegion;
+  /** A slide the part was designed for (a rod in a shock absorber, a piston in
+   * its cylinder), measured from geometry: it slides along `axis` even though
+   * axles and pins do not. */
+  designedSlide?: boolean;
+  /** How far the male may move along `axis` from where it was built, LDU. */
+  travel?: [number, number];
 };
 export type MechanicalConstraintGraph = {
   joints: MechanicalJoint[];
