@@ -11,6 +11,9 @@ import { saveBlob, safeFileName } from './download';
 import { Ic } from './icons';
 import { TransmissionDesigner } from './TransmissionDesigner';
 import { GearboxTable } from './GearboxTable';
+import { VehicleTable } from './VehicleTable';
+import { vehicleReport } from '../anim/motion/vehicle/vehicleReport';
+import { sweepSuspension } from '../anim/motion/vehicle/suspension';
 import { sweepMechanism, type SweepResult } from '../anim/motion/v4/mechanismSweep';
 import { composeTransmissionProgram } from '../anim/motion/v4/transmissionComposer';
 import { MechanismSolver } from '../anim/motion/v4/mechanismSolver';
@@ -92,6 +95,13 @@ export function MechanismLabPanel({ model, onRender }: { model: ModelState; onRe
 
   const candidates = report?.detection.suggestions ?? [];
   const gearbox = lab.program?.shiftTrack ? candidates.find(s => s.program === lab.program) : undefined;
+  // A vehicle: one solver per program; the report follows the steering.
+  const vehicleSolver = useMemo(() => { try { return lab.program?.vehicle ? new MechanismSolver(model.view, lab.program) : null; } catch { return null; } }, [lab.program, model.view]);
+  const vehicle = useMemo(() => { try { return lab.program?.vehicle && vehicleSolver ? vehicleReport(lab.program.vehicle, vehicleSolver, lab.position) : null; } catch { return null; } },
+    [lab.program, vehicleSolver, lab.position]);
+  // A suspension carrying a wheel: swept once per program.
+  const suspended = lab.program ? candidates.find(s => s.program === lab.program && s.wheel) : undefined;
+  const suspension = useMemo(() => { try { return suspended ? sweepSuspension(model.view, suspended.program, suspended.wheel!) : null; } catch { return null; } }, [suspended, model.view]);
   const joints = useMemo(() => (report?.detection.joints ?? []).filter(j =>
     `${j.a} ${j.b} ${j.kind} ${j.motion}`.toLowerCase().includes(query.toLowerCase())), [report, query]);
   const ratios = report?.detection.gearMeshes ?? [];
@@ -330,7 +340,7 @@ export function MechanismLabPanel({ model, onRender }: { model: ModelState; onRe
               }}>{engagedRatchet?'Reset pawl + centre':'Centre'}</button>
               <button className="nx-btn nx-sm" onClick={lab.stop}>Exit preview</button>
             </div>
-            <label className="nx-field">Driver position <b>{formatPosition(lab.position)}</b>
+            <label className="nx-field">{lab.program?.vehicle ? 'Steering' : 'Driver position'} <b>{formatPosition(lab.position)}</b>
               <input aria-label="Mechanism driver position" type="range"
                 min={-displayPosition(max)} max={displayPosition(max)}
                 step={driveKind === 'revolute' ? 0.1 : 0.05}
@@ -347,6 +357,16 @@ export function MechanismLabPanel({ model, onRender }: { model: ModelState; onRe
               <input aria-label="Mechanism cycles per minute" type="range" min={1} max={120} step={1} value={lab.rpm}
                 onChange={e => lab.setRpm(Number(e.target.value))} />
             </label>
+            {vehicle && lab.program?.vehicle && <div className="nx-field">
+              <span>Driving · {lab.playing ? 'playing drives it round' : 'press Play to drive'}</span>
+              <VehicleTable report={vehicle} label={t => {
+                const w = lab.program!.vehicle!.wheels.find(x => x.tyre === t);
+                return `${partOf.get(t) ?? t}${w ? ` · x ${Math.round(w.centre[0])}, z ${Math.round(w.centre[2])}${w.steered ? ' · steered' : ''}` : ''}`;
+              }} />
+            </div>}
+            {suspension && <p className="nx-fine bm-suspension">
+              Camber gain {(Math.abs(suspension.camberGainDegPerLdu) < 5e-4 ? 0 : suspension.camberGainDegPerLdu).toFixed(3)}°/LDU · bump steer {suspension.bumpSteerDeg.toFixed(2)}° over {suspension.travelLdu.toFixed(1)} LDU{suspension.strokeMeasured ? '' : ' · stroke not measured'}
+            </p>}
             {gearbox?.gears && <div className="nx-field">
               <span>Gears · now <b>{lab.gear || '—'}</b>{lab.shift ? ' (chosen by hand)' : ''}</span>
               <GearboxTable rows={gearbox.gears} current={gearbox.gears.find(r => r.label === lab.gear)?.id}

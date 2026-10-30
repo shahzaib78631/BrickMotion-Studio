@@ -37,6 +37,7 @@ import { useMechanismLab } from '../state/mechanismLab';
 import { MechanismSolver } from '../anim/motion/v4/mechanismSolver';
 import { solveLabFrame } from '../anim/motion/v4/mechanismLab';
 import { playShiftTrack } from '../anim/motion/gearbox/shiftPlayback';
+import { vehicleFrame } from '../anim/motion/vehicle/vehiclePlayback';
 import { SpatialMechanismSolver } from '../anim/motion/kinematics/spatialModel';
 import type { SpatialLinkagePreview } from '../anim/motion/spatial/spatialAdapter';
 import type { MechanismProgram } from '../anim/motion/v4/mechanismProgram';
@@ -545,6 +546,8 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
               labAssembly = assembly;
               labProgram = lab.program;
               labRestInverse = new Map([...labSolver.rest].map(([k, m]) => [k, m.clone().invert()]));
+              // A vehicle carries every part, not only the program's bodies.
+              if (lab.program!.vehicle) for (const i of assembly.instances) if (!labRestInverse.has(i.key)) labRestInverse.set(i.key, i.world.clone().invert());
               labClock = 0;
               labDrawnPosition = Number.NaN;
               labInputSignature = '';
@@ -553,12 +556,15 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
             // A gearbox with a shift track runs one way through its cycle, shifting as it goes;
             // it redraws every frame so shift rings finish sliding while paused.
             const shifting = !!labSolver?.program.shiftTrack && !lab.spatial && !!lab.amplitude;
+            // A vehicle: the slider steers, playing drives it round (400 LDU per cycle).
+            const driving = !!labSolver?.program.vehicle && !lab.spatial;
             const cycle = lab.playing ? (labClock * lab.rpm / 60) % 1 : Math.min(1, Math.max(0, (lab.position / lab.amplitude + 1) / 2));
             const drive = shifting ? lab.amplitude * (2 * cycle - 1)
+              : driving ? lab.position
               : lab.playing ? Math.sin(labClock * 2 * Math.PI * lab.rpm / 60) * lab.amplitude
               : lab.position;
             const inputSignature = JSON.stringify([lab.additionalInputs,lab.engagements]);
-            if (shifting || drive !== labDrawnPosition || inputSignature !== labInputSignature || !labPreviewWasActive) {
+            if (shifting || (driving && lab.playing) || drive !== labDrawnPosition || inputSignature !== labInputSignature || !labPreviewWasActive) {
               const bases = labBaseRef.current;
               const animated = new Map<string, THREE.Matrix4>();
               if(lab.spatial && spatialSolver){
@@ -585,7 +591,8 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
                   const f=playShiftTrack(labSolver,cycle,lab.shift??undefined,lab.amplitude);
                   frames=f.poses;
                   if(f.mode!==lab.gear)useMechanismLab.setState({gear:f.mode});
-                }else frames=solveLabFrame(labSolver,drive,lab.additionalInputs,lab.engagements);
+                }else if(driving)frames=vehicleFrame(assembly,labSolver,drive,labClock*lab.rpm/60*400);
+                else frames=solveLabFrame(labSolver,drive,lab.additionalInputs,lab.engagements);
                 for (const [key,pose] of frames) {
                   const base=bases.get(key),inverse=labRestInverse.get(key);
                   if(base&&inverse)animated.set(key,pose.clone().multiply(inverse).multiply(base));
@@ -595,7 +602,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
               labDrawnPosition = drive;
               labInputSignature = inputSignature;
             }
-            if (lab.playing && now - labLastUI >= 120) {
+            if (lab.playing && !driving && now - labLastUI >= 120) {
               labLastUI = now;
               useMechanismLab.setState({ position: drive });
             }

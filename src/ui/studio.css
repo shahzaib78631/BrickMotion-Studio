@@ -256,3 +256,5 @@
 .bm-gearbox td:last-child{text-align:right;width:1%}
 .bm-gearbox tr.on td{background:var(--hover);font-weight:650}
 .bm-gearbox tr.locked td{color:var(--ink3)}
+.bm-vehicle{display:grid;gap:4px}
+.bm-suspension{margin:4px 0 0}
