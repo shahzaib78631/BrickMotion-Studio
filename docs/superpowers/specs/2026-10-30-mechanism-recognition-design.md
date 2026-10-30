@@ -29,11 +29,12 @@ kinematics, tracks, chains and ropes.
 | LDCad shadow snaps, profiled cylinder mates | `construction/profiledCylinderMate.ts`, `mechanicalConstraintGraph.ts` | Raw contact evidence for stage A |
 | Rigid clusters, body graph | `v4/mechanismGraph.ts`, `v4/bodyGraph.ts` | Replaced by stage B (computed, not hand-classified) |
 | Measured gear table, spur/bevel/rack meshing | `gears/` | Seed of the higher-pair library (stage C) |
-| Joint-coordinate solver with closures, transmissions, rack-on-arc contact | `v4/mechanismSolver.ts` | Basis of the unified solver (section 3) |
-| 6-DOF spatial solver with Ackermann, winch and differential-drive laws | `v6/spatialConstraints.ts` | Its laws move into the unified solver, then it is retired |
+| Joint-coordinate solver with closures, transmissions, rack-on-arc contact | `v4/mechanismSolver.ts` | Now a front end of the unified solver (Phase 2 ✓) |
+| 6-DOF spatial solver with Ackermann, winch and differential-drive laws | was `v6/spatialConstraints.ts` | Retired in Phase 2: its API is `kinematics/spatialModel.ts`, its laws `kinematics/laws.ts` |
 | Rack steering assembler, 5590 benchmark | `v4/drivetrainSuggestions.ts`, `benchmarks/mechanisms/` | Becomes one pattern in the classifier (stage E) |
 
-Two solvers with overlapping features are the main structural debt. This
+Two solvers with overlapping features were the main structural debt. Since
+Phase 2 there is one (`src/anim/motion/kinematics/`). This
 design ends with one.
 
 ## 2. Recognition pipeline
@@ -182,6 +183,14 @@ whole-function mechanisms (steering, gearbox, crane) > single named joints
 
 ## 3. Unified solver
 
+Implemented in `src/anim/motion/kinematics/` (Phase 2): `system.ts` (joint
+coordinates on a spanning tree, cut joints with six closure equations, point,
+distance and rolling equations, exact Jacobian including the inverse left
+Jacobian of SO(3)), `laws.ts` (all 27 v6 mechanics), `solve.ts` (corrector,
+bisecting continuation, active set, dead-point stop) and `spatialModel.ts`
+(the former v6 rig API). Authored closure tolerances (v4) are soft rows,
+minimised inside the exact constraints.
+
 One kinematic solver; dynamics are out of scope.
 
 - **Coordinates:** joint coordinates on the spanning tree from E (as today's
@@ -315,7 +324,7 @@ require ([MotionSolve tutorial][altair]).
 | Phase | Builds | Done when |
 |---|---|---|
 | 1 ✓ | Wrench joints (A–B), loop basis, local-dimension mobility (D) | Done: 5590 movable connector edges 314 → 129 (92 body joints), still 17/17; mobility suite passes (incl. Wampler Table 2 and Bennett) |
-| 2 | Unified solver: analytic Jacobian, predictor-corrector, singularity stop, several drivers; port v6 laws | All v4 and v6 tests pass on it; v6 deleted |
+| 2 ✓ | Unified solver: analytic Jacobian, predictor-corrector, singularity stop, several drivers; port v6 laws | Done: v6 deleted; vitest 893 pass (only the pre-existing minifig failure), verify:v8:all 192/192, 5590 17/17 at unchanged speed (≈1.55 s); new solver suite covers full-turn crank, 3 rad jump on one branch, dead-point stop, redundant parallelogram, two drivers, stops, Bennett |
 | 3 | Higher-pair library (C) and classifier (E); suggestions from mobility | 5590 17/17; first added official model ≥ 80 % |
 | 4 | Gearbox modes | Ratio table matches the set's manual on the gearbox benchmark; a shift during playback never jumps |
 | 5 | Vehicle mode: rolling, ICR, scrub, differential, suspension | 5590 drives a circle with correct wheel spins; tandem-axle scrub reported; suspension sweep gives bump steer |
