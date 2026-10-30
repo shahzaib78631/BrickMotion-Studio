@@ -182,8 +182,8 @@ describe.skipIf(!partDataInstalled() || !existsSync(M42000))('42000 suggestions'
   it('no mechanism is suggested twice', () => {
     const titles = suggestions.map(s => s.title);
     expect(new Set(titles).size).toBe(titles.length);
-    // Each gear of a gearbox is offered on its own, from the same input.
-    const drives = suggestions.filter(s => s.mechanism?.kind !== 'gearbox').map(s => [...drivenBy(s)].sort().join(','));
+    // Each gear of a gearbox is offered on its own, from the same input; the vehicle is driven by its steering's input.
+    const drives = suggestions.filter(s => s.mechanism?.kind !== 'gearbox' && s.mechanism?.kind !== 'vehicle').map(s => [...drivenBy(s)].sort().join(','));
     expect(new Set(drives).size).toBe(drives.length);
   });
 

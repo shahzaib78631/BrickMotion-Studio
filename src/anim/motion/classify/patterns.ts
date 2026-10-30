@@ -19,7 +19,7 @@ import { worldFeatures } from '../gears/gearTable';
 import { blocks, jointsAround, shortestLoop, type Cycle } from './loops';
 
 export type MechanismKind = 'gearbox' | 'gear-train' | 'differential' | 'worm-drive' | 'four-bar' | 'parallelogram' | 'slider-crank' | 'piston-engine'
-  | 'watt-six-bar' | 'stephenson-six-bar' | 'rack-steering' | 'steering' | 'suspension' | 'turntable' | 'linear-actuator';
+  | 'watt-six-bar' | 'stephenson-six-bar' | 'rack-steering' | 'steering' | 'suspension' | 'turntable' | 'linear-actuator' | 'vehicle';
 export type NamedMechanism = {
   kind: MechanismKind; name: string;
   /** Body indices of the recognition, joint indices, and higher pair ids. */

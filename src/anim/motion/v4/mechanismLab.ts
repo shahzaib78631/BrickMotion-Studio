@@ -8,6 +8,8 @@
 import { findShiftElements, type ShiftElement } from '../gearbox/shiftElements';
 import { rateNetwork, type RateNetwork } from '../gearbox/shiftModes';
 import { recognizeVehicle, type Vehicle } from '../vehicle/vehicle';
+import { steeringFor } from '../vehicle/vehicleReport';
+import { vehicleSuggestion } from '../vehicle/vehiclePlayback';
 import * as THREE from 'three';
 import type { Assembly, Metrics } from '../../../model/assemble';
 import type { ConstructionModel, ConstructionNode } from '../../construction/types';
@@ -90,9 +92,12 @@ export function inspectMechanisms(asm: Assembly, metrics: Metrics): LabReport {
   const gearbox = rec ? { shifts: findShiftElements(asm, rec), network: rateNetwork(rec, higherPairs, named, asm) }
     : { shifts: [], network: { meshes: [], locks: [] } };
   detection.suggestions = rankSuggestions([...steering, ...suggestMechanisms(asm, graph, named, higherPairs, screws, gearbox), ...detection.suggestions]);
+  // The vehicle shares its steering suggestion's driver, so it joins after ranking (never merged away), just after that suggestion.
+  const vehicle = rec ? recognizeVehicle(asm, rec, named, metrics) : null;
+  const steer = vehicle ? steeringFor(vehicle, detection.suggestions) : undefined;
+  if (vehicle && steer) detection.suggestions.splice(detection.suggestions.indexOf(steer) + 1, 0, vehicleSuggestion(vehicle, steer));
   return {
-    graph,detection,geometryCandidates,higherPairs,gearbox,
-    vehicle: rec ? recognizeVehicle(asm, rec, named, metrics) : null,
+    graph,detection,geometryCandidates,higherPairs,gearbox,vehicle,
     tolerances: toleratedPairs(asm, withLibraryConnectors(known, measuredJoints), higherPairs),
     pairsExamined: matched.pairsExamined,
     connectorPairs: matched.matesByPair.size,

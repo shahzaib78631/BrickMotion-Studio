@@ -117,7 +117,10 @@ export type MechanismProgram = {
   shiftTrack?: ShiftMark[];
   /** Shift rings to slide along their axis as their clutches engage (LDU along `axis`). */
   selectors?: Selector[];
+  /** Vehicle mode (spec §5): the driver steers, and the whole model drives round its turning centre. */
+  vehicle?: Vehicle;
 };
+import type { Vehicle } from '../vehicle/vehicle';
 export type ShiftMark = { at: number; label: string; engagements: Record<string, boolean> };
 /** Slides of a shift ring from its assembled place, LDU along `axis`. `engaged`: with that
  * clutch in; `waiting`: while its dogs wait to line up (the edge of engagement);
@@ -296,6 +299,17 @@ export function validateMechanismProgram(raw: unknown): string[] {
       s && key(s.ring) && vec(s.axis) && Math.hypot(...s.axis) > 1e-9 && (s.neutral === undefined || finite(s.neutral)) && s.at && typeof s.at === 'object'
       && Object.entries(s.at).every(([id, v]) => clutches.has(id) && v && finite(v.engaged) && finite(v.waiting)));
     if (!ok) errors.push('Selectors: each needs a ring, an axis and slides for known clutches');
+  }
+  if (p.vehicle !== undefined) {
+    const v = p.vehicle, axles = Array.isArray(v?.axles) ? v.axles : [];
+    const unitLevel = (a: unknown) => vec(a) && Math.abs(Math.hypot(...a) - 1) < 1e-6 && Math.abs(a[1]) <= Math.sin((10 * Math.PI) / 180);
+    const ok = !!v && typeof v === 'object' && Array.isArray(v.wheels) && v.wheels.length >= 3 && v.wheels.length <= 64
+      && axles.length >= 2 && axles.length <= 32 && axles.every(a => a && typeof a.solid === 'boolean' && typeof a.steered === 'boolean')
+      && v.wheels.every(w => w && key(w.tyre) && Array.isArray(w.parts) && w.parts.length > 0 && w.parts.every(key) && vec(w.centre) && unitLevel(w.axis)
+        && finite(w.radius) && w.radius > 0 && w.radius <= 500 && Number.isInteger(w.axle) && w.axle >= 0 && w.axle < axles.length && typeof w.steered === 'boolean')
+      && unitLevel(v.forward) && vec(v.ref) && finite(v.groundY) && Array.isArray(v.towed) && v.towed.every(key)
+      && Array.isArray(v.warnings) && v.warnings.every(x => typeof x === 'string');
+    if (!ok) errors.push('Vehicle: 3–64 wheels with horizontal unit axles, radii 0–500 LDU and valid axles, a level forward direction and a reference point');
   }
   return errors;
 }
