@@ -327,6 +327,12 @@ function analyseBlock(block: Block, joints: readonly BodyJoint[], twists: Tw[][]
   const F = evaluate(ring, exp, q), Rset = new Set(rowsR);
   // The solved rows must vanish to the series order; otherwise only the bound stands.
   if (rowsR.some(i => F[i].size() > 1e-6)) return { ...result, dimension: c };
+  // Still to first order is not locked: a coordinate with higher-order terms
+  // moves along the motion (a shock cylinder's pivot when the rocker arm is
+  // square to the shock turns with the square of the rocker's angle).
+  result.locked = vars.map((v, k) => ({ ...v, k }))
+    .filter(({ joint, coordinate, k }) => locked.some(l => l.joint === joint && l.coordinate === coordinate) && q[k].size(2) < 1e-9)
+    .map(({ joint, coordinate }) => ({ joint, coordinate }));
   const g = F.filter((_, i) => !Rset.has(i)).filter(s => s.size(1) > 1e-10);
   const system = g.length ? g : [space.zero()];
   const dim = localDimension(system, 0, c, D, o.seed);

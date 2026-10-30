@@ -41,6 +41,13 @@ describe('planar loops', () => {
     const m = mobility(4, [hinge(0, 1, pin(0, 0)), hinge(1, 2, pin(1, 2)), hinge(2, 3, pin(6, 0)), { a: 3, b: 0, joint: screwJoint([slide]) }]);
     expect(m.blocks[0]).toMatchObject({ dimension: 1, exact: true, realMotion: true });
   });
+  it('a joint still only to first order but moving at second order is not locked (42000 rear rocker square to its shock)', () => {
+    // frame-rocker pivot (3,0), rocker-rod eye (1,0), rod slides in the cylinder along y, cylinder pivot (1,-5).
+    const slide: ConnectorFreedom = { centre: [1 * S, -2.5 * S, 0], axis: [0, 1, 0], turns: false, slides: true };
+    const m = mobility(4, [hinge(0, 1, pin(3, 0)), hinge(1, 2, pin(1, 0)), { a: 2, b: 3, joint: screwJoint([slide]) }, hinge(3, 0, pin(1, -5))]);
+    expect(m.blocks[0]).toMatchObject({ dimension: 1, exact: true });
+    expect(m.blocks[0].locked).toEqual([]);
+  });
   it('an open chain hanging off a loop adds its own DOF', () => {
     const m = mobility(6, [hinge(0, 1, pin(0, 0)), hinge(1, 2, pin(1, 3)), hinge(2, 3, pin(5, 4)), hinge(3, 0, pin(6, 0)), hinge(2, 4, pin(3, 6)), hinge(4, 5, pin(3, 9))]);
     expect(m.freeJoints.length).toBe(2);
