@@ -7,6 +7,7 @@
  */
 import { findShiftElements, type ShiftElement } from '../gearbox/shiftElements';
 import { rateNetwork, type RateNetwork } from '../gearbox/shiftModes';
+import { recognizeVehicle, type Vehicle } from '../vehicle/vehicle';
 import * as THREE from 'three';
 import type { Assembly, Metrics } from '../../../model/assemble';
 import type { ConstructionModel, ConstructionNode } from '../../construction/types';
@@ -40,6 +41,8 @@ export type LabReport = {
   tolerances: TolerancedPair[];
   /** Driving rings with their clutch gears, and the gear network the mode table is read from (spec §4). */
   gearbox: { shifts: ShiftElement[]; network: RateNetwork };
+  /** The model as a vehicle (spec §5), or null: fewer than three ground wheels on two axles. */
+  vehicle: Vehicle | null;
 };
 /** One part pair's accepted placement errors. */
 export type TolerancedPair = { a: string; b: string; partA: string; partB: string; fits: ToleratedFit[] };
@@ -89,6 +92,7 @@ export function inspectMechanisms(asm: Assembly, metrics: Metrics): LabReport {
   detection.suggestions = rankSuggestions([...steering, ...suggestMechanisms(asm, graph, named, higherPairs, screws, gearbox), ...detection.suggestions]);
   return {
     graph,detection,geometryCandidates,higherPairs,gearbox,
+    vehicle: rec ? recognizeVehicle(asm, rec, named, metrics) : null,
     tolerances: toleratedPairs(asm, withLibraryConnectors(known, measuredJoints), higherPairs),
     pairsExamined: matched.pairsExamined,
     connectorPairs: matched.matesByPair.size,
