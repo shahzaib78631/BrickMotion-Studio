@@ -21,6 +21,8 @@ import type { Inequality, Law } from '../kinematics/laws';
 import type { Frame } from '../kinematics/rigid';
 import { UNIT as LDU_PER_RAD } from '../mobility/screw';
 
+/** Most free coordinates a closed-chain program may solve for at once. */
+const MAX_LOOP_COORDINATES = 48;
 const UNIT = (v: Vec3) => new THREE.Vector3(...v).normalize();
 const at = (p: Vec3) => new THREE.Matrix4().makeTranslation(...p);
 const finiteMatrix = (m: THREE.Matrix4) => m.elements.every(Number.isFinite);
@@ -155,8 +157,9 @@ export class MechanismSolver {
     this.factors=factors;
     this.roots=[...new Set([...factors.values()].map(x=>x.root))];
     this.freeRoots=this.roots.filter(x=>x!==this.driver);
-    if ((program.closures?.length??0) && this.freeRoots.length>12)
-      throw Error('More than 12 free joint coordinates in a closed-chain solution. Split the mechanism.');
+    // The unified solver's Jacobians are dense; this only bounds runaway input (a V8 needs 16).
+    if ((program.closures?.length??0) && this.freeRoots.length>MAX_LOOP_COORDINATES)
+      throw Error(`More than ${MAX_LOOP_COORDINATES} free joint coordinates in a closed-chain solution. Split the mechanism.`);
     const bounds=new Map<string,{min:number;max:number}>();
     for (const j of this.order) {
       let min=j.limits?.min ?? -Infinity,max=j.limits?.max ?? Infinity;

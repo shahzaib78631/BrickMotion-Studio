@@ -10,7 +10,7 @@ import type { Assembly, Metrics } from '../../../model/assemble';
 import type { ConstructionModel, ConstructionNode } from '../../construction/types';
 import { buildMechanicalConstraintGraph } from '../../construction/mechanicalConstraintGraph';
 import { buildMotionMechanismGraph, type MechanismGraph } from './mechanismGraph';
-import { refineKnownMechanicalJoints, detectAutomaticMechanics, MAX_SUGGESTIONS, type AutoMechanicsReport } from './autoMechanics';
+import { refineKnownMechanicalJoints, detectAutomaticMechanics, rankSuggestions, type AutoMechanicsReport } from './autoMechanics';
 import { MechanismSolver } from './mechanismSolver';
 import type { MechanismProgram } from './mechanismProgram';
 import { screenMechanismGeometry, type GeometryCandidate } from '../spatial/geometryScreen';
@@ -21,6 +21,8 @@ import { findHigherPairs, type HigherPair } from '../pairs/higherPairs';
 import type { ToleratedFit } from '../../construction/toleratedFit';
 import type { MechanicalJoint } from '../../construction/mechanicalConstraintGraph';
 import { suggestRackSteering } from './drivetrainSuggestions';
+import { classify } from '../classify/patterns';
+import { suggestMechanisms } from '../classify/suggest';
 import type { WorldGear } from '../gears/gearGeometry';
 
 export type LabReport = {
@@ -65,15 +67,19 @@ export function inspectMechanisms(asm: Assembly, metrics: Metrics): LabReport {
   const known = refineKnownMechanicalJoints(matched.joints, asm);
   const measuredJoints = libraryConnectors(asm, metrics, known);
   const graph = buildMotionMechanismGraph(asm, withLibraryConnectors(known, measuredJoints));
-  const higherPairs = findHigherPairs(asm, graph.recognition?.bodyOf, findLinearActuators(asm, measuredJoints));
+  const screws = findLinearActuators(asm, measuredJoints);
+  const higherPairs = findHigherPairs(asm, graph.recognition?.bodyOf, screws);
   const detection = detectAutomaticMechanics(asm, metrics, graph);
   const measured = new Map(asm.instances.flatMap(i => { const g = worldGear(i.key, i.part, i.world); return g ? [[i.key, g] as [string, WorldGear]] : []; }));
   const geometryCandidates = screenMechanismGeometry(detection.parts,
     new Map(asm.instances.map(i=>[i.key,i.worldBox])),graph.rigidClusters,measured);
-  // Whole drive trains built from measured meshes come first: they are the
-  // model's purpose-built functions, not incidental hinges.
-  detection.suggestions.unshift(...suggestRackSteering(asm, graph, geometryCandidates, measured));
-  detection.suggestions.splice(MAX_SUGGESTIONS);
+  // Whole functions come first: the model's purpose-built mechanisms, named
+  // from its loops and meshes, not incidental hinges. Rack steering assembled
+  // from measured meshes leads, as it was built for the model's steering.
+  const steering = suggestRackSteering(asm, graph, geometryCandidates, measured)
+    .map(s => ({ ...s, mechanism: { kind: 'rack-steering', name: s.title } }));
+  const named = graph.recognition ? classify(graph.recognition, higherPairs, screws, asm, metrics) : [];
+  detection.suggestions = rankSuggestions([...steering, ...suggestMechanisms(asm, graph, named, higherPairs, screws), ...detection.suggestions]);
   return {
     graph,detection,geometryCandidates,higherPairs,
     tolerances: toleratedPairs(asm, withLibraryConnectors(known, measuredJoints), higherPairs),

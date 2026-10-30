@@ -5,113 +5,113 @@
       "mechanism": "steering",
       "type": "function",
       "label": "steering wheel turns both front hubs, rear hubs stay",
-      "status": "missing",
-      "detail": "no suggestion named rack-steering / steering"
+      "status": "hit",
+      "detail": "rack-steering \"Rack steering — 32270 → 87761 on tie rods, 2 hubs\" moves every expected part"
     },
     {
       "mechanism": "steering",
       "type": "gearMesh",
       "label": "column 20T double bevel drives the vertical 12T bevel",
-      "status": "missing",
-      "detail": "no bevel mesh considered"
+      "status": "hit",
+      "detail": "measured bevel pair 12:20"
     },
     {
       "mechanism": "steering",
       "type": "gearMesh",
       "label": "vertical 12T bevel drives the forward 20T double bevel",
-      "status": "missing",
-      "detail": "no bevel mesh considered"
+      "status": "hit",
+      "detail": "measured bevel pair 12:20"
     },
     {
       "mechanism": "steering",
       "type": "rackPinion",
       "label": "12T double bevel pinion drives the 1x7 rack",
-      "status": "missing",
-      "detail": "no rack-and-pinion considered"
+      "status": "hit",
+      "detail": "measured rack pair 12:8"
     },
     {
       "mechanism": "steering",
       "type": "rotates",
       "label": "right front hub steers about its kingpin",
-      "status": "missing",
-      "detail": "no movable joint on axis [0,1,0] (1 on other axes)"
+      "status": "hit",
+      "detail": "cylindrical revolute joint i0/iey ↔ i0/igb"
     },
     {
       "mechanism": "steering",
       "type": "rotates",
       "label": "left front hub steers about its kingpin",
-      "status": "missing",
-      "detail": "no movable joint on axis [0,1,0] (1 on other axes)"
+      "status": "hit",
+      "detail": "cylindrical revolute joint i0/if2 ↔ i0/igc"
     },
     {
       "mechanism": "engine",
       "type": "function",
       "label": "right rear wheel turns the crankshaft and the pistons",
       "status": "missing",
-      "detail": "no suggestion named piston-engine / differential / gear-train"
+      "detail": "\"Drive train — axle → differential → gears → piston engine, 8 pistons on 2853\": driven at 92906, not at 92909; \"Gear train — 6542b → 92695, 6 meshes\": driven at 6542b, not at 92909"
     },
     {
       "mechanism": "engine",
       "type": "gearMesh",
       "label": "differential 28T bevel drives the 20T double bevel",
-      "status": "missing",
-      "detail": "no bevel mesh considered"
+      "status": "hit",
+      "detail": "measured bevel pair 20:28"
     },
     {
       "mechanism": "engine",
       "type": "gearMesh",
       "label": "20T double bevel drives the 12T on the crank axle (side by side)",
-      "status": "missing",
-      "detail": "no spur mesh considered"
+      "status": "hit",
+      "detail": "measured spur pair 20:12"
     },
     {
       "mechanism": "engine",
       "type": "gearMesh",
       "label": "right side gear meshes the differential's planet",
-      "status": "rejected",
-      "detail": "geometry screen rejected: No measured cone geometry for bevel part i0/i7o; bevel meshes are not guessed from boxes; Pulley / sprocket shafts are not parallel; Pulley / sprocket planes are not aligned"
+      "status": "hit",
+      "detail": "measured bevel pair 12:12"
     },
     {
       "mechanism": "engine",
       "type": "gearMesh",
       "label": "left side gear meshes the differential's planet",
-      "status": "rejected",
-      "detail": "geometry screen rejected: No measured cone geometry for bevel part i0/i7p; bevel meshes are not guessed from boxes; Pulley / sprocket shafts are not parallel; Pulley / sprocket planes are not aligned"
+      "status": "hit",
+      "detail": "measured bevel pair 12:12"
     },
     {
       "mechanism": "engine",
       "type": "slides",
       "label": "piston slides in its cylinder",
-      "status": "wrong-motion",
-      "detail": "found cylindrical/revolute on this axis, wanted sliding"
+      "status": "hit",
+      "detail": "cylindrical sliding joint i0/ibg ↔ i0/ibp"
     },
     {
       "mechanism": "front-suspension",
       "type": "function",
       "label": "left front wishbone works the rocker and its shock",
       "status": "missing",
-      "detail": "no suggestion named suspension"
+      "detail": "\"Suspension — 4254 in 4255 for 44771 — left\": driven at 32294, not at 32294; \"Suspension — 4254 in 4255 for 44771 — right\": driven at 32294, not at 32294; \"Suspension — 4254 in 4255 (no wheel reached)\": driven at 32054, not at 32294; \"Suspension — 4255 in 4254 (no wheel reached)\": driven at 32056, not at 32294"
     },
     {
       "mechanism": "front-suspension",
       "type": "slides",
       "label": "front shock rod slides in its cylinder",
-      "status": "missing",
-      "detail": "no movable joint on axis [0,0,1] (1 on other axes)"
+      "status": "hit",
+      "detail": "cylindrical sliding joint i0/ifq ↔ i0/ifr"
     },
     {
       "mechanism": "rear-suspension",
       "type": "function",
       "label": "left rear wishbone works the rocker and its shock",
-      "status": "missing",
-      "detail": "no suggestion named suspension"
+      "status": "hit",
+      "detail": "suspension \"Suspension — 4254 in 4255 for 44771 — left\" moves every expected part"
     },
     {
       "mechanism": "rear-suspension",
       "type": "slides",
       "label": "rear shock rod slides in its cylinder",
-      "status": "missing",
-      "detail": "no movable joint on axis [0,0,1] (1 on other axes)"
+      "status": "hit",
+      "detail": "cylindrical sliding joint i0/icx ↔ i0/icz"
     },
     {
       "mechanism": "front-wheels",
@@ -147,28 +147,28 @@
       "id": "steering",
       "title": "Steering wheel -> column -> bevels under the nose -> 12T pinion -> 1x7 rack -> both front hubs",
       "evidence": "review",
-      "hit": 0,
+      "hit": 6,
       "total": 6
     },
     {
       "id": "engine",
       "title": "Rear wheels -> half-shafts -> differential -> 20T/12T -> V8 crankshaft -> pistons",
       "evidence": "review",
-      "hit": 0,
+      "hit": 5,
       "total": 6
     },
     {
       "id": "front-suspension",
       "title": "Front pushrod suspension: wishbone -> pushrod -> rocker -> shock absorber",
       "evidence": "review",
-      "hit": 0,
+      "hit": 1,
       "total": 2
     },
     {
       "id": "rear-suspension",
       "title": "Rear pushrod suspension: wishbone -> pushrod -> rocker -> shock absorber",
       "evidence": "review",
-      "hit": 0,
+      "hit": 2,
       "total": 2
     },
     {
@@ -195,7 +195,7 @@
   ],
   "byPhase": {
     "3": {
-      "hit": 0,
+      "hit": 14,
       "total": 18
     },
     "4": {
@@ -204,25 +204,26 @@
     }
   },
   "score": {
-    "hit": 0,
+    "hit": 14,
     "total": 20,
-    "recall": 0,
-    "mechanismsComplete": 0,
+    "recall": 0.7,
+    "mechanismsComplete": 2,
     "mechanisms": 7
   },
   "noise": {
-    "movableEdges": 395,
+    "movableEdges": 392,
     "byMotion": {
-      "revolute": 393,
-      "ball": 2
+      "revolute": 358,
+      "ball": 22,
+      "sliding": 12
     },
     "byType": {
-      "cylindrical": 252,
-      "axle-hole": 140,
-      "ball-socket": 2,
-      "clip": 1
+      "cylindrical": 225,
+      "axle-hole": 141,
+      "ball-socket": 22,
+      "clip": 4
     },
-    "suggestions": 6,
-    "unrelatedSuggestions": 4
+    "suggestions": 7,
+    "unrelatedSuggestions": 3
   }
 }

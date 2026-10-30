@@ -13,7 +13,7 @@
       "type": "gearMesh",
       "label": "input bevel pair",
       "status": "hit",
-      "detail": "geometry screen: plausible bevel"
+      "detail": "measured bevel pair 14:14"
     },
     {
       "mechanism": "truck-steering",
@@ -27,7 +27,7 @@
       "type": "rackPinion",
       "label": "8T pinion drives 1x4 rack",
       "status": "hit",
-      "detail": "geometry screen: plausible rack-pinion"
+      "detail": "measured rack pair 8:10"
     },
     {
       "mechanism": "truck-steering",
@@ -69,7 +69,7 @@
       "type": "suggested",
       "label": "offered as a ready-to-drive mechanism",
       "status": "hit",
-      "detail": "suggested as \"Turntable — 3404 / 3403 (swings 298 parts)\""
+      "detail": "suggested as \"Turntable — 3404 turns on 3004\""
     },
     {
       "mechanism": "truck-front-wheels",
@@ -179,20 +179,20 @@
     "mechanisms": 6
   },
   "noise": {
-    "movableEdges": 129,
+    "movableEdges": 110,
     "byMotion": {
       "revolute": 102,
-      "ball": 27
+      "ball": 8
     },
     "byType": {
       "axle-hole": 52,
-      "ball-socket": 27,
+      "ball-socket": 8,
       "hinge": 12,
       "cylindrical": 26,
       "pin-hole": 10,
       "clip": 2
     },
-    "suggestions": 6,
-    "unrelatedSuggestions": 3
+    "suggestions": 5,
+    "unrelatedSuggestions": 2
   }
 }

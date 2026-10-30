@@ -162,6 +162,38 @@ function gearPairs(parts:readonly DetectedPart[]):DetectedGearMesh[] {
 }
 /** Most suggestions offered at once; whole drive trains are added on top by the lab. */
 export const MAX_SUGGESTIONS=6;
+/** Kinds that are a whole function of the model; the rest are single joints or loops. */
+export const WHOLE_FUNCTIONS=new Set(['rack-steering','steering','piston-engine','differential','suspension','linear-actuator','gear-train']);
+/** 0: a whole function (steering, an engine, a suspension); 1: a named joint or loop (turntable, four-bar); 2: a plain hinge or gear pair. */
+export const suggestionRank=(s:SuggestedMechanism)=>!s.mechanism?2:WHOLE_FUNCTIONS.has(s.mechanism.kind)?0:1;
+const leaderOf=(s:SuggestedMechanism)=>s.program.joints.find(x=>x.id===s.program.driver.joint)?.body??'';
+const drivenParts=(s:SuggestedMechanism)=>{
+  const p=s.program,j=p.joints.find(x=>x.id===p.driver.joint);
+  return new Set([j?.body??'',...(p.rigidFollowers??[]).filter(f=>f.leader===j?.body).flatMap(f=>f.bodies)]);
+};
+/** A drive train assembled from measured meshes leads its rank: it was built for that model's function. */
+const measuredFirst=(s:SuggestedMechanism)=>s.evidence==='measured-gear-train'?0:1;
+const movingParts=(s:SuggestedMechanism)=>s.program.joints.length+(s.program.rigidFollowers??[]).reduce((n,f)=>n+f.bodies.length,0);
+/**
+ * Order suggestions for the user: whole functions first, then named joints
+ * and loops, then plain hinges; within a rank, the one moving more parts
+ * first (a drive train built from measured meshes leads). A suggestion whose
+ * driver moves with one already kept, and drives it in turn, or with the
+ * same title, is the same mechanism again and is dropped. Whole
+ * functions are all kept; the rest fill up to MAX_SUGGESTIONS.
+ */
+export function rankSuggestions(list:readonly SuggestedMechanism[]):SuggestedMechanism[] {
+  const sorted=list.map((s,i)=>({s,i})).sort((x,y)=>suggestionRank(x.s)-suggestionRank(y.s)||measuredFirst(x.s)-measuredFirst(y.s)||movingParts(y.s)-movingParts(x.s)||x.i-y.i).map(x=>x.s);
+  const kept:SuggestedMechanism[]=[];
+  for(const s of sorted){
+    const mine=drivenParts(s),lead=leaderOf(s);
+    // The same mechanism again: each one's driver moves with the other's (a hinge riding on a turntable is not).
+    if(kept.some(k=>k.title===s.title||mine.has(leaderOf(k))&&drivenParts(k).has(lead)))continue;
+    if(suggestionRank(s)>0&&kept.length>=MAX_SUGGESTIONS)continue;
+    kept.push(s);
+  }
+  return kept;
+}
 const groupOf=(graph:MechanismGraph,key:string)=>graph.rigidClusters.find(g=>g.includes(key))??[key];
 /** Propose small connected rigid groups, excluding any that would sever a
  * fixed LDCad connector or propose a driver without a sound connector axis. */

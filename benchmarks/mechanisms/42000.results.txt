@@ -1,28 +1,28 @@
 Mechanism benchmark — LEGO 42000 Grand Prix Racer (LDraw OMR)
-Checks passed: 0/20 (0%) · mechanisms fully found: 0/7
-  phase 3: 0/18 (0%)
+Checks passed: 14/20 (70%) · mechanisms fully found: 2/7
+  phase 3: 14/18 (78%)
   phase 4: 0/2 (0%)
 
-· steering [review] 0/6
-    missing      steering wheel turns both front hubs, rear hubs stay — no suggestion named rack-steering / steering
-    missing      column 20T double bevel drives the vertical 12T bevel — no bevel mesh considered
-    missing      vertical 12T bevel drives the forward 20T double bevel — no bevel mesh considered
-    missing      12T double bevel pinion drives the 1x7 rack — no rack-and-pinion considered
-    missing      right front hub steers about its kingpin — no movable joint on axis [0,1,0] (1 on other axes)
-    missing      left front hub steers about its kingpin — no movable joint on axis [0,1,0] (1 on other axes)
-· engine [review] 0/6
-    missing      right rear wheel turns the crankshaft and the pistons — no suggestion named piston-engine / differential / gear-train
-    missing      differential 28T bevel drives the 20T double bevel — no bevel mesh considered
-    missing      20T double bevel drives the 12T on the crank axle (side by side) — no spur mesh considered
-    rejected     right side gear meshes the differential's planet — geometry screen rejected: No measured cone geometry for bevel part i0/i7o; bevel meshes are not guessed from boxes; Pulley / sprocket shafts are not parallel; Pulley / sprocket planes are not aligned
-    rejected     left side gear meshes the differential's planet — geometry screen rejected: No measured cone geometry for bevel part i0/i7p; bevel meshes are not guessed from boxes; Pulley / sprocket shafts are not parallel; Pulley / sprocket planes are not aligned
-    wrong-motion piston slides in its cylinder — found cylindrical/revolute on this axis, wanted sliding
-· front-suspension [review] 0/2
-    missing      left front wishbone works the rocker and its shock — no suggestion named suspension
-    missing      front shock rod slides in its cylinder — no movable joint on axis [0,0,1] (1 on other axes)
-· rear-suspension [review] 0/2
-    missing      left rear wishbone works the rocker and its shock — no suggestion named suspension
-    missing      rear shock rod slides in its cylinder — no movable joint on axis [0,0,1] (1 on other axes)
+✓ steering [review] 6/6
+    hit          steering wheel turns both front hubs, rear hubs stay — rack-steering "Rack steering — 32270 → 87761 on tie rods, 2 hubs" moves every expected part
+    hit          column 20T double bevel drives the vertical 12T bevel — measured bevel pair 12:20
+    hit          vertical 12T bevel drives the forward 20T double bevel — measured bevel pair 12:20
+    hit          12T double bevel pinion drives the 1x7 rack — measured rack pair 12:8
+    hit          right front hub steers about its kingpin — cylindrical revolute joint i0/iey ↔ i0/igb
+    hit          left front hub steers about its kingpin — cylindrical revolute joint i0/if2 ↔ i0/igc
+· engine [review] 5/6
+    missing      right rear wheel turns the crankshaft and the pistons — "Drive train — axle → differential → gears → piston engine, 8 pistons on 2853": driven at 92906, not at 92909; "Gear train — 6542b → 92695, 6 meshes": driven at 6542b, not at 92909
+    hit          differential 28T bevel drives the 20T double bevel — measured bevel pair 20:28
+    hit          20T double bevel drives the 12T on the crank axle (side by side) — measured spur pair 20:12
+    hit          right side gear meshes the differential's planet — measured bevel pair 12:12
+    hit          left side gear meshes the differential's planet — measured bevel pair 12:12
+    hit          piston slides in its cylinder — cylindrical sliding joint i0/ibg ↔ i0/ibp
+· front-suspension [review] 1/2
+    missing      left front wishbone works the rocker and its shock — "Suspension — 4254 in 4255 for 44771 — left": driven at 32294, not at 32294; "Suspension — 4254 in 4255 for 44771 — right": driven at 32294, not at 32294; "Suspension — 4254 in 4255 (no wheel reached)": driven at 32054, not at 32294; "Suspension — 4255 in 4254 (no wheel reached)": driven at 32056, not at 32294
+    hit          front shock rod slides in its cylinder — cylindrical sliding joint i0/ifq ↔ i0/ifr
+✓ rear-suspension [review] 2/2
+    hit          left rear wishbone works the rocker and its shock — suspension "Suspension — 4254 in 4255 for 44771 — left" moves every expected part
+    hit          rear shock rod slides in its cylinder — cylindrical sliding joint i0/icx ↔ i0/icz
 · front-wheels [review] 0/2
     missing      right front rim turns on its hub axis — no movable joint on axis [1,0,0] (0 on other axes)
     missing      left front tyre turns on its hub axis — no movable joint on axis [1,0,0] (0 on other axes)
@@ -31,5 +31,5 @@ Checks passed: 0/20 (0%) · mechanisms fully found: 0/7
 · selector-cover [review] 0/1
     missing      knob drives both engine cover actuators — no suggestion named linear-actuator / gearbox
 
-Noise: 395 movable joints {"revolute":393,"ball":2} by type {"cylindrical":252,"axle-hole":140,"ball-socket":2,"clip":1}
-Suggestions: 6, unrelated to any expected mechanism: 4
+Noise: 392 movable joints {"revolute":358,"ball":22,"sliding":12} by type {"cylindrical":225,"axle-hole":141,"ball-socket":22,"clip":4}
+Suggestions: 7, unrelated to any expected mechanism: 3

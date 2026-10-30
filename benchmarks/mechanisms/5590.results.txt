@@ -4,16 +4,16 @@ Checks passed: 17/17 (100%) · mechanisms fully found: 6/6
 
 ✓ truck-steering [posed] 8/8
     hit          vertical steering input shaft — axle-hole revolute joint i0/i5r ↔ i0/ix
-    hit          input bevel pair — geometry screen: plausible bevel
+    hit          input bevel pair — measured bevel pair 14:14
     hit          lengthwise steering shaft — axle-hole revolute joint i0/i2z ↔ i0/i2t
-    hit          8T pinion drives 1x4 rack — geometry screen: plausible rack-pinion
+    hit          8T pinion drives 1x4 rack — measured rack pair 8:10
     hit          rack rides on a tie rod between the steering arms (moves on an arc, not a slide) — four-bar loop: frame i0/i10 – arms i0/ih, i0/ii – coupler i0/i2y
     hit          right kingpin — cylindrical revolute joint i0/ih ↔ i0/i5
     hit          left kingpin — cylindrical revolute joint i0/ii ↔ i0/i5
     hit          offered as a ready-to-drive mechanism — suggested as "Rack steering — 4143 → 3647 → 3743 on a four-bar tie rod"
 ✓ trailer-hitch [posed] 2/2
     hit          turntable top — cylindrical revolute joint i0/i66 ↔ i0/i65
-    hit          offered as a ready-to-drive mechanism — suggested as "Turntable — 3404 / 3403 (swings 298 parts)"
+    hit          offered as a ready-to-drive mechanism — suggested as "Turntable — 3404 turns on 3004"
 ✓ truck-front-wheels [geometry] 2/2
     hit          right front wheel axle — axle-hole revolute joint i0/il ↔ i0/ih
     hit          left front wheel axle — axle-hole revolute joint i0/im ↔ i0/i9q
@@ -26,5 +26,5 @@ Checks passed: 17/17 (100%) · mechanisms fully found: 6/6
 ✓ helicopter-rotor [review] 1/1
     hit          rotor shaft — cylindrical revolute joint i2/ixw ↔ i2/ixv
 
-Noise: 129 movable joints {"revolute":102,"ball":27} by type {"axle-hole":52,"ball-socket":27,"hinge":12,"cylindrical":26,"pin-hole":10,"clip":2}
-Suggestions: 6, unrelated to any expected mechanism: 3
+Noise: 110 movable joints {"revolute":102,"ball":8} by type {"axle-hole":52,"ball-socket":8,"hinge":12,"cylindrical":26,"pin-hole":10,"clip":2}
+Suggestions: 5, unrelated to any expected mechanism: 2
