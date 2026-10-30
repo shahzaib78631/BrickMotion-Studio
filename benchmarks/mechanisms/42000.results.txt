@@ -27,9 +27,9 @@ Checks passed: 16/20 (80%) · mechanisms fully found: 3/7
     hit          right front rim turns on its hub axis — cylindrical revolute joint i0/iga ↔ i0/igb
     hit          left front tyre turns on its hub axis — cylindrical revolute joint i0/igd ↔ i0/igc
 · selector-wing [review] 0/1
-    missing      knob drives the rear wing actuator — no suggestion named linear-actuator / gearbox
+    missing      knob drives the rear wing actuator — "Gearbox — 1st: 6539 → 6542b": 92693c01, 3706 did not move; "Gearbox — 2nd: 6539 → 6542b": 92693c01, 3706 did not move
 · selector-cover [review] 0/1
-    missing      knob drives both engine cover actuators — no suggestion named linear-actuator / gearbox
+    missing      knob drives both engine cover actuators — "Gearbox — 1st: 6539 → 6542b": 92693c01, 92693c01 did not move; "Gearbox — 2nd: 6539 → 6542b": 92693c01, 92693c01 did not move
 
 Noise: 392 movable joints {"revolute":358,"ball":22,"sliding":12} by type {"cylindrical":225,"axle-hole":141,"ball-socket":22,"clip":4}
-Suggestions: 7, unrelated to any expected mechanism: 3
+Suggestions: 9, unrelated to any expected mechanism: 3

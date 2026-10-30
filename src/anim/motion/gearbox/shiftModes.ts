@@ -7,6 +7,8 @@
  * ring on its shaft, an engaged clutch), so rates are carried outward from
  * the input; a body reached twice at a different speed is a lock-up.
  */
+import type { Assembly } from '../../../model/assemble';
+import { worldFeatures } from '../gears/gearTable';
 import type { HigherPair } from '../pairs/higherPairs';
 import type { Recognition } from '../mobility/recognise';
 import type { NamedMechanism } from '../classify/patterns';
@@ -30,12 +32,38 @@ export type GearMode = {
 const MAX_RINGS = 4;
 const TOLERANCE = 1e-6;
 
-export function rateNetwork(rec: Recognition, pairs: readonly HigherPair[], named: readonly NamedMechanism[]): RateNetwork {
+const ON_LINE = 2.5;
+const PARALLEL = Math.cos((4 * Math.PI) / 180);
+
+/**
+ * The gear network: meshes between bodies, each gear on a shaft (every hinge
+ * of its body on the gear's own line; a gear on a body that also swings about
+ * another line is not on a shaft and is left out), and every differential
+ * locked, as when the vehicle drives straight.
+ */
+export function rateNetwork(rec: Recognition, pairs: readonly HigherPair[], named: readonly NamedMechanism[], asm: Assembly): RateNetwork {
+  const world = new Map(asm.instances.map(i => [i.key, i.world]));
+  const onBearing = (key: string, part: string, feature: number, body: number) => {
+    const m = world.get(key), f = m && worldFeatures(key, part, m)[feature];
+    if (!f) return false;
+    const n = Math.hypot(...f.axis), u = f.axis.map(x => x / n);
+    const bearings = rec.joints.filter(({ a, b, joint: j }) => (a === body || b === body) && j.kind === 'revolute' && j.axis && j.point);
+    // A body on no bearing at all is loose (a gear missing its axle): kept, it can drive nothing else.
+    if (!bearings.length) return true;
+    // A shaft: every hinge of the body on one line, and the gear on that line.
+    return bearings.every(({ joint: j }) => {
+      const axis = j.axis!, point = j.point!, ja = Math.hypot(...axis), d = f.centre.map((x, i) => x - point[i]);
+      const along = d.reduce((t, x, i) => t + x * u[i], 0);
+      return Math.abs(axis.reduce((t, x, i) => t + x * u[i], 0)) / ja >= PARALLEL
+        && Math.hypot(...d.map((x, i) => x - along * u[i])) <= ON_LINE;
+    });
+  };
   const meshes: RateNetwork['meshes'] = [];
   for (const p of pairs) {
     if (p.kind !== 'spur' && p.kind !== 'bevel' && p.kind !== 'crown' && p.kind !== 'clutch') continue;
     const a = rec.bodyOf.get(p.a), b = rec.bodyOf.get(p.b);
     if (a === undefined || b === undefined || a === b || !p.teethA || !p.teethB) continue;
+    if (!onBearing(p.a, p.partA, p.featureA, a) || !onBearing(p.b, p.partB, p.featureB, b)) continue;
     meshes.push({ a, b, teethA: p.teethA, teethB: p.teethB, pair: p.id });
   }
   const locks: [number, number][] = named.filter(m => m.kind === 'differential')

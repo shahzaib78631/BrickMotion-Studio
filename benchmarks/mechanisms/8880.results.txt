@@ -25,4 +25,4 @@ Checks passed: 12/16 (75%) · mechanisms fully found: 1/4
     missing      crankshaft drives the pistons — no suggestion named piston-engine
 
 Noise: 421 movable joints {"ball":23,"revolute":390,"sliding":8} by type {"ball-socket":23,"cylindrical":149,"axle-hole":149,"pin-hole":44,"hinge":10,"clip":46}
-Suggestions: 6, unrelated to any expected mechanism: 5
+Suggestions: 6, unrelated to any expected mechanism: 1

@@ -15,7 +15,7 @@ import type { SuggestedMechanism } from '../../src/anim/motion/v4/autoMechanics'
 import { loadRealModel, partDataInstalled } from '../diagnostics/loadRealModel';
 
 const SAMPLES = join(__dirname, '..', '..', 'samples');
-const M42000 = join(SAMPLES, '42000-1.mpd'), M5590 = join(SAMPLES, '5590_-_whirl_n_wheel_super_truck.mpd');
+const M42000 = join(SAMPLES, '42000-1.mpd'), M5590 = join(SAMPLES, '5590_-_whirl_n_wheel_super_truck.mpd'), M8880 = join(SAMPLES, '8880-1.mpd');
 
 function finder(asm: Assembly) {
   return (part: string, x: number, y: number, z: number) => {
@@ -64,6 +64,17 @@ describe.skipIf(!partDataInstalled() || !existsSync(M5590))('5590 suggestions', 
     const s = inspectMechanisms(asm, metrics).detection.suggestions;
     expect(s[0].title).toMatch(/^Rack steering — 4143 → 3647 → 3743 on a four-bar tie rod/);
     expect(s[0].mechanism?.kind).toBe('rack-steering');
+    expect(s.filter(x => x.mechanism?.kind === 'gearbox')).toEqual([]);
+  }, 600_000);
+});
+
+describe.skipIf(!partDataInstalled() || !existsSync(M8880))('8880 suggestions', () => {
+  it('offers a suggestion per gear that reaches the wheels, labelled with its ratio', async () => {
+    const { asm, metrics } = await loadRealModel(M8880);
+    const titles = inspectMechanisms(asm, metrics).detection.suggestions.filter(s => s.mechanism?.kind === 'gearbox').map(s => s.title);
+    expect(titles.some(t => /\(2\.25:1\)/.test(t)), titles.join('\n')).toBe(true);
+    expect(titles.some(t => /\(0\.75:1\)/.test(t)), titles.join('\n')).toBe(true);
+    expect(new Set(titles).size).toBe(titles.length);
   }, 600_000);
 });
 
@@ -125,10 +136,27 @@ describe.skipIf(!partDataInstalled() || !existsSync(M42000))('42000 suggestions'
     }
   });
 
+  it('the selector knob turns the engine-cover gears in one gear and the wing drive in the other', () => {
+    // The small linear actuators (92693c01) have no screw pair yet (a phase 3 gap), so the
+    // check stops at the gears each clutch selects: 92695 for the covers, 3707 toward the wing.
+    const knob = at('32270', -250, -40, 450), covers = [at('92695', 100, -65, 253), at('92695', -100, -65, 253)], wing = at('3707', -20, -40, 410);
+    const gear = suggestions.filter(s => s.mechanism?.kind === 'gearbox');
+    expect(gear.map(s => s.title)).toHaveLength(2);
+    for (const s of gear) expect(drivenBy(s).has(knob), s.title).toBe(true);
+    const moves = (s: SuggestedMechanism, k: string) => moved(sweep(asm, s, [k]).most.get(k)!);
+    const c = gear.find(s => covers.every(k => moves(s, k))), w = gear.find(s => moves(s, wing));
+    expect(c, gear.map(s => s.title).join('\n')).toBeDefined();
+    expect(w, gear.map(s => s.title).join('\n')).toBeDefined();
+    expect(w).not.toBe(c);
+    expect(moves(c!, wing)).toBe(false);
+    expect(covers.some(k => moves(w!, k))).toBe(false);
+  });
+
   it('no mechanism is suggested twice', () => {
     const titles = suggestions.map(s => s.title);
     expect(new Set(titles).size).toBe(titles.length);
-    const drives = suggestions.map(s => [...drivenBy(s)].sort().join(','));
+    // Each gear of a gearbox is offered on its own, from the same input.
+    const drives = suggestions.filter(s => s.mechanism?.kind !== 'gearbox').map(s => [...drivenBy(s)].sort().join(','));
     expect(new Set(drives).size).toBe(drives.length);
   });
 

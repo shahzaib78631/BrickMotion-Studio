@@ -28,6 +28,8 @@ import type { JointDrive, LoopClosure, MechanismProgram, TransmissionConstraint,
 import { MechanismSolver } from '../v4/mechanismSolver';
 import { provenSuggestion, MAX_HINGE_CARRIED, type SuggestedMechanism } from '../v4/autoMechanics';
 import type { NamedMechanism } from './patterns';
+import type { ShiftElement } from '../gearbox/shiftElements';
+import { shiftModes, type RateNetwork } from '../gearbox/shiftModes';
 
 type V3 = [number, number, number];
 const dot = (a: readonly number[], b: readonly number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -55,21 +57,25 @@ type Joint = { a: number; b: number; ka: number; kb: number; kind: 'revolute' | 
 type Plan = {
   title: string; mechanism: { kind: string; name: string };
   bodies: number[]; pairs: HigherPair[]; driver: number; outputs: number[];
-  /** Bodies that turn as one (a differential when the vehicle drives straight). */
-  lock?: number[];
+  /** Groups of bodies that each turn as one (a differential when the vehicle drives straight, a ring on its shaft). */
+  locks?: number[][];
+  /** A gear turning on a shaft, on the same line as the shaft's own bearing, is taken to turn on the frame (gearboxes). */
+  lift?: boolean;
+  /** Dog clutches between a shaft and a gear on it, by body, engaged as this plan's gear says. */
+  clutches?: { id: string; shaft: number; gear: number; engaged: boolean; dogs: number }[];
   /** The mechanism's own frame (a four-bar's fixed link, a turntable's base) when it is not the model's main body. */
   frame?: number;
   warnings: string[];
 };
 
 export function suggestMechanisms(asm: Assembly, graph: MechanismGraph, named: readonly NamedMechanism[],
-  pairs: readonly HigherPair[], screws: readonly Screw[]): SuggestedMechanism[] {
+  pairs: readonly HigherPair[], screws: readonly Screw[], gearbox?: { shifts: readonly ShiftElement[]; network: RateNetwork }): SuggestedMechanism[] {
   const rec = graph.recognition;
   if (!rec) return [];
   void screws; // Linear actuators with a known input and piston arrive as screw pairs.
   const byId = new Map(pairs.map(p => [p.id, p]));
   const out: SuggestedMechanism[] = [];
-  for (const plan of plans(rec, named, byId)) {
+  for (const plan of [...plans(rec, named, byId), ...gearPlans(asm, rec, named, byId, gearbox)]) {
     const s = build(asm, graph, rec, plan);
     if (s) out.push(s);
   }
@@ -118,7 +124,7 @@ function plans(rec: Recognition, named: readonly NamedMechanism[], byId: Readonl
       mechanism: { kind: what.kind, name: what.name },
       bodies: [...new Set(members.flatMap(m => m.bodies))], pairs: [...new Set(members.flatMap(pairsOf))],
       driver: diff.outputs[0], outputs: engine ? engine.outputs : what.outputs,
-      lock: diff.bodies.filter(b => b !== ground),
+      locks: [diff.bodies.filter(b => b !== ground)],
       warnings: ['Driven as a vehicle driving straight: both axles turn together, so the differential turns as one.'],
     });
   }
@@ -135,6 +141,64 @@ function plans(rec: Recognition, named: readonly NamedMechanism[], byId: Readonl
   return out;
 }
 
+const ORDINAL = ['1st', '2nd', '3rd'];
+const ordinal = (n: number) => ORDINAL[n - 1] ?? `${n}th`;
+const bareName = (asm: Assembly, key: string) => asm.instances.find(i => i.key === key)?.part.replace(/\.dat$/i, '') ?? key;
+
+/**
+ * Gearboxes (spec §4): one plan per gear the selector gate allows (one ring
+ * engaged), driven at the input shaft, with the driving rings' dog clutches
+ * engaged as that gear says. The ratio in the title is read to the first
+ * differential the gear turns, with the differentials locked (driving straight).
+ */
+function gearPlans(asm: Assembly, rec: Recognition, named: readonly NamedMechanism[], byId: ReadonlyMap<string, HigherPair>,
+  gearbox?: { shifts: readonly ShiftElement[]; network: RateNetwork }): Plan[] {
+  if (!gearbox?.shifts.length) return [];
+  const { shifts, network } = gearbox, ground = groundOf(rec);
+  // Everything the gearbox can turn: bodies joined by meshes, locks, rings and clutches.
+  const adj = new Map<number, number[]>();
+  const link = (a: number, b: number) => { adj.set(a, [...(adj.get(a) ?? []), b]); adj.set(b, [...(adj.get(b) ?? []), a]); };
+  network.meshes.forEach(m => link(m.a, m.b));
+  network.locks.forEach(([a, b]) => link(a, b));
+  for (const e of shifts) { link(e.ringBody, e.shaftBody); e.couplings.forEach(c => link(e.shaftBody, c.gearBody)); }
+  const comp = new Set(shifts.map(e => e.shaftBody)), queue = [...comp];
+  while (queue.length) for (const y of adj.get(queue.shift()!) ?? []) if (y !== ground && !comp.has(y)) { comp.add(y); queue.push(y); }
+  // What the gears turn: a mechanism driven from a body in the box (a linear actuator's input axle) comes with it.
+  const driven = named.filter(m => m.kind !== 'differential' && m.kind !== 'gearbox' && m.drivers.some(b => comp.has(b)));
+  for (const m of driven) m.bodies.forEach(b => { if (b !== ground) comp.add(b); });
+  const diffs = named.filter(m => m.kind === 'differential' && comp.has(m.drivers[0]));
+  const locks = [...diffs.map(d => d.bodies.filter(b => b !== ground)), ...shifts.map(e => [e.ringBody, e.shaftBody])];
+  const locked = new Set(locks.flat()), jointed = new Set(rec.joints.flatMap(j => [j.a, j.b]));
+  // A body with no joint at all (a gear on no axle) cannot be driven: left out.
+  const bodies = [...comp].filter(b => jointed.has(b) || locked.has(b));
+  const inPlan = new Set(bodies);
+  const pairs = [...new Set([...network.meshes.filter(m => inPlan.has(m.a) && inPlan.has(m.b)).flatMap(m => byId.get(m.pair) ?? []),
+    ...driven.flatMap(m => m.pairs.flatMap(id => byId.get(id) ?? []))])]
+    .filter(p => [p.a, p.b].every(k => { const b = rec.bodyOf.get(k); return b !== undefined && inPlan.has(b); }));
+  // The input: the ring shaft that reaches furthest out of the box (the most parts).
+  const input = [...new Set(shifts.map(e => e.shaftBody))].sort((a, b) => rec.bodies[b].length - rec.bodies[a].length || a - b)[0];
+  const carriers = diffs.map(d => d.drivers[0]).sort((a, b) => a - b);
+  const loose = [...comp].filter(b => !inPlan.has(b)).map(b => bareName(asm, rec.bodies[b][0]));
+  const gears = shiftModes(network, shifts, input, input).filter(m => m.engaged.length === 1 && m.state !== 'locked').map(m => {
+    const at = carriers.map(c => shiftModes(network, shifts, input, c).find(x => x.id === m.id)!).find(x => x.state === 'drive');
+    return { m, ratio: at?.ratio };
+  }).sort((a, b) => (b.ratio ?? -1) - (a.ratio ?? -1));
+  return gears.map(({ m, ratio }, i) => {
+    const title = `Gearbox — ${ordinal(i + 1)}${ratio !== undefined ? ` (${ratio.toFixed(2)}:1)` : ''}: ${m.engaged.map(e => `${bareName(asm, e.ring)} → ${bareName(asm, e.gear)}`).join(' + ')}`;
+    return {
+      title, mechanism: { kind: 'gearbox', name: title }, bodies, pairs, driver: input, outputs: carriers.length ? carriers : bodies,
+      locks, lift: true,
+      clutches: shifts.flatMap(e => e.couplings.map(c => ({ id: `clutch:${e.ring}:${c.gear}`, shaft: e.shaftBody, gear: c.gearBody,
+        engaged: m.engaged.some(x => x.ring === e.ring && x.gear === c.gear), dogs: e.dogs }))),
+      warnings: [
+        `Shown in one gear: ${m.engaged.map(e => bareName(asm, e.ring)).join(', ')} engaged with ${m.engaged.map(e => bareName(asm, e.gear)).join(', ')}.`,
+        ...(ratio !== undefined ? [`${ratio.toFixed(2)} input turns per turn of the differential, the differentials locked as when driving straight.`] : []),
+        ...(loose.length ? [`Left out, joined to nothing: ${loose.join(', ')} (check the model file for a missing axle).`] : []),
+      ],
+    };
+  });
+}
+
 const groundOf = (rec: Recognition) => rec.bodies.reduce((best, b, i) => (b.length > rec.bodies[best].length ? i : best), 0);
 
 function build(asm: Assembly, graph: MechanismGraph, rec: Recognition, plan: Plan): SuggestedMechanism | null {
@@ -144,7 +208,7 @@ function build(asm: Assembly, graph: MechanismGraph, rec: Recognition, plan: Pla
 
   // --- Units: recognition bodies, with locked groups merged.
   const unitOf = rec.bodies.map((_, i) => i);
-  for (const b of plan.lock ?? []) unitOf[b] = Math.min(...(plan.lock ?? []));
+  for (const group of plan.locks ?? []) for (const b of group) unitOf[b] = Math.min(...group);
   const moving = new Set(plan.bodies.filter(b => b !== ground && b !== plan.frame).map(b => unitOf[b]));
   if (!moving.size) return null;
   const inMoving = (b: number) => moving.has(unitOf[b]);
@@ -201,6 +265,18 @@ function build(asm: Assembly, graph: MechanismGraph, rec: Recognition, plan: Pla
     if (!kind) { joints.push({ a, b, ka: j.a, kb: j.b, kind: 'spherical', index: -1 }); return; } // unusable: fails below if needed
     joints.push({ a, b, ka: j.a, kb: j.b, kind, axis: j.joint.axis, point: j.joint.point, index });
   });
+  // Gearbox: a gear turning on a shaft, on the line of the shaft's own frame bearing, turns on the frame.
+  if (plan.lift) {
+    const line = (j: Joint, k: Joint) => j.axis && k.axis && j.point && k.point && parallel(j.axis, k.axis) && offLine(j.point, k.point, k.axis) <= ON_LINE;
+    const bearing = (u: number) => joints.find(k => k.kind === 'revolute' && (k.a === u || k.b === u) && (k.a === STATIC || k.b === STATIC));
+    joints.forEach((j, n) => {
+      if (j.kind !== 'revolute' || j.a === STATIC || j.b === STATIC) return;
+      for (const [x, y, kx] of [[j.a, j.b, j.ka], [j.b, j.a, j.kb]] as const) {
+        const k = bearing(y);
+        if (k && !bearing(x) && line(j, k)) { joints[n] = { ...j, a: x, b: STATIC, ka: kx, kb: ground }; return; }
+      }
+    });
+  }
   // A rack held only by its tie rods slides in a guide the connector data misses: along its teeth.
   for (const p of plan.pairs) {
     if (p.kind !== 'rack') continue;
@@ -361,6 +437,15 @@ function build(asm: Assembly, graph: MechanismGraph, rec: Recognition, plan: Pla
       transmissions.push({ id: p.id, kind: 'gear', a: ja.id, b: jb.id, teethA: p.teethA ?? fa.teeth, teethB: p.teethB ?? fb.teeth, ...(v > 0 ? { reversed: true } : {}), source: 'inferred' });
     } else return null;
     meshes.push(p);
+  }
+  // --- Dog clutches: the shaft and the gear both turn on the frame, so the clutch joins their angles.
+  for (const c of plan.clutches ?? []) {
+    const us = unitOf[c.shaft], ug = unitOf[c.gear];
+    if (!moving.has(us) || !moving.has(ug)) return null;
+    const js = jointOf.get(us)!, jg = jointOf.get(ug)!;
+    if (js.parent || jg.parent || js.kind !== 'revolute' || jg.kind !== 'revolute' || !parallel(js.axis, jg.axis)) return null;
+    transmissions.push({ id: c.id, kind: 'clutch', a: js.id, b: jg.id, engaged: c.engaged, dogs: c.dogs,
+      ...(dot(js.axis, jg.axis) < 0 ? { reversed: true } : {}), source: 'inferred' });
   }
 
   // --- Followers: the rest of each unit, and everything it carries.

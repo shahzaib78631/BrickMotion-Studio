@@ -84,9 +84,9 @@ export function inspectMechanisms(asm: Assembly, metrics: Metrics): LabReport {
     .map(s => ({ ...s, mechanism: { kind: 'rack-steering', name: s.title } }));
   const named = graph.recognition ? classify(graph.recognition, higherPairs, screws, asm, metrics) : [];
   const rec = graph.recognition;
-  const gearbox = rec ? { shifts: findShiftElements(asm, rec), network: rateNetwork(rec, higherPairs, named) }
+  const gearbox = rec ? { shifts: findShiftElements(asm, rec), network: rateNetwork(rec, higherPairs, named, asm) }
     : { shifts: [], network: { meshes: [], locks: [] } };
-  detection.suggestions = rankSuggestions([...steering, ...suggestMechanisms(asm, graph, named, higherPairs, screws), ...detection.suggestions]);
+  detection.suggestions = rankSuggestions([...steering, ...suggestMechanisms(asm, graph, named, higherPairs, screws, gearbox), ...detection.suggestions]);
   return {
     graph,detection,geometryCandidates,higherPairs,gearbox,
     tolerances: toleratedPairs(asm, withLibraryConnectors(known, measuredJoints), higherPairs),

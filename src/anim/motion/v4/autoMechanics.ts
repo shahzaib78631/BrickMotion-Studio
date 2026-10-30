@@ -163,7 +163,7 @@ function gearPairs(parts:readonly DetectedPart[]):DetectedGearMesh[] {
 /** Most suggestions offered at once; whole drive trains are added on top by the lab. */
 export const MAX_SUGGESTIONS=6;
 /** Kinds that are a whole function of the model; the rest are single joints or loops. */
-export const WHOLE_FUNCTIONS=new Set(['rack-steering','steering','piston-engine','differential','suspension','linear-actuator','gear-train']);
+export const WHOLE_FUNCTIONS=new Set(['rack-steering','steering','piston-engine','differential','suspension','linear-actuator','gear-train','gearbox']);
 /** 0: a whole function (steering, an engine, a suspension); 1: a named joint or loop (turntable, four-bar); 2: a plain hinge or gear pair. */
 export const suggestionRank=(s:SuggestedMechanism)=>!s.mechanism?2:WHOLE_FUNCTIONS.has(s.mechanism.kind)?0:1;
 const leaderOf=(s:SuggestedMechanism)=>s.program.joints.find(x=>x.id===s.program.driver.joint)?.body??'';
@@ -188,7 +188,9 @@ export function rankSuggestions(list:readonly SuggestedMechanism[]):SuggestedMec
   for(const s of sorted){
     const mine=drivenParts(s),lead=leaderOf(s);
     // The same mechanism again: each one's driver moves with the other's (a hinge riding on a turntable is not).
-    if(kept.some(k=>k.title===s.title||mine.has(leaderOf(k))&&drivenParts(k).has(lead)))continue;
+    // Each gear of a gearbox drives from the same input: only the same title repeats it.
+    const gears=(k:SuggestedMechanism)=>k.mechanism?.kind==='gearbox'&&s.mechanism?.kind==='gearbox';
+    if(kept.some(k=>k.title===s.title||!gears(k)&&mine.has(leaderOf(k))&&drivenParts(k).has(lead)))continue;
     if(suggestionRank(s)>0&&kept.length>=MAX_SUGGESTIONS)continue;
     kept.push(s);
   }

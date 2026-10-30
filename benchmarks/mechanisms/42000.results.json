@@ -132,14 +132,14 @@
       "type": "function",
       "label": "knob drives the rear wing actuator",
       "status": "missing",
-      "detail": "no suggestion named linear-actuator / gearbox"
+      "detail": "\"Gearbox — 1st: 6539 → 6542b\": 92693c01, 3706 did not move; \"Gearbox — 2nd: 6539 → 6542b\": 92693c01, 3706 did not move"
     },
     {
       "mechanism": "selector-cover",
       "type": "function",
       "label": "knob drives both engine cover actuators",
       "status": "missing",
-      "detail": "no suggestion named linear-actuator / gearbox"
+      "detail": "\"Gearbox — 1st: 6539 → 6542b\": 92693c01, 92693c01 did not move; \"Gearbox — 2nd: 6539 → 6542b\": 92693c01, 92693c01 did not move"
     }
   ],
   "mechanisms": [
@@ -223,7 +223,7 @@
       "ball-socket": 22,
       "clip": 4
     },
-    "suggestions": 7,
+    "suggestions": 9,
     "unrelatedSuggestions": 3
   }
 }

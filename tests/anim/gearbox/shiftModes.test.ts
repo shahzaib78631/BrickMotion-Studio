@@ -38,7 +38,7 @@ describe.skipIf(!partDataInstalled() || !existsSync(M8880))('8880 Super Car', ()
     const bodyOf = (part: string, at: number[]) => rec.bodyOf.get(asm.instances.find(i => i.part.startsWith(part)
       && Math.hypot(...[0, 1, 2].map(n => (i.worldBox.min[n] + i.worldBox.max[n]) / 2 - at[n])) < 3)!.key)!;
     const named = classify(rec, report.higherPairs, [], asm, metrics as Metrics);
-    return { net: rateNetwork(rec, report.higherPairs, named), shifts: findShiftElements(asm, rec), bodyOf,
+    return { net: rateNetwork(rec, report.higherPairs, named, asm), shifts: findShiftElements(asm, rec), bodyOf,
       input: bodyOf('4019', [20, -54, 390]), output: bodyOf('6573', [0, -54, 500]) };
   };
   const singleDrive = (modes: ReturnType<typeof shiftModes>) => modes.filter(m => m.engaged.length === 1 && m.state === 'drive').map(m => m.ratio);
@@ -50,5 +50,20 @@ describe.skipIf(!partDataInstalled() || !existsSync(M8880))('8880 Super Car', ()
     const s = await setup();
     const fixed: RateNetwork = { ...s.net, locks: [...s.net.locks, [s.bodyOf('3647', [-60, -14, -70]), s.bodyOf('6538a', [-60, -14, 80])]] };
     expect(singleDrive(shiftModes(fixed, s.shifts, s.input, s.output))).toEqual([2.25, 1.5, 0.75, 0.5].map(r => expect.closeTo(r, 3)));
+  }, 600_000);
+});
+
+const M42000 = join(__dirname, '..', '..', '..', 'samples', '42000-1.mpd');
+describe.skipIf(!partDataInstalled() || !existsSync(M42000))('42000 gear network', () => {
+  it('leaves out a gear that does not turn on a bearing of its own body', async () => {
+    const { asm, metrics } = await loadRealModel(M42000);
+    const report = inspectMechanisms(asm, metrics), rec = report.graph.recognition!;
+    const net = rateNetwork(rec, report.higherPairs, classify(rec, report.higherPairs, [], asm, metrics as Metrics), asm);
+    // Bevel 6589 sits on a tilted axle whose body only hinges about x at z=479.
+    const tilted = rec.bodyOf.get(asm.instances.find(i => i.part.startsWith('6589') && Math.abs(i.world.elements[14] - 433) < 2)!.key)!;
+    expect(net.meshes.filter(m => m.a === tilted || m.b === tilted)).toEqual([]);
+    // The selector's clutch gears still mesh.
+    const clutch = rec.bodyOf.get(asm.instances.find(i => i.part.startsWith('6542b') && Math.abs(i.world.elements[12] + 70) < 2 && Math.abs(i.world.elements[14] - 450) < 2)!.key)!;
+    expect(net.meshes.some(m => m.a === clutch || m.b === clutch)).toBe(true);
   }, 600_000);
 });
