@@ -45,6 +45,13 @@ export function worldSnaps(snaps: Snap[] | undefined, e: V): WorldSnap[] {
   });
 }
 
+/**
+ * Ball centres may be this far apart and still join: half the ball radius. A
+ * ball joint has play, and a link between two balls often cannot be placed
+ * exactly in LDraw (its socket spacing differs from the balls' spacing).
+ */
+export const ballSlop = (a: Snap, b: Snap) => Math.max(AXIS_SLOP, 0.5 * Math.min(a.radius, b.radius));
+
 /** Whether a male of these shapes/radius fits a female of these. */
 function fits(male: Snap, female: Snap): boolean {
   if (female.kind === "clp")
@@ -157,7 +164,7 @@ function genericMate(
       Math.abs(along) > (a.snap.length + b.snap.length) / 2 + 0.5
     )
       return null;
-  } else if (Math.hypot(w[0], w[1], w[2]) > AXIS_SLOP) return null;
+  } else if (Math.hypot(w[0], w[1], w[2]) > ballSlop(a.snap, b.snap)) return null;
   return a.axis;
 }
 

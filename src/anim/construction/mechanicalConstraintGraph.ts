@@ -10,7 +10,7 @@ import { axisLineFits, type ToleratedFit } from './toleratedFit';
 import { possibleFinalContacts } from './contactBroadphase';
 import { dot, mul, norm, sub } from './math';
 import type { V3 } from './math';
-import { mateAxis, worldSnaps, type WorldSnap } from '../snapMates';
+import { ballSlop, mateAxis, worldSnaps, type WorldSnap } from '../snapMates';
 import { profiledCylinderMate } from './profiledCylinderMate';
 import type { ConstructionModel, Connection, ContactRegion, ConstructionNode } from './types';
 
@@ -141,8 +141,9 @@ function nonCylinderFits(x: WorldSnap, y: WorldSnap): ToleratedFit[] {
   if (x.snap.kind === 'gen' && y.snap.kind === 'gen' && x.snap.shapes[0] !== 'GEN:cyl') {
     const centre = (s: WorldSnap) => [0, 1, 2].map(k => s.start[k] + (s.axis[k] * s.snap.length) / 2);
     const a = centre(x), b = centre(y), off = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
-    return off > 0.1 ? [{ rule: 'axis-offset', measured: off, allowed: 1.2, unit: 'LDU',
-      detail: `${what}: centres ${off.toFixed(2)} LDU apart (accepted up to 1.2); move one part so the centres meet` }] : [];
+    const allowed = ballSlop(x.snap, y.snap);
+    return off > 0.1 ? [{ rule: 'axis-offset', measured: off, allowed, unit: 'LDU',
+      detail: `${what}: centres ${off.toFixed(2)} LDU apart (accepted up to ${allowed}); move one part so the centres meet` }] : [];
   }
   return axisLineFits(x.start, x.axis, y.start, y.axis, 1.2, 4, what);
 }
