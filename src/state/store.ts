@@ -1,6 +1,17 @@
 import { create } from 'zustand';
 import { usePlayback } from './playback';
 import { useKeyframePlayback } from './keyframePlayback';
+import type { CameraClock } from '../anim/cameraTrack/types';
+
+/** A camera key, or the move that leaves it (`id` is the key it starts from). */
+/** `id` is the key or move last clicked; `ids` (keys only) every key chosen with it. */
+export type CameraSelection = { kind: 'key' | 'transition'; clock: CameraClock; id: string; ids?: string[] };
+
+/** Every camera key chosen on `clock` (just the one when a single key is chosen). */
+export function selectedKeyIds(sel: CameraSelection | null, clock: CameraClock): string[] {
+  if (!sel || sel.kind !== 'key' || sel.clock !== clock) return [];
+  return sel.ids?.length ? sel.ids : [sel.id];
+}
 import { modelSteps, reorderStep, type ModelName } from '../plan/ops';
 import { setAssemblySpot, setLoosePiecesFollow, setSubmodelBuildSpot, setWorkBaySpot as applyWorkBaySpot } from '../plan/pieceActions';
 import { isMainSpot, type SpotRef } from '../plan/assemblySpots';
@@ -32,6 +43,8 @@ export type StudioState = {
   past: Plan[];
   future: Plan[];
   selection: { model: ModelName; ids: string[] };
+  /** A camera key or the move leaving it, picked in the Camera row (shown in the Inspector). */
+  cameraSelection: CameraSelection | null;
   /** the Assembly tile whose spot is selected (null: none) */
   spot: SpotRef | null;
   selectSpot(ref: SpotRef | null): void;
@@ -97,6 +110,7 @@ export type StudioState = {
   replans: number;
   replan(): void;
   select(ids: string[], additive?: boolean): void;
+  selectCamera(sel: CameraSelection | null): void;
   setEditingModel(m: ModelName): void;
   setMode(mode: 'edit' | 'preview'): void;
   setCurrentStep(s: number | null): void;
@@ -109,6 +123,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   past: [],
   future: [],
   selection: { model: '', ids: [] },
+  cameraSelection: null,
   spot: null,
   selectSpot(ref) {
     // selecting a spot also makes it the transform gizmo's target, not the pieces
@@ -236,14 +251,19 @@ export const useStudio = create<StudioState>((set, get) => ({
   },
   setPlan(p, opts) {
     // a different set: its pieces may reuse ids, so nothing stays hidden
-    if (opts?.resetHistory) set({ plan: p, past: [], future: [], selection: { model: '', ids: [] }, spot: null, editingModel: '', currentStep: null, hidden: {} });
+    if (opts?.resetHistory) set({ plan: p, past: [], future: [], selection: { model: '', ids: [] }, cameraSelection: null, spot: null, editingModel: '', currentStep: null, hidden: {} });
     else {
       get().apply(() => p);
       set({ hidden: {} });
     }
   },
+  selectCamera(cameraSelection) {
+    set({ cameraSelection });
+  },
   select(ids, additive) {
     const { selection, editingModel } = get();
+    // picking pieces moves the Inspector off the camera
+    if (ids.length && get().cameraSelection) set({ cameraSelection: null });
     if (!additive) return set({ selection: { model: editingModel, ids } });
     const cur = new Set(selection.ids);
     for (const id of ids) cur.has(id) ? cur.delete(id) : cur.add(id);

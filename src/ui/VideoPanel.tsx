@@ -133,6 +133,10 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
             onClick={() => s.set({ targetSeconds: 14, introSeconds: 0.6, buildSeconds: 10.4, outroSeconds: 3, heroOrbit: true })}>
             Match reference pacing (14 s)
           </button>
+          <button className="nx-btn nx-sm" type="button" title="The KenBrick videos: 12 s upright, the build in about 8 s, a still 3.5 s hold on the front, on black. Pair with Auto-direct → Turntable."
+            onClick={() => s.set({ targetSeconds: 12, introSeconds: 0.5, buildSeconds: 8, outroSeconds: 3.5, heroOrbit: false, studioLook: 'black', format: '9:16' })}>
+            KenBrick look (12 s)
+          </button>
           <button className="nx-link" onClick={() => s.set({ introSeconds: null, buildSeconds: null, outroSeconds: null })}>Reset to auto</button>
         </div>
         <div className="bm-duration-fields" aria-label="Timeline clip durations">
@@ -163,6 +167,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
         <label className="nx-field">
           MP4 camera
           <select aria-label="MP4 camera" value={s.exportCamera} onChange={(e) => s.set({ exportCamera: e.target.value as typeof s.exportCamera })}>
+            <option value="track">Camera track — the shots on the Camera row (automatic until you make one)</option>
             <option value="automatic">Automatic — the cinematic shots</option>
             <option value="buildView">My viewport — what I see when I press play, intro to hero</option>
           </select>

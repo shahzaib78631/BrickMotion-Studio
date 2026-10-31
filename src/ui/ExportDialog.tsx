@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { resolveExportCamera, type ExportCameraSetting } from '../anim/cameraTrack/context';
+import type { CameraTrack } from '../anim/cameraTrack/types';
 import { animationDuration, canExportMp4, exportKeyframeVideo, exportVideo } from '../export/exportVideo';
 import { animationOf } from '../anim/keyframes';
 import { buildLayerAt } from '../anim/buildLayer';
@@ -33,6 +35,12 @@ export const jobFileName = (setName: string, model: string, mode: 'build' | 'tim
   `${safeFileName(`${model ? `${setName} - ${model}` : setName}${mode === 'timeline' ? ' - Timeline' : ''}`)}.mp4`;
 
 /** Renders one or more models to MP4, one after another, and saves each file as it finishes. */
+/** The model's Camera track for this video, when the MP4 camera is set to use it and it has keys. */
+function exportTrack(plan: Plan, model: string, mode: 'build' | 'timeline', setting: ExportCameraSetting): CameraTrack | null {
+  const track = plan.cameraTracks?.[model]?.[mode === 'timeline' ? 'timeline' : 'build'];
+  return resolveExportCamera(setting, !!track?.keys.length) === 'track' ? track! : null;
+}
+
 export function ExportDialog({ plan, jobs, mode = 'build', onClose }: { plan: Plan; jobs: ExportJob[]; mode?: 'build' | 'timeline'; onClose(): void }) {
   const settings = useAppSettings.getState();
   const { fps, format } = settings;
@@ -84,6 +92,7 @@ export function ExportDialog({ plan, jobs, mode = 'build', onClose }: { plan: Pl
               cameraFraming: settings.cameraFraming,
               camera: settings.camera,
               buildView: viewportMode ? editorCamera() : undefined,
+              cameraTrack: exportTrack(plan, job.model, mode, settings.exportCamera),
               sceneSetup: plan.sceneSetup,
               stageCameraFixed: settings.floorStyle === 'camera-frame',
               render: { edges: settings.edgeLines, linearColors: settings.linearColors },

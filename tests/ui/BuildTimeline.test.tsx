@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, createEvent, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test } from 'vitest';
 import type { Timeline } from '../../src/anim/timeline';
 import type { Plan } from '../../src/plan/types';
@@ -119,4 +119,38 @@ test('discloses hardware that starts preassembled instead of depicting tyre fitt
   render(<BuildTimeline timeline={hardwareTimeline} />);
   expect(screen.getByRole('note').textContent).toContain('1 wheel assemblies start');
   expect(screen.getByRole('note').textContent).toContain('Tyre fitting is not animated');
+});
+
+test('the playhead can be grabbed anywhere along its line and dragged', () => {
+  const { container } = render(<BuildTimeline timeline={tl} />);
+  const line = container.querySelector('.nx-playhead') as HTMLElement;
+  fireEvent.pointerDown(line, { button: 0, clientX: 40 });
+  const first = usePlayback.getState().t;
+  fireEvent.pointerMove(window, { clientX: 400 });
+  expect(usePlayback.getState().t).toBeGreaterThan(first);
+  fireEvent.pointerUp(window, { clientX: 400 });
+});
+
+test('dragging a step near the edge of the timeline scrolls it, so a step can go anywhere', () => {
+  const { container } = render(<BuildTimeline timeline={tl} />);
+  const scroll = container.querySelector('.nx-scroll') as HTMLElement;
+  scroll.getBoundingClientRect = () => ({ left: 100, right: 500, top: 0, bottom: 200, width: 400, height: 200, x: 100, y: 0, toJSON() {} });
+  let left = 300;
+  Object.defineProperty(scroll, 'scrollLeft', { get: () => left, set: (v: number) => { left = Math.max(0, v); }, configurable: true });
+  // happy-dom has no DragEvent, so drag events carry no pointer position: give them one
+  const dragOver = (clientX: number) => {
+    const e = createEvent.dragOver(scroll, { dataTransfer: { dropEffect: 'move' } });
+    Object.defineProperty(e, 'clientX', { value: clientX });
+    fireEvent(scroll, e);
+  };
+  fireEvent.dragStart(screen.getByRole('button', { name: /^Step 2 ·/ }), { dataTransfer: { setData() {}, effectAllowed: 'move' } });
+  dragOver(105);
+  expect(left).toBeLessThan(300);
+  const back = left;
+  dragOver(495);
+  expect(left).toBeGreaterThan(back);
+  dragOver(300);
+  const still = left;
+  dragOver(300);
+  expect(left).toBe(still);
 });

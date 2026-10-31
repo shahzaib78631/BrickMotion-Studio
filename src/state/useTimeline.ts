@@ -25,7 +25,7 @@ export function useTimeline(ready: boolean, plan: Plan, model: string, opts: Ani
   if (plan !== previous.current) {
     const old = previous.current;
     const keys = new Set([...Object.keys(plan), ...Object.keys(old)]);
-    const animationOnly = [...keys].every((key) => key === 'animation' || key === 'sceneSetup' ||
+    const animationOnly = [...keys].every((key) => key === 'animation' || key === 'sceneSetup' || key === 'cameraTracks' ||
       (plan as unknown as Record<string, unknown>)[key] === (old as unknown as Record<string, unknown>)[key]);
     if (!animationOnly) previous.current = plan;
   }

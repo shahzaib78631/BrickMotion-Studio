@@ -12,6 +12,10 @@ import { createPortal } from 'react-dom';
 import { ContextMenu, type ContextItem } from './ContextMenu';
 import { MotionEditor, type MotionTarget } from './MotionEditor';
 import { partClipMenu, stepClipMenu } from './timelineMenus';
+import { CameraTrackLanes, CameraTrackTools } from './CameraTrackRow';
+import { autoDirect, mergeAuto } from '../anim/cameraTrack/autoDirect';
+import { replaceAutoTrack } from '../anim/cameraTrack/ops';
+import type { DirectorStyle } from '../anim/cameraTrack/types';
 
 const MAX_PART_ROWS = 6;
 
@@ -24,6 +28,16 @@ const rounded = (v: number) => Math.round(v * 10) / 10;
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 /** During a drag, block browser text highlighting; always restore the old style. */
+/** How close to the timeline's edge a dragged step starts scrolling it, and the fastest step per drag event. */
+const EDGE = 56;
+const EDGE_SPEED = 28;
+/** Scrolls `el` sideways when `clientX` is near one of its edges: faster the closer it gets. */
+export function edgeScroll(el: HTMLElement, clientX: number): void {
+  const r = el.getBoundingClientRect();
+  const into = clientX < r.left + EDGE ? clientX - (r.left + EDGE) : clientX > r.right - EDGE ? clientX - (r.right - EDGE) : 0;
+  if (into) el.scrollLeft += Math.sign(into) * Math.ceil(EDGE_SPEED * Math.min(1, Math.abs(into) / EDGE));
+}
+
 function stopSelection() {
   const prev = document.body.style.userSelect;
   document.body.style.userSelect = 'none';
@@ -252,6 +266,17 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
   const step = tl ? tickStep(px) : 1;
   const ticks = tl ? Array.from({ length: Math.floor(dur / step) + 1 }, (_, i) => i * step) : [];
   const contentWidth = Math.max(width, X(Math.max(dur, previewDuration)) + PAD);
+  const camTrack = plan.cameraTracks?.[editingModel]?.build;
+  const hasTrack = !!camTrack?.keys.length;
+  const directCamera = (style: DirectorStyle) => {
+    if (!tl) return;
+    const ref = { model: editingModel, clock: 'build' as const };
+    const auto = autoDirect(tl, { style, swings: 0.5, lensMm: video.camera.lensMm, shutter: 0.5 });
+    st().apply((p) => replaceAutoTrack(p, ref, mergeAuto(p.cameraTracks?.[editingModel]?.build, auto, tl.duration)));
+    st().selectCamera(null);
+    // the exported video uses the track just written
+    useAppSettings.getState().set({ exportCamera: 'track' });
+  };
 
   return (
     <div className="nx-timeline bm-timeline">
@@ -330,6 +355,7 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
           </button>
         </div>
         <div className="nx-tr-right">
+          {tl && <CameraTrackTools clock="build" time={t} duration={dur} fps={video.fps} sensorMm={video.camera.sensorWidthMm} onAutoDirect={directCamera} />}
           {/* The intro shot and the hero orbit are camera moves: off keeps your own angle. */}
           <button className={`nx-icon bm-camera-follow ${cameraFollows ? 'on' : ''}`} aria-pressed={cameraFollows}
             aria-label="Camera follows playback" title={cameraFollows
@@ -367,6 +393,7 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
               ['brick', 'Parts', partsLaneHeight(parts.rows)],
               ['box', 'Submodels', LANE],
               ['camera', 'Camera', LANE],
+              ...(hasTrack ? [['view', 'Lens', Math.round(LANE * 0.6)], ['settings', 'Pacing', LANE]] as const : []),
             ] as const
           ).map(([icon, label, height]) => (
             <div key={label} className="nx-head-row" style={{ height }}>
@@ -378,6 +405,8 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
         <div
           className="nx-scroll"
           ref={scrollRef}
+          // while a step is dragged, holding it near either edge scrolls the timeline that way
+          onDragOver={(e) => { if (dragStep !== null) edgeScroll(e.currentTarget, e.clientX); }}
           // the lane names follow the lanes when the Parts lane makes them taller than the panel
           onScroll={(e) => {
             const to = headsRef.current;
@@ -526,6 +555,9 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
                     </button>
                   ))}
                 </div>
+                {hasTrack && (
+                  <CameraTrackLanes clock="build" duration={dur} fps={video.fps} laneHeight={LANE} toX={X} toT={timeAt} />
+                )}
                 <div className="nx-lane" style={{ height: LANE }}>
                   <div className="nx-clip bm-cam dim" style={{ left: X(0), width: Math.max(8, introEnd * px - 2) }} title="Drag the right edge to change the intro duration">
                     <span className="lbl">Intro</span>
@@ -546,8 +578,9 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
               </div>
             )}
             {tl && (
-              <div className={`nx-playhead ${mode === 'preview' || follow ? '' : 'bm-idle'}`} style={{ left: X(t) }}>
-                <i onPointerDown={scrubFrom} />
+              // the knob and the grab strip along the line (CSS ::after) both drag the playhead
+              <div className={`nx-playhead ${mode === 'preview' || follow ? '' : 'bm-idle'}`} style={{ left: X(t) }} onPointerDown={scrubFrom}>
+                <i />
               </div>
             )}
           </div>

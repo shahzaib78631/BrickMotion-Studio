@@ -237,6 +237,13 @@ function focusPlan(tl: Timeline): FocusPlan {
   return plan;
 }
 
+/** What the automatic build camera frames at time t (LDU box): the part being assembled. */
+export function buildFocusBox(tl: Timeline, t: number): Box {
+  const plan = focusPlan(tl);
+  if (!plan.groups.some((g) => g.lands.length)) return tl.modelBox;
+  return focusAt(plan, t).box;
+}
+
 /** The (sub)model being assembled around time t and the part of it the camera must show. */
 function focusAt(plan: FocusPlan, t: number): { group: number; box: Box; anchor: Box; hold: string; easeIn?: number; easeOut?: number } {
   const { groups, shots } = plan;

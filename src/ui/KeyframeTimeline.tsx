@@ -16,6 +16,11 @@ import { useKeyframePlayback } from '../state/keyframePlayback';
 import { useStudio } from '../state/store';
 import { ContextMenu, type ContextItem } from './ContextMenu';
 import { Ic } from './icons';
+import { CameraTrackLanes, CameraTrackTools } from './CameraTrackRow';
+import { autoDirect, mergeAuto } from '../anim/cameraTrack/autoDirect';
+import { replaceAutoTrack } from '../anim/cameraTrack/ops';
+import type { CameraTrack, DirectorStyle } from '../anim/cameraTrack/types';
+import { useAppSettings } from '../state/appSettings';
 
 const PAD = 26;
 /** One row height for the object outliner and its lanes. Sized to match the rest of
@@ -207,6 +212,24 @@ export function KeyframeTimeline({ timeline, planning, buildError, instances, pl
     ? refsByTarget.get(row.target ?? '') ?? []
     : refsByChannel.get(JSON.stringify([row.target, row.channel])) ?? [];
 
+  // The Camera row runs in seconds from the first frame.
+  const camDuration = (animation.endFrame - animation.startFrame + 1) / fps;
+  const camX = (sec: number) => X(animation.startFrame + sec * fps);
+  const camT = (clientX: number) => (timeAt(clientX) - animation.startFrame) / fps;
+  const sensorMm = useAppSettings((s) => s.camera.sensorWidthMm);
+  const lensMm = useAppSettings((s) => s.camera.lensMm);
+  /** Auto-direct reads the linked Build: its keys move onto this clock (start frame and speed). */
+  const directCamera = buildLayer && timeline ? (style: DirectorStyle) => {
+    const auto = autoDirect(timeline, { style, swings: 0.5, lensMm, shutter: 0.5 });
+    const offset = (buildLayer.startFrame - animation.startFrame) / fps;
+    const onClock: CameraTrack = { ...auto, keys: auto.keys.map((k) => ({ ...k, t: Math.min(camDuration, Math.max(0, offset + k.t / buildLayer.speed)) })) };
+    // keys squeezed onto the same time (past the end) keep only the first
+    onClock.keys = onClock.keys.filter((k, i, all) => i === 0 || k.t - all[i - 1].t > 1e-6);
+    const ref = { model: editingModel, clock: 'timeline' as const };
+    useStudio.getState().apply((p) => replaceAutoTrack(p, ref, mergeAuto(p.cameraTracks?.[editingModel]?.timeline, onClock, camDuration)));
+    useStudio.getState().selectCamera(null);
+    useAppSettings.getState().set({ exportCamera: 'track' });
+  } : undefined;
   const applyAnimation = (fn: (animation: KeyframeAnimation) => KeyframeAnimation) => {
     setMotionReport(null);
     useStudio.getState().apply((p) => {
@@ -482,6 +505,7 @@ export function KeyframeTimeline({ timeline, planning, buildError, instances, pl
             onChange={(e) => seek(Number(e.target.value))} aria-label="Current animation frame" /></label>
         </div>
         <div className="bm-key-right">
+          <CameraTrackTools clock="timeline" time={(frameRounded - animation.startFrame) / fps} duration={camDuration} fps={fps} sensorMm={sensorMm} onAutoDirect={directCamera} />
           <button className={`bm-key-icon ${loop ? 'active' : ''}`} title="Loop playback" aria-pressed={loop} aria-label="Loop animation" onClick={() => useKeyframePlayback.getState().set({ loop: !loop })}><Ic name="repeat" /></button>
           <button className="bm-key-icon" title="Zoom out (Ctrl+wheel)" aria-label="Zoom out" onClick={() => zoomTo(zoom / 1.4)}><Ic name="zoomOut" /></button>
           <span className="bm-key-zoom">{Math.round(zoom * 100)}%</span>
@@ -581,6 +605,8 @@ export function KeyframeTimeline({ timeline, planning, buildError, instances, pl
             const to = editorRef.current;
             if (to && to.scrollTop !== e.currentTarget.scrollTop) to.scrollTop = e.currentTarget.scrollTop;
           }}>
+            <div className="bm-key-outline-row bm-cam-head" style={{ height: ROW, paddingLeft: 7 }}><Ic name="camera" /><span className="bm-key-trackname">Camera</span></div>
+            <div className="bm-key-outline-row bm-cam-head" style={{ height: Math.round(ROW * 0.6), paddingLeft: 7 }}><Ic name="view" /><span className="bm-key-trackname">Lens</span></div>
             {rows.map((row) => {
               const active = row.target && (selectedObjects.includes(row.target) || focused === row.target);
               const num = keyFor(row).length;
@@ -609,6 +635,7 @@ export function KeyframeTimeline({ timeline, planning, buildError, instances, pl
             <div className="bm-key-ruler" onPointerDown={startScrub} role="slider" tabIndex={0} aria-label="Keyframe ruler" aria-valuemin={animation.startFrame} aria-valuemax={animation.endFrame} aria-valuenow={frameRounded} onKeyDown={(e) => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); seek(frameRounded + (e.key === 'ArrowRight' ? 1 : -1)); } }}>
               {ticks.map((tick) => <span key={tick} className="bm-key-tick" style={{ left: X(tick) }}><i />{tick}</span>)}
             </div>
+            <CameraTrackLanes clock="timeline" duration={camDuration} fps={fps} laneHeight={ROW} toX={camX} toT={camT} />
             <div className="bm-key-body" ref={bodyRef} style={{ minHeight: Math.max(rows.length * ROW, 120), backgroundSize: `${tickStep * px}px 100%` }} onPointerDown={startMarquee}>
               {rows.map((row, i) => {
                 // Only render diamonds close to the visible horizontal viewport.

@@ -10,6 +10,14 @@ import { advancePlayback, usePlayback } from '../state/playback';
 import { soundSnaps } from '../audio/snapSound';
 import type { ModelState } from '../state/useModel';
 import { viewportApi } from './viewportApi';
+import { cameraTrackAt } from '../anim/cameraTrack/sample';
+import { applyShot, buildCameraContext, resolveExportCamera, shotLens, videoCameraInCharge } from '../anim/cameraTrack/context';
+import { LensPass } from '../render/depthOfField';
+import { accumulateWeights, bricksMovedPixels, MotionBlurAccumulator, movedPixels, subframeCount, subframeOffsets } from '../render/motionBlur';
+import { groundOf } from '../export/pathTracedStill';
+
+/** most renders per Preview frame for motion blur */
+const PREVIEW_SUBFRAMES = 4;
 
 /** Plays the build animation on the editor's canvas inside the output frame (9:16, 1:1, …); the timeline below drives play and scrub. */
 export function PreviewPlayer({ model, timeline: tl }: { model: ModelState; timeline: Timeline }) {
@@ -66,11 +74,18 @@ export function PreviewPlayer({ model, timeline: tl }: { model: ModelState; time
     if (pb.t > tl.duration) pb.set({ t: tl.duration });
   }, [asm, tl, setup]);
 
+  const trackContext = useMemo(() => buildCameraContext(tl, ASPECT, s.camera.sensorWidthMm), [tl, ASPECT, s.camera.sensorWidthMm]);
+
   // render loop
   useEffect(() => {
     let raf = 0;
     let last = performance.now();
     const placed = new Map(asm.instances.map((inst) => [inst.key, inst.world]));
+    // depth of field from the camera track, made on first use
+    let lens: LensPass | null = null;
+    let motion: MotionBlurAccumulator | null = null;
+    const keys = asm.instances.map((inst) => inst.key);
+    const sceneBox = worldBox3(tl.sceneBox);
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
       const studio = viewportApi.studio;
@@ -88,27 +103,77 @@ export function PreviewPlayer({ model, timeline: tl }: { model: ModelState; time
       const fw = fh * ASPECT;
       setFrame((f) => (f.width === fw && f.height === fh ? f : { left: (W - fw) / 2, top: (H - fh) / 2, width: fw, height: fh }));
       // a scene camera in charge holds its shot after the same intro the Build view plays
-      const scene = sceneCameraPose(setup);
-      const cam = scene
+      // the Camera track, when the video uses it (as the MP4 will)
+      const editor = useStudio.getState();
+      const track = editor.plan.cameraTracks?.[editor.editingModel]?.build;
+      const shot = track && resolveExportCamera(s.exportCamera, track.keys.length > 0) === 'track'
+        ? cameraTrackAt(track, t, trackContext)
+        : null;
+      const scene = shot ? null : sceneCameraPose(setup);
+      const cam = shot ?? (scene
         ? (s.floorStyle === 'camera-frame' || s.frameStagingPending) ? scene : introInto(tl, scene, ASPECT, s.cameraFraming, s.camera)(t)
-        : cameraAt(tl, t, ASPECT, s.cameraFraming, s.camera);
+        : cameraAt(tl, t, ASPECT, s.cameraFraming, s.camera));
       // A piece the timeline does not know (the plan changed under it) is shown in place rather
       // than dropped: a preview that silently draws nothing is impossible to diagnose. Pieces
       // the timeline does know still arrive, wait and hide as it says.
       const at = poseAt(tl, t);
       studio.bricks.setMatrices((key) => at(key) ?? (tl.tracks.has(key) ? null : placed.get(key) ?? null));
-      studio.perspective.position.copy(cam.position);
-      studio.perspective.lookAt(cam.target);
-      studio.perspective.fov = cam.fov;
+      if (shot) applyShot(studio.perspective, shot);
+      else {
+        studio.perspective.position.copy(cam.position);
+        studio.perspective.up.set(0, 1, 0);
+        studio.perspective.lookAt(cam.target);
+        studio.perspective.fov = cam.fov;
+      }
       studio.perspective.aspect = ASPECT;
       if (scene) { studio.perspective.near = scene.near; studio.perspective.far = scene.far; }
       studio.perspective.updateProjectionMatrix();
       applyCameraCrop(studio.perspective, setup);
-      studio.render({ x: (W - fw) / 2, y: (H - fh) / 2, width: fw, height: fh });
+      const rect = { x: (W - fw) / 2, y: (H - fh) / 2, width: fw, height: fh };
+      // motion blur while the camera track moves (up to 4 renders a frame)
+      const shutter = shot && usePlayback.getState().playing ? shot.shutter : 0;
+      const fps = useAppSettings.getState().fps;
+      let offsets = [0];
+      if (shot && shutter > 0) {
+        const half = shutter / (2 * fps);
+        const t0 = Math.max(0, t - half), t1 = Math.min(tl.duration, t + half);
+        const a = cameraTrackAt(track!, t0, trackContext)!, b = cameraTrackAt(track!, t1, trackContext)!;
+        const bricks = bricksMovedPixels(shot, fw, fh, keys, poseAt(tl, t0), poseAt(tl, t1));
+        offsets = subframeOffsets(subframeCount(shutter, movedPixels(a, b, sceneBox, fw, fh, bricks), PREVIEW_SUBFRAMES), shutter, fps);
+      }
+      if (offsets.length > 1) {
+        motion ??= new MotionBlurAccumulator(studio.renderer);
+        const weights = accumulateWeights(offsets.length);
+        let begun = false;
+        offsets.forEach((off, k) => {
+          const at = Math.min(tl.duration, Math.max(0, t + off));
+          const pose = poseAt(tl, at);
+          studio.bricks.setMatrices((key) => pose(key) ?? (tl.tracks.has(key) ? null : placed.get(key) ?? null));
+          applyShot(studio.perspective, cameraTrackAt(track!, at, trackContext)!);
+          studio.perspective.aspect = ASPECT;
+          studio.perspective.updateProjectionMatrix();
+          applyCameraCrop(studio.perspective, setup);
+          studio.render(rect);
+          if (!begun) { motion!.begin(rect); begun = true; }
+          motion!.add(weights[k]);
+        });
+        motion.resolve();
+        // back to the frame's own time for the depth of field
+        studio.bricks.setMatrices((key) => at(key) ?? (tl.tracks.has(key) ? null : placed.get(key) ?? null));
+        applyShot(studio.perspective, shot!);
+        studio.perspective.aspect = ASPECT;
+        studio.perspective.updateProjectionMatrix();
+        applyCameraCrop(studio.perspective, setup);
+      } else studio.render(rect);
+      if (shot && shot.blur > 0) {
+        lens ??= new LensPass(studio.renderer);
+        lens.apply('canvas', { lens: shotLens(shot), camera: studio.perspective, root: studio.bricks.root, box: sceneBox,
+          groundY: groundOf(useAppSettings.getState().materials, -tl.ground / 20), frame: rect });
+      }
     };
     raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, [asm, tl, s.cameraFraming, s.camera, s.floorStyle, s.frameStagingPending, ASPECT, setup]);
+    return () => { cancelAnimationFrame(raf); lens?.dispose(); motion?.dispose(); };
+  }, [asm, tl, s.cameraFraming, s.camera, s.floorStyle, s.frameStagingPending, s.exportCamera, ASPECT, setup, trackContext]);
 
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   useEffect(() => {
@@ -119,8 +184,9 @@ export function PreviewPlayer({ model, timeline: tl }: { model: ModelState; time
   }, [s.logo]);
 
   const unit = Math.min(frame.width, frame.height);
-  /** A saved scene camera is meant to be the video's camera. */
-  const sceneInCharge = setup?.useCameraForVideo === true && !!setup?.activeCameraId;
+  const trackKeys = useStudio((st) => st.plan.cameraTracks?.[st.editingModel]?.build?.keys.length ?? 0);
+  /** A saved scene camera is meant to be the video's camera (unless a Camera track films it). */
+  const sceneInCharge = videoCameraInCharge(setup ?? undefined, s.exportCamera, trackKeys) === 'scene';
   /** Pieces this timeline has no track for: the plan changed under it. */
   const missingTracks = useMemo(() => asm.instances.filter((inst) => !tl.tracks.has(inst.key)).length, [asm, tl]);
   return (

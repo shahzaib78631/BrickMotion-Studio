@@ -29,7 +29,16 @@ export function blurRadius(depth: number, focus: number, maxPx: number): number 
 }
 
 /** The largest blur for a frame `height` pixels tall. */
-export const maxBlurPx = (lens: LensChoice, height: number) => (LENS_BLUR_PX[lens.blur] ?? 0) * (height / 1080);
+export const maxBlurPx = (lens: LensChoice, height: number) => (lens.px ?? LENS_BLUR_PX[lens.blur] ?? 0) * (height / 1080);
+
+export type FrameRect = { x: number; y: number; width: number; height: number };
+/** A frame inside the canvas (CSS pixels, top-left origin) in device pixels from the bottom left, as WebGL counts. */
+export function frameRegion(frame: FrameRect, cssHeight: number, pixelRatio: number): FrameRect {
+  return {
+    x: Math.round(frame.x * pixelRatio), y: Math.round((cssHeight - frame.y - frame.height) * pixelRatio),
+    width: Math.max(1, Math.round(frame.width * pixelRatio)), height: Math.max(1, Math.round(frame.height * pixelRatio)),
+  };
+}
 
 /**
  * Distance from the camera to the plane in focus: `focus` 0 is the nearest corner of
@@ -163,10 +172,13 @@ export class LensPass {
    * `root` is the bricks, `box` what the focus is measured against, `groundY` the floor
    * height (null: no floor).
    */
-  apply(source: 'canvas' | ImageData, opts: { lens: LensChoice; camera: THREE.Camera; root: THREE.Object3D; box: THREE.Box3; groundY: number | null }): void {
+  apply(source: 'canvas' | ImageData, opts: { lens: LensChoice; camera: THREE.Camera; root: THREE.Object3D; box: THREE.Box3; groundY: number | null; frame?: FrameRect }): void {
     const r = this.renderer;
     const size = r.getDrawingBufferSize(new THREE.Vector2());
-    const w = size.x, h = size.y;
+    const pr = r.getPixelRatio();
+    // `frame`: only that part of the canvas (the Preview's video frame), in CSS pixels
+    const region = opts.frame ? frameRegion(opts.frame, size.y / pr, pr) : { x: 0, y: 0, width: size.x, height: size.y };
+    const w = region.width, h = region.height;
     const maxR = maxBlurPx(opts.lens, h);
     if (source === 'canvas' && maxR < 0.5) return;
     let color: THREE.Texture;
@@ -176,7 +188,7 @@ export class LensPass {
         this.frame = new THREE.FramebufferTexture(w, h);
       }
       r.setRenderTarget(null);
-      r.copyFramebufferToTexture(this.frame);
+      r.copyFramebufferToTexture(this.frame, opts.frame ? new THREE.Vector2(region.x, region.y) : null);
       color = this.frame;
     } else {
       if (!this.image || this.image.image.width !== source.width || this.image.image.height !== source.height) {
@@ -199,9 +211,11 @@ export class LensPass {
     u.radScale.value = Math.max(0.5, maxR / 24);
     u.flipColor.value = source !== 'canvas';
     r.setRenderTarget(null);
-    r.setScissorTest(false);
-    r.setViewport(0, 0, w / r.getPixelRatio(), h / r.getPixelRatio());
+    r.setViewport(region.x / pr, region.y / pr, w / pr, h / pr);
+    r.setScissor(region.x / pr, region.y / pr, w / pr, h / pr);
+    r.setScissorTest(!!opts.frame);
     this.quad.render(r);
+    r.setScissorTest(false);
   }
 
   dispose(): void {

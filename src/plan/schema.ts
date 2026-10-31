@@ -160,6 +160,43 @@ const SceneSetupSchema = z.object({
     ctx.addIssue({ code: 'custom', path: ['activeCameraId'], message: 'Active camera does not exist' });
 });
 
+const Xyz = z.tuple([num, num, num]);
+const CurveSchema = z.object({ kind: z.enum(['linear', 'easeIn', 'easeOut', 'easeInOut', 'holdThenMove', 'snap']), strength: num.min(0).max(1) });
+const CameraKeySchema = z.object({
+  id: z.string().min(1),
+  t: num.min(0),
+  target: z.union([
+    z.object({ kind: z.literal('model') }), z.object({ kind: z.literal('build') }), z.object({ kind: z.literal('piece') }),
+    z.object({ kind: z.literal('point'), at: Xyz }),
+  ]),
+  offset: Xyz,
+  azimuth: num,
+  elevation: num.min(-90).max(90),
+  distance: z.union([z.object({ fit: z.literal(true), margin: num.min(0.5).max(4) }), z.object({ fit: z.literal(false), value: num.min(0) })]),
+  roll: num.min(-180).max(180),
+  lensMm: num.min(8).max(400),
+  focus: z.union([num.min(0).max(1), z.literal('target')]),
+  blur: num.min(0).max(1),
+  origin: z.enum(['auto', 'user']),
+});
+const TransitionSettingsSchema = z.object({
+  curve: CurveSchema, aimCurve: CurveSchema.optional(), lensCurve: CurveSchema.optional(),
+  path: z.enum(['arc', 'straight']), orbit: z.enum(['shortest', 'cw', 'ccw']), extraTurns: num.int().min(0).max(10),
+  overshoot: num.min(0).max(1), motionBlur: num.min(0).max(1),
+  shake: z.object({ amount: num.min(0).max(20), frequency: num.min(0).max(20) }),
+  cut: z.boolean(), flowThrough: z.boolean(), turnLast: num.min(0).max(60).optional(),
+});
+const CameraTrackSchema = z.object({
+  keys: z.array(CameraKeySchema).max(2000),
+  transitions: z.array(z.object({ from: z.string(), to: z.string(), preset: z.string(), settings: TransitionSettingsSchema, origin: z.enum(['auto', 'user']) })).max(2000),
+  shutter: num.min(0).max(1),
+  style: z.enum(['reference', 'showcase', 'turntable', 'calm', 'energetic', 'overhead']).optional(),
+}).superRefine((track, ctx) => {
+  if (track.keys.some((k, i) => i > 0 && k.t <= track.keys[i - 1].t))
+    ctx.addIssue({ code: 'custom', path: ['keys'], message: 'Camera keys must be sorted and unique by time' });
+});
+const CameraTracksSchema = z.record(z.string(), z.object({ build: CameraTrackSchema.optional(), timeline: CameraTrackSchema.optional() }));
+
 export const PlanSchema = z.object({
   format: z.literal('brickmotion-plan'),
   version: z.literal(1),
@@ -170,6 +207,7 @@ export const PlanSchema = z.object({
   steps: z.array(StepSchema),
   animation: AnimationSchema.optional(),
   sceneSetup: SceneSetupSchema.optional(),
+  cameraTracks: CameraTracksSchema.optional(),
   assemblySpot: AssemblySpotSchema.optional(),
   workBaySpots: z.record(z.string().min(1), AssemblySpotSchema).optional(),
   loosePiecesFollow: z.boolean().optional(),

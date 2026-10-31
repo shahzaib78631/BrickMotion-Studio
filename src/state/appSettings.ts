@@ -8,6 +8,7 @@ import type { LogoCorner } from '../export/exportVideo';
 import type { ExportFps } from '../export/frameRates';
 import type { Materials, StudioLook } from '../render/looks';
 import type { CameraFraming, CameraSettings } from '../anim/camera';
+import type { TransitionPreset } from '../anim/cameraTrack/presets';
 import { DEFAULT_SETTINGS, type Settings, type VideoEngine } from '../storage/settings';
 import { formatAspect, type VideoFormat } from '../export/formats';
 import type { SceneSetup } from '../render/sceneSetup';
@@ -69,9 +70,11 @@ export type AppSettings = {
   /** the floating quick-action bar over the viewport when parts are selected */
   showSelectionBar: boolean;
   /** MP4 camera: the automatic cinematics, or the camera the viewport plays. */
-  exportCamera: 'automatic' | 'buildView';
+  exportCamera: 'automatic' | 'buildView' | 'track';
   /** play the intro shot and hero orbit in the Build viewport as well as in the video */
   cameraFollowsPlayback: boolean;
+  /** camera moves saved as presets */
+  cameraPresets: TransitionPreset[];
   /** When Camera frame staging plays, fit the scene camera to the visible loose pieces. */
   autoFitStaging: boolean;
   /** UI-only selection; no planning until Arrange is pressed. Never persisted. */
@@ -93,6 +96,7 @@ export const useAppSettings = create<AppSettings>((set) => ({
   showSelectionBar: DEFAULT_SETTINGS.showSelectionBar,
   exportCamera: DEFAULT_SETTINGS.exportCamera,
   cameraFollowsPlayback: DEFAULT_SETTINGS.cameraFollowsPlayback,
+  cameraPresets: DEFAULT_SETTINGS.cameraPresets,
   autoFitStaging: DEFAULT_SETTINGS.autoFitStaging,
   frameStagingPending: false,
   frameStagingPrevious: null,
@@ -109,8 +113,9 @@ export const toSettings = (s: AppSettings): Settings => ({
   logoEnabled: s.logoEnabled,
   showSelectionBar: s.showSelectionBar,
   cameraFollowsPlayback: s.cameraFollowsPlayback,
+  cameraPresets: s.cameraPresets,
   autoFitStaging: s.autoFitStaging,
-  exportCamera: s.exportCamera ?? 'automatic',
+  exportCamera: s.exportCamera ?? 'track',
   video: { targetSeconds: s.targetSeconds, heroOrbit: s.heroOrbit, mode: s.mode, fps: s.fps, introSeconds: s.introSeconds, buildSeconds: s.buildSeconds, outroSeconds: s.outroSeconds, studioLook: s.studioLook, cameraFraming: s.cameraFraming, camera: s.camera, format: s.format, edgeLines: s.edgeLines, linearColors: s.linearColors, bottomUp: s.bottomUp, snapSound: s.snapSound, planner: s.planner ?? 'legacy', constructionSupport: s.constructionSupport ?? 'fixture', constructionBudget: s.constructionBudget ?? 'standard', constructionStepModules: s.constructionStepModules === true, motionV4Limits: s.motionV4Limits ?? [], motionV4Mechanism: s.motionV4Mechanism ?? null, floorSort: s.floorSort, floorSides: s.floorSides, floorStyle: s.floorStyle ?? 'packed', floorMatch: s.floorMatch ?? 'fill', materials: s.materials, sound: s.sound, videoEngine: s.videoEngine, pathSamples: s.pathSamples },
 });
 
@@ -118,7 +123,7 @@ export async function applySettings(s: Settings): Promise<void> {
   const logoBitmap = s.logo ? await createImageBitmap(s.logo).catch(() => null) : null;
   useAppSettings
     .getState()
-    .set({ apiKey: s.apiKey, model: s.model, logo: s.logo, logoBitmap, logoCorner: s.logoCorner, logoEnabled: s.logoEnabled && !!logoBitmap, showSelectionBar: s.showSelectionBar, cameraFollowsPlayback: s.cameraFollowsPlayback, autoFitStaging: false, frameStagingPending: false, frameStagingPrevious: null, exportCamera: s.exportCamera ?? 'automatic', ...s.video });
+    .set({ apiKey: s.apiKey, model: s.model, logo: s.logo, logoBitmap, logoCorner: s.logoCorner, logoEnabled: s.logoEnabled && !!logoBitmap, showSelectionBar: s.showSelectionBar, cameraFollowsPlayback: s.cameraFollowsPlayback, cameraPresets: s.cameraPresets ?? [], autoFitStaging: false, frameStagingPending: false, frameStagingPrevious: null, exportCamera: s.exportCamera ?? 'track', ...s.video });
 }
 
 /** The animation options the timeline planner needs, taken from the video settings. */

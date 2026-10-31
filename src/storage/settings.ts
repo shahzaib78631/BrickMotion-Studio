@@ -9,6 +9,7 @@ import { DEFAULT_SOUND, sanitizeSound, type SoundSettings } from '../audio/sound
 import { DEFAULT_MATERIALS, isStudioLook, sanitizeMaterials, type Materials, type StudioLook } from '../render/looks';
 import { DEFAULT_CAMERA_SETTINGS, type CameraFraming, type CameraSettings } from '../anim/camera';
 import { isVideoFormat, type VideoFormat } from '../export/formats';
+import { isTransitionSettings, type TransitionPreset } from '../anim/cameraTrack/presets';
 
 export type Settings = {
   apiKey: string;
@@ -19,9 +20,12 @@ export type Settings = {
   /** the floating quick-action bar over the viewport when parts are selected */
   showSelectionBar: boolean;
   /** MP4 camera: automatic cinematics, or the camera the viewport plays. */
-  exportCamera: 'automatic' | 'buildView';
+  /** 'track': the model's Camera track, or the automatic camera while it has none */
+  exportCamera: 'automatic' | 'buildView' | 'track';
   /** the Build viewport plays the intro shot and hero orbit while it plays */
   cameraFollowsPlayback: boolean;
+  /** camera moves the user saved as presets (Camera inspector → Save as preset) */
+  cameraPresets: TransitionPreset[];
   /** Refit the saved camera to the initial loose pieces when playing Camera frame staging. */
   autoFitStaging: boolean;
   video: { targetSeconds: number; heroOrbit: boolean; mode: ArrivalMode | 'auto'; fps: ExportFps; introSeconds: number | null; buildSeconds: number | null; outroSeconds: number | null; studioLook: StudioLook; cameraFraming: CameraFraming; camera: CameraSettings; format: VideoFormat; edgeLines: boolean; linearColors: boolean; bottomUp: boolean; snapSound: boolean; planner?: 'legacy' | 'construction-v2' | 'construction-auto' | 'construction-v3' | 'construction-v3-auto' | 'construction-v4' | 'standard-motion' | 'standard-motion-v4' | 'assembly-artifact'; constructionSupport?: 'fixture' | 'table'; constructionBudget?: ConstructionBudgetPreset; constructionStepModules?: boolean; motionV4Limits?: JointLimitRule[]; motionV4Mechanism?: MechanismProgram | null; floorSort: FloorSort; floorSides: FloorSides; floorStyle: FloorStyle; floorMatch: FloorMatch; materials: Materials; sound: SoundSettings; /** MP4 renderer: the live one, or path traced per frame */ videoEngine: VideoEngine; /** path-traced MP4 samples per pixel */ pathSamples: number };
@@ -37,8 +41,9 @@ export const DEFAULT_SETTINGS: Settings = {
   logoCorner: 'br',
   logoEnabled: false,
   showSelectionBar: true,
-  exportCamera: 'automatic',
+  exportCamera: 'track',
   cameraFollowsPlayback: true,
+  cameraPresets: [],
   autoFitStaging: false,
   video: { targetSeconds: 15, heroOrbit: true, mode: 'auto', fps: 30, introSeconds: null, buildSeconds: null, outroSeconds: null, studioLook: 'soft', cameraFraming: 'cinematic', camera: DEFAULT_CAMERA_SETTINGS, format: '9:16', edgeLines: true, linearColors: true, bottomUp: true, snapSound: true, planner: 'legacy', constructionSupport: 'fixture', constructionBudget: 'standard', constructionStepModules: false, motionV4Limits: [], motionV4Mechanism: null, floorSort: 'step', floorSides: 'front-back', floorStyle: 'packed', floorMatch: 'fill', materials: DEFAULT_MATERIALS, sound: DEFAULT_SOUND, videoEngine: 'live', pathSamples: 64 },
 };
@@ -90,7 +95,8 @@ export function sanitizeSettings(stored: Partial<Settings>): Settings {
   if (typeof s.showSelectionBar !== 'boolean') s.showSelectionBar = DEFAULT_SETTINGS.showSelectionBar;
   if (typeof s.cameraFollowsPlayback !== 'boolean') s.cameraFollowsPlayback = DEFAULT_SETTINGS.cameraFollowsPlayback;
   if (typeof s.autoFitStaging !== 'boolean') s.autoFitStaging = DEFAULT_SETTINGS.autoFitStaging;
-  if (s.exportCamera !== 'automatic' && s.exportCamera !== 'buildView') s.exportCamera = 'automatic';
+  if (s.exportCamera !== 'automatic' && s.exportCamera !== 'buildView' && s.exportCamera !== 'track') s.exportCamera = 'track';
+  s.cameraPresets = sanitizePresets(s.cameraPresets);
   for (const key of ['introSeconds', 'buildSeconds', 'outroSeconds'] as const) {
     const value = video[key];
     if (value !== null && (!Number.isFinite(value) || value < (key === 'buildSeconds' ? 1 : 0.2) || value > 120)) video[key] = null;
@@ -100,4 +106,12 @@ export function sanitizeSettings(stored: Partial<Settings>): Settings {
 
 export async function saveSettings(s: Settings): Promise<void> {
   await set(KEY, s);
+}
+
+/** Saved camera presets that are well formed; anything else is dropped. */
+function sanitizePresets(v: unknown): TransitionPreset[] {
+  if (!Array.isArray(v)) return [];
+  return v.filter((p): p is TransitionPreset => !!p && typeof p === 'object' && typeof p.id === 'string' && p.id !== ''
+    && typeof p.label === 'string' && typeof (p.hint ?? '') === 'string' && isTransitionSettings(p.settings))
+    .map((p) => ({ id: p.id, label: p.label, hint: p.hint ?? '', settings: p.settings, ...(p.key ? { key: p.key } : {}) }));
 }

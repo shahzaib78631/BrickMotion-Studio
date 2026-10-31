@@ -29,12 +29,36 @@ vi.mock('mediabunny', () => {
   return { Output, CanvasSource, Mp4OutputFormat, BufferTarget, QUALITY_HIGH: 'high', canEncodeVideo: async (_codec: string, config: unknown) => ((calls.encodeConfig = config), true) };
 });
 
+const lensCalls = vi.hoisted(() => ({ made: 0, px: [] as number[] }));
+vi.mock('../../src/render/depthOfField', () => ({
+  LensPass: class {
+    constructor() { lensCalls.made++; }
+    apply(_s: unknown, o: { lens: { px?: number } }) { lensCalls.px.push(o.lens.px ?? -1); }
+    dispose() {}
+  },
+}));
+
+const blurCalls = vi.hoisted(() => ({ made: 0, adds: 0, resolves: 0 }));
+vi.mock('../../src/render/motionBlur', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/render/motionBlur')>()),
+  MotionBlurAccumulator: class {
+    constructor() { blurCalls.made++; }
+    begin() {}
+    add() { blurCalls.adds++; }
+    resolve() { blurCalls.resolves++; }
+    dispose() {}
+  },
+}));
+
 import { buildTimeline } from '../../src/anim/timeline';
 import { canExportMp4, exportVideo, frameCount, drawLogo, type ExportOpts } from '../../src/export/exportVideo';
 import { FPS_OPTIONS, isExportFps } from '../../src/export/frameRates';
 import { measurePart } from '../../src/ldraw/metrics';
 
 beforeEach(() => {
+  lensCalls.made = 0;
+  blurCalls.made = 0; blurCalls.adds = 0; blurCalls.resolves = 0;
+  lensCalls.px = [];
   calls.add = [];
   calls.cancel = 0;
   calls.finalize = 0;
@@ -146,4 +170,63 @@ test('logo: 22% wide, 48 px margin, 90% opacity', () => {
   expect(x).toBeCloseTo(1080 - 48 - 237.6);
   expect(y).toBeCloseTo(1920 - 48 - 118.8);
   expect(ctx.globalAlpha).toBe(1); // restored
+});
+
+test('with a camera track every frame looks where the track says', async () => {
+  const { create } = fakeStudio();
+  const target: [number, number, number] = [3, 4, 5];
+  const cameraTrack = {
+    keys: [{ id: 'a', t: 0, target: { kind: 'point' as const, at: target }, offset: [0, 0, 0] as [number, number, number], azimuth: 20, elevation: 30,
+      distance: { fit: false as const, value: 40 }, roll: 0, lensMm: 50, focus: 0.5, blur: 0, origin: 'user' as const }],
+    transitions: [], shutter: 0,
+  };
+  await exportVideo({ ...opts(new AbortController().signal), cameraTrack }, { createStudio: create as never, createCanvas: fakeCanvas });
+  const studio = create.mock.results[0].value;
+  const looks = studio.perspective.lookAt.mock.calls;
+  expect(looks.length).toBe(calls.add.length);
+  for (const [p] of looks) expect([p.x, p.y, p.z]).toEqual(target);
+});
+
+const blurTrack = (b0: number, b1: number) => {
+  const k = (id: string, t: number, blur: number) => ({ id, t, target: { kind: 'point' as const, at: [0, 0, 0] as [number, number, number] },
+    offset: [0, 0, 0] as [number, number, number], azimuth: 0, elevation: 20, distance: { fit: false as const, value: 40 }, roll: 0, lensMm: 50, focus: 0.5, blur, origin: 'user' as const });
+  return { keys: [k('a', 0, b0), k('b', 0.1, b1)], transitions: [], shutter: 0 };
+};
+
+test('depth of field follows the camera track frame by frame', async () => {
+  const { create } = fakeStudio();
+  await exportVideo({ ...opts(new AbortController().signal), cameraTrack: blurTrack(0, 1) }, { createStudio: create as never, createCanvas: fakeCanvas });
+  expect(lensCalls.made).toBe(1);
+  expect(lensCalls.px.length).toBeGreaterThanOrEqual(2);
+  for (let i = 1; i < lensCalls.px.length; i++) expect(lensCalls.px[i]).toBeGreaterThan(lensCalls.px[i - 1]);
+});
+
+test('a camera track with no blur makes no lens pass', async () => {
+  const { create } = fakeStudio();
+  await exportVideo({ ...opts(new AbortController().signal), cameraTrack: blurTrack(0, 0) }, { createStudio: create as never, createCanvas: fakeCanvas });
+  expect(lensCalls.made).toBe(0);
+});
+
+const swingTrack = (shutter: number) => {
+  const k = (id: string, t: number, azimuth: number) => ({ id, t, target: { kind: 'point' as const, at: [0, 0, 0] as [number, number, number] },
+    offset: [0, 0, 0] as [number, number, number], azimuth, elevation: 20, distance: { fit: false as const, value: 40 }, roll: 0, lensMm: 50, focus: 0.5, blur: 0, origin: 'user' as const });
+  const settings = { curve: { kind: 'linear' as const, strength: 0 }, path: 'arc' as const, orbit: 'shortest' as const, extraTurns: 0, overshoot: 0,
+    motionBlur: shutter, shake: { amount: 0, frequency: 0.6 }, cut: false, flowThrough: false };
+  return { keys: [k('a', 0, 0), k('b', 0.1, 90)], transitions: [{ from: 'a', to: 'b', preset: 'whip-pan', settings, origin: 'user' as const }], shutter };
+};
+
+test('a fast camera move is rendered as several blurred sub-frames', async () => {
+  const { create, render } = fakeStudio();
+  await exportVideo({ ...opts(new AbortController().signal), cameraTrack: swingTrack(1) }, { createStudio: create as never, createCanvas: fakeCanvas });
+  expect(blurCalls.made).toBe(1);
+  expect(render.mock.calls.length).toBeGreaterThan(calls.add.length);
+  expect(blurCalls.adds).toBe(render.mock.calls.length);
+  expect(blurCalls.resolves).toBe(calls.add.length);
+});
+
+test('with the shutter shut every frame is one render', async () => {
+  const { create, render } = fakeStudio();
+  await exportVideo({ ...opts(new AbortController().signal), cameraTrack: swingTrack(0) }, { createStudio: create as never, createCanvas: fakeCanvas });
+  expect(blurCalls.made).toBe(0);
+  expect(render.mock.calls.length).toBe(calls.add.length);
 });

@@ -2,7 +2,7 @@
  * the viewport, the preview, MP4 export and still capture so they always agree. */
 
 /** A scene preset: the studio around the model. */
-export type StudioLook = 'soft' | 'classic' | 'white' | 'dark' | 'warm' | 'sky' | 'night' | 'chroma'
+export type StudioLook = 'soft' | 'classic' | 'white' | 'dark' | 'black' | 'warm' | 'sky' | 'night' | 'chroma'
   | 'photo-grey' | 'slate-blue' | 'porcelain' | 'sage' | 'sandstone' | 'graphite'
   | 'lavender' | 'render-grey' | 'steel-grey' | 'powder-blue' | 'mint' | 'peach' | 'blush' | 'butter' | 'cobalt';
 /** What the model stands on. 'auto' is the scene's own choice. */
@@ -33,7 +33,8 @@ export const GLASS_LOOKS: { id: GlassLook; label: string; hint: string }[] = [
 /** Background blur: off, or how wide the blur gets (see LENS_BLUR_PX). */
 export type LensBlur = 'off' | 'subtle' | 'medium' | 'strong';
 /** `focus`: where the sharp plane sits, 0 = the nearest point of the model, 1 = the farthest. */
-export type LensChoice = { blur: LensBlur; focus: number };
+/** `px`: an exact largest blur (pixels at 1080 tall) that replaces the named size, for a camera track's continuous blur. */
+export type LensChoice = { blur: LensBlur; focus: number; px?: number };
 export const LENS_BLURS: { id: LensBlur; label: string; hint: string }[] = [
   { id: 'off', label: 'Off', hint: 'Everything sharp' },
   { id: 'subtle', label: 'Subtle', hint: 'A slight softening away from the focus' },
@@ -241,6 +242,11 @@ export const SCENES: readonly ScenePreset[] = [
     spot: { x: 0.62, y: 0.3, radius: 0.75, rgb: [150, 151, 158] },
     floorColor: '#55565c', floor: 'reflective', shadowColor: '#08080a', shadowOpacity: 0.55,
     hemi: 0.45, hemiGround: '#3a3b40', key: 3.1, keyColor: '#fff6ec', fill: 0.25, env: 0.45, exposure: 1.05, reflection: 0.34 },
+  { id: 'black', label: 'Black stage', hint: 'Pure black, no floor: bright bricks floating in the dark, as in the KenBrick videos',
+    stops: [{ at: 0, rgb: [0, 0, 0] }, { at: 1, rgb: [0, 0, 0] }],
+    floorColor: '#000000', floor: 'none', shadowColor: '#000000', shadowOpacity: 0,
+    hemi: 0.75, hemiGround: '#2a2a30', key: 2.9, keyColor: '#fff8f0', fill: 0.45, rim: 0.8, rimColor: '#ffffff', rimDirection: [0.6, 1.2, -1.3],
+    env: 0.7, exposure: 1.06, reflection: 0 },
   { id: 'warm', label: 'Warm paper', hint: 'Soft beige, gentle warm light',
     stops: [{ at: 0, rgb: [226, 214, 196] }, { at: 0.6, rgb: [236, 227, 212] }, { at: 1, rgb: [245, 239, 228] }],
     floorColor: '#e4d8c6', floor: 'shadow', shadowColor: '#3b2e22', shadowOpacity: 0.38,

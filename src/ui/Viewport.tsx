@@ -59,6 +59,9 @@ import { useSceneView } from './sceneViewState';
 import { createSceneControls } from './sceneControls';
 import { cameraFrame, sceneSetupOf } from '../render/sceneSetup';
 import { formatAspect } from '../export/formats';
+import { cameraTrackAt } from '../anim/cameraTrack/sample';
+import { applyShot, buildCameraContext, timelineCameraContext, viewportFollowsTrack } from '../anim/cameraTrack/context';
+import type { CameraContext, CameraShot } from '../anim/cameraTrack/types';
 
 /** Whether the camera sees all of `box` (its eight corners inside the view). */
 function inView(camera: THREE.Camera, box: THREE.Box3): boolean {
@@ -496,6 +499,21 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     let labClock = 0, labDrawnPosition = Number.NaN, labLastUI = 0;
     let labInputSignature = '';
     let labRestInverse = new Map<string, THREE.Matrix4>();
+    // the Camera track drives the view while playing or scrubbing (never while parked)
+    let trackCtx: { key: unknown; aspect: number; ctx: CameraContext } | null = null;
+    const contextFor = (key: unknown, aspect: number, make: () => CameraContext) => {
+      if (!trackCtx || trackCtx.key !== key || Math.abs(trackCtx.aspect - aspect) > 1e-6) trackCtx = { key, aspect, ctx: make() };
+      return trackCtx.ctx;
+    };
+    /** whether the viewport plays the Camera track of this clock while the playhead moves */
+    const followsTrack = (keys: number) => {
+      const settings = useAppSettings.getState();
+      return viewportFollowsTrack({
+        cameraView: useSceneView.getState().cameraView, follow: settings.cameraFollowsPlayback !== false,
+        stagingPending: !!settings.frameStagingPending, exportCamera: settings.exportCamera, trackKeys: keys,
+        scene: useStudio.getState().plan.sceneSetup,
+      });
+    };
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
       const dt = Math.min(0.1, (now - last) / 1000);
@@ -503,6 +521,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       // The intro establishing shot and the hero orbit are camera moves: play them here
       // too, or pressing play in the Build view shows the poses without the shots.
       let shot: CamPose | null = null;
+      let trackShot: CameraShot | null = null;
       if (useStudio.getState().mode === 'edit') {
         if (useStudio.getState().timelineEditor === 'timeline') {
           const scene = keyScene.current;
@@ -510,6 +529,16 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
             const a = animationOf(useStudio.getState().plan.animation);
             const atFrame = advanceKeyframePlayback(dt, a.fps, a.startFrame, a.endFrame);
             if (atFrame !== shownKeyFrame || scene.dirty) {
+              const editorState = useStudio.getState();
+              const kfTrack = editorState.plan.cameraTracks?.[editorState.editingModel]?.timeline;
+              if (kfTrack && atFrame !== shownKeyFrame && followsTrack(kfTrack.keys.length)) {
+                const view = useSceneView.getState();
+                const aspect = view.width / Math.max(1, view.height);
+                const bounds = modelRef.current.view.bounds;
+                const ctx = contextFor(a, aspect, () => timelineCameraContext(a, bounds ? worldBox(bounds) : new THREE.Box3(new THREE.Vector3(-4, 0, -4), new THREE.Vector3(4, 5, 4)),
+                  null, editorState.editingModel, aspect, useAppSettings.getState().camera.sensorWidthMm));
+                trackShot = cameraTrackAt(kfTrack, (atFrame - a.startFrame) / a.fps, ctx);
+              }
               const poses = scene.at(atFrame);
               studio.bricks.setMatrices((key) => poses.has(key) ? poses.get(key)! : scene.bases.get(key) ?? null);
               scene.dirty = false;
@@ -637,6 +666,12 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
             // they: the build in between stays the editor's own view, so playing never zooms
             // under you. The transport's camera switch turns both off completely.
             const settings = useAppSettings.getState();
+            const buildTrack = useStudio.getState().plan.cameraTracks?.[useStudio.getState().editingModel]?.build;
+            if (buildTrack && followsTrack(buildTrack.keys.length)) {
+              const view = useSceneView.getState();
+              const aspect = view.width / Math.max(1, view.height);
+              trackShot = cameraTrackAt(buildTrack, t, contextFor(run.tl, aspect, () => buildCameraContext(run.tl, aspect, settings.camera.sensorWidthMm)));
+            }
             const inHero = t >= run.tl.buildEnd;
             // Camera-frame staging holds its fitted tabletop shot through playback;
             // the procedural intro/hero orbit would otherwise restore a huge
@@ -645,7 +680,9 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
             const holdsShot = cameraView || settings.floorStyle === 'camera-frame';
             const follows = !settings.frameStagingPending && settings.cameraFollowsPlayback !== false;
             if (heroBase && heroBase.cameraView !== cameraView) heroBase = null;
-            if (!holdsShot && follows && (inHero || t < run.tl.intro)) {
+            if (trackShot) {
+              shotFrom = null;
+            } else if (!holdsShot && follows && (inHero || t < run.tl.intro)) {
               const view = useSceneView.getState();
               shot = shotAt(cameraAt(run.tl, t, view.width / Math.max(1, view.height), settings.cameraFraming, settings.camera), t);
             } else if (holdsShot && follows && inHero && run.tl.heroOrbit) {
@@ -675,6 +712,16 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
           active.lookAt(shot.target);
           // keep the editor's orbit behaving around the shot, not the old centre
           controls.target.copy(shot.target);
+        }
+        if (trackShot && studio.camera instanceof THREE.PerspectiveCamera) {
+          const cam = studio.camera, sh = trackShot;
+          applyShot(cam, sh);
+          controls.target.copy(sh.target);
+          if (useSceneView.getState().cameraView) {
+            // in camera view the controls save every view change into the scene camera: let
+            // them take in the track's move quietly, so playing never rewrites that camera
+            viewportApi.scene?.quietly(() => { controls.update(); applyShot(cam, sh); });
+          }
         }
         if (heldShot && !heroBase) controls.update();
         heldShot = false;

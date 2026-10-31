@@ -21,6 +21,8 @@ export type SceneController = {
    * changes the shot the video and captures use, not just the editor's picture of it.
    */
   saveViewToCamera(): void;
+  /** Runs `fn` (a camera move the Camera track makes) without saving the view into the scene camera. */
+  quietly(fn: () => void): void;
   dispose(): void;
 };
 
@@ -206,6 +208,11 @@ export function createSceneControls(studio: Studio, orbit: OrbitControls, canvas
     pick(ray) { return studio.lighting.pick(ray); },
     isHandlingPointer() { return dragging || !!transform.axis; },
     saveViewToCamera,
+    quietly(fn) {
+      const was = syncingView;
+      syncingView = true;
+      try { fn(); } finally { syncingView = was; }
+    },
     prepareRender() {
       if (!useSceneView.getState().cameraView || useStudio.getState().mode !== 'edit') return undefined;
       const { width, height } = useSceneView.getState();

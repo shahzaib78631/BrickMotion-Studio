@@ -86,3 +86,15 @@ test('editing object keyframes preserves the construction timeline and does not 
   await runDebounce();
   expect(mocks.run).toHaveBeenCalledTimes(1);
 });
+
+test('editing the camera track preserves the construction timeline and does not replan', async () => {
+  mocks.run.mockResolvedValue(timeline);
+  const { result, rerender } = renderHook(({ editedPlan }) => useTimeline(true, editedPlan, '', opts),
+    { initialProps: { editedPlan: plan } });
+  await runDebounce();
+  const withCamera = { ...plan, cameraTracks: { '': { build: { keys: [], transitions: [], shutter: 0.5 } } } };
+  rerender({ editedPlan: withCamera });
+  expect(result.current.timeline).toBe(timeline);
+  await runDebounce();
+  expect(mocks.run).toHaveBeenCalledTimes(1);
+});
