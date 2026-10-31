@@ -85,6 +85,9 @@ export type StudioState = {
   setGizmo(enabled: boolean): void;
   setGizmoMode(mode: 'translate' | 'rotate' | 'scale'): void;
   setAimWay(on: boolean): void;
+  /** Pieces whose last edit was refused (they would sit inside another piece); the viewport tints them red briefly. */
+  blocked: { ids: string[]; at: number } | null;
+  flashBlocked(ids: string[]): void;
   beginGesture(): void;
   endGesture(): void;
   apply(fn: (p: Plan) => Plan): void;
@@ -195,6 +198,12 @@ export const useStudio = create<StudioState>((set, get) => ({
   setAimWay(aimWay) {
     // aiming and the transform gizmo both claim the arrow keys and drags: one at a time
     set(aimWay ? { aimWay, gizmoEnabled: false, tool: 'select' } : { aimWay });
+  },
+  blocked: null,
+  flashBlocked(ids) {
+    const at = Date.now();
+    set({ blocked: { ids: [...ids], at } });
+    setTimeout(() => { if (get().blocked?.at === at) set({ blocked: null }); }, 400);
   },
   beginGesture() {
     set({ gesture: get().plan });

@@ -6,6 +6,11 @@ import { gridToPlacement } from '../plan/placement';
 import { isGrid, isSub, type Grid, type Plan, type PlanItem } from '../plan/types';
 import { studSnapper, type SnapPart, type StudSnapper } from '../plan/studSnap';
 import type { Command } from './keymap';
+import { useAppSettings } from './appSettings';
+import { guardEdit, guardedApply } from './guard';
+
+/** How far (plates, or studs for a duplicate) a blocked edit looks for a clean spot. */
+const RETRY_PLATES = 12;
 import { ensureParts, getColors, metricsOf } from './partService';
 import { useStudio } from './store';
 
@@ -103,34 +108,54 @@ export function runCommand(cmd: Command): void {
   if (cmd.kind === 'undo') return st.undo();
   if (cmd.kind === 'redo') return st.redo();
   if (cmd.kind === 'tool') return st.setTool(cmd.tool);
+  if (cmd.kind === 'collision') {
+    const a = useAppSettings.getState();
+    return a.set({ collision: !a.collision });
+  }
   const ids = selection.model === editingModel ? selection.ids : [];
   if (!ids.length) return;
   const m: ModelName = editingModel;
-  if (cmd.kind === 'move') st.apply((p) => {
-    const seated = sidewaysMove(p, m, ids, cmd.d);
-    return seated ? moveItems(p, m, ids, seated, bodyFor(p)) : moveItems(p, m, ids, cmd.d);
-  });
-  else if (cmd.kind === 'rotate') st.apply((p) => rotateItems(p, m, ids, footprintFor(p), bodyFor(p)));
+  if (cmd.kind === 'move') {
+    const step = (p: Plan, d: { x: number; y: number; z: number }) => {
+      const seated = sidewaysMove(p, m, ids, d);
+      return seated ? moveItems(p, m, ids, seated, bodyFor(p)) : moveItems(p, m, ids, d);
+    };
+    // Raise / Lower into a piece keep going the same way to the first clean height
+    // (E on a plate under a brick pops it up on top). Sideways moves are refused.
+    const vertical = cmd.d.x === 0 && cmd.d.z === 0 && cmd.d.y !== 0;
+    const retry = vertical ? (p: Plan) => {
+      for (let n = Math.abs(cmd.d.y) + 1; n <= RETRY_PLATES; n++) {
+        const next = step(p, { x: 0, y: Math.sign(cmd.d.y) * n, z: 0 });
+        if (guardEdit(p, next, m, ids)) return next;
+      }
+      return null;
+    } : undefined;
+    guardedApply(m, ids, (p) => step(p, cmd.d), retry);
+  } else if (cmd.kind === 'rotate') guardedApply(m, ids, (p) => rotateItems(p, m, ids, footprintFor(p), bodyFor(p)));
   else if (cmd.kind === 'duplicate') {
-    // the copy goes right beside the selection (+X), so it is easy to see and drag
+    // the copy goes right beside the selection (+X), so it is easy to see and drag;
+    // when that spot is taken it steps further out until it is clear
     const view = assemble({ ...st.plan, steps: modelSteps(st.plan, m) }, metricsOf, getColors());
     const set = new Set(ids);
     const boxes = view.instances.filter((i) => set.has(i.key.split('/')[0])).map((i) => i.worldBox);
     const w = boxes.length ? Math.max(1, Math.ceil((Math.max(...boxes.map((b) => b.max[0])) - Math.min(...boxes.map((b) => b.min[0]))) / 20 - 1e-6)) : 1;
-    let copies: string[] = [];
+    const plan = st.plan;
     const taken = new Set<string>();
-    st.apply((plan) => {
-      const fresh = () => {
-        let id = newId(plan);
-        while (taken.has(id)) id = newId(plan);
-        taken.add(id);
-        return id;
-      };
-      const r = duplicateItems(plan, m, ids, fresh, { x: w, y: 0, z: 0 });
-      copies = r.ids;
-      return r.plan;
-    });
-    st.select(copies);
+    const fresh = () => {
+      let id = newId(plan);
+      while (taken.has(id)) id = newId(plan);
+      taken.add(id);
+      return id;
+    };
+    for (let k = 0; k <= RETRY_PLATES; k++) {
+      taken.clear();
+      const r = duplicateItems(plan, m, ids, fresh, { x: w + k, y: 0, z: 0 });
+      if (!guardEdit(plan, r.plan, m, r.ids)) continue;
+      st.apply(() => r.plan);
+      st.select(r.ids);
+      return;
+    }
+    st.flashBlocked(ids);
   } else if (cmd.kind === 'delete') {
     st.apply((p) => deleteItems(p, m, ids));
     st.select([]);

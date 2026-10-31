@@ -18,6 +18,8 @@ export type Settings = {
   logoEnabled: boolean;
   /** the floating quick-action bar over the viewport when parts are selected */
   showSelectionBar: boolean;
+  /** Build mode refuses edits that push a piece into another piece (K toggles). */
+  collision: boolean;
   /** MP4 camera: automatic cinematics, or the camera the viewport plays. */
   exportCamera: 'automatic' | 'buildView';
   /** the Build viewport plays the intro shot and hero orbit while it plays */
@@ -37,6 +39,7 @@ export const DEFAULT_SETTINGS: Settings = {
   logoCorner: 'br',
   logoEnabled: false,
   showSelectionBar: true,
+  collision: true,
   exportCamera: 'automatic',
   cameraFollowsPlayback: true,
   autoFitStaging: false,
@@ -88,6 +91,7 @@ export function sanitizeSettings(stored: Partial<Settings>): Settings {
   if (video.videoEngine !== 'path') video.videoEngine = 'live';
   if (!PATH_SAMPLE_OPTIONS.includes(video.pathSamples as (typeof PATH_SAMPLE_OPTIONS)[number])) video.pathSamples = 64;
   if (typeof s.showSelectionBar !== 'boolean') s.showSelectionBar = DEFAULT_SETTINGS.showSelectionBar;
+  if (typeof s.collision !== 'boolean') s.collision = DEFAULT_SETTINGS.collision;
   if (typeof s.cameraFollowsPlayback !== 'boolean') s.cameraFollowsPlayback = DEFAULT_SETTINGS.cameraFollowsPlayback;
   if (typeof s.autoFitStaging !== 'boolean') s.autoFitStaging = DEFAULT_SETTINGS.autoFitStaging;
   if (s.exportCamera !== 'automatic' && s.exportCamera !== 'buildView') s.exportCamera = 'automatic';

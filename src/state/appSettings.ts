@@ -68,6 +68,8 @@ export type AppSettings = {
   logoCorner: LogoCorner;
   /** the floating quick-action bar over the viewport when parts are selected */
   showSelectionBar: boolean;
+  /** Build mode refuses edits that push a piece into another piece (K toggles). */
+  collision: boolean;
   /** MP4 camera: the automatic cinematics, or the camera the viewport plays. */
   exportCamera: 'automatic' | 'buildView';
   /** play the intro shot and hero orbit in the Build viewport as well as in the video */
@@ -91,6 +93,7 @@ export const useAppSettings = create<AppSettings>((set) => ({
   logoEnabled: DEFAULT_SETTINGS.logoEnabled,
   logoCorner: DEFAULT_SETTINGS.logoCorner,
   showSelectionBar: DEFAULT_SETTINGS.showSelectionBar,
+  collision: DEFAULT_SETTINGS.collision,
   exportCamera: DEFAULT_SETTINGS.exportCamera,
   cameraFollowsPlayback: DEFAULT_SETTINGS.cameraFollowsPlayback,
   autoFitStaging: DEFAULT_SETTINGS.autoFitStaging,
@@ -108,6 +111,7 @@ export const toSettings = (s: AppSettings): Settings => ({
   logoCorner: s.logoCorner,
   logoEnabled: s.logoEnabled,
   showSelectionBar: s.showSelectionBar,
+  collision: s.collision,
   cameraFollowsPlayback: s.cameraFollowsPlayback,
   autoFitStaging: s.autoFitStaging,
   exportCamera: s.exportCamera ?? 'automatic',
@@ -118,7 +122,7 @@ export async function applySettings(s: Settings): Promise<void> {
   const logoBitmap = s.logo ? await createImageBitmap(s.logo).catch(() => null) : null;
   useAppSettings
     .getState()
-    .set({ apiKey: s.apiKey, model: s.model, logo: s.logo, logoBitmap, logoCorner: s.logoCorner, logoEnabled: s.logoEnabled && !!logoBitmap, showSelectionBar: s.showSelectionBar, cameraFollowsPlayback: s.cameraFollowsPlayback, autoFitStaging: false, frameStagingPending: false, frameStagingPrevious: null, exportCamera: s.exportCamera ?? 'automatic', ...s.video });
+    .set({ apiKey: s.apiKey, model: s.model, logo: s.logo, logoBitmap, logoCorner: s.logoCorner, logoEnabled: s.logoEnabled && !!logoBitmap, showSelectionBar: s.showSelectionBar, collision: s.collision, cameraFollowsPlayback: s.cameraFollowsPlayback, autoFitStaging: false, frameStagingPending: false, frameStagingPrevious: null, exportCamera: s.exportCamera ?? 'automatic', ...s.video });
 }
 
 /** The animation options the timeline planner needs, taken from the video settings. */

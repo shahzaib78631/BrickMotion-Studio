@@ -21,6 +21,7 @@ import { createSubmodel } from '../plan/createSubmodel';
 import { instancePlacements, itemPlacement, placedBox, placedMatrix, sourceEditDelta, viewPlacement } from './modelPlacement';
 import { NewSubmodelDialog } from './NewSubmodelDialog';
 import { runCommand, snapperFor } from '../state/editing';
+import { guardEdit } from '../state/guard';
 import { commandForKey } from '../state/keymap';
 import { useStudio } from '../state/store';
 import { metricsOf } from '../state/partService';
@@ -95,6 +96,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
   const editingModel = useStudio((s) => s.editingModel);
   const currentStep = useStudio((s) => s.currentStep);
   const selection = useStudio((s) => s.selection);
+  const blocked = useStudio((s) => s.blocked);
   const focus = useStudio((s) => s.focus);
   const mode = useStudio((s) => s.mode);
   const timelineEditor = useStudio((s) => s.timelineEditor);
@@ -261,9 +263,12 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     window.addEventListener('keydown', onSceneKey, true);
     let lastTransform = '';
     let gizmoSnap: StudSnapper | null = null;
+    /** the last gizmo result that pushed nothing into another piece */
+    let lastClean: Plan | null = null;
     transform.addEventListener('dragging-changed', (ev) => {
       const active = !!ev.value;
       gizmoSnap = null;
+      lastClean = null;
       draggingGizmo.current = active;
       controls.enabled = !active && useStudio.getState().mode === 'edit';
       if (active) {
@@ -438,6 +443,17 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
         const placement = itemPlacement(modelRef.current.view.instances, shown, id);
         next = transformPlanItems(next, initialModel.current, [id], initialNodes.current, sourceEditDelta(delta, placement));
       }
+      if (currentMode === 'translate' && !guardEdit(original, next, initialModel.current, initialIds.current)) {
+        if (readoutRef.current) {
+          readoutRef.current.textContent = 'Blocked';
+          readoutRef.current.hidden = false;
+        }
+        const clean = lastClean ?? original;
+        useStudio.getState().apply(() => clean);
+        return;
+      }
+      if (currentMode === 'translate' && readoutRef.current) readoutRef.current.hidden = true;
+      lastClean = next;
       useStudio.getState().apply(() => next);
     });
     let raf = 0;
@@ -982,8 +998,9 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     const sel = new Set(selection.model === editingModel ? selection.ids : []);
     studio.bricks.setHighlight(new Set(shown.filter((i) => sel.has(i.key.split('/')[0])).map((i) => i.key)), 'select');
     const warnIds = new Set(model.warnings.flatMap((w) => w.itemIds));
+    for (const id of blocked?.ids ?? []) warnIds.add(id);
     studio.bricks.setHighlight(new Set(shown.filter((i) => warnIds.has(i.itemId) || warnIds.has(i.key.split('/')[0])).map((i) => i.key)), 'warn');
-  }, [selection, model.warnings, visible, editingModel, mode, engaged, model.view, drawn]);
+  }, [blocked, selection, model.warnings, visible, editingModel, mode, engaged, model.view, drawn]);
 
   // focus requests
   useEffect(() => {

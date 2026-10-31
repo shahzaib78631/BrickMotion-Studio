@@ -6,7 +6,8 @@ export type Command =
   | { kind: 'duplicate' }
   | { kind: 'undo' }
   | { kind: 'redo' }
-  | { kind: 'tool'; tool: Tool };
+  | { kind: 'tool'; tool: Tool }
+  | { kind: 'collision' };
 
 type KeyLike = { key: string; shiftKey: boolean; metaKey: boolean; ctrlKey: boolean; altKey?: boolean };
 
@@ -64,6 +65,9 @@ export function commandForKey(e: KeyLike, cameraAzimuthDeg: number): Command | n
     case 'm':
     case 'M':
       return { kind: 'tool', tool: 'move' };
+    case 'k':
+    case 'K':
+      return { kind: 'collision' };
     case 'Delete':
     case 'Backspace':
       return { kind: 'delete' };

@@ -26,6 +26,7 @@ export function ViewportChrome({ model, onMakeSubmodel }: { model: ModelState; o
   const projection = useViewState((s) => s.projection);
   const laidOut = useStudio((s) => s.laidOut);
   const showSelectionBar = useAppSettings((s) => s.showSelectionBar);
+  const collision = useAppSettings((s) => s.collision);
   const [grid, setGrid] = useState(8);
   const [showGrid, setShowGrid] = useState(true);
   const [overview, setOverview] = useState(false);
@@ -90,6 +91,7 @@ export function ViewportChrome({ model, onMakeSubmodel }: { model: ModelState; o
       <button className={gizmoEnabled && gizmoMode === 'translate' ? 'selected square' : 'square'} title="Transform gizmo (G)" aria-label="Transform gizmo" onClick={() => { useStudio.getState().setGizmo(true); useStudio.getState().setGizmoMode('translate'); }}><Ic name="fit" /></button>
       <button className={gizmoEnabled && gizmoMode === 'rotate' ? 'selected square' : 'square'} title="Rotate gizmo" aria-label="Rotate gizmo" onClick={() => { useStudio.getState().setGizmo(true); useStudio.getState().setGizmoMode('rotate'); }}><Ic name="rotate" /></button>
       <button className={aimWay ? 'selected square' : 'square'} title="Aim the way in (W): drag the arrow on the selected piece, or use the arrow keys" aria-label="Aim the way in" aria-pressed={aimWay} onClick={() => useStudio.getState().setAimWay(!aimWay)}><Ic name="arrowDown" /></button>
+      <button className={collision ? 'selected square' : 'square'} title={collision ? 'Collision on (K): pieces never go inside each other' : 'Collision off (K): pieces may overlap'} aria-label="Collision" aria-pressed={collision} onClick={() => runCommand({ kind: 'collision' })}><Ic name="box" /></button>
     </div>
     <div className="bm-viewport-top-right" role="toolbar" aria-label="Viewport options">
       <button className="bm-float-icon" title="Orbit 45°" aria-label="Orbit 45 degrees" onClick={() => viewportApi.views?.orbit(45, 0)}><Ic name="rotate" /></button>
