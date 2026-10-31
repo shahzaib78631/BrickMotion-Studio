@@ -52,8 +52,8 @@ describe('free targets on a big model', () => {
     const t0 = performance.now();
     let pose = null as ReturnType<typeof findPose> | null;
     for (let i = 0; i < 10; i++) pose = findPose({
-      moving: { solids: g10.solids.slice(0, 200), connectors: mine }, targets, hit: { point: [40, -8, 40], owner: 'b1_1' },
-      handle: mine.findIndex((c) => c.gender === 'F'), yaw: 0, world: null, before: new Set(), prev: null,
+      moving: { solids: g10.solids.slice(0, 200), connectors: mine }, targets,
+      aim: { ray: { origin: [40, -408, 40], dir: [0, 1, 0] }, hitDepth: 400, floorPoint: [40, 0, 40] }, ref: [180, 8, 180], lock: null, yaw: 0, world: null, before: new Set(), prev: null,
     });
     expect(pose!.valid).toBe(true);
     expect(pose!.mated).toBeGreaterThan(0);

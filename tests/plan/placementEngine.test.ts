@@ -5,6 +5,7 @@ import { partConnectors, worldConnectors, type Connector } from '../../src/plan/
 import { collisionWorld, type Solid } from '../../src/plan/collision';
 import type { PartMetrics } from '../../src/ldraw/metrics';
 import type { Vec3 } from '../../src/ldraw/parse';
+import type { Aim } from '../../src/plan/aim';
 import { measureReal, realPartsReady as ready } from '../helpers/realParts';
 
 type Placed = { solid: Solid; connectors: Connector[] };
@@ -13,12 +14,27 @@ const place = (id: string, m: PartMetrics, x: number, top: number, z = 0, yawDeg
   const world = new THREE.Matrix4().makeTranslation(x, top - m.body.min[1], z).multiply(new THREE.Matrix4().makeRotationY((yawDeg * Math.PI) / 180)).elements;
   return { solid: { id, world, body: m.body, studs: m.studs, snaps: m.snaps, mesh: m.mesh }, connectors: worldConnectors(partConnectors(m), world) };
 };
-const query = (moving: Placed, fixed: Placed[], hit: PoseQuery['hit'], handle: number, extra: Partial<PoseQuery> = {}): PoseQuery => {
+/** The bottom-face centre of a placed part: where a new part is held (box centre x / z, box bottom). */
+const underside = (p: Placed): Vec3 => {
+  const b = new THREE.Box3(new THREE.Vector3(...p.solid.body.min), new THREE.Vector3(...p.solid.body.max)).applyMatrix4(new THREE.Matrix4().fromArray(p.solid.world as number[]));
+  const c = b.getCenter(new THREE.Vector3());
+  return [c.x, b.max.y, c.z];
+};
+/** The mouse ray from `from` (default 400 LDU straight above) through `p`, hitting at `p`. */
+const aimAt = (p: Vec3, from: Vec3 = [p[0], p[1] - 400, p[2]], floorY = 0): Aim => {
+  const d = new THREE.Vector3(p[0] - from[0], p[1] - from[1], p[2] - from[2]);
+  const depth = d.length();
+  d.normalize();
+  const t = Math.abs(d.y) > 1e-9 ? (floorY - from[1]) / d.y : -1;
+  const floorPoint: Vec3 | null = t > 0 ? [from[0] + d.x * t, floorY, from[2] + d.z * t] : null;
+  return { ray: { origin: from, dir: [d.x, d.y, d.z] }, hitDepth: depth, floorPoint };
+};
+const query = (moving: Placed, fixed: Placed[], aim: Aim, extra: Partial<PoseQuery> = {}): PoseQuery => {
   const solids = fixed.map((f) => f.solid);
   return {
     moving: { solids: [moving.solid], connectors: moving.connectors },
     targets: freeTargets(fixed.map((f) => ({ list: f.connectors, owner: f.solid.id })), solids),
-    hit, handle, yaw: 0, world: collisionWorld(solids), before: new Set(), prev: null, ...extra,
+    aim, ref: underside(moving), lock: null, yaw: 0, world: collisionWorld(solids), before: new Set(), prev: null, ...extra,
   };
 };
 /** index of the moving connector of a gender nearest a world point */
@@ -33,31 +49,58 @@ const handleNear = (p: Placed, gender: 'M' | 'F', at: Vec3) => {
 };
 const moved = (p: Placed, pose: Pose) => new THREE.Vector3(0, 0, 0).applyMatrix4(new THREE.Matrix4().fromArray(pose.delta).multiply(new THREE.Matrix4().fromArray(p.solid.world as number[])));
 
+const centre = (p: Placed, pose: Pose) => {
+  const c = moved(p, pose);
+  return [c.x, c.y, c.z].map((v) => Math.round(v * 1000) / 1000);
+};
+const boxX = (p: Placed, pose: Pose) => {
+  const w = new THREE.Matrix4().fromArray(pose.delta).multiply(new THREE.Matrix4().fromArray(p.solid.world as number[]));
+  const b = new THREE.Box3(new THREE.Vector3(...p.solid.body.min), new THREE.Vector3(...p.solid.body.max)).applyMatrix4(w);
+  return [Math.round(b.min.x), Math.round(b.max.x)];
+};
+/** looking along +z at a point from 400 LDU in front of it */
+const fromFront = (p: Vec3): Vec3 => [p[0], p[1], p[2] - 400];
+/** looking up at a point from 400 LDU below it */
+const fromBelow = (p: Vec3): Vec3 => [p[0], p[1] + 400, p[2]];
+
 describe('placement pose search', () => {
   it.skipIf(!ready)('seats a 2x4 brick on all 8 studs of a 2x4 plate', async () => {
     const plate = place('plate', await measureReal('3020'), 0, 0);
     const brick = place('m', await measureReal('3001'), 200, -100, 160);
-    const h = handleNear(brick, 'F', [200 - 30, -100 + 24, 160 - 10]);
-    const pose = findPose(query(brick, [plate], { point: [-29, 0, -9], owner: 'plate' }, h));
+    const pose = findPose(query(brick, [plate], aimAt([0, 0, 0])));
     expect(pose.valid).toBe(true);
     expect(pose.mated).toBe(8);
     expect(pose.owners).toEqual(['plate']);
-    const c = moved(brick, pose);
-    expect([c.x, c.y, c.z].map((v) => Math.round(v * 1000) / 1000)).toEqual([0, -24, 0]);
+    expect(pose.links).toHaveLength(8);
+    expect(centre(brick, pose)).toEqual([0, -24, 0]);
   });
 
-  it.skipIf(!ready)('uses the stud nearest the hit point', async () => {
+  it.skipIf(!ready)("slides a 1x2 brick along a 1x2 plate's row as the mouse moves", async () => {
+    const plate = place('plate', await measureReal('3023'), 0, 0);
+    const brick = place('m', await measureReal('3004'), 300, -100, 0);
+    const on = findPose(query(brick, [plate], aimAt([0, 0, 0])));
+    expect(centre(brick, on)[0]).toBe(0);
+    expect(on.mated).toBe(2);
+    const half = findPose(query(brick, [plate], aimAt([-10, 0, 0])));
+    expect(Math.abs(centre(brick, half)[0] + 10)).toBeLessThanOrEqual(10);
+    expect(half.mated).toBeGreaterThanOrEqual(1);
+    const off = findPose(query(brick, [plate], aimAt([-22, 0, 0])));
+    expect(off.valid).toBe(true);
+    expect(centre(brick, off)[0]).toBe(-20);
+    expect(off.mated).toBe(1);
+  });
+
+  it.skipIf(!ready)('uses the stud nearest the mouse', async () => {
     const plate = place('plate', await measureReal('3020'), 0, 0);
     const one = place('m', await measureReal('3024'), 300, -60, 0);
-    const pose = findPose(query(one, [plate], { point: [12, 0, 8], owner: 'plate' }, handleNear(one, 'F', [300, -52, 0])));
-    const c = moved(one, pose);
-    expect([c.x, c.z]).toEqual([10, 10]);
+    const c = centre(one, findPose(query(one, [plate], aimAt([12, 0, 8]))));
+    expect([c[0], c[2]]).toEqual([10, 10]);
   });
 
   it.skipIf(!ready)('climbs onto a taller part', async () => {
     const tall = place('tall', await measureReal('3001'), 0, -24);
     const one = place('m', await measureReal('3024'), 300, -8, 0);
-    const pose = findPose(query(one, [tall], { point: [10, -24, 10], owner: 'tall' }, handleNear(one, 'F', [300, 0, 0])));
+    const pose = findPose(query(one, [tall], aimAt([10, -24, 10])));
     expect(pose.valid).toBe(true);
     expect(Math.round(moved(one, pose).y)).toBe(-24 - 8);
   });
@@ -65,61 +108,99 @@ describe('placement pose search', () => {
   it.skipIf(!ready)("seats a 1x1 round plate on a jumper's centre stud", async () => {
     const jumper = place('j', await measureReal('3794b'), 0, 0);
     const round = place('m', await measureReal('4073'), 300, -40, 0);
-    const pose = findPose(query(round, [jumper], { point: [2, 0, 1], owner: 'j' }, handleNear(round, 'F', [300, -32, 0])));
-    const c = moved(round, pose);
-    expect([Math.round(c.x), Math.round(c.z)]).toEqual([0, 0]);
+    const pose = findPose(query(round, [jumper], aimAt([2, 0, 1])));
+    const c = centre(round, pose);
+    expect([Math.round(c[0]), Math.round(c[2])]).toEqual([0, 0]);
     expect(pose.mated).toBe(1);
   });
 
-  it.skipIf(!ready)('hangs a part under another when the handle is a top stud', async () => {
+  it.skipIf(!ready)('hangs a part under another by its studs, looking up', async () => {
     const above = place('above', await measureReal('3001'), 0, -48);
     const one = place('m', await measureReal('3024'), 300, 0, 0);
-    // pointing at the brick's underside
-    const pose = findPose(query(one, [above], { point: [10, -24, 10], owner: 'above' }, handleNear(one, 'M', [300, -8, 0])));
+    const pose = findPose(query(one, [above], aimAt([10, -24, 10], fromBelow([10, -24, 10]))));
     expect(pose.valid).toBe(true);
-    const c = moved(one, pose);
     // the plate's top face (its origin, where its studs start) meets the brick's bottom at y = -24
-    expect([Math.round(c.x), Math.round(c.y), Math.round(c.z)]).toEqual([10, -24, 10]);
+    expect(centre(one, pose).map(Math.round)).toEqual([10, -24, 10]);
+  });
+
+  it.skipIf(!ready)('hangs a plate under a plate by its studs', async () => {
+    const above = place('above', await measureReal('3020'), 0, -48);
+    const two = place('m', await measureReal('3023'), 300, 0, 0);
+    const pose = findPose(query(two, [above], aimAt([0, -40, 10], fromBelow([0, -40, 10]))));
+    expect(pose.valid).toBe(true);
+    expect(pose.mated).toBe(2);
   });
 
   it.skipIf(!ready)('skips a colliding pose and takes the next best', async () => {
     const plate = place('plate', await measureReal('3020'), 0, 0);
-    const blocker = place('blk', await measureReal('3024'), 10, -8, 10);
+    const blocker = { ...place('blk', await measureReal('3024'), 10, -8, 10), connectors: [] };
     const one = place('m', await measureReal('3024'), 300, -60, 0);
-    const h = handleNear(one, 'F', [300, -52, 0]);
-    const fixed = [plate, blocker];
-    const pose = findPose(query(one, fixed, { point: [10, 0, 10], owner: 'plate' }, h));
+    const pose = findPose(query(one, [plate, blocker], aimAt([10, 0, 10])));
     expect(pose.valid).toBe(true);
-    const c = moved(one, pose);
-    expect(Math.hypot(c.x - 10, c.z - 10)).toBeGreaterThan(5);
+    const c = centre(one, pose);
+    expect(Math.hypot(c[0] - 10, c[2] - 10)).toBeGreaterThan(5);
   });
 
-  it.skipIf(!ready)('is invalid when every stud near the hit is taken', async () => {
+  it.skipIf(!ready)('shows the best pose invalid when every pose near the mouse collides', async () => {
     const plate = place('plate', await measureReal('3020'), 0, 0);
-    const m1 = await measureReal('3024');
-    const blockers = [-30, -10, 10, 30].flatMap((x) => [-10, 10].map((z) => place(`b${x},${z}`, m1, x, -8, z)));
-    const one = place('m', m1, 300, -60, 0);
-    const pose = findPose(query(one, [plate, ...blockers], { point: [10, 0, 10], owner: 'plate' }, handleNear(one, 'F', [300, -52, 0])));
+    // a brick hovering 4 LDU over the plate (its own studs left out): nothing fits under it
+    const lid = { ...place('lid', await measureReal('3001'), 0, -28), connectors: [] };
+    const one = place('m', await measureReal('3024'), 300, -60, 0);
+    const pose = findPose(query(one, [plate, lid], aimAt([10, 0, 10])));
     expect(pose.valid).toBe(false);
+    expect(pose.links).toEqual([]);
   });
 
   it.skipIf(!ready)('keeps the previous pose within the hysteresis distance', async () => {
     const plate = place('plate', await measureReal('3020'), 0, 0);
     const one = place('m', await measureReal('3024'), 300, -60, 0);
-    const h = handleNear(one, 'F', [300, -52, 0]);
-    const atA = findPose(query(one, [plate], { point: [10, 0, 10], owner: 'plate' }, h));
-    // 6 LDU toward stud B (x = 30): B is now nearer, but not by more than the hysteresis
-    const still = findPose(query(one, [plate], { point: [21, 0, 10], owner: 'plate' }, h, { prev: atA }));
+    const atA = findPose(query(one, [plate], aimAt([10, 0, 10])));
+    // 11 LDU toward stud B (x = 30): B is now nearer, but not by more than the hysteresis
+    const still = findPose(query(one, [plate], aimAt([21, 0, 10]), { prev: atA }));
     expect(moved(one, still).x).toBe(10);
-    const switched = findPose(query(one, [plate], { point: [28, 0, 10], owner: 'plate' }, h, { prev: atA }));
+    const switched = findPose(query(one, [plate], aimAt([28, 0, 10]), { prev: atA }));
     expect(moved(one, switched).x).toBe(30);
   });
 
-  it.skipIf(!ready)('falls back to the floor grid when nothing is hit', async () => {
+  it.skipIf(!ready)('holds still on the seam between two plates', async () => {
+    const m = await measureReal('3020');
+    const a = place('a', m, 0, 0), b = place('b', m, 80, 0);
     const one = place('m', await measureReal('3024'), 300, -60, 0);
-    const pose = findPose(query(one, [], { point: [33, 0, 47], owner: null }, handleNear(one, 'F', [300, -52, 0])));
+    const onA = findPose(query(one, [a, b], aimAt([38, 0, 10])));
+    expect(moved(one, onA).x).toBe(30);
+    const onB = findPose(query(one, [a, b], aimAt([42, 0, 10]), { prev: onA }));
+    expect(moved(one, onB).x).toBe(30);
+  });
+
+  it.skipIf(!ready)('holds the pose when two are equally near', async () => {
+    const plate = place('plate', await measureReal('3022'), 0, 0);
+    const one = place('m', await measureReal('3024'), 300, -60, 0);
+    const left = findPose(query(one, [plate], aimAt([-10, 0, 10])));
+    expect(moved(one, left).x).toBe(-10);
+    const between = findPose(query(one, [plate], aimAt([0, 0, 10]), { prev: left }));
+    expect(moved(one, between).x).toBe(-10);
+  });
+
+  it.skipIf(!ready)('a locked grip is the only one used', async () => {
+    const plate = place('plate', await measureReal('3023'), 0, 0);
+    const brick = place('m', await measureReal('3004'), 300, -100, 0);
+    const aim = aimAt([-12, 0, 0]);
+    // automatic: the brick centres where the mouse is, overhanging by its right socket
+    expect(centre(brick, findPose(query(brick, [plate], aim)))[0]).toBe(-20);
+    // locked to its left socket, that socket goes on the stud
+    const left = handleNear(brick, 'F', [290, -100 + 24, 0]);
+    const pose = findPose(query(brick, [plate], aim, { lock: left }));
+    expect(pose.handle).toBe(left);
+    expect(centre(brick, pose)[0]).toBe(0);
+  });
+
+  it.skipIf(!ready)('falls back to the floor grid when no connection is near', async () => {
+    const one = place('m', await measureReal('3024'), 300, -60, 0);
+    const pose = findPose(query(one, [], aimAt([33, 0, 47])));
     expect(pose.valid).toBe(true);
     expect(pose.mated).toBe(0);
+    expect(pose.handle).toBe(-1);
+    expect(pose.links).toEqual([]);
     const c = moved(one, pose);
     // a 1x1 plate centre sits mid-cell: 10 + 20k
     expect([((c.x - 10) % 20 + 20) % 20, Math.round(c.y), ((c.z - 10) % 20 + 20) % 20]).toEqual([0, -8, 0]);
@@ -130,9 +211,8 @@ describe('placement pose search', () => {
   it.skipIf(!ready)('rotates in hand', async () => {
     const plate = place('plate', await measureReal('3020'), 0, 0);
     const two = place('m', await measureReal('3023'), 300, -60, 0);
-    const h = handleNear(two, 'F', [290, -52, 0]);
-    const flat = findPose(query(two, [plate], { point: [-10, 0, -10], owner: 'plate' }, h));
-    const turned = findPose(query(two, [plate], { point: [-10, 0, -10], owner: 'plate' }, h, { yaw: 90 }));
+    const flat = findPose(query(two, [plate], aimAt([-10, 0, -10])));
+    const turned = findPose(query(two, [plate], aimAt([-10, 0, -10]), { yaw: 90 }));
     expect(flat.mated).toBe(2);
     expect(turned.valid).toBe(true);
     expect(turned.mated).toBe(2);
@@ -145,19 +225,19 @@ describe('placement pose search', () => {
     const plate = place('plate', await measureReal('3020'), 0, -8);
     const one = place('m', await measureReal('3024'), 300, -60, 0);
     // hanging a 1x1 plate under a plate that lies on the floor would put it underground
-    const pose = findPose(query(one, [plate], { point: [10, 0, 10], owner: 'plate' }, handleNear(one, 'M', [300, -60, 0])));
+    const pose = findPose(query(one, [plate], aimAt([10, 0, 10], fromBelow([10, 0, 10]))));
     expect(pose.valid).toBe(false);
   });
 
   it.skipIf(!ready)('stands on the floor it is given, not LDraw y = 0', async () => {
     const one = place('m', await measureReal('3024'), 300, -60, 0);
-    const pose = findPose(query(one, [], { point: [30, 24, 50], owner: null }, handleNear(one, 'F', [300, -52, 0]), { floor: 24 }));
+    const pose = findPose(query(one, [], aimAt([30, 24, 50], undefined, 24), { floor: 24 }));
     expect(pose.valid).toBe(true);
     expect(Math.round(moved(one, pose).y)).toBe(16);
   });
 
   it('an empty moving set never gives a usable pose', () => {
-    const pose = findPose({ moving: { solids: [], connectors: [] }, targets: [], hit: { point: [5, 0, 5], owner: null }, handle: 0, yaw: 0, world: null, before: new Set(), prev: null });
+    const pose = findPose({ moving: { solids: [], connectors: [] }, targets: [], aim: aimAt([5, 0, 5]), ref: [0, 0, 0], lock: null, yaw: 0, world: null, before: new Set(), prev: null });
     expect(pose.valid).toBe(false);
     expect(pose.delta.every(Number.isFinite)).toBe(true);
   });
@@ -165,78 +245,57 @@ describe('placement pose search', () => {
   it.skipIf(!ready)('pointing at a piece with no studs nearby stays by the mouse', async () => {
     const plate = place('plate', await measureReal('3020'), 0, 0);
     const one = place('m', await measureReal('3024'), 300, -60, 0);
-    const h = handleNear(one, 'F', [300, -52, 0]);
-    const far = findPose(query(one, [plate], { point: [200, 0, 0], owner: 'plate' }, h));
+    const far = findPose(query(one, [plate], aimAt([200, 0, 0])));
     expect(Math.abs(moved(one, far).x - 200)).toBeLessThanOrEqual(10);
     // even right after a seated pose: far from it, the part follows the mouse instead of jumping back
-    const atA = findPose(query(one, [plate], { point: [10, 0, 10], owner: 'plate' }, h));
-    const after = findPose(query(one, [plate], { point: [200, 0, 0], owner: 'plate' }, h, { prev: atA }));
+    const atA = findPose(query(one, [plate], aimAt([10, 0, 10])));
+    const after = findPose(query(one, [plate], aimAt([200, 0, 0]), { prev: atA }));
     expect(Math.abs(moved(one, after).x - 200)).toBeLessThanOrEqual(10);
-  });
-
-  it.skipIf(!ready)('holds still on the seam between two pieces', async () => {
-    const m = await measureReal('3020');
-    const a = place('a', m, 0, 0), b = place('b', m, 80, 0);
-    const one = place('m', await measureReal('3024'), 300, -60, 0);
-    const h = handleNear(one, 'F', [300, -52, 0]);
-    const onA = findPose(query(one, [a, b], { point: [38, 0, 10], owner: 'a' }, h));
-    expect(moved(one, onA).x).toBe(30);
-    const onB = findPose(query(one, [a, b], { point: [42, 0, 10], owner: 'b' }, h, { prev: onA }));
-    expect(moved(one, onB).x).toBe(30);
   });
 
   it.skipIf(!ready)('seats a 1x2x1 2/3 brick with side studs (22885) on a 2x4 plate', async () => {
     const plate = place('plate', await measureReal('3020'), 0, 0);
     const tall = place('m', await measureReal('22885'), 300, -100, 0);
-    const h = handleNear(tall, 'F', [300 - 10, -100 + 40, 0]);
-    expect(h).toBeGreaterThanOrEqual(0);
-    const pose = findPose(query(tall, [plate], { point: [-11, 0, -9], owner: 'plate' }, h));
+    const pose = findPose(query(tall, [plate], aimAt([-20, 0, -10])));
     expect(pose.valid).toBe(true);
     expect(pose.mated).toBe(2);
-    expect(Math.round(moved(tall, pose).y)).toBe(-40);
+    expect(centre(tall, pose).map(Math.round)).toEqual([-20, -40, -10]);
   });
 
-  describe('two 22885s each on one top stud of a third', () => {
-    // the base stands upright: its top studs are at x = ±10, y = 0
-    const centreX = (p: Placed, pose: Pose) => Math.round(moved(p, pose).x);
-
-    it.skipIf(!ready)('puts the held socket on the stud under the mouse, even when that overhangs', async () => {
+  describe('22885s on one top stud of another', () => {
+    // the base stands upright: its top studs are at x = ±10, y = -40
+    it.skipIf(!ready)('puts it on one stud either side, overhanging', async () => {
       const m = await measureReal('22885');
       const base = place('base', m, 0, -40);
       const held = place('m', m, 300, -200, 0);
-      const right = handleNear(held, 'F', [310, -160, 0]); // held by its right-hand socket
-      const pose = findPose(query(held, [base], { point: [-10, -40, 0], owner: 'base' }, right));
-      expect(pose.valid).toBe(true);
-      expect(pose.mated).toBe(1);
-      expect(centreX(held, pose)).toBe(-20); // hangs off the left side
+      const left = findPose(query(held, [base], aimAt([-20, -40, 0])));
+      expect(left.valid).toBe(true);
+      expect(left.mated).toBe(1);
+      expect(centre(held, left)[0]).toBe(-20);
+      const right = findPose(query(held, [base], aimAt([20, -40, 0])));
+      expect(right.valid).toBe(true);
+      expect(centre(held, right)[0]).toBe(20);
     });
 
-    it.skipIf(!ready)('tries another socket when the held one would clash', async () => {
+    it.skipIf(!ready)('puts a second one beside the first', async () => {
       const m = await measureReal('22885');
       const base = place('base', m, 0, -40);
-      const left = place('left', m, -20, -80); // the first one, hanging off the left side
+      const first = place('first', m, -20, -80);
       const held = place('m', m, 300, -200, 0);
-      const right = handleNear(held, 'F', [310, -160, 0]); // on the free right stud this would push into `left`
-      const pose = findPose(query(held, [base, left], { point: [10, -40, 0], owner: 'base' }, right));
+      const pose = findPose(query(held, [base, first], aimAt([20, -40, 0])));
       expect(pose.valid).toBe(true);
       expect(pose.mated).toBe(1);
-      expect(centreX(held, pose)).toBe(20); // hangs off the right side
+      expect(centre(held, pose)[0]).toBe(20);
     });
   });
 
   describe('sideways onto side studs', () => {
-    const boxX = (p: Placed, pose: Pose) => {
-      const w = new THREE.Matrix4().fromArray(pose.delta).multiply(new THREE.Matrix4().fromArray(p.solid.world as number[]));
-      const b = new THREE.Box3(new THREE.Vector3(...p.solid.body.min), new THREE.Vector3(...p.solid.body.max)).applyMatrix4(w);
-      return [Math.round(b.min.x), Math.round(b.max.x)];
-    };
-
+    // upright base: side studs at x = ±10, y = 10 and 30, on the face z = -10, pointing -Z
     it.skipIf(!ready)('mounts a 22885 flat on the side studs of another', async () => {
       const m = await measureReal('22885');
-      const base = place('base', m, 0, 0); // upright: side studs at x = ±10, y = 10 and 30, pointing -Z
+      const base = place('base', m, 0, 0);
       const held = place('m', m, 300, -200, 0);
-      const right = handleNear(held, 'F', [310, -160, 0]);
-      const pose = findPose(query(held, [base], { point: [10, 30, -10], owner: 'base' }, right, { floor: 1000 }));
+      const pose = findPose(query(held, [base], aimAt([0, 20, -10], fromFront([0, 20, -10])), { floor: 1000 }));
       expect(pose.valid).toBe(true);
       expect(pose.mated).toBe(2);
       expect(boxX(held, pose)).toEqual([-20, 20]);
@@ -246,9 +305,9 @@ describe('placement pose search', () => {
       const m = await measureReal('22885');
       const base = place('base', m, 0, 0);
       const held = place('m', m, 300, -200, 0);
-      const middle = handleNear(held, 'F', [300, -160, 0]);
-      // the middle socket on the lower-right stud would put the end wall over the lower-left stud
-      const pose = findPose(query(held, [base], { point: [10, 30, -10], owner: 'base' }, middle, { floor: 1000 }));
+      // centred on the lower-right stud, the end wall would sit over the lower-left one
+      const pose = findPose(query(held, [base], aimAt([10, 30, -10], fromFront([10, 30, -10])), { floor: 1000 }));
+      expect(pose.valid).toBe(true);
       expect(boxX(held, pose)).not.toEqual([-10, 30]);
     });
   });
