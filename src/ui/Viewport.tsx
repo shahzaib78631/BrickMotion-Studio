@@ -18,7 +18,8 @@ import { applyWay, wayState } from '../state/flightWay';
 import { createStudio, worldBox } from '../render/studio';
 import { selectionForHit } from '../plan/groups';
 import { createSubmodel } from '../plan/createSubmodel';
-import { instancePlacements, itemPlacement, placedBox, placedMatrix, sourceEditDelta, viewPlacement, modelPlacement, placingPointOf, placingRayOf } from './modelPlacement';
+import { instancePlacements, itemPlacement, placedBox, placedMatrix, sourceEditDelta, viewPlacement, modelPlacement, placingPointOf, placingRayOf, modelToView } from './modelPlacement';
+import { LinkRings } from '../render/linkRings';
 import { aimPoint, type Aim } from '../plan/aim';
 import { NewSubmodelDialog } from './NewSubmodelDialog';
 import { runCommand, snapperFor } from '../state/editing';
@@ -106,6 +107,14 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
   const selection = useStudio((s) => s.selection);
   const blocked = useStudio((s) => s.blocked);
   const placingState = usePlacing((p) => p.state);
+  const ringsRef = useRef<LinkRings | null>(null);
+  // what the shown pose will connect (nothing for floor or red poses)
+  useEffect(() => {
+    const rings = ringsRef.current, pose = placingState?.pose;
+    if (!rings) return;
+    if (pose?.valid && pose.links.length) rings.show(pose.links, modelToView(placingFrame.current?.root ?? null));
+    else rings.clear();
+  }, [placingState]);
   const lastPointer = useRef<{ clientX: number; clientY: number } | null>(null);
   /** display placements captured for the open placing session */
   const placingFrame = useRef<{ placements: Map<string, THREE.Matrix4>; root: THREE.Matrix4 | null } | null>(null);
@@ -243,6 +252,9 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     const wayHandle = new WayHandle();
     studio.scene.add(wayHandle.group);
     wayHandleRef.current = wayHandle;
+    // rings on the connections a placing pose will make. Editor scene only.
+    const rings = new LinkRings(studio.scene);
+    ringsRef.current = rings;
     const transform = new TransformControls(studio.camera, canvas);
     transform.setSize(0.86);
     transform.setSpace('world');
@@ -787,6 +799,8 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       spotMarkers.dispose();
       wayHandle.dispose();
       wayHandleRef.current = null;
+      rings.dispose();
+      ringsRef.current = null;
       studio.scene.remove(spotMarkers.group);
       markersRef.current = null;
       gizmoRef.current = null;

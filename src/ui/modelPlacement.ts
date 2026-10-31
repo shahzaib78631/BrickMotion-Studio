@@ -142,3 +142,8 @@ export function placingRayOf(origin: THREE.Vector3, dir: THREE.Vector3, key: str
   const d = new THREE.Vector3(...modelPointOf(origin.clone().add(dir), placement)).sub(a).normalize();
   return { origin: [a.x, a.y, a.z], dir: [d.x, d.y, d.z] };
 }
+
+/** Model LDraw (LDU) → viewport (studs, Y up) through a display placement. */
+export function modelToView(placement: THREE.Matrix4 | null): THREE.Matrix4 {
+  return placement ? LDU_TO_VIEW.clone().multiply(placement) : LDU_TO_VIEW.clone();
+}
