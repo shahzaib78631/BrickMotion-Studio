@@ -2,13 +2,15 @@ import * as THREE from 'three';
 import type { Vec3 } from '../ldraw/parse';
 import { addsOverlap, type CollisionWorld, type Solid } from './collision';
 import { worldConnectors, type Connector } from './connectors';
+import { candidates, rayAngle, rayDepth, type Aim } from './aim';
 
 /**
- * Studio-style placement: given where the mouse ray hits the model, find the pose that seats
- * the moving parts on the connection under the mouse. One of the moving set's connectors is
- * the handle (Tab cycles it); it is put onto a free target connector of the opposite gender,
- * axes opposed, and the pose that mates the most connectors without pushing into anything
- * wins. Everything is in LDU (Y down), in one shared frame.
+ * Studio-style placement: given the mouse ray, find the pose that puts the moving parts where
+ * the mouse points, snapped onto a free connection near it. Every connection near the ray (on
+ * any visible piece) is tried with every connector of the moving set that can take it (the
+ * grip); the pose whose reference point (where the parts are held) lands nearest the ray wins,
+ * mating more connectors breaks ties, and poses that push into something are skipped. All in
+ * LDU (Y down), in one shared frame.
  */
 
 /** A free connector of a fixed piece, in world LDU. */
@@ -19,10 +21,12 @@ export type PoseQuery = {
   moving: { solids: Solid[]; connectors: Connector[] };
   /** free connectors of the pieces it may land on (already limited to visible pieces) */
   targets: Target[];
-  /** where the mouse ray meets the model; owner null = the floor */
-  hit: { point: Vec3; owner: string | null };
-  /** index into moving.connectors: the connector that seats on the target */
-  handle: number;
+  /** the mouse ray, how deep it hits a fixed piece, and where it meets the floor */
+  aim: Aim;
+  /** the point the parts are held by (the grab point, or a new part's underside centre), world LDU */
+  ref: Vec3;
+  /** index into moving.connectors: the only grip to use (Tab); null = automatic */
+  lock: number | null;
   /** extra quarter turns about the target axis (R / Shift+R) */
   yaw: Quarter;
   /** null = collision off */
@@ -43,16 +47,23 @@ export type Pose = {
   owners: string[];
   /** false = no clean pose: the ghost shows red and a release does nothing */
   valid: boolean;
+  /** the grip used (index into moving.connectors); -1 on the floor */
   handle: number;
   yaw: Quarter;
-  /** the target the handle sits on (null on the floor) */
+  /** the target the grip sits on (null on the floor) */
   at: Vec3 | null;
+  /** the target connectors the pose mates (drawn as rings) */
+  links: { pos: Vec3; axis: Vec3 }[];
+  /** how far from the mouse the held point lands (angle from the ray; lower is nearer) */
+  score: number;
 };
 
-/** How far (LDU) from the hit point a target may be. */
-export const SEARCH_RADIUS = 30;
-/** A new target must be this much (LDU) nearer the hit than the current one to take over. */
-export const HYSTERESIS = 7;
+/** How many of the moving set's connectors are tried as the grip on each target. */
+export const MAX_GRIPS = 16;
+/** A new pose must land this much (LDU at the target's depth) nearer the mouse to take over. */
+export const HYSTERESIS = 4;
+/** Collision tests stop after this long (ms) in one search: a big moving set never hitches the drag. */
+export const TRY_BUDGET_MS = 12;
 /** The floor's LDraw height. */
 export const FLOOR_Y = 0;
 
@@ -146,56 +157,127 @@ function targetIndex(targets: readonly Target[]): (c: Connector) => Target | und
   return find;
 }
 
+const STUD_RADIUS = 6;
+/** Whether a stud (base `pos`, pointing along `axis`) reaches into a box, with half an LDU of slack. */
+function studInBox(pos: readonly number[], axis: readonly number[], b: THREE.Box3): boolean {
+  const along = [0, 1, 2].reduce((k, i) => (Math.abs(axis[i]) > Math.abs(axis[k]) ? i : k), 0);
+  const lo = b.min.toArray(), hi = b.max.toArray();
+  return [0, 1, 2].every((i) => {
+    const v = pos[i] + 2 * axis[i]; // 2 LDU up the stud
+    return i === along ? v > lo[i] + 0.5 && v < hi[i] - 0.5 : v > lo[i] - (STUD_RADIUS - 0.5) && v < hi[i] + (STUD_RADIUS - 0.5);
+  });
+}
+/**
+ * A free stud of a fixed piece that would reach into a moving part without one of the moving
+ * part's sockets taking it: it would be cutting through a wall (the collision world lets studs
+ * pass everywhere, as if they always sat in a socket).
+ */
+function studPokesIn(q: PoseQuery, m: THREE.Matrix4): boolean {
+  const all = boxOf(q.moving.solids, m);
+  const near = q.targets.filter((t) => t.gender === 'M' && studInBox(t.pos, t.axis, all));
+  if (!near.length) return false;
+  const boxes = q.moving.solids.map((s) => boxOf([s], m));
+  const sockets = worldConnectors(q.moving.connectors, m.elements).filter((c) => c.gender === 'F');
+  return near.some((t) => boxes.some((b) => studInBox(t.pos, t.axis, b)) && !sockets.some((c) => mates(c, t)));
+}
+
+const same = (a: readonly number[], b: readonly number[]) => dist(a, b) < 1e-6;
+/** scores closer than this count as equal (mating more connectors then wins) */
+const TIE = 1e-9;
+
 export function findPose(q: PoseQuery): Pose {
-  const { moving, hit, handle, yaw } = q;
-  const h = moving.connectors[handle];
+  const { moving, aim, yaw } = q;
   // nothing solid to place (e.g. only unknown parts): no pose can be trusted
-  if (!moving.solids.length) return { delta: clean(new THREE.Matrix4()), mated: 0, owners: [], valid: false, handle, yaw, at: null };
+  if (!moving.solids.length) return { delta: clean(new THREE.Matrix4()), mated: 0, owners: [], valid: false, handle: -1, yaw, at: null, links: [], score: Infinity };
   const floor = q.floor ?? FLOOR_Y;
   // the floor is solid: nothing goes underground (unless it already started there)
   const ground = Math.max(floor, boxOf(moving.solids, new THREE.Matrix4()).max.y) + 0.5;
   const blocked = (m: THREE.Matrix4) => {
-    if (moving.solids.length && boxOf(moving.solids, m).max.y > ground) return true;
+    if (boxOf(moving.solids, m).max.y > ground) return true;
     if (!q.world) return false;
+    if (studPokesIn(q, m)) return true;
     const shifted = moving.solids.map((s) => ({ ...s, world: new THREE.Matrix4().fromArray(Array.from(s.world)).premultiply(m).elements }));
     return addsOverlap(q.before, q.world.hits(shifted));
   };
-  if (hit.owner === null || !h) return floorPose(q, blocked);
+  const near = candidates(q.targets, aim);
+  if (!near.length) return floorPose(q, blocked);
 
-  type Scored = { m: THREE.Matrix4; at: Vec3; mated: number; owners: string[]; ok: boolean; d: number };
-  const scored: Scored[] = [];
-  const index = targetIndex(q.targets);
-  for (const t of q.targets) {
-    if (t.owner !== hit.owner || t.gender === h.gender || t.type !== h.type || dist(t.pos, hit.point) > SEARCH_RADIUS) continue;
-    const m = seat(h, t, yaw);
-    const placed = worldConnectors(moving.connectors, m.elements);
-    const owners = new Set<string>();
-    let mated = 0;
-    for (const c of placed) {
-      const o = index(c);
-      if (o) { mated++; owners.add(o.owner); }
+  const ref = new THREE.Vector3(...q.ref);
+  const scoreOf = (m: THREE.Matrix4) => rayAngle(aim.ray, ref.clone().applyMatrix4(m).toArray());
+  // grips: the locked one, or the connectors nearest the held point (one list per gender)
+  const grips = (gender: Connector['gender'], type: string): number[] => {
+    if (q.lock !== null) {
+      const c = moving.connectors[q.lock];
+      return c && c.gender === gender && c.type === type ? [q.lock] : [];
     }
-    scored.push({ m, at: t.pos, mated, owners: [...owners].sort(), ok: !blocked(m), d: dist(t.pos, hit.point) });
+    return moving.connectors
+      .map((c, i) => ({ c, i, d: dist(c.pos, q.ref) }))
+      .filter(({ c }) => c.gender === gender && c.type === type)
+      .sort((a, b) => a.d - b.d)
+      .slice(0, MAX_GRIPS)
+      .map(({ i }) => i);
+  };
+  const gripCache = new Map<string, number[]>();
+  const index = targetIndex(q.targets);
+  const matesOf = (m: THREE.Matrix4) => {
+    const owners = new Set<string>();
+    const links: Pose['links'] = [];
+    for (const c of worldConnectors(moving.connectors, m.elements)) {
+      const o = index(c);
+      if (o) { links.push({ pos: o.pos, axis: o.axis }); owners.add(o.owner); }
+    }
+    return { mated: links.length, owners: [...owners].sort(), links };
+  };
+
+  type Option = { m: THREE.Matrix4; t: Target; grip: number; score: number; mates?: ReturnType<typeof matesOf> };
+  const mates = (o: Option) => (o.mates ??= matesOf(o.m));
+  const options: Option[] = [];
+  for (const t of near) {
+    const want = t.gender === 'M' ? 'F' : 'M';
+    const key = `${want}|${t.type}`;
+    const list = gripCache.get(key) ?? gripCache.set(key, grips(want, t.type)).get(key)!;
+    for (const g of list) {
+      const m = seat(moving.connectors[g], t, yaw);
+      options.push({ m, t, grip: g, score: scoreOf(m) });
+    }
   }
-  const valid = scored.filter((s) => s.ok).sort((a, b) => b.mated - a.mated || a.d - b.d);
-  const best = valid[0];
-  const p = q.prev;
-  // a seated pose holds while the mouse stays near it, whichever piece is under the mouse
+  if (!options.length) return floorPose(q, blocked);
+  options.sort((a, b) => a.score - b.score);
+
+  const pose = (o: Option, valid: boolean): Pose => valid
+    ? { delta: clean(o.m), ...mates(o), valid: true, handle: o.grip, yaw, at: o.t.pos, score: o.score }
+    : { delta: clean(o.m), mated: 0, owners: [], links: [], valid: false, handle: o.grip, yaw, at: o.t.pos, score: o.score };
+  // nearest first; among equally near ones, the one mating more (counted only where needed)
+  let best: Option | undefined;
+  const t0 = performance.now();
+  let tried = 0;
+  const fits = (o: Option) => (tried++ === 0 || performance.now() - t0 < TRY_BUDGET_MS) && !blocked(o.m);
+  for (let i = 0; i < options.length && !best && (tried === 0 || performance.now() - t0 < TRY_BUDGET_MS);) {
+    let j = i + 1;
+    while (j < options.length && options[j].score - options[i].score <= TIE) j++;
+    // collision first (cheap next to counting mates on a big set), then the most mated clean one
+    const clear = options.slice(i, j).filter(fits);
+    best = clear.length > 1 ? clear.reduce((a, b) => (mates(b).mated > mates(a).mated ? b : a)) : clear[0];
+    i = j;
+  }
+
+  // the last pose holds while its target is still near the mouse and it lands about as near
   // (the fixed pieces do not change during a drag, so it is still clean)
-  const holds = !!p && p.valid && !!p.at && p.handle === handle && p.yaw === yaw && dist(p.at, hit.point) <= SEARCH_RADIUS;
-  if (!best) {
-    if (!scored.length) return holds ? p! : floorPose(q, blocked); // no studs near the mouse: stay by it
-    // nothing clean: show where it would go (nearest), in red
-    const near = scored.sort((a, b) => a.d - b.d)[0];
-    return { delta: clean(near.m), mated: 0, owners: [], valid: false, handle, yaw, at: near.at };
+  const p = q.prev;
+  if (p && p.valid && p.at && p.yaw === yaw && p.handle >= 0 && (q.lock === null || p.handle === q.lock) && near.some((t) => same(t.pos, p.at!))) {
+    const again = scoreOf(new THREE.Matrix4().fromArray(p.delta));
+    const depth = rayDepth(aim.ray, p.at);
+    if (depth > 0 && (!best || again <= best.score + HYSTERESIS / depth + TIE)) return { ...p, score: again };
   }
-  if (holds && dist(p!.at!, hit.point) <= best.d + HYSTERESIS) return p!;
-  return { delta: clean(best.m), mated: best.mated, owners: best.owners, valid: true, handle, yaw, at: best.at };
+  // nothing clean: show the nearest, in red (a release does nothing)
+  return best ? pose(best, true) : pose(options[0], false);
 }
 
-/** Over empty floor: the moving set stands on the floor at the nearest whole-stud spot under the mouse. */
+/** No connection near the mouse: the moving set stands on the floor at the nearest whole-stud spot under it. */
 function floorPose(q: PoseQuery, blocked: (m: THREE.Matrix4) => boolean): Pose {
-  const { moving, hit, handle, yaw } = q;
+  const { moving, yaw } = q;
+  const at = q.aim.floorPoint;
+  if (!at) return { delta: clean(new THREE.Matrix4()), mated: 0, owners: [], valid: false, handle: -1, yaw, at: null, links: [], score: Infinity };
   const start = boxOf(moving.solids, new THREE.Matrix4());
   const pivot = start.getCenter(new THREE.Vector3());
   const turn = new THREE.Matrix4().makeTranslation(pivot.x, pivot.y, pivot.z)
@@ -203,8 +285,8 @@ function floorPose(q: PoseQuery, blocked: (m: THREE.Matrix4) => boolean): Pose {
     .multiply(new THREE.Matrix4().makeTranslation(-pivot.x, -pivot.y, -pivot.z));
   const b = boxOf(moving.solids, turn);
   const c = b.getCenter(new THREE.Vector3());
-  const snapX = Math.round((b.min.x + hit.point[0] - c.x) / 20) * 20 - b.min.x;
-  const snapZ = Math.round((b.min.z + hit.point[2] - c.z) / 20) * 20 - b.min.z;
+  const snapX = Math.round((b.min.x + at[0] - c.x) / 20) * 20 - b.min.x;
+  const snapZ = Math.round((b.min.z + at[2] - c.z) / 20) * 20 - b.min.z;
   const m = new THREE.Matrix4().makeTranslation(snapX, (q.floor ?? FLOOR_Y) - b.max.y, snapZ).multiply(turn);
-  return { delta: clean(m), mated: 0, owners: [], valid: !blocked(m), handle, yaw, at: null };
+  return { delta: clean(m), mated: 0, owners: [], valid: !blocked(m), handle: -1, yaw, at: null, links: [], score: Infinity };
 }

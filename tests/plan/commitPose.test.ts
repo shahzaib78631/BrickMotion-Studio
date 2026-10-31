@@ -11,7 +11,7 @@ const body: Box = { min: [-10, 0, -10], max: [10, 8, 10] };
 const metrics = () => ({ id: 'x', body, full: body, footprint: { w: 1, d: 1 }, heightPlates: 1, placeholder: false });
 const piece = (id: string, x: number): PlanItem => ({ id, part: '3024', color: 4, x, y: 0, z: 0, rot: 0 });
 const plan = (steps: PlanItem[][]): Plan => ({ name: 't', steps: steps.map((pieces) => ({ pieces })) } as Plan);
-const pose = (m: THREE.Matrix4, owners: string[] = []): Pose => ({ delta: m.elements.slice(), mated: owners.length, owners, valid: true, handle: 0, yaw: 0, at: null });
+const pose = (m: THREE.Matrix4, owners: string[] = []): Pose => ({ delta: m.elements.slice(), mated: owners.length, owners, valid: true, handle: 0, yaw: 0, at: null, links: [], score: 0 });
 const nodes = (p: Plan) => assemble(p, metrics as never, new Map()).nodes;
 
 describe('committing a pose', () => {

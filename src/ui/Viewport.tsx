@@ -18,7 +18,9 @@ import { applyWay, wayState } from '../state/flightWay';
 import { createStudio, worldBox } from '../render/studio';
 import { selectionForHit } from '../plan/groups';
 import { createSubmodel } from '../plan/createSubmodel';
-import { instancePlacements, itemPlacement, placedBox, placedMatrix, sourceEditDelta, viewPlacement, modelPlacement, placingPointOf } from './modelPlacement';
+import { instancePlacements, itemPlacement, placedBox, placedMatrix, sourceEditDelta, viewPlacement, modelPlacement, placingPointOf, placingRayOf, modelToView } from './modelPlacement';
+import { LinkRings } from '../render/linkRings';
+import { aimPoint, type Aim } from '../plan/aim';
 import { NewSubmodelDialog } from './NewSubmodelDialog';
 import { runCommand, snapperFor } from '../state/editing';
 import { clampGizmo } from '../state/guard';
@@ -105,6 +107,14 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
   const selection = useStudio((s) => s.selection);
   const blocked = useStudio((s) => s.blocked);
   const placingState = usePlacing((p) => p.state);
+  const ringsRef = useRef<LinkRings | null>(null);
+  // what the shown pose will connect (nothing for floor or red poses)
+  useEffect(() => {
+    const rings = ringsRef.current, pose = placingState?.pose;
+    if (!rings) return;
+    if (pose?.valid && pose.links.length) rings.show(pose.links, modelToView(placingFrame.current?.root ?? null));
+    else rings.clear();
+  }, [placingState]);
   const lastPointer = useRef<{ clientX: number; clientY: number } | null>(null);
   /** display placements captured for the open placing session */
   const placingFrame = useRef<{ placements: Map<string, THREE.Matrix4>; root: THREE.Matrix4 | null } | null>(null);
@@ -113,8 +123,8 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     viewportApi.placeAtPointer = () => {
       const at = lastPointer.current, placing = usePlacing.getState().state;
       if (!at || !placing) return;
-      const hit = placingHit(at, new Set(placing.ids));
-      if (hit) updatePlacing(hit);
+      const aim = placingAim(at, new Set(placing.ids));
+      if (aim) updatePlacing(aim);
     };
     return () => { viewportApi.placeAtPointer = null; };
   });
@@ -242,6 +252,9 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     const wayHandle = new WayHandle();
     studio.scene.add(wayHandle.group);
     wayHandleRef.current = wayHandle;
+    // rings on the connections a placing pose will make. Editor scene only.
+    const rings = new LinkRings(studio.scene);
+    ringsRef.current = rings;
     const transform = new TransformControls(studio.camera, canvas);
     transform.setSize(0.86);
     transform.setSpace('world');
@@ -786,6 +799,8 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       spotMarkers.dispose();
       wayHandle.dispose();
       wayHandleRef.current = null;
+      rings.dispose();
+      ringsRef.current = null;
       studio.scene.remove(spotMarkers.group);
       markersRef.current = null;
       gizmoRef.current = null;
@@ -1336,7 +1351,9 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     if (s.tool !== 'move' && !already) return;
     const ids = already ? s.selection.ids : selectionForHit(s.plan, s.editingModel, id, e.altKey);
     if (!already) s.select(ids);
-    const grabbed = placingHit(e, new Set());
+    // where the piece was grabbed: the parts stay held by that point
+    const first = placingAim(e, new Set());
+    const grabbed = (first && aimPoint(first)) ?? undefined;
     if (viewportApi.controls) viewportApi.controls.enabled = false;
     const model0 = s.editingModel;
     const from = { x: e.clientX, y: e.clientY };
@@ -1345,10 +1362,10 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       if (!started) {
         if (Math.hypot(ev.clientX - from.x, ev.clientY - from.y) <= 4) return;
         started = true;
-        beginPlacing({ kind: 'move', model: model0, ids }, grabbed?.point);
+        beginPlacing({ kind: 'move', model: model0, ids }, grabbed);
       }
-      const hit = placingHit(ev, new Set(ids));
-      if (hit) updatePlacing(hit);
+      const aim = placingAim(ev, new Set(ids));
+      if (aim) updatePlacing(aim);
     };
     const up = () => {
       window.removeEventListener('pointermove', move);
@@ -1394,11 +1411,11 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
   };
 
   /**
-   * Where the mouse points for placing, in the editing model's LDraw frame: the brick under it
-   * (skipping the pieces being placed) or the floor. A brick shown at a submodel bay is
-   * mapped back through that bay.
+   * The mouse ray for placing, in the editing model's LDraw frame: how deep it hits a brick
+   * (skipping the pieces being placed) and where it meets the drawn floor. A ray hitting a
+   * brick shown at a submodel bay is mapped back through that bay.
    */
-  const placingHit = (ev: { clientX: number; clientY: number }, skip: ReadonlySet<string>): { point: [number, number, number]; owner: string | null } | null => {
+  const placingAim = (ev: { clientX: number; clientY: number }, skip: ReadonlySet<string>): Aim | null => {
     const studio = viewportApi.studio;
     if (!studio) return null;
     const ray = rayAt(ev);
@@ -1410,11 +1427,14 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       placements: instancePlacements(s.plan, s.editingModel, modelRef.current.assembly),
       root: modelPlacement(s.plan, s.editingModel, modelRef.current.assembly),
     });
-    if (hit) return { point: placingPointOf(hit.point, hit.key, frame.placements, frame.root), owner: hit.key.split('/')[0] };
+    const key = hit?.key ?? null;
+    const model = placingRayOf(ray.ray.origin, ray.ray.direction, key, frame.placements, frame.root);
+    const hitAt = hit ? placingPointOf(hit.point, key, frame.placements, frame.root) : null;
+    const hitDepth = hitAt ? Math.hypot(hitAt[0] - model.origin[0], hitAt[1] - model.origin[1], hitAt[2] - model.origin[2]) : null;
     // the drawn floor, as the session fixed it at the start
     const ground = placingFloor() ?? (timeline?.ground ?? modelRef.current.assembly.bounds?.max[1] ?? 0);
     const floor = ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), ground / 20), new THREE.Vector3());
-    return floor ? { point: placingPointOf(floor, null, frame.placements, frame.root), owner: null } : null;
+    return { ray: model, hitDepth, floorPoint: floor ? placingPointOf(floor, null, frame.placements, frame.root) : null };
   };
 
   /**
@@ -1517,8 +1537,8 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
           e.dataTransfer.dropEffect = 'copy';
           if (!isPlacing()) beginPlacing({ kind: 'new', model: s.editingModel, items: [{ part, color: s.paintColor, x: 0, y: 0, z: 0, rot: 0 }] });
           const ids = usePlacing.getState().state?.ids ?? [];
-          const hit = placingHit(e, new Set(ids));
-          if (hit) updatePlacing(hit);
+          const aim = placingAim(e, new Set(ids));
+          if (aim) updatePlacing(aim);
           return;
         }
         if (!e.dataTransfer.types.includes(SPOT_DRAG_TYPE)) return;
@@ -1557,8 +1577,8 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
           lastPointer.current = { clientX: e.clientX, clientY: e.clientY };
           const placing = usePlacing.getState().state;
           if (placing?.source.kind !== 'new' || e.buttons) return;
-          const hit = placingHit(e, new Set(placing.ids));
-          if (hit) updatePlacing(hit);
+          const aim = placingAim(e, new Set(placing.ids));
+          if (aim) updatePlacing(aim);
         }}
         onPointerDown={(e) => {
           if (e.button === 2) rightDown.current = { x: e.clientX, y: e.clientY };

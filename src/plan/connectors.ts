@@ -15,8 +15,12 @@ import type { Plan, Step } from './types';
  */
 export type Connector = { pos: Vec3; axis: Vec3; gender: 'M' | 'F'; type: 'stud' };
 
-/** a plain round stud (radius 6 LDU), or a round socket that takes one: an anti-stud or a hinge tube such as a car door's */
-export const isStudSnap = (s: Snap) => s.kind === 'cyl' && s.length > 0 && s.length <= (s.gender === 'M' ? 8 : 32) && s.shapes.length > 0
+/**
+ * a plain round stud (radius 6 LDU), or a round socket that takes one: an anti-stud, a hinge
+ * tube such as a car door's, or the deep hollow of a tall brick (22885's runs 36 LDU). A
+ * socket's depth does not matter, a stud only enters its open end.
+ */
+export const isStudSnap = (s: Snap) => s.kind === 'cyl' && s.length > 0 && (s.gender === 'F' || s.length <= 8) && s.shapes.length > 0
     // a round stud also seats in a square socket: the underside of 1-wide plates (4315) and special bases
     && s.shapes.every(x => x === 'R' || (s.gender === 'F' && x === 'S')) && Math.abs(s.radius - 6) <= .6;
 
