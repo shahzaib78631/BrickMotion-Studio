@@ -1,0 +1,54 @@
+/* Camera row: keys as diamonds, moves as bars named by their preset, lens marks below. */
+.bm-camtrack, .bm-camlens { position: relative; }
+.bm-cammove {
+  --c: var(--cam);
+  position: absolute; top: 9px; bottom: 9px; display: flex; align-items: center; padding: 0 6px;
+  border: none; border-radius: 6px; background: color-mix(in srgb, var(--c) 82%, transparent); color: #fff;
+  font: 550 11px/1 inherit; text-align: left; overflow: hidden; white-space: nowrap; cursor: pointer;
+}
+.bm-cammove .lbl { overflow: hidden; text-overflow: ellipsis; }
+.bm-cammove.auto { background: color-mix(in srgb, var(--c) 55%, transparent); }
+.bm-cammove.k-quick { --c: #b4532a; }
+.bm-cammove.k-cut { --c: #7f1d1d; background: repeating-linear-gradient(90deg, var(--c) 0 3px, transparent 3px 7px); }
+.bm-cammove.k-flow { --c: #1f6f8b; }
+.bm-cammove.k-hold { --c: #6b6b74; }
+.bm-cammove.sel { outline: 2px solid var(--focus); outline-offset: 1px; }
+.bm-camkey {
+  position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; padding: 0;
+  transform: rotate(45deg); border: 1.5px solid var(--surface); border-radius: 2px;
+  background: var(--ink); cursor: ew-resize; z-index: 2; touch-action: none;
+}
+.bm-camkey.auto { background: color-mix(in srgb, var(--ink) 55%, var(--surface)); }
+.bm-camkey.sel { background: var(--focus); box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus) 40%, transparent); }
+.bm-camkey:focus-visible, .bm-cammove:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.bm-lensmark {
+  position: absolute; top: 50%; transform: translate(-1px, -50%); padding: 1px 5px 1px 6px;
+  border-left: 2px solid var(--ink); color: var(--ink); font: 600 10px ui-monospace, monospace; white-space: nowrap; opacity: 0.75;
+}
+.bm-camtools { display: inline-flex; align-items: center; gap: 4px; }
+/* a narrow timeline: the tools shrink to icons rather than spilling over the Play button */
+.bm-timeline-shell .nx-tr-right { container-type: inline-size; justify-content: safe flex-end; overflow-x: auto; scrollbar-width: none; }
+@container (max-width: 520px) { .bm-camtool-label { display: none; } }
+@container (max-width: 440px) { .nx-zoom { display: none; } .bm-camtools { gap: 1px; } }
+.bm-styles-float.bm-tl-pop.open { display: flex; z-index: 1000; overflow-y: auto; overscroll-behavior: contain; }
+.bm-styles { display: flex; flex-direction: column; min-width: 240px; padding: 4px; gap: 2px; }
+.bm-styles button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 6px 8px; border: none; border-radius: 6px; background: none; color: inherit; text-align: left; cursor: pointer; }
+.bm-styles button:hover, .bm-styles button.on { background: color-mix(in srgb, var(--focus) 14%, transparent); }
+.bm-styles small { opacity: 0.7; font-size: 11px; line-height: 1.3; }
+.bm-keys .bm-camtrack, .bm-keys .bm-camlens { border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--cam) 6%, var(--surface)); }
+.bm-keys .bm-cam-head { cursor: default; background: color-mix(in srgb, var(--cam) 6%, var(--surface)); border-bottom: 1px solid var(--line); }
+/* Camera inspector */
+.bm-cam-inspector { text-align: left; }
+.bm-cam-inspector .nx-field { display: flex; flex-direction: column; align-items: stretch; gap: 4px; margin-bottom: 10px; font-size: 11.5px; color: var(--ink2); text-align: left; }
+.bm-cam-inspector .nx-field select, .bm-cam-inspector .nx-field input[type='number'] { width: 100%; font-size: 12px; }
+.bm-cam-inspector .bm-cam-slider { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 8px; }
+.bm-cam-slider input { grid-column: 1 / -1; grid-row: 2; width: 100%; }
+.bm-cam-value { font: 600 11px ui-monospace, monospace; opacity: 0.75; }
+.bm-cam-inspector .bm-cam-check { flex-direction: row; align-items: center; justify-content: flex-start; gap: 7px; color: var(--ink); }
+.bm-cam-inspector .bm-cam-check input { margin: 0; width: auto; }
+.bm-cam-hint { margin: 4px 0 10px; font-size: 12px; opacity: 0.7; line-height: 1.4; }
+.bm-cam-advanced summary { cursor: pointer; font-size: 12px; font-weight: 600; margin-bottom: 8px; }
+
+/* box-select across the Camera lane */
+.bm-cam-box { position: absolute; top: 3px; bottom: 3px; border: 1px dashed var(--focus); background: color-mix(in srgb, var(--focus) 12%, transparent); border-radius: 4px; pointer-events: none; z-index: 5; }
+.bm-cam-inspector .bm-danger { color: var(--danger, #c2410c); margin-top: 6px; }

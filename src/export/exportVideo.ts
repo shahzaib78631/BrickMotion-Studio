@@ -13,8 +13,15 @@ import type { Instance } from '../model/assemble';
 import type { KeyframeAnimation } from '../plan/types';
 import type { createStudio } from '../render/studio';
 import { LensPass } from '../render/depthOfField';
+import { accumulateWeights, bricksMovedPixels, MotionBlurAccumulator, movedPixels, subframeCount, subframeOffsets } from '../render/motionBlur';
 import { groundOf, PathTraceSession } from './pathTracedStill';
 import { disposeOffscreenStudio } from '../render/studio';
+import { cameraTrackAt } from '../anim/cameraTrack/sample';
+import { buildCameraContext, shotLens, timelineCameraContext } from '../anim/cameraTrack/context';
+import type { CameraContext, CameraShot, CameraTrack } from '../anim/cameraTrack/types';
+
+/** most renders per MP4 frame for motion blur */
+const MP4_SUBFRAMES = 12;
 
 export type LogoCorner = 'tl' | 'tr' | 'bl' | 'br';
 type CommonExportOpts = {
@@ -25,6 +32,8 @@ type CommonExportOpts = {
   studioLook?: StudioLook;
   cameraFraming?: CameraFraming;
   camera?: CameraSettings;
+  /** The model's Camera track for this video: when it has keys it is the camera. */
+  cameraTrack?: CameraTrack | null;
   /** Shoot the build from the editor camera instead of the automatic one. */
   buildView?: EditorCamera;
   sceneSetup?: SceneSetup;
@@ -132,6 +141,8 @@ export async function encodeMp4(opts: CommonExportOpts, deps: ExportDeps, sample
   let started = false;
   let session: PathTraceSession | null = null;
   let lens: LensPass | null = null;
+  let motion: MotionBlurAccumulator | null = null;
+  const keys = opts.instances.map((inst) => inst.key);
   try {
     studio.setLook?.(opts.studioLook ?? 'soft');
     if (opts.render) studio.setRenderOptions?.(opts.render);
@@ -141,7 +152,7 @@ export async function encodeMp4(opts: CommonExportOpts, deps: ExportDeps, sample
     studio.setSize(w, h);
     studio.bricks.setInstances(opts.instances);
     studio.fitTo(samples.box, samples.groundY);
-    const lensChoice = opts.materials?.lens ?? null;
+    let lensChoice = opts.materials?.lens ?? null;
     const blur = !!lensChoice && lensChoice.blur !== 'off';
     if (opts.pathTrace) {
       studio.renderer.setPixelRatio(1);
@@ -168,25 +179,64 @@ export async function encodeMp4(opts: CommonExportOpts, deps: ExportDeps, sample
     for (let i = 0; i < total; i++) {
       if (signal.aborted) throw abortError();
       const seconds = Math.min(i / fps, samples.duration);
-      studio.bricks.setMatrices(samples.at(seconds));
       const cam = samples.camera(seconds, w / h);
-      studio.perspective.position.copy(cam.position);
-      studio.perspective.lookAt(cam.target);
-      studio.perspective.fov = cam.fov;
-      if (samples.near) { studio.perspective.near = samples.near.near; studio.perspective.far = samples.near.far; }
-      studio.perspective.updateProjectionMatrix();
-      if (opts.buildView || samples.ownsCamera) applyCameraCrop(studio.perspective, opts.sceneSetup);
-      else if (!applySceneCamera(studio.perspective, opts.sceneSetup)) applyCameraCrop(studio.perspective, opts.sceneSetup);
-      if (session && lens) {
-        const ptSamples = opts.pathTrace!.samples;
-        const image = await session.render(ptSamples, {
-          signal,
-          onProgress: (done, all) => opts.onProgress(i + done / all, total),
+      // a camera track brings its own depth of field: it replaces the look's lens
+      const shot = cam as Partial<CameraShot>;
+      const trackLens = typeof shot.blur === 'number' && typeof shot.focus === 'number' ? shotLens(shot as CameraShot) : null;
+      if (trackLens) {
+        lensChoice = trackLens;
+        if (!lens && trackLens.blur !== 'off') lens = new LensPass(studio.renderer);
+      }
+      // motion blur (camera track, live renderer): several renders across the open shutter
+      const shutter = trackLens && !session ? (shot.shutter ?? 0) : 0;
+      let offsets = [0];
+      if (shutter > 0) {
+        const half = shutter / (2 * fps);
+        const t0 = Math.max(0, seconds - half), t1 = Math.min(samples.duration, seconds + half);
+        const bricks = bricksMovedPixels(cam as CameraShot, w, h, keys, samples.at(t0), samples.at(t1));
+        const moved = movedPixels(samples.camera(t0, w / h) as CameraShot, samples.camera(t1, w / h) as CameraShot, samples.box, w, h, bricks);
+        offsets = subframeOffsets(subframeCount(shutter, moved, MP4_SUBFRAMES), shutter, fps);
+      }
+      const placeAt = (at: number, pose: CamPose) => {
+        studio.bricks.setMatrices(samples.at(at));
+        studio.perspective.position.copy(pose.position);
+        studio.perspective.up?.set(0, 1, 0);
+        studio.perspective.lookAt(pose.target);
+        const roll = (pose as Partial<CameraShot>).roll;
+        if (roll) studio.perspective.rotateZ(THREE.MathUtils.degToRad(roll));
+        studio.perspective.fov = pose.fov;
+        if (samples.near) { studio.perspective.near = samples.near.near; studio.perspective.far = samples.near.far; }
+        studio.perspective.updateProjectionMatrix();
+        if (opts.buildView || samples.ownsCamera) applyCameraCrop(studio.perspective, opts.sceneSetup);
+        else if (!applySceneCamera(studio.perspective, opts.sceneSetup)) applyCameraCrop(studio.perspective, opts.sceneSetup);
+      };
+      if (offsets.length > 1) {
+        motion ??= new MotionBlurAccumulator(studio.renderer);
+        motion.begin();
+        const weights = accumulateWeights(offsets.length);
+        offsets.forEach((off, k) => {
+          const at = Math.min(samples.duration, Math.max(0, seconds + off));
+          placeAt(at, samples.camera(at, w / h));
+          studio.render();
+          motion!.add(weights[k]);
         });
-        lens.apply(image, lensOpts());
+        motion.resolve();
+        // depth of field is measured at the frame's own time
+        placeAt(seconds, cam);
+        if (trackLens && trackLens.blur !== 'off' && lens) lens.apply('canvas', lensOpts());
       } else {
-        studio.render();
-        if (blur && lens) lens.apply('canvas', lensOpts());
+        placeAt(seconds, cam);
+        if (session && lens) {
+          const ptSamples = opts.pathTrace!.samples;
+          const image = await session.render(ptSamples, {
+            signal,
+            onProgress: (done, all) => opts.onProgress(i + done / all, total),
+          });
+          lens.apply(image, lensOpts());
+        } else {
+          studio.render();
+          if ((trackLens ? trackLens.blur !== 'off' : blur) && lens) lens.apply('canvas', lensOpts());
+        }
       }
       if (opts.logo && ctx) {
         ctx.drawImage(renderCanvas as CanvasImageSource, 0, 0, w, h);
@@ -204,15 +254,37 @@ export async function encodeMp4(opts: CommonExportOpts, deps: ExportDeps, sample
     throw e;
   } finally {
     lens?.dispose();
+    motion?.dispose();
     session?.dispose();
     disposeOffscreenStudio(studio);
   }
+}
+
+/** A per-frame camera from a Camera track (one context per frame shape), or null without keys. */
+function trackCamera(track: CameraTrack | null | undefined, contextFor: (aspect: number) => CameraContext) {
+  if (!track?.keys.length) return null;
+  const contexts = new Map<number, CameraContext>();
+  return (seconds: number, aspect: number): CamPose => {
+    let ctx = contexts.get(aspect);
+    if (!ctx) contexts.set(aspect, (ctx = contextFor(aspect)));
+    return cameraTrackAt(track, seconds, ctx)!;
+  };
 }
 
 /** Existing collision-certified construction video, unchanged in semantics. */
 export function exportVideo(opts: ExportOpts, deps: ExportDeps): Promise<Blob> {
   const tl = opts.timeline;
   const scene = opts.buildView ? null : sceneCameraPose(opts.sceneSetup);
+  const track = trackCamera(opts.cameraTrack, (aspect) => buildCameraContext(tl, aspect, opts.camera?.sensorWidthMm ?? DEFAULT_CAMERA_SETTINGS.sensorWidthMm));
+  if (track) return encodeMp4(opts, deps, {
+    duration: tl.duration,
+    box: worldBox3(tl.sceneBox),
+    groundY: -tl.ground / 20,
+    at: (seconds) => poseAt(tl, seconds),
+    camera: track,
+    ownsCamera: true,
+    snaps: snapsOf(tl),
+  });
   return encodeMp4(opts, deps, {
     duration: tl.duration,
     box: worldBox3(tl.sceneBox),
@@ -300,7 +372,9 @@ export async function exportKeyframeVideo(opts: KeyframeExportOpts, deps: Export
   /** Motion baked from a Build (or still linked to one) follows the Build camera:
    * it frames the assembled model instead of the whole staging floor and keeps
    * the configured hero orbit. Fully hand-keyed clips stay on the stable camera. */
-  const cameraAtTime = buildTimeline
+  const fromTrack = trackCamera(opts.cameraTrack, (aspect) =>
+    timelineCameraContext(animation, bounds, buildTimeline ?? null, editingModel, aspect, camera.sensorWidthMm));
+  const cameraAtTime = fromTrack ?? (buildTimeline
     ? (seconds: number, aspect: number) => {
         const frame = animation.startFrame + seconds * animation.fps;
         const buildSeconds = layer
@@ -308,7 +382,7 @@ export async function exportKeyframeVideo(opts: KeyframeExportOpts, deps: Export
           : seconds;
         return cameraAt(buildTimeline, buildSeconds, aspect, opts.cameraFraming ?? 'cinematic', opts.camera);
       }
-    : () => cam;
+    : () => cam);
   const snaps = layer && buildTimeline ? snapsOf(buildTimeline).map((s) => ({
     ...s, t: (layer.startFrame - animation.startFrame) / animation.fps + s.t / layer.speed,
   })).filter((s) => s.t >= 0 && s.t < animationDuration(animation)) : undefined;
@@ -330,6 +404,7 @@ export async function exportKeyframeVideo(opts: KeyframeExportOpts, deps: Export
       return (key) => evaluated.has(key) ? evaluated.get(key)! : base.get(key) ?? null;
     },
     camera: cameraAtTime,
+    ownsCamera: !!fromTrack,
     snaps,
   });
 }

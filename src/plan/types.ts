@@ -1,5 +1,6 @@
 import type { Mat3, Vec3 } from '../ldraw/parse';
 import type { SceneSetup } from '../render/sceneSetup';
+import type { CameraTracks } from '../anim/cameraTrack/types';
 
 export type Rot = 0 | 90 | 180 | 270;
 /** x, z in studs; y in plates (up is positive). Min corner of the rotated footprint, bottom of the piece. */
@@ -109,6 +110,8 @@ export type Plan = {
   animation?: KeyframeAnimation;
   /** Project-local cameras, lamps, and render border. */
   sceneSetup?: SceneSetup;
+  /** Camera tracks (keys and moves) for each model's Build and Timeline videos. */
+  cameraTracks?: CameraTracks;
   assemblySpot?: AssemblySpot;
   /**
    * Overrides for planner-generated work bays (Construction V2/V3 anatomical

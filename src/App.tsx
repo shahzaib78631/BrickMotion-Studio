@@ -5,6 +5,7 @@ import { AssemblyPanel } from './ui/AssemblyPanel';
 import { initPartService } from './state/partService';
 import { initPersistence } from './state/persistence';
 import { useStudio } from './state/store';
+import { videoCameraInCharge } from './anim/cameraTrack/context';
 import { sceneSetupOf } from './render/sceneSetup';
 import { useModel } from './state/useModel';
 import { useTimeline } from './state/useTimeline';
@@ -82,6 +83,7 @@ function Studio() {
   const model = useModel();
   const mode = useStudio((s) => s.mode);
   const sceneCameraForVideo = useStudio((s) => s.plan.sceneSetup?.useCameraForVideo === true);
+  const trackKeys = useStudio((s) => s.plan.cameraTracks?.[s.editingModel]?.build?.keys.length ?? 0);
   const timelineEditor = useStudio((s) => s.timelineEditor);
   const editingModel = useStudio((s) => s.editingModel);
   const selection = useStudio((s) => s.selection);
@@ -289,7 +291,12 @@ function Studio() {
               </div>
               <div className="bm-workspace-top-help">
                 {warnings.length > 0 && <button title="View model warnings" onClick={() => { setTab('checks'); setPanelClosed(false); }}><Ic name="checks" /> {warnings.length} warnings</button>}
-                {mode === 'preview' && <button
+                {mode === 'preview' && videoCameraInCharge(undefined, video.exportCamera, trackKeys) === 'track' && <button
+                  title="The video follows the Camera track on the timeline (the saved scene camera is not used). Choose another camera in Export to change it."
+                  onClick={() => undefined} aria-disabled="true">
+                  <Ic name="camera" /> Camera track
+                </button>}
+                {mode === 'preview' && videoCameraInCharge(undefined, video.exportCamera, trackKeys) !== 'track' && <button
                   aria-pressed={sceneCameraForVideo}
                   title={sceneCameraForVideo
                     ? 'The video uses the saved scene camera — click to use the automatic video camera'

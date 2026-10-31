@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { searchCatalog } from '../catalog/catalog';
 import { resolveColor } from '../ldraw/colors';
 import { findItem, modelSteps, moveItems, moveItemsToStep, setColor, setPart } from '../plan/ops';
@@ -19,6 +19,7 @@ import { PartThumb } from './PartThumb';
 import { viewportApi } from './viewportApi';
 import { pieceCount } from './Toolbar';
 import { ColorSwatches } from './ColorSwatches';
+import { CameraInspector } from './CameraInspector';
 
 export { ColorSwatches };
 
@@ -33,7 +34,7 @@ function PartPicker({ onPick }: { onPick: (id: string) => void }) {
   </div>;
 }
 
-type InspectorTab = 'selection' | 'part' | 'submodule';
+type InspectorTab = 'selection' | 'part' | 'submodule' | 'camera';
 
 type PartEntry = { part: string; color: number; count: number };
 
@@ -64,6 +65,9 @@ export function Inspector({ timeline, checks, stepCard, model, onMakeSubmodel }:
   const editingModel = useStudio((s) => s.editingModel);
   const paintColor = useStudio((s) => s.paintColor);
   const [tab, setTab] = useState<InspectorTab>('selection');
+  // picking something on the Camera row opens the Camera tab; picking parts goes back
+  const cameraSelection = useStudio((s) => s.cameraSelection);
+  useEffect(() => { if (cameraSelection) setTab('camera'); }, [cameraSelection]);
   const [moveOpen, setMoveOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -71,6 +75,7 @@ export function Inspector({ timeline, checks, stepCard, model, onMakeSubmodel }:
   const [moveDraft, setMoveDraft] = useState({ x: '0', y: '0', z: '0' });
   const st = useStudio.getState();
   const ids = selection.model === editingModel ? selection.ids : [];
+  useEffect(() => { if (ids.length) setTab((t) => (t === 'camera' ? 'selection' : t)); }, [ids.length]);
   const found = ids.map((id) => findItem(plan, editingModel, id))
     .filter((v): v is NonNullable<typeof v> => v !== null);
   const first = found[0]?.item;
@@ -142,6 +147,7 @@ export function Inspector({ timeline, checks, stepCard, model, onMakeSubmodel }:
       </button>
       <button role="tab" aria-selected={tab === 'part'} className={tab === 'part' ? 'active' : ''} onClick={() => setTab('part')}>Part</button>
       <button role="tab" aria-selected={tab === 'submodule'} className={tab === 'submodule' ? 'active' : ''} onClick={() => setTab('submodule')}>Submodule</button>
+      <button role="tab" aria-selected={tab === 'camera'} className={tab === 'camera' ? 'active' : ''} onClick={() => setTab('camera')}>Camera</button>
     </div>
     <div className="bm-inspector-scroll">
       {tab === 'selection' && <>
@@ -261,6 +267,7 @@ export function Inspector({ timeline, checks, stepCard, model, onMakeSubmodel }:
         </div> : <div className="bm-empty-inspector"><Ic name="brick" /><strong>No part selected</strong><p>Select a brick in the viewport to change its geometry, color or build step.</p>
           <h4>Color for new parts</h4><ColorSwatches value={resolveColor(getColors(), paintColor)} onPick={(c) => st.setPaintColor(c)} /></div>}
       </>}
+      {tab === 'camera' && <CameraInspector />}
       {tab === 'submodule' && <div className="bm-inspector-section">
         <div className="bm-part-heading"><span className="bm-part-heading-icon"><Ic name="box" /></span><div><strong>{selectedSub || 'Main model'}</strong><small>{selectedSub && plan.submodels?.[selectedSub] ? `${modelSteps(plan, selectedSub).length} build steps` : 'Model structure'}</small></div></div>
         {selectedSub && plan.submodels?.[selectedSub] && <button className="nx-btn bm-inspector-open-model" onClick={() => st.setEditingModel(selectedSub)}><Ic name="edit" /> Open submodule</button>}

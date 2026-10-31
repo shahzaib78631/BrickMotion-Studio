@@ -26,7 +26,24 @@ export const trackId = (model: string, target: string): string => JSON.stringify
 export const boundedFrame = (frame: number, animation: KeyframeAnimation): number =>
   Math.max(animation.startFrame, Math.min(animation.endFrame, Math.round(Number.isFinite(frame) ? frame : animation.startFrame)));
 
-/** Strictly sorted, unique frames. Bezier is cubic Hermite with automatic zero-slope handles. */
+type Pt = { x: number; y: number };
+/**
+ * Auto-clamped tangent at `cur` (like Blender's "Auto Clamped" handles): flat at the
+ * first and last key and at a peak or dip, otherwise the slope through its neighbours,
+ * limited so neither side can overshoot (Fritsch–Carlson). Smooth keys then flow
+ * through middle keys instead of stopping at each one.
+ */
+export function autoClampedSlope(prev: Pt | null, cur: Pt, next: Pt | null): number {
+  if (!prev || !next) return 0;
+  const dl = (cur.y - prev.y) / (cur.x - prev.x);
+  const dr = (next.y - cur.y) / (next.x - cur.x);
+  if (dl === 0 || dr === 0 || Math.sign(dl) !== Math.sign(dr)) return 0;
+  const s = (next.y - prev.y) / (next.x - prev.x);
+  const limit = 3 * Math.min(Math.abs(dl), Math.abs(dr));
+  return Math.sign(s) * Math.min(Math.abs(s), limit);
+}
+
+/** Strictly sorted, unique frames. Bezier is cubic Hermite with auto-clamped handles. */
 export function channelAt(keys: readonly AnimationKey[] | undefined, frame: number, fallback: number, discrete = false): number {
   if (!keys?.length) return fallback;
   if (frame <= keys[0].frame) return keys[0].value;
@@ -40,8 +57,17 @@ export function channelAt(keys: readonly AnimationKey[] | undefined, frame: numb
   }
   const from = keys[lo], to = keys[hi];
   const t = (frame - from.frame) / (to.frame - from.frame);
-  const smooth = from.interpolation === 'bezier' ? t * t * (3 - 2 * t) : t;
-  return from.interpolation === 'constant' || discrete ? from.value : from.value + (to.value - from.value) * smooth;
+  if (from.interpolation === 'constant' || discrete) return from.value;
+  if (from.interpolation !== 'bezier') return from.value + (to.value - from.value) * t;
+  const pt = (i: number): Pt | null => (i >= 0 && i <= last ? { x: keys[i].frame, y: keys[i].value } : null);
+  // a neighbour joined by a non-smooth segment does not bend this one
+  const before = lo > 0 && keys[lo - 1].interpolation === 'bezier' ? pt(lo - 1) : null;
+  const after = to.interpolation === 'bezier' ? pt(hi + 1) : null;
+  const h = to.frame - from.frame;
+  const m0 = autoClampedSlope(before, pt(lo)!, pt(hi)) * h;
+  const m1 = autoClampedSlope(pt(lo), pt(hi)!, after) * h;
+  const t2 = t * t, t3 = t2 * t;
+  return (2 * t3 - 3 * t2 + 1) * from.value + (t3 - 2 * t2 + t) * m0 + (-2 * t3 + 3 * t2) * to.value + (t3 - t2) * m1;
 }
 
 export function trackOf(animation: KeyframeAnimation | undefined, model: string, target: string): ObjectAnimationTrack | undefined {

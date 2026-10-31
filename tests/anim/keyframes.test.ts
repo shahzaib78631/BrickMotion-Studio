@@ -97,3 +97,29 @@ describe('object Dope Sheet keyframes', () => {
     expect(valuesAt(b, '', 'truck', 24)['rotation.y']).toBe(90);
   });
 });
+
+describe('smooth (bezier) keys flow through middle keys', () => {
+  const keys = [0, 10, 20].map((f, i) => ({ frame: f, value: i * 10, interpolation: 'bezier' as const }));
+  it('does not stop at a middle key on a steady ramp', () => {
+    const v = (f: number) => channelAt(keys, f, 0);
+    expect(v(10.1) - v(9.9)).toBeCloseTo(0.2, 2);
+  });
+  it('still eases at the first and last key', () => {
+    expect(channelAt(keys, 0.1, 0)).toBeLessThan(0.05);
+    expect(20 - channelAt(keys, 19.9, 0)).toBeLessThan(0.05);
+  });
+  it('never overshoots at a peak key', () => {
+    const peak = [0, 10, 20].map((f, i) => ({ frame: f, value: [0, 10, 0][i], interpolation: 'bezier' as const }));
+    for (let f = 0; f <= 20; f += 0.25) expect(channelAt(peak, f, 0)).toBeLessThanOrEqual(10 + 1e-9);
+  });
+  it('never overshoots between keys of uneven steps', () => {
+    const uneven = [{ frame: 0, value: 0 }, { frame: 10, value: 1 }, { frame: 12, value: 10 }, { frame: 30, value: 11 }]
+      .map((k) => ({ ...k, interpolation: 'bezier' as const }));
+    let prev = -Infinity;
+    for (let f = 0; f <= 30; f += 0.1) { const v = channelAt(uneven, f, 0); expect(v).toBeGreaterThanOrEqual(prev - 1e-9); prev = v; }
+  });
+  it('linear keys are unchanged', () => {
+    const lin = [{ frame: 0, value: 0, interpolation: 'linear' as const }, { frame: 10, value: 10, interpolation: 'linear' as const }];
+    expect(channelAt(lin, 5, 0)).toBe(5);
+  });
+});
