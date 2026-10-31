@@ -87,15 +87,61 @@ export function handleCount(moving: PoseQuery['moving']): number {
 
 /** Free connectors: not already mated with another piece, and not covered by one. */
 export function freeTargets(groups: readonly { list: readonly Connector[]; owner: string }[], solids: readonly Solid[]): Target[] {
-  const boxes = solids.map((s) => ({ id: s.id, box: boxOf([s], new THREE.Matrix4()) }));
+  // connectors hashed by whole-LDU position (mates sit within 1 LDU), boxes by 40 LDU cells
+  const key = (x: number, y: number, z: number) => `${x},${y},${z}`;
+  const byPos = new Map<string, { c: Connector; owner: string }[]>();
+  for (const g of groups) for (const c of g.list) {
+    const k = key(Math.round(c.pos[0]), Math.round(c.pos[1]), Math.round(c.pos[2]));
+    (byPos.get(k) ?? byPos.set(k, []).get(k)!).push({ c, owner: g.owner });
+  }
+  const matedElsewhere = (c: Connector, owner: string) => {
+    const [x, y, z] = c.pos.map(Math.round);
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++)
+      for (const o of byPos.get(key(x + dx, y + dy, z + dz)) ?? []) if (o.owner !== owner && mates(c, o.c)) return true;
+    return false;
+  };
+  const CELL = 40;
+  const cells = new Map<string, { id: string; box: THREE.Box3 }[]>();
+  for (const s of solids) {
+    const box = boxOf([s], new THREE.Matrix4()).expandByScalar(-0.5);
+    if (box.isEmpty()) continue;
+    const lo = box.min.toArray().map((v) => Math.floor(v / CELL)), hi = box.max.toArray().map((v) => Math.floor(v / CELL));
+    for (let i = lo[0]; i <= hi[0]; i++) for (let j = lo[1]; j <= hi[1]; j++) for (let k = lo[2]; k <= hi[2]; k++) {
+      const ck = key(i, j, k);
+      (cells.get(ck) ?? cells.set(ck, []).get(ck)!).push({ id: s.id, box });
+    }
+  }
+  const q = new THREE.Vector3();
   const out: Target[] = [];
   for (const g of groups) for (const c of g.list) {
-    if (groups.some((o) => o.owner !== g.owner && o.list.some((t) => mates(c, t)))) continue;
-    const q = new THREE.Vector3(c.pos[0] + 2 * c.axis[0], c.pos[1] + 2 * c.axis[1], c.pos[2] + 2 * c.axis[2]);
-    if (boxes.some((b) => b.id !== g.owner && b.box.clone().expandByScalar(-0.5).containsPoint(q))) continue;
+    if (matedElsewhere(c, g.owner)) continue;
+    q.set(c.pos[0] + 2 * c.axis[0], c.pos[1] + 2 * c.axis[1], c.pos[2] + 2 * c.axis[2]);
+    const near = cells.get(key(Math.floor(q.x / CELL), Math.floor(q.y / CELL), Math.floor(q.z / CELL))) ?? [];
+    if (near.some((b) => b.id !== g.owner && b.box.containsPoint(q))) continue;
     out.push({ ...c, owner: g.owner });
   }
   return out;
+}
+
+const posKey = (x: number, y: number, z: number) => `${x},${y},${z}`;
+const indexes = new WeakMap<readonly Target[], (c: Connector) => Target | undefined>();
+/** The target a connector mates with, looked up by whole-LDU position (built once per target list). */
+function targetIndex(targets: readonly Target[]): (c: Connector) => Target | undefined {
+  const hit = indexes.get(targets);
+  if (hit) return hit;
+  const byPos = new Map<string, Target[]>();
+  for (const t of targets) {
+    const k = posKey(Math.round(t.pos[0]), Math.round(t.pos[1]), Math.round(t.pos[2]));
+    (byPos.get(k) ?? byPos.set(k, []).get(k)!).push(t);
+  }
+  const find = (c: Connector) => {
+    const x = Math.round(c.pos[0]), y = Math.round(c.pos[1]), z = Math.round(c.pos[2]);
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++)
+      for (const t of byPos.get(posKey(x + dx, y + dy, z + dz)) ?? []) if (mates(c, t)) return t;
+    return undefined;
+  };
+  indexes.set(targets, find);
+  return find;
 }
 
 export function findPose(q: PoseQuery): Pose {
@@ -113,6 +159,7 @@ export function findPose(q: PoseQuery): Pose {
 
   type Scored = { m: THREE.Matrix4; at: Vec3; mated: number; owners: string[]; ok: boolean; d: number };
   const scored: Scored[] = [];
+  const index = targetIndex(q.targets);
   for (const t of q.targets) {
     if (t.owner !== hit.owner || t.gender === h.gender || t.type !== h.type || dist(t.pos, hit.point) > SEARCH_RADIUS) continue;
     const m = seat(h, t, yaw);
@@ -120,7 +167,7 @@ export function findPose(q: PoseQuery): Pose {
     const owners = new Set<string>();
     let mated = 0;
     for (const c of placed) {
-      const o = q.targets.find((x) => mates(c, x));
+      const o = index(c);
       if (o) { mated++; owners.add(o.owner); }
     }
     scored.push({ m, at: t.pos, mated, owners: [...owners].sort(), ok: !blocked(m), d: dist(t.pos, hit.point) });

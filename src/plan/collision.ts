@@ -32,6 +32,32 @@ function worldBox(e: ArrayLike<number>, body: Box): { min: number[]; max: number
   return { min, max };
 }
 
+/** Triangles bucketed by the 4 LDU cell their shadow covers, per mesh and per line axis. */
+const TRI_CELL = 4;
+const NO_TRIS: number[] = [];
+const triIndex = new WeakMap<Float32Array, (Map<number, number[]> | undefined)[]>();
+const cellOf = (a: number, b: number) => (Math.floor(a / TRI_CELL) + 32768) * 65536 + (Math.floor(b / TRI_CELL) + 32768);
+/** Offsets (into `mesh`) of the triangles whose shadow on the plane across `axis` may cover (x, z). */
+function trianglesNear(mesh: Float32Array, axis: 0 | 1 | 2, x: number, z: number): number[] {
+  let perAxis = triIndex.get(mesh);
+  if (!perAxis) triIndex.set(mesh, (perAxis = []));
+  let cells = perAxis[axis];
+  if (!cells) {
+    cells = perAxis[axis] = new Map();
+    const [i, j] = axis === 0 ? [1, 2] : axis === 1 ? [0, 2] : [0, 1];
+    for (let t = 0; t + 8 < mesh.length; t += 9) {
+      const a0 = Math.min(mesh[t + i], mesh[t + 3 + i], mesh[t + 6 + i]) - 1e-3, a1 = Math.max(mesh[t + i], mesh[t + 3 + i], mesh[t + 6 + i]) + 1e-3;
+      const b0 = Math.min(mesh[t + j], mesh[t + 3 + j], mesh[t + 6 + j]) - 1e-3, b1 = Math.max(mesh[t + j], mesh[t + 3 + j], mesh[t + 6 + j]) + 1e-3;
+      for (let ca = Math.floor(a0 / TRI_CELL); ca <= Math.floor(a1 / TRI_CELL); ca++)
+        for (let cb = Math.floor(b0 / TRI_CELL); cb <= Math.floor(b1 / TRI_CELL); cb++) {
+          const k = (ca + 32768) * 65536 + (cb + 32768), list = cells.get(k);
+          if (list) list.push(t); else cells.set(k, [t]);
+        }
+    }
+  }
+  return cells.get(cellOf(x, z)) ?? NO_TRIS;
+}
+
 const spans = new WeakMap<Float32Array, Map<string, [number, number] | null>>();
 /**
  * The range a part's mesh fills along one local axis through the line at the other two
@@ -47,7 +73,7 @@ function lineSpan(mesh: Float32Array, body: Box, axis: 0 | 1 | 2, q: readonly nu
   const hit = cache.get(key);
   if (hit !== undefined) return hit;
   let lo = Infinity, hi = -Infinity;
-  for (let t = 0; t + 8 < mesh.length; t += 9) {
+  for (const t of trianglesNear(mesh, axis, x, z)) {
     const ax = mesh[t + i], az = mesh[t + j], bx = mesh[t + 3 + i], bz = mesh[t + 3 + j], cx = mesh[t + 6 + i], cz = mesh[t + 6 + j];
     const area = (bx - ax) * (cz - az) - (cx - ax) * (bz - az);
     if (Math.abs(area) < 1e-6) continue;
