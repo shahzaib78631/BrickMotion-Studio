@@ -1209,6 +1209,10 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
       // slides a short way into its wrist). Never from under the floor.
       // Generate candidates lazily: a successful stud-aligned path should not
       // pay for every alternative mesh direction before it is even attempted.
+      /** the entry being tried is a short sideways push (see `lengths`) */
+      let shortSide = false;
+      /** ways whose long push was blocked only by pieces still in the air this attempt */
+      const waitedWays: Dir[] = [];
       function* entries(): Generator<Dir> {
         const seen: Dir[] = [];
         let triedUp = false;
@@ -1228,13 +1232,20 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
           const around = blockers.filter((b) => b.end === Infinity && boxesTouch(dst, b.box)).map((b) => b.box);
           // Small joints need short entries; forcing every joint to approach
           // from two studs away can push a tilted wrist below the floor.
-          const lengths = [Math.max(4, clearOf(around) + 0.6), 4, 8, 12, 20,
-            ...[clearOf(around), clearOf([modelBox])].map((d) => Math.max(2 * STUD, d + FLIGHT_CLEARANCE))];
+          const short = [Math.max(4, clearOf(around) + 0.6), 4, 8, 12, 20];
+          const long = [clearOf(around), clearOf([modelBox])].map((d) => Math.max(2 * STUD, d + FLIGHT_CLEARANCE));
+          // A sideways way in should read as a snap: line up well clear, then push
+          // straight in. With only a few LDU to spare the piece drops down along the
+          // face it joins and then barely moves, which looks like sliding into place.
+          // Try the long push first; the short ones stay as fallbacks for tight spots.
+          const lengths = Math.abs(way[1]) < 0.5 ? [...long, ...short] : [...short, ...long];
           for (const len of lengths) {
             if (dst.max[1] + way[1] * len > ground + 0.5) continue;
             if (seen.some((e) => Math.hypot(e[0] - way[0] * len, e[1] - way[1] * len, e[2] - way[2] * len) < 1e-6)) continue;
             const entry: Dir = [way[0] * len, way[1] * len, way[2] * len];
             seen.push(entry);
+            // a short sideways push, tried only after the long ones along this way
+            shortSide = Math.abs(way[1]) < 0.5 && len < 2 * STUD;
             yield entry;
           }
         }
@@ -1260,6 +1271,9 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
       let transient = false;
       for (const entry of entries()) {
         report();
+        // Rather than slide in close along the face, wait for the air in front to clear.
+        const len = Math.hypot(...entry);
+        if (shortSide && attempt < MAX_POSTPONE && waitedWays.some((w) => w[0] * entry[0] + w[1] * entry[1] + w[2] * entry[2] > (1 - 1e-6) * len)) continue;
         for (const { move } of [...members[i], ...proxies[i]]) move.entry = entry;
         const arrival = u.start + u.dur;
         // Cache and precheck FINAL contacts before trying thirty cruise/hold
@@ -1333,7 +1347,13 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
             break;
           }
         }
-        if (!corridorBlocked) transient = true;
+        if (!corridorBlocked) {
+          transient = true;
+          if (!shortSide && !blockedSeat && Math.abs(entry[1]) < 0.5 * Math.hypot(...entry)) {
+            const len = Math.hypot(...entry);
+            waitedWays.push([entry[0] / len, entry[1] / len, entry[2] / len]);
+          }
+        }
         if (safe) break;
       }
       // Pieces already built never move: if they block every way, waiting is useless.

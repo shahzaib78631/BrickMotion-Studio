@@ -32,7 +32,17 @@ export const LOGO_STUDS: Readonly<Record<string, string>> = { 'stud.dat': 'stud-
 export type FlattenOptions = {
   /** Draw the raised LEGO logo on ordinary top studs. Stud detection is unchanged. */
   studLogos?: boolean;
+  /** Use the 48-segment versions of round primitives (p/48/) when the library has them. */
+  hiRes?: boolean;
 };
+
+/** Round primitives (circle fractions such as 4-4cyli.dat) that have 48-segment twins in p/48/. */
+export const HIRES_RE = /^\d+-\d+[a-z0-9_-]*\.dat$/;
+/** The 48-segment twin of a primitive reference, or null. */
+export function hiResName(file: string): string | null {
+  const n = file.trim().replace(/\\/g, '/').toLowerCase();
+  return !n.includes('/') && HIRES_RE.test(n) ? `48/${n}` : null;
+}
 const LOGO_RE = /^logo\d*\.dat$/;
 
 function det(m: Mat3): number {
@@ -107,7 +117,8 @@ export function flattenPart(id: string, root: LDrawFile, lookup: FileLookup, onM
       if (c.t === 'ref') {
         const plain = baseName(c.file).toLowerCase();
         const logo = options.studLogos && !inStud ? LOGO_STUDS[plain] : undefined;
-        const child = (logo ? lookup(logo) : null) ?? lookup(c.file);
+        const hi = options.hiRes && !logo ? hiResName(c.file) : null;
+        const child = (logo ? lookup(logo) : null) ?? (hi ? lookup(hi) : null) ?? lookup(c.file);
         if (!child) {
           onMissing?.(c.file);
           continue;

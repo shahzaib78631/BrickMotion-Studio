@@ -59,6 +59,8 @@ export type StudioState = {
   /** Optional three-axis Blender-like transform handles. */
   gizmoEnabled: boolean;
   gizmoMode: 'translate' | 'rotate' | 'scale';
+  /** Aiming the selected pieces' way in: the viewport shows a draggable arrow and arrow keys set the way. */
+  aimWay: boolean;
   /** the plan before a drag; while set, edits replace the plan without adding undo steps */
   gesture: Plan | null;
   /** how the Build view shows the current step's new parts */
@@ -82,6 +84,7 @@ export type StudioState = {
   setTool(t: Tool): void;
   setGizmo(enabled: boolean): void;
   setGizmoMode(mode: 'translate' | 'rotate' | 'scale'): void;
+  setAimWay(on: boolean): void;
   beginGesture(): void;
   endGesture(): void;
   apply(fn: (p: Plan) => Plan): void;
@@ -150,6 +153,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   tool: 'select',
   gizmoEnabled: false,
   gizmoMode: 'translate',
+  aimWay: false,
   gesture: null,
   stepView: 'separated',
   laidOut: false,
@@ -180,13 +184,17 @@ export const useStudio = create<StudioState>((set, get) => ({
     set(laidOut ? { laidOut, currentStep: null } : { laidOut });
   },
   setTool(tool) {
-    set({ tool });
+    set(tool === 'move' ? { tool, aimWay: false } : { tool });
   },
   setGizmo(enabled) {
-    set({ gizmoEnabled: enabled });
+    set(enabled ? { gizmoEnabled: enabled, aimWay: false } : { gizmoEnabled: enabled });
   },
   setGizmoMode(mode) {
-    set({ gizmoMode: mode, gizmoEnabled: true });
+    set({ gizmoMode: mode, gizmoEnabled: true, aimWay: false });
+  },
+  setAimWay(aimWay) {
+    // aiming and the transform gizmo both claim the arrow keys and drags: one at a time
+    set(aimWay ? { aimWay, gizmoEnabled: false, tool: 'select' } : { aimWay });
   },
   beginGesture() {
     set({ gesture: get().plan });

@@ -357,6 +357,28 @@ export function setItemsMotion(p: Plan, m: ModelName, ids: string[], style: Moti
   });
 }
 
+/**
+ * Sets (or with null clears) the way pieces come in: the outward direction from
+ * their seat, in the model's LDraw frame (−Y is up). Stored normalised and rounded,
+ * so a tiny nudge back to the same way is not a change.
+ */
+export function setItemsInsertionAxis(p: Plan, m: ModelName, ids: string[], axis: Vec3 | null): Plan {
+  let next: Vec3 | undefined;
+  if (axis) {
+    const len = Math.hypot(...axis);
+    if (!Number.isFinite(len) || len < 1e-6) return p;
+    next = axis.map((v) => Math.round((v / len) * 1e4) / 1e4 + 0) as Vec3;
+  }
+  const same = (a?: Vec3) => (!a && !next) || (!!a && !!next && a.every((v, k) => Math.abs(v - next![k]) < 1e-4));
+  const set = new Set(ids);
+  if (modelSteps(p, m).every((s) => s.pieces.every((i) => !i.id || !set.has(i.id) || same(i.assembly?.insertionAxis)))) return p;
+  return mapItems(p, m, ids, (i) => {
+    const { insertionAxis: _old, ...assembly } = i.assembly ?? {};
+    const out = next ? { ...assembly, insertionAxis: next } : assembly;
+    return { ...i, assembly: Object.keys(out).length ? out : undefined } as PlanItem;
+  });
+}
+
 /** Sets (or with null clears) the project-wide flight style. */
 export function setPlanMotion(p: Plan, style: MotionStyle | null): Plan {
   const motion = tidyStyle(style);

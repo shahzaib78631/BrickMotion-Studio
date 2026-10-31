@@ -1,6 +1,8 @@
-import type { CSSProperties, ReactNode } from 'react';
+import { useMemo, type CSSProperties, type ReactNode } from 'react';
 import { useAppSettings } from '../state/appSettings';
-import { AO_RADIUS_RANGE, AO_STRENGTH_RANGE, ENVIRONMENTS, FINISHES, FLOORS, SCENES, TEXTURES, aoFor, finishOf, sceneOf, type AOChoice, type FloorSurface, type Materials, type ScenePreset } from '../render/looks';
+import { geometryOf, getColors } from '../state/partService';
+import type { ModelState } from '../state/useModel';
+import { AO_RADIUS_RANGE, AO_STRENGTH_RANGE, ENVIRONMENTS, FINISHES, FLOORS, GLASS_LOOKS, GLOW_STRENGTH_RANGE, LENS_BLURS, SCENES, TEXTURES, aoFor, finishOf, floorFor, sceneOf, takesFloorColor, type AOChoice, type FloorSurface, type Materials, type ScenePreset } from '../render/looks';
 
 const css = (rgb: readonly number[]) => `rgb(${rgb.join(',')})`;
 /** The backdrop as CSS: the same stops (and pool of light) the renderer uses. */
@@ -51,12 +53,45 @@ const STUD_SWATCH = (logo: boolean) =>
 const FLOOR_SWATCH: Record<FloorSurface, string> = {
   auto: 'linear-gradient(180deg, #d9d9df 50%, #c9c9d0 50%)',
   shadow: 'radial-gradient(ellipse 45% 18% at 50% 70%, #00000055, transparent), linear-gradient(180deg, #d2d2d8, #c4c4cc)',
+  // a floor that curves up into the wall: a soft vertical gradient with a light band where it bends
+  sweep: 'radial-gradient(ellipse 40% 14% at 50% 78%, #00000040, transparent), linear-gradient(180deg, #c6c6cd 0%, #dedee3 58%, #ececf0 70%, #d6d6dc 100%)',
   reflective: 'linear-gradient(180deg, #e6e6ea 52%, #f4f4f7 52%), linear-gradient(0deg, #b3261e33, transparent)',
   matte: 'linear-gradient(180deg, #ececef 50%, #dcdce0 50%)',
   wood: 'repeating-linear-gradient(0deg, #c9a172 0 9px, #b98f60 9px 10px), repeating-linear-gradient(90deg, #00000008 0 2px, transparent 2px 5px)',
   concrete: 'radial-gradient(circle at 30% 40%, #9d9d99 0 2%, transparent 3%), radial-gradient(circle at 70% 70%, #a4a4a0 0 2%, transparent 3%), linear-gradient(135deg, #b9b9b5, #a9a9a5)',
   none: 'repeating-conic-gradient(#e9e9ee 0 25%, #fff 0 50%) 0 0 / 12px 12px',
 };
+
+/** Studio paper colours, from white to black and a few backdrop tints. */
+const FLOOR_COLORS: { hex: string; name: string }[] = [
+  { hex: '#f4f4f2', name: 'White' }, { hex: '#d9d9d6', name: 'Light grey' }, { hex: '#a0a2a5', name: 'Mid grey' },
+  { hex: '#3a3d43', name: 'Charcoal' }, { hex: '#15161a', name: 'Black' }, { hex: '#e9dcc6', name: 'Warm beige' },
+  { hex: '#9fc5ee', name: 'Powder blue' }, { hex: '#f5bfa5', name: 'Peach' }, { hex: '#abb39e', name: 'Sage' }, { hex: '#9883e8', name: 'Lavender' },
+];
+
+/** Floor colour for the curved sweep and the matte table: the scene's own, a studio paper colour, or any colour. */
+function FloorColor({ m, kind, sceneColor, set }: { m: Materials; kind: FloorSurface; sceneColor: string; set(p: Partial<Materials>): void }) {
+  const usable = takesFloorColor(kind);
+  const current = m.floorColor ?? sceneColor;
+  return (
+    <div className={`bm-floor-color${usable ? '' : ' off'}`}>
+      <div className="bm-mat-row"><span>Floor colour</span><span className="nx-fine">{m.floorColor ? current : 'Scene colour'}</span></div>
+      <div className="bm-floor-swatches" role="group" aria-label="Floor colour">
+        <button type="button" className={`bm-floor-swatch scene${m.floorColor ? '' : ' selected'}`} title={`Scene colour (${sceneColor})`} aria-label="Scene colour"
+          disabled={!usable} style={{ background: sceneColor }} onClick={() => set({ floorColor: null })}>S</button>
+        {FLOOR_COLORS.map((c) => (
+          <button key={c.hex} type="button" className={`bm-floor-swatch${m.floorColor === c.hex ? ' selected' : ''}`} title={c.name} aria-label={c.name}
+            disabled={!usable} style={{ background: c.hex }} onClick={() => set({ floorColor: c.hex })} />
+        ))}
+        <label className={`bm-floor-swatch custom${m.floorColor && !FLOOR_COLORS.some((c) => c.hex === m.floorColor) ? ' selected' : ''}`} title="Any colour">
+          <input type="color" aria-label="Custom floor colour" disabled={!usable} value={current}
+            onChange={(e) => set({ floorColor: e.target.value.toLowerCase() })} />
+        </label>
+      </div>
+      {!usable && <span className="nx-hint">Pick Curved sweep or Matte table to colour the floor; the other floors show the scene backdrop, a texture or a mirror.</span>}
+    </div>
+  );
+}
 
 export function Section({ title, value, children }: { title: string; value?: string; children: ReactNode }) {
   return (
@@ -76,10 +111,46 @@ export function Card({ selected, label, hint, swatch, onClick }: { selected: boo
   );
 }
 
+const GLASS_SWATCH: Record<string, string> = {
+  soft: 'radial-gradient(circle at 35% 30%, #ffffffaa 0 12%, transparent 30%), linear-gradient(135deg, #9fd3ffaa, #5aa7e6cc)',
+  clear: 'radial-gradient(circle at 30% 25%, #fff 0 6%, transparent 12%), linear-gradient(160deg, transparent 40%, #ffffff99 42% 46%, transparent 48%), linear-gradient(135deg, #d9f0ff, #7cc3f5 70%, #3d8fd1)',
+};
+const LENS_SWATCH: Record<string, string> = {
+  off: 'radial-gradient(circle at 50% 60%, #c7362b 0 18%, transparent 19%), radial-gradient(circle at 22% 35%, #3a7bd5 0 10%, transparent 11%), radial-gradient(circle at 78% 30%, #f2c230 0 10%, transparent 11%), #e6e6ea',
+  subtle: 'radial-gradient(circle at 50% 60%, #c7362b 0 18%, transparent 19%), radial-gradient(circle at 22% 35%, #3a7bd5 0 7%, #3a7bd544 12%, transparent 15%), radial-gradient(circle at 78% 30%, #f2c230 0 7%, #f2c23044 12%, transparent 15%), #e6e6ea',
+  medium: 'radial-gradient(circle at 50% 60%, #c7362b 0 18%, transparent 19%), radial-gradient(circle at 22% 35%, #3a7bd5aa 0 4%, #3a7bd533 14%, transparent 20%), radial-gradient(circle at 78% 30%, #f2c230aa 0 4%, #f2c23033 14%, transparent 20%), #e6e6ea',
+  strong: 'radial-gradient(circle at 50% 60%, #c7362b 0 18%, transparent 19%), radial-gradient(circle at 22% 35%, #3a7bd566 0 2%, #3a7bd522 18%, transparent 26%), radial-gradient(circle at 78% 30%, #f2c23066 0 2%, #f2c23022 18%, transparent 26%), #e6e6ea',
+};
+
+/** The LDraw colours used by the model (its own and the fixed colours inside parts), transparent ones first. */
+function useModelColors(model: ModelState | undefined): { code: number; name: string; hex: string; trans: boolean }[] {
+  const instances = model?.assembly.instances;
+  return useMemo(() => {
+    const colors = getColors();
+    const codes = new Set<number>();
+    for (const i of instances ?? []) {
+      codes.add(i.color);
+      for (const f of geometryOf(i.part)?.fixed ?? []) codes.add(f.color);
+    }
+    return [...codes].flatMap((code) => {
+      const c = colors.get(code);
+      return c ? [{ code, name: c.name.replace(/_/g, ' '), hex: c.hex, trans: c.finish === 'trans' }] : [];
+    }).sort((a, b) => Number(b.trans) - Number(a.trans) || a.name.localeCompare(b.name));
+  }, [instances]);
+}
+
 /** Materials: the scene around the model, how the plastic looks and the floor. The viewport, preview, MP4 and stills all use these. */
-export function MaterialsPanel() {
+export function MaterialsPanel({ model }: { model?: ModelState }) {
   const s = useAppSettings();
   const m = s.materials;
+  const modelColors = useModelColors(model);
+  const glowSet = new Set(m.glow.colors);
+  const toggleGlow = (code: number) => {
+    // read the stored choice, not this render's: quick clicks must not undo each other
+    const now = useAppSettings.getState().materials;
+    const colors = now.glow.colors.includes(code) ? now.glow.colors.filter((c) => c !== code) : [...now.glow.colors, code];
+    s.set({ materials: { ...now, glow: { ...now.glow, colors } } });
+  };
   const setMaterials = (patch: Partial<Materials>) => s.set({ materials: { ...m, ...patch } });
   const scene = sceneOf(s.studioLook);
   const setAO = (patch: Partial<AOChoice>) => setMaterials({ ao: { ...m.ao, ...patch } });
@@ -161,6 +232,16 @@ export function MaterialsPanel() {
         <span className="nx-hint">Logos add detail to every stud. Switch to plain if a very large model gets slow.</span>
       </Section>
 
+      <Section title="Part detail" value={m.detail === 'high' ? 'High' : 'Standard'}>
+        <div className="bm-mat-grid">
+          <Card selected={m.detail !== 'high'} label="Standard" hint="The LDraw shapes as they are: fastest" onClick={() => setMaterials({ detail: 'standard' })}
+            swatch={<span className="bm-mat-swatch" style={{ background: EDGE_SWATCH(false) }} />} />
+          <Card selected={m.detail === 'high'} label="High" hint="Smooth round parts and real rounded edges, like product renders" onClick={() => setMaterials({ detail: 'high' })}
+            swatch={<span className="bm-mat-swatch" style={{ background: EDGE_SWATCH(true) }} />} />
+        </div>
+        <span className="nx-hint">High uses 48-segment curves and rounds every sharp outside edge in the geometry, so it also shows in path-traced stills. It is heavier: use Standard if a very large model gets slow. Snapping and the build animation are not affected.</span>
+      </Section>
+
       <Section title="Edges" value={`${m.roundedEdges ? 'Rounded' : 'Sharp'}${s.edgeLines ? ' · lines' : ''}`}>
         <div className="bm-mat-grid">
           <Card selected={m.roundedEdges} label="Rounded" hint="A thin highlight on every outside corner, like moulded plastic" onClick={() => setMaterials({ roundedEdges: true })}
@@ -170,6 +251,49 @@ export function MaterialsPanel() {
         </div>
         <label className="nx-check"><input type="checkbox" checked={s.edgeLines} onChange={(e) => s.set({ edgeLines: e.target.checked })} /> Edge lines</label>
         <span className="nx-hint">Rounded edges are a lighting effect, not new geometry. Edge lines draw the thin LDraw outlines; render scenes start with them off.</span>
+      </Section>
+
+      <Section title="Glowing parts" value={m.glow.colors.length ? `${m.glow.colors.length} colour${m.glow.colors.length === 1 ? '' : 's'}` : 'None'}>
+        {modelColors.length ? (
+          <div className="bm-glow-list" role="group" aria-label="Colours that glow">
+            {modelColors.map((c) => (
+              <button key={c.code} type="button" className={`bm-glow-chip${glowSet.has(c.code) ? ' on' : ''}`} aria-pressed={glowSet.has(c.code)}
+                title={`${c.name} (${c.code})`} onClick={() => toggleGlow(c.code)}>
+                <i style={{ background: c.hex, boxShadow: glowSet.has(c.code) ? `0 0 8px 2px ${c.hex}` : undefined }} />
+                <span>{c.name}</span>
+              </button>
+            ))}
+          </div>
+        ) : <span className="nx-hint">Open a model to choose which of its colours glow.</span>}
+        <label className="bm-mat-slider">Brightness <span>{Math.round(m.glow.strength * 100)}%</span>
+          <input type="range" min={GLOW_STRENGTH_RANGE[0]} max={GLOW_STRENGTH_RANGE[1]} step={0.05} value={m.glow.strength} disabled={!m.glow.colors.length}
+            aria-label="Glow brightness" onChange={(e) => setMaterials({ glow: { ...m.glow, strength: Number(e.target.value) } })} />
+        </label>
+        <span className="nx-hint">Pick the colours of lamps, windows or screens. Every part in that colour gives off its own light; in path-traced stills and videos it also lights the parts around it. Transparent colours are listed first.</span>
+      </Section>
+
+      <Section title="Glass" value={GLASS_LOOKS.find((g) => g.id === m.glass)?.label}>
+        <div className="bm-mat-grid">
+          {GLASS_LOOKS.map((g) => (
+            <Card key={g.id} selected={m.glass === g.id} label={g.label} hint={g.hint} onClick={() => setMaterials({ glass: g.id })}
+              swatch={<span className="bm-mat-swatch" style={{ background: GLASS_SWATCH[g.id] }} />} />
+          ))}
+        </div>
+        <span className="nx-hint">Clear glass bends and tints the light passing through transparent parts, like real windshields and bottles. It shows in path-traced stills and videos; the viewport keeps the soft look.</span>
+      </Section>
+
+      <Section title="Camera lens" value={LENS_BLURS.find((b) => b.id === m.lens.blur)?.label}>
+        <div className="bm-mat-grid">
+          {LENS_BLURS.map((b) => (
+            <Card key={b.id} selected={m.lens.blur === b.id} label={b.label} hint={b.hint} onClick={() => setMaterials({ lens: { ...m.lens, blur: b.id } })}
+              swatch={<span className="bm-mat-swatch" style={{ background: LENS_SWATCH[b.id] }} />} />
+          ))}
+        </div>
+        <label className="bm-mat-slider">Focus <span>{m.lens.focus < 0.15 ? 'Front' : m.lens.focus > 0.85 ? 'Back' : m.lens.focus < 0.4 ? 'Front half' : m.lens.focus > 0.6 ? 'Back half' : 'Middle'}</span>
+          <input type="range" min={0} max={1} step={0.05} value={m.lens.focus} disabled={m.lens.blur === 'off'}
+            aria-label="Focus depth" onChange={(e) => setMaterials({ lens: { ...m.lens, focus: Number(e.target.value) } })} />
+        </label>
+        <span className="nx-hint">Depth of field: the model stays sharp at the focus and the background and foreground soften, like a close-up photo. Focus runs from the nearest point of the model to the farthest. Applies to final renders (opaque) and MP4 exports, not the viewport.</span>
       </Section>
 
       <Section title="Ambient occlusion" value={!m.ao.enabled ? 'Off' : m.ao.strength === null && m.ao.radius === null ? 'Scene' : 'Custom'}>
@@ -195,6 +319,13 @@ export function MaterialsPanel() {
               swatch={<span className="bm-mat-swatch" style={{ background: FLOOR_SWATCH[f.id] }} />} />
           ))}
         </div>
+        <FloorColor m={m} kind={floorFor(s.studioLook, m.floor)} sceneColor={scene.floorColor} set={setMaterials} />
+        {floorFor(s.studioLook, m.floor) === 'sweep' && <>
+          <label className="bm-mat-slider">Curve <span>{(m.sweepCurve ?? 0.6) < 0.34 ? 'Tight' : (m.sweepCurve ?? 0.6) > 0.7 ? 'Long and soft' : 'Medium'}</span>
+            <input type="range" min={0} max={1} step={0.05} value={m.sweepCurve ?? 0.6} aria-label="Sweep curve" onChange={(e) => setMaterials({ sweepCurve: Number(e.target.value) })} />
+          </label>
+          <span className="nx-hint">How the floor bends up into the wall: a tight corner, or a long soft curve that starts just behind the model. The sweep turns with the camera, so it is always behind the model.</span>
+        </>}
         <label className="bm-mat-slider">Contact shadow <span>{m.contactShadows === 0 ? 'Off' : `${Math.round(m.contactShadows * 100)}%`}</span>
           <input type="range" min={0} max={1} step={0.05} value={m.contactShadows} aria-label="Contact shadow" onChange={(e) => setMaterials({ contactShadows: Number(e.target.value) })} />
         </label>

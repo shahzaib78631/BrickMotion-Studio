@@ -1,4 +1,4 @@
-import { flattenPart, LOGO_STUDS, type FlatPart } from './flatten';
+import { flattenPart, hiResName, LOGO_STUDS, type FlatPart } from './flatten';
 import { normalizeName, parseLDraw, type LDrawFile } from './parse';
 import type { ShadowLookup, Snap } from './shadow';
 import { embeddedPartId, sameGeometry } from './partAlias';
@@ -52,7 +52,9 @@ export class PartLibrary {
     for (const [k, v] of files) {
       const n = normalizeName(k);
       this.inline.set(n, v);
-      this.parts.delete(n.replace(/\.dat$/, ''));
+      const id = n.replace(/\.dat$/, '');
+      this.parts.delete(id);
+      this.parts.delete(`${id}\u0000hi`);
     }
   }
 
@@ -105,28 +107,36 @@ export class PartLibrary {
   }
 
   /** Loads a file and all its sub-files (in parallel) into the resolved cache. */
-  private async preload(name: string, seen = new Set<string>()): Promise<LDrawFile | null> {
+  private async preload(name: string, seen = new Set<string>(), hiRes = false): Promise<LDrawFile | null> {
     const n = normalizeName(name);
     if (seen.has(n)) return this.resolved.get(n) ?? this.inline.get(n) ?? null;
     seen.add(n);
     const f = await this.getFile(n);
     if (f) {
       const refs = [...new Set(f.cmds.flatMap((c) => (c.t === 'ref' ? [c.file] : [])))];
-      await Promise.all(refs.map((r) => this.preload(r, seen)));
+      // the 48-segment twins too (most exist; a missing one falls back to the plain file)
+      const twins = hiRes ? refs.flatMap((r) => hiResName(r) ?? []) : [];
+      await Promise.all([...refs, ...twins].map((r) => this.preload(r, seen, hiRes)));
     }
     return f;
   }
 
-  loadPart(id: string): Promise<FlatPart | null> {
+  /**
+   * A part flattened to triangles. `hiRes`: round primitives at 48 segments, for render
+   * geometry only (measurements and connectors always come from the standard part).
+   */
+  loadPart(id: string, hiRes = false): Promise<FlatPart | null> {
     const key = normalizeName(id).replace(/\.dat$/, '');
-    let p = this.parts.get(key);
+    const cacheKey = hiRes ? `${key}\u0000hi` : key;
+    let p = this.parts.get(cacheKey);
     if (!p) {
       p = (async () => {
         const rootName = `${key}.dat`;
-        const root = await this.preload(rootName);
+        const seen = new Set<string>();
+        const root = await this.preload(rootName, seen, hiRes);
         if (!root) return null;
-        const options = { studLogos: this.studLogos };
-        if (options.studLogos) await Promise.all(Object.values(LOGO_STUDS).map((f) => this.preload(f)));
+        const options = { studLogos: this.studLogos, hiRes };
+        if (options.studLogos) await Promise.all(Object.values(LOGO_STUDS).map((f) => this.preload(f, seen, hiRes)));
         const lookup = (n: string) => this.inline.get(n) ?? this.resolved.get(n) ?? null;
         const warn = (missing: string) => {
           if (!this.warned.has(missing)) {
@@ -172,7 +182,7 @@ export class PartLibrary {
         }
         return flat;
       })();
-      this.parts.set(key, p);
+      this.parts.set(cacheKey, p);
     }
     return p;
   }

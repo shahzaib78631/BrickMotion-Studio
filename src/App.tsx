@@ -272,7 +272,7 @@ function Studio() {
             {tab === 'mechanisms' && <MechanismLabPanel model={model} onRender={() => { setTab('video'); setPanelClosed(false); }} />}
             {tab === 'ai' && <AiPanel warnings={warnings} onOpenSettings={() => setTab('settings')} />}
             {tab === 'video' && <VideoPanel timeline={timeline} onExport={exportCurrent} />}
-            {tab === 'materials' && <MaterialsPanel />}
+            {tab === 'materials' && <MaterialsPanel model={model} />}
             {tab === 'sound' && <SoundPanel />}
             {tab === 'staging' && <StagingPanel timeline={timeline} planning={planning} planError={planError} onRetry={retry} />}
             {tab === 'capture' && <CapturePanel model={model} />}
