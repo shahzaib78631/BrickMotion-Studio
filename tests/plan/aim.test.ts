@@ -39,3 +39,11 @@ describe('floorAim', () => {
     expect(a.floorPoint).toEqual([100, 0, 20]);
   });
 });
+
+describe('aimPoint', () => {
+  it('is the hit along the ray, or null', async () => {
+    const { aimPoint } = await import('../../src/plan/aim');
+    expect(aimPoint(down(500))).toEqual([0, 0, 0]);
+    expect(aimPoint(down())).toBeNull();
+  });
+});

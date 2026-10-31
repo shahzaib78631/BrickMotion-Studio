@@ -53,3 +53,9 @@ export function candidates(targets: readonly Target[], aim: Aim, max = MAX_TARGE
 export function floorAim(p: Vec3): Aim {
   return { ray: { origin: p, dir: [0, 1, 0] }, hitDepth: 0, floorPoint: p };
 }
+
+/** Where the ray hits (null when it hits nothing). */
+export function aimPoint(aim: Aim): Vec3 | null {
+  const { ray: { origin: o, dir: d }, hitDepth: t } = aim;
+  return t === null ? null : [o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t];
+}

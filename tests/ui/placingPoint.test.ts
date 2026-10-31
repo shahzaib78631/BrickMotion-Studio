@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { placingPointOf } from '../../src/ui/modelPlacement';
+import { placingPointOf, placingRayOf } from '../../src/ui/modelPlacement';
+import { rayAngle } from '../../src/plan/aim';
 
 const r = (p: number[]) => p.map((v) => Math.round(v * 1000) / 1000 || 0);
 
@@ -20,4 +21,17 @@ describe('placing point', () => {
     expect(r(placingPointOf(viewOf(bay), 'b/1', placements, root))).toEqual([20, 0, 0]);
     expect(r(placingPointOf(viewOf(root), 'loose', placements, root))).toEqual([20, 0, 0]);
   });
+
+  it("maps the ray through the hit piece's placement", () => {
+    const target = (m: THREE.Matrix4) => viewOf(m);
+    for (const [key, m] of [['b/1', bay], [null, root], ['loose', root]] as const) {
+      const at = target(m);
+      const origin = at.clone().add(new THREE.Vector3(3, 7, -2));
+      const dir = at.clone().sub(origin).multiplyScalar(5); // not unit length on purpose
+      const ray = placingRayOf(origin, dir, key, placements, root);
+      expect(Math.hypot(...ray.dir)).toBeCloseTo(1, 9);
+      expect(rayAngle(ray, [20, 0, 0])).toBeLessThan(1e-6);
+    }
+  });
 });
+

@@ -6,6 +6,7 @@ import { transformBox, unionBox } from '../model/assemble';
 import type { Box } from '../ldraw/flatten';
 import { isSub, type AssemblySpot, type Plan } from '../plan/types';
 import { modelSteps } from '../plan/ops';
+import type { Ray } from '../plan/aim';
 
 /** View-only placement of the main model. The LDraw document is never moved. */
 export function modelPlacement(plan: Plan, editingModel: string, assembly: Assembly): THREE.Matrix4 | null {
@@ -129,4 +130,15 @@ export function modelPointOf(view: THREE.Vector3, placement: THREE.Matrix4 | nul
  */
 export function placingPointOf(view: THREE.Vector3, key: string | null, placements: ReadonlyMap<string, THREE.Matrix4>, root: THREE.Matrix4 | null): [number, number, number] {
   return modelPointOf(view, (key !== null ? placements.get(key) : undefined) ?? root);
+}
+
+/**
+ * The mouse ray (view origin and direction) in the editing model's LDraw frame, mapped back
+ * through the hit piece's display placement (or the model root): LDU, unit direction.
+ */
+export function placingRayOf(origin: THREE.Vector3, dir: THREE.Vector3, key: string | null, placements: ReadonlyMap<string, THREE.Matrix4>, root: THREE.Matrix4 | null): Ray {
+  const placement = (key !== null ? placements.get(key) : undefined) ?? root;
+  const a = new THREE.Vector3(...modelPointOf(origin, placement));
+  const d = new THREE.Vector3(...modelPointOf(origin.clone().add(dir), placement)).sub(a).normalize();
+  return { origin: [a.x, a.y, a.z], dir: [d.x, d.y, d.z] };
 }
