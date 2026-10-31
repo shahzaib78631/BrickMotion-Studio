@@ -184,4 +184,72 @@ describe('placement pose search', () => {
     const onB = findPose(query(one, [a, b], { point: [42, 0, 10], owner: 'b' }, h, { prev: onA }));
     expect(moved(one, onB).x).toBe(30);
   });
+
+  it.skipIf(!ready)('seats a 1x2x1 2/3 brick with side studs (22885) on a 2x4 plate', async () => {
+    const plate = place('plate', await measureReal('3020'), 0, 0);
+    const tall = place('m', await measureReal('22885'), 300, -100, 0);
+    const h = handleNear(tall, 'F', [300 - 10, -100 + 40, 0]);
+    expect(h).toBeGreaterThanOrEqual(0);
+    const pose = findPose(query(tall, [plate], { point: [-11, 0, -9], owner: 'plate' }, h));
+    expect(pose.valid).toBe(true);
+    expect(pose.mated).toBe(2);
+    expect(Math.round(moved(tall, pose).y)).toBe(-40);
+  });
+
+  describe('two 22885s each on one top stud of a third', () => {
+    // the base stands upright: its top studs are at x = ±10, y = 0
+    const centreX = (p: Placed, pose: Pose) => Math.round(moved(p, pose).x);
+
+    it.skipIf(!ready)('puts the held socket on the stud under the mouse, even when that overhangs', async () => {
+      const m = await measureReal('22885');
+      const base = place('base', m, 0, -40);
+      const held = place('m', m, 300, -200, 0);
+      const right = handleNear(held, 'F', [310, -160, 0]); // held by its right-hand socket
+      const pose = findPose(query(held, [base], { point: [-10, -40, 0], owner: 'base' }, right));
+      expect(pose.valid).toBe(true);
+      expect(pose.mated).toBe(1);
+      expect(centreX(held, pose)).toBe(-20); // hangs off the left side
+    });
+
+    it.skipIf(!ready)('tries another socket when the held one would clash', async () => {
+      const m = await measureReal('22885');
+      const base = place('base', m, 0, -40);
+      const left = place('left', m, -20, -80); // the first one, hanging off the left side
+      const held = place('m', m, 300, -200, 0);
+      const right = handleNear(held, 'F', [310, -160, 0]); // on the free right stud this would push into `left`
+      const pose = findPose(query(held, [base, left], { point: [10, -40, 0], owner: 'base' }, right));
+      expect(pose.valid).toBe(true);
+      expect(pose.mated).toBe(1);
+      expect(centreX(held, pose)).toBe(20); // hangs off the right side
+    });
+  });
+
+  describe('sideways onto side studs', () => {
+    const boxX = (p: Placed, pose: Pose) => {
+      const w = new THREE.Matrix4().fromArray(pose.delta).multiply(new THREE.Matrix4().fromArray(p.solid.world as number[]));
+      const b = new THREE.Box3(new THREE.Vector3(...p.solid.body.min), new THREE.Vector3(...p.solid.body.max)).applyMatrix4(w);
+      return [Math.round(b.min.x), Math.round(b.max.x)];
+    };
+
+    it.skipIf(!ready)('mounts a 22885 flat on the side studs of another', async () => {
+      const m = await measureReal('22885');
+      const base = place('base', m, 0, 0); // upright: side studs at x = ±10, y = 10 and 30, pointing -Z
+      const held = place('m', m, 300, -200, 0);
+      const right = handleNear(held, 'F', [310, -160, 0]);
+      const pose = findPose(query(held, [base], { point: [10, 30, -10], owner: 'base' }, right, { floor: 1000 }));
+      expect(pose.valid).toBe(true);
+      expect(pose.mated).toBe(2);
+      expect(boxX(held, pose)).toEqual([-20, 20]);
+    });
+
+    it.skipIf(!ready)('never leaves a side stud cutting into the wall of a brick held half a stud off', async () => {
+      const m = await measureReal('22885');
+      const base = place('base', m, 0, 0);
+      const held = place('m', m, 300, -200, 0);
+      const middle = handleNear(held, 'F', [300, -160, 0]);
+      // the middle socket on the lower-right stud would put the end wall over the lower-left stud
+      const pose = findPose(query(held, [base], { point: [10, 30, -10], owner: 'base' }, middle, { floor: 1000 }));
+      expect(boxX(held, pose)).not.toEqual([-10, 30]);
+    });
+  });
 });

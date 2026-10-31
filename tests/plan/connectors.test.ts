@@ -31,6 +31,12 @@ describe('connector model', () => {
     expect(males(c).some((s) => near(s.axis, [0, 0, -1]) || near(s.axis, [1, 0, 0]) || near(s.axis, [-1, 0, 0]))).toBe(true);
   });
 
+  it.skipIf(!ready)('gives a tall brick with side studs (22885) its deep underside sockets', async () => {
+    const down = partConnectors(await measureReal('22885')).filter((c) => c.gender === 'F' && c.axis[1] > 0.9);
+    expect(down.map((c) => c.pos[0]).sort((a, b) => a - b)).toEqual([-10, 0, 10]);
+    expect(down.every((c) => c.pos[1] === 40)).toBe(true);
+  });
+
   it.skipIf(!ready)('dedupes studs found by both metrics.studs and shadow snaps', async () => {
     for (const id of ['3001', '3023', '3794b', '87087']) {
       const c = partConnectors(await measureReal(id));

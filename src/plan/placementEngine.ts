@@ -53,6 +53,8 @@ export type Pose = {
 export const SEARCH_RADIUS = 30;
 /** A new target must be this much (LDU) nearer the hit than the current one to take over. */
 export const HYSTERESIS = 7;
+/** How many other connectors are tried when the held one would clash. */
+export const OTHER_HANDLES = 16;
 /** The floor's LDraw height. */
 export const FLOOR_Y = 0;
 
@@ -146,6 +148,30 @@ function targetIndex(targets: readonly Target[]): (c: Connector) => Target | und
   return find;
 }
 
+const STUD_RADIUS = 6;
+/** Whether a stud (base `pos`, pointing along `axis`) reaches into a box, with half an LDU of slack. */
+function studInBox(pos: readonly number[], axis: readonly number[], b: THREE.Box3): boolean {
+  const along = [0, 1, 2].reduce((k, i) => (Math.abs(axis[i]) > Math.abs(axis[k]) ? i : k), 0);
+  const lo = b.min.toArray(), hi = b.max.toArray();
+  return [0, 1, 2].every((i) => {
+    const v = pos[i] + 2 * axis[i]; // 2 LDU up the stud
+    return i === along ? v > lo[i] + 0.5 && v < hi[i] - 0.5 : v > lo[i] - (STUD_RADIUS - 0.5) && v < hi[i] + (STUD_RADIUS - 0.5);
+  });
+}
+/**
+ * A free stud of a fixed piece that would reach into a moving part without one of the moving
+ * part's sockets taking it: it would be cutting through a wall (the collision world lets studs
+ * pass everywhere, as if they always sat in a socket).
+ */
+function studPokesIn(q: PoseQuery, m: THREE.Matrix4): boolean {
+  const all = boxOf(q.moving.solids, m);
+  const near = q.targets.filter((t) => t.gender === 'M' && studInBox(t.pos, t.axis, all));
+  if (!near.length) return false;
+  const boxes = q.moving.solids.map((s) => boxOf([s], m));
+  const sockets = worldConnectors(q.moving.connectors, m.elements).filter((c) => c.gender === 'F');
+  return near.some((t) => boxes.some((b) => studInBox(t.pos, t.axis, b)) && !sockets.some((c) => mates(c, t)));
+}
+
 export function findPose(q: PoseQuery): Pose {
   const { moving, hit, handle, yaw } = q;
   const h = moving.connectors[handle];
@@ -157,28 +183,48 @@ export function findPose(q: PoseQuery): Pose {
   const blocked = (m: THREE.Matrix4) => {
     if (moving.solids.length && boxOf(moving.solids, m).max.y > ground) return true;
     if (!q.world) return false;
+    if (studPokesIn(q, m)) return true;
     const shifted = moving.solids.map((s) => ({ ...s, world: new THREE.Matrix4().fromArray(Array.from(s.world)).premultiply(m).elements }));
     return addsOverlap(q.before, q.world.hits(shifted));
   };
   if (hit.owner === null || !h) return floorPose(q, blocked);
 
-  type Scored = { m: THREE.Matrix4; at: Vec3; mated: number; owners: string[]; ok: boolean; d: number };
+  type Scored = { m: THREE.Matrix4; at: Vec3; t: Target; mated: number; owners: string[]; ok: boolean; d: number };
   const scored: Scored[] = [];
   const index = targetIndex(q.targets);
-  for (const t of q.targets) {
-    if (t.owner !== hit.owner || t.gender === h.gender || t.type !== h.type || dist(t.pos, hit.point) > SEARCH_RADIUS) continue;
-    const m = seat(h, t, yaw);
-    const placed = worldConnectors(moving.connectors, m.elements);
+  const matesOf = (m: THREE.Matrix4) => {
     const owners = new Set<string>();
     let mated = 0;
-    for (const c of placed) {
+    for (const c of worldConnectors(moving.connectors, m.elements)) {
       const o = index(c);
       if (o) { mated++; owners.add(o.owner); }
     }
-    scored.push({ m, at: t.pos, mated, owners: [...owners].sort(), ok: !blocked(m), d: dist(t.pos, hit.point) });
+    return { mated, owners: [...owners].sort() };
+  };
+  for (const t of q.targets) {
+    if (t.owner !== hit.owner || t.gender === h.gender || t.type !== h.type || dist(t.pos, hit.point) > SEARCH_RADIUS) continue;
+    const m = seat(h, t, yaw);
+    scored.push({ m, at: t.pos, t, ...matesOf(m), ok: !blocked(m), d: dist(t.pos, hit.point) });
   }
-  const valid = scored.filter((s) => s.ok).sort((a, b) => b.mated - a.mated || a.d - b.d);
+  // the held connector goes on the stud under the mouse (Studio-like); seating more studs only breaks ties
+  const valid = scored.filter((s) => s.ok).sort((a, b) => a.d - b.d || b.mated - a.mated);
   const best = valid[0];
+  // the held connector would clash on the stud nearest the mouse: hold the parts by another
+  // connector on the same face there instead (nearest to the held one first)
+  const nearest = scored.reduce((d, x) => Math.min(d, x.d), Infinity);
+  if (scored.length && (!best || best.d > nearest + 1e-6)) {
+    const spots = scored.filter((x) => x.d <= nearest + 1e-6);
+    const others = moving.connectors
+      .map((c, i) => ({ c, i }))
+      .filter(({ c, i }) => i !== handle && c.gender === h.gender && c.type === h.type && dot(c.axis, h.axis) > 0.999)
+      .sort((a, b) => dist(a.c.pos, h.pos) - dist(b.c.pos, h.pos))
+      .slice(0, OTHER_HANDLES); // each try is a collision test: keep big moving sets responsive
+    for (const { c, i } of others) for (const x of spots) {
+      const m = seat(c, x.t, yaw);
+      if (blocked(m)) continue;
+      return { delta: clean(m), ...matesOf(m), valid: true, handle: i, yaw, at: x.t.pos };
+    }
+  }
   const p = q.prev;
   // a seated pose holds while the mouse stays near it, whichever piece is under the mouse
   // (the fixed pieces do not change during a drag, so it is still clean)
