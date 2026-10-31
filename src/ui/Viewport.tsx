@@ -18,10 +18,11 @@ import { applyWay, wayState } from '../state/flightWay';
 import { createStudio, worldBox } from '../render/studio';
 import { selectionForHit } from '../plan/groups';
 import { createSubmodel } from '../plan/createSubmodel';
-import { instancePlacements, itemPlacement, placedBox, placedMatrix, sourceEditDelta, viewPlacement } from './modelPlacement';
+import { instancePlacements, itemPlacement, placedBox, placedMatrix, sourceEditDelta, viewPlacement, modelPointOf } from './modelPlacement';
 import { NewSubmodelDialog } from './NewSubmodelDialog';
 import { runCommand, snapperFor } from '../state/editing';
 import { guardEdit } from '../state/guard';
+import { beginPlacing, cancelPlacing, commitPlacing, cycleHandle, isPlacing, turnInHand, updatePlacing, usePlacing } from '../state/placing';
 import { commandForKey } from '../state/keymap';
 import { useStudio } from '../state/store';
 import { metricsOf } from '../state/partService';
@@ -97,6 +98,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
   const currentStep = useStudio((s) => s.currentStep);
   const selection = useStudio((s) => s.selection);
   const blocked = useStudio((s) => s.blocked);
+  const placingState = usePlacing((p) => p.state);
   const focus = useStudio((s) => s.focus);
   const mode = useStudio((s) => s.mode);
   const timelineEditor = useStudio((s) => s.timelineEditor);
@@ -999,8 +1001,10 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     studio.bricks.setHighlight(new Set(shown.filter((i) => sel.has(i.key.split('/')[0])).map((i) => i.key)), 'select');
     const warnIds = new Set(model.warnings.flatMap((w) => w.itemIds));
     for (const id of blocked?.ids ?? []) warnIds.add(id);
+    // a placing pose with no clean seat shows red
+    if (placingState?.pose && !placingState.pose.valid) for (const id of placingState.ids) warnIds.add(id);
     studio.bricks.setHighlight(new Set(shown.filter((i) => warnIds.has(i.itemId) || warnIds.has(i.key.split('/')[0])).map((i) => i.key)), 'warn');
-  }, [blocked, selection, model.warnings, visible, editingModel, mode, engaged, model.view, drawn]);
+  }, [blocked, placingState, selection, model.warnings, visible, editingModel, mode, engaged, model.view, drawn]);
 
   // focus requests
   useEffect(() => {
@@ -1058,6 +1062,13 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       // geometry when a keyframe operation is intended.
       if (useStudio.getState().timelineEditor === 'timeline') {
         if ((e.key === 'f' || e.key === 'F') && !e.metaKey && !e.ctrlKey) fitAll();
+        return;
+      }
+      // while placing: Tab picks the connection the parts hang from, R turns them, Esc puts them back
+      if (isPlacing()) {
+        if (e.key === 'Tab') { e.preventDefault(); return cycleHandle(e.shiftKey ? -1 : 1); }
+        if ((e.key === 'r' || e.key === 'R') && !e.metaKey && !e.ctrlKey) { e.preventDefault(); return turnInHand(e.shiftKey ? -1 : 1); }
+        if (e.key === 'Escape') { e.preventDefault(); return cancelPlacing(); }
         return;
       }
       if (e.key === 'Escape') return useStudio.getState().select([]);
@@ -1248,52 +1259,56 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     if (startFloorDrag(e)) return;
     const s = st();
     if (s.timelineEditor === 'timeline') return;
-    if (s.mode !== 'edit' || s.tool !== 'move' || (s.gizmoEnabled && s.selection.ids.length > 0) || e.button !== 0 || !viewportApi.studio) return;
+    if (s.mode !== 'edit' || (s.gizmoEnabled && s.selection.ids.length > 0) || e.button !== 0 || !viewportApi.studio) return;
     const key = pickAt(e);
     if (!key) return;
     const id = key.split('/')[0];
-    const ids = s.selection.model === s.editingModel && s.selection.ids.includes(id)
-      ? s.selection.ids : selectionForHit(s.plan, s.editingModel, id, e.altKey);
-    if (!(s.selection.model === s.editingModel && ids.every(i => s.selection.ids.includes(i)))) s.select(ids);
-    const inst = model.view.instances.find((i) => i.key === key);
-    const placements = instancePlacements(s.plan, s.editingModel, model.assembly);
-    const top = inst ? -placedBox(inst, placements).min[1] / 20 : 0;
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -top);
-    const hit = (ev: { clientX: number; clientY: number }) => rayAt(ev).ray.intersectPlane(plane, new THREE.Vector3());
-    const start = hit(e);
-    if (!start) return;
+    const already = s.selection.model === s.editingModel && s.selection.ids.includes(id);
+    // Move tool: any piece; Select tool: only a piece that is already selected (a plain click still selects)
+    if (s.tool !== 'move' && !already) return;
+    const ids = already ? s.selection.ids : selectionForHit(s.plan, s.editingModel, id, e.altKey);
+    if (!already) s.select(ids);
+    const grabbed = placingHit(e, new Set());
     if (viewportApi.controls) viewportApi.controls.enabled = false;
-    s.beginGesture();
     const model0 = s.editingModel;
-    const snap = snapperFor(model.view.instances, ids);
-    const bodyOf = (item: PlanItem) => ('part' in item ? metricsOf(item.part).body : undefined);
-    let last = '0,0,0';
+    const from = { x: e.clientX, y: e.clientY };
+    let started = false;
     const move = (ev: PointerEvent) => {
-      const p = hit(ev);
-      const base = st().gesture;
-      if (!p || !base) return;
-      // A drag in display coordinates must be inverted through the specific
-      // placed submodel's yaw. Two selected groups may have different bays.
-      const changes = ids.map(id => {
-        const placement = itemPlacement(model.view.instances, placements, id);
-        const inverse = placement ? viewPlacement(placement).clone().invert() : null;
-        const d = dragDelta(inverse ? start.clone().applyMatrix4(inverse) : start,
-          inverse ? p.clone().applyMatrix4(inverse) : p, snap);
-        return { id, d };
-      });
-      const sig = changes.map(c => `${c.id}:${c.d.x},${c.d.y},${c.d.z}`).join('|');
-      if (sig === last) return;
-      last = sig;
-      st().apply(() => changes.reduce((next, { id, d }) => moveItems(next, model0, [id], d, bodyOf), base));
+      if (!started) {
+        if (Math.hypot(ev.clientX - from.x, ev.clientY - from.y) <= 4) return;
+        started = true;
+        beginPlacing({ kind: 'move', model: model0, ids }, grabbed?.point);
+      }
+      const hit = placingHit(ev, new Set(ids));
+      if (hit) updatePlacing(hit);
     };
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
-      st().endGesture();
+      if (started) commitPlacing();
       if (viewportApi.controls) viewportApi.controls.enabled = st().mode === 'edit';
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+  };
+
+  /**
+   * Where the mouse points for placing, in the editing model's LDraw frame: the brick under it
+   * (skipping the pieces being placed) or the floor. A brick shown at a submodel bay is
+   * mapped back through that bay.
+   */
+  const placingHit = (ev: { clientX: number; clientY: number }, skip: ReadonlySet<string>): { point: [number, number, number]; owner: string | null } | null => {
+    const studio = viewportApi.studio;
+    if (!studio) return null;
+    const ray = rayAt(ev);
+    const hit = studio.bricks.pickHit(ray, (k) => skip.has(k.split('/')[0]));
+    const s = st();
+    if (hit) {
+      const placement = instancePlacements(s.plan, s.editingModel, modelRef.current.assembly).get(hit.key) ?? null;
+      return { point: modelPointOf(hit.point, placement), owner: hit.key.split('/')[0] };
+    }
+    const floor = ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3());
+    return floor ? { point: modelPointOf(floor, null), owner: null } : null;
   };
 
   /**

@@ -101,7 +101,10 @@ export function freeTargets(groups: readonly { list: readonly Connector[]; owner
 export function findPose(q: PoseQuery): Pose {
   const { moving, hit, handle, yaw } = q;
   const h = moving.connectors[handle];
+  // the floor is solid: nothing goes underground (unless it already started there)
+  const ground = Math.max(FLOOR_Y, boxOf(moving.solids, new THREE.Matrix4()).max.y) + 0.5;
   const blocked = (m: THREE.Matrix4) => {
+    if (moving.solids.length && boxOf(moving.solids, m).max.y > ground) return true;
     if (!q.world) return false;
     const shifted = moving.solids.map((s) => ({ ...s, world: new THREE.Matrix4().fromArray(Array.from(s.world)).premultiply(m).elements }));
     return addsOverlap(q.before, q.world.hits(shifted));

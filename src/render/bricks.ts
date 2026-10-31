@@ -164,6 +164,18 @@ export class BrickRenderer {
     for (const m of touched) if (m.instanceColor) m.instanceColor.needsUpdate = true;
   }
 
+  /** The nearest brick under a ray and where the ray meets it (world), skipping keys `skip` rejects. */
+  pickHit(raycaster: THREE.Raycaster, skip?: (key: string) => boolean): { key: string; point: THREE.Vector3 } | null {
+    this.root.updateMatrixWorld(true);
+    for (const m of this.meshes) if (!m.boundingSphere) m.computeBoundingSphere();
+    for (const h of raycaster.intersectObjects(this.meshes, false)) {
+      if (h.instanceId === undefined) continue;
+      const key = this.keyAt.get(h.object as THREE.InstancedMesh)?.[h.instanceId];
+      if (key && !skip?.(key)) return { key, point: h.point.clone() };
+    }
+    return null;
+  }
+
   pick(raycaster: THREE.Raycaster): string | null {
     this.root.updateMatrixWorld(true);
     for (const m of this.meshes) if (!m.boundingSphere) m.computeBoundingSphere();

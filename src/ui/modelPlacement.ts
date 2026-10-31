@@ -114,3 +114,10 @@ export function sourceEditDelta(delta: THREE.Matrix4, placement: THREE.Matrix4 |
   const shown = viewPlacement(placement);
   return shown.clone().invert().multiply(delta).multiply(shown);
 }
+
+/** A point in the viewport (studs, Y up) back in the model's own LDraw frame, undoing a bay's placement. */
+export function modelPointOf(view: THREE.Vector3, placement: THREE.Matrix4 | null): [number, number, number] {
+  const p = view.clone().applyMatrix4(VIEW_TO_LDU);
+  if (placement) p.applyMatrix4(placement.clone().invert());
+  return [p.x, p.y, p.z];
+}

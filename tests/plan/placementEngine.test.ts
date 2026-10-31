@@ -140,4 +140,12 @@ describe('placement pose search', () => {
     // a quarter turn about the vertical: x maps onto z
     expect(Math.abs(m[2])).toBeCloseTo(1, 5);
   });
+
+  it.skipIf(!ready)('never sinks a part below the floor', async () => {
+    const plate = place('plate', await measureReal('3020'), 0, -8);
+    const one = place('m', await measureReal('3024'), 300, -60, 0);
+    // hanging a 1x1 plate under a plate that lies on the floor would put it underground
+    const pose = findPose(query(one, [plate], { point: [10, 0, 10], owner: 'plate' }, handleNear(one, 'M', [300, -60, 0])));
+    expect(pose.valid).toBe(false);
+  });
 });
