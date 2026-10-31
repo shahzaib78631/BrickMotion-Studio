@@ -111,6 +111,14 @@ export class StudioAO {
           float ao = wsum > 0.0 ? sum / wsum : clamp(texture2D(tAO, vUv).r, 0.0, 1.0);
           float up = (viewToWorld * n0).y;
           float k = intensity * mix(0.25, 1.0, smoothstep(0.35, 0.85, up));
+          // A surface seen nearly edge-on (the far floor from a low camera) gets almost no
+          // depth detail per pixel, and GTAO reads it as occluded: a dark band at the horizon.
+          #if PERSPECTIVE_CAMERA == 1
+            vec3 toEye = -normalize(viewPos(vUv, texture2D(tDepth, vUv).x));
+          #else
+            vec3 toEye = vec3(0.0, 0.0, 1.0);
+          #endif
+          k *= smoothstep(0.06, 0.3, abs(dot(n0, toEye)));
           return mix(1.0, pow(ao, 1.35), k);
         }
 

@@ -16,7 +16,7 @@ const stepLabel = (plan: Plan, model: string, i: number) => {
 const itemName = (item: PlanItem) => (isSub(item) ? `${item.submodel} (submodel)` : `${partName(item.part)} (${item.part})`);
 
 /** Moves the pieces and shows the step they landed in, still selected. */
-function moveTo(ids: string[], where: { step: number } | { newAt: number }) {
+export function moveTo(ids: string[], where: { step: number } | { newAt: number }) {
   const st = useStudio.getState();
   const m = st.editingModel;
   let landed = 0;

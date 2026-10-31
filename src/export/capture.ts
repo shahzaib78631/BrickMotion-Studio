@@ -14,7 +14,7 @@ import {
   DEFAULT_CAMERA_SETTINGS, type CameraSettings,
 } from '../anim/camera';
 import { activeSceneCamera, applyCameraCrop, type SceneSetup } from '../render/sceneSetup';
-import { createStudio, type RenderOptions, type Studio, type StudioLook, type Materials } from '../render/studio';
+import { createStudio, disposeOffscreenStudio, type RenderOptions, type Studio, type StudioLook, type Materials } from '../render/studio';
 import { safeFileName } from '../ui/download';
 import { encodeMp4, type ExportDeps, type FrameSampler } from './exportVideo';
 
@@ -144,7 +144,7 @@ export async function captureOffscreenStill(opts: TransparentStillOpts, deps: Ex
     studio.render();
     return await canvasBlob(canvas, type, 0.92);
   } finally {
-    studio.dispose();
+    disposeOffscreenStudio(studio);
   }
 }
 

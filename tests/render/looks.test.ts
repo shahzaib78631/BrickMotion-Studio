@@ -20,7 +20,7 @@ test('the backdrop pixels follow the stops and the pool of light brightens the d
 
 test('materials from storage are sanitised, and auto floors follow the scene', () => {
   expect(sanitizeMaterials(undefined)).toEqual(DEFAULT_MATERIALS);
-  expect(sanitizeMaterials({ finish: 'glossy', texture: 'nope', floor: 'wood' })).toEqual({ finish: 'glossy', texture: 'none', floor: 'wood', studLogos: true, roundedEdges: true, ao: { enabled: true, strength: null, radius: null }, contactShadows: 0.5, environment: 'room' });
+  expect(sanitizeMaterials({ finish: 'glossy', texture: 'nope', floor: 'wood' })).toEqual({ finish: 'glossy', texture: 'none', floor: 'wood', studLogos: true, detail: 'standard', roundedEdges: true, ao: { enabled: true, strength: null, radius: null }, contactShadows: 0.5, environment: 'room', glow: { colors: [], strength: 1.5 }, glass: 'soft', lens: { blur: 'off', focus: 0.4 }, floorColor: null, sweepCurve: 0.6 });
   expect(floorFor('white', 'auto')).toBe('reflective');
   expect(floorFor('soft', 'auto')).toBe('shadow');
   expect(floorFor('soft', 'concrete')).toBe('concrete');

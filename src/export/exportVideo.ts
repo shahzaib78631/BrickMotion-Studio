@@ -12,6 +12,9 @@ import { poseAt, type Timeline } from '../anim/timeline';
 import type { Instance } from '../model/assemble';
 import type { KeyframeAnimation } from '../plan/types';
 import type { createStudio } from '../render/studio';
+import { LensPass } from '../render/depthOfField';
+import { groundOf, PathTraceSession } from './pathTracedStill';
+import { disposeOffscreenStudio } from '../render/studio';
 
 export type LogoCorner = 'tl' | 'tr' | 'bl' | 'br';
 type CommonExportOpts = {
@@ -32,6 +35,8 @@ type CommonExportOpts = {
   /** Brick finish, texture and floor; the studio's defaults when left out. */
   materials?: Materials;
   logo: { image: ImageBitmap; corner: LogoCorner } | null;
+  /** path trace every frame (samples per pixel) instead of the live renderer: much slower */
+  pathTrace?: { samples: number } | null;
   snapSound?: boolean;
   /** how the clicks sound; the defaults when left out */
   sound?: SoundSettings;
@@ -125,6 +130,8 @@ export async function encodeMp4(opts: CommonExportOpts, deps: ExportDeps, sample
   const studio = deps.createStudio(renderCanvas, { preserveDrawingBuffer: true });
   const output = new Output({ format: new Mp4OutputFormat(), target: new BufferTarget() });
   let started = false;
+  let session: PathTraceSession | null = null;
+  let lens: LensPass | null = null;
   try {
     studio.setLook?.(opts.studioLook ?? 'soft');
     if (opts.render) studio.setRenderOptions?.(opts.render);
@@ -134,6 +141,20 @@ export async function encodeMp4(opts: CommonExportOpts, deps: ExportDeps, sample
     studio.setSize(w, h);
     studio.bricks.setInstances(opts.instances);
     studio.fitTo(samples.box, samples.groundY);
+    const lensChoice = opts.materials?.lens ?? null;
+    const blur = !!lensChoice && lensChoice.blur !== 'off';
+    if (opts.pathTrace) {
+      studio.renderer.setPixelRatio(1);
+      session = await PathTraceSession.create(studio, { materials: opts.materials, studioLook: opts.studioLook, groundY: samples.groundY });
+    }
+    if (blur || session) lens = new LensPass(studio.renderer);
+    const lensOpts = () => ({
+      lens: lensChoice ?? { blur: 'off' as const, focus: 0.4 },
+      camera: studio.perspective,
+      root: studio.bricks.root,
+      box: samples.box,
+      groundY: groundOf(opts.materials, samples.groundY),
+    });
     const source = new CanvasSource(composite, { codec: 'avc', bitrate: QUALITY_HIGH, latencyMode: 'quality' });
     output.addVideoTrack(source, { frameRate: fps });
     const sound = opts.snapSound && samples.snaps ? await snapAudio(samples.snaps, samples.duration, opts.sound) : null;
@@ -156,7 +177,17 @@ export async function encodeMp4(opts: CommonExportOpts, deps: ExportDeps, sample
       studio.perspective.updateProjectionMatrix();
       if (opts.buildView || samples.ownsCamera) applyCameraCrop(studio.perspective, opts.sceneSetup);
       else if (!applySceneCamera(studio.perspective, opts.sceneSetup)) applyCameraCrop(studio.perspective, opts.sceneSetup);
-      studio.render();
+      if (session && lens) {
+        const ptSamples = opts.pathTrace!.samples;
+        const image = await session.render(ptSamples, {
+          signal,
+          onProgress: (done, all) => opts.onProgress(i + done / all, total),
+        });
+        lens.apply(image, lensOpts());
+      } else {
+        studio.render();
+        if (blur && lens) lens.apply('canvas', lensOpts());
+      }
       if (opts.logo && ctx) {
         ctx.drawImage(renderCanvas as CanvasImageSource, 0, 0, w, h);
         drawLogo(ctx, opts.logo.image, opts.logo.corner, w, h);
@@ -172,7 +203,9 @@ export async function encodeMp4(opts: CommonExportOpts, deps: ExportDeps, sample
     if (started) await output.cancel().catch(() => {});
     throw e;
   } finally {
-    studio.dispose();
+    lens?.dispose();
+    session?.dispose();
+    disposeOffscreenStudio(studio);
   }
 }
 

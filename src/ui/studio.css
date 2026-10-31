@@ -258,3 +258,18 @@
 .bm-gearbox tr.locked td{color:var(--ink3)}
 .bm-vehicle{display:grid;gap:4px}
 .bm-suspension{margin:4px 0 0}
+
+/* Motion style editor (timeline) */
+.bm-motion-pop{position:fixed;z-index:210;width:300px;padding:10px 12px 12px;border-radius:12px;background:var(--surface);border:1px solid var(--line2);box-shadow:0 10px 38px #00000029,0 2px 6px #00000014;font-size:12.5px;color:var(--ink);animation:nxMenuIn .1s ease-out}
+.bm-motion-pop header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.bm-motion-pop footer{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px}
+.bm-motion-presets{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.bm-motion-row{display:grid;grid-template-columns:76px 1fr 44px 22px;align-items:center;gap:6px;padding:4px 4px;border-radius:7px}
+.bm-motion-row.own{background:color-mix(in srgb,var(--accent, #3b82f6) 10%,transparent)}
+.bm-motion-row.own .bm-motion-label{font-weight:600}
+.bm-motion-row input[type=range]{width:100%}
+.bm-motion-row output{font-variant-numeric:tabular-nums;text-align:right;color:var(--ink2, inherit)}
+.bm-motion-row select{width:100%}
+.bm-motion-reset{width:22px;height:22px}
+.bm-motion-reset:disabled{opacity:.25}
+.bm-step.bm-has-motion::after,.bm-part-clip.bm-has-motion::after{content:"";position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:50%;background:var(--accent, #3b82f6)}

@@ -6,15 +6,42 @@ export type StudioLook = 'soft' | 'classic' | 'white' | 'dark' | 'warm' | 'sky' 
   | 'photo-grey' | 'slate-blue' | 'porcelain' | 'sage' | 'sandstone' | 'graphite'
   | 'lavender' | 'render-grey' | 'steel-grey' | 'powder-blue' | 'mint' | 'peach' | 'blush' | 'butter' | 'cobalt';
 /** What the model stands on. 'auto' is the scene's own choice. */
-export type FloorSurface = 'auto' | 'shadow' | 'reflective' | 'matte' | 'wood' | 'concrete' | 'none';
+export type FloorSurface = 'auto' | 'shadow' | 'sweep' | 'reflective' | 'matte' | 'wood' | 'concrete' | 'none';
 /** How the plastic itself responds to light. */
 export type BrickFinish = 'studio' | 'render' | 'soft-touch' | 'glossy' | 'satin' | 'matte' | 'pearl' | 'clay';
 /** A fine surface detail drawn on every part (procedural: it moves with the part). */
 export type BrickTexture = 'none' | 'grain' | 'worn' | 'speckle' | 'glitter';
 
-export type Materials = { finish: BrickFinish; texture: BrickTexture; floor: FloorSurface; /** raised LEGO logo on studs */ studLogos: boolean; /** a thin highlight on convex edges, like moulded rounded corners */ roundedEdges: boolean; /** ambient occlusion: on/off, and overrides of the scene's own strength and reach */ ao: AOChoice;
+export type Materials = { finish: BrickFinish; texture: BrickTexture; floor: FloorSurface; /** raised LEGO logo on studs */ studLogos: boolean; /** 'high': smooth 48-segment curves and real rounded edges in the geometry */ detail?: 'standard' | 'high'; /** a thin highlight on convex edges, like moulded rounded corners */ roundedEdges: boolean; /** ambient occlusion: on/off, and overrides of the scene's own strength and reach */ ao: AOChoice;
   /** soft blurred shadow pooled under the model, 0–1 */ contactShadows: number;
-  /** what the plastic reflects and is lit by */ environment: EnvironmentId };
+  /** what the plastic reflects and is lit by */ environment: EnvironmentId;
+  /** colours that give off light (lamps, windows): in the viewport and as light sources in path tracing */ glow: GlowChoice;
+  /** transparent parts: 'clear' refracts light like real glass in path-traced renders */ glass: GlassLook;
+  /** depth of field for final renders and MP4 export */ lens: LensChoice;
+  /** the floor colour of the curved sweep and the matte table (sRGB hex); null: the scene's own */
+  floorColor?: string | null;
+  /** how big the curved sweep's bend is, 0 (a tight corner) to 1 (a long, soft curve) */
+  sweepCurve?: number };
+/** Light-up parts, by LDraw colour code. `strength` scales how bright they glow. */
+export type GlowChoice = { colors: number[]; strength: number };
+export const GLOW_STRENGTH_RANGE = [0.25, 4] as const;
+export type GlassLook = 'soft' | 'clear';
+export const GLASS_LOOKS: { id: GlassLook; label: string; hint: string }[] = [
+  { id: 'soft', label: 'Soft', hint: 'Frosted, partly see-through: the same everywhere' },
+  { id: 'clear', label: 'Clear', hint: 'Real refracting glass in path-traced renders and videos' },
+];
+/** Background blur: off, or how wide the blur gets (see LENS_BLUR_PX). */
+export type LensBlur = 'off' | 'subtle' | 'medium' | 'strong';
+/** `focus`: where the sharp plane sits, 0 = the nearest point of the model, 1 = the farthest. */
+export type LensChoice = { blur: LensBlur; focus: number };
+export const LENS_BLURS: { id: LensBlur; label: string; hint: string }[] = [
+  { id: 'off', label: 'Off', hint: 'Everything sharp' },
+  { id: 'subtle', label: 'Subtle', hint: 'A slight softening away from the focus' },
+  { id: 'medium', label: 'Medium', hint: 'Product-shot blur' },
+  { id: 'strong', label: 'Strong', hint: 'Macro lens: a shallow sharp band' },
+];
+/** Largest blur radius in pixels on a 1080-pixel-tall frame (scaled with the frame). */
+export const LENS_BLUR_PX: Record<LensBlur, number> = { off: 0, subtle: 5, medium: 10, strong: 18 };
 /** Lighting environments: the built-in grey room, or HDR photos (see public/hdri/CREDITS.txt). */
 /** `gain` brings each photo's average brightness (measured over the sphere) near the studio room's, so switching keeps the exposure; Night stays a little darker. */
 export const ENVIRONMENTS = [
@@ -38,7 +65,7 @@ export function aoFor(look: StudioLook, choice: AOChoice): { intensity: number; 
     radius: choice.radius ?? scene.aoRadius ?? 0.45,
   };
 }
-export const DEFAULT_MATERIALS: Materials = { finish: 'studio', texture: 'none', floor: 'auto', studLogos: true, roundedEdges: true, ao: { enabled: true, strength: null, radius: null }, contactShadows: 0.5, environment: 'room' };
+export const DEFAULT_MATERIALS: Materials = { finish: 'studio', texture: 'none', floor: 'auto', studLogos: true, detail: 'standard', roundedEdges: true, ao: { enabled: true, strength: null, radius: null }, contactShadows: 0.5, environment: 'room', glow: { colors: [], strength: 1.5 }, glass: 'soft', lens: { blur: 'off', focus: 0.4 }, floorColor: null, sweepCurve: 0.6 };
 
 type RGB = readonly [number, number, number];
 /** Relative direction from the subject towards each studio light (Y is up). */
@@ -269,6 +296,7 @@ export const TEXTURES: readonly { id: BrickTexture; label: string; hint: string 
 export const FLOORS: readonly { id: FloorSurface; label: string; hint: string }[] = [
   { id: 'auto', label: 'Scene default', hint: 'Whatever the scene uses' },
   { id: 'shadow', label: 'Shadows only', hint: 'Seamless backdrop with contact shadows' },
+  { id: 'sweep', label: 'Curved sweep', hint: 'The floor curves up into a back wall, like a product studio paper roll' },
   { id: 'reflective', label: 'Glossy reflective', hint: 'A soft mirror of the model' },
   { id: 'matte', label: 'Matte table', hint: 'A lit floor in the scene colour' },
   { id: 'wood', label: 'Wood', hint: 'Light oak planks' },
@@ -285,10 +313,35 @@ export function sanitizeMaterials(v: unknown): Materials {
     texture: has(TEXTURES, o.texture) ? o.texture : DEFAULT_MATERIALS.texture,
     floor: has(FLOORS, o.floor) ? o.floor : DEFAULT_MATERIALS.floor,
     studLogos: typeof o.studLogos === 'boolean' ? o.studLogos : DEFAULT_MATERIALS.studLogos,
+    detail: o.detail === 'high' ? 'high' : 'standard',
     roundedEdges: typeof o.roundedEdges === 'boolean' ? o.roundedEdges : DEFAULT_MATERIALS.roundedEdges,
     ao: sanitizeAO(o.ao),
     contactShadows: clampOrNull(o.contactShadows, [0, 1]) ?? DEFAULT_MATERIALS.contactShadows,
     environment: ENVIRONMENTS.some((e) => e.id === o.environment) ? (o.environment as EnvironmentId) : DEFAULT_MATERIALS.environment,
+    glow: sanitizeGlow(o.glow),
+    glass: o.glass === 'clear' ? 'clear' : 'soft',
+    lens: sanitizeLens(o.lens),
+    floorColor: typeof o.floorColor === 'string' && /^#[0-9a-f]{6}$/i.test(o.floorColor) ? o.floorColor.toLowerCase() : null,
+    sweepCurve: clampOrNull(o.sweepCurve, [0, 1]) ?? DEFAULT_MATERIALS.sweepCurve,
+  };
+}
+
+/** The floor colour in use: the one picked in Materials, else the scene's. */
+export const floorColorOf = (look: StudioLook | undefined, materials: Partial<Materials> | undefined): string =>
+  materials?.floorColor ?? sceneOf(look ?? 'soft').floorColor;
+
+/** Floors that take the picked floor colour (the others show the backdrop, a texture or a mirror). */
+export const takesFloorColor = (kind: FloorSurface) => kind === 'sweep' || kind === 'matte';
+function sanitizeGlow(v: unknown): GlowChoice {
+  const o = (v && typeof v === 'object' ? v : {}) as Partial<Record<keyof GlowChoice, unknown>>;
+  const colors = Array.isArray(o.colors) ? [...new Set(o.colors.filter((c): c is number => Number.isInteger(c)))] : [];
+  return { colors, strength: clampOrNull(o.strength, GLOW_STRENGTH_RANGE) ?? DEFAULT_MATERIALS.glow.strength };
+}
+function sanitizeLens(v: unknown): LensChoice {
+  const o = (v && typeof v === 'object' ? v : {}) as Partial<Record<keyof LensChoice, unknown>>;
+  return {
+    blur: LENS_BLURS.some((b) => b.id === o.blur) ? (o.blur as LensBlur) : DEFAULT_MATERIALS.lens.blur,
+    focus: clampOrNull(o.focus, [0, 1]) ?? DEFAULT_MATERIALS.lens.focus,
   };
 }
 const clampOrNull = (v: unknown, [lo, hi]: readonly [number, number]): number | null =>

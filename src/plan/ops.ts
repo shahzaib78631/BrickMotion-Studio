@@ -1,7 +1,7 @@
 import type { Box } from '../ldraw/flatten';
 import type { Mat3, Vec3 } from '../ldraw/parse';
 import { gridToPlacement, rotatedBox, rotMatrix } from './placement';
-import { isGrid, type AssemblyHints, type Plan, type PlanItem, type Rot, type Step } from './types';
+import { isGrid, type AssemblyHints, type MotionStyle, type Plan, type PlanItem, type Rot, type Step } from './types';
 
 /** '' is the main model; anything else names a submodel. */
 export type ModelName = string;
@@ -311,4 +311,78 @@ export function duplicateItems(
       : s,
   );
   return { plan: moveItems(withSteps(p, m, steps), m, copies, d), ids: copies };
+}
+
+/**
+ * Splits step `at` before arrival position `index`: that piece and every one after it
+ * become the next step. Nothing moves in space.
+ */
+export function splitStepAt(p: Plan, m: ModelName, at: number, index: number): Plan {
+  const steps = [...modelSteps(p, m)];
+  const step = steps[at];
+  if (!step || !Number.isInteger(index) || index <= 0 || index >= step.pieces.length) return p;
+  steps.splice(at, 1,
+    { ...step, pieces: step.pieces.slice(0, index), pauseAfter: undefined },
+    { pieces: step.pieces.slice(index), pauseAfter: step.pauseAfter, motion: step.motion });
+  return withSteps(p, m, steps);
+}
+
+const sameStyle = (a: MotionStyle | undefined, b: MotionStyle | undefined) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+const tidyStyle = (s: MotionStyle | null | undefined): MotionStyle | undefined => {
+  if (!s) return undefined;
+  const out = Object.fromEntries(Object.entries(s).filter(([, v]) => v !== undefined && v !== null)) as MotionStyle;
+  return Object.keys(out).length ? out : undefined;
+};
+
+/** Sets (or with null clears) the flight style of one step. */
+export function setStepMotion(p: Plan, m: ModelName, at: number, style: MotionStyle | null): Plan {
+  const steps = [...modelSteps(p, m)];
+  if (!steps[at]) return p;
+  const motion = tidyStyle(style);
+  if (sameStyle(steps[at].motion, motion)) return p;
+  const { motion: _old, ...rest } = steps[at];
+  steps[at] = motion ? { ...rest, motion } : rest;
+  return withSteps(p, m, steps);
+}
+
+/** Sets (or with null clears) the flight style of pieces. */
+export function setItemsMotion(p: Plan, m: ModelName, ids: string[], style: MotionStyle | null): Plan {
+  const motion = tidyStyle(style);
+  const set = new Set(ids);
+  if (modelSteps(p, m).every((s) => s.pieces.every((i) => !i.id || !set.has(i.id) || sameStyle(i.assembly?.motion, motion)))) return p;
+  return mapItems(p, m, ids, (i) => {
+    const { motion: _old, ...assembly } = i.assembly ?? {};
+    const next = motion ? { ...assembly, motion } : assembly;
+    return { ...i, assembly: Object.keys(next).length ? next : undefined } as PlanItem;
+  });
+}
+
+/**
+ * Sets (or with null clears) the way pieces come in: the outward direction from
+ * their seat, in the model's LDraw frame (−Y is up). Stored normalised and rounded,
+ * so a tiny nudge back to the same way is not a change.
+ */
+export function setItemsInsertionAxis(p: Plan, m: ModelName, ids: string[], axis: Vec3 | null): Plan {
+  let next: Vec3 | undefined;
+  if (axis) {
+    const len = Math.hypot(...axis);
+    if (!Number.isFinite(len) || len < 1e-6) return p;
+    next = axis.map((v) => Math.round((v / len) * 1e4) / 1e4 + 0) as Vec3;
+  }
+  const same = (a?: Vec3) => (!a && !next) || (!!a && !!next && a.every((v, k) => Math.abs(v - next![k]) < 1e-4));
+  const set = new Set(ids);
+  if (modelSteps(p, m).every((s) => s.pieces.every((i) => !i.id || !set.has(i.id) || same(i.assembly?.insertionAxis)))) return p;
+  return mapItems(p, m, ids, (i) => {
+    const { insertionAxis: _old, ...assembly } = i.assembly ?? {};
+    const out = next ? { ...assembly, insertionAxis: next } : assembly;
+    return { ...i, assembly: Object.keys(out).length ? out : undefined } as PlanItem;
+  });
+}
+
+/** Sets (or with null clears) the project-wide flight style. */
+export function setPlanMotion(p: Plan, style: MotionStyle | null): Plan {
+  const motion = tidyStyle(style);
+  if (sameStyle(p.motion, motion)) return p;
+  const { motion: _old, ...rest } = p;
+  return motion ? { ...rest, motion } : rest;
 }

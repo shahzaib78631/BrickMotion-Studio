@@ -68,26 +68,53 @@ export function onGeometryChange(cb: () => void): () => void {
   return () => { geometryListeners.delete(cb); };
 }
 let logoSwitch: Promise<void> = Promise.resolve();
-/** Switches stud logos and rebuilds the geometry of every part already loaded. */
-export function setStudLogos(on: boolean): Promise<void> {
-  if (on === studLogos) return logoSwitch;
-  studLogos = on;
-  library.setStudLogos(on);
+/** Bumped by every look change, so a rebuild that was overtaken stops. */
+let geometryVersion = 0;
+/** Rebuilds the render geometry of every part already loaded, then tells the viewers. */
+function rebuildGeometry(): Promise<void> {
+  const version = ++geometryVersion;
   const ids = [...geometry.keys()];
   logoSwitch = logoSwitch.then(async () => {
     const old: PartGeometry[] = [];
     for (const id of ids) {
-      const flat = await library.loadPart(id);
-      if (studLogos !== on) return; // switched again meanwhile; that run rebuilds
+      const built = await renderGeometry(id);
+      if (version !== geometryVersion) return; // changed again meanwhile; that run rebuilds
       const prev = geometry.get(id);
       if (prev) old.push(prev);
-      geometry.set(id, flat ? buildPartGeometry(flat) : null);
+      geometry.set(id, built);
     }
     for (const cb of geometryListeners) cb();
     // only now nothing draws the old buffers any more
     for (const g of old) for (const b of [g.main, g.mainDoubleSided, g.edges, ...g.fixed.map((f) => f.geometry)]) b?.dispose();
   });
   return logoSwitch;
+}
+/** Switches stud logos and rebuilds the geometry of every part already loaded. */
+export function setStudLogos(on: boolean): Promise<void> {
+  if (on === studLogos) return logoSwitch;
+  studLogos = on;
+  library.setStudLogos(on);
+  return rebuildGeometry();
+}
+
+/**
+ * Render detail (Materials): 'high' draws round primitives at 48 segments and rounds
+ * sharp outside edges. Display only: measurements, connectors and planning never change.
+ */
+export type PartDetail = 'standard' | 'high';
+let partDetail: PartDetail = 'standard';
+export function setPartDetail(detail: PartDetail): Promise<void> {
+  if (detail === partDetail) return logoSwitch;
+  partDetail = detail;
+  return rebuildGeometry();
+}
+export const partDetailOn = () => partDetail;
+
+/** The render geometry of a part at the current detail. */
+async function renderGeometry(id: string): Promise<PartGeometry | null> {
+  const high = partDetail === 'high';
+  const flat = await library.loadPart(id, high);
+  return flat ? buildPartGeometry(flat, { bevel: high }) : null;
 }
 export const studLogosOn = () => studLogos;
 
@@ -122,7 +149,7 @@ async function loadOne(id: string): Promise<void> {
   const flat = await library.loadPart(id);
   metrics.set(id, measurePart(flat, id));
   ensurePartFunctions(id, flat, embedded.has(id.replace(/\.dat$/i, '')), await measureActuator(id, (n) => library.getFile(n)));
-  geometry.set(id, flat ? buildPartGeometry(flat) : null);
+  geometry.set(id, partDetail === 'high' ? await renderGeometry(id) : flat ? buildPartGeometry(flat) : null);
 }
 
 /** Loads, measures and builds geometry for parts, 6 at a time. */

@@ -24,7 +24,7 @@ import { buildMotionMechanismGraph, type MechanismEdge } from './mechanismGraph'
 import { TimedMeshCertifier, type Certificate, type Verdict } from './meshCertifier';
 import { adaptiveClearanceApproaches, clearanceApproaches, mechanicalApproaches, type MotionCandidate } from '../kinematicCandidates';
 import { InstalledRouteIndex } from '../routeSelection';
-import { buildStandardMotionTimeline, jointsFor } from '../standardMotion';
+import { buildStandardMotionTimeline, explicitWayKeys, jointsFor } from '../standardMotion';
 import { compileMechanismStage } from './mechanismStage';
 import { validateMechanismProgram } from './mechanismProgram';
 import { detectAutomaticMechanics, refineKnownMechanicalJoints } from './autoMechanics';
@@ -100,6 +100,8 @@ export function buildStandardMotionV4Timeline(asm:Assembly,metrics:Metrics,opts:
   };
   const index=new InstalledRouteIndex(asm,tl,metrics);
   const byKey=new Map(asm.instances.map(inst=>[inst.key,inst]));
+  // a way in set by hand is kept exactly as Standard planned it
+  const handSet=explicitWayKeys(asm);
   const finish=new Map<string,number>();
   for(const [key,track] of tl.tracks){const last=track.moves.at(-1);
     if(last){const unit=tl.units[last.unit];if(unit)finish.set(key,unit.start+unit.dur);}}
@@ -114,7 +116,7 @@ export function buildStandardMotionV4Timeline(asm:Assembly,metrics:Metrics,opts:
     routesProcessed++;
     if(now()>routeDeadline){skippedRouteChecks++;continue;}
     const m=track.moves[0],u=m&&tl.units[m.unit],inst=byKey.get(key);
-    if(!u||!inst||!freeLeaf(tl,key,m))continue;
+    if(!u||!inst||handSet.has(key)||!freeLeaf(tl,key,m))continue;
     const installed=new Set([...finish].filter(([,end])=>end<=u.start+1e-5).map(([id])=>id));
     const engaged=(graph.byBody.get(key)??[]).filter(edge=>installed.has(edge.a===key?edge.b:edge.a));
     let legacy:MotionCandidate|undefined;

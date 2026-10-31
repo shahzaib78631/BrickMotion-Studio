@@ -89,12 +89,13 @@ export function ExportDialog({ plan, jobs, mode = 'build', onClose }: { plan: Pl
               render: { edges: settings.edgeLines, linearColors: settings.linearColors },
         materials: settings.materials,
               logo,
+              pathTrace: settings.videoEngine === 'path' ? { samples: settings.pathSamples } : null,
               snapSound: settings.snapSound,
               sound: settings.sound,
               signal: ac.signal,
               onProgress: (done: number, total: number) => {
                 // Avoid re-rendering the modal for every 60/90/120-FPS frame.
-                const pct = Math.floor((done / total) * 100);
+                const pct = Math.floor((done / total) * 1000);
                 if (alive && pct !== last) ((last = pct), update(i, { s: 'rendering', done, total }));
               },
           };
@@ -135,6 +136,7 @@ export function ExportDialog({ plan, jobs, mode = 'build', onClose }: { plan: Pl
         <p className="muted">
           {width}×{height} · {fps} fps · MP4 (H.264) · {mode === 'timeline' ? 'keyframed motion' : 'automatic construction'}
           {viewportMode ? ' · from your viewport camera' : ' · from the automatic camera'}
+          {settings.videoEngine === 'path' ? ` · path traced, ${settings.pathSamples} samples per frame` : ''}
         </p>
         {phase === 'checking' && <p className="muted">Checking your browser…</p>}
         {sceneCameraInCharge && (
@@ -173,7 +175,7 @@ export function ExportDialog({ plan, jobs, mode = 'build', onClose }: { plan: Pl
                     <span className="bm-export-state">
                       {st.s === 'queued' && 'Waiting'}
                       {st.s === 'planning' && (mode === 'timeline' ? 'Preparing animation…' : 'Planning animation…')}
-                      {st.s === 'rendering' && `${Math.round((st.done / st.total) * 100)}% · frame ${st.done}/${st.total}`}
+                      {st.s === 'rendering' && `${Math.floor((st.done / st.total) * 100)}% · frame ${Math.min(st.total, Math.floor(st.done) + 1)}/${st.total}`}
                       {st.s === 'done' && `${st.seconds.toFixed(1)} s · ${(st.blob.size / 1e6).toFixed(1)} MB`}
                       {st.s === 'error' && <span className="error">{st.message}</span>}
                     </span>

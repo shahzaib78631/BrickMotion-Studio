@@ -8,7 +8,7 @@ import type { LogoCorner } from '../export/exportVideo';
 import type { ExportFps } from '../export/frameRates';
 import type { Materials, StudioLook } from '../render/looks';
 import type { CameraFraming, CameraSettings } from '../anim/camera';
-import { DEFAULT_SETTINGS, type Settings } from '../storage/settings';
+import { DEFAULT_SETTINGS, type Settings, type VideoEngine } from '../storage/settings';
 import { formatAspect, type VideoFormat } from '../export/formats';
 import type { SceneSetup } from '../render/sceneSetup';
 
@@ -56,6 +56,10 @@ export type AppSettings = {
   snapSound: boolean;
   /** how that click sounds (Sound panel) */
   sound: SoundSettings;
+  /** MP4 renderer: the live one, or path traced per frame (slow, final quality) */
+  videoEngine: VideoEngine;
+  /** samples per pixel for a path-traced MP4 */
+  pathSamples: number;
   introSeconds: number | null;
   buildSeconds: number | null;
   outroSeconds: number | null;
@@ -107,7 +111,7 @@ export const toSettings = (s: AppSettings): Settings => ({
   cameraFollowsPlayback: s.cameraFollowsPlayback,
   autoFitStaging: s.autoFitStaging,
   exportCamera: s.exportCamera ?? 'automatic',
-  video: { targetSeconds: s.targetSeconds, heroOrbit: s.heroOrbit, mode: s.mode, fps: s.fps, introSeconds: s.introSeconds, buildSeconds: s.buildSeconds, outroSeconds: s.outroSeconds, studioLook: s.studioLook, cameraFraming: s.cameraFraming, camera: s.camera, format: s.format, edgeLines: s.edgeLines, linearColors: s.linearColors, bottomUp: s.bottomUp, snapSound: s.snapSound, planner: s.planner ?? 'legacy', constructionSupport: s.constructionSupport ?? 'fixture', constructionBudget: s.constructionBudget ?? 'standard', constructionStepModules: s.constructionStepModules === true, motionV4Limits: s.motionV4Limits ?? [], motionV4Mechanism: s.motionV4Mechanism ?? null, floorSort: s.floorSort, floorSides: s.floorSides, floorStyle: s.floorStyle ?? 'packed', floorMatch: s.floorMatch ?? 'fill', materials: s.materials, sound: s.sound },
+  video: { targetSeconds: s.targetSeconds, heroOrbit: s.heroOrbit, mode: s.mode, fps: s.fps, introSeconds: s.introSeconds, buildSeconds: s.buildSeconds, outroSeconds: s.outroSeconds, studioLook: s.studioLook, cameraFraming: s.cameraFraming, camera: s.camera, format: s.format, edgeLines: s.edgeLines, linearColors: s.linearColors, bottomUp: s.bottomUp, snapSound: s.snapSound, planner: s.planner ?? 'legacy', constructionSupport: s.constructionSupport ?? 'fixture', constructionBudget: s.constructionBudget ?? 'standard', constructionStepModules: s.constructionStepModules === true, motionV4Limits: s.motionV4Limits ?? [], motionV4Mechanism: s.motionV4Mechanism ?? null, floorSort: s.floorSort, floorSides: s.floorSides, floorStyle: s.floorStyle ?? 'packed', floorMatch: s.floorMatch ?? 'fill', materials: s.materials, sound: s.sound, videoEngine: s.videoEngine, pathSamples: s.pathSamples },
 });
 
 export async function applySettings(s: Settings): Promise<void> {

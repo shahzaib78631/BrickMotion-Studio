@@ -18,6 +18,7 @@ export function ViewportChrome({ model, onMakeSubmodel }: { model: ModelState; o
   const tool = useStudio((s) => s.tool);
   const gizmoEnabled = useStudio((s) => s.gizmoEnabled);
   const gizmoMode = useStudio((s) => s.gizmoMode);
+  const aimWay = useStudio((s) => s.aimWay);
   const selection = useStudio((s) => s.selection);
   const editingModel = useStudio((s) => s.editingModel);
   const mode = useStudio((s) => s.mode);
@@ -88,6 +89,7 @@ export function ViewportChrome({ model, onMakeSubmodel }: { model: ModelState; o
       <button className={tool === 'move' ? 'selected square' : 'square'} title="Move parts (M)" aria-label="Move parts" onClick={() => setTool('move')}><Ic name="move" /></button>
       <button className={gizmoEnabled && gizmoMode === 'translate' ? 'selected square' : 'square'} title="Transform gizmo (G)" aria-label="Transform gizmo" onClick={() => { useStudio.getState().setGizmo(true); useStudio.getState().setGizmoMode('translate'); }}><Ic name="fit" /></button>
       <button className={gizmoEnabled && gizmoMode === 'rotate' ? 'selected square' : 'square'} title="Rotate gizmo" aria-label="Rotate gizmo" onClick={() => { useStudio.getState().setGizmo(true); useStudio.getState().setGizmoMode('rotate'); }}><Ic name="rotate" /></button>
+      <button className={aimWay ? 'selected square' : 'square'} title="Aim the way in (W): drag the arrow on the selected piece, or use the arrow keys" aria-label="Aim the way in" aria-pressed={aimWay} onClick={() => useStudio.getState().setAimWay(!aimWay)}><Ic name="arrowDown" /></button>
     </div>
     <div className="bm-viewport-top-right" role="toolbar" aria-label="Viewport options">
       <button className="bm-float-icon" title="Orbit 45°" aria-label="Orbit 45 degrees" onClick={() => viewportApi.views?.orbit(45, 0)}><Ic name="rotate" /></button>
@@ -112,7 +114,7 @@ export function ViewportChrome({ model, onMakeSubmodel }: { model: ModelState; o
       <button aria-label="Select all" title="Select all (A)" onClick={selectAll}><Ic name="components" /></button>
       <button aria-label="Fit selection" title="Fit selected parts" onClick={() => ids.length ? useStudio.getState().requestFocus(ids) : viewportApi.fit()}><Ic name="view" /></button>
     </div>
-    {ids.length > 0 && showSelectionBar && <div className="bm-selection-float" role="toolbar" aria-label="Quick selection actions">
+    {ids.length > 0 && showSelectionBar && !aimWay && <div className="bm-selection-float" role="toolbar" aria-label="Quick selection actions">
       <button className="bm-selection-primary" disabled={ids.length < 2} onClick={onMakeSubmodel}><Ic name="box" /> Make Submodule</button>
       <button disabled={!editingModel} onClick={extract} title="Extract selected pieces to the main model"><Ic name="moveHere" /> Extract</button>
       <button disabled={ids.length < 2} onClick={() => {

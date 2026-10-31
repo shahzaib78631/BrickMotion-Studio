@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { ColorDef } from '../ldraw/colors';
-import { finishOf, type BrickFinish, type BrickTexture } from './looks';
+import { finishOf, type BrickFinish, type BrickTexture, type GlowChoice } from './looks';
 
 const cache = new Map<string, THREE.MeshPhysicalMaterial>();
 
@@ -8,7 +8,9 @@ const FALLBACK: ColorDef = { code: 71, name: 'Light_Bluish_Gray', hex: '#A0A5A9'
 
 /** The finish and texture every brick uses. Materials are cached and shared by every
  * studio on the page (viewport, export), so a change re-styles them in place. */
-let profile: { finish: BrickFinish; texture: BrickTexture } = { finish: 'studio', texture: 'none' };
+let profile: { finish: BrickFinish; texture: BrickTexture; glow: GlowChoice } = { finish: 'studio', texture: 'none', glow: { colors: [], strength: 1.5 } };
+/** Viewport emissive intensity per unit of glow strength (the path tracer uses its own). */
+export const GLOW_GAIN = 0.7;
 const TEXTURE_ID: Record<BrickTexture, number> = { none: 0, grain: 1, worn: 2, speckle: 3, glitter: 4 };
 
 /** Value noise and a derivative bump, in the part's own coordinates (LDU), so the
@@ -91,6 +93,11 @@ function style(m: THREE.MeshPhysicalMaterial, c: ColorDef) {
     else if (c.finish === 'pearl') Object.assign(m, { metalness: 0.5, roughness: 0.3 });
     else if (c.finish === 'rubber') Object.assign(m, { roughness: 0.86, clearcoat: 0 });
   }
+  // light-up colours (Materials → Glowing parts): their own colour, given off as light
+  const glows = profile.glow.colors.includes(c.code);
+  m.emissive.set(glows ? c.hex : '#000000');
+  m.emissiveIntensity = glows ? profile.glow.strength * GLOW_GAIN : 1;
+  m.userData.bmGlow = glows ? profile.glow.strength : 0;
   // rubber tyres and transparent parts keep their own surface
   const texture = c.finish === 'trans' || c.finish === 'rubber' ? 0 : TEXTURE_ID[profile.texture];
   if (m.userData.bmTexture !== texture) {
@@ -119,10 +126,13 @@ export function materialFor(color: ColorDef | undefined, doubleSided: boolean): 
   return m;
 }
 
-/** Re-styles every brick material: Materials → Brick finish and texture. */
-export function setBrickMaterials(next: { finish: BrickFinish; texture: BrickTexture }): void {
-  if (next.finish === profile.finish && next.texture === profile.texture) return;
-  profile = { finish: next.finish, texture: next.texture };
+const sameGlow = (a: GlowChoice, b: GlowChoice) =>
+  a.strength === b.strength && a.colors.length === b.colors.length && a.colors.every((c) => b.colors.includes(c));
+/** Re-styles every brick material: Materials → Brick finish, texture and glowing parts. */
+export function setBrickMaterials(next: { finish: BrickFinish; texture: BrickTexture; glow?: GlowChoice }): void {
+  const glow = next.glow ?? { colors: [], strength: 1.5 };
+  if (next.finish === profile.finish && next.texture === profile.texture && sameGlow(glow, profile.glow)) return;
+  profile = { finish: next.finish, texture: next.texture, glow: { colors: [...glow.colors], strength: glow.strength } };
   for (const m of cache.values()) style(m, m.userData.bmColor as ColorDef);
 }
 

@@ -80,6 +80,8 @@ export type MoveData<M> = {
     rel: M | null;
     skyY: number;
     hold: number;
+    /** Landing/hover/ease applied after planning (see motionStyle.ts); the path is unchanged. */
+    style?: { landing?: number; hover?: number; ease?: 'smooth' | 'gentle' | 'soft' | 'linear' };
     entry: [
         number,
         number,
@@ -135,6 +137,8 @@ export type MechanismStage = {
     };
 };
 export type TimelineData = {
+    /** Clock map from planned to shown seconds when flight times were changed after planning. */
+    retime?: { from: number[]; to: number[] };
     /** Optional post-build mechanism demonstration; regular Build is unchanged. */
     mechanismStage?: MechanismStage;
     /** A permissive, non-physics preview; all paths remain editable in the Dope Sheet. */

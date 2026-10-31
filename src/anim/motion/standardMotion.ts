@@ -48,6 +48,23 @@ export function jointsFor(asm: Assembly, metrics: Metrics): MechanicalJoint[] {
   return buildMechanicalConstraintGraph(model).joints;
 }
 
+/**
+ * Pieces whose way in was set by hand (`insertionAxis`). The Standard planner
+ * already flies them along it; joint and clearance routes must not replace it.
+ */
+export function explicitWayKeys(asm: Assembly): Set<string> {
+  const out = new Set<string>();
+  const walk = (nodes: Assembly['nodes'], prefix: string) => {
+    for (const n of nodes) {
+      const key = prefix ? `${prefix}/${n.itemId}` : n.itemId;
+      if (n.assembly?.insertionAxis) out.add(key);
+      if (n.kind === 'sub') walk(n.children, key);
+    }
+  };
+  walk(asm.nodes, '');
+  return out;
+}
+
 /** Updates the visible camera framing to include newly proposed joint arcs. */
 function widenMotionCamera(tl: Timeline, unit: Unit, move: Move, body: Box): void {
   let box: Box | null = unit.box ?? null;
@@ -87,6 +104,7 @@ export function articulateStandardTimeline(tl: Timeline, asm: Assembly, metrics:
     list.push({ joint, other }); candidates.set(key, list);
   }
   const byKey = new Map(asm.instances.map(i => [i.key, i]));
+  const handSet = explicitWayKeys(asm);
   const partByKey = new Map(asm.instances.map(i => [i.key, i.part]));
   const index = new InstalledRouteIndex(asm, tl, metrics);
   let articulated = 0, checked = 0, obstructed = 0, interferenceScore = 0;
@@ -108,7 +126,7 @@ export function articulateStandardTimeline(tl: Timeline, asm: Assembly, metrics:
     const firstMove = track.moves[0];
     const firstUnit = tl.units[firstMove.unit];
     if (!firstUnit) continue;
-    const free = (track.ctx ?? 0) === 0 && firstUnit.kind === 'piece' && firstUnit.keys.length === 1 &&
+    const free = !handSet.has(key) && (track.ctx ?? 0) === 0 && firstUnit.kind === 'piece' && firstUnit.keys.length === 1 &&
       firstUnit.keys[0] === key && !firstMove.rel && !firstMove.stationary && !firstMove.rigidDeltas?.length;
     if (free) {
       const engaged = (candidates.get(key) ?? []).filter(c => {

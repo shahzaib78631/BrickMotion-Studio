@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
-import { geometryOf, getColors, onGeometryChange, setStudLogos } from '../state/partService';
+import { geometryOf, getColors, onGeometryChange, setPartDetail, setStudLogos } from '../state/partService';
 import { useSmoothSoftShadows } from './softShadows';
 import { StudioAO } from './ambientOcclusion';
 import { ContactShadows } from './contactShadows';
@@ -10,9 +10,10 @@ import { studioGradientPixels } from './studioPalette';
 import { SceneLighting } from './sceneLights';
 import type { SceneSetup } from './sceneSetup';
 
-import { DEFAULT_MATERIALS, ENVIRONMENTS, aoFor, floorFor, sceneOf, scenePixels, type Materials, type StudioLook } from './looks';
+import { DEFAULT_MATERIALS, ENVIRONMENTS, aoFor, floorColorOf, floorFor, sceneOf, scenePixels, type Materials, type StudioLook } from './looks';
 import { setBrickMaterials } from './materials';
 import { concreteTexture, createFade, createReflection, fadingFloorMaterial, woodTexture } from './floorSurfaces';
+import { Sweep } from './sweep';
 
 /** A scene preset (see SCENES in looks.ts); 'soft' matches the supplied reference footage. */
 export type { StudioLook, Materials } from './looks';
@@ -165,6 +166,9 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
   scene.add(floor);
   let groundLevel = 0;
   // the shadow catcher drawn over a lit or mirrored floor
+  // the curved studio sweep (floor 'sweep'): floor and back wall in one lit surface
+  const sweep = new Sweep();
+  scene.add(sweep.mesh);
   const shadowOver = new THREE.Mesh(floor.geometry, shadowFloor);
   shadowOver.rotation.x = -Math.PI / 2;
   shadowOver.receiveShadow = true;
@@ -236,6 +240,17 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
   let lookEnv = 0.75;
   const lightCenter = new THREE.Vector3();
   let lightRadius = 20;
+  /** The key light's shadow frame: the model, or out to the back wall of a sweep so it catches the shadow too. */
+  const fitShadow = () => {
+    const r = lightRadius;
+    const reach = sweep.mesh.visible ? Math.max(r * 1.3, sweep.reach + r * 0.4) : r * 1.3;
+    const s = key.shadow.camera;
+    s.left = s.bottom = -reach;
+    s.right = s.top = reach;
+    s.near = 0.1;
+    s.far = r * 6 + (sweep.mesh.visible ? sweep.reach * 2 : 0);
+    s.updateProjectionMatrix();
+  };
   const aimStudioRig = () => {
     const preset = sceneOf(look);
     const aim = (lamp: THREE.DirectionalLight, dir: readonly [number, number, number]) => {
@@ -266,7 +281,8 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
     const kind = floorFor(look, materials.floor);
     shadowFloor.color.set(preset.shadowColor);
     shadowFloor.opacity = preset.shadowOpacity;
-    litFloor.color.set(kind === 'wood' || kind === 'concrete' ? '#ffffff' : preset.floorColor);
+    const floorColor = floorColorOf(look, materials);
+    litFloor.color.set(kind === 'wood' || kind === 'concrete' ? '#ffffff' : kind === 'matte' ? floorColor : preset.floorColor);
     litFloor.roughness = kind === 'concrete' ? 0.85 : kind === 'wood' ? 0.6 : 0.92;
     if (kind === 'wood') litFloor.map = (woodMap ??= woodTexture());
     else if (kind === 'concrete') litFloor.map = (concreteMap ??= concreteTexture());
@@ -274,7 +290,11 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
     litFloor.needsUpdate = true;
     const lit = kind === 'matte' || kind === 'wood' || kind === 'concrete';
     floor.material = lit ? litFloor : shadowFloor;
-    floor.visible = !transparent && kind !== 'none' && kind !== 'reflective';
+    floor.visible = !transparent && kind !== 'none' && kind !== 'reflective' && kind !== 'sweep';
+    sweep.mesh.visible = !transparent && kind === 'sweep';
+    sweep.mesh.material.color.set(floorColor);
+    sweep.setCurve(materials.sweepCurve ?? DEFAULT_MATERIALS.sweepCurve ?? 0.6);
+    fitShadow();
     // a lit floor or a mirror still gets the real contact shadows on top
     shadowOver.visible = !transparent && (lit || kind === 'reflective') && preset.shadowOpacity > 0;
     contact.plane.visible = !transparent && kind !== 'none';
@@ -340,7 +360,9 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
     if (envChanged) applyEnvironment(m.environment);
     setBrickMaterials(m);
     void setStudLogos(m.studLogos);
-    ao.setRoundedEdges(m.roundedEdges ? ROUNDED_EDGE_LIGHT : 0);
+    void setPartDetail(m.detail ?? 'standard');
+    // high detail has real rounded edges in the geometry: no screen-space imitation on top
+    ao.setRoundedEdges(m.roundedEdges && m.detail !== 'high' ? ROUNDED_EDGE_LIGHT : 0);
     applyAO();
     applyFloor();
   };
@@ -408,17 +430,14 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
       lightCenter.copy(c);
       lightRadius = r;
       aimStudioRig();
-      const s = key.shadow.camera;
-      s.left = s.bottom = -r * 1.3;
-      s.right = s.top = r * 1.3;
-      s.near = 0.1;
-      s.far = r * 6;
-      s.updateProjectionMatrix();
+      sweep.fit(box, groundY);
+      fitShadow();
       lightBounds = box.clone();
       lighting.fitTo(box);
       contact.fitTo(box, groundY);
     },
     render(frame) {
+      sweep.face(active);
       contact.update(renderer, bricks.root);
       if (frame) {
         // Render to the true output aspect ratio, not a squeezed full-width canvas.
@@ -463,6 +482,7 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
         (reflection.material as THREE.Material).dispose();
       }
       shadowFloor.dispose();
+      sweep.dispose();
       disposed = true;
       env.dispose();
       for (const t of photoEnvs.values()) void t.then((x) => x?.dispose());
@@ -471,6 +491,22 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
       renderer.dispose();
     },
   };
+}
+
+/**
+ * Disposes a studio made for one export (a still, a path-traced render, a video) and
+ * releases its WebGL context at once. `dispose()` alone frees the GPU memory but leaves
+ * the context alive until garbage collection, and Chrome keeps only about 16: after a
+ * handful of renders it drops the oldest one, which is the live viewport.
+ * Never use this for the viewport's own studio: React may mount it again on the same canvas.
+ */
+export function disposeOffscreenStudio(studio: Pick<Studio, 'dispose'> & { renderer?: { forceContextLoss?(): void } }): void {
+  studio.dispose();
+  try {
+    studio.renderer?.forceContextLoss?.();
+  } catch {
+    // already lost: nothing to release
+  }
 }
 
 /** Converts an LDU box to world units (studs, +Y up). */

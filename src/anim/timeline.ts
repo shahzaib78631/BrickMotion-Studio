@@ -16,6 +16,7 @@ import type { Box } from '../ldraw/flatten';
 import { moveAssembly, placementMatrix, transformBox, unionBox, type ANode, type Assembly, type Instance, type Metrics } from '../model/assemble';
 import type { AssemblySpot, Plan } from '../plan/types';
 import { clamp01, easeInOutCubic, lerp } from './easing';
+import { easeOf, inverse, landingWarp } from './motionStyle';
 import { hash01, layoutFloor, STYLE_AREA, type FloorItem, type LayoutStyle, type Region } from './floorLayout';
 import { createFrameStagingSpace } from './cameraFrameLayout';
 import { choosePacing, SEQUENTIAL_GAP, type AnimOptions, type FloorSides, type Pacing } from './pacing';
@@ -1208,6 +1209,10 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
       // slides a short way into its wrist). Never from under the floor.
       // Generate candidates lazily: a successful stud-aligned path should not
       // pay for every alternative mesh direction before it is even attempted.
+      /** the entry being tried is a short sideways push (see `lengths`) */
+      let shortSide = false;
+      /** ways whose long push was blocked only by pieces still in the air this attempt */
+      const waitedWays: Dir[] = [];
       function* entries(): Generator<Dir> {
         const seen: Dir[] = [];
         let triedUp = false;
@@ -1227,13 +1232,20 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
           const around = blockers.filter((b) => b.end === Infinity && boxesTouch(dst, b.box)).map((b) => b.box);
           // Small joints need short entries; forcing every joint to approach
           // from two studs away can push a tilted wrist below the floor.
-          const lengths = [Math.max(4, clearOf(around) + 0.6), 4, 8, 12, 20,
-            ...[clearOf(around), clearOf([modelBox])].map((d) => Math.max(2 * STUD, d + FLIGHT_CLEARANCE))];
+          const short = [Math.max(4, clearOf(around) + 0.6), 4, 8, 12, 20];
+          const long = [clearOf(around), clearOf([modelBox])].map((d) => Math.max(2 * STUD, d + FLIGHT_CLEARANCE));
+          // A sideways way in should read as a snap: line up well clear, then push
+          // straight in. With only a few LDU to spare the piece drops down along the
+          // face it joins and then barely moves, which looks like sliding into place.
+          // Try the long push first; the short ones stay as fallbacks for tight spots.
+          const lengths = Math.abs(way[1]) < 0.5 ? [...long, ...short] : [...short, ...long];
           for (const len of lengths) {
             if (dst.max[1] + way[1] * len > ground + 0.5) continue;
             if (seen.some((e) => Math.hypot(e[0] - way[0] * len, e[1] - way[1] * len, e[2] - way[2] * len) < 1e-6)) continue;
             const entry: Dir = [way[0] * len, way[1] * len, way[2] * len];
             seen.push(entry);
+            // a short sideways push, tried only after the long ones along this way
+            shortSide = Math.abs(way[1]) < 0.5 && len < 2 * STUD;
             yield entry;
           }
         }
@@ -1259,6 +1271,9 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
       let transient = false;
       for (const entry of entries()) {
         report();
+        // Rather than slide in close along the face, wait for the air in front to clear.
+        const len = Math.hypot(...entry);
+        if (shortSide && attempt < MAX_POSTPONE && waitedWays.some((w) => w[0] * entry[0] + w[1] * entry[1] + w[2] * entry[2] > (1 - 1e-6) * len)) continue;
         for (const { move } of [...members[i], ...proxies[i]]) move.entry = entry;
         const arrival = u.start + u.dur;
         // Cache and precheck FINAL contacts before trying thirty cruise/hold
@@ -1332,7 +1347,13 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
             break;
           }
         }
-        if (!corridorBlocked) transient = true;
+        if (!corridorBlocked) {
+          transient = true;
+          if (!shortSide && !blockedSeat && Math.abs(entry[1]) < 0.5 * Math.hypot(...entry)) {
+            const len = Math.hypot(...entry);
+            waitedWays.push([entry[0] / len, entry[1] / len, entry[2] / len]);
+          }
+        }
         if (safe) break;
       }
       // Pieces already built never move: if they block every way, waiting is useless.
@@ -1534,6 +1555,11 @@ export function flightPose(m: Move, u: number, out: THREE.Matrix4): THREE.Matrix
     return out;
   }
   u = clamp01((u - m.hold) / (1 - m.hold));
+  const ease = easeOf(m.style?.ease);
+  if (m.style) {
+    const lateral = !m.translationPath && !m.posePath?.length && !m.rigidDeltas?.length && m.entry.some((v) => v !== 0);
+    u = landingWarp(u, m.style, lateral ? SIDE_INSERT_START : LOWER_START);
+  }
   if (u <= 0 || u >= 1) {
     out.copy(u <= 0 ? m.from : m.to);
     if (m.rel) out.multiply(m.rel);
@@ -1543,7 +1569,7 @@ export function flightPose(m: Move, u: number, out: THREE.Matrix4): THREE.Matrix
     // All members of a V2 rigid group must rotate about ONE shared pivot.
     // Interpolating each brick's position independently shrinks/deforms the
     // group mid-turn even when its endpoint matrices are individually correct.
-    const scaled = easeInOutCubic(u) * (m.rigidDeltas.length - 1);
+    const scaled = ease(u) * (m.rigidDeltas.length - 1);
     const i = Math.min(m.rigidDeltas.length - 2, Math.floor(scaled));
     const local = Math.max(0, Math.min(1, scaled - i));
     const a = m.rigidDeltas[i], b = m.rigidDeltas[i + 1];
@@ -1562,7 +1588,7 @@ export function flightPose(m: Move, u: number, out: THREE.Matrix4): THREE.Matrix
     return out;
   }
   if (m.translationPath) {
-    const offset = pathOffset(m.translationPath, easeInOutCubic(u));
+    const offset = pathOffset(m.translationPath, ease(u));
     out.copy(m.from);
     out.elements[12] += offset[0]; out.elements[13] += offset[1]; out.elements[14] += offset[2];
     if (m.rel) out.multiply(m.rel);
@@ -1574,7 +1600,7 @@ export function flightPose(m: Move, u: number, out: THREE.Matrix4): THREE.Matrix
       if (m.rel) out.multiply(m.rel);
       return out;
     }
-    const scaled = easeInOutCubic(u) * (m.posePath.length - 1);
+    const scaled = ease(u) * (m.posePath.length - 1);
     const i = Math.min(m.posePath.length - 2, Math.floor(scaled));
     const local = Math.max(0, Math.min(1, scaled - i));
     const segment = m.kinematicSegments?.find(s => s.index === i);
@@ -1599,30 +1625,30 @@ export function flightPose(m: Move, u: number, out: THREE.Matrix4): THREE.Matrix
   _q1.copy(d.q1);
   const lateral = m.entry.some((v) => v !== 0);
   if (u < LIFT_END) {
-    _p0.y = lerp(_p0.y, m.skyY, easeInOutCubic(clamp01(u / LIFT_END)));
+    _p0.y = lerp(_p0.y, m.skyY, ease(clamp01(u / LIFT_END)));
     out.compose(_p0, _q0, _unitScale).multiply(d.shape);
   } else if (lateral) {
     if (u < SIDE_CRUISE_END) {
-      const e = easeInOutCubic(clamp01((u - LIFT_END) / (SIDE_CRUISE_END - LIFT_END)));
+      const e = ease(clamp01((u - LIFT_END) / (SIDE_CRUISE_END - LIFT_END)));
       _p0.set(lerp(_p0.x, _p1.x + m.entry[0], e), m.skyY, lerp(_p0.z, _p1.z + m.entry[2], e));
       _q0.slerp(_q1, e);
       out.compose(_p0, _q0, _unitScale).multiply(d.shape);
     } else if (u < SIDE_INSERT_START) {
-      const e = easeInOutCubic(clamp01((u - SIDE_CRUISE_END) / (SIDE_INSERT_START - SIDE_CRUISE_END)));
+      const e = ease(clamp01((u - SIDE_CRUISE_END) / (SIDE_INSERT_START - SIDE_CRUISE_END)));
       _p1.set(_p1.x + m.entry[0], lerp(m.skyY, _p1.y + m.entry[1], e), _p1.z + m.entry[2]);
       out.compose(_p1, _q1, _unitScale).multiply(d.shape);
     } else {
-      const e = easeInOutCubic(clamp01((u - SIDE_INSERT_START) / (1 - SIDE_INSERT_START)));
+      const e = ease(clamp01((u - SIDE_INSERT_START) / (1 - SIDE_INSERT_START)));
       _p1.set(_p1.x + m.entry[0] * (1 - e), _p1.y + m.entry[1] * (1 - e), _p1.z + m.entry[2] * (1 - e));
       out.compose(_p1, _q1, _unitScale).multiply(d.shape);
     }
   } else if (u < LOWER_START) {
-    const e = easeInOutCubic(clamp01((u - LIFT_END) / (LOWER_START - LIFT_END)));
+    const e = ease(clamp01((u - LIFT_END) / (LOWER_START - LIFT_END)));
     _p0.set(lerp(_p0.x, _p1.x, e), m.skyY, lerp(_p0.z, _p1.z, e));
     _q0.slerp(_q1, e);
     out.compose(_p0, _q0, _unitScale).multiply(d.shape);
   } else {
-    _p1.y = lerp(m.skyY, _p1.y, easeInOutCubic(clamp01((u - LOWER_START) / (1 - LOWER_START))));
+    _p1.y = lerp(m.skyY, _p1.y, ease(clamp01((u - LOWER_START) / (1 - LOWER_START))));
     out.compose(_p1, _q1, _unitScale).multiply(d.shape);
   }
   if (m.rel) out.multiply(m.rel);
@@ -1948,7 +1974,13 @@ export function poseAt(tl: Timeline, t: number): (key: string) => THREE.Matrix4 
       const mv = tr.moves[i];
       const u = tl.units[mv.unit];
       if (t < u.start) return restPose(tr.moves[i - 1].to, tr.moves[i - 1].rel);
-      if (t < u.start + u.dur) return u.hidden ? null : flightPose(mv, (t - u.start) / u.dur, new THREE.Matrix4());
+      if (t < u.start + u.dur) {
+        if (u.hidden) return null;
+        // A re-timed clock: sample the planned moment this shown moment stands for.
+        const r = tl.retime;
+        const p = r ? (inverse(r, t) - inverse(r, u.start)) / Math.max(1e-9, inverse(r, u.start + u.dur) - inverse(r, u.start)) : (t - u.start) / u.dur;
+        return flightPose(mv, p, new THREE.Matrix4());
+      }
     }
     return tr.final.clone();
   };

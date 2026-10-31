@@ -141,3 +141,30 @@ export function selectedItems(): PlanItem[] {
   const { plan, selection } = useStudio.getState();
   return selection.ids.map((id) => findItem(plan, selection.model, id)?.item).filter((x): x is PlanItem => !!x);
 }
+
+/**
+ * Whole-stud/plate move that puts the model's footprint centre on the origin and
+ * its lowest point on the floor (LDraw y = 0). Null when it is already there.
+ */
+export function floorCentreOffset(bounds: Box | null): { x: number; y: number; z: number } | null {
+  if (!bounds) return null;
+  const d = {
+    x: -Math.round((bounds.min[0] + bounds.max[0]) / 2 / 20),
+    y: Math.round(bounds.max[1] / 8),
+    z: -Math.round((bounds.min[2] + bounds.max[2]) / 2 / 20),
+  };
+  return d.x || d.y || d.z ? d : null;
+}
+
+/** Centre the open model on the floor: one undoable move of every top-level piece. */
+export function centreModelOnFloor(): boolean {
+  const st = useStudio.getState();
+  const m: ModelName = st.editingModel;
+  const view = assemble({ ...st.plan, steps: modelSteps(st.plan, m) }, metricsOf, getColors());
+  const d = floorCentreOffset(view.bounds);
+  if (!d) return false;
+  const ids = modelSteps(st.plan, m).flatMap((s) => s.pieces.map((i) => i.id).filter((x): x is string => !!x));
+  if (!ids.length) return false;
+  st.apply((p) => moveItems(p, m, ids, d));
+  return true;
+}

@@ -12,6 +12,7 @@ import type { ModelState } from '../state/useModel';
 import { useStudio } from '../state/store';
 import type { Timeline } from '../anim/timeline';
 import { EditPad } from './EditPad';
+import { FlightWayEditor } from './FlightWayEditor';
 import { Ic } from './icons';
 import { HelpNote } from './PaneHead';
 import { PartThumb } from './PartThumb';
@@ -213,6 +214,7 @@ export function Inspector({ timeline, checks, stepCard, model, onMakeSubmodel }:
                 {steps.map((_, i) => <option key={i} value={i}>Step {i + 1}</option>)}
               </select></label></div>}
           </section>
+          <FlightWayEditor ids={ids} model={model} timeline={timeline} />
           <section className="bm-inspector-section bm-info-collapsible">
             <button className="bm-collapse-heading" aria-expanded={detailsOpen} onClick={() => setDetailsOpen((o) => !o)}>Part info <Ic name="chevron" /></button>
             {detailsOpen && <div className="bm-part-meta">

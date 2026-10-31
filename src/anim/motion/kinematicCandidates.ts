@@ -75,7 +75,7 @@ export function mechanicalApproaches(move: Move, joint: MechanicalJoint, movingK
     });
   }
   if (!['pin-hole', 'axle-hole', 'cylindrical', 'stud-socket'].includes(joint.type)) return [];
-  const depth = Math.min(70, Math.max(24, joint.engagement + 20));
+  const depth = Math.min(70, Math.max(40, joint.engagement + 20));
   // No invented screw thread: even nominally round pins are inserted axially.
   // Keyed axles/studs retain their exact authored orientation throughout the
   // constrained phase. Free-flight orientation may still change before it.

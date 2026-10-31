@@ -12,6 +12,9 @@ import { isSub } from '../plan/types';
 import { isMainSpot, markers, sameSpot, sceneSpot, storedSpot, sceneOffset, planOffset, spotOfRef, type SpotRef } from '../plan/assemblySpots';
 import { SPOT_DRAG_TYPE, draggedSpot } from './AssemblyPanel';
 import { SpotMarkers } from './spotMarkers';
+import { WayHandle, ldrawToView, viewToLdraw } from './wayHandle';
+import { snapWay, wayForArrow } from '../anim/flightDirection';
+import { applyWay, wayState } from '../state/flightWay';
 import { createStudio, worldBox } from '../render/studio';
 import { selectionForHit } from '../plan/groups';
 import { createSubmodel } from '../plan/createSubmodel';
@@ -103,6 +106,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
   const spotSel = useStudio((s) => s.spot);
   const gizmoEnabled = useStudio((s) => s.gizmoEnabled);
   const gizmoMode = useStudio((s) => s.gizmoMode);
+  const aimWay = useStudio((s) => s.aimWay);
   const stepView = useStudio((s) => s.stepView);
   const hiddenIds = useStudio((s) => s.hidden[s.editingModel]);
   const [menu, setMenu] = useState<{ x: number; y: number; items: ContextItem[]; label: string } | null>(null);
@@ -115,7 +119,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
    * piece where it really is, so the handles sit on the piece they move. The animation
    * pose at the playhead has pieces waiting elsewhere on the staging table.
    */
-  const placing = mode === 'edit' && timelineEditor === 'build' && (tool === 'move' || (gizmoEnabled && selection.model === editingModel && selection.ids.length > 0));
+  const placing = mode === 'edit' && timelineEditor === 'build' && (tool === 'move' || ((gizmoEnabled || aimWay) && selection.model === editingModel && selection.ids.length > 0));
   /** the Build view shows the build animation at the playhead, with the editor's own camera */
   const engaged = mode === 'edit' && timelineEditor === 'build' && follow && !!timeline && !placing;
   /** what the render loop needs while engaged: the timeline and the pose at a time */
@@ -134,6 +138,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
   const sceneLock = useSceneView((s) => s.lockCamera);
   const outputFormat = useAppSettings((s) => s.format);
   const gizmoRef = useRef<{ controls: TransformControls; proxy: THREE.Object3D } | null>(null);
+  const wayHandleRef = useRef<WayHandle | null>(null);
   const draggingGizmo = useRef(false);
   const readoutRef = useRef<HTMLDivElement>(null);
   const origin = useRef(new THREE.Vector3());
@@ -207,6 +212,10 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     const spotMarkers = new SpotMarkers();
     studio.scene.add(spotMarkers.group);
     markersRef.current = spotMarkers;
+    // "Flies in from" arrow for the selected pieces (aim mode). Editor scene only.
+    const wayHandle = new WayHandle();
+    studio.scene.add(wayHandle.group);
+    wayHandleRef.current = wayHandle;
     const transform = new TransformControls(studio.camera, canvas);
     transform.setSize(0.86);
     transform.setSpace('world');
@@ -691,6 +700,8 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       transform.dispose();
       studio.scene.remove(proxy);
       spotMarkers.dispose();
+      wayHandle.dispose();
+      wayHandleRef.current = null;
       studio.scene.remove(spotMarkers.group);
       markersRef.current = null;
       gizmoRef.current = null;
@@ -988,6 +999,32 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus.tick]);
 
+  /** What aim mode points at: the selected items, where the first one sits (view) and how big it is. */
+  const aimTarget = (): { ids: string[]; center: THREE.Vector3; size: number } | null => {
+    const s = useStudio.getState();
+    if (!s.aimWay || s.mode !== 'edit' || s.selection.model !== s.editingModel || !s.selection.ids.length) return null;
+    const ids = s.selection.ids;
+    const current = modelRef.current;
+    const placements = instancePlacements(s.plan, s.editingModel, current.assembly);
+    const own = current.view.instances.filter((i) => i.model === s.editingModel ? i.itemId === ids[0] : i.key.startsWith(`${ids[0]}/`));
+    if (!own.length) return null;
+    const box = new THREE.Box3();
+    for (const inst of own) box.union(worldBox(placedBox(inst, placements)));
+    const size = box.getSize(new THREE.Vector3()).length();
+    return { ids, center: box.getCenter(new THREE.Vector3()), size };
+  };
+  /** Shows, moves or hides the aim arrow to match the selection and its way in. */
+  const refreshAim = () => {
+    const handle = wayHandleRef.current;
+    if (!handle) return;
+    const target = aimTarget();
+    const s = useStudio.getState();
+    const way = target && wayState(s.plan, s.editingModel, target.ids, modelRef.current, timelineRef.current).way;
+    if (!target || !way) return handle.hide();
+    handle.set(target.center, ldrawToView(way), Math.max(2.2, target.size * 0.6 + 1.2));
+  };
+  useEffect(refreshAim, [aimWay, selection, editingModel, plan, timeline, model.view]);
+
   // keyboard
   const fitAll = () => fitAllRef.current();
   useEffect(() => {
@@ -1027,6 +1064,24 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
         return;
       }
       if ((e.key === 'f' || e.key === 'F') && !e.metaKey && !e.ctrlKey) return fitAll();
+      // W aims the selected pieces' way in (an arrow handle; arrow keys set it)
+      if ((e.key === 'w' || e.key === 'W') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        const state = useStudio.getState();
+        state.setAimWay(!state.aimWay);
+        return;
+      }
+      if (useStudio.getState().aimWay && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && !e.metaKey && !e.ctrlKey) {
+        const state = useStudio.getState();
+        const ids = state.selection.model === state.editingModel ? state.selection.ids : [];
+        if (ids.length) {
+          e.preventDefault();
+          const current = wayState(state.plan, state.editingModel, ids, modelRef.current, timelineRef.current).way ?? [0, -1, 0];
+          const az = viewportApi.controls ? (viewportApi.controls.getAzimuthalAngle() * 180) / Math.PI : 0;
+          applyWay(ids, wayForArrow(e.key as 'ArrowUp', { shift: e.shiftKey, alt: e.altKey }, az, current));
+          return;
+        }
+      }
       // A selects every piece you can see (hidden ones stay out); Alt+A clears, like Blender
       if ((e.code === 'KeyA' || e.key.toLowerCase() === 'a') && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
         e.preventDefault();
@@ -1132,11 +1187,42 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
 
   // Move tool: dragging a piece slides the selection over the floor in whole studs (one undo step).
   // Runs in the capture phase so the orbit controls are switched off before they see the press.
+  /**
+   * Aim mode: dragging the arrow turns the selected pieces' way in. It snaps to the
+   * nearest axis within a few degrees (hold Shift to aim freely) and saves once, on release.
+   */
+  const startAimDrag = (e: React.PointerEvent): boolean => {
+    const handle = wayHandleRef.current;
+    const target = aimTarget();
+    if (!handle || !target || e.button !== 0 || !handle.pick(rayAt(e))) return false;
+    e.preventDefault();
+    e.stopPropagation();
+    if (viewportApi.controls) viewportApi.controls.enabled = false;
+    let current = new THREE.Vector3(0, 1, 0).applyQuaternion(handle.group.quaternion);
+    let way = viewToLdraw(current);
+    const move = (ev: PointerEvent) => {
+      const aimed = handle.aimAt(rayAt(ev).ray, current);
+      way = ev.shiftKey ? viewToLdraw(aimed) : snapWay(viewToLdraw(aimed));
+      current = ldrawToView(way);
+      handle.point(current);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      if (viewportApi.controls) viewportApi.controls.enabled = useStudio.getState().mode === 'edit';
+      applyWay(target.ids, way);
+      refreshAim();
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    return true;
+  };
   const startDrag = (e: React.PointerEvent) => {
     // overlay UI (menus, the nav gizmo) must never pick or drag a brick behind it
     if (e.target !== canvasRef.current || viewportApi.scene?.isHandlingPointer()) return;
     if (viewportApi.scene?.pick(rayAt(e))) return;
     if (useSceneView.getState().selectedId) return;
+    if (startAimDrag(e)) return;
     // a marker under the pointer wins over the bricks behind it (a gizmo handle still has priority)
     if (!(gizmoEnabled && gizmoRef.current?.controls.axis)) {
       const ref = pickSpotAt(e);

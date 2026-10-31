@@ -1,4 +1,8 @@
 import { applyFloorShifts, applyAssemblySpotTransform } from '../anim/timeline';
+import { applyMotionStyle, cleanStyle, mergeStyles } from '../anim/motionStyle';
+import type { Unit } from '../anim/timelineData';
+import { findItem } from '../plan/ops';
+import { isSub, type MotionStyle } from '../plan/types';
 import { floorShiftsByKey, resetFloorShifts } from '../plan/pieceActions';
 import type { Timeline } from '../anim/timeline';
 import { decodeTimeline, type EncodedTimeline } from '../anim/timelineCodec';
@@ -27,7 +31,7 @@ function baseOf(p: Plan): { plan: Plan; key: string } {
   if (!b) {
     let plan = resetFloorShifts(p);
     // Editor-only viewing state and selection groups never invalidate a timeline.
-    const { showModelAtSpot: _view, sceneSetup: _scene, ...withoutView } = plan;
+    const { showModelAtSpot: _view, sceneSetup: _scene, motion: _motion, ...withoutView } = plan;
     plan = withoutView as Plan;
     // "Loose pieces follow on" (the default): the main spot is applied to the planned
     // timeline as one rigid transform, so it is not part of the planning cache key —
@@ -37,9 +41,10 @@ function baseOf(p: Plan): { plan: Plan; key: string } {
       const { assemblySpot: _s, loosePiecesFollow: _f, ...rest } = plan;
       plan = rest as Plan;
     }
-    const omitGroups = (steps: Plan['steps']) => steps.map(step => ({ ...step, pieces: step.pieces.map(item => {
-      if (!item.assembly?.group) return item;
-      const { group: _group, ...assembly } = item.assembly;
+    // Motion styles re-time a planned timeline (applyMotionStyle); they never change routes.
+    const omitGroups = (steps: Plan['steps']) => steps.map(({ motion: _motion, ...step }) => ({ ...step, pieces: step.pieces.map(item => {
+      if (!item.assembly?.group && !item.assembly?.motion) return item;
+      const { group: _group, motion: _m, ...assembly } = item.assembly;
       const out = { ...item, assembly: Object.keys(assembly).length ? assembly : undefined };
       return out;
     }) }));
@@ -133,8 +138,9 @@ export function planTimeline(plan: Plan, model: string, opts: AnimOptions, lane:
   const base = baseOf(plan).plan;
   const planned = planBase(base, model, opts, lane, onProgress);
   if (!withShifts) return planned;
+  const styled = planned.then((tl) => applyMotionStyle(tl, motionResolver(plan, model, plan.motion)));
   const shifts = floorShiftsByKey(plan, model);
-  let res = shifts.size ? planned.then((tl) => applyFloorShifts(tl, shifts)) : planned;
+  let res = shifts.size ? styled.then((tl) => applyFloorShifts(tl, shifts)) : styled;
   // "Loose pieces follow on" (default): the whole scene turns with the main spot. The
   // spot applies only to the root model; a submodel rendered alone keeps its origin.
   if (model === '' && plan.assemblySpot && plan.loosePiecesFollow !== false) {
@@ -213,4 +219,45 @@ export async function savedTimeline(plan: Plan, model: string, opts: AnimOptions
 export async function adoptTimeline(plan: Plan, model: string, opts: string, timeline: EncodedTimeline): Promise<void> {
   const fingerprint = await timelineFingerprint({ plan: scopedPlan(baseOf(plan).plan, model), model, opts, shadow: hasShadowPack() });
   await putCachedTimeline(fingerprint, timeline);
+}
+
+/**
+ * The motion style of a timeline unit: the global style, then for each model level
+ * on the way down to the piece, its step's style and the item's own. The deepest wins.
+ */
+export function motionResolver(plan: Plan, model: string, global: MotionStyle | null | undefined) {
+  const base = cleanStyle(global);
+  const memo = new Map<string, MotionStyle | null>();
+  const resolvePath = (path: string[]): MotionStyle | null => {
+    const key = path.join('/');
+    if (memo.has(key)) return memo.get(key)!;
+    const layers: (MotionStyle | null)[] = [base];
+    let m = model;
+    for (const id of path) {
+      const found = findItem(plan, m, id);
+      if (!found) break;
+      const steps = m === '' ? plan.steps : plan.submodels?.[m]?.steps ?? [];
+      layers.push(cleanStyle(steps[found.step]?.motion), cleanStyle(found.item.assembly?.motion));
+      if (!isSub(found.item)) break;
+      m = found.item.submodel;
+    }
+    const merged = cleanStyle(mergeStyles(...layers));
+    memo.set(key, merged);
+    return merged;
+  };
+  return (u: Unit): MotionStyle | null => {
+    if (!u.keys.length) return base;
+    let path = u.keys[0].split('/');
+    if (u.kind === 'attach') {
+      // the attached submodel use: the path all its pieces share, never a leaf piece
+      for (const k of u.keys) {
+        const segs = k.split('/');
+        let n = 0;
+        while (n < path.length && n < segs.length && path[n] === segs[n]) n++;
+        path = path.slice(0, n);
+      }
+      if (u.keys.length === 1) path = path.slice(0, -1);
+    }
+    return resolvePath(path);
+  };
 }
