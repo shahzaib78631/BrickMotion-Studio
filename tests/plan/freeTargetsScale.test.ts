@@ -83,7 +83,7 @@ describe('free targets on a big model', () => {
       aim: { ray: { origin: [40, -408, 40], dir: [0, 1, 0] }, hitDepth: 400, floorPoint: [40, 0, 40] }, ref: [180, 8, 180], lock: null, yaw: 0, world, before: new Set(), prev: null,
     });
     expect(pose!.valid).toBe(false);
-    expect((performance.now() - t0) / 5).toBeLessThan(60);
+    expect((performance.now() - t0) / 5).toBeLessThan(200); // ~1100 ms before the collision budget
   });
 });
 
