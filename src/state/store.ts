@@ -63,6 +63,8 @@ export type StudioState = {
   aimWay: boolean;
   /** the plan before a drag; while set, edits replace the plan without adding undo steps */
   gesture: Plan | null;
+  /** cancels the open gesture's owner (a placing session) before anything else changes the plan */
+  gestureOwner: (() => void) | null;
   /** how the Build view shows the current step's new parts */
   stepView: StepView;
   /** every piece of the open model laid out on the floor (no step selected) */
@@ -94,6 +96,10 @@ export type StudioState = {
   /** Reorder, update the preview cursor, and record the move as a single undoable edit. */
   reorderBuildStep(model: ModelName, from: number, to: number): void;
   undo(): void;
+  /** claims the open gesture: `cancel` runs before any outside change (edit, undo, new plan, model or mode switch) */
+  ownGesture(cancel: (() => void) | null): void;
+  /** the owner's own edit during its gesture: replaces the plan without cancelling or adding undo steps */
+  gestureApply(fn: (p: Plan) => Plan): void;
   redo(): void;
   setPlan(p: Plan, opts?: { resetHistory: boolean }): void;
   /** Bumped to make the preview plan its animation again. */
@@ -106,6 +112,12 @@ export type StudioState = {
   requestFocus(ids: string[]): void;
   setPaintColor(c: string | number): void;
 };
+
+/** Lets the open gesture's owner put things back before an outside change; the owner is cleared first. */
+function interrupt(get: () => StudioState): void {
+  const cancel = get().gestureOwner;
+  if (cancel) cancel();
+}
 
 export const useStudio = create<StudioState>((set, get) => ({
   plan: emptyPlan(),
@@ -158,6 +170,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   gizmoMode: 'translate',
   aimWay: false,
   gesture: null,
+  gestureOwner: null,
   stepView: 'separated',
   laidOut: false,
   hidden: {},
@@ -205,7 +218,15 @@ export const useStudio = create<StudioState>((set, get) => ({
     set({ blocked: { ids: [...ids], at } });
     setTimeout(() => { if (get().blocked?.at === at) set({ blocked: null }); }, 400);
   },
+  ownGesture(cancel) {
+    set({ gestureOwner: cancel });
+  },
+  gestureApply(fn) {
+    const { plan, gesture } = get();
+    if (gesture) set({ plan: fn(plan) });
+  },
   beginGesture() {
+    interrupt(get);
     set({ gesture: get().plan });
   },
   endGesture() {
@@ -215,6 +236,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     set({ gesture: null, past: [...past, gesture].slice(-HISTORY_LIMIT), future: [] });
   },
   apply(fn) {
+    interrupt(get);
     const { plan, past, gesture } = get();
     const next = fn(plan);
     if (next === plan) return;
@@ -232,18 +254,21 @@ export const useStudio = create<StudioState>((set, get) => ({
     }
   },
   undo() {
+    interrupt(get);
     const { plan, past, future, editingModel, currentStep } = get();
     if (!past.length) return;
     const previous = past[past.length - 1];
     set({ plan: previous, past: past.slice(0, -1), future: [plan, ...future], currentStep: remapStep(plan, previous, editingModel, currentStep) });
   },
   redo() {
+    interrupt(get);
     const { plan, past, future, editingModel, currentStep } = get();
     if (!future.length) return;
     const next = future[0];
     set({ plan: next, past: [...past, plan], future: future.slice(1), currentStep: remapStep(plan, next, editingModel, currentStep) });
   },
   setPlan(p, opts) {
+    interrupt(get);
     // a different set: its pieces may reuse ids, so nothing stays hidden
     if (opts?.resetHistory) set({ plan: p, past: [], future: [], selection: { model: '', ids: [] }, spot: null, editingModel: '', currentStep: null, hidden: {} });
     else {
@@ -259,11 +284,13 @@ export const useStudio = create<StudioState>((set, get) => ({
     set({ selection: { model: editingModel, ids: [...cur] } });
   },
   setEditingModel(m) {
+    interrupt(get);
     usePlayback.getState().set({ follow: false, playing: false });
     useKeyframePlayback.getState().set({ playing: false });
     set({ editingModel: m, selection: { model: m, ids: [] }, spot: null, currentStep: null, laidOut: false });
   },
   setMode(mode) {
+    interrupt(get);
     if (mode === 'preview') useKeyframePlayback.getState().set({ playing: false });
     // coming back to Build while the preview plays: keep playing, now in the Build view
     if (mode === 'edit') usePlayback.getState().set({ follow: usePlayback.getState().playing });

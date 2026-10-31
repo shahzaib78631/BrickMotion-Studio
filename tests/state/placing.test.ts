@@ -99,4 +99,47 @@ describe('placing session', () => {
     commitPlacing();
     expect(item('brick')).toMatchObject({ x: 0, y: 1, z: 0 });
   });
+
+  describe('an outside change ends the session first', () => {
+    const ghostIn = () => useStudio.getState().plan.steps.flatMap((x) => x.pieces).some((it) => 'part' in it && it.part === '3024');
+
+    it.skipIf(!ready)('keeps an edit made elsewhere and drops the held part', () => {
+      load([[piece('plate', '3020', 0, 0)]]);
+      beginPlacing({ kind: 'new', model: '', items: [piece('', '3024', 0, 0)] });
+      updatePlacing({ point: [30, -8, 30], owner: 'plate' });
+      useStudio.getState().apply((p) => ({ ...p, steps: [{ pieces: [...p.steps[0].pieces, piece('lane', '3001', 40, 0)] }] }));
+      expect(usePlacing.getState().state).toBeNull();
+      expect(ghostIn()).toBe(false);
+      expect(item('lane')).toBeTruthy();
+      expect(useStudio.getState().gesture).toBeNull();
+      expect(useStudio.getState().past).toHaveLength(1);
+      // a late mouse move or drag end changes nothing
+      expect(updatePlacing({ point: [30, -8, 30], owner: 'plate' })).toBeNull();
+      cancelPlacing();
+      expect(item('lane')).toBeTruthy();
+    });
+
+    it.skipIf(!ready)('opening another project leaves that project alone', () => {
+      load([[piece('plate', '3020', 0, 0)]]);
+      beginPlacing({ kind: 'new', model: '', items: [piece('', '3024', 0, 0)] });
+      const other = { name: 'other', steps: [{ pieces: [piece('x', '3001', 0, 0)] }] } as Plan;
+      useStudio.getState().setPlan(other, { resetHistory: true });
+      updatePlacing({ point: [30, -8, 30], owner: 'plate' });
+      expect(useStudio.getState().plan).toBe(other);
+      expect(useStudio.getState().gesture).toBeNull();
+    });
+
+    it.skipIf(!ready)('undo, switching model or mode cancel it', () => {
+      for (const act of [() => useStudio.getState().undo(), () => useStudio.getState().setEditingModel(''), () => useStudio.getState().setMode('preview')]) {
+        load([[piece('plate', '3020', 0, 0)]]);
+        useStudio.getState().setMode('edit');
+        beginPlacing({ kind: 'new', model: '', items: [piece('', '3024', 0, 0)] });
+        updatePlacing({ point: [30, -8, 30], owner: 'plate' });
+        act();
+        expect(usePlacing.getState().state).toBeNull();
+        expect(ghostIn()).toBe(false);
+        expect(useStudio.getState().gesture).toBeNull();
+      }
+    });
+  });
 });

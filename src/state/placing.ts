@@ -66,11 +66,14 @@ export function beginPlacing(src: PlacingSource, grab?: Vec3): void {
   const steps = modelSteps(st.plan, m);
   const step = st.currentStep ?? Math.max(0, steps.length - 1);
   st.beginGesture();
+  st.ownGesture(cancelPlacing);
   const base = st.plan;
   let plan0 = base, ids: string[] = [], newItems: PlanItem[] | null = null;
   if (src.kind === 'move') ids = [...src.ids];
   else {
-    if (src.submodels) plan0 = { ...plan0, submodels: { ...plan0.submodels, ...src.submodels } };
+    // never replace a submodel the plan already has
+    const fresh = Object.entries(src.submodels ?? {}).filter(([n]) => !plan0.submodels?.[n]);
+    if (fresh.length) plan0 = { ...plan0, submodels: { ...plan0.submodels, ...Object.fromEntries(fresh) } };
     newItems = [];
     for (const it of src.items) {
       const placed = { ...it, id: newId(plan0) };
@@ -104,7 +107,7 @@ export function beginPlacing(src: PlacingSource, grab?: Vec3): void {
       if (e < d) { d = e; handle = i; }
     });
   }
-  if (plan0 !== base) st.apply(() => plan0);
+  if (plan0 !== base) st.gestureApply(() => plan0);
   session = {
     model: m, ids, base, plan0, nodes0: view.nodes, visible, newItems, step,
     query: { moving: { solids, connectors }, targets, world, before },
@@ -122,8 +125,8 @@ function apply(pose: Pose): void {
   if (s.newItems) {
     // new pieces are re-added from the base plan at the pose (their step stays the current one)
     const without = s.base.submodels === s.plan0.submodels ? s.base : { ...s.base, submodels: s.plan0.submodels };
-    st.apply(() => addPosedItems(without, s.model, s.step, s.newItems!, pose, bodyFor(s.plan0)));
-  } else st.apply(() => commitPose(s.plan0, s.model, s.ids, s.nodes0, pose, s.stepOf));
+    st.gestureApply(() => addPosedItems(without, s.model, s.step, s.newItems!, pose, bodyFor(s.plan0)));
+  } else st.gestureApply(() => commitPose(s.plan0, s.model, s.ids, s.nodes0, pose, s.stepOf));
 }
 
 /** Follows the mouse: the best pose for a hit in the model's LDraw frame (owner = top-level item id, null = floor). */
@@ -172,9 +175,10 @@ export function commitPlacing(): string[] | null {
     return null;
   }
   const st = useStudio.getState();
+  session = null;
+  st.ownGesture(null);
   st.endGesture();
   st.select(s.ids);
-  session = null;
   usePlacing.setState({ state: null });
   return s.ids;
 }
@@ -186,7 +190,8 @@ export function cancelPlacing(): void {
   usePlacing.setState({ state: null });
   if (!s) return;
   const st = useStudio.getState();
-  st.apply(() => s.base);
+  st.ownGesture(null);
+  st.gestureApply(() => s.base);
   st.endGesture();
   if (s.newItems) st.select(s.selection);
 }
