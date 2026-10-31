@@ -62,6 +62,8 @@ export type Pose = {
 export const MAX_GRIPS = 16;
 /** A new pose must land this much (LDU at the target's depth) nearer the mouse to take over. */
 export const HYSTERESIS = 4;
+/** Collision tests stop after this long (ms) in one search: a big moving set never hitches the drag. */
+export const TRY_BUDGET_MS = 12;
 /** The floor's LDraw height. */
 export const FLOOR_Y = 0;
 
@@ -247,13 +249,15 @@ export function findPose(q: PoseQuery): Pose {
     : { delta: clean(o.m), mated: 0, owners: [], links: [], valid: false, handle: o.grip, yaw, at: o.t.pos, score: o.score };
   // nearest first; among equally near ones, the one mating more (counted only where needed)
   let best: Option | undefined;
-  for (let i = 0; i < options.length && !best;) {
+  const t0 = performance.now();
+  let tried = 0;
+  const fits = (o: Option) => (tried++ === 0 || performance.now() - t0 < TRY_BUDGET_MS) && !blocked(o.m);
+  for (let i = 0; i < options.length && !best && (tried === 0 || performance.now() - t0 < TRY_BUDGET_MS);) {
     let j = i + 1;
     while (j < options.length && options[j].score - options[i].score <= TIE) j++;
-    const group = options.slice(i, j);
-    if (group.length > 1) group.sort((a, b) => mates(b).mated - mates(a).mated);
-    best = group.find((o) => !blocked(o.m));
-    if (i === 0) options.splice(0, j, ...group); // options[0] = the best pose, clean or not
+    // collision first (cheap next to counting mates on a big set), then the most mated clean one
+    const clear = options.slice(i, j).filter(fits);
+    best = clear.length > 1 ? clear.reduce((a, b) => (mates(b).mated > mates(a).mated ? b : a)) : clear[0];
     i = j;
   }
 
