@@ -18,11 +18,11 @@ import { applyWay, wayState } from '../state/flightWay';
 import { createStudio, worldBox } from '../render/studio';
 import { selectionForHit } from '../plan/groups';
 import { createSubmodel } from '../plan/createSubmodel';
-import { instancePlacements, itemPlacement, placedBox, placedMatrix, sourceEditDelta, viewPlacement, modelPointOf } from './modelPlacement';
+import { instancePlacements, itemPlacement, placedBox, placedMatrix, sourceEditDelta, viewPlacement, modelPlacement, placingPointOf } from './modelPlacement';
 import { NewSubmodelDialog } from './NewSubmodelDialog';
 import { runCommand, snapperFor } from '../state/editing';
 import { guardEdit } from '../state/guard';
-import { beginPlacing, cancelPlacing, commitPlacing, cycleHandle, isPlacing, paletteDrag, turnInHand, updatePlacing, usePlacing } from '../state/placing';
+import { beginPlacing, cancelPlacing, commitPlacing, cycleHandle, isPlacing, paletteDrag, placingFloor, turnInHand, updatePlacing, usePlacing } from '../state/placing';
 import { PART_DRAG_TYPE } from './PartsLane';
 import { boxSelect } from './boxSelect';
 import { commandForKey } from '../state/keymap';
@@ -102,6 +102,8 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
   const blocked = useStudio((s) => s.blocked);
   const placingState = usePlacing((p) => p.state);
   const lastPointer = useRef<{ clientX: number; clientY: number } | null>(null);
+  /** display placements captured for the open placing session */
+  const placingFrame = useRef<{ placements: Map<string, THREE.Matrix4>; root: THREE.Matrix4 | null } | null>(null);
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   useEffect(() => {
     viewportApi.placeAtPointer = () => {
@@ -1351,13 +1353,18 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     if (!studio) return null;
     const ray = rayAt(ev);
     const hit = studio.bricks.pickHit(ray, (k) => skip.has(k.split('/')[0]));
+    // display placements are taken once per session: the plan changes under the drag
+    if (!isPlacing()) placingFrame.current = null;
     const s = st();
-    if (hit) {
-      const placement = instancePlacements(s.plan, s.editingModel, modelRef.current.assembly).get(hit.key) ?? null;
-      return { point: modelPointOf(hit.point, placement), owner: hit.key.split('/')[0] };
-    }
-    const floor = ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3());
-    return floor ? { point: modelPointOf(floor, null), owner: null } : null;
+    const frame = (placingFrame.current ??= {
+      placements: instancePlacements(s.plan, s.editingModel, modelRef.current.assembly),
+      root: modelPlacement(s.plan, s.editingModel, modelRef.current.assembly),
+    });
+    if (hit) return { point: placingPointOf(hit.point, hit.key, frame.placements, frame.root), owner: hit.key.split('/')[0] };
+    // the drawn floor, as the session fixed it at the start
+    const ground = placingFloor() ?? (timeline?.ground ?? modelRef.current.assembly.bounds?.max[1] ?? 0);
+    const floor = ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), ground / 20), new THREE.Vector3());
+    return floor ? { point: placingPointOf(floor, null, frame.placements, frame.root), owner: null } : null;
   };
 
   /**

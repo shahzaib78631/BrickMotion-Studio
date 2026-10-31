@@ -31,6 +31,8 @@ export type PoseQuery = {
   before: ReadonlySet<string>;
   /** the last pose, for hysteresis */
   prev: Pose | null;
+  /** LDraw height of the drawn floor (default FLOOR_Y) */
+  floor?: number;
 };
 export type Pose = {
   /** column-major 4x4 LDU transform applied to the moving set's current world pose */
@@ -147,8 +149,11 @@ function targetIndex(targets: readonly Target[]): (c: Connector) => Target | und
 export function findPose(q: PoseQuery): Pose {
   const { moving, hit, handle, yaw } = q;
   const h = moving.connectors[handle];
+  // nothing solid to place (e.g. only unknown parts): no pose can be trusted
+  if (!moving.solids.length) return { delta: clean(new THREE.Matrix4()), mated: 0, owners: [], valid: false, handle, yaw, at: null };
+  const floor = q.floor ?? FLOOR_Y;
   // the floor is solid: nothing goes underground (unless it already started there)
-  const ground = Math.max(FLOOR_Y, boxOf(moving.solids, new THREE.Matrix4()).max.y) + 0.5;
+  const ground = Math.max(floor, boxOf(moving.solids, new THREE.Matrix4()).max.y) + 0.5;
   const blocked = (m: THREE.Matrix4) => {
     if (moving.solids.length && boxOf(moving.solids, m).max.y > ground) return true;
     if (!q.world) return false;
@@ -174,14 +179,17 @@ export function findPose(q: PoseQuery): Pose {
   }
   const valid = scored.filter((s) => s.ok).sort((a, b) => b.mated - a.mated || a.d - b.d);
   const best = valid[0];
+  const p = q.prev;
+  // a seated pose holds while the mouse stays near it, whichever piece is under the mouse
+  // (the fixed pieces do not change during a drag, so it is still clean)
+  const holds = !!p && p.valid && !!p.at && p.handle === handle && p.yaw === yaw && dist(p.at, hit.point) <= SEARCH_RADIUS;
   if (!best) {
+    if (!scored.length) return holds ? p! : floorPose(q, blocked); // no studs near the mouse: stay by it
     // nothing clean: show where it would go (nearest), in red
     const near = scored.sort((a, b) => a.d - b.d)[0];
-    return { delta: clean(near?.m ?? new THREE.Matrix4()), mated: 0, owners: [], valid: false, handle, yaw, at: near?.at ?? null };
+    return { delta: clean(near.m), mated: 0, owners: [], valid: false, handle, yaw, at: near.at };
   }
-  const p = q.prev;
-  if (p && p.valid && p.at && p.handle === handle && p.yaw === yaw && dist(p.at, hit.point) <= SEARCH_RADIUS &&
-    dist(p.at, hit.point) <= best.d + HYSTERESIS && valid.some((s) => dist(s.at, p.at!) < 1e-6)) return p;
+  if (holds && dist(p!.at!, hit.point) <= best.d + HYSTERESIS) return p!;
   return { delta: clean(best.m), mated: best.mated, owners: best.owners, valid: true, handle, yaw, at: best.at };
 }
 
@@ -197,6 +205,6 @@ function floorPose(q: PoseQuery, blocked: (m: THREE.Matrix4) => boolean): Pose {
   const c = b.getCenter(new THREE.Vector3());
   const snapX = Math.round((b.min.x + hit.point[0] - c.x) / 20) * 20 - b.min.x;
   const snapZ = Math.round((b.min.z + hit.point[2] - c.z) / 20) * 20 - b.min.z;
-  const m = new THREE.Matrix4().makeTranslation(snapX, FLOOR_Y - b.max.y, snapZ).multiply(turn);
+  const m = new THREE.Matrix4().makeTranslation(snapX, (q.floor ?? FLOOR_Y) - b.max.y, snapZ).multiply(turn);
   return { delta: clean(m), mated: 0, owners: [], valid: !blocked(m), handle, yaw, at: null };
 }

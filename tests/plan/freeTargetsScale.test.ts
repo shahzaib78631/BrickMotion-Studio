@@ -47,11 +47,12 @@ describe('free targets on a big model', () => {
     const { groups, solids } = grid(27);
     const targets = freeTargets(groups, solids);
     // the moving set: 200 plates' worth of connectors
-    const mine = grid(10).groups.slice(0, 200).flatMap((g) => g.list);
+    const g10 = grid(10);
+    const mine = g10.groups.slice(0, 200).flatMap((g) => g.list);
     const t0 = performance.now();
     let pose = null as ReturnType<typeof findPose> | null;
     for (let i = 0; i < 10; i++) pose = findPose({
-      moving: { solids: [], connectors: mine }, targets, hit: { point: [40, -8, 40], owner: 'b1_1' },
+      moving: { solids: g10.solids.slice(0, 200), connectors: mine }, targets, hit: { point: [40, -8, 40], owner: 'b1_1' },
       handle: mine.findIndex((c) => c.gender === 'F'), yaw: 0, world: null, before: new Set(), prev: null,
     });
     expect(pose!.valid).toBe(true);

@@ -121,3 +121,12 @@ export function modelPointOf(view: THREE.Vector3, placement: THREE.Matrix4 | nul
   if (placement) p.applyMatrix4(placement.clone().invert());
   return [p.x, p.y, p.z];
 }
+
+/**
+ * Where a placing hit is in the editing model's LDraw frame: a hit piece is mapped back
+ * through its own display placement (or the model root when it has none), empty floor
+ * through the model root.
+ */
+export function placingPointOf(view: THREE.Vector3, key: string | null, placements: ReadonlyMap<string, THREE.Matrix4>, root: THREE.Matrix4 | null): [number, number, number] {
+  return modelPointOf(view, (key !== null ? placements.get(key) : undefined) ?? root);
+}

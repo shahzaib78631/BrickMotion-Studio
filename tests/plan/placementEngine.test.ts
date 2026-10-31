@@ -148,4 +148,40 @@ describe('placement pose search', () => {
     const pose = findPose(query(one, [plate], { point: [10, 0, 10], owner: 'plate' }, handleNear(one, 'M', [300, -60, 0])));
     expect(pose.valid).toBe(false);
   });
+
+  it.skipIf(!ready)('stands on the floor it is given, not LDraw y = 0', async () => {
+    const one = place('m', await measureReal('3024'), 300, -60, 0);
+    const pose = findPose(query(one, [], { point: [30, 24, 50], owner: null }, handleNear(one, 'F', [300, -52, 0]), { floor: 24 }));
+    expect(pose.valid).toBe(true);
+    expect(Math.round(moved(one, pose).y)).toBe(16);
+  });
+
+  it('an empty moving set never gives a usable pose', () => {
+    const pose = findPose({ moving: { solids: [], connectors: [] }, targets: [], hit: { point: [5, 0, 5], owner: null }, handle: 0, yaw: 0, world: null, before: new Set(), prev: null });
+    expect(pose.valid).toBe(false);
+    expect(pose.delta.every(Number.isFinite)).toBe(true);
+  });
+
+  it.skipIf(!ready)('pointing at a piece with no studs nearby stays by the mouse', async () => {
+    const plate = place('plate', await measureReal('3020'), 0, 0);
+    const one = place('m', await measureReal('3024'), 300, -60, 0);
+    const h = handleNear(one, 'F', [300, -52, 0]);
+    const far = findPose(query(one, [plate], { point: [200, 0, 0], owner: 'plate' }, h));
+    expect(Math.abs(moved(one, far).x - 200)).toBeLessThanOrEqual(10);
+    // even right after a seated pose: far from it, the part follows the mouse instead of jumping back
+    const atA = findPose(query(one, [plate], { point: [10, 0, 10], owner: 'plate' }, h));
+    const after = findPose(query(one, [plate], { point: [200, 0, 0], owner: 'plate' }, h, { prev: atA }));
+    expect(Math.abs(moved(one, after).x - 200)).toBeLessThanOrEqual(10);
+  });
+
+  it.skipIf(!ready)('holds still on the seam between two pieces', async () => {
+    const m = await measureReal('3020');
+    const a = place('a', m, 0, 0), b = place('b', m, 80, 0);
+    const one = place('m', await measureReal('3024'), 300, -60, 0);
+    const h = handleNear(one, 'F', [300, -52, 0]);
+    const onA = findPose(query(one, [a, b], { point: [38, 0, 10], owner: 'a' }, h));
+    expect(moved(one, onA).x).toBe(30);
+    const onB = findPose(query(one, [a, b], { point: [42, 0, 10], owner: 'b' }, h, { prev: onA }));
+    expect(moved(one, onB).x).toBe(30);
+  });
 });

@@ -31,7 +31,7 @@ type Session = {
   base: Plan;
   plan0: Plan;
   nodes0: ANode[];
-  query: Omit<PoseQuery, 'hit' | 'handle' | 'yaw' | 'prev'>;
+  query: Omit<PoseQuery, 'hit' | 'handle' | 'yaw' | 'prev'> & { floor: number };
   visible: Set<string>;
   stepOf: (owner: string) => number;
   newItems: PlanItem[] | null;
@@ -110,7 +110,8 @@ export function beginPlacing(src: PlacingSource, grab?: Vec3): void {
   if (plan0 !== base) st.gestureApply(() => plan0);
   session = {
     model: m, ids, base, plan0, nodes0: view.nodes, visible, newItems, step,
-    query: { moving: { solids, connectors }, targets, world, before },
+    // the drawn floor (the model's lowest point), fixed for the whole gesture
+    query: { moving: { solids, connectors }, targets, world, before, floor: view.bounds?.max[1] ?? 0 },
     stepOf: (o) => findItem(plan0, m, o)?.step ?? 0,
     selection: st.selection.ids,
     lastHit: null,
@@ -197,6 +198,8 @@ export function cancelPlacing(): void {
 }
 
 export const isPlacing = () => session !== null;
+/** LDraw height of the floor the open session places onto (null when not placing). */
+export const placingFloor = (): number | null => session?.query.floor ?? null;
 
 /** The part being dragged from the Parts panel (HTML drag and drop hides its data until the drop). */
 let palettePart: string | null = null;
