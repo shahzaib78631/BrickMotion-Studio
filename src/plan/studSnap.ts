@@ -1,6 +1,7 @@
 import type { Box } from '../ldraw/flatten';
 import type { StudConnector } from '../ldraw/connectors';
 import type { Snap } from '../ldraw/shadow';
+import { collisionWorld, sampleCount } from './collision';
 
 /**
  * Half-stud snapping for drags. Parts normally move in whole studs, but some
@@ -141,83 +142,16 @@ function cellBottom(mesh: Float32Array, cx: number, cz: number, fallback: number
   return y;
 }
 
-const spans = new WeakMap<Float32Array, Map<string, [number, number] | null>>();
-/**
- * The range a part's mesh fills along one local axis through the line at the other two
- * coordinates of `q`, kept to its body, or null. Hollows count as filled, so callers
- * test all three axes: a point is inside a part only when every axis agrees.
- */
-function lineSpan(mesh: Float32Array, body: Box, axis: 0 | 1 | 2, q: readonly number[]): [number, number] | null {
-  let cache = spans.get(mesh);
-  if (!cache) spans.set(mesh, (cache = new Map()));
-  const [i, j] = axis === 0 ? [1, 2] : axis === 1 ? [0, 2] : [0, 1];
-  const x = Math.round(q[i] * 2) / 2, z = Math.round(q[j] * 2) / 2;
-  const key = `${axis}:${x},${z}`;
-  const hit = cache.get(key);
-  if (hit !== undefined) return hit;
-  let lo = Infinity, hi = -Infinity;
-  for (let t = 0; t + 8 < mesh.length; t += 9) {
-    const ax = mesh[t + i], az = mesh[t + j], bx = mesh[t + 3 + i], bz = mesh[t + 3 + j], cx = mesh[t + 6 + i], cz = mesh[t + 6 + j];
-    const area = (bx - ax) * (cz - az) - (cx - ax) * (bz - az);
-    if (Math.abs(area) < 1e-6) continue;
-    const u = ((bx - x) * (cz - z) - (cx - x) * (bz - z)) / area;
-    const v = ((cx - x) * (az - z) - (ax - x) * (cz - z)) / area;
-    const w = 1 - u - v;
-    if (u < -1e-6 || v < -1e-6 || w < -1e-6) continue;
-    const y = u * mesh[t + axis] + v * mesh[t + 3 + axis] + w * mesh[t + 6 + axis];
-    lo = Math.min(lo, y); hi = Math.max(hi, y);
-  }
-  lo = Math.max(lo, body.min[axis]); hi = Math.min(hi, body.max[axis]);
-  const span: [number, number] | null = hi - lo > 0.5 ? [lo, hi] : null;
-  cache.set(key, span);
-  return span;
-}
-
-/** Whether a part-space point lies in a stud (with half an LDU of slack). */
-function inStud(st: StudConnector, q: readonly number[]): boolean {
-  const a = [st.tip[0] - st.base[0], st.tip[1] - st.base[1], st.tip[2] - st.base[2]];
-  const len = Math.hypot(a[0], a[1], a[2]);
-  if (len < 1e-6) return false;
-  const d = [q[0] - st.base[0], q[1] - st.base[1], q[2] - st.base[2]];
-  const t = (d[0] * a[0] + d[1] * a[1] + d[2] * a[2]) / len;
-  if (t < -0.5 || t > len + 0.5) return false;
-  const r2 = d[0] ** 2 + d[1] ** 2 + d[2] ** 2 - t * t;
-  return r2 < (st.radius + 0.5) ** 2;
-}
-
 /**
  * Tests whether a selection, shifted by an LDraw offset, would sit inside another part.
- * Points sampled through the selection's solid are checked against the other parts'
- * meshes, column by column, with a little slack so parts that only touch pass.
+ * A thin wrapper over the collision world (see collision.ts).
  */
 export function overlapTest(moving: readonly SnapPart[], others: readonly SnapPart[]): ((shift: readonly number[]) => boolean) | null {
-  const points: P3[] = [];
-  for (const part of moving) {
-    if (!part.mesh) return null;
-    const { min, max } = part.body;
-    for (let x = min[0] + 2; x <= max[0] - 2 + 1e-6; x += 4) for (let z = min[2] + 2; z <= max[2] - 2 + 1e-6; z += 4) {
-      const span = lineSpan(part.mesh, part.body, 1, [x, 0, z]);
-      if (!span || span[1] - span[0] < 2.5) continue;
-      for (const y of [span[0] + 1, (span[0] + span[1]) / 2, span[1] - 1]) points.push(apply(part.world, [x, y, z]));
-    }
-  }
-  if (!points.length) return null;
-  const solids = others.filter((o) => o.mesh).map((o) => ({ part: o, box: worldBox(o.world, o.body) }));
-  return (shift) => points.some((p0) => {
-    const p = [p0[0] + shift[0], p0[1] + shift[1], p0[2] + shift[2]];
-    return solids.some(({ part, box }) => {
-      if (![0, 1, 2].every((k) => p[k] > box.min[k] && p[k] < box.max[k])) return false;
-      // into the part's own frame (rotation transposed)
-      const e = part.world, d = [p[0] - e[12], p[1] - e[13], p[2] - e[14]];
-      const q = [0, 1, 2].map((c) => e[c * 4] * d[0] + e[c * 4 + 1] * d[1] + e[c * 4 + 2] * d[2]);
-      // a stud sits in the selection's sockets, not inside it
-      if ((part.studs ?? []).some((st) => inStud(st, q))) return false;
-      return ([0, 1, 2] as const).every((k) => {
-        const span = lineSpan(part.mesh!, part.body, k, q);
-        return !!span && q[k] > span[0] + 0.5 && q[k] < span[1] - 0.5;
-      });
-    });
-  });
+  if (moving.some((p) => !p.mesh)) return null;
+  const world = collisionWorld(others.map((o, i) => ({ ...o, id: String(i) })));
+  const mine = moving.map((m) => ({ ...m, id: 'moving' }));
+  if (!sampleCount(mine)) return null;
+  return (shift) => world.hits(mine, shift).size > 0;
 }
 
 /** The world axis a unit vector lies along, or -1 when it is tilted. */
