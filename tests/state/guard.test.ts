@@ -2,7 +2,7 @@ import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { useStudio } from '../../src/state/store';
 import { useAppSettings } from '../../src/state/appSettings';
 import { runCommand } from '../../src/state/editing';
-import { guardedApply } from '../../src/state/guard';
+import { clampGizmo, guardEdit, guardedApply } from '../../src/state/guard';
 import { moveItems, findItem } from '../../src/plan/ops';
 import type { Plan, PlanItem } from '../../src/plan/types';
 import { appPartsReady as ready, useAppParts } from '../helpers/appParts';
@@ -55,5 +55,19 @@ describe('collision guard', () => {
     const copy = useStudio.getState().selection.ids[0];
     expect(copy).not.toBe('a');
     expect(at(copy).x).toBeGreaterThanOrEqual(8);
+  });
+
+  it.skipIf(!ready)('the rotate gizmo cannot turn a piece into its neighbour', () => {
+    load([piece('a', '3001', 0, 0), piece('wall', '3001', 0, 0, 2)], ['a']);
+    const original = useStudio.getState().plan;
+    const turned = { ...original, steps: [{ pieces: original.steps[0].pieces.map((it) => (it.id === 'a' ? { ...it, rot: 90 } : it)) }] } as Plan;
+    expect(guardEdit(original, turned, '', ['a'])).toBe(false); // the turn really overlaps
+    const r = clampGizmo('rotate', original, turned, null, '', ['a']);
+    expect(r.blocked).toBe(true);
+    expect(r.plan).toBe(original);
+    const t = clampGizmo('translate', original, turned, null, '', ['a']);
+    expect(t.blocked).toBe(true);
+    // scaling is an explicit, separate mode and stays unguarded
+    expect(clampGizmo('scale', original, turned, null, '', ['a']).plan).toBe(turned);
   });
 });

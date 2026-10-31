@@ -12,6 +12,7 @@ import { useAppSettings } from './appSettings';
 import { bodyFor } from './editing';
 import { getColors, metricsOf } from './partService';
 import { useStudio } from './store';
+import { visibleItemIds } from '../plan/visible';
 
 /**
  * One Studio-style placing gesture: moving pieces already built, or placing new ones
@@ -50,13 +51,7 @@ function connectorsOf(inst: Instance): Connector[] {
 /** Ids of the model's top-level items visible at the current step and not hidden. */
 function visibleIds(plan: Plan, m: ModelName): Set<string> {
   const { currentStep, hidden } = useStudio.getState();
-  const gone = new Set(hidden[m] ?? []);
-  const out = new Set<string>();
-  modelSteps(plan, m).forEach((s, i) => {
-    if (currentStep !== null && i > currentStep) return;
-    for (const it of s.pieces) if (it.id && !gone.has(it.id)) out.add(it.id);
-  });
-  return out;
+  return visibleItemIds(plan, m, currentStep, hidden[m] ?? []);
 }
 
 export function beginPlacing(src: PlacingSource, grab?: Vec3): void {

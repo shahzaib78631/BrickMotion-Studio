@@ -21,10 +21,11 @@ import { createSubmodel } from '../plan/createSubmodel';
 import { instancePlacements, itemPlacement, placedBox, placedMatrix, sourceEditDelta, viewPlacement, modelPlacement, placingPointOf } from './modelPlacement';
 import { NewSubmodelDialog } from './NewSubmodelDialog';
 import { runCommand, snapperFor } from '../state/editing';
-import { guardEdit } from '../state/guard';
+import { clampGizmo } from '../state/guard';
 import { beginPlacing, cancelPlacing, commitPlacing, cycleHandle, isPlacing, paletteDrag, placingFloor, turnInHand, updatePlacing, usePlacing } from '../state/placing';
 import { PART_DRAG_TYPE } from './PartsLane';
 import { boxSelect } from './boxSelect';
+import { visibleItemIds } from '../plan/visible';
 import { commandForKey } from '../state/keymap';
 import { useStudio } from '../state/store';
 import { isLoaded, metricsOf } from '../state/partService';
@@ -463,13 +464,13 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
         const placement = itemPlacement(modelRef.current.view.instances, shown, id);
         next = transformPlanItems(next, initialModel.current, [id], initialNodes.current, sourceEditDelta(delta, placement));
       }
-      if (currentMode === 'translate' && !guardEdit(original, next, initialModel.current, initialIds.current)) {
+      const step = clampGizmo(currentMode, original, next, lastClean, initialModel.current, initialIds.current);
+      if (step.blocked) {
         if (readoutRef.current) {
           readoutRef.current.textContent = 'Blocked';
           readoutRef.current.hidden = false;
         }
-        const clean = lastClean ?? original;
-        useStudio.getState().apply(() => clean);
+        useStudio.getState().apply(() => step.plan);
         return;
       }
       if (currentMode === 'translate' && readoutRef.current) readoutRef.current.hidden = true;
@@ -1331,7 +1332,9 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       if (Math.hypot(to.x - from.x, to.y - from.y) <= 4) return;
       const s = st();
       const placements = instancePlacements(s.plan, s.editingModel, modelRef.current.assembly);
-      const items = modelRef.current.view.instances.map((i) => ({ key: i.key, box: placedBox(i, placements) }));
+      // only pieces drawn at the picked step can be boxed
+      const shown = visibleItemIds(s.plan, s.editingModel, s.currentStep, s.hidden[s.editingModel] ?? []);
+      const items = modelRef.current.view.instances.filter((i) => shown.has(i.key.split('/')[0])).map((i) => ({ key: i.key, box: placedBox(i, placements) }));
       const hit = boxSelect(items, studio.camera, { x0: from.x, y0: from.y, x1: to.x, y1: to.y }, { w: r.width, h: r.height }, new Set(s.hidden[s.editingModel] ?? []));
       const found = [...new Set(hit.flatMap((id) => selectionForHit(s.plan, s.editingModel, id, false)))];
       const current = s.selection.model === s.editingModel ? s.selection.ids : [];

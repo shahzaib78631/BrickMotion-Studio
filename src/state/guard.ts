@@ -43,3 +43,12 @@ export function guardedApply(m: ModelName, ids: string[], edit: (p: Plan) => Pla
   st.flashBlocked(ids);
   return 'blocked';
 }
+
+/**
+ * One gizmo step: a move or turn that would push the pieces into another is held at the last
+ * clean plan (or the start). Scale is its own explicit mode and is not guarded.
+ */
+export function clampGizmo(mode: 'translate' | 'rotate' | 'scale', original: Plan, next: Plan, lastClean: Plan | null, m: ModelName, ids: readonly string[]): { plan: Plan; blocked: boolean } {
+  if (mode !== 'scale' && !guardEdit(original, next, m, ids)) return { plan: lastClean ?? original, blocked: true };
+  return { plan: next, blocked: false };
+}
