@@ -1,3 +1,4 @@
+import { isStudSnap } from '../../plan/connectors';
 import { assemblyRole } from '../assemblyGraph';
 import { connectionGeometryFor, transformConnections, studFitsFace } from '../../ldraw/connectors';
 import { cupGripFits, wristContact } from '../jointContact';
@@ -14,10 +15,6 @@ const contactTube = (origin: V3, axis: V3, length: number, radius: number, minRa
 const near = (a: number, b: number, eps = .35) => Math.abs(a - b) <= eps;
 const relBasisNear = (r: readonly number[], expected: readonly number[], eps = 1e-3) => [0, 1, 2, 4, 5, 6, 8, 9, 10].every((k, i) => near(r[k], expected[i], eps));
 const ID_BASIS = [1, 0, 0, 0, 1, 0, 0, 0, 1] as const;
-/** a plain round stud (radius 6 LDU), or a round socket that takes one: an anti-stud or a hinge tube such as a car door's */
-const isStudSnap = (s: Snap) => s.kind === 'cyl' && s.length > 0 && s.length <= (s.gender === 'M' ? 8 : 32) && s.shapes.length > 0
-    // a round stud also seats in a square socket: the underside of 1-wide plates (4315) and special bases
-    && s.shapes.every(x => x === 'R' || (s.gender === 'F' && x === 'S')) && Math.abs(s.radius - 6) <= .6;
 const STUD_PARALLEL = Math.cos(4 * Math.PI / 180);
 const volume = (n: ConstructionNode) => [0, 1, 2].reduce((v, k) => v * Math.max(0, n.body.max[k] - n.body.min[k]), 1);
 const FLIP_XZ_BASIS = [-1, 0, 0, 0, 1, 0, 0, 0, -1] as const;
