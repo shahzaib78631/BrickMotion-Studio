@@ -60,20 +60,28 @@ export function mergeSubmodels(plan: Plan, clip: Clip): { plan: Plan; clip: Clip
   const existing = plan.submodels ?? {};
   const rename = new Map<string, string>();
   const taken = new Set([...Object.keys(existing), ...Object.keys(clip.submodels)]);
-  for (const [name, sm] of Object.entries(clip.submodels)) {
-    if (!existing[name] || sameSteps(existing[name], sm)) continue;
-    let n = 2;
-    while (taken.has(`${name} (${n})`)) n++;
-    rename.set(name, `${name} (${n})`);
-    taken.add(`${name} (${n})`);
-  }
   const ref = (it: PlanItem): PlanItem => (isSub(it) && rename.has(it.submodel) ? { ...it, submodel: rename.get(it.submodel)! } : it);
-  const submodels: Record<string, Submodel> = {};
-  for (const [name, sm] of Object.entries(clip.submodels))
-    submodels[rename.get(name) ?? name] = { ...sm, steps: sm.steps.map((s) => ({ ...s, pieces: s.pieces.map(ref) })) };
-  const added = Object.fromEntries(Object.entries(submodels).filter(([n]) => !existing[n]));
+  const withRefs = (sm: Submodel): Submodel => ({ ...sm, steps: sm.steps.map((s) => ({ ...s, pieces: s.pieces.map(ref) })) });
+  // a parent counts as the same only once its children's renames are applied, so repeat until stable
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const [name, sm] of Object.entries(clip.submodels)) {
+      if (rename.has(name) || !existing[name] || sameSteps(existing[name], withRefs(sm))) continue;
+      let n = 2;
+      while (taken.has(`${name} (${n})`)) n++;
+      rename.set(name, `${name} (${n})`);
+      taken.add(`${name} (${n})`);
+      changed = true;
+    }
+  }
+  // only new names go back: a reused submodel is already in the plan and must not be replaced
+  const added: Record<string, Submodel> = {};
+  for (const [name, sm] of Object.entries(clip.submodels)) {
+    const to = rename.get(name) ?? name;
+    if (!existing[to]) added[to] = withRefs(sm);
+  }
   return {
     plan: Object.keys(added).length ? { ...plan, submodels: { ...existing, ...added } } : plan,
-    clip: { items: clip.items.map(ref), submodels },
+    clip: { items: clip.items.map(ref), submodels: added },
   };
 }

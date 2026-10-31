@@ -69,4 +69,29 @@ describe('clipboard', () => {
     expect(out.plan.submodels!['A (2)']).toEqual(clip.submodels.A);
     expect((out.clip.items[0] as { submodel: string }).submodel).toBe('A (2)');
   });
+
+  it('renames a parent whose nested submodel was renamed, and never hands back a name the plan has', () => {
+    const wheel = { steps: [{ pieces: [piece('w', '3001', 0)] }] };
+    const car = { steps: [{ pieces: [{ submodel: 'Wheel', x: 0, y: 0, z: 0, rot: 0 } as PlanItem] }] };
+    const p = plan([[sub('c1', 'Car', 0)]], { Car: car, Wheel: wheel });
+    const clip = {
+      items: [{ submodel: 'Car', x: 0, y: 0, z: 0, rot: 0 } as PlanItem],
+      submodels: { Car: car, Wheel: { steps: [{ pieces: [piece('w2', '3023', 2)] }] } },
+    };
+    const out = mergeSubmodels(p, clip);
+    expect(out.plan.submodels!.Car).toEqual(car);
+    expect(out.plan.submodels!.Wheel).toEqual(wheel);
+    expect(Object.keys(out.clip.submodels).sort()).toEqual(['Car (2)', 'Wheel (2)']);
+    expect((out.plan.submodels!['Car (2)'].steps[0].pieces[0] as { submodel: string }).submodel).toBe('Wheel (2)');
+    expect((out.clip.items[0] as { submodel: string }).submodel).toBe('Car (2)');
+  });
+
+  it('reuses an identical submodel without handing it back to overwrite', () => {
+    const wheel = { steps: [{ pieces: [piece('w', '3001', 0)] }] };
+    const p = plan([[]], { Wheel: wheel });
+    const out = mergeSubmodels(p, { items: [{ submodel: 'Wheel', x: 0, y: 0, z: 0, rot: 0 } as PlanItem], submodels: { Wheel: wheel } });
+    expect(out.plan).toBe(p);
+    expect(out.clip.submodels).toEqual({});
+    expect((out.clip.items[0] as { submodel: string }).submodel).toBe('Wheel');
+  });
 });
