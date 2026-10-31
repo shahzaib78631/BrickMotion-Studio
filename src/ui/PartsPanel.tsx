@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react';
 import { searchCatalog } from '../catalog/catalog';
 import { COMMON_PARTS } from '../catalog/common';
 import { addPart } from '../state/editing';
+import { ensureParts } from '../state/partService';
+import { setPaletteDrag } from '../state/placing';
 import { getCatalog } from '../state/partService';
 import { PaneHead } from './PaneHead';
 import { PartThumb } from './PartThumb';
@@ -32,7 +34,7 @@ export function PartsPanel() {
   return (
     <div className="nx-pane">
       <PaneHead id="parts" title="Parts" count={catalog.length.toLocaleString()}
-        help="Click a part to add it in the selected colour. It lands in the current step. Or drag it onto the timeline's Parts lane to add it at that moment of the build." />
+        help="Drag a part into the view to snap it onto the model, or click to add it beside the model. Drag onto the timeline's Parts lane to add it at that moment." />
       <input type="search" aria-label="Search parts" placeholder="Search: 2x4, slope 45, 3001…" value={q} onChange={(e) => setQ(e.target.value)} />
       <select aria-label="Category" value={cat} onChange={(e) => setCat(e.target.value)}>
         <option value="">All categories</option>
@@ -48,13 +50,16 @@ export function PartsPanel() {
           <button
             key={e.id}
             className="part-tile"
-            title={`${e.name} (${e.id}) — click to add, or drag onto the timeline's Parts lane to add it at that moment`}
+            title={`${e.name} (${e.id}) — drag into the view to snap it on, click to add, or drag onto the timeline's Parts lane`}
             onClick={() => addPart(e.id)}
             draggable
             onDragStart={(ev) => {
               ev.dataTransfer.setData(PART_DRAG_TYPE, e.id);
               ev.dataTransfer.effectAllowed = 'copy';
+              setPaletteDrag(e.id);
+              void ensureParts([e.id]);
             }}
+            onDragEnd={() => setPaletteDrag(null)}
           >
             <PartThumb id={e.id} />
             <span className="part-name">{e.name}</span>

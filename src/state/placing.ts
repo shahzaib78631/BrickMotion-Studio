@@ -192,3 +192,12 @@ export function cancelPlacing(): void {
 }
 
 export const isPlacing = () => session !== null;
+
+/** The part being dragged from the Parts panel (HTML drag and drop hides its data until the drop). */
+let palettePart: string | null = null;
+export const paletteDrag = () => palettePart;
+export function setPaletteDrag(part: string | null): void {
+  palettePart = part;
+  // a drag that ended anywhere but the view leaves nothing behind
+  if (!part && session?.newItems) cancelPlacing();
+}

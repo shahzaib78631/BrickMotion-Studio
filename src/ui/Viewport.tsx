@@ -22,10 +22,11 @@ import { instancePlacements, itemPlacement, placedBox, placedMatrix, sourceEditD
 import { NewSubmodelDialog } from './NewSubmodelDialog';
 import { runCommand, snapperFor } from '../state/editing';
 import { guardEdit } from '../state/guard';
-import { beginPlacing, cancelPlacing, commitPlacing, cycleHandle, isPlacing, turnInHand, updatePlacing, usePlacing } from '../state/placing';
+import { beginPlacing, cancelPlacing, commitPlacing, cycleHandle, isPlacing, paletteDrag, turnInHand, updatePlacing, usePlacing } from '../state/placing';
+import { PART_DRAG_TYPE } from './PartsLane';
 import { commandForKey } from '../state/keymap';
 import { useStudio } from '../state/store';
-import { metricsOf } from '../state/partService';
+import { isLoaded, metricsOf } from '../state/partService';
 import { modelSteps } from '../plan/ops';
 import { posedBounds, stepPoses, timelineStep } from '../model/stepLayout';
 import { poseAt, spotTransform, type Timeline } from '../anim/timeline';
@@ -1403,11 +1404,28 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       ref={wrapRef}
       onPointerDownCapture={startDrag}
       onDragOver={(e) => {
+        // a part dragged from the Parts panel: it snaps onto the model under the mouse
+        if (e.dataTransfer.types.includes(PART_DRAG_TYPE)) {
+          const part = paletteDrag(), s = st();
+          if (!part || s.mode !== 'edit' || s.timelineEditor !== 'build' || !isLoaded(part)) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
+          if (!isPlacing()) beginPlacing({ kind: 'new', model: s.editingModel, items: [{ part, color: s.paintColor, x: 0, y: 0, z: 0, rot: 0 }] });
+          const ids = usePlacing.getState().state?.ids ?? [];
+          const hit = placingHit(e, new Set(ids));
+          if (hit) updatePlacing(hit);
+          return;
+        }
         if (!e.dataTransfer.types.includes(SPOT_DRAG_TYPE)) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'copy';
       }}
       onDrop={(e) => {
+        if (e.dataTransfer.types.includes(PART_DRAG_TYPE) && isPlacing()) {
+          e.preventDefault();
+          commitPlacing();
+          return;
+        }
         const ref = draggedSpot(e);
         if (!ref || useStudio.getState().timelineEditor !== 'build' || !viewportApi.studio) return;
         e.preventDefault();
