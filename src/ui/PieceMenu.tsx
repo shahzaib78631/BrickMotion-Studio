@@ -108,6 +108,10 @@ export function pieceMenuItems(ids: string[], onCreateSubmodel?: (ids: string[])
     { icon: 'raise', label: 'Raise one plate', hint: '⇧↑ or E', onClick: () => runCommand({ kind: 'move', d: { x: 0, y: 1, z: 0 } }) },
     { icon: 'lower', label: 'Lower one plate', hint: '⇧↓ or Q', onClick: () => runCommand({ kind: 'move', d: { x: 0, y: -1, z: 0 } }) },
     { icon: 'copy', label: 'Duplicate', hint: '⌘D', onClick: () => runCommand({ kind: 'duplicate' }) },
+    { icon: 'copy', label: 'Copy', hint: '⌘C', onClick: () => runCommand({ kind: 'copy' }) },
+    { icon: 'copy', label: 'Cut', hint: '⌘X', onClick: () => runCommand({ kind: 'cut' }) },
+    { icon: 'paste', label: 'Paste', hint: '⌘V', onClick: () => runCommand({ kind: 'paste' }) },
+    { icon: 'copy', label: 'Clone and place', hint: 'C', onClick: () => runCommand({ kind: 'clone' }) },
     ...(one && !isSub(first.item)
       ? [{ icon: 'paste' as const, label: 'Use its colour for new pieces', onClick: () => st.setPaintColor((first.item as { color: string | number }).color) }]
       : []),

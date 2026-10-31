@@ -50,3 +50,12 @@ test('Shift+Up/Down and E/Q raise and lower; Alt adds a full brick', () => {
 test('K toggles collision', () => {
   expect(commandForKey({ key: 'k', shiftKey: false, metaKey: false, ctrlKey: false }, 0)).toEqual({ kind: 'collision' });
 });
+
+test('clipboard keys', () => {
+  const key = (k: string, meta = false) => commandForKey({ key: k, shiftKey: false, metaKey: meta, ctrlKey: false }, 0);
+  expect(key('c', true)).toEqual({ kind: 'copy' });
+  expect(key('x', true)).toEqual({ kind: 'cut' });
+  expect(key('v', true)).toEqual({ kind: 'paste' });
+  expect(key('c')).toEqual({ kind: 'clone' });
+  expect(key('d', true)).toEqual({ kind: 'duplicate' });
+});

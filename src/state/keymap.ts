@@ -7,7 +7,11 @@ export type Command =
   | { kind: 'undo' }
   | { kind: 'redo' }
   | { kind: 'tool'; tool: Tool }
-  | { kind: 'collision' };
+  | { kind: 'collision' }
+  | { kind: 'copy' }
+  | { kind: 'cut' }
+  | { kind: 'paste' }
+  | { kind: 'clone' };
 
 type KeyLike = { key: string; shiftKey: boolean; metaKey: boolean; ctrlKey: boolean; altKey?: boolean };
 
@@ -30,6 +34,9 @@ export function commandForKey(e: KeyLike, cameraAzimuthDeg: number): Command | n
   const mod = e.metaKey || e.ctrlKey;
   if (mod && e.key.toLowerCase() === 'z') return e.shiftKey ? { kind: 'redo' } : { kind: 'undo' };
   if (mod && e.key.toLowerCase() === 'd') return { kind: 'duplicate' };
+  if (mod && e.key.toLowerCase() === 'c') return { kind: 'copy' };
+  if (mod && e.key.toLowerCase() === 'x') return { kind: 'cut' };
+  if (mod && e.key.toLowerCase() === 'v') return { kind: 'paste' };
   if (mod) return null;
   const a = (cameraAzimuthDeg * Math.PI) / 180;
   const fwd = { x: -Math.sin(a), z: Math.cos(a) };
@@ -65,6 +72,9 @@ export function commandForKey(e: KeyLike, cameraAzimuthDeg: number): Command | n
     case 'm':
     case 'M':
       return { kind: 'tool', tool: 'move' };
+    case 'c':
+    case 'C':
+      return { kind: 'clone' };
     case 'k':
     case 'K':
       return { kind: 'collision' };

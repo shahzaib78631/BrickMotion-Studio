@@ -7,6 +7,9 @@ import { isGrid, isSub, type Grid, type Plan, type PlanItem } from '../plan/type
 import { studSnapper, type SnapPart, type StudSnapper } from '../plan/studSnap';
 import type { Command } from './keymap';
 import { useAppSettings } from './appSettings';
+import { beginPlacing, cancelPlacing, commitPlacing, updatePlacing } from './placing';
+import { clipFromLDraw, clipToLDraw, copyItems, mergeSubmodels, type Clip } from '../plan/clipboard';
+import { viewportApi } from '../ui/viewportApi';
 import { guardEdit, guardedApply } from './guard';
 
 /** How far (plates, or studs for a duplicate) a blocked edit looks for a clean spot. */
@@ -102,9 +105,39 @@ function sidewaysMove(plan: Plan, m: ModelName, ids: readonly string[], d: { x: 
   return snap.sideways ? snap({ x: d.x, z: d.z, y: Math.sign(d.y) }) : null;
 }
 
+let lastClip: Clip | null = null;
+let lastText = '';
+
+/** Starts placing copied pieces: they follow the mouse in the view, or land beside the model. */
+async function placeClip(clip: Clip): Promise<void> {
+  const parts = [...clip.items, ...Object.values(clip.submodels).flatMap((s) => s.steps.flatMap((x) => x.pieces))]
+    .flatMap((i) => ('part' in i ? [i.part] : []));
+  await ensureParts(parts);
+  const st = useStudio.getState();
+  const m = st.editingModel;
+  const merged = mergeSubmodels(st.plan, clip).clip;
+  beginPlacing({ kind: 'new', model: m, items: merged.items, submodels: merged.submodels });
+  if (viewportApi.pointerInside && viewportApi.placeAtPointer) return viewportApi.placeAtPointer();
+  // the mouse is elsewhere: put it on the floor just past the model, like Duplicate
+  const view = assemble({ ...st.plan, steps: modelSteps(st.plan, m) }, metricsOf, getColors());
+  const b = view.bounds;
+  for (let k = 0; k <= RETRY_PLATES; k++) {
+    const pose = updatePlacing({ point: [(b ? b.max[0] : 0) + 40 + k * 20, 0, b ? (b.min[2] + b.max[2]) / 2 : 0], owner: null });
+    if (pose?.valid) { commitPlacing(); return; }
+  }
+  cancelPlacing();
+}
+
+async function pasteClip(): Promise<void> {
+  const text = await navigator.clipboard?.readText?.().catch(() => null) ?? null;
+  const clip = text && text !== lastText ? clipFromLDraw(text) ?? lastClip : lastClip;
+  if (clip) await placeClip(clip);
+}
+
 export function runCommand(cmd: Command): void {
   const st = useStudio.getState();
   const { selection, editingModel } = st;
+  if (cmd.kind === 'paste') return void pasteClip();
   if (cmd.kind === 'undo') return st.undo();
   if (cmd.kind === 'redo') return st.redo();
   if (cmd.kind === 'tool') return st.setTool(cmd.tool);
@@ -156,6 +189,16 @@ export function runCommand(cmd: Command): void {
       return;
     }
     st.flashBlocked(ids);
+  } else if (cmd.kind === 'copy' || cmd.kind === 'cut') {
+    lastClip = copyItems(st.plan, m, ids);
+    lastText = clipToLDraw(lastClip, metricsOf, getColors());
+    void navigator.clipboard?.writeText?.(lastText).catch(() => {});
+    if (cmd.kind === 'cut') {
+      st.apply((p) => deleteItems(p, m, ids));
+      st.select([]);
+    }
+  } else if (cmd.kind === 'clone') {
+    void placeClip(copyItems(st.plan, m, ids));
   } else if (cmd.kind === 'delete') {
     st.apply((p) => deleteItems(p, m, ids));
     st.select([]);

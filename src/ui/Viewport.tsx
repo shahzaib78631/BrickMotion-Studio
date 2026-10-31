@@ -100,6 +100,16 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
   const selection = useStudio((s) => s.selection);
   const blocked = useStudio((s) => s.blocked);
   const placingState = usePlacing((p) => p.state);
+  const lastPointer = useRef<{ clientX: number; clientY: number } | null>(null);
+  useEffect(() => {
+    viewportApi.placeAtPointer = () => {
+      const at = lastPointer.current, placing = usePlacing.getState().state;
+      if (!at || !placing) return;
+      const hit = placingHit(at, new Set(placing.ids));
+      if (hit) updatePlacing(hit);
+    };
+    return () => { viewportApi.placeAtPointer = null; };
+  });
   const focus = useStudio((s) => s.focus);
   const mode = useStudio((s) => s.mode);
   const timelineEditor = useStudio((s) => s.timelineEditor);
@@ -1261,6 +1271,8 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     const s = st();
     if (s.timelineEditor === 'timeline') return;
     if (s.mode !== 'edit' || (s.gizmoEnabled && s.selection.ids.length > 0) || e.button !== 0 || !viewportApi.studio) return;
+    // pasted / cloned pieces follow the mouse; the click that places them is not a drag
+    if (isPlacing()) return;
     const key = pickAt(e);
     if (!key) return;
     const id = key.split('/')[0];
@@ -1446,6 +1458,15 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
           rightDown.current = null;
           if (e.button === 2 && start && Math.hypot(e.clientX - start.x, e.clientY - start.y) <= 4) openMenu(e);
         }}
+        onPointerEnter={() => { viewportApi.pointerInside = true; }}
+        onPointerLeave={() => { viewportApi.pointerInside = false; }}
+        onPointerMove={(e) => {
+          lastPointer.current = { clientX: e.clientX, clientY: e.clientY };
+          const placing = usePlacing.getState().state;
+          if (placing?.source.kind !== 'new' || e.buttons) return;
+          const hit = placingHit(e, new Set(placing.ids));
+          if (hit) updatePlacing(hit);
+        }}
         onPointerDown={(e) => {
           if (e.button === 2) rightDown.current = { x: e.clientX, y: e.clientY };
           down.current = { x: e.clientX, y: e.clientY };
@@ -1455,6 +1476,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
           gizmoPress.current = !!(st().gizmoEnabled && gizmoRef.current?.controls.axis);
         }}
         onClick={(e) => {
+          if (isPlacing()) { commitPlacing(); return; }
           if (gizmoPress.current) { gizmoPress.current = false; return; }
           if (st().mode !== 'edit' || viewportApi.scene?.isHandlingPointer()) return;
           if (Math.hypot(e.clientX - down.current.x, e.clientY - down.current.y) > 4) return;
