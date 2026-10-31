@@ -6,8 +6,8 @@ import type { Mat3, Vec3 } from '../ldraw/parse';
 import type { Plan } from './types';
 
 /** LDraw X right, Y down, Z back; viewport X right, Y up, Z forward. */
-const LDU_TO_WORLD = new THREE.Matrix4().makeScale(1 / 20, -1 / 20, -1 / 20);
-const WORLD_TO_LDU = LDU_TO_WORLD.clone().invert();
+export const LDU_TO_WORLD = new THREE.Matrix4().makeScale(1 / 20, -1 / 20, -1 / 20);
+export const WORLD_TO_LDU = LDU_TO_WORLD.clone().invert();
 
 const nearZero = (v: number) => Math.abs(v) < 1e-6 ? 0 : Math.round(v * 100000) / 100000;
 
