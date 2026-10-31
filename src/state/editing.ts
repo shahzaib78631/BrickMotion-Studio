@@ -8,6 +8,7 @@ import { studSnapper, type SnapPart, type StudSnapper } from '../plan/studSnap';
 import type { Command } from './keymap';
 import { useAppSettings } from './appSettings';
 import { beginPlacing, cancelPlacing, commitPlacing, updatePlacing } from './placing';
+import { floorAim } from '../plan/aim';
 import { clipFromLDraw, clipToLDraw, copyItems, mergeSubmodels, type Clip } from '../plan/clipboard';
 import { viewportApi } from '../ui/viewportApi';
 import { guardEdit, guardedApply } from './guard';
@@ -122,7 +123,7 @@ async function placeClip(clip: Clip): Promise<void> {
   const view = assemble({ ...st.plan, steps: modelSteps(st.plan, m) }, metricsOf, getColors());
   const b = view.bounds;
   for (let k = 0; k <= RETRY_PLATES; k++) {
-    const pose = updatePlacing({ point: [(b ? b.max[0] : 0) + 40 + k * 20, 0, b ? (b.min[2] + b.max[2]) / 2 : 0], owner: null });
+    const pose = updatePlacing(floorAim([(b ? b.max[0] : 0) + 40 + k * 20, b?.max[1] ?? 0, b ? (b.min[2] + b.max[2]) / 2 : 0]));
     if (pose?.valid) { commitPlacing(); return; }
   }
   cancelPlacing();

@@ -48,3 +48,8 @@ export function candidates(targets: readonly Target[], aim: Aim, max = MAX_TARGE
   }
   return near.sort((a, b) => a.angle - b.angle).slice(0, max).map((x) => x.t);
 }
+
+/** An aim at a floor spot with nothing in front of it (paste beside the model): only the floor is used. */
+export function floorAim(p: Vec3): Aim {
+  return { ray: { origin: p, dir: [0, 1, 0] }, hitDepth: 0, floorPoint: p };
+}

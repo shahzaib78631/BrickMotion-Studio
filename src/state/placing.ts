@@ -7,6 +7,8 @@ import { partConnectors, worldConnectors, type Connector } from '../plan/connect
 import { newId } from '../plan/ids';
 import { addItem, findItem, modelSteps, type ModelName } from '../plan/ops';
 import { findPose, freeTargets, handleCount, type Pose, type PoseQuery, type Quarter } from '../plan/placementEngine';
+import type { Aim } from '../plan/aim';
+import * as THREE from 'three';
 import type { Plan, PlanItem, Submodel } from '../plan/types';
 import { useAppSettings } from './appSettings';
 import { bodyFor } from './editing';
@@ -18,12 +20,13 @@ import { visibleItemIds } from '../plan/visible';
  * One Studio-style placing gesture: moving pieces already built, or placing new ones
  * (palette, paste, clone). The pieces live in the plan for the whole gesture, at the pose
  * the mouse picks, so the viewport just draws the plan; commit keeps it as one undo step,
- * cancel puts the plan back. Hits are in the model's own LDraw frame.
+ * cancel puts the plan back. The mouse ray is in the model's own LDraw frame.
  */
 export type PlacingSource =
   | { kind: 'move'; model: ModelName; ids: string[] }
   | { kind: 'new'; model: ModelName; items: PlanItem[]; submodels?: Record<string, Submodel> };
-export type PlacingState = { source: PlacingSource; ids: string[]; pose: Pose | null; handle: number; yaw: Quarter } | null;
+/** `lock`: the grip Tab pinned (index into the moving connectors); null = automatic. */
+export type PlacingState = { source: PlacingSource; ids: string[]; pose: Pose | null; lock: number | null; yaw: Quarter } | null;
 export const usePlacing = create<{ state: PlacingState }>(() => ({ state: null }));
 
 type Session = {
@@ -32,13 +35,13 @@ type Session = {
   base: Plan;
   plan0: Plan;
   nodes0: ANode[];
-  query: Omit<PoseQuery, 'hit' | 'handle' | 'yaw' | 'prev'> & { floor: number };
+  query: Omit<PoseQuery, 'aim' | 'lock' | 'yaw' | 'prev'> & { floor: number };
   visible: Set<string>;
   stepOf: (owner: string) => number;
   newItems: PlanItem[] | null;
   step: number;
   selection: string[];
-  lastHit: PoseQuery['hit'] | null;
+  lastAim: Aim | null;
 };
 let session: Session | null = null;
 
@@ -46,6 +49,15 @@ const top = (key: string) => key.split('/')[0];
 
 function connectorsOf(inst: Instance): Connector[] {
   return worldConnectors(partConnectors(metricsOf(inst.part)), inst.world.elements);
+}
+
+/** The centre of the bottom face of what is placed (box centre x / z, box bottom; Y down). */
+function undersideOf(solids: readonly Solid[]): Vec3 {
+  const box = new THREE.Box3();
+  for (const s of solids) box.union(new THREE.Box3(new THREE.Vector3(...s.body.min), new THREE.Vector3(...s.body.max)).applyMatrix4(new THREE.Matrix4().fromArray(Array.from(s.world))));
+  if (box.isEmpty()) return [0, 0, 0];
+  const c = box.getCenter(new THREE.Vector3());
+  return [c.x, box.max.y, c.z];
 }
 
 /** Ids of the model's top-level items visible at the current step and not hidden. */
@@ -90,29 +102,19 @@ export function beginPlacing(src: PlacingSource, grab?: Vec3): void {
   const connectors = mine.flatMap(connectorsOf);
   const world = useAppSettings.getState().collision ? collisionWorld(solidsFor(rest, metricsOf)) : null;
   const before = src.kind === 'move' && world ? world.hits(solids) : new Set<string>();
-  // default handle: the connector nearest where the piece was grabbed; a new part hangs from its first socket
-  let handle = Math.max(0, connectors.findIndex((c) => c.gender === 'F'));
-  if (grab) {
-    // grabbed pieces go on top of things: the nearest underside socket, else the nearest connector (Tab for the rest)
-    const down = connectors.some((c) => c.gender === 'F' && c.axis[1] > 0.9);
-    let d = Infinity;
-    connectors.forEach((c, i) => {
-      if (down && !(c.gender === 'F' && c.axis[1] > 0.9)) return;
-      const e = Math.hypot(c.pos[0] - grab[0], c.pos[1] - grab[1], c.pos[2] - grab[2]);
-      if (e < d) { d = e; handle = i; }
-    });
-  }
+  // the parts are held where they were grabbed; a new part by the centre of its underside
+  const ref: Vec3 = grab ?? undersideOf(solids);
   if (plan0 !== base) st.gestureApply(() => plan0);
   session = {
     model: m, ids, base, plan0, nodes0: view.nodes, visible, newItems, step,
     // the drawn floor (the model's lowest point), fixed for the whole gesture
-    query: { moving: { solids, connectors }, targets, world, before, floor: view.bounds?.max[1] ?? 0 },
+    query: { moving: { solids, connectors }, targets, ref, world, before, floor: view.bounds?.max[1] ?? 0 },
     stepOf: (o) => findItem(plan0, m, o)?.step ?? 0,
     selection: st.selection.ids,
-    lastHit: null,
+    lastAim: null,
   };
   if (newItems) st.select(ids);
-  usePlacing.setState({ state: { source: src, ids, pose: null, handle, yaw: 0 } });
+  usePlacing.setState({ state: { source: src, ids, pose: null, lock: null, yaw: 0 } });
 }
 
 function apply(pose: Pose): void {
@@ -125,13 +127,12 @@ function apply(pose: Pose): void {
   } else st.gestureApply(() => commitPose(s.plan0, s.model, s.ids, s.nodes0, pose, s.stepOf));
 }
 
-/** Follows the mouse: the best pose for a hit in the model's LDraw frame (owner = top-level item id, null = floor). */
-export function updatePlacing(hit: { point: Vec3; owner: string | null }): Pose | null {
+/** Follows the mouse: the best pose for the mouse ray, in the model's LDraw frame. */
+export function updatePlacing(aim: Aim): Pose | null {
   const s = session, cur = usePlacing.getState().state;
   if (!s || !cur) return null;
-  const owner = hit.owner && s.visible.has(hit.owner) && !s.ids.includes(hit.owner) ? hit.owner : null;
-  s.lastHit = { point: hit.point, owner };
-  const pose = findPose({ ...s.query, hit: s.lastHit, handle: cur.handle, yaw: cur.yaw, prev: cur.pose });
+  s.lastAim = aim;
+  const pose = findPose({ ...s.query, aim, lock: cur.lock, yaw: cur.yaw, prev: cur.pose });
   if (pose !== cur.pose) {
     apply(pose);
     usePlacing.setState({ state: { ...cur, pose } });
@@ -141,16 +142,19 @@ export function updatePlacing(hit: { point: Vec3; owner: string | null }): Pose 
 
 function refresh(): void {
   const s = session;
-  if (s?.lastHit) updatePlacing(s.lastHit);
+  if (s?.lastAim) updatePlacing(s.lastAim);
 }
 
-/** Tab / Shift+Tab: hold the parts by the next (or previous) connection. */
+/** Tab / Shift+Tab: pin the next (or previous) grip; past the last one is back to automatic. */
 export function cycleHandle(dir: 1 | -1): void {
   const s = session, cur = usePlacing.getState().state;
   if (!s || !cur) return;
   const n = handleCount(s.query.moving);
-  if (n < 2) return;
-  usePlacing.setState({ state: { ...cur, handle: (cur.handle + dir + n) % n, pose: null } });
+  if (!n) return;
+  // positions 0..n: 0 = automatic, k = grip k - 1
+  const at = cur.lock === null ? 0 : cur.lock + 1;
+  const next = (at + dir + n + 1) % (n + 1);
+  usePlacing.setState({ state: { ...cur, lock: next === 0 ? null : next - 1, pose: null } });
   refresh();
 }
 

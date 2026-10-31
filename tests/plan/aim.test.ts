@@ -30,3 +30,12 @@ describe('aim', () => {
     expect(rayAngle(down().ray, [0, -600, 0])).toBe(Infinity);
   });
 });
+
+describe('floorAim', () => {
+  it('reaches no connection, only the floor spot', async () => {
+    const { floorAim } = await import('../../src/plan/aim');
+    const a = floorAim([100, 0, 20]);
+    expect(candidates([stud(100, 0), stud(100, -8), stud(100, 8, [0, 1, 0])], a)).toHaveLength(0);
+    expect(a.floorPoint).toEqual([100, 0, 20]);
+  });
+});

@@ -6,6 +6,8 @@ import { beginPlacing, cancelPlacing, commitPlacing, cycleHandle, updatePlacing,
 import { findItem } from '../../src/plan/ops';
 import { modelPointOf, viewPlacement } from '../../src/ui/modelPlacement';
 import type { Plan, PlanItem } from '../../src/plan/types';
+import type { Aim } from '../../src/plan/aim';
+import type { Vec3 } from '../../src/ldraw/parse';
 import { appPartsReady as ready, useAppParts } from '../helpers/appParts';
 
 const piece = (id: string, part: string, x: number, y: number, z = 0): PlanItem => ({ id, part, color: 4, x, y, z, rot: 0 });
@@ -14,6 +16,8 @@ const load = (steps: PlanItem[][], currentStep: number | null = null) => {
   s.setPlan({ name: 't', steps: steps.map((pieces) => ({ pieces })) } as Plan, { resetHistory: true });
   s.setCurrentStep(currentStep);
 };
+/** Looking straight down at a model point from 400 LDU above it (the floor is the plan's, y = 0). */
+const aimDown = (p: Vec3): Aim => ({ ray: { origin: [p[0], p[1] - 400, p[2]], dir: [0, 1, 0] }, hitDepth: 400, floorPoint: [p[0], 0, p[2]] });
 const item = (id: string) => findItem(useStudio.getState().plan, '', id)!.item as { x: number; y: number; z: number };
 
 describe('placing session', () => {
@@ -24,7 +28,7 @@ describe('placing session', () => {
     load([[piece('plate', '3020', 0, 0), piece('brick', '3001', 10, 0)]]);
     // grab the brick by its corner socket (model LDU, Y down)
     beginPlacing({ kind: 'move', model: '', ids: ['brick'] }, [210, 0, 10]);
-    const pose = updatePlacing({ point: [11, -8, 11], owner: 'plate' });
+    const pose = updatePlacing(aimDown([11, -8, 11]));
     expect(pose?.valid).toBe(true);
     expect(pose?.mated).toBe(8);
     expect(commitPlacing()).toEqual(['brick']);
@@ -37,7 +41,7 @@ describe('placing session', () => {
     load([[piece('plate', '3020', 0, 0), piece('brick', '3001', 10, 0)]]);
     const before = useStudio.getState().plan;
     beginPlacing({ kind: 'move', model: '', ids: ['brick'] }, [210, 0, 10]);
-    updatePlacing({ point: [11, -8, 11], owner: 'plate' });
+    updatePlacing(aimDown([11, -8, 11]));
     cancelPlacing();
     expect(useStudio.getState().plan).toBe(before);
     expect(useStudio.getState().past).toHaveLength(0);
@@ -47,7 +51,7 @@ describe('placing session', () => {
   it.skipIf(!ready)('does not target pieces from later steps', () => {
     load([[piece('brick', '3001', 10, 0)], [], [], [piece('plate', '3020', 0, 0)]], 1);
     beginPlacing({ kind: 'move', model: '', ids: ['brick'] }, [210, 0, 10]);
-    const pose = updatePlacing({ point: [11, -8, 11], owner: 'plate' });
+    const pose = updatePlacing(aimDown([11, -8, 11]));
     expect(pose?.owners).toEqual([]);
     expect(pose?.mated).toBe(0);
   });
@@ -55,7 +59,7 @@ describe('placing session', () => {
   it.skipIf(!ready)('adds a new part where it is dropped, in the current step', () => {
     load([[piece('plate', '3020', 0, 0)], []], 1);
     beginPlacing({ kind: 'new', model: '', items: [piece('', '3024', 0, 0)] });
-    updatePlacing({ point: [30, -8, 30], owner: 'plate' });
+    updatePlacing(aimDown([30, -8, 30]));
     const ids = commitPlacing()!;
     expect(ids).toHaveLength(1);
     const found = findItem(useStudio.getState().plan, '', ids[0])!;
@@ -68,17 +72,36 @@ describe('placing session', () => {
     load([[piece('plate', '3020', 0, 0)]]);
     const before = useStudio.getState().plan;
     beginPlacing({ kind: 'new', model: '', items: [piece('', '3024', 0, 0)] });
-    updatePlacing({ point: [30, -8, 30], owner: 'plate' });
+    updatePlacing(aimDown([30, -8, 30]));
     cancelPlacing();
     expect(useStudio.getState().plan).toBe(before);
   });
 
-  it.skipIf(!ready)('Tab cycles the handle', () => {
+  it.skipIf(!ready)('cycles the grip lock through Auto', () => {
     load([[piece('brick', '3001', 10, 0)]]);
     beginPlacing({ kind: 'move', model: '', ids: ['brick'] }, [210, 0, 10]);
-    const h0 = usePlacing.getState().state!.handle;
+    const lock = () => usePlacing.getState().state!.lock;
+    expect(lock()).toBeNull();
     cycleHandle(1);
-    expect(usePlacing.getState().state!.handle).not.toBe(h0);
+    expect(lock()).toBe(0);
+    cycleHandle(-1);
+    expect(lock()).toBeNull();
+    cycleHandle(-1);
+    const n = lock()! + 1;
+    expect(n).toBeGreaterThan(1);
+    cycleHandle(1); // past the last grip: back to Auto
+    expect(lock()).toBeNull();
+    for (let i = 0; i < n; i++) cycleHandle(1);
+    expect(lock()).toBe(n - 1);
+  });
+
+  it.skipIf(!ready)("a new part is held by its underside centre", () => {
+    load([[piece('plate', '3020', 0, 0)], []], 1);
+    beginPlacing({ kind: 'new', model: '', items: [piece('', '3001', 0, 0)] });
+    // pointing at the plate's centre (plan positions are corner-based) puts the brick's centre there: on all 8 studs
+    const pose = updatePlacing(aimDown([40, -8, 20]));
+    expect(pose?.valid).toBe(true);
+    expect(pose?.mated).toBe(8);
   });
 
   it('maps a display hit back into the model frame of a rotated bay', () => {
@@ -94,7 +117,7 @@ describe('placing session', () => {
   it.skipIf(!ready)('grabbing a brick by its top still seats it on top', () => {
     load([[piece('plate', '3020', 0, 0), piece('brick', '3001', 10, 0)]]);
     beginPlacing({ kind: 'move', model: '', ids: ['brick'] }, [210, -24, 10]);
-    const pose = updatePlacing({ point: [11, -8, 11], owner: 'plate' });
+    const pose = updatePlacing(aimDown([11, -8, 11]));
     expect(pose?.valid).toBe(true);
     commitPlacing();
     expect(item('brick')).toMatchObject({ x: 0, y: 1, z: 0 });
@@ -106,7 +129,7 @@ describe('placing session', () => {
     it.skipIf(!ready)('keeps an edit made elsewhere and drops the held part', () => {
       load([[piece('plate', '3020', 0, 0)]]);
       beginPlacing({ kind: 'new', model: '', items: [piece('', '3024', 0, 0)] });
-      updatePlacing({ point: [30, -8, 30], owner: 'plate' });
+      updatePlacing(aimDown([30, -8, 30]));
       useStudio.getState().apply((p) => ({ ...p, steps: [{ pieces: [...p.steps[0].pieces, piece('lane', '3001', 40, 0)] }] }));
       expect(usePlacing.getState().state).toBeNull();
       expect(ghostIn()).toBe(false);
@@ -114,7 +137,7 @@ describe('placing session', () => {
       expect(useStudio.getState().gesture).toBeNull();
       expect(useStudio.getState().past).toHaveLength(1);
       // a late mouse move or drag end changes nothing
-      expect(updatePlacing({ point: [30, -8, 30], owner: 'plate' })).toBeNull();
+      expect(updatePlacing(aimDown([30, -8, 30]))).toBeNull();
       cancelPlacing();
       expect(item('lane')).toBeTruthy();
     });
@@ -124,7 +147,7 @@ describe('placing session', () => {
       beginPlacing({ kind: 'new', model: '', items: [piece('', '3024', 0, 0)] });
       const other = { name: 'other', steps: [{ pieces: [piece('x', '3001', 0, 0)] }] } as Plan;
       useStudio.getState().setPlan(other, { resetHistory: true });
-      updatePlacing({ point: [30, -8, 30], owner: 'plate' });
+      updatePlacing(aimDown([30, -8, 30]));
       expect(useStudio.getState().plan).toBe(other);
       expect(useStudio.getState().gesture).toBeNull();
     });
@@ -134,7 +157,7 @@ describe('placing session', () => {
         load([[piece('plate', '3020', 0, 0)]]);
         useStudio.getState().setMode('edit');
         beginPlacing({ kind: 'new', model: '', items: [piece('', '3024', 0, 0)] });
-        updatePlacing({ point: [30, -8, 30], owner: 'plate' });
+        updatePlacing(aimDown([30, -8, 30]));
         act();
         expect(usePlacing.getState().state).toBeNull();
         expect(ghostIn()).toBe(false);
