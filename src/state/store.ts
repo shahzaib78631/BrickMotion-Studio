@@ -54,7 +54,7 @@ export type StudioState = {
   focus: { ids: string[]; tick: number };
   /** color used for the next added piece */
   paintColor: string | number;
-  /** Select: dragging orbits the view. Move: dragging a piece moves it on the floor. */
+  /** Select: drag a selected piece to move it, or drag empty space to box-select. Move: drag any piece. Right-drag orbits. */
   tool: Tool;
   /** Optional three-axis Blender-like transform handles. */
   gizmoEnabled: boolean;

@@ -257,6 +257,8 @@ export function createViewControls(deps: Deps): ViewControls {
   };
 
   const onPointerDown = (e: PointerEvent) => {
+    // Shift+right pans; plain right orbits
+    if (e.button === 2) controls.mouseButtons.RIGHT = e.shiftKey ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
     if (e.button !== 1) return;
     // Shift+middle pans; plain and Ctrl+middle keep OrbitControls' zoom
     controls.mouseButtons.MIDDLE = e.shiftKey ? THREE.MOUSE.PAN : THREE.MOUSE.DOLLY;

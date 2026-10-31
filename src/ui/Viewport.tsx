@@ -24,6 +24,7 @@ import { runCommand, snapperFor } from '../state/editing';
 import { guardEdit } from '../state/guard';
 import { beginPlacing, cancelPlacing, commitPlacing, cycleHandle, isPlacing, paletteDrag, turnInHand, updatePlacing, usePlacing } from '../state/placing';
 import { PART_DRAG_TYPE } from './PartsLane';
+import { boxSelect } from './boxSelect';
 import { commandForKey } from '../state/keymap';
 import { useStudio } from '../state/store';
 import { isLoaded, metricsOf } from '../state/partService';
@@ -101,6 +102,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
   const blocked = useStudio((s) => s.blocked);
   const placingState = usePlacing((p) => p.state);
   const lastPointer = useRef<{ clientX: number; clientY: number } | null>(null);
+  const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   useEffect(() => {
     viewportApi.placeAtPointer = () => {
       const at = lastPointer.current, placing = usePlacing.getState().state;
@@ -213,6 +215,9 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     const studio = createStudio(canvas);
     const controls = new OrbitControls(studio.camera, canvas);
     controls.enableDamping = true;
+    // Studio's mouse: left-drag selects (a box on empty space), right-drag orbits, Shift+right pans
+    controls.mouseButtons.LEFT = null;
+    controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE;
     controls.maxPolarAngle = Math.PI * 0.49;
     controls.target.set(0, 0, 0);
     studio.camera.position.set(18, 22, 30);
@@ -1274,7 +1279,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     // pasted / cloned pieces follow the mouse; the click that places them is not a drag
     if (isPlacing()) return;
     const key = pickAt(e);
-    if (!key) return;
+    if (!key) return startBoxSelect(e);
     const id = key.split('/')[0];
     const already = s.selection.model === s.editingModel && s.selection.ids.includes(id);
     // Move tool: any piece; Select tool: only a piece that is already selected (a plain click still selects)
@@ -1300,6 +1305,37 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       window.removeEventListener('pointerup', up);
       if (started) commitPlacing();
       if (viewportApi.controls) viewportApi.controls.enabled = st().mode === 'edit';
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
+  /** Left-drag on empty space draws a selection box: Shift adds to the selection, Alt takes away. */
+  const startBoxSelect = (e: React.PointerEvent) => {
+    const canvas = canvasRef.current, studio = viewportApi.studio;
+    if (!canvas || !studio) return;
+    const r = canvas.getBoundingClientRect();
+    const from = { x: e.clientX - r.left, y: e.clientY - r.top };
+    const add = e.shiftKey, remove = e.altKey;
+    let to = from;
+    const move = (ev: PointerEvent) => {
+      to = { x: ev.clientX - r.left, y: ev.clientY - r.top };
+      if (Math.hypot(to.x - from.x, to.y - from.y) > 4) setMarquee({ x0: from.x, y0: from.y, x1: to.x, y1: to.y });
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      setMarquee(null);
+      if (Math.hypot(to.x - from.x, to.y - from.y) <= 4) return;
+      const s = st();
+      const placements = instancePlacements(s.plan, s.editingModel, modelRef.current.assembly);
+      const items = modelRef.current.view.instances.map((i) => ({ key: i.key, box: placedBox(i, placements) }));
+      const hit = boxSelect(items, studio.camera, { x0: from.x, y0: from.y, x1: to.x, y1: to.y }, { w: r.width, h: r.height }, new Set(s.hidden[s.editingModel] ?? []));
+      const found = [...new Set(hit.flatMap((id) => selectionForHit(s.plan, s.editingModel, id, false)))];
+      const current = s.selection.model === s.editingModel ? s.selection.ids : [];
+      if (remove) s.select(current.filter((id) => !found.includes(id)));
+      else if (add) s.select([...new Set([...current, ...found])]);
+      else s.select(found);
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
@@ -1542,6 +1578,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       <SceneTools />
       <CameraRegionOverlay />
       <div className="bm-gizmo-readout" ref={readoutRef} hidden aria-live="polite" />
+      {marquee && <div className="bm-box-select" style={{ left: Math.min(marquee.x0, marquee.x1), top: Math.min(marquee.y0, marquee.y1), width: Math.abs(marquee.x1 - marquee.x0), height: Math.abs(marquee.y1 - marquee.y0) }} />}
       <ViewLabel />
       {model.ready && placing && follow && !!timeline && (
         <div className="overlay-note">Showing the model as built while you place pieces. {tool === 'move' ? 'Switch to the Select tool' : 'Press Esc'} to go back to the animation.</div>
