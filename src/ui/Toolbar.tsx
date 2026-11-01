@@ -5,6 +5,7 @@ import { readStudioIo } from '../io/studioIo';
 import { planToJson, readPlanFile, attachAssemblyArtifact } from '../io/planFile';
 import { isAssemblyArtifact } from '../anim/assemblyPlan/artifact';
 import { isProjectFile, readProjectFile, PROJECT_EXTENSION } from '../io/projectFile';
+import { parsePartsBin, parseRebrickablePartsCsv, partsBinToRows } from '../io/partsImport';
 import { animOptions, useAppSettings } from '../state/appSettings';
 import { adoptTimeline, forgetTimelines, optsKey, settingsFromOptsKey } from '../state/timelineService';
 import { regenerateSteps } from '../plan/regenerate';
@@ -16,6 +17,7 @@ import { ensureParts, getColors, metricsOf, registerInlineParts } from '../state
 import { allPartIds } from '../state/useModel';
 import { newProject, useSaveStatus } from '../state/persistence';
 import { applyImportTemplate } from '../state/templates';
+import { importParts } from '../state/editing';
 import { useStudio } from '../state/store';
 import { saveBlob, safeFileName } from './download';
 import { Ic, type IconName } from './icons';
@@ -119,11 +121,17 @@ export function Toolbar({ theme, onTheme, onProjects, onTemplates, onAbout, onEx
   const fileRef = useRef<HTMLInputElement>(null);
   const [savingProject, setSavingProject] = useState<SaveProgress | null>(null);
   const [templateNote, setTemplateNote] = useState<string | null>(null);
+  const [importNote, setImportNote] = useState<string | null>(null);
   useEffect(() => {
     if (!templateNote) return;
     const id = setTimeout(() => setTemplateNote(null), 4000);
     return () => clearTimeout(id);
   }, [templateNote]);
+  useEffect(() => {
+    if (!importNote) return;
+    const id = setTimeout(() => setImportNote(null), 4000);
+    return () => clearTimeout(id);
+  }, [importNote]);
   const pieces = pieceCount(plan);
   const editingModel = useStudio((s) => s.editingModel);
   const [regenerating, setRegenerating] = useState(false);
@@ -184,6 +192,26 @@ export function Toolbar({ theme, onTheme, onProjects, onTemplates, onAbout, onEx
   };
   const importFile = async (f: File) => {
     if (isProjectFile(f.name)) return openProjectFile(f);
+    const ext = f.name.toLowerCase().split('.').pop() ?? '';
+    // A bill of materials is not a model: it becomes the parts that get imported into the open set.
+    if (ext === 'csv' || ext === 'pbg') {
+      let partsText: string;
+      try { partsText = await f.text(); } catch (e) { return alert(`Couldn't read ${f.name}:\n\n${e instanceof Error ? e.message : String(e)}`); }
+      const rows = ext === 'pbg' ? partsBinToRows(parsePartsBin(partsText)) : parseRebrickablePartsCsv(partsText);
+      const before = pieceCount();
+      await importParts(rows);
+      const added = pieceCount() - before;
+      if (added > 0) setImportNote(`Imported ${added} parts from ${f.name}`);
+      const plan = useStudio.getState().plan;
+      // A bill of materials lands as one step; big ones get the bottom-up layers a step-less model gets.
+      if (modelsWithoutSteps(plan).length) {
+        registerInlineParts(plan.parts);
+        await ensureParts(allPartIds(plan));
+        const stepped = autoStepPlan(plan, metricsOf, getColors()).plan;
+        if (stepped !== plan) useStudio.getState().apply(() => stepped);
+      }
+      return;
+    }
     let text: string;
     try { text = f.name.toLowerCase().endsWith('.io') ? await readStudioIo(await f.arrayBuffer()) : await f.text(); }
     catch (e) { return alert(`Couldn't extract ${f.name}:\n\n${e instanceof Error ? e.message : String(e)}`); }
@@ -246,6 +274,7 @@ export function Toolbar({ theme, onTheme, onProjects, onTemplates, onAbout, onEx
     { icon: 'checks', label: 'Review model checks', subtitle: 'Warnings and verification', action: () => onNavigate('checks') },
     { icon: 'settings', label: 'Open Settings', subtitle: 'Workspace and animation preferences', action: () => onNavigate('settings') },
     { icon: 'upload', label: 'Import a model', subtitle: 'Studio .io, LDraw, MPD, JSON, project file', action: () => fileRef.current?.click() },
+    { icon: 'upload', label: 'Import parts…', subtitle: 'Rebrickable parts CSV or parts bin', action: () => fileRef.current?.click() },
     { icon: 'folder', label: 'Browse projects', subtitle: 'Open a saved project', action: onProjects },
     { icon: 'layout', label: 'Templates', subtitle: 'Save this project as a template, or apply one to this model', action: onTemplates },
     { icon: 'fit', label: 'Fit the viewport', subtitle: 'Frame all model pieces', action: () => viewportApi.fit() },
@@ -293,7 +322,7 @@ export function Toolbar({ theme, onTheme, onProjects, onTemplates, onAbout, onEx
             {status === 'saved' ? 'Autosaved' : status === 'dirty' ? 'Saving…' : 'Save error'}
             {status === 'saved' && <Ic name="check" />}
           </span>
-          <input ref={fileRef} type="file" accept={`.${PROJECT_EXTENSION},.json,.ldr,.mpd,.dat,.io`} hidden
+          <input ref={fileRef} type="file" accept={`.${PROJECT_EXTENSION},.json,.ldr,.mpd,.dat,.io,.csv,.pbg`} hidden
             onChange={(e) => { const f = e.target.files?.[0]; if (f) void importFile(f); e.target.value = ''; }} />
         </div>
         <button className="bm-command-trigger" aria-label="Search or run a command (Command K)"
@@ -302,6 +331,7 @@ export function Toolbar({ theme, onTheme, onProjects, onTemplates, onAbout, onEx
         </button>
         <div className="nx-head-right">
           {templateNote && <span className="bm-saving-progress" role="status">{templateNote}</span>}
+          {importNote && <span className="bm-saving-progress" role="status">{importNote}</span>}
           {savingProject && <span className="bm-saving-progress" role="status">Saving {savingProject.done + 1}/{savingProject.total}…</span>}
           <DropMenu className="nx-icon bm-history-button" label="Project tools" align="right"
             trigger={<Ic name="history" />} items={[

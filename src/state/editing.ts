@@ -1,9 +1,10 @@
 import type { Box } from '../ldraw/flatten';
-import { assemble, transformBox, placementMatrix, type Assembly, type Instance } from '../model/assemble';
+import { assemble, DEFAULT_COLOR, transformBox, placementMatrix, type Assembly, type Instance } from '../model/assemble';
 import { newId } from '../plan/ids';
 import { addItem, deleteItems, duplicateItems, findItem, modelSteps, moveItems, rotateItems, type ModelName, insertItem } from '../plan/ops';
 import { gridToPlacement } from '../plan/placement';
-import { isGrid, isSub, type Grid, type Plan, type PlanItem } from '../plan/types';
+import { neededBomRows } from '../plan/bom';
+import { isGrid, isSub, type BomRow, type Grid, type Plan, type PlanItem } from '../plan/types';
 import { studSnapper, type SnapPart, type StudSnapper } from '../plan/studSnap';
 import type { Command } from './keymap';
 import { useAppSettings } from './appSettings';
@@ -81,6 +82,52 @@ export async function addPart(part: string, at?: { step: number; index: number }
     st.apply((p) => addItem(p, editingModel, steps.length === 0 ? 0 : step, item));
   }
   st.select([id]);
+}
+
+/**
+ * Imports a bill of materials into the edited model: every needed unit of every part and
+ * colour becomes a piece of the model's step, each waiting at a free spot on the floor.
+ * The sources are a Rebrickable parts export CSV and a parts bin; both become the same
+ * rows, and spares or excess quantities never reach the plan.
+ */
+export async function importParts(rows: BomRow[]): Promise<void> {
+  const needed = neededBomRows(rows);
+  if (!needed.length) return;
+  const partIds = [...new Set(needed.map((r) => r.part))];
+  await ensureParts(partIds);
+  const st = useStudio.getState();
+  const m: ModelName = st.editingModel;
+  const plan = st.plan;
+  const view = assemble({ ...plan, steps: modelSteps(plan, m) }, metricsOf, getColors());
+  const instances: Instance[] = [...view.instances];
+  const bounds = view.bounds;
+  const placed: PlanItem[] = [];
+  for (const row of needed) {
+    const body = metricsOf(row.part).body;
+    for (let k = 0; k < row.quantity; k++) {
+      const spot = findFreeSpot({ ...view, instances, bounds }, body);
+      const world = placementMatrix(gridToPlacement(spot, body));
+      const item: PlanItem = { id: newId(plan), part: row.part, color: row.color, ...spot };
+      placed.push(item);
+      instances.push({
+        key: `${m}/${row.part}/${row.color}/${placed.length}`,
+        itemId: item.id ?? '',
+        model: m,
+        part: row.part,
+        color: typeof row.color === 'number' ? row.color : DEFAULT_COLOR,
+        world,
+        worldBox: transformBox(body, world),
+        placeholder: false,
+        grid: true,
+      });
+    }
+  }
+  if (!placed.length) return;
+  let next = plan;
+  const step = st.currentStep ?? Math.max(0, modelSteps(plan, m).length - 1);
+  for (const item of placed) next = addItem(next, m, step, item);
+  st.apply(() => next);
+  st.select(placed.map((i) => i.id).filter((id): id is string => !!id));
 }
 
 /** A move's stud snapper: the selected items' parts against every other part (LDraw frame). */

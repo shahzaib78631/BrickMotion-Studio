@@ -44,6 +44,13 @@ export type AssemblyHints = {
 export type PieceItem = { assembly?: AssemblyHints; id?: string; part: string; color: string | number } & (Grid | Raw);
 export type SubItem = { assembly?: AssemblyHints; id?: string; submodel: string } & (Grid | Raw);
 export type PlanItem = PieceItem | SubItem;
+
+/**
+ * One needed unit of a part in a bill of materials: an LDraw part id, its colour, how
+ * many are needed, and whether they are spares rather than build stock. Comes from a
+ * Rebrickable parts export or a parts bin (LDcad) and is what a plan picks up.
+ */
+export type BomRow = { part: string; color: number; quantity: number; spare?: boolean };
 /** A step's editorial metadata is optional, keeping older saved projects compatible. */
 export type Step = {
   pieces: PlanItem[];
