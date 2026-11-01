@@ -41,21 +41,35 @@ function overlaps(a: Box, b: Box): boolean {
   return [0, 1, 2].every((k) => Math.min(a.max[k], b.max[k]) - Math.max(a.min[k], b.min[k]) > 1);
 }
 
-/** Nearest free grid spot on the floor, spiralling out from the model centre. */
-export function findFreeSpot(view: Assembly, body: Box): Grid {
+/** How many rings the free-spot search spirals out before it gives up on a clear spot. */
+const SPOT_RINGS = 120;
+/** Floor clearance (LDU, one stud) left around imported parts so each one stands apart. */
+const IMPORT_GAP = 20;
+
+/** Grows a box by `gap` LDU on the floor (x/z); the height is left alone. */
+function padFloor(b: Box, gap: number): Box {
+  return { min: [b.min[0] - gap, b.min[1], b.min[2] - gap], max: [b.max[0] + gap, b.max[1], b.max[2] + gap] };
+}
+
+/**
+ * Nearest free grid spot on the floor, spiralling out from the model centre. `gap` (LDU)
+ * is the clear floor space kept around the spot: the default 0 packs parts flush, while
+ * a positive gap keeps the placed part apart from whatever is already there.
+ */
+export function findFreeSpot(view: Assembly, body: Box, gap = 0): Grid {
   const g0 = { x: 0, y: 0, z: 0, rot: 0 as const };
   const fp = { w: Math.max(1, Math.round((body.max[0] - body.min[0]) / 20)), d: Math.max(1, Math.round((body.max[2] - body.min[2]) / 20)) };
   const b = view.bounds;
   const cx = b ? Math.round((b.min[0] + b.max[0]) / 40 - fp.w / 2) : 0;
   const cz = b ? Math.round((b.min[2] + b.max[2]) / 40 - fp.d / 2) : 0;
   const boxes = view.instances.map((i) => i.worldBox);
-  for (let r = 0; r <= 40; r++) {
+  for (let r = 0; r <= SPOT_RINGS; r++) {
     for (let dx = -r; dx <= r; dx++)
       for (let dz = -r; dz <= r; dz++) {
         if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
         const g = { ...g0, x: cx + dx, z: cz + dz };
         const wb = transformBox(body, placementMatrix(gridToPlacement(g, body)));
-        if (!boxes.some((o) => overlaps(o, wb))) return g;
+        if (!boxes.some((o) => overlaps(o, gap > 0 ? padFloor(wb, gap) : wb))) return g;
       }
   }
   return { ...g0, x: cx, z: cz };
@@ -105,7 +119,7 @@ export async function importParts(rows: BomRow[]): Promise<void> {
   for (const row of needed) {
     const body = metricsOf(row.part).body;
     for (let k = 0; k < row.quantity; k++) {
-      const spot = findFreeSpot({ ...view, instances, bounds }, body);
+      const spot = findFreeSpot({ ...view, instances, bounds }, body, IMPORT_GAP);
       const world = placementMatrix(gridToPlacement(spot, body));
       const item: PlanItem = { id: newId(plan), part: row.part, color: row.color, ...spot };
       placed.push(item);
