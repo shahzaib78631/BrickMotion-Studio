@@ -1304,7 +1304,10 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
           const geometry = metrics(part);
           if (geometry.placeholder || !geometry.mesh?.length) missingInsertionParts.add(part);
         }
-        clear = verifiedInsertion(member, block, way, metrics, byKey, holder, insertionMemo, matesOf(member.key, block.key));
+        // The joint this piece makes with this block: a connector's axis, or a documented slot's
+        // line. Either way the seat is a joint contact, not a collision, when the way matches it.
+        clear = verifiedInsertion(member, block, way, metrics, byKey, holder, insertionMemo,
+          [...matesOf(member.key, block.key), ...slotWaysOf(member.key, block.key)]);
         insertionCache.set(id, clear);
         return clear;
       };

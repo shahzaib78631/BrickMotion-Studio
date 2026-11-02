@@ -3,7 +3,7 @@ import { assemble, type Metrics } from '../../src/model/assemble';
 import type { Box } from '../../src/ldraw/flatten';
 import { ensureIds } from '../../src/plan/ids';
 import { setAssemblySpot, setLoosePiecesFollow, setSubmodelBuildSpot } from '../../src/plan/pieceActions';
-import { boxesOverlap, facing, formatSpot, outline, overlaps, spotWarnings, submodelUses, scenePoint, planPoint, sceneSpot, storedSpot, planOffset, sceneOffset } from '../../src/plan/assemblySpots';
+import { boxesOverlap, centredSpot, centre2, facing, formatSpot, outline, overlaps, spotWarnings, submodelUses, scenePoint, planPoint, sceneSpot, storedSpot, planOffset, sceneOffset } from '../../src/plan/assemblySpots';
 import { parsePlan } from '../../src/plan/schema';
 import type { Plan, PlanItem } from '../../src/plan/types';
 import { fixtureColors, fixtureMetrics } from '../helpers/fixtureMetrics';
@@ -121,6 +121,20 @@ describe('spot geometry', () => {
     expect(boxesOverlap(box([0, 0, 0], [20, 20, 20]), box([10, 0, 0], [30, 20, 20]))).toBe(true);
     expect(boxesOverlap(box([0, 0, 0], [20, 20, 20]), box([40, 0, 0], [60, 20, 20]))).toBe(false);
     expect(overlaps([{ ref: { model: '', id: '' }, label: 'A', box: box([0, 0, 0], [20, 20, 20]), placed: true }, { ref: { model: '', id: 'x' }, label: 'B', box: box([5, 0, 0], [25, 20, 20]), placed: true }])).toHaveLength(1);
+  });
+
+  it('centres a model on the floor origin, at any facing', () => {
+    // a model whose own coordinates sit well away from the origin
+    const original = box([120, -24, -160], [200, 0, -100]);
+    const centre = centre2(original);
+    for (const angle of [0, 37, 90, -120]) {
+      const plan = { ...withUse(), assemblySpot: centredSpot(angle) };
+      // the display origin is the model's own centre, so the camera and the hero orbit turn
+      // around the model rather than around wherever the file happened to put it
+      const at = planPoint(plan, original, [0, 0]);
+      expect(at[0]).toBeCloseTo(centre[0], 7);
+      expect(at[1]).toBeCloseTo(centre[1], 7);
+    }
   });
 
   it('round-trips nested spot coordinates when the entire scene is rotated', () => {

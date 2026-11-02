@@ -10,6 +10,7 @@ import { selectedKeyIds, useStudio } from '../state/store';
 import { useAppSettings } from '../state/appSettings';
 import { cameraPoseToKey } from '../anim/cameraTrack/context';
 import { addCameraKey, choosePreset, deleteCameraKey, deleteCameraKeys, moveCameraKey, moveCameraKeys, trackOf, updateCameraKey, type TrackRef } from '../anim/cameraTrack/ops';
+import { copiedCameraKeys, copiedSpan, copyCameraKeys, pasteCameraKeys } from '../anim/cameraTrack/clipboard';
 import { usePlayback } from '../state/playback';
 import { useKeyframePlayback } from '../state/keyframePlayback';
 import { animationOf } from '../anim/keyframes';
@@ -90,6 +91,19 @@ export function CameraTrackLanes({ clock, duration, fps, laneHeight, toX, toT, u
       useKeyframePlayback.getState().set({ frame: Math.round(a.startFrame + t * a.fps), playing: false });
     }
   };
+  /** the time the playhead is on, for a paste with no pointer position */
+  const playhead = () => clock === 'build' ? usePlayback.getState().t
+    : (() => { const a = animationOf(st().plan.animation); return (useKeyframePlayback.getState().frame - a.startFrame) / a.fps; })();
+  /** pastes the copied shots at `t`, keeping their spacing, and selects what landed */
+  const pasteAt = (t: number) => {
+    if (!copiedCameraKeys().length) return;
+    const before = new Set(trackOf(st().plan, ref)?.keys.map((k) => k.id));
+    st().apply((p) => pasteCameraKeys(p, ref, t, fps, duration));
+    const added = (trackOf(st().plan, ref)?.keys ?? []).filter((k) => !before.has(k.id));
+    if (added.length) st().selectCamera(added.length > 1
+      ? { kind: 'key', clock, id: added[0].id, ids: added.map((k) => k.id) }
+      : { kind: 'key', clock, id: added[0].id });
+  };
   const addKeyAt = (t: number) => {
     const key = keyFromView(t, sensorMm);
     if (!key) return;
@@ -105,6 +119,8 @@ export function CameraTrackLanes({ clock, duration, fps, laneHeight, toX, toT, u
       return setMenu({ x: e.clientX, y: e.clientY, label: 'Camera keys menu', items: [
         { heading: `${n} camera keys` },
         { icon: 'edit', label: `Edit ${n} keys in the Inspector`, onClick: () => choose(ids, k.id) },
+        { icon: 'copy', label: `Copy ${n} camera keys`, hint: '⌘C', onClick: () => copyCameraKeys(keys.filter((k) => ids.includes(k.id))) },
+        { icon: 'paste', label: `Paste at ${fmt(playhead())}`, disabled: !copiedCameraKeys().length, onClick: () => pasteAt(playhead()) },
         { icon: 'check', label: 'Select all camera keys', hint: '⌘A', onClick: selectAll },
         'sep',
         { icon: 'trash', label: `Delete ${n} camera keys`, hint: 'Delete', danger: true, onClick: () => removeKeys(ids) },
@@ -119,6 +135,8 @@ export function CameraTrackLanes({ clock, duration, fps, laneHeight, toX, toT, u
         const key = keyFromView(k.t, sensorMm);
         if (key) st().apply((p) => updateCameraKey(p, ref, k.id, { ...key, t: k.t }));
       } },
+      { icon: 'copy', label: 'Copy this camera key', hint: '⌘C', onClick: () => { const full = keys.find((x) => x.id === k.id); if (full) copyCameraKeys([full]); } },
+      { icon: 'paste', label: `Paste at ${fmt(playhead())}`, disabled: !copiedCameraKeys().length, onClick: () => pasteAt(playhead()) },
       'sep',
       { icon: 'check', label: 'Select all camera keys', hint: '⌘A', onClick: selectAll },
       'sep',
@@ -145,8 +163,21 @@ export function CameraTrackLanes({ clock, duration, fps, laneHeight, toX, toT, u
     setMenu({ x: e.clientX, y: e.clientY, label: 'Camera lane menu', items: [
       { heading: `Camera at ${fmt(t)}` },
       { icon: 'plus', label: 'Add camera key here', hint: 'from the viewport\'s view', onClick: () => addKeyAt(t) },
+      { icon: 'paste' as const, label: copiedCameraKeys().length > 1
+        ? `Paste ${copiedCameraKeys().length} camera keys here (${copiedSpan().toFixed(2)} s apart)`
+        : 'Paste camera key here', hint: '⌘V', disabled: !copiedCameraKeys().length, onClick: () => pasteAt(t) },
       ...(keys.length ? [{ icon: 'check' as const, label: 'Select all camera keys', onClick: selectAll }] : []),
     ] });
+  };
+
+  /**
+   * Double-click anywhere on the lane adds a key there from the viewport's view — over a move
+   * bar or over an existing key too. A time that is already taken lands on the nearest free
+   * frame rather than being refused.
+   */
+  const laneDoubleClick = (e: React.MouseEvent<HTMLElement>) => {
+    e.preventDefault();
+    addKeyAt(Math.min(duration, Math.max(0, toT(e.clientX))));
   };
 
   const selectKey = (id: string) => st().selectCamera({ kind: 'key', clock, id });
@@ -253,6 +284,13 @@ export function CameraTrackLanes({ clock, duration, fps, laneHeight, toX, toT, u
       e.preventDefault();
       const step = ((e.shiftKey ? 10 : 1) / fps) * (e.key === 'ArrowLeft' ? -1 : 1);
       st().apply((p) => (group.length > 1 ? moveCameraKeys(p, ref, group, step, fps, duration) : moveCameraKey(p, ref, id, t + step, fps, duration)));
+    } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'c') {
+      e.preventDefault();
+      const ids = chosen.length ? chosen : [id];
+      copyCameraKeys(keys.filter((k) => ids.includes(k.id)));
+    } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'v') {
+      e.preventDefault();
+      pasteAt(playhead());
     } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') {
       e.preventDefault();
       selectAll();
@@ -267,7 +305,7 @@ export function CameraTrackLanes({ clock, duration, fps, laneHeight, toX, toT, u
 
   return (
     <>
-      <div className="nx-lane bm-camtrack" style={{ height: laneHeight }} onContextMenu={laneMenu} onPointerDown={startBox}>
+      <div className="nx-lane bm-camtrack" style={{ height: laneHeight }} onContextMenu={laneMenu} onPointerDown={startBox} onDoubleClick={laneDoubleClick}>
         {(track?.transitions ?? []).map((tr) => {
           const a = keys.find((k) => k.id === tr.from), b = keys.find((k) => k.id === tr.to);
           if (!a || !b) return null;

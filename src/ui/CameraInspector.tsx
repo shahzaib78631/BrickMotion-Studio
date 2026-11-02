@@ -8,6 +8,8 @@ import { selectedKeyIds, useStudio, type CameraSelection } from '../state/store'
 import { useAppSettings } from '../state/appSettings';
 import { choosePreset, deleteCameraKeys, setTrackOptions, setTransition, trackOf, updateCameraKey, updateCameraKeys, type TrackRef } from '../anim/cameraTrack/ops';
 import { BUILT_IN_PRESETS, presetById, type TransitionPreset } from '../anim/cameraTrack/presets';
+import { orbitDegreesOf, orbitTurn, roundDegrees } from '../anim/cameraTrack/orbit';
+import type { CameraTrack } from '../anim/cameraTrack/types';
 import type { CameraKey, CameraTarget, CameraTransition, CurveKind, SpeedCurve, TransitionSettings } from '../anim/cameraTrack/types';
 import { viewportApi } from './viewportApi';
 import './cameraTrack.css';
@@ -108,7 +110,7 @@ function KeyPanel({ refT, k, ids = [k.id], all = [k] }: { refT: TrackRef; k: Cam
             {TARGETS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
           </select>
         </label>
-        <Slider label="Angle around" value={k.azimuth} min={-180} max={180} step={1} onChange={(azimuth) => set({ azimuth })} fmt={deg} />
+        <Slider label="Angle around" value={k.azimuth} min={-360} max={360} step={1} onChange={(azimuth) => set({ azimuth })} fmt={deg} />
         <Slider label="Height" value={k.elevation} min={-85} max={89} step={1} onChange={(elevation) => set({ elevation })} fmt={deg} />
         <label className="nx-field bm-cam-check">
           <input type="checkbox" checked={k.distance.fit} aria-label="Auto-fit distance"
@@ -134,7 +136,7 @@ function KeyPanel({ refT, k, ids = [k.id], all = [k] }: { refT: TrackRef; k: Cam
   );
 }
 
-function MovePanel({ refT, tr, presets, gap }: { refT: TrackRef; tr: CameraTransition; presets: readonly TransitionPreset[]; gap: number }) {
+function MovePanel({ refT, tr, presets, gap, track }: { refT: TrackRef; tr: CameraTransition; presets: readonly TransitionPreset[]; gap: number; track?: CameraTrack }) {
   const st = useStudio.getState;
   const s = tr.settings;
   const set = (patch: Partial<TransitionSettings>) => st().apply((p) => setTransition(p, refT, tr.from, { settings: { ...s, ...patch } }));
@@ -191,6 +193,17 @@ function MovePanel({ refT, tr, presets, gap }: { refT: TrackRef; tr: CameraTrans
             </select>
           </label>
           {s.orbit !== 'shortest' && <Num label="Extra turns" value={s.extraTurns} min={0} max={5} step={1} onChange={(extraTurns) => set({ extraTurns: Math.round(extraTurns) })} />}
+          {(() => {
+            const from = track?.keys.find((x) => x.id === tr.from), to = track?.keys.find((x) => x.id === tr.to);
+            if (!from || !to) return null;
+            // the total angle this move swings, however the direction and extra turns express it
+            return <Num label="Total orbit (°)" value={roundDegrees(orbitDegreesOf(from.azimuth, to.azimuth, s))} min={-1080} max={1080} step={15}
+              onChange={(degrees) => {
+                const turn = orbitTurn(from.azimuth, degrees);
+                st().apply((p) => setTransition(updateCameraKey(p, refT, to.id, { azimuth: turn.azimuth }), refT, tr.from,
+                  { settings: { ...s, orbit: turn.orbit, extraTurns: turn.extraTurns } }));
+              }} />;
+          })()}
           <Slider label="Overshoot" value={s.overshoot} min={0} max={1} step={0.01} onChange={(overshoot) => set({ overshoot })} fmt={pct} />
           <Slider label="Motion blur" value={s.motionBlur} min={0} max={1} step={0.01} onChange={(motionBlur) => set({ motionBlur })} fmt={pct} />
           <Slider label="Handheld shake" value={s.shake.amount} min={0} max={3} step={0.05} onChange={(amount) => set({ shake: { ...s.shake, amount } })} fmt={(v) => v.toFixed(2)} />
@@ -241,7 +254,7 @@ export function CameraInspector() {
   return (
     <div className="bm-cam-inspector">
       {k && <KeyPanel refT={refT} k={k} ids={ids.length ? ids : [k.id]} all={all.length ? all : [k]} />}
-      {tr && <MovePanel refT={refT} tr={tr} presets={presets} gap={moveGap(track, tr)} />}
+      {tr && <MovePanel refT={refT} tr={tr} presets={presets} gap={moveGap(track, tr)} track={track} />}
       {!k && !tr && <p className="bm-cam-hint">That camera key is gone. Pick another one on the Camera row.</p>}
       {track && (
         <section className="bm-inspector-section">

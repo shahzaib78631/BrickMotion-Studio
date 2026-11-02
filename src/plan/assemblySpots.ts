@@ -78,6 +78,13 @@ export function autoCentre(tl: Timeline | null, use: SpotUse): [number, number] 
 
 export const centre2 = (b: Box): [number, number] => [(b.min[0] + b.max[0]) / 2, (b.min[2] + b.max[2]) / 2];
 
+/**
+ * The spot that puts a use's footprint centre on the floor origin, keeping its facing. A spot is
+ * stored relative to the model's own footprint centre, so centring it is (0, 0) — which is also
+ * the point the framing and the hero orbit turn around.
+ */
+export const centredSpot = (angle = 0): AssemblySpot => ({ x: 0, z: 0, angle });
+
 /** Convert a submodel's *saved* coordinates (the original model frame) to
  * displayed/world coordinates. Follow-off deliberately leaves the bays still. */
 export function scenePoint(plan: Plan, original: Box | null, point: [number, number]): [number, number] {

@@ -9,6 +9,7 @@ import { autoClampedSlope } from '../keyframes';
 import { curveAt, overshootAt } from './curves';
 import { DEFAULT_TRANSITION } from './presets';
 import type { CameraContext, CameraKey, CameraShot, CameraTrack, CameraTransition, TransitionSettings } from './types';
+import { orbitDegreesOf } from './orbit';
 
 const MIN_EL = -85;
 const MAX_EL = 89;
@@ -48,14 +49,8 @@ export function keyRig(key: CameraKey, t: number, ctx: CameraContext): Rig {
   };
 }
 
-/** Signed azimuth change of a move, following its orbit direction. */
-function azimuthDelta(a: number, b: number, s: TransitionSettings): number {
-  const pos = (((b - a) % 360) + 360) % 360;
-  // a chosen direction between two keys facing the same way circles all the way round
-  if (s.orbit === 'cw') return (pos === 0 ? 360 : pos) + 360 * Math.max(0, Math.floor(s.extraTurns));
-  if (s.orbit === 'ccw') return -(pos === 0 ? 360 : 360 - pos) - 360 * Math.max(0, Math.floor(s.extraTurns));
-  return pos > 180 ? pos - 360 : pos;
-}
+/** Signed azimuth change of a move, following its orbit direction (one rule with the editor). */
+const azimuthDelta = (a: number, b: number, s: TransitionSettings): number => orbitDegreesOf(a, b, s);
 
 const transitionFrom = (track: CameraTrack, id: string): CameraTransition | undefined =>
   track.transitions.find((tr) => tr.from === id);

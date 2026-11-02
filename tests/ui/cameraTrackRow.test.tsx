@@ -163,6 +163,37 @@ describe('Camera lane right-click menus', () => {
     expect(track().transitions.find((x) => x.from === 'a')!.preset).toBe('orbit');
     expect(track().keys.find((k) => k.id === 'b')!.azimuth).toBe(90);
   });
+  it('double-clicking an empty spot on the Camera lane adds a key there from the view', () => {
+    const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
+    cam.position.set(0, 5, 10);
+    viewportApi.studio = { camera: cam, perspective: cam } as never;
+    viewportApi.controls = { target: new THREE.Vector3(0, 1, 0) } as never;
+    const { container } = lanes();
+    const lane = container.querySelector('.bm-camtrack') as HTMLElement;
+    lane.getBoundingClientRect = () => ({ left: 0, right: 1000, top: 0, bottom: 42, width: 1000, height: 42, x: 0, y: 0, toJSON() {} });
+    fireEvent.doubleClick(lane, { clientX: 650, clientY: 20 });
+    expect(track().keys.some((k) => Math.abs(k.t - 6.5) < 1e-9)).toBe(true);
+  });
+
+  it('double-clicking over a move bar or an existing key still adds one', () => {
+    const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
+    cam.position.set(0, 5, 10);
+    viewportApi.studio = { camera: cam, perspective: cam } as never;
+    viewportApi.controls = { target: new THREE.Vector3(0, 1, 0) } as never;
+    lanes();
+    const before = track().keys.length;
+    // the move bars cover most of the lane: adding there has to work
+    fireEvent.doubleClick(screen.getByRole('button', { name: /Fast swoop/ }), { clientX: 150, clientY: 20 });
+    expect(track().keys).toHaveLength(before + 1);
+    expect(track().keys.some((k) => Math.abs(k.t - 1.5) < 1e-9)).toBe(true);
+    // and a double-click on a key lands on the nearest free frame, never a duplicate time
+    const keyed = screen.getAllByRole('button', { name: /^Camera key at/ })[1];
+    fireEvent.doubleClick(keyed, { clientX: 200, clientY: 20 });
+    expect(track().keys).toHaveLength(before + 2);
+    const times = track().keys.map((k) => k.t).sort((a, b) => a - b);
+    expect(new Set(times.map((t) => t.toFixed(4))).size).toBe(times.length);
+  });
+
   it('right-clicking an empty spot on the Camera lane adds a key there from the view', () => {
     const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
     cam.position.set(0, 5, 10);

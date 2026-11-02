@@ -66,6 +66,12 @@ test.skipIf(!ready)('a scabbard turned on its belt still takes the sword up its 
   const m = [0, 0.75081, -0.66052, 0, -0.66052, -0.75081, 1, 0, 0];
   const blade = [m[1], m[4], m[7]];
   expect(Math.abs(way[0] * blade[0] + way[1] * blade[1] + way[2] * blade[2])).toBeGreaterThan(0.99);
-  const entry = tl.tracks.get('ix')!.moves[0].entry;
+  const track = tl.tracks.get('ix')!;
+  const entry = track.moves[0].entry;
   expect(Math.hypot(entry[0], entry[2])).toBeGreaterThan(2);
+  // the seat is a joint contact, not a collision the mesh test has to excuse: the hole cannot be
+  // modelled open in a point cloud, so a sword would never certify without the slot's own line
+  expect((tl.units[track.moves[0].unit] as { uncertified?: boolean }).uncertified).toBeFalsy();
+  // and it slides the whole way along the blade rather than hopping the last bit
+  expect(Math.hypot(entry[0], entry[1], entry[2])).toBeGreaterThan(20);
 }, 120_000);

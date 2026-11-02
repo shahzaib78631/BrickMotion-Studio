@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type DragEvent } from 'react';
 import type { Timeline } from '../anim/timeline';
 import type { WorkBay } from '../anim/construction/types';
-import { autoCentre, centre2, footprints, formatSpot, isMainSpot, overlaps, spotOf, storedSpot, submodelUses, type SpotRef, type SpotUse } from '../plan/assemblySpots';
+import { autoCentre, centredSpot, centre2, footprints, formatSpot, isMainSpot, overlaps, spotOf, storedSpot, submodelUses, type SpotRef, type SpotUse } from '../plan/assemblySpots';
 import type { AssemblySpot } from '../plan/types';
 import type { ModelState } from '../state/useModel';
 import { useStudio } from '../state/store';
@@ -135,13 +135,14 @@ export function AssemblyPanel({ model, timeline }: { model: ModelState; timeline
 }
 
 /** Shared transform editor. Values are in the plan-space studs the planner consumes. */
-function SpotEditor({ label, chosen, base, autoNote, onApply, onReset }: {
+function SpotEditor({ label, chosen, base, autoNote, onApply, onReset, onCentre }: {
   label: string;
   chosen: boolean;
   base: AssemblySpot;
   autoNote?: string;
   onApply: (spot: AssemblySpot) => void;
   onReset: () => void;
+  onCentre?: () => void;
 }) {
   const [draft, setDraft] = useState(() => strings(base));
   const [invalid, setInvalid] = useState(false);
@@ -182,6 +183,7 @@ function SpotEditor({ label, chosen, base, autoNote, onApply, onReset }: {
       {invalid && <p className="bm-spot-error" role="alert">Enter a finite number in every field.</p>}
       <div className="bm-spot-actions">
         <button type="button" className="nx-btn nx-sm bm-spot-apply" onClick={commit} disabled={!dirty || !valid}><Ic name="check" /> Apply transform</button>
+        {onCentre && <button type="button" className="nx-btn nx-sm" onClick={onCentre} title="Put this model's footprint centre on the floor origin, keeping its facing — the animated camera and the hero orbit turn around that point"><Ic name="fit" /> Centre</button>}
         <button type="button" className="nx-btn nx-sm" onClick={onReset} disabled={!chosen} title="Remove the manual placement"><Ic name="undo" /> Auto</button>
       </div>
       {!chosen && <p className="nx-fine">{autoNote ?? 'Automatic position available after planning. Applying the fields creates a fixed build spot.'}</p>}
@@ -205,7 +207,12 @@ function SpotFields({ use, model, timeline }: { use: SpotUse; model: ModelState;
     <SpotEditor label={use.label} chosen={!!chosen} base={base}
       autoNote={`Automatic position${auto ? ' detected from the timeline' : ' available after planning'}. Applying the fields creates a fixed build spot.`}
       onApply={(spot) => useStudio.getState().setSpot(use.ref, spot)}
-      onReset={() => useStudio.getState().setSpot(use.ref, null)} />
+      onReset={() => useStudio.getState().setSpot(use.ref, null)}
+      onCentre={() => {
+        const st = useStudio.getState();
+        st.setSpot(use.ref, centredSpot(spotOf(st.plan, use)?.angle ?? 0));
+        st.setShowModelAtSpot(true);
+      }} />
   );
 }
 
