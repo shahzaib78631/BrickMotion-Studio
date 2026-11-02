@@ -135,7 +135,7 @@ function Studio() {
   // useTimeline compares the serialized options. Recompute this small object so
   // a new planner/support setting can never be omitted from a memo dependency list.
   const opts = animOptions(video, model.plan.sceneSetup);
-  const { timeline, planning, error: planError, progress, retry } = useTimeline(model.ready && model.view.instances.length > 0, model.plan, editingModel, opts);
+  const { timeline, planning, error: planError, progress, retry, stale } = useTimeline(model.ready && model.view.instances.length > 0, model.plan, editingModel, opts, video.autoPlan);
   // Standard Motion creates actual editable leaf keyframes the first time the
   // user opens Timeline. Never re-bake an existing track automatically: those
   // may contain the user's hand corrections, even after model re-planning.
@@ -189,7 +189,7 @@ function Studio() {
     }
     setExportJobs([{ model: editingModel, label: editingModel || 'Main model' }]);
   };
-  const canPreview = model.ready && model.view.instances.length > 0 && timeline !== null && !planning && !planError;
+  const canPreview = model.ready && model.view.instances.length > 0 && timeline !== null && !planning && !planError && !stale;
   const selectedIds = selection.model === editingModel ? selection.ids : [];
   const makeSubmodel = () => { if (selectedIds.length >= 2) setNewSubmodelOpen(true); };
   const onCreateSubmodel = (name: string): boolean => {
@@ -333,7 +333,7 @@ function Studio() {
           <span className="bm-timeline-step-name"><strong>Step {Math.min((currentStep ?? 0) + 1, Math.max(1, timeline?.steps.length ?? 1))} of {timeline?.steps.length ?? '—'}</strong><span>·</span><span>{timelineEditor === 'build' ? 'Building ' + (editingModel || 'main model') : 'Editing motion keyframes'}</span><Ic name="edit" /></span>
           {video.planner === 'standard-motion' && timelineEditor === 'timeline' && (motionKeyError || motionKeyStatus) &&
             <span role="status" title={motionKeyError || motionKeyStatus} className="bm-timeline-mode-hint">{motionKeyError || motionKeyStatus}</span>}
-          {timelineEditor === 'build' && timeline && !planning && !planError && <button className="bm-link-build"
+          {timelineEditor === 'build' && timeline && !planning && !planError && !stale && <button className="bm-link-build"
             title={video.planner === 'standard-motion' ? 'Generate all independent per-brick motion and visibility keyframes; existing corrected keys are preserved' : 'Keep the generated Build as a procedural base and keyframe offsets on top of its motion'}
             onClick={() => {
               try {
@@ -349,6 +349,7 @@ function Studio() {
           {timelineEditor === 'build'
             ? <BuildTimeline timeline={timeline} planning={planning} error={model.error || planError}
                 progress={progress} loading={!model.ready && !model.error} onRetry={model.error ? undefined : retry}
+                autoPlan={video.autoPlan} stale={stale}
                 onUseStandard={!model.error && !!planError && (video.planner === 'construction-v2' || video.planner === 'construction-v3') ? () => {
                   if (window.confirm('Standard planning may include paths that are NOT collision-certified. Unsafe or blocked routes will be flagged. Switch to Standard planner?')) {
                     useAppSettings.getState().set({ planner: 'legacy' });

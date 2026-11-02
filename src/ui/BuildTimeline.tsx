@@ -62,9 +62,13 @@ const mainSteps = (tl: Timeline) => {
  * The build animation as lanes (Rewind studio-kit timeline): main steps, submodel builds and the camera.
  * Clicking a step edits it; the ruler, play and step buttons drive the preview.
  */
-export function BuildTimeline({ timeline: tl, planning = false, error = '', progress = null, loading = false, onRetry, onUseStandard }: {
+export function BuildTimeline({ timeline: tl, planning = false, error = '', progress = null, loading = false, onRetry, onUseStandard, autoPlan = true, stale = false }: {
   timeline: Timeline | null; planning?: boolean; error?: string;
   progress?: PlanningProgress | null; loading?: boolean; onRetry?: () => void; onUseStandard?: () => void;
+  /** plan the animation after every edit (off: only when asked) */
+  autoPlan?: boolean;
+  /** this plan is older than the model */
+  stale?: boolean;
 }) {
   const t = usePlayback((s) => s.t);
   const playing = usePlayback((s) => s.playing);
@@ -331,11 +335,25 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
               ].filter(Boolean).join(' ')}
             </TimelineNote>
           )}
+          {stale && !planning && (
+            <span className="bm-stale" role="status" title="Auto-planning is off, so this build is from before your last edit">
+              Build preview out of date
+              {onRetry && <button className="nx-btn nx-sm" onClick={onRetry}>Plan</button>}
+            </span>
+          )}
           {planning && (
             <span className="bm-planning" role="status" aria-live="polite">
               <i /> {planningLabel(progress)}
             </span>
           )}
+          <button className={`nx-icon bm-auto-plan ${autoPlan ? 'on' : ''}`} aria-pressed={autoPlan}
+            aria-label="Plan after every edit"
+            title={autoPlan
+              ? 'Planning the whole build after every edit — click to plan only when you ask (edits then keep this preview)'
+              : 'Planning only when you ask — click to plan the whole build after every edit'}
+            onClick={() => useAppSettings.getState().set({ autoPlan: !autoPlan })}>
+            <Ic name="repeat" />
+          </button>
         </div>
         <div className="nx-tr-center">
           <button className="nx-icon" aria-label="Previous step" title="Previous step" disabled={!tl} onClick={() => jump(-1)}>

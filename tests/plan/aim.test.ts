@@ -5,7 +5,7 @@ import type { Vec3 } from '../../src/ldraw/parse';
 
 const stud = (x: number, y = 0, axis: Vec3 = [0, -1, 0], owner = 'p'): Target => ({ pos: [x, y, 0], axis, gender: 'M', type: 'stud', owner });
 // looking straight down from 500 LDU above the origin (LDraw: up is -Y)
-const down = (hitDepth: number | null = null): Aim => ({ ray: { origin: [0, -500, 0], dir: [0, 1, 0] }, hitDepth, floorPoint: null });
+const down = (hitDepth: number | null = null): Aim => ({ ray: { origin: [0, -500, 0], dir: [0, 1, 0] }, hitDepth, floorPoint: null, hitPoint: null });
 
 describe('aim', () => {
   it('ranks targets by how near the ray they are', () => {

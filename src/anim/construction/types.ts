@@ -35,8 +35,10 @@ export type Connection = {
     id: string;
     parent: string;
     child: string;
-    kind: 'explicit' | 'stud' | 'anatomical' | 'mechanical' | 'support' | 'surface';
+    kind: 'explicit' | 'stud' | 'anatomical' | 'mechanical' | 'placement' | 'support' | 'surface';
     confidence: 'declared' | 'inferred';
+    /** Auditable exact-pose attachment, no cylinder or contact exemption. */
+    attachment?: { slot: string; evidence: 'reviewed-ldraw-help' | 'reviewed-profile'; source: string; mirrored: boolean };
     outward?: V3; /** Directional contact metadata is not a whole-part collision exemption. */
     /** Localised contact regions. `region` is retained for older serialized plans. */
     region?: ContactRegion;

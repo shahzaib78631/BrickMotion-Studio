@@ -3,6 +3,7 @@ import { assemblyRole } from '../assemblyGraph';
 import { connectionGeometryFor, transformConnections, studFitsFace } from '../../ldraw/connectors';
 import { cupGripFits, wristContact } from '../jointContact';
 import { mateAxis, worldSnaps } from '../snapMates';
+import { discoverPlacedAttachments } from '../../model/attachmentPlacements';
 import type { Snap } from '../../ldraw/shadow';
 import { add, sub, mul, unit, norm, point, vector, invert, multiply, dot } from './math';
 import type { V3 } from './math';
@@ -290,6 +291,27 @@ export function discoverConnections(model: ConstructionModel): {
             }
         }
 
+
+    // Independent friction-slot / documented-pose attachments. A reviewed
+    // placement is a *real assembly dependency* and a candidate mate, but
+    // does not synthesize SNAP_CYL, an insertion axis or mesh collision waiver.
+    // Its world transform is checked in full (position + orientation); 19141's
+    // two sword slots are therefore recognised even with rotated hosts.
+    const placed = leaves.filter((n) => !!n.part).map((n) => ({
+        id: n.id, part: n.part!, world: n.matrix,
+        hints: model.metrics(n.part!).attachmentHints,
+    }));
+    for (const fit of discoverPlacedAttachments(placed)) {
+        const host = model.parts.get(fit.host), insert = model.parts.get(fit.insert);
+        if (!host || !insert) continue;
+        // The second 19141 example is reflected. Keep it visible as reference
+        // evidence, but it is not a rigid physical joint or a dependency.
+        addEdge(host, insert, 'placement', {
+            confidence: 'declared',
+            staticOnly: fit.slot.mirrored,
+            attachment: { slot: fit.slot.id, evidence: fit.slot.evidence === 'reviewed-profile' ? 'reviewed-profile' : 'reviewed-ldraw-help', source: fit.slot.source, mirrored: fit.slot.mirrored },
+        }, !fit.slot.mirrored);
+    }
 
     // Train and legacy-electrics mechanical interfaces. These profiles are
     // recognised from both the exact part family and the completed relative

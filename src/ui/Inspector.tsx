@@ -7,6 +7,7 @@ import { nextGroupName, setGroup, ungroupSelection } from '../plan/groups';
 import { isGrid, isSub } from '../plan/types';
 import { DEFAULT_COLOR } from '../model/assemble';
 import { runCommand } from '../state/editing';
+import { fitSelected } from '../state/fit';
 import { ensureParts, getCatalog, getColors, partName } from '../state/partService';
 import type { ModelState } from '../state/useModel';
 import { useStudio } from '../state/store';
@@ -97,6 +98,15 @@ export function Inspector({ timeline, checks, stepCard, model, onMakeSubmodel }:
     selectedParts.push(...byPart.values());
   }
   const singlePart = selectedParts.length === 1 && selectedParts[0].count === 1 ? selectedParts[0] : null;
+  /** Why the selected pieces are outlined red in the viewport (the Checks tab lists the rest). */
+  const pieceChecks = model.warnings.filter((w) => w.itemIds.some((id) => ids.includes(id)));
+  /** The last edit the editor refused, when it involved what is selected now. */
+  const blockedNote = useStudio((s) => s.blockedNote);
+  const blockedHere = blockedNote && ids.some((id) => blockedNote.ids.includes(id) || blockedNote.with.includes(id)) ? blockedNote : null;
+  const nameOf = (id: string) => {
+    const item = findItem(plan, editingModel, id);
+    return item && 'part' in item.item ? partName(item.item.part) : id;
+  };
   const group = first?.assembly?.group;
   const steps = modelSteps(plan, editingModel);
   const selectedSub = first && isSub(first) ? first.submodel : editingModel;
@@ -172,6 +182,8 @@ export function Inspector({ timeline, checks, stepCard, model, onMakeSubmodel }:
                   {submodels.length === 0 && editingModel === '' && <p>No other models yet. Create a submodule first.</p>}
                 </div>}
               </div>
+              <button disabled={ids.length < 2} title="Slot the selected pieces together: a documented LDraw slot when one of them has one, otherwise the nearest stud, pin or bar joint"
+                onClick={() => fitSelected()}><Ic name="fit" /> Fit</button>
               <div className="bm-inline-actions">
                 <button disabled={ids.length < 2} onClick={groupSelected}><Ic name="components" /> Group</button>
                 <button disabled={!group} onClick={() => st.apply((p) => ungroupSelection(p, editingModel, ids))}><Ic name="x" /> Ungroup</button>
@@ -261,6 +273,27 @@ export function Inspector({ timeline, checks, stepCard, model, onMakeSubmodel }:
             <div><strong>{singlePart ? partName(singlePart.part) : 'Multiple parts'}</strong><small>{singlePart ? singlePart.part : `${pieceIds.length} pieces · ${selectedParts.length} types`}</small></div>
           </div>
           {pieceIds.length === 1 && <><h4>Replace part</h4><PartPicker onPick={async (id) => { await ensureParts([id]); st.apply((p) => setPart(p, editingModel, pieceIds, id)); }} /></>}
+          {blockedHere && <><h4>Refused edit</h4>
+            <p className="nx-fine">
+              {blockedHere.why}{blockedHere.with.length ? <> — {blockedHere.with.map(nameOf).join(', ')}</> : null}.
+              {' '}Move it clear and try again; K turns the overlap check off if you mean it.
+            </p>
+          </>}
+          {pieceChecks.length > 0 && <><h4>Checks <span className="nx-count">{pieceChecks.length}</span></h4>
+            <p className="nx-fine">These are why it is outlined red in the viewport.</p>
+            <ul className="bm-checks">
+              {pieceChecks.slice(0, 8).map((w, i) => (
+                <li key={i}>
+                  <button title={w.detail ? `${w.message} — ${w.detail}` : w.message}
+                    onClick={() => { st.select(w.itemIds); st.requestFocus(w.itemIds); }}>
+                    <span className={`bm-kind ${w.kind}`} aria-label={w.kind} />
+                    <span className="bm-check-msg">{w.message}{w.detail && <small>{w.detail}</small>}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {pieceChecks.length > 8 && <p className="nx-hint">…and {pieceChecks.length - 8} more in Checks.</p>}
+          </>}
           <h4>Part color</h4>
           <ColorSwatches value={firstColor} onPick={pickColor} />
           <label className="nx-field">Step<select value={found[0]?.step ?? 0} onChange={(e) => st.apply((p) => moveItemsToStep(p, editingModel, ids, Number(e.target.value)))}>{steps.map((_, i) => <option key={i} value={i}>Step {i + 1}</option>)}</select></label>

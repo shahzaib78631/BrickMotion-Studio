@@ -11,26 +11,35 @@ beforeAll(async () => {
 });
 
 const brick = (x: number, y: number, z = 0, part = '3001'): PlanItem => ({ part, color: 4, x, y, z, rot: 0 });
-const run = (items: PlanItem[], extra?: Record<string, PlanItem[]>) =>
-  validate(
-    assemble(
-      ensureIds({
-        format: 'brickmotion-plan',
-        version: 1,
-        name: 't',
-        steps: [{ pieces: items }],
-        submodels: extra && Object.fromEntries(Object.entries(extra).map(([k, v]) => [k, { steps: [{ pieces: v }] }])),
-      }),
-      metrics,
-      fixtureColors,
-    ),
+const model = (items: PlanItem[], extra?: Record<string, PlanItem[]>) =>
+  assemble(
+    ensureIds({
+      format: 'brickmotion-plan',
+      version: 1,
+      name: 't',
+      steps: [{ pieces: items }],
+      submodels: extra && Object.fromEntries(Object.entries(extra).map(([k, v]) => [k, { steps: [{ pieces: v }] }])),
+    }),
+    metrics,
+    fixtureColors,
   );
+const run = (items: PlanItem[], extra?: Record<string, PlanItem[]>, conflicts?: () => boolean) =>
+  validate(model(items, extra), undefined, undefined, conflicts);
 
 test('two bricks in the same spot overlap', () => {
   const w = run([brick(0, 0), brick(0, 0)]);
   expect(w).toHaveLength(1);
   expect(w[0].kind).toBe('overlap');
   expect(w[0].itemIds).toHaveLength(2);
+});
+
+test('an overlap the solids do not confirm is not reported, and a real one carries its depth', () => {
+  // the boxes interpenetrate, but the caller's mesh verdict decides: a piece tucked into a
+  // hollow or a stepped part's empty corner is not an overlap (the editor allows it)
+  expect(run([brick(0, 0), brick(0, 0)], undefined, () => false).filter((w) => w.kind === 'overlap')).toEqual([]);
+  const real = run([brick(0, 0), brick(0, 0)], undefined, () => true);
+  expect(real.filter((w) => w.kind === 'overlap')).toHaveLength(1);
+  expect(real[0].detail).toMatch(/\d+ × \d+ × \d+ LDU inside each other/);
 });
 
 test('a plate resting on a brick is fine', () => {

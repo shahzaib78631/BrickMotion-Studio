@@ -81,6 +81,19 @@ export function SettingsPanel({ onAbout }: { onAbout(): void }) {
         Show the selection toolbar
       </label>
       <p className="nx-fine">The floating quick-action bar (Make Submodule, Extract, Group…) that appears over the model when parts are selected. Turn it off if it covers the build.</p>
+      <label className="nx-check">
+        <input type="checkbox" checked={s.wireframe}
+          onChange={(e) => s.set({ wireframe: e.currentTarget.checked })} />
+        Wireframe viewport
+      </label>
+      <p className="nx-fine">Draw every part as its LDraw outlines only, like a technical drawing, so you can see what is behind and inside the build. Build view only: the preview and exported video stay solid.</p>
+      <div className="nx-sub">Build</div>
+      <label className="nx-check">
+        <input type="checkbox" checked={s.autoPlan}
+          onChange={(e) => s.set({ autoPlan: e.currentTarget.checked })} />
+        Plan the build after every edit
+      </label>
+      <p className="nx-fine">Every part edit re-runs the whole assembly search, which takes time on a large model. Turn this off to keep the current preview while you build, and press Plan (or the repeat button in the Build footer) when you want it planned again. Turning it off never changes the model.</p>
       <div className="nx-sub">App</div>
       <button className="nx-btn" onClick={onAbout}>
         <Ic name="info" /> About and credits

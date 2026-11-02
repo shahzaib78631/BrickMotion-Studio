@@ -41,6 +41,16 @@ afterEach(() => {
   useStudio.getState().select([]);
 });
 
+test('the Actions panel offers Fit for a multi-selection', () => {
+  useStudio.getState().select(['a', 'b']);
+  renderInspector();
+  expect((screen.getByRole('button', { name: 'Fit' }) as HTMLButtonElement).disabled).toBe(false);
+  useStudio.getState().select(['a']);
+  cleanup();
+  renderInspector();
+  expect((screen.getByRole('button', { name: 'Fit' }) as HTMLButtonElement).disabled).toBe(true);
+});
+
 test('Part info shows the thumbnail of the selected part', async () => {
   useStudio.getState().select(['a']);
   const { container } = renderInspector();

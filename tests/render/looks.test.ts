@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { DEFAULT_MATERIALS, SCENES, floorFor, sanitizeMaterials, sceneOf, scenePixels } from '../../src/render/looks';
+import { DEFAULT_MATERIALS, FINISHES, SCENES, finishWithClay, floorFor, sanitizeMaterials, sceneOf, scenePixels } from '../../src/render/looks';
 
 test('every scene has a unique id and a backdrop that spans bottom to top', () => {
   expect(new Set(SCENES.map((s) => s.id)).size).toBe(SCENES.length);
@@ -54,4 +54,14 @@ test('ambient occlusion: scene values unless the user overrides them', async () 
   expect(aoFor('soft', { ...scene, strength: 0.6 }).intensity).toBe(0.6);
   expect(clean({ ao: { enabled: false, strength: 9, radius: 'x' } }).ao).toEqual({ enabled: false, strength: 1.5, radius: null });
   expect(clean({}).ao).toEqual(scene);
+});
+
+test('the Clay button remembers the finish it replaced and puts it back', () => {
+  expect(FINISHES.some((f) => f.id === 'clay' && f.tint)).toBe(true);
+  const on = finishWithClay('glossy', null);
+  expect(on).toEqual({ finish: 'clay', before: 'glossy' });
+  expect(finishWithClay(on.finish, on.before)).toEqual({ finish: 'glossy', before: null });
+  // nothing worth remembering (or clay already), and it falls back to Studio plastic
+  expect(finishWithClay('clay', null)).toEqual({ finish: 'studio', before: null });
+  expect(finishWithClay('clay', 'clay')).toEqual({ finish: 'studio', before: null });
 });

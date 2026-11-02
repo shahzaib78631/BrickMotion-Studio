@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeAll, expect, test } from 'vitest';
 import type { Plan } from '../../src/plan/types';
+import { findItem } from '../../src/plan/ops';
+import { appPartsReady, useAppParts } from '../helpers/appParts';
 import { useAppSettings } from '../../src/state/appSettings';
 import { useStudio } from '../../src/state/store';
 import type { ModelState } from '../../src/state/useModel';
@@ -34,6 +36,25 @@ test('the viewport tool group switches between Select and Move', () => {
   expect(useStudio.getState().tool).toBe('move');
   fireEvent.click(screen.getByRole('button', { name: 'Select parts' }));
   expect(useStudio.getState().tool).toBe('select');
+});
+
+test('the selection bar fits the selected pieces together', async () => {
+  if (!appPartsReady) return;
+  await useAppParts(['19141', '21459']);
+  const sword: Plan = {
+    name: 'fit', steps: [{ pieces: [
+      { id: 'scabbard', part: '19141', color: 4, x: 0, y: 0, z: 0, rot: 0 },
+      { id: 'sword', part: '21459', color: 4, x: 30, y: 0, z: 0, rot: 0 },
+    ] }],
+  } as Plan;
+  useStudio.getState().setPlan(sword, { resetHistory: true });
+  useStudio.getState().select(['sword', 'scabbard']);
+  render(<ViewportChrome model={model()} onMakeSubmodel={() => undefined} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Fit' }));
+  // the documented slot pose is off the stud grid, so the piece keeps an exact LDU placement
+  await waitFor(() => expect(findItem(useStudio.getState().plan, '', 'sword')!.item).toHaveProperty('ldu'));
+  useStudio.getState().select([]);
+  useStudio.getState().setPlan(plan, { resetHistory: true });
 });
 
 test('nothing is drawn outside edit mode', () => {

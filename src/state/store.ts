@@ -72,6 +72,12 @@ export type StudioState = {
   /** Optional three-axis Blender-like transform handles. */
   gizmoEnabled: boolean;
   gizmoMode: 'translate' | 'rotate' | 'scale';
+  /** Respect LDCad joint constraints when operating transform handles (editor only). */
+  smartJointsEnabled: boolean;
+  setSmartJointsEnabled(on: boolean): void;
+  /** Axes of unconstrained transformations; joint axes always override. */
+  gizmoSpace: 'world' | 'local';
+  setGizmoSpace(space: 'world' | 'local'): void;
   /** Aiming the selected pieces' way in: the viewport shows a draggable arrow and arrow keys set the way. */
   aimWay: boolean;
   /** the plan before a drag; while set, edits replace the plan without adding undo steps */
@@ -98,11 +104,22 @@ export type StudioState = {
   setLaidOut(on: boolean): void;
   setTool(t: Tool): void;
   setGizmo(enabled: boolean): void;
+  /** The gizmo buttons are one toggle: the active mode turns it off, another mode switches to it. */
+  toggleGizmo(mode: 'translate' | 'rotate' | 'scale'): void;
   setGizmoMode(mode: 'translate' | 'rotate' | 'scale'): void;
   setAimWay(on: boolean): void;
-  /** Pieces whose last edit was refused (they would sit inside another piece); the viewport tints them red briefly. */
-  blocked: { ids: string[]; at: number } | null;
-  flashBlocked(ids: string[]): void;
+  /**
+   * Pieces whose last edit was refused (they would sit inside another piece); the viewport
+   * tints them red briefly. `with` names the pieces they would have hit, and `why` says
+   * what was wrong, so the sidebar can explain the red instead of leaving it a mystery.
+   */
+  blocked: { ids: string[]; at: number; with: string[]; why: string } | null;
+  /** The last refusal, kept after the tint fades so its reason can still be read. */
+  blockedNote: { ids: string[]; at: number; with: string[]; why: string } | null;
+  flashBlocked(ids: string[], withIds?: readonly string[], why?: string): void;
+  /** Record why an edit was refused, without the tint (the gizmo calls this every frame). */
+  noteBlocked(ids: string[], withIds?: readonly string[], why?: string): void;
+  clearBlockedNote(): void;
   beginGesture(): void;
   endGesture(): void;
   apply(fn: (p: Plan) => Plan): void;
@@ -183,6 +200,10 @@ export const useStudio = create<StudioState>((set, get) => ({
   tool: 'select',
   gizmoEnabled: false,
   gizmoMode: 'translate',
+  smartJointsEnabled: true,
+  setSmartJointsEnabled(smartJointsEnabled) { set({ smartJointsEnabled }); },
+  gizmoSpace: 'world',
+  setGizmoSpace(gizmoSpace) { set({ gizmoSpace }); },
   aimWay: false,
   gesture: null,
   gestureOwner: null,
@@ -223,15 +244,32 @@ export const useStudio = create<StudioState>((set, get) => ({
   setGizmoMode(mode) {
     set({ gizmoMode: mode, gizmoEnabled: true, aimWay: false });
   },
+  toggleGizmo(mode) {
+    const s = get();
+    // clicking the handle mode that is already showing puts the gizmo away again
+    if (s.gizmoEnabled && s.gizmoMode === mode) set({ gizmoEnabled: false });
+    else set({ gizmoMode: mode, gizmoEnabled: true, aimWay: false });
+  },
   setAimWay(aimWay) {
     // aiming and the transform gizmo both claim the arrow keys and drags: one at a time
     set(aimWay ? { aimWay, gizmoEnabled: false, tool: 'select' } : { aimWay });
   },
   blocked: null,
-  flashBlocked(ids) {
+  blockedNote: null,
+  flashBlocked(ids, withIds = [], why = 'it would sit inside another piece') {
     const at = Date.now();
-    set({ blocked: { ids: [...ids], at } });
+    const note = { ids: [...ids], at, with: [...withIds], why };
+    set({ blocked: note, blockedNote: note });
     setTimeout(() => { if (get().blocked?.at === at) set({ blocked: null }); }, 400);
+  },
+  noteBlocked(ids, withIds = [], why = 'it would sit inside another piece') {
+    const prev = get().blockedNote;
+    const key = (n: { ids: string[]; with: string[]; why: string }) => `${n.ids.join(',')}|${n.with.join(',')}|${n.why}`;
+    if (prev && key(prev) === key({ ids: [...ids], with: [...withIds], why })) return;
+    set({ blockedNote: { ids: [...ids], at: Date.now(), with: [...withIds], why } });
+  },
+  clearBlockedNote() {
+    set({ blockedNote: null });
   },
   ownGesture(cancel) {
     set({ gestureOwner: cancel });

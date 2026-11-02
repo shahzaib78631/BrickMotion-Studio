@@ -1,3 +1,87 @@
+## Moving along a piece’s own axes (2026-11-02)
+
+Dragging a piece normally slides it onto the studs (or the floor). Hold **Alt** while dragging to
+place it exactly where the pointer is, without snapping — that is how a prop with no connector for
+the job (a sword into a scabbard’s slot) is threaded in by hand; **Fit** does the same thing from a
+selection.
+
+Press **L**, or the **World / Local** button in the viewport toolbar (and in the editing pad), to
+switch the transform orientation — the same idea as Blender’s local orientation. With **Local** on:
+
+- the **arrow keys** and the pad’s arrow buttons step along the *piece’s* axes, not the world grid.
+  A part turned 45° moves out at 45°; a part turned a quarter turn moves along the world axis its
+  own x points down, and the step stays a whole stud. A piece turned to any other angle is off the
+  stud grid, so its step is exact (1 LDU resolution) along its own axis.
+- the **gizmo’s** handles already follow the piece’s axes for both moving and turning. For a piece
+  off the stud grid the drag snaps in that piece’s *own* frame — a whole stud along its own axes, a
+  plate upwards — so it stays on its own grid instead of being pulled back onto the world’s.
+
+The anchor is the first selected piece (Blender’s active object), which the cyan selection cage
+already frames in the same way. `R` and the pad’s Rotate stay world-vertical quarter turns; use the
+rotate handle for a turn about the piece’s own axis.
+
+## Sliding into place in the animation (2026-11-02)
+
+The flight planner already tried a connector's own axis before dropping a piece straight down, so
+a pin slides into its hole and an axle into its clip. It now also knows about **documented
+placements**: a piece seated in a reviewed slot (a katana in `19141`'s sword slot) is offered that
+slot's line as a way in — the piece's own longest axis, both ways round — ahead of the drop, with
+the mesh sweep still deciding. A sword therefore slides into the scabbard up its blade (a sideways
+push) instead of falling through it, and a plain stud stack still drops straight on. A way in set
+by hand (the **W** arrow) still wins over all of it.
+
+The slot test uses the same interface rule as **Fit**, so a katana other than the one the LDraw
+example names counts when its grip sits exactly where the documented one does.
+
+## Fit selected pieces (2026-11-02)
+
+Select two pieces and press **Fit** in the selection bar. The one that is already joined to the
+rest of the model stays put; the loose one is slotted into it, in one undo step, and the sidebar
+explains the refusal when nothing fits.
+
+Two kinds of joint are tried, in order:
+
+1. **A documented slot** — the placement examples a host's own LDraw source carries (the two
+   `0 !HELP Positioning of Swords` poses in `19141.dat`), plus reviewed profiles. These are
+   audited poses, so they win outright. A slot is also offered to a *different* insert when that
+   insert's joint columns sit exactly where the documented insert's do: `21459`'s katana grip is
+   at the same place, and the same way round, as `30173a`'s, so the documented sword pose seats
+   it identically — and the collision verdict confirms the blade lies in the scabbard's slots
+   rather than through them.
+2. **A connector seat** — a free male column of one piece and a female socket of the other of the
+   same family (stud, Technic pin, minifig bar), seated with the placement engine's own rule, so
+   fitting and dragging always agree on where the joint is. The minifig-bar family includes the
+   two snaps LDCad uses for hand-held things, which are not cylinders: `SNAP_CLP` (the clip a bar
+   is pushed into — a hand, a bar holder) and `SNAP_FGR` (the friction grip a hand closes round —
+   a blaster's handle). A hand therefore takes a sword, a lightsaber blade, a loudhailer, a
+   crossbow or a 4L bar by the clip it actually holds them with, and that wins over the wrist stud
+   the arm mounts on.
+
+Slots and sockets are **occupied** by the pieces already in them (tested with the same pose check
+the attachment layer uses), so fitting a second sword finds the scabbard's free slot instead of
+burying the one that is filled. `19141`'s second slot is a reflected pose in the official data
+(negative determinant), so it is only used with **Settings → mirror reference placements** on;
+until then Fit says exactly that instead of double-booking the first slot.
+
+The result is an exact LDU pose (off the stud grid when the slot says so), checked with the same
+collision verdict a drag uses. See `src/plan/fitSelection.ts`, `src/state/fit.ts`, and the tests
+`tests/plan/fitSelection.test.ts` / `tests/state/fit.test.ts`.
+
+## Smart joint-aware editing (2026-11-02)
+
+The Build editor now includes an oriented cyan selection cage, connector-pivot rotation handles with 15° snapping, exact signed-angle increments, World/Local transform axes, and 6D joint-aware hinge/ball/slider/rigid-module guidance. Dragging and keyboard transforms respect detected joints by default, with an explicit **Joints** toggle for manual overrides. Collision ON screens intermediate hinge angles with a cached static collision world and adaptive sampling. For capabilities, source citations, caveats, and tests see [Smart Joint Editing](docs/SMART_JOINTS_IMPLEMENTATION.md); the existing [Precision Attachments](docs/PRECISION_ATTACHMENTS.md) remain available.
+
+```sh
+npm run verify:smart-joints:offline
+npm run test:smart-joints   # after npm ci
+```
+
+## Precision Attachments (LDraw/LDCad extension)
+
+**New:** documented and reviewed non-cylindrical placements complement the existing LDCad shadow snap engine. The first supported pair is **scabbard 19141 + katana 30173/30173a**, with exact positions from official LDraw `!HELP` data, source provenance, occupancy checking, rotated-host matching, editor drag precision targets, model floating-check integration, and construction dependency recognition. Arbitrary `!HELP` examples are not automatically trusted; the second official sword placement has **negative determinant** and is offered only as an explicit, warned mirrored *display* pose. This does not simulate friction or grant mesh-collision exceptions.
+
+See [`docs/PRECISION_ATTACHMENTS.md`](docs/PRECISION_ATTACHMENTS.md) for researched sources, design decisions, limitations, extension API and tests. Run `npm run verify:attachments:offline` for a network-free regression check; run `npm run test:attachments` with dependencies installed for Vitest integration checks.
+
 # BrickMotion Studio — V8 twenty-iteration kinematics and mechanics upgrade
 
 **Newest upgrade:** 10 robustness/fix iterations followed by 10 researched mechanics and integration iterations, with 20 targeted offline regressions and 6 additional property checks. See [`V8_20_ITERATION_REPORT.md`](V8_20_ITERATION_REPORT.md), [`V8_MECHANICS_GUIDE.md`](V8_MECHANICS_GUIDE.md), and [`V8_VERIFICATION_RESULTS.md`](V8_VERIFICATION_RESULTS.md).
@@ -238,3 +322,100 @@ npm run instructions -- --name 40859 --set 40859-1 --pdf 6668730 --pdf 6668732
 step numbers; a booklet that starts again at step 1 becomes another figure (a submodel). The
 result and a `report.md` listing everything to check go to `.cache/instructions/<name>/`.
 Needs the Python tools once: `cd python && uv sync`.
+
+## BrickHeadz generative construction engine
+
+A two-phase (so far) engine for generating new, structurally valid BrickHeadz.
+
+**Phase 1 — dataset intelligence.** Turns the official OMR BrickHeadz MPD corpus
+into a structured dataset plus a derived construction grammar (head/body/leg
+proportions, per-role part vocabulary, connection patterns, colour usage).
+
+```bash
+cd python && uv sync          # once
+npm run brickheadz:build      # or: cd python && uv run python -m brickheadz all
+```
+
+Writes per-model records, the grammar and a report to `.cache/brickheadz/`. The
+semantic layer (head / face / hair / torso / arms / legs / base / accessory) is
+derived from LDCad connectors and geometry, and every piece keeps its original
+part, colour and matrix. Over the current 78-model corpus it detects a head in
+100% and a face in 99%. See [docs/brickheadz/PHASE1_DATASET_DNA.md](docs/brickheadz/PHASE1_DATASET_DNA.md).
+
+**Phase 2 — procedural generator.** Builds a new BrickHeadz on the stud grid and
+writes a studio plan (the studio emits the MPD from it).
+
+```bash
+cd python
+uv run python -m brickheadz generate --seed 1 --name MyHero   # random character
+uv run python -m brickheadz generate --spec hero.json         # or a specific one
+uv run python -m brickheadz sample --count 30                 # batch + validate
+```
+
+The head is a real BrickHeadz SNOT shell (`22885` bricks with side studs) around a
+studs-up core, with mounted round eyes, a brick-bonded body, legs and a stand.
+Every model is checked for overlap, connection and ground support; 30/30 random
+samples pass, and the output passes the studio's own plan schema and MPD importer.
+See [docs/brickheadz/PHASE2_GENERATOR.md](docs/brickheadz/PHASE2_GENERATOR.md).
+
+**Phase 3 — mesh certification.** Runs generated models through the studio's real
+triangle-SAT collision oracle and its connection checker.
+
+```bash
+npm run brickheadz:sample     # generate a batch
+npm run brickheadz:verify     # certify them (non-zero exit on failure)
+```
+
+`CLEAR` means no two pieces interpenetrate and nothing floats. Running this caught
+and fixed two real placement defects in the generator (the `22885` head brick's
+asymmetric AABB and grid-placing side-stud parts); 20/20 random models now certify
+clean. See [docs/brickheadz/PHASE3_VALIDATOR.md](docs/brickheadz/PHASE3_VALIDATOR.md).
+
+**Phase 4 — learned headwear/hair patterns.** Learns reusable headwear/hair
+sub-assemblies from the corpus and recombines them onto generated figures, then
+certifies and repairs each result.
+
+```bash
+npm run brickheadz:patterns   # learn the pattern library
+npm run brickheadz:cast       # generate + certify + repair (20 models)
+```
+
+58 hair and 68 face patterns are learned at the dominant 4×4 head size. The
+generate → certify → repair loop drops only the offending pattern pieces; a
+20-model batch certifies **20/20 CLEAR**. See
+[docs/brickheadz/PHASE4_PATTERNS.md](docs/brickheadz/PHASE4_PATTERNS.md).
+
+**Phase 5 — inventory-constrained generation.** Build from the parts you have: the
+generator uses only the shapes and colours in a parts list, substitutes within it,
+and shrinks the figure when the list is tight.
+
+```bash
+cd python && uv run python -m brickheadz generate --inventory parts.json --cast --out ../.cache/brickheadz/inv
+```
+
+`--inventory` reads the Rebrickable parts export (or `{part: qty}` JSON, or
+`part,color,quantity` CSV). Output is guaranteed to use only listed shapes and
+colours and reports any shortfall. See
+[docs/brickheadz/PHASE5_INVENTORY.md](docs/brickheadz/PHASE5_INVENTORY.md).
+
+**Phase 6 — photo + parts → model.** One front photo and a parts inventory produce
+a certified MPD: colours/proportions come from the image (or a vision model),
+geometry from the template, and the proportions/headwear from an offline
+render-and-match search, all certified by the mesh oracle.
+
+```bash
+cd python
+uv run python -m brickheadz spec --image hero.png --inventory parts.json --vision   # needs ANTHROPIC_API_KEY
+cd .. && npm run brickheadz:fit -- hero.png tests/fixtures/brickheadz/inventory.json
+```
+
+`--vision` infers hair/face/prop/colours with a vision model; `--hints` supplies
+them by hand. `brickheadz:fit` searches proportions × headwear, certifies, and
+emits the MPD from the certified plan. It also accepts a **video** (build/orbit
+clip): frames are sampled, the best front frame is chosen, and the same chain runs.
+
+```bash
+npm run brickheadz:fit -- clip.mp4 tests/fixtures/brickheadz/inventory.json
+```
+
+See [docs/brickheadz/PHASE6_IMAGE_TO_MODEL.md](docs/brickheadz/PHASE6_IMAGE_TO_MODEL.md).

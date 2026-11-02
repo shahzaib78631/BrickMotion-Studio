@@ -261,6 +261,11 @@
 .bm-toolbar-separator{width:1px;height:22px;margin:0 3px;background:var(--line2)}
 .bm-grid-button{height:35px;min-width:41px;padding:0 3px 0 10px;border:1px solid var(--line2);border-right:none;border-radius:10px 0 0 10px;color:var(--ink2);background:var(--surface);box-shadow:0 2px 8px #111c440c;font-size:11px;font-weight:650}
 .studio .bm-viewport-top-right select{height:35px;width:53px;min-width:0;border:1px solid var(--line2);border-left:none;padding:0 8px 0 5px;border-radius:0 10px 10px 0;background:var(--surface);font-weight:650;font-size:11px;box-shadow:0 2px 8px #111c440c}
+/* Wire and Clay are their own switches: rounded on both sides, so the Grid button plus its
+   size select never read as one control with them */
+.bm-view-toggle{height:35px;padding:0 11px;border:1px solid var(--line2);border-radius:9px;color:var(--ink2);background:var(--surface);box-shadow:0 2px 8px #111c440c;font-size:11px;font-weight:650}
+.bm-view-toggle:hover{background:color-mix(in srgb,var(--accent) 7%,var(--surface));color:var(--accent)}
+.bm-view-toggle.on{background:color-mix(in srgb,var(--accent) 13%,var(--surface));border-color:color-mix(in srgb,var(--accent) 42%,var(--line2));color:color-mix(in srgb,var(--accent) 90%,var(--accent-shade))}
 .bm-viewport-toolrail{position:absolute;top:22%;left:13px;width:42px;display:flex;flex-direction:column;gap:4px;padding:5px 4px;border-radius:12px}
 .bm-viewport-toolrail button{width:32px;height:35px;padding:0;display:grid;place-items:center}
 .bm-viewport-toolrail .ic{width:17px;height:17px}
@@ -551,7 +556,8 @@
   .bm-viewport-top-right{right:6px;top:6px}
   .bm-viewport-top-right .bm-float-icon:nth-of-type(-n+3),.bm-toolbar-separator{display:none}
   .bm-viewport-top-right .bm-fullscreen{display:grid}
-  .bm-grid-button,.studio .bm-viewport-top-right select{height:30px}
+  .bm-grid-button,.bm-view-toggle,.studio .bm-viewport-top-right select{height:30px}
+  .bm-view-toggle{padding:0 8px}
   .bm-viewport-toolrail{top:86px;left:7px;width:32px}
   .bm-viewport-toolrail button{width:24px;height:25px}
   .bm-viewport-toolrail .ic{width:14px;height:14px}
@@ -651,3 +657,8 @@
 .bm-floor-swatch.custom{background:conic-gradient(#f44,#fd4,#4d6,#4cf,#64f,#f4c,#f44);overflow:hidden}
 .bm-floor-swatch.custom input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;border:0;padding:0}
 .bm-floor-color.off .bm-floor-swatches{opacity:.45}
+
+/* Provenance-aware nonstandard attachments: only shown while a matching
+   placement is previewed, never implied by an ordinary cylinder snap. */
+.bm-precision-attachment{position:absolute;bottom:48px;left:50%;transform:translateX(-50%);z-index:3;max-width:min(480px,calc(100% - 90px));display:flex;flex-direction:column;gap:3px;padding:9px 13px;border-radius:11px;border:1px solid var(--line2);background:var(--surface);color:var(--ink2);box-shadow:0 5px 18px #15203b30;pointer-events:none;font-size:11px;line-height:1.4}
+.bm-precision-attachment strong{color:var(--ink);font-size:12px;font-weight:700}

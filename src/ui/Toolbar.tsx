@@ -188,6 +188,7 @@ export function Toolbar({ theme, onTheme, onProjects, onTemplates, onAbout, onEx
       .map((opts) => adoptTimeline(plan, t.model, opts, t.timeline).catch(() => {}))));
     st.setPlan(plan);
     st.setEditingModel('');
+    if (r.stale) alert(`${r.stale} saved animation(s) in ${f.name} were planned by an older build and will be planned again with the current rules.`);
     if (r.skipped) alert(`${r.skipped} saved animation timeline(s) in ${f.name} were damaged and will be planned again.`);
   };
   const importFile = async (f: File) => {

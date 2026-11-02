@@ -2,8 +2,10 @@ import { del, get, set } from 'idb-keyval';
 import type { EncodedTimeline } from '../anim/timelineData';
 import type { Plan } from '../plan/types';
 
-/** Bump when the planner's output changes, so stale timelines are planned again. */
-export const TIMELINE_CACHE_VERSION = 7;
+import { PLANNER_VERSION } from '../anim/plannerVersion';
+
+/** The planner's output version: a stale timeline is planned again, never replayed. */
+export const TIMELINE_CACHE_VERSION = PLANNER_VERSION;
 const MAX_ENTRIES = 40;
 const INDEX = 'timelines:index';
 const entryKey = (k: string) => `timeline:${k}`;

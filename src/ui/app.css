@@ -267,6 +267,11 @@ body { margin: 0; }
 .bm-planning i { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--line2); border-top-color: var(--ink2); animation: bmSpin 0.8s linear infinite; }
 @keyframes bmSpin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .bm-planning i { animation: none; } }
+/* Planning after every edit, and the notice an out-of-date build shows when it is off. */
+.bm-auto-plan { margin-left: 4px; }
+.bm-auto-plan.on { border-color: var(--accent); color: var(--accent); }
+.bm-stale { display: inline-flex; align-items: center; gap: 8px; margin-left: 8px; font-size: 11.5px; color: var(--ink3); white-space: nowrap; }
+.bm-stale .nx-btn { padding: 1px 8px; font-size: 11px; }
 
 /* ---- models panel ---- */
 .bm-models { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
@@ -438,6 +443,7 @@ body { margin: 0; }
 .bm-checks .bm-kind.floating { background: var(--mark); }
 .bm-check-msg { flex: 1; min-width: 0; color: var(--ink); line-height: 1.35; overflow-wrap: anywhere; }
 .bm-check-msg small { display: block; font-size: 10.5px; color: var(--ink3); }
+.bm-check-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .studio .bm-checks button { align-items: flex-start; }
 .bm-checks .bm-kind { margin-top: 5px; }
 
@@ -602,3 +608,19 @@ body { margin: 0; }
 .bm-template-imports { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; margin-right: 4px; }
 .bm-templates .actions .spacer { flex: 1; }
 @media (max-width: 560px) { .bm-template-save { flex-direction: column; } .bm-templates .project-list li { flex-wrap: wrap; } }
+
+/* Joint-aware editor interaction; selectable but never part of exports. */
+.bm-joint-status{position:absolute;z-index:8;bottom:50px;left:14px;max-width:min(390px,calc(100% - 30px));display:flex;flex-direction:column;gap:5px;padding:11px 13px;border-radius:11px;border:1px solid var(--line2);background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(8px);box-shadow:0 5px 17px #1114281c;color:var(--ink);font-size:12px;pointer-events:auto}
+.bm-joint-status strong{font-weight:730;font-size:12px}
+.bm-joint-status span{font-size:11px;line-height:1.4;color:var(--muted)}
+.bm-joint-status-actions{display:flex;gap:6px;flex-wrap:wrap}
+.bm-joint-status-actions:empty{display:none}
+.bm-joint-status button{border:1px solid var(--line2);border-radius:7px;background:var(--surface);color:var(--ink);padding:5px 9px;font-size:11px;cursor:pointer}
+.bm-joint-status button:hover{border-color:var(--accent)}
+@media(max-width:650px){.bm-joint-status{bottom:50px;max-width:265px}}
+
+/* Exact-angle joint rotation controls (collision-screened, relative degrees) */
+.bm-joint-angle{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:3px}
+.bm-joint-angle label{display:flex;align-items:center;gap:4px;color:var(--muted);font-size:11px}
+.bm-joint-angle input{width:66px;min-width:0;border:1px solid var(--line2);border-radius:6px;background:var(--surface);color:var(--ink);padding:4px 5px;font:inherit;font-variant-numeric:tabular-nums}
+.bm-joint-angle input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}

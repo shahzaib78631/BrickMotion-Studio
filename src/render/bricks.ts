@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { ColorDef } from '../ldraw/colors';
 import type { PartGeometry } from '../ldraw/geometry';
 import type { Instance } from '../model/assemble';
-import { edgeMaterialFor, materialFor, placeholderMaterial } from './materials';
+import { edgeMaterialFor, materialFor, placeholderMaterial, wireMaterial } from './materials';
 
 /** World scale: 1 world unit = 1 stud (20 LDU), +Y up. */
 export const LDU = 1 / 20;
@@ -29,6 +29,10 @@ export class BrickRenderer {
   /** faint outline edges, one per (part, color) group, sharing that group's instance matrices */
   private edges: THREE.LineSegments[] = [];
   private edgesOn = true;
+  /** Outlines only, no solid faces: a see-through wireframe of the model. */
+  private wireframeOn = false;
+  /** The ink every wireframe line is drawn in, so it reads on any brick colour. */
+  private wireInk = 0x2c3a35;
   private slots = new Map<string, Slot[]>();
   /** mesh → instance index → key, for picking */
   private keyAt = new Map<THREE.InstancedMesh, string[]>();
@@ -97,6 +101,8 @@ export class BrickRenderer {
         g.setAttribute('instanceMatrix', groupMesh.instanceMatrix);
         g.instanceCount = group.length;
         const lines = new THREE.LineSegments(g, edgeMaterialFor(this.colors.get(first.color)));
+        // the part's colour, kept so the wireframe can hand the line back when it ends
+        lines.userData.edgeColor = first.color;
         lines.frustumCulled = false;
         lines.visible = this.edgesOn;
         lines.renderOrder = 1;
@@ -104,6 +110,7 @@ export class BrickRenderer {
         this.root.add(lines);
       }
     }
+    this.applyWireframe();
     this.applyHighlight();
   }
 
@@ -191,7 +198,32 @@ export class BrickRenderer {
   /** Shows or hides the faint outline edges. */
   setEdges(on: boolean): void {
     this.edgesOn = on;
-    for (const l of this.edges) l.visible = on;
+    this.applyWireframe();
+  }
+
+  /**
+   * A wireframe view: the LDraw outlines drawn in one ink colour, with the solid faces
+   * hidden. Picking still works — the ray caster does not skip invisible meshes.
+   */
+  setWireframe(on: boolean, ink?: number): void {
+    if (ink !== undefined) this.wireInk = ink;
+    this.wireframeOn = on;
+    this.applyWireframe();
+  }
+
+  wireframe(): boolean {
+    return this.wireframeOn;
+  }
+
+  /** Puts the faces, edges and wireframe ink back in step with the two switches. */
+  private applyWireframe(): void {
+    for (const mesh of this.meshes) mesh.visible = !this.wireframeOn;
+    for (const line of this.edges) {
+      line.material = this.wireframeOn
+        ? wireMaterial(this.wireInk)
+        : edgeMaterialFor(this.colors.get(line.userData.edgeColor as number));
+      line.visible = this.wireframeOn || this.edgesOn;
+    }
   }
 
   meshCount(): number {

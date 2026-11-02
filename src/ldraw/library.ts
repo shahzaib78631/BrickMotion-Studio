@@ -166,6 +166,9 @@ export class PartLibrary {
             }
           }
         }
+        // Retain the source of placement examples, separately from LDCad snaps.
+        // Only reviewed pairs in the attachment registry are auto-recognised.
+        if (root.attachmentHints?.length) flat = { ...flat, attachmentHints: root.attachmentHints };
         const extra = [...supplementarySnapsFor(key), ...(alias ? supplementarySnapsFor(alias) : [])];
         if (extra.length) {
           const snaps: Snap[] = flat.snaps ? [...flat.snaps] : [];

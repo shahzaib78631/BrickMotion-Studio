@@ -1,4 +1,5 @@
 import type { LDrawFile, Mat3, Vec3 } from './parse';
+import type { AttachmentHint } from './attachmentHints';
 import type { StudConnector } from './connectors';
 import { ownSnaps, type ShadowLookup, type Snap } from './shadow';
 
@@ -20,6 +21,8 @@ export type FlatPart = {
   /** LDCad shadow-library connectors (studs, holes, pins, axles, clips, hinges), part space */
   snaps?: Snap[];
   description?: string;
+  /** Literal LDraw !HELP type-1 placements (examples, not snap connectors). */
+  attachmentHints?: AttachmentHint[];
 };
 
 const MAX_DEPTH = 32;

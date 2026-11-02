@@ -23,6 +23,12 @@
     "test:scene": "vitest run tests/render/sceneSetup.test.ts",
     "verify:scene:offline": "node scripts/verify-scene-studio-offline.cjs",
     "instructions": "tsx scripts/instructions-to-mpd.ts",
+    "brickheadz:build": "cd python && uv run python -m brickheadz all --corpus ../dist/ldraw_brickheadz --out ../.cache/brickheadz",
+    "brickheadz:sample": "cd python && uv run python -m brickheadz sample --count 20 --seed 7 --out ../.cache/brickheadz/gen",
+    "brickheadz:verify": "tsx scripts/validate-brickheadz.ts public/ldraw .cache/brickheadz/gen",
+    "brickheadz:patterns": "cd python && uv run python -m brickheadz patterns",
+    "brickheadz:cast": "bash scripts/brickheadz-cast.sh",
+    "brickheadz:fit": "bash scripts/brickheadz-fit.sh",
     "verify:v5:offline": "node scripts/verify-v5-transmissions-offline.cjs",
     "test:v5:kinematics": "vitest run tests/anim/transmissionV5.test.ts",
     "typecheck:v5:core": "tsc -p tsconfig.transmission.json",
@@ -37,7 +43,11 @@
     "typecheck:v8:math": "tsc -p tsconfig.v8.json",
     "verify:v8:syntax": "node scripts/verify-v8-syntax.cjs",
     "verify:v8:all": "npm run verify:v4:mechanisms:offline && npm run verify:v5:offline && npm run verify:v6:offline && npm run verify:v7:offline && npm run verify:v8:offline && npm run verify:v8:properties && npm run typecheck:v8:math && npm run verify:v8:syntax",
-    "bench:mechanisms": "vitest run tests/diagnostics/mechanismBenchmark.test.ts --silent=false"
+    "bench:mechanisms": "vitest run tests/diagnostics/mechanismBenchmark.test.ts --silent=false",
+    "verify:attachments:offline": "node scripts/verify-attachments-offline.cjs",
+    "verify:smart-joints:offline": "node scripts/verify-smart-joints-offline.cjs",
+    "test:smart-joints": "vitest run tests/plan/smartJoints.test.ts tests/ui/SelectionCage.test.ts tests/state/guard.test.ts",
+    "test:attachments": "vitest run tests/ldraw/attachmentHints.test.ts tests/ldraw/attachmentPropagation.test.ts tests/model/attachmentPlacements.test.ts tests/plan/precisionAttachments.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.1.0",

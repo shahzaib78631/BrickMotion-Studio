@@ -3,14 +3,21 @@ import * as THREE from 'three';
 import type { ModelState } from '../state/useModel';
 import { useStudio } from '../state/store';
 import { useAppSettings } from '../state/appSettings';
+import { usePlacing } from '../state/placing';
 import { useViewState } from './viewState';
 import { viewportApi } from './viewportApi';
 import { runCommand } from '../state/editing';
+import { finishWithClay, type BrickFinish } from '../render/looks';
 import { nextGroupName, setGroup } from '../plan/groups';
 import { modelSteps } from '../plan/ops';
+import { analyseSelection } from '../plan/smartJoints';
+import { metricsOf } from '../state/partService';
 import { movePartsToModel } from '../plan/crossModel';
+import { fitSelected } from '../state/fit';
 import { Ic } from './icons';
 import { ViewsDropdown } from './ViewMenu';
+
+let finishBeforeClay: BrickFinish | null = null;
 
 /** Lightweight editing chrome drawn over the REAL WebGL viewport.
  * The controls talk to the existing camera / selection / undoable plan actions. */
@@ -18,6 +25,8 @@ export function ViewportChrome({ model, onMakeSubmodel }: { model: ModelState; o
   const tool = useStudio((s) => s.tool);
   const gizmoEnabled = useStudio((s) => s.gizmoEnabled);
   const gizmoMode = useStudio((s) => s.gizmoMode);
+  const smartJoints = useStudio((s) => s.smartJointsEnabled);
+  const gizmoSpace = useStudio((s) => s.gizmoSpace);
   const aimWay = useStudio((s) => s.aimWay);
   const selection = useStudio((s) => s.selection);
   const editingModel = useStudio((s) => s.editingModel);
@@ -27,6 +36,11 @@ export function ViewportChrome({ model, onMakeSubmodel }: { model: ModelState; o
   const laidOut = useStudio((s) => s.laidOut);
   const showSelectionBar = useAppSettings((s) => s.showSelectionBar);
   const collision = useAppSettings((s) => s.collision);
+  const attachmentPose = usePlacing((s) => s.state?.pose?.attachment);
+  const attachmentValid = usePlacing((s) => s.state?.pose?.valid);
+  const wireframe = useAppSettings((s) => s.wireframe);
+  const finish = useAppSettings((s) => s.materials.finish);
+  const clay = finish === 'clay';
   const [grid, setGrid] = useState(8);
   const [showGrid, setShowGrid] = useState(true);
   const [overview, setOverview] = useState(false);
@@ -88,8 +102,17 @@ export function ViewportChrome({ model, onMakeSubmodel }: { model: ModelState; o
     <div className="bm-viewport-top-center bm-floating-group" role="toolbar" aria-label="Selection and transform tools">
       <button className={tool === 'select' ? 'selected square' : 'square'} title="Select parts (V): click to select, drag empty space for a box, drag a selected part to move it. Right-drag orbits." aria-label="Select parts" onClick={() => setTool('select')}><Ic name="pointer" /></button>
       <button className={tool === 'move' ? 'selected square' : 'square'} title="Move parts (M): drag any part, it snaps onto the studs under the mouse. Tab changes the grip, R turns it." aria-label="Move parts" onClick={() => setTool('move')}><Ic name="move" /></button>
-      <button className={gizmoEnabled && gizmoMode === 'translate' ? 'selected square' : 'square'} title="Transform gizmo (G)" aria-label="Transform gizmo" onClick={() => { useStudio.getState().setGizmo(true); useStudio.getState().setGizmoMode('translate'); }}><Ic name="fit" /></button>
-      <button className={gizmoEnabled && gizmoMode === 'rotate' ? 'selected square' : 'square'} title="Rotate gizmo" aria-label="Rotate gizmo" onClick={() => { useStudio.getState().setGizmo(true); useStudio.getState().setGizmoMode('rotate'); }}><Ic name="rotate" /></button>
+      <button className={gizmoEnabled && gizmoMode === 'translate' ? 'selected square' : 'square'} aria-pressed={gizmoEnabled && gizmoMode === 'translate'}
+        title={gizmoEnabled && gizmoMode === 'translate' ? 'Move gizmo on — click to put it away (G)' : 'Move gizmo (G): drag the arrows to move the selection'}
+        aria-label="Move gizmo" onClick={() => useStudio.getState().toggleGizmo('translate')}><Ic name="fit" /></button>
+      <button className={gizmoEnabled && gizmoMode === 'rotate' ? 'selected square' : 'square'} aria-pressed={gizmoEnabled && gizmoMode === 'rotate'}
+        title={gizmoEnabled && gizmoMode === 'rotate' ? 'Rotate gizmo on — click to put it away' : 'Rotate gizmo: drag a ring to turn the selection'}
+        aria-label="Rotate gizmo" onClick={() => useStudio.getState().toggleGizmo('rotate')}><Ic name="rotate" /></button>
+      <button className={smartJoints ? 'selected' : ''} aria-pressed={smartJoints}
+        aria-label="Smart joint constraints" title={smartJoints ? 'Smart joints ON: limit movement to documented joint degrees of freedom. Click to detach and edit freely.' : 'Smart joints OFF: free transform mode; collision checks are still separate.'}
+        onClick={() => useStudio.getState().setSmartJointsEnabled(!smartJoints)}>Joints</button>
+      <button aria-label="Toggle world/local axes" title={gizmoSpace === 'world' ? 'World axes: press L (or click) for local part axes, so moves and turns follow the piece’s own directions' : 'Local part axes (L): moves and turns follow the piece’s own directions — click for world axes'}
+        onClick={() => useStudio.getState().setGizmoSpace(gizmoSpace === 'world' ? 'local' : 'world')}>{gizmoSpace === 'world' ? 'World' : 'Local'}</button>
       <button className={aimWay ? 'selected square' : 'square'} title="Aim the way in (W): drag the arrow on the selected piece, or use the arrow keys" aria-label="Aim the way in" aria-pressed={aimWay} onClick={() => useStudio.getState().setAimWay(!aimWay)}><Ic name="arrowDown" /></button>
       <button className={collision ? 'selected square' : 'square'} title={collision ? 'Collision on (K): pieces never go inside each other' : 'Collision off (K): pieces may overlap'} aria-label="Collision" aria-pressed={collision} onClick={() => runCommand({ kind: 'collision' })}><Ic name="box" /></button>
     </div>
@@ -102,6 +125,19 @@ export function ViewportChrome({ model, onMakeSubmodel }: { model: ModelState; o
       <select aria-label="Grid size" title="Screen grid spacing" value={grid} onChange={(e) => { setGrid(Number(e.target.value)); setShowGrid(true); }}>
         {[4, 8, 12, 16, 24].map((g) => <option key={g} value={g}>{g}</option>)}
       </select>
+      <span className="bm-toolbar-separator" />
+      <button className={`bm-view-toggle ${wireframe ? 'on' : ''}`} aria-pressed={wireframe}
+        title={wireframe ? 'Wireframe on: parts are outlines only — click for solid parts' : 'Wireframe: draw every part as outlines only'}
+        onClick={() => useAppSettings.getState().set({ wireframe: !wireframe })}>Wire</button>
+      <button className={`bm-view-toggle ${clay ? 'on' : ''}`} aria-pressed={clay}
+        title={clay ? 'Clay render on: every part one neutral colour — click to restore the brick finish'
+          : 'Clay render: every part one neutral colour, to judge shape (Materials → Brick finish)'}
+        onClick={() => {
+          const next = finishWithClay(useAppSettings.getState().materials.finish, finishBeforeClay);
+          finishBeforeClay = next.before;
+          const materials = useAppSettings.getState().materials;
+          useAppSettings.getState().set({ materials: { ...materials, finish: next.finish } });
+        }}>Clay</button>
       <button className="bm-float-icon bm-fullscreen" title="Fullscreen viewport" aria-label="Fullscreen viewport" onClick={() => {
         if (document.fullscreenElement) void document.exitFullscreen();
         else void document.querySelector('.bm-stage')?.requestFullscreen?.();
@@ -109,12 +145,16 @@ export function ViewportChrome({ model, onMakeSubmodel }: { model: ModelState; o
     </div>
     <div className="bm-viewport-toolrail bm-floating-group" role="toolbar" aria-label="Editing tools">
       <button className={tool === 'select' ? 'selected' : ''} aria-label="Select" title="Select (V)" onClick={() => setTool('select')}><Ic name="pointer" /></button>
-      <button className={tool === 'move' ? 'selected' : ''} aria-label="Move" title="Move (M)" onClick={() => setTool('move')}><Ic name="move" /></button>
-      <button className={gizmoEnabled && gizmoMode === 'rotate' ? 'selected' : ''} aria-label="Rotate" title="Rotate selected bricks" onClick={() => { useStudio.getState().setGizmo(true); useStudio.getState().setGizmoMode('rotate'); }}><Ic name="rotate" /></button>
-      <button className={gizmoEnabled && gizmoMode === 'scale' ? 'selected' : ''} aria-label="Scale" title="Scale transform handles" onClick={() => { useStudio.getState().setGizmo(true); useStudio.getState().setGizmoMode('scale'); }}><Ic name="scale" /></button>
+      <button className={tool === 'move' ? 'selected' : ''} aria-label="Move" title="Move (M): drag a piece to slide it onto the studs; hold Alt to place it exactly where you point, without snapping" onClick={() => setTool('move')}><Ic name="move" /></button>
+      <button className={gizmoEnabled && gizmoMode === 'rotate' ? 'selected' : ''} aria-pressed={gizmoEnabled && gizmoMode === 'rotate'}
+        aria-label="Rotate" title={gizmoEnabled && gizmoMode === 'rotate' ? 'Rotate handles on — click to put them away' : 'Rotate selected bricks with the handles'}
+        onClick={() => useStudio.getState().toggleGizmo('rotate')}><Ic name="rotate" /></button>
+      <button className={gizmoEnabled && gizmoMode === 'scale' ? 'selected' : ''} aria-pressed={gizmoEnabled && gizmoMode === 'scale'}
+        aria-label="Scale" title={gizmoEnabled && gizmoMode === 'scale' ? 'Scale handles on — click to put them away' : 'Scale transform handles'}
+        onClick={() => useStudio.getState().toggleGizmo('scale')}><Ic name="scale" /></button>
       <span className="bm-toolrail-separator" />
       <button aria-label="Select all" title="Select all (A)" onClick={selectAll}><Ic name="components" /></button>
-      <button aria-label="Fit selection" title="Fit selected parts" onClick={() => ids.length ? useStudio.getState().requestFocus(ids) : viewportApi.fit()}><Ic name="view" /></button>
+      <button aria-label="Frame selection" title="Frame the selected parts in the viewport" onClick={() => ids.length ? useStudio.getState().requestFocus(ids) : viewportApi.fit()}><Ic name="view" /></button>
     </div>
     {ids.length > 0 && showSelectionBar && !aimWay && <div className="bm-selection-float" role="toolbar" aria-label="Quick selection actions">
       <button className="bm-selection-primary" disabled={ids.length < 2} onClick={onMakeSubmodel}><Ic name="box" /> Make Submodule</button>
@@ -122,6 +162,14 @@ export function ViewportChrome({ model, onMakeSubmodel }: { model: ModelState; o
       <button disabled={ids.length < 2} onClick={() => {
         const st = useStudio.getState(); st.apply((p) => setGroup(p, editingModel, ids, nextGroupName(p, editingModel)));
       }}><Ic name="components" /> Group</button>
+      <button disabled={ids.length < 2} title="Slot the selected pieces together: a documented LDraw slot when the one piece has one, otherwise the nearest stud, pin or bar joint"
+        onClick={() => fitSelected()}><Ic name="fit" /> Fit</button>
+      {smartJoints && <button title="Select the entire rigid module connected to these pieces. A hinge/slider remains a boundary. Never moves additional pieces without your click." onClick={() => {
+        const st = useStudio.getState();
+        const parts = model.view.instances.map(inst => ({id:inst.key,part:inst.part,world:inst.world.elements,worldBox:inst.worldBox}));
+        const guide = analyseSelection(parts,ids,metricsOf);
+        if (guide.rigidGroup.length > ids.length) st.select(guide.rigidGroup);
+      }}><Ic name="components" /> Rigid module</button>}
       <span className="bm-selection-divider" />
       <button className="icon-only" aria-label="Duplicate selected" title="Duplicate (⌘D)" onClick={() => runCommand({ kind: 'duplicate' })}><Ic name="copy" /></button>
       <button className="icon-only" aria-label="Rotate selected" title="Rotate 90° (R)" onClick={() => runCommand({ kind: 'rotate' })}><Ic name="rotate" /></button>
@@ -147,6 +195,13 @@ export function ViewportChrome({ model, onMakeSubmodel }: { model: ModelState; o
         <button aria-label="Zoom in" onClick={() => changeZoom(1)}>+</button>
       </div>
     </div>
+    {attachmentPose && <div className="bm-precision-attachment" role="status" aria-live="polite">
+      <strong>{attachmentValid ? 'Reference alignment' : 'Placement blocked'} · {attachmentPose.slot}</strong>
+      <span>{attachmentPose.evidence === 'reviewed-ldraw-help' ? 'Reviewed LDraw example' : attachmentPose.evidence === 'reviewed-profile' ? 'Reviewed custom profile' : 'Unreviewed placement hint'}
+        {attachmentPose.mirrored ? ' · mirrored visual pose (not a physical rotation)' : ' · rigid reference pose'}
+        {!collision ? ' · collision checks OFF' : ''}</span>
+      <span>Documented alignment is not a friction, clearance, or insertion-path certificate.</span>
+    </div>}
     <span className="bm-projection-indicator">{projection === 'ortho' ? 'ORTHO' : 'PERSPECTIVE'}</span>
   </div>;
 }

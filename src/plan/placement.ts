@@ -15,6 +15,38 @@ export function rotMatrix(rot: Rot): Mat3 {
   return [c, 0, s, 0, 1, 0, -s, 0, c].map(z0) as Mat3;
 }
 
+/**
+ * A nudge asked for in a piece's own axes, expressed in the model's. The delta is in the
+ * plan's units (studs across, plates up, studs deep) and the basis is the piece's LDraw
+ * transform, so a part turned 45° moves out along its own 45° axes — Blender's local
+ * orientation, for the editor whose pieces are usually turned in quarter steps.
+ */
+export function localDelta(basis: Mat3, d: { x: number; y: number; z: number }): { x: number; y: number; z: number } {
+  // the basis is LDraw (y down), the delta is plan units (y up)
+  const vx = d.x * 20, vy = -d.y * 8, vz = d.z * 20;
+  const mx = basis[0] * vx + basis[1] * vy + basis[2] * vz;
+  const my = basis[3] * vx + basis[4] * vy + basis[5] * vz;
+  const mz = basis[6] * vx + basis[7] * vy + basis[8] * vz;
+  const clean = (n: number) => (Math.abs(n) < 1e-9 ? 0 : Math.round(n * 1e6) / 1e6);
+  return { x: clean(mx / 20), y: clean(-my / 8), z: clean(mz / 20) };
+}
+
+/**
+ * A translation asked for in a piece's own axes, snapped to that piece's own grid: a whole
+ * stud across, a plate up. A piece off the world stud grid dragged with local axes still has
+ * a grid — its own — so it moves in tidy increments instead of sliding freely. `delta` is a
+ * view-space translation (studs, y up); the basis is the piece's LDraw transform.
+ */
+export function snapLocal(basis: Mat3, delta: { x: number; y: number; z: number }): { x: number; y: number; z: number } {
+  const v = [delta.x * 20, -delta.y * 20, -delta.z * 20];                  // LDU, y down
+  const local = [0, 1, 2].map((c) => basis[0 * 3 + c] * v[0] + basis[1 * 3 + c] * v[1] + basis[2 * 3 + c] * v[2]);
+  const step = [20, 8, 20];                                                // stud, plate, stud
+  const snapped = local.map((n, i) => (Math.abs(n) < step[i] / 2 ? 0 : Math.round(n / step[i]) * step[i]));
+  const out = [0, 1, 2].map((r) => basis[r * 3] * snapped[0] + basis[r * 3 + 1] * snapped[1] + basis[r * 3 + 2] * snapped[2]);
+  const clean = (n: number) => (Object.is(n, -0) ? 0 : n);
+  return { x: clean(out[0] / 20), y: clean(-out[1] / 20), z: clean(-out[2] / 20) };
+}
+
 export function rotatedBox(body: Box, m: Mat3): Box {
   const min: Vec3 = [Infinity, Infinity, Infinity];
   const max: Vec3 = [-Infinity, -Infinity, -Infinity];

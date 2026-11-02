@@ -3,6 +3,9 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { findItem, moveItems } from '../plan/ops';
+import { snapLocal } from '../plan/placement';
+import { isGrid } from '../plan/types';
+import type { Mat3 } from '../ldraw/parse';
 import { setAssemblySpot, setSubmodelBuildSpot, shiftOnFloor } from '../plan/pieceActions';
 import { aroundPivot, transformPlanItems } from '../plan/gizmo';
 import type { ANode, Instance } from '../model/assemble';
@@ -23,13 +26,18 @@ import { LinkRings } from '../render/linkRings';
 import { aimPoint, type Aim } from '../plan/aim';
 import { NewSubmodelDialog } from './NewSubmodelDialog';
 import { runCommand, snapperFor } from '../state/editing';
-import { clampGizmo } from '../state/guard';
+import { clampGizmo, createGizmoCollisionProbe } from '../state/guard';
+import { angularStepForRadius, rotationSweepAngles } from '../plan/rotationSweep';
 import { beginPlacing, cancelPlacing, commitPlacing, cycleHandle, isPlacing, paletteDrag, placingFloor, turnInHand, updatePlacing, usePlacing } from '../state/placing';
 import { PART_DRAG_TYPE } from './PartsLane';
 import { boxSelect } from './boxSelect';
+import { SelectionCage } from './SelectionCage';
+import { pressOnHandle } from './gizmoPress';
+import { analyseSelection, type MotionGuide } from '../plan/smartJoints';
 import { visibleItemIds } from '../plan/visible';
 import { commandForKey } from '../state/keymap';
 import { useStudio } from '../state/store';
+import { resolveMode, useTheme } from '../state/theme';
 import { isLoaded, metricsOf } from '../state/partService';
 import { modelSteps } from '../plan/ops';
 import { posedBounds, stepPoses, timelineStep } from '../model/stepLayout';
@@ -139,6 +147,8 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
   const spotSel = useStudio((s) => s.spot);
   const gizmoEnabled = useStudio((s) => s.gizmoEnabled);
   const gizmoMode = useStudio((s) => s.gizmoMode);
+  const smartJointsEnabled = useStudio((s) => s.smartJointsEnabled);
+  const gizmoSpace = useStudio((s) => s.gizmoSpace);
   const aimWay = useStudio((s) => s.aimWay);
   const stepView = useStudio((s) => s.stepView);
   const hiddenIds = useStudio((s) => s.hidden[s.editingModel]);
@@ -163,6 +173,9 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
   const studioLook = useAppSettings((s) => s.studioLook);
   const materials = useAppSettings((s) => s.materials);
   const edgeLines = useAppSettings((s) => s.edgeLines);
+  const wireframe = useAppSettings((s) => s.wireframe);
+  const collisionEnabled = useAppSettings((s) => s.collision);
+  const themeMode = useTheme((s) => s.mode);
   const linearColors = useAppSettings((s) => s.linearColors);
   const sceneSetup = useStudio((s) => s.plan.sceneSetup);
   const sceneSelected = useSceneView((s) => s.selectedId);
@@ -171,6 +184,11 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
   const sceneLock = useSceneView((s) => s.lockCamera);
   const outputFormat = useAppSettings((s) => s.format);
   const gizmoRef = useRef<{ controls: TransformControls; proxy: THREE.Object3D } | null>(null);
+  const cageRef = useRef<SelectionCage | null>(null);
+  const motionRef = useRef<MotionGuide | null>(null);
+  const initialGizmoQuat = useRef(new THREE.Quaternion());
+  const [motionStatus, setMotionStatus] = useState<MotionGuide | null>(null);
+  const [jointAngleText, setJointAngleText] = useState('15');
   const wayHandleRef = useRef<WayHandle | null>(null);
   const draggingGizmo = useRef(false);
   const readoutRef = useRef<HTMLDivElement>(null);
@@ -244,6 +262,9 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     // TransformControls' helper is not a brick. Its proxy is never exported.
     const proxy = new THREE.Object3D();
     studio.scene.add(proxy);
+    const cage = new SelectionCage();
+    studio.scene.add(cage.group);
+    cageRef.current = cage;
     // Assembly-spot markers live in the editor scene only, never in preview or export.
     const spotMarkers = new SpotMarkers();
     studio.scene.add(spotMarkers.group);
@@ -300,18 +321,34 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     window.addEventListener('keydown', onSceneKey, true);
     let lastTransform = '';
     let gizmoSnap: StudSnapper | null = null;
+    /** The frame to snap in when the selection is off the stud grid: the first piece's own axes */
+    let gizmoFree: Mat3 | null = null;
     /** the last gizmo result that pushed nothing into another piece */
     let lastClean: Plan | null = null;
+    let collisionProbe: ReturnType<typeof createGizmoCollisionProbe> | null = null;
+    let lastCleanAngle = 0;
+    let angularStep = THREE.MathUtils.degToRad(5);
+    const lastCageDelta = new THREE.Matrix4();
     transform.addEventListener('dragging-changed', (ev) => {
       const active = !!ev.value;
       gizmoSnap = null;
+      gizmoFree = null;
       lastClean = null;
+      collisionProbe = null;
+      lastCleanAngle = 0;
+      angularStep = THREE.MathUtils.degToRad(5);
+      lastCageDelta.identity();
       draggingGizmo.current = active;
       controls.enabled = !active && useStudio.getState().mode === 'edit';
       if (active) {
         lastTransform = '';
         const current = useStudio.getState();
         origin.current.copy(proxy.position);
+        initialGizmoQuat.current.copy(proxy.quaternion);
+        if (current.gizmoSpace === 'local') {
+          const first = findItem(current.plan, current.editingModel, current.selection.ids[0])?.item;
+          if (first && !isGrid(first)) gizmoFree = first.matrix;
+        }
         if (current.timelineEditor === 'timeline') {
           if (!useKeyframePlayback.getState().autoKey || !current.selection.ids.length) return;
           useKeyframePlayback.getState().set({ playing: false });
@@ -328,6 +365,18 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
           initialNodes.current = modelRef.current.view.nodes;
           initialIds.current = [...current.selection.ids];
           initialModel.current = current.editingModel;
+          // Limit the angular displacement of the FARTHEST selected corner.
+          // A 30-stud crane arm needs finer collision samples than a small knob.
+          const selected = new Set(initialIds.current);
+          const placements = instancePlacements(current.plan,current.editingModel,modelRef.current.assembly);
+          let reach = 0;
+          for (const inst of modelRef.current.view.instances) if (selected.has(inst.key.split('/')[0])) {
+            const box = worldBox(placedBox(inst,placements));
+            const radius = box.getCenter(new THREE.Vector3()).distanceTo(origin.current) +
+              box.getSize(new THREE.Vector3()).length()*.5;
+            reach = Math.max(reach,radius);
+          }
+          angularStep = angularStepForRadius(reach);
         } else if (current.spot) {
           // The placed model follows the gizmo immediately, without waiting
           // for the planner. A scrubbed timeline must not override this edit.
@@ -432,27 +481,61 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       }
       if (!original || !initialNodes.current.length) return;
       const currentMode = state.gizmoMode;
+      const guide = state.smartJointsEnabled && state.timelineEditor === 'build' ? motionRef.current : null;
+      const constrainedAxis = guide?.axis ? new THREE.Vector3(...guide.axis).transformDirection(
+        modelToView(itemPlacement(modelRef.current.view.instances,
+          instancePlacements(state.plan, initialModel.current, modelRef.current.assembly), initialIds.current[0]))) : null;
+      const restricted = guide && guide.kind !== 'free';
+      if (guide?.kind === 'locked' || (currentMode === 'translate' && (guide?.kind === 'revolute' || guide?.kind === 'ball')) ||
+          (currentMode === 'rotate' && guide?.kind === 'prismatic') || (currentMode === 'scale' && restricted)) return;
       let delta: THREE.Matrix4;
+      let jointAngle: number | null = null;
+      let jointAxis: THREE.Vector3 | null = null;
       if (currentMode === 'translate') {
         const move = proxy.position.clone().sub(origin.current);
-        // World units: 1 stud = 1; one plate is 8/20 of a world unit.
-        // Whole studs, or a half stud when that seats the selection on a stud (jumper plates).
-        gizmoSnap ??= snapperFor(modelRef.current.view.instances, initialIds.current);
-        const flat = gizmoSnap({ x: move.x, z: -move.z, y: move.y });
-        // the seat height applies only while the gizmo is not lifting the part itself;
-        // a sideways part's height comes from the snapper, which steps it a stud row at a time
-        const lift = gizmoSnap.sideways ? 0 : Math.round(move.y / 0.4) * 0.4;
-        const dx = flat.x, dy = lift || flat.y * 0.4, dz = -flat.z || 0;
-        delta = new THREE.Matrix4().makeTranslation(dx, dy, dz);
+        if (constrainedAxis && (guide?.kind === 'prismatic' || guide?.kind === 'cylindrical')) {
+          // The cylinder/slide is defined along its OWN axis, not the stud grid.
+          // One LDraw unit resolution preserves accurate non-orthogonal sliders.
+          const travel = Math.round(move.dot(constrainedAxis) * 20) / 20;
+          const offset = constrainedAxis.clone().multiplyScalar(travel);
+          delta = new THREE.Matrix4().makeTranslation(offset.x,offset.y,offset.z);
+          if (readoutRef.current) { readoutRef.current.textContent = `Slide ${ (travel * 20).toFixed(0) } LDU`; readoutRef.current.hidden = false; }
+        } else if (gizmoFree) {
+          // Local axes on a part off the stud grid (a turned import, a 45° piece). The world
+          // stud snapper would pull it off its own axis, so snap in the part's own frame: a
+          // whole stud along its own axes, a plate upwards. It still moves in tidy steps.
+          const step = snapLocal(gizmoFree, { x: move.x, y: move.y, z: move.z });
+          delta = new THREE.Matrix4().makeTranslation(step.x, step.y, step.z);
+        } else {
+          // Unconstrained movement retains the established stud/plate snapping.
+          gizmoSnap ??= snapperFor(modelRef.current.view.instances, initialIds.current);
+          const flat = gizmoSnap({ x: move.x, z: -move.z, y: move.y });
+          const lift = gizmoSnap.sideways ? 0 : Math.round(move.y / 0.4) * 0.4;
+          const dx = flat.x, dy = lift || flat.y * 0.4, dz = -flat.z || 0;
+          delta = new THREE.Matrix4().makeTranslation(dx, dy, dz);
+        }
       } else if (currentMode === 'rotate') {
-        // round off float noise so 90° steps land exactly square
-        const q = proxy.quaternion;
-        const angle = 2 * Math.acos(Math.min(1, Math.abs(q.w)));
-        const axis = new THREE.Vector3(q.x, q.y, q.z);
-        if (axis.lengthSq() > 1e-12) axis.normalize().multiplyScalar(Math.sign(q.w) || 1);
-        const deg = Math.round(THREE.MathUtils.radToDeg(angle) * 100) / 100;
-        const rot = axis.lengthSq() > 1e-12 ? new THREE.Matrix4().makeRotationAxis(axis, THREE.MathUtils.degToRad(deg)) : new THREE.Matrix4();
+        // Delta from the INITIAL proxy quaternion, not identity. In local
+        // space the proxy is already oriented to the joint axis/part frame.
+        const q = proxy.quaternion.clone().multiply(initialGizmoQuat.current.clone().invert()).normalize();
+        const axis = new THREE.Vector3(q.x,q.y,q.z);
+        if (axis.lengthSq() > 1e-12) axis.normalize();
+        let radians = 2*Math.atan2(Math.hypot(q.x,q.y,q.z),q.w);
+        if (radians > Math.PI) radians -= Math.PI*2;
+        if (constrainedAxis && (guide?.kind === 'revolute' || guide?.kind === 'cylindrical')) {
+          // Only twist about the documented joint; world-camera rings cannot
+          // silently introduce unwanted pitch/yaw into a single-axis bearing.
+          const signed = q.x*constrainedAxis.x + q.y*constrainedAxis.y + q.z*constrainedAxis.z;
+          radians = 2*Math.atan2(signed,q.w);
+          axis.copy(constrainedAxis);
+        }
+        const deg = Math.round(THREE.MathUtils.radToDeg(radians) * 100) / 100;
+        const rot = axis.lengthSq() > 1e-12 ? new THREE.Matrix4().makeRotationAxis(axis,THREE.MathUtils.degToRad(deg)) : new THREE.Matrix4();
         delta = aroundPivot(rot, origin.current);
+        if (guide?.kind === 'revolute' || guide?.kind === 'cylindrical' || guide?.kind === 'ball') {
+          jointAngle = THREE.MathUtils.degToRad(deg);
+          jointAxis = axis.clone();
+        }
         const main = Math.abs(axis.x) > Math.abs(axis.y) && Math.abs(axis.x) > Math.abs(axis.z) ? ['X', axis.x] as const : Math.abs(axis.z) > Math.abs(axis.y) ? ['Z', axis.z] as const : ['Y', axis.y] as const;
         if (readoutRef.current) {
           readoutRef.current.textContent = `Rotate ${main[0]}  ${main[1] < 0 ? '−' : ''}${Math.round(deg)}°`;
@@ -472,16 +555,47 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       if (signature === lastTransform) return;
       lastTransform = signature;
       const shown = instancePlacements(state.plan, initialModel.current, modelRef.current.assembly);
-      // Different selected submodel uses may be previewed at different bays.
-      // Conjugate the gizmo delta separately for each authored top-level item,
-      // keeping a multi-selection transform visually consistent.
-      let next = original;
-      for (const id of initialIds.current) {
-        const placement = itemPlacement(modelRef.current.view.instances, shown, id);
-        next = transformPlanItems(next, initialModel.current, [id], initialNodes.current, sourceEditDelta(delta, placement));
+      // Precompute the display-to-authored mapping once. It also makes all
+      // collision samples use exactly the same initial LDraw plan and pivot.
+      const placements = initialIds.current.map(id => ({
+        id, placement: itemPlacement(modelRef.current.view.instances, shown, id),
+      }));
+      const buildCandidate = (viewDelta: THREE.Matrix4): Plan => {
+        let proposed = original;
+        for (const {id,placement} of placements)
+          proposed = transformPlanItems(proposed, initialModel.current, [id], initialNodes.current, sourceEditDelta(viewDelta, placement));
+        return proposed;
+      };
+      const next = buildCandidate(delta);
+      // A snap from 0° to 15° must not tunnel through a blocker between the
+      // endpoints. Probe the intervening angular positions when collision is on.
+      // Hard-cap per-event samples: never freeze a large assembly on an input spike.
+      if (useAppSettings.getState().collision) {
+        collisionProbe ??= createGizmoCollisionProbe(original, initialModel.current, initialIds.current);
       }
-      const step = clampGizmo(currentMode, original, next, lastClean, initialModel.current, initialIds.current);
+      if (jointAngle !== null && jointAxis && collisionProbe) {
+        const angles = rotationSweepAngles(lastCleanAngle, jointAngle, angularStep, 24);
+        let refused: string[] | null = null;
+        if (!angles) refused = [];
+        else for (const angle of angles.slice(0,-1)) {
+          const intermediate = buildCandidate(aroundPivot(
+            new THREE.Matrix4().makeRotationAxis(jointAxis,angle),origin.current));
+          const test = collisionProbe(intermediate);
+          if (!test.ok) { refused = test.hits; break; }
+        }
+        if (refused) {
+          const why = angles ? 'Hinge sweep crosses another part before reaching that angle' :
+            'Large hinge change cannot be sampled safely; rotate in smaller steps';
+          useStudio.getState().noteBlocked(initialIds.current, refused, why);
+          cage.preview(lastCageDelta);
+          if (readoutRef.current) { readoutRef.current.textContent = angles ? 'Sweep blocked' : 'Smaller rotation needed'; readoutRef.current.hidden = false; }
+          useStudio.getState().apply(() => lastClean ?? original);
+          return;
+        }
+      }
+      const step = clampGizmo(currentMode, original, next, lastClean, initialModel.current, initialIds.current, collisionProbe ?? undefined);
       if (step.blocked) {
+        cage.preview(lastCageDelta);
         if (readoutRef.current) {
           readoutRef.current.textContent = 'Blocked';
           readoutRef.current.hidden = false;
@@ -489,8 +603,11 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
         useStudio.getState().apply(() => step.plan);
         return;
       }
-      if (currentMode === 'translate' && readoutRef.current) readoutRef.current.hidden = true;
+      if (currentMode === 'translate' && !constrainedAxis && readoutRef.current) readoutRef.current.hidden = true;
+      lastCageDelta.copy(delta);
+      cage.preview(delta);
       lastClean = next;
+      if (jointAngle !== null) lastCleanAngle = jointAngle;
       useStudio.getState().apply(() => next);
     });
     let raf = 0;
@@ -796,6 +913,9 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       studio.scene.remove(transform.getHelper());
       transform.dispose();
       studio.scene.remove(proxy);
+      studio.scene.remove(cage.group);
+      cage.dispose();
+      cageRef.current = null;
       spotMarkers.dispose();
       wayHandle.dispose();
       wayHandleRef.current = null;
@@ -827,43 +947,73 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     if (materials) viewportApi.studio?.setMaterials?.(materials);
   }, [materials]);
   useEffect(() => {
-    viewportApi.studio?.setRenderOptions?.({ edges: edgeLines, linearColors });
-  }, [edgeLines, linearColors]);
+    // the wireframe ink follows the theme so the outlines read on the background
+    const wireInk = resolveMode(themeMode) === 'dark' ? 0xd7e6e0 : 0x2c3a35;
+    // a build-view aid only: the preview and the exports stay solid
+    viewportApi.studio?.setRenderOptions?.({ edges: edgeLines, linearColors, wireframe: wireframe && mode === 'edit', wireInk });
+  }, [edgeLines, linearColors, wireframe, themeMode, mode]);
 
-  // Attach / hide the gizmo when selection or mode changes. Do not reset it
-  // midway through a drag, even though the plan re-renders on every snap.
+  // Whether the model is laid out on the floor (the video's staging) rather than built:
+  // the gizmo, the cage and the step poses all depend on it, so it is read up here.
+  const laidOut = useStudio((s) => s.laidOut);
+
+  // Selection frame and joint-aware handles. The model remains in AUTHORED
+  // LDraw coordinates for mating; only the visual cage/pivot use view studs.
+  // While dragging, the guide stays frozen at the gesture's starting pose.
   useEffect(() => {
     const entry = gizmoRef.current;
     if (!entry || draggingGizmo.current) return;
     const { controls: transform, proxy } = entry;
     const ids = new Set(selection.model === editingModel ? selection.ids : []);
     const boxes = model.view.instances.filter((inst) => ids.has(inst.key.split('/')[0]));
+    const build = mode === 'edit' && timelineEditor === 'build' && !laidOut;
+    const shown = instancePlacements(plan, editingModel, model.assembly);
+    let guide: MotionGuide | null = null;
+    if (build && smartJointsEnabled && boxes.length && !sceneSelected) {
+      const parts = model.view.instances.map(inst => ({
+        id: inst.key, part: inst.part, world: inst.world.elements,
+        worldBox: inst.worldBox,
+      }));
+      guide = analyseSelection(parts, [...ids], metricsOf);
+    }
+    motionRef.current = guide;
+    setMotionStatus(guide);
+    // The cage uses each part's LOCAL body and its actual displayed matrix.
+    // AABB unions rotated into a world frame incorrectly inflate the box.
+    if (build && boxes.length && !sceneSelected) {
+      cageRef.current?.update(boxes.map(inst => ({
+        matrix: placedMatrix(inst, shown), body: metricsOf(inst.part).body,
+      })), guide, shown.get(boxes[0].key));
+    } else cageRef.current?.clear();
+
     const chosen = timelineEditor === 'build' && spotSel && !editingModel ? spotOfRef(plan, spotSel) : null;
     const spot = chosen && spotSel ? sceneSpot(plan, model.assembly.bounds, spotSel, chosen) : null;
     if (mode === 'edit' && gizmoEnabled && spot && !boxes.length) {
-      // A selected spot is a planar X/Z object; rotate exposes only the Y ring.
       const y = -(timeline?.ground ?? model.assembly.bounds?.max[1] ?? 0) / 20;
       proxy.position.set(spot.x, y, -spot.z);
       proxy.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -THREE.MathUtils.degToRad(spot.angle));
       proxy.scale.setScalar(1);
+      transform.setSpace('world');
       transform.setMode(gizmoMode === 'rotate' ? 'rotate' : 'translate');
       transform.showX = gizmoMode !== 'rotate';
       transform.showZ = gizmoMode !== 'rotate';
       transform.showY = gizmoMode === 'rotate';
+      transform.showXY = false; transform.showYZ = false; transform.showXZ = false;
+      transform.showE = false; transform.showXYZE = false;
       transform.enabled = true;
       transform.attach(proxy);
       return;
     }
-    transform.showX = true;
-    transform.showY = true;
-    transform.showZ = true;
-    if (sceneSelected || mode !== 'edit' || !gizmoEnabled || !boxes.length || (timelineEditor === 'timeline' && (!autoKey || keyframeAtRest < 0))) {
+    transform.showX = true; transform.showY = true; transform.showZ = true;
+    transform.showXY = true; transform.showYZ = true; transform.showXZ = true;
+    transform.showE = true; transform.showXYZE = true;
+    if (sceneSelected || mode !== 'edit' || !gizmoEnabled || !boxes.length ||
+      (timelineEditor === 'timeline' && (!autoKey || keyframeAtRest < 0))) {
       transform.enabled = false;
       transform.detach();
       return;
     }
     const bounds = new THREE.Box3();
-    const shown = instancePlacements(plan, editingModel, model.assembly);
     if (timelineEditor === 'timeline') {
       const at = makeKeyframePose(model.view.instances, shown, plan.animation, editingModel, timeline)(keyframeAtRest);
       boxes.forEach((inst) => {
@@ -879,10 +1029,51 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     bounds.getCenter(proxy.position);
     proxy.quaternion.identity();
     proxy.scale.setScalar(1);
-    transform.setMode(gizmoMode);
+    let nextMode = gizmoMode;
+    if (guide) {
+      if (guide.kind === 'locked') {
+        transform.enabled = false;
+        transform.detach();
+        return;
+      }
+      if ((guide.kind === 'revolute' || guide.kind === 'ball') && nextMode !== 'rotate') nextMode = 'rotate';
+      if (guide.kind === 'prismatic' && nextMode !== 'translate') nextMode = 'translate';
+      if (guide.kind === 'cylindrical' && nextMode === 'scale') nextMode = 'rotate';
+      if (nextMode !== gizmoMode) useStudio.getState().setGizmoMode(nextMode);
+      if (guide.pivot) {
+        const p = new THREE.Vector3(...guide.pivot).applyMatrix4(modelToView(shown.get(boxes[0].key) ?? null));
+        proxy.position.copy(p);
+      }
+      if (guide.axis && (guide.kind === 'revolute' || guide.kind === 'prismatic' || guide.kind === 'cylindrical')) {
+        const axis = new THREE.Vector3(...guide.axis).transformDirection(
+          modelToView(shown.get(boxes[0].key) ?? null));
+        proxy.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), axis);
+        transform.setSpace('local');
+        transform.showX = false; transform.showZ = false; transform.showY = true;
+        transform.showXY = false; transform.showYZ = false; transform.showXZ = false;
+        transform.showE = false; transform.showXYZE = false;
+      } else if (guide.kind === 'ball') {
+        // Full rotational freedom with a fixed socket pivot.
+        transform.setSpace('world');
+        transform.showXY = false; transform.showYZ = false; transform.showXZ = false;
+      } else transform.setSpace(gizmoSpace);
+    } else transform.setSpace(gizmoSpace);
+    // Local space axes should match the first part, not the model's world AABB.
+    if ((!guide || guide.kind === 'free') && gizmoSpace === 'local' && build) {
+      const m = placedMatrix(boxes[0], shown).elements;
+      const x = new THREE.Vector3(m[0], -m[1], -m[2]).normalize();
+      const y = new THREE.Vector3(m[4], -m[5], -m[6]);
+      y.addScaledVector(x, -y.dot(x)).normalize();
+      if (x.lengthSq() > .9 && y.lengthSq() > .9) {
+        const z = new THREE.Vector3().crossVectors(x,y).normalize();
+        proxy.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x,y,z));
+      }
+    }
+    transform.setMode(nextMode);
     transform.enabled = true;
     transform.attach(proxy);
-  }, [selection, editingModel, model.view, gizmoEnabled, gizmoMode, mode, spotSel, plan, timeline, timelineEditor, autoKey, keyframeAtRest, sceneSelected]);
+  }, [selection, editingModel, model.view, model.assembly, gizmoEnabled, gizmoMode, gizmoSpace,
+    smartJointsEnabled, mode, spotSel, plan, timeline, timelineEditor, autoKey, keyframeAtRest, sceneSelected, laidOut]);
 
   // Assembly-spot markers: Build view only, for the whole set (never in preview or export),
   // and only while the Assembly tab is open. Elsewhere their floating
@@ -921,7 +1112,6 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     () => (currentStep === null || !timeline ? null : timelineStep(model.view, currentStep, timeline)),
     [model.view, currentStep, timeline],
   );
-  const laidOut = useStudio((s) => s.laidOut);
   const poses = useMemo(() => {
     if (placing) return new Map<string, THREE.Matrix4>();
     if (currentStep === null) return laidOut ? stepPoses(model.view, 'all', 'laidout', metricsOf) : new Map<string, THREE.Matrix4>();
@@ -1228,15 +1418,18 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     viewportApi.scene?.saveViewToCamera();
   };
 
-  const rayAt = (e: { clientX: number; clientY: number }) => {
+  /** Pointer position in the drawn viewport's normalized device coordinates (camera view crops it). */
+  const ndcAt = (e: { clientX: number; clientY: number }) => {
     const r = canvasRef.current!.getBoundingClientRect();
     const cameraMode = useSceneView.getState().cameraView;
     const shown = cameraMode ? cameraFrame(r.width, r.height, formatAspect(useAppSettings.getState().format)) : null;
     const rx = e.clientX - r.left - (shown?.x ?? 0);
     const ry = e.clientY - r.top - (shown?.y ?? 0);
-    const ndc = new THREE.Vector2((rx / (shown?.width ?? r.width)) * 2 - 1, -(ry / (shown?.height ?? r.height)) * 2 + 1);
+    return new THREE.Vector2((rx / (shown?.width ?? r.width)) * 2 - 1, -(ry / (shown?.height ?? r.height)) * 2 + 1);
+  };
+  const rayAt = (e: { clientX: number; clientY: number }) => {
     const ray = new THREE.Raycaster();
-    ray.setFromCamera(ndc, viewportApi.studio!.camera);
+    ray.setFromCamera(ndcAt(e), viewportApi.studio!.camera);
     return ray;
   };
   const pickAt = (e: { clientX: number; clientY: number }): string | null => (viewportApi.studio ? viewportApi.studio.bricks.pick(rayAt(e)) : null);
@@ -1329,28 +1522,52 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
   const startDrag = (e: React.PointerEvent) => {
     // overlay UI (menus, the nav gizmo) must never pick or drag a brick behind it
     if (e.target !== canvasRef.current || viewportApi.scene?.isHandlingPointer()) return;
+    // a press that lands on a transform handle is the gizmo's: picking the brick behind the
+    // ring would move the selection out from under the gesture, and a press on a bare part of
+    // the ring would start a selection box instead of a rotation
+    if (gizmoEnabled && pressOnHandle(gizmoRef.current?.controls, ndcAt(e))) return;
     if (viewportApi.scene?.pick(rayAt(e))) return;
     if (useSceneView.getState().selectedId) return;
     if (startAimDrag(e)) return;
-    // a marker under the pointer wins over the bricks behind it (a gizmo handle still has priority)
-    if (!(gizmoEnabled && gizmoRef.current?.controls.axis)) {
-      const ref = pickSpotAt(e);
-      if (ref && startSpotDrag(e, ref)) return;
-    }
+    // a marker under the pointer wins over the bricks behind it (a gizmo handle is gone by now)
+    const ref = pickSpotAt(e);
+    if (ref && startSpotDrag(e, ref)) return;
     if (startFloorDrag(e)) return;
     const s = st();
     if (s.timelineEditor === 'timeline') return;
-    if (s.mode !== 'edit' || (s.gizmoEnabled && s.selection.ids.length > 0) || e.button !== 0 || !viewportApi.studio) return;
+    if (s.mode !== 'edit' || e.button !== 0 || !viewportApi.studio) return;
     // pasted / cloned pieces follow the mouse; the click that places them is not a drag
     if (isPlacing()) return;
     const key = pickAt(e);
+    // empty space always draws a selection box, so a gizmo no longer stops multi-select
     if (!key) return startBoxSelect(e);
     const id = key.split('/')[0];
     const already = s.selection.model === s.editingModel && s.selection.ids.includes(id);
     // Move tool: any piece; Select tool: only a piece that is already selected (a plain click still selects)
     if (s.tool !== 'move' && !already) return;
+    // with the gizmo on, its handles own the pieces it is attached to: a press on one of
+    // those must not start a move drag (clicking another piece still selects it)
+    if (s.gizmoEnabled && already) return;
     const ids = already ? s.selection.ids : selectionForHit(s.plan, s.editingModel, id, e.altKey);
     if (!already) s.select(ids);
+    // A freeform pointer drag bypasses TransformControls entirely. Route any
+    // connected selection to the same smart hinge/slider controls instead of
+    // silently detaching it. A manual Joints-off override remains available.
+    if (s.smartJointsEnabled && !s.laidOut && s.timelineEditor === 'build') {
+      const parts = modelRef.current.view.instances.map(inst => ({
+        id: inst.key, part: inst.part, world: inst.world.elements, worldBox: inst.worldBox,
+      }));
+      const guide = analyseSelection(parts, ids, metricsOf);
+      if (guide.kind !== 'free') {
+        if (guide.kind !== 'locked') {
+          s.setGizmo(true);
+          s.setGizmoMode(guide.kind === 'prismatic' ? 'translate' : 'rotate');
+        } else {
+          s.noteBlocked(ids, [], 'This selection has no allowed independent motion; select its rigid module or switch Smart joints off.');
+        }
+        return;
+      }
+    }
     // where the piece was grabbed: the parts stay held by that point
     const first = placingAim(e, new Set());
     const grabbed = (first && aimPoint(first)) ?? undefined;
@@ -1415,7 +1632,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
    * (skipping the pieces being placed) and where it meets the drawn floor. A ray hitting a
    * brick shown at a submodel bay is mapped back through that bay.
    */
-  const placingAim = (ev: { clientX: number; clientY: number }, skip: ReadonlySet<string>): Aim | null => {
+  const placingAim = (ev: { clientX: number; clientY: number; altKey?: boolean }, skip: ReadonlySet<string>): Aim | null => {
     const studio = viewportApi.studio;
     if (!studio) return null;
     const ray = rayAt(ev);
@@ -1434,7 +1651,13 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     // the drawn floor, as the session fixed it at the start
     const ground = placingFloor() ?? (timeline?.ground ?? modelRef.current.assembly.bounds?.max[1] ?? 0);
     const floor = ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), ground / 20), new THREE.Vector3());
-    return { ray: model, hitDepth, floorPoint: floor ? placingPointOf(floor, null, frame.placements, frame.root) : null };
+    // Free placement is asked for, not assumed: holding Alt drops the piece exactly where it
+    // points (a prop into a slot). Without it a piece that finds nothing to seat on falls back
+    // to the stud grid / floor, so a drag over a wall can never leave it stuck in the model.
+    return {
+      ray: model, hitDepth, floorPoint: floor ? placingPointOf(floor, null, frame.placements, frame.root) : null,
+      hitPoint: ev.altKey ? hitAt : null,
+    };
   };
 
   /**
@@ -1523,6 +1746,58 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     const items = pieceMenuItems(ids, (chosen) => setSubmodelDialog({ model: s.editingModel, ids: chosen }));
     if (items.length) setMenu({ x: e.clientX, y: e.clientY, items, label: 'Piece' });
   };
+  /** Precise relative turn about the SAME joint as the draggable ring.
+   * Samples the route before a single undoable change; does not move a rigidly
+   * attached neighbour unless the user has explicitly selected that module. */
+  const turnJointBy = (degrees: number): void => {
+    const state = st(), guide = motionRef.current;
+    if (!guide || (guide.kind !== 'revolute' && guide.kind !== 'cylindrical') ||
+        !guide.pivot || !guide.axis || !Number.isFinite(degrees) || Math.abs(degrees) > 180 || Math.abs(degrees) < 0.00001 ||
+        state.selection.model !== state.editingModel || !state.smartJointsEnabled || state.timelineEditor !== 'build') return;
+    const ids = [...state.selection.ids];
+    if (!ids.length) return;
+    const instances = modelRef.current.view.instances;
+    const shown = instancePlacements(state.plan, state.editingModel, modelRef.current.assembly);
+    const first = instances.find(inst => ids.includes(inst.key.split('/')[0]));
+    if (!first) return;
+    const frame = modelToView(shown.get(first.key) ?? null);
+    const pivot = new THREE.Vector3(...guide.pivot).applyMatrix4(frame);
+    const axis = new THREE.Vector3(...guide.axis).transformDirection(frame);
+    const placements = ids.map(id => ({id,placement:itemPlacement(instances,shown,id)}));
+    const before = state.plan;
+    const make = (angle: number) => {
+      const delta = aroundPivot(new THREE.Matrix4().makeRotationAxis(axis,angle),pivot);
+      let plan = before;
+      for (const {id,placement} of placements)
+        plan = transformPlanItems(plan,state.editingModel,[id],modelRef.current.view.nodes,sourceEditDelta(delta,placement));
+      return plan;
+    };
+    const target = THREE.MathUtils.degToRad(degrees);
+    if (useAppSettings.getState().collision) {
+      const probe = createGizmoCollisionProbe(before,state.editingModel,ids);
+      const selected = new Set(ids);
+      let reach = 0;
+      for (const inst of instances) if (selected.has(inst.key.split('/')[0])) {
+        const box = worldBox(placedBox(inst,shown));
+        reach = Math.max(reach,box.getCenter(new THREE.Vector3()).distanceTo(pivot) +
+          box.getSize(new THREE.Vector3()).length()*.5);
+      }
+      const angles = rotationSweepAngles(0,target,angularStepForRadius(reach),96);
+      if (!angles) {
+        state.noteBlocked(ids,[], 'This hinge turn exceeds the collision sampling budget; use smaller increments.');
+        return;
+      }
+      for (const angle of angles) {
+        const result = probe(make(angle));
+        if (!result.ok) {
+          state.noteBlocked(ids,result.hits,'The requested hinge arc would intersect a neighbouring part.');
+          return;
+        }
+      }
+    }
+    state.apply(() => make(target));
+  };
+
   return (
     <div
       className={`viewport ${tool === 'move' && mode === 'edit' ? 'bm-move' : ''}`}
@@ -1583,18 +1858,19 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
         onPointerDown={(e) => {
           if (e.button === 2) rightDown.current = { x: e.clientX, y: e.clientY };
           down.current = { x: e.clientX, y: e.clientY };
-          // TransformControls can clear its hovered axis on pointer-up.
-          // Remember whether this press began on a handle so the subsequent
-          // canvas click cannot accidentally deselect the transformed brick.
-          gizmoPress.current = !!(st().gizmoEnabled && gizmoRef.current?.controls.axis);
+          // TransformControls clears its hovered axis on pointer-up, so remember whether this
+          // press began on a handle: the canvas click that follows must not deselect (or
+          // reselect) the piece the gizmo is about to transform.
+          gizmoPress.current = e.button === 0 && st().gizmoEnabled && pressOnHandle(gizmoRef.current?.controls, ndcAt(e));
         }}
         onClick={(e) => {
           if (isPlacing()) { commitPlacing(); return; }
           if (gizmoPress.current) { gizmoPress.current = false; return; }
           if (st().mode !== 'edit' || viewportApi.scene?.isHandlingPointer()) return;
           if (Math.hypot(e.clientX - down.current.x, e.clientY - down.current.y) > 4) return;
-          // Clicking an axis must not clear the selection because a brick ray missed.
-          if (gizmoRef.current?.controls.axis && st().gizmoEnabled) return;
+          // A press that began on a handle was already consumed above (`gizmoPress`). Do not
+          // re-read the hovered axis here: it may be stale, and it used to swallow clicks on
+          // a brick, which broke shift-click multi-select while the gizmo was on.
           const selectedScene = viewportApi.scene?.pick(rayAt(e));
           if (selectedScene) {
             useSceneView.setState({ selectedId: selectedScene, panelOpen: true });
@@ -1654,6 +1930,23 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       <NavGizmo />
       <SceneTools />
       <CameraRegionOverlay />
+      {motionStatus && mode === 'edit' && selection.ids.length > 0 && <div className="bm-joint-status" aria-live="polite">
+        <strong>{motionStatus.kind === 'locked' ? 'Locked assembly' : motionStatus.kind === 'free' ? 'Free selection' : motionStatus.kind === 'revolute' ? 'Hinge / bearing' : motionStatus.kind === 'ball' ? 'Ball joint' : motionStatus.kind === 'prismatic' ? 'Linear slider' : 'Cylindrical joint'}</strong>
+        <span>{motionStatus.reason}</span>
+        <span>{motionStatus.interfaces.some(j => j.evidence === 'ldcad-shadow')
+          ? 'Estimated from LDCad connector shapes; motion is not physically certified.'
+          : motionStatus.knownJoints > 0 ? 'Connection metadata informed this motion.' : 'No connector evidence available for this selection.'}
+          {!collisionEnabled ? ' Collision OFF: path not checked.' : ' Collision ON: sampled arc checks.'}</span>
+        {(motionStatus.kind === 'revolute' || motionStatus.kind === 'cylindrical') && <div className="bm-joint-angle" aria-label="Precise hinge rotation">
+          <label>Angle <input aria-label="Joint rotation increment in degrees" type="number" step="0.1" min="-180" max="180" value={jointAngleText} onChange={e => setJointAngleText(e.target.value)} /> °</label>
+          <button title="Turn backward by this many degrees; tests the intermediate collision poses" onClick={() => turnJointBy(-Math.abs(Number(jointAngleText)))}>− Turn</button>
+          <button title="Turn forward by this many degrees; tests the intermediate collision poses" onClick={() => turnJointBy(Math.abs(Number(jointAngleText)))}>+ Turn</button>
+        </div>}
+        <div className="bm-joint-status-actions">
+          {motionStatus.rigidGroup.length > motionStatus.selected.length && <button title="Explicitly select every part rigidly attached to this selection" onClick={() => useStudio.getState().select(motionStatus.rigidGroup)}>Select rigid module ({motionStatus.rigidGroup.length})</button>}
+          {motionStatus.kind === 'locked' && <button title="Edit this part independently; collision checking remains available" onClick={() => useStudio.getState().setSmartJointsEnabled(false)}>Detach / free edit</button>}
+        </div>
+      </div>}
       <div className="bm-gizmo-readout" ref={readoutRef} hidden aria-live="polite" />
       {marquee && <div className="bm-box-select" style={{ left: Math.min(marquee.x0, marquee.x1), top: Math.min(marquee.y0, marquee.y1), width: Math.abs(marquee.x1 - marquee.x0), height: Math.abs(marquee.y1 - marquee.y0) }} />}
       <ViewLabel />

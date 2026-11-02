@@ -2,7 +2,7 @@ import type { Box } from '../ldraw/flatten';
 import { assemble, DEFAULT_COLOR, transformBox, placementMatrix, type Assembly, type Instance } from '../model/assemble';
 import { newId } from '../plan/ids';
 import { addItem, deleteItems, duplicateItems, findItem, modelSteps, moveItems, rotateItems, type ModelName, insertItem } from '../plan/ops';
-import { gridToPlacement } from '../plan/placement';
+import { gridToPlacement, localDelta, rotMatrix } from '../plan/placement';
 import { neededBomRows } from '../plan/bom';
 import { isGrid, isSub, type BomRow, type Grid, type Plan, type PlanItem } from '../plan/types';
 import { studSnapper, type SnapPart, type StudSnapper } from '../plan/studSnap';
@@ -12,7 +12,8 @@ import { beginPlacing, cancelPlacing, commitPlacing, updatePlacing } from './pla
 import { floorAim } from '../plan/aim';
 import { clipFromLDraw, clipToLDraw, copyItems, mergeSubmodels, type Clip } from '../plan/clipboard';
 import { viewportApi } from '../ui/viewportApi';
-import { guardEdit, guardedApply } from './guard';
+import { guardConflict, guardEdit, guardedApply, type GuardResult } from './guard';
+import { analyseSelection } from '../plan/smartJoints';
 
 /** How far (plates, or studs for a duplicate) a blocked edit looks for a clean spot. */
 const RETRY_PLATES = 12;
@@ -203,6 +204,7 @@ export function runCommand(cmd: Command): void {
   if (cmd.kind === 'undo') return st.undo();
   if (cmd.kind === 'redo') return st.redo();
   if (cmd.kind === 'tool') return st.setTool(cmd.tool);
+  if (cmd.kind === 'axes') return st.setGizmoSpace(st.gizmoSpace === 'world' ? 'local' : 'world');
   if (cmd.kind === 'collision') {
     const a = useAppSettings.getState();
     return a.set({ collision: !a.collision });
@@ -210,22 +212,46 @@ export function runCommand(cmd: Command): void {
   const ids = selection.model === editingModel ? selection.ids : [];
   if (!ids.length) return;
   const m: ModelName = editingModel;
+  // Keyboard nudges and the 90-degree button must not be a hidden bypass for
+  // pivot-aware hinge constraints. Use the exact-axis gizmo for joint motion.
+  // Deliberately never blocks copy, delete, or other explicit part operations.
+  if ((cmd.kind === 'move' || cmd.kind === 'rotate') && st.smartJointsEnabled &&
+      st.timelineEditor === 'build' && !st.laidOut) {
+    const view = assemble({ ...st.plan, steps: modelSteps(st.plan, m) }, metricsOf, getColors());
+    const guide = analyseSelection(view.instances.map(inst => ({
+      id: inst.key, part: inst.part, world: inst.world.elements, worldBox: inst.worldBox,
+    })), ids, metricsOf);
+    if (guide.kind !== 'free') {
+      st.noteBlocked(ids, [], 'Use the joint rotation/translation handle or turn Smart joints off to detach.');
+      if (guide.kind !== 'locked') {
+        st.setGizmo(true);
+        st.setGizmoMode(guide.kind === 'prismatic' ? 'translate' : 'rotate');
+      }
+      return;
+    }
+  }
   if (cmd.kind === 'move') {
+    // Local axes (the toolbar toggle, or L): the nudge is asked for in the piece's own frame
+    // and answered in the model's, so a part turned 45° steps along its own 45° axes.
+    const anchor = findItem(st.plan, m, ids[0])?.item;
+    const basis = anchor ? (isGrid(anchor) ? rotMatrix(anchor.rot) : anchor.matrix) : null;
+    const along = (d: { x: number; y: number; z: number }) => (st.gizmoSpace === 'local' && basis ? localDelta(basis, d) : d);
+    const wanted = along(cmd.d);
     const step = (p: Plan, d: { x: number; y: number; z: number }) => {
       const seated = sidewaysMove(p, m, ids, d);
       return seated ? moveItems(p, m, ids, seated, bodyFor(p)) : moveItems(p, m, ids, d);
     };
     // Raise / Lower into a piece keep going the same way to the first clean height
     // (E on a plate under a brick pops it up on top). Sideways moves are refused.
-    const vertical = cmd.d.x === 0 && cmd.d.z === 0 && cmd.d.y !== 0;
+    const vertical = wanted.x === 0 && wanted.z === 0 && wanted.y !== 0;
     const retry = vertical ? (p: Plan) => {
       for (let n = Math.abs(cmd.d.y) + 1; n <= RETRY_PLATES; n++) {
-        const next = step(p, { x: 0, y: Math.sign(cmd.d.y) * n, z: 0 });
+        const next = step(p, along({ x: 0, y: Math.sign(cmd.d.y) * n, z: 0 }));
         if (guardEdit(p, next, m, ids)) return next;
       }
       return null;
     } : undefined;
-    guardedApply(m, ids, (p) => step(p, cmd.d), retry);
+    guardedApply(m, ids, (p) => step(p, wanted), retry);
   } else if (cmd.kind === 'rotate') guardedApply(m, ids, (p) => rotateItems(p, m, ids, footprintFor(p), bodyFor(p)));
   else if (cmd.kind === 'duplicate') {
     // the copy goes right beside the selection (+X), so it is easy to see and drag;
@@ -242,15 +268,20 @@ export function runCommand(cmd: Command): void {
       taken.add(id);
       return id;
     };
+    let refused: GuardResult | null = null;
     for (let k = 0; k <= RETRY_PLATES; k++) {
       taken.clear();
       const r = duplicateItems(plan, m, ids, fresh, { x: w + k, y: 0, z: 0 });
-      if (!guardEdit(plan, r.plan, m, r.ids)) continue;
+      const check = guardConflict(plan, r.plan, m, r.ids);
+      if (!check.ok) {
+        refused ??= check;
+        continue;
+      }
       st.apply(() => r.plan);
       st.select(r.ids);
       return;
     }
-    st.flashBlocked(ids);
+    st.flashBlocked(ids, refused?.hits ?? [], 'there is no free spot for the copy beside it');
   } else if (cmd.kind === 'copy' || cmd.kind === 'cut') {
     lastClip = copyItems(st.plan, m, ids);
     lastText = clipToLDraw(lastClip, metricsOf, getColors());

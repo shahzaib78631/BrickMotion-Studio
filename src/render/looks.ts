@@ -291,6 +291,17 @@ export const FINISHES: readonly FinishPreset[] = [
 ];
 export const finishOf = (id: string | undefined): FinishPreset => FINISHES.find((f) => f.id === id) ?? FINISHES[0];
 
+/**
+ * The viewport's Clay button: on shows the clay render, off puts back the finish it
+ * replaced (Studio plastic when there is nothing worthwhile to remember). `before` is the
+ * value the caller keeps between presses.
+ */
+export function finishWithClay(current: BrickFinish, before: BrickFinish | null): { finish: BrickFinish; before: BrickFinish | null } {
+  return current === 'clay'
+    ? { finish: before && before !== 'clay' ? before : 'studio', before: null }
+    : { finish: 'clay', before: current };
+}
+
 export const TEXTURES: readonly { id: BrickTexture; label: string; hint: string }[] = [
   { id: 'none', label: 'Smooth', hint: 'Clean, flawless surfaces' },
   { id: 'grain', label: 'Molded grain', hint: 'The fine texture of real injection-moulded parts' },

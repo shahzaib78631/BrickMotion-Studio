@@ -98,3 +98,71 @@ test('editing the camera track preserves the construction timeline and does not 
   await runDebounce();
   expect(mocks.run).toHaveBeenCalledTimes(1);
 });
+
+test('auto-planning on: a part edit plans the build again', async () => {
+  mocks.run.mockResolvedValue(timeline);
+  const { rerender } = renderHook(({ editedPlan }) => useTimeline(true, editedPlan, '', opts),
+    { initialProps: { editedPlan: plan } });
+  await runDebounce();
+  rerender({ editedPlan: { ...plan, name: 'edited' } });
+  await runDebounce();
+  expect(mocks.run).toHaveBeenCalledTimes(2);
+});
+
+test('auto-planning off: a part edit keeps the last plan and only marks it out of date', async () => {
+  mocks.run.mockResolvedValue(timeline);
+  const { result, rerender } = renderHook(({ editedPlan }) => useTimeline(true, editedPlan, '', opts, false),
+    { initialProps: { editedPlan: plan } });
+  await runDebounce(); // the first plan is made either way
+  expect(result.current.timeline).toBe(timeline);
+  rerender({ editedPlan: { ...plan, name: 'edited' } });
+  await runDebounce();
+  expect(mocks.run).toHaveBeenCalledTimes(1); // no route search for a part edit
+  expect(result.current.timeline).toBe(timeline); // the preview stays where it was
+  expect(result.current.planning).toBe(false);
+  expect(result.current.stale).toBe(true);
+  act(() => result.current.retry()); // Plan asks for a new one
+  expect(result.current.planning).toBe(true);
+  await runDebounce();
+  expect(mocks.run).toHaveBeenCalledTimes(2);
+  expect(result.current.stale).toBe(false);
+});
+
+test('auto-planning off: options, model and turning it back on still plan', async () => {
+  mocks.run.mockResolvedValue(timeline);
+  const { rerender } = renderHook(({ model, auto, seconds }) => useTimeline(true, plan, model, { ...opts, targetSeconds: seconds }, auto),
+    { initialProps: { model: '', auto: false, seconds: 15 } });
+  await runDebounce();
+  rerender({ model: '', auto: false, seconds: 30 }); // an animation option changed: plan it
+  await runDebounce();
+  expect(mocks.run).toHaveBeenCalledTimes(2);
+  rerender({ model: 'engine', auto: false, seconds: 30 }); // another model: it needs its own plan
+  await runDebounce();
+  expect(mocks.run).toHaveBeenCalledTimes(3);
+  rerender({ model: 'engine', auto: true, seconds: 30 }); // back on: nothing is pending here
+  await runDebounce();
+  expect(mocks.run).toHaveBeenCalledTimes(4);
+});
+
+test('auto-planning off: switching it off while planning finishes instead of spinning', async () => {
+  mocks.run.mockResolvedValue(timeline);
+  const { result, rerender } = renderHook(({ auto }) => useTimeline(true, plan, '', opts, auto), { initialProps: { auto: true } });
+  rerender({ auto: false }); // before the debounce fires, so the request is replaced, not kept
+  await runDebounce();
+  expect(result.current.planning).toBe(false);
+  expect(result.current.timeline).toBe(timeline);
+  expect(result.current.stale).toBe(false);
+});
+
+test('auto-planning off: a failed plan keeps its error until asked again', async () => {
+  mocks.run.mockRejectedValue(new Error('blocked-route: wrist'));
+  const { result, rerender } = renderHook(({ editedPlan }) => useTimeline(true, editedPlan, '', opts, false),
+    { initialProps: { editedPlan: plan } });
+  await runDebounce();
+  expect(result.current.error).toContain('wrist');
+  rerender({ editedPlan: { ...plan, name: 'edited' } });
+  await runDebounce();
+  expect(mocks.run).toHaveBeenCalledTimes(1);
+  expect(result.current.error).toContain('wrist');
+  expect(result.current.stale).toBe(true);
+});

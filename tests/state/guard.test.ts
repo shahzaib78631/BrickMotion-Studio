@@ -2,7 +2,7 @@ import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { useStudio } from '../../src/state/store';
 import { useAppSettings } from '../../src/state/appSettings';
 import { runCommand } from '../../src/state/editing';
-import { clampGizmo, guardEdit, guardedApply } from '../../src/state/guard';
+import { clampGizmo, createGizmoCollisionProbe, guardConflict, guardEdit, guardedApply } from '../../src/state/guard';
 import { moveItems, findItem } from '../../src/plan/ops';
 import type { Plan, PlanItem } from '../../src/plan/types';
 import { appPartsReady as ready, useAppParts } from '../helpers/appParts';
@@ -17,7 +17,11 @@ const at = (id: string) => findItem(useStudio.getState().plan, '', id)!.item as 
 
 describe('collision guard', () => {
   beforeAll(async () => { if (ready) await useAppParts(['3001', '3023']); }, 60_000);
-  beforeEach(() => useAppSettings.getState().set({ collision: true }));
+  beforeEach(() => {
+    // This suite tests collision guarding, not smart-joint detachment policies.
+    useStudio.getState().setSmartJointsEnabled(false);
+    useAppSettings.getState().set({ collision: true });
+  });
 
   it.skipIf(!ready)('refuses an arrow move into a wall', () => {
     load([piece('a', '3001', 0, 0), piece('wall', '3001', 8, 0)], ['a']);
@@ -57,6 +61,31 @@ describe('collision guard', () => {
     expect(at(copy).x).toBeGreaterThanOrEqual(8);
   });
 
+  it.skipIf(!ready)('a refused move names the piece it would hit, for the sidebar', () => {
+    load([piece('a', '3001', 0, 0), piece('wall', '3001', 4, 0)], ['a']);
+    const before = useStudio.getState().plan;
+    const after = moveItems(before, '', ['a'], { x: 1, y: 0, z: 0 });
+    expect(guardConflict(before, after, '', ['a'])).toEqual({ ok: false, hits: ['wall'] });
+    expect(guardedApply('', ['a'], () => after)).toBe('blocked');
+    const note = useStudio.getState().blockedNote!;
+    expect(note.ids).toEqual(['a']);
+    expect(note.with).toEqual(['wall']);
+    expect(note.why).toContain('inside another piece');
+    useStudio.getState().clearBlockedNote();
+    expect(useStudio.getState().blockedNote).toBeNull();
+  });
+
+  it.skipIf(!ready)('gesture collision probe is equivalent to guardConflict and preserves existing contacts', () => {
+    load([piece('a','3001',0,0),piece('wall','3001',8,0)],['a']);
+    const before=useStudio.getState().plan;
+    const probe=createGizmoCollisionProbe(before,'',['a']);
+    const far=moveItems(before,'',['a'],{x:1,y:0,z:0});
+    const hit=moveItems(before,'',['a'],{x:5,y:0,z:0});
+    expect(probe(far)).toEqual(guardConflict(before,far,'',['a']));
+    expect(probe(hit)).toEqual(guardConflict(before,hit,'',['a']));
+    expect(clampGizmo('translate',before,hit,null,'',['a'],probe).blocked).toBe(!probe(hit).ok);
+  });
+
   it.skipIf(!ready)('the rotate gizmo cannot turn a piece into its neighbour', () => {
     load([piece('a', '3001', 0, 0), piece('wall', '3001', 0, 0, 2)], ['a']);
     const original = useStudio.getState().plan;
@@ -69,5 +98,18 @@ describe('collision guard', () => {
     expect(t.blocked).toBe(true);
     // scaling is an explicit, separate mode and stays unguarded
     expect(clampGizmo('scale', original, turned, null, '', ['a']).plan).toBe(turned);
+  });
+
+  it.skipIf(!ready)('a piece whose studs land between a neighbour’s tubes is refused', () => {
+    // the plate sits under the brick; on the brick's grid (z = 10) its studs are in the
+    // brick's sockets, 10 LDU over they are between the brick's tubes, in its way
+    const plan = (plateZ: number): Plan => ({ name: 't', steps: [{ pieces: [
+      { id: 'b', part: '3001', color: 4, ldu: [0, -32, 0], matrix: [1, 0, 0, 0, 1, 0, 0, 0, 1] },
+      { id: 'p', part: '3023', color: 4, ldu: [0, -8, plateZ], matrix: [1, 0, 0, 0, 1, 0, 0, 0, 1] },
+    ] }] } as Plan);
+    const seated = plan(10), moved = plan(0);
+    expect(guardEdit(seated, seated, '', ['p'])).toBe(true); // the studs are in the sockets
+    expect(guardEdit(seated, moved, '', ['p'])).toBe(false); // the studs are in the way
+    expect(clampGizmo('translate', seated, moved, null, '', ['p']).blocked).toBe(true);
   });
 });

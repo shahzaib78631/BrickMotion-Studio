@@ -27,7 +27,7 @@ const aimAt = (p: Vec3, from: Vec3 = [p[0], p[1] - 400, p[2]], floorY = 0): Aim 
   d.normalize();
   const t = Math.abs(d.y) > 1e-9 ? (floorY - from[1]) / d.y : -1;
   const floorPoint: Vec3 | null = t > 0 ? [from[0] + d.x * t, floorY, from[2] + d.z * t] : null;
-  return { ray: { origin: from, dir: [d.x, d.y, d.z] }, hitDepth: depth, floorPoint };
+  return { ray: { origin: from, dir: [d.x, d.y, d.z] }, hitDepth: depth, floorPoint, hitPoint: p };
 };
 const query = (moving: Placed, fixed: Placed[], aim: Aim, extra: Partial<PoseQuery> = {}): PoseQuery => {
   const solids = fixed.map((f) => f.solid);
@@ -149,6 +149,9 @@ describe('placement pose search', () => {
     const pose = findPose(query(one, [plate, lid], aimAt([10, 0, 10])));
     expect(pose.valid).toBe(false);
     expect(pose.links).toEqual([]);
+    // and it says what stopped it, so the sidebar can explain the red ghost
+    expect(pose.why).toBe('it would sit inside another piece');
+    expect(pose.with).toContain('lid');
   });
 
   it.skipIf(!ready)('keeps the previous pose within the hysteresis distance', async () => {
@@ -196,7 +199,7 @@ describe('placement pose search', () => {
 
   it.skipIf(!ready)('falls back to the floor grid when no connection is near', async () => {
     const one = place('m', await measureReal('3024'), 300, -60, 0);
-    const pose = findPose(query(one, [], aimAt([33, 0, 47])));
+    const pose = findPose(query(one, [], { ...aimAt([33, 0, 47]), hitPoint: null })); // pointing at the floor
     expect(pose.valid).toBe(true);
     expect(pose.mated).toBe(0);
     expect(pose.handle).toBe(-1);
@@ -286,6 +289,70 @@ describe('placement pose search', () => {
       expect(pose.valid).toBe(true);
       expect(pose.mated).toBe(1);
       expect(centre(held, pose)[0]).toBe(20);
+    });
+  });
+
+  describe('Technic pins', () => {
+    // 3700 is a 1x2 brick with an 8 LDU hole through its side; 4274 is the pin that goes in it
+    it.skipIf(!ready)('seats a pin in the brick’s side hole', async () => {
+      const brick = place('brick', await measureReal('3700'), 0, -24);
+      const pin = place('m', await measureReal('4274'), 300, -100, 0);
+      // the hole's centre is 10 LDU below the brick's top (y = -14), and it opens toward −z
+      const pose = findPose(query(pin, [brick], aimAt([0, -14, 0], fromFront([0, -14, 0]))));
+      expect(pose.valid).toBe(true);
+      expect(pose.owners).toEqual(['brick']);
+      expect(pose.mated).toBe(1);
+      // the pin's shaft base sits in the mouth of the hole, so its own origin lands 20 LDU in
+      expect(moved(pin, pose).toArray().map(Math.round)).toEqual([0, -14, 10]);
+    });
+  });
+
+  describe('bars: swords, scabbards and Technic pins', () => {
+    // a minifig bar is 4 LDU across; a Technic pin's axial hole is the same bore
+    it.skipIf(!ready)('seats a scabbard’s peg in a Technic pin', async () => {
+      const pin = place('pin', await measureReal('4274'), 0, 0);
+      const scab = place('m', await measureReal('19141'), 300, -300, 0);
+      // the pin's bore runs along +x from its back end, so aim at the bore's mouth
+      const pose = findPose(query(scab, [pin], aimAt([-20, 0, 0], fromFront([-20, 0, 0])), { floor: 1000 }));
+      expect(pose.valid).toBe(true);
+      expect(pose.mated).toBe(1);
+      expect(pose.at?.map(Math.round)).toEqual([-20, 8, 0]); // the pin stands with its top at y 0
+    });
+
+    it.skipIf(!ready)('seats it from either end of the pin’s through hole', async () => {
+      const pin = place('pin', await measureReal('4274'), 0, 0);
+      const scab = place('m', await measureReal('19141'), 300, -300, 0);
+      // the bore runs from x = −20 to x = 4, so the peg goes in from either face
+      const back = findPose(query(scab, [pin], aimAt([-20, 8, 0], fromFront([-20, 8, 0])), { floor: 1000 }));
+      expect(back.valid).toBe(true);
+      expect(back.mated).toBe(1);
+      expect(back.at?.map(Math.round)).toEqual([-20, 8, 0]);
+      const front = findPose(query(scab, [pin], aimAt([4, 8, 0], fromFront([4, 8, 0])), { floor: 1000 }));
+      expect(front.valid).toBe(true);
+      expect(front.mated).toBe(1);
+      expect(front.at?.map(Math.round)).toEqual([4, 8, 0]);
+    });
+
+    it.skipIf(!ready)('seats a sword’s grip in a Technic pin', async () => {
+      const pin = place('pin', await measureReal('4274'), 0, 0);
+      const sword = place('m', await measureReal('21459'), 300, -300, 0);
+      const pose = findPose(query(sword, [pin], aimAt([-20, 0, 0], fromFront([-20, 0, 0])), { floor: 1000 }));
+      expect(pose.valid).toBe(true);
+      expect(pose.mated).toBe(1);
+    });
+
+    it.skipIf(!ready)('places a part with no matching connection where the mouse points', async () => {
+      // a sword has nothing that takes a scabbard: it goes exactly where you point, unsnapped
+      const scab = place('scab', await measureReal('19141'), 0, 0);
+      const sword = place('m', await measureReal('21459'), 300, -300, 0);
+      const ref: Vec3 = [0, -40, 0];
+      const at: Vec3 = [0, -40, -60];
+      const pose = findPose(query(sword, [scab], aimAt(at), { ...{ ref }, floor: 1000 }));
+      expect(pose.valid).toBe(true);
+      expect(pose.mated).toBe(0);
+      expect(pose.handle).toBe(-1);
+      const landed = new THREE.Vector3(...ref).applyMatrix4(new THREE.Matrix4().fromArray(pose.delta));
+      expect([landed.x, landed.y, landed.z].map(Math.round)).toEqual(at);
     });
   });
 

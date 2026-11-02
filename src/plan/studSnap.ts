@@ -2,6 +2,9 @@ import type { Box } from '../ldraw/flatten';
 import type { StudConnector } from '../ldraw/connectors';
 import type { Snap } from '../ldraw/shadow';
 import { collisionWorld, sampleCount } from './collision';
+import { localSockets, socketsOf } from './sockets';
+
+export { socketsOf };
 
 /**
  * Half-stud snapping for drags. Parts normally move in whole studs, but some
@@ -43,19 +46,6 @@ function worldBox(e: ArrayLike<number>, body: Box): { min: number[]; max: number
   return { min, max };
 }
 
-/** Underside sockets of a standard part: one per stud cell of its footprint, at its bottom face. */
-export function socketsOf(body: Box): P3[] {
-  const w = body.max[0] - body.min[0], d = body.max[2] - body.min[2];
-  const nx = Math.round(w / 20), nz = Math.round(d / 20);
-  // only parts whose footprint is whole studs have a socket grid we can trust
-  if (nx < 1 || nz < 1 || nx * nz > 64 || Math.abs(w - nx * 20) > 2 || Math.abs(d - nz * 20) > 2) return [];
-  const x0 = (body.min[0] + body.max[0]) / 2 - (nx - 1) * 10;
-  const z0 = (body.min[2] + body.max[2]) / 2 - (nz - 1) * 10;
-  const out: P3[] = [];
-  for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) out.push([x0 + i * 20, body.max[1], z0 + j * 20]);
-  return out;
-}
-
 /**
  * x, z in studs along LDraw X and Z; y in plates, up positive (like plan moves).
  * `raw.y` is a vertical drag in studs (world up). It only matters for a sideways
@@ -84,74 +74,22 @@ const SIDE_REACH = 30;
  */
 type Socket = { p: P3; up: P3; axis: 0 | 1 | 2; kind: 'socket' | 'stud' };
 
-/**
- * Stud sockets in part space. Shadow-library female stud snaps are exact, so a part
- * that has them (the cutout ear 29120 grips its stud a plate up inside) uses those;
- * otherwise one socket per stud cell of the footprint, at the bottom face.
- */
-function localSockets(part: SnapPart): { p: P3; up: P3 }[] {
-  const holes = (part.snaps ?? []).filter((s) => s.kind === 'cyl' && s.gender === 'F' && Math.abs(s.radius - 6) < 0.6 &&
-    Math.abs(Math.abs(s.axis[1]) - 1) < 1e-3);
-  if (holes.length) return holes.map((s) => ({ p: s.start as P3, up: [0, Math.sign(s.axis[1]), 0] as P3 }));
-  return socketsOf(part.body).map((p) => {
-    const y = part.mesh ? cellBottom(part.mesh, p[0], p[2], part.body.max[1]) : p[1];
-    return { p: [p[0], y, p[2]] as P3, up: [0, -1, 0] as P3 };
-  });
-}
-
-const bottoms = new WeakMap<Float32Array, Map<string, number>>();
-/**
- * The underside plane of one stud cell: the lowest point (largest LDraw y) of the
- * part's surface inside the cell, slightly inset so the neighbouring cell's walls
- * do not count. Most cells reach the part's bottom; a recessed one does not — the
- * thick end of curved slope 7302 is a one-plate tongue that seats a plate above
- * the flat bottom, so its socket is a plate higher.
- */
-function cellBottom(mesh: Float32Array, cx: number, cz: number, fallback: number): number {
-  let cache = bottoms.get(mesh);
-  if (!cache) bottoms.set(mesh, (cache = new Map()));
-  const key = `${cx},${cz}`;
-  const hit = cache.get(key);
-  if (hit !== undefined) return hit;
-  const inset = 1.5, x0 = cx - 10 + inset, x1 = cx + 10 - inset, z0 = cz - 10 + inset, z1 = cz + 10 - inset;
-  let low = -Infinity;
-  for (let i = 0; i + 8 < mesh.length; i += 9) {
-    let poly: number[][] = [[mesh[i], mesh[i + 1], mesh[i + 2]], [mesh[i + 3], mesh[i + 4], mesh[i + 5]], [mesh[i + 6], mesh[i + 7], mesh[i + 8]]];
-    if (Math.max(...poly.map((v) => v[0])) < x0 || Math.min(...poly.map((v) => v[0])) > x1 ||
-      Math.max(...poly.map((v) => v[2])) < z0 || Math.min(...poly.map((v) => v[2])) > z1) continue;
-    // clip the triangle to the cell (Sutherland-Hodgman in x/z, carrying y)
-    for (const [k, lim, keepBelow] of [[0, x1, true], [0, x0, false], [2, z1, true], [2, z0, false]] as const) {
-      const out: number[][] = [];
-      const inside = (v: number[]) => (keepBelow ? v[k] <= lim : v[k] >= lim);
-      for (let j = 0; j < poly.length; j++) {
-        const a = poly[j], b = poly[(j + 1) % poly.length];
-        if (inside(a)) out.push(a);
-        if (inside(a) !== inside(b)) {
-          const t = (lim - a[k]) / (b[k] - a[k]);
-          out.push([a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]), a[2] + t * (b[2] - a[2])]);
-        }
-      }
-      poly = out;
-      if (!poly.length) break;
-    }
-    for (const v of poly) low = Math.max(low, v[1]);
-  }
-  // a cell with no surface, or one that reaches the bottom, uses the part's bottom face
-  const y = !Number.isFinite(low) || Math.abs(low - fallback) < 0.5 ? fallback : low;
-  cache.set(key, y);
-  return y;
-}
+/** Stud sockets of a part, in its own frame, at the height its surface really sits. */
+const socketsInPart = (part: SnapPart): { p: P3; up: P3 }[] =>
+  localSockets({ body: part.body, snaps: part.snaps, mesh: part.mesh }).map((s) => ({ p: s.pos, up: s.dir }));
 
 /**
- * Tests whether a selection, shifted by an LDraw offset, would sit inside another part.
- * A thin wrapper over the collision world (see collision.ts).
+ * Tests whether a selection, shifted by an LDraw offset, would sink its body into another
+ * part. A thin wrapper over the collision world (see collision.ts), without the stud test:
+ * this snapper seats sideways parts by their own connectors (`seat`/`magnet`), where a stud
+ * reaching under a neighbour is the seat it is aiming for, not an overlap.
  */
 export function overlapTest(moving: readonly SnapPart[], others: readonly SnapPart[]): ((shift: readonly number[]) => boolean) | null {
   if (moving.some((p) => !p.mesh)) return null;
   const world = collisionWorld(others.map((o, i) => ({ ...o, id: String(i) })));
   const mine = moving.map((m) => ({ ...m, id: 'moving' }));
   if (!sampleCount(mine)) return null;
-  return (shift) => world.hits(mine, shift).size > 0;
+  return (shift) => world.hits(mine, shift, false).size > 0;
 }
 
 /** The world axis a unit vector lies along, or -1 when it is tilted. */
@@ -175,7 +113,7 @@ export function studSnapper(moving: readonly SnapPart[], others: readonly SnapPa
     return len < 1e-6 ? null : { p, dir: [d[0] / len, d[1] / len, d[2] / len] };
   };
   /** World sockets of a part; a tilted part has no square underside to seat. */
-  const socketsIn = (part: SnapPart): { p: P3; dir: P3 }[] => localSockets(part).flatMap((s) => {
+  const socketsIn = (part: SnapPart): { p: P3; dir: P3 }[] => socketsInPart(part).flatMap((s) => {
     const dir = vec(part.world, s.up);
     return axisOf(dir) === -1 ? [] : [{ p: apply(part.world, s.p), dir }];
   });

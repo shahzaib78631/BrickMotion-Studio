@@ -9,6 +9,8 @@ import { isAbandoned, planTimeline } from './timelineService';
 export type TimelineState = {
   timeline: Timeline | null; planning: boolean; error: string;
   progress: PlanningProgress | null; retry(): void;
+  /** This plan is older than the model (auto-planning is off): Plan makes a new one. */
+  stale: boolean;
 };
 type State = {
   model: string; plan: Plan | null; optsSig: string; attempt: number;
@@ -16,7 +18,14 @@ type State = {
   progress: PlanningProgress | null;
 };
 
-export function useTimeline(ready: boolean, plan: Plan, model: string, opts: AnimOptions): TimelineState {
+/**
+ * Plans the build animation for the open model. `autoPlan` decides what an edit does: on,
+ * every change to the geometry is planned again (a full route search, which can take a
+ * while); off, the plan already on screen stays and is only marked out of date, and a new
+ * one is made when the user asks (Plan / retry), changes the animation options, or switches
+ * model. Either way, keyframe and camera edits never re-plan.
+ */
+export function useTimeline(ready: boolean, plan: Plan, model: string, opts: AnimOptions, autoPlan = true): TimelineState {
   const dragging = useStudio((s) => s.gesture !== null);
   // Keyframe and scene-production editing are not changes to assembly geometry.
   // In particular, dragging a camera must NEVER interrupt an expensive V4 build.
@@ -36,8 +45,22 @@ export function useTimeline(ready: boolean, plan: Plan, model: string, opts: Ani
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
   const optsSig = JSON.stringify(opts);
   const [state, setState] = useState<State>({ model, plan: null, optsSig: '', attempt: -1, timeline: null, error: '', status: 'idle', progress: null });
+  /** The request the last plan was made for: a part edit is not one while auto-planning is off. */
+  const planned = useRef<{ model: string; optsSig: string; attempt: number } | null>(null);
+  const last = planned.current;
+  const sameRequest = last !== null && last.model === model && last.optsSig === optsSig && last.attempt === attempt;
+  /** A result worth holding on to while auto-planning is off: a plan, or the error it failed with. */
+  const holding = state.status === 'ready' || state.status === 'error';
+  /** Whether this render should (re)plan: an edit alone does not count with auto-planning off. */
+  const willPlan = autoPlan || !sameRequest || !holding;
   useEffect(() => {
     if (!ready || dragging) return;
+    // auto-planning off: an edit of the model leaves the plan that is already there. A new
+    // one is asked for by retry (Plan), by an animation option change, or by a model switch,
+    // and the first plan of a model is always made — there would be nothing to keep.
+    const plannedFor = planned.current;
+    if (!autoPlan && holding && plannedFor && plannedFor.model === model && plannedFor.optsSig === optsSig && plannedFor.attempt === attempt) return;
+    planned.current = { model, optsSig, attempt };
     let alive = true;
     const request = { model, plan: planningPlan, optsSig, attempt };
     setState((prev) => ({ ...request, timeline: prev.model === model ? prev.timeline : null, error: '', status: 'planning', progress: null }));
@@ -54,13 +77,18 @@ export function useTimeline(ready: boolean, plan: Plan, model: string, opts: Ani
     }, 120);
     return () => { alive = false; clearTimeout(timer); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, dragging, planningPlan, model, optsSig, attempt]);
-  const current = state.model === model && state.plan === planningPlan && state.optsSig === optsSig && state.attempt === attempt;
+  }, [ready, dragging, planningPlan, model, optsSig, attempt, autoPlan]);
+  const mine = state.model === model;
+  const current = mine && state.plan === planningPlan && state.optsSig === optsSig && state.attempt === attempt;
+  // With auto-planning off the last result stays on screen — a plan, or the error it failed
+  // with — until the user asks for a new one.
+  const kept = !autoPlan && mine && (state.status === 'ready' || state.status === 'error');
   return {
-    timeline: ready && current && state.status === 'ready' ? state.timeline : null,
-    planning: ready && !dragging && (!current || state.status === 'planning'),
-    error: current ? state.error : '',
+    timeline: ready && mine && state.status === 'ready' && (current || !autoPlan) ? state.timeline : null,
+    planning: ready && !dragging && (state.status === 'planning' || (!current && willPlan)),
+    error: current || kept ? state.error : '',
     progress: current ? state.progress : null,
+    stale: kept && !current,
     retry,
   };
 }

@@ -7,7 +7,13 @@ import type { Target } from './placementEngine';
  * and where it meets the drawn floor (null: it does not).
  */
 export type Ray = { origin: Vec3; dir: Vec3 };
-export type Aim = { ray: Ray; hitDepth: number | null; floorPoint: Vec3 | null };
+export type Aim = {
+  ray: Ray;
+  hitDepth: number | null;
+  floorPoint: Vec3 | null;
+  /** the point on the piece under the cursor (null: the cursor is not on a piece) */
+  hitPoint: Vec3 | null;
+};
 
 /** How far (LDU, across the ray) a connection may be from the cursor to count. */
 export const PICK_RADIUS = 24;
@@ -51,7 +57,7 @@ export function candidates(targets: readonly Target[], aim: Aim, max = MAX_TARGE
 
 /** An aim at a floor spot with nothing in front of it (paste beside the model): only the floor is used. */
 export function floorAim(p: Vec3): Aim {
-  return { ray: { origin: p, dir: [0, 1, 0] }, hitDepth: 0, floorPoint: p };
+  return { ray: { origin: p, dir: [0, 1, 0] }, hitDepth: 0, floorPoint: p, hitPoint: null };
 }
 
 /** Where the ray hits (null when it hits nothing). */

@@ -39,6 +39,18 @@ test('duplicate selects the copy, delete removes the selection', () => {
   expect(useStudio.getState().plan.steps[0].pieces.map((i) => i.id)).toEqual(['a']);
 });
 
+test('the pad switches the arrows between world and the piece’s own axes', () => {
+  useStudio.getState().setGizmoSpace('world');
+  render(<EditPad azimuth={() => 0} />);
+  const toggle = screen.getByRole('button', { name: 'Move along the piece’s own axes' });
+  expect(toggle.textContent).toBe('World');
+  expect(toggle.getAttribute('aria-pressed')).toBe('false');
+  fireEvent.click(toggle);
+  expect(useStudio.getState().gizmoSpace).toBe('local');
+  expect(screen.getByRole('button', { name: 'Move along the piece’s own axes' }).textContent).toBe('Local');
+  useStudio.getState().setGizmoSpace('world');
+});
+
 test('rotate turns the piece', () => {
   render(<EditPad azimuth={() => 0} />);
   fireEvent.click(screen.getByRole('button', { name: 'Rotate 90°' }));

@@ -4,6 +4,7 @@ import { COMMON_PARTS } from '../catalog/common';
 import { addPart } from '../state/editing';
 import { ensureParts } from '../state/partService';
 import { setPaletteDrag } from '../state/placing';
+import { useAppSettings } from '../state/appSettings';
 import { getCatalog } from '../state/partService';
 import { PaneHead } from './PaneHead';
 import { PartThumb } from './PartThumb';
@@ -12,6 +13,8 @@ import { PART_DRAG_TYPE } from './PartsLane';
 export function PartsPanel() {
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('');
+  const referenceHints = useAppSettings((s) => s.referenceHints);
+  const mirrorPoses = useAppSettings((s) => s.mirrorReferencePlacements);
   const catalog = getCatalog();
   const categories = useMemo(() => {
     const counts = new Map<string, number>();
@@ -44,6 +47,15 @@ export function PartsPanel() {
           </option>
         ))}
       </select>
+      <div className="nx-sub">Attachment precision</div>
+      <label className="nx-hint" title="Suggest unreviewed LDraw !HELP placement examples. These are not verified connections." style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <input type="checkbox" checked={referenceHints} onChange={(e) => useAppSettings.getState().set({ referenceHints: e.target.checked })} />
+        Preview unreviewed part placement hints
+      </label>
+      <label className="nx-hint" title="A mirrored LDraw instance is not a physical rigid rotation; visual display only, and must still pass collision checks." style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <input type="checkbox" checked={mirrorPoses} onChange={(e) => useAppSettings.getState().set({ mirrorReferencePlacements: e.target.checked })} />
+        Allow mirrored LDraw reference poses
+      </label>
       <div className="nx-sub">{!q.trim() && !cat ? 'Common parts' : `${results.length} found`}</div>
       <div className="part-grid">
         {results.map((e) => (

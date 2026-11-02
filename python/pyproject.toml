@@ -17,9 +17,10 @@ build-backend = "hatchling.build"
 
 [project.scripts]
 brickmotion-assembly = "assembly_model.cli:main"
+brickheadz = "brickheadz.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["assembly_model", "instructions_pdf"]
+packages = ["assembly_model", "instructions_pdf", "brickheadz"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

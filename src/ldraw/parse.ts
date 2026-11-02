@@ -1,3 +1,5 @@
+import { attachmentHintsFromLDraw, type AttachmentHint } from './attachmentHints';
+
 /** Row-major 3x3 rotation/scale matrix (LDraw a..i). */
 export type Mat3 = [number, number, number, number, number, number, number, number, number];
 export type Vec3 = [number, number, number];
@@ -10,7 +12,7 @@ export type LDrawCmd =
   | { t: 'step' }
   | { t: 'bfc'; cert?: 'CCW' | 'CW' | 'NOCERTIFY'; winding?: 'CCW' | 'CW'; clip?: boolean };
 
-export type LDrawFile = { name: string; description: string; category?: string; cmds: LDrawCmd[] };
+export type LDrawFile = { name: string; description: string; category?: string; cmds: LDrawCmd[]; help?: string[]; attachmentHints?: AttachmentHint[] };
 
 export function normalizeName(file: string): string {
   return file.trim().replace(/\\/g, '/').toLowerCase();
@@ -62,6 +64,7 @@ export function parseLDraw(text: string, name = 'main.ldr'): LDrawFile {
         else if (rest[2]?.toUpperCase() === 'END') groups.pop();
       }
       else if (key === '!CATEGORY') file.category = rest.slice(1).join(' ');
+      else if (key === '!HELP') (file.help ??= []).push(rest.slice(1).join(' '));
       else if (key === 'BFC') {
         if (rest[1]?.toUpperCase() === 'INVERTNEXT') invertNext = true;
         else {
@@ -93,6 +96,7 @@ export function parseLDraw(text: string, name = 'main.ldr'): LDrawFile {
       file.cmds.push({ t: 'quad', color: n[1], pts: n.slice(2, 14) });
     }
   }
+  if (file.help?.length) file.attachmentHints = attachmentHintsFromLDraw(text);
   return file;
 }
 

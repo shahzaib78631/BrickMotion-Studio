@@ -61,7 +61,7 @@ describe('free targets on a big model', () => {
     let pose = null as ReturnType<typeof findPose> | null;
     for (let i = 0; i < 10; i++) pose = findPose({
       moving: { solids: g10.solids.slice(0, 200), connectors: mine }, targets,
-      aim: { ray: { origin: [40, -408, 40], dir: [0, 1, 0] }, hitDepth: 400, floorPoint: [40, 0, 40] }, ref: [180, 8, 180], lock: null, yaw: 0, world: null, before: new Set(), prev: null,
+      aim: { ray: { origin: [40, -408, 40], dir: [0, 1, 0] }, hitDepth: 400, floorPoint: [40, 0, 40], hitPoint: [40, 0, 40] }, ref: [180, 8, 180], lock: null, yaw: 0, world: null, before: new Set(), prev: null,
     });
     expect(pose!.valid).toBe(true);
     expect(pose!.mated).toBeGreaterThan(0);
@@ -80,7 +80,7 @@ describe('free targets on a big model', () => {
     let pose = null as ReturnType<typeof findPose> | null;
     for (let i = 0; i < 5; i++) pose = findPose({
       moving: { solids: g10.solids.slice(0, 200).map(meshed), connectors: mine }, targets,
-      aim: { ray: { origin: [40, -408, 40], dir: [0, 1, 0] }, hitDepth: 400, floorPoint: [40, 0, 40] }, ref: [180, 8, 180], lock: null, yaw: 0, world, before: new Set(), prev: null,
+      aim: { ray: { origin: [40, -408, 40], dir: [0, 1, 0] }, hitDepth: 400, floorPoint: [40, 0, 40], hitPoint: [40, 0, 40] }, ref: [180, 8, 180], lock: null, yaw: 0, world, before: new Set(), prev: null,
     });
     expect(pose!.valid).toBe(false);
     expect((performance.now() - t0) / 5).toBeLessThan(200); // ~1100 ms before the collision budget

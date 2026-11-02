@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { assemble, type Assembly } from '../model/assemble';
+import { assemble, type Assembly, type Instance } from '../model/assemble';
 import { validate, type Warning } from '../model/validate';
+import { collisionWorld, solidsFor } from '../plan/collision';
 import { modelSteps } from '../plan/ops';
 import { isSub, type Plan } from '../plan/types';
 import { sameGeometry } from './modelChange';
@@ -41,12 +42,21 @@ export type ModelState = {
 /** the parts' LDCad connectors, so the floating check sees real stud and clip joints */
 const snapsOf = (part: string) => metricsOf(part).snaps;
 
+/**
+ * Whether two pieces really reach into each other. The boxes are only a prefilter: a
+ * hollow or stepped part (22885, a slope) has empty space inside its bounds, and a piece
+ * sitting in it is not an overlap — the editor's guard allows it, so the checks must not
+ * paint it red.
+ */
+const conflicts = (a: Instance, b: Instance) =>
+  collisionWorld(solidsFor([b], metricsOf)).hits(solidsFor([a], metricsOf)).size > 0;
+
 const EMPTY: Assembly = { nodes: [], instances: [], bounds: null, problems: [] };
 
 export function computeModel(plan: Plan, editingModel: string): Omit<ModelState, 'ready'> {
   const colors = getColors();
   const assembly = assemble(plan, metricsOf, colors);
-  const all = validate(assembly, partName, snapsOf);
+  const all = validate(assembly, partName, snapsOf, conflicts);
   const viewPlan = scopedPlan(plan, editingModel);
   const view = editingModel ? assemble(viewPlan, metricsOf, colors) : assembly;
   const warnings = editingModel ? all.filter((w) => w.model === editingModel) : all;
@@ -85,7 +95,7 @@ export function useModel(): ModelState {
     }).then(() => {
       if (cancelled) return;
       const assembly = assemble(plan, metricsOf, getColors());
-      setBase({ plan, assembly, warnings: validate(assembly, partName, snapsOf) });
+      setBase({ plan, assembly, warnings: validate(assembly, partName, snapsOf, conflicts) });
     }).catch((error: unknown) => {
       if (!cancelled) setFailure({ plan, message: error instanceof Error ? error.message : String(error) });
     });

@@ -1,11 +1,13 @@
 import { runCommand } from '../state/editing';
 import { commandForKey, type Command } from '../state/keymap';
+import { useStudio } from '../state/store';
 import { Ic, type IconName } from './icons';
 
 const key = (k: string) => ({ key: k, shiftKey: false, metaKey: false, ctrlKey: false });
 
 /** On-screen editing for the selection: move (relative to the camera), raise, lower, rotate, duplicate, delete. */
 export function EditPad({ azimuth }: { azimuth(): number }) {
+  const axes = useStudio((s) => s.gizmoSpace);
   const run = (k: string) => {
     const cmd = commandForKey(key(k), azimuth());
     if (cmd) runCommand(cmd);
@@ -18,7 +20,11 @@ export function EditPad({ azimuth }: { azimuth(): number }) {
   const cmd = (c: Command) => () => runCommand(c);
   return (
     <div className="bm-pad">
-      <div className="nx-sub">Move</div>
+      <div className="nx-sub">Move
+        <button className="nx-btn nx-sm bm-pad-axes" aria-label="Move along the piece’s own axes" aria-pressed={axes === 'local'}
+          title={axes === 'local' ? 'Local axes (L): the arrows move along the piece’s own directions — click for world axes' : 'World axes (L): the arrows move along the world grid — click for the piece’s own directions'}
+          onClick={() => runCommand({ kind: 'axes' })}>{axes === 'local' ? 'Local' : 'World'}</button>
+      </div>
       <div className="bm-pad-grid">
         <div className="bm-dpad">
           <span />

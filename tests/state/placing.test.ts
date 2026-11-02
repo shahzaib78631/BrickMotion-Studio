@@ -17,12 +17,12 @@ const load = (steps: PlanItem[][], currentStep: number | null = null) => {
   s.setCurrentStep(currentStep);
 };
 /** Looking straight down at a model point from 400 LDU above it (the floor is the plan's, y = 0). */
-const aimDown = (p: Vec3): Aim => ({ ray: { origin: [p[0], p[1] - 400, p[2]], dir: [0, 1, 0] }, hitDepth: 400, floorPoint: [p[0], 0, p[2]] });
+const aimDown = (p: Vec3): Aim => ({ ray: { origin: [p[0], p[1] - 400, p[2]], dir: [0, 1, 0] }, hitDepth: 400, floorPoint: [p[0], 0, p[2]], hitPoint: p });
 const item = (id: string) => findItem(useStudio.getState().plan, '', id)!.item as { x: number; y: number; z: number };
 
 describe('placing session', () => {
   beforeAll(async () => { if (ready) await useAppParts(['3001', '3020', '3024']); }, 60_000);
-  beforeEach(() => { useAppSettings.getState().set({ collision: true }); cancelPlacing(); });
+  beforeEach(() => { useAppSettings.getState().set({ collision: true }); cancelPlacing(); useStudio.getState().clearBlockedNote(); });
 
   it.skipIf(!ready)('drags a brick from the floor onto a plate and commits once', () => {
     load([[piece('plate', '3020', 0, 0), piece('brick', '3001', 10, 0)]]);
@@ -102,6 +102,16 @@ describe('placing session', () => {
     const pose = updatePlacing(aimDown([40, -8, 20]));
     expect(pose?.valid).toBe(true);
     expect(pose?.mated).toBe(8);
+  });
+
+  it('says so when a part is not in the library instead of letting it float', () => {
+    load([[piece('x', 'not-a-part', 0, 0)]]);
+    beginPlacing({ kind: 'move', model: '', ids: ['x'] }, [10, 0, 10]);
+    // a placeholder has no connectors and no measurement: the sidebar must say why nothing bites
+    const note = useStudio.getState().blockedNote;
+    expect(note?.why).toContain('not in the part library');
+    expect(note?.why).toContain('not-a-part');
+    cancelPlacing();
   });
 
   it('maps a display hit back into the model frame of a rotated bay', () => {

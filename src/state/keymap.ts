@@ -8,6 +8,7 @@ export type Command =
   | { kind: 'redo' }
   | { kind: 'tool'; tool: Tool }
   | { kind: 'collision' }
+  | { kind: 'axes' }
   | { kind: 'copy' }
   | { kind: 'cut' }
   | { kind: 'paste' }
@@ -78,6 +79,10 @@ export function commandForKey(e: KeyLike, cameraAzimuthDeg: number): Command | n
     case 'k':
     case 'K':
       return { kind: 'collision' };
+    case 'l':
+    case 'L':
+      // Blender-style: move and rotate along the piece's own axes rather than the world's
+      return { kind: 'axes' };
     case 'Delete':
     case 'Backspace':
       return { kind: 'delete' };

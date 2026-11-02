@@ -54,6 +54,27 @@ test('a saved rigid flight validates its new matrix references and pivot', () =>
   expect(damaged.ok && damaged.skipped).toBe(1);
 });
 
+test('an animation planned by an older build is planned again, not replayed', async () => {
+  const { PLANNER_VERSION } = await import('../../src/anim/plannerVersion');
+  const tl = buildTimeline(assemble(plan, metrics, fixtureColors), metrics, { targetSeconds: 10, heroOrbit: true });
+  const current = projectToJson(plan, [{ model: '', opts: 'k', timeline: encodeTimeline(tl) }]);
+  const read = readProjectFile(current);
+  expect(read.ok && read.timelines).toHaveLength(1);
+  expect(read.ok && read.stale).toBe(0);
+
+  // a file from before the stamp carries no version at all: its flight was planned by other rules
+  const older = JSON.parse(current);
+  delete older.plannerVersion;
+  const old = readProjectFile(JSON.stringify(older));
+  expect(old.ok && old.timelines).toHaveLength(0);
+  expect(old.ok && old.stale).toBe(1);
+  expect(old.ok && old.plan.steps.length).toBe(plan.steps.length);   // the model itself still opens
+
+  const newer = JSON.parse(current);
+  newer.plannerVersion = PLANNER_VERSION + 1;
+  expect(readProjectFile(JSON.stringify(newer)).ok && (readProjectFile(JSON.stringify(newer)) as { stale: number }).stale).toBe(1);
+});
+
 test('a reopened project fingerprints the same, so its saved timelines are found', async () => {
   const { timelineFingerprint } = await import('../../src/storage/timelineCache');
   const r = readProjectFile(projectToJson(plan, []));

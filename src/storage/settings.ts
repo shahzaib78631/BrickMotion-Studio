@@ -21,6 +21,14 @@ export type Settings = {
   showSelectionBar: boolean;
   /** Build mode refuses edits that push a piece into another piece (K toggles). */
   collision: boolean;
+  /** Opt-in suggestion mode for unreviewed LDraw !HELP placement examples. */
+  referenceHints: boolean;
+  /** Opt-in LDraw reflected display poses (det -1), not physical rotations. */
+  mirrorReferencePlacements: boolean;
+  /** Build mode plans the animation after every part edit; off keeps the last plan until you ask. */
+  autoPlan: boolean;
+  /** Viewport draws parts as outlines only (never used for exports). */
+  wireframe: boolean;
   /** MP4 camera: automatic cinematics, or the camera the viewport plays. */
   /** 'track': the model's Camera track, or the automatic camera while it has none */
   exportCamera: 'automatic' | 'buildView' | 'track';
@@ -44,6 +52,10 @@ export const DEFAULT_SETTINGS: Settings = {
   logoEnabled: false,
   showSelectionBar: true,
   collision: true,
+  referenceHints: false,
+  mirrorReferencePlacements: false,
+  autoPlan: true,
+  wireframe: false,
   exportCamera: 'track',
   cameraFollowsPlayback: true,
   cameraPresets: [],
@@ -97,6 +109,10 @@ export function sanitizeSettings(stored: Partial<Settings>): Settings {
   if (!PATH_SAMPLE_OPTIONS.includes(video.pathSamples as (typeof PATH_SAMPLE_OPTIONS)[number])) video.pathSamples = 64;
   if (typeof s.showSelectionBar !== 'boolean') s.showSelectionBar = DEFAULT_SETTINGS.showSelectionBar;
   if (typeof s.collision !== 'boolean') s.collision = DEFAULT_SETTINGS.collision;
+  if (typeof s.referenceHints !== 'boolean') s.referenceHints = false;
+  if (typeof s.mirrorReferencePlacements !== 'boolean') s.mirrorReferencePlacements = false;
+  if (typeof s.autoPlan !== 'boolean') s.autoPlan = DEFAULT_SETTINGS.autoPlan;
+  if (typeof s.wireframe !== 'boolean') s.wireframe = DEFAULT_SETTINGS.wireframe;
   if (typeof s.cameraFollowsPlayback !== 'boolean') s.cameraFollowsPlayback = DEFAULT_SETTINGS.cameraFollowsPlayback;
   if (typeof s.autoFitStaging !== 'boolean') s.autoFitStaging = DEFAULT_SETTINGS.autoFitStaging;
   if (s.exportCamera !== 'automatic' && s.exportCamera !== 'buildView' && s.exportCamera !== 'track') s.exportCamera = 'track';

@@ -23,6 +23,8 @@ import { choosePacing, SEQUENTIAL_GAP, type AnimOptions, type FloorSides, type P
 import { AssemblyPlanningError, buildAssemblyGraph } from './assemblyGraph';
 import { intersects, sweptIntersects, rotationPadding } from './sweptBounds';
 import { mateAxes, plugAxes, worldSnaps, type WorldSnap } from './snapMates';
+import { attachmentFit, sameSlotInterface } from '../model/attachmentPlacements';
+import { canonicalAttachmentPart, reviewedAttachmentSlots } from '../ldraw/attachments';
 import { CLEAR, crossings, nudged, shapeOf, slopNudges, sweepReach, translationClear, UP, waysFor, type Placed, type Way } from './shapes';
 
 const STUD = 20;
@@ -520,6 +522,37 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
       mateCache.set(id, axes);
     }
     return axes;
+  };
+  const slotCache = new Map<string, [number, number, number][]>();
+  /**
+   * The line a documented placement slides along: the inserted piece's own longest axis, both
+   * ways round — a sword goes up its blade, not down through the scabbard. The shadow library
+   * carries no snap for a friction slot, so the connector ways cannot see it; the mesh sweep
+   * still decides which end it can actually come in from, so these are only candidates.
+   */
+  const slotWaysOf = (insertKey: string, hostKey: string): [number, number, number][] => {
+    const id = `${insertKey}|${hostKey}`;
+    let ways = slotCache.get(id);
+    if (!ways) {
+      ways = [];
+      const insert = byKey.get(insertKey), host = byKey.get(hostKey);
+      if (insert && host) {
+        const documented = reviewedAttachmentSlots().filter((slot) =>
+          canonicalAttachmentPart(slot.host) === canonicalAttachmentPart(host.part) &&
+          sameSlotInterface(host.part, canonicalAttachmentPart(slot.insert), insert.part, (part) => metrics(part)));
+        if (documented.some((slot) => attachmentFit(host.world.elements, insert.world.elements, slot) !== null)) {
+          const body = metrics(insert.part).body;
+          const spans = [body.max[0] - body.min[0], body.max[1] - body.min[1], body.max[2] - body.min[2]];
+          const k = spans[0] >= spans[1] && spans[0] >= spans[2] ? 0 : spans[1] >= spans[2] ? 1 : 2;
+          const e = insert.world.elements;
+          const len = Math.hypot(e[k * 4], e[k * 4 + 1], e[k * 4 + 2]) || 1;
+          const axis: [number, number, number] = [e[k * 4] / len, e[k * 4 + 1] / len, e[k * 4 + 2] / len];
+          ways.push(axis, [-axis[0], -axis[1], -axis[2]]);
+        }
+      }
+      slotCache.set(id, ways);
+    }
+    return ways;
   };
   const ground = asm.instances.length ? Math.max(...asm.instances.map((i) => i.worldBox.max[1])) : 0;
   const modelBox = asm.bounds ?? EMPTY_BOX;
@@ -1177,6 +1210,8 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
       const slide = u.kind === 'piece' ? slideAxis(dst, resting) : null;
       // Along the axis of a connector it joins (pin into hole, axle into clip), both ways.
       const connectorWays: Dir[] = [];
+      // Along the line of a documented placement it fills (a sword into a scabbard's slot).
+      const slotWays: Dir[] = [];
       if (u.kind === 'piece')
         for (const block of blockers)
           if (block.end === Infinity && boxesTouch(dst, block.box))
@@ -1184,13 +1219,19 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
               for (const a of matesOf(member.key, block.key))
                 for (const w of [a, [-a[0], -a[1], -a[2]] as Dir])
                   if (!connectorWays.some((o) => o[0] * w[0] + o[1] * w[1] + o[2] * w[2] > 1 - 1e-6)) connectorWays.push(w);
+      if (u.kind === 'piece')
+        for (const block of blockers)
+          if (block.end === Infinity && boxesTouch(dst, block.box))
+            for (const member of members[i])
+              for (const w of slotWaysOf(member.key, block.key))
+                if (!slotWays.some((o) => o[0] * w[0] + o[1] * w[1] + o[2] * w[2] > 1 - 1e-6)) slotWays.push(w);
       // Preference order only: the per-pair predicate below is the sole judge.
       // `slideAxis` infers "this piece is tucked, so slide it in" from AABBs, and
       // a hollow underside (a bracket, a wedge, a tyre) overlaps its neighbour's
       // box without any real interlock. Offering the vertical way first lets the
       // mesh test reject that false tuck; a piece that truly cannot come down
       // still falls through to the slide, exactly as before.
-      const boxWays: Dir[] = [...connectorWays, ...(narrowSide !== undefined ? sides.slice(0, 2) : []), UP, ...(slide ? [axisDir(slide[0], slide[1])] : []), ...sides];
+      const boxWays: Dir[] = [...slotWays, ...connectorWays, ...(narrowSide !== undefined ? sides.slice(0, 2) : []), UP, ...(slide ? [axisDir(slide[0], slide[1])] : []), ...sides];
       const explicitWay = flat[i].u.entryWay;
       const directions: Iterable<Dir> = explicitWay ? [explicitWay] : u.kind === 'piece'
         ? waysFor(restPose(members[i][0].move.to, members[i][0].move.rel), boxWays) : boxWays;
@@ -1263,7 +1304,7 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
           const geometry = metrics(part);
           if (geometry.placeholder || !geometry.mesh?.length) missingInsertionParts.add(part);
         }
-        clear = verifiedInsertion(member, block, way, metrics, byKey, holder, insertionMemo);
+        clear = verifiedInsertion(member, block, way, metrics, byKey, holder, insertionMemo, matesOf(member.key, block.key));
         insertionCache.set(id, clear);
         return clear;
       };
@@ -1705,9 +1746,14 @@ function studSeat(member: Member, block: RestingBlock, way: Way, metrics: Metric
  * must have zero sampled material crossings. This remains a mesh heuristic,
  * not a claim of CAD-level connector recognition or deformable snap simulation.
  */
-function verifiedInsertion(member: Member, block: RestingBlock, way: Way, metrics: Metrics, byKey: Map<string, Instance>, holder: boolean, memo?: Map<string, boolean>): boolean {
+function verifiedInsertion(member: Member, block: RestingBlock, way: Way, metrics: Metrics, byKey: Map<string, Instance>, holder: boolean, memo?: Map<string, boolean>, jointAxes: readonly Way[] = []): boolean {
   if (!block.assembled) return false;
   if (studSeat(member, block, way, metrics, byKey)) return true;
+  // A column that meets a socket of this block, approached along that joint, is seated. The
+  // point cloud cannot tell a hole from the wall around it — a pin entering a Technic hole
+  // still touches the hole's rim points — so the joint decides here, exactly as a stud
+  // landing on a stud is excused above. The route to the seat is still certified separately.
+  if (jointAxes.some((a) => Math.abs(a[0] * way[0] + a[1] * way[1] + a[2] * way[2]) > 0.999)) return true;
   const own = metrics(byKey.get(member.key)!.part), other = metrics(block.part);
   if (!own.mesh?.length || !other.mesh?.length || own.placeholder || other.placeholder) return false;
   const world = restPose(member.move.to, member.move.rel);

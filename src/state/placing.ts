@@ -15,6 +15,7 @@ import { bodyFor } from './editing';
 import { getColors, metricsOf } from './partService';
 import { useStudio } from './store';
 import { visibleItemIds } from '../plan/visible';
+import { availableAttachmentTargets } from '../model/attachmentPlacements';
 
 /**
  * One Studio-style placing gesture: moving pieces already built, or placing new ones
@@ -99,7 +100,24 @@ export function beginPlacing(src: PlacingSource, grab?: Vec3): void {
   const keyed: Solid[] = shown.map((i) => ({ ...solidsFor([i], metricsOf)[0], id: i.key }));
   const targets = freeTargets(shown.map((i) => ({ list: connectorsOf(i), owner: i.key })), keyed).map((t) => ({ ...t, owner: top(t.owner) }));
   const solids = solidsFor(mine, metricsOf);
+  // A part the library does not have is drawn as a placeholder box: no connectors, no
+  // measurement. Nothing can seat it, so say why instead of letting it follow the mouse.
+  const unknown = [...new Set(mine.filter((i) => i.placeholder).map((i) => i.part))];
+  if (unknown.length) {
+    useStudio.getState().noteBlocked(ids, [], `${unknown.join(', ')} is not in the part library, so nothing can connect to it and it is not checked — import its .dat first`);
+  }
   const connectors = mine.flatMap(connectorsOf);
+  // A sword/sheath fit (or other reviewed, non-cylindrical part relationship)
+  // may have no LDCad connector. Keep occupancy global to this editing scope
+  // while only exposing placement targets on currently visible host pieces.
+  const snapSettings = useAppSettings.getState();
+  const precisionTargets = mine.length === 1 ? availableAttachmentTargets({
+    id: mine[0].key, part: mine[0].part, world: mine[0].world.elements,
+    hints: metricsOf(mine[0].part).attachmentHints,
+  }, rest.map((i) => ({
+    id: i.key, part: i.part, world: i.world.elements,
+    hints: metricsOf(i.part).attachmentHints,
+  })), snapSettings.referenceHints, snapSettings.mirrorReferencePlacements).filter((t) => visible.has(top(t.owner))).map((t) => ({ ...t, owner: top(t.owner) })) : [];
   const world = useAppSettings.getState().collision ? collisionWorld(solidsFor(rest, metricsOf)) : null;
   const before = src.kind === 'move' && world ? world.hits(solids) : new Set<string>();
   // the parts are held where they were grabbed; a new part by the centre of its underside
@@ -108,7 +126,7 @@ export function beginPlacing(src: PlacingSource, grab?: Vec3): void {
   session = {
     model: m, ids, base, plan0, nodes0: view.nodes, visible, newItems, step,
     // the drawn floor (the model's lowest point), fixed for the whole gesture
-    query: { moving: { solids, connectors }, targets, ref, world, before, floor: view.bounds?.max[1] ?? 0 },
+    query: { moving: { solids, connectors }, targets, precisionTargets, ref, world, before, floor: view.bounds?.max[1] ?? 0 },
     stepOf: (o) => findItem(plan0, m, o)?.step ?? 0,
     selection: st.selection.ids,
     lastAim: null,
@@ -133,6 +151,8 @@ export function updatePlacing(aim: Aim): Pose | null {
   if (!s || !cur) return null;
   s.lastAim = aim;
   const pose = findPose({ ...s.query, aim, lock: cur.lock, yaw: cur.yaw, prev: cur.pose });
+  // a red ghost is worth an explanation: keep what stopped it for the sidebar
+  if (!pose.valid) useStudio.getState().noteBlocked(s.ids, pose.with ?? [], pose.why ?? 'there is no clean seat here');
   if (pose !== cur.pose) {
     apply(pose);
     usePlacing.setState({ state: { ...cur, pose } });

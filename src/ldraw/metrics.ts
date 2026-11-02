@@ -1,6 +1,7 @@
 import type { Box, FlatPart } from './flatten';
 import { bottomSocketFace, type ConnectionGeometry } from './connectors';
 import type { Snap } from './shadow';
+import type { AttachmentHint } from './attachmentHints';
 
 export type PartMetrics = ConnectionGeometry & {
   id: string;
@@ -21,6 +22,8 @@ export type PartMetrics = ConnectionGeometry & {
   meshTwoSidedFrom?: number;
   /** LDCad shadow-library connectors in part space; absent when the shadow pack is not installed */
   snaps?: Snap[];
+  /** Documented !HELP placements, NOT auto-approved physical connectors. */
+  attachmentHints?: AttachmentHint[];
 };
 
 /** Collision geometry must retain every surface; dropping triangles creates holes. */
@@ -57,6 +60,7 @@ export function measurePart(flat: FlatPart | null, id: string): PartMetrics {
     placeholder: false,
     studs: flat.studs,
     ...(flat.snaps ? { snaps: flat.snaps } : {}),
+    ...(flat.attachmentHints ? { attachmentHints: flat.attachmentHints } : {}),
     socketFace: bottomSocketFace(body, flat.description ?? ''),
     ...(() => {
       const m = meshOf(flat);

@@ -158,3 +158,18 @@ export function edgeMaterialFor(color: ColorDef | undefined): THREE.LineBasicMat
   edgeCache.set(c.code, m);
   return m;
 }
+
+const wireCache = new Map<number, THREE.LineBasicMaterial>();
+
+/**
+ * The ink a wireframe view draws every part in. One colour for the whole model (not the part
+ * colour) so the outlines read whatever the bricks are, and solid lines so they stay crisp.
+ */
+export function wireMaterial(ink: number): THREE.LineBasicMaterial {
+  let m = wireCache.get(ink);
+  if (m) return m;
+  m = new THREE.LineBasicMaterial({ color: ink, depthWrite: false });
+  m.defines = { USE_INSTANCING: '' };
+  wireCache.set(ink, m);
+  return m;
+}

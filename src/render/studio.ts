@@ -27,7 +27,14 @@ export type Projection = 'perspective' | 'ortho';
  * - linearColors: plain linear tone mapping instead of filmic (ACES), which mutes
  *   saturated LEGO colours; exposure is lowered a little so whites don't clip
  */
-export type RenderOptions = { edges: boolean; linearColors: boolean; /** ambient occlusion on scenes that use it (default on) */ ao?: boolean };
+export type RenderOptions = {
+  edges: boolean; linearColors: boolean;
+  /** viewport only: outlines instead of solid faces, never used for exports */
+  wireframe?: boolean;
+  /** the ink a wireframe draws every part in */
+  wireInk?: number;
+  /** ambient occlusion on scenes that use it (default on) */ ao?: boolean;
+};
 export const DEFAULT_RENDER: RenderOptions = { edges: true, linearColors: true };
 const LINEAR_EXPOSURE = 0.85;
 export const STUDIO_BG = '#EDEDEF';
@@ -270,11 +277,13 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
   const setRenderOptions = (o: RenderOptions) => {
     render = { ...o };
     applyEdges();
+    applyWireframe();
     applyExposure();
   };
   /** Outline edges: the user's switch, unless the scene is a product render without them. */
   // the user's edge-lines toggle decides; a scene's `outlines` is only the default it suggests when picked
   const applyEdges = () => bricks.setEdges(render.edges);
+  const applyWireframe = () => bricks.setWireframe(render.wireframe === true, render.wireInk);
   /** The floor for the current scene and material choice. */
   const applyFloor = () => {
     const preset = sceneOf(look);
@@ -347,6 +356,7 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
     key.shadow.radius = Math.max(4, preset.shadowSoftness ?? 4);
     applyAO();
     applyEdges();
+    applyWireframe();
     aimStudioRig();
     applyFloor();
     applyExposure();

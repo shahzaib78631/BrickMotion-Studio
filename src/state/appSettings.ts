@@ -71,6 +71,14 @@ export type AppSettings = {
   showSelectionBar: boolean;
   /** Build mode refuses edits that push a piece into another piece (K toggles). */
   collision: boolean;
+  /** Preview unreviewed LDraw !HELP references; these are not certified mates. */
+  referenceHints: boolean;
+  /** Allow LDraw mirror images (det -1); not physically valid rigid rotations. */
+  mirrorReferencePlacements: boolean;
+  /** Build mode plans the animation after every part edit; off keeps the last plan until you ask. */
+  autoPlan: boolean;
+  /** Viewport draws parts as outlines only (never used for exports). */
+  wireframe: boolean;
   /** MP4 camera: the automatic cinematics, or the camera the viewport plays. */
   exportCamera: 'automatic' | 'buildView' | 'track';
   /** play the intro shot and hero orbit in the Build viewport as well as in the video */
@@ -97,6 +105,10 @@ export const useAppSettings = create<AppSettings>((set) => ({
   logoCorner: DEFAULT_SETTINGS.logoCorner,
   showSelectionBar: DEFAULT_SETTINGS.showSelectionBar,
   collision: DEFAULT_SETTINGS.collision,
+  referenceHints: DEFAULT_SETTINGS.referenceHints,
+  mirrorReferencePlacements: DEFAULT_SETTINGS.mirrorReferencePlacements,
+  autoPlan: DEFAULT_SETTINGS.autoPlan,
+  wireframe: DEFAULT_SETTINGS.wireframe,
   exportCamera: DEFAULT_SETTINGS.exportCamera,
   cameraFollowsPlayback: DEFAULT_SETTINGS.cameraFollowsPlayback,
   cameraPresets: DEFAULT_SETTINGS.cameraPresets,
@@ -116,6 +128,10 @@ export const toSettings = (s: AppSettings): Settings => ({
   logoEnabled: s.logoEnabled,
   showSelectionBar: s.showSelectionBar,
   collision: s.collision,
+  referenceHints: s.referenceHints,
+  mirrorReferencePlacements: s.mirrorReferencePlacements,
+  autoPlan: s.autoPlan,
+  wireframe: s.wireframe,
   cameraFollowsPlayback: s.cameraFollowsPlayback,
   cameraPresets: s.cameraPresets,
   autoFitStaging: s.autoFitStaging,
@@ -127,7 +143,7 @@ export async function applySettings(s: Settings): Promise<void> {
   const logoBitmap = s.logo ? await createImageBitmap(s.logo).catch(() => null) : null;
   useAppSettings
     .getState()
-    .set({ apiKey: s.apiKey, model: s.model, logo: s.logo, logoBitmap, logoCorner: s.logoCorner, logoEnabled: s.logoEnabled && !!logoBitmap, showSelectionBar: s.showSelectionBar, collision: s.collision, cameraFollowsPlayback: s.cameraFollowsPlayback, cameraPresets: s.cameraPresets ?? [], autoFitStaging: false, frameStagingPending: false, frameStagingPrevious: null, exportCamera: s.exportCamera ?? 'track', ...s.video });
+    .set({ apiKey: s.apiKey, model: s.model, logo: s.logo, logoBitmap, logoCorner: s.logoCorner, logoEnabled: s.logoEnabled && !!logoBitmap, showSelectionBar: s.showSelectionBar, collision: s.collision, referenceHints: s.referenceHints, mirrorReferencePlacements: s.mirrorReferencePlacements, autoPlan: s.autoPlan, wireframe: s.wireframe, cameraFollowsPlayback: s.cameraFollowsPlayback, cameraPresets: s.cameraPresets ?? [], autoFitStaging: false, frameStagingPending: false, frameStagingPrevious: null, exportCamera: s.exportCamera ?? 'track', ...s.video });
 }
 
 /** The animation options the timeline planner needs, taken from the video settings. */

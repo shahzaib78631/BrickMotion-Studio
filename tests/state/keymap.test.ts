@@ -47,6 +47,11 @@ test('Shift+Up/Down and E/Q raise and lower; Alt adds a full brick', () => {
   expect(commandForKey(k('ArrowRight', { shiftKey: true }), 0)).toEqual({ kind: 'move', d: { x: 1, y: 0, z: 0 } });
 });
 
+test('L switches between world and the piece’s own axes', () => {
+  expect(commandForKey(k('l'), 0)).toEqual({ kind: 'axes' });
+  expect(commandForKey(k('L', { shiftKey: true }), 0)).toEqual({ kind: 'axes' });
+});
+
 test('K toggles collision', () => {
   expect(commandForKey({ key: 'k', shiftKey: false, metaKey: false, ctrlKey: false }, 0)).toEqual({ kind: 'collision' });
 });

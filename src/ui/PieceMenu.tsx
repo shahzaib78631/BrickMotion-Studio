@@ -1,4 +1,5 @@
 import { runCommand } from '../state/editing';
+import { fitSelected } from '../state/fit';
 import { nextGroupName, setGroup, ungroupSelection, membersOfGroup } from '../plan/groups';
 import { findItem, modelSteps } from '../plan/ops';
 import { connectedIds, movePiecesToNewStep, movePiecesToStep, similarIds, stepsOf } from '../plan/pieceActions';
@@ -89,6 +90,8 @@ export function pieceMenuItems(ids: string[], onCreateSubmodel?: (ids: string[])
     { heading: one ? itemName(first.item) : `${ids.length} pieces` },
     { heading: where },
     { icon: 'fit', label: 'Frame in view', onClick: () => st.requestFocus(ids) },
+    { icon: 'fit', label: ids.length < 2 ? 'Fit together: select the two pieces first' : 'Fit together (slot in)',
+      disabled: ids.length < 2, onClick: () => fitSelected() },
     ...(one && isSub(first.item)
       ? [{ icon: 'box' as const, label: `Open submodel “${first.item.submodel}”`, onClick: () => st.setEditingModel((first.item as { submodel: string }).submodel) }]
       : []),
@@ -139,6 +142,7 @@ export function emptyMenuItems(onCreateSubmodel?: (ids: string[]) => void): Cont
     { icon: 'x', label: 'Clear selection', hint: 'Esc', disabled: !st.selection.ids.length, onClick: () => st.select([]) },
     ...(selected.length >= 2 ? [
       'sep' as const,
+      { icon: 'fit' as const, label: 'Fit together (slot in)', onClick: () => fitSelected() },
       { icon: 'components' as const, label: `Group ${selected.length} selected pieces`, onClick: () => {
         st.apply(p => setGroup(p, m, selected, nextGroupName(p, m))); st.select(selected);
       } },

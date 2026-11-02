@@ -11,12 +11,13 @@
  */
 import { parsePlan } from '../plan/schema';
 import type { Plan } from '../plan/types';
+import { PLANNER_VERSION } from '../anim/plannerVersion';
 import type { EncodedTimeline } from '../anim/timelineData';
 
 export const PROJECT_EXTENSION = 'brickmotion';
 export type SavedTimeline = { model: string; opts: string; timeline: EncodedTimeline };
 type StoredTimeline = { model: string; opts: string; timeline: Omit<EncodedTimeline, 'mats'> & { mats: string } };
-type ProjectJson = { format: 'brickmotion-project'; version: 1; savedAt: string; plan: unknown; timelines: StoredTimeline[] };
+type ProjectJson = { format: 'brickmotion-project'; version: 1; savedAt: string; plan: unknown; timelines: StoredTimeline[]; plannerVersion?: number };
 
 function toBase64(values: Float64Array): string {
   const bytes = new Uint8Array(values.buffer, values.byteOffset, values.byteLength);
@@ -40,6 +41,7 @@ export function projectToJson(plan: Plan, timelines: SavedTimeline[]): string {
     savedAt: new Date().toISOString(),
     plan,
     timelines: timelines.map(({ model, opts, timeline }) => ({ model, opts, timeline: { ...timeline, mats: toBase64(timeline.mats) } })),
+    plannerVersion: PLANNER_VERSION,
   };
   return JSON.stringify(file);
 }
@@ -47,7 +49,7 @@ export function projectToJson(plan: Plan, timelines: SavedTimeline[]): string {
 export const isProjectFile = (fileName: string) => fileName.toLowerCase().endsWith(`.${PROJECT_EXTENSION}`);
 
 /** Reads a project file. A damaged timeline is skipped (it is planned again); a damaged plan fails. */
-export function readProjectFile(text: string): { ok: true; plan: Plan; timelines: SavedTimeline[]; skipped: number } | { ok: false; errors: string[] } {
+export function readProjectFile(text: string): { ok: true; plan: Plan; timelines: SavedTimeline[]; skipped: number; stale: number } | { ok: false; errors: string[] } {
   let json: Partial<ProjectJson>;
   try {
     json = JSON.parse(text);
@@ -60,8 +62,13 @@ export function readProjectFile(text: string): { ok: true; plan: Plan; timelines
   if (!parsed.ok) return parsed;
   const timelines: SavedTimeline[] = [];
   let skipped = 0;
+  // An animation planned by an older planner replays the old behaviour, so it is not reused:
+  // the plan is planned again with the rules this build has.
+  let stale = 0;
+  const version = typeof json.plannerVersion === 'number' ? json.plannerVersion : 0;
   for (const t of Array.isArray(json.timelines) ? json.timelines : []) {
     try {
+      if (version !== PLANNER_VERSION) { stale++; continue; }
       if (typeof t.model !== 'string' || typeof t.opts !== 'string' || typeof t.timeline?.mats !== 'string' || !Array.isArray(t.timeline.tracks) || !Array.isArray(t.timeline.units)) throw new Error('bad shape');
       // Older 'certified' V2 clips were checked with outdated connector and
       // swept-contact logic. Never silently reuse an obsolete safety claim:
@@ -82,5 +89,5 @@ export function readProjectFile(text: string): { ok: true; plan: Plan; timelines
       skipped++;
     }
   }
-  return { ok: true, plan: parsed.plan, timelines, skipped };
+  return { ok: true, plan: parsed.plan, timelines, skipped, stale };
 }

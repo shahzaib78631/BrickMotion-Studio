@@ -1,0 +1,14 @@
+[
+  { "part": "22885", "ldrawPart": "22885", "color": 71, "quantity": 24, "spare": false },
+  { "part": "3001", "ldrawPart": "3001", "color": 4, "quantity": 8, "spare": false },
+  { "part": "3003", "ldrawPart": "3003", "color": 4, "quantity": 12, "spare": false },
+  { "part": "3004", "ldrawPart": "3004", "color": 71, "quantity": 10, "spare": false },
+  { "part": "3020", "ldrawPart": "3020", "color": 71, "quantity": 14, "spare": false },
+  { "part": "3022", "ldrawPart": "3022", "color": 4, "quantity": 16, "spare": false },
+  { "part": "3023", "ldrawPart": "3023", "color": 0, "quantity": 20, "spare": false },
+  { "part": "3024", "ldrawPart": "3024", "color": 0, "quantity": 20, "spare": false },
+  { "part": "3958", "ldrawPart": "3958", "color": 0, "quantity": 1, "spare": false },
+  { "part": "4073", "ldrawPart": "4073", "color": 0, "quantity": 4, "spare": false },
+  { "part": "15068", "ldrawPart": "15068", "color": 14, "quantity": 6, "spare": false },
+  { "part": "11477", "ldrawPart": "11477", "color": 14, "quantity": 6, "spare": false }
+]
