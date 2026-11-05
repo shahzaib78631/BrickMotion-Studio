@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { assemble } from '../model/assemble';
 import { partConnectors } from '../plan/connectors';
 import { collisionWorld, solidsFor, type CollisionWorld, type Solid } from '../plan/collision';
-import { fitSelection, type FitPiece } from '../plan/fitSelection';
+import { fitChoices, type FitChoice, type FitPiece } from '../plan/fitSelection';
 import { worldConnectors } from '../plan/connectors';
 import { LDU_TO_WORLD, WORLD_TO_LDU, transformPlanItems } from '../plan/gizmo';
 import { modelSteps } from '../plan/ops';
@@ -17,14 +17,12 @@ import { useStudio } from './store';
  * otherwise (`src/plan/fitSelection.ts`). One undo step, the same collision verdict as a drag,
  * and a named reason in the sidebar when nothing fits.
  */
-export function fitSelected(): 'ok' | 'refused' {
+function planFit() {
   const st = useStudio.getState();
   const model = st.editingModel;
   const ids = st.selection.model === model ? [...st.selection.ids] : [];
-  const refuse = (why: string, hits: readonly string[] = []) => {
-    st.noteBlocked(ids, hits, why);
-    return 'refused' as const;
-  };
+  // pure: the sidebar list asks this while rendering, so it must not write the store
+  const refuse = (why: string) => ({ ok: false as const, why });
   if (ids.length < 2) return refuse('select the piece to slot in together with the piece it goes into');
 
   const before = st.plan;
@@ -80,13 +78,62 @@ export function fitSelected(): 'ok' | 'refused' {
   const placed: FitPiece[] = view.instances.map((inst) => ({
     id: inst.key.split('/')[0], part: inst.part, world: Array.from(inst.world.elements),
   }));
-  const fit = fitSelection(pieces, {
+  const found = fitChoices(pieces, {
     metricsOf, blocked, placed, planted: (id) => planted.get(id) ?? 0,
     referenceHints: useAppSettings.getState().referenceHints,
     mirrored: useAppSettings.getState().mirrorReferencePlacements,
   });
-  if (!fit.ok) return refuse(fit.why);
+  if (!found.ok) return { ok: false as const, why: found.why };
+  return { ok: true as const, choices: found.choices, leaf, before, view, model };
+}
 
+/** One way the selected pieces can fit together, for the sidebar list. */
+export type FitListing = {
+  choice: FitChoice;
+  /** this pose is where the insert already sits */
+  current: boolean;
+  title: string;
+  detail: string;
+};
+
+/** Every way the selection can fit together, best first; `why` says why there is none. */
+export function fitOptionsForSelection(): { ok: true; options: FitListing[] } | { ok: false; why: string } {
+  const plan = planFit();
+  if (!plan.ok) return plan;
+  return {
+    ok: true,
+    options: plan.choices.map((choice) => {
+      const inst = plan.leaf.get(choice.insert)!;
+      const host = plan.leaf.get(choice.host)!;
+      return {
+        choice,
+        current: choice.world.every((v, i) => Math.abs(v - inst.world.elements[i]) < 1e-6),
+        title: `${choice.insert} into ${choice.host}`,
+        detail: `${choice.kind === 'documented-slot' ? 'Documented slot' : 'Joint'} · ${choice.detail} · ${inst.part} → ${host.part}`,
+      };
+    }),
+  };
+}
+
+/**
+ * Fit the selection with the `index`th way from `fitOptionsForSelection` (the best one by default).
+ * Applying one is one undo step, so switching to another is just applying it again.
+ */
+export function fitSelected(index = 0): 'ok' | 'refused' {
+  const st = useStudio.getState();
+  const plan = planFit();
+  if (!plan.ok) {
+    st.noteBlocked(st.selection.model === st.editingModel ? [...st.selection.ids] : [], [], plan.why);
+    return 'refused';
+  }
+  const { before, view, model, leaf } = plan;
+  const fit = plan.choices[index];
+  if (!fit) return 'refused';
+  const refuse = (why: string, hits: readonly string[] = []) => {
+    const ids = st.selection.model === model ? [...st.selection.ids] : [];
+    st.noteBlocked(ids, hits, why);
+    return 'refused' as const;
+  };
   const inst = leaf.get(fit.insert)!;
   // already seated: nothing to change, and no empty undo step
   if (fit.world.every((v, i) => Math.abs(v - inst.world.elements[i]) < 1e-6)) return 'ok';

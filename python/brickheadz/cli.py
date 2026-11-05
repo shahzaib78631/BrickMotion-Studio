@@ -376,6 +376,28 @@ def cmd_video(args) -> int:
     return 0
 
 
+def cmd_reconstruct(args) -> int:
+    """Assemble a model from instructions. OMR -> exact; images -> proposals."""
+    from assembly_model.ldraw import load_library
+    from brickheadz import reconstruct as R
+
+    lib = load_library(args.library)
+    if args.omr:
+        report = R.from_omr(args.omr, args.out, args.name)
+        print(json.dumps({k: report[k] for k in ("mode", "steps", "pieces", "trusted")}, indent=1))
+        return 0
+    if not args.steps:
+        raise SystemExit("reconstruct needs --omr <mpd> or --steps <json>")
+    from brickheadz.image_spec import ldconfig_rgb
+
+    palette = ldconfig_rgb(args.ldconfig)
+    with open(args.steps) as f:
+        spec = json.load(f)
+    report = R.propose(lib, palette, spec, args.out, args.name, args.yaw, args.pitch, args.size, args.min_confidence)
+    print(json.dumps(report["summary"], indent=1))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="brickheadz")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -472,6 +494,19 @@ def main(argv: list[str] | None = None) -> int:
     vd.add_argument("--out", default=None)
     vd.add_argument("--seed", type=int, default=0)
     vd.set_defaults(func=cmd_video)
+
+    rc = sub.add_parser("reconstruct", help="assemble a model from instructions (OMR: exact; images: proposals)")
+    rc.add_argument("--omr", default=None, help="a verified OMR/parts MPD (exact geometry + step order)")
+    rc.add_argument("--steps", default=None, help="JSON: [{image, parts:[[part,color],...]}, ...]")
+    rc.add_argument("--name", default="model")
+    rc.add_argument("--out", required=True)
+    rc.add_argument("--library", default=DEFAULT_LIBRARY)
+    rc.add_argument("--ldconfig", default=DEFAULT_LDCONFIG)
+    rc.add_argument("--yaw", type=float, default=30.0)
+    rc.add_argument("--pitch", type=float, default=25.0)
+    rc.add_argument("--size", type=int, default=256)
+    rc.add_argument("--min-confidence", type=float, default=0.6, dest="min_confidence")
+    rc.set_defaults(func=cmd_reconstruct)
 
     args = parser.parse_args(argv)
     return args.func(args)

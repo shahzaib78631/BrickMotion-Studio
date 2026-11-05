@@ -1,9 +1,9 @@
-import { applyFloorShifts, applyAssemblySpotTransform } from '../anim/timeline';
+import { applyFloorShifts, applyFloorTurns, applyAssemblySpotTransform } from '../anim/timeline';
 import { applyMotionStyle, cleanStyle, mergeStyles } from '../anim/motionStyle';
 import type { Unit } from '../anim/timelineData';
 import { findItem } from '../plan/ops';
 import { isSub, type MotionStyle } from '../plan/types';
-import { floorShiftsByKey, resetFloorShifts } from '../plan/pieceActions';
+import { floorShiftsByKey, floorTurnsByKey, resetFloorShifts } from '../plan/pieceActions';
 import type { Timeline } from '../anim/timeline';
 import { decodeTimeline, type EncodedTimeline } from '../anim/timelineCodec';
 import type { PlanRequest } from '../anim/timeline.worker';
@@ -139,8 +139,11 @@ export function planTimeline(plan: Plan, model: string, opts: AnimOptions, lane:
   const planned = planBase(base, model, opts, lane, onProgress);
   if (!withShifts) return planned;
   const styled = planned.then((tl) => applyMotionStyle(tl, motionResolver(plan, model, plan.motion)));
+  // a turn is applied first (about the middle of where the piece waits), then the drag offset
+  const turns = floorTurnsByKey(plan, model);
+  const turned = turns.size ? styled.then((tl) => applyFloorTurns(tl, turns)) : styled;
   const shifts = floorShiftsByKey(plan, model);
-  let res = shifts.size ? styled.then((tl) => applyFloorShifts(tl, shifts)) : styled;
+  let res = shifts.size ? turned.then((tl) => applyFloorShifts(tl, shifts)) : turned;
   // "Loose pieces follow on" (default): the whole scene turns with the main spot. The
   // spot applies only to the root model; a submodel rendered alone keeps its origin.
   if (model === '' && plan.assemblySpot && plan.loosePiecesFollow !== false) {

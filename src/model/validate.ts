@@ -117,8 +117,14 @@ export function validate(
       if ((ground.get(objectOf(i)) ?? overall) - i.worldBox.max[1] <= CONTACT_GAP) grounded.add(find(idx));
     });
     inst.forEach((i, idx) => {
-      if (!grounded.has(find(idx)) && !i.placeholder)
-        out.push({ kind: 'floating', itemIds: [i.itemId], instanceKeys: [i.key], model: i.model, message: `${names(i.part)} is floating` });
+      if (!grounded.has(find(idx)) && !i.placeholder) {
+        const o = objectOf(i);
+        const gap = (ground.get(o) ?? overall) - i.worldBox.max[1];
+        out.push({
+          kind: 'floating', itemIds: [i.itemId], instanceKeys: [i.key], model: i.model, message: `${names(i.part)} is floating`,
+          detail: `touches no piece; ${Math.round(gap)} LDU above the lowest point of ${o ? `"${o}"` : 'the model'}`,
+        });
+      }
     });
   }
   return out;

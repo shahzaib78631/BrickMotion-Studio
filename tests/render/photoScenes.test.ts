@@ -7,7 +7,7 @@ const photoLooks = SCENES.filter((scene) => scene.collection === 'photo');
 describe('photographic scenes', () => {
   it('adds distinct grey, blue, soft white, sage, warm and dark tabletop looks', () => {
     expect(photoLooks.map((scene) => scene.id)).toEqual([
-      'photo-grey', 'slate-blue', 'porcelain', 'sage', 'sandstone', 'graphite',
+      'photo-grey', 'slate-blue', 'porcelain', 'sage', 'sandstone', 'catalog-cream', 'graphite',
     ]);
     expect(new Set(SCENES.map((scene) => scene.id)).size).toBe(SCENES.length);
     for (const scene of photoLooks) {
@@ -30,7 +30,7 @@ describe('photographic scenes', () => {
   });
   it('uses a real single shadow-casting key in each editable photo lighting rig', () => {
     const focus: [number, number, number] = [120, 35, -80];
-    expect(PHOTO_RIGS).toHaveLength(4);
+    expect(PHOTO_RIGS).toHaveLength(6);
     for (const rig of PHOTO_RIGS) {
       expect(photoLooks.some((look) => look.id === rig.look)).toBe(true);
       const lights = createPhotoRigLights(rig.id, focus, 200);

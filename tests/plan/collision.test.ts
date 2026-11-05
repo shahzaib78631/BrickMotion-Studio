@@ -115,4 +115,33 @@ describe('side (SNOT) studs', () => {
     // pushed 4 LDU into the brick — past its sockets, off the studs — it is a real overlap
     expect([...world.hits([plateAt(4)])]).toEqual(['brick']);
   });
+  it.skipIf(!ready)('accepts plates stacked in the open corner of an L bracket', async () => {
+    // 44728's underside anti-studs are square ("S") in the shadow library, and its body is
+    // not a whole-stud footprint, so it once had no sockets and every plate read as a poke
+    const br = await measureReal('44728'), p = await measureReal('3710');
+    const at = (id: string, m: PartMetrics, x: number, y: number): Solid => ({ id, world: ldrawAt(x, y, 10), body: m.body, studs: m.studs, snaps: m.snaps, mesh: m.mesh });
+    const bracket = at('br', br, 0, -40);
+    const plates = [-32, -24, -16, -8].map((y, k) => at(`p${k}`, p, 20, y));
+    for (const plate of plates) {
+      const world = collisionWorld([bracket, ...plates.filter((q) => q !== plate)]);
+      expect([...world.hits([plate])]).toEqual([]);
+    }
+    expect([...collisionWorld(plates).hits([bracket])]).toEqual([]);
+    // the bracket's top plate is still solid: a plate pushed up into it is an overlap
+    expect([...collisionWorld([bracket]).hits([at('up', p, 20, -36)])]).toEqual(['br']);
+  });
+  it.skipIf(!ready)('accepts hinge halves joined round their shared axis', async () => {
+    // knuckles interlock round the axis: each fills the other's bounds there
+    const at = (id: string, m: PartMetrics, x = 0, z = 0, turn = false): Solid => ({
+      id, world: ldrawAt(x, 0, z, turn ? [-1, 0, 0, 0, 1, 0, 0, 0, -1] : undefined), body: m.body, studs: m.studs, snaps: m.snaps, mesh: m.mesh,
+    });
+    for (const [b, t, x, z, turn] of [['3937', '3938', 0, 0, false], ['3830', '3831', 0, 0, false], ['4275', '4276', 60, 20, true]] as const) {
+      const mb = await measureReal(b), mt = await measureReal(t);
+      expect([...collisionWorld([at('base', mb)]).hits([at('top', mt, x, z, turn)])], `${t} on ${b}`).toEqual([]);
+      expect([...collisionWorld([at('top', mt, x, z, turn)]).hits([at('base', mb)])], `${b} under ${t}`).toEqual([]);
+    }
+    // the hinge is no free pass: the top shifted along the base still collides
+    const mb = await measureReal('3830'), mt = await measureReal('3831');
+    expect([...collisionWorld([at('base', mb)]).hits([at('top', mt, 10, 0)])]).toEqual(['base']);
+  });
 });

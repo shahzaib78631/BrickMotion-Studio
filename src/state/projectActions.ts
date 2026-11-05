@@ -4,7 +4,7 @@ import { PROJECT_EXTENSION, projectToJson, type SavedTimeline } from '../io/proj
 import { reachableSubmodels, standalonePlan } from '../plan/modelFiles';
 import type { Plan } from '../plan/types';
 import { saveBlob, safeFileName } from '../ui/download';
-import { animOptions, useAppSettings } from './appSettings';
+import { animOptions, toSettings, useAppSettings } from './appSettings';
 import { getColors, metricsOf } from './partService';
 import { optsKey, planTimeline, savedTimeline } from './timelineService';
 
@@ -38,7 +38,7 @@ export async function saveProjectFile(plan: Plan, model: string, onProgress: (p:
     onProgress(null);
   }
   if (failed.length && !confirm(`These animations could not be planned: ${failed.join(', ')}.\n\nSave the project without them? They will be planned when the file is opened.`)) return false;
-  saveBlob(`${safeFileName(standalone.name)}.${PROJECT_EXTENSION}`, new Blob([projectToJson(standalone, timelines)], { type: 'application/json' }));
+  saveBlob(`${safeFileName(standalone.name)}.${PROJECT_EXTENSION}`, new Blob([projectToJson(standalone, timelines, { video: toSettings(useAppSettings.getState()).video, exportCamera: useAppSettings.getState().exportCamera ?? 'track' })], { type: 'application/json' }));
   return true;
 }
 

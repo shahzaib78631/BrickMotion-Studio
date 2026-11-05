@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import type { FloorMatch, FloorSides, FloorSort, FrameStagingCamera } from '../anim/pacing';
 import type { VideoFormat } from '../export/formats';
+import type { ReferenceImage } from './referenceImages';
 
 export type XYZ = [number, number, number];
 /** The inspector and camera use the SAME world-stud coordinates. Never multiply
@@ -48,6 +49,8 @@ export type SceneSetup = {
   cropToRegion: boolean;
   /** Camera and layout controls captured by explicit user action only. */
   frameStaging?: AppliedFrameStaging;
+  /** Pictures hung in the editor's 3D view to model against (never in video). */
+  images?: ReferenceImage[];
   exposure: number;
 };
 export const EMPTY_SCENE_SETUP: SceneSetup = {

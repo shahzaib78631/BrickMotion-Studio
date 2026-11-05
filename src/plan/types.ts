@@ -33,6 +33,11 @@ export type AssemblyHints = {
    * x and z, from the spot the automatic layout gives it. Set by dragging it.
    */
   floorShift?: [number, number];
+  /**
+   * Turns the piece about the vertical axis while it waits on the floor, in degrees
+   * (0–360, set in 90° steps), so it can wait in the orientation it lands in.
+   */
+  floorTurn?: number;
   /** Editorial selection group, scoped to one model; independent of the build hierarchy. */
   group?: string;
   /** Build spot for a submodel use (absolute in main model's unmoved frame). */
@@ -58,6 +63,11 @@ export type Step = {
   notes?: string;
   /** Extra seconds to hold on the completed step before the next action. */
   pauseAfter?: number;
+  /**
+   * Keep this step's pieces in the order they are listed: the planner stops re-sequencing them
+   * (each piece carries the per-piece force flag), so a moved step still plays as it did.
+   */
+  pinOrder?: boolean;
   /** made by auto-steps (layers of a step-less file), not by the author: no editorial order inside it */
   auto?: boolean;
   /** Flight style for every piece in this step. */

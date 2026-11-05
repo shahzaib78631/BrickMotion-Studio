@@ -85,6 +85,8 @@ function Studio() {
   const sceneCameraForVideo = useStudio((s) => s.plan.sceneSetup?.useCameraForVideo === true);
   const trackKeys = useStudio((s) => s.plan.cameraTracks?.[s.editingModel]?.build?.keys.length ?? 0);
   const timelineEditor = useStudio((s) => s.timelineEditor);
+  const workspace = useStudio((s) => s.workspace);
+  const animate = workspace === 'animate';
   const editingModel = useStudio((s) => s.editingModel);
   const selection = useStudio((s) => s.selection);
   const currentStep = useStudio((s) => s.currentStep);
@@ -135,7 +137,8 @@ function Studio() {
   // useTimeline compares the serialized options. Recompute this small object so
   // a new planner/support setting can never be omitted from a memo dependency list.
   const opts = animOptions(video, model.plan.sceneSetup);
-  const { timeline, planning, error: planError, progress, retry, stale } = useTimeline(model.ready && model.view.instances.length > 0, model.plan, editingModel, opts, video.autoPlan);
+  // Build mode never plans: moving parts must not start a route search. Animate plans on entry.
+  const { timeline, planning, error: planError, progress, retry, stale } = useTimeline(animate && model.ready && model.view.instances.length > 0, model.plan, editingModel, opts, video.autoPlan);
   // Standard Motion creates actual editable leaf keyframes the first time the
   // user opens Timeline. Never re-bake an existing track automatically: those
   // may contain the user's hand corrections, even after model re-planning.
@@ -235,7 +238,7 @@ function Studio() {
 
   return (
     <div className="studio" {...themeAttrs}>
-      <div className={`nx ${selectedIds.length ? 'has-sel' : ''}`} style={{ '--tl-h': `${tlHeight}px` } as React.CSSProperties}>
+      <div className={`nx ${selectedIds.length ? 'has-sel' : ''} ${animate ? '' : 'bm-build-mode'}`} style={{ '--tl-h': animate ? `${tlHeight}px` : '0px' } as React.CSSProperties}>
         <Toolbar
           theme={theme}
           onTheme={() => useTheme.getState().set({ mode: theme === 'dark' ? 'light' : 'dark' })}
@@ -317,8 +320,9 @@ function Studio() {
               {mode === 'preview' && !timeline && <div className="overlay-note">{planError ? `Couldn't plan the animation: ${planError}` : 'Planning the build animation…'}</div>}
             </div>
           </section>
-          <Inspector model={model} onMakeSubmodel={makeSubmodel} timeline={timeline} checks={warnings.length} stepCard={mode === 'edit' ? <StepCallout model={model} timeline={timeline} /> : null} />
+          <Inspector model={model} onMakeSubmodel={makeSubmodel} timeline={timeline} checks={warnings.length} stepCard={mode === 'edit' && animate ? <StepCallout model={model} timeline={timeline} /> : null} />
         </div>
+        {animate && <>
         <div className="nx-resizer" onPointerDown={resize} title="Drag to resize the timeline" />
         <div className="bm-timeline-shell">
           <div className="bm-timeline-modebar">
@@ -358,6 +362,7 @@ function Studio() {
             : <KeyframeTimeline timeline={timeline} planning={planning} buildError={planError}
                 instances={model.view.instances} placements={instancePlacements(model.plan, editingModel, model.assembly)} />}
         </div>
+        </>}
       </div>
       {newSubmodelOpen && <NewSubmodelDialog plan={model.plan} count={selectedIds.length} onCreate={onCreateSubmodel} onClose={() => setNewSubmodelOpen(false)} />}
       {dialog === 'projects' && <ProjectsDialog onClose={() => setDialog(null)} />}

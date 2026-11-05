@@ -307,7 +307,7 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
     // a lit floor or a mirror still gets the real contact shadows on top
     shadowOver.visible = !transparent && (lit || kind === 'reflective') && preset.shadowOpacity > 0;
     contact.plane.visible = !transparent && kind !== 'none';
-    contact.set(materials.contactShadows, preset.shadowColor);
+    contact.set(materials.contactShadows, preset.shadowColor, materials.clearShadow);
     if (kind === 'reflective' && !transparent) {
       if (!reflection) {
         reflection = createReflection(fade, opts.preserveDrawingBuffer ? 1024 : 768);

@@ -42,6 +42,19 @@ test('setRootHint marks and clears it, keeping the rest of the hints', () => {
   expect(setRootHint(setRootHint(bare, '', ['a'], true), '', ['a'], false).steps[0].pieces[0].assembly).toBeUndefined();
 });
 
+test('a cyclic pair still plans end to end instead of reporting a missing parent', async () => {
+  const metrics = await fixtureMetrics();
+  // two pieces each told to go on after the other: the planner breaks the loop, and neither is
+  // left waiting for a parent the order puts after it (that used to fail as "missing parent")
+  const plan: Plan = ensureIds({ format: 'brickmotion-plan', version: 1, name: 'loop', steps: [{ pieces: [
+    { id: 'a', part: '3001', color: 4, x: 0, y: 0, z: 0, rot: 0, assembly: { attachTo: 'b' } },
+    { id: 'b', part: '3001', color: 4, x: 4, y: 0, z: 0, rot: 0, assembly: { attachTo: 'a' } },
+  ] }] });
+  const tl = buildTimeline(assemble(plan, metrics, fixtureColors), metrics, { targetSeconds: 10, heroOrbit: false });
+  expect(tl.units.length).toBe(2);
+  expect([...tl.tracks.keys()].sort()).toHaveLength(2);
+}, 60_000);
+
 describe('forcing the order on a whole build', () => {
   let metrics: Metrics;
   beforeAll(async () => { metrics = await fixtureMetrics(); });
@@ -67,4 +80,39 @@ describe('forcing the order on a whole build', () => {
     const ids = p.steps[0].pieces.map((i) => i.id!);
     expect(order(setRootHint(p, '', ids, true))).toEqual(ids);
   });
+});
+
+test('a dependency loop is broken instead of failing the whole build', () => {
+  // the planner's own contact inference can produce this; a loop is unsatisfiable, so the
+  // edge that closes it is dropped and everything still gets an order
+  const items: AssemblyItem[] = [
+    item('a', 0, 0, { attachTo: 'b' }),
+    item('b', 0, 1, { attachTo: 'a' }),
+    item('c', 0, 2),
+  ];
+  const graph = buildAssemblyGraph(items, false);
+  expect(graph.ordered.map((item) => item.id).sort()).toEqual(['a', 'b', 'c']);
+  expect(graph.cycles).toHaveLength(1);
+  expect([...graph.cycles[0]].sort()).toEqual(['a', 'a', 'b']);
+});
+
+test('a three-way loop is broken the same way, and self references are ignored', () => {
+  const items: AssemblyItem[] = [
+    item('a', 0, 0, { after: ['c'] }),
+    item('b', 0, 1, { attachTo: 'a' }),
+    item('c', 0, 2, { attachTo: 'b' }),
+    item('d', 0, 3, { attachTo: 'd' }),
+  ];
+  const graph = buildAssemblyGraph(items, false);
+  expect(graph.ordered).toHaveLength(4);
+  expect(graph.cycles.length).toBeGreaterThanOrEqual(1);
+  expect(graph.dependencies.some((d) => d.parent === 'd' && d.child === 'd')).toBe(false);
+  // the edge that closed the loop is gone from the parent map too, so no piece waits for a
+  // parent the order puts after it (that is what "missing/unordered parent" used to report)
+  for (const [child, list] of graph.parents) {
+    for (const parent of list) {
+      const at = (id: string) => graph.ordered.findIndex((x) => x.id === id);
+      expect(at(parent), `${child} waits for ${parent}`).toBeLessThan(at(child));
+    }
+  }
 });

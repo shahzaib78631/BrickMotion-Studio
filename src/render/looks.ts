@@ -3,17 +3,17 @@
 
 /** A scene preset: the studio around the model. */
 export type StudioLook = 'soft' | 'classic' | 'white' | 'dark' | 'black' | 'warm' | 'sky' | 'night' | 'chroma'
-  | 'photo-grey' | 'slate-blue' | 'porcelain' | 'sage' | 'sandstone' | 'graphite'
+  | 'photo-grey' | 'slate-blue' | 'porcelain' | 'sage' | 'sandstone' | 'catalog-cream' | 'graphite'
   | 'lavender' | 'render-grey' | 'steel-grey' | 'powder-blue' | 'mint' | 'peach' | 'blush' | 'butter' | 'cobalt';
 /** What the model stands on. 'auto' is the scene's own choice. */
 export type FloorSurface = 'auto' | 'shadow' | 'sweep' | 'reflective' | 'matte' | 'wood' | 'concrete' | 'none';
 /** How the plastic itself responds to light. */
-export type BrickFinish = 'studio' | 'render' | 'soft-touch' | 'glossy' | 'satin' | 'matte' | 'pearl' | 'clay';
+export type BrickFinish = 'studio' | 'render' | 'soft-touch' | 'glossy' | 'catalog' | 'satin' | 'matte' | 'pearl' | 'clay';
 /** A fine surface detail drawn on every part (procedural: it moves with the part). */
 export type BrickTexture = 'none' | 'grain' | 'worn' | 'speckle' | 'glitter';
 
 export type Materials = { finish: BrickFinish; texture: BrickTexture; floor: FloorSurface; /** raised LEGO logo on studs */ studLogos: boolean; /** 'high': smooth 48-segment curves and real rounded edges in the geometry */ detail?: 'standard' | 'high'; /** a thin highlight on convex edges, like moulded rounded corners */ roundedEdges: boolean; /** ambient occlusion: on/off, and overrides of the scene's own strength and reach */ ao: AOChoice;
-  /** soft blurred shadow pooled under the model, 0–1 */ contactShadows: number;
+  /** soft blurred shadow pooled under the model, 0–1 */ contactShadows: number; /** how much of that shadow clear (transparent) parts get, 0–1 of the solid strength */ clearShadow: number;
   /** what the plastic reflects and is lit by */ environment: EnvironmentId;
   /** colours that give off light (lamps, windows): in the viewport and as light sources in path tracing */ glow: GlowChoice;
   /** transparent parts: 'clear' refracts light like real glass in path-traced renders */ glass: GlassLook;
@@ -47,7 +47,11 @@ export const LENS_BLUR_PX: Record<LensBlur, number> = { off: 0, subtle: 5, mediu
 /** `gain` brings each photo's average brightness (measured over the sphere) near the studio room's, so switching keeps the exposure; Night stays a little darker. */
 export const ENVIRONMENTS = [
   { id: 'room', label: 'Studio room', hint: 'Neutral grey room, generated in the browser', file: null, gain: 1 },
-  { id: 'studio', label: 'Photo studio', hint: 'Softboxes in a white photo studio', file: 'studio_small_09_1k.hdr', gain: 0.88 },
+  { id: 'studio', label: 'Photo studio', hint: 'Softboxes in a white photo studio (BrickLink Studio product shot)', file: 'studio_small_09_1k.hdr', gain: 0.88 },
+  { id: 'white-studio-05', label: 'White studio', hint: 'Soft low-contrast white studio with umbrella light', file: 'white_studio_05_1k.hdr', gain: 0.8 },
+  { id: 'white-studio-03', label: 'White studio III', hint: 'White studio with umbrella lamps, medium contrast', file: 'white_studio_03_1k.hdr', gain: 0.85 },
+  { id: 'monochrome-studio-04', label: 'Monochrome studio', hint: 'Twin softboxes and a circular scrim', file: 'monochrome_studio_04_1k.hdr', gain: 0.9 },
+  { id: 'studio-kontrast-04', label: 'Studio cove', hint: 'Rectangular softboxes over an infinity cove', file: 'studio_kontrast_04_1k.hdr', gain: 0.75 },
   { id: 'city', label: 'City', hint: 'Bright city street: lively, varied reflections', file: 'potsdamer_platz_1k.hdr', gain: 1.34 },
   { id: 'sunset', label: 'Sunset', hint: 'Warm low sun, long golden highlights', file: 'venice_sunset_1k.hdr', gain: 1.5 },
   { id: 'night', label: 'Night', hint: 'Dark sky with scattered lights: moody, glossy', file: 'dikhololo_night_1k.hdr', gain: 6.5 },
@@ -66,7 +70,7 @@ export function aoFor(look: StudioLook, choice: AOChoice): { intensity: number; 
     radius: choice.radius ?? scene.aoRadius ?? 0.45,
   };
 }
-export const DEFAULT_MATERIALS: Materials = { finish: 'studio', texture: 'none', floor: 'auto', studLogos: true, detail: 'standard', roundedEdges: true, ao: { enabled: true, strength: null, radius: null }, contactShadows: 0.5, environment: 'room', glow: { colors: [], strength: 1.5 }, glass: 'soft', lens: { blur: 'off', focus: 0.4 }, floorColor: null, sweepCurve: 0.6 };
+export const DEFAULT_MATERIALS: Materials = { finish: 'catalog', texture: 'none', floor: 'auto', studLogos: true, detail: 'standard', roundedEdges: true, ao: { enabled: true, strength: null, radius: null }, contactShadows: 0.5, clearShadow: 0.12, environment: 'studio', glow: { colors: [], strength: 1.5 }, glass: 'soft', lens: { blur: 'off', focus: 0.4 }, floorColor: null, sweepCurve: 0.6 };
 
 type RGB = readonly [number, number, number];
 /** Relative direction from the subject towards each studio light (Y is up). */
@@ -152,6 +156,13 @@ export const SCENES: readonly ScenePreset[] = [
     fill: 0.55, fillColor: '#e3eeff', fillDirection: [0.9, 1.3, -0.8], rim: 0.32, rimColor: '#fff4d8', rimDirection: [0.65, 1.1, -1.25],
     env: 0.65, exposure: 1, reflection: 0.08,
     ao: 0.65, aoRadius: 0.45, shadowSoftness: 6 },
+  { id: 'catalog-cream', label: 'Catalog cream', hint: 'BrickLink-style warm cream backdrop, glossy plastic and soft short shadows', collection: 'photo',
+    stops: [{ at: 0, rgb: [240, 226, 180] }, { at: 1, rgb: [240, 226, 180] }],
+    floorColor: '#e9dcc6', floor: 'shadow', shadowColor: '#4a3b1f', shadowOpacity: 0.33,
+    hemi: 1.0, hemiGround: '#e4d6b4', key: 2.45, keyColor: '#fff8ec', keyDirection: [-0.55, 2.1, 0.65],
+    fill: 0.55, fillColor: '#eef3ff', fillDirection: [1, 1.4, -0.4], rim: 0.22, rimColor: '#ffffff', rimDirection: [0.5, 1.25, -1.15],
+    env: 0.85, exposure: 1.02, reflection: 0.07,
+    ao: 0.6, aoRadius: 0.45, shadowSoftness: 8, outlines: false },
   { id: 'graphite', label: 'Graphite', hint: 'Dark matte editorial set with bright rim separation', collection: 'photo',
     stops: [{ at: 0, rgb: [54, 59, 68] }, { at: 0.5, rgb: [47, 53, 62] }, { at: 1, rgb: [37, 43, 52] }],
     spot: { x: 0.47, y: 0.38, radius: 0.86, rgb: [77, 84, 97] },
@@ -284,6 +295,7 @@ export const FINISHES: readonly FinishPreset[] = [
   { id: 'render', label: 'Render plastic', hint: 'Clean product-render ABS with broad soft highlights', roughness: 0.3, clearcoat: 0.45, clearcoatRoughness: 0.2, metalness: 0, sheen: 0.15 },
   { id: 'soft-touch', label: 'Soft-touch', hint: 'Low-sheen toy plastic with a velvety edge glow', roughness: 0.5, clearcoat: 0.12, clearcoatRoughness: 0.45, metalness: 0, sheen: 0.45 },
   { id: 'glossy', label: 'Glossy ABS', hint: 'New, shiny bricks', roughness: 0.2, clearcoat: 0.65, clearcoatRoughness: 0.08, metalness: 0 },
+  { id: 'catalog', label: 'Catalog plastic', hint: 'Soft LEGO ABS gloss with broad highlights and faint sheen', roughness: 0.28, clearcoat: 0.4, clearcoatRoughness: 0.18, metalness: 0, sheen: 0.12 },
   { id: 'satin', label: 'Satin', hint: 'Between glossy and matte', roughness: 0.55, clearcoat: 0.06, clearcoatRoughness: 0.5, metalness: 0 },
   { id: 'matte', label: 'Matte', hint: 'No shine, flat colour', roughness: 0.86, clearcoat: 0, clearcoatRoughness: 1, metalness: 0 },
   { id: 'pearl', label: 'Pearlescent', hint: 'A soft rainbow sheen', roughness: 0.32, clearcoat: 0.5, clearcoatRoughness: 0.15, metalness: 0.25, iridescence: 0.55 },
@@ -334,6 +346,7 @@ export function sanitizeMaterials(v: unknown): Materials {
     roundedEdges: typeof o.roundedEdges === 'boolean' ? o.roundedEdges : DEFAULT_MATERIALS.roundedEdges,
     ao: sanitizeAO(o.ao),
     contactShadows: clampOrNull(o.contactShadows, [0, 1]) ?? DEFAULT_MATERIALS.contactShadows,
+    clearShadow: clampOrNull(o.clearShadow, [0, 1]) ?? DEFAULT_MATERIALS.clearShadow,
     environment: ENVIRONMENTS.some((e) => e.id === o.environment) ? (o.environment as EnvironmentId) : DEFAULT_MATERIALS.environment,
     glow: sanitizeGlow(o.glow),
     glass: o.glass === 'clear' ? 'clear' : 'soft',

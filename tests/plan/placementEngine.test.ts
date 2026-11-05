@@ -211,6 +211,35 @@ describe('placement pose search', () => {
     expect(Math.abs(c.z - 47)).toBeLessThanOrEqual(10);
   });
 
+  it.skipIf(!ready)('pointing at the wall of a piece on the floor puts the part beside it, not inside it', async () => {
+    const wall = place('wall', await measureReal('3001'), 0, -24);
+    const brick = place('m', await measureReal('3001'), 600, -100, 400);
+    // looking down at the side wall from the right: the cursor is on the brick, no stud near it can take the part
+    for (const hit of [[40, -12, 0], [40, -12, 12], [40, -6, -14]] as Vec3[]) {
+      const pose = findPose(query(brick, [wall], aimAt(hit, [300, -300, hit[2]])));
+      expect(pose.valid).toBe(true);
+      const [lo, hi] = boxX(brick, pose);
+      expect(lo).toBeGreaterThanOrEqual(40);
+      expect(hi - lo).toBe(80);
+      expect(Math.round(moved(brick, pose).y)).toBe(-24);
+    }
+  });
+
+  it.skipIf(!ready)('on the floor, a part lines up with the studs of the pieces beside it, not an absolute grid', async () => {
+    // from the user's file: a 1x1 bracket whose studs sit 12 LDU off the 20 LDU floor grid
+    const rot = (m: PartMetrics, id: string, x: number, y: number, z: number): Placed => {
+      const world = new THREE.Matrix4().set(0, 0, 1, x, 0, 1, 0, y, -1, 0, 0, z, 0, 0, 0, 1).elements;
+      return { solid: { id, world, body: m.body, studs: m.studs, snaps: m.snaps, mesh: m.mesh }, connectors: worldConnectors(partConnectors(m), world) };
+    };
+    const bracket = rot(await measureReal('36840'), 'bracket', 252, -4, -410);
+    const plate = rot(await measureReal('3710'), 'm', 600, -100, 0);
+    // pointing at the floor just right of the bracket
+    const pose = findPose(query(plate, [bracket], { ...aimAt([275, 4, -380]), hitPoint: null }, { floor: 4 }));
+    expect(pose.valid).toBe(true);
+    // the bracket's box ends at x = 262: the plate starts there, on the bracket's stud rows
+    expect(boxX(plate, pose)).toEqual([262, 282]);
+  });
+
   it.skipIf(!ready)('rotates in hand', async () => {
     const plate = place('plate', await measureReal('3020'), 0, 0);
     const two = place('m', await measureReal('3023'), 300, -60, 0);

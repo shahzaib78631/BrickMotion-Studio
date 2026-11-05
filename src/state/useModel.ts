@@ -5,7 +5,7 @@ import { collisionWorld, solidsFor } from '../plan/collision';
 import { modelSteps } from '../plan/ops';
 import { isSub, type Plan } from '../plan/types';
 import { sameGeometry } from './modelChange';
-import { ensureParts, getColors, metricsOf, partName, registerInlineParts } from './partService';
+import { ensureParts, getColors, isLoaded, metricsOf, partName, registerInlineParts } from './partService';
 import { useStudio } from './store';
 
 export function allPartIds(plan: Plan): string[] {
@@ -48,15 +48,22 @@ const snapsOf = (part: string) => metricsOf(part).snaps;
  * sitting in it is not an overlap — the editor's guard allows it, so the checks must not
  * paint it red.
  */
-const conflicts = (a: Instance, b: Instance) =>
-  collisionWorld(solidsFor([b], metricsOf)).hits(solidsFor([a], metricsOf)).size > 0;
+const conflictsIn = (assembly: Assembly) => (a: Instance, b: Instance) => {
+  // the pieces touching `a` join the world, so a stud of `a` plugged into a third piece
+  // counts as seated and not as poking into `b`; only the verdict on `b` is read
+  const touching = (i: Instance) => i !== a && i !== b && [0, 1, 2].every((k) =>
+    i.worldBox.min[k] <= a.worldBox.max[k] + 1 && a.worldBox.min[k] <= i.worldBox.max[k] + 1);
+  const target = solidsFor([b], metricsOf);
+  const world = collisionWorld([...target, ...solidsFor(assembly.instances.filter(touching), metricsOf)]);
+  return target.length > 0 && world.hits(solidsFor([a], metricsOf)).has(target[0].id);
+};
 
 const EMPTY: Assembly = { nodes: [], instances: [], bounds: null, problems: [] };
 
 export function computeModel(plan: Plan, editingModel: string): Omit<ModelState, 'ready'> {
   const colors = getColors();
   const assembly = assemble(plan, metricsOf, colors);
-  const all = validate(assembly, partName, snapsOf, conflicts);
+  const all = validate(assembly, partName, snapsOf, conflictsIn(assembly));
   const viewPlan = scopedPlan(plan, editingModel);
   const view = editingModel ? assemble(viewPlan, metricsOf, colors) : assembly;
   const warnings = editingModel ? all.filter((w) => w.model === editingModel) : all;
@@ -74,7 +81,30 @@ type Base = { plan: Plan; assembly: Assembly; warnings: Warning[] };
 export function useModel(): ModelState {
   const plan = useStudio((s) => s.plan);
   const editingModel = useStudio((s) => s.editingModel);
-  const [base, setBase] = useState<Base | null>(null);
+  const [loadedBase, setBase] = useState<Base | null>(null);
+  /** the last model assembled, by either path */
+  const latest = useRef<Base | null>(null);
+  // Every part already loaded (a drag, a nudge, an undo): assemble in this render.
+  // Waiting for an effect and a promise drew each change once with the old model
+  // ("Loading parts…" flashing) and once more with the new one — on every mouse
+  // move of a drag.
+  const syncBase = useMemo<Base | null>(() => {
+    const prev = latest.current;
+    // Main spot edits move the timeline, NOT the source geometry. Reuse the
+    // assembled set and its warnings instead of unloading the viewer on every
+    // position/angle edit (and avoid a needless full model rebuild).
+    if (prev && sameGeometry(prev.plan, plan)) return { ...prev, plan };
+    registerInlineParts(plan.parts);
+    if (!allPartIds(plan).every(isLoaded)) return null;
+    try {
+      const assembly = assemble(plan, metricsOf, getColors());
+      return { plan, assembly, warnings: validate(assembly, partName, snapsOf, conflictsIn(assembly)) };
+    } catch {
+      return null; // the async path below reports the error
+    }
+  }, [plan]);
+  const base = syncBase ?? loadedBase;
+  latest.current = base;
   // Editing object keyframes (or assembly markers) must not re-assemble a
   // hundred-brick submodel on every transform change. Cache by geometry identity.
   const viewCache = useRef<{ assembly: Assembly; model: string; view: Assembly } | null>(null);
@@ -82,20 +112,14 @@ export function useModel(): ModelState {
   useEffect(() => {
     let cancelled = false;
     setFailure(null);
-    // Main spot edits move the timeline, NOT the source geometry. Reuse the
-    // assembled set and its warnings instead of unloading the viewer on every
-    // position/angle edit (and avoid a needless full model rebuild).
-    if (base && sameGeometry(base.plan, plan)) {
-      setBase({ ...base, plan });
-      return () => { cancelled = true; };
-    }
+    if (syncBase) return () => { cancelled = true; };
     Promise.resolve().then(() => {
       registerInlineParts(plan.parts);
       return ensureParts(allPartIds(plan));
     }).then(() => {
       if (cancelled) return;
       const assembly = assemble(plan, metricsOf, getColors());
-      setBase({ plan, assembly, warnings: validate(assembly, partName, snapsOf, conflicts) });
+      setBase({ plan, assembly, warnings: validate(assembly, partName, snapsOf, conflictsIn(assembly)) });
     }).catch((error: unknown) => {
       if (!cancelled) setFailure({ plan, message: error instanceof Error ? error.message : String(error) });
     });

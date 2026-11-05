@@ -554,6 +554,8 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
     }
     return ways;
   };
+  /** pieces of a pinned step: they keep the order the author gave them, so never postpone them */
+  const pinnedItems = new Set(asm.nodes.filter((n) => n.pinned).map((n) => n.itemId));
   const ground = asm.instances.length ? Math.max(...asm.instances.map((i) => i.worldBox.max[1])) : 0;
   const modelBox = asm.bounds ?? EMPTY_BOX;
   /** the box the floor bands are laid out around; a moved model with "follow off" keeps the automatic floor */
@@ -777,6 +779,8 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
     for (const a of f.u.after ?? []) if (indexOf.has(a)) d.add(indexOf.get(a)!); // its side spot must be free
     for (const key of f.u.requires ?? []) {
       const parent = unitByKey.get(key);
+      // A broken dependency loop is repaired in the graph, so anything still out of order here
+      // is a real reference problem worth reporting rather than papering over.
       if (parent === undefined || parent >= i) throw new AssemblyPlanningError([{
         code: 'missing-parent', items: [f.u.key, key], message: `Cannot schedule "${f.u.key}" after missing/unordered parent "${key}".`,
       }]);
@@ -1001,6 +1005,22 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
   // Recalculate when new pieces may safely occupy a reused floor band. A
   // piece that has merely STARTED rising is still in the space where the next
   // window drops in. The band isn't empty until the last piece clears it.
+  /** A pinned step's pieces wait together: they take the earliest appearance any of them has. */
+  const pinAppearance = () => {
+    const byStep = new Map<number, string[]>();
+    for (const n of asm.nodes) {
+      if (!n.pinned || n.kind !== 'piece') continue;
+      const list = byStep.get(n.step) ?? [];
+      list.push(n.itemId);
+      byStep.set(n.step, list);
+    }
+    for (const keys of byStep.values()) {
+      if (keys.length < 2) continue;
+      const appear = keys.reduce((best, key) => Math.min(best, tracks.get(key)?.appear ?? Infinity), Infinity);
+      if (!Number.isFinite(appear)) continue;
+      for (const key of keys) { const tr = tracks.get(key); if (tr) tr.appear = appear; }
+    }
+  };
   const refreshAppear = () => {
   for (const { ctx, windows } of windowVisibility) {
     const previousSub = subInfo.find((sub) => sub.ctx === ctxs[ctx].after);
@@ -1021,6 +1041,7 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
       }, -Infinity);
     }
   }
+    pinAppearance();
   };
   refreshAppear();
   /**
@@ -1100,6 +1121,8 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
   };
   for (let i = 0; i < units.length; i++) {
     const u = units[i];
+    /** this unit's step is pinned: it keeps the order the author gave it, so never postpone it */
+    const pinned = u.keys.some((k) => pinnedItems.has(k.split('/').pop() ?? k));
     const report = () => onProgress?.({ phase: 'routing', completed: i, total: units.length, item: `${u.keys[0]} (part ${byKey.get(u.keys[0])?.part ?? 'subassembly'})` });
     report();
     const ready = Math.max(u.start, ...members[i].map(({ key }) => tracks.get(key)!.appear + FLOOR_READY_TIME),
@@ -1401,6 +1424,9 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
         if (safe) break;
       }
       // Pieces already built never move: if they block every way, waiting is useless.
+      // A pinned step keeps its own order: rather than postpone a piece behind the pieces the
+      // author put after it, fly it uncertified. Order is the point of the pin.
+      if (pinned && !safe) break;
       if (safe || attempt >= MAX_POSTPONE || !transient) break;
       // Wait for actual reservations to clear, not arbitrary retry increments.
       const event = Math.max(u.start, ...overlaps.map((j) => units[j].start + units[j].dur + SETTLE_TIME));
@@ -1411,7 +1437,7 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
     }
     // A clear route for a part with no geometry proves nothing: keep it, but flag it.
     if (safe && allowUncertified && members[i].some((m) => byKey.get(m.key)?.placeholder)) u.uncertified = true;
-    if (!safe && allowUncertified) {
+    if (!safe && (allowUncertified || pinned)) {
       // Shown, never hidden: it flies at the top lane and enters the least-obstructed way.
       u.uncertified = true;
       if (failures) {
@@ -2125,12 +2151,78 @@ export function rootSpotLayout(asm: Assembly, plan: Plan): { asm: Assembly; layo
 }
 
 /**
+ * How much of a dragged waiting spot's offset is gone at each waypoint: 0 at the
+ * start, rising with distance travelled, 1 from the start of the final leg on.
+ * `rigid` lists segments (i -> i+1) whose endpoints must move together.
+ */
+function fadeWeights(points: THREE.Vector3[], rigid: number[] = []): number[] {
+  const n = points.length;
+  if (n < 2) return points.map(() => 1);
+  const end = n >= 3 ? n - 2 : n - 1;
+  const len = [0];
+  for (let k = 1; k < n; k++) len.push(len[k - 1] + points[k].distanceTo(points[k - 1]));
+  const w = points.map((_, k) => (k >= end ? 1 : len[end] > 1e-6 ? len[k] / len[end] : k / end));
+  for (const i of [...rigid].sort((a, b) => b - a)) if (i >= 0 && i + 1 < n) w[i] = w[i + 1];
+  w[0] = Math.min(w[0], 0);
+  return w;
+}
+
+/**
  * Pieces the user dragged to another waiting spot (studs along LDraw x and z, by
  * key). Applied to a planned timeline, never planned: moving where a piece waits
  * only moves its floor pose and the start of its first flight, so it never costs
  * a new plan. A piece waiting with others it flies with (a tyre on its rim) moves
  * with them. The original timeline is not changed.
  */
+/**
+ * Turns waiting pieces about the vertical axis through the middle of where they wait
+ * (`turns`: piece key → degrees). The floor pose and the start of the flight turn; a
+ * pose path's lift keeps rising straight up from the turned pose, so a piece turned to
+ * its landing orientation no longer spins in the air. The original is not changed.
+ */
+export function applyFloorTurns(tl: Timeline, turns: Map<string, number>): Timeline {
+  const byUnit = new Map<number, { deg: number; cx: number; cz: number }>();
+  for (const [key, deg] of turns) {
+    const tr = tl.tracks.get(key);
+    const unit = tr?.moves[0]?.unit;
+    if (!tr || unit === undefined || tl.units[unit]?.kind !== 'piece' || !deg) continue;
+    const b = tr.floorBox;
+    byUnit.set(unit, { deg, cx: (b.min[0] + b.max[0]) / 2, cz: (b.min[2] + b.max[2]) / 2 });
+  }
+  if (!byUnit.size) return tl;
+  const tracks = new Map(tl.tracks);
+  for (const [key, tr] of tl.tracks) {
+    const t = tr.moves.length ? byUnit.get(tr.moves[0].unit) : undefined;
+    if (!t) continue;
+    const turn = new THREE.Matrix4().makeTranslation(t.cx, 0, t.cz).multiply(yaw(t.deg)).multiply(new THREE.Matrix4().makeTranslation(-t.cx, 0, -t.cz));
+    const floor = turn.clone().multiply(tr.floor);
+    tracks.set(key, {
+      ...tr,
+      floor,
+      floorBox: transformBox(tr.floorBox, turn),
+      moves: tr.moves.map((mv, i) => {
+        if (i !== 0) return mv;
+        const from = turn.clone().multiply(mv.from);
+        let posePath: Move['posePath'];
+        if (mv.posePath?.length) {
+          posePath = mv.posePath.slice();
+          posePath[0] = turn.clone().multiply(mv.posePath[0]);
+          // the lift: same place as the turned start, only higher, in whatever orientation it was planned with
+          if (posePath.length > 2) {
+            const lift = mv.posePath[1].clone(), at = new THREE.Vector3().setFromMatrixPosition(posePath[0]);
+            const was = new THREE.Vector3().setFromMatrixPosition(mv.posePath[0]);
+            lift.setPosition(lift.elements[12] + at.x - was.x, lift.elements[13], lift.elements[14] + at.z - was.z);
+            posePath[1] = lift;
+          }
+        }
+        const translationPath = mv.translationPath;
+        return { ...mv, from, posePath, translationPath };
+      }),
+    });
+  }
+  return { ...tl, tracks };
+}
+
 export function applyFloorShifts(tl: Timeline, shifts: Map<string, [number, number]>): Timeline {
   if (!shifts.size) return tl;
   const byUnit = new Map<number, [number, number]>();
@@ -2154,16 +2246,28 @@ export function applyFloorShifts(tl: Timeline, shifts: Map<string, [number, numb
         if (i !== 0) return mv;
         const from = t.clone().multiply(mv.from);
         const shift: [number, number, number] = [d[0] * STUD, 0, d[1] * STUD];
-        // An edited inventory pose needs an explicit first leg back to the
-        // planner's certified start. Otherwise waypoint-driven flights ignore
-        // their changed `from` and visibly teleport on departure. This short
-        // manual repositioning leg is not a new collision-certified route.
-        const translationPath: Move['translationPath'] = mv.translationPath
-          ? [[0, 0, 0], ...mv.translationPath.map((p): [number, number, number] =>
-              [p[0] - shift[0], p[1] - shift[1], p[2] - shift[2]])]
-          : undefined;
-        const posePath = mv.posePath?.length ? [from, ...mv.posePath] : undefined;
-        const rigidDeltas = mv.rigidDeltas?.length ? [t.clone().multiply(mv.rigidDeltas[0]), ...mv.rigidDeltas] : undefined;
+        // Waypoint flights (V2 paths, rigid groups) start at the planner's old
+        // waiting spot. Fade the drag offset out along the route instead of
+        // flying back there first: full offset at the new spot, none from the
+        // start of the final approach, so the certified insertion is unchanged.
+        const at = (k: number, w: number[]) => new THREE.Matrix4().makeTranslation(shift[0] * (1 - w[k]), 0, shift[2] * (1 - w[k]));
+        let translationPath: Move['translationPath'];
+        if (mv.translationPath) {
+          const w = fadeWeights(mv.translationPath.map((p) => new THREE.Vector3(...p)));
+          translationPath = mv.translationPath.map((p, k): [number, number, number] =>
+            [p[0] - shift[0] * w[k], p[1], p[2] - shift[2] * w[k]]);
+        }
+        let posePath: Move['posePath'];
+        if (mv.posePath?.length) {
+          const w = fadeWeights(mv.posePath.map((m) => new THREE.Vector3().setFromMatrixPosition(m)), mv.kinematicSegments?.map((g) => g.index));
+          posePath = mv.posePath.map((m, k) => at(k, w).multiply(m));
+        }
+        let rigidDeltas: Move['rigidDeltas'];
+        if (mv.rigidDeltas?.length) {
+          const pivot = new THREE.Vector3(...(mv.rigidPivot ?? [0, 0, 0]));
+          const w = fadeWeights(mv.rigidDeltas.map((m) => pivot.clone().applyMatrix4(m)));
+          rigidDeltas = mv.rigidDeltas.map((m, k) => at(k, w).multiply(m));
+        }
         return { ...mv, from, translationPath, posePath, rigidDeltas };
       }),
     });

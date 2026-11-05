@@ -6,7 +6,7 @@ import { findItem, moveItems } from '../plan/ops';
 import { snapLocal } from '../plan/placement';
 import { isGrid } from '../plan/types';
 import type { Mat3 } from '../ldraw/parse';
-import { setAssemblySpot, setSubmodelBuildSpot, shiftOnFloor } from '../plan/pieceActions';
+import { setAssemblySpot, setSubmodelBuildSpot, shiftOnFloor, turnOnFloor } from '../plan/pieceActions';
 import { aroundPivot, transformPlanItems } from '../plan/gizmo';
 import type { ANode, Instance } from '../model/assemble';
 import { dragDelta } from '../state/drag';
@@ -41,7 +41,7 @@ import { resolveMode, useTheme } from '../state/theme';
 import { isLoaded, metricsOf } from '../state/partService';
 import { modelSteps } from '../plan/ops';
 import { posedBounds, stepPoses, timelineStep } from '../model/stepLayout';
-import { poseAt, spotTransform, type Timeline } from '../anim/timeline';
+import { poseAt, spotTransform, yaw, type Timeline } from '../anim/timeline';
 import { cameraAt, heroAround, worldBox3, type CamPose } from '../anim/camera';
 import { stepAt } from '../anim/partClips';
 import { advancePlayback, usePlayback } from '../state/playback';
@@ -72,10 +72,14 @@ import { Ic } from './icons';
 import { SceneTools, CameraRegionOverlay } from './SceneTools';
 import { useSceneView } from './sceneViewState';
 import { createSceneControls } from './sceneControls';
+import { createReferenceImages } from './referenceImageControls';
+import { useReferenceView } from './referenceViewState';
+import { addReferenceFiles } from './ReferenceImages';
 import { cameraFrame, sceneSetupOf } from '../render/sceneSetup';
 import { formatAspect } from '../export/formats';
 import { cameraTrackAt } from '../anim/cameraTrack/sample';
-import { applyShot, buildCameraContext, timelineCameraContext, viewportFollowsTrack } from '../anim/cameraTrack/context';
+import { applyShot, buildCameraContext, cameraPoseToKey, timelineCameraContext, viewportFollowsTrack } from '../anim/cameraTrack/context';
+import { trackOf, updateCameraKey } from '../anim/cameraTrack/ops';
 import type { CameraContext, CameraShot } from '../anim/cameraTrack/types';
 
 /** Whether the camera sees all of `box` (its eight corners inside the view). */
@@ -304,6 +308,8 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     });
     viewportApi.scene = createSceneControls(studio, controls, canvas);
     viewportApi.scene.sync(useStudio.getState().plan.sceneSetup);
+    viewportApi.refs = createReferenceImages(studio, controls, canvas);
+    viewportApi.refs.sync(useStudio.getState().plan.sceneSetup);
     const onSceneKey = (e: KeyboardEvent) => {
       if (useStudio.getState().mode !== 'edit' || isTyping(e.target)) return;
       if (e.code === 'Numpad0') {
@@ -654,6 +660,26 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       heroBase = null;
     };
     controls.addEventListener('start', onGrab);
+    // Orbiting while a camera key is selected and the playhead sits on it sets that key's
+    // shot: the key follows the view you leave, instead of keeping the pose it was added with.
+    const onKeyView = () => {
+      const ed = useStudio.getState();
+      const sel = ed.cameraSelection;
+      if (!sel || sel.kind !== 'key' || (sel.ids?.length ?? 0) > 1 || ed.mode !== 'edit') return;
+      if (useSceneView.getState().cameraView) return;
+      const ref = { model: ed.editingModel, clock: sel.clock };
+      const key = trackOf(ed.plan, ref)?.keys.find((k) => k.id === sel.id);
+      if (!key) return;
+      const a = animationOf(ed.plan.animation);
+      const now = sel.clock === 'build' ? usePlayback.getState().t
+        : (useKeyframePlayback.getState().frame - a.startFrame) / a.fps;
+      if (Math.abs(now - key.t) > 1 / a.fps) return;
+      const cam = studio.camera as THREE.PerspectiveCamera;
+      const posed = cameraPoseToKey(cam.position.clone(), controls.target.clone(), cam.fov, useAppSettings.getState().camera.sensorWidthMm, key.t);
+      const { target, offset, azimuth, elevation, distance, lensMm } = posed;
+      ed.apply((p) => updateCameraKey(p, ref, key.id, { target, offset, azimuth, elevation, distance, lensMm }));
+    };
+    controls.addEventListener('end', onKeyView);
     // The mechanism inspector owns neither source matrices nor a render
     // timeline. Its solver and work buffers are confined to this viewport's
     // lifetime; switching projects invalidates them without leaking state.
@@ -905,6 +931,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     return () => {
       cancelAnimationFrame(raf);
       controls.removeEventListener('start', onGrab);
+      controls.removeEventListener('end', onKeyView);
       ro.disconnect();
       window.removeEventListener('keydown', onShift);
       window.removeEventListener('keyup', onShift);
@@ -928,6 +955,8 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       viewportApi.views = null;
       viewportApi.scene?.dispose();
       viewportApi.scene = null;
+      viewportApi.refs?.dispose();
+      viewportApi.refs = null;
       viewportApi.frameAspect = null;
       controls.dispose();
       studio.dispose();
@@ -937,6 +966,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
   }, []);
 
   useEffect(() => { viewportApi.scene?.sync(sceneSetup); }, [sceneSetup, sceneSelected, sceneCameraView, sceneHelpers, sceneLock, outputFormat, mode]);
+  useEffect(() => { viewportApi.refs?.sync(sceneSetup); }, [sceneSetup, mode]);
 
   // Video and live viewer use the same lighting preset. A changed preset is
   // applied to the EXISTING WebGL scene, never recreating the renderer.
@@ -1521,7 +1551,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
   };
   const startDrag = (e: React.PointerEvent) => {
     // overlay UI (menus, the nav gizmo) must never pick or drag a brick behind it
-    if (e.target !== canvasRef.current || viewportApi.scene?.isHandlingPointer()) return;
+    if (e.target !== canvasRef.current || viewportApi.scene?.isHandlingPointer() || viewportApi.refs?.isHandlingPointer()) return;
     // a press that lands on a transform handle is the gizmo's: picking the brick behind the
     // ring would move the selection out from under the gesture, and a press on a bare part of
     // the ring would start a selection box instead of a rotation
@@ -1717,6 +1747,36 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     return true;
   };
 
+  /**
+   * Menu items to turn a piece that is still waiting on the floor (Build view, before its
+   * flight starts): quarter turns, or the turn that makes it wait the way it lands.
+   */
+  const waitingTurnItems = (key: string): ContextItem[] => {
+    const run = live.current;
+    const tl = run?.tl;
+    const tr = tl?.tracks.get(key);
+    if (!tl || !tr?.moves.length || st().mode !== 'edit') return [];
+    const t = usePlayback.getState().t;
+    if (t < tr.appear || t >= tl.units[tr.moves[0].unit].start) return [];
+    const root = tl.units[tr.moves[0].unit].keys[0] ?? key;
+    const rootTrack = tl.tracks.get(root) ?? tr;
+    const model0 = st().editingModel;
+    const turn = (deg: number) => { const next = turnOnFloor(st().plan, model0, root, deg); if (next) st().apply(() => next); };
+    // the quarter turn that brings the waiting pose closest to the landing pose
+    const fin = rootTrack.final.elements;
+    const gap = (deg: number) => {
+      const m = yaw(deg).multiply(rootTrack.floor).elements;
+      return [0, 1, 2, 4, 5, 6, 8, 9, 10].reduce((n, i) => n + Math.abs(m[i] - fin[i]), 0);
+    };
+    const quarters = [0, 90, 180, 270];
+    const best = quarters.reduce((a, d) => (gap(d) < gap(a) - 1e-6 ? d : a), 0);
+    return [
+      { icon: 'rotate', label: 'Turn waiting piece 90°', onClick: () => turn(90) },
+      { icon: 'rotate', label: 'Turn waiting piece −90°', onClick: () => turn(-90) },
+      { icon: 'rotate', label: 'Wait facing the way it lands', disabled: best === 0, onClick: () => turn(best) },
+    ];
+  };
+
   const down = useRef({ x: 0, y: 0 });
   const closeMenu = useRef(() => setMenu(null)).current;
   const rightDown = useRef<{ x: number; y: number } | null>(null);
@@ -1744,6 +1804,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       ? s.selection.ids : selectionForHit(s.plan, s.editingModel, id);
     if (!(s.selection.model === s.editingModel && ids.every(i => s.selection.ids.includes(i)))) s.select(ids);
     const items = pieceMenuItems(ids, (chosen) => setSubmodelDialog({ model: s.editingModel, ids: chosen }));
+    items.unshift(...waitingTurnItems(key));
     if (items.length) setMenu({ x: e.clientX, y: e.clientY, items, label: 'Piece' });
   };
   /** Precise relative turn about the SAME joint as the draggable ring.
@@ -1816,11 +1877,19 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
           if (aim) updatePlacing(aim);
           return;
         }
+        // picture files dropped from the desktop become reference images
+        if (e.dataTransfer.types.includes('Files') && st().mode === 'edit') { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; return; }
         if (!e.dataTransfer.types.includes(SPOT_DRAG_TYPE)) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'copy';
       }}
       onDrop={(e) => {
+        if (e.dataTransfer.files.length && st().mode === 'edit' && [...e.dataTransfer.files].some((f) => f.type.startsWith('image/'))) {
+          e.preventDefault();
+          useSceneView.setState({ panelOpen: true });
+          void addReferenceFiles(e.dataTransfer.files).then((problems) => { if (problems.length) alert(problems.join('\n')); });
+          return;
+        }
         if (e.dataTransfer.types.includes(PART_DRAG_TYPE) && isPlacing()) {
           e.preventDefault();
           commitPlacing();
@@ -1866,7 +1935,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
         onClick={(e) => {
           if (isPlacing()) { commitPlacing(); return; }
           if (gizmoPress.current) { gizmoPress.current = false; return; }
-          if (st().mode !== 'edit' || viewportApi.scene?.isHandlingPointer()) return;
+          if (st().mode !== 'edit' || viewportApi.scene?.isHandlingPointer() || viewportApi.refs?.isHandlingPointer()) return;
           if (Math.hypot(e.clientX - down.current.x, e.clientY - down.current.y) > 4) return;
           // A press that began on a handle was already consumed above (`gizmoPress`). Do not
           // re-read the hovered axis here: it may be stale, and it used to swallow clicks on
@@ -1880,13 +1949,22 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
           const mark = pickSpotAt(e);
           if (mark) { st().selectSpot(mark); return; }
           const key = pickAt(e);
+          // a brick in front of a reference image wins; the picture is only picked where nothing else is
+          const image = key ? null : viewportApi.refs?.pick(rayAt(e)) ?? null;
           if (key) {
             const state = st();
             st().select(selectionForHit(state.plan, state.editingModel, key.split('/')[0], e.altKey), e.shiftKey);
+            useReferenceView.setState({ selectedId: null });
+          }
+          else if (image) {
+            useReferenceView.setState({ selectedId: image });
+            useSceneView.setState({ panelOpen: true, selectedId: null });
+            st().select([]);
           }
           else if (!e.shiftKey) {
             st().select([]);
             useSceneView.setState({ selectedId: null });
+            useReferenceView.setState({ selectedId: null });
           }
         }}
         onDoubleClick={(e) => {

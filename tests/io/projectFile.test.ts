@@ -5,6 +5,7 @@ import type { Plan } from '../../src/plan/types';
 import { buildTimeline, poseAt } from '../../src/anim/timeline';
 import { decodeTimeline, encodeTimeline } from '../../src/anim/timelineCodec';
 import { projectToJson, readProjectFile } from '../../src/io/projectFile';
+import { DEFAULT_SETTINGS } from '../../src/storage/settings';
 import { fixtureColors, fixtureMetrics } from '../helpers/fixtureMetrics';
 
 let metrics: Metrics;
@@ -123,4 +124,32 @@ test('adaptive planner mode round-trips through the persisted video options key'
   const { optsKey, settingsFromOptsKey } = await import('../../src/state/timelineService');
   const key = optsKey({ targetSeconds: 20, heroOrbit: false, planner: 'construction-auto' });
   expect(settingsFromOptsKey(key)?.planner).toBe('construction-auto');
+});
+
+test('a project file keeps the look and video settings it was made with', () => {
+  const video = { ...DEFAULT_SETTINGS.video, studioLook: 'soft' as const, format: '16:9' as const, heroOrbit: false,
+    materials: { ...DEFAULT_SETTINGS.video.materials, finish: 'glossy' as const, clearShadow: 0.4, contactShadows: 0.8 },
+    camera: { ...DEFAULT_SETTINGS.video.camera, lensMm: 85 } };
+  const r = readProjectFile(projectToJson(plan, [], { video, exportCamera: 'buildView' }));
+  if (!r.ok) throw new Error(r.errors.join());
+  expect(r.settings?.exportCamera).toBe('buildView');
+  expect(r.settings?.video.studioLook).toBe('soft');
+  expect(r.settings?.video.format).toBe('16:9');
+  expect(r.settings?.video.heroOrbit).toBe(false);
+  expect(r.settings?.video.materials).toMatchObject({ finish: 'glossy', clearShadow: 0.4, contactShadows: 0.8 });
+  expect(r.settings?.video.camera.lensMm).toBe(85);
+});
+
+test('a project file without settings, or with damaged ones, opens with none or range-checked ones', () => {
+  const none = readProjectFile(projectToJson(plan, []));
+  expect(none.ok && none.settings).toBeNull();
+  const file = JSON.parse(projectToJson(plan, [], { video: DEFAULT_SETTINGS.video, exportCamera: 'track' }));
+  file.settings.video.format = 'nonsense';
+  file.settings.video.camera.lensMm = 9999;
+  file.settings.exportCamera = 'nonsense';
+  const r = readProjectFile(JSON.stringify(file));
+  expect(r.ok && r.settings?.video.format).toBe('9:16');
+  expect(r.ok && r.settings?.video.camera.lensMm).toBe(200);
+  expect(r.ok && r.settings?.exportCamera).toBe('track');
+  expect(readProjectFile(JSON.stringify({ ...file, settings: 'x' })).ok).toBe(true);
 });

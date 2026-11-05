@@ -126,8 +126,20 @@ const mated = (a: Connector, b: Connector) =>
   Math.hypot(a.pos[0] - b.pos[0], a.pos[1] - b.pos[1], a.pos[2] - b.pos[2]) < 1 &&
   Math.abs(a.axis[0] * b.axis[0] + a.axis[1] * b.axis[1] + a.axis[2] * b.axis[2]) >= .999;
 
-/** Everything that can bring these two pieces together, best first. */
+export type FitChoice = Extract<FitOutcome, { ok: true }>;
+
+/** The best way these pieces fit together, or the reason none does. */
 export function fitSelection(pieces: readonly FitPiece[], options: FitOptions): FitOutcome {
+  const found = fitChoices(pieces, options, 1);
+  return found.ok ? found.choices[0] : found;
+}
+
+/**
+ * Every distinct way these pieces can fit together that does not collide, best first (the first
+ * is what `fitSelection` picks). Distinct means a different insert or a different resulting pose.
+ */
+export function fitChoices(pieces: readonly FitPiece[], options: FitOptions, limit = 24):
+  { ok: true; choices: FitChoice[] } | { ok: false; why: string } {
   if (pieces.length < 2) return { ok: false, why: 'select the piece to slot in together with the piece it goes into' };
   const { metricsOf } = options;
   let taken = 0, reflected = 0;
@@ -190,14 +202,21 @@ export function fitSelection(pieces: readonly FitPiece[], options: FitOptions): 
     return planted || Number(b.grip) - Number(a.grip) || a.travel - b.travel;
   });
   let refused = '';
+  const choices: FitChoice[] = [];
+  const seen = new Set<string>();
   for (const candidate of candidates) {
+    if (choices.length >= limit) break;
+    const key = `${candidate.insert}|${candidate.world.map((v) => Math.round(v * 100)).join(',')}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
     const hits = options.blocked?.(candidate.insert, candidate.world) ?? [];
     if (hits.length) { refused ||= `the fit would put ${candidate.insert} inside ${hits.join(', ')}`; continue; }
-    return {
+    choices.push({
       ok: true, host: candidate.host, insert: candidate.insert, world: candidate.world,
       kind: candidate.kind, detail: candidate.detail, ...(candidate.axis ? { axis: candidate.axis } : {}),
-    };
+    });
   }
+  if (choices.length) return { ok: true, choices };
   if (refused) return { ok: false, why: refused };
   const setting = 'turn on “Allow mirrored LDraw reference poses” (Parts panel → Attachment precision)';
   if (taken) return { ok: false, why: reflected

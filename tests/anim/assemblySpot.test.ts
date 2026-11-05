@@ -260,10 +260,35 @@ describe('submodel build spot', () => {
     const original = tl.tracks.get(key)!.moves[0];
     const shifted = applyFloorShifts(tl, new Map<string, [number, number]>([[key, [3, -2]]]));
     const moved = shifted.tracks.get(key)!.moves[0];
-    expect(moved.rigidDeltas!.length).toBe(original.rigidDeltas!.length + 1);
+    expect(moved.rigidDeltas!.length).toBe(original.rigidDeltas!.length);
     expectMat(moved.from, new THREE.Matrix4().makeTranslation(60, 0, -40).multiply(original.from));
     expectMat(flightPose(moved, 0.0001, new THREE.Matrix4()), moved.from, 1e-3);
     expectMat(flightPose(moved, 1, new THREE.Matrix4()), moved.to, 1e-6);
+  });
+
+  it('construction-v2: a dragged waiting piece flies from its new spot, never back to the old one first', () => {
+    for (const p of [tower(), setSubmodelBuildSpot(sub(), '', 's1', { x: 14, z: -6, angle: 30 })]) {
+      const asm = assemble(p, metrics, fixtureColors);
+      const tl = buildTimeline(asm, metrics, v2);
+      let checked = 0;
+      for (const [key, tr] of tl.tracks) {
+        const mv = tr.moves[0];
+        if (!mv || mv.stationary || !(mv.translationPath || mv.posePath?.length || mv.rigidDeltas?.length)) continue;
+        const shifted = applyFloorShifts(tl, new Map<string, [number, number]>([[key, [6, -4]]])).tracks.get(key)!.moves[0];
+        const oldSpot = new THREE.Vector3().setFromMatrixPosition(mv.from);
+        const shift = 20 * Math.hypot(6, 4);
+        for (let f = 0; f <= 1.0001; f += 0.01) {
+          const at = new THREE.Vector3().setFromMatrixPosition(flightPose(shifted, f, new THREE.Matrix4()));
+          const orig = new THREE.Vector3().setFromMatrixPosition(flightPose(mv, f, new THREE.Matrix4()));
+          // Never revisits the old waiting spot (the original route itself leaves it).
+          if (orig.distanceTo(oldSpot) > shift) continue;
+          expect(at.distanceTo(oldSpot)).toBeGreaterThan(0.25 * shift);
+        }
+        expectMat(flightPose(shifted, 1, new THREE.Matrix4()), flightPose(mv, 1, new THREE.Matrix4()), 1e-6);
+        checked++;
+      }
+      expect(checked).toBeGreaterThan(0);
+    }
   });
 
   it('with no build spot the submodel keeps its automatic side spot', () => {

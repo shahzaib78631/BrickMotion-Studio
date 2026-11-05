@@ -75,7 +75,8 @@ export class BrickRenderer {
         // otherwise recalculate every moving mesh's bounding sphere on every
         // frame, which is expensive and can cull parts mid-flight.
         mesh.frustumCulled = false;
-        mesh.castShadow = true;
+        // clear parts cast no shadow: the shadow passes treat every caster as solid
+        mesh.castShadow = !(p.material as THREE.Material).transparent;
         mesh.receiveShadow = true;
         const keys: string[] = [];
         this.keyAt.set(mesh, keys);

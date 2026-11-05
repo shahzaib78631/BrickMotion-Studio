@@ -17,6 +17,10 @@ export class ContactShadows {
   private readonly blurTarget: THREE.WebGLRenderTarget;
   private readonly camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   private readonly depth: THREE.MeshDepthMaterial;
+  /** clear parts: the same shadow, much fainter */
+  private readonly depthClear: THREE.MeshDepthMaterial;
+  private readonly clearStage = new THREE.Scene();
+  private readonly clearDarkness = { value: 0.35 };
   private readonly hBlur = new THREE.ShaderMaterial(HorizontalBlurShader);
   private readonly vBlur = new THREE.ShaderMaterial(VerticalBlurShader);
   private readonly quad = new FullScreenQuad();
@@ -40,26 +44,35 @@ export class ContactShadows {
     this.plane.rotation.x = Math.PI / 2;
     this.plane.renderOrder = -0.5;
     this.camera.up.set(0, 0, 1);
-    this.depth = new THREE.MeshDepthMaterial({ depthTest: false, depthWrite: false });
-    this.depth.onBeforeCompile = (shader) => {
-      shader.uniforms.darkness = this.uniforms.darkness;
-      shader.uniforms.tint = this.uniforms.tint;
-      shader.fragmentShader = `uniform float darkness;\nuniform vec3 tint;\n${shader.fragmentShader.replace(
-        'gl_FragColor = vec4( vec3( 1.0 - fragCoordZ ), opacity );',
-        // near the floor (depth 0) fully dark, fading out by the far plane
-        'gl_FragColor = vec4( tint, min( 1.0, pow( 1.0 - fragCoordZ, 1.5 ) * darkness ) );',
-      )}`;
+    const make = (darkness: { value: number }) => {
+      const m = new THREE.MeshDepthMaterial({ depthTest: false, depthWrite: false });
+      m.onBeforeCompile = (shader) => {
+        shader.uniforms.darkness = darkness;
+        shader.uniforms.tint = this.uniforms.tint;
+        shader.fragmentShader = `uniform float darkness;\nuniform vec3 tint;\n${shader.fragmentShader.replace(
+          'gl_FragColor = vec4( vec3( 1.0 - fragCoordZ ), opacity );',
+          // near the floor (depth 0) fully dark, fading out by the far plane
+          'gl_FragColor = vec4( tint, min( 1.0, pow( 1.0 - fragCoordZ, 1.5 ) * darkness ) );',
+        )}`;
+      };
+      return m;
     };
+    this.depth = make(this.uniforms.darkness);
+    this.depthClear = make(this.clearDarkness);
+    // keep the darker of the two where a clear part overlaps a solid one
+    Object.assign(this.depthClear, { transparent: true, blending: THREE.CustomBlending, blendEquation: THREE.MaxEquation, blendEquationAlpha: THREE.MaxEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor, blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneFactor });
+    this.clearStage.overrideMaterial = this.depthClear;
     this.stage.overrideMaterial = this.depth;
   }
 
-  /** Shadow strength 0–1 (0 hides it), and the colour it darkens towards. */
-  set(strength: number, tint: THREE.ColorRepresentation) {
+  /** Shadow strength 0–1 (0 hides it), the colour it darkens towards, and the share of that strength clear parts get (0–1). */
+  set(strength: number, tint: THREE.ColorRepresentation, clearShare = 0.12) {
     this.strength = Math.min(1, Math.max(0, strength));
     this.uniforms.tint.value.set(tint);
     // the blur thins the shadow out: draw it saturated, then let opacity set the strength
     this.plane.material.opacity = Math.min(1, this.strength * 1.1);
     this.uniforms.darkness.value = 3;
+    this.clearDarkness.value = 3 * Math.min(1, Math.max(0, clearShare));
   }
 
   get on() {
@@ -102,12 +115,32 @@ export class ContactShadows {
     // own material, which the override replaces, so they would all land at the model's
     // origin and darken the floor there, hidden (not yet built) pieces included.
     const lines: THREE.Object3D[] = [];
+    const solid: THREE.Object3D[] = [];
+    const clear: THREE.Object3D[] = [];
     bricks.traverse((o) => {
-      if (((o as THREE.Line).isLine || (o as THREE.Points).isPoints) && o.visible) { o.visible = false; lines.push(o); }
+      if (!o.visible) return;
+      if ((o as THREE.Line).isLine || (o as THREE.Points).isPoints) { o.visible = false; lines.push(o); return; }
+      const m = (o as THREE.Mesh).material as THREE.Material | undefined;
+      if ((o as THREE.Mesh).isMesh && m && !Array.isArray(m)) (m.transparent ? clear : solid).push(o);
     });
-    this.stage.add(bricks);
-    renderer.setRenderTarget(this.target);
-    renderer.render(this.stage, this.camera);
+    const show = (list: THREE.Object3D[], on: boolean) => { for (const o of list) o.visible = on; };
+    const draw = (stage: THREE.Scene, autoClear: boolean) => {
+      renderer.autoClear = autoClear;
+      stage.add(bricks);
+      renderer.setRenderTarget(this.target);
+      renderer.render(stage, this.camera);
+    };
+    // solid parts at full strength; clear parts (the override ignores opacity) as a faint
+    // second layer, so glass still sits on the floor without a dark smudge showing through it
+    show(clear, false);
+    draw(this.stage, true);
+    if (clear.length) {
+      show(clear, true);
+      show(solid, false);
+      draw(this.clearStage, false);
+      show(solid, true);
+    }
+    renderer.autoClear = true;
     parent?.add(bricks);
     for (const o of lines) o.visible = true;
     // two blur passes each way: target → blurTarget → target
@@ -135,6 +168,7 @@ export class ContactShadows {
     this.target.dispose();
     this.blurTarget.dispose();
     this.depth.dispose();
+    this.depthClear.dispose();
     this.hBlur.dispose();
     this.vBlur.dispose();
     this.quad.dispose();

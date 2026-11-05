@@ -12,6 +12,7 @@ import { orbitDegreesOf, orbitTurn, roundDegrees } from '../anim/cameraTrack/orb
 import type { CameraTrack } from '../anim/cameraTrack/types';
 import type { CameraKey, CameraTarget, CameraTransition, CurveKind, SpeedCurve, TransitionSettings } from '../anim/cameraTrack/types';
 import { viewportApi } from './viewportApi';
+import { cameraPoseToKey } from '../anim/cameraTrack/context';
 import './cameraTrack.css';
 
 const CURVES: { id: CurveKind; label: string }[] = [
@@ -50,6 +51,27 @@ function Num({ label, value, min, max, step, onChange }: { label: string; value:
         onChange={(e) => { const v = Number(e.target.value); if (Number.isFinite(v)) onChange(Math.min(max, Math.max(min, v))); }} />
     </label>
   );
+}
+
+/** The camera's world position for a key aimed at a fixed point from a fixed distance; null otherwise. */
+function pinnedPosition(k: CameraKey): THREE.Vector3 | null {
+  if (k.target.kind !== 'point' || k.distance.fit) return null;
+  const T = new THREE.Vector3(...k.target.at).add(new THREE.Vector3(...k.offset));
+  const az = THREE.MathUtils.degToRad(k.azimuth), el = THREE.MathUtils.degToRad(k.elevation), d = k.distance.value;
+  return T.add(new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)).multiplyScalar(d));
+}
+
+/** The key patch that puts the camera at `pos` while still looking at the same point. */
+function patchForPosition(k: CameraKey, pos: THREE.Vector3): Partial<Omit<CameraKey, 'id'>> {
+  const T = new THREE.Vector3(...(k.target.kind === 'point' ? k.target.at : [0, 0, 0])).add(new THREE.Vector3(...k.offset));
+  const v = pos.clone().sub(T);
+  const dist = Math.max(0.5, v.length());
+  return {
+    target: { kind: 'point', at: [T.x, T.y, T.z] }, offset: [0, 0, 0],
+    distance: { fit: false, value: dist },
+    azimuth: THREE.MathUtils.radToDeg(Math.atan2(v.x, v.z)),
+    elevation: THREE.MathUtils.radToDeg(Math.asin(Math.min(1, Math.max(-1, v.y / dist)))),
+  };
 }
 
 function CurveFields({ name, curve, onChange }: { name: string; curve: SpeedCurve; onChange(c: SpeedCurve): void }) {
@@ -110,6 +132,23 @@ function KeyPanel({ refT, k, ids = [k.id], all = [k] }: { refT: TrackRef; k: Cam
             {TARGETS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
           </select>
         </label>
+        {!many && (() => {
+          const pos = pinnedPosition(k);
+          if (!pos) return (
+            <button type="button" className="nx-btn nx-sm" title="Fix this key on the viewport's current view so its X, Y, Z can be typed in"
+              onClick={() => {
+                const cam = viewportApi.studio?.camera as THREE.PerspectiveCamera | undefined, tg = viewportApi.controls?.target;
+                if (!cam || !tg) return;
+                const { target, offset, azimuth, elevation, distance } = cameraPoseToKey(cam.position.clone(), tg.clone(), cam.fov, useAppSettings.getState().camera.sensorWidthMm, k.t);
+                set({ target, offset, azimuth, elevation, distance });
+              }}>Edit camera position (X, Y, Z)…</button>
+          );
+          const axis = (label: string, i: 'x' | 'y' | 'z') => (
+            <Num label={label} value={pos[i]} min={-5000} max={5000} step={1}
+              onChange={(v) => set(patchForPosition(k, pos.clone().setComponent('xyz'.indexOf(i), v)))} />
+          );
+          return <>{axis('Camera X', 'x')}{axis('Camera Y', 'y')}{axis('Camera Z', 'z')}</>;
+        })()}
         <Slider label="Angle around" value={k.azimuth} min={-360} max={360} step={1} onChange={(azimuth) => set({ azimuth })} fmt={deg} />
         <Slider label="Height" value={k.elevation} min={-85} max={89} step={1} onChange={(elevation) => set({ elevation })} fmt={deg} />
         <label className="nx-field bm-cam-check">

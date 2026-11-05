@@ -47,7 +47,8 @@ export function templateFrom(name: string, settings: Settings, plan: Plan, refer
     },
     reference,
   };
-  if (plan.sceneSetup) t.scene = structuredClone(plan.sceneSetup);
+  // a template is a look, not a project: the pictures someone modelled against stay with that project
+  if (plan.sceneSetup) { const { images: _images, ...scene } = plan.sceneSetup; t.scene = structuredClone(scene); }
   if (plan.assemblySpot) t.assemblySpot = { ...plan.assemblySpot };
   if (plan.loosePiecesFollow !== undefined) t.loosePiecesFollow = plan.loosePiecesFollow;
   if (plan.showModelAtSpot !== undefined) t.showModelAtSpot = plan.showModelAtSpot;

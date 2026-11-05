@@ -61,7 +61,7 @@ export function StagingPanel({ timeline, planning, planError, onRetry }: { timel
   const frameBeingPlanned = planning && applied;
   const inFirstShot = timeline ? [...timeline.tracks.values()].filter((tr) => tr.appear <= 0).length : null;
   const totalStaged = timeline?.tracks.size ?? 0;
-  const moved = [...plan.steps, ...Object.values(plan.submodels ?? {}).flatMap((m) => m.steps)].reduce((n, step) => n + step.pieces.filter((i) => i.assembly?.floorShift).length, 0);
+  const moved = [...plan.steps, ...Object.values(plan.submodels ?? {}).flatMap((m) => m.steps)].reduce((n, step) => n + step.pieces.filter((i) => i.assembly?.floorShift || i.assembly?.floorTurn).length, 0);
   const ids = pieces.map((i) => i.id).filter((id): id is string => !!id);
   const forced = pieces.filter((i) => i.assembly?.root).length;
   const framePieces = () => {
@@ -179,11 +179,12 @@ export function StagingPanel({ timeline, planning, planError, onRetry }: { timel
         <span className="nx-hint">
           Drag clips in the Parts lane of the timeline to change when they go on. The planner keeps a piece after what it
           rests on. Hold <kbd>Alt</kbd> (<kbd>⌥</kbd>) while you drop to force your order, or click the pin on a clip to
-          force or release it.
+          force or release it. To move a whole step and have it play as one block, pin the step
+          (<em>Keep this step's pieces in this order</em> on its timeline block) <em>and</em> force the whole order here.
         </span>
         <div className="bm-btn-row">
-          <button className="nx-btn nx-sm" disabled={!ids.length || forced === ids.length} title="Every piece of this model goes on exactly in the order you set. Pieces may pass through each other." onClick={() => force(true)}>
-            <Ic name="pin" /> Force all
+          <button className="nx-btn nx-sm" aria-label="Force the whole order" disabled={!ids.length || forced === ids.length} title="Every piece of this model goes on exactly in the order you set — a moved step plays as one block instead of stretching across the waits. Pieces may pass through each other." onClick={() => force(true)}>
+            <Ic name="pin" /> Force the whole order
           </button>
           <button className="nx-btn nx-sm" disabled={!forced} title="Let the planner put pieces after what they rest on again" onClick={() => force(false)}>
             <Ic name="x" /> Release all

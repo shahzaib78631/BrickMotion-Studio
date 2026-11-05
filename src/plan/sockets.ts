@@ -11,6 +11,9 @@ import type { Snap } from '../ldraw/shadow';
 /** A part-space point or direction (LDU). */
 export type SocketPoint = readonly [number, number, number];
 
+/** The round pin of a hinge brick (6.5 LDU, longer than a stud) or the knuckle hole it turns in. */
+export const isHingePin = (s: Snap) => s.kind === 'cyl' && s.length >= 8 && s.radius > 6.25 && s.radius <= 7 && s.shapes.some((x) => x === 'R');
+
 const unit = (v: readonly number[]): SocketPoint => {
   const l = Math.hypot(v[0], v[1], v[2]) || 1;
   return [v[0] / l, v[1] / l, v[2] / l];
@@ -107,7 +110,15 @@ export function allSockets(part: { body: Box; snaps?: readonly Snap[]; mesh?: Fl
   const out: { pos: SocketPoint; dir: SocketPoint; radius: number; length?: number }[] = footprintSockets(part).map((s) => ({ ...s, radius: 6 }));
   for (const s of part.snaps ?? []) {
     // a clip takes a bar, whether or not the library models its opening as a round section
-    const grip = s.kind === 'clp' && s.gender === 'F';
+    // a clip, or a finger hinge's female knuckles, takes a bar-sized column
+    const grip = (s.kind === 'clp' || s.kind === 'fgr') && s.gender === 'F';
+    // An underside anti-stud is often modelled square ("S"), not round. A bracket's plate
+    // (44728) has no whole-stud footprint grid to fall back on, so it needs these. Like the
+    // footprint sockets they take a stud at the mouth only.
+    if (!grip && isStudSocket(s) && !s.shapes.includes('R')) {
+      out.push({ pos: [...s.start] as SocketPoint, dir: unit(s.axis), radius: s.radius });
+      continue;
+    }
     if (!grip && (s.kind !== 'cyl' || s.gender !== 'F' || !s.shapes.some((x) => x === 'R'))) continue;
     if (s.length <= 0 || s.radius < 3 || s.radius > 8.6) continue;
     out.push({ pos: [...s.start] as SocketPoint, dir: unit(s.axis), radius: s.radius, length: s.length });
@@ -161,7 +172,7 @@ export function columnsOf(part: { body: Box; studs?: readonly StudConnector[]; s
     const stud = Math.abs(s.radius - 6) <= 0.6 && s.length <= 8;
     const pin = Math.abs(s.radius - 8) <= 0.6;
     const bar = Math.abs(s.radius - 4) <= 0.6 && s.length >= 8;
-    if (!stud && !pin && !bar) continue;
+    if (!stud && !pin && !bar && !isHingePin(s)) continue;
     const base = s.start as SocketPoint, a = unit(s.axis);
     const tip: SocketPoint = [base[0] + a[0] * s.length, base[1] + a[1] * s.length, base[2] + a[2] * s.length];
     if (out.some((o) => Math.hypot(o.base[0] - base[0], o.base[1] - base[1], o.base[2] - base[2]) < 1)) continue;

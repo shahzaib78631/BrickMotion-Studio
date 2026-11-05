@@ -158,6 +158,19 @@ export function reorderStep(p: Plan, m: ModelName, from: number, to: number): Pl
   return withSteps(p, m, steps);
 }
 
+/**
+ * Pins a step's order: its pieces keep the order they have inside the step and stop waiting on
+ * what they rest on (the per-piece force flag), so moving the step does not re-sequence the film.
+ * Clearing it gives the pieces back to the planner.
+ */
+export function setStepPinned(p: Plan, m: ModelName, at: number, on: boolean): Plan {
+  const steps = [...modelSteps(p, m)];
+  if (!steps[at]) return p;
+  const ids = steps[at].pieces.flatMap((i) => (i.id ? [i.id] : []));
+  const flagged = withSteps(p, m, steps.map((s, i) => (i === at ? { ...s, pinOrder: on || undefined } : s)));
+  return ids.length ? setRootHint(flagged, m, ids, on) : flagged;
+}
+
 export function insertStep(p: Plan, m: ModelName, at: number): Plan {
   const steps = [...modelSteps(p, m)];
   if (!Number.isInteger(at) || at < 0 || at > steps.length) return p;

@@ -21,6 +21,8 @@ import { emptyPlan, type AssemblySpot, type Plan } from '../plan/types';
 
 const HISTORY_LIMIT = 200;
 
+export type Workspace = 'build' | 'animate';
+
 /** Keep the preview focused on the same group when Undo/Redo changes step indices. */
 function remapStep(from: Plan, to: Plan, model: ModelName, index: number | null): number | null {
   if (index === null) return null;
@@ -58,6 +60,12 @@ export type StudioState = {
   setShowModelAtSpot(show: boolean): void;
   editingModel: ModelName;
   mode: 'edit' | 'preview';
+  /**
+   * Build: model the set only — no timeline, and the animation planner never runs.
+   * Animate: the timeline, preview and video export, with the planner on.
+   */
+  workspace: Workspace;
+  setWorkspace(workspace: Workspace): void;
   /** Build clips and Dope Sheet remain independent workflows. */
   timelineEditor: 'build' | 'timeline';
   setTimelineEditor(mode: 'build' | 'timeline'): void;
@@ -187,6 +195,15 @@ export const useStudio = create<StudioState>((set, get) => ({
   replans: 0,
   replan() { set({ replans: get().replans + 1 }); },
   mode: 'edit',
+  workspace: 'build',
+  setWorkspace(workspace) {
+    if (get().workspace === workspace) return;
+    usePlayback.getState().set({ playing: false, follow: false });
+    useKeyframePlayback.getState().set({ playing: false });
+    // Build mode always edits the real model, so the keyframe editor is left behind.
+    set({ workspace, mode: 'edit', currentStep: null, laidOut: false,
+      ...(workspace === 'build' ? { timelineEditor: 'build' as const } : {}) });
+  },
   timelineEditor: 'build',
   setTimelineEditor(timelineEditor) {
     if (get().timelineEditor === timelineEditor) return;
@@ -352,7 +369,8 @@ export const useStudio = create<StudioState>((set, get) => ({
     if (mode === 'preview') useKeyframePlayback.getState().set({ playing: false });
     // coming back to Build while the preview plays: keep playing, now in the Build view
     if (mode === 'edit') usePlayback.getState().set({ follow: usePlayback.getState().playing });
-    set({ mode });
+    // a preview plays the animation, which only exists in Animate mode
+    set(mode === 'preview' ? { mode, workspace: 'animate' } : { mode });
   },
   setCurrentStep(s) {
     // picking a step lays it out (separated/exploded/assembled) instead of following the timeline

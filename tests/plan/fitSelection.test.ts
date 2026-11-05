@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import * as THREE from 'three';
 import { measureReal, realPartsReady as ready } from '../helpers/realParts';
-import { fitSelection, type FitPiece } from '../../src/plan/fitSelection';
+import { fitChoices, fitSelection, type FitPiece } from '../../src/plan/fitSelection';
 import { attachmentSlotsFor } from '../../src/ldraw/attachments';
 import { attachmentLocalMatrix, multiplyAttachmentMatrices } from '../../src/model/attachmentPlacements';
 import { partConnectors } from '../../src/plan/connectors';
@@ -113,4 +113,17 @@ it.skipIf(!ready)('reports a pose the collision verdict refuses instead of takin
   const fit = fitSelection([host, sword], { metricsOf, blocked: () => ['torso'] });
   expect(fit.ok).toBe(false);
   expect(fit.ok === false && fit.why).toContain('would put sword inside torso');
+});
+
+it.skipIf(!ready)('lists every way to fit, the best first, and fitSelection picks that one', async () => {
+  const metricsOf = await measure(['19141', '21459', '30173a', '4274']);
+  const host: FitPiece = { id: 'scabbard', part: '19141', world: I };
+  const sword: FitPiece = { id: 'sword', part: '21459', world: at(40, 0, 40) };
+  const all = fitChoices([host, sword], { metricsOf });
+  expect(all.ok).toBe(true);
+  if (!all.ok) return;
+  const best = fitSelection([host, sword], { metricsOf });
+  expect(best.ok && round(best.world)).toEqual(round(all.choices[0].world));
+  const poses = new Set(all.choices.map((c) => `${c.insert}|${round(c.world).join(',')}`));
+  expect(poses.size).toBe(all.choices.length);
 });

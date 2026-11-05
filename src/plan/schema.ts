@@ -35,6 +35,7 @@ const AssemblySchema = z.object({
   role: z.enum(['base', 'hips', 'leg', 'torso', 'arm', 'hand', 'head', 'headwear', 'generic']).optional(),
   root: z.boolean().optional(),
   floorShift: z.tuple([num, num]).optional(),
+  floorTurn: num.optional(),
   group: z.string().min(1).max(80).optional(),
   buildSpot: AssemblySpotSchema.optional(),
   motion: MotionSchema,
@@ -58,6 +59,7 @@ const StepSchema = z.object({
   title: z.string().max(80).optional(),
   notes: z.string().max(1000).optional(),
   pauseAfter: num.min(0).max(10).optional(),
+  pinOrder: z.boolean().optional(),
   auto: z.boolean().optional(),
   motion: MotionSchema,
 });
@@ -147,14 +149,21 @@ const FrameStagingSchema = z.object({
     crop: RegionSchema.optional(),
   }).refine((c) => Math.hypot(...c.position.map((n, i) => n - c.target[i])) > 1e-4, 'Camera must not sit at its target'),
 });
+const ReferenceImageSchema = z.object({
+  id: z.string().min(1), name: z.string().max(100),
+  src: z.string().startsWith('data:image/').max(8_000_000),
+  aspect: num.positive(), position: z.tuple([num, num, num]), rotation: z.tuple([num, num, num]),
+  width: num.positive(), opacity: num.min(0).max(1), visible: z.boolean(), locked: z.boolean(),
+});
 const SceneSetupSchema = z.object({
   cameras: z.array(SceneCameraSchema).max(24), lights: z.array(SceneLightSchema).max(64),
   activeCameraId: z.string().nullable(), useCameraForVideo: z.boolean(), useLightsForVideo: z.boolean(),
   includeStudioLights: z.boolean(), region: RegionSchema.nullable(), cropToRegion: z.boolean(),
   frameStaging: FrameStagingSchema.optional(),
+  images: z.array(ReferenceImageSchema).max(16).optional(),
   exposure: num.min(0.1).max(5),
 }).superRefine((s, ctx) => {
-  const ids = [...s.cameras, ...s.lights].map((o) => o.id);
+  const ids = [...s.cameras, ...s.lights, ...(s.images ?? [])].map((o) => o.id);
   if (ids.length !== new Set(ids).size) ctx.addIssue({ code: 'custom', message: 'Scene object IDs must be unique' });
   if (s.activeCameraId && !s.cameras.some((c) => c.id === s.activeCameraId))
     ctx.addIssue({ code: 'custom', path: ['activeCameraId'], message: 'Active camera does not exist' });

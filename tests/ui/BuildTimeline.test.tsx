@@ -56,6 +56,41 @@ test('clicking a step block edits that step and moves the playhead to it', () =>
   expect(usePlayback.getState().t).toBe(4);
 });
 
+test('a step block can be moved before any step, whole, from its menu', () => {
+  render(<BuildTimeline timeline={tl as unknown as Timeline} />);
+  fireEvent.contextMenu(screen.getByRole('button', { name: /^Step 2 ·/ }));
+  fireEvent.click(screen.getByRole('menuitem', { name: /Move this step before/ }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Step 1' }));
+  // the whole block moved, its pieces still in their own order
+  expect(useStudio.getState().plan.steps.map((st) => st.pieces.map((i) => i.id).join(','))).toEqual(['b,s', 'a']);
+});
+
+test('a step block can be moved to the playhead from its menu', () => {
+  // the playhead sits inside step 1 (1–3 s); step 2 goes before it
+  usePlayback.getState().set({ t: 1.5, playing: false });
+  render(<BuildTimeline timeline={tl as unknown as Timeline} />);
+  fireEvent.contextMenu(screen.getByRole('button', { name: /^Step 2 ·/ }));
+  fireEvent.click(screen.getByRole('menuitem', { name: /Move before step 1 \(the playhead\)/ }));
+  expect(useStudio.getState().plan.steps.map((st) => st.pieces.map((i) => i.id).join(','))).toEqual(['b,s', 'a']);
+});
+
+test('a step can be pinned so its pieces keep their order', () => {
+  render(<BuildTimeline timeline={tl as unknown as Timeline} />);
+  fireEvent.contextMenu(screen.getByRole('button', { name: /^Step 2 ·/ }));
+  fireEvent.click(screen.getByRole('menuitem', { name: /Keep this step/ }));
+  const plan = useStudio.getState().plan;
+  expect(plan.steps[1].pinOrder).toBe(true);
+  // every piece carries the force flag, which is what stops the planner re-sequencing them
+  expect(plan.steps[1].pieces.every((p) => (p as { assembly?: { root?: boolean } }).assembly?.root)).toBe(true);
+  // the step still holds exactly the pieces it did, in the same order
+  expect(plan.steps[1].pieces.map((p) => p.id)).toEqual(['b', 's']);
+
+  fireEvent.contextMenu(screen.getByRole('button', { name: /^Step 2 ·/ }));
+  fireEvent.click(screen.getByRole('menuitem', { name: /Release this step/ }));
+  expect(useStudio.getState().plan.steps[1].pinOrder).toBeUndefined();
+  expect(useStudio.getState().plan.steps[1].pieces.some((p) => (p as { assembly?: { root?: boolean } }).assembly?.root)).toBe(false);
+});
+
 test('clicking a submodel block opens that submodel', () => {
   render(<BuildTimeline timeline={tl} />);
   fireEvent.click(screen.getByRole('button', { name: /^Build engine/ }));

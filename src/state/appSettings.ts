@@ -121,6 +121,7 @@ export const useAppSettings = create<AppSettings>((set) => ({
 }));
 
 export const toSettings = (s: AppSettings): Settings => ({
+  schemaVersion: DEFAULT_SETTINGS.schemaVersion,
   apiKey: s.apiKey,
   model: s.model,
   logo: s.logo,

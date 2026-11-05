@@ -64,6 +64,13 @@ export function buildAssemblyGraph<T extends AssemblyItem>(items: T[], inferSupp
   ordered: T[];
   dependencies: Dependency[];
   parents: Map<string, string[]>;
+  /**
+   * Dependency loops the planner had to break to build at all. A loop is unsatisfiable by
+   * definition — some piece would have to go on before itself — and the edges that close one
+   * are usually the planner's own inferred contacts, not anything the author wrote, so a loop
+   * must not stop the whole build. Each entry is the chain, ending where it closed.
+   */
+  cycles: string[][];
 } {
   const byId = new Map<string, T>();
   const problems: PlanningIssue[] = [];
@@ -83,7 +90,7 @@ export function buildAssemblyGraph<T extends AssemblyItem>(items: T[], inferSupp
       problems.push({ code: 'missing-parent', items: [child, parent], message: `"${child}" references missing sibling "${parent}". Use an item ID, not a part number.` });
       return;
     }
-    if (parents.get(child)!.includes(parent)) return;
+    if (parent === child || parents.get(child)!.includes(parent)) return;
     parents.get(child)!.push(parent);
     dependencies.push({ parent, child, reason });
   };
@@ -187,46 +194,59 @@ export function buildAssemblyGraph<T extends AssemblyItem>(items: T[], inferSupp
   // Preserve editorial order by building prerequisites of the earliest item
   // first. A ready-only queue otherwise builds later enclosing parts while an
   // earlier chassis piece waits for a recessed carrier in a later step.
-  const done = new Set<string>(), visiting = new Set<string>();
-  const ordered: T[] = [];
+  const cycles: string[][] = [];
+  const seenCycle = new Set<string>();
   const priority = new Map(preferred.map((item, i) => [item.id, i]));
-  // Iterative DFS avoids a call-stack overflow on long dependency chains.
-  for (const root of preferred) {
-    if (done.has(root.id)) continue;
-    const stack: { item: T; parents: string[]; index: number }[] = [];
-    const push = (item: T) => {
-      visiting.add(item.id);
-      stack.push({ item, parents: [...parents.get(item.id)!].sort((a, b) => priority.get(a)! - priority.get(b)!), index: 0 });
-    };
-    push(root);
-    while (stack.length) {
-      const frame = stack[stack.length - 1];
-      if (frame.index < frame.parents.length) {
-        const id = frame.parents[frame.index++];
-        if (done.has(id)) continue;
-        if (visiting.has(id)) {
-          const chain = stack.map((f) => f.item.id);
-          const blocked = [...chain.slice(chain.indexOf(id)), id];
-          throw new AssemblyPlanningError([{ code: 'dependency-cycle', items: blocked, message: `Cyclic assembly dependencies involving ${blocked.join(', ')}. Correct the parent/after references; no edge was discarded.` }]);
+  /**
+   * One ordering pass. Returns the loop it ran into, or null when the graph is acyclic.
+   * The pass never works around a loop itself: the caller removes an edge and walks again,
+   * so the order returned always agrees with every edge still in `parents`.
+   */
+  const walk = (): { ordered: T[]; loop: string[] | null } => {
+    const done = new Set<string>(), visiting = new Set<string>();
+    const ordered: T[] = [];
+    // Iterative DFS avoids a call-stack overflow on long dependency chains.
+    for (const root of preferred) {
+      if (done.has(root.id)) continue;
+      const stack: { item: T; parents: string[]; index: number }[] = [];
+      const push = (item: T) => {
+        visiting.add(item.id);
+        stack.push({ item, parents: [...parents.get(item.id)!].sort((a, b) => priority.get(a)! - priority.get(b)!), index: 0 });
+      };
+      push(root);
+      while (stack.length) {
+        const frame = stack[stack.length - 1];
+        if (frame.index < frame.parents.length) {
+          const id = frame.parents[frame.index++];
+          if (done.has(id)) continue;
+          if (visiting.has(id)) {
+            const chain = stack.map((f) => f.item.id);
+            return { ordered, loop: [...chain.slice(chain.indexOf(id)), id] };
+          }
+          push(byId.get(id)!);
+        } else {
+          visiting.delete(frame.item.id); done.add(frame.item.id); ordered.push(frame.item); stack.pop();
         }
-        push(byId.get(id)!);
-      } else {
-        visiting.delete(frame.item.id); done.add(frame.item.id); ordered.push(frame.item); stack.pop();
       }
     }
+    return { ordered, loop: null };
+  };
+  let ordered: T[];
+  for (;;) {
+    const pass = walk();
+    if (!pass.loop) { ordered = pass.ordered; break; }
+    // Unsatisfiable by construction: drop one edge of the loop and order again, so one bad
+    // contact cannot take the whole build down. The route checks still have the final say on
+    // whether the resulting order can actually be flown. The weakest edge goes: one the
+    // planner inferred beats one the author wrote.
+    const loop = pass.loop;
+    const key = [...loop].sort().join('|');
+    if (!seenCycle.has(key)) { seenCycle.add(key); cycles.push(loop); }
+    const edges = loop.slice(0, -1).map((child, i) => ({ child, parent: loop[i + 1] }));
+    const edge = edges.find(({ child, parent }) => dependencies.some((d) => d.parent === parent && d.child === child && d.reason !== 'explicit'))
+      ?? edges[edges.length - 1];
+    const list = parents.get(edge.child)!;
+    list.splice(list.indexOf(edge.parent), 1);
   }
-  // Contacting items must not race each other in batch mode. These edges follow
-  // the already acyclic build order; face-only side contact does not serialize
-  // an entire tiled layer. Explicit/root semantics remain authoritative.
-  if (inferSupport) for (let i = 0; i < ordered.length; i++) {
-    const child = ordered[i];
-    if (child.assembly?.root) continue;
-    for (let j = 0; j < i; j++) {
-      const parent = ordered[j];
-      if (!touches(child.box, parent.box)) continue;
-      const depth = [0, 1, 2].map((k) => overlaps(child.box, parent.box, k));
-      if (depth.every((d) => d > 1)) add(parent.id, child.id, 'contact');
-    }
-  }
-  return { ordered, dependencies, parents };
+  return { ordered, dependencies, parents, cycles };
 }

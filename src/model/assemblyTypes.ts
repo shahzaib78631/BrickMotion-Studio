@@ -12,6 +12,8 @@ type NodeBase = {
     pauseAfter?: number;
     /** its step was generated (auto-steps), so its order inside the step is not editorial */
     autoStep?: boolean;
+    /** the step is pinned: its pieces keep the order they are listed in */
+    pinned?: boolean;
     local: Placement;
 };
 export type ANode = (NodeBase & {

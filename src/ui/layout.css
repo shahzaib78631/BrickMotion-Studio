@@ -40,3 +40,12 @@
 /* a row of buttons that wraps instead of overflowing a narrow panel */
 .bm-btn-row{display:flex;flex-wrap:wrap;gap:6px}
 .bm-btn-row .nx-btn{display:inline-flex;align-items:center;gap:5px}
+/* Build mode has no timeline: the viewport takes the whole height under the header */
+.nx.bm-build-mode{grid-template-rows:56px minmax(0,1fr)}
+@media(max-width:760px){.nx.bm-build-mode{grid-template-rows:55px minmax(0,1fr)}}
+/* Build | Animate switch in the header */
+.bm-workspace-switch{display:inline-flex;padding:2px;gap:2px;border:1px solid var(--line);border-radius:9px;background:var(--bg)}
+.bm-workspace-switch button{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:7px;font-size:12px;font-weight:600;color:var(--ink3)}
+.bm-workspace-switch button:hover{color:var(--ink)}
+.bm-workspace-switch button.active{background:var(--surface);color:var(--accent);box-shadow:0 1px 2px #0000001f}
+.bm-workspace-switch .ic{width:14px;height:14px}

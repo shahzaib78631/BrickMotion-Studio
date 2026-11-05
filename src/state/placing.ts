@@ -35,6 +35,8 @@ type Session = {
   ids: string[];
   base: Plan;
   plan0: Plan;
+  /** the plan before the new pieces: the base plus any submodels they brought along */
+  empty: Plan;
   nodes0: ANode[];
   query: Omit<PoseQuery, 'aim' | 'lock' | 'yaw' | 'prev'> & { floor: number };
   visible: Set<string>;
@@ -76,12 +78,13 @@ export function beginPlacing(src: PlacingSource, grab?: Vec3): void {
   st.beginGesture();
   st.ownGesture(cancelPlacing);
   const base = st.plan;
-  let plan0 = base, ids: string[] = [], newItems: PlanItem[] | null = null;
+  let plan0 = base, empty = base, ids: string[] = [], newItems: PlanItem[] | null = null;
   if (src.kind === 'move') ids = [...src.ids];
   else {
     // never replace a submodel the plan already has
     const fresh = Object.entries(src.submodels ?? {}).filter(([n]) => !plan0.submodels?.[n]);
     if (fresh.length) plan0 = { ...plan0, submodels: { ...plan0.submodels, ...Object.fromEntries(fresh) } };
+    empty = plan0;
     newItems = [];
     for (const it of src.items) {
       const placed = { ...it, id: newId(plan0) };
@@ -122,9 +125,13 @@ export function beginPlacing(src: PlacingSource, grab?: Vec3): void {
   const before = src.kind === 'move' && world ? world.hits(solids) : new Set<string>();
   // the parts are held where they were grabbed; a new part by the centre of its underside
   const ref: Vec3 = grab ?? undersideOf(solids);
-  if (plan0 !== base) st.gestureApply(() => plan0);
+  // New pieces enter the plan only once the mouse gives them a pose. Left at the spot they
+  // were copied from, pasted pieces sat right inside their originals (red, "overlaps")
+  // until the first pose arrived, or for good when none did.
+  const shownPlan = newItems ? empty : plan0;
+  if (shownPlan !== base) st.gestureApply(() => shownPlan);
   session = {
-    model: m, ids, base, plan0, nodes0: view.nodes, visible, newItems, step,
+    model: m, ids, base, plan0, empty, nodes0: view.nodes, visible, newItems, step,
     // the drawn floor (the model's lowest point), fixed for the whole gesture
     query: { moving: { solids, connectors }, targets, precisionTargets, ref, world, before, floor: view.bounds?.max[1] ?? 0 },
     stepOf: (o) => findItem(plan0, m, o)?.step ?? 0,
@@ -139,9 +146,10 @@ function apply(pose: Pose): void {
   const s = session!;
   const st = useStudio.getState();
   if (s.newItems) {
-    // new pieces are re-added from the base plan at the pose (their step stays the current one)
-    const without = s.base.submodels === s.plan0.submodels ? s.base : { ...s.base, submodels: s.plan0.submodels };
-    st.gestureApply(() => addPosedItems(without, s.model, s.step, s.newItems!, pose, bodyFor(s.plan0)));
+    // New pieces are re-added at the pose to the plan as it was before them (their step
+    // stays the current one). Taking plan0's submodels instead kept a second copy at the
+    // copied spot whenever the pieces went into a submodel: same id, inside the original.
+    st.gestureApply(() => addPosedItems(s.empty, s.model, s.step, s.newItems!, pose, bodyFor(s.plan0)));
   } else st.gestureApply(() => commitPose(s.plan0, s.model, s.ids, s.nodes0, pose, s.stepOf));
 }
 

@@ -29,6 +29,10 @@ function finishBall(id: string): CSSProperties {
 const ENV_SWATCH: Record<string, string> = {
   room: 'linear-gradient(180deg, #f4f4f6 0 45%, #c9c9cf 45% 100%)',
   studio: 'radial-gradient(ellipse 30% 25% at 30% 35%, #fff, transparent 70%), radial-gradient(ellipse 30% 25% at 72% 35%, #fff, transparent 70%), linear-gradient(180deg, #d8d8dc, #9d9da3)',
+  'white-studio-05': 'radial-gradient(ellipse 35% 28% at 45% 30%, #fff, transparent 70%), linear-gradient(180deg, #f2f2f4, #cfcfd4)',
+  'white-studio-03': 'radial-gradient(ellipse 30% 26% at 35% 32%, #fff, transparent 65%), radial-gradient(ellipse 30% 26% at 65% 32%, #fff, transparent 65%), linear-gradient(180deg, #ececef, #b9b9c0)',
+  'monochrome-studio-04': 'radial-gradient(ellipse 28% 24% at 30% 30%, #fff, transparent 60%), radial-gradient(ellipse 28% 24% at 70% 30%, #fff, transparent 60%), linear-gradient(180deg, #d6d6da, #9f9fa6)',
+  'studio-kontrast-04': 'linear-gradient(180deg, #e8e8ec 0 55%, #dcdce0 55%), radial-gradient(ellipse 45% 30% at 50% 20%, #fff, transparent 60%)',
   city: 'linear-gradient(180deg, #9fc4e8 0 40%, #8a8d93 40% 48%, #b9a98f 48% 60%, #6e7178 60% 100%)',
   sunset: 'radial-gradient(circle at 50% 58%, #ffe3a0 0 8%, transparent 20%), linear-gradient(180deg, #6f7fb5 0%, #f2a65e 55%, #3c3530 60%, #241f1c 100%)',
   night: 'radial-gradient(circle at 25% 30%, #fff 0 1%, transparent 2%), radial-gradient(circle at 70% 20%, #fff 0 1%, transparent 2%), radial-gradient(circle at 55% 45%, #ffd 0 1%, transparent 2%), linear-gradient(180deg, #0c1230 0 60%, #1b1b22 60% 100%)',
@@ -330,6 +334,10 @@ export function MaterialsPanel({ model }: { model?: ModelState }) {
           <input type="range" min={0} max={1} step={0.05} value={m.contactShadows} aria-label="Contact shadow" onChange={(e) => setMaterials({ contactShadows: Number(e.target.value) })} />
         </label>
         <span className="nx-hint">A soft, blurred shadow pooled right under the model, on top of the lights' own shadows, so it sits on the floor instead of floating.</span>
+        <label className="bm-mat-slider">Clear parts shadow <span>{m.clearShadow === 0 ? 'None' : `${Math.round(m.clearShadow * 100)}%`}</span>
+          <input type="range" min={0} max={1} step={0.02} value={m.clearShadow} aria-label="Clear parts shadow" onChange={(e) => setMaterials({ clearShadow: Number(e.target.value) })} />
+        </label>
+        <span className="nx-hint">How much of the contact shadow transparent parts (trans red, glass) get. Low keeps them light; 100% shades them like solid parts, which looks dark through the part.</span>
       </Section>
 
     </div>

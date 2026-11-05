@@ -5,7 +5,8 @@
  * {
  *   format: 'brickmotion-project', version: 1, savedAt,
  *   plan,                                   // the same plan as a .plan.json
- *   timelines: [{ model, opts, timeline }]  // model '' is the whole set; opts is the options key
+ *   timelines: [{ model, opts, timeline }], // model '' is the whole set; opts is the options key
+ *   settings: { video, exportCamera }       // the look and video settings (materials, camera framing, ...)
  * }
  * Each timeline's matrix table is stored as base64 (little-endian float64).
  */
@@ -13,11 +14,27 @@ import { parsePlan } from '../plan/schema';
 import type { Plan } from '../plan/types';
 import { PLANNER_VERSION } from '../anim/plannerVersion';
 import type { EncodedTimeline } from '../anim/timelineData';
+import { DEFAULT_SETTINGS, sanitizeSettings, type Settings } from '../storage/settings';
 
 export const PROJECT_EXTENSION = 'brickmotion';
 export type SavedTimeline = { model: string; opts: string; timeline: EncodedTimeline };
 type StoredTimeline = { model: string; opts: string; timeline: Omit<EncodedTimeline, 'mats'> & { mats: string } };
-type ProjectJson = { format: 'brickmotion-project'; version: 1; savedAt: string; plan: unknown; timelines: StoredTimeline[]; plannerVersion?: number };
+/**
+ * The look and video settings a project was made with: studio look, materials, camera
+ * framing and lens, floor, sound, output format, planner options, which camera the video
+ * uses. (Not the API key, logo file or editor preferences: those belong to the person.)
+ */
+export type ProjectSettings = { video: Settings['video']; exportCamera: Settings['exportCamera'] };
+type ProjectJson = { format: 'brickmotion-project'; version: 1; savedAt: string; plan: unknown; timelines: StoredTimeline[]; plannerVersion?: number; settings?: unknown };
+
+/** Settings of a project file, range-checked; null when the file has none. */
+function readSettings(raw: unknown): ProjectSettings | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const { video, exportCamera } = raw as Partial<ProjectSettings>;
+  if (!video || typeof video !== 'object') return null;
+  const clean = sanitizeSettings({ schemaVersion: DEFAULT_SETTINGS.schemaVersion, video, exportCamera });
+  return { video: clean.video, exportCamera: clean.exportCamera };
+}
 
 function toBase64(values: Float64Array): string {
   const bytes = new Uint8Array(values.buffer, values.byteOffset, values.byteLength);
@@ -34,7 +51,7 @@ function fromBase64(text: string): Float64Array {
   return new Float64Array(bytes.buffer);
 }
 
-export function projectToJson(plan: Plan, timelines: SavedTimeline[]): string {
+export function projectToJson(plan: Plan, timelines: SavedTimeline[], settings?: ProjectSettings): string {
   const file: ProjectJson = {
     format: 'brickmotion-project',
     version: 1,
@@ -42,6 +59,7 @@ export function projectToJson(plan: Plan, timelines: SavedTimeline[]): string {
     plan,
     timelines: timelines.map(({ model, opts, timeline }) => ({ model, opts, timeline: { ...timeline, mats: toBase64(timeline.mats) } })),
     plannerVersion: PLANNER_VERSION,
+    ...(settings ? { settings: { video: settings.video, exportCamera: settings.exportCamera } } : {}),
   };
   return JSON.stringify(file);
 }
@@ -49,7 +67,7 @@ export function projectToJson(plan: Plan, timelines: SavedTimeline[]): string {
 export const isProjectFile = (fileName: string) => fileName.toLowerCase().endsWith(`.${PROJECT_EXTENSION}`);
 
 /** Reads a project file. A damaged timeline is skipped (it is planned again); a damaged plan fails. */
-export function readProjectFile(text: string): { ok: true; plan: Plan; timelines: SavedTimeline[]; skipped: number; stale: number } | { ok: false; errors: string[] } {
+export function readProjectFile(text: string): { ok: true; plan: Plan; timelines: SavedTimeline[]; skipped: number; stale: number; settings: ProjectSettings | null } | { ok: false; errors: string[] } {
   let json: Partial<ProjectJson>;
   try {
     json = JSON.parse(text);
@@ -89,5 +107,5 @@ export function readProjectFile(text: string): { ok: true; plan: Plan; timelines
       skipped++;
     }
   }
-  return { ok: true, plan: parsed.plan, timelines, skipped, stale };
+  return { ok: true, plan: parsed.plan, timelines, skipped, stale, settings: readSettings(json.settings) };
 }

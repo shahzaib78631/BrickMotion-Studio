@@ -3,7 +3,7 @@ import type { StudConnector } from '../ldraw/connectors';
 import type { Instance, Metrics } from '../model/assemble';
 import type { Snap } from '../ldraw/shadow';
 import type { SnapPart } from './studSnap';
-import { allSockets, columnsOf, studsOf } from './sockets';
+import { allSockets, columnsOf, isHingePin, studsOf } from './sockets';
 
 /**
  * Which pieces a moved selection would sit inside. Points sampled through the moving parts'
@@ -131,7 +131,7 @@ const worldBores = (e: ArrayLike<number>, snaps?: readonly Snap[]): Bore[] => {
   const out: Bore[] = [];
   for (const s of snaps ?? []) {
     // a clip's opening is not modelled as a round section, but a bar goes in it all the same
-    const grip = s.kind === 'clp' && s.gender === 'F';
+    const grip = (s.kind === 'clp' || s.kind === 'fgr') && s.gender === 'F';
     if (!grip && (s.kind !== 'cyl' || s.gender !== 'F' || !s.shapes.some((x) => x === 'R'))) continue;
     if (s.length <= 0 || s.radius < 3 || s.radius > 8.6) continue;
     out.push({ base: apply(e, s.start), axis: unit(vector(e, s.axis)), radius: s.radius, length: s.length, grip });
@@ -145,6 +145,43 @@ const inBore = (b: Bore, p: P3) => {
   if (t < -0.5 || t > b.length + 0.5) return false;
   const radial = [d[0] - t * b.axis[0], d[1] - t * b.axis[1], d[2] - t * b.axis[2]];
   return radial[0] ** 2 + radial[1] ** 2 + radial[2] ** 2 < (b.radius - 0.5) ** 2;
+};
+
+/**
+ * A hinge axis two pieces share: a finger hinge's knuckles (3937 / 3938) or a hinge brick's
+ * pin in its hole (3830 / 3831). The two halves' knuckles interlock round the axis, so
+ * their solids fill each other's bounds there; that material is the joint, not an overlap.
+ */
+type Joint = { base: P3; axis: P3; radius: number; length: number; gender: 'M' | 'F'; kind: string };
+/** how far past the pin the knuckles reach */
+const KNUCKLE = 6;
+const worldJoints = (e: ArrayLike<number>, snaps?: readonly Snap[]): Joint[] =>
+  (snaps ?? []).filter((s) => s.length > 0 && (s.kind === 'fgr' || isHingePin(s)))
+    .map((s) => ({ base: apply(e, s.start), axis: unit(vector(e, s.axis)), radius: s.radius, length: s.length, gender: s.gender, kind: s.kind }));
+/** Zones round the hinge axes `a` and `b` have in common (each a joint seen from `a`). */
+function sharedJoints(a: readonly Joint[], b: readonly Joint[]): Joint[] {
+  const out: Joint[] = [];
+  for (const x of a) for (const y of b) {
+    if (x.gender === y.gender || x.kind !== y.kind || Math.abs(x.radius - y.radius) > 0.7) continue;
+    if (Math.abs(dot(x.axis, y.axis)) < 0.999) continue;
+    const d = [y.base[0] - x.base[0], y.base[1] - x.base[1], y.base[2] - x.base[2]];
+    const along = dot(d, x.axis);
+    if (Math.hypot(d[0] - along * x.axis[0], d[1] - along * x.axis[1], d[2] - along * x.axis[2]) > 1.5) continue;
+    // y's span along x's axis, and the union of the two
+    const y0 = along, y1 = along + y.length * dot(y.axis, x.axis);
+    const lo = Math.min(0, y0, y1), hi = Math.max(x.length, y0, y1);
+    if (Math.min(x.length, Math.max(y0, y1)) < Math.max(0, Math.min(y0, y1))) continue;
+    const base: P3 = [x.base[0] + lo * x.axis[0], x.base[1] + lo * x.axis[1], x.base[2] + lo * x.axis[2]];
+    out.push({ ...x, base, length: hi - lo });
+  }
+  return out;
+}
+/** Whether a shared-frame point is in a joint's knuckle zone. */
+const inJoint = (j: Joint, p: readonly number[]) => {
+  const d = [p[0] - j.base[0], p[1] - j.base[1], p[2] - j.base[2]];
+  const t = dot(d, j.axis);
+  if (t < -1 || t > j.length + 1) return false;
+  return Math.hypot(d[0] - t * j.axis[0], d[1] - t * j.axis[1], d[2] - t * j.axis[2]) < j.radius + KNUCKLE;
 };
 
 /** A socket in the shared frame: where a column's base meets it, the way it opens, and its bore. */
@@ -324,7 +361,7 @@ const CELL = 40;
 const cellKey = (x: number, y: number, z: number) => `${x},${y},${z}`;
 
 /** A fixed part plus the studs and sockets the verdict needs from it. */
-type Entry = Body & { part: Solid; studs: Stud[]; studBox: Box | null; sockets: Socket[]; bores: Bore[] };
+type Entry = Body & { part: Solid; studs: Stud[]; studBox: Box | null; sockets: Socket[]; bores: Bore[]; joints: Joint[] };
 
 /** A collision world over fixed solids, indexed once in a uniform grid (40 LDU cells). */
 export function collisionWorld(solids: readonly Solid[]): CollisionWorld {
@@ -336,6 +373,7 @@ export function collisionWorld(solids: readonly Solid[]): CollisionWorld {
       studs, studBox: studBox(studs),
       sockets: worldSockets(part.world, part),
       bores: worldBores(part.world, part.snaps),
+      joints: worldJoints(part.world, part.snaps),
     };
   });
   const grid = new Map<string, number[]>();
@@ -369,7 +407,7 @@ export function collisionWorld(solids: readonly Solid[]): CollisionWorld {
       const plain = isIdentity(T), shiftOnly = isShift(T);
       const place = (p: P3): P3 => shiftOnly ? [p[0] + T[12], p[1] + T[13], p[2] + T[14]] : apply(T, p);
       // the moving set at the pose the caller asks about
-      const posed: Body[] = [], studs: Stud[] = [], columns: Stud[] = [], sockets: Socket[] = [];
+      const posed: Body[] = [], studs: Stud[] = [], columns: Stud[] = [], sockets: Socket[] = [], joints: Joint[] = [];
       let movingBox: Box | null = null;
       for (const s of moving) {
         const world = plain ? s.world : compose(T, s.world);
@@ -378,7 +416,16 @@ export function collisionWorld(solids: readonly Solid[]): CollisionWorld {
         posed.push({ world, box, body: s.body, mesh: s.mesh! });
         studs.push(...worldStuds(world, localColumns(s)));
         sockets.push(...worldSockets(world, s));
+        joints.push(...worldJoints(world, s.snaps));
       }
+      /** the hinge axes the moving set shares with a fixed part (worked out once each) */
+      const hinged = new Map<Entry, Joint[]>();
+      const sharedWith = (e: Entry) => {
+        let hit = hinged.get(e);
+        if (!hit) hinged.set(e, (hit = joints.length && e.joints.length ? sharedJoints(e.joints, joints) : []));
+        return hit;
+      };
+      const inHinge = (e: Entry, p: readonly number[]) => sharedWith(e).some((j) => inJoint(j, p));
       const near = (p: P3, visit: (e: Entry) => void) => {
         const list = grid.get(cellKey(Math.floor(p[0] / CELL), Math.floor(p[1] / CELL), Math.floor(p[2] / CELL)));
         if (!list) return;
@@ -421,6 +468,8 @@ export function collisionWorld(solids: readonly Solid[]): CollisionWorld {
         near(p, (e) => {
           // a bore the selection is seated in is a hole in the part, not material
           if (openBores(e).some((b) => inBore(b, p))) return;
+          // knuckles interlocking round a hinge axis the two share
+          if (inHinge(e, p)) return;
           const taken = seatedStuds(e);
           const hit = taken.length
             ? insidePart(e, p, (q) => taken.some((st) => inStud(st, q)))
@@ -436,17 +485,22 @@ export function collisionWorld(solids: readonly Solid[]): CollisionWorld {
         const e = entries[i], free = freeOn()[i];
         if (!free.length || !e.studBox || !boxesTouch(e.studBox, movingBox, 1)) continue;
         for (const st of free) {
-          if (seatedIn(st, sockets)) continue;
+          if (seatedIn(st, sockets) || inHinge(e, st.base)) continue;
           if (posed.some((m) => studInBox(st, m.box))) { out.add(e.part.id); break; }
         }
       }
       // and the moving parts' studs into the fixed pieces, the other way round
-      const movingStudBox = withStuds ? studBox(studs) : null;
+      // A stud plugged into any fixed piece is taken: it cannot also poke the box of a piece
+      // it merely passes, such as plates stacked in the open corner of an L bracket.
+      const looseStuds = withStuds
+        ? studs.filter((st) => !atCells(st.base).some((j) => !mine.has(entries[j].part) && seatedIn(st, entries[j].sockets)))
+        : [];
+      const movingStudBox = studBox(looseStuds);
       if (movingStudBox) for (const i of nearby(movingStudBox)) {
         const e = entries[i];
         if (out.has(e.part.id)) continue;
-        for (const st of studs) {
-          if (seatedIn(st, e.sockets)) continue;
+        for (const st of looseStuds) {
+          if (inHinge(e, st.base)) continue;
           if (studInBox(st, e.box)) { out.add(e.part.id); break; }
         }
       }

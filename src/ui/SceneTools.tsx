@@ -11,6 +11,7 @@ import { useStudio } from '../state/store';
 import { Ic } from './icons';
 import { viewportApi } from './viewportApi';
 import { useSceneView } from './sceneViewState';
+import { ReferenceImagesSection } from './ReferenceImages';
 
 
 /** Camera and light outliner plus inspector. All edits use the project's normal
@@ -81,7 +82,7 @@ export function SceneTools() {
   };
   return <>
     <button className={`bm-scene-btn${v.panelOpen ? ' on' : ''}`} onClick={() => useSceneView.setState({ panelOpen: !v.panelOpen })}
-      title="Add and edit cameras and lights directly in the 3D viewport" aria-expanded={v.panelOpen} aria-controls="bm-scene-panel">
+      title="Add and edit cameras, lights and reference images directly in the 3D viewport" aria-expanded={v.panelOpen} aria-controls="bm-scene-panel">
       <Ic name="camera" /> Scene <Ic name="chevron" />
     </button>
     {v.panelOpen && <div id="bm-scene-panel" className="bm-scene-panel" role="region" aria-label="Cameras and lighting">
@@ -95,6 +96,7 @@ export function SceneTools() {
             <button onClick={() => addLight('ambient')}>☼ Ambient</button>
           </div>
         </div>
+        <ReferenceImagesSection />
         <div className="bm-scene-section"><label>Photo scene + editable lighting</label>
           <div className="bm-photo-rigs">
             {PHOTO_RIGS.map((rig) => <button key={rig.id} className="bm-photo-rig" onClick={() => applyPhotoRig(rig.id)} title={rig.hint}>

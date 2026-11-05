@@ -19,6 +19,19 @@ const same = (left: THREE.Matrix4, right: THREE.Matrix4, digits = 6) =>
   left.elements.forEach((v, i) => expect(v, `matrix element ${i}`).toBeCloseTo(right.elements[i], digits));
 
 describe('Standard Motion v3 — real joint-space kinematics', () => {
+  it('turns a stud-socket part on the vertical lift, not while it crosses the model', () => {
+    const dest = new THREE.Matrix4().makeRotationY(Math.PI / 2).setPosition(40, 0, 0);
+    const base = move(dest);
+    for (const sign of mechanicalApproaches(base, joint('stud-socket', 'fixed'), 'moving')) {
+      const [start, lift, cruise] = sign.poses;
+      // straight up from the floor spot, already in the final orientation
+      expect(lift.elements[12]).toBeCloseTo(start.elements[12]);
+      expect(lift.elements[14]).toBeCloseTo(start.elements[14]);
+      for (const i of [0, 1, 2, 4, 5, 6, 8, 9, 10]) expect(lift.elements[i]).toBeCloseTo(dest.elements[i]);
+      // the sky leg is a pure translation
+      for (const i of [0, 1, 2, 4, 5, 6, 8, 9, 10]) expect(cruise.elements[i]).toBeCloseTo(lift.elements[i]);
+    }
+  });
   it('keeps a hinge anchor stationary between EVERY keyframe, not just at waypoints', () => {
     const dest = at(180);
     const base = move(dest);

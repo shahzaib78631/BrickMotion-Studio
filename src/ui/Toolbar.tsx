@@ -114,6 +114,7 @@ type Props = {
 export function Toolbar({ theme, onTheme, onProjects, onTemplates, onAbout, onExportVideo, canPreview, onNavigate }: Props) {
   const plan = useStudio((s) => s.plan);
   const mode = useStudio((s) => s.mode);
+  const workspace = useStudio((s) => s.workspace);
   const canUndo = useStudio((s) => s.past.length > 0);
   const canRedo = useStudio((s) => s.future.length > 0);
   const status = useSaveStatus((s) => s.status);
@@ -179,8 +180,11 @@ export function Toolbar({ theme, onTheme, onProjects, onTemplates, onAbout, onEx
     const plan = ensureIds(r.plan);
     // Use the video settings the animations were planned with, or they would not match and be planned again.
     const main = r.timelines.find((t) => t.model === '') ?? r.timelines[0];
+    // A file that carries its settings restores the whole look (materials, camera framing, floor,
+    // sound, format, planner); an older one only has the planning options in its timeline key.
     const saved = main ? settingsFromOptsKey(main.opts) : null;
-    if (saved) useAppSettings.getState().set(saved);
+    if (r.settings) useAppSettings.getState().set({ ...r.settings.video, exportCamera: r.settings.exportCamera, frameStagingPending: false, frameStagingPrevious: null });
+    else if (saved) useAppSettings.getState().set(saved);
     const current = optsKey(animOptions(useAppSettings.getState(), plan.sceneSetup));
     // Store the planned timelines first, so the preview finds them instead of planning again.
     // A file saved by an older version keys its settings differently; also file it under today's key.
@@ -349,14 +353,23 @@ export function Toolbar({ theme, onTheme, onProjects, onTemplates, onAbout, onEx
           <button className="nx-icon" disabled={!canUndo} onClick={st.undo} title="Undo (⌘Z)" aria-label="Undo"><Ic name="undo" /></button>
           <button className="nx-icon" disabled={!canRedo} onClick={st.redo} title="Redo (⇧⌘Z)" aria-label="Redo"><Ic name="redo" /></button>
           <span className="bm-head-divider" />
-          <button className="nx-btn bm-preview-button" disabled={!canPreview}
+          <div className="bm-workspace-switch" role="tablist" aria-label="Mode">
+            <button role="tab" aria-selected={workspace === 'build'} className={workspace === 'build' ? 'active' : ''}
+              title="Build the model: no timeline, and moving parts never re-plans the animation"
+              onClick={() => st.setWorkspace('build')}><Ic name="brick" /> Build</button>
+            <button role="tab" aria-selected={workspace === 'animate'} className={workspace === 'animate' ? 'active' : ''}
+              title="Animate: plan the build animation, edit the timeline, preview and export video"
+              onClick={() => st.setWorkspace('animate')}><Ic name="video" /> Animate</button>
+          </div>
+          {workspace === 'animate' && <button className="nx-btn bm-preview-button" disabled={!canPreview}
             onClick={() => st.setMode(mode === 'edit' ? 'preview' : 'edit')}>
             <Ic name={mode === 'edit' ? 'play' : 'edit'} />{mode === 'edit' ? 'Preview' : 'Back to editor'} <Ic name="right" />
-          </button>
+          </button>}
           <DropMenu className="nx-btn nx-primary bm-export-button" label="Export" align="right"
             trigger={<><Ic name="download" /> Export <Ic name="chevron" /></>}
             items={[
-              { icon: 'video', label: 'Export video (MP4)…', disabled: pieces === 0, onClick: onExportVideo },
+              { icon: 'video', label: workspace === 'animate' ? 'Export video (MP4)…' : 'Export video (MP4)… — switches to Animate', disabled: pieces === 0,
+                onClick: () => { if (workspace !== 'animate') st.setWorkspace('animate'); onExportVideo(); } },
               'sep',
               { icon: 'download', label: `Project with animation (.${PROJECT_EXTENSION})`, disabled: pieces === 0 || !!savingProject, onClick: () => void downloadProject() },
               { icon: 'file', label: 'Plan (.json)', onClick: downloadPlan },

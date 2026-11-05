@@ -12,7 +12,7 @@ type RigSource = {
   color: string;
   shadow?: boolean;
 };
-export type PhotoRigId = 'softbox' | 'slate' | 'catalog' | 'dramatic';
+export type PhotoRigId = 'softbox' | 'slate' | 'catalog' | 'dramatic' | 'building' | 'mechanic';
 export type PhotoRig = { id: PhotoRigId; label: string; hint: string; look: StudioLook; lamps: readonly RigSource[] };
 export const PHOTO_RIGS: readonly PhotoRig[] = [
   { id: 'softbox', label: 'Grey softbox', hint: 'Balanced key, neutral bounce and clean tabletop shadows', look: 'photo-grey', lamps: [
@@ -38,6 +38,18 @@ export const PHOTO_RIGS: readonly PhotoRig[] = [
     { name: 'Dim fill', type: 'sun', direction: [1.1, 1.1, 0], intensity: 0.22, color: '#d0e4ff' },
     { name: 'Cool rim', type: 'sun', direction: [0.7, 1.1, -1.2], intensity: 1.05, color: '#b7d6ff' },
     { name: 'Ambient bounce', type: 'ambient', direction: [0, 1, 0], intensity: 0.14, color: '#cedcef' },
+  ] },
+  { id: 'building', label: 'Building · four softboxes', hint: 'Evenly-spaced four-light photo studio, like BrickLink Studio\'s Building preset', look: 'catalog-cream', lamps: [
+    { name: 'Softbox key', type: 'sun', direction: [-0.9, 1.8, 0.7], intensity: 2.3, color: '#fff8ec', shadow: true },
+    { name: 'Right softbox', type: 'sun', direction: [0.9, 1.8, 0.7], intensity: 1.7, color: '#ffffff' },
+    { name: 'Rear softbox', type: 'sun', direction: [-0.9, 1.8, -0.7], intensity: 1.4, color: '#e8efff' },
+    { name: 'Ambient bounce', type: 'ambient', direction: [0, 1, 0], intensity: 0.3, color: '#ffffff' },
+  ] },
+  { id: 'mechanic', label: 'Mechanic · subdued', hint: 'Soft three-light key, fill and rim, like BrickLink Studio\'s Mechanic preset', look: 'porcelain', lamps: [
+    { name: 'Subdued key', type: 'sun', direction: [-0.7, 1.9, 0.8], intensity: 1.6, color: '#fff6ea', shadow: true },
+    { name: 'Soft fill', type: 'sun', direction: [1.1, 1.5, -0.4], intensity: 0.7, color: '#eef3ff' },
+    { name: 'Soft rim', type: 'sun', direction: [0.6, 1.3, -1.2], intensity: 0.5, color: '#ffffff' },
+    { name: 'Ambient bounce', type: 'ambient', direction: [0, 1, 0], intensity: 0.4, color: '#ffffff' },
   ] },
 ];
 

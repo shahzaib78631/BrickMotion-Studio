@@ -525,7 +525,7 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
                           onClick={() => editStep(s)}
                           onContextMenu={(e) => {
                             e.preventDefault();
-                            setMenu({ x: e.clientX, y: e.clientY, label: `Step ${s.index + 1} menu`, items: stepClipMenu(s.index, openMotion(e.clientX, e.clientY)) });
+                            setMenu({ x: e.clientX, y: e.clientY, label: `Step ${s.index + 1} menu`, items: stepClipMenu(s.index, openMotion(e.clientX, e.clientY), tl?.steps) });
                           }}
                         >
                           <span className="lbl">{label}</span>

@@ -4,6 +4,8 @@ import { afterEach, beforeEach, expect, test } from 'vitest';
 import type { Plan } from '../../src/plan/types';
 import { useStudio } from '../../src/state/store';
 import { StepsPanel } from '../../src/ui/StepsPanel';
+import { usePlayback } from '../../src/state/playback';
+import { modelSteps } from '../../src/plan/ops';
 
 const piece = (id: string) => ({ id, part: '3001', color: 4, x: 0, y: 0, z: 0, rot: 0 as const });
 const plan: Plan = {
@@ -21,6 +23,31 @@ test('renders one chip per step plus All', () => {
   render(<StepsPanel />);
   expect(screen.getAllByRole('button', { name: /^Step \d+/ })).toHaveLength(3);
   expect(screen.getByRole('button', { name: 'All' })).toBeTruthy();
+});
+
+test('the step menu moves a whole step before another step, pieces untouched', () => {
+  render(<StepsPanel />);
+  fireEvent.contextMenu(screen.getByRole('button', { name: /^Step 3/ }));
+  fireEvent.click(screen.getByRole('menuitem', { name: /Move this step before/ }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Step 1' }));
+  const steps = modelSteps(useStudio.getState().plan, '');
+  expect(steps.map((s) => s.pieces.map((p) => p.id ?? (p as { submodel?: string }).submodel).join(',')))
+    .toEqual(['s', 'a', 'b,c']);
+});
+
+test('the step menu moves a step to the playhead', () => {
+  const timeline = { steps: [
+    { model: '', index: 0, start: 0, end: 1 },
+    { model: '', index: 1, start: 1, end: 2 },
+    { model: '', index: 2, start: 2, end: 3 },
+  ] } as never;
+  usePlayback.getState().set({ t: 2.5, playing: false });
+  render(<StepsPanel timeline={timeline} />);
+  fireEvent.contextMenu(screen.getByRole('button', { name: /^Step 1/ }));
+  fireEvent.click(screen.getByRole('menuitem', { name: /Move before step 3 \(the playhead\)/ }));
+  const steps = modelSteps(useStudio.getState().plan, '');
+  expect(steps.map((s) => s.pieces.map((p) => p.id ?? (p as { submodel?: string }).submodel).join(',')))
+    .toEqual(['b,c', 'a', 's']);
 });
 
 test('clicking a chip shows the model up to that step', () => {

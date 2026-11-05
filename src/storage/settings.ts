@@ -12,6 +12,8 @@ import { isVideoFormat, type VideoFormat } from '../export/formats';
 import { isTransitionSettings, type TransitionPreset } from '../anim/cameraTrack/presets';
 
 export type Settings = {
+  /** Bumped when stored settings need a one-time upgrade on load. */
+  schemaVersion: number;
   apiKey: string;
   model: string;
   logo: Blob | null;
@@ -45,6 +47,7 @@ export type VideoEngine = 'live' | 'path';
 export const PATH_SAMPLE_OPTIONS = [32, 64, 128, 256] as const;
 
 export const DEFAULT_SETTINGS: Settings = {
+  schemaVersion: 2,
   apiKey: '',
   model: 'claude-opus-5-5',
   logo: null,
@@ -60,7 +63,7 @@ export const DEFAULT_SETTINGS: Settings = {
   cameraFollowsPlayback: true,
   cameraPresets: [],
   autoFitStaging: false,
-  video: { targetSeconds: 15, heroOrbit: true, mode: 'auto', fps: 30, introSeconds: null, buildSeconds: null, outroSeconds: null, studioLook: 'soft', cameraFraming: 'cinematic', camera: DEFAULT_CAMERA_SETTINGS, format: '9:16', edgeLines: true, linearColors: true, bottomUp: true, snapSound: true, planner: 'legacy', constructionSupport: 'fixture', constructionBudget: 'standard', constructionStepModules: false, motionV4Limits: [], motionV4Mechanism: null, floorSort: 'step', floorSides: 'front-back', floorStyle: 'packed', floorMatch: 'fill', materials: DEFAULT_MATERIALS, sound: DEFAULT_SOUND, videoEngine: 'live', pathSamples: 64 },
+  video: { targetSeconds: 15, heroOrbit: true, mode: 'auto', fps: 30, introSeconds: null, buildSeconds: null, outroSeconds: null, studioLook: 'catalog-cream', cameraFraming: 'cinematic', camera: DEFAULT_CAMERA_SETTINGS, format: '9:16', edgeLines: false, linearColors: true, bottomUp: true, snapSound: true, planner: 'legacy', constructionSupport: 'fixture', constructionBudget: 'standard', constructionStepModules: false, motionV4Limits: [], motionV4Mechanism: null, floorSort: 'step', floorSides: 'front-back', floorStyle: 'packed', floorMatch: 'fill', materials: DEFAULT_MATERIALS, sound: DEFAULT_SOUND, videoEngine: 'live', pathSamples: 64 },
 };
 
 const KEY = 'settings';
@@ -73,6 +76,18 @@ export async function loadSettings(): Promise<Settings> {
 export function sanitizeSettings(stored: Partial<Settings>): Settings {
   const s = { ...stored };
   const video = { ...DEFAULT_SETTINGS.video, ...(s.video ?? {}) };
+  // v1 shipped with the grey Soft studio, studio-plastic finish and the grey room
+  // environment. v2 upgrades exactly that untouched default to the BrickLink-style
+  // catalog look; any saved customisation is preserved.
+  const version = s.schemaVersion;
+  const legacyDefault = version === undefined || !Number.isFinite(version) || version < 2
+    ? video.studioLook === 'soft'
+    : false;
+  if (legacyDefault) {
+    video.studioLook = 'catalog-cream';
+    video.edgeLines = false;
+    video.materials = { ...video.materials, finish: 'catalog', environment: 'studio' };
+  }
   if (!isExportFps(video.fps)) video.fps = DEFAULT_SETTINGS.video.fps;
   if (!isStudioLook(video.studioLook)) video.studioLook = 'soft';
   video.materials = sanitizeMaterials(video.materials);

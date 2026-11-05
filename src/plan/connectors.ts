@@ -6,6 +6,7 @@ import type { Snap } from '../ldraw/shadow';
 import { assemble, type Metrics } from '../model/assemble';
 import { modelSteps } from './ops';
 import { socketsOf } from './studSnap';
+import { isHingePin } from './sockets';
 import type { Plan, Step } from './types';
 
 /**
@@ -14,7 +15,7 @@ import type { Plan, Step } from './types';
  * down (+Y). A male and a female mate when their `pos` coincide, their axes are opposite
  * and they are of the same `type`, so a stud never seats in a Technic hole.
  */
-export type ConnectorType = 'stud' | 'pin' | 'bar';
+export type ConnectorType = 'stud' | 'pin' | 'bar' | 'hinge';
 export type Connector = {
   pos: Vec3;
   axis: Vec3;
@@ -22,6 +23,10 @@ export type Connector = {
   type: ConnectorType;
   /** a clip or a friction grip: the interface that says one part is *held* by the other */
   grip?: boolean;
+  /** a finger hinge's knuckle run: both ends of one run share this key */
+  joint?: string;
+  /** the far end of a finger hinge's run: a seat there turns the other half round */
+  flip?: boolean;
 };
 
 /**
@@ -46,9 +51,14 @@ export const isStudSnap = (s: Snap) => s.kind === 'cyl' && s.length > 0 && (s.ge
  */
 const snapFamily = (s: Snap): ConnectorType | null => {
   if (s.length <= 0 || !s.shapes.length) return null;
+  // a hinge brick's pin and knuckle hole (3830 / 3831): wider than a stud and long. Checked
+  // before the stud rule, which would take the hole for an anti-stud
+  if (isHingePin(s)) return 'hinge';
   if (isStudSnap(s)) return 'stud';
   if (s.kind === 'clp') return s.gender === 'F' ? 'bar' : null;
-  if (s.kind === 'fgr') return s.gender === 'M' ? 'bar' : null;
+  // a finger hinge (3937 / 3938, 4275 / 4276) is a friction grip with both halves described:
+  // the knuckles of one take the other's
+  if (s.kind === 'fgr') return 'bar';
   if (s.kind !== 'cyl') return null;
   // a pin's friction ridges are extra sections (`L_`, `_L`); its shaft is the round one,
   // and that is the part the 8 LDU hole takes
@@ -94,12 +104,15 @@ export function partConnectors(m: PartMetrics): Connector[] {
     if (!type) continue;
     const a = unit(s.axis);
     const grip = s.kind === 'clp' || s.kind === 'fgr';
-    add({ pos: [...s.start] as Vec3, axis: s.gender === 'M' ? a : [-a[0] || 0, -a[1] || 0, -a[2] || 0], gender: s.gender, type, ...(grip ? { grip } : {}) });
-    // the library describes a bore from one end; a through hole takes the column from either
+    const joint = s.kind === 'fgr' ? `fgr:${s.start.map((v) => v.toFixed(2))}:${a.map((v) => v.toFixed(3))}` : undefined;
+    add({ pos: [...s.start] as Vec3, axis: s.gender === 'M' ? a : [-a[0] || 0, -a[1] || 0, -a[2] || 0], gender: s.gender, type, ...(grip ? { grip } : {}), ...(joint ? { joint } : {}) });
+    // the library describes a bore from one end; a through hole takes the column from either.
+    // A finger hinge's far end turns the other half round: the engine only takes it when the
+    // same-way seat on that hinge is blocked (see `flip`).
     if (s.gender === 'F' && type !== 'stud' && throughBore(m.body, a, s.length)) {
       add({
         pos: [s.start[0] + a[0] * s.length, s.start[1] + a[1] * s.length, s.start[2] + a[2] * s.length],
-        axis: a, gender: 'F', type,
+        axis: a, gender: 'F', type, ...(joint ? { joint, flip: true, grip } : {}),
       });
     }
   }

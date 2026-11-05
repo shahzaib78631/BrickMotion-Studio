@@ -68,6 +68,73 @@ describe('placing session', () => {
     expect(useStudio.getState().selection.ids).toEqual(ids);
   });
 
+  it.skipIf(!ready)('keeps pasted pieces out of the plan until they have a pose', () => {
+    load([[piece('orig', '3024', 0, 0)]]);
+    const before = useStudio.getState().plan;
+    // a paste starts with the copy at the spot it was copied from: right inside the original
+    beginPlacing({ kind: 'new', model: '', items: [piece('', '3024', 0, 0)] });
+    expect(useStudio.getState().plan).toBe(before);
+    updatePlacing(aimDown([50, -8, 50]));
+    expect(useStudio.getState().plan.steps[0].pieces).toHaveLength(2);
+    cancelPlacing();
+  });
+
+  it.skipIf(!ready)('pastes into a submodel once, at the pose only', () => {
+    const s = useStudio.getState();
+    s.setPlan({ name: 't', steps: [{ pieces: [{ id: 'u', submodel: 'leg', x: 0, y: 0, z: 0, rot: 0 }] }],
+      submodels: { leg: { steps: [{ pieces: [piece('plate', '3020', 0, 0)] }] } } } as unknown as Plan, { resetHistory: true });
+    s.setCurrentStep(null);
+    beginPlacing({ kind: 'new', model: 'leg', items: [piece('', '3024', 0, 0)] });
+    // nothing in the submodel until the mouse gives the piece a pose
+    expect(useStudio.getState().plan.submodels!.leg.steps[0].pieces).toHaveLength(1);
+    updatePlacing(aimDown([30, -8, 30]));
+    updatePlacing(aimDown([50, -8, 30]));
+    const ids = commitPlacing()!;
+    const pieces = useStudio.getState().plan.submodels!.leg.steps.flatMap((st) => st.pieces);
+    // one copy, not a second one left at the spot it was copied from
+    expect(pieces.filter((i) => i.id === ids[0])).toHaveLength(1);
+    expect(pieces).toHaveLength(2);
+  });
+
+  it.skipIf(!ready)('seats a hinge top on its hinge base', async () => {
+    await useAppParts(['3937', '3938', '3830', '3831']);
+    for (const [b, t] of [['3937', '3938'], ['3830', '3831']]) {
+      useStudio.getState().setPlan({ name: 't', steps: [{ pieces: [{ id: 'base', part: b, color: 4, ldu: [0, -8, 0], matrix: [1, 0, 0, 0, 1, 0, 0, 0, 1] }] }] } as unknown as Plan, { resetHistory: true });
+      beginPlacing({ kind: 'new', model: '', items: [piece('', t, 0, 0)] });
+      // the cursor on the knuckles' surface; the axis sits deeper inside them
+      const pose = updatePlacing(aimDown([0, -6, 0]));
+      expect(pose?.valid, t).toBe(true);
+      expect(pose?.mated, t).toBe(1);
+      const ids = commitPlacing()!;
+      // the two halves of a hinge share an origin when joined
+      expect(findItem(useStudio.getState().plan, '', ids[0])!.item, t).toMatchObject({ ldu: [0, -8, 0] });
+    }
+  });
+
+  it.skipIf(!ready)('seats a hinge top the way round it is made to go, from either end', async () => {
+    await useAppParts(['3937', '3938', '4275', '4276']);
+    const hingeOn = (base: string, top: string, at: Vec3) => {
+      useStudio.getState().setPlan({ name: 't', steps: [{ pieces: [{ id: 'base', part: base, color: 4, ldu: [0, -24, 0], matrix: [1, 0, 0, 0, 1, 0, 0, 0, 1] }] }] } as unknown as Plan, { resetHistory: true });
+      beginPlacing({ kind: 'new', model: '', items: [piece('', top, 0, 0)] });
+      const pose = updatePlacing(aimDown(at));
+      cancelPlacing();
+      return pose!;
+    };
+    // the knuckles of 3937 / 3938 fit either way round, but the top goes on facing one way:
+    // pointing near the far end of the run must not turn it round
+    for (const x of [-15, 15, 45]) {
+      const pose = hingeOn('3937', '3938', [x, -20, 0]);
+      expect(pose.valid, `x ${x}`).toBe(true);
+      expect(pose.mated, `x ${x}`).toBe(1);
+      expect([pose.delta[0], pose.delta[10]], `x ${x}`).toEqual([1, 1]);
+    }
+    // 4276 has to turn round: the same-way seat would put its plate inside 4275's
+    const turned = hingeOn('4275', '4276', [45, -20, 0]);
+    expect(turned.valid).toBe(true);
+    expect(turned.mated).toBe(1);
+    expect([turned.delta[0], turned.delta[10]]).toEqual([-1, -1]);
+  });
+
   it.skipIf(!ready)('cancelling a new part leaves the plan untouched', () => {
     load([[piece('plate', '3020', 0, 0)]]);
     const before = useStudio.getState().plan;

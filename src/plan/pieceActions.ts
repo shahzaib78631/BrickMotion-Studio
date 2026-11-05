@@ -117,13 +117,43 @@ export function shiftOnFloor(p: Plan, m: ModelName, path: string, d: [number, nu
   return model === '' ? { ...p, steps } : { ...p, submodels: { ...p.submodels, [model]: { ...p.submodels![model], steps } } };
 }
 
-/** Puts every piece of a model (and its submodels) back where the automatic floor layout puts it. */
-export function resetFloorShifts(p: Plan): Plan {
-  const clear = (steps: Step[]) => steps.map((s) => (!s.pieces.some((i) => i.assembly?.floorShift) ? s : {
+/**
+ * Turns a waiting piece about the vertical axis by `deg` more degrees (the turn adds to
+ * any earlier one and wraps at 360; a full turn back removes it). Stored like `shiftOnFloor`.
+ */
+export function turnOnFloor(p: Plan, m: ModelName, path: string, deg: number): Plan | null {
+  const segs = path.split('/');
+  let model = m;
+  for (const seg of segs.slice(0, -1)) {
+    const found = findItem(p, model, seg);
+    if (!found || !isSub(found.item)) return null;
+    model = found.item.submodel;
+  }
+  const id = segs[segs.length - 1];
+  if (!findItem(p, model, id) || !Number.isFinite(deg)) return null;
+  const steps = modelSteps(p, model).map((s) => (!s.pieces.some((i) => i.id === id) ? s : {
     ...s,
     pieces: s.pieces.map((i) => {
-      if (!i.assembly?.floorShift) return i;
-      const { floorShift: _, ...rest } = i.assembly;
+      if (i.id !== id) return i;
+      const next = ((((i.assembly?.floorTurn ?? 0) + deg) % 360) + 360) % 360;
+      const { floorTurn: _, ...rest } = i.assembly ?? {};
+      const assembly = next > 1e-6 && 360 - next > 1e-6 ? { ...rest, floorTurn: Math.round(next * 1000) / 1000 } : rest;
+      const out = { ...i, assembly } as PlanItem;
+      if (!Object.keys(assembly).length) delete out.assembly;
+      return out;
+    }),
+  }));
+  return model === '' ? { ...p, steps } : { ...p, submodels: { ...p.submodels, [model]: { ...p.submodels![model], steps } } };
+}
+
+/** Puts every piece of a model (and its submodels) back where the automatic floor layout puts it. */
+export function resetFloorShifts(p: Plan): Plan {
+  const moved = (i: PlanItem) => !!(i.assembly?.floorShift || i.assembly?.floorTurn);
+  const clear = (steps: Step[]) => steps.map((s) => (!s.pieces.some(moved) ? s : {
+    ...s,
+    pieces: s.pieces.map((i) => {
+      if (!moved(i)) return i;
+      const { floorShift: _, floorTurn: _t, ...rest } = i.assembly!;
       const out = { ...i, assembly: rest } as PlanItem;
       if (!Object.keys(rest).length) delete out.assembly;
       return out;
@@ -142,6 +172,22 @@ export function floorShiftsByKey(p: Plan, m: ModelName): Map<string, [number, nu
         if (!i.id) continue;
         if (isSub(i)) walk(i.submodel, `${prefix}${i.id}/`, depth + 1);
         else if (i.assembly?.floorShift) out.set(prefix + i.id, i.assembly.floorShift);
+      }
+  };
+  walk(m, '', 0);
+  return out;
+}
+
+/** Every turned waiting piece in a model and the submodels it uses, by piece key ("sub/piece"), in degrees. */
+export function floorTurnsByKey(p: Plan, m: ModelName): Map<string, number> {
+  const out = new Map<string, number>();
+  const walk = (model: string, prefix: string, depth: number) => {
+    if (depth > 16) return;
+    for (const s of modelSteps(p, model))
+      for (const i of s.pieces) {
+        if (!i.id) continue;
+        if (isSub(i)) walk(i.submodel, `${prefix}${i.id}/`, depth + 1);
+        else if (i.assembly?.floorTurn) out.set(prefix + i.id, i.assembly.floorTurn);
       }
   };
   walk(m, '', 0);

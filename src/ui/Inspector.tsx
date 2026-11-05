@@ -7,7 +7,7 @@ import { nextGroupName, setGroup, ungroupSelection } from '../plan/groups';
 import { isGrid, isSub } from '../plan/types';
 import { DEFAULT_COLOR } from '../model/assemble';
 import { runCommand } from '../state/editing';
-import { fitSelected } from '../state/fit';
+import { fitOptionsForSelection, fitSelected } from '../state/fit';
 import { ensureParts, getCatalog, getColors, partName } from '../state/partService';
 import type { ModelState } from '../state/useModel';
 import { useStudio } from '../state/store';
@@ -77,6 +77,12 @@ export function Inspector({ timeline, checks, stepCard, model, onMakeSubmodel }:
   const st = useStudio.getState();
   const ids = selection.model === editingModel ? selection.ids : [];
   useEffect(() => { if (ids.length) setTab((t) => (t === 'camera' ? 'selection' : t)); }, [ids.length]);
+  /** Every way the selected pieces fit together, recomputed when the plan or selection changes. */
+  const fitWays = useMemo(
+    () => (selection.model === editingModel && selection.ids.length >= 2 ? fitOptionsForSelection() : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [plan, selection, editingModel],
+  );
   const found = ids.map((id) => findItem(plan, editingModel, id))
     .filter((v): v is NonNullable<typeof v> => v !== null);
   const first = found[0]?.item;
@@ -194,6 +200,18 @@ export function Inspector({ timeline, checks, stepCard, model, onMakeSubmodel }:
               </div>
             </div>
           </section>
+          {fitWays && <section className="bm-inspector-section" aria-label="Ways to fit">
+            <h4>Ways to fit {fitWays.ok && <small>({fitWays.options.length})</small>}</h4>
+            {fitWays.ok ? <ul className="bm-fit-ways" role="listbox" aria-label="Ways these pieces fit together">
+              {fitWays.options.map((way, i) => <li key={`${way.title}|${i}`}>
+                <button role="option" aria-selected={way.current} className={way.current ? 'active' : ''} title={way.detail}
+                  onClick={() => fitSelected(i)}>
+                  <strong>{way.title}</strong>
+                  <span>{way.detail}</span>
+                </button>
+              </li>)}
+            </ul> : <p className="bm-fit-none">{fitWays.why}</p>}
+          </section>}
           <section className="bm-inspector-section">
             <h4>Marks (Tags) <button className="bm-section-plus" title="Add a mark to selected parts" aria-label="Add a mark" onClick={() => setTagOpen((x) => !x)}><Ic name="plus" /></button></h4>
             <div className="bm-tags">

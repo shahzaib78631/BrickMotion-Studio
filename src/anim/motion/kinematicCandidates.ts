@@ -26,6 +26,13 @@ const shifted = (pose: THREE.Matrix4, offset: THREE.Vector3) =>
   new THREE.Matrix4().makeTranslation(offset.x, offset.y, offset.z).multiply(pose);
 const elevated = (pose: THREE.Matrix4, sky: number) =>
   shifted(pose, new THREE.Vector3(0, sky - pose.elements[13], 0));
+/** Straight up from `start`, already turned to `dest`'s orientation: the part spins on the
+ * lift, above where it lay, instead of tumbling while it crosses the model. */
+const liftedTurned = (start: THREE.Matrix4, dest: THREE.Matrix4, sky: number) => {
+  const m = dest.clone();
+  m.setPosition(start.elements[12], sky, start.elements[14]);
+  return m;
+};
 const swung = (pose: THREE.Matrix4, joint: MechanicalJoint, angle: number, axis?: THREE.Vector3) => {
   const pivot = new THREE.Vector3(...joint.centre);
   const turn = axis ?? new THREE.Vector3(...joint.axis).normalize();
@@ -88,7 +95,7 @@ export function mechanicalApproaches(move: Move, joint: MechanicalJoint, movingK
       { index: 4, kind: 'prismatic', axis: [...joint.axis] as [number, number, number], travel: -depth * sign * .35 },
     ];
     return { motion: joint.type, host, preference: -1.2, kinematicSegments, poses: [
-      start.clone(), elevated(start, sky), elevated(prep, sky), prep, middle, dest.clone(),
+      start.clone(), liftedTurned(start, dest, sky), elevated(prep, sky), prep, middle, dest.clone(),
     ] };
   });
 }
@@ -102,7 +109,7 @@ export function clearanceApproaches(move: Move, extent: number): MotionCandidate
   return [[distance, 0, 0], [-distance, 0, 0], [0, 0, distance], [0, 0, -distance]].map(([x, y, z]): MotionCandidate => {
     const near = shifted(move.to, new THREE.Vector3(x, y, z));
     return { motion: 'clearance-route', preference: 0.5, poses: [
-      move.from.clone(), elevated(move.from, sky), elevated(near, sky), near, move.to.clone(),
+      move.from.clone(), liftedTurned(move.from, move.to, sky), elevated(near, sky), near, move.to.clone(),
     ] };
   });
 }
@@ -137,7 +144,7 @@ export function connectionApproaches(move: Move, movingBox: {min: number[]; max:
     const offset = outward.clone().multiplyScalar(sign * distance);
     const prep = shifted(dest, offset);
     return { motion: 'clearance-route', preference: sign > 0 ? -0.8 : 0.8,
-      poses: [start.clone(), elevated(start, sky), elevated(prep, sky), prep,
+      poses: [start.clone(), liftedTurned(start, dest, sky), elevated(prep, sky), prep,
         shifted(dest, offset.clone().multiplyScalar(0.67)),
         shifted(dest, offset.clone().multiplyScalar(0.25)), dest.clone()] };
   });

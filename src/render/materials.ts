@@ -8,7 +8,7 @@ const FALLBACK: ColorDef = { code: 71, name: 'Light_Bluish_Gray', hex: '#A0A5A9'
 
 /** The finish and texture every brick uses. Materials are cached and shared by every
  * studio on the page (viewport, export), so a change re-styles them in place. */
-let profile: { finish: BrickFinish; texture: BrickTexture; glow: GlowChoice } = { finish: 'studio', texture: 'none', glow: { colors: [], strength: 1.5 } };
+let profile: { finish: BrickFinish; texture: BrickTexture; glow: GlowChoice } = { finish: 'catalog', texture: 'none', glow: { colors: [], strength: 1.5 } };
 /** Viewport emissive intensity per unit of glow strength (the path tracer uses its own). */
 export const GLOW_GAIN = 0.7;
 const TEXTURE_ID: Record<BrickTexture, number> = { none: 0, grain: 1, worn: 2, speckle: 3, glitter: 4 };

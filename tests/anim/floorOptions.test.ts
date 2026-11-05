@@ -3,10 +3,10 @@ import { beforeAll, expect, test } from 'vitest';
 import { assemble, transformBox, type Metrics } from '../../src/model/assemble';
 import { ensureIds } from '../../src/plan/ids';
 import type { Plan, PlanItem } from '../../src/plan/types';
-import { applyFloorShifts, buildTimeline } from '../../src/anim/timeline';
+import { applyFloorShifts, applyFloorTurns, buildTimeline } from '../../src/anim/timeline';
 import { encodeTimeline } from '../../src/anim/timelineCodec';
 import type { AnimOptions } from '../../src/anim/pacing';
-import { floorShiftsByKey, resetFloorShifts, shiftOnFloor } from '../../src/plan/pieceActions';
+import { floorShiftsByKey, floorTurnsByKey, resetFloorShifts, shiftOnFloor, turnOnFloor } from '../../src/plan/pieceActions';
 import { fixtureColors, fixtureMetrics } from '../helpers/fixtureMetrics';
 
 let metrics: Metrics;
@@ -87,4 +87,31 @@ test('a piece of a submodel is moved on its item in the submodel', () => {
   const shifted = waiting(out).boxes.get('w/r')!, base = waiting(plan).boxes.get('w/r')!;
   expect(shifted.min[2] - base.min[2]).toBeCloseTo(40);
   void THREE;
+});
+
+test('a turned waiting piece is stored in the plan, adds up, wraps, and resets', () => {
+  const turned = turnOnFloor(house(), '', 'a', 90)!;
+  expect(turned.steps[0].pieces[0].assembly?.floorTurn).toBe(90);
+  expect(floorTurnsByKey(turned, '').get('a')).toBe(90);
+  expect(turnOnFloor(turned, '', 'a', 90)!.steps[0].pieces[0].assembly?.floorTurn).toBe(180);
+  expect(turnOnFloor(turned, '', 'a', -90)!.steps[0].pieces[0].assembly).toBeUndefined();
+  expect(turnOnFloor(turned, '', 'a', 270)!.steps[0].pieces[0].assembly).toBeUndefined();
+  expect(turnOnFloor(turned, '', 'a', -180)!.steps[0].pieces[0].assembly?.floorTurn).toBe(270);
+  expect(resetFloorShifts(turned).steps[0].pieces[0].assembly).toBeUndefined();
+  expect(turnOnFloor(house(), '', 'nope', 90)).toBeNull();
+});
+
+test('a turn spins the waiting piece in place and leaves its landing and the others alone', () => {
+  const tl = buildTimeline(assemble(house(), metrics, fixtureColors), metrics, opts);
+  const out = applyFloorTurns(tl, new Map([['a', 90]]));
+  const before = tl.tracks.get('a')!, after = out.tracks.get('a')!;
+  const centre2 = (b: { min: number[]; max: number[] }) => [(b.min[0] + b.max[0]) / 2, (b.min[2] + b.max[2]) / 2];
+  const [bx, bz] = centre2(before.floorBox), [ax, az] = centre2(after.floorBox);
+  expect(ax).toBeCloseTo(bx); expect(az).toBeCloseTo(bz);
+  // a quarter turn swaps the footprint's two sides
+  expect(after.floorBox.max[0] - after.floorBox.min[0]).toBeCloseTo(before.floorBox.max[2] - before.floorBox.min[2]);
+  expect(after.moves[0].from.equals(after.floor)).toBe(true);
+  expect(after.final.equals(before.final)).toBe(true);
+  expect(out.tracks.get('b')).toBe(tl.tracks.get('b'));
+  expect(applyFloorTurns(tl, new Map())).toBe(tl);
 });

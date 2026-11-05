@@ -129,6 +129,7 @@ export function assemble(plan: Plan, metrics: Metrics, colors: Map<number, Color
         const itemId = item.id ?? `${model}:${si}:${order}`;
         const pauseAfter = step.pauseAfter;
         const autoStep = step.auto || undefined;
+        const pinned = step.pinOrder || undefined;
         if (isSub(item)) {
           const def = plan.submodels?.[item.submodel];
           if (!def) {
@@ -141,7 +142,7 @@ export function assemble(plan: Plan, metrics: Metrics, colors: Map<number, Color
           }
           const children = buildModel(item.submodel, def.steps, [...stack, item.submodel]);
           const body = subBody(item.submodel, children);
-          nodes.push({ kind: 'sub', assembly: item.assembly, itemId, model, step: si, order, pauseAfter, autoStep, submodel: item.submodel, children, body, local: itemPlacement(item, body) });
+          nodes.push({ kind: 'sub', assembly: item.assembly, itemId, model, step: si, order, pauseAfter, autoStep, pinned, submodel: item.submodel, children, body, local: itemPlacement(item, body) });
           return;
         }
         const m = metrics(item.part);
@@ -151,7 +152,7 @@ export function assemble(plan: Plan, metrics: Metrics, colors: Map<number, Color
           if (c === undefined) report({ kind: 'unknown-color', model, itemId, detail: String(item.color) });
           else color = c;
         }
-        nodes.push({ kind: 'piece', assembly: item.assembly, itemId, model, step: si, order, pauseAfter, autoStep, part: item.part, color, placeholder: m.placeholder, body: m.body, grid: isGrid(item), local: itemPlacement(item, m.body) });
+        nodes.push({ kind: 'piece', assembly: item.assembly, itemId, model, step: si, order, pauseAfter, autoStep, pinned, part: item.part, color, placeholder: m.placeholder, body: m.body, grid: isGrid(item), local: itemPlacement(item, m.body) });
       });
     });
     return nodes;

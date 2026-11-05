@@ -1,6 +1,7 @@
-import { deleteStep, findItem, insertStep, mergeSteps, modelSteps, moveItemTo, splitStep, splitStepAt } from '../plan/ops';
+import { deleteStep, findItem, insertStep, mergeSteps, modelSteps, moveItemTo, setStepPinned, splitStep, splitStepAt } from '../plan/ops';
 import { isSub } from '../plan/types';
 import { runCommand } from '../state/editing';
+import type { StepSpan } from '../anim/timeline';
 import { usePlayback } from '../state/playback';
 import { partName } from '../state/partService';
 import { useStudio } from '../state/store';
@@ -71,7 +72,7 @@ export function partClipMenu(ids: string[], onMotion: (t: MotionTarget) => void)
 }
 
 /** Right-click menu for a step block on the timeline. */
-export function stepClipMenu(index: number, onMotion: (t: MotionTarget) => void): ContextItem[] {
+export function stepClipMenu(index: number, onMotion: (t: MotionTarget) => void, timeline?: readonly StepSpan[]): ContextItem[] {
   const st = useStudio.getState();
   const { plan, editingModel: m } = st;
   const steps = modelSteps(plan, m);
@@ -101,6 +102,25 @@ export function stepClipMenu(index: number, onMotion: (t: MotionTarget) => void)
     { heading: 'Order' },
     { icon: 'raise', label: 'Move step earlier', disabled: index === 0, onClick: () => { stop(); st.reorderBuildStep(m, index, index - 1); st.setCurrentStep(index - 1); } },
     { icon: 'lower', label: 'Move step later', disabled: index >= steps.length - 1, onClick: () => { stop(); st.reorderBuildStep(m, index, index + 1); st.setCurrentStep(index + 1); } },
+    // the whole step, exactly as it is, to any place in the build — the pieces never reshuffle
+    { icon: 'steps', label: 'Move this step before…', items: steps.map((_, j) => {
+      const to = j > index ? j - 1 : j;
+      return { icon: 'steps' as const, label: j === index ? `Step ${j + 1} (this one)` : `Step ${j + 1}`, disabled: j === index,
+        onClick: () => { stop(); st.reorderBuildStep(m, index, to); st.setCurrentStep(to); } };
+    }) },
+    ...(() => {
+      const t = usePlayback.getState().t;
+      const at = timeline?.filter((sp) => sp.model === m).find((sp) => t >= sp.start - 1e-6 && t <= sp.end + 1e-6)?.index ?? null;
+      return [{
+        icon: 'play' as const,
+        label: at === null ? 'Move to the playhead' : `Move before step ${at + 1} (the playhead)`,
+        disabled: at === null || at === index,
+        onClick: () => { if (at === null) return; const to = at > index ? at - 1 : at; stop(); st.reorderBuildStep(m, index, to); st.setCurrentStep(to); },
+      }];
+    })(),
+    { icon: 'check', label: step.pinOrder ? 'Release this step’s order' : 'Keep this step’s pieces in this order',
+      hint: step.pinOrder ? 'pinned' : undefined,
+      onClick: go((p) => setStepPinned(p, m, index, !step.pinOrder), null) },
     { icon: 'plus', label: 'Insert an empty step before', onClick: go((p) => insertStep(p, m, index), null) },
     { icon: 'plus', label: 'Insert an empty step after', onClick: go((p) => insertStep(p, m, index + 1), null) },
     'sep',

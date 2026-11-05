@@ -225,14 +225,36 @@ export function findPose(q: PoseQuery): Pose {
 
   type Option = { m: THREE.Matrix4; t?: Target; precision?: AttachmentTarget; grip: number; score: number; mates?: ReturnType<typeof matesOf> };
   const mates = (o: Option) => (o.mates ??= matesOf(o.m));
+  /**
+   * A finger hinge seated at the far end of its run joins with the other half turned round.
+   * Both ways can fit (3937 / 3938's knuckles are symmetric), but only one faces the way the
+   * parts are made to go together: the same-way seat. The turned seat is the right one only
+   * when the same-way one is blocked, as with 4275 / 4276, whose plates would coincide. So
+   * a far-end seat becomes the same-way seat of that hinge whenever that one is clean.
+   */
+  const sameWay = new Map<string, { t: Target; g: number; m: THREE.Matrix4 } | null>();
+  const unturned = (t: Target, g: number): { t: Target; g: number; m: THREE.Matrix4 } | null => {
+    const h = moving.connectors[g];
+    if (!(t.flip || h.flip) || !t.joint || !h.joint) return null;
+    const key = `${t.owner}|${t.joint}|${h.joint}`;
+    if (!sameWay.has(key)) {
+      const t2 = q.targets.find((x) => x.owner === t.owner && x.joint === t.joint && !x.flip);
+      const g2 = moving.connectors.findIndex((x) => x.joint === h.joint && !x.flip && x.gender === h.gender);
+      const m = t2 && g2 >= 0 ? seat(moving.connectors[g2], t2, yaw) : null;
+      sameWay.set(key, t2 && m && !blocked(m) ? { t: t2, g: g2, m } : null);
+    }
+    return sameWay.get(key)!;
+  };
   const options: Option[] = [];
   for (const t of near) {
     const want = t.gender === 'M' ? 'F' : 'M';
     const key = `${want}|${t.type}`;
     const list = gripCache.get(key) ?? gripCache.set(key, grips(want, t.type)).get(key)!;
     for (const g of list) {
-      const m = seat(moving.connectors[g], t, yaw);
-      options.push({ m, t, grip: g, score: scoreOf(m) });
+      const plain = unturned(t, g);
+      // scored where the mouse asked for it, seated the way the hinge is made to go
+      const m = plain?.m ?? seat(moving.connectors[g], t, yaw);
+      options.push({ m, t: plain?.t ?? t, grip: plain?.g ?? g, score: scoreOf(m) });
     }
   }
   // Precise non-cylindrical placements are a parallel route through the same
@@ -321,11 +343,39 @@ function freePose(q: PoseQuery, blockOf: (m: THREE.Matrix4) => { ground: boolean
   return { delta: clean(m), mated: 0, owners: [], valid: free, handle: -1, yaw, at: null, links: [], score: Infinity, ...(free ? {} : refusal(block)) };
 }
 
+const mod20 = (v: number) => ((v % 20) + 20) % 20;
+/**
+ * The stud grid a part stands on near `at`, in x / z: `ref` is a point of the moving set
+ * (after `turn`) that must land on the grid, `phase` where the grid lines fall (mod 20).
+ * The grid is the one the nearest upright stud of the fixed pieces sits on, and the moving
+ * set lines up by one of its own upright connectors. A model built off the 20 LDU floor
+ * grid (moved, imported, or a bracket's studs between rows) would otherwise put a part
+ * dropped beside it a few LDU inside its neighbour. With nothing to read, box corners on
+ * the floor grid, as before.
+ */
+function gridOf(q: PoseQuery, turn: THREE.Matrix4, b: THREE.Box3, at: readonly number[]): { ref: [number, number]; phase: [number, number] } {
+  const upright = (axis: readonly number[]) => Math.abs(Math.abs(axis[1]) - 1) < 1e-3;
+  let near: Target | undefined, best = Infinity;
+  for (const t of q.targets) {
+    if (!upright(t.axis)) continue;
+    const d = Math.hypot(t.pos[0] - at[0], t.pos[2] - at[2]);
+    if (d < best) { best = d; near = t; }
+  }
+  const own = q.moving.connectors.find((c) => upright(new THREE.Vector3(...c.axis).transformDirection(turn).toArray()));
+  if (!near || !own) return { ref: [b.min.x, b.min.z], phase: [0, 0] };
+  const p = new THREE.Vector3(...own.pos).applyMatrix4(turn);
+  return { ref: [p.x, p.z], phase: [mod20(near.pos[0]), mod20(near.pos[2])] };
+}
+
 /** No connection near the mouse: the moving set stands where the mouse points, or on the floor grid under it. */
 function floorPose(q: PoseQuery, blockOf: (m: THREE.Matrix4) => { ground: boolean; hits: string[] }): Pose {
   const { moving, yaw } = q;
   const hit = q.aim.hitPoint;
-  if (hit) return freePose(q, blockOf, hit);
+  if (hit) {
+    const free = freePose(q, blockOf, hit);
+    // pointing at a piece's wall centres the part on the wall, inside the piece: stand it beside instead
+    return free.valid ? free : besidePose(q, blockOf, hit) ?? free;
+  }
   const at = q.aim.floorPoint;
   if (!at) return { delta: clean(new THREE.Matrix4()), mated: 0, owners: [], valid: false, handle: -1, yaw, at: null, links: [], score: Infinity, why: 'there is nowhere to put it', with: [] };
   const start = boxOf(moving.solids, new THREE.Matrix4());
@@ -335,10 +385,50 @@ function floorPose(q: PoseQuery, blockOf: (m: THREE.Matrix4) => { ground: boolea
     .multiply(new THREE.Matrix4().makeTranslation(-pivot.x, -pivot.y, -pivot.z));
   const b = boxOf(moving.solids, turn);
   const c = b.getCenter(new THREE.Vector3());
-  const snapX = Math.round((b.min.x + at[0] - c.x) / 20) * 20 - b.min.x;
-  const snapZ = Math.round((b.min.z + at[2] - c.z) / 20) * 20 - b.min.z;
+  const g = gridOf(q, turn, b, at);
+  const snapX = Math.round((g.ref[0] + at[0] - c.x - g.phase[0]) / 20) * 20 + g.phase[0] - g.ref[0];
+  const snapZ = Math.round((g.ref[1] + at[2] - c.z - g.phase[1]) / 20) * 20 + g.phase[1] - g.ref[1];
   const m = new THREE.Matrix4().makeTranslation(snapX, (q.floor ?? FLOOR_Y) - b.max.y, snapZ).multiply(turn);
   const block = blockOf(m);
   const free = !block.ground && !block.hits.length;
   return { delta: clean(m), mated: 0, owners: [], valid: free, handle: -1, yaw, at: null, links: [], score: Infinity, ...(free ? {} : refusal(block)) };
+}
+
+/** How many grid cells either side of the pointed spot are tried for a place beside a piece. */
+const BESIDE_REACH = 4;
+/** How many of the nearest cells are tried whatever the time budget says. */
+const BESIDE_ALWAYS = 9;
+/**
+ * The cursor is on a piece that nothing can seat the part on (a wall, a smooth top) and the
+ * part held there would sit inside it: stand the part on the floor grid at the nearest clean
+ * cell to the pointed spot, which is the one touching the piece. Without this, putting a part
+ * side by side with another meant hitting a free stud exactly.
+ */
+function besidePose(q: PoseQuery, blockOf: (m: THREE.Matrix4) => { ground: boolean; hits: string[] }, hit: Vec3): Pose | null {
+  const { moving, yaw } = q;
+  const pivot = boxOf(moving.solids, new THREE.Matrix4()).getCenter(new THREE.Vector3());
+  const turn = new THREE.Matrix4().makeTranslation(pivot.x, pivot.y, pivot.z)
+    .multiply(new THREE.Matrix4().makeRotationY((yaw * Math.PI) / 180))
+    .multiply(new THREE.Matrix4().makeTranslation(-pivot.x, -pivot.y, -pivot.z));
+  const b = boxOf(moving.solids, turn);
+  const c = b.getCenter(new THREE.Vector3());
+  const g = gridOf(q, turn, b, hit);
+  const x0 = Math.round((g.ref[0] + hit[0] - c.x - g.phase[0]) / 20), z0 = Math.round((g.ref[1] + hit[2] - c.z - g.phase[1]) / 20);
+  const y = (q.floor ?? FLOOR_Y) - b.max.y;
+  const cells: { m: THREE.Matrix4; d: number; e: number }[] = [];
+  for (let i = -BESIDE_REACH; i <= BESIDE_REACH; i++) for (let j = -BESIDE_REACH; j <= BESIDE_REACH; j++) {
+    const dx = (x0 + i) * 20 + g.phase[0] - g.ref[0], dz = (z0 + j) * 20 + g.phase[1] - g.ref[1];
+    cells.push({ m: new THREE.Matrix4().makeTranslation(dx, y, dz).multiply(turn), d: Math.hypot(Math.max(b.min.x + dx - hit[0], 0, hit[0] - b.max.x - dx), Math.max(b.min.z + dz - hit[2], 0, hit[2] - b.max.z - dz)),
+      e: Math.hypot(c.x + dx - hit[0], c.z + dz - hit[2]) });
+  }
+  // the cell that touches the pointed spot first; of those, the one centred nearest it
+  cells.sort((a, z) => a.d - z.d || a.e - z.e);
+  const t0 = performance.now();
+  for (const [k, { m }] of cells.entries()) {
+    // the nearest ring is always tried, so the answer does not depend on how busy the machine is
+    if (k >= BESIDE_ALWAYS && performance.now() - t0 > TRY_BUDGET_MS) break;
+    const block = blockOf(m);
+    if (!block.ground && !block.hits.length) return { delta: clean(m), mated: 0, owners: [], valid: true, handle: -1, yaw, at: null, links: [], score: Infinity };
+  }
+  return null;
 }

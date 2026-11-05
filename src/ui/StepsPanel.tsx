@@ -1,5 +1,5 @@
 import { Fragment, useRef, useState, type FormEvent, type PointerEvent as RPointerEvent } from 'react';
-import { deleteStep, insertStep, mergeSteps, modelSteps, moveItemsToStep, reorderItemInStep, splitStep, updateStep } from '../plan/ops';
+import { deleteStep, insertStep, mergeSteps, modelSteps, moveItemsToStep, reorderItemInStep, setStepPinned, splitStep, updateStep } from '../plan/ops';
 import { isSub, type Step } from '../plan/types';
 import type { Timeline } from '../anim/timeline';
 import { autoSplitSteps, LARGE_STEP } from '../plan/autoSteps';
@@ -154,6 +154,8 @@ export function StepsPanel({ timeline = null }: { timeline?: Timeline | null }) 
       return n;
     });
   const pause = () => usePlayback.getState().set({ playing: false });
+  /** where step `from` lands when it is put *before* step `j` */
+  const beforeStep = (from: number, j: number) => (j > from ? j - 1 : j);
   const move = (from: number, to: number) => {
     if (from === to || to < 0 || to >= steps.length) return;
     pause();
@@ -307,11 +309,31 @@ export function StepsPanel({ timeline = null }: { timeline?: Timeline | null }) 
           { icon: 'pointer', label: 'Select its pieces', disabled: !steps[menu.i].pieces.length, onClick: () => { useStudio.getState().select(steps[menu.i].pieces.flatMap((item) => item.id ? [item.id] : [])); setCurrentStep(menu.i); } },
           { icon: 'edit', label: 'Edit…', onClick: () => { setCurrentStep(menu.i); setEditAt(`${editingModel}:${menu.i}`); } },
           'sep',
+          { icon: 'check', label: steps[menu.i].pinOrder ? 'Release this step’s order' : 'Keep this step’s pieces in this order',
+            hint: steps[menu.i].pinOrder ? 'pinned' : undefined,
+            onClick: () => { pause(); setEditAt(null); apply((p) => setStepPinned(p, editingModel, menu.i, !steps[menu.i].pinOrder)); } },
           { icon: 'plus', label: 'Insert a step before', onClick: () => add(menu.i) },
           { icon: 'plus', label: 'Insert a step after', onClick: () => add(menu.i + 1) },
           'sep',
           { icon: 'arrowUp', label: 'Move earlier', disabled: menu.i === 0, onClick: () => move(menu.i, menu.i - 1) },
           { icon: 'arrowDown', label: 'Move later', disabled: menu.i === steps.length - 1, onClick: () => move(menu.i, menu.i + 1) },
+          { icon: 'steps', label: 'Move this step before…', items: steps.map((_, j) => ({
+            icon: 'steps' as const,
+            label: j === menu.i ? `Step ${j + 1} (this one)` : `Step ${j + 1}`,
+            disabled: j === menu.i,
+            onClick: () => move(menu.i, beforeStep(menu.i, j)),
+          })) },
+          ...(() => {
+            const t = usePlayback.getState().t;
+            const at = timeline?.steps.filter((sp) => sp.model === editingModel)
+              .find((sp) => t >= sp.start - 1e-6 && t <= sp.end + 1e-6)?.index ?? null;
+            return [{
+              icon: 'play' as const,
+              label: at === null ? 'Move to the playhead' : `Move before step ${at + 1} (the playhead)`,
+              disabled: at === null || at === menu.i,
+              onClick: () => { if (at !== null) move(menu.i, beforeStep(menu.i, at)); },
+            }];
+          })(),
           'sep',
           { icon: 'trash', label: steps.length > 1 ? 'Delete (pieces join the step before)' : 'Delete', danger: true, disabled: steps.length <= 1 && steps[menu.i].pieces.length > 0, onClick: () => remove(menu.i) },
         ]} />
