@@ -39,6 +39,7 @@ const AssemblySchema = z.object({
   group: z.string().min(1).max(80).optional(),
   buildSpot: AssemblySpotSchema.optional(),
   motion: MotionSchema,
+  flight: z.array(z.tuple([num, num, num, num, num, num, num])).min(2).max(400).optional(),
 }).optional();
 
 const Item = z

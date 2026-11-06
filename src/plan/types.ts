@@ -44,7 +44,15 @@ export type AssemblyHints = {
   buildSpot?: AssemblySpot;
   /** This piece's own flight style (wins over its step's). */
   motion?: MotionStyle;
+  /**
+   * A flight path edited in the viewport, which the Build timeline flies this piece along
+   * (with its own timing) instead of the planner's route. Poses from where the piece starts
+   * to its seat, evenly spaced along the way, each `[x, y, z, qx, qy, qz, qw]`: the move
+   * from the seat, in the seat's own frame (LDU), so it holds wherever the model is placed.
+   */
+  flight?: FlightPose[];
 };
+export type FlightPose = [number, number, number, number, number, number, number];
 
 export type PieceItem = { assembly?: AssemblyHints; id?: string; part: string; color: string | number } & (Grid | Raw);
 export type SubItem = { assembly?: AssemblyHints; id?: string; submodel: string } & (Grid | Raw);

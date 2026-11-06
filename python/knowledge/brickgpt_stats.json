@@ -1,0 +1,103 @@
+{
+ "structures": 47389,
+ "bricks": 5097330,
+ "bricks_per_structure_median": 92,
+ "brick_sizes": {
+  "1x2": 0.241,
+  "2x6": 0.216,
+  "1x1": 0.183,
+  "2x2": 0.118,
+  "1x8": 0.067,
+  "1x4": 0.065,
+  "2x4": 0.06,
+  "1x6": 0.05
+ },
+ "categories": {
+  "table": 11157,
+  "chair": 9564,
+  "car": 6533,
+  "sofa": 5549,
+  "vessel": 3048,
+  "bench": 2792,
+  "bus": 1557,
+  "guitar": 1515,
+  "bottle": 939,
+  "jar": 806,
+  "train": 743,
+  "bookshelf": 695,
+  "pot": 581,
+  "bed": 335,
+  "piano": 330,
+  "mug": 310,
+  "bowl": 269,
+  "tower": 213,
+  "basket": 168,
+  "camera": 168,
+  "birdhouse": 117
+ },
+ "all_stable_share": 1.0,
+ "bricks_resting_on_n_bricks_below": {
+  "1": 1926957,
+  "2": 1123005,
+  "3": 573716,
+  "4": 614973
+ },
+ "interlocking_share": 0.545,
+ "examples": [
+  {
+   "category": "basket",
+   "caption": "Basket with vertical ridges and arched handle.",
+   "bricks": 243,
+   "first_lines": [
+    "1x1 (16,15,0)",
+    "1x2 (16,13,0)",
+    "2x4 (16,9,0)",
+    "1x1 (16,8,0)"
+   ]
+  },
+  {
+   "category": "basket",
+   "caption": "Open-top basket with square, angular sides and vertical alignment.",
+   "bricks": 406,
+   "first_lines": [
+    "1x1 (15,18,0)",
+    "1x6 (15,12,0)",
+    "1x8 (15,4,0)",
+    "2x2 (13,16,0)"
+   ]
+  },
+  {
+   "category": "basket",
+   "caption": "Basket with geometric and angular features.",
+   "bricks": 53,
+   "first_lines": [
+    "2x6 (15,10,0)",
+    "4x1 (13,16,0)",
+    "2x6 (13,10,0)",
+    "4x1 (13,9,0)"
+   ]
+  },
+  {
+   "category": "basket",
+   "caption": "Basket with geometric and angular features.",
+   "bricks": 57,
+   "first_lines": [
+    "1x8 (16,9,0)",
+    "2x6 (14,9,0)",
+    "1x1 (12,17,0)",
+    "4x2 (12,15,0)"
+   ]
+  },
+  {
+   "category": "basket",
+   "caption": "Basket with rectangular opening and vertical structure.",
+   "bricks": 180,
+   "first_lines": [
+    "2x2 (10,18,0)",
+    "2x2 (10,11,0)",
+    "2x2 (0,18,0)",
+    "2x2 (0,11,0)"
+   ]
+  }
+ ]
+}

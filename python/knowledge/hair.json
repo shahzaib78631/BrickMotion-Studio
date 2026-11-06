@@ -1,0 +1,5518 @@
+{
+ "techniques": {
+  "models_with_hair": 64,
+  "attachment": [
+   {
+    "studs": "up",
+    "attached_to": "head",
+    "pieces": 350
+   },
+   {
+    "studs": "up",
+    "attached_to": "face",
+    "pieces": 38
+   },
+   {
+    "studs": "side",
+    "attached_to": "head",
+    "pieces": 28
+   },
+   {
+    "studs": "front",
+    "attached_to": "face",
+    "pieces": 12
+   },
+   {
+    "studs": "side",
+    "attached_to": "arms",
+    "pieces": 7
+   },
+   {
+    "studs": "side",
+    "attached_to": "face",
+    "pieces": 7
+   },
+   {
+    "studs": "front",
+    "attached_to": "head",
+    "pieces": 6
+   },
+   {
+    "studs": "back",
+    "attached_to": "head",
+    "pieces": 6
+   },
+   {
+    "studs": "up",
+    "attached_to": "torso",
+    "pieces": 4
+   },
+   {
+    "studs": "up",
+    "attached_to": "arms",
+    "pieces": 4
+   },
+   {
+    "studs": "back",
+    "attached_to": "torso",
+    "pieces": 4
+   },
+   {
+    "studs": "front",
+    "attached_to": "torso",
+    "pieces": 1
+   },
+   {
+    "studs": "front",
+    "attached_to": "arms",
+    "pieces": 1
+   },
+   {
+    "studs": "down",
+    "attached_to": "torso",
+    "pieces": 1
+   },
+   {
+    "studs": "back",
+    "attached_to": "face",
+    "pieces": 1
+   }
+  ],
+  "connected_pairs": [
+   {
+    "a": "15068",
+    "b": "22885",
+    "a_name": "Slope Brick Curved 2 x 2 x 0.667",
+    "b_name": "Brick 1 x 2 x 1.667 with Studs on 1 Side",
+    "count": 111
+   },
+   {
+    "a": "15068",
+    "b": "3003",
+    "a_name": "Slope Brick Curved 2 x 2 x 0.667",
+    "b_name": "Brick 2 x 2",
+    "count": 53
+   },
+   {
+    "a": "15068",
+    "b": "3023b",
+    "a_name": "Slope Brick Curved 2 x 2 x 0.667",
+    "b_name": "Plate 1 x 2",
+    "count": 38
+   },
+   {
+    "a": "11477",
+    "b": "22885",
+    "a_name": "Slope Brick Curved 2 x 1",
+    "b_name": "Brick 1 x 2 x 1.667 with Studs on 1 Side",
+    "count": 37
+   },
+   {
+    "a": "22885",
+    "b": "88930",
+    "a_name": "Brick 1 x 2 x 1.667 with Studs on 1 Side",
+    "b_name": "Slope Brick Curved 2 x 4 with Underside Studs",
+    "count": 36
+   },
+   {
+    "a": "22885",
+    "b": "93273",
+    "a_name": "Brick 1 x 2 x 1.667 with Studs on 1 Side",
+    "b_name": "Slope Brick Curved 4 x 1 Double",
+    "count": 36
+   },
+   {
+    "a": "15068",
+    "b": "32028",
+    "a_name": "Slope Brick Curved 2 x 2 x 0.667",
+    "b_name": "Plate 1 x 2 with Door Rail",
+    "count": 36
+   },
+   {
+    "a": "11477",
+    "b": "2420",
+    "a_name": "Slope Brick Curved 2 x 1",
+    "b_name": "Plate 2 x 2 Corner",
+    "count": 32
+   },
+   {
+    "a": "11477",
+    "b": "32028",
+    "a_name": "Slope Brick Curved 2 x 1",
+    "b_name": "Plate 1 x 2 with Door Rail",
+    "count": 28
+   },
+   {
+    "a": "11477",
+    "b": "3020",
+    "a_name": "Slope Brick Curved 2 x 1",
+    "b_name": "Plate 2 x 4",
+    "count": 22
+   },
+   {
+    "a": "15068",
+    "b": "3020",
+    "a_name": "Slope Brick Curved 2 x 2 x 0.667",
+    "b_name": "Plate 2 x 4",
+    "count": 22
+   },
+   {
+    "a": "15068",
+    "b": "3022",
+    "a_name": "Slope Brick Curved 2 x 2 x 0.667",
+    "b_name": "Plate 2 x 2",
+    "count": 20
+   },
+   {
+    "a": "32028",
+    "b": "88930",
+    "a_name": "Plate 1 x 2 with Door Rail",
+    "b_name": "Slope Brick Curved 2 x 4 with Underside Studs",
+    "count": 20
+   },
+   {
+    "a": "2420",
+    "b": "2420",
+    "a_name": "Plate 2 x 2 Corner",
+    "b_name": "Plate 2 x 2 Corner",
+    "count": 19
+   },
+   {
+    "a": "22885",
+    "b": "99206",
+    "a_name": "Brick 1 x 2 x 1.667 with Studs on 1 Side",
+    "b_name": "Plate 2 x 2 x 0.667 with Two Studs On Side and Two Raised with Closed Understud",
+    "count": 18
+   },
+   {
+    "a": "3003",
+    "b": "99206",
+    "a_name": "Brick 2 x 2",
+    "b_name": "Plate 2 x 2 x 0.667 with Two Studs On Side and Two Raised with Closed Understud",
+    "count": 14
+   },
+   {
+    "a": "3023b",
+    "b": "3069b",
+    "a_name": "Plate 1 x 2",
+    "b_name": "Tile 1 x 2 with Groove",
+    "count": 14
+   },
+   {
+    "a": "32028",
+    "b": "93273",
+    "a_name": "Plate 1 x 2 with Door Rail",
+    "b_name": "Slope Brick Curved 4 x 1 Double",
+    "count": 14
+   },
+   {
+    "a": "2420",
+    "b": "93273",
+    "a_name": "Plate 2 x 2 Corner",
+    "b_name": "Slope Brick Curved 4 x 1 Double",
+    "count": 14
+   },
+   {
+    "a": "11477",
+    "b": "3023b",
+    "a_name": "Slope Brick Curved 2 x 1",
+    "b_name": "Plate 1 x 2",
+    "count": 14
+   },
+   {
+    "a": "3003",
+    "b": "88930",
+    "a_name": "Brick 2 x 2",
+    "b_name": "Slope Brick Curved 2 x 4 with Underside Studs",
+    "count": 13
+   },
+   {
+    "a": "2420",
+    "b": "3022",
+    "a_name": "Plate 2 x 2 Corner",
+    "b_name": "Plate 2 x 2",
+    "count": 13
+   },
+   {
+    "a": "15571",
+    "b": "3023b",
+    "a_name": "Slope Brick 45 1 x 2 Triple with Bottom Stud Holder",
+    "b_name": "Plate 1 x 2",
+    "count": 12
+   },
+   {
+    "a": "3020",
+    "b": "92946",
+    "a_name": "Plate 2 x 4",
+    "b_name": "Slope Plate 45.73 2 x 1",
+    "count": 12
+   },
+   {
+    "a": "11477",
+    "b": "3024",
+    "a_name": "Slope Brick Curved 2 x 1",
+    "b_name": "Plate 1 x 1",
+    "count": 11
+   },
+   {
+    "a": "11477",
+    "b": "3022",
+    "a_name": "Slope Brick Curved 2 x 1",
+    "b_name": "Plate 2 x 2",
+    "count": 11
+   },
+   {
+    "a": "15068",
+    "b": "99206",
+    "a_name": "Slope Brick Curved 2 x 2 x 0.667",
+    "b_name": "Plate 2 x 2 x 0.667 with Two Studs On Side and Two Raised with Closed Understud",
+    "count": 10
+   },
+   {
+    "a": "3021",
+    "b": "3023b",
+    "a_name": "Plate 2 x 3",
+    "b_name": "Plate 1 x 2",
+    "count": 10
+   },
+   {
+    "a": "15068",
+    "b": "3021",
+    "a_name": "Slope Brick Curved 2 x 2 x 0.667",
+    "b_name": "Plate 2 x 3",
+    "count": 10
+   },
+   {
+    "a": "3020",
+    "b": "3023b",
+    "a_name": "Plate 2 x 4",
+    "b_name": "Plate 1 x 2",
+    "count": 10
+   }
+  ],
+  "extent_median": {
+   "above_head_plates": 1.5,
+   "lowest_below_head_top_plates": 1.5,
+   "side_overhang_studs": 0.0,
+   "front_overhang_studs": -1.4,
+   "back_overhang_studs": -0.8
+  },
+  "snot_share": 0.137,
+  "styles": {
+   "flat cap (thin layer on top)": 33,
+   "wider than head (side overhang)": 19,
+   "volume on top (>= 1 brick above head)": 18,
+   "SNOT-heavy (sideways pieces)": 10,
+   "back overhang": 3,
+   "fringe sticks out at the front": 2,
+   "long (reaches below head mid-height)": 2
+  }
+ },
+ "models": [
+  {
+   "id": "40270",
+   "name": "40270 - Valentine_s Bee",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 4,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 5.3,
+    "lowest_below_head_top_plates": 0.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -1.06,
+    "back_overhang_studs": -0.66
+   },
+   "items": [
+    {
+     "part": "59900",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "32474",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 2
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "volume on top (>= 1 brick above head)"
+   ],
+   "exact_attachments": [
+    "2x 59900 (hair, tube) on 3031 (head, stud)"
+   ]
+  },
+  {
+   "id": "40271",
+   "name": "40271 - Bunny",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 18,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 12.2,
+    "lowest_below_head_top_plates": 0.5,
+    "side_overhang_studs": 3.08,
+    "front_overhang_studs": -2.6,
+    "back_overhang_studs": -1.12
+   },
+   "items": [
+    {
+     "part": "3023b",
+     "color": "Bright Pink",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 4
+    },
+    {
+     "part": "92280",
+     "color": "Light Bluish Grey",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "3623",
+     "color": "Dark Bluish Grey",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "60478",
+     "color": "Dark Bluish Grey",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "3023b",
+     "color": "Dark Bluish Grey",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "6091",
+     "color": "Dark Bluish Grey",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "61678",
+     "color": "Dark Bluish Grey",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "85984",
+     "color": "Dark Bluish Grey",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "15068",
+     "color": "Dark Bluish Grey",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "volume on top (>= 1 brick above head)",
+    "wider than head (side overhang)"
+   ],
+   "exact_attachments": [
+    "6x 3023b (hair, hole) on 3023b (hair, stud)",
+    "4x 6091 (hair, hole) on 3023b (hair, stud) turned 270",
+    "4x 61678 (hair, hole) on 60478 (hair, stud) turned 270",
+    "4x 60478 (hair, hole) on 3623 (hair, stud) turned 180",
+    "2x 92280 (hair, hole) on 3031 (head, stud) turned 180",
+    "2x 15068 (hair, hole) on 3031 (head, stud)",
+    "2x 85984 (hair, hole) on 3031 (head, stud) turned 180",
+    "2x 92280 (hair, hole) on 3031 (head, stud)",
+    "2x 3023b (hair, hole) on 3623 (hair, stud)",
+    "2x 61678 (hair, hole) on 6091 (hair, stud) turned 180",
+    "2x 61678 (hair, hole) on 3023b (hair, stud) turned 90",
+    "2x 92280 (hair, clip) on 60478 (hair, bar)",
+    "1x 15068 (hair, hole) on 92280 (hair, stud)",
+    "1x 15068 (hair, hole) on 92280 (hair, stud) turned 180"
+   ]
+  },
+  {
+   "id": "40272",
+   "name": "40272 - Witch",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 8,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 4.5,
+    "lowest_below_head_top_plates": 0.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -1.58,
+    "back_overhang_studs": -0.8
+   },
+   "items": [
+    {
+     "part": "85984",
+     "color": "Medium Lilac",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 4
+    },
+    {
+     "part": "3003",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "3023b",
+     "color": "Medium Lilac",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "85984",
+     "color": "Medium Lilac",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "15068",
+     "color": "Medium Lilac",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    }
+   ],
+   "full_hair": {
+    "color": "Medium Lilac",
+    "pieces": 21,
+    "in_head_shell": 13,
+    "sides": {
+     "top/inside": 11,
+     "sides": 2
+    },
+    "parts": {
+     "3023b": 5,
+     "3005": 4,
+     "3710": 2,
+     "3031": 2
+    }
+   },
+   "tags": [
+    "volume on top (>= 1 brick above head)"
+   ],
+   "exact_attachments": [
+    "4x 3003 (hair, hole) on 3031 (head, stud)",
+    "2x 85984 (hair, hole) on 3031 (head, stud) turned 90",
+    "2x 85984 (hair, hole) on 3031 (head, stud)",
+    "2x 85984 (hair, hole) on 3031 (head, stud) turned 180",
+    "2x 85984 (hair, hole) on 3031 (head, stud) turned 270",
+    "2x 85984 (hair, hole) on 3003 (hair, stud) turned 90",
+    "2x 3023b (hair, hole) on 3003 (hair, stud) turned 90",
+    "2x 15068 (hair, hole) on 3023b (hair, stud) turned 180"
+   ]
+  },
+  {
+   "id": "40273",
+   "name": "40273 - Turkey",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 2,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 1.4,
+    "lowest_below_head_top_plates": 0.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -2.58,
+    "back_overhang_studs": -1.8
+   },
+   "items": [
+    {
+     "part": "54200",
+     "color": "Light Bluish Grey",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "1x 54200 (hair, hole) on 3031 (head, stud) turned 270",
+    "1x 54200 (hair, hole) on 3031 (head, stud) turned 90"
+   ]
+  },
+  {
+   "id": "40348",
+   "name": "40348 - Birthday Clown",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 8,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 15.3,
+    "lowest_below_head_top_plates": 0.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -2.0,
+    "back_overhang_studs": -0.6
+   },
+   "items": [
+    {
+     "part": "27925",
+     "color": "Blue",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 4
+    },
+    {
+     "part": "4032a",
+     "color": "Dark Bluish Grey",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "6233",
+     "color": "Green",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "3942c",
+     "color": "Green",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "32474",
+     "color": "Red",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    }
+   ],
+   "full_hair": {
+    "color": "Blue",
+    "pieces": 8,
+    "in_head_shell": 0,
+    "sides": {},
+    "parts": {}
+   },
+   "tags": [
+    "volume on top (>= 1 brick above head)"
+   ],
+   "exact_attachments": [
+    "4x 4032a (hair, hole) on 3031 (head, stud)",
+    "4x 6233 (hair, tube) on 4032a (hair, stud)",
+    "4x 3942c (hair, hole) on 6233 (hair, stud)",
+    "2x 27925 (hair, hole) on 3031 (head, stud) turned 90",
+    "2x 27925 (hair, hole) on 3031 (head, stud) turned 180",
+    "2x 27925 (hair, hole) on 3031 (head, stud)",
+    "2x 27925 (hair, hole) on 3031 (head, stud) turned 270"
+   ]
+  },
+  {
+   "id": "40349",
+   "name": "40349 - Valentine_s Puppy",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 6,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 1.5,
+    "lowest_below_head_top_plates": 0.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -1.6,
+    "back_overhang_studs": -0.8
+   },
+   "items": [
+    {
+     "part": "60478",
+     "color": "Dark Tan",
+     "studs": "up",
+     "attached_to": "head+torso",
+     "count": 2
+    },
+    {
+     "part": "60478",
+     "color": "Dark Tan",
+     "studs": "up",
+     "attached_to": "arms+head",
+     "count": 2
+    },
+    {
+     "part": "15068",
+     "color": "Tan",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    }
+   ],
+   "full_hair": {
+    "color": "Dark Tan",
+    "pieces": 7,
+    "in_head_shell": 1,
+    "sides": {
+     "front (fringe)": 1
+    },
+    "parts": {
+     "15573": 1
+    }
+   },
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "4x 60478 (hair, hole) on 3031 (head, stud) turned 180",
+    "4x 60478 (hair, hole) on 3031 (head, stud)",
+    "2x 15068 (hair, hole) on 3031 (head, stud)",
+    "2x 15068 (hair, hole) on 3031 (head, stud) turned 180",
+    "2x 15068 (hair, hole) on 60478 (hair, stud) turned 180",
+    "2x 15068 (hair, hole) on 60478 (hair, stud)",
+    "2x 63868 (torso, clip) on 60478 (hair, bar)",
+    "2x 63868 (arms, clip) on 60478 (hair, bar)"
+   ]
+  },
+  {
+   "id": "40350",
+   "name": "40350 - Chick",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 17.5
+   },
+   "pieces": 2,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 2.5,
+    "lowest_below_head_top_plates": 0.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -2.58,
+    "back_overhang_studs": -1.8
+   },
+   "items": [
+    {
+     "part": "87580",
+     "color": "Yellow",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "11477",
+     "color": "Orange",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "4x 87580 (hair, hole) on 3031 (head, stud)",
+    "1x 11477 (hair, hole) on 87580 (hair, open) turned 270"
+   ]
+  },
+  {
+   "id": "40351",
+   "name": "40351 - Halloween Ghost",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 2,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 1.5,
+    "lowest_below_head_top_plates": 0.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -1.2,
+    "back_overhang_studs": -0.8
+   },
+   "items": [
+    {
+     "part": "88930",
+     "color": "White",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "4x 88930 (hair, hole) on 22885 (head, stud) turned 270",
+    "4x 88930 (hair, hole) on 22885 (head, stud) turned 90",
+    "4x 88930 (hair, hole) on 22885 (head, stud)",
+    "2x 88930 (hair, hole) on 3003 (head, stud) turned 90",
+    "2x 88930 (hair, hole) on 3003 (head, stud) turned 270"
+   ]
+  },
+  {
+   "id": "40352",
+   "name": "40352 - Thanksgiving Scarecrow",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 17.5
+   },
+   "pieces": 8,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 12.0,
+    "lowest_below_head_top_plates": 0.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -1.6,
+    "back_overhang_studs": -1.0
+   },
+   "items": [
+    {
+     "part": "27925",
+     "color": "Pearl Gold",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 4
+    },
+    {
+     "part": "4032a",
+     "color": "Dark Green",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "6233",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "18674",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "19119",
+     "color": "Dark Orange",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    }
+   ],
+   "full_hair": {
+    "color": "Pearl Gold",
+    "pieces": 8,
+    "in_head_shell": 0,
+    "sides": {},
+    "parts": {}
+   },
+   "tags": [
+    "volume on top (>= 1 brick above head)"
+   ],
+   "exact_attachments": [
+    "8x 27925 (hair, hole) on 30357 (head, stud) turned 270",
+    "4x 6233 (hair, tube) on 4032a (hair, stud)",
+    "4x 18674 (hair, hole) on 6233 (hair, stud)",
+    "1x 4032a (hair, hole) on 30357 (head, stud)",
+    "1x 4032a (hair, hole) on 30357 (head, stud) turned 270",
+    "1x 4032a (hair, hole) on 30357 (head, stud) turned 180",
+    "1x 4032a (hair, hole) on 30357 (head, stud) turned 90",
+    "1x 18674 (hair, clip) on 19119 (hair, bar)"
+   ]
+  },
+  {
+   "id": "40353",
+   "name": "40353 - Reindeer_ Elf and Elfie",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 17.5
+   },
+   "pieces": 16,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 10.5,
+    "lowest_below_head_top_plates": 8.5,
+    "side_overhang_studs": 10.7,
+    "front_overhang_studs": -1.3,
+    "back_overhang_studs": -1.5
+   },
+   "items": [
+    {
+     "part": "3045",
+     "color": "Red",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 4
+    },
+    {
+     "part": "15573",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "54200",
+     "color": "Tan",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "6091",
+     "color": "Tan",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "3068b",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "88292",
+     "color": "Tan",
+     "studs": "up",
+     "attached_to": "arms",
+     "count": 1
+    },
+    {
+     "part": "88292",
+     "color": "Tan",
+     "studs": "up",
+     "attached_to": "torso",
+     "count": 1
+    },
+    {
+     "part": "6233",
+     "color": "Green",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "18674",
+     "color": "Red",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "32474",
+     "color": "White",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    }
+   ],
+   "full_hair": {
+    "color": "Tan",
+    "pieces": 19,
+    "in_head_shell": 3,
+    "sides": {
+     "sides": 2,
+     "front (fringe)": 1
+    },
+    "parts": {
+     "6141": 2,
+     "15573": 1
+    }
+   },
+   "tags": [
+    "volume on top (>= 1 brick above head)",
+    "wider than head (side overhang)"
+   ],
+   "exact_attachments": [
+    "5x 6233 (hair, hole) on 3623 (head, stud)",
+    "4x 3045 (hair, hole) on 3031 (head, stud) turned 90",
+    "4x 3045 (hair, hole) on 3031 (head, stud) turned 180",
+    "4x 3045 (hair, hole) on 3031 (head, stud)",
+    "4x 3045 (hair, hole) on 3031 (head, stud) turned 270",
+    "4x 18674 (hair, hole) on 6233 (hair, stud)",
+    "4x 15573 (hair, hole) on 3031 (head, stud) turned 90",
+    "4x 3068b (hair, hole) on 3031 (head, stud)",
+    "2x 54200 (hair, hole) on 88292 (hair, stud)",
+    "1x 6091 (hair, hole) on 88292 (hair, stud) turned 20",
+    "1x 6091 (hair, hole) on 88292 (hair, stud) turned 340",
+    "1x 88292 (hair, hole) on 15573 (hair, open) turned 160",
+    "1x 88292 (hair, hole) on 15573 (hair, open) turned 20"
+   ]
+  },
+  {
+   "id": "40367",
+   "name": "40367 - Lady Liberty",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 20.5
+   },
+   "pieces": 27,
+   "snot_pieces": 7,
+   "extent": {
+    "above_head_plates": 3.3,
+    "lowest_below_head_top_plates": 1.9,
+    "side_overhang_studs": 2.2,
+    "front_overhang_studs": 0.96,
+    "back_overhang_studs": -0.41
+   },
+   "items": [
+    {
+     "part": "61252",
+     "color": "Sand Green",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 5
+    },
+    {
+     "part": "11477",
+     "color": "Sand Green",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 5
+    },
+    {
+     "part": "49668",
+     "color": "Sand Green",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 5
+    },
+    {
+     "part": "99206",
+     "color": "Sand Green",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "15068",
+     "color": "Sand Green",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "3024",
+     "color": "Sand Green",
+     "studs": "front",
+     "attached_to": "face",
+     "count": 2
+    },
+    {
+     "part": "54200",
+     "color": "Sand Green",
+     "studs": "front",
+     "attached_to": "face",
+     "count": 2
+    },
+    {
+     "part": "3710",
+     "color": "Sand Green",
+     "studs": "front",
+     "attached_to": "face+head",
+     "count": 1
+    },
+    {
+     "part": "29119",
+     "color": "Sand Green",
+     "studs": "front",
+     "attached_to": "face+torso",
+     "count": 1
+    },
+    {
+     "part": "29120",
+     "color": "Sand Green",
+     "studs": "front",
+     "attached_to": "arms+face",
+     "count": 1
+    },
+    {
+     "part": "75937",
+     "color": "Sand Green",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "volume on top (>= 1 brick above head)",
+    "wider than head (side overhang)",
+    "fringe sticks out at the front"
+   ],
+   "exact_attachments": [
+    "5x 11477 (hair, hole) on 61252 (hair, stud) turned 180",
+    "5x 11477 (hair, hole) on 49668 (hair, stud)",
+    "5x 61252 (hair, clip) on 75937 (hair, bar)",
+    "4x 15068 (hair, hole) on 99206 (hair, stud) turned 180",
+    "4x 3710 (hair, hole) on 99206 (hair, open)",
+    "2x 99206 (hair, hole) on 3003 (head, stud)",
+    "2x 15068 (hair, hole) on 3003 (head, stud) turned 180",
+    "2x 99206 (hair, hole) on 22885 (head, stud) turned 270",
+    "2x 99206 (hair, hole) on 22885 (head, stud)",
+    "2x 99206 (hair, hole) on 22885 (head, stud) turned 90",
+    "2x 3024 (hair, hole) on 3710 (hair, stud)",
+    "1x 15068 (hair, hole) on 22885 (head, stud) turned 90",
+    "1x 15068 (hair, hole) on 22885 (head, stud) turned 270",
+    "1x 54200 (hair, hole) on 3710 (hair, stud) turned 270",
+    "1x 54200 (hair, hole) on 3710 (hair, stud) turned 90",
+    "1x 29119 (hair, hole) on 3024 (hair, stud) turned 90",
+    "1x 29120 (hair, hole) on 3024 (hair, stud) turned 270",
+    "1x 11476 (head, clip) on 75937 (hair, bar)"
+   ]
+  },
+  {
+   "id": "40377",
+   "name": "40377 - Donald Duck",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 10,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 4.4,
+    "lowest_below_head_top_plates": 0.5,
+    "side_overhang_studs": 2.2,
+    "front_overhang_studs": -2.0,
+    "back_overhang_studs": -0.8
+   },
+   "items": [
+    {
+     "part": "15068",
+     "color": "Blue",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "60474",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "60474",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "3623",
+     "color": "Blue",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "3710",
+     "color": "Blue",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "61252",
+     "color": "Blue",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "85984",
+     "color": "Blue",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "3069b",
+     "color": "Blue",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "60478",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    }
+   ],
+   "full_hair": {
+    "color": "Blue",
+    "pieces": 22,
+    "in_head_shell": 12,
+    "sides": {
+     "top/inside": 6,
+     "sides": 4,
+     "back": 2
+    },
+    "parts": {
+     "3005": 4,
+     "3010": 2,
+     "3023b": 2,
+     "3069b": 2,
+     "3020": 1,
+     "3245c": 1
+    }
+   },
+   "tags": [
+    "volume on top (>= 1 brick above head)",
+    "wider than head (side overhang)"
+   ],
+   "exact_attachments": [
+    "12x 60474 (hair, hole) on 3031 (head, stud)",
+    "12x 60474 (hair, hole) on 60474 (hair, stud)",
+    "4x 3710 (hair, hole) on 60474 (hair, stud)",
+    "3x 3623 (hair, hole) on 60474 (hair, stud)",
+    "2x 15068 (hair, hole) on 60474 (hair, stud)",
+    "2x 15068 (hair, hole) on 60474 (hair, stud) turned 180",
+    "2x 15068 (hair, hole) on 3623 (hair, stud) turned 180",
+    "2x 15068 (hair, hole) on 3710 (hair, stud)",
+    "1x 61252 (hair, hole) on 60474 (hair, stud) turned 90",
+    "1x 85984 (hair, hole) on 3623 (hair, stud) turned 90",
+    "1x 3069b (hair, hole) on 3710 (hair, stud) turned 90",
+    "1x 85984 (hair, hole) on 3710 (hair, stud) turned 90",
+    "1x 3069b (hair, hole) on 61252 (hair, stud)",
+    "1x 61252 (hair, clip) on 60478 (hair, bar)"
+   ]
+  },
+  {
+   "id": "40378",
+   "name": "40378 - Goofy and Pluto",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 8.5
+   },
+   "pieces": 15,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 10.6,
+    "lowest_below_head_top_plates": 0.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -2.0,
+    "back_overhang_studs": 1.07
+   },
+   "items": [
+    {
+     "part": "15573",
+     "color": "Blue",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "3023b",
+     "color": "Lime",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "85984",
+     "color": "Lime",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "3023b",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "3069b",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "3937",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "6134",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "92946",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "54200",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "3003",
+     "color": "Lime",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "3021",
+     "color": "Lime",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "3069b",
+     "color": "Lime",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    }
+   ],
+   "full_hair": {
+    "color": "Lime",
+    "pieces": 15,
+    "in_head_shell": 0,
+    "sides": {},
+    "parts": {}
+   },
+   "tags": [
+    "volume on top (>= 1 brick above head)",
+    "back overhang"
+   ],
+   "exact_attachments": [
+    "4x 3023b (hair, hole) on 3021 (hair, stud) turned 270",
+    "4x 15573 (hair, hole) on 3003 (hair, stud)",
+    "4x 3003 (hair, hole) on 6134 (hair, open) turned 90",
+    "2x 92946 (hair, hole) on 3031 (head, stud) turned 270",
+    "2x 3023b (hair, hole) on 3031 (head, stud)",
+    "2x 3937 (hair, hole) on 3031 (head, stud) turned 180",
+    "2x 3069b (hair, hole) on 3031 (head, stud)",
+    "2x 3021 (hair, hole) on 15573 (hair, open)",
+    "2x 85984 (hair, hole) on 3023b (hair, stud)",
+    "2x 85984 (hair, hole) on 3023b (hair, stud) turned 180",
+    "2x 3069b (hair, hole) on 3021 (hair, stud) turned 270",
+    "2x 3937 (hair, clip) on 6134 (hair, bar)",
+    "1x 54200 (hair, hole) on 92946 (hair, stud)"
+   ]
+  },
+  {
+   "id": "40379",
+   "name": "40379 - Valentine_s Bear",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 14.5
+   },
+   "pieces": 5,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 1.5,
+    "lowest_below_head_top_plates": 0.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -2.2,
+    "back_overhang_studs": -0.6
+   },
+   "items": [
+    {
+     "part": "54200",
+     "color": "Medium Nougat",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "93273",
+     "color": "Medium Nougat",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "3022",
+     "color": "Medium Nougat",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "4x 3022 (hair, hole) on 3020 (head, stud)",
+    "4x 93273 (hair, hole) on 3020 (head, stud)",
+    "4x 93273 (hair, hole) on 3022 (hair, stud)",
+    "1x 54200 (hair, hole) on 3020 (head, stud) turned 270",
+    "1x 54200 (hair, hole) on 3020 (head, stud) turned 90"
+   ]
+  },
+  {
+   "id": "40380",
+   "name": "40380 - Easter Sheep",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 21,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 2.5,
+    "lowest_below_head_top_plates": 1.0,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -1.4,
+    "back_overhang_studs": -0.0
+   },
+   "items": [
+    {
+     "part": "98138",
+     "color": "White",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 6
+    },
+    {
+     "part": "6141",
+     "color": "White",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 6
+    },
+    {
+     "part": "49307",
+     "color": "White",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 3
+    },
+    {
+     "part": "6141",
+     "color": "White",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "3022",
+     "color": "White",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "98138",
+     "color": "White",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "49307",
+     "color": "White",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "3024",
+     "color": "White",
+     "studs": "up",
+     "attached_to": "head+torso",
+     "count": 1
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "3x 6141 (hair, tube) on 3020 (head, stud)",
+    "3x 98138 (hair, tube) on 3020 (head, stud)",
+    "2x 49307 (hair, hole) on 99780 (head, open) turned 270",
+    "2x 98138 (hair, tube) on 3710 (head, stud)",
+    "2x 6141 (hair, tube) on 3710 (head, stud)",
+    "2x 3022 (hair, hole) on 3020 (head, stud)",
+    "2x 6141 (hair, tube) on 3022 (hair, stud)",
+    "1x 98138 (hair, tube) on 99780 (head, open) turned 180",
+    "1x 3024 (hair, hole) on 99780 (head, open) turned 180",
+    "1x 3022 (hair, hole) on 60478 (head, stud)",
+    "1x 49307 (hair, hole) on 60478 (head, stud) turned 270",
+    "1x 3022 (hair, hole) on 60478 (head, stud) turned 180",
+    "1x 6141 (hair, tube) on 60478 (head, stud) turned 180",
+    "1x 98138 (hair, tube) on 3022 (hair, stud)",
+    "1x 49307 (hair, hole) on 3022 (hair, stud) turned 90",
+    "1x 15429 (torso, hole) on 3024 (hair, stud) turned 180"
+   ]
+  },
+  {
+   "id": "40412",
+   "name": "40412 - Hagrid and Buckbeak",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 8,
+   "snot_pieces": 2,
+   "extent": {
+    "above_head_plates": 1.0,
+    "lowest_below_head_top_plates": 4.5,
+    "side_overhang_studs": 7.0,
+    "front_overhang_studs": -2.8,
+    "back_overhang_studs": 1.78
+   },
+   "items": [
+    {
+     "part": "54200",
+     "color": "White",
+     "studs": "back",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "25269",
+     "color": "Light Bluish Grey",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "3021",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "99206",
+     "color": "Light Bluish Grey",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "54200",
+     "color": "White",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "29120",
+     "color": "White",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    }
+   ],
+   "full_hair": {
+    "color": "White",
+    "pieces": 8,
+    "in_head_shell": 0,
+    "sides": {},
+    "parts": {}
+   },
+   "tags": [
+    "wider than head (side overhang)",
+    "back overhang",
+    "SNOT-heavy (sideways pieces)"
+   ],
+   "exact_attachments": [
+    "6x 3021 (hair, hole) on 3031 (head, stud) turned 90",
+    "2x 99206 (hair, hole) on 3003 (head, stud)",
+    "2x 99206 (hair, hole) on 22885 (head, stud)",
+    "2x 54200 (hair, hole) on 99206 (hair, open) turned 180",
+    "2x 29120 (hair, hole) on 99206 (hair, stud) turned 180",
+    "1x 25269 (hair, hole) on 3710 (head, stud) turned 180",
+    "1x 25269 (hair, hole) on 3710 (head, stud) turned 90",
+    "1x 54200 (hair, hole) on 99206 (hair, stud)"
+   ]
+  },
+  {
+   "id": "40436",
+   "name": "40436 - Lucky Cat",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 14.5
+   },
+   "pieces": 9,
+   "snot_pieces": 6,
+   "extent": {
+    "above_head_plates": 2.5,
+    "lowest_below_head_top_plates": 2.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -1.6,
+    "back_overhang_studs": -1.45
+   },
+   "items": [
+    {
+     "part": "15068",
+     "color": "White",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "24201",
+     "color": "White",
+     "studs": "side",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "3024",
+     "color": "White",
+     "studs": "side",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "11477",
+     "color": "White",
+     "studs": "side",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "93273",
+     "color": "White",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    }
+   ],
+   "full_hair": {
+    "color": "White",
+    "pieces": 37,
+    "in_head_shell": 28,
+    "sides": {
+     "top/inside": 10,
+     "sides": 10,
+     "front (fringe)": 6,
+     "back": 2
+    },
+    "parts": {
+     "88930": 4,
+     "3004": 2,
+     "93273": 2,
+     "3069b": 2,
+     "85861": 2,
+     "3022": 2,
+     "11211": 1,
+     "3622": 1,
+     "3700": 1,
+     "30414": 1
+    }
+   },
+   "tags": [
+    "SNOT-heavy (sideways pieces)"
+   ],
+   "exact_attachments": [
+    "2x 15068 (hair, hole) on 22885 (head, stud)",
+    "2x 15068 (hair, hole) on 87087 (head, stud)",
+    "2x 15068 (hair, hole) on 3021 (head, stud)",
+    "2x 15068 (hair, hole) on 3021 (head, stud) turned 180",
+    "2x 93273 (hair, hole) on 3021 (head, stud) turned 180",
+    "2x 3024 (hair, hole) on 24201 (hair, open) turned 90",
+    "2x 2921 (head, hole) on 24201 (hair, open) turned 180",
+    "2x 11477 (hair, hole) on 3024 (hair, stud) turned 270",
+    "2x 11477 (hair, hole) on 2921 (head, stud) turned 180",
+    "1x 93273 (hair, hole) on 22885 (head, stud)",
+    "1x 93273 (hair, hole) on 22885 (head, stud) turned 180"
+   ]
+  },
+  {
+   "id": "40440",
+   "name": "40440 - German Shepherds",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 14.5
+   },
+   "pieces": 11,
+   "snot_pieces": 6,
+   "extent": {
+    "above_head_plates": 3.5,
+    "lowest_below_head_top_plates": 1.5,
+    "side_overhang_studs": 0.42,
+    "front_overhang_studs": -2.0,
+    "back_overhang_studs": -0.8
+   },
+   "items": [
+    {
+     "part": "92946",
+     "color": "Black",
+     "studs": "side",
+     "attached_to": "arms+head",
+     "count": 4
+    },
+    {
+     "part": "11477",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "3023b",
+     "color": "Black",
+     "studs": "side",
+     "attached_to": "arms",
+     "count": 2
+    },
+    {
+     "part": "2431",
+     "color": "Tan",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "15068",
+     "color": "Tan",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "15573",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "volume on top (>= 1 brick above head)",
+    "SNOT-heavy (sideways pieces)"
+   ],
+   "exact_attachments": [
+    "4x 2431 (hair, hole) on 3020 (head, stud)",
+    "4x 3023b (hair, hole) on 92946 (hair, stud)",
+    "4x 15068 (arms, hole) on 3023b (hair, stud) turned 180",
+    "2x 15068 (hair, hole) on 22885 (head, stud)",
+    "2x 11477 (hair, hole) on 3020 (head, stud)",
+    "2x 15573 (hair, hole) on 3020 (head, stud)",
+    "2x 15068 (hair, hole) on 3023b (head, stud)",
+    "1x 11477 (hair, hole) on 22885 (head, stud) turned 90",
+    "1x 11477 (hair, hole) on 22885 (head, stud) turned 270"
+   ]
+  },
+  {
+   "id": "40441",
+   "name": "40441 - Shorthair Cats",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 10.5
+   },
+   "pieces": 10,
+   "snot_pieces": 4,
+   "extent": {
+    "above_head_plates": 2.5,
+    "lowest_below_head_top_plates": 2.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -2.6,
+    "back_overhang_studs": -0.8
+   },
+   "items": [
+    {
+     "part": "3023b",
+     "color": "Dark Bluish Grey",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "15571",
+     "color": "Dark Bluish Grey",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "29120",
+     "color": "Dark Bluish Grey",
+     "studs": "side",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "29119",
+     "color": "Dark Bluish Grey",
+     "studs": "side",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "15068",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "15573",
+     "color": "Dark Bluish Grey",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    }
+   ],
+   "full_hair": {
+    "color": "Dark Bluish Grey",
+    "pieces": 28,
+    "in_head_shell": 18,
+    "sides": {
+     "sides": 8,
+     "top/inside": 5,
+     "front (fringe)": 4,
+     "back": 1
+    },
+    "parts": {
+     "3022": 4,
+     "3069b": 2,
+     "3710": 2,
+     "85861": 2,
+     "3024": 2,
+     "26603": 2,
+     "15068": 2,
+     "3020": 1,
+     "3031": 1
+    }
+   },
+   "tags": [
+    "SNOT-heavy (sideways pieces)"
+   ],
+   "exact_attachments": [
+    "4x 3023b (hair, hole) on 3020 (head, stud) turned 90",
+    "2x 15068 (hair, hole) on 3003 (head, stud)",
+    "2x 15068 (hair, hole) on 3020 (head, stud)",
+    "2x 15573 (hair, hole) on 3020 (head, stud)",
+    "2x 15571 (hair, hole) on 3023b (hair, stud) turned 180",
+    "2x 15571 (hair, hole) on 3023b (hair, stud)",
+    "2x 29119 (hair, hole) on 3022 (head, stud) turned 270",
+    "2x 29120 (hair, hole) on 3022 (head, stud) turned 270"
+   ]
+  },
+  {
+   "id": "40466",
+   "name": "40466 - Chinese New Year Pandas",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 14.5
+   },
+   "pieces": 15,
+   "snot_pieces": 1,
+   "extent": {
+    "above_head_plates": 5.5,
+    "lowest_below_head_top_plates": 13.0,
+    "side_overhang_studs": 11.61,
+    "front_overhang_studs": 2.51,
+    "back_overhang_studs": -0.6
+   },
+   "items": [
+    {
+     "part": "54200",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "3024",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "face",
+     "count": 2
+    },
+    {
+     "part": "98138",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "3070b",
+     "color": "White",
+     "studs": "up",
+     "attached_to": "face",
+     "count": 2
+    },
+    {
+     "part": "12885",
+     "color": "Black",
+     "studs": "side",
+     "attached_to": "arms",
+     "count": 1
+    },
+    {
+     "part": "15712",
+     "color": "Red",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "4740",
+     "color": "Red",
+     "studs": "up",
+     "attached_to": "arms",
+     "count": 1
+    },
+    {
+     "part": "63864",
+     "color": "White",
+     "studs": "up",
+     "attached_to": "face",
+     "count": 1
+    },
+    {
+     "part": "15573",
+     "color": "White",
+     "studs": "up",
+     "attached_to": "face",
+     "count": 1
+    },
+    {
+     "part": "3024",
+     "color": "White",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "25269",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "long (reaches below head mid-height)",
+    "volume on top (>= 1 brick above head)",
+    "wider than head (side overhang)",
+    "fringe sticks out at the front"
+   ],
+   "exact_attachments": [
+    "3x 63864 (hair, hole) on 11212 (face, stud)",
+    "2x 3070b (hair, hole) on 11212 (face, stud)",
+    "2x 3024 (hair, hole) on 11212 (face, stud)",
+    "2x 15573 (hair, hole) on 11212 (face, stud) turned 90",
+    "2x 98138 (hair, tube) on 3024 (hair, stud)",
+    "1x 54200 (hair, hole) on 3031 (head, stud) turned 270",
+    "1x 54200 (hair, hole) on 3031 (head, stud) turned 90",
+    "1x 15712 (hair, hole) on 4740 (hair, open) turned 90",
+    "1x 4740 (hair, tube) on 51270 (arms, open)",
+    "1x 3024 (hair, hole) on 15573 (hair, open) turned 315",
+    "1x 25269 (hair, hole) on 3024 (hair, stud) turned 180",
+    "1x 12885 (hair, post) on 64567a (arms, open) turned 180",
+    "1x 15712 (hair, clip) on 12885 (hair, bar)"
+   ]
+  },
+  {
+   "id": "40923",
+   "name": "40923 - Shrek, Donkey & Gingy Figures",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 19.5
+   },
+   "pieces": 28,
+   "snot_pieces": 18,
+   "extent": {
+    "above_head_plates": 1.5,
+    "lowest_below_head_top_plates": 16.0,
+    "side_overhang_studs": 7.5,
+    "front_overhang_studs": -0.8,
+    "back_overhang_studs": -0.8
+   },
+   "items": [
+    {
+     "part": "88930",
+     "color": "Lime",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "67329",
+     "color": "Dark Orange",
+     "studs": "up",
+     "attached_to": "face+head",
+     "count": 2
+    },
+    {
+     "part": "85984",
+     "color": "Medium Nougat",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "3023b",
+     "color": "Medium Nougat",
+     "studs": "front",
+     "attached_to": "face",
+     "count": 2
+    },
+    {
+     "part": "6141",
+     "color": "White",
+     "studs": "front",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "24246",
+     "color": "Bright Light Blue",
+     "studs": "front",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "3023b",
+     "color": "Medium Nougat",
+     "studs": "side",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "3069b",
+     "color": "Medium Nougat",
+     "studs": "side",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "85984",
+     "color": "Medium Nougat",
+     "studs": "side",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "32952",
+     "color": "Light Bluish Grey",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "32952",
+     "color": "Light Bluish Grey",
+     "studs": "up",
+     "attached_to": "face+head",
+     "count": 1
+    },
+    {
+     "part": "3023b",
+     "color": "Medium Nougat",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "3069b",
+     "color": "Medium Nougat",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "3623",
+     "color": "Medium Nougat",
+     "studs": "front",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "3069b",
+     "color": "Medium Nougat",
+     "studs": "front",
+     "attached_to": "face",
+     "count": 1
+    },
+    {
+     "part": "3021",
+     "color": "Medium Nougat",
+     "studs": "back",
+     "attached_to": "torso",
+     "count": 1
+    },
+    {
+     "part": "3623",
+     "color": "Medium Nougat",
+     "studs": "back",
+     "attached_to": "torso",
+     "count": 1
+    },
+    {
+     "part": "3623",
+     "color": "Medium Nougat",
+     "studs": "back",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "63864",
+     "color": "Medium Nougat",
+     "studs": "back",
+     "attached_to": "hair",
+     "count": 1
+    }
+   ],
+   "full_hair": {
+    "color": "Medium Nougat",
+    "pieces": 28,
+    "in_head_shell": 0,
+    "sides": {},
+    "parts": {}
+   },
+   "tags": [
+    "long (reaches below head mid-height)",
+    "wider than head (side overhang)",
+    "SNOT-heavy (sideways pieces)"
+   ],
+   "exact_attachments": []
+  },
+  {
+   "id": "41486",
+   "name": "41486 - Captain Phasma",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 21.5
+   },
+   "pieces": 4,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 0.5,
+    "lowest_below_head_top_plates": 1.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -1.4,
+    "back_overhang_studs": -1.0
+   },
+   "items": [
+    {
+     "part": "15068",
+     "color": "Light Bluish Grey",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 4
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "4x 15068 (hair, hole) on 22885 (head, stud)",
+    "2x 15068 (hair, hole) on 22885 (head, stud) turned 270",
+    "2x 15068 (hair, hole) on 22885 (head, stud) turned 90",
+    "2x 15068 (hair, hole) on 32028 (head, stud) turned 90",
+    "2x 15068 (hair, hole) on 32028 (head, stud) turned 270",
+    "2x 15068 (hair, hole) on 3022 (head, stud) turned 90",
+    "2x 15068 (hair, hole) on 3022 (head, stud) turned 270"
+   ]
+  },
+  {
+   "id": "41488",
+   "name": "41488 - Master Wu",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 3,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 2.8,
+    "lowest_below_head_top_plates": 1.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -1.0,
+    "back_overhang_studs": -1.0
+   },
+   "items": [
+    {
+     "part": "44375b",
+     "color": "Tan",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "6141",
+     "color": "Tan",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "93059",
+     "color": "Tan",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    }
+   ],
+   "full_hair": {
+    "color": "Tan",
+    "pieces": 4,
+    "in_head_shell": 1,
+    "sides": {
+     "top/inside": 1
+    },
+    "parts": {
+     "3961": 1
+    }
+   },
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "4x 44375b (hair, hole) on 3961 (head, stud)",
+    "1x 93059 (hair, tube) on 6141 (hair, stud)"
+   ]
+  },
+  {
+   "id": "41490",
+   "name": "41490 - Superman & Wonder Woman",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 5,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 1.5,
+    "lowest_below_head_top_plates": 1.5,
+    "side_overhang_studs": 7.16,
+    "front_overhang_studs": -1.6,
+    "back_overhang_studs": -0.29
+   },
+   "items": [
+    {
+     "part": "88930",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 4
+    },
+    {
+     "part": "50746",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "face",
+     "count": 1
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "wider than head (side overhang)"
+   ],
+   "exact_attachments": [
+    "8x 88930 (hair, hole) on 3020 (head, stud) turned 180",
+    "8x 88930 (hair, hole) on 32028 (head, stud)",
+    "2x 88930 (hair, hole) on 3003 (head, stud) turned 180",
+    "2x 88930 (hair, hole) on 22885 (head, stud)",
+    "2x 88930 (hair, hole) on 22885 (head, stud) turned 270",
+    "2x 88930 (hair, hole) on 22885 (head, stud) turned 90",
+    "2x 88930 (hair, hole) on 32028 (head, stud) turned 90",
+    "2x 88930 (hair, hole) on 32028 (head, stud) turned 270",
+    "2x 88930 (hair, hole) on 3022 (head, stud) turned 90",
+    "2x 88930 (hair, hole) on 3022 (head, stud) turned 270",
+    "1x 50746 (hair, hole) on 99780 (face, open) turned 180"
+   ]
+  },
+  {
+   "id": "41491",
+   "name": "41491 - Batman & The Joker",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 15,
+   "snot_pieces": 2,
+   "extent": {
+    "above_head_plates": 3.5,
+    "lowest_below_head_top_plates": 4.0,
+    "side_overhang_studs": 8.2,
+    "front_overhang_studs": -1.8,
+    "back_overhang_studs": -0.2
+   },
+   "items": [
+    {
+     "part": "93273",
+     "color": "Green",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "3023b",
+     "color": "Blue",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "15571",
+     "color": "Blue",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "22385",
+     "color": "Blue",
+     "studs": "side",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "15068",
+     "color": "Green",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "3022",
+     "color": "Green",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "3069b",
+     "color": "Green",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "3024",
+     "color": "Green",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "3024",
+     "color": "Green",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "11477",
+     "color": "Green",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "11477",
+     "color": "Green",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    }
+   ],
+   "full_hair": {
+    "color": "Green",
+    "pieces": 40,
+    "in_head_shell": 25,
+    "sides": {
+     "back": 13,
+     "sides": 8,
+     "top/inside": 4
+    },
+    "parts": {
+     "50950": 8,
+     "3024": 4,
+     "3023b": 3,
+     "11477": 2,
+     "2420": 2,
+     "15068": 2,
+     "3022": 2,
+     "3020": 1,
+     "32028": 1
+    }
+   },
+   "tags": [
+    "volume on top (>= 1 brick above head)",
+    "wider than head (side overhang)"
+   ],
+   "exact_attachments": [
+    "4x 22385 (hair, hole) on 22885 (head, open) turned 180",
+    "4x 3023b (hair, hole) on 3031 (head, stud)",
+    "4x 93273 (hair, hole) on 3023b (head, stud) turned 270",
+    "4x 3022 (hair, hole) on 3020 (head, stud) turned 90",
+    "2x 15571 (hair, hole) on 3023b (hair, stud) turned 180",
+    "2x 15571 (hair, hole) on 3023b (hair, stud)",
+    "2x 93273 (hair, hole) on 22885 (head, stud)",
+    "2x 93273 (hair, hole) on 22885 (head, stud) turned 180",
+    "2x 15068 (hair, hole) on 3020 (head, stud) turned 90",
+    "2x 3069b (hair, hole) on 3022 (hair, stud)",
+    "2x 11477 (hair, hole) on 3024 (hair, stud) turned 180",
+    "1x 3024 (hair, hole) on 3020 (head, stud) turned 90",
+    "1x 11477 (hair, hole) on 3020 (head, stud) turned 270",
+    "1x 11477 (hair, hole) on 3022 (hair, stud) turned 180",
+    "1x 3024 (hair, hole) on 3022 (hair, stud)"
+   ]
+  },
+  {
+   "id": "41493",
+   "name": "41493 - Black Panther & Dr. Strange",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 2,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 0.0,
+    "lowest_below_head_top_plates": 2.0,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -2.2,
+    "back_overhang_studs": -0.8
+   },
+   "items": [
+    {
+     "part": "2431",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "88930",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    }
+   ],
+   "full_hair": {
+    "color": "Black",
+    "pieces": 12,
+    "in_head_shell": 10,
+    "sides": {
+     "sides": 4,
+     "front (fringe)": 3,
+     "top/inside": 2,
+     "back": 1
+    },
+    "parts": {
+     "3710": 3,
+     "85984": 2,
+     "3069b": 2,
+     "3070b": 2,
+     "88930": 1
+    }
+   },
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "4x 88930 (hair, hole) on 22885 (head, stud)",
+    "4x 2431 (hair, hole) on 3710 (head, stud)",
+    "2x 88930 (hair, hole) on 3003 (head, stud)",
+    "1x 88930 (hair, hole) on 22885 (head, stud) turned 90",
+    "1x 88930 (hair, hole) on 22885 (head, stud) turned 270"
+   ]
+  },
+  {
+   "id": "41496",
+   "name": "41496 - Supergirl & Martian Manhunter",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 11,
+   "snot_pieces": 1,
+   "extent": {
+    "above_head_plates": 1.0,
+    "lowest_below_head_top_plates": 2.0,
+    "side_overhang_studs": 6.8,
+    "front_overhang_studs": -0.6,
+    "back_overhang_studs": -0.2
+   },
+   "items": [
+    {
+     "part": "11477",
+     "color": "Dark Tan",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "15068",
+     "color": "Dark Tan",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "3023b",
+     "color": "Sand Green",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "50950",
+     "color": "Sand Green",
+     "studs": "up",
+     "attached_to": "face+head",
+     "count": 2
+    },
+    {
+     "part": "3069b",
+     "color": "Sand Green",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "3023b",
+     "color": "Sand Green",
+     "studs": "back",
+     "attached_to": "head+torso",
+     "count": 1
+    }
+   ],
+   "full_hair": {
+    "color": "Sand Green",
+    "pieces": 11,
+    "in_head_shell": 0,
+    "sides": {},
+    "parts": {}
+   },
+   "tags": [
+    "wider than head (side overhang)"
+   ],
+   "exact_attachments": [
+    "4x 50950 (hair, hole) on 3003 (face, stud)",
+    "4x 3023b (hair, hole) on 3021 (head, stud) turned 270",
+    "4x 3069b (hair, hole) on 3023b (hair, stud) turned 270",
+    "2x 11477 (hair, hole) on 22885 (head, stud)",
+    "2x 15068 (hair, hole) on 22885 (head, stud)",
+    "2x 3023b (hair, hole) on 3710 (head, stud) turned 270",
+    "2x 50950 (torso, hole) on 3023b (hair, stud)",
+    "2x 50950 (hair, hole) on 3021 (head, stud) turned 90",
+    "1x 15068 (hair, hole) on 22885 (head, stud) turned 270",
+    "1x 15068 (hair, hole) on 22885 (head, stud) turned 90",
+    "1x 11477 (hair, hole) on 3020 (head, stud)",
+    "1x 11477 (hair, hole) on 3020 (head, stud) turned 180",
+    "1x 15068 (hair, hole) on 3020 (head, stud)",
+    "1x 15068 (hair, hole) on 3020 (head, stud) turned 180",
+    "1x 15068 (hair, hole) on 3023b (head, stud) turned 90",
+    "1x 15068 (hair, hole) on 3023b (head, stud) turned 270"
+   ]
+  },
+  {
+   "id": "41498",
+   "name": "41498 - Boba Fett & Han Solo In Carbonite",
+   "head": {
+    "wStuds": 8.4,
+    "dStuds": 4.2,
+    "hPlates": 8.0
+   },
+   "pieces": 6,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": -4.2,
+    "lowest_below_head_top_plates": 9.0,
+    "side_overhang_studs": 10.7,
+    "front_overhang_studs": -1.2,
+    "back_overhang_studs": 1.0
+   },
+   "items": [
+    {
+     "part": "15068",
+     "color": "Sand Green",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 4
+    },
+    {
+     "part": "60897",
+     "color": "Black",
+     "studs": "down",
+     "attached_to": "torso",
+     "count": 1
+    },
+    {
+     "part": "3070b",
+     "color": "Trans Clear",
+     "studs": "down",
+     "attached_to": "hair",
+     "count": 1
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "wider than head (side overhang)",
+    "back overhang"
+   ],
+   "exact_attachments": [
+    "4x 15068 (hair, hole) on 22885 (head, stud)",
+    "4x 15068 (hair, hole) on 3020 (head, stud)",
+    "4x 15068 (hair, hole) on 3020 (head, stud) turned 180",
+    "2x 15068 (hair, hole) on 22885 (head, stud) turned 90",
+    "2x 15068 (hair, hole) on 22885 (head, stud) turned 270",
+    "1x 3070b (hair, hole) on 60897 (hair, stud) turned 180"
+   ]
+  },
+  {
+   "id": "41585",
+   "name": "41585 - Batman",
+   "head": {
+    "wStuds": 4.5,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 4,
+   "snot_pieces": 4,
+   "extent": {
+    "above_head_plates": 2.5,
+    "lowest_below_head_top_plates": 2.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -1.8,
+    "back_overhang_studs": -1.8
+   },
+   "items": [
+    {
+     "part": "32028",
+     "color": "Black",
+     "studs": "side",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "15068",
+     "color": "Black",
+     "studs": "side",
+     "attached_to": "head",
+     "count": 2
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "SNOT-heavy (sideways pieces)"
+   ],
+   "exact_attachments": [
+    "4x 15068 (hair, hole) on 32028 (hair, stud) turned 180",
+    "4x 15068 (hair, hole) on 3020 (head, stud) turned 270"
+   ]
+  },
+  {
+   "id": "41586",
+   "name": "41586 - Batgirl",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 6,
+   "snot_pieces": 2,
+   "extent": {
+    "above_head_plates": 3.5,
+    "lowest_below_head_top_plates": 4.0,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -3.0,
+    "back_overhang_studs": -1.8
+   },
+   "items": [
+    {
+     "part": "3023b",
+     "color": "Medium Lilac",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "15571",
+     "color": "Medium Lilac",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "22385",
+     "color": "Medium Lilac",
+     "studs": "side",
+     "attached_to": "head",
+     "count": 2
+    }
+   ],
+   "full_hair": {
+    "color": "Medium Lilac",
+    "pieces": 32,
+    "in_head_shell": 26,
+    "sides": {
+     "top/inside": 10,
+     "sides": 8,
+     "back": 7,
+     "front (fringe)": 1
+    },
+    "parts": {
+     "92593": 4,
+     "3069b": 4,
+     "2431": 4,
+     "3022": 3,
+     "3031": 3,
+     "3023b": 2,
+     "87079": 2,
+     "26603": 2,
+     "30414": 1,
+     "3010": 1
+    }
+   },
+   "tags": [
+    "volume on top (>= 1 brick above head)",
+    "SNOT-heavy (sideways pieces)"
+   ],
+   "exact_attachments": [
+    "4x 22385 (hair, hole) on 22885 (head, open) turned 180",
+    "4x 3023b (hair, hole) on 3031 (head, stud) turned 270",
+    "2x 15571 (hair, hole) on 3023b (hair, stud) turned 180",
+    "2x 15571 (hair, hole) on 3023b (hair, stud)"
+   ]
+  },
+  {
+   "id": "41587",
+   "name": "41587 - Robin",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 7,
+   "snot_pieces": 1,
+   "extent": {
+    "above_head_plates": 1.9,
+    "lowest_below_head_top_plates": 2.0,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -1.6,
+    "back_overhang_studs": -0.8
+   },
+   "items": [
+    {
+     "part": "15068",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 3
+    },
+    {
+     "part": "99206",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "3023b",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "85984",
+     "color": "Reddish Brown",
+     "studs": "side",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "85984",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "3x 15068 (hair, hole) on 22885 (head, stud)",
+    "2x 15068 (hair, hole) on 22885 (head, stud) turned 270",
+    "2x 99206 (hair, hole) on 22885 (head, stud) turned 90",
+    "2x 85984 (hair, hole) on 99206 (hair, open)",
+    "2x 85984 (hair, hole) on 99206 (hair, stud) turned 180",
+    "2x 3023b (hair, hole) on 99206 (hair, stud)",
+    "2x 15068 (hair, hole) on 3023b (head, stud) turned 180",
+    "1x 99206 (hair, hole) on 3003 (head, stud) turned 90",
+    "1x 99206 (hair, hole) on 22885 (head, stud)",
+    "1x 15068 (hair, hole) on 22885 (head, stud) turned 90",
+    "1x 15068 (hair, hole) on 3023b (head, stud) turned 90",
+    "1x 15068 (hair, hole) on 3023b (head, stud) turned 270",
+    "1x 15068 (hair, hole) on 32028 (head, stud) turned 90",
+    "1x 15068 (hair, hole) on 32028 (head, stud) turned 270"
+   ]
+  },
+  {
+   "id": "41591",
+   "name": "41591 - Black Widow",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 7,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 1.0,
+    "lowest_below_head_top_plates": 2.0,
+    "side_overhang_studs": 0.2,
+    "front_overhang_studs": -1.4,
+    "back_overhang_studs": 0.0
+   },
+   "items": [
+    {
+     "part": "15068",
+     "color": "Dark Orange",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "11477",
+     "color": "Dark Orange",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "3710",
+     "color": "Dark Orange",
+     "studs": "up",
+     "attached_to": "face+head",
+     "count": 1
+    },
+    {
+     "part": "93606",
+     "color": "Dark Orange",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "93606",
+     "color": "Dark Orange",
+     "studs": "up",
+     "attached_to": "face+head",
+     "count": 1
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "4x 93606 (hair, hole) on 22885 (head, stud)",
+    "4x 93606 (hair, hole) on 3710 (hair, stud)",
+    "2x 15068 (hair, hole) on 3021 (head, stud) turned 90",
+    "2x 3710 (hair, hole) on 3021 (head, stud) turned 270",
+    "2x 93606 (hair, hole) on 3021 (head, stud) turned 270",
+    "2x 15068 (hair, hole) on 3024 (head, stud) turned 90",
+    "1x 11477 (hair, hole) on 3022 (head, stud) turned 90",
+    "1x 3710 (hair, hole) on 3022 (head, stud) turned 270",
+    "1x 11477 (hair, hole) on 3022 (head, stud) turned 270",
+    "1x 93606 (hair, hole) on 3022 (head, stud) turned 270",
+    "1x 3710 (hair, hole) on 3022 (face, stud) turned 270",
+    "1x 93606 (hair, hole) on 3022 (face, stud) turned 270"
+   ]
+  },
+  {
+   "id": "41592",
+   "name": "41592 - The Hulk",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 7,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 1.4,
+    "lowest_below_head_top_plates": 0.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -1.2,
+    "back_overhang_studs": -0.6
+   },
+   "items": [
+    {
+     "part": "50746",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 7
+    }
+   ],
+   "full_hair": {
+    "color": "Black",
+    "pieces": 23,
+    "in_head_shell": 16,
+    "sides": {
+     "sides": 10,
+     "back": 3,
+     "front (fringe)": 2,
+     "top/inside": 1
+    },
+    "parts": {
+     "50746": 6,
+     "3024": 4,
+     "3031": 2,
+     "98138": 2,
+     "3710": 2
+    }
+   },
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "5x 50746 (hair, hole) on 3031 (head, stud) turned 270",
+    "1x 50746 (hair, hole) on 3031 (head, stud) turned 180",
+    "1x 50746 (hair, hole) on 3031 (head, stud)"
+   ]
+  },
+  {
+   "id": "41593",
+   "name": "41593 - Captain Jack Sparrow",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 4,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 0.5,
+    "lowest_below_head_top_plates": 1.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -1.2,
+    "back_overhang_studs": -0.8
+   },
+   "items": [
+    {
+     "part": "15068",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 4
+    }
+   ],
+   "full_hair": {
+    "color": "Black",
+    "pieces": 22,
+    "in_head_shell": 18,
+    "sides": {
+     "sides": 8,
+     "front (fringe)": 5,
+     "back": 4,
+     "top/inside": 1
+    },
+    "parts": {
+     "3021": 4,
+     "32028": 3,
+     "3710": 3,
+     "3024": 2,
+     "98138": 2,
+     "3023b": 2,
+     "99780": 1,
+     "2420": 1
+    }
+   },
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "4x 15068 (hair, hole) on 22885 (head, stud)",
+    "3x 15068 (hair, hole) on 3021 (head, stud)",
+    "3x 15068 (hair, hole) on 3021 (head, stud) turned 180",
+    "2x 15068 (hair, hole) on 22885 (head, stud) turned 90",
+    "2x 15068 (hair, hole) on 22885 (head, stud) turned 270",
+    "1x 15068 (hair, hole) on 32028 (head, stud) turned 90",
+    "1x 15068 (hair, hole) on 32028 (head, stud) turned 270"
+   ]
+  },
+  {
+   "id": "41594",
+   "name": "41594 - Captain Armando Salazar",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.2,
+    "hPlates": 17.5
+   },
+   "pieces": 16,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 3.9,
+    "lowest_below_head_top_plates": 2.0,
+    "side_overhang_studs": 2.0,
+    "front_overhang_studs": -0.78,
+    "back_overhang_studs": -0.8
+   },
+   "items": [
+    {
+     "part": "24201",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 3
+    },
+    {
+     "part": "3024",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "11477",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "61678",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "face+head",
+     "count": 2
+    },
+    {
+     "part": "50746",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "3623",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "50950",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "61678",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "50950",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "3024",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "volume on top (>= 1 brick above head)",
+    "wider than head (side overhang)"
+   ],
+   "exact_attachments": [
+    "4x 61678 (hair, hole) on 3031 (head, stud)",
+    "3x 3623 (hair, hole) on 3031 (head, stud) turned 270",
+    "2x 50950 (hair, hole) on 3031 (head, stud)",
+    "2x 50950 (hair, hole) on 3623 (hair, stud) turned 90",
+    "2x 61678 (hair, hole) on 24201 (hair, open) turned 180",
+    "1x 11477 (hair, hole) on 3031 (head, stud)",
+    "1x 3024 (hair, hole) on 3031 (head, stud) turned 90",
+    "1x 3024 (hair, hole) on 3031 (head, stud) turned 270",
+    "1x 11477 (hair, hole) on 3031 (head, stud) turned 180",
+    "1x 61678 (hair, hole) on 3623 (hair, stud) turned 270",
+    "1x 61678 (hair, hole) on 3024 (hair, stud) turned 90",
+    "1x 61678 (hair, hole) on 3024 (head, stud)",
+    "1x 50746 (hair, hole) on 24201 (hair, open) turned 180",
+    "1x 3024 (hair, hole) on 24201 (hair, open)",
+    "1x 50950 (hair, hole) on 24201 (hair, open) turned 180",
+    "1x 50746 (hair, hole) on 3024 (hair, stud) turned 180",
+    "1x 11477 (hair, hole) on 3024 (hair, stud) turned 270"
+   ]
+  },
+  {
+   "id": "41595",
+   "name": "41595 - Belle",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 15,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 3.0,
+    "lowest_below_head_top_plates": 2.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -0.07,
+    "back_overhang_studs": -0.0
+   },
+   "items": [
+    {
+     "part": "3623",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "63864",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "99206",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "15068",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "3937",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "3022",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "3022",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "6134",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "face+head",
+     "count": 1
+    },
+    {
+     "part": "4032a",
+     "color": "Yellow",
+     "studs": "up",
+     "attached_to": "face+head",
+     "count": 1
+    },
+    {
+     "part": "18674",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "face",
+     "count": 1
+    },
+    {
+     "part": "4740",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "volume on top (>= 1 brick above head)"
+   ],
+   "exact_attachments": [
+    "8x 15068 (hair, hole) on 99206 (hair, stud) turned 180",
+    "6x 63864 (hair, hole) on 3623 (hair, stud)",
+    "4x 3022 (hair, hole) on 3022 (hair, stud)",
+    "4x 18674 (hair, hole) on 4032a (hair, stud)",
+    "4x 4032a (hair, hole) on 6134 (hair, open)",
+    "2x 3937 (hair, hole) on 22885 (head, stud)",
+    "2x 99206 (hair, hole) on 22885 (head, stud) turned 90",
+    "2x 99206 (hair, hole) on 22885 (head, stud) turned 270",
+    "2x 3623 (hair, hole) on 2420 (head, stud) turned 90",
+    "2x 3623 (hair, hole) on 2420 (head, stud) turned 180",
+    "2x 3623 (hair, hole) on 3710 (head, stud) turned 270",
+    "2x 3022 (hair, hole) on 3710 (head, stud)",
+    "2x 15068 (head, hole) on 99206 (hair, open) turned 180",
+    "2x 11477 (head, hole) on 99206 (hair, open) turned 180",
+    "2x 3937 (hair, clip) on 6134 (hair, bar)",
+    "1x 3022 (hair, hole) on 2420 (head, stud) turned 180",
+    "1x 3022 (hair, hole) on 2420 (head, stud) turned 270",
+    "1x 4740 (hair, tube) on 18674 (hair, open)"
+   ]
+  },
+  {
+   "id": "41596",
+   "name": "41596 - Beast",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 10,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 2.0,
+    "lowest_below_head_top_plates": 1.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -0.58,
+    "back_overhang_studs": 0.2
+   },
+   "items": [
+    {
+     "part": "85984",
+     "color": "Dark Orange",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 4
+    },
+    {
+     "part": "92946",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 4
+    },
+    {
+     "part": "3020",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "3020",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    }
+   ],
+   "full_hair": {
+    "color": "Reddish Brown",
+    "pieces": 12,
+    "in_head_shell": 2,
+    "sides": {
+     "top/inside": 1,
+     "front (fringe)": 1
+    },
+    "parts": {
+     "3022": 1,
+     "99780": 1
+    }
+   },
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "8x 3020 (hair, hole) on 3020 (hair, stud)",
+    "4x 92946 (hair, hole) on 22885 (head, stud)",
+    "4x 85984 (hair, hole) on 22885 (head, stud)",
+    "4x 3020 (hair, hole) on 3022 (head, stud) turned 90",
+    "2x 85984 (hair, hole) on 22885 (head, stud) turned 90",
+    "2x 85984 (hair, hole) on 22885 (head, stud) turned 270",
+    "2x 3020 (hair, hole) on 92946 (hair, stud) turned 90",
+    "2x 3020 (hair, hole) on 92946 (hair, stud) turned 270"
+   ]
+  },
+  {
+   "id": "41599",
+   "name": "41599 - Wonder Woman",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 17.5
+   },
+   "pieces": 4,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 0.5,
+    "lowest_below_head_top_plates": 2.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -1.6,
+    "back_overhang_studs": -0.0
+   },
+   "items": [
+    {
+     "part": "88930",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "11477",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "25269",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "4x 88930 (hair, hole) on 32028 (head, stud)",
+    "3x 88930 (hair, hole) on 2420 (head, stud) turned 90",
+    "3x 88930 (hair, hole) on 2420 (head, stud)",
+    "1x 88930 (hair, hole) on 3023b (head, stud) turned 90",
+    "1x 88930 (hair, hole) on 3023b (head, stud) turned 270",
+    "1x 88930 (hair, hole) on 32028 (head, stud) turned 90",
+    "1x 88930 (hair, hole) on 32028 (head, stud) turned 270",
+    "1x 11477 (hair, hole) on 4032a (head, stud) turned 90",
+    "1x 88930 (hair, hole) on 4032a (head, stud) turned 90",
+    "1x 25269 (hair, hole) on 4032a (head, stud)",
+    "1x 88930 (hair, hole) on 4032a (head, stud) turned 270"
+   ]
+  },
+  {
+   "id": "41600",
+   "name": "41600 - Aquaman",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 9,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 1.5,
+    "lowest_below_head_top_plates": 1.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -1.2,
+    "back_overhang_studs": -0.8
+   },
+   "items": [
+    {
+     "part": "11477",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 8
+    },
+    {
+     "part": "3022",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "4x 11477 (hair, hole) on 32028 (head, stud)",
+    "4x 3022 (hair, hole) on 4032a (head, stud)",
+    "3x 11477 (hair, hole) on 32028 (head, stud) turned 270",
+    "2x 11477 (hair, hole) on 22885 (head, stud) turned 270",
+    "2x 11477 (hair, hole) on 3022 (hair, stud) turned 180",
+    "1x 11477 (hair, hole) on 22885 (head, stud) turned 90",
+    "1x 11477 (hair, hole) on 22885 (head, stud)",
+    "1x 11477 (hair, hole) on 32028 (head, stud) turned 90",
+    "1x 11477 (hair, hole) on 3022 (hair, stud)",
+    "1x 11477 (hair, hole) on 3022 (hair, stud) turned 270"
+   ]
+  },
+  {
+   "id": "41602",
+   "name": "41602 - Rey",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 14.5
+   },
+   "pieces": 7,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 1.5,
+    "lowest_below_head_top_plates": 1.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -2.0,
+    "back_overhang_studs": -0.8
+   },
+   "items": [
+    {
+     "part": "11477",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "25269",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "93273",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "3022",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "4x 93273 (hair, hole) on 3022 (hair, stud)",
+    "2x 11477 (hair, hole) on 22885 (head, stud)",
+    "2x 93273 (hair, hole) on 32028 (head, stud)",
+    "2x 93273 (hair, hole) on 32028 (head, stud) turned 180",
+    "2x 11477 (hair, hole) on 3710 (head, stud)",
+    "2x 3022 (hair, hole) on 3710 (head, stud)",
+    "1x 25269 (hair, hole) on 2420 (head, stud) turned 180",
+    "1x 3022 (hair, hole) on 2420 (head, stud)",
+    "1x 25269 (hair, hole) on 2420 (head, stud)",
+    "1x 3022 (hair, hole) on 2420 (head, stud) turned 90"
+   ]
+  },
+  {
+   "id": "41603",
+   "name": "41603 - Kylo Ren",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 9,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 2.0,
+    "lowest_below_head_top_plates": 1.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -1.6,
+    "back_overhang_studs": -0.0
+   },
+   "items": [
+    {
+     "part": "54200",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 4
+    },
+    {
+     "part": "93273",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 3
+    },
+    {
+     "part": "3021",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "3022",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "4x 3021 (hair, hole) on 3021 (head, stud)",
+    "4x 3022 (hair, hole) on 3021 (hair, stud) turned 90",
+    "2x 54200 (hair, hole) on 32028 (head, stud)",
+    "2x 93273 (hair, hole) on 32028 (head, stud) turned 90",
+    "2x 93273 (hair, hole) on 3021 (head, stud)",
+    "2x 3021 (hair, hole) on 3023b (head, stud) turned 270",
+    "2x 93273 (hair, hole) on 3021 (hair, stud)",
+    "1x 93273 (hair, hole) on 22885 (head, stud) turned 180",
+    "1x 93273 (hair, hole) on 22885 (head, stud)",
+    "1x 93273 (hair, hole) on 32028 (head, stud) turned 180",
+    "1x 93273 (hair, hole) on 32028 (head, stud)",
+    "1x 54200 (hair, hole) on 3023b (head, stud) turned 90",
+    "1x 54200 (hair, hole) on 3023b (head, stud) turned 270"
+   ]
+  },
+  {
+   "id": "41606",
+   "name": "41606 - Star-Lord",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 11,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 1.5,
+    "lowest_below_head_top_plates": 2.0,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -1.6,
+    "back_overhang_studs": -0.8
+   },
+   "items": [
+    {
+     "part": "11477",
+     "color": "Medium Nougat",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 5
+    },
+    {
+     "part": "54200",
+     "color": "Medium Nougat",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "2420",
+     "color": "Medium Nougat",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "3024",
+     "color": "Medium Nougat",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "3024",
+     "color": "Medium Nougat",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "3024",
+     "color": "Medium Nougat",
+     "studs": "up",
+     "attached_to": "face",
+     "count": 1
+    },
+    {
+     "part": "11477",
+     "color": "Medium Nougat",
+     "studs": "up",
+     "attached_to": "face+head",
+     "count": 1
+    }
+   ],
+   "full_hair": {
+    "color": "Medium Nougat",
+    "pieces": 16,
+    "in_head_shell": 5,
+    "sides": {
+     "top/inside": 4,
+     "front (fringe)": 1
+    },
+    "parts": {
+     "2420": 3,
+     "3022": 1,
+     "11477": 1
+    }
+   },
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "2x 11477 (hair, hole) on 3022 (head, stud)",
+    "2x 11477 (hair, hole) on 2420 (head, stud) turned 90",
+    "2x 11477 (hair, hole) on 2420 (hair, stud) turned 180",
+    "1x 11477 (hair, hole) on 22885 (head, stud) turned 90",
+    "1x 11477 (hair, hole) on 22885 (head, stud)",
+    "1x 11477 (hair, hole) on 87087 (head, stud) turned 270",
+    "1x 11477 (hair, hole) on 87087 (head, stud) turned 90",
+    "1x 11477 (hair, hole) on 3022 (head, stud) turned 180",
+    "1x 2420 (hair, hole) on 3022 (head, stud) turned 180",
+    "1x 2420 (hair, hole) on 2420 (head, stud)",
+    "1x 54200 (hair, hole) on 2420 (head, stud)",
+    "1x 2420 (hair, hole) on 2420 (head, stud) turned 270",
+    "1x 3024 (hair, hole) on 2420 (head, stud) turned 90",
+    "1x 11477 (hair, hole) on 2420 (face, stud) turned 180",
+    "1x 3024 (hair, hole) on 2420 (face, stud) turned 180",
+    "1x 3024 (hair, hole) on 2420 (hair, stud) turned 180"
+   ]
+  },
+  {
+   "id": "41607",
+   "name": "41607 - Gamora",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 6,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 1.4,
+    "lowest_below_head_top_plates": 1.0,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -1.6,
+    "back_overhang_studs": -0.0
+   },
+   "items": [
+    {
+     "part": "54200",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 4
+    },
+    {
+     "part": "88930",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "4x 88930 (hair, hole) on 22885 (head, stud) turned 270",
+    "4x 88930 (hair, hole) on 22885 (head, stud) turned 90",
+    "4x 88930 (hair, hole) on 22885 (head, stud)",
+    "2x 88930 (hair, hole) on 3003 (head, stud) turned 90",
+    "2x 88930 (hair, hole) on 3003 (head, stud) turned 270",
+    "2x 54200 (hair, hole) on 99780 (head, open) turned 90",
+    "2x 54200 (hair, hole) on 99780 (head, open) turned 270"
+   ]
+  },
+  {
+   "id": "41608",
+   "name": "41608 - Han Solo",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 14,
+   "snot_pieces": 2,
+   "extent": {
+    "above_head_plates": 0.5,
+    "lowest_below_head_top_plates": 2.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -0.2,
+    "back_overhang_studs": -0.6
+   },
+   "items": [
+    {
+     "part": "11477",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 8
+    },
+    {
+     "part": "54200",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "face",
+     "count": 2
+    },
+    {
+     "part": "3024",
+     "color": "Reddish Brown",
+     "studs": "side",
+     "attached_to": "face+head",
+     "count": 2
+    },
+    {
+     "part": "2420",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "4x 11477 (hair, hole) on 2420 (hair, stud)",
+    "4x 11477 (hair, hole) on 32028 (head, stud)",
+    "3x 2420 (hair, hole) on 3020 (head, stud)",
+    "3x 2420 (hair, hole) on 3020 (head, stud) turned 180",
+    "2x 6091 (face, hole) on 3024 (hair, stud) turned 90",
+    "2x 11477 (hair, hole) on 2420 (hair, stud) turned 180",
+    "1x 11477 (hair, hole) on 22885 (head, stud) turned 90",
+    "1x 11477 (hair, hole) on 22885 (head, stud) turned 270",
+    "1x 54200 (hair, hole) on 99780 (face, open) turned 270",
+    "1x 54200 (hair, hole) on 99780 (face, open) turned 90",
+    "1x 11477 (hair, hole) on 3020 (head, stud)",
+    "1x 11477 (hair, hole) on 3020 (head, stud) turned 180",
+    "1x 11477 (hair, hole) on 3024 (head, stud) turned 90",
+    "1x 11477 (hair, hole) on 3024 (head, stud) turned 270"
+   ]
+  },
+  {
+   "id": "41609",
+   "name": "41609 - Chewbacca",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 21,
+   "snot_pieces": 2,
+   "extent": {
+    "above_head_plates": 3.0,
+    "lowest_below_head_top_plates": 2.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -1.2,
+    "back_overhang_studs": -0.2
+   },
+   "items": [
+    {
+     "part": "54200",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 4
+    },
+    {
+     "part": "99206",
+     "color": "White",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "2420",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "2420",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "3023b",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "11477",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "6091",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "3710",
+     "color": "Blue",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "15068",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "3004",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "32028",
+     "color": "Reddish Brown",
+     "studs": "front",
+     "attached_to": "face+head",
+     "count": 1
+    },
+    {
+     "part": "32028",
+     "color": "Reddish Brown",
+     "studs": "back",
+     "attached_to": "head+torso",
+     "count": 1
+    }
+   ],
+   "full_hair": {
+    "color": "Reddish Brown",
+    "pieces": 50,
+    "in_head_shell": 29,
+    "sides": {
+     "sides": 18,
+     "back": 8,
+     "top/inside": 2,
+     "front (fringe)": 1
+    },
+    "parts": {
+     "3023b": 8,
+     "3022": 4,
+     "3623": 4,
+     "11477": 4,
+     "93604": 3,
+     "3245c": 2,
+     "3020": 2,
+     "50950": 2
+    }
+   },
+   "tags": [
+    "volume on top (>= 1 brick above head)"
+   ],
+   "exact_attachments": [
+    "4x 99206 (hair, hole) on 22885 (head, stud)",
+    "4x 32028 (hair, hole) on 99206 (hair, open) turned 180",
+    "2x 99206 (hair, hole) on 3003 (head, stud)",
+    "2x 99206 (hair, hole) on 3003 (head, stud) turned 180",
+    "2x 2420 (hair, hole) on 3623 (head, stud) turned 270",
+    "2x 3710 (hair, hole) on 3623 (head, stud) turned 270",
+    "2x 2420 (hair, hole) on 3623 (head, stud) turned 180",
+    "2x 3023b (hair, hole) on 99206 (hair, stud)",
+    "2x 3710 (hair, hole) on 99206 (hair, stud)",
+    "2x 2420 (hair, hole) on 99206 (hair, stud) turned 180",
+    "2x 2420 (hair, hole) on 99206 (hair, stud) turned 90",
+    "2x 6091 (hair, hole) on 3710 (hair, stud)",
+    "2x 3004 (hair, hole) on 3710 (hair, stud)",
+    "2x 2420 (hair, hole) on 2420 (hair, stud) turned 270",
+    "2x 11477 (hair, hole) on 2420 (hair, stud) turned 180",
+    "2x 2420 (hair, hole) on 2420 (hair, stud) turned 90",
+    "2x 11477 (hair, hole) on 2420 (hair, stud) turned 270",
+    "2x 15068 (hair, hole) on 3023b (hair, stud) turned 180",
+    "2x 54200 (hair, hole) on 3023b (hair, stud)",
+    "2x 93604 (face, hole) on 32028 (hair, stud)",
+    "2x 93604 (torso, hole) on 32028 (hair, stud)",
+    "1x 6091 (hair, hole) on 22885 (head, stud) turned 90",
+    "1x 6091 (hair, hole) on 22885 (head, stud) turned 270",
+    "1x 3023b (hair, hole) on 2420 (hair, stud) turned 90",
+    "1x 15068 (hair, hole) on 2420 (hair, stud) turned 270",
+    "1x 3023b (hair, hole) on 2420 (hair, stud)",
+    "1x 15068 (hair, hole) on 2420 (hair, stud) turned 180",
+    "1x 54200 (hair, hole) on 6091 (hair, stud) turned 90",
+    "1x 54200 (hair, hole) on 6091 (hair, stud) turned 270"
+   ]
+  },
+  {
+   "id": "41611",
+   "name": "41611 - Marty McFly and Doc Brown",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 13,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 0.5,
+    "lowest_below_head_top_plates": 3.0,
+    "side_overhang_studs": 9.0,
+    "front_overhang_studs": -0.2,
+    "back_overhang_studs": 0.0
+   },
+   "items": [
+    {
+     "part": "50950",
+     "color": "White",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 4
+    },
+    {
+     "part": "93273",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "25269",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "3023b",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "3023b",
+     "color": "White",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "25269",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "face",
+     "count": 1
+    },
+    {
+     "part": "2420",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "2420",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "face+head",
+     "count": 1
+    }
+   ],
+   "full_hair": {
+    "color": "Reddish Brown",
+    "pieces": 13,
+    "in_head_shell": 0,
+    "sides": {},
+    "parts": {}
+   },
+   "tags": [
+    "wider than head (side overhang)"
+   ],
+   "exact_attachments": [
+    "4x 50950 (hair, hole) on 22885 (head, stud)",
+    "2x 93273 (hair, hole) on 22885 (head, stud)",
+    "2x 93273 (hair, hole) on 22885 (head, stud) turned 180",
+    "2x 25269 (hair, hole) on 3022 (head, stud)",
+    "2x 2420 (hair, hole) on 3022 (head, stud)",
+    "2x 93273 (hair, hole) on 2420 (head, stud) turned 270",
+    "2x 93273 (hair, hole) on 2420 (head, stud) turned 180",
+    "2x 2420 (hair, hole) on 3022 (face, stud) turned 180",
+    "2x 50950 (hair, hole) on 3023b (head, stud)",
+    "2x 50950 (hair, hole) on 3666 (head, stud)",
+    "2x 3023b (hair, hole) on 3666 (head, stud)",
+    "2x 3023b (hair, hole) on 3023b (hair, stud)",
+    "1x 2420 (hair, hole) on 2420 (head, stud) turned 270",
+    "1x 2420 (hair, hole) on 2420 (head, stud)",
+    "1x 25269 (hair, hole) on 3022 (face, stud) turned 270",
+    "1x 50950 (hair, hole) on 22885 (head, stud) turned 90",
+    "1x 50950 (hair, hole) on 22885 (head, stud) turned 270"
+   ]
+  },
+  {
+   "id": "41613",
+   "name": "41613 - Mr. Incredible and Frozone",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 6,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 1.5,
+    "lowest_below_head_top_plates": 2.5,
+    "side_overhang_studs": 9.2,
+    "front_overhang_studs": -1.2,
+    "back_overhang_studs": -0.8
+   },
+   "items": [
+    {
+     "part": "6091",
+     "color": "Dark Tan",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "11477",
+     "color": "Dark Tan",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "88930",
+     "color": "White",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    }
+   ],
+   "full_hair": {
+    "color": "Dark Tan",
+    "pieces": 16,
+    "in_head_shell": 10,
+    "sides": {
+     "sides": 4,
+     "back": 4,
+     "top/inside": 2
+    },
+    "parts": {
+     "3020": 5,
+     "3069b": 2,
+     "87079": 2,
+     "3710": 1
+    }
+   },
+   "tags": [
+    "wider than head (side overhang)"
+   ],
+   "exact_attachments": [
+    "4x 88930 (hair, hole) on 22885 (head, stud) turned 270",
+    "4x 88930 (hair, hole) on 22885 (head, stud) turned 90",
+    "4x 88930 (hair, hole) on 22885 (head, stud)",
+    "2x 6091 (hair, hole) on 3004 (head, stud)",
+    "2x 11477 (hair, hole) on 3020 (head, stud) turned 180",
+    "2x 6091 (hair, hole) on 3710 (head, stud)",
+    "2x 11477 (hair, hole) on 6091 (hair, stud) turned 180",
+    "2x 88930 (hair, hole) on 3003 (head, stud) turned 90",
+    "2x 88930 (hair, hole) on 3003 (head, stud) turned 270"
+   ]
+  },
+  {
+   "id": "41614",
+   "name": "41614 - Owen and Blue",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 10,
+   "snot_pieces": 1,
+   "extent": {
+    "above_head_plates": 1.0,
+    "lowest_below_head_top_plates": 2.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -1.4,
+    "back_overhang_studs": -0.0
+   },
+   "items": [
+    {
+     "part": "11477",
+     "color": "Medium Nougat",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 4
+    },
+    {
+     "part": "2420",
+     "color": "Medium Nougat",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "54200",
+     "color": "Medium Nougat",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "3023b",
+     "color": "Medium Nougat",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "11477",
+     "color": "Medium Nougat",
+     "studs": "back",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "3023b",
+     "color": "Medium Nougat",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "2x 11477 (hair, hole) on 22885 (head, stud)",
+    "2x 3023b (hair, hole) on 3020 (head, stud) turned 270",
+    "2x 2420 (hair, hole) on 3020 (head, stud) turned 90",
+    "2x 2420 (hair, hole) on 3020 (head, stud)",
+    "2x 11477 (hair, hole) on 3023b (head, stud) turned 90",
+    "2x 3023b (hair, hole) on 2420 (hair, stud)",
+    "1x 54200 (hair, hole) on 22885 (head, stud)",
+    "1x 11477 (hair, hole) on 3020 (head, stud) turned 90",
+    "1x 2420 (hair, hole) on 3023b (head, stud) turned 90",
+    "1x 2420 (hair, hole) on 3023b (head, stud)",
+    "1x 11477 (hair, hole) on 2420 (head, stud) turned 90",
+    "1x 11477 (hair, hole) on 3024 (head, stud) turned 90",
+    "1x 11477 (hair, hole) on 2420 (hair, stud) turned 270",
+    "1x 11477 (hair, hole) on 3023b (hair, stud) turned 180"
+   ]
+  },
+  {
+   "id": "41615",
+   "name": "41615 - Harry Potter and Hedwig",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 5,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 1.0,
+    "lowest_below_head_top_plates": 2.0,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -1.3,
+    "back_overhang_studs": -0.6
+   },
+   "items": [
+    {
+     "part": "15068",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "93273",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "3021",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "face+head",
+     "count": 1
+    },
+    {
+     "part": "93273",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "face",
+     "count": 1
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "4x 3021 (hair, hole) on 4032a (head, stud) turned 90",
+    "4x 15068 (hair, hole) on 32028 (head, stud)",
+    "2x 93273 (hair, hole) on 32028 (head, stud) turned 270",
+    "2x 15068 (hair, hole) on 3021 (hair, stud)",
+    "2x 15068 (hair, hole) on 3021 (hair, stud) turned 180",
+    "2x 93273 (hair, hole) on 3021 (hair, stud)",
+    "1x 93273 (hair, hole) on 22885 (head, stud) turned 180",
+    "1x 93273 (hair, hole) on 22885 (head, stud)",
+    "1x 3021 (hair, hole) on 2420 (face, stud)",
+    "1x 93273 (hair, hole) on 2420 (face, stud)",
+    "1x 3021 (hair, hole) on 2420 (face, stud) turned 270",
+    "1x 93273 (hair, hole) on 2420 (face, stud) turned 270"
+   ]
+  },
+  {
+   "id": "41616",
+   "name": "41616 - Hermione Granger",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 14.5
+   },
+   "pieces": 4,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 0.5,
+    "lowest_below_head_top_plates": 1.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -1.4,
+    "back_overhang_studs": -0.8
+   },
+   "items": [
+    {
+     "part": "15068",
+     "color": "Reddish Brown",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 4
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "8x 15068 (hair, hole) on 22885 (head, stud)",
+    "4x 15068 (hair, hole) on 3020 (head, stud)",
+    "4x 15068 (hair, hole) on 3020 (head, stud) turned 180"
+   ]
+  },
+  {
+   "id": "41617",
+   "name": "41617 - Elsa",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 21.5
+   },
+   "pieces": 7,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 2.0,
+    "lowest_below_head_top_plates": 2.0,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -0.2,
+    "back_overhang_studs": -1.0
+   },
+   "items": [
+    {
+     "part": "3023b",
+     "color": "Bright Light Yellow",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 3
+    },
+    {
+     "part": "88930",
+     "color": "Bright Light Yellow",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "6091",
+     "color": "Bright Light Yellow",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "11477",
+     "color": "Bright Light Yellow",
+     "studs": "up",
+     "attached_to": "face+head",
+     "count": 1
+    },
+    {
+     "part": "11477",
+     "color": "Bright Light Yellow",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "6x 3023b (hair, hole) on 3020 (head, stud)",
+    "4x 88930 (hair, hole) on 22885 (head, stud)",
+    "2x 88930 (hair, hole) on 3003 (head, stud) turned 90",
+    "1x 88930 (hair, hole) on 22885 (head, stud) turned 270",
+    "1x 88930 (hair, hole) on 22885 (head, stud) turned 90",
+    "1x 11477 (hair, hole) on 3023b (hair, stud)",
+    "1x 11477 (hair, hole) on 3023b (hair, stud) turned 180",
+    "1x 6091 (hair, hole) on 3023b (hair, stud) turned 180",
+    "1x 11477 (hair, hole) on 6091 (hair, stud) turned 180",
+    "1x 11477 (hair, hole) on 3024 (face, stud) turned 270"
+   ]
+  },
+  {
+   "id": "41618",
+   "name": "41618 - Anna and Olaf",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 4,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 0.0,
+    "lowest_below_head_top_plates": 2.0,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -1.2,
+    "back_overhang_studs": -0.8
+   },
+   "items": [
+    {
+     "part": "15068",
+     "color": "Dark Orange",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 4
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "4x 15068 (hair, hole) on 22885 (head, stud)",
+    "3x 15068 (hair, hole) on 3020 (head, stud)",
+    "3x 15068 (hair, hole) on 3020 (head, stud) turned 180",
+    "2x 15068 (hair, hole) on 22885 (head, stud) turned 270",
+    "2x 15068 (hair, hole) on 22885 (head, stud) turned 90",
+    "1x 15068 (hair, hole) on 3023b (head, stud) turned 90",
+    "1x 15068 (hair, hole) on 3023b (head, stud) turned 270"
+   ]
+  },
+  {
+   "id": "41620",
+   "name": "41620 - Stormtrooper",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 21.5
+   },
+   "pieces": 2,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 1.5,
+    "lowest_below_head_top_plates": 0.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -1.6,
+    "back_overhang_studs": -1.0
+   },
+   "items": [
+    {
+     "part": "88930",
+     "color": "White",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "4x 88930 (hair, hole) on 22885 (head, stud)",
+    "2x 88930 (hair, hole) on 3003 (head, stud) turned 90",
+    "2x 88930 (hair, hole) on 3003 (head, stud) turned 270",
+    "2x 88930 (hair, hole) on 22885 (head, stud) turned 270",
+    "2x 88930 (hair, hole) on 22885 (head, stud) turned 90",
+    "2x 88930 (hair, hole) on 3710 (head, stud) turned 90",
+    "2x 88930 (hair, hole) on 3710 (head, stud) turned 270"
+   ]
+  },
+  {
+   "id": "41621",
+   "name": "41621 - Ron Weasley and Albus Dumbledore",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 19,
+   "snot_pieces": 3,
+   "extent": {
+    "above_head_plates": 2.5,
+    "lowest_below_head_top_plates": 2.5,
+    "side_overhang_studs": 6.8,
+    "front_overhang_studs": -1.2,
+    "back_overhang_studs": 0.05
+   },
+   "items": [
+    {
+     "part": "15068",
+     "color": "Dark Orange",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 4
+    },
+    {
+     "part": "99206",
+     "color": "Dark Red",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "85984",
+     "color": "Dark Red",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "54200",
+     "color": "Dark Red",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "2431",
+     "color": "Dark Brown",
+     "studs": "side",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "3003",
+     "color": "Dark Red",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "3004",
+     "color": "Dark Brown",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "85984",
+     "color": "Dark Red",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "2431",
+     "color": "Dark Brown",
+     "studs": "back",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "15068",
+     "color": "Dark Red",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "29120",
+     "color": "Dark Red",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "29119",
+     "color": "Dark Red",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    }
+   ],
+   "full_hair": {
+    "color": "Dark Red",
+    "pieces": 23,
+    "in_head_shell": 4,
+    "sides": {
+     "top/inside": 4
+    },
+    "parts": {
+     "3003": 2,
+     "2420": 2
+    }
+   },
+   "tags": [
+    "wider than head (side overhang)"
+   ],
+   "exact_attachments": [
+    "8x 15068 (hair, hole) on 22885 (head, stud)",
+    "4x 2431 (hair, hole) on 99206 (hair, open) turned 180",
+    "4x 85984 (hair, hole) on 99206 (hair, stud)",
+    "4x 15068 (hair, hole) on 3020 (head, stud)",
+    "4x 2431 (hair, hole) on 3020 (head, stud)",
+    "4x 15068 (hair, hole) on 3020 (head, stud) turned 180",
+    "2x 99206 (hair, hole) on 22885 (head, stud) turned 270",
+    "2x 99206 (hair, hole) on 22885 (head, stud) turned 90",
+    "2x 99206 (hair, hole) on 22885 (head, stud)",
+    "2x 15068 (hair, hole) on 3003 (hair, stud)",
+    "2x 3004 (hair, hole) on 3003 (head, stud)",
+    "2x 3003 (hair, hole) on 99206 (hair, stud) turned 270",
+    "2x 3003 (hair, hole) on 99206 (hair, stud) turned 90",
+    "2x 15068 (hair, hole) on 3004 (hair, stud)",
+    "1x 99206 (hair, hole) on 3003 (head, stud) turned 90",
+    "1x 99206 (hair, hole) on 3003 (head, stud) turned 270",
+    "1x 85984 (hair, hole) on 2420 (head, stud)",
+    "1x 85984 (hair, hole) on 2420 (head, stud) turned 90",
+    "1x 54200 (hair, hole) on 2420 (head, stud)",
+    "1x 54200 (hair, hole) on 2420 (head, stud) turned 90",
+    "1x 29119 (hair, hole) on 3003 (hair, stud) turned 180",
+    "1x 29120 (hair, hole) on 3003 (hair, stud) turned 180"
+   ]
+  },
+  {
+   "id": "41624",
+   "name": "41624 - Mickey Mouse",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 3.2,
+    "hPlates": 16.5
+   },
+   "pieces": 7,
+   "snot_pieces": 2,
+   "extent": {
+    "above_head_plates": 3.8,
+    "lowest_below_head_top_plates": 3.8,
+    "side_overhang_studs": 1.47,
+    "front_overhang_studs": -1.0,
+    "back_overhang_studs": -0.8
+   },
+   "items": [
+    {
+     "part": "60897",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "93273",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "face+head",
+     "count": 2
+    },
+    {
+     "part": "6256",
+     "color": "Black",
+     "studs": "front",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "3023b",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "face",
+     "count": 1
+    }
+   ],
+   "full_hair": {
+    "color": "Black",
+    "pieces": 36,
+    "in_head_shell": 29,
+    "sides": {
+     "sides": 12,
+     "top/inside": 11,
+     "back": 6
+    },
+    "parts": {
+     "33909": 4,
+     "3023b": 4,
+     "3010": 2,
+     "3020": 2,
+     "3069b": 2,
+     "6231": 2,
+     "2420": 2,
+     "63864": 2,
+     "2431": 2,
+     "26603": 2
+    }
+   },
+   "tags": [
+    "volume on top (>= 1 brick above head)",
+    "wider than head (side overhang)",
+    "SNOT-heavy (sideways pieces)"
+   ],
+   "exact_attachments": [
+    "2x 93273 (hair, hole) on 3020 (face, stud)",
+    "2x 3023b (hair, hole) on 3020 (face, stud)",
+    "2x 93273 (hair, hole) on 3023b (hair, stud)",
+    "1x 93273 (hair, hole) on 2420 (head, stud) turned 270",
+    "1x 60897 (hair, hole) on 2420 (head, stud) turned 180",
+    "1x 93273 (hair, hole) on 2420 (head, stud) turned 180",
+    "1x 60897 (hair, hole) on 2420 (head, stud) turned 270",
+    "1x 93273 (hair, hole) on 60897 (hair, stud) turned 270",
+    "1x 93273 (hair, hole) on 60897 (hair, stud) turned 90"
+   ]
+  },
+  {
+   "id": "41625",
+   "name": "41625 - Minnie Mouse",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 3.2,
+    "hPlates": 16.5
+   },
+   "pieces": 20,
+   "snot_pieces": 12,
+   "extent": {
+    "above_head_plates": 7.0,
+    "lowest_below_head_top_plates": 3.8,
+    "side_overhang_studs": 1.3,
+    "front_overhang_studs": -1.0,
+    "back_overhang_studs": -1.0
+   },
+   "items": [
+    {
+     "part": "60897",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "6256",
+     "color": "Black",
+     "studs": "front",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "2341",
+     "color": "Red",
+     "studs": "side",
+     "attached_to": "face",
+     "count": 2
+    },
+    {
+     "part": "3024",
+     "color": "Red",
+     "studs": "side",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "54200",
+     "color": "Red",
+     "studs": "side",
+     "attached_to": "face",
+     "count": 2
+    },
+    {
+     "part": "11477",
+     "color": "Red",
+     "studs": "side",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "15573",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "face",
+     "count": 1
+    },
+    {
+     "part": "85984",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "face",
+     "count": 1
+    },
+    {
+     "part": "15068",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "6141",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "4733",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "3070b",
+     "color": "Red",
+     "studs": "front",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "3070b",
+     "color": "Red",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "3070b",
+     "color": "Red",
+     "studs": "back",
+     "attached_to": "hair",
+     "count": 1
+    }
+   ],
+   "full_hair": {
+    "color": "Red",
+    "pieces": 42,
+    "in_head_shell": 22,
+    "sides": {
+     "top/inside": 11,
+     "sides": 6,
+     "front (fringe)": 3,
+     "back": 2
+    },
+    "parts": {
+     "3023b": 4,
+     "13548": 4,
+     "33909": 4,
+     "3700": 2,
+     "3010": 2,
+     "3069b": 2,
+     "32952": 2,
+     "3039": 1,
+     "3020": 1
+    }
+   },
+   "tags": [
+    "volume on top (>= 1 brick above head)",
+    "wider than head (side overhang)",
+    "SNOT-heavy (sideways pieces)"
+   ],
+   "exact_attachments": [
+    "3x 3070b (hair, hole) on 4733 (hair, open)",
+    "2x 2341 (hair, hole) on 4733 (hair, open) turned 90",
+    "2x 3024 (hair, hole) on 2341 (hair, stud)",
+    "1x 15068 (hair, hole) on 2420 (head, stud)",
+    "1x 60897 (hair, hole) on 2420 (head, stud) turned 270",
+    "1x 15068 (hair, hole) on 2420 (head, stud) turned 90",
+    "1x 60897 (hair, hole) on 2420 (head, stud) turned 180",
+    "1x 85984 (hair, hole) on 2420 (face, stud)",
+    "1x 15573 (hair, hole) on 2420 (face, stud)",
+    "1x 85984 (hair, hole) on 2420 (face, stud) turned 90",
+    "1x 15573 (hair, hole) on 2420 (face, stud) turned 90",
+    "1x 6141 (hair, tube) on 15573 (hair, open)",
+    "1x 15068 (hair, hole) on 60897 (hair, stud) turned 90",
+    "1x 15068 (hair, hole) on 60897 (hair, stud) turned 270",
+    "1x 4733 (hair, hole) on 6141 (hair, stud)",
+    "1x 54200 (hair, hole) on 2341 (hair, open)",
+    "1x 11477 (hair, hole) on 2341 (hair, open) turned 180",
+    "1x 11477 (hair, hole) on 3024 (hair, stud) turned 180",
+    "1x 11477 (hair, hole) on 2341 (hair, open)",
+    "1x 54200 (hair, hole) on 2341 (hair, open) turned 180",
+    "1x 11477 (hair, hole) on 3024 (hair, stud)"
+   ]
+  },
+  {
+   "id": "41627",
+   "name": "41627 - Yoda and Luke Skywalker",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 20,
+   "snot_pieces": 4,
+   "extent": {
+    "above_head_plates": 1.0,
+    "lowest_below_head_top_plates": 11.0,
+    "side_overhang_studs": 7.1,
+    "front_overhang_studs": -0.9,
+    "back_overhang_studs": -0.3
+   },
+   "items": [
+    {
+     "part": "11477",
+     "color": "Dark Tan",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "15068",
+     "color": "Dark Tan",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "3024",
+     "color": "Dark Tan",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "54200",
+     "color": "Dark Tan",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "3024",
+     "color": "Dark Brown",
+     "studs": "up",
+     "attached_to": "face",
+     "count": 2
+    },
+    {
+     "part": "3024",
+     "color": "Sand Green",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "85861",
+     "color": "Light Bluish Grey",
+     "studs": "up",
+     "attached_to": "face",
+     "count": 1
+    },
+    {
+     "part": "3024",
+     "color": "Bright Pink",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "3021",
+     "color": "Sand Green",
+     "studs": "up",
+     "attached_to": "face+head",
+     "count": 1
+    },
+    {
+     "part": "3623",
+     "color": "Sand Green",
+     "studs": "up",
+     "attached_to": "face+head",
+     "count": 1
+    },
+    {
+     "part": "63864",
+     "color": "Sand Green",
+     "studs": "front",
+     "attached_to": "face",
+     "count": 1
+    },
+    {
+     "part": "63864",
+     "color": "Sand Green",
+     "studs": "side",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "63864",
+     "color": "Sand Green",
+     "studs": "side",
+     "attached_to": "face",
+     "count": 1
+    },
+    {
+     "part": "63864",
+     "color": "Sand Green",
+     "studs": "back",
+     "attached_to": "face",
+     "count": 1
+    }
+   ],
+   "full_hair": {
+    "color": "Dark Tan",
+    "pieces": 58,
+    "in_head_shell": 38,
+    "sides": {
+     "sides": 14,
+     "top/inside": 10,
+     "back": 7,
+     "front (fringe)": 7
+    },
+    "parts": {
+     "3024": 4,
+     "3020": 4,
+     "3023b": 4,
+     "3710": 3,
+     "15068": 3,
+     "11477": 3,
+     "25269": 3,
+     "3010": 2,
+     "3022": 2,
+     "3069b": 2
+    }
+   },
+   "tags": [
+    "wider than head (side overhang)"
+   ],
+   "exact_attachments": [
+    "3x 3021 (hair, hole) on 3024 (hair, stud)",
+    "3x 63864 (hair, hole) on 3021 (face, stud)",
+    "2x 63864 (hair, hole) on 32952 (head, open) turned 180",
+    "2x 63864 (hair, hole) on 32952 (face, open)",
+    "2x 3024 (hair, hole) on 3622 (face, stud)",
+    "2x 3024 (hair, hole) on 3024 (hair, stud)",
+    "2x 63864 (hair, hole) on 3021 (face, stud) turned 270",
+    "2x 54200 (hair, hole) on 22885 (head, stud)",
+    "2x 15068 (hair, hole) on 22885 (head, stud)",
+    "2x 15068 (hair, hole) on 32028 (head, stud) turned 90",
+    "2x 11477 (hair, hole) on 32028 (head, stud) turned 270",
+    "2x 3024 (hair, hole) on 4032a (head, stud)",
+    "1x 3021 (hair, hole) on 32952 (face, stud)",
+    "1x 3021 (hair, hole) on 32952 (head, stud) turned 90",
+    "1x 3021 (hair, hole) on 32952 (face, stud) turned 270",
+    "1x 85861 (hair, tube) on 3622 (face, stud)",
+    "1x 3024 (hair, hole) on 85861 (hair, open)",
+    "1x 3623 (hair, hole) on 32952 (face, stud) turned 180",
+    "1x 3623 (hair, hole) on 32952 (face, stud) turned 270",
+    "1x 3623 (hair, hole) on 32952 (head, stud) turned 90",
+    "1x 63864 (hair, hole) on 3623 (face, stud) turned 270",
+    "1x 11477 (hair, hole) on 22885 (head, stud) turned 270",
+    "1x 15068 (hair, hole) on 22885 (head, stud) turned 90",
+    "1x 15068 (hair, hole) on 26604 (head, stud)",
+    "1x 11477 (hair, hole) on 26604 (head, stud) turned 270",
+    "1x 15068 (hair, hole) on 4032a (head, stud) turned 90",
+    "1x 15068 (hair, hole) on 4032a (head, stud) turned 270"
+   ]
+  },
+  {
+   "id": "41630",
+   "name": "41630 - Jack Skellington and Sally",
+   "head": {
+    "wStuds": 5.18,
+    "dStuds": 5.18,
+    "hPlates": 16.5
+   },
+   "pieces": 5,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 0.5,
+    "lowest_below_head_top_plates": 1.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -0.91,
+    "back_overhang_studs": -0.77
+   },
+   "items": [
+    {
+     "part": "15068",
+     "color": "Dark Red",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 4
+    },
+    {
+     "part": "93273",
+     "color": "Dark Red",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "4x 15068 (hair, hole) on 22885 (head, stud)",
+    "3x 15068 (hair, hole) on 3022 (head, stud) turned 180",
+    "3x 15068 (hair, hole) on 3022 (head, stud)",
+    "2x 15068 (hair, hole) on 22885 (head, stud) turned 90",
+    "2x 15068 (hair, hole) on 22885 (head, stud) turned 270",
+    "2x 93273 (hair, hole) on 3022 (head, stud) turned 180",
+    "1x 15068 (hair, hole) on 3023b (head, stud) turned 270",
+    "1x 15068 (hair, hole) on 3023b (head, stud) turned 90"
+   ]
+  },
+  {
+   "id": "41630",
+   "name": "41630",
+   "head": {
+    "wStuds": 5.18,
+    "dStuds": 5.18,
+    "hPlates": 16.5
+   },
+   "pieces": 5,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 0.5,
+    "lowest_below_head_top_plates": 1.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -0.91,
+    "back_overhang_studs": -0.77
+   },
+   "items": [
+    {
+     "part": "15068",
+     "color": "Dark Red",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 4
+    },
+    {
+     "part": "93273",
+     "color": "Dark Red",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "4x 15068 (hair, hole) on 22885 (head, stud)",
+    "3x 15068 (hair, hole) on 3022 (head, stud) turned 180",
+    "3x 15068 (hair, hole) on 3022 (head, stud)",
+    "2x 15068 (hair, hole) on 22885 (head, stud) turned 90",
+    "2x 15068 (hair, hole) on 22885 (head, stud) turned 270",
+    "2x 93273 (hair, hole) on 3022 (head, stud) turned 180",
+    "1x 15068 (hair, hole) on 3023b (head, stud) turned 270",
+    "1x 15068 (hair, hole) on 3023b (head, stud) turned 90"
+   ]
+  },
+  {
+   "id": "41632",
+   "name": "41632 - Homer Simpson and Krusty the Clown",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 7,
+   "snot_pieces": 2,
+   "extent": {
+    "above_head_plates": 2.4,
+    "lowest_below_head_top_plates": 0.5,
+    "side_overhang_studs": 7.9,
+    "front_overhang_studs": -2.4,
+    "back_overhang_studs": -1.8
+   },
+   "items": [
+    {
+     "part": "4592",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "4593",
+     "color": "Black",
+     "studs": "side",
+     "attached_to": "hair",
+     "count": 2
+    },
+    {
+     "part": "3023b",
+     "color": "Dark Turquoise",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "85984",
+     "color": "Dark Turquoise",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "85984",
+     "color": "Dark Turquoise",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    }
+   ],
+   "full_hair": {
+    "color": "Black",
+    "pieces": 7,
+    "in_head_shell": 0,
+    "sides": {},
+    "parts": {}
+   },
+   "tags": [
+    "wider than head (side overhang)",
+    "SNOT-heavy (sideways pieces)"
+   ],
+   "exact_attachments": [
+    "2x 4592 (hair, tube) on 3031 (head, stud) turned 90",
+    "2x 3023b (hair, hole) on 3031 (head, stud) turned 90",
+    "2x 85984 (hair, hole) on 3031 (head, stud) turned 270",
+    "2x 85984 (hair, hole) on 3023b (hair, stud)"
+   ]
+  },
+  {
+   "id": "41637",
+   "name": "41637 - Sweet Mayhem",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 11,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 2.5,
+    "lowest_below_head_top_plates": 1.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": 0.0,
+    "back_overhang_studs": -0.0
+   },
+   "items": [
+    {
+     "part": "93273",
+     "color": "White",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "15573",
+     "color": "White",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "3024",
+     "color": "Magenta",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "3023b",
+     "color": "Magenta",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "3024",
+     "color": "Magenta",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    },
+    {
+     "part": "6091",
+     "color": "Magenta",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "3665a",
+     "color": "Magenta",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "6636",
+     "color": "Magenta",
+     "studs": "up",
+     "attached_to": "hair",
+     "count": 1
+    }
+   ],
+   "full_hair": {
+    "color": "Magenta",
+    "pieces": 20,
+    "in_head_shell": 9,
+    "sides": {
+     "sides": 8,
+     "back": 1
+    },
+    "parts": {
+     "27925": 8,
+     "3023b": 1
+    }
+   },
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "4x 93273 (hair, hole) on 3020 (head, stud)",
+    "4x 15573 (hair, hole) on 3020 (head, stud)",
+    "2x 93273 (hair, hole) on 22885 (head, stud)",
+    "2x 93273 (hair, hole) on 22885 (head, stud) turned 180",
+    "2x 3024 (hair, hole) on 15573 (head, open)",
+    "2x 6636 (hair, hole) on 3023b (hair, stud)",
+    "1x 3023b (hair, hole) on 15573 (hair, open) turned 90",
+    "1x 3024 (hair, hole) on 15573 (hair, open)",
+    "1x 3023b (hair, hole) on 3024 (hair, stud) turned 90",
+    "1x 6091 (hair, hole) on 3024 (hair, stud)",
+    "1x 6636 (hair, hole) on 3024 (hair, stud) turned 90",
+    "1x 6636 (hair, hole) on 6091 (hair, stud) turned 90",
+    "1x 6636 (hair, hole) on 3665a (hair, open) turned 270",
+    "1x 6636 (hair, hole) on 3665a (hair, stud) turned 270"
+   ]
+  },
+  {
+   "id": "75317",
+   "name": "75317 - The Mandalorian and The Child",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 4,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 0.5,
+    "lowest_below_head_top_plates": 1.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -1.2,
+    "back_overhang_studs": -1.0
+   },
+   "items": [
+    {
+     "part": "15068",
+     "color": "Dark Bluish Grey",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 4
+    }
+   ],
+   "full_hair": {
+    "color": "Dark Bluish Grey",
+    "pieces": 38,
+    "in_head_shell": 34,
+    "sides": {
+     "sides": 16,
+     "front (fringe)": 10,
+     "top/inside": 5,
+     "back": 3
+    },
+    "parts": {
+     "3023b": 10,
+     "3022": 6,
+     "14719": 4,
+     "3020": 3,
+     "87087": 2,
+     "3070b": 2,
+     "15068": 2,
+     "32028": 2,
+     "24299": 1,
+     "24307": 1
+    }
+   },
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "4x 15068 (hair, hole) on 22885 (head, stud)",
+    "2x 15068 (hair, hole) on 22885 (head, stud) turned 270",
+    "2x 15068 (hair, hole) on 22885 (head, stud) turned 90",
+    "2x 15068 (hair, hole) on 32028 (head, stud) turned 90",
+    "2x 15068 (hair, hole) on 32028 (head, stud) turned 270",
+    "2x 15068 (hair, hole) on 3022 (head, stud) turned 90",
+    "2x 15068 (hair, hole) on 3022 (head, stud) turned 270"
+   ]
+  },
+  {
+   "id": "99999",
+   "name": "99999 - Wonder Woman",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 7,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 1.5,
+    "lowest_below_head_top_plates": 1.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -2.0,
+    "back_overhang_studs": -0.0
+   },
+   "items": [
+    {
+     "part": "11477",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "15068",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "92946",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 2
+    },
+    {
+     "part": "24309",
+     "color": "Black",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    }
+   ],
+   "full_hair": null,
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": []
+  },
+  {
+   "id": "01 - Deadpool",
+   "name": "01 - Deadpool",
+   "head": {
+    "wStuds": 4.4,
+    "dStuds": 4.4,
+    "hPlates": 16.5
+   },
+   "pieces": 8,
+   "snot_pieces": 0,
+   "extent": {
+    "above_head_plates": 1.5,
+    "lowest_below_head_top_plates": 1.5,
+    "side_overhang_studs": 0.0,
+    "front_overhang_studs": -1.93,
+    "back_overhang_studs": 0.1
+   },
+   "items": [
+    {
+     "part": "11477",
+     "color": "Red",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 4
+    },
+    {
+     "part": "15068",
+     "color": "Red",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "93273",
+     "color": "Red",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "3023b",
+     "color": "Red",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    },
+    {
+     "part": "3069a",
+     "color": "Red",
+     "studs": "up",
+     "attached_to": "head",
+     "count": 1
+    }
+   ],
+   "full_hair": {
+    "color": "Red",
+    "pieces": 54,
+    "in_head_shell": 46,
+    "sides": {
+     "top/inside": 20,
+     "sides": 12,
+     "back": 8,
+     "front (fringe)": 6
+    },
+    "parts": {
+     "2420": 8,
+     "3023b": 4,
+     "3069b": 4,
+     "2431": 4,
+     "3070b": 4,
+     "3020": 3,
+     "87079": 3,
+     "3005": 2,
+     "3024": 2,
+     "54200": 2
+    }
+   },
+   "tags": [
+    "flat cap (thin layer on top)"
+   ],
+   "exact_attachments": [
+    "2x 11477 (hair, hole) on 22885 (head, stud)",
+    "2x 93273 (hair, hole) on 22885 (head, stud) turned 90",
+    "2x 11477 (hair, hole) on 3020 (head, stud)",
+    "2x 3069a (hair, hole) on 3020 (head, stud) turned 180",
+    "2x 3023b (hair, hole) on 3020 (head, stud) turned 180",
+    "2x 15068 (hair, hole) on 3023b (head, stud) turned 180",
+    "2x 93273 (hair, hole) on 3023b (head, stud) turned 90",
+    "1x 11477 (hair, hole) on 3020 (head, stud) turned 90",
+    "1x 11477 (hair, hole) on 3020 (head, stud) turned 270",
+    "1x 11477 (hair, hole) on 3023b (hair, stud) turned 90",
+    "1x 11477 (hair, hole) on 3023b (hair, stud) turned 270"
+   ]
+  }
+ ]
+}

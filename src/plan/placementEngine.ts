@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Vec3 } from '../ldraw/parse';
 import { type CollisionWorld, type Solid } from './collision';
-import { worldConnectors, type Connector } from './connectors';
+import { connectorsMate, worldConnectors, type Connector } from './connectors';
 import { candidates, rayAngle, rayDepth, PICK_RADIUS, OCCLUDE_SLACK, type Aim } from './aim';
 import type { AttachmentTarget } from '../model/attachmentPlacements';
 
@@ -78,7 +78,7 @@ export const FLOOR_Y = 0;
 
 const dist = (a: readonly number[], b: readonly number[]) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 const dot = (a: readonly number[], b: readonly number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const mates = (c: Connector, t: Connector) => c.gender !== t.gender && c.type === t.type && dist(c.pos, t.pos) < 1 && dot(c.axis, t.axis) < -0.999;
+const mates = connectorsMate;
 
 function boxOf(solids: readonly Solid[], m: THREE.Matrix4): THREE.Box3 {
   const out = new THREE.Box3();
@@ -91,11 +91,21 @@ function boxOf(solids: readonly Solid[], m: THREE.Matrix4): THREE.Box3 {
   return out;
 }
 
-/** The transform that puts `handle` onto `target`, axes opposed, plus `yaw` about the target axis. */
+/**
+ * The transform that puts `handle` onto `target`, plus `yaw` about the target axis. A stud,
+ * pin or bar goes on with the axes opposed. A knuckle (finger hinge pivot) goes on with its axis on the target's
+ * line, whichever way round turns the part least, and `yaw` swings it about the hinge. A ball
+ * keeps the part's orientation and only moves its centre onto the socket's; `yaw` then turns
+ * it about the vertical through the ball.
+ */
 export function seat(handle: Connector, target: Connector, yaw: Quarter): THREE.Matrix4 {
-  const from = new THREE.Vector3(...handle.axis), to = new THREE.Vector3(...target.axis).negate();
+  const from = new THREE.Vector3(...handle.axis);
+  const to = target.type === 'ball' ? from.clone()
+    : target.type === 'knuckle' && dot(handle.axis, target.axis) >= 0 ? new THREE.Vector3(...target.axis)
+    : new THREE.Vector3(...target.axis).negate();
   const align = new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(from, to));
-  const turn = new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(...target.axis).normalize(), (yaw * Math.PI) / 180);
+  const about = target.type === 'ball' ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(...target.axis).normalize();
+  const turn = new THREE.Matrix4().makeRotationAxis(about, (yaw * Math.PI) / 180);
   return new THREE.Matrix4().makeTranslation(...target.pos)
     .multiply(turn).multiply(align)
     .multiply(new THREE.Matrix4().makeTranslation(-handle.pos[0], -handle.pos[1], -handle.pos[2]));
@@ -251,6 +261,8 @@ export function findPose(q: PoseQuery): Pose {
     const key = `${want}|${t.type}`;
     const list = gripCache.get(key) ?? gripCache.set(key, grips(want, t.type)).get(key)!;
     for (const g of list) {
+      // a knuckle or ball only takes its own kind (same group, or same size)
+      if (moving.connectors[g].fit !== t.fit) continue;
       const plain = unturned(t, g);
       // scored where the mouse asked for it, seated the way the hinge is made to go
       const m = plain?.m ?? seat(moving.connectors[g], t, yaw);

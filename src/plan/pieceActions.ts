@@ -3,7 +3,7 @@ import type { Box } from '../ldraw/flatten';
 import { assemble, placementMatrix, transformBox, type Metrics } from '../model/assemble';
 import { CARRIER_RATIO, footprint, touching } from './components';
 import { findItem, insertStep, modelSteps, moveItemsToStep, type ModelName } from './ops';
-import { isSub, type AssemblySpot, type Plan, type PlanItem, type Step } from './types';
+import { isSub, type AssemblySpot, type FlightPose, type Plan, type PlanItem, type Step } from './types';
 
 /**
  * Moves pieces into step `target`. A step the move empties is removed (steps that
@@ -172,6 +172,52 @@ export function floorShiftsByKey(p: Plan, m: ModelName): Map<string, [number, nu
         if (!i.id) continue;
         if (isSub(i)) walk(i.submodel, `${prefix}${i.id}/`, depth + 1);
         else if (i.assembly?.floorShift) out.set(prefix + i.id, i.assembly.floorShift);
+      }
+  };
+  walk(m, '', 0);
+  return out;
+}
+
+/**
+ * Sets (or with null, clears) the flight path the Build timeline flies a piece along.
+ * Stored on the piece like `shiftOnFloor`, so it applies to every copy of a submodel.
+ */
+export function setPieceFlight(p: Plan, m: ModelName, path: string, flight: FlightPose[] | null): Plan | null {
+  const segs = path.split('/');
+  let model = m;
+  for (const seg of segs.slice(0, -1)) {
+    const found = findItem(p, model, seg);
+    if (!found || !isSub(found.item)) return null;
+    model = found.item.submodel;
+  }
+  const id = segs[segs.length - 1];
+  const found = findItem(p, model, id);
+  if (!found || isSub(found.item)) return null;
+  if (!flight && !found.item.assembly?.flight) return p;
+  const steps = modelSteps(p, model).map((s) => (!s.pieces.some((i) => i.id === id) ? s : {
+    ...s,
+    pieces: s.pieces.map((i) => {
+      if (i.id !== id) return i;
+      const { flight: _, ...rest } = i.assembly ?? {};
+      const assembly = flight ? { ...rest, flight } : rest;
+      const out = { ...i, assembly } as PlanItem;
+      if (!Object.keys(assembly).length) delete out.assembly;
+      return out;
+    }),
+  }));
+  return model === '' ? { ...p, steps } : { ...p, submodels: { ...p.submodels, [model]: { ...p.submodels![model], steps } } };
+}
+
+/** Every piece with an edited flight path in a model and the submodels it uses, by piece key. */
+export function flightsByKey(p: Plan, m: ModelName): Map<string, FlightPose[]> {
+  const out = new Map<string, FlightPose[]>();
+  const walk = (model: string, prefix: string, depth: number) => {
+    if (depth > 16) return;
+    for (const s of modelSteps(p, model))
+      for (const i of s.pieces) {
+        if (!i.id) continue;
+        if (isSub(i)) walk(i.submodel, `${prefix}${i.id}/`, depth + 1);
+        else if (i.assembly?.flight) out.set(prefix + i.id, i.assembly.flight);
       }
   };
   walk(m, '', 0);

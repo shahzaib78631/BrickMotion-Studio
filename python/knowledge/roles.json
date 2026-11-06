@@ -1,0 +1,1915 @@
+{
+ "head": {
+  "pieces_per_model_median": 65.5,
+  "models_with_role": 80,
+  "stud_directions": {
+   "up": 0.631,
+   "side": 0.262,
+   "back": 0.084,
+   "front": 0.023,
+   "down": 0.001
+  },
+  "categories": {
+   "Plates": 0.313,
+   "Bricks Special": 0.258,
+   "Tiles": 0.125,
+   "Bricks": 0.104,
+   "Plates Special": 0.05,
+   "Bricks Curved": 0.049,
+   "Plates Round Curved and Dishes": 0.027,
+   "Tiles Round and Curved": 0.019,
+   "Bricks Round and Cones": 0.016,
+   "Bricks Sloped": 0.009
+  },
+  "top_parts": [
+   {
+    "part": "3003",
+    "name": "Brick 2 x 2",
+    "models": 77,
+    "uses": 255
+   },
+   {
+    "part": "22885",
+    "name": "Brick 1 x 2 x 1.667 with Studs on 1 Side",
+    "models": 76,
+    "uses": 1188
+   },
+   {
+    "part": "3023b",
+    "name": "Plate 1 x 2",
+    "models": 74,
+    "uses": 491
+   },
+   {
+    "part": "4032a",
+    "name": "Plate 2 x 2 Round with Axlehole",
+    "models": 72,
+    "uses": 122
+   },
+   {
+    "part": "3022",
+    "name": "Plate 2 x 2",
+    "models": 67,
+    "uses": 213
+   },
+   {
+    "part": "3069b",
+    "name": "Tile 1 x 2 with Groove",
+    "models": 65,
+    "uses": 272
+   },
+   {
+    "part": "3020",
+    "name": "Plate 2 x 4",
+    "models": 64,
+    "uses": 182
+   },
+   {
+    "part": "3031",
+    "name": "Plate 4 x 4",
+    "models": 57,
+    "uses": 122
+   },
+   {
+    "part": "3710",
+    "name": "Plate 1 x 4",
+    "models": 55,
+    "uses": 202
+   },
+   {
+    "part": "3024",
+    "name": "Plate 1 x 1",
+    "models": 53,
+    "uses": 272
+   },
+   {
+    "part": "3010",
+    "name": "Brick 1 x 4",
+    "models": 52,
+    "uses": 104
+   },
+   {
+    "part": "87079",
+    "name": "Tile 2 x 4",
+    "models": 51,
+    "uses": 156
+   },
+   {
+    "part": "3005",
+    "name": "Brick 1 x 1",
+    "models": 47,
+    "uses": 149
+   },
+   {
+    "part": "3941",
+    "name": "Brick 2 x 2 Round without Reinforcement",
+    "models": 46,
+    "uses": 92
+   },
+   {
+    "part": "2420",
+    "name": "Plate 2 x 2 Corner",
+    "models": 41,
+    "uses": 162
+   },
+   {
+    "part": "3004",
+    "name": "Brick 1 x 2",
+    "models": 38,
+    "uses": 75
+   },
+   {
+    "part": "2431",
+    "name": "Tile 1 x 4 with Groove",
+    "models": 32,
+    "uses": 77
+   },
+   {
+    "part": "3070b",
+    "name": "Tile 1 x 1 with Groove",
+    "models": 31,
+    "uses": 102
+   },
+   {
+    "part": "11477",
+    "name": "Slope Brick Curved 2 x 1",
+    "models": 31,
+    "uses": 88
+   },
+   {
+    "part": "3021",
+    "name": "Plate 2 x 3",
+    "models": 30,
+    "uses": 82
+   },
+   {
+    "part": "3623",
+    "name": "Plate 1 x 3",
+    "models": 29,
+    "uses": 99
+   },
+   {
+    "part": "32028",
+    "name": "Plate 1 x 2 with Door Rail",
+    "models": 28,
+    "uses": 79
+   },
+   {
+    "part": "11211",
+    "name": "Brick 1 x 2 with Two Studs on One Side",
+    "models": 27,
+    "uses": 45
+   },
+   {
+    "part": "15068",
+    "name": "Slope Brick Curved 2 x 2 x 0.667",
+    "models": 26,
+    "uses": 98
+   },
+   {
+    "part": "99206",
+    "name": "Plate 2 x 2 x 0.667 with Two Studs On Side and Two Raised with Closed Understud",
+    "models": 23,
+    "uses": 46
+   },
+   {
+    "part": "87087",
+    "name": "Brick 1 x 1 with Stud on 1 Side",
+    "models": 21,
+    "uses": 69
+   },
+   {
+    "part": "3068b",
+    "name": "Tile 2 x 2 with Groove",
+    "models": 21,
+    "uses": 49
+   },
+   {
+    "part": "4070",
+    "name": "Brick 1 x 1 with Headlight",
+    "models": 18,
+    "uses": 119
+   },
+   {
+    "part": "32952",
+    "name": "Brick 1 x 1 x 1.667 with Studs on 1 Side",
+    "models": 18,
+    "uses": 50
+   },
+   {
+    "part": "6143",
+    "name": "Brick 2 x 2 Round Reinforced",
+    "models": 18,
+    "uses": 35
+   },
+   {
+    "part": "25269",
+    "name": "Tile 1 x 1 Corner Round",
+    "models": 16,
+    "uses": 65
+   },
+   {
+    "part": "14719",
+    "name": "Tile 2 x 2 Corner",
+    "models": 15,
+    "uses": 37
+   },
+   {
+    "part": "99780",
+    "name": "Bracket 1 x 2 - 1 x 2 Up",
+    "models": 13,
+    "uses": 25
+   },
+   {
+    "part": "30414",
+    "name": "Brick 1 x 4 with Studs on Side",
+    "models": 13,
+    "uses": 16
+   },
+   {
+    "part": "3245c",
+    "name": "Brick 1 x 2 x 2 without Understud",
+    "models": 12,
+    "uses": 13
+   },
+   {
+    "part": "50950",
+    "name": "Slope Brick Curved 3 x 1",
+    "models": 11,
+    "uses": 35
+   },
+   {
+    "part": "6141",
+    "name": "Plate 1 x 1 Round",
+    "models": 11,
+    "uses": 25
+   },
+   {
+    "part": "15573",
+    "name": "Plate 1 x 2 with Groove with 1 Centre Stud, without Understud",
+    "models": 11,
+    "uses": 24
+   },
+   {
+    "part": "26603",
+    "name": "Tile 2 x 3",
+    "models": 11,
+    "uses": 20
+   },
+   {
+    "part": "63864",
+    "name": "Tile 1 x 3",
+    "models": 10,
+    "uses": 27
+   }
+  ],
+  "colors": {
+   "Light Bluish Grey": 1382,
+   "Black": 681,
+   "White": 563,
+   "Tan": 373,
+   "Reddish Brown": 346,
+   "Red": 326,
+   "Dark Red": 227,
+   "Yellow": 209,
+   "Dark Bluish Grey": 208,
+   "Green": 183
+  }
+ },
+ "face": {
+  "pieces_per_model_median": 18.5,
+  "models_with_role": 80,
+  "stud_directions": {
+   "front": 0.719,
+   "up": 0.11,
+   "back": 0.08,
+   "side": 0.075,
+   "down": 0.016
+  },
+  "categories": {
+   "Plates": 0.306,
+   "Tiles": 0.166,
+   "Tiles Round and Curved": 0.151,
+   "Bricks Curved": 0.106,
+   "Plates Special": 0.1,
+   "Bricks Sloped": 0.044,
+   "Bricks Special": 0.028,
+   "Plates Round Curved and Dishes": 0.021,
+   "Bricks": 0.021,
+   "Plates Wedged": 0.015
+  },
+  "top_parts": [
+   {
+    "part": "98138",
+    "name": "Tile 1 x 1 Round with Groove",
+    "models": 52,
+    "uses": 130
+   },
+   {
+    "part": "3024",
+    "name": "Plate 1 x 1",
+    "models": 41,
+    "uses": 112
+   },
+   {
+    "part": "3023b",
+    "name": "Plate 1 x 2",
+    "models": 41,
+    "uses": 112
+   },
+   {
+    "part": "2431",
+    "name": "Tile 1 x 4 with Groove",
+    "models": 41,
+    "uses": 67
+   },
+   {
+    "part": "3710",
+    "name": "Plate 1 x 4",
+    "models": 34,
+    "uses": 60
+   },
+   {
+    "part": "87079",
+    "name": "Tile 2 x 4",
+    "models": 33,
+    "uses": 40
+   },
+   {
+    "part": "3031",
+    "name": "Plate 4 x 4",
+    "models": 30,
+    "uses": 33
+   },
+   {
+    "part": "11477",
+    "name": "Slope Brick Curved 2 x 1",
+    "models": 29,
+    "uses": 68
+   },
+   {
+    "part": "25269",
+    "name": "Tile 1 x 1 Corner Round",
+    "models": 28,
+    "uses": 91
+   },
+   {
+    "part": "3020",
+    "name": "Plate 2 x 4",
+    "models": 28,
+    "uses": 40
+   },
+   {
+    "part": "92593",
+    "name": "Plate 1 x 4 with Two Studs",
+    "models": 28,
+    "uses": 37
+   },
+   {
+    "part": "3070b",
+    "name": "Tile 1 x 1 with Groove",
+    "models": 27,
+    "uses": 72
+   },
+   {
+    "part": "3069b",
+    "name": "Tile 1 x 2 with Groove",
+    "models": 25,
+    "uses": 45
+   },
+   {
+    "part": "15068",
+    "name": "Slope Brick Curved 2 x 2 x 0.667",
+    "models": 21,
+    "uses": 39
+   },
+   {
+    "part": "3022",
+    "name": "Plate 2 x 2",
+    "models": 21,
+    "uses": 25
+   },
+   {
+    "part": "3021",
+    "name": "Plate 2 x 3",
+    "models": 19,
+    "uses": 31
+   },
+   {
+    "part": "2420",
+    "name": "Plate 2 x 2 Corner",
+    "models": 18,
+    "uses": 38
+   },
+   {
+    "part": "54200",
+    "name": "Slope Brick 31 1 x 1 x 0.667",
+    "models": 17,
+    "uses": 41
+   },
+   {
+    "part": "15573",
+    "name": "Plate 1 x 2 with Groove with 1 Centre Stud, without Understud",
+    "models": 15,
+    "uses": 21
+   },
+   {
+    "part": "3623",
+    "name": "Plate 1 x 3",
+    "models": 14,
+    "uses": 21
+   },
+   {
+    "part": "6091",
+    "name": "Brick 2 x 1 x 1.333 with Curved Top",
+    "models": 13,
+    "uses": 25
+   },
+   {
+    "part": "99780",
+    "name": "Bracket 1 x 2 - 1 x 2 Up",
+    "models": 13,
+    "uses": 20
+   },
+   {
+    "part": "99206",
+    "name": "Plate 2 x 2 x 0.667 with Two Studs On Side and Two Raised with Closed Understud",
+    "models": 9,
+    "uses": 16
+   },
+   {
+    "part": "63864",
+    "name": "Tile 1 x 3",
+    "models": 9,
+    "uses": 15
+   },
+   {
+    "part": "85984",
+    "name": "Slope Brick 31 1 x 2 x 0.667",
+    "models": 9,
+    "uses": 11
+   },
+   {
+    "part": "6141",
+    "name": "Plate 1 x 1 Round",
+    "models": 7,
+    "uses": 21
+   },
+   {
+    "part": "26601",
+    "name": "Plate 2 x 2 without Corner",
+    "models": 7,
+    "uses": 14
+   },
+   {
+    "part": "24246",
+    "name": "Tile 1 x 1 with Rounded End",
+    "models": 6,
+    "uses": 12
+   },
+   {
+    "part": "3010",
+    "name": "Brick 1 x 4",
+    "models": 6,
+    "uses": 10
+   },
+   {
+    "part": "88930",
+    "name": "Slope Brick Curved 2 x 4 with Underside Studs",
+    "models": 6,
+    "uses": 9
+   },
+   {
+    "part": "3068b",
+    "name": "Tile 2 x 2 with Groove",
+    "models": 6,
+    "uses": 9
+   },
+   {
+    "part": "93273",
+    "name": "Slope Brick Curved 4 x 1 Double",
+    "models": 6,
+    "uses": 7
+   },
+   {
+    "part": "3004",
+    "name": "Brick 1 x 2",
+    "models": 6,
+    "uses": 6
+   },
+   {
+    "part": "32952",
+    "name": "Brick 1 x 1 x 1.667 with Studs on 1 Side",
+    "models": 5,
+    "uses": 13
+   },
+   {
+    "part": "11211",
+    "name": "Brick 1 x 2 with Two Studs on One Side",
+    "models": 5,
+    "uses": 12
+   },
+   {
+    "part": "33909",
+    "name": "Plate 2 x 2 with 2 Studs on One Edge",
+    "models": 5,
+    "uses": 12
+   },
+   {
+    "part": "26603",
+    "name": "Tile 2 x 3",
+    "models": 5,
+    "uses": 10
+   },
+   {
+    "part": "3005",
+    "name": "Brick 1 x 1",
+    "models": 5,
+    "uses": 7
+   },
+   {
+    "part": "41740",
+    "name": "Plate 1 x 4 with Two Studs and Groove",
+    "models": 5,
+    "uses": 6
+   },
+   {
+    "part": "32028",
+    "name": "Plate 1 x 2 with Door Rail",
+    "models": 4,
+    "uses": 14
+   }
+  ],
+  "colors": {
+   "Black": 373,
+   "White": 192,
+   "Tan": 155,
+   "Reddish Brown": 118,
+   "Light Bluish Grey": 79,
+   "Red": 75,
+   "Dark Red": 70,
+   "Sand Green": 62,
+   "Dark Bluish Grey": 52,
+   "Green": 41
+  }
+ },
+ "hair": {
+  "pieces_per_model_median": 6.5,
+  "models_with_role": 64,
+  "stud_directions": {
+   "up": 0.86,
+   "side": 0.08,
+   "front": 0.037,
+   "back": 0.02,
+   "down": 0.003
+  },
+  "categories": {
+   "Bricks Curved": 0.35,
+   "Plates": 0.185,
+   "Bricks Sloped": 0.142,
+   "Plates Special": 0.09,
+   "Tiles": 0.053,
+   "Tiles Round and Curved": 0.047,
+   "Plates Round Curved and Dishes": 0.035,
+   "?": 0.017,
+   "Bricks Wedged": 0.015,
+   "Bricks Round and Cones": 0.01
+  },
+  "top_parts": [
+   {
+    "part": "15068",
+    "name": "Slope Brick Curved 2 x 2 x 0.667",
+    "models": 28,
+    "uses": 70
+   },
+   {
+    "part": "11477",
+    "name": "Slope Brick Curved 2 x 1",
+    "models": 21,
+    "uses": 64
+   },
+   {
+    "part": "3023b",
+    "name": "Plate 1 x 2",
+    "models": 18,
+    "uses": 40
+   },
+   {
+    "part": "54200",
+    "name": "Slope Brick 31 1 x 1 x 0.667",
+    "models": 16,
+    "uses": 36
+   },
+   {
+    "part": "3024",
+    "name": "Plate 1 x 1",
+    "models": 11,
+    "uses": 30
+   },
+   {
+    "part": "93273",
+    "name": "Slope Brick Curved 4 x 1 Double",
+    "models": 11,
+    "uses": 21
+   },
+   {
+    "part": "85984",
+    "name": "Slope Brick 31 1 x 2 x 0.667",
+    "models": 10,
+    "uses": 25
+   },
+   {
+    "part": "88930",
+    "name": "Slope Brick Curved 2 x 4 with Underside Studs",
+    "models": 9,
+    "uses": 18
+   },
+   {
+    "part": "15573",
+    "name": "Plate 1 x 2 with Groove with 1 Centre Stud, without Understud",
+    "models": 7,
+    "uses": 10
+   },
+   {
+    "part": "3022",
+    "name": "Plate 2 x 2",
+    "models": 7,
+    "uses": 8
+   },
+   {
+    "part": "3623",
+    "name": "Plate 1 x 3",
+    "models": 6,
+    "uses": 10
+   },
+   {
+    "part": "6091",
+    "name": "Brick 2 x 1 x 1.333 with Curved Top",
+    "models": 6,
+    "uses": 10
+   },
+   {
+    "part": "99206",
+    "name": "Plate 2 x 2 x 0.667 with Two Studs On Side and Two Raised with Closed Understud",
+    "models": 6,
+    "uses": 10
+   },
+   {
+    "part": "3021",
+    "name": "Plate 2 x 3",
+    "models": 6,
+    "uses": 6
+   },
+   {
+    "part": "2420",
+    "name": "Plate 2 x 2 Corner",
+    "models": 5,
+    "uses": 11
+   },
+   {
+    "part": "3069b",
+    "name": "Tile 1 x 2 with Groove",
+    "models": 5,
+    "uses": 10
+   },
+   {
+    "part": "25269",
+    "name": "Tile 1 x 1 Corner Round",
+    "models": 5,
+    "uses": 9
+   },
+   {
+    "part": "6141",
+    "name": "Plate 1 x 1 Round",
+    "models": 4,
+    "uses": 12
+   },
+   {
+    "part": "92946",
+    "name": "Slope Plate 45.73 2 x 1",
+    "models": 4,
+    "uses": 11
+   },
+   {
+    "part": "63864",
+    "name": "Tile 1 x 3",
+    "models": 4,
+    "uses": 8
+   },
+   {
+    "part": "29120",
+    "name": "Slope Brick Curved 2 x 1 with Cutout Left",
+    "models": 4,
+    "uses": 5
+   },
+   {
+    "part": "3710",
+    "name": "Plate 1 x 4",
+    "models": 4,
+    "uses": 4
+   },
+   {
+    "part": "50746",
+    "name": "=Slope Brick 31 1 x 1 x 0.667",
+    "models": 3,
+    "uses": 10
+   },
+   {
+    "part": "50950",
+    "name": "Slope Brick Curved 3 x 1",
+    "models": 3,
+    "uses": 8
+   },
+   {
+    "part": "60478",
+    "name": "Plate 1 x 2 with Handle on End",
+    "models": 3,
+    "uses": 7
+   },
+   {
+    "part": "15571",
+    "name": "Slope Brick 45 1 x 2 Triple with Bottom Stud Holder",
+    "models": 3,
+    "uses": 6
+   },
+   {
+    "part": "3070b",
+    "name": "Tile 1 x 1 with Groove",
+    "models": 3,
+    "uses": 6
+   },
+   {
+    "part": "2431",
+    "name": "Tile 1 x 4 with Groove",
+    "models": 3,
+    "uses": 5
+   },
+   {
+    "part": "60897",
+    "name": "Plate 1 x 1 with Clip Vertical (Thick C-Clip)",
+    "models": 3,
+    "uses": 5
+   },
+   {
+    "part": "32474",
+    "name": "Technic Ball Joint with Axlehole Blind",
+    "models": 3,
+    "uses": 4
+   },
+   {
+    "part": "29119",
+    "name": "Slope Brick Curved 2 x 1 with Cutout Right",
+    "models": 3,
+    "uses": 4
+   },
+   {
+    "part": "3003",
+    "name": "Brick 2 x 2",
+    "models": 3,
+    "uses": 3
+   },
+   {
+    "part": "4032a",
+    "name": "Plate 2 x 2 Round with Axlehole",
+    "models": 3,
+    "uses": 3
+   },
+   {
+    "part": "6233",
+    "name": "Cone 3 x 3 x 2",
+    "models": 3,
+    "uses": 3
+   },
+   {
+    "part": "18674",
+    "name": "Plate 2 x 2 Round with 1 Centre Stud",
+    "models": 3,
+    "uses": 3
+   },
+   {
+    "part": "98138",
+    "name": "Tile 1 x 1 Round with Groove",
+    "models": 2,
+    "uses": 9
+   },
+   {
+    "part": "27925",
+    "name": "Tile 2 x 2 Corner Round",
+    "models": 2,
+    "uses": 8
+   },
+   {
+    "part": "61252",
+    "name": "Plate 1 x 1 with Clip Horizontal (Thick C-Clip)",
+    "models": 2,
+    "uses": 6
+   },
+   {
+    "part": "61678",
+    "name": "Slope Brick Curved 4 x 1",
+    "models": 2,
+    "uses": 5
+   },
+   {
+    "part": "24201",
+    "name": "Slope Brick Curved 2 x 1 Inverted",
+    "models": 2,
+    "uses": 5
+   }
+  ],
+  "colors": {
+   "Black": 124,
+   "Reddish Brown": 91,
+   "White": 59,
+   "Sand Green": 46,
+   "Medium Nougat": 44,
+   "Red": 27,
+   "Dark Bluish Grey": 26,
+   "Dark Orange": 22,
+   "Dark Red": 21,
+   "Blue": 20
+  }
+ },
+ "torso": {
+  "pieces_per_model_median": 18.0,
+  "models_with_role": 79,
+  "stud_directions": {
+   "up": 0.537,
+   "back": 0.211,
+   "front": 0.125,
+   "side": 0.113,
+   "down": 0.015
+  },
+  "categories": {
+   "Plates": 0.381,
+   "Plates Special": 0.11,
+   "Bricks": 0.084,
+   "Tiles": 0.078,
+   "Bricks Curved": 0.063,
+   "Bricks Special": 0.058,
+   "Bricks Sloped": 0.049,
+   "Tiles Round and Curved": 0.048,
+   "Plates Round Curved and Dishes": 0.029,
+   "?": 0.018
+  },
+  "top_parts": [
+   {
+    "part": "3023b",
+    "name": "Plate 1 x 2",
+    "models": 65,
+    "uses": 292
+   },
+   {
+    "part": "3020",
+    "name": "Plate 2 x 4",
+    "models": 49,
+    "uses": 101
+   },
+   {
+    "part": "3031",
+    "name": "Plate 4 x 4",
+    "models": 35,
+    "uses": 39
+   },
+   {
+    "part": "3022",
+    "name": "Plate 2 x 2",
+    "models": 34,
+    "uses": 50
+   },
+   {
+    "part": "3024",
+    "name": "Plate 1 x 1",
+    "models": 30,
+    "uses": 106
+   },
+   {
+    "part": "3004",
+    "name": "Brick 1 x 2",
+    "models": 30,
+    "uses": 62
+   },
+   {
+    "part": "3710",
+    "name": "Plate 1 x 4",
+    "models": 28,
+    "uses": 55
+   },
+   {
+    "part": "98138",
+    "name": "Tile 1 x 1 Round with Groove",
+    "models": 28,
+    "uses": 53
+   },
+   {
+    "part": "54200",
+    "name": "Slope Brick 31 1 x 1 x 0.667",
+    "models": 22,
+    "uses": 47
+   },
+   {
+    "part": "3069b",
+    "name": "Tile 1 x 2 with Groove",
+    "models": 22,
+    "uses": 44
+   },
+   {
+    "part": "11477",
+    "name": "Slope Brick Curved 2 x 1",
+    "models": 21,
+    "uses": 41
+   },
+   {
+    "part": "3070b",
+    "name": "Tile 1 x 1 with Groove",
+    "models": 20,
+    "uses": 39
+   },
+   {
+    "part": "3021",
+    "name": "Plate 2 x 3",
+    "models": 20,
+    "uses": 38
+   },
+   {
+    "part": "92593",
+    "name": "Plate 1 x 4 with Two Studs",
+    "models": 19,
+    "uses": 19
+   },
+   {
+    "part": "3005",
+    "name": "Brick 1 x 1",
+    "models": 18,
+    "uses": 51
+   },
+   {
+    "part": "85984",
+    "name": "Slope Brick 31 1 x 2 x 0.667",
+    "models": 18,
+    "uses": 22
+   },
+   {
+    "part": "11476",
+    "name": "Plate 1 x 2 with Clip Horizontal on Side (Thick C-Clip)",
+    "models": 17,
+    "uses": 18
+   },
+   {
+    "part": "6141",
+    "name": "Plate 1 x 1 Round",
+    "models": 16,
+    "uses": 36
+   },
+   {
+    "part": "25269",
+    "name": "Tile 1 x 1 Corner Round",
+    "models": 16,
+    "uses": 35
+   },
+   {
+    "part": "15573",
+    "name": "Plate 1 x 2 with Groove with 1 Centre Stud, without Understud",
+    "models": 14,
+    "uses": 34
+   },
+   {
+    "part": "87079",
+    "name": "Tile 2 x 4",
+    "models": 14,
+    "uses": 20
+   },
+   {
+    "part": "2420",
+    "name": "Plate 2 x 2 Corner",
+    "models": 13,
+    "uses": 30
+   },
+   {
+    "part": "15068",
+    "name": "Slope Brick Curved 2 x 2 x 0.667",
+    "models": 13,
+    "uses": 28
+   },
+   {
+    "part": "3623",
+    "name": "Plate 1 x 3",
+    "models": 12,
+    "uses": 30
+   },
+   {
+    "part": "2431",
+    "name": "Tile 1 x 4 with Groove",
+    "models": 12,
+    "uses": 19
+   },
+   {
+    "part": "3010",
+    "name": "Brick 1 x 4",
+    "models": 11,
+    "uses": 22
+   },
+   {
+    "part": "99781",
+    "name": "Bracket 1 x 2 - 1 x 2 Down",
+    "models": 10,
+    "uses": 23
+   },
+   {
+    "part": "6091",
+    "name": "Brick 2 x 1 x 1.333 with Curved Top",
+    "models": 10,
+    "uses": 19
+   },
+   {
+    "part": "3941",
+    "name": "Brick 2 x 2 Round without Reinforcement",
+    "models": 10,
+    "uses": 14
+   },
+   {
+    "part": "3003",
+    "name": "Brick 2 x 2",
+    "models": 9,
+    "uses": 15
+   },
+   {
+    "part": "99206",
+    "name": "Plate 2 x 2 x 0.667 with Two Studs On Side and Two Raised with Closed Understud",
+    "models": 8,
+    "uses": 20
+   },
+   {
+    "part": "15712",
+    "name": "Tile 1 x 1 with Clip (Thick C-Clip)",
+    "models": 8,
+    "uses": 8
+   },
+   {
+    "part": "87087",
+    "name": "Brick 1 x 1 with Stud on 1 Side",
+    "models": 7,
+    "uses": 27
+   },
+   {
+    "part": "63864",
+    "name": "Tile 1 x 3",
+    "models": 7,
+    "uses": 21
+   },
+   {
+    "part": "11212",
+    "name": "Plate 3 x 3",
+    "models": 7,
+    "uses": 18
+   },
+   {
+    "part": "4032a",
+    "name": "Plate 2 x 2 Round with Axlehole",
+    "models": 7,
+    "uses": 8
+   },
+   {
+    "part": "99780",
+    "name": "Bracket 1 x 2 - 1 x 2 Up",
+    "models": 7,
+    "uses": 8
+   },
+   {
+    "part": "22885",
+    "name": "Brick 1 x 2 x 1.667 with Studs on 1 Side",
+    "models": 6,
+    "uses": 41
+   },
+   {
+    "part": "29119",
+    "name": "Slope Brick Curved 2 x 1 with Cutout Right",
+    "models": 6,
+    "uses": 12
+   },
+   {
+    "part": "34103",
+    "name": "Plate 1 x 3 with 2 Studs Offset",
+    "models": 6,
+    "uses": 11
+   }
+  ],
+  "colors": {
+   "Black": 374,
+   "White": 236,
+   "Light Bluish Grey": 236,
+   "Reddish Brown": 147,
+   "Tan": 126,
+   "Dark Bluish Grey": 116,
+   "Red": 102,
+   "Green": 76,
+   "Bright Light Orange": 61,
+   "Dark Tan": 57
+  }
+ },
+ "arms": {
+  "pieces_per_model_median": 14.5,
+  "models_with_role": 80,
+  "stud_directions": {
+   "side": 0.554,
+   "up": 0.264,
+   "front": 0.089,
+   "back": 0.07,
+   "down": 0.023
+  },
+  "categories": {
+   "Plates": 0.231,
+   "Plates Special": 0.152,
+   "Bricks Curved": 0.109,
+   "Bricks Sloped": 0.1,
+   "Plates Round Curved and Dishes": 0.068,
+   "Tiles": 0.065,
+   "Tiles Round and Curved": 0.057,
+   "Plants & Trees": 0.038,
+   "Bricks Round and Cones": 0.024,
+   "Bricks Special": 0.024
+  },
+  "top_parts": [
+   {
+    "part": "11476",
+    "name": "Plate 1 x 2 with Clip Horizontal on Side (Thick C-Clip)",
+    "models": 66,
+    "uses": 126
+   },
+   {
+    "part": "3023b",
+    "name": "Plate 1 x 2",
+    "models": 38,
+    "uses": 124
+   },
+   {
+    "part": "85984",
+    "name": "Slope Brick 31 1 x 2 x 0.667",
+    "models": 36,
+    "uses": 80
+   },
+   {
+    "part": "3024",
+    "name": "Plate 1 x 1",
+    "models": 34,
+    "uses": 111
+   },
+   {
+    "part": "11477",
+    "name": "Slope Brick Curved 2 x 1",
+    "models": 27,
+    "uses": 72
+   },
+   {
+    "part": "3069b",
+    "name": "Tile 1 x 2 with Groove",
+    "models": 27,
+    "uses": 58
+   },
+   {
+    "part": "54200",
+    "name": "Slope Brick 31 1 x 1 x 0.667",
+    "models": 19,
+    "uses": 53
+   },
+   {
+    "part": "6141",
+    "name": "Plate 1 x 1 Round",
+    "models": 17,
+    "uses": 61
+   },
+   {
+    "part": "15068",
+    "name": "Slope Brick Curved 2 x 2 x 0.667",
+    "models": 17,
+    "uses": 38
+   },
+   {
+    "part": "25269",
+    "name": "Tile 1 x 1 Corner Round",
+    "models": 14,
+    "uses": 58
+   },
+   {
+    "part": "3710",
+    "name": "Plate 1 x 4",
+    "models": 14,
+    "uses": 29
+   },
+   {
+    "part": "98138",
+    "name": "Tile 1 x 1 Round with Groove",
+    "models": 14,
+    "uses": 18
+   },
+   {
+    "part": "6091",
+    "name": "Brick 2 x 1 x 1.333 with Curved Top",
+    "models": 13,
+    "uses": 35
+   },
+   {
+    "part": "3022",
+    "name": "Plate 2 x 2",
+    "models": 12,
+    "uses": 21
+   },
+   {
+    "part": "2420",
+    "name": "Plate 2 x 2 Corner",
+    "models": 11,
+    "uses": 33
+   },
+   {
+    "part": "4032a",
+    "name": "Plate 2 x 2 Round with Axlehole",
+    "models": 11,
+    "uses": 22
+   },
+   {
+    "part": "3070b",
+    "name": "Tile 1 x 1 with Groove",
+    "models": 10,
+    "uses": 22
+   },
+   {
+    "part": "3623",
+    "name": "Plate 1 x 3",
+    "models": 10,
+    "uses": 17
+   },
+   {
+    "part": "24866",
+    "name": "Plate 1 x 1 with 5 Petals",
+    "models": 9,
+    "uses": 24
+   },
+   {
+    "part": "15712",
+    "name": "Tile 1 x 1 with Clip (Thick C-Clip)",
+    "models": 9,
+    "uses": 11
+   },
+   {
+    "part": "63868",
+    "name": "Plate 1 x 2 with Clip Horizontal on End (Thick C-Clip)",
+    "models": 9,
+    "uses": 11
+   },
+   {
+    "part": "3020",
+    "name": "Plate 2 x 4",
+    "models": 8,
+    "uses": 10
+   },
+   {
+    "part": "59900",
+    "name": "Cone 1 x 1 with Stop",
+    "models": 8,
+    "uses": 9
+   },
+   {
+    "part": "15573",
+    "name": "Plate 1 x 2 with Groove with 1 Centre Stud, without Understud",
+    "models": 7,
+    "uses": 15
+   },
+   {
+    "part": "60478",
+    "name": "Plate 1 x 2 with Handle on End",
+    "models": 7,
+    "uses": 10
+   },
+   {
+    "part": "50746",
+    "name": "=Slope Brick 31 1 x 1 x 0.667",
+    "models": 6,
+    "uses": 10
+   },
+   {
+    "part": "30374",
+    "name": "Bar 4L Lightsaber Blade",
+    "models": 6,
+    "uses": 9
+   },
+   {
+    "part": "3626c",
+    "name": "Minifig Head with Hollow Stud",
+    "models": 6,
+    "uses": 7
+   },
+   {
+    "part": "29120",
+    "name": "Slope Brick Curved 2 x 1 with Cutout Left",
+    "models": 5,
+    "uses": 12
+   },
+   {
+    "part": "3062b",
+    "name": "Brick 1 x 1 Round with Hollow Stud",
+    "models": 5,
+    "uses": 12
+   },
+   {
+    "part": "29119",
+    "name": "Slope Brick Curved 2 x 1 with Cutout Right",
+    "models": 5,
+    "uses": 11
+   },
+   {
+    "part": "3021",
+    "name": "Plate 2 x 3",
+    "models": 5,
+    "uses": 8
+   },
+   {
+    "part": "3005",
+    "name": "Brick 1 x 1",
+    "models": 5,
+    "uses": 7
+   },
+   {
+    "part": "63965",
+    "name": "~Bar 6L with Thick Stop (Obsolete)",
+    "models": 5,
+    "uses": 7
+   },
+   {
+    "part": "85861",
+    "name": "Plate 1 x 1 Round with Open Stud",
+    "models": 5,
+    "uses": 5
+   },
+   {
+    "part": "33183",
+    "name": "Minifig Food Carrot Top",
+    "models": 4,
+    "uses": 7
+   },
+   {
+    "part": "3040b",
+    "name": "Slope Brick 45 2 x 1",
+    "models": 4,
+    "uses": 6
+   },
+   {
+    "part": "61252",
+    "name": "Plate 1 x 1 with Clip Horizontal (Thick C-Clip)",
+    "models": 4,
+    "uses": 6
+   },
+   {
+    "part": "3004",
+    "name": "Brick 1 x 2",
+    "models": 4,
+    "uses": 5
+   },
+   {
+    "part": "87087",
+    "name": "Brick 1 x 1 with Stud on 1 Side",
+    "models": 3,
+    "uses": 10
+   }
+  ],
+  "colors": {
+   "Black": 262,
+   "White": 177,
+   "Tan": 135,
+   "Dark Bluish Grey": 108,
+   "Reddish Brown": 101,
+   "Red": 90,
+   "Light Bluish Grey": 84,
+   "Green": 80,
+   "Yellow": 49,
+   "Bright Light Orange": 41
+  }
+ },
+ "legs": {
+  "pieces_per_model_median": 9.0,
+  "models_with_role": 80,
+  "stud_directions": {
+   "up": 0.978,
+   "back": 0.009,
+   "front": 0.007,
+   "side": 0.004,
+   "down": 0.002
+  },
+  "categories": {
+   "Tiles": 0.323,
+   "Plates": 0.309,
+   "Plates Special": 0.175,
+   "Plates Round Curved and Dishes": 0.093,
+   "Plants & Trees": 0.02,
+   "Bricks Sloped": 0.017,
+   "Bricks": 0.017,
+   "Tiles Special": 0.01,
+   "Bricks Round and Cones": 0.01,
+   "Bricks Curved": 0.007
+  },
+  "top_parts": [
+   {
+    "part": "2431",
+    "name": "Tile 1 x 4 with Groove",
+    "models": 78,
+    "uses": 114
+   },
+   {
+    "part": "87079",
+    "name": "Tile 2 x 4",
+    "models": 76,
+    "uses": 114
+   },
+   {
+    "part": "3023b",
+    "name": "Plate 1 x 2",
+    "models": 62,
+    "uses": 153
+   },
+   {
+    "part": "92593",
+    "name": "Plate 1 x 4 with Two Studs",
+    "models": 61,
+    "uses": 76
+   },
+   {
+    "part": "3958",
+    "name": "Plate 6 x 6",
+    "models": 18,
+    "uses": 20
+   },
+   {
+    "part": "4032a",
+    "name": "Plate 2 x 2 Round with Axlehole",
+    "models": 16,
+    "uses": 34
+   },
+   {
+    "part": "30565",
+    "name": "Plate 4 x 4 with Corner Round",
+    "models": 16,
+    "uses": 32
+   },
+   {
+    "part": "4477",
+    "name": "Plate 1 x 10",
+    "models": 16,
+    "uses": 16
+   },
+   {
+    "part": "3666",
+    "name": "Plate 1 x 6",
+    "models": 16,
+    "uses": 16
+   },
+   {
+    "part": "41740",
+    "name": "Plate 1 x 4 with Two Studs and Groove",
+    "models": 11,
+    "uses": 12
+   },
+   {
+    "part": "15573",
+    "name": "Plate 1 x 2 with Groove with 1 Centre Stud, without Understud",
+    "models": 10,
+    "uses": 21
+   },
+   {
+    "part": "24866",
+    "name": "Plate 1 x 1 with 5 Petals",
+    "models": 7,
+    "uses": 14
+   },
+   {
+    "part": "3623",
+    "name": "Plate 1 x 3",
+    "models": 7,
+    "uses": 14
+   },
+   {
+    "part": "3024",
+    "name": "Plate 1 x 1",
+    "models": 6,
+    "uses": 14
+   },
+   {
+    "part": "54200",
+    "name": "Slope Brick 31 1 x 1 x 0.667",
+    "models": 6,
+    "uses": 13
+   },
+   {
+    "part": "87580",
+    "name": "Plate 2 x 2 with Groove with 1 Centre Stud",
+    "models": 5,
+    "uses": 14
+   },
+   {
+    "part": "3069b",
+    "name": "Tile 1 x 2 with Groove",
+    "models": 5,
+    "uses": 13
+   },
+   {
+    "part": "6141",
+    "name": "Plate 1 x 1 Round",
+    "models": 4,
+    "uses": 9
+   },
+   {
+    "part": "3020",
+    "name": "Plate 2 x 4",
+    "models": 4,
+    "uses": 4
+   },
+   {
+    "part": "3710",
+    "name": "Plate 1 x 4",
+    "models": 3,
+    "uses": 5
+   },
+   {
+    "part": "3021",
+    "name": "Plate 2 x 3",
+    "models": 3,
+    "uses": 5
+   },
+   {
+    "part": "3070b",
+    "name": "Tile 1 x 1 with Groove",
+    "models": 2,
+    "uses": 13
+   },
+   {
+    "part": "3004",
+    "name": "Brick 1 x 2",
+    "models": 2,
+    "uses": 6
+   },
+   {
+    "part": "3622",
+    "name": "Brick 1 x 3",
+    "models": 2,
+    "uses": 4
+   },
+   {
+    "part": "49668",
+    "name": "Plate 1 x 1 with Tooth In-line",
+    "models": 2,
+    "uses": 4
+   },
+   {
+    "part": "15712",
+    "name": "Tile 1 x 1 with Clip (Thick C-Clip)",
+    "models": 2,
+    "uses": 3
+   },
+   {
+    "part": "99206",
+    "name": "Plate 2 x 2 x 0.667 with Two Studs On Side and Two Raised with Closed Understud",
+    "models": 2,
+    "uses": 3
+   },
+   {
+    "part": "33909",
+    "name": "Plate 2 x 2 with 2 Studs on One Edge",
+    "models": 2,
+    "uses": 3
+   },
+   {
+    "part": "18674",
+    "name": "Plate 2 x 2 Round with 1 Centre Stud",
+    "models": 2,
+    "uses": 2
+   },
+   {
+    "part": "28802",
+    "name": "Bracket 1 x 2 - 1 x 4 with Rounded Bottom Corners",
+    "models": 2,
+    "uses": 2
+   },
+   {
+    "part": "32028",
+    "name": "Plate 1 x 2 with Door Rail",
+    "models": 2,
+    "uses": 2
+   },
+   {
+    "part": "93273",
+    "name": "Slope Brick Curved 4 x 1 Double",
+    "models": 2,
+    "uses": 2
+   },
+   {
+    "part": "3068b",
+    "name": "Tile 2 x 2 with Groove",
+    "models": 2,
+    "uses": 2
+   },
+   {
+    "part": "26047",
+    "name": "Plate 1 x 1 Round with Horizontal Handle on Side",
+    "models": 1,
+    "uses": 4
+   },
+   {
+    "part": "85080",
+    "name": "Brick 2 x 2 Corner Round with Stud Notch and Reinforced Underside",
+    "models": 1,
+    "uses": 4
+   },
+   {
+    "part": "48092",
+    "name": "Brick 4 x 4 Corner Round",
+    "models": 1,
+    "uses": 4
+   },
+   {
+    "part": "30413",
+    "name": "Panel 1 x 4 x 1 with Rounded Corners, Thick Wall",
+    "models": 1,
+    "uses": 4
+   },
+   {
+    "part": "11203",
+    "name": "Tile 2 x 2 Inverted",
+    "models": 1,
+    "uses": 4
+   },
+   {
+    "part": "6091",
+    "name": "Brick 2 x 1 x 1.333 with Curved Top",
+    "models": 1,
+    "uses": 4
+   },
+   {
+    "part": "32607",
+    "name": "Plate 1 x 1 Round with 3 Leaves",
+    "models": 1,
+    "uses": 2
+   }
+  ],
+  "colors": {
+   "Black": 500,
+   "Red": 50,
+   "White": 47,
+   "Dark Bluish Grey": 32,
+   "Green": 29,
+   "Reddish Brown": 19,
+   "Lime": 15,
+   "Dark Turquoise": 15,
+   "Bright Green": 11,
+   "Dark Tan": 10
+  }
+ },
+ "base": {
+  "pieces_per_model_median": 1.0,
+  "models_with_role": 66,
+  "stud_directions": {
+   "up": 1.0
+  },
+  "categories": {
+   "Plates": 0.907,
+   "Plates Round Curved and Dishes": 0.074,
+   "Tiles": 0.019
+  },
+  "top_parts": [
+   {
+    "part": "3958",
+    "name": "Plate 6 x 6",
+    "models": 47,
+    "uses": 68
+   },
+   {
+    "part": "3032",
+    "name": "Plate 4 x 6",
+    "models": 16,
+    "uses": 21
+   },
+   {
+    "part": "11212",
+    "name": "Plate 3 x 3",
+    "models": 1,
+    "uses": 4
+   },
+   {
+    "part": "30357",
+    "name": "Plate 3 x 3 with 2 x 2 Corner Round",
+    "models": 1,
+    "uses": 4
+   },
+   {
+    "part": "30565",
+    "name": "Plate 4 x 4 with Corner Round",
+    "models": 1,
+    "uses": 4
+   },
+   {
+    "part": "3035",
+    "name": "Plate 4 x 8",
+    "models": 1,
+    "uses": 2
+   },
+   {
+    "part": "87079",
+    "name": "Tile 2 x 4",
+    "models": 1,
+    "uses": 2
+   },
+   {
+    "part": "3030",
+    "name": "Plate 4 x 10",
+    "models": 1,
+    "uses": 1
+   },
+   {
+    "part": "3028",
+    "name": "Plate 6 x 12",
+    "models": 1,
+    "uses": 1
+   },
+   {
+    "part": "3036",
+    "name": "Plate 6 x 8",
+    "models": 1,
+    "uses": 1
+   }
+  ],
+  "colors": {
+   "Black": 91,
+   "White": 17
+  }
+ },
+ "accessory": {
+  "pieces_per_model_median": 0.0,
+  "models_with_role": 2,
+  "stud_directions": {
+   "up": 0.5,
+   "down": 0.231,
+   "front": 0.154,
+   "side": 0.077,
+   "back": 0.038
+  },
+  "categories": {
+   "Technic Gears": 0.269,
+   "Plates Special": 0.25,
+   "Bricks Special": 0.173,
+   "Tiles": 0.077,
+   "Plates": 0.058,
+   "Bricks": 0.038,
+   "Tiles Round and Curved": 0.038,
+   "Plates Round Curved and Dishes": 0.019,
+   "Technic Bricks": 0.019,
+   "?": 0.019
+  },
+  "top_parts": [
+   {
+    "part": "572c",
+    "name": "~String Minifig Grip (Obsolete)",
+    "models": 1,
+    "uses": 12
+   },
+   {
+    "part": "22885",
+    "name": "Brick 1 x 2 x 1.667 with Studs on 1 Side",
+    "models": 1,
+    "uses": 8
+   },
+   {
+    "part": "33909",
+    "name": "Plate 2 x 2 with 2 Studs on One Edge",
+    "models": 1,
+    "uses": 4
+   },
+   {
+    "part": "79389",
+    "name": "Bracket 1 x 1 - 2 x 1 Down",
+    "models": 1,
+    "uses": 3
+   },
+   {
+    "part": "572a",
+    "name": "~String End Stud (Obsolete)",
+    "models": 1,
+    "uses": 2
+   },
+   {
+    "part": "2436a",
+    "name": "Bracket 1 x 2 - 1 x 4 with Square Corners",
+    "models": 1,
+    "uses": 2
+   },
+   {
+    "part": "44728",
+    "name": "Bracket 1 x 2 - 2 x 2 Down",
+    "models": 1,
+    "uses": 2
+   },
+   {
+    "part": "63864",
+    "name": "Tile 1 x 3",
+    "models": 1,
+    "uses": 2
+   },
+   {
+    "part": "24246",
+    "name": "Tile 1 x 1 with Rounded End",
+    "models": 1,
+    "uses": 2
+   },
+   {
+    "part": "3022",
+    "name": "Plate 2 x 2",
+    "models": 1,
+    "uses": 2
+   },
+   {
+    "part": "4032a",
+    "name": "Plate 2 x 2 Round with Axlehole",
+    "models": 1,
+    "uses": 1
+   },
+   {
+    "part": "3003",
+    "name": "Brick 2 x 2",
+    "models": 1,
+    "uses": 1
+   },
+   {
+    "part": "6541",
+    "name": "Technic Brick 1 x 1 with Hole",
+    "models": 1,
+    "uses": 1
+   },
+   {
+    "part": "3005",
+    "name": "Brick 1 x 1",
+    "models": 1,
+    "uses": 1
+   },
+   {
+    "part": "u7021",
+    "name": "Modulex Tile 1 x 4 with Bottom Studs",
+    "models": 1,
+    "uses": 1
+   },
+   {
+    "part": "87079",
+    "name": "Tile 2 x 4",
+    "models": 1,
+    "uses": 1
+   },
+   {
+    "part": "3069a",
+    "name": "Tile 1 x 2 without Groove",
+    "models": 1,
+    "uses": 1
+   },
+   {
+    "part": "2420",
+    "name": "Plate 2 x 2 Corner",
+    "models": 1,
+    "uses": 1
+   },
+   {
+    "part": "95199",
+    "name": "Minifig Gun Pistol Two Barrel",
+    "models": 1,
+    "uses": 1
+   },
+   {
+    "part": "11477",
+    "name": "Slope Brick Curved 2 x 1",
+    "models": 1,
+    "uses": 1
+   },
+   {
+    "part": "3794b",
+    "name": "Plate 1 x 2 with Groove with 1 Centre Stud",
+    "models": 1,
+    "uses": 1
+   },
+   {
+    "part": "99207",
+    "name": "Bracket 1 x 2 - 2 x 2 Up",
+    "models": 1,
+    "uses": 1
+   },
+   {
+    "part": "32952",
+    "name": "Brick 1 x 1 x 1.667 with Studs on 1 Side",
+    "models": 1,
+    "uses": 1
+   }
+  ],
+  "colors": {
+   "Red": 14,
+   "Tan": 14,
+   "White": 12,
+   "Light Bluish Grey": 6,
+   "Main Colour": 2,
+   "Black": 2,
+   "Bright Green": 1,
+   "Pink": 1
+  }
+ }
+}

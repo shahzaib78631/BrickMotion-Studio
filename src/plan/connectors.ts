@@ -3,6 +3,7 @@ import type { Vec3 } from '../ldraw/parse';
 import type { PartMetrics } from '../ldraw/metrics';
 import type { ColorDef } from '../ldraw/colors';
 import type { Snap } from '../ldraw/shadow';
+import { bricknetJointSnaps, isBall } from '../data/bricknetJoints';
 import { assemble, type Metrics } from '../model/assemble';
 import { modelSteps } from './ops';
 import { socketsOf } from './studSnap';
@@ -15,7 +16,7 @@ import type { Plan, Step } from './types';
  * down (+Y). A male and a female mate when their `pos` coincide, their axes are opposite
  * and they are of the same `type`, so a stud never seats in a Technic hole.
  */
-export type ConnectorType = 'stud' | 'pin' | 'bar' | 'hinge';
+export type ConnectorType = 'stud' | 'pin' | 'bar' | 'hinge' | 'knuckle' | 'ball';
 export type Connector = {
   pos: Vec3;
   axis: Vec3;
@@ -27,7 +28,29 @@ export type Connector = {
   joint?: string;
   /** the far end of a finger hinge's run: a seat there turns the other half round */
   flip?: boolean;
+  /**
+   * knuckle and ball only: what the mate must match — the snap group, or for an ungrouped
+   * LDCad `match=size` ball its radius. Two joint halves with different keys never seat.
+   */
+  fit?: string;
 };
+
+/**
+ * Joints seat by their own rule. A stud, pin, bar or hinge pin seats with the axes opposed.
+ * A knuckle (a finger hinge's pivot, from the joint data) has a line for an axis, not a
+ * direction, so its halves seat with the axes on one line either way round, at any angle
+ * about it. A ball seats on its centre alone, in any orientation; its
+ * `axis` carries no meaning.
+ */
+export const isJoint = (c: Pick<Connector, 'type'>) => c.type === 'knuckle' || c.type === 'ball';
+const dot3 = (a: readonly number[], b: readonly number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+export function connectorsMate(c: Connector, t: Connector): boolean {
+  if (c.gender === t.gender || c.type !== t.type || c.fit !== t.fit) return false;
+  if (Math.hypot(c.pos[0] - t.pos[0], c.pos[1] - t.pos[1], c.pos[2] - t.pos[2]) >= 1) return false;
+  if (c.type === 'ball') return true;
+  const d = dot3(c.axis, t.axis);
+  return c.type === 'knuckle' ? Math.abs(d) > 0.999 : d < -0.999;
+}
 
 /**
  * a plain round stud (radius 6 LDU), or a round socket that takes one: an anti-stud, a hinge
@@ -117,6 +140,56 @@ export function partConnectors(m: PartMetrics): Connector[] {
     }
   }
   cache.set(m, out);
+  return out;
+}
+
+/**
+ * The joint key a hinge or ball snap mates by, as LDCad: the same group, or with no group on
+ * either side `match=size` and the same radius. null: nothing would mate it.
+ */
+const fitOf = (s: Snap): string | null =>
+  s.group ? `g:${s.group.toLowerCase()}` : s.match?.toLowerCase() === 'size' ? `r:${s.radius.toFixed(1)}` : null;
+
+/** The centre of a joint snap: a ball's centre, a hinge's pivot (the middle of its span). */
+export const jointCentre = (s: Snap): Vec3 =>
+  [s.start[0] + s.axis[0] * s.length / 2, s.start[1] + s.axis[1] * s.length / 2, s.start[2] + s.axis[2] * s.length / 2];
+
+/**
+ * A part's joint snaps for placement and its collision allowance: its LDCad balls, and the
+ * BrickNet fallback hinges and balls (`bricknetJoints.ts`) where LDCad has none. LDCad
+ * fingers stay what they are in the placement engine (a hand's grip, `bar`): their halves
+ * carry no consistent gender.
+ */
+export function jointSnaps(part: string, snaps: readonly Snap[] | undefined): Snap[] {
+  return [...(snaps ?? []).filter(isBall), ...bricknetJointSnaps(part, snaps)];
+}
+
+const jointCache = new WeakMap<PartMetrics, Connector[]>();
+/** The hinges and balls a part can be placed by or onto (part space). */
+export function jointConnectors(m: PartMetrics): Connector[] {
+  const hit = jointCache.get(m);
+  if (hit) return hit;
+  const out: Connector[] = [];
+  for (const s of jointSnaps(m.id, m.snaps)) {
+    const fit = fitOf(s);
+    if (!fit) continue;
+    out.push({ pos: jointCentre(s), axis: unit(s.axis), gender: s.gender, type: s.kind === 'fgr' ? 'knuckle' : 'ball', fit });
+  }
+  jointCache.set(m, out);
+  return out;
+}
+
+const placeCache = new WeakMap<PartMetrics, Connector[]>();
+/**
+ * What drag placement seats a part by: its studs, pins and bars, plus its hinges and balls.
+ * The other users of `partConnectors` (fit, attachments, build order) keep to the first three.
+ */
+export function placementConnectors(m: PartMetrics): Connector[] {
+  const hit = placeCache.get(m);
+  if (hit) return hit;
+  const joints = jointConnectors(m);
+  const out = joints.length ? [...partConnectors(m), ...joints] : partConnectors(m);
+  placeCache.set(m, out);
   return out;
 }
 

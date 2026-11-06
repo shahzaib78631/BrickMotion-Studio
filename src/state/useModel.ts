@@ -4,6 +4,7 @@ import { validate, type Warning } from '../model/validate';
 import { collisionWorld, solidsFor } from '../plan/collision';
 import { modelSteps } from '../plan/ops';
 import { isSub, type Plan } from '../plan/types';
+import { connectionChecks } from '../plan/connectionGraph';
 import { sameGeometry } from './modelChange';
 import { ensureParts, getColors, isLoaded, metricsOf, partName, registerInlineParts } from './partService';
 import { useStudio } from './store';
@@ -60,10 +61,14 @@ const conflictsIn = (assembly: Assembly) => (a: Instance, b: Instance) => {
 
 const EMPTY: Assembly = { nodes: [], instances: [], bounds: null, problems: [] };
 
+/** Every check the model runs: geometry overlaps and floating pieces, plus connection-based stability. */
+const allChecks = (assembly: Assembly): Warning[] =>
+  [...validate(assembly, partName, snapsOf, conflictsIn(assembly)), ...connectionChecks(assembly, metricsOf, partName)];
+
 export function computeModel(plan: Plan, editingModel: string): Omit<ModelState, 'ready'> {
   const colors = getColors();
   const assembly = assemble(plan, metricsOf, colors);
-  const all = validate(assembly, partName, snapsOf, conflictsIn(assembly));
+  const all = allChecks(assembly);
   const viewPlan = scopedPlan(plan, editingModel);
   const view = editingModel ? assemble(viewPlan, metricsOf, colors) : assembly;
   const warnings = editingModel ? all.filter((w) => w.model === editingModel) : all;
@@ -98,7 +103,7 @@ export function useModel(): ModelState {
     if (!allPartIds(plan).every(isLoaded)) return null;
     try {
       const assembly = assemble(plan, metricsOf, getColors());
-      return { plan, assembly, warnings: validate(assembly, partName, snapsOf, conflictsIn(assembly)) };
+      return { plan, assembly, warnings: allChecks(assembly) };
     } catch {
       return null; // the async path below reports the error
     }
@@ -119,7 +124,7 @@ export function useModel(): ModelState {
     }).then(() => {
       if (cancelled) return;
       const assembly = assemble(plan, metricsOf, getColors());
-      setBase({ plan, assembly, warnings: validate(assembly, partName, snapsOf, conflictsIn(assembly)) });
+      setBase({ plan, assembly, warnings: allChecks(assembly) });
     }).catch((error: unknown) => {
       if (!cancelled) setFailure({ plan, message: error instanceof Error ? error.message : String(error) });
     });

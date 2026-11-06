@@ -4,6 +4,7 @@ import type { Instance, Metrics } from '../model/assemble';
 import type { Snap } from '../ldraw/shadow';
 import type { SnapPart } from './studSnap';
 import { allSockets, columnsOf, isHingePin, studsOf } from './sockets';
+import { jointConnectors, type Connector } from './connectors';
 
 /**
  * Which pieces a moved selection would sit inside. Points sampled through the moving parts'
@@ -15,8 +16,12 @@ import { allSockets, columnsOf, isHingePin, studsOf } from './sockets';
  * frame. `guardEdit` and the drag engine both ask this world, so they agree.
  */
 
-/** A placed part, tagged with its top-level plan item id (a submodel use's parts share its id). */
-export type Solid = SnapPart & { id: string };
+/**
+ * A placed part, tagged with its top-level plan item id (a submodel use's parts share its id).
+ * `joints` are its hinges and balls (part space, from `jointConnectors`), for the joint
+ * allowance below.
+ */
+export type Solid = SnapPart & { id: string; joints?: readonly Connector[] };
 export type CollisionWorld = {
   /**
    * ids of the world's solids that `moving` would penetrate. `transform` places the
@@ -182,6 +187,33 @@ const inJoint = (j: Joint, p: readonly number[]) => {
   const t = dot(d, j.axis);
   if (t < -1 || t > j.length + 1) return false;
   return Math.hypot(d[0] - t * j.axis[0], d[1] - t * j.axis[1], d[2] - t * j.axis[2]) < j.radius + KNUCKLE;
+};
+/**
+ * A seated knuckle or ball from the joint data (`jointConnectors`). Its two halves interlock — a ball sits inside its socket, a hinge's
+ * knuckles inside each other's — so around a mated joint the two parts' material is the joint,
+ * not a collision. The allowance holds only between the two parts whose joint halves meet, and
+ * only near the joint: within the ball's radius plus 3 LDU of its centre, or within 8 LDU of
+ * a hinge axis and 12 LDU along it from the pivot. Everywhere else the parts are tested as usual.
+ */
+type Pocket = { pos: P3; axis: P3; gender: 'M' | 'F'; type: 'knuckle' | 'ball'; fit?: string; reach: number };
+export const HINGE_POCKET = { radius: 8, half: 12 };
+const ballReach = (fit?: string) => {
+  const r = fit?.startsWith('r:') ? Number(fit.slice(2)) : fit === 'g:techballjnt' ? 12.7 : 8;
+  return (Number.isFinite(r) ? r : 8) + 3;
+};
+const worldPockets = (e: ArrayLike<number>, joints?: readonly Connector[]): Pocket[] => (joints ?? []).flatMap((c) =>
+  c.type === 'knuckle' || c.type === 'ball'
+    ? [{ pos: apply(e, c.pos), axis: unit(vector(e, c.axis)), gender: c.gender, type: c.type, fit: c.fit, reach: c.type === 'ball' ? ballReach(c.fit) : HINGE_POCKET.half }]
+    : []);
+const pocketsMeet = (a: Pocket, b: Pocket) => a.type === b.type && a.gender !== b.gender && a.fit === b.fit &&
+  Math.hypot(a.pos[0] - b.pos[0], a.pos[1] - b.pos[1], a.pos[2] - b.pos[2]) < 1.5 &&
+  (a.type === 'ball' || Math.abs(dot(a.axis, b.axis)) > 0.999);
+const inPocket = (j: Pocket, p: P3) => {
+  const d = [p[0] - j.pos[0], p[1] - j.pos[1], p[2] - j.pos[2]];
+  if (j.type === 'ball') return Math.hypot(d[0], d[1], d[2]) < j.reach;
+  const along = dot(d, j.axis);
+  if (Math.abs(along) > j.reach) return false;
+  return Math.hypot(d[0] - along * j.axis[0], d[1] - along * j.axis[1], d[2] - along * j.axis[2]) < HINGE_POCKET.radius;
 };
 
 /** A socket in the shared frame: where a column's base meets it, the way it opens, and its bore. */
@@ -361,7 +393,7 @@ const CELL = 40;
 const cellKey = (x: number, y: number, z: number) => `${x},${y},${z}`;
 
 /** A fixed part plus the studs and sockets the verdict needs from it. */
-type Entry = Body & { part: Solid; studs: Stud[]; studBox: Box | null; sockets: Socket[]; bores: Bore[]; joints: Joint[] };
+type Entry = Body & { part: Solid; studs: Stud[]; studBox: Box | null; sockets: Socket[]; bores: Bore[]; joints: Joint[]; pockets: Pocket[] };
 
 /** A collision world over fixed solids, indexed once in a uniform grid (40 LDU cells). */
 export function collisionWorld(solids: readonly Solid[]): CollisionWorld {
@@ -374,6 +406,7 @@ export function collisionWorld(solids: readonly Solid[]): CollisionWorld {
       sockets: worldSockets(part.world, part),
       bores: worldBores(part.world, part.snaps),
       joints: worldJoints(part.world, part.snaps),
+      pockets: worldPockets(part.world, part.joints),
     };
   });
   const grid = new Map<string, number[]>();
@@ -407,7 +440,7 @@ export function collisionWorld(solids: readonly Solid[]): CollisionWorld {
       const plain = isIdentity(T), shiftOnly = isShift(T);
       const place = (p: P3): P3 => shiftOnly ? [p[0] + T[12], p[1] + T[13], p[2] + T[14]] : apply(T, p);
       // the moving set at the pose the caller asks about
-      const posed: Body[] = [], studs: Stud[] = [], columns: Stud[] = [], sockets: Socket[] = [], joints: Joint[] = [];
+      const posed: Body[] = [], studs: Stud[] = [], columns: Stud[] = [], sockets: Socket[] = [], joints: Joint[] = [], pockets: Pocket[] = [];
       let movingBox: Box | null = null;
       for (const s of moving) {
         const world = plain ? s.world : compose(T, s.world);
@@ -417,6 +450,7 @@ export function collisionWorld(solids: readonly Solid[]): CollisionWorld {
         studs.push(...worldStuds(world, localColumns(s)));
         sockets.push(...worldSockets(world, s));
         joints.push(...worldJoints(world, s.snaps));
+        if (s.joints?.length) pockets.push(...worldPockets(world, s.joints));
       }
       /** the hinge axes the moving set shares with a fixed part (worked out once each) */
       const hinged = new Map<Entry, Joint[]>();
@@ -440,6 +474,13 @@ export function collisionWorld(solids: readonly Solid[]): CollisionWorld {
       const openBores = (e: Entry) => {
         let hit = open.get(e);
         if (!hit) open.set(e, (hit = takenBores(e.bores, columns)));
+        return hit;
+      };
+      /** the fixed part's joint halves a moving joint half is seated on */
+      const seatedPockets = new Map<Entry, Pocket[]>();
+      const metPockets = (e: Entry) => {
+        let hit = seatedPockets.get(e);
+        if (!hit) seatedPockets.set(e, (hit = pockets.length ? e.pockets.filter((j) => pockets.some((m) => pocketsMeet(m, j))) : []));
         return hit;
       };
       /** the fixed studs one of the moving sockets is waiting for: those are seats, not pokes */
@@ -470,6 +511,8 @@ export function collisionWorld(solids: readonly Solid[]): CollisionWorld {
           if (openBores(e).some((b) => inBore(b, p))) return;
           // knuckles interlocking round a hinge axis the two share
           if (inHinge(e, p)) return;
+          // nor is the other half of a joint it is seated on
+          if (metPockets(e).some((j) => inPocket(j, p))) return;
           const taken = seatedStuds(e);
           const hit = taken.length
             ? insidePart(e, p, (q) => taken.some((st) => inStud(st, q)))
@@ -519,6 +562,7 @@ export function addsOverlap(before: ReadonlySet<string>, after: ReadonlySet<stri
 export function solidsFor(instances: readonly Instance[], metrics: Metrics): Solid[] {
   return instances.filter((i) => !i.placeholder).map((i) => {
     const m = metrics(i.part);
-    return { id: i.key.split('/')[0], world: i.world.elements, body: m.body, studs: m.studs, snaps: m.snaps, mesh: m.mesh };
+    const joints = jointConnectors(m);
+    return { id: i.key.split('/')[0], world: i.world.elements, body: m.body, studs: m.studs, snaps: m.snaps, mesh: m.mesh, ...(joints.length ? { joints } : {}) };
   });
 }

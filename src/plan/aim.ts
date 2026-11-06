@@ -29,6 +29,8 @@ export const BURIED_SLACK = 14;
  * plane the stud rises from, so the cursor is on a wall below it, not on the face it stands on.
  */
 export const WALL_SLACK = 5;
+/** The same for a hinge pivot or ball centre, which lie inside the part (a Technic ball's radius is 12.7 LDU). */
+export const JOINT_OCCLUDE_SLACK = 16;
 /** How many connections near the cursor are tried. */
 export const MAX_TARGETS = 6;
 
@@ -56,15 +58,18 @@ export function candidates(targets: readonly Target[], aim: Aim, max = MAX_TARGE
   const d = ray.dir;
   const near: { t: Target; angle: number }[] = [];
   for (const t of targets) {
+    // a hinge pin turns in its hole from either side, a knuckle's axis is a line and a ball has
+    // none: which way any of them faces does not matter. A knuckle's pivot or a ball's centre
+    // sits inside the part, up to a ball's radius behind the surface the ray hits
+    const joint = t.type === 'knuckle' || t.type === 'ball';
     const buried = t.type === 'hinge' || !!t.grip;
-    // a hinge pin turns in its hole from either side, so which way it faces does not matter
-    if (t.type !== 'hinge' && t.axis[0] * -d[0] + t.axis[1] * -d[1] + t.axis[2] * -d[2] <= -0.05) continue;
+    if (t.type !== 'hinge' && !joint && t.axis[0] * -d[0] + t.axis[1] * -d[1] + t.axis[2] * -d[2] <= -0.05) continue;
     const depth = rayDepth(ray, t.pos);
-    if (depth <= 0 || (hitDepth !== null && depth > hitDepth + (buried ? BURIED_SLACK : OCCLUDE_SLACK))) continue;
+    if (depth <= 0 || (hitDepth !== null && depth > hitDepth + (joint ? JOINT_OCCLUDE_SLACK : buried ? BURIED_SLACK : OCCLUDE_SLACK))) continue;
     if (rayGap(ray, t.pos, depth) > PICK_RADIUS) continue;
     // pointing at a piece's wall just under its top studs means "beside it", not "on top of it"
     const p = aim.hitPoint;
-    if (p && !buried && t.gender === 'M' && (p[0] - t.pos[0]) * t.axis[0] + (p[1] - t.pos[1]) * t.axis[1] + (p[2] - t.pos[2]) * t.axis[2] < -WALL_SLACK) continue;
+    if (p && !buried && !joint && t.gender === 'M' && (p[0] - t.pos[0]) * t.axis[0] + (p[1] - t.pos[1]) * t.axis[1] + (p[2] - t.pos[2]) * t.axis[2] < -WALL_SLACK) continue;
     near.push({ t, angle: rayAngle(ray, t.pos) });
   }
   return near.sort((a, b) => a.angle - b.angle).slice(0, max).map((x) => x.t);

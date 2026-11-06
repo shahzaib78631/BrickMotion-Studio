@@ -19,9 +19,11 @@ import type { Vec3 } from '../ldraw/parse';
 import { worldSnaps, mateAxis, type WorldSnap } from '../anim/snapMates';
 import { profiledCylinderMate } from '../anim/construction/profiledCylinderMate';
 import { discoverPlacedAttachments } from '../model/attachmentPlacements';
+import { withBricknetJoints } from '../data/bricknetJoints';
 
 export type MotionKind = 'free' | 'locked' | 'revolute' | 'prismatic' | 'cylindrical' | 'ball';
-export type JointEvidence = 'ldcad-shadow' | 'reviewed-attachment' | 'explicit-verified-rule';
+/** 'bricknet-catalogue': at least one side is a BrickNet fallback hinge or ball (src/data/bricknetJoints.ts). */
+export type JointEvidence = 'ldcad-shadow' | 'bricknet-catalogue' | 'reviewed-attachment' | 'explicit-verified-rule';
 export type EditorJoint = {
   a: string; b: string;
   kind: Exclude<MotionKind, 'free' | 'locked'> | 'fixed';
@@ -82,7 +84,8 @@ export function detectEditorJoints(parts: readonly SmartPart[], metrics: (part: 
   const sorted = [...parts].sort((a,b) => a.worldBox.min[0]-b.worldBox.min[0]);
   const forPart = (p: SmartPart) => {
     let s = snaps.get(p.id);
-    if (!s) { s=worldSnaps(metrics(p.part).snaps, p.world); snaps.set(p.id,s); }
+    // LDCad snaps, plus BrickNet hinges/balls where the part has none of its own (joints only)
+    if (!s) { s=worldSnaps(withBricknetJoints(p.part,metrics(p.part).snaps), p.world); snaps.set(p.id,s); }
     return s;
   };
   const reviewed = new Map(verified.filter(r=>r.evidence==='verified' && r.note.trim())
@@ -104,11 +107,12 @@ export function detectEditorJoints(parts: readonly SmartPart[], metrics: (part: 
           mid(add(x.start,scale(x.axis,x.snap.length/2)),add(y.start,scale(y.axis,y.snap.length/2)));
         const kind = rule?.kind ?? connectorFreedom(x.snap,y.snap);
         found.push({a:topId(a.id),b:topId(b.id),kind,axis:unit(axis),pivot:spot,
-          evidence:rule?'explicit-verified-rule':'ldcad-shadow',mates:1});
+          evidence:rule?'explicit-verified-rule':x.snap.source==='bricknet'||y.snap.source==='bricknet'?'bricknet-catalogue':'ldcad-shadow',mates:1});
       }
-      if(found.length) {
+      const kept=preferLdcad(found);
+      if(kept.length) {
         const pkey=key(topId(a.id),topId(b.id));
-        (seen.get(pkey)??seen.set(pkey,[]).get(pkey)!).push(...found);
+        (seen.get(pkey)??seen.set(pkey,[]).get(pkey)!).push(...kept);
       }
     }
   }
@@ -125,6 +129,26 @@ export function detectEditorJoints(parts: readonly SmartPart[], metrics: (part: 
     });
   }
   return [...seen.values()].map(aggregateJoint).filter((j):j is EditorJoint=>!!j);
+}
+
+/** How far (LDU) an LDCad mate may be from a BrickNet hinge/ball pivot and still be that same joint. */
+export const BRICKNET_SAME_JOINT = 6;
+
+/**
+ * LDCad stays primary for each pair of parts. BrickNet fallback mates are dropped when LDCad
+ * already gives the pair a hinge, ball or other moving mate. When LDCad gives it only "fixed"
+ * mates, a BrickNet hinge or ball replaces the fixed mates at its own pivot: there the fixed
+ * label is this file's guess from the connector's size (a minifig shoulder pin is a 6 LDU round
+ * peg, the size of a stud), and BrickNet records that the joint turns. LDCad mates anywhere
+ * else (studs elsewhere on the pair) still hold, so the pair stays locked.
+ */
+function preferLdcad(found: EditorJoint[]): EditorJoint[] {
+  const bricknet=found.filter(j=>j.evidence==='bricknet-catalogue');
+  if(!bricknet.length)return found;
+  const ldcad=found.filter(j=>j.evidence!=='bricknet-catalogue');
+  if(ldcad.some(j=>j.kind!=='fixed'))return ldcad;
+  const atPivot=(j:EditorJoint)=>bricknet.some(b=>length(sub(b.pivot,j.pivot))<=BRICKNET_SAME_JOINT);
+  return [...ldcad.filter(j=>!atPivot(j)),...bricknet];
 }
 
 /** No broad "slide" heuristics: that flag also marks perfectly stationary pin
@@ -161,7 +185,8 @@ function aggregateJoint(joints: EditorJoint[]): EditorJoint | null {
   return { ...base, kind:result.kind==='free'||result.kind==='locked'?'fixed':result.kind,
     axis:result.axis??base.axis,pivot:result.pivot??base.pivot,
     mates:joints.reduce((sum,j)=>sum+j.mates,0),
-    evidence:joints.some(j=>j.evidence==='reviewed-attachment')?'reviewed-attachment':base.evidence };
+    evidence:joints.some(j=>j.evidence==='reviewed-attachment')?'reviewed-attachment':
+      joints.some(j=>j.evidence==='bricknet-catalogue')?'bricknet-catalogue':base.evidence };
 }
 
 /** Nullspace of constraints on angular (w) + linear (v) body twist.
@@ -272,7 +297,7 @@ export function guideSelection(selection:readonly string[],parts:readonly SmartP
   const interfaces=joints.filter(j=>selected.has(j.a)!==selected.has(j.b));
   const raw=solveCut(interfaces);
   const rigidGroup=rigidModule(ids,joints);
-  const missing = metrics ? parts.filter(p=>!metrics(p.part).snaps?.length && !metrics(p.part).attachmentHints?.length).length : 0;
+  const missing = metrics ? parts.filter(p=>!withBricknetJoints(p.part,metrics(p.part).snaps)?.length && !metrics(p.part).attachmentHints?.length).length : 0;
   const reason=raw.kind==='free' ? 'No known joint crosses the selection; move or rotate freely. Missing connector data is not proof of disconnection.' :
     raw.kind==='locked' ? `${interfaces.length} constrained interface${interfaces.length===1?'':'s'} prevent an independent rigid-body move. Select the rigid module or turn Smart joints off to detach.` :
     raw.kind==='ball' ? 'Ball socket: rotate around its connector centre; translation is constrained.' :

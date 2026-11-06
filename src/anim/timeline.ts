@@ -22,7 +22,7 @@ import { createFrameStagingSpace } from './cameraFrameLayout';
 import { choosePacing, SEQUENTIAL_GAP, type AnimOptions, type FloorSides, type Pacing } from './pacing';
 import { AssemblyPlanningError, buildAssemblyGraph } from './assemblyGraph';
 import { intersects, sweptIntersects, rotationPadding } from './sweptBounds';
-import { mateAxes, plugAxes, worldSnaps, type WorldSnap } from './snapMates';
+import { entryWays, hingeClipWays, mateAxes, plugAxes, worldSnaps, type WorldSnap } from './snapMates';
 import { attachmentFit, sameSlotInterface } from '../model/attachmentPlacements';
 import { canonicalAttachmentPart, reviewedAttachmentSlots } from '../ldraw/attachments';
 import { CLEAR, crossings, nudged, shapeOf, slopNudges, sweepReach, translationClear, UP, waysFor, type Placed, type Way } from './shapes';
@@ -522,6 +522,36 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
       mateCache.set(id, axes);
     }
     return axes;
+  };
+  const waysCache = new Map<string, { seat: [number, number, number][]; clip: [number, number, number][] }>();
+  /**
+   * The ways `moving` can come in to join `other` (entry ways: final pose -> start of the
+   * push). `seat` ways have a side (a stud goes up into the socket above it, never down
+   * through it). `clip` ways are how a hinge half clips onto the other's pin from the other's
+   * open side, away from its body (the fingers interleave, so it never slides along the pin). Along either,
+   * the final seat with this one neighbour is a joint contact, like a stud in its socket;
+   * the rest of the route is still checked.
+   */
+  const waysOf = (moving: string, other: string) => {
+    const id = `${moving}|${other}`;
+    let ways = waysCache.get(id);
+    if (!ways) {
+      const a = snapsAt(moving), b = snapsAt(other);
+      const inst = byKey.get(moving)!;
+      const seat = entryWays(a, b, inst.worldBox, byKey.get(other)!.worldBox);
+      // the body's own centre: a tilted part's world box centre leans toward its far corner
+      const centreOf = (i: Instance) => {
+        const body = metrics(i.part).body;
+        return new THREE.Vector3(...[0, 1, 2].map((k) => (body.min[k] + body.max[k]) / 2) as [number, number, number]).applyMatrix4(i.world).toArray();
+      };
+      const clip = hingeClipWays(a, b, centreOf(inst), centreOf(byKey.get(other)!));
+      // a part with no connector data still joins a neighbour whose socket it fills
+      if (!seat.length && !clip.length && !metrics(inst.part).snaps?.length && !!metrics(byKey.get(other)!.part).snaps?.length)
+        for (const w of plugAxes(b, inst.worldBox)) seat.push([-w[0] || 0, -w[1] || 0, -w[2] || 0]);
+      ways = { seat, clip };
+      waysCache.set(id, ways);
+    }
+    return ways;
   };
   const slotCache = new Map<string, [number, number, number][]>();
   /**
@@ -1238,10 +1268,11 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
       if (u.kind === 'piece')
         for (const block of blockers)
           if (block.end === Infinity && boxesTouch(dst, block.box))
-            for (const member of members[i])
-              for (const a of matesOf(member.key, block.key))
-                for (const w of [a, [-a[0], -a[1], -a[2]] as Dir])
-                  if (!connectorWays.some((o) => o[0] * w[0] + o[1] * w[1] + o[2] * w[2] > 1 - 1e-6)) connectorWays.push(w);
+            for (const member of members[i]) {
+              const { seat, clip } = waysOf(member.key, block.key);
+              for (const w of [...seat, ...clip])
+                if (!connectorWays.some((o) => o[0] * w[0] + o[1] * w[1] + o[2] * w[2] > 1 - 1e-6)) connectorWays.push(w);
+            }
       if (u.kind === 'piece')
         for (const block of blockers)
           if (block.end === Infinity && boxesTouch(dst, block.box))
@@ -1330,7 +1361,7 @@ function planTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProg
         // The joint this piece makes with this block: a connector's axis, or a documented slot's
         // line. Either way the seat is a joint contact, not a collision, when the way matches it.
         clear = verifiedInsertion(member, block, way, metrics, byKey, holder, insertionMemo,
-          [...matesOf(member.key, block.key), ...slotWaysOf(member.key, block.key)]);
+          [...waysOf(member.key, block.key).seat, ...waysOf(member.key, block.key).clip, ...slotWaysOf(member.key, block.key)]);
         insertionCache.set(id, clear);
         return clear;
       };
@@ -1782,7 +1813,8 @@ function verifiedInsertion(member: Member, block: RestingBlock, way: Way, metric
   // point cloud cannot tell a hole from the wall around it — a pin entering a Technic hole
   // still touches the hole's rim points — so the joint decides here, exactly as a stud
   // landing on a stud is excused above. The route to the seat is still certified separately.
-  if (jointAxes.some((a) => Math.abs(a[0] * way[0] + a[1] * way[1] + a[2] * way[2]) > 0.999)) return true;
+  // The ways have a side: arriving along the axis from the wrong end goes through the part.
+  if (jointAxes.some((a) => a[0] * way[0] + a[1] * way[1] + a[2] * way[2] > 0.999)) return true;
   const own = metrics(byKey.get(member.key)!.part), other = metrics(block.part);
   if (!own.mesh?.length || !other.mesh?.length || own.placeholder || other.placeholder) return false;
   const world = restPose(member.move.to, member.move.rel);

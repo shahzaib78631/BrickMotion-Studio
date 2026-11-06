@@ -10,6 +10,7 @@ from __future__ import annotations
 import multiprocessing as mp
 import os
 import random
+import re
 
 import numpy as np
 
@@ -20,10 +21,19 @@ from brickheadz.part_match import CANDIDATES
 _W: dict = {}
 
 
+def real_part(name: str, vocab: list[str]) -> str | None:
+    """Map a class name to a whole part: a sub-file `s\\2431s01` -> `2431` (when that part is in the
+    vocabulary); primitives such as `rect1` or `stud` and other sub-files -> None."""
+    if name.startswith("s\\"):
+        parent = re.sub(r"s\d+$", "", name[2:])
+        return parent if parent in vocab else None
+    return name if re.match(r"^\d", name) and "\\" not in name else None
+
+
 def vocabulary(lib, parts: list[str] | None = None) -> list[str]:
     seen, out = set(), []
     for p in parts or CANDIDATES:
-        if p in seen:
+        if p in seen or real_part(p, [p]) is None:  # whole parts only
             continue
         seen.add(p)
         name = p if p.endswith(".dat") else p + ".dat"
@@ -230,8 +240,15 @@ def predict(model, vocab: list[str], crops_bgr: list[np.ndarray], top: int = 5) 
     batch = np.stack([pr.letterbox(c) for c in crops_bgr])
     with torch.no_grad():
         p = torch.softmax(model(to_tensor(batch)), 1)
+    # fold sub-file classes into their parent part, drop primitives, renormalise
+    target = [real_part(c, vocab) for c in vocab]
     out = []
-    for row in p:
-        v, i = row.topk(min(top, len(vocab)))
-        out.append([{"part": vocab[int(j)], "p": round(float(s), 3)} for s, j in zip(v, i)])
+    for row in p.cpu().numpy():
+        acc: dict[str, float] = {}
+        for t, s in zip(target, row):
+            if t is not None:
+                acc[t] = acc.get(t, 0.0) + float(s)
+        total = sum(acc.values()) or 1.0
+        best = sorted(acc.items(), key=lambda kv: -kv[1])[:top]
+        out.append([{"part": k, "p": round(s / total, 3)} for k, s in best])
     return out

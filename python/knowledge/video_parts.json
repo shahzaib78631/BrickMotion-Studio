@@ -1,0 +1,2416 @@
+{
+ "clips": 110,
+ "pieces": 20601,
+ "distinct_parts": 252,
+ "median_pieces_per_build": 172.0,
+ "top_parts": [
+  {
+   "part": "3023b",
+   "name": "Plate 1 x 2",
+   "category": "Plates",
+   "clips": 110,
+   "pieces": 2013,
+   "official_models": 79,
+   "official_roles": {
+    "head": 0.41,
+    "torso": 0.24,
+    "legs": 0.13
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Tan",
+    "Dark Blue",
+    "Yellow"
+   ]
+  },
+  {
+   "part": "3020",
+   "name": "Plate 2 x 4",
+   "category": "Plates",
+   "clips": 109,
+   "pieces": 604,
+   "official_models": 74,
+   "official_roles": {
+    "head": 0.54,
+    "torso": 0.3,
+    "face": 0.12
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Dark Blue",
+    "Coral",
+    "Yellow"
+   ]
+  },
+  {
+   "part": "3710",
+   "name": "Plate 1 x 4",
+   "category": "Plates",
+   "clips": 109,
+   "pieces": 792,
+   "official_models": 69,
+   "official_roles": {
+    "head": 0.57,
+    "face": 0.17,
+    "torso": 0.15
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Tan",
+    "Dark Blue",
+    "Yellow"
+   ]
+  },
+  {
+   "part": "2431",
+   "name": "Tile 1 x 4 with Groove",
+   "category": "Tiles",
+   "clips": 108,
+   "pieces": 713,
+   "official_models": 79,
+   "official_roles": {
+    "legs": 0.4,
+    "head": 0.27,
+    "face": 0.24
+   },
+   "colors": [
+    "Black",
+    "Tan",
+    "White",
+    "Yellow",
+    "Pink"
+   ]
+  },
+  {
+   "part": "3022",
+   "name": "Plate 2 x 2",
+   "category": "Plates",
+   "clips": 108,
+   "pieces": 503,
+   "official_models": 73,
+   "official_roles": {
+    "head": 0.67,
+    "torso": 0.16,
+    "face": 0.08
+   },
+   "colors": [
+    "White",
+    "Black",
+    "Yellow",
+    "Tan",
+    "Dark Blue"
+   ]
+  },
+  {
+   "part": "3024",
+   "name": "Plate 1 x 1",
+   "category": "Plates",
+   "clips": 107,
+   "pieces": 1276,
+   "official_models": 70,
+   "official_roles": {
+    "head": 0.42,
+    "face": 0.17,
+    "arms": 0.17
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Red",
+    "Yellow",
+    "Tan"
+   ]
+  },
+  {
+   "part": "22885",
+   "name": "Brick 1 x 2 x 1.667 with Studs on 1 Side",
+   "category": "Bricks Special",
+   "clips": 107,
+   "pieces": 1015,
+   "official_models": 79,
+   "official_roles": {
+    "head": 0.96,
+    "torso": 0.03,
+    "accessory": 0.01
+   },
+   "colors": [
+    "Light Gray",
+    "Light Bluish Gray",
+    "Tan",
+    "Black",
+    "White"
+   ]
+  },
+  {
+   "part": "3069b",
+   "name": "Tile 1 x 2 with Groove",
+   "category": "Tiles",
+   "clips": 103,
+   "pieces": 895,
+   "official_models": 71,
+   "official_roles": {
+    "head": 0.62,
+    "arms": 0.13,
+    "face": 0.1
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Tan",
+    "Reddish Brown",
+    "Dark Blue"
+   ]
+  },
+  {
+   "part": "3003",
+   "name": "Brick 2 x 2",
+   "category": "Bricks",
+   "clips": 102,
+   "pieces": 430,
+   "official_models": 79,
+   "official_roles": {
+    "head": 0.92,
+    "torso": 0.05,
+    "hair": 0.01
+   },
+   "colors": [
+    "White",
+    "Dark Tan",
+    "Black",
+    "Yellow",
+    "Orange"
+   ]
+  },
+  {
+   "part": "3958",
+   "name": "Plate 6 x 6",
+   "category": "Plates",
+   "clips": 100,
+   "pieces": 102,
+   "official_models": 63,
+   "official_roles": {
+    "base": 0.77,
+    "legs": 0.23
+   },
+   "colors": [
+    "Black"
+   ]
+  },
+  {
+   "part": "3031",
+   "name": "Plate 4 x 4",
+   "category": "Plates",
+   "clips": 100,
+   "pieces": 209,
+   "official_models": 68,
+   "official_roles": {
+    "head": 0.62,
+    "torso": 0.2,
+    "face": 0.17
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Yellow",
+    "Reddish Brown",
+    "Dark Blue"
+   ]
+  },
+  {
+   "part": "6636",
+   "name": "Tile 1 x 6",
+   "category": "Tiles",
+   "clips": 98,
+   "pieces": 228,
+   "official_models": 2,
+   "official_roles": {
+    "legs": 0.67,
+    "hair": 0.33
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Light Gray",
+    "Yellow",
+    "Dark Blue"
+   ]
+  },
+  {
+   "part": "11477",
+   "name": "Slope Brick Curved 2 x 1",
+   "category": "Bricks Curved",
+   "clips": 97,
+   "pieces": 1080,
+   "official_models": 51,
+   "official_roles": {
+    "head": 0.26,
+    "arms": 0.22,
+    "face": 0.2
+   },
+   "colors": [
+    "Black",
+    "Coral",
+    "Yellow",
+    "White",
+    "Reddish Brown"
+   ]
+  },
+  {
+   "part": "54200",
+   "name": "Slope Brick 31 1 x 1 x 0.667",
+   "category": "Bricks Sloped",
+   "clips": 94,
+   "pieces": 822,
+   "official_models": 39,
+   "official_roles": {
+    "arms": 0.25,
+    "torso": 0.22,
+    "face": 0.19
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Yellow",
+    "Tan",
+    "Medium Azure"
+   ]
+  },
+  {
+   "part": "3794b",
+   "name": "Plate 1 x 2 with Groove with 1 Centre Stud",
+   "category": "Plates Special",
+   "clips": 94,
+   "pieces": 325,
+   "official_models": 1,
+   "official_roles": {
+    "accessory": 1.0
+   },
+   "colors": [
+    "White",
+    "Black",
+    "Tan",
+    "Yellow",
+    "Dark Blue"
+   ]
+  },
+  {
+   "part": "3070b",
+   "name": "Tile 1 x 1 with Groove",
+   "category": "Tiles",
+   "clips": 94,
+   "pieces": 595,
+   "official_models": 56,
+   "official_roles": {
+    "head": 0.4,
+    "face": 0.28,
+    "torso": 0.15
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Dark Green",
+    "Yellow",
+    "Reddish Brown"
+   ]
+  },
+  {
+   "part": "15068",
+   "name": "Slope Brick Curved 2 x 2 x 0.667",
+   "category": "Bricks Curved",
+   "clips": 93,
+   "pieces": 635,
+   "official_models": 52,
+   "official_roles": {
+    "head": 0.36,
+    "hair": 0.26,
+    "face": 0.14
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Pink",
+    "Yellow",
+    "Dark Blue"
+   ]
+  },
+  {
+   "part": "15712",
+   "name": "Tile 1 x 1 with Clip (Thick C-Clip)",
+   "category": "Tiles Special",
+   "clips": 90,
+   "pieces": 217,
+   "official_models": 20,
+   "official_roles": {
+    "arms": 0.35,
+    "torso": 0.26,
+    "head": 0.19
+   },
+   "colors": [
+    "Tan",
+    "White",
+    "Black",
+    "Dark Bluish Gray",
+    "Reddish Brown"
+   ]
+  },
+  {
+   "part": "92593",
+   "name": "Plate 1 x 4 with Two Studs",
+   "category": "Plates Special",
+   "clips": 89,
+   "pieces": 337,
+   "official_models": 64,
+   "official_roles": {
+    "legs": 0.47,
+    "face": 0.23,
+    "head": 0.16
+   },
+   "colors": [
+    "Black",
+    "Tan",
+    "White",
+    "Medium Nougat",
+    "Dark Bluish Gray"
+   ]
+  },
+  {
+   "part": "25269",
+   "name": "Tile 1 x 1 Corner Round",
+   "category": "Tiles Round and Curved",
+   "clips": 86,
+   "pieces": 479,
+   "official_models": 41,
+   "official_roles": {
+    "face": 0.35,
+    "head": 0.25,
+    "arms": 0.22
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Yellow",
+    "Pink",
+    "Coral"
+   ]
+  },
+  {
+   "part": "11211",
+   "name": "Brick 1 x 2 with Two Studs on One Side",
+   "category": "Bricks Special",
+   "clips": 85,
+   "pieces": 238,
+   "official_models": 33,
+   "official_roles": {
+    "head": 0.69,
+    "face": 0.18,
+    "torso": 0.11
+   },
+   "colors": [
+    "Tan",
+    "Black",
+    "White",
+    "Light Gray",
+    "Red"
+   ]
+  },
+  {
+   "part": "29119",
+   "name": "Slope Brick Curved 2 x 1 with Cutout Right",
+   "category": "Bricks Wedged",
+   "clips": 78,
+   "pieces": 373,
+   "official_models": 13,
+   "official_roles": {
+    "torso": 0.34,
+    "arms": 0.31,
+    "face": 0.14
+   },
+   "colors": [
+    "Black",
+    "Yellow",
+    "White",
+    "Orange",
+    "Dark Red"
+   ]
+  },
+  {
+   "part": "29120",
+   "name": "Slope Brick Curved 2 x 1 with Cutout Left",
+   "category": "Bricks Wedged",
+   "clips": 78,
+   "pieces": 349,
+   "official_models": 11,
+   "official_roles": {
+    "arms": 0.38,
+    "torso": 0.22,
+    "face": 0.19
+   },
+   "colors": [
+    "Black",
+    "Yellow",
+    "White",
+    "Reddish Brown",
+    "Orange"
+   ]
+  },
+  {
+   "part": "99780",
+   "name": "Bracket 1 x 2 - 1 x 2 Up",
+   "category": "Plates Special",
+   "clips": 77,
+   "pieces": 254,
+   "official_models": 30,
+   "official_roles": {
+    "head": 0.4,
+    "face": 0.32,
+    "arms": 0.16
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Yellow",
+    "Tan",
+    "Red"
+   ]
+  },
+  {
+   "part": "3004",
+   "name": "Brick 1 x 2",
+   "category": "Bricks",
+   "clips": 76,
+   "pieces": 243,
+   "official_models": 54,
+   "official_roles": {
+    "head": 0.48,
+    "torso": 0.4,
+    "face": 0.04
+   },
+   "colors": [
+    "White",
+    "Black",
+    "Tan",
+    "Dark Blue",
+    "Red"
+   ]
+  },
+  {
+   "part": "3010",
+   "name": "Brick 1 x 4",
+   "category": "Bricks",
+   "clips": 70,
+   "pieces": 131,
+   "official_models": 61,
+   "official_roles": {
+    "head": 0.76,
+    "torso": 0.16,
+    "face": 0.07
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Dark Blue",
+    "Tan",
+    "Orange"
+   ]
+  },
+  {
+   "part": "85984",
+   "name": "Slope Brick 31 1 x 2 x 0.667",
+   "category": "Bricks Sloped",
+   "clips": 67,
+   "pieces": 221,
+   "official_models": 51,
+   "official_roles": {
+    "arms": 0.52,
+    "hair": 0.16,
+    "torso": 0.14
+   },
+   "colors": [
+    "Tan",
+    "Black",
+    "White",
+    "Yellow",
+    "Dark Blue"
+   ]
+  },
+  {
+   "part": "3623",
+   "name": "Plate 1 x 3",
+   "category": "Plates",
+   "clips": 66,
+   "pieces": 208,
+   "official_models": 42,
+   "official_roles": {
+    "head": 0.52,
+    "torso": 0.16,
+    "face": 0.11
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Dark Blue",
+    "Red",
+    "Yellow"
+   ]
+  },
+  {
+   "part": "87087",
+   "name": "Brick 1 x 1 with Stud on 1 Side",
+   "category": "Bricks Special",
+   "clips": 64,
+   "pieces": 277,
+   "official_models": 26,
+   "official_roles": {
+    "head": 0.64,
+    "torso": 0.25,
+    "arms": 0.09
+   },
+   "colors": [
+    "Aqua",
+    "Tan",
+    "Black",
+    "Medium Nougat",
+    "Dark Blue"
+   ]
+  },
+  {
+   "part": "4070",
+   "name": "Brick 1 x 1 with Headlight",
+   "category": "Bricks Special",
+   "clips": 60,
+   "pieces": 316,
+   "official_models": 22,
+   "official_roles": {
+    "head": 0.88,
+    "torso": 0.07,
+    "arms": 0.03
+   },
+   "colors": [
+    "White",
+    "Black",
+    "Tan",
+    "Yellow",
+    "Orange"
+   ]
+  },
+  {
+   "part": "33909",
+   "name": "Plate 2 x 2 with 2 Studs on One Edge",
+   "category": "Plates Special",
+   "clips": 58,
+   "pieces": 180,
+   "official_models": 10,
+   "official_roles": {
+    "head": 0.41,
+    "face": 0.38,
+    "accessory": 0.12
+   },
+   "colors": [
+    "White",
+    "Black",
+    "Tan",
+    "Dark Blue",
+    "Yellow"
+   ]
+  },
+  {
+   "part": "32952",
+   "name": "Brick 1 x 1 x 1.667 with Studs on 1 Side",
+   "category": "Bricks Special",
+   "clips": 56,
+   "pieces": 162,
+   "official_models": 23,
+   "official_roles": {
+    "head": 0.65,
+    "face": 0.17,
+    "torso": 0.1
+   },
+   "colors": [
+    "Light Gray",
+    "Tan",
+    "Light Bluish Gray",
+    "Black",
+    "Dark Blue"
+   ]
+  },
+  {
+   "part": "36840",
+   "name": "Bracket 1 x 1 - 1 x 1 Up",
+   "category": "Plates Special",
+   "clips": 56,
+   "pieces": 209,
+   "official_models": 11,
+   "official_roles": {
+    "head": 0.53,
+    "torso": 0.33,
+    "arms": 0.13
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Dark Bluish Gray",
+    "Red",
+    "Yellow"
+   ]
+  },
+  {
+   "part": "50950",
+   "name": "Slope Brick Curved 3 x 1",
+   "category": "Bricks Curved",
+   "clips": 51,
+   "pieces": 237,
+   "official_models": 18,
+   "official_roles": {
+    "head": 0.58,
+    "torso": 0.13,
+    "hair": 0.13
+   },
+   "colors": [
+    "Black",
+    "Yellow",
+    "Dark Purple",
+    "White",
+    "Red"
+   ]
+  },
+  {
+   "part": "3021",
+   "name": "Plate 2 x 3",
+   "category": "Plates",
+   "clips": 51,
+   "pieces": 120,
+   "official_models": 47,
+   "official_roles": {
+    "head": 0.48,
+    "torso": 0.22,
+    "face": 0.18
+   },
+   "colors": [
+    "White",
+    "Black",
+    "Yellow",
+    "Red",
+    "Reddish Brown"
+   ]
+  },
+  {
+   "part": "6141",
+   "name": "Plate 1 x 1 Round",
+   "category": "Plates Round Curved and Dishes",
+   "clips": 49,
+   "pieces": 208,
+   "official_models": 33,
+   "official_roles": {
+    "arms": 0.37,
+    "torso": 0.22,
+    "head": 0.15
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Red",
+    "Green",
+    "Orange"
+   ]
+  },
+  {
+   "part": "98138",
+   "name": "Tile 1 x 1 Round with Groove",
+   "category": "Tiles Round and Curved",
+   "clips": 45,
+   "pieces": 123,
+   "official_models": 74,
+   "official_roles": {
+    "face": 0.54,
+    "torso": 0.22,
+    "head": 0.12
+   },
+   "colors": [
+    "Red",
+    "Black",
+    "Yellow",
+    "White",
+    "Bright Light Orange"
+   ]
+  },
+  {
+   "part": "2420",
+   "name": "Plate 2 x 2 Corner",
+   "category": "Plates",
+   "clips": 45,
+   "pieces": 121,
+   "official_models": 54,
+   "official_roles": {
+    "head": 0.58,
+    "face": 0.14,
+    "arms": 0.12
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Yellow",
+    "Medium Azure",
+    "Reddish Brown"
+   ]
+  },
+  {
+   "part": "99781",
+   "name": "Bracket 1 x 2 - 1 x 2 Down",
+   "category": "Plates Special",
+   "clips": 44,
+   "pieces": 102,
+   "official_models": 11,
+   "official_roles": {
+    "torso": 0.85,
+    "arms": 0.07,
+    "head": 0.07
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Dark Red",
+    "Tan",
+    "Orange"
+   ]
+  },
+  {
+   "part": "3005",
+   "name": "Brick 1 x 1",
+   "category": "Bricks",
+   "clips": 44,
+   "pieces": 161,
+   "official_models": 57,
+   "official_roles": {
+    "head": 0.69,
+    "torso": 0.24,
+    "arms": 0.03
+   },
+   "colors": [
+    "Black",
+    "Red",
+    "White",
+    "Tan",
+    "Yellow"
+   ]
+  },
+  {
+   "part": "93273",
+   "name": "Slope Brick Curved 4 x 1 Double",
+   "category": "Bricks Curved",
+   "clips": 39,
+   "pieces": 87,
+   "official_models": 24,
+   "official_roles": {
+    "head": 0.37,
+    "hair": 0.34,
+    "torso": 0.15
+   },
+   "colors": [
+    "White",
+    "Yellow",
+    "Black",
+    "Dark Blue",
+    "Dark Turquoise"
+   ]
+  },
+  {
+   "part": "63864",
+   "name": "Tile 1 x 3",
+   "category": "Tiles",
+   "clips": 38,
+   "pieces": 114,
+   "official_models": 20,
+   "official_roles": {
+    "head": 0.36,
+    "torso": 0.28,
+    "face": 0.2
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Reddish Brown",
+    "Yellow",
+    "Dark Blue"
+   ]
+  },
+  {
+   "part": "30414",
+   "name": "Brick 1 x 4 with Studs on Side",
+   "category": "Bricks Special",
+   "clips": 38,
+   "pieces": 52,
+   "official_models": 17,
+   "official_roles": {
+    "head": 0.7,
+    "torso": 0.26,
+    "face": 0.04
+   },
+   "colors": [
+    "Tan",
+    "Black",
+    "White",
+    "Yellow",
+    "Red"
+   ]
+  },
+  {
+   "part": "3068b",
+   "name": "Tile 2 x 2 with Groove",
+   "category": "Tiles",
+   "clips": 37,
+   "pieces": 91,
+   "official_models": 29,
+   "official_roles": {
+    "head": 0.71,
+    "face": 0.13,
+    "torso": 0.09
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Dark Blue",
+    "Yellow",
+    "Medium Nougat"
+   ]
+  },
+  {
+   "part": "36841",
+   "name": "Bracket 1 x 1 - 1 x 1 Down",
+   "category": "Plates Special",
+   "clips": 36,
+   "pieces": 133,
+   "official_models": 3,
+   "official_roles": {
+    "torso": 0.6,
+    "arms": 0.4
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Dark Blue",
+    "Yellow",
+    "Light Bluish Gray"
+   ]
+  },
+  {
+   "part": "35480",
+   "name": "Plate 1 x 2 with Round Ends and 2 Open Studs",
+   "category": "Plates Round Curved and Dishes",
+   "clips": 35,
+   "pieces": 110,
+   "official_models": 7,
+   "official_roles": {
+    "torso": 0.54,
+    "arms": 0.15,
+    "head": 0.15
+   },
+   "colors": [
+    "White",
+    "Black",
+    "Yellow",
+    "Red",
+    "Tan"
+   ]
+  },
+  {
+   "part": "26604",
+   "name": "Brick 1 x 1 with Studs on Two Adjacent Sides",
+   "category": "Bricks Special",
+   "clips": 29,
+   "pieces": 83,
+   "official_models": 15,
+   "official_roles": {
+    "head": 0.48,
+    "torso": 0.25,
+    "arms": 0.14
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Tan",
+    "Light Gray",
+    "Light Bluish Gray"
+   ]
+  },
+  {
+   "part": "87079",
+   "name": "Tile 2 x 4",
+   "category": "Tiles",
+   "clips": 29,
+   "pieces": 45,
+   "official_models": 78,
+   "official_roles": {
+    "head": 0.46,
+    "legs": 0.34,
+    "face": 0.12
+   },
+   "colors": [
+    "Black",
+    "Green",
+    "Dark Blue",
+    "White",
+    "Reddish Brown"
+   ]
+  },
+  {
+   "part": "3001",
+   "name": "Brick 2 x 4",
+   "category": "Bricks",
+   "clips": 28,
+   "pieces": 83,
+   "official_models": 7,
+   "official_roles": {
+    "torso": 0.86,
+    "arms": 0.14
+   },
+   "colors": [
+    "Dark Green",
+    "Black",
+    "Red",
+    "Bright Light Orange",
+    "White"
+   ]
+  },
+  {
+   "part": "24246",
+   "name": "Tile 1 x 1 with Rounded End",
+   "category": "Tiles Round and Curved",
+   "clips": 27,
+   "pieces": 75,
+   "official_models": 12,
+   "official_roles": {
+    "face": 0.35,
+    "torso": 0.29,
+    "head": 0.12
+   },
+   "colors": [
+    "White",
+    "Yellow",
+    "Black",
+    "Green",
+    "Tan"
+   ]
+  },
+  {
+   "part": "26601",
+   "name": "Plate 2 x 2 without Corner",
+   "category": "Plates Wedged",
+   "clips": 26,
+   "pieces": 77,
+   "official_models": 9,
+   "official_roles": {
+    "face": 0.61,
+    "head": 0.3,
+    "torso": 0.09
+   },
+   "colors": [
+    "Black",
+    "Yellow",
+    "Bright Green",
+    "Red",
+    "Orange"
+   ]
+  },
+  {
+   "part": "32028",
+   "name": "Plate 1 x 2 with Door Rail",
+   "category": "Plates Special",
+   "clips": 26,
+   "pieces": 69,
+   "official_models": 32,
+   "official_roles": {
+    "head": 0.76,
+    "face": 0.13,
+    "hair": 0.04
+   },
+   "colors": [
+    "White",
+    "Black",
+    "Red",
+    "Blue",
+    "Yellow"
+   ]
+  },
+  {
+   "part": "61678",
+   "name": "Slope Brick Curved 4 x 1",
+   "category": "Bricks Curved",
+   "clips": 25,
+   "pieces": 90,
+   "official_models": 8,
+   "official_roles": {
+    "head": 0.52,
+    "hair": 0.19,
+    "arms": 0.15
+   },
+   "colors": [
+    "Reddish Brown",
+    "Black",
+    "Dark Blue",
+    "Red",
+    "Dark Biue"
+   ]
+  },
+  {
+   "part": "26047",
+   "name": "Plate 1 x 1 Round with Horizontal Handle on Side",
+   "category": "Plates Special",
+   "clips": 25,
+   "pieces": 66,
+   "official_models": 4,
+   "official_roles": {
+    "legs": 0.5,
+    "head": 0.25,
+    "torso": 0.25
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Pearl Gold",
+    "Dark Bluish Gray",
+    "Dark Turquoise"
+   ]
+  },
+  {
+   "part": "85861",
+   "name": "Plate 1 x 1 Round with Open Stud",
+   "category": "Plates Round Curved and Dishes",
+   "clips": 24,
+   "pieces": 64,
+   "official_models": 10,
+   "official_roles": {
+    "face": 0.39,
+    "arms": 0.28,
+    "torso": 0.17
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Dark Bluish Gray",
+    "Trans-Light Blue",
+    "Pearl Gold"
+   ]
+  },
+  {
+   "part": "41740",
+   "name": "Plate 1 x 4 with Two Studs and Groove",
+   "category": "Plates Special",
+   "clips": 24,
+   "pieces": 99,
+   "official_models": 13,
+   "official_roles": {
+    "legs": 0.55,
+    "face": 0.27,
+    "torso": 0.09
+   },
+   "colors": [
+    "Tan",
+    "Black",
+    "Dark Bluish Gray",
+    "Medium Nougat",
+    "Yellow"
+   ]
+  },
+  {
+   "part": "2436a",
+   "name": "Bracket 1 x 2 - 1 x 4 with Square Corners",
+   "category": "Plates Special",
+   "clips": 22,
+   "pieces": 37,
+   "official_models": 1,
+   "official_roles": {
+    "accessory": 1.0
+   },
+   "colors": [
+    "White",
+    "Black",
+    "Dark Bluish Gray",
+    "Yellow"
+   ]
+  },
+  {
+   "part": "24201",
+   "name": "Slope Brick Curved 2 x 1 Inverted",
+   "category": "Bricks Curved",
+   "clips": 22,
+   "pieces": 87,
+   "official_models": 7,
+   "official_roles": {
+    "hair": 0.36,
+    "arms": 0.21,
+    "face": 0.14
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Yellow",
+    "Dark Azure",
+    "Red"
+   ]
+  },
+  {
+   "part": "24299",
+   "name": "Wing 2 x 2 Left",
+   "category": "Plates Wedged",
+   "clips": 17,
+   "pieces": 86,
+   "official_models": 11,
+   "official_roles": {
+    "torso": 0.53,
+    "face": 0.27,
+    "head": 0.13
+   },
+   "colors": [
+    "Dark Green",
+    "White",
+    "Black",
+    "Yellow",
+    "Medium Azure"
+   ]
+  },
+  {
+   "part": "49668",
+   "name": "Plate 1 x 1 with Tooth In-line",
+   "category": "Plates Special",
+   "clips": 17,
+   "pieces": 36,
+   "official_models": 9,
+   "official_roles": {
+    "torso": 0.39,
+    "arms": 0.19,
+    "hair": 0.16
+   },
+   "colors": [
+    "White",
+    "Black",
+    "Red",
+    "Bright Light Orange",
+    "Light Gray"
+   ]
+  },
+  {
+   "part": "24307",
+   "name": "Wing 2 x 2 Right",
+   "category": "Plates Wedged",
+   "clips": 16,
+   "pieces": 39,
+   "official_models": 10,
+   "official_roles": {
+    "face": 0.36,
+    "torso": 0.36,
+    "head": 0.18
+   },
+   "colors": [
+    "White",
+    "Black",
+    "Medium Azure",
+    "Bright Light Orange",
+    "Red"
+   ]
+  },
+  {
+   "part": "26603",
+   "name": "Tile 2 x 3",
+   "category": "Tiles",
+   "clips": 15,
+   "pieces": 31,
+   "official_models": 19,
+   "official_roles": {
+    "head": 0.47,
+    "torso": 0.23,
+    "face": 0.23
+   },
+   "colors": [
+    "White",
+    "Black",
+    "Light Gray",
+    "Yellow",
+    "Dark Bluish Gray"
+   ]
+  },
+  {
+   "part": "44728",
+   "name": "Bracket 1 x 2 - 2 x 2 Down",
+   "category": "Plates Special",
+   "clips": 15,
+   "pieces": 107,
+   "official_models": 11,
+   "official_roles": {
+    "torso": 0.48,
+    "arms": 0.29,
+    "head": 0.14
+   },
+   "colors": [
+    "Green",
+    "White",
+    "Black",
+    "Yellow",
+    "Red"
+   ]
+  },
+  {
+   "part": "2412b",
+   "name": "Tile 1 x 2 Grille with Groove",
+   "category": "Tiles Special",
+   "clips": 13,
+   "pieces": 23,
+   "official_models": 7,
+   "official_roles": {
+    "head": 0.5,
+    "face": 0.31,
+    "torso": 0.12
+   },
+   "colors": [
+    "Yellow",
+    "Green",
+    "White",
+    "Dark Bluish Gray",
+    "Orange"
+   ]
+  },
+  {
+   "part": "11476",
+   "name": "Plate 1 x 2 with Clip Horizontal on Side (Thick C-Clip)",
+   "category": "Plates Special",
+   "clips": 12,
+   "pieces": 22,
+   "official_models": 70,
+   "official_roles": {
+    "arms": 0.81,
+    "torso": 0.12,
+    "face": 0.04
+   },
+   "colors": [
+    "Medium Nougat",
+    "Tan",
+    "Black",
+    "Red",
+    "Dark Brown"
+   ]
+  },
+  {
+   "part": "87580",
+   "name": "Plate 2 x 2 with Groove with 1 Centre Stud",
+   "category": "Plates Special",
+   "clips": 12,
+   "pieces": 30,
+   "official_models": 15,
+   "official_roles": {
+    "legs": 0.52,
+    "face": 0.15,
+    "arms": 0.15
+   },
+   "colors": [
+    "White",
+    "Black",
+    "Yellow",
+    "Green",
+    "Medium Azure"
+   ]
+  },
+  {
+   "part": "4032a",
+   "name": "Plate 2 x 2 Round with Axlehole",
+   "category": "Plates Round Curved and Dishes",
+   "clips": 12,
+   "pieces": 27,
+   "official_models": 77,
+   "official_roles": {
+    "head": 0.63,
+    "legs": 0.18,
+    "arms": 0.11
+   },
+   "colors": [
+    "White",
+    "Black",
+    "Yellow",
+    "Biack",
+    "Blue"
+   ]
+  },
+  {
+   "part": "30374",
+   "name": "Bar 4L Lightsaber Blade",
+   "category": "Bars, Ladders and Fences",
+   "clips": 12,
+   "pieces": 19,
+   "official_models": 7,
+   "official_roles": {
+    "arms": 0.9,
+    "torso": 0.1
+   },
+   "colors": [
+    "Trans-Clear",
+    "Black",
+    "White",
+    "Trans-Light Blue",
+    "Light Bluish Gray"
+   ]
+  },
+  {
+   "part": "3700",
+   "name": "Technic Brick 1 x 2 with Hole",
+   "category": "Technic Bricks",
+   "clips": 12,
+   "pieces": 13,
+   "official_models": 11,
+   "official_roles": {
+    "head": 0.77,
+    "torso": 0.15,
+    "arms": 0.08
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Tan",
+    "Blue",
+    "Orange"
+   ]
+  },
+  {
+   "part": "27925",
+   "name": "Tile 2 x 2 Corner Round",
+   "category": "Tiles Round and Curved",
+   "clips": 12,
+   "pieces": 23,
+   "official_models": 5,
+   "official_roles": {
+    "head": 0.5,
+    "hair": 0.33,
+    "arms": 0.17
+   },
+   "colors": [
+    "Yellow",
+    "Dark Purple",
+    "Pink",
+    "Dark Orange",
+    "White"
+   ]
+  },
+  {
+   "part": "4733",
+   "name": "Brick 1 x 1 with Studs on Four Sides",
+   "category": "Bricks Special",
+   "clips": 11,
+   "pieces": 15,
+   "official_models": 6,
+   "official_roles": {
+    "arms": 0.62,
+    "torso": 0.25,
+    "hair": 0.12
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Dark Bluish Gray",
+    "Light Gray"
+   ]
+  },
+  {
+   "part": "3062b",
+   "name": "Brick 1 x 1 Round with Hollow Stud",
+   "category": "Bricks Round and Cones",
+   "clips": 10,
+   "pieces": 45,
+   "official_models": 7,
+   "official_roles": {
+    "arms": 0.75,
+    "head": 0.12,
+    "torso": 0.06
+   },
+   "colors": [
+    "Trans-Clear",
+    "Black",
+    "Light Bluish Gray",
+    "Green",
+    "White"
+   ]
+  },
+  {
+   "part": "18674",
+   "name": "Plate 2 x 2 Round with 1 Centre Stud",
+   "category": "Plates Special",
+   "clips": 10,
+   "pieces": 29,
+   "official_models": 5,
+   "official_roles": {
+    "hair": 0.5,
+    "legs": 0.33,
+    "arms": 0.17
+   },
+   "colors": [
+    "Yellow",
+    "Black",
+    "Medium Azure",
+    "White",
+    "Dark Blue"
+   ]
+  },
+  {
+   "part": "73825",
+   "name": "Bracket 1 x 1 - 2 x 1 Up",
+   "category": "Plates Special",
+   "clips": 9,
+   "pieces": 18,
+   "official_models": 0,
+   "official_roles": {},
+   "colors": [
+    "Black",
+    "Blue",
+    "White",
+    "Red",
+    "Yellow"
+   ]
+  },
+  {
+   "part": "11203",
+   "name": "Tile 2 x 2 Inverted",
+   "category": "Tiles Special",
+   "clips": 9,
+   "pieces": 19,
+   "official_models": 2,
+   "official_roles": {
+    "legs": 0.8,
+    "arms": 0.2
+   },
+   "colors": [
+    "White",
+    "Light Gray",
+    "Black"
+   ]
+  },
+  {
+   "part": "32000",
+   "name": "Technic Brick 1 x 2 with Holes",
+   "category": "Technic Bricks",
+   "clips": 9,
+   "pieces": 18,
+   "official_models": 0,
+   "official_roles": {},
+   "colors": [
+    "Dark Bluish Gray",
+    "White"
+   ]
+  },
+  {
+   "part": "4081b",
+   "name": "Plate 1 x 1 with Clip Light Type 2",
+   "category": "Plates Special",
+   "clips": 9,
+   "pieces": 42,
+   "official_models": 5,
+   "official_roles": {
+    "head": 0.5,
+    "torso": 0.38,
+    "arms": 0.12
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Green",
+    "Bright Light Orange",
+    "Light Gray"
+   ]
+  },
+  {
+   "part": "63965",
+   "name": "~Bar 6L with Thick Stop (Obsolete)",
+   "category": "Bars, Ladders and Fences",
+   "clips": 9,
+   "pieces": 11,
+   "official_models": 6,
+   "official_roles": {
+    "arms": 0.88,
+    "torso": 0.12
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Yellow",
+    "Reddish Brown",
+    "Red"
+   ]
+  },
+  {
+   "part": "27263",
+   "name": "Tile 2 x 2 Corner without Corner",
+   "category": "Tiles Special",
+   "clips": 9,
+   "pieces": 12,
+   "official_models": 1,
+   "official_roles": {
+    "head": 0.5,
+    "arms": 0.5
+   },
+   "colors": [
+    "White",
+    "Black",
+    "Light Bluish Gray"
+   ]
+  },
+  {
+   "part": "21459",
+   "name": "Minifig Sword Katana Type 3 (Square Guard with Smooth Endcap)",
+   "category": "Minifig Shields, Weapons, & Tools",
+   "clips": 9,
+   "pieces": 8,
+   "official_models": 2,
+   "official_roles": {
+    "torso": 0.67,
+    "head": 0.33
+   },
+   "colors": [
+    "Light Gray",
+    "White",
+    "Black",
+    "Pearl Gold",
+    "Light Bluish Gray"
+   ]
+  },
+  {
+   "part": "3069a",
+   "name": "Tile 1 x 2 without Groove",
+   "category": "Tiles",
+   "clips": 8,
+   "pieces": 21,
+   "official_models": 2,
+   "official_roles": {
+    "hair": 0.5,
+    "accessory": 0.5
+   },
+   "colors": [
+    "Black",
+    "Pink",
+    "White",
+    "Aqua",
+    "Dark Blue"
+   ]
+  },
+  {
+   "part": "22385",
+   "name": "Tile 3 x 2 with Angled End",
+   "category": "Tiles Special",
+   "clips": 8,
+   "pieces": 12,
+   "official_models": 3,
+   "official_roles": {
+    "hair": 0.5,
+    "torso": 0.25,
+    "head": 0.25
+   },
+   "colors": [
+    "White",
+    "Black",
+    "Yellow",
+    "Red",
+    "Blue"
+   ]
+  },
+  {
+   "part": "11212",
+   "name": "Plate 3 x 3",
+   "category": "Plates",
+   "clips": 8,
+   "pieces": 19,
+   "official_models": 11,
+   "official_roles": {
+    "torso": 0.47,
+    "head": 0.32,
+    "base": 0.11
+   },
+   "colors": [
+    "White",
+    "Yellow",
+    "Black",
+    "Dark Blue",
+    "Dark Bluish Gray"
+   ]
+  },
+  {
+   "part": "3622",
+   "name": "Brick 1 x 3",
+   "category": "Bricks",
+   "clips": 8,
+   "pieces": 17,
+   "official_models": 11,
+   "official_roles": {
+    "head": 0.42,
+    "face": 0.23,
+    "torso": 0.19
+   },
+   "colors": [
+    "White",
+    "Black",
+    "Green",
+    "Red"
+   ]
+  },
+  {
+   "part": "3070a",
+   "name": "Tile 1 x 1 without Groove",
+   "category": "Tiles",
+   "clips": 8,
+   "pieces": 14,
+   "official_models": 0,
+   "official_roles": {},
+   "colors": [
+    "Yellow",
+    "White",
+    "Red",
+    "Tan",
+    "Orange"
+   ]
+  },
+  {
+   "part": "47905",
+   "name": "Brick 1 x 1 with Studs on Two Opposite Sides",
+   "category": "Bricks Special",
+   "clips": 7,
+   "pieces": 15,
+   "official_models": 2,
+   "official_roles": {
+    "face": 0.5,
+    "torso": 0.5
+   },
+   "colors": [
+    "Black",
+    "Light Gray",
+    "White",
+    "Tan",
+    "Dark Bluish Gray"
+   ]
+  },
+  {
+   "part": "4150",
+   "name": "Tile 2 x 2 Round with Cross Underside Stud",
+   "category": "Tiles Round and Curved",
+   "clips": 7,
+   "pieces": 11,
+   "official_models": 0,
+   "official_roles": {},
+   "colors": [
+    "Yellow",
+    "Orange",
+    "Coral",
+    "White",
+    "Dark Pink"
+   ]
+  },
+  {
+   "part": "99207",
+   "name": "Bracket 1 x 2 - 2 x 2 Up",
+   "category": "Plates Special",
+   "clips": 7,
+   "pieces": 23,
+   "official_models": 6,
+   "official_roles": {
+    "torso": 0.58,
+    "head": 0.25,
+    "arms": 0.08
+   },
+   "colors": [
+    "White",
+    "Yellow",
+    "Black"
+   ]
+  },
+  {
+   "part": "3040b",
+   "name": "Slope Brick 45 2 x 1",
+   "category": "Bricks Sloped",
+   "clips": 7,
+   "pieces": 28,
+   "official_models": 8,
+   "official_roles": {
+    "torso": 0.47,
+    "arms": 0.4,
+    "face": 0.07
+   },
+   "colors": [
+    "White",
+    "Yellow",
+    "Sand Blue",
+    "Bright Pink",
+    "Black"
+   ]
+  },
+  {
+   "part": "48336",
+   "name": "Plate 1 x 2 with Handle Type 2",
+   "category": "Plates Special",
+   "clips": 7,
+   "pieces": 11,
+   "official_models": 3,
+   "official_roles": {
+    "head": 0.33,
+    "arms": 0.33,
+    "torso": 0.33
+   },
+   "colors": [
+    "Medium Azure",
+    "White",
+    "Black",
+    "Light Gray",
+    "Yellow"
+   ]
+  },
+  {
+   "part": "89678",
+   "name": "Technic Pin 1/2 with Friction",
+   "category": "Technic Pins",
+   "clips": 7,
+   "pieces": 8,
+   "official_models": 0,
+   "official_roles": {},
+   "colors": [
+    "Light Gray",
+    "Light Bluish Gray"
+   ]
+  },
+  {
+   "part": "3819",
+   "name": "Minifig Arm Left",
+   "category": "Minifig Upper Body",
+   "clips": 6,
+   "pieces": 12,
+   "official_models": 0,
+   "official_roles": {},
+   "colors": [
+    "Black",
+    "lack",
+    "White"
+   ]
+  },
+  {
+   "part": "2431p52",
+   "name": "Tile 1 x 4 with Black Danger Stripes Type 2 Pattern",
+   "category": "Tiles",
+   "clips": 6,
+   "pieces": 24,
+   "official_models": 0,
+   "official_roles": {},
+   "colors": [
+    "Yellow"
+   ]
+  },
+  {
+   "part": "61252",
+   "name": "Plate 1 x 1 with Clip Horizontal (Thick C-Clip)",
+   "category": "Plates Special",
+   "clips": 6,
+   "pieces": 21,
+   "official_models": 9,
+   "official_roles": {
+    "arms": 0.24,
+    "torso": 0.24,
+    "hair": 0.24
+   },
+   "colors": [
+    "Yellow",
+    "White",
+    "Black",
+    "Dark Red"
+   ]
+  },
+  {
+   "part": "3666",
+   "name": "Plate 1 x 6",
+   "category": "Plates",
+   "clips": 6,
+   "pieces": 10,
+   "official_models": 18,
+   "official_roles": {
+    "legs": 0.64,
+    "torso": 0.24,
+    "head": 0.12
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Dark Green"
+   ]
+  },
+  {
+   "part": "41770a",
+   "name": "Wing 2 x 4 Left without Chamfer",
+   "category": "Plates Wedged",
+   "clips": 6,
+   "pieces": 12,
+   "official_models": 3,
+   "official_roles": {
+    "head": 0.67,
+    "arms": 0.33
+   },
+   "colors": [
+    "White",
+    "Black",
+    "Green",
+    "Yellow",
+    "Red"
+   ]
+  },
+  {
+   "part": "79389",
+   "name": "Bracket 1 x 1 - 2 x 1 Down",
+   "category": "Plates Special",
+   "clips": 6,
+   "pieces": 14,
+   "official_models": 1,
+   "official_roles": {
+    "accessory": 0.6,
+    "head": 0.4
+   },
+   "colors": [
+    "White",
+    "Black",
+    "Light Gray",
+    "Red"
+   ]
+  },
+  {
+   "part": "3068a",
+   "name": "Tile 2 x 2 without Groove",
+   "category": "Tiles",
+   "clips": 6,
+   "pieces": 9,
+   "official_models": 0,
+   "official_roles": {},
+   "colors": [
+    "Black",
+    "Green",
+    "Dark Purple",
+    "Dark Red",
+    "Dark Green"
+   ]
+  },
+  {
+   "part": "87994",
+   "name": "Bar 3L",
+   "category": "Bars, Ladders and Fences",
+   "clips": 6,
+   "pieces": 31,
+   "official_models": 4,
+   "official_roles": {
+    "torso": 0.6,
+    "arms": 0.2,
+    "head": 0.2
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Bluish GrayLight",
+    "Reddish Brown"
+   ]
+  },
+  {
+   "part": "15571",
+   "name": "Slope Brick 45 1 x 2 Triple with Bottom Stud Holder",
+   "category": "Bricks Sloped",
+   "clips": 6,
+   "pieces": 31,
+   "official_models": 6,
+   "official_roles": {
+    "hair": 0.5,
+    "torso": 0.25,
+    "arms": 0.25
+   },
+   "colors": [
+    "Black",
+    "Yellow",
+    "Pearl Gold",
+    "White",
+    "Light Gray"
+   ]
+  },
+  {
+   "part": "4274",
+   "name": "Technic Pin 1/2",
+   "category": "Technic Pins",
+   "clips": 6,
+   "pieces": 8,
+   "official_models": 7,
+   "official_roles": {
+    "head": 0.67,
+    "torso": 0.22,
+    "arms": 0.11
+   },
+   "colors": [
+    "Light Gray",
+    "Light Bluish Gray",
+    "Ligh Bluish"
+   ]
+  },
+  {
+   "part": "3937",
+   "name": "Hinge 1 x 2 Base",
+   "category": "Hinges, Arms and Turntables",
+   "clips": 5,
+   "pieces": 14,
+   "official_models": 6,
+   "official_roles": {
+    "head": 0.6,
+    "hair": 0.2,
+    "torso": 0.1
+   },
+   "colors": [
+    "Light Gray",
+    "Dark Bluish Gray",
+    "Black",
+    "White",
+    "Red"
+   ]
+  },
+  {
+   "part": "43722a",
+   "name": "Wing 2 x 3 Right without Chamfer",
+   "category": "Plates Wedged",
+   "clips": 5,
+   "pieces": 7,
+   "official_models": 9,
+   "official_roles": {
+    "head": 0.36,
+    "torso": 0.27,
+    "arms": 0.18
+   },
+   "colors": [
+    "White",
+    "Red",
+    "Dark Blue",
+    "Yellow",
+    "Dark Bluish Gray"
+   ]
+  },
+  {
+   "part": "3002",
+   "name": "Brick 2 x 3",
+   "category": "Bricks",
+   "clips": 5,
+   "pieces": 6,
+   "official_models": 5,
+   "official_roles": {
+    "arms": 0.5,
+    "head": 0.5
+   },
+   "colors": [
+    "White",
+    "Black",
+    "Tan"
+   ]
+  },
+  {
+   "part": "41769a",
+   "name": "Wing 2 x 4 Right without Chamfer",
+   "category": "Plates Wedged",
+   "clips": 5,
+   "pieces": 10,
+   "official_models": 5,
+   "official_roles": {
+    "arms": 0.62,
+    "head": 0.25,
+    "torso": 0.12
+   },
+   "colors": [
+    "White",
+    "Green",
+    "Red",
+    "",
+    "Dark Bluish Gray"
+   ]
+  },
+  {
+   "part": "43723a",
+   "name": "Wing 2 x 3 Left without Chamfer",
+   "category": "Plates Wedged",
+   "clips": 5,
+   "pieces": 21,
+   "official_models": 9,
+   "official_roles": {
+    "torso": 0.5,
+    "head": 0.29,
+    "arms": 0.14
+   },
+   "colors": [
+    "Red",
+    "White",
+    "Blue",
+    "Yellow",
+    "Dark Bluish Gray"
+   ]
+  },
+  {
+   "part": "15070",
+   "name": "Plate 1 x 1 with Tooth Perpendicular",
+   "category": "Plates Special",
+   "clips": 5,
+   "pieces": 11,
+   "official_models": 5,
+   "official_roles": {
+    "head": 0.5,
+    "torso": 0.33,
+    "arms": 0.17
+   },
+   "colors": [
+    "White",
+    "Light Gray"
+   ]
+  },
+  {
+   "part": "14719",
+   "name": "Tile 2 x 2 Corner",
+   "category": "Tiles",
+   "clips": 5,
+   "pieces": 4,
+   "official_models": 19,
+   "official_roles": {
+    "head": 0.79,
+    "arms": 0.15,
+    "legs": 0.04
+   },
+   "colors": [
+    "Black"
+   ]
+  },
+  {
+   "part": "53451",
+   "name": "Minifig Helmet Viking Horn",
+   "category": "Animal / Creature Body Parts",
+   "clips": 5,
+   "pieces": 8,
+   "official_models": 2,
+   "official_roles": {
+    "torso": 0.33,
+    "arms": 0.33,
+    "legs": 0.33
+   },
+   "colors": [
+    "White",
+    "Black"
+   ]
+  },
+  {
+   "part": "3795",
+   "name": "Plate 2 x 6",
+   "category": "Plates",
+   "clips": 5,
+   "pieces": 6,
+   "official_models": 4,
+   "official_roles": {
+    "torso": 0.75,
+    "head": 0.25
+   },
+   "colors": [
+    "Black",
+    "Dark Bluish Gray",
+    "Dark Blue",
+    "Yellow"
+   ]
+  },
+  {
+   "part": "3176",
+   "name": "Plate 3 x 2 with Hole",
+   "category": "Plates Special",
+   "clips": 4,
+   "pieces": 7,
+   "official_models": 4,
+   "official_roles": {
+    "arms": 0.5,
+    "torso": 0.33,
+    "face": 0.17
+   },
+   "colors": [
+    "Black",
+    "White",
+    "Yellow"
+   ]
+  },
+  {
+   "part": "3938",
+   "name": "Hinge 1 x 2 Top",
+   "category": "Hinges, Arms and Turntables",
+   "clips": 4,
+   "pieces": 7,
+   "official_models": 1,
+   "official_roles": {
+    "head": 1.0
+   },
+   "colors": [
+    "White",
+    "Black"
+   ]
+  },
+  {
+   "part": "3039",
+   "name": "Slope Brick 45 2 x 2",
+   "category": "Bricks Sloped",
+   "clips": 4,
+   "pieces": 10,
+   "official_models": 1,
+   "official_roles": {
+    "face": 1.0
+   },
+   "colors": [
+    "Yellow",
+    "White",
+    "Blue",
+    "Black"
+   ]
+  },
+  {
+   "part": "15395",
+   "name": "Dome 2 x 2 Inverted with Stud and Tube",
+   "category": "Bricks Round and Cones",
+   "clips": 4,
+   "pieces": 4,
+   "official_models": 1,
+   "official_roles": {
+    "arms": 1.0
+   },
+   "colors": [
+    "White",
+    "Pearl Gold"
+   ]
+  },
+  {
+   "part": "6541",
+   "name": "Technic Brick 1 x 1 with Hole",
+   "category": "Technic Bricks",
+   "clips": 4,
+   "pieces": 12,
+   "official_models": 4,
+   "official_roles": {
+    "head": 0.57,
+    "torso": 0.14,
+    "legs": 0.14
+   },
+   "colors": [
+    "White",
+    "Dark Blue",
+    "Red",
+    "Bright Pink"
+   ]
+  },
+  {
+   "part": "24866",
+   "name": "Plate 1 x 1 with 5 Petals",
+   "category": "Plants & Trees",
+   "clips": 4,
+   "pieces": 13,
+   "official_models": 11,
+   "official_roles": {
+    "arms": 0.59,
+    "legs": 0.34,
+    "torso": 0.07
+   },
+   "colors": [
+    "White",
+    "Pink"
+   ]
+  },
+  {
+   "part": "6048",
+   "name": "Arm Piece with Pin and 2 Fingers",
+   "category": "",
+   "clips": 4,
+   "pieces": 7,
+   "official_models": 0,
+   "official_roles": {},
+   "colors": [
+    "Black",
+    "Flat Silver"
+   ]
+  },
+  {
+   "part": "2654a",
+   "name": "Dish 2 x 2 with Rim",
+   "category": "Plates Round Curved and Dishes",
+   "clips": 4,
+   "pieces": 6,
+   "official_models": 2,
+   "official_roles": {
+    "arms": 0.67,
+    "torso": 0.33
+   },
+   "colors": [
+    "Trans-Dark Blue",
+    "Red"
+   ]
+  },
+  {
+   "part": "3044b",
+   "name": "Slope Brick 45 2 x 1 Double",
+   "category": "Bricks Sloped",
+   "clips": 4,
+   "pieces": 5,
+   "official_models": 0,
+   "official_roles": {},
+   "colors": [
+    "Black",
+    "White"
+   ]
+  },
+  {
+   "part": "35787",
+   "name": "Tile 2 x 2 Triangular",
+   "category": "Tiles Special",
+   "clips": 4,
+   "pieces": 7,
+   "official_models": 3,
+   "official_roles": {
+    "face": 0.5,
+    "head": 0.5
+   },
+   "colors": [
+    "Yellow",
+    "Black",
+    "White"
+   ]
+  }
+ ],
+ "used_by_fans_not_in_official": [
+  {
+   "part": "73825",
+   "name": "Bracket 1 x 1 - 2 x 1 Up",
+   "category": "Plates Special",
+   "clips": 9,
+   "pieces": 18,
+   "official_models": 0,
+   "official_roles": {},
+   "colors": [
+    "Black",
+    "Blue",
+    "White",
+    "Red",
+    "Yellow"
+   ]
+  },
+  {
+   "part": "32000",
+   "name": "Technic Brick 1 x 2 with Holes",
+   "category": "Technic Bricks",
+   "clips": 9,
+   "pieces": 18,
+   "official_models": 0,
+   "official_roles": {},
+   "colors": [
+    "Dark Bluish Gray",
+    "White"
+   ]
+  },
+  {
+   "part": "3070a",
+   "name": "Tile 1 x 1 without Groove",
+   "category": "Tiles",
+   "clips": 8,
+   "pieces": 14,
+   "official_models": 0,
+   "official_roles": {},
+   "colors": [
+    "Yellow",
+    "White",
+    "Red",
+    "Tan",
+    "Orange"
+   ]
+  },
+  {
+   "part": "4150",
+   "name": "Tile 2 x 2 Round with Cross Underside Stud",
+   "category": "Tiles Round and Curved",
+   "clips": 7,
+   "pieces": 11,
+   "official_models": 0,
+   "official_roles": {},
+   "colors": [
+    "Yellow",
+    "Orange",
+    "Coral",
+    "White",
+    "Dark Pink"
+   ]
+  },
+  {
+   "part": "89678",
+   "name": "Technic Pin 1/2 with Friction",
+   "category": "Technic Pins",
+   "clips": 7,
+   "pieces": 8,
+   "official_models": 0,
+   "official_roles": {},
+   "colors": [
+    "Light Gray",
+    "Light Bluish Gray"
+   ]
+  },
+  {
+   "part": "3819",
+   "name": "Minifig Arm Left",
+   "category": "Minifig Upper Body",
+   "clips": 6,
+   "pieces": 12,
+   "official_models": 0,
+   "official_roles": {},
+   "colors": [
+    "Black",
+    "lack",
+    "White"
+   ]
+  },
+  {
+   "part": "2431p52",
+   "name": "Tile 1 x 4 with Black Danger Stripes Type 2 Pattern",
+   "category": "Tiles",
+   "clips": 6,
+   "pieces": 24,
+   "official_models": 0,
+   "official_roles": {},
+   "colors": [
+    "Yellow"
+   ]
+  },
+  {
+   "part": "3068a",
+   "name": "Tile 2 x 2 without Groove",
+   "category": "Tiles",
+   "clips": 6,
+   "pieces": 9,
+   "official_models": 0,
+   "official_roles": {},
+   "colors": [
+    "Black",
+    "Green",
+    "Dark Purple",
+    "Dark Red",
+    "Dark Green"
+   ]
+  },
+  {
+   "part": "6048",
+   "name": "Arm Piece with Pin and 2 Fingers",
+   "category": "",
+   "clips": 4,
+   "pieces": 7,
+   "official_models": 0,
+   "official_roles": {},
+   "colors": [
+    "Black",
+    "Flat Silver"
+   ]
+  },
+  {
+   "part": "3044b",
+   "name": "Slope Brick 45 2 x 1 Double",
+   "category": "Bricks Sloped",
+   "clips": 4,
+   "pieces": 5,
+   "official_models": 0,
+   "official_roles": {},
+   "colors": [
+    "Black",
+    "White"
+   ]
+  }
+ ]
+}

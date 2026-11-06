@@ -39,6 +39,8 @@ class Blob:
     solidity: float = 1.0  # area / convex-hull area; low => several parts merged
     isolated: bool = True  # no other blob within a few px (not touching/occluding)
     text: float = 0.0  # share of the bbox covered by removed overlay-text strokes
+    motion: bool = False  # found by its motion in front of the model, not as a separate outline
+    mask: np.ndarray | None = field(default=None, repr=False)  # bbox-sized pixel mask (motion blobs only)
 
 
 @dataclass
@@ -140,6 +142,60 @@ def blobs_in_frame(frame: np.ndarray, static: np.ndarray, index: int) -> tuple[l
     return kept, rejected  # type: ignore[return-value]
 
 
+MOTION_T = 3.0  # px/frame: vertical motion this far from the model's own motion marks a moving part
+MOTION_WIN = 9  # optical-flow window; small keeps part outlines tight
+
+
+def motion_blobs(a: np.ndarray, b: np.ndarray, base: Blob | None, others: list[Blob], index: int,
+                 thresh: float = MOTION_T, min_area: int = MIN_AREA // 2) -> list[Blob]:
+    """Parts moving in front of (or overlapping) the model, which outline segmentation merges into it.
+
+    The model turns about a vertical axis, so its vertical screen motion is linear in screen
+    position (plus pan and zoom) and does not depend on depth; a dropping or rising part
+    moves vertically much faster. Pixels inside the model whose vertical optical flow departs
+    from a robust linear fit of the model's are a moving part.
+    """
+    if base is None:
+        return []
+    fg = a.max(axis=2) > FG_LUMA
+    ga, gb = cv2.cvtColor(a, cv2.COLOR_BGR2GRAY), cv2.cvtColor(b, cv2.COLOR_BGR2GRAY)
+    x0, y0, w0, h0 = base.bbox
+    pad = 12
+    xa, ya = max(0, x0 - pad), max(0, y0 - pad)
+    xb, yb = min(a.shape[1], x0 + w0 + pad), min(a.shape[0], y0 + h0 + pad)
+    fl = cv2.calcOpticalFlowFarneback(ga[ya:yb, xa:xb], gb[ya:yb, xa:xb], None, 0.5, 4, MOTION_WIN, 3, 5, 1.2, 0)
+    sub = fg[ya:yb, xa:xb]
+    ys, xs = np.nonzero(sub)
+    if len(xs) < 200:
+        return []
+    A = np.stack([xs, ys, np.ones_like(xs)], 1).astype(np.float64)
+    y = fl[ys, xs, 1].astype(np.float64)
+    w = np.ones(len(y))
+    for _ in range(4):  # robust: the moving parts themselves are outliers
+        coef = np.linalg.lstsq(A * w[:, None], y * w, rcond=None)[0]
+        r = y - A @ coef
+        w = (np.abs(r) < 2.5 * max(1.4826 * float(np.median(np.abs(r))), 1.0)).astype(float)
+    gx, gy = np.meshgrid(np.arange(sub.shape[1]), np.arange(sub.shape[0]))
+    res = np.abs(fl[..., 1] - (coef[0] * gx + coef[1] * gy + coef[2]))
+    m = ((res > thresh) & sub).astype(np.uint8)
+    for o in others:  # parts already seen as their own outline
+        ox, oy, ow, oh = o.bbox
+        m[max(0, oy - ya) : max(0, oy - ya + oh), max(0, ox - xa) : max(0, ox - xa + ow)] = 0
+    m = cv2.morphologyEx(m, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+    n, lab, stats, cent = cv2.connectedComponentsWithStats(m, connectivity=8)
+    out = []
+    for k in range(1, n):
+        area = int(stats[k, cv2.CC_STAT_AREA])
+        if area < min_area:
+            continue
+        x, y_, bw, bh = (int(v) for v in stats[k, :4])
+        bl = Blob(index, (x + xa, y_ + ya, bw, bh), area, (float(cent[k, 0]) + xa, float(cent[k, 1]) + ya),
+                  x + xa <= 2 or y_ + ya <= 2 or x + xa + bw >= a.shape[1] - 2 or y_ + ya + bh >= a.shape[0] - 2,
+                  isolated=False, motion=True, mask=lab[y_ : y_ + bh, x : x + bw] == k)
+        out.append(bl)
+    return out
+
+
 def split_base(blobs: list[Blob]) -> tuple[Blob | None, list[Blob]]:
     """The model is the largest blob in the frame; everything else floats."""
     if not blobs:
@@ -233,10 +289,17 @@ def opening_track(bases: list[Blob | None], jump: float = 1.25, min_move: float 
     return PartTrack(0, run)
 
 
+MOTION_MIN_AREA = 2500  # px: a track seen only by motion must be this big (median) ...
+MOTION_MIN_LEN = 4  # ... and this long; flow noise on the model makes small, short tracks
+
+
 def finalize(tracks: list[PartTrack], frames_dir: str, out: str | None, min_len: int = 3) -> list[PartTrack]:
     kept = []
     for t in tracks:
         if len(t.blobs) < min_len:
+            continue
+        if all(b.motion for b in t.blobs) and (len(t.blobs) < MOTION_MIN_LEN or
+                                               float(np.median([b.area for b in t.blobs])) < MOTION_MIN_AREA):
             continue
         xs = [b.centroid[0] for b in t.blobs]
         ys = [b.centroid[1] for b in t.blobs]
@@ -250,7 +313,9 @@ def finalize(tracks: list[PartTrack], frames_dir: str, out: str | None, min_len:
         t.best = max(clean, key=lambda b: b.area * b.solidity)
         img = cv2.imread(os.path.join(frames_dir, f"{t.best.frame + 1:04d}.png"))
         x, y, w, h = t.best.bbox
-        crop = img[y : y + h, x : x + w]
+        crop = img[y : y + h, x : x + w].copy()
+        if t.best.mask is not None:
+            crop[~t.best.mask] = 0  # motion blob: drop the model pixels behind the part
         lit = crop[crop.max(axis=2) > 60]
         if len(lit):
             b, g, r = np.median(lit, axis=0)
@@ -263,7 +328,8 @@ def finalize(tracks: list[PartTrack], frames_dir: str, out: str | None, min_len:
     return kept
 
 
-def analyse(video: str, work: str, out: str | None = None, fps: int = 10) -> dict:
+def analyse(video: str, work: str, out: str | None = None, fps: int = 10, motion: bool = False) -> dict:
+    """motion: also find parts moving in front of the model by optical flow (`motion_blobs`)."""
     paths = extract(video, work, fps)
     frames = np.stack([cv2.imread(p) for p in paths])
     static = static_overlay(frames)
@@ -273,6 +339,8 @@ def analyse(video: str, work: str, out: str | None = None, fps: int = 10) -> dic
         rejected += len(rej)
         base, floaters = split_base(kept)
         mark_isolation(floaters, [base] if base else [])
+        if motion and i + 1 < len(frames):
+            floaters = floaters + motion_blobs(fr, frames[i + 1], base, floaters, i)
         bases.append(base)
         per_frame.append(floaters)
     raw = track_parts(per_frame)

@@ -7,6 +7,7 @@ import type { Step } from '../plan/types';
 import { addPart } from '../state/editing';
 import { getColors, partName } from '../state/partService';
 import { usePlayback } from '../state/playback';
+import { useFlightEdit } from '../state/flightEdit';
 import { useStudio } from '../state/store';
 import { Ic } from './icons';
 
@@ -211,10 +212,18 @@ export function PartsLane({
               top: LANE_PAD + c.row * PART_ROW,
               width: Math.max(PART_MIN_PX - 2, (c.end - c.start) * px - 1),
             }}
-            title={`${name}${c.part ? ` (${c.part})` : ''} — step ${c.step + 1}, #${c.index + 1}, ${c.start.toFixed(1)}–${c.end.toFixed(1)} s${forced.has(c.id) ? ', order forced' : ''}. Click to select, drag to change when it arrives; hold Alt (⌥) while dropping to force the order.`}
+            title={`${name}${c.part ? ` (${c.part})` : ''} — step ${c.step + 1}, #${c.index + 1}, ${c.start.toFixed(1)}–${c.end.toFixed(1)} s${forced.has(c.id) ? ', order forced' : ''}. Click to select, double-click to edit its flight path as keyframes, drag to change when it arrives; hold Alt (⌥) while dropping to force the order.`}
             aria-label={`${name}, step ${c.step + 1}, piece ${c.index + 1}`}
             aria-pressed={selected.has(c.id)}
             onPointerDown={(e) => onPointerDown(e, c)}
+            onDoubleClick={(e) => {
+              // its whole flight as keyframes, in the Timeline (Dope Sheet) and the viewport
+              e.preventDefault();
+              e.stopPropagation();
+              st().select([c.id]);
+              useFlightEdit.getState().set({ request: c.id });
+              st().setTimelineEditor('timeline');
+            }}
             onContextMenu={(e) => {
               if (!onClipMenu) return;
               e.preventDefault();

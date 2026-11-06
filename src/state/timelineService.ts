@@ -3,7 +3,8 @@ import { applyMotionStyle, cleanStyle, mergeStyles } from '../anim/motionStyle';
 import type { Unit } from '../anim/timelineData';
 import { findItem } from '../plan/ops';
 import { isSub, type MotionStyle } from '../plan/types';
-import { floorShiftsByKey, floorTurnsByKey, resetFloorShifts } from '../plan/pieceActions';
+import { flightsByKey, floorShiftsByKey, floorTurnsByKey, resetFloorShifts } from '../plan/pieceActions';
+import { applyCustomFlights } from '../anim/customFlight';
 import type { Timeline } from '../anim/timeline';
 import { decodeTimeline, type EncodedTimeline } from '../anim/timelineCodec';
 import type { PlanRequest } from '../anim/timeline.worker';
@@ -43,8 +44,9 @@ function baseOf(p: Plan): { plan: Plan; key: string } {
     }
     // Motion styles re-time a planned timeline (applyMotionStyle); they never change routes.
     const omitGroups = (steps: Plan['steps']) => steps.map(({ motion: _motion, ...step }) => ({ ...step, pieces: step.pieces.map(item => {
-      if (!item.assembly?.group && !item.assembly?.motion) return item;
-      const { group: _group, motion: _m, ...assembly } = item.assembly;
+      if (!item.assembly?.group && !item.assembly?.motion && !item.assembly?.flight) return item;
+      // an edited flight path is laid over the planned timeline too (applyCustomFlights)
+      const { group: _group, motion: _m, flight: _f, ...assembly } = item.assembly;
       const out = { ...item, assembly: Object.keys(assembly).length ? assembly : undefined };
       return out;
     }) }));
@@ -144,12 +146,16 @@ export function planTimeline(plan: Plan, model: string, opts: AnimOptions, lane:
   const turned = turns.size ? styled.then((tl) => applyFloorTurns(tl, turns)) : styled;
   const shifts = floorShiftsByKey(plan, model);
   let res = shifts.size ? turned.then((tl) => applyFloorShifts(tl, shifts)) : turned;
+  // edited flight paths start from where the piece waits now (after any drag or turn)
+  const flights = flightsByKey(plan, model);
   // "Loose pieces follow on" (default): the whole scene turns with the main spot. The
   // spot applies only to the root model; a submodel rendered alone keeps its origin.
   if (model === '' && plan.assemblySpot && plan.loosePiecesFollow !== false) {
     const spot = plan.assemblySpot;
     res = res.then((tl) => applyAssemblySpotTransform(tl, spot));
   }
+  // last: a flight is kept in its seat's own frame, so the main spot turns it too
+  if (flights.size) res = res.then((tl) => applyCustomFlights(tl, flights));
   return res;
 }
 

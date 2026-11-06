@@ -1,0 +1,11118 @@
+{
+ "3023b": {
+  "name": "Plate 1 x 2",
+  "category": "Plates",
+  "rebrickable": "3023",
+  "models": 79,
+  "uses": 1212,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 491,
+   "torso": 292,
+   "legs": 153,
+   "arms": 124,
+   "face": 112,
+   "hair": 40
+  },
+  "colors": {
+   "Black": 179,
+   "White": 110,
+   "Tan": 94,
+   "Reddish Brown": 87,
+   "Red": 72,
+   "Green": 66
+  },
+  "studs": {
+   "up": 730,
+   "side": 293,
+   "front": 114,
+   "back": 73,
+   "down": 2
+  },
+  "partners": [
+   "3023b",
+   "22885",
+   "3020",
+   "92593",
+   "3024",
+   "3031",
+   "2420",
+   "3710"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 3,
+   "studs_up": 2
+  }
+ },
+ "22885": {
+  "name": "Brick 1 x 2 x 1.667 with Studs on 1 Side",
+  "category": "Bricks Special",
+  "rebrickable": "22885",
+  "models": 79,
+  "uses": 1242,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 1188,
+   "torso": 41,
+   "accessory": 8,
+   "face": 3,
+   "arms": 2
+  },
+  "colors": {
+   "Light Bluish Grey": 1149,
+   "White": 30,
+   "Tan": 26,
+   "Red": 20,
+   "Very Light Bluish Grey": 12,
+   "Dark Pink": 3
+  },
+  "studs": {
+   "up": 1239,
+   "back": 3
+  },
+  "partners": [
+   "22885",
+   "3023b",
+   "3020",
+   "3031",
+   "2420",
+   "15068",
+   "3710",
+   "3021"
+  ],
+  "connectors": {
+   "clips": 4,
+   "anti_studs": 3,
+   "studs_side": 4,
+   "studs_up": 2
+  }
+ },
+ "3003": {
+  "name": "Brick 2 x 2",
+  "category": "Bricks",
+  "rebrickable": "3003",
+  "models": 79,
+  "uses": 277,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 255,
+   "torso": 15,
+   "hair": 3,
+   "arms": 2,
+   "face": 1,
+   "accessory": 1
+  },
+  "colors": {
+   "Bright Pink": 93,
+   "Green": 46,
+   "Orange": 22,
+   "Light Bluish Grey": 21,
+   "Sand Green": 13,
+   "Tan": 12
+  },
+  "studs": {
+   "up": 277
+  },
+  "partners": [
+   "4032a",
+   "3003",
+   "2420",
+   "3020",
+   "22885",
+   "3031",
+   "15068",
+   "3022"
+  ],
+  "connectors": {
+   "anti_studs": 5,
+   "studs_up": 4
+  }
+ },
+ "2431": {
+  "name": "Tile 1 x 4 with Groove",
+  "category": "Tiles",
+  "rebrickable": "2431",
+  "models": 79,
+  "uses": 285,
+  "brickheadz_sets": 0,
+  "roles": {
+   "legs": 114,
+   "head": 77,
+   "face": 67,
+   "torso": 19,
+   "hair": 5,
+   "arms": 3
+  },
+  "colors": {
+   "Black": 133,
+   "Tan": 47,
+   "White": 23,
+   "Red": 12,
+   "Light Bluish Grey": 10,
+   "Reddish Brown": 8
+  },
+  "studs": {
+   "up": 117,
+   "front": 72,
+   "back": 49,
+   "side": 46,
+   "down": 1
+  },
+  "partners": [
+   "3958",
+   "3023b",
+   "3021",
+   "22885",
+   "4070",
+   "3031",
+   "3710",
+   "3020"
+  ],
+  "connectors": {
+   "bars": 3,
+   "anti_studs": 7
+  }
+ },
+ "87079": {
+  "name": "Tile 2 x 4",
+  "category": "Tiles",
+  "rebrickable": "87079",
+  "models": 78,
+  "uses": 338,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 156,
+   "legs": 114,
+   "face": 40,
+   "torso": 20,
+   "arms": 5,
+   "base": 2,
+   "accessory": 1
+  },
+  "colors": {
+   "Black": 145,
+   "White": 35,
+   "Tan": 22,
+   "Reddish Brown": 20,
+   "Light Bluish Grey": 16,
+   "Red": 14
+  },
+  "studs": {
+   "up": 125,
+   "side": 81,
+   "back": 78,
+   "front": 54
+  },
+  "partners": [
+   "22885",
+   "3958",
+   "3031",
+   "3020",
+   "3021",
+   "3710",
+   "3032",
+   "2420"
+  ],
+  "connectors": {
+   "anti_studs": 11
+  }
+ },
+ "4032a": {
+  "name": "Plate 2 x 2 Round with Axlehole",
+  "category": "Plates Round Curved and Dishes",
+  "rebrickable": "4032a",
+  "models": 77,
+  "uses": 193,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 122,
+   "legs": 34,
+   "arms": 22,
+   "torso": 8,
+   "hair": 3,
+   "face": 3,
+   "accessory": 1
+  },
+  "colors": {
+   "Dark Bluish Grey": 42,
+   "Yellow": 24,
+   "Dark Turquoise": 20,
+   "Green": 17,
+   "Red": 16,
+   "Black": 14
+  },
+  "studs": {
+   "up": 170,
+   "side": 14,
+   "front": 7,
+   "down": 2
+  },
+  "partners": [
+   "3003",
+   "30565",
+   "3958",
+   "99206",
+   "2420",
+   "27925",
+   "3941",
+   "22885"
+  ],
+  "connectors": {
+   "axle_holes": 1,
+   "anti_studs": 5,
+   "studs_up": 4
+  }
+ },
+ "98138": {
+  "name": "Tile 1 x 1 Round with Groove",
+  "category": "Tiles Round and Curved",
+  "rebrickable": "98138",
+  "models": 74,
+  "uses": 239,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 130,
+   "torso": 53,
+   "head": 29,
+   "arms": 18,
+   "hair": 9
+  },
+  "colors": {
+   "Black": 165,
+   "White": 48,
+   "Red": 5,
+   "Yellow": 3,
+   "Light Bluish Grey": 3,
+   "Trans Red": 3
+  },
+  "studs": {
+   "front": 148,
+   "back": 52,
+   "side": 24,
+   "up": 15
+  },
+  "partners": [
+   "92593",
+   "3024",
+   "3710",
+   "41740",
+   "3021",
+   "3020",
+   "15573",
+   "3623"
+  ],
+  "connectors": {
+   "anti_studs": 1
+  }
+ },
+ "3020": {
+  "name": "Plate 2 x 4",
+  "category": "Plates",
+  "rebrickable": "3020",
+  "models": 74,
+  "uses": 339,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 182,
+   "torso": 101,
+   "face": 40,
+   "arms": 10,
+   "legs": 4,
+   "hair": 2
+  },
+  "colors": {
+   "Black": 43,
+   "White": 33,
+   "Reddish Brown": 27,
+   "Dark Bluish Grey": 21,
+   "Dark Tan": 21,
+   "Red": 19
+  },
+  "studs": {
+   "up": 197,
+   "back": 61,
+   "side": 42,
+   "front": 39
+  },
+  "partners": [
+   "22885",
+   "3023b",
+   "3020",
+   "15068",
+   "3710",
+   "3004",
+   "3003",
+   "11477"
+  ],
+  "connectors": {
+   "anti_studs": 11,
+   "studs_up": 8
+  }
+ },
+ "3022": {
+  "name": "Plate 2 x 2",
+  "category": "Plates",
+  "rebrickable": "3022",
+  "models": 73,
+  "uses": 320,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 213,
+   "torso": 50,
+   "face": 25,
+   "arms": 21,
+   "hair": 8,
+   "accessory": 2,
+   "legs": 1
+  },
+  "colors": {
+   "Black": 42,
+   "White": 28,
+   "Reddish Brown": 25,
+   "Tan": 23,
+   "Dark Bluish Grey": 20,
+   "Red": 18
+  },
+  "studs": {
+   "side": 156,
+   "up": 121,
+   "back": 24,
+   "front": 19
+  },
+  "partners": [
+   "22885",
+   "3069b",
+   "11476",
+   "3023b",
+   "3031",
+   "3020",
+   "3022",
+   "15068"
+  ],
+  "connectors": {
+   "anti_studs": 5,
+   "studs_up": 4
+  }
+ },
+ "3069b": {
+  "name": "Tile 1 x 2 with Groove",
+  "category": "Tiles",
+  "rebrickable": "3069b",
+  "models": 71,
+  "uses": 442,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 272,
+   "arms": 58,
+   "face": 45,
+   "torso": 44,
+   "legs": 13,
+   "hair": 10
+  },
+  "colors": {
+   "Black": 62,
+   "White": 40,
+   "Tan": 37,
+   "Dark Bluish Grey": 31,
+   "Sand Green": 27,
+   "Light Bluish Grey": 27
+  },
+  "studs": {
+   "side": 298,
+   "up": 55,
+   "front": 53,
+   "back": 32,
+   "down": 4
+  },
+  "partners": [
+   "22885",
+   "3022",
+   "3023b",
+   "3710",
+   "3021",
+   "99780",
+   "99206",
+   "2420"
+  ],
+  "connectors": {
+   "anti_studs": 3
+  }
+ },
+ "11476": {
+  "name": "Plate 1 x 2 with Clip Horizontal on Side (Thick C-Clip)",
+  "category": "Plates Special",
+  "rebrickable": "11476",
+  "models": 70,
+  "uses": 156,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 126,
+   "torso": 18,
+   "face": 6,
+   "head": 6
+  },
+  "colors": {
+   "Tan": 50,
+   "White": 29,
+   "Black": 24,
+   "Yellow": 11,
+   "Light Bluish Grey": 9,
+   "Reddish Brown": 7
+  },
+  "studs": {
+   "side": 138,
+   "back": 6,
+   "front": 6,
+   "up": 6
+  },
+  "partners": [
+   "3022",
+   "3023b",
+   "3069b",
+   "36840",
+   "3020",
+   "25893",
+   "30374",
+   "11477"
+  ],
+  "connectors": {
+   "bars": 1,
+   "clips": 1,
+   "anti_studs": 3,
+   "studs_up": 2
+  }
+ },
+ "3024": {
+  "name": "Plate 1 x 1",
+  "category": "Plates",
+  "rebrickable": "3024",
+  "models": 70,
+  "uses": 645,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 272,
+   "face": 112,
+   "arms": 111,
+   "torso": 106,
+   "hair": 30,
+   "legs": 14
+  },
+  "colors": {
+   "Black": 123,
+   "Pearl Gold": 57,
+   "White": 46,
+   "Tan": 41,
+   "Reddish Brown": 39,
+   "Dark Bluish Grey": 33
+  },
+  "studs": {
+   "up": 341,
+   "side": 149,
+   "front": 102,
+   "back": 45,
+   "down": 8
+  },
+  "partners": [
+   "3024",
+   "3023b",
+   "3710",
+   "22885",
+   "98138",
+   "3020",
+   "3010",
+   "2420"
+  ],
+  "connectors": {
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "3710": {
+  "name": "Plate 1 x 4",
+  "category": "Plates",
+  "rebrickable": "3710",
+  "models": 69,
+  "uses": 355,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 202,
+   "face": 60,
+   "torso": 55,
+   "arms": 29,
+   "legs": 5,
+   "hair": 4
+  },
+  "colors": {
+   "Black": 44,
+   "Reddish Brown": 34,
+   "White": 31,
+   "Yellow": 23,
+   "Blue": 21,
+   "Tan": 20
+  },
+  "studs": {
+   "up": 194,
+   "front": 59,
+   "side": 54,
+   "back": 44,
+   "down": 4
+  },
+  "partners": [
+   "22885",
+   "3710",
+   "3024",
+   "3023b",
+   "3020",
+   "3010",
+   "2420",
+   "3031"
+  ],
+  "connectors": {
+   "bars": 3,
+   "anti_studs": 7,
+   "studs_up": 4
+  }
+ },
+ "3031": {
+  "name": "Plate 4 x 4",
+  "category": "Plates",
+  "rebrickable": "3031",
+  "models": 68,
+  "uses": 197,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 122,
+   "torso": 39,
+   "face": 33,
+   "arms": 3
+  },
+  "colors": {
+   "Black": 37,
+   "White": 35,
+   "Tan": 18,
+   "Reddish Brown": 16,
+   "Blue": 14,
+   "Red": 13
+  },
+  "studs": {
+   "up": 113,
+   "back": 42,
+   "front": 37,
+   "side": 5
+  },
+  "partners": [
+   "22885",
+   "3023b",
+   "87079",
+   "3005",
+   "3010",
+   "3710",
+   "3004",
+   "4070"
+  ],
+  "connectors": {
+   "anti_studs": 25,
+   "studs_up": 16
+  }
+ },
+ "92593": {
+  "name": "Plate 1 x 4 with Two Studs",
+  "category": "Plates Special",
+  "rebrickable": "92593",
+  "models": 64,
+  "uses": 160,
+  "brickheadz_sets": 0,
+  "roles": {
+   "legs": 76,
+   "face": 37,
+   "head": 25,
+   "torso": 19,
+   "arms": 3
+  },
+  "colors": {
+   "Black": 99,
+   "Tan": 30,
+   "Yellow": 6,
+   "Medium Lilac": 5,
+   "Dark Bluish Grey": 4,
+   "Bright Light Orange": 2
+  },
+  "studs": {
+   "up": 96,
+   "front": 41,
+   "back": 17,
+   "side": 5,
+   "down": 1
+  },
+  "partners": [
+   "3023b",
+   "98138",
+   "3958",
+   "3021",
+   "3004",
+   "3031",
+   "22885",
+   "3623"
+  ],
+  "connectors": {
+   "bars": 3,
+   "anti_studs": 7,
+   "studs_up": 2
+  }
+ },
+ "3958": {
+  "name": "Plate 6 x 6",
+  "category": "Plates",
+  "rebrickable": "3958",
+  "models": 63,
+  "uses": 88,
+  "brickheadz_sets": 0,
+  "roles": {
+   "base": 68,
+   "legs": 20
+  },
+  "colors": {
+   "Black": 88
+  },
+  "studs": {
+   "up": 88
+  },
+  "partners": [
+   "87079",
+   "2431",
+   "92593",
+   "4032a",
+   "4477",
+   "3666",
+   "15573",
+   "41740"
+  ],
+  "connectors": {
+   "anti_studs": 61,
+   "studs_up": 36
+  }
+ },
+ "3010": {
+  "name": "Brick 1 x 4",
+  "category": "Bricks",
+  "rebrickable": "3010",
+  "models": 61,
+  "uses": 137,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 104,
+   "torso": 22,
+   "face": 10,
+   "legs": 1
+  },
+  "colors": {
+   "Black": 27,
+   "White": 19,
+   "Red": 10,
+   "Blue": 8,
+   "Dark Blue": 8,
+   "Dark Bluish Grey": 7
+  },
+  "studs": {
+   "up": 137
+  },
+  "partners": [
+   "3710",
+   "3031",
+   "3010",
+   "3023b",
+   "3020",
+   "3024",
+   "3021",
+   "3005"
+  ],
+  "connectors": {
+   "bars": 3,
+   "anti_studs": 7,
+   "studs_up": 4
+  }
+ },
+ "3005": {
+  "name": "Brick 1 x 1",
+  "category": "Bricks",
+  "rebrickable": "3005",
+  "models": 57,
+  "uses": 216,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 149,
+   "torso": 51,
+   "arms": 7,
+   "face": 7,
+   "legs": 1,
+   "accessory": 1
+  },
+  "colors": {
+   "White": 26,
+   "Black": 26,
+   "Reddish Brown": 20,
+   "Red": 16,
+   "Tan": 15,
+   "Medium Nougat": 13
+  },
+  "studs": {
+   "up": 204,
+   "side": 7,
+   "back": 5
+  },
+  "partners": [
+   "3031",
+   "3023b",
+   "3005",
+   "3024",
+   "3010",
+   "3020",
+   "3021",
+   "3623"
+  ],
+  "connectors": {
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "3070b": {
+  "name": "Tile 1 x 1 with Groove",
+  "category": "Tiles",
+  "rebrickable": "3070b",
+  "models": 56,
+  "uses": 254,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 102,
+   "face": 72,
+   "torso": 39,
+   "arms": 22,
+   "legs": 13,
+   "hair": 6
+  },
+  "colors": {
+   "Black": 45,
+   "White": 31,
+   "Tan": 31,
+   "Red": 24,
+   "Light Bluish Grey": 21,
+   "Dark Red": 19
+  },
+  "studs": {
+   "side": 100,
+   "front": 87,
+   "up": 38,
+   "back": 28,
+   "down": 1
+  },
+  "partners": [
+   "22885",
+   "3031",
+   "4070",
+   "3023b",
+   "2420",
+   "3623",
+   "3020",
+   "3024"
+  ],
+  "connectors": {
+   "anti_studs": 1
+  }
+ },
+ "3004": {
+  "name": "Brick 1 x 2",
+  "category": "Bricks",
+  "rebrickable": "3004",
+  "models": 54,
+  "uses": 156,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 75,
+   "torso": 62,
+   "face": 6,
+   "legs": 6,
+   "arms": 5,
+   "hair": 2
+  },
+  "colors": {
+   "Black": 28,
+   "White": 17,
+   "Green": 12,
+   "Blue": 11,
+   "Light Bluish Grey": 11,
+   "Red": 9
+  },
+  "studs": {
+   "up": 145,
+   "front": 9,
+   "back": 1,
+   "side": 1
+  },
+  "partners": [
+   "3020",
+   "3031",
+   "3023b",
+   "3004",
+   "3710",
+   "92593",
+   "2420",
+   "22885"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 3,
+   "studs_up": 2
+  }
+ },
+ "2420": {
+  "name": "Plate 2 x 2 Corner",
+  "category": "Plates",
+  "rebrickable": "2420",
+  "models": 54,
+  "uses": 277,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 162,
+   "face": 38,
+   "arms": 33,
+   "torso": 30,
+   "hair": 11,
+   "legs": 2,
+   "accessory": 1
+  },
+  "colors": {
+   "Black": 64,
+   "Reddish Brown": 40,
+   "Medium Nougat": 23,
+   "White": 22,
+   "Dark Red": 22,
+   "Red": 18
+  },
+  "studs": {
+   "up": 128,
+   "side": 80,
+   "front": 48,
+   "back": 21
+  },
+  "partners": [
+   "22885",
+   "3003",
+   "2420",
+   "3023b",
+   "3710",
+   "11477",
+   "3024",
+   "3941"
+  ],
+  "connectors": {
+   "bars": 2,
+   "anti_studs": 5,
+   "studs_up": 3
+  }
+ },
+ "15068": {
+  "name": "Slope Brick Curved 2 x 2 x 0.667",
+  "category": "Bricks Curved",
+  "rebrickable": "15068",
+  "models": 52,
+  "uses": 273,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 98,
+   "hair": 70,
+   "face": 39,
+   "arms": 38,
+   "torso": 28
+  },
+  "colors": {
+   "Black": 54,
+   "Dark Orange": 42,
+   "Reddish Brown": 31,
+   "Dark Red": 30,
+   "Dark Bluish Grey": 23,
+   "Light Bluish Grey": 20
+  },
+  "studs": {
+   "side": 91,
+   "up": 75,
+   "back": 61,
+   "front": 46
+  },
+  "partners": [
+   "22885",
+   "3020",
+   "3023b",
+   "32028",
+   "3003",
+   "3710",
+   "3022",
+   "15068"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 6
+  }
+ },
+ "85984": {
+  "name": "Slope Brick 31 1 x 2 x 0.667",
+  "category": "Bricks Sloped",
+  "rebrickable": "85984",
+  "models": 51,
+  "uses": 153,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 80,
+   "hair": 25,
+   "torso": 22,
+   "head": 14,
+   "face": 11,
+   "legs": 1
+  },
+  "colors": {
+   "Tan": 44,
+   "Red": 14,
+   "Black": 12,
+   "Green": 11,
+   "Yellow": 8,
+   "Reddish Brown": 7
+  },
+  "studs": {
+   "side": 103,
+   "up": 29,
+   "back": 11,
+   "front": 10
+  },
+  "partners": [
+   "3023b",
+   "2420",
+   "22885",
+   "4032a",
+   "3022",
+   "6134",
+   "3020",
+   "99206"
+  ],
+  "connectors": {
+   "anti_studs": 2
+  }
+ },
+ "11477": {
+  "name": "Slope Brick Curved 2 x 1",
+  "category": "Bricks Curved",
+  "rebrickable": "11477",
+  "models": 51,
+  "uses": 334,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 88,
+   "arms": 72,
+   "face": 68,
+   "hair": 64,
+   "torso": 41,
+   "accessory": 1
+  },
+  "colors": {
+   "Reddish Brown": 79,
+   "Black": 54,
+   "White": 30,
+   "Medium Nougat": 25,
+   "Dark Tan": 19,
+   "Green": 17
+  },
+  "studs": {
+   "side": 155,
+   "up": 79,
+   "back": 56,
+   "front": 44
+  },
+  "partners": [
+   "22885",
+   "3023b",
+   "3020",
+   "2420",
+   "3710",
+   "3024",
+   "32028",
+   "3022"
+  ],
+  "connectors": {
+   "anti_studs": 2
+  }
+ },
+ "3941": {
+  "name": "Brick 2 x 2 Round without Reinforcement",
+  "category": "Bricks Round and Cones",
+  "rebrickable": "3941",
+  "models": 50,
+  "uses": 107,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 92,
+   "torso": 14,
+   "arms": 1
+  },
+  "colors": {
+   "Red": 33,
+   "White": 25,
+   "Yellow": 22,
+   "Light Bluish Grey": 6,
+   "Blue": 4,
+   "Orange": 4
+  },
+  "studs": {
+   "up": 107
+  },
+  "partners": [
+   "3941",
+   "3020",
+   "2420",
+   "3031",
+   "4032a",
+   "3022",
+   "3023b",
+   "3021"
+  ],
+  "connectors": {
+   "axle_holes": 1,
+   "anti_studs": 5,
+   "studs_up": 4
+  }
+ },
+ "3021": {
+  "name": "Plate 2 x 3",
+  "category": "Plates",
+  "rebrickable": "3021",
+  "models": 47,
+  "uses": 170,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 82,
+   "torso": 38,
+   "face": 31,
+   "arms": 8,
+   "hair": 6,
+   "legs": 5
+  },
+  "colors": {
+   "Black": 43,
+   "Tan": 27,
+   "Reddish Brown": 12,
+   "Yellow": 11,
+   "White": 11,
+   "Sand Green": 11
+  },
+  "studs": {
+   "up": 70,
+   "front": 44,
+   "back": 40,
+   "side": 16
+  },
+  "partners": [
+   "22885",
+   "2431",
+   "3023b",
+   "3010",
+   "92593",
+   "15068",
+   "87079",
+   "2420"
+  ],
+  "connectors": {
+   "anti_studs": 8,
+   "studs_up": 6
+  }
+ },
+ "3623": {
+  "name": "Plate 1 x 3",
+  "category": "Plates",
+  "rebrickable": "3623",
+  "models": 42,
+  "uses": 191,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 99,
+   "torso": 30,
+   "face": 21,
+   "arms": 17,
+   "legs": 14,
+   "hair": 10
+  },
+  "colors": {
+   "Black": 47,
+   "White": 23,
+   "Reddish Brown": 17,
+   "Dark Orange": 14,
+   "Light Bluish Grey": 13,
+   "Dark Tan": 12
+  },
+  "studs": {
+   "up": 89,
+   "side": 65,
+   "front": 20,
+   "back": 17
+  },
+  "partners": [
+   "22885",
+   "26604",
+   "3024",
+   "3023b",
+   "3623",
+   "15068",
+   "11477",
+   "54200"
+  ],
+  "connectors": {
+   "bars": 2,
+   "anti_studs": 5,
+   "studs_up": 3
+  }
+ },
+ "25269": {
+  "name": "Tile 1 x 1 Corner Round",
+  "category": "Tiles Round and Curved",
+  "rebrickable": "25269",
+  "models": 41,
+  "uses": 260,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 91,
+   "head": 65,
+   "arms": 58,
+   "torso": 35,
+   "hair": 9,
+   "legs": 2
+  },
+  "colors": {
+   "Reddish Brown": 49,
+   "Black": 43,
+   "White": 42,
+   "Light Bluish Grey": 22,
+   "Red": 18,
+   "Magenta": 16
+  },
+  "studs": {
+   "side": 110,
+   "front": 99,
+   "up": 25,
+   "back": 25,
+   "down": 1
+  },
+  "partners": [
+   "3023b",
+   "2420",
+   "3710",
+   "3623",
+   "3020",
+   "3031",
+   "99206",
+   "4032a"
+  ],
+  "connectors": {
+   "anti_studs": 1
+  }
+ },
+ "54200": {
+  "name": "Slope Brick 31 1 x 1 x 0.667",
+  "category": "Bricks Sloped",
+  "rebrickable": "54200",
+  "models": 39,
+  "uses": 214,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 53,
+   "torso": 47,
+   "face": 41,
+   "hair": 36,
+   "head": 24,
+   "legs": 13
+  },
+  "colors": {
+   "Black": 40,
+   "Reddish Brown": 38,
+   "White": 23,
+   "Light Bluish Grey": 21,
+   "Dark Tan": 17,
+   "Lime": 10
+  },
+  "studs": {
+   "side": 69,
+   "up": 63,
+   "front": 45,
+   "back": 29,
+   "down": 8
+  },
+  "partners": [
+   "3023b",
+   "3623",
+   "3710",
+   "22885",
+   "3031",
+   "2420",
+   "3022",
+   "3020"
+  ],
+  "connectors": {
+   "anti_studs": 1
+  }
+ },
+ "15573": {
+  "name": "Plate 1 x 2 with Groove with 1 Centre Stud, without Understud",
+  "category": "Plates Special",
+  "rebrickable": "15573",
+  "models": 35,
+  "uses": 125,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 34,
+   "head": 24,
+   "face": 21,
+   "legs": 21,
+   "arms": 15,
+   "hair": 10
+  },
+  "colors": {
+   "Black": 31,
+   "White": 14,
+   "Light Bluish Grey": 13,
+   "Reddish Brown": 11,
+   "Bright Light Orange": 9,
+   "Tan": 8
+  },
+  "studs": {
+   "up": 61,
+   "front": 28,
+   "side": 21,
+   "back": 15
+  },
+  "partners": [
+   "3023b",
+   "3021",
+   "22885",
+   "3004",
+   "3958",
+   "11212",
+   "3024",
+   "99780"
+  ],
+  "connectors": {
+   "clips": 1,
+   "anti_studs": 3,
+   "studs_up": 1
+  }
+ },
+ "6141": {
+  "name": "Plate 1 x 1 Round",
+  "category": "Plates Round Curved and Dishes",
+  "rebrickable": "6141",
+  "models": 33,
+  "uses": 164,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 61,
+   "torso": 36,
+   "head": 25,
+   "face": 21,
+   "hair": 12,
+   "legs": 9
+  },
+  "colors": {
+   "White": 47,
+   "Black": 23,
+   "Orange": 19,
+   "Trans Light Blue": 9,
+   "Pearl Gold": 9,
+   "Pearl Silver": 9
+  },
+  "studs": {
+   "up": 57,
+   "front": 40,
+   "side": 32,
+   "back": 31,
+   "down": 4
+  },
+  "partners": [
+   "6141",
+   "3023b",
+   "41769a",
+   "3024",
+   "2423",
+   "4733",
+   "30565",
+   "3005"
+  ],
+  "connectors": {
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "11211": {
+  "name": "Brick 1 x 2 with Two Studs on One Side",
+  "category": "Bricks Special",
+  "rebrickable": "11211",
+  "models": 33,
+  "uses": 65,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 45,
+   "face": 12,
+   "torso": 7,
+   "arms": 1
+  },
+  "colors": {
+   "Light Bluish Grey": 13,
+   "Dark Bluish Grey": 11,
+   "Red": 9,
+   "Tan": 7,
+   "White": 5,
+   "Black": 5
+  },
+  "studs": {
+   "up": 64,
+   "side": 1
+  },
+  "partners": [
+   "3020",
+   "99206",
+   "3023b",
+   "3022",
+   "22885",
+   "3710",
+   "2420",
+   "99780"
+  ],
+  "connectors": {
+   "bars": 1,
+   "clips": 2,
+   "anti_studs": 3,
+   "studs_side": 2,
+   "studs_up": 2
+  }
+ },
+ "99206": {
+  "name": "Plate 2 x 2 x 0.667 with Two Studs On Side and Two Raised with Closed Understud",
+  "category": "Plates Special",
+  "rebrickable": "99206",
+  "models": 32,
+  "uses": 99,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 46,
+   "torso": 20,
+   "face": 16,
+   "hair": 10,
+   "arms": 4,
+   "legs": 3
+  },
+  "colors": {
+   "White": 24,
+   "Black": 20,
+   "Light Bluish Grey": 14,
+   "Red": 10,
+   "Reddish Brown": 10,
+   "Sand Green": 6
+  },
+  "studs": {
+   "up": 63,
+   "side": 18,
+   "front": 15,
+   "back": 3
+  },
+  "partners": [
+   "22885",
+   "3023b",
+   "4032a",
+   "3020",
+   "3003",
+   "3022",
+   "11211",
+   "11477"
+  ],
+  "connectors": {
+   "clips": 2,
+   "anti_studs": 5,
+   "studs_side": 2,
+   "studs_up": 4
+  }
+ },
+ "32028": {
+  "name": "Plate 1 x 2 with Door Rail",
+  "category": "Plates Special",
+  "rebrickable": "32028",
+  "models": 32,
+  "uses": 104,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 79,
+   "face": 14,
+   "hair": 4,
+   "arms": 3,
+   "torso": 2,
+   "legs": 2
+  },
+  "colors": {
+   "Black": 45,
+   "Reddish Brown": 19,
+   "Dark Red": 12,
+   "Sand Green": 8,
+   "Red": 4,
+   "Light Bluish Grey": 4
+  },
+  "studs": {
+   "up": 52,
+   "front": 21,
+   "side": 18,
+   "back": 13
+  },
+  "partners": [
+   "22885",
+   "15068",
+   "11477",
+   "2420",
+   "88930",
+   "3710",
+   "93273",
+   "3031"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 3,
+   "studs_up": 2
+  }
+ },
+ "6091": {
+  "name": "Brick 2 x 1 x 1.333 with Curved Top",
+  "category": "Bricks Curved",
+  "rebrickable": "6091",
+  "models": 31,
+  "uses": 100,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 35,
+   "face": 25,
+   "torso": 19,
+   "hair": 10,
+   "head": 7,
+   "legs": 4
+  },
+  "colors": {
+   "Black": 16,
+   "White": 14,
+   "Reddish Brown": 10,
+   "Orange": 8,
+   "Tan": 8,
+   "Dark Orange": 8
+  },
+  "studs": {
+   "side": 50,
+   "up": 22,
+   "front": 15,
+   "back": 9,
+   "down": 4
+  },
+  "partners": [
+   "3023b",
+   "3024",
+   "22885",
+   "3623",
+   "3022",
+   "3020",
+   "11477",
+   "3710"
+  ],
+  "connectors": {
+   "anti_studs": 2,
+   "studs_up": 1
+  }
+ },
+ "99780": {
+  "name": "Bracket 1 x 2 - 1 x 2 Up",
+  "category": "Plates Special",
+  "rebrickable": "99780",
+  "models": 30,
+  "uses": 63,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 25,
+   "face": 20,
+   "arms": 10,
+   "torso": 8
+  },
+  "colors": {
+   "Black": 21,
+   "Dark Bluish Grey": 16,
+   "Reddish Brown": 14,
+   "White": 6,
+   "Yellow": 3,
+   "Light Aqua": 1
+  },
+  "studs": {
+   "up": 26,
+   "front": 15,
+   "side": 14,
+   "back": 8
+  },
+  "partners": [
+   "3023b",
+   "22885",
+   "3710",
+   "2420",
+   "3069b",
+   "11211",
+   "87087",
+   "15573"
+  ],
+  "connectors": {
+   "bars": 1,
+   "clips": 2,
+   "anti_studs": 3,
+   "studs_side": 2,
+   "studs_up": 2
+  }
+ },
+ "3068b": {
+  "name": "Tile 2 x 2 with Groove",
+  "category": "Tiles",
+  "rebrickable": "3068b",
+  "models": 29,
+  "uses": 69,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 49,
+   "face": 9,
+   "torso": 6,
+   "arms": 2,
+   "legs": 2,
+   "hair": 1
+  },
+  "colors": {
+   "Reddish Brown": 9,
+   "Dark Red": 9,
+   "Yellow": 8,
+   "Tan": 7,
+   "Black": 6,
+   "Dark Bluish Grey": 6
+  },
+  "studs": {
+   "side": 40,
+   "up": 13,
+   "front": 11,
+   "back": 5
+  },
+  "partners": [
+   "22885",
+   "3020",
+   "6091",
+   "32028",
+   "3021",
+   "3023b",
+   "87087",
+   "2420"
+  ],
+  "connectors": {
+   "anti_studs": 5
+  }
+ },
+ "87087": {
+  "name": "Brick 1 x 1 with Stud on 1 Side",
+  "category": "Bricks Special",
+  "rebrickable": "87087",
+  "models": 26,
+  "uses": 107,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 69,
+   "torso": 27,
+   "arms": 10,
+   "face": 1
+  },
+  "colors": {
+   "Light Bluish Grey": 27,
+   "Dark Bluish Grey": 14,
+   "White": 12,
+   "Black": 7,
+   "Blue": 6,
+   "Bright Light Orange": 6
+  },
+  "studs": {
+   "up": 103,
+   "back": 2,
+   "side": 2
+  },
+  "partners": [
+   "11212",
+   "3023b",
+   "3710",
+   "3623",
+   "3024",
+   "3031",
+   "3021",
+   "3666"
+  ],
+  "connectors": {
+   "clips": 1,
+   "anti_studs": 1,
+   "studs_side": 1,
+   "studs_up": 1
+  }
+ },
+ "93273": {
+  "name": "Slope Brick Curved 4 x 1 Double",
+  "category": "Bricks Curved",
+  "rebrickable": "93273",
+  "models": 24,
+  "uses": 62,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 23,
+   "hair": 21,
+   "torso": 9,
+   "face": 7,
+   "legs": 2
+  },
+  "colors": {
+   "Reddish Brown": 15,
+   "Black": 14,
+   "Medium Nougat": 6,
+   "White": 6,
+   "Tan": 4,
+   "Bright Light Orange": 4
+  },
+  "studs": {
+   "up": 23,
+   "side": 21,
+   "back": 9,
+   "front": 9
+  },
+  "partners": [
+   "22885",
+   "3023b",
+   "2420",
+   "3020",
+   "32028",
+   "3710",
+   "3022",
+   "3021"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 5
+  }
+ },
+ "32952": {
+  "name": "Brick 1 x 1 x 1.667 with Studs on 1 Side",
+  "category": "Bricks Special",
+  "rebrickable": "32952",
+  "models": 23,
+  "uses": 77,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 50,
+   "face": 13,
+   "torso": 8,
+   "arms": 3,
+   "hair": 2,
+   "accessory": 1
+  },
+  "colors": {
+   "Tan": 18,
+   "Reddish Brown": 12,
+   "Light Bluish Grey": 11,
+   "Dark Bluish Grey": 10,
+   "Black": 9,
+   "Red": 8
+  },
+  "studs": {
+   "up": 76,
+   "back": 1
+  },
+  "partners": [
+   "22885",
+   "3021",
+   "3623",
+   "3023b",
+   "3022",
+   "2420",
+   "3031",
+   "11212"
+  ],
+  "connectors": {
+   "clips": 2,
+   "anti_studs": 1,
+   "studs_side": 2,
+   "studs_up": 1
+  }
+ },
+ "4070": {
+  "name": "Brick 1 x 1 with Headlight",
+  "category": "Bricks Special",
+  "rebrickable": "4070",
+  "models": 22,
+  "uses": 136,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 119,
+   "torso": 10,
+   "arms": 4,
+   "face": 3
+  },
+  "colors": {
+   "Red": 29,
+   "Black": 21,
+   "Dark Red": 20,
+   "Dark Bluish Grey": 19,
+   "White": 12,
+   "Tan": 8
+  },
+  "studs": {
+   "up": 130,
+   "front": 3,
+   "back": 3
+  },
+  "partners": [
+   "3031",
+   "3023b",
+   "2431",
+   "4070",
+   "3020",
+   "3070b",
+   "2420",
+   "3024"
+  ],
+  "connectors": {
+   "clips": 1,
+   "holes_side": 1,
+   "anti_studs": 1,
+   "studs_side": 1,
+   "studs_up": 1
+  }
+ },
+ "6143": {
+  "name": "Brick 2 x 2 Round Reinforced",
+  "category": "",
+  "rebrickable": null,
+  "models": 20,
+  "uses": 39,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 35,
+   "torso": 4
+  },
+  "colors": {
+   "Light Bluish Grey": 16,
+   "Red": 11,
+   "White": 5,
+   "Yellow": 3,
+   "Lime": 2,
+   "Blue": 1
+  },
+  "studs": {
+   "up": 39
+  },
+  "partners": [
+   "6143",
+   "3031",
+   "3020",
+   "2420",
+   "4032a",
+   "3022",
+   "3021",
+   "99206"
+  ],
+  "connectors": {
+   "axle_holes": 1,
+   "anti_studs": 5,
+   "studs_up": 4
+  }
+ },
+ "15712": {
+  "name": "Tile 1 x 1 with Clip (Thick C-Clip)",
+  "category": "Tiles Special",
+  "rebrickable": "15712",
+  "models": 20,
+  "uses": 31,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 11,
+   "torso": 8,
+   "head": 6,
+   "legs": 3,
+   "face": 2,
+   "hair": 1
+  },
+  "colors": {
+   "Black": 10,
+   "Light Bluish Grey": 5,
+   "Reddish Brown": 3,
+   "Sand Green": 3,
+   "Bright Light Orange": 3,
+   "Pearl Gold": 2
+  },
+  "studs": {
+   "up": 10,
+   "down": 6,
+   "back": 6,
+   "side": 5,
+   "front": 4
+  },
+  "partners": [
+   "60478",
+   "15573",
+   "87087",
+   "14719",
+   "2420",
+   "4740",
+   "26047",
+   "59900"
+  ],
+  "connectors": {
+   "clips": 1,
+   "anti_studs": 1
+  }
+ },
+ "63864": {
+  "name": "Tile 1 x 3",
+  "category": "Tiles",
+  "rebrickable": "63864",
+  "models": 20,
+  "uses": 76,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 27,
+   "torso": 21,
+   "face": 15,
+   "hair": 8,
+   "arms": 3,
+   "accessory": 2
+  },
+  "colors": {
+   "White": 13,
+   "Tan": 12,
+   "Sand Green": 9,
+   "Bright Light Orange": 8,
+   "Dark Tan": 7,
+   "Light Bluish Grey": 7
+  },
+  "studs": {
+   "side": 26,
+   "back": 23,
+   "front": 21,
+   "up": 6
+  },
+  "partners": [
+   "3623",
+   "3021",
+   "22885",
+   "26604",
+   "11212",
+   "99206",
+   "32952",
+   "3024"
+  ],
+  "connectors": {
+   "bars": 2,
+   "anti_studs": 5
+  }
+ },
+ "88930": {
+  "name": "Slope Brick Curved 2 x 4 with Underside Studs",
+  "category": "Bricks Curved",
+  "rebrickable": "88930",
+  "models": 19,
+  "uses": 54,
+  "brickheadz_sets": 0,
+  "roles": {
+   "hair": 18,
+   "head": 16,
+   "face": 9,
+   "torso": 8,
+   "arms": 3
+  },
+  "colors": {
+   "White": 23,
+   "Black": 15,
+   "Bright Light Yellow": 7,
+   "Yellow": 5,
+   "Lime": 2,
+   "Bright Light Orange": 1
+  },
+  "studs": {
+   "up": 19,
+   "back": 15,
+   "side": 12,
+   "front": 8
+  },
+  "partners": [
+   "22885",
+   "32028",
+   "3003",
+   "99206",
+   "11211",
+   "3020",
+   "3710",
+   "2420"
+  ],
+  "connectors": {
+   "anti_studs": 11
+  }
+ },
+ "14719": {
+  "name": "Tile 2 x 2 Corner",
+  "category": "Tiles",
+  "rebrickable": "14719",
+  "models": 19,
+  "uses": 47,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 37,
+   "arms": 7,
+   "legs": 2,
+   "torso": 1
+  },
+  "colors": {
+   "Tan": 26,
+   "Black": 6,
+   "White": 4,
+   "Dark Bluish Grey": 4,
+   "Bright Light Orange": 2,
+   "Red": 2
+  },
+  "studs": {
+   "side": 45,
+   "up": 2
+  },
+  "partners": [
+   "22885",
+   "2420",
+   "3023b",
+   "3024",
+   "26604",
+   "3070b",
+   "87087",
+   "15712"
+  ],
+  "connectors": {
+   "bars": 2,
+   "anti_studs": 5
+  }
+ },
+ "26603": {
+  "name": "Tile 2 x 3",
+  "category": "Tiles",
+  "rebrickable": "26603",
+  "models": 19,
+  "uses": 43,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 20,
+   "torso": 10,
+   "face": 10,
+   "legs": 2,
+   "arms": 1
+  },
+  "colors": {
+   "Black": 13,
+   "White": 13,
+   "Tan": 5,
+   "Dark Bluish Grey": 3,
+   "Medium Lilac": 2,
+   "Yellow": 2
+  },
+  "studs": {
+   "side": 26,
+   "back": 8,
+   "front": 6,
+   "up": 3
+  },
+  "partners": [
+   "22885",
+   "26604",
+   "87087",
+   "99781",
+   "11211",
+   "99206",
+   "11212",
+   "32952"
+  ],
+  "connectors": {
+   "anti_studs": 8
+  }
+ },
+ "3666": {
+  "name": "Plate 1 x 6",
+  "category": "Plates",
+  "rebrickable": "3666",
+  "models": 18,
+  "uses": 25,
+  "brickheadz_sets": 0,
+  "roles": {
+   "legs": 16,
+   "torso": 6,
+   "head": 3
+  },
+  "colors": {
+   "Black": 16,
+   "Light Bluish Grey": 6,
+   "Yellow": 2,
+   "White": 1
+  },
+  "studs": {
+   "up": 23,
+   "side": 2
+  },
+  "partners": [
+   "3958",
+   "87087",
+   "2357",
+   "44728",
+   "3023b",
+   "3666",
+   "3010",
+   "2436b"
+  ],
+  "connectors": {
+   "bars": 5,
+   "anti_studs": 11,
+   "studs_up": 6
+  }
+ },
+ "50950": {
+  "name": "Slope Brick Curved 3 x 1",
+  "category": "Bricks Curved",
+  "rebrickable": "50950",
+  "models": 18,
+  "uses": 60,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 35,
+   "torso": 8,
+   "hair": 8,
+   "arms": 5,
+   "face": 4
+  },
+  "colors": {
+   "Black": 16,
+   "White": 14,
+   "Dark Red": 12,
+   "Green": 8,
+   "Sand Green": 4,
+   "Reddish Brown": 4
+  },
+  "studs": {
+   "side": 36,
+   "back": 10,
+   "up": 9,
+   "front": 4,
+   "down": 1
+  },
+  "partners": [
+   "22885",
+   "3023b",
+   "3710",
+   "2420",
+   "3022",
+   "3623",
+   "3020",
+   "3003"
+  ],
+  "connectors": {
+   "anti_studs": 4
+  }
+ },
+ "30414": {
+  "name": "Brick 1 x 4 with Studs on Side",
+  "category": "Bricks Special",
+  "rebrickable": "30414",
+  "models": 17,
+  "uses": 23,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 16,
+   "torso": 6,
+   "face": 1
+  },
+  "colors": {
+   "Black": 5,
+   "Light Bluish Grey": 4,
+   "Red": 4,
+   "Dark Bluish Grey": 3,
+   "Blue": 3,
+   "Medium Lilac": 2
+  },
+  "studs": {
+   "up": 23
+  },
+  "partners": [
+   "3710",
+   "22885",
+   "3020",
+   "99206",
+   "3031",
+   "32028",
+   "15068",
+   "3021"
+  ],
+  "connectors": {
+   "bars": 3,
+   "clips": 4,
+   "anti_studs": 7,
+   "studs_side": 4,
+   "studs_up": 4
+  }
+ },
+ "4477": {
+  "name": "Plate 1 x 10",
+  "category": "Plates",
+  "rebrickable": "4477",
+  "models": 17,
+  "uses": 18,
+  "brickheadz_sets": 0,
+  "roles": {
+   "legs": 16,
+   "arms": 2
+  },
+  "colors": {
+   "Black": 16,
+   "Dark Bluish Grey": 2
+  },
+  "studs": {
+   "up": 16,
+   "front": 2
+  },
+  "partners": [
+   "30565",
+   "3958",
+   "99780",
+   "92593",
+   "3069b"
+  ],
+  "connectors": {
+   "bars": 9,
+   "anti_studs": 19,
+   "studs_up": 10
+  }
+ },
+ "30565": {
+  "name": "Plate 4 x 4 with Corner Round",
+  "category": "Plates Round Curved and Dishes",
+  "rebrickable": "30565",
+  "models": 17,
+  "uses": 38,
+  "brickheadz_sets": 0,
+  "roles": {
+   "legs": 32,
+   "base": 4,
+   "torso": 2
+  },
+  "colors": {
+   "Green": 8,
+   "Lime": 6,
+   "White": 6,
+   "Reddish Brown": 4,
+   "Dark Tan": 4,
+   "Dark Bluish Grey": 2
+  },
+  "studs": {
+   "up": 36,
+   "front": 2
+  },
+  "partners": [
+   "4032a",
+   "4477",
+   "3023b",
+   "24866",
+   "54200",
+   "6141",
+   "3070b",
+   "3958"
+  ],
+  "connectors": {
+   "anti_studs": 19,
+   "studs_up": 11
+  }
+ },
+ "3032": {
+  "name": "Plate 4 x 6",
+  "category": "Plates",
+  "rebrickable": "3032",
+  "models": 16,
+  "uses": 21,
+  "brickheadz_sets": 0,
+  "roles": {
+   "base": 21
+  },
+  "colors": {
+   "Black": 19,
+   "White": 2
+  },
+  "studs": {
+   "up": 21
+  },
+  "partners": [
+   "92593",
+   "2431",
+   "87079",
+   "3958",
+   "3009"
+  ],
+  "connectors": {
+   "anti_studs": 39,
+   "studs_up": 24
+  }
+ },
+ "26604": {
+  "name": "Brick 1 x 1 with Studs on Two Adjacent Sides",
+  "category": "Bricks Special",
+  "rebrickable": "26604",
+  "models": 15,
+  "uses": 64,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 31,
+   "torso": 16,
+   "arms": 9,
+   "face": 8
+  },
+  "colors": {
+   "Tan": 27,
+   "White": 14,
+   "Light Bluish Grey": 10,
+   "Black": 5,
+   "Bright Light Orange": 4,
+   "Red": 4
+  },
+  "studs": {
+   "up": 64
+  },
+  "partners": [
+   "3623",
+   "11212",
+   "3021",
+   "26603",
+   "3023b",
+   "3031",
+   "22885",
+   "63864"
+  ],
+  "connectors": {
+   "clips": 2,
+   "anti_studs": 1,
+   "studs_side": 1,
+   "studs_up": 2
+  }
+ },
+ "87580": {
+  "name": "Plate 2 x 2 with Groove with 1 Centre Stud",
+  "category": "Plates Special",
+  "rebrickable": "87580",
+  "models": 15,
+  "uses": 27,
+  "brickheadz_sets": 0,
+  "roles": {
+   "legs": 14,
+   "face": 4,
+   "arms": 4,
+   "head": 4,
+   "hair": 1
+  },
+  "colors": {
+   "Black": 14,
+   "Red": 3,
+   "Yellow": 2,
+   "Bright Pink": 2,
+   "Green": 1,
+   "Tan": 1
+  },
+  "studs": {
+   "up": 21,
+   "front": 4,
+   "side": 2
+  },
+  "partners": [
+   "3958",
+   "3023b",
+   "3623",
+   "27925",
+   "3021",
+   "3024",
+   "22885",
+   "4032a"
+  ],
+  "connectors": {
+   "clips": 1,
+   "anti_studs": 5,
+   "studs_up": 1
+  }
+ },
+ "3245c": {
+  "name": "Brick 1 x 2 x 2 without Understud",
+  "category": "Bricks",
+  "rebrickable": "3245c",
+  "models": 14,
+  "uses": 16,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 13,
+   "arms": 2,
+   "torso": 1
+  },
+  "colors": {
+   "Light Bluish Grey": 3,
+   "White": 2,
+   "Black": 2,
+   "Reddish Brown": 2,
+   "Blue": 1,
+   "Orange": 1
+  },
+  "studs": {
+   "up": 16
+  },
+  "partners": [
+   "2420",
+   "22885",
+   "3031",
+   "3020",
+   "3023b",
+   "3024",
+   "3009",
+   "3022"
+  ],
+  "connectors": {
+   "anti_studs": 3,
+   "studs_up": 2
+  }
+ },
+ "59900": {
+  "name": "Cone 1 x 1 with Stop",
+  "category": "Bricks Round and Cones",
+  "rebrickable": "59900",
+  "models": 13,
+  "uses": 22,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 9,
+   "torso": 8,
+   "face": 3,
+   "hair": 2
+  },
+  "colors": {
+   "Black": 9,
+   "Green": 5,
+   "Sand Green": 4,
+   "Pearl Silver": 2,
+   "White": 1,
+   "Orange": 1
+  },
+  "studs": {
+   "up": 11,
+   "back": 7,
+   "front": 2,
+   "side": 1,
+   "down": 1
+  },
+  "partners": [
+   "6141",
+   "60849",
+   "15712",
+   "32474",
+   "32607",
+   "3031",
+   "19119",
+   "30565"
+  ],
+  "connectors": {
+   "clips": 1,
+   "axle_holes": 1,
+   "pin_holes": 1,
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "29119": {
+  "name": "Slope Brick Curved 2 x 1 with Cutout Right",
+  "category": "Bricks Wedged",
+  "rebrickable": "29119",
+  "models": 13,
+  "uses": 35,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 12,
+   "arms": 11,
+   "face": 5,
+   "hair": 4,
+   "head": 2,
+   "legs": 1
+  },
+  "colors": {
+   "White": 12,
+   "Dark Bluish Grey": 7,
+   "Red": 6,
+   "Sand Green": 4,
+   "Light Bluish Grey": 4,
+   "Dark Red": 1
+  },
+  "studs": {
+   "side": 18,
+   "front": 7,
+   "back": 6,
+   "up": 3,
+   "down": 1
+  },
+  "partners": [
+   "3020",
+   "3023b",
+   "3024",
+   "3710",
+   "4733",
+   "29119",
+   "32607",
+   "3031"
+  ],
+  "connectors": {
+   "anti_studs": 2
+  }
+ },
+ "41740": {
+  "name": "Plate 1 x 4 with Two Studs and Groove",
+  "category": "Plates Special",
+  "rebrickable": "41740",
+  "models": 13,
+  "uses": 22,
+  "brickheadz_sets": 0,
+  "roles": {
+   "legs": 12,
+   "face": 6,
+   "torso": 2,
+   "head": 2
+  },
+  "colors": {
+   "Black": 15,
+   "White": 4,
+   "Tan": 1,
+   "Lime": 1,
+   "Yellow": 1
+  },
+  "studs": {
+   "up": 12,
+   "front": 6,
+   "back": 2,
+   "side": 2
+  },
+  "partners": [
+   "3958",
+   "3023b",
+   "2420",
+   "98138",
+   "44728",
+   "3031",
+   "32028",
+   "22885"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 5,
+   "studs_up": 2
+  }
+ },
+ "24246": {
+  "name": "Tile 1 x 1 with Rounded End",
+  "category": "Tiles Round and Curved",
+  "rebrickable": "24246",
+  "models": 12,
+  "uses": 34,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 12,
+   "torso": 10,
+   "head": 4,
+   "arms": 4,
+   "hair": 2,
+   "accessory": 2
+  },
+  "colors": {
+   "White": 14,
+   "Light Bluish Grey": 9,
+   "Black": 4,
+   "Red": 3,
+   "Bright Light Blue": 2,
+   "Tan": 2
+  },
+  "studs": {
+   "front": 30,
+   "side": 2,
+   "back": 1,
+   "up": 1
+  },
+  "partners": [
+   "99206",
+   "36840",
+   "2420",
+   "3023b",
+   "15573",
+   "35480",
+   "41740",
+   "4032a"
+  ],
+  "connectors": {
+   "anti_studs": 1
+  }
+ },
+ "63868": {
+  "name": "Plate 1 x 2 with Clip Horizontal on End (Thick C-Clip)",
+  "category": "Plates Special",
+  "rebrickable": "63868",
+  "models": 12,
+  "uses": 16,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 11,
+   "torso": 5
+  },
+  "colors": {
+   "Dark Tan": 4,
+   "Red": 4,
+   "Light Bluish Grey": 3,
+   "Reddish Brown": 2,
+   "White": 2,
+   "Yellow": 1
+  },
+  "studs": {
+   "side": 14,
+   "front": 1,
+   "back": 1
+  },
+  "partners": [
+   "3022",
+   "61678",
+   "3021",
+   "47755",
+   "99206",
+   "92593",
+   "60478",
+   "3069b"
+  ],
+  "connectors": {
+   "bars": 1,
+   "clips": 1,
+   "anti_studs": 3,
+   "studs_up": 2
+  }
+ },
+ "3700": {
+  "name": "Technic Brick 1 x 2 with Hole",
+  "category": "Technic Bricks",
+  "rebrickable": "3700",
+  "models": 11,
+  "uses": 13,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 10,
+   "torso": 2,
+   "arms": 1
+  },
+  "colors": {
+   "Red": 6,
+   "White": 2,
+   "Yellow": 1,
+   "Dark Bluish Grey": 1,
+   "Medium Nougat": 1,
+   "Black": 1
+  },
+  "studs": {
+   "up": 13
+  },
+  "partners": [
+   "4274",
+   "3031",
+   "2780",
+   "2420",
+   "3010",
+   "3020",
+   "88704",
+   "3023b"
+  ],
+  "connectors": {
+   "clips": 2,
+   "pin_holes": 1,
+   "holes_side": 2,
+   "anti_studs": 3,
+   "studs_up": 2
+  }
+ },
+ "60478": {
+  "name": "Plate 1 x 2 with Handle on End",
+  "category": "Plates Special",
+  "rebrickable": "60478",
+  "models": 11,
+  "uses": 21,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 10,
+   "hair": 7,
+   "head": 2,
+   "face": 1,
+   "torso": 1
+  },
+  "colors": {
+   "Dark Bluish Grey": 6,
+   "Dark Tan": 5,
+   "Black": 4,
+   "White": 3,
+   "Light Bluish Grey": 2,
+   "Medium Nougat": 1
+  },
+  "studs": {
+   "up": 14,
+   "front": 3,
+   "back": 2,
+   "side": 2
+  },
+  "partners": [
+   "15068",
+   "15712",
+   "92280",
+   "3023b",
+   "3623",
+   "3022",
+   "3031",
+   "63868"
+  ],
+  "connectors": {
+   "bars": 2,
+   "anti_studs": 3,
+   "studs_up": 2
+  }
+ },
+ "24866": {
+  "name": "Plate 1 x 1 with 5 Petals",
+  "category": "Plants & Trees",
+  "rebrickable": "24866",
+  "models": 11,
+  "uses": 41,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 24,
+   "legs": 14,
+   "torso": 3
+  },
+  "colors": {
+   "White": 7,
+   "Green": 7,
+   "Magenta": 6,
+   "Lime": 6,
+   "Bright Green": 4,
+   "Pearl Gold": 4
+  },
+  "studs": {
+   "up": 33,
+   "side": 4,
+   "back": 2,
+   "front": 2
+  },
+  "partners": [
+   "30565",
+   "24866",
+   "3626c",
+   "32607",
+   "19119",
+   "33303",
+   "32606",
+   "87580"
+  ],
+  "connectors": {
+   "clips": 1,
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "60897": {
+  "name": "Plate 1 x 1 with Clip Vertical (Thick C-Clip)",
+  "category": "Plates Special",
+  "rebrickable": "60897",
+  "models": 11,
+  "uses": 16,
+  "brickheadz_sets": 0,
+  "roles": {
+   "hair": 5,
+   "face": 4,
+   "torso": 4,
+   "arms": 3
+  },
+  "colors": {
+   "Black": 8,
+   "Reddish Brown": 3,
+   "Light Bluish Grey": 2,
+   "White": 1,
+   "Tan": 1,
+   "Red": 1
+  },
+  "studs": {
+   "up": 9,
+   "side": 4,
+   "back": 2,
+   "down": 1
+  },
+  "partners": [
+   "3023b",
+   "2420",
+   "3020",
+   "6256",
+   "64567a",
+   "60478",
+   "3022",
+   "30162"
+  ],
+  "connectors": {
+   "clips": 1,
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "99781": {
+  "name": "Bracket 1 x 2 - 1 x 2 Down",
+  "category": "Plates Special",
+  "rebrickable": "99781",
+  "models": 11,
+  "uses": 27,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 23,
+   "arms": 2,
+   "head": 2
+  },
+  "colors": {
+   "Black": 9,
+   "Dark Bluish Grey": 9,
+   "Yellow": 3,
+   "White": 2,
+   "Light Bluish Grey": 2,
+   "Blue": 2
+  },
+  "studs": {
+   "up": 21,
+   "front": 6
+  },
+  "partners": [
+   "3020",
+   "99781",
+   "3023b",
+   "22885",
+   "3024",
+   "50746",
+   "26603",
+   "43723a"
+  ],
+  "connectors": {
+   "bars": 1,
+   "clips": 2,
+   "anti_studs": 3,
+   "studs_side": 2,
+   "studs_up": 2
+  }
+ },
+ "29120": {
+  "name": "Slope Brick Curved 2 x 1 with Cutout Left",
+  "category": "Bricks Wedged",
+  "rebrickable": "29120",
+  "models": 11,
+  "uses": 32,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 12,
+   "torso": 7,
+   "face": 6,
+   "hair": 5,
+   "head": 2
+  },
+  "colors": {
+   "White": 13,
+   "Dark Bluish Grey": 7,
+   "Sand Green": 6,
+   "Light Bluish Grey": 4,
+   "Dark Red": 1,
+   "Black": 1
+  },
+  "studs": {
+   "side": 17,
+   "front": 8,
+   "back": 4,
+   "up": 3
+  },
+  "partners": [
+   "3023b",
+   "3020",
+   "3710",
+   "99206",
+   "87087",
+   "29120",
+   "3031",
+   "26601"
+  ],
+  "connectors": {
+   "anti_studs": 2
+  }
+ },
+ "36840": {
+  "name": "Bracket 1 x 1 - 1 x 1 Up",
+  "category": "Plates Special",
+  "rebrickable": "36840",
+  "models": 11,
+  "uses": 30,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 16,
+   "torso": 10,
+   "arms": 4
+  },
+  "colors": {
+   "Black": 10,
+   "Reddish Brown": 8,
+   "Dark Bluish Grey": 6,
+   "White": 3,
+   "Light Bluish Grey": 2,
+   "Bright Light Yellow": 1
+  },
+  "studs": {
+   "side": 15,
+   "up": 10,
+   "front": 4,
+   "back": 1
+  },
+  "partners": [
+   "3024",
+   "22885",
+   "11476",
+   "15068",
+   "6091",
+   "24246",
+   "3020",
+   "3710"
+  ],
+  "connectors": {
+   "clips": 1,
+   "anti_studs": 1,
+   "studs_side": 1,
+   "studs_up": 1
+  }
+ },
+ "3622": {
+  "name": "Brick 1 x 3",
+  "category": "Bricks",
+  "rebrickable": "3622",
+  "models": 11,
+  "uses": 26,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 11,
+   "face": 6,
+   "torso": 5,
+   "legs": 4
+  },
+  "colors": {
+   "Black": 8,
+   "White": 6,
+   "Dark Turquoise": 4,
+   "Blue": 3,
+   "Red": 3,
+   "Green": 1
+  },
+  "studs": {
+   "up": 20,
+   "back": 4,
+   "down": 2
+  },
+  "partners": [
+   "22885",
+   "3622",
+   "3005",
+   "3024",
+   "3023b",
+   "87087",
+   "26604",
+   "28802"
+  ],
+  "connectors": {
+   "bars": 2,
+   "anti_studs": 5,
+   "studs_up": 3
+  }
+ },
+ "11212": {
+  "name": "Plate 3 x 3",
+  "category": "Plates",
+  "rebrickable": "11212",
+  "models": 11,
+  "uses": 38,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 18,
+   "head": 12,
+   "base": 4,
+   "face": 3,
+   "legs": 1
+  },
+  "colors": {
+   "White": 19,
+   "Black": 5,
+   "Dark Bluish Grey": 4,
+   "Bright Light Orange": 3,
+   "Light Bluish Grey": 3,
+   "Green": 2
+  },
+  "studs": {
+   "up": 26,
+   "back": 9,
+   "front": 3
+  },
+  "partners": [
+   "26604",
+   "87087",
+   "3024",
+   "3623",
+   "22885",
+   "3005",
+   "15573",
+   "4070"
+  ],
+  "connectors": {
+   "anti_studs": 13,
+   "studs_up": 9
+  }
+ },
+ "44728": {
+  "name": "Bracket 1 x 2 - 2 x 2 Down",
+  "category": "Plates Special",
+  "rebrickable": "44728",
+  "models": 11,
+  "uses": 21,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 10,
+   "arms": 6,
+   "head": 3,
+   "accessory": 2
+  },
+  "colors": {
+   "Black": 5,
+   "White": 4,
+   "Dark Tan": 2,
+   "Dark Bluish Grey": 2,
+   "Reddish Brown": 2,
+   "Red": 2
+  },
+  "studs": {
+   "up": 21
+  },
+  "partners": [
+   "2420",
+   "3020",
+   "3710",
+   "6091",
+   "3022",
+   "3941",
+   "11211",
+   "15068"
+  ],
+  "connectors": {
+   "bars": 1,
+   "clips": 4,
+   "anti_studs": 3,
+   "studs_side": 4,
+   "studs_up": 2
+  }
+ },
+ "50746": {
+  "name": "=Slope Brick 31 1 x 1 x 0.667",
+  "category": "",
+  "rebrickable": null,
+  "models": 11,
+  "uses": 60,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 26,
+   "hair": 10,
+   "arms": 10,
+   "head": 7,
+   "face": 7
+  },
+  "colors": {
+   "Black": 30,
+   "Green": 13,
+   "Yellow": 8,
+   "Light Brown": 4,
+   "Dark Brown": 2,
+   "Dark Red": 1
+  },
+  "studs": {
+   "side": 17,
+   "down": 14,
+   "back": 14,
+   "up": 10,
+   "front": 5
+  },
+  "partners": [
+   "3031",
+   "99781",
+   "22885",
+   "4032a",
+   "3023b",
+   "3710",
+   "99780",
+   "3024"
+  ],
+  "connectors": {
+   "anti_studs": 1
+  }
+ },
+ "24299": {
+  "name": "Wing 2 x 2 Left",
+  "category": "Plates Wedged",
+  "rebrickable": "24299",
+  "models": 11,
+  "uses": 15,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 8,
+   "face": 4,
+   "head": 2,
+   "arms": 1
+  },
+  "colors": {
+   "Dark Green": 5,
+   "Black": 4,
+   "Light Bluish Grey": 2,
+   "White": 2,
+   "Yellow": 1,
+   "Dark Bluish Grey": 1
+  },
+  "studs": {
+   "front": 7,
+   "side": 6,
+   "back": 2
+  },
+  "partners": [
+   "3023b",
+   "3020",
+   "99781",
+   "43723a",
+   "3070b",
+   "2431",
+   "22885",
+   "26603"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 3,
+   "studs_up": 2
+  }
+ },
+ "85861": {
+  "name": "Plate 1 x 1 Round with Open Stud",
+  "category": "Plates Round Curved and Dishes",
+  "rebrickable": "85861",
+  "models": 10,
+  "uses": 18,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 7,
+   "arms": 5,
+   "torso": 3,
+   "legs": 1,
+   "head": 1,
+   "hair": 1
+  },
+  "colors": {
+   "White": 6,
+   "Dark Bluish Grey": 4,
+   "Pearl Gold": 3,
+   "Reddish Brown": 2,
+   "Light Bluish Grey": 2,
+   "Red": 1
+  },
+  "studs": {
+   "front": 10,
+   "up": 6,
+   "down": 1,
+   "back": 1
+  },
+  "partners": [
+   "10187",
+   "15573",
+   "93094p01",
+   "3024",
+   "30565",
+   "33172",
+   "32602",
+   "85861"
+  ],
+  "connectors": {
+   "clips": 1,
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "33909": {
+  "name": "Plate 2 x 2 with 2 Studs on One Edge",
+  "category": "Plates Special",
+  "rebrickable": "33909",
+  "models": 10,
+  "uses": 32,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 13,
+   "face": 12,
+   "accessory": 4,
+   "legs": 3
+  },
+  "colors": {
+   "Black": 15,
+   "Red": 7,
+   "Tan": 6,
+   "White": 2,
+   "Light Bluish Grey": 2
+  },
+  "studs": {
+   "side": 13,
+   "up": 13,
+   "front": 4,
+   "back": 2
+  },
+  "partners": [
+   "22885",
+   "3022",
+   "3023b",
+   "3024",
+   "2420",
+   "6091",
+   "3021",
+   "3010"
+  ],
+  "connectors": {
+   "anti_studs": 5,
+   "studs_up": 2
+  }
+ },
+ "24307": {
+  "name": "Wing 2 x 2 Right",
+  "category": "Plates Wedged",
+  "rebrickable": "24307",
+  "models": 10,
+  "uses": 11,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 4,
+   "torso": 4,
+   "head": 2,
+   "arms": 1
+  },
+  "colors": {
+   "Black": 4,
+   "Light Bluish Grey": 2,
+   "White": 2,
+   "Dark Green": 1,
+   "Yellow": 1,
+   "Dark Bluish Grey": 1
+  },
+  "studs": {
+   "front": 7,
+   "side": 2,
+   "back": 2
+  },
+  "partners": [
+   "2431",
+   "22885",
+   "26603",
+   "30414",
+   "3710",
+   "3023b",
+   "3937",
+   "3938"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 3,
+   "studs_up": 2
+  }
+ },
+ "3665a": {
+  "name": "Slope Brick 45 2 x 1 Inverted without Inner Stopper Ring",
+  "category": "Bricks Sloped",
+  "rebrickable": "3665a",
+  "models": 9,
+  "uses": 17,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 10,
+   "arms": 5,
+   "face": 1,
+   "hair": 1
+  },
+  "colors": {
+   "Sand Green": 4,
+   "Reddish Brown": 3,
+   "Bright Light Orange": 2,
+   "Light Bluish Grey": 2,
+   "Tan": 2,
+   "Dark Bluish Grey": 2
+  },
+  "studs": {
+   "up": 14,
+   "side": 3
+  },
+  "partners": [
+   "3031",
+   "6091",
+   "3623",
+   "3024",
+   "22885",
+   "3710",
+   "2420",
+   "3021"
+  ],
+  "connectors": {
+   "clips": 1,
+   "anti_studs": 1,
+   "studs_up": 2
+  }
+ },
+ "61252": {
+  "name": "Plate 1 x 1 with Clip Horizontal (Thick C-Clip)",
+  "category": "Plates Special",
+  "rebrickable": "61252",
+  "models": 9,
+  "uses": 25,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 6,
+   "torso": 6,
+   "hair": 6,
+   "head": 5,
+   "face": 2
+  },
+  "colors": {
+   "Sand Green": 13,
+   "Black": 5,
+   "Bright Green": 2,
+   "Red": 2,
+   "Light Bluish Grey": 2,
+   "Blue": 1
+  },
+  "studs": {
+   "side": 18,
+   "up": 6,
+   "front": 1
+  },
+  "partners": [
+   "11477",
+   "3024",
+   "15068",
+   "75937",
+   "6141",
+   "49668",
+   "99206",
+   "3623"
+  ],
+  "connectors": {
+   "clips": 1,
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "26601": {
+  "name": "Plate 2 x 2 without Corner",
+  "category": "Plates Wedged",
+  "rebrickable": "26601",
+  "models": 9,
+  "uses": 23,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 14,
+   "head": 7,
+   "torso": 2
+  },
+  "colors": {
+   "Dark Red": 8,
+   "Black": 8,
+   "Sand Green": 5,
+   "Dark Brown": 2
+  },
+  "studs": {
+   "back": 8,
+   "front": 6,
+   "side": 5,
+   "up": 4
+  },
+  "partners": [
+   "22885",
+   "3021",
+   "3024",
+   "3023b",
+   "25269",
+   "63864",
+   "11211",
+   "45677"
+  ],
+  "connectors": {
+   "anti_studs": 4,
+   "studs_up": 3
+  }
+ },
+ "43723a": {
+  "name": "Wing 2 x 3 Left without Chamfer",
+  "category": "Plates Wedged",
+  "rebrickable": "43723",
+  "models": 9,
+  "uses": 14,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 7,
+   "head": 4,
+   "arms": 2,
+   "legs": 1
+  },
+  "colors": {
+   "Red": 4,
+   "Nougat": 4,
+   "Bright Light Orange": 2,
+   "Reddish Brown": 1,
+   "Dark Bluish Grey": 1,
+   "Black": 1
+  },
+  "studs": {
+   "side": 5,
+   "up": 3,
+   "back": 3,
+   "front": 3
+  },
+  "partners": [
+   "3023b",
+   "3020",
+   "99781",
+   "15068",
+   "22885",
+   "30414",
+   "87079",
+   "24299"
+  ],
+  "connectors": {}
+ },
+ "43722a": {
+  "name": "Wing 2 x 3 Right without Chamfer",
+  "category": "Plates Wedged",
+  "rebrickable": "43722",
+  "models": 9,
+  "uses": 11,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 4,
+   "torso": 3,
+   "arms": 2,
+   "legs": 1,
+   "face": 1
+  },
+  "colors": {
+   "Red": 4,
+   "Bright Light Orange": 2,
+   "Reddish Brown": 1,
+   "Dark Bluish Grey": 1,
+   "Black": 1,
+   "Yellow": 1
+  },
+  "studs": {
+   "front": 4,
+   "up": 3,
+   "back": 3,
+   "side": 1
+  },
+  "partners": [
+   "15068",
+   "22885",
+   "3023b",
+   "30414",
+   "87079",
+   "85984",
+   "92593",
+   "2431"
+  ],
+  "connectors": {}
+ },
+ "49668": {
+  "name": "Plate 1 x 1 with Tooth In-line",
+  "category": "Plates Special",
+  "rebrickable": "49668",
+  "models": 9,
+  "uses": 31,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 12,
+   "arms": 6,
+   "hair": 5,
+   "legs": 4,
+   "face": 3,
+   "head": 1
+  },
+  "colors": {
+   "Black": 15,
+   "Sand Green": 7,
+   "Bright Light Orange": 4,
+   "Dark Orange": 2,
+   "Blue": 2,
+   "Magenta": 1
+  },
+  "studs": {
+   "side": 12,
+   "up": 9,
+   "back": 6,
+   "front": 4
+  },
+  "partners": [
+   "99206",
+   "11477",
+   "3024",
+   "49668",
+   "3023b",
+   "61252",
+   "4733",
+   "15068"
+  ],
+  "connectors": {
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "92946": {
+  "name": "Slope Plate 45.73 2 x 1",
+  "category": "Bricks Sloped",
+  "rebrickable": "92946",
+  "models": 9,
+  "uses": 26,
+  "brickheadz_sets": 0,
+  "roles": {
+   "hair": 11,
+   "face": 5,
+   "head": 4,
+   "torso": 3,
+   "arms": 3
+  },
+  "colors": {
+   "Black": 14,
+   "Reddish Brown": 4,
+   "Dark Bluish Grey": 3,
+   "White": 3,
+   "Light Bluish Grey": 2
+  },
+  "studs": {
+   "up": 9,
+   "side": 9,
+   "front": 7,
+   "down": 1
+  },
+  "partners": [
+   "3020",
+   "22885",
+   "2420",
+   "3710",
+   "3023b",
+   "15068",
+   "28192",
+   "87087"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 3,
+   "studs_up": 1
+  }
+ },
+ "61678": {
+  "name": "Slope Brick Curved 4 x 1",
+  "category": "Bricks Curved",
+  "rebrickable": "61678",
+  "models": 8,
+  "uses": 27,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 14,
+   "hair": 5,
+   "arms": 4,
+   "torso": 2,
+   "face": 2
+  },
+  "colors": {
+   "Dark Tan": 6,
+   "Green": 6,
+   "Black": 5,
+   "Tan": 4,
+   "Dark Bluish Grey": 2,
+   "Reddish Brown": 2
+  },
+  "studs": {
+   "side": 14,
+   "up": 9,
+   "back": 2,
+   "front": 2
+  },
+  "partners": [
+   "3023b",
+   "22885",
+   "2420",
+   "3024",
+   "3022",
+   "6091",
+   "3623",
+   "3021"
+  ],
+  "connectors": {
+   "anti_studs": 5
+  }
+ },
+ "3040b": {
+  "name": "Slope Brick 45 2 x 1",
+  "category": "Bricks Sloped",
+  "rebrickable": "3040b",
+  "models": 8,
+  "uses": 15,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 7,
+   "arms": 6,
+   "face": 1,
+   "head": 1
+  },
+  "colors": {
+   "Dark Bluish Grey": 5,
+   "Reddish Brown": 3,
+   "White": 2,
+   "Tan": 2,
+   "Sand Green": 1,
+   "Light Bluish Grey": 1
+  },
+  "studs": {
+   "up": 13,
+   "side": 2
+  },
+  "partners": [
+   "2430",
+   "2429",
+   "15573",
+   "30565",
+   "2357",
+   "3623",
+   "35480",
+   "36840"
+  ],
+  "connectors": {
+   "anti_studs": 3,
+   "studs_up": 1
+  }
+ },
+ "34103": {
+  "name": "Plate 1 x 3 with 2 Studs Offset",
+  "category": "Plates Special",
+  "rebrickable": "34103",
+  "models": 8,
+  "uses": 15,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 11,
+   "head": 4
+  },
+  "colors": {
+   "White": 8,
+   "Light Bluish Grey": 4,
+   "Black": 3
+  },
+  "studs": {
+   "up": 6,
+   "side": 6,
+   "front": 2,
+   "back": 1
+  },
+  "partners": [
+   "3023b",
+   "11212",
+   "22885",
+   "3024",
+   "25269",
+   "15573",
+   "33909",
+   "36840"
+  ],
+  "connectors": {
+   "clips": 2,
+   "anti_studs": 5,
+   "studs_up": 2
+  }
+ },
+ "60849": {
+  "name": "Minifig Hose Nozzle with Side String Hole Simplified",
+  "category": "Minifig Accessories",
+  "rebrickable": "60849",
+  "models": 8,
+  "uses": 8,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 5,
+   "arms": 3
+  },
+  "colors": {
+   "Black": 7,
+   "Light Bluish Grey": 1
+  },
+  "studs": {
+   "up": 8
+  },
+  "partners": [
+   "11476",
+   "59900",
+   "15712",
+   "63868",
+   "4595",
+   "48729a",
+   "11477",
+   "4733"
+  ],
+  "connectors": {
+   "bars": 2,
+   "holes_side": 2,
+   "anti_studs": 1
+  }
+ },
+ "4274": {
+  "name": "Technic Pin 1/2",
+  "category": "Technic Pins",
+  "rebrickable": "4274",
+  "models": 7,
+  "uses": 9,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 6,
+   "torso": 2,
+   "arms": 1
+  },
+  "colors": {
+   "Light Bluish Grey": 7,
+   "Black": 1,
+   "Red": 1
+  },
+  "studs": {
+   "up": 8,
+   "front": 1
+  },
+  "partners": [
+   "3700",
+   "6541",
+   "6141",
+   "59900",
+   "32474",
+   "19141",
+   "21459",
+   "13564"
+  ],
+  "connectors": {
+   "clips": 1,
+   "pins": 1,
+   "studs_up": 1
+  }
+ },
+ "30374": {
+  "name": "Bar 4L Lightsaber Blade",
+  "category": "Bars, Ladders and Fences",
+  "rebrickable": "30374",
+  "models": 7,
+  "uses": 10,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 9,
+   "torso": 1
+  },
+  "colors": {
+   "Reddish Brown": 3,
+   "Dark Brown": 3,
+   "Black": 2,
+   "Trans Light Blue": 1,
+   "Dark Tan": 1
+  },
+  "studs": {
+   "front": 5,
+   "side": 3,
+   "back": 2
+  },
+  "partners": [
+   "11476",
+   "3062b",
+   "87087",
+   "15712",
+   "64567a"
+  ],
+  "connectors": {
+   "bars": 1,
+   "holes_down": 1,
+   "anti_studs": 1
+  }
+ },
+ "3062b": {
+  "name": "Brick 1 x 1 Round with Hollow Stud",
+  "category": "Bricks Round and Cones",
+  "rebrickable": "3062b",
+  "models": 7,
+  "uses": 16,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 12,
+   "head": 2,
+   "torso": 1,
+   "face": 1
+  },
+  "colors": {
+   "Reddish Brown": 6,
+   "Red": 4,
+   "White": 2,
+   "Green": 1,
+   "Trans Yellow": 1,
+   "Lavender": 1
+  },
+  "studs": {
+   "up": 9,
+   "side": 6,
+   "back": 1
+  },
+  "partners": [
+   "3062b",
+   "30374",
+   "63965",
+   "87087",
+   "11212",
+   "3622",
+   "63864",
+   "63868"
+  ],
+  "connectors": {
+   "clips": 1,
+   "pin_holes": 1,
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "35480": {
+  "name": "Plate 1 x 2 with Round Ends and 2 Open Studs",
+  "category": "Plates Round Curved and Dishes",
+  "rebrickable": "35480",
+  "models": 7,
+  "uses": 13,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 7,
+   "arms": 2,
+   "head": 2,
+   "face": 2
+  },
+  "colors": {
+   "White": 7,
+   "Black": 3,
+   "Red": 1,
+   "Dark Pink": 1,
+   "Light Bluish Grey": 1
+  },
+  "studs": {
+   "front": 8,
+   "up": 4,
+   "back": 1
+  },
+  "partners": [
+   "24246",
+   "68013",
+   "6141",
+   "36840",
+   "3040b",
+   "2431",
+   "2420",
+   "3023b"
+  ],
+  "connectors": {
+   "bars": 1,
+   "clips": 2,
+   "anti_studs": 3,
+   "studs_up": 2
+  }
+ },
+ "3001": {
+  "name": "Brick 2 x 4",
+  "category": "Bricks",
+  "rebrickable": "3001",
+  "models": 7,
+  "uses": 7,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 6,
+   "arms": 1
+  },
+  "colors": {
+   "Green": 2,
+   "White": 1,
+   "Reddish Brown": 1,
+   "Dark Bluish Grey": 1,
+   "Black": 1,
+   "Bright Light Orange": 1
+  },
+  "studs": {
+   "up": 5,
+   "back": 2
+  },
+  "partners": [
+   "22885",
+   "3020",
+   "3710",
+   "44728",
+   "3010",
+   "4032a",
+   "32952",
+   "49668"
+  ],
+  "connectors": {
+   "anti_studs": 11,
+   "studs_up": 8
+  }
+ },
+ "24201": {
+  "name": "Slope Brick Curved 2 x 1 Inverted",
+  "category": "Bricks Curved",
+  "rebrickable": "24201",
+  "models": 7,
+  "uses": 14,
+  "brickheadz_sets": 0,
+  "roles": {
+   "hair": 5,
+   "arms": 3,
+   "face": 2,
+   "head": 2,
+   "torso": 2
+  },
+  "colors": {
+   "Black": 6,
+   "White": 4,
+   "Light Bluish Grey": 2,
+   "Dark Turquoise": 2
+  },
+  "studs": {
+   "up": 5,
+   "side": 4,
+   "down": 2,
+   "back": 2,
+   "front": 1
+  },
+  "partners": [
+   "3024",
+   "11212",
+   "2921",
+   "61678",
+   "3623",
+   "92946",
+   "11477",
+   "36841"
+  ],
+  "connectors": {
+   "clips": 2,
+   "studs_up": 2
+  }
+ },
+ "64567a": {
+  "name": "Minifig Lightsaber Hilt with Slight Sloping Fingers with Bottom Ring",
+  "category": "Minifig Shields, Weapons, & Tools",
+  "rebrickable": "64567",
+  "models": 7,
+  "uses": 9,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 5,
+   "arms": 3,
+   "face": 1
+  },
+  "colors": {
+   "Metallic Silver": 5,
+   "Black": 2,
+   "Pearl Dark Grey": 2
+  },
+  "studs": {
+   "up": 3,
+   "down": 2,
+   "front": 2,
+   "back": 2
+  },
+  "partners": [
+   "60897",
+   "11476",
+   "15712",
+   "63965",
+   "12885",
+   "92290",
+   "30374",
+   "21699"
+  ],
+  "connectors": {
+   "bars": 1,
+   "clips": 2,
+   "studs_up": 1,
+   "studs_down": 1
+  }
+ },
+ "2412b": {
+  "name": "Tile 1 x 2 Grille with Groove",
+  "category": "Tiles Special",
+  "rebrickable": "2412b",
+  "models": 7,
+  "uses": 16,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 8,
+   "face": 5,
+   "torso": 2,
+   "arms": 1
+  },
+  "colors": {
+   "Dark Red": 6,
+   "Dark Bluish Grey": 4,
+   "Pearl Silver": 2,
+   "Light Bluish Grey": 2,
+   "Pearl Gold": 1,
+   "White": 1
+  },
+  "studs": {
+   "back": 7,
+   "front": 4,
+   "side": 4,
+   "up": 1
+  },
+  "partners": [
+   "3020",
+   "3023b",
+   "22885",
+   "3031",
+   "4070",
+   "3024",
+   "6134",
+   "3022"
+  ],
+  "connectors": {
+   "anti_studs": 2
+  }
+ },
+ "25893": {
+  "name": "~Plate 1 x 1 Round with Horizontal Handle Below (Obsolete)",
+  "category": "Plates Special",
+  "rebrickable": "25893",
+  "models": 6,
+  "uses": 7,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 4,
+   "torso": 2,
+   "face": 1
+  },
+  "colors": {
+   "Trans Clear": 7
+  },
+  "studs": {
+   "front": 3,
+   "down": 2,
+   "side": 1,
+   "back": 1
+  },
+  "partners": [
+   "11476",
+   "6141",
+   "15712",
+   "32607",
+   "4740",
+   "63868",
+   "3004"
+  ],
+  "connectors": {
+   "bars": 1,
+   "clips": 1,
+   "studs_up": 1
+  }
+ },
+ "32607": {
+  "name": "Plate 1 x 1 Round with 3 Leaves",
+  "category": "Plants & Trees",
+  "rebrickable": "32607",
+  "models": 6,
+  "uses": 9,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 4,
+   "legs": 2,
+   "head": 2,
+   "torso": 1
+  },
+  "colors": {
+   "Bright Green": 7,
+   "Pearl Gold": 2
+  },
+  "studs": {
+   "up": 7,
+   "back": 2
+  },
+  "partners": [
+   "24866",
+   "4733",
+   "3024",
+   "29119",
+   "30565",
+   "59900",
+   "15573",
+   "4081b"
+  ],
+  "connectors": {
+   "clips": 1,
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "3626c": {
+  "name": "Minifig Head with Hollow Stud",
+  "category": "Minifig Heads",
+  "rebrickable": "3626c",
+  "models": 6,
+  "uses": 8,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 7,
+   "torso": 1
+  },
+  "colors": {
+   "Orange": 3,
+   "Red": 2,
+   "Bright Light Orange": 1,
+   "Medium Lavender": 1,
+   "Black": 1
+  },
+  "studs": {
+   "up": 8
+  },
+  "partners": [
+   "11477",
+   "24866",
+   "30565",
+   "54200",
+   "4733",
+   "4740",
+   "20695",
+   "2489"
+  ],
+  "connectors": {
+   "clips": 1,
+   "pin_holes": 1,
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "63965": {
+  "name": "~Bar 6L with Thick Stop (Obsolete)",
+  "category": "Bars, Ladders and Fences",
+  "rebrickable": "63965",
+  "models": 6,
+  "uses": 8,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 7,
+   "torso": 1
+  },
+  "colors": {
+   "White": 5,
+   "Black": 1,
+   "Reddish Brown": 1,
+   "Light Bluish Grey": 1
+  },
+  "studs": {
+   "down": 5,
+   "up": 2,
+   "back": 1
+  },
+  "partners": [
+   "24947",
+   "24866",
+   "3062b",
+   "92280",
+   "63868",
+   "4070",
+   "60470b",
+   "32474"
+  ],
+  "connectors": {}
+ },
+ "4733": {
+  "name": "Brick 1 x 1 with Studs on Four Sides",
+  "category": "Bricks Special",
+  "rebrickable": "4733",
+  "models": 6,
+  "uses": 8,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 5,
+   "torso": 2,
+   "hair": 1
+  },
+  "colors": {
+   "White": 2,
+   "Dark Bluish Grey": 2,
+   "Black": 2,
+   "Reddish Brown": 1,
+   "Lime": 1
+  },
+  "studs": {
+   "up": 6,
+   "down": 1,
+   "back": 1
+  },
+  "partners": [
+   "3023b",
+   "11477",
+   "41769a",
+   "6141",
+   "3024",
+   "29119",
+   "32607",
+   "49668"
+  ],
+  "connectors": {
+   "clips": 5,
+   "anti_studs": 1,
+   "studs_up": 3,
+   "studs_side": 2
+  }
+ },
+ "15571": {
+  "name": "Slope Brick 45 1 x 2 Triple with Bottom Stud Holder",
+  "category": "Bricks Sloped",
+  "rebrickable": "15571",
+  "models": 6,
+  "uses": 12,
+  "brickheadz_sets": 0,
+  "roles": {
+   "hair": 6,
+   "torso": 3,
+   "arms": 3
+  },
+  "colors": {
+   "Dark Bluish Grey": 5,
+   "Blue": 2,
+   "Black": 2,
+   "Medium Lilac": 2,
+   "White": 1
+  },
+  "studs": {
+   "up": 8,
+   "back": 2,
+   "side": 2
+  },
+  "partners": [
+   "3023b",
+   "87087",
+   "26604",
+   "3022",
+   "99780",
+   "3020"
+  ],
+  "connectors": {
+   "anti_studs": 3
+  }
+ },
+ "3937": {
+  "name": "Hinge 1 x 2 Base",
+  "category": "Hinges, Arms and Turntables",
+  "rebrickable": "3937",
+  "models": 6,
+  "uses": 10,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 6,
+   "hair": 2,
+   "torso": 1,
+   "arms": 1
+  },
+  "colors": {
+   "Black": 5,
+   "Green": 2,
+   "Red": 2,
+   "Reddish Brown": 1
+  },
+  "studs": {
+   "side": 6,
+   "up": 2,
+   "front": 2
+  },
+  "partners": [
+   "4032a",
+   "6134",
+   "2420",
+   "22885",
+   "3023b",
+   "3022",
+   "3938",
+   "3021"
+  ],
+  "connectors": {
+   "clips": 2,
+   "hinge": 1,
+   "anti_studs": 2
+  }
+ },
+ "99207": {
+  "name": "Bracket 1 x 2 - 2 x 2 Up",
+  "category": "Plates Special",
+  "rebrickable": "99207",
+  "models": 6,
+  "uses": 12,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 7,
+   "head": 3,
+   "arms": 1,
+   "accessory": 1
+  },
+  "colors": {
+   "Light Bluish Grey": 4,
+   "Reddish Brown": 4,
+   "Black": 2,
+   "Orange": 1,
+   "Red": 1
+  },
+  "studs": {
+   "up": 11,
+   "front": 1
+  },
+  "partners": [
+   "2357",
+   "3023b",
+   "15573",
+   "4032a",
+   "3003",
+   "2436b",
+   "3004",
+   "2420"
+  ],
+  "connectors": {
+   "bars": 1,
+   "clips": 4,
+   "anti_studs": 3,
+   "studs_side": 4,
+   "studs_up": 2
+  }
+ },
+ "2357": {
+  "name": "Brick 2 x 2 Corner",
+  "category": "Bricks",
+  "rebrickable": "2357",
+  "models": 6,
+  "uses": 14,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 8,
+   "face": 3,
+   "arms": 2,
+   "head": 1
+  },
+  "colors": {
+   "Reddish Brown": 5,
+   "Light Bluish Grey": 4,
+   "Black": 3,
+   "White": 2
+  },
+  "studs": {
+   "up": 9,
+   "front": 3,
+   "side": 2
+  },
+  "partners": [
+   "99207",
+   "3666",
+   "3023b",
+   "2420",
+   "13965",
+   "3005",
+   "25269",
+   "22885"
+  ],
+  "connectors": {
+   "bars": 2,
+   "anti_studs": 5,
+   "studs_up": 3
+  }
+ },
+ "32474": {
+  "name": "Technic Ball Joint with Axlehole Blind",
+  "category": "Technic Special",
+  "rebrickable": "32474",
+  "models": 5,
+  "uses": 8,
+  "brickheadz_sets": 0,
+  "roles": {
+   "hair": 4,
+   "head": 1,
+   "face": 1,
+   "arms": 1,
+   "torso": 1
+  },
+  "colors": {
+   "Red": 4,
+   "Black": 2,
+   "White": 2
+  },
+  "studs": {
+   "up": 5,
+   "back": 2,
+   "front": 1
+  },
+  "partners": [
+   "59900",
+   "15573",
+   "4274",
+   "3942c",
+   "18674",
+   "85861",
+   "63965"
+  ],
+  "connectors": {
+   "axle_holes": 1,
+   "ball": 1
+  }
+ },
+ "30367b": {
+  "name": "Cylinder 2 x 2 with Dome Top with Axle Hole and Blocked Stud",
+  "category": "Bricks Round and Cones",
+  "rebrickable": "30367b",
+  "models": 5,
+  "uses": 8,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 6,
+   "face": 2
+  },
+  "colors": {
+   "Medium Azure": 2,
+   "Lime": 1,
+   "Yellow": 1,
+   "Red": 1,
+   "Tan": 1,
+   "Dark Turquoise": 1
+  },
+  "studs": {
+   "up": 6,
+   "front": 2
+  },
+  "partners": [
+   "24947",
+   "3022",
+   "25269",
+   "4032a"
+  ],
+  "connectors": {
+   "clips": 1,
+   "axle_holes": 1,
+   "anti_studs": 5,
+   "studs_up": 1
+  }
+ },
+ "27925": {
+  "name": "Tile 2 x 2 Corner Round",
+  "category": "Tiles Round and Curved",
+  "rebrickable": "27925",
+  "models": 5,
+  "uses": 24,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 12,
+   "hair": 8,
+   "arms": 4
+  },
+  "colors": {
+   "Pearl Gold": 8,
+   "Magenta": 8,
+   "Blue": 4,
+   "Dark Red": 4
+  },
+  "studs": {
+   "up": 16,
+   "side": 8
+  },
+  "partners": [
+   "4032a",
+   "3023b",
+   "22885",
+   "87580",
+   "25269",
+   "3031",
+   "30357",
+   "3623"
+  ],
+  "connectors": {
+   "anti_studs": 2
+  }
+ },
+ "18674": {
+  "name": "Plate 2 x 2 Round with 1 Centre Stud",
+  "category": "Plates Special",
+  "rebrickable": "18674",
+  "models": 5,
+  "uses": 6,
+  "brickheadz_sets": 0,
+  "roles": {
+   "hair": 3,
+   "legs": 2,
+   "arms": 1
+  },
+  "colors": {
+   "Reddish Brown": 3,
+   "Red": 2,
+   "White": 1
+  },
+  "studs": {
+   "up": 6
+  },
+  "partners": [
+   "4032a",
+   "6233",
+   "30565",
+   "24866",
+   "37762",
+   "19119",
+   "32474",
+   "4345b"
+  ],
+  "connectors": {
+   "clips": 1,
+   "anti_studs": 5,
+   "studs_up": 1
+  }
+ },
+ "15070": {
+  "name": "Plate 1 x 1 with Tooth Perpendicular",
+  "category": "Plates Special",
+  "rebrickable": "15070",
+  "models": 5,
+  "uses": 12,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 6,
+   "torso": 4,
+   "arms": 2
+  },
+  "colors": {
+   "Yellow": 6,
+   "Black": 2,
+   "White": 1,
+   "Pearl Gold": 1,
+   "Tan": 1,
+   "Reddish Brown": 1
+  },
+  "studs": {
+   "up": 11,
+   "side": 1
+  },
+  "partners": [
+   "3010",
+   "3024",
+   "3023b",
+   "2420",
+   "36840",
+   "99780",
+   "3020",
+   "22885"
+  ],
+  "connectors": {
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "4081b": {
+  "name": "Plate 1 x 1 with Clip Light Type 2",
+  "category": "Plates Special",
+  "rebrickable": "4081b",
+  "models": 5,
+  "uses": 8,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 4,
+   "torso": 3,
+   "arms": 1
+  },
+  "colors": {
+   "White": 4,
+   "Red": 2,
+   "Yellow": 1,
+   "Light Bluish Grey": 1
+  },
+  "studs": {
+   "up": 6,
+   "front": 1,
+   "side": 1
+  },
+  "partners": [
+   "6141",
+   "3023b",
+   "15573",
+   "3022",
+   "15068",
+   "90370",
+   "32607",
+   "85984"
+  ],
+  "connectors": {
+   "clips": 1,
+   "anti_studs": 1,
+   "studs_up": 3
+  }
+ },
+ "6134": {
+  "name": "Hinge 2 x 2 Top",
+  "category": "Hinges, Arms and Turntables",
+  "rebrickable": "6134",
+  "models": 5,
+  "uses": 8,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 5,
+   "hair": 2,
+   "torso": 1
+  },
+  "colors": {
+   "Green": 2,
+   "Medium Lavender": 2,
+   "Red": 2,
+   "Black": 1,
+   "Reddish Brown": 1
+  },
+  "studs": {
+   "side": 6,
+   "up": 2
+  },
+  "partners": [
+   "85984",
+   "4032a",
+   "3937",
+   "3023b",
+   "3024",
+   "2420",
+   "3022",
+   "3003"
+  ],
+  "connectors": {
+   "bars": 2,
+   "clips": 4,
+   "hinge": 1,
+   "anti_studs": 2,
+   "studs_up": 4
+  }
+ },
+ "41769a": {
+  "name": "Wing 2 x 4 Right without Chamfer",
+  "category": "Plates Wedged",
+  "rebrickable": "41769",
+  "models": 5,
+  "uses": 8,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 5,
+   "head": 2,
+   "torso": 1
+  },
+  "colors": {
+   "Green": 4,
+   "Black": 1,
+   "Red": 1,
+   "Dark Red": 1,
+   "White": 1
+  },
+  "studs": {
+   "back": 4,
+   "front": 2,
+   "up": 1,
+   "side": 1
+  },
+  "partners": [
+   "3023b",
+   "6141",
+   "4733",
+   "3024",
+   "41769a",
+   "3005",
+   "22885",
+   "3010"
+  ],
+  "connectors": {}
+ },
+ "3002": {
+  "name": "Brick 2 x 3",
+  "category": "Bricks",
+  "rebrickable": "3002",
+  "models": 5,
+  "uses": 6,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 3,
+   "head": 3
+  },
+  "colors": {
+   "Tan": 2,
+   "Black": 1,
+   "Dark Bluish Grey": 1,
+   "White": 1,
+   "Light Bluish Grey": 1
+  },
+  "studs": {
+   "up": 6
+  },
+  "partners": [
+   "2420",
+   "44728",
+   "3710",
+   "3021",
+   "4070",
+   "3023b",
+   "99780",
+   "11211"
+  ],
+  "connectors": {
+   "anti_studs": 8,
+   "studs_up": 6
+  }
+ },
+ "3176": {
+  "name": "Plate 3 x 2 with Hole",
+  "category": "Plates Special",
+  "rebrickable": "3176",
+  "models": 4,
+  "uses": 6,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 3,
+   "torso": 2,
+   "face": 1
+  },
+  "colors": {
+   "Red": 4,
+   "Dark Green": 1,
+   "Dark Bluish Grey": 1
+  },
+  "studs": {
+   "side": 2,
+   "front": 2,
+   "up": 2
+  },
+  "partners": [
+   "3176",
+   "3020",
+   "99206",
+   "6141",
+   "85861",
+   "87994",
+   "30162"
+  ],
+  "connectors": {
+   "pin_holes": 1,
+   "holes_down": 1,
+   "anti_studs": 6,
+   "studs_up": 4
+  }
+ },
+ "33183": {
+  "name": "Minifig Food Carrot Top",
+  "category": "Plants & Trees",
+  "rebrickable": "33183",
+  "models": 4,
+  "uses": 8,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 7,
+   "torso": 1
+  },
+  "colors": {
+   "Bright Green": 7,
+   "Bright Light Orange": 1
+  },
+  "studs": {
+   "up": 6,
+   "front": 1,
+   "back": 1
+  },
+  "partners": [
+   "33172",
+   "33183",
+   "3665a",
+   "63868",
+   "87087",
+   "3024",
+   "61252",
+   "3622"
+  ],
+  "connectors": {
+   "bars": 1
+  }
+ },
+ "6541": {
+  "name": "Technic Brick 1 x 1 with Hole",
+  "category": "Technic Bricks",
+  "rebrickable": "6541",
+  "models": 4,
+  "uses": 7,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 4,
+   "torso": 1,
+   "legs": 1,
+   "accessory": 1
+  },
+  "colors": {
+   "Medium Azure": 2,
+   "White": 2,
+   "Black": 2,
+   "Red": 1
+  },
+  "studs": {
+   "up": 6,
+   "back": 1
+  },
+  "partners": [
+   "4274",
+   "3005",
+   "3673",
+   "3622",
+   "3020",
+   "11212",
+   "86996",
+   "11211"
+  ],
+  "connectors": {
+   "clips": 1,
+   "pin_holes": 1,
+   "holes_side": 2,
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "87994": {
+  "name": "Bar 3L",
+  "category": "Bars, Ladders and Fences",
+  "rebrickable": "87994",
+  "models": 4,
+  "uses": 5,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 3,
+   "arms": 1,
+   "head": 1
+  },
+  "colors": {
+   "Bright Green": 2,
+   "Reddish Brown": 2,
+   "Pearl Gold": 1
+  },
+  "studs": {
+   "up": 2,
+   "back": 1,
+   "down": 1,
+   "front": 1
+  },
+  "partners": [
+   "11476",
+   "3024",
+   "61252",
+   "3176",
+   "85861",
+   "6141",
+   "4733",
+   "32607"
+  ],
+  "connectors": {
+   "bars": 1,
+   "holes_down": 1,
+   "anti_studs": 1
+  }
+ },
+ "15208": {
+  "name": "Plate 1 x 2 with 3 Teeth In-line",
+  "category": "Plates Special",
+  "rebrickable": "15208",
+  "models": 4,
+  "uses": 7,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 4,
+   "head": 2,
+   "torso": 1
+  },
+  "colors": {
+   "White": 3,
+   "Bright Light Orange": 2,
+   "Dark Bluish Grey": 2
+  },
+  "studs": {
+   "side": 6,
+   "front": 1
+  },
+  "partners": [
+   "3022",
+   "15068",
+   "36840",
+   "11211",
+   "63864",
+   "87087",
+   "11477",
+   "35480"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 3,
+   "studs_up": 2
+  }
+ },
+ "3660a": {
+  "name": "~Slope Brick 45 2 x 2 Inverted without Inner Stopper Ring (Obsolete)",
+  "category": "Bricks Sloped",
+  "rebrickable": "3660a",
+  "models": 4,
+  "uses": 4,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 2,
+   "head": 1,
+   "face": 1
+  },
+  "colors": {
+   "Red": 1,
+   "Dark Bluish Grey": 1,
+   "Dark Red": 1,
+   "Green": 1
+  },
+  "studs": {
+   "up": 3,
+   "back": 1
+  },
+  "partners": [
+   "3020",
+   "3004",
+   "3068b",
+   "30165",
+   "3031",
+   "3956",
+   "32125",
+   "60470b"
+  ],
+  "connectors": {
+   "clips": 2,
+   "anti_studs": 2,
+   "studs_up": 4
+  }
+ },
+ "88704": {
+  "name": "Minifig Whip Bent Flexible",
+  "category": "Minifig Accessories",
+  "rebrickable": "88704",
+  "models": 4,
+  "uses": 5,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 3,
+   "head": 2
+  },
+  "colors": {
+   "Black": 5
+  },
+  "studs": {
+   "front": 2,
+   "back": 2,
+   "up": 1
+  },
+  "partners": [
+   "15068",
+   "3700",
+   "32028",
+   "85984",
+   "4070",
+   "90370",
+   "3010",
+   "2780"
+  ],
+  "connectors": {
+   "bars": 2,
+   "anti_studs": 2
+  }
+ },
+ "4740": {
+  "name": "Dish 2 x 2 Inverted",
+  "category": "Plates Round Curved and Dishes",
+  "rebrickable": "4740",
+  "models": 4,
+  "uses": 7,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 4,
+   "hair": 2,
+   "torso": 1
+  },
+  "colors": {
+   "Black": 2,
+   "Metallic Gold": 2,
+   "Red": 1,
+   "Trans Neon Orange": 1,
+   "Reddish Brown": 1
+  },
+  "studs": {
+   "up": 6,
+   "back": 1
+  },
+  "partners": [
+   "15712",
+   "3626b",
+   "87618",
+   "2423",
+   "3626c",
+   "51270",
+   "12885",
+   "25893"
+  ],
+  "connectors": {
+   "clips": 1,
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "26047": {
+  "name": "Plate 1 x 1 Round with Horizontal Handle on Side",
+  "category": "Plates Special",
+  "rebrickable": "26047",
+  "models": 4,
+  "uses": 8,
+  "brickheadz_sets": 0,
+  "roles": {
+   "legs": 4,
+   "head": 2,
+   "torso": 2
+  },
+  "colors": {
+   "Pearl Gold": 4,
+   "Black": 3,
+   "Light Bluish Grey": 1
+  },
+  "studs": {
+   "up": 5,
+   "side": 2,
+   "front": 1
+  },
+  "partners": [
+   "30565",
+   "27925",
+   "15712",
+   "11477",
+   "3623",
+   "60478",
+   "48729b",
+   "59900"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "2780": {
+  "name": "Technic Pin with Friction and Slots",
+  "category": "Technic Pins",
+  "rebrickable": "2780",
+  "models": 4,
+  "uses": 5,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 3,
+   "head": 2
+  },
+  "colors": {
+   "Black": 5
+  },
+  "studs": {
+   "up": 5
+  },
+  "partners": [
+   "3700",
+   "11301",
+   "3005",
+   "88704",
+   "32524"
+  ],
+  "connectors": {
+   "pins": 2
+  }
+ },
+ "3795": {
+  "name": "Plate 2 x 6",
+  "category": "Plates",
+  "rebrickable": "3795",
+  "models": 4,
+  "uses": 4,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 3,
+   "head": 1
+  },
+  "colors": {
+   "Dark Red": 1,
+   "Bright Pink": 1,
+   "Black": 1,
+   "Tan": 1
+  },
+  "studs": {
+   "back": 2,
+   "front": 1,
+   "up": 1
+  },
+  "partners": [
+   "2436b",
+   "3023b",
+   "3710",
+   "99207",
+   "2420",
+   "99206",
+   "11301",
+   "67329"
+  ],
+  "connectors": {
+   "anti_studs": 17,
+   "studs_up": 12
+  }
+ },
+ "92280": {
+  "name": "Plate 1 x 2 with Single Clip on Top",
+  "category": "Plates Special",
+  "rebrickable": "92280",
+  "models": 3,
+  "uses": 6,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 4,
+   "hair": 2
+  },
+  "colors": {
+   "Light Bluish Grey": 4,
+   "Black": 2
+  },
+  "studs": {
+   "side": 4,
+   "up": 2
+  },
+  "partners": [
+   "60478",
+   "3069b",
+   "15068",
+   "22885",
+   "63965",
+   "30357",
+   "30414",
+   "3031"
+  ],
+  "connectors": {
+   "bars": 1,
+   "clips": 1,
+   "anti_studs": 3,
+   "studs_up": 1
+  }
+ },
+ "30357": {
+  "name": "Plate 3 x 3 with 2 x 2 Corner Round",
+  "category": "Plates Round Curved and Dishes",
+  "rebrickable": "30357",
+  "models": 3,
+  "uses": 10,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 4,
+   "base": 4,
+   "arms": 2
+  },
+  "colors": {
+   "White": 6,
+   "Reddish Brown": 4
+  },
+  "studs": {
+   "up": 8,
+   "front": 1,
+   "back": 1
+  },
+  "partners": [
+   "22885",
+   "3958",
+   "3003",
+   "4032a",
+   "27925",
+   "3009",
+   "85080",
+   "3004"
+  ],
+  "connectors": {
+   "anti_studs": 12,
+   "studs_up": 8
+  }
+ },
+ "3659": {
+  "name": "Arch 1 x 4",
+  "category": "Bricks Curved",
+  "rebrickable": "3659",
+  "models": 3,
+  "uses": 3,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 2,
+   "torso": 1
+  },
+  "colors": {
+   "Dark Bluish Grey": 1,
+   "Reddish Brown": 1,
+   "Light Bluish Grey": 1
+  },
+  "studs": {
+   "up": 3
+  },
+  "partners": [
+   "3623",
+   "30165",
+   "3023b",
+   "3005",
+   "3031",
+   "6141",
+   "99206",
+   "3710"
+  ],
+  "connectors": {
+   "anti_studs": 2,
+   "studs_up": 4
+  }
+ },
+ "33172": {
+  "name": "Minifig Food Carrot",
+  "category": "Plants & Trees",
+  "rebrickable": "33172",
+  "models": 3,
+  "uses": 5,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 5
+  },
+  "colors": {
+   "Orange": 5
+  },
+  "studs": {
+   "up": 4,
+   "front": 1
+  },
+  "partners": [
+   "33183",
+   "24866",
+   "85861",
+   "11476",
+   "30565"
+  ],
+  "connectors": {
+   "bars": 1
+  }
+ },
+ "24947": {
+  "name": "Dome 2 x 2 Inverted Ovoid with Studs",
+  "category": "Bricks Round and Cones",
+  "rebrickable": "24947",
+  "models": 3,
+  "uses": 6,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 6
+  },
+  "colors": {
+   "Yellow": 3,
+   "Red": 2,
+   "Medium Lilac": 1
+  },
+  "studs": {
+   "up": 6
+  },
+  "partners": [
+   "30367b",
+   "63965",
+   "30565",
+   "4032a",
+   "3040b",
+   "54200"
+  ],
+  "connectors": {
+   "clips": 5,
+   "anti_studs": 1,
+   "studs_up": 4
+  }
+ },
+ "2423": {
+  "name": "Plant Leaves 4 x 3",
+  "category": "Plants & Trees",
+  "rebrickable": "2423",
+  "models": 3,
+  "uses": 8,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 6,
+   "torso": 2
+  },
+  "colors": {
+   "Green": 4,
+   "Lavender": 2,
+   "Lime": 2
+  },
+  "studs": {
+   "up": 6,
+   "front": 2
+  },
+  "partners": [
+   "6141",
+   "13965",
+   "11477",
+   "39739",
+   "24866",
+   "4070",
+   "4740",
+   "3665a"
+  ],
+  "connectors": {
+   "clips": 6,
+   "pin_holes": 1,
+   "anti_studs": 2,
+   "studs_up": 6
+  }
+ },
+ "48336": {
+  "name": "Plate 1 x 2 with Handle Type 2",
+  "category": "Plates Special",
+  "rebrickable": "48336",
+  "models": 3,
+  "uses": 3,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 1,
+   "arms": 1,
+   "torso": 1
+  },
+  "colors": {
+   "Tan": 1,
+   "Dark Bluish Grey": 1,
+   "Green": 1
+  },
+  "studs": {
+   "up": 3
+  },
+  "partners": [
+   "4070",
+   "3023b",
+   "15712",
+   "6091",
+   "2654a",
+   "30350b",
+   "3710",
+   "29111"
+  ],
+  "connectors": {
+   "bars": 2,
+   "anti_studs": 3,
+   "studs_up": 2
+  }
+ },
+ "6233": {
+  "name": "Cone 3 x 3 x 2",
+  "category": "Bricks Round and Cones",
+  "rebrickable": "6233",
+  "models": 3,
+  "uses": 3,
+  "brickheadz_sets": 0,
+  "roles": {
+   "hair": 3
+  },
+  "colors": {
+   "Green": 2,
+   "Reddish Brown": 1
+  },
+  "studs": {
+   "up": 3
+  },
+  "partners": [
+   "3623",
+   "4032a",
+   "18674",
+   "3942c",
+   "19119"
+  ],
+  "connectors": {
+   "axle_holes": 1,
+   "anti_studs": 9,
+   "studs_up": 4
+  }
+ },
+ "60470b": {
+  "name": "Plate 1 x 2 with 2 Clips Horizontal (Thick C-Clips)",
+  "category": "Plates Special",
+  "rebrickable": "60470b",
+  "models": 3,
+  "uses": 4,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 3,
+   "arms": 1
+  },
+  "colors": {
+   "Yellow": 1,
+   "Bright Light Orange": 1,
+   "Red": 1,
+   "Green": 1
+  },
+  "studs": {
+   "up": 3,
+   "front": 1
+  },
+  "partners": [
+   "3023b",
+   "18649",
+   "3022",
+   "87079",
+   "63965",
+   "47458",
+   "3660a",
+   "3068b"
+  ],
+  "connectors": {
+   "bars": 1,
+   "clips": 2,
+   "anti_studs": 3,
+   "studs_up": 2
+  }
+ },
+ "3034": {
+  "name": "Plate 2 x 8",
+  "category": "Plates",
+  "rebrickable": "3034",
+  "models": 3,
+  "uses": 5,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 2,
+   "legs": 2,
+   "torso": 1
+  },
+  "colors": {
+   "White": 3,
+   "Dark Bluish Grey": 2
+  },
+  "studs": {
+   "up": 5
+  },
+  "partners": [
+   "11203",
+   "99781",
+   "3069b",
+   "3958",
+   "3023b",
+   "3068b",
+   "11476",
+   "3031"
+  ],
+  "connectors": {
+   "anti_studs": 23,
+   "studs_up": 16
+  }
+ },
+ "10187": {
+  "name": "Minifig Bladed Claw Spread",
+  "category": "Minifig Shields, Weapons, & Tools",
+  "rebrickable": "10187",
+  "models": 3,
+  "uses": 8,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 4,
+   "arms": 3,
+   "torso": 1
+  },
+  "colors": {
+   "Pearl Silver": 6,
+   "Pearl Gold": 2
+  },
+  "studs": {
+   "front": 8
+  },
+  "partners": [
+   "85861",
+   "11476",
+   "3031"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 1
+  }
+ },
+ "64644": {
+  "name": "Minifig Telescope",
+  "category": "Minifig Accessories",
+  "rebrickable": "64644",
+  "models": 3,
+  "uses": 4,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 2,
+   "torso": 2
+  },
+  "colors": {
+   "Black": 2,
+   "Sand Green": 1,
+   "Light Bluish Grey": 1
+  },
+  "studs": {
+   "up": 2,
+   "down": 1,
+   "back": 1
+  },
+  "partners": [
+   "30565",
+   "87618",
+   "61252",
+   "4032a",
+   "93094p01",
+   "4081b",
+   "60849"
+  ],
+  "connectors": {
+   "bars": 1,
+   "clips": 2,
+   "pin_holes": 1,
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "49307": {
+  "name": "Brick 1 x 1 x 0.667 with Curved Top",
+  "category": "Bricks Curved",
+  "rebrickable": "49307",
+  "models": 3,
+  "uses": 10,
+  "brickheadz_sets": 0,
+  "roles": {
+   "hair": 4,
+   "torso": 3,
+   "arms": 3
+  },
+  "colors": {
+   "White": 4,
+   "Black": 4,
+   "Medium Nougat": 2
+  },
+  "studs": {
+   "side": 6,
+   "up": 4
+  },
+  "partners": [
+   "3623",
+   "99780",
+   "22885",
+   "3024",
+   "60478",
+   "3022"
+  ],
+  "connectors": {
+   "anti_studs": 1
+  }
+ },
+ "2429": {
+  "name": "Hinge Plate 1 x 4 Base",
+  "category": "Hinges, Arms and Turntables",
+  "rebrickable": "2429",
+  "models": 3,
+  "uses": 6,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 4,
+   "face": 2
+  },
+  "colors": {
+   "Black": 4,
+   "White": 2
+  },
+  "studs": {
+   "up": 4,
+   "back": 2
+  },
+  "partners": [
+   "3024",
+   "2430",
+   "3710",
+   "2420",
+   "3040b",
+   "3623",
+   "3070b",
+   "3023b"
+  ],
+  "connectors": {
+   "bars": 1,
+   "clips": 1,
+   "hinge": 1,
+   "anti_studs": 3,
+   "studs_up": 2
+  }
+ },
+ "2430": {
+  "name": "Hinge Plate 1 x 4 Top",
+  "category": "Hinges, Arms and Turntables",
+  "rebrickable": "2430",
+  "models": 3,
+  "uses": 6,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 3,
+   "face": 2,
+   "torso": 1
+  },
+  "colors": {
+   "Black": 4,
+   "White": 2
+  },
+  "studs": {
+   "up": 4,
+   "back": 2
+  },
+  "partners": [
+   "3024",
+   "3710",
+   "2429",
+   "2420",
+   "3040b",
+   "3623",
+   "3023b",
+   "3070b"
+  ],
+  "connectors": {
+   "bars": 1,
+   "hinge": 1,
+   "anti_studs": 3,
+   "studs_up": 2
+  }
+ },
+ "35787": {
+  "name": "Tile 2 x 2 Triangular",
+  "category": "Tiles Special",
+  "rebrickable": "35787",
+  "models": 3,
+  "uses": 8,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 4,
+   "head": 4
+  },
+  "colors": {
+   "Sand Green": 2,
+   "White": 2,
+   "Black": 2,
+   "Light Bluish Grey": 2
+  },
+  "studs": {
+   "front": 4,
+   "back": 4
+  },
+  "partners": [
+   "3710",
+   "3020",
+   "35787",
+   "11211",
+   "3005",
+   "33909",
+   "24299",
+   "24307"
+  ],
+  "connectors": {
+   "anti_studs": 3
+  }
+ },
+ "36841": {
+  "name": "Bracket 1 x 1 - 1 x 1 Down",
+  "category": "Plates Special",
+  "rebrickable": "36841",
+  "models": 3,
+  "uses": 5,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 3,
+   "arms": 2
+  },
+  "colors": {
+   "Black": 2,
+   "Dark Turquoise": 2,
+   "Dark Orange": 1
+  },
+  "studs": {
+   "up": 3,
+   "down": 2
+  },
+  "partners": [
+   "3024",
+   "6091",
+   "3023b",
+   "11212",
+   "3622",
+   "24201"
+  ],
+  "connectors": {
+   "clips": 1,
+   "anti_studs": 1,
+   "studs_side": 1,
+   "studs_up": 1
+  }
+ },
+ "22385": {
+  "name": "Tile 3 x 2 with Angled End",
+  "category": "Tiles Special",
+  "rebrickable": "22385",
+  "models": 3,
+  "uses": 8,
+  "brickheadz_sets": 0,
+  "roles": {
+   "hair": 4,
+   "torso": 2,
+   "head": 2
+  },
+  "colors": {
+   "Medium Lilac": 4,
+   "Blue": 2,
+   "Reddish Brown": 2
+  },
+  "studs": {
+   "side": 4,
+   "back": 2,
+   "front": 2
+  },
+  "partners": [
+   "22885",
+   "30414",
+   "3020",
+   "3023b",
+   "24299",
+   "24307"
+  ],
+  "connectors": {
+   "anti_studs": 6
+  }
+ },
+ "55707c": {
+  "name": "=Minifig Bar with Bat Wings",
+  "category": "",
+  "rebrickable": null,
+  "models": 3,
+  "uses": 3,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 3
+  },
+  "colors": {
+   "Black": 2,
+   "Yellow": 1
+  },
+  "studs": {
+   "side": 3
+  },
+  "partners": [
+   "99781",
+   "11476"
+  ],
+  "connectors": {
+   "bars": 1
+  }
+ },
+ "75902": {
+  "name": "Minifig Shield Round Bowed",
+  "category": "Minifig Shields, Weapons, & Tools",
+  "rebrickable": "75902",
+  "models": 3,
+  "uses": 3,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 3
+  },
+  "colors": {
+   "Red": 2,
+   "Dark Bluish Grey": 1
+  },
+  "studs": {
+   "side": 2,
+   "up": 1
+  },
+  "partners": [
+   "3010",
+   "3031",
+   "63868",
+   "3022",
+   "11476",
+   "3069b"
+  ],
+  "connectors": {
+   "bars": 1
+  }
+ },
+ "20482": {
+  "name": "Tile 1 x 1 Round with Pin and Pin Hole",
+  "category": "Tiles Special",
+  "rebrickable": "20482",
+  "models": 3,
+  "uses": 8,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 7,
+   "arms": 1
+  },
+  "colors": {
+   "Reddish Brown": 4,
+   "White": 3,
+   "Yellow": 1
+  },
+  "studs": {
+   "back": 4,
+   "side": 2,
+   "down": 1,
+   "front": 1
+  },
+  "partners": [
+   "22885",
+   "3022",
+   "44728",
+   "16770",
+   "3024",
+   "60475b",
+   "13608",
+   "6141"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 1,
+   "holes_down": 1
+  }
+ },
+ "41770a": {
+  "name": "Wing 2 x 4 Left without Chamfer",
+  "category": "Plates Wedged",
+  "rebrickable": "41770",
+  "models": 3,
+  "uses": 3,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 2,
+   "arms": 1
+  },
+  "colors": {
+   "Red": 1,
+   "Dark Red": 1,
+   "White": 1
+  },
+  "studs": {
+   "up": 1,
+   "back": 1,
+   "side": 1
+  },
+  "partners": [
+   "22885",
+   "3010",
+   "30414",
+   "2431",
+   "25269",
+   "3069b",
+   "3023b",
+   "85984"
+  ],
+  "connectors": {}
+ },
+ "2436b": {
+  "name": "Bracket 1 x 2 - 1 x 4 with Rounded Corners",
+  "category": "Plates Special",
+  "rebrickable": "2436",
+  "models": 3,
+  "uses": 6,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 4,
+   "torso": 2
+  },
+  "colors": {
+   "Light Bluish Grey": 4,
+   "Reddish Brown": 1,
+   "White": 1
+  },
+  "studs": {
+   "front": 4,
+   "up": 2
+  },
+  "partners": [
+   "3023b",
+   "22885",
+   "99207",
+   "44728",
+   "3795",
+   "3022",
+   "3024",
+   "3666"
+  ],
+  "connectors": {
+   "bars": 1,
+   "clips": 4,
+   "anti_studs": 3,
+   "studs_side": 4,
+   "studs_up": 2
+  }
+ },
+ "32828": {
+  "name": "Plate 1 x 1 Round with Bar",
+  "category": "Plates Special",
+  "rebrickable": "32828",
+  "models": 3,
+  "uses": 5,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 3,
+   "torso": 2
+  },
+  "colors": {
+   "Black": 3,
+   "Reddish Brown": 2
+  },
+  "studs": {
+   "side": 2,
+   "up": 2,
+   "front": 1
+  },
+  "partners": [
+   "32028",
+   "6141",
+   "59900",
+   "11212",
+   "3005",
+   "23443",
+   "26604"
+  ],
+  "connectors": {
+   "bars": 1,
+   "clips": 1,
+   "anti_studs": 2,
+   "studs_up": 1
+  }
+ },
+ "6191": {
+  "name": "Brick 1 x 4 x 1.333 with Curved Top",
+  "category": "Bricks Curved",
+  "rebrickable": "6191",
+  "models": 3,
+  "uses": 3,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 3
+  },
+  "colors": {
+   "White": 2,
+   "Medium Blue": 1
+  },
+  "studs": {
+   "up": 2,
+   "back": 1
+  },
+  "partners": [
+   "3710",
+   "92593",
+   "87087"
+  ],
+  "connectors": {
+   "anti_studs": 7
+  }
+ },
+ "2654a": {
+  "name": "Dish 2 x 2 with Rim",
+  "category": "Plates Round Curved and Dishes",
+  "rebrickable": "2654",
+  "models": 2,
+  "uses": 3,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 2,
+   "torso": 1
+  },
+  "colors": {
+   "Trans Clear": 3
+  },
+  "studs": {
+   "front": 1,
+   "back": 1,
+   "up": 1
+  },
+  "partners": [
+   "30357",
+   "60478",
+   "3023b",
+   "3020",
+   "48336",
+   "3022"
+  ],
+  "connectors": {
+   "clips": 4,
+   "studs_up": 4
+  }
+ },
+ "30165": {
+  "name": "Brick 2 x 2 with Curved Top and 2 Studs on Top",
+  "category": "Bricks Curved",
+  "rebrickable": "30165",
+  "models": 2,
+  "uses": 3,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 2,
+   "arms": 1
+  },
+  "colors": {
+   "White": 2,
+   "Red": 1
+  },
+  "studs": {
+   "up": 3
+  },
+  "partners": [
+   "3659",
+   "98138",
+   "3022",
+   "3004",
+   "15070",
+   "3660a",
+   "4345b"
+  ],
+  "connectors": {
+   "clips": 2,
+   "anti_studs": 5,
+   "studs_up": 2
+  }
+ },
+ "32606": {
+  "name": "Plant Flower with 7 Alternate Petals with Bar and Pin Hole",
+  "category": "Plants & Trees",
+  "rebrickable": "32606",
+  "models": 2,
+  "uses": 8,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 7,
+   "torso": 1
+  },
+  "colors": {
+   "Red": 6,
+   "Dark Pink": 2
+  },
+  "studs": {
+   "up": 8
+  },
+  "partners": [
+   "19119",
+   "24866",
+   "30565",
+   "93092"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 1
+  }
+ },
+ "13965": {
+  "name": "Arch 1 x 3 x 3 Pointed",
+  "category": "Bricks Curved",
+  "rebrickable": "13965",
+  "models": 2,
+  "uses": 4,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 3,
+   "arms": 1
+  },
+  "colors": {
+   "Reddish Brown": 3,
+   "Black": 1
+  },
+  "studs": {
+   "up": 4
+  },
+  "partners": [
+   "2423",
+   "2357",
+   "11477",
+   "3005",
+   "6141",
+   "3024",
+   "50950",
+   "30565"
+  ],
+  "connectors": {
+   "anti_studs": 1,
+   "studs_up": 3
+  }
+ },
+ "15397": {
+  "name": "Plate 3 x 3 Cross",
+  "category": "Plates",
+  "rebrickable": "15397",
+  "models": 2,
+  "uses": 4,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 4
+  },
+  "colors": {
+   "Tan": 4
+  },
+  "studs": {
+   "up": 4
+  },
+  "partners": [
+   "92593",
+   "3023b",
+   "2431"
+  ],
+  "connectors": {
+   "anti_studs": 5,
+   "studs_up": 5
+  }
+ },
+ "33303": {
+  "name": "Fence 1 x 4 x 2 Picket",
+  "category": "Bars, Ladders and Fences",
+  "rebrickable": "33303",
+  "models": 2,
+  "uses": 4,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 4
+  },
+  "colors": {
+   "White": 4
+  },
+  "studs": {
+   "up": 4
+  },
+  "partners": [
+   "24866",
+   "30565",
+   "60478",
+   "3023b",
+   "54200"
+  ],
+  "connectors": {
+   "bars": 3,
+   "anti_studs": 7
+  }
+ },
+ "60474": {
+  "name": "Plate 4 x 4 Round with Hole and Snapstud",
+  "category": "Plates Round Curved and Dishes",
+  "rebrickable": "60474",
+  "models": 2,
+  "uses": 3,
+  "brickheadz_sets": 0,
+  "roles": {
+   "hair": 2,
+   "arms": 1
+  },
+  "colors": {
+   "Black": 2,
+   "Blue": 1
+  },
+  "studs": {
+   "up": 3
+  },
+  "partners": [
+   "15470",
+   "15068",
+   "4032a",
+   "60474",
+   "3623",
+   "3710",
+   "3940b",
+   "24866"
+  ],
+  "connectors": {
+   "anti_studs": 21,
+   "studs_up": 12
+  }
+ },
+ "19119": {
+  "name": "Plant Flower Stem with Bar and 6 Stems",
+  "category": "Plants & Trees",
+  "rebrickable": "19119",
+  "models": 2,
+  "uses": 3,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 2,
+   "hair": 1
+  },
+  "colors": {
+   "Green": 2,
+   "Dark Orange": 1
+  },
+  "studs": {
+   "up": 3
+  },
+  "partners": [
+   "24866",
+   "32606",
+   "59900",
+   "18674",
+   "6233"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 1
+  }
+ },
+ "32064a": {
+  "name": "Technic Brick 1 x 2 with Axlehole with Open Sides and Stud Blocker",
+  "category": "Technic Bricks",
+  "rebrickable": "32064a",
+  "models": 2,
+  "uses": 3,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 2,
+   "arms": 1
+  },
+  "colors": {
+   "Yellow": 2,
+   "White": 1
+  },
+  "studs": {
+   "up": 2,
+   "front": 1
+  },
+  "partners": [
+   "6587",
+   "3031",
+   "3941",
+   "63965",
+   "2431"
+  ],
+  "connectors": {
+   "clips": 2,
+   "axle_holes": 1,
+   "anti_studs": 2,
+   "studs_up": 2
+  }
+ },
+ "53451": {
+  "name": "Minifig Helmet Viking Horn",
+  "category": "Animal / Creature Body Parts",
+  "rebrickable": "53451",
+  "models": 2,
+  "uses": 6,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 2,
+   "arms": 2,
+   "legs": 2
+  },
+  "colors": {
+   "Black": 4,
+   "Pearl Gold": 2
+  },
+  "studs": {
+   "down": 4,
+   "back": 2
+  },
+  "partners": [
+   "43892",
+   "36840"
+  ],
+  "connectors": {
+   "bars": 1,
+   "holes_side": 1
+  }
+ },
+ "4286": {
+  "name": "Slope Brick 33 3 x 1",
+  "category": "Bricks Sloped",
+  "rebrickable": "4286",
+  "models": 2,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 2
+  },
+  "colors": {
+   "Sand Green": 1,
+   "Reddish Brown": 1
+  },
+  "studs": {
+   "side": 1,
+   "up": 1
+  },
+  "partners": [
+   "22885",
+   "3024",
+   "30565",
+   "2357"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 4,
+   "studs_up": 1
+  }
+ },
+ "39739": {
+  "name": "Tile 1 x 1 Heart Shape",
+  "category": "Tiles Round and Curved",
+  "rebrickable": "39739",
+  "models": 2,
+  "uses": 6,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 4,
+   "face": 2
+  },
+  "colors": {
+   "Dark Pink": 6
+  },
+  "studs": {
+   "front": 5,
+   "side": 1
+  },
+  "partners": [
+   "2423",
+   "11211",
+   "39739",
+   "11476"
+  ],
+  "connectors": {
+   "anti_studs": 1
+  }
+ },
+ "15429": {
+  "name": "Animal Cat Tail",
+  "category": "Animal / Creature Body Parts",
+  "rebrickable": "15429",
+  "models": 2,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 1,
+   "face": 1
+  },
+  "colors": {
+   "White": 1,
+   "Black": 1
+  },
+  "studs": {
+   "up": 2
+  },
+  "partners": [
+   "22885",
+   "99780",
+   "87079",
+   "3024",
+   "3021"
+  ],
+  "connectors": {
+   "anti_studs": 1
+  }
+ },
+ "51739": {
+  "name": "Wing 2 x 4",
+  "category": "Plates Wedged",
+  "rebrickable": "51739",
+  "models": 2,
+  "uses": 3,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 2,
+   "head": 1
+  },
+  "colors": {
+   "White": 3
+  },
+  "studs": {
+   "back": 2,
+   "front": 1
+  },
+  "partners": [
+   "51739",
+   "3069b",
+   "25269",
+   "32028",
+   "3023b",
+   "3031"
+  ],
+  "connectors": {
+   "anti_studs": 7,
+   "studs_up": 4
+  }
+ },
+ "3673": {
+  "name": "Technic Pin",
+  "category": "Technic Pins",
+  "rebrickable": "3673",
+  "models": 2,
+  "uses": 3,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 2,
+   "torso": 1
+  },
+  "colors": {
+   "Light Bluish Grey": 3
+  },
+  "studs": {
+   "up": 3
+  },
+  "partners": [
+   "6541",
+   "2343",
+   "11458",
+   "6141",
+   "85984",
+   "18677",
+   "32524"
+  ],
+  "connectors": {
+   "pins": 2
+  }
+ },
+ "23969": {
+  "name": "Panel 1 x 2 x 1 Double Corner with Rounded Corners",
+  "category": "Panels",
+  "rebrickable": "23969",
+  "models": 2,
+  "uses": 3,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 2,
+   "torso": 1
+  },
+  "colors": {
+   "Tan": 2,
+   "White": 1
+  },
+  "studs": {
+   "up": 3
+  },
+  "partners": [
+   "3023b",
+   "2357",
+   "99206",
+   "6141",
+   "3005",
+   "99780",
+   "3020"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 3
+  }
+ },
+ "11203": {
+  "name": "Tile 2 x 2 Inverted",
+  "category": "Tiles Special",
+  "rebrickable": "11203",
+  "models": 2,
+  "uses": 5,
+  "brickheadz_sets": 0,
+  "roles": {
+   "legs": 4,
+   "arms": 1
+  },
+  "colors": {
+   "Dark Bluish Grey": 4,
+   "White": 1
+  },
+  "studs": {
+   "up": 4,
+   "back": 1
+  },
+  "partners": [
+   "4162",
+   "3034",
+   "18651",
+   "11458",
+   "63868"
+  ],
+  "connectors": {
+   "clips": 4,
+   "studs_up": 4
+  }
+ },
+ "11458": {
+  "name": "Plate 1 x 2 with Offset Peghole",
+  "category": "Plates Special",
+  "rebrickable": "11458",
+  "models": 2,
+  "uses": 3,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 3
+  },
+  "colors": {
+   "Light Bluish Grey": 2,
+   "White": 1
+  },
+  "studs": {
+   "side": 2,
+   "back": 1
+  },
+  "partners": [
+   "3673",
+   "6141",
+   "4070",
+   "54200",
+   "2431",
+   "2343",
+   "87079",
+   "18651"
+  ],
+  "connectors": {
+   "bars": 1,
+   "pin_holes": 1,
+   "holes_side": 2,
+   "anti_studs": 3,
+   "studs_up": 1
+  }
+ },
+ "3009": {
+  "name": "Brick 1 x 6",
+  "category": "Bricks",
+  "rebrickable": "3009",
+  "models": 2,
+  "uses": 4,
+  "brickheadz_sets": 0,
+  "roles": {
+   "legs": 2,
+   "torso": 1,
+   "head": 1
+  },
+  "colors": {
+   "Red": 2,
+   "Light Bluish Grey": 2
+  },
+  "studs": {
+   "up": 4
+  },
+  "partners": [
+   "3023b",
+   "2453b",
+   "30357",
+   "3245c",
+   "3032",
+   "3034",
+   "44728",
+   "99207"
+  ],
+  "connectors": {
+   "bars": 5,
+   "anti_studs": 11,
+   "studs_up": 6
+  }
+ },
+ "28802": {
+  "name": "Bracket 1 x 2 - 1 x 4 with Rounded Bottom Corners",
+  "category": "Plates Special",
+  "rebrickable": "28802",
+  "models": 2,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "legs": 2
+  },
+  "colors": {
+   "Red": 1,
+   "Light Bluish Grey": 1
+  },
+  "studs": {
+   "up": 2
+  },
+  "partners": [
+   "3622",
+   "3069b",
+   "3023b",
+   "32028",
+   "93273",
+   "3030",
+   "3035"
+  ],
+  "connectors": {
+   "bars": 1,
+   "clips": 4,
+   "anti_studs": 3,
+   "studs_side": 4,
+   "studs_up": 2
+  }
+ },
+ "37352": {
+  "name": "Brick 1 x 2 with Curved Top",
+  "category": "Bricks Curved",
+  "rebrickable": "37352",
+  "models": 2,
+  "uses": 4,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 2,
+   "head": 2
+  },
+  "colors": {
+   "Tan": 2,
+   "White": 2
+  },
+  "studs": {
+   "front": 2,
+   "side": 2
+  },
+  "partners": [
+   "99780",
+   "22885",
+   "13608"
+  ],
+  "connectors": {
+   "anti_studs": 3
+  }
+ },
+ "48729b": {
+  "name": "Bar 1.5L with Clip with Truncated Sides and Hole in Shaft",
+  "category": "Bars, Ladders and Fences",
+  "rebrickable": "48729b",
+  "models": 2,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 2
+  },
+  "colors": {
+   "Light Bluish Grey": 2
+  },
+  "studs": {
+   "front": 1,
+   "down": 1
+  },
+  "partners": [
+   "11212",
+   "3623",
+   "35464",
+   "26047",
+   "59900",
+   "15712",
+   "64567a"
+  ],
+  "connectors": {
+   "bars": 1,
+   "clips": 1
+  }
+ },
+ "67329": {
+  "name": "Brick 1 x 2 x 1.667 with 8 Studs on 3 Sides",
+  "category": "Bricks Special",
+  "rebrickable": "67329",
+  "models": 2,
+  "uses": 4,
+  "brickheadz_sets": 0,
+  "roles": {
+   "hair": 2,
+   "arms": 2
+  },
+  "colors": {
+   "Dark Orange": 2,
+   "Dark Bluish Grey": 2
+  },
+  "studs": {
+   "up": 4
+  },
+  "partners": [
+   "11477",
+   "11211",
+   "85984",
+   "33243",
+   "3021",
+   "3623",
+   "3023b",
+   "6141"
+  ],
+  "connectors": {
+   "clips": 8,
+   "anti_studs": 3,
+   "studs_up": 6,
+   "studs_side": 4
+  }
+ },
+ "58367": {
+  "name": "Minifig Hose Nozzle with Side String Hole",
+  "category": "Minifig Accessories",
+  "rebrickable": "58367",
+  "models": 2,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 1,
+   "arms": 1
+  },
+  "colors": {
+   "Black": 2
+  },
+  "studs": {
+   "up": 2
+  },
+  "partners": [
+   "63868",
+   "59900",
+   "15712",
+   "11477"
+  ],
+  "connectors": {
+   "bars": 3,
+   "holes_side": 1,
+   "anti_studs": 1
+  }
+ },
+ "2450": {
+  "name": "Plate 3 x 3 without Corner",
+  "category": "Plates Wedged",
+  "rebrickable": "2450",
+  "models": 2,
+  "uses": 3,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 2,
+   "face": 1
+  },
+  "colors": {
+   "Black": 1,
+   "Red": 1,
+   "Dark Tan": 1
+  },
+  "studs": {
+   "back": 2,
+   "side": 1
+  },
+  "partners": [
+   "22885",
+   "15068",
+   "32952",
+   "3024",
+   "27263",
+   "3623",
+   "41769a",
+   "15573"
+  ],
+  "connectors": {
+   "anti_studs": 9,
+   "studs_up": 6
+  }
+ },
+ "28192": {
+  "name": "Slope Brick 45 2 x 1 with Cutout and without Stud",
+  "category": "Bricks Sloped",
+  "rebrickable": "28192",
+  "models": 2,
+  "uses": 3,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 2,
+   "face": 1
+  },
+  "colors": {
+   "Light Bluish Grey": 2,
+   "White": 1
+  },
+  "studs": {
+   "side": 2,
+   "down": 1
+  },
+  "partners": [
+   "92946",
+   "3710",
+   "99206",
+   "3024",
+   "3666",
+   "22885",
+   "3069b"
+  ],
+  "connectors": {
+   "anti_studs": 2
+  }
+ },
+ "99253": {
+  "name": "Minifig Lasso",
+  "category": "Minifig Accessories",
+  "rebrickable": "99253",
+  "models": 2,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 1,
+   "arms": 1
+  },
+  "colors": {
+   "Pearl Gold": 2
+  },
+  "studs": {
+   "back": 2
+  },
+  "partners": [
+   "3710",
+   "22885",
+   "3069b",
+   "3023b",
+   "3010",
+   "3031",
+   "11476",
+   "3005"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 1
+  }
+ },
+ "33291": {
+  "name": "Plate 1 x 1 Round with Tabs",
+  "category": "Plants & Trees",
+  "rebrickable": "33291",
+  "models": 2,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 1,
+   "torso": 1
+  },
+  "colors": {
+   "Magenta": 1,
+   "Red": 1
+  },
+  "studs": {
+   "front": 2
+  },
+  "partners": [
+   "4728",
+   "88930",
+   "87994"
+  ],
+  "connectors": {
+   "clips": 1,
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "13564": {
+  "name": "Animal Cow Horn 2.25L",
+  "category": "Animal / Creature Body Parts",
+  "rebrickable": "13564",
+  "models": 2,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1,
+   "torso": 1
+  },
+  "colors": {
+   "Red": 2
+  },
+  "studs": {
+   "back": 1,
+   "up": 1
+  },
+  "partners": [
+   "60897",
+   "4274",
+   "3700"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 1
+  }
+ },
+ "4595": {
+  "name": "Brick 1 x 2 x 0.667 with Studs on Sides",
+  "category": "Bricks Special",
+  "rebrickable": "4595",
+  "models": 2,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 1,
+   "arms": 1
+  },
+  "colors": {
+   "Light Bluish Grey": 1,
+   "Black": 1
+  },
+  "studs": {
+   "back": 1,
+   "side": 1
+  },
+  "partners": [
+   "3023b",
+   "3069b",
+   "60849",
+   "59900"
+  ],
+  "connectors": {
+   "bars": 1,
+   "clips": 8,
+   "anti_studs": 3,
+   "holes_side": 1,
+   "studs_up": 6,
+   "studs_side": 1
+  }
+ },
+ "93606": {
+  "name": "Slope Brick Curved 4 x 2",
+  "category": "Bricks Curved",
+  "rebrickable": "93606",
+  "models": 2,
+  "uses": 3,
+  "brickheadz_sets": 0,
+  "roles": {
+   "hair": 2,
+   "torso": 1
+  },
+  "colors": {
+   "Dark Orange": 2,
+   "Dark Green": 1
+  },
+  "studs": {
+   "up": 3
+  },
+  "partners": [
+   "22885",
+   "3021",
+   "3003",
+   "3022",
+   "3710"
+  ],
+  "connectors": {
+   "bars": 2,
+   "anti_studs": 11
+  }
+ },
+ "2530": {
+  "name": "Minifig Sword Cutlass",
+  "category": "Minifig Shields, Weapons, & Tools",
+  "rebrickable": "2530",
+  "models": 2,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1,
+   "torso": 1
+  },
+  "colors": {
+   "Dark Bluish Grey": 2
+  },
+  "studs": {
+   "front": 1,
+   "back": 1
+  },
+  "partners": [
+   "11476"
+  ],
+  "connectors": {
+   "bars": 1
+  }
+ },
+ "47905": {
+  "name": "Brick 1 x 1 with Studs on Two Opposite Sides",
+  "category": "Bricks Special",
+  "rebrickable": "47905",
+  "models": 2,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 1,
+   "torso": 1
+  },
+  "colors": {
+   "Black": 1,
+   "Light Bluish Grey": 1
+  },
+  "studs": {
+   "up": 1,
+   "back": 1
+  },
+  "partners": [
+   "3031",
+   "3024",
+   "96910",
+   "11477",
+   "22885",
+   "50746",
+   "61678",
+   "4070"
+  ],
+  "connectors": {
+   "clips": 2,
+   "anti_studs": 1,
+   "studs_side": 2,
+   "studs_up": 1
+  }
+ },
+ "6636": {
+  "name": "Tile 1 x 6",
+  "category": "Tiles",
+  "rebrickable": "6636",
+  "models": 2,
+  "uses": 3,
+  "brickheadz_sets": 0,
+  "roles": {
+   "legs": 2,
+   "hair": 1
+  },
+  "colors": {
+   "Black": 2,
+   "Magenta": 1
+  },
+  "studs": {
+   "up": 3
+  },
+  "partners": [
+   "88930",
+   "99206",
+   "3022",
+   "3036",
+   "3023b",
+   "3665a",
+   "3024",
+   "6091"
+  ],
+  "connectors": {
+   "bars": 5,
+   "anti_studs": 11
+  }
+ },
+ "96910": {
+  "name": "Tile 1 x 2 Chamfered with 2 Top Indentations",
+  "category": "",
+  "rebrickable": null,
+  "models": 2,
+  "uses": 8,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 5,
+   "torso": 2,
+   "face": 1
+  },
+  "colors": {
+   "Light Bluish Grey": 7,
+   "Pearl Silver": 1
+  },
+  "studs": {
+   "back": 4,
+   "side": 1,
+   "down": 1,
+   "up": 1,
+   "front": 1
+  },
+  "partners": [
+   "4070",
+   "3031",
+   "47905",
+   "3022",
+   "99780"
+  ],
+  "connectors": {
+   "anti_studs": 3
+  }
+ },
+ "30162": {
+  "name": "Minifig Binoculars with Round Eyepiece",
+  "category": "Minifig Accessories",
+  "rebrickable": "30162",
+  "models": 2,
+  "uses": 3,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 3
+  },
+  "colors": {
+   "Dark Bluish Grey": 2,
+   "Light Bluish Grey": 1
+  },
+  "studs": {
+   "front": 3
+  },
+  "partners": [
+   "60897",
+   "99206",
+   "3020",
+   "15573",
+   "3176",
+   "3069b",
+   "3005"
+  ],
+  "connectors": {
+   "bars": 2,
+   "clips": 2,
+   "anti_studs": 1
+  }
+ },
+ "21459": {
+  "name": "Minifig Sword Katana Type 3 (Square Guard with Smooth Endcap)",
+  "category": "Minifig Shields, Weapons, & Tools",
+  "rebrickable": "21459",
+  "models": 2,
+  "uses": 3,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 2,
+   "head": 1
+  },
+  "colors": {
+   "Black": 2,
+   "Pearl Silver": 1
+  },
+  "studs": {
+   "back": 1,
+   "side": 1,
+   "down": 1
+  },
+  "partners": [
+   "15068",
+   "19141",
+   "21459",
+   "3021",
+   "24307",
+   "11476",
+   "4274",
+   "22885"
+  ],
+  "connectors": {
+   "bars": 2,
+   "anti_studs": 1
+  }
+ },
+ "87552": {
+  "name": "Panel 1 x 2 x 2 Reinforced",
+  "category": "Panels",
+  "rebrickable": "87552",
+  "models": 2,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 2
+  },
+  "colors": {
+   "Trans Clear": 2
+  },
+  "studs": {
+   "up": 2
+  },
+  "partners": [
+   "3023b",
+   "3031"
+  ],
+  "connectors": {
+   "bars": 1,
+   "clips": 2,
+   "anti_studs": 3,
+   "studs_up": 2
+  }
+ },
+ "60481a": {
+  "name": "Slope Brick 65 2 x 1 x 2 with Symmetric Stud Holder",
+  "category": "Bricks Sloped",
+  "rebrickable": "60481",
+  "models": 2,
+  "uses": 4,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 2,
+   "arms": 2
+  },
+  "colors": {
+   "White": 2,
+   "Sand Green": 2
+  },
+  "studs": {
+   "down": 2,
+   "side": 2
+  },
+  "partners": [
+   "3023b",
+   "54200",
+   "22885",
+   "99206"
+  ],
+  "connectors": {
+   "anti_studs": 3,
+   "studs_up": 1
+  }
+ },
+ "6231": {
+  "name": "Panel 1 x 1 x 1 Corner with Rounded Corners",
+  "category": "Panels",
+  "rebrickable": "6231",
+  "models": 2,
+  "uses": 4,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 4
+  },
+  "colors": {
+   "Black": 4
+  },
+  "studs": {
+   "up": 4
+  },
+  "partners": [
+   "6256",
+   "99206"
+  ],
+  "connectors": {
+   "anti_studs": 1
+  }
+ },
+ "6256": {
+  "name": "Minifig Dinner Plate",
+  "category": "Minifig Accessories",
+  "rebrickable": "6256",
+  "models": 2,
+  "uses": 4,
+  "brickheadz_sets": 0,
+  "roles": {
+   "hair": 4
+  },
+  "colors": {
+   "Black": 4
+  },
+  "studs": {
+   "front": 4
+  },
+  "partners": [
+   "22885",
+   "6231",
+   "2420",
+   "2431",
+   "60897"
+  ],
+  "connectors": {
+   "anti_studs": 1
+  }
+ },
+ "3069a": {
+  "name": "Tile 1 x 2 without Groove",
+  "category": "Tiles",
+  "rebrickable": "3069a",
+  "models": 2,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "hair": 1,
+   "accessory": 1
+  },
+  "colors": {
+   "Red": 1,
+   "Tan": 1
+  },
+  "studs": {
+   "up": 1,
+   "side": 1
+  },
+  "partners": [
+   "3020"
+  ],
+  "connectors": {
+   "anti_studs": 3
+  }
+ },
+ "95199": {
+  "name": "Minifig Gun Pistol Two Barrel",
+  "category": "Minifig Shields, Weapons, & Tools",
+  "rebrickable": "95199",
+  "models": 2,
+  "uses": 3,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1,
+   "face": 1,
+   "accessory": 1
+  },
+  "colors": {
+   "Black": 3
+  },
+  "studs": {
+   "side": 2,
+   "up": 1
+  },
+  "partners": [
+   "15573",
+   "15712",
+   "2431"
+  ],
+  "connectors": {
+   "bars": 4,
+   "anti_studs": 1
+  }
+ },
+ "30367c": {
+  "name": "Cylinder 2 x 2 with Dome Top with Axle Hole and Hollow Stud",
+  "category": "Bricks Round and Cones",
+  "rebrickable": "30367c",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Reddish Brown": 1
+  },
+  "studs": {
+   "down": 1
+  },
+  "partners": [
+   "4032a",
+   "15712"
+  ],
+  "connectors": {
+   "clips": 1,
+   "axle_holes": 1,
+   "anti_studs": 5,
+   "studs_up": 1
+  }
+ },
+ "93092": {
+  "name": "Figure Friends Basket",
+  "category": "Minifig Accessories",
+  "rebrickable": "93092",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Bright Light Orange": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "11476",
+   "24866",
+   "32606"
+  ],
+  "connectors": {
+   "bars": 2,
+   "anti_studs": 2
+  }
+ },
+ "4332": {
+  "name": "Minifig Broom",
+  "category": "Minifig Accessories",
+  "rebrickable": "4332",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Reddish Brown": 1
+  },
+  "studs": {
+   "back": 1
+  },
+  "partners": [
+   "3023b",
+   "2420",
+   "85984",
+   "11476"
+  ],
+  "connectors": {
+   "bars": 1
+  }
+ },
+ "4341": {
+  "name": "Minifig Cauldron",
+  "category": "Minifig Accessories",
+  "rebrickable": "4341",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Black": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "3022",
+   "93160"
+  ],
+  "connectors": {
+   "bars": 2,
+   "anti_studs": 4
+  }
+ },
+ "93160": {
+  "name": "Bone 2L",
+  "category": "Animal / Creature Body Parts",
+  "rebrickable": "93160",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "White": 1
+  },
+  "studs": {
+   "front": 1
+  },
+  "partners": [
+   "4341"
+  ],
+  "connectors": {
+   "bars": 1
+  }
+ },
+ "30350b": {
+  "name": "Tile 2 x 3 with Clips Horizontal (Thick C-Clips)",
+  "category": "Tiles Special",
+  "rebrickable": "30350b",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 1
+  },
+  "colors": {
+   "Reddish Brown": 1
+  },
+  "studs": {
+   "front": 1
+  },
+  "partners": [
+   "15068",
+   "30565",
+   "3020",
+   "48336",
+   "22885"
+  ],
+  "connectors": {
+   "clips": 2,
+   "anti_studs": 8
+  }
+ },
+ "3942c": {
+  "name": "Cone 2 x 2 x 2 with Hollow Stud Open",
+  "category": "Bricks Round and Cones",
+  "rebrickable": "3942c",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "hair": 1
+  },
+  "colors": {
+   "Green": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "32474",
+   "6233"
+  ],
+  "connectors": {
+   "clips": 1,
+   "anti_studs": 5,
+   "studs_up": 1
+  }
+ },
+ "3940b": {
+  "name": "Support 2 x 2 x 2 Round with Open Hole and Stud Holders",
+  "category": "Supports, Girders and Cranes",
+  "rebrickable": "3940b",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Black": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "60474",
+   "30565"
+  ],
+  "connectors": {
+   "clips": 5,
+   "axle_holes": 1,
+   "anti_studs": 5,
+   "studs_up": 4
+  }
+ },
+ "15470": {
+  "name": "Plate 1 x 1 Round with Swirled Top",
+  "category": "Plates Round Curved and Dishes",
+  "rebrickable": "15470",
+  "models": 1,
+  "uses": 4,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 3,
+   "torso": 1
+  },
+  "colors": {
+   "Bright Pink": 2,
+   "Reddish Brown": 2
+  },
+  "studs": {
+   "up": 4
+  },
+  "partners": [
+   "60474"
+  ],
+  "connectors": {
+   "anti_studs": 1
+  }
+ },
+ "37762": {
+  "name": "Cylinder 1 x 1.333 with 0.5L Bar and Bar Hole",
+  "category": "Minifig Accessories",
+  "rebrickable": "37762",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "White": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "24866",
+   "18674",
+   "37775"
+  ],
+  "connectors": {
+   "bars": 1,
+   "clips": 1,
+   "anti_studs": 1
+  }
+ },
+ "37775": {
+  "name": "Minifig Candle Flame",
+  "category": "Energy Effects",
+  "rebrickable": "37775",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Trans Orange": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "37762"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 1
+  }
+ },
+ "47755": {
+  "name": "Wedge 4 x 3 Curved with 2 x 2 Cutout",
+  "category": "Transportation - Land",
+  "rebrickable": "47755",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 1,
+   "arms": 1
+  },
+  "colors": {
+   "White": 2
+  },
+  "studs": {
+   "side": 2
+  },
+  "partners": [
+   "61678",
+   "63868",
+   "3021",
+   "29119"
+  ],
+  "connectors": {
+   "bars": 2,
+   "anti_studs": 6,
+   "studs_up": 4
+  }
+ },
+ "15279": {
+  "name": "Plant Grass Stem",
+  "category": "Plants & Trees",
+  "rebrickable": "15279",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 2
+  },
+  "colors": {
+   "Lime": 2
+  },
+  "studs": {
+   "up": 2
+  },
+  "partners": [
+   "30565",
+   "15573",
+   "54200",
+   "6141",
+   "24946"
+  ],
+  "connectors": {
+   "clips": 1,
+   "anti_studs": 1
+  }
+ },
+ "24946": {
+  "name": "Animal Egg 1.2 x 1.2 x 1.333 with Hole on Top",
+  "category": "Minifig Accessories",
+  "rebrickable": "24946",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 2
+  },
+  "colors": {
+   "White": 2
+  },
+  "studs": {
+   "up": 2
+  },
+  "partners": [
+   "6141",
+   "15279"
+  ],
+  "connectors": {
+   "pin_holes": 1,
+   "anti_studs": 1
+  }
+ },
+ "2489": {
+  "name": "Barrel 2 x 2 x 1.667",
+  "category": "Containers",
+  "rebrickable": "2489",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Dark Bluish Grey": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "3626c",
+   "92691",
+   "20695",
+   "30565"
+  ],
+  "connectors": {
+   "axle_holes": 1,
+   "anti_studs": 5
+  }
+ },
+ "92691": {
+  "name": "Bone 5L",
+  "category": "Animal / Creature Body Parts",
+  "rebrickable": "92691",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "White": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "2489"
+  ],
+  "connectors": {
+   "bars": 1
+  }
+ },
+ "30103": {
+  "name": "Animal Bat",
+  "category": "Animals / Creatures",
+  "rebrickable": "30103",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Black": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "6091",
+   "15573"
+  ],
+  "connectors": {
+   "clips": 1
+  }
+ },
+ "29111": {
+  "name": "Animal Spider with Elongated Abdomen",
+  "category": "Animals / Creatures",
+  "rebrickable": "29111",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Black": 1
+  },
+  "studs": {
+   "front": 1
+  },
+  "partners": [
+   "36840",
+   "3020",
+   "3710",
+   "48336",
+   "3024",
+   "4070",
+   "6091",
+   "3069b"
+  ],
+  "connectors": {
+   "anti_studs": 1
+  }
+ },
+ "20695": {
+  "name": "Minifig Headdress Pumpkin Carved",
+  "category": "",
+  "rebrickable": null,
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Orange": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "3626c",
+   "2489",
+   "6141"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 1,
+   "holes_down": 1
+  }
+ },
+ "27261": {
+  "name": "Plate 1 x 2 with 3 Rocky Claws",
+  "category": "Plates Special",
+  "rebrickable": "27261",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 1
+  },
+  "colors": {
+   "White": 1
+  },
+  "studs": {
+   "front": 1
+  },
+  "partners": [
+   "22885",
+   "3023b",
+   "3031"
+  ],
+  "connectors": {
+   "anti_studs": 2,
+   "studs_up": 2
+  }
+ },
+ "88292": {
+  "name": "Arch 1 x 3 x 2 Ogee",
+  "category": "Bricks Curved",
+  "rebrickable": "88292",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "hair": 2
+  },
+  "colors": {
+   "Tan": 2
+  },
+  "studs": {
+   "up": 2
+  },
+  "partners": [
+   "3665a",
+   "11477",
+   "54200",
+   "6091",
+   "15573"
+  ],
+  "connectors": {
+   "anti_studs": 1,
+   "studs_up": 3
+  }
+ },
+ "4345b": {
+  "name": "Container Box 2 x 2 x 2 with Hollow Studs",
+  "category": "Containers",
+  "rebrickable": "4345b",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Red": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "6141",
+   "3069b",
+   "18674",
+   "54200",
+   "30165",
+   "4346"
+  ],
+  "connectors": {
+   "clips": 4,
+   "hinge": 1,
+   "anti_studs": 5,
+   "studs_up": 4
+  }
+ },
+ "4346": {
+  "name": "Container Box 2 x 2 x 2 Door with Slot",
+  "category": "Containers",
+  "rebrickable": "4346",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Trans Clear": 1
+  },
+  "studs": {
+   "front": 1
+  },
+  "partners": [
+   "18674",
+   "6141",
+   "4345b",
+   "3069b"
+  ],
+  "connectors": {
+   "hinge": 1
+  }
+ },
+ "3045": {
+  "name": "Slope Brick 45 2 x 2 Double Convex",
+  "category": "Bricks Sloped",
+  "rebrickable": "3045",
+  "models": 1,
+  "uses": 4,
+  "brickheadz_sets": 0,
+  "roles": {
+   "hair": 4
+  },
+  "colors": {
+   "Red": 4
+  },
+  "studs": {
+   "up": 4
+  },
+  "partners": [
+   "3031"
+  ],
+  "connectors": {
+   "anti_studs": 5,
+   "studs_up": 1
+  }
+ },
+ "49673": {
+  "name": "=Plate 1 x 1 with Tooth",
+  "category": "",
+  "rebrickable": null,
+  "models": 1,
+  "uses": 12,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 8,
+   "torso": 4
+  },
+  "colors": {
+   "Red": 10,
+   "White": 2
+  },
+  "studs": {
+   "side": 10,
+   "back": 2
+  },
+  "partners": [
+   "3023b",
+   "3022",
+   "3024",
+   "87087",
+   "25269"
+  ],
+  "connectors": {
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "64647": {
+  "name": "Minifig Plume/Flame Triple",
+  "category": "Minifig Headwear Accessories",
+  "rebrickable": "64647",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 2
+  },
+  "colors": {
+   "Pearl Gold": 2
+  },
+  "studs": {
+   "side": 2
+  },
+  "partners": [
+   "4081b"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 1
+  }
+ },
+ "47458": {
+  "name": "Slope Brick Curved 1 x 2 x 2/3 with Fin without Studs",
+  "category": "Bricks Wedged",
+  "rebrickable": "47458",
+  "models": 1,
+  "uses": 5,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 5
+  },
+  "colors": {
+   "Pearl Gold": 5
+  },
+  "studs": {
+   "up": 3,
+   "back": 2
+  },
+  "partners": [
+   "18649",
+   "3020",
+   "3022",
+   "47458",
+   "3031",
+   "60470b"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 3
+  }
+ },
+ "18649": {
+  "name": "Plate 1 x 2 with Handles on Opposite Ends",
+  "category": "Plates Special",
+  "rebrickable": "18649",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 2
+  },
+  "colors": {
+   "Bright Light Orange": 2
+  },
+  "studs": {
+   "up": 2
+  },
+  "partners": [
+   "60470b",
+   "47458",
+   "3022"
+  ],
+  "connectors": {
+   "bars": 3,
+   "anti_studs": 3,
+   "studs_up": 2
+  }
+ },
+ "90370": {
+  "name": "Minifig Microphone",
+  "category": "Minifig Accessories",
+  "rebrickable": "90370",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 2
+  },
+  "colors": {
+   "Black": 2
+  },
+  "studs": {
+   "front": 2
+  },
+  "partners": [
+   "4081b",
+   "32607",
+   "88704",
+   "85984"
+  ],
+  "connectors": {
+   "bars": 1
+  }
+ },
+ "87618": {
+  "name": "Bar 4.5L with Handle",
+  "category": "Bars, Ladders and Fences",
+  "rebrickable": "87618",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 2
+  },
+  "colors": {
+   "Black": 2
+  },
+  "studs": {
+   "down": 2
+  },
+  "partners": [
+   "64644",
+   "3626b",
+   "4740",
+   "15712"
+  ],
+  "connectors": {
+   "bars": 2,
+   "holes_down": 1,
+   "holes_side": 1
+  }
+ },
+ "3626b": {
+  "name": "Minifig Head with Blocked Hollow Stud",
+  "category": "Minifig Heads",
+  "rebrickable": "3626b",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 2
+  },
+  "colors": {
+   "Trans Red": 2
+  },
+  "studs": {
+   "up": 2
+  },
+  "partners": [
+   "4740",
+   "87618"
+  ],
+  "connectors": {
+   "clips": 2,
+   "pin_holes": 1,
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "75937": {
+  "name": "Plate 2 x 2 with Rod Frame Octagonal Reinforced",
+  "category": "Plates Special",
+  "rebrickable": "75937",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "hair": 1
+  },
+  "colors": {
+   "Sand Green": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "61252",
+   "99206",
+   "15068",
+   "3070b",
+   "11477",
+   "11476"
+  ],
+  "connectors": {
+   "bars": 8,
+   "axle_holes": 1,
+   "anti_studs": 5,
+   "studs_up": 4
+  }
+ },
+ "93094p01": {
+  "name": "Figure Friends Lipstick with Light Bluish Grey Handle (Complete)",
+  "category": "Minifig Accessories",
+  "rebrickable": "93094",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 1
+  },
+  "colors": {
+   "Red": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "85861",
+   "32602",
+   "4032a",
+   "64644"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 1
+  }
+ },
+ "32602": {
+  "name": "Minifig Hair Wavy Windblown to One Side",
+  "category": "Minifig Headwear",
+  "rebrickable": "32602",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 1
+  },
+  "colors": {
+   "Pearl Gold": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "85861",
+   "3023b",
+   "3020",
+   "85984",
+   "26601",
+   "11477",
+   "4032a",
+   "93094p01"
+  ],
+  "connectors": {
+   "anti_studs": 1
+  }
+ },
+ "39613": {
+  "name": "Plate 3 x 3 Heart Shape",
+  "category": "Plates Round Curved and Dishes",
+  "rebrickable": "39613",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Red": 1
+  },
+  "studs": {
+   "front": 1
+  },
+  "partners": [
+   "4070"
+  ],
+  "connectors": {
+   "anti_studs": 11,
+   "studs_up": 8
+  }
+ },
+ "3957b": {
+  "name": "Antenna 4H with Flat Top",
+  "category": "Bars, Ladders and Fences",
+  "rebrickable": "3957b",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Trans Clear": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "30565",
+   "61252",
+   "54200"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 1
+  }
+ },
+ "15395": {
+  "name": "Dome 2 x 2 Inverted with Stud and Tube",
+  "category": "Bricks Round and Cones",
+  "rebrickable": "15395",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Dark Brown": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "3024",
+   "4032a",
+   "6141"
+  ],
+  "connectors": {
+   "clips": 1,
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "93552": {
+  "name": "Minifig Paint Brush",
+  "category": "Minifig Accessories",
+  "rebrickable": "93552",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Reddish Brown": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "3020",
+   "11476"
+  ],
+  "connectors": {
+   "bars": 1
+  }
+ },
+ "95343": {
+  "name": "Bucket 1 x 1 x 1 Conical",
+  "category": "Containers",
+  "rebrickable": "95343",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Reddish Brown": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "6141",
+   "30565",
+   "3062b"
+  ],
+  "connectors": {
+   "anti_studs": 1
+  }
+ },
+ "27150": {
+  "name": "Minifig Umbrella Folded",
+  "category": "Minifig Accessories",
+  "rebrickable": "27150",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Bright Pink": 1
+  },
+  "studs": {
+   "back": 1
+  },
+  "partners": [
+   "11476"
+  ],
+  "connectors": {
+   "bars": 1
+  }
+ },
+ "37776": {
+  "name": "Minifig Lantern",
+  "category": "Minifig Accessories",
+  "rebrickable": "37776",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Pearl Dark Grey": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "43722a",
+   "3021",
+   "60897",
+   "3062b",
+   "87079"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 1
+  }
+ },
+ "18980": {
+  "name": "Plate 2 x 6 with Two Rounded Corners",
+  "category": "Plates Round Curved and Dishes",
+  "rebrickable": "18980",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 2
+  },
+  "colors": {
+   "Light Bluish Grey": 2
+  },
+  "studs": {
+   "side": 2
+  },
+  "partners": [
+   "29119",
+   "29120",
+   "3023b",
+   "25269",
+   "87087",
+   "11211",
+   "43723a",
+   "43722a"
+  ],
+  "connectors": {
+   "anti_studs": 15,
+   "studs_up": 10
+  }
+ },
+ "3049c": {
+  "name": "Slope Brick 45 1 x 2 Double / Inverted without Centre Stud",
+  "category": "Bricks Sloped",
+  "rebrickable": "3049c",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 1
+  },
+  "colors": {
+   "Dark Bluish Grey": 1
+  },
+  "studs": {
+   "back": 1
+  },
+  "partners": [
+   "3020"
+  ],
+  "connectors": {
+   "anti_studs": 3
+  }
+ },
+ "18677": {
+  "name": "Plate 1 x 2 with Offset Peghole on Underside",
+  "category": "Plates Special",
+  "rebrickable": "18677",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 1
+  },
+  "colors": {
+   "White": 1
+  },
+  "studs": {
+   "front": 1
+  },
+  "partners": [
+   "3031",
+   "85984",
+   "3024",
+   "32028",
+   "3023b",
+   "3673"
+  ],
+  "connectors": {
+   "clips": 2,
+   "pin_holes": 1,
+   "anti_studs": 1,
+   "holes_side": 2,
+   "studs_up": 2
+  }
+ },
+ "32524": {
+  "name": "Technic Beam 7",
+  "category": "Technic Beams",
+  "rebrickable": "32524",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 1
+  },
+  "colors": {
+   "Black": 1
+  },
+  "studs": {
+   "side": 1
+  },
+  "partners": [
+   "2780",
+   "85984",
+   "3673",
+   "3700",
+   "3005"
+  ],
+  "connectors": {
+   "pin_holes": 7,
+   "holes_down": 7,
+   "anti_studs": 7
+  }
+ },
+ "3046": {
+  "name": "Slope Brick 45 2 x 2 Double Concave",
+  "category": "Bricks Sloped",
+  "rebrickable": "3046b",
+  "models": 1,
+  "uses": 4,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 4
+  },
+  "colors": {
+   "Black": 4
+  },
+  "studs": {
+   "up": 4
+  },
+  "partners": [
+   "30414",
+   "11211",
+   "3003"
+  ],
+  "connectors": {
+   "anti_studs": 5,
+   "studs_up": 3
+  }
+ },
+ "45677": {
+  "name": "Wedge 4 x 4 x 0.667 Curved",
+  "category": "Bricks Wedged",
+  "rebrickable": "45677",
+  "models": 1,
+  "uses": 4,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 3,
+   "face": 1
+  },
+  "colors": {
+   "Black": 4
+  },
+  "studs": {
+   "side": 2,
+   "front": 1,
+   "back": 1
+  },
+  "partners": [
+   "99206",
+   "3023b",
+   "26601",
+   "32952",
+   "22885",
+   "30414",
+   "3020"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 18,
+   "studs_up": 2
+  }
+ },
+ "18651": {
+  "name": "Technic Axle Pin Long with Friction with 2L Axle",
+  "category": "Technic Pins",
+  "rebrickable": "18651",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 1
+  },
+  "colors": {
+   "Black": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "3700",
+   "32184",
+   "11203",
+   "11458"
+  ],
+  "connectors": {
+   "axles": 1,
+   "pins": 1
+  }
+ },
+ "32184": {
+  "name": "Technic Cross Block 1 x 3 (Axle/Pin/Axle)",
+  "category": "Technic Connectors",
+  "rebrickable": "32184",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 1
+  },
+  "colors": {
+   "Red": 1
+  },
+  "studs": {
+   "front": 1
+  },
+  "partners": [
+   "18651"
+  ],
+  "connectors": {
+   "axle_holes": 2,
+   "pin_holes": 1,
+   "holes_side": 2
+  }
+ },
+ "2921": {
+  "name": "Brick 1 x 1 with Handle",
+  "category": "Bricks Special",
+  "rebrickable": "2921",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 2
+  },
+  "colors": {
+   "Red": 2
+  },
+  "studs": {
+   "side": 2
+  },
+  "partners": [
+   "15712",
+   "15573",
+   "24201",
+   "11477",
+   "88930",
+   "93273"
+  ],
+  "connectors": {
+   "bars": 2,
+   "anti_studs": 2,
+   "holes_down": 1,
+   "studs_up": 1
+  }
+ },
+ "3049d": {
+  "name": "Slope Brick 45 1 x 2 Double / Inverted with Bottom Stud Holder",
+  "category": "Bricks Sloped",
+  "rebrickable": "3049d",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1,
+   "torso": 1
+  },
+  "colors": {
+   "Black": 2
+  },
+  "studs": {
+   "side": 2
+  },
+  "partners": [
+   "3023b"
+  ],
+  "connectors": {
+   "anti_studs": 3
+  }
+ },
+ "3030": {
+  "name": "Plate 4 x 10",
+  "category": "Plates",
+  "rebrickable": "3030",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "base": 1
+  },
+  "colors": {
+   "White": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "3958",
+   "3710",
+   "3622",
+   "3023b",
+   "28802"
+  ],
+  "connectors": {
+   "anti_studs": 67,
+   "studs_up": 40
+  }
+ },
+ "85080": {
+  "name": "Brick 2 x 2 Corner Round with Stud Notch and Reinforced Underside",
+  "category": "Bricks Round and Cones",
+  "rebrickable": "85080",
+  "models": 1,
+  "uses": 4,
+  "brickheadz_sets": 0,
+  "roles": {
+   "legs": 4
+  },
+  "colors": {
+   "Red": 4
+  },
+  "studs": {
+   "up": 4
+  },
+  "partners": [
+   "30357"
+  ],
+  "connectors": {
+   "anti_studs": 2,
+   "studs_up": 2
+  }
+ },
+ "3035": {
+  "name": "Plate 4 x 8",
+  "category": "Plates",
+  "rebrickable": "3035",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "base": 2
+  },
+  "colors": {
+   "White": 2
+  },
+  "studs": {
+   "up": 2
+  },
+  "partners": [
+   "3958",
+   "3023b",
+   "3622",
+   "3010",
+   "28802"
+  ],
+  "connectors": {
+   "anti_studs": 53,
+   "studs_up": 32
+  }
+ },
+ "48092": {
+  "name": "Brick 4 x 4 Corner Round",
+  "category": "Bricks Round and Cones",
+  "rebrickable": "48092",
+  "models": 1,
+  "uses": 4,
+  "brickheadz_sets": 0,
+  "roles": {
+   "legs": 4
+  },
+  "colors": {
+   "Dark Turquoise": 4
+  },
+  "studs": {
+   "up": 4
+  },
+  "partners": [
+   "3958",
+   "30565",
+   "36840",
+   "2431",
+   "3710",
+   "2429",
+   "2430",
+   "3024"
+  ],
+  "connectors": {
+   "anti_studs": 3,
+   "studs_up": 3
+  }
+ },
+ "98100": {
+  "name": "Cone 2 x 2 Truncated",
+  "category": "Bricks Round and Cones",
+  "rebrickable": "98100",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Black": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "63965",
+   "59900",
+   "30565"
+  ],
+  "connectors": {
+   "clips": 1,
+   "axle_holes": 1,
+   "anti_studs": 5,
+   "studs_up": 1
+  }
+ },
+ "12885": {
+  "name": "Minifig Paint Roller Brush Handle",
+  "category": "Minifig Accessories",
+  "rebrickable": "12885",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "hair": 1
+  },
+  "colors": {
+   "Black": 1
+  },
+  "studs": {
+   "side": 1
+  },
+  "partners": [
+   "64567a",
+   "15712",
+   "4740"
+  ],
+  "connectors": {
+   "bars": 2,
+   "anti_studs": 2
+  }
+ },
+ "51270": {
+  "name": "Plant Pumpkin",
+  "category": "Plants & Trees",
+  "rebrickable": "51270",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Red": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "4740"
+  ],
+  "connectors": {
+   "clips": 1,
+   "axle_holes": 1,
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "37695": {
+  "name": "Plant Stem with 3 Leaves with Bar and Pin Holes",
+  "category": "Plants & Trees",
+  "rebrickable": "37695",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Bright Green": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "15573",
+   "3024",
+   "61252"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 1
+  }
+ },
+ "2460": {
+  "name": "Tile 2 x 2 with Pin",
+  "category": "Tiles Special",
+  "rebrickable": "2460",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "legs": 1
+  },
+  "colors": {
+   "Black": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "3622",
+   "3005",
+   "3024",
+   "3958",
+   "11212",
+   "6541"
+  ],
+  "connectors": {
+   "pins": 1,
+   "anti_studs": 5
+  }
+ },
+ "86996": {
+  "name": "Plate 1 x 1 x 0.667",
+  "category": "Plates",
+  "rebrickable": "86996",
+  "models": 1,
+  "uses": 11,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 5,
+   "torso": 5,
+   "face": 1
+  },
+  "colors": {
+   "Light Bluish Grey": 6,
+   "Tan": 4,
+   "Reddish Brown": 1
+  },
+  "studs": {
+   "up": 11
+  },
+  "partners": [
+   "11212",
+   "3623",
+   "3024",
+   "2357",
+   "22885",
+   "6541",
+   "3386",
+   "3031"
+  ],
+  "connectors": {
+   "clips": 1,
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "68013": {
+  "name": "Cylinder Half 1 x 2 with Cutout",
+  "category": "Bricks Round and Cones",
+  "rebrickable": "68013",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 1
+  },
+  "colors": {
+   "Red": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "35480",
+   "2357"
+  ],
+  "connectors": {
+   "clips": 2,
+   "anti_studs": 2,
+   "studs_up": 2
+  }
+ },
+ "3386": {
+  "name": "Plate 1 x 1 x 0.667 Half Round with Open Side Stud",
+  "category": "Plates Special",
+  "rebrickable": "3386",
+  "models": 1,
+  "uses": 9,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 4,
+   "torso": 3,
+   "face": 2
+  },
+  "colors": {
+   "White": 9
+  },
+  "studs": {
+   "up": 8,
+   "front": 1
+  },
+  "partners": [
+   "3031",
+   "2431",
+   "3623",
+   "63864",
+   "87087",
+   "26604",
+   "3386",
+   "86996"
+  ],
+  "connectors": {
+   "clips": 1,
+   "pin_holes": 1,
+   "anti_studs": 1,
+   "studs_side": 1,
+   "studs_up": 1
+  }
+ },
+ "2343": {
+  "name": "Minifig Goblet",
+  "category": "Minifig Accessories",
+  "rebrickable": "2343",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 1,
+   "arms": 1
+  },
+  "colors": {
+   "Lime": 2
+  },
+  "studs": {
+   "side": 2
+  },
+  "partners": [
+   "3673",
+   "6141",
+   "11458",
+   "11211",
+   "87079"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 1
+  }
+ },
+ "5841": {
+  "name": "Brick 2 x 1 x 1 with Curved Top",
+  "category": "Bricks Curved",
+  "rebrickable": "5841",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 2
+  },
+  "colors": {
+   "Light Bluish Grey": 2
+  },
+  "studs": {
+   "up": 2
+  },
+  "partners": [
+   "3623",
+   "11212"
+  ],
+  "connectors": {
+   "anti_studs": 2,
+   "studs_up": 1
+  }
+ },
+ "78257": {
+  "name": "Plate 1 x 1 with Handles on Opposite Ends",
+  "category": "Plates Special",
+  "rebrickable": "78257",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 1
+  },
+  "colors": {
+   "Light Bluish Grey": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "3623",
+   "78256",
+   "3005"
+  ],
+  "connectors": {
+   "bars": 2,
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "1126": {
+  "name": "Tile 1 x 2 with Rounded Ends",
+  "category": "Tiles Round and Curved",
+  "rebrickable": "1126",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 1
+  },
+  "colors": {
+   "Light Bluish Grey": 1
+  },
+  "studs": {
+   "front": 1
+  },
+  "partners": [
+   "3023b"
+  ],
+  "connectors": {
+   "anti_studs": 3
+  }
+ },
+ "35464": {
+  "name": "Slope Brick 45 1 x 1 Double",
+  "category": "Bricks Sloped",
+  "rebrickable": "35464",
+  "models": 1,
+  "uses": 6,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 3,
+   "head": 2,
+   "face": 1
+  },
+  "colors": {
+   "Black": 6
+  },
+  "studs": {
+   "back": 3,
+   "up": 3
+  },
+  "partners": [
+   "3623",
+   "3024",
+   "48729b",
+   "59900"
+  ],
+  "connectors": {
+   "anti_studs": 1
+  }
+ },
+ "77850": {
+  "name": "Plate 1 x 3 with Round Ends and 3 Open Studs",
+  "category": "Plates Round Curved and Dishes",
+  "rebrickable": "77850",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 2
+  },
+  "colors": {
+   "Light Bluish Grey": 2
+  },
+  "studs": {
+   "front": 2
+  },
+  "partners": [
+   "78256",
+   "24246"
+  ],
+  "connectors": {
+   "bars": 2,
+   "clips": 3,
+   "anti_studs": 5,
+   "studs_up": 3
+  }
+ },
+ "78256": {
+  "name": "Plate 1 x 2 with Clip Vertical on End",
+  "category": "Plates Special",
+  "rebrickable": "78256",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 2
+  },
+  "colors": {
+   "Light Bluish Grey": 2
+  },
+  "studs": {
+   "front": 2
+  },
+  "partners": [
+   "77850",
+   "24246",
+   "78257",
+   "63864"
+  ],
+  "connectors": {
+   "bars": 1,
+   "clips": 1,
+   "anti_studs": 3,
+   "studs_up": 2
+  }
+ },
+ "86876": {
+  "name": "Brick 1 x 2 with Centred Stud on Long Side",
+  "category": "Bricks Special",
+  "rebrickable": "86876",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 2
+  },
+  "colors": {
+   "Medium Nougat": 2
+  },
+  "studs": {
+   "up": 2
+  },
+  "partners": [
+   "3021",
+   "3024"
+  ],
+  "connectors": {
+   "clips": 1,
+   "anti_studs": 3,
+   "studs_side": 1,
+   "studs_up": 2
+  }
+ },
+ "61409": {
+  "name": "~Slope Brick 18 2 x 1 x 0.667 Grille (Obsolete)",
+  "category": "Bricks Sloped",
+  "rebrickable": "61409",
+  "models": 1,
+  "uses": 4,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 4
+  },
+  "colors": {
+   "Light Bluish Grey": 2,
+   "Black": 2
+  },
+  "studs": {
+   "up": 2,
+   "down": 2
+  },
+  "partners": [
+   "99206",
+   "61409",
+   "3024",
+   "3005"
+  ],
+  "connectors": {}
+ },
+ "27263": {
+  "name": "Tile 2 x 2 Corner without Corner",
+  "category": "Tiles Special",
+  "rebrickable": "27263",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 1,
+   "arms": 1
+  },
+  "colors": {
+   "Black": 2
+  },
+  "studs": {
+   "side": 2
+  },
+  "partners": [
+   "15068",
+   "3070b",
+   "3623",
+   "3024",
+   "2450"
+  ],
+  "connectors": {
+   "anti_studs": 2
+  }
+ },
+ "25111": {
+  "name": "Minifig Sword Dao with Curved Blade and Hilt",
+  "category": "Minifig Shields, Weapons, & Tools",
+  "rebrickable": "25111",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Pearl Silver": 1
+  },
+  "studs": {
+   "front": 1
+  },
+  "partners": [
+   "3022",
+   "11476",
+   "3069b"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 1
+  }
+ },
+ "64799": {
+  "name": "Plate 4 x 4 with Open Centre 2 x 2",
+  "category": "Plates Special",
+  "rebrickable": "64799",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 1
+  },
+  "colors": {
+   "White": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "3023b",
+   "3031"
+  ],
+  "connectors": {
+   "bars": 12,
+   "anti_studs": 24,
+   "studs_up": 12
+  }
+ },
+ "3961": {
+  "name": "Dish 8 x 8 Inverted with Solid Studs",
+  "category": "Plates Round Curved and Dishes",
+  "rebrickable": "3961",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 1
+  },
+  "colors": {
+   "Tan": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "22885",
+   "27925",
+   "87079",
+   "4032a",
+   "44375b",
+   "3020",
+   "3003",
+   "3031"
+  ],
+  "connectors": {
+   "pin_holes": 1,
+   "anti_studs": 5,
+   "studs_up": 4
+  }
+ },
+ "44375b": {
+  "name": "Dish 6 x 6 Inverted with Solid Studs",
+  "category": "Plates Round Curved and Dishes",
+  "rebrickable": "44375b",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "hair": 1
+  },
+  "colors": {
+   "Tan": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "3961",
+   "6141",
+   "4032a",
+   "93059"
+  ],
+  "connectors": {
+   "clips": 1,
+   "anti_studs": 5,
+   "studs_up": 4
+  }
+ },
+ "93059": {
+  "name": "Minifig Hat Conical Asian",
+  "category": "Minifig Headwear",
+  "rebrickable": "93059",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "hair": 1
+  },
+  "colors": {
+   "Tan": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "6141",
+   "44375b"
+  ],
+  "connectors": {
+   "anti_studs": 1
+  }
+ },
+ "4728": {
+  "name": "Plant Flower 2 x 2 with Hollow Stud",
+  "category": "Plants & Trees",
+  "rebrickable": "4728",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 1
+  },
+  "colors": {
+   "Yellow": 1
+  },
+  "studs": {
+   "front": 1
+  },
+  "partners": [
+   "87087",
+   "22885",
+   "3020",
+   "2431",
+   "33291"
+  ],
+  "connectors": {
+   "clips": 1,
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "32059": {
+  "name": "Plate 4 x 6 without Corners",
+  "category": "Plates Wedged",
+  "rebrickable": "32059",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 1
+  },
+  "colors": {
+   "Blue": 1
+  },
+  "studs": {
+   "back": 1
+  },
+  "partners": [
+   "87079",
+   "22885"
+  ],
+  "connectors": {
+   "bars": 2,
+   "anti_studs": 33,
+   "studs_up": 20
+  }
+ },
+ "16770": {
+  "name": "Claw Wide with Clip",
+  "category": "Animal / Creature Body Parts",
+  "rebrickable": "16770",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 2
+  },
+  "colors": {
+   "White": 2
+  },
+  "studs": {
+   "front": 2
+  },
+  "partners": [
+   "2431",
+   "3070b",
+   "20482"
+  ],
+  "connectors": {
+   "clips": 1
+  }
+ },
+ "3300": {
+  "name": "Slope Brick 33 2 x 2 Double",
+  "category": "Bricks Sloped",
+  "rebrickable": "3300",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 2
+  },
+  "colors": {
+   "White": 2
+  },
+  "studs": {
+   "side": 2
+  },
+  "partners": [
+   "3020"
+  ],
+  "connectors": {
+   "anti_studs": 5
+  }
+ },
+ "572c": {
+  "name": "~String Minifig Grip (Obsolete)",
+  "category": "Technic Gears",
+  "rebrickable": "572",
+  "models": 1,
+  "uses": 18,
+  "brickheadz_sets": 0,
+  "roles": {
+   "accessory": 12,
+   "arms": 4,
+   "legs": 2
+  },
+  "colors": {
+   "White": 12,
+   "Main Colour": 6
+  },
+  "studs": {
+   "down": 12,
+   "up": 4,
+   "side": 2
+  },
+  "partners": [
+   "572c",
+   "11476"
+  ],
+  "connectors": {}
+ },
+ "43892": {
+  "name": "Animal Tail",
+  "category": "Animal / Creature Body Parts",
+  "rebrickable": "43892",
+  "models": 1,
+  "uses": 4,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 4
+  },
+  "colors": {
+   "Black": 4
+  },
+  "studs": {
+   "front": 2,
+   "up": 2
+  },
+  "partners": [
+   "26604",
+   "3031",
+   "3010",
+   "53451",
+   "43892"
+  ],
+  "connectors": {
+   "bars": 1,
+   "holes_side": 1
+  }
+ },
+ "572a": {
+  "name": "~String End Stud (Obsolete)",
+  "category": "Technic Gears",
+  "rebrickable": "572",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "accessory": 2
+  },
+  "colors": {
+   "White": 2
+  },
+  "studs": {
+   "side": 1,
+   "up": 1
+  },
+  "partners": [],
+  "connectors": {}
+ },
+ "3028": {
+  "name": "Plate 6 x 12",
+  "category": "Plates",
+  "rebrickable": "3028",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "base": 1
+  },
+  "colors": {
+   "Black": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "3070b",
+   "30413",
+   "4162",
+   "4865b",
+   "26603",
+   "87079"
+  ],
+  "connectors": {
+   "anti_studs": 127,
+   "studs_up": 72
+  }
+ },
+ "30413": {
+  "name": "Panel 1 x 4 x 1 with Rounded Corners, Thick Wall",
+  "category": "",
+  "rebrickable": null,
+  "models": 1,
+  "uses": 4,
+  "brickheadz_sets": 0,
+  "roles": {
+   "legs": 4
+  },
+  "colors": {
+   "Black": 4
+  },
+  "studs": {
+   "up": 4
+  },
+  "partners": [
+   "3028"
+  ],
+  "connectors": {
+   "bars": 3,
+   "anti_studs": 7
+  }
+ },
+ "4162": {
+  "name": "Tile 1 x 8",
+  "category": "Tiles",
+  "rebrickable": "4162",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "legs": 2
+  },
+  "colors": {
+   "Black": 2
+  },
+  "studs": {
+   "up": 2
+  },
+  "partners": [
+   "11203",
+   "3028"
+  ],
+  "connectors": {
+   "bars": 7,
+   "anti_studs": 15
+  }
+ },
+ "4865b": {
+  "name": "Panel 1 x 2 x 1 with Rounded Corners",
+  "category": "Panels",
+  "rebrickable": "4865b",
+  "models": 1,
+  "uses": 6,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 4,
+   "legs": 2
+  },
+  "colors": {
+   "Trans Clear": 4,
+   "Black": 2
+  },
+  "studs": {
+   "back": 4,
+   "up": 2
+  },
+  "partners": [
+   "44728",
+   "3028"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 3
+  }
+ },
+ "60581": {
+  "name": "Panel 1 x 4 x 3 Reinforced",
+  "category": "Panels",
+  "rebrickable": "60581",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 1
+  },
+  "colors": {
+   "Light Bluish Grey": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "3023b",
+   "44728",
+   "3004",
+   "3034",
+   "87079"
+  ],
+  "connectors": {
+   "bars": 3,
+   "clips": 4,
+   "anti_studs": 7,
+   "studs_up": 4
+  }
+ },
+ "2453b": {
+  "name": "Brick 1 x 1 x 5 with Solid Stud",
+  "category": "Bricks",
+  "rebrickable": "2453b",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 2
+  },
+  "colors": {
+   "Light Bluish Grey": 2
+  },
+  "studs": {
+   "up": 2
+  },
+  "partners": [
+   "3009"
+  ],
+  "connectors": {
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "3938": {
+  "name": "Hinge 1 x 2 Top",
+  "category": "Hinges, Arms and Turntables",
+  "rebrickable": "3938",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 2
+  },
+  "colors": {
+   "Black": 2
+  },
+  "studs": {
+   "front": 2
+  },
+  "partners": [
+   "3937",
+   "4070",
+   "3023b",
+   "3070b",
+   "22885",
+   "2420",
+   "24299",
+   "24307"
+  ],
+  "connectors": {
+   "bars": 2,
+   "clips": 2,
+   "hinge": 1,
+   "anti_studs": 2,
+   "studs_up": 2
+  }
+ },
+ "18041": {
+  "name": "Minifig Harpoon with Smooth Bar",
+  "category": "Minifig Shields, Weapons, & Tools",
+  "rebrickable": "18041",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 1
+  },
+  "colors": {
+   "Pearl Silver": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "59900"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 1
+  }
+ },
+ "48729a": {
+  "name": "Bar 1.5L with Clip without Hole in Shaft",
+  "category": "Bars, Ladders and Fences",
+  "rebrickable": "48729a",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 1
+  },
+  "colors": {
+   "Black": 1
+  },
+  "studs": {
+   "down": 1
+  },
+  "partners": [
+   "22885",
+   "3070b",
+   "60849",
+   "11090",
+   "63868",
+   "2420"
+  ],
+  "connectors": {
+   "bars": 1,
+   "clips": 1
+  }
+ },
+ "11090": {
+  "name": "Bar Tube with Clip",
+  "category": "Bars, Ladders and Fences",
+  "rebrickable": "11090",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 1
+  },
+  "colors": {
+   "Black": 1
+  },
+  "studs": {
+   "back": 1
+  },
+  "partners": [
+   "3070b",
+   "48729a",
+   "24299"
+  ],
+  "connectors": {
+   "clips": 2
+  }
+ },
+ "30340": {
+  "name": "Minifig Life Ring",
+  "category": "Minifig Accessories",
+  "rebrickable": "30340",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 2
+  },
+  "colors": {
+   "Black": 2
+  },
+  "studs": {
+   "front": 2
+  },
+  "partners": [
+   "3710",
+   "98138",
+   "3069b",
+   "99206"
+  ],
+  "connectors": {
+   "clips": 1,
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "6005": {
+  "name": "Arch 1 x 3 x 2 with Curved Top",
+  "category": "Bricks Curved",
+  "rebrickable": "6005",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 1
+  },
+  "colors": {
+   "Green": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "3023b",
+   "3022",
+   "3710",
+   "6091",
+   "61678",
+   "99206",
+   "3020"
+  ],
+  "connectors": {
+   "anti_studs": 2,
+   "studs_up": 1
+  }
+ },
+ "3036": {
+  "name": "Plate 6 x 8",
+  "category": "Plates",
+  "rebrickable": "3036",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "base": 1
+  },
+  "colors": {
+   "Black": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "87580",
+   "6636",
+   "3069b",
+   "87079"
+  ],
+  "connectors": {
+   "anti_studs": 83,
+   "studs_up": 48
+  }
+ },
+ "95673": {
+  "name": "Minifig Sword Roman Gladius with Thin Crossguard",
+  "category": "Minifig Shields, Weapons, & Tools",
+  "rebrickable": "95673",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Pearl Silver": 1
+  },
+  "studs": {
+   "back": 1
+  },
+  "partners": [
+   "11476"
+  ],
+  "connectors": {
+   "bars": 1
+  }
+ },
+ "92290": {
+  "name": "Minifig Weapon Trident",
+  "category": "Minifig Shields, Weapons, & Tools",
+  "rebrickable": "92290",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Pearl Dark Grey": 1
+  },
+  "studs": {
+   "front": 1
+  },
+  "partners": [
+   "3023b",
+   "64567a",
+   "11476"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 1
+  }
+ },
+ "14769": {
+  "name": "Tile 2 x 2 Round with Round Underside Stud",
+  "category": "Tiles Round and Curved",
+  "rebrickable": "14769",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 2
+  },
+  "colors": {
+   "Light Bluish Grey": 2
+  },
+  "studs": {
+   "side": 2
+  },
+  "partners": [
+   "15573"
+  ],
+  "connectors": {
+   "anti_studs": 5
+  }
+ },
+ "6587": {
+  "name": "Technic Axle 3 with Stud",
+  "category": "Technic Axles",
+  "rebrickable": "6587",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 1
+  },
+  "colors": {
+   "Dark Tan": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "32064a",
+   "3700",
+   "3070b",
+   "3710"
+  ],
+  "connectors": {
+   "axles": 1,
+   "clips": 1,
+   "studs_up": 1
+  }
+ },
+ "21699": {
+  "name": "Bar 4L Lightsaber Blade with Cross Bar 2L",
+  "category": "Bars, Ladders and Fences",
+  "rebrickable": "21699",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 1
+  },
+  "colors": {
+   "Trans Red": 1
+  },
+  "studs": {
+   "back": 1
+  },
+  "partners": [
+   "64567a",
+   "3022",
+   "11476"
+  ],
+  "connectors": {
+   "bars": 4,
+   "holes_down": 1,
+   "anti_studs": 3
+  }
+ },
+ "3956": {
+  "name": "Bracket 2 x 2 - 2 x 2 Up",
+  "category": "Plates Special",
+  "rebrickable": "3956",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 1
+  },
+  "colors": {
+   "Black": 1
+  },
+  "studs": {
+   "back": 1
+  },
+  "partners": [
+   "3010",
+   "3941",
+   "22885",
+   "3031",
+   "3660a",
+   "3003"
+  ],
+  "connectors": {
+   "holes_side": 5,
+   "anti_studs": 7,
+   "studs_side": 4
+  }
+ },
+ "32125": {
+  "name": "Technic Rotor 3 Blade with 6 Studs",
+  "category": "Technic Special",
+  "rebrickable": "32125",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 1,
+   "face": 1
+  },
+  "colors": {
+   "Dark Red": 2
+  },
+  "studs": {
+   "back": 2
+  },
+  "partners": [
+   "3023b",
+   "11477",
+   "3024",
+   "32125",
+   "3070b",
+   "3660a"
+  ],
+  "connectors": {
+   "bars": 3,
+   "clips": 6,
+   "axle_holes": 1,
+   "anti_studs": 9,
+   "studs_up": 6
+  }
+ },
+ "30031": {
+  "name": "Minifig Handlebars",
+  "category": "Transportation - Land",
+  "rebrickable": "30031",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 1
+  },
+  "colors": {
+   "Pearl Silver": 1
+  },
+  "studs": {
+   "front": 1
+  },
+  "partners": [
+   "3070b",
+   "3020",
+   "11476",
+   "3068b"
+  ],
+  "connectors": {
+   "bars": 4
+  }
+ },
+ "17010": {
+  "name": "Minifig Weapon Blaster with Two Barrels",
+  "category": "Minifig Shields, Weapons, & Tools",
+  "rebrickable": "17010",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 2
+  },
+  "colors": {
+   "Pearl Dark Grey": 2
+  },
+  "studs": {
+   "front": 2
+  },
+  "partners": [
+   "3022",
+   "11476"
+  ],
+  "connectors": {
+   "bars": 1
+  }
+ },
+ "93604": {
+  "name": "Slope Brick Curved 3 x 4 x 0.667 Rounded",
+  "category": "Bricks Round and Cones",
+  "rebrickable": "93604",
+  "models": 1,
+  "uses": 4,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 2,
+   "face": 1,
+   "torso": 1
+  },
+  "colors": {
+   "Reddish Brown": 4
+  },
+  "studs": {
+   "side": 2,
+   "front": 1,
+   "back": 1
+  },
+  "partners": [
+   "22885",
+   "54200",
+   "3623",
+   "32028",
+   "3022",
+   "3020",
+   "3023b"
+  ],
+  "connectors": {
+   "bars": 3,
+   "anti_studs": 19,
+   "studs_up": 2
+  }
+ },
+ "4592c": {
+  "name": "Lever Small Base",
+  "category": "Bars, Ladders and Fences",
+  "rebrickable": "4592",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 1
+  },
+  "colors": {
+   "Light Bluish Grey": 1
+  },
+  "studs": {
+   "front": 1
+  },
+  "partners": [
+   "15573"
+  ],
+  "connectors": {}
+ },
+ "18787": {
+  "name": "Minifig Sword Blocky",
+  "category": "Minifig Shields, Weapons, & Tools",
+  "rebrickable": "18787",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Pearl Silver": 1
+  },
+  "studs": {
+   "front": 1
+  },
+  "partners": [
+   "3023b",
+   "3020",
+   "3010",
+   "11476",
+   "22885"
+  ],
+  "connectors": {
+   "bars": 1
+  }
+ },
+ "87989": {
+  "name": "Minifig Syringe",
+  "category": "Minifig Accessories",
+  "rebrickable": "87989",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 1
+  },
+  "colors": {
+   "Lime": 1
+  },
+  "studs": {
+   "front": 1
+  },
+  "partners": [
+   "15712"
+  ],
+  "connectors": {
+   "bars": 1
+  }
+ },
+ "93274": {
+  "name": "Bracket 1 x 2 - 2 x 4",
+  "category": "Plates Special",
+  "rebrickable": "93274",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 1
+  },
+  "colors": {
+   "Sand Green": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "3024",
+   "3004",
+   "3022",
+   "11477",
+   "3010",
+   "87087",
+   "3710",
+   "15068"
+  ],
+  "connectors": {
+   "bars": 1,
+   "clips": 8,
+   "anti_studs": 3,
+   "studs_side": 8,
+   "studs_up": 2
+  }
+ },
+ "35365": {
+  "name": "Bar 2.4 x 5.4 Round",
+  "category": "Large Buildable Figures",
+  "rebrickable": "35365",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 1
+  },
+  "colors": {
+   "Black": 1
+  },
+  "studs": {
+   "front": 1
+  },
+  "partners": [
+   "3024",
+   "98138",
+   "26601",
+   "15573"
+  ],
+  "connectors": {
+   "anti_studs": 1
+  }
+ },
+ "24324": {
+  "name": "Minifig Book Base with Two Studs",
+  "category": "Minifig Accessories",
+  "rebrickable": "24324",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Reddish Brown": 1
+  },
+  "studs": {
+   "front": 1
+  },
+  "partners": [
+   "3023b",
+   "3010",
+   "3020",
+   "3001",
+   "92593",
+   "24093",
+   "3069b",
+   "11476"
+  ],
+  "connectors": {
+   "clips": 2,
+   "hinge": 1,
+   "studs_up": 2
+  }
+ },
+ "24093": {
+  "name": "Minifig Book Cover",
+  "category": "Minifig Accessories",
+  "rebrickable": "24093",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "Reddish Brown": 1
+  },
+  "studs": {
+   "back": 1
+  },
+  "partners": [
+   "24324",
+   "3069b",
+   "11476"
+  ],
+  "connectors": {
+   "hinge": 1
+  }
+ },
+ "60475b": {
+  "name": "Brick 1 x 1 with Clip Vertical (Thick C-Clip) and Hollow Stud",
+  "category": "Bricks Special",
+  "rebrickable": "60475b",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 1
+  },
+  "colors": {
+   "Bright Light Orange": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "3023b",
+   "3024",
+   "20482",
+   "3070b"
+  ],
+  "connectors": {
+   "clips": 2,
+   "anti_studs": 1,
+   "studs_up": 1
+  }
+ },
+ "24855": {
+  "name": "Plant Flower Stem with Bar and Hole",
+  "category": "Plants & Trees",
+  "rebrickable": "24855",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 1
+  },
+  "colors": {
+   "Reddish Brown": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "3623",
+   "85861",
+   "3024"
+  ],
+  "connectors": {
+   "bars": 1,
+   "clips": 1,
+   "anti_studs": 1
+  }
+ },
+ "18671": {
+  "name": "Bracket 3 x 2 x 1.333",
+  "category": "Bricks Special",
+  "rebrickable": "18671",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 1
+  },
+  "colors": {
+   "Dark Bluish Grey": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "3023b",
+   "3004",
+   "3941",
+   "3001"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 7,
+   "studs_up": 6
+  }
+ },
+ "13548": {
+  "name": "Slope Brick 45 2 x 2 Double Convex with 45 Corner",
+  "category": "Bricks Wedged",
+  "rebrickable": "13548",
+  "models": 1,
+  "uses": 4,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 2,
+   "face": 2
+  },
+  "colors": {
+   "Red": 4
+  },
+  "studs": {
+   "up": 4
+  },
+  "partners": [
+   "3031",
+   "3010"
+  ],
+  "connectors": {
+   "anti_studs": 4,
+   "studs_up": 1
+  }
+ },
+ "3039": {
+  "name": "Slope Brick 45 2 x 2",
+  "category": "Bricks Sloped",
+  "rebrickable": "3039",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 1
+  },
+  "colors": {
+   "Red": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "3031",
+   "3010"
+  ],
+  "connectors": {
+   "anti_studs": 5,
+   "studs_up": 2
+  }
+ },
+ "2341": {
+  "name": "Slope Brick 45 3 x 1 Inverted Double without Inner Stopper Rings",
+  "category": "Bricks Sloped",
+  "rebrickable": "2341",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "hair": 2
+  },
+  "colors": {
+   "Red": 2
+  },
+  "studs": {
+   "side": 2
+  },
+  "partners": [
+   "2420",
+   "15573",
+   "4733",
+   "3024",
+   "54200",
+   "11477"
+  ],
+  "connectors": {
+   "clips": 2,
+   "anti_studs": 1,
+   "studs_up": 3
+  }
+ },
+ "4592": {
+  "name": "Hinge Control Stick Base",
+  "category": "Bars, Ladders and Fences",
+  "rebrickable": "4592",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "hair": 2
+  },
+  "colors": {
+   "Black": 2
+  },
+  "studs": {
+   "up": 2
+  },
+  "partners": [
+   "4593",
+   "3031"
+  ],
+  "connectors": {
+   "hinge": 1,
+   "anti_studs": 1
+  }
+ },
+ "4593": {
+  "name": "Hinge Control Stick",
+  "category": "Bars, Ladders and Fences",
+  "rebrickable": "4593",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "hair": 2
+  },
+  "colors": {
+   "Black": 2
+  },
+  "studs": {
+   "side": 2
+  },
+  "partners": [
+   "4592"
+  ],
+  "connectors": {
+   "hinge": 1
+  }
+ },
+ "60592": {
+  "name": "Window 1 x 2 x 2 without Sill",
+  "category": "Windows and Doors",
+  "rebrickable": "60592",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 2
+  },
+  "colors": {
+   "White": 2
+  },
+  "studs": {
+   "back": 2
+  },
+  "partners": [
+   "3022",
+   "88930",
+   "98138",
+   "87087",
+   "60601",
+   "22885"
+  ],
+  "connectors": {
+   "clips": 2,
+   "anti_studs": 3,
+   "studs_up": 2
+  }
+ },
+ "60601": {
+  "name": "Glass for Window 1 x 2 x 2 without Sill",
+  "category": "Windows and Doors",
+  "rebrickable": "60601",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 1
+  },
+  "colors": {
+   "White": 1
+  },
+  "studs": {
+   "back": 1
+  },
+  "partners": [
+   "60592"
+  ],
+  "connectors": {}
+ },
+ "32803": {
+  "name": "Slope Brick Curved 2 x 2 Inverted",
+  "category": "Bricks Curved",
+  "rebrickable": "32803",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 1
+  },
+  "colors": {
+   "White": 1
+  },
+  "studs": {
+   "back": 1
+  },
+  "partners": [
+   "24201",
+   "88072",
+   "2431",
+   "60897",
+   "2429",
+   "2430"
+  ],
+  "connectors": {
+   "clips": 4,
+   "studs_up": 4
+  }
+ },
+ "88072": {
+  "name": "Plate 1 x 2 with Vertical Bar on Long Side and Short Arm",
+  "category": "Plates Special",
+  "rebrickable": "88072",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 2
+  },
+  "colors": {
+   "White": 2
+  },
+  "studs": {
+   "back": 2
+  },
+  "partners": [
+   "24201",
+   "2431",
+   "32803",
+   "60897",
+   "29120",
+   "29119"
+  ],
+  "connectors": {
+   "bars": 3,
+   "anti_studs": 3,
+   "holes_down": 1,
+   "studs_up": 2
+  }
+ },
+ "13608": {
+  "name": "Minifig Gun Laser Pistol with Rounded Heat Diffusers",
+  "category": "Minifig Shields, Weapons, & Tools",
+  "rebrickable": "13608",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 1
+  },
+  "colors": {
+   "White": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "20482",
+   "3023b",
+   "37352",
+   "63868"
+  ],
+  "connectors": {
+   "bars": 1,
+   "clips": 3,
+   "anti_studs": 1,
+   "studs_side": 1,
+   "studs_up": 2
+  }
+ },
+ "57899": {
+  "name": "Minifig Gun Long Blaster",
+  "category": "Minifig Shields, Weapons, & Tools",
+  "rebrickable": "57899",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 1
+  },
+  "colors": {
+   "Black": 1
+  },
+  "studs": {
+   "side": 1
+  },
+  "partners": [
+   "15712",
+   "64567a"
+  ],
+  "connectors": {
+   "bars": 3,
+   "holes_side": 1,
+   "anti_studs": 1
+  }
+ },
+ "11301": {
+  "name": "Slope Brick Curved 2 x 8 x 2 Inverted Double",
+  "category": "Bricks Curved",
+  "rebrickable": "11301",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 2
+  },
+  "colors": {
+   "White": 2
+  },
+  "studs": {
+   "up": 2
+  },
+  "partners": [
+   "2780",
+   "99206",
+   "15573",
+   "3941",
+   "11211",
+   "3020",
+   "3795",
+   "3021"
+  ],
+  "connectors": {
+   "clips": 16,
+   "pin_holes": 6,
+   "holes_side": 6,
+   "anti_studs": 11,
+   "studs_up": 16
+  }
+ },
+ "33243": {
+  "name": "Brick 1 x 3 x 2 Curved Top",
+  "category": "Bricks Curved",
+  "rebrickable": "33243",
+  "models": 1,
+  "uses": 4,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 4
+  },
+  "colors": {
+   "White": 4
+  },
+  "studs": {
+   "front": 2,
+   "back": 2
+  },
+  "partners": [
+   "50950",
+   "67329",
+   "30043"
+  ],
+  "connectors": {
+   "clips": 1,
+   "anti_studs": 5,
+   "studs_up": 1
+  }
+ },
+ "18646": {
+  "name": "Plate 3 x 6 Round Half with 1 x 2 Cutout",
+  "category": "Plates Round Curved and Dishes",
+  "rebrickable": "18646",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 1
+  },
+  "colors": {
+   "Dark Tan": 1
+  },
+  "studs": {
+   "back": 1
+  },
+  "partners": [
+   "88293",
+   "6141",
+   "3021",
+   "30043",
+   "3023b"
+  ],
+  "connectors": {
+   "anti_studs": 18,
+   "studs_up": 10
+  }
+ },
+ "88293": {
+  "name": "Brick 3 x 3 x 2 Round Corner with Dome Top",
+  "category": "Bricks Round and Cones",
+  "rebrickable": "88293",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "torso": 2
+  },
+  "colors": {
+   "White": 2
+  },
+  "studs": {
+   "back": 2
+  },
+  "partners": [
+   "18646",
+   "3023b",
+   "30043"
+  ],
+  "connectors": {
+   "anti_studs": 9,
+   "studs_up": 1
+  }
+ },
+ "30043": {
+  "name": "Plate 1 x 4 with Arm",
+  "category": "Plates Special",
+  "rebrickable": "30043",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "arms": 2
+  },
+  "colors": {
+   "Light Bluish Grey": 2
+  },
+  "studs": {
+   "side": 2
+  },
+  "partners": [
+   "11477",
+   "33243",
+   "18646",
+   "88293",
+   "6141",
+   "4032a",
+   "67329",
+   "54200"
+  ],
+  "connectors": {
+   "bars": 5,
+   "anti_studs": 8,
+   "studs_up": 4
+  }
+ },
+ "24309": {
+  "name": "Slope Brick Curved 3 x 2",
+  "category": "Bricks Curved",
+  "rebrickable": "24309",
+  "models": 1,
+  "uses": 3,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 2,
+   "hair": 1
+  },
+  "colors": {
+   "Black": 3
+  },
+  "studs": {
+   "front": 2,
+   "up": 1
+  },
+  "partners": [
+   "3023b",
+   "92946",
+   "22885",
+   "3623",
+   "3024",
+   "99206"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 8
+  }
+ },
+ "19141": {
+  "name": "Minifig Scabbard for Two Swords with Bar",
+  "category": "Minifig Accessories",
+  "rebrickable": "19141",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 1
+  },
+  "colors": {
+   "Dark Brown": 1
+  },
+  "studs": {
+   "back": 1
+  },
+  "partners": [
+   "3023b",
+   "21459",
+   "3700",
+   "3022",
+   "4274"
+  ],
+  "connectors": {
+   "bars": 1,
+   "anti_studs": 1
+  }
+ },
+ "23443": {
+  "name": "Bar Tube with Handle",
+  "category": "Bars, Ladders and Fences",
+  "rebrickable": "23443",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "face": 1
+  },
+  "colors": {
+   "Black": 1
+  },
+  "studs": {
+   "side": 1
+  },
+  "partners": [
+   "3024",
+   "3069b",
+   "32828",
+   "26604",
+   "87087",
+   "3023b"
+  ],
+  "connectors": {
+   "bars": 1,
+   "clips": 1
+  }
+ },
+ "u8001b": {
+  "name": "Mursten Brick 1 x 2 with 1 Slot",
+  "category": "",
+  "rebrickable": null,
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "head": 1
+  },
+  "colors": {
+   "Red": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [
+   "99780",
+   "3020",
+   "11211"
+  ],
+  "connectors": {
+   "anti_studs": 3,
+   "studs_up": 2
+  }
+ },
+ "79389": {
+  "name": "Bracket 1 x 1 - 2 x 1 Down",
+  "category": "Plates Special",
+  "rebrickable": "79389",
+  "models": 1,
+  "uses": 5,
+  "brickheadz_sets": 0,
+  "roles": {
+   "accessory": 3,
+   "head": 2
+  },
+  "colors": {
+   "Tan": 4,
+   "Red": 1
+  },
+  "studs": {
+   "up": 5
+  },
+  "partners": [
+   "3024",
+   "26604",
+   "3070b",
+   "87087",
+   "25269",
+   "63864",
+   "24246"
+  ],
+  "connectors": {
+   "clips": 2,
+   "anti_studs": 1,
+   "studs_side": 2,
+   "studs_up": 1
+  }
+ },
+ "2436a": {
+  "name": "Bracket 1 x 2 - 1 x 4 with Square Corners",
+  "category": "Plates Special",
+  "rebrickable": "2436",
+  "models": 1,
+  "uses": 2,
+  "brickheadz_sets": 0,
+  "roles": {
+   "accessory": 2
+  },
+  "colors": {
+   "Tan": 2
+  },
+  "studs": {
+   "up": 2
+  },
+  "partners": [],
+  "connectors": {
+   "bars": 1,
+   "clips": 4,
+   "anti_studs": 3,
+   "studs_side": 4,
+   "studs_up": 2
+  }
+ },
+ "u7021": {
+  "name": "Modulex Tile 1 x 4 with Bottom Studs",
+  "category": "",
+  "rebrickable": null,
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "accessory": 1
+  },
+  "colors": {
+   "Red": 1
+  },
+  "studs": {
+   "up": 1
+  },
+  "partners": [],
+  "connectors": {}
+ },
+ "3794b": {
+  "name": "Plate 1 x 2 with Groove with 1 Centre Stud",
+  "category": "Plates Special",
+  "rebrickable": "3794b",
+  "models": 1,
+  "uses": 1,
+  "brickheadz_sets": 0,
+  "roles": {
+   "accessory": 1
+  },
+  "colors": {
+   "Red": 1
+  },
+  "studs": {
+   "front": 1
+  },
+  "partners": [],
+  "connectors": {
+   "bars": 1,
+   "clips": 1,
+   "anti_studs": 3,
+   "studs_up": 1
+  }
+ }
+}

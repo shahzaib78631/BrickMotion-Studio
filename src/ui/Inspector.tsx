@@ -8,7 +8,8 @@ import { isGrid, isSub } from '../plan/types';
 import { DEFAULT_COLOR } from '../model/assemble';
 import { runCommand } from '../state/editing';
 import { fitOptionsForSelection, fitSelected } from '../state/fit';
-import { ensureParts, getCatalog, getColors, partName } from '../state/partService';
+import { ensureParts, getCatalog, getColors, metricsOf, partName } from '../state/partService';
+import { modelConnections } from '../plan/connectionGraph';
 import type { ModelState } from '../state/useModel';
 import { useStudio } from '../state/store';
 import type { Timeline } from '../anim/timeline';
@@ -113,6 +114,20 @@ export function Inspector({ timeline, checks, stepCard, model, onMakeSubmodel }:
     const item = findItem(plan, editingModel, id);
     return item && 'part' in item.item ? partName(item.item.part) : id;
   };
+  /** What the selected pieces connect to, from the whole assembly's mated connectors. */
+  const connections = useMemo(() => modelConnections(model.assembly, metricsOf), [model.assembly]);
+  const selectedConns = ids.length ? connections.filter((c) => ids.includes(c.a.itemId) || ids.includes(c.b.itemId)) : [];
+  const mateGroups = useMemo(() => {
+    const m = new Map<string, { part: string; type: string; grip?: boolean; count: number }>();
+    for (const c of selectedConns) {
+      const other = ids.includes(c.a.itemId) ? c.b : c.a;
+      const k = `${other.part}|${c.type}|${c.grip ? 1 : 0}`;
+      let g = m.get(k);
+      if (!g) m.set(k, (g = { part: other.part, type: c.type, grip: c.grip, count: 0 }));
+      g.count++;
+    }
+    return [...m.values()];
+  }, [selectedConns, ids]);
   const group = first?.assembly?.group;
   const steps = modelSteps(plan, editingModel);
   const selectedSub = first && isSub(first) ? first.submodel : editingModel;
@@ -298,7 +313,7 @@ export function Inspector({ timeline, checks, stepCard, model, onMakeSubmodel }:
             </p>
           </>}
           {pieceChecks.length > 0 && <><h4>Checks <span className="nx-count">{pieceChecks.length}</span></h4>
-            <p className="nx-fine">These are why it is outlined red in the viewport.</p>
+            {pieceChecks.some((w) => w.kind !== 'weak') && <p className="nx-fine">These are why it is outlined red in the viewport.</p>}
             <ul className="bm-checks">
               {pieceChecks.slice(0, 8).map((w, i) => (
                 <li key={i}>
@@ -312,6 +327,10 @@ export function Inspector({ timeline, checks, stepCard, model, onMakeSubmodel }:
             </ul>
             {pieceChecks.length > 8 && <p className="nx-hint">…and {pieceChecks.length - 8} more in Checks.</p>}
           </>}
+          <h4>Connections</h4>
+          {mateGroups.length === 0
+            ? <p className="nx-fine">Nothing mates with {pieceIds.length === 1 ? 'this piece' : 'these pieces'}: {pieceIds.length === 1 ? 'it sits' : 'they sit'} loose. Stud, pin, bar and clip joints count.</p>
+            : <p className="nx-fine">{mateGroups.map((g) => `${g.count}× ${g.type}${g.grip ? ' (clip)' : ''} to ${partName(g.part)}`).join(' · ')}</p>}
           <h4>Part color</h4>
           <ColorSwatches value={firstColor} onPick={pickColor} />
           <label className="nx-field">Step<select value={found[0]?.step ?? 0} onChange={(e) => st.apply((p) => moveItemsToStep(p, editingModel, ids, Number(e.target.value)))}>{steps.map((_, i) => <option key={i} value={i}>Step {i + 1}</option>)}</select></label>

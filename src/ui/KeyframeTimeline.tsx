@@ -5,13 +5,18 @@ import {
   type KeyClipboard, type KeyRef,
 } from '../anim/keyframes';
 import { buildLayerAt, linkBuildLayer, unlinkBuildLayer, updateBuildLayer } from '../anim/buildLayer';
-import { bakeBuildFlights } from '../anim/bakeBuild';
+import { bakeBuildFlights, isBakedFlight } from '../anim/bakeBuild';
+import { fullPathKeys, locationFrames, unbakeFlight } from '../anim/flightPath';
+import { flightFromKeys } from '../anim/customFlight';
+import { setPieceFlight } from '../plan/pieceActions';
+import { placedMatrix } from './modelPlacement';
+import { useFlightEdit } from '../state/flightEdit';
 import { checkEditedMotion, type MotionReport } from '../anim/motionDiagnostics';
 import type { Instance } from '../model/assemble';
 import * as THREE from 'three';
 import type { Timeline } from '../anim/timeline';
 import { modelSteps } from '../plan/ops';
-import { isSub, type AnimationChannel, type KeyframeAnimation, type KeyInterpolation } from '../plan/types';
+import { isSub, type AnimationChannel, type FlightPose, type KeyframeAnimation, type KeyInterpolation } from '../plan/types';
 import { useKeyframePlayback } from '../state/keyframePlayback';
 import { useStudio } from '../state/store';
 import { ContextMenu, type ContextItem } from './ContextMenu';
@@ -480,6 +485,70 @@ export function KeyframeTimeline({ timeline, planning, buildError, instances, pl
   const propertyTrack = propertyId ? trackOf(animation, editingModel, propertyId) : undefined;
   const bakedCount = instances.filter((inst) => animation.tracks.some((track) => track.model === editingModel && track.target === inst.key && track.source === 'baked-flight')).length;
   const canBake = !!timeline && !planning && !buildError;
+  // A clip double-clicked in the Build timeline: its flight as editable keys, opened here.
+  const flightRequest = useFlightEdit((s) => s.request);
+  useEffect(() => {
+    if (!flightRequest || !canBake || !timeline) return;
+    useFlightEdit.getState().set({ request: null });
+    const id = flightRequest;
+    const leaves = instances.filter((inst) => inst.key === id || inst.key.startsWith(`${id}/`));
+    if (!leaves.length) return;
+    const fresh = leaves.filter((inst) => !isBakedFlight(animation, editingModel, inst.key));
+    let next = animation;
+    try {
+      if (fresh.length) next = bakeBuildFlights(next, editingModel, instances, placements, timeline, { targets: fresh.map((inst) => inst.key) }).animation;
+      // every path point keys X, Y and Z, so dragging one cannot move the rest of the path
+      for (const inst of leaves) next = fullPathKeys(next, editingModel, inst.key);
+    } catch (error) { setLayerError(error instanceof Error ? error.message : String(error)); return; }
+    if (next !== animation) applyAnimation(() => next);
+    setLayerError('');
+    setBakeMessage(fresh.length ? 'Flight baked into editable keys. Drag its points in the viewport (double-click the path to add one), or edit the keys here.' : '');
+    setExpanded((old) => new Set([...old, id]));
+    setFocused(id);
+    const start = locationFrames(next, editingModel, leaves[0].key).find((f) => valuesAt(next, editingModel, leaves[0].key, f).visibility >= 0.5);
+    if (start !== undefined) seek(start);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flightRequest, canBake, timeline]);
+  // a path point clicked in the viewport: its keys, selected here (Delete removes the point)
+  const pickedKeys = useFlightEdit((s) => s.select);
+  useEffect(() => {
+    if (!pickedKeys) return;
+    useFlightEdit.getState().set({ select: null });
+    setSelected(pickedKeys);
+  }, [pickedKeys]);
+  const focusedBaked = activeObject ? instances.some((inst) => (inst.key === activeObject || inst.key.startsWith(`${activeObject}/`)) && isBakedFlight(animation, editingModel, inst.key)) : false;
+  const focusedLeaves = activeObject ? instances.filter((inst) => inst.key === activeObject || inst.key.startsWith(`${activeObject}/`)) : [];
+  /** Removes the piece's flight keys; with `flights`, the Build timeline flies each leaf along its own. */
+  const handBack = (flights: ReadonlyMap<string, FlightPose[]> | null) => {
+    if (!activeObject) return;
+    setMotionReport(null);
+    useStudio.getState().apply((p) => {
+      let next = p;
+      for (const inst of focusedLeaves) next = setPieceFlight(next, editingModel, inst.key, flights?.get(inst.key) ?? null) ?? next;
+      const animation = unbakeFlight(animationOf(p.animation), editingModel, activeObject);
+      return next === p && animation === p.animation ? p : { ...next, animation };
+    });
+  };
+  const backToPlanner = () => {
+    handBack(null);
+    setBakeMessage('Flight handed back to the planner.');
+  };
+  /** The edited path becomes the piece's Build flight: same route, the Build's own smooth timing. */
+  const useInBuild = () => {
+    if (!timeline) return;
+    const flights = new Map<string, FlightPose[]>();
+    try {
+      for (const inst of focusedLeaves) {
+        if (!isBakedFlight(animation, editingModel, inst.key)) continue;
+        const flight = flightFromKeys(animation, editingModel, inst, placedMatrix(inst, placements), timeline);
+        if (flight) flights.set(inst.key, flight);
+      }
+    } catch (error) { setLayerError(error instanceof Error ? error.message : String(error)); return; }
+    if (!flights.size) { setLayerError('This flight does not move the piece, so there is no path to use.'); return; }
+    setLayerError('');
+    handBack(flights);
+    setBakeMessage('The Build timeline now flies this piece along your path. Double-click its clip to edit the path again.');
+  };
   const activeInterpolation = selectedKeys(animation, selected).map((s) => s.key.interpolation);
   const interpolation: KeyInterpolation | '' = activeInterpolation.length && activeInterpolation.every((v) => v === activeInterpolation[0]) ? activeInterpolation[0] : '';
 
@@ -528,6 +597,8 @@ export function KeyframeTimeline({ timeline, planning, buildError, instances, pl
               changeLayer((a) => unlinkBuildLayer(a, editingModel));
             }}><Ic name="x" /> Unlink</button>
             <button className="bm-key-bake" disabled={!canBake} title="Turn selected Build flights into independent editable object keys" onClick={() => doBake(false)}><Ic name="key" /> Bake selected</button>
+            {focusedBaked && <button className="bm-key-bake" disabled={!timeline} title="Play this edited path from the Build timeline, with its smooth timing (the piece's keys are removed)" onClick={useInBuild}><Ic name="brick" /> Use in Build</button>}
+            {focusedBaked && <button className="bm-key-bake" title="Remove this piece's edited flight (keys and path) and let the planner fly it again" onClick={backToPlanner}><Ic name="undo" /> Back to planner</button>}
             <button className="bm-key-bake" disabled={!canBake} title="Bake every brick, preserve appearance timing, and detach this model from its planner" onClick={() => doBake(true)}>Bake all & detach</button>
           </>
         ) : (

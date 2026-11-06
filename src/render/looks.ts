@@ -3,20 +3,20 @@
 
 /** A scene preset: the studio around the model. */
 export type StudioLook = 'soft' | 'classic' | 'white' | 'dark' | 'black' | 'warm' | 'sky' | 'night' | 'chroma'
-  | 'photo-grey' | 'slate-blue' | 'porcelain' | 'sage' | 'sandstone' | 'catalog-cream' | 'graphite'
+  | 'photo-grey' | 'slate-blue' | 'porcelain' | 'sage' | 'sandstone' | 'catalog-cream' | 'graphite' | 'eyesight' | 'bricklink-white'
   | 'lavender' | 'render-grey' | 'steel-grey' | 'powder-blue' | 'mint' | 'peach' | 'blush' | 'butter' | 'cobalt';
 /** What the model stands on. 'auto' is the scene's own choice. */
 export type FloorSurface = 'auto' | 'shadow' | 'sweep' | 'reflective' | 'matte' | 'wood' | 'concrete' | 'none';
 /** How the plastic itself responds to light. */
-export type BrickFinish = 'studio' | 'render' | 'soft-touch' | 'glossy' | 'catalog' | 'satin' | 'matte' | 'pearl' | 'clay';
+export type BrickFinish = 'studio' | 'render' | 'soft-touch' | 'glossy' | 'chrome' | 'catalog' | 'satin' | 'matte' | 'pearl' | 'clay';
 /** A fine surface detail drawn on every part (procedural: it moves with the part). */
-export type BrickTexture = 'none' | 'grain' | 'worn' | 'speckle' | 'glitter';
+export type BrickTexture = 'none' | 'grain' | 'worn' | 'speckle' | 'glitter' | 'scratches';
 
 export type Materials = { finish: BrickFinish; texture: BrickTexture; floor: FloorSurface; /** raised LEGO logo on studs */ studLogos: boolean; /** 'high': smooth 48-segment curves and real rounded edges in the geometry */ detail?: 'standard' | 'high'; /** a thin highlight on convex edges, like moulded rounded corners */ roundedEdges: boolean; /** ambient occlusion: on/off, and overrides of the scene's own strength and reach */ ao: AOChoice;
   /** soft blurred shadow pooled under the model, 0–1 */ contactShadows: number; /** how much of that shadow clear (transparent) parts get, 0–1 of the solid strength */ clearShadow: number;
   /** what the plastic reflects and is lit by */ environment: EnvironmentId;
   /** colours that give off light (lamps, windows): in the viewport and as light sources in path tracing */ glow: GlowChoice;
-  /** transparent parts: 'clear' refracts light like real glass in path-traced renders */ glass: GlassLook;
+  /** transparent parts: 'clear' refracts light like real glass in path-traced renders, 'milky' frosts them everywhere */ glass: GlassLook;
   /** depth of field for final renders and MP4 export */ lens: LensChoice;
   /** the floor colour of the curved sweep and the matte table (sRGB hex); null: the scene's own */
   floorColor?: string | null;
@@ -25,10 +25,11 @@ export type Materials = { finish: BrickFinish; texture: BrickTexture; floor: Flo
 /** Light-up parts, by LDraw colour code. `strength` scales how bright they glow. */
 export type GlowChoice = { colors: number[]; strength: number };
 export const GLOW_STRENGTH_RANGE = [0.25, 4] as const;
-export type GlassLook = 'soft' | 'clear';
+export type GlassLook = 'soft' | 'clear' | 'milky';
 export const GLASS_LOOKS: { id: GlassLook; label: string; hint: string }[] = [
   { id: 'soft', label: 'Soft', hint: 'Frosted, partly see-through: the same everywhere' },
   { id: 'clear', label: 'Clear', hint: 'Real refracting glass in path-traced renders and videos' },
+  { id: 'milky', label: 'Milky', hint: 'Frosted translucent parts, like the LGEO milky finish' },
 ];
 /** Background blur: off, or how wide the blur gets (see LENS_BLUR_PX). */
 export type LensBlur = 'off' | 'subtle' | 'medium' | 'strong';
@@ -52,6 +53,8 @@ export const ENVIRONMENTS = [
   { id: 'white-studio-03', label: 'White studio III', hint: 'White studio with umbrella lamps, medium contrast', file: 'white_studio_03_1k.hdr', gain: 0.85 },
   { id: 'monochrome-studio-04', label: 'Monochrome studio', hint: 'Twin softboxes and a circular scrim', file: 'monochrome_studio_04_1k.hdr', gain: 0.9 },
   { id: 'studio-kontrast-04', label: 'Studio cove', hint: 'Rectangular softboxes over an infinity cove', file: 'studio_kontrast_04_1k.hdr', gain: 0.75 },
+  { id: 'bricklink-sky', label: 'BrickLink sky', hint: "EyeSight's sky HDR: drop bricklink_pano029_1k.hdr into public/hdri", file: 'bricklink_pano029_1k.hdr', gain: 0.9 },
+  { id: 'bricklink-pano', label: 'BrickLink pano', hint: "EyeSight's second HDR: drop bricklink_pano040_1k.hdr into public/hdri", file: 'bricklink_pano040_1k.hdr', gain: 0.9 },
   { id: 'city', label: 'City', hint: 'Bright city street: lively, varied reflections', file: 'potsdamer_platz_1k.hdr', gain: 1.34 },
   { id: 'sunset', label: 'Sunset', hint: 'Warm low sun, long golden highlights', file: 'venice_sunset_1k.hdr', gain: 1.5 },
   { id: 'night', label: 'Night', hint: 'Dark sky with scattered lights: moody, glossy', file: 'dikhololo_night_1k.hdr', gain: 6.5 },
@@ -127,42 +130,42 @@ export const SCENES: readonly ScenePreset[] = [
     hemi: 0.95, hemiGround: '#b3b6b9', key: 2.5, keyColor: '#fffdfa', keyDirection: [-0.85, 1.9, 0.95],
     fill: 0.52, fillColor: '#e8efff', fillDirection: [1.1, 1.4, -0.45], rim: 0.26, rimColor: '#ffffff', rimDirection: [0.5, 1.2, -1.1],
     env: 0.7, exposure: 1, reflection: 0.1,
-    ao: 0.65, aoRadius: 0.45, shadowSoftness: 6 },
+    ao: 0.8, aoRadius: 0.5, shadowSoftness: 6 },
   { id: 'slate-blue', label: 'Slate blue', hint: 'Blue paper backdrop with cool fill and sculpted shadows', collection: 'photo',
     stops: [{ at: 0, rgb: [72, 89, 121] }, { at: 0.6, rgb: [79, 96, 129] }, { at: 1, rgb: [89, 108, 142] }],
     floorColor: '#506282', floor: 'shadow', shadowColor: '#101b2f', shadowOpacity: 0.43,
     hemi: 0.7, hemiGround: '#526985', key: 2.85, keyColor: '#fff7e8', keyDirection: [-0.9, 1.6, 0.7],
     fill: 0.5, fillColor: '#dceaff', fillDirection: [1.15, 1.1, -0.4], rim: 0.75, rimColor: '#c9ddff', rimDirection: [0.6, 1.4, -1.1],
     env: 0.55, exposure: 1.06, reflection: 0.08,
-    ao: 0.65, aoRadius: 0.45, shadowSoftness: 6 },
+    ao: 0.8, aoRadius: 0.5, shadowSoftness: 6 },
   { id: 'porcelain', label: 'Porcelain', hint: 'Light neutral sweep with high-key diffused illumination', collection: 'photo',
     stops: [{ at: 0, rgb: [207, 208, 207] }, { at: 0.55, rgb: [221, 221, 219] }, { at: 1, rgb: [232, 231, 228] }],
     floorColor: '#d9d9d6', floor: 'shadow', shadowColor: '#3c3d3f', shadowOpacity: 0.28,
     hemi: 1.15, hemiGround: '#d1d0d0', key: 2.25, keyColor: '#ffffff', keyDirection: [-0.6, 2, 0.7],
     fill: 0.72, fillColor: '#f3f5ff', fillDirection: [1.2, 1.5, -0.35], rim: 0.28, rimColor: '#ffffff', rimDirection: [0.4, 1.3, -1.2],
     env: 0.85, exposure: 0.98, reflection: 0.1,
-    ao: 0.65, aoRadius: 0.45, shadowSoftness: 6 },
+    ao: 0.8, aoRadius: 0.5, shadowSoftness: 6 },
   { id: 'sage', label: 'Sage paper', hint: 'Muted olive backdrop with clean daylight and soft edge light', collection: 'photo',
     stops: [{ at: 0, rgb: [150, 157, 138] }, { at: 0.55, rgb: [170, 177, 155] }, { at: 1, rgb: [191, 196, 177] }],
     floorColor: '#abb39e', floor: 'shadow', shadowColor: '#333a30', shadowOpacity: 0.36,
     hemi: 0.9, hemiGround: '#b0b7a4', key: 2.6, keyColor: '#fff8e9', keyDirection: [-0.85, 1.7, 1.15],
     fill: 0.55, fillColor: '#e2efff', fillDirection: [1, 1.2, -0.6], rim: 0.3, rimColor: '#f2ffe5', rimDirection: [0.7, 1.3, -1],
     env: 0.7, exposure: 1.02, reflection: 0.08,
-    ao: 0.65, aoRadius: 0.45, shadowSoftness: 6 },
+    ao: 0.8, aoRadius: 0.5, shadowSoftness: 6 },
   { id: 'sandstone', label: 'Warm catalog', hint: 'Beige tabletop with a warm key and subtle cool bounce', collection: 'photo',
     stops: [{ at: 0, rgb: [193, 175, 153] }, { at: 0.55, rgb: [211, 196, 174] }, { at: 1, rgb: [224, 213, 193] }],
     floorColor: '#d4c2a9', floor: 'shadow', shadowColor: '#493827', shadowOpacity: 0.34,
     hemi: 0.82, hemiGround: '#c7b69d', key: 2.75, keyColor: '#ffe6c5', keyDirection: [-1.1, 1.65, 0.55],
     fill: 0.55, fillColor: '#e3eeff', fillDirection: [0.9, 1.3, -0.8], rim: 0.32, rimColor: '#fff4d8', rimDirection: [0.65, 1.1, -1.25],
     env: 0.65, exposure: 1, reflection: 0.08,
-    ao: 0.65, aoRadius: 0.45, shadowSoftness: 6 },
+    ao: 0.8, aoRadius: 0.5, shadowSoftness: 6 },
   { id: 'catalog-cream', label: 'Catalog cream', hint: 'BrickLink-style warm cream backdrop, glossy plastic and soft short shadows', collection: 'photo',
     stops: [{ at: 0, rgb: [240, 226, 180] }, { at: 1, rgb: [240, 226, 180] }],
     floorColor: '#e9dcc6', floor: 'shadow', shadowColor: '#4a3b1f', shadowOpacity: 0.33,
     hemi: 1.0, hemiGround: '#e4d6b4', key: 2.45, keyColor: '#fff8ec', keyDirection: [-0.55, 2.1, 0.65],
     fill: 0.55, fillColor: '#eef3ff', fillDirection: [1, 1.4, -0.4], rim: 0.22, rimColor: '#ffffff', rimDirection: [0.5, 1.25, -1.15],
     env: 0.85, exposure: 1.02, reflection: 0.07,
-    ao: 0.6, aoRadius: 0.45, shadowSoftness: 8, outlines: false },
+    ao: 0.75, aoRadius: 0.5, shadowSoftness: 8, outlines: false },
   { id: 'graphite', label: 'Graphite', hint: 'Dark matte editorial set with bright rim separation', collection: 'photo',
     stops: [{ at: 0, rgb: [54, 59, 68] }, { at: 0.5, rgb: [47, 53, 62] }, { at: 1, rgb: [37, 43, 52] }],
     spot: { x: 0.47, y: 0.38, radius: 0.86, rgb: [77, 84, 97] },
@@ -170,7 +173,21 @@ export const SCENES: readonly ScenePreset[] = [
     hemi: 0.35, hemiGround: '#303b48', key: 3.25, keyColor: '#fff3e4', keyDirection: [-1.0, 1.6, 0.6],
     fill: 0.22, fillColor: '#d0e4ff', fillDirection: [1.1, 1.1, 0], rim: 1.05, rimColor: '#b7d6ff', rimDirection: [0.7, 1.1, -1.2],
     env: 0.4, exposure: 1.07, reflection: 0.1,
-    ao: 0.65, aoRadius: 0.45, shadowSoftness: 6 },
+    ao: 0.8, aoRadius: 0.5, shadowSoftness: 6 },
+  { id: 'eyesight', label: 'BrickLink studio', hint: 'EyeSight default set: teal studio backdrop and the BrickLink Studio three-light rig', collection: 'photo',
+    stops: [{ at: 0, rgb: [138, 184, 199] }, { at: 1, rgb: [154, 199, 213] }],
+    floorColor: '#94c3d2', floor: 'shadow', shadowColor: '#16333f', shadowOpacity: 0.38,
+    hemi: 0.85, hemiGround: '#a9cdd9', key: 2.4, keyColor: '#ffffff', keyDirection: [-0.57, 0.5, -0.65],
+    fill: 1.3, fillColor: '#ffffff', fillDirection: [0.88, 0.34, 0.35], rim: 0.9, rimColor: '#ffffff', rimDirection: [-0.61, 0.65, 0.45],
+    env: 0.8, exposure: 1.02, reflection: 0.09,
+    ao: 0.85, aoRadius: 0.5, shadowSoftness: 6 },
+  { id: 'bricklink-white', label: 'BrickLink product', hint: 'EyeSight product shot: white seamless, a strong front-right key and deep soft shadows', collection: 'photo',
+    stops: [{ at: 0, rgb: [238, 238, 241] }, { at: 0.55, rgb: [246, 246, 248] }, { at: 1, rgb: [252, 252, 253] }],
+    floorColor: '#f3f3f5', floor: 'shadow', shadowColor: '#30303a', shadowOpacity: 0.34,
+    hemi: 0.7, hemiGround: '#dcdce2', key: 2.7, keyColor: '#fffdfa', keyDirection: [-0.8, 1.8, 0.9],
+    fill: 0.45, fillColor: '#eef3ff', fillDirection: [1.1, 1.3, -0.4], rim: 0.3, rimColor: '#ffffff', rimDirection: [0.6, 1.3, -1.1],
+    env: 0.6, exposure: 1.06, reflection: 0.08,
+    ao: 0.85, aoRadius: 0.5, shadowSoftness: 9, outlines: false },
   // Pastel seamless render looks: a large overhead softbox, short soft contact
   // shadows tinted by the backdrop and a bright environment for broad highlights.
   { id: 'lavender', label: 'Lavender', hint: 'Saturated lilac sweep with tinted overhead shadows', collection: 'render',
@@ -292,10 +309,11 @@ export type FinishPreset = {
 };
 export const FINISHES: readonly FinishPreset[] = [
   { id: 'studio', label: 'Studio plastic', hint: 'Soft, broad highlights', roughness: 0.42, clearcoat: 0.16, clearcoatRoughness: 0.36, metalness: 0 },
-  { id: 'render', label: 'Render plastic', hint: 'Clean product-render ABS with broad soft highlights', roughness: 0.3, clearcoat: 0.45, clearcoatRoughness: 0.2, metalness: 0, sheen: 0.15 },
+  { id: 'render', label: 'Render plastic', hint: 'Clean product-render ABS with broad soft highlights', roughness: 0.32, clearcoat: 0.45, clearcoatRoughness: 0.25, metalness: 0, sheen: 0.2 },
   { id: 'soft-touch', label: 'Soft-touch', hint: 'Low-sheen toy plastic with a velvety edge glow', roughness: 0.5, clearcoat: 0.12, clearcoatRoughness: 0.45, metalness: 0, sheen: 0.45 },
   { id: 'glossy', label: 'Glossy ABS', hint: 'New, shiny bricks', roughness: 0.2, clearcoat: 0.65, clearcoatRoughness: 0.08, metalness: 0 },
-  { id: 'catalog', label: 'Catalog plastic', hint: 'Soft LEGO ABS gloss with broad highlights and faint sheen', roughness: 0.28, clearcoat: 0.4, clearcoatRoughness: 0.18, metalness: 0, sheen: 0.12 },
+  { id: 'chrome', label: 'Chrome', hint: 'Mirror-finish metal, like LGEO chrome', roughness: 0.08, clearcoat: 0.9, clearcoatRoughness: 0.05, metalness: 1 },
+  { id: 'catalog', label: 'Catalog plastic', hint: 'Soft LEGO ABS gloss with broad highlights and faint sheen', roughness: 0.32, clearcoat: 0.4, clearcoatRoughness: 0.25, metalness: 0, sheen: 0.18 },
   { id: 'satin', label: 'Satin', hint: 'Between glossy and matte', roughness: 0.55, clearcoat: 0.06, clearcoatRoughness: 0.5, metalness: 0 },
   { id: 'matte', label: 'Matte', hint: 'No shine, flat colour', roughness: 0.86, clearcoat: 0, clearcoatRoughness: 1, metalness: 0 },
   { id: 'pearl', label: 'Pearlescent', hint: 'A soft rainbow sheen', roughness: 0.32, clearcoat: 0.5, clearcoatRoughness: 0.15, metalness: 0.25, iridescence: 0.55 },
@@ -317,6 +335,7 @@ export function finishWithClay(current: BrickFinish, before: BrickFinish | null)
 export const TEXTURES: readonly { id: BrickTexture; label: string; hint: string }[] = [
   { id: 'none', label: 'Smooth', hint: 'Clean, flawless surfaces' },
   { id: 'grain', label: 'Molded grain', hint: 'The fine texture of real injection-moulded parts' },
+  { id: 'scratches', label: 'Scratches', hint: 'Fine light scratches, like the LEGO scratch texture' },
   { id: 'worn', label: 'Played-with', hint: 'Scuffs and dull patches' },
   { id: 'speckle', label: 'Speckled', hint: 'Granite-like dark speckles' },
   { id: 'glitter', label: 'Glitter', hint: 'Tiny sparkling flakes' },
@@ -349,7 +368,7 @@ export function sanitizeMaterials(v: unknown): Materials {
     clearShadow: clampOrNull(o.clearShadow, [0, 1]) ?? DEFAULT_MATERIALS.clearShadow,
     environment: ENVIRONMENTS.some((e) => e.id === o.environment) ? (o.environment as EnvironmentId) : DEFAULT_MATERIALS.environment,
     glow: sanitizeGlow(o.glow),
-    glass: o.glass === 'clear' ? 'clear' : 'soft',
+    glass: o.glass === 'clear' ? 'clear' : o.glass === 'milky' ? 'milky' : 'soft',
     lens: sanitizeLens(o.lens),
     floorColor: typeof o.floorColor === 'string' && /^#[0-9a-f]{6}$/i.test(o.floorColor) ? o.floorColor.toLowerCase() : null,
     sweepCurve: clampOrNull(o.sweepCurve, [0, 1]) ?? DEFAULT_MATERIALS.sweepCurve,

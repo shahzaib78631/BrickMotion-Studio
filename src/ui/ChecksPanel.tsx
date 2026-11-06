@@ -7,6 +7,7 @@ import { Ic } from './icons';
 const KIND: Record<Warning['kind'], string> = {
   overlap: 'Overlap',
   floating: 'Floating',
+  weak: 'Weak connection',
   'unknown-part': 'Unknown part',
   'unknown-color': 'Unknown colour',
   'missing-submodel': 'Missing submodel',
@@ -18,6 +19,7 @@ const KIND: Record<Warning['kind'], string> = {
 const WHY: Record<Warning['kind'], string> = {
   overlap: 'Two pieces reach into each other by more than 2 LDU on every axis. Move one out; the measured depth is on each row.',
   floating: 'Nothing holds it up: no piece under it and no stud, clip or pin joining it to the model, so it would fall when the build plays.',
+  weak: 'Held by a single stud or clip: it can spin, tilt or fall during the build animation. Add another stud or use a pin.',
   'unknown-part': 'The part is not in the library, so it cannot be measured, drawn properly or collision-checked.',
   'unknown-color': 'The colour code is not in the LDraw palette; the piece is drawn in the fallback colour.',
   'missing-submodel': 'A submodel use points at a definition this file does not have.',
@@ -64,7 +66,7 @@ export function ChecksPanel({ warnings }: { warnings: Warning[] }) {
       )}
       {warnings.length > 0 && (
         <p className="nx-fine">
-          The pieces listed here are outlined red in the viewport. Click one to select and show it. AI → Fix can repair them for you.
+          The pieces listed here are outlined red in the viewport (weak connections are only listed). Click one to select and show it. AI → Fix can repair them for you.
         </p>
       )}
       {(Object.keys(KIND) as Warning['kind'][]).map((kind) => {

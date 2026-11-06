@@ -16,6 +16,10 @@ import { isMainSpot, markers, sameSpot, sceneSpot, storedSpot, sceneOffset, plan
 import { SPOT_DRAG_TYPE, draggedSpot } from './AssemblyPanel';
 import { SpotMarkers } from './spotMarkers';
 import { WayHandle, ldrawToView, viewToLdraw } from './wayHandle';
+import { FlightPathOverlay } from './flightPathOverlay';
+import { addPathKey, flightPath, pathHits, pathKeyRefs } from '../anim/flightPath';
+import { isBakedFlight } from '../anim/bakeBuild';
+import { useFlightEdit } from '../state/flightEdit';
 import { snapWay, wayForArrow } from '../anim/flightDirection';
 import { applyWay, wayState } from '../state/flightWay';
 import { createStudio, worldBox } from '../render/studio';
@@ -23,6 +27,8 @@ import { selectionForHit } from '../plan/groups';
 import { createSubmodel } from '../plan/createSubmodel';
 import { instancePlacements, itemPlacement, placedBox, placedMatrix, sourceEditDelta, viewPlacement, modelPlacement, placingPointOf, placingRayOf, modelToView } from './modelPlacement';
 import { LinkRings } from '../render/linkRings';
+import { GhostPieces } from '../render/ghosts';
+import { acceptSuggestion, cycleSuggestion, dismissSuggestions, noteBuild, shownSuggestion, useSuggest } from '../state/suggest';
 import { aimPoint, type Aim } from '../plan/aim';
 import { NewSubmodelDialog } from './NewSubmodelDialog';
 import { runCommand, snapperFor } from '../state/editing';
@@ -38,7 +44,7 @@ import { visibleItemIds } from '../plan/visible';
 import { commandForKey } from '../state/keymap';
 import { useStudio } from '../state/store';
 import { resolveMode, useTheme } from '../state/theme';
-import { isLoaded, metricsOf } from '../state/partService';
+import { geometryOf, getColors, isLoaded, metricsOf } from '../state/partService';
 import { modelSteps } from '../plan/ops';
 import { posedBounds, stepPoses, timelineStep } from '../model/stepLayout';
 import { poseAt, spotTransform, yaw, type Timeline } from '../anim/timeline';
@@ -98,6 +104,12 @@ function frame(camera: THREE.PerspectiveCamera | THREE.OrthographicCamera, contr
   frameBox(camera, controls, box, (h) => viewportApi.studio?.setOrthoHeight(h));
 }
 
+/** The one baked piece whose flight path the Timeline view shows and edits, if any. */
+function pathPiece(s = useStudio.getState()): string | null {
+  if (s.mode !== 'edit' || s.timelineEditor !== 'timeline' || s.selection.model !== s.editingModel || s.selection.ids.length !== 1) return null;
+  const id = s.selection.ids[0];
+  return isBakedFlight(s.plan.animation, s.editingModel, id) ? id : null;
+}
 const isTyping = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName));
 
 
@@ -120,6 +132,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
   const blocked = useStudio((s) => s.blocked);
   const placingState = usePlacing((p) => p.state);
   const ringsRef = useRef<LinkRings | null>(null);
+  const ghostsRef = useRef<GhostPieces | null>(null);
   // what the shown pose will connect (nothing for floor or red poses)
   useEffect(() => {
     const rings = ringsRef.current, pose = placingState?.pose;
@@ -194,6 +207,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
   const [motionStatus, setMotionStatus] = useState<MotionGuide | null>(null);
   const [jointAngleText, setJointAngleText] = useState('15');
   const wayHandleRef = useRef<WayHandle | null>(null);
+  const pathRef = useRef<FlightPathOverlay | null>(null);
   const draggingGizmo = useRef(false);
   const readoutRef = useRef<HTMLDivElement>(null);
   const origin = useRef(new THREE.Vector3());
@@ -277,9 +291,16 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     const wayHandle = new WayHandle();
     studio.scene.add(wayHandle.group);
     wayHandleRef.current = wayHandle;
+    // the selected baked piece's flight path (Timeline view). Editor scene only.
+    const flightOverlay = new FlightPathOverlay();
+    studio.scene.add(flightOverlay.group);
+    pathRef.current = flightOverlay;
     // rings on the connections a placing pose will make. Editor scene only.
     const rings = new LinkRings(studio.scene);
     ringsRef.current = rings;
+    // suggested next pieces (build autocomplete). Editor scene only.
+    const ghosts = new GhostPieces(studio.scene, geometryOf, getColors);
+    ghostsRef.current = ghosts;
     const transform = new TransformControls(studio.camera, canvas);
     transform.setSize(0.86);
     transform.setSpace('world');
@@ -356,7 +377,8 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
           if (first && !isGrid(first)) gizmoFree = first.matrix;
         }
         if (current.timelineEditor === 'timeline') {
-          if (!useKeyframePlayback.getState().autoKey || !current.selection.ids.length) return;
+          // Auto Key records any move; a piece whose flight path is open is always keyed
+          if ((!useKeyframePlayback.getState().autoKey && !pathPiece(current)) || !current.selection.ids.length) return;
           useKeyframePlayback.getState().set({ playing: false });
           const at = Math.round(useKeyframePlayback.getState().frame);
           const ids = [...current.selection.ids];
@@ -946,8 +968,13 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       spotMarkers.dispose();
       wayHandle.dispose();
       wayHandleRef.current = null;
+      studio.scene.remove(flightOverlay.group);
+      flightOverlay.dispose();
+      pathRef.current = null;
       rings.dispose();
       ringsRef.current = null;
+      ghosts.dispose();
+      ghostsRef.current = null;
       studio.scene.remove(spotMarkers.group);
       markersRef.current = null;
       gizmoRef.current = null;
@@ -1037,8 +1064,10 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     transform.showX = true; transform.showY = true; transform.showZ = true;
     transform.showXY = true; transform.showYZ = true; transform.showXZ = true;
     transform.showE = true; transform.showXYZE = true;
-    if (sceneSelected || mode !== 'edit' || !gizmoEnabled || !boxes.length ||
-      (timelineEditor === 'timeline' && (!autoKey || keyframeAtRest < 0))) {
+    // the piece whose flight path is open gets the handles without the gizmo toggle or Auto Key
+    const pathOpen = !!pathPiece();
+    if (sceneSelected || mode !== 'edit' || !(gizmoEnabled || pathOpen) || !boxes.length ||
+      (timelineEditor === 'timeline' && (!(autoKey || pathOpen) || keyframeAtRest < 0))) {
       transform.enabled = false;
       transform.detach();
       return;
@@ -1105,6 +1134,47 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
   }, [selection, editingModel, model.view, model.assembly, gizmoEnabled, gizmoMode, gizmoSpace,
     smartJointsEnabled, mode, spotSel, plan, timeline, timelineEditor, autoKey, keyframeAtRest, sceneSelected, laidOut]);
 
+  // The open flight path (Timeline view, one baked piece selected): line, keyframe dots, and
+  // red where it goes through a piece that is already built. The check runs once edits settle.
+  const pathId = mode === 'edit' && timelineEditor === 'timeline' && selection.model === editingModel && selection.ids.length === 1 &&
+    isBakedFlight(plan.animation, editingModel, selection.ids[0]) ? selection.ids[0] : null;
+  const drawnPath = useMemo(() => {
+    const inst = pathId ? model.view.instances.find((i) => i.key === pathId) : undefined;
+    if (!pathId || !inst) return null;
+    const shown = instancePlacements(plan, editingModel, model.assembly);
+    const path = flightPath(plan.animation, editingModel, inst, placedMatrix(inst, shown));
+    return path ? { path, shown } : null;
+  }, [pathId, plan, editingModel, model.view, model.assembly]);
+  const pathHitFrames = useFlightEdit((s) => s.hits);
+  useEffect(() => {
+    const overlay = pathRef.current;
+    if (!overlay) return;
+    if (!drawnPath) { overlay.hide(); return; }
+    overlay.set(drawnPath.path, pathHitFrames, keyframeAtRest);
+  }, [drawnPath, pathHitFrames, keyframeAtRest]);
+  useEffect(() => {
+    useFlightEdit.getState().set({ hits: new Set() });
+    if (!drawnPath || !pathId) return;
+    const timer = window.setTimeout(() => {
+      const { path, shown } = drawnPath;
+      const instances = model.view.instances;
+      const pose = makeKeyframePose(instances, shown, plan.animation, editingModel, timeline);
+      const bases = new Map(instances.map((i) => [i.key, placedMatrix(i, shown)]));
+      // about 120 checks along the path; a hit marks the stretch up to the checks either side
+      const every = Math.max(1, Math.ceil(path.samples.length / 120));
+      const checked = path.samples.filter((_, k) => k % every === 0 || k === path.samples.length - 1).map((p) => p.frame);
+      const hit = pathHits(instances, pose, bases, metricsOf, pathId, checked);
+      const red = new Set<number>();
+      checked.forEach((f, k) => {
+        if (!hit.has(f)) return;
+        const lo = checked[Math.max(0, k - 1)], hi = checked[Math.min(checked.length - 1, k + 1)];
+        for (const p of path.samples) if (p.frame >= lo && p.frame <= hi) red.add(p.frame);
+      });
+      useFlightEdit.getState().set({ hits: red });
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [drawnPath, pathId, timeline]);
+
   // Assembly-spot markers: Build view only, for the whole set (never in preview or export),
   // and only while the Assembly tab is open. Elsewhere their floating
   // name tags read as dark shadows on the floor where nothing is built yet.
@@ -1127,6 +1197,20 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     () => (currentStep === null ? drawn : drawn.filter((i) => (topStep.get(i.key.split('/')[0]) ?? 0) <= currentStep)),
     [drawn, currentStep, topStep],
   );
+
+  // build autocomplete: the engine follows what the editor shows and what is selected
+  const suggestState = useSuggest();
+  useEffect(() => {
+    if (mode !== 'edit' || placingState || timelineEditor !== 'build') return;
+    noteBuild(visible, selection.model === editingModel ? selection.ids : []);
+  }, [visible, selection, editingModel, mode, placingState, timelineEditor]);
+  useEffect(() => {
+    const ghosts = ghostsRef.current;
+    if (!ghosts) return;
+    const s = suggestState.on && !suggestState.dismissed ? suggestState.list[suggestState.index] : null;
+    if (!s || mode !== 'edit' || placingState || timelineEditor !== 'build') return ghosts.clear();
+    ghosts.show(s.pieces, modelToView(modelPlacement(plan, editingModel, model.assembly)));
+  }, [suggestState, mode, placingState, timelineEditor, plan, editingModel, model.assembly]);
 
   // a new project or submodel gets re-framed (declared before the instances
   // effect so the reset happens first in the same commit)
@@ -1300,7 +1384,8 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     const shown = engaged ? drawn : visible;
     const sel = new Set(selection.model === editingModel ? selection.ids : []);
     studio.bricks.setHighlight(new Set(shown.filter((i) => sel.has(i.key.split('/')[0])).map((i) => i.key)), 'select');
-    const warnIds = new Set(model.warnings.flatMap((w) => w.itemIds));
+    // a weak connection is advice, not a mistake: it is listed in Checks but not outlined
+    const warnIds = new Set(model.warnings.filter((w) => w.kind !== 'weak').flatMap((w) => w.itemIds));
     for (const id of blocked?.ids ?? []) warnIds.add(id);
     // a placing pose with no clean seat shows red
     if (placingState?.pose && !placingState.pose.valid) for (const id of placingState.ids) warnIds.add(id);
@@ -1372,6 +1457,15 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
         if (e.key === 'Escape') { e.preventDefault(); return cancelPlacing(); }
         return;
       }
+      // build autocomplete: Tab places the ghost, ` shows the next one, Esc hides them
+      if (e.key === 'Tab' && !e.metaKey && !e.ctrlKey && !e.altKey && shownSuggestion()) {
+        e.preventDefault();
+        if (e.shiftKey) return cycleSuggestion(-1);
+        acceptSuggestion();
+        return;
+      }
+      if (e.key === '`' && !e.metaKey && !e.ctrlKey && shownSuggestion()) { e.preventDefault(); return cycleSuggestion(e.shiftKey ? -1 : 1); }
+      if (e.key === 'Escape' && shownSuggestion()) return dismissSuggestions();
       if (e.key === 'Escape') return useStudio.getState().select([]);
       // H hides the selection, Shift+H shows every hidden piece again
       if (e.key.toLowerCase() === 'h' && !e.metaKey && !e.ctrlKey && !e.altKey) {
@@ -1930,7 +2024,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
           // TransformControls clears its hovered axis on pointer-up, so remember whether this
           // press began on a handle: the canvas click that follows must not deselect (or
           // reselect) the piece the gizmo is about to transform.
-          gizmoPress.current = e.button === 0 && st().gizmoEnabled && pressOnHandle(gizmoRef.current?.controls, ndcAt(e));
+          gizmoPress.current = e.button === 0 && (st().gizmoEnabled || !!pathPiece()) && pressOnHandle(gizmoRef.current?.controls, ndcAt(e));
         }}
         onClick={(e) => {
           if (isPlacing()) { commitPlacing(); return; }
@@ -1940,6 +2034,19 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
           // A press that began on a handle was already consumed above (`gizmoPress`). Do not
           // re-read the hovered axis here: it may be stale, and it used to swallow clicks on
           // a brick, which broke shift-click multi-select while the gizmo was on.
+          // a point on the open flight path: go to its frame and select its keys
+          const pathId = pathPiece();
+          if (pathId && pathRef.current?.shown) {
+            const ray = rayAt(e);
+            const keyFrame = pathRef.current.pickKey(ray);
+            if (keyFrame !== null) {
+              useKeyframePlayback.getState().set({ playing: false, frame: keyFrame });
+              useFlightEdit.getState().set({ select: pathKeyRefs(st().plan.animation, st().editingModel, pathId, keyFrame) });
+              return;
+            }
+            // on the line itself: leave the selection alone (a double-click there adds a point)
+            if (pathRef.current.pickLine(ray.ray) !== null) return;
+          }
           const selectedScene = viewportApi.scene?.pick(rayAt(e));
           if (selectedScene) {
             useSceneView.setState({ selectedId: selectedScene, panelOpen: true });
@@ -1969,6 +2076,16 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
         }}
         onDoubleClick={(e) => {
           if (st().mode !== 'edit') return;
+          // double-click the open flight path: a new point there, ready to drag
+          const pathId = pathPiece();
+          const onPath = pathId && pathRef.current?.shown ? pathRef.current.pickLine(rayAt(e).ray) : null;
+          if (pathId && onPath !== null) {
+            const model = st().editingModel;
+            st().apply((p) => ({ ...p, animation: addPathKey(animationOf(p.animation), model, pathId, onPath) }));
+            useKeyframePlayback.getState().set({ playing: false, frame: onPath });
+            useFlightEdit.getState().set({ select: pathKeyRefs(st().plan.animation, model, pathId, onPath) });
+            return;
+          }
           const key = pickAt(e);
           if (!key) return;
           const found = findItem(st().plan, st().editingModel, key.split('/')[0]);
@@ -2011,7 +2128,9 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       {motionStatus && mode === 'edit' && selection.ids.length > 0 && <div className="bm-joint-status" aria-live="polite">
         <strong>{motionStatus.kind === 'locked' ? 'Locked assembly' : motionStatus.kind === 'free' ? 'Free selection' : motionStatus.kind === 'revolute' ? 'Hinge / bearing' : motionStatus.kind === 'ball' ? 'Ball joint' : motionStatus.kind === 'prismatic' ? 'Linear slider' : 'Cylindrical joint'}</strong>
         <span>{motionStatus.reason}</span>
-        <span>{motionStatus.interfaces.some(j => j.evidence === 'ldcad-shadow')
+        <span>{motionStatus.interfaces.some(j => j.evidence === 'bricknet-catalogue')
+          ? 'Estimated from BrickNet connector data (no LDCad snap for this joint); motion is not physically certified.'
+          : motionStatus.interfaces.some(j => j.evidence === 'ldcad-shadow')
           ? 'Estimated from LDCad connector shapes; motion is not physically certified.'
           : motionStatus.knownJoints > 0 ? 'Connection metadata informed this motion.' : 'No connector evidence available for this selection.'}
           {!collisionEnabled ? ' Collision OFF: path not checked.' : ' Collision ON: sampled arc checks.'}</span>

@@ -6,4 +6,4 @@
  * planned by an older planner is planned again instead of being replayed from the file. Without
  * it, a fix to how pieces come in is invisible in every project that was saved before it.
  */
-export const PLANNER_VERSION = 8;
+export const PLANNER_VERSION = 10;

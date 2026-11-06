@@ -52,6 +52,11 @@ export function worldSnaps(snaps: Snap[] | undefined, e: V): WorldSnap[] {
  */
 export const ballSlop = (a: Snap, b: Snap) => Math.max(AXIS_SLOP, 0.5 * Math.min(a.radius, b.radius));
 
+/** A plain round stud (radius 6, at most 8 long) and a stud-sized socket. */
+const isStud = (male: Snap, female: Snap) =>
+  male.shapes.length > 0 && male.shapes.every((s) => s === "R") && male.length <= 8 &&
+  Math.abs(male.radius - 6) <= RADIUS_SLOP && Math.abs(female.radius - 6) <= RADIUS_SLOP;
+
 /** Whether a male of these shapes/radius fits a female of these. */
 function fits(male: Snap, female: Snap): boolean {
   if (female.kind === "clp")
@@ -71,7 +76,10 @@ function fits(male: Snap, female: Snap): boolean {
   // square sockets only take square plugs; cross-shaped axle holes only take axles
   const fShapes = new Set(female.shapes),
     mShapes = new Set(male.shapes);
-  if (fShapes.size === 1 && fShapes.has("S")) return mShapes.has("S");
+  // A round stud also seats in a square socket: LDCad gives the underside of 1-wide plates
+  // and tiles (3024, 3023, 3069b) a square socket, and a stud is what goes in it.
+  if (fShapes.size === 1 && fShapes.has("S"))
+    return mShapes.has("S") || isStud(male, female);
   if (mShapes.size === 1 && mShapes.has("S")) return fShapes.has("S");
   if (fShapes.size === 1 && fShapes.has("A")) return mShapes.has("A");
   return (
@@ -180,6 +188,74 @@ export function mateAxes(
       const axis = mateAxis(x, y);
       if (axis && !out.some((o) => Math.abs(dot(o, axis)) > PARALLEL))
         out.push(axis);
+    }
+  return out;
+}
+
+type Way3 = [number, number, number];
+const neg = (a: V): Way3 => [-a[0] || 0, -a[1] || 0, -a[2] || 0];
+const addWay = (out: Way3[], w: Way3) => { if (!out.some((o) => dot(o, w) > PARALLEL)) out.push(w); };
+
+/**
+ * The ways a moving part can come in to join `other`, each as the direction from its final
+ * pose to where its last straight push starts (the planner's entry way). Unlike `mateAxes`
+ * these have a side, taken from the socket: a female's sections run from its mouth into its
+ * part (an anti-stud's axis points up into the plate), so the male goes in from the mouth side
+ * and a moving female comes down onto the male the other way. Coming down from above onto a
+ * socket that opens downward would pass through the part.
+ *
+ * Two-way: a socket that runs right through its part (a Technic hole takes a pin from either
+ * face), a clip (it holds a bar from either end), and a tyre or a ball. None: two hinge halves
+ * (finger snaps), whose fingers interleave so neither slides along the pin; they clip together
+ * from the side (`hingeClipWays`). `movingBox` / `otherBox` are the parts' world boxes.
+ */
+export function entryWays(moving: WorldSnap[], other: WorldSnap[], movingBox: Box3, otherBox: Box3): Way3[] {
+  const out: Way3[] = [];
+  for (const x of moving)
+    for (const y of other) {
+      if (x.snap.kind === "fgr" || y.snap.kind === "fgr") continue;
+      const axis = mateAxis(x, y);
+      if (!axis) continue;
+      const twoWay = x.snap.kind === "gen" || y.snap.kind === "gen" || x.snap.kind === "clp" || y.snap.kind === "clp";
+      const [female, box] = x.snap.gender === "F" ? [x, movingBox] : [y, otherBox];
+      if (twoWay || throughPart(female, box)) { addWay(out, [...axis] as Way3); addWay(out, neg(axis)); continue; }
+      addWay(out, x.snap.gender === "M" ? neg(female.axis) : ([...female.axis] as Way3));
+    }
+  return out;
+}
+
+type Box3 = { min: V; max: V };
+/** A socket as long as its part is deep along it: open at both faces. */
+function throughPart(female: WorldSnap, box: Box3): boolean {
+  const a = female.axis;
+  const extent = Math.abs(a[0]) * (box.max[0] - box.min[0]) + Math.abs(a[1]) * (box.max[1] - box.min[1]) + Math.abs(a[2]) * (box.max[2] - box.min[2]);
+  return female.snap.length >= extent - 1;
+}
+
+/**
+ * Two hinge halves joined by their fingers: the moving half clips onto the other's pin from
+ * the open side of the other half, straight away from the pin on the side away from the
+ * other's body (`otherCentre`). A hinge plate sticks out sideways from its own pin, so the
+ * moving half's own body (`centre`) only decides when the other half is centred on the pin.
+ * Neither centred: no way.
+ */
+export function hingeClipWays(moving: WorldSnap[], other: WorldSnap[], centre: V, otherCentre?: V): Way3[] {
+  const out: Way3[] = [];
+  const radial = (from: V, at: V, axis: V, sign: number): Way3 | null => {
+    const d = [sign * (from[0] - at[0]), sign * (from[1] - at[1]), sign * (from[2] - at[2])];
+    const along = dot(d, axis);
+    const r: Way3 = [d[0] - along * axis[0], d[1] - along * axis[1], d[2] - along * axis[2]];
+    const n = Math.hypot(r[0], r[1], r[2]);
+    return n > 1 ? [r[0] / n, r[1] / n, r[2] / n] : null;
+  };
+  for (const x of moving)
+    for (const y of other) {
+      if (x.snap.kind !== "fgr" || y.snap.kind !== "fgr") continue;
+      const axis = mateAxis(x, y);
+      if (!axis) continue;
+      // away from the other half's body, else toward the moving half's own body
+      const way = (otherCentre && radial(otherCentre, y.start, axis, -1)) ?? radial(centre, x.start, axis, 1);
+      if (way) addWay(out, way);
     }
   return out;
 }

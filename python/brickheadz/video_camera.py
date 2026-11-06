@@ -102,12 +102,14 @@ def observe(tracks, part_of: dict[int, str], meshes: dict[str, pr.PartMesh], fra
             continue
         if part not in banks:
             banks[part] = ViewBank(meshes[part])
-        good = [b for b in t.blobs if not b.touches_border and b.isolated and b.text < 0.01] or [b for b in t.blobs if not b.touches_border]
+        # motion blobs (parts in front of the model) have unreliable side edges: no camera evidence
+        outline = [b for b in t.blobs if not b.motion]
+        good = [b for b in outline if not b.touches_border and b.isolated and b.text < 0.01] or [b for b in outline if not b.touches_border]
         if not good:
             continue
         idx = np.linspace(0, len(good) - 1, min(per_track, len(good))).round().astype(int)
         for b in [good[i] for i in sorted(set(idx))]:
-            m = _tight(blob_mask(frame_reader(b.frame), b.bbox))
+            m = _tight(blob_mask(frame_reader(b.frame), b.bbox, mask=b.mask))
             if m is None or m.sum() < 200:
                 continue
             yw, pt, s, sc = banks[part].match(m)
@@ -251,7 +253,7 @@ def estimate(tracks, part_of, meshes, frame_reader, n_frames: int, banks=None, b
     for t in tracks:
         if t.id not in part_of:
             continue
-        pts = [(b.frame, b.bbox[0] + b.bbox[2] / 2.0) for b in t.blobs if not b.touches_border]
+        pts = [(b.frame, b.bbox[0] + b.bbox[2] / 2.0) for b in t.blobs if not b.touches_border and not b.motion]
         if len(pts) >= 2:
             tracks_u[t.id] = pts
     ox = pivot_column(bases) if bases else None
@@ -320,7 +322,7 @@ def refine(cams: list[VCam], placements: dict, tracks, meshes, frame_reader, min
         diag.update(scale_k=k, ox_c=c0, ox_drift=d, resid_px=float(np.median(np.abs(M @ sol - r))))
         out = [cm.replace(scale=cm.scale * (1 + k), ox=cm.ox + c0 + d * f / n) for f, cm in enumerate(cams)]
     if good:
-        reps = [(pl, vp.blob_mask(frame_reader(t.best.frame), t.best.bbox), t.best) for t, pl in good]
+        reps = [(pl, vp.blob_mask(frame_reader(t.best.frame), t.best.bbox, mask=t.best.mask), t.best) for t, pl in good]
         best = (-1.0, 0.0)
         for dp in np.arange(-pitch_span, pitch_span + 1e-6, pitch_step):
             ious = []

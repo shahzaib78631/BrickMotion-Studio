@@ -53,7 +53,10 @@ def fit_xz(obs: list[tuple[VCam, float]]) -> tuple[float, float, float] | None:
     return float(sol[0]), float(sol[1]), rms
 
 
-def blob_mask(frame: np.ndarray, bbox, thresh: int = 28) -> np.ndarray:
+def blob_mask(frame: np.ndarray, bbox, thresh: int = 28, mask: np.ndarray | None = None) -> np.ndarray:
+    """The blob's pixels inside its bbox; `mask` (a motion blob's own mask) wins when given."""
+    if mask is not None:
+        return mask
     x, y, w, h = bbox
     m = (frame[y : y + h, x : x + w].max(axis=2) > thresh).astype(np.uint8)
     n, lab, stats, _ = cv2.connectedComponentsWithStats(m)
@@ -413,7 +416,7 @@ def place_all(lib, tracks, part_of: dict[int, str], meshes: dict, cams: list[VCa
         edges = [(cams[b.frame], float(b.bbox[0]), float(b.bbox[0] + b.bbox[2]), float(b.bbox[1]),
                   float(b.bbox[1] + b.bbox[3])) for b in clean]
         rep_cam = cams[t.best.frame]
-        bm = blob_mask(frame_reader(t.best.frame), t.best.bbox)
+        bm = blob_mask(frame_reader(t.best.frame), t.best.bbox, mask=t.best.mask)
         pl = place(lib, mesh, part, obs, (rep_cam, bm, float(t.best.bbox[0])), heights, from_below=approach(t),
                    edges=edges if len(edges) >= 2 else None,
                    rep_rows=(float(t.best.bbox[1]), float(t.best.bbox[1] + t.best.bbox[3])))

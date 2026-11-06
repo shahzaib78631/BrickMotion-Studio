@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { ColorDef } from '../ldraw/colors';
-import { finishOf, type BrickFinish, type BrickTexture, type GlowChoice } from './looks';
+import { finishOf, type BrickFinish, type BrickTexture, type GlassLook, type GlowChoice } from './looks';
 
 const cache = new Map<string, THREE.MeshPhysicalMaterial>();
 
@@ -8,10 +8,10 @@ const FALLBACK: ColorDef = { code: 71, name: 'Light_Bluish_Gray', hex: '#A0A5A9'
 
 /** The finish and texture every brick uses. Materials are cached and shared by every
  * studio on the page (viewport, export), so a change re-styles them in place. */
-let profile: { finish: BrickFinish; texture: BrickTexture; glow: GlowChoice } = { finish: 'catalog', texture: 'none', glow: { colors: [], strength: 1.5 } };
+let profile: { finish: BrickFinish; texture: BrickTexture; glass: GlassLook; glow: GlowChoice } = { finish: 'catalog', texture: 'none', glass: 'soft', glow: { colors: [], strength: 1.5 } };
 /** Viewport emissive intensity per unit of glow strength (the path tracer uses its own). */
 export const GLOW_GAIN = 0.7;
-const TEXTURE_ID: Record<BrickTexture, number> = { none: 0, grain: 1, worn: 2, speckle: 3, glitter: 4 };
+const TEXTURE_ID: Record<BrickTexture, number> = { none: 0, grain: 1, worn: 2, speckle: 3, glitter: 4, scratches: 5 };
 
 /** Value noise and a derivative bump, in the part's own coordinates (LDU), so the
  * texture sticks to each part as it flies. LDraw geometry has no UVs. */
@@ -47,6 +47,11 @@ const TEXTURE_BODY = /* glsl */ `
 #elif BM_TEXTURE == 3
   float bmDots = smoothstep(0.86, 0.9, bmNoise(vBmPos * 0.6)) * 0.7 + smoothstep(0.88, 0.92, bmNoise(vBmPos * 1.4 + 11.0)) * 0.45;
   diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.45, clamp(bmDots, 0.0, 1.0));
+#elif BM_TEXTURE == 5
+  float bmScratch = smoothstep(0.9, 0.985, bmNoise(vBmPos * vec3(0.9, 0.06, 0.9))) + smoothstep(0.9, 0.985, bmNoise(vBmPos.zyx * vec3(0.9, 0.06, 0.9) + 7.0));
+  bmH = bmScratch * 0.25 + bmNoise(vBmPos * 1.2) * 0.08;
+  bmRough = bmScratch * 0.12; bmBump = 0.35;
+  diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.92 + 0.05, clamp(bmScratch, 0.0, 1.0) * 0.4);
 #elif BM_TEXTURE == 4
   vec3 bmCell = floor(vBmPos * 1.5);
   bmSpark = step(0.968, bmHash(bmCell)) * (0.6 + 0.4 * bmHash(bmCell + 5.0));
@@ -87,10 +92,17 @@ function style(m: THREE.MeshPhysicalMaterial, c: ColorDef) {
   m.sheenRoughness = 0.6;
   m.sheenColor.set(f.tint && c.finish !== 'trans' ? f.tint : c.hex).lerp(new THREE.Color('#ffffff'), 0.5);
   if (!f.tint || c.finish === 'trans') {
-    if (c.finish === 'trans') Object.assign(m, { transparent: true, opacity: c.alpha / 255, depthWrite: false, transmission: 0.6, roughness: 0.1, thickness: 0.5 });
-    else if (c.finish === 'chrome') Object.assign(m, { metalness: 1, roughness: 0.15 });
-    else if (c.finish === 'metal') Object.assign(m, { metalness: 0.8, roughness: 0.3 });
-    else if (c.finish === 'pearl') Object.assign(m, { metalness: 0.5, roughness: 0.3 });
+    if (c.finish === 'trans') {
+      if (profile.glass === 'milky') {
+        // LGEO lg_milky_finish: frosted translucent, lit from inside
+        Object.assign(m, { transparent: true, opacity: Math.min(0.92, c.alpha / 255 + 0.12), depthWrite: false, transmission: 0.3, roughness: 0.55, thickness: 0.5 });
+      } else {
+        Object.assign(m, { transparent: true, opacity: c.alpha / 255, depthWrite: false, transmission: 0.6, roughness: 0.1, thickness: 0.5 });
+      }
+    }
+    else if (c.finish === 'chrome') Object.assign(m, { metalness: 1, roughness: 0.08 });
+    else if (c.finish === 'metal') Object.assign(m, { metalness: 0.7, roughness: 0.2 });
+    else if (c.finish === 'pearl') Object.assign(m, { metalness: 0.5, roughness: 0.1 });
     else if (c.finish === 'rubber') Object.assign(m, { roughness: 0.86, clearcoat: 0 });
   }
   // light-up colours (Materials → Glowing parts): their own colour, given off as light
@@ -129,10 +141,11 @@ export function materialFor(color: ColorDef | undefined, doubleSided: boolean): 
 const sameGlow = (a: GlowChoice, b: GlowChoice) =>
   a.strength === b.strength && a.colors.length === b.colors.length && a.colors.every((c) => b.colors.includes(c));
 /** Re-styles every brick material: Materials → Brick finish, texture and glowing parts. */
-export function setBrickMaterials(next: { finish: BrickFinish; texture: BrickTexture; glow?: GlowChoice }): void {
+export function setBrickMaterials(next: { finish: BrickFinish; texture: BrickTexture; glow?: GlowChoice; glass?: GlassLook }): void {
   const glow = next.glow ?? { colors: [], strength: 1.5 };
-  if (next.finish === profile.finish && next.texture === profile.texture && sameGlow(glow, profile.glow)) return;
-  profile = { finish: next.finish, texture: next.texture, glow: { colors: [...glow.colors], strength: glow.strength } };
+  const glass = next.glass ?? 'soft';
+  if (next.finish === profile.finish && next.texture === profile.texture && glass === profile.glass && sameGlow(glow, profile.glow)) return;
+  profile = { finish: next.finish, texture: next.texture, glass, glow: { colors: [...glow.colors], strength: glow.strength } };
   for (const m of cache.values()) style(m, m.userData.bmColor as ColorDef);
 }
 

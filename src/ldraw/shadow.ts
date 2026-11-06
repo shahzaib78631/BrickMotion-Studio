@@ -198,6 +198,8 @@ export type Snap = {
   scale?: string;
   match?: string;
   placement?: string;
+  /** Set on fallback connectors that do not come from LDCad (src/data/bricknetJoints.ts). */
+  source?: 'bricknet';
 };
 
 const DOWN_LOCAL: Vec3 = [0, -1, 0];

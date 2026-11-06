@@ -3,7 +3,7 @@ import type { Vec3 } from '../ldraw/parse';
 import { assemble, type ANode, type Instance } from '../model/assemble';
 import { collisionWorld, solidsFor, type Solid } from '../plan/collision';
 import { addPosedItems, commitPose } from '../plan/commitPose';
-import { partConnectors, worldConnectors, type Connector } from '../plan/connectors';
+import { placementConnectors, worldConnectors, type Connector } from '../plan/connectors';
 import { newId } from '../plan/ids';
 import { addItem, findItem, modelSteps, type ModelName } from '../plan/ops';
 import { findPose, freeTargets, handleCount, type Pose, type PoseQuery, type Quarter } from '../plan/placementEngine';
@@ -51,7 +51,7 @@ let session: Session | null = null;
 const top = (key: string) => key.split('/')[0];
 
 function connectorsOf(inst: Instance): Connector[] {
-  return worldConnectors(partConnectors(metricsOf(inst.part)), inst.world.elements);
+  return worldConnectors(placementConnectors(metricsOf(inst.part)), inst.world.elements);
 }
 
 /** The centre of the bottom face of what is placed (box centre x / z, box bottom; Y down). */

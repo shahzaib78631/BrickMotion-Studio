@@ -13,6 +13,7 @@ import { usePlayback } from './state/playback';
 import { AboutDialog } from './ui/AboutDialog';
 import { AiPanel } from './ui/AiPanel';
 import { BuildTimeline } from './ui/BuildTimeline';
+import { useFlightEdit } from './state/flightEdit';
 import { KeyframeTimeline } from './ui/KeyframeTimeline';
 import { instancePlacements } from './ui/modelPlacement';
 import { animationOf } from './anim/keyframes';
@@ -31,6 +32,7 @@ import { createSubmodel } from './plan/createSubmodel';
 import { ModelsPanel } from './ui/ModelsPanel';
 import { StepCallout } from './ui/StepCallout';
 import { PartsPanel } from './ui/PartsPanel';
+import { SuggestPanel } from './ui/SuggestPanel';
 import { PreviewPlayer } from './ui/PreviewPlayer';
 import { ProjectsDialog } from './ui/ProjectsDialog';
 import { TemplatesDialog } from './ui/TemplatesDialog';
@@ -52,10 +54,10 @@ import './ui/reference.css';
 import './ui/themes.css';
 import './ui/layout.css';
 
-type Tab = 'models' | 'parts' | 'assembly' | 'steps' | 'checks' | 'mechanisms' | 'ai' | 'video' | 'materials' | 'sound' | 'staging' | 'capture' | 'settings';
+type Tab = 'models' | 'parts' | 'suggest' | 'assembly' | 'steps' | 'checks' | 'mechanisms' | 'ai' | 'video' | 'materials' | 'sound' | 'staging' | 'capture' | 'settings';
 /** The rail, in groups: building the model, how the video looks, then assets; Settings sits at the bottom. */
 const TAB_GROUPS: [Tab, IconName, string][][] = [
-  [['models', 'box', 'Models'], ['parts', 'parts', 'Parts'], ['assembly', 'spot', 'Assembly'], ['steps', 'steps', 'Animation'], ['mechanisms', 'rotate', 'Mechanisms']],
+  [['models', 'box', 'Models'], ['parts', 'parts', 'Parts'], ['suggest', 'wand', 'Suggest'], ['assembly', 'spot', 'Assembly'], ['steps', 'steps', 'Animation'], ['mechanisms', 'rotate', 'Mechanisms']],
   [['video', 'camera', 'Render'], ['materials', 'palette', 'Materials'], ['sound', 'sound', 'Sound'], ['staging', 'layout', 'Staging'], ['capture', 'video', 'Capture']],
   [['ai', 'folder', 'Assets']],
   [['settings', 'settings', 'Settings']],
@@ -95,6 +97,9 @@ function Studio() {
   const themeAttrs = useThemeAttrs();
   const theme = themeAttrs['data-theme'];
   const [tlHeight, setTlHeight] = useState(() => Number(load('bm-tl-h')) || 176);
+  // a clip double-clicked to edit its flight opens the Dope Sheet tall enough to work in
+  const flightRequest = useFlightEdit((s) => s.request);
+  useEffect(() => { if (flightRequest) setTlHeight((h) => Math.max(340, h)); }, [flightRequest]);
   // null: the width each screen size picks; a number once the panel edge was dragged
   const [panelW, setPanelW] = useState<number | null>(() => Number(load('bm-panel-w')) || null);
   const [panelClosed, setPanelClosed] = useState(() => load('bm-panel-closed') === '1');
@@ -271,6 +276,7 @@ function Studio() {
               onDoubleClick={() => { setPanelW(null); store('bm-panel-w', ''); }} />
             {tab === 'models' && <ModelsPanel model={model} onExport={setExportJobs} onMakeSubmodel={makeSubmodel} />}
             {tab === 'parts' && <PartsPanel />}
+            {tab === 'suggest' && <SuggestPanel />}
             {tab === 'assembly' && <AssemblyPanel model={model} timeline={timeline} />}
             {tab === 'steps' && <StepsPanel timeline={timeline} />}
             {tab === 'checks' && <ChecksPanel warnings={warnings} />}

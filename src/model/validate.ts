@@ -5,7 +5,7 @@ import type { Snap } from '../ldraw/shadow';
 import { mateAxes, worldSnaps, type WorldSnap } from '../anim/snapMates';
 import { discoverPlacedAttachments } from './attachmentPlacements';
 
-export type WarningKind = 'unknown-part' | 'unknown-color' | 'missing-submodel' | 'submodel-cycle' | 'overlap' | 'floating' | 'assembly-spot';
+export type WarningKind = 'unknown-part' | 'unknown-color' | 'missing-submodel' | 'submodel-cycle' | 'overlap' | 'floating' | 'assembly-spot' | 'weak';
 export type Warning = {
   kind: WarningKind; itemIds: string[]; instanceKeys: string[]; model: string; message: string;
   /** The measured number behind the message, e.g. how deep two pieces reach into each other. */

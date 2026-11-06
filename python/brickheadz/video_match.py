@@ -47,9 +47,9 @@ class Match:
     n_frames: int
 
 
-def colour_hist(frame: np.ndarray, bbox) -> np.ndarray:
+def colour_hist(frame: np.ndarray, bbox, mask: np.ndarray | None = None) -> np.ndarray:
     x, y, w, h = bbox
-    m = blob_mask(frame, bbox).astype(np.uint8)
+    m = blob_mask(frame, bbox, mask=mask).astype(np.uint8)
     hist = cv2.calcHist([frame[y : y + h, x : x + w]], [0, 1, 2], m, [BINS] * 3, [0, 256] * 3)
     return hist / max(1.0, float(hist.max()))
 
@@ -157,8 +157,8 @@ def track_scores(t, mesh: PartMesh, part: str, cams: list[VCam], frame_reader, n
     """
     rep = t.best
     frame = frame_reader(rep.frame)
-    bmask = blob_mask(frame, rep.bbox)
-    hist = colour_hist(frame, rep.bbox)
+    bmask = blob_mask(frame, rep.bbox, mask=rep.mask)
+    hist = colour_hist(frame, rep.bbox, rep.mask)
     hover = [b for b in t.blobs if not b.touches_border]
     clean = [b for b in hover if b.isolated and b.text < 0.01]
     hover = clean if len(clean) >= 2 else hover

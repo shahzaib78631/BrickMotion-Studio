@@ -116,7 +116,9 @@ export class PathTraceSession {
     const floorScene = baseScene(studio, environment, floorColor, opts.groundY, disposables);
     const tracer = () => {
       const t = new WebGLPathTracer(renderer);
-      Object.assign(t, { renderToCanvas: true, synchronizeRenderSize: true, dynamicLowRes: false, rasterizeScene: false, minSamples: 0, renderDelay: 0, fadeDuration: 0, bounces: 6, transmissiveBounces: 8, filterGlossyFactor: 0.5 });
+      // EyeSight (Cycles) parity: diffuse ≤ 3 + glossy ≤ 4 + headroom, 32 transmissive
+      // bounces, full glossy filtering (filter_glossy = 1.0)
+      Object.assign(t, { renderToCanvas: true, synchronizeRenderSize: true, dynamicLowRes: false, rasterizeScene: false, minSamples: 0, renderDelay: 0, fadeDuration: 0, bounces: 8, transmissiveBounces: 32, filterGlossyFactor: 1.0 });
       disposables.push(t);
       return t;
     };
@@ -231,16 +233,21 @@ export class PathTraceSession {
   }
 }
 
-/** A brick material as the path tracer should see it: clear glass refracts, glowing colours light the scene. */
+/** A brick material as the path tracer should see it: clear glass refracts, milky glass frosts, glowing colours light the scene. */
 export function tracedMaterial(source: THREE.Material, materials: Materials | undefined): THREE.Material {
   const m = source.clone() as THREE.MeshPhysicalMaterial;
   const color = m.userData?.bmColor as ColorDef | undefined;
-  if (m.isMeshPhysicalMaterial && color?.finish === 'trans' && materials?.glass === 'clear') {
-    const tint = new THREE.Color(color.hex);
-    // tinted through its depth like coloured glass; a light tint on each surface
-    Object.assign(m, { transparent: false, opacity: 1, depthWrite: true, transmission: 1, ior: 1.52, roughness: 0.02, metalness: 0, thickness: 1, attenuationDistance: 2.5 });
-    m.attenuationColor.copy(tint);
-    m.color.copy(tint).lerp(new THREE.Color('#ffffff'), 0.55);
+  if (m.isMeshPhysicalMaterial && color?.finish === 'trans') {
+    if (materials?.glass === 'clear') {
+      const tint = new THREE.Color(color.hex);
+      // tinted through its depth like coloured glass; a light tint on each surface
+      Object.assign(m, { transparent: false, opacity: 1, depthWrite: true, transmission: 1, ior: 1.52, roughness: 0.02, metalness: 0, thickness: 1, attenuationDistance: 2.5 });
+      m.attenuationColor.copy(tint);
+      m.color.copy(tint).lerp(new THREE.Color('#ffffff'), 0.55);
+    } else if (materials?.glass === 'milky') {
+      // LGEO lg_milky_finish: frosted, faintly lit from inside
+      Object.assign(m, { transparent: false, opacity: 1, depthWrite: true, transmission: 0.3, ior: 1.52, roughness: 0.55, metalness: 0, thickness: 0.5 });
+    }
   }
   const glow = (m.userData?.bmGlow as number) ?? 0;
   if (glow > 0 && 'emissiveIntensity' in m) m.emissiveIntensity = glow * PT_GLOW_GAIN;

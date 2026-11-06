@@ -273,3 +273,27 @@
 .bm-motion-reset{width:22px;height:22px}
 .bm-motion-reset:disabled{opacity:.25}
 .bm-step.bm-has-motion::after,.bm-part-clip.bm-has-motion::after{content:"";position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:50%;background:var(--accent, #3b82f6)}
+
+/* Suggest panel: build autocomplete + technique library */
+.bm-suggest-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.bm-suggest-item{display:grid;grid-template-columns:1fr auto;align-items:center;gap:6px;border:1px solid var(--line);border-radius:10px;padding:6px;background:var(--surface)}
+.bm-suggest-item.active{border-color:var(--focus);box-shadow:0 0 0 1px var(--focus) inset}
+.bm-suggest-main{display:flex;align-items:center;gap:8px;min-width:0;background:none;border:0;padding:0;text-align:left;color:inherit;cursor:pointer}
+.bm-suggest-thumbs{display:flex;flex:none}
+.bm-suggest-thumbs>*{margin-right:-8px}
+.bm-suggest-text{display:flex;flex-direction:column;min-width:0;padding-left:8px}
+.bm-suggest-title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bm-suggest-kind{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3)}
+.bm-suggest-kind.k-mirror,.bm-suggest-kind.k-repeat{color:var(--focus)}
+.bm-suggest-why{grid-column:1/-1;margin:2px 0 0}
+.bm-suggest-section{margin:10px 0 4px;text-transform:uppercase;letter-spacing:.04em}
+.bm-suggest-all summary{cursor:pointer;margin:8px 0}
+.bm-tech{border:1px solid var(--line);border-radius:10px;margin:6px 0;background:var(--surface)}
+.bm-tech-head{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;background:none;border:0;padding:8px 10px;text-align:left;color:inherit;cursor:pointer}
+.bm-tech-name{font-weight:600}
+.bm-tech-body{padding:0 10px 10px}
+.bm-tech-steps{margin:6px 0;padding-left:18px;font-size:12px;color:var(--ink2)}
+.bm-tech-parts{display:flex;gap:4px;flex-wrap:wrap;margin:6px 0}
+.bm-calc{border-top:1px solid var(--line);margin-top:8px;padding-top:8px;display:flex;flex-direction:column;gap:6px}
+.bm-calc-row{display:flex;justify-content:space-between;gap:8px;font-size:12px}
+.bm-calc-out{border-bottom:1px dashed var(--line);padding-bottom:4px}

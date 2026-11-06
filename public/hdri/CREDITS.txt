@@ -11,3 +11,10 @@ potsdamer_platz_1k.hdr     https://polyhaven.com/a/potsdamer_platz
 venice_sunset_1k.hdr       https://polyhaven.com/a/venice_sunset
 dikhololo_night_1k.hdr     https://polyhaven.com/a/dikhololo_night
 empty_warehouse_01_1k.hdr  https://polyhaven.com/a/empty_warehouse_01
+
+From BrickLink Studio's EyeSight photorealistic renderer (textures.com panorama
+packs, bundled with Studio; converted to 1k here). See
+BRICKLINK_RENDERING_PIPELINE.md.
+
+bricklink_pano029_1k.hdr    TexturesCom_Pano029.hdr (EyeSight HDR set)
+bricklink_pano040_1k.hdr    TexturesCom_Pano040.hdr (EyeSight HDR set)
