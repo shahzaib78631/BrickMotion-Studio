@@ -520,12 +520,15 @@ export function KeyframeTimeline({ timeline, planning, buildError, instances, pl
   const focusedLeaves = activeObject ? instances.filter((inst) => inst.key === activeObject || inst.key.startsWith(`${activeObject}/`)) : [];
   /** Removes the piece's flight keys; with `flights`, the Build timeline flies each leaf along its own. */
   const handBack = (flights: ReadonlyMap<string, FlightPose[]> | null) => {
-    if (!activeObject) return;
+    if (!activeObject || !timeline) return;
     setMotionReport(null);
     useStudio.getState().apply((p) => {
       let next = p;
       for (const inst of focusedLeaves) next = setPieceFlight(next, editingModel, inst.key, flights?.get(inst.key) ?? null) ?? next;
-      const animation = unbakeFlight(animationOf(p.animation), editingModel, activeObject);
+      // a detached model links its Build again, so the piece has a Build flight to play;
+      // the other baked pieces keep playing their own keys
+      const unbaked = unbakeFlight(animationOf(p.animation), editingModel, activeObject);
+      const animation = buildLayerAt(unbaked, editingModel) ? unbaked : linkBuildLayer(unbaked, editingModel, timeline.duration);
       return next === p && animation === p.animation ? p : { ...next, animation };
     });
   };
@@ -598,7 +601,7 @@ export function KeyframeTimeline({ timeline, planning, buildError, instances, pl
             }}><Ic name="x" /> Unlink</button>
             <button className="bm-key-bake" disabled={!canBake} title="Turn selected Build flights into independent editable object keys" onClick={() => doBake(false)}><Ic name="key" /> Bake selected</button>
             {focusedBaked && <button className="bm-key-bake" disabled={!timeline} title="Play this edited path from the Build timeline, with its smooth timing (the piece's keys are removed)" onClick={useInBuild}><Ic name="brick" /> Use in Build</button>}
-            {focusedBaked && <button className="bm-key-bake" title="Remove this piece's edited flight (keys and path) and let the planner fly it again" onClick={backToPlanner}><Ic name="undo" /> Back to planner</button>}
+            {focusedBaked && <button className="bm-key-bake" disabled={!timeline} title="Remove this piece's edited flight (keys and path) and let the planner fly it again" onClick={backToPlanner}><Ic name="undo" /> Back to planner</button>}
             <button className="bm-key-bake" disabled={!canBake} title="Bake every brick, preserve appearance timing, and detach this model from its planner" onClick={() => doBake(true)}>Bake all & detach</button>
           </>
         ) : (
@@ -608,6 +611,7 @@ export function KeyframeTimeline({ timeline, planning, buildError, instances, pl
               if (timeline) changeLayer((a) => linkBuildLayer(a, editingModel, timeline.duration));
             }}><Ic name="key" /> Use Build as base</button>
             {bakedCount > 0 && <span className="bm-key-buildnote">{bakedCount} individual flights baked · independent of Build</span>}
+            {focusedBaked && <button className="bm-key-bake" disabled={!timeline} title="Play this edited path from the Build timeline, with its smooth timing (links the Build again; other baked pieces keep their keys)" onClick={useInBuild}><Ic name="brick" /> Use in Build</button>}
             {bakedCount > 0 && <button className="bm-key-bake" disabled={!canBake} title="Bake current generated motion for every item and remove the Build source" onClick={() => doBake(true)}>Rebake all</button>}
           </>
         )}
@@ -751,6 +755,10 @@ export function KeyframeTimeline({ timeline, planning, buildError, instances, pl
           {propertyObject && propertyValues ? (
             <>
               <div className="bm-key-property-object" title={propertyObject.label}><Ic name={propertyObject.isSubmodel ? 'box' : 'brick'} />{propertyObject.label}</div>
+              {focusedBaked && <div className="bm-key-property-flight">
+                <button className="bm-key-property-use" disabled={!timeline} title="Play this edited path from the Build timeline, with its smooth timing (the piece's keys are removed)" onClick={useInBuild}><Ic name="brick" /> Use in Build</button>
+                <button disabled={!timeline} title="Remove this piece's edited flight (keys and path) and let the planner fly it again" onClick={backToPlanner}><Ic name="undo" /> Back to planner</button>
+              </div>}
               {(['location', 'rotation', 'scale'] as const).map((kind) => (
                 <section className={`bm-key-property-section section-${kind}`} key={kind}>
                   <div className="bm-key-section-title">{kind === 'location' ? 'Location' : kind === 'rotation' ? 'Euler Rotation' : 'Scale'} <span>{kind === 'location' ? 'studs' : kind === 'rotation' ? 'degrees' : 'factor'}</span></div>

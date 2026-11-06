@@ -51,6 +51,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.1.0",
+    "@huggingface/transformers": "^3.7.6",
     "idb-keyval": "^6.3.0",
     "mediabunny": "^1.62.0",
     "react": "^18.3.1",

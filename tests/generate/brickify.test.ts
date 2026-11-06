@@ -85,6 +85,32 @@ describe('brickify', () => {
     expect(b.components).toBe(1);
   });
 
+  it('hollows a ball to a shell: same outside, far fewer pieces, still one piece', () => {
+    const v = sphere(12, 4);
+    const solid = brickify(v);
+    const b = brickify(v, { hollow: 2 });
+    expect(b.shape.count()).toBeLessThan(v.count() * 0.75);
+    // every cell that shows from outside is still there, in its colour
+    v.forEach((x, y, z, c) => {
+      if (!hiddenIn(v, x, y, z)) expect(b.shape.get(x, y, z)).toBe(c);
+    });
+    coversExactly(b.shape, b);
+    expect(b.components).toBe(1);
+    expect(b.pieces.length).toBeLessThan(solid.pieces.length * 0.8);
+  });
+
+  it('thickens a shell that would fall apart', () => {
+    const b = brickify(sphere(12, 4), { hollow: 1 });
+    expect(b.components).toBe(1);
+    expect(b.shell).toBeGreaterThan(1);
+    expect(b.shape.count()).toBeLessThan(sphere(12, 4).count());
+  });
+
+  it('leaves thin shapes alone when hollowing', () => {
+    const b = brickify(wall(), { hollow: 2 });
+    expect(b.shape.count()).toBe(wall().count());
+  });
+
   it('turns a cell list into plan items on the stud grid', () => {
     const b = brickify(Voxels.from(2, 4, 3, () => 1));
     expect(b.items).toEqual([{ part: '3001', color: 1, x: 0, y: 0, z: 0, rot: 90 }]);
@@ -102,9 +128,9 @@ describe.skipIf(!ready)('brickify with real parts', () => {
     expect(wrong).toEqual([]);
   }, 60000);
 
-  it.each([['sphere', () => sphere(10, 4)], ['wall', wall], ['head', head]] as const)('the editor finds nothing floating or overlapping in the %s', async (_, shape) => {
-    const b = brickify(shape());
-    await useAppParts([...new Set(b.items.map((i) => i.part))]);
+  it.each([['sphere', () => sphere(10, 4), 0], ['hollow sphere', () => sphere(12, 4), 2], ['wall', wall, 0], ['head', head, 0]] as const)('the editor finds nothing floating or overlapping in the %s', async (_, shape, hollow) => {
+    const b = brickify(shape(), { hollow });
+    await useAppParts([...new Set(b.pieces.map((p) => p.part))]);
     const plan: Plan = { format: 'brickmotion-plan', version: 1, name: 'gen', steps: [{ pieces: b.items.map((it, i) => ({ ...it, id: `p${i}` })) }] };
     const asm = assemble(plan, metricsOf, getColors());
     const problems = validate(asm, (p) => p, (p) => metricsOf(p).snaps).filter((w) => w.kind === 'floating' || w.kind === 'overlap');

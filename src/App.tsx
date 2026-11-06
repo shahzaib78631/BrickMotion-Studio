@@ -33,6 +33,7 @@ import { ModelsPanel } from './ui/ModelsPanel';
 import { StepCallout } from './ui/StepCallout';
 import { PartsPanel } from './ui/PartsPanel';
 import { SuggestPanel } from './ui/SuggestPanel';
+import { GeneratePanel } from './ui/GeneratePanel';
 import { PreviewPlayer } from './ui/PreviewPlayer';
 import { ProjectsDialog } from './ui/ProjectsDialog';
 import { TemplatesDialog } from './ui/TemplatesDialog';
@@ -54,10 +55,10 @@ import './ui/reference.css';
 import './ui/themes.css';
 import './ui/layout.css';
 
-type Tab = 'models' | 'parts' | 'suggest' | 'assembly' | 'steps' | 'checks' | 'mechanisms' | 'ai' | 'video' | 'materials' | 'sound' | 'staging' | 'capture' | 'settings';
+type Tab = 'models' | 'parts' | 'suggest' | 'generate' | 'assembly' | 'steps' | 'checks' | 'mechanisms' | 'ai' | 'video' | 'materials' | 'sound' | 'staging' | 'capture' | 'settings';
 /** The rail, in groups: building the model, how the video looks, then assets; Settings sits at the bottom. */
 const TAB_GROUPS: [Tab, IconName, string][][] = [
-  [['models', 'box', 'Models'], ['parts', 'parts', 'Parts'], ['suggest', 'wand', 'Suggest'], ['assembly', 'spot', 'Assembly'], ['steps', 'steps', 'Animation'], ['mechanisms', 'rotate', 'Mechanisms']],
+  [['models', 'box', 'Models'], ['parts', 'parts', 'Parts'], ['suggest', 'wand', 'Suggest'], ['generate', 'brick', 'Generate'], ['assembly', 'spot', 'Assembly'], ['steps', 'steps', 'Animation'], ['mechanisms', 'rotate', 'Mechanisms']],
   [['video', 'camera', 'Render'], ['materials', 'palette', 'Materials'], ['sound', 'sound', 'Sound'], ['staging', 'layout', 'Staging'], ['capture', 'video', 'Capture']],
   [['ai', 'folder', 'Assets']],
   [['settings', 'settings', 'Settings']],
@@ -277,6 +278,7 @@ function Studio() {
             {tab === 'models' && <ModelsPanel model={model} onExport={setExportJobs} onMakeSubmodel={makeSubmodel} />}
             {tab === 'parts' && <PartsPanel />}
             {tab === 'suggest' && <SuggestPanel />}
+            {tab === 'generate' && <GeneratePanel />}
             {tab === 'assembly' && <AssemblyPanel model={model} timeline={timeline} />}
             {tab === 'steps' && <StepsPanel timeline={timeline} />}
             {tab === 'checks' && <ChecksPanel warnings={warnings} />}

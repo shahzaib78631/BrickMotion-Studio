@@ -62,7 +62,7 @@ const conflictsIn = (assembly: Assembly) => (a: Instance, b: Instance) => {
 const EMPTY: Assembly = { nodes: [], instances: [], bounds: null, problems: [] };
 
 /** Every check the model runs: geometry overlaps and floating pieces, plus connection-based stability. */
-const allChecks = (assembly: Assembly): Warning[] =>
+export const allChecks = (assembly: Assembly): Warning[] =>
   [...validate(assembly, partName, snapsOf, conflictsIn(assembly)), ...connectionChecks(assembly, metricsOf, partName)];
 
 export function computeModel(plan: Plan, editingModel: string): Omit<ModelState, 'ready'> {

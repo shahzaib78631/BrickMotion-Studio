@@ -52,6 +52,26 @@ export class Voxels {
   }
 }
 
+/**
+ * The shape with its core taken out: a cell stays only when an empty cell (or the outside)
+ * lies within `shell` studs of it, measured round (a plate is 0.4 stud up). What shows from
+ * outside never changes; shapes thinner than twice the shell come back whole.
+ */
+export function hollowed(v: Voxels, shell: number): Voxels {
+  if (shell <= 0) return v;
+  const r = Math.ceil(shell);
+  const ry = Math.ceil(shell * 2.5);
+  const offsets: [number, number, number][] = [];
+  for (let dy = -ry; dy <= ry; dy++) for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
+    if ((dx || dy || dz) && dx * dx + dz * dz + (dy / 2.5) ** 2 <= shell * shell) offsets.push([dx, dy, dz]);
+  }
+  const out = new Voxels(v.w, v.d, v.h);
+  v.forEach((x, y, z, c) => {
+    if (offsets.some(([dx, dy, dz]) => v.get(x + dx, y + dy, z + dz) < 0)) out.set(x, y, z, c);
+  });
+  return out;
+}
+
 /** Plates in a height of `studs` studs (2.5 plates per stud, rounded). */
 export const platesFor = (studs: number) => Math.round(studs * 2.5);
 

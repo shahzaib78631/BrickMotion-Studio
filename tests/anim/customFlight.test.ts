@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { bakeBuildFlights } from '../../src/anim/bakeBuild';
 import { applyCustomFlights, flightFromKeys } from '../../src/anim/customFlight';
 import { emptyAnimation, valuesAt } from '../../src/anim/keyframes';
+import { unlinkBuildLayer } from '../../src/anim/buildLayer';
 import { displayPivot, FROM_VIEW } from '../../src/anim/keyframePose';
 import { locationFrames, setPathKey } from '../../src/anim/flightPath';
 import { applyAssemblySpotTransform, poseAt, type Move, type Timeline, type Track } from '../../src/anim/timeline';
@@ -69,6 +70,11 @@ describe('an edited flight path played by the Build timeline', () => {
     expect(xAtHigh + pivot.x).toBeCloseTo(pivot.x + x * 20, -1);
     // the other piece keeps the planner's route
     expect(flown.tracks.get('other')).toBe(tl.tracks.get('other'));
+  });
+
+  it('works on a model baked and detached from its Build (no Build layer)', () => {
+    const { tl, a, flight } = bent();
+    expect(flightFromKeys(unlinkBuildLayer(a, ''), '', parts[0], parts[0].world, tl)).toEqual(flight);
   });
 
   it('eases: slow away from the start and into the seat, fastest in the middle', () => {

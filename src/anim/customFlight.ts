@@ -52,14 +52,15 @@ export function flightFromKeys(
 ): FlightPose[] | null {
   const track = timeline.tracks.get(inst.key);
   const move = track?.moves[0];
+  // the Build layer only bounds a piece that moves again later; a detached model has none
   const layer = buildLayerAt(animation, model);
-  if (!track || !move || move.stationary || !layer) return null;
+  if (!track || !move || move.stationary) return null;
   const visible = (f: number) => valuesAt(animation, model, inst.key, f).visibility >= 0.5;
   const frames = locationFrames(animation, model, inst.key).filter(visible);
   if (frames.length < 2) return null;
   const lo = frames[0];
   let hi = frames[frames.length - 1];
-  if (track.moves.length > 1) {
+  if (track.moves.length > 1 && layer) {
     const u = timeline.units[move.unit];
     if (u) hi = Math.min(hi, layer.startFrame + ((u.start + u.dur) / layer.speed) * animation.fps);
   }

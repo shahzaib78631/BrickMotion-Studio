@@ -1,5 +1,5 @@
-import type { Grid, PieceItem } from '../plan/types';
-import { Voxels } from './voxels';
+import type { Grid, PieceItem, PlanItem } from '../plan/types';
+import { hollowed, Voxels } from './voxels';
 
 /**
  * Shape → bricks. Fills a voxel shape (studs across, plates up) with real bricks and
@@ -48,17 +48,35 @@ export const PLATES: PartSpec[] = [
 ];
 
 /** A placed piece: grid corner, rotated footprint (w along x, d along z) and height. */
-export type Piece = { part: string; color: number; x: number; y: number; z: number; w: number; d: number; h: number; rot: 0 | 90 };
+export type Piece = { part: string; color: number; x: number; y: number; z: number; w: number; d: number; h: number; rot: 0 | 90; fixed?: boolean };
+
+/**
+ * Something placed before the bricks go in (a window, a door): the box of cells it fills
+ * (x, z in studs, y in plates, w×d×h) and the plan items that make it. Bricks are laid
+ * around it and joined to it like to any other piece; its cells should be empty in the shape.
+ */
+export type Fixture = { x: number; y: number; z: number; w: number; d: number; h: number; items: PlanItem[] };
 
 export type Built = {
   pieces: Piece[];
-  /** plan items on the stud grid (y in plates, up) */
-  items: (PieceItem & Grid)[];
+  /** plan items: the bricks on the stud grid (y in plates, up), then the fixtures' items */
+  items: PlanItem[];
   /** how many separate parts the model falls into: 1 means it holds together */
   components: number;
+  /** the shape actually built (the input, or its hollowed shell) */
+  shape: Voxels;
+  /** shell thickness used in studs (0: solid) */
+  shell: number;
 };
 
-export type BrickifyOptions = { parts?: PartSpec[]; maxRepairs?: number };
+export type BrickifyOptions = {
+  parts?: PartSpec[];
+  maxRepairs?: number;
+  /** keep only a shell this many studs thick (0 or unset: solid) */
+  hollow?: number;
+  /** windows, doors and other set pieces the bricks are laid around */
+  fixtures?: Fixture[];
+};
 
 type Cand = { spec: PartSpec; x: number; z: number; w: number; d: number; rot: 0 | 90 };
 
@@ -229,12 +247,12 @@ class Builder {
     for (const comp of order) {
       for (let i = 0; i < this.pieces.length; i++) {
         const p = this.pieces[i];
-        if (!p || of[i] !== comp) continue;
+        if (!p || p.fixed || of[i] !== comp) continue;
         const pairs: number[] = [];
         for (let y = p.y; y < p.y + p.h; y++) {
           const look = (x: number, z: number) => {
             const q = this.at(x, y, z);
-            if (q >= 0 && of[q] !== comp && !pairs.includes(q)) pairs.push(q);
+            if (q >= 0 && of[q] !== comp && !this.pieces[q]!.fixed && !pairs.includes(q)) pairs.push(q);
           };
           for (let z = p.z; z < p.z + p.d; z++) { look(p.x - 1, z); look(p.x + p.w, z); }
           for (let x = p.x; x < p.x + p.w; x++) { look(x, p.z - 1); look(x, p.z + p.d); }
@@ -270,8 +288,9 @@ class Builder {
   }
 }
 
-export function brickify(v: Voxels, opts: BrickifyOptions = {}): Built {
+function build(v: Voxels, opts: BrickifyOptions): Omit<Built, 'shell'> {
   const b = new Builder(v, opts.parts ?? [...BRICKS, ...PLATES]);
+  for (const f of opts.fixtures ?? []) b.add({ part: 'fixture', color: -1, x: f.x, y: f.y, z: f.z, w: f.w, d: f.d, h: f.h, rot: 0, fixed: true });
   for (let y = 0; y < v.h; y++) b.fillLayer(y);
   let comps = b.components();
   const tried = new Set<string>();
@@ -279,10 +298,30 @@ export function brickify(v: Voxels, opts: BrickifyOptions = {}): Built {
     if (!b.repairOnce(comps.of, tried)) break;
     comps = b.components();
   }
-  const pieces = b.pieces.filter((p): p is Piece => !!p);
+  const pieces = b.pieces.filter((p): p is Piece => !!p && !p.fixed);
+  const bricks: (PieceItem & Grid)[] = pieces.map((p) => ({ part: p.part, color: p.color, x: p.x, y: p.y, z: p.z, rot: p.rot }));
   return {
     pieces,
-    items: pieces.map((p) => ({ part: p.part, color: p.color, x: p.x, y: p.y, z: p.z, rot: p.rot })),
+    items: [...bricks, ...(opts.fixtures ?? []).flatMap((f) => f.items)],
     components: b.components().count,
+    shape: v,
   };
+}
+
+/**
+ * Bricks for a shape. With `hollow`, the core is taken out first; when a thin shell would
+ * fall apart (rings that no longer overlap the ring above, near a ball's poles), the shell
+ * thickens half a stud at a time until it holds, up to solid.
+ */
+export function brickify(input: Voxels, opts: BrickifyOptions = {}): Built {
+  const solid = () => ({ ...build(input, opts), shell: 0 });
+  if (!opts.hollow || opts.hollow <= 0) return solid();
+  const deepest = Math.max(input.w, input.d, input.h / 2.5) / 2;
+  for (let shell = opts.hollow; shell < deepest; shell += 0.5) {
+    const v = hollowed(input, shell);
+    if (v.count() === input.count()) break; // nothing left to take out
+    const b = build(v, opts);
+    if (b.components === 1) return { ...b, shell };
+  }
+  return solid();
 }

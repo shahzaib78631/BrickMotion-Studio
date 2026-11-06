@@ -297,3 +297,12 @@
 .bm-calc{border-top:1px solid var(--line);margin-top:8px;padding-top:8px;display:flex;flex-direction:column;gap:6px}
 .bm-calc-row{display:flex;justify-content:space-between;gap:8px;font-size:12px}
 .bm-calc-out{border-bottom:1px dashed var(--line);padding-bottom:4px}
+
+/* Generate tab */
+.bm-generate-seed { display: flex; align-items: flex-end; gap: 8px; }
+.bm-generate-seed .nx-field { flex: 1; }
+.bm-generate-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; }
+.bm-generate .nx-primary { width: 100%; }
+.bm-generate-card { display: flex; flex-direction: column; gap: 4px; padding: 10px; margin: 8px 0; border: 1px solid var(--line, #e5e7eb); border-radius: 10px; }
+.bm-generate-ok { font-size: 12px; color: #15803d; font-weight: 600; }
+.bm-generate-bad { font-size: 12px; color: #b91c1c; font-weight: 600; }
