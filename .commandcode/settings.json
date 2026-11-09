@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(strings:*)",
+      "Shell(grep:*)",
+      "Shell(awk:*)"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}

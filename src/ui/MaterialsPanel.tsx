@@ -2,7 +2,8 @@ import { useMemo, type CSSProperties, type ReactNode } from 'react';
 import { useAppSettings } from '../state/appSettings';
 import { geometryOf, getColors } from '../state/partService';
 import type { ModelState } from '../state/useModel';
-import { AO_RADIUS_RANGE, AO_STRENGTH_RANGE, ENVIRONMENTS, FINISHES, FLOORS, GLASS_LOOKS, GLOW_STRENGTH_RANGE, LENS_BLURS, SCENES, TEXTURES, aoFor, finishOf, floorFor, sceneOf, takesFloorColor, type AOChoice, type FloorSurface, type Materials, type ScenePreset } from '../render/looks';
+import { AO_RADIUS_RANGE, AO_STRENGTH_RANGE, ENVIRONMENTS, FINISHES, FLOORS, GLASS_LOOKS, GLOW_STRENGTH_RANGE, LENS_BLURS, PALETTES, SCENES, TEXTURES, aoFor, finishOf, floorFor, paletteOf, sceneOf, takesFloorColor, type AOChoice, type FloorSurface, type Materials, type Palette, type ScenePreset } from '../render/looks';
+import { brickHex } from '../render/materials';
 
 const css = (rgb: readonly number[]) => `rgb(${rgb.join(',')})`;
 /** The backdrop as CSS: the same stops (and pool of light) the renderer uses. */
@@ -24,6 +25,16 @@ function finishBall(id: string): CSSProperties {
   return {
     background: `radial-gradient(circle at 34% 30%, rgba(${spec},${spec},${spec},${0.55 + f.clearcoat * 0.4}) 0, transparent ${size}%)${sheen}, radial-gradient(circle at 50% 55%, ${base} 0, color-mix(in srgb, ${base} 55%, #000) 100%)`,
   };
+}
+
+/** Four common brick colours as a palette renders them, so the two material tables are visible. */
+function paletteSwatch(id: Palette): CSSProperties {
+  const colors = getColors();
+  const strip = [4, 1, 14, 2].map((code) => {
+    const c = colors.get(code);
+    return !c ? '#9a9ca6' : id === 'studio' ? brickHex(c) : c.hex;
+  });
+  return { background: `linear-gradient(90deg, ${strip.map((h, i) => `${h} ${i * 25}% ${(i + 1) * 25}%`).join(', ')})` };
 }
 
 const ENV_SWATCH: Record<string, string> = {
@@ -204,6 +215,16 @@ export function MaterialsPanel({ model }: { model?: ModelState }) {
           ))}
         </div>
         <span className="nx-hint">What the plastic reflects and is softly lit by. The photo environments give glossy bricks varied, real-world highlights; the backdrop and lights stay the scene's own.</span>
+      </Section>
+
+      <Section title="Colour source" value={paletteOf(m.palette).label}>
+        <div className="bm-mat-grid">
+          {PALETTES.map((p) => (
+            <Card key={p.id} selected={m.palette === p.id} label={p.label} hint={p.hint} onClick={() => setMaterials({ palette: p.id, finish: p.finish })}
+              swatch={<span className="bm-mat-swatch" style={paletteSwatch(p.id)} />} />
+          ))}
+        </div>
+        <span className="nx-hint">Which material table colours every brick: the LDraw library's own values, or BrickLink Studio's (the table EyeSight binds its shaders to). Each also sets its matching plastic finish below; pick another finish afterwards to mix them.</span>
       </Section>
 
       <Section title="Brick finish" value={finishOf(m.finish).label}>

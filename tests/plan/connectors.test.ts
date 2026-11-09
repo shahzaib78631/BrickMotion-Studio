@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { partConnectors, submodelConnectors, worldConnectors, type Connector } from '../../src/plan/connectors';
+import { connectorsMate, partConnectors, submodelConnectors, worldConnectors, type Connector } from '../../src/plan/connectors';
 import { itemPlacement } from '../../src/model/assemble';
 import { placementMatrix } from '../../src/model/assemble';
 import type { Plan } from '../../src/plan/types';
@@ -10,6 +10,32 @@ const males = (c: Connector[]) => c.filter((x) => x.gender === 'M');
 const females = (c: Connector[]) => c.filter((x) => x.gender === 'F');
 
 describe('connector model', () => {
+  it.skipIf(!ready)('gives headwear without shadow data the hole it sits on a head stud by (2528a)', async () => {
+    const hat = partConnectors(await measureReal('2528a'));
+    const hole = females(hat).filter((c) => c.type === 'stud');
+    expect(hole).toHaveLength(1);
+    expect(near(hole[0].pos, [0, 0, 0]) && near(hole[0].axis, [0, 1, 0])).toBe(true);
+    // a hat at the head's own placement seats on the head's top stud
+    const stud = males(partConnectors(await measureReal('3626c'))).find((c) => near(c.axis, [0, -1, 0]))!;
+    expect(near(stud.pos, hole[0].pos)).toBe(true);
+  });
+
+  it.skipIf(!ready)('gives a minifig torso its neck stud, where a head seats (973)', async () => {
+    const neck = males(partConnectors(await measureReal('973'))).filter((c) => c.type === 'stud');
+    expect(neck).toHaveLength(1);
+    expect(near(neck[0].pos, [0, 0, 0]) && near(neck[0].axis, [0, -1, 0])).toBe(true);
+    // real sets put a head 24 LDU above its torso (442 of 571 OMR minifigs): its socket on that stud
+    const socket = females(partConnectors(await measureReal('3626c'))).find((c) => near(c.axis, [0, 1, 0]))!;
+    expect(near([socket.pos[0], socket.pos[1] - 24, socket.pos[2]], neck[0].pos)).toBe(true);
+  });
+
+  it.skipIf(!ready)('leaves headwear that has its hole, and other parts, as they are', async () => {
+    expect(females(partConnectors(await measureReal('3624'))).filter((c) => c.type === 'stud')).toHaveLength(1);
+    expect(females(partConnectors(await measureReal('3847'))).filter((c) => c.type === 'stud')).toHaveLength(0);
+    // a Technic link is a long stud-width rod, not a stud
+    expect(males(partConnectors(await measureReal('32005'))).filter((c) => c.type === 'stud')).toHaveLength(0);
+  });
+
   it.skipIf(!ready)('gives a 2x4 brick 8 up studs and 8 down sockets', async () => {
     const m = await measureReal('3001');
     const c = partConnectors(m);
@@ -74,15 +100,35 @@ describe('connector model', () => {
   });
 
   it.skipIf(!ready)('takes a bar in a minifig hand, which the library records as a clip', async () => {
-    // 3820's grip is `SNAP_CLP` (shape CLP, always female), not a cylinder: a bar goes in it
+    // 3820's grip is `SNAP_CLP` (shape CLP, always female), not a cylinder: a bar goes in it.
+    // The fist is open at both ends of its 11 LDU span, so it takes the bar from either side.
     const hand = partConnectors(await measureReal('3820'));
     const clip = hand.filter((c) => c.type === 'bar' && c.gender === 'F');
-    expect(clip).toHaveLength(1);
-    expect(clip[0].grip).toBe(true);
+    expect(clip).toHaveLength(2);
+    expect(clip.every((c) => c.grip)).toBe(true);
     expect(clip[0].pos.map((v) => Math.round(v))).toEqual([0, 5, -9]);
     expect(Math.abs(clip[0].pos[1] - 4.5)).toBeLessThan(0.1);
+    expect(Math.hypot(...clip[1].pos.map((v, i) => v - clip[0].pos[i]))).toBeCloseTo(11, 1);
     // and the hand keeps the wrist stud that mounts it on the arm
     expect(hand.filter((c) => c.type === 'stud' && c.gender === 'M')).toHaveLength(1);
+  });
+
+  it.skipIf(!ready)('takes a bar in a C-clip from either end (27256 into 15712)', async () => {
+    // 15712's clip is an 8 LDU span centred at (0, -6, 0), so its opening has a seat at z -4 and
+    // at z +4: a bar slips in from either side. Only one seat used to exist, so the lightning
+    // bolt could be inserted one way round and not the other.
+    const clip = partConnectors(await measureReal('15712')).filter((c) => c.type === 'bar');
+    expect(clip).toHaveLength(2);
+    expect(clip.map((c) => Math.round(c.pos[2])).sort((a, b) => a - b)).toEqual([-4, 4]);
+    // each seat faces out of its own end of the span
+    expect(clip[0].axis[2] + clip[1].axis[2]).toBeCloseTo(0, 6);
+    expect(Math.round(clip[0].axis[2])).toBe(clip[0].pos[2] < 0 ? -1 : 1);
+    // 27256's lightning bolt is a 4 LDU bar; each seat takes it, with the axes opposed
+    const bar = partConnectors(await measureReal('27256')).find((c) => c.type === 'bar')!;
+    for (const seat of clip) {
+      const placed: Connector = { ...bar, pos: seat.pos, axis: [-seat.axis[0], -seat.axis[1], -seat.axis[2]] };
+      expect(connectorsMate(placed, seat)).toBe(true);
+    }
   });
 
   it.skipIf(!ready)('takes a friction grip, which the library records as `fgr`, as a bar', async () => {

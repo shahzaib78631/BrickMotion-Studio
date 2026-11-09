@@ -111,6 +111,12 @@ function Studio() {
     setTab(id);
     setPanelClosed(false);
   };
+  // another part of the app asks for a panel (the viewport's "What fits here?" opens Suggest)
+  useEffect(() => {
+    const open = (e: Event) => { setTab((e as CustomEvent<Tab>).detail); setPanelClosed(false); };
+    window.addEventListener('bm:open-panel', open);
+    return () => window.removeEventListener('bm:open-panel', open);
+  }, []);
   const startPanelResize = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
     const panel = e.currentTarget.parentElement!;

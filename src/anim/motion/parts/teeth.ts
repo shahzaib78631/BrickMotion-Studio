@@ -20,6 +20,11 @@
 import type { FlatPart } from '../../../ldraw/flatten';
 import { PointGrid, rotationalOrder, rotationShare, screwLead, type P3 } from './meshSymmetry';
 
+// Loops, not Math.max(...xs): a detailed part has more vertices than a call can take arguments.
+const maxOf = (xs: readonly number[]) => { let m = -Infinity; for (const x of xs) if (x > m) m = x; return m; };
+const minOf = (xs: readonly number[]) => { let m = Infinity; for (const x of xs) if (x < m) m = x; return m; };
+
+
 export type V3 = [number, number, number];
 export type ToothedFeature = {
   kind: 'spur' | 'bevel' | 'double-bevel' | 'crown' | 'clutch' | 'worm' | 'rack';
@@ -70,14 +75,14 @@ function rows(ps: readonly P3[]): Map<number, P3[]> {
   for (const p of ps) { const k = Math.round(p[2] * 4); (out.get(k) ?? out.set(k, []).get(k)!).push(p); }
   return out;
 }
-const spread = (ps: readonly P3[]) => ps.length ? Math.max(...ps.map(radius)) - Math.min(...ps.map(radius)) : 0;
+const spread = (ps: readonly P3[]) => ps.length ? maxOf(ps.map(radius)) - minOf(ps.map(radius)) : 0;
 
 export function measureTeeth(flat: FlatPart): ToothedFeature[] {
   const verts = partVertices(flat), out: ToothedFeature[] = [];
   for (const { axis, to, from } of AXES) {
     let rest = verts.map(to).filter(p => radius(p) > 4);
     for (let round = 0; round < 8 && rest.length; round++) {
-      const top = Math.max(...rest.map(radius));
+      const top = maxOf(rest.map(radius));
       if (top < 6) break;
       const band = rest.filter(p => radius(p) > top - BAND);
       rest = rest.filter(p => radius(p) <= top - BAND);
@@ -102,7 +107,7 @@ function splitAlong(band: P3[]): P3[][] {
 }
 
 function gearOf(piece: P3[], axis: V3, from: (u: number, v: number, w: number) => V3): ToothedFeature | null {
-  const top = Math.max(...piece.map(radius));
+  const top = maxOf(piece.map(radius));
   const n = rotationalOrder(piece);
   if (n < 6 || top - TOOTH_RADIUS * n < 0.5 || top - TOOTH_RADIUS * n > 3.5 || spread(piece) < 1.5) return null;
   const R = TOOTH_RADIUS * n;
@@ -110,16 +115,16 @@ function gearOf(piece: P3[], axis: V3, from: (u: number, v: number, w: number) =
   // Teeth have a tip land: at least two angles per tooth out at the tips. A
   // rim drawn from n-sided circles has only n (3482).
   if (new Set(crest.map(angleBin)).size < 2 * n) return null;
-  const lo = Math.min(...zs), hi = Math.max(...zs), mid = (lo + hi) / 2;
+  const lo = minOf(zs), hi = maxOf(zs), mid = (lo + hi) / 2;
   // A taper: past the crest each tooth's ridge carries on at a smaller radius,
   // drawn as a ring of one or two vertices per tooth with the gear's own
   // symmetry (a hub circle on the same face has more, at even spacing). A ring
   // at the root radius is the root cylinder carrying on as a collar (10928).
-  const root = Math.min(...piece.filter(p => p[2] >= lo - 0.1 && p[2] <= hi + 0.1).map(radius));
+  const root = minOf(piece.filter(p => p[2] >= lo - 0.1 && p[2] <= hi + 0.1).map(radius));
   const tapered = (side: P3[]) => [...rows(side).values()].some(row => row.length >= 0.8 * n && row.length <= 2 * n + 2 &&
     row.every(p => radius(p) < top - 1 && Math.abs(radius(p) - root) > 0.3) && rotationShare(row, new PointGrid(row, 0.05), n) >= 0.85);
   const below = tapered(piece.filter(p => p[2] < lo - 0.75)), above = tapered(piece.filter(p => p[2] > hi + 0.75));
-  const zAll = piece.map(p => p[2]), width = Math.max(...zAll) - Math.min(...zAll);
+  const zAll = piece.map(p => p[2]), width = maxOf(zAll) - minOf(zAll);
   const at = (w: number): V3 => from(0, 0, w);
   const base = { teeth: n, axis, centre: at(mid), pitchRadius: R, width };
   if (below && above) return { ...base, kind: 'double-bevel', tips: [at((mid + hi) / 2 + R), at((mid + lo) / 2 - R)] };
@@ -137,10 +142,10 @@ function gearOf(piece: P3[], axis: V3, from: (u: number, v: number, w: number) =
  */
 function wormOf(piece: P3[], axis: V3, from: (u: number, v: number, w: number) => V3): ToothedFeature | null {
   const zs0 = piece.map(p => p[2]);
-  if (spread(piece) < 1.5 || Math.max(...zs0) - Math.min(...zs0) < 8 || new Set(piece.map(p => Math.floor(angleBin(p) / 45))).size < 14) return null;
+  if (spread(piece) < 1.5 || maxOf(zs0) - minOf(zs0) < 8 || new Set(piece.map(p => Math.floor(angleBin(p) / 45))).size < 14) return null;
   const lead = screwLead(piece);
   if (lead === null || Math.abs(lead) < 4 || Math.abs(lead) > 20) return null;
-  const top = Math.max(...piece.map(radius)), zs = piece.map(p => p[2]), lo = Math.min(...zs), hi = Math.max(...zs);
+  const top = maxOf(piece.map(radius)), zs = piece.map(p => p[2]), lo = minOf(zs), hi = maxOf(zs);
   return { kind: 'worm', teeth: 1, axis, centre: from(0, 0, (lo + hi) / 2), pitchRadius: top - 2.4, width: hi - lo, lead };
 }
 
@@ -169,9 +174,9 @@ function racks(verts: readonly P3[]): ToothedFeature[] {
         // A root between every two tips.
         const roots = verts.filter(p => { const d = h - height(p); return d >= 2 && d <= 5.05; }).map(p => dotV(p, dir));
         if (!r.gaps.every(([a, b]) => roots.some(x => x > a + 0.1 && x < b - 0.1))) continue;
-        const ws = layer.map(p => dotV(p, side)), wMid = (Math.min(...ws) + Math.max(...ws)) / 2, mid = (r.from + r.to) / 2;
+        const ws = layer.map(p => dotV(p, side)), wMid = (minOf(ws) + maxOf(ws)) / 2, mid = (r.from + r.to) / 2;
         const centre = [0, 1, 2].map(i => dir[i] * mid + side[i] * wMid + face[i] * (h - 2)) as V3;
-        out.push({ kind: 'rack', teeth: r.teeth, axis: dir, centre, pitchRadius: 0, width: Math.max(...ws) - Math.min(...ws),
+        out.push({ kind: 'rack', teeth: r.teeth, axis: dir, centre, pitchRadius: 0, width: maxOf(ws) - minOf(ws),
           length: r.teeth * r.period, face });
         break;
       }

@@ -57,6 +57,15 @@ test('clear glass refracts in the path tracer and glowing parts light the scene'
   setBrickMaterials({ finish: 'studio', texture: 'none', glow: { colors: [], strength: 1.5 } });
 });
 
+test('the colour source switches a brick between the LDraw value and Studio’s table', () => {
+  const brick = materialFor(red, false) as THREE.MeshPhysicalMaterial;
+  const ldrawRed = new THREE.Color(red.hex).getHexString();
+  setBrickMaterials({ finish: 'catalog', palette: 'ldraw', texture: 'none' });
+  expect(brick.color.getHexString()).toBe(ldrawRed);
+  setBrickMaterials({ finish: 'eyesight', palette: 'studio', texture: 'none' });
+  expect(brick.color.getHexString()).not.toBe(ldrawRed);
+});
+
 test('blur is zero at the focus, grows away from it and never passes the lens maximum', () => {
   expect(blurRadius(10, 10, 12)).toBe(0);
   expect(blurRadius(12, 10, 12)).toBeGreaterThan(0);

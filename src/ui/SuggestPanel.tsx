@@ -1,21 +1,21 @@
 import { useMemo, useState } from 'react';
 import { MODEL_COUNT } from '../data/suggestRelations.generated';
 import { partName } from '../state/partService';
-import { acceptSuggestion, highlightSuggestion, setSuggestionsOn, useSuggest } from '../state/suggest';
+import { acceptSuggestion, askSpot, clearSpot, highlightSuggestion, setSuggestionsOn, useSuggest } from '../state/suggest';
 import type { SuggestionKind } from '../suggest/engine';
 import { angledWall, lowellSphere, roundWall, snotSpacing, taper, technicPolygon, wedgeFor } from '../suggest/geometry';
 import { TECHNIQUES, searchTechniques, techniqueById, type Technique } from '../suggest/techniques';
 import { PaneHead } from './PaneHead';
 import { PartThumb } from './PartThumb';
 
-const KIND: Record<SuggestionKind, string> = { mirror: 'Mirror', repeat: 'Continue', habit: 'Builders do this', technique: 'Technique' };
+const KIND: Record<SuggestionKind, string> = { mirror: 'Mirror', repeat: 'Continue', habit: 'Builders do this', technique: 'Technique', fit: 'Fits here' };
 
 /**
  * Build autocomplete: what to place next (drawn as a ghost in the view; Tab places it),
  * and the building-technique library with its calculators.
  */
 export function SuggestPanel() {
-  const { on, list, index, busy, dismissed } = useSuggest();
+  const { on, list, index, busy, dismissed, spot, spots } = useSuggest();
   const [q, setQ] = useState('');
   const [open, setOpen] = useState<string | null>(null);
   const found = useMemo(() => (q.trim() ? searchTechniques(q) : []), [q]);
@@ -26,7 +26,7 @@ export function SuggestPanel() {
   return (
     <div className="nx-pane bm-suggest">
       <PaneHead id="suggest" title="Suggest" count={on ? list.length : 'off'}
-        help={<>Suggestions follow what you select (or the last piece placed). Each one is checked to connect and to sit inside nothing. <b>Tab</b> places the ghost, <b>`</b> shows the next one, <b>Esc</b> hides them. Habits come from {MODEL_COUNT} real models; techniques from the Brick Builder&apos;s Handbook.</>} />
+        help={<>Suggestions follow what you select (or the last piece placed). Each one is checked to connect and to sit inside nothing. <b>Tab</b> places the ghost, <b>`</b> shows the next one, <b>Esc</b> hides them. Right-click a piece and pick <b>What fits here?</b> for the parts that fit that stud, hole or clip, ranked by how often builders join them there in 67,185 BrickNet models (Kulits &amp; Schmid, CVPR 2026). Habits also come from {MODEL_COUNT} real models; techniques from the Brick Builder&apos;s Handbook.</>} />
       <label className="nx-hint" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <input type="checkbox" checked={on} onChange={(e) => setSuggestionsOn(e.target.checked)} />
         Suggest what to place next
@@ -34,8 +34,25 @@ export function SuggestPanel() {
 
       {on && (
         <>
-          <div className="nx-sub">Next pieces {busy && <span className="nx-fine">· loading parts…</span>}</div>
-          {!list.length && <p className="nx-fine">Select a piece to see what could go on it. Nothing here means nothing fits around it.</p>}
+          {spot ? (
+            <div className="nx-sub bm-suggest-spot">
+              <span>What fits this {spot.label} {busy && <span className="nx-fine">· thinking…</span>}</span>
+              <button className="nx-btn nx-sm" onClick={clearSpot} title="Back to next-piece suggestions">Back</button>
+            </div>
+          ) : (
+            <div className="nx-sub">Next pieces {busy && <span className="nx-fine">· loading parts…</span>}</div>
+          )}
+          {!spot && spots.length > 0 && (
+            <div className="bm-suggest-spots" aria-label="Open connections">
+              <span className="nx-fine">Open:</span>
+              {summarise(spots.map((x) => x.label)).map(([label, n]) => (
+                <button key={label} className="nx-chip" title={`Show what fits the first open ${label}`} onClick={() => askSpot(spots.find((x) => x.label === label)!)}>
+                  {n > 1 ? `${n} ${plural(label)}` : `1 ${label}`}
+                </button>
+              ))}
+            </div>
+          )}
+          {!list.length && !busy && <p className="nx-fine">{spot ? 'Nothing fits there without hitting another piece.' : 'Select a piece to see what could go on it, or right-click a stud or hole and pick What fits here?. Nothing here means nothing fits around it.'}</p>}
           <ol className="bm-suggest-list">
             {list.map((s, i) => (
               <li key={s.id} className={`bm-suggest-item ${i === index && !dismissed ? 'active' : ''}`} onMouseEnter={() => highlightSuggestion(i)}>
@@ -78,6 +95,13 @@ export function SuggestPanel() {
       )}
     </div>
   );
+}
+
+const plural = (label: string) => (label.endsWith('s') ? label : label === 'open underside' ? 'open undersides' : `${label}s`);
+function summarise(labels: string[]): [string, number][] {
+  const n = new Map<string, number>();
+  for (const l of labels) n.set(l, (n.get(l) ?? 0) + 1);
+  return [...n.entries()];
 }
 
 function TechniqueCard({ t, open, onToggle }: { t: Technique; open: boolean; onToggle: () => void }) {

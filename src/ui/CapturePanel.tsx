@@ -7,11 +7,16 @@ import {
 } from '../export/capture';
 import { canExportMp4 } from '../export/exportVideo';
 import { capturePathTracedStill } from '../export/pathTracedStill';
+import { buildCollada, type ColladaPiece } from '../export/collada';
+import { getColors, geometryOf } from '../state/partService';
+import { poseAt } from '../anim/timeline';
+import { planTimeline } from '../state/timelineService';
+import { sceneOf } from '../render/looks';
 import { FPS_OPTIONS } from '../export/frameRates';
 import { VIDEO_FORMATS, type VideoFormat } from '../export/formats';
 import { activeSceneCamera } from '../render/sceneSetup';
 import { createStudio, type Studio } from '../render/studio';
-import { useAppSettings } from '../state/appSettings';
+import { animOptions, useAppSettings } from '../state/appSettings';
 import { useStudio } from '../state/store';
 import type { ModelState } from '../state/useModel';
 import { saveBlob } from './download';
@@ -68,6 +73,7 @@ export function CapturePanel({ model }: { model: ModelState }) {
   const [transparent, setTransparent] = useState(false);
   const [stillSize, setStillSize] = useState(STILL_SIZES[0].key);
   const [format, setFormat] = useState<VideoFormat>(settings.format);
+  const [daeBusy, setDaeBusy] = useState<'model' | 'animation' | null>(null);
   const [fps, setFps] = useState<number>(settings.fps);
   const [seconds, setSeconds] = useState(6);
   const [elevation, setElevation] = useState(28);
@@ -318,6 +324,78 @@ export function CapturePanel({ model }: { model: ModelState }) {
   const working = busy !== null;
   const clipboard = typeof ClipboardItem !== 'undefined' && !!navigator.clipboard?.write;
 
+
+  /** A camera for the .dae: the viewport's pose, aimed at the model. */
+  const colladaCamera = (width: number, height: number) => {
+    const studio = viewportApi.studio;
+    if (!studio) return undefined;
+    const cam = studio.camera as THREE.PerspectiveCamera;
+    const bounds = model.view.bounds ?? model.assembly.bounds;
+    const center = bounds
+      ? new THREE.Vector3((bounds.min[0] + bounds.max[0]) / 40, -(bounds.min[1] + bounds.max[1]) / 40, -(bounds.min[2] + bounds.max[2]) / 40)
+      : new THREE.Vector3();
+    const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion);
+    const distance = Math.max(1, cam.position.distanceTo(center));
+    return { position: cam.position.clone(), target: cam.position.clone().addScaledVector(dir, distance), fov: cam.fov ?? 30, near: cam.near, far: cam.far, width, height };
+  };
+
+  /** The current look's three lamps, as COLLADA lights. */
+  const rigLights = () => {
+    const look = sceneOf(settings.studioLook);
+    const lamps: { name: string; dir: readonly [number, number, number]; size: number; intensity: number }[] = [
+      { name: 'Key', dir: look.keyDirection ?? [-0.5, 1.2, 0.7], size: 0.5, intensity: look.key },
+      { name: 'Fill', dir: look.fillDirection ?? [0.8, 1.2, -0.9], size: 0.8, intensity: look.fill },
+    ];
+    if (look.rim) lamps.push({ name: 'Rim', dir: look.rimDirection ?? [0.5, 1.2, -1.1], size: 0.4, intensity: look.rim });
+    return lamps;
+  };
+
+  const exportPieces = (): ColladaPiece[] =>
+    model.assembly.instances.filter((i) => !i.placeholder).map((i) => ({ key: i.key, part: i.part, color: i.color, world: i.world }));
+
+  const saveColladaModel = () => {
+    setError(''); setNotice('');
+    const pieces = exportPieces();
+    if (!pieces.length) return setError('This model has nothing to export yet.');
+    const out = STILL_SIZES.find((entry) => entry.key === finalSize) ?? STILL_SIZES[0];
+    try {
+      const text = buildCollada({ name: plan.name, pieces, geometryOf, colors: getColors(), camera: colladaCamera(out.width, out.height), lights: rigLights() });
+      saveBlob(name('model', 'dae'), new Blob([text], { type: 'model/vnd.collada+xml' }));
+      setNotice(`Saved a COLLADA model (.dae): ${pieces.length} pieces, ${Math.round(text.length / 1024)} KB.`);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const saveColladaAnimation = async () => {
+    setError(''); setNotice('');
+    const pieces = exportPieces();
+    if (!pieces.length) return setError('This model has nothing to export yet.');
+    setDaeBusy('animation');
+    try {
+      const timeline = await planTimeline(plan, editingModel, animOptions(settings, plan.sceneSetup), 'export');
+      const out = STILL_SIZES.find((entry) => entry.key === finalSize) ?? STILL_SIZES[0];
+      const text = buildCollada({
+        name: plan.name, pieces, geometryOf, colors: getColors(), camera: colladaCamera(out.width, out.height), lights: rigLights(),
+        animation: {
+          fps: settings.fps, duration: timeline.duration,
+          sample: (t) => {
+            const pose = poseAt(timeline, t);
+            const map = new Map<string, THREE.Matrix4 | null>();
+            for (const piece of pieces) map.set(piece.key, pose(piece.key));
+            return map;
+          },
+        },
+      });
+      saveBlob(name('animation', 'dae'), new Blob([text], { type: 'model/vnd.collada+xml' }));
+      setNotice(`Saved a COLLADA animation (.dae): ${pieces.length} pieces, ${timeline.duration.toFixed(1)} s at ${settings.fps} fps, ${Math.round(text.length / 1024)} KB.`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setDaeBusy(null);
+    }
+  };
+
   return (
     <div className="nx-pane">
       <PaneHead id="capture" title="Capture"
@@ -424,6 +502,18 @@ export function CapturePanel({ model }: { model: ModelState }) {
         </div>
       </section>
 
+
+      <section className="bm-capture-group" aria-label="COLLADA export">
+        <h4><Ic name="download" /> COLLADA (.dae)</h4>
+        <p className="nx-hint">The finished model — or the build animation as sampled keyframes — as a standard COLLADA scene with parts, colours, the camera and the studio rig. Opens in Blender, three.js or BrickLink Studio.</p>
+        <div className="bm-capture-row">
+          <button type="button" className="nx-btn" onClick={saveColladaModel}>Save model .dae</button>
+          <button type="button" className="nx-btn" disabled={daeBusy !== null} onClick={() => void saveColladaAnimation()}>
+            {daeBusy === 'animation' ? 'Planning animation…' : 'Save animation .dae'}
+          </button>
+        </div>
+        <p className="nx-hint">The animation samples the planned build at {settings.fps} fps; pieces that never move stay static nodes.</p>
+      </section>
       <section className="bm-capture-group" aria-label="Turntable video">
         <h4><Ic name="video" /> Turntable video</h4>
         <p className="nx-hint">One full turn of the finished model, rendered frame by frame.</p>

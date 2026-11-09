@@ -9,6 +9,7 @@ import { makeKeyframePose } from '../anim/keyframePose';
 import type { StudioLook, RenderOptions, Materials } from '../render/studio';
 import { applySceneCamera, applyCameraCrop, sceneCameraPose, type SceneSetup } from '../render/sceneSetup';
 import { poseAt, type Timeline } from '../anim/timeline';
+import { withTurntable } from '../anim/heroTurntable';
 import type { Instance } from '../model/assemble';
 import type { KeyframeAnimation } from '../plan/types';
 import type { createStudio } from '../render/studio';
@@ -280,7 +281,7 @@ export function exportVideo(opts: ExportOpts, deps: ExportDeps): Promise<Blob> {
     duration: tl.duration,
     box: worldBox3(tl.sceneBox),
     groundY: -tl.ground / 20,
-    at: (seconds) => poseAt(tl, seconds),
+    at: (seconds) => withTurntable(tl, opts.camera ?? DEFAULT_CAMERA_SETTINGS, seconds, poseAt(tl, seconds)),
     camera: track,
     ownsCamera: true,
     snaps: snapsOf(tl),
@@ -289,7 +290,7 @@ export function exportVideo(opts: ExportOpts, deps: ExportDeps): Promise<Blob> {
     duration: tl.duration,
     box: worldBox3(tl.sceneBox),
     groundY: -tl.ground / 20,
-    at: (seconds) => poseAt(tl, seconds),
+    at: (seconds) => withTurntable(tl, opts.camera ?? DEFAULT_CAMERA_SETTINGS, seconds, poseAt(tl, seconds)),
     camera: opts.buildView
       ? (seconds, aspect) => buildViewCamera(tl, opts.buildView!, aspect, opts.camera ?? DEFAULT_CAMERA_SETTINGS, opts.cameraFraming ?? 'cinematic')(seconds)
       : scene

@@ -24,6 +24,8 @@ export type CameraSettings = {
   heroOrbitDegrees: number;
   heroElevation: number;
   heroMargin: number;
+  /** The hero turn spins the finished model about its centre with the camera held still, instead of the camera circling it (see heroTurntable.ts). */
+  heroTurntable: boolean;
 };
 
 export const DEFAULT_CAMERA_SETTINGS: CameraSettings = {
@@ -39,6 +41,7 @@ export const DEFAULT_CAMERA_SETTINGS: CameraSettings = {
   heroOrbitDegrees: 120,
   heroElevation: 30,
   heroMargin: 1.14,
+  heroTurntable: false,
 };
 
 /** The reference product-shot camera: a long lens looking down at a high diagonal,
@@ -479,9 +482,11 @@ export function cameraAt(
   camera: CameraSettings = DEFAULT_CAMERA_SETTINGS,
 ): CamPose {
   // Wide keeps the legacy spirit, while cinematic uses the photographic settings.
-  const settings: CameraSettings = framing === 'wide'
+  const base: CameraSettings = framing === 'wide'
     ? { ...camera, buildAzimuth: 30, buildElevation: 44, buildMargin: Math.max(camera.buildMargin, 1.22), targetLock: 0.45 }
     : camera;
+  // a turntable turns the model, not the camera: no orbit angle, the reveal framing still applies
+  const settings: CameraSettings = base.heroTurntable ? { ...base, heroOrbitDegrees: 0 } : base;
   const fov = cameraFov(settings, aspect);
   let rig: Rig;
   if (t <= tl.buildEnd) rig = buildRig(tl, Math.min(t, tl.buildEnd), aspect, framing, settings);
@@ -543,9 +548,9 @@ export type EditorCamera = {
  * itself; during it, the shot swung around its own target by the hero angle at the same
  * distance, height and lens — so a saved scene camera keeps its framing while it orbits.
  */
-export function heroAround(tl: Pick<Timeline, 'buildEnd' | 'duration' | 'heroOrbit'>, shot: CamPose, settings: Pick<CameraSettings, 'heroOrbitDegrees'> = DEFAULT_CAMERA_SETTINGS): (t: number) => CamPose {
+export function heroAround(tl: Pick<Timeline, 'buildEnd' | 'duration' | 'heroOrbit'>, shot: CamPose, settings: Pick<CameraSettings, 'heroOrbitDegrees'> & Partial<Pick<CameraSettings, 'heroTurntable'>> = DEFAULT_CAMERA_SETTINGS): (t: number) => CamPose {
   const offset = shot.position.clone().sub(shot.target);
-  const degrees = (settings.heroOrbitDegrees ?? 120) * (Math.PI / 180);
+  const degrees = settings.heroTurntable ? 0 : (settings.heroOrbitDegrees ?? 120) * (Math.PI / 180);
   const ease = (u: number) => { const k = Math.min(1, Math.max(0, u)); return k * k * (3 - 2 * k); };
   const up = new THREE.Vector3(0, 1, 0);
   return (t: number) => {
@@ -595,7 +600,7 @@ export function buildViewCamera(
       fov: editor.fov,
     };
   };
-  const heroDegrees = (settings.heroOrbitDegrees ?? 120) * (Math.PI / 180);
+  const heroDegrees = settings.heroTurntable ? 0 : (settings.heroOrbitDegrees ?? 120) * (Math.PI / 180);
   return (t: number) => {
     // the same establishing shot the Build view plays, landing on your own shot
     if (t < tl.intro) return introInto(tl, pose(radius, azimuth0), aspect, framing, settings)(t);

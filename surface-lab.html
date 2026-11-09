@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Surface lighting lab</title>
+<style>
+body{margin:0;background:#181a1d;color:#eee;font:14px system-ui}header{padding:16px 24px;border-bottom:1px solid #35383d}h1{font-size:20px;margin:0 0 8px}p{color:#b7bdc7;margin:8px 0}button{background:#343b47;color:white;border:1px solid #596375;border-radius:6px;padding:8px 14px;margin:6px 8px 6px 0;cursor:pointer}button:disabled{opacity:.4}#row{display:flex;gap:16px;padding:16px;align-items:flex-start}figure{margin:0;flex:1;min-width:0}figcaption{margin-bottom:8px}canvas,img{width:100%;max-height:76vh;object-fit:contain;display:block;background:white}#st,#timing{white-space:pre-wrap;font:12px ui-monospace;line-height:1.5}#timing{padding:0 24px}label{margin-right:12px}
+</style></head><body>
+<header><h1>Surface lighting lab</h1><p>Opaque dome visibility cached on brick surfaces. Drag to orbit. Direct highlights stay in the raster renderer.</p>
+<button id="bake" disabled>Bake surface lighting</button><button id="mode" disabled>Show base viewport</button><button id="reset" disabled>Reset camera</button><button id="bench" disabled>Measure full frames</button>
+<label>Cache strength <input id="strength" type="range" min="0" max="1" step="0.05" value="1"></label>
+<div id="st">Loading scene…</div></header>
+<div id="row"><figure><figcaption id="caption">Base viewport</figcaption><canvas id="c"></canvas></figure><figure><figcaption>EyeSight — reference camera</figcaption><img id="ref" src="/_calib/ref_end.png" alt="EyeSight reference render"></figure></div>
+<div id="timing"></div><script type="module" src="/src/dev/surfaceLab.ts"></script></body></html>

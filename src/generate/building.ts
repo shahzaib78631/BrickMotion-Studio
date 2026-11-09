@@ -93,7 +93,7 @@ export type BuildingSpec = {
 export type SpecOverrides = Partial<{ kind: BuildingKind; shape: Shape; width: number; depth: number; floors: number; roof: RoofStyle }>;
 
 /** A small fast PRNG (mulberry32): the same seed, the same building. */
-function random(seed: number): () => number {
+export function random(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -270,7 +270,7 @@ const DIRS = [
 ];
 
 /** A window or door whose first cell is (x, z) at plate y, in the wall facing `rot`. */
-function opening(kind: keyof typeof FIXTURE_PARTS, along: 'x' | 'z', rot: Rot, x: number, z: number, y: number, frameColor: number, innerColor: number): Fixture {
+export function opening(kind: keyof typeof FIXTURE_PARTS, along: 'x' | 'z', rot: Rot, x: number, z: number, y: number, frameColor: number, innerColor: number): Fixture {
   const f = FIXTURE_PARTS[kind];
   const at = gridToPlacement({ x, y, z, rot }, f.body);
   const off = mul(at.m, f.offset as Vec3);
@@ -299,7 +299,7 @@ function widths(n: number, table: Record<number, string>): number[] {
 }
 
 /** Starts (along a run of `length`) of `width`-wide openings: 2 apart, centred, a stud of wall at each end. */
-function slots(length: number, width: number): number[] {
+export function slots(length: number, width: number): number[] {
   const gap = 2;
   const room = length - 2;
   const n = Math.floor((room - 2 + gap) / (width + gap));
@@ -318,6 +318,19 @@ const UPPER = 12;
 
 export function generateBuilding(specOrSeed: BuildingSpec | number): GeneratedBuilding {
   const spec = typeof specOrSeed === 'number' ? buildingSpec(specOrSeed) : specOrSeed;
+  const g = layOut(spec, false);
+  // a small building whose wide windows don't fit (short walls, the door's wall), or one
+  // whose bricks don't all join up, is laid out again with narrow windows and its doors at
+  // one end of their walls
+  const windows = g.plan.steps.flatMap((s) => s.pieces).filter((p) => 'part' in p && WINDOW_FRAMES.has(p.part)).length;
+  if (windows >= 2 && g.built.components === 1) return g;
+  const again = layOut(spec, true);
+  return again.built.components === 1 ? again : g;
+}
+
+const WINDOW_FRAMES = new Set(['60592', '60593', '60594']);
+
+function layOut(spec: BuildingSpec, narrow: boolean): GeneratedBuilding {
   const { width: W, depth: D } = spec;
 
   // who owns each cell: the last volume listed that covers it
@@ -400,11 +413,11 @@ export function generateBuilding(specOrSeed: BuildingSpec | number): GeneratedBu
       spec.volumes.forEach((v, i) => {
         if (!v.door) return;
         const r = longest(runs.filter((q) => q.owner === i && q.dir.rot === 0));
-        if (r) doors.set(r, Math.floor((r.len - 4) / 2));
+        if (r) doors.set(r, narrow ? 1 : Math.floor((r.len - 4) / 2));
       });
       if (!doors.size) {
         const r = longest(runs.filter((q) => q.dir.rot === 0)) ?? longest(runs);
-        if (r) doors.set(r, Math.floor((r.len - 4) / 2));
+        if (r) doors.set(r, narrow ? 1 : Math.floor((r.len - 4) / 2));
       }
     }
 
@@ -412,7 +425,7 @@ export function generateBuilding(specOrSeed: BuildingSpec | number): GeneratedBu
       const v = spec.volumes[r.owner];
       let kind: WindowKind = f === 0 ? v.windows.ground : v.windows.upper;
       // a wall too short for a wide window gets the narrow one of the same height
-      if (kind === 'window4x3' && !slots(r.len, 4).length) kind = 'window2x3';
+      if (kind === 'window4x3' && (narrow || !slots(r.len, 4).length)) kind = 'window2x3';
       const ww = FIXTURE_PARTS[kind].w;
       const d0 = doors.get(r);
       if (d0 !== undefined) fixtures.push(opening('door', r.dir.along, r.dir.rot, ...cellOf(r, d0), y0, v.scheme.door, v.scheme.door));

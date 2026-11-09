@@ -36,6 +36,9 @@ export class BrickRenderer {
   private slots = new Map<string, Slot[]>();
   /** mesh → instance index → key, for picking */
   private keyAt = new Map<THREE.InstancedMesh, string[]>();
+  /** bumped when the set of pieces changes / when any piece moves (consumers like the dome visibility rebuild or refit on these) */
+  structureVersion = 0;
+  poseVersion = 0;
   private instances: Instance[] = [];
   private highlight = new Map<string, 'select' | 'warn'>();
 
@@ -48,6 +51,7 @@ export class BrickRenderer {
   }
 
   setInstances(list: Instance[]): void {
+    this.structureVersion++;
     this.clear();
     this.instances = list;
     const groups = new Map<string, Instance[]>();
@@ -116,6 +120,7 @@ export class BrickRenderer {
   }
 
   setMatrices(get: (key: string) => THREE.Matrix4 | null): void {
+    this.poseVersion++;
     for (const [key, slots] of this.slots) {
       const m = get(key) ?? HIDDEN;
       for (const s of slots) s.mesh.setMatrixAt(s.index, m);

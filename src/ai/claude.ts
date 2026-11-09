@@ -17,7 +17,32 @@ export class AiError extends Error {
 
 export const AI_MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-fable-5-1'] as const;
 
-const defaultClient = (apiKey: string) => new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
+/** The SDK's errors as the app's: cancelled, bad key, no connection. */
+export function aiErrorFrom(e: unknown, signal?: AbortSignal): unknown {
+  if (e instanceof APIUserAbortError || signal?.aborted) return new DOMException('Cancelled', 'AbortError');
+  if (e instanceof AuthenticationError) return new AiError('auth', 'Claude rejected the API key. Check it in Settings.');
+  if (e instanceof APIConnectionError) return new AiError('network', 'Could not reach the Claude API. Check your connection.');
+  if (e instanceof APIError) return new AiError('network', e.message);
+  return e;
+}
+
+/** Stop reasons that leave no usable answer. */
+export function checkStop(msg: { stop_reason: string | null }, tooLong: string): void {
+  if (msg.stop_reason === 'refusal') throw new AiError('refusal', 'Claude declined this request. Try a different idea.');
+  if (msg.stop_reason === 'max_tokens') throw new AiError('truncated', tooLong);
+}
+
+/** The reply's text, parsed as JSON. */
+export function jsonText(msg: { content: { type: string; text?: string }[] }): unknown {
+  const text = msg.content.flatMap((b) => (b.type === 'text' && b.text !== undefined ? [b.text] : [])).join('');
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new AiError('invalid', 'Claude returned something that is not valid JSON.');
+  }
+}
+
+export const defaultClient = (apiKey: string) => new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
 
 export async function generatePlan(
   args: { apiKey: string; model: string; system: string; user: string; signal?: AbortSignal },
@@ -41,21 +66,10 @@ export async function generatePlan(
     );
     msg = await stream.finalMessage();
   } catch (e) {
-    if (e instanceof APIUserAbortError || args.signal?.aborted) throw new DOMException('Cancelled', 'AbortError');
-    if (e instanceof AuthenticationError) throw new AiError('auth', 'Claude rejected the API key. Check it in Settings.');
-    if (e instanceof APIConnectionError) throw new AiError('network', 'Could not reach the Claude API. Check your connection.');
-    if (e instanceof APIError) throw new AiError('network', e.message);
-    throw e;
+    throw aiErrorFrom(e, args.signal);
   }
-  if (msg.stop_reason === 'refusal') throw new AiError('refusal', 'Claude declined this request. Try a different idea.');
-  if (msg.stop_reason === 'max_tokens') throw new AiError('truncated', 'The plan was too long and got cut off. Ask for fewer pieces.');
-  const text = msg.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('');
-  let json: unknown;
-  try {
-    json = JSON.parse(text);
-  } catch {
-    throw new AiError('invalid', 'Claude returned something that is not valid JSON.');
-  }
+  checkStop(msg, 'The plan was too long and got cut off. Ask for fewer pieces.');
+  const json = jsonText(msg);
   const parsed = AiPlanSchema.safeParse(json);
   if (!parsed.success) throw new AiError('invalid', `The plan did not match the expected format: ${parsed.error.issues[0]?.message ?? ''}`);
   return aiPlanToPlan(parsed.data);

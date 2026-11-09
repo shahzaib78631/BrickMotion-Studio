@@ -177,3 +177,110 @@ also reasons over the mated pairs:
   ("8× stud to 3001 · 1× pin to 4274").
 - **Checks panel** — the new `Weak connection` group, clickable to select the
   piece.
+
+## Driving the real EyeSight binary (reverse-engineered CLI)
+
+EyeSight can be run outside Studio. Confirmed contract (from the binary's own
+option table and from live runs):
+
+```
+eyesight [options] [settings.xml] [inc_settings.xml] ...
+  --daefile <path>          COLLADA .dae model (the geometry; NOT in the scene XML)
+  --daewindingorder <cw|ccw>  Collada vertex winding order
+  --dae-transx/y/z <cm>     move the collada scene
+  --dae-rotx/y/z <deg>      rotate the collada scene
+  --dae-scale <f>           scale the collada scene
+  --defaultlightcamera      use the built-in default camera and lights
+  --defaultlight / --adddefaultlight
+  --preset <name>           active preset config
+  --param <node> <n> <v>    override a shader parameter
+  --output <file> --img-format <png|jpg|exr|...>
+  --fps, --time-start/end, --frame-start/end/current/sub   (movie frames)
+  --device <name>, --device-count <n>, --logpath, --tmp-dir, --spotname
+```
+
+Run it from `PhotoRealisticRenderer/mac/` (it loads `./lib/*.dylib` by relative
+path) or copy `eyesight`, `lib/`, `textures/` and `HDR/` somewhere writable — it
+writes `logs/` next to itself and hangs at exit once it has saved the image
+(kill it after the `Simultion result is saved to` line).
+
+Settings XML files (all under `PhotoRealisticRenderer/mac/`):
+- `settings_v1.xml` — the LEGO material library: node groups `SOLID-GROUP`,
+  `CHROME-GROUP`, `PEARL-GROUP`, `MILKY-*`, `RUBBER-*`, `SATIN-GROUP`,
+  `GLITTER-TRANS-GROUP`, `STICKER-GROUP`, plus the limit-free integrator and
+  film defaults and the procedural scratch/dirt/bump texture graphs
+  (`BigScratchTexture`, `DirtOnScratchMixGroup`, …). Materials are named after
+  LEGO colours (`SOLID-WHITE`, `METAL-BLACK`, `PEARL-BLUE`, …).
+- `settings_camera_light.xml` — camera + the lighting presets (DEFAULT, BUILD_FL/FR/RL/RR, MECHANIC_*, NO_LIGHT)
+- `LEGO_StudioSet.xml` — the studio set (background shader, AO)
+- `settings_image_format.xml`, `settings_movie_format.xml`, `lib/extra.khm` (postprocess graph: colour curves, clip)
+
+Scene XML shape (verified: parses, and camera/background/lights/integrator/film
+all render):
+
+```xml
+<eyesight version="2.24">
+  <integrator .../><film .../>
+  <background><shader>…background_shader + connect…</shader></background>
+  <camera …><transform matrix="row-major 16 floats"/></camera>
+  <light type="distant" …><transform …/><shader>…emission + connect…</shader></light>
+  <group>
+    <shader name="…">…bsdf nodes + connect…</shader>   <!-- shaders are group-scoped -->
+    <transform matrix="…"><object name="…"><state shader="…">…</state></object></transform>
+  </group>
+</eyesight>
+```
+
+The scene reader's known node names are exactly: `integrator`, `postprocess`,
+`curves`, `camera`, `background`, `light`, `transform`, `preset`, `movie_format`,
+`image_format`, `include`, `group` (with `shader` definitions), `film`.
+There is **no mesh/object/state node in the scene reader** — geometry comes only
+from the COLLADA file passed with `--daefile`.
+
+Geometry source in the install: `data/collada_mesh/<part>-<surface>.xml` — one
+COLLADA `<geometry>` fragment per part (positions + normals, `material="Base"`).
+
+**Open item:** a hand-written `.dae` (COLLADA 1.4.1, Z_UP, cm units, triangles +
+material binding) loads without error but contributes no visible geometry, at any
+scale or winding order — so the loader wants something more (likely the exact
+document/materials shape Studio's own exporter writes). The fastest way to close
+this is to export once from Studio (File → Export As → Collada) or capture the
+argument list Studio passes to `eyesight` during a render; everything else in the
+pipeline (camera, lights, background, materials, integrator, film, output) is
+already verified working.
+
+### Studio's own .dae export (verified working through EyeSight)
+
+A real `File → Export As → Collada` file from Studio renders correctly through the
+`eyesight` binary (`--daefile model.dae --output out.png settings_v1.xml`). Its
+shape, which `scripts/render-eyesight.ts` reproduces:
+
+- `<asset>`: `<unit name="LDU" meter="0.04"/>` and `<up_axis>Y_UP</up_axis>`
+- `library_cameras`: one `<camera id="camera_id_main">` with `aspect_ratio`/`xfov`
+  and an `eyesight` extra carrying `resolution_x`/`resolution_y`
+- `library_lights`: `<directional>` and `<ambient>` with `eyesight` extras
+  (`<size>`, `<intensity>`); the visual-scene light nodes add `cast_shadow`,
+  `use_mis`, `max_bounces`, `samples`
+- `library_effects` + `library_materials`: one material per LDraw colour, **named
+  with Studio's material library convention** (`SOLID-ORANGE`,
+  `SOLID-LIGHT_BLUISH_GRAY`, `TRANS-…`, `CHROME-…`; `-logo` variants for stud
+  logos) so settings_v1.xml binds its real shaders
+- `library_geometries`: one `<geometry>` per part — duplicated per-corner
+  positions + normals and `<triangles material="Base">`
+- `library_visual_scenes`: `<node id="Model"><matrix>1 0 0 0 0 -1 0 0 0 0 1 0 0 0 0 1</matrix>`
+  (LDraw Y-down → COLLADA Y-up), piece nodes with LDU matrices and
+  `bind_material`/`instance_material symbol="Base"`, a camera node, light nodes
+- `<scene><instance_visual_scene url="#VisualScene1"/></scene>`
+
+`scripts/render-eyesight.ts` writes exactly this (plus the project's saved camera
+scaled from studs to LDU), then runs EyeSight with `settings_v1.xml` and
+`LEGO_StudioSet.xml` and saves `render.png`. `--dae-only` stops after the COLLADA
+file.
+
+The render now uses the app's own in-app exporter (`src/export/collada.ts`): the app's
+LDraw→world root transform (rotX(π), 1/20 scale) is baked into every node matrix,
+the camera and lights are given in the same stud-space, and the file is written in
+Studio's row-major matrix dialect. That keeps geometry, camera and rig in one
+coordinate space — the earlier empty renders came from mixing a Y-flipped LDU
+model with a stud-space camera. With this, `npm run render:eyesight -- model.brickmotion`
+produces a correctly framed, lit EyeSight still of the project.

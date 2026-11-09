@@ -55,6 +55,26 @@ These replace the hand-picked tables in `src/generate/building.ts`, so generated
 - **Training data:** StableText2Brick (47k, with captions) plus OMR models turned into voxels (captioned from set names and themes), augmented by mirroring, turning and recolouring.
 - Because CLIP puts pictures and text in one space, a picture works as a prompt from day one. Fine-tuning on renders of OMR models with their own pictures makes it better.
 
+#### Stage 2 as built (2026-11-06)
+
+**v1** (trained first, from StableText2Brick only):
+- 20×20×20 brick grid, occupancy only; colour comes from the prompt's colour words.
+- VQ-VAE: a patch transformer (4×4×4 patches → 125 codes, codebook 512). 3D convolutions run about 50× slower on the M1's GPU, so the design uses matrix multiplies only. Test IoU 0.88.
+- GPT: 10.9M parameters, 8 layers, width 320, classifier-free guidance.
+- Both networks run in the browser in plain TypeScript (`src/ai/shapeModel.ts`).
+- The CLIP text encoder runs through transformers.js in fp16. It matches PyTorch exactly; the 8-bit file drifts to cosine 0.87–0.94.
+
+**v2** (more detail, the foundation for stage 3):
+- **Grid:** 32×32 studs × 64 plates, on the app's own stud and plate grid. Steps are one plate high, not one brick high.
+- **Colour:** each cell is one of the 32 most used LDraw colours, or "other".
+- **OMR data:** every OMR model voxelised from the parts' real LDraw geometry (`python/omr/voxelise.py`). Studs are left out, columns are filled solid, so slopes keep their profile. A model too big for the grid is split into its main model's submodels.
+- **StableText2Brick:** its shapes are kept and scaled to plates (×3). They have no colour, so their colour loss is masked.
+- **Conditioning:**
+  - CLIP text of the captions, and of set, theme and submodel names.
+  - CLIP *image* embeddings of rendered OMR voxels, so a reference picture works as a prompt (stage 4) and set names aren't the only captions.
+- **VQ-VAE:** 4×4×8 patches (about cubic: 80×80×64 LDU) → 512 codes, codebook 1024.
+- **GPT:** writes 512 codes. It runs in a Web Worker in the app, so the page stays responsive during the roughly 10–20 s of sampling.
+
 ### 3. Detail model: next piece, like an autocomplete for building (GPU, hours)
 
 - A transformer over build sequences from the OMR (real designers' order and techniques).

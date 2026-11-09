@@ -1,0 +1,6 @@
+[project]
+name = "neuralshade"
+version = "0.1.0"
+description = "Learned screen-space shading: a small CNN that turns viewport G-buffers into EyeSight-quality pixels"
+requires-python = ">=3.11"
+dependencies = ["torch>=2.4", "numpy>=1.26", "pillow>=10", "onnx>=1.16", "onnxscript>=0.1"]

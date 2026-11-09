@@ -5,6 +5,7 @@ import { newId } from '../plan/ids';
 import { addItem, modelSteps } from '../plan/ops';
 import type { PlanItem } from '../plan/types';
 import { suggest, type Placed, type Suggestion } from '../suggest/engine';
+import { fitsAt, loadHabits, openSpots, type Habits, type Spot } from '../suggest/fitsAt';
 import { ensureParts, isLoaded, metricsOf, partName } from './partService';
 import { useStudio } from './store';
 
@@ -22,8 +23,20 @@ type SuggestState = {
   /** hidden until the next edit (Esc) */
   dismissed: boolean;
   busy: boolean;
+  /** "What fits here?": the spot asked about; the list then holds what fits it */
+  spot: Spot | null;
+  /** free Technic holes, pins, clips… on the pieces suggestions follow */
+  spots: Spot[];
 };
-export const useSuggest = create<SuggestState>(() => ({ on: true, list: [], index: 0, dismissed: false, busy: false }));
+export const useSuggest = create<SuggestState>(() => ({ on: true, list: [], index: 0, dismissed: false, busy: false, spot: null, spots: [] }));
+
+let habits: Habits | null = null;
+void loadHabits().then((h) => {
+  habits = h;
+  if (h) schedule(0);
+});
+const metrics = (p: string) => (isLoaded(p) ? metricsOf(p) : null);
+const name = (p: string) => partName(p) || p;
 
 let timer: ReturnType<typeof setTimeout> | null = null;
 let lastInput: { instances: readonly Instance[]; selection: readonly string[] } | null = null;
@@ -40,22 +53,65 @@ function run(): void {
   if (!input || !useSuggest.getState().on) return;
   const gen = ++generation;
   const pieces = placedOf(input.instances);
+  const spot = useSuggest.getState().spot;
+  if (spot) return runSpot(gen, pieces, spot);
   const sel = new Set(input.selection);
   const anchors = pieces.filter((p) => sel.has(top(p.key))).map((p) => p.key);
-  const out = suggest({
-    pieces, anchors,
-    metrics: (p) => (isLoaded(p) ? metricsOf(p) : null),
-    name: (p) => partName(p) || p,
-    limit: 8,
-    budgetMs: 60,
-  });
-  useSuggest.setState({ list: out.suggestions, index: 0, busy: out.wanted.length > 0 });
-  // parts the engine wanted but were not loaded: load them, then think again
-  if (out.wanted.length) {
-    void ensureParts(out.wanted).then(() => {
-      if (gen === generation) schedule(0);
-    }).catch(() => useSuggest.setState({ busy: false }));
+  const out = suggest({ pieces, anchors, metrics, name, limit: 8, budgetMs: 60 });
+  // open connections on what suggestions follow; the best fit of the first two joins the list
+  const on = anchors.length ? anchors : pieces.slice(-1).map((p) => p.key);
+  const spots = openSpots(pieces, on, metrics);
+  const wanted = new Set(out.wanted);
+  const extra: Suggestion[] = [];
+  if (habits) {
+    for (const sp of spots.slice(0, 2)) {
+      const f = fitsAt({ pieces, key: sp.key, spot: sp.conn, metrics, habits, name, limit: 1, budgetMs: 40 });
+      f.wanted.forEach((w) => wanted.add(w));
+      if (f.fits[0]) extra.push({ ...f.fits[0], title: `${f.fits[0].title} in the open ${sp.label}` });
+    }
   }
+  const list = out.suggestions.slice(0, 1).concat(extra, out.suggestions.slice(1)).slice(0, 8);
+  useSuggest.setState({ list, index: 0, spots, busy: wanted.size > 0 });
+  loadThenRetry(gen, [...wanted]);
+}
+
+/** Parts the engine wanted but were not loaded: load them, then think again. */
+function loadThenRetry(gen: number, wanted: string[]): void {
+  if (!wanted.length) return;
+  void ensureParts(wanted).then(() => {
+    if (gen === generation) schedule(0);
+  }).catch(() => useSuggest.setState({ busy: false }));
+}
+
+function runSpot(gen: number, pieces: Placed[], spot: Spot): void {
+  const out = fitsAt({ pieces, key: spot.key, spot: spot.conn, metrics, habits, name, limit: 10, budgetMs: 400 });
+  useSuggest.setState({ list: out.fits, index: 0, busy: out.wanted.length > 0 || !habits, dismissed: false });
+  loadThenRetry(gen, out.wanted);
+}
+
+/**
+ * The free connection of a piece nearest a point on it (model LDU, from the viewport's pick),
+ * for "What fits here?". Null when the piece has none free (or is not loaded yet).
+ */
+export function spotAt(key: string, point: readonly number[]): Spot | null {
+  const input = lastInput;
+  if (!input) return null;
+  const pieces = placedOf(input.instances);
+  const piece = pieces.find((p) => p.key === key) ?? pieces.find((p) => top(p.key) === top(key));
+  if (!piece || !isLoaded(piece.part)) return null;
+  return fitsAt({ pieces, key: piece.key, point, metrics, habits: null, limit: 0, budgetMs: 0 }).spot;
+}
+
+/** Show what fits one open spot. */
+export function askSpot(spot: Spot): void {
+  useSuggest.setState({ on: true, spot, list: [], index: 0, dismissed: false, busy: true });
+  schedule(0);
+}
+
+/** Back to the usual next-piece suggestions. */
+export function clearSpot(): void {
+  useSuggest.setState({ spot: null, list: [] });
+  schedule(0);
 }
 
 function schedule(ms = 150): void {
@@ -70,9 +126,24 @@ function schedule(ms = 150): void {
   }, ms);
 }
 
+/** Whether the pieces differ (the viewport hands over a new list often, mostly with the same pieces). */
+function changed(a: readonly Instance[], b: readonly Instance[]): boolean {
+  if (a === b) return false;
+  if (a.length !== b.length) return true;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].key !== b[i].key || a[i].part !== b[i].part) return true;
+    const x = a[i].world.elements, y = b[i].world.elements;
+    for (let k = 0; k < 16; k++) if (x[k] !== y[k]) return true;
+  }
+  return false;
+}
+
 /** The viewport tells us what it shows; suggestions follow (debounced). */
 export function noteBuild(instances: readonly Instance[], selection: readonly string[]): void {
   if (lastInput && lastInput.instances === instances && lastInput.selection.join() === selection.join()) return;
+  // a spot asked about holds until the model changes or the selection leaves its piece
+  const spot = useSuggest.getState().spot;
+  if (spot && lastInput && (changed(lastInput.instances, instances) || (selection.length && !selection.includes(top(spot.key))))) useSuggest.setState({ spot: null });
   lastInput = { instances, selection: [...selection] };
   useSuggest.setState({ dismissed: false });
   schedule();
@@ -133,7 +204,7 @@ export function acceptSuggestion(index = useSuggest.getState().index): string[] 
     return p;
   });
   st.select(ids);
-  useSuggest.setState({ list: [], index: 0 });
+  useSuggest.setState({ list: [], index: 0, spot: null });
   return ids;
 }
 

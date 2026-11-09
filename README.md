@@ -123,6 +123,20 @@ npm run dev     # open http://localhost:5173
 
 The parts library is downloaded on demand. To fetch it manually, official parts are at <https://library.ldraw.org/library/updates/complete.zip> and unofficial parts at <https://library.ldraw.org/library/unofficial/ldrawunf.zip>. Unzip them into `public/ldraw/`.
 
+Keep it current the way BrickLink Studio does, without re-downloading everything by hand:
+
+```bash
+npm run update:parts                 # check library.ldraw.org, apply any new release, rebuild the catalog
+npm run update:parts -- --check      # report local vs upstream only
+npm run update:parts -- --studio     # also add parts the installed BrickLink Studio has
+npm run update:parts -- --shadow     # also refresh the LDCad connector (shadow) pack
+npm run update:parts -- --catalog-only
+```
+
+`update:parts` compares the library version in `LDConfig.ldr` with the published snapshot (`Last-Modified` is remembered in `.cache`, so an unchanged library costs one request). A snapshot apply also removes parts upstream has dropped; `--from <zip|dir>` merges a local `complete.zip`, a monthly update zip or an extracted library instead (nothing is deleted).
+
+`data:studio-parts` fills gaps from a local Studio install on its own — it adds the parts Studio ships that your library is missing, reports what differs, and only replaces differing files with `--refresh` (the public snapshots are usually newer, so replacement is opt-in).
+
 ## Kinebrick-inspired Mechanism Lab + BrickLink Studio import
 
 The left rail now includes **Mechanisms**, an interactive, non-destructive
@@ -165,6 +179,7 @@ feature list, controls, compatibility notes and current testing limitations.
 5. **Animate with keyframes**: In the timeline footer choose **Timeline** (Blender-inspired Dope Sheet) instead of **Build** (automatic assembly). Select a brick or top-level submodel in the viewport, press **I** to insert Location/Rotation/Scale keys, advance to another frame, and edit its transform values. Drag and multi-select keyframe diamonds, choose Bezier/Linear/Constant interpolation, use copy/paste and undo/redo, or turn on **Auto Key** to record gizmo transforms. Timeline has its **own** frame clock and works even if Construction V2 cannot plan a build route. To **edit the generated construction animation**, click **Edit Build in Timeline** on the Build toolbar, then use the linked Build strip and add motion-offset keys over it. You can change the procedural Build's start frame and speed, or return to Build to change assembly steps; the manually authored keys remain. To edit **each generated brick flight**, use **Bake selected** (others remain linked) or **Bake all & detach** (self-contained keyframe animation). The Dope Sheet now includes per-brick transforms and a Visibility track, plus a Check motion advisory. Keyframes save with the project but do **not** change authored LDraw geometry. See [KEYFRAME_TIMELINE_NOTES.md](KEYFRAME_TIMELINE_NOTES.md) and [BAKED_FLIGHTS_NOTES.md](BAKED_FLIGHTS_NOTES.md) for controls, safety notes and limitations.
 6. **Preview**: **▶ Preview** plays the automatic construction animation inside a 9:16 frame. Set the length (5–60 s), how pieces arrive (one by one, in batches, step by step), the export FPS, the hero orbit and an optional logo. Flights rise above already assembled pieces before crossing the scene, with swept-volume collision checks for simultaneous flights.
 7. **Export MP4**: Open **Video** and export with **Build** active for an automatic-construction MP4, or with **Timeline** active for a keyframed MP4. Timeline export includes linked Build motion when enabled, samples the animation at the selected output FPS (regardless of authoring FPS), and renders the same object poses and visibility as the Dope Sheet. H.264 supports selectable 24, 25, 30, 48, 50, 60, 90 or 120 fps at your chosen size. Browser support for high FPS varies. Timeline MP4 export runs a sampled collision-warning preflight for edited motion. It is not mesh collision certification. Timeline export follows the Build camera (including framing and the hero orbit) when motion comes from a Build, including fully baked Standard Motion tracks. Fully hand-keyed clips use a fixed camera fitted to the animated scene; camera keyframing is future work.
+8. **Export COLLADA (.dae)**: In **Capture**, *COLLADA (.dae)* saves the finished model — or the planned build animation as sampled keyframes — as a standard COLLADA scene: parts, colours, the current camera and the studio rig. Files open in Blender, three.js or BrickLink Studio. `npm run render:eyesight -- <project.brickmotion>` renders the same project through BrickLink Studio's own EyeSight path tracer (needs Studio installed; see [BRICKLINK_RENDERING_PIPELINE.md](BRICKLINK_RENDERING_PIPELINE.md)).
 
 Projects save automatically (📁 Projects), and the last one reopens on load.
 

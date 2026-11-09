@@ -86,7 +86,7 @@ export function sanitizeSettings(stored: Partial<Settings>): Settings {
   if (legacyDefault) {
     video.studioLook = 'catalog-cream';
     video.edgeLines = false;
-    video.materials = { ...video.materials, finish: 'catalog', environment: 'studio' };
+    video.materials = { ...video.materials, finish: 'catalog', palette: 'ldraw', environment: 'studio' };
   }
   if (!isExportFps(video.fps)) video.fps = DEFAULT_SETTINGS.video.fps;
   if (!isStudioLook(video.studioLook)) video.studioLook = 'soft';
@@ -96,17 +96,18 @@ export function sanitizeSettings(stored: Partial<Settings>): Settings {
   if (video.floorMatch !== 'nearest') video.floorMatch = 'fill';
   if (video.cameraFraming !== 'cinematic' && video.cameraFraming !== 'wide') video.cameraFraming = 'cinematic';
   video.camera = { ...DEFAULT_CAMERA_SETTINGS, ...(video.camera ?? {}) };
-  delete (video.camera as Partial<Record<string, number>>).closeUpStrength; // replaced by submodelFocus
-  const ranges: Record<keyof CameraSettings, [number, number]> = {
+  delete (video.camera as unknown as Record<string, unknown>).closeUpStrength; // replaced by submodelFocus
+  const ranges: Record<Exclude<keyof CameraSettings, 'heroTurntable'>, [number, number]> = {
     lensMm: [18, 200], sensorWidthMm: [12, 70], buildAzimuth: [-180, 180], buildElevation: [15, 89],
     buildMargin: [1, 2], targetLock: [0, 1], submodelFocus: [0, 1], buildDrift: [-45, 45], damping: [0, 1],
     heroOrbitDegrees: [-360, 360], heroElevation: [5, 85], heroMargin: [1, 2],
   };
-  for (const key of Object.keys(ranges) as (keyof CameraSettings)[]) {
+  for (const key of Object.keys(ranges) as (keyof typeof ranges)[]) {
     const [lo, hi] = ranges[key];
     const value = Number(video.camera[key]);
     video.camera[key] = Number.isFinite(value) ? Math.min(hi, Math.max(lo, value)) : DEFAULT_CAMERA_SETTINGS[key];
   }
+  video.camera.heroTurntable = video.camera.heroTurntable === true;
   if (!isVideoFormat(video.format)) video.format = '9:16';
   if (typeof video.edgeLines !== 'boolean') video.edgeLines = DEFAULT_SETTINGS.video.edgeLines;
   if (typeof video.linearColors !== 'boolean') video.linearColors = DEFAULT_SETTINGS.video.linearColors;

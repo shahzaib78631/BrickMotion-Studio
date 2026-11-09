@@ -2,8 +2,8 @@
 
 Two networks, trained in order:
 
-1. vq:  a 3D VQ-VAE that squeezes a 20^3 grid into 5x5x5 = 125 codes from a codebook of
-        512, and turns codes back into a grid;
+1. vq:  a VQ-VAE that squeezes a 20^3 grid into 5x5x5 = 125 codes (one per 4x4x4 patch)
+        from a codebook of 512, and turns codes back into a grid;
 2. gpt: a small transformer that writes those 125 codes bottom-up, conditioned on CLIP
         (with a "no prompt" token, for classifier-free guidance).
 
@@ -21,6 +21,7 @@ DATA is the folder python/shape/prepare.py wrote.
 from __future__ import annotations
 
 import argparse
+import os
 import json
 import math
 import struct
@@ -37,7 +38,7 @@ L = 5  # latent side
 K = 512  # codebook size
 D = 64  # code width
 SEQ = L * L * L
-DEV = 'mps' if torch.backends.mps.is_available() else 'cpu'
+DEV = os.environ.get('SHAPE_DEVICE') or ('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
 
 
 # ---------------------------------------------------------------- data
@@ -71,38 +72,86 @@ def settle(x: torch.Tensor) -> torch.Tensor:
 
 # ---------------------------------------------------------------- VQ-VAE
 
+class Block(nn.Module):
+    """A pre-norm transformer block (causal for the GPT, open for the VQ-VAE)."""
+
+    def __init__(self, width: int, heads: int, causal: bool, dropout: float = 0.0) -> None:
+        super().__init__()
+        self.heads, self.causal, self.dropout = heads, causal, dropout
+        self.ln1 = nn.LayerNorm(width)
+        self.qkv = nn.Linear(width, 3 * width)
+        self.proj = nn.Linear(width, width)
+        self.ln2 = nn.LayerNorm(width)
+        self.fc = nn.Linear(width, 4 * width)
+        self.out = nn.Linear(4 * width, width)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        b, t, w = x.shape
+        q, k, v = self.qkv(self.ln1(x)).view(b, t, 3, self.heads, w // self.heads).permute(2, 0, 3, 1, 4)
+        p = self.dropout if self.training else 0.0
+        a = F.scaled_dot_product_attention(q, k, v, is_causal=self.causal, dropout_p=p)
+        x = x + F.dropout(self.proj(a.transpose(1, 2).reshape(b, t, w)), p, self.training)
+        return x + F.dropout(self.out(F.gelu(self.fc(self.ln2(x)), approximate='tanh')), p, self.training)
+
+
+P = G // L  # patch side: each code stands for a 4x4x4 block of the grid
+VW, VLAYERS, VHEADS = 256, 4, 8
+
+
+def patchify(x: torch.Tensor) -> torch.Tensor:
+    """(B, 1, X, Y, Z) -> (B, 125, 64): patches written bottom-up (z, then y, then x)."""
+    b = x.shape[0]
+    return x.view(b, L, P, L, P, L, P).permute(0, 5, 3, 1, 2, 4, 6).reshape(b, SEQ, P ** 3)
+
+
+def unpatchify(p: torch.Tensor) -> torch.Tensor:
+    b = p.shape[0]
+    return p.view(b, L, L, L, P, P, P).permute(0, 3, 4, 2, 5, 1, 6).reshape(b, 1, G, G, G)
+
+
 class VQ(nn.Module):
+    """A patch transformer VQ-VAE (as ViT-VQGAN): every op is a matrix multiply, which the
+    M1's GPU runs fast (its 3D convolutions are ~50x slower) and TypeScript runs simply."""
+
     def __init__(self) -> None:
         super().__init__()
-        self.enc = nn.Sequential(
-            nn.Conv3d(1, 64, 3, padding=1), nn.ReLU(),
-            nn.Conv3d(64, 128, 4, stride=2, padding=1), nn.ReLU(),  # 10
-            nn.Conv3d(128, 128, 3, padding=1), nn.ReLU(),
-            nn.Conv3d(128, 256, 4, stride=2, padding=1), nn.ReLU(),  # 5
-            nn.Conv3d(256, D, 1),
-        )
-        self.dec = nn.Sequential(
-            nn.Conv3d(D, 256, 3, padding=1), nn.ReLU(),
-            nn.ConvTranspose3d(256, 128, 4, stride=2, padding=1), nn.ReLU(),  # 10
-            nn.Conv3d(128, 128, 3, padding=1), nn.ReLU(),
-            nn.ConvTranspose3d(128, 64, 4, stride=2, padding=1), nn.ReLU(),  # 20
-            nn.Conv3d(64, 1, 3, padding=1),
-        )
+        self.enc_in = nn.Linear(P ** 3, VW)
+        self.enc_pos = nn.Parameter(torch.randn(SEQ, VW) * 0.02)
+        self.enc_blocks = nn.ModuleList(Block(VW, VHEADS, False) for _ in range(VLAYERS))
+        self.enc_ln = nn.LayerNorm(VW)
+        self.enc_out = nn.Linear(VW, D)
+        self.dec_in = nn.Linear(D, VW)
+        self.dec_pos = nn.Parameter(torch.randn(SEQ, VW) * 0.02)
+        self.dec_blocks = nn.ModuleList(Block(VW, VHEADS, False) for _ in range(VLAYERS))
+        self.dec_ln = nn.LayerNorm(VW)
+        self.dec_out = nn.Linear(VW, P ** 3)
         self.register_buffer('codes', torch.randn(K, D) * 0.1)
         self.register_buffer('ema_n', torch.ones(K))
         self.register_buffer('ema_sum', self.codes.clone())
 
+    def encode(self, x: torch.Tensor) -> torch.Tensor:
+        h = self.enc_in(patchify(x)) + self.enc_pos
+        for blk in self.enc_blocks:
+            h = blk(h)
+        return self.enc_out(self.enc_ln(h))
+
+    def decode(self, q: torch.Tensor) -> torch.Tensor:
+        """(B, 125, D) code vectors -> (B, 1, X, Y, Z) occupancy logits."""
+        h = self.dec_in(q) + self.dec_pos
+        for blk in self.dec_blocks:
+            h = blk(h)
+        return unpatchify(self.dec_out(self.dec_ln(h)))
+
     def quantise(self, z: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        flat = z.permute(0, 2, 3, 4, 1).reshape(-1, D)
+        flat = z.reshape(-1, D)
         dist = flat.pow(2).sum(1, keepdim=True) - 2 * flat @ self.codes.t() + self.codes.pow(2).sum(1)[None]
-        idx = dist.argmin(1)
-        return idx.view(z.shape[0], L, L, L), flat
+        return dist.argmin(1).view(z.shape[0], SEQ), flat
 
     def lookup(self, idx: torch.Tensor) -> torch.Tensor:
-        return self.codes[idx].permute(0, 4, 1, 2, 3)
+        return self.codes[idx]
 
     def forward(self, x: torch.Tensor):
-        z = self.enc(x)
+        z = self.encode(x)
         idx, flat = self.quantise(z)
         q = self.lookup(idx)
         if self.training:  # EMA codebook, restart unused codes from the batch
@@ -121,7 +170,7 @@ class VQ(nn.Module):
                     self.ema_n[dead] = 1.0
         commit = F.mse_loss(z, q.detach())
         q = z + (q - z).detach()
-        return self.dec(q), idx, commit
+        return self.decode(q), idx, commit
 
 
 def iou(logits: torch.Tensor, x: torch.Tensor) -> float:
@@ -173,43 +222,16 @@ def tokens(data: Path) -> None:
             for v in range(8):
                 xv = settle(variant(x, v)).to(DEV)
                 logits, idx, _ = m(xv)
-                out[s:s + len(x), v] = order(idx).cpu().numpy()
+                out[s:s + len(x), v] = idx.cpu().numpy()
                 if v == 0:
                     ious.append(iou(logits, xv))
             print(f'::progress {min(s + 256, len(occ))}/{len(occ)} tokens, mean IoU {np.mean(ious):.3f}', flush=True)
     np.save(data / 'tokens.npy', out)
 
 
-def order(idx: torch.Tensor) -> torch.Tensor:
-    """(B, X, Y, Z) codes -> (B, 125) written bottom-up: z, then y, then x."""
-    return idx.permute(0, 3, 2, 1).reshape(idx.shape[0], SEQ)
-
-
-def unorder(seq: torch.Tensor) -> torch.Tensor:
-    return seq.view(-1, L, L, L).permute(0, 3, 2, 1)
-
-
 # ---------------------------------------------------------------- transformer
 
 W, LAYERS, HEADS, PREFIX = 320, 8, 8, 4
-
-
-class Block(nn.Module):
-    def __init__(self) -> None:
-        super().__init__()
-        self.ln1 = nn.LayerNorm(W)
-        self.qkv = nn.Linear(W, 3 * W)
-        self.proj = nn.Linear(W, W)
-        self.ln2 = nn.LayerNorm(W)
-        self.fc = nn.Linear(W, 4 * W)
-        self.out = nn.Linear(4 * W, W)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        b, t, _ = x.shape
-        q, k, v = self.qkv(self.ln1(x)).view(b, t, 3, HEADS, W // HEADS).permute(2, 0, 3, 1, 4)
-        a = F.scaled_dot_product_attention(q, k, v, is_causal=True)
-        x = x + self.proj(a.transpose(1, 2).reshape(b, t, W))
-        return x + self.out(F.gelu(self.fc(self.ln2(x)), approximate='tanh'))
 
 
 class GPT(nn.Module):
@@ -221,7 +243,7 @@ class GPT(nn.Module):
         self.null = nn.Parameter(torch.zeros(512))
         self.tok = nn.Embedding(K + 1, W)  # K = BOS
         self.pos = nn.Parameter(torch.randn(PREFIX + 1 + SEQ, W) * 0.02)
-        self.blocks = nn.ModuleList(Block() for _ in range(LAYERS))
+        self.blocks = nn.ModuleList(Block(W, HEADS, True) for _ in range(LAYERS))
         self.ln = nn.LayerNorm(W)
         self.head = nn.Linear(W, K)
 
@@ -310,7 +332,7 @@ def sample_cmd(data: Path, prompt: str) -> None:
     vq, gpt = VQ().to(DEV).eval(), GPT().to(DEV).eval()
     vq.load_state_dict(torch.load(data / 'vq.pt', map_location=DEV))
     gpt.load_state_dict(torch.load(data / 'gpt.pt', map_location=DEV))
-    g = vq.dec(vq.lookup(unorder(sample(gpt, e))))[0, 0] > 0
+    g = vq.decode(vq.lookup(sample(gpt, e)))[0, 0] > 0
     for z in range(G):
         layer = g[:, :, z].cpu().numpy()
         if layer.any():
@@ -325,9 +347,9 @@ def export(data: Path, out: Path) -> None:
     vq, gpt = VQ(), GPT()
     vq.load_state_dict(torch.load(data / 'vq.pt', map_location='cpu'))
     gpt.load_state_dict(torch.load(data / 'gpt.pt', map_location='cpu'))
-    tensors = {f'vq.{k}': v for k, v in vq.state_dict().items() if k.startswith(('dec', 'codes'))}
+    tensors = {f'vq.{k}': v for k, v in vq.state_dict().items() if k.startswith(('dec_', 'codes'))}
     tensors.update({f'gpt.{k}': v for k, v in gpt.state_dict().items()})
-    header, blobs, offset = {'config': {'G': G, 'L': L, 'K': K, 'D': D, 'W': W, 'layers': LAYERS, 'heads': HEADS, 'prefix': PREFIX}, 'tensors': {}}, [], 0
+    header, blobs, offset = {'config': {'G': G, 'L': L, 'K': K, 'D': D, 'W': W, 'layers': LAYERS, 'heads': HEADS, 'prefix': PREFIX, 'VW': VW, 'vqLayers': VLAYERS, 'vqHeads': VHEADS}, 'tensors': {}}, [], 0
     for k, v in tensors.items():
         a = v.detach().float().numpy().astype(np.float16)
         header['tensors'][k] = {'shape': list(a.shape), 'offset': offset}
@@ -342,6 +364,18 @@ def export(data: Path, out: Path) -> None:
         for b in blobs:
             f.write(b)
     print(f'{offset / 1e6:.1f}M weights -> {out} ({out.stat().st_size / 1e6:.1f} MB)', flush=True)
+
+    # what PyTorch computes for one test caption, so the TypeScript port can be checked
+    # against it (tests/ai/shapeModel.test.ts), with the float16 weights the app uses
+    vq.half().float().eval()
+    gpt.half().float().eval()
+    clip = torch.from_numpy(np.load(data / 'clip.npy')[-1].astype(np.float32))
+    toks = torch.from_numpy(np.load(data / 'tokens.npy')[-1, 0].astype(np.int64))[None]
+    with torch.no_grad():
+        logits = gpt(clip[None], toks[:, :3])[0]  # first 4 positions
+        occ = (vq.decode(vq.lookup(toks))[0, 0] > 0).flatten().int().tolist()
+    ref = {'clip': clip.tolist(), 'codes': toks[0].tolist(), 'logits': logits.tolist(), 'occ': ''.join(map(str, occ))}
+    (out.parent / 'shape.reference.json').write_text(json.dumps(ref))
 
 
 def main() -> None:

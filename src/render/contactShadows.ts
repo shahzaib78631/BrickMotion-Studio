@@ -15,6 +15,11 @@ export class ContactShadows {
   readonly plane: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
   private readonly target: THREE.WebGLRenderTarget;
   private readonly blurTarget: THREE.WebGLRenderTarget;
+  /** a second, much wider blur of the same shadow, blended in behind the tight one */
+  private readonly wideTarget: THREE.WebGLRenderTarget;
+  private readonly copyMaterial = new THREE.ShaderMaterial({ uniforms: { tDiffuse: { value: null as THREE.Texture | null } }, vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }', fragmentShader: 'uniform sampler2D tDiffuse; varying vec2 vUv; void main(){ gl_FragColor = texture2D(tDiffuse, vUv); }', depthTest: false, depthWrite: false });
+  private readonly wide = { weight: { value: 0 }, map: { value: null as THREE.Texture | null } };
+  private wideSpread = 1;
   private readonly camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   private readonly depth: THREE.MeshDepthMaterial;
   /** clear parts: the same shadow, much fainter */
@@ -35,11 +40,19 @@ export class ContactShadows {
     const rt = () => new THREE.WebGLRenderTarget(size, size, { depthBuffer: true });
     this.target = rt();
     this.blurTarget = rt();
-    this.target.texture.generateMipmaps = this.blurTarget.texture.generateMipmaps = false;
+    this.wideTarget = rt();
+    this.wide.map.value = this.wideTarget.texture;
+    this.target.texture.generateMipmaps = this.blurTarget.texture.generateMipmaps = this.wideTarget.texture.generateMipmaps = false;
     this.plane = new THREE.Mesh(
       new THREE.PlaneGeometry(1, 1),
       new THREE.MeshBasicMaterial({ map: this.target.texture, transparent: true, depthWrite: false, side: THREE.DoubleSide }),
     );
+    const wide = this.wide;
+    this.plane.material.onBeforeCompile = (shader) => {
+      shader.uniforms.wideMap = wide.map;
+      shader.uniforms.wideWeight = wide.weight;
+      shader.fragmentShader = `uniform sampler2D wideMap;\nuniform float wideWeight;\n${shader.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\n  diffuseColor.a = max(diffuseColor.a, texture2D(wideMap, vMapUv).a * wideWeight);')}`;
+    };
     // the camera below looks up with +Z as its "up": a plane facing down maps its image the same way round
     this.plane.rotation.x = Math.PI / 2;
     this.plane.renderOrder = -0.5;
@@ -66,7 +79,9 @@ export class ContactShadows {
   }
 
   /** Shadow strength 0–1 (0 hides it), the colour it darkens towards, and the share of that strength clear parts get (0–1). */
-  set(strength: number, tint: THREE.ColorRepresentation, clearShare = 0.12) {
+  set(strength: number, tint: THREE.ColorRepresentation, clearShare = 0.12, wide?: { spread: number; weight: number }) {
+    this.wide.weight.value = wide?.weight ?? 0;
+    this.wideSpread = wide?.spread ?? 1;
     this.strength = Math.min(1, Math.max(0, strength));
     this.uniforms.tint.value.set(tint);
     // the blur thins the shadow out: draw it saturated, then let opacity set the strength
@@ -75,12 +90,18 @@ export class ContactShadows {
     this.clearDarkness.value = 3 * Math.min(1, Math.max(0, clearShare));
   }
 
+  /** The wide layer: its blur as a multiple of the tight one, and how much of it shows (0 = off). */
+  setWide(spread: number, weight: number) {
+    this.wideSpread = spread;
+    this.wide.weight.value = weight;
+  }
+
   get on() {
     return this.strength > 0 && this.plane.visible;
   }
 
   /** Covers `box` (world units) on the floor at `groundY`; parts higher than `reach` above it cast nothing. */
-  fitTo(box: THREE.Box3, groundY: number, reach = 2.5) {
+  fitTo(box: THREE.Box3, groundY: number, reach = 2.5, spread = 1) {
     const size = box.getSize(new THREE.Vector3());
     const c = box.getCenter(new THREE.Vector3());
     const span = Math.max(size.x, size.z) * 1.25 + reach * 4;
@@ -96,7 +117,7 @@ export class ContactShadows {
     cam.updateProjectionMatrix();
     cam.updateMatrixWorld();
     // the blur spreads about half a stud past the parts, whatever the model size
-    this.blur = Math.max(0.8, (0.14 / span) * this.target.width);
+    this.blur = Math.max(0.8, ((0.14 * spread) / span) * this.target.width);
   }
 
   /** Redraws the shadow from `bricks` (moved into a private scene for the draw and put back). */
@@ -143,6 +164,17 @@ export class ContactShadows {
     renderer.autoClear = true;
     parent?.add(bricks);
     for (const o of lines) o.visible = true;
+    if (this.wide.weight.value > 0) {
+      this.copyMaterial.uniforms.tDiffuse.value = this.target.texture;
+      this.quad.material = this.copyMaterial;
+      renderer.setRenderTarget(this.wideTarget);
+      this.quad.render(renderer);
+      for (let i = 0; i < 3; i++) {
+        const spread = this.blur * this.wideSpread * (i ? 0.7 : 1);
+        this.pass(renderer, this.hBlur, this.wideTarget, this.blurTarget, spread);
+        this.pass(renderer, this.vBlur, this.blurTarget, this.wideTarget, spread);
+      }
+    }
     // two blur passes each way: target → blurTarget → target
     for (let i = 0; i < 2; i++) {
       const spread = this.blur * (i ? 0.6 : 1);
@@ -167,6 +199,8 @@ export class ContactShadows {
   dispose() {
     this.target.dispose();
     this.blurTarget.dispose();
+    this.wideTarget.dispose();
+    this.copyMaterial.dispose();
     this.depth.dispose();
     this.depthClear.dispose();
     this.hBlur.dispose();

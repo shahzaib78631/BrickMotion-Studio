@@ -103,6 +103,17 @@ function throughBore(body: Box, axis: readonly number[], length: number): boolea
   return length >= body.max[k] - body.min[k] - 1;
 }
 
+/**
+ * A minifig torso's neck: the shadow library describes it as one 12 LDU round column pointing
+ * up, which a head's hollow takes whole. Plain studs are 8 LDU or less
+ * (`isStudSnap`); other long stud-width columns (Technic links, hip pins) are not studs, so
+ * this is kept to torsos.
+ */
+const TORSO = /^(?:[=_~]+\s*)?minifig\s+torso\b/i;
+const isNeck = (s: Snap, description: string | undefined) => !!description && TORSO.test(description)
+  && s.kind === 'cyl' && s.gender === 'M' && s.length > 8 && s.shapes.length > 0
+  && s.shapes.every((x) => x === 'R') && Math.abs(s.radius - 6) <= .6 && unit(s.axis)[1] < -0.999;
+
 const unit = (v: readonly number[]): Vec3 => {
   const l = Math.hypot(v[0], v[1], v[2]) || 1;
   return [v[0] / l, v[1] / l, v[2] / l];
@@ -112,6 +123,16 @@ const same = (a: Connector, b: Connector) => a.gender === b.gender &&
   a.axis[0] * b.axis[0] + a.axis[1] * b.axis[1] + a.axis[2] * b.axis[2] > 0.999;
 
 const cache = new WeakMap<PartMetrics, Connector[]>();
+
+/**
+ * Minifig headwear: a hat, helmet, hood, headdress or hairpiece that is worn on a head's top
+ * stud. LDraw puts such a part's origin at that stud, so where the shadow library describes no
+ * hole for it (the bicorne 2528a, many hairpieces) the hole is at the origin, opening down.
+ * Visors, plumes and decorations clip onto headwear instead, and capes go round the neck.
+ */
+const HEADWEAR = /^(?:[=_~]+\s*)?minifig\s+(?:hat|headdress|helmet|cap|hair|headgear|crown|hood|turban|bandana|headwear)\b/i;
+const NOT_WORN = /\b(?:visor|plume|feather|decoration|accessory|cape)\b/i;
+const isHeadwear = (description: string | undefined) => !!description && HEADWEAR.test(description) && !NOT_WORN.test(description);
 
 /** Every stud, anti-stud, pin shaft and Technic hole of a part, from its measured studs, its socket grid and its shadow snaps (deduped). */
 export function partConnectors(m: PartMetrics): Connector[] {
@@ -123,9 +144,15 @@ export function partConnectors(m: PartMetrics): Connector[] {
   for (const p of socketsOf(m.body)) add({ pos: [p[0], p[1], p[2]], axis: [0, 1, 0], gender: 'F', type: 'stud' });
   // shadow snaps: a male's sections run out of the part, a female's run into it
   for (const s of m.snaps ?? []) {
+    const a = unit(s.axis);
+    if (isNeck(s, m.description)) {
+      // the whole neck goes up inside the head: the head's socket rests on the shoulders, at
+      // the column's base (real sets put a head 24 LDU above its torso)
+      add({ pos: [...s.start] as Vec3, axis: a, gender: 'M', type: 'stud' });
+      continue;
+    }
     const type = snapFamily(s);
     if (!type) continue;
-    const a = unit(s.axis);
     const grip = s.kind === 'clp' || s.kind === 'fgr';
     const joint = s.kind === 'fgr' ? `fgr:${s.start.map((v) => v.toFixed(2))}:${a.map((v) => v.toFixed(3))}` : undefined;
     add({ pos: [...s.start] as Vec3, axis: s.gender === 'M' ? a : [-a[0] || 0, -a[1] || 0, -a[2] || 0], gender: s.gender, type, ...(grip ? { grip } : {}), ...(joint ? { joint } : {}) });
@@ -138,7 +165,18 @@ export function partConnectors(m: PartMetrics): Connector[] {
         axis: a, gender: 'F', type, ...(joint ? { joint, flip: true, grip } : {}),
       });
     }
+    // A clip is a C-shaped grip, open at *both* ends of its span, so a bar pushes in from either
+    // one. Its span is not a bore through the part, so the rule above never fires for it, which
+    // left only the near end able to take a bar (27256 into 15712 worked one way round only).
+    if (s.kind === 'clp' && s.length > 0) {
+      add({
+        pos: [s.start[0] + a[0] * s.length, s.start[1] + a[1] * s.length, s.start[2] + a[2] * s.length],
+        axis: a, gender: 'F', type: 'bar', grip: true,
+      });
+    }
   }
+  if (isHeadwear(m.description) && !out.some((c) => c.gender === 'F' && c.type === 'stud'))
+    out.push({ pos: [0, 0, 0], axis: [0, 1, 0], gender: 'F', type: 'stud' });
   cache.set(m, out);
   return out;
 }

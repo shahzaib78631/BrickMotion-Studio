@@ -2,30 +2,55 @@ import { brickify, type Built } from '../generate/brickify';
 import { Voxels } from '../generate/voxels';
 import { ensureIds } from '../plan/ids';
 import type { Plan, PlanItem, Step } from '../plan/types';
-import { decodeCodes, sampleCodes, ShapeWeights } from './shapeModel';
+import { gridSpec, type ShapeConfig } from './shapeModel';
 
 /**
  * Text → a certified brick model, with our own shape model:
- * prompt → CLIP text embedding → shape model (20×20×20 brick grid) → brickify.
- * Everything runs in the browser from files in public/data/ai (see python/shape).
+ * prompt → CLIP text embedding → shape model (in a worker) → coloured voxels → brickify.
+ * Everything runs in the browser from files in public/data/ai (see python/shape): the
+ * detailed colour model (shape2.bin) when it is installed, else the first one (shape.bin).
  */
 
 const BASE = '/data/ai/';
-let weights: Promise<ShapeWeights> | null = null;
 let clip: Promise<(text: string) => Promise<Float32Array>> | null = null;
+let modelUrl: Promise<string> | null = null;
 
-export function loadShapeModel(): Promise<ShapeWeights> {
-  weights ??= fetch(`${BASE}shape.bin`)
-    .then((r) => {
-      if (!r.ok) throw new Error('The shape model is not installed (public/data/ai/shape.bin). Train and export it with python/shape/shape.py.');
-      return r.arrayBuffer();
-    })
-    .then(ShapeWeights.parse)
-    .catch((e) => { weights = null; throw e; });
-  return weights;
+/** The best installed shape model. */
+export function shapeModelUrl(): Promise<string> {
+  modelUrl ??= (async () => {
+    for (const f of ['shape2.bin', 'shape.bin']) {
+      const r = await fetch(`${BASE}${f}`, { method: 'HEAD' }).catch(() => null);
+      // a dev server answers a missing file with its HTML page, so check the type too
+      if (r?.ok && !(r.headers.get('content-type') ?? '').includes('text/html')) return `${BASE}${f}`;
+    }
+    throw new Error('No shape model is installed in public/data/ai. Train and export one with python/shape.');
+  })().catch((e) => { modelUrl = null; throw e; });
+  return modelUrl;
 }
 
-/** CLIP ViT-B/32 text encoder (the weights the model was trained against), run locally. */
+let worker: Worker | null = null;
+let nextId = 0;
+
+/** Run the shape model in a worker: CLIP embedding → class grid and the model's config. */
+function runShapeModel(url: string, e: Float32Array, seed: number, progress?: (done: number, total: number) => void): Promise<{ grid: Uint8Array; config: ShapeConfig }> {
+  worker ??= new Worker(new URL('./shapeWorker.ts', import.meta.url), { type: 'module' });
+  const w = worker;
+  const id = nextId++;
+  return new Promise((resolve, reject) => {
+    const on = (ev: MessageEvent) => {
+      const d = ev.data as { id: number; progress?: [number, number]; grid?: Uint8Array; config?: ShapeConfig; error?: string };
+      if (d.id !== id) return;
+      if (d.progress) return progress?.(...d.progress);
+      w.removeEventListener('message', on);
+      if (d.error || !d.grid || !d.config) reject(new Error(d.error ?? 'The shape model failed.'));
+      else resolve({ grid: d.grid, config: d.config });
+    };
+    w.addEventListener('message', on);
+    w.postMessage({ id, url, clip: e, seed });
+  });
+}
+
+/** CLIP ViT-B/32 text encoder, run locally in half precision: it matches the PyTorch embeddings the model was trained on (cosine 1.000; the 8-bit file drifts to 0.87–0.94). */
 export function loadTextEncoder(): Promise<(text: string) => Promise<Float32Array>> {
   clip ??= (async () => {
     const t = await import('@huggingface/transformers');
@@ -34,7 +59,7 @@ export function loadTextEncoder(): Promise<(text: string) => Promise<Float32Arra
     t.env.localModelPath = `${BASE}models/`;
     const id = 'Xenova/clip-vit-base-patch32';
     const tokenizer = await t.AutoTokenizer.from_pretrained(id);
-    const model = await t.CLIPTextModelWithProjection.from_pretrained(id, { dtype: 'q8' });
+    const model = await t.CLIPTextModelWithProjection.from_pretrained(id, { dtype: 'fp16' });
     return async (text: string) => {
       const inputs = tokenizer([text], { padding: true, truncation: true });
       const { text_embeds } = (await model(inputs)) as { text_embeds: { data: Float32Array } };
@@ -68,55 +93,73 @@ const COLOURS: [RegExp, number][] = [
 ];
 const DEFAULTS = [4, 1, 14, 2, 25, 15, 71, 70, 19, 272];
 
-/** The colour a prompt names, or one picked by the seed. */
-export function colourFor(prompt: string, seed: number): number {
+/** The colour a prompt names, if it names one. */
+export function namedColour(prompt: string): number | null {
   const p = prompt.toLowerCase();
   for (const [re, c] of COLOURS) if (re.test(p)) return c;
-  return DEFAULTS[seed % DEFAULTS.length];
+  return null;
+}
+
+/** The prompt without its colour words ("a red police car" → "a police car"). */
+export function withoutColours(prompt: string): string {
+  let p = prompt;
+  for (const [re] of COLOURS) p = p.replace(new RegExp(re.source, 'gi'), ' ');
+  return p.replace(/\s+/g, ' ').trim();
+}
+
+/** The colour a prompt names, or one picked by the seed. */
+export function colourFor(prompt: string, seed: number): number {
+  return namedColour(prompt) ?? DEFAULTS[seed % DEFAULTS.length];
 }
 
 /**
- * The model's 20³ grid (x, y across, z up in bricks) → Voxels on the stud grid (y up in
- * plates, 3 per brick), cropped, keeping only the largest connected piece so nothing
- * floats free.
+ * A model's class grid (A × B across, C up, cells indexed (a·B + b)·C + c) → Voxels on the
+ * stud grid (y up in plates), cropped, keeping only the largest connected piece so nothing
+ * floats free. `plates` is how many plates one cell is tall (v1: a brick, 3; v2: 1);
+ * `colourOf` turns a class into an LDraw colour.
  */
-export function gridToVoxels(occ: Uint8Array, colour: number, G = 20): Voxels {
-  const at = (x: number, y: number, z: number) => occ[(x * G + y) * G + z] === 1;
+export function gridToVoxels(
+  grid: Uint8Array,
+  dims: { A: number; B: number; C: number },
+  plates: number,
+  colourOf: (cls: number) => number,
+): Voxels {
+  const { A, B, C } = dims;
+  const index = (a: number, b: number, c: number) => (a * B + b) * C + c;
   // largest 6-connected piece
-  const label = new Int32Array(G * G * G).fill(-1);
+  const label = new Int32Array(grid.length).fill(-1);
   const sizes: number[] = [];
-  for (let i = 0; i < occ.length; i++) {
-    if (!occ[i] || label[i] >= 0) continue;
+  for (let i = 0; i < grid.length; i++) {
+    if (!grid[i] || label[i] >= 0) continue;
     const id = sizes.length;
     let n = 0;
     const stack = [i];
     label[i] = id;
     while (stack.length) {
-      const c = stack.pop()!;
+      const k = stack.pop()!;
       n++;
-      const x = Math.floor(c / (G * G)), y = Math.floor(c / G) % G, z = c % G;
-      for (const [dx, dy, dz] of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]]) {
-        const X = x + dx, Y = y + dy, Z = z + dz;
-        if (X < 0 || Y < 0 || Z < 0 || X >= G || Y >= G || Z >= G) continue;
-        const j = (X * G + Y) * G + Z;
-        if (occ[j] && label[j] < 0) { label[j] = id; stack.push(j); }
+      const a = Math.floor(k / (B * C)), b = Math.floor(k / C) % B, c = k % C;
+      for (const [da, db, dc] of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]]) {
+        const x = a + da, y = b + db, z = c + dc;
+        if (x < 0 || y < 0 || z < 0 || x >= A || y >= B || z >= C) continue;
+        const j = index(x, y, z);
+        if (grid[j] && label[j] < 0) { label[j] = id; stack.push(j); }
       }
     }
     sizes.push(n);
   }
   const keep = sizes.indexOf(Math.max(0, ...sizes));
-  let lo = [G, G, G], hi = [-1, -1, -1];
-  for (let x = 0; x < G; x++) for (let y = 0; y < G; y++) for (let z = 0; z < G; z++) {
-    if (!at(x, y, z) || label[(x * G + y) * G + z] !== keep) continue;
-    lo = [Math.min(lo[0], x), Math.min(lo[1], y), Math.min(lo[2], z)];
-    hi = [Math.max(hi[0], x), Math.max(hi[1], y), Math.max(hi[2], z)];
+  let lo = [A, B, C], hi = [-1, -1, -1];
+  for (let a = 0; a < A; a++) for (let b = 0; b < B; b++) for (let c = 0; c < C; c++) {
+    if (label[index(a, b, c)] !== keep || !grid[index(a, b, c)]) continue;
+    lo = [Math.min(lo[0], a), Math.min(lo[1], b), Math.min(lo[2], c)];
+    hi = [Math.max(hi[0], a), Math.max(hi[1], b), Math.max(hi[2], c)];
   }
   if (hi[0] < 0) return new Voxels(1, 1, 1);
-  const w = hi[0] - lo[0] + 1, d = hi[1] - lo[1] + 1, bricks = hi[2] - lo[2] + 1;
-  return Voxels.from(w, d, bricks * 3, (x, y, z) => {
-    const gx = x + lo[0], gy = z + lo[1], gz = Math.floor(y / 3) + lo[2];
-    const i = (gx * G + gy) * G + gz;
-    return occ[i] && label[i] === keep ? colour : null;
+  const w = hi[0] - lo[0] + 1, d = hi[1] - lo[1] + 1, h = hi[2] - lo[2] + 1;
+  return Voxels.from(w, d, h * plates, (x, y, z) => {
+    const i = index(x + lo[0], z + lo[1], Math.floor(y / plates) + lo[2]);
+    return grid[i] && label[i] === keep ? colourOf(grid[i]) : null;
   });
 }
 
@@ -124,7 +167,7 @@ export type PromptResult = { prompt: string; seed: number; colour: number; voxel
 
 /** Lay a shape in bricks and make a plan, one step per brick layer. */
 export function shapeToPlan(prompt: string, seed: number, voxels: Voxels): { built: Built; plan: Plan } {
-  const built = brickify(voxels, { hollow: 1 });
+  const built = brickify(voxels, { hollow: 1, keepLargest: true });
   const layers = new Map<number, PlanItem[]>();
   for (const it of built.items) {
     const layer = Math.floor(('y' in it ? it.y : 0) / 3);
@@ -135,21 +178,10 @@ export function shapeToPlan(prompt: string, seed: number, voxels: Voxels): { bui
   const plan = ensureIds({
     format: 'brickmotion-plan', version: 1,
     name: `${name} #${seed}`,
-    description: `Generated from the prompt “${prompt.trim()}” (seed ${seed}) by BrickMotion's shape model, trained on StableText2Brick (CMU, MIT licence).`,
+    description: `Generated from the prompt “${prompt.trim()}” (seed ${seed}) by BrickMotion's shape model, trained on StableText2Brick (CMU, MIT licence) and the LDraw Official Model Repository (CC BY 2.0/4.0, models by their OMR authors).`,
     steps,
   });
   return { built, plan };
-}
-
-function mulberry32(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }
 
 export async function generateFromPrompt(
@@ -158,13 +190,16 @@ export async function generateFromPrompt(
   progress?: (stage: string, done: number, total: number) => void,
 ): Promise<PromptResult> {
   progress?.('Loading the model', 0, 1);
-  const [m, encode] = await Promise.all([loadShapeModel(), loadTextEncoder()]);
+  const [url, encode] = await Promise.all([shapeModelUrl(), loadTextEncoder()]);
   progress?.('Reading the prompt', 0, 1);
   const e = await encode(prompt);
-  const codes = await sampleCodes(m, e, { random: mulberry32(seed), progress: (d, t) => progress?.('Sketching the shape', d, t) });
-  progress?.('Shaping', 1, 1);
-  const colour = colourFor(prompt, seed);
-  const voxels = gridToVoxels(decodeCodes(m, codes), colour, m.config.G);
+  const { grid, config } = await runShapeModel(url, e, seed, (d, t) => progress?.('Sketching the shape', d, t));
   progress?.('Laying bricks', 1, 1);
-  return { prompt, seed, colour, voxels, ...shapeToPlan(prompt, seed, voxels) };
+  const named = colourFor(prompt, seed);
+  const spec = gridSpec(config);
+  const palette = config.colours ?? [];
+  // v2 cells carry a colour class (the last one is "other"); v1 cells only say filled
+  const colourOf = (cls: number) => (cls >= 1 && cls <= palette.length ? palette[cls - 1] : named);
+  const voxels = gridToVoxels(grid, spec, config.version === 2 ? 1 : 3, colourOf);
+  return { prompt, seed, colour: named, voxels, ...shapeToPlan(prompt, seed, voxels) };
 }

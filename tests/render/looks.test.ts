@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { DEFAULT_MATERIALS, FINISHES, SCENES, finishWithClay, floorFor, sanitizeMaterials, sceneOf, scenePixels } from '../../src/render/looks';
+import { DEFAULT_MATERIALS, FINISHES, PALETTES, SCENES, finishWithClay, floorFor, paletteOf, sanitizeMaterials, sceneOf, scenePixels } from '../../src/render/looks';
 
 test('every scene has a unique id and a backdrop that spans bottom to top', () => {
   expect(new Set(SCENES.map((s) => s.id)).size).toBe(SCENES.length);
@@ -20,10 +20,21 @@ test('the backdrop pixels follow the stops and the pool of light brightens the d
 
 test('materials from storage are sanitised, and auto floors follow the scene', () => {
   expect(sanitizeMaterials(undefined)).toEqual(DEFAULT_MATERIALS);
-  expect(sanitizeMaterials({ finish: 'glossy', texture: 'nope', floor: 'wood' })).toEqual({ finish: 'glossy', texture: 'none', floor: 'wood', studLogos: true, detail: 'standard', roundedEdges: true, ao: { enabled: true, strength: null, radius: null }, contactShadows: 0.5, clearShadow: 0.12, environment: 'studio', glow: { colors: [], strength: 1.5 }, glass: 'soft', lens: { blur: 'off', focus: 0.4 }, floorColor: null, sweepCurve: 0.6 });
+  expect(sanitizeMaterials({ finish: 'glossy', texture: 'nope', floor: 'wood' })).toEqual({ finish: 'glossy', palette: 'studio', texture: 'none', floor: 'wood', studLogos: true, detail: 'standard', roundedEdges: true, ao: { enabled: true, strength: null, radius: null }, contactShadows: 0.5, clearShadow: 0.12, environment: 'studio', glow: { colors: [], strength: 1.5 }, glass: 'soft', lens: { blur: 'off', focus: 0.4 }, floorColor: null, sweepCurve: 0.6 });
   expect(floorFor('white', 'auto')).toBe('reflective');
   expect(floorFor('soft', 'auto')).toBe('shadow');
   expect(floorFor('soft', 'concrete')).toBe('concrete');
+});
+
+test('the colour palette is a stored choice: LDraw values or Studio’s table', () => {
+  expect(DEFAULT_MATERIALS.palette).toBe('studio');
+  expect(sanitizeMaterials({ palette: 'ldraw' }).palette).toBe('ldraw');
+  expect(sanitizeMaterials({ palette: 'nope' }).palette).toBe('studio');
+  // each palette carries the plastic finish that goes with it
+  expect(PALETTES.map((p) => p.id)).toEqual(['ldraw', 'studio']);
+  expect(paletteOf('ldraw').finish).toBe('catalog');
+  expect(paletteOf('studio').finish).toBe('eyesight');
+  expect(paletteOf(undefined).id).toBe('studio');
 });
 
 test('stud logos are a stored material choice, on by default', () => {

@@ -26,6 +26,7 @@ class Part:
     matrix: np.ndarray  # 4x4 part -> model, LDU, y down
     step: int
     submodel: str
+    top: str = ''  # the main model's direct submodel this part is in ('' for the main model's own parts)
 
 
 def _sections(text: str) -> tuple[list[str], dict[str, list[str]]]:
@@ -67,7 +68,7 @@ def read_model(path: str | Path) -> list[Part]:
     out: list[Part] = []
     step = [0]
 
-    def walk(name: str, parent: np.ndarray, color: int, depth: int) -> None:
+    def walk(name: str, parent: np.ndarray, color: int, depth: int, top: str = '') -> None:
         if depth > 12:
             return
         for s in files.get(name, []):
@@ -88,9 +89,9 @@ def read_model(path: str | Path) -> list[Part]:
                 c = color
             ref = ' '.join(t[14:]).strip().lower()
             if ref in files and not ref.endswith('.dat'):
-                walk(ref, m, c, depth + 1)
+                walk(ref, m, c, depth + 1, top or ref)
             else:
-                out.append(Part(_part_id(ref), c, m, step[0], name))
+                out.append(Part(_part_id(ref), c, m, step[0], name, top))
 
     walk(order[0], np.eye(4), 7, 0)
     return out

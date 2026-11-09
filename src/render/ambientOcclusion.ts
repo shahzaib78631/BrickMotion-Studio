@@ -3,7 +3,7 @@ import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 
 /** How strong and how wide the ambient occlusion is (world units: 1 = one stud). */
-export type AOSettings = { intensity: number; radius: number };
+export type AOSettings = { intensity: number; radius: number; /** occlusion kept on upright faces (0–1, default 0.4) */ sides?: number; /** darkening curve exponent (default 1.35) */ power?: number; /** how thick a surface GTAO assumes, in studs (default 1.2) */ thickness?: number; /** a second, wide-radius occlusion at half resolution: how much of the sky the surroundings hide (radius in studs, strength 0–1.5) */ wide?: { radius: number; strength: number } };
 
 /** Half-width of the fake rounded edge, in studs (a real brick's is about 0.02). */
 const BEVEL_STUDS = 0.022;
@@ -24,6 +24,8 @@ const BEVEL_STUDS = 0.022;
  */
 export class StudioAO {
   private pass: GTAOPass;
+  private wide: GTAOPass;
+  private wideIntensity = 0;
   private quad: FullScreenQuad;
   private material: THREE.ShaderMaterial;
   private perspective = true;
@@ -47,22 +49,29 @@ export class StudioAO {
     this.pass.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 8, rings: 2, samples: 16 });
     // Only the listed objects take part. Helpers, gizmos, markers and lights stay out of the G-buffer.
     this.internals = this.pass as unknown as StudioAO['internals'];
-    const hidden: THREE.Object3D[] = [];
-    this.internals._overrideVisibility = () => {
-      const keep = new Set(this.include());
-      for (const child of scene.children) if (child.visible && !keep.has(child)) { child.visible = false; hidden.push(child); }
-      for (const obj of keep) obj.traverse((o) => {
-        if (((o as THREE.Line).isLine || (o as THREE.Points).isPoints) && o.visible) { o.visible = false; hidden.push(o); }
-      });
-    };
-    this.internals._restoreVisibility = () => {
-      for (const o of hidden) o.visible = true;
-      hidden.length = 0;
-    };
+    this.wide = new GTAOPass(scene, camera, 1, 1);
+    this.wide.output = GTAOPass.OUTPUT.Off;
+    this.wide.updateGtaoMaterial({ radius: 6, distanceExponent: 1, thickness: 4, scale: 1, samples: 16, distanceFallOff: 1 });
+    this.wide.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 8, rings: 2, samples: 16 });
+    for (const gtao of [this.pass, this.wide]) {
+      const g = gtao as unknown as StudioAO['internals'];
+      const hidden: THREE.Object3D[] = [];
+      g._overrideVisibility = () => {
+        const keep = new Set(this.include());
+        for (const child of scene.children) if (child.visible && !keep.has(child)) { child.visible = false; hidden.push(child); }
+        for (const obj of keep) obj.traverse((o) => {
+          if (((o as THREE.Line).isLine || (o as THREE.Points).isPoints) && o.visible) { o.visible = false; hidden.push(o); }
+        });
+      };
+      g._restoreVisibility = () => {
+        for (const o of hidden) o.visible = true;
+        hidden.length = 0;
+      };
+    }
     this.material = new THREE.ShaderMaterial({
       uniforms: {
-        tAO: { value: null }, tDepth: { value: null }, tNormal: { value: null },
-        intensity: { value: 0 }, edge: { value: 0 }, bevel: { value: BEVEL_STUDS },
+        tAO: { value: null }, tAO2: { value: null }, wideK: { value: 0 }, tDepth: { value: null }, tNormal: { value: null },
+        intensity: { value: 0 }, sides: { value: 0.4 }, power: { value: 1.35 }, edge: { value: 0 }, bevel: { value: BEVEL_STUDS },
         texel: { value: new THREE.Vector2(1, 1) }, cameraNear: { value: 0.1 }, cameraFar: { value: 1000 },
         projInv: { value: new THREE.Matrix4() }, viewToWorld: { value: new THREE.Matrix3() }, pxPerUnit: { value: 1 }, lightDir: { value: new THREE.Vector3(0, 1, 0) },
       },
@@ -70,8 +79,8 @@ export class StudioAO {
       vertexShader: /* glsl */ `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
       fragmentShader: /* glsl */ `
         #include <packing>
-        uniform sampler2D tAO; uniform sampler2D tDepth; uniform sampler2D tNormal;
-        uniform float intensity; uniform float edge; uniform float bevel;
+        uniform sampler2D tAO; uniform sampler2D tAO2; uniform float wideK; uniform sampler2D tDepth; uniform sampler2D tNormal;
+        uniform float intensity; uniform float sides; uniform float power; uniform float edge; uniform float bevel;
         uniform vec2 texel; uniform float cameraNear; uniform float cameraFar;
         uniform mat4 projInv; uniform float pxPerUnit; uniform vec3 lightDir; uniform mat3 viewToWorld;
         varying vec2 vUv;
@@ -94,23 +103,31 @@ export class StudioAO {
         // shadow across the edge of a part. Upright faces keep only a trace of occlusion: in
         // product renders the darkening pools on the floor and tops, the sides of a brick stay
         // clean. A gentle curve then keeps the open floor clean and deepens only true contact.
-        float occlusion(float z0) {
+        float occlusion(float d0) {
           if (intensity <= 0.0) return 1.0;
+          vec3 p0 = viewPos(vUv, d0);
           vec3 n0 = viewNormal(vUv);
           float sum = 0.0, wsum = 0.0;
-          for (int y = -4; y <= 4; y++) for (int x = -4; x <= 4; x++) {
+          // GTAO's Poisson filter has already denoised the estimate. A compact
+          // final kernel preserves narrow contacts instead of blurring them twice.
+          // Test distance from the receiving plane, not camera-relative depth:
+          // the latter admitted progressively larger gaps as the camera zoomed out.
+          for (int y = -2; y <= 2; y++) for (int x = -2; x <= 2; x++) {
             vec2 o = vec2(float(x), float(y));
-            vec2 uv = vUv + o * texel * 1.5;
-            float z = viewZ(uv);
-            float wz = max(0.0, 1.0 - abs(z - z0) / (0.015 * z0));
+            vec2 uv = vUv + o * texel * 2.0;
+            if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) continue;
+            float depth = texture2D(tDepth, uv).x;
+            if (depth >= 1.0) continue;
+            vec3 delta = viewPos(uv, depth) - p0;
+            float wz = 1.0 - smoothstep(0.008, 0.04, abs(dot(n0, delta)));
             float wn = pow(max(dot(n0, viewNormal(uv)), 0.0), 16.0);
-            float w = exp(-dot(o, o) / 12.0) * wz * wn;
+            float w = exp(-dot(o, o) / 3.0) * wz * wn;
             sum += clamp(texture2D(tAO, uv).r, 0.0, 1.0) * w;
             wsum += w;
           }
           float ao = wsum > 0.0 ? sum / wsum : clamp(texture2D(tAO, vUv).r, 0.0, 1.0);
           float up = (viewToWorld * n0).y;
-          float k = intensity * mix(0.4, 1.0, smoothstep(0.35, 0.85, up));
+          float face = mix(sides, 1.0, smoothstep(0.35, 0.85, up));
           // A surface seen nearly edge-on (the far floor from a low camera) gets almost no
           // depth detail per pixel, and GTAO reads it as occluded: a dark band at the horizon.
           #if PERSPECTIVE_CAMERA == 1
@@ -118,8 +135,11 @@ export class StudioAO {
           #else
             vec3 toEye = vec3(0.0, 0.0, 1.0);
           #endif
-          k *= smoothstep(0.06, 0.3, abs(dot(n0, toEye)));
-          return mix(1.0, pow(ao, 1.35), k);
+          face *= smoothstep(0.06, 0.3, abs(dot(n0, toEye)));
+          float tight = max(0.0, mix(1.0, pow(ao, power), intensity * face));
+          // the sky the surroundings hide at a larger scale (half resolution, so no extra blur)
+          float wideAo = wideK > 0.0 ? clamp(texture2D(tAO2, vUv).r, 0.0, 1.0) : 1.0;
+          return tight * max(0.0, mix(1.0, wideAo, wideK * face));
         }
 
         // Light on a fake rounded corner: look a bevel's width around; where a neighbour lies on
@@ -137,7 +157,10 @@ export class StudioAO {
           #else
             float scale = pxPerUnit;
           #endif
-          float r = clamp(bevel * scale, 0.75, 2.5);
+          float footprint = bevel * scale;
+          float coverage = smoothstep(0.2, 1.0, footprint);
+          if (coverage <= 0.0) return 0.0;
+          float r = clamp(footprint, 0.75, 2.5);
           // faces must continue this far (about 2 LDU) on both sides of the corner
           float extent = clamp(0.1 * scale, 2.0, 24.0);
           float reach = max(bevel * 8.0, 4.0 * r / scale);
@@ -167,17 +190,22 @@ export class StudioAO {
           float e = clamp(hits / 2.5, 0.0, 1.0);
           if (e <= 0.0) return 0.0;
           vec3 n = normalize(bent);
-          vec3 v = normalize(-p0);
+          #if PERSPECTIVE_CAMERA == 1
+            vec3 v = normalize(-p0);
+          #else
+            vec3 v = vec3(0.0, 0.0, 1.0);
+          #endif
           // only the part of the bevel that turns towards the light is brighter than its faces
           float lit = max(dot(n, lightDir), 0.0) - max(max(dot(n0, lightDir), 0.0), 0.0) * 0.6;
           float spec = pow(max(dot(reflect(-v, n), lightDir), 0.0), 16.0);
-          return edge * e * (max(lit, 0.0) * 0.6 + spec);
+          return coverage * edge * e * (max(lit, 0.0) * 0.6 + spec);
         }
 
         void main() {
           float d0 = texture2D(tDepth, vUv).x;
+          if (d0 >= 1.0) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
           // rgb is added, alpha multiplies what is on screen: frame * ao + edge light
-          gl_FragColor = vec4(vec3(roundedEdge(d0)), occlusion(viewZ(vUv)));
+          gl_FragColor = vec4(vec3(roundedEdge(d0)), occlusion(d0));
         }`,
       transparent: true,
       depthTest: false,
@@ -201,11 +229,16 @@ export class StudioAO {
     this.width = w;
     this.height = h;
     this.pass.setSize(w, h);
+    this.wide.setSize(Math.max(1, Math.round(w / 2)), Math.max(1, Math.round(h / 2)));
   }
 
   set(settings: AOSettings): void {
     this.aoIntensity = settings.intensity;
-    this.pass.updateGtaoMaterial({ radius: settings.radius });
+    this.material.uniforms.sides.value = settings.sides ?? 0.4;
+    this.material.uniforms.power.value = settings.power ?? 1.35;
+    this.pass.updateGtaoMaterial({ radius: settings.radius, thickness: settings.thickness ?? 1.2 });
+    this.wideIntensity = settings.wide?.strength ?? 0;
+    if (settings.wide) this.wide.updateGtaoMaterial({ radius: settings.wide.radius });
   }
 
   /** Strength of the rounded-edge light (0 = sharp LDraw corners). */
@@ -231,6 +264,11 @@ export class StudioAO {
       pass.gtaoMaterial.defines.PERSPECTIVE_CAMERA = this.perspective ? 1 : 0;
       pass.gtaoMaterial.needsUpdate = true;
     }
+    if (this.wide.camera !== camera) {
+      this.wide.camera = camera;
+      this.wide.gtaoMaterial.defines.PERSPECTIVE_CAMERA = this.perspective ? 1 : 0;
+      this.wide.gtaoMaterial.needsUpdate = true;
+    }
     const useAO = ao && this.aoIntensity > 0;
     // the normal/depth pre-pass must not redraw the shadow maps the frame just used
     const shadows = renderer.shadowMap.autoUpdate;
@@ -241,6 +279,7 @@ export class StudioAO {
     try {
       if (useAO) {
         pass.render(renderer, null as unknown as THREE.WebGLRenderTarget, null as unknown as THREE.WebGLRenderTarget, 0, false);
+        if (this.wideIntensity > 0) this.wide.render(renderer, null as unknown as THREE.WebGLRenderTarget, null as unknown as THREE.WebGLRenderTarget, 0, false);
       } else {
         // the edges only need normals and depth
         const g = this.internals;
@@ -258,6 +297,8 @@ export class StudioAO {
     const u = this.material.uniforms;
     u.intensity.value = useAO ? this.aoIntensity : 0;
     u.tAO.value = pass.pdRenderTarget.texture;
+    u.tAO2.value = this.wide.pdRenderTarget.texture;
+    u.wideK.value = useAO ? this.wideIntensity : 0;
     u.tDepth.value = pass.depthTexture;
     u.tNormal.value = this.internals.normalRenderTarget.texture;
     u.texel.value.set(1 / this.width, 1 / this.height);
@@ -284,6 +325,7 @@ export class StudioAO {
 
   dispose(): void {
     this.pass.dispose();
+    this.wide.dispose();
     this.quad.dispose();
     this.material.dispose();
   }

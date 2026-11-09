@@ -23,7 +23,7 @@ import { WEDGES } from './geometry';
 
 export type Placed = { key: string; part: string; color: number; world: THREE.Matrix4 };
 export type Ghost = { part: string; color: number; world: number[] };
-export type SuggestionKind = 'habit' | 'mirror' | 'repeat' | 'technique';
+export type SuggestionKind = 'habit' | 'mirror' | 'repeat' | 'technique' | 'fit';
 export type Suggestion = {
   id: string;
   kind: SuggestionKind;
@@ -60,8 +60,8 @@ const EPS = 0.75;
 
 const dist3 = (a: ArrayLike<number>, b: ArrayLike<number>) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 const dot3 = (a: ArrayLike<number>, b: ArrayLike<number>) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const mates = (c: Connector, t: Connector) => c.gender !== t.gender && c.type === t.type && dist3(c.pos, t.pos) < 1 && dot3(c.axis, t.axis) < -0.999;
-const posOf = (m: THREE.Matrix4) => [m.elements[12], m.elements[13], m.elements[14]];
+export const mates = (c: Connector, t: Connector) => c.gender !== t.gender && c.type === t.type && dist3(c.pos, t.pos) < 1 && dot3(c.axis, t.axis) < -0.999;
+export const posOf = (m: THREE.Matrix4) => [m.elements[12], m.elements[13], m.elements[14]];
 
 function solidOf(id: string, m: PartMetrics, world: ArrayLike<number>): Solid {
   return { id, world, body: m.body, studs: m.studs, snaps: m.snaps, mesh: m.mesh };
@@ -76,13 +76,13 @@ function faceOf(c: Connector): Face | null {
 }
 
 /** Same part at (nearly) the same pose: already there. */
-function samePose(a: THREE.Matrix4, b: THREE.Matrix4): boolean {
+export function samePose(a: THREE.Matrix4, b: THREE.Matrix4): boolean {
   const x = a.elements, y = b.elements;
   for (let i = 0; i < 16; i++) if (Math.abs(x[i] - y[i]) > (i >= 12 ? EPS : 1e-3)) return false;
   return true;
 }
 
-type Scene = {
+export type Scene = {
   near: Placed[];
   world: CollisionWorld;
   targets: Target[];
@@ -90,7 +90,7 @@ type Scene = {
   local: Map<string, Connector[]>;
 };
 
-function sceneAround(pieces: readonly Placed[], centre: number[], metrics: SuggestInput['metrics']): Scene {
+export function sceneAround(pieces: readonly Placed[], centre: number[], metrics: SuggestInput['metrics']): Scene {
   const near = pieces.filter((p) => dist3(posOf(p.world), centre) < NEAR && metrics(p.part));
   const solids = near.map((p) => solidOf(p.key, metrics(p.part)!, p.world.elements));
   const conns = new Map<string, Connector[]>(), local = new Map<string, Connector[]>();
@@ -106,7 +106,7 @@ function sceneAround(pieces: readonly Placed[], centre: number[], metrics: Sugge
  * Whether `part` at `world` fits: it sits inside nothing (the scene, or `extra` ghosts) and
  * mates at least one free connector. Returns how many it mates (0 = does not fit).
  */
-function fit(sc: Scene, m: PartMetrics, world: THREE.Matrix4, extra: { solids: Solid[]; conns: Connector[] }): number {
+export function fit(sc: Scene, m: PartMetrics, world: THREE.Matrix4, extra: { solids: Solid[]; conns: Connector[] }): number {
   const s = solidOf('ghost', m, world.elements);
   if (sc.world.hits([s]).size) return 0;
   if (extra.solids.length && collisionWorld(extra.solids).hits([s]).size) return 0;

@@ -286,6 +286,9 @@
 .bm-suggest-kind{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3)}
 .bm-suggest-kind.k-mirror,.bm-suggest-kind.k-repeat{color:var(--focus)}
 .bm-suggest-why{grid-column:1/-1;margin:2px 0 0}
+.bm-suggest-kind.k-fit{color:var(--ok, #2f9e5b)}
+.bm-suggest-spot{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.bm-suggest-spots{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 6px}
 .bm-suggest-section{margin:10px 0 4px;text-transform:uppercase;letter-spacing:.04em}
 .bm-suggest-all summary{cursor:pointer;margin:8px 0}
 .bm-tech{border:1px solid var(--line);border-radius:10px;margin:6px 0;background:var(--surface)}

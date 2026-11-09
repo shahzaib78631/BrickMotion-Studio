@@ -43,3 +43,14 @@ export function resolveColor(table: Map<number, ColorDef>, c: string | number): 
   }
   return index.get(normalizeColorName(s));
 }
+
+/** Studio's material-library names (SOLID-RED, TRANS-CLEAR, …), so EyeSight binds its own shaders. */
+export function materialName(c: ColorDef): string {
+  const prefix = c.finish === 'trans' ? 'TRANS' : c.finish === 'chrome' ? 'CHROME' : c.finish === 'metal' ? 'METAL'
+    : c.finish === 'pearl' ? 'PEARL' : c.finish === 'rubber' ? 'RUBBER' : 'SOLID';
+  // Studio's library spells it GRAY, and a colour named "Trans_X" must not become TRANS-TRANS_X
+  let base = c.name.toUpperCase().replace(/GREY/g, 'GRAY');
+  if (base.startsWith('TRANS_')) base = base.slice('TRANS_'.length);
+  return `${prefix}-${base}`;
+}
+

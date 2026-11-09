@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { cameraAt, introInto, worldBox3 } from '../anim/camera';
 import { poseAt, type Timeline } from '../anim/timeline';
+import { withTurntable } from '../anim/heroTurntable';
 import { formatAspect } from '../export/formats';
 import { useAppSettings } from '../state/appSettings';
 import { useStudio } from '../state/store';
@@ -116,7 +117,7 @@ export function PreviewPlayer({ model, timeline: tl }: { model: ModelState; time
       // A piece the timeline does not know (the plan changed under it) is shown in place rather
       // than dropped: a preview that silently draws nothing is impossible to diagnose. Pieces
       // the timeline does know still arrive, wait and hide as it says.
-      const at = poseAt(tl, t);
+      const at = withTurntable(tl, s.camera, t, poseAt(tl, t));
       studio.bricks.setMatrices((key) => at(key) ?? (tl.tracks.has(key) ? null : placed.get(key) ?? null));
       if (shot) applyShot(studio.perspective, shot);
       else {
@@ -138,7 +139,7 @@ export function PreviewPlayer({ model, timeline: tl }: { model: ModelState; time
         const half = shutter / (2 * fps);
         const t0 = Math.max(0, t - half), t1 = Math.min(tl.duration, t + half);
         const a = cameraTrackAt(track!, t0, trackContext)!, b = cameraTrackAt(track!, t1, trackContext)!;
-        const bricks = bricksMovedPixels(shot, fw, fh, keys, poseAt(tl, t0), poseAt(tl, t1));
+        const bricks = bricksMovedPixels(shot, fw, fh, keys, withTurntable(tl, s.camera, t0, poseAt(tl, t0)), withTurntable(tl, s.camera, t1, poseAt(tl, t1)));
         offsets = subframeOffsets(subframeCount(shutter, movedPixels(a, b, sceneBox, fw, fh, bricks), PREVIEW_SUBFRAMES), shutter, fps);
       }
       if (offsets.length > 1) {
@@ -147,7 +148,7 @@ export function PreviewPlayer({ model, timeline: tl }: { model: ModelState; time
         let begun = false;
         offsets.forEach((off, k) => {
           const at = Math.min(tl.duration, Math.max(0, t + off));
-          const pose = poseAt(tl, at);
+          const pose = withTurntable(tl, s.camera, at, poseAt(tl, at));
           studio.bricks.setMatrices((key) => pose(key) ?? (tl.tracks.has(key) ? null : placed.get(key) ?? null));
           applyShot(studio.perspective, cameraTrackAt(track!, at, trackContext)!);
           studio.perspective.aspect = ASPECT;

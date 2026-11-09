@@ -24,7 +24,9 @@ test('an embedded copy gets the library shadow of the part it actually copies', 
   const lib = new PartLibrary(async (path) => (path === 'parts/3001.dat' ? triangle : null), shadow);
   lib.addInline(new Map([['acme - 3001.dat', parseLDraw(triangle, 'acme - 3001.dat')]]));
   const part = await lib.loadPart('acme - 3001');
-  expect(part!.snaps).toEqual([expect.objectContaining({ group: 'cloneSeat', gender: 'M' })]);
+  // BrickLink Studio's fallback (data/studioConnectors.ts) is a separate source, and this stub
+  // part's geometry is not 3001's, so only the shadow side is checked here
+  expect(part!.snaps?.filter((s) => s.source !== 'studio')).toEqual([expect.objectContaining({ group: 'cloneSeat', gender: 'M' })]);
 });
 
 test('an embedded copy with different geometry is not aliased, even with a matching name', async () => {

@@ -1,10 +1,14 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { createSoftboxEnvironment } from './softboxEnvironment';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 import { geometryOf, getColors, onGeometryChange, setPartDetail, setStudLogos } from '../state/partService';
 import { useSmoothSoftShadows } from './softShadows';
 import { StudioAO } from './ambientOcclusion';
 import { ContactShadows } from './contactShadows';
+import { NeuralShade } from './neuralShade';
+import { GBuffer } from './gbuffer';
+import { DomeVisibility } from './domeVisibility';
 import { BrickRenderer } from './bricks';
 import { studioGradientPixels } from './studioPalette';
 import { SceneLighting } from './sceneLights';
@@ -63,6 +67,10 @@ export type Studio = {
   setRenderOptions?(o: RenderOptions): void;
   /** Brick finish, surface texture and floor; preview and MP4 export must agree. */
   setMaterials?(m: Materials): void;
+  /** Learned shading (neuralShade.ts): the URL (without extension) of a trained network, or null for the normal render. */
+  setNeural?(url: string | null): Promise<void>;
+  /** How far above the floor parts still cast a contact shadow, and how widely it blurs (1 = default). */
+  contactTune?(reach: number, spread: number, wide?: { spread: number; weight: number }): void;
   /** Resolves once everything the materials need (an HDR environment) has loaded. */
   ready?(): Promise<void>;
   /** Floor height and light/shadow framing for a world-space box (studs, +Y up). */
@@ -111,8 +119,35 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
   let envGain = 1;
   let envLoad: Promise<unknown> = Promise.resolve();
   let disposed = false;
-  const applyEnvironment = (id: Materials['environment']) => {
+  // a uniform white world (EyeSight's): even ambient light and plain reflections
+  let domeEnv: THREE.Texture | null = null;
+  let softboxEnv: THREE.WebGLRenderTarget | null = null;
+  const dome = () => {
+    if (!domeEnv) {
+      const white = new THREE.Scene();
+      white.background = new THREE.Color(1, 1, 1);
+      domeEnv = pmrem.fromScene(white, 0.04).texture;
+    }
+    return domeEnv;
+  };
+  const applyEnvironment = (chosen: Materials['environment']) => {
+    const id = sceneOf(look).environment && chosen === DEFAULT_MATERIALS.environment ? sceneOf(look).environment! : chosen;
     const choice = ENVIRONMENTS.find((e) => e.id === id) ?? ENVIRONMENTS[0];
+    if (id === 'softboxes') {
+      softboxEnv ??= createSoftboxEnvironment(pmrem);
+      scene.environment = softboxEnv.texture;
+      envGain = 1;
+      syncStudioLights();
+      envLoad = Promise.resolve();
+      return;
+    }
+    if (id === 'dome') {
+      scene.environment = dome();
+      envGain = 1;
+      syncStudioLights();
+      envLoad = Promise.resolve();
+      return;
+    }
     if (!choice.file) {
       scene.environment = env;
       envGain = 1;
@@ -148,6 +183,9 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
     if (disposed) return;
     env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     photoEnvs.clear();
+    domeEnv = null;
+    softboxEnv?.dispose();
+    softboxEnv = null;
     scene.environment = env;
     applyEnvironment(materials.environment);
   };
@@ -183,6 +221,49 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
   shadowOver.visible = false;
   scene.add(shadowOver);
   let reflection: ReturnType<typeof createReflection> | null = null;
+  let contactReach = 2.5, contactSpread = 1, lastGround = 0;
+  // learned shading: the frame is copied out, the G-buffers drawn, and the network writes the result back
+  let neural: NeuralShade | null = null, neuralUrl: string | null = null, gbuf: GBuffer | null = null, frameTex: WebGLTexture | null = null;
+  let neuralSize: [number, number] = [0, 0];
+  // ray-traced dome visibility for networks that read it: live at 2 rays per pixel, half-res trace, accumulated while still
+  let domeVis: DomeVisibility | null = null, domeStructure = -1, domePose = -1;
+  const neuralPass = () => {
+    if (!neural) return;
+    const gl = renderer.getContext() as WebGL2RenderingContext;
+    const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+    const w = Math.round(size.x), h = Math.round(size.y);
+    if (neuralSize[0] !== w || neuralSize[1] !== h) {
+      neuralSize = [w, h];
+      neural.resize(w, h);
+      if (frameTex) gl.deleteTexture(frameTex);
+      frameTex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, frameTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      if (!gbuf) gbuf = new GBuffer(renderer, w, h); else gbuf.setSize(w, h);
+      domeVis?.setSize(w, h);
+    }
+    // the finished frame, from the canvas
+    renderer.setRenderTarget(null);
+    gl.bindTexture(gl.TEXTURE_2D, frameTex);
+    gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
+    gbuf!.render(scene, bricks.root, active);
+    (globalThis as Record<string, unknown>).__gbuf = gbuf; // debug
+    const tex = (t: THREE.WebGLRenderTarget) => (renderer.properties.get(t.texture) as { __webglTexture: WebGLTexture }).__webglTexture;
+    let visTex: WebGLTexture | null = null;
+    if (neural.needsVis) {
+      const dbg = (globalThis as { __neuralDebug?: { domeScale?: number; domeRays?: number; vis?: string } }).__neuralDebug;
+      if (domeVis && dbg && ((dbg.domeScale ?? 0.5) !== (domeVis as unknown as { options: { scale: number } }).options.scale || (dbg.domeRays ?? 2) !== (domeVis as unknown as { options: { rays: number } }).options.rays)) { domeVis.dispose(); domeVis = null; }
+      if (!domeVis) { domeVis = new DomeVisibility(renderer, { rays: dbg?.domeRays ?? 2, scale: dbg?.domeScale ?? 0.5, groundY: lastGround, floorBounce: 1 }); domeVis.setSize(w, h); domeStructure = -1; }
+      if (domeStructure !== bricks.structureVersion) { domeVis.set({ groundY: lastGround }); domeVis.setScene(bricks.root); domeStructure = bricks.structureVersion; domePose = bricks.poseVersion; }
+      else if (domePose !== bricks.poseVersion) { domeVis.refit(); domeVis.reset(); domePose = bricks.poseVersion; }
+      domeVis.render(active as THREE.PerspectiveCamera);
+      visTex = dbg?.vis === 'white' ? null : tex((domeVis as unknown as { out: THREE.WebGLRenderTarget }).out);
+    }
+    neural.run(frameTex!, tex(gbuf!.albedo), tex(gbuf!.normal), tex(gbuf!.pos), null, true, visTex, tex(gbuf!.spec));
+    renderer.resetState();
+  };
   const contact = new ContactShadows(opts.preserveDrawingBuffer ? 512 : 384);
   scene.add(contact.plane);
   let look: StudioLook = 'soft';
@@ -307,7 +388,10 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
     // a lit floor or a mirror still gets the real contact shadows on top
     shadowOver.visible = !transparent && (lit || kind === 'reflective') && preset.shadowOpacity > 0;
     contact.plane.visible = !transparent && kind !== 'none';
-    contact.set(materials.contactShadows, preset.shadowColor, materials.clearShadow);
+    contactReach = preset.contact?.reach ?? 2.5;
+    contactSpread = preset.contact?.spread ?? 1;
+    contact.set(Math.max(materials.contactShadows, preset.contact?.strength ?? 0), preset.shadowColor, materials.clearShadow, preset.contact?.wide);
+    if (lightBounds) contact.fitTo(lightBounds, lastGround, contactReach, contactSpread);
     if (kind === 'reflective' && !transparent) {
       if (!reflection) {
         reflection = createReflection(fade, opts.preserveDrawingBuffer ? 1024 : 768);
@@ -354,6 +438,7 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
     // Soft scenes widen the PCF filter (16 samples, see softShadows.ts). Variance shadow
     // maps were tried: their half-float depth draws contour steps around parts.
     key.shadow.radius = Math.max(4, preset.shadowSoftness ?? 4);
+    applyEnvironment(materials.environment);
     applyAO();
     applyEdges();
     applyWireframe();
@@ -372,7 +457,7 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
     void setStudLogos(m.studLogos);
     void setPartDetail(m.detail ?? 'standard');
     // high detail has real rounded edges in the geometry: no screen-space imitation on top
-    ao.setRoundedEdges(m.roundedEdges && m.detail !== 'high' ? ROUNDED_EDGE_LIGHT : 0);
+    ao.setRoundedEdges(m.roundedEdges && m.detail !== 'high' ? sceneOf(look).edgeLight ?? ROUNDED_EDGE_LIGHT : 0);
     applyAO();
     applyFloor();
   };
@@ -387,7 +472,7 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
   };
   setLook('soft');
   setRenderOptions(DEFAULT_RENDER);
-  ao.setRoundedEdges(materials.roundedEdges ? ROUNDED_EDGE_LIGHT : 0);
+  ao.setRoundedEdges(materials.roundedEdges ? sceneOf(look).edgeLight ?? ROUNDED_EDGE_LIGHT : 0);
 
   return {
     renderer,
@@ -444,7 +529,21 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
       fitShadow();
       lightBounds = box.clone();
       lighting.fitTo(box);
-      contact.fitTo(box, groundY);
+      lastGround = groundY;
+      contact.fitTo(box, groundY, contactReach, contactSpread);
+    },
+    async setNeural(url: string | null) {
+      neuralUrl = url;
+      if (!url) { neural?.dispose(); neural = null; return; }
+      const loaded = await NeuralShade.load(renderer.getContext() as WebGL2RenderingContext, url);
+      if (neuralUrl !== url || disposed) { loaded.dispose(); return; }
+      neural?.dispose();
+      neural = loaded; neuralSize = [0, 0];
+    },
+    contactTune(reach: number, spread: number, wide?: { spread: number; weight: number }) {
+      contactReach = reach; contactSpread = spread;
+      if (wide) contact.setWide(wide.spread, wide.weight);
+      if (lightBounds) contact.fitTo(lightBounds, lastGround, reach, spread);
     },
     render(frame) {
       sweep.face(active);
@@ -474,10 +573,14 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
         if (transparent) renderer.setClearColor(0x000000, 0);
         renderer.render(scene, active);
         if (aoOn()) finish(renderer.getPixelRatio(), sizeW, sizeH);
+        if (neural) neuralPass();
       }
     },
     dispose() {
       stopGeometry();
+      neural?.dispose();
+      gbuf?.dispose();
+      domeVis?.dispose();
       contact.dispose();
       ao.dispose();
       lighting.dispose();
@@ -495,6 +598,8 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
       sweep.dispose();
       disposed = true;
       env.dispose();
+      domeEnv?.dispose();
+      softboxEnv?.dispose();
       for (const t of photoEnvs.values()) void t.then((x) => x?.dispose());
       pmrem.dispose();
       canvas.removeEventListener('webglcontextrestored', onRestored as EventListener);

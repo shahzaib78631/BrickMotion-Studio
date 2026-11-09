@@ -24,12 +24,16 @@ export type SweepShape = {
 /**
  * A sweep sized for a model of bounding radius `r` (world units). `softness` 0 is a
  * tight bend close to the wall, 1 a long curve that starts right behind the model.
+ * `flat` is how far behind the centre the floor must stay level (the scene's horizontal
+ * reach): parts laid out around the model must never sink into the curve.
  */
-export function sweepFor(r: number, softness = 0.6): SweepShape {
+export function sweepFor(r: number, softness = 0.6, flat = 0): SweepShape {
   const radius = Math.max(4, r);
-  const back = radius * 1.9;
+  const base = radius * 1.9;
   const soft = Math.min(1, Math.max(0, softness));
-  return { front: radius * 40, back, curve: back * (0.25 + 0.75 * soft), height: radius * 40, width: radius * 90 };
+  const curve = base * (0.25 + 0.75 * soft);
+  const back = Math.max(base - curve, flat) + curve;
+  return { front: radius * 40, back, curve, height: radius * 40, width: radius * 90 };
 }
 
 /** The profile from the front edge, along the floor, round the curve and up the wall: (z, y) points. */
@@ -81,6 +85,8 @@ export class Sweep {
   readonly mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
   private center = new THREE.Vector3();
   private radius = 0;
+  /** horizontal reach of the scene from its centre: the floor stays flat this far */
+  private flat = 0;
   private softness = 0.6;
   private built = '';
 
@@ -100,6 +106,8 @@ export class Sweep {
     this.center.y = groundY - 0.001;
     this.mesh.position.copy(this.center);
     this.radius = r;
+    // the sweep turns about the centre to follow the camera, so any side may face the wall
+    this.flat = Math.hypot(box.max.x - box.min.x, box.max.z - box.min.z) / 2 * 1.08;
     this.rebuild();
   }
 
@@ -110,15 +118,15 @@ export class Sweep {
   }
 
   private rebuild() {
-    const id = `${this.radius.toFixed(3)}|${this.softness.toFixed(3)}`;
+    const id = `${this.radius.toFixed(3)}|${this.softness.toFixed(3)}|${this.flat.toFixed(3)}`;
     if (id === this.built || !this.radius) return;
     this.built = id;
     this.mesh.geometry.dispose();
-    this.mesh.geometry = sweepGeometry(sweepFor(this.radius, this.softness));
+    this.mesh.geometry = sweepGeometry(sweepFor(this.radius, this.softness, this.flat));
   }
 
   /** How far behind the model the wall stands (for shadow framing). */
-  get reach(): number { return sweepFor(this.radius || 8, this.softness).back; }
+  get reach(): number { return sweepFor(this.radius || 8, this.softness, this.flat).back; }
 
   /** Turns the sweep so its wall is behind the model as seen from `camera`. */
   face(camera: THREE.Camera): void {

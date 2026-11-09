@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import type { ColorDef } from '../ldraw/colors';
-import { finishOf, type BrickFinish, type BrickTexture, type GlassLook, type GlowChoice } from './looks';
+import { materialName, type ColorDef } from '../ldraw/colors';
+import { EYESIGHT_COLORS } from '../data/eyesightColors.generated';
+import { finishOf, type BrickFinish, type BrickTexture, type GlassLook, type GlowChoice, type Palette } from './looks';
 
 const cache = new Map<string, THREE.MeshPhysicalMaterial>();
 
@@ -8,7 +9,7 @@ const FALLBACK: ColorDef = { code: 71, name: 'Light_Bluish_Gray', hex: '#A0A5A9'
 
 /** The finish and texture every brick uses. Materials are cached and shared by every
  * studio on the page (viewport, export), so a change re-styles them in place. */
-let profile: { finish: BrickFinish; texture: BrickTexture; glass: GlassLook; glow: GlowChoice } = { finish: 'catalog', texture: 'none', glass: 'soft', glow: { colors: [], strength: 1.5 } };
+let profile: { finish: BrickFinish; palette: Palette; texture: BrickTexture; glass: GlassLook; glow: GlowChoice } = { finish: 'eyesight', palette: 'studio', texture: 'none', glass: 'soft', glow: { colors: [], strength: 1.5 } };
 /** Viewport emissive intensity per unit of glow strength (the path tracer uses its own). */
 export const GLOW_GAIN = 0.7;
 const TEXTURE_ID: Record<BrickTexture, number> = { none: 0, grain: 1, worn: 2, speckle: 3, glitter: 4, scratches: 5 };
@@ -78,11 +79,23 @@ function installTexture(m: THREE.MeshPhysicalMaterial) {
   m.customProgramCacheKey = () => `bm-texture-${(m.userData.bmTexture as number) ?? 0}`;
 }
 
-/** Applies the LDraw colour, then the current finish and texture, to a material. */
+/**
+ * The colour EyeSight gives this LDraw colour (BrickLink Studio's own material table), as a
+ * sRGB hex; the LDraw value where Studio has no material of that name.
+ */
+export function brickHex(c: ColorDef): string {
+  const rgb = EYESIGHT_COLORS[materialName(c)];
+  return rgb ? '#' + new THREE.Color().setRGB(rgb[0], rgb[1], rgb[2], THREE.LinearSRGBColorSpace).getHexString(THREE.SRGBColorSpace) : c.hex;
+}
+
+/** The colour the current palette gives an LDraw colour: LDraw's own value, or Studio's table. */
+const paletteHex = (c: ColorDef) => (profile.palette === 'studio' ? brickHex(c) : c.hex);
+
+/** Applies the palette colour, then the current finish and texture, to a material. */
 function style(m: THREE.MeshPhysicalMaterial, c: ColorDef) {
   const f = finishOf(profile.finish);
   const special = c.finish === 'trans' || c.finish === 'chrome' || c.finish === 'metal' || c.finish === 'pearl' || c.finish === 'rubber';
-  m.color.set(f.tint && c.finish !== 'trans' ? f.tint : c.hex);
+  m.color.set(f.tint && c.finish !== 'trans' ? f.tint : paletteHex(c));
   m.roughness = f.roughness;
   m.metalness = f.metalness;
   m.clearcoat = f.clearcoat;
@@ -90,7 +103,7 @@ function style(m: THREE.MeshPhysicalMaterial, c: ColorDef) {
   m.iridescence = special ? 0 : f.iridescence ?? 0;
   m.sheen = special ? 0 : f.sheen ?? 0;
   m.sheenRoughness = 0.6;
-  m.sheenColor.set(f.tint && c.finish !== 'trans' ? f.tint : c.hex).lerp(new THREE.Color('#ffffff'), 0.5);
+  m.sheenColor.set(f.tint && c.finish !== 'trans' ? f.tint : paletteHex(c)).lerp(new THREE.Color('#ffffff'), 0.5);
   if (!f.tint || c.finish === 'trans') {
     if (c.finish === 'trans') {
       if (profile.glass === 'milky') {
@@ -140,12 +153,13 @@ export function materialFor(color: ColorDef | undefined, doubleSided: boolean): 
 
 const sameGlow = (a: GlowChoice, b: GlowChoice) =>
   a.strength === b.strength && a.colors.length === b.colors.length && a.colors.every((c) => b.colors.includes(c));
-/** Re-styles every brick material: Materials → Brick finish, texture and glowing parts. */
-export function setBrickMaterials(next: { finish: BrickFinish; texture: BrickTexture; glow?: GlowChoice; glass?: GlassLook }): void {
+/** Re-styles every brick material: Materials → Brick finish, palette, texture and glowing parts. */
+export function setBrickMaterials(next: { finish: BrickFinish; palette?: Palette; texture: BrickTexture; glow?: GlowChoice; glass?: GlassLook }): void {
   const glow = next.glow ?? { colors: [], strength: 1.5 };
   const glass = next.glass ?? 'soft';
-  if (next.finish === profile.finish && next.texture === profile.texture && glass === profile.glass && sameGlow(glow, profile.glow)) return;
-  profile = { finish: next.finish, texture: next.texture, glass, glow: { colors: [...glow.colors], strength: glow.strength } };
+  const palette = next.palette ?? 'studio';
+  if (next.finish === profile.finish && palette === profile.palette && next.texture === profile.texture && glass === profile.glass && sameGlow(glow, profile.glow)) return;
+  profile = { finish: next.finish, palette, texture: next.texture, glass, glow: { colors: [...glow.colors], strength: glow.strength } };
   for (const m of cache.values()) style(m, m.userData.bmColor as ColorDef);
 }
 

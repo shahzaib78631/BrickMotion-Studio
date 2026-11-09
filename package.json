@@ -10,6 +10,11 @@
     "typecheck": "tsc --noEmit",
     "setup": "tsx scripts/setup-data.ts",
     "setup:shadow": "tsx scripts/import-shadow-metadata.ts",
+    "data:studio-connectivity": "tsx scripts/import-studio-connectivity.ts",
+    "update:parts": "tsx scripts/update-parts.ts",
+    "data:studio-parts": "tsx scripts/sync-studio-parts.ts",
+    "render:eyesight": "tsx scripts/render-eyesight.ts",
+    "render:eyesight-anim": "tsx scripts/render-eyesight-animation.ts",
     "data:part-functions": "tsx scripts/measure-part-functions.ts",
     "test:v4": "vitest run tests/anim/standardMotionV4.test.ts",
     "verify:v4:offline": "node scripts/verify-v4-offline.cjs",
@@ -47,7 +52,11 @@
     "verify:attachments:offline": "node scripts/verify-attachments-offline.cjs",
     "verify:smart-joints:offline": "node scripts/verify-smart-joints-offline.cjs",
     "test:smart-joints": "vitest run tests/plan/smartJoints.test.ts tests/ui/SelectionCage.test.ts tests/state/guard.test.ts",
-    "test:attachments": "vitest run tests/ldraw/attachmentHints.test.ts tests/ldraw/attachmentPropagation.test.ts tests/model/attachmentPlacements.test.ts tests/plan/precisionAttachments.test.ts"
+    "test:attachments": "vitest run tests/ldraw/attachmentHints.test.ts tests/ldraw/attachmentPropagation.test.ts tests/model/attachmentPlacements.test.ts tests/plan/precisionAttachments.test.ts",
+    "neural:scenes": "tsx scripts/neural/gen-scenes.ts",
+    "neural:targets": "tsx scripts/neural/render-targets.ts --samples 40",
+    "neural:train": "cd python/neuralshade && uv run python -m neuralshade.train",
+    "neural:export": "cd python/neuralshade && uv run python -m neuralshade.export"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.1.0",

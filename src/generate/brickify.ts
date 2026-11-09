@@ -65,6 +65,8 @@ export type Built = {
   components: number;
   /** the shape actually built (the input, or its hollowed shell) */
   shape: Voxels;
+  /** with `keepLargest`: how many loose pieces were left out */
+  dropped?: number;
   /** shell thickness used in studs (0: solid) */
   shell: number;
 };
@@ -76,6 +78,11 @@ export type BrickifyOptions = {
   hollow?: number;
   /** windows, doors and other set pieces the bricks are laid around */
   fixtures?: Fixture[];
+  /**
+   * When the repairs cannot join everything, keep the largest connected part (by cells)
+   * and leave the loose pieces out, so the result always holds together.
+   */
+  keepLargest?: boolean;
 };
 
 type Cand = { spec: PartSpec; x: number; z: number; w: number; d: number; rot: 0 | 90 };
@@ -166,14 +173,22 @@ class Builder {
 
   /**
    * Fill every free shape cell at plate y that `allowed` lets in, greedily, best piece first.
-   * `bonus` adds to a candidate's score (the repair pass uses it to make pieces straddle a seam).
+   * `bonus` adds to a candidate's score (the repair pass uses it to make pieces straddle a seam);
+   * cells `first` picks are filled before the rest (so their pieces can reach into the others).
    */
-  fillLayer(y: number, allowed: (x: number, y: number, z: number) => boolean = () => true, bonus: (c: Cand) => number = () => 0, platesOnly = false): void {
+  fillLayer(
+    y: number,
+    allowed: (x: number, y: number, z: number) => boolean = () => true,
+    bonus: (c: Cand) => number = () => 0,
+    platesOnly = false,
+    first: (x: number, z: number) => boolean = () => false,
+  ): void {
     const v = this.v;
     const alongX = y % 2 === 0; // alternate the long direction per layer so layers cross
-    const cells: [number, number][] = [];
-    if (alongX) { for (let z = 0; z < v.d; z++) for (let x = 0; x < v.w; x++) cells.push([x, z]); }
-    else { for (let x = 0; x < v.w; x++) for (let z = 0; z < v.d; z++) cells.push([x, z]); }
+    const scan: [number, number][] = [];
+    if (alongX) { for (let z = 0; z < v.d; z++) for (let x = 0; x < v.w; x++) scan.push([x, z]); }
+    else { for (let x = 0; x < v.w; x++) for (let z = 0; z < v.d; z++) scan.push([x, z]); }
+    const cells = [...scan.filter(([x, z]) => first(x, z)), ...scan.filter(([x, z]) => !first(x, z))];
     for (const [cx, cz] of cells) {
       const own = v.get(cx, y, cz);
       if (own < 0 || this.at(cx, y, cz) !== -1 || !allowed(cx, y, cz)) continue;
@@ -257,33 +272,66 @@ class Builder {
           for (let z = p.z; z < p.z + p.d; z++) { look(p.x - 1, z); look(p.x + p.w, z); }
           for (let x = p.x; x < p.x + p.w; x++) { look(x, p.z - 1); look(x, p.z + p.d); }
         }
-        for (const q of pairs) {
-          const a = p;
-          const b = this.pieces[q]!;
-          const key = [a, b].map((t) => `${t.x},${t.y},${t.z},${t.w},${t.d},${t.h}`).sort().join('|');
+        // one neighbour at a time first, then all of them at once: a piece lying wholly
+        // inside a deck (nothing above or below it) only joins up when its replacement
+        // can reach past one neighbour to another that is held
+        const groups = [...pairs.map((q) => [q]), ...(pairs.length > 1 ? [pairs] : [])];
+        for (const qs of groups) {
+          const all = [this.pieces[i]!, ...qs.map((q) => this.pieces[q]!)];
+          const key = all.map((t) => `${t.x},${t.y},${t.z},${t.w},${t.d},${t.h}`).sort().join('|');
           if (tried.has(key)) continue;
           tried.add(key);
-          const side = new Map<string, number>();
-          for (const [s, piece] of [[0, a], [1, b]] as const)
-            for (let y = piece.y; y < piece.y + piece.h; y++) for (let z = piece.z; z < piece.z + piece.d; z++) for (let x = piece.x; x < piece.x + piece.w; x++)
-              side.set(`${x},${y},${z}`, s);
-          const y0 = Math.min(a.y, b.y);
-          const y1 = Math.max(a.y + a.h, b.y + b.h);
-          this.remove(i);
-          this.remove(q);
-          const allowed = (x: number, y: number, z: number) => side.has(`${x},${y},${z}`);
-          const straddle = (c: Cand) => {
-            const seen = new Set<number>();
-            for (let z = c.z; z < c.z + c.d; z++) for (let x = c.x; x < c.x + c.w; x++) {
-              for (let y = y0; y < y1; y++) { const s = side.get(`${x},${y},${z}`); if (s !== undefined) seen.add(s); }
-            }
-            return seen.size === 2 ? 50 : 0;
-          };
-          for (let y = y0; y < y1; y++) this.fillLayer(y, allowed, straddle, true);
-          return true;
+          if (this.refill([i, ...qs])) return true;
         }
       }
     }
+    return false;
+  }
+
+  /**
+   * Clear pieces and refill their cells, rewarding pieces that cover the first one and
+   * another. Kept only when the model falls into fewer parts; otherwise put back as it was.
+   */
+  private refill(ids: number[]): boolean {
+    const comps = this.components();
+    const was = comps.count;
+    // the largest part: pieces resting on or under it are held
+    const sizes = new Map<number, number>();
+    comps.of.forEach((c) => { if (c >= 0) sizes.set(c, (sizes.get(c) ?? 0) + 1); });
+    const main = [...sizes.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? -1;
+    const mine = new Set(ids);
+    const old = ids.map((id) => [id, this.pieces[id]!] as const);
+    const start = this.pieces.length;
+    const side = new Map<string, number>();
+    let y0 = Infinity, y1 = -Infinity;
+    ids.forEach((id, s) => {
+      const piece = this.pieces[id]!;
+      y0 = Math.min(y0, piece.y);
+      y1 = Math.max(y1, piece.y + piece.h);
+      for (let y = piece.y; y < piece.y + piece.h; y++) for (let z = piece.z; z < piece.z + piece.d; z++) for (let x = piece.x; x < piece.x + piece.w; x++)
+        side.set(`${x},${y},${z}`, s);
+    });
+    for (const id of ids) this.remove(id);
+    const allowed = (x: number, y: number, z: number) => side.has(`${x},${y},${z}`);
+    const straddle = (c: Cand) => {
+      const seen = new Set<number>();
+      for (let z = c.z; z < c.z + c.d; z++) for (let x = c.x; x < c.x + c.w; x++) {
+        for (let y = y0; y < y1; y++) { const s = side.get(`${x},${y},${z}`); if (s !== undefined) seen.add(s); }
+      }
+      return (seen.has(0) && seen.size >= 2 ? 50 : 0) + (held(c) ? 30 : 0);
+    };
+    const held = (c: Cand) => {
+      for (const yy of [y0 - 1, y1]) for (let z = c.z; z < c.z + c.d; z++) for (let x = c.x; x < c.x + c.w; x++) {
+        const q = this.at(x, yy, z);
+        if (q >= 0 && !mine.has(q) && comps.of[q] === main) return true;
+      }
+      return false;
+    };
+    for (let y = y0; y < y1; y++) this.fillLayer(y, allowed, straddle, true, (x, z) => side.get(`${x},${y},${z}`) === 0);
+    if (this.components().count < was) return true;
+    for (let id = start; id < this.pieces.length; id++) this.remove(id);
+    this.pieces.length = start;
+    for (const [id, p] of old) { this.pieces[id] = p; this.mark(p, id); }
     return false;
   }
 }
@@ -298,6 +346,13 @@ function build(v: Voxels, opts: BrickifyOptions): Omit<Built, 'shell'> {
     if (!b.repairOnce(comps.of, tried)) break;
     comps = b.components();
   }
+  let dropped = 0;
+  if (opts.keepLargest && comps.count > 1) {
+    const size = new Array<number>(comps.count).fill(0);
+    b.pieces.forEach((p, i) => { if (p && !p.fixed) size[comps.of[i]] += p.w * p.d * p.h; });
+    const keep = size.indexOf(Math.max(...size));
+    b.pieces.forEach((p, i) => { if (p && !p.fixed && comps.of[i] !== keep) { b.remove(i); dropped++; } });
+  }
   const pieces = b.pieces.filter((p): p is Piece => !!p && !p.fixed);
   const bricks: (PieceItem & Grid)[] = pieces.map((p) => ({ part: p.part, color: p.color, x: p.x, y: p.y, z: p.z, rot: p.rot }));
   return {
@@ -305,6 +360,7 @@ function build(v: Voxels, opts: BrickifyOptions): Omit<Built, 'shell'> {
     items: [...bricks, ...(opts.fixtures ?? []).flatMap((f) => f.items)],
     components: b.components().count,
     shape: v,
+    ...(dropped ? { dropped } : {}),
   };
 }
 
@@ -320,7 +376,7 @@ export function brickify(input: Voxels, opts: BrickifyOptions = {}): Built {
   for (let shell = opts.hollow; shell < deepest; shell += 0.5) {
     const v = hollowed(input, shell);
     if (v.count() === input.count()) break; // nothing left to take out
-    const b = build(v, opts);
+    const b = build(v, { ...opts, keepLargest: false }); // drop loose bits only as a last resort
     if (b.components === 1) return { ...b, shell };
   }
   return solid();

@@ -125,6 +125,9 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
       <label className="nx-check">
         <input type="checkbox" checked={s.heroOrbit} onChange={(e) => s.set({ heroOrbit: e.target.checked })} /> End with a hero orbit
       </label>
+      <label className="nx-check" style={{ opacity: s.heroOrbit ? 1 : 0.5 }} title="Holds the camera still and spins the finished model about its centre, so the backdrop, light and shadows stay put.">
+        <input type="checkbox" disabled={!s.heroOrbit} checked={s.camera.heroTurntable} onChange={(e) => s.set({ camera: { ...s.camera, heroTurntable: e.target.checked } })} /> Spin the model, hold the camera
+      </label>
 
       <details className="nx-group bm-vsec">
         <summary>Timing<span className="bm-vsec-val">{s.introSeconds ?? s.buildSeconds ?? s.outroSeconds ? 'Custom' : 'Auto'}</span></summary>

@@ -42,6 +42,9 @@ def main() -> None:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
 
+    if (out / 'captions.json').exists():  # grids already built: just (re)do the embeddings
+        embed(out, json.loads((out / 'captions.json').read_text()))
+        return
     grids, captions, owner, split = [], [], [], []
     files = sorted(glob.glob(str(Path(a.data) / 'data' / '*.parquet')))
     for f in files:
@@ -59,21 +62,34 @@ def main() -> None:
     np.save(out / 'split.npy', np.array(split, dtype=np.uint8))
     np.save(out / 'caption_shape.npy', np.array(owner, dtype=np.int32))
     (out / 'captions.json').write_text(json.dumps(captions))
-
-    from transformers import CLIPTextModelWithProjection, CLIPTokenizer
-    dev = 'mps' if torch.backends.mps.is_available() else 'cpu'
-    tok = CLIPTokenizer.from_pretrained('openai/clip-vit-base-patch32')
-    model = CLIPTextModelWithProjection.from_pretrained('openai/clip-vit-base-patch32').to(dev).eval()
-    embs = []
-    with torch.no_grad():
-        for s in range(0, len(captions), 512):
-            b = tok(captions[s:s + 512], padding=True, truncation=True, max_length=77, return_tensors='pt').to(dev)
-            e = model(**b).text_embeds
-            e = e / e.norm(dim=-1, keepdim=True)
-            embs.append(e.half().cpu().numpy())
-            print(f'::progress {min(s + 512, len(captions))}/{len(captions)} captions', flush=True)
-    np.save(out / 'clip.npy', np.concatenate(embs))
+    embed(out, captions)
     print(f'{len(grids)} shapes, {len(captions)} captions -> {out}', flush=True)
+
+
+def embed(out: Path, captions: list[str]) -> None:
+    """CLIP embeddings in chunks saved as they finish, so a stopped run picks up where it was."""
+    from transformers import CLIPTextModelWithProjection, CLIPTokenizerFast
+    dev = 'mps' if torch.backends.mps.is_available() else 'cpu'
+    tok = CLIPTokenizerFast.from_pretrained('openai/clip-vit-base-patch32')
+    model = CLIPTextModelWithProjection.from_pretrained('openai/clip-vit-base-patch32').to(dev).half().eval()
+    parts = out / 'clip_parts'
+    parts.mkdir(exist_ok=True)
+    chunk = 8192
+    with torch.no_grad():
+        for c0 in range(0, len(captions), chunk):
+            f = parts / f'{c0:07d}.npy'
+            if f.exists():
+                continue
+            embs = []
+            for s in range(c0, min(c0 + chunk, len(captions)), 128):
+                b = tok(captions[s:min(s + 128, c0 + chunk)], padding=True, truncation=True, max_length=77, return_tensors='pt').to(dev)
+                e = model(**b).text_embeds
+                e = e.float()
+                e = e / e.norm(dim=-1, keepdim=True)
+                embs.append(e.half().cpu().numpy())
+            np.save(f, np.concatenate(embs))
+            print(f'::progress {min(c0 + chunk, len(captions))}/{len(captions)} captions', flush=True)
+    np.save(out / 'clip.npy', np.concatenate([np.load(f) for f in sorted(parts.glob('*.npy'))]))
 
 
 if __name__ == '__main__':

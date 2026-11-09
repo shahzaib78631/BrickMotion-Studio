@@ -3,6 +3,7 @@ import { normalizeName, parseLDraw, type LDrawFile } from './parse';
 import type { ShadowLookup, Snap } from './shadow';
 import { embeddedPartId, sameGeometry } from './partAlias';
 import { supplementarySnapsFor } from '../data/connectorLibrary';
+import { studioSnapsFor } from '../data/studioConnectors';
 
 export type FetchText = (path: string) => Promise<string | null>;
 
@@ -183,6 +184,13 @@ export class PartLibrary {
           }
           flat = { ...flat, snaps };
         }
+        // BrickLink Studio's own connectivity last, and only for connections nothing above knows:
+        // the shadow pack stays primary and the measurement the fallback (see data/studioConnectors.ts).
+        const studio = [
+          ...studioSnapsFor(key, { snaps: flat.snaps, studs: flat.studs }),
+          ...(alias ? studioSnapsFor(alias, { snaps: flat.snaps, studs: flat.studs }) : []),
+        ];
+        if (studio.length) flat = { ...flat, snaps: [...(flat.snaps ?? []), ...studio] };
         return flat;
       })();
       this.parts.set(cacheKey, p);

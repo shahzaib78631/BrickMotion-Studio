@@ -8,11 +8,22 @@ export type StudioLook = 'soft' | 'classic' | 'white' | 'dark' | 'black' | 'warm
 /** What the model stands on. 'auto' is the scene's own choice. */
 export type FloorSurface = 'auto' | 'shadow' | 'sweep' | 'reflective' | 'matte' | 'wood' | 'concrete' | 'none';
 /** How the plastic itself responds to light. */
-export type BrickFinish = 'studio' | 'render' | 'soft-touch' | 'glossy' | 'chrome' | 'catalog' | 'satin' | 'matte' | 'pearl' | 'clay';
+export type BrickFinish = 'eyesight' | 'studio' | 'render' | 'soft-touch' | 'glossy' | 'chrome' | 'catalog' | 'satin' | 'matte' | 'pearl' | 'clay';
 /** A fine surface detail drawn on every part (procedural: it moves with the part). */
 export type BrickTexture = 'none' | 'grain' | 'worn' | 'speckle' | 'glitter' | 'scratches';
+/**
+ * Where a brick's colour comes from: the LDraw library's own LDConfig values, or BrickLink
+ * Studio's material table (what EyeSight binds its shaders to). Each palette carries the
+ * plastic finish that goes with it, so one choice restores a whole look.
+ */
+export type Palette = 'ldraw' | 'studio';
+export const PALETTES: readonly { id: Palette; label: string; hint: string; finish: BrickFinish }[] = [
+  { id: 'ldraw', label: 'LDraw', hint: "The colours of the LDraw LDConfig file, with the catalog plastic finish", finish: 'catalog' },
+  { id: 'studio', label: 'Studio', hint: "BrickLink Studio's own material table (EyeSight), with the BrickLink plastic finish", finish: 'eyesight' },
+];
+export const paletteOf = (id: string | undefined) => PALETTES.find((p) => p.id === id) ?? PALETTES[1];
 
-export type Materials = { finish: BrickFinish; texture: BrickTexture; floor: FloorSurface; /** raised LEGO logo on studs */ studLogos: boolean; /** 'high': smooth 48-segment curves and real rounded edges in the geometry */ detail?: 'standard' | 'high'; /** a thin highlight on convex edges, like moulded rounded corners */ roundedEdges: boolean; /** ambient occlusion: on/off, and overrides of the scene's own strength and reach */ ao: AOChoice;
+export type Materials = { finish: BrickFinish; /** where a brick's colour comes from */ palette: Palette; texture: BrickTexture; floor: FloorSurface; /** raised LEGO logo on studs */ studLogos: boolean; /** 'high': smooth 48-segment curves and real rounded edges in the geometry */ detail?: 'standard' | 'high'; /** a thin highlight on convex edges, like moulded rounded corners */ roundedEdges: boolean; /** ambient occlusion: on/off, and overrides of the scene's own strength and reach */ ao: AOChoice;
   /** soft blurred shadow pooled under the model, 0–1 */ contactShadows: number; /** how much of that shadow clear (transparent) parts get, 0–1 of the solid strength */ clearShadow: number;
   /** what the plastic reflects and is lit by */ environment: EnvironmentId;
   /** colours that give off light (lamps, windows): in the viewport and as light sources in path tracing */ glow: GlowChoice;
@@ -47,6 +58,8 @@ export const LENS_BLUR_PX: Record<LensBlur, number> = { off: 0, subtle: 5, mediu
 /** Lighting environments: the built-in grey room, or HDR photos (see public/hdri/CREDITS.txt). */
 /** `gain` brings each photo's average brightness (measured over the sphere) near the studio room's, so switching keeps the exposure; Night stays a little darker. */
 export const ENVIRONMENTS = [
+  { id: 'softboxes', label: 'Plastic reflections', hint: 'Broad studio panels and a narrow strip reflected in glossy plastic', file: null, gain: 1 },
+  { id: 'dome', label: 'White dome', hint: "Uniform white world: even ambient light and plain white reflections, like EyeSight's", file: null, gain: 1 },
   { id: 'room', label: 'Studio room', hint: 'Neutral grey room, generated in the browser', file: null, gain: 1 },
   { id: 'studio', label: 'Photo studio', hint: 'Softboxes in a white photo studio (BrickLink Studio product shot)', file: 'studio_small_09_1k.hdr', gain: 0.88 },
   { id: 'white-studio-05', label: 'White studio', hint: 'Soft low-contrast white studio with umbrella light', file: 'white_studio_05_1k.hdr', gain: 0.8 },
@@ -66,14 +79,15 @@ export type AOChoice = { enabled: boolean; strength: number | null; radius: numb
 export const AO_STRENGTH_RANGE = [0, 1.5] as const;
 export const AO_RADIUS_RANGE = [0.1, 1.5] as const;
 /** The occlusion a scene ends up with once the user's choice is applied. */
-export function aoFor(look: StudioLook, choice: AOChoice): { intensity: number; radius: number } {
+export function aoFor(look: StudioLook, choice: AOChoice): { intensity: number; radius: number; sides?: number; power?: number; thickness?: number; wide?: { radius: number; strength: number } } {
   const scene = sceneOf(look);
   return {
+    sides: scene.aoSides, power: scene.aoPower, thickness: scene.aoThickness, wide: scene.aoWide,
     intensity: choice.enabled ? choice.strength ?? scene.ao ?? 0 : 0,
     radius: choice.radius ?? scene.aoRadius ?? 0.45,
   };
 }
-export const DEFAULT_MATERIALS: Materials = { finish: 'catalog', texture: 'none', floor: 'auto', studLogos: true, detail: 'standard', roundedEdges: true, ao: { enabled: true, strength: null, radius: null }, contactShadows: 0.5, clearShadow: 0.12, environment: 'studio', glow: { colors: [], strength: 1.5 }, glass: 'soft', lens: { blur: 'off', focus: 0.4 }, floorColor: null, sweepCurve: 0.6 };
+export const DEFAULT_MATERIALS: Materials = { finish: 'eyesight', palette: 'studio', texture: 'none', floor: 'auto', studLogos: true, detail: 'standard', roundedEdges: true, ao: { enabled: true, strength: null, radius: null }, contactShadows: 0.5, clearShadow: 0.12, environment: 'studio', glow: { colors: [], strength: 1.5 }, glass: 'soft', lens: { blur: 'off', focus: 0.4 }, floorColor: null, sweepCurve: 0.6 };
 
 type RGB = readonly [number, number, number];
 /** Relative direction from the subject towards each studio light (Y is up). */
@@ -115,8 +129,21 @@ export type ScenePreset = {
   ao?: number;
   /** How far that darkening reaches, in studs. */
   aoRadius?: number;
+  /** Occlusion kept on upright faces (0–1; default 0.4: product shots keep brick sides clean). */
+  aoSides?: number;
+  /** Darkening curve exponent (default 1.35) and assumed surface thickness in studs (default 1.2). */
+  aoPower?: number;
+  aoThickness?: number;
+  /** A second, wide occlusion: how much of the sky the surroundings hide (radius in studs, strength 0–1.5). */
+  aoWide?: { radius: number; strength: number };
   /** Key-light shadow blur in shadow-map texels (default 4). */
   shadowSoftness?: number;
+  /** Environment this look uses while the Materials setting is still the default one. */
+  environment?: EnvironmentId;
+  /** Strength of the rounded-edge highlight (default 0.18). */
+  edgeLight?: number;
+  /** Wide soft contact shadow: a floor of at least `strength`, parts up to `reach` studs high casting, blurred `spread`× the default. */
+  contact?: { strength: number; reach: number; spread: number; /** a second, wider blur blended behind the tight shadow */ wide?: { spread: number; weight: number } };
   /** false: picking this scene switches the edge-lines toggle off (the toggle still decides). */
   outlines?: boolean;
 };
@@ -181,13 +208,15 @@ export const SCENES: readonly ScenePreset[] = [
     fill: 1.3, fillColor: '#ffffff', fillDirection: [0.88, 0.34, 0.35], rim: 0.9, rimColor: '#ffffff', rimDirection: [-0.61, 0.65, 0.45],
     env: 0.8, exposure: 1.02, reflection: 0.09,
     ao: 0.85, aoRadius: 0.5, shadowSoftness: 6 },
-  { id: 'bricklink-white', label: 'BrickLink product', hint: 'EyeSight product shot: white seamless, a strong front-right key and deep soft shadows', collection: 'photo',
-    stops: [{ at: 0, rgb: [238, 238, 241] }, { at: 0.55, rgb: [246, 246, 248] }, { at: 1, rgb: [252, 252, 253] }],
-    floorColor: '#f3f3f5', floor: 'shadow', shadowColor: '#30303a', shadowOpacity: 0.34,
-    hemi: 0.7, hemiGround: '#dcdce2', key: 2.7, keyColor: '#fffdfa', keyDirection: [-0.8, 1.8, 0.9],
-    fill: 0.45, fillColor: '#eef3ff', fillDirection: [1.1, 1.3, -0.4], rim: 0.3, rimColor: '#ffffff', rimDirection: [0.6, 1.3, -1.1],
-    env: 0.6, exposure: 1.06, reflection: 0.08,
-    ao: 0.85, aoRadius: 0.5, shadowSoftness: 9, outlines: false },
+  { id: 'bricklink-white', label: 'BrickLink product', hint: 'EyeSight product shot: a uniform white world with a high key and a low side light, fitted to EyeSight renders', collection: 'photo',
+    stops: [{ at: 0, rgb: [255, 255, 255] }, { at: 1, rgb: [255, 255, 255] }],
+    floorColor: '#ffffff', floor: 'shadow', shadowColor: '#30303a', shadowOpacity: 0.01,
+    hemi: 0.1, hemiGround: '#cccccc', key: 5, keyColor: '#ffffff', keyDirection: [0.17, 0.985, 0],
+    fill: 0, fillColor: '#eef3ff', fillDirection: [1.1, 1.3, -0.4], rim: 1.95, rimColor: '#ffffff', rimDirection: [-0.827, 0.296, 0.478],
+    env: 0.85, exposure: 0.59, reflection: 0.08,
+    ao: 1.7, aoRadius: 3, shadowSoftness: 18, environment: 'softboxes',
+    contact: { strength: 0.9, reach: 17.5, spread: 7, wide: { spread: 2, weight: 0.6 } },
+    outlines: false },
   // Pastel seamless render looks: a large overhead softbox, short soft contact
   // shadows tinted by the backdrop and a bright environment for broad highlights.
   { id: 'lavender', label: 'Lavender', hint: 'Saturated lilac sweep with tinted overhead shadows', collection: 'render',
@@ -308,6 +337,7 @@ export type FinishPreset = {
   sheen?: number;
 };
 export const FINISHES: readonly FinishPreset[] = [
+  { id: 'eyesight', label: 'BrickLink plastic', hint: 'ABS with a soft base and a smooth glossy surface that catches studio reflections', roughness: 0.62, clearcoat: 0.7, clearcoatRoughness: 0.14, metalness: 0, sheen: 0.38 },
   { id: 'studio', label: 'Studio plastic', hint: 'Soft, broad highlights', roughness: 0.42, clearcoat: 0.16, clearcoatRoughness: 0.36, metalness: 0 },
   { id: 'render', label: 'Render plastic', hint: 'Clean product-render ABS with broad soft highlights', roughness: 0.32, clearcoat: 0.45, clearcoatRoughness: 0.25, metalness: 0, sheen: 0.2 },
   { id: 'soft-touch', label: 'Soft-touch', hint: 'Low-sheen toy plastic with a velvety edge glow', roughness: 0.5, clearcoat: 0.12, clearcoatRoughness: 0.45, metalness: 0, sheen: 0.45 },
@@ -358,6 +388,7 @@ export function sanitizeMaterials(v: unknown): Materials {
   const o = (v && typeof v === 'object' ? v : {}) as Partial<Record<keyof Materials, unknown>>;
   return {
     finish: has(FINISHES, o.finish) ? o.finish : DEFAULT_MATERIALS.finish,
+    palette: has(PALETTES, o.palette) ? o.palette : DEFAULT_MATERIALS.palette,
     texture: has(TEXTURES, o.texture) ? o.texture : DEFAULT_MATERIALS.texture,
     floor: has(FLOORS, o.floor) ? o.floor : DEFAULT_MATERIALS.floor,
     studLogos: typeof o.studLogos === 'boolean' ? o.studLogos : DEFAULT_MATERIALS.studLogos,

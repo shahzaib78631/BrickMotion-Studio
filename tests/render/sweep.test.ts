@@ -64,3 +64,13 @@ test('the curve setting goes from a tight bend to a long soft one', () => {
   // even the longest curve starts behind the model's centre, never under it
   expect(sweepFor(10, 1).curve).toBeLessThanOrEqual(sweepFor(10, 1).back);
 });
+
+test('the floor stays flat out to the edge of the scene, however soft the curve', () => {
+  // floor parts laid wide around the model must not sink into the rising curve
+  const s = sweepFor(10, 0.95, 30);
+  expect(s.back - s.curve).toBeGreaterThan(30 - 1e-9);
+  // the curve itself keeps its size
+  expect(s.curve).toBeCloseTo(sweepFor(10, 0.95).curve, 6);
+  // without a scene radius nothing changes
+  expect(sweepFor(10, 0.95)).toEqual(sweepFor(10, 0.95, 0));
+});

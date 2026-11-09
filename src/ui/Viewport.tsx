@@ -28,7 +28,7 @@ import { createSubmodel } from '../plan/createSubmodel';
 import { instancePlacements, itemPlacement, placedBox, placedMatrix, sourceEditDelta, viewPlacement, modelPlacement, placingPointOf, placingRayOf, modelToView } from './modelPlacement';
 import { LinkRings } from '../render/linkRings';
 import { GhostPieces } from '../render/ghosts';
-import { acceptSuggestion, cycleSuggestion, dismissSuggestions, noteBuild, shownSuggestion, useSuggest } from '../state/suggest';
+import { acceptSuggestion, askSpot, cycleSuggestion, dismissSuggestions, noteBuild, shownSuggestion, spotAt, useSuggest } from '../state/suggest';
 import { aimPoint, type Aim } from '../plan/aim';
 import { NewSubmodelDialog } from './NewSubmodelDialog';
 import { runCommand, snapperFor } from '../state/editing';
@@ -68,6 +68,7 @@ import type { MechanismProgram } from '../anim/motion/v4/mechanismProgram';
 import type { Assembly } from '../model/assemble';
 import type { ModelState } from '../state/useModel';
 import { viewportApi } from './viewportApi';
+import { withTurntable } from '../anim/heroTurntable';
 import { ContextMenu, type ContextItem } from './ContextMenu';
 import { emptyMenuItems, pieceMenuItems } from './PieceMenu';
 import { NavGizmo } from './NavGizmo';
@@ -1306,7 +1307,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       if (!tr || tr.final.elements.some((v, k) => Math.abs(v - final.elements[k]) > 1e-3)) changed.add(inst.key);
     }
     const pose = (t: number) => {
-      const at = poseAt(tl, t);
+      const at = withTurntable(tl, useAppSettings.getState().camera, t, poseAt(tl, t));
       return (key: string) => {
         const inst = byKey.get(key);
         if (!inst) return null;
@@ -1899,6 +1900,16 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     if (!(s.selection.model === s.editingModel && ids.every(i => s.selection.ids.includes(i)))) s.select(ids);
     const items = pieceMenuItems(ids, (chosen) => setSubmodelDialog({ model: s.editingModel, ids: chosen }));
     items.unshift(...waitingTurnItems(key));
+    // "What fits here?": the free connection nearest the clicked point, and what fits it
+    const hit = viewportApi.studio?.bricks.pickHit(rayAt(e));
+    if (hit && s.timelineEditor === 'build') {
+      const at = placingPointOf(hit.point, hit.key, instancePlacements(s.plan, s.editingModel, modelRef.current.assembly), modelPlacement(s.plan, s.editingModel, modelRef.current.assembly));
+      const spot = spotAt(hit.key, at);
+      items.unshift({
+        icon: 'wand', label: spot ? `What fits this ${spot.label}?` : 'What fits here? (nothing free here)', disabled: !spot,
+        onClick: () => { if (spot) { askSpot(spot); window.dispatchEvent(new CustomEvent('bm:open-panel', { detail: 'suggest' })); } },
+      }, 'sep');
+    }
     if (items.length) setMenu({ x: e.clientX, y: e.clientY, items, label: 'Piece' });
   };
   /** Precise relative turn about the SAME joint as the draggable ring.

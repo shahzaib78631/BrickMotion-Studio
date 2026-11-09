@@ -1,19 +1,46 @@
 /**
- * BrickMotion's shape model, run in the browser: a prompt's CLIP embedding → a 20×20×20
- * brick shape. Trained by python/shape/shape.py on StableText2Brick (CMU, MIT licence).
+ * BrickMotion's shape model, run in the browser: a prompt's CLIP embedding → a shape.
+ * Trained by python/shape (v1: shape.py on StableText2Brick, a 20³ brick grid, filled or
+ * not; v2: shape2.py on the OMR's sets and StableText2Brick, 32×32 studs × 64 plates, in
+ * colour).
  *
- * A small transformer writes 125 codes bottom-up (5×5×5 latent cells), steered toward
- * the prompt by classifier-free guidance; a 3D VQ-VAE decoder turns the codes into a
- * grid. Both are plain TypeScript over float16 weights (one file with a JSON header),
- * so nothing but the weights has to be downloaded.
+ * A small transformer writes the codes bottom-up (one per patch of the grid), steered
+ * toward the prompt by classifier-free guidance; a patch-transformer VQ-VAE decoder turns
+ * the codes into the grid. Both are plain TypeScript over float16 weights (one file with
+ * a JSON header), so nothing but the weights has to be downloaded.
  */
 
-export type ShapeConfig = { G: number; L: number; K: number; D: number; W: number; layers: number; heads: number; prefix: number };
+export type ShapeConfig = {
+  K: number; D: number; W: number; layers: number; heads: number; prefix: number;
+  VW: number; vqLayers: number; vqHeads: number;
+  /** v1: a cube of side G in patches of side G/L */
+  G?: number; L?: number;
+  /** v2: X × Z studs × Y plates, in patches of PX × PZ × PY */
+  version?: number; X?: number; Z?: number; Y?: number; PX?: number; PZ?: number; PY?: number;
+  /** v2: decoder classes (0 empty, 1…n colours, n+1 other) and the LDraw colour of each */
+  classes?: number; colours?: number[];
+};
+
+/** The grid either version writes: A × B across, C up, cells indexed (a·B + b)·C + c. */
+export type GridSpec = { A: number; B: number; C: number; PA: number; PB: number; PC: number; seq: number; classes: number };
+
+export function gridSpec(c: ShapeConfig): GridSpec {
+  if (c.version === 2) {
+    const [A, B, C, PA, PB, PC] = [c.X!, c.Z!, c.Y!, c.PX!, c.PZ!, c.PY!];
+    return { A, B, C, PA, PB, PC, seq: (A / PA) * (B / PB) * (C / PC), classes: c.classes! };
+  }
+  const P = c.G! / c.L!;
+  return { A: c.G!, B: c.G!, C: c.G!, PA: P, PB: P, PC: P, seq: c.L! ** 3, classes: 2 };
+}
 
 type Tensor = { shape: number[]; data: Float32Array };
 
 export class ShapeWeights {
-  constructor(readonly config: ShapeConfig, private readonly tensors: Map<string, Tensor>) {}
+  readonly grid: GridSpec;
+
+  constructor(readonly config: ShapeConfig, private readonly tensors: Map<string, Tensor>) {
+    this.grid = gridSpec(config);
+  }
 
   get(name: string): Float32Array {
     const t = this.tensors.get(name);
@@ -25,7 +52,7 @@ export class ShapeWeights {
     return this.tensors.get(name)?.shape ?? [];
   }
 
-  /** Read the file python/shape/shape.py `export` writes: u32 header length, JSON, float16 data. */
+  /** Read the file python/shape `export` writes: u32 header length, JSON, float16 data. */
   static parse(buf: ArrayBuffer): ShapeWeights {
     const view = new DataView(buf);
     const n = view.getUint32(0, true);
@@ -56,17 +83,24 @@ function half(h: number): number {
 
 // ------------------------------------------------------------------ small maths
 
-/** y = W x + b, with W stored [out][in]. */
-function linear(w: Float32Array, b: Float32Array | null, x: Float32Array, out: number): Float32Array {
-  const inn = x.length;
-  const y = new Float32Array(out);
+/** y_i = W x_i + b for each input, with W stored [out][in]; one pass over W for all inputs. */
+function linearN(w: Float32Array, b: Float32Array | null, xs: Float32Array[], out: number): Float32Array[] {
+  const inn = xs[0].length;
+  const ys = xs.map(() => new Float32Array(out));
   for (let o = 0; o < out; o++) {
-    let s = b ? b[o] : 0;
     const row = o * inn;
-    for (let i = 0; i < inn; i++) s += w[row + i] * x[i];
-    y[o] = s;
+    for (let k = 0; k < xs.length; k++) {
+      const x = xs[k];
+      let s = b ? b[o] : 0;
+      for (let i = 0; i < inn; i++) s += w[row + i] * x[i];
+      ys[k][o] = s;
+    }
   }
-  return y;
+  return ys;
+}
+
+function linear(w: Float32Array, b: Float32Array | null, x: Float32Array, out: number): Float32Array {
+  return linearN(w, b, [x], out)[0];
 }
 
 function layerNorm(x: Float32Array, g: Float32Array, b: Float32Array): Float32Array {
@@ -83,64 +117,73 @@ function layerNorm(x: Float32Array, g: Float32Array, b: Float32Array): Float32Ar
 
 const gelu = (v: number) => 0.5 * v * (1 + Math.tanh(0.7978845608028654 * (v + 0.044715 * v * v * v)));
 
+/** Causal attention of the newest position over a cache. */
+function attend(q: Float32Array, keys: Float32Array, values: Float32Array, t: number, W: number, heads: number): Float32Array {
+  const hd = W / heads;
+  const att = new Float32Array(W);
+  const scores = new Float32Array(t + 1);
+  for (let h = 0; h < heads; h++) {
+    const o = h * hd;
+    let max = -Infinity;
+    for (let s = 0; s <= t; s++) {
+      let d = 0;
+      for (let i = 0; i < hd; i++) d += q[o + i] * keys[s * W + o + i];
+      scores[s] = d / Math.sqrt(hd);
+      if (scores[s] > max) max = scores[s];
+    }
+    let sum = 0;
+    for (let s = 0; s <= t; s++) { scores[s] = Math.exp(scores[s] - max); sum += scores[s]; }
+    for (let s = 0; s <= t; s++) {
+      const a = scores[s] / sum;
+      for (let i = 0; i < hd; i++) att[o + i] += a * values[s * W + o + i];
+    }
+  }
+  return att;
+}
+
 // ------------------------------------------------------------------ transformer
 
-/** One sequence being written, with its attention cache. */
-class Stream {
-  readonly keys: Float32Array[];
-  readonly values: Float32Array[];
+/** Several sequences written side by side (the prompt and no prompt), each with its cache. */
+class Streams {
+  readonly keys: Float32Array[][];
+  readonly values: Float32Array[][];
   length = 0;
 
-  constructor(private readonly m: ShapeWeights) {
+  constructor(private readonly m: ShapeWeights, readonly count: number) {
     const { layers, W, prefix } = m.config;
-    const max = prefix + 1 + m.config.L ** 3;
-    this.keys = Array.from({ length: layers }, () => new Float32Array(max * W));
-    this.values = Array.from({ length: layers }, () => new Float32Array(max * W));
+    const max = prefix + 1 + m.grid.seq;
+    this.keys = Array.from({ length: count }, () => Array.from({ length: layers }, () => new Float32Array(max * W)));
+    this.values = Array.from({ length: count }, () => Array.from({ length: layers }, () => new Float32Array(max * W)));
   }
 
-  /** Feed one embedded token; returns the logits for what comes next. */
-  step(input: Float32Array): Float32Array {
+  /** Feed one embedded token to each stream; returns each stream's logits for what comes next. */
+  step(inputs: Float32Array[]): Float32Array[] {
     const m = this.m;
     const { W, heads, layers, K } = m.config;
-    const hd = W / heads;
     const t = this.length++;
     const pos = m.get('gpt.pos');
-    let x: Float32Array = new Float32Array(W);
-    for (let i = 0; i < W; i++) x[i] = input[i] + pos[t * W + i];
+    let xs: Float32Array[] = inputs.map((input) => {
+      const x = new Float32Array(W);
+      for (let i = 0; i < W; i++) x[i] = input[i] + pos[t * W + i];
+      return x;
+    });
     for (let l = 0; l < layers; l++) {
       const p = `gpt.blocks.${l}.`;
-      const h = layerNorm(x, m.get(`${p}ln1.weight`), m.get(`${p}ln1.bias`));
-      const qkv = linear(m.get(`${p}qkv.weight`), m.get(`${p}qkv.bias`), h, 3 * W);
-      this.keys[l].set(qkv.subarray(W, 2 * W), t * W);
-      this.values[l].set(qkv.subarray(2 * W, 3 * W), t * W);
-      const att = new Float32Array(W);
-      const scores = new Float32Array(t + 1);
-      for (let hh = 0; hh < heads; hh++) {
-        const o = hh * hd;
-        let max = -Infinity;
-        for (let s = 0; s <= t; s++) {
-          let d = 0;
-          for (let i = 0; i < hd; i++) d += qkv[o + i] * this.keys[l][s * W + o + i];
-          scores[s] = d / Math.sqrt(hd);
-          if (scores[s] > max) max = scores[s];
-        }
-        let sum = 0;
-        for (let s = 0; s <= t; s++) { scores[s] = Math.exp(scores[s] - max); sum += scores[s]; }
-        for (let s = 0; s <= t; s++) {
-          const a = scores[s] / sum;
-          for (let i = 0; i < hd; i++) att[o + i] += a * this.values[l][s * W + o + i];
-        }
-      }
-      const proj = linear(m.get(`${p}proj.weight`), m.get(`${p}proj.bias`), att, W);
-      for (let i = 0; i < W; i++) x[i] += proj[i];
-      const h2 = layerNorm(x, m.get(`${p}ln2.weight`), m.get(`${p}ln2.bias`));
-      const f = linear(m.get(`${p}fc.weight`), m.get(`${p}fc.bias`), h2, 4 * W);
-      for (let i = 0; i < f.length; i++) f[i] = gelu(f[i]);
-      const o2 = linear(m.get(`${p}out.weight`), m.get(`${p}out.bias`), f, W);
-      for (let i = 0; i < W; i++) x[i] += o2[i];
+      const qkv = linearN(m.get(`${p}qkv.weight`), m.get(`${p}qkv.bias`), xs.map((x) => layerNorm(x, m.get(`${p}ln1.weight`), m.get(`${p}ln1.bias`))), 3 * W);
+      const atts = qkv.map((q, k) => {
+        this.keys[k][l].set(q.subarray(W, 2 * W), t * W);
+        this.values[k][l].set(q.subarray(2 * W, 3 * W), t * W);
+        return attend(q, this.keys[k][l], this.values[k][l], t, W, heads);
+      });
+      const proj = linearN(m.get(`${p}proj.weight`), m.get(`${p}proj.bias`), atts, W);
+      xs.forEach((x, k) => { for (let i = 0; i < W; i++) x[i] += proj[k][i]; });
+      const f = linearN(m.get(`${p}fc.weight`), m.get(`${p}fc.bias`), xs.map((x) => layerNorm(x, m.get(`${p}ln2.weight`), m.get(`${p}ln2.bias`))), 4 * W);
+      for (const v of f) for (let i = 0; i < v.length; i++) v[i] = gelu(v[i]);
+      const o = linearN(m.get(`${p}out.weight`), m.get(`${p}out.bias`), f, W);
+      xs.forEach((x, k) => { for (let i = 0; i < W; i++) x[i] += o[k][i]; });
     }
-    x = layerNorm(x, m.get('gpt.ln.weight'), m.get('gpt.ln.bias'));
-    return linear(m.get('gpt.head.weight'), m.get('gpt.head.bias'), x, K);
+    xs = xs.map((x) => layerNorm(x, m.get('gpt.ln.weight'), m.get('gpt.ln.bias')));
+    return linearN(m.get('gpt.head.weight'), m.get('gpt.head.bias'), xs, K);
   }
 }
 
@@ -149,12 +192,20 @@ function tokenEmbedding(m: ShapeWeights, token: number): Float32Array {
   return m.get('gpt.tok.weight').slice(token * W, token * W + W);
 }
 
-/** Feed the prompt's prefix tokens and BOS; returns the logits for the first code. */
-function start(m: ShapeWeights, s: Stream, clip: Float32Array): Float32Array {
+/** Feed each stream's prompt prefix and BOS; returns the logits for the first code. */
+function start(m: ShapeWeights, s: Streams, clips: Float32Array[]): Float32Array[] {
   const { W, prefix, K } = m.config;
-  const pre = linear(m.get('gpt.cond.weight'), m.get('gpt.cond.bias'), clip, prefix * W);
-  for (let i = 0; i < prefix; i++) s.step(pre.subarray(i * W, i * W + W));
-  return s.step(tokenEmbedding(m, K));
+  const pre = linearN(m.get('gpt.cond.weight'), m.get('gpt.cond.bias'), clips, prefix * W);
+  for (let i = 0; i < prefix; i++) s.step(pre.map((p) => p.subarray(i * W, i * W + W)));
+  return s.step(clips.map(() => tokenEmbedding(m, K)));
+}
+
+/** The logits at each position for given codes (what PyTorch's forward gives; for tests). */
+export function conditionalLogits(m: ShapeWeights, clip: Float32Array, codes: number[]): Float32Array[] {
+  const s = new Streams(m, 1);
+  const out = [start(m, s, [clip])[0]];
+  for (const c of codes) out.push(s.step([tokenEmbedding(m, c)])[0]);
+  return out;
 }
 
 export type SampleOptions = {
@@ -167,14 +218,12 @@ export type SampleOptions = {
   progress?: (done: number, total: number) => void;
 };
 
-/** Write the 125 codes for a prompt (unit-length CLIP embedding, 512 numbers). */
+/** Write the codes for a prompt (unit-length CLIP embedding, 512 numbers). */
 export async function sampleCodes(m: ShapeWeights, clip: Float32Array, opts: SampleOptions = {}): Promise<Int32Array> {
   const { guidance = 3, temperature = 0.9, topK = 40, random = Math.random, progress } = opts;
-  const total = m.config.L ** 3;
-  const cond = new Stream(m);
-  const free = new Stream(m);
-  let lc = start(m, cond, clip);
-  let lf = start(m, free, m.get('gpt.null'));
+  const total = m.grid.seq;
+  const s = new Streams(m, 2);
+  let [lc, lf] = start(m, s, [clip, m.get('gpt.null')]);
   const codes = new Int32Array(total);
   for (let i = 0; i < total; i++) {
     const l = new Float32Array(lc.length);
@@ -184,10 +233,9 @@ export async function sampleCodes(m: ShapeWeights, clip: Float32Array, opts: Sam
     progress?.(i + 1, total);
     if (i + 1 < total) {
       const e = tokenEmbedding(m, code);
-      lc = cond.step(e);
-      lf = free.step(e);
+      [lc, lf] = s.step([e, e]);
     }
-    if (i % 8 === 7) await new Promise((r) => setTimeout(r, 0)); // keep the page responsive
+    if (i % 8 === 7) await new Promise((r) => setTimeout(r, 0)); // let other work run
   }
   return codes;
 }
@@ -206,93 +254,72 @@ function pick(logits: Float32Array, topK: number, random: () => number): number 
 
 // ------------------------------------------------------------------ VQ-VAE decoder
 
-/** A 3D feature map: channels, then x, y, z. */
-type Grid = { c: number; n: number; data: Float32Array };
-
-function conv(m: ShapeWeights, name: string, x: Grid, relu: boolean): Grid {
-  const w = m.get(`${name}.weight`);
-  const b = m.get(`${name}.bias`);
-  const [out, inn, k] = m.shape(`${name}.weight`);
-  const pad = (k - 1) / 2;
-  const n = x.n;
-  const n3 = n * n * n;
-  const y = new Float32Array(out * n3);
-  for (let o = 0; o < out; o++) y.fill(b[o], o * n3, (o + 1) * n3);
-  for (let o = 0; o < out; o++) {
-    const yo = o * n3;
-    for (let i = 0; i < inn; i++) {
-      const xi = i * n3;
-      for (let a = 0; a < k; a++) for (let bb = 0; bb < k; bb++) for (let c = 0; c < k; c++) {
-        const wv = w[((o * inn + i) * k + a) * k * k + bb * k + c];
-        if (wv === 0) continue;
-        const dx = a - pad, dy = bb - pad, dz = c - pad;
-        const x0 = Math.max(0, -dx), x1 = Math.min(n, n - dx);
-        const y0 = Math.max(0, -dy), y1 = Math.min(n, n - dy);
-        const z0 = Math.max(0, -dz), z1 = Math.min(n, n - dz);
-        for (let px = x0; px < x1; px++) for (let py = y0; py < y1; py++) {
-          const row = yo + (px * n + py) * n;
-          const src = xi + ((px + dx) * n + (py + dy)) * n + dz;
-          for (let pz = z0; pz < z1; pz++) y[row + pz] += wv * x.data[src + pz];
-        }
+/** An open (not causal) transformer block over a whole sequence, in place. */
+function block(m: ShapeWeights, p: string, xs: Float32Array[], heads: number): void {
+  const T = xs.length, W = xs[0].length, hd = W / heads;
+  const qkv = linearN(m.get(`${p}qkv.weight`), m.get(`${p}qkv.bias`), xs.map((x) => layerNorm(x, m.get(`${p}ln1.weight`), m.get(`${p}ln1.bias`))), 3 * W);
+  const scores = new Float32Array(T);
+  const atts = xs.map((_, t) => {
+    const att = new Float32Array(W);
+    for (let h = 0; h < heads; h++) {
+      const o = h * hd;
+      let max = -Infinity;
+      for (let s = 0; s < T; s++) {
+        let d = 0;
+        for (let i = 0; i < hd; i++) d += qkv[t][o + i] * qkv[s][W + o + i];
+        scores[s] = d / Math.sqrt(hd);
+        if (scores[s] > max) max = scores[s];
+      }
+      let sum = 0;
+      for (let s = 0; s < T; s++) { scores[s] = Math.exp(scores[s] - max); sum += scores[s]; }
+      for (let s = 0; s < T; s++) {
+        const a = scores[s] / sum;
+        for (let i = 0; i < hd; i++) att[o + i] += a * qkv[s][2 * W + o + i];
       }
     }
-  }
-  if (relu) for (let i = 0; i < y.length; i++) if (y[i] < 0) y[i] = 0;
-  return { c: out, n, data: y };
-}
-
-/** ConvTranspose3d, kernel 4, stride 2, padding 1: doubles the side. */
-function up(m: ShapeWeights, name: string, x: Grid, relu: boolean): Grid {
-  const w = m.get(`${name}.weight`);
-  const b = m.get(`${name}.bias`);
-  const [inn, out, k] = m.shape(`${name}.weight`);
-  const n = x.n, N = n * 2, n3 = n * n * n, N3 = N * N * N;
-  const y = new Float32Array(out * N3);
-  for (let o = 0; o < out; o++) y.fill(b[o], o * N3, (o + 1) * N3);
-  for (let i = 0; i < inn; i++) for (let o = 0; o < out; o++) {
-    const yo = o * N3, xi = i * n3;
-    for (let a = 0; a < k; a++) for (let bb = 0; bb < k; bb++) for (let c = 0; c < k; c++) {
-      const wv = w[((i * out + o) * k + a) * k * k + bb * k + c];
-      for (let px = 0; px < n; px++) {
-        const X = 2 * px - 1 + a;
-        if (X < 0 || X >= N) continue;
-        for (let py = 0; py < n; py++) {
-          const Y = 2 * py - 1 + bb;
-          if (Y < 0 || Y >= N) continue;
-          const row = yo + (X * N + Y) * N;
-          const src = xi + (px * n + py) * n;
-          for (let pz = 0; pz < n; pz++) {
-            const Z = 2 * pz - 1 + c;
-            if (Z >= 0 && Z < N) y[row + Z] += wv * x.data[src + pz];
-          }
-        }
-      }
-    }
-  }
-  if (relu) for (let i = 0; i < y.length; i++) if (y[i] < 0) y[i] = 0;
-  return { c: out, n: N, data: y };
+    return att;
+  });
+  const proj = linearN(m.get(`${p}proj.weight`), m.get(`${p}proj.bias`), atts, W);
+  xs.forEach((x, t) => { for (let i = 0; i < W; i++) x[i] += proj[t][i]; });
+  const f = linearN(m.get(`${p}fc.weight`), m.get(`${p}fc.bias`), xs.map((x) => layerNorm(x, m.get(`${p}ln2.weight`), m.get(`${p}ln2.bias`))), 4 * W);
+  for (const v of f) for (let i = 0; i < v.length; i++) v[i] = gelu(v[i]);
+  const o = linearN(m.get(`${p}out.weight`), m.get(`${p}out.bias`), f, W);
+  xs.forEach((x, t) => { for (let i = 0; i < W; i++) x[i] += o[t][i]; });
 }
 
 /**
- * Codes (written bottom-up: z, then y, then x) → occupancy of the 20³ grid, indexed
- * x·400 + y·20 + z (x, y across in studs, z up in bricks).
+ * Codes (one per patch, written bottom-up: up, then the second axis, then the first) →
+ * the class of every cell, indexed (a·B + b)·C + c: 0 empty, else filled (v1: 1; v2: the
+ * colour class, see `config.colours`).
  */
 export function decodeCodes(m: ShapeWeights, codes: Int32Array): Uint8Array {
-  const { L, D } = m.config;
+  const { D, VW, vqLayers, vqHeads } = m.config;
+  const { A, B, C, PA, PB, PC, classes } = m.grid;
+  const LA = A / PA, LB = B / PB;
+  const cells = PA * PB * PC;
   const book = m.get('vq.codes');
-  const l3 = L * L * L;
-  const lat = new Float32Array(D * l3);
-  for (let z = 0; z < L; z++) for (let y = 0; y < L; y++) for (let x = 0; x < L; x++) {
-    const code = codes[z * L * L + y * L + x];
-    for (let d = 0; d < D; d++) lat[d * l3 + (x * L + y) * L + z] = book[code * D + d];
-  }
-  let g: Grid = { c: D, n: L, data: lat };
-  g = conv(m, 'vq.dec.0', g, true);
-  g = up(m, 'vq.dec.2', g, true);
-  g = conv(m, 'vq.dec.4', g, true);
-  g = up(m, 'vq.dec.6', g, true);
-  g = conv(m, 'vq.dec.8', g, false);
-  const out = new Uint8Array(g.data.length);
-  for (let i = 0; i < out.length; i++) out[i] = g.data[i] > 0 ? 1 : 0;
-  return out;
+  const pos = m.get('vq.dec_pos');
+  const xs = linearN(m.get('vq.dec_in.weight'), m.get('vq.dec_in.bias'), Array.from(codes, (code) => book.subarray(code * D, code * D + D)), VW);
+  xs.forEach((h, t) => { for (let i = 0; i < VW; i++) h[i] += pos[t * VW + i]; });
+  for (let l = 0; l < vqLayers; l++) block(m, `vq.dec_blocks.${l}.`, xs, vqHeads);
+  const outs = linearN(
+    m.get('vq.dec_out.weight'), m.get('vq.dec_out.bias'),
+    xs.map((x) => layerNorm(x, m.get('vq.dec_ln.weight'), m.get('vq.dec_ln.bias'))),
+    classes === 2 ? cells : cells * classes,
+  );
+  const grid = new Uint8Array(A * B * C);
+  outs.forEach((logits, t) => {
+    const pc = Math.floor(t / (LA * LB)), pb = Math.floor(t / LA) % LB, pa = t % LA;
+    for (let ia = 0; ia < PA; ia++) for (let ib = 0; ib < PB; ib++) for (let ic = 0; ic < PC; ic++) {
+      const cell = (ia * PB + ib) * PC + ic;
+      let cls: number;
+      if (classes === 2) cls = logits[cell] > 0 ? 1 : 0;
+      else {
+        cls = 0;
+        for (let k = 1; k < classes; k++) if (logits[cell * classes + k] > logits[cell * classes + cls]) cls = k;
+      }
+      if (cls) grid[((pa * PA + ia) * B + (pb * PB + ib)) * C + pc * PC + ic] = cls;
+    }
+  });
+  return grid;
 }

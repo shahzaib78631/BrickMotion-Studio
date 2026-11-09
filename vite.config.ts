@@ -2,9 +2,11 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { assemblyCorrectorBridge } from './scripts/assembly-corrector-bridge';
+import { claudeBridge } from './scripts/claude-bridge';
+import { neuralSaveBridge } from './scripts/neural/save-bridge';
 
 export default defineConfig({
-  plugins: [react(), assemblyCorrectorBridge()],
+  plugins: [react(), assemblyCorrectorBridge(), claudeBridge(), neuralSaveBridge()],
   test: {
     environment: 'node',
     include: ['tests/**/*.test.{ts,tsx}'],
