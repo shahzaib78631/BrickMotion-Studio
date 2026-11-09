@@ -4,7 +4,7 @@
 /** A scene preset: the studio around the model. */
 export type StudioLook = 'soft' | 'classic' | 'white' | 'dark' | 'black' | 'warm' | 'sky' | 'night' | 'chroma'
   | 'photo-grey' | 'slate-blue' | 'porcelain' | 'sage' | 'sandstone' | 'catalog-cream' | 'graphite' | 'eyesight' | 'bricklink-white'
-  | 'lavender' | 'render-grey' | 'steel-grey' | 'powder-blue' | 'mint' | 'peach' | 'blush' | 'butter' | 'cobalt';
+  | 'lavender' | 'render-grey' | 'steel-grey' | 'powder-blue' | 'mint' | 'peach' | 'blush' | 'butter' | 'cobalt' | 'eyesight-reference';
 /** What the model stands on. 'auto' is the scene's own choice. */
 export type FloorSurface = 'auto' | 'shadow' | 'sweep' | 'reflective' | 'matte' | 'wood' | 'concrete' | 'none';
 /** How the plastic itself responds to light. */
@@ -140,6 +140,8 @@ export type ScenePreset = {
   shadowSoftness?: number;
   /** Environment this look uses while the Materials setting is still the default one. */
   environment?: EnvironmentId;
+  /** Jointly fitted finite-area reference lighting and opaque ABS response. */
+  referenceLighting?: boolean;
   /** Strength of the rounded-edge highlight (default 0.18). */
   edgeLight?: number;
   /** Wide soft contact shadow: a floor of at least `strength`, parts up to `reach` studs high casting, blurred `spread`× the default. */
@@ -218,6 +220,13 @@ export const SCENES: readonly ScenePreset[] = [
     contact: { strength: 0.9, reach: 17.5, spread: 7, wide: { spread: 2, weight: 0.6 } },
     outlines: false },
   // Pastel seamless render looks: a large overhead softbox, short soft contact
+  { id: 'eyesight-reference', label: 'EyeSight lighting', hint: 'Fitted four-softbox ABS lighting; plain studs match the reference geometry', collection: 'photo',
+    referenceLighting: true,
+    stops: [{ at: 0, rgb: [255, 255, 255] }, { at: 1, rgb: [255, 255, 255] }],
+    floorColor: '#ffffff', floor: 'shadow', shadowColor: '#30303a', shadowOpacity: 0.01,
+    hemi: 0, hemiGround: '#cccccc', key: 0, keyColor: '#ffffff', fill: 0,
+    env: 1, exposure: 1, reflection: 0.08, ao: 0, edgeLight: 0, environment: 'dome',
+    contact: { strength: 0.9, reach: 17.5, spread: 7, wide: { spread: 2, weight: 0.6 } }, outlines: false },
   // shadows tinted by the backdrop and a bright environment for broad highlights.
   { id: 'lavender', label: 'Lavender', hint: 'Saturated lilac sweep with tinted overhead shadows', collection: 'render',
     stops: [{ at: 0, rgb: [146, 124, 228] }, { at: 0.6, rgb: [152, 131, 232] }, { at: 1, rgb: [158, 138, 236] }],
@@ -337,7 +346,7 @@ export type FinishPreset = {
   sheen?: number;
 };
 export const FINISHES: readonly FinishPreset[] = [
-  { id: 'eyesight', label: 'BrickLink plastic', hint: 'ABS with a soft base and a smooth glossy surface that catches studio reflections', roughness: 0.62, clearcoat: 0.7, clearcoatRoughness: 0.14, metalness: 0, sheen: 0.38 },
+  { id: 'eyesight', label: 'BrickLink plastic', hint: 'ABS with defined studio reflections and a restrained glossy surface', roughness: 0.38, clearcoat: 0.35, clearcoatRoughness: 0.2, metalness: 0, sheen: 0 },
   { id: 'studio', label: 'Studio plastic', hint: 'Soft, broad highlights', roughness: 0.42, clearcoat: 0.16, clearcoatRoughness: 0.36, metalness: 0 },
   { id: 'render', label: 'Render plastic', hint: 'Clean product-render ABS with broad soft highlights', roughness: 0.32, clearcoat: 0.45, clearcoatRoughness: 0.25, metalness: 0, sheen: 0.2 },
   { id: 'soft-touch', label: 'Soft-touch', hint: 'Low-sheen toy plastic with a velvety edge glow', roughness: 0.5, clearcoat: 0.12, clearcoatRoughness: 0.45, metalness: 0, sheen: 0.45 },

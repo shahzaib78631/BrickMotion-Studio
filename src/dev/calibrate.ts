@@ -12,6 +12,7 @@ import { assemble } from '../model/assemble';
 import { ensureParts, geometryOf, getColors, initPartService, metricsOf } from '../state/partService';
 import { createStudio, type Materials, type StudioLook } from '../render/studio';
 import { DEFAULT_MATERIALS, paletteOf } from '../render/looks';
+import { DEFAULT_REFERENCE_LIGHTING } from '../render/referenceLighting';
 import * as looks from '../render/looks';
 import * as ps from '../state/partService';
 import { CALIB_PIECES, calibCamera } from './calibScene';
@@ -30,6 +31,7 @@ if (CALIB) { const d = document.getElementById('d') as HTMLCanvasElement; d.widt
 
 async function mainCalib() {
   await initPartService();
+  if (QS.has('reference')) await ps.setStudLogos(false);
   const az = Number(QS.get('az') ?? 0);
   (document.getElementById('ref') as HTMLImageElement).src = `/_calib/calib_az${az}.png`;
   await ensureParts([...new Set(CALIB_PIECES.map((p) => p.part))]);
@@ -44,7 +46,7 @@ async function mainCalib() {
   studio.renderer.setPixelRatio(1);
   studio.bricks.setInstances(instances);
   const mats = new Map(instances.map((i) => [i.key, i.world] as const));
-  const setup: { look: StudioLook; materials: Materials; scene?: undefined } = { look: 'bricklink-white', materials: { ...DEFAULT_MATERIALS, palette: PALETTE.id, finish: PALETTE.finish } };
+  const setup: { look: StudioLook; materials: Materials; scene?: undefined } = { look: 'bricklink-white', materials: { ...DEFAULT_MATERIALS, studLogos: !QS.has('reference'), palette: PALETTE.id, finish: PALETTE.finish } };
   const draw = async (o: { look?: StudioLook; materials?: Partial<Materials> } = {}) => {
     if (o.look) setup.look = o.look;
     if (o.materials) Object.assign(setup.materials, o.materials);
@@ -59,6 +61,15 @@ async function mainCalib() {
     const p = studio.perspective;
     p.position.copy(shot.position); p.up.set(0, 1, 0); p.lookAt(shot.target);
     p.fov = shot.fov; p.aspect = W / H; p.updateProjectionMatrix();
+    // Diagnostic ablation: ?light=side removes ambient/key illumination so the
+    // side light's cast silhouette can be distinguished from a reflection.
+    if (QS.get('light') === 'side') {
+      const directions = studio.scene.children.filter((o): o is THREE.DirectionalLight => (o as THREE.DirectionalLight).isDirectionalLight);
+      const side = directions[QS.get('lamp') === 'rim' ? 2 : 1];
+      for (const object of studio.scene.children) if ((object as THREE.Light).isLight) object.visible = object === side;
+      studio.scene.environment = null;
+      if (side && QS.get('sideShadow') === '0') side.castShadow = false;
+    }
     studio.render();
   };
   const setAz = async (a: number) => {
@@ -76,6 +87,7 @@ async function mainCalib() {
 async function main() {
   if (CALIB) return mainCalib();
   await initPartService();
+  if (QS.has('reference')) await ps.setStudLogos(false);
   const read = readProjectFile(await (await fetch('/_calib/hellboy.brickmotion')).text());
   if (!read.ok) throw new Error(read.errors.join());
   const { plan, timelines } = read;
@@ -110,7 +122,7 @@ async function main() {
     mats.set(i.key, w ?? null);
   }
   void poses;
-  const setup: { look: StudioLook; materials: Materials; scene?: typeof plan.sceneSetup } = { look: 'bricklink-white' as StudioLook, materials: { ...DEFAULT_MATERIALS, palette: PALETTE.id, finish: PALETTE.finish } as Materials };
+  const setup: { look: StudioLook; materials: Materials; scene?: typeof plan.sceneSetup } = { look: 'bricklink-white' as StudioLook, materials: { ...DEFAULT_MATERIALS, studLogos: !QS.has('reference'), palette: PALETTE.id, finish: PALETTE.finish } as Materials };
   const draw = async (o: { look?: StudioLook; materials?: Partial<Materials> } = {}) => {
     if (o.look) setup.look = o.look;
     if (o.materials) Object.assign(setup.materials, o.materials);
@@ -127,6 +139,13 @@ async function main() {
     p.position.copy(shot.position); p.up.set(0, 1, 0); p.lookAt(shot.target);
     if (shot.roll) p.rotateZ(THREE.MathUtils.degToRad(shot.roll));
     p.fov = shot.fov; p.aspect = W / H; p.updateProjectionMatrix();
+    if (QS.get('light') === 'side') {
+      const directions = studio.scene.children.filter((o): o is THREE.DirectionalLight => (o as THREE.DirectionalLight).isDirectionalLight);
+      const side = directions[QS.get('lamp') === 'rim' ? 2 : 1];
+      for (const object of studio.scene.children) if ((object as THREE.Light).isLight) object.visible = object === side;
+      studio.scene.environment = null;
+      if (side && QS.get('sideShadow') === '0') side.castShadow = false;
+    }
     studio.render();
   };
   (window as unknown as Record<string, unknown>).calib = { studio, draw, shot, bounds, setup, THREE, plan, asm, looks, ps, instances };
@@ -134,6 +153,45 @@ async function main() {
   st.textContent = `ok · ${instances.length} pieces · fov ${shot.fov.toFixed(1)}`;
 }
 main().then(async () => {
+  const base = document.getElementById('d') as HTMLCanvasElement;
+  base.width = W; base.height = H;
+  base.getContext('2d')!.drawImage(canvas, 0, 0, W, H);
+  if (QS.has('reference')) {
+    const { studio } = (window as unknown as { calib: { studio: ReturnType<typeof createStudio> } }).calib;
+    studio.setReferenceLighting?.(DEFAULT_REFERENCE_LIGHTING);
+    studio.render();
+  }
+  const neuralModel = QS.get('neural');
+  if (neuralModel) {
+    if (!/^shadenet_[a-z0-9]+$/.test(neuralModel)) throw new Error('Invalid neural model name');
+    const { studio } = (window as unknown as { calib: { studio: ReturnType<typeof createStudio> } }).calib;
+    st.textContent = `Comparing ${neuralModel}: left neural · middle EyeSight · right base viewport…`;
+    const debug = (window as unknown as { __neuralDebug?: { spec?: number; edge?: number } });
+    if (QS.get('ablate') === 'spec') debug.__neuralDebug = { spec: 0 };
+    if (QS.get('ablate') === 'edge') debug.__neuralDebug = { edge: 0 };
+    await studio.setNeural?.(`/models/${neuralModel}`);
+    // Let the visibility history settle; every displayed output uses the same camera.
+    for (let i = 0; i < 16; i++) {
+      studio.render();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    studio.renderer.getContext().finish();
+    st.textContent = `${neuralModel}${QS.has('ablate') ? ` (${QS.get('ablate')} contribution off)` : ''} · left: neural · middle: EyeSight · right: base viewport`;
+  }
+  if (QS.has('reference') && QS.has('tile')) st.textContent = 'left: reference rig · middle: EyeSight · right: base viewport';
+  if (QS.has('tile')) {
+    // Identical source-pixel crop, enlarged by CSS only; no image enhancement.
+    const ref = document.getElementById('ref') as HTMLImageElement;
+    await ref.decode();
+    for (const source of [canvas, ref, base]) {
+      const full = document.createElement('canvas'); full.width = W; full.height = H;
+      full.getContext('2d')!.drawImage(source, 0, 0, W, H);
+      const crop = document.createElement('canvas'); crop.width = 150; crop.height = 240;
+      crop.getContext('2d')!.drawImage(full, 255, 275, 150, 240, 0, 0, 150, 240);
+      crop.style.width = '360px'; crop.style.height = '576px';
+      source.replaceWith(crop);
+    }
+  }
   if (!QS.has('measure')) return;
   const api = window as unknown as { calib: { studio: ReturnType<typeof createStudio> }; metrics: () => Promise<Record<string, unknown>> };
   const { studio } = api.calib;

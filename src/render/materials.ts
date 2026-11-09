@@ -1,9 +1,18 @@
 import * as THREE from 'three';
 import { materialName, type ColorDef } from '../ldraw/colors';
 import { EYESIGHT_COLORS } from '../data/eyesightColors.generated';
+import { referenceMaterialShader } from './referenceLighting';
 import { finishOf, type BrickFinish, type BrickTexture, type GlassLook, type GlowChoice, type Palette } from './looks';
 
 const cache = new Map<string, THREE.MeshPhysicalMaterial>();
+let referenceMaterialMode = false;
+/** Compile the reference shader only for the reference rig. Other viewport looks
+ * retain their original shader and do not pay for its attributes or branches. */
+export function setReferenceMaterialMode(enabled: boolean): void {
+  if (referenceMaterialMode === enabled) return;
+  referenceMaterialMode = enabled;
+  for (const material of cache.values()) material.needsUpdate = true;
+}
 
 const FALLBACK: ColorDef = { code: 71, name: 'Light_Bluish_Gray', hex: '#A0A5A9', edge: '#333333', alpha: 255, finish: 'solid' };
 
@@ -64,6 +73,8 @@ const TEXTURE_BODY = /* glsl */ `
 
 function installTexture(m: THREE.MeshPhysicalMaterial) {
   m.onBeforeCompile = (shader) => {
+    const color = m.userData.bmColor as ColorDef | undefined;
+    if (referenceMaterialMode) referenceMaterialShader(shader, color?.finish === 'solid', color?.code === 0);
     const id = (m.userData.bmTexture as number) ?? 0;
     shader.defines = { ...(shader.defines ?? {}), BM_TEXTURE: id };
     if (!id) return;
@@ -76,7 +87,7 @@ function installTexture(m: THREE.MeshPhysicalMaterial) {
       .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nroughnessFactor = clamp(mix(roughnessFactor + bmRough, 0.06, bmSpark), 0.04, 1.0);\nmetalnessFactor = mix(metalnessFactor, 1.0, bmSpark);')
       .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nif (bmBump > 0.0) normal = bmPerturb(-vViewPosition, normal, vec2(dFdx(bmH), dFdy(bmH)) * bmBump, faceDirection);');
   };
-  m.customProgramCacheKey = () => `bm-texture-${(m.userData.bmTexture as number) ?? 0}`;
+  m.customProgramCacheKey = () => `bm-texture-${(m.userData.bmTexture as number) ?? 0}|reference-${referenceMaterialMode ? `${m.userData.bmColor?.finish === 'solid' ? 'solid' : 'special'}-${m.userData.bmColor?.code === 0 ? 'dark' : 'base'}` : 'off'}`;
 }
 
 /**

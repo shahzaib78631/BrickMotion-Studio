@@ -45,8 +45,8 @@ def main() -> None:
     widths = tuple(ck["widths"])
     mode = ck.get("mode", "residual")
     half = bool(ck.get("half", False))
-    detail = bool(ck.get("detail", False))
-    net = ShadeNet(widths=widths, levels=len(widths) - 1, mode=mode, half=half, detail=detail)
+    detail = bool(ck.get("detail", False)); achroma = bool(ck.get("achroma", False))
+    net = ShadeNet(widths=widths, levels=len(widths) - 1, mode=mode, half=half, detail=detail, achroma=achroma)
     net.load_state_dict(ck["state"])
     ops, blobs, offset = [], [], 0
 
@@ -71,7 +71,7 @@ def main() -> None:
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     np.concatenate(blobs).tofile(out.with_suffix(".bin"))
-    out.with_suffix(".json").write_text(json.dumps({"inChannels": IN_CHANNELS, "half": half, "spec": bool(ck.get("spec", False)), "detail": detail, "widths": widths, "floats": offset, "ops": ops}))
+    out.with_suffix(".json").write_text(json.dumps({"inChannels": IN_CHANNELS, "half": half, "spec": bool(ck.get("spec", False)), "detail": detail, "achroma": achroma, "widths": widths, "floats": offset, "ops": ops}))
     print("wrote", out.with_suffix(".bin"), offset, "floats;", len(ops), "ops")
 
 

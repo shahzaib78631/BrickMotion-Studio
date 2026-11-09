@@ -37,6 +37,18 @@ function toGeometry(pts: number[] | undefined, bevel = false): THREE.BufferGeome
   }
   creased.computeBoundingSphere();
   creased.computeBoundingBox();
+  // EyeSight's surface-noise node uses generated object coordinates. Keep this
+  // parameterization on the original triangles; no tessellation or UV unwrap.
+  const box = creased.boundingBox!;
+  const size = box.getSize(new THREE.Vector3());
+  const position = creased.getAttribute('position');
+  const generated = new Float32Array(position.count * 3);
+  for (let i = 0; i < position.count; i++) {
+    generated[i * 3] = size.x > 1e-8 ? (position.getX(i) - box.min.x) / size.x : 0;
+    generated[i * 3 + 1] = size.y > 1e-8 ? (position.getY(i) - box.min.y) / size.y : 0;
+    generated[i * 3 + 2] = size.z > 1e-8 ? (position.getZ(i) - box.min.z) / size.z : 0;
+  }
+  creased.setAttribute('bmGenerated', new THREE.BufferAttribute(generated, 3));
   return creased;
 }
 

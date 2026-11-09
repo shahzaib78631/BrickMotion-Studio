@@ -50,6 +50,8 @@ def main() -> None:
     ap.add_argument("--blender", type=float, default=0.0, help="share of training scenes drawn from Blender-only targets (0 = EyeSight scenes only)")
     ap.add_argument("--init", default="", help="start from this checkpoint (fine-tuning)")
     ap.add_argument("--highlight-weight", type=float, default=6.0, help="extra loss weight on pixels brighter than their surroundings in the target")
+    ap.add_argument("--achroma", action="store_true", help="additive terms are brightness-only (needs --detail)")
+    ap.add_argument("--chroma-weight", type=float, default=0.0, help="loss weight on hue drift (chromaticity difference)")
     ap.add_argument("--detail", action="store_true", help="full-resolution specular + edge gains (needs --spec, mode mul)")
     ap.add_argument("--spec", action="store_true", help="use the view-dependent shine inputs (needs spec.bin.gz in every scene)")
     ap.add_argument("--no-vis", action="store_true", help="hide the dome-visibility input (control run)")
@@ -85,10 +87,15 @@ def main() -> None:
     print(f"{len(train_eye)} EyeSight + {len(blend)} Blender training scenes, {len(test)} held out", flush=True)
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
     widths = tuple(int(v) for v in a.widths.split(","))
-    net = ShadeNet(widths=widths, levels=len(widths) - 1, mode=a.mode, half=a.half, detail=a.detail).to(device)
+    net = ShadeNet(widths=widths, levels=len(widths) - 1, mode=a.mode, half=a.half, detail=a.detail, achroma=a.achroma).to(device)
     if a.init:
         state = torch.load(a.init, map_location=device)["state"]
         own = net.state_dict()
+        ck_in = torch.load(a.init, map_location=device)
+        if a.achroma and not ck_in.get("achroma", False) and ck_in.get("detail", False):
+            # old layout (scale3 add3 specGain3 edgeGain3) -> (scale3 add1 specGain1 edgeGain1): keep the red-channel rows
+            for key in ("out.weight", "out.bias"):
+                w = state[key]; state[key] = torch.cat([w[0:3], w[3:4], w[6:7], w[9:10]], 0)
         for k, v in state.items():  # an older checkpoint may have fewer output channels: copy what overlaps, the rest starts at zero
             if k in own and own[k].shape != v.shape:
                 keep = own[k].clone(); keep[: v.shape[0]] = v; state[k] = keep
@@ -176,7 +183,12 @@ def main() -> None:
         w = 1.0 + a.highlight_weight * (hy / 0.2).clamp(0, 1)
         weighted = (w * (pred - y).abs()).mean() / w.mean()
         energy = (hp.abs().mean() - hy.abs().mean()).abs()
-        loss = weighted + 0.5 * (gx + gy) + 2.0 * energy
+        chroma_loss = 0.0
+        if a.chroma_weight > 0:
+            sp, sy = pred.sum(1, keepdim=True), y.sum(1, keepdim=True)
+            ok = (sy > 0.15).float()  # not near-black, where chromaticity is meaningless
+            chroma_loss = ((pred / (sp + 1e-3) - y / (sy + 1e-3)).abs().mean(1, keepdim=True) * ok).sum() / ok.sum().clamp_min(1)
+        loss = weighted + 0.5 * (gx + gy) + 2.0 * energy + a.chroma_weight * chroma_loss
         opt.zero_grad(set_to_none=True); loss.backward(); opt.step(); sched.step()
         if step % 100 == 0 or step == 1:
             msg = f"step {step}/{a.steps} loss {loss.item():.4f} ({time.time() - t0:.0f}s)"
@@ -184,7 +196,7 @@ def main() -> None:
                 got, base = evaluate()
                 msg += f"  held-out L1: net {got:.2f} vs viewport {base:.2f} (0-255); sharpness net {evaluate.hf[0]:.2f} viewport {evaluate.hf[1]:.2f} (EyeSight=1)"
             print(msg, flush=True)
-    torch.save({"state": net.state_dict(), "widths": widths, "mode": a.mode, "half": a.half, "spec": a.spec, "detail": a.detail}, a.out)
+    torch.save({"state": net.state_dict(), "widths": widths, "mode": a.mode, "half": a.half, "spec": a.spec, "detail": a.detail, "achroma": a.achroma}, a.out)
     print("saved", a.out)
 
 

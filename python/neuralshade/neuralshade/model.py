@@ -80,8 +80,9 @@ class ShadeNet(nn.Module):
     """Encoder/decoder with `levels` 2x downsamples: the deepest layer sees the whole neighbourhood
     of a model, which is what dome-light occlusion and bounce light need."""
 
-    def __init__(self, widths=(16, 24, 32, 48, 64), levels: int = 4, mode: str = "residual", half: bool = False, detail: bool = False):
+    def __init__(self, widths=(16, 24, 32, 48, 64), levels: int = 4, mode: str = "residual", half: bool = False, detail: bool = False, achroma: bool = False):
         super().__init__()
+        self.achroma = achroma  # additive terms are brightness only (no per-channel tint): out = scale3 + add1 + specGain1 + edgeGain1
         self.detail = detail  # full-resolution shine: gains predicted by the net times exact specular and edge maps
         self.mode = mode
         self.half = half  # run the network at half resolution, upsample its output onto the full-resolution frame
@@ -94,7 +95,7 @@ class ShadeNet(nn.Module):
         self.dec = nn.ModuleList()
         for i in range(levels - 1, -1, -1):
             self.dec.append(block(widths[i + 1] + widths[i], widths[i]))
-        self.out = nn.Conv2d(widths[0], (12 if detail else 6) if mode == "mul" else 3, 1)
+        self.out = nn.Conv2d(widths[0], ((6 if achroma else 12) if detail else 6) if mode == "mul" else 3, 1)
         if mode == "mul":  # start as the identity: scale 1, nothing added
             nn.init.zeros_(self.out.weight); nn.init.zeros_(self.out.bias)
         self.levels = levels
@@ -118,6 +119,9 @@ class ShadeNet(nn.Module):
             # in linear light: the viewport's lighting scaled and topped up. A smooth scale cannot erase the
             # frame's brick detail, which an additive correction learned under L1 tends to do.
             scale = F.softplus(o[:, :3] + 0.5413)  # softplus(0.5413) = 1
+            if self.achroma and self.detail:
+                lin = srgb_to_linear(frame) * scale + 0.1 * o[:, 3:4] + o[:, 4:5] * x[:, 14:15] + o[:, 5:6] * edge_map(x)
+                return linear_to_srgb(lin.clamp(0, 1))
             lin = srgb_to_linear(frame) * scale + 0.1 * o[:, 3:6]
             if self.detail:
                 # sharp pixels come from full-resolution geometry, brightness from the (smooth) prediction

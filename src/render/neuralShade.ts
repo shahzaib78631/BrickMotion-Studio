@@ -19,13 +19,13 @@ type Op =
   | { op: 'pool' }
   | { op: 'up'; level: number }
   | { op: 'residual'; mode?: 'residual' | 'mul' };
-type Spec = { inChannels: number; half?: boolean; spec?: boolean; detail?: boolean; widths: number[]; floats: number; ops: Op[] };
+type Spec = { inChannels: number; half?: boolean; spec?: boolean; detail?: boolean; achroma?: boolean; widths: number[]; floats: number; ops: Op[] };
 
 type FeatureMap = { tex: WebGLTexture; w: number; h: number; layers: number };
 type Step =
   | { kind: 'conv'; op: Extract<Op, { op: 'conv' }>; a: number; b: number; up: boolean; out: number }
   | { kind: 'pool'; src: number; out: number }
-  | { kind: 'residual'; src: number; mul: boolean; detail: boolean };
+  | { kind: 'residual'; src: number; mul: boolean; detail: boolean; achroma: boolean };
 
 /** Layers with at most this many (input group, tap) matrices keep their weights in uniforms: far cheaper than a texture fetch per tap. */
 const MAXMAT = 144;
@@ -123,7 +123,7 @@ void main() {
 const FINAL_DETAIL = `#version 300 es
 precision highp float; precision highp sampler2D; precision highp sampler2DArray;
 uniform sampler2D uFrame; uniform sampler2DArray uOut; uniform sampler2DArray uGuide; uniform sampler2D uNormal; uniform sampler2D uPos; uniform sampler2D uSpecMap;
-uniform int uHalf; uniform ivec2 uFull; uniform ivec2 uHalfSize; out vec4 o;
+uniform int uHalf; uniform ivec2 uFull; uniform ivec2 uHalfSize; uniform vec2 uDetailScale; uniform float uGreyScale; uniform int uAchroma; out vec4 o;
 vec4 outAt(ivec2 p, int layer) { return uHalf == 1 ? texture(uOut, vec3((vec2(p) + 0.5) / vec2(uFull), float(layer))) : texelFetch(uOut, ivec3(p, layer), 0); }
 vec3 toLin(vec3 c) { return mix(c / 12.92, pow((max(c, 1e-6) + 0.055) / 1.055, vec3(2.4)), step(0.04045, c)); }
 vec3 toSrgb(vec3 c) { return mix(c * 12.92, 1.055 * pow(max(c, 1e-6), vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
@@ -150,7 +150,7 @@ float edgeAt(ivec2 p) {
 // Edge-aware (joint bilateral) upsample of the half-resolution outputs: a pixel only takes values from texels that look like it
 // (same coverage, facing and depth), so a correction never leaks across a brick edge. Must match jbu_upsample() in model.py.
 void upsample(ivec2 p, out vec4 a, out vec4 b, out vec4 c) {
-  if (uHalf != 1) { a = texelFetch(uOut, ivec3(p, 0), 0); b = texelFetch(uOut, ivec3(p, 1), 0); c = texelFetch(uOut, ivec3(p, 2), 0); return; }
+  if (uHalf != 1) { a = texelFetch(uOut, ivec3(p, 0), 0); b = texelFetch(uOut, ivec3(p, 1), 0); c = uAchroma == 1 ? vec4(0.0) : texelFetch(uOut, ivec3(p, 2), 0); return; }
   float cov; vec3 n = normalAt(p, cov);
   float d = texelFetch(uPos, clamp(p, ivec2(0), uFull - 1), 0).r;
   vec2 u = (vec2(p) + 0.5) * vec2(uHalfSize) / vec2(uFull) - 0.5;
@@ -165,7 +165,7 @@ void upsample(ivec2 p, out vec4 a, out vec4 b, out vec4 c) {
     float nd = cov > 0.5 ? clamp(dot(n, nh) / max(covh, 1e-3), 0.0, 1.0) : 1.0;
     float dd = (cov > 0.5 && covh > 0.99) ? exp(-abs(d - dh) / 0.0006) : 1.0;
     float w = wb * (0.01 + sc * sc * nd * dd);
-    a += w * texelFetch(uOut, ivec3(q, 0), 0); b += w * texelFetch(uOut, ivec3(q, 1), 0); c += w * texelFetch(uOut, ivec3(q, 2), 0); den += w;
+    a += w * texelFetch(uOut, ivec3(q, 0), 0); b += w * texelFetch(uOut, ivec3(q, 1), 0); if (uAchroma != 1) c += w * texelFetch(uOut, ivec3(q, 2), 0); den += w;
   }
   a /= den; b /= den; c /= den;
 }
@@ -173,9 +173,11 @@ void main() {
   ivec2 p = ivec2(gl_FragCoord.xy);
   vec4 a, b, c; upsample(p, a, b, c);
   vec3 scale = log(1.0 + exp(a.rgb + 0.5413)), add = vec3(a.a, b.r, b.g);
+  scale = mix(scale, vec3(dot(scale, vec3(0.2126, 0.7152, 0.0722))), uGreyScale); // debug: one gain for all channels
   vec3 gSpec = vec3(b.b, b.a, c.r), gEdge = c.gba;
+  if (uAchroma == 1) { add = vec3(a.a); gSpec = vec3(b.r); gEdge = vec3(b.g); } // brightness-only terms
   float spec = texelFetch(uSpecMap, p, 0).g;
-  vec3 lin = toLin(texelFetch(uFrame, p, 0).rgb) * scale + 0.1 * add + gSpec * spec + gEdge * edgeAt(p);
+  vec3 lin = toLin(texelFetch(uFrame, p, 0).rgb) * scale + 0.1 * add + uDetailScale.x * gSpec * spec + uDetailScale.y * gEdge * edgeAt(p);
   o = vec4(toSrgb(clamp(lin, 0.0, 1.0)), 1.0);
 }`;
 
@@ -307,7 +309,7 @@ export class NeuralShade {
         this.steps.push({ kind: 'pool', src: cur, out });
         cur = out;
       } else if (op.op === 'up') { level = op.level; pendingUp = { a: cur, level: op.level }; }
-      else if (op.op === 'residual') this.steps.push({ kind: 'residual', src: cur, mul: op.mode === 'mul', detail: !!this.spec.detail });
+      else if (op.op === 'residual') this.steps.push({ kind: 'residual', src: cur, mul: op.mode === 'mul', detail: !!this.spec.detail, achroma: !!this.spec.achroma });
     }
   }
 
@@ -389,7 +391,7 @@ export class NeuralShade {
         p = s.detail ? this.programs.finalDetail : s.mul ? this.programs.finalMul : this.programs.final;
         gl.useProgram(p);
         this.bindTex(0, gl.TEXTURE_2D, frame); this.bindTex(1, gl.TEXTURE_2D_ARRAY, this.maps[s.src].tex);
-        if (s.detail) { this.bindTex(2, gl.TEXTURE_2D, normal); this.bindTex(3, gl.TEXTURE_2D, pos); this.bindTex(4, gl.TEXTURE_2D, spec ?? this.whiteTex); this.bindTex(5, gl.TEXTURE_2D_ARRAY, this.input.tex); set1i(p, 'uNormal', 2); set1i(p, 'uPos', 3); set1i(p, 'uSpecMap', 4); set1i(p, 'uGuide', 5); gl.uniform2i(gl.getUniformLocation(p, 'uHalfSize'), this.input.w, this.input.h); }
+        if (s.detail) { this.bindTex(2, gl.TEXTURE_2D, normal); this.bindTex(3, gl.TEXTURE_2D, pos); this.bindTex(4, gl.TEXTURE_2D, spec ?? this.whiteTex); this.bindTex(5, gl.TEXTURE_2D_ARRAY, this.input.tex); set1i(p, 'uNormal', 2); set1i(p, 'uPos', 3); set1i(p, 'uSpecMap', 4); set1i(p, 'uGuide', 5); gl.uniform2i(gl.getUniformLocation(p, 'uHalfSize'), this.input.w, this.input.h); const dbg = (globalThis as { __neuralDebug?: { spec?: number; edge?: number } }).__neuralDebug; gl.uniform2f(gl.getUniformLocation(p, 'uDetailScale'), dbg?.spec ?? 1, dbg?.edge ?? 1); gl.uniform1i(gl.getUniformLocation(p, 'uAchroma'), s.achroma ? 1 : 0); gl.uniform1f(gl.getUniformLocation(p, 'uGreyScale'), (globalThis as { __neuralDebug?: { grey?: number } }).__neuralDebug?.grey ?? 0); }
         set1i(p, 'uFrame', 0); set1i(p, 'uOut', 1); set1i(p, 'uHalf', this.spec.half ? 1 : 0); gl.uniform2i(gl.getUniformLocation(p, 'uFull'), this.width, this.height);
         gl.bindFramebuffer(gl.FRAMEBUFFER, target);
         gl.viewport(0, 0, this.width, this.height);

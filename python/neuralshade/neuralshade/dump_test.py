@@ -19,7 +19,7 @@ def main() -> None:
     top, left, size = int(sys.argv[3]), int(sys.argv[4]), int(sys.argv[5])
     out = ROOT / "data/neuralshade/nstest"; out.mkdir(parents=True, exist_ok=True)
     ck = torch.load(ck_path, map_location="cpu")
-    net = ShadeNet(widths=tuple(ck["widths"]), levels=len(ck["widths"]) - 1, mode=ck.get("mode", "residual"), half=bool(ck.get("half", False)), detail=bool(ck.get("detail", False))); net.load_state_dict(ck["state"]); net.eval()
+    net = ShadeNet(widths=tuple(ck["widths"]), levels=len(ck["widths"]) - 1, mode=ck.get("mode", "residual"), half=bool(ck.get("half", False)), detail=bool(ck.get("detail", False)), achroma=bool(ck.get("achroma", False))); net.load_state_dict(ck["state"]); net.eval()
     import gzip
     for name in ("frame", "albedo", "normal"):
         raw = _raw(scene / f"{name}.bin.gz", 3200, 2400)[top:top + size, left:left + size]  # top row first

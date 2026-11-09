@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { createSoftboxEnvironment } from './softboxEnvironment';
+import { ReferenceLighting, DEFAULT_REFERENCE_LIGHTING, bindReferenceLighting, type ReferenceLightingOptions } from './referenceLighting';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 import { geometryOf, getColors, onGeometryChange, setPartDetail, setStudLogos } from '../state/partService';
 import { useSmoothSoftShadows } from './softShadows';
@@ -15,7 +16,7 @@ import { SceneLighting } from './sceneLights';
 import type { SceneSetup } from './sceneSetup';
 
 import { DEFAULT_MATERIALS, ENVIRONMENTS, aoFor, floorColorOf, floorFor, sceneOf, scenePixels, type Materials, type StudioLook } from './looks';
-import { setBrickMaterials } from './materials';
+import { setBrickMaterials, setReferenceMaterialMode } from './materials';
 import { concreteTexture, createFade, createReflection, fadingFloorMaterial, woodTexture } from './floorSurfaces';
 import { Sweep } from './sweep';
 
@@ -69,6 +70,8 @@ export type Studio = {
   setMaterials?(m: Materials): void;
   /** Learned shading (neuralShade.ts): the URL (without extension) of a trained network, or null for the normal render. */
   setNeural?(url: string | null): Promise<void>;
+  /** Analytic reference rig; null restores the selected scene lighting. */
+  setReferenceLighting?(options: ReferenceLightingOptions | null): void;
   /** How far above the floor parts still cast a contact shadow, and how widely it blurs (1 = default). */
   contactTune?(reach: number, spread: number, wide?: { spread: number; weight: number }): void;
   /** Resolves once everything the materials need (an HDR environment) has loaded. */
@@ -109,6 +112,9 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   const scene = new THREE.Scene();
+  const referenceRig = new ReferenceLighting();
+  scene.add(referenceRig.group);
+  let referenceOptions: ReferenceLightingOptions | null = null;
   const gradient = studioBackground();
   let backdrop: THREE.DataTexture | null = null;
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -118,6 +124,7 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
   const photoEnvs = new Map<string, Promise<THREE.Texture | null>>();
   let envGain = 1;
   let envLoad: Promise<unknown> = Promise.resolve();
+  let environmentRequest = 0;
   let disposed = false;
   // a uniform white world (EyeSight's): even ambient light and plain reflections
   let domeEnv: THREE.Texture | null = null;
@@ -131,6 +138,7 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
     return domeEnv;
   };
   const applyEnvironment = (chosen: Materials['environment']) => {
+    const request = ++environmentRequest;
     const id = sceneOf(look).environment && chosen === DEFAULT_MATERIALS.environment ? sceneOf(look).environment! : chosen;
     const choice = ENVIRONMENTS.find((e) => e.id === id) ?? ENVIRONMENTS[0];
     if (id === 'softboxes') {
@@ -169,7 +177,7 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
     }
     envLoad = tex.then((t) => {
       // only if still the chosen one when it arrives; a failed load keeps the room
-      if (disposed || materials.environment !== id) return;
+      if (disposed || request !== environmentRequest) return;
       scene.environment = t ?? env;
       envGain = t ? choice.gain : 1;
       syncStudioLights();
@@ -181,6 +189,7 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
   // three re-uploads geometry and textures itself; the generated maps are redone here.
   const onRestored = () => {
     if (disposed) return;
+    referenceRig.invalidate();
     env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     photoEnvs.clear();
     domeEnv = null;
@@ -282,8 +291,6 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
   scene.add(key, key.target);
   const fill = new THREE.DirectionalLight(0xf3f5ff, 0.38);
   scene.add(fill, fill.target);
-  // A non-shadow-casting back/edge light separates dark bricks from photo backdrops.
-  // It is zero-strength on legacy scenes, so existing projects keep their look.
   const rim = new THREE.DirectionalLight(0xffffff, 0);
   scene.add(rim, rim.target);
 
@@ -352,8 +359,8 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
   };
   let render: RenderOptions = { ...DEFAULT_RENDER };
   const applyExposure = () => {
-    renderer.toneMapping = render.linearColors ? THREE.LinearToneMapping : THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = exposure * (sceneSetup?.exposure ?? 1) * (render.linearColors ? LINEAR_EXPOSURE : 1);
+    renderer.toneMapping = referenceRig.group.visible || render.linearColors ? THREE.LinearToneMapping : THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = referenceRig.group.visible ? 1 : exposure * (sceneSetup?.exposure ?? 1) * (render.linearColors ? LINEAR_EXPOSURE : 1);
   };
   const setRenderOptions = (o: RenderOptions) => {
     render = { ...o };
@@ -406,6 +413,9 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
   };
   const setLook = (next: StudioLook) => {
     look = sceneOf(next).id;
+    referenceOptions = sceneOf(look).referenceLighting ? { ...DEFAULT_REFERENCE_LIGHTING, strengths: [...DEFAULT_REFERENCE_LIGHTING.strengths] } : null;
+    if (referenceOptions) referenceRig.configure(referenceOptions);
+    renderer.shadowMap.type = referenceOptions?.specularVisibility ? THREE.BasicShadowMap : THREE.PCFShadowMap;
     const preset = sceneOf(look);
     // A transparent studio keeps an empty background and no shadow floor, so an
     // exported still has no studio backdrop baked into its alpha channel.
@@ -463,12 +473,14 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
   };
   const syncStudioLights = () => {
     const enabled = !sceneSetup?.lights.length || !sceneSetup.useLightsForVideo || sceneSetup.includeStudioLights;
-    hemi.visible = enabled;
-    key.visible = enabled;
-    fill.visible = enabled;
-    rim.visible = enabled && rim.intensity > 0;
+    const reference = enabled && referenceOptions !== null;
+    referenceRig.group.visible = reference;
+    hemi.visible = enabled && !reference;
+    key.visible = enabled && !reference;
+    fill.visible = enabled && !reference;
+    rim.visible = enabled && !reference && rim.intensity > 0;
     // Keep just a small environment fill when the authored scene lights replace the studio.
-    scene.environmentIntensity = (enabled ? lookEnv : 0.12) * envGain;
+    scene.environmentIntensity = (reference ? referenceOptions!.environment : enabled ? lookEnv : 0.12) * envGain;
   };
   setLook('soft');
   setRenderOptions(DEFAULT_RENDER);
@@ -504,6 +516,14 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
     setLook,
     setRenderOptions,
     setMaterials,
+    setReferenceLighting(options) {
+      referenceOptions = options ? { ...options, strengths: [...options.strengths] } : null;
+      if (referenceOptions) referenceRig.configure(referenceOptions);
+      renderer.shadowMap.type = referenceOptions?.specularVisibility ? THREE.BasicShadowMap : THREE.PCFShadowMap;
+      applyEnvironment(referenceOptions ? 'dome' : materials.environment);
+      syncStudioLights();
+      applyExposure();
+    },
     ready: () => envLoad.then(() => undefined),
     setSize(w, h) {
       renderer.setSize(w, h, false);
@@ -546,6 +566,10 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
       if (lightBounds) contact.fitTo(lightBounds, lastGround, reach, spread);
     },
     render(frame) {
+      const reference = referenceRig.group.visible ? referenceOptions : null;
+      setReferenceMaterialMode(reference !== null);
+      bindReferenceLighting(reference, referenceRig.shadowMatrices);
+      if (reference) referenceRig.update(active, lightCenter, lightRadius, bricks.structureVersion, bricks.poseVersion);
       sweep.face(active);
       contact.update(renderer, bricks.root);
       if (frame) {
@@ -604,6 +628,7 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
       pmrem.dispose();
       canvas.removeEventListener('webglcontextrestored', onRestored as EventListener);
       renderer.dispose();
+      referenceRig.dispose();
     },
   };
 }

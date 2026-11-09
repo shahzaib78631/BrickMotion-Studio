@@ -173,7 +173,12 @@ export function MaterialsPanel({ model }: { model?: ModelState }) {
   const aoScene = aoFor(s.studioLook, { enabled: true, strength: null, radius: null });
   const aoNow = { strength: m.ao.strength ?? aoScene.intensity, radius: m.ao.radius ?? aoScene.radius };
   // a scene can suggest edge lines on or off when it is picked; the toggle stays in charge after that
-  const pickScene = (sc: (typeof SCENES)[number]) => s.set(sc.id === s.studioLook ? {} : { studioLook: sc.id, ...(sc.outlines === false ? { edgeLines: false } : {}) });
+  const pickScene = (sc: (typeof SCENES)[number]) => s.set(sc.id === s.studioLook ? {} : {
+    studioLook: sc.id, ...(sc.outlines === false ? { edgeLines: false } : {}),
+    ...(sc.referenceLighting ? { materials: { ...m, palette: 'studio' as const, finish: 'eyesight' as const, texture: 'none' as const,
+      detail: 'standard' as const, studLogos: false, roundedEdges: false, environment: 'studio' as const,
+      ao: { enabled: true, strength: null, radius: null } } } : {}),
+  });
   return (
     <div className="nx-pane bm-materials" aria-label="Materials">
       <div className="nx-pane-head"><h3>Materials</h3></div>

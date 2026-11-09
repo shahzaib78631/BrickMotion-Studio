@@ -11,6 +11,11 @@ test('main-color geometry keeps every triangle and has normals', async () => {
   const triCount = flat.tris.get(16)!.length / 9;
   expect(g.main!.getAttribute('position').count).toBe(triCount * 3);
   expect(g.main!.getAttribute('normal')).toBeDefined();
+  const generated = g.main!.getAttribute('bmGenerated');
+  expect(generated.count).toBe(triCount * 3);
+  for (const value of generated.array) {
+    expect(value).toBeGreaterThanOrEqual(0); expect(value).toBeLessThanOrEqual(1);
+  }
   expect(g.fixed).toHaveLength(0);
 });
 
