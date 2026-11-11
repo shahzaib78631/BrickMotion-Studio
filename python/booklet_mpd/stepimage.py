@@ -45,3 +45,11 @@ def model_mask(rgb: np.ndarray, tolerance: float = 30.0, min_fraction: float = 0
         if stats[i][4] >= min_fraction * h * w:
             keep |= labels == i
     return keep
+
+
+def largest_component(mask: np.ndarray) -> np.ndarray:
+    """The biggest connected piece of the mask (the built model, without a floating new part)."""
+    count, labels, stats = _components(mask)
+    if count <= 1:
+        return np.zeros_like(mask, bool)
+    return labels == 1 + int(stats[1:, 4].argmax())

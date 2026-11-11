@@ -49,3 +49,18 @@ def test_floating_part_separate_from_the_model_is_kept():
     img[10:25, 110:140] = TAN          # floating new part
     m = model_mask(img)
     assert m[17, 125] and m[80, 130]
+
+
+from booklet_mpd.stepimage import largest_component
+
+
+def test_largest_component_drops_the_floating_part():
+    img = canvas()
+    img[60:100, 100:160] = TAN
+    img[10:25, 110:140] = TAN
+    m = largest_component(model_mask(img))
+    assert m[80, 130] and not m[17, 125]
+
+
+def test_largest_component_of_empty_mask_is_empty():
+    assert not largest_component(np.zeros((10, 10), bool)).any()

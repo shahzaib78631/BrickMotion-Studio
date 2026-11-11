@@ -12,7 +12,7 @@ import numpy as np
 
 import cv2
 
-from brickheadz.instruction_place import Camera, iou, render
+from brickheadz.instruction_place import Camera, iou, part_vertices, rotation
 
 
 def normalise(mask: np.ndarray, size: int) -> np.ndarray:
@@ -41,14 +41,38 @@ def pieces_from(parts) -> list[P]:
     return [P(base_part=part, matrix=matrix, color=colour) for part, colour, matrix in parts]
 
 
+def _clouds(lib, parts) -> list[np.ndarray]:
+    """World-space vertices per part, de-duplicated (triangle lists repeat each vertex)."""
+    clouds = []
+    for part, _colour, matrix in parts:
+        v = part_vertices(lib, part)
+        if len(v):
+            clouds.append(np.unique(np.round(v @ matrix[:3, :3].T + matrix[:3, 3], 2), axis=0))
+    return clouds
+
+
+def silhouette(clouds: list[np.ndarray], yaw: float, pitch: float, size: int) -> np.ndarray:
+    """Union of per-part convex hulls seen from (yaw, pitch), fitted into size x size."""
+    rot = rotation(yaw, pitch)
+    projected = [(c @ rot.T)[:, :2] for c in clouds]
+    allp = np.concatenate(projected)
+    lo, hi = allp.min(0), allp.max(0)
+    scale = (size - 12) / (max(hi - lo) or 1.0)
+    mask = np.zeros((size, size), np.uint8)
+    for p in projected:
+        pts = ((p - lo) * scale + 6).astype(np.float32)
+        hull = cv2.convexHull(pts)
+        cv2.fillConvexPoly(mask, hull.astype(np.int32), 1)
+    return mask.astype(bool)
+
+
 def fit_camera_to_mask(lib, parts, mask: np.ndarray, yaws=range(-180, 180, 15), pitches=range(-60, 61, 10),
                        size: int = 96, refine: bool = True) -> dict:
-    pieces = pieces_from(parts)
+    clouds = _clouds(lib, parts)
     target = normalise(mask, size)
 
     def score(yaw: float, pitch: float) -> float:
-        rendered, _, _ = render(lib, pieces, Camera(yaw, pitch), size)
-        return iou(normalise(rendered, size), target)
+        return iou(normalise(silhouette(clouds, yaw, pitch, size), size), target)
 
     best = {"iou": -1.0, "yaw": 0.0, "pitch": 0.0}
     for yaw in yaws:
