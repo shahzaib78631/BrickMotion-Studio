@@ -1,0 +1,21 @@
+<!doctype html><html><head><meta charset="utf-8"><title>WebGPU path trace</title>
+<style>
+  body { margin: 0; background: #181818; color: #ccc; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; display: flex; gap: 12px; padding: 12px; align-items: flex-start; }
+  #st { white-space: pre; min-width: 320px; line-height: 1.6; }
+  figure { margin: 0; }
+  figcaption { opacity: 0.6; padding: 4px 0; }
+  canvas, #ref { background: #fff; display: block; border-radius: 2px; }
+  #ref { object-fit: contain; }
+</style></head>
+<body>
+  <figure>
+    <div style="position:relative; display:inline-block">
+      <canvas id="gpu" style="position:absolute; left:-20000px; top:0"></canvas>
+      <canvas id="c"></canvas>
+    </div>
+    <figcaption>WebGPU path tracer (live)</figcaption>
+  </figure>
+  <figure><img id="ref" alt="EyeSight reference"><figcaption id="reflabel">EyeSight reference</figcaption></figure>
+  <div id="st">loading…</div>
+  <script type="module" src="/src/dev/pathTrace.ts"></script>
+</body></html>
