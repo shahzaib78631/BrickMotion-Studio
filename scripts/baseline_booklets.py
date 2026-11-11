@@ -14,10 +14,10 @@ import pymupdf
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "python"))
 from assembly_model.ldraw import load_library
-from booklet_mpd.baseline import BUDGET_KEYS, error_budget, run_set
+from booklet_mpd.audit import TRUTH_LOADERS
+from booklet_mpd.baseline import BUDGET_KEYS, calibration_lines, error_budget, group_truth, run_set
 from booklet_mpd.pairing import find_pairs
 from brickheadz.image_spec import ldconfig_rgb
-from brickheadz.reconstruct import steps_from_omr
 
 OMR = Path("/Users/mac/Projects/BrickMotion-Data/omr/models")
 SOURCES = ROOT / "benchmarks/instructions/arrow-catalog-100-sources.json"
@@ -51,7 +51,8 @@ def main():
         folder = OUT / "extract" / f"{pair.set_number}-{pair.booklet}"
         steps = json.loads((folder / "extract.json").read_text())["steps"]
         pictures = [read_image(folder / s["picture"]) if s.get("picture") else None for s in steps]
-        result = run_set(lib, palette, steps_from_omr(str(pair.omr)), pictures, row["aligned"])
+        truth, grouped = group_truth(TRUTH_LOADERS[row["truth_mode"]](str(pair.omr)), pictures, row["groups"])
+        result = run_set(lib, palette, truth, grouped, [[i, i] for i in range(len(truth))])
         result.update(set=pair.set_number, split=pair.split)
         results.append(result)
         print(pair.set_number, pair.split, result["steps_total"], "steps;", result["parts_exact"], "/",
@@ -71,6 +72,7 @@ def main():
         f = r["first_failure"]
         lines.append(f"| {r['set']} | {r['split']} | {r['steps_total']} | {r['steps_supported']} | {r['steps_attempted']} | "
                      f"{r['parts_exact']}/{r['parts_predicted']} | {('step %d: %s' % (f['step'], f['message'][:60])) if f else ''} |")
+    lines += calibration_lines(results)
     (OUT / "baseline.md").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))
 

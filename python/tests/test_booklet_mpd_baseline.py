@@ -63,3 +63,29 @@ def test_identical_first_step_plates_are_a_valid_foundation(lib, monkeypatch):
     r = run_set(lib, {4: (0, 0, 0)}, [[("3020", 4, eye), ("3020", 4, eye)]],
                 [np.zeros((8, 8, 3), np.uint8)], [[0, 0]])
     assert r["first_failure"] is None and r["parts_predicted"] == 1
+
+
+def _row(score, exact):
+    return {"exact": exact, "report": {"camera": {"rmsPixels": 0.1, "scale": 2.0},
+                                       "fit": {"geometricScore": score, "nextDifferentBoundsScore": None, "arrowErrorPixels": 0.0}}}
+
+
+def test_calibration_lines_refuse_to_report_on_too_few_parts():
+    text = "\n".join(baseline.calibration_lines([{"split": "train", "per_part": [_row(0.9, True)]}]))
+    assert "too few parts to calibrate" in text
+
+
+def test_calibration_lines_report_unflagged_exactness():
+    train = [{"split": "train", "per_part": [_row(0.95, True)] * 20 + [_row(0.3, False)] * 20}]
+    test = [{"split": "test", "per_part": [_row(0.95, True)] * 20 + [_row(0.3, False)] * 20}]
+    text = "\n".join(baseline.calibration_lines(train + test))
+    assert "unflagged exact" in text and "100.0%" in text
+
+
+def test_group_truth_merges_omr_steps_and_drops_picture_for_merged_booklet_steps():
+    eye = np.eye(4)
+    truth = [[("3023", 4, eye)], [("3023", 4, eye)], [("3023", 4, eye)], [("3023", 4, eye)]]
+    pics = ["p0", "p1", "p2"]
+    steps, pictures = baseline.group_truth(truth, pics, [[[0], [0, 1]], [[1, 2], [2]], [[2], [3]]])
+    assert [len(s) for s in steps] == [2, 1, 1]
+    assert pictures == ["p0", None, "p2"]

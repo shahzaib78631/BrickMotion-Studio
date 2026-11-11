@@ -1,3 +1,4 @@
+import pytest
 from collections import Counter
 
 from booklet_mpd.align import align_steps, count_similarity, multiset_similarity
@@ -53,3 +54,27 @@ def test_merged_unmatched_omr_step_makes_not_ok():
 def test_merged_empty_inputs():
     a = align_merged([], [])
     assert not a.ok
+
+
+from booklet_mpd.align import align_groups
+
+
+def test_groups_one_to_one():
+    g = align_groups([2, 6, 3], [2, 6, 3])
+    assert g.ok and g.groups == [([0], [0]), ([1], [1]), ([2], [2])]
+
+
+def test_groups_merge_on_either_side():
+    # booklet step 1 = OMR steps 1+2 (2+3=5); OMR step 2 = booklet steps 2+3 (1+1=2)
+    g = align_groups([2, 5, 1, 1], [2, 2, 3, 2])
+    assert g.groups == [([0], [0]), ([1], [1, 2]), ([2, 3], [3])]
+    assert g.ok and g.booklet_coverage == 1.0 and g.omr_coverage == 1.0
+
+
+def test_groups_extra_steps_lower_coverage():
+    g = align_groups([2, 40, 3], [2, 3])
+    assert g.booklet_coverage == pytest.approx(2 / 3) and g.omr_coverage == 1.0 and not g.ok
+
+
+def test_groups_empty():
+    assert not align_groups([], []).ok

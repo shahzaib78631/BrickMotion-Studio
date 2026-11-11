@@ -118,3 +118,47 @@ def run_set(lib, palette, truth_steps, pictures, aligned) -> dict:
             statuses[o] = "placed_exact" if all(flags) else "placed_wrong"
     out["statuses"] = statuses
     return out
+
+
+MIN_CALIBRATION_PARTS = 30
+
+
+def calibration_lines(results: list[dict]) -> list[str]:
+    """Markdown section: fit the combiner on train sets, pick a threshold on validation
+    (or train when there is none), report on held-out splits."""
+    from .confidence import choose_threshold, confidence, cues_from_report, fit_combiner
+    from .score import calibration
+
+    def rows(split):
+        return [(cues_from_report(p["report"], p["report"]["camera"]["scale"]), p["exact"])
+                for r in results if r["split"] == split for p in r["per_part"]]
+
+    train, validation = rows("train"), rows("validation")
+    lines = ["", "## Calibration", ""]
+    if len(train) < MIN_CALIBRATION_PARTS:
+        return lines + [f"Calibration skipped: too few parts to calibrate ({len(train)} scored training parts, need {MIN_CALIBRATION_PARTS})."]
+    model = fit_combiner(train)
+    tune = validation if len(validation) >= MIN_CALIBRATION_PARTS else train
+    threshold = choose_threshold([(confidence(c, model), e) for c, e in tune])
+    lines.append(f"Threshold {threshold:.3f} (chosen on {'validation' if tune is validation else 'train'}, target 90% unflagged exact).")
+    for split in ("validation", "test"):
+        held = rows(split)
+        if len(held) < MIN_CALIBRATION_PARTS:
+            lines.append(f"- {split}: too few parts to calibrate ({len(held)}).")
+            continue
+        r = calibration([(confidence(c, model), e) for c, e in held], threshold)
+        fmt = lambda v: "n/a" if v is None else f"{v:.1%}"
+        lines.append(f"- {split}: {r['n']} parts, {r['flagged']} flagged; unflagged exact {fmt(r['unflagged_exact'])}, "
+                     f"flagged exact {fmt(r['flagged_exact'])}, flag recall {fmt(r['flag_recall'])}.")
+    return lines
+
+
+def group_truth(truth_steps, pictures, groups):
+    """Collapse OMR steps into the booklet's step granularity. A group of several OMR
+    steps becomes one step (union of parts); a group spanning several booklet steps has
+    no single picture, so its picture is None."""
+    steps, pics = [], []
+    for booklet_idx, omr_idx in groups:
+        steps.append([part for o in omr_idx for part in truth_steps[o]])
+        pics.append(pictures[booklet_idx[0]] if len(booklet_idx) == 1 else None)
+    return steps, pics

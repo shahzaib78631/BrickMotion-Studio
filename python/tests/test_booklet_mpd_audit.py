@@ -76,3 +76,16 @@ def test_audit_reuses_cached_extraction(tmp_path, monkeypatch):
         raise AssertionError("extract_booklet called again")
     monkeypatch.setattr(audit, "extract_booklet", boom)
     assert audit_pair(pair(tmp_path, pdf, mpd), tmp_path / "work") == first
+
+
+def test_audit_picks_submodel_granularity_when_root_has_one_step(tmp_path):
+    pdf, mpd = tmp_path / "b.pdf", tmp_path / "m.mpd"
+    make_pdf(pdf)
+    part = "1 4 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat"
+    ref = lambda n: f"1 4 0 0 0 1 0 0 0 1 0 0 0 1 {n}.ldr"
+    mpd.write_text("\n".join(["0 FILE main.ldr", ref("a"), ref("b"), "0 STEP",
+                              "0 FILE a.ldr", part, part, "0 STEP",
+                              "0 FILE b.ldr", part, part, part, "0 STEP", "0 NOFILE"]) + "\n")
+    r = audit_pair(pair(tmp_path, pdf, mpd), tmp_path / "work")
+    assert r["truth_mode"] == "expand" and r["alignment_ok"] is True
+    assert r["groups"] == [[[0], [0]], [[1], [1]]]

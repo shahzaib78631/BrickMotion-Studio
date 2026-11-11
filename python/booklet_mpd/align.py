@@ -119,3 +119,69 @@ def align_merged(a: list[int], b: list[int], *, max_run: int = 12, gap: float = 
     ok = m > 0 and len(runs) / m >= min_matched
     return MergedAlignment(runs, missing, extra, sum(sims) / len(sims) if sims else 0.0, ok,
                            "" if ok else f"{len(missing)} unmatched OMR steps of {m}")
+
+
+@dataclass
+class GroupAlignment:
+    groups: list[tuple[list[int], list[int]]]  # (booklet step indices, OMR step indices)
+    booklet_coverage: float
+    omr_coverage: float
+    mean_similarity: float
+    ok: bool
+    reason: str
+
+
+def align_groups(a: list[int], b: list[int], *, max_group: int = 6, gap: float = 0.3,
+                 min_similarity: float = 0.8, min_covered: float = 0.9) -> GroupAlignment:
+    """Align booklet step totals `a` to OMR step sizes `b` allowing k booklet steps to
+    equal l OMR steps (k, l <= max_group) when their summed counts agree."""
+    n, m = len(a), len(b)
+    pa, pb = [0], [0]
+    for x in a:
+        pa.append(pa[-1] + x)
+    for x in b:
+        pb.append(pb[-1] + x)
+    NEG = float("-inf")
+    score = [[NEG] * (m + 1) for _ in range(n + 1)]
+    move: dict[tuple[int, int], tuple[str, int, int]] = {}
+    score[0][0] = 0.0
+    for i in range(n + 1):
+        for j in range(m + 1):
+            base = score[i][j]
+            if base == NEG:
+                continue
+            if i < n and base - gap > score[i + 1][j]:
+                score[i + 1][j] = base - gap
+                move[(i + 1, j)] = ("extra", 1, 0)
+            if j < m and base - gap > score[i][j + 1]:
+                score[i][j + 1] = base - gap
+                move[(i, j + 1)] = ("miss", 0, 1)
+            for k in range(1, min(max_group, n - i) + 1):
+                for l in range(1, min(max_group, m - j) + 1):
+                    s = count_similarity(pa[i + k] - pa[i], pb[j + l] - pb[j])
+                    if s < min_similarity:
+                        continue
+                    value = base + s - 0.02 * (k + l - 2)
+                    if value > score[i + k][j + l]:
+                        score[i + k][j + l] = value
+                        move[(i + k, j + l)] = ("group", k, l)
+    groups: list[tuple[list[int], list[int]]] = []
+    sims: list[float] = []
+    i, j = n, m
+    while i > 0 or j > 0:
+        kind, k, l = move[(i, j)]
+        if kind == "extra":
+            i -= 1
+        elif kind == "miss":
+            j -= 1
+        else:
+            groups.append((list(range(i - k, i)), list(range(j - l, j))))
+            sims.append(count_similarity(pa[i] - pa[i - k], pb[j] - pb[j - l]))
+            i -= k
+            j -= l
+    groups.reverse()
+    cov_a = sum(len(x) for x, _ in groups) / n if n else 0.0
+    cov_b = sum(len(y) for _, y in groups) / m if m else 0.0
+    ok = n > 0 and m > 0 and min(cov_a, cov_b) >= min_covered
+    return GroupAlignment(groups, cov_a, cov_b, sum(sims) / len(sims) if sims else 0.0, ok,
+                          "" if ok else f"coverage booklet {cov_a:.0%}, OMR {cov_b:.0%}")
