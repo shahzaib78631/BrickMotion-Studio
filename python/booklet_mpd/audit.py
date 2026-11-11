@@ -11,7 +11,7 @@ from pathlib import Path
 from brickheadz.reconstruct import steps_from_omr
 from instructions_pdf.extract import extract_booklet
 
-from .align import align_steps, count_similarity
+from .align import align_merged
 from .pairing import Pair
 
 
@@ -28,7 +28,7 @@ def _extraction(pair: Pair, folder: Path) -> dict:
 def audit_pair(pair: Pair, work_dir: Path) -> dict:
     result = {"set": pair.set_number, "split": pair.split, "booklet_steps": 0, "omr_steps": 0,
               "alignment_ok": False, "alignment_reason": "", "mean_similarity": 0.0,
-              "steps_with_picture": 0, "extraction_error": None, "aligned": []}
+              "steps_with_picture": 0, "extraction_error": None, "aligned": [], "merged": []}
     try:
         truth = steps_from_omr(str(pair.omr))
         result["omr_steps"] = len(truth)
@@ -41,8 +41,10 @@ def audit_pair(pair: Pair, work_dir: Path) -> dict:
     result["booklet_steps"] = len(steps)
     result["steps_with_picture"] = sum(1 for s in steps if s.get("picture"))
     totals = [sum(c["count"] for c in s["callout"]) for s in steps]
-    alignment = align_steps(totals, [len(s) for s in truth], count_similarity)
+    alignment = align_merged(totals, [len(s) for s in truth])
     result.update(alignment_ok=alignment.ok, alignment_reason=alignment.reason,
                   mean_similarity=alignment.mean_similarity,
-                  aligned=[[a, b] for a, b in alignment.pairs if a is not None and b is not None])
+                  aligned=[[idx[0], o] for idx, o in alignment.runs if len(idx) == 1],
+                  merged=[[idx, o] for idx, o in alignment.runs if len(idx) > 1],
+                  unmatched_omr=alignment.unmatched_omr, extra_booklet=alignment.extra_booklet)
     return result

@@ -56,3 +56,66 @@ def align_steps(a: list, b: list, sim: Callable[[Any, Any], float], *, gap: floa
     longest = max(n, m)
     ok = longest > 0 and matched / longest >= min_matched
     return Alignment(pairs, mean, ok, "" if ok else f"{longest - matched} unmatched of {longest}")
+
+
+@dataclass
+class MergedAlignment:
+    runs: list[tuple[list[int], int]]  # (booklet step indices, OMR step index)
+    unmatched_omr: list[int]
+    extra_booklet: list[int]
+    mean_similarity: float
+    ok: bool
+    reason: str
+
+
+def align_merged(a: list[int], b: list[int], *, max_run: int = 12, gap: float = 0.3,
+                 min_similarity: float = 0.8, min_matched: float = 0.9) -> MergedAlignment:
+    """Align booklet step totals `a` to OMR step sizes `b`; one OMR step may equal
+    the sum of several consecutive booklet steps (OMR authors often merge steps)."""
+    n, m = len(a), len(b)
+    NEG = float("-inf")
+    prefix = [0]
+    for x in a:
+        prefix.append(prefix[-1] + x)
+    score = [[NEG] * (m + 1) for _ in range(n + 1)]
+    move: dict[tuple[int, int], tuple[str, int]] = {}
+    score[0][0] = 0.0
+    for i in range(n + 1):
+        for j in range(m + 1):
+            if score[i][j] == NEG:
+                continue
+            base = score[i][j]
+            if i < n and base - gap > score[i + 1][j]:
+                score[i + 1][j] = base - gap
+                move[(i + 1, j)] = ("extra", 1)
+            if j < m and base - gap > score[i][j + 1]:
+                score[i][j + 1] = base - gap
+                move[(i, j + 1)] = ("miss", 1)
+            if j < m:
+                for k in range(1, min(max_run, n - i) + 1):
+                    s = count_similarity(prefix[i + k] - prefix[i], b[j])
+                    if s < min_similarity:
+                        continue
+                    value = base + s - 0.01 * (k - 1)
+                    if value > score[i + k][j + 1]:
+                        score[i + k][j + 1] = value
+                        move[(i + k, j + 1)] = ("run", k)
+    runs: list[tuple[list[int], int]] = []
+    extra: list[int] = []
+    missing: list[int] = []
+    sims: list[float] = []
+    i, j = n, m
+    while i > 0 or j > 0:
+        kind, k = move[(i, j)]
+        if kind == "extra":
+            extra.append(i - 1); i -= 1
+        elif kind == "miss":
+            missing.append(j - 1); j -= 1
+        else:
+            runs.append((list(range(i - k, i)), j - 1))
+            sims.append(count_similarity(prefix[i] - prefix[i - k], b[j - 1]))
+            i -= k; j -= 1
+    runs.reverse(); extra.reverse(); missing.reverse()
+    ok = m > 0 and len(runs) / m >= min_matched
+    return MergedAlignment(runs, missing, extra, sum(sims) / len(sims) if sims else 0.0, ok,
+                           "" if ok else f"{len(missing)} unmatched OMR steps of {m}")
