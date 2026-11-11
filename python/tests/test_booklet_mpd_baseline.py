@@ -89,3 +89,15 @@ def test_group_truth_merges_omr_steps_and_drops_picture_for_merged_booklet_steps
     steps, pictures = baseline.group_truth(truth, pics, [[[0], [0, 1]], [[1, 2], [2]], [[2], [3]]])
     assert [len(s) for s in steps] == [2, 1, 1]
     assert pictures == ["p0", None, "p2"]
+
+
+def test_classify_unknown_part_is_unsupported_not_a_crash(lib):
+    assert classify_step(lib, [("40354 - 36840", 4)]) == "unsupported:part not in library"
+
+
+def test_foundation_ignores_parts_missing_from_the_library(lib, monkeypatch):
+    monkeypatch.setattr(baseline, "reconstruct_sequence", fake_sequence)
+    eye = np.eye(4)
+    r = run_set(lib, {4: (0, 0, 0)}, [[("3020", 4, eye), ("nope - 1", 4, eye)]],
+                [np.zeros((8, 8, 3), np.uint8)], [[0, 0]])
+    assert r["first_failure"] is None and r["statuses"] == ["unsupported:part not in library"]

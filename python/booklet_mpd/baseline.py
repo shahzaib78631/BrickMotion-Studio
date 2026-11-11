@@ -22,8 +22,11 @@ def classify_step(lib, parts: list[tuple[str, int]]) -> str:
         return "unsupported:more than two additions" if parts else "unsupported:no additions"
     if len(parts) == 2 and parts[0] != parts[1]:
         return "unsupported:two different additions"
-    if any(info(lib, p).h != 1 or info(lib, p).side_studs for p, _ in parts):
-        return "unsupported:not a plate/tile"
+    try:
+        if any(info(lib, p).h != 1 or info(lib, p).side_studs for p, _ in parts):
+            return "unsupported:not a plate/tile"
+    except KeyError:  # e.g. a collapsed flexible part, which is not an LDraw part
+        return "unsupported:part not in library"
     return "supported"
 
 
@@ -33,8 +36,16 @@ def error_budget(statuses: list[str]) -> dict:
     return {k: (counts[k] / total if total else 0.0) for k in BUDGET_KEYS}
 
 
+def _known(lib, part):
+    try:
+        info(lib, part)
+        return True
+    except KeyError:
+        return False
+
+
 def _foundation(lib, parts):
-    candidates = [pc for pc in parts if info(lib, pc[0]).top_studs and info(lib, pc[0]).h == 1]
+    candidates = [pc for pc in parts if _known(lib, pc[0]) and info(lib, pc[0]).top_studs and info(lib, pc[0]).h == 1]
     candidates.sort(key=lambda pc: info(lib, pc[0]).w * info(lib, pc[0]).d, reverse=True)
     area = lambda pc: info(lib, pc[0]).w * info(lib, pc[0]).d
     if not candidates:

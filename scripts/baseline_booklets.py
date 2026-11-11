@@ -51,7 +51,7 @@ def main():
         folder = OUT / "extract" / f"{pair.set_number}-{pair.booklet}"
         steps = json.loads((folder / "extract.json").read_text())["steps"]
         pictures = [read_image(folder / s["picture"]) if s.get("picture") else None for s in steps]
-        truth, grouped = group_truth(TRUTH_LOADERS[row["truth_mode"]](str(pair.omr)), pictures, row["groups"])
+        truth, grouped = group_truth(TRUTH_LOADERS[row["truth_mode"]](str(pair.omr), warnings=[]), pictures, row["groups"])
         result = run_set(lib, palette, truth, grouped, [[i, i] for i in range(len(truth))])
         result.update(set=pair.set_number, split=pair.split)
         results.append(result)
