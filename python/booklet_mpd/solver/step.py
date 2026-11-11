@@ -15,7 +15,7 @@ from .edges import NEAR_INK, ink_distance
 from .candidates import candidates
 from .picture import Picture
 from .place import DELTAS, Scene, State, solve_step
-from .register import rank_views, search
+from .register import rank_views, register, search
 from .render import View
 
 
@@ -35,6 +35,7 @@ MIN_ARROW_PIXELS = 25     # working-resolution red stroke pixels before floating
 RANKED = 4
 EDGE_REG_WEIGHT = 1.0
 UPRIGHT_BONUS = 0.0
+REREGISTER = True
 UPRIGHT = [i for i, R in enumerate(ORIENTATIONS) if np.allclose(R @ np.array([0.0, -1.0, 0.0]), [0.0, -1.0, 0.0])]
 
 
@@ -97,6 +98,21 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
     if not states or not states[0].placed:
         return StepResult(seeded, [None] * len(seeded), reg.view, reg.score, fit["iou"], status="no candidates")
     best: State = states[0]
+    if REREGISTER:
+        # the picture shows the model AFTER the step: registering the model before it lets the new
+        # parts' silhouette pull the camera off by about a part height. Re-register with the placed
+        # parts drawn where the picture shows them, then place again under that view.
+        from .place import drawn_pose
+        drawn = [(p, c, drawn_pose(sc) if sc is not None else m) for (p, c, m), sc in zip(best.placed, best.scores)]
+        reg2 = register(lib, model0 + drawn, picture, codes, reg.view.orientation, reg.view.yaw, reg.view.pitch,
+                        reg.view.scale, scale_range=(0.98, 1.0, 1.02), classes=classes, on_ink=ink_dist <= NEAR_INK)
+        moved = np.hypot(reg2.view.offset[0] - reg.view.offset[0], reg2.view.offset[1] - reg.view.offset[1])
+        if moved > 1.0 or abs(reg2.view.yaw - reg.view.yaw) > 1 or abs(reg2.view.pitch - reg.view.pitch) > 1:
+            reg2.orientation_index = reg.orientation_index
+            reg = reg2
+            states2 = solve_step(lib, scene_for, model0, parts, candidate_fn, collides=collides, beam=beam, deltas=deltas)
+            if states2 and states2[0].placed:
+                states, best = states2, states2[0]
     return StepResult(seeded + best.placed, [None] * len(seeded) + best.scores, reg.view, reg.score, fit["iou"],
                       alternatives=states[1:])
 
