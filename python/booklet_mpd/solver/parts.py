@@ -165,7 +165,8 @@ def assign(descs: dict, totals: dict, inv_desc: list, counts: list[int]) -> dict
     elems = [j for j, d in enumerate(inv_desc) if d is not None]
     if not keys or not elems:
         return {}
-    sim = np.array([[similarity(descs[k], inv_desc[j]) for j in elems] for k in keys])
+    sim = np.array([[max(similarity(descs[k], d) for d in (inv_desc[j] if isinstance(inv_desc[j], list) else [inv_desc[j]]))
+                     for j in elems] for k in keys])
     G, E = sim.shape
     n = G * E + 2 * E                   # x_ge, unused_e, over_e
     c = np.zeros(n)
@@ -202,7 +203,20 @@ def assign(descs: dict, totals: dict, inv_desc: list, counts: list[int]) -> dict
     return out
 
 
-def rendered_descriptor(lib, part: str, colour: int) -> Descriptor | None:
+def rendered_descriptors(lib, part: str, colour: int) -> list[Descriptor] | None:
+    """The part drawn in the four upright turns (a parts-list picture may show any of them)."""
+    out = []
+    for turn in range(4):
+        a = np.radians(90 * turn)
+        m = np.eye(4)
+        m[:3, :3] = [[np.cos(a), 0, np.sin(a)], [0, 1, 0], [-np.sin(a), 0, np.cos(a)]]
+        d = rendered_descriptor(lib, part, colour, m)
+        if d is not None:
+            out.append(d)
+    return out or None
+
+
+def rendered_descriptor(lib, part: str, colour: int, matrix: np.ndarray | None = None) -> Descriptor | None:
     """Descriptor of an LDraw part drawn like a parts-list picture (iso view, flat colour, dark
     outline): stands in for the printed picture when the booklet has no parts list."""
     from .picture import colour_rgb
@@ -210,7 +224,7 @@ def rendered_descriptor(lib, part: str, colour: int) -> Descriptor | None:
     from .render import mesh
     if not len(mesh(lib, part)):
         return None
-    parts = [(part, colour, np.eye(4))]
+    parts = [(part, colour, np.eye(4) if matrix is None else matrix)]
     view = View(np.eye(3), 45.0, 30.0, 1.0, (0.0, 0.0))
     lo, hi = bounds(lib, parts, view)
     k = 96.0 / float(max(hi[0] - lo[0], hi[1] - lo[1], 1.0))
@@ -258,7 +272,7 @@ def fallback_inventory(lib, set_number: str, client, index: dict) -> list[dict]:
         index.setdefault(element, {k: r.get(k) for k in ("ldrawPart", "ldrawAll", "color", "part")})
         part, _notes = ldraw_part(lib, index[element])
         out.append({"element": element, "count": int(r.get("quantity", 0)),
-                    "desc": rendered_descriptor(lib, part, int(r["color"])) if part else None})
+                    "desc": rendered_descriptors(lib, part, int(r["color"])) if part else None})
     return out
 
 
