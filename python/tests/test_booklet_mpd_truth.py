@@ -151,3 +151,16 @@ def test_malformed_line_raises_by_default_and_is_skipped_when_collecting_warning
     warnings = []
     steps = build_steps(p, warnings=warnings)
     assert [len(s) for s in steps] == [1] and len(warnings) == 1 and "Malformed" in warnings[0]
+
+
+def test_long_stepless_chain_with_many_distinct_names_is_one_part(tmp_path):
+    names = [f"seg{i % 8}.dat" for i in range(60)]
+    seg = "\n".join(ref(0, 8 * i, n) for i, n in enumerate(names))
+    p = w(tmp_path / "k.mpd", f"""
+0 FILE main.ldr
+{ref(4, 0, 'hose-studio-1.ldr')}
+0 STEP
+0 FILE hose-studio-1.ldr
+{seg}
+0 NOFILE""")
+    assert [[part for part, _c, _m in s] for s in build_steps(p)] == [["hose-studio-1"]]

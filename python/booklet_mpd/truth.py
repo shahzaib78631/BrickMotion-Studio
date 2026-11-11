@@ -51,13 +51,13 @@ def _parse(path: str) -> tuple[dict[str, list[str]], str | None]:
 
 def _flexible_chains(files: dict[str, list[str]], root: str) -> set[str]:
     """Submodels that model one flexible part (flex axle, hose, cable) as many tiny
-    segments: no STEP lines, at least 12 placements, at most 3 distinct part names."""
+    segments: no STEP lines and either at least 40 placements, or at least 12 with at most 3 distinct part names."""
     found = set()
     for name, lines in files.items():
         if name == root or name.endswith(".dat") or any(l.upper() == "0 STEP" or l.upper().startswith("0 ROTSTEP ") for l in lines):
             continue
         refs = [l.split(maxsplit=14)[14] for l in lines if l.startswith("1 ") and len(l.split(maxsplit=14)) == 15]
-        if len(refs) >= 12 and len({_name(r) for r in refs}) <= 3:
+        if len(refs) >= 40 or (len(refs) >= 12 and len({_name(r) for r in refs}) <= 3):
             found.add(name)
     return found
 
