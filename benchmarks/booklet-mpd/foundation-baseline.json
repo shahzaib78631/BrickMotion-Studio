@@ -1,0 +1,20 @@
+{
+ "audit_usable": 30,
+ "grade_counts": {
+  "A": 5,
+  "B": 18,
+  "C": 8
+ },
+ "heldout_median_iou": {
+  "test": 0.7871819407132453,
+  "validation": 0.7558413351981488
+ },
+ "identity_matched_fraction": 0.9642227705322524,
+ "mask_pass": {
+  "test": 0.9252336448598131,
+  "train": 0.9520348837209303,
+  "validation": 0.9430555555555555
+ },
+ "protocol_hash": "5175a885cb3d2a933007355d52579e26f063f4ea71359be53cc0f84646608a6d",
+ "tuning_median_iou": 0.7904515357946307
+}
