@@ -1,8 +1,8 @@
 """Per-part confidence for solver placements: logistic combiner of independent cues.
 
 Cues come from the placer (picture score, colour and edge evidence, margin over the next pose,
-float distance), from the step registration (score, hull IoU) and from parts reading (how well the
-callout matched its parts-list picture). The combiner is the L2 logistic regression of
+float distance) and from the step registration (score, hull IoU); the pose probability is multiplied
+by the parts-reading confidence (how well the callout matched its parts-list picture). The combiner is the L2 logistic regression of
 `booklet_mpd.confidence`, refit on these cues over TRAIN-split teacher-forced placements only
 (`fit`); the fitted model and its flag threshold ship in `confidence_model.json`.
 """
@@ -13,7 +13,7 @@ from pathlib import Path
 
 import numpy as np
 
-FEATURES = ("score", "colour", "edge", "margin", "delta", "registration", "fit_iou", "read")
+FEATURES = ("score", "colour", "edge", "margin", "delta", "registration", "fit_iou")
 MODEL_PATH = Path(__file__).with_name("confidence_model.json")
 _DEFAULT: dict | None = None
 
@@ -67,8 +67,9 @@ def part_confidence(sc, result, read_confidence: float = 1.0, model: dict | None
     model = model or default_model()
     c = cues(sc, result, read_confidence)
     if model is None:   # unfitted: margin-only heuristic
-        return float(min(1.0, max(0.0, c["margin"] * 10)))
-    return predict(c, model)
+        return float(min(1.0, max(0.0, c["margin"] * 10))) * float(read_confidence)
+    # pose and identity treated as independent: P(exact) = P(pose | identity) * P(identity)
+    return predict(c, model) * float(read_confidence)
 
 
 def threshold(model: dict | None = None) -> float:

@@ -100,7 +100,15 @@ def parts_set(set_number: str, force: bool = False) -> dict:
     lib = _STATE["lib"]
     t0 = time.time()
     extract, folder = extract_of(set_number)
-    steps, report = read_parts(lib, extract, folder, element_index())
+    import pymupdf
+
+    from .dataset import pairs
+    from .parts import rebrickable_client
+    from .pipeline import inventory_fallback
+    index = element_index()
+    client = rebrickable_client()
+    steps, report = read_parts(lib, extract, folder, index, client,
+                               fallback=inventory_fallback(lib, pymupdf.open(str(pairs()[set_number].pdf)), extract, index, client))
     rows = []
     for case in cases(set_number, with_images=False):
         read = steps[case.booklet_step] if case.booklet_step < len(steps) else None
@@ -114,7 +122,7 @@ def parts_set(set_number: str, force: bool = False) -> dict:
                     hit += 1
                     break
         rows.append({"step": case.step_number, "truth": len(truth), "predicted": len(pred), "hit": hit,
-                     "ok": hit == len(truth) == len(pred), "confidence": float(read.confidence) if read else 0.0})
+                     "ok": hit == len(truth) == len(pred), "confidence": float(min(read.confidence, default=0.0)) if read else 0.0})
     out = {"set": set_number, "rows": rows, "report": report, "seconds": time.time() - t0}
     out["summary"] = summarise_parts([out])
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -236,7 +244,9 @@ def freerun_set(set_number: str, force: bool = False) -> dict:
     lib, collider = _STATE["lib"], _STATE["collider"]
     t0 = time.time()
     data, folder = extract_of(set_number)
-    run = pipeline.run(lib, Path(pairs()[set_number].pdf), data, folder, element_index(), collider=collider)
+    from .parts import rebrickable_client
+    run = pipeline.run(lib, Path(pairs()[set_number].pdf), data, folder, element_index(), collider=collider,
+                       client=rebrickable_client())
     (OUT / "freerun").mkdir(parents=True, exist_ok=True)
     written = pipeline.write(run, OUT / "freerun" / f"{set_number}.mpd", set_number, threshold())
     truth = [(p, c, m) for p, c, m in truth_model(set_number)]
@@ -256,3 +266,75 @@ def freerun_set(set_number: str, force: bool = False) -> dict:
     out["summary"] = {k2: scores[k2] for k2 in ("parts", "predicted", "exact", "component_accuracy")}
     path.write_text(json.dumps(out, indent=1, default=str))
     return out
+
+
+MEPNET_PUBLISHED = {   # MEPNet (Wang et al., ECCV 2022) Table 1: component pose acc / stepwise acc (%), teacher-forced
+    "synthetic_test": (96.96, 93.41), "classics": (88.69, 90.29), "architecture": (83.47, 82.23)}
+
+
+def _load(mode: str) -> dict[str, dict]:
+    out = {}
+    for path in sorted((OUT / mode).rglob("*.json")):
+        r = json.loads(path.read_text())
+        out[r["set"]] = r
+    return out
+
+
+def report_text() -> str:
+    from ..protocol import heldout_sets, tuning_sets
+    from .dataset import grades
+    g = grades()
+    grade = {r["set"]: r["grade"] for r in g}
+    splits = {"train": set(tuning_sets(g)), "validation": set(heldout_sets(g, "validation")), "test": set(heldout_sets(g, "test"))}
+    lines = []
+    for mode, fn in (("teacher", summarise), ("parts", summarise_parts), ("freerun", summarise_freerun)):
+        results = _load(mode)
+        if not results:
+            continue
+        lines.append(f"== {mode}")
+        for split, members in splits.items():
+            for gr in ("A", "B"):
+                for fam in ("studded", "technic"):
+                    sel = [r for s, r in results.items() if s in members and grade.get(s) == gr and family(s) == fam]
+                    if sel:
+                        lines.append(f"  {split:10s} grade {gr} {fam:8s} {json.dumps(fn(sel))}")
+    for mode in ("mepnet_teacher",):
+        for ds, (comp, stepwise) in MEPNET_PUBLISHED.items():
+            sel = [json.loads(p.read_text()) for p in sorted((OUT / mode / ds).glob("*.json"))]
+            if sel:
+                s = summarise(sel)
+                lines.append(f"== {mode} {ds}: ours component {100 * (s['part_accuracy'] or 0):.1f}% stepwise "
+                             f"{100 * (s['step_accuracy'] or 0):.1f}% over {s['steps']} ops / {s['parts']} components "
+                             f"(step 0 excluded) | MEPNet published {comp} / {stepwise}")
+    return "\n".join(lines)
+
+
+def fit_confidence(target: float = 0.9, write: bool = True) -> dict:
+    """Fit the confidence combiner on TRAIN teacher-forced placements only and pick the flag threshold
+    (lowest confidence whose unflagged parts are exact at `target`)."""
+    from ..confidence import choose_threshold
+    from ..protocol import assert_tuning_allowed, tuning_sets
+    from . import confidence
+    from .dataset import grades
+    from .step import StepResult
+    train = set(tuning_sets(grades()))
+    rows = []
+    for s, r in _load("teacher").items():
+        if s not in train:
+            continue
+        assert_tuning_allowed(s, grades())
+        for row in r["rows"]:
+            if row["frame_free"]:
+                continue
+            for f in row["features"]:
+                if "registration" not in f:
+                    continue
+                rows.append(({k: f.get(k, 0.0) for k in confidence.FEATURES}, bool(f["exact"])))
+    model = confidence.fit(rows)
+    scored = [(confidence.predict(c, model), e) for c, e in rows]
+    model["threshold"] = choose_threshold(scored, target)
+    model["fit_on"] = {"sets": sorted(s for s in _load("teacher") if s in train), "parts": len(rows), "target": target}
+    model["calibration_train"] = confidence.calibration(scored)
+    if write:
+        confidence.MODEL_PATH.write_text(json.dumps(model, indent=1))
+    return model

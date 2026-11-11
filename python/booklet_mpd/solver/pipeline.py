@@ -2,7 +2,9 @@
 
 1. Extract the booklet (steps, callouts, parts list) with `instructions_pdf.extract`.
 2. Read each step's new parts (`parts.read_parts`: callout pictures matched to the printed parts
-   list, element ids to LDraw parts through the cached Rebrickable inventories).
+   list, element ids to LDraw parts through the cached Rebrickable inventories). A booklet without a
+   parts list falls back to the set's Rebrickable inventory (set number read off the cover), its
+   pictures rendered from the LDraw parts.
 3. Walk the steps in order, keeping one model in one frame: each step re-registers the model so far
    to its picture and places the new parts (`step.solve`). Substep panels have no pictures of their
    own in the extract, so their callout parts are placed against the main picture. "Nx" repeats are
@@ -59,9 +61,10 @@ def run(lib, pdf: Path, extract_data: dict, folder: Path, index: dict, collider=
     from .parts import read_parts
     from .step import solve
 
-    steps_parts, report = read_parts(lib, extract_data, folder, index, client)
-    out = FreeRun(parts_report=report)
     doc = pymupdf.open(str(pdf))
+    steps_parts, report = read_parts(lib, extract_data, folder, index, client,
+                                     fallback=inventory_fallback(lib, doc, extract_data, index, client))
+    out = FreeRun(parts_report=report)
     model: list = []
     steps = extract_data["steps"][:max_steps] if max_steps else extract_data["steps"]
     for si, step in enumerate(steps):
@@ -98,6 +101,15 @@ def run(lib, pdf: Path, extract_data: dict, folder: Path, index: dict, collider=
         if log:
             log(row)
     return out
+
+
+def inventory_fallback(lib, doc, extract_data: dict, index: dict, client) -> list[dict] | None:
+    """No printed parts list: the set's Rebrickable inventory, the set number read off the cover."""
+    if any(e.get("element") for e in extract_data.get("inventory", [])):
+        return None
+    from .parts import fallback_inventory, set_number_from_pdf
+    number = set_number_from_pdf(doc)
+    return fallback_inventory(lib, number, client, index) if number else None
 
 
 def write(run_result: FreeRun, path: Path, name: str, threshold: float) -> dict:

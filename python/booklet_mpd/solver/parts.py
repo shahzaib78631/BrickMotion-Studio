@@ -202,6 +202,66 @@ def assign(descs: dict, totals: dict, inv_desc: list, counts: list[int]) -> dict
     return out
 
 
+def rendered_descriptor(lib, part: str, colour: int) -> Descriptor | None:
+    """Descriptor of an LDraw part drawn like a parts-list picture (iso view, flat colour, dark
+    outline): stands in for the printed picture when the booklet has no parts list."""
+    from .picture import colour_rgb
+    from .render import View, bounds, render
+    from .render import mesh
+    if not len(mesh(lib, part)):
+        return None
+    parts = [(part, colour, np.eye(4))]
+    view = View(np.eye(3), 45.0, 30.0, 1.0, (0.0, 0.0))
+    lo, hi = bounds(lib, parts, view)
+    k = 96.0 / float(max(hi[0] - lo[0], hi[1] - lo[1], 1.0))
+    view = view.replace(scale=k)
+    lo, hi = bounds(lib, parts, view)
+    view = view.replace(offset=(8 - lo[0], 8 - lo[1]))
+    _depth, label = render(lib, parts, view, (112, 112))
+    mask = (label >= 0).astype(np.uint8)
+    if not mask.any():
+        return None
+    img = np.full((112, 112, 3), 255, np.uint8)
+    img[mask > 0] = colour_rgb(colour)
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    cv2.drawContours(img, contours, -1, (20, 20, 20), 1)
+    return describe(img)
+
+
+_SET = re.compile(r"\b(\d{4,6})\b")
+
+
+def set_number_from_pdf(doc) -> str | None:
+    """The set number printed on the booklet: the 4-6 digit number repeated most on the first and
+    last pages (cover, back cover)."""
+    from collections import Counter
+    pages = [doc[i] for i in sorted({0, 1, len(doc) - 2, len(doc) - 1}) if 0 <= i < len(doc)]
+    counts = Counter(m for p in pages for m in _SET.findall(p.get_text()) if not m.startswith(("19", "20")) or len(m) != 4)
+    return counts.most_common(1)[0][0] if counts else None
+
+
+def fallback_inventory(lib, set_number: str, client, index: dict) -> list[dict]:
+    """Parts list from the set's Rebrickable inventory (read-only, cached) when the booklet prints
+    none: [{'element', 'count', 'desc'}], pictures rendered from the LDraw parts."""
+    try:
+        rows = client.set_parts(f"{set_number}-1") if client is not None else None
+    except Exception:
+        rows = None
+    if rows is None:
+        cached = REBRICKABLE / f"{set_number}-1.json"
+        rows = json.loads(cached.read_text()) if cached.exists() else []
+    out = []
+    for r in rows:
+        if r.get("spare") or r.get("color") is None:
+            continue
+        element = str(r.get("element") or f"{r.get('part')}:{r.get('color')}")
+        index.setdefault(element, {k: r.get(k) for k in ("ldrawPart", "ldrawAll", "color", "part")})
+        part, _notes = ldraw_part(lib, index[element])
+        out.append({"element": element, "count": int(r.get("quantity", 0)),
+                    "desc": rendered_descriptor(lib, part, int(r["color"])) if part else None})
+    return out
+
+
 def _read(folder: Path, rel: str | None):
     if not rel:
         return None
@@ -209,10 +269,16 @@ def _read(folder: Path, rel: str | None):
     return None if img is None else cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
 
-def read_parts(lib, extract: dict, folder: Path, index: dict, client=None) -> tuple[list[StepParts], dict]:
-    """Per extracted step, the parts it adds. Returns (steps, report)."""
+def read_parts(lib, extract: dict, folder: Path, index: dict, client=None, fallback: list[dict] | None = None) -> tuple[list[StepParts], dict]:
+    """Per extracted step, the parts it adds. Returns (steps, report). `fallback`: parts list to use
+    when the booklet prints none (`fallback_inventory`)."""
     inventory = [e for e in extract.get("inventory", []) if e.get("element")]
     inv_desc = [describe(_read(folder, e.get("crop"))) for e in inventory]
+    used_fallback = False
+    if not inventory and fallback:
+        inventory = [e for e in fallback if e.get("desc") is not None]
+        inv_desc = [e["desc"] for e in inventory]
+        used_fallback = True
     records = [resolve_element(e["element"], index, client) for e in inventory]
     resolved = []
     for e, rec in zip(inventory, records):
@@ -255,5 +321,6 @@ def read_parts(lib, extract: dict, folder: Path, index: dict, client=None) -> tu
         steps_out.append(StepParts(parts, conf, unresolved, notes))
     report = {"inventory_entries": len(inventory), "inventory_resolved": sum(1 for r, _ in resolved if r),
               "callout_pictures": len(groups), "callout_pieces": sum(int(c.get("count", 1) or 1) for s in extract["steps"] for c in s.get("callout", [])),
-              "unresolved_pieces": unresolved_total, "has_inventory": bool(inventory)}
+              "unresolved_pieces": unresolved_total, "has_inventory": bool(inventory) and not used_fallback,
+              "rebrickable_inventory": used_fallback}
     return steps_out, report
