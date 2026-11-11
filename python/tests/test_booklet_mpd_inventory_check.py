@@ -111,3 +111,83 @@ def test_count_signature_flags_spares_and_shape_differences():
 def test_count_signature_merges_repeated_element_entries():
     inv = [{"element": "1", "count": 2}, {"element": "1", "count": 1}]
     assert count_signature(inv, Counter({("3001", 4): 3}))["same_signature"]
+
+
+def test_omr_counter_strips_embedded_set_prefix_from_part_names():
+    truth = [[("42121 - 42924", 1, None), ("42924", 1, None), ("3001", 4, None), ("technicflexaxle-studio-1", 0, None)]]
+    assert omr_counter(truth) == Counter({("42924", 1): 2, ("3001", 4): 1, ("technicflexaxle-studio-1", 0): 1})
+
+
+from booklet_mpd.inventory_check import base_number, reconcile
+
+
+def test_base_number_strips_variant_and_print_suffixes():
+    assert [base_number(x) for x in ("63965a", "30367c", "98138pz0", "3070bp07", "3070bpr0235", "3023", "technicflexaxle-studio-1")] == \
+        ["63965", "30367", "98138", "3070", "3070", "3023", "technicflexaxle-studio-1"]
+
+
+def test_reconcile_pairs_variants_and_alternates_within_the_same_colour():
+    only_a = {("63965a", 15): 3, ("28653", 15): 4, ("4073", 2): 1, ("2780", 0): 5}
+    only_b = {("63965", 15): 3, ("3023", 15): 4, ("6141", 2): 1, ("2780", 1): 5}
+    related = lambda a, b: "alternate" if {a, b} in ({"28653", "3023"}, {"4073", "6141"}) else None
+    r = reconcile(only_a, only_b, related)
+    tiers = {(a, b): t for a, b, n, t in r["pairs"]}
+    assert tiers[("63965a", "63965")] == "variant"
+    assert tiers[("28653", "3023")] == "alternate" and tiers[("4073", "6141")] == "alternate"
+    assert r["residual_a"] == {("2780", 0): 5} and r["residual_b"] == {("2780", 1): 5}  # colour differs: real mismatch
+    assert r["reconciled"] == 8
+
+
+def test_reconcile_consumes_counts_without_double_use():
+    r = reconcile({("63965a", 15): 5}, {("63965", 15): 3}, lambda a, b: None)
+    assert r["reconciled"] == 3 and r["residual_a"] == {("63965a", 15): 2} and r["residual_b"] == {}
+
+
+def test_part_lookup_is_cached_and_404_is_none(tmp_path):
+    import urllib.error
+    calls = []
+
+    def get(url, headers):
+        calls.append(url)
+        if url.endswith("/parts/9999/"):
+            raise urllib.error.HTTPError(url, 404, "nf", {}, None)
+        return {"part_num": "28653", "alternates": ["3023"], "molds": ["28653b"], "prints": [], "print_of": None}
+
+    rb = Rebrickable("k", tmp_path, get=get, pause=0, sleep=lambda s: None)
+    assert rb.related_parts("28653") == {"28653", "3023", "28653b"}
+    assert rb.related_parts("28653") == {"28653", "3023", "28653b"} and rb.related_parts("9999") == {"9999"}
+    assert len(calls) == 2
+
+
+import numpy as np
+
+from booklet_mpd.inventory_check import colour_aliases, geometry_equivalent, remap_colours
+
+
+class MeshLib:
+    def __init__(self, meshes):
+        self.meshes = meshes
+
+    def triangles(self, name):
+        return self.meshes.get(name.removesuffix(".dat"), np.zeros((0, 3)))
+
+
+def test_geometry_equivalent_when_meshes_are_identical_up_to_order():
+    cube = np.array([[0, 0, 0], [20, 0, 0], [0, 8, 0], [0, 0, 10]], float)
+    lib = MeshLib({"3023": cube, "28653": cube[::-1].copy(), "3001": cube * 2})
+    assert geometry_equivalent(lib, "3023", "28653")
+    assert not geometry_equivalent(lib, "3023", "3001")
+    assert not geometry_equivalent(lib, "3023", "not-in-library")
+
+
+def test_colour_aliases_map_rubber_colours_to_their_base_colour(tmp_path):
+    cfg = tmp_path / "LDConfig.ldr"
+    cfg.write_text("0 !COLOUR Black CODE 0 VALUE #05131D EDGE #595959\n"
+                   "0 !COLOUR Rubber_Black CODE 256 VALUE #1B2A34 EDGE #808080 RUBBER\n"
+                   "0 !COLOUR Rubber_Mystery CODE 999 VALUE #000000 EDGE #000000\n")
+    assert colour_aliases(cfg) == {256: 0}
+
+
+def test_remap_colours_merges_counts():
+    c = Counter({("92402", 256): 4, ("92402", 0): 1, ("3001", 4): 2})
+    assert remap_colours(c, {256: 0}) == Counter({("92402", 0): 5, ("3001", 4): 2})

@@ -6,6 +6,8 @@ as the Authorization header; only set and element numbers leave the machine.
 from __future__ import annotations
 
 import json
+import numpy as np
+import re
 import time
 import urllib.error
 import urllib.request
@@ -100,6 +102,25 @@ class Rebrickable:
             self._sleep(self._pause)
         return known[element_id]
 
+    def related_parts(self, part_id: str) -> set[str]:
+        cache = self.cache / "parts.json"
+        known = json.loads(cache.read_text()) if cache.is_file() else {}
+        if part_id not in known:
+            try:
+                known[part_id] = self._call(f"{API}parts/{part_id}/")
+            except urllib.error.HTTPError as error:
+                if error.code != 404:
+                    raise
+                known[part_id] = None
+            self.cache.mkdir(parents=True, exist_ok=True)
+            cache.write_text(json.dumps(known, indent=1))
+            self._sleep(self._pause)
+        record = known[part_id] or {}
+        related = {part_id, *(record.get("alternates") or []), *(record.get("molds") or []), *(record.get("prints") or [])}
+        if record.get("print_of"):
+            related.add(record["print_of"])
+        return related
+
 
 def official_counter(parts: list[dict], spares: bool = False) -> Counter:
     counter: Counter = Counter()
@@ -110,8 +131,17 @@ def official_counter(parts: list[dict], spares: bool = False) -> Counter:
     return counter
 
 
+_EMBEDDED = re.compile(r"^\d+ - (.+)$")
+
+
+def _plain(part: str) -> str:
+    """OMR authors name embedded part files '<set> - <part>'; that is the part itself."""
+    match = _EMBEDDED.match(part)
+    return (match.group(1) if match else part).lower()
+
+
 def omr_counter(truth_steps) -> Counter:
-    return Counter((part.lower(), colour) for step in truth_steps for part, colour, _m in step)
+    return Counter((_plain(part), colour) for step in truth_steps for part, colour, _m in step)
 
 
 def booklet_counter(inventory: list[dict], set_parts: list[dict], lookup: Callable) -> tuple[Counter, list[str]]:
@@ -176,3 +206,63 @@ def count_signature(inventory: list[dict], omr: Counter) -> dict:
             "same_distinct": len(elements) == len(omr), "same_signature": a == b,
             "shared_counts": sum(c * n for c, n in shared.items()),
             "booklet_extra": dict(a - b), "omr_extra": dict(b - a)}
+
+
+_VARIANT = re.compile(r"^(\d+)[a-z][a-z0-9]*$")
+
+
+def base_number(part: str) -> str:
+    """'63965a', '30367c', '98138pz0', '3070bpr0235' -> the bare part number."""
+    match = _VARIANT.match(part.lower())
+    return match.group(1) if match else part.lower()
+
+
+def reconcile(only_a: dict, only_b: dict, related: Callable) -> dict:
+    """Pair leftover parts of equal colour that are the same physical part under another
+    id: 'variant' (same base number) or whatever tier `related(a, b)` names (or None)."""
+    left_a, left_b = dict(only_a), dict(only_b)
+    pairs: list[tuple[str, str, int, str]] = []
+    for (pa, ca) in sorted(left_a, key=lambda k: -left_a[k]):
+        for (pb, cb) in list(left_b):
+            if cb != ca or left_a[(pa, ca)] == 0 or left_b[(pb, cb)] == 0:
+                continue
+            tier = "variant" if base_number(pa) == base_number(pb) else related(pa, pb)
+            if not tier:
+                continue
+            take = min(left_a[(pa, ca)], left_b[(pb, cb)])
+            left_a[(pa, ca)] -= take
+            left_b[(pb, cb)] -= take
+            pairs.append((pa, pb, take, tier))
+    return {"pairs": pairs, "reconciled": sum(n for _a, _b, n, _t in pairs),
+            "residual_a": {k: n for k, n in left_a.items() if n}, "residual_b": {k: n for k, n in left_b.items() if n}}
+
+
+def geometry_equivalent(lib, a: str, b: str) -> bool:
+    """Two LDraw ids are the same physical part when their triangle meshes coincide."""
+    def signature(part):
+        triangles = lib.triangles(part + ".dat")
+        return None if not len(triangles) else np.unique(np.round(triangles, 3), axis=0)
+
+    sa, sb = signature(a), signature(b)
+    return sa is not None and sb is not None and sa.shape == sb.shape and bool(np.allclose(sa, sb, atol=0.001))
+
+
+_COLOUR = re.compile(r"!COLOUR\s+(\S+)\s+CODE\s+(\d+)")
+
+
+def colour_aliases(ldconfig: Path) -> dict[int, int]:
+    """Rubber_X -> X (LDraw lists rubber variants separately; inventories do not)."""
+    codes = {}
+    for line in Path(ldconfig).read_text(errors="ignore").splitlines():
+        match = _COLOUR.search(line)
+        if match:
+            codes[match.group(1)] = int(match.group(2))
+    return {code: codes[name[len("Rubber_"):]] for name, code in codes.items()
+            if name.startswith("Rubber_") and name[len("Rubber_"):] in codes}
+
+
+def remap_colours(counter: Counter, mapping: dict[int, int]) -> Counter:
+    out: Counter = Counter()
+    for (part, colour), n in counter.items():
+        out[(part, mapping.get(colour, colour))] += n
+    return out
