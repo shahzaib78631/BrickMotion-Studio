@@ -67,6 +67,7 @@ def teacher_set(set_number: str, force: bool = False) -> dict:
                        trace=traceback.format_exc()[-800:])
         rows.append(row)
     out = {"set": set_number, "rows": rows, "seconds": time.time() - t0}
+    out["summary"] = summarise([out])
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(out, indent=1))
     return out
@@ -161,6 +162,7 @@ def mepnet_teacher(item: str, force: bool = False) -> dict:
     from ..viewfit import BOOKLET_SCALE
     from . import mepnet
     from .evaluate import canonical
+    from .register import rank_views
     from .step import solve
 
     dataset, name = item.split("/")
@@ -187,7 +189,11 @@ def mepnet_teacher(item: str, force: bool = False) -> dict:
         else:
             row["parts"] = len(singles)
             try:
-                result = solve(lib, base, [(p, c) for p, c, _m in singles], mepnet.load_rgb(op.image), pts, collider=collider)
+                # MEPNet's camera is fixed within a set: read its orientation off the previous render,
+                # which shows exactly the given model so far
+                prev = rank_views(lib, base, mepnet.load_rgb(ops[op.index - 1].image), None, None, top=1)
+                result = solve(lib, base, [(p, c) for p, c, _m in singles], mepnet.load_rgb(op.image), pts, collider=collider,
+                               orientations=[prev[0][1]] if prev else None)
                 placed = canonical(lib, result.placed, singles)
                 flags = exact_flags(lib, placed, singles) if placed else []
                 row.update(status=result.status, exact=int(sum(flags)), all_exact=bool(len(flags) == len(singles) and all(flags)),
@@ -206,3 +212,47 @@ def mepnet_teacher(item: str, force: bool = False) -> dict:
 
 def mepnet_summary(results: list[dict]) -> dict:
     return summarise(results)
+
+
+def truth_model(set_number: str) -> list:
+    """The answer key's whole model, every submodel expanded into the main model's frame."""
+    from .dataset import pairs
+    from .mepnet import flatten, parse_mpd
+    files = parse_mpd(Path(pairs()[set_number].omr).read_text(errors="replace"))
+    return flatten(files, next(iter(files)), np.eye(4))
+
+
+def freerun_set(set_number: str, force: bool = False) -> dict:
+    """Free-run from the PDF (extract, parts reading, step-by-step placement); answer key only scores."""
+    from . import pipeline
+    from .confidence import threshold
+    from .dataset import extract_of, pairs
+    from .evaluate import model_scores
+    from .parts import element_index
+
+    path = OUT / "freerun" / f"{set_number}.json"
+    if path.exists() and not force:
+        return json.loads(path.read_text())
+    lib, collider = _STATE["lib"], _STATE["collider"]
+    t0 = time.time()
+    data, folder = extract_of(set_number)
+    run = pipeline.run(lib, Path(pairs()[set_number].pdf), data, folder, element_index(), collider=collider)
+    (OUT / "freerun").mkdir(parents=True, exist_ok=True)
+    written = pipeline.write(run, OUT / "freerun" / f"{set_number}.mpd", set_number, threshold())
+    truth = [(p, c, m) for p, c, m in truth_model(set_number)]
+    model = run.model
+    scores = model_scores(lib, model, truth)
+    flags = scores.pop("flags")
+    k, steps_ok, conf_rows = 0, [], []
+    for group, confs in zip(run.groups, run.confidences):
+        f = flags[k:k + len(group)]
+        k += len(group)
+        if group:
+            steps_ok.append(all(f))
+        conf_rows += [(float(c), bool(e)) for c, e in zip(confs, f)]
+    out = {"set": set_number, "model": scores, "written": written, "incomplete_from": run.failed_from,
+           "step_accuracy": float(np.mean(steps_ok)) if steps_ok else 0.0, "confidence": conf_rows,
+           "parts_reading": run.parts_report, "rows": run.rows, "seconds": time.time() - t0}
+    out["summary"] = {k2: scores[k2] for k2 in ("parts", "predicted", "exact", "component_accuracy")}
+    path.write_text(json.dumps(out, indent=1, default=str))
+    return out

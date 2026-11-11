@@ -50,3 +50,32 @@ def test_write_flags_and_incomplete(tmp_path):
     text = (tmp_path / "x.mpd").read_text()
     assert out == {"parts": 3, "flagged": 1, "steps_flagged": [2]}
     assert text.count("0 STEP") == 2 and "INCOMPLETE from step 2" in text
+
+
+def test_end_to_end_first_steps_of_grade_a_train_booklet(tmp_path):
+    """Regression: 40349 (grade A, train) from the PDF, first 3 steps, scored against the answer key."""
+    import pytest
+    from pathlib import Path
+
+    from booklet_mpd.solver.dataset import CACHE, ROOT
+    pdf = ROOT / ".cache/instructions/arrow-catalog-100/pdf/40349-6270798.pdf"
+    folder = CACHE / "extract" / "40349-6270798"
+    if not pdf.exists() or not (folder / "extract.json").exists():
+        pytest.skip("40349 booklet not cached")
+    import json
+
+    from assembly_model.ldraw import load_library
+    from booklet_mpd.solver import pipeline
+    from booklet_mpd.solver.bench import truth_model
+    from booklet_mpd.solver.collide import Collider
+    from booklet_mpd.solver.evaluate import aligned
+    from booklet_mpd.solver.parts import element_index
+
+    lib = load_library(str(ROOT / "public/ldraw"))
+    data = json.loads((folder / "extract.json").read_text())
+    run = pipeline.run(lib, pdf, data, folder, element_index(), collider=Collider(lib), max_steps=3)
+    assert [len(g) for g in run.groups] == [3, 2, 5]
+    _moved, exact = aligned(lib, run.model, truth_model("40349"))
+    assert exact >= 5, exact      # measured 5/10 on 2026-11-11 (regression guard, not a target)
+    out = pipeline.write(run, tmp_path / "x.mpd", "x", 0.5)
+    assert out["parts"] == 10

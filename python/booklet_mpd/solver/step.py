@@ -43,9 +43,10 @@ def first_part_pose() -> np.ndarray:
 
 
 def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_per_px: float | None,
-          collider=None, beam: int = 6, extra_codes=()) -> StepResult:
+          collider=None, beam: int = 6, extra_codes=(), orientations: list[int] | None = None) -> StepResult:
     """`base`: model so far [(id, colour, 4x4)] in the frame the step is built in; `parts`: new parts
-    [(id, colour)]. When `base` is empty the largest new part is put at the origin (the frame is free)."""
+    [(id, colour)]. When `base` is empty the largest new part is put at the origin (the frame is free).
+    `orientations`: restrict the camera search to these cube orientations (a known, fixed camera)."""
     if rgb is None:
         return StepResult([], [], None, 0.0, 0.0, status="no picture")
     parts = list(parts)
@@ -68,7 +69,8 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
     codes = sorted({c for _p, c, _m in model0} | {c for _p, c in parts} | set(extra_codes))
     classes = picture.classes(codes)
     ink_dist = ink_distance(picture.rgb)
-    orientations = list(dict.fromkeys([oi for _i, oi, _y, _p in views[:RANKED]] + UPRIGHT))
+    if orientations is None:
+        orientations = list(dict.fromkeys([oi for _i, oi, _y, _p in views[:RANKED]] + UPRIGHT))
     scale = BOOKLET_SCALE / picture.pts_per_px if picture.pts_per_px else _scale_from_extent(lib, model0, views[0][1], views[0][2], views[0][3], picture)
     best = None
     for reg in search(lib, model0, picture, codes, orientations, scale, classes=classes, on_ink=ink_dist <= NEAR_INK):
