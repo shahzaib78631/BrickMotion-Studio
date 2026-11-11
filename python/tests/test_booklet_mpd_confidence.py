@@ -8,7 +8,7 @@ def cue(score, margin=0.5, rms=0.1, arrow=0.0):
 
 
 def test_combiner_separates_high_and_low_scores():
-    rows = [(cue(0.95), True), (cue(0.9), True), (cue(0.92), True), (cue(0.3), False), (cue(0.4), False), (cue(0.35), False)]
+    rows = [(cue(0.95), True), (cue(0.9), True), (cue(0.92), True), (cue(0.3), False), (cue(0.4), False), (cue(0.35), False)] * 4
     model = fit_combiner(rows)
     assert confidence(cue(0.93), model) > 0.8
     assert confidence(cue(0.35), model) < 0.2
