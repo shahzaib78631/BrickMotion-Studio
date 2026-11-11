@@ -101,3 +101,8 @@ def test_foundation_ignores_parts_missing_from_the_library(lib, monkeypatch):
     r = run_set(lib, {4: (0, 0, 0)}, [[("3020", 4, eye), ("nope - 1", 4, eye)]],
                 [np.zeros((8, 8, 3), np.uint8)], [[0, 0]])
     assert r["first_failure"] is None and r["statuses"] == ["unsupported:part not in library"]
+
+
+def test_group_visible_uses_the_first_omr_step_of_each_group():
+    scoped = [{"visible": ["a"]}, {"visible": ["a", "b"]}, {"visible": ["x"]}]
+    assert baseline.group_visible(scoped, [[[0], [0, 1]], [[1], [2]]]) == [["a"], ["x"]]

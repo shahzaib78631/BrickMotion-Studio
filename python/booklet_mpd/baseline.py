@@ -173,3 +173,9 @@ def group_truth(truth_steps, pictures, groups):
         steps.append([part for o in omr_idx for part in truth_steps[o]])
         pics.append(pictures[booklet_idx[0]] if len(booklet_idx) == 1 else None)
     return steps, pics
+
+
+def group_visible(scoped_steps, groups):
+    """Parts shown in the picture before each booklet step: those visible before the first
+    OMR step of its group (a submodel's own progress, not every part ever placed)."""
+    return [scoped_steps[omr_idx[0]]["visible"] for _booklet_idx, omr_idx in groups]

@@ -9,14 +9,17 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import pymupdf
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "python"))
 from assembly_model.ldraw import load_library
 from booklet_mpd.audit import TRUTH_LOADERS
-from booklet_mpd.baseline import group_truth
+from booklet_mpd.baseline import group_truth, group_visible
+from booklet_mpd.truth import build_scoped_steps
 from booklet_mpd.camera_fit import _clouds, normalise, silhouette
 from booklet_mpd.pairing import find_pairs
+from booklet_mpd.rawimages import main_model_image
 from booklet_mpd.stepimage import model_components
 from brickheadz.instruction_place import _rotations24, iou
 
@@ -24,6 +27,8 @@ OMR = Path("/Users/mac/Projects/BrickMotion-Data/omr/models")
 SOURCES = ROOT / "benchmarks/instructions/arrow-catalog-100-sources.json"
 OUT = ROOT / ".cache/booklet-mpd"
 SIZE = 80
+RAW = "--raw" in sys.argv
+SCOPED = "--scoped" in sys.argv
 
 
 def vertical_turn(k):
@@ -43,14 +48,21 @@ def main():
         row = wanted.get(pair.set_number)
         if not row:
             continue
+        pdf = pymupdf.open(pair.pdf)
         folder = OUT / "extract" / f"{pair.set_number}-{pair.booklet}"
         steps = json.loads((folder / "extract.json").read_text())["steps"]
         truth, _ = group_truth(TRUTH_LOADERS[row["truth_mode"]](str(pair.omr), warnings=[]), [None] * len(steps), row["groups"])
+        if SCOPED:
+            visible = group_visible(build_scoped_steps(str(pair.omr), expand_submodels=row["truth_mode"] == "expand", warnings=[]), row["groups"])
         usable = [(i, g[0][0]) for i, g in enumerate(row["groups"]) if len(g[0]) == 1 and steps[g[0][0]].get("picture") and i > 0
-                  and sum(len(st) for st in truth[:i]) <= 120]
+                  and sum(len(st) for st in truth[:i]) <= 120 and not (SCOPED and not visible[i])]
         for gi, bi in usable[:: max(1, len(usable) // 12)][:12]:
-            clouds = _clouds(lib, [p for st in truth[:gi] for p in st])
+            clouds = _clouds(lib, visible[gi] if SCOPED else [p for st in truth[:gi] for p in st])
             rgb = cv2.imread(str(folder / steps[bi]["picture"]))[..., ::-1].copy()
+            if RAW:
+                step = steps[bi]
+                raw = main_model_image(pdf[step["page"] - 1], pymupdf.Rect(step["pictureBox"])) if step.get("pictureBox") else None
+                rgb = raw if raw is not None else rgb
             targets = [normalise(c, SIZE) for c in model_components(rgb)]
             score = lambda R: max((iou(normalise(silhouette([c @ R.T for c in clouds], 35, 35, SIZE), SIZE), t) for t in targets), default=0.0)
             v = max(score(vertical_turn(k)) for k in range(4))

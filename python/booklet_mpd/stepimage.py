@@ -21,6 +21,15 @@ def _components(mask: np.ndarray):
     return count, labels, stats
 
 
+def fill_holes(mask: np.ndarray) -> np.ndarray:
+    """Pixels the outside cannot reach without crossing the mask (closed-outline interiors)."""
+    padded = np.pad(~mask, 1, constant_values=True).astype(np.uint8)
+    flood = padded.copy()
+    cv2.floodFill(flood, np.zeros((flood.shape[0] + 2, flood.shape[1] + 2), np.uint8), (0, 0), 2)
+    outside = (flood == 2)[1:-1, 1:-1]
+    return ~outside
+
+
 def _foreground(rgb: np.ndarray, tolerance: float = 30.0, min_fraction: float = 0.0015) -> np.ndarray:
     h, w = rgb.shape[:2]
     pixels = rgb.astype(float)
@@ -52,7 +61,7 @@ def _foreground(rgb: np.ndarray, tolerance: float = 30.0, min_fraction: float = 
             keep |= labels == i
     # Opening removes thin lines (the connector) but also thin parts; give back what lies within
     # half a kernel of the kept body.
-    return cv2.dilate(keep.astype(np.uint8), kernel).astype(bool) & candidate
+    return fill_holes(cv2.dilate(keep.astype(np.uint8), kernel).astype(bool) & candidate)
 
 
 def model_mask(rgb: np.ndarray, tolerance: float = 30.0, min_fraction: float = 0.0015) -> np.ndarray:

@@ -62,7 +62,7 @@ def _flexible_chains(files: dict[str, list[str]], root: str) -> set[str]:
     return found
 
 
-def build_steps(path: str, *, expand_submodels: bool = True, warnings: list[str] | None = None) -> list[list[Part]]:
+def build_scoped_steps(path: str, *, expand_submodels: bool = True, warnings: list[str] | None = None) -> list[dict]:
     """Strict unless `warnings` is given: then malformed placement lines are skipped and described there."""
     files, root = _parse(path)
     if root is None:
@@ -102,14 +102,23 @@ def build_steps(path: str, *, expand_submodels: bool = True, warnings: list[str]
     def steps_of(ref, colour, matrix, stack):
         if ref in stack:
             raise ValueError(f"Cyclic MPD reference: {' -> '.join((*stack, ref))}")
-        out: list[list[Part]] = []
+        out: list[dict] = []
         group: list[Part] = []
+        own: list[Part] = []        # parts already built into this file's model
+        attached: list[Part] = []   # leaves of sub-assemblies attached in the current step
+
+        def flush():
+            nonlocal group, attached
+            if group:
+                out.append({"added": group, "visible": list(own), "file": ref})
+            own.extend(group)
+            own.extend(attached)
+            group, attached = [], []
+
         for line in files[ref]:
             upper = line.upper()
             if upper == "0 STEP" or upper.startswith("0 ROTSTEP "):
-                if group:
-                    out.append(group)
-                group = []
+                flush()
             elif line.startswith("1 "):
                 placed = placement(line)
                 if placed is None:
@@ -120,11 +129,16 @@ def build_steps(path: str, *, expand_submodels: bool = True, warnings: list[str]
                 if expand_submodels and child in files and not child.endswith(".dat") and child not in chains and child not in expanded:
                     expanded.add(child)
                     out.extend(steps_of(child, c, m, (*stack, ref)))
+                    attached.extend(leaves(child, c, m, (*stack, ref)))
                 else:
                     group.extend(leaves(child, c, m, (*stack, ref)))
-        if group:
-            out.append(group)
+        flush()
         return out
 
     expanded.add(root)
     return steps_of(root, 16, np.eye(4), ())
+
+
+def build_steps(path: str, *, expand_submodels: bool = True, warnings: list[str] | None = None) -> list[list[Part]]:
+    """Parts added per step, in booklet build order (see build_scoped_steps for visibility)."""
+    return [step["added"] for step in build_scoped_steps(path, expand_submodels=expand_submodels, warnings=warnings)]

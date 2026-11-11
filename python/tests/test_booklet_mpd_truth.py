@@ -164,3 +164,42 @@ def test_long_stepless_chain_with_many_distinct_names_is_one_part(tmp_path):
 {seg}
 0 NOFILE""")
     assert [[part for part, _c, _m in s] for s in build_steps(p)] == [["hose-studio-1"]]
+
+
+from booklet_mpd.truth import build_scoped_steps
+
+
+def test_scoped_steps_show_only_what_the_picture_shows(tmp_path):
+    p = w(tmp_path / "s.mpd", f"""
+0 FILE main.ldr
+{ref(4, 0, '3020.dat')}
+{ref(4, 100, 'sub.ldr')}
+0 STEP
+{ref(4, 0, '3023.dat')}
+0 STEP
+0 FILE sub.ldr
+{ref(4, 0, '3001.dat')}
+0 STEP
+{ref(4, 20, '3001.dat')}
+0 STEP
+0 NOFILE""")
+    steps = build_scoped_steps(p)
+    names = lambda parts: [part for part, _c, _m in parts]
+    assert [(names(s["added"]), names(s["visible"]), s["file"]) for s in steps] == [
+        (["3001"], [], "sub.ldr"),
+        (["3001"], ["3001"], "sub.ldr"),                      # the sub-assembly's own progress only
+        (["3020"], [], "main.ldr"),                            # sub is attached in this step, not yet visible before it
+        (["3023"], ["3020", "3001", "3001"], "main.ldr"),      # parent now shows leaves + the attached sub-assembly
+    ]
+
+
+def test_build_steps_is_unchanged_by_scoping(tmp_path):
+    p = w(tmp_path / "t.mpd", f"""
+0 FILE main.ldr
+{ref(4, 0, 'sub.ldr')}
+0 STEP
+0 FILE sub.ldr
+{ref(4, 0, '3001.dat')}
+0 STEP
+0 NOFILE""")
+    assert [len(s) for s in build_steps(p)] == [1]

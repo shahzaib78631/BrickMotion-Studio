@@ -101,3 +101,31 @@ def test_thin_details_close_to_the_model_are_kept_but_a_long_connector_is_not():
     img[118:121, 20:150] = (0, 0, 0)    # a long thin connector line reaching the model from the left
     m = model_mask(img)
     assert m[111, 262] and not m[119, 60]
+
+
+from booklet_mpd.stepimage import fill_holes
+
+
+def test_fill_holes_fills_enclosed_background_but_not_open_gaps():
+    m = np.zeros((40, 40), bool)
+    m[5:35, 5:35] = True
+    m[15:25, 15:25] = False          # enclosed hole
+    m[5:35, 30:35] = True
+    c = np.zeros((40, 40), bool)
+    c[5:35, 5:35] = True
+    c[15:25, 15:40] = False          # a channel open to the outside: not a hole
+    f = fill_holes(m)
+    assert f[20, 20] and f.sum() == 30 * 30
+    assert not fill_holes(c)[20, 30]
+
+
+def test_white_model_with_speckled_interior_becomes_solid():
+    img = canvas(h=120, w=200)
+    img[30:100, 60:160] = (255, 255, 255)
+    img[28:32, 60:160] = (0, 0, 0)
+    img[98:102, 60:160] = (0, 0, 0)
+    img[30:100, 58:62] = (0, 0, 0)
+    img[30:100, 158:162] = (0, 0, 0)
+    img[60:70, 90:100] = BG              # interior pixels that read as background
+    m = model_mask(img)
+    assert m[65, 95] and m[50, 100]
