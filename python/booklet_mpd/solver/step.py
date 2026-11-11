@@ -25,9 +25,11 @@ class StepResult:
     scores: list                       # per placed part: place.Scored
     view: View | None
     registration: float
-    fit_iou: float
+    fit_iou: float                     # PRE-placement hull IoU of the model so far (not evidence of correct placement)
     alternatives: list = field(default_factory=list)   # other final beam states (State)
     status: str = "ok"
+    completed: float = 0.0             # registration score of the chosen completed hypothesis (model + new parts)
+    hypotheses: list = field(default_factory=list)     # completed scores of every camera hypothesis tried
 
 
 VIEWS = 8
@@ -36,6 +38,7 @@ RANKED = 4
 EDGE_REG_WEIGHT = 1.0
 UPRIGHT_BONUS = 0.0
 REREGISTER = True
+HYPOTHESES = 3            # camera orientations carried through placement and compared once completed
 UPRIGHT = [i for i, R in enumerate(ORIENTATIONS) if np.allclose(R @ np.array([0.0, -1.0, 0.0]), [0.0, -1.0, 0.0])]
 
 
@@ -73,18 +76,19 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
     if orientations is None:
         orientations = list(dict.fromkeys([oi for _i, oi, _y, _p in views[:RANKED]] + UPRIGHT))
     scale = BOOKLET_SCALE / picture.pts_per_px if picture.pts_per_px else _scale_from_extent(lib, model0, views[0][1], views[0][2], views[0][3], picture)
-    best = None
-    for reg in search(lib, model0, picture, codes, orientations, scale, classes=classes, on_ink=ink_dist <= NEAR_INK):
-        value = reg.score + (UPRIGHT_BONUS if reg.orientation_index in UPRIGHT else 0.0)
-        if best is None or value > best[0]:
-            best = (value, reg)
-    _value, reg = best
-    fit = {"iou": views[0][0]}
+    regs = search(lib, model0, picture, codes, orientations, scale, classes=classes, on_ink=ink_dist <= NEAR_INK,
+                  refine=2 * HYPOTHESES)
+    # diverse camera hypotheses: the best registration per cube orientation, best first
+    hypotheses, seen = [], set()
+    for reg in sorted(regs, key=lambda r: -(r.score + (UPRIGHT_BONUS if r.orientation_index in UPRIGHT else 0.0))):
+        if reg.orientation_index not in seen:
+            seen.add(reg.orientation_index)
+            hypotheses.append(reg)
+    hypotheses = hypotheses[:HYPOTHESES]
+    pre_iou = float(views[0][0])
     if not parts:
-        return StepResult(seeded, [None] * len(seeded), reg.view, reg.score, fit["iou"])
-
-    def scene_for(model):
-        return Scene.build(lib, model, reg.view, classes, codes, ink_dist)
+        reg = hypotheses[0]
+        return StepResult(seeded, [None] * len(seeded), reg.view, reg.score, pre_iou, completed=reg.score)
 
     def candidate_fn(part, model):
         return candidates(lib, part, model)
@@ -94,27 +98,46 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
         collider.set_model(model0)
         collides = lambda part, matrix, _model: collider.hits(part, matrix)
     deltas = DELTAS if int(picture.arrows.sum()) >= MIN_ARROW_PIXELS else (0.0,)
-    states = solve_step(lib, scene_for, model0, parts, candidate_fn, collides=collides, beam=beam, deltas=deltas)
-    if not states or not states[0].placed:
-        return StepResult(seeded, [None] * len(seeded), reg.view, reg.score, fit["iou"], status="no candidates")
-    best: State = states[0]
-    if REREGISTER:
-        # the picture shows the model AFTER the step: registering the model before it lets the new
-        # parts' silhouette pull the camera off by about a part height. Re-register with the placed
-        # parts drawn where the picture shows them, then place again under that view.
+    on_ink = ink_dist <= NEAR_INK
+
+    def place_under(reg):
+        def scene_for(model):
+            return Scene.build(lib, model, reg.view, classes, codes, ink_dist)
+        return solve_step(lib, scene_for, model0, parts, candidate_fn, collides=collides, beam=beam, deltas=deltas)
+
+    def completed(reg, state):
+        """Re-register the completed hypothesis (parts drawn where the picture shows them)."""
         from .place import drawn_pose
-        drawn = [(p, c, drawn_pose(sc) if sc is not None else m) for (p, c, m), sc in zip(best.placed, best.scores)]
-        reg2 = register(lib, model0 + drawn, picture, codes, reg.view.orientation, reg.view.yaw, reg.view.pitch,
-                        reg.view.scale, scale_range=(0.98, 1.0, 1.02), classes=classes, on_ink=ink_dist <= NEAR_INK)
-        moved = np.hypot(reg2.view.offset[0] - reg.view.offset[0], reg2.view.offset[1] - reg.view.offset[1])
-        if moved > 1.0 or abs(reg2.view.yaw - reg.view.yaw) > 1 or abs(reg2.view.pitch - reg.view.pitch) > 1:
-            reg2.orientation_index = reg.orientation_index
-            reg = reg2
-            states2 = solve_step(lib, scene_for, model0, parts, candidate_fn, collides=collides, beam=beam, deltas=deltas)
-            if states2 and states2[0].placed:
-                states, best = states2, states2[0]
-    return StepResult(seeded + best.placed, [None] * len(seeded) + best.scores, reg.view, reg.score, fit["iou"],
-                      alternatives=states[1:])
+        drawn = [(p, c, drawn_pose(sc) if sc is not None else m) for (p, c, m), sc in zip(state.placed, state.scores)]
+        out = register(lib, model0 + drawn, picture, codes, reg.view.orientation, reg.view.yaw, reg.view.pitch,
+                       reg.view.scale, scale_range=(0.98, 1.0, 1.02), classes=classes, on_ink=on_ink)
+        out.orientation_index = reg.orientation_index
+        return out
+
+    results = []
+    for reg in hypotheses:
+        states = place_under(reg)
+        if not states or not states[0].placed:
+            continue
+        reg2 = completed(reg, states[0])
+        if REREGISTER:
+            # the picture shows the model AFTER the step: registering the model before it lets the new
+            # parts' silhouette pull the camera off; place again under the completed registration
+            moved = np.hypot(reg2.view.offset[0] - reg.view.offset[0], reg2.view.offset[1] - reg.view.offset[1])
+            if moved > 1.0 or abs(reg2.view.yaw - reg.view.yaw) > 1 or abs(reg2.view.pitch - reg.view.pitch) > 1:
+                states2 = place_under(reg2)
+                if states2 and states2[0].placed:
+                    states = states2
+                    reg2 = completed(reg2, states[0])
+        results.append((reg2.score, reg2, states))
+    if not results:
+        reg = hypotheses[0]
+        return StepResult(seeded, [None] * len(seeded), reg.view, reg.score, pre_iou, status="no candidates")
+    # pick the hypothesis whose completed model explains the picture best
+    score, reg, states = max(results, key=lambda r: r[0])
+    best: State = states[0]
+    return StepResult(seeded + best.placed, [None] * len(seeded) + best.scores, reg.view, reg.score, pre_iou,
+                      alternatives=states[1:], completed=float(score), hypotheses=[float(r[0]) for r in results])
 
 
 def _scale_from_extent(lib, parts, oi, yaw, pitch, picture) -> float:

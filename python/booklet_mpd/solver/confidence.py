@@ -65,11 +65,18 @@ def default_model() -> dict | None:
 
 def part_confidence(sc, result, read_confidence: float = 1.0, model: dict | None = None) -> float:
     model = model or default_model()
+    read_confidence = float(min(1.0, max(0.0, read_confidence)))
     c = cues(sc, result, read_confidence)
     if model is None:   # unfitted: margin-only heuristic
         return float(min(1.0, max(0.0, c["margin"] * 10))) * float(read_confidence)
     # pose and identity treated as independent: P(exact) = P(pose | identity) * P(identity)
     return predict(c, model) * float(read_confidence)
+
+
+def model_hash(model: dict | None = None) -> str | None:
+    import hashlib
+    model = model or default_model()
+    return hashlib.sha256(json.dumps(model, sort_keys=True).encode()).hexdigest()[:16] if model else None
 
 
 def threshold(model: dict | None = None) -> float:

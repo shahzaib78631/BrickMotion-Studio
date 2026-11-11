@@ -27,7 +27,8 @@ def init_worker(oracle: bool = True):
 def part_features(sc, result) -> dict:
     if sc is None:
         return {}
-    return {"score": float(sc.score), "colour": float(sc.colour), "edge": float(sc.edge), "delta": float(sc.delta),
+    return {"completed": float(result.completed),
+            "score": float(sc.score), "colour": float(sc.colour), "edge": float(sc.edge), "delta": float(sc.delta),
             "margin": float(sc.margin), "changed": int(sc.changed), "seated": float(sc.seated),
             "registration": float(result.registration), "fit_iou": float(result.fit_iou)}
 
@@ -260,7 +261,9 @@ def freerun_set(set_number: str, force: bool = False) -> dict:
         if group:
             steps_ok.append(all(f))
         conf_rows += [(float(c), bool(e)) for c, e in zip(confs, f)]
+    from .confidence import model_hash
     out = {"set": set_number, "model": scores, "written": written, "incomplete_from": run.failed_from,
+           "unsupported_from": run.unsupported_from, "review": run.review, "confidence_model": model_hash(),
            "step_accuracy": float(np.mean(steps_ok)) if steps_ok else 0.0, "confidence": conf_rows,
            "parts_reading": run.parts_report, "rows": run.rows, "seconds": time.time() - t0}
     out["summary"] = {k2: scores[k2] for k2 in ("parts", "predicted", "exact", "component_accuracy")}

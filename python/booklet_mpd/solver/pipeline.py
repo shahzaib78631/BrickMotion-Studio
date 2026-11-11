@@ -11,7 +11,9 @@
    recorded in the report (one copy is placed: compound placement of repeated sub-assemblies is not
    implemented).
 4. Score each part with the confidence combiner and write an MPD with real STEPs, flags on parts
-   below the threshold and an INCOMPLETE marker from the first step the solver gave up on.
+   below the threshold and an INCOMPLETE marker from the first step that is either an operational
+   give-up or an unsupported construction (repeats). Review-required uncertainty (unresolved or
+   unread parts) is listed separately. A run without these markers is NOT verified correct.
 """
 from __future__ import annotations
 
@@ -33,7 +35,9 @@ class FreeRun:
     groups: list = field(default_factory=list)        # per extracted step: [(part, colour, matrix)]
     confidences: list = field(default_factory=list)   # per extracted step: [float]
     rows: list = field(default_factory=list)          # per extracted step: diagnostics
-    failed_from: int | None = None                    # 1-based step index of the first give-up
+    failed_from: int | None = None                    # 1-based step of the first operational give-up
+    unsupported_from: int | None = None               # 1-based step of the first unsupported construction (repeats)
+    review: list = field(default_factory=list)        # [(step, reason)] steps needing human review
     parts_report: dict = field(default_factory=dict)
 
     @property
@@ -86,14 +90,25 @@ def run(lib, pdf: Path, extract_data: dict, folder: Path, index: dict, collider=
                 read_conf = list(read.confidence)
                 for k, sc in enumerate(result.scores):
                     confs.append(part_confidence(sc, result, read_conf[k] if k < len(read_conf) else 0.0, combiner))
-                row.update(registration=float(result.registration), fit_iou=float(result.fit_iou),
-                           placed=len(placed))
+                row.update(registration=float(result.registration), pre_fit_iou=float(result.fit_iou),
+                           completed=float(result.completed), hypotheses=result.hypotheses, placed=len(placed))
+            # operational failure: the solver could not produce a placement for every part read
             gave_up = result is None or status != "ok" or result.fit_iou < GIVE_UP_IOU or len(placed) < len(read.parts)
-            row["status"] = status if status != "ok" or not gave_up else "low fit"
+            row["status"] = status if status != "ok" or not gave_up else "low pre-placement fit"
             if gave_up and out.failed_from is None:
                 out.failed_from = si + 1
         else:
             row["status"] = "no parts read"
+        # unsupported construction: "Nx" sub-assemblies are placed once, so the model lacks copies
+        if int(step.get("repeat", 1) or 1) > 1:
+            row["unsupported"] = f"repeat x{step['repeat']} placed once"
+            if out.unsupported_from is None:
+                out.unsupported_from = si + 1
+        # review-required uncertainty (not a failure by itself)
+        if read.unresolved:
+            out.review.append((si + 1, f"{read.unresolved} unresolved part(s)"))
+        if not read.parts:
+            out.review.append((si + 1, "no parts read"))
         model += placed
         out.groups.append(placed)
         out.confidences.append(confs)
@@ -114,5 +129,6 @@ def inventory_fallback(lib, doc, extract_data: dict, index: dict, client) -> lis
 
 def write(run_result: FreeRun, path: Path, name: str, threshold: float) -> dict:
     from ..flagged_mpd import write_flagged_mpd
+    marks = [s for s in (run_result.failed_from, run_result.unsupported_from) if s is not None]
     return write_flagged_mpd(path, name, run_result.groups, run_result.confidences, threshold,
-                             failed_from_step=run_result.failed_from)
+                             failed_from_step=min(marks) if marks else None)

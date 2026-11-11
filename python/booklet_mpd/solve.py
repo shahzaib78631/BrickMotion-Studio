@@ -53,7 +53,9 @@ def main(argv=None) -> int:
     written = pipeline.write(result, args.out, args.out.stem, confidence.threshold())
     report = {"pdf": str(args.pdf), "steps": len(result.groups), "written": written,
               "incomplete_from_step": result.failed_from, "parts_reading": result.parts_report,
-              "threshold": confidence.threshold(), "exact_collisions": collider.exact, "rows": result.rows}
+              "unsupported_from_step": result.unsupported_from, "review": result.review,
+              "threshold": confidence.threshold(), "confidence_model": confidence.model_hash() or "unfitted margin heuristic",
+              "exact_collisions": collider.exact, "verified": False, "rows": result.rows}
     if args.report:
         args.report.write_text(json.dumps(report, indent=1, default=str))
     print(f"{args.out}: {written['parts']} parts in {len(result.groups)} steps, {written['flagged']} flagged"

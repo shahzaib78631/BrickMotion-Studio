@@ -48,29 +48,43 @@ def _is_cube_rotation(r: np.ndarray) -> bool:
 
 
 def aligned(lib, predicted: list, truth: list, max_tries: int = 60) -> tuple[list, int]:
-    """(predicted moved onto the answer key's frame, exact count) for the best rigid alignment."""
+    """(predicted moved onto the answer key's frame, exact count) for the best rigid alignment.
+
+    Each anchor pair (a predicted part and an answer-key part of the same id and colour) proposes the
+    cube turns that map the anchor onto its answer-key copy, including every turn under which the
+    anchor's own geometry is unchanged (a square plate admits four frames, not one)."""
+    from ..viewfit import ORIENTATIONS
     predicted = canonical(lib, predicted, truth)
     if not predicted or not truth:
         return predicted, 0
     best = (predicted, sum(exact_flags(lib, predicted, truth)))
     tries = 0
-    anchors = sorted(range(len(predicted)), key=lambda i: i)[:6]
-    for i in anchors:
+    seen: set = set()
+    for i in range(min(6, len(predicted))):
         p, c, m = predicted[i]
+        m = np.asarray(m, float)
         for tp, tc, tm in truth:
             if tp != p or tc != c:
                 continue
-            T = np.asarray(tm, float) @ np.linalg.inv(np.asarray(m, float))
-            if not _is_cube_rotation(T[:3, :3]):
-                continue
-            T[:3, :3] = np.round(T[:3, :3])
-            moved = [(pp, cc, T @ np.asarray(mm, float)) for pp, cc, mm in predicted]
-            n = sum(exact_flags(lib, moved, truth))
-            if n > best[1]:
-                best = (moved, n)
-            tries += 1
-            if tries >= max_tries or best[1] == len(truth):
-                return best
+            tm = np.asarray(tm, float)
+            for sym in ORIENTATIONS:
+                T = np.eye(4)
+                T[:3, :3] = tm[:3, :3] @ sym @ np.linalg.inv(m[:3, :3])
+                if not _is_cube_rotation(T[:3, :3]):
+                    continue
+                T[:3, :3] = np.round(T[:3, :3])
+                T[:3, 3] = tm[:3, 3] - T[:3, :3] @ m[:3, 3]
+                key = tuple(np.round(T, 2).ravel())
+                if key in seen or not exact_flags(lib, [(p, c, T @ m)], [(tp, tc, tm)])[0]:
+                    continue
+                seen.add(key)
+                moved = [(pp, cc, T @ np.asarray(mm, float)) for pp, cc, mm in predicted]
+                n = sum(exact_flags(lib, moved, truth))
+                if n > best[1]:
+                    best = (moved, n)
+                tries += 1
+                if tries >= max_tries or best[1] == len(truth):
+                    return best
     return best
 
 
