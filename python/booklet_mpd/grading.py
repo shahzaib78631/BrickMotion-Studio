@@ -8,6 +8,7 @@ Rules (written before any set was graded; see docs/superpowers/specs/2026-11-11-
 """
 from __future__ import annotations
 
+RULES_VERSION = 2   # 2: visible-IoU allows all 24 orientations (1: vertical quarter turns only)
 A_MAX_RESIDUAL = 0.01
 C_MIN_RESIDUAL = 0.05
 MAX_OFFICIAL_GAP = 0.02

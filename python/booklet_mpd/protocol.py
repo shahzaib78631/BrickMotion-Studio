@@ -11,7 +11,7 @@ import json
 
 from . import grading
 
-PROTOCOL_VERSION = 1
+PROTOCOL_VERSION = 2   # 2: consistency check allows all 24 orientations (see grading.RULES_VERSION)
 ELIGIBLE_GRADES = ("A", "B")
 CONTAMINATED = {"40351": "step-mask thresholds were tuned while inspecting its failures"}
 HELD_OUT_SPLITS = ("validation", "test")
@@ -49,5 +49,5 @@ def protocol_hash() -> str:
     """Identity of the rules; stored with every report so a changed protocol is visible."""
     rules = {"version": PROTOCOL_VERSION, "eligible": ELIGIBLE_GRADES, "contaminated": CONTAMINATED,
              "heldout": HELD_OUT_SPLITS,
-             "grading": {k: getattr(grading, k) for k in ("A_MAX_RESIDUAL", "C_MIN_RESIDUAL", "MAX_OFFICIAL_GAP", "MIN_IOU", "MIN_IOU_STEPS")}}
+             "grading": {k: getattr(grading, k) for k in ("RULES_VERSION", "A_MAX_RESIDUAL", "C_MIN_RESIDUAL", "MAX_OFFICIAL_GAP", "MIN_IOU", "MIN_IOU_STEPS")}}
     return hashlib.sha256(json.dumps(rules, sort_keys=True).encode()).hexdigest()

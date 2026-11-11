@@ -87,3 +87,29 @@ def test_visible_iou_is_low_when_the_picture_shows_something_else(lib):
     other = [("3001", 4, placed(0, 0, 0)), ("3001", 4, placed(0, -24, 0)), ("3001", 4, placed(0, -48, 0))]
     mask = silhouette(_clouds(lib, other), 35, 35, 160)
     assert visible_iou(lib, PARTS, picture_from(mask)) < 0.85
+
+
+def rotated(parts, R):
+    out = []
+    for part, colour, m in parts:
+        n = m.copy()
+        n[:3, :3] = R @ m[:3, :3]
+        n[:3, 3] = R @ m[:3, 3]
+        out.append((part, colour, n))
+    return out
+
+
+FLIP_X_180 = np.diag([1.0, -1.0, -1.0])      # model turned upside down about a horizontal axis
+TILT_X_90 = np.array([[1.0, 0, 0], [0, 0, -1], [0, 1, 0]])   # model laid on its back
+
+
+def test_visible_iou_accepts_a_model_flipped_upside_down_or_on_its_back(lib):
+    for R in (FLIP_X_180, TILT_X_90):
+        mask = silhouette(_clouds(lib, rotated(PARTS, R)), 35, 35, 160)
+        # all 24 orientations: 0.97 / 0.86 here; the version-1 vertical-turns-only check gave 0.61 / 0.57
+        assert visible_iou(lib, PARTS, picture_from(mask)) > 0.8
+
+
+def test_rules_version_is_part_of_the_protocol_identity():
+    from booklet_mpd import grading, protocol
+    assert grading.RULES_VERSION == 2 and protocol.PROTOCOL_VERSION == 2
