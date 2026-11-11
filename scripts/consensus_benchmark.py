@@ -61,15 +61,17 @@ def main():
         camera = consensus_camera(fit, YAWS, PITCHES)
         held_consensus = [apply_consensus(s, YAWS, PITCHES, camera)["iou"] for s in held]
         held_free = [float(s.max()) for s in held]
+        held_fixed = [apply_consensus(s, YAWS, PITCHES, {"yaw": 35, "pitch": 35})["iou"] for s in held]
         item = {"set": pair.set_number, "yaw": camera["yaw"], "pitch": camera["pitch"], "fit_steps": len(fit), "held_steps": len(held),
-                "held_consensus_mean": statistics.mean(held_consensus), "held_free_mean": statistics.mean(held_free),
+                "held_consensus_mean": statistics.mean(held_consensus), "held_free_mean": statistics.mean(held_free), "held_fixed_35_mean": statistics.mean(held_fixed),
+                "held_fixed_35_ge_0.8": sum(v >= .8 for v in held_fixed) / len(held),
                 "held_consensus_ge_0.8": sum(v >= .8 for v in held_consensus) / len(held)}
         summary.append(item)
         print(f"{pair.set_number}: camera yaw {camera['yaw']} pitch {camera['pitch']} | held-out mean IoU consensus {item['held_consensus_mean']:.2f} "
-              f"vs free per-step {item['held_free_mean']:.2f} | held-out >=0.8: {item['held_consensus_ge_0.8']:.0%}", flush=True)
+              f"vs free per-step {item['held_free_mean']:.2f} | fixed 35/35 {item['held_fixed_35_mean']:.2f} | held-out >=0.8: {item['held_consensus_ge_0.8']:.0%}", flush=True)
     (OUT / "consensus-benchmark.json").write_text(json.dumps(summary, indent=1))
     if summary:
-        print(f"overall: consensus {statistics.mean(s['held_consensus_mean'] for s in summary):.2f} vs free {statistics.mean(s['held_free_mean'] for s in summary):.2f}")
+        print(f"overall: consensus {statistics.mean(s['held_consensus_mean'] for s in summary):.2f} | fixed 35/35 {statistics.mean(s['held_fixed_35_mean'] for s in summary):.2f} | free {statistics.mean(s['held_free_mean'] for s in summary):.2f}")
 
 
 if __name__ == "__main__":

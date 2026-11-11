@@ -21,7 +21,7 @@ def _components(mask: np.ndarray):
     return count, labels, stats
 
 
-def model_mask(rgb: np.ndarray, tolerance: float = 30.0, min_fraction: float = 0.0015) -> np.ndarray:
+def _foreground(rgb: np.ndarray, tolerance: float = 30.0, min_fraction: float = 0.0015) -> np.ndarray:
     h, w = rgb.shape[:2]
     pixels = rgb.astype(float)
     candidate = np.linalg.norm(pixels - _background(rgb), axis=-1) > tolerance
@@ -35,16 +35,28 @@ def model_mask(rgb: np.ndarray, tolerance: float = 30.0, min_fraction: float = 0
             candidate[y:y + bh, x:x + bw] = False
     candidate &= ~cream
 
-    red = (r > 150) & (g < 90) & (b < 110) & (r - g > 90)
-    candidate &= ~cv2.dilate(red.astype(np.uint8), np.ones((3, 3), np.uint8)).astype(bool)
+    # Arrows are thin red strokes; red parts are large blobs. Remove only what a kernel scaled
+    # to the picture cannot fit inside.
+    red = ((r > 150) & (g < 90) & (b < 110) & (r - g > 90)).astype(np.uint8)
+    size = max(5, int(0.035 * min(h, w)) | 1)
+    blobs = cv2.morphologyEx(red, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size)))
+    arrows = cv2.dilate(red & ~blobs, np.ones((3, 3), np.uint8)).astype(bool)
+    candidate &= ~arrows
 
-    opened = cv2.morphologyEx(candidate.astype(np.uint8), cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))).astype(bool)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
+    opened = cv2.morphologyEx(candidate.astype(np.uint8), cv2.MORPH_OPEN, kernel).astype(bool)
     count, labels, stats = _components(opened)
     keep = np.zeros_like(opened)
     for i in range(1, count):
         if stats[i][4] >= min_fraction * h * w:
             keep |= labels == i
-    return keep
+    # Opening removes thin lines (the connector) but also thin parts; give back what lies within
+    # half a kernel of the kept body.
+    return cv2.dilate(keep.astype(np.uint8), kernel).astype(bool) & candidate
+
+
+def model_mask(rgb: np.ndarray, tolerance: float = 30.0, min_fraction: float = 0.0015) -> np.ndarray:
+    return _foreground(rgb, tolerance, min_fraction)
 
 
 def largest_component(mask: np.ndarray) -> np.ndarray:
@@ -53,3 +65,12 @@ def largest_component(mask: np.ndarray) -> np.ndarray:
     if count <= 1:
         return np.zeros_like(mask, bool)
     return labels == 1 + int(stats[1:, 4].argmax())
+
+
+def model_components(rgb: np.ndarray, tolerance: float = 30.0, max_components: int = 8) -> list[np.ndarray]:
+    """Candidate foreground pieces (panel, model, floating part ...) as separate masks, largest
+    first. Which one is the model is decided by comparing each with the rendered silhouette."""
+    plain = _foreground(rgb, tolerance)
+    count, labels, stats = _components(plain)
+    order = sorted(range(1, count), key=lambda i: -stats[i][4])[:max_components]
+    return [labels == i for i in order if stats[i][4] >= 0.0015 * plain.size]
