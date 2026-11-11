@@ -43,3 +43,29 @@ def test_fit_reports_low_iou_for_an_unrelated_mask(lib):
 def test_pieces_from_wraps_parts_for_the_renderer():
     p = pieces_from(PARTS)[0]
     assert (p.base_part, p.color) == ("3020", 4) and p.matrix.shape == (4, 4)
+
+
+from booklet_mpd.camera_fit import _clouds, exact_silhouette, silhouette
+
+
+def test_exact_silhouette_keeps_the_notch_of_a_non_convex_part(lib):
+    clips = [("60470a", 4, np.eye(4))]           # plate with two clips: concave, its hull fills the gaps (about 12% here)
+    hull = silhouette(_clouds(lib, clips), 35, 35, 160)
+    exact = exact_silhouette(lib, clips, np.eye(3), 35, 35, 160)
+    assert 0.8 * hull.sum() < exact.sum() < 0.93 * hull.sum()
+
+
+def test_exact_silhouette_matches_the_hull_for_a_convex_part(lib):
+    brick = [("3001", 4, np.eye(4))]
+    hull = silhouette(_clouds(lib, brick), 35, 35, 160)
+    exact = exact_silhouette(lib, brick, np.eye(3), 35, 35, 160)
+    inter = (hull & exact).sum()
+    assert inter / (hull | exact).sum() > 0.93
+
+
+def test_exact_silhouette_applies_the_orientation(lib):
+    parts = [("3020", 4, np.eye(4)), ("3023", 15, np.array([[1, 0, 0, 20], [0, 1, 0, -8], [0, 0, 1, 10], [0, 0, 0, 1.0]]))]
+    flip = np.diag([1.0, -1.0, -1.0])
+    a = exact_silhouette(lib, parts, flip, 35, 35, 160)
+    b = exact_silhouette(lib, parts, np.eye(3), 35, 35, 160)
+    assert (a ^ b).sum() > 0.05 * a.sum()

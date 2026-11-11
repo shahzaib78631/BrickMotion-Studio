@@ -66,6 +66,46 @@ def silhouette(clouds: list[np.ndarray], yaw: float, pitch: float, size: int) ->
     return mask.astype(bool)
 
 
+_POLYGONS: dict = {}
+
+
+def _polygons(lib, part: str):
+    """(vertices, polygon lengths) of a part: LDraw triangles and quads, kept separate."""
+    key = (id(lib), part)
+    if key not in _POLYGONS:
+        chunks = lib._tri_walk((part if part.endswith(".dat") else part + ".dat").lower(), np.eye(4))
+        verts = np.concatenate(chunks) if chunks else np.zeros((0, 3))
+        _POLYGONS[key] = (verts, np.array([len(c) for c in chunks], int))
+    return _POLYGONS[key]
+
+
+def exact_silhouette(lib, parts, orientation: np.ndarray, yaw: float, pitch: float, size: int) -> np.ndarray:
+    """Silhouette from the parts' actual polygons (no convex hulls), so concave parts keep
+    their notches. `orientation` is a 3x3 rotation applied to the whole model first; the
+    framing (scale and offset) uses the same rule as `silhouette`."""
+    rot = rotation(yaw, pitch)
+    projected = []
+    for part, _colour, matrix in parts:
+        verts, lengths = _polygons(lib, part)
+        if len(verts):
+            world = (verts @ matrix[:3, :3].T + matrix[:3, 3]) @ orientation.T
+            projected.append(((world @ rot.T)[:, :2], lengths))
+    mask = np.zeros((size, size), np.uint8)
+    if not projected:
+        return mask.astype(bool)
+    allp = np.concatenate([p for p, _ in projected])
+    lo, hi = allp.min(0), allp.max(0)
+    scale = (size - 12) / (max(hi - lo) or 1.0)
+    polygons = []
+    for p, lengths in projected:
+        pts = ((p - lo) * scale + 6).astype(np.int32)
+        polygons.extend(np.split(pts, np.cumsum(lengths)[:-1]))
+    # fillPoly would XOR overlapping polygons (front and back faces cancel); fill each one alone
+    for polygon in polygons:
+        cv2.fillConvexPoly(mask, polygon, 1)
+    return mask.astype(bool)
+
+
 def fit_camera_to_mask(lib, parts, mask: np.ndarray, yaws=range(-180, 180, 15), pitches=range(-60, 61, 10),
                        size: int = 96, refine: bool = True) -> dict:
     clouds = _clouds(lib, parts)
