@@ -1,0 +1,1307 @@
+{
+ "version": 1,
+ "policy": "Official PDF per set that already has an OMR model; split by set-number hash.",
+ "booklets": [
+  {
+   "set": "42075",
+   "booklet": "6230208",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/42075",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6230208.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/42075-6230208.pdf",
+   "sha256": "f8ce05e1d6ca68dc490ef3f00dee68af2aa874b137309862deeb7643907ab046",
+   "pages": 96,
+   "bytes": 15010163,
+   "coverMentionsSet": false,
+   "annotationStatus": "pending",
+   "split": "test"
+  },
+  {
+   "set": "42079",
+   "booklet": "6245451",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/42079",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6245451.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/42079-6245451.pdf",
+   "sha256": "578dd4deaf15781e9e944b0335544286c23ab9b84a8d90154dcc3c3bab291cf6",
+   "pages": 124,
+   "bytes": 20970948,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "42073",
+   "booklet": "6227047",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/42073",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6227047.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/42073-6227047.pdf",
+   "sha256": "76b5c188fa4abaef1359cf8f7e647c3ebd8338e372fe1f5a6caa5543bca31178",
+   "pages": 56,
+   "bytes": 7877624,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "41605",
+   "booklet": "6234561",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/41605",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6234561.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/41605-6234561.pdf",
+   "sha256": "5bc96f317d8dc44bf57c3cd6417c8b6a2f4e86d0831dc374e6af3f43e094dcdf",
+   "pages": 32,
+   "bytes": 3988764,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "21051",
+   "booklet": "6326833",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/21051",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6326833.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/21051-6326833.pdf",
+   "sha256": "359451546dd9834ed57865a5b8d60efd053734ff8ba3d2425552e8b7b8f00c28",
+   "pages": 96,
+   "bytes": 22907972,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "validation"
+  },
+  {
+   "set": "40441",
+   "booklet": "6351694",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/40441",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6351694.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/40441-6351694.pdf",
+   "sha256": "31d5504973034a42ca31bc83586445e11427b248f69242631245f9c30e230b08",
+   "pages": 76,
+   "bytes": 7386901,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "40440",
+   "booklet": "6351692",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/40440",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6351692.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/40440-6351692.pdf",
+   "sha256": "4eccb214457b432c018fd17f197508a2dfda9b006a93db0ff39ebbc8d50f7653",
+   "pages": 72,
+   "bytes": 7783240,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "40335",
+   "booklet": "6270523",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/40335",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6270523.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/40335-6270523.pdf",
+   "sha256": "79da5ece7aaa664b91d3d9159954ae29f0ddb1f05f0c2cc3e1bf2eaa55c15734",
+   "pages": 52,
+   "bytes": 7954317,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "42094",
+   "booklet": "6268336",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/42094",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6268336.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/42094-6268336.pdf",
+   "sha256": "d46dffc52921fe6a1c3e1730161978f3150487fcb6b9b4cd2a8b7c5d0caea570",
+   "pages": 140,
+   "bytes": 36425788,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "validation"
+  },
+  {
+   "set": "41616",
+   "booklet": "6249103",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/41616",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6249103.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/41616-6249103.pdf",
+   "sha256": "e1a87f56019eee7afae46ba6fd49da4a6abb18d9de9460ca2363d30a128d8e04",
+   "pages": 40,
+   "bytes": 3849197,
+   "coverMentionsSet": false,
+   "annotationStatus": "pending",
+   "split": "test"
+  },
+  {
+   "set": "41181",
+   "booklet": "6198999",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/41181",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6198999.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/41181-6198999.pdf",
+   "sha256": "87ffd6ba0564d25e6ec35472c7b71fae9d360d7e597363dea65a566695ede6df",
+   "pages": 40,
+   "bytes": 5416596,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "41627",
+   "booklet": "6250569",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/41627",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6250569.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/41627-6250569.pdf",
+   "sha256": "5368141e2e25b6d6e959fe048c4ab7a471098df87278a5c0f1da8e5887db3447",
+   "pages": 64,
+   "bytes": 4898018,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "40466",
+   "booklet": "6351436",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/40466",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6351436.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/40466-6351436.pdf",
+   "sha256": "c1357662832b1e93aaa2eef4895defdec824a4769099b617e407225b6911032a",
+   "pages": 52,
+   "bytes": 4615637,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "validation"
+  },
+  {
+   "set": "75317",
+   "booklet": "6334518",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/75317",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6334518.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/75317-6334518.pdf",
+   "sha256": "0eee59cacc3c0f2bdc311a436ab0893d6e8422818e1f509cbec125fff2a1adcc",
+   "pages": 40,
+   "bytes": 5554951,
+   "coverMentionsSet": false,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "42072",
+   "booklet": "6220553",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/42072",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6220553.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/42072-6220553.pdf",
+   "sha256": "1f73c06c01f047a7b911f4ab85d235cb09936a3ba0c56c2aed19308831845ba2",
+   "pages": 52,
+   "bytes": 7419453,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "test"
+  },
+  {
+   "set": "42076",
+   "booklet": "6225298",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/42076",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6225298.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/42076-6225298.pdf",
+   "sha256": "c4d1ef5ff7211fe9ed166b94431c0124d1e7e628b1bd7e51a5d00b307ac36773",
+   "pages": 156,
+   "bytes": 27950171,
+   "coverMentionsSet": false,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "40436",
+   "booklet": "6309022",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/40436",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6309022.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/40436-6309022.pdf",
+   "sha256": "4b2321f9bc35211a7e5316a4dd178b9c3f45d171d23d08b3b4afec26c408fbcd",
+   "pages": 44,
+   "bytes": 5283657,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "10258",
+   "booklet": "6211568",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/10258",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6211568.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/10258-6211568.pdf",
+   "sha256": "4a85326903005c4b5681d11d610a8a487ae7d227cd272598573fc9183ba2a1a7",
+   "pages": 176,
+   "bytes": 36674224,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "validation"
+  },
+  {
+   "set": "76897",
+   "booklet": "6309078",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/76897",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6309078.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/76897-6309078.pdf",
+   "sha256": "fa983114ba339e0a0885f9e5e30cef440c03aa34a60926e3b852b8abc4c10462",
+   "pages": 76,
+   "bytes": 20283905,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "validation"
+  },
+  {
+   "set": "31092",
+   "booklet": "6270168",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/31092",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6270168.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/31092-6270168.pdf",
+   "sha256": "2bb71f30d7414ffa7d7b7b905c74d19331115a448510737ff84d9d6387587048",
+   "pages": 48,
+   "bytes": 6435761,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "41620",
+   "booklet": "6249110",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/41620",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6249110.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/41620-6249110.pdf",
+   "sha256": "8ebbd9eac2bfbbce10b1d2091d81fde7e1be31d1e07323f68dc738d6f5b3a347",
+   "pages": 32,
+   "bytes": 3681586,
+   "coverMentionsSet": false,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "42060",
+   "booklet": "6181998",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/42060",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6181998.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/42060-6181998.pdf",
+   "sha256": "801acea389ed6f465e4178bfec3a40630e1463d1390fdc199eb424135586020c",
+   "pages": 84,
+   "bytes": 5699806,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "41601",
+   "booklet": "6220569",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/41601",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6220569.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/41601-6220569.pdf",
+   "sha256": "0217de9b923dc0939220649cc1a85928b29aeba6957ad781b5f430e8b9a4ffd5",
+   "pages": 32,
+   "bytes": 3187355,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "31197",
+   "booklet": "6332214",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/31197",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6332214.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/31197-6332214.pdf",
+   "sha256": "db7f74cfc3af744ca7772e8e934b9a8eb7d59c59f9121563f5ddfcd85f88ad59",
+   "pages": 140,
+   "bytes": 34426777,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "21032",
+   "booklet": "6199016",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/21032",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6199016.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/21032-6199016.pdf",
+   "sha256": "8fbe9242584515ed61a4d196293347991fd3327d1847c69aed7ef7ec01b3815d",
+   "pages": 136,
+   "bytes": 6485437,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "test"
+  },
+  {
+   "set": "31066",
+   "booklet": "6203839",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/31066",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6203839.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/31066-6203839.pdf",
+   "sha256": "ff8930ea31ce52fdf7dd97d58f91fbd432466821f810bf88348e267bf571609c",
+   "pages": 76,
+   "bytes": 10266351,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "42062",
+   "booklet": "6188504",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/42062",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6188504.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/42062-6188504.pdf",
+   "sha256": "0dabecee6960ac27d7bdbf9d3192c9666d33e68cd7031f7699fdcf6ff26cee64",
+   "pages": 88,
+   "bytes": 15453010,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "41488",
+   "booklet": "6220672",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/41488",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6220672.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/41488-6220672.pdf",
+   "sha256": "e5f4f2bb7737e00c865a4d2a23586d079c3cdc77f56f18c0b654f38e7960513d",
+   "pages": 32,
+   "bytes": 3508655,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "41486",
+   "booklet": "6220609",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/41486",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6220609.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/41486-6220609.pdf",
+   "sha256": "8f6dddf082f29889fbc75f4cbf852ff76a24d298f71ad9d233515a558076f196",
+   "pages": 40,
+   "bytes": 3356668,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "validation"
+  },
+  {
+   "set": "21047",
+   "booklet": "6254671",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/21047",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6254671.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/21047-6254671.pdf",
+   "sha256": "3ff10299330b7967404c613f2177ea1e52711ea95c77ee18a08e1c402548a336",
+   "pages": 140,
+   "bytes": 12340789,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "test"
+  },
+  {
+   "set": "41613",
+   "booklet": "6237652",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/41613",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6237652.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/41613-6237652.pdf",
+   "sha256": "f6b3425710b4c4ce6890f91d8eb901a1b127fc6408f212cf2dd84dc41e577a39",
+   "pages": 28,
+   "bytes": 3200129,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "41634",
+   "booklet": "6277207",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/41634",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6277207.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/41634-6277207.pdf",
+   "sha256": "e411ac60a9b0944d8ce29e88b5e0a354c0208e020dfdf6295b1f3cd914a86d92",
+   "pages": 32,
+   "bytes": 6175183,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "42063",
+   "booklet": "6187737",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/42063",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6187737.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/42063-6187737.pdf",
+   "sha256": "ea625430b3a466b4f14862b6d5fd960075edb015a1831abee5f4a1f551c0c930",
+   "pages": 112,
+   "bytes": 13867270,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "41608",
+   "booklet": "6234418",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/41608",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6234418.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/41608-6234418.pdf",
+   "sha256": "730404ffba3cce9b2f4f0008daf65f55f7b6d8b0bad2cde502eb3d24b8ca118b",
+   "pages": 44,
+   "bytes": 4319919,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "75272",
+   "booklet": "6310758",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/75272",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6310758.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/75272-6310758.pdf",
+   "sha256": "6ae5be6a79a7870ca50e58fb956da5053e5acdbdac4c914b6a922819403809c2",
+   "pages": 104,
+   "bytes": 31308261,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "42061",
+   "booklet": "6187733",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/42061",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6187733.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/42061-6187733.pdf",
+   "sha256": "d3ad97cb4a7cfe9a240b3b24f6d252788401f567dd5633c9f3c61d7caa444dcb",
+   "pages": 84,
+   "bytes": 9450081,
+   "coverMentionsSet": false,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "10885",
+   "booklet": "6269902",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/10885",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6269902.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/10885-6269902.pdf",
+   "sha256": "48e06d48c21b6cf91b0bdd08c33fa74481caf1ab5c94420c1678716c7a0d25ad",
+   "pages": 8,
+   "bytes": 7479777,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "75895",
+   "booklet": "6296005",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/75895",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6296005.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/75895-6296005.pdf",
+   "sha256": "edfbf2f5849484d1480b68eb50d196c710ac7c138abc8e9ede736bb5e447ac98",
+   "pages": 80,
+   "bytes": 28407925,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "10281",
+   "booklet": "6532381",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/10281",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6532381.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/10281-6532381.pdf",
+   "sha256": "1269851bf473cd52939d41dd45af9ce9f68a03c883479bd92bd1dd3eddead023",
+   "pages": 84,
+   "bytes": 17609354,
+   "coverMentionsSet": false,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "41598",
+   "booklet": "6220563",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/41598",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6220563.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/41598-6220563.pdf",
+   "sha256": "372537314a0ca2d7c4796dcee5f59413cea941ff42758ef2c5cdd88a69aba256",
+   "pages": 40,
+   "bytes": 3435471,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "41594",
+   "booklet": "6196185",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/41594",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6196185.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/41594-6196185.pdf",
+   "sha256": "f0508ea0fc795b26d89019fd83089d2fc8e2c67bbea47147e0ede0590a21ef2c",
+   "pages": 40,
+   "bytes": 3356334,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "40290",
+   "booklet": "6225141",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/40290",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6225141.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/40290-6225141.pdf",
+   "sha256": "51831956884c041dfc55dd24c7ec04195606598d3d939f9ea08ff844f736487c",
+   "pages": 84,
+   "bytes": 8382601,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "validation"
+  },
+  {
+   "set": "21046",
+   "booklet": "6281925",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/21046",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6281925.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/21046-6281925.pdf",
+   "sha256": "d95b41640d9f02f92b4c8d7e78c9a92245ad5579d62260b2aeab84f15f09383c",
+   "pages": 140,
+   "bytes": 30120840,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "40199",
+   "booklet": "6241477",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/40199",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6241477.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/40199-6241477.pdf",
+   "sha256": "5781ddb6e55c7210c08d1d899d546e13c6a6bbc57e687374da60ed76cb16aedf",
+   "pages": 60,
+   "bytes": 6674550,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "75277",
+   "booklet": "6323017",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/75277",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6323017.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/75277-6323017.pdf",
+   "sha256": "75086af2317c29648c640fd43930160777ffb9831a2498db13d153bf361c69a7",
+   "pages": 116,
+   "bytes": 22624232,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "41596",
+   "booklet": "6196191",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/41596",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6196191.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/41596-6196191.pdf",
+   "sha256": "343d6c2ca6013f3f68e4be7f4357610455d4b2f7401466648f011606c61f0813",
+   "pages": 40,
+   "bytes": 3699017,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "21036",
+   "booklet": "6205215",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/21036",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6205215.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/21036-6205215.pdf",
+   "sha256": "6c76f24fdc012ba9bac2bea0d2f548de58711e8e7f18b2136397ceaadf8ab193",
+   "pages": 100,
+   "bytes": 6946391,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "41624",
+   "booklet": "6248865",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/41624",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6248865.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/41624-6248865.pdf",
+   "sha256": "2b057346c8ac5f08c1410753b28fbf4c5e7adb94072695ea076680150cc0893b",
+   "pages": 44,
+   "bytes": 4101135,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "21043",
+   "booklet": "6268875",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/21043",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6268875.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/21043-6268875.pdf",
+   "sha256": "183eae01f5dd36462b01e08b660e3316ac492cd84e06ea0c479b65bae8de9417",
+   "pages": 128,
+   "bytes": 32597398,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "41586",
+   "booklet": "6196153",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/41586",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6196153.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/41586-6196153.pdf",
+   "sha256": "8ebb08b0eaac5dd862b26a7e0907fdc945718ea5a1a09d587b6d423ba023862c",
+   "pages": 32,
+   "bytes": 3452417,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "validation"
+  },
+  {
+   "set": "40433",
+   "booklet": "6303502",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/40433",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6303502.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/40433-6303502.pdf",
+   "sha256": "65b52fcc84becb5705795949874541025b58befe943007ecaf9a296111b72955",
+   "pages": 84,
+   "bytes": 22989188,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "40413",
+   "booklet": "6329107",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/40413",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6329107.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/40413-6329107.pdf",
+   "sha256": "cb5705b8fc8782fff05a4573090097236dd7478de47301a594e9448d2ee5be93",
+   "pages": 112,
+   "bytes": 8717764,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "42057",
+   "booklet": "6181875",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/42057",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6181875.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/42057-6181875.pdf",
+   "sha256": "798a124c779845985d2745f3a1f71b7bf75b8ed3fadf6f9276cd08bfde1f4356",
+   "pages": 72,
+   "bytes": 8134383,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "75892",
+   "booklet": "6267103",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/75892",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6267103.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/75892-6267103.pdf",
+   "sha256": "83986c28f355dba84f782970d8d635a8a61af3bd5d1d716bef4e814ba687ebd5",
+   "pages": 64,
+   "bytes": 6941792,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "41630",
+   "booklet": "6250375",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/41630",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6250375.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/41630-6250375.pdf",
+   "sha256": "3d9c5769be4de50d9812bb793c10c5efe74fb2f61859df834c4255c5e9d92d53",
+   "pages": 28,
+   "bytes": 3056129,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "31063",
+   "booklet": "6188493",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/31063",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6188493.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/31063-6188493.pdf",
+   "sha256": "1b522d2d72ffa4adb7382d0287c22777d7c9529b18cc22b57a213db4386ed264",
+   "pages": 56,
+   "bytes": 3957870,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "41588",
+   "booklet": "6196161",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/41588",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6196161.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/41588-6196161.pdf",
+   "sha256": "d84433d1a645661e10a41094720fb6fa4e00136b2a02fa6133ca3557ab2c53e8",
+   "pages": 48,
+   "bytes": 4306531,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "40431",
+   "booklet": "6327719",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/40431",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6327719.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/40431-6327719.pdf",
+   "sha256": "1f536ccce98629991358301bb7af102739aea91562b8ed9261bb4f64ff755bbf",
+   "pages": 60,
+   "bytes": 11387832,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "validation"
+  },
+  {
+   "set": "41602",
+   "booklet": "6220571",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/41602",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6220571.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/41602-6220571.pdf",
+   "sha256": "8fa987b5926e8099f9d67aedbbed505840902efa82b66d143e821e078f48a421",
+   "pages": 36,
+   "bytes": 3328557,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "75966",
+   "booklet": "6324753",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/75966",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6324753.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/75966-6324753.pdf",
+   "sha256": "8a6bb347f2665be33349e41f0261196b982954b7e4b8247f4e10b1b88d887a05",
+   "pages": 60,
+   "bytes": 35602174,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "test"
+  },
+  {
+   "set": "42084",
+   "booklet": "6220549",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/42084",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6220549.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/42084-6220549.pdf",
+   "sha256": "b30d64d9f577b10328cfd51e1e7aceb94ff7ce9d74ce926767784048f2db25fd",
+   "pages": 48,
+   "bytes": 5143454,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "validation"
+  },
+  {
+   "set": "75893",
+   "booklet": "6267132",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/75893",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6267132.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/75893-6267132.pdf",
+   "sha256": "c2a3db95f52ca54b9842de1985c057cbd093c7da25ce6ba78e2f5b4e496d7790",
+   "pages": 68,
+   "bytes": 8447765,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "test"
+  },
+  {
+   "set": "21321",
+   "booklet": "6327401",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/21321",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6327401.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/21321-6327401.pdf",
+   "sha256": "9f7f1a5de2ec72ac3a13520d5aa2c2845fbdcb9c3e95e597c3b07b30a79c7320",
+   "pages": 148,
+   "bytes": 41815393,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "validation"
+  },
+  {
+   "set": "21033",
+   "booklet": "6220462",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/21033",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6220462.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/21033-6220462.pdf",
+   "sha256": "a430c254a97e474f1f3aea895c47b5b192ece5111b909e87e74bbbb25d5868e6",
+   "pages": 124,
+   "bytes": 9513810,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "validation"
+  },
+  {
+   "set": "41637",
+   "booklet": "6274779",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/41637",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6274779.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/41637-6274779.pdf",
+   "sha256": "116361e92a72ee09f2a5004fd717bff0c42cd3ea8b1e8e3ab1ce3b1ae85bc15d",
+   "pages": 40,
+   "bytes": 6450839,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "41604",
+   "booklet": "6234341",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/41604",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6234341.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/41604-6234341.pdf",
+   "sha256": "2974faf0b433b01a082da6f4b3947396ab6825a33966e45cf9926b27efd2e0d8",
+   "pages": 32,
+   "bytes": 4001117,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "41621",
+   "booklet": "6247394",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/41621",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6247394.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/41621-6247394.pdf",
+   "sha256": "2d42907c371f254c8827f7c452ace934098d0839b5c609854b40c7d8f47910f1",
+   "pages": 32,
+   "bytes": 28533771,
+   "coverMentionsSet": false,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "10280",
+   "booklet": "6532379",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/10280",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6532379.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/10280-6532379.pdf",
+   "sha256": "af5fafdd098c46c5ecb73c5f8c5756e330d67d8b466e17a9066b9ead46182231",
+   "pages": 84,
+   "bytes": 11645466,
+   "coverMentionsSet": false,
+   "annotationStatus": "pending",
+   "split": "validation"
+  },
+  {
+   "set": "75878",
+   "booklet": "6194462",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/75878",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6194462.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/75878-6194462.pdf",
+   "sha256": "5951e5f7260fdf6f5f0e8f23be20c5138ecc5ad676a8d77b0061cc29c1bf754f",
+   "pages": 48,
+   "bytes": 6701035,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "41599",
+   "booklet": "6220565",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/41599",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6220565.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/41599-6220565.pdf",
+   "sha256": "bd5577627442490b9e57c0ba150a9be7a954128d38cf1304ffcac9c616e83a49",
+   "pages": 40,
+   "bytes": 3888792,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  },
+  {
+   "set": "41585",
+   "booklet": "6196148",
+   "theme": "OMR",
+   "sourcePage": "https://www.lego.com/en-us/service/building-instructions/41585",
+   "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6196148.pdf",
+   "path": ".cache/instructions/omr-catalog/pdf/41585-6196148.pdf",
+   "sha256": "9abd66e249b76abcd9b7f4f541885edfa24a28c634fb6fb06968fee9f493ea99",
+   "pages": 32,
+   "bytes": 3254018,
+   "coverMentionsSet": true,
+   "annotationStatus": "pending",
+   "split": "train"
+  }
+ ],
+ "errors": [
+  {
+   "set": "42083",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "76161",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "42113",
+   "theme": "OMR",
+   "error": "no official PDF link"
+  },
+  {
+   "set": "42081",
+   "theme": "OMR",
+   "error": "page count 260 outside range"
+  },
+  {
+   "set": "21035",
+   "theme": "OMR",
+   "error": "page count 192 outside range"
+  },
+  {
+   "set": "10276",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "42077",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "10270",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "75968",
+   "theme": "OMR",
+   "error": "page count 184 outside range"
+  },
+  {
+   "set": "21319",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "10261",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "42068",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "42100",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "42111",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "41498",
+   "theme": "OMR",
+   "error": "no official PDF link"
+  },
+  {
+   "set": "10256",
+   "theme": "OMR",
+   "error": "page count 184 outside range"
+  },
+  {
+   "set": "31084",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "75181",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "21318",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "10918",
+   "theme": "OMR",
+   "error": "page count 2 outside range"
+  },
+  {
+   "set": "75144",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "30572",
+   "theme": "OMR",
+   "error": "page count 2 outside range"
+  },
+  {
+   "set": "75969",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "42125",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "41496",
+   "theme": "OMR",
+   "error": "no official PDF link"
+  },
+  {
+   "set": "10269",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "17101",
+   "theme": "OMR",
+   "error": "no official PDF link"
+  },
+  {
+   "set": "42069",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "31070",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "76139",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "41903",
+   "theme": "OMR",
+   "error": "no official PDF link"
+  },
+  {
+   "set": "42110",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "77904",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "40412",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "10262",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "10271",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "42122",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "42096",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "21323",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "10264",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "4002020",
+   "theme": "OMR",
+   "error": "no official PDF link"
+  },
+  {
+   "set": "21045",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "21325",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "10265",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "75953",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "42082",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "21042",
+   "theme": "OMR",
+   "error": "page count 208 outside range"
+  },
+  {
+   "set": "30542",
+   "theme": "OMR",
+   "error": "page count 2 outside range"
+  },
+  {
+   "set": "10267",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "10272",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "51515",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "75948",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "10315",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "10297",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "41497",
+   "theme": "OMR",
+   "error": "no official PDF link"
+  },
+  {
+   "set": "21309",
+   "theme": "OMR",
+   "error": "page count 200 outside range"
+  },
+  {
+   "set": "42114",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "42131",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "30571",
+   "theme": "OMR",
+   "error": "page count 2 outside range"
+  },
+  {
+   "set": "42064",
+   "theme": "OMR",
+   "error": "oversize response"
+  },
+  {
+   "set": "10295",
+   "theme": "OMR",
+   "error": "no official PDF link"
+  }
+ ]
+}

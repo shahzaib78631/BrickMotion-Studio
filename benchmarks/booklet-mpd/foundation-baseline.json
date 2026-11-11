@@ -1,22 +1,22 @@
 {
- "audit_usable": 30,
+ "audit_usable": 85,
  "grade_counts": {
-  "A": 7,
-  "B": 16,
-  "C": 8
+  "A": 13,
+  "B": 47,
+  "C": 42
  },
  "heldout_median_iou": {
-  "test": 0.8835325521236199,
-  "validation": 0.7693579877603215
+  "test": 0.8932167562801032,
+  "validation": 0.7656570272805473
  },
- "identity_matched_fraction": 0.9642227705322524,
+ "identity_matched_fraction": 0.9007638571521839,
  "mask_pass": {
-  "test": 0.9252336448598131,
-  "train": 0.9520348837209303,
-  "validation": 0.9430555555555555
+  "test": 0.9155937052932761,
+  "train": 0.9219255663430421,
+  "validation": 0.9197396963123644
  },
- "protocol_hash": "a60ec79a75dbac2f2559ae5a3b478f766a3b991bd3b59098ecb1d6367b79a014",
- "scale_feasible_sets": 24,
- "scale_median_of_feasible_sets": 0.8119983729718797,
- "tuning_median_iou": 0.8446641784716842
+ "protocol_hash": "2702cd066331c74e76e9d32144e0217d0e161ebe398b55ea82089a6c17c6eba8",
+ "scale_feasible_sets": 69,
+ "scale_median_of_feasible_sets": 0.8095896134344174,
+ "tuning_median_iou": 0.8391329290335888
 }
