@@ -1,12 +1,12 @@
 {
  "audit_usable": 30,
  "grade_counts": {
-  "A": 5,
-  "B": 18,
+  "A": 6,
+  "B": 17,
   "C": 8
  },
  "heldout_median_iou": {
-  "test": 0.7871819407132453,
+  "test": 0.8095407843806921,
   "validation": 0.7558413351981488
  },
  "identity_matched_fraction": 0.9642227705322524,
@@ -15,6 +15,6 @@
   "train": 0.9520348837209303,
   "validation": 0.9430555555555555
  },
- "protocol_hash": "5175a885cb3d2a933007355d52579e26f063f4ea71359be53cc0f84646608a6d",
- "tuning_median_iou": 0.7904515357946307
+ "protocol_hash": "9aa98037bd125a7cf029a3cb09946b0cb7188f56e240e80043013b0effaec7fd",
+ "tuning_median_iou": 0.8206638848672059
 }
