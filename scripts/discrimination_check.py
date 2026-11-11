@@ -17,9 +17,9 @@ from assembly_model.ldraw import load_library
 from booklet_mpd.baseline import group_visible
 from booklet_mpd.pairing import find_pairs
 from booklet_mpd.protocol import assert_tuning_allowed
-from booklet_mpd.rawimages import main_model_image
+from booklet_mpd.rawimages import main_model_image_info
 from booklet_mpd.truth import build_scoped_steps
-from booklet_mpd.viewfit import fit_view
+from booklet_mpd.viewfit import BOOKLET_SCALE, fit_view
 
 OMR = Path("/Users/mac/Projects/BrickMotion-Data/omr/models")
 SOURCES = ROOT / "benchmarks/instructions/arrow-catalog-100-sources.json"
@@ -42,12 +42,12 @@ def main():
         chosen = eligible[:: max(1, len(eligible) // 6)][:6]
         for k, (gi, bi) in enumerate(chosen):
             step = steps[bi]
-            image = main_model_image(pdf[step["page"] - 1], pymupdf.Rect(step["pictureBox"]))
+            image, ppx = main_model_image_info(pdf[step["page"] - 1], pymupdf.Rect(step["pictureBox"]))
             if image is None:
                 continue
             other_gi = chosen[(k + len(chosen) // 2) % len(chosen)][0]      # a different step, far away in the sequence
-            a = fit_view(lib, visible[gi], image)["iou"]
-            b = fit_view(lib, visible[other_gi], image)["iou"]
+            a = fit_view(lib, visible[gi], image, pts_per_px=ppx, scale_prior=BOOKLET_SCALE)["iou"]     # 0.0 when scale-infeasible
+            b = fit_view(lib, visible[other_gi], image, pts_per_px=ppx, scale_prior=BOOKLET_SCALE)["iou"]
             matched.append(a)
             mismatched.append(b)
             print(f"{setno} step {step['number']:3} matched {a:.2f}   mismatched {b:.2f}", flush=True)
