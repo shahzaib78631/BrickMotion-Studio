@@ -78,3 +78,9 @@ def test_groups_extra_steps_lower_coverage():
 
 def test_groups_empty():
     assert not align_groups([], []).ok
+
+
+def test_groups_prefer_one_contiguous_block_over_scattered_matches():
+    g = align_groups([1, 1, 1, 1], [5, 1, 5, 1, 5, 1, 1, 1, 1, 5])
+    assert g.groups == [([0], [5]), ([1], [6]), ([2], [7]), ([3], [8])]
+    assert g.booklet_coverage == 1.0 and g.omr_coverage == 0.4

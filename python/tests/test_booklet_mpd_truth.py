@@ -81,3 +81,73 @@ def test_flat_model_matches_plain_steps(tmp_path):
 0 STEP
 0 NOFILE""")
     assert [len(s) for s in build_steps(p)] == [1, 1]
+
+
+def test_flexible_chain_submodel_counts_as_one_part(tmp_path):
+    seg = "\n".join(ref(0, 8 * i, "750.dat") for i in range(20))
+    p = w(tmp_path / "f.mpd", f"""
+0 FILE main.ldr
+{ref(4, 0, '3020.dat')}
+{ref(4, 100, 'flexaxle-studio-1.ldr')}
+0 STEP
+0 FILE flexaxle-studio-1.ldr
+{seg}
+0 NOFILE""")
+    steps = build_steps(p)
+    assert [[part for part, _c, _m in s] for s in steps] == [["3020", "flexaxle-studio-1"]]
+    assert steps[0][1][2][0, 3] == 100
+
+
+def test_small_stepless_submodel_is_still_expanded(tmp_path):
+    p = w(tmp_path / "g.mpd", f"""
+0 FILE main.ldr
+{ref(4, 0, 'sub.ldr')}
+0 STEP
+0 FILE sub.ldr
+{ref(4, 0, '3001.dat')}
+{ref(4, 20, '3023.dat')}
+0 NOFILE""")
+    assert [len(s) for s in build_steps(p)] == [2]
+
+
+def test_embedded_part_definition_is_one_part_not_its_primitives(tmp_path):
+    prims = "\n".join(ref(4, 10 * i, "stud.dat") for i in range(30))
+    p = w(tmp_path / "h.mpd", f"""
+0 FILE main.ldr
+{ref(4, 0, '61904.dat')}
+0 STEP
+0 FILE 61904.dat
+{prims}
+0 NOFILE""")
+    assert [[part for part, _c, _m in s] for s in build_steps(p)] == [["61904"]]
+
+
+def test_lump_mode_keeps_submodel_parts_in_the_parent_step(tmp_path):
+    p = w(tmp_path / "i.mpd", f"""
+0 FILE main.ldr
+{ref(4, 0, '3020.dat')}
+{ref(4, 100, 'sub.ldr')}
+0 STEP
+{ref(4, 0, '3023.dat')}
+0 STEP
+0 FILE sub.ldr
+{ref(4, 0, '3001.dat')}
+0 STEP
+{ref(4, 20, '3001.dat')}
+0 STEP
+0 NOFILE""")
+    assert [len(s) for s in build_steps(p, expand_submodels=False)] == [3, 1]
+
+
+def test_malformed_line_raises_by_default_and_is_skipped_when_collecting_warnings(tmp_path):
+    p = w(tmp_path / "j.mpd", f"""
+0 FILE main.ldr
+{ref(4, 0, '3020.dat')}
+1 191 -10 -16 -30 1 0 0 0 1 0 0 0  24866.dat
+0 STEP
+0 NOFILE""")
+    with pytest.raises(ValueError, match="Malformed"):
+        build_steps(p)
+    warnings = []
+    steps = build_steps(p, warnings=warnings)
+    assert [len(s) for s in steps] == [1] and len(warnings) == 1 and "Malformed" in warnings[0]

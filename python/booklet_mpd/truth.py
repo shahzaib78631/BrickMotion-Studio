@@ -17,7 +17,7 @@ def _name(value: str) -> str:
     return value.strip().replace("\\", "/").lower()
 
 
-def _placement(line: str):
+def _placement(line: str):  # raises ValueError on a malformed line
     fields = line.split(maxsplit=14)
     if len(fields) != 15:
         raise ValueError(f"Malformed LDraw placement: {line[:100]}")
@@ -49,23 +49,53 @@ def _parse(path: str) -> tuple[dict[str, list[str]], str | None]:
     return files, root
 
 
-def build_steps(path: str) -> list[list[Part]]:
+def _flexible_chains(files: dict[str, list[str]], root: str) -> set[str]:
+    """Submodels that model one flexible part (flex axle, hose, cable) as many tiny
+    segments: no STEP lines, at least 12 placements, at most 3 distinct part names."""
+    found = set()
+    for name, lines in files.items():
+        if name == root or name.endswith(".dat") or any(l.upper() == "0 STEP" or l.upper().startswith("0 ROTSTEP ") for l in lines):
+            continue
+        refs = [l.split(maxsplit=14)[14] for l in lines if l.startswith("1 ") and len(l.split(maxsplit=14)) == 15]
+        if len(refs) >= 12 and len({_name(r) for r in refs}) <= 3:
+            found.add(name)
+    return found
+
+
+def build_steps(path: str, *, expand_submodels: bool = True, warnings: list[str] | None = None) -> list[list[Part]]:
+    """Strict unless `warnings` is given: then malformed placement lines are skipped and described there."""
     files, root = _parse(path)
     if root is None:
         return []
     expanded: set[str] = set()
 
+    def placement(line):
+        try:
+            return _placement(line)
+        except ValueError as error:
+            if warnings is None:
+                raise
+            warnings.append(str(error))
+            return None
+
+    chains = _flexible_chains(files, root)
+
     def leaves(ref, colour, matrix, stack):
         if ref in stack:
             raise ValueError(f"Cyclic MPD reference: {' -> '.join((*stack, ref))}")
-        if ref not in files:
+        if ref in chains:
+            return [(ref.removesuffix(".ldr"), colour, matrix)]
+        if ref.endswith(".dat") or ref not in files:  # embedded part definitions are one part
             if not ref.endswith(".dat"):
                 raise ValueError(f"Missing MPD submodel: {ref}")
             return [(ref[:-4], colour, matrix)]
         out: list[Part] = []
         for line in files[ref]:
             if line.startswith("1 "):
-                child, child_colour, child_matrix = _placement(line)
+                placed = placement(line)
+                if placed is None:
+                    continue
+                child, child_colour, child_matrix = placed
                 out.extend(leaves(child, colour if child_colour == 16 else child_colour, matrix @ child_matrix, (*stack, ref)))
         return out
 
@@ -81,10 +111,13 @@ def build_steps(path: str) -> list[list[Part]]:
                     out.append(group)
                 group = []
             elif line.startswith("1 "):
-                child, child_colour, child_matrix = _placement(line)
+                placed = placement(line)
+                if placed is None:
+                    continue
+                child, child_colour, child_matrix = placed
                 c = colour if child_colour == 16 else child_colour
                 m = matrix @ child_matrix
-                if child in files and child not in expanded:
+                if expand_submodels and child in files and not child.endswith(".dat") and child not in chains and child not in expanded:
                     expanded.add(child)
                     out.extend(steps_of(child, c, m, (*stack, ref)))
                 else:

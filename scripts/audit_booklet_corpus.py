@@ -28,10 +28,10 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     rows = [audit_pair(p, OUT / "extract") for p in pairs]
     (OUT / "audit.json").write_text(json.dumps({"pairs": rows, "skips": skips}, indent=1))
-    print(f"{'set':8}{'split':11}{'booklet':>8}{'omr':>6}{'sim':>6}  status")
+    print(f"{'set':8}{'split':11}{'booklet':>8}{'omr':>6}{'blocks':>7}{'sim':>6}  status")
     for r in rows:
         status = "ok" if r["alignment_ok"] else (r["extraction_error"] or r["alignment_reason"])
-        print(f"{r['set']:8}{r['split']:11}{r['booklet_steps']:>8}{r['omr_steps']:>6}{r['mean_similarity']:>6.2f}  {status}")
+        print(f"{r['set']:8}{r['split']:11}{r['booklet_steps']:>8}{r['omr_steps']:>6}{r['omr_blocks']:>7}{r['mean_similarity']:>6.2f}  {status}")
     print(f"usable: {sum(r['alignment_ok'] for r in rows)} of {len(rows)}")
 
 

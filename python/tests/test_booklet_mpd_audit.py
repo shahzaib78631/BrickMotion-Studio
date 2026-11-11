@@ -89,3 +89,13 @@ def test_audit_picks_submodel_granularity_when_root_has_one_step(tmp_path):
     r = audit_pair(pair(tmp_path, pdf, mpd), tmp_path / "work")
     assert r["truth_mode"] == "expand" and r["alignment_ok"] is True
     assert r["groups"] == [[[0], [0]], [[1], [1]]]
+
+
+def test_audit_survives_one_malformed_omr_line_and_records_it(tmp_path):
+    pdf, mpd = tmp_path / "b.pdf", tmp_path / "m.mpd"
+    make_pdf(pdf)
+    good = "1 4 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat"
+    bad = "1 191 -10 -16 -30 1 0 0 0 1 0 0 0  24866.dat"
+    mpd.write_text("\n".join(["0 FILE a.ldr", good, good, "0 STEP", good, good, good, bad, "0 STEP", "0 NOFILE"]) + "\n")
+    r = audit_pair(pair(tmp_path, pdf, mpd), tmp_path / "work")
+    assert r["alignment_ok"] is True and len(r["omr_warnings"]) >= 1
