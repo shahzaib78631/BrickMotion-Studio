@@ -23,7 +23,7 @@ from booklet_mpd.stepfit import fit_step
 from booklet_mpd.viewfit import BOOKLET_SCALE
 
 OMR = Path("/Users/mac/Projects/BrickMotion-Data/omr/models")
-SOURCES = ROOT / "benchmarks/instructions/arrow-catalog-100-sources.json"
+SOURCES = ROOT / "benchmarks/booklet-mpd/sources.json"
 OUT = ROOT / ".cache/booklet-mpd"
 
 

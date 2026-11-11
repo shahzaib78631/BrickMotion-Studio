@@ -24,7 +24,7 @@ from booklet_mpd.stepimage import model_components
 from brickheadz.instruction_place import _rotations24, iou
 
 OMR = Path("/Users/mac/Projects/BrickMotion-Data/omr/models")
-SOURCES = ROOT / "benchmarks/instructions/arrow-catalog-100-sources.json"
+SOURCES = ROOT / "benchmarks/booklet-mpd/sources.json"
 OUT = ROOT / ".cache/booklet-mpd"
 SIZE = 80
 RAW = "--raw" in sys.argv

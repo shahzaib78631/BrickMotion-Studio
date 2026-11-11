@@ -23,7 +23,7 @@ from booklet_mpd.viewfit import BOOKLET_SCALE
 from booklet_mpd.truth import build_scoped_steps
 
 OMR = Path("/Users/mac/Projects/BrickMotion-Data/omr/models")
-SOURCES = ROOT / "benchmarks/instructions/arrow-catalog-100-sources.json"
+SOURCES = ROOT / "benchmarks/booklet-mpd/sources.json"
 OUT = ROOT / ".cache/booklet-mpd"
 SAMPLE_STEPS, MAX_PARTS = 8, 150
 
@@ -60,24 +60,48 @@ def sampled_iou(lib, pair, audit_row):
     return (statistics.median(values) if values else None), len(values), stats
 
 
-def main():
-    audit = {r["set"]: r for r in json.loads((OUT / "audit.json").read_text())["pairs"]}
-    identity = {r["set"]: r for r in json.loads((OUT / "part-identity-api.json").read_text())}
-    pairs, _ = find_pairs(SOURCES, OMR, ROOT)
-    lib = load_library(str(ROOT / "public/ldraw"))
-    rows = []
-    for pair in pairs:
-        a = audit[pair.set_number]
-        if not a["alignment_ok"]:
-            iou, n, scale = None, 0, {"median": None, "feasible": None, "n": 0}
-        else:
-            iou, n, scale = sampled_iou(lib, pair, a)
-        graded = grade_set(alignment_ok=a["alignment_ok"], evidence=a["evidence"], identity=identity_of(identity.get(pair.set_number)),
+_STATE = {}
+
+
+def _init(audit, identity):
+    _STATE["lib"] = load_library(str(ROOT / "public/ldraw"))
+    _STATE["audit"], _STATE["identity"] = audit, identity
+
+
+def grade_pair(pair):
+    """Grade one set (runs in a worker process); a crash becomes a recorded grade-C row, never a lost run."""
+    a = _STATE["audit"][pair.set_number]
+    empty = {"median": None, "feasible": None, "n": 0}
+    try:
+        iou, n, scale = (None, 0, empty) if not a["alignment_ok"] else sampled_iou(_STATE["lib"], pair, a)
+        graded = grade_set(alignment_ok=a["alignment_ok"], evidence=a["evidence"], identity=identity_of(_STATE["identity"].get(pair.set_number)),
                            median_iou=iou, iou_steps=n, scale_feasible=scale["feasible"], scale_steps=scale["n"])
-        rows.append({"set": pair.set_number, "split": pair.split, "family": "studded" if pair.set_number.startswith("40") else "technic/other",
-                     "median_iou": iou, "iou_steps": n, "scale_median": scale["median"], "scale_feasible": scale["feasible"],
-                     "scale_steps": scale["n"], **graded})
-        print(f"{pair.set_number} {pair.split:11} {graded['grade']}  iou {('%.2f' % iou) if iou is not None else ' n/a'} scale {('%.3f' % scale['median']) if scale['median'] else ' n/a'} feasible {('%.0f%%' % (100 * scale['feasible'])) if scale['feasible'] is not None else 'n/a'} ({n} steps)  {'; '.join(graded['reasons'])}", flush=True)
+    except Exception as error:
+        iou, n, scale = None, 0, empty
+        graded = {"grade": "C", "reasons": [f"grading error: {type(error).__name__}: {str(error)[:80]}"]}
+    return {"set": pair.set_number, "split": pair.split, "family": "studded" if pair.set_number.startswith("40") else "technic/other",
+            "median_iou": iou, "iou_steps": n, "scale_median": scale["median"], "scale_feasible": scale["feasible"],
+            "scale_steps": scale["n"], **graded}
+
+
+def main():
+    import concurrent.futures
+    import os
+    audit = {r["set"]: r for r in json.loads((OUT / "audit.json").read_text())["pairs"]}
+    identity = {r["set"]: r for r in json.loads((OUT / "part-identity-api.json").read_text())} if (OUT / "part-identity-api.json").exists() else {}
+    pairs = [p for p in find_pairs(SOURCES, OMR, ROOT)[0] if p.set_number in audit]
+    workers = max(1, (os.cpu_count() or 2) - 1)
+    results = {}
+    with concurrent.futures.ProcessPoolExecutor(max_workers=workers, initializer=_init, initargs=(audit, identity)) as pool:
+        futures = {pool.submit(grade_pair, p): p for p in pairs}
+        for done in concurrent.futures.as_completed(futures):
+            row = done.result()
+            results[row["set"]] = row
+            f = row["scale_feasible"]
+            print(f"{row['set']} {row['split']:11} {row['grade']}  iou {('%.2f' % row['median_iou']) if row['median_iou'] is not None else ' n/a'} "
+                  f"scale {('%.3f' % row['scale_median']) if row['scale_median'] else ' n/a'} feasible {('%.0f%%' % (100 * f)) if f is not None else 'n/a'} "
+                  f"({row['iou_steps']} steps)  {'; '.join(row['reasons'])[:120]}  [{len(results)}/{len(pairs)}]", flush=True)
+    rows = [results[p.set_number] for p in pairs]          # manifest order: stable, deterministic output
     (OUT / "grades.json").write_text(json.dumps(rows, indent=1))
     for g in "ABC":
         print(g, [r["set"] for r in rows if r["grade"] == g])

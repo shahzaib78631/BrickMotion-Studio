@@ -21,7 +21,7 @@ from booklet_mpd.truth import build_scoped_steps
 from booklet_mpd.viewfit import BOOKLET_SCALE, fit_view
 
 OMR = Path("/Users/mac/Projects/BrickMotion-Data/omr/models")
-SOURCES = ROOT / "benchmarks/instructions/arrow-catalog-100-sources.json"
+SOURCES = ROOT / "benchmarks/booklet-mpd/sources.json"
 OUT = ROOT / ".cache/booklet-mpd"
 
 

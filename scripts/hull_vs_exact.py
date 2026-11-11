@@ -26,7 +26,7 @@ from booklet_mpd.truth import build_scoped_steps
 from brickheadz.instruction_place import _rotations24, iou
 
 OMR = Path("/Users/mac/Projects/BrickMotion-Data/omr/models")
-SOURCES = ROOT / "benchmarks/instructions/arrow-catalog-100-sources.json"
+SOURCES = ROOT / "benchmarks/booklet-mpd/sources.json"
 OUT = ROOT / ".cache/booklet-mpd"
 SIZE = 96
 ROT = [np.asarray(r, float)[:3, :3] for r in _rotations24()]

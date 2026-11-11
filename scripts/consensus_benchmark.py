@@ -23,7 +23,7 @@ from booklet_mpd.pairing import find_pairs
 from booklet_mpd.stepimage import largest_component, model_mask
 
 OMR = Path("/Users/mac/Projects/BrickMotion-Data/omr/models")
-SOURCES = ROOT / "benchmarks/instructions/arrow-catalog-100-sources.json"
+SOURCES = ROOT / "benchmarks/booklet-mpd/sources.json"
 OUT = ROOT / ".cache/booklet-mpd"
 YAWS, PITCHES = list(range(0, 360, 5)), list(range(10, 71, 5))
 

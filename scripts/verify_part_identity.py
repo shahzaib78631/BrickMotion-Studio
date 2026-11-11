@@ -14,7 +14,7 @@ from booklet_mpd.inventory_check import count_signature, omr_counter
 from booklet_mpd.pairing import find_pairs
 
 OMR = Path("/Users/mac/Projects/BrickMotion-Data/omr/models")
-SOURCES = ROOT / "benchmarks/instructions/arrow-catalog-100-sources.json"
+SOURCES = ROOT / "benchmarks/booklet-mpd/sources.json"
 OUT = ROOT / ".cache/booklet-mpd"
 
 
