@@ -43,7 +43,7 @@ def first_part_pose() -> np.ndarray:
 
 
 def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_per_px: float | None,
-          collides=None, beam: int = 6, extra_codes=()) -> StepResult:
+          collider=None, beam: int = 6, extra_codes=()) -> StepResult:
     """`base`: model so far [(id, colour, 4x4)] in the frame the step is built in; `parts`: new parts
     [(id, colour)]. When `base` is empty the largest new part is put at the origin (the frame is free)."""
     if rgb is None:
@@ -86,6 +86,10 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
     def candidate_fn(part, model):
         return candidates(lib, part, model)
 
+    collides = None
+    if collider is not None:
+        collider.set_model(model0)
+        collides = lambda part, matrix, _model: collider.hits(part, matrix)
     deltas = DELTAS if int(picture.arrows.sum()) >= MIN_ARROW_PIXELS else (0.0,)
     states = solve_step(lib, scene_for, model0, parts, candidate_fn, collides=collides, beam=beam, deltas=deltas)
     if not states or not states[0].placed:

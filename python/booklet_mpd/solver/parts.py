@@ -97,6 +97,16 @@ def element_index(cache: Path = REBRICKABLE) -> dict[str, dict]:
     return index
 
 
+def rebrickable_client(cache: Path = REBRICKABLE):
+    """Read-only Rebrickable client (key from REBRICKABLE_API_KEY, 1.1 s between calls, every answer
+    cached); None when no key is set, in which case only the cache is used."""
+    key = os.environ.get("REBRICKABLE_API_KEY", "")
+    if not key.strip():
+        return None
+    from ..inventory_check import Rebrickable
+    return Rebrickable(key, cache)
+
+
 def resolve_element(element: str, index: dict, client=None) -> dict | None:
     if element in index:
         return index[element]
