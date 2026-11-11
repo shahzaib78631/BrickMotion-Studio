@@ -106,3 +106,8 @@ def test_foundation_ignores_parts_missing_from_the_library(lib, monkeypatch):
 def test_group_visible_uses_the_first_omr_step_of_each_group():
     scoped = [{"visible": ["a"]}, {"visible": ["a", "b"]}, {"visible": ["x"]}]
     assert baseline.group_visible(scoped, [[[0], [0, 1]], [[1], [2]]]) == [["a"], ["x"]]
+
+
+def test_group_context_uses_the_first_omr_step_of_each_group():
+    scoped = [{"context": ["x"]}, {"context": []}, {"context": ["y"]}]
+    assert baseline.group_context(scoped, [[[0], [0, 1]], [[1], [2]]]) == [["x"], ["y"]]

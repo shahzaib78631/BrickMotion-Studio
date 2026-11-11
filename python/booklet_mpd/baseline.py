@@ -179,3 +179,8 @@ def group_visible(scoped_steps, groups):
     """Parts shown in the picture before each booklet step: those visible before the first
     OMR step of its group (a submodel's own progress, not every part ever placed)."""
     return [scoped_steps[omr_idx[0]]["visible"] for _booklet_idx, omr_idx in groups]
+
+
+def group_context(scoped_steps, groups):
+    """Parts of the enclosing models (built before the submodel) for each booklet step."""
+    return [scoped_steps[omr_idx[0]]["context"] for _booklet_idx, omr_idx in groups]

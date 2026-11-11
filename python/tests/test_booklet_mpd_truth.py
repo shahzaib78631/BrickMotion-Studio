@@ -203,3 +203,29 @@ def test_build_steps_is_unchanged_by_scoping(tmp_path):
 0 STEP
 0 NOFILE""")
     assert [len(s) for s in build_steps(p)] == [1]
+
+
+def test_scoped_steps_carry_the_context_of_the_models_they_sit_inside(tmp_path):
+    p = w(tmp_path / "ctx.mpd", f"""
+0 FILE main.ldr
+{ref(4, 0, '3020.dat')}
+0 STEP
+{ref(4, 100, 'sub.ldr')}
+{ref(4, 0, '3023.dat')}
+0 STEP
+0 FILE sub.ldr
+{ref(4, 0, '3001.dat')}
+0 STEP
+{ref(4, 20, 'deep.ldr')}
+0 STEP
+0 FILE deep.ldr
+{ref(4, 0, '3710.dat')}
+0 STEP
+0 NOFILE""")
+    names = lambda parts: [part for part, _c, _m in parts]
+    steps = build_scoped_steps(p)
+    by_file = {(s["file"], tuple(names(s["added"]))): names(s["context"]) for s in steps}
+    assert by_file[("main.ldr", ("3020",))] == []
+    assert by_file[("sub.ldr", ("3001",))] == ["3020"]                 # main's step 1 is already built
+    assert by_file[("deep.ldr", ("3710",))] == ["3020", "3001"]        # main's 3020 and sub's own 3001
+    assert by_file[("main.ldr", ("3023",))] == []

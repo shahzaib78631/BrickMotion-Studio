@@ -99,7 +99,7 @@ def build_scoped_steps(path: str, *, expand_submodels: bool = True, warnings: li
                 out.extend(leaves(child, colour if child_colour == 16 else child_colour, matrix @ child_matrix, (*stack, ref)))
         return out
 
-    def steps_of(ref, colour, matrix, stack):
+    def steps_of(ref, colour, matrix, stack, context=()):
         if ref in stack:
             raise ValueError(f"Cyclic MPD reference: {' -> '.join((*stack, ref))}")
         out: list[dict] = []
@@ -110,7 +110,7 @@ def build_scoped_steps(path: str, *, expand_submodels: bool = True, warnings: li
         def flush():
             nonlocal group, attached
             if group:
-                out.append({"added": group, "visible": list(own), "file": ref})
+                out.append({"added": group, "visible": list(own), "file": ref, "context": list(context)})
             own.extend(group)
             own.extend(attached)
             group, attached = [], []
@@ -128,7 +128,7 @@ def build_scoped_steps(path: str, *, expand_submodels: bool = True, warnings: li
                 m = matrix @ child_matrix
                 if expand_submodels and child in files and not child.endswith(".dat") and child not in chains and child not in expanded:
                     expanded.add(child)
-                    out.extend(steps_of(child, c, m, (*stack, ref)))
+                    out.extend(steps_of(child, c, m, (*stack, ref), (*context, *own)))
                     attached.extend(leaves(child, c, m, (*stack, ref)))
                 else:
                     group.extend(leaves(child, c, m, (*stack, ref)))
