@@ -8,7 +8,7 @@ Rules (written before any set was graded; see docs/superpowers/specs/2026-11-11-
 """
 from __future__ import annotations
 
-RULES_VERSION = 4   # 4: scale-constrained per-step fit; 3: per-step camera + exact refinement; 2: 24 orientations; 1: vertical turns
+RULES_VERSION = 5   # 5: per-step before/after hypothesis; 4: scale-constrained per-step fit; 3: per-step camera + exact refinement; 2: 24 orientations; 1: vertical turns
 A_MAX_RESIDUAL = 0.01
 C_MIN_RESIDUAL = 0.05
 MAX_OFFICIAL_GAP = 0.02

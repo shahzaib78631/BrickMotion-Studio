@@ -128,4 +128,4 @@ def test_unestablished_render_scale_is_not_a():
 
 def test_rules_version_is_part_of_the_protocol_identity():
     from booklet_mpd import grading, protocol
-    assert grading.RULES_VERSION == 4 and protocol.PROTOCOL_VERSION == 4
+    assert grading.RULES_VERSION == 5 and protocol.PROTOCOL_VERSION == 5

@@ -11,7 +11,7 @@ import json
 
 from . import grading
 
-PROTOCOL_VERSION = 4   # 4: scale-constrained per-step fit (see grading.RULES_VERSION)
+PROTOCOL_VERSION = 5   # 5: per-step before/after hypothesis (see grading.RULES_VERSION)
 ELIGIBLE_GRADES = ("A", "B")
 CONTAMINATED = {"40351": "step-mask thresholds were tuned while inspecting its failures"}
 HELD_OUT_SPLITS = ("validation", "test")
