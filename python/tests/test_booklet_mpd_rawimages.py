@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 import pymupdf
 
 from booklet_mpd.rawimages import main_model_image
@@ -44,3 +45,27 @@ def test_page_without_a_model_image_gives_none(tmp_path):
 def test_box_restricts_which_images_are_considered(tmp_path):
     doc = booklet_page(tmp_path)
     assert main_model_image(doc[0], box=pymupdf.Rect(0, 0, 150, 150)) is None
+
+
+from booklet_mpd.rawimages import main_model_image_info
+
+
+def test_info_gives_page_points_per_image_pixel(tmp_path):
+    doc = booklet_page(tmp_path)
+    img, pts_per_px = main_model_image_info(doc[0])
+    assert img.shape == (180, 140, 3)
+    assert pts_per_px == pytest.approx(140 / 140)     # image drawn 140pt wide from 140px of pixels
+
+
+def test_info_reflects_a_scaled_placement(tmp_path):
+    doc = pymupdf.open()
+    p = doc.new_page(width=400, height=290)
+    p.insert_image(pymupdf.Rect(50, 50, 150, 150), stream=png((0.8, 0.7, 0.4), 200, 200))   # 200px drawn at 100pt
+    img, pts_per_px = main_model_image_info(p.parent[0])
+    assert pts_per_px == pytest.approx(0.5)
+
+
+def test_info_none_when_no_model_image(tmp_path):
+    doc = pymupdf.open()
+    doc.new_page(width=200, height=200)
+    assert main_model_image_info(doc[0]) == (None, None)

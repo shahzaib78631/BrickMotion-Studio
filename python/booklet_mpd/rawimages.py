@@ -21,8 +21,9 @@ def _panels(page) -> list[pymupdf.Rect]:
     return found
 
 
-def main_model_image(page, box: pymupdf.Rect | None = None) -> np.ndarray | None:
-    """The largest RGB image outside every filled panel (optionally centred inside `box`)."""
+def main_model_image_info(page, box: pymupdf.Rect | None = None) -> tuple[np.ndarray | None, float | None]:
+    """The largest RGB image outside every filled panel (optionally centred inside `box`) and its
+    scale on the page in points per image pixel (None, None when there is no model image)."""
     panels = _panels(page)
     best, best_area = None, 0.0
     for info in page.get_image_info(xrefs=True):
@@ -37,8 +38,13 @@ def main_model_image(page, box: pymupdf.Rect | None = None) -> np.ndarray | None
         if rect.get_area() > best_area:
             best, best_area = info, rect.get_area()
     if best is None:
-        return None
+        return None, None
     pix = pymupdf.Pixmap(page.parent, best["xref"])
     if pix.alpha or pix.n != 3:
         pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.Pixmap(pix, 0) if pix.alpha else pix)
-    return np.frombuffer(pix.samples, np.uint8).reshape(pix.height, pix.width, 3).copy()
+    image = np.frombuffer(pix.samples, np.uint8).reshape(pix.height, pix.width, 3).copy()
+    return image, (best["bbox"][2] - best["bbox"][0]) / pix.width
+
+
+def main_model_image(page, box: pymupdf.Rect | None = None) -> np.ndarray | None:
+    return main_model_image_info(page, box)[0]

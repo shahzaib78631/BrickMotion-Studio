@@ -14,10 +14,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "python"))
 from assembly_model.ldraw import load_library
 from booklet_mpd.baseline import group_visible
-from booklet_mpd.consistency import visible_iou
 from booklet_mpd.grading import grade_set
 from booklet_mpd.pairing import find_pairs
-from booklet_mpd.rawimages import main_model_image
+from booklet_mpd.rawimages import main_model_image_info
+from booklet_mpd.scale import scale_ratio
+from booklet_mpd.viewfit import BOOKLET_SCALE, fit_view
 from booklet_mpd.truth import build_scoped_steps
 
 OMR = Path("/Users/mac/Projects/BrickMotion-Data/omr/models")
@@ -43,13 +44,18 @@ def sampled_iou(lib, pair, audit_row):
     eligible = [(i, g[0][0]) for i, g in enumerate(audit_row["groups"])
                 if len(g[0]) == 1 and steps[g[0][0]].get("pictureBox") and 0 < len(visible[i]) <= MAX_PARTS]
     chosen = eligible[:: max(1, len(eligible) // SAMPLE_STEPS)][:SAMPLE_STEPS]
-    values = []
+    values, feasible, ratios = [], [], []
     for gi, bi in chosen:
         step = steps[bi]
-        image = main_model_image(pdf[step["page"] - 1], pymupdf.Rect(step["pictureBox"]))
+        image, pts_per_px = main_model_image_info(pdf[step["page"] - 1], pymupdf.Rect(step["pictureBox"]))
         if image is not None:
-            values.append(visible_iou(lib, visible[gi], image))
-    return (statistics.median(values) if values else None), len(values)
+            fit = fit_view(lib, visible[gi], image, pts_per_px=pts_per_px, scale_prior=BOOKLET_SCALE)
+            values.append(fit["iou"])            # 0.0 when no view reproduces the booklet's scale
+            feasible.append(fit["feasible"])
+            ratios.append(scale_ratio(fit, pts_per_px))
+    stats = {"feasible": (sum(feasible) / len(feasible)) if feasible else None, "n": len(feasible),
+             "median": statistics.median([r for r in ratios if r]) if any(ratios) else None}
+    return (statistics.median(values) if values else None), len(values), stats
 
 
 def main():
@@ -61,14 +67,15 @@ def main():
     for pair in pairs:
         a = audit[pair.set_number]
         if not a["alignment_ok"]:
-            iou, n = None, 0
+            iou, n, scale = None, 0, {"median": None, "feasible": None, "n": 0}
         else:
-            iou, n = sampled_iou(lib, pair, a)
+            iou, n, scale = sampled_iou(lib, pair, a)
         graded = grade_set(alignment_ok=a["alignment_ok"], evidence=a["evidence"], identity=identity_of(identity.get(pair.set_number)),
-                           median_iou=iou, iou_steps=n)
+                           median_iou=iou, iou_steps=n, scale_feasible=scale["feasible"], scale_steps=scale["n"])
         rows.append({"set": pair.set_number, "split": pair.split, "family": "studded" if pair.set_number.startswith("40") else "technic/other",
-                     "median_iou": iou, "iou_steps": n, **graded})
-        print(f"{pair.set_number} {pair.split:11} {graded['grade']}  iou {('%.2f' % iou) if iou is not None else ' n/a'} ({n} steps)  {'; '.join(graded['reasons'])}", flush=True)
+                     "median_iou": iou, "iou_steps": n, "scale_median": scale["median"], "scale_feasible": scale["feasible"],
+                     "scale_steps": scale["n"], **graded})
+        print(f"{pair.set_number} {pair.split:11} {graded['grade']}  iou {('%.2f' % iou) if iou is not None else ' n/a'} scale {('%.3f' % scale['median']) if scale['median'] else ' n/a'} feasible {('%.0f%%' % (100 * scale['feasible'])) if scale['feasible'] is not None else 'n/a'} ({n} steps)  {'; '.join(graded['reasons'])}", flush=True)
     (OUT / "grades.json").write_text(json.dumps(rows, indent=1))
     for g in "ABC":
         print(g, [r["set"] for r in rows if r["grade"] == g])

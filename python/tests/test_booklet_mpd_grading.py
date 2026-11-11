@@ -13,7 +13,7 @@ IDENT = {"booklet_total": 150, "booklet_residual": 0, "omr_residual": 0, "offici
 
 
 def grade(**over):
-    base = dict(alignment_ok=True, evidence="strong", identity=IDENT, median_iou=0.85, iou_steps=6)
+    base = dict(alignment_ok=True, evidence="strong", identity=IDENT, median_iou=0.85, iou_steps=6, scale_feasible=1.0, scale_steps=6)
     base.update(over)
     return grade_set(**base)
 
@@ -83,10 +83,12 @@ def test_visible_iou_is_high_when_the_picture_shows_those_parts(lib):
     assert visible_iou(lib, PARTS, picture_from(mask)) > 0.9
 
 
-def test_visible_iou_is_low_when_the_picture_shows_something_else(lib):
-    other = [("3001", 4, placed(0, 0, 0)), ("3001", 4, placed(0, -24, 0)), ("3001", 4, placed(0, -48, 0))]
-    mask = silhouette(_clouds(lib, other), 35, 35, 160)
-    assert visible_iou(lib, PARTS, picture_from(mask)) < 0.85
+def test_visible_iou_is_low_for_a_very_different_outline(lib):
+    # IoU alone cannot separate near-identical outlines (that is the scale check's job), but it must
+    # reject a clearly different aspect ratio: a long row of bricks against a compact cluster.
+    row = [("3001", 4, placed(80 * i, 0, 0)) for i in range(8)]
+    mask = silhouette(_clouds(lib, row), 35, 35, 160)
+    assert visible_iou(lib, PARTS, picture_from(mask)) < 0.7
 
 
 def rotated(parts, R):
@@ -110,6 +112,20 @@ def test_visible_iou_accepts_a_model_flipped_upside_down_or_on_its_back(lib):
         assert visible_iou(lib, PARTS, picture_from(mask)) > 0.8
 
 
+def test_many_scale_infeasible_steps_is_not_a():
+    g = grade(scale_feasible=0.5)
+    assert g["grade"] == "B" and any("scale-feasible" in r for r in g["reasons"])
+
+
+def test_three_quarters_feasible_is_enough_for_a():
+    assert grade(scale_feasible=0.75)["grade"] == "A"
+
+
+def test_unestablished_render_scale_is_not_a():
+    g = grade(scale_feasible=None, scale_steps=2)
+    assert g["grade"] == "B" and any("render scale not established" in r for r in g["reasons"])
+
+
 def test_rules_version_is_part_of_the_protocol_identity():
     from booklet_mpd import grading, protocol
-    assert grading.RULES_VERSION == 2 and protocol.PROTOCOL_VERSION == 2
+    assert grading.RULES_VERSION == 4 and protocol.PROTOCOL_VERSION == 4
