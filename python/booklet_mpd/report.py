@@ -6,6 +6,7 @@ import statistics
 from collections import Counter
 from pathlib import Path
 
+from .grading import MIN_SCALE_FEASIBLE
 from .protocol import HELD_OUT_SPLITS, heldout_sets, protocol_hash, tuning_sets
 
 
@@ -38,12 +39,15 @@ def build_report(out_dir: Path) -> dict:
         value = _median(iou[s] for s in heldout_sets(grades, split))
         if value is not None:
             held[split] = value
+    feasible_sets = [r for r in grades if (r.get("scale_feasible") or 0) >= MIN_SCALE_FEASIBLE]
     return {
         "protocol_hash": protocol_hash(),
         "audit_usable": sum(1 for r in audit if r["alignment_ok"]),
         "grade_counts": {g: counts.get(g, 0) for g in "ABC"},
         "identity_matched_fraction": matched / total if total else None,
         "mask_pass": mask,
+        "scale_feasible_sets": len(feasible_sets),
+        "scale_median_of_feasible_sets": _median(r["scale_median"] for r in feasible_sets),
         "tuning_median_iou": _median(iou[s] for s in tuning_sets(grades)),
         "heldout_median_iou": held,
     }

@@ -1,13 +1,13 @@
 {
  "audit_usable": 30,
  "grade_counts": {
-  "A": 6,
-  "B": 17,
+  "A": 7,
+  "B": 16,
   "C": 8
  },
  "heldout_median_iou": {
-  "test": 0.8095407843806921,
-  "validation": 0.7558413351981488
+  "test": 0.8835325521236199,
+  "validation": 0.7693579877603215
  },
  "identity_matched_fraction": 0.9642227705322524,
  "mask_pass": {
@@ -15,6 +15,8 @@
   "train": 0.9520348837209303,
   "validation": 0.9430555555555555
  },
- "protocol_hash": "9aa98037bd125a7cf029a3cb09946b0cb7188f56e240e80043013b0effaec7fd",
- "tuning_median_iou": 0.8206638848672059
+ "protocol_hash": "a60ec79a75dbac2f2559ae5a3b478f766a3b991bd3b59098ecb1d6367b79a014",
+ "scale_feasible_sets": 24,
+ "scale_median_of_feasible_sets": 0.8119983729718797,
+ "tuning_median_iou": 0.8446641784716842
 }

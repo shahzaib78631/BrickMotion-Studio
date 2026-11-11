@@ -10,9 +10,9 @@ def write(path, data):
 def fixture(tmp_path, iou_a=0.9):
     write(tmp_path / "audit.json", {"pairs": [{"set": "A1", "alignment_ok": True}, {"set": "V1", "alignment_ok": True}, {"set": "T1", "alignment_ok": False}]})
     write(tmp_path / "grades.json", [
-        {"set": "A1", "split": "train", "grade": "A", "reasons": [], "median_iou": iou_a, "iou_steps": 8},
-        {"set": "V1", "split": "validation", "grade": "B", "reasons": [], "median_iou": 0.7, "iou_steps": 8},
-        {"set": "T1", "split": "test", "grade": "C", "reasons": [], "median_iou": None, "iou_steps": 0},
+        {"set": "A1", "split": "train", "grade": "A", "reasons": [], "median_iou": iou_a, "iou_steps": 8, "scale_feasible": 0.9, "scale_median": 0.81},
+        {"set": "V1", "split": "validation", "grade": "B", "reasons": [], "median_iou": 0.7, "iou_steps": 8, "scale_feasible": 0.5, "scale_median": 0.7},
+        {"set": "T1", "split": "test", "grade": "C", "reasons": [], "median_iou": None, "iou_steps": 0, "scale_feasible": None, "scale_median": None},
     ])
     write(tmp_path / "part-identity-api.json", [
         {"set": "A1", "booklet_vs_omr": {"total_a": 100, "exact": 95}, "reconcile": {"reconciled": 4}},
@@ -30,6 +30,7 @@ def test_report_aggregates_cached_stage_outputs(tmp_path):
     assert r["mask_pass"] == {"train": 0.5, "validation": 1.0, "test": 1.0}
     assert r["tuning_median_iou"] == 0.9 and r["heldout_median_iou"] == {"validation": 0.7}
     assert len(r["protocol_hash"]) == 64
+    assert r["scale_feasible_sets"] == 1 and r["scale_median_of_feasible_sets"] == 0.81
 
 
 def test_report_is_deterministic(tmp_path):
