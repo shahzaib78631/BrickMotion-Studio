@@ -68,3 +68,11 @@ per-part solve — the natural next algorithm to build.
 - Exact analytic placement when the depth is known (`_iou_at` IoU > 0.99).
 - High-scoring candidate search.
 - The corrected, translation- and symmetry-invariant metric.
+
+## Update: the global solve is built
+
+The joint constraint-satisfaction / optimisation solver this document calls for is now
+implemented and **proved** — see [CERTIFIED_GEOMETRIC_SOLVER.md](CERTIFIED_GEOMETRIC_SOLVER.md).
+It recovers the camera in closed form, encodes each step as a finite optimisation (exactly
+one pose per part, exact-cell non-overlap, support), proves optimality with z3 (a witness
+plus an UNSAT core), and re-checks the certificate from its own data.

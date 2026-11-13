@@ -1,0 +1,2990 @@
+{
+  "reviewer": "coding-agent, not independent human",
+  "decisions": [
+    {
+      "id": "31124-p11-green-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "130d4d45baba8fb257dec69fce497f438f2df96ed77990fe0db0021abf576005",
+      "approvedInstances": [
+        {
+          "id": "31124-p11-green-1-head0",
+          "mark_id": "31124-p11-green-1",
+          "kind": "single-headed",
+          "tip": [
+            109.5,
+            125.0
+          ],
+          "head_base": [
+            110.31014533285479,
+            105.01641512291516
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "31124-p11-green-2",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "7aaf9ef740ed89cb9074d0ae15d6d698a8ec1464ededdad0c71de423f4c3f3ca",
+      "approvedInstances": [
+        {
+          "id": "31124-p11-green-2-head0",
+          "mark_id": "31124-p11-green-2",
+          "kind": "single-headed",
+          "tip": [
+            110.0,
+            128.0
+          ],
+          "head_base": [
+            110.24388430433987,
+            108.00148704413009
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "31124-p12-green-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "26caadd1b94a563798da4ba41570ebd03ad87e766e18b1bf9bd6cfc6a59e81c2",
+      "approvedInstances": [
+        {
+          "id": "31124-p12-green-1-head0",
+          "mark_id": "31124-p12-green-1",
+          "kind": "single-headed",
+          "tip": [
+            111.0,
+            129.0
+          ],
+          "head_base": [
+            111.0,
+            109.0
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "31124-p14-green-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "63ac45d5558d58a46227cac7d811d72295bde9b1ed322fa69b06ba461b434285",
+      "approvedInstances": [
+        {
+          "id": "31124-p14-green-1-head0",
+          "mark_id": "31124-p14-green-1",
+          "kind": "single-headed",
+          "tip": [
+            94.33333333333333,
+            97.33333333333333
+          ],
+          "head_base": [
+            109.89484063674517,
+            109.89675207370252
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "31124-p14-green-2",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "329f8b254b4b74190a6090973d56a6da7e3fe3bc2a1e5e31d7addf938d302cee",
+      "approvedInstances": [
+        {
+          "id": "31124-p14-green-2-head0",
+          "mark_id": "31124-p14-green-2",
+          "kind": "single-headed",
+          "tip": [
+            95.0,
+            97.5
+          ],
+          "head_base": [
+            110.78704434752653,
+            109.7788122702984
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "31124-p15-green-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "1af92c1a24015d656f3c3f826db3dadfcb077249f0b3e5d731a7cae9876b7170",
+      "approvedInstances": [
+        {
+          "id": "31124-p15-green-1-head0",
+          "mark_id": "31124-p15-green-1",
+          "kind": "single-headed",
+          "tip": [
+            110.0,
+            138.0
+          ],
+          "head_base": [
+            110.30765590086408,
+            118.00236644383482
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "31124-p18-green-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "2240142bd2932e54442d25b6b65e1c8b7cbfd8612d5dfed68e413e86c6dc719c",
+      "approvedInstances": [
+        {
+          "id": "31124-p18-green-1-head0",
+          "mark_id": "31124-p18-green-1",
+          "kind": "single-headed",
+          "tip": [
+            110.0,
+            137.0
+          ],
+          "head_base": [
+            110.0,
+            117.0
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "31124-p18-green-2",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "8e5d7f5c92acea19b5f8ed57e649567adca5ea76ef5f117650636e86a6bcc090",
+      "approvedInstances": [
+        {
+          "id": "31124-p18-green-2-head0",
+          "mark_id": "31124-p18-green-2",
+          "kind": "single-headed",
+          "tip": [
+            110.5,
+            139.0
+          ],
+          "head_base": [
+            110.65151080381571,
+            119.00057389632575
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "31124-p19-green-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "0908c48f6668d1e091bfd52539298a2996f7747ed03fd1d06e9ac17100f89922",
+      "approvedInstances": [
+        {
+          "id": "31124-p19-green-1-head0",
+          "mark_id": "31124-p19-green-1",
+          "kind": "single-headed",
+          "tip": [
+            110.5,
+            128.0
+          ],
+          "head_base": [
+            110.5,
+            108.0
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "31124-p19-green-2",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "64090791bbef258a929079ecab85343e64c04f75c926fd4e03c37fcb5552780b",
+      "approvedInstances": [
+        {
+          "id": "31124-p19-green-2-head0",
+          "mark_id": "31124-p19-green-2",
+          "kind": "single-headed",
+          "tip": [
+            110.5,
+            129.0
+          ],
+          "head_base": [
+            110.5,
+            109.0
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "31124-p21-green-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "21a50ff339f0953c0b2200f62c8b5e213641b7f71e9001c75e975c7aa42fff7b",
+      "approvedInstances": [
+        {
+          "id": "31124-p21-green-1-head0",
+          "mark_id": "31124-p21-green-1",
+          "kind": "single-headed",
+          "tip": [
+            128.0,
+            121.0
+          ],
+          "head_base": [
+            111.34903317550071,
+            109.92095203506078
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "31124-p21-green-2",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "4c4a829c097dadd1994fd1c0640ca7b89bd77dc58080c1fc767b8c508ff6e3b3",
+      "approvedInstances": [
+        {
+          "id": "31124-p21-green-2-head0",
+          "mark_id": "31124-p21-green-2",
+          "kind": "single-headed",
+          "tip": [
+            126.5,
+            122.5
+          ],
+          "head_base": [
+            110.1123191187043,
+            111.03510072731487
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "31124-p24-green-2",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "d633bc1b6640f7de1e716a915c4c136b9143b720efb4168635fb8f5c90b5ea56",
+      "approvedInstances": [
+        {
+          "id": "31124-p24-green-2-head0",
+          "mark_id": "31124-p24-green-2",
+          "kind": "single-headed",
+          "tip": [
+            110.5,
+            133.0
+          ],
+          "head_base": [
+            110.5,
+            113.0
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "31124-p25-green-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "6d26147e3a9026e4184dee4672760918327d7eb2b9c17b58ccbbb917518a9bee",
+      "approvedInstances": [
+        {
+          "id": "31124-p25-green-1-head0",
+          "mark_id": "31124-p25-green-1",
+          "kind": "single-headed",
+          "tip": [
+            110.0,
+            135.0
+          ],
+          "head_base": [
+            110.3225386943652,
+            115.00260094935751
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "31124-p26-green-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "1de7a61a668c527ee9cb81e06866cc37803e9be6882d63fd67d40e1da44e1230",
+      "approvedInstances": [
+        {
+          "id": "31124-p26-green-1-head0",
+          "mark_id": "31124-p26-green-1",
+          "kind": "single-headed",
+          "tip": [
+            111.0,
+            128.0
+          ],
+          "head_base": [
+            110.48734798414898,
+            108.00657138181037
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "31124-p26-green-2",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "d3d28ab00fdd550a744e4b072b8fe741a4dfcce8ec873f8cbe476d6dc12d4213",
+      "approvedInstances": [
+        {
+          "id": "31124-p26-green-2-head0",
+          "mark_id": "31124-p26-green-2",
+          "kind": "single-headed",
+          "tip": [
+            110.0,
+            128.0
+          ],
+          "head_base": [
+            110.25638918650132,
+            108.0016434528973
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "31124-p27-green-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "03d3f1a89da5d1f5182b0d3b6cadb0447bec98f20aca198240ae708d9a34cef7",
+      "approvedInstances": [
+        {
+          "id": "31124-p27-green-1-head0",
+          "mark_id": "31124-p27-green-1",
+          "kind": "single-headed",
+          "tip": [
+            93.0,
+            96.5
+          ],
+          "head_base": [
+            108.63666802345091,
+            108.96974791743554
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "31124-p27-green-2",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "9414578a625391a8a750b404ad95370b5a93296507d479c72467a8a12f00d554",
+      "approvedInstances": [
+        {
+          "id": "31124-p27-green-2-head0",
+          "mark_id": "31124-p27-green-2",
+          "kind": "single-headed",
+          "tip": [
+            93.5,
+            96.0
+          ],
+          "head_base": [
+            108.7236164082473,
+            108.97079424917932
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "31124-p31-green-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "ef5537dcd2e48251ab571501625df9f38e3f49ba447a9e12b207e64744c2ced4",
+      "approvedInstances": [
+        {
+          "id": "31124-p31-green-1-head0",
+          "mark_id": "31124-p31-green-1",
+          "kind": "single-headed",
+          "tip": [
+            111.0,
+            133.0
+          ],
+          "head_base": [
+            110.40026981788658,
+            113.00899392955266
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "31124-p31-green-2",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "6363578e5af4bff509822f89aa33f4694b305289b16d2bb5292ea9ead4f9ae9f",
+      "approvedInstances": [
+        {
+          "id": "31124-p31-green-2-head0",
+          "mark_id": "31124-p31-green-2",
+          "kind": "single-headed",
+          "tip": [
+            110.0,
+            131.0
+          ],
+          "head_base": [
+            110.20407100865802,
+            111.00104115151427
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "31124-p32-green-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "f01d7c2d010cb4cbb29faa3973d0846b34c9e37f5bbef47a226565518f73a1b5",
+      "approvedInstances": [
+        {
+          "id": "31124-p32-green-1-head0",
+          "mark_id": "31124-p32-green-1",
+          "kind": "single-headed",
+          "tip": [
+            111.0,
+            134.0
+          ],
+          "head_base": [
+            111.0,
+            114.0
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "31124-p35-green-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "2918eca93889765bea14409c418f01f4ec647f8ba5c524174e3f965d701d54c1",
+      "approvedInstances": [
+        {
+          "id": "31124-p35-green-1-head0",
+          "mark_id": "31124-p35-green-1",
+          "kind": "single-headed",
+          "tip": [
+            111.0,
+            137.0
+          ],
+          "head_base": [
+            110.83051456055719,
+            117.00071814574791
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "31124-p35-green-2",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "b120c906004706a0c125925d34d679fe4cd867221c4f307ccf69a6a31b953d1a",
+      "approvedInstances": [
+        {
+          "id": "31124-p35-green-2-head0",
+          "mark_id": "31124-p35-green-2",
+          "kind": "single-headed",
+          "tip": [
+            110.5,
+            134.0
+          ],
+          "head_base": [
+            110.32759261311622,
+            114.00074312148205
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "31124-p36-green-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "87b2e519a9b3f87e8bb390a1e9ae2f6add49e3a233f08b53227837aa08cad201",
+      "approvedInstances": [
+        {
+          "id": "31124-p36-green-1-head0",
+          "mark_id": "31124-p36-green-1",
+          "kind": "single-headed",
+          "tip": [
+            111.0,
+            134.0
+          ],
+          "head_base": [
+            111.0,
+            114.0
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "31124-p39-green-3",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "5fbcf07edc0fa745ef0ea3bf2cb3680602dfe26c45e33b8e8a0bbecab31d2102",
+      "approvedInstances": [
+        {
+          "id": "31124-p39-green-3-head0",
+          "mark_id": "31124-p39-green-3",
+          "kind": "single-headed",
+          "tip": [
+            94.0,
+            101.0
+          ],
+          "head_base": [
+            111.323711720972,
+            110.99444906979154
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "31124-p39-green-4",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "6582feb5a00918d246d8daa304e86b204f40bebecb5227f2a6b5b7bb46b30401",
+      "approvedInstances": [
+        {
+          "id": "31124-p39-green-4-head0",
+          "mark_id": "31124-p39-green-4",
+          "kind": "single-headed",
+          "tip": [
+            93.0,
+            101.5
+          ],
+          "head_base": [
+            110.46395404029825,
+            111.24732318528274
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "31124-p43-green-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "b3c260aa58d9851ebd1f2ada0703d49cfd41d6898a7491e30f7f04fe32409cb4",
+      "approvedInstances": [
+        {
+          "id": "31124-p43-green-1-head0",
+          "mark_id": "31124-p43-green-1",
+          "kind": "single-headed",
+          "tip": [
+            111.0,
+            133.0
+          ],
+          "head_base": [
+            110.58342372636329,
+            113.00433886543776
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "31124-p43-green-2",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "8e31954b84d93802ba5dc87074ff901d536a0e155e579dba324ed52671c2b8ab",
+      "approvedInstances": [
+        {
+          "id": "31124-p43-green-2-head0",
+          "mark_id": "31124-p43-green-2",
+          "kind": "single-headed",
+          "tip": [
+            110.5,
+            130.0
+          ],
+          "head_base": [
+            110.5,
+            110.0
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "40495-p8-green-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "c1fed622fc02e355deafbbe79c3bd6800998d91edaa0d6132e2eb721edbcbaf1",
+      "approvedInstances": [
+        {
+          "id": "40495-p8-green-1-head0",
+          "mark_id": "40495-p8-green-1",
+          "kind": "single-headed",
+          "tip": [
+            111.0,
+            128.0
+          ],
+          "head_base": [
+            110.72224901018484,
+            108.00192873330889
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "40495-p8-green-2",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "e9ed3aead00083223ccd9a9b267c6076dc4ef89bdbe43865a4e416ae1762c80b",
+      "approvedInstances": [
+        {
+          "id": "40495-p8-green-2-head0",
+          "mark_id": "40495-p8-green-2",
+          "kind": "single-headed",
+          "tip": [
+            110.0,
+            125.0
+          ],
+          "head_base": [
+            110.64482588021916,
+            105.010397713206
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "40495-p8-green-3",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "5919601e61fd00090db85d12af918456e12e0700a3f80deee33366068199e014",
+      "approvedInstances": [
+        {
+          "id": "40495-p8-green-3-head0",
+          "mark_id": "40495-p8-green-3",
+          "kind": "single-headed",
+          "tip": [
+            73.0,
+            128.0
+          ],
+          "head_base": [
+            72.714314864343,
+            108.0020405040098
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "40495-p8-green-4",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "ab0dae860e1993a5b2dc93621e3928ae571275cfe85d01ec25e3b4747b124642",
+      "approvedInstances": [
+        {
+          "id": "40495-p8-green-4-head0",
+          "mark_id": "40495-p8-green-4",
+          "kind": "single-headed",
+          "tip": [
+            110.0,
+            126.0
+          ],
+          "head_base": [
+            110.3225386943652,
+            106.00260094935751
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "40495-p10-red-3",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "8c5af3e20857fba46ba87882b742c93978ea10c6ef48f1c79b083f517d8cf28b",
+      "approvedInstances": [
+        {
+          "id": "40495-p10-red-3-head0",
+          "mark_id": "40495-p10-red-3",
+          "kind": "single-headed",
+          "tip": [
+            110.5,
+            126.0
+          ],
+          "head_base": [
+            110.81246186001084,
+            106.00244095930609
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "40495-p10-red-4",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "47e552f9110379ac2154ace0357cd6c4bff9d01251458f32ed5473d2094d5572",
+      "approvedInstances": [
+        {
+          "id": "40495-p10-red-4-head0",
+          "mark_id": "40495-p10-red-4",
+          "kind": "single-headed",
+          "tip": [
+            110.5,
+            128.0
+          ],
+          "head_base": [
+            110.22224901018484,
+            108.00192873330889
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "40495-p12-red-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "ae51aa33170019f164fd1be9bf401e06ebde4feab989fae3fa9113bb7de9404d",
+      "approvedInstances": [
+        {
+          "id": "40495-p12-red-1-head0",
+          "mark_id": "40495-p12-red-1",
+          "kind": "single-headed",
+          "tip": [
+            111.0,
+            132.0
+          ],
+          "head_base": [
+            110.78262153662826,
+            112.00118136979931
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "40495-p14-red-2",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "59b459fcbe03ab935f267a199087153aa01fcce8978d8653769dba099b4d8179",
+      "approvedInstances": [
+        {
+          "id": "40495-p14-red-2-head0",
+          "mark_id": "40495-p14-red-2",
+          "kind": "single-headed",
+          "tip": [
+            111.0,
+            129.0
+          ],
+          "head_base": [
+            110.47386635823534,
+            109.00692161294306
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "40495-p17-red-3",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "0e06fced4856d8d69f88ea82ed2a2e381d9ed6685f9628bcef0d420c00a3f1b9",
+      "approvedInstances": [
+        {
+          "id": "40495-p17-red-3-head0",
+          "mark_id": "40495-p17-red-3",
+          "kind": "single-headed",
+          "tip": [
+            122.66666666666667,
+            100.33333333333333
+          ],
+          "head_base": [
+            107.00752273474794,
+            112.77484495047426
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "40495-p20-red-49",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "d27819e7ca138ffc25827b99b58db7298de3fb1129d57f8001ffffc1d5889398",
+      "approvedInstances": [
+        {
+          "id": "40495-p20-red-49-head0",
+          "mark_id": "40495-p20-red-49",
+          "kind": "single-headed",
+          "tip": [
+            110.5,
+            128.0
+          ],
+          "head_base": [
+            111.33261089424363,
+            108.01733853815296
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "40495-p20-red-55",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "fe184f94a21a313346055ca441600cd18a1060dc609cd5488037686aacfb7a75",
+      "approvedInstances": [
+        {
+          "id": "40495-p20-red-55-head0",
+          "mark_id": "40495-p20-red-55",
+          "kind": "single-headed",
+          "tip": [
+            81.0,
+            127.0
+          ],
+          "head_base": [
+            80.41201896796214,
+            107.00864491071295
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "40495-p27-red-14",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "9cdf8ddcc642528d65b1f561ad9156da3afbba6114970dcf28782c9cf2818e06",
+      "approvedInstances": [
+        {
+          "id": "40495-p27-red-14-head0",
+          "mark_id": "40495-p27-red-14",
+          "kind": "single-headed",
+          "tip": [
+            52.0,
+            113.0
+          ],
+          "head_base": [
+            71.46834336667152,
+            108.41921332548905
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "40495-p27-red-15",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "6a29d59450670906f7b4a467bf27186a1c8b6acaece371bc3c7bd989f2a0e900",
+      "approvedInstances": [
+        {
+          "id": "40495-p27-red-15-head0",
+          "mark_id": "40495-p27-red-15",
+          "kind": "single-headed",
+          "tip": [
+            111.0,
+            120.0
+          ],
+          "head_base": [
+            94.45048451216483,
+            108.76997163325471
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "40495-p27-red-21",
+      "accepted": false,
+      "flip": false,
+      "reason": "Rejected: part/decal/edge, not an arrow"
+    },
+    {
+      "id": "40495-p27-red-32",
+      "accepted": false,
+      "flip": false,
+      "reason": "Rejected: part/decal/edge, not an arrow"
+    },
+    {
+      "id": "40495-p30-red-12",
+      "accepted": false,
+      "flip": false,
+      "reason": "Rejected: part/decal/edge, not an arrow"
+    },
+    {
+      "id": "40495-p32-red-6",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "4d4fb27f0cd024720968db3541d1e68fea0f7e32e0c459a51fef4fcfb6d30f2d",
+      "approvedInstances": [
+        {
+          "id": "40495-p32-red-6-head0",
+          "mark_id": "40495-p32-red-6",
+          "kind": "single-headed",
+          "tip": [
+            129.5,
+            96.0
+          ],
+          "head_base": [
+            113.90614720315672,
+            108.52324857815987
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "40495-p35-red-10",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "1efd94b3b90776b807141800cda9c5bab5fb626c7aa41cd2177fbbdda3f1200f",
+      "approvedInstances": [
+        {
+          "id": "40495-p35-red-10-head0",
+          "mark_id": "40495-p35-red-10",
+          "kind": "single-headed",
+          "tip": [
+            125.0,
+            104.0
+          ],
+          "head_base": [
+            106.55118023397381,
+            111.7227617625226
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "40495-p35-red-16",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "fc1a9d96866a858e80400daf73736eac7bc84e27b0d631d69e020bb5e680d037",
+      "approvedInstances": [
+        {
+          "id": "40495-p35-red-16-head0",
+          "mark_id": "40495-p35-red-16",
+          "kind": "single-headed",
+          "tip": [
+            125.0,
+            104.0
+          ],
+          "head_base": [
+            106.51966335156217,
+            111.647035854526
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "40495-p40-red-5",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "1f9fbc7866cf0153c59ce861f7190043305301820fcd0d6661965c0267ef1426",
+      "approvedInstances": [
+        {
+          "id": "40495-p40-red-5-head0",
+          "mark_id": "40495-p40-red-5",
+          "kind": "single-headed",
+          "tip": [
+            94.5,
+            98.0
+          ],
+          "head_base": [
+            110.40184055320584,
+            110.12977604988724
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "40495-p40-red-8",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "f8800eb850ce547a93d4e7e42cafd523e10dbe7d1775c4a617a82430719b1f07",
+      "approvedInstances": [
+        {
+          "id": "40495-p40-red-8-head0",
+          "mark_id": "40495-p40-red-8",
+          "kind": "single-headed",
+          "tip": [
+            124.5,
+            42.0
+          ],
+          "head_base": [
+            117.28239311378486,
+            60.65224251493798
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "40495-p49-red-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "7956a57889dcd1292e738e6a7b8707e940d39b0a06aaba06388bb8f6a60383d1",
+      "approvedInstances": [
+        {
+          "id": "40495-p49-red-1-head0",
+          "mark_id": "40495-p49-red-1",
+          "kind": "single-headed",
+          "tip": [
+            111.0,
+            122.0
+          ],
+          "head_base": [
+            111.27775098981516,
+            102.00192873330889
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42117-p5-red-10",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "a4ef2a45cb4035a6cb091c2f436c260c0b538351f9a50b8b79754ab98c064599",
+      "approvedInstances": [
+        {
+          "id": "42117-p5-red-10-head0",
+          "mark_id": "42117-p5-red-10",
+          "kind": "single-headed",
+          "tip": [
+            96.5,
+            98.0
+          ],
+          "head_base": [
+            111.95306178033515,
+            110.69656967897807
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42117-p6-red-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "05797b1fad316ae6631118697bc93636c25dc0b1a5f4b5a6a8eed7e63370b28e",
+      "approvedInstances": [
+        {
+          "id": "42117-p6-red-1-head0",
+          "mark_id": "42117-p6-red-1",
+          "kind": "single-headed",
+          "tip": [
+            97.5,
+            74.0
+          ],
+          "head_base": [
+            113.25614332644872,
+            86.31843932795081
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42117-p6-red-2",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "bd3303f00ac781681e5abd6c5eca6d62ac9aee72fdd64507aceb42c0a5cc2956",
+      "approvedInstances": [
+        {
+          "id": "42117-p6-red-2-head0",
+          "mark_id": "42117-p6-red-2",
+          "kind": "single-headed",
+          "tip": [
+            97.0,
+            82.0
+          ],
+          "head_base": [
+            112.54698999219593,
+            94.581379184436
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42117-p6-red-6",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "0409eb2d0d8fece48a723f8326d44a784276a1d5b4521936a9e74843d68acfa9",
+      "approvedInstances": [
+        {
+          "id": "42117-p6-red-6-head0",
+          "mark_id": "42117-p6-red-6",
+          "kind": "single-headed",
+          "tip": [
+            129.0,
+            126.0
+          ],
+          "head_base": [
+            113.65151126510429,
+            113.17721194299853
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42117-p9-red-2",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "999c8f3ee7a49d1e392a370fceedd81fa6e6d145a915fd98f6ce449243893206",
+      "approvedInstances": [
+        {
+          "id": "42117-p9-red-2-head0",
+          "mark_id": "42117-p9-red-2",
+          "kind": "single-headed",
+          "tip": [
+            125.5,
+            121.0
+          ],
+          "head_base": [
+            109.55187228795367,
+            108.93114659628927
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42117-p9-red-3",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "0501800486b1574b46fb0cdb1f93e7fd2a27718a4e08925412620d66257a57f8",
+      "approvedInstances": [
+        {
+          "id": "42117-p9-red-3-head0",
+          "mark_id": "42117-p9-red-3",
+          "kind": "single-headed",
+          "tip": [
+            123.0,
+            120.75
+          ],
+          "head_base": [
+            107.60133100336091,
+            107.98751618485076
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42117-p12-red-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "ead5ef731ae74348542da142c2d4a825bb17c3ecb5e7bbec7ce1296417f7fd68",
+      "approvedInstances": [
+        {
+          "id": "42117-p12-red-1-head0",
+          "mark_id": "42117-p12-red-1",
+          "kind": "single-headed",
+          "tip": [
+            112.0,
+            103.5
+          ],
+          "head_base": [
+            93.55831166831061,
+            111.23977593195254
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42117-p12-red-9",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "c5e017bfdc136116964dedcef4157b9d7ec7fdc7f13e5c013747142a28e85f2e",
+      "approvedInstances": [
+        {
+          "id": "42117-p12-red-9-head0",
+          "mark_id": "42117-p12-red-9",
+          "kind": "single-headed",
+          "tip": [
+            128.0,
+            103.0
+          ],
+          "head_base": [
+            109.53846153846153,
+            110.6923076923077
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42117-p12-red-43",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "eed14c7e8500d62504700b792cdd45272a1ef68c46512aed65097f40ef39599c",
+      "approvedInstances": [
+        {
+          "id": "42117-p12-red-43-head0",
+          "mark_id": "42117-p12-red-43",
+          "kind": "single-headed",
+          "tip": [
+            84.0,
+            119.0
+          ],
+          "head_base": [
+            102.60676401341611,
+            111.66594703120825
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42117-p14-red-3",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "eafbb95a10eb8d568b2adf7be6b74aa13236b8521bd1bac12644647639f87d0a",
+      "approvedInstances": [
+        {
+          "id": "42117-p14-red-3-head0",
+          "mark_id": "42117-p14-red-3",
+          "kind": "single-headed",
+          "tip": [
+            67.0,
+            74.5
+          ],
+          "head_base": [
+            82.34505740492294,
+            87.32689413847405
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42117-p14-red-4",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "c19c77489c3fa19bb688caccafc4c63464fe486ee49d443eae7f0363760f82f8",
+      "approvedInstances": [
+        {
+          "id": "42117-p14-red-4-head0",
+          "mark_id": "42117-p14-red-4",
+          "kind": "single-headed",
+          "tip": [
+            68.0,
+            74.5
+          ],
+          "head_base": [
+            83.32088346955437,
+            87.35575862064684
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42117-p15-red-3",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "2023745d7eb89f6ee22e017b57401bbd4d3e4a5c052f7019382e39c2dd196fdc",
+      "approvedInstances": [
+        {
+          "id": "42117-p15-red-3-head0",
+          "mark_id": "42117-p15-red-3",
+          "kind": "single-headed",
+          "tip": [
+            127.33333333333333,
+            88.33333333333333
+          ],
+          "head_base": [
+            111.72937880487244,
+            75.82267375544836
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42117-p15-red-4",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "9dbf1ec828cc50f8602926bb363f35ebb17ec9e0cf1b72c246481221c4782264",
+      "approvedInstances": [
+        {
+          "id": "42117-p15-red-4-head0",
+          "mark_id": "42117-p15-red-4",
+          "kind": "single-headed",
+          "tip": [
+            126.33333333333333,
+            97.33333333333333
+          ],
+          "head_base": [
+            110.72937880487244,
+            84.82267375544836
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42117-p15-red-14",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "acae9a2595df06c85069d059ed9fafdff248d34cf68b5ac7ec3e3ff1855163b8",
+      "approvedInstances": [
+        {
+          "id": "42117-p15-red-14-head0",
+          "mark_id": "42117-p15-red-14",
+          "kind": "single-headed",
+          "tip": [
+            91.5,
+            95.0
+          ],
+          "head_base": [
+            107.07106016054537,
+            107.55157701154228
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42117-p18-red-6",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "c5cb823687615958c84c2c93879df89f4e562b6ac4bf24ceef2b3a58209126f0",
+      "approvedInstances": [
+        {
+          "id": "42117-p18-red-6-head0",
+          "mark_id": "42117-p18-red-6",
+          "kind": "single-headed",
+          "tip": [
+            110.5,
+            91.0
+          ],
+          "head_base": [
+            110.5,
+            111.0
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42117-p20-red-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "062baf91281bb930112a18f643a05fc8fccf26558de2af8966367eee8cea22e9",
+      "approvedInstances": [
+        {
+          "id": "42117-p20-red-1-head0",
+          "mark_id": "42117-p20-red-1",
+          "kind": "single-headed",
+          "tip": [
+            111.0,
+            132.0
+          ],
+          "head_base": [
+            111.41657627363671,
+            112.00433886543776
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42117-p20-red-2",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "2b237c00c5ef67a352a4f6c884620231aead576a2d8b301f03d7aa69ea687de6",
+      "approvedInstances": [
+        {
+          "id": "42117-p20-red-2-head0",
+          "mark_id": "42117-p20-red-2",
+          "kind": "single-headed",
+          "tip": [
+            110.5,
+            131.0
+          ],
+          "head_base": [
+            110.5,
+            111.0
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42117-p21-red-5",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "f9613bc59c8353ee5bf8aee98e8c672ff09a8be5a6ad82a7a98cfe6c7899847c",
+      "approvedInstances": [
+        {
+          "id": "42117-p21-red-5-head0",
+          "mark_id": "42117-p21-red-5",
+          "kind": "single-headed",
+          "tip": [
+            131.0,
+            102.0
+          ],
+          "head_base": [
+            112.38751315592451,
+            109.31951729823194
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42117-p25-red-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "27848455653469158c8112825e20d26b25b5afbbfc67f504cf9d4d2fe0d2180b",
+      "approvedInstances": [
+        {
+          "id": "42117-p25-red-1-head0",
+          "mark_id": "42117-p25-red-1",
+          "kind": "single-headed",
+          "tip": [
+            111.5,
+            97.0
+          ],
+          "head_base": [
+            110.35900418922974,
+            116.96742668847953
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42117-p27-red-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "82b8154472969b78df2315a8ddda11fc75795701eb1d2156547bba806fd40554",
+      "approvedInstances": [
+        {
+          "id": "42117-p27-red-1-head0",
+          "mark_id": "42117-p27-red-1",
+          "kind": "single-headed",
+          "tip": [
+            111.0,
+            132.0
+          ],
+          "head_base": [
+            111.21737846337174,
+            112.00118136979931
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42117-p28-red-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "04cb57e5c8bd5ede3889a3e4c35bffdec678c1ac12320aafaec6fae8c11749b3",
+      "approvedInstances": [
+        {
+          "id": "42117-p28-red-1-head0",
+          "mark_id": "42117-p28-red-1",
+          "kind": "single-headed",
+          "tip": [
+            85.0,
+            117.5
+          ],
+          "head_base": [
+            104.35750317904898,
+            112.47137487248169
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42117-p30-red-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "f3f0115543743de97a39f7963305476a9ef19213f44a7a1bca1ef421b52492f9",
+      "approvedInstances": [
+        {
+          "id": "42117-p30-red-1-head0",
+          "mark_id": "42117-p30-red-1",
+          "kind": "single-headed",
+          "tip": [
+            110.5,
+            113.0
+          ],
+          "head_base": [
+            110.5,
+            93.0
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42117-p30-red-2",
+      "accepted": false,
+      "flip": false,
+      "reason": "Rejected: part/decal/edge, not an arrow"
+    },
+    {
+      "id": "42117-p31-red-6",
+      "accepted": false,
+      "flip": false,
+      "reason": "Rejected: part/decal/edge, not an arrow"
+    },
+    {
+      "id": "42117-p32-red-2",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "1845676aee4996638c027762d34ab84ee6deaf214f4ead48fe9fce28a7b5b78b",
+      "approvedInstances": [
+        {
+          "id": "42117-p32-red-2-head0",
+          "mark_id": "42117-p32-red-2",
+          "kind": "single-headed",
+          "tip": [
+            90.0,
+            118.5
+          ],
+          "head_base": [
+            108.58258215508711,
+            111.10489077501636
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42117-p33-red-2",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "b94fa804fb3fbe2b128a8e63c3fc858b99d20dcf59f930c91531b3cc83298457",
+      "approvedInstances": [
+        {
+          "id": "42117-p33-red-2-head0",
+          "mark_id": "42117-p33-red-2",
+          "kind": "single-headed",
+          "tip": [
+            75.33333333333333,
+            67.33333333333333
+          ],
+          "head_base": [
+            87.65177266128414,
+            83.08947665978205
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42117-p35-red-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "5087c29fff8a61c37128910ec647657a7164e9d59fb6a7b1c3d2c1f62421b706",
+      "approvedInstances": [
+        {
+          "id": "42117-p35-red-1-head0",
+          "mark_id": "42117-p35-red-1",
+          "kind": "single-headed",
+          "tip": [
+            132.66666666666666,
+            128.66666666666666
+          ],
+          "head_base": [
+            117.43162746873602,
+            115.70929113620073
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42117-p47-red-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "05b426e511b3024cac7bc099f62c8afdf56a4c07eb764839cabedf2f0dac5599",
+      "approvedInstances": [
+        {
+          "id": "42117-p47-red-1-head0",
+          "mark_id": "42117-p47-red-1",
+          "kind": "single-headed",
+          "tip": [
+            88.0,
+            91.0
+          ],
+          "head_base": [
+            106.55696036056952,
+            83.54082965898677
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42117-p47-red-3",
+      "accepted": false,
+      "flip": false,
+      "reason": "Rejected: part/decal/edge, not an arrow"
+    },
+    {
+      "id": "42117-p47-red-79",
+      "accepted": false,
+      "flip": false,
+      "reason": "Rejected: part/decal/edge, not an arrow"
+    },
+    {
+      "id": "42117-p48-red-84",
+      "accepted": false,
+      "flip": false,
+      "reason": "Rejected: part/decal/edge, not an arrow"
+    },
+    {
+      "id": "42117-p52-red-79",
+      "accepted": false,
+      "flip": false,
+      "reason": "Rejected: part/decal/edge, not an arrow"
+    },
+    {
+      "id": "42117-p53-red-52",
+      "accepted": false,
+      "flip": false,
+      "reason": "Rejected: part/decal/edge, not an arrow"
+    },
+    {
+      "id": "42117-p54-red-4",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "46b746923a7855e62ad8f9cc7f04f5d4bbed28e0899f3da4482c6c82585016af",
+      "approvedInstances": [
+        {
+          "id": "42117-p54-red-4-head0",
+          "mark_id": "42117-p54-red-4",
+          "kind": "single-headed",
+          "tip": [
+            110.5,
+            91.0
+          ],
+          "head_base": [
+            110.5,
+            111.0
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p5-red-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "ba623a55709ae155f65eef32abea7b00a06dfadf60743fead898fb4207808ddf",
+      "approvedInstances": [
+        {
+          "id": "42606-p5-red-1-head0",
+          "mark_id": "42606-p5-red-1",
+          "kind": "single-headed",
+          "tip": [
+            111.0,
+            133.0
+          ],
+          "head_base": [
+            111.0,
+            113.0
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p5-red-2",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "b5c1e3c124d65e0822316d6f14c46ca52c8f918d6445b567b2e407a3153a7c25",
+      "approvedInstances": [
+        {
+          "id": "42606-p5-red-2-head0",
+          "mark_id": "42606-p5-red-2",
+          "kind": "single-headed",
+          "tip": [
+            110.0,
+            130.0
+          ],
+          "head_base": [
+            110.0,
+            110.0
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p5-red-13",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "8958df6ab5af9429781ced37bd6935d4bdc6734b9b8c121d06b57c4301fb434d",
+      "approvedInstances": [
+        {
+          "id": "42606-p5-red-13-head0",
+          "mark_id": "42606-p5-red-13",
+          "kind": "single-headed",
+          "tip": [
+            111.0,
+            130.0
+          ],
+          "head_base": [
+            110.26878188298551,
+            110.01337146827035
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p5-red-16",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "277f6fe02eadf12b33bbfcfe7dca4301df7db47ea2cda2932cc13dd55fb55d74",
+      "approvedInstances": [
+        {
+          "id": "42606-p5-red-16-head0",
+          "mark_id": "42606-p5-red-16",
+          "kind": "single-headed",
+          "tip": [
+            110.5,
+            129.0
+          ],
+          "head_base": [
+            110.5,
+            109.0
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p7-red-137",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "9a1d99fbd9ab42925fb87931bed328d5acbdac102694fbb27847fa6ba2560db5",
+      "approvedInstances": [
+        {
+          "id": "42606-p7-red-137-head0",
+          "mark_id": "42606-p7-red-137",
+          "kind": "single-headed",
+          "tip": [
+            110.5,
+            127.0
+          ],
+          "head_base": [
+            110.5,
+            107.0
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p8-red-4",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "1c25a319afdcf2aa9fd42bbecb8da4684738664102430ca2bdf108d4f566bc22",
+      "approvedInstances": [
+        {
+          "id": "42606-p8-red-4-head0",
+          "mark_id": "42606-p8-red-4",
+          "kind": "single-headed",
+          "tip": [
+            111.0,
+            130.0
+          ],
+          "head_base": [
+            111.0,
+            110.0
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p8-red-5",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "ab81bf7d8722c9668a339394ba0a817ff0c1dee1c9796f395e17a2dfa5c52dcb",
+      "approvedInstances": [
+        {
+          "id": "42606-p8-red-5-head0",
+          "mark_id": "42606-p8-red-5",
+          "kind": "single-headed",
+          "tip": [
+            110.5,
+            128.0
+          ],
+          "head_base": [
+            110.75638918650132,
+            108.0016434528973
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p15-red-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "11b90296c2eac99060eb5b24aa2f0660af3a41bbbc4c48a8c674187525e2ca48",
+      "approvedInstances": [
+        {
+          "id": "42606-p15-red-1-head0",
+          "mark_id": "42606-p15-red-1",
+          "kind": "single-headed",
+          "tip": [
+            107.0,
+            129.0
+          ],
+          "head_base": [
+            107.0,
+            109.0
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p15-red-2",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "c18e73637661b88fb3a09667c37eb27b9f62804770abf9976f31343d38cedd78",
+      "approvedInstances": [
+        {
+          "id": "42606-p15-red-2-head0",
+          "mark_id": "42606-p15-red-2",
+          "kind": "single-headed",
+          "tip": [
+            110.5,
+            127.0
+          ],
+          "head_base": [
+            110.785685135657,
+            107.0020405040098
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p22-red-2",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "5994d1c80a674b7eccb882c9e8a645ad64010b558aef85d0c583e9a6cfc94af2",
+      "approvedInstances": [
+        {
+          "id": "42606-p22-red-2-head0",
+          "mark_id": "42606-p22-red-2",
+          "kind": "single-headed",
+          "tip": [
+            90.0,
+            69.0
+          ],
+          "head_base": [
+            108.55478889773056,
+            76.46457024621344
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p23-red-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "06e7a8a8f45fbd95d17ea6ee0016443fe4ec42a0f64f6d80111ae103b60ae951",
+      "approvedInstances": [
+        {
+          "id": "42606-p23-red-1-head0",
+          "mark_id": "42606-p23-red-1",
+          "kind": "single-headed",
+          "tip": [
+            110.0,
+            129.0
+          ],
+          "head_base": [
+            110.44433474570293,
+            109.0049364433678
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p23-red-2",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "0dd997616fe80cc6d7e9dedebf5038b17ce515981aeb4e6dbac9f2a8f765ed0f",
+      "approvedInstances": [
+        {
+          "id": "42606-p23-red-2-head0",
+          "mark_id": "42606-p23-red-2",
+          "kind": "single-headed",
+          "tip": [
+            111.0,
+            131.0
+          ],
+          "head_base": [
+            111.2222085060711,
+            111.00123445360114
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p26-red-3",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "85c9fb6de3f7c83a625df765452254b5f06b5645d9a331806b11397e51bf1301",
+      "approvedInstances": [
+        {
+          "id": "42606-p26-red-3-head0",
+          "mark_id": "42606-p26-red-3",
+          "kind": "single-headed",
+          "tip": [
+            128.0,
+            103.0
+          ],
+          "head_base": [
+            109.447129641249,
+            110.4693374171595
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p26-red-4",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "9ee93a6ae8d596bd0651e7db4feaf46739cabb230544fc815b4a47278648790b",
+      "approvedInstances": [
+        {
+          "id": "42606-p26-red-4-head0",
+          "mark_id": "42606-p26-red-4",
+          "kind": "single-headed",
+          "tip": [
+            128.0,
+            103.0
+          ],
+          "head_base": [
+            109.43046618229481,
+            110.42781352708208
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p27-red-3",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "e02fab9d9e157bb52650990fd7272e6ff9910a000b686fc5420a876caa20db68",
+      "approvedInstances": [
+        {
+          "id": "42606-p27-red-3-head0",
+          "mark_id": "42606-p27-red-3",
+          "kind": "single-headed",
+          "tip": [
+            129.0,
+            103.0
+          ],
+          "head_base": [
+            110.3684476102988,
+            110.27084971305413
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p27-red-4",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "f7fb812bed26ee2c9b7fbdaf88107ace7538dbabe941dd3774a215cadc63f47f",
+      "approvedInstances": [
+        {
+          "id": "42606-p27-red-4-head0",
+          "mark_id": "42606-p27-red-4",
+          "kind": "single-headed",
+          "tip": [
+            128.0,
+            104.0
+          ],
+          "head_base": [
+            109.41407845241758,
+            111.3867124099366
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p29-red-3",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "554f9206b431d9ac7f54c69fe4eeac115724a9368ab231504149eb9a8b2bd1a1",
+      "approvedInstances": [
+        {
+          "id": "42606-p29-red-3-head0",
+          "mark_id": "42606-p29-red-3",
+          "kind": "single-headed",
+          "tip": [
+            130.0,
+            103.0
+          ],
+          "head_base": [
+            111.4753665038593,
+            110.53909502749912
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p30-red-133",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "67bd5e24c5f0d71c71a5fcc3f310ada1ff305687fbb2b7f52a959e917bcb1a2f",
+      "approvedInstances": [
+        {
+          "id": "42606-p30-red-133-head0",
+          "mark_id": "42606-p30-red-133",
+          "kind": "single-headed",
+          "tip": [
+            111.0,
+            131.0
+          ],
+          "head_base": [
+            111.47605555892578,
+            111.00566652511728
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p30-red-145",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "3a1cfcdec3ef127a6e1f94d40e519d24a7a1de6a44eb3619e1517332883d9116",
+      "approvedInstances": [
+        {
+          "id": "42606-p30-red-145-head0",
+          "mark_id": "42606-p30-red-145",
+          "kind": "single-headed",
+          "tip": [
+            110.5,
+            129.0
+          ],
+          "head_base": [
+            110.23686488259429,
+            109.001731077166
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p33-red-146",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "10b8ed41677dcc322f9a51090f6e7cd2eaf55b15d81a35497636d4fee903ae77",
+      "approvedInstances": [
+        {
+          "id": "42606-p33-red-146-head0",
+          "mark_id": "42606-p33-red-146",
+          "kind": "single-headed",
+          "tip": [
+            110.5,
+            128.0
+          ],
+          "head_base": [
+            110.23686488259429,
+            108.001731077166
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p39-red-21",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "1fba3cd56e4379cd52674b2903a86170e4c11fbea67a833fd8c8f445bc9f39f3",
+      "approvedInstances": [
+        {
+          "id": "42606-p39-red-21-head0",
+          "mark_id": "42606-p39-red-21",
+          "kind": "single-headed",
+          "tip": [
+            110.0,
+            129.0
+          ],
+          "head_base": [
+            109.72224901018484,
+            109.00192873330889
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p39-red-22",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "26a54a2d696041198bdf83bc67af39498705f22265a8103cd83eb67f667f6813",
+      "approvedInstances": [
+        {
+          "id": "42606-p39-red-22-head0",
+          "mark_id": "42606-p39-red-22",
+          "kind": "single-headed",
+          "tip": [
+            110.0,
+            129.0
+          ],
+          "head_base": [
+            110.99875233887785,
+            109.02495322244312
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p41-red-2",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "030c6badb2ae09d8ed8d9d5cf68286b540b0b25d5575162f4416bed4e717b0ba",
+      "approvedInstances": [
+        {
+          "id": "42606-p41-red-2-head0",
+          "mark_id": "42606-p41-red-2",
+          "kind": "single-headed",
+          "tip": [
+            110.0,
+            128.0
+          ],
+          "head_base": [
+            110.0,
+            108.0
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p48-red-26",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "08d409185ab7dc51c46d09c54583f848e33f1bc74a73ce190c7e01669da59136",
+      "approvedInstances": [
+        {
+          "id": "42606-p48-red-26-head0",
+          "mark_id": "42606-p48-red-26",
+          "kind": "single-headed",
+          "tip": [
+            110.0,
+            129.0
+          ],
+          "head_base": [
+            109.72224901018484,
+            109.00192873330889
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p48-red-27",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "b169144c921b88107256a70e1b53fe276b537d07150e1347f4fe38a8e5fcb815",
+      "approvedInstances": [
+        {
+          "id": "42606-p48-red-27-head0",
+          "mark_id": "42606-p48-red-27",
+          "kind": "single-headed",
+          "tip": [
+            110.0,
+            129.0
+          ],
+          "head_base": [
+            110.99875233887785,
+            109.02495322244312
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p50-red-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "05b8b1c89960c20abb01b3c916a838ff5c66cd6416cdae3748bee3cc6b4d6f57",
+      "approvedInstances": [
+        {
+          "id": "42606-p50-red-1-head0",
+          "mark_id": "42606-p50-red-1",
+          "kind": "single-headed",
+          "tip": [
+            110.0,
+            128.0
+          ],
+          "head_base": [
+            110.25638918650132,
+            108.0016434528973
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p50-red-10",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "2823bec45ffc9bb817ebdd30a39d539cdfacb9f85c195387131f3de9bea90518",
+      "approvedInstances": [
+        {
+          "id": "42606-p50-red-10-head0",
+          "mark_id": "42606-p50-red-10",
+          "kind": "single-headed",
+          "tip": [
+            110.0,
+            128.0
+          ],
+          "head_base": [
+            110.25638918650132,
+            108.0016434528973
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p54-red-24",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "dbee90716adee0112064dae47a0506c979c31752872fb20666c99bd7f30b376c",
+      "approvedInstances": [
+        {
+          "id": "42606-p54-red-24-head0",
+          "mark_id": "42606-p54-red-24",
+          "kind": "single-headed",
+          "tip": [
+            76.0,
+            130.0
+          ],
+          "head_base": [
+            75.74361081349868,
+            110.0016434528973
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p54-red-25",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "12d9bca4d8d4dd25ebb3f87627734eefec86cc690b5ef4287dcb5fabb1c45690",
+      "approvedInstances": [
+        {
+          "id": "42606-p54-red-25-head0",
+          "mark_id": "42606-p54-red-25",
+          "kind": "single-headed",
+          "tip": [
+            98.0,
+            129.0
+          ],
+          "head_base": [
+            98.0,
+            109.0
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p55-red-13",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "6c549b346e287754ef8d3c8c913e64400c4df6967f1c303ef0c3697ede2982e0",
+      "approvedInstances": [
+        {
+          "id": "42606-p55-red-13-head0",
+          "mark_id": "42606-p55-red-13",
+          "kind": "single-headed",
+          "tip": [
+            110.0,
+            129.0
+          ],
+          "head_base": [
+            110.24998047103853,
+            109.00156231691837
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p58-red-1",
+      "accepted": true,
+      "flip": false,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "c158df21527587af1cf28a12ceca4cc62bb73eb18ddcdfbdf3e6009ee23be6ae",
+      "approvedInstances": [
+        {
+          "id": "42606-p58-red-1-head0",
+          "mark_id": "42606-p58-red-1",
+          "kind": "single-headed",
+          "tip": [
+            110.0,
+            129.0
+          ],
+          "head_base": [
+            110.0,
+            109.0
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "unknown",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p60-red-9",
+      "accepted": true,
+      "flip": true,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "0ee2bbfb5b1c0aa380599242d01a7c075f7dbbfff9670b67da6560e6e87cab8e",
+      "approvedInstances": [
+        {
+          "id": "42606-p60-red-9-head0",
+          "mark_id": "42606-p60-red-9",
+          "kind": "bidirectional",
+          "tip": [
+            109.5,
+            62.0
+          ],
+          "head_base": [
+            109.71051465325085,
+            81.99889205883082
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "motion",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        },
+        {
+          "id": "42606-p60-red-9-head1",
+          "mark_id": "42606-p60-red-9",
+          "kind": "bidirectional",
+          "tip": [
+            110.5,
+            157.0
+          ],
+          "head_base": [
+            110.28948534674915,
+            137.00110794116918
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "motion",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    },
+    {
+      "id": "42606-p60-red-10",
+      "accepted": true,
+      "flip": true,
+      "reason": "Coding-agent visual review: arrowhead/shaft visible and local direction checked",
+      "pixel_sha256": "5d1bb84a80a680b76eeabc60e77b5a124ac0ce707f0180b6db9cd9bc0f6f20c2",
+      "approvedInstances": [
+        {
+          "id": "42606-p60-red-10-head0",
+          "mark_id": "42606-p60-red-10",
+          "kind": "bidirectional",
+          "tip": [
+            110.5,
+            60.0
+          ],
+          "head_base": [
+            110.60416525384457,
+            79.99972873815771
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "motion",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        },
+        {
+          "id": "42606-p60-red-10-head1",
+          "mark_id": "42606-p60-red-10",
+          "kind": "bidirectional",
+          "tip": [
+            111.0,
+            156.0
+          ],
+          "head_base": [
+            110.89583474615543,
+            136.00027126184227
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "direction_reviewed": true,
+          "purpose": "motion",
+          "provenance": "CV-proposed, coding-agent visually checked against source crop. Base is an approximate directional anchor, not a measured head boundary."
+        }
+      ]
+    }
+  ]
+}

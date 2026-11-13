@@ -27,7 +27,7 @@ def real_part(name: str, vocab: list[str]) -> str | None:
     if name.startswith("s\\"):
         parent = re.sub(r"s\d+$", "", name[2:])
         return parent if parent in vocab else None
-    return name if re.match(r"^\d", name) and "\\" not in name else None
+    return name if re.fullmatch(r"[0-9][a-z0-9]*", name, re.IGNORECASE) else None
 
 
 def vocabulary(lib, parts: list[str] | None = None) -> list[str]:

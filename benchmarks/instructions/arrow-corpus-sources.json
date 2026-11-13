@@ -1,0 +1,53 @@
+{
+  "booklets": [
+    {
+      "set": "31124",
+      "booklet": "6394747",
+      "split": "train",
+      "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6394747.pdf",
+      "path": ".cache/instructions/arrow-corpus/31124-6394747.pdf",
+      "sha256": "88a6ba462f310570bfd16c5ac585321214bf0434d9daf133246d22fa7f3eea61",
+      "pages": 52,
+      "sampleVectorPaths": 24
+    },
+    {
+      "set": "60312",
+      "booklet": "6607929",
+      "split": "test",
+      "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6607929.pdf",
+      "path": ".cache/instructions/arrow-corpus/60312-6607929.pdf",
+      "sha256": "6750ee65efdf0eedd69bb0741d47d8b2b551edac914d859a9deb8204b2026b7c",
+      "pages": 48,
+      "sampleVectorPaths": 12
+    },
+    {
+      "set": "42117",
+      "booklet": "6351151",
+      "split": "train",
+      "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6351151.pdf",
+      "path": ".cache/instructions/arrow-corpus/42117-6351151.pdf",
+      "sha256": "cccab3d213efb6890719119619904604be32ad3754cbddf70707f47ab7b275c5",
+      "pages": 60,
+      "sampleVectorPaths": 39
+    },
+    {
+      "set": "40495",
+      "booklet": "6373325",
+      "split": "train",
+      "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6373325.pdf",
+      "path": ".cache/instructions/arrow-corpus/40495-6373325.pdf",
+      "sha256": "1abf4980c30df6fe6caa1ff56f1bd6e0e73e10af959124722c14e3ee3052d448",
+      "pages": 56,
+      "sampleVectorPaths": 4
+    },
+    {
+      "set": "42606",
+      "booklet": "6493649",
+      "split": "validation",
+      "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6493649.pdf",
+      "path": ".cache/instructions/arrow-corpus/42606-6493649.pdf",
+      "sha256": "4dfb7bb40c8d11e49b14bf1b471222747e64357ea878beb52ebef7154397f3fb",
+      "pages": 68
+    }
+  ]
+}

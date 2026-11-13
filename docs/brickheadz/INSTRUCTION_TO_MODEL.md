@@ -31,7 +31,7 @@ and a rotation `R = Rx(pitch)·Ry(yaw)`:
 
 ```
 u = s·(R·p)_x + ox
-v = -s·(R·p)_y + oy        (screen v grows downward; model up is -y)
+v = s·(R·p)_y + oy        (screen v grows downward; model up is -y)
 depth = (R·p)_z
 ```
 
@@ -154,4 +154,13 @@ determine which pixel blob is which part.
    greedy commits, to stop the error cascade.
 3. **Physical constraints** (support + MeshOracle collision) during the search.
 4. Keep benchmarking every change against the OMR; never trust an unmeasured gain.
+
+---
+
+## The global, certified solver
+
+The joint step solve and physical constraints above are now implemented — see
+[CERTIFIED_GEOMETRIC_SOLVER.md](CERTIFIED_GEOMETRIC_SOLVER.md): closed-form axonometric
+camera recovery, a finite physically-pruned pose domain, a z3 optimality encode with an
+UNSAT-core proof, and an independent verifier, benchmarked against the Aquaman OMR.
 

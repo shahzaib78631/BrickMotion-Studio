@@ -1,0 +1,10 @@
+0 FILE batman-opening-reference.ldr
+0 Evaluation only: opening two steps in the canonical foundation frame
+0 One rigid transform of the existing reference: inverse foundation orientation
+0 This resolves the square foundation global yaw gauge, never a per-step correction
+1 0 40 -8 40 1 0 0 0 1 0 0 0 1 3031.dat
+1 14 70 -16 40 0 0 1 0 1 0 -1 0 0 3710.dat
+0 STEP
+1 14 10 -16 40 0 0 1 0 1 0 -1 0 0 3710.dat
+0 STEP
+0 NOFILE

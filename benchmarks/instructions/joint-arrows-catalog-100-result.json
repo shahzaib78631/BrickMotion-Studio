@@ -1,0 +1,383 @@
+{
+  "catalogBooklets": 120,
+  "positivelyAnnotatedNewBooklets": 112,
+  "reviewedProposals": 600,
+  "coverage": "Selected source-image regions; agent-reviewed, not exhaustive booklet annotation or independent human ground truth",
+  "trainingBooklets": 102,
+  "trainingHeads": 511,
+  "validationBooklets": 12,
+  "testBooklets": 12,
+  "trainedSteps": 2400,
+  "selectedStep": 1800,
+  "thresholds": [
+    0.2,
+    0.45
+  ],
+  "checkpoint": ".cache/instructions/joint-arrows/catalog-100/best.pt",
+  "checkpointSHA256": "733e397cf0fb1fe78043ae5c32ee936cdc68a220eae245bcfebf268dd0286a75",
+  "labelsSHA256": "490053160144c3412eafa2859b62bfaee4c19e9ed391a8b94075e3e7859fee98",
+  "completeTest": {
+    "locationF1": 0.7272727272727273,
+    "directedF1": 0.6666666666666666,
+    "precision": 0.8888888888888888,
+    "recall": 0.6153846153846154,
+    "labels": 39,
+    "matchedTips": 24,
+    "falsePositives": 3,
+    "missedTips": 15,
+    "directedCorrect": 22,
+    "reversed": 0,
+    "abstained": 0,
+    "completeRegions": 42,
+    "partialRegions": 0,
+    "angularErrorOnMatchedTips": {
+      "count": 24,
+      "available": 24,
+      "meanDegrees": 4.824724066384328,
+      "meanDegreesWithAbstentionsAt180": 4.824724066384328,
+      "within15Degrees": 22,
+      "reversed": 0
+    },
+    "oracleTipDirection": {
+      "count": 39,
+      "available": 39,
+      "meanDegrees": 8.764395574592431,
+      "meanDegreesWithAbstentionsAt180": 8.764395574592431,
+      "within15Degrees": 35,
+      "reversed": 0
+    },
+    "alwaysDownOracleBaseline": {
+      "count": 39,
+      "available": 39,
+      "meanDegrees": 31.35726523527867,
+      "meanDegreesWithAbstentionsAt180": 31.357265235278664,
+      "within15Degrees": 27,
+      "reversed": 6
+    }
+  },
+  "validationCalibratedPreviousLearnedTest": {
+    "locationF1": 0.5970149253731343,
+    "directedF1": 0.5970149253731343,
+    "precision": 0.7142857142857143,
+    "recall": 0.5128205128205128,
+    "labels": 39,
+    "matchedTips": 20,
+    "falsePositives": 8,
+    "missedTips": 19,
+    "directedCorrect": 20,
+    "reversed": 0,
+    "abstained": 0,
+    "completeRegions": 42,
+    "partialRegions": 0,
+    "angularErrorOnMatchedTips": {
+      "count": 20,
+      "available": 20,
+      "meanDegrees": 2.2469393918682092,
+      "meanDegreesWithAbstentionsAt180": 2.2469393918682092,
+      "within15Degrees": 20,
+      "reversed": 0
+    },
+    "oracleTipDirection": {
+      "count": 39,
+      "available": 39,
+      "meanDegrees": 11.079627306508986,
+      "meanDegreesWithAbstentionsAt180": 11.079627306508984,
+      "within15Degrees": 33,
+      "reversed": 1
+    },
+    "alwaysDownOracleBaseline": {
+      "count": 39,
+      "available": 39,
+      "meanDegrees": 31.35726523527867,
+      "meanDegreesWithAbstentionsAt180": 31.357265235278664,
+      "within15Degrees": 27,
+      "reversed": 6
+    }
+  },
+  "previousHybridTest": {
+    "locationF1": 0.7435897435897436,
+    "directedF1": 0.6666666666666666,
+    "precision": 0.7435897435897436,
+    "recall": 0.7435897435897436,
+    "labels": 39,
+    "matchedTips": 29,
+    "falsePositives": 10,
+    "missedTips": 10,
+    "directedCorrect": 26,
+    "reversed": 0,
+    "abstained": 0,
+    "completeRegions": 42,
+    "partialRegions": 0,
+    "angularErrorOnMatchedTips": {
+      "count": 29,
+      "available": 29,
+      "meanDegrees": 7.723363227588461,
+      "meanDegreesWithAbstentionsAt180": 7.723363227588461,
+      "within15Degrees": 26,
+      "reversed": 0
+    },
+    "oracleTipDirection": {
+      "count": 39,
+      "available": 39,
+      "meanDegrees": 11.079627306508986,
+      "meanDegreesWithAbstentionsAt180": 11.079627306508984,
+      "within15Degrees": 33,
+      "reversed": 1
+    },
+    "alwaysDownOracleBaseline": {
+      "count": 39,
+      "available": 39,
+      "meanDegrees": 31.35726523527867,
+      "meanDegreesWithAbstentionsAt180": 31.357265235278664,
+      "within15Degrees": 27,
+      "reversed": 6
+    }
+  },
+  "earlierLargerRegions": {
+    "6607929": {
+      "joint": {
+        "locationF1": 0.6956521739130435,
+        "directedF1": 0.6956521739130435,
+        "precision": 0.8888888888888888,
+        "recall": 0.5714285714285714,
+        "labels": 14,
+        "matchedTips": 8,
+        "falsePositives": 1,
+        "missedTips": 6,
+        "directedCorrect": 8,
+        "reversed": 0,
+        "abstained": 0,
+        "completeRegions": 9,
+        "partialRegions": 0,
+        "angularErrorOnMatchedTips": {
+          "count": 8,
+          "available": 8,
+          "meanDegrees": 5.674423614092728,
+          "meanDegreesWithAbstentionsAt180": 5.674423614092727,
+          "within15Degrees": 8,
+          "reversed": 0
+        },
+        "oracleTipDirection": {
+          "count": 14,
+          "available": 14,
+          "meanDegrees": 11.034079427117579,
+          "meanDegreesWithAbstentionsAt180": 11.034079427117579,
+          "within15Degrees": 12,
+          "reversed": 0
+        },
+        "alwaysDownOracleBaseline": {
+          "count": 14,
+          "available": 14,
+          "meanDegrees": 32.142857142857146,
+          "meanDegreesWithAbstentionsAt180": 32.142857142857146,
+          "within15Degrees": 11,
+          "reversed": 2
+        }
+      },
+      "previous": {
+        "locationF1": 0.64,
+        "directedF1": 0.64,
+        "precision": 0.7272727272727273,
+        "recall": 0.5714285714285714,
+        "labels": 14,
+        "matchedTips": 8,
+        "falsePositives": 3,
+        "missedTips": 6,
+        "directedCorrect": 8,
+        "reversed": 0,
+        "abstained": 0,
+        "completeRegions": 9,
+        "partialRegions": 0,
+        "angularErrorOnMatchedTips": {
+          "count": 8,
+          "available": 8,
+          "meanDegrees": 4.574214214419516,
+          "meanDegreesWithAbstentionsAt180": 4.574214214419516,
+          "within15Degrees": 8,
+          "reversed": 0
+        },
+        "oracleTipDirection": {
+          "count": 14,
+          "available": 14,
+          "meanDegrees": 8.58311340950259,
+          "meanDegreesWithAbstentionsAt180": 8.583113409502591,
+          "within15Degrees": 13,
+          "reversed": 0
+        },
+        "alwaysDownOracleBaseline": {
+          "count": 14,
+          "available": 14,
+          "meanDegrees": 32.142857142857146,
+          "meanDegreesWithAbstentionsAt180": 32.142857142857146,
+          "within15Degrees": 11,
+          "reversed": 2
+        }
+      },
+      "previousSavedHybrid": {
+        "locationF1": 0.6153846153846154,
+        "directedF1": 0.6153846153846154,
+        "precision": 0.6666666666666666,
+        "recall": 0.5714285714285714,
+        "labels": 14,
+        "matchedTips": 8,
+        "falsePositives": 4,
+        "missedTips": 6,
+        "directedCorrect": 8,
+        "reversed": 0,
+        "abstained": 0,
+        "completeRegions": 9,
+        "partialRegions": 0,
+        "angularErrorOnMatchedTips": {
+          "count": 8,
+          "available": 8,
+          "meanDegrees": 3.0222270854021795,
+          "meanDegreesWithAbstentionsAt180": 3.0222270854021795,
+          "within15Degrees": 8,
+          "reversed": 0
+        },
+        "oracleTipDirection": {
+          "count": 14,
+          "available": 14,
+          "meanDegrees": 8.58311340950259,
+          "meanDegreesWithAbstentionsAt180": 8.583113409502591,
+          "within15Degrees": 13,
+          "reversed": 0
+        },
+        "alwaysDownOracleBaseline": {
+          "count": 14,
+          "available": 14,
+          "meanDegrees": 32.142857142857146,
+          "meanDegreesWithAbstentionsAt180": 32.142857142857146,
+          "within15Degrees": 11,
+          "reversed": 2
+        }
+      }
+    },
+    "6668733": {
+      "joint": {
+        "locationF1": 0.0,
+        "directedF1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "labels": 8,
+        "matchedTips": 0,
+        "falsePositives": 3,
+        "missedTips": 8,
+        "directedCorrect": 0,
+        "reversed": 0,
+        "abstained": 0,
+        "completeRegions": 2,
+        "partialRegions": 0,
+        "angularErrorOnMatchedTips": {
+          "count": 0,
+          "available": 0,
+          "meanDegrees": null,
+          "meanDegreesWithAbstentionsAt180": null,
+          "within15Degrees": 0,
+          "reversed": 0
+        },
+        "oracleTipDirection": {
+          "count": 8,
+          "available": 8,
+          "meanDegrees": 9.210978150944786,
+          "meanDegreesWithAbstentionsAt180": 9.210978150944786,
+          "within15Degrees": 7,
+          "reversed": 0
+        },
+        "alwaysDownOracleBaseline": {
+          "count": 8,
+          "available": 8,
+          "meanDegrees": 97.74595549828891,
+          "meanDegreesWithAbstentionsAt180": 97.74595549828891,
+          "within15Degrees": 2,
+          "reversed": 6
+        }
+      },
+      "previous": {
+        "locationF1": 0.0,
+        "directedF1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "labels": 8,
+        "matchedTips": 0,
+        "falsePositives": 0,
+        "missedTips": 8,
+        "directedCorrect": 0,
+        "reversed": 0,
+        "abstained": 0,
+        "completeRegions": 2,
+        "partialRegions": 0,
+        "angularErrorOnMatchedTips": {
+          "count": 0,
+          "available": 0,
+          "meanDegrees": null,
+          "meanDegreesWithAbstentionsAt180": null,
+          "within15Degrees": 0,
+          "reversed": 0
+        },
+        "oracleTipDirection": {
+          "count": 8,
+          "available": 8,
+          "meanDegrees": 13.74956171654068,
+          "meanDegreesWithAbstentionsAt180": 13.74956171654068,
+          "within15Degrees": 6,
+          "reversed": 0
+        },
+        "alwaysDownOracleBaseline": {
+          "count": 8,
+          "available": 8,
+          "meanDegrees": 97.74595549828891,
+          "meanDegreesWithAbstentionsAt180": 97.74595549828891,
+          "within15Degrees": 2,
+          "reversed": 6
+        }
+      },
+      "previousSavedHybrid": {
+        "locationF1": 0.4,
+        "directedF1": 0.2,
+        "precision": 1.0,
+        "recall": 0.25,
+        "labels": 8,
+        "matchedTips": 2,
+        "falsePositives": 0,
+        "missedTips": 6,
+        "directedCorrect": 1,
+        "reversed": 0,
+        "abstained": 0,
+        "completeRegions": 2,
+        "partialRegions": 0,
+        "angularErrorOnMatchedTips": {
+          "count": 2,
+          "available": 2,
+          "meanDegrees": 29.75726925425932,
+          "meanDegreesWithAbstentionsAt180": 29.75726925425932,
+          "within15Degrees": 1,
+          "reversed": 0
+        },
+        "oracleTipDirection": {
+          "count": 8,
+          "available": 8,
+          "meanDegrees": 13.74956171654068,
+          "meanDegreesWithAbstentionsAt180": 13.74956171654068,
+          "within15Degrees": 6,
+          "reversed": 0
+        },
+        "alwaysDownOracleBaseline": {
+          "count": 8,
+          "available": 8,
+          "meanDegrees": 97.74595549828891,
+          "meanDegreesWithAbstentionsAt180": 97.74595549828891,
+          "within15Degrees": 2,
+          "reversed": 6
+        }
+      }
+    }
+  },
+  "frozenStudDetectorUnchanged": true,
+  "trainingExposuresPerBooklet": {
+    "min": 300,
+    "max": 301
+  },
+  "automaticPipelineEnabled": false,
+  "fullSetReconstructionValidated": false
+}

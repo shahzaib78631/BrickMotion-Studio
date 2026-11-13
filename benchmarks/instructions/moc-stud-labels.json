@@ -1,0 +1,174 @@
+{
+  "format": "brickmotion-keypoint-labels",
+  "version": 1,
+  "pdfSHA256": "8de44d3fa351307afca0538da395a505d6f79979f82088b62f3e44537f407f50",
+  "dpi": 150,
+  "limitations": "Two selected simple early assembly diagrams plus one door-panel negative region. Not representative of the complete booklet. Coding-agent review, not independent annotation. Never used for training.",
+  "samples": [
+    {
+      "id": "moc244965-p2-main",
+      "booklet": "MOC-244965",
+      "page": 2,
+      "image": ".cache/instructions/keypoint-learning/moc-stud-review/page-002-main.png",
+      "panel": null,
+      "split": "test",
+      "reviewed": true,
+      "studs": [
+        [
+          276.4857491286673,
+          122.75374087237071
+        ],
+        [
+          174.50809364114866,
+          73.9054245953223
+        ],
+        [
+          174.55715051118375,
+          122.78715944777639
+        ],
+        [
+          278.9057086759119,
+          175.17344581925738
+        ],
+        [
+          226.66551020156396,
+          148.26239386577583
+        ],
+        [
+          125.03599312006259,
+          98.18813504649802
+        ],
+        [
+          328.03018535285753,
+          148.41853685383455
+        ],
+        [
+          224.2247456848936,
+          96.23638403371365
+        ]
+      ],
+      "arrow_tips": [],
+      "studs_complete": true,
+      "arrows_complete": true,
+      "pixel_sha256": "044a05f6fd9751281b3724444728d8227c86b6693782cb916672bfc730ca48b1",
+      "size": [
+        450,
+        280
+      ],
+      "pageCropPixels": [
+        650,
+        480,
+        1100,
+        760
+      ],
+      "provenance": "Pilot proposals visually checked by coding agent against original assembly: all visible caps accounted for; not independently human annotated."
+    },
+    {
+      "id": "moc244965-p4-main",
+      "booklet": "MOC-244965",
+      "page": 4,
+      "image": ".cache/instructions/keypoint-learning/moc-stud-review/page-004-main.png",
+      "panel": null,
+      "split": "test",
+      "reviewed": true,
+      "studs": [
+        [
+          309.11021467634566,
+          128.004101002305
+        ],
+        [
+          358.876254850579,
+          153.23777918174142
+        ],
+        [
+          309.2023553226493,
+          76.69832841049345
+        ],
+        [
+          152.769443834434,
+          101.10861696485688
+        ],
+        [
+          358.8038315012151,
+          51.55301489362489
+        ],
+        [
+          204.90402776444307,
+          180.28525261564323
+        ],
+        [
+          155.79520798573162,
+          153.77978981050865
+        ],
+        [
+          102.94722385384557,
+          180.6980279862438
+        ],
+        [
+          207.35523956838438,
+          128.67962469522695
+        ],
+        [
+          256.64540457376836,
+          153.21289199779028
+        ],
+        [
+          358.87769297888474,
+          101.15487839674859
+        ],
+        [
+          201.98846761486607,
+          76.51943564149087
+        ],
+        [
+          308.954057586457,
+          180.43210911905896
+        ],
+        [
+          256.8213218493481,
+          101.35393307466052
+        ]
+      ],
+      "arrow_tips": [],
+      "studs_complete": true,
+      "arrows_complete": true,
+      "pixel_sha256": "1acf5b749f971689d84994ec343249a455562595f4738f255eebbf2efd6d194f",
+      "size": [
+        460,
+        310
+      ],
+      "pageCropPixels": [
+        620,
+        450,
+        1080,
+        760
+      ],
+      "provenance": "Pilot proposals visually checked by coding agent against original assembly: all visible caps accounted for; not independently human annotated."
+    },
+    {
+      "id": "moc244965-p131-door-negative",
+      "booklet": "MOC-244965",
+      "page": 131,
+      "image": ".cache/instructions/keypoint-learning/moc-stud-review/page-131-door-negative.png",
+      "panel": null,
+      "split": "test",
+      "reviewed": true,
+      "studs": [],
+      "arrow_tips": [],
+      "studs_complete": true,
+      "arrows_complete": true,
+      "pixel_sha256": "e540af715a809e59236a0384bd45a7468be3835503d77cbdcd50a5fbe5d45890",
+      "size": [
+        180,
+        360
+      ],
+      "pageCropPixels": [
+        1120,
+        235,
+        1300,
+        595
+      ],
+      "provenance": "Coding-agent visual review: door panels and knob, no outward male stud caps; negative test region, never used in training."
+    }
+  ]
+}

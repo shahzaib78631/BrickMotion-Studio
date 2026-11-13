@@ -27,28 +27,86 @@ BACKGROUND = (211, 236, 247)
 # ------------------------------------------------------------------ inputs ---
 
 
-def steps_from_omr(path: str):
-    """Parse a `0 STEP`-partitioned MPD into [(part, colour, matrix)] groups."""
-    steps, cur = [], []
-    for ln in open(path, errors="ignore"):
-        if ln.startswith("0 STEP"):
-            steps.append(cur); cur = []
-        elif ln.startswith("1 "):
-            f = ln.split()
-            vals = list(map(float, f[2:14]))
-            m = np.eye(4)
-            m[:3, :3] = np.array(vals[3:12]).reshape(3, 3)
-            m[:3, 3] = vals[:3]
-            cur.append((f[14].lower().replace(".dat", ""), int(f[1]), m))
-    if cur:
-        steps.append(cur)
-    return [s for s in steps if s]
+def steps_from_omr(path: str, *, preserve_empty: bool = False):
+    """Expand the root MPD's steps, composing nested local assembly transforms.
+
+    Repeated references create repeated instances; unused definitions are never
+    emitted. Child build steps belong to the referenced assembly, so all of its
+    leaves are added at the parent attachment step. No external paths are read.
+    """
+    def name(value):
+        return value.strip().replace("\\", "/").lower()
+    files = {}
+    current = None
+    root = None
+    with open(path, errors="strict") as source:
+        for line in source:
+            line = line.strip()
+            if line.upper().startswith("0 FILE "):
+                current = name(line[7:])
+                if current in files:
+                    raise ValueError(f"Duplicate MPD definition: {current}")
+                files[current] = []
+                root = root or current
+            elif line.upper() == "0 NOFILE":
+                current = None
+            elif current is not None:
+                files[current].append(line)
+            elif root is None:
+                files.setdefault("__root__", []).append(line)
+    root = root or "__root__"
+    if root not in files:
+        return []
+
+    def placement(line):
+        fields = line.split(maxsplit=14)
+        if len(fields) != 15:
+            raise ValueError(f"Malformed LDraw placement: {line[:100]}")
+        values = np.array([float(v) for v in fields[2:14]])
+        if not np.isfinite(values).all():
+            raise ValueError("Non-finite LDraw placement")
+        matrix = np.eye(4)
+        matrix[:3,3] = values[:3]
+        matrix[:3,:3] = values[3:].reshape(3,3)
+        return name(fields[14]),int(fields[1]),matrix
+
+    def expand(ref, colour, matrix, stack):
+        if ref in stack:
+            raise ValueError(f"Cyclic MPD reference: {' -> '.join((*stack,ref))}")
+        if ref not in files:
+            if not ref.endswith('.dat'):
+                raise ValueError(f"Missing MPD submodel: {ref}")
+            return [(ref[:-4],colour,matrix)]
+        pieces = []
+        for line in files[ref]:
+            if line.startswith('1 '):
+                child, child_colour, child_matrix = placement(line)
+                pieces.extend(expand(child,colour if child_colour==16 else child_colour,
+                                     matrix@child_matrix,(*stack,ref)))
+        return pieces
+
+    steps, group = [], []
+    for line in files[root]:
+        if line.upper() == '0 STEP' or line.upper().startswith('0 ROTSTEP '):
+            if group or preserve_empty:
+                steps.append(group)
+            group = []
+        elif line.startswith('1 '):
+            ref,colour,matrix = placement(line)
+            group.extend(expand(ref,colour,matrix,(root,)))
+    if group:
+        steps.append(group)
+    return steps
 
 
 def _load_rgb(path: str) -> np.ndarray:
     import pymupdf
 
     pix = pymupdf.Pixmap(path)
+    if pix.alpha:
+        pix = pymupdf.Pixmap(pix,0)
+    if pix.n != 3:
+        pix = pymupdf.Pixmap(pymupdf.csRGB,pix)
     return np.frombuffer(pix.samples, np.uint8).reshape(pix.height, pix.width, pix.n)[:, :, :3].astype(float)
 
 
@@ -63,12 +121,29 @@ def _model_from(pieces, name: str) -> Model:
 
 def from_omr(omr_path: str, out_dir: str, name: str = "model") -> dict:
     """Authoritative assembled model: exact geometry + instruction step order."""
-    steps = steps_from_omr(omr_path)
+    steps = steps_from_omr(omr_path, preserve_empty=True)
     pieces = [pc for s in steps for pc in s]
     os.makedirs(out_dir, exist_ok=True)
     model = _model_from(pieces, name)
-    write_plan(model, os.path.join(out_dir, f"{name}.plan.json"), name)
-    write_mpd(model, os.path.join(out_dir, f"{name}.mpd"), name)
+    # Generic generator exports regroup pieces; source reconstruction must keep
+    # attachment/turn steps and official simultaneous additions intact.
+    from brickheadz.export import _fmt
+    lines = [f"0 FILE {name}.ldr", f"0 {name} (source geometry, original steps)"]
+    plan_steps = []
+    for group in steps:
+        items = []
+        for part, colour, matrix in group:
+            nums = " ".join(_fmt(v) for v in (*matrix[:3,3],*matrix[:3,:3].ravel()))
+            lines.append(f"1 {colour} {nums} {part}.dat")
+            items.append({"part":part,"color":colour,"ldu":matrix[:3,3].tolist(),
+                          "matrix":matrix[:3,:3].ravel().tolist()})
+        lines.append('0 STEP')
+        plan_steps.append({"pieces":items})
+    lines.append('0 NOFILE')
+    with open(os.path.join(out_dir,f"{name}.mpd"),'w') as target:
+        target.write('\n'.join(lines)+'\n')
+    with open(os.path.join(out_dir,f"{name}.plan.json"),'w') as target:
+        json.dump({"format":"brickmotion-plan","version":1,"name":name,"steps":plan_steps},target,indent=1)
     counts = [len(s) for s in steps]
     report = {
         "mode": "omr",
@@ -78,6 +153,7 @@ def from_omr(omr_path: str, out_dir: str, name: str = "model") -> dict:
         "pieces": len(pieces),
         "piecesPerStep": counts,
         "trusted": True,
+        "buildabilityValidated": False,
         "note": "exact geometry from the OMR; build order from the instructions; no guessing",
     }
     with open(os.path.join(out_dir, "reconstruct.json"), "w") as f:
@@ -146,12 +222,17 @@ def propose(lib, palette, spec, out_dir, name="proposal", yaw=30, pitch=25, size
         rgb = _load_rgb(step["image"])
         h, w = rgb.shape[:2]
         s = int(max(h, w))
+        if h != w:
+            bg = np.median(np.array([rgb[0,0],rgb[0,-1],rgb[-1,0],rgb[-1,-1]]),axis=0)
+            canvas = np.broadcast_to(bg,(s,s,3)).copy()
+            canvas[:h,:w] = rgb
+            rgb = canvas
         if cam_override:
             cam = Camera(**cam_override)
         else:
             cam = _camera(lib, built, rgb, yaw, pitch, s) or Camera(yaw, pitch, s * 0.5, s / 2, s / 2)
         step_new = [(p, c, None, None) for p, c in step["parts"]]
-        rec = reconstruct_step(lib, step_new, cam, s, occupied, y_cands, rgb, palette)
+        rec = reconstruct_step(lib, step_new, cam, s, set(occupied), y_cands, rgb, palette)
         entries = []
         for (part, colour, grid, m, score, _g) in rec:
             if m is None:

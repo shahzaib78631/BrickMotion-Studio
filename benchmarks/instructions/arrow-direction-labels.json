@@ -1,0 +1,2165 @@
+{
+  "format": "brickmotion-arrow-direction-labels",
+  "version": 1,
+  "definition": "stud = visible outward stud cap centre, including partial diagram occlusion; arrow_tip = geometric point of the drawn arrowhead",
+  "limitations": "Small coding-agent-reviewed pilot; no independent human annotations. Superman supplies all real training. Batman and Aquaman are development diagnostics. Doctor Doom has eight new test arrows on one page, with CV-proposed and reviewed directions. Head-base lengths are approximate directional anchors. Unannotated shaft paths remain null.",
+  "samples": [
+    {
+      "id": "6668730-s1-panel0",
+      "booklet": "6668730",
+      "step": 1,
+      "image": ".cache/instructions/heroes-complete-regression/booklets/6668730/crops/p4_s1_picture.png",
+      "panel": null,
+      "split": "train",
+      "studs": [
+        [
+          83.57325744628906,
+          170.4687703450521
+        ],
+        [
+          111.32955932617188,
+          159.38481648763022
+        ],
+        [
+          64.11984252929688,
+          154.02669270833334
+        ],
+        [
+          138.98047892252603,
+          147.55740356445312
+        ],
+        [
+          91.95150756835938,
+          142.73460896809897
+        ],
+        [
+          44.826446533203125,
+          137.89006551106772
+        ],
+        [
+          166.6009724934896,
+          136.26180013020834
+        ],
+        [
+          119.5244649251302,
+          131.61055501302084
+        ],
+        [
+          72.49179585774739,
+          126.749267578125
+        ],
+        [
+          146.9791259765625,
+          120.3707784016927
+        ],
+        [
+          100.17264811197917,
+          115.6783955891927
+        ],
+        [
+          53.45635986328125,
+          111.02552286783855
+        ],
+        [
+          127.67954508463542,
+          104.64691162109375
+        ],
+        [
+          80.89171854654948,
+          99.94864908854167
+        ],
+        [
+          25.111788431803387,
+          41.846232096354164
+        ],
+        [
+          53.062835693359375,
+          30.882486979166668
+        ],
+        [
+          80.75602722167969,
+          19.95218022664388
+        ],
+        [
+          108.49697875976562,
+          9.023300170898438
+        ],
+        [
+          25.7,
+          122.3
+        ],
+        [
+          108.4,
+          89.1
+        ]
+      ],
+      "arrow_tips": [
+        [
+          108.0,
+          84.0
+        ],
+        [
+          25.5,
+          116.0
+        ]
+      ],
+      "studs_complete": true,
+      "arrows_complete": true,
+      "provenance": "CV-proposed coordinates; coding-agent visual review; not independent human annotation",
+      "notes": "Two stud centres partially obscured by arrow tips were added during visual review.",
+      "size": [
+        192,
+        203
+      ],
+      "pixel_sha256": "af430868ae034f92df3f98f97f37a7a3148c81e37468d14c550058cc45d93cb6",
+      "reviewed": true,
+      "arrow_instances": [
+        {
+          "id": "6668730-s1-panel0-a0",
+          "tip": [
+            108.0,
+            84.0
+          ],
+          "head_base": [
+            108,
+            70
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        },
+        {
+          "id": "6668730-s1-panel0-a1",
+          "tip": [
+            25.5,
+            116.0
+          ],
+          "head_base": [
+            25.5,
+            102
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        }
+      ]
+    },
+    {
+      "id": "6668730-s2-panel0",
+      "booklet": "6668730",
+      "step": 2,
+      "image": ".cache/instructions/heroes-complete-regression/booklets/6668730/crops/p5_s2_picture.png",
+      "panel": null,
+      "split": "train",
+      "studs": [
+        [
+          82.71573893229167,
+          101.3480224609375
+        ],
+        [
+          110.4400126139323,
+          89.86241658528645
+        ],
+        [
+          138.06976318359375,
+          78.68546040852864
+        ],
+        [
+          63.332784016927086,
+          74.09039815266927
+        ],
+        [
+          165.59333292643228,
+          67.59947713216145
+        ],
+        [
+          91.08400472005208,
+          62.93803914388021
+        ],
+        [
+          44.09410095214844,
+          58.17796834309896
+        ],
+        [
+          118.6476338704427,
+          51.87016805013021
+        ],
+        [
+          71.74503072102864,
+          47.115325927734375
+        ],
+        [
+          24.96214548746745,
+          42.430702209472656
+        ],
+        [
+          146.16891479492188,
+          40.81794230143229
+        ],
+        [
+          99.32169596354167,
+          35.84669748942057
+        ],
+        [
+          52.60527547200521,
+          31.12725321451823
+        ],
+        [
+          126.82716878255208,
+          24.655545552571613
+        ],
+        [
+          80.10608927408855,
+          19.950000762939453
+        ],
+        [
+          107.4871114095052,
+          9.024996439615885
+        ]
+      ],
+      "arrow_tips": [],
+      "studs_complete": true,
+      "arrows_complete": true,
+      "provenance": "CV-proposed coordinates; coding-agent visual review; not independent human annotation",
+      "size": [
+        191,
+        134
+      ],
+      "pixel_sha256": "996b5e6cfa58ac34a4d21fad40dd249aa6dfcc0a25d28443cb5ea629ac58078b",
+      "reviewed": true,
+      "arrow_instances": []
+    },
+    {
+      "id": "6668730-s3-panel0",
+      "booklet": "6668730",
+      "step": 3,
+      "image": ".cache/instructions/heroes-complete-regression/booklets/6668730/crops/p5_s3_picture.png",
+      "panel": null,
+      "split": "train",
+      "studs": [
+        [
+          82.71591695149739,
+          101.34564208984375
+        ],
+        [
+          63.3344472249349,
+          74.09456380208333
+        ],
+        [
+          165.5940958658854,
+          67.59709167480469
+        ],
+        [
+          91.08165486653645,
+          62.93376159667969
+        ],
+        [
+          44.08862813313802,
+          58.17497253417969
+        ],
+        [
+          118.65316772460938,
+          51.869344075520836
+        ],
+        [
+          71.74950663248698,
+          47.113311767578125
+        ],
+        [
+          24.961720784505207,
+          42.42169698079427
+        ],
+        [
+          146.16026814778647,
+          40.823089599609375
+        ],
+        [
+          99.32046508789062,
+          35.84846750895182
+        ],
+        [
+          52.608683268229164,
+          31.131337483723957
+        ],
+        [
+          126.8029073079427,
+          24.648508707682293
+        ],
+        [
+          80.11177062988281,
+          19.95291010538737
+        ],
+        [
+          107.4916280110677,
+          9.019116083780924
+        ]
+      ],
+      "arrow_tips": [],
+      "studs_complete": true,
+      "arrows_complete": true,
+      "provenance": "CV-proposed coordinates; coding-agent visual review; not independent human annotation",
+      "size": [
+        191,
+        134
+      ],
+      "pixel_sha256": "44fa7705ed3fbb8c8a1a4c1e30c2879155ba480f24ac75d4e343787840793e8e",
+      "reviewed": true,
+      "arrow_instances": []
+    },
+    {
+      "id": "6668730-s4-panel0",
+      "booklet": "6668730",
+      "step": 4,
+      "image": ".cache/instructions/heroes-complete-regression/booklets/6668730/crops/p6_s4_picture.png",
+      "panel": null,
+      "split": "train",
+      "studs": [
+        [
+          63.59998575846354,
+          74.09202575683594
+        ],
+        [
+          91.52767944335938,
+          62.9336903889974
+        ],
+        [
+          44.25557963053385,
+          58.1644287109375
+        ],
+        [
+          119.2936299641927,
+          51.86566670735677
+        ],
+        [
+          72.1221415201823,
+          47.107767740885414
+        ],
+        [
+          25.030715942382812,
+          42.42373911539713
+        ],
+        [
+          146.92011515299478,
+          40.81480916341146
+        ],
+        [
+          99.82607014973958,
+          35.848670959472656
+        ],
+        [
+          52.818756103515625,
+          31.115084330240887
+        ],
+        [
+          127.44598388671875,
+          24.642364501953125
+        ],
+        [
+          80.49263509114583,
+          19.94624201456706
+        ],
+        [
+          108.0603535970052,
+          9.017635345458984
+        ]
+      ],
+      "arrow_tips": [],
+      "studs_complete": true,
+      "arrows_complete": true,
+      "provenance": "CV-proposed coordinates; coding-agent visual review; not independent human annotation",
+      "size": [
+        192,
+        134
+      ],
+      "pixel_sha256": "8b9ee567ec54c8b451d1de175d3cb14f724105be2b5ae7d0f7203608b4a339b1",
+      "reviewed": true,
+      "arrow_instances": []
+    },
+    {
+      "id": "6668730-s34-panel0",
+      "booklet": "6668730",
+      "step": 34,
+      "image": ".cache/instructions/heroes-complete-regression/booklets/6668730/crops/p29_s34_picture.png",
+      "panel": 0,
+      "split": "train",
+      "studs": [
+        [
+          87.6352030436198,
+          106.29307047526042
+        ],
+        [
+          115.39217122395833,
+          94.80453491210938
+        ],
+        [
+          68.32557678222656,
+          89.92995198567708
+        ],
+        [
+          143.10196940104166,
+          83.6624043782552
+        ],
+        [
+          96.01922607421875,
+          78.77592468261719
+        ],
+        [
+          170.5367431640625,
+          72.56572977701823
+        ],
+        [
+          123.58089192708333,
+          67.7137451171875
+        ],
+        [
+          151.09749348958334,
+          56.68218994140625
+        ]
+      ],
+      "arrow_tips": [],
+      "studs_complete": true,
+      "arrows_complete": true,
+      "provenance": "CV-proposed coordinates; coding-agent visual review; not independent human annotation",
+      "size": [
+        201,
+        144
+      ],
+      "pixel_sha256": "d8a2e0f2ee2185fbf6dcb2fb56509dbc740f9091c2ecc706c4aaac17d0451b75",
+      "reviewed": true,
+      "arrow_instances": []
+    },
+    {
+      "id": "6668730-s34-panel1",
+      "booklet": "6668730",
+      "step": 34,
+      "image": ".cache/instructions/heroes-complete-regression/booklets/6668730/crops/p29_s34_picture.png",
+      "panel": 1,
+      "split": "train",
+      "studs": [],
+      "arrow_tips": [],
+      "studs_complete": true,
+      "arrows_complete": true,
+      "provenance": "CV-proposed coordinates; coding-agent visual review; not independent human annotation",
+      "size": [
+        202,
+        144
+      ],
+      "pixel_sha256": "633e60a4e3cf31ebae2c7a0fb19efd0b7bcbc60027a1e80c45c89d22f7ac2c27",
+      "reviewed": true,
+      "arrow_instances": []
+    },
+    {
+      "id": "6668732-s1-panel0",
+      "booklet": "6668732",
+      "step": 1,
+      "image": ".cache/instructions/heroes-complete-regression/booklets/6668732/crops/p2_s1_picture.png",
+      "panel": null,
+      "split": "test",
+      "studs": [
+        [
+          166.4747517903646,
+          56.635111490885414
+        ],
+        [
+          146.85212198893228,
+          40.81542205810547
+        ],
+        [
+          127.39567057291667,
+          24.642283121744793
+        ],
+        [
+          107.99307250976562,
+          9.022984186808268
+        ],
+        [
+          83.02760314941406,
+          101.31153361002605
+        ],
+        [
+          111.01314290364583,
+          89.8300069173177
+        ],
+        [
+          63.5120849609375,
+          84.98771667480469
+        ],
+        [
+          138.7550048828125,
+          78.69941711425781
+        ],
+        [
+          91.41712443033855,
+          73.86561584472656
+        ],
+        [
+          44.23234558105469,
+          69.05942789713542
+        ],
+        [
+          119.1956787109375,
+          62.80973815917969
+        ],
+        [
+          72.04396057128906,
+          57.96083068847656
+        ],
+        [
+          25.034563700358074,
+          53.284881591796875
+        ],
+        [
+          99.76414998372395,
+          46.94359334309896
+        ],
+        [
+          52.7586669921875,
+          42.259325663248696
+        ],
+        [
+          80.39541117350261,
+          31.013839721679688
+        ]
+      ],
+      "arrow_tips": [],
+      "studs_complete": true,
+      "arrows_complete": true,
+      "provenance": "CV-proposed coordinates; coding-agent visual review; not independent human annotation",
+      "size": [
+        192,
+        134
+      ],
+      "pixel_sha256": "a90b8f6dc050a508f7eb8aefa3880f9929a976d885ae49fae89a222257b92c26",
+      "reviewed": true,
+      "arrow_instances": []
+    },
+    {
+      "id": "6668732-s2-panel0",
+      "booklet": "6668732",
+      "step": 2,
+      "image": ".cache/instructions/heroes-complete-regression/booklets/6668732/crops/p3_s2_picture.png",
+      "panel": null,
+      "split": "test",
+      "studs": [
+        [
+          82.64466857910156,
+          90.0736592610677
+        ],
+        [
+          63.29740905761719,
+          74.09208170572917
+        ],
+        [
+          44.09223937988281,
+          58.18126424153646
+        ],
+        [
+          165.57939656575522,
+          56.62854512532552
+        ],
+        [
+          24.959515889485676,
+          42.3912353515625
+        ],
+        [
+          146.08651733398438,
+          40.81944274902344
+        ],
+        [
+          126.73192342122395,
+          24.649129231770832
+        ],
+        [
+          107.46533203125,
+          9.030287424723307
+        ],
+        [
+          110.36154174804688,
+          89.82240804036458
+        ],
+        [
+          138.03429158528647,
+          78.69308471679688
+        ],
+        [
+          91.06111653645833,
+          73.86740112304688
+        ],
+        [
+          118.5216776529948,
+          62.8099110921224
+        ],
+        [
+          71.75295511881511,
+          57.962626139322914
+        ],
+        [
+          99.2750752766927,
+          46.94187927246094
+        ],
+        [
+          52.58766174316406,
+          42.245035807291664
+        ],
+        [
+          80.10106913248698,
+          31.0242919921875
+        ]
+      ],
+      "arrow_tips": [],
+      "studs_complete": true,
+      "arrows_complete": true,
+      "provenance": "CV-proposed coordinates; coding-agent visual review; not independent human annotation",
+      "size": [
+        191,
+        134
+      ],
+      "pixel_sha256": "e38b3d488f462547b72e5fb1275bde06a85bdae4e7c1e373df01a1c59838581e",
+      "reviewed": true,
+      "arrow_instances": []
+    },
+    {
+      "id": "6668732-s3-panel0",
+      "booklet": "6668732",
+      "step": 3,
+      "image": ".cache/instructions/heroes-complete-regression/booklets/6668732/crops/p3_s3_picture.png",
+      "panel": null,
+      "split": "test",
+      "studs": [],
+      "arrow_tips": [
+        [
+          126.0,
+          93.0
+        ],
+        [
+          145.5,
+          109.0
+        ]
+      ],
+      "studs_complete": false,
+      "arrows_complete": true,
+      "provenance": "CV-proposed coordinates; coding-agent visual review; not independent human annotation",
+      "size": [
+        191,
+        198
+      ],
+      "pixel_sha256": "89b0ca56f0bb59bdb6d716de22fb01eb61d04a13751e00932cd6450214642c49",
+      "reviewed": true,
+      "arrow_instances": [
+        {
+          "id": "6668732-s3-panel0-a0",
+          "tip": [
+            126.0,
+            93.0
+          ],
+          "head_base": [
+            126,
+            65
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        },
+        {
+          "id": "6668732-s3-panel0-a1",
+          "tip": [
+            145.5,
+            109.0
+          ],
+          "head_base": [
+            145.5,
+            81
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        }
+      ]
+    },
+    {
+      "id": "6668732-s4-panel0",
+      "booklet": "6668732",
+      "step": 4,
+      "image": ".cache/instructions/heroes-complete-regression/booklets/6668732/crops/p4_s4_picture.png",
+      "panel": null,
+      "split": "test",
+      "studs": [],
+      "arrow_tips": [
+        [
+          84.0,
+          101.0
+        ],
+        [
+          57.0,
+          112.0
+        ]
+      ],
+      "studs_complete": false,
+      "arrows_complete": true,
+      "provenance": "CV-proposed coordinates; coding-agent visual review; not independent human annotation",
+      "size": [
+        196,
+        206
+      ],
+      "pixel_sha256": "7ed8fce464dcdaaca67b1be474fd13e3b5050199b940bd0ab0949a43df686df0",
+      "reviewed": true,
+      "arrow_instances": [
+        {
+          "id": "6668732-s4-panel0-a0",
+          "tip": [
+            84.0,
+            101.0
+          ],
+          "head_base": [
+            84,
+            78
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        },
+        {
+          "id": "6668732-s4-panel0-a1",
+          "tip": [
+            57.0,
+            112.0
+          ],
+          "head_base": [
+            57,
+            89
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        }
+      ]
+    },
+    {
+      "id": "6668732-s5-panel0",
+      "booklet": "6668732",
+      "step": 5,
+      "image": ".cache/instructions/heroes-complete-regression/booklets/6668732/crops/p4_s5_picture.png",
+      "panel": null,
+      "split": "test",
+      "studs": [],
+      "arrow_tips": [
+        [
+          85.7,
+          221.3
+        ],
+        [
+          168.7,
+          184.0
+        ]
+      ],
+      "studs_complete": false,
+      "arrows_complete": true,
+      "provenance": "CV-proposed coordinates; coding-agent visual review; not independent human annotation",
+      "size": [
+        196,
+        282
+      ],
+      "pixel_sha256": "f02a2f8de7ed4db0410a37ca6d3eb1b0ee3eec8386521125b2de374109433894",
+      "reviewed": true,
+      "arrow_instances": [
+        {
+          "id": "6668732-s5-panel0-a0",
+          "tip": [
+            85.7,
+            221.3
+          ],
+          "head_base": [
+            85.7,
+            196
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        },
+        {
+          "id": "6668732-s5-panel0-a1",
+          "tip": [
+            168.7,
+            184.0
+          ],
+          "head_base": [
+            168.7,
+            159
+          ],
+          "shaft": [
+            [
+              86,
+              121
+            ],
+            [
+              168.7,
+              121
+            ],
+            [
+              168.7,
+              159
+            ]
+          ],
+          "shaft_complete": true,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        }
+      ]
+    },
+    {
+      "id": "6668730-s5-arrows",
+      "booklet": "6668730",
+      "step": 5,
+      "image": ".cache/instructions/heroes-complete-regression/booklets/6668730/crops/p6_s5_picture.png",
+      "panel": null,
+      "split": "train",
+      "studs": [],
+      "arrow_tips": [
+        [
+          71,
+          95
+        ],
+        [
+          118,
+          98
+        ]
+      ],
+      "studs_complete": false,
+      "arrows_complete": true,
+      "reviewed": true,
+      "pixel_sha256": "d46a6bca11d22507b50cd3aa7079ee39073de1963aaaa4e48a50634a4bf17867",
+      "size": [
+        190,
+        218
+      ],
+      "provenance": "Arrow tips and negative images manually read by coding agent from coordinate-grid overlays; no independent human annotator.",
+      "arrow_instances": [
+        {
+          "id": "6668730-s5-arrows-a0",
+          "tip": [
+            71,
+            95
+          ],
+          "head_base": [
+            71,
+            70
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        },
+        {
+          "id": "6668730-s5-arrows-a1",
+          "tip": [
+            118,
+            98
+          ],
+          "head_base": [
+            118,
+            73
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        }
+      ]
+    },
+    {
+      "id": "6668730-s8-arrows",
+      "booklet": "6668730",
+      "step": 8,
+      "image": ".cache/instructions/heroes-complete-regression/booklets/6668730/crops/p8_s8_picture.png",
+      "panel": null,
+      "split": "train",
+      "studs": [],
+      "arrow_tips": [
+        [
+          174,
+          95
+        ],
+        [
+          203,
+          83
+        ],
+        [
+          202,
+          302
+        ],
+        [
+          71,
+          376
+        ]
+      ],
+      "studs_complete": false,
+      "arrows_complete": true,
+      "reviewed": true,
+      "pixel_sha256": "ecd2efea7da203d12b121556c1cc151e1703430fae3816a0fb1a7aa0994c5bbf",
+      "size": [
+        386,
+        438
+      ],
+      "provenance": "Arrow tips and negative images manually read by coding agent from coordinate-grid overlays; no independent human annotator.",
+      "arrow_instances": [
+        {
+          "id": "6668730-s8-arrows-a0",
+          "tip": [
+            174,
+            95
+          ],
+          "head_base": [
+            174,
+            70
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        },
+        {
+          "id": "6668730-s8-arrows-a1",
+          "tip": [
+            203,
+            83
+          ],
+          "head_base": [
+            203,
+            58
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        },
+        {
+          "id": "6668730-s8-arrows-a2",
+          "tip": [
+            202,
+            302
+          ],
+          "head_base": [
+            226,
+            302
+          ],
+          "shaft": [
+            [
+              342,
+              166
+            ],
+            [
+              342,
+              302
+            ],
+            [
+              226,
+              302
+            ]
+          ],
+          "shaft_complete": true,
+          "purpose": "subassembly-callout",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        },
+        {
+          "id": "6668730-s8-arrows-a3",
+          "tip": [
+            71,
+            376
+          ],
+          "head_base": [
+            95,
+            376
+          ],
+          "shaft": [
+            [
+              342,
+              166
+            ],
+            [
+              342,
+              376
+            ],
+            [
+              95,
+              376
+            ]
+          ],
+          "shaft_complete": true,
+          "purpose": "subassembly-callout",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        }
+      ]
+    },
+    {
+      "id": "6668730-s10-arrows",
+      "booklet": "6668730",
+      "step": 10,
+      "image": ".cache/instructions/heroes-complete-regression/booklets/6668730/crops/p10_s10_picture.png",
+      "panel": null,
+      "split": "train",
+      "studs": [],
+      "arrow_tips": [
+        [
+          225,
+          117
+        ],
+        [
+          329,
+          96
+        ],
+        [
+          200,
+          367
+        ]
+      ],
+      "studs_complete": false,
+      "arrows_complete": true,
+      "reviewed": true,
+      "pixel_sha256": "e35e08ea59d86a7b551e6247b4e1aa8b556705a3b606b640c636ea99a820105d",
+      "size": [
+        355,
+        461
+      ],
+      "provenance": "Arrow tips and negative images manually read by coding agent from coordinate-grid overlays; no independent human annotator.",
+      "arrow_instances": [
+        {
+          "id": "6668730-s10-arrows-a0",
+          "tip": [
+            225,
+            117
+          ],
+          "head_base": [
+            225,
+            92
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        },
+        {
+          "id": "6668730-s10-arrows-a1",
+          "tip": [
+            329,
+            96
+          ],
+          "head_base": [
+            329,
+            71
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        },
+        {
+          "id": "6668730-s10-arrows-a2",
+          "tip": [
+            200,
+            367
+          ],
+          "head_base": [
+            224,
+            367
+          ],
+          "shaft": [
+            [
+              281,
+              187
+            ],
+            [
+              281,
+              367
+            ],
+            [
+              224,
+              367
+            ]
+          ],
+          "shaft_complete": true,
+          "purpose": "subassembly-callout",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        }
+      ]
+    },
+    {
+      "id": "6668730-s13-arrows",
+      "booklet": "6668730",
+      "step": 13,
+      "image": ".cache/instructions/heroes-complete-regression/booklets/6668730/crops/p12_s13_picture.png",
+      "panel": null,
+      "split": "train",
+      "studs": [],
+      "arrow_tips": [
+        [
+          76,
+          118
+        ],
+        [
+          124,
+          122
+        ]
+      ],
+      "studs_complete": false,
+      "arrows_complete": true,
+      "reviewed": true,
+      "pixel_sha256": "f08ec65bb9ef7812b954c37c3b78ffa55ee6bc0249c83ec328fe2ff722a30096",
+      "size": [
+        200,
+        308
+      ],
+      "provenance": "Arrow tips and negative images manually read by coding agent from coordinate-grid overlays; no independent human annotator.",
+      "arrow_instances": [
+        {
+          "id": "6668730-s13-arrows-a0",
+          "tip": [
+            76,
+            118
+          ],
+          "head_base": [
+            76,
+            93
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        },
+        {
+          "id": "6668730-s13-arrows-a1",
+          "tip": [
+            124,
+            122
+          ],
+          "head_base": [
+            124,
+            97
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        }
+      ]
+    },
+    {
+      "id": "6668730-s15-arrows",
+      "booklet": "6668730",
+      "step": 15,
+      "image": ".cache/instructions/heroes-complete-regression/booklets/6668730/crops/p14_s15_picture.png",
+      "panel": null,
+      "split": "train",
+      "studs": [],
+      "arrow_tips": [
+        [
+          240,
+          118
+        ],
+        [
+          287,
+          121
+        ],
+        [
+          152,
+          235
+        ]
+      ],
+      "studs_complete": false,
+      "arrows_complete": true,
+      "reviewed": true,
+      "pixel_sha256": "62b120c0cbb154c627c338cbefe5810dd10255ea5e1c02379d50d9532c5c0b97",
+      "size": [
+        313,
+        468
+      ],
+      "provenance": "Arrow tips and negative images manually read by coding agent from coordinate-grid overlays; no independent human annotator.",
+      "arrow_instances": [
+        {
+          "id": "6668730-s15-arrows-a0",
+          "tip": [
+            240,
+            118
+          ],
+          "head_base": [
+            240,
+            93
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        },
+        {
+          "id": "6668730-s15-arrows-a1",
+          "tip": [
+            287,
+            121
+          ],
+          "head_base": [
+            287,
+            96
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        },
+        {
+          "id": "6668730-s15-arrows-a2",
+          "tip": [
+            152,
+            235
+          ],
+          "head_base": [
+            177,
+            235
+          ],
+          "shaft": [
+            [
+              263,
+              179
+            ],
+            [
+              263,
+              235
+            ],
+            [
+              177,
+              235
+            ]
+          ],
+          "shaft_complete": true,
+          "purpose": "subassembly-callout",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        }
+      ]
+    },
+    {
+      "id": "6668730-s6-arrows",
+      "booklet": "6668730",
+      "step": 6,
+      "image": ".cache/instructions/heroes-complete-regression/booklets/6668730/crops/p7_s6_picture.png",
+      "panel": null,
+      "split": "train",
+      "studs": [],
+      "arrow_tips": [],
+      "studs_complete": false,
+      "arrows_complete": true,
+      "reviewed": true,
+      "pixel_sha256": "d517954b161fac30ac5ee35d7b689d7a2e6b7656e521b8bbd4ecaf5b91c87a47",
+      "size": [
+        194,
+        189
+      ],
+      "provenance": "Arrow tips and negative images manually read by coding agent from coordinate-grid overlays; no independent human annotator.",
+      "arrow_instances": []
+    },
+    {
+      "id": "6668730-s7-arrows",
+      "booklet": "6668730",
+      "step": 7,
+      "image": ".cache/instructions/heroes-complete-regression/booklets/6668730/crops/p7_s7_picture.png",
+      "panel": null,
+      "split": "train",
+      "studs": [],
+      "arrow_tips": [],
+      "studs_complete": false,
+      "arrows_complete": true,
+      "reviewed": true,
+      "pixel_sha256": "bc509331b4cb9834264fdb5f7a56c2156819f5473fe45859f220227233d85b71",
+      "size": [
+        194,
+        189
+      ],
+      "provenance": "Arrow tips and negative images manually read by coding agent from coordinate-grid overlays; no independent human annotator.",
+      "arrow_instances": []
+    },
+    {
+      "id": "6668730-s11-arrows",
+      "booklet": "6668730",
+      "step": 11,
+      "image": ".cache/instructions/heroes-complete-regression/booklets/6668730/crops/p11_s11_picture.png",
+      "panel": null,
+      "split": "train",
+      "studs": [],
+      "arrow_tips": [],
+      "studs_complete": false,
+      "arrows_complete": true,
+      "reviewed": true,
+      "pixel_sha256": "a696bb428d042667e60bd227683acc4126885ef63340ea336f3f014016c4cb67",
+      "size": [
+        201,
+        200
+      ],
+      "provenance": "Arrow tips and negative images manually read by coding agent from coordinate-grid overlays; no independent human annotator.",
+      "arrow_instances": []
+    },
+    {
+      "id": "6668730-s12-arrows",
+      "booklet": "6668730",
+      "step": 12,
+      "image": ".cache/instructions/heroes-complete-regression/booklets/6668730/crops/p11_s12_picture.png",
+      "panel": null,
+      "split": "train",
+      "studs": [],
+      "arrow_tips": [],
+      "studs_complete": false,
+      "arrows_complete": true,
+      "reviewed": true,
+      "pixel_sha256": "e986260d838953f82728ec615adfeea3cb92d301fb6d259989df2861dd787633",
+      "size": [
+        201,
+        200
+      ],
+      "provenance": "Arrow tips and negative images manually read by coding agent from coordinate-grid overlays; no independent human annotator.",
+      "arrow_instances": []
+    },
+    {
+      "id": "6668730-s14-arrows",
+      "booklet": "6668730",
+      "step": 14,
+      "image": ".cache/instructions/heroes-complete-regression/booklets/6668730/crops/p13_s14_picture.png",
+      "panel": null,
+      "split": "train",
+      "studs": [],
+      "arrow_tips": [],
+      "studs_complete": false,
+      "arrows_complete": true,
+      "reviewed": true,
+      "pixel_sha256": "433054c5e209aea3ec0ec21fd7150bf31ad6df9de0a618660048ad4b8acfd3fe",
+      "size": [
+        201,
+        254
+      ],
+      "provenance": "Arrow tips and negative images manually read by coding agent from coordinate-grid overlays; no independent human annotator.",
+      "arrow_instances": []
+    },
+    {
+      "id": "6668730-s16-arrows",
+      "booklet": "6668730",
+      "step": 16,
+      "image": ".cache/instructions/heroes-complete-regression/booklets/6668730/crops/p15_s16_picture.png",
+      "panel": null,
+      "split": "train",
+      "studs": [],
+      "arrow_tips": [],
+      "studs_complete": false,
+      "arrows_complete": true,
+      "reviewed": true,
+      "pixel_sha256": "f35039bb1bda88223ba275fbcc6095cbf94906899da871cb5536eaa81086e708",
+      "size": [
+        201,
+        309
+      ],
+      "provenance": "Arrow tips and negative images manually read by coding agent from coordinate-grid overlays; no independent human annotator.",
+      "arrow_instances": []
+    },
+    {
+      "id": "6220567-s1-arrows",
+      "booklet": "6220567",
+      "step": 1,
+      "image": ".cache/instructions/aquaman/booklets/6220567/crops/p3_s1_picture.png",
+      "panel": null,
+      "split": "test",
+      "studs": [],
+      "arrow_tips": [
+        [
+          53,
+          96
+        ],
+        [
+          81,
+          84
+        ]
+      ],
+      "studs_complete": false,
+      "arrows_complete": true,
+      "reviewed": true,
+      "pixel_sha256": "6f7707a21fc7176570a452668404a300258d00baf16bff24080bcd727a40872c",
+      "size": [
+        154,
+        159
+      ],
+      "provenance": "Arrow tips and negative images manually read by coding agent from coordinate-grid overlays; no independent human annotator. Corrected coarse-grid coordinates using magnified source pixels and colour-component boundaries; weights unchanged.",
+      "arrow_instances": [
+        {
+          "id": "6220567-s1-arrows-a0",
+          "tip": [
+            53,
+            96
+          ],
+          "head_base": [
+            53,
+            74
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        },
+        {
+          "id": "6220567-s1-arrows-a1",
+          "tip": [
+            81,
+            84
+          ],
+          "head_base": [
+            81,
+            62
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        }
+      ]
+    },
+    {
+      "id": "6220567-s2-arrows",
+      "booklet": "6220567",
+      "step": 2,
+      "image": ".cache/instructions/aquaman/booklets/6220567/crops/p4_s2_picture.png",
+      "panel": null,
+      "split": "test",
+      "studs": [],
+      "arrow_tips": [
+        [
+          200,
+          423
+        ]
+      ],
+      "studs_complete": false,
+      "arrows_complete": true,
+      "reviewed": true,
+      "pixel_sha256": "79dd1d15855d464309a31e29c8cb9d465c6294945276de639f680e706696b959",
+      "size": [
+        479,
+        483
+      ],
+      "provenance": "Arrow tips and negative images manually read by coding agent from coordinate-grid overlays; no independent human annotator. Corrected coarse-grid coordinates using magnified source pixels and colour-component boundaries; weights unchanged.",
+      "arrow_instances": [
+        {
+          "id": "6220567-s2-arrows-a0",
+          "tip": [
+            200,
+            423
+          ],
+          "head_base": [
+            230,
+            423
+          ],
+          "shaft": [
+            [
+              361,
+              326
+            ],
+            [
+              361,
+              423
+            ],
+            [
+              230,
+              423
+            ]
+          ],
+          "shaft_complete": true,
+          "purpose": "subassembly-callout",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        }
+      ]
+    },
+    {
+      "id": "6220567-s3-arrows",
+      "booklet": "6220567",
+      "step": 3,
+      "image": ".cache/instructions/aquaman/booklets/6220567/crops/p5_s3_picture.png",
+      "panel": null,
+      "split": "test",
+      "studs": [],
+      "arrow_tips": [
+        [
+          108,
+          85
+        ]
+      ],
+      "studs_complete": false,
+      "arrows_complete": true,
+      "reviewed": true,
+      "pixel_sha256": "08143e460d0af8b931fba125e21a45e9af8857318874d9a7255c02dcf2dbe04a",
+      "size": [
+        192,
+        212
+      ],
+      "provenance": "Arrow tips and negative images manually read by coding agent from coordinate-grid overlays; no independent human annotator. Corrected coarse-grid coordinates using magnified source pixels and colour-component boundaries; weights unchanged.",
+      "arrow_instances": [
+        {
+          "id": "6220567-s3-arrows-a0",
+          "tip": [
+            108,
+            85
+          ],
+          "head_base": [
+            108,
+            62
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        }
+      ]
+    },
+    {
+      "id": "6220567-s4-arrows",
+      "booklet": "6220567",
+      "step": 4,
+      "image": ".cache/instructions/aquaman/booklets/6220567/crops/p5_s4_picture.png",
+      "panel": null,
+      "split": "test",
+      "studs": [],
+      "arrow_tips": [],
+      "studs_complete": false,
+      "arrows_complete": true,
+      "reviewed": true,
+      "pixel_sha256": "e426d84e4816c34dfe2882fc1c3278543c8b91f0e191d5b0030e21acbd6962d0",
+      "size": [
+        192,
+        175
+      ],
+      "provenance": "Arrow tips and negative images manually read by coding agent from coordinate-grid overlays; no independent human annotator.",
+      "arrow_instances": []
+    },
+    {
+      "id": "6220567-s5-arrows",
+      "booklet": "6220567",
+      "step": 5,
+      "image": ".cache/instructions/aquaman/booklets/6220567/crops/p6_s5_picture.png",
+      "panel": null,
+      "split": "test",
+      "studs": [],
+      "arrow_tips": [
+        [
+          83,
+          118
+        ],
+        [
+          167,
+          84
+        ],
+        [
+          54,
+          296
+        ],
+        [
+          144,
+          330
+        ]
+      ],
+      "studs_complete": false,
+      "arrows_complete": true,
+      "reviewed": true,
+      "pixel_sha256": "765bd47b7b69de75d97e0353ac3c7068805a7bd4eb916d09a35a6c6ce7942b02",
+      "size": [
+        193,
+        469
+      ],
+      "provenance": "Arrow tips and negative images manually read by coding agent from coordinate-grid overlays; no independent human annotator. Corrected coarse-grid coordinates using magnified source pixels and colour-component boundaries; weights unchanged.",
+      "arrow_instances": [
+        {
+          "id": "6220567-s5-arrows-a0",
+          "tip": [
+            83,
+            118
+          ],
+          "head_base": [
+            83,
+            94
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        },
+        {
+          "id": "6220567-s5-arrows-a1",
+          "tip": [
+            167,
+            84
+          ],
+          "head_base": [
+            167,
+            60
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        },
+        {
+          "id": "6220567-s5-arrows-a2",
+          "tip": [
+            54,
+            296
+          ],
+          "head_base": [
+            54,
+            264
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        },
+        {
+          "id": "6220567-s5-arrows-a3",
+          "tip": [
+            144,
+            330
+          ],
+          "head_base": [
+            144,
+            298
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        }
+      ]
+    },
+    {
+      "id": "6220567-s6-arrows",
+      "booklet": "6220567",
+      "step": 6,
+      "image": ".cache/instructions/aquaman/booklets/6220567/crops/p7_s6_picture.png",
+      "panel": null,
+      "split": "test",
+      "studs": [],
+      "arrow_tips": [
+        [
+          13,
+          128
+        ],
+        [
+          60,
+          133
+        ],
+        [
+          454,
+          91
+        ]
+      ],
+      "studs_complete": false,
+      "arrows_complete": true,
+      "reviewed": true,
+      "pixel_sha256": "4f917a2e7957af98e77ea7e6d10ee778e4a1e121d20f07363e41f76bfe4dbe01",
+      "size": [
+        595,
+        228
+      ],
+      "provenance": "Arrow tips and negative images manually read by coding agent from coordinate-grid overlays; no independent human annotator. Corrected coarse-grid coordinates using magnified source pixels and colour-component boundaries; weights unchanged.",
+      "arrow_instances": [
+        {
+          "id": "6220567-s6-arrows-a0",
+          "tip": [
+            13,
+            128
+          ],
+          "head_base": [
+            13,
+            104
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        },
+        {
+          "id": "6220567-s6-arrows-a1",
+          "tip": [
+            60,
+            133
+          ],
+          "head_base": [
+            60,
+            109
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        },
+        {
+          "id": "6220567-s6-arrows-a2",
+          "tip": [
+            454,
+            91
+          ],
+          "head_base": [
+            424,
+            91
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "subassembly-callout",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        }
+      ]
+    },
+    {
+      "id": "6220567-s7-arrows",
+      "booklet": "6220567",
+      "step": 7,
+      "image": ".cache/instructions/aquaman/booklets/6220567/crops/p8_s7_picture.png",
+      "panel": null,
+      "split": "test",
+      "studs": [],
+      "arrow_tips": [],
+      "studs_complete": false,
+      "arrows_complete": true,
+      "reviewed": true,
+      "pixel_sha256": "e42666eefe911386e1ef91c53437308cf81f29b3ea0a39ba3f105cb5d0e53bd5",
+      "size": [
+        193,
+        202
+      ],
+      "provenance": "Arrow tips and negative images manually read by coding agent from coordinate-grid overlays; no independent human annotator.",
+      "arrow_instances": []
+    },
+    {
+      "id": "6220567-s8-arrows",
+      "booklet": "6220567",
+      "step": 8,
+      "image": ".cache/instructions/aquaman/booklets/6220567/crops/p9_s8_picture.png",
+      "panel": null,
+      "split": "test",
+      "studs": [],
+      "arrow_tips": [
+        [
+          351,
+          82
+        ],
+        [
+          406,
+          50
+        ],
+        [
+          386,
+          207
+        ],
+        [
+          405,
+          223
+        ],
+        [
+          21,
+          342
+        ],
+        [
+          160,
+          290
+        ]
+      ],
+      "studs_complete": false,
+      "arrows_complete": true,
+      "reviewed": true,
+      "pixel_sha256": "22ee03c44de99e1ac3ed5803c982289bc5b8c641c2209f90a7009dca21d234f0",
+      "size": [
+        431,
+        476
+      ],
+      "provenance": "Arrow tips and negative images manually read by coding agent from coordinate-grid overlays; no independent human annotator. Corrected coarse-grid coordinates using magnified source pixels and colour-component boundaries; weights unchanged.",
+      "arrow_instances": [
+        {
+          "id": "6220567-s8-arrows-a0",
+          "tip": [
+            351,
+            82
+          ],
+          "head_base": [
+            333,
+            66
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        },
+        {
+          "id": "6220567-s8-arrows-a1",
+          "tip": [
+            406,
+            50
+          ],
+          "head_base": [
+            388,
+            34
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        },
+        {
+          "id": "6220567-s8-arrows-a2",
+          "tip": [
+            386,
+            207
+          ],
+          "head_base": [
+            386,
+            183
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        },
+        {
+          "id": "6220567-s8-arrows-a3",
+          "tip": [
+            405,
+            223
+          ],
+          "head_base": [
+            405,
+            199
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        },
+        {
+          "id": "6220567-s8-arrows-a4",
+          "tip": [
+            21,
+            342
+          ],
+          "head_base": [
+            21,
+            310
+          ],
+          "shaft": [
+            [
+              263,
+              223
+            ],
+            [
+              21,
+              223
+            ],
+            [
+              21,
+              310
+            ]
+          ],
+          "shaft_complete": true,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        },
+        {
+          "id": "6220567-s8-arrows-a5",
+          "tip": [
+            160,
+            290
+          ],
+          "head_base": [
+            160,
+            258
+          ],
+          "shaft": [
+            [
+              263,
+              223
+            ],
+            [
+              160,
+              223
+            ],
+            [
+              160,
+              258
+            ]
+          ],
+          "shaft_complete": true,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Coding-agent visual review of head orientation; head-base lengths approximate. Null shaft means unannotated, not absent."
+        }
+      ]
+    },
+    {
+      "id": "6668733-p16-left",
+      "booklet": "6668733",
+      "page": 16,
+      "image": ".cache/instructions/arrow-direction/holdout/doom-p16-left.png",
+      "panel": null,
+      "split": "test",
+      "studs": [],
+      "arrow_tips": [
+        [
+          86.66666666666667,
+          65.33333333333333
+        ],
+        [
+          105.33333333333333,
+          72.66666666666667
+        ],
+        [
+          67.5,
+          182.0
+        ],
+        [
+          100.0,
+          332.0
+        ]
+      ],
+      "arrow_instances": [
+        {
+          "id": "doom-left-a0",
+          "tip": [
+            86.66666666666667,
+            65.33333333333333
+          ],
+          "head_base": [
+            79.09170882840321,
+            71.8617338838917
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Red-component PCA orientation proposed from source pixels, coding-agent visually reviewed; head base is a directional anchor, not an independently measured base length."
+        },
+        {
+          "id": "doom-left-a1",
+          "tip": [
+            105.33333333333333,
+            72.66666666666667
+          ],
+          "head_base": [
+            97.6878958951359,
+            79.11238511991988
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Red-component PCA orientation proposed from source pixels, coding-agent visually reviewed; head base is a directional anchor, not an independently measured base length."
+        },
+        {
+          "id": "doom-left-a2",
+          "tip": [
+            67.5,
+            182.0
+          ],
+          "head_base": [
+            59.94829086669107,
+            188.555279488008
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Red-component PCA orientation proposed from source pixels, coding-agent visually reviewed; head base is a directional anchor, not an independently measured base length."
+        },
+        {
+          "id": "doom-left-a3",
+          "tip": [
+            100.0,
+            332.0
+          ],
+          "head_base": [
+            99.9298597444449,
+            322.0002459857979
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Red-component PCA orientation proposed from source pixels, coding-agent visually reviewed; head base is a directional anchor, not an independently measured base length."
+        }
+      ],
+      "studs_complete": false,
+      "arrows_complete": true,
+      "reviewed": true,
+      "pixel_sha256": "4d73dfae32d5d075c4bc0f921c9414ec137c13e63aa5049219c309784438fa84",
+      "size": [
+        145,
+        368
+      ],
+      "pdfDPI": 100,
+      "pageCropPixels": [
+        39,
+        191,
+        184,
+        559
+      ],
+      "sourcePDFSHA256": "ec218d9e702632cc8ef4e0dae06e25bf35e42349eed485b1bc34a4112794de8f"
+    },
+    {
+      "id": "6668733-p16-right",
+      "booklet": "6668733",
+      "page": 16,
+      "image": ".cache/instructions/arrow-direction/holdout/doom-p16-right.png",
+      "panel": null,
+      "split": "test",
+      "studs": [],
+      "arrow_tips": [
+        [
+          82.33333333333333,
+          69.33333333333333
+        ],
+        [
+          63.666666666666664,
+          76.66666666666667
+        ],
+        [
+          100.5,
+          182.0
+        ],
+        [
+          69.0,
+          329.0
+        ]
+      ],
+      "arrow_instances": [
+        {
+          "id": "doom-right-a0",
+          "tip": [
+            82.33333333333333,
+            69.33333333333333
+          ],
+          "head_base": [
+            90.01745957029267,
+            75.73288050281907
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Red-component PCA orientation proposed from source pixels, coding-agent visually reviewed; head base is a directional anchor, not an independently measured base length."
+        },
+        {
+          "id": "doom-right-a1",
+          "tip": [
+            63.666666666666664,
+            76.66666666666667
+          ],
+          "head_base": [
+            71.36572116629897,
+            83.04824639363801
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Red-component PCA orientation proposed from source pixels, coding-agent visually reviewed; head base is a directional anchor, not an independently measured base length."
+        },
+        {
+          "id": "doom-right-a2",
+          "tip": [
+            100.5,
+            182.0
+          ],
+          "head_base": [
+            108.20401329779388,
+            188.37559245148364
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Red-component PCA orientation proposed from source pixels, coding-agent visually reviewed; head base is a directional anchor, not an independently measured base length."
+        },
+        {
+          "id": "doom-right-a3",
+          "tip": [
+            69.0,
+            329.0
+          ],
+          "head_base": [
+            68.88423223268175,
+            319.0006701312513
+          ],
+          "shaft": null,
+          "shaft_complete": false,
+          "purpose": "placement",
+          "direction_reviewed": true,
+          "provenance": "Red-component PCA orientation proposed from source pixels, coding-agent visually reviewed; head base is a directional anchor, not an independently measured base length."
+        }
+      ],
+      "studs_complete": false,
+      "arrows_complete": true,
+      "reviewed": true,
+      "pixel_sha256": "ce67d9d99eab5fab19efa396f2ca67183c475b477e10c6cd98a1286f9b2488f5",
+      "size": [
+        160,
+        365
+      ],
+      "pdfDPI": 100,
+      "pageCropPixels": [
+        556,
+        54,
+        716,
+        419
+      ],
+      "sourcePDFSHA256": "ec218d9e702632cc8ef4e0dae06e25bf35e42349eed485b1bc34a4112794de8f"
+    }
+  ],
+  "developmentBooklets": [
+    "6668732",
+    "6220567"
+  ],
+  "transferTestBooklets": [
+    "6668733"
+  ],
+  "annotationCorrection": "Aquaman coarse-grid labels refined against magnified source images after discovering several points on receiving studs or white outlines instead of arrowhead tips. Both models re-evaluated with the same corrected labels, without retraining or threshold selection. Original labels archived in arrow-comparison/superseded-grid-labels.json.",
+  "directionConvention": "unit vector from head_base to tip; image x right, y down. Final local arrowhead direction, not tail-to-tip displacement."
+}

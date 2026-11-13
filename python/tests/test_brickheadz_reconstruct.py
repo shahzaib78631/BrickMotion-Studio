@@ -76,3 +76,70 @@ def test_propose_gates_by_confidence(tmp_path):
     loose = R.propose(lib, palette, spec, str(tmp_path / "b"), "t", min_confidence=0.0)
     assert loose["summary"]["committed"] == 1
     assert (tmp_path / "b" / "t.committed.mpd").exists()
+
+
+SUBMODEL = '''0 FILE Main.ldr
+1 4 100 0 0 0 0 1 0 1 0 -1 0 0 Arm.ldr
+0 STEP
+0 STEP
+1 1 -100 0 0 1 0 0 0 1 0 0 0 1 ARM.LDR
+0 STEP
+0 NOFILE
+0 FILE Arm.ldr
+1 16 20 0 0 1 0 0 0 1 0 0 0 1 plate.ldr
+0 STEP
+1 14 0 -8 0 1 0 0 0 1 0 0 0 1 3024.dat
+0 NOFILE
+0 FILE plate.ldr
+1 16 0 -8 0 1 0 0 0 1 0 0 0 1 3023.dat
+0 NOFILE
+0 FILE unused.ldr
+1 4 999 999 999 1 0 0 0 1 0 0 0 1 3001.dat
+0 NOFILE
+'''
+
+
+def test_nested_repeated_subassembly_transforms_colours_and_steps(tmp_path):
+    source=tmp_path/'assemblies.mpd';source.write_text(SUBMODEL)
+    steps=R.steps_from_omr(str(source),preserve_empty=True)
+    assert [len(s) for s in steps] == [2,0,2]
+    assert [p for p,c,m in steps[0]] == ['3023','3024']
+    assert [c for p,c,m in steps[0]] == [4,14]
+    assert [c for p,c,m in steps[2]] == [1,14]
+    assert np.allclose(steps[0][0][2][:3,3],[100,-8,-20])
+    assert np.allclose(steps[2][0][2][:3,3],[-80,-8,0])
+    report=R.from_omr(str(source),str(tmp_path/'out'),'nested')
+    assert report['piecesPerStep']==[2,0,2]
+    assert not report['buildabilityValidated']
+    exported=R.steps_from_omr(str(tmp_path/'out/nested.mpd'),preserve_empty=True)
+    assert [len(s) for s in exported]==[2,0,2]
+    for a,b in zip([p for s in steps for p in s],[p for s in exported for p in s]):
+        assert a[:2]==b[:2] and np.allclose(a[2],b[2])
+
+
+def test_cyclic_and_missing_submodels_are_rejected(tmp_path):
+    import pytest
+    source=tmp_path/'invalid.mpd'
+    source.write_text('0 FILE main.ldr\n1 16 0 0 0 1 0 0 0 1 0 0 0 1 main.ldr\n')
+    with pytest.raises(ValueError,match='Cyclic'):
+        R.steps_from_omr(str(source))
+    source.write_text('0 FILE main.ldr\n1 16 0 0 0 1 0 0 0 1 0 0 0 1 missing.ldr\n')
+    with pytest.raises(ValueError,match='Missing'):
+        R.steps_from_omr(str(source))
+
+
+def test_rejected_proposal_cannot_poison_next_step_occupancy(tmp_path,monkeypatch):
+    import brickheadz.instruction_place as placer
+    observations=[]
+    def search(lib,parts,cam,size,occupied,*args,**kwargs):
+        observations.append(set(occupied))
+        occupied.add((999,999,999))
+        return [('3001',4,(0,0,0,tuple(map(tuple,np.eye(3)))),np.eye(4),.1,None)]
+    monkeypatch.setattr(placer,'reconstruct_step',search)
+    image=tmp_path/'rectangle.png'
+    _save_png(np.full((30,60,3),255),str(image))
+    spec={'cam':{'yaw':30,'pitch':25,'scale':1,'ox':0,'oy':0},
+          'steps':[{'image':str(image),'parts':[['3001',4]]}]*2}
+    report=R.propose(None,{4:(196,40,28)},spec,str(tmp_path/'out'),min_confidence=.9)
+    assert observations==[set(),set()]
+    assert report['summary']['committed']==0

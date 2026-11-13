@@ -15,7 +15,7 @@ point p (LDraw: x right, y down, z front) is viewed through a rotation
 and projected to the image plane with a uniform scale s and offset o:
 
     u = s * (R p)_x + o_x
-    v = -s * (R p)_y + o_y          # screen v grows downward; up is -y
+    v = s * (R p)_y + o_y          # screen v grows downward; up is -y
     depth = (R p)_z
 
 A part is a set of part-space vertices; a placement is a 4x4 affine M, so world
@@ -61,6 +61,7 @@ class Camera:
     scale: float = 1.0
     ox: float = 0.0
     oy: float = 0.0
+    screen_y: int = 1  # LDraw +y and image +v both point down; -1 reads legacy synthetic cameras.
 
     @property
     def r(self) -> np.ndarray:
@@ -69,7 +70,7 @@ class Camera:
     def project(self, pts: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """world (N,3) LDU -> (u, v, depth)."""
         p = np.asarray(pts, float) @ self.r.T
-        return self.scale * p[:, 0] + self.ox, -self.scale * p[:, 1] + self.oy, p[:, 2]
+        return self.scale * p[:, 0] + self.ox, self.screen_y * self.scale * p[:, 1] + self.oy, p[:, 2]
 
 
 def fit_camera(points: np.ndarray, yaw: float, pitch: float, size: int, pad: int = 6) -> Camera:
@@ -319,7 +320,12 @@ def cells_of(lib, part, x, y, z, R):
 
     pi = info(lib, part)
     m, fw, fd = grid_matrix(lib, part, x, y, z, R)
-    return m, [(cx, cz, cy) for cx in range(x, x + fw) for cz in range(z, z + fd) for cy in range(y, y + pi.h)]
+    # Rotating a plate onto its side changes its vertical extent. Using the
+    # unrotated pi.h silently under-counted SNOT occupancy. Fractional plate
+    # heights are conservatively rounded up; exact meshes/snaps remain necessary.
+    extent = np.abs(np.asarray(R,float)) @ (np.asarray(pi.hi)-np.asarray(pi.lo))
+    height = max(1,int(math.ceil(extent[1]/8-1e-8)))
+    return m, [(cx, cz, cy) for cx in range(x, x + fw) for cz in range(z, z + fd) for cy in range(y, y + height)]
 
 
 def solve_xz(lib, part, cam: Camera, target_uv, y: int, R):
@@ -333,11 +339,11 @@ def solve_xz(lib, part, cam: Camera, target_uv, y: int, R):
     base = np.asarray(R, float) @ c_local + m0[:3, 3]
     rr = cam.r
     u0 = cam.scale * (rr @ base)[0] + cam.ox
-    v0 = -cam.scale * (rr @ base)[1] + cam.oy
+    v0 = cam.screen_y * cam.scale * (rr @ base)[1] + cam.oy
     a = cam.scale * 20 * rr[0, 0]
     b = cam.scale * 20 * rr[0, 2]
-    c = -cam.scale * 20 * rr[1, 0]
-    d = -cam.scale * 20 * rr[1, 2]
+    c = cam.screen_y * cam.scale * 20 * rr[1, 0]
+    d = cam.screen_y * cam.scale * 20 * rr[1, 2]
     det = a * d - b * c
     if abs(det) < 1e-9:
         return None

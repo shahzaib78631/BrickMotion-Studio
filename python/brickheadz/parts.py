@@ -92,6 +92,15 @@ def info(lib: LDrawLibrary, part: str) -> PartInfo:
     top_studs = (1, -1) in faces
     side_studs = any(i in (0, 2) for i, _ in faces)
     for i, sign in faces:
+        # An underside tube may also expose a male cylindrical snap. It does
+        # not protrude beyond the plate body: the outer walls reach the same
+        # extreme plane. Pulling that face back halved 3710's measured body.
+        extreme = lo[i] if sign < 0 else hi[i]
+        boundary = tri[np.abs(tri[:,i]-extreme)<1e-4]
+        other = [axis for axis in range(3) if axis != i]
+        coverage = np.prod([(np.ptp(boundary[:,axis])/max(1e-9,hi[axis]-lo[axis])) for axis in other]) if len(boundary) else 0
+        if coverage > 1-1e-5:
+            continue
         if sign < 0:
             body_lo[i] += STUD_LEN
         else:
@@ -102,3 +111,16 @@ def info(lib: LDrawLibrary, part: str) -> PartInfo:
     pi = PartInfo(key, w, d, max(1, h), tuple(float(v) for v in body_lo), tuple(float(v) for v in body_hi), top_studs, side_studs)
     _cache[key] = pi
     return pi
+
+
+def body_aabb(lib, part: str, matrix: np.ndarray):
+    """World body bounds, excluding male stud protrusions that interlock.
+
+    These bounds are a conservative contact/overlap approximation, not a proof
+    of compatible LEGO connectors (slopes, holes and clips need mesh/snaps).
+    """
+    pi = info(lib, part)
+    pts = np.array([[x,y,z] for x in (pi.lo[0],pi.hi[0])
+                    for y in (pi.lo[1],pi.hi[1]) for z in (pi.lo[2],pi.hi[2])])
+    world = pts @ matrix[:3,:3].T + matrix[:3,3]
+    return tuple(map(float,world.min(0))), tuple(map(float,world.max(0)))

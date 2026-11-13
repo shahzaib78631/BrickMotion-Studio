@@ -1,0 +1,14 @@
+0 FILE superman-opening-reference.ldr
+0 Evaluation only: opening 4 steps from the existing hand-placed superman reference
+0 Never an input to the image reconstruction solver
+1 4 40 -8 40 1 0 0 0 1 0 0 0 1 3031.dat
+1 4 40 -16 10 1 0 0 0 1 0 0 0 1 3710.dat
+0 STEP
+1 14 40 -16 40 1 0 0 0 1 0 0 0 1 3020.dat
+0 STEP
+1 14 40 -16 70 1 0 0 0 1 0 0 0 1 1126.dat
+0 STEP
+1 14 10 -16 70 1 0 0 0 1 0 0 0 1 3070b.dat
+1 14 70 -16 70 1 0 0 0 1 0 0 0 1 3070b.dat
+0 STEP
+0 NOFILE

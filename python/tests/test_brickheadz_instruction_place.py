@@ -34,8 +34,8 @@ def test_rotation_is_orthonormal():
 def test_projection_scale_and_offset():
     cam = Camera(yaw=0, pitch=0, scale=2.0, ox=10, oy=20)
     u, v, d = cam.project(np.array([[5.0, 3.0, -1.0]]))
-    # yaw=pitch=0 -> u = 2*x+ox, v = -2*y+oy, depth = z
-    assert u[0] == 20.0 and v[0] == 14.0 and d[0] == -1.0
+    # yaw=pitch=0 -> u = 2*x+ox, v = 2*y+oy, depth = z
+    assert u[0] == 20.0 and v[0] == 26.0 and d[0] == -1.0
 
 
 def test_hull_of_square():
@@ -114,3 +114,24 @@ def test_colour_mask_selects_colour():
     m = colour_mask(rgb, (4, 100, 60))
     assert m.sum() == 9
     assert not m[0, 0]
+
+
+def test_ldraw_up_projects_up_on_a_real_instruction_page():
+    cam=Camera(yaw=30,pitch=25,scale=2)
+    _u,v,_d=cam.project(np.array([[0,0,0],[0,-24,0]]))
+    assert v[1]<v[0]  # the top of an upright brick must appear above its base
+
+
+def test_legacy_synthetic_camera_is_explicitly_supported():
+    cam=Camera(yaw=0,pitch=0,scale=2,oy=20,screen_y=-1)
+    assert cam.project(np.array([[0,3,0]]))[1][0]==14
+
+
+def test_sideways_plate_occupancy_uses_rotated_height():
+    from brickheadz.instruction_place import cells_of
+    lib=load_library(LIB)
+    # A 2x4 plate's 80-LDU length is vertical after a Z quarter turn.
+    r=np.array([[0,1,0],[-1,0,0],[0,0,1]])
+    _m,cells=cells_of(lib,'3020',0,2,0,r)
+    assert min(c[2] for c in cells)==2
+    assert max(c[2] for c in cells)==11  # ten plates tall, not one
