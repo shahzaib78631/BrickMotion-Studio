@@ -46,7 +46,7 @@ peaks, and one render confirms it.
 ## Anti-goals (fail even if it "works")
 
 - Regressing continuous poses and rounding them (Manual2Skill style): a 1 cm-tolerant answer is wrong for LEGO.
-- Using the answer key anywhere except grading.
+- Using a held-out set's answer key (21065 and the booklet_mpd held-out sets) anywhere except grading.
 - Silently accepting a low-confidence step; it must be marked for review or fall back.
 - A speed-up that only works on 21065 book 1 (must hold on held-out synthetic sets and the booklet_mpd train sets).
 
@@ -131,6 +131,11 @@ Peaks per type become candidate poses. Keep the best few dozen overall.
   voting, legal-connection filtering, and Big Pickle's exact-cover tiling (I4) and whole-step solve (I5/I12); later
   arrow reading for exploded steps (I10). Dropped: crystallographic FFT (C1), off-grid sparse recovery (C2);
   C3 (diff against the previous state) is already the change evidence.
+
+- Training data (2026-11-13): use whatever gives the most accuracy and works on any booklet. So the network
+  trains on synthetic placements **and** fine-tunes on real booklet pages of the booklet_mpd *train* sets (their
+  answer keys give exact labels). 21065 and the held-out sets stay grading-only, so the "any booklet" claim is
+  measured on booklets the network never saw. Style randomisation of the synthetic data is still required.
 
 ## Left to the builder
 
