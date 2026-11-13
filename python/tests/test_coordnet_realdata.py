@@ -64,3 +64,22 @@ def test_bad_fit_is_dropped(monkeypatch):
                         lambda net, pic, parts, cam, centre, W, H, rounds=4, log=None:
                         (cam, [dict(round=0, n=900, median=3.0, p90=6.0, inliers=0.5, flow_median=2.0)]))
     assert realdata.label_case(object(), case, start=TRUE_CAM) is None
+
+
+def test_small_booklet_pictures_are_upscaled():
+    case, _parts, _centre = _case()
+    case.rgb = case.rgb[::4, ::4]                     # 150 x 115, like small sets' embedded pictures
+    pic, pts = realdata._prepare(case)
+    assert max(pic.shape[:2]) == realdata.MIN_SIDE
+    assert abs(pts - 0.48 * 150 / 512) < 1e-3
+
+
+def test_blue_paper_is_repainted_grey():
+    case, _parts, _centre = _case()
+    pic = case.rgb.copy()
+    bg = (np.abs(pic.astype(int) - pic[0, 0]).sum(-1) < 10)
+    pic[bg] = (190, 215, 235)                            # light-blue booklet paper
+    case.rgb = pic
+    out, _pts = realdata._prepare(case)
+    corner = out[:5, :5].reshape(-1, 3)
+    assert np.abs(corner.astype(int) - realdata.PAPER).max() <= 2
