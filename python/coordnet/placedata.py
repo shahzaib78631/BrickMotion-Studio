@@ -25,6 +25,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
+from .camera import BookletCamera
 from . import datagen, labels
 from . import render as R
 from .data import augment_image
@@ -112,8 +113,10 @@ class PlaceDataset(Dataset):
         meta = json.loads(Path(stem + ".json").read_text())
         new = lab["new"].astype(bool)
         inst = lab["inst"].astype(np.int64)
-        orders = np.array([labels.sym_order(p[0]) for p in meta["parts"]] + [1])
-        sym = np.where(new, orders[np.where(inst >= 0, inst, len(orders) - 1)], 1)
+        cam = BookletCamera(**meta["cam"])
+        centre = np.array(meta["centre"], float)
+        parts = [(p, c, np.array(m, float)) for p, c, m, _n in meta["parts"]]
+        offset, _extent = labels.centre_targets(inst, new, parts, cam, centre)     # full image, before the crop
         ev = change_evidence(pic, base)
         H, W = new.shape
         ch, cw = self.crop
@@ -134,9 +137,9 @@ class PlaceDataset(Dataset):
         t = lambda a: torch.from_numpy(np.ascontiguousarray(a))
         return dict(picture=t(p.transpose(2, 0, 1)), base=t(b.transpose(2, 0, 1)),
                     evidence=t(cut(ev).astype(np.float32)[None]), new=t(cut(new).astype(np.float32)),
-                    local=t(cut(lab["local"].transpose(1, 2, 0)).astype(np.float32).transpose(2, 0, 1) / 4.0),
-                    size=t(cut(lab["size"].transpose(1, 2, 0)).astype(np.float32).transpose(2, 0, 1)),
-                    sym=t(cut(sym, 1).astype(np.int64)))
+                    offset=t(cut(offset).transpose(2, 0, 1)),
+                    camera=t(labels.camera_channels(cam, centre)),
+                    origin=torch.tensor([top, left]))
 
     def _start(self, rng, n: int, c: int, idx: np.ndarray) -> int:
         """Crop start along one axis: the new pixels' span stays inside when it fits."""

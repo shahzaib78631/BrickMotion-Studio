@@ -47,6 +47,52 @@ def part_box(part: str) -> np.ndarray:
     return (v.max(0) - v.min(0)).astype(np.float32)
 
 
+@lru_cache(maxsize=None)
+def part_centre(part: str) -> np.ndarray:
+    """Centre of the part's geometry box in its own frame (LDU), [3]."""
+    v = _vertices(part)
+    if len(v) == 0:
+        return np.zeros(3)
+    return (v.max(0) + v.min(0)) / 2.0
+
+
+def pose_centre_extent(part: str, m) -> tuple[np.ndarray, np.ndarray]:
+    """World centre of the part's box and its extent along the world axes for pose `m` (4x4)."""
+    m = np.asarray(m, float)
+    return m[:3, 3] + m[:3, :3] @ part_centre(part), np.abs(m[:3, :3]) @ part_box(part)
+
+
+def centre_targets(inst: np.ndarray, new: np.ndarray, parts: list, cam, centre) -> tuple[np.ndarray, np.ndarray]:
+    """Per new pixel: the offset (image pixels / cam.scale) from the pixel's centre (x + 0.5, y + 0.5) to where its
+    part's box centre is drawn, [H,W,2] -- a per-pixel field: pixel + offset * scale is the same point for every
+    pixel of a part; and the part's box extent along the world axes, [H,W,3], constant per part. Both are unchanged
+    by the part's symmetry turns. Zero elsewhere. Call on the full image, before any crop."""
+    from .camera import project
+    H, W = new.shape
+    off = np.zeros((H, W, 2), np.float32)
+    ext = np.zeros((H, W, 3), np.float32)
+    ids = np.unique(inst[new])
+    for i in ids[ids >= 0]:
+        p, _c, m = parts[int(i)]
+        c, e = pose_centre_extent(p, m)
+        cuv = project(cam, centre, c[None])[0][0]
+        ys, xs = np.nonzero(new & (inst == i))
+        off[ys, xs] = (cuv - np.stack([xs + 0.5, ys + 0.5], 1)) / cam.scale
+        ext[ys, xs] = e
+    return off, ext
+
+
+def camera_channels(cam, centre) -> np.ndarray:
+    """What the network needs to know about the camera, [6]: how one LDU along world +X and +Z is drawn (image
+    vector / cam.scale), log(cam.scale), and the perspective strength 1000 / eye (0 for orthographic)."""
+    from .camera import project
+    c = np.asarray(centre, float)
+    uv, _ = project(cam, centre, np.stack([c, c + (1, 0, 0), c + (0, 0, 1)]))
+    ax, az = (uv[1] - uv[0]) / cam.scale, (uv[2] - uv[0]) / cam.scale
+    persp = 1000.0 / cam.eye if cam.eye > 0 else 0.0
+    return np.array([ax[0], ax[1], az[0], az[1], np.log(cam.scale), persp], np.float32)
+
+
 def canonical(local: np.ndarray, order: int) -> np.ndarray:
     """The label under each symmetry turn about local Y: [order, ..., 3]; entry 0 is the label itself."""
     local = np.asarray(local, float)

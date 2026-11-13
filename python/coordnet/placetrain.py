@@ -4,8 +4,9 @@
 
 Data: `<data>/shard-000` is validation (synthetic), other `shard-*` are training, `real-*` (booklet_mpd train sets,
 from `coordnet.realdata`) are training too, drawn with total probability `--real-weight`. Validation reports the
-new-pixel IoU and the share of new pixels whose part-local coordinate is within 4 LDU (mean per axis), and
-`best.pt` keeps the best of the latter.
+new-pixel IoU; the share of new pixels whose predicted part centre is within 2 px (`centre_acc2`, best.pt keeps
+the best); the median offset error and that of always predicting zero (a do-nothing baseline the net must beat);
+and the prediction / label spread of the offset (a collapse watch: near 0 means it predicts a constant).
 """
 from __future__ import annotations
 
@@ -19,32 +20,44 @@ import torch
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
 from .placedata import OUT, PlaceDataset
-from .placenet import PlaceNet, local_error, placenet_loss
+from .placenet import PlaceNet, offset_error, placenet_loss
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def _inputs(b: dict, dev) -> torch.Tensor:
-    return torch.cat([b["picture"], b["base"], b["evidence"]], 1).to(dev)
+def _inputs(b: dict, dev) -> tuple[torch.Tensor, torch.Tensor]:
+    return torch.cat([b["picture"], b["base"], b["evidence"]], 1).to(dev), b["camera"].to(dev)
 
 
 @torch.no_grad()
 def validate(model, ds, dev, limit: int = 300) -> dict:
     model.eval()
     inter = union = good = total = 0.0
+    errs, zero, preds, labs = [], [], [], []
     for i in range(min(len(ds), limit)):
         b = {k: v[None] for k, v in ds[i].items()}
-        out = model(_inputs(b, dev))
+        out = model(*_inputs(b, dev))
         h = lambda t: t[..., ::2, ::2].to(dev)
         new = h(b["new"]) > 0.5
         pred = out["new"][:, 0] > 0
         inter += float((pred & new).sum())
         union += float((pred | new).sum())
-        err = local_error(out["local"], h(b["local"]), h(b["sym"]))
-        good += float(((err / 3.0 < 4.0) & new).sum())
+        lab = h(b["offset"])
+        scale = float(torch.exp(b["camera"][0, 4]))
+        err = offset_error(out["offset"], lab)[new]
+        good += float((err * scale < 2.0).sum())
         total += float(new.sum())
+        errs.append(err.cpu())
+        zero.append(lab.norm(dim=1)[new].cpu())
+        preds.append(out["offset"].permute(0, 2, 3, 1)[new].cpu())
+        labs.append(lab.permute(0, 2, 3, 1)[new].cpu())
     model.train()
-    return dict(new_iou=inter / max(union, 1), local_acc4=good / max(total, 1))
+    cat = lambda xs: torch.cat(xs) if xs else torch.zeros(0)
+    P, L = cat(preds), cat(labs)
+    spread = float(P.std(0).mean() / L.std(0).mean().clamp(min=1e-6)) if len(P) > 1 else 0.0
+    return dict(new_iou=inter / max(union, 1), centre_acc2=good / max(total, 1),
+                offset_median=float(cat(errs).median()) if total else 0.0,
+                zero_median=float(cat(zero).median()) if total else 0.0, spread=spread)
 
 
 def main(argv=None) -> None:
@@ -94,7 +107,7 @@ def main(argv=None) -> None:
     it = iter(loader)
     while step < a.steps:
         b = next(it)
-        loss = placenet_loss(model(_inputs(b, dev)), {k: v.to(dev) for k, v in b.items()})
+        loss = placenet_loss(model(*_inputs(b, dev)), {k: v.to(dev) for k, v in b.items()})
         opt.zero_grad(set_to_none=True)
         loss["total"].backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -110,8 +123,8 @@ def main(argv=None) -> None:
             with (a.out / "log.jsonl").open("a") as fh:
                 fh.write(json.dumps(row) + "\n")
             print(json.dumps(row), flush=True)
-            if v["local_acc4"] > best:
-                best = v["local_acc4"]
+            if v["centre_acc2"] > best:
+                best = v["centre_acc2"]
                 save(a.out / "best.pt")
             save(a.out / "last.pt")
 

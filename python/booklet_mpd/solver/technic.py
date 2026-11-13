@@ -63,7 +63,7 @@ def _align(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """A rotation taking unit vector a onto unit vector b (axis-aligned inputs give cube rotations)."""
     v = np.cross(a, b)
     c = float(a @ b)
-    if np.linalg.norm(v) < 1e-9:
+    if np.linalg.norm(v) < 1e-9 or 1.0 + c < 1e-9:      # parallel, or so nearly opposite that 1 + c vanishes
         if c > 0:
             return np.eye(3)
         perp = np.array([1.0, 0, 0]) if abs(a[0]) < 0.9 else np.array([0, 1.0, 0])
