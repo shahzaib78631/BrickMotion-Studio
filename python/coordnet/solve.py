@@ -106,14 +106,20 @@ class CameraFit:
 
 
 def fit_camera(m: Matches, cam0: BookletCamera, centre, free: tuple[str, ...] | None = None,
-               f_scale: float = 1.0) -> CameraFit:
-    """Robust least-squares camera from matches (soft-L1 loss with a 1 px knee by default)."""
+               f_scale: float = 1.0, bounds: dict | None = None) -> CameraFit | None:
+    """Robust least-squares camera from matches (soft-L1 loss with a 1 px knee by default). `free`: parameters to
+    fit (default all, eye only for a perspective start); `bounds`: {param: (lo, hi)} on top of eye's EYE_RANGE.
+    None when there are fewer matches than parameters (2 equations each)."""
     if free is None:
         free = PARAMS if cam0.eye > 0 else PARAMS[:-1]
+    if 2 * len(m.p) < max(len(free), 1) * 4:
+        return None
+    bounds = {"eye": EYE_RANGE, **(bounds or {})}
     x0 = _vec(cam0, free)
-    lo = np.array([EYE_RANGE[0] if k == "eye" else -np.inf for k in free])
-    hi = np.array([EYE_RANGE[1] if k == "eye" else np.inf for k in free])
-    x0 = np.clip(x0, lo, hi)
+    lo = np.array([bounds[k][0] if k in bounds else -np.inf for k in free], float)
+    hi = np.array([bounds[k][1] if k in bounds else np.inf for k in free], float)
+    pad = 1e-9 * (np.abs(np.where(np.isfinite(lo), lo, 0)) + np.abs(np.where(np.isfinite(hi), hi, 0)) + 1)
+    x0 = np.clip(x0, lo + pad, hi - pad)          # strictly inside: least_squares rejects a start on a bound
     sw = np.sqrt(m.w)
 
     def res(x):

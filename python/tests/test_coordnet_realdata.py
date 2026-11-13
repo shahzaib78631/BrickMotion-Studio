@@ -60,7 +60,9 @@ def test_label_case_on_a_rendered_page():
 
 
 def test_bad_fit_is_dropped(monkeypatch):
+    from coordnet import linefit
     case, _parts, _centre = _case()
+    monkeypatch.setattr(linefit, "search", lambda *a, **k: [])   # the network path alone
     monkeypatch.setattr(realdata, "solve_camera",
                         lambda net, pic, parts, cam, centre, W, H, rounds=4, log=None, free=None:
                         (cam, [dict(round=0, n=900, median=3.0, p90=6.0, inliers=0.5, flow_median=2.0)]))
@@ -113,7 +115,9 @@ def test_view_whose_lines_fit_wins_among_tight_fits(monkeypatch):
 
 
 def test_rejection_reason_is_reported(monkeypatch):
+    from coordnet import linefit
     case, _parts, _centre = _case()
+    monkeypatch.setattr(linefit, "search", lambda *a, **k: [])   # the network path alone
     monkeypatch.setattr(realdata, "solve_camera",
                         lambda net, pic, parts, cam, centre, W, H, rounds=4, log=None, free=None:
                         (cam, [dict(round=0, n=900, median=3.0, p90=6.0, inliers=0.5, flow_median=2.0)]))

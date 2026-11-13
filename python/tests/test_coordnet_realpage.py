@@ -78,8 +78,21 @@ def test_tight_network_fit_with_wrong_lines_is_dropped(monkeypatch):
     monkeypatch.setattr(realdata, "solve_camera", lambda net, pic, parts, cam, centre, W, H, rounds=4, free=None:
                         (shifted, [dict(round=0, n=20000, median=0.3, p90=0.6, inliers=1.0, flow_median=0.1)]))
     why: list = []
+    s = realdata.label_case(object(), case, start=TRUE_CAM, why=why)
+    # the network's tight-but-wrong camera is never used; the line fit may still find the true one on this page
+    assert s is None or (s["meta"]["solver"] == "linefit" and abs(s["cam"].cx - TRUE_CAM.cx) < 1.0)
+
+
+def test_tight_network_fit_with_wrong_lines_is_dropped_when_the_line_fit_fails_too(monkeypatch):
+    from coordnet import linefit
+    case, _parts, _centre = _case()
+    shifted = TRUE_CAM.with_(cx=TRUE_CAM.cx + 6)
+    monkeypatch.setattr(realdata, "solve_camera", lambda net, pic, parts, cam, centre, W, H, rounds=4, free=None:
+                        (shifted, [dict(round=0, n=20000, median=0.3, p90=0.6, inliers=1.0, flow_median=0.1)]))
+    monkeypatch.setattr(linefit, "search", lambda *a, **k: [linefit.Fit(shifted, 0.5, 0.8, 1000)])
+    why: list = []
     assert realdata.label_case(object(), case, start=TRUE_CAM, why=why) is None
-    assert any(w.startswith("camera") for w in why)
+    assert why[-1].startswith("camera: off the page")
 
 
 def test_chained_start_is_fitted_translation_only_first(monkeypatch):
@@ -173,7 +186,7 @@ def test_white_part_on_white_paper_is_not_paper():
 
 def test_camera_check_requires_a_tight_line_median(monkeypatch):
     parts, centre, _g, full, _base = _scene()
-    monkeypatch.setattr(realdata, "line_distance", lambda pic, ren, region, up=4, thin=False: (2.0, 3.0))
+    monkeypatch.setattr(realdata, "line_distance", lambda pic, ren, region, up=4, thin=False, native=1.0: (2.0, 3.0))
     assert not realdata.camera_check(full, parts, TRUE_CAM, centre, print_scale=TRUE_CAM.scale)["ok"]
 
 
@@ -234,9 +247,9 @@ def test_part_with_too_few_lines_rejects_the_page_as_unverified():
     real = realdata.line_distance
     calls = {"n": 0}
 
-    def few(pic, ren, region, up=4, thin=False):
+    def few(pic, ren, region, up=4, thin=False, native=1.0):
         calls["n"] += 1
-        return (float("nan"), float("nan")) if calls["n"] > 2 and pic is full and ren is full else real(pic, ren, region, up, thin)
+        return (float("nan"), float("nan")) if calls["n"] > 2 and pic is full and ren is full else real(pic, ren, region, up, thin, native)
 
     import pytest
     mp = pytest.MonkeyPatch()
@@ -360,3 +373,98 @@ def test_malformed_image_is_a_page_error_not_a_crash(monkeypatch, tmp_path, caps
     realdata.main(["--sets", "99999", "--out", str(tmp_path)])
     out = capsys.readouterr()
     assert "drop set 99999 step 3" in out.out
+
+
+# --- line fit fallback ------------------------------------------------------------------------------------------
+
+def test_camera_check_tolerance_follows_the_pictures_native_resolution(monkeypatch):
+    """A 1.2 px shift on a picture upscaled 2.56x is 0.47 px of the booklet's own raster."""
+    parts, centre, _g, full, _base = _scene()
+    monkeypatch.setattr(realdata, "shift_summary", lambda pic, ren, region: dict(tiles=50, median=1.2))
+    monkeypatch.setattr(realdata, "line_distance", lambda pic, ren, region, up=4, thin=0.0, native=1.0:
+                        (0.9 / native, 5.6 / native))        # 0.9/5.6 working px
+    assert not realdata.camera_check(full, parts, TRUE_CAM, centre, TRUE_CAM.scale)["ok"]
+    assert realdata.camera_check(full, parts, TRUE_CAM, centre, TRUE_CAM.scale, upscale=2.56)["ok"]
+
+
+def _no_network(monkeypatch):
+    monkeypatch.setattr(realdata, "solve_camera", lambda net, pic, parts, cam, centre, W, H, rounds=4, free=None:
+                        (cam, []))
+
+
+def test_label_case_falls_back_to_the_line_fit_when_the_network_sees_nothing(monkeypatch):
+    case, parts, centre = _case()
+    _no_network(monkeypatch)
+    checked: dict = {}
+    s = realdata.label_case(object(), case, start=TRUE_CAM.with_(cx=TRUE_CAM.cx + 7, yaw=TRUE_CAM.yaw + 2),
+                            checked=checked)
+    assert s is not None and s["meta"]["solver"] == "linefit"
+    assert abs(s["cam"].cx - TRUE_CAM.cx) < 1.0 and "cam" in checked
+
+
+def test_ambiguous_line_fits_abstain_and_do_not_chain(monkeypatch):
+    from coordnet import linefit
+    case, parts, centre = _case()
+    _no_network(monkeypatch)
+    other = TRUE_CAM.with_(yaw=TRUE_CAM.yaw + 90)            # a different view that (here) also passes
+    monkeypatch.setattr(linefit, "search", lambda *a, **k: [linefit.Fit(TRUE_CAM, 0.3, 0.9, 1000),
+                                                           linefit.Fit(other, 0.3, 0.9, 1000)])
+    monkeypatch.setattr(realdata, "camera_check",
+                        lambda pic, parts, cam, centre, ps, **k: dict(ok=True, tiles=50, shift=0.3, p50=0.2, p90=1.0,
+                                                                      scale_err=0.0, render=None, gbuffer=None))
+    why, checked = [], {}
+    assert realdata.label_case(object(), case, start=TRUE_CAM, why=why, checked=checked) is None
+    assert "ambiguous" in why[-1] and "cam" not in checked
+
+
+# --- review fixes: native units, cross-pass ambiguity -------------------------------------------------------------
+
+def test_line_distance_is_reported_in_native_pixels_and_clipped_there():
+    from coordnet.evaluate import line_distance
+    a = np.full((200, 300, 3), 230, np.uint8); b = a.copy()
+    a[:, 100:102] = 0; b[:, 124:126] = 0                       # 24 working px apart
+    reg = np.ones((200, 300), bool)
+    assert line_distance(a, b, reg)[0] == 15.0                  # clipped
+    assert abs(line_distance(a, b, reg, native=2.0)[0] - 12.0) < 1.0     # 2 px wide lines: centre within a px
+
+
+def test_edge_agreement_measures_in_native_pixels(monkeypatch):
+    from coordnet import realdata as rd
+    parts, centre, g, full, base = _scene()
+    seen = []
+    real = rd.line_distance
+    monkeypatch.setattr(rd, "line_distance", lambda *a, **k: (seen.append(k.get("native")), real(*a, **k))[1])
+    rd.edge_agreement(full, full, base, g.part, NEW_IDS, _without(parts, centre), upscale=2.5)
+    assert seen and all(n == 2.5 for n in seen)
+
+
+def _ok_check_with_real_gbuffer(parts_, centre_):
+    def chk(pic, parts, cam, centre, ps, **k):
+        g = R.gbuffer(*R.scene(parts), cam, centre, pic.shape[1], pic.shape[0])
+        return dict(ok=True, tiles=50, shift=0.3, p50=0.2, p90=1.0, scale_err=0.0, render=pic, gbuffer=g)
+    return chk
+
+
+def test_a_section_fit_is_compared_with_the_global_search_before_it_is_kept(monkeypatch):
+    from coordnet import linefit
+    case, parts, centre = _case()
+    _no_network(monkeypatch)
+    other = TRUE_CAM.with_(yaw=TRUE_CAM.yaw + 90)
+    monkeypatch.setattr(linefit, "search", lambda *a, start=None, **k:
+                        [linefit.Fit(other if start is not None else TRUE_CAM, 0.3, 0.9, 1000)])
+    monkeypatch.setattr(realdata, "camera_check", _ok_check_with_real_gbuffer(parts, centre))
+    why, checked = [], {}
+    assert realdata.label_case(object(), case, start=TRUE_CAM, why=why, checked=checked) is None
+    assert "ambiguous" in why[-1] and "cam" not in checked
+
+
+def test_equivalent_passing_fits_are_not_ambiguous(monkeypatch):
+    from coordnet import linefit
+    case, parts, centre = _case()
+    _no_network(monkeypatch)
+    monkeypatch.setattr(linefit, "search", lambda *a, start=None, **k:
+                        [linefit.Fit(TRUE_CAM.with_(cx=TRUE_CAM.cx + (0.3 if start is None else 0.0)), 0.3, 0.9, 1000)])
+    monkeypatch.setattr(realdata, "camera_check", _ok_check_with_real_gbuffer(parts, centre))
+    why = []
+    realdata.label_case(object(), case, start=TRUE_CAM, why=why)
+    assert not any("ambiguous" in w for w in why)

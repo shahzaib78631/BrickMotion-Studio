@@ -86,16 +86,18 @@ def dark_lines(img: np.ndarray, up: int = 1, thin: float = 0.0) -> np.ndarray:
 
 
 def line_distance(pic: np.ndarray, ren: np.ndarray, region: np.ndarray, up: int = 4,
-                  thin: float = 0.0) -> tuple[float, float]:
+                  thin: float = 0.0, native: float = 1.0, clip: float = 15.0) -> tuple[float, float]:
     """Two-way distance between the centres of the render's dark lines and the picture's, within `region`
-    (px at the picture's resolution: p50, p90; measured at `up` x so it resolves sub-pixel offsets)."""
+    (p50, p90; measured at `up` x so it resolves sub-pixel offsets). Reported in the source raster's pixels: a
+    picture enlarged `native` times before solving has its distances divided by `native`, and clipped at `clip`
+    of those pixels."""
     reg = cv2.resize(region.astype(np.uint8), None, fx=up, fy=up, interpolation=cv2.INTER_NEAREST).astype(bool)
     a, b = dark_lines(pic, up, thin) & reg, dark_lines(ren, up, thin) & reg
     if a.sum() < 50 * up or b.sum() < 50 * up:
         return float("nan"), float("nan")
     da = cv2.distanceTransform((~a).astype(np.uint8), cv2.DIST_L2, cv2.DIST_MASK_PRECISE)
     db = cv2.distanceTransform((~b).astype(np.uint8), cv2.DIST_L2, cv2.DIST_MASK_PRECISE)
-    d = np.minimum(np.concatenate([da[b], db[a]]) / up, 15)
+    d = np.minimum(np.concatenate([da[b], db[a]]) / (up * max(1.0, float(native))), clip)
     return float(np.median(d)), float(np.percentile(d, 90))
 
 
@@ -160,6 +162,8 @@ def solve_camera(net: Net, pic, parts, cam, centre, W, H, rounds: int = 4, log=N
         if len(m.p) < 200:
             break
         fit = fit_camera(m, cam, centre, free)
+        if fit is None:
+            break
         moved = float(np.median(np.linalg.norm(flow[:, w > 0], axis=0)))
         fits.append(dict(round=r, n=fit.n, median=fit.median, p90=fit.p90, inliers=fit.inliers, flow_median=moved))
         if log:

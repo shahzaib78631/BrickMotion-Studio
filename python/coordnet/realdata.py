@@ -149,19 +149,24 @@ def finite(x):
 
 def camera_check(pic: np.ndarray, parts: list, cam: BookletCamera, centre, print_scale: float,
                  min_tiles: int = 8, max_shift: float = 1.0, max_line_p50: float = 1.2,
-                 max_line_p90: float = 4.0, max_scale_err: float = 0.05, stroke: float = 4.0) -> dict:
+                 max_line_p90: float = 4.0, max_scale_err: float = 0.05, stroke: float = 4.0,
+                 upscale: float = 1.0) -> dict:
     """Whether a solved camera draws the model where the page does, judged without the network: the median shift
     between page and render of the whole model over phase-correlated tiles (dense stud outlines make the nearest-
     line distance blind to a shift of several px; tiles are not), the dark-line p90, and the scale against the
-    booklet's print scale. Returns the render (whole model, no red) and its G-buffer for reuse."""
+    booklet's print scale. Returns the render (whole model, no red) and its G-buffer for reuse.
+
+    Distances are judged in the booklet's own pixels: a picture enlarged `upscale` times before solving has its
+    shift and line distances divided by it (a 1 px error in the source raster is `upscale` px here)."""
     H, W = pic.shape[:2]
+    u = max(1.0, float(upscale))
     ren = R.render(parts, set(), cam, centre, W, H, R.Style(), ss=2, red=False).picture
     g = R.gbuffer(*R.scene(parts), cam, centre, W, H)
     region = cv2.dilate((g.part >= 0).astype(np.uint8), np.ones((9, 9), np.uint8)).astype(bool)
     sh = shift_summary(pic, ren, region)
-    p50, p90 = line_distance(pic, ren, region, thin=stroke)
+    p50, p90 = line_distance(pic, ren, region, thin=stroke, native=u)
     scale_err = abs(cam.scale / print_scale - 1.0)
-    shift = sh.get("median", float("inf"))
+    shift = sh.get("median", float("inf")) / u
     ok = bool(sh["tiles"] >= min_tiles and shift <= max_shift and np.isfinite(p90) and p50 <= max_line_p50
               and p90 <= max_line_p90 and scale_err <= max_scale_err)
     return dict(ok=ok, tiles=int(sh["tiles"]), shift=float(shift), p50=p50, p90=p90, scale_err=float(scale_err),
@@ -171,7 +176,7 @@ def camera_check(pic: np.ndarray, parts: list, cam: BookletCamera, centre, print
 def edge_agreement(pic: np.ndarray, full: np.ndarray, base: np.ndarray, part: np.ndarray, new_ids: set,
                    render_without, max_p50: float = 1.5, max_p90: float = 4.0, min_gain: float = 0.5,
                    min_px: int = 40, informative_p90: float = 2.0, part_max_p50: float = 1.5,
-                   part_max_p90: float = 5.0, stroke: float = 4.0) -> dict:
+                   part_max_p90: float = 5.0, stroke: float = 4.0, upscale: float = 1.0) -> dict:
     """Do the page's outlines show the new parts? Palette-free: compares dark-line maps, not colours.
 
     In the new parts' region the render of the whole model must fit the page's lines (p50, p90) and fit them
@@ -180,12 +185,14 @@ def edge_agreement(pic: np.ndarray, full: np.ndarray, base: np.ndarray, part: np
     model and better with the part than without it (p90 by 1 px or p50 by `min_gain`); where removing it leaves no
     lines at all, its own lines fitting the page is the evidence. Every new pixel becomes a label, so a visible part
     that cannot be verified (too few lines; removal barely changes the drawing, e.g. mostly hidden) rejects the
-    page. `part`: G-buffer part index per pixel of the whole model."""
+    page. `part`: G-buffer part index per pixel of the whole model. Distances are in the booklet's own pixels
+    (`upscale`: how much the picture was enlarged before solving)."""
+    dist = lambda a, b, r: line_distance(a, b, r, thin=stroke, native=upscale)
     newvis = np.isin(part, list(new_ids))
     k9 = np.ones((9, 9), np.uint8)
     region = cv2.dilate(newvis.astype(np.uint8), k9).astype(bool)
-    f50, f90 = line_distance(pic, full, region, thin=stroke)
-    b50, b90 = line_distance(pic, base, region, thin=stroke)
+    f50, f90 = dist(pic, full, region)
+    b50, b90 = dist(pic, base, region)
     out = dict(full=[f50, f90], base=[b50, b90], parts={})
     if not np.isfinite(f50):
         return dict(out, ok=False, reason="too few lines")
@@ -198,13 +205,13 @@ def edge_agreement(pic: np.ndarray, full: np.ndarray, base: np.ndarray, part: np
         if own.sum() < min_px:
             continue                                  # too small to judge, and too small to matter as a label
         reg = cv2.dilate(own.astype(np.uint8), k9).astype(bool)
-        pf = line_distance(pic, full, reg, thin=stroke)
+        pf = dist(pic, full, reg)
         if not np.isfinite(pf[0]):
             out["parts"][int(i)] = "too few lines"
             return dict(out, ok=False, reason=f"new part {i} cannot be verified (too few lines)")
         fits_page = pf[0] <= part_max_p50 and pf[1] <= part_max_p90
         minus = render_without(i)
-        d = line_distance(full, minus, reg, thin=stroke)
+        d = dist(full, minus, reg)
         if not np.isfinite(d[1]):
             # without the part the region has no lines left: the part's own lines are the evidence
             drawn, pm = fits_page, (float("nan"), float("nan"))
@@ -213,12 +220,45 @@ def edge_agreement(pic: np.ndarray, full: np.ndarray, base: np.ndarray, part: np
             return dict(out, ok=False, reason=f"new part {i} cannot be verified (removing it barely changes "
                                               f"the drawing)")
         else:
-            pm = line_distance(pic, minus, reg, thin=stroke)
+            pm = dist(pic, minus, reg)
             drawn = fits_page and (not np.isfinite(pm[0]) or pm[1] >= pf[1] + 1.0 or pm[0] >= pf[0] + min_gain)
         out["parts"][int(i)] = dict(full=list(pf), without=list(pm), drawn=bool(drawn))
         if not drawn:
             return dict(out, ok=False, reason=f"new part {i} is not drawn")
     return dict(out, ok=True, reason="")
+
+
+def _line_fit(pic, parts, centre, W, H, print_scale, fg, start, stroke, upscale, n_base,
+              min_iou: float = 0.9) -> dict:
+    """The network-free camera (docs/coordnet/linefit-design.md): line-fit hypotheses from the section's view and
+    from the page's own line directions, each verified by `camera_check`. All passing fits of both searches are
+    compared before any is kept: two that would label the new parts differently (new-part mask IoU < `min_iou`,
+    or no G-buffer to tell) make the page ambiguous; equivalent ones (symmetric views, the same view found twice)
+    are not. Returns best=(cam, fits, check) | ambiguous=[...] | lines=[diagnostics]."""
+    from . import linefit
+    feat = linefit.page_features(pic, stroke)
+    newset = list(range(n_base, len(parts)))
+    diag: list[str] = []
+    passing = []
+    for st in ([start] if start is not None else []) + [None]:
+        for f in linefit.search(feat, parts, centre, W, H, print_scale, fg, start=st):
+            chk = camera_check(pic, parts, f.cam, centre, print_scale, stroke=stroke, upscale=upscale)
+            diag.append(f"{chk['tiles']}/{chk['shift']:.2f}/{chk['p90']:.2f}/{chk['scale_err']:.3f} line fit")
+            if chk["ok"]:
+                passing.append((f, chk))
+    if not passing:
+        return dict(lines=diag)
+    passing.sort(key=lambda t: t[1]["shift"])
+    f0, c0 = passing[0]
+    mask = lambda c: None if c.get("gbuffer") is None else np.isin(c["gbuffer"].part, newset)
+    m0 = mask(c0)
+    for _f, c in passing[1:]:
+        m = mask(c)
+        if m0 is None or m is None or (m & m0).sum() / max(1, (m | m0).sum()) < min_iou:
+            return dict(ambiguous=[f"{g.cam.yaw:.1f}/{g.cam.pitch:.1f}/{g.cam.cx:.1f}/{g.cam.cy:.1f}"
+                                   for g, _c in passing])
+    fit = dict(solver="linefit", score=f0.score, cover=f0.cover, n=f0.n)
+    return dict(best=(f0.cam, [fit], c0))
 
 
 def label_case(net, case, start: BookletCamera | None = None, rounds: int = 4,
@@ -231,7 +271,8 @@ def label_case(net, case, start: BookletCamera | None = None, rounds: int = 4,
     from booklet_mpd.viewfit import BOOKLET_SCALE
     reject = lambda reason: (why.append(reason) if why is not None else None)
     pic, pts_px = _prepare(case)
-    stroke = stroke_width((case.pts_per_px or 0.48) / pts_px)
+    upscale = (case.pts_per_px or 0.48) / pts_px
+    stroke = stroke_width(upscale)
     H, W = pic.shape[:2]
     base = [norm(p) for p in case.visible]
     new = [norm(p) for p in case.added]
@@ -241,6 +282,7 @@ def label_case(net, case, start: BookletCamera | None = None, rounds: int = 4,
         return None
     centre = R.bounds_centre(parts)
     fg = ~paper_mask(pic)
+    s0 = None
     if start is not None:
         s0 = frame(start, centre, _points(parts), fg, fit_scale=False)
         starts = [(s0, ("cx", "cy")), (s0, None)]
@@ -254,12 +296,22 @@ def label_case(net, case, start: BookletCamera | None = None, rounds: int = 4,
         tried.append(f"{fits[-1]['median']:.2f}/{fits[-1]['p90']:.2f}/{fits[-1]['n']}" if fits else "none")
         if not fits or fits[-1]["median"] >= max_median or fits[-1]["p90"] >= max_p90:
             continue
-        chk = camera_check(pic, parts, cam, centre, print_scale, stroke=stroke)
+        chk = camera_check(pic, parts, cam, centre, print_scale, stroke=stroke, upscale=upscale)
         lines.append(f"{chk['tiles']}/{chk['shift']:.2f}/{chk['p90']:.2f}/{chk['scale_err']:.3f}")
         if chk["ok"] and (best is None or chk["shift"] < best[2]["shift"]):
             best = (cam, fits, chk)
         if best is not None and free is not None:
             break                                   # the section's view with a new offset explains the page
+    solver = "coordnet"
+    if best is None:
+        lf = _line_fit(pic, parts, centre, W, H, print_scale, fg, s0, stroke, upscale, len(base))
+        if lf.get("ambiguous"):
+            reject("camera: ambiguous line fits (yaw/pitch/cx/cy per passing fit: " + ", ".join(lf["ambiguous"]) + ")")
+            return None
+        if lf.get("best") is not None:
+            best, solver = lf["best"], "linefit"
+        else:
+            lines += lf["lines"]
     if best is None:
         if not lines:
             reject("camera: no tight fit (median/p90/n per start: " + ", ".join(tried) + ")")
@@ -272,14 +324,15 @@ def label_case(net, case, start: BookletCamera | None = None, rounds: int = 4,
     cam, fits, chk = best
     if checked is not None:
         checked["cam"] = cam
-    fit = fits[-1]
+    fit = fits[-1] if fits else {}
     newset = set(range(len(base), len(parts)))
     g = chk["gbuffer"]
     lab = labels.local_labels(g, parts, newset)
     base_img = R.render(base, set(), cam, centre, W, H, R.Style(), ss=2, red=False).picture
     without = lambda i: R.render([q for j, q in enumerate(parts) if j != i], set(), cam, centre, W, H, R.Style(),
                                  ss=2, red=False).picture
-    agree = edge_agreement(pic, chk["render"], base_img, g.part, newset, without, stroke=stroke)
+    agree = edge_agreement(pic, chk["render"], base_img, g.part, newset, without, stroke=stroke,
+                           upscale=upscale)
     if lab["new"].sum() < 30 or not agree["ok"]:
         f, b = agree["full"], agree["base"]
         reject(f"new parts: {int(lab['new'].sum())} px, {agree.get('reason') or 'too small'} (lines full "
@@ -292,6 +345,7 @@ def label_case(net, case, start: BookletCamera | None = None, rounds: int = 4,
                 turned=cam.turned)
     agree_meta = dict(full=agree["full"], base=agree["base"], parts={str(k): v for k, v in agree["parts"].items()})
     meta = dict(real=True, set=case.set_number, step=case.step_number, W=W, H=H, cam=camd, pts_per_px=pts_px,
+                solver=solver,
                 centre=np.asarray(centre).tolist(), fit=fit, agree=agree_meta,
                 camera_check=dict(tiles=chk["tiles"], shift=chk["shift"], p50=chk["p50"], p90=chk["p90"],
                                   scale_err=chk["scale_err"]),

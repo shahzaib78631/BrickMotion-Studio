@@ -193,13 +193,21 @@ def scene_lines(parts: list) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.nda
     return cat(E, (0, 2, 3)), cat(Ei, (0,)).astype(np.int32), cat(C, (0, 4, 3)), cat(Ci, (0,)).astype(np.int32)
 
 
-def line_mask(edges: np.ndarray, edge_part: np.ndarray, cond: np.ndarray, cond_part: np.ndarray, g: "GBuffer",
-              cam: BookletCamera, centre, ss: int, eps: float = 0.5) -> np.ndarray:
-    """Pixels (at the G-buffer's resolution) covered by visible LDraw lines.
+@dataclass
+class LineSamples:
+    X: np.ndarray        # [N,3] world points on visible LDraw lines
+    uv: np.ndarray       # [N,2] where they are drawn (px at the G-buffer's resolution; pixel i spans [i, i+1))
+    part: np.ndarray     # [N] part index
+
+
+def visible_line_samples(edges: np.ndarray, edge_part: np.ndarray, cond: np.ndarray, cond_part: np.ndarray,
+                         g: "GBuffer", cam: BookletCamera, centre, ss: int, eps: float = 0.5) -> LineSamples:
+    """Points on the visible LDraw lines, every half pixel of their projected length.
 
     Conditional lines are drawn when both control points project on the same side of the line (the LDraw rule:
     a curved surface's silhouette). A line sample is visible when it is no more than `eps` LDU behind the visible
-    surface at its pixel (plus one pixel's depth footprint), so hidden edges of the same part stay hidden.
+    surface at its pixel (plus one pixel's depth footprint), so hidden edges of the same part stay hidden. The one
+    visibility rule for the booklet render (`line_mask`) and for fitting a camera to a page's lines.
     """
     H, W = g.part.shape
     c = cam.with_(scale=cam.scale * ss, cx=cam.cx * ss, cy=cam.cy * ss)
@@ -212,9 +220,8 @@ def line_mask(edges: np.ndarray, edge_part: np.ndarray, cond: np.ndarray, cond_p
         keep = side(uv[:, 2]) * side(uv[:, 3]) > 0
         segs = np.concatenate([segs, cond[keep, :2]])
         sp = np.concatenate([sp, cond_part[keep]])
-    mask = np.zeros(H * W, bool)
     if not len(segs):
-        return mask.reshape(H, W)
+        return LineSamples(np.zeros((0, 3)), np.zeros((0, 2)), np.zeros(0, np.int32))
     uv, z = project(c, centre, segs.reshape(-1, 3))
     uv = uv.reshape(-1, 2, 2)
     n = np.clip(np.ceil(np.linalg.norm(uv[:, 1] - uv[:, 0], axis=1) * 2).astype(int) + 1, 2, 4000)
@@ -225,17 +232,25 @@ def line_mask(edges: np.ndarray, edge_part: np.ndarray, cond: np.ndarray, cond_p
     x = np.floor(puv[:, 0]).astype(np.int64)
     y = np.floor(puv[:, 1]).astype(np.int64)
     ok = (x >= 0) & (x < W) & (y >= 0) & (y < H)
-    x, y, pz, seg = x[ok], y[ok], pz[ok], seg[ok]
+    P, puv, x, y, pz, seg = P[ok], puv[ok], x[ok], y[ok], pz[ok], seg[ok]
     flat = y * W + x
     # an edge lies where faces meet, so compare with the deepest surface around its pixel (3x3): the face it
     # belongs to is always among them; samples that fail it are behind something by more than that
     dmax = cv2.dilate(np.where(np.isfinite(g.depth), g.depth, 1e9).astype(np.float32), np.ones((3, 3), np.uint8))
     gd = dmax.reshape(-1)[flat]
-    gp = g.part.reshape(-1)[flat]
     # a line on the visible surface is within about a pixel's depth footprint of it; anything further is hidden
     vis = pz <= gd + eps + 1.5 / c.scale
-    mask[flat[vis]] = True
-    return mask.reshape(H, W)
+    return LineSamples(P[vis], puv[vis], np.asarray(sp)[seg[vis]].astype(np.int32))
+
+
+def line_mask(edges: np.ndarray, edge_part: np.ndarray, cond: np.ndarray, cond_part: np.ndarray, g: "GBuffer",
+              cam: BookletCamera, centre, ss: int, eps: float = 0.5) -> np.ndarray:
+    """Pixels (at the G-buffer's resolution) covered by visible LDraw lines (`visible_line_samples`)."""
+    H, W = g.part.shape
+    s = visible_line_samples(edges, edge_part, cond, cond_part, g, cam, centre, ss, eps)
+    mask = np.zeros((H, W), bool)
+    mask[np.floor(s.uv[:, 1]).astype(np.int64), np.floor(s.uv[:, 0]).astype(np.int64)] = True
+    return mask
 
 
 def scene(parts: list) -> tuple[np.ndarray, np.ndarray]:
