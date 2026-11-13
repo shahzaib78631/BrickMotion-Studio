@@ -338,6 +338,363 @@ step numbers; a booklet that starts again at step 1 becomes another figure (a su
 result and a `report.md` listing everything to check go to `.cache/instructions/<name>/`.
 Needs the Python tools once: `cd python && uv sync`.
 
+Raster Studio-style booklets (one step per page, pale blue parts panels) are also
+supported. Install Tesseract (`brew install tesseract` on macOS) for those PDFs.
+Extract and inspect a booklet without an inventory/API call:
+
+```bash
+npm run instructions -- --name fishing --extract-only --strict --pdf /path/to/booklet.pdf
+```
+
+This writes `extraction.json` with page images, individual part crops, source and
+artwork hashes, OCR diagnostics and unparsed pages. Panel-free steps are retained.
+Obscured step labels are provisionally inferred only between agreeing adjacent
+sequences, with the observed label preserved and an explicit review diagnostic.
+The raster adapter does not interpret arbitrary multi-step page layouts; review
+unparsed pages and quantities before using the evidence for placement.
+
+For a MOC, use `--inventory /path/to/inventory.json` instead of `--set`.
+The JSON is a nonempty array with the same `SetPart` schema as the cached
+`rebrickable-parts.json`; colour numbers must be **LDraw**, not Rebrickable IDs.
+Each row needs a unique `element` matching key (a real element ID or a local
+alphanumeric key), `ldrawPart`, positive `quantity`, `color`, `spare`, `image`
+(URL or null), `part`, and `colorName`. Without a booklet inventory page, reference
+image URLs are needed for automatic visual part matching. Local inventory mode
+makes no Rebrickable element lookups.
+
+**Current output is an unplaced parts layout, not a completed set.** Extraction
+and matching do not establish 3D poses, attachment legality or buildability. The
+separate geometric reconstruction benchmark still requires known-model evidence
+and cannot yet reconstruct these arbitrary booklets reliably. `--strict` exits
+with status 2 for extraction review issues/unparsed pages, and for every unplaced
+MPD export. It never certifies a loose-parts layout as a complete model. Failed
+PDF/OCR operations preserve the previous extraction. Use distinct `--name` values
+for independent runs.
+
+The matching stage also writes `placement-job.json`: page-specific step IDs,
+absolute image/callout paths, resolved parts and quantities, repeated-sub-build
+metadata, unresolved entries, source hashes and unassigned inventory. Unassigned
+stock may be a foundation shown without a callout; it is never automatically
+inserted into a model. This handoff contains evidence and no placeholder poses.
+See [the reconstruction status](docs/brickheadz/CERTIFIED_GEOMETRIC_SOLVER.md)
+for the finite-candidate solver's limits and reproducible benchmark flags.
+
+### Real-booklet reconstruction milestone
+
+A separate, limited image solver now reconstructs small studs-up plate/tile
+sequences from the actual booklet crops. It detects studs, estimates the camera,
+uses arrow endpoints for exploded placements, and scores projected LDraw polygons.
+The inference API receives part identities/counts and images, never reference poses.
+
+| Real-image case | Exact recovered pieces |
+| --- | ---: |
+| Superman steps 1–4, including an exploded placement and omitted foundation | 6/6 |
+| Superman step 34, two sub-build panels | 3/3 |
+| Batman steps 1–2, different colours and plate orientation | 3/3 |
+
+These compare part, colour, translation and rotation-equivalent vertex geometry
+within 0.001 LDU **at each step**, so swapping identical pieces between steps fails.
+The Batman fixture uses one rigid transform of the source model to align its
+foundation with the solver's canonical frame. Resizing/padding the Superman inputs also passes. This does not
+establish reconstruction of complete sets, SNOT placements, arbitrary page styles,
+or attaching the detached sub-build to the full figure.
+
+First generate the matching evidence using the `instructions` command above
+(use `--name heroes-complete-regression` for the paths below). Then run:
+
+```bash
+cd python
+uv run --extra vision python ../scripts/reconstruct_real_sequence.py \
+  --job ../.cache/instructions/heroes-complete-regression/placement-job.json \
+  --reference ../benchmarks/instructions/superman-opening-reference.ldr \
+  --subbuild-reference ../benchmarks/instructions/superman-34-audited.ldr
+```
+
+For the Batman holdout, add `--model 1 --last-step 2 --subbuild-step 0`, replace
+`--reference` with `../benchmarks/instructions/batman-opening-reference.ldr`, and
+omit `--subbuild-reference`. Choose a separate `--out` folder for independent runs.
+References are optional and loaded only after inference and MPD export. Results,
+per-step camera/fit measurements, source hashes and CAD previews go under
+`.cache/instructions/real-sequence/milestone/` unless `--out` is specified.
+
+The step-34 evaluation fixture is separately audited: its two 2×4 tiles cover
+one 4×4 plate without overlap. The older full-figure hand placement had the second
+tile 10 LDU too close; it is preserved and is not used as this sub-build's truth.
+Real-image integration tests require the local extracted booklet images; they
+explicitly skip when those private inputs are unavailable:
+`cd python && uv run --extra vision pytest -q tests/test_booklet_real_sequence.py`.
+
+### Reusing the video part classifier for booklets
+
+The existing video-trained checkpoints are in `python/.cache/part_classifier/`
+(`model1.pt`/`vocab1.json`: 79 classes; `model2.pt`/`vocab2.json`: 398 raw classes).
+`part_classifier.py` supplies the architecture and `part_render.py` the labelled
+LDraw renderer. This classifier proposes part identity for an isolated crop;
+it does not estimate studs, arrows, camera parameters, or 3D poses.
+
+A booklet adaptation pilot reuses `model2.pt`'s encoder, removes primitive geometry
+classes, copies the relevant classifier rows, and adds missing training classes.
+It freezes the early encoder blocks and fine-tunes the last block/head. The
+original checkpoints are never overwritten. Reproduce with:
+
+```bash
+cd python
+uv run --extra vision --extra vision-train python ../scripts/train_booklet_classifier.py
+```
+
+Defaults use the `heroes-complete-regression/placement-job.json` above and write
+new weights and evidence to `.cache/instructions/part-learning/pilot/` in the
+repository root. Specify `--out` to keep experiments separate. The saved checkpoint
+contains its vocabulary, preprocessing version, parent hash and training metadata.
+
+The pilot used 63 Superman crops plus 372 labelled LDraw replay renders across
+93 classes. A separate synthetic view per class selected the checkpoint. All 67
+Batman crops were held out; 19 near-duplicate Superman artworks were excluded
+before training. The same background preprocessing and 93-class head are used
+for the before/after comparison. Top-1 template-label matches rose **31/67 →
+50/67**, while the independently audited subset stayed **2/3 → 2/3** (only two
+unique artworks). Most labels are **silver labels from the existing matcher**;
+these results do not establish general recognition accuracy. Twelve held-out
+labels fall outside this pilot's vocabulary. The black 4×4 plate is still confused
+with larger plates. The model remains experimental and is not enabled in the
+PDF pipeline automatically.
+
+Inspect ranked proposals for an isolated callout crop:
+
+```bash
+cd python
+uv run --extra vision --extra vision-train python -m brickheadz.booklet_classifier \
+  --checkpoint ../.cache/instructions/part-learning/pilot/best.pt /path/to/crop.png
+```
+
+`dataset.json` records the split, label provenance and excluded duplicates;
+`report.json` records metrics and every held-out prediction. Run the data-isolation,
+checkpoint-reuse and preprocessing tests with
+`uv run --extra vision --extra vision-train pytest -q tests/test_booklet_classifier.py`.
+
+### Experimental stud/arrow detection and placement ranking
+
+Two small models are now trained and available for opt-in evaluation. Neither is
+automatically enabled in the PDF pipeline, and complete-set reconstruction remains
+unresolved.
+
+The 472,166-parameter keypoint model reuses the video classifier's first three
+encoder blocks and predicts stud centres, arrow tips and subpixel offsets. The
+pilot trained on 500 synthetic LDraw scenes plus six Superman panels; 96 synthetic
+scenes with different part IDs selected the checkpoint and detection thresholds.
+Five Batman panels were reserved for testing. The frozen annotations in
+`benchmarks/instructions/keypoint-labels.json` are CV proposals reviewed visually
+by the coding agent, not independent human annotations. Unknown channels are
+excluded from both loss and metrics, and image hashes guard against changed inputs
+and exact duplicates crossing the split.
+
+| Reviewed Batman test | Existing detector | Learned detector |
+| --- | ---: | ---: |
+| Studs, two fully labelled panels | 32/32, no false positives | 32/32, no false positives; 0.29 px mean error |
+| Arrow tips, five panels | 0/6, no false positives | 3/6, seven false positives |
+
+Matching uses a four-pixel tolerance. The three remaining Batman panels have no
+complete stud labels. Arrow performance is insufficient for unattended use; more
+varied real arrow annotations and a new untouched test booklet are needed before
+claiming improvement beyond this pilot.
+
+The 88,337-parameter placement ranker adapts the existing verifier using five
+Superman candidate groups and one Superman validation group. On two Batman groups,
+the saved verifier selected the correct placement in 1/2 groups and the adapted
+model in 2/2. This isolated ranking test supplies labelled prior geometry. Its
+report records that limitation; it does not measure autonomous reconstruction.
+The original video and verifier checkpoints are preserved.
+
+Reproduce training and the separate reconstruction comparison from the repository
+root (use a new `--out` directory to preserve an experiment):
+
+```bash
+cd python
+uv run --extra vision --extra vision-train python ../scripts/train_booklet_keypoints.py
+uv run --extra vision --extra vision-train python ../scripts/train_real_pose_ranker.py
+uv run --extra vision --extra vision-train python ../scripts/evaluate_learned_booklet.py
+```
+
+The scripts use the extracted booklet images and local LDraw library. Defaults
+write checkpoints, split manifests and reports beneath
+`.cache/instructions/keypoint-learning/pilot/` and
+`.cache/instructions/pose-learning/pilot/`. The pose report was re-evaluated after
+aligning the Batman reference frame, with the trained weights unchanged; superseded
+reports are retained explicitly. For an individual image:
+
+```bash
+cd python
+uv run --extra vision --extra vision-train python -m brickheadz.keypoint_model \
+  --checkpoint ../.cache/instructions/keypoint-learning/pilot/best.pt /path/to/panel.png
+```
+
+The reconstruction comparison writes
+`.cache/instructions/keypoint-learning/assembly-evaluation/report.json` and MPDs.
+Baseline, raw learned centres, contour-refined centres, fused detections, and the
+learned detector plus ranker all preserve the three small cases above under strict
+per-step checks. Superman images were used in training; only the three Batman
+pieces are held out. Camera estimation still uses contour-derived stud dimensions,
+and geometric agreement checks remain in force when the ranker selects candidates.
+The inference path receives images and part identities/counts; references are
+loaded only for evaluation after reconstruction.
+
+Tests for masked labels, checkpoint reuse, split isolation, invalid ranker outputs
+and per-step reconstruction:
+
+```bash
+cd python
+uv run --extra vision --extra vision-train pytest -q \
+  tests/test_keypoint_learning.py tests/test_booklet_real_sequence.py
+```
+
+The arrow follow-up adds long/bent shafts, white outlines, multiple directions,
+occlusion-aware stud targets and a separate per-channel arrow loss weight.
+`arrow-learning-labels.json` adds reviewed Superman arrow examples and negatives;
+Batman is development data after the original pilot, while Aquaman supplies a
+separate transfer test. Batman and Aquaman images are excluded from training.
+Local crops around real arrow tips preserve head detail during augmentation.
+Train and compare saved checkpoints without overwriting the original pilot:
+
+```bash
+cd python
+uv run --extra vision --extra vision-train python ../scripts/train_booklet_keypoints.py \
+  --resume ../.cache/instructions/keypoint-learning/pilot/best.pt \
+  --labels ../benchmarks/instructions/arrow-learning-labels.json \
+  --out ../.cache/instructions/keypoint-learning/arrows-v3 \
+  --train-scenes 1000 --val-scenes 160 --steps 1000 --arrow-weight 2 \
+  --real-fraction .7 --focus-arrows .6 --every 200
+uv run --extra vision --extra vision-train python ../scripts/evaluate_arrow_detectors.py
+```
+
+The saved v3 checkpoint was selected at step 800 using synthetic validation;
+neither Batman nor Aquaman images entered training. The comparison reports the
+learned head separately from an optional red-arrow shaft/head geometry check:
+
+| Arrow case | Pilot: correct / extras | v3 learned: correct / extras | v3 hybrid: correct / extras |
+| --- | ---: | ---: | ---: |
+| Batman, six tips | 3/6 / 7 | 4/6 / 1 | 6/6 / 1 |
+| Aquaman, seventeen tips | 4/17 / 18 | 7/17 / 6 | 8/17 / 6 |
+
+Batman is a development regression. Aquaman supplied a separate learned-model
+transfer check; its failures were subsequently inspected during geometry work,
+so the hybrid's Aquaman result is also a development diagnostic. Coarse Aquaman
+annotations were corrected against magnified source pixels, with both saved
+models re-evaluated and weights/thresholds unchanged. The report records the
+correction and retains the superseded labels. No independent human annotations
+or new blind hybrid test are claimed.
+
+The geometry check requires a narrow shaft, wider head, tapering endpoint and an
+abrupt transition from head to shaft, with complete component context;
+red parts alone do not qualify. It supplies the two missed Batman red tips and
+preserves learned black-arrow proposals. Geometry-only outputs have score zero
+as a source marker, not a neural probability. Enable it explicitly with
+`python -m brickheadz.keypoint_model --checkpoint /path/to/best.pt --arrow-geometry /path/to/panel.png`
+or `LearnedObserver(..., arrow_geometry=True)`. The reconstruction comparison
+includes `hybrid-and-ranker`; all three small cases still pass per-step checks.
+Black sideways arrows and some blurred/diagonal tips remain unresolved.
+The synthetic-only v2 attempt is preserved separately: it reduced false positives
+but regressed to 1/6 Batman tips, so it was not promoted.
+
+For large PDF diagrams, `detect_pdf_keypoints.py` uses overlapping tiles, rejects
+uncertain seam predictions and merges duplicates in original-image coordinates.
+It writes every page's overlay, a searchable `index.html`, contact sheets and
+`report.json` with source/checkpoint hashes. Full-page proposals include parts
+callouts and repeated assemblies; their count is not an inventory or accuracy
+measurement. Example MOC run from the repository root:
+
+```bash
+python/.venv/bin/python scripts/detect_pdf_keypoints.py \
+  /Users/mac/Downloads/MOC-244965_Lefty2444_fishing_boat_and_farmhouse.pdf \
+  --checkpoint .cache/instructions/keypoint-learning/arrows-v3/best.pt \
+  --out .cache/instructions/keypoint-learning/moc-studs-v3 --heads studs \
+  --booklet .cache/instructions/fishing-regression/booklets/MOC-244965_Lefty2444_fishing_boat_and_farmhouse/booklet.json \
+  --review-labels benchmarks/instructions/moc-stud-labels.json
+```
+
+Both the pilot and v3 stud detectors processed all 265 pages (262 instruction pages).
+The v3 run produced 11,679 proposals on instruction pages. In the three selected
+review regions it found 22 visible studs, missed none and produced one false
+positive on door details (the pilot produced four). These are coding-agent-reviewed labels on a small, unrepresentative
+sample. The MOC images and labels are excluded from training. The review requires
+the exact PDF hash and rendering DPI; matching counts prioritize valid pairs
+within the pixel tolerance before localization distance.
+
+### Arrow direction pilot
+
+Tip detection alone does not establish direction. `arrow-direction-labels.json`
+records arrow identities, tip/head-base pairs, purpose annotations and nullable
+shaft paths. Direction follows **head base → tip** in image coordinates (x right,
+y down), rather than the displacement from the distant tail of a bent callout.
+There are 16 real training arrows from Superman, 23 Batman/Aquaman development
+arrows, and eight new Doctor Doom arrows from two panels on one page. The alternate
+Batman-language booklet was excluded as duplicate artwork. Doctor Doom crops
+record their PDF hash, page, render DPI and bounds. Annotations were reviewed by
+the coding agent; they are not independent human ground truth. Head-base lengths
+are approximate directional anchors, and an unannotated shaft is explicitly null.
+
+The direction model adds 33,667 trainable parameters to the frozen v3 stud/tip
+detector, including a small RGB detail branch that preserves background/black-arrow
+contrast. The legacy preprocessing zeroes both paper and black interiors; it stays
+on the frozen detector, while the new branch receives the original RGB. A test
+guards this difference. The initial 18,595-parameter frozen-feature-only attempt
+was rejected after reversing real arrows; its report remains under `pilot/`.
+The new outputs are a local direction vector and an experimental head-base
+distance. Synthetic arrows now include labelled head bases and bent shaft paths;
+coordinate transforms rotate vectors through their endpoints and mask cropped
+heads. Quarter-turn augmentation covers all image orientations. Original weights
+are preserved, and the trainer verifies that every frozen detector parameter and
+buffer remains unchanged. Reproduce with:
+
+```bash
+cd python
+uv run --extra vision --extra vision-train python ../scripts/train_arrow_direction.py \
+  --out ../.cache/instructions/arrow-direction/rgb-preserved --steps 1200
+uv run --extra vision --extra vision-train python -m brickheadz.arrow_direction \
+  --checkpoint ../.cache/instructions/arrow-direction/rgb-preserved/best.pt \
+  --hybrid /path/to/panel.png
+```
+
+Checkpoints, split metadata, validation history, direction overlays and a report
+are written to `.cache/instructions/arrow-direction/rgb-preserved/`. Checkpoint selection
+uses synthetic validation angular error, penalizing missing directions at 180 degrees; real evaluation labels never select
+weights or thresholds. The report separates direction at supplied reference tips
+(`oracleTipDirection`) from detected tips with direction within 15 degrees
+(`directedCorrect`, also requiring a four-pixel tip match). It includes reversed
+directions, false arrows, missed tips and an always-down direction baseline.
+Missing/near-zero vectors abstain, and direction confidence is not calibrated.
+Doctor Doom was a new test for the first pilot; its failures informed the detail
+branch design, so follow-up results are development diagnostics rather than a new
+blind test.
+
+`DirectionObserver` exposes image direction vectors to the reconstruction report.
+They are metadata only: direction is not yet interpreted as a 3D movement
+constraint. Purpose classification and shaft segmentation are not trained in this
+pilot. Add `--direction-checkpoint /path/to/best.pt` to
+`evaluate_learned_booklet.py` for the opt-in direction rollout. Run its tests with
+`uv run --extra vision --extra vision-train pytest -q tests/test_arrow_direction.py`.
+
+The follow-up direction experiment expands real training to 39 arrows using
+`arrow-direction-expanded-labels.json`. Batman and Aquaman are then training
+diagnostics, not held-out scores. Doctor Doom remains excluded from training, but
+its earlier failures make it a development check. The original 16-arrow split and
+its reports are retained. Warm-start and evaluate the expanded model with:
+
+```bash
+cd python
+uv run --extra vision --extra vision-train python ../scripts/train_arrow_direction.py \
+  --labels ../benchmarks/instructions/arrow-direction-expanded-labels.json \
+  --resume-direction ../.cache/instructions/arrow-direction/rgb-preserved/best.pt \
+  --out ../.cache/instructions/arrow-direction/expanded-real --steps 800 \
+  --learning-rate .0003 --real-fraction .7
+uv run --extra vision --extra vision-train python ../scripts/evaluate_arrow_direction.py
+```
+
+The evaluator writes `.cache/instructions/arrow-direction/evaluation/report.json`
+with an explicit role for every booklet. Correct-tip-but-reversed predictions
+fail the direction metric, and missing heads remain misses even if direction at
+a supplied reference point is accurate. The existing tip detector stays frozen;
+this pilot does not resolve its missed small arrows in new page styles.
+
 ## BrickHeadz generative construction engine
 
 A two-phase (so far) engine for generating new, structurally valid BrickHeadz.
