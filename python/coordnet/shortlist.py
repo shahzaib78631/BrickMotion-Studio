@@ -38,7 +38,8 @@ def _colour_share(rgb: np.ndarray, keys: list, colours: dict, sigma: float) -> d
 def shortlist(uv, offset, weight, rgb, cam, centre, poses: dict, colours: dict, need: dict, depth=None,
               sigma_px: float = 3.0, sites_per_part: int = 3, extra_sites: int = 4, colour_sigma: float = 40.0,
               depth_tol: float = 4.0) -> tuple[dict, dict]:
-    """Candidate poses per step type, and per-type info (sites voted, site scores, candidates kept).
+    """Candidates per step type as (pose, site score) -- every rotation at a site shares its score; non-axis poses
+    (`PoseTable.fallback`) are listed with score 0 -- and per-type info (sites, sites voted, kept, top scores).
 
     uv [N,2] full-res pixel centres; offset [N,2] (px / cam.scale); weight [N]; rgb [N,3]; depth [N] of the known
     model at those pixels (inf where empty). `poses`: legal poses per (part, colour). A type keeps its
@@ -55,7 +56,8 @@ def shortlist(uv, offset, weight, rgb, cam, centre, poses: dict, colours: dict, 
         table = PoseTable.build(key[0], plist)
         cand = list(table.poses)
         if not cand:
-            out[key], info[key] = list(table.fallback), dict(sites=0, kept=len(table.fallback))
+            out[key] = [(m, 0.0) for m in table.fallback]
+            info[key] = dict(sites=0, voted=0, kept=len(table.fallback), top_scores=[])
             continue
         cw, ext = zip(*(labels.pose_centre_extent(key[0], m) for m in cand))
         cw, ext = np.array(cw), np.array(ext)
@@ -92,8 +94,38 @@ def shortlist(uv, offset, weight, rgb, cam, centre, poses: dict, colours: dict, 
         keep_n = sites_per_part * int(need.get(key, 1)) + extra_sites
         top = [s for s in np.argsort(-score)[:keep_n] if score[s] > 0]
         chosen = set(top)
-        kept = [m for m, s in zip(cand, site_of) if s in chosen] + list(table.fallback)
+        kept = [(m, float(score[s])) for m, s in zip(cand, site_of) if s in chosen] + \
+            [(m, 0.0) for m in table.fallback]
         out[key] = kept
         info[key] = dict(sites=int(n_site), voted=int((score > 0).sum()), kept=len(kept),
                          top_scores=[round(float(score[s]), 1) for s in top])
     return out, info
+
+
+def consistency(part: str, pose, xs, ys, target, weight, newmask, base_depth, cam, centre, sigma_px: float = 3.0,
+                depth_tol: float = 2.0) -> dict:
+    """How well a candidate's drawn outline explains the pixels that voted for its centre (half resolution).
+
+    The candidate is rendered alone at half resolution (depth only); a pixel of it is *visible* where its surface is
+    in front of the known model there (`base_depth`, half-res, inf where empty). precision: share of the visible
+    outline on new pixels. recall: weighted share of the pixels voting for this centre that the visible outline
+    covers -- so a line-of-sight twin hidden under the base collects the votes but explains none of them.
+    xs, ys: half-res new pixels; target [N,2]: their predicted centres (full-res px)."""
+    from . import render as R
+    h, w = newmask.shape
+    half = cam.with_(scale=cam.scale / 2, cx=cam.cx / 2, cy=cam.cy / 2)
+    d = R.gbuffer(*R.scene([(part, 0, np.asarray(pose, float))]), half, centre, w, h).depth
+    vis = np.isfinite(d) & (d <= base_depth + depth_tol)
+    precision = float((vis & newmask).sum() / max(vis.sum(), 1))
+    c, _ext = labels.pose_centre_extent(part, pose)
+    (cuv,), _z = project(cam, centre, c[None])
+    near = ((np.asarray(target) - cuv) ** 2).sum(1) < (3 * sigma_px) ** 2
+    wt = np.asarray(weight, float)[near]
+    inside = vis[np.asarray(ys)[near], np.asarray(xs)[near]]
+    recall = float((wt * inside).sum() / max(wt.sum(), 1e-9))
+    return dict(precision=precision, recall=recall, voters=int(near.sum()), outline=int(vis.sum()))
+
+
+def accepted(c: dict, min_precision: float = 0.8, min_recall: float = 0.6) -> bool:
+    """A candidate explains its voters: most of its outline is new, and it covers most of the pixels that voted."""
+    return c["precision"] >= min_precision and c["recall"] >= min_recall

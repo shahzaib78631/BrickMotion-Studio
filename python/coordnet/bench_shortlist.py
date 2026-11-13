@@ -62,7 +62,7 @@ def step_recall(lib, base, truth, cam, centre, W, H, picture, base_depth) -> dic
         legal = any(same_pose(p, m, q) for q in poses[(p, c)])
         on_new = not any(same_pose(p, m, q) for q in base_only[(p, c)])
         rows.append(dict(part=p, colour=c, visible=int((g.part == i).sum()), legal=legal, on_new=on_new,
-                         listed=any(same_pose(p, m, q) for q in cands[(p, c)])))
+                         listed=any(same_pose(p, m, q) for q, _s in cands[(p, c)])))
     return dict(parts=rows, seconds=secs, kept=sum(len(v) for v in cands.values()),
                 legal=sum(len(v) for v in poses.values()), info={f"{k[0]}|{k[1]}": v for k, v in info.items()})
 

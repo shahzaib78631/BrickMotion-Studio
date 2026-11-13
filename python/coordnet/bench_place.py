@@ -93,13 +93,13 @@ class TruthLabels:
     def __init__(self, base: list, truth: list, cam, centre, W: int, H: int):
         from . import labels
         model = list(base) + list(truth)
-        lab = labels.local_labels(R.gbuffer(*R.scene(model), cam, centre, W, H), model,
-                                  set(range(len(base), len(model))))
+        g = R.gbuffer(*R.scene(model), cam, centre, W, H)
+        new = np.isin(g.part, list(range(len(base), len(model))))
+        off, _ext = labels.centre_targets(g.part.astype(int), new, model, cam, centre)
         h = lambda a: a[::2, ::2]
-        self.out = dict(new=h(lab["new"]).astype(np.float32), local=np.nan_to_num(h(lab["local"])),
-                        size=np.nan_to_num(h(lab["size"])), conf=np.ones(h(lab["new"]).shape, np.float32))
+        self.out = dict(new=h(new).astype(np.float32), offset=h(off), conf=np.ones(h(new).shape, np.float32))
 
-    def __call__(self, picture, base_img, evidence):
+    def __call__(self, picture, base_img, evidence, cam, centre):
         return self.out
 
 

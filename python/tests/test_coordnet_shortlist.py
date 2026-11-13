@@ -4,7 +4,7 @@ import pytest
 
 from coordnet import labels, shortlist
 from coordnet import render as R
-from coordnet.camera import BookletCamera
+from coordnet.camera import BookletCamera, project
 from coordnet.place import same_pose
 
 CAM = BookletCamera(36, 33, 0.8, 3.0, 230, 170, eye=4500)
@@ -54,5 +54,39 @@ def test_answer_key_offsets_shortlist_every_true_pose(lib):
                                       CAM, centre, poses, {k: np.array(R.colour_table()[k[1]], float) for k in NEED},
                                       NEED, depth=depth[2 * ys, 2 * xs])
     for p, c, m in TRUTH:
-        assert any(same_pose(p, m, q) for q in cands[(p, c)]), (p, m[:3, 3], info)
+        assert any(same_pose(p, m, q) for q, _s in cands[(p, c)]), (p, m[:3, 3], info)
     assert sum(len(v) for v in cands.values()) < 0.25 * sum(len(v) for v in poses.values())   # it is short
+
+
+def test_outline_consistency_separates_rotation_and_type():
+    model = BASE + TRUTH
+    centre = R.bounds_centre(model)
+    g = R.gbuffer(*R.scene(model), CAM, centre, W, H)
+    new = np.isin(g.part, [1, 2, 3])
+    off, _ext = labels.centre_targets(g.part.astype(int), new, model, CAM, centre)
+    h = lambda a: a[::2, ::2]
+    ys, xs = np.nonzero(h(new))
+    target = shortlist.half_uv(xs, ys) + h(off)[ys, xs] * CAM.scale
+    base_depth = h(R.gbuffer(*R.scene(BASE), CAM, centre, W, H).depth)
+    p, c, m = TRUTH[0]                                            # 2x4 plate along x
+    score = lambda part, pose: shortlist.consistency(part, pose, xs, ys, target, np.ones(len(xs)), h(new),
+                                                     base_depth, CAM, centre)
+    good = score(p, m)
+    turned = score(p, _m(*m[:3, 3], yaw=90))                      # same centre, along z
+    brick = score("3001.dat", m)                                  # a brick where the plate is
+    assert good["precision"] > 0.85 and good["recall"] > 0.85, good
+    assert shortlist.accepted(good)
+    assert not shortlist.accepted(turned), turned
+    assert not shortlist.accepted(brick), brick                   # (its centre is drawn elsewhere: no voters)
+    # a line-of-sight twin under the base plate: slid along the viewing ray through its centre, so its centre is
+    # drawn where the true one is (same voters), but the base plate hides it
+    from coordnet.lattice import rays
+    cw, _e = labels.pose_centre_extent(p, m)
+    (cuv,), _z = project(CAM, centre, cw[None])
+    _o, d = rays(CAM, centre, cuv[None])
+    q = m.copy()
+    q[:3, 3] = m[:3, 3] + d[0] * (12.0 / d[0, 1])                   # 12 LDU lower (+Y is down): under the base
+    (quv,), _z = project(CAM, centre, labels.pose_centre_extent(p, q)[0][None])
+    assert np.abs(quv - cuv).max() < 0.05                          # the twin really is on the same sight line
+    twin = score(p, q)
+    assert twin["voters"] > 100 and not shortlist.accepted(twin), twin

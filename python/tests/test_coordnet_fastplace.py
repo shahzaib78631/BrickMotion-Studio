@@ -27,15 +27,15 @@ class Oracle:
     """Returns the true labels at half resolution, like a perfect PlaceNet."""
 
     def __init__(self, model, cam, centre, blank=False):
-        idx = set(range(len(BASE), len(model)))
+        idx = list(range(len(BASE), len(model)))
         g = R.gbuffer(*R.scene(model), cam, centre, W, H)
-        lab = labels.local_labels(g, model, idx)
+        new = np.isin(g.part, idx)
+        off, _ext = labels.centre_targets(g.part.astype(int), new, model, cam, centre)
         h = lambda a: a[::2, ::2]
-        self.out = dict(new=h(lab["new"]).astype(np.float32) * (0 if blank else 1),
-                        local=np.nan_to_num(h(lab["local"])), size=np.nan_to_num(h(lab["size"])),
-                        conf=np.ones(h(lab["new"]).shape, np.float32))
+        self.out = dict(new=h(new).astype(np.float32) * (0 if blank else 1), offset=h(off),
+                        conf=np.ones(h(new).shape, np.float32))
 
-    def __call__(self, picture, base_img, evidence):
+    def __call__(self, picture, base_img, evidence, cam, centre):
         return self.out
 
 

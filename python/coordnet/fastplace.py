@@ -1,9 +1,11 @@
-"""Fast placement: one network pass, ray/lattice voting onto legal poses, a whole-step pick, one check render.
+"""Fast placement: one network pass, centre votes shortlist legal poses, outline consistency scores them, a
+whole-step pick, one check render.
 
     python -m coordnet.fastplace --step 8 [--ckpt .cache/coordnet/placenet/best.pt]
 
-`net(picture, base_render, evidence)` returns half-resolution numpy maps: new [h,w] (probability), local [h,w,3]
-LDU, size [h,w,3] LDU, conf [h,w] (probability). `PlaceModel` wraps a trained PlaceNet that way.
+`net(picture, base_render, evidence, cam, centre)` returns half-resolution numpy maps: new [h,w] (probability),
+offset [h,w,2] (px / cam.scale to the pixel's part centre, see `labels.centre_targets`), conf [h,w] (probability).
+`PlaceModel` wraps a trained PlaceNet that way.
 """
 from __future__ import annotations
 
@@ -34,16 +36,20 @@ class PlaceModel:
         self.net.load_state_dict(sd.get("model", sd))
 
     @torch.no_grad()
-    def __call__(self, picture: np.ndarray, base_img: np.ndarray, evidence: np.ndarray) -> dict:
+    def __call__(self, picture: np.ndarray, base_img: np.ndarray, evidence: np.ndarray, cam: BookletCamera,
+                 centre) -> dict:
+        """Half-resolution maps: new (probability), offset [h,w,2] (px / cam.scale), conf (probability)."""
+        from . import labels
         H, W = picture.shape[:2]
         ph, pw = (-H) % 32, (-W) % 32                                   # the U-Net wants multiples of 32
         t = lambda a: np.pad(a, ((0, ph), (0, pw), (0, 0)), constant_values=140) if a.ndim == 3 else \
             np.pad(a, ((0, ph), (0, pw)))
         x = np.concatenate([t(picture) / 255.0, t(base_img) / 255.0, t(evidence.astype(np.float32))[..., None]], -1)
-        out = self.net(torch.from_numpy(x.astype(np.float32)).permute(2, 0, 1)[None].to(self.dev))
+        camera = torch.from_numpy(labels.camera_channels(cam, centre))[None].to(self.dev)
+        out = self.net(torch.from_numpy(x.astype(np.float32)).permute(2, 0, 1)[None].to(self.dev), camera)
         h, w = (H + 1) // 2, (W + 1) // 2
         g = lambda k: out[k][0].permute(1, 2, 0).float().cpu().numpy()[:h, :w]
-        return dict(new=1 / (1 + np.exp(-g("new")[..., 0])), local=g("local"), size=g("size"),
+        return dict(new=1 / (1 + np.exp(-g("new")[..., 0])), offset=g("offset"),
                     conf=1 / (1 + np.exp(-g("conf")[..., 0])))
 
 
@@ -63,28 +69,35 @@ def new_iou(base: list, placed: list, cam: BookletCamera, centre, newmask: np.nd
 
 
 def _vote_pick(lib, out, picture, base, need, poses, cam, centre, collider, colours, newmask, depth):
+    """Centre votes -> shortlisted poses -> outline consistency (each candidate's outline must explain the pixels
+    that voted for its centre; score = site votes x precision x recall) -> whole-step pick."""
+    from .shortlist import accepted, consistency, half_uv, shortlist
     tables = {k: lattice.PoseTable.build(k[0], v) for k, v in poses.items()}
     sel = (out["new"] > 0.5) & (out["conf"] > 0.5)
     ys, xs = np.nonzero(sel)
     if len(xs) > 6000:
         keep = np.random.default_rng(0).choice(len(xs), 6000, replace=False)
         ys, xs = ys[keep], xs[keep]
-    uv = np.stack([2 * xs + 1.0, 2 * ys + 1.0], 1)                     # half-res pixel centre in full-res px
-    fy = np.clip(2 * ys + 1, 0, picture.shape[0] - 1)
-    fx = np.clip(2 * xs + 1, 0, picture.shape[1] - 1)
-    votes = lattice.vote(uv, out["local"][ys, xs], out["size"][ys, xs], picture[fy, fx].astype(float),
-                         out["conf"][ys, xs], cam, centre, tables, colours, depth=depth[fy, fx]) if len(xs) else []
+    uv = half_uv(xs, ys)                                                # full-res pixel 2x, centre 2x + 0.5
+    fy = np.clip(2 * ys, 0, picture.shape[0] - 1)
+    fx = np.clip(2 * xs, 0, picture.shape[1] - 1)
+    votes: list = []
+    if len(xs):
+        cands, _info = shortlist(uv, out["offset"][ys, xs], out["conf"][ys, xs], picture[fy, fx].astype(float),
+                                 cam, centre, poses, colours, need, depth=depth[fy, fx])
+        target = uv + out["offset"][ys, xs] * cam.scale
+        half_depth = depth[::2, ::2][: newmask.shape[0], : newmask.shape[1]]
+        for k, lst in cands.items():
+            for m, s in lst:
+                if s <= 0:
+                    continue
+                c = consistency(k[0], m, xs, ys, target, out["conf"][ys, xs], newmask, half_depth, cam, centre)
+                if accepted(c):
+                    votes.append(lattice.Vote(k, m, s * c["precision"] * c["recall"], c["voters"], 0.0))
+        votes.sort(key=lambda v: -v.score)
     if collider is not None and votes:                                 # drop poses that cut into the base
         collider.set_model(list(base))
-        enough: dict = {}
-        kept = []
-        for v in votes:
-            if enough.get(v.key, 0) >= 3 * need[v.key] + 4:
-                continue
-            if not collider.hits(v.key[0], v.pose):
-                kept.append(v)
-                enough[v.key] = enough.get(v.key, 0) + 1
-        votes = kept
+        votes = [v for v in votes if not collider.hits(v.key[0], v.pose)]
     p = pick.pick(votes, need, newmask, cam, centre, collider, ds=2.0)
     return p, tables, len(votes)
 
@@ -99,7 +112,7 @@ def place_fast(net, lib, picture: np.ndarray, base: list, need: dict, cam: Bookl
         base_ren = R.render(base, set(), cam, centre, W, H, R.Style(), ss=2, red=False)
     base_img = base_ren.picture
     ev = change_evidence(picture, base_img)
-    out = net(picture, base_img, ev)
+    out = net(picture, base_img, ev, cam, centre)
     newmask = out["new"] > 0.5
     rep = dict(review=False, pass2=False, fallback=[], unplaced={}, votes=0, margin=0.0)
     if not newmask.any():
