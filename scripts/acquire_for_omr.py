@@ -50,6 +50,7 @@ def main():
     ap.add_argument("--target", type=int, default=70)
     ap.add_argument("--workers", type=int, default=3)
     ap.add_argument("--max-candidates", type=int, default=400)
+    ap.add_argument("--max-mb", type=int, default=40)
     args = ap.parse_args()
     out = ROOT / ".cache/instructions/omr-catalog"
     out.mkdir(parents=True, exist_ok=True)
@@ -64,7 +65,7 @@ def main():
         while len(rows) < args.target and cursor < len(items):
             batch = items[cursor: cursor + args.workers]
             cursor += len(batch)
-            for r in pool.map(lambda item: acq.acquire(item, out, 40, 180), batch):
+            for r in pool.map(lambda item: acq.acquire(item, out, args.max_mb, 180), batch):
                 if "error" in r:
                     errors.append(r)
                     print(json.dumps({"skip": r["set"], "why": r["error"][:60]}), flush=True)
