@@ -66,14 +66,17 @@ def test_votes_recover_two_identical_plates_exactly(lib):
     top = _top(votes, ("3020.dat", 0), 2)
     assert sorted(_xyz(v) for v in top) == [(0, 0, -20), (0, 0, 20)]
     assert all(v.residual < 1.0 for v in top)
-    assert secs < 1.0, secs
+    assert secs < 2.0, secs                           # ~0.2 s idle; the speed gate is the Task 7 benchmark
 
 
 def test_line_of_sight_twin_scores_below_truth(lib):
     new = [("3020.dat", 0, _m(0, 0, 0))]
     twins = [_m(dx, -8, dz) for dx, dz in ((20, 0), (-20, 0), (0, 20), (0, -20))]
     votes, _ = scene_votes(lib, new, extra_poses={("3020.dat", 0): twins})
-    score = {_xyz(v): v.score for v in votes if v.key == ("3020.dat", 0)}
+    score: dict = {}
+    for v in votes:                                   # several rotations can share a position: keep the best
+        if v.key == ("3020.dat", 0):
+            score[_xyz(v)] = max(score.get(_xyz(v), 0.0), v.score)
     truth = score[(0, 0, 0)]
     best_twin = max(score.get(_xyz(type("V", (), {"pose": t})), 0.0) for t in twins)
     assert truth > 2 * best_twin, (truth, best_twin)
@@ -99,3 +102,24 @@ def test_non_axis_poses_go_to_fallback():
     rx = np.array([[1, 0, 0], [0, np.cos(a), -np.sin(a)], [0, np.sin(a), np.cos(a)]])
     t = lattice.PoseTable.build("3020.dat", [np.eye(4), _m(0, 0, 0, rx)])
     assert len(t.fallback) == 1
+
+
+def test_pose_hidden_behind_the_base_gets_no_votes(lib):
+    # a 1x1 plate on top of a 2x4 plate; a legal pose under the base lies on the same lines of sight
+    base = [("3958.dat", 72, _m(0, 8, 0)), ("3020.dat", 0, _m(0, 0, -20))]
+    new = [("3024.dat", 4, _m(-30, -8, -30))]
+    model = base + new
+    centre = R.bounds_centre(model)
+    ren = R.render(model, {2}, CAM, centre, W, H, R.Style(), ss=2)
+    lab = labels.local_labels(ren.gt, model, {2})
+    sel = lab["new"]
+    ys, xs = np.nonzero(sel)
+    hidden = _m(-50, 16, -50)
+    table = {("3024.dat", 4): lattice.PoseTable.build("3024.dat", [new[0][2], hidden])}
+    depth = R.gbuffer(*R.scene(base), CAM, centre, W, H).depth[sel]
+    args = (np.stack([xs + 0.5, ys + 0.5], 1), lab["local"][sel], lab["size"][sel], ren.picture[sel].astype(float),
+            np.ones(len(xs)), CAM, centre, table, {})
+    blind = {_xyz(v) for v in lattice.vote(*args)}
+    seen = {_xyz(v) for v in lattice.vote(*args, depth=depth)}
+    assert (-50, 16, -50) in blind                       # without the depth test the twin collects votes
+    assert seen == {(-30, -8, -30)}

@@ -142,5 +142,5 @@ def pick(votes: list[Vote], need: dict, newmask: np.ndarray, cam: BookletCamera,
         if got < n:
             unplaced[k] = n - got
     review = (bool(unplaced) or nodes > budget or any(cands[i].score < min_votes for i in best)
-              or margin < 0.05 * abs(obj))
+              or margin < 0.2 * min((cands[i].score for i in best), default=0.0))
     return Pick(placed, float(obj), float(margin), unplaced, review)

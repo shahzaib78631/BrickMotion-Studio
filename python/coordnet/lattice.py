@@ -14,7 +14,7 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from . import labels
-from .camera import BookletCamera, unproject
+from .camera import BookletCamera, project, unproject
 
 
 @dataclass
@@ -81,13 +81,30 @@ def rays(cam: BookletCamera, centre, uv: np.ndarray) -> tuple[np.ndarray, np.nda
 
 
 def vote(uv, local, size, rgb, weight, cam: BookletCamera, centre, tables: dict, colours: dict,
-         snap: float = 6.0, size_tol: float = 6.0, colour_sigma: float = 40.0) -> list[Vote]:
-    """Votes for every legal pose of every type, best first. Arrays are per pixel: uv [N,2], local/size/rgb [N,3]."""
+         snap: float = 6.0, size_tol: float = 6.0, colour_sigma: float = 40.0, depth=None,
+         depth_tol: float = 4.0) -> list[Vote]:
+    """Votes for every legal pose of every type, best first. Arrays are per pixel: uv [N,2], local/size/rgb [N,3].
+
+    `depth` [N]: depth (LDU from the eye, inf where empty) of the model built so far at each pixel. A pixel only
+    votes for a pose whose point on that pixel's ray lies in front of it: a pose the known model would hide cannot
+    be what the pixel shows (this removes line-of-sight twins behind or under the model)."""
     local = np.asarray(local, float)
     size = np.asarray(size, float)
     rgb = np.asarray(rgb, float)
     weight = np.asarray(weight, float)
     org, dirn = rays(cam, centre, uv)
+    # colour only decides between step types of the same part (booklet styling shifts colours, so an absolute
+    # match would starve every type): each pixel is shared among them by a softmax of colour distance
+    share: dict = {}
+    for part in {k[0] for k in tables}:
+        keys = [k for k in tables if k[0] == part and colours.get(k) is not None]
+        if len(keys) < 2:
+            continue
+        logit = np.stack([-((rgb - colours[k]) ** 2).sum(1) / (2 * colour_sigma ** 2) for k in keys])
+        logit -= logit.max(0)
+        p = np.exp(logit)
+        p /= p.sum(0)
+        share.update({k: p[i] for i, k in enumerate(keys)})
     out: list[Vote] = []
     for key, table in tables.items():
         if not table.poses:
@@ -96,9 +113,9 @@ def vote(uv, local, size, rgb, weight, cam: BookletCamera, centre, tables: dict,
         ok = (np.abs(size - box) <= size_tol).all(1)
         if not ok.any():
             continue
-        col = colours.get(key)
-        w = weight[ok] * (np.exp(-((rgb[ok] - col) ** 2).sum(1) / (2 * colour_sigma ** 2)) if col is not None else 1.0)
+        w = weight[ok] * (share[key][ok] if key in share else 1.0)
         o, d = org[ok], dirn[ok]
+        front = None if depth is None else np.asarray(depth, float)[ok] + depth_tol
         variants = labels.canonical(local[ok], labels.sym_order(key[0]))      # [S,n,3]
         P = len(table.poses)
         score = np.zeros(P)
@@ -107,6 +124,7 @@ def vote(uv, local, size, rgb, weight, cam: BookletCamera, centre, tables: dict,
         for lv in table.levels:
             best_d = np.full(len(o), np.inf)
             best_i = np.zeros(len(o), int)
+            best_X = np.zeros((len(o), 3))
             for u in variants:
                 ru = u @ lv.rot.T                                    # R u, [n,3]
                 plane = lv.y + ru[:, 1]
@@ -120,8 +138,11 @@ def vote(uv, local, size, rgb, weight, cam: BookletCamera, centre, tables: dict,
                 if good.any():
                     dd[good], ii[good] = lv.tree.query(t[good][:, [0, 2]])
                 better = dd < best_d
-                best_d[better], best_i[better] = dd[better], ii[better]
+                best_d[better], best_i[better], best_X[better] = dd[better], ii[better], X[better]
             hit = best_d < snap
+            if front is not None and hit.any():
+                _uv, zx = project(cam, centre, best_X[hit])
+                hit[np.flatnonzero(hit)[zx > front[hit]]] = False
             if not hit.any():
                 continue
             pose = lv.index[best_i[hit]]
