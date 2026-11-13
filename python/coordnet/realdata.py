@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -24,8 +25,8 @@ import torch
 from . import datagen, labels
 from . import render as R
 from .camera import BookletCamera, project
-from .evaluate import ROOT, Net, solve_camera
-from .place import change_evidence
+from .evaluate import ROOT, Net, line_distance, shift_summary, solve_camera
+from .solve import EYE_RANGE  # noqa: F401  (bounds the fitted eye; re-exported for callers)
 from .placedata import OUT, write
 
 CKPT = ROOT / ".cache/coordnet/ckpt/best.pt"
@@ -57,7 +58,11 @@ def paper_mask(pic: np.ndarray, tol: int = 40) -> np.ndarray:
     ring = np.concatenate([pic[:3].reshape(-1, 3), pic[-3:].reshape(-1, 3), pic[:, :3].reshape(-1, 3),
                            pic[:, -3:].reshape(-1, 3)])
     paper = np.median(ring, 0)
-    return np.abs(pic.astype(int) - paper).sum(-1) < tol
+    near = (np.abs(pic.astype(int) - paper).sum(-1) < tol).astype(np.uint8)
+    # only paper-coloured regions connected to the picture's border: a white part inside its outline is not paper
+    _n, lab = cv2.connectedComponents(near, connectivity=4)
+    edge = np.unique(np.concatenate([lab[0], lab[-1], lab[:, 0], lab[:, -1]]))
+    return np.isin(lab, edge[edge > 0])
 
 
 def normalise_paper(pic: np.ndarray) -> np.ndarray:
@@ -125,13 +130,108 @@ def _prepare(case) -> tuple[np.ndarray, float]:
     return np.ascontiguousarray(normalise_paper(pic)), pts
 
 
+def stroke_width(upscale: float) -> float:
+    """Widest dark structure (px at picture resolution) still a line: booklet lines are up to ~2 px wide at native
+    resolution, and `_prepare` may upscale small pictures."""
+    return max(4.0, 2.0 * upscale)
+
+
+def finite(x):
+    """`x` with every non-finite float replaced by None (sample JSON must be strict JSON)."""
+    if isinstance(x, dict):
+        return {k: finite(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return [finite(v) for v in x]
+    if isinstance(x, (float, np.floating)):
+        return float(x) if np.isfinite(x) else None
+    return x
+
+
+def camera_check(pic: np.ndarray, parts: list, cam: BookletCamera, centre, print_scale: float,
+                 min_tiles: int = 8, max_shift: float = 1.0, max_line_p50: float = 1.2,
+                 max_line_p90: float = 4.0, max_scale_err: float = 0.05, stroke: float = 4.0) -> dict:
+    """Whether a solved camera draws the model where the page does, judged without the network: the median shift
+    between page and render of the whole model over phase-correlated tiles (dense stud outlines make the nearest-
+    line distance blind to a shift of several px; tiles are not), the dark-line p90, and the scale against the
+    booklet's print scale. Returns the render (whole model, no red) and its G-buffer for reuse."""
+    H, W = pic.shape[:2]
+    ren = R.render(parts, set(), cam, centre, W, H, R.Style(), ss=2, red=False).picture
+    g = R.gbuffer(*R.scene(parts), cam, centre, W, H)
+    region = cv2.dilate((g.part >= 0).astype(np.uint8), np.ones((9, 9), np.uint8)).astype(bool)
+    sh = shift_summary(pic, ren, region)
+    p50, p90 = line_distance(pic, ren, region, thin=stroke)
+    scale_err = abs(cam.scale / print_scale - 1.0)
+    shift = sh.get("median", float("inf"))
+    ok = bool(sh["tiles"] >= min_tiles and shift <= max_shift and np.isfinite(p90) and p50 <= max_line_p50
+              and p90 <= max_line_p90 and scale_err <= max_scale_err)
+    return dict(ok=ok, tiles=int(sh["tiles"]), shift=float(shift), p50=p50, p90=p90, scale_err=float(scale_err),
+                render=ren, gbuffer=g)
+
+
+def edge_agreement(pic: np.ndarray, full: np.ndarray, base: np.ndarray, part: np.ndarray, new_ids: set,
+                   render_without, max_p50: float = 1.5, max_p90: float = 4.0, min_gain: float = 0.5,
+                   min_px: int = 40, informative_p90: float = 2.0, part_max_p50: float = 1.5,
+                   part_max_p90: float = 5.0, stroke: float = 4.0) -> dict:
+    """Do the page's outlines show the new parts? Palette-free: compares dark-line maps, not colours.
+
+    In the new parts' region the render of the whole model must fit the page's lines (p50, p90) and fit them
+    clearly better than the render of the model so far (by `min_gain` px at p50). Then each new part with `min_px`
+    visible pixels is removed in turn (`render_without(i)`): in its region the page must be fitted by the whole
+    model and better with the part than without it (p90 by 1 px or p50 by `min_gain`); where removing it leaves no
+    lines at all, its own lines fitting the page is the evidence. Every new pixel becomes a label, so a visible part
+    that cannot be verified (too few lines; removal barely changes the drawing, e.g. mostly hidden) rejects the
+    page. `part`: G-buffer part index per pixel of the whole model."""
+    newvis = np.isin(part, list(new_ids))
+    k9 = np.ones((9, 9), np.uint8)
+    region = cv2.dilate(newvis.astype(np.uint8), k9).astype(bool)
+    f50, f90 = line_distance(pic, full, region, thin=stroke)
+    b50, b90 = line_distance(pic, base, region, thin=stroke)
+    out = dict(full=[f50, f90], base=[b50, b90], parts={})
+    if not np.isfinite(f50):
+        return dict(out, ok=False, reason="too few lines")
+    if not (f50 <= max_p50 and f90 <= max_p90):
+        return dict(out, ok=False, reason="lines off")
+    if np.isfinite(b50) and b50 < f50 + min_gain:
+        return dict(out, ok=False, reason="no better than the model so far")
+    for i in sorted(new_ids):
+        own = part == i
+        if own.sum() < min_px:
+            continue                                  # too small to judge, and too small to matter as a label
+        reg = cv2.dilate(own.astype(np.uint8), k9).astype(bool)
+        pf = line_distance(pic, full, reg, thin=stroke)
+        if not np.isfinite(pf[0]):
+            out["parts"][int(i)] = "too few lines"
+            return dict(out, ok=False, reason=f"new part {i} cannot be verified (too few lines)")
+        fits_page = pf[0] <= part_max_p50 and pf[1] <= part_max_p90
+        minus = render_without(i)
+        d = line_distance(full, minus, reg, thin=stroke)
+        if not np.isfinite(d[1]):
+            # without the part the region has no lines left: the part's own lines are the evidence
+            drawn, pm = fits_page, (float("nan"), float("nan"))
+        elif d[1] < informative_p90:
+            out["parts"][int(i)] = "uninformative"
+            return dict(out, ok=False, reason=f"new part {i} cannot be verified (removing it barely changes "
+                                              f"the drawing)")
+        else:
+            pm = line_distance(pic, minus, reg, thin=stroke)
+            drawn = fits_page and (not np.isfinite(pm[0]) or pm[1] >= pf[1] + 1.0 or pm[0] >= pf[0] + min_gain)
+        out["parts"][int(i)] = dict(full=list(pf), without=list(pm), drawn=bool(drawn))
+        if not drawn:
+            return dict(out, ok=False, reason=f"new part {i} is not drawn")
+    return dict(out, ok=True, reason="")
+
+
 def label_case(net, case, start: BookletCamera | None = None, rounds: int = 4,
-               max_median: float = 1.0, max_p90: float = 2.0, min_agree: float = 0.6,
-               why: list | None = None) -> dict | None:
+               max_median: float = 1.0, max_p90: float = 2.0, why: list | None = None,
+               checked: dict | None = None) -> dict | None:
     """Labels for one booklet step, or None when the camera or the new parts cannot be trusted (the reason is
-    appended to `why`)."""
+    appended to `why`). A camera that passes `camera_check` is put in `checked["cam"]` even when the new parts
+    then fail, so the next page of the section can start from it. A `start` (the section's view) is fitted with
+    only the offset free first, then with everything free."""
+    from booklet_mpd.viewfit import BOOKLET_SCALE
     reject = lambda reason: (why.append(reason) if why is not None else None)
     pic, pts_px = _prepare(case)
+    stroke = stroke_width((case.pts_per_px or 0.48) / pts_px)
     H, W = pic.shape[:2]
     base = [norm(p) for p in case.visible]
     new = [norm(p) for p in case.added]
@@ -141,44 +241,63 @@ def label_case(net, case, start: BookletCamera | None = None, rounds: int = 4,
         return None
     centre = R.bounds_centre(parts)
     fg = ~paper_mask(pic)
-    starts = [frame(start, centre, _points(parts), fg, fit_scale=False)] if start is not None else \
-        standard_views(pic, parts, pts_px)
-    # Wrong views can also fit a few pixels tightly; among tight fits the true view matches by far the most pixels.
-    best, tried = None, []
-    for cam0 in starts:
-        cam, fits = solve_camera(net, pic, parts, cam0, centre, W, H, rounds)
+    if start is not None:
+        s0 = frame(start, centre, _points(parts), fg, fit_scale=False)
+        starts = [(s0, ("cx", "cy")), (s0, None)]
+    else:
+        starts = [(c, None) for c in standard_views(pic, parts, pts_px)]
+    print_scale = BOOKLET_SCALE / pts_px
+    # the network's residuals only say the fit is self-consistent; the page's lines decide between tight fits
+    best, tried, lines = None, [], []
+    for cam0, free in starts:
+        cam, fits = solve_camera(net, pic, parts, cam0, centre, W, H, rounds, free=free)
         tried.append(f"{fits[-1]['median']:.2f}/{fits[-1]['p90']:.2f}/{fits[-1]['n']}" if fits else "none")
         if not fits or fits[-1]["median"] >= max_median or fits[-1]["p90"] >= max_p90:
             continue
-        if best is None or fits[-1]["n"] > best[1][-1]["n"]:
-            best = (cam, fits)
+        chk = camera_check(pic, parts, cam, centre, print_scale, stroke=stroke)
+        lines.append(f"{chk['tiles']}/{chk['shift']:.2f}/{chk['p90']:.2f}/{chk['scale_err']:.3f}")
+        if chk["ok"] and (best is None or chk["shift"] < best[2]["shift"]):
+            best = (cam, fits, chk)
+        if best is not None and free is not None:
+            break                                   # the section's view with a new offset explains the page
     if best is None:
-        reject("camera: no tight fit (median/p90/n per start: " + ", ".join(tried) + ")")
+        if not lines:
+            reject("camera: no tight fit (median/p90/n per start: " + ", ".join(tried) + ")")
+        elif all(int(x.split("/")[0]) < 8 for x in lines):
+            reject("camera: too few tiles to verify (tiles/shift/line p90/scale error per tight start: "
+                   + ", ".join(lines) + ")")
+        else:
+            reject("camera: off the page (tiles/shift/line p90/scale error per tight start: " + ", ".join(lines) + ")")
         return None
-    cam, fits = best
+    cam, fits, chk = best
+    if checked is not None:
+        checked["cam"] = cam
     fit = fits[-1]
     newset = set(range(len(base), len(parts)))
-    g = R.gbuffer(*R.scene(parts), cam, centre, W, H)
+    g = chk["gbuffer"]
     lab = labels.local_labels(g, parts, newset)
     base_img = R.render(base, set(), cam, centre, W, H, R.Style(), ss=2, red=False).picture
-    ev = change_evidence(pic, base_img)
-    k = np.ones((7, 7), np.uint8)
-    newpix = lab["new"]
-    recall = (newpix & cv2.dilate(ev.astype(np.uint8), k).astype(bool)).sum() / max(newpix.sum(), 1)
-    precision = (ev & cv2.dilate(newpix.astype(np.uint8), k).astype(bool)).sum() / max(ev.sum(), 1)
-    if newpix.sum() < 30 or recall < min_agree or precision < min_agree * 0.8:
-        reject(f"new parts: {int(newpix.sum())} px, recall {recall:.2f}, precision {precision:.2f}")
+    without = lambda i: R.render([q for j, q in enumerate(parts) if j != i], set(), cam, centre, W, H, R.Style(),
+                                 ss=2, red=False).picture
+    agree = edge_agreement(pic, chk["render"], base_img, g.part, newset, without, stroke=stroke)
+    if lab["new"].sum() < 30 or not agree["ok"]:
+        f, b = agree["full"], agree["base"]
+        reject(f"new parts: {int(lab['new'].sum())} px, {agree.get('reason') or 'too small'} (lines full "
+               f"{f[0]:.2f}/{f[1]:.2f}, base {b[0]:.2f}/{b[1]:.2f})")
         return None
     types: dict[tuple, int] = {}
     for p, c, _m in new:
         types[(p, c)] = types.get((p, c), 0) + 1
     camd = dict(yaw=cam.yaw, pitch=cam.pitch, roll=cam.roll, scale=cam.scale, cx=cam.cx, cy=cam.cy, eye=cam.eye,
                 turned=cam.turned)
+    agree_meta = dict(full=agree["full"], base=agree["base"], parts={str(k): v for k, v in agree["parts"].items()})
     meta = dict(real=True, set=case.set_number, step=case.step_number, W=W, H=H, cam=camd, pts_per_px=pts_px,
-                centre=np.asarray(centre).tolist(), fit=fit, agree=dict(recall=float(recall), precision=float(precision)),
+                centre=np.asarray(centre).tolist(), fit=fit, agree=agree_meta,
+                camera_check=dict(tiles=chk["tiles"], shift=chk["shift"], p50=chk["p50"], p90=chk["p90"],
+                                  scale_err=chk["scale_err"]),
                 parts=[[p, c, m.tolist(), i >= len(base)] for i, (p, c, m) in enumerate(parts)],
                 types=[[p, c, n] for (p, c), n in types.items()])
-    return dict(picture=pic, base=base_img, labels=lab, meta=meta, cam=cam)
+    return dict(picture=pic, base=base_img, labels=lab, meta=finite(meta), cam=cam)
 
 
 def main(argv=None):
@@ -205,34 +324,42 @@ def main(argv=None):
         except Exception as e:
             print(f"set {s}: cannot load ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
+        if out.exists():
+            shutil.rmtree(out)                       # a rerun must not leave samples of an earlier run behind
         start, prev_pts, kept, dropped = None, None, 0, 0
+        reasons: dict[str, int] = {}
+        count = lambda why: reasons.__setitem__(why, reasons.get(why, 0) + 1)
         for ci, case in enumerate(cases):
             if case.rgb is None:
                 dropped += 1
+                count("no image")
+                print(f"drop set {s} step {case.step_number}: no image (no picture box or main image)", flush=True)
                 continue
-            st, why = None, []
-            if start is not None:
-                _pic, pts_px = _prepare(case)
-                st = start.with_(scale=start.scale * prev_pts / pts_px)
+            st, why, checked, pts_px = None, [], {}, None
             try:
-                smp = label_case(net, case, st, why=why)
-                if smp is None and st is not None:
-                    smp = label_case(net, case, None, why=why)  # the view changed: search again
+                _pic, pts_px = _prepare(case)
+                if start is not None:
+                    st = start.with_(scale=start.scale * prev_pts / pts_px)
+                smp = label_case(net, case, st, why=why, checked=checked)
+                if smp is None and st is not None and "cam" not in checked:
+                    smp = label_case(net, case, None, why=why, checked=checked)  # the view changed: search again
             except Exception as e:
                 print(f"set {s} step {case.step_number}: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
                 smp = None
             if smp is None:
                 dropped += 1
+                count(why[-1].split(":")[0] if why else "error")
                 print(f"drop set {s} step {case.step_number}: {' | '.join(why) or 'error'}", flush=True)
             else:
                 write(out, kept, smp)
                 kept += 1
-                start, prev_pts = smp["cam"], smp["meta"]["pts_per_px"]
+            if "cam" in checked and pts_px:         # the camera passed its own check: the section's view
+                start, prev_pts = checked["cam"], pts_px
             print(f"::progress {si}/{len(sets)} set {s} step {ci + 1}/{len(cases)} kept {kept} "
                   f"dropped {dropped} {time.time() - t0:.0f}s", flush=True)
         total["kept"] += kept
         total["dropped"] += dropped
-        print(json.dumps(dict(set=s, kept=kept, dropped=dropped)), flush=True)
+        print(json.dumps(dict(set=s, kept=kept, dropped=dropped, reasons=reasons)), flush=True)
     print(json.dumps(total))
 
 

@@ -148,10 +148,13 @@ def change_evidence(picture: np.ndarray, base_render: np.ndarray, thresh: float 
 
 
 def red_band(picture: np.ndarray) -> np.ndarray:
-    """Studio's new-part highlight: a red band drawn just outside the new parts' silhouette."""
+    """Studio's new-part highlight: a red band drawn just outside the new parts' silhouette. Only a pure red (orange
+    parts are not it) and only thin structures (a filled red part is not a band: whatever survives an opening wider
+    than the band is a part)."""
     r, g, b = (picture[..., i].astype(int) for i in range(3))
-    red = (r > 140) & (r - g > 70) & (r - b > 70)
-    return cv2.dilate(red.astype(np.uint8), np.ones((3, 3), np.uint8)).astype(bool)
+    red = ((r > 140) & (g < 100) & (b < 110) & (r - g > 110)).astype(np.uint8)
+    filled = cv2.dilate(cv2.morphologyEx(red, cv2.MORPH_OPEN, np.ones((9, 9), np.uint8)), np.ones((3, 3), np.uint8))
+    return cv2.dilate(red & (1 - filled), np.ones((3, 3), np.uint8)).astype(bool)
 
 
 @dataclass

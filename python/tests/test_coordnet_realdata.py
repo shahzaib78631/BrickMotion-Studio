@@ -62,7 +62,7 @@ def test_label_case_on_a_rendered_page():
 def test_bad_fit_is_dropped(monkeypatch):
     case, _parts, _centre = _case()
     monkeypatch.setattr(realdata, "solve_camera",
-                        lambda net, pic, parts, cam, centre, W, H, rounds=4, log=None:
+                        lambda net, pic, parts, cam, centre, W, H, rounds=4, log=None, free=None:
                         (cam, [dict(round=0, n=900, median=3.0, p90=6.0, inliers=0.5, flow_median=2.0)]))
     assert realdata.label_case(object(), case, start=TRUE_CAM) is None
 
@@ -97,25 +97,25 @@ def test_standard_views_use_the_print_scale():
     assert {c.turned for c in starts} == {False, True}
 
 
-def test_view_with_most_matches_wins_among_tight_fits(monkeypatch):
+def test_view_whose_lines_fit_wins_among_tight_fits(monkeypatch):
+    """Wrong views can fit their own matches tightly, with many matches; the page's lines pick the true one."""
     case, _parts, _centre = _case()
-    fits = {35: dict(median=0.2, p90=0.5, n=2000), 125: dict(median=0.3, p90=0.6, n=19000),
-            215: dict(median=3.0, p90=6.0, n=30000)}
+    wrong = TRUE_CAM.with_(yaw=TRUE_CAM.yaw + 4)
+    fits = {35: (wrong, dict(median=0.2, p90=0.5, n=30000)), 125: (TRUE_CAM, dict(median=0.3, p90=0.6, n=2000))}
 
-    def fake_solve(net, pic, parts, cam, centre, W, H, rounds=4, log=None):
+    def fake_solve(net, pic, parts, cam, centre, W, H, rounds=4, log=None, free=None):
         f = fits.get(round(cam.yaw) % 360)
-        return (cam, [dict(round=0, inliers=1.0, flow_median=0.2, **f)]) if f and not cam.turned else (cam, [])
+        return (f[0], [dict(round=0, inliers=1.0, flow_median=0.2, **f[1])]) if f and not cam.turned else (cam, [])
 
     monkeypatch.setattr(realdata, "solve_camera", fake_solve)
-    monkeypatch.setattr(realdata, "change_evidence", lambda pic, base: np.ones(pic.shape[:2], bool))
-    s = realdata.label_case(object(), case, min_agree=0.0)
-    assert s is not None and round(s["cam"].yaw) % 360 == 125
+    s = realdata.label_case(object(), case)
+    assert s is not None and abs(s["cam"].yaw - TRUE_CAM.yaw) < 1e-9
 
 
 def test_rejection_reason_is_reported(monkeypatch):
     case, _parts, _centre = _case()
     monkeypatch.setattr(realdata, "solve_camera",
-                        lambda net, pic, parts, cam, centre, W, H, rounds=4, log=None:
+                        lambda net, pic, parts, cam, centre, W, H, rounds=4, log=None, free=None:
                         (cam, [dict(round=0, n=900, median=3.0, p90=6.0, inliers=0.5, flow_median=2.0)]))
     why: list = []
     assert realdata.label_case(object(), case, start=TRUE_CAM, why=why) is None

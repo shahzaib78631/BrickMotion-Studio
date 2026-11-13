@@ -65,23 +65,32 @@ def initial_camera(d, parts, pic) -> tuple[BookletCamera, np.ndarray]:
     return cam.with_(cx=W / 2 + dx, cy=H / 2 + dy), centre
 
 
-def dark_lines(img: np.ndarray, up: int = 1) -> np.ndarray:
-    """Thin dark-line mask (line centres), at `up` times the image resolution."""
+def dark_lines(img: np.ndarray, up: int = 1, thin: float = 0.0) -> np.ndarray:
+    """Thin dark-line mask (line centres), at `up` times the image resolution. thin > 0 drops filled dark regions
+    (a black part's face is not a line; booklets print it anywhere from black to mid grey): only dark structures
+    an opening `thin` px wide (at picture resolution; True means 4) removes are kept -- pass a wider stroke for
+    upscaled pictures, whose lines are wider."""
     g = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY).astype(np.float32)
     if up > 1:
         g = cv2.resize(g, None, fx=up, fy=up, interpolation=cv2.INTER_CUBIC)
     dark = (g < cv2.GaussianBlur(g, (0, 0), 3 * up) - 25) | (g < 45)
+    if thin:
+        w = int(round((4.0 if thin is True else float(thin)) * up)) + 1
+        k = np.ones((w, w), np.uint8)
+        filled = cv2.morphologyEx(dark.astype(np.uint8), cv2.MORPH_OPEN, k).astype(bool)
+        dark &= ~filled
     # keep the darkest pixel across each line: a local minimum along x or y
     mx = (g <= np.roll(g, 1, 1)) & (g <= np.roll(g, -1, 1))
     my = (g <= np.roll(g, 1, 0)) & (g <= np.roll(g, -1, 0))
     return dark & (mx | my)
 
 
-def line_distance(pic: np.ndarray, ren: np.ndarray, region: np.ndarray, up: int = 4) -> tuple[float, float]:
+def line_distance(pic: np.ndarray, ren: np.ndarray, region: np.ndarray, up: int = 4,
+                  thin: float = 0.0) -> tuple[float, float]:
     """Two-way distance between the centres of the render's dark lines and the picture's, within `region`
     (px at the picture's resolution: p50, p90; measured at `up` x so it resolves sub-pixel offsets)."""
     reg = cv2.resize(region.astype(np.uint8), None, fx=up, fy=up, interpolation=cv2.INTER_NEAREST).astype(bool)
-    a, b = dark_lines(pic, up) & reg, dark_lines(ren, up) & reg
+    a, b = dark_lines(pic, up, thin) & reg, dark_lines(ren, up, thin) & reg
     if a.sum() < 50 * up or b.sum() < 50 * up:
         return float("nan"), float("nan")
     da = cv2.distanceTransform((~a).astype(np.uint8), cv2.DIST_L2, cv2.DIST_MASK_PRECISE)
@@ -102,7 +111,8 @@ def tile_shifts(pic: np.ndarray, ren: np.ndarray, region: np.ndarray, tile: int 
         for x in range(0, W - tile + 1, tile // 2):
             if region[y:y + tile, x:x + tile].mean() < 0.5:
                 continue
-            ta, tb = a[y:y + tile, x:x + tile], b[y:y + tile, x:x + tile]
+            # copies: phaseCorrelate applies the window to its inputs in place, and tiles overlap
+            ta, tb = a[y:y + tile, x:x + tile].copy(), b[y:y + tile, x:x + tile].copy()
             if ta.std() < 8 or tb.std() < 8:
                 continue
             (dx, dy), resp = cv2.phaseCorrelate(ta, tb, win)
@@ -139,7 +149,8 @@ class Net:
         return flow, conf, new
 
 
-def solve_camera(net: Net, pic, parts, cam, centre, W, H, rounds: int = 4, log=None):
+def solve_camera(net: Net, pic, parts, cam, centre, W, H, rounds: int = 4, log=None, free=None):
+    """Iterate network matches and robust fits; `free`: camera parameters to fit (default all)."""
     fits = []
     for r in range(rounds):
         ren = R.render(parts, set(), cam, centre, W, H, R.Style(), ss=2, red=False)
@@ -148,7 +159,7 @@ def solve_camera(net: Net, pic, parts, cam, centre, W, H, rounds: int = 4, log=N
         m = correspondences(flow, w, ren.gt)
         if len(m.p) < 200:
             break
-        fit = fit_camera(m, cam, centre)
+        fit = fit_camera(m, cam, centre, free)
         moved = float(np.median(np.linalg.norm(flow[:, w > 0], axis=0)))
         fits.append(dict(round=r, n=fit.n, median=fit.median, p90=fit.p90, inliers=fit.inliers, flow_median=moved))
         if log:

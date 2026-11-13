@@ -24,6 +24,7 @@ from .camera import BookletCamera, project
 from . import render as R
 
 PARAMS = ("yaw", "pitch", "roll", "scale", "cx", "cy", "eye")
+EYE_RANGE = (1500.0, 12000.0)   # perspective eye distances CoordNet is trained on (datagen draws 2000-9000)
 
 
 @dataclass
@@ -110,6 +111,9 @@ def fit_camera(m: Matches, cam0: BookletCamera, centre, free: tuple[str, ...] | 
     if free is None:
         free = PARAMS if cam0.eye > 0 else PARAMS[:-1]
     x0 = _vec(cam0, free)
+    lo = np.array([EYE_RANGE[0] if k == "eye" else -np.inf for k in free])
+    hi = np.array([EYE_RANGE[1] if k == "eye" else np.inf for k in free])
+    x0 = np.clip(x0, lo, hi)
     sw = np.sqrt(m.w)
 
     def res(x):
@@ -118,7 +122,7 @@ def fit_camera(m: Matches, cam0: BookletCamera, centre, free: tuple[str, ...] | 
 
     scale = np.array([1.0 if k in ("yaw", "pitch", "roll") else 0.01 * cam0.scale if k == "scale"
                       else 1.0 if k in ("cx", "cy") else 0.05 * max(cam0.eye, 1) for k in free])
-    r = least_squares(res, x0, loss="soft_l1", f_scale=f_scale, x_scale=scale, max_nfev=200)
+    r = least_squares(res, x0, loss="soft_l1", f_scale=f_scale, x_scale=scale, bounds=(lo, hi), max_nfev=200)
     cam = _cam(cam0, free, r.x)
     uv, _ = project(cam, centre, m.X)
     e = np.linalg.norm(uv - m.p, axis=1)
