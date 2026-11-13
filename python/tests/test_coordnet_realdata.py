@@ -110,3 +110,13 @@ def test_view_with_most_matches_wins_among_tight_fits(monkeypatch):
     monkeypatch.setattr(realdata, "change_evidence", lambda pic, base: np.ones(pic.shape[:2], bool))
     s = realdata.label_case(object(), case, min_agree=0.0)
     assert s is not None and round(s["cam"].yaw) % 360 == 125
+
+
+def test_rejection_reason_is_reported(monkeypatch):
+    case, _parts, _centre = _case()
+    monkeypatch.setattr(realdata, "solve_camera",
+                        lambda net, pic, parts, cam, centre, W, H, rounds=4, log=None:
+                        (cam, [dict(round=0, n=900, median=3.0, p90=6.0, inliers=0.5, flow_median=2.0)]))
+    why: list = []
+    assert realdata.label_case(object(), case, start=TRUE_CAM, why=why) is None
+    assert why and why[0].startswith("camera")

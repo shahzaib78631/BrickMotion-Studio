@@ -126,28 +126,34 @@ def _prepare(case) -> tuple[np.ndarray, float]:
 
 
 def label_case(net, case, start: BookletCamera | None = None, rounds: int = 4,
-               max_median: float = 1.0, max_p90: float = 2.0, min_agree: float = 0.6) -> dict | None:
-    """Labels for one booklet step, or None when the camera or the new parts cannot be trusted."""
+               max_median: float = 1.0, max_p90: float = 2.0, min_agree: float = 0.6,
+               why: list | None = None) -> dict | None:
+    """Labels for one booklet step, or None when the camera or the new parts cannot be trusted (the reason is
+    appended to `why`)."""
+    reject = lambda reason: (why.append(reason) if why is not None else None)
     pic, pts_px = _prepare(case)
     H, W = pic.shape[:2]
     base = [norm(p) for p in case.visible]
     new = [norm(p) for p in case.added]
     parts = base + new
     if not new or not base:
+        reject("no base or no new parts")
         return None
     centre = R.bounds_centre(parts)
     fg = ~paper_mask(pic)
     starts = [frame(start, centre, _points(parts), fg, fit_scale=False)] if start is not None else \
         standard_views(pic, parts, pts_px)
     # Wrong views can also fit a few pixels tightly; among tight fits the true view matches by far the most pixels.
-    best = None
+    best, tried = None, []
     for cam0 in starts:
         cam, fits = solve_camera(net, pic, parts, cam0, centre, W, H, rounds)
+        tried.append(f"{fits[-1]['median']:.2f}/{fits[-1]['p90']:.2f}/{fits[-1]['n']}" if fits else "none")
         if not fits or fits[-1]["median"] >= max_median or fits[-1]["p90"] >= max_p90:
             continue
         if best is None or fits[-1]["n"] > best[1][-1]["n"]:
             best = (cam, fits)
     if best is None:
+        reject("camera: no tight fit (median/p90/n per start: " + ", ".join(tried) + ")")
         return None
     cam, fits = best
     fit = fits[-1]
@@ -161,6 +167,7 @@ def label_case(net, case, start: BookletCamera | None = None, rounds: int = 4,
     recall = (newpix & cv2.dilate(ev.astype(np.uint8), k).astype(bool)).sum() / max(newpix.sum(), 1)
     precision = (ev & cv2.dilate(newpix.astype(np.uint8), k).astype(bool)).sum() / max(ev.sum(), 1)
     if newpix.sum() < 30 or recall < min_agree or precision < min_agree * 0.8:
+        reject(f"new parts: {int(newpix.sum())} px, recall {recall:.2f}, precision {precision:.2f}")
         return None
     types: dict[tuple, int] = {}
     for p, c, _m in new:
@@ -203,19 +210,20 @@ def main(argv=None):
             if case.rgb is None:
                 dropped += 1
                 continue
-            st = None
+            st, why = None, []
             if start is not None:
                 _pic, pts_px = _prepare(case)
                 st = start.with_(scale=start.scale * prev_pts / pts_px)
             try:
-                smp = label_case(net, case, st)
+                smp = label_case(net, case, st, why=why)
                 if smp is None and st is not None:
-                    smp = label_case(net, case, None)          # the view changed: search again
+                    smp = label_case(net, case, None, why=why)  # the view changed: search again
             except Exception as e:
                 print(f"set {s} step {case.step_number}: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
                 smp = None
             if smp is None:
                 dropped += 1
+                print(f"drop set {s} step {case.step_number}: {' | '.join(why) or 'error'}", flush=True)
             else:
                 write(out, kept, smp)
                 kept += 1
