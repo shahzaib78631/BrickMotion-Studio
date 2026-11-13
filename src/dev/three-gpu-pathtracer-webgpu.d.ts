@@ -61,6 +61,8 @@ declare module 'three-gpu-pathtracer/webgpu' {
     readonly fadeState: number;
     readonly target: unknown;
 
+    getMaterial(): { diffuseBrdf: unknown; [key: string]: unknown };
+    setMaterial(material: unknown): void;
     renderSample(): void;
     setScene(scene: unknown, camera: unknown): void;
     setRandom(random: object): void;
@@ -78,4 +80,9 @@ declare module 'three-gpu-pathtracer/webgpu' {
     getRenderTime(): number;
     dispose(): void;
   }
+}
+
+declare module 'three-gpu-pathtracer/src/webgpu/nodes/structs.wgsl.js' {
+  export const surfaceRecordStruct: any;
+  export const materialStruct: any;
 }

@@ -145,3 +145,69 @@ describe('side (SNOT) studs', () => {
     expect([...collisionWorld([at('base', mb)]).hits([at('top', mt, 10, 0)])]).toEqual(['base']);
   });
 });
+
+/** A solid at an LDraw reference line's transform. */
+const placed = (id: string, m: PartMetrics, x: number, y: number, z: number, r?: readonly number[]): Solid => ({
+  id, world: ldrawAt(x, y, z, r), body: m.body, studs: m.studs, snaps: m.snaps, mesh: m.mesh,
+});
+
+// Found by the answer-key audit (scripts/collision-audit.ts): every part of a real model must pass.
+describe('answer-key placements (false collisions)', () => {
+  it.skipIf(!ready)('gives the same verdict for a part turned a quarter (rotation into the part frame)', async () => {
+    const slope = await measureReal('3040'), b = await measureReal('3005');
+    // a 1 x 1 brick sunk into the sloped cell of a 1 x 2 slope, the whole scene turned about y
+    const turns = [[1, 0, 0, 0, 1, 0, 0, 0, 1], [0, 0, 1, 0, 1, 0, -1, 0, 0], [-1, 0, 0, 0, 1, 0, 0, 0, -1], [0, 0, -1, 0, 1, 0, 1, 0, 0]];
+    for (const r of turns) {
+      const cell = [r[1] * 0 + r[2] * -20, r[8] * -20];
+      const world = collisionWorld([placed('slope', slope, 0, 0, 0, r)]);
+      expect(world.hits([placed('b', b, r[2] * -20, -4, r[8] * -20, r)]).size).toBe(1);
+      void cell;
+    }
+  });
+
+  it.skipIf(!ready)('does not report a 1 x 1 plate on a headlight brick’s side stud (40353 step 2)', async () => {
+    const head = await measureReal('4070'), plate = await measureReal('3024');
+    const brick = placed('brick', head, -280, 80, -20, [0, 0, 1, 0, 1, 0, -1, 0, 0]);
+    const side = placed('plate', plate, -294, 90, -20, [0, 1, 0, 0, 0, -1, -1, 0, 0]);
+    expect(collisionWorld([brick]).hits([side]).size).toBe(0);
+    expect(collisionWorld([side]).hits([brick]).size).toBe(0);
+    // pushed 4 LDU into the brick it is a collision
+    expect(collisionWorld([brick]).hits([side], [4, 0, 0]).size).toBe(1);
+  });
+
+  it.skipIf(!ready)('does not read the air between two side studs as part of the brick', async () => {
+    const brick = await measureReal('22885'), plate = await measureReal('3020');
+    // a 2 x 4 plate on the brick's side studs (40271): the brick's samples between the studs are air
+    const b = placed('brick', brick, 0, 0, 0);
+    const p = placed('plate', plate, 0, 20, -18, [1, 0, 0, 0, 0, 1, 0, -1, 0]);
+    expect(collisionWorld([p]).hits([b]).size).toBe(0);
+  });
+
+  it.skipIf(!ready)('seats a jumper plate’s stud in the tube of the tile above', async () => {
+    const tile = await measureReal('87079'), jumper = await measureReal('15573');
+    const world = collisionWorld([solid('tile', tile, 0, -8)]);
+    expect(world.hits([solid('jumper', jumper, 20, 0)]).size).toBe(0);
+    // half a stud over, the stud meets the tile's wall between sockets
+    expect(world.hits([solid('jumper', jumper, 15, 0)]).size).toBe(1);
+  });
+
+  it.skipIf(!ready)('seats a jumper’s stud between the slots of a 1-wide inverted face (21036)', async () => {
+    const bracket = await measureReal('99781'), jumper = await measureReal('15573');
+    const r = [1, 0, 0, 0, 0, 1, 0, -1, 0];
+    const b = placed('bracket', bracket, 0, -146, 60, r);
+    const j = placed('jumper', jumper, 0, -146, 52, r);
+    expect(collisionWorld([b]).hits([j], undefined, true).size).toBe(0);
+    expect(collisionWorld([j]).hits([b], undefined, true).size).toBe(0);
+    // pushed 4 LDU further in, the jumper's plate is in the bracket
+    expect(collisionWorld([b]).hits([j], [0, 0, 4], true).size).toBe(1);
+  });
+
+  it.skipIf(!ready)('does not report an axle through a connector, either way round', async () => {
+    const axle = await measureReal('32062'), conn = await measureReal('32016');
+    const c = 0.38268343, s = 0.92387953;
+    const a = placed('axle', axle, 0, 0, 0);
+    const k = placed('conn', conn, -30, 0, 0, [0, -c, s, 0, -s, -c, 1, 0, 0]);
+    expect(collisionWorld([a]).hits([k]).size).toBe(0);
+    expect(collisionWorld([k]).hits([a]).size).toBe(0);
+  });
+});

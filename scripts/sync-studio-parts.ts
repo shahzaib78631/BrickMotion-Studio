@@ -169,7 +169,10 @@ function main() {
     { from: join(source, 'parts'), to: join(DEST_LDRAW, 'parts'), label: 'parts' },
     { from: join(source, 'p'), to: join(DEST_LDRAW, 'p'), label: 'p' },
   ];
-  if (args.unofficial) trees.push({ from: join(source, 'UnOfficial', 'parts'), to: join(DEST_LDRAW, 'parts'), label: 'UnOfficial/parts' });
+  if (args.unofficial) trees.push(
+    { from: join(source, 'UnOfficial', 'parts'), to: join(DEST_LDRAW, 'parts'), label: 'UnOfficial/parts' },
+    { from: join(source, 'UnOfficial', 'p'), to: join(DEST_LDRAW, 'p'), label: 'UnOfficial/p' },
+  );
 
   let added = 0, updated = 0, same = 0, kept = 0, bytes = 0;
   for (const tree of trees) {

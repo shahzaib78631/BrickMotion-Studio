@@ -84,7 +84,7 @@ const FLOOR_COLORS: { hex: string; name: string }[] = [
   { hex: '#9fc5ee', name: 'Powder blue' }, { hex: '#f5bfa5', name: 'Peach' }, { hex: '#abb39e', name: 'Sage' }, { hex: '#9883e8', name: 'Lavender' },
 ];
 
-/** Floor colour for the curved sweep and the matte table: the scene's own, a studio paper colour, or any colour. */
+/** Floor colour: the scene's own, a studio paper colour, or any colour. */
 function FloorColor({ m, kind, sceneColor, set }: { m: Materials; kind: FloorSurface; sceneColor: string; set(p: Partial<Materials>): void }) {
   const usable = takesFloorColor(kind);
   const current = m.floorColor ?? sceneColor;
@@ -103,7 +103,7 @@ function FloorColor({ m, kind, sceneColor, set }: { m: Materials; kind: FloorSur
             onChange={(e) => set({ floorColor: e.target.value.toLowerCase() })} />
         </label>
       </div>
-      {!usable && <span className="nx-hint">Pick Curved sweep or Matte table to colour the floor; the other floors show the scene backdrop, a texture or a mirror.</span>}
+      {!usable && <span className="nx-hint">Choose a floor to change its colour.</span>}
     </div>
   );
 }
@@ -309,7 +309,7 @@ export function MaterialsPanel({ model }: { model?: ModelState }) {
               swatch={<span className="bm-mat-swatch" style={{ background: GLASS_SWATCH[g.id] }} />} />
           ))}
         </div>
-        <span className="nx-hint">Clear glass bends and tints the light passing through transparent parts, like real windshields and bottles. It shows in path-traced stills and videos; the viewport keeps the soft look.</span>
+        <span className="nx-hint">Clear glass bends and tints the light passing through transparent parts, like real windshields and bottles. The current viewport approximates thin transparent walls. Studio path traces internal surfaces for more accurate glass. Soft softens reflections; Milky gives a frosted finish.</span>
       </Section>
 
       <Section title="Camera lens" value={LENS_BLURS.find((b) => b.id === m.lens.blur)?.label}>

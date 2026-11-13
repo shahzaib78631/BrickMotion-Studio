@@ -75,12 +75,13 @@ export class BrickRenderer {
       let groupMesh: THREE.InstancedMesh | null = null;
       for (const p of parts) {
         const mesh = new THREE.InstancedMesh(p.geometry, p.material, group.length);
+        mesh.userData.brickColor = first.color;
         // Instances travel far from their assembled positions. Three.js would
         // otherwise recalculate every moving mesh's bounding sphere on every
         // frame, which is expensive and can cull parts mid-flight.
         mesh.frustumCulled = false;
         // clear parts cast no shadow: the shadow passes treat every caster as solid
-        mesh.castShadow = !(p.material as THREE.Material).transparent;
+        mesh.castShadow = !(p.material as THREE.Material).transparent && ((p.material as THREE.MeshPhysicalMaterial).transmission ?? 0) <= 0;
         mesh.receiveShadow = true;
         const keys: string[] = [];
         this.keyAt.set(mesh, keys);

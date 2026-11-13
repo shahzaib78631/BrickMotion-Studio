@@ -3,7 +3,7 @@ import type { StudConnector } from '../ldraw/connectors';
 import type { Instance, Metrics } from '../model/assemble';
 import type { Snap } from '../ldraw/shadow';
 import type { SnapPart } from './studSnap';
-import { allSockets, columnsOf, isHingePin, studsOf } from './sockets';
+import { allSockets, columnsOf, isHingePin, shaftsOf, studsOf } from './sockets';
 import { jointConnectors, type Connector } from './connectors';
 
 /**
@@ -29,8 +29,14 @@ export type CollisionWorld = {
    * the stud test (see the module comment); it defaults to on, and only a caller with its
    * own stud seating (the sideways snapper) turns it off.
    */
-  hits(moving: readonly Solid[], transform?: ArrayLike<number>, studs?: boolean): Set<string>;
+  hits(moving: readonly Solid[], transform?: ArrayLike<number>, studs?: boolean, explain?: Explain): Set<string>;
 };
+/**
+ * Diagnostics: called once per hit with the rule that found it — a moving `body` sample inside the
+ * fixed part, a fixed part's free `stud` reaching into the moving part, or a moving `column` (stud,
+ * pin, bar) reaching into the fixed part — and the shared-frame point involved.
+ */
+export type Explain = (id: string, rule: 'body' | 'stud' | 'column', point: readonly number[]) => void;
 
 type P3 = readonly [number, number, number];
 const IDENTITY: readonly number[] = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
@@ -131,7 +137,7 @@ function studInBox(st: Stud, box: Box): boolean {
  * scabbard's peg hole, and the hollow inside a stud. Material inside a bore is something
  * inserted in the hole (a bar, a stud, a pin), not a collision, so the narrow phase skips it.
  */
-type Bore = { base: P3; axis: P3; radius: number; length: number; /** a clip grips any bar-sized column */ grip: boolean };
+type Bore = { base: P3; axis: P3; radius: number; length: number; /** a clip grips any bar-sized column */ grip: boolean; /** a cross hole, for an axle */ cross: boolean };
 const worldBores = (e: ArrayLike<number>, snaps?: readonly Snap[]): Bore[] => {
   const out: Bore[] = [];
   for (const s of snaps ?? []) {
@@ -139,17 +145,17 @@ const worldBores = (e: ArrayLike<number>, snaps?: readonly Snap[]): Bore[] => {
     const grip = (s.kind === 'clp' || s.kind === 'fgr') && s.gender === 'F';
     if (!grip && (s.kind !== 'cyl' || s.gender !== 'F' || !s.shapes.some((x) => x === 'R'))) continue;
     if (s.length <= 0 || s.radius < 3 || s.radius > 8.6) continue;
-    out.push({ base: apply(e, s.start), axis: unit(vector(e, s.axis)), radius: s.radius, length: s.length, grip });
+    out.push({ base: apply(e, s.start), axis: unit(vector(e, s.axis)), radius: s.radius, length: s.length, grip, cross: s.shapes.includes('A') });
   }
   return out;
 };
-/** Whether a shared-frame point is inside a bore, half an LDU inside its wall. */
-const inBore = (b: Bore, p: P3) => {
+/** Whether a shared-frame point is inside a bore, `slack` LDU inside its wall. */
+const inBore = (b: Bore, p: P3, slack = 0.5) => {
   const d = [p[0] - b.base[0], p[1] - b.base[1], p[2] - b.base[2]];
   const t = d[0] * b.axis[0] + d[1] * b.axis[1] + d[2] * b.axis[2];
   if (t < -0.5 || t > b.length + 0.5) return false;
   const radial = [d[0] - t * b.axis[0], d[1] - t * b.axis[1], d[2] - t * b.axis[2]];
-  return radial[0] ** 2 + radial[1] ** 2 + radial[2] ** 2 < (b.radius - 0.5) ** 2;
+  return radial[0] ** 2 + radial[1] ** 2 + radial[2] ** 2 < (b.radius - slack) ** 2;
 };
 
 /**
@@ -233,6 +239,13 @@ const localColumns = (part: HasSockets): readonly StudConnector[] => {
   if (!own) columnCache.set(part, (own = columnsOf(part)));
   return own;
 };
+/** Every shaft a part can put into a bore (columns and axles), for opening the bores it sits in. */
+const shaftCache = new WeakMap<HasSockets, readonly StudConnector[]>();
+const localShafts = (part: HasSockets): readonly StudConnector[] => {
+  let own = shaftCache.get(part);
+  if (!own) shaftCache.set(part, (own = shaftsOf(part)));
+  return own;
+};
 /** A part's own sockets, worked out once per part: the drag asks again per candidate pose. */
 const socketCache = new WeakMap<HasSockets, readonly { pos: P3; dir: P3; radius: number; length?: number }[]>();
 const worldSockets = (e: ArrayLike<number>, part: HasSockets): Socket[] => {
@@ -260,7 +273,9 @@ const seatedIn = (st: Stud, sockets: readonly Socket[]) => sockets.some((c) => {
  * through-hole takes the column at any depth (a pin slid half way in is seated), so the test
  * is "on the bore's line and along its axis", not "at its mouth".
  */
-const takenBores = (bores: readonly Bore[], columns: readonly Stud[]) => bores.filter((b) => columns.some((m) => {
+const takenBores = (bores: readonly Bore[], columns: readonly Stud[]) => bores.filter((b) => columns.some((m) => inLine(m, b)));
+/** Whether a column sits in a bore: it fits, and lies on the bore's line. */
+const inLine = (m: Stud, b: Bore) => {
   // a clip holds a bar of any size — a hand grips a 3 LDU tool shaft as readily as a 4 LDU bar
   const fits = b.grip ? m.radius <= 4.6 && m.radius >= 2.2 : Math.abs(m.radius - b.radius) <= 0.7;
   if (!fits || Math.abs(dot(m.axis, b.axis)) < 0.999) return false;
@@ -268,7 +283,15 @@ const takenBores = (bores: readonly Bore[], columns: readonly Stud[]) => bores.f
   const along = dot(d, b.axis);
   const off = Math.hypot(d[0] - along * b.axis[0], d[1] - along * b.axis[1], d[2] - along * b.axis[2]);
   return off <= 1.5;
-}));
+};
+/**
+ * Whether a point is in a seated bore, half an LDU inside its wall. A cross hole is open out to
+ * its wall where the axle in it is: the axle's arms reach the hole's full radius, and half an LDU
+ * in they read as overlapping their connector. Round holes keep the margin, so a pin's collar
+ * pushed into a beam's hole still meets it.
+ */
+const inSeat = (b: Bore, p: P3, shafts: readonly Stud[]) =>
+  inBore(b, p) || (b.cross && inBore(b, p, 0) && shafts.some((m) => inLine(m, b) && inColumn(m, p)));
 
 /** Triangles bucketed by the 4 LDU cell their shadow covers, per mesh and per line axis. */
 const TRI_CELL = 4;
@@ -340,6 +363,23 @@ function inStud(st: StudConnector, q: readonly number[]): boolean {
   return r2 < (st.radius + 0.5) ** 2;
 }
 
+/** Whether a shared-frame point lies in a column (with half an LDU of slack). */
+function inColumn(st: Stud, p: readonly number[]): boolean {
+  const len = Math.hypot(st.local.tip[0] - st.local.base[0], st.local.tip[1] - st.local.base[1], st.local.tip[2] - st.local.base[2]);
+  const d = [p[0] - st.base[0], p[1] - st.base[1], p[2] - st.base[2]];
+  const t = dot(d, st.axis);
+  if (t < -0.5 || t > len + 0.5) return false;
+  return d[0] ** 2 + d[1] ** 2 + d[2] ** 2 - t * t < (st.radius + 0.5) ** 2;
+}
+
+/**
+ * Whether a column reaches out of its own part: its tip lies outside the part's body. The bars
+ * inside a 1 x N brick's underside are bar connectors a clip can grip, but they end at the
+ * brick's bottom edge, so they never poke anything.
+ */
+const protrudes = (local: StudConnector, body: Box) =>
+  [0, 1, 2].some((k) => local.tip[k] < body.min[k] - 0.5 || local.tip[k] > body.max[k] + 0.5);
+
 /** A placed part in the shared frame: everything the narrow phase needs, no more. */
 type Body = { world: ArrayLike<number>; box: Box; body: Box; mesh: Float32Array };
 /**
@@ -351,10 +391,11 @@ function insidePart(part: Body, p: P3, exempt?: (q: readonly number[]) => boolea
   if (![0, 1, 2].every((k) => p[k] > box.min[k] && p[k] < box.max[k])) return false;
   // into the part's own frame (rotation transposed)
   const m = part.world, d = [p[0] - m[12], p[1] - m[13], p[2] - m[14]];
+  // column k of the rotation is (m[4k], m[4k+1], m[4k+2]); the transpose takes its dot with d
   const q: P3 = [
-    m[0] * d[0] + m[4] * d[1] + m[8] * d[2],
-    m[1] * d[0] + m[5] * d[1] + m[9] * d[2],
-    m[2] * d[0] + m[6] * d[1] + m[10] * d[2],
+    m[0] * d[0] + m[1] * d[1] + m[2] * d[2],
+    m[4] * d[0] + m[5] * d[1] + m[6] * d[2],
+    m[8] * d[0] + m[9] * d[1] + m[10] * d[2],
   ];
   if (exempt?.(q)) return false;
   return ([0, 1, 2] as const).every((k) => {
@@ -380,7 +421,16 @@ function sampleOf(moving: readonly Solid[]): P3[] {
     for (let x = min[0] + 0.5; x <= max[0] - 0.5 + 1e-6; x += 4) for (let z = min[2] + 0.5; z <= max[2] - 0.5 + 1e-6; z += 4) {
       const span = lineSpan(part.mesh, part.body, 1, [x, 0, z]);
       if (!span || span[1] - span[0] < 2.5) continue;
-      for (const y of [span[0] + 1, (span[0] + span[1]) / 2, span[1] - 1]) points.push(apply(part.world, [x, y, z]));
+      // down the line every 4 LDU, so a thin curved wall (a ball socket's cup) keeps a point inside it
+      const ys = [span[0] + 1, span[1] - 1];
+      for (let y = span[0] + 4; y < span[1] - 2; y += 4) ys.push(y);
+      for (const y of ys) {
+        // a vertical span runs from the first surface to the last, so it bridges the air between
+        // two side studs; keep only points the other two axes agree are inside, as insidePart does
+        const sx = lineSpan(part.mesh, part.body, 0, [x, y, z]), sz = lineSpan(part.mesh, part.body, 2, [x, y, z]);
+        if (!sx || !sz || x <= sx[0] || x >= sx[1] || z <= sz[0] || z >= sz[1]) continue;
+        points.push(apply(part.world, [x, y, z]));
+      }
     }
   }
   samples.set(moving, points);
@@ -393,7 +443,7 @@ const CELL = 40;
 const cellKey = (x: number, y: number, z: number) => `${x},${y},${z}`;
 
 /** A fixed part plus the studs and sockets the verdict needs from it. */
-type Entry = Body & { part: Solid; studs: Stud[]; studBox: Box | null; sockets: Socket[]; bores: Bore[]; joints: Joint[]; pockets: Pocket[] };
+type Entry = Body & { part: Solid; studs: Stud[]; studBox: Box | null; sockets: Socket[]; bores: Bore[]; shafts: Stud[]; joints: Joint[]; pockets: Pocket[] };
 
 /** A collision world over fixed solids, indexed once in a uniform grid (40 LDU cells). */
 export function collisionWorld(solids: readonly Solid[]): CollisionWorld {
@@ -405,6 +455,7 @@ export function collisionWorld(solids: readonly Solid[]): CollisionWorld {
       studs, studBox: studBox(studs),
       sockets: worldSockets(part.world, part),
       bores: worldBores(part.world, part.snaps),
+      shafts: worldStuds(part.world, localShafts(part)),
       joints: worldJoints(part.world, part.snaps),
       pockets: worldPockets(part.world, part.joints),
     };
@@ -433,21 +484,25 @@ export function collisionWorld(solids: readonly Solid[]): CollisionWorld {
   const freeOn = () => freeStuds ??= entries.map((e, i) => e.studs.filter((st) =>
     !atCells(st.base).some((j) => j !== i && entries[j].part.id !== e.part.id && seatedIn(st, entries[j].sockets))));
   return {
-    hits(moving, transform, withStuds = true) {
+    hits(moving, transform, withStuds = true, explain) {
       const out = new Set<string>();
       const mine = new Set(moving);
       const T = asMatrix(transform);
       const plain = isIdentity(T), shiftOnly = isShift(T);
       const place = (p: P3): P3 => shiftOnly ? [p[0] + T[12], p[1] + T[13], p[2] + T[14]] : apply(T, p);
       // the moving set at the pose the caller asks about
-      const posed: Body[] = [], studs: Stud[] = [], columns: Stud[] = [], sockets: Socket[] = [], joints: Joint[] = [], pockets: Pocket[] = [];
+      const posed: Body[] = [], studs: Stud[] = [], columns: Stud[] = [], sockets: Socket[] = [], bores: Bore[] = [], joints: Joint[] = [], pockets: Pocket[] = [];
       let movingBox: Box | null = null;
       for (const s of moving) {
         const world = plain ? s.world : compose(T, s.world);
         const box = worldBox(world, s.body);
         movingBox = movingBox ? unionBox(movingBox, box) : box;
         posed.push({ world, box, body: s.body, mesh: s.mesh! });
-        studs.push(...worldStuds(world, localColumns(s)));
+        studs.push(...worldStuds(world, localColumns(s).filter((c) => protrudes(c, s.body))));
+        // every shaft, protruding or not, for the bores it is seated in (this list was never filled,
+        // so a pin, bar or axle in a hole always read as overlap unless the samples missed it)
+        columns.push(...worldStuds(world, localShafts(s)));
+        bores.push(...worldBores(world, s.snaps));
         sockets.push(...worldSockets(world, s));
         joints.push(...worldJoints(world, s.snaps));
         if (s.joints?.length) pockets.push(...worldPockets(world, s.joints));
@@ -474,6 +529,13 @@ export function collisionWorld(solids: readonly Solid[]): CollisionWorld {
       const openBores = (e: Entry) => {
         let hit = open.get(e);
         if (!hit) open.set(e, (hit = takenBores(e.bores, columns)));
+        return hit;
+      };
+      /** the moving part's bores a fixed shaft sits in: the other way round (a connector slid onto an axle) */
+      const filled = new Map<Entry, Bore[]>();
+      const filledBores = (e: Entry) => {
+        let hit = filled.get(e);
+        if (!hit) filled.set(e, (hit = bores.length ? takenBores(bores, e.shafts) : []));
         return hit;
       };
       /** the fixed part's joint halves a moving joint half is seated on */
@@ -503,21 +565,31 @@ export function collisionWorld(solids: readonly Solid[]): CollisionWorld {
           }
         return out2;
       };
+      /** the moving columns seated in a fixed part's sockets: inside them is the joint, not overlap */
+      const plugged = new Map<Entry, Stud[]>();
+      const pluggedInto = (e: Entry) => {
+        let hit = plugged.get(e);
+        if (!hit) plugged.set(e, (hit = studs.filter((st) => seatedIn(st, e.sockets))));
+        return hit;
+      };
       // the moving parts' own bodies
       for (const p0 of sampleOf(moving)) {
         const p = place(p0);
         near(p, (e) => {
           // a bore the selection is seated in is a hole in the part, not material
-          if (openBores(e).some((b) => inBore(b, p))) return;
+          if (openBores(e).some((b) => inSeat(b, p, columns))) return;
+          if (filledBores(e).some((b) => inSeat(b, p, e.shafts))) return;
           // knuckles interlocking round a hinge axis the two share
           if (inHinge(e, p)) return;
           // nor is the other half of a joint it is seated on
           if (metPockets(e).some((j) => inPocket(j, p))) return;
+          // nor a moving stud standing in one of its sockets (a plate on a side stud, say)
+          if (pluggedInto(e).some((st) => inColumn(st, p))) return;
           const taken = seatedStuds(e);
           const hit = taken.length
             ? insidePart(e, p, (q) => taken.some((st) => inStud(st, q)))
             : insidePart(e, p);
-          if (hit) out.add(e.part.id);
+          if (hit) { out.add(e.part.id); explain?.(e.part.id, 'body', p); }
         });
       }
       // A stud is solid: the one an opposing socket is waiting for is a seat, any other one
@@ -529,7 +601,7 @@ export function collisionWorld(solids: readonly Solid[]): CollisionWorld {
         if (!free.length || !e.studBox || !boxesTouch(e.studBox, movingBox, 1)) continue;
         for (const st of free) {
           if (seatedIn(st, sockets) || inHinge(e, st.base)) continue;
-          if (posed.some((m) => studInBox(st, m.box))) { out.add(e.part.id); break; }
+          if (posed.some((m) => studInBox(st, m.box))) { out.add(e.part.id); explain?.(e.part.id, 'stud', st.base); break; }
         }
       }
       // and the moving parts' studs into the fixed pieces, the other way round
@@ -544,7 +616,7 @@ export function collisionWorld(solids: readonly Solid[]): CollisionWorld {
         if (out.has(e.part.id)) continue;
         for (const st of looseStuds) {
           if (inHinge(e, st.base)) continue;
-          if (studInBox(st, e.box)) { out.add(e.part.id); break; }
+          if (studInBox(st, e.box)) { out.add(e.part.id); explain?.(e.part.id, 'column', st.base); break; }
         }
       }
       return out;

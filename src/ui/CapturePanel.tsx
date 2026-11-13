@@ -5,6 +5,7 @@ import {
   canRecordViewport, captureFileName, captureOffscreenStill, captureTransparentStill, captureViewportStill, exportTurntable,
   sceneCameraStill, startViewportRecording, type StillCamera, type StillType,
 } from '../export/capture';
+import { finishCapture } from '../export/capturePostProcessing';
 import { canExportMp4 } from '../export/exportVideo';
 import { capturePathTracedStill } from '../export/pathTracedStill';
 import { buildCollada, type ColladaPiece } from '../export/collada';
@@ -70,6 +71,18 @@ export function CapturePanel({ model }: { model: ModelState }) {
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const [scale, setScale] = useState<number>(1);
   const [type, setType] = useState<StillType>('image/png');
+  const [inspectPixels, setInspectPixels] = useState(true);
+  const [filmSmoothing, setFilmSmoothing] = useState(true);
+  const [comparison, setComparison] = useState<{ original: Blob; processed: Blob } | null>(null);
+  const [previewUrls, setPreviewUrls] = useState<{ original: string; processed: string } | null>(null);
+  useEffect(() => {
+    if (!comparison) return;
+    const urls = { original: URL.createObjectURL(comparison.original), processed: URL.createObjectURL(comparison.processed) };
+    setPreviewUrls(urls);
+    return () => { URL.revokeObjectURL(urls.original); URL.revokeObjectURL(urls.processed); };
+  }, [comparison]);
+  const [coverLogo, setCoverLogo] = useState(false);
+  const [coverShape, setCoverShape] = useState<'portrait' | 'square'>('portrait');
   const [transparent, setTransparent] = useState(false);
   const [stillSize, setStillSize] = useState(STILL_SIZES[0].key);
   const [format, setFormat] = useState<VideoFormat>(settings.format);
@@ -77,7 +90,7 @@ export function CapturePanel({ model }: { model: ModelState }) {
   const [fps, setFps] = useState<number>(settings.fps);
   const [seconds, setSeconds] = useState(6);
   const [elevation, setElevation] = useState(28);
-  const [busy, setBusy] = useState<'still' | 'transparent' | 'turntable' | 'final' | null>(null);
+  const [busy, setBusy] = useState<'still' | 'transparent' | 'turntable' | 'final' | 'instagram' | 'eyesight' | null>(null);
   const [finalSamples, setFinalSamples] = useState(256);
   const [finalSize, setFinalSize] = useState(STILL_SIZES[0].key);
   const [finalAlpha, setFinalAlpha] = useState(false);
@@ -156,6 +169,13 @@ export function CapturePanel({ model }: { model: ModelState }) {
     return { blob, width, height };
   };
 
+  const processStill = async (blob: Blob, logo = false) => {
+    const processed = await finishCapture(blob, filmSmoothing,
+      logo && settings.logoBitmap ? { image: settings.logoBitmap, corner: settings.logoCorner } : null);
+    setComparison(filmSmoothing ? { original: blob, processed } : null);
+    return processed;
+  };
+
   const saveStill = async () => {
     setError(''); setNotice('');
     const studio = viewportApi.studio;
@@ -163,8 +183,34 @@ export function CapturePanel({ model }: { model: ModelState }) {
     setBusy('still');
     try {
       const { blob, width, height } = await takeStill(studio, type);
-      saveBlob(name(fromCamera ? 'camera' : 'capture', stillExt), blob);
+      saveBlob(name(fromCamera ? 'camera' : 'capture', stillExt), await processStill(blob));
       setNotice(`Saved a ${width} × ${height} ${stillExt.toUpperCase()} ${fromCamera ? `through ${sceneCamera!.name}` : 'of the viewport'}.`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally { setBusy(null); }
+  };
+
+  const saveInstagramCover = async () => {
+    setError(''); setNotice('');
+    const studio = viewportApi.studio;
+    if (!studio) return setError('The viewport is not ready yet.');
+    const bounds = model.view.bounds ?? model.assembly.bounds;
+    if (!bounds) return setError('This model has nothing to capture yet.');
+    const width = 1080;
+    const height = coverShape === 'portrait' ? 1920 : 1080;
+    setBusy('instagram');
+    try {
+      const blob = await captureOffscreenStill({
+        instances: model.view.instances, width, height,
+        pose: studio.bricks.readMatrices(),
+        camera: stillCamera(studio, width / height),
+        box: worldBox3(bounds), groundY: -bounds.max[1] / 20,
+        type: 'image/png', studioLook: settings.studioLook,
+        render: { edges: settings.edgeLines, linearColors: settings.linearColors },
+        materials: settings.materials, sceneSetup: plan.sceneSetup,
+      }, deps);
+      saveBlob(name(`instagram-cover-${coverShape}`, 'png'), await processStill(blob, coverLogo));
+      setNotice(`Saved a ${width} × ${height} Instagram cover PNG.`);
     } catch (e) {
       setError((e as Error).message);
     } finally { setBusy(null); }
@@ -192,7 +238,7 @@ export function CapturePanel({ model }: { model: ModelState }) {
         materials: settings.materials,
         sceneSetup: plan.sceneSetup,
       }, deps);
-      saveBlob(name(fromCamera ? 'camera-transparent' : 'capture-transparent', 'png'), blob);
+      saveBlob(name(fromCamera ? 'camera-transparent' : 'capture-transparent', 'png'), await processStill(blob));
       setNotice(`Saved a transparent ${size.width} × ${size.height} PNG.`);
     } catch (e) {
       setError((e as Error).message);
@@ -209,7 +255,7 @@ export function CapturePanel({ model }: { model: ModelState }) {
     setBusy('still');
     try {
       const { blob } = await takeStill(studio, 'image/png');
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': await processStill(blob) })]);
       setNotice(`Copied the ${fromCamera ? `${sceneCamera!.name} view` : 'viewport image'} to the clipboard.`);
     } catch (e) {
       setError((e as Error).message);
@@ -279,7 +325,7 @@ export function CapturePanel({ model }: { model: ModelState }) {
         signal: ac.signal,
         onProgress: (done, total) => setProgress({ done, total }),
       }, deps);
-      saveBlob(name('final-render', 'png'), blob);
+      saveBlob(name('final-render', 'png'), await processStill(blob));
       setNotice(`Saved a path-traced ${out.width} × ${out.height} PNG (${finalSamples} samples, ${Math.round((performance.now() - started) / 1000)}s).`);
     } catch (e) {
       if ((e as Error).name !== 'AbortError') setError((e as Error).message);
@@ -353,6 +399,44 @@ export function CapturePanel({ model }: { model: ModelState }) {
   const exportPieces = (): ColladaPiece[] =>
     model.assembly.instances.filter((i) => !i.placeholder).map((i) => ({ key: i.key, part: i.part, color: i.color, world: i.world }));
 
+  const saveNativeCapture = async () => {
+    setError(''); setNotice('');
+    const studio = viewportApi.studio;
+    if (!studio) return setError('The viewport is not ready yet.');
+    const width = 1080, height = coverShape === 'portrait' ? 1920 : 1080;
+    const camera = stillCamera(studio, width / height);
+    if (camera.ortho || camera.view?.enabled) return setError('Native EyeSight capture currently needs a perspective camera without a render-border crop.');
+    const pose = studio.bricks.readMatrices();
+    const pieces = model.view.instances.filter(i => !i.placeholder && pose.get(i.key)).map(i => ({
+      key: i.key, part: i.part, color: i.color, world: pose.get(i.key)!,
+    }));
+    if (!pieces.length) return setError('This view has nothing to capture yet.');
+    const ac = new AbortController(); abort.current = ac;
+    setBusy('eyesight');
+    try {
+      const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+      const right = new THREE.Vector3().crossVectors(direction, new THREE.Vector3(0, 1, 0)).normalize();
+      const upright = new THREE.Vector3().crossVectors(right, direction).normalize();
+      const roll = THREE.MathUtils.radToDeg(Math.atan2(-up.dot(right), up.dot(upright)));
+      const dae = buildCollada({ name: plan.name, pieces, geometryOf, colors: getColors(), matrixOrder: 'row',
+        camera: { position: camera.position, target: camera.position.clone().add(direction), fov: camera.fov,
+          near: camera.near, far: camera.far, width, height, roll } });
+      const response = await fetch(`/__eyesight/capture?width=${width}&height=${height}&samples=${finalSamples}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/xml' }, body: dae, signal: ac.signal,
+      });
+      if (!response.ok) throw new Error(await response.text() || 'Native EyeSight capture failed.');
+      if (!response.headers.get('Content-Type')?.includes('image/png')) throw new Error('Native EyeSight needs the local development server. Restart npm run dev.');
+      const original = await response.blob();
+      const processed = await finishCapture(original, false, coverLogo && settings.logoBitmap
+        ? { image: settings.logoBitmap, corner: settings.logoCorner } : null);
+      setComparison({ original, processed });
+      saveBlob(name(`eyesight-cover-${coverShape}`, 'png'), processed);
+      setNotice(`Saved native EyeSight ${width} × ${height} PNG with Studio's shipped film and denoising settings.`);
+    } catch (e) { if ((e as Error).name !== 'AbortError') setError((e as Error).message); }
+    finally { setBusy(null); abort.current = null; }
+  };
+
   const saveColladaModel = () => {
     setError(''); setNotice('');
     const pieces = exportPieces();
@@ -422,6 +506,32 @@ export function CapturePanel({ model }: { model: ModelState }) {
         </p>
       </section>
 
+      <details className="bm-capture-group" aria-label="Native EyeSight">
+        <summary>Separate native EyeSight render</summary>
+        <p className="nx-hint">Render the current pose using installed Studio's own Blackman–Harris film filter and denoising settings. Uses Studio's building light rig and white backdrop. Choose size and logo below; quality uses Final render's sample count. Local development server required.</p>
+        <button type="button" className="nx-btn nx-primary" disabled={working || !canvas} onClick={() => void saveNativeCapture()}>
+          {busy === 'eyesight' ? 'Rendering in EyeSight…' : 'Render native EyeSight cover'}
+        </button>
+        {busy === 'eyesight' && <button type="button" className="nx-btn" onClick={() => abort.current?.abort()}>Cancel EyeSight</button>}
+      </details>
+
+      <section className="bm-capture-group" aria-label="Capture processing">
+        <h4>Capture processing</h4>
+        <label className="nx-check">
+          <input type="checkbox" checked={filmSmoothing} disabled={working}
+            onChange={(e) => setFilmSmoothing(e.currentTarget.checked)} />
+          Blackman–Harris edge smoothing (subtle)
+        </label>
+        <p className="nx-hint">Subtle edge smoothing only; this does not reproduce Studio lighting, materials or denoising. Uses a Blackman–Harris image filter at Studio's recorded 1.5 width. Keeps viewport lighting and materials. Applies to stills, covers, copies and final renders; logos are added afterward. Native EyeSight denoising requires render passes and is unavailable for screenshots.</p>
+        {previewUrls && <>
+          <label className="nx-check"><input type="checkbox" checked={inspectPixels} onChange={e => setInspectPixels(e.currentTarget.checked)} /> Inspect at native pixel size</label>
+          <p className="nx-hint">{inspectPixels ? 'Centre crop at 100%: compare fine edges. Open an image to inspect another area.' : 'Fit previews can hide the subtle edge smoothing.'}</p>
+          <div className="bm-capture-row">
+          <figure style={{ margin: 0, flex: 1, minWidth: 0 }}><figcaption>Before processing</figcaption><img alt="Original capture" src={previewUrls.original} style={{ width: '100%', height: inspectPixels ? 240 : 'auto', objectFit: inspectPixels ? 'none' : 'contain', objectPosition: 'center' }} /><a href={previewUrls.original} target="_blank" rel="noreferrer">Open original</a></figure>
+          <figure style={{ margin: 0, flex: 1, minWidth: 0 }}><figcaption>Saved capture</figcaption><img alt="Processed capture" src={previewUrls.processed} style={{ width: '100%', height: inspectPixels ? 240 : 'auto', objectFit: inspectPixels ? 'none' : 'contain', objectPosition: 'center' }} /><a href={previewUrls.processed} target="_blank" rel="noreferrer">Open saved capture</a></figure>
+        </div></>}
+      </section>
+
       <section className="bm-capture-group" aria-label="Still image">
         <h4><Ic name="camera" /> Still image</h4>
         <p className="nx-hint">{fromCamera
@@ -449,6 +559,29 @@ export function CapturePanel({ model }: { model: ModelState }) {
           </button>
         </div>
         {!clipboard && <p className="nx-hint">Copying images needs a secure context (https or localhost).</p>}
+      </section>
+
+      <section className="bm-capture-group" aria-label="Instagram cover">
+        <h4><Ic name="camera" /> Instagram cover</h4>
+        <p className="nx-hint">Save the current pose as a cover PNG from the selected view. Portrait and square use a different frame, so check your composition.</p>
+        <label className="nx-field">Size
+          <select aria-label="Instagram cover size" value={coverShape} disabled={working}
+            onChange={(e) => setCoverShape(e.currentTarget.value as 'portrait' | 'square')}>
+            <option value="portrait">Portrait · 1080 × 1920 (9:16)</option>
+            <option value="square">Square · 1080 × 1080 (1:1)</option>
+          </select>
+        </label>
+        <label className="nx-check">
+          <input type="checkbox" checked={coverLogo} disabled={working || !settings.logoBitmap}
+            onChange={(e) => setCoverLogo(e.currentTarget.checked)} />
+          Include logo
+        </label>
+        <p className="nx-hint">{settings.logoBitmap
+          ? 'Uses the logo and corner selected in Video settings.'
+          : 'Upload a logo in Video settings to include it on the cover.'}</p>
+        <button type="button" className="nx-btn nx-primary" disabled={working || !canvas} onClick={() => void saveInstagramCover()}>
+          {busy === 'instagram' ? 'Capturing cover…' : 'Save Instagram cover'}
+        </button>
       </section>
 
       <section className="bm-capture-group" aria-label="Transparent still">

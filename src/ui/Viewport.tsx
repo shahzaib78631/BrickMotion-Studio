@@ -68,6 +68,7 @@ import type { MechanismProgram } from '../anim/motion/v4/mechanismProgram';
 import type { Assembly } from '../model/assemble';
 import type { ModelState } from '../state/useModel';
 import { viewportApi } from './viewportApi';
+import { ViewportPathMode } from './viewportPathMode';
 import { withTurntable } from '../anim/heroTurntable';
 import { ContextMenu, type ContextItem } from './ContextMenu';
 import { emptyMenuItems, pieceMenuItems } from './PieceMenu';
@@ -183,6 +184,8 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
   const placing = mode === 'edit' && timelineEditor === 'build' && (tool === 'move' || ((gizmoEnabled || aimWay) && selection.model === editingModel && selection.ids.length > 0));
   /** the Build view shows the build animation at the playhead, with the editor's own camera */
   const engaged = mode === 'edit' && timelineEditor === 'build' && follow && !!timeline && !placing;
+  /** following the build, even while a new plan is being made (the timeline is missing for a moment) */
+  const following = mode === 'edit' && timelineEditor === 'build' && follow && !placing;
   /** what the render loop needs while engaged: the timeline and the pose at a time */
   const live = useRef<{ tl: Timeline; pose: (t: number) => (key: string) => THREE.Matrix4 | null; dirty: boolean; override?: Map<string, THREE.Matrix4> } | null>(null);
   /** Timeline mode uses a separate, non-destructive matrix sampler. */
@@ -265,7 +268,8 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
   // mount: studio, controls, render loop, resize
   useEffect(() => {
     const canvas = canvasRef.current!;
-    const studio = createStudio(canvas);
+    const studio = createStudio(canvas, { alpha: true });
+    const pathMode = new ViewportPathMode(studio, canvas);
     const controls = new OrbitControls(studio.camera, canvas);
     controls.enableDamping = true;
     // Studio's mouse: left-drag selects (a box on empty space), right-drag orbits, Shift+right pans
@@ -941,7 +945,9 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
         }
         if (heldShot && !heroBase) controls.update();
         heldShot = false;
-        studio.render(viewportApi.scene?.prepareRender());
+        const renderFrame = viewportApi.scene?.prepareRender();
+        const settings = useAppSettings.getState();
+        if (!pathMode.render(settings.viewportRenderer, settings.materials.palette, renderFrame)) studio.render(renderFrame);
       }
     };
     raf = requestAnimationFrame(loop);
@@ -987,6 +993,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       viewportApi.refs = null;
       viewportApi.frameAspect = null;
       controls.dispose();
+      pathMode.dispose();
       studio.dispose();
       viewportApi.studio = null;
       viewportApi.controls = null;
@@ -1286,7 +1293,9 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     const studio = viewportApi.studio;
     if (!studio || !engaged || !timeline) {
       live.current = null;
-      followFor.current = null;
+      // A replan after an edit (a part or step moved) takes the timeline away for a moment: that is
+      // not the end of following, or the new timeline would re-frame the user's camera.
+      if (!following) followFor.current = null;
       return;
     }
     // only when following starts (or another model opens) — never after an edit
@@ -1332,7 +1341,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       framed.current = true;
     }
     live.current = { tl, pose, dirty: true };
-  }, [engaged, timeline, model.view, model.assembly.bounds, plan.assemblySpot, editingModel, drawn]);
+  }, [engaged, following, timeline, model.view, model.assembly.bounds, plan.assemblySpot, editingModel, drawn]);
 
   // Fixed-camera staging NEVER changes camera position or lens on Play.
   // The separate Staging > Fit camera button remains an explicit opt-in.

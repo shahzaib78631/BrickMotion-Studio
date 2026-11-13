@@ -99,6 +99,7 @@ export function ExportDialog({ plan, jobs, mode = 'build', onClose }: { plan: Pl
         materials: settings.materials,
               logo,
               pathTrace: settings.videoEngine === 'path' ? { samples: settings.pathSamples } : null,
+              studioPath: settings.videoEngine === 'studio-path' ? { samples: settings.pathSamples } : null,
               snapSound: settings.snapSound,
               sound: settings.sound,
               signal: ac.signal,
@@ -146,6 +147,7 @@ export function ExportDialog({ plan, jobs, mode = 'build', onClose }: { plan: Pl
           {width}×{height} · {fps} fps · MP4 (H.264) · {mode === 'timeline' ? 'keyframed motion' : 'automatic construction'}
           {viewportMode ? ' · from your viewport camera' : ' · from the automatic camera'}
           {settings.videoEngine === 'path' ? ` · path traced, ${settings.pathSamples} samples per frame` : ''}
+          {settings.videoEngine === 'studio-path' ? ` · Studio path, ${settings.pathSamples} samples per frame` : ''}
         </p>
         {phase === 'checking' && <p className="muted">Checking your browser…</p>}
         {sceneCameraInCharge && (

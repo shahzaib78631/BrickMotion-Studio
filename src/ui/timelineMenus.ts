@@ -48,10 +48,11 @@ export function partClipMenu(ids: string[], onMotion: (t: MotionTarget) => void)
       { icon: 'next', label: 'At the start', onClick: () => { stop(); moveTo(ids, { newAt: 0 }); } },
       { icon: 'next', label: 'At the end', onClick: () => { stop(); moveTo(ids, { newAt: steps.length }); } },
     ] },
-    { icon: 'widen', label: one ? 'Split step here (this piece starts a new step)' : 'Split these into their own step',
-      disabled: one ? index <= 0 : !sameStep || ids.length >= count,
+    { icon: 'widen', label: one ? 'Split step here (this piece starts a new step)' : sameStep ? 'Split these into their own step' : 'Gather these into a new step',
+      disabled: one ? index <= 0 : sameStep && ids.length >= count,
       onClick: () => {
         stop();
+        if (!one && !sameStep) { moveTo(ids, { newAt: Math.max(...ids.map((id) => findItem(plan, m, id)?.step ?? 0)) + 1 }); return; }
         st.apply((p) => (one ? splitStepAt(p, m, at, index) : splitStep(p, m, at, ids)));
         st.select(ids);
         st.setCurrentStep(at + 1);
@@ -96,6 +97,8 @@ export function stepClipMenu(index: number, onMotion: (t: MotionTarget) => void,
     { icon: 'widen', label: 'Split in half', disabled: step.pieces.length < 2, onClick: go((p) => splitStep(p, m, index)) },
     { icon: 'widen', label: `Split off the ${picked.length} selected`, disabled: !picked.length || picked.length >= step.pieces.length,
       onClick: go((p) => splitStep(p, m, index, picked), index + 1) },
+    { icon: 'moveHere', label: `Gather the ${st.selection.model === m ? st.selection.ids.length : 0} selected into a new step after this`,
+      disabled: st.selection.model !== m || !st.selection.ids.length, onClick: () => { stop(); moveTo(st.selection.ids, { newAt: index + 1 }); } },
     { icon: 'components', label: 'Join with the previous step', disabled: index === 0, onClick: go((p) => mergeSteps(p, m, index - 1), index - 1) },
     { icon: 'components', label: 'Join with the next step', disabled: index >= steps.length - 1, onClick: go((p) => mergeSteps(p, m, index)) },
     'sep',

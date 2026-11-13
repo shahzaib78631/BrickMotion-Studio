@@ -12,7 +12,7 @@ import { VerticalBlurShader } from 'three/addons/shaders/VerticalBlurShader.js';
  * carry their own.
  */
 export class ContactShadows {
-  readonly plane: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+  readonly plane: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
   private readonly target: THREE.WebGLRenderTarget;
   private readonly blurTarget: THREE.WebGLRenderTarget;
   /** a second, much wider blur of the same shadow, blended in behind the tight one */
@@ -32,6 +32,7 @@ export class ContactShadows {
   /** the bricks are drawn alone, through this scene's override material */
   private readonly stage = new THREE.Scene();
   private readonly uniforms = { darkness: { value: 1 }, tint: { value: new THREE.Color('#000000') } };
+  private surfaceKey = '';
   private strength = 0.5;
   private blur = 2.5;
   private readonly clear = new THREE.Color();
@@ -51,7 +52,7 @@ export class ContactShadows {
     this.plane.material.onBeforeCompile = (shader) => {
       shader.uniforms.wideMap = wide.map;
       shader.uniforms.wideWeight = wide.weight;
-      shader.fragmentShader = `uniform sampler2D wideMap;\nuniform float wideWeight;\n${shader.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\n  diffuseColor.a = max(diffuseColor.a, texture2D(wideMap, vMapUv).a * wideWeight);')}`;
+      shader.fragmentShader = `uniform sampler2D wideMap;\nuniform float wideWeight;\n${shader.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\n  if (any(lessThan(vMapUv, vec2(0.0))) || any(greaterThan(vMapUv, vec2(1.0)))) discard;\n  diffuseColor.a = max(diffuseColor.a, texture2D(wideMap, vMapUv).a * wideWeight);')}`;
     };
     // the camera below looks up with +Z as its "up": a plane facing down maps its image the same way round
     this.plane.rotation.x = Math.PI / 2;
@@ -120,6 +121,37 @@ export class ContactShadows {
     this.blur = Math.max(0.8, ((0.14 * spread) / span) * this.target.width);
   }
 
+  /** Project the contact texture onto the actual receiver instead of intersecting
+   * the rising cove with a horizontal transparent plane. */
+  setSurface(surface: THREE.Mesh<THREE.BufferGeometry> | null): void {
+    this.plane.updateMatrixWorld(true);
+    surface?.updateMatrixWorld(true);
+    const key = surface ? `${surface.geometry.uuid}|${surface.matrixWorld.elements}|${this.plane.matrixWorld.elements}` : '';
+    if (key === this.surfaceKey) return;
+    this.surfaceKey = key;
+    this.plane.geometry.dispose();
+    if (!surface) {
+      this.plane.geometry = new THREE.PlaneGeometry(1, 1);
+      return;
+    }
+    const geometry = surface.geometry.clone();
+    const transform = this.plane.matrixWorld.clone().invert().multiply(surface.matrixWorld);
+    geometry.applyMatrix4(transform);
+    const positions = geometry.getAttribute('position');
+    const uv = new Float32Array(positions.count * 2);
+    // The original unit plane's XY coordinates map directly into the floor camera.
+    for (let i = 0; i < positions.count; i++) {
+      uv[i * 2] = positions.getX(i) + 0.5;
+      uv[i * 2 + 1] = positions.getY(i) + 0.5;
+      // Preserve the receiver's shape, with the same small vertical offset as
+      // the horizontal contact plane, to avoid coplanar depth fighting.
+      positions.setZ(i, positions.getZ(i) - 0.004);
+    }
+    geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    geometry.computeBoundingBox(); geometry.computeBoundingSphere();
+    this.plane.geometry = geometry;
+  }
+
   /** Redraws the shadow from `bricks` (moved into a private scene for the draw and put back). */
   update(renderer: THREE.WebGLRenderer, bricks: THREE.Object3D) {
     if (!this.on) return;
@@ -142,7 +174,7 @@ export class ContactShadows {
       if (!o.visible) return;
       if ((o as THREE.Line).isLine || (o as THREE.Points).isPoints) { o.visible = false; lines.push(o); return; }
       const m = (o as THREE.Mesh).material as THREE.Material | undefined;
-      if ((o as THREE.Mesh).isMesh && m && !Array.isArray(m)) (m.transparent ? clear : solid).push(o);
+      if ((o as THREE.Mesh).isMesh && m && !Array.isArray(m)) (m.transparent || ((m as THREE.MeshPhysicalMaterial).transmission ?? 0) > 0 ? clear : solid).push(o);
     });
     const show = (list: THREE.Object3D[], on: boolean) => { for (const o of list) o.visible = on; };
     const draw = (stage: THREE.Scene, autoClear: boolean) => {

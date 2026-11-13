@@ -102,12 +102,61 @@ const footprintSockets = (part: { body: Box; mesh?: Float32Array }): { pos: Sock
   }));
 
 /**
+ * The underside tubes: one at the centre of every 2 x 2 group of footprint sockets on one plane. A
+ * stud fits inside a tube — a jumper plate's centre stud, or any half-stud offset, seats there — so
+ * the collision verdict must not read it as a stud poking into the part.
+ */
+function tubeSockets(grid: readonly { pos: SocketPoint; dir: SocketPoint }[]): { pos: SocketPoint; dir: SocketPoint; radius: number }[] {
+  const at = new Map(grid.map((s) => [`${s.pos[0]},${s.pos[2]}`, s.pos[1]]));
+  const out: { pos: SocketPoint; dir: SocketPoint; radius: number }[] = [];
+  for (const s of grid) {
+    const [x, y, z] = s.pos;
+    const corners = [at.get(`${x + 20},${z}`), at.get(`${x},${z + 20}`), at.get(`${x + 20},${z + 20}`)];
+    if (corners.some((c) => c === undefined || Math.abs(c - y) > 0.5)) continue;
+    out.push({ pos: [x + 10, y, z + 10], dir: s.dir, radius: 6 });
+  }
+  return out;
+}
+
+/**
+ * A 1-wide row of stud sockets also takes a stud midway between two of them: the underside of a
+ * 1 x 2 plate (or a bracket's inverted face) holds a jumper's centre stud between its slots. Only
+ * where no row runs alongside — in a 2-wide part that spot is a tube's wall.
+ */
+function rowSockets(mouths: readonly { pos: SocketPoint; dir: SocketPoint }[]): { pos: SocketPoint; dir: SocketPoint; radius: number }[] {
+  const out: { pos: SocketPoint; dir: SocketPoint; radius: number }[] = [];
+  const same = (a: SocketPoint, b: SocketPoint, eps = 0.5) => Math.abs(a[0] - b[0]) < eps && Math.abs(a[1] - b[1]) < eps && Math.abs(a[2] - b[2]) < eps;
+  const has = (p: SocketPoint, dir: SocketPoint) => mouths.some((m) => same(m.pos, p) && same(m.dir, dir, 0.05));
+  for (let i = 0; i < mouths.length; i++) for (let j = i + 1; j < mouths.length; j++) {
+    const a = mouths[i], b = mouths[j];
+    if (!same(a.dir, b.dir, 0.05)) continue;
+    const d: SocketPoint = [b.pos[0] - a.pos[0], b.pos[1] - a.pos[1], b.pos[2] - a.pos[2]];
+    if (Math.abs(Math.hypot(...d) - 20) > 0.5) continue;
+    // the row runs along d, square to the opening
+    if (Math.abs(d[0] * a.dir[0] + d[1] * a.dir[1] + d[2] * a.dir[2]) > 0.5) continue;
+    // across the row, in the plane of the openings
+    const n = a.dir;
+    const across: SocketPoint = [(n[1] * d[2] - n[2] * d[1]) / 20, (n[2] * d[0] - n[0] * d[2]) / 20, (n[0] * d[1] - n[1] * d[0]) / 20];
+    const beside = [1, -1].some((k) => [a, b].some((m) => has([m.pos[0] + k * 20 * across[0], m.pos[1] + k * 20 * across[1], m.pos[2] + k * 20 * across[2]], m.dir)));
+    if (beside) continue;
+    const mid: SocketPoint = [a.pos[0] + d[0] / 2, a.pos[1] + d[1] / 2, a.pos[2] + d[2] / 2];
+    // the grid and the shadow library often list the same socket twice
+    if (out.some((o) => same(o.pos, mid) && same(o.dir, a.dir, 0.05))) continue;
+    out.push({ pos: mid, dir: a.dir, radius: 6 });
+  }
+  return out;
+}
+
+/**
  * Every socket a part has: the footprint grid (so a cell the shadow library does not cover
  * still counts) plus the shadow library's own. The collision verdict excuses a stud that
  * meets any of them, so seating and overlap never disagree about a legitimate join.
  */
 export function allSockets(part: { body: Box; snaps?: readonly Snap[]; mesh?: Float32Array }): { pos: SocketPoint; dir: SocketPoint; radius: number; length?: number }[] {
-  const out: { pos: SocketPoint; dir: SocketPoint; radius: number; length?: number }[] = footprintSockets(part).map((s) => ({ ...s, radius: 6 }));
+  const grid = footprintSockets(part);
+  const out: { pos: SocketPoint; dir: SocketPoint; radius: number; length?: number }[] = grid.map((s) => ({ ...s, radius: 6 }));
+  out.push(...tubeSockets(grid));
+  const mouths: { pos: SocketPoint; dir: SocketPoint }[] = grid.map((g) => ({ pos: g.pos, dir: g.dir }));
   for (const s of part.snaps ?? []) {
     // a clip takes a bar, whether or not the library models its opening as a round section
     // a clip, or a finger hinge's female knuckles, takes a bar-sized column
@@ -117,12 +166,14 @@ export function allSockets(part: { body: Box; snaps?: readonly Snap[]; mesh?: Fl
     // footprint sockets they take a stud at the mouth only.
     if (!grip && isStudSocket(s) && !s.shapes.includes('R')) {
       out.push({ pos: [...s.start] as SocketPoint, dir: unit(s.axis), radius: s.radius });
+      mouths.push({ pos: [...s.start] as SocketPoint, dir: unit(s.axis) });
       continue;
     }
     if (!grip && (s.kind !== 'cyl' || s.gender !== 'F' || !s.shapes.some((x) => x === 'R'))) continue;
     if (s.length <= 0 || s.radius < 3 || s.radius > 8.6) continue;
     out.push({ pos: [...s.start] as SocketPoint, dir: unit(s.axis), radius: s.radius, length: s.length });
   }
+  out.push(...rowSockets(mouths));
   return out;
 }
 
@@ -177,6 +228,22 @@ export function columnsOf(part: { body: Box; studs?: readonly StudConnector[]; s
     const tip: SocketPoint = [base[0] + a[0] * s.length, base[1] + a[1] * s.length, base[2] + a[2] * s.length];
     if (out.some((o) => Math.hypot(o.base[0] - base[0], o.base[1] - base[1], o.base[2] - base[2]) < 1)) continue;
     out.push({ base: [base[0], base[1], base[2]], tip: [tip[0], tip[1], tip[2]], radius: s.radius });
+  }
+  return out;
+}
+
+/**
+ * Every shaft a part can put into a hole: its columns plus axles (a cross section, "A", that
+ * `columnsOf` leaves out because an axle never pokes as a stud does). The collision verdict opens a
+ * bore that one of these lies on, so an axle through a connector is not read as overlap.
+ */
+export function shaftsOf(part: { body: Box; studs?: readonly StudConnector[]; snaps?: readonly Snap[] }): StudConnector[] {
+  const out: StudConnector[] = [...columnsOf(part)];
+  for (const s of part.snaps ?? []) {
+    if (s.kind !== 'cyl' || s.gender !== 'M' || s.length <= 0 || s.radius < 3 || s.radius > 8.6) continue;
+    const base = s.start as SocketPoint, a = unit(s.axis);
+    if (out.some((o) => Math.hypot(o.base[0] - base[0], o.base[1] - base[1], o.base[2] - base[2]) < 1 && o.radius === s.radius)) continue;
+    out.push({ base: [base[0], base[1], base[2]], tip: [base[0] + a[0] * s.length, base[1] + a[1] * s.length, base[2] + a[2] * s.length], radius: s.radius });
   }
   return out;
 }

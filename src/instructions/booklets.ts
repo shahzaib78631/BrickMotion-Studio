@@ -14,6 +14,15 @@ const first = (b: Booklet) => b.steps[0];
 
 /** What a booklet instructs, independent of its language/region text: steps, sections, part counts. */
 const signature = (b: Booklet) => JSON.stringify(b.steps.map((s) => [s.number, s.section ?? 0, s.callout.map((c) => c.count)]));
+const EMPTY_TEXT_HASH = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+function sameBooklet(a: Booklet, b: Booklet): boolean {
+  if (a.sourceHash && b.sourceHash && a.sourceHash === b.sourceHash) return true;
+  if (a.visualHash && b.visualHash) return a.visualHash === b.visualHash && signature(a) === signature(b);
+  // Older manifests have no artwork hash. Never equate two raster PDFs by
+  // their empty text layer, or by counts alone.
+  if (a.rasterPages?.length || b.rasterPages?.length) return false;
+  return (a.textHash !== EMPTY_TEXT_HASH && a.textHash === b.textHash) || (!a.sourceHash && !b.sourceHash && signature(a) === signature(b));
+}
 
 /**
  * Drops regional duplicates (same text), orders booklets, and groups them into models:
@@ -25,7 +34,7 @@ export function orderBooklets(list: Booklet[]): { booklets: Booklet[]; models: s
   const unique: Booklet[] = [];
   for (const b of list) {
     if (!b.steps.length) throw new Error(`no instruction steps found in ${b.id}`);
-    const dup = unique.find((u) => u.textHash === b.textHash || signature(u) === signature(b));
+    const dup = unique.find((u) => sameBooklet(u, b));
     if (dup) flags.push(`${b.id} is a duplicate of ${dup.id}; skipped`);
     else unique.push(b);
   }

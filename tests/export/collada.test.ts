@@ -142,3 +142,24 @@ describe('COLLADA export', () => {
     expect(dae).not.toContain('NaN');
   });
 });
+
+it('exports detailed parts without exceeding the function argument limit', () => {
+  const vertexCount = 60_000;
+  const mesh = new THREE.BufferGeometry();
+  const positions = new Float32Array(vertexCount * 3);
+  const normals = new Float32Array(vertexCount * 3);
+  for (let i = 0; i < vertexCount; i++) {
+    positions[i * 3] = i;
+    normals[i * 3 + 2] = 1;
+  }
+  mesh.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  mesh.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+  const detailed: PartGeometry = { main: mesh, mainDoubleSided: null, fixed: [], edges: null };
+  try {
+    const dae = buildCollada({ ...base, pieces: [piece('detailed', 'large', 4, 0)], geometryOf: () => detailed });
+    expect(dae).toContain('id="Part-large-pos-array" count="180000"');
+    expect(dae).toContain('<triangles count="20000" material="main">');
+    expect(dae).toContain('59997 59998 59999</p>');
+    expect(dae).toContain('59999 0 0</float_array>');
+  } finally { mesh.dispose(); }
+});

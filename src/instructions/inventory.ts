@@ -37,7 +37,7 @@ export function inventoryDiffs(booklets: Booklet[], parts: SetPart[], extra: Map
  */
 export function calloutUseDiffs(
   booklets: Booklet[],
-  matches: { booklet: string; step: number; index: number; element: string | null }[],
+  matches: { booklet: string; page?: number; step: number; index: number; element: string | null }[],
   parts: SetPart[],
   extra: Map<string, SetPart>,
 ): Flag[] {
@@ -45,7 +45,7 @@ export function calloutUseDiffs(
   const used = new Map<string, number>();
   for (const m of matches) {
     if (!m.element) continue;
-    const step = booklets.find((b) => b.id === m.booklet)?.steps.find((s) => s.number === m.step);
+    const step = booklets.find((b) => b.id === m.booklet)?.steps.find((s) => s.number === m.step && (m.page === undefined || s.page === m.page));
     const count = step?.callout[m.index]?.count ?? 1;
     const p = byElement.get(m.element) ?? extra.get(m.element);
     const k = p ? key(p) : `element ${m.element}`;

@@ -56,7 +56,7 @@ test('floor colour: picked, else the scene colour; bad values from storage are d
   expect(sanitizeMaterials({ floorColor: 'red' }).floorColor).toBeNull();
   expect(sanitizeMaterials({ sweepCurve: 5 }).sweepCurve).toBe(1);
   expect(sanitizeMaterials({}).sweepCurve).toBe(0.6);
-  expect(takesFloorColor('sweep') && takesFloorColor('matte') && !takesFloorColor('shadow')).toBe(true);
+  for (const { id } of FLOORS) expect(takesFloorColor(id)).toBe(id !== 'none');
 });
 
 test('the curve setting goes from a tight bend to a long soft one', () => {
@@ -73,4 +73,26 @@ test('the floor stays flat out to the edge of the scene, however soft the curve'
   expect(s.curve).toBeCloseTo(sweepFor(10, 0.95).curve, 6);
   // without a scene radius nothing changes
   expect(sweepFor(10, 0.95)).toEqual(sweepFor(10, 0.95, 0));
+});
+
+
+test('floor and curve normals follow the profile without a lighting band at the join', () => {
+  for (const softness of [0, 0.6, 1]) {
+    const shape = sweepFor(10, softness);
+    const g = sweepGeometry(shape);
+    const pos = g.getAttribute('position'), normal = g.getAttribute('normal');
+    for (let i = 0; i < pos.count; i++) {
+      const y = pos.getY(i);
+      if (y === 0) {
+        expect(normal.getY(i)).toBe(1);
+        expect(normal.getZ(i)).toBe(0);
+      } else if (y < shape.curve) {
+        expect(normal.getY(i)).toBeCloseTo(1 - y / shape.curve, 5);
+      } else {
+        expect(normal.getZ(i)).toBe(1);
+      }
+      expect(Math.hypot(normal.getY(i), normal.getZ(i))).toBeCloseTo(1, 6);
+    }
+    g.dispose();
+  }
 });

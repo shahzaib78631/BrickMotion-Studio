@@ -1,4 +1,5 @@
 import type { CatalogEntry } from '../catalog/buildCatalog';
+import { loadPartUsage, type PartUsageFile } from '../catalog/usage';
 import { parseLDConfig, type ColorDef } from '../ldraw/colors';
 import { buildPartGeometry, type PartGeometry } from '../ldraw/geometry';
 import { browserFetchText, PartLibrary, type FetchText } from '../ldraw/library';
@@ -31,6 +32,14 @@ export async function initPartService(fetchText: FetchText = browserFetchText): 
     catalog = [];
   }
   catalogById = new Map(catalog.map((e) => [e.id, e]));
+  // How often each part is used, mined from the OMR and BrickNet corpora
+  // (npm run data:part-usage). Without it the Parts panel's "Frequently used" tab is empty.
+  try {
+    const res = await fetch('/data/part-usage.json');
+    loadPartUsage(res.ok ? ((await res.json()) as PartUsageFile) : undefined);
+  } catch {
+    loadPartUsage(undefined);
+  }
   // Optional connector metadata (npm run setup:shadow). Without it parts simply have no snaps.
   try {
     const res = await fetch('/data/ldcad-shadow.json');

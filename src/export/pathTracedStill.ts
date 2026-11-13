@@ -239,7 +239,7 @@ export function tracedMaterial(source: THREE.Material, materials: Materials | un
   const color = m.userData?.bmColor as ColorDef | undefined;
   if (m.isMeshPhysicalMaterial && color?.finish === 'trans') {
     if (materials?.glass === 'clear') {
-      const tint = new THREE.Color(color.hex);
+      const tint = m.attenuationColor.clone();
       // tinted through its depth like coloured glass; a light tint on each surface
       Object.assign(m, { transparent: false, opacity: 1, depthWrite: true, transmission: 1, ior: 1.52, roughness: 0.02, metalness: 0, thickness: 1, attenuationDistance: 2.5 });
       m.attenuationColor.copy(tint);

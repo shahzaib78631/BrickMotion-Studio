@@ -1,0 +1,11 @@
+Cycles diffuse lobe adaptation: src/dev/cyclesDiffuse.ts
+Copyright 2011–2017 Blender Foundation. Licensed under Apache-2.0.
+Adapted from Blender v2.79b:
+https://github.com/blender/blender/blob/v2.79b/intern/cycles/kernel/closure/bsdf_principled_diffuse.h
+Modifications: WGSL translation; supplies material albedo; cosine is applied by the enclosing integrator.
+This does not include or claim to reproduce EyeSight's proprietary custom nodes.
+
+Film window adaptation: src/dev/cyclesFilmMath.ts
+Copyright 2011–2013 Blender Foundation. Licensed under Apache-2.0.
+https://github.com/blender/blender/blob/v2.79b/intern/cycles/render/film.cpp
+Modifications: TypeScript analytic CDF and inverse table; WGSL camera-jitter integration.

@@ -16,7 +16,7 @@ import {
 import { activeSceneCamera, applyCameraCrop, type SceneSetup } from '../render/sceneSetup';
 import { createStudio, disposeOffscreenStudio, type RenderOptions, type Studio, type StudioLook, type Materials } from '../render/studio';
 import { safeFileName } from '../ui/download';
-import { encodeMp4, type ExportDeps, type FrameSampler } from './exportVideo';
+import { drawLogo, encodeMp4, type ExportDeps, type FrameSampler, type LogoCorner } from './exportVideo';
 
 export type StillType = 'image/png' | 'image/jpeg';
 export type StillResult = { blob: Blob; width: number; height: number };
@@ -74,6 +74,7 @@ export async function captureViewportStill(
 }
 
 export type TransparentStillOpts = {
+  logo?: { image: ImageBitmap; corner: LogoCorner } | null;
   instances: Instance[];
   width: number;
   height: number;
@@ -142,6 +143,14 @@ export async function captureOffscreenStill(opts: TransparentStillOpts, deps: Ex
     studio.fitTo(opts.box, opts.groundY);
     applyStillCamera(studio, opts.camera);
     studio.render();
+    if (opts.logo) {
+      const composite = makeCanvas(opts.width, opts.height);
+      const ctx = composite.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+      if (!ctx) throw new Error('Could not create a 2D canvas for the capture logo.');
+      ctx.drawImage(canvas, 0, 0);
+      drawLogo(ctx, opts.logo.image, opts.logo.corner, opts.width, opts.height);
+      return await canvasBlob(composite, type, 0.92);
+    }
     return await canvasBlob(canvas, type, 0.92);
   } finally {
     disposeOffscreenStudio(studio);

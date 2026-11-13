@@ -12,10 +12,16 @@ const settings = join('/Applications/Studio 2.0/PhotoRealisticRenderer/mac', 'se
 const xml = readFileSync(settings, 'utf8');
 const table: Record<string, [number, number, number]> = {};
 for (const m of xml.matchAll(/<material [^>]*?name="([A-Z]+-[A-Z0-9_-]+)"[^>]*>([\s\S]*?)<\/material>/g)) {
-  const color = /<color name="[^"]*" value="([^"]+)"/.exec(m[2]);
+  const colors = [...m[2].matchAll(/<color name="([^"]*)" value="([^"]+)"/g)];
+  // Transparent shaders carry a white surface highlight and a separate tint.
+  // Follow the tint input instead of taking whichever node was serialized first.
+  const tintNode = m[1].startsWith('TRANS-')
+    ? /<connect from_node="([^"]+)" from_socket="Color" to_node="[^"]+" to_socket="Color"/.exec(m[2])?.[1]
+    : undefined;
+  const color = tintNode ? colors.find((c) => c[1] === tintNode) : colors[0];
   if (!color) continue;
-  const rgb = color[1].trim().split(/\s+/).map(Number);
-  if (rgb.length >= 3 && rgb.slice(0, 3).every(Number.isFinite)) table[m[1]] = [rgb[0], rgb[1], rgb[2]].map((v) => +v.toFixed(5)) as [number, number, number];
+  const rgb = color[2].trim().split(/\s+/).map(Number);
+  if (rgb.length >= 3 && rgb.slice(0, 3).every(Number.isFinite)) table[m[1]] = [rgb[0], rgb[1], rgb[2]];
 }
 const body = Object.entries(table).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `  '${k}': [${v.join(', ')}],`).join('\n');
 writeFileSync(join('src', 'data', 'eyesightColors.generated.ts'),

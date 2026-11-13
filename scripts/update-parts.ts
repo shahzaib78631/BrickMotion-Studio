@@ -1,3 +1,4 @@
+import { resolvePartsLibrary } from './parts-library-source';
 /**
  * Keeps the parts library current, the way BrickLink Studio does: check the official
  * LDraw library for a newer release, apply it, and rebuild the part catalog.
@@ -10,14 +11,14 @@
  *   npm run update:parts -- --studio          # also add parts the installed BrickLink Studio has
  *
  * The official library is published as `complete.zip` (a full snapshot) plus monthly
- * `YYYY-MM.zip` increments; a snapshot apply also removes parts upstream has dropped,
+ * `YYYY-MM.zip` increments; updates preserve locally installed and third-party parts,
  * while an `--from` merge never deletes. The local version comes from
  * `LDConfig.ldr` ("!LDRAW_ORG Configuration UPDATE YYYY-MM-DD"); the upstream
  * fingerprint (Last-Modified + size) is remembered in .cache so an unchanged library
  * costs one HEAD request.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, rmSync, renameSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { buildCatalog, parseDatHeader, type CatalogEntry } from '../src/catalog/buildCatalog';
@@ -105,11 +106,10 @@ async function download(url: string, dest: string, minBytes: number): Promise<st
 
 type Applied = { added: number; updated: number; removed: number };
 
-/** Merges a staged library into `dest`. `prune` removes files upstream no longer ships. */
-function apply(stage: string, dest: string, prune: boolean, dryRun: boolean): Applied {
+/** Merge updates without deleting local or third-party parts. */
+function apply(stage: string, dest: string, dryRun: boolean): Applied {
   const out: Applied = { added: 0, updated: 0, removed: 0 };
   const trees = ['parts', 'p'];
-  const seen = new Set<string>();
   for (const tree of trees) {
     const from = join(stage, tree);
     if (!existsSync(from)) continue;
@@ -118,7 +118,6 @@ function apply(stage: string, dest: string, prune: boolean, dryRun: boolean): Ap
         const full = join(dir, entry.name);
         if (entry.isDirectory()) { walk(full); continue; }
         const rel = relative(stage, full).replace(/\\/g, '/');
-        seen.add(rel);
         const target = join(dest, rel);
         if (!existsSync(target)) { out.added++; if (!dryRun) { mkdirSync(dirname(target), { recursive: true }); writeFileSync(target, readFileSync(full)); } continue; }
         // same size is not proof: compare the bytes so an upstream fix of equal length still lands
@@ -131,19 +130,6 @@ function apply(stage: string, dest: string, prune: boolean, dryRun: boolean): Ap
     walk(from);
   }
   if (existsSync(join(stage, 'LDConfig.ldr')) && !dryRun) writeFileSync(join(dest, 'LDConfig.ldr'), readFileSync(join(stage, 'LDConfig.ldr')));
-  if (prune) {
-    for (const tree of trees) {
-      const walk = (dir: string) => {
-        for (const entry of readdirSync(dir, { withFileTypes: true })) {
-          const full = join(dir, entry.name);
-          if (entry.isDirectory()) { walk(full); continue; }
-          const rel = relative(dest, full).replace(/\\/g, '/');
-          if (!seen.has(rel) && rel.toLowerCase().endsWith('.dat')) { out.removed++; if (!dryRun) unlinkSync(full); }
-        }
-      };
-      try { walk(join(dest, tree)); } catch { /* missing tree */ }
-    }
-  }
   return out;
 }
 
@@ -188,7 +174,10 @@ function rebuildCatalog(dest: string, outDir = join(ROOT, 'public', 'data')) {
     categories: new Map(csv('part_categories.csv.gz').map((r) => [r[0], r[1]] as [string, string])),
   });
   mkdirSync(outDir, { recursive: true });
-  writeFileSync(join(outDir, 'catalog.json'), JSON.stringify(catalog));
+  if (!catalog.length) throw new Error('Refusing to replace the parts catalog with an empty catalog');
+  const catalogPath = join(outDir, 'catalog.json');
+  writeFileSync(`${catalogPath}.tmp`, JSON.stringify(catalog));
+  renameSync(`${catalogPath}.tmp`, catalogPath);
   return catalog.length;
 }
 
@@ -236,38 +225,42 @@ async function main() {
       console.log('✓ already up to date (upstream unchanged since the last sync)');
       return;
     }
-    if (unchanged && args.check) {
+    if (unchanged && cached.localVersion === local && args.check) {
       console.log('✓ up to date: upstream snapshot matches the last sync');
       return;
     }
     console.log('… a new library is available');
     if (args.check) return;
+    // A detected release must never reuse an archive from a previous sync.
+    rmSync(join(CACHE, 'complete.zip'), { force: true });
     source = { kind: 'snapshot', path: await download(COMPLETE_ZIP, join(CACHE, 'complete.zip'), 100_000_000) };
   }
 
   const stage = join(CACHE, 'parts-stage');
   if (source.kind === 'snapshot') {
     console.log('… unpacking');
+    rmSync(stage, { recursive: true, force: true });
     unzipTo(source.path, stage);
   } else {
     mkdirSync(stage, { recursive: true });
   }
-  const stagedLib = source.kind === 'snapshot' ? stage : source.path;
-  const result = apply(stagedLib, dest, source.kind === 'snapshot', args.dryRun);
+  const stagedLib = resolvePartsLibrary(source.kind === 'snapshot' ? stage : source.path, source.kind === 'snapshot');
+  const result = apply(stagedLib, dest, args.dryRun);
   const label = args.dryRun ? 'would apply' : 'applied';
   console.log(`✓ ${label}: ${result.added} added · ${result.updated} updated${result.removed ? ` · ${result.removed} removed` : ''} · now ${libraryVersion(dest)}`);
 
   if (args.dryRun) return;
-  if (result.added || result.updated || result.removed) {
-    // a custom --dest is a test/staging library: keep its catalog beside it, never the app's
-    const outDir = dest === DEFAULT_DEST ? undefined : join(dest, '..', 'data');
-    console.log(`✓ catalog rebuilt: ${rebuildCatalog(dest, outDir)} parts`);
-  }
+  // Always repair the catalog, including after an interrupted prior update.
+  const outDir = dest === DEFAULT_DEST ? undefined : join(dest, '..', 'data');
+  console.log(`✓ catalog rebuilt: ${rebuildCatalog(dest, outDir)} parts`);
 
   if (args.unofficial) {
     const zip = await download(UNOFFICIAL_ZIP, join(CACHE, 'ldrawunf.zip'), 1_000_000);
-    unzipTo(zip, stage);
-    const u = apply(stage, dest, false, false);
+    const unofficialStage = join(CACHE, 'unofficial-stage');
+    rmSync(unofficialStage, { recursive: true, force: true });
+    unzipTo(zip, unofficialStage);
+    const u = apply(resolvePartsLibrary(unofficialStage, false), dest, false);
+    rebuildCatalog(dest, dest === DEFAULT_DEST ? undefined : join(dest, '..', 'data'));
     console.log(`✓ unofficial parts: ${u.added} added · ${u.updated} updated`);
   }
 
@@ -275,7 +268,7 @@ async function main() {
     const sync = join(ROOT, 'scripts', 'sync-studio-parts.ts');
     console.log('… adding the parts the installed BrickLink Studio has');
     try {
-      execFileSync('npx', ['tsx', sync, ...(args.dryRun ? ['--dry-run'] : [])], { stdio: 'inherit' });
+      execFileSync('npx', ['tsx', sync, ...(args.unofficial ? ['--unofficial'] : []), ...(args.dryRun ? ['--dry-run'] : [])], { stdio: 'inherit' });
     } catch {
       console.error('  Studio sync skipped (no Studio install found, or it failed)');
     }
@@ -297,6 +290,7 @@ async function main() {
   mkdirSync(CACHE, { recursive: true });
   // remember the upstream state only when this run actually applied the upstream snapshot,
   // so a --from run never claims the official library is up to date
+  if (dest !== DEFAULT_DEST) return;
   writeFileSync(FINGERPRINT, JSON.stringify({
     syncedAt: new Date().toISOString(),
     localVersion: libraryVersion(dest),

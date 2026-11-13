@@ -74,6 +74,9 @@ export class StudioAO {
         intensity: { value: 0 }, sides: { value: 0.4 }, power: { value: 1.35 }, edge: { value: 0 }, bevel: { value: BEVEL_STUDS },
         texel: { value: new THREE.Vector2(1, 1) }, cameraNear: { value: 0.1 }, cameraFar: { value: 1000 },
         projInv: { value: new THREE.Matrix4() }, viewToWorld: { value: new THREE.Matrix3() }, pxPerUnit: { value: 1 }, lightDir: { value: new THREE.Vector3(0, 1, 0) },
+        // grazing-angle fade thresholds (near, far): widened for the large AO radii that
+        // make GTAO read the receding open floor as occluded (see occlusion()).
+        grazing: { value: new THREE.Vector2(0.06, 0.3) },
       },
       defines: { PERSPECTIVE_CAMERA: 1 },
       vertexShader: /* glsl */ `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
@@ -81,6 +84,7 @@ export class StudioAO {
         #include <packing>
         uniform sampler2D tAO; uniform sampler2D tAO2; uniform float wideK; uniform sampler2D tDepth; uniform sampler2D tNormal;
         uniform float intensity; uniform float sides; uniform float power; uniform float edge; uniform float bevel;
+        uniform vec2 grazing;
         uniform vec2 texel; uniform float cameraNear; uniform float cameraFar;
         uniform mat4 projInv; uniform float pxPerUnit; uniform vec3 lightDir; uniform mat3 viewToWorld;
         varying vec2 vUv;
@@ -130,12 +134,14 @@ export class StudioAO {
           float face = mix(sides, 1.0, smoothstep(0.35, 0.85, up));
           // A surface seen nearly edge-on (the far floor from a low camera) gets almost no
           // depth detail per pixel, and GTAO reads it as occluded: a dark band at the horizon.
+          // A wide world-space radius (BrickLink product's 3 studs) makes GTAO misread the
+          // open floor even well below the horizon, so the fade opens up with the radius.
           #if PERSPECTIVE_CAMERA == 1
             vec3 toEye = -normalize(viewPos(vUv, texture2D(tDepth, vUv).x));
           #else
             vec3 toEye = vec3(0.0, 0.0, 1.0);
           #endif
-          face *= smoothstep(0.06, 0.3, abs(dot(n0, toEye)));
+          face *= smoothstep(grazing.x, grazing.y, abs(dot(n0, toEye)));
           float tight = max(0.0, mix(1.0, pow(ao, power), intensity * face));
           // the sky the surroundings hide at a larger scale (half resolution, so no extra blur)
           float wideAo = wideK > 0.0 ? clamp(texture2D(tAO2, vUv).r, 0.0, 1.0) : 1.0;
@@ -237,6 +243,10 @@ export class StudioAO {
     this.material.uniforms.sides.value = settings.sides ?? 0.4;
     this.material.uniforms.power.value = settings.power ?? 1.35;
     this.pass.updateGtaoMaterial({ radius: settings.radius, thickness: settings.thickness ?? 1.2 });
+    // The wider the occlusion reaches in world units, the further up the open floor GTAO
+    // reads it as occluded: widen the grazing fade from the tight default to the wide one.
+    const t = Math.min(1, Math.max(0, (Math.max(0, settings.radius) - 0.5) / 2.0));
+    this.material.uniforms.grazing.value.set(0.06 + 0.06 * t, 0.3 + 0.25 * t);
     this.wideIntensity = settings.wide?.strength ?? 0;
     if (settings.wide) this.wide.updateGtaoMaterial({ radius: settings.wide.radius });
   }

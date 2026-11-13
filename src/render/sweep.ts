@@ -52,10 +52,16 @@ export function sweepProfile(s: SweepShape, curveSteps = 28): [number, number][]
 export function sweepGeometry(s: SweepShape): THREE.BufferGeometry {
   const profile = sweepProfile(s);
   const across = [-0.5, -0.15, 0, 0.15, 0.5].map((f) => f * s.width);
-  const positions: number[] = [], uvs: number[] = [], index: number[] = [];
+  const positions: number[] = [], normals: number[] = [], uvs: number[] = [], index: number[] = [];
   for (let i = 0; i < profile.length; i++) {
     for (let j = 0; j < across.length; j++) {
       positions.push(across[j], profile[i][1], profile[i][0]);
+      // Exact profile normals keep the flat floor uniformly lit. Averaging triangle
+      // normals weights the huge floor/wall faces against the small curve faces,
+      // creating a straight lighting band under low studio lights.
+      const angle = i < 4 ? 0 : i >= profile.length - 2 ? Math.PI / 2
+        : ((i - 3) / (profile.length - 6)) * Math.PI / 2;
+      normals.push(0, Math.cos(angle), Math.sin(angle));
       uvs.push(j / (across.length - 1), i / (profile.length - 1));
     }
   }
@@ -71,7 +77,7 @@ export function sweepGeometry(s: SweepShape): THREE.BufferGeometry {
   g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   g.setIndex(index);
-  g.computeVertexNormals();
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
   return g;
 }
 

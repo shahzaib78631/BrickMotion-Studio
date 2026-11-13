@@ -82,3 +82,16 @@ test('a base moved later reports the pieces put before it that now follow it', (
   expect(pushedBack(clips, 'base', new Set(['side', 'top'])).map((c) => c.id)).toEqual(['top']);
   expect(pushedBack(clips, 'top', new Set(['side', 'base']))).toEqual([]);
 });
+
+test('on an out-of-date timeline the old time slots go out in the plan\'s current order', () => {
+  const p = plan();
+  const tl = timeline(p);
+  const fresh = partClips(tl, p.steps).sort((a, b) => a.start - b.start).map((c) => c.id);
+  const moved = { ...p, steps: [...p.steps].reverse() };
+  const stale = partClips(tl, moved.steps, true);
+  const slots = partClips(tl, p.steps).map((c) => c.start).sort((a, b) => a - b);
+  expect(stale.map((c) => c.start).sort((a, b) => a - b)).toEqual(slots);
+  const order = [...stale].sort((a, b) => a.start - b.start).map((c) => c.id);
+  expect(order).toEqual(moved.steps.flatMap((s) => s.pieces.map((i) => i.id)));
+  expect(order).not.toEqual(fresh);
+});

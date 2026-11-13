@@ -1,4 +1,5 @@
 import { Fragment, useRef, useState, type FormEvent, type PointerEvent as RPointerEvent } from 'react';
+import { moveTo } from './PieceMenu';
 import { deleteStep, insertStep, mergeSteps, modelSteps, moveItemsToStep, reorderItemInStep, setStepPinned, splitStep, updateStep } from '../plan/ops';
 import { isSub, type Step } from '../plan/types';
 import type { Timeline } from '../anim/timeline';
@@ -106,6 +107,16 @@ function StepEditor({ step, index, model, hasNext, selectedIds, onClose }: StepE
             onClose();
           }}
         ><Ic name="plus" /> {selectedSplit ? 'Split selected' : 'Split in two'}</button>
+        {selectedIds.some((id) => !inThisStep.has(id)) && (
+          <button
+            className="nx-btn nx-sm"
+            title="Gather every selected piece, from all steps, into one new step after this one"
+            onClick={() => {
+              moveTo(selectedIds, { newAt: index + 1 });
+              onClose();
+            }}
+          ><Ic name="moveHere" /> Gather {selectedIds.length} selected into new step</button>
+        )}
         <button
           className="nx-btn nx-sm"
           disabled={!hasNext}
@@ -312,6 +323,9 @@ export function StepsPanel({ timeline = null }: { timeline?: Timeline | null }) 
           { icon: 'check', label: steps[menu.i].pinOrder ? 'Release this step’s order' : 'Keep this step’s pieces in this order',
             hint: steps[menu.i].pinOrder ? 'pinned' : undefined,
             onClick: () => { pause(); setEditAt(null); apply((p) => setStepPinned(p, editingModel, menu.i, !steps[menu.i].pinOrder)); } },
+          { icon: 'moveHere', label: hasSelection ? `Gather the ${selection.ids.length} selected into a new step after this` : 'Gather selected pieces into a new step (select pieces first)',
+            hint: hasSelection ? 'from any step' : undefined, disabled: !hasSelection,
+            onClick: () => { pause(); setEditAt(null); moveTo(selection.ids, { newAt: menu.i + 1 }); } },
           { icon: 'plus', label: 'Insert a step before', onClick: () => add(menu.i) },
           { icon: 'plus', label: 'Insert a step after', onClick: () => add(menu.i + 1) },
           'sep',

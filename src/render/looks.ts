@@ -4,7 +4,8 @@
 /** A scene preset: the studio around the model. */
 export type StudioLook = 'soft' | 'classic' | 'white' | 'dark' | 'black' | 'warm' | 'sky' | 'night' | 'chroma'
   | 'photo-grey' | 'slate-blue' | 'porcelain' | 'sage' | 'sandstone' | 'catalog-cream' | 'graphite' | 'eyesight' | 'bricklink-white'
-  | 'lavender' | 'render-grey' | 'steel-grey' | 'powder-blue' | 'mint' | 'peach' | 'blush' | 'butter' | 'cobalt' | 'eyesight-reference';
+  | 'lavender' | 'render-grey' | 'steel-grey' | 'powder-blue' | 'mint' | 'peach' | 'blush' | 'butter' | 'cobalt' | 'eyesight-reference'
+  | 'catalog-pink' | 'catalog-cyan' | 'catalog-ocean' | 'catalog-amber' | 'catalog-olive' | 'catalog-ember';
 /** What the model stands on. 'auto' is the scene's own choice. */
 export type FloorSurface = 'auto' | 'shadow' | 'sweep' | 'reflective' | 'matte' | 'wood' | 'concrete' | 'none';
 /** How the plastic itself responds to light. */
@@ -27,9 +28,9 @@ export type Materials = { finish: BrickFinish; /** where a brick's colour comes 
   /** soft blurred shadow pooled under the model, 0–1 */ contactShadows: number; /** how much of that shadow clear (transparent) parts get, 0–1 of the solid strength */ clearShadow: number;
   /** what the plastic reflects and is lit by */ environment: EnvironmentId;
   /** colours that give off light (lamps, windows): in the viewport and as light sources in path tracing */ glow: GlowChoice;
-  /** transparent parts: 'clear' refracts light like real glass in path-traced renders, 'milky' frosts them everywhere */ glass: GlassLook;
+  /** transparent parts: 'clear' refracts light with sharp reflections, 'milky' frosts them */ glass: GlassLook;
   /** depth of field for final renders and MP4 export */ lens: LensChoice;
-  /** the floor colour of the curved sweep and the matte table (sRGB hex); null: the scene's own */
+  /** the floor colour or texture tint (sRGB hex); null: the scene's own */
   floorColor?: string | null;
   /** how big the curved sweep's bend is, 0 (a tight corner) to 1 (a long, soft curve) */
   sweepCurve?: number };
@@ -38,8 +39,8 @@ export type GlowChoice = { colors: number[]; strength: number };
 export const GLOW_STRENGTH_RANGE = [0.25, 4] as const;
 export type GlassLook = 'soft' | 'clear' | 'milky';
 export const GLASS_LOOKS: { id: GlassLook; label: string; hint: string }[] = [
-  { id: 'soft', label: 'Soft', hint: 'Frosted, partly see-through: the same everywhere' },
-  { id: 'clear', label: 'Clear', hint: 'Real refracting glass in path-traced renders and videos' },
+  { id: 'soft', label: 'Soft', hint: 'Transmitting plastic with gently softened reflections' },
+  { id: 'clear', label: 'Clear', hint: 'Sharp reflections and tinted refraction in the viewport and renders' },
   { id: 'milky', label: 'Milky', hint: 'Frosted translucent parts, like the LGEO milky finish' },
 ];
 /** Background blur: off, or how wide the blur gets (see LENS_BLUR_PX). */
@@ -291,6 +292,61 @@ export const SCENES: readonly ScenePreset[] = [
     fill: 0.55, fillColor: '#ffffff', fillDirection: [1, 1.6, 0.2], rim: 0.3, rimColor: '#ffffff', rimDirection: [0.3, 1.4, -1.2],
     env: 0.9, exposure: 1.04, reflection: 0.08,
     ao: 0.9, aoRadius: 0.5, shadowSoftness: 9, outlines: false },
+  // Saturated collectible portrait scenes inspired by catalog character renders.
+  { id: 'catalog-pink', label: 'Pop pink', hint: 'Vivid pink collectible backdrop with neutral softbox light', collection: 'render',
+    stops: [{ at: 0, rgb: [255, 111, 186] }, { at: 1, rgb: [255, 36, 151] }],
+    floorColor: '#ff5eaf', floor: 'shadow', shadowColor: '#571736', shadowOpacity: 0.32,
+    hemi: 0.75, hemiGround: '#c5c6ce', key: 2.7, keyColor: '#fffaf5', keyDirection: [-0.75, 1.8, 1.0],
+    fill: 0.65, fillColor: '#f1f5ff', fillDirection: [1, 1.0, 0.6],
+    rim: 0.45, rimColor: '#ffffff', rimDirection: [0.6, 1.4, -1.1],
+    env: 0.7, exposure: 1.0, reflection: 0.04, environment: 'softboxes',
+    ao: 0.8, aoRadius: 0.45, shadowSoftness: 8,
+    contact: { strength: 0.65, reach: 3, spread: 2 }, outlines: false },
+  { id: 'catalog-cyan', label: 'Catalog cyan', hint: 'Bright cyan-blue collectible backdrop with a soft grounded shadow', collection: 'render',
+    stops: [{ at: 0, rgb: [0, 151, 204] }, { at: 1, rgb: [0, 118, 164] }],
+    floorColor: '#008cbd', floor: 'shadow', shadowColor: '#082e40', shadowOpacity: 0.32,
+    hemi: 0.75, hemiGround: '#c5c6ce', key: 2.7, keyColor: '#fffaf5', keyDirection: [-0.75, 1.8, 1.0],
+    fill: 0.65, fillColor: '#f1f5ff', fillDirection: [1, 1.0, 0.6],
+    rim: 0.45, rimColor: '#ffffff', rimDirection: [0.6, 1.4, -1.1],
+    env: 0.7, exposure: 1.0, reflection: 0.04, environment: 'softboxes',
+    ao: 0.8, aoRadius: 0.45, shadowSoftness: 8,
+    contact: { strength: 0.65, reach: 3, spread: 2 }, outlines: false },
+  { id: 'catalog-ocean', label: 'Ocean blue', hint: 'Deep blue backdrop with a brighter blue floor for character portraits', collection: 'render',
+    stops: [{ at: 0, rgb: [0, 139, 197] }, { at: 1, rgb: [0, 73, 130] }],
+    floorColor: '#007eb6', floor: 'shadow', shadowColor: '#071c30', shadowOpacity: 0.32,
+    hemi: 0.75, hemiGround: '#c5c6ce', key: 2.7, keyColor: '#fffaf5', keyDirection: [-0.75, 1.8, 1.0],
+    fill: 0.65, fillColor: '#f1f5ff', fillDirection: [1, 1.0, 0.6],
+    rim: 0.45, rimColor: '#ffffff', rimDirection: [0.6, 1.4, -1.1],
+    env: 0.7, exposure: 1.0, reflection: 0.04, environment: 'softboxes',
+    ao: 0.8, aoRadius: 0.45, shadowSoftness: 8,
+    contact: { strength: 0.65, reach: 3, spread: 2 }, outlines: false },
+  { id: 'catalog-amber', label: 'Amber glow', hint: 'Golden floor rising into burnt orange for warm character portraits', collection: 'render',
+    stops: [{ at: 0, rgb: [255, 197, 0] }, { at: 1, rgb: [185, 77, 0] }],
+    floorColor: '#efa900', floor: 'shadow', shadowColor: '#56300c', shadowOpacity: 0.32,
+    hemi: 0.75, hemiGround: '#c5c6ce', key: 2.7, keyColor: '#fffaf5', keyDirection: [-0.75, 1.8, 1.0],
+    fill: 0.65, fillColor: '#f1f5ff', fillDirection: [1, 1.0, 0.6],
+    rim: 0.45, rimColor: '#ffffff', rimDirection: [0.6, 1.4, -1.1],
+    env: 0.7, exposure: 1.0, reflection: 0.04, environment: 'softboxes',
+    ao: 0.8, aoRadius: 0.45, shadowSoftness: 8,
+    contact: { strength: 0.65, reach: 3, spread: 2 }, outlines: false },
+  { id: 'catalog-olive', label: 'Olive gold', hint: 'Muted antique-gold backdrop with soft neutral light', collection: 'render',
+    stops: [{ at: 0, rgb: [173, 155, 65] }, { at: 1, rgb: [139, 121, 53] }],
+    floorColor: '#a18f3e', floor: 'shadow', shadowColor: '#37301b', shadowOpacity: 0.32,
+    hemi: 0.75, hemiGround: '#c5c6ce', key: 2.7, keyColor: '#fffaf5', keyDirection: [-0.75, 1.8, 1.0],
+    fill: 0.65, fillColor: '#f1f5ff', fillDirection: [1, 1.0, 0.6],
+    rim: 0.45, rimColor: '#ffffff', rimDirection: [0.6, 1.4, -1.1],
+    env: 0.7, exposure: 1.0, reflection: 0.04, environment: 'softboxes',
+    ao: 0.8, aoRadius: 0.45, shadowSoftness: 8,
+    contact: { strength: 0.65, reach: 3, spread: 2 }, outlines: false },
+  { id: 'catalog-ember', label: 'Ember orange', hint: 'Fiery orange floor and deep red backdrop for bold character renders', collection: 'render',
+    stops: [{ at: 0, rgb: [255, 94, 0] }, { at: 1, rgb: [194, 22, 0] }],
+    floorColor: '#ef4800', floor: 'shadow', shadowColor: '#501608', shadowOpacity: 0.32,
+    hemi: 0.75, hemiGround: '#c5c6ce', key: 2.7, keyColor: '#fffaf5', keyDirection: [-0.75, 1.8, 1.0],
+    fill: 0.65, fillColor: '#f1f5ff', fillDirection: [1, 1.0, 0.6],
+    rim: 0.45, rimColor: '#ffffff', rimDirection: [0.6, 1.4, -1.1],
+    env: 0.7, exposure: 1.0, reflection: 0.04, environment: 'softboxes',
+    ao: 0.8, aoRadius: 0.45, shadowSoftness: 8,
+    contact: { strength: 0.65, reach: 3, spread: 2 }, outlines: false },
   { id: 'soft', label: 'Soft studio', hint: 'Neutral grey, soft contact shadows',
     stops: [{ at: 0, rgb: [172, 171, 180] }, { at: 0.3, rgb: [179, 178, 187] }, { at: 0.58, rgb: [184, 183, 192] }, { at: 0.83, rgb: [199, 198, 207] }, { at: 1, rgb: [207, 206, 214] }],
     floorColor: '#b8b7c0', floor: 'shadow', shadowColor: '#262630', shadowOpacity: 0.42,
@@ -419,8 +475,8 @@ export function sanitizeMaterials(v: unknown): Materials {
 export const floorColorOf = (look: StudioLook | undefined, materials: Partial<Materials> | undefined): string =>
   materials?.floorColor ?? sceneOf(look ?? 'soft').floorColor;
 
-/** Floors that take the picked floor colour (the others show the backdrop, a texture or a mirror). */
-export const takesFloorColor = (kind: FloorSurface) => kind === 'sweep' || kind === 'matte';
+/** Every visible floor can take a colour, including the scene default. */
+export const takesFloorColor = (kind: FloorSurface) => kind !== 'none';
 function sanitizeGlow(v: unknown): GlowChoice {
   const o = (v && typeof v === 'object' ? v : {}) as Partial<Record<keyof GlowChoice, unknown>>;
   const colors = Array.isArray(o.colors) ? [...new Set(o.colors.filter((c): c is number => Number.isInteger(c)))] : [];

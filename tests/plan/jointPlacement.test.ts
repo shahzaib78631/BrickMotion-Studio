@@ -107,11 +107,13 @@ describe.skipIf(!ready)('dropping parts onto hinges and balls (real LDraw parts)
     // the arm keeps its orientation
     expect(near([pose.delta[0], pose.delta[5], pose.delta[10]], [1, 1, 1])).toBe(true);
 
-    // the same pose without the joint allowance sits inside the ball
+    // the seated pose is clear. The socket's cup is empty, and the moving part is sampled only where
+    // all three axes agree it is solid, so the ball in the cup is clear even without the joint
+    // allowance (the vertical scan alone used to fill the cup and read it as overlap).
     const world = collisionWorld([plate.solid]);
     const seated = { ...arm.solid, world: new THREE.Matrix4().fromArray(pose.delta).multiply(new THREE.Matrix4().fromArray(arm.solid.world as number[])).elements };
     expect(world.hits([seated]).size).toBe(0);
-    expect(collisionWorld([{ ...plate.solid, joints: undefined }]).hits([seated]).size).toBe(1);
+    expect(collisionWorld([{ ...plate.solid, joints: undefined }]).hits([seated]).size).toBe(0);
     // and the allowance is only for a seated joint: 4 LDU off the ball, the socket is in it
     expect(world.hits([seated], [4, 0, 0]).size).toBe(1);
   });

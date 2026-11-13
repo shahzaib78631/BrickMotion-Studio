@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { applyPauses } from '../anim/pauses';
 import type { Timeline } from '../anim/timeline';
 import type { PlanningProgress } from '../anim/planning';
 import type { AnimOptions } from '../anim/pacing';
@@ -34,7 +35,7 @@ export function useTimeline(ready: boolean, plan: Plan, model: string, opts: Ani
   if (plan !== previous.current) {
     const old = previous.current;
     const keys = new Set([...Object.keys(plan), ...Object.keys(old)]);
-    const animationOnly = [...keys].every((key) => key === 'animation' || key === 'sceneSetup' || key === 'cameraTracks' ||
+    const animationOnly = [...keys].every((key) => key === 'animation' || key === 'sceneSetup' || key === 'cameraTracks' || key === 'pauses' ||
       (plan as unknown as Record<string, unknown>)[key] === (old as unknown as Record<string, unknown>)[key]);
     if (!animationOnly) previous.current = plan;
   }
@@ -68,7 +69,7 @@ export function useTimeline(ready: boolean, plan: Plan, model: string, opts: Ani
       // The promise boundary also catches synchronous request/metrics failures.
       Promise.resolve().then(() => planTimeline(planningPlan, model, opts, 'ui', (progress) => {
         if (alive) setState((prev) => ({ ...prev, progress }));
-      })).then((timeline) => {
+      }, true, false)).then((timeline) => {
         if (alive) setState({ ...request, timeline, error: '', status: 'ready', progress: null });
       }).catch((e: unknown) => {
         if (alive) setState({ ...request, timeline: null, status: 'error', progress: null,
@@ -83,8 +84,12 @@ export function useTimeline(ready: boolean, plan: Plan, model: string, opts: Ani
   // With auto-planning off the last result stays on screen — a plan, or the error it failed
   // with — until the user asks for a new one.
   const kept = !autoPlan && mine && (state.status === 'ready' || state.status === 'error');
+  // Pause blocks re-time the planned timeline here, so editing one never plans again.
+  const pauses = plan.pauses?.[model];
+  const shown = ready && mine && state.status === 'ready' && (current || !autoPlan) ? state.timeline : null;
+  const timeline = useMemo(() => (shown && pauses?.length ? applyPauses(shown, pauses) : shown), [shown, pauses]);
   return {
-    timeline: ready && mine && state.status === 'ready' && (current || !autoPlan) ? state.timeline : null,
+    timeline,
     planning: ready && !dragging && (state.status === 'planning' || (!current && willPlan)),
     error: current || kept ? state.error : '',
     progress: current ? state.progress : null,

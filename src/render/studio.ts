@@ -58,6 +58,10 @@ export type Studio = {
   /** Full ortho frustum height in world units at zoom 1; the width follows the aspect. */
   setOrthoHeight(h: number): void;
   bricks: BrickRenderer;
+  readonly groundY: number;
+  /** Explicit floor tint, shared with path rendering; null keeps its default. */
+  readonly floorColorOverride?: string | null;
+  readonly materialVersion?: number;
   lighting: SceneLighting;
   /** Apply custom lamps and toggle the traditional studio lighting. */
   setSceneSetup(setup?: SceneSetup, helpers?: boolean, selectedId?: string | null, frameAspect?: number): void;
@@ -80,6 +84,8 @@ export type Studio = {
   fitTo(box: THREE.Box3, groundY: number): void;
   /** Optionally render only inside a camera frame (CSS pixel coordinates, top-left origin). */
   render(frame?: { x: number; y: number; width: number; height: number }): void;
+  /** Transparent editing helpers over an independently rendered model. */
+  renderOverlay(frame?: { x: number; y: number; width: number; height: number }): void;
   dispose(): void;
 };
 
@@ -101,9 +107,9 @@ useSmoothSoftShadows();
 /** How bright the fake rounded-edge highlight is (see ambientOcclusion.ts). */
 const ROUNDED_EDGE_LIGHT = 0.18;
 
-export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: { preserveDrawingBuffer?: boolean; transparent?: boolean } = {}): Studio {
+export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: { preserveDrawingBuffer?: boolean; transparent?: boolean; alpha?: boolean } = {}): Studio {
   const transparent = !!opts.transparent;
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: !!opts.preserveDrawingBuffer, alpha: transparent });
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: !!opts.preserveDrawingBuffer, alpha: transparent || !!opts.alpha });
   if (transparent) renderer.setClearColor(0x000000, 0);
   renderer.setPixelRatio(typeof window !== 'undefined' && canvas instanceof HTMLCanvasElement ? Math.min(window.devicePixelRatio, 1.5) : 1);
   renderer.shadowMap.enabled = true;
@@ -379,15 +385,16 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
     shadowFloor.color.set(preset.shadowColor);
     shadowFloor.opacity = preset.shadowOpacity;
     const floorColor = floorColorOf(look, materials);
-    litFloor.color.set(kind === 'wood' || kind === 'concrete' ? '#ffffff' : kind === 'matte' ? floorColor : preset.floorColor);
+    litFloor.color.set(kind === 'wood' || kind === 'concrete' ? materials.floorColor ?? '#ffffff' : floorColor);
     litFloor.roughness = kind === 'concrete' ? 0.85 : kind === 'wood' ? 0.6 : 0.92;
     if (kind === 'wood') litFloor.map = (woodMap ??= woodTexture());
     else if (kind === 'concrete') litFloor.map = (concreteMap ??= concreteTexture());
     else litFloor.map = null;
     litFloor.needsUpdate = true;
-    const lit = kind === 'matte' || kind === 'wood' || kind === 'concrete';
+    const colored = materials.floorColor != null;
+    const lit = kind === 'matte' || kind === 'wood' || kind === 'concrete' || (colored && (kind === 'shadow' || kind === 'reflective'));
     floor.material = lit ? litFloor : shadowFloor;
-    floor.visible = !transparent && kind !== 'none' && kind !== 'reflective' && kind !== 'sweep';
+    floor.visible = !transparent && kind !== 'none' && (kind !== 'reflective' || colored) && kind !== 'sweep';
     sweep.mesh.visible = !transparent && kind === 'sweep';
     sweep.mesh.material.color.set(floorColor);
     sweep.setCurve(materials.sweepCurve ?? DEFAULT_MATERIALS.sweepCurve ?? 0.6);
@@ -459,7 +466,9 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
   };
   /** The scene's occlusion, with the user's on/off and strength/reach overrides. */
   const applyAO = () => ao.set(aoFor(look, materials.ao));
+  let materialVersion = 0;
   const setMaterials = (m: Materials) => {
+    materialVersion++;
     const envChanged = m.environment !== materials.environment;
     materials = { ...m };
     if (envChanged) applyEnvironment(m.environment);
@@ -485,6 +494,7 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
   setLook('soft');
   setRenderOptions(DEFAULT_RENDER);
   ao.setRoundedEdges(materials.roundedEdges ? sceneOf(look).edgeLight ?? ROUNDED_EDGE_LIGHT : 0);
+  const studioObjects = new Set(scene.children);
 
   return {
     renderer,
@@ -505,6 +515,9 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
       applyOrtho();
     },
     bricks,
+    get groundY() { return groundLevel; },
+    get floorColorOverride() { return materials.floorColor ?? null; },
+    get materialVersion() { return materialVersion; },
     lighting,
     setSceneSetup(setup, helpers = false, selectedId = null, frameAspect = aspect) {
       sceneSetup = setup;
@@ -565,12 +578,53 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
       if (wide) contact.setWide(wide.spread, wide.weight);
       if (lightBounds) contact.fitTo(lightBounds, lastGround, reach, spread);
     },
+    renderOverlay(frame) {
+      const hidden: THREE.Object3D[] = [];
+      const background = scene.background, autoClear = renderer.autoClear;
+      const clear = renderer.getClearColor(new THREE.Color()), clearAlpha = renderer.getClearAlpha();
+      const shadowEnabled = renderer.shadowMap.enabled;
+      const hide = (object: THREE.Object3D) => { if (object.visible) { object.visible = false; hidden.push(object); } };
+      // Studio roots contain the floor and lighting. Later roots are editing
+      // helpers (gizmo, selection cage, paths, references), kept above the image.
+      for (const object of studioObjects) if (object !== bricks.root) hide(object);
+      const helperRoots = scene.children.filter((object) => !studioObjects.has(object));
+      for (const object of helperRoots) hide(object);
+      const inks = new Map<THREE.Material, boolean>();
+      bricks.root.traverse((object) => {
+        if ((object as THREE.Line).isLine) hide(object);
+        if (!(object as THREE.Mesh).isMesh) return;
+        const material = (object as THREE.Mesh).material;
+        for (const item of Array.isArray(material) ? material : [material]) {
+          if (!inks.has(item)) inks.set(item, item.colorWrite);
+          item.colorWrite = false;
+        }
+      });
+      try {
+        scene.background = null; renderer.shadowMap.enabled = false;
+        renderer.setScissorTest(false); renderer.setViewport(0, 0, sizeW, sizeH);
+        renderer.setClearColor(0, 0); renderer.clear(); renderer.autoClear = false;
+        if (frame) { renderer.setViewport(frame.x, sizeH - frame.y - frame.height, frame.width, frame.height); renderer.setScissor(frame.x, sizeH - frame.y - frame.height, frame.width, frame.height); renderer.setScissorTest(true); }
+        // Model depth occludes paths/cages behind bricks, without painting them.
+        renderer.render(scene, active);
+        for (const [material, colorWrite] of inks) material.colorWrite = colorWrite;
+        hide(bricks.root);
+        for (const object of helperRoots) if (hidden.includes(object)) object.visible = true;
+        renderer.render(scene, active);
+      } finally {
+        for (const [material, colorWrite] of inks) material.colorWrite = colorWrite;
+        for (const object of hidden) object.visible = true;
+        renderer.autoClear = autoClear; scene.background = background;
+        renderer.shadowMap.enabled = shadowEnabled;
+        renderer.setClearColor(clear, clearAlpha); renderer.setScissorTest(false); renderer.setViewport(0, 0, sizeW, sizeH);
+      }
+    },
     render(frame) {
       const reference = referenceRig.group.visible ? referenceOptions : null;
       setReferenceMaterialMode(reference !== null);
       bindReferenceLighting(reference, referenceRig.shadowMatrices);
       if (reference) referenceRig.update(active, lightCenter, lightRadius, bricks.structureVersion, bricks.poseVersion);
       sweep.face(active);
+      contact.setSurface(sweep.mesh.visible ? sweep.mesh : null);
       contact.update(renderer, bricks.root);
       if (frame) {
         // Render to the true output aspect ratio, not a squeezed full-width canvas.

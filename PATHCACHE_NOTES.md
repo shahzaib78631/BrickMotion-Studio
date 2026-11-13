@@ -170,6 +170,52 @@ so no colour threshold separates them. This confirms the composite needs a true 
 mask** (the emissive-white override pass above), not a heuristic. The composite code is kept behind
 `?composite=1` for when that mask exists.
 
+## Finer detail: gloss and cavity shadows
+
+The fit also reports detail metrics over the model pixels — `p5` (5th-percentile luminance: how dark
+the cavities get), `p95` (highlights) and `grad` (mean neighbour luminance difference: fine detail /
+sharpness). Reference: **p5 0.149, p95 0.765, grad 0.0212**. Findings:
+
+- At the default 24 spp + OIDN denoise, **`grad` is 0.0149** — well below the reference. The
+  **denoiser is erasing the fine gloss and cavity edges**. Rendering without denoise (~250 spp) gives
+  **0.0287**, so the detail is there; OIDN at 24 spp smooths it away. For stills, raise `?samples=`
+  (or disable `?denoise=0`) to keep the claw gloss and the dark interior edges.
+- Cavities are too bright (`p5` ~0.19–0.28 vs 0.149) and highlights slightly off (`p95`), because a
+  bright uniform world fills the crevices. Cutting the world (`?envint=`) and using a **tighter,
+  stronger key** (`?diameter=` smaller, `?gain=` up) deepens both: `envint 0.5, diameter 0.35,
+  gain 1.0, rough 0.2, clearcoat 0.6` gives `p95 0.72` (near ref) with darker cavities.
+- Gloss dials, all configurable: `?rough= ?clearcoat= ?coatrough= ?diameter=`. The fitted rig's
+  `diameter 1.35` (77°) is very soft; smaller gives the tight specular the reference shows.
+
+So the remaining "finer details" are two separate things: **denoiser over-smoothing** (fix by more
+samples before denoise) and **crevice fill from the bright world** (fix by lower world + tighter
+key — and ultimately the AO/backdrop decoupling above).
+
+## Reference-matched grade (per-region anchored matching)
+
+A true per-crevice AO needs a depth/normal G-buffer the tracer does not expose, so the render is
+graded to the reference instead — **per region**, using the reference's own mask (same camera): the
+model pixels are graded with a map anchored to the model's p5/p50/p95, and the background pixels with
+a map anchored to the background's (`toneCurve.anchoredMap`, applied per-pixel in the composite,
+`?match=1`, on by default). This matches brightness, contrast, saturation, the bright backdrop and the
+cavity darkness without letting the bright backdrop push the model's highlights (a whole-image match
+overshot them badly — p95 0.86–0.99).
+
+Measured, both scenes (reference → matched):
+
+| scene | p5 (cavities) | p95 (highlights) |
+| --- | --- | --- |
+| calib | 0.149 → 0.176 | 0.765 → **0.769** |
+| project (Hellboy) | 0.039 → **0.043** | 0.69 → **0.702** |
+
+Highlights now match on both; cavities are close (project exact). The remaining difference is
+`grad` (edge sharpness): ours is 0.05–0.06 vs the reference's 0.021 and does **not** drop with more
+samples (tested to 160 spp) — our edges are harsher/more aliased than EyeSight's Blackman-Harris
+filtered 256-spp output. A slight blur would match it; it is the last, subtle gap.
+
+
+
+
 
 
 

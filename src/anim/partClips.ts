@@ -22,7 +22,7 @@ export type PartClip = {
  * submodel the moment its finished build is attached. Pieces flying inside a submodel's
  * build belong to that submodel's own timeline and are left out.
  */
-export function partClips(tl: Timeline, steps: Step[]): PartClip[] {
+export function partClips(tl: Timeline, steps: Step[], stale = false): PartClip[] {
   const flight = new Map<string, { start: number; end: number; size: number }>();
   for (const u of tl.units) {
     // A preassembled wheel is one flight but both part rows must remain
@@ -50,7 +50,17 @@ export function partClips(tl: Timeline, steps: Step[]): PartClip[] {
       );
     }),
   );
-  return out;
+  return stale ? inPlanOrder(out) : out;
+}
+
+/**
+ * A timeline that is out of date (auto-planning is off) still holds the flights of the plan
+ * it was made from. The pieces keep those time slots but take them in the order the plan has
+ * now, so a move shows at once; Plan makes the real timeline for the new order.
+ */
+function inPlanOrder(clips: PartClip[]): PartClip[] {
+  const slots = clips.map((c) => ({ start: c.start, end: c.end })).sort((a, b) => a.start - b.start || a.end - b.end);
+  return clips.map((c, i) => ({ ...c, start: slots[i].start, end: slots[i].end }));
 }
 
 /**

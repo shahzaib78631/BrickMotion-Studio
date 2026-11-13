@@ -6,6 +6,10 @@
   figcaption { opacity: 0.6; padding: 4px 0; }
   canvas, #ref { background: #fff; display: block; border-radius: 2px; }
   #ref { object-fit: contain; }
+  #panel { display: flex; flex-direction: column; gap: 6px; min-width: 260px; }
+  #panel label { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+  #panel input { width: 120px; }
+  #panel span { opacity: 0.7; min-width: 34px; text-align: right; }
 </style></head>
 <body>
   <figure>
@@ -16,6 +20,19 @@
     <figcaption>WebGPU path tracer (live)</figcaption>
   </figure>
   <figure><img id="ref" alt="EyeSight reference"><figcaption id="reflabel">EyeSight reference</figcaption></figure>
+  <div id="panel">
+    <label>Colour source <select id="p-palette"><option value="studio">Studio / EyeSight</option><option value="ldraw">LDraw</option></select></label>
+    <button id="reset-camera" type="button">Restore reference camera</button>
+    <button id="measure-reference" type="button">Measure reference difference</button>
+    <pre id="comparison" style="white-space:pre-wrap;max-width:260px"></pre>
+    <label>world <input id="p-env" type="range" min="0" max="2" step="0.05" value="0.65"><span></span></label>
+    <label>key gain <input id="p-gain" type="range" min="0" max="3" step="0.05" value="0.35"><span></span></label>
+    <label>light spread <input id="p-diameter" type="range" min="0.05" max="1.5" step="0.05" value="0.3"><span></span></label>
+    <label>roughness <input id="p-rough" type="range" min="0.03" max="1" step="0.01" value="0.2"><span></span></label>
+    <label>clearcoat <input id="p-coat" type="range" min="0" max="1" step="0.01" value="0.6"><span></span></label>
+    <label>albedo <input id="p-alb" type="range" min="0.3" max="1" step="0.01" value="0.65"><span></span></label>
+    <label>samples <input id="p-samples" type="range" min="0" max="256" step="8" value="64"><span></span></label>
+  </div>
   <div id="st">loading…</div>
   <script type="module" src="/src/dev/pathTrace.ts"></script>
 </body></html>

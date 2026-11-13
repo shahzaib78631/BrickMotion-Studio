@@ -122,6 +122,9 @@ export type KeyframeAnimation = {
   buildLayers?: Record<string, BuildAnimationLayer>;
 };
 
+/** The build stands still for `len` seconds starting at `at` (seconds on the finished video, pauses before it included). */
+export type Pause = { id: string; at: number; len: number };
+
 export type Plan = {
   format: 'brickmotion-plan';
   version: 1;
@@ -137,6 +140,8 @@ export type Plan = {
   sceneSetup?: SceneSetup;
   /** Camera tracks (keys and moves) for each model's Build and Timeline videos. */
   cameraTracks?: CameraTracks;
+  /** Freeze blocks on the Build timeline, per editable model: the build stops, the camera keeps moving. */
+  pauses?: Record<string, Pause[]>;
   assemblySpot?: AssemblySpot;
   /**
    * Overrides for planner-generated work bays (Construction V2/V3 anatomical

@@ -13,6 +13,7 @@ import { ContextMenu, type ContextItem } from './ContextMenu';
 import { MotionEditor, type MotionTarget } from './MotionEditor';
 import { partClipMenu, stepClipMenu } from './timelineMenus';
 import { CameraTrackLanes, CameraTrackTools } from './CameraTrackRow';
+import { PauseLane } from './PauseLane';
 import { autoDirect, mergeAuto } from '../anim/cameraTrack/autoDirect';
 import { replaceAutoTrack } from '../anim/cameraTrack/ops';
 import type { DirectorStyle } from '../anim/cameraTrack/types';
@@ -260,9 +261,9 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
   // one clip per piece; rows depend on the zoom (short flights get a readable minimum width)
   const parts = useMemo(() => {
     if (!tl) return { clips: [], rows: 1 };
-    const clips = partClips(tl, steps);
+    const clips = partClips(tl, steps, stale);
     return { clips, rows: packRows(clips, PART_MIN_PX / px, MAX_PART_ROWS) };
-  }, [tl, steps, px]);
+  }, [tl, steps, px, stale]);
   const timeAt = (clientX: number) => {
     const el = scrollRef.current!;
     return (clientX - el.getBoundingClientRect().left + el.scrollLeft - PAD) / px;
@@ -412,6 +413,7 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
               ['box', 'Submodels', LANE],
               ['camera', 'Camera', LANE],
               ...(hasTrack ? [['view', 'Lens', Math.round(LANE * 0.6)], ['settings', 'Pacing', LANE]] as const : []),
+              ['pause', 'Pause', LANE],
             ] as const
           ).map(([icon, label, height]) => (
             <div key={label} className="nx-head-row" style={{ height }}>
@@ -593,6 +595,8 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
                   </div>
                   {trimPreview && trimPreview.kind !== 'step' && <span className="bm-resize-bubble" style={{ left: X(trimPreview.kind === 'intro' ? introEnd : trimPreview.kind === 'build' ? buildEnd : previewDuration) }}>{trimPreview.seconds.toFixed(1)}s</span>}
                 </div>
+                <PauseLane duration={dur} px={px} laneHeight={LANE} X={X} timeAt={timeAt}
+                  openMenu={(x, y, label, items) => setMenu({ x, y, label, items })} />
               </div>
             )}
             {tl && (

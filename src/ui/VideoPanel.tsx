@@ -470,12 +470,13 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
             Renderer
             <select aria-label="Video renderer" value={s.videoEngine} onChange={(e) => s.set({ videoEngine: e.target.value as VideoEngine })}>
               <option value="live">Live (fast)</option>
+              <option value="studio-path">Studio path (WebGPU)</option>
               <option value="path">Path traced (final quality, slow)</option>
             </select>
           </label>
           <label className="nx-field">
             Quality
-            <select aria-label="Path-traced video quality" value={s.pathSamples} disabled={s.videoEngine !== 'path'} onChange={(e) => s.set({ pathSamples: Number(e.target.value) })}>
+            <select aria-label="Path-traced video quality" value={s.pathSamples} disabled={s.videoEngine === 'live'} onChange={(e) => s.set({ pathSamples: Number(e.target.value) })}>
               {PATH_SAMPLE_OPTIONS.map((n) => (
                 <option key={n} value={n}>{n} samples{n === 32 ? ' (draft, grainy)' : n === 64 ? ' (standard)' : n === 256 ? ' (very slow)' : ''}</option>
               ))}
@@ -483,6 +484,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
           </label>
         </div>
         {s.videoEngine === 'path' && <p className="nx-fine">Every frame is path traced like the final still: real bounce light, clear glass and glowing parts light their surroundings. Expect a few seconds per frame, so a 15 s clip at 30 fps takes tens of minutes. Keep this tab in front while it renders.</p>}
+        {s.videoEngine === 'studio-path' && <p className="nx-fine">Uses the Studio path viewport’s lighting, reflections and white shadow ground. Each frame finishes its samples and denoising before encoding. Export takes longer than playback; keep this tab in front.</p>}
         {previewNeedsConsent && <label className="nx-field" role="alert">
           <span><input type="checkbox" checked={acceptUncertified} onChange={(e) => setAcceptUncertified(e.target.checked)} /> {v4NeedsReview
             ? `I have reviewed the ${timeline?.motion?.v4?.mesh.blocked ?? 0} blocked and ${timeline?.motion?.v4?.mesh.unverified ?? 0} unverified v4 assembly route(s)${timeline!.mechanismStage?.collisionStatus !== 'clear' && timeline!.mechanismStage ? ', plus the blocked/unverified post-build mechanical demo' : ''}, and understand that exporting may show pieces passing through others.`

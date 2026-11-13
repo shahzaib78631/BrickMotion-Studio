@@ -154,8 +154,9 @@ export function buildCollada(opts: ColladaOptions): string {
     for (const g of groups) {
       const start = index.length;
       const base = positions.length / 3;
-      positions.push(...g.positions);
-      normals.push(...g.normals);
+      // Detailed parts can exceed the engine's argument limit with push(...values).
+      for (const value of g.positions) positions.push(value);
+      for (const value of g.normals) normals.push(value);
       // a missing normal falls back to the face normal so every reader shades the part
       for (let t = 0; t < g.indices.length; t += 3) {
         const ia = g.indices[t], ib = g.indices[t + 1], ic = g.indices[t + 2];

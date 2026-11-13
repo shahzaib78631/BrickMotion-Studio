@@ -11,6 +11,8 @@ import { DEFAULT_CAMERA_SETTINGS, type CameraFraming, type CameraSettings } from
 import { isVideoFormat, type VideoFormat } from '../export/formats';
 import { isTransitionSettings, type TransitionPreset } from '../anim/cameraTrack/presets';
 
+export type ViewportRenderer = 'live' | 'studio-path' | 'studio-hybrid';
+
 export type Settings = {
   /** Bumped when stored settings need a one-time upgrade on load. */
   schemaVersion: number;
@@ -40,10 +42,10 @@ export type Settings = {
   cameraPresets: TransitionPreset[];
   /** Refit the saved camera to the initial loose pieces when playing Camera frame staging. */
   autoFitStaging: boolean;
-  video: { targetSeconds: number; heroOrbit: boolean; mode: ArrivalMode | 'auto'; fps: ExportFps; introSeconds: number | null; buildSeconds: number | null; outroSeconds: number | null; studioLook: StudioLook; cameraFraming: CameraFraming; camera: CameraSettings; format: VideoFormat; edgeLines: boolean; linearColors: boolean; bottomUp: boolean; snapSound: boolean; planner?: 'legacy' | 'construction-v2' | 'construction-auto' | 'construction-v3' | 'construction-v3-auto' | 'construction-v4' | 'standard-motion' | 'standard-motion-v4' | 'assembly-artifact'; constructionSupport?: 'fixture' | 'table'; constructionBudget?: ConstructionBudgetPreset; constructionStepModules?: boolean; motionV4Limits?: JointLimitRule[]; motionV4Mechanism?: MechanismProgram | null; floorSort: FloorSort; floorSides: FloorSides; floorStyle: FloorStyle; floorMatch: FloorMatch; materials: Materials; sound: SoundSettings; /** MP4 renderer: the live one, or path traced per frame */ videoEngine: VideoEngine; /** path-traced MP4 samples per pixel */ pathSamples: number };
+  video: { targetSeconds: number; heroOrbit: boolean; mode: ArrivalMode | 'auto'; fps: ExportFps; introSeconds: number | null; buildSeconds: number | null; outroSeconds: number | null; studioLook: StudioLook; cameraFraming: CameraFraming; camera: CameraSettings; format: VideoFormat; edgeLines: boolean; linearColors: boolean; bottomUp: boolean; snapSound: boolean; planner?: 'legacy' | 'construction-v2' | 'construction-auto' | 'construction-v3' | 'construction-v3-auto' | 'construction-v4' | 'standard-motion' | 'standard-motion-v4' | 'assembly-artifact'; constructionSupport?: 'fixture' | 'table'; constructionBudget?: ConstructionBudgetPreset; constructionStepModules?: boolean; motionV4Limits?: JointLimitRule[]; motionV4Mechanism?: MechanismProgram | null; floorSort: FloorSort; floorSides: FloorSides; floorStyle: FloorStyle; floorMatch: FloorMatch; materials: Materials; sound: SoundSettings; /** MP4 renderer: the live one, or path traced per frame */ viewportRenderer?: ViewportRenderer; videoEngine: VideoEngine; /** path-traced MP4 samples per pixel */ pathSamples: number };
 };
 
-export type VideoEngine = 'live' | 'path';
+export type VideoEngine = 'live' | 'path' | 'studio-path';
 export const PATH_SAMPLE_OPTIONS = [32, 64, 128, 256] as const;
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -63,7 +65,7 @@ export const DEFAULT_SETTINGS: Settings = {
   cameraFollowsPlayback: true,
   cameraPresets: [],
   autoFitStaging: false,
-  video: { targetSeconds: 15, heroOrbit: true, mode: 'auto', fps: 30, introSeconds: null, buildSeconds: null, outroSeconds: null, studioLook: 'bricklink-white', cameraFraming: 'cinematic', camera: DEFAULT_CAMERA_SETTINGS, format: '9:16', edgeLines: false, linearColors: true, bottomUp: true, snapSound: true, planner: 'legacy', constructionSupport: 'fixture', constructionBudget: 'standard', constructionStepModules: false, motionV4Limits: [], motionV4Mechanism: null, floorSort: 'step', floorSides: 'front-back', floorStyle: 'packed', floorMatch: 'fill', materials: DEFAULT_MATERIALS, sound: DEFAULT_SOUND, videoEngine: 'live', pathSamples: 64 },
+  video: { targetSeconds: 15, heroOrbit: true, mode: 'auto', fps: 30, introSeconds: null, buildSeconds: null, outroSeconds: null, studioLook: 'bricklink-white', cameraFraming: 'cinematic', camera: DEFAULT_CAMERA_SETTINGS, format: '9:16', edgeLines: false, linearColors: true, bottomUp: true, snapSound: true, planner: 'legacy', constructionSupport: 'fixture', constructionBudget: 'standard', constructionStepModules: false, motionV4Limits: [], motionV4Mechanism: null, floorSort: 'step', floorSides: 'front-back', floorStyle: 'packed', floorMatch: 'fill', materials: DEFAULT_MATERIALS, sound: DEFAULT_SOUND, viewportRenderer: 'live', videoEngine: 'live', pathSamples: 64 },
 };
 
 const KEY = 'settings';
@@ -121,7 +123,8 @@ export function sanitizeSettings(stored: Partial<Settings>): Settings {
   if (!['step', 'colour', 'part', 'size', 'all'].includes(video.floorSort)) video.floorSort = 'step';
   if (!['front-back', 'front', 'behind', 'sides', 'around'].includes(video.floorSides)) video.floorSides = 'front-back';
   if (typeof video.snapSound !== 'boolean') video.snapSound = DEFAULT_SETTINGS.video.snapSound;
-  if (video.videoEngine !== 'path') video.videoEngine = 'live';
+  if (video.videoEngine !== 'path' && video.videoEngine !== 'studio-path') video.videoEngine = 'live';
+  if (video.viewportRenderer !== 'studio-path' && video.viewportRenderer !== 'studio-hybrid') video.viewportRenderer = 'live';
   if (!PATH_SAMPLE_OPTIONS.includes(video.pathSamples as (typeof PATH_SAMPLE_OPTIONS)[number])) video.pathSamples = 64;
   if (typeof s.showSelectionBar !== 'boolean') s.showSelectionBar = DEFAULT_SETTINGS.showSelectionBar;
   if (typeof s.collision !== 'boolean') s.collision = DEFAULT_SETTINGS.collision;

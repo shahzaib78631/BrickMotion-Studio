@@ -1,3 +1,4 @@
+import { PartsUpdatePrompt } from './ui/PartsUpdatePrompt';
 import { useEffect, useMemo, useState } from 'react';
 import { animOptions, useAppSettings } from './state/appSettings';
 import { spotWarnings } from './plan/assemblySpots';
@@ -12,6 +13,7 @@ import { useTimeline } from './state/useTimeline';
 import { usePlayback } from './state/playback';
 import { AboutDialog } from './ui/AboutDialog';
 import { AiPanel } from './ui/AiPanel';
+import { BricksafePanel } from './ui/BricksafePanel';
 import { BuildTimeline } from './ui/BuildTimeline';
 import { useFlightEdit } from './state/flightEdit';
 import { KeyframeTimeline } from './ui/KeyframeTimeline';
@@ -55,12 +57,12 @@ import './ui/reference.css';
 import './ui/themes.css';
 import './ui/layout.css';
 
-type Tab = 'models' | 'parts' | 'suggest' | 'generate' | 'assembly' | 'steps' | 'checks' | 'mechanisms' | 'ai' | 'video' | 'materials' | 'sound' | 'staging' | 'capture' | 'settings';
+type Tab = 'models' | 'parts' | 'suggest' | 'generate' | 'assembly' | 'steps' | 'checks' | 'mechanisms' | 'ai' | 'bricksafe' | 'video' | 'materials' | 'sound' | 'staging' | 'capture' | 'settings';
 /** The rail, in groups: building the model, how the video looks, then assets; Settings sits at the bottom. */
 const TAB_GROUPS: [Tab, IconName, string][][] = [
   [['models', 'box', 'Models'], ['parts', 'parts', 'Parts'], ['suggest', 'wand', 'Suggest'], ['generate', 'brick', 'Generate'], ['assembly', 'spot', 'Assembly'], ['steps', 'steps', 'Animation'], ['mechanisms', 'rotate', 'Mechanisms']],
   [['video', 'camera', 'Render'], ['materials', 'palette', 'Materials'], ['sound', 'sound', 'Sound'], ['staging', 'layout', 'Staging'], ['capture', 'video', 'Capture']],
-  [['ai', 'folder', 'Assets']],
+  [['ai', 'folder', 'Assets'], ['bricksafe', 'search', 'Bricksafe']],
   [['settings', 'settings', 'Settings']],
 ];
 /** the side panel can be dragged between these widths */
@@ -250,6 +252,7 @@ function Studio() {
 
   return (
     <div className="studio" {...themeAttrs}>
+      <PartsUpdatePrompt />
       <div className={`nx ${selectedIds.length ? 'has-sel' : ''} ${animate ? '' : 'bm-build-mode'}`} style={{ '--tl-h': animate ? `${tlHeight}px` : '0px' } as React.CSSProperties}>
         <Toolbar
           theme={theme}
@@ -290,6 +293,7 @@ function Studio() {
             {tab === 'checks' && <ChecksPanel warnings={warnings} />}
             {tab === 'mechanisms' && <MechanismLabPanel model={model} onRender={() => { setTab('video'); setPanelClosed(false); }} />}
             {tab === 'ai' && <AiPanel warnings={warnings} onOpenSettings={() => setTab('settings')} />}
+            {tab === 'bricksafe' && <BricksafePanel />}
             {tab === 'video' && <VideoPanel timeline={timeline} onExport={exportCurrent} />}
             {tab === 'materials' && <MaterialsPanel model={model} />}
             {tab === 'sound' && <SoundPanel />}

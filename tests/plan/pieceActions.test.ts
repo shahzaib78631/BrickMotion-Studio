@@ -44,6 +44,15 @@ describe('moving pieces between steps', () => {
     expect(end.step).toBe(2);
   });
 
+  it('gathers pieces from different steps into one new step, dropping steps it empties', () => {
+    const r = movePiecesToNewStep(plan(), '', ['b', 'c', 'e'], 1);
+    expect(ids(r.plan)).toEqual([['a'], ['b', 'c', 'e'], ['d']]);
+    expect(r.step).toBe(1);
+    const all = movePiecesToNewStep(plan(), '', ['a', 'b', 'c'], 3);
+    expect(ids(all.plan)).toEqual([['d', 'e'], ['a', 'b', 'c']]);
+    expect(all.step).toBe(1);
+  });
+
   it('works inside a submodel and leaves the others alone', () => {
     const r = movePiecesToStep(plan(), 'wheel', ['w2'], 0);
     expect(ids(r.plan, 'wheel')).toEqual([['w1', 'w2']]);

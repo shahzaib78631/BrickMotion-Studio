@@ -4,6 +4,7 @@ import type { Unit } from '../anim/timelineData';
 import { findItem } from '../plan/ops';
 import { isSub, type MotionStyle } from '../plan/types';
 import { flightsByKey, floorShiftsByKey, floorTurnsByKey, resetFloorShifts } from '../plan/pieceActions';
+import { applyPauses } from '../anim/pauses';
 import { applyCustomFlights } from '../anim/customFlight';
 import type { Timeline } from '../anim/timeline';
 import { decodeTimeline, type EncodedTimeline } from '../anim/timelineCodec';
@@ -32,7 +33,8 @@ function baseOf(p: Plan): { plan: Plan; key: string } {
   if (!b) {
     let plan = resetFloorShifts(p);
     // Editor-only viewing state and selection groups never invalidate a timeline.
-    const { showModelAtSpot: _view, sceneSetup: _scene, motion: _motion, ...withoutView } = plan;
+    // Pause blocks re-time the finished timeline (applyPauses), like motion styles.
+    const { showModelAtSpot: _view, sceneSetup: _scene, motion: _motion, pauses: _pauses, ...withoutView } = plan;
     plan = withoutView as Plan;
     // "Loose pieces follow on" (the default): the main spot is applied to the planned
     // timeline as one rigid transform, so it is not part of the planning cache key —
@@ -136,7 +138,7 @@ const lanes = {
 };
 
 /** Parts must be loaded first. UI replacement never cancels an export's request. */
-export function planTimeline(plan: Plan, model: string, opts: AnimOptions, lane: Lane = 'ui', onProgress?: (p: PlanningProgress) => void, withShifts = true): Promise<Timeline> {
+export function planTimeline(plan: Plan, model: string, opts: AnimOptions, lane: Lane = 'ui', onProgress?: (p: PlanningProgress) => void, withShifts = true, withPauses = true): Promise<Timeline> {
   const base = baseOf(plan).plan;
   const planned = planBase(base, model, opts, lane, onProgress);
   if (!withShifts) return planned;
@@ -156,6 +158,10 @@ export function planTimeline(plan: Plan, model: string, opts: AnimOptions, lane:
   }
   // last: a flight is kept in its seat's own frame, so the main spot turns it too
   if (flights.size) res = res.then((tl) => applyCustomFlights(tl, flights));
+  // very last: a pause is a pure clock change of the finished timeline
+  // (the editor adds them itself, so a pause edit never waits for the planner)
+  const pauses = withPauses ? plan.pauses?.[model] : undefined;
+  if (pauses?.length) res = res.then((tl) => applyPauses(tl, pauses));
   return res;
 }
 

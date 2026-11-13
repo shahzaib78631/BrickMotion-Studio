@@ -218,6 +218,7 @@ export const PlanSchema = z.object({
   animation: AnimationSchema.optional(),
   sceneSetup: SceneSetupSchema.optional(),
   cameraTracks: CameraTracksSchema.optional(),
+  pauses: z.record(z.string(), z.array(z.object({ id: z.string(), at: z.number().min(0), len: z.number().min(0.1).max(60) }))).optional(),
   assemblySpot: AssemblySpotSchema.optional(),
   workBaySpots: z.record(z.string().min(1), AssemblySpotSchema).optional(),
   loosePiecesFollow: z.boolean().optional(),

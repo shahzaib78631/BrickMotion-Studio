@@ -39,6 +39,7 @@ export function ViewportChrome({ model, onMakeSubmodel }: { model: ModelState; o
   const attachmentPose = usePlacing((s) => s.state?.pose?.attachment);
   const attachmentValid = usePlacing((s) => s.state?.pose?.valid);
   const wireframe = useAppSettings((s) => s.wireframe);
+  const viewportRenderer = useAppSettings((s) => s.viewportRenderer);
   const finish = useAppSettings((s) => s.materials.finish);
   const clay = finish === 'clay';
   const [grid, setGrid] = useState(8);
@@ -96,6 +97,11 @@ export function ViewportChrome({ model, onMakeSubmodel }: { model: ModelState; o
     {showGrid && <div className="bm-screen-grid" aria-hidden="true" />}
     <div className="bm-viewport-top-left bm-floating-group" role="group" aria-label="Viewport display">
       <ViewsDropdown />
+      <select aria-label="Viewport renderer" title="Studio path uses the reviewed lighting preset, glossy reflections and progressive denoising" value={viewportRenderer} onChange={(e) => useAppSettings.getState().set({ viewportRenderer: e.target.value === 'studio-hybrid' ? 'studio-hybrid' : e.target.value === 'studio-path' ? 'studio-path' : 'live' })}>
+        <option value="live">Current viewport</option>
+        <option value="studio-path">Studio path</option>
+        <option value="studio-hybrid">Studio hybrid (preview)</option>
+      </select>
       <button className={view === 'user' ? 'selected' : ''} onClick={() => { viewportApi.views?.setProjection('perspective'); if (view === 'top') viewportApi.views?.orbit(34, -46); else if (view === 'bottom') viewportApi.views?.orbit(34, 46); else viewportApi.views?.orbit(18, 8); }}>3D</button>
       <button className={laidOut ? 'selected' : ''} aria-pressed={laidOut} title="Lay out every part on the floor" onClick={toggleSplit}>Split</button>
     </div>
@@ -126,10 +132,10 @@ export function ViewportChrome({ model, onMakeSubmodel }: { model: ModelState; o
         {[4, 8, 12, 16, 24].map((g) => <option key={g} value={g}>{g}</option>)}
       </select>
       <span className="bm-toolbar-separator" />
-      <button className={`bm-view-toggle ${wireframe ? 'on' : ''}`} aria-pressed={wireframe}
+      <button className={`bm-view-toggle ${wireframe ? 'on' : ''}`} aria-pressed={wireframe} disabled={viewportRenderer !== 'live'}
         title={wireframe ? 'Wireframe on: parts are outlines only — click for solid parts' : 'Wireframe: draw every part as outlines only'}
         onClick={() => useAppSettings.getState().set({ wireframe: !wireframe })}>Wire</button>
-      <button className={`bm-view-toggle ${clay ? 'on' : ''}`} aria-pressed={clay}
+      <button className={`bm-view-toggle ${clay ? 'on' : ''}`} aria-pressed={clay} disabled={viewportRenderer !== 'live'}
         title={clay ? 'Clay render on: every part one neutral colour — click to restore the brick finish'
           : 'Clay render: every part one neutral colour, to judge shape (Materials → Brick finish)'}
         onClick={() => {

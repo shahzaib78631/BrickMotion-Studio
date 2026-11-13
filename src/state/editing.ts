@@ -18,6 +18,7 @@ import { analyseSelection } from '../plan/smartJoints';
 /** How far (plates, or studs for a duplicate) a blocked edit looks for a clean spot. */
 const RETRY_PLATES = 12;
 import { ensureParts, getColors, metricsOf } from './partService';
+import { recordRecentPart } from '../catalog/recentParts';
 import { useStudio } from './store';
 
 const PLACEHOLDER: Box = { min: [0, -24, 0], max: [20, 0, 20] };
@@ -83,6 +84,7 @@ export function findFreeSpot(view: Assembly, body: Box, gap = 0): Grid {
  * it was dropped on the timeline.
  */
 export async function addPart(part: string, at?: { step: number; index: number }): Promise<void> {
+  recordRecentPart(part);
   await ensureParts([part]);
   const st = useStudio.getState();
   const { plan, editingModel, currentStep, paintColor } = st;

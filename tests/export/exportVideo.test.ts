@@ -230,3 +230,49 @@ test('with the shutter shut every frame is one render', async () => {
   expect(blurCalls.made).toBe(0);
   expect(render.mock.calls.length).toBe(calls.add.length);
 });
+
+test('Studio path encodes completed GPU frames using the same pose/camera sampler', async () => {
+  const s = fakeStudio(), gpuCanvas = fakeCanvas();
+  const draw = vi.fn();
+  const canvas = () => ({ width: 1080, height: 1920, getContext: () => ({ ...fakeCtx(), drawImage: draw }) }) as unknown as OffscreenCanvas;
+  const renderFrame = vi.fn(async (signal: AbortSignal) => { expect(signal.aborted).toBe(false); });
+  const dispose = vi.fn();
+  const createStudioPath = vi.fn(async () => ({ canvas: gpuCanvas, renderFrame, dispose }));
+  await exportVideo({ ...opts(new AbortController().signal), studioPath: { samples: 32 } }, { createStudio: s.create as never, createCanvas: canvas, createStudioPath });
+  expect(createStudioPath).toHaveBeenCalledOnce();
+  expect(createStudioPath).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.objectContaining({ samples: 32, interactive: false, width: 1080, height: 1920 }));
+  expect(renderFrame).toHaveBeenCalledTimes(3);
+  expect(draw.mock.calls.every(([source]) => source === gpuCanvas)).toBe(true);
+  expect(s.render).not.toHaveBeenCalled();
+  expect(s.create.mock.results[0].value.bricks.setMatrices).toHaveBeenCalledTimes(3);
+  expect(dispose).toHaveBeenCalledOnce();
+  expect(calls.finalize).toBe(1);
+});
+
+test('Studio path cancellation stops encoding and disposes its GPU session', async () => {
+  const s = fakeStudio(), ac = new AbortController(), dispose = vi.fn();
+  const renderFrame = vi.fn(async () => { ac.abort(); throw new DOMException('cancelled', 'AbortError'); });
+  await expect(exportVideo({ ...opts(ac.signal), studioPath: { samples: 64 } }, { createStudio: s.create as never, createCanvas: fakeCanvas, createStudioPath: async () => ({ canvas: fakeCanvas(), renderFrame, dispose }) })).rejects.toMatchObject({ name: 'AbortError' });
+  expect(dispose).toHaveBeenCalledOnce();
+  expect(s.create.mock.results[0].value.dispose).toHaveBeenCalledOnce();
+  expect(calls.add).toEqual([]);
+  expect(calls.cancel).toBe(1);
+});
+
+test('Studio path failures propagate instead of silently exporting the old renderer', async () => {
+  const s = fakeStudio();
+  await expect(exportVideo({ ...opts(new AbortController().signal), studioPath: { samples: 64 } }, { createStudio: s.create as never, createCanvas: fakeCanvas, createStudioPath: async () => { throw new Error('WebGPU unavailable'); } })).rejects.toThrow('WebGPU unavailable');
+  expect(s.render).not.toHaveBeenCalled();
+  expect(calls.add).toEqual([]);
+  expect(s.create.mock.results[0].value.dispose).toHaveBeenCalledOnce();
+});
+
+test('Studio path retains motion-blur subframes instead of substituting live renders', async () => {
+  const s = fakeStudio(), renderFrame = vi.fn(async () => {});
+  const canvas = () => ({ width: 1080, height: 1920, getContext: () => ({ ...fakeCtx(), getImageData: () => ({ width: 1080, height: 1920, data: new Uint8ClampedArray(0) }) }) }) as unknown as OffscreenCanvas;
+  await exportVideo({ ...opts(new AbortController().signal), cameraTrack: swingTrack(1), studioPath: { samples: 32 } }, { createStudio: s.create as never, createCanvas: canvas, createStudioPath: async () => ({ canvas: canvas(), renderFrame, dispose: vi.fn() }) });
+  expect(renderFrame.mock.calls.length).toBeGreaterThan(calls.add.length);
+  expect(blurCalls.adds).toBe(renderFrame.mock.calls.length);
+  expect(blurCalls.resolves).toBe(calls.add.length);
+  expect(s.render).not.toHaveBeenCalled();
+});

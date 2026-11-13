@@ -75,6 +75,13 @@ function installTexture(m: THREE.MeshPhysicalMaterial) {
   m.onBeforeCompile = (shader) => {
     const color = m.userData.bmColor as ColorDef | undefined;
     if (referenceMaterialMode) referenceMaterialShader(shader, color?.finish === 'solid', color?.code === 0);
+    if (color?.finish === 'trans') {
+      // Thickness is stored in world studs. Three scales it by modelMatrix,
+      // but our LDraw root already converts LDU to studs (1/20).
+      shader.fragmentShader = shader.fragmentShader.replace('#include <transmission_fragment>',
+        THREE.ShaderChunk.transmission_fragment.replace('material.thickness = thickness;',
+          'material.thickness = thickness / max(length(modelMatrix[0].xyz), 0.000001);'));
+    }
     const id = (m.userData.bmTexture as number) ?? 0;
     shader.defines = { ...(shader.defines ?? {}), BM_TEXTURE: id };
     if (!id) return;
@@ -117,18 +124,32 @@ function style(m: THREE.MeshPhysicalMaterial, c: ColorDef) {
   m.sheenColor.set(f.tint && c.finish !== 'trans' ? f.tint : paletteHex(c)).lerp(new THREE.Color('#ffffff'), 0.5);
   if (!f.tint || c.finish === 'trans') {
     if (c.finish === 'trans') {
-      if (profile.glass === 'milky') {
-        // LGEO lg_milky_finish: frosted translucent, lit from inside
-        Object.assign(m, { transparent: true, opacity: Math.min(0.92, c.alpha / 255 + 0.12), depthWrite: false, transmission: 0.3, roughness: 0.55, thickness: 0.5 });
-      } else {
-        Object.assign(m, { transparent: true, opacity: c.alpha / 255, depthWrite: false, transmission: 0.6, roughness: 0.1, thickness: 0.5 });
-      }
+      // Physical transmission already reveals the background. Alpha blending on top
+      // fades reflections and stacks washed-out faces across a hollow part.
+      const tint = new THREE.Color(paletteHex(c));
+      const milky = profile.glass === 'milky';
+      Object.assign(m, {
+        transparent: false, opacity: 1, depthWrite: true,
+        transmission: milky ? 0.3 : profile.glass === 'clear' ? 1 : 0.92,
+        roughness: milky ? 0.55 : profile.glass === 'clear' ? 0.02 : 0.1,
+        metalness: 0, clearcoat: 0, ior: 1.52,
+        // The live transmission pass approximates one wall, not the entire
+        // hollow part. A half-stud slab displaces samples into adjacent bricks
+        // and makes each faceted wall look like a separate broken prism.
+        thickness: milky ? 0.08 : 0.06,
+        attenuationDistance: 0.3,
+      });
+      // Beer–Lambert absorption takes log(tint). A zero channel absorbs all
+      // light at every nonzero thickness, turning saturated glass into paint.
+      m.attenuationColor.setRGB(Math.max(0.02, tint.r), Math.max(0.02, tint.g), Math.max(0.02, tint.b));
+      m.color.copy(tint).lerp(new THREE.Color('#ffffff'), milky ? 0.35 : 0.8);
     }
     else if (c.finish === 'chrome') Object.assign(m, { metalness: 1, roughness: 0.08 });
     else if (c.finish === 'metal') Object.assign(m, { metalness: 0.7, roughness: 0.2 });
     else if (c.finish === 'pearl') Object.assign(m, { metalness: 0.5, roughness: 0.1 });
     else if (c.finish === 'rubber') Object.assign(m, { roughness: 0.86, clearcoat: 0 });
   }
+  m.needsUpdate = true;
   // light-up colours (Materials → Glowing parts): their own colour, given off as light
   const glows = profile.glow.colors.includes(c.code);
   m.emissive.set(glows ? c.hex : '#000000');

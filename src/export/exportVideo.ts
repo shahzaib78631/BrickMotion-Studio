@@ -47,6 +47,8 @@ type CommonExportOpts = {
   logo: { image: ImageBitmap; corner: LogoCorner } | null;
   /** path trace every frame (samples per pixel) instead of the live renderer: much slower */
   pathTrace?: { samples: number } | null;
+  /** The reviewed WebGPU Studio path preset, shared with the selectable viewport. */
+  studioPath?: { samples: number } | null;
   snapSound?: boolean;
   /** how the clicks sound; the defaults when left out */
   sound?: SoundSettings;
@@ -64,7 +66,9 @@ export type KeyframeExportOpts = CommonExportOpts & {
 };
 
 type AnyCanvas = HTMLCanvasElement | OffscreenCanvas;
-export type ExportDeps = { createStudio: typeof createStudio; createCanvas?: (w: number, h: number) => AnyCanvas };
+type StudioPathSession = { canvas: AnyCanvas; renderFrame(signal: AbortSignal, progress?: (done: number, total: number) => void): Promise<void>; dispose(): void };
+export type ExportDeps = { createStudio: typeof createStudio; createCanvas?: (w: number, h: number) => AnyCanvas;
+  createStudioPath?: (canvas: AnyCanvas, studio: ReturnType<typeof createStudio>, options: { width: number; height: number; samples: number; palette: 'studio' | 'ldraw'; interactive: boolean }) => Promise<StudioPathSession> };
 
 const LOGO_WIDTH = 0.22;
 const LOGO_MARGIN = 48;
@@ -131,16 +135,20 @@ export async function encodeMp4(opts: CommonExportOpts, deps: ExportDeps, sample
   const { width: w, height: h, fps, signal } = opts;
   if (signal.aborted) throw abortError();
   if (!Number.isFinite(fps) || fps <= 0) throw new Error('Choose a valid FPS setting.');
+  if (opts.studioPath && (!Number.isFinite(opts.studioPath.samples) || opts.studioPath.samples <= 0)) throw new Error('Choose a positive Studio path sample count.');
+  if (opts.studioPath && opts.pathTrace) throw new Error('Choose one export renderer.');
   const makeCanvas = deps.createCanvas ?? defaultCanvas;
   const renderCanvas = makeCanvas(w, h);
-  const composite = opts.logo ? makeCanvas(w, h) : renderCanvas;
-  const ctx = opts.logo ? (composite.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null) : null;
-  if (opts.logo && !ctx) throw new Error('Could not create a 2D canvas for the logo overlay.');
+  const composite = opts.logo || opts.studioPath ? makeCanvas(w, h) : renderCanvas;
+  const ctx = opts.logo || opts.studioPath ? (composite.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null) : null;
+  if ((opts.logo || opts.studioPath) && !ctx) throw new Error('Could not create a 2D canvas for the export.');
 
   const studio = deps.createStudio(renderCanvas, { preserveDrawingBuffer: true });
   const output = new Output({ format: new Mp4OutputFormat(), target: new BufferTarget() });
   let started = false;
   let session: PathTraceSession | null = null;
+  let studioPath: StudioPathSession | null = null;
+  let pathReadCanvas: AnyCanvas | null = null;
   let lens: LensPass | null = null;
   let motion: MotionBlurAccumulator | null = null;
   const keys = opts.instances.map((inst) => inst.key);
@@ -167,6 +175,24 @@ export async function encodeMp4(opts: CommonExportOpts, deps: ExportDeps, sample
       box: samples.box,
       groundY: groundOf(opts.materials, samples.groundY),
     });
+    const renderStudioPath = async (progress: (done: number, total: number) => void) => {
+      if (!studioPath) {
+        const create = deps.createStudioPath ?? (await import('../render/studioPathRenderer')).StudioPathRenderer.create;
+        studioPath = await create(makeCanvas(w, h), studio, { width: w, height: h, samples: opts.studioPath!.samples, palette: opts.materials?.palette ?? 'studio', interactive: false });
+      }
+      await studioPath.renderFrame(signal, progress);
+      return studioPath.canvas;
+    };
+    // Only lens/motion processing needs a readback; ordinary frames copy directly
+    // from the WebGPU canvas to the encoder's 2D composite.
+    const pathToLens = (canvas: AnyCanvas, depthOfField: boolean) => {
+      pathReadCanvas ??= makeCanvas(w, h);
+      const read = pathReadCanvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+      if (!read) throw new Error('Could not prepare Studio path lens processing.');
+      read.drawImage(canvas as CanvasImageSource, 0, 0, w, h);
+      lens ??= new LensPass(studio.renderer);
+      lens.apply(read.getImageData(0, 0, w, h), depthOfField ? lensOpts() : { ...lensOpts(), lens: { blur: 'off', focus: 0.4 } });
+    };
     const source = new CanvasSource(composite, { codec: 'avc', bitrate: QUALITY_HIGH, latencyMode: 'quality' });
     output.addVideoTrack(source, { frameRate: fps });
     const sound = opts.snapSound && samples.snaps ? await snapAudio(samples.snaps, samples.duration, opts.sound) : null;
@@ -180,6 +206,7 @@ export async function encodeMp4(opts: CommonExportOpts, deps: ExportDeps, sample
     for (let i = 0; i < total; i++) {
       if (signal.aborted) throw abortError();
       const seconds = Math.min(i / fps, samples.duration);
+      let frameCanvas = renderCanvas;
       const cam = samples.camera(seconds, w / h);
       // a camera track brings its own depth of field: it replaces the look's lens
       const shot = cam as Partial<CameraShot>;
@@ -215,19 +242,23 @@ export async function encodeMp4(opts: CommonExportOpts, deps: ExportDeps, sample
         motion ??= new MotionBlurAccumulator(studio.renderer);
         motion.begin();
         const weights = accumulateWeights(offsets.length);
-        offsets.forEach((off, k) => {
+        for (const [k, off] of offsets.entries()) {
           const at = Math.min(samples.duration, Math.max(0, seconds + off));
           placeAt(at, samples.camera(at, w / h));
-          studio.render();
+          if (opts.studioPath) pathToLens(await renderStudioPath((done, all) => opts.onProgress(i + (k + done / all) / offsets.length, total)), false);
+          else studio.render();
           motion!.add(weights[k]);
-        });
+        }
         motion.resolve();
         // depth of field is measured at the frame's own time
         placeAt(seconds, cam);
         if (trackLens && trackLens.blur !== 'off' && lens) lens.apply('canvas', lensOpts());
       } else {
         placeAt(seconds, cam);
-        if (session && lens) {
+        if (opts.studioPath) {
+          frameCanvas = await renderStudioPath((done, all) => opts.onProgress(i + done / all, total));
+          if ((trackLens ? trackLens.blur !== 'off' : blur)) { pathToLens(frameCanvas, true); frameCanvas = renderCanvas; }
+        } else if (session && lens) {
           const ptSamples = opts.pathTrace!.samples;
           const image = await session.render(ptSamples, {
             signal,
@@ -239,9 +270,9 @@ export async function encodeMp4(opts: CommonExportOpts, deps: ExportDeps, sample
           if ((trackLens ? trackLens.blur !== 'off' : blur) && lens) lens.apply('canvas', lensOpts());
         }
       }
-      if (opts.logo && ctx) {
-        ctx.drawImage(renderCanvas as CanvasImageSource, 0, 0, w, h);
-        drawLogo(ctx, opts.logo.image, opts.logo.corner, w, h);
+      if (ctx) {
+        ctx.drawImage(frameCanvas as CanvasImageSource, 0, 0, w, h);
+        if (opts.logo) drawLogo(ctx, opts.logo.image, opts.logo.corner, w, h);
       }
       await source.add(i / fps, 1 / fps);
       opts.onProgress(i + 1, total);
@@ -257,6 +288,7 @@ export async function encodeMp4(opts: CommonExportOpts, deps: ExportDeps, sample
     lens?.dispose();
     motion?.dispose();
     session?.dispose();
+    (studioPath as StudioPathSession | null)?.dispose();
     disposeOffscreenStudio(studio);
   }
 }

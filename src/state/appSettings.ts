@@ -9,7 +9,7 @@ import type { ExportFps } from '../export/frameRates';
 import type { Materials, StudioLook } from '../render/looks';
 import type { CameraFraming, CameraSettings } from '../anim/camera';
 import type { TransitionPreset } from '../anim/cameraTrack/presets';
-import { DEFAULT_SETTINGS, type Settings, type VideoEngine } from '../storage/settings';
+import { DEFAULT_SETTINGS, type Settings, type VideoEngine, type ViewportRenderer } from '../storage/settings';
 import { formatAspect, type VideoFormat } from '../export/formats';
 import type { SceneSetup } from '../render/sceneSetup';
 
@@ -58,6 +58,7 @@ export type AppSettings = {
   /** how that click sounds (Sound panel) */
   sound: SoundSettings;
   /** MP4 renderer: the live one, or path traced per frame (slow, final quality) */
+  viewportRenderer: ViewportRenderer;
   videoEngine: VideoEngine;
   /** samples per pixel for a path-traced MP4 */
   pathSamples: number;
@@ -101,6 +102,7 @@ export const useAppSettings = create<AppSettings>((set) => ({
   apiKey: DEFAULT_SETTINGS.apiKey,
   model: DEFAULT_SETTINGS.model,
   ...DEFAULT_SETTINGS.video,
+  viewportRenderer: DEFAULT_SETTINGS.video.viewportRenderer ?? 'live',
   logoEnabled: DEFAULT_SETTINGS.logoEnabled,
   logoCorner: DEFAULT_SETTINGS.logoCorner,
   showSelectionBar: DEFAULT_SETTINGS.showSelectionBar,
@@ -137,14 +139,14 @@ export const toSettings = (s: AppSettings): Settings => ({
   cameraPresets: s.cameraPresets,
   autoFitStaging: s.autoFitStaging,
   exportCamera: s.exportCamera ?? 'track',
-  video: { targetSeconds: s.targetSeconds, heroOrbit: s.heroOrbit, mode: s.mode, fps: s.fps, introSeconds: s.introSeconds, buildSeconds: s.buildSeconds, outroSeconds: s.outroSeconds, studioLook: s.studioLook, cameraFraming: s.cameraFraming, camera: s.camera, format: s.format, edgeLines: s.edgeLines, linearColors: s.linearColors, bottomUp: s.bottomUp, snapSound: s.snapSound, planner: s.planner ?? 'legacy', constructionSupport: s.constructionSupport ?? 'fixture', constructionBudget: s.constructionBudget ?? 'standard', constructionStepModules: s.constructionStepModules === true, motionV4Limits: s.motionV4Limits ?? [], motionV4Mechanism: s.motionV4Mechanism ?? null, floorSort: s.floorSort, floorSides: s.floorSides, floorStyle: s.floorStyle ?? 'packed', floorMatch: s.floorMatch ?? 'fill', materials: s.materials, sound: s.sound, videoEngine: s.videoEngine, pathSamples: s.pathSamples },
+  video: { targetSeconds: s.targetSeconds, heroOrbit: s.heroOrbit, mode: s.mode, fps: s.fps, introSeconds: s.introSeconds, buildSeconds: s.buildSeconds, outroSeconds: s.outroSeconds, studioLook: s.studioLook, cameraFraming: s.cameraFraming, camera: s.camera, format: s.format, edgeLines: s.edgeLines, linearColors: s.linearColors, bottomUp: s.bottomUp, snapSound: s.snapSound, planner: s.planner ?? 'legacy', constructionSupport: s.constructionSupport ?? 'fixture', constructionBudget: s.constructionBudget ?? 'standard', constructionStepModules: s.constructionStepModules === true, motionV4Limits: s.motionV4Limits ?? [], motionV4Mechanism: s.motionV4Mechanism ?? null, floorSort: s.floorSort, floorSides: s.floorSides, floorStyle: s.floorStyle ?? 'packed', floorMatch: s.floorMatch ?? 'fill', materials: s.materials, sound: s.sound, viewportRenderer: s.viewportRenderer, videoEngine: s.videoEngine, pathSamples: s.pathSamples },
 });
 
 export async function applySettings(s: Settings): Promise<void> {
   const logoBitmap = s.logo ? await createImageBitmap(s.logo).catch(() => null) : null;
   useAppSettings
     .getState()
-    .set({ apiKey: s.apiKey, model: s.model, logo: s.logo, logoBitmap, logoCorner: s.logoCorner, logoEnabled: s.logoEnabled && !!logoBitmap, showSelectionBar: s.showSelectionBar, collision: s.collision, referenceHints: s.referenceHints, mirrorReferencePlacements: s.mirrorReferencePlacements, autoPlan: s.autoPlan, wireframe: s.wireframe, cameraFollowsPlayback: s.cameraFollowsPlayback, cameraPresets: s.cameraPresets ?? [], autoFitStaging: false, frameStagingPending: false, frameStagingPrevious: null, exportCamera: s.exportCamera ?? 'track', ...s.video });
+    .set({ apiKey: s.apiKey, model: s.model, logo: s.logo, logoBitmap, logoCorner: s.logoCorner, logoEnabled: s.logoEnabled && !!logoBitmap, showSelectionBar: s.showSelectionBar, collision: s.collision, referenceHints: s.referenceHints, mirrorReferencePlacements: s.mirrorReferencePlacements, autoPlan: s.autoPlan, wireframe: s.wireframe, cameraFollowsPlayback: s.cameraFollowsPlayback, cameraPresets: s.cameraPresets ?? [], autoFitStaging: false, frameStagingPending: false, frameStagingPrevious: null, exportCamera: s.exportCamera ?? 'track', ...s.video, viewportRenderer: s.video.viewportRenderer ?? 'live' });
 }
 
 /** The animation options the timeline planner needs, taken from the video settings. */

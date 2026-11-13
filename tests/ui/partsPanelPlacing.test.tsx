@@ -8,8 +8,13 @@ import { PartsPanel } from '../../src/ui/PartsPanel';
 import { emptyPlan } from '../../src/plan/types';
 
 beforeAll(async () => {
-  // a one-part catalog, served the way the browser fetches it
-  vi.stubGlobal('fetch', async (url: string) => ({ ok: url.endsWith('catalog.json'), json: async () => [{ id: '3001', name: 'Brick 2 x 4', category: 'Brick' }] }));
+  // a one-part catalog and its usage row, served the way the browser fetches them
+  const catalog = [{ id: '3001', name: 'Brick 2 x 4', category: 'Brick' }];
+  const usage = { format: 'brickmotion-part-usage', version: 1, sources: { omrSets: 1, bricknetModels: 0 }, parts: [['3001', 12, 20, 0, 0]] };
+  vi.stubGlobal('fetch', async (url: string) => {
+    const usageFile = url.endsWith('part-usage.json');
+    return { ok: usageFile || url.endsWith('catalog.json'), json: async () => (usageFile ? usage : catalog) };
+  });
   await initPartService(async () => '0 LDConfig');
   vi.unstubAllGlobals();
 });

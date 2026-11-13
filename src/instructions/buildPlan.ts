@@ -1,3 +1,4 @@
+import { matchForStep } from './assessment';
 import type { Plan, PlanItem, Step } from '../plan/types';
 import type { Resolved } from './rebrickable';
 import type { Booklet, Matches } from './types';
@@ -12,7 +13,6 @@ const FIGURE_GAP = 24;
 const rowZ = (stepIndex: number) => -(8 + 4 * stepIndex);
 
 function modelSteps(booklets: Booklet[], matches: Matches, resolve: (element: string) => Resolved, flags: Flag[]): Step[] {
-  const byKey = new Map(matches.matches.map((m) => [`${m.booklet}|${m.step}|${m.index}`, m]));
   const steps: Step[] = [];
   for (const b of booklets) {
     for (const s of b.steps) {
@@ -21,7 +21,7 @@ function modelSteps(booklets: Booklet[], matches: Matches, resolve: (element: st
       const pieces: PlanItem[] = [];
       let x = 0;
       s.callout.forEach((c, i) => {
-        const m = byKey.get(`${b.id}|${s.number}|${i}`);
+        const m = matchForStep(matches, b.id, s.page, s.number, i);
         let part = PLACEHOLDER;
         let color: number = DEFAULT_COLOR;
         if (!m?.element) {
@@ -35,7 +35,7 @@ function modelSteps(booklets: Booklet[], matches: Matches, resolve: (element: st
             color = r.color ?? DEFAULT_COLOR;
           }
         }
-        if (!c.countFound) flag(`callout part ${i + 1} has no readable count; using 1`);
+        if (!c.countFound) flag(`callout part ${i + 1} has no reliable count; using ${c.count} provisionally`);
         for (let n = 0; n < c.count; n++) {
           pieces.push({ part, color, x, y: 0, z: rowZ(k), rot: 0 });
           x += PITCH;

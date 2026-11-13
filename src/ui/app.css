@@ -38,7 +38,33 @@ body { margin: 0; }
 .part-tile canvas, .part-tile img { border-radius: 6px; }
 .part-name { font-size: 10.5px; line-height: 1.25; text-align: center; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; color: var(--ink); }
 .part-id { font-size: 10px; color: var(--ink3); font-variant-numeric: tabular-nums; }
+.part-uses { font-size: 9.5px; line-height: 1.2; color: var(--ink3); font-variant-numeric: tabular-nums; }
 .thumb-wait { background: var(--sunken); border-radius: 6px; }
+
+/* bricksafe models */
+.bm-bricksafe-controls { display: flex; align-items: center; gap: 6px; }
+.bm-bricksafe-controls select { flex: 1; min-width: 0; }
+.bm-bricksafe-error { color: var(--danger); }
+.bm-bricksafe-live { color: var(--accent); }
+.bm-bricksafe-exts { display: flex; flex-wrap: wrap; gap: 4px; }
+.bm-chip { padding: 2px 8px; border-radius: 20px; border: 1px solid var(--line2); background: var(--surface2); color: var(--ink2); font-size: 11px; font-weight: 600; }
+.bm-chip:hover { background: var(--hover); }
+.bm-chip.on { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); border-color: color-mix(in srgb, var(--accent) 45%, var(--line2)); color: var(--accent); }
+.bm-bricksafe-summary { gap: 8px; }
+.bm-bricksafe-summary > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bm-bricksafe-copy { display: inline-flex; align-items: center; gap: 5px; text-transform: none; letter-spacing: 0; white-space: nowrap; flex-shrink: 0; }
+.bm-bricksafe-copy .ic { width: 13px; height: 13px; }
+.bm-bricksafe-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.bm-bricksafe-page { border: 1px solid var(--line); border-radius: 10px; background: var(--surface2); padding: 8px 10px; min-width: 0; }
+.bm-bricksafe-head { display: flex; align-items: center; gap: 8px; }
+.bm-bricksafe-head a { flex: 1; min-width: 0; font-weight: 600; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bm-bricksafe-head a:hover { text-decoration: underline; }
+.bm-bricksafe-count { font-size: 10.5px; color: var(--ink3); background: var(--sunken); border-radius: 20px; padding: 1px 7px; font-variant-numeric: tabular-nums; }
+.bm-bricksafe-files { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.bm-bricksafe-files li { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.bm-bricksafe-files a { flex: 1; min-width: 0; font-size: 11.5px; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bm-bricksafe-files a:hover { color: var(--accent); text-decoration: underline; }
+.bm-bricksafe-ext { font-size: 10px; color: var(--ink3); }
 
 /* steps */
 .bm-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
@@ -626,3 +652,13 @@ body { margin: 0; }
 .bm-joint-angle label{display:flex;align-items:center;gap:4px;color:var(--muted);font-size:11px}
 .bm-joint-angle input{width:66px;min-width:0;border:1px solid var(--line2);border-radius:6px;background:var(--surface);color:var(--ink);padding:4px 5px;font:inherit;font-variant-numeric:tabular-nums}
 .bm-joint-angle input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* Pause lane: blocks that freeze the build while the camera keeps moving */
+.bm-timeline .bm-pauselane { position: relative; }
+.bm-timeline .nx-clip.bm-pause {
+  top: 6px; height: calc(100% - 12px); display: flex; align-items: center; gap: 6px; padding: 0 12px 0 6px; overflow: hidden;
+  color: var(--ink); background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--amber, #d89a1d) 34%, var(--surface)) 0 6px, color-mix(in srgb, var(--amber, #d89a1d) 20%, var(--surface)) 6px 12px);
+  border-radius: 6px; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--amber, #d89a1d) 60%, transparent);
+}
+.bm-timeline .nx-clip.bm-pause:focus-visible { outline: 2px solid var(--accent, currentColor); outline-offset: 1px; }
+.bm-timeline .nx-clip.bm-pause .av { display: inline-flex; width: 14px; height: 14px; }

@@ -9,7 +9,7 @@ export function instructionsReport(name: string, plan: Plan, flags: Flag[], matc
   const models: Step[][] = plan.submodels && Object.keys(plan.submodels).length ? Object.values(plan.submodels).map((s) => s.steps) : [plan.steps];
   const steps = models.reduce((n, m) => n + m.length, 0);
   const pieces = models.reduce((n, m) => n + m.reduce((k, s) => k + s.pieces.filter(isPiece).length, 0), 0);
-  const out: string[] = [`# ${name}: instructions → MPD report`, '', `Steps: ${steps} · Pieces: ${pieces} · Flags: ${flags.length}`];
+  const out: string[] = [`# ${name}: instructions → MPD report`, '', 'Status: **unplaced parts layout — not a complete or buildability-validated model**.', '', `Steps: ${steps} · Pieces: ${pieces} · Flags: ${flags.length}`];
   if (matches.scale) out.push(`Callout-to-inventory scale: ${matches.scale.toFixed(3)}`);
 
   out.push('', '## Flags', '');

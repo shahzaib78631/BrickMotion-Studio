@@ -5,8 +5,10 @@ import { DEFAULT_MATERIALS, sanitizeMaterials } from '../../src/render/looks';
 import { GLOW_GAIN, materialFor, setBrickMaterials } from '../../src/render/materials';
 import { tracedMaterial } from '../../src/export/pathTracedStill';
 import { sanitizeSettings } from '../../src/storage/settings';
+import { pathTraceColor } from '../../src/dev/eyesightScene';
 import type { ColorDef } from '../../src/ldraw/colors';
 
+const absorption = (c: THREE.Color) => new THREE.Color().setRGB(Math.max(0.02, c.r), Math.max(0.02, c.g), Math.max(0.02, c.b));
 const transYellow: ColorDef = { code: 46, name: 'Trans_Yellow', hex: '#F5CD2F', edge: '#C8A000', alpha: 128, finish: 'trans' };
 const red: ColorDef = { code: 4, name: 'Red', hex: '#C91A09', edge: '#333333', alpha: 255, finish: 'solid' };
 
@@ -48,7 +50,7 @@ test('clear glass refracts in the path tracer and glowing parts light the scene'
   expect(soft.emissiveIntensity).toBeGreaterThan((lamp as THREE.MeshPhysicalMaterial).emissiveIntensity);
   const clear = tracedMaterial(lamp, { ...DEFAULT_MATERIALS, glass: 'clear' }) as THREE.MeshPhysicalMaterial;
   expect(clear).toMatchObject({ transmission: 1, transparent: false, opacity: 1, ior: 1.52 });
-  expect(clear.attenuationColor.getHexString()).toBe(new THREE.Color('#F5CD2F').getHexString());
+  expect(clear.attenuationColor.equals((lamp as THREE.MeshPhysicalMaterial).attenuationColor)).toBe(true);
   // the viewport's material is untouched
   expect((lamp as THREE.MeshPhysicalMaterial).transmission).toBeLessThan(1);
   // solid bricks never turn to glass
@@ -85,4 +87,62 @@ test('focus runs from the nearest to the farthest point of the model', () => {
   expect(focusDistance(camera, box, 0)).toBeCloseTo(45);
   expect(focusDistance(camera, box, 1)).toBeCloseTo(55);
   expect(focusDistance(camera, box, 0.5)).toBeCloseTo(50);
+});
+
+
+test.each([
+  { code: 46, name: 'Trans_Yellow', hex: '#F5CD2F', rgb: [1, 0.9137255, 0] },
+  { code: 36, name: 'Trans_Red', hex: '#C91A09', rgb: [0.88, 0, 0] },
+  { code: 34, name: 'Trans_Green', hex: '#237841', rgb: [0, 0.6, 0.1428191] },
+  { code: 47, name: 'Trans_Clear', hex: '#FCFCFC', rgb: [1, 1, 1] },
+])('transparent Studio $name uses its tint in the viewport and path renderer', ({ code, name, hex, rgb }) => {
+  const def: ColorDef = { code, name, hex, edge: '#333333', alpha: 128, finish: 'trans' };
+  setBrickMaterials({ finish: 'eyesight', palette: 'studio', texture: 'none' });
+  const material = materialFor(def, false) as THREE.MeshPhysicalMaterial;
+  const expected = new THREE.Color().setRGB(rgb[0], rgb[1], rgb[2], THREE.LinearSRGBColorSpace);
+  expect(material.attenuationColor.getHexString()).toBe(absorption(expected).getHexString());
+  expect(material.transparent).toBe(false);
+  expect(material.opacity).toBe(1);
+  expect(material.transmission).toBeGreaterThan(0.9);
+  expect(pathTraceColor(def, 'studio').toArray()).toEqual(expected.toArray());
+  setBrickMaterials({ finish: 'eyesight', palette: 'ldraw', texture: 'none' });
+  expect(material.attenuationColor.getHexString()).toBe(absorption(new THREE.Color(hex)).getHexString());
+  setBrickMaterials({ finish: 'eyesight', palette: 'studio', texture: 'none' });
+  expect(material.attenuationColor.getHexString()).toBe(absorption(expected).getHexString());
+});
+
+
+test('glass settings restyle cached viewport materials without fading reflections', () => {
+  setBrickMaterials({ finish: 'eyesight', palette: 'studio', texture: 'none', glass: 'soft' });
+  const material = materialFor(transYellow, false) as THREE.MeshPhysicalMaterial;
+  const version = material.version;
+  const tint = material.attenuationColor.clone();
+  setBrickMaterials({ finish: 'eyesight', palette: 'studio', texture: 'none', glass: 'clear' });
+  expect(materialFor(transYellow, false)).toBe(material);
+  expect(material).toMatchObject({ transmission: 1, opacity: 1, transparent: false, depthWrite: true, roughness: 0.02, ior: 1.52, metalness: 0, thickness: 0.06, attenuationDistance: 0.3 });
+  expect(material.attenuationColor.equals(tint)).toBe(true);
+  expect(material.version).toBeGreaterThan(version);
+  setBrickMaterials({ finish: 'eyesight', palette: 'studio', texture: 'none', glass: 'milky' });
+  expect(material).toMatchObject({ transmission: 0.3, roughness: 0.55, opacity: 1 });
+  setBrickMaterials({ finish: 'eyesight', palette: 'studio', texture: 'none', glass: 'soft' });
+  expect(material).toMatchObject({ transmission: 0.92, roughness: 0.1, opacity: 1 });
+});
+
+
+test('saturated glass keeps finite absorption in every channel', () => {
+  setBrickMaterials({ finish: 'eyesight', palette: 'studio', texture: 'none', glass: 'clear' });
+  const glass = materialFor({ code: 36, name: 'Trans_Red', hex: '#C91A09', edge: '#333333', alpha: 128, finish: 'trans' }, false) as THREE.MeshPhysicalMaterial;
+  for (const channel of glass.attenuationColor.toArray()) {
+    expect(channel).toBeGreaterThan(0);
+    expect(Number.isFinite(-Math.log(channel) / glass.attenuationDistance)).toBe(true);
+  }
+  setBrickMaterials({ finish: 'eyesight', palette: 'studio', texture: 'none', glass: 'soft' });
+});
+
+test('viewport glass thickness is not shrunk by the LDraw root scale', () => {
+  const glass = materialFor(transYellow, false) as THREE.MeshPhysicalMaterial;
+  const shader = { uniforms: {}, vertexShader: '#include <common>', fragmentShader: '#include <transmission_fragment>', defines: {} };
+  glass.onBeforeCompile(shader as never, {} as THREE.WebGLRenderer);
+  expect(shader.fragmentShader).toContain('thickness / max(length(modelMatrix[0].xyz), 0.000001)');
+  expect(shader.fragmentShader).not.toContain('#include <transmission_fragment>');
 });
