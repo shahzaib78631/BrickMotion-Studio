@@ -1,0 +1,211 @@
+"""Real booklet pages of the booklet_mpd *train* sets, labelled through the solved camera.
+
+For each step picture with an answer key: find the camera (coarse silhouette search over booklet-like views the
+first time in a set, the previous step's camera after that), refine it with CoordNet against a render of the
+step's full model, and keep the page only if the fit is tight (median < 1 px, p90 < 2 px) and the rendered new
+parts agree with what changed on the page (this drops exploded drawings, whose new parts are drawn elsewhere).
+Labels then come from the G-buffer exactly as for synthetic data. Held-out sets (21065, validation, test) are
+refused: they are for grading only.
+
+    python -m coordnet.realdata [--sets 40271,40274]
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import time
+from pathlib import Path
+
+import cv2
+import numpy as np
+import torch
+
+from . import datagen, labels
+from . import render as R
+from .camera import BookletCamera, project
+from .evaluate import ROOT, Net, foreground, solve_camera
+from .place import change_evidence
+from .placedata import OUT, write
+
+CKPT = ROOT / ".cache/coordnet/ckpt/best.pt"
+MAX_SIDE = 640
+EYE = 4200.0
+
+
+def norm(p):
+    return datagen._part(p)
+
+
+def load_net(ckpt: Path = CKPT) -> Net:
+    return Net(ckpt, "mps" if torch.backends.mps.is_available() else "cpu")
+
+
+def _points(parts: list, n: int = 5000) -> np.ndarray:
+    v = R.scene(parts)[0].reshape(-1, 3)
+    if len(v) > n:
+        v = v[np.random.default_rng(0).choice(len(v), n, replace=False)]
+    return v
+
+
+def frame(cam: BookletCamera, centre, pts: np.ndarray, fg: np.ndarray, fit_scale: bool = True) -> BookletCamera:
+    """Scale (optionally) and offset `cam` so the model's projected box matches the picture's foreground box."""
+    ys, xs = np.nonzero(fg)
+    if len(xs) == 0:
+        return cam
+    flo, fhi = np.array([xs.min(), ys.min()], float), np.array([xs.max(), ys.max()], float)
+    if fit_scale:
+        uv, _ = project(cam.with_(scale=1.0, cx=0.0, cy=0.0), centre, pts)
+        span = np.maximum(uv.max(0) - uv.min(0), 1e-6)
+        cam = cam.with_(scale=float(np.mean((fhi - flo) / span)))
+    uv, _ = project(cam.with_(cx=0.0, cy=0.0), centre, pts)
+    off = (flo + fhi) / 2 - (uv.min(0) + uv.max(0)) / 2
+    return cam.with_(cx=float(off[0]), cy=float(off[1]))
+
+
+def coarse(pic: np.ndarray, parts: list, top: int = 5) -> list[tuple[float, BookletCamera]]:
+    """Booklet-like views ranked by silhouette IoU against the picture's foreground (quarter resolution)."""
+    centre = R.bounds_centre(parts)
+    pts = _points(parts)
+    fg = foreground(pic)
+    q = 4
+    fgq = cv2.resize(fg.astype(np.uint8), (pic.shape[1] // q, pic.shape[0] // q), interpolation=cv2.INTER_AREA) > 0
+    Hq, Wq = fgq.shape
+    out = []
+    yaws = [s * a + b for a in range(20, 75, 5) for s in (1, -1) for b in (0, 180)]
+    for turned in (False, True):
+        for pitch in range(15, 55, 5):
+            for yaw in yaws:
+                cam = frame(BookletCamera(yaw, pitch, 0.0, 1.0, 0.0, 0.0, eye=EYE, turned=turned), centre, pts, fg)
+                uv, _ = project(cam, centre, pts)
+                ij = np.round(uv / q - 0.5).astype(int)
+                ok = (ij[:, 0] >= 0) & (ij[:, 0] < Wq) & (ij[:, 1] >= 0) & (ij[:, 1] < Hq)
+                m = np.zeros((Hq, Wq), np.uint8)
+                m[ij[ok, 1], ij[ok, 0]] = 1
+                m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8)).astype(bool)
+                iou = (m & fgq).sum() / max((m | fgq).sum(), 1)
+                out.append((float(iou), cam))
+    out.sort(key=lambda t: -t[0])
+    return out[:top]
+
+
+def _prepare(case) -> tuple[np.ndarray, float]:
+    pic = np.asarray(case.rgb)
+    if pic.dtype != np.uint8:
+        pic = (np.clip(pic, 0, 1) * 255).round().astype(np.uint8) if pic.max() <= 1.0 else pic.astype(np.uint8)
+    pic = pic[..., :3]
+    f = min(1.0, MAX_SIDE / max(pic.shape[:2]))
+    if f < 1.0:
+        pic = cv2.resize(pic, (round(pic.shape[1] * f), round(pic.shape[0] * f)), interpolation=cv2.INTER_AREA)
+    pts = (case.pts_per_px or 0.48) / f
+    return np.ascontiguousarray(pic), pts
+
+
+def label_case(net, case, start: BookletCamera | None = None, rounds: int = 4,
+               max_median: float = 1.0, max_p90: float = 2.0, min_agree: float = 0.6) -> dict | None:
+    """Labels for one booklet step, or None when the camera or the new parts cannot be trusted."""
+    pic, pts_px = _prepare(case)
+    H, W = pic.shape[:2]
+    base = [norm(p) for p in case.visible]
+    new = [norm(p) for p in case.added]
+    parts = base + new
+    if not new or not base:
+        return None
+    centre = R.bounds_centre(parts)
+    fg = foreground(pic)
+    starts = [frame(start, centre, _points(parts), fg, fit_scale=False)] if start is not None else \
+        [c for _iou, c in coarse(pic, parts)]
+    best = None
+    for cam0 in starts:
+        cam, fits = solve_camera(net, pic, parts, cam0, centre, W, H, rounds)
+        if not fits:
+            continue
+        if best is None or fits[-1]["median"] < best[1][-1]["median"]:
+            best = (cam, fits)
+        if fits[-1]["median"] < max_median:
+            break
+    if best is None:
+        return None
+    cam, fits = best
+    fit = fits[-1]
+    if fit["median"] >= max_median or fit["p90"] >= max_p90:
+        return None
+    newset = set(range(len(base), len(parts)))
+    g = R.gbuffer(*R.scene(parts), cam, centre, W, H)
+    lab = labels.local_labels(g, parts, newset)
+    base_img = R.render(base, set(), cam, centre, W, H, R.Style(), ss=2, red=False).picture
+    ev = change_evidence(pic, base_img)
+    k = np.ones((7, 7), np.uint8)
+    newpix = lab["new"]
+    recall = (newpix & cv2.dilate(ev.astype(np.uint8), k).astype(bool)).sum() / max(newpix.sum(), 1)
+    precision = (ev & cv2.dilate(newpix.astype(np.uint8), k).astype(bool)).sum() / max(ev.sum(), 1)
+    if newpix.sum() < 30 or recall < min_agree or precision < min_agree * 0.8:
+        return None
+    types: dict[tuple, int] = {}
+    for p, c, _m in new:
+        types[(p, c)] = types.get((p, c), 0) + 1
+    camd = dict(yaw=cam.yaw, pitch=cam.pitch, roll=cam.roll, scale=cam.scale, cx=cam.cx, cy=cam.cy, eye=cam.eye,
+                turned=cam.turned)
+    meta = dict(real=True, set=case.set_number, step=case.step_number, W=W, H=H, cam=camd, pts_per_px=pts_px,
+                centre=np.asarray(centre).tolist(), fit=fit, agree=dict(recall=float(recall), precision=float(precision)),
+                parts=[[p, c, m.tolist(), i >= len(base)] for i, (p, c, m) in enumerate(parts)],
+                types=[[p, c, n] for (p, c), n in types.items()])
+    return dict(picture=pic, base=base_img, labels=lab, meta=meta, cam=cam)
+
+
+def main(argv=None):
+    from booklet_mpd.protocol import tuning_sets
+    from booklet_mpd.solver import dataset as D
+
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--sets", default="")
+    ap.add_argument("--out", type=Path, default=OUT)
+    ap.add_argument("--ckpt", type=Path, default=CKPT)
+    a = ap.parse_args(argv)
+    allowed = tuning_sets(D.grades())
+    sets = [s for s in a.sets.split(",") if s] or allowed
+    bad = [s for s in sets if s not in allowed]
+    if bad:
+        ap.error(f"not booklet_mpd train sets (held-out sets are grading-only): {', '.join(bad)}")
+    net = load_net(a.ckpt)
+    t0 = time.time()
+    total = dict(kept=0, dropped=0)
+    for si, s in enumerate(sets):
+        out = a.out / f"real-{s}"
+        try:
+            cases = D.cases(s)
+        except Exception as e:
+            print(f"set {s}: cannot load ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
+            continue
+        start, prev_pts, kept, dropped = None, None, 0, 0
+        for ci, case in enumerate(cases):
+            if case.rgb is None:
+                dropped += 1
+                continue
+            st = None
+            if start is not None:
+                _pic, pts_px = _prepare(case)
+                st = start.with_(scale=start.scale * prev_pts / pts_px)
+            try:
+                smp = label_case(net, case, st)
+                if smp is None and st is not None:
+                    smp = label_case(net, case, None)          # the view changed: search again
+            except Exception as e:
+                print(f"set {s} step {case.step_number}: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
+                smp = None
+            if smp is None:
+                dropped += 1
+            else:
+                write(out, kept, smp)
+                kept += 1
+                start, prev_pts = smp["cam"], smp["meta"]["pts_per_px"]
+            print(f"::progress {si}/{len(sets)} set {s} step {ci + 1}/{len(cases)} kept {kept} "
+                  f"dropped {dropped} {time.time() - t0:.0f}s", flush=True)
+        total["kept"] += kept
+        total["dropped"] += dropped
+        print(json.dumps(dict(set=s, kept=kept, dropped=dropped)), flush=True)
+    print(json.dumps(total))
+
+
+if __name__ == "__main__":
+    main()
