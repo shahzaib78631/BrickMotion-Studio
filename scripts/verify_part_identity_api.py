@@ -45,30 +45,34 @@ def main():
     for pair in pairs:
         if pair.set_number not in wanted:
             continue
-        parts = rb.set_parts(f"{pair.set_number}-1")
-        official = official_counter(parts)
-        aliases = alias_map(parts)
-        truth = TRUTH_LOADERS["expand"](str(pair.omr), warnings=[])
-        omr, remapped = remap(omr_counter(truth), aliases)
-        inventory = json.loads((OUT / "extract" / f"{pair.set_number}-{pair.booklet}" / "extract.json").read_text())["inventory"]
-        booklet, unresolved = booklet_counter(inventory, parts, rb.element)
-        omr, booklet = remap_colours(omr, shades), remap_colours(booklet, shades)
-        direct = compare(booklet, omr)
-        def related(a, b):
-            if geometry_equivalent(lib, a, b):
-                return "geometry"
-            return "alternate" if b in rb.related_parts(a) or a in rb.related_parts(b) else None
-        rec = reconcile(direct["only_a"], direct["only_b"], related)
-        row = {"set": pair.set_number, "reconcile": {"pairs": rec["pairs"], "reconciled": rec["reconciled"],
-                                                      "residual_booklet": [[f"{k[0]} c{k[1]}", n] for k, n in rec["residual_a"].items()],
-                                                      "residual_omr": [[f"{k[0]} c{k[1]}", n] for k, n in rec["residual_b"].items()]}, "official_total": sum(official.values()), "remapped_omr_parts": remapped,
-               "unresolved_elements": unresolved}
-        for name, (a, b) in {"omr_vs_official": (omr, official), "booklet_vs_official": (booklet, official),
-                             "booklet_vs_omr": (booklet, omr)}.items():
-            c = compare(a, b)
-            row[name] = {k: c[k] for k in ("exact", "total_a", "total_b", "a_covered", "b_covered")}
-            row[name]["only_a"] = [[label(parts, k), n] for k, n in sorted(c["only_a"].items(), key=lambda kv: -kv[1])[:6]]
-            row[name]["only_b"] = [[label(parts, k), n] for k, n in sorted(c["only_b"].items(), key=lambda kv: -kv[1])[:6]]
+        try:
+            parts = rb.set_parts(f"{pair.set_number}-1")
+            official = official_counter(parts)
+            aliases = alias_map(parts)
+            truth = TRUTH_LOADERS["expand"](str(pair.omr), warnings=[])
+            omr, remapped = remap(omr_counter(truth), aliases)
+            inventory = json.loads((OUT / "extract" / f"{pair.set_number}-{pair.booklet}" / "extract.json").read_text())["inventory"]
+            booklet, unresolved = booklet_counter(inventory, parts, rb.element)
+            omr, booklet = remap_colours(omr, shades), remap_colours(booklet, shades)
+            direct = compare(booklet, omr)
+            def related(a, b):
+                if geometry_equivalent(lib, a, b):
+                    return "geometry"
+                return "alternate" if b in rb.related_parts(a) or a in rb.related_parts(b) else None
+            rec = reconcile(direct["only_a"], direct["only_b"], related)
+            row = {"set": pair.set_number, "reconcile": {"pairs": rec["pairs"], "reconciled": rec["reconciled"],
+                                                          "residual_booklet": [[f"{k[0]} c{k[1]}", n] for k, n in rec["residual_a"].items()],
+                                                          "residual_omr": [[f"{k[0]} c{k[1]}", n] for k, n in rec["residual_b"].items()]}, "official_total": sum(official.values()), "remapped_omr_parts": remapped,
+                   "unresolved_elements": unresolved}
+            for name, (a, b) in {"omr_vs_official": (omr, official), "booklet_vs_official": (booklet, official),
+                                 "booklet_vs_omr": (booklet, omr)}.items():
+                c = compare(a, b)
+                row[name] = {k: c[k] for k in ("exact", "total_a", "total_b", "a_covered", "b_covered")}
+                row[name]["only_a"] = [[label(parts, k), n] for k, n in sorted(c["only_a"].items(), key=lambda kv: -kv[1])[:6]]
+                row[name]["only_b"] = [[label(parts, k), n] for k, n in sorted(c["only_b"].items(), key=lambda kv: -kv[1])[:6]]
+        except Exception as error:     # one bad set must not lose the run
+            print(f"{pair.set_number}: SKIPPED ({type(error).__name__}: {str(error)[:90]})", flush=True)
+            continue
         results.append(row)
         pct = lambda v: "n/a" if v is None else f"{v:.1%}"
         b = row["booklet_vs_omr"]

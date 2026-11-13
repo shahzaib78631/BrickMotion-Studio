@@ -13,9 +13,20 @@ def _signature(lib, part: str, matrix: np.ndarray) -> np.ndarray:
     return np.unique(points, axis=0)
 
 
-def exact_flags(lib, predicted: list[Part], expected: list[Part]) -> list[bool]:
-    """Per predicted part: id, colour, translation (0.001 LDU) and rotated-vertex
-    geometry match an unclaimed expected part. Rotation-equivalent poses count."""
+def _same_points(a: np.ndarray, b: np.ndarray, atol: float) -> bool:
+    """Every vertex of each set within atol of a vertex of the other (rounding can merge or split
+    near-coincident vertices, so the unique sets need not have the same size)."""
+    from scipy.spatial import cKDTree
+    if not len(a) or not len(b):
+        return len(a) == len(b)
+    return bool(cKDTree(b).query(a)[0].max() <= atol and cKDTree(a).query(b)[0].max() <= atol)
+
+
+def exact_flags(lib, predicted: list[Part], expected: list[Part], atol: float = 0.001) -> list[bool]:
+    """Per predicted part: id, colour, translation (`atol`, 0.001 LDU) and rotated-vertex
+    geometry match an unclaimed expected part. Rotation-equivalent poses count. Answer keys store
+    about two decimals, so parts on angled beams can miss by 0.01-0.02 LDU; pass a larger atol
+    to ask whether a pose is the same part placement rather than the same numbers."""
     used: set[int] = set()
     flags: list[bool] = []
     for part, colour, matrix in predicted:
@@ -23,10 +34,13 @@ def exact_flags(lib, predicted: list[Part], expected: list[Part]) -> list[bool]:
         for i, (p, c, truth) in enumerate(expected):
             if i in used or p != part or c != colour:
                 continue
-            if not np.allclose(matrix[:3, 3], truth[:3, 3], atol=0.001):
+            if not np.allclose(matrix[:3, 3], truth[:3, 3], atol=atol):
                 continue
             a, b = _signature(lib, part, matrix), _signature(lib, p, truth)
-            if a.shape == b.shape and np.allclose(a, b, atol=0.001):
+            if a.shape == b.shape and np.allclose(a, b, atol=atol):
+                found = i
+                break
+            if atol > 0.001 and _same_points(a, b, atol):
                 found = i
                 break
         if found is not None:

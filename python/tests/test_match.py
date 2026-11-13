@@ -133,3 +133,11 @@ def test_match_work_dir_names_booklets_by_folder(tmp_path):
     os.rename(work / "b1", work / "b1-2")
     match_work_dir(str(work))
     assert json.loads((work / "matches.json").read_text())["matches"][0]["booklet"] == "b1-2"
+
+
+def test_restarted_step_numbers_keep_page_identity(tmp_path):
+    work, booklets = make_work(tmp_path, [("L", (200, 20, 20), 1), ("bar", (30, 160, 50), 1)])
+    booklets[0]['steps'][1]['number'] = 1
+    booklets[0]['steps'][1]['page'] = 2
+    matches = match_callouts(booklets, str(work))['matches']
+    assert [(m['page'], m['step'], m['element']) for m in matches] == [(1,1,'302321'), (2,1,'302328')]

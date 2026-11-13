@@ -80,6 +80,21 @@ def _about(axis: np.ndarray, degrees: float) -> np.ndarray:
     return np.eye(3) + np.sin(t) * k + (1 - np.cos(t)) * k @ k
 
 
+def _roll(r0: np.ndarray, axis: np.ndarray, hrot: np.ndarray, haxis: np.ndarray) -> float:
+    """Degrees about `haxis` taking the moving part's frame (after r0) onto the host part's frame: the
+    moving part's own axis most across its snap axis, turned by r0, onto the host's axis most across."""
+    e = np.eye(3)
+    mine = r0 @ e[int(np.argmin(np.abs(axis)))]
+    theirs = hrot[:, int(np.argmin(np.abs(hrot.T @ haxis)))]
+    mine = mine - haxis * (mine @ haxis)
+    theirs = theirs - haxis * (theirs @ haxis)
+    if np.linalg.norm(mine) < 1e-6 or np.linalg.norm(theirs) < 1e-6:
+        return 0.0
+    mine, theirs = mine / np.linalg.norm(mine), theirs / np.linalg.norm(theirs)
+    deg = float(np.degrees(np.arctan2(np.cross(mine, theirs) @ haxis, mine @ theirs)))
+    return deg % 90.0
+
+
 def technic_candidates(lib, part: str, base: list) -> list[dict]:
     mine = cylinder_snaps(lib, part)
     if not mine or not base:
@@ -88,16 +103,19 @@ def technic_candidates(lib, part: str, base: list) -> list[dict]:
     for i, (p, _c, m) in enumerate(base):
         m = np.asarray(m, float)
         for gender, mid, axis, axle in cylinder_snaps(lib, p):
-            hosts.append((i, gender, m[:3, :3] @ mid + m[:3, 3], m[:3, :3] @ axis, axle))
+            hosts.append((i, gender, m[:3, :3] @ mid + m[:3, 3], m[:3, :3] @ axis, axle, m[:3, :3]))
     out, seen = [], set()
     for g_mine, mid, axis, axle_mine in mine:
-        for host, g_host, hmid, haxis, axle_host in hosts:
+        for host, g_host, hmid, haxis, axle_host, hrot in hosts:
             if g_mine == g_host:
                 continue
             for flip in (1.0, -1.0):
                 r0 = _align(axis, flip * haxis)
+                # quarter turns about the axis counted from the host's own frame, not the world's: on a
+                # beam turned 13.6 degrees the pin turns with it
+                base = _roll(r0, axis, hrot, haxis)
                 for turn in TURNS:
-                    R = _about(haxis, turn) @ r0
+                    R = _about(haxis, turn + base) @ r0
                     R = np.round(R, 6)
                     for slide in SLIDES:
                         t = hmid + slide * haxis - R @ mid

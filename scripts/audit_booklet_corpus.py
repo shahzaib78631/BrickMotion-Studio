@@ -21,12 +21,17 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--split", default="validation,test")
     ap.add_argument("--limit", type=int)
+    ap.add_argument("--counts-only", action="store_true", help="pair by part counts only, not by the parts' look")
     args = ap.parse_args()
     wanted = set(args.split.split(","))
     pairs, skips = find_pairs(SOURCES, OMR, ROOT)
     pairs = [p for p in pairs if p.split in wanted][: args.limit]
     OUT.mkdir(parents=True, exist_ok=True)
-    rows = [audit_pair(p, OUT / "extract") for p in pairs]
+    lib = None
+    if not args.counts_only:
+        from assembly_model.ldraw import load_library
+        lib = load_library(str(ROOT / "public/ldraw"))
+    rows = [audit_pair(p, OUT / "extract", lib) for p in pairs]
     (OUT / "audit.json").write_text(json.dumps({"pairs": rows, "skips": skips}, indent=1))
     print(f"{'set':8}{'split':11}{'booklet':>8}{'omr':>6}{'blocks':>7}{'sim':>6}  status")
     for r in rows:

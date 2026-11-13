@@ -1,0 +1,155 @@
+{
+  "sourceHashes": {
+    "step.py": "0a686481c07b7732a21d36e523a2e4d59b5e71f1cae90bf9f7ab08bfe4680e5b",
+    "register.py": "daf4ac8152267c906cf2455bc444b916f38c86e9e318687075f9fef58d038ea3",
+    "pipeline.py": "1e3ac897864addea48a40dee2c0493cd997662ce817bbb5611ed67996737104a",
+    "evaluate.py": "4b133acd7fcbb6367873613da505709c3b6d623459d74e87cc915e04ee51cb5a"
+  },
+  "commit": "3972b35ae65663b82c87241d771aa354c0b2b49b",
+  "diagnosticOnly": true,
+  "registrationSearches": [
+    {
+      "refineRequested": 3,
+      "returnedOrientations": [
+        2,
+        20,
+        0
+      ],
+      "uniqueOrientations": 3
+    },
+    {
+      "refineRequested": 3,
+      "returnedOrientations": [
+        0,
+        2,
+        20
+      ],
+      "uniqueOrientations": 3
+    },
+    {
+      "refineRequested": 3,
+      "returnedOrientations": [
+        22,
+        2,
+        20
+      ],
+      "uniqueOrientations": 3
+    }
+  ],
+  "collisionOracleLauncher": "installed node_modules/.bin/tsx; same lab-oracle.ts",
+  "step2CorrectPreviousAndIdentity": {
+    "exact": 0,
+    "parts": 3,
+    "status": "ok",
+    "completedScore": 1.0947717428207397,
+    "hypotheses": [
+      1.0855658054351807,
+      1.0508352518081665,
+      1.0947717428207397
+    ],
+    "seconds": 219.55081701278687,
+    "collisionOracleExact": true,
+    "view": {
+      "orientation": [
+        [
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "yaw": 63.0,
+      "pitch": 24.5
+    }
+  },
+  "pdfFreeRunFirstTwoSteps": {
+    "exact": 2,
+    "expectedParts": 5,
+    "predictedParts": 5,
+    "partsByStep": [
+      2,
+      3
+    ],
+    "rows": [
+      {
+        "index": 0,
+        "number": 1,
+        "page": 3,
+        "read": 2,
+        "unresolved": 0,
+        "repeat": 1,
+        "substeps": 0,
+        "registration": 1.6116511821746826,
+        "pre_fit_iou": 0.8916504854368932,
+        "completed": 1.6116511821746826,
+        "hypotheses": [
+          1.6116511821746826,
+          1.6116511821746826,
+          1.6116511821746826
+        ],
+        "placed": 2,
+        "status": "ok"
+      },
+      {
+        "index": 1,
+        "number": 2,
+        "page": 4,
+        "read": 3,
+        "unresolved": 0,
+        "repeat": 1,
+        "substeps": 0,
+        "registration": 1.0947717428207397,
+        "pre_fit_iou": 0.8402732595966168,
+        "completed": 1.0947717428207397,
+        "hypotheses": [
+          1.0855658054351807,
+          1.0508352518081665,
+          1.0947717428207397
+        ],
+        "placed": 3,
+        "status": "ok"
+      }
+    ],
+    "giveUpFrom": null,
+    "unsupportedFrom": null,
+    "review": [],
+    "seconds": 337.1821928024292
+  },
+  "sourceUnchanged": {
+    "step.py": true,
+    "register.py": true,
+    "pipeline.py": true,
+    "evaluate.py": true
+  },
+  "headUnchanged": true,
+  "referenceDiagnosticOrientationIndex": 22,
+  "focusedTests": {
+    "passed": 18,
+    "deselected": 1,
+    "excluded": "longer existing 40349 end-to-end test"
+  },
+  "markersAndSymmetry": {
+    "symmetryExpected": 2,
+    "symmetryActual": 2,
+    "unsupportedRepeatMarkedIncomplete": true,
+    "negativeReadConfidenceClamped": 0.0,
+    "oversizedReadConfidenceClamped": 1.0,
+    "confidenceModel": "unfitted margin heuristic"
+  },
+  "geometryVerification": {
+    "stagedDatFiles": 37151,
+    "missingFiles": [],
+    "source": "/Users/mac/Projects/BrickMotion-Studio/.cache/parts-stage/ldraw",
+    "destination": "/Users/mac/Projects/BrickMotion-Studio/public/ldraw"
+  },
+  "comparison": "Original two-step divergence remains: 0/3 new parts in controlled step 2 and 2/5 cumulative parts from actual PDF. Correct poses are available; useful orientation excluded before placement."
+}

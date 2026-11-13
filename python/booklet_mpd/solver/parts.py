@@ -36,6 +36,7 @@ class Descriptor:
     mask: np.ndarray        # SIZE x SIZE aspect-kept foreground
     colour: np.ndarray      # median non-ink foreground RGB
     aspect: float
+    size: float = 0.0       # foreground bounding-box diagonal in crop pixels
 
 
 def _background(rgb: np.ndarray) -> np.ndarray:
@@ -58,19 +59,46 @@ def describe(rgb: np.ndarray | None) -> Descriptor | None:
     big = [i for i in range(1, count) if stats[i][4] >= 0.08 * stats[1:, 4].max()]
     fg = np.isin(labels, big)
     ys, xs = np.where(fg)
-    pix = rgb[fg]
-    keep = pix.max(-1) >= INK
-    colour = np.median(pix[keep], axis=0) if keep.any() else np.median(pix, axis=0)
-    return Descriptor(normalise(fg, SIZE), colour.astype(float), (np.ptp(xs) + 1) / (np.ptp(ys) + 1))
+    # colour: the part's inside (outline eroded away), dark pixels kept: a black part's body is darker
+    # than the ink cut-off, so dropping ink-dark pixels read black as the grey of its highlights
+    inner = cv2.erode(fg.astype(np.uint8), np.ones((5, 5), np.uint8)) > 0
+    pix = rgb[inner] if inner.sum() >= 20 else rgb[fg]
+    colour = np.median(pix, axis=0)
+    return Descriptor(normalise(fg, SIZE), colour.astype(float), (np.ptp(xs) + 1) / (np.ptp(ys) + 1),
+                      float(np.hypot(np.ptp(xs) + 1, np.ptp(ys) + 1)))
 
 
-def similarity(a: Descriptor, b: Descriptor) -> float:
+SIZE_WEIGHT = 0.25        # weight of the absolute-size term once the callout / parts-list scale is known
+SIZE_SHARPNESS = 5.0      # 1x5 vs 1x6 plate: ~15% longer -> term drops to ~0.5
+
+
+def similarity(a: Descriptor, b: Descriptor, ratio: float | None = None) -> float:
+    """`ratio`: callout size / parts-list size for the same part (one booklet draws both at fixed scales).
+    Without it, shape, colour and aspect only (a 2x2 and a 3x3 plate look alike)."""
     inter = np.logical_and(a.mask, b.mask).sum()
     union = np.logical_or(a.mask, b.mask).sum()
     shape = inter / union if union else 0.0
     colour = float(np.exp(-np.linalg.norm(a.colour - b.colour) / 35.0))
     aspect = float(np.exp(-abs(np.log(max(a.aspect, 1e-3) / max(b.aspect, 1e-3))) * 2.0))
-    return 0.5 * shape + 0.35 * colour + 0.15 * aspect
+    base = 0.5 * shape + 0.35 * colour + 0.15 * aspect
+    if not ratio or not a.size or not b.size:
+        return base
+    size = float(np.exp(-abs(np.log(a.size / (ratio * b.size))) * SIZE_SHARPNESS))
+    return (1 - SIZE_WEIGHT) * base + SIZE_WEIGHT * size
+
+
+def size_ratio(descs: dict, inv_desc: list) -> float | None:
+    """Callout / parts-list drawing scale: median size ratio of confident best matches (shape, colour
+    and aspect only). None when too few callouts match confidently."""
+    ratios = []
+    flat = [(j, d) for j, ds in enumerate(inv_desc) if ds is not None for d in (ds if isinstance(ds, list) else [ds])]
+    for d in descs.values():
+        if d is None or not d.size:
+            continue
+        sims = sorted(((similarity(d, b), b) for _j, b in flat), key=lambda x: -x[0])
+        if sims and sims[0][0] > 0.85 and sims[0][1].size:
+            ratios.append(d.size / sims[0][1].size)
+    return float(np.median(ratios)) if len(ratios) >= 5 else None
 
 
 # ------------------------------------------------------------------ element -> LDraw
@@ -155,7 +183,7 @@ UNUSED_PENALTY = 0.02     # per printed piece left unconsumed
 OVER_PENALTY = 0.05       # per piece beyond an element's printed count
 
 
-def assign(descs: dict, totals: dict, inv_desc: list, counts: list[int]) -> dict:
+def assign(descs: dict, totals: dict, inv_desc: list, counts: list[int], ratio: float | None = None) -> dict:
     """Callout picture group -> (element index, similarity, margin to the runner-up element).
     Maximise total similarity subject to each group taking one element, with soft count terms:
     an element's printed count should be consumed (callout totals summed), not exceeded."""
@@ -165,7 +193,7 @@ def assign(descs: dict, totals: dict, inv_desc: list, counts: list[int]) -> dict
     elems = [j for j, d in enumerate(inv_desc) if d is not None]
     if not keys or not elems:
         return {}
-    sim = np.array([[max(similarity(descs[k], d) for d in (inv_desc[j] if isinstance(inv_desc[j], list) else [inv_desc[j]]))
+    sim = np.array([[max(similarity(descs[k], d, ratio) for d in (inv_desc[j] if isinstance(inv_desc[j], list) else [inv_desc[j]]))
                      for j in elems] for k in keys])
     G, E = sim.shape
     n = G * E + 2 * E                   # x_ge, unused_e, over_e
@@ -312,7 +340,8 @@ def read_parts(lib, extract: dict, folder: Path, index: dict, client=None, fallb
             if key not in descs:
                 descs[key] = describe(img)
     totals = {k: sum(extract["steps"][si]["callout"][ci].get("count", 1) for si, ci in v) for k, v in groups.items()}
-    assigned = assign(descs, totals, inv_desc, [int(e.get("count", 0) or 0) for e in inventory])
+    ratio = None if used_fallback else size_ratio(descs, inv_desc)     # rendered pictures have no print scale
+    assigned = assign(descs, totals, inv_desc, [int(e.get("count", 0) or 0) for e in inventory], ratio)
     steps_out = []
     unresolved_total = 0
     for si, step in enumerate(extract["steps"]):
@@ -336,5 +365,5 @@ def read_parts(lib, extract: dict, folder: Path, index: dict, client=None, fallb
     report = {"inventory_entries": len(inventory), "inventory_resolved": sum(1 for r, _ in resolved if r),
               "callout_pictures": len(groups), "callout_pieces": sum(int(c.get("count", 1) or 1) for s in extract["steps"] for c in s.get("callout", [])),
               "unresolved_pieces": unresolved_total, "has_inventory": bool(inventory) and not used_fallback,
-              "rebrickable_inventory": used_fallback}
+              "rebrickable_inventory": used_fallback, "size_ratio": ratio}
     return steps_out, report

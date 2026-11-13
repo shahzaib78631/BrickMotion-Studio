@@ -4,6 +4,7 @@ free-run booklets and the MEPNet datasets. Results are cached per set under
 from __future__ import annotations
 
 import json
+import os
 import time
 import traceback
 from pathlib import Path
@@ -12,7 +13,8 @@ import numpy as np
 
 from .dataset import CACHE
 
-OUT = CACHE / "solver"
+# BOOKLET_SOLVER_TAG keeps an A/B variant's cached results apart from the default run
+OUT = CACHE / "solver" / os.environ["BOOKLET_SOLVER_TAG"] if os.environ.get("BOOKLET_SOLVER_TAG") else CACHE / "solver"
 _STATE: dict = {}
 
 
@@ -45,6 +47,8 @@ def teacher_set(set_number: str, force: bool = False) -> dict:
     lib, collider = _STATE["lib"], _STATE["collider"]
     rows = []
     t0 = time.time()
+    from .step import SectionCamera, solve_start
+    section = SectionCamera()
     for case in cases(set_number):
         base = case.visible if case.visible else case.context
         frame_free = not base
@@ -55,11 +59,22 @@ def teacher_set(set_number: str, force: bool = False) -> dict:
             rows.append(row)
             continue
         try:
-            result = solve(lib, base, [(p, c) for p, c, _m in case.added], case.rgb, case.pts_per_px, collider=collider)
-            scores = step_scores(lib, result.placed, case.added, frame_free=frame_free)
+            key = getattr(case, "file", None)
+            new = [(p, c) for p, c, _m in case.added]
+            alone = False
+            if case.visible or not base:
+                result = solve(lib, base, new, case.rgb, case.pts_per_px, collider=collider,
+                               subbuilds=case.subbuilds, camera=section.prior(key) if base else None)
+            else:      # a sub-model starts: drawn on the model so far, or alone (scored up to a rigid move)
+                result, alone = solve_start(lib, base, new, case.rgb, case.pts_per_px, collider=collider,
+                                            subbuilds=case.subbuilds)
+            row["alone"] = alone
+            if not alone:
+                section.add(key, result, len(base))
+            scores = step_scores(lib, result.placed, case.added, frame_free=frame_free or alone)
             from ..score import exact_flags
             from .evaluate import canonical, aligned
-            placed = aligned(lib, result.placed, case.added)[0] if frame_free else canonical(lib, result.placed, case.added)
+            placed = aligned(lib, result.placed, case.added)[0] if frame_free or alone else canonical(lib, result.placed, case.added)
             flags = exact_flags(lib, placed, case.added) if placed else []
             row.update(status=result.status, **scores,
                        features=[{**part_features(sc, result), "part": p, "exact": bool(f)} for (p, _c, _m), sc, f in zip(result.placed, result.scores, flags)])

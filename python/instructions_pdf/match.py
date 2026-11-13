@@ -110,8 +110,8 @@ def _scale(parts: list, cands: list, min_score: float) -> float | None:
 
 def match_callouts(booklets: list[dict], work_dir: str, min_score: float = 0.7) -> dict:
     cands, inventory = _candidates(booklets, work_dir)
-    refs = [(b["id"], step["number"], i, part) for b in booklets for step in b["steps"] for i, part in enumerate(step["callout"])]
-    feats = [features(os.path.join(work_dir, bid, part["crop"])) for bid, _, _, part in refs]
+    refs = [(b["id"], step["page"], step["number"], i, part) for b in booklets for step in b["steps"] for i, part in enumerate(step["callout"])]
+    feats = [features(os.path.join(work_dir, bid, part["crop"])) for bid, _, _, _, part in refs]
     k = _scale(feats, cands, min_score) if inventory else None
 
     ranked: list[dict[str, float]] = []
@@ -127,9 +127,9 @@ def match_callouts(booklets: list[dict], work_dir: str, min_score: float = 0.7) 
         left = dict(inventory)
         pairs = sorted(((s, i, e) for i, r in enumerate(ranked) for e, s in r.items() if s >= min_score), key=lambda t: -t[0])
         for s, i, e in pairs:
-            if chosen[i] is None and left.get(e, 0) >= refs[i][3]["count"]:
+            if chosen[i] is None and left.get(e, 0) >= refs[i][4]["count"]:
                 chosen[i] = e
-                left[e] -= refs[i][3]["count"]
+                left[e] -= refs[i][4]["count"]
     for i, r in enumerate(ranked):  # nothing left fits: take the best and let over-use report it
         if chosen[i] is None and r:
             e, s = max(r.items(), key=lambda kv: kv[1])
@@ -137,12 +137,12 @@ def match_callouts(booklets: list[dict], work_dir: str, min_score: float = 0.7) 
                 chosen[i] = e
 
     matches, used = [], {}
-    for (bid, number, index, part), r, e in zip(refs, ranked, chosen):
+    for (bid, page, number, index, part), r, e in zip(refs, ranked, chosen):
         top = sorted(r.items(), key=lambda kv: -kv[1])[:3]
         if e:
             used[e] = used.get(e, 0) + part["count"]
         matches.append({
-            "booklet": bid, "step": number, "index": index, "element": e,
+            "booklet": bid, "page": page, "step": number, "index": index, "element": e,
             "score": round(r[e] if e else (top[0][1] if top else 0.0), 4),
             "alternatives": [{"element": a, "score": round(s, 4)} for a, s in top],
         })

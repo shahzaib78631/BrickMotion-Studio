@@ -1,0 +1,665 @@
+{
+  "set": "41488",
+  "snapshotSHA256": {
+    "json": "8db81d26de4c057a9a192116d706d97c660d76edd5a8d881d8b1e6146d9919f8",
+    "mpd": "8cf5859f530a0a13985f56e773d3e1b3c1f4a0605fa7848cac6c531a8921de92"
+  },
+  "sourceCodeSHA256": {
+    "solver/pipeline.py": "e0e292824ccfcd8ed2ad4850f30af3d73f64a3e9d8d3e6718e814a8c61900279",
+    "solver/step.py": "98a86610cb91d88e36921314f0f63d36301a6258df67f737fc62fbb15600d2fd",
+    "solver/evaluate.py": "7d5da796e10ad5739d1805ce7323e61fa8cd027f566f5086af5d6929c7cb306b",
+    "solver/candidates.py": "5e90eeb40527ab0deda1c6a863b95e90fa47be401cc9119600cf2e83952fd7f7"
+  },
+  "sourceCodeUnchangedDuringReplay": {
+    "solver/pipeline.py": true,
+    "solver/step.py": true,
+    "solver/evaluate.py": true,
+    "solver/candidates.py": true
+  },
+  "productionSummary": {
+    "parts": 89,
+    "predicted": 91,
+    "exact": 2,
+    "component_accuracy": 0.02247191011235955
+  },
+  "firstStepEquivalentFrameCount": 1,
+  "firstDivergentStep": {
+    "index": 1,
+    "printedStep": 2,
+    "page": 4,
+    "file": "41488 - master wu.ldr"
+  },
+  "truePreviousAssemblyCandidateCoverage": [
+    {
+      "part": "3010",
+      "colour": 15,
+      "expectedMatrix": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          -80.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          50.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "candidates": 356,
+      "exactCandidateIndices": [
+        256,
+        282
+      ]
+    },
+    {
+      "part": "2420",
+      "colour": 71,
+      "expectedMatrix": [
+        [
+          0.0,
+          0.0,
+          1.0,
+          -30.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          -56.0
+        ],
+        [
+          -1.0,
+          0.0,
+          0.0,
+          10.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "candidates": 296,
+      "exactCandidateIndices": [
+        189
+      ]
+    },
+    {
+      "part": "2420",
+      "colour": 71,
+      "expectedMatrix": [
+        [
+          -1.0,
+          0.0,
+          0.0,
+          30.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          -56.0
+        ],
+        [
+          0.0,
+          0.0,
+          -1.0,
+          10.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "candidates": 296,
+      "exactCandidateIndices": [
+        214
+      ]
+    }
+  ],
+  "completionAudit": {
+    "structurallyIncompleteFrom": 8,
+    "issues": [
+      {
+        "ordinal": 8,
+        "printedStep": 8,
+        "page": 10,
+        "reasons": [
+          "unsupported-repeat"
+        ]
+      },
+      {
+        "ordinal": 23,
+        "printedStep": 23,
+        "page": 25,
+        "reasons": [
+          "unsupported-repeat"
+        ]
+      }
+    ],
+    "poseCorrectness": "not-established",
+    "caveat": "A high fit value is not proof of placement correctness. The current solver reports a pre-placement silhouette fit."
+  },
+  "productionIncompleteFrom": null,
+  "writtenFlagAudit": {
+    "flagged": 65,
+    "unflagged": 26,
+    "unflaggedExactUnderProductionScoring": 1,
+    "unflaggedExactFractionUnderProductionScoring": 0.038461538461538464,
+    "invalidConfidenceCount": 2
+  },
+  "currentConfidenceModel": {
+    "path": "/Users/mac/Projects/BrickMotion-Studio/python/booklet_mpd/solver/confidence_model.json",
+    "exists": false,
+    "caveat": "Current loader state only; the old benchmark did not record a confidence-model hash."
+  },
+  "oraclePreviousAndIdentityReplay": {
+    "seconds": 28.854546308517456,
+    "collisionOracleExact": true,
+    "status": "ok",
+    "registration": 1.0508352518081665,
+    "reportedFitIoU": 0.8402732595966168,
+    "exact": 0,
+    "placed": [
+      [
+        "3010",
+        15,
+        [
+          [
+            6.123233995736766e-17,
+            0.0,
+            1.0,
+            -9.999999999999998
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            -72.0
+          ],
+          [
+            -1.0,
+            0.0,
+            6.123233995736766e-17,
+            -20.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      ],
+      [
+        "2420",
+        71,
+        [
+          [
+            1.0,
+            0.0,
+            0.0,
+            -50.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            -64.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            30.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      ],
+      [
+        "2420",
+        71,
+        [
+          [
+            -1.0,
+            0.0,
+            -1.2246467991473532e-16,
+            10.000000000000002
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            -40.0
+          ],
+          [
+            1.2246467991473532e-16,
+            0.0,
+            -1.0,
+            70.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      ]
+    ],
+    "view": {
+      "orientation": [
+        [
+          0.0,
+          0.0,
+          1.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          -1.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "yaw": 69.5,
+      "pitch": 16.0,
+      "scale": 0.9810008658721003,
+      "offset": [
+        45.62612403264652,
+        107.9001385171668
+      ]
+    }
+  },
+  "referenceCompletedModelCamera": {
+    "registration": 1.4432134628295898,
+    "view": {
+      "orientation": [
+        [
+          0.0,
+          0.0,
+          -1.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          1.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "yaw": 55.0,
+      "pitch": 32.5,
+      "scale": 1.1349447751771256,
+      "offset": [
+        77.24634808573819,
+        123.5384167067494
+      ]
+    },
+    "diagnosticOnly": true
+  },
+  "firstPlacedPartCameraAblation": {
+    "estimated": {
+      "part": "3010",
+      "correctCandidateRank": 265,
+      "correctScore": -774.0,
+      "bestScore": 712.0,
+      "bestMatrix": [
+        [
+          6.123233995736766e-17,
+          0.0,
+          1.0,
+          -9.999999999999998
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          -72.0
+        ],
+        [
+          -1.0,
+          0.0,
+          6.123233995736766e-17,
+          -20.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "correctCandidateCollides": false,
+      "view": {
+        "orientation": [
+          [
+            0.0,
+            0.0,
+            1.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            -1.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "yaw": 69.5,
+        "pitch": 16.0,
+        "scale": 0.9810008658721003,
+        "offset": [
+          45.62612403264652,
+          107.9001385171668
+        ]
+      }
+    },
+    "referenceCompleted": {
+      "part": "3010",
+      "correctCandidateRank": 1,
+      "correctScore": 2043.0,
+      "bestScore": 2043.0,
+      "bestMatrix": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          -80.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          50.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "correctCandidateCollides": false,
+      "view": {
+        "orientation": [
+          [
+            0.0,
+            0.0,
+            -1.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            1.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "yaw": 55.0,
+        "pitch": 32.5,
+        "scale": 1.1349447751771256,
+        "offset": [
+          77.24634808573819,
+          123.5384167067494
+        ]
+      }
+    }
+  },
+  "oraclePreviousIdentityAndCameraReplay": {
+    "exact": 3,
+    "parts": 3,
+    "predicted": 3,
+    "perPartExact": [
+      true,
+      true,
+      true
+    ],
+    "seconds": 3.988168954849243,
+    "collisionOracleExact": true,
+    "placed": [
+      [
+        "3010",
+        15,
+        [
+          [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            -80.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            50.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      ],
+      [
+        "2420",
+        71,
+        [
+          [
+            6.123233995736766e-17,
+            0.0,
+            1.0,
+            -30.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            -56.0
+          ],
+          [
+            -1.0,
+            0.0,
+            6.123233995736766e-17,
+            10.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      ],
+      [
+        "2420",
+        71,
+        [
+          [
+            -1.0,
+            0.0,
+            1.2246467991473532e-16,
+            30.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            -56.0
+          ],
+          [
+            -1.2246467991473532e-16,
+            0.0,
+            -1.0,
+            10.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      ]
+    ],
+    "diagnosticOnly": true
+  },
+  "prefixFirstThree": [
+    {
+      "index": 0,
+      "printedStep": 1,
+      "page": 3,
+      "expectedPrefixParts": 2,
+      "predictedPrefixParts": 2,
+      "exactPrefix": 2,
+      "newExact": 2,
+      "newParts": 2,
+      "transform": [
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          -48.0
+        ],
+        [
+          -1.0,
+          0.0,
+          0.0,
+          20.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "index": 1,
+      "printedStep": 2,
+      "page": 4,
+      "expectedPrefixParts": 5,
+      "predictedPrefixParts": 5,
+      "exactPrefix": 2,
+      "newExact": 0,
+      "newParts": 3,
+      "transform": [
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          -48.0
+        ],
+        [
+          -1.0,
+          0.0,
+          0.0,
+          20.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "index": 2,
+      "printedStep": 3,
+      "page": 5,
+      "expectedPrefixParts": 9,
+      "predictedPrefixParts": 9,
+      "exactPrefix": 2,
+      "newExact": 0,
+      "newParts": 4,
+      "transform": [
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          -48.0
+        ],
+        [
+          -1.0,
+          0.0,
+          0.0,
+          20.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    }
+  ],
+  "purpose": "Independent evaluation-only audit; no production solver change or inference access to answer keys."
+}

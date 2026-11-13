@@ -7,6 +7,8 @@ tan plate (no colour change) and the difference between studs and tubes (a model
 """
 from __future__ import annotations
 
+import os
+
 import cv2
 import numpy as np
 
@@ -86,8 +88,19 @@ def visible_points(points: np.ndarray, depth: np.ndarray) -> np.ndarray:
     return np.unique(np.stack([rows[keep], cols[keep]], 1), axis=0)
 
 
+INK = os.environ.get("BOOKLET_SOLVER_INK", "value")   # A/B on 4 sets: value 229 vs grey 222 exact parts
+
+
 def ink(rgb: np.ndarray) -> np.ndarray:
-    """Dark line pixels: very dark, or clearly darker than their 7x7 surroundings (black-hat)."""
+    """Dark line pixels. "grey": very dark, or clearly darker than their 7x7 surroundings (black-hat).
+    That rule reads booklet red as ink (grey about 76, shaded red under 60; and every red feature narrower
+    than 7 px), so on red parts every drawn edge looked confirmed. "value": brightness is the largest
+    channel (red is bright, ink is dark in every channel); dark, or darker than the 5x5 surroundings and
+    not bright."""
+    if INK == "value":
+        v = rgb.max(2).astype(np.uint8)
+        hat = cv2.morphologyEx(v, cv2.MORPH_BLACKHAT, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
+        return (v < 70) | ((hat > 40) & (v < 150))
     grey = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
     hat = cv2.morphologyEx(grey, cv2.MORPH_BLACKHAT, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7)))
     return (grey < 60) | (hat > 35)

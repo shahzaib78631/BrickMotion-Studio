@@ -133,14 +133,23 @@ class GroupAlignment:
 
 def align_groups(a: list[int], b: list[int], *, max_group: int = 6, gap: float = 0.3,
                  omr_gap_open: float = 1.0, omr_gap_extend: float = 0.02,
-                 min_similarity: float = 0.8, min_covered: float = 0.9) -> GroupAlignment:
+                 min_similarity: float = 0.8, min_covered: float = 0.9,
+                 part_sim=None, part_weight: float = 0.5, part_centre: float = 0.5) -> GroupAlignment:
     """Align booklet step totals `a` to OMR step sizes `b` allowing k booklet steps to
     equal l OMR steps (k, l <= max_group) when their summed counts agree.
 
     A booklet may show only some models of a set, so skipping OMR steps uses an affine
     cost (one opening cost, tiny per-step extension): one contiguous unrelated stretch is
-    cheap, scattered skips are not. Skipping a booklet step costs `gap` each.
-    Coverage uses the booklet side: `ok` means every booklet step is explained."""
+    cheap, scattered skips are not. OMR steps before the booklet's first match or after its
+    last are free (models the booklet does not build): charged per step, a long unmatched tail
+    cost more than the same models skipped mid-way, and the booklet's last steps were paired
+    with a later model whose last steps happened to hold the same counts (40353). Skipping a booklet step costs `gap` each.
+    Coverage uses the booklet side: `ok` means every booklet step is explained.
+
+    `part_sim(booklet_range, omr_range)` (optional): how well the booklet steps' parts-list pictures look
+    like the OMR steps' parts, 0..1, or None when unknown. Counts alone pair any two runs with the same
+    totals; the parts' look decides between them. Added as part_weight * (sim - part_centre), so a poor
+    look counts against a group and an unknown one is neutral."""
     n, m = len(a), len(b)
     pa, pb = [0], [0]
     for x in a:
@@ -163,6 +172,8 @@ def align_groups(a: list[int], b: list[int], *, max_group: int = 6, gap: float =
             if j > 0:  # OMR step j-1 skipped
                 best, arg = NEG, M
                 for st, cost in ((M, omr_gap_open), (X, omr_gap_open), (Y, omr_gap_extend)):
+                    if i == 0 or i == n:
+                        cost = 0.0      # leading / trailing OMR steps: another model, free
                     value = score[st][i][j - 1] - cost
                     if value > best:
                         best, arg = value, st
@@ -178,6 +189,10 @@ def align_groups(a: list[int], b: list[int], *, max_group: int = 6, gap: float =
                     if score[st][i - k][j - l] == NEG:
                         continue
                     value = score[st][i - k][j - l] + sim - 0.02 * (k + l - 2)
+                    if part_sim is not None:
+                        look = part_sim(range(i - k, i), range(j - l, j))
+                        if look is not None:
+                            value += part_weight * (look - part_centre)
                     if value > score[M][i][j]:
                         score[M][i][j] = value
                         back[(M, i, j)] = (st, k, l)

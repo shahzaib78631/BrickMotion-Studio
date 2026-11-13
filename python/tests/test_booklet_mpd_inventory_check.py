@@ -191,3 +191,15 @@ def test_colour_aliases_map_rubber_colours_to_their_base_colour(tmp_path):
 def test_remap_colours_merges_counts():
     c = Counter({("92402", 256): 4, ("92402", 0): 1, ("3001", 4): 2})
     assert remap_colours(c, {256: 0}) == Counter({("92402", 0): 5, ("3001", 4): 2})
+
+
+def test_omr_counter_strips_set_prefix_that_carries_a_version_suffix():
+    truth = [[("41181-1 - 3068bpm1", 15, None), ("3068bpm1", 15, None), ("40272 - 3001", 4, None)]]
+    assert omr_counter(truth) == Counter({("3068bpm1", 15): 2, ("3001", 4): 1})
+
+
+def test_related_parts_never_queries_the_api_for_a_malformed_id(tmp_path):
+    calls = []
+    rb = Rebrickable("k", tmp_path, get=lambda url, headers: calls.append(url) or {}, pause=0, sleep=lambda s: None)
+    assert rb.related_parts("weird name with spaces") == {"weird name with spaces"}
+    assert rb.related_parts("42121 - 42924") == {"42121 - 42924"} and calls == []

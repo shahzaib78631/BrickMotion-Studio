@@ -1,0 +1,225 @@
+{
+  "set": "30023",
+  "source": {
+    "set": "30023",
+    "sourcePage": "https://www.lego.com/en-us/service/building-instructions/30023",
+    "sourceURL": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/4650618.pdf",
+    "sha256": "9e50ac4a2029ccc3428b5cfc3b265c84d897e1507608163855f7e218f8de6eb6"
+  },
+  "perception": "Coding-agent reviewed the official booklet and independent Rebrickable inventory to identify new parts per step. No reference poses are present; this is supervised perception, not an automatic parts reader.",
+  "steps": [
+    {
+      "number": 1,
+      "page": 1,
+      "image": ".cache/booklet-mpd/small-set-30023/step-01.png",
+      "xref": 81,
+      "ptsPerPixel": 0.9984878912204649,
+      "pixelSHA256": "22809b20dad7286a006677e68f3ddde86179881973950a78076d71f9ebc299a0",
+      "newParts": [
+        [
+          "3031",
+          2
+        ],
+        [
+          "3700",
+          72
+        ]
+      ]
+    },
+    {
+      "number": 2,
+      "page": 1,
+      "image": ".cache/booklet-mpd/small-set-30023/step-02.png",
+      "xref": 92,
+      "ptsPerPixel": 0.997820221975948,
+      "pixelSHA256": "7503ea2500f8195f449bd24b41de564ef0c0e35dbd8c104c9a341cc3d3d49738",
+      "newParts": [
+        [
+          "3001",
+          70
+        ],
+        [
+          "3039",
+          71
+        ],
+        [
+          "3039",
+          71
+        ]
+      ]
+    },
+    {
+      "number": 3,
+      "page": 1,
+      "image": ".cache/booklet-mpd/small-set-30023/step-03.png",
+      "xref": 103,
+      "ptsPerPixel": 0.997820221975948,
+      "pixelSHA256": "f322f3c721a2bb16d018dc03d967a1e46a9401d0f8100616e919fdde2596b9a0",
+      "newParts": [
+        [
+          "87081",
+          15
+        ],
+        [
+          "54200",
+          0
+        ],
+        [
+          "54200",
+          0
+        ]
+      ]
+    },
+    {
+      "number": 4,
+      "page": 1,
+      "image": ".cache/booklet-mpd/small-set-30023/step-04.png",
+      "xref": 113,
+      "ptsPerPixel": 0.997820221975948,
+      "pixelSHA256": "538b16782f70f9440bc6e7becb0a7913096861925657aa17daae2fedb18090ef",
+      "newParts": [
+        [
+          "85080",
+          4
+        ],
+        [
+          "85080",
+          4
+        ],
+        [
+          "85080",
+          4
+        ],
+        [
+          "85080",
+          4
+        ]
+      ]
+    },
+    {
+      "number": 5,
+      "page": 1,
+      "image": ".cache/booklet-mpd/small-set-30023/step-05.png",
+      "xref": 120,
+      "ptsPerPixel": 1.0043865550648083,
+      "pixelSHA256": "7d162c83b5ac1e0e25438505fad5f37e1eaae81d63a1d3f3d4bef39dacc76c17",
+      "newParts": [
+        [
+          "87081",
+          15
+        ],
+        [
+          "85080",
+          4
+        ],
+        [
+          "85080",
+          4
+        ],
+        [
+          "85080",
+          4
+        ],
+        [
+          "85080",
+          4
+        ],
+        [
+          "87081",
+          15
+        ]
+      ]
+    },
+    {
+      "number": 6,
+      "page": 1,
+      "image": ".cache/booklet-mpd/small-set-30023/step-06.png",
+      "xref": 128,
+      "ptsPerPixel": 1.0025394739729634,
+      "pixelSHA256": "8453d02e5aa8d584a650538a690fbb88de71ea0ce70141558df7f7d3b56cb866",
+      "newParts": [
+        [
+          "2419",
+          71
+        ]
+      ]
+    },
+    {
+      "number": 7,
+      "page": 1,
+      "image": ".cache/booklet-mpd/small-set-30023/step-07.png",
+      "xref": 134,
+      "ptsPerPixel": 0.9987331814236111,
+      "pixelSHA256": "6f209b28e8a38a4200afb6116ea83fbeb6c15f31b849d3a8eb8bca45b06d1e7a",
+      "newParts": [
+        [
+          "2419",
+          71
+        ],
+        [
+          "87081",
+          0
+        ]
+      ]
+    },
+    {
+      "number": 8,
+      "page": 2,
+      "image": ".cache/booklet-mpd/small-set-30023/step-08-with-arrows.png",
+      "xref": 15,
+      "ptsPerPixel": 0.9893999311659071,
+      "pixelSHA256": "872b0bcf63183e5f541f49f1b286e727bc98a160c5fef30a629dc9aab948684e",
+      "newParts": [
+        [
+          "3941",
+          46
+        ],
+        [
+          "3941",
+          46
+        ]
+      ],
+      "sourceRendering": "PDF crop at 72dpi, retaining vector assembly arrows omitted by native embedded-image extraction"
+    },
+    {
+      "number": 9,
+      "page": 2,
+      "image": ".cache/booklet-mpd/small-set-30023/step-09.png",
+      "xref": 14,
+      "ptsPerPixel": 1.005235993460323,
+      "pixelSHA256": "4c3ecb34f49d9e9b544badeaf5aa2640c8ac7c75c9f240b8038ac90db68e03ea",
+      "newParts": [
+        [
+          "6141",
+          15
+        ],
+        [
+          "43898",
+          0
+        ]
+      ],
+      "compound": {
+        "root": "43898",
+        "parts": [
+          [
+            "43898",
+            0
+          ],
+          [
+            "6141",
+            15
+          ]
+        ],
+        "image": ".cache/booklet-mpd/small-set-30023/image-13.png",
+        "provenance": "Printed step-9 inset: assemble the dish and white round plate before attaching the cap; no relative poses annotated."
+      }
+    }
+  ],
+  "referenceInventoryDiscrepancy": "Rebrickable/official image specify 3700 colour 72; OMR uses 71. Keep correct inventory colour 72 in inference.",
+  "perceptionReview": "Enlarged every step image: black cheese slopes first appear in step 3, and step 5 adds white/red/white tower layers. Observations contain no positions.",
+  "structuralConstraints": [
+    "upright-stud-build",
+    "round-tower-sections-share-an-axis"
+  ],
+  "constraintProvenance": "Reviewed booklet depicts the circular white/red tower, black platform and lantern stacked concentrically. This is a semantic source observation, not an annotated coordinate or reference-model pose."
+}

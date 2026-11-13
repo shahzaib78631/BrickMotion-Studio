@@ -15,7 +15,7 @@ import pymupdf
 
 from ..baseline import group_context, group_visible
 from ..pairing import find_pairs
-from ..rawimages import main_model_image_info
+from ..rawimages import main_model_image_info, subbuild_images
 from ..truth import build_scoped_steps
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -36,6 +36,7 @@ class Case:
     file: str                  # submodel file the step builds into
     rgb: object = None
     pts_per_px: float | None = None
+    subbuilds: list | None = None     # sub-build panels (rawimages.subbuild_images)
 
 
 @lru_cache(maxsize=1)
@@ -83,5 +84,6 @@ def cases(set_number: str, with_images: bool = True, max_parts: int = 400) -> li
         case = Case(set_number, bidx[0], step["number"], step["page"], visible[gi], context[gi], added, files.pop())
         if with_images and step.get("pictureBox"):
             case.rgb, case.pts_per_px = main_model_image_info(doc[step["page"] - 1], pymupdf.Rect(step["pictureBox"]))
+            case.subbuilds = subbuild_images(doc[step["page"] - 1], pymupdf.Rect(step["pictureBox"]))
         out.append(case)
     return out

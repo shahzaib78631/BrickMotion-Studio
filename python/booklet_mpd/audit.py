@@ -1,7 +1,8 @@
 """Audit a booklet/OMR pair: does extraction work and do the steps line up?
 
-Alignment here is count-only (callout quantity total vs OMR piece count); callout
-crops are not yet resolved to LDraw ids, so this is the first, weaker filter.
+Alignment matches callout quantity totals to OMR piece counts and, given an LDraw library, also how the
+parts-list pictures look against the OMR steps' parts (shape and colour of each part drawn in four turns):
+counts alone pair any two runs of steps with the same totals.
 """
 from __future__ import annotations
 
@@ -37,7 +38,46 @@ def omr_blocks(groups) -> int:
     return sum(1 for pos, o in enumerate(indices) if pos == 0 or o != indices[pos - 1] + 1)
 
 
-def audit_pair(pair: Pair, work_dir: Path) -> dict:
+_LOOKS: dict = {}
+
+
+def part_look(lib, folder: Path, steps: list, omr_steps: list):
+    """part_sim for align_groups: per booklet step, the count-weighted mean over its callout pictures of
+    the best similarity to any part the OMR steps add (each part drawn in four upright turns)."""
+    import cv2
+    from .solver.parts import describe, rendered_descriptors, similarity
+    callouts = []
+    for st in steps:
+        row = []
+        for e in st.get("callout", []):
+            img = cv2.imread(str(folder / e["crop"])) if e.get("crop") else None
+            d = describe(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)) if img is not None else None
+            if d is not None:
+                row.append((d, e.get("count", 1) or 1))
+        callouts.append(row)
+    keys = [sorted({(p, c) for p, c, *_ in step}) for step in omr_steps]
+    best: dict = {}
+
+    def one(bi, ci, key):
+        k = (bi, ci, key)
+        if k not in best:
+            if key not in _LOOKS:
+                _LOOKS[key] = rendered_descriptors(lib, *key) or []
+            best[k] = max((similarity(callouts[bi][ci][0], r) for r in _LOOKS[key]), default=0.0)
+        return best[k]
+
+    def sim(brange, orange):
+        parts = {k for j in orange for k in keys[j]}
+        tot = w = 0.0
+        for bi in brange:
+            for ci, (_d, n) in enumerate(callouts[bi]):
+                tot += n * max((one(bi, ci, key) for key in parts), default=0.0)
+                w += n
+        return tot / w if w else None
+    return sim
+
+
+def audit_pair(pair: Pair, work_dir: Path, lib=None) -> dict:
     """Pick, per set, the OMR step granularity (root-file steps with submodels lumped, or
     submodel steps expanded) that best aligns with the booklet's callout totals."""
     result = {"set": pair.set_number, "split": pair.split, "booklet_steps": 0, "omr_steps": 0,
@@ -58,11 +98,13 @@ def audit_pair(pair: Pair, work_dir: Path) -> dict:
     for mode, loader in TRUTH_LOADERS.items():
         try:
             found: list[str] = []
-            sizes = [len(s) for s in loader(str(pair.omr), warnings=found)]
+            omr_steps = loader(str(pair.omr), warnings=found)
+            sizes = [len(s) for s in omr_steps]
         except Exception as error:
             errors.append(f"{mode}: {type(error).__name__}: {error}")
             continue
-        alignment = align_groups(totals, sizes)
+        look = part_look(lib, Path(work_dir) / f"{pair.set_number}-{pair.booklet}", steps, omr_steps) if lib is not None else None
+        alignment = align_groups(totals, sizes, part_sim=look)
         one_to_one = sum(1 for b, o in alignment.groups if len(b) == 1 and len(o) == 1)
         key = (alignment.ok, round(min(alignment.booklet_coverage, alignment.omr_coverage), 2), one_to_one, alignment.mean_similarity)
         if best is None or key > best[0]:

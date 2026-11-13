@@ -61,15 +61,16 @@ def run(lib, pdf: Path, extract_data: dict, folder: Path, index: dict, collider=
         combiner: dict | None = None, max_steps: int | None = None, log=None) -> FreeRun:
     import pymupdf
 
-    from ..rawimages import main_model_image_info
+    from ..rawimages import main_model_image_info, subbuild_images
     from .parts import read_parts
-    from .step import solve
+    from .step import SectionCamera, solve
 
     doc = pymupdf.open(str(pdf))
     steps_parts, report = read_parts(lib, extract_data, folder, index, client,
                                      fallback=inventory_fallback(lib, doc, extract_data, index, client))
     out = FreeRun(parts_report=report)
     model: list = []
+    section = SectionCamera()       # one camera per booklet section, not re-estimated every step
     steps = extract_data["steps"][:max_steps] if max_steps else extract_data["steps"]
     for si, step in enumerate(steps):
         read = steps_parts[si]
@@ -78,10 +79,14 @@ def run(lib, pdf: Path, extract_data: dict, folder: Path, index: dict, collider=
         placed, confs = [], []
         if read.parts:
             rgb = pts = None
+            subs = []
             if step.get("pictureBox"):
                 rgb, pts = main_model_image_info(doc[step["page"] - 1], pymupdf.Rect(step["pictureBox"]))
+                subs = subbuild_images(doc[step["page"] - 1], pymupdf.Rect(step["pictureBox"]))
             try:
-                result = solve(lib, model, list(read.parts), rgb, pts, collider=collider)
+                result = solve(lib, model, list(read.parts), rgb, pts, collider=collider, subbuilds=subs,
+                               camera=section.prior(None) if model else None)
+                section.add(None, result, len(model))
                 status = result.status
             except Exception as error:   # one bad step must not stop the booklet
                 result, status = None, f"error: {type(error).__name__}: {error}"[:200]

@@ -84,3 +84,20 @@ def test_picture_classes_separate_white_from_grey():
     pic.foreground[:] = True
     cls = pic.classes([15, 71])
     assert cls[4, 4] == 0 and cls[4, 14] == 1
+
+
+def test_solve_fills_a_hole_under_the_part_that_shows(lib):
+    # a BrickHeadz neck: a 1 x 1 brick and a round plate sunk in a hole, the plate on top the only part
+    # that shows. Largest first, the hidden brick has no evidence; the top plate is drawn where it floats
+    # over the hole's floor, and the other two fill that gap exactly. (This small model also solves
+    # without the fill, BOOKLET_SOLVER_FILL=0: the hole's stud happens to lead the tied hidden poses. In
+    # 40353 it does not; this guards the result, not the mechanism.)
+    ring = [(x, z) for x in (-10, 10, 30) for z in (-10, 10, 30) if (x, z) != (10, 10)]
+    base = [("3958", 19, placed(0, 0, 0))]
+    base += [("3005", 2, placed(x, -24, z)) for x, z in ring] + [("3024", 2, placed(x, -32, z)) for x, z in ring]
+    new = [("3005", 4, placed(10, -24, 10)), ("6141", 14, placed(10, -32, 10)), ("3024", 13, placed(10, -40, 10))]
+    view = View(np.eye(3), 35, 35, 1.1, (150, 140))
+    img = drawing(lib, base + new, view)
+    result = solve(lib, base, [(p, c) for p, c, _m in new], img, None)
+    got = result.placed[-len(new):]
+    assert all(exact_flags(lib, got, new)), [(p, np.round(m[:3, 3])) for p, _c, m in got]

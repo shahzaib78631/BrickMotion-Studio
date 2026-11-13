@@ -1,6 +1,6 @@
-"""Split a LEGO instruction booklet PDF into steps, callout parts and the inventory page.
+"""Split vector LEGO and raster Studio instruction PDFs into auditable evidence.
 
-Layout facts this relies on (40859 booklets): main step numbers are 26pt text, section markers
+Vector layout facts this relies on (40859 booklets): main step numbers are 26pt text, section markers
 31.6pt, sub-build numbers 16-22pt, part counts "Nx" in small (8pt) text inside pale-blue callout
 boxes, and each callout part is its own embedded image. Coordinates are PDF points.
 """
@@ -140,16 +140,33 @@ def _inventory(page, spans: list[dict], images: list[tuple], crops: str, out_dir
 
 def extract_booklet(pdf_path: str, out_dir: str) -> dict:
     doc = pymupdf.open(pdf_path)
+    with open(pdf_path, "rb") as source:
+        source_hash = hashlib.file_digest(source, "sha256").hexdigest()
     crops = os.path.join(out_dir, "crops")
     os.makedirs(crops, exist_ok=True)
     texts: list[str] = []
     steps: list[dict] = []
     inventory: list[dict] = []
     pending_sections: list[int] = []
+    diagnostics: list[dict] = []
+    raster_pages: list[int] = []
+    unparsed_pages: list[int] = []
 
     for pno, page in enumerate(doc, start=1):
         texts.append(page.get_text())
         spans = _spans(page)
+        page_images = page.get_image_info()
+        full_page_raster = any(pymupdf.Rect(i["bbox"]).get_area() >= page.rect.get_area() * .9 for i in page_images)
+        if not spans and full_page_raster:
+            from .raster import raster_step
+            raster_pages.append(pno)
+            step, issues = raster_step(page, out_dir)
+            diagnostics.extend(issues)
+            if step:
+                steps.append(step)
+            else:
+                unparsed_pages.append(pno)
+            continue
         images = _images(page)
         mains = sorted(
             (s for s in spans if NUM.match(s["text"]) and _in(s["size"], MAIN)),
@@ -199,10 +216,15 @@ def extract_booklet(pdf_path: str, out_dir: str) -> dict:
             if i in callout_images:
                 continue
             st = nearest_step(_center(b))
+            # A bag-opening illustration sits left of the initial step in
+            # section-start spreads. It is not part of the assembly image.
+            if "section" in st and st["_b"][0] > page.rect.width*.4 and b[2] < st["_b"][0]:
+                continue
             u = unions.setdefault(id(st), list(b))
             unions[id(st)] = [min(u[0], b[0]), min(u[1], b[1]), max(u[2], b[2]), max(u[3], b[3])]
         for st in page_steps:
             if id(st) in unions:
+                st["pictureBox"] = unions[id(st)]
                 st["picture"] = f"crops/p{pno}_s{st['number']}_picture.png"
                 _clip(page, unions[id(st)], PICTURE_DPI, os.path.join(out_dir, st["picture"]))
 
@@ -219,13 +241,34 @@ def extract_booklet(pdf_path: str, out_dir: str) -> dict:
             del st["_b"]
         steps += page_steps
 
+    if raster_pages:
+        from .raster import recover_raster_sequence
+        recover_raster_sequence(doc, steps, raster_pages, unparsed_pages, diagnostics, out_dir)
+    visual = hashlib.sha256()
+    for step in steps:
+        for crop in [step.get("picture"), *(c["crop"] for c in step["callout"])]:
+            if crop:
+                with open(os.path.join(out_dir, crop), "rb") as image:
+                    visual.update(image.read())
     booklet = {
         "id": os.path.splitext(os.path.basename(pdf_path))[0],
         "textHash": hashlib.sha256("".join(texts).encode("utf-8")).hexdigest(),
         "pages": doc.page_count,
         "steps": steps,
         "inventory": inventory,
+        "diagnostics": diagnostics,
+        "rasterPages": raster_pages,
+        "unparsedPages": unparsed_pages,
+        "visualHash": visual.hexdigest(),
+        "sourceHash": source_hash,
     }
+    for prev, current in zip(steps, steps[1:]):
+        if current["number"] != prev["number"] + 1:
+            diagnostics.append({"page": current["page"], "code": "step-sequence",
+                                "message": f"Step {prev['number']} on page {prev['page']} followed by {current['number']}; verify missing, restarted or obscured labels."})
+    if not steps:
+        diagnostics.append({"code": "no-steps", "message": "No instruction steps extracted; this is not a complete extraction."})
+    doc.close()
     with open(os.path.join(out_dir, "booklet.json"), "w") as f:
         json.dump(booklet, f, indent=1)
     return booklet

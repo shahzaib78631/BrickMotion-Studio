@@ -152,7 +152,9 @@ COARSE_PITCHES = (20, 30, 40, 50, 60)
 
 
 def search(lib, parts, picture: Picture, codes: list[int], orientations: list[int], scale: float,
-           classes: np.ndarray | None = None, refine: int = 3, on_ink: np.ndarray | None = None) -> list[Registration]:
+           classes: np.ndarray | None = None, refine: int = 3, on_ink: np.ndarray | None = None,
+           diverse: bool = False, separation: float = 0.0,
+           scale_range=np.linspace(0.9, 1.1, 7)) -> list[Registration]:
     """Coarse registration over orientations x a yaw/pitch grid at half resolution, then local
     refinement of the `refine` best. Returns refined registrations, best first."""
     from ..viewfit import ORIENTATIONS
@@ -170,12 +172,18 @@ def search(lib, parts, picture: Picture, codes: list[int], orientations: list[in
     for value, oi, yaw, pitch in found:
         if len(out) >= refine:
             break
-        key = (oi, yaw, pitch)
-        if key in seen:
-            continue
-        seen.add(key)
+        if separation:
+            # distinct camera peaks: coarse views of one orientation closer than `separation` degrees are one
+            if any(o == oi and abs(y - yaw) < separation and abs(q - pitch) < separation for o, y, q in seen):
+                continue
+            seen.add((oi, yaw, pitch))
+        else:
+            key = oi if diverse else (oi, yaw, pitch)    # diverse: the best coarse view of each orientation
+            if key in seen:
+                continue
+            seen.add(key)
         reg = register(lib, parts, picture, codes, ORIENTATIONS[oi], yaw, pitch, scale, classes=classes, on_ink=on_ink,
-                       angle_steps=((5.0, 0.0), (-5.0, 0.0), (0.0, 5.0), (0.0, -5.0)))
+                       angle_steps=((5.0, 0.0), (-5.0, 0.0), (0.0, 5.0), (0.0, -5.0)), scale_range=scale_range)
         reg.orientation_index = oi
         out.append(reg)
     out.sort(key=lambda r: -r.score)

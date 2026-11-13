@@ -103,6 +103,8 @@ class Rebrickable:
         return known[element_id]
 
     def related_parts(self, part_id: str) -> set[str]:
+        if not re.fullmatch(r"[A-Za-z0-9._-]+", part_id):   # a custom or malformed id: nothing to look up
+            return {part_id}
         cache = self.cache / "parts.json"
         known = json.loads(cache.read_text()) if cache.is_file() else {}
         if part_id not in known:
@@ -131,7 +133,7 @@ def official_counter(parts: list[dict], spares: bool = False) -> Counter:
     return counter
 
 
-_EMBEDDED = re.compile(r"^\d+ - (.+)$")
+_EMBEDDED = re.compile(r"^\d+(?:-\d+)? - (.+)$")
 
 
 def _plain(part: str) -> str:

@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     "numpy>=1.26",
     "pymupdf>=1.26",
+    "z3-solver>=4.13",
 ]
 
 [dependency-groups]
@@ -18,6 +19,14 @@ build-backend = "hatchling.build"
 [project.scripts]
 brickmotion-assembly = "assembly_model.cli:main"
 brickheadz = "brickheadz.cli:main"
+
+[project.optional-dependencies]
+vision = [
+    "opencv-python-headless>=4.10",
+    "scipy>=1.14",
+]
+
+vision-train = ["torch>=2.0"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["assembly_model", "instructions_pdf", "brickheadz"]

@@ -138,3 +138,17 @@ def test_single_part_callout_without_count_is_kept(tmp_path):
     doc.save(pdf)
     b = extract_booklet(str(pdf), str(tmp_path / "o"))
     assert [(c["count"], c["countFound"]) for c in b["steps"][0]["callout"]] == [(1, False)]
+
+
+def test_bag_illustration_is_excluded_from_section_start_picture(tmp_path):
+    doc=pymupdf.open();p=page(doc)
+    text(p,50,130,'1',31.6)
+    p.insert_image(pymupdf.Rect(20,100,160,250),stream=png((.8,.7,.6),140,150))
+    text(p,200,90,'1',26)
+    p.draw_rect(pymupdf.Rect(196,15,348,62),color=None,fill=CALLOUT)
+    p.insert_image(pymupdf.Rect(220,25,240,40),stream=png((1,0,0)))
+    text(p,220,50,'1x',8)
+    p.insert_image(pymupdf.Rect(230,120,350,250),stream=png((1,0,0),120,130))
+    source=tmp_path/'section.pdf';doc.save(source)
+    b=extract_booklet(str(source),str(tmp_path/'out'))
+    assert b['steps'][0]['pictureBox'][0]>=200

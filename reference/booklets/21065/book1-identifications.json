@@ -1,0 +1,1664 @@
+{
+  "format": "booklet-artwork-review-v1",
+  "set": "21065",
+  "book": 1,
+  "pdfSha256": "1b5094fd87f8de90d1751373b74de720455c75a1b305229c7718d31cc92c8f28",
+  "method": "Visual side-by-side review of all 331 visible artwork groups against the official printed inventory; close-up review of stud bores and stud counts for the corrections below.",
+  "identifications": {
+    "88a3e92f05023cbe": {
+      "element": "6174917",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "0fcff93694270bec": {
+      "element": "6350415",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "b4ef2af9f2af8ed6": {
+      "element": "6079461",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "e386860055b61cd9": {
+      "element": "6174917",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "284e863ec6c2dae7": {
+      "element": "4211067",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "84fb472067981db2": {
+      "element": "6350415",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "b023dc1f64dc7536": {
+      "element": "302301",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "321fcd75cd45c3b0": {
+      "element": "302026",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "5c9767b89665d6f0": {
+      "element": "242026",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "65ceeab627a520ad": {
+      "element": "303026",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "a59f4450c161ac4f": {
+      "element": "447726",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "1553192f91102b13": {
+      "element": "346026",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "8babe824326b7c02": {
+      "element": "6350415",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "3f599959703b1e3f": {
+      "element": "4211043",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "37f9260d192d70fb": {
+      "element": "6501239",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "cfd890d53f3cd6c0": {
+      "element": "6357797",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "3a165ccc1b5cb64e": {
+      "element": "6186681",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "c2db0da641d89377": {
+      "element": "4568734",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "1df0a44926cf2d0e": {
+      "element": "4211052",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "f66fc01343374103": {
+      "element": "6288635",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "d93f285b28c6aad6": {
+      "element": "6357804",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "23b88a5a747cb8a0": {
+      "element": "6330199",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "f723fdf96fd5e46a": {
+      "element": "6480369",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "20d2c3843c237d69": {
+      "element": "6187008",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "96ea00ada2878803": {
+      "element": "4211055",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "d1bc014e7b1667ec": {
+      "element": "6247784",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "bb4c297cab9f395d": {
+      "element": "4539090",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "bc01669e46a916ef": {
+      "element": "4550169",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "4e1025045ed11db1": {
+      "element": "6350399",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "05e2b79dd3c8273b": {
+      "element": "302001",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "2b5bd7520e57a392": {
+      "element": "6364638",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "37d68dce7e1da851": {
+      "element": "6535078",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "480585771f2e9514": {
+      "element": "6510133",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "35024443f77a052a": {
+      "element": "4211001",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "81e13320a5524289": {
+      "element": "6480361",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "e8780faa49eca406": {
+      "element": "4583299",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "6e4baff27501fca9": {
+      "element": "6553652",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "540709ff4fd67149": {
+      "element": "6051511",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "4faa127d9a1ef8f6": {
+      "element": "6284575",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "c76aee986a5964b0": {
+      "element": "6507854",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "7638b978e023182d": {
+      "element": "6514262",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "b728cbf79b3c059b": {
+      "element": "4567448",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "0fe397e872ada595": {
+      "element": "300501",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "421634c7d0bfbcd1": {
+      "element": "301001",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "01216a1655b2e096": {
+      "element": "6214334",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "490d1d190bffbaf0": {
+      "element": "6137926",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "e307b7601b33ac77": {
+      "element": "307001",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "a6387a0f8c47b703": {
+      "element": "6156667",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "62efd58d2e0d09d5": {
+      "element": "243101",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "3504598f274f45e6": {
+      "element": "4558168",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "8d22426bf5638899": {
+      "element": "6172366",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "4662fcea7838416c": {
+      "element": "6373439",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "dea7f88011ad7294": {
+      "element": "6399573",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "7a05dcdfc44e6518": {
+      "element": "6480394",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "f905ce87603c446b": {
+      "element": "6416525",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "7106117ce0858ad6": {
+      "element": "4159553",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "5d4d38d067aa9dc7": {
+      "element": "4113917",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "1f15d8314649558c": {
+      "element": "6024495",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "1ed4270404e1d078": {
+      "element": "4579260",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "78f1ae9e10935e07": {
+      "element": "6069165",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "0a263f0115d58a63": {
+      "element": "6575079",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "b1cf6ebad94a8508": {
+      "element": "6388196",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "c01dfe92fc2089af": {
+      "element": "6360078",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "e3010f87ddb26fc0": {
+      "element": "4114084",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "4a25c7a52c19b3f2": {
+      "element": "6544404",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "af075ec16537f9fd": {
+      "element": "6514455",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "dac5cdbdb8f2248e": {
+      "element": "6514001",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "3e75b0f314cb0e9e": {
+      "element": "4124456",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "01c39091726a3dab": {
+      "element": "6546189",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "e1202109fa5b90d5": {
+      "element": "6514213",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "ab5c48e05bb4fc99": {
+      "element": "6513964",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "1848b90f72772a60": {
+      "element": "6514209",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "bdd4413010003340": {
+      "element": "4121921",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "445b1f881df4506e": {
+      "element": "6514003",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "24d0280152502223": {
+      "element": "6443061",
+      "review": "visual-artwork-comparison",
+      "reason": "Tan round 1x1 plate has the smaller inner bore and rim of the open stud, matching printed 6443061 rather than closed-stud 4161734."
+    },
+    "08ff31fcb0ee8694": {
+      "element": "6514002",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "ecbb8938ba4f2fcb": {
+      "element": "6514231",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "299f6c24433e1e49": {
+      "element": "4114026",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "a0e6ea38a983e2f2": {
+      "element": "4113233",
+      "review": "visual-artwork-comparison",
+      "reason": "Four studs along the entire 1x4 plate: 3710, not the two-end-stud tile 41740."
+    },
+    "e2669d53e5cce3df": {
+      "element": "6236914",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "65cf4479fa3676a7": {
+      "element": "6352222",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "bdbdbdffa1ee5c1b": {
+      "element": "6458097",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "4e828627ae052d73": {
+      "element": "6211966",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "0482e25f04760232": {
+      "element": "6254770",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "b4e971ca2b65438c": {
+      "element": "6116614",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "df2735a9437fbb9f": {
+      "element": "6269968",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "ed950a509490b670": {
+      "element": "6538442",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "16455e67efcb3649": {
+      "element": "6234807",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "345ca041c039128f": {
+      "element": "371001",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "908fa3ac252edd51": {
+      "element": "6168642",
+      "review": "visual-artwork-comparison",
+      "reason": "White round 1x1 plate has an open-stud rim. Quantity across this artwork is 12, matching all 12 printed instances of this element in the set."
+    },
+    "8332ae80767daf39": {
+      "element": "6399559",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "ad2a3a08645d0a68": {
+      "element": "306201",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "c001be64aca5d008": {
+      "element": "6501816",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "3ef9901b0cbfde1c": {
+      "element": "6195371",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "383ea4b79170e4d8": {
+      "element": "6450820",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "c294add8878ca106": {
+      "element": "6210272",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "5d312dde2b597210": {
+      "element": "6579939",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "0a5d912a0ba4799f": {
+      "element": "6199549",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "6bd7c8be82ce29c2": {
+      "element": "6212758",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "03bd77494128cb20": {
+      "element": "4210633",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "fcad175d4b8c34ee": {
+      "element": "6177079",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "8f87e36fc3f7518f": {
+      "element": "6302268",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "72ac89c79c892659": {
+      "element": "4650647",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "403c9b039e00102e": {
+      "element": "6454938",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "c55ef60123462eb6": {
+      "element": "6060850",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "390ac2762ed2db27": {
+      "element": "6573919",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "0c17bec65d8f5e3d": {
+      "element": "6595738",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "ebdf683981f320ba": {
+      "element": "4529237",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "031f056512c740d6": {
+      "element": "4113915",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "5074c0b478d66061": {
+      "element": "4113916",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "a62a2506e92e1694": {
+      "element": "6452537",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "bbba176a67ec9b50": {
+      "element": "6092587",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "22b58521c8258a37": {
+      "element": "4159196",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "9c008fc486154435": {
+      "element": "4218749",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "23daeee25eab2f05": {
+      "element": "4114324",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "89b1f80437664cb9": {
+      "element": "6491421",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "c3043e75914d842a": {
+      "element": "6536100",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "032737ed6a75e93f": {
+      "element": "4125253",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "6a88a7cbef8dfebf": {
+      "element": "4114309",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "14ff162ac83379a0": {
+      "element": "4118790",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "6921319069dd8b6d": {
+      "element": "6577047",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "daa889f62027bf56": {
+      "element": "6257600",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "638f944090d56dad": {
+      "element": "6536100",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "14ddb0368fbb2d67": {
+      "element": "6573915",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "1d5caac3c347ba7f": {
+      "element": "6250018",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "17cfaa1a129cc263": {
+      "element": "6115248",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "fc7be6b268e798ae": {
+      "element": "6443061",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "a4967394095f70e4": {
+      "element": "6232135",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "27a878f1ae93c321": {
+      "element": "6230284",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "3792cdecf5a04576": {
+      "element": "6573918",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "384464f38421c5e6": {
+      "element": "6350415",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "151361f58fd6eda0": {
+      "element": "303326",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "d4ace3b7e44d1915": {
+      "element": "4211002",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "9cd635ab4bd011c0": {
+      "element": "302326",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "e11cd0cd3eb18d82": {
+      "element": "362326",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "6c289b310ff41044": {
+      "element": "6350415",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "d0bb95827bb65ac2": {
+      "element": "4283046",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "23845e3b1f8ed7d5": {
+      "element": "4180508",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "82669db3fc9ca5e9": {
+      "element": "4283047",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "8f5c7112888b99e4": {
+      "element": "4180536",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "0153de1ed19a18bd": {
+      "element": "6365746",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "f2f802e66c1ca3df": {
+      "element": "6349274",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "5b8f5ff1e81d3f55": {
+      "element": "4210719",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "87b7d7f4b8ed73d3": {
+      "element": "6257592",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "900e6472affa3cf9": {
+      "element": "4210848",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "dd53029862227e20": {
+      "element": "6092572",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "a14705e85435ebae": {
+      "element": "6510145",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "6366aa008df26004": {
+      "element": "6510131",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "76e4f89a3dcd06ca": {
+      "element": "4560184",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "c59627f2127af830": {
+      "element": "663626",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "8c1041b54b8b7e82": {
+      "element": "6510139",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "b5b50138e811ecd7": {
+      "element": "6510125",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "bd02148d880a3c8f": {
+      "element": "307026",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "307fd16ada5d2992": {
+      "element": "6301870",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "73f1b65443c00974": {
+      "element": "6262018",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "956c8fbbccbaecc5": {
+      "element": "4516055",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "364dec0b2dd6e367": {
+      "element": "6267495",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "1807662534e02b89": {
+      "element": "6401023",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "81f9da4edea5b487": {
+      "element": "6463667",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "2e613188a181f179": {
+      "element": "6573916",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "a087abdfd1be9fbc": {
+      "element": "6357613",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "23145e2b4ea693f0": {
+      "element": "6593092",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "307469e7770021f4": {
+      "element": "6070327",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "761169e9f7045967": {
+      "element": "6337079",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "7a71bf5316d6a28b": {
+      "element": "302401",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "855eaa89a80b07f8": {
+      "element": "366501",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "443b16a68b37602f": {
+      "element": "663601",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "07338ccfd31a29c4": {
+      "element": "6249091",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "b98bcc04a2c5eb9a": {
+      "element": "4201062",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "2c709501f31bbbb1": {
+      "element": "6351905",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "dd01d611c5cbc213": {
+      "element": "6536855",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "3f4a72f18a8e5544": {
+      "element": "6299492",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "7c499f7783a0df6a": {
+      "element": "614101",
+      "review": "visual-artwork-comparison",
+      "reason": "Solid white round stud top; no open-stud rim. Native artwork matches printed 614101, not hollow-stud 6168642."
+    },
+    "452acf3c500d6cad": {
+      "element": "4550323",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "e4d5d66b69ee14bd": {
+      "element": "6055868",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "b51073c0441b4ddb": {
+      "element": "6533760",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "39fc1d74e14753f1": {
+      "element": "6131896",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "5a8268ba2d74a7b9": {
+      "element": "6452913",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "0410e59c92a40330": {
+      "element": "6223758",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "f129ce883044c337": {
+      "element": "6470076",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "02651100dec82abe": {
+      "element": "4143409",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "442fe4852884b891": {
+      "element": "4160483",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "37fbdd172acfb209": {
+      "element": "4109995",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "c08816d1ac312a64": {
+      "element": "6398654",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "d89b11c4d1603ac9": {
+      "element": "6092591",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "5b6a7f75f20718e2": {
+      "element": "4114322",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "d5b2eed9795771c6": {
+      "element": "4118793",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "a3abd22c8a38f9f9": {
+      "element": "6449594",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "80ac41ba06e11748": {
+      "element": "4210725",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "c59d601324865f60": {
+      "element": "6230233",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "8ddf2f5ad1097616": {
+      "element": "4121972",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "6e074b1c50d98d1a": {
+      "element": "6435267",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "b9463778eef129ec": {
+      "element": "6332045",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "9bdb80397592a742": {
+      "element": "6312460",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "f922da3a6f1dea8f": {
+      "element": "4211398",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "7adbdd982b47e9de": {
+      "element": "6232193",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "d384c4c97a7f3d36": {
+      "element": "6174938",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "fc729f0be1820eb7": {
+      "element": "6245271",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "5edac83e2a402e27": {
+      "element": "6585139",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "cadbbc8e37a64085": {
+      "element": "241201",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "f377f1ae61209658": {
+      "element": "6567117",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "01922d4f6711f805": {
+      "element": "368001",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "48dc2816cb8df221": {
+      "element": "6472370",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "c8ae38929eddd6f4": {
+      "element": "4543086",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "699893ff52f00eec": {
+      "element": "4114077",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "e5c2e157ccd3a43e": {
+      "element": "4211056",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "46d2668e2ac8d89f": {
+      "element": "6343852",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "69d755a86a561835": {
+      "element": "6135287",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "d0f684d9f7f6d568": {
+      "element": "6446790",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "f6ea9ab34da5b6b8": {
+      "element": "4161734",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "a03ce027c8f8945f": {
+      "element": "614326",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "3f3331f29c4f447d": {
+      "element": "4161734",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "1ec775197d0d420c": {
+      "element": "6454936",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "778c7d9b0492cc85": {
+      "element": "6456637",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "e798119fabbad076": {
+      "element": "6231386",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "93e3c0bf48ebe2f8": {
+      "element": "4211042",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "2941bb4932d21b54": {
+      "element": "6226565",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "fcbf76afc0d63857": {
+      "element": "302226",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "dbe6e0e17c578740": {
+      "element": "4211397",
+      "review": "visual-artwork-comparison",
+      "reason": "Four visible studs in a 2x2 grid: ordinary plate 3022, not half-studded 33909. Original candidate also exceeded its entire set quantity."
+    },
+    "81ba94121420d3b5": {
+      "element": "6117975",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "407cb0e849730c94": {
+      "element": "6253003",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "96d48fd92b095568": {
+      "element": "6174925",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "8ac2591a98008581": {
+      "element": "6046907",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "81054cb3cf86c65b": {
+      "element": "4624086",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "b19273732fa90268": {
+      "element": "379501",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "9b8e10ef8e1e4274": {
+      "element": "366601",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "4c0510239f4407e2": {
+      "element": "6514007",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "0f2ea18dfd4b0606": {
+      "element": "6573916",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "3ffa536ee74531c1": {
+      "element": "6395373",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "0b2f0c5b0c0a3d44": {
+      "element": "6177890",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "5a11d81829d15f6e": {
+      "element": "4124067",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "77ded4cff966b4db": {
+      "element": "6177891",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "0d2418bc6a583b52": {
+      "element": "6385281",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "5c942be3698c6301": {
+      "element": "6385280",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "8417028a8c5ff854": {
+      "element": "6365720",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "2ae0f3dc3d1dd1e0": {
+      "element": "6251252",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "d1bb4a90a3944a6c": {
+      "element": "6374192",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "c1bba38eb0dfc24a": {
+      "element": "6286492",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "36baa4f332c20c75": {
+      "element": "6411591",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "93d049480359525e": {
+      "element": "6458394",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "439ac8c3014e92ec": {
+      "element": "6206149",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "4a819dbc7fdc55b3": {
+      "element": "6461425",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "6acd728e62f49e67": {
+      "element": "6536425",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "68e846dedb608823": {
+      "element": "6426730",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "801b1b9b669abbf2": {
+      "element": "6512536",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "c2ac3f64dfa738e3": {
+      "element": "4117070",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "9f3cade341b56992": {
+      "element": "4558168",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "560e5f28355909e6": {
+      "element": "6242241",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "5b8cc68e0c9e77b9": {
+      "element": "6353196",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "ae90b40a6095fdbe": {
+      "element": "6195325",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "01661d0e21cec56b": {
+      "element": "6115080",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "e7ecd72a15fe34e3": {
+      "element": "4211511",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "db2e9643fc435d9c": {
+      "element": "6221467",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "a6338a3b276f22c6": {
+      "element": "6170418",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "6ec19224e13ad6dc": {
+      "element": "6388133",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "8d3fb2a41996c3aa": {
+      "element": "6447501",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "ab683b43c939c66a": {
+      "element": "6388133",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "c3f4689b1b776978": {
+      "element": "6447501",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "b7a2ffc8ccc0e52f": {
+      "element": "6209691",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "d771880987e1d682": {
+      "element": "6580724",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "13e75617c295b10a": {
+      "element": "6488988",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "67ad6acfe80b7613": {
+      "element": "4518400",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "e1d7244b444a4902": {
+      "element": "6357680",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "80f719ce31ecc38c": {
+      "element": "302126",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "e02f7cbb05a7cfde": {
+      "element": "379526",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "26ece040b597fda3": {
+      "element": "6394881",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "6a272416d9f4e610": {
+      "element": "4143180",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "09a5df0cd4696a11": {
+      "element": "371026",
+      "review": "visual-artwork-comparison",
+      "reason": "Four visible studs on the black 1x4 plate, not a smooth 1x4 tile 2431. The second-ranked template is the correct studded part."
+    },
+    "0dd7afc0c2a4b13c": {
+      "element": "362326",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "b957b118ccdbf63c": {
+      "element": "6369265",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "dfe909346b0dbd3b": {
+      "element": "6092597",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "1a951c3651a190a6": {
+      "element": "4210635",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "8dca6d116e44fe68": {
+      "element": "4211133",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "3c4a4557312e6c35": {
+      "element": "6359681",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "2f4d5c99bb584fb6": {
+      "element": "243126",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "2ef672c5f8076e4b": {
+      "element": "4558170",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "11dcf2cb718a0f00": {
+      "element": "4211063",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "3ba9219fb9778294": {
+      "element": "302328",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "7521e7eb3342a2a5": {
+      "element": "6092586",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "8501808a70e9cb08": {
+      "element": "6510150",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "5ec3267d976a1464": {
+      "element": "6510137",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "84af4277327c21fd": {
+      "element": "4558593",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "889b66e132a59dd3": {
+      "element": "4211541",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "96aa347b84dadb1d": {
+      "element": "6148265",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "a26add755d29230b": {
+      "element": "4598467",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "4c7d615fb9c20674": {
+      "element": "4162465",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "e0f7388ea43cb944": {
+      "element": "6057517",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "5c1b2dbb91d7e964": {
+      "element": "4618876",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "9770d147144963b0": {
+      "element": "6059185",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "f4b83eb191e0463e": {
+      "element": "6055541",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "86a3de113ddd182f": {
+      "element": "6348055",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "1bd54a8140e3191f": {
+      "element": "4620761",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "43ea569b7d6106fe": {
+      "element": "6510064",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "1d4136e44b4ea870": {
+      "element": "6132203",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "0c3cfcb41a59b1e2": {
+      "element": "6132204",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "135028ddefffde5b": {
+      "element": "6280386",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "30ff3f006ef2455a": {
+      "element": "302101",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "e423283fd8fd0104": {
+      "element": "362301",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "53b30f92c1019c8f": {
+      "element": "4208072",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "e8ede5c76c27e528": {
+      "element": "6314477",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "c4fe5911e999f712": {
+      "element": "6069164",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "ba839e1b5078e224": {
+      "element": "6375672",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "65969a5ce9b753e9": {
+      "element": "6585140",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "77e8047f90f38ace": {
+      "element": "6428803",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "71ccb8f08baad17b": {
+      "element": "6151537",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "ab20b8a9cc4af25d": {
+      "element": "6533800",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "cdba2cfc4f4345a1": {
+      "element": "4626904",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "9d1d8f37262ae5c8": {
+      "element": "6092587",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "fb343745eb15503a": {
+      "element": "4112982",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "0f6cbe4125270f84": {
+      "element": "4211096",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "9e61d6802553e2f1": {
+      "element": "6146877",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "c66d6f75521bb9cd": {
+      "element": "6449593",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "53032b790a9930c0": {
+      "element": "4514842",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "fa853653f77ba94c": {
+      "element": "6093864",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "791ec245002b942a": {
+      "element": "4504378",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "138d3d3bfaa332d8": {
+      "element": "6533361",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "e17a9973fdbb5206": {
+      "element": "4210998",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "8df2e85b6fa93a79": {
+      "element": "6262021",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "dc9607f41a0cb899": {
+      "element": "6608951",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "9e432eb2cfd982bd": {
+      "element": "6485745",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "ca3f13a25c3913c9": {
+      "element": "6533755",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "594df0746f220727": {
+      "element": "6311435",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "207ef4a1f069c8ab": {
+      "element": "6606745",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "ea4d79a3acb57aed": {
+      "element": "6441240",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "f62fe6a21b1ff25a": {
+      "element": "6308032",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "6c3e6ec0e34e34ec": {
+      "element": "6600730",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "4795ff7a027cf272": {
+      "element": "6046922",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "6175e5de2bb89ce6": {
+      "element": "6514207",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "cacad2d43e26d6c6": {
+      "element": "6335932",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "4ef7b785a43abf73": {
+      "element": "6447501",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    },
+    "0b1d7802bdb669d3": {
+      "element": "6447501",
+      "review": "visual-artwork-comparison",
+      "reason": "Visible part shape, stud pattern and colour agree with the printed inventory artwork."
+    }
+  }
+}

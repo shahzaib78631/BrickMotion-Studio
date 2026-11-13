@@ -18,6 +18,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline';
 import { collisionWorld, type CollisionWorld, type Solid } from '../src/plan/collision';
+import { jointConnectors } from '../src/plan/connectors';
 import { ensureParts, initPartService, isLoaded, metricsOf, setShadowPack } from '../src/state/partService';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -31,7 +32,10 @@ async function solid(part: string, m: number[], id: string): Promise<Solid | nul
   if (!isLoaded(part)) await ensureParts([part]);
   const pm = metricsOf(part);
   if (!pm.mesh) return null;
-  return { id, world: m, body: pm.body, studs: pm.studs, snaps: pm.snaps, mesh: pm.mesh };
+  // hinge knuckles and ball joints, as the app's solidsFor gives them: without them every seated
+  // hinge or ball joint read as overlap
+  const joints = jointConnectors(pm);
+  return { id, world: m, body: pm.body, studs: pm.studs, snaps: pm.snaps, mesh: pm.mesh, ...(joints.length ? { joints } : {}) };
 }
 
 async function hits(part: string, m: number[]): Promise<boolean> {

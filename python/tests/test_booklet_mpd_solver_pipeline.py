@@ -76,6 +76,8 @@ def test_end_to_end_first_steps_of_grade_a_train_booklet(tmp_path):
     run = pipeline.run(lib, pdf, data, folder, element_index(), collider=Collider(lib), max_steps=3)
     assert [len(g) for g in run.groups] == [3, 2, 5]
     _moved, exact = aligned(lib, run.model, truth_model("40349"))
-    assert exact >= 5, exact      # measured 5/10 on 2026-11-11 (regression guard, not a target)
+    # regression guard, not a target: 5/10 on 2026-11-11; 4/10 since parts go best-shown first (2026-11-12),
+    # which loses one part here but gains 3 on the four teacher-forced sets (267 vs 264)
+    assert exact >= 4, exact
     out = pipeline.write(run, tmp_path / "x.mpd", "x", 0.5)
     assert out["parts"] == 10
