@@ -36,7 +36,8 @@ def _case():
     parts = [realdata.norm(p) for p in BASE + NEW]
     centre = R.bounds_centre(parts)
     pic = R.render(parts, {5, 6}, TRUE_CAM, centre, 600, 460, R.Style(), ss=2).picture
-    return FakeCase("99999", 3, BASE, NEW, pic), parts, centre
+    # pages are printed at booklet_mpd's BOOKLET_SCALE (0.815 pt per LDU): 2.2 px per LDU is 0.815 / 2.2 pt per px
+    return FakeCase("99999", 3, BASE, NEW, pic, pts_per_px=0.815 / 2.2), parts, centre
 
 
 def test_refuses_heldout_sets():
@@ -71,7 +72,7 @@ def test_small_booklet_pictures_are_upscaled():
     case.rgb = case.rgb[::4, ::4]                     # 150 x 115, like small sets' embedded pictures
     pic, pts = realdata._prepare(case)
     assert max(pic.shape[:2]) == realdata.MIN_SIDE
-    assert abs(pts - 0.48 * 150 / 512) < 1e-3
+    assert abs(pts - case.pts_per_px * 150 / 512) < 1e-3
 
 
 def test_blue_paper_is_repainted_grey():
@@ -83,3 +84,29 @@ def test_blue_paper_is_repainted_grey():
     out, _pts = realdata._prepare(case)
     corner = out[:5, :5].reshape(-1, 3)
     assert np.abs(corner.astype(int) - realdata.PAPER).max() <= 2
+
+
+def test_standard_views_use_the_print_scale():
+    case, parts, centre = _case()
+    pic, pts = realdata._prepare(case)
+    starts = realdata.standard_views(pic, parts, pts)
+    assert len(starts) == 8
+    from booklet_mpd.viewfit import BOOKLET_SCALE
+    assert all(abs(c.scale - BOOKLET_SCALE / pts) < 1e-9 for c in starts)
+    assert {round(c.yaw) % 360 for c in starts} == {35, 125, 215, 305}
+    assert {c.turned for c in starts} == {False, True}
+
+
+def test_view_with_most_matches_wins_among_tight_fits(monkeypatch):
+    case, _parts, _centre = _case()
+    fits = {35: dict(median=0.2, p90=0.5, n=2000), 125: dict(median=0.3, p90=0.6, n=19000),
+            215: dict(median=3.0, p90=6.0, n=30000)}
+
+    def fake_solve(net, pic, parts, cam, centre, W, H, rounds=4, log=None):
+        f = fits.get(round(cam.yaw) % 360)
+        return (cam, [dict(round=0, inliers=1.0, flow_median=0.2, **f)]) if f and not cam.turned else (cam, [])
+
+    monkeypatch.setattr(realdata, "solve_camera", fake_solve)
+    monkeypatch.setattr(realdata, "change_evidence", lambda pic, base: np.ones(pic.shape[:2], bool))
+    s = realdata.label_case(object(), case, min_agree=0.0)
+    assert s is not None and round(s["cam"].yaw) % 360 == 125

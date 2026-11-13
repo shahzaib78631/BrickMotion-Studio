@@ -1,7 +1,7 @@
 """Real booklet pages of the booklet_mpd *train* sets, labelled through the solved camera.
 
-For each step picture with an answer key: find the camera (coarse silhouette search over booklet-like views the
-first time in a set, the previous step's camera after that), refine it with CoordNet against a render of the
+For each step picture with an answer key: find the camera (the standard booklet views at the print scale the
+first time in a set, keeping the tight fit that matches the most pixels; the previous step's camera after that), refine it with CoordNet against a render of the
 step's full model, and keep the page only if the fit is tight (median < 1 px, p90 < 2 px) and the rendered new
 parts agree with what changed on the page (this drops exploded drawings, whose new parts are drawn elsewhere).
 Labels then come from the G-buffer exactly as for synthetic data. Held-out sets (21065, validation, test) are
@@ -32,7 +32,6 @@ CKPT = ROOT / ".cache/coordnet/ckpt/best.pt"
 MAX_SIDE = 640
 MIN_SIDE = 512
 EYE = 4200.0
-SCALES = (0.85, 1.0, 1.15)
 
 
 def norm(p):
@@ -94,31 +93,21 @@ def frame(cam: BookletCamera, centre, pts: np.ndarray, fg: np.ndarray, fit_scale
     return cam.with_(cx=float(off[0]), cy=float(off[1]))
 
 
-def coarse(pic: np.ndarray, parts: list, top: int = 5) -> list[tuple[float, BookletCamera]]:
-    """Booklet-like views ranked by silhouette IoU against the picture's foreground (quarter resolution)."""
+STANDARD_YAWS = (35, 125, 215, 305)      # booklets draw models at ~35 deg yaw in one of four quadrants
+STANDARD_PITCH = 35.0                     # and ~35 deg pitch (solved cameras on 21065 and train sets: 34.6-35.7)
+
+
+def standard_views(pic: np.ndarray, parts: list, pts_per_px: float) -> list[BookletCamera]:
+    """The booklet views to start from: four yaw quadrants, upright or turned over, at the print scale
+    (booklet_mpd's BOOKLET_SCALE page points per LDU), framed on the picture's foreground."""
+    from booklet_mpd.viewfit import BOOKLET_SCALE
     centre = R.bounds_centre(parts)
     pts = _points(parts)
     fg = ~paper_mask(pic)
-    q = 4
-    fgq = cv2.resize(fg.astype(np.uint8), (pic.shape[1] // q, pic.shape[0] // q), interpolation=cv2.INTER_AREA) > 0
-    Hq, Wq = fgq.shape
-    out = []
-    yaws = [s * a + b for a in range(20, 75, 5) for s in (1, -1) for b in (0, 180)]
-    for turned in (False, True):
-        for pitch in range(15, 55, 5):
-            for yaw, mult in ((y, k) for y in yaws for k in SCALES):
-                cam = frame(BookletCamera(yaw, pitch, 0.0, 1.0, 0.0, 0.0, eye=EYE, turned=turned), centre, pts, fg,
-                            scale_mult=mult)
-                uv, _ = project(cam, centre, pts)
-                ij = np.round(uv / q - 0.5).astype(int)
-                ok = (ij[:, 0] >= 0) & (ij[:, 0] < Wq) & (ij[:, 1] >= 0) & (ij[:, 1] < Hq)
-                m = np.zeros((Hq, Wq), np.uint8)
-                m[ij[ok, 1], ij[ok, 0]] = 1
-                m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8)).astype(bool)
-                iou = (m & fgq).sum() / max((m | fgq).sum(), 1)
-                out.append((float(iou), cam))
-    out.sort(key=lambda t: -t[0])
-    return out[:top]
+    scale = BOOKLET_SCALE / pts_per_px
+    return [frame(BookletCamera(yaw, STANDARD_PITCH, 0.0, scale, 0.0, 0.0, eye=EYE, turned=turned), centre, pts, fg,
+                  fit_scale=False)
+            for turned in (False, True) for yaw in STANDARD_YAWS]
 
 
 def _prepare(case) -> tuple[np.ndarray, float]:
@@ -149,22 +138,19 @@ def label_case(net, case, start: BookletCamera | None = None, rounds: int = 4,
     centre = R.bounds_centre(parts)
     fg = ~paper_mask(pic)
     starts = [frame(start, centre, _points(parts), fg, fit_scale=False)] if start is not None else \
-        [c for _iou, c in coarse(pic, parts)]
+        standard_views(pic, parts, pts_px)
+    # Wrong views can also fit a few pixels tightly; among tight fits the true view matches by far the most pixels.
     best = None
     for cam0 in starts:
         cam, fits = solve_camera(net, pic, parts, cam0, centre, W, H, rounds)
-        if not fits:
+        if not fits or fits[-1]["median"] >= max_median or fits[-1]["p90"] >= max_p90:
             continue
-        if best is None or fits[-1]["median"] < best[1][-1]["median"]:
+        if best is None or fits[-1]["n"] > best[1][-1]["n"]:
             best = (cam, fits)
-        if fits[-1]["median"] < max_median:
-            break
     if best is None:
         return None
     cam, fits = best
     fit = fits[-1]
-    if fit["median"] >= max_median or fit["p90"] >= max_p90:
-        return None
     newset = set(range(len(base), len(parts)))
     g = R.gbuffer(*R.scene(parts), cam, centre, W, H)
     lab = labels.local_labels(g, parts, newset)
