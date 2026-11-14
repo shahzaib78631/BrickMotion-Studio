@@ -174,3 +174,35 @@ The 12 worse steps are the finding. The pass only accepts moves that raise the w
 moved correct parts to wrong poses. So the whole-model score (`register.Aligner`) itself ranks some wrong
 layouts above the right one. A better search against this score has a ceiling. The next gate to add measures
 the score on its own: does the true layout outscore every one-part change of it?
+
+### 14 Nov: gate 1 P0 checks (parts reading, all 42 sets, fresh run)
+
+Recall is 4,936/5,869 = **84.1%**. The cached table (80%) was stale.
+
+**Checked and ruled out:**
+- **Step shift:** the best offset is 0 on every set. 40413 is now 49/116, not 3%.
+- **Count inflation:** the piece count per step is right on 1,520/1,631 steps (93%), with only 55 pieces over and 143
+  under; 114 of the under-count is 75317, which has no inventory. The "2–9× pieces" came from counting every
+  booklet step against only the answer-keyed ones. The Technic answer keys cover 12–28 of 100–300 steps.
+
+**Where the 933 misses are:**
+
+| Kind | Parts |
+|---|---|
+| Wrong part, right colour | 328 |
+| Wrong part and colour | 356 |
+| Right part, wrong colour | 106 (75277 greens and greys; rubber black 256 read as 0) |
+| Not read (75317 data) | 143 |
+
+By group: printed list 326, no list 276, Technic 331. The top confusions are look-alikes:
+- plate lengths (1×3/1×4/1×6) and plates 3×3/4×4;
+- curved slope against corner plate;
+- jumper with/without understud (LDraw variants of one element);
+- friction pin variants.
+
+There are answer-key artefacts too: 42120's truth has submodels standing in as parts (27× "61332"). About 40
+truth ids aren't in the library.
+
+**Conclusion:** the work is shape and colour recognition, plus data fixes. Count repair and hard count
+conservation (DeepSeek P1/P2) would gain at most about 70 parts.
+Scripts and output: `scratchpad/p0/` (run.py, analyze.py, alias.py, analysis.txt).
