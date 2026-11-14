@@ -152,3 +152,9 @@ def test_bag_illustration_is_excluded_from_section_start_picture(tmp_path):
     source=tmp_path/'section.pdf';doc.save(source)
     b=extract_booklet(str(source),str(tmp_path/'out'))
     assert b['steps'][0]['pictureBox'][0]>=200
+
+
+def test_a_sliver_is_never_a_parts_list_picture():
+    """40441 draws 1-3 pt slivers (tile seams, rules) between the parts: skip them, keep the part."""
+    from instructions_pdf.extract import _pictures
+    assert _pictures([(195, 150, 213, 153), (195, 134, 213, 150), (34, 56, 40, 57)]) == [(195, 134, 213, 150)]

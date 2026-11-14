@@ -114,7 +114,15 @@ def _pair_counts(images: list[tuple], counts: list[dict]) -> list[tuple[int, boo
     return result
 
 
+MIN_PICTURE = 4.0       # pt: a thinner image box is a sliver (tile seam, rule), never a part picture
+
+
+def _pictures(images: list[tuple]) -> list[tuple]:
+    return [b for b in images if b[2] - b[0] >= MIN_PICTURE and b[3] - b[1] >= MIN_PICTURE]
+
+
 def _inventory(page, spans: list[dict], images: list[tuple], crops: str, out_dir: str, pno: int) -> list[dict]:
+    images = _pictures(images)
     counts = [s for s in spans if COUNT.match(s["text"]) and s["size"] < COUNT_MAX]
     elements = [s for s in spans if ELEMENT.match(s["text"])]
     pairs = []
