@@ -26,7 +26,8 @@ import numpy as np
 from ..camera_fit import normalise
 from ..stepimage import fill_holes
 
-SIZE = 32
+SIZE = 64               # 32 -> 64 px: fine detail (studs, holes) survives
+LINES = 32              # grid of the inside-lines descriptor
 INK = 60
 DARK_PAGE = 80          # a page whose background is darker than this draws on black
 REBRICKABLE = Path(__file__).resolve().parents[3] / ".cache/booklet-mpd/rebrickable"
@@ -38,6 +39,7 @@ class Descriptor:
     colour: np.ndarray      # median non-ink foreground RGB
     aspect: float
     size: float = 0.0       # foreground bounding-box diagonal in crop pixels
+    lines: np.ndarray | None = None     # LINES x LINES drawn lines inside the piece (studs, holes, edges)
 
 
 def _background(rgb: np.ndarray) -> np.ndarray:
@@ -67,8 +69,21 @@ def describe(rgb: np.ndarray | None) -> Descriptor | None:
     inner = cv2.erode(fg.astype(np.uint8), np.ones((5, 5), np.uint8)) > 0
     pix = rgb[inner] if inner.sum() >= 20 else rgb[fg]
     colour = np.median(pix, axis=0)
+    # inside lines: dark strokes on a light page, light strokes on a dark one, within the piece
+    lap = cv2.Laplacian(cv2.GaussianBlur(grey.astype(float), (3, 3), 0), cv2.CV_64F, ksize=3)
+    strokes = (lap > 25) if bg.max() < DARK_PAGE else (lap < -25)
+    lines = cv2.dilate(normalise(strokes & inner, LINES).astype(np.uint8), np.ones((3, 3), np.uint8)) > 0
     return Descriptor(normalise(fg, SIZE), colour.astype(float), (np.ptp(xs) + 1) / (np.ptp(ys) + 1),
-                      float(np.hypot(np.ptp(xs) + 1, np.ptp(ys) + 1)))
+                      float(np.hypot(np.ptp(xs) + 1, np.ptp(ys) + 1)), lines)
+
+
+LINES_WEIGHT = 0.15      # inside-lines overlap (gate 1: +11 parts on top of Lab + 64 px)
+COLOUR_SCALE = 15.0      # CIELAB distance at which the colour term falls to 1/e
+
+
+def _lab(rgb: np.ndarray) -> np.ndarray:
+    lab = cv2.cvtColor(np.uint8([[np.clip(rgb, 0, 255)]]), cv2.COLOR_RGB2LAB)[0, 0].astype(float)
+    return lab * [100 / 255, 1, 1] - [0, 128, 128]
 
 
 SIZE_WEIGHT = 0.25        # weight of the absolute-size term once the callout / parts-list scale is known
@@ -81,9 +96,12 @@ def similarity(a: Descriptor, b: Descriptor, ratio: float | None = None) -> floa
     inter = np.logical_and(a.mask, b.mask).sum()
     union = np.logical_or(a.mask, b.mask).sum()
     shape = inter / union if union else 0.0
-    colour = float(np.exp(-np.linalg.norm(a.colour - b.colour) / 35.0))
+    colour = float(np.exp(-np.linalg.norm(_lab(a.colour) - _lab(b.colour)) / COLOUR_SCALE))   # Lab: 88.1% -> 88.6%
     aspect = float(np.exp(-abs(np.log(max(a.aspect, 1e-3) / max(b.aspect, 1e-3))) * 2.0))
     base = 0.5 * shape + 0.35 * colour + 0.15 * aspect
+    if a.lines is not None and b.lines is not None:
+        union = np.logical_or(a.lines, b.lines).sum()
+        base = (1 - LINES_WEIGHT) * base + LINES_WEIGHT * (np.logical_and(a.lines, b.lines).sum() / union if union else 1.0)
     if not ratio or not a.size or not b.size:
         return base
     size = float(np.exp(-abs(np.log(a.size / (ratio * b.size))) * SIZE_SHARPNESS))
