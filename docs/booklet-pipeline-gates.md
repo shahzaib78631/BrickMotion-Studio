@@ -230,3 +230,42 @@ By group:
 | Technic | 72.7% |
 
 The remaining misses are recognition (wrong shape or colour).
+
+### 15 Nov: gate 1 matching (P1–P3)
+
+Training sets (42) are tuned on. Validation (33) is reported as totals only; its failures were never
+inspected.
+
+| Change | Train recall | Validation recall |
+|---|---|---|
+| Before (after the data fixes) | 85.8% | 75.4% |
+| Dark pages are background, not ink (75277 419 → 503/522) | 87.3% | |
+| Parts-list slivers skipped (merging tiles tried: 77.1%, reverted) | 87.4% | |
+| Printed counts bind the assignment (penalty 0.02/0.05 → 0.3) | 88.1% | |
+| 64-px outline + CIELAB colour + inside lines | **89.2%** | **77.5%** |
+
+Train by group: parts list 95.2%, no list 79.7%, Technic 73.5%.
+Validation by group: parts list 87.2 → 89.5%, Technic 72.5 → 74.4%, no list 16.1 → 17.0%.
+
+**Checked, nothing to fix:** per-step counts (P0) and tiny callout crops. No train crop is under 15 px.
+
+**Answer-key mismatches (the reader can't fix these):**
+- 40413 and 42076: the step pairing is wrong. Hits rise 51 → 101 and 16 → 78 at other steps.
+- 41621: its Rebrickable inventory lacks most of the key's dark-orange parts, so the key is a different
+  build version.
+
+On 103 of the remaining misses the callout clearly matches the reader's pick (similarity < 0.6 to the
+key's part, > 0.85 to the pick).
+
+**Remaining reader misses (train):**
+- 146 clearly wrong;
+- 106 close calls (margin < 0.1).
+
+They are mostly Technic look-alikes and booklets with no parts list.
+
+**Validation, no parts list:**
+- 40378 reads 89/96;
+- 10270 reads 35/551;
+- 31088 reads 2/93.
+
+Those two collapse structurally. They aren't diagnosed, to keep them held out.
