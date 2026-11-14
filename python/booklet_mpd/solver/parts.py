@@ -86,8 +86,10 @@ def _lab(rgb: np.ndarray) -> np.ndarray:
     return lab * [100 / 255, 1, 1] - [0, 128, 128]
 
 
+RENDER_YAW, RENDER_PITCH = 45.0, 30.0   # parts-list-style view of a rendered candidate
 RENDERED_CONFIDENT = 0.65    # renders never match a callout as closely as LEGO's own art (0.85 -> no scale learnt)
 CALLOUT_PX_PER_LDU = 2.29    # LEGO draws callouts at one scale: 2.25-2.31 px/LDU at the 300-dpi crops on 7 booklets
+PARTSNET_WEIGHT = float(os.environ.get("PARTSNET_W", "0.5"))   # learned matcher's share (P5)
 SIZE_WEIGHT = 0.25        # weight of the absolute-size term once the callout / parts-list scale is known
 SIZE_SHARPNESS = 5.0      # 1x5 vs 1x6 plate: ~15% longer -> term drops to ~0.5
 
@@ -206,7 +208,8 @@ UNUSED_PENALTY = 0.3      # per printed piece left unconsumed (0.02 -> 0.3: gate
 OVER_PENALTY = 0.3        # per piece beyond an element's printed count
 
 
-def assign(descs: dict, totals: dict, inv_desc: list, counts: list[int], ratio: float | None = None) -> dict:
+def assign(descs: dict, totals: dict, inv_desc: list, counts: list[int], ratio: float | None = None,
+           learned: dict | None = None) -> dict:
     """Callout picture group -> (element index, similarity, margin to the runner-up element).
     Maximise total similarity subject to each group taking one element, with soft count terms:
     an element's printed count should be consumed (callout totals summed), not exceeded."""
@@ -218,6 +221,10 @@ def assign(descs: dict, totals: dict, inv_desc: list, counts: list[int], ratio: 
         return {}
     sim = np.array([[max(similarity(descs[k], d, ratio) for d in (inv_desc[j] if isinstance(inv_desc[j], list) else [inv_desc[j]]))
                      for j in elems] for k in keys])
+    if learned:                         # P5: the learned cosine per group over all inventory entries
+        cos = np.array([[learned[k][j] if k in learned else 0.0 for j in elems] for k in keys])
+        has = np.array([k in learned for k in keys])[:, None]
+        sim = np.where(has, (1 - PARTSNET_WEIGHT) * sim + PARTSNET_WEIGHT * cos, sim)
     G, E = sim.shape
     n = G * E + 2 * E                   # x_ge, unused_e, over_e
     c = np.zeros(n)
@@ -276,7 +283,7 @@ def rendered_descriptor(lib, part: str, colour: int, matrix: np.ndarray | None =
     if not len(mesh(lib, part)):
         return None
     parts = [(part, colour, np.eye(4) if matrix is None else matrix)]
-    view = View(np.eye(3), 45.0, 30.0, 1.0, (0.0, 0.0))
+    view = View(np.eye(3), RENDER_YAW, RENDER_PITCH, 1.0, (0.0, 0.0))
     lo, hi = bounds(lib, parts, view)
     k = 96.0 / float(max(hi[0] - lo[0], hi[1] - lo[1], 1.0))
     view = view.replace(scale=k)
@@ -340,6 +347,22 @@ def _read(folder: Path, rel: str | None):
     return None if img is None else cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
 
+def _learned(pictures: dict, inventory: list, folder: Path) -> dict | None:
+    """P5: cosine of the learned embedding between each callout picture and every parts-list picture."""
+    from . import partsnet
+    net = partsnet.loaded(os.environ.get("PARTSNET", str(partsnet.WEIGHTS)))
+    if net is None or not pictures:
+        return None
+    inv = [_read(folder, e.get("crop")) for e in inventory]
+    blank = np.full((8, 8, 3), 255, np.uint8)
+    zi = partsnet.embed(net, [p if p is not None else blank for p in inv])
+    keys = list(pictures)
+    zc = partsnet.embed(net, [pictures[k] for k in keys])
+    cos = zc @ zi.T
+    cos[:, [p is None for p in inv]] = 0.0
+    return {k: cos[i] for i, k in enumerate(keys)}
+
+
 def read_parts(lib, extract: dict, folder: Path, index: dict, client=None, fallback: list[dict] | None = None) -> tuple[list[StepParts], dict]:
     """Per extracted step, the parts it adds. Returns (steps, report). `fallback`: parts list to use
     when the booklet prints none (`fallback_inventory`)."""
@@ -361,6 +384,7 @@ def read_parts(lib, extract: dict, folder: Path, index: dict, client=None, fallb
     # group identical callout pictures (same crop content) across steps
     groups: dict[str, list[tuple[int, int]]] = defaultdict(list)
     descs: dict[str, Descriptor | None] = {}
+    pictures: dict[str, np.ndarray] = {}
     for si, step in enumerate(extract["steps"]):
         for ci, call in enumerate(step.get("callout", [])):
             img = _read(folder, call.get("crop"))
@@ -368,11 +392,14 @@ def read_parts(lib, extract: dict, folder: Path, index: dict, client=None, fallb
             groups[key].append((si, ci))
             if key not in descs:
                 descs[key] = describe(img)
+                if img is not None:
+                    pictures[key] = img
     totals = {k: sum(extract["steps"][si]["callout"][ci].get("count", 1) for si, ci in v) for k, v in groups.items()}
     ratio = size_ratio(descs, inv_desc, RENDERED_CONFIDENT if used_fallback else 0.85)   # parts-list scale, or callout px per LDU
     if ratio is None and used_fallback:
         ratio = CALLOUT_PX_PER_LDU
-    assigned = assign(descs, totals, inv_desc, [int(e.get("count", 0) or 0) for e in inventory], ratio)
+    assigned = assign(descs, totals, inv_desc, [int(e.get("count", 0) or 0) for e in inventory], ratio,
+                      learned=None if used_fallback else _learned(pictures, inventory, folder))
     steps_out = []
     unresolved_total = 0
     for si, step in enumerate(extract["steps"]):
