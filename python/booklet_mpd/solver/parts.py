@@ -182,8 +182,8 @@ class StepParts:
     notes: list[str] = field(default_factory=list)
 
 
-UNUSED_PENALTY = 0.02     # per printed piece left unconsumed
-OVER_PENALTY = 0.05       # per piece beyond an element's printed count
+UNUSED_PENALTY = 0.3      # per printed piece left unconsumed (0.02 -> 0.3: gate 1 87.4% -> 88.1%; 2.0 same)
+OVER_PENALTY = 0.3        # per piece beyond an element's printed count
 
 
 def assign(descs: dict, totals: dict, inv_desc: list, counts: list[int], ratio: float | None = None) -> dict:
