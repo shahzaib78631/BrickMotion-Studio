@@ -13,7 +13,9 @@ from . import grading
 
 PROTOCOL_VERSION = 5   # 5: per-step before/after hypothesis (see grading.RULES_VERSION)
 ELIGIBLE_GRADES = ("A", "B")
-CONTAMINATED = {"40351": "step-mask thresholds were tuned while inspecting its failures"}
+CONTAMINATED = {"40351": "step-mask thresholds were tuned while inspecting its failures",
+                "10270": "gate 1 collapse (35/551) diagnosed on 15 Nov 2026",
+                "31088": "gate 1 collapse (2/93) diagnosed on 15 Nov 2026"}
 HELD_OUT_SPLITS = ("validation", "test")
 
 
