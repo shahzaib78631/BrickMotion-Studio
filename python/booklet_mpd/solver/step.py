@@ -16,9 +16,9 @@ from ..viewfit import BOOKLET_SCALE, ORIENTATIONS
 from .edges import NEAR_INK, ink_distance
 from .candidates import candidates
 from .picture import Picture
-from .place import DELTAS, Scene, State, solve_step
+from .place import DELTAS, Scene, State, _boxes_overlap, distinct, polish, score_candidates, solve_step
 from .subbuild import FACING, SUBBUILDS, place_units, solve_unit, unit_parts
-from .register import rank_views, register, search
+from .register import Aligner, rank_views, register, search
 from .render import View
 
 
@@ -45,6 +45,10 @@ UPRIGHT_BONUS = 0.0
 REREGISTER = True
 PUSH = os.environ.get("BOOKLET_SOLVER_PUSH", "0") != "0"   # parts drawn displaced along their arrows (A/B: no gain, off)
 RERANK = int(os.environ.get("BOOKLET_SOLVER_RERANK", "3"))  # beam states re-scored as completed models
+# after the beam: move one part at a time to the alternative the completed model scores higher (gate 4b: the
+# beam lost a better-scoring layout in 63 of 101 wrong parts with a good camera; a wider beam got 8 of them)
+POLISH = os.environ.get("BOOKLET_SOLVER_POLISH", "0") != "0"   # off: gate 4b 368/578 vs 370 without (A/B 14 Nov)
+POLISH_K = int(os.environ.get("BOOKLET_SOLVER_POLISH_K", "32"))   # alternatives tried per part
 ROUNDS = 1                # placement / completed re-registration alternations per hypothesis
 # booklet pages sit within a few percent of the scale prior; the registered base alone cannot tell scale
 # from the parts about to be added (they hide part of the silhouette), so the prior is held tightly
@@ -301,7 +305,36 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
             alt = completed(reg, states[k], scales)
             if alt.score > reg2.score + 1e-9:
                 reg2, states = alt, [states[k]] + states[:k] + states[k + 1:]
+        # drawn in place (no arrows / explosion: placed poses are drawn poses) and no sub-build units (moving
+        # one part of a unit on its own breaks the unit the panel fixed)
+        if POLISH and deltas == (0.0,) and not units:
+            better = polish_state(reg2.view, states[0])
+            if better is not states[0]:
+                reg3 = completed(reg, better, scales)
+                if reg3.score >= reg2.score - 1e-9:
+                    reg2, states = reg3, [better] + states
         return reg2.score, reg2, states
+
+    def polish_state(view, state):
+        aligner_codes = codes
+
+        def score(model):
+            return float(Aligner(lib, model, classes, aligner_codes, on_ink=on_ink).evaluate(view)[0])
+
+        def shortlist(part, colour, model):
+            cands = distinct(lib, part, candidates(lib, part, model))
+            if not cands:
+                return []
+            scene = Scene.build(lib, model, view, classes, codes, ink_dist)
+            scene.picture = picture
+            scored = score_candidates(lib, scene, part, colour, cands, deltas=(0.0,))
+            scored.sort(key=lambda sc: -sc.score)
+            return [(sc.candidate["matrix"], sc) for sc in scored[:POLISH_K]]
+
+        hits = (lambda part, matrix, _model: collider.hits(part, matrix)) if collider is not None else None
+        out = polish(model0, state, shortlist, score, collides=hits,
+                     overlaps=lambda a, b: _boxes_overlap(lib, a, b))
+        return out
 
     results = []
     search_free = True

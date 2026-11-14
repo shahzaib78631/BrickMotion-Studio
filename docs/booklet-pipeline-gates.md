@@ -128,3 +128,39 @@ What this says:
 
 Stage 4 is worked on first because it is the bottleneck and can be tested with answer-key inputs while the
 earlier gates are still open. The report after each item always shows the full gate table.
+
+## Work log
+
+### 14 Nov: gate 4b, why the right pose isn't chosen (good-camera steps, 101 wrong parts)
+
+| Cause | Parts |
+|---|---|
+| Search lost a pose that scores better (truth scores higher on the whole model) | 63 |
+| Scorer prefers a wrong pose | 23 |
+| Part hidden in the picture (< 40 px) | 7 |
+| Collision check rejects the true pose (6091, 2420, 24947, 3659) | 7 |
+| True pose not a candidate | 1 |
+
+**Tried on the 26 "search lost" steps (125 parts):**
+
+| Change | Parts exact | Steps fully right | Time |
+|---|---|---|---|
+| Baseline (beam 6, 12 candidates per part) | 49 | 0 | 1.0× |
+| Wider beam (24, re-score all) | 57 | 4 | 1.35× |
+| Final pass (`place.polish`), sub-build steps included | 65 | 7 | 1.9× |
+| Final pass, sub-build steps skipped (to keep the headlights unit test) | 51 | not counted | not counted |
+
+**Full gate:** 4b with the final pass (sub-build steps skipped) gave 368/578 parts exact, against 370
+without it, so it has no effect. The pass is in the code with tests but **off by default**
+(`BOOKLET_SOLVER_POLISH=1` turns it on).
+
+**What is left after the final pass (60 wrong parts):**
+- 21: the true pose isn't a candidate while the other new parts are misplaced (it sits on another new part).
+- 37: no single move toward the truth raises the score.
+- 6: the true pose is outside the top 32 alternatives.
+
+All of the final pass's gain was in sub-build steps.
+
+**Next:**
+- Move a host part and the parts on it together.
+- Move sub-build units as whole units in the final pass.

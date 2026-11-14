@@ -269,6 +269,63 @@ def _boxes_overlap(lib, a, b, shrink: float = 2.0) -> bool:
     return bool(np.all(hi > lo))
 
 
+def polish(base: list, state: State, shortlist, score, collides=None, overlaps=None, rounds: int = 3) -> State:
+    """Move one part at a time to the alternative that raises the completed-model score.
+
+    The beam ranks states by summed per-part gains; the completed model is the better judge. On the gate-4b
+    steps where the beam lost a better-scoring layout, a single move toward the truth raised the completed
+    score in every step, so coordinate ascent from the beam's best state reaches it.
+    `shortlist(part, colour, model) -> [(matrix, Scored | None)]`: the part's alternatives with the other
+    parts in place; `score(model) -> float`: completed score of base + placed; `collides(part, matrix, model)`: the
+    exact collision test against the base; `overlaps(entry, other)`: new parts that cannot share space
+    (default: same origin). Returns `state` itself when no move helps."""
+    overlaps = overlaps or (lambda a, b: _same_spot(a[2], b[2]))
+    placed, scores = list(state.placed), list(state.scores)
+    best = score(base + placed)
+    changed = False
+    for _round in range(rounds):
+        moved = False
+        for i, (part, colour, current) in enumerate(placed):
+            others = placed[:i] + placed[i + 1:]
+            for matrix, scored in shortlist(part, colour, base + others):
+                if _same_spot(matrix, current) and np.allclose(matrix[:3, :3], current[:3, :3], atol=1e-3):
+                    continue
+                entry = (part, colour, matrix)
+                if collides is not None and collides(part, matrix, base + others):
+                    continue
+                blocking = [j for j, o in enumerate(placed) if j != i and overlaps(entry, o)]
+                trials = []
+                if not blocking:
+                    trials.append(({i: (entry, scored)}))
+                elif len(blocking) == 1:
+                    # the spot is taken by one other part: move that part to one of its own alternatives
+                    j = blocking[0]
+                    pj, cj, _mj = placed[j]
+                    rest = [o for k, o in enumerate(placed) if k not in (i, j)] + [entry]
+                    for mj, sj in shortlist(pj, cj, base + rest):
+                        ej = (pj, cj, mj)
+                        if any(overlaps(ej, o) for o in rest):
+                            continue
+                        if collides is not None and collides(pj, mj, base + rest):
+                            continue
+                        trials.append({i: (entry, scored), j: (ej, sj)})
+                accepted = False
+                for change in trials:
+                    trial = [change[k][0] if k in change else o for k, o in enumerate(placed)]
+                    value = score(base + trial)
+                    if value > best + 1e-9:
+                        best, placed = value, trial
+                        scores = [(change[k][1] if change[k][1] is not None else s) if k in change else s
+                                  for k, s in enumerate(scores)]
+                        moved = accepted = changed = True
+                        break
+                if accepted:      # the other parts changed: this part's alternatives are re-read next round
+                    break
+        if not moved:
+            break
+    return State(placed, scores, state.total, state.done) if changed else state
+
+
 def _same_spot(a: np.ndarray, b: np.ndarray, tol: float = 0.6) -> bool:
     # plain comparisons: called millions of times per step (np.allclose was half a step's time)
     return abs(a[0][3] - b[0][3]) <= tol and abs(a[1][3] - b[1][3]) <= tol and abs(a[2][3] - b[2][3]) <= tol
