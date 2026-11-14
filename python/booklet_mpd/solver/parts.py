@@ -347,6 +347,24 @@ def _read(folder: Path, rel: str | None):
     return None if img is None else cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
 
+def step_callouts(step: dict) -> list[tuple[int, dict]]:
+    """A step's callouts as (index, callout). A picture embedded twice at the same box (Technic PDFs) is one
+    callout: the first is kept, with the larger of the two counts."""
+    out, at = [], {}
+    for ci, call in enumerate(step.get("callout", [])):
+        box = call.get("box")
+        key = tuple(round(v) for v in box) if box else None
+        if key is not None and key in at:
+            first = out[at[key]][1]
+            if int(call.get("count", 1) or 1) > int(first.get("count", 1) or 1):
+                out[at[key]] = (out[at[key]][0], {**first, "count": call.get("count")})
+            continue
+        if key is not None:
+            at[key] = len(out)
+        out.append((ci, call))
+    return out
+
+
 def _learned(pictures: dict, inventory: list, folder: Path) -> dict | None:
     """P5: cosine of the learned embedding between each callout picture and every parts-list picture."""
     from . import partsnet
@@ -386,7 +404,7 @@ def read_parts(lib, extract: dict, folder: Path, index: dict, client=None, fallb
     descs: dict[str, Descriptor | None] = {}
     pictures: dict[str, np.ndarray] = {}
     for si, step in enumerate(extract["steps"]):
-        for ci, call in enumerate(step.get("callout", [])):
+        for ci, call in step_callouts(step):
             img = _read(folder, call.get("crop"))
             key = "none" if img is None else f"{img.shape}:{hash(img.tobytes())}"
             groups[key].append((si, ci))
@@ -394,7 +412,8 @@ def read_parts(lib, extract: dict, folder: Path, index: dict, client=None, fallb
                 descs[key] = describe(img)
                 if img is not None:
                     pictures[key] = img
-    totals = {k: sum(extract["steps"][si]["callout"][ci].get("count", 1) for si, ci in v) for k, v in groups.items()}
+    counts_at = {(si, ci): int(call.get("count", 1) or 1) for si, step in enumerate(extract["steps"]) for ci, call in step_callouts(step)}
+    totals = {k: sum(counts_at[si, ci] for si, ci in v) for k, v in groups.items()}
     ratio = size_ratio(descs, inv_desc, RENDERED_CONFIDENT if used_fallback else 0.85)   # parts-list scale, or callout px per LDU
     if ratio is None and used_fallback:
         ratio = CALLOUT_PX_PER_LDU
@@ -405,7 +424,7 @@ def read_parts(lib, extract: dict, folder: Path, index: dict, client=None, fallb
     for si, step in enumerate(extract["steps"]):
         parts, conf, notes = [], [], []
         unresolved = 0
-        for ci, call in enumerate(step.get("callout", [])):
+        for ci, call in step_callouts(step):
             count = int(call.get("count", 1) or 1)
             key = next(k for k, v in groups.items() if (si, ci) in v)
             hit = assigned.get(key)
