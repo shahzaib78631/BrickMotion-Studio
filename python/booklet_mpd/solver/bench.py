@@ -107,7 +107,7 @@ def parts_set(set_number: str, force: bool = False) -> dict:
     """Parts reading against the answer key: per step, does the read (part, colour) multiset match?"""
     from ..inventory_check import _plain, base_number
     from .dataset import cases, extract_of
-    from .evaluate import same_part
+    from .evaluate import same_colour, same_part
     from .parts import element_index, read_parts
 
     path = OUT / "parts" / f"{set_number}.json"
@@ -133,7 +133,7 @@ def parts_set(set_number: str, force: bool = False) -> dict:
         used, hit = [False] * len(pred), 0
         for tp, tc in truth:
             for i, (pp, pc) in enumerate(pred):
-                if not used[i] and pc == tc and same_part(lib, pp, tp):
+                if not used[i] and same_colour(pc, tc) and same_part(lib, pp, tp):
                     used[i] = True
                     hit += 1
                     break

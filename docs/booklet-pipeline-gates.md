@@ -206,3 +206,27 @@ truth ids aren't in the library.
 **Conclusion:** the work is shape and colour recognition, plus data fixes. Count repair and hard count
 conservation (DeepSeek P1/P2) would gain at most about 70 parts.
 Scripts and output: `scratchpad/p0/` (run.py, analyze.py, alias.py, analysis.txt).
+
+### 14 Nov: gate 1 data fixes
+
+- Rubber colours now score as their plain colour (Rubber_Black 256 = Black 0): `evaluate.same_colour`.
+- The set number falls back to LEGO's file name (`75317-6334518.pdf`). 75317 now gets its Rebrickable
+  inventory: 0% → 74%.
+- Checked and dropped: alias/moved LDraw ids (3023/28653…) were already matched by `same_part`.
+
+**Gate 1, all 42 sets:**
+
+| Metric | Before | After |
+|---|---|---|
+| Recall | 84.1% | **85.8%** |
+| Steps exact | — | 76.1% |
+
+By group:
+
+| Group | Recall |
+|---|---|
+| Printed list | 88.1% |
+| No list | 71.1% |
+| Technic | 72.7% |
+
+The remaining misses are recognition (wrong shape or colour).

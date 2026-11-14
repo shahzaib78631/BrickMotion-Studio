@@ -12,11 +12,23 @@ from functools import lru_cache
 
 import numpy as np
 
-from ..inventory_check import _plain, base_number, geometry_equivalent
+from ..inventory_check import _plain, base_number, colour_aliases, geometry_equivalent
 from ..metrics import chamfer_distance
 from ..score import exact_flags
 
 _GEQ: dict = {}
+LDCONFIG = __import__("pathlib").Path(__file__).resolve().parents[3] / "public/ldraw/LDConfig.ldr"
+
+
+@lru_cache(maxsize=1)
+def _rubber() -> dict[int, int]:
+    return colour_aliases(LDCONFIG)
+
+
+def same_colour(a: int, b: int) -> bool:
+    """Same printed colour: a rubber colour (Rubber_Black 256) counts as its plain one (Black 0)."""
+    rubber = _rubber()
+    return rubber.get(int(a), int(a)) == rubber.get(int(b), int(b))
 
 
 def same_part(lib, a: str, b: str) -> bool:

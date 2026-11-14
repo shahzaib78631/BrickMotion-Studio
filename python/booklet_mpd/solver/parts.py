@@ -279,7 +279,10 @@ def set_number_from_pdf(doc) -> str | None:
     from collections import Counter
     pages = [doc[i] for i in sorted({0, 1, len(doc) - 2, len(doc) - 1}) if 0 <= i < len(doc)]
     counts = Counter(m for p in pages for m in _SET.findall(p.get_text()) if not m.startswith(("19", "20")) or len(m) != 4)
-    return counts.most_common(1)[0][0] if counts else None
+    if counts:
+        return counts.most_common(1)[0][0]
+    named = re.match(r"(\d{4,6})-\d+\.pdf$", Path(doc.name or "").name)     # LEGO's '<set>-<booklet>.pdf'
+    return named.group(1) if named else None
 
 
 def fallback_inventory(lib, set_number: str, client, index: dict) -> list[dict]:
