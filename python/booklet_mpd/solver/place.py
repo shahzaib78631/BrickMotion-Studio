@@ -257,6 +257,7 @@ class State:
     scores: list = field(default_factory=list)        # per placed part: Scored
     total: float = 0.0
     done: frozenset = frozenset()                     # indices into the step's parts already placed
+    groups: list | None = None                        # indices into placed that move together (unit copies)
 
 
 def _boxes_overlap(lib, a, b, shrink: float = 2.0) -> bool:
@@ -270,60 +271,74 @@ def _boxes_overlap(lib, a, b, shrink: float = 2.0) -> bool:
 
 
 def polish(base: list, state: State, shortlist, score, collides=None, overlaps=None, rounds: int = 3) -> State:
-    """Move one part at a time to the alternative that raises the completed-model score.
+    """Move one group at a time to the alternative that raises the completed-model score.
 
-    The beam ranks states by summed per-part gains; the completed model is the better judge. On the gate-4b
-    steps where the beam lost a better-scoring layout, a single move toward the truth raised the completed
-    score in every step, so coordinate ascent from the beam's best state reaches it.
-    `shortlist(part, colour, model) -> [(matrix, Scored | None)]`: the part's alternatives with the other
-    parts in place; `score(model) -> float`: completed score of base + placed; `collides(part, matrix, model)`: the
-    exact collision test against the base; `overlaps(entry, other)`: new parts that cannot share space
-    (default: same origin). Returns `state` itself when no move helps."""
+    A group is one part, or one copy of a sub-build unit (`state.groups`), which only ever moves as a whole.
+    The beam ranks states by summed per-part gains; the completed model is the better judge (gate 4b: where
+    the beam lost a better-scoring layout, a single move toward the truth raised the completed score).
+    `shortlist(entries, model) -> [(entries, [Scored | None])]`: the group's alternative placements (same
+    parts, same order) with the other parts in place; `score(model) -> float`: completed score;
+    `collides(part, matrix, model)`: the exact collision test against the base; `overlaps(entry, other)`:
+    new parts that cannot share space (default: same origin). When a spot is taken by exactly one other
+    group, that group is also tried at each of its own alternatives. Returns `state` itself when no move
+    helps."""
     overlaps = overlaps or (lambda a, b: _same_spot(a[2], b[2]))
+    groups = state.groups or [[i] for i in range(len(state.placed))]
     placed, scores = list(state.placed), list(state.scores)
     best = score(base + placed)
     changed = False
+
+    def rest_of(skip):
+        return [o for k, o in enumerate(placed) if k not in skip]
+
+    def free(entries, rest):
+        if any(overlaps(e, o) for e in entries for o in rest):
+            return False
+        return collides is None or not any(collides(q, m, base + rest) for q, _c, m in entries)
+
+    def same(entries, group):
+        return all(_same_spot(e[2], placed[k][2]) and np.allclose(e[2][:3, :3], placed[k][2][:3, :3], atol=1e-3)
+                   for e, k in zip(entries, group))
+
     for _round in range(rounds):
         moved = False
-        for i, (part, colour, current) in enumerate(placed):
-            others = placed[:i] + placed[i + 1:]
-            for matrix, scored in shortlist(part, colour, base + others):
-                if _same_spot(matrix, current) and np.allclose(matrix[:3, :3], current[:3, :3], atol=1e-3):
+        for g, group in enumerate(groups):
+            here = [placed[k] for k in group]
+            accepted = False
+            for entries, scs in shortlist(here, base + rest_of(set(group))):
+                if same(entries, group):
                     continue
-                entry = (part, colour, matrix)
-                if collides is not None and collides(part, matrix, base + others):
+                others = rest_of(set(group))
+                if collides is not None and any(collides(q, m, base + others) for q, _c, m in entries):
                     continue
-                blocking = [j for j, o in enumerate(placed) if j != i and overlaps(entry, o)]
+                blocking = [h for h, other in enumerate(groups) if h != g
+                            and any(overlaps(e, placed[k]) for e in entries for k in other)]
                 trials = []
                 if not blocking:
-                    trials.append(({i: (entry, scored)}))
+                    trials.append({g: (entries, scs)})
                 elif len(blocking) == 1:
-                    # the spot is taken by one other part: move that part to one of its own alternatives
-                    j = blocking[0]
-                    pj, cj, _mj = placed[j]
-                    rest = [o for k, o in enumerate(placed) if k not in (i, j)] + [entry]
-                    for mj, sj in shortlist(pj, cj, base + rest):
-                        ej = (pj, cj, mj)
-                        if any(overlaps(ej, o) for o in rest):
-                            continue
-                        if collides is not None and collides(pj, mj, base + rest):
-                            continue
-                        trials.append({i: (entry, scored), j: (ej, sj)})
-                accepted = False
+                    # the spot is taken by one other group: move that group to one of its own alternatives
+                    h = blocking[0]
+                    rest = rest_of(set(group) | set(groups[h])) + list(entries)
+                    for e2, s2 in shortlist([placed[k] for k in groups[h]], base + rest):
+                        if free(e2, rest):
+                            trials.append({g: (entries, scs), h: (e2, s2)})
                 for change in trials:
-                    trial = [change[k][0] if k in change else o for k, o in enumerate(placed)]
+                    trial, tscores = list(placed), list(scores)
+                    for h, (ents, ss) in change.items():
+                        for k, e, sc in zip(groups[h], ents, ss):
+                            trial[k] = e
+                            tscores[k] = sc if sc is not None else tscores[k]
                     value = score(base + trial)
                     if value > best + 1e-9:
-                        best, placed = value, trial
-                        scores = [(change[k][1] if change[k][1] is not None else s) if k in change else s
-                                  for k, s in enumerate(scores)]
+                        best, placed, scores = value, trial, tscores
                         moved = accepted = changed = True
                         break
-                if accepted:      # the other parts changed: this part's alternatives are re-read next round
+                if accepted:      # the other parts changed: this group's alternatives are re-read next round
                     break
         if not moved:
             break
-    return State(placed, scores, state.total, state.done) if changed else state
+    return State(placed, scores, state.total, state.done, state.groups) if changed else state
 
 
 def _same_spot(a: np.ndarray, b: np.ndarray, tol: float = 0.6) -> bool:

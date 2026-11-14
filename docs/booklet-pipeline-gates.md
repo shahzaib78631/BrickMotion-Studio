@@ -164,3 +164,13 @@ All of the final pass's gain was in sub-build steps.
 **Next:**
 - Move a host part and the parts on it together.
 - Move sub-build units as whole units in the final pass.
+
+### 14 Nov: unit-aware final pass (sub-build copies move whole)
+
+**Full gate 4b:** 372/578 parts exact (64.4%), against 370 baseline. Good-camera steps: 261/359, against
+258. 13 steps got better and 12 worse; time +24%. That is noise, so the pass stays **off**.
+
+The 12 worse steps are the finding. The pass only accepts moves that raise the whole-model score, yet it
+moved correct parts to wrong poses. So the whole-model score (`register.Aligner`) itself ranks some wrong
+layouts above the right one. A better search against this score has a ceiling. The next gate to add measures
+the score on its own: does the true layout outscore every one-part change of it?

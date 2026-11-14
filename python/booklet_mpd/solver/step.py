@@ -47,7 +47,7 @@ PUSH = os.environ.get("BOOKLET_SOLVER_PUSH", "0") != "0"   # parts drawn displac
 RERANK = int(os.environ.get("BOOKLET_SOLVER_RERANK", "3"))  # beam states re-scored as completed models
 # after the beam: move one part at a time to the alternative the completed model scores higher (gate 4b: the
 # beam lost a better-scoring layout in 63 of 101 wrong parts with a good camera; a wider beam got 8 of them)
-POLISH = os.environ.get("BOOKLET_SOLVER_POLISH", "0") != "0"   # off: gate 4b 368/578 vs 370 without (A/B 14 Nov)
+POLISH = os.environ.get("BOOKLET_SOLVER_POLISH", "0") != "0"   # off: gate 4b 372/578 vs 370, 13 steps up 12 down, +24% time
 POLISH_K = int(os.environ.get("BOOKLET_SOLVER_POLISH_K", "32"))   # alternatives tried per part
 ROUNDS = 1                # placement / completed re-registration alternations per hypothesis
 # booklet pages sit within a few percent of the scale prior; the registered base alone cannot tell scale
@@ -256,16 +256,23 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
                 set_model(model0)
             loose = rest + [x for u, n in solved for x in [(q, c) for q, c, _m in u["parts"]] * n]
             return solve_step(lib, scene_for, model0, loose, cands, collides=collides, beam=beam, deltas=deltas, pushes=pushes)
+        sizes = [len(unit["parts"]) for unit, n in solved for _ in range(n)]
+        unit_groups, at = [], 0
+        for size in sizes:                  # each unit copy's parts sit together, in copy order
+            unit_groups.append(list(range(at, at + size)))
+            at += size
         out = []
         for ust in ustates[:UNIT_BEAM]:
             if not rest:
-                out.append(ust)
+                out.append(State(ust.placed, ust.scores, ust.total, ust.done, unit_groups))
                 continue
             if set_model is not None:
                 set_model(model0 + ust.placed)
             for st in solve_step(lib, scene_for, model0 + ust.placed, rest, cands, collides=collides,
                                  beam=beam, deltas=deltas, pushes=pushes):
-                out.append(State(ust.placed + st.placed, ust.scores + st.scores, ust.total + st.total))
+                n0 = len(ust.placed)
+                out.append(State(ust.placed + st.placed, ust.scores + st.scores, ust.total + st.total,
+                                 groups=unit_groups + [[n0 + k] for k in range(len(st.placed))]))
         if set_model is not None:
             set_model(model0)
         out.sort(key=lambda st: -st.total)
@@ -305,9 +312,8 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
             alt = completed(reg, states[k], scales)
             if alt.score > reg2.score + 1e-9:
                 reg2, states = alt, [states[k]] + states[:k] + states[k + 1:]
-        # drawn in place (no arrows / explosion: placed poses are drawn poses) and no sub-build units (moving
-        # one part of a unit on its own breaks the unit the panel fixed)
-        if POLISH and deltas == (0.0,) and not units:
+        # drawn in place (no arrows / explosion): placed poses are drawn poses; a sub-build unit copy moves whole
+        if POLISH and deltas == (0.0,):
             better = polish_state(reg2.view, states[0])
             if better is not states[0]:
                 reg3 = completed(reg, better, scales)
@@ -321,15 +327,40 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
         def score(model):
             return float(Aligner(lib, model, classes, aligner_codes, on_ink=on_ink).evaluate(view)[0])
 
-        def shortlist(part, colour, model):
-            cands = distinct(lib, part, candidates(lib, part, model))
-            if not cands:
-                return []
+        def scene_of(model):
             scene = Scene.build(lib, model, view, classes, codes, ink_dist)
             scene.picture = picture
-            scored = score_candidates(lib, scene, part, colour, cands, deltas=(0.0,))
-            scored.sort(key=lambda sc: -sc.score)
-            return [(sc.candidate["matrix"], sc) for sc in scored[:POLISH_K]]
+            return scene
+
+        def shortlist(entries, model):
+            if len(entries) == 1:
+                part, colour, _m = entries[0]
+                cands = distinct(lib, part, candidates(lib, part, model))
+                if not cands:
+                    return []
+                scored = score_candidates(lib, scene_of(model), part, colour, cands, deltas=(0.0,))
+                scored.sort(key=lambda sc: -sc.score)
+                return [([(part, colour, sc.candidate["matrix"])], [sc]) for sc in scored[:POLISH_K]]
+            # a unit copy: every placement that seats one of its parts on a candidate, the rest rigidly with it
+            m0inv = np.linalg.inv(entries[0][2])
+            config = [(q, c, m0inv @ m) for q, c, m in entries]
+            options = {}
+            for q, _c, rel in config:
+                inv = np.linalg.inv(rel)
+                for cand in candidates(lib, q, model):
+                    t = np.asarray(cand["matrix"], float) @ inv
+                    key = tuple(np.round(t[:3, :4], 1).ravel())
+                    if key not in options:
+                        options[key] = [(qq, cc, t @ r) for qq, cc, r in config]
+            if not options:
+                return []
+            scene = scene_of(model)
+            ranked = []
+            for world in options.values():
+                ss = [score_candidates(lib, scene, qq, cc, [{"matrix": m}], deltas=(0.0,))[0] for qq, cc, m in world]
+                ranked.append((sum(x.score for x in ss), world, ss))
+            ranked.sort(key=lambda r: -r[0])
+            return [(world, ss) for _t, world, ss in ranked[:POLISH_K]]
 
         hits = (lambda part, matrix, _model: collider.hits(part, matrix)) if collider is not None else None
         out = polish(model0, state, shortlist, score, collides=hits,
