@@ -269,3 +269,28 @@ They are mostly Technic look-alikes and booklets with no parts list.
 - 31088 reads 2/93.
 
 Those two collapse structurally. They aren't diagnosed, to keep them held out.
+
+### 15 Nov: P4, P5, and the two collapsed validation booklets
+
+**10270 and 31088 (diagnosed by Big Pickle, read-only). Both are answer-key mismatches, not the reader:**
+- 31088 builds the 137-piece alternate model, but its key is the main model. With the right model the reader
+  gets 92/137.
+- 10270 covers only the first building of a multi-booklet set, but its key is the whole 2,400-piece model, and
+  the count-based pairing smears the steps.
+
+Both are now marked contaminated in `protocol.py`.
+
+**Changes and results:**
+
+| Change | Effect |
+|---|---|
+| P4: rendered candidates keep their real size, and the callout scale is learnt | No-list train 79.7% → 84.8%. The scale is 2.25–2.31 px/LDU on every booklet; 2.29 is the default. |
+| P4 tries that didn't help | One orientation 71.0%, two 76.5% (four needed); views 35/55° yaw and 22/38° tilt no better than 45°/30°. |
+| Dedupe: a callout picture embedded twice at one box counts once (318 on train) | Technic train 73.5% → 74.6% |
+| P5: learned matcher | 3-fold cross-validation: +8/4,893 parts at weight 0.5, −17 alone. That is no gain, so it stays off (no weights shipped). |
+
+P5 setup: a small CNN trained on 12,158 callout ↔ parts-list pairs, 2,873 of them from answer keys.
+
+**Gate 1 now:**
+- Train: **90.1%** (parts list 95.4%, no list 84.8%, Technic 74.6%).
+- Validation, 31 clean sets: **88.7%** (was 88.1%; Technic 74.4% → 80.6%).
