@@ -86,6 +86,8 @@ def _lab(rgb: np.ndarray) -> np.ndarray:
     return lab * [100 / 255, 1, 1] - [0, 128, 128]
 
 
+RENDERED_CONFIDENT = 0.65    # renders never match a callout as closely as LEGO's own art (0.85 -> no scale learnt)
+CALLOUT_PX_PER_LDU = 2.29    # LEGO draws callouts at one scale: 2.25-2.31 px/LDU at the 300-dpi crops on 7 booklets
 SIZE_WEIGHT = 0.25        # weight of the absolute-size term once the callout / parts-list scale is known
 SIZE_SHARPNESS = 5.0      # 1x5 vs 1x6 plate: ~15% longer -> term drops to ~0.5
 
@@ -108,7 +110,7 @@ def similarity(a: Descriptor, b: Descriptor, ratio: float | None = None) -> floa
     return (1 - SIZE_WEIGHT) * base + SIZE_WEIGHT * size
 
 
-def size_ratio(descs: dict, inv_desc: list) -> float | None:
+def size_ratio(descs: dict, inv_desc: list, confident: float = 0.85) -> float | None:
     """Callout / parts-list drawing scale: median size ratio of confident best matches (shape, colour
     and aspect only). None when too few callouts match confidently."""
     ratios = []
@@ -117,7 +119,7 @@ def size_ratio(descs: dict, inv_desc: list) -> float | None:
         if d is None or not d.size:
             continue
         sims = sorted(((similarity(d, b), b) for _j, b in flat), key=lambda x: -x[0])
-        if sims and sims[0][0] > 0.85 and sims[0][1].size:
+        if sims and sims[0][0] > confident and sims[0][1].size:
             ratios.append(d.size / sims[0][1].size)
     return float(np.median(ratios)) if len(ratios) >= 5 else None
 
@@ -288,7 +290,10 @@ def rendered_descriptor(lib, part: str, colour: int, matrix: np.ndarray | None =
     img[mask > 0] = colour_rgb(colour)
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     cv2.drawContours(img, contours, -1, (20, 20, 20), 1)
-    return describe(img)
+    d = describe(img)
+    if d is not None:
+        d.size /= k            # in LDU: the picture is drawn at 96 px, its size stays the part's real size
+    return d
 
 
 _SET = re.compile(r"\b(\d{4,6})\b")
@@ -364,7 +369,9 @@ def read_parts(lib, extract: dict, folder: Path, index: dict, client=None, fallb
             if key not in descs:
                 descs[key] = describe(img)
     totals = {k: sum(extract["steps"][si]["callout"][ci].get("count", 1) for si, ci in v) for k, v in groups.items()}
-    ratio = None if used_fallback else size_ratio(descs, inv_desc)     # rendered pictures have no print scale
+    ratio = size_ratio(descs, inv_desc, RENDERED_CONFIDENT if used_fallback else 0.85)   # parts-list scale, or callout px per LDU
+    if ratio is None and used_fallback:
+        ratio = CALLOUT_PX_PER_LDU
     assigned = assign(descs, totals, inv_desc, [int(e.get("count", 0) or 0) for e in inventory], ratio)
     steps_out = []
     unresolved_total = 0
