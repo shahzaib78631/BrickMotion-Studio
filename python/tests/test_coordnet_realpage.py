@@ -398,8 +398,10 @@ def test_label_case_falls_back_to_the_line_fit_when_the_network_sees_nothing(mon
     checked: dict = {}
     s = realdata.label_case(object(), case, start=TRUE_CAM.with_(cx=TRUE_CAM.cx + 7, yaw=TRUE_CAM.yaw + 2),
                             checked=checked)
-    assert s is not None and s["meta"]["solver"] == "linefit"
-    assert abs(s["cam"].cx - TRUE_CAM.cx) < 1.0 and "cam" in checked
+    assert s is not None and s["meta"]["solver"] == "linefit" and "cam" in checked
+    c = s["cam"]
+    assert abs(c.cx - TRUE_CAM.cx) < 1.0 and abs(c.cy - TRUE_CAM.cy) < 1.0
+    assert abs((c.yaw - TRUE_CAM.yaw + 180) % 360 - 180) < 0.5 and abs(c.pitch - TRUE_CAM.pitch) < 0.5
 
 
 def test_ambiguous_line_fits_abstain_and_do_not_chain(monkeypatch):
@@ -468,3 +470,33 @@ def test_equivalent_passing_fits_are_not_ambiguous(monkeypatch):
     why = []
     realdata.label_case(object(), case, start=TRUE_CAM, why=why)
     assert not any("ambiguous" in w for w in why)
+
+
+def test_a_view_that_swaps_identical_new_parts_is_ambiguous(monkeypatch):
+    """Big Pickle: two identical new parts on either side (eyes, ears) give the same new-part union from the
+    true view and the half-turned one, but the labels of each part are swapped."""
+    from types import SimpleNamespace
+    from coordnet import linefit
+    case, parts, centre = _case()
+    _no_network(monkeypatch)
+    a, b = len(BASE), len(BASE) + 1
+    part0 = np.full((460, 600), -1, np.int32); part0[100:150, 100:200] = a; part0[100:150, 300:400] = b
+    part1 = part0.copy(); part1[part0 == a] = b; part1[part0 == b] = a
+    half = TRUE_CAM.with_(yaw=TRUE_CAM.yaw + 180)
+    monkeypatch.setattr(linefit, "search", lambda *a_, start=None, **k:
+                        [linefit.Fit(TRUE_CAM, 0.3, 0.9, 1000), linefit.Fit(half, 0.3, 0.9, 1000)])
+    monkeypatch.setattr(realdata, "camera_check", lambda pic, parts, cam, centre, ps, **k:
+                        dict(ok=True, tiles=50, shift=0.3, p50=0.2, p90=1.0, scale_err=0.0, render=pic,
+                             gbuffer=SimpleNamespace(part=part0 if cam.yaw == TRUE_CAM.yaw else part1)))
+    why, checked = [], {}
+    assert realdata.label_case(object(), case, start=TRUE_CAM, why=why, checked=checked) is None
+    assert "ambiguous" in why[-1] and "cam" not in checked
+
+
+def test_downscaled_pictures_are_judged_in_native_pixels_too(monkeypatch):
+    parts, centre, _g, full, _base = _scene()
+    monkeypatch.setattr(realdata, "shift_summary", lambda pic, ren, region: dict(tiles=50, median=0.6))
+    monkeypatch.setattr(realdata, "line_distance", lambda pic, ren, region, up=4, thin=0.0, native=1.0:
+                        (0.5 / native, 2.5 / native))
+    assert realdata.camera_check(full, parts, TRUE_CAM, centre, TRUE_CAM.scale)["ok"]
+    assert not realdata.camera_check(full, parts, TRUE_CAM, centre, TRUE_CAM.scale, upscale=0.5)["ok"]

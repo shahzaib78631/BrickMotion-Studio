@@ -97,7 +97,7 @@ def line_distance(pic: np.ndarray, ren: np.ndarray, region: np.ndarray, up: int 
         return float("nan"), float("nan")
     da = cv2.distanceTransform((~a).astype(np.uint8), cv2.DIST_L2, cv2.DIST_MASK_PRECISE)
     db = cv2.distanceTransform((~b).astype(np.uint8), cv2.DIST_L2, cv2.DIST_MASK_PRECISE)
-    d = np.minimum(np.concatenate([da[b], db[a]]) / (up * max(1.0, float(native))), clip)
+    d = np.minimum(np.concatenate([da[b], db[a]]) / (up * (float(native) if native and native > 0 else 1.0)), clip)
     return float(np.median(d)), float(np.percentile(d, 90))
 
 

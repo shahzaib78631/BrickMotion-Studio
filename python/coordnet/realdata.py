@@ -159,9 +159,9 @@ def camera_check(pic: np.ndarray, parts: list, cam: BookletCamera, centre, print
     Distances are judged in the booklet's own pixels: a picture enlarged `upscale` times before solving has its
     shift and line distances divided by it (a 1 px error in the source raster is `upscale` px here)."""
     H, W = pic.shape[:2]
-    u = max(1.0, float(upscale))
-    ren = R.render(parts, set(), cam, centre, W, H, R.Style(), ss=2, red=False).picture
-    g = R.gbuffer(*R.scene(parts), cam, centre, W, H)
+    u = float(upscale) if upscale and upscale > 0 else 1.0
+    rd = R.render(parts, set(), cam, centre, W, H, R.Style(), ss=2, red=False)
+    ren, g = rd.picture, rd.gt
     region = cv2.dilate((g.part >= 0).astype(np.uint8), np.ones((9, 9), np.uint8)).astype(bool)
     sh = shift_summary(pic, ren, region)
     p50, p90 = line_distance(pic, ren, region, thin=stroke, native=u)
@@ -232,8 +232,8 @@ def _line_fit(pic, parts, centre, W, H, print_scale, fg, start, stroke, upscale,
               min_iou: float = 0.9) -> dict:
     """The network-free camera (docs/coordnet/linefit-design.md): line-fit hypotheses from the section's view and
     from the page's own line directions, each verified by `camera_check`. All passing fits of both searches are
-    compared before any is kept: two that would label the new parts differently (new-part mask IoU < `min_iou`,
-    or no G-buffer to tell) make the page ambiguous; equivalent ones (symmetric views, the same view found twice)
+    compared before any is kept: two that would label the new parts differently (fewer than `min_iou` of the
+    new-part pixels given the same part by both, or no G-buffer to tell) make the page ambiguous; equivalent ones (symmetric views, the same view found twice)
     are not. Returns best=(cam, fits, check) | ambiguous=[...] | lines=[diagnostics]."""
     from . import linefit
     feat = linefit.page_features(pic, stroke)
@@ -248,13 +248,20 @@ def _line_fit(pic, parts, centre, W, H, print_scale, fg, start, stroke, upscale,
                 passing.append((f, chk))
     if not passing:
         return dict(lines=diag)
-    passing.sort(key=lambda t: t[1]["shift"])
+    passing.sort(key=lambda t: (t[1]["shift"], t[0].score))
     f0, c0 = passing[0]
-    mask = lambda c: None if c.get("gbuffer") is None else np.isin(c["gbuffer"].part, newset)
-    m0 = mask(c0)
+
+    def agree(c, c1):
+        """Share of the new-part pixels (either fit) labelled with the same part by both: a half-turned view
+        that swaps two identical parts has the same new-part union but disagrees here."""
+        if c.get("gbuffer") is None or c1.get("gbuffer") is None:
+            return 0.0
+        p, p1 = c["gbuffer"].part, c1["gbuffer"].part
+        u = np.isin(p, newset) | np.isin(p1, newset)
+        return float((p[u] == p1[u]).mean()) if u.any() else 1.0
+
     for _f, c in passing[1:]:
-        m = mask(c)
-        if m0 is None or m is None or (m & m0).sum() / max(1, (m | m0).sum()) < min_iou:
+        if agree(c0, c) < min_iou:
             return dict(ambiguous=[f"{g.cam.yaw:.1f}/{g.cam.pitch:.1f}/{g.cam.cx:.1f}/{g.cam.cy:.1f}"
                                    for g, _c in passing])
     fit = dict(solver="linefit", score=f0.score, cover=f0.cover, n=f0.n)

@@ -142,8 +142,8 @@ STAGES = (                     # (free parameters, match radius px, iterations)
     (("cx", "cy"), 8.0, 3),
     (("yaw", "pitch", "roll", "cx", "cy"), 4.0, 4),
     (("yaw", "pitch", "roll", "scale", "cx", "cy"), 2.5, 3),
-    (("yaw", "pitch", "roll", "scale", "cx", "cy", "eye"), 2.0, 3),
-)
+    (("yaw", "pitch", "roll", "scale", "cx", "cy"), 2.0, 3),
+)                              # eye stays at the start's: the verifier has no perspective check (design: fixed)
 
 
 def _samples(parts, cam, centre, W, H, lines):
@@ -163,7 +163,7 @@ def evaluate(feat: Features, tree, s, clip: float = 4.0) -> tuple[float, float]:
 
 
 def refine(feat: Features, parts: list, cam0, centre, W: int, H: int, print_scale: float,
-           scale_tol: float = 0.05, min_samples: int = 200, lines=None) -> Fit | None:
+           scale_tol: float = 0.03, min_samples: int = 200, lines=None) -> Fit | None:
     """Fit the camera so the model's visible LDraw lines lie on the page's lines, from a start already within a
     few px and degrees. Each iteration: visible samples (`render.visible_line_samples`), each matched to its
     nearest page feature within the stage's radius, the residual taken along that feature's normal
@@ -184,8 +184,6 @@ def refine(feat: Features, parts: list, cam0, centre, W: int, H: int, print_scal
         return None
     best = Fit(cam, *evaluate(feat, tree, s), len(s.uv))
     for free, radius, iters in STAGES:
-        if "eye" in free and cam.eye <= 0:
-            free = tuple(k for k in free if k != "eye")
         for _ in range(iters):
             d, j = tree.query(s.uv, distance_upper_bound=radius)
             ok = np.isfinite(d)
@@ -290,8 +288,9 @@ def _direction_hist(theta: np.ndarray, w: np.ndarray) -> np.ndarray:
 
 
 def view_angles(feat: Features, parts: list, centre, print_scale: float, k: int = 2,
-                pitches=tuple(np.arange(20.0, 52.5, 2.5)), eye: float = 4200.0) -> list[tuple[float, float]]:
-    """(yaw in [0, 360), pitch) of the views whose projected model edges run in the page's line directions, best
+                pitches=tuple(np.arange(20.0, 52.5, 2.5)), eye: float = 4200.0,
+                max_roll: int = 0) -> list[tuple[float, float, float]]:
+    """(yaw in [0, 360), pitch, roll) of the views whose projected model edges run in the page's line directions, best
     first, at least 6 deg of yaw apart. No translation, colour or network is involved (on BrickHeadz 40348 the
     booklet views are yaw 145, not the standard 35 + k*90). The whole circle is scored: an upright brick model
     repeats every quarter turn, but a tilted one does not."""
@@ -304,28 +303,37 @@ def view_angles(feat: Features, parts: list, centre, print_scale: float, k: int 
     if len(E) == 0:
         return []
 
+    # roll turns every drawn direction by the same angle; `max_roll` > 0 scores the page histogram shifted by up
+    # to that many degrees. Off by default: hidden model edges (the histogram counts them, the page does not draw
+    # them) bias yaw by a few degrees, and with roll free yaw and roll trade off. Booklet pages have roll ~0
+    # (21065: 0.24; 40348 fits: 0.0-0.4); the coarse +-4 deg rotation and the refine absorb a few degrees.
+    shifts = np.arange(-max_roll, max_roll + 1)
+    hps = np.stack([np.roll(hp, -int(r)) for r in shifts])
+
     def score(yaw, pitch):
         cam = BookletCamera(yaw, pitch, 0.0, print_scale, 0.0, 0.0, eye=eye)
         a, _ = project(cam, centre, E[:, 0])
         b, _ = project(cam, centre, E[:, 1])
         d = b - a
-        return float(_direction_hist(np.arctan2(d[:, 1], d[:, 0]), np.hypot(d[:, 0], d[:, 1])) @ hp)
+        sc = hps @ _direction_hist(np.arctan2(d[:, 1], d[:, 0]), np.hypot(d[:, 0], d[:, 1]))
+        i = int(np.argmax(sc))
+        return float(sc[i]), float(shifts[i])
 
-    grid = sorted(((score(y, p), y, p) for p in pitches for y in np.arange(0.0, 360.0, 1.0)), reverse=True)
-    out: list[tuple[float, float]] = []
-    for _s, y, p in grid:
-        if any(min((y - a) % 360, (a - y) % 360) < 6 for a, _ in out):
+    grid = sorted(((*score(y, p), y, p) for p in pitches for y in np.arange(0.0, 360.0, 1.0)), reverse=True)
+    out: list[tuple[float, float, float]] = []
+    for _s, _r, y, p in grid:
+        if any(min((y - a) % 360, (a - y) % 360) < 6 for a, _p, _rr in out):
             continue
-        best = max(((score(yy, pp), yy, pp) for yy in np.arange(y - 1, y + 1.01, 0.25)
+        best = max(((*score(yy, pp), yy, pp) for yy in np.arange(y - 1, y + 1.01, 0.25)
                     for pp in np.arange(p - 2, p + 2.01, 0.5)), key=lambda t: t[0])
-        out.append((best[1] % 360.0, best[2]))
+        out.append((best[2] % 360.0, best[3], best[1]))
         if len(out) >= k:
             break
     return out
 
 
 def search(feat: Features, parts: list, centre, W: int, H: int, print_scale: float, fg: np.ndarray,
-           start=None, eye: float = 4200.0, n_angles: int = 2, lines=None) -> list:
+           start=None, eye: float = 4200.0, n_angles: int = 2, polish: int = 3, lines=None) -> list:
     """Camera hypotheses for a page, best (lowest score) first; the caller verifies them all.
 
     With `start` (the section's verified view) the fits around it. Otherwise each direction-histogram view
@@ -341,19 +349,27 @@ def search(feat: Features, parts: list, centre, W: int, H: int, print_scale: flo
     else:
         P = _points(parts)
         views: list = []
-        for yaw, pitch in view_angles(feat, parts, centre, print_scale, k=n_angles, eye=eye):
+        for yaw, pitch, roll in view_angles(feat, parts, centre, print_scale, k=n_angles, eye=eye):
             for q in range(4):
                 for turned in (False, True):
                     y = (yaw + 90 * q) % 360
-                    if any(t == turned and min((y - v) % 360, (v - y) % 360) < 6 for v, _p, t in views):
+                    if any(t == turned and min((y - v) % 360, (v - y) % 360) < 6 for v, _p, _r, t in views):
                         continue
-                    views.append((y, pitch, turned))
+                    views.append((y, pitch, roll, turned))
         hyp = []
-        for y, pitch, turned in views:
-            cam = frame(BookletCamera(y, pitch, 0.0, print_scale, 0.0, 0.0, eye=eye, turned=turned), centre, P, fg,
+        for y, pitch, roll, turned in views:
+            cam = frame(BookletCamera(y, pitch, roll, print_scale, 0.0, 0.0, eye=eye, turned=turned), centre, P, fg,
                         fit_scale=False)
-            c = coarse(feat, parts, cam, centre, W, H, reach=48, step=2, angles=(-2.0, 0.0, 2.0), k=1, lines=lines)
+            c = coarse(feat, parts, cam, centre, W, H, reach=48, step=2, angles=(-4.0, -2.0, 0.0, 2.0, 4.0), k=1,
+                       lines=lines)
             hyp += [cm for _s, cm in c[:1]]
     fits = [r for r in (refine(feat, parts, cam, centre, W, H, print_scale, lines=lines) for cam in hyp)
             if r is not None]
+    fits.sort(key=lambda f: f.score)
+    # the staged ICP can stop short (a few tenths of a degree of roll/yaw left); one more pass from its own result
+    # converges, so polish the best few and keep whichever scores better
+    for i, f in enumerate(fits[:polish]):
+        r = refine(feat, parts, f.cam, centre, W, H, print_scale, lines=lines)
+        if r is not None and r.score < f.score:
+            fits[i] = r
     return sorted(fits, key=lambda f: f.score)

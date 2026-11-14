@@ -228,7 +228,7 @@ def test_view_angles_read_yaw_and_pitch_off_the_line_directions(cam):
     centre = R.bounds_centre(parts)
     pic = R.render(parts, set(), cam, centre, PW, PH, R.Style(), ss=2, red=False).picture
     page = np.clip(pic[..., [2, 0, 1]].astype(int) * 0.7 + 50, 0, 255).astype(np.uint8)
-    yaw, pitch = linefit.view_angles(linefit.page_features(page), parts, centre, cam.scale)[0]
+    yaw, pitch, _roll = linefit.view_angles(linefit.page_features(page), parts, centre, cam.scale)[0]
     assert _ang(yaw, cam.yaw, 90) <= 2.0 and abs(pitch - cam.pitch) <= 3.0
 
 
@@ -262,7 +262,7 @@ def test_view_angles_find_a_tilted_model_over_the_full_circle():
     cam = TRUE_CAM.with_(yaw=145, pitch=35, roll=0)
     pic = R.render(parts, set(), cam, centre, PW, PH, R.Style(), ss=2, red=False).picture
     cands = linefit.view_angles(linefit.page_features(pic), parts, centre, cam.scale, k=4)
-    assert any(_ang(y, 145, 360) <= 2.0 and abs(p - 35) <= 3.0 for y, p in cands)
+    assert any(_ang(y, 145, 360) <= 2.0 and abs(p - 35) <= 3.0 for y, p, _r in cands)
 
 
 def test_search_refines_every_view_not_just_the_best_coarse_scores(monkeypatch):
@@ -275,3 +275,34 @@ def test_search_refines_every_view_not_just_the_best_coarse_scores(monkeypatch):
     linefit.search(linefit.page_features(pic), parts, centre, PW, PH, TRUE_CAM.scale, ~realdata.paper_mask(pic))
     views = {(int(((c.yaw - refined[0].yaw + 45) % 360) // 90), c.turned) for c in refined}   # quarter turn, turned
     assert len(views) == 8
+
+
+@pytest.mark.parametrize("roll", [3.0, -3.0])        # larger roll: unsupported (booklets: ~0)
+def test_search_handles_a_rolled_page(roll):
+    """Big Pickle: roll rotates every drawn direction; unmodelled, it shifts the yaw estimate. (The direction
+    histogram is only a start: hidden model edges bias it by a few degrees on small models.)"""
+    from coordnet import linefit
+    from coordnet import realdata
+    from coordnet import render as R
+    parts = _parts()
+    centre = R.bounds_centre(parts)
+    cam = TRUE_CAM.with_(roll=roll)
+    pic = R.render(parts, set(), cam, centre, PW, PH, R.Style(), ss=2, red=False).picture
+    feat = linefit.page_features(pic)
+    fits = linefit.search(feat, parts, centre, PW, PH, cam.scale, ~realdata.paper_mask(pic))
+    g = R.gbuffer(*R.scene(parts), cam, centre, PW, PH)
+    s = R.visible_line_samples(*R.scene_lines(parts), g, cam, centre, 1)
+    err = float(np.linalg.norm(project(fits[0].cam, centre, s.X)[0] - s.uv, axis=1).mean())
+    assert err < 0.5
+
+
+def test_refine_keeps_the_eye_and_the_scale_within_three_percent():
+    from coordnet import linefit
+    from coordnet import render as R
+    parts = _parts()
+    centre = R.bounds_centre(parts)
+    page_cam = TRUE_CAM.with_(scale=TRUE_CAM.scale * 1.05, eye=3000)
+    pic = R.render(parts, set(), page_cam, centre, PW, PH, R.Style(), ss=2, red=False).picture
+    r = linefit.refine(linefit.page_features(pic), parts, TRUE_CAM, centre, PW, PH, print_scale=TRUE_CAM.scale)
+    assert r is not None and r.cam.eye == TRUE_CAM.eye
+    assert abs(r.cam.scale / TRUE_CAM.scale - 1) <= 0.03 + 1e-9

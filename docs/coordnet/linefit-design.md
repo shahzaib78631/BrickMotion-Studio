@@ -1,4 +1,4 @@
-# Network-free camera fit to the page's lines (proposal, for review before it is built)
+# Network-free camera fit to the page's lines (built; reviewed by Codex and Big Pickle)
 
 ## Why
 
@@ -49,3 +49,29 @@ upright or turned), pitch ≈ 35, scale = print scale within 1–3%, eye ≈ 420
 - Conditional lines (curved silhouettes) are view-dependent; `line_mask`'s conditional handling must be mirrored or
   they are left out of the ICP points (left out at first).
 - Speed: 8 starts × ~6 iterations × 0.3 s ≈ 15 s per page worst case; acceptable for offline labelling.
+
+## As built (2026-11-14), where it departs from the proposal
+
+- **Page lines:** Steger ridges (dark lines; light lines only on dark surroundings) and step edges away from
+  ridges, sub-pixel, red band removed (`page_features`). The model side is `render.visible_line_samples`, shared
+  with `line_mask`.
+- **The view comes from the line directions** (`view_angles`): the page's line-direction histogram against the
+  projected LDraw edge directions over the full yaw circle and pitch 20-50. BrickHeadz 40348 is drawn at yaw 145,
+  not 35 + k*90, so the 8 "standard views" were wrong for it; the histogram found yaw 145/55 and pitch 32.5-35 on
+  every page tried, in seconds. It is only a start: it counts hidden model edges, which the page does not draw,
+  and is a few degrees off on small models. Roll is not searched (it trades off against yaw); booklet pages
+  have roll ~0 and the coarse +-4 deg rotation and the refine absorb a few degrees. Larger roll is unsupported.
+- **Global step:** a translation x rotation grid scored on the page-line distance transform (`coarse`), not an
+  FFT. `search` takes each histogram view in its four quarter turns, upright and turned, and refines the best
+  hypothesis of *every* view (the verifier must see competing views to notice ambiguity), then polishes the best
+  three with a second refine.
+- **Refine:** staged point-to-line ICP; eye fixed at the start's (the verifier has no perspective check); scale
+  within +-3% of print.
+- **Verification is in the booklet's own pixels:** tile shift and line distances are divided by the picture's
+  enlargement (`camera_check(upscale=)`, `edge_agreement(upscale=)`, `line_distance(native=)`, clip 15 native px).
+- **Ambiguity:** passing fits from the section search and the global search are all compared; any two that give a
+  different part on more than 10% of the new-part pixels (or cannot be compared) drop the page as ambiguous and
+  it is not chained. This is a rejection by the labeller, not by the solver.
+- **Measured** (40348, 41 pages): kept 14 (from 6 with CoordNet alone). Remaining camera drops: steps 17, 22-26
+  have a fit with tile shift 0.32-0.44 native px but line p90 4.1-5.5 (artwork that differs locally from the
+  model); steps 34-41 get no fit at all (to investigate: layout of the final pages).
