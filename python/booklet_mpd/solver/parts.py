@@ -28,6 +28,7 @@ from ..stepimage import fill_holes
 
 SIZE = 32
 INK = 60
+DARK_PAGE = 80          # a page whose background is darker than this draws on black
 REBRICKABLE = Path(__file__).resolve().parents[3] / ".cache/booklet-mpd/rebrickable"
 
 
@@ -50,7 +51,9 @@ def describe(rgb: np.ndarray | None) -> Descriptor | None:
         return None
     bg = _background(rgb)
     grey = rgb.max(-1)
-    fg = (np.linalg.norm(rgb.astype(float) - bg, axis=-1) > 22) | (grey < INK)
+    fg = np.linalg.norm(rgb.astype(float) - bg, axis=-1) > 22
+    if bg.max() >= DARK_PAGE:           # on a near-black page (75277, 21036) dark pixels are page, not ink
+        fg |= grey < INK
     fg = cv2.morphologyEx(fg.astype(np.uint8), cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8))
     fg = fill_holes(fg.astype(bool))      # white parts on pale backgrounds: the outline closes them
     count, labels, stats, _ = cv2.connectedComponentsWithStats(fg.astype(np.uint8), connectivity=8)
