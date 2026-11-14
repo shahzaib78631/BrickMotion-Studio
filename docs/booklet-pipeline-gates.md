@@ -1,0 +1,130 @@
+# Booklet → model pipeline: stages, gates and where each stands (14 Nov 2026)
+
+Goal: from a booklet's pages, build the model step by step so that every step's render overlaps its picture
+exactly.
+
+Rules for the work:
+- Four stages, in order. Each has **one fixed test set, one number and one pass mark**.
+- Each stage is tested on its own. Its inputs come from the answer key, not from the stage before, so a
+  failure is always pinned to one stage.
+- A stage isn't "done" until its gate passes. Every change reports the gate number before and after.
+- The end-to-end run (all four stages chained) is reported every time, but only to see how the stages work
+  together; it isn't where a stage gets fixed.
+
+## Test sets (fixed, never tuned on silently)
+
+| Set | Answer key | Used for |
+|---|---|---|
+| 5 teacher sets (`.cache/booklet-mpd/solver/teacher`) | MPD, step-aligned | all four gates |
+| 21065 book 1 | verified answer | camera, placement |
+| 40348 BrickHeadz | MPD | camera, placement |
+| Synthetic shard-000 (200 steps) | exact | placement coverage per joint type |
+| Desk MOC (user's images) | none (images only) | end-to-end visual check only |
+
+## Gate 1: identify the parts of each step
+
+- **In:** the step's page.
+- **Out:** a multiset of (part, colour) per step.
+- **Number:** per-step exact multiset match.
+- **Pass:** ≥ 98% of steps.
+- **Now:** median part recall is 0.90 over 42 sets. Some sets collapse (40413: 0.03; 41621: 0.35;
+  40274: 0.52). It only works from a PDF with element IDs. There is no reader for images (the desk was
+  typed by hand).
+
+## Gate 2: divide the page into steps and panels
+
+- **In:** the page.
+- **Out:** per step its main picture, callout and sub-build panels, plus "attach sub-model" steps.
+- **Number:** steps and panels matched to the answer key.
+- **Pass:** 100% on the test sets.
+- **Now:** not measured. `raster_step` handles one Studio step per page. Cropping the desk took manual
+  dividers and panel blanking. The solver has no "attach a finished sub-model" step.
+
+## Gate 3: find the camera
+
+- **In:** the step picture plus the answer-key model so far.
+- **Out:** the camera.
+- **Number:** p90 line distance in the booklet's own pixels.
+- **Pass:** ≤ 1.5 px on ≥ 95% of steps.
+- **Now:**
+  - 21065: 0.37–0.5 px median (CoordNet).
+  - 40348: 15 of 41 steps verified with the line fit.
+  - The other sets are not measured against this gate.
+
+## Gate 4: place the new parts (camera and parts from the answer key)
+
+4a. **Coverage.** Is the true pose among the candidates? It is counted per joint type, and every type must
+reach ≥ 99%:
+
+| Joint type | Now |
+|---|---|
+| Studs (top/bottom, quarter turns) | covered |
+| Rotations off the quarter grid (45°, 22.5°…) | not generated |
+| SNOT (side studs, brackets) | catalogue side studs exist; desk 22885 still failed; not measured per type |
+| Hinges (on/in, free angle) | not generated (catalogue has them; work started 14 Nov) |
+| Bar / clip (free roll and slide) | excluded in `snap_candidates` (work started 14 Nov) |
+| Technic pins/axles (continuous slide) | slide grid −20..20 step 10; misses −7, 18.5, 25.4… |
+| Parts with no catalogue data | 33 synthetic misses |
+
+Overall: real sets 5,029/5,611 covered (90%). Synthetic: 571/772 visible true poses (74%).
+
+4b. **Selection.** With the true camera and the true candidate set, is the right pose chosen?
+- **Pass:** ≥ 95% of parts exact.
+- **Now:** not measured in isolation. The teacher run, which also solves its own camera, gets 200/458 parts
+  exact (44%) and 36% of steps.
+
+4c. **Overlap.** The render of the completed step matches the picture.
+- **Pass:** p90 line distance ≤ 1.5 px for every step.
+
+## Measured baseline (14 Nov 2026, `python -m booklet_mpd.gates`, test sets 40271 40350 41488 41605 41620 40348)
+
+Results: `.cache/booklet-mpd/gates/gates-{1-2,4a,3-4b}.json`.
+
+| Gate | Pass mark | Measured | Verdict |
+|---|---|---|---|
+| 1 Parts | ≥ 98% of steps exact | 161/181 = **89%** (40348 98%, 41620 83%) | fail |
+| 2 Steps | 100% | every answer-key step has a picture; sub-build detection is unreliable in lump-mode sets (40348 reports 0) | not measurable yet |
+| 3 Camera (oracle) | p90 ≤ 1.5 px on ≥ 95% | **60%** of 167 steps; median p90 1.48 px; median silhouette IoU 0.96 | fail |
+| 4a Coverage | ≥ 99% per joint type | **584/609 = 95.9%** overall | fail on 4 types |
+| 4b Selection (oracle camera) | ≥ 95% parts exact | **64%** parts (370/578), 56% of steps | fail, largest gap |
+
+Gate 4a by joint type (each part counted under its hardest joint):
+
+| Joint type | Covered |
+|---|---|
+| Stud | 350/350 (100%) |
+| SNOT | 223/223 (100%) |
+| Hinge | 2/2 (100%; both at quarter angles) |
+| Technic | 4/6 |
+| Bar/clip | 4/11 |
+| Off-grid rotation | 1/5 |
+| No joint found (plates laid flush, tied in later) | 0/12 |
+
+Gate 4b split by camera quality:
+
+| Camera | Steps | Parts exact |
+|---|---|---|
+| Good (p90 ≤ 1.5 px) | 101 | 258/359 = **72%** |
+| Bad | 66 | 112/219 = 51% |
+
+What this says:
+- Coverage misses about 4% of parts.
+- With a good camera, the solver still picks the wrong pose for about 28% of parts.
+- So choosing among the candidates (4b) is now the biggest loss, then the camera (3). The joint types are a
+  smaller loss on these sets, though they matter for MOCs like the desk.
+
+## Order of work
+
+1. ~~Measure first~~: done, see the baseline above.
+2. **4a coverage, one joint type at a time,** each with real fixtures from the answer keys:
+   - bar/clip and hinges (tests written: `python/tests/test_booklet_mpd_joints.py`)
+   - SNOT
+   - off-grid rotations
+   - Technic slides
+   - uncatalogued parts
+3. **4b selection** with the true camera.
+4. **Gate 3** on all test sets.
+5. **Gates 1 and 2:** an image parts reader and panel parsing (needed for MOCs like the desk).
+
+Stage 4 is worked on first because it is the bottleneck and can be tested with answer-key inputs while the
+earlier gates are still open. The report after each item always shows the full gate table.
