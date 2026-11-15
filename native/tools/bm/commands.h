@@ -19,6 +19,8 @@ struct Command {
 int cmdLoad(const Args& args);
 int cmdAudit(const Args& args);
 int cmdJoints(const Args& args);
+int cmdOverlaps(const Args& args);
+int cmdShape(const Args& args);
 
 /// The value after `--name`, or `fallback`. Sets `bad` when the flag is last with no value.
 std::string option(const Args& args, std::string_view name, std::string fallback, bool& bad);

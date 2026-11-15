@@ -97,10 +97,12 @@ Pieces in the largest connected group, on models both engines measured:
 
 | Source | Models | Native | Web | Fully joined models, native / web | Groups, native / web |
 |---|---|---|---|---|---|
-| OMR | 914 | 80.3% | 37.3% | 226 / 43 | 10,675 / 169,974 |
-| Reference sets | 6 | 84.4% | 34.5% | 1 / 0 | 97 / 2,428 |
+| OMR | 1,833 | 80.1% | 36.2% | 461 / 55 | 17,721 / 304,623 |
+| Reference sets | 6 | 84.5% | 34.5% | 1 / 0 | 93 / 2,428 |
 | MOC | 12 | 75.3% | 59.8% | 0 / 0 | 419 / 1,541 |
-| BrickNet | 2,000 | 98.0% | 78.6% | 1,780 / 637 | 2,436 / 9,624 |
+| BrickNet | 2,000 | 98.0% | 78.6% | 1,786 / 637 | 2,421 / 9,624 |
+
+(The web baseline finished on 2026-11-16, so this covers every model in the corpus.)
 
 Whole corpus (3,854 models, 872,970 pieces), native:
 
@@ -146,3 +148,80 @@ per file is not the target for every file. `moc/10001-1` is 53 groups because it
 - A shadow file pulled in with `SNAP_INCL` brings its `SNAP_CLEAR` with it (pin `2780` includes `3673`).
 - A part embedded in a model as `<set> - <part>.dat` uses `<part>`'s connector data.
 - A piece whose library description starts with `~`, or that is a primitive, is a segment, not a part.
+
+## The web engine's baseline (finished 2026-11-16)
+
+`native/corpus/baseline.json`, from `scripts/native/baseline-audit.ts`, default planner, 180 s limit per model.
+
+| Source | Models | Planned | Timed out | Plan time, median / 95th pct | Placed pieces joined to nothing |
+|---|---|---|---|---|---|
+| OMR | 1,833 | 1,590 | 178 | 8.5 s / 92.8 s | 23.2% |
+| Reference sets | 6 | 3 | 3 | 97.3 s / 137.6 s | 24.6% |
+| MOC | 12 | 11 | 1 | 74.8 s / 154.6 s | 19.6% |
+| BrickNet | 2,000 | 1,998 | 0 | 0.4 s / 6.4 s | 21.9% |
+
+Across the corpus 3,394 of 3,854 models have at least one floating placement, 692 are fully joined, and
+249 fail to plan (182 time-outs, 67 planning errors).
+
+## Phase 3 results (2026-11-16): collision
+
+```bash
+native/build/tools/bm/bm overlaps <file> [--part <part>] [--triangles]
+native/build/tools/bm/bm shape <part> [--at x y z]
+```
+
+`bm overlaps` lists the pieces of a model that pass through each other, how each pair is joined, and where
+they cross. `bm shape` describes a part's collision shape. `bm audit` adds overlap columns and writes
+`overlap-pairs.json`.
+
+### How it works
+
+- Each part has its **true surface** and an **inner surface**: every face moved inward by the skin (0.5 LDU)
+  along its own normal and trimmed back from each edge by what the turn of the surface there requires
+  (`skin * tan(angle / 2)`). A flat face made of several triangles is trimmed as one face.
+- Two pieces interpenetrate when the inner surface of one crosses the true surface of the other. Pieces that
+  touch, or overlap by less than the skin, do not.
+- Joined pieces may cross inside each mate's **zone** (a stud in its socket, a bar in its clip), and
+  elsewhere need two skins of overlap to count. A mate that holds by stretching (a tyre on a rim) exempts
+  the pair.
+- A model is checked with a sort-and-sweep over piece boxes, then tree against tree. `World::hits` and
+  `World::sweep` answer for one more shape, still or moving (sampled every 0.5 LDU).
+
+### What the corpus shows
+
+| Source | Models | Models with no overlap | Pieces in an overlap |
+|---|---|---|---|
+| BrickNet | 2,000 | 1,953 | 0.27% |
+| OMR | 1,833 | 573 | 4.99% |
+| MOC | 12 | 2 | 7.47% |
+| Reference sets | 6 | 0 | 9.43% |
+
+25,086 overlapping pairs in 872,970 pieces; 402 exact duplicates. 95% of the pairs are between pieces that
+are **not joined**, and the commonest are things the engine does not model yet, not faults in the test:
+
+- **Gears in mesh** (`6589`, `32270`, `32269`, `4143`, `4019`, racks): teeth interleave. Needs gear recognition (phase 4).
+- **Tread links and chains** (`57518` + `57519`/`57520`, `30104k02`): hinged to each other with no connector data.
+- **Ball links** (`6628` + `32293`, tow balls): no ball data for these parts, so they are not joined.
+- **Decoration placed through itself** (`98138`, `6141` round 1x1s): real overlaps in the files.
+- **Window glass in a frame** (`3853` + `3004`/`3005`), minifig accessories over a torso (`3838`).
+
+Reference sets: 5590 has 16 overlapping pairs in 1,258 pieces, 42000 has 32 in 1,377, 8880 has 109 in 1,410,
+nearly all gears, pistons and links.
+
+Whole corpus with loading, joints and collision: 78 s on 10 threads (collision is most of it; median 52 ms
+per model, 95th percentile about 1.5 s).
+
+### What the corpus corrected
+
+- Moving shared corners inward (the first design) tilts a sloped face out through its own edge, which
+  reported a stud resting under a sloped panel as an overlap. The inner surface is now built face by face.
+- Pulling both pieces in equally cannot see two aligned bricks pushed into each other: their faces stay
+  coplanar. One piece's inner surface is tested against the other's true surface.
+- Studio stores a Technic hole as a bare length; a pin's collar needs the 2 LDU countersink at each mouth.
+  This also joined the pins that phase 2 had left loose.
+
+### Not done
+
+- Clearance distance between shapes; a continuous sweep (it is sampled); a piece wholly inside another's solid.
+- Speed: no SIMD, and joined pairs are searched linearly for their zones.
+- The reference sets will not be clean until gear meshes, treads and ball links are joints (phase 4).

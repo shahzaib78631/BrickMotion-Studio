@@ -9,7 +9,7 @@
 
 namespace bm::audit {
 
-Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Library& library, ldraw::PartCache& cache, connect::ConnectorDb* connectors) {
+Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Library& library, ldraw::PartCache& cache, connect::ConnectorDb* connectors, collide::ShapeCache* shapes) {
   Row row;
   row.id = std::move(id);
   const auto started = std::chrono::steady_clock::now();
@@ -47,6 +47,28 @@ Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Libr
         (g.hasConnectors[i] ? row.unmatedParts : row.noConnectorParts)[model.pieces()[i].part]++;
       }
       row.graphMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - graphStart).count();
+      if (shapes) {
+        const auto collideStart = std::chrono::steady_clock::now();
+        const collide::Report report = collide::findOverlaps(model, g, cache, *shapes);
+        row.hasCollision = true;
+        std::unordered_set<uint32_t> involved;
+        for (const collide::Overlap& o : report.overlaps) {
+          if (o.duplicate) {
+            row.duplicates++;
+            continue;
+          }
+          row.overlaps++;
+          const bool joined = std::any_of(g.connections.begin(), g.connections.end(), [&](const connect::Connection& c) { return c.a == o.a && c.b == o.b; });
+          row.overlapsJoined += joined;
+          involved.insert(o.a);
+          involved.insert(o.b);
+          const std::string& pa = model.pieces()[o.a].part;
+          const std::string& pb = model.pieces()[o.b].part;
+          row.overlapPairs[(pa <= pb ? pa + " + " + pb : pb + " + " + pa) + (joined ? "  [joined]" : "")]++;
+        }
+        row.overlapPieces = static_cast<int>(involved.size());
+        row.collisionMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - collideStart).count();
+      }
     }
     row.ok = true;
     return row;
@@ -82,6 +104,13 @@ nlohmann::json toJson(const Row& row) {
     for (int k = 0; k < connect::kJointKinds; k++) j["joints"][connect::name(static_cast<connect::JointKind>(k))] = row.joints[k];
     j["graphMs"] = row.graphMs;
   }
+  if (row.hasCollision) {
+    j["overlaps"] = row.overlaps;
+    j["overlapPieces"] = row.overlapPieces;
+    j["overlapsJoined"] = row.overlapsJoined;
+    j["duplicates"] = row.duplicates;
+    j["collisionMs"] = row.collisionMs;
+  }
   return j;
 }
 
@@ -90,7 +119,8 @@ nlohmann::json summarize(const std::vector<Row>& rows) {
   long joined = 0, attached = 0, groups = 0, bodies = 0, withoutConnectors = 0, fullyJoined = 0, graphed = 0, graphedPieces = 0;
   long joints[connect::kJointKinds] = {};
   long segments = 0, partsAttached = 0, partsJoined = 0;
-  std::vector<double> graphTimes;
+  std::vector<double> graphTimes, collisionTimes;
+  long overlaps = 0, overlapsJoined = 0, overlapPieces = 0, duplicates = 0, cleanModels = 0, collided = 0;
   std::set<std::string> distinct;
   std::vector<double> times;
   for (const Row& r : rows) {
@@ -117,6 +147,14 @@ nlohmann::json summarize(const std::vector<Row>& rows) {
     if (r.pieces > 0 && r.groups == 1) fullyJoined++;
     for (int k = 0; k < connect::kJointKinds; k++) joints[k] += r.joints[k];
     graphTimes.push_back(r.graphMs);
+    if (!r.hasCollision) continue;
+    collided++;
+    overlaps += r.overlaps;
+    overlapsJoined += r.overlapsJoined;
+    overlapPieces += r.overlapPieces;
+    duplicates += r.duplicates;
+    if (r.overlaps == 0) cleanModels++;
+    collisionTimes.push_back(r.collisionMs);
   }
   std::sort(times.begin(), times.end());
   auto quantile = [&](double q) -> nlohmann::json {
@@ -153,6 +191,18 @@ nlohmann::json summarize(const std::vector<Row>& rows) {
     std::sort(graphTimes.begin(), graphTimes.end());
     s["p50"]["graphMs"] = graphTimes[graphTimes.size() / 2];
     s["p95"]["graphMs"] = graphTimes[std::min(graphTimes.size() - 1, static_cast<size_t>(0.95 * static_cast<double>(graphTimes.size())))];
+  }
+  if (collided > 0) {
+    nlohmann::json& t = s["totals"];
+    t["overlaps"] = overlaps;
+    t["overlapsJoined"] = overlapsJoined;
+    t["overlapPieces"] = overlapPieces;
+    t["overlapPiecesPercent"] = 100.0 * static_cast<double>(overlapPieces) / static_cast<double>(std::max(1L, graphedPieces - segments));
+    t["duplicates"] = duplicates;
+    t["modelsWithoutOverlaps"] = cleanModels;
+    std::sort(collisionTimes.begin(), collisionTimes.end());
+    s["p50"]["collisionMs"] = collisionTimes[collisionTimes.size() / 2];
+    s["p95"]["collisionMs"] = collisionTimes[std::min(collisionTimes.size() - 1, static_cast<size_t>(0.95 * static_cast<double>(collisionTimes.size())))];
   }
   return s;
 }

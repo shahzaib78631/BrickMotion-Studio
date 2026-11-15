@@ -180,6 +180,8 @@ Graph buildGraph(const Model& model, ConnectorDb& db) {
   // The volume a mate occupies: along the shorter of the two connectors (the clip, not the
   // whole bar it holds), a little wider than the wider of them.
   auto zoneOf = [](const Connector& x, const Connector& y) {
+    auto elastic = [](const Connector& c) { return (!c.profile.empty() && c.profile[0].shape == 'T') || c.group.rfind("studio-wheel-", 0) == 0; };
+    if (elastic(x) || elastic(y)) return MateZone{x.start, x.start, collide::kElasticZone};
     if (x.kind == SnapKind::Generic || y.kind == SnapKind::Generic) return MateZone{x.start, x.start, std::max({x.radius, y.radius, collide::kGenericZone}) + collide::kZonePad};
     const Connector& s = x.length <= y.length ? x : y;
     return MateZone{s.start, s.start + s.axis * s.length, std::max(x.radius, y.radius) + collide::kZonePad};

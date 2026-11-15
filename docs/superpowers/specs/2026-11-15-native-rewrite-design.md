@@ -64,6 +64,12 @@ connection data, consumed by code that pattern-matches instead of solving.**
 
 Speed figures are targets; phase 0 measures the web app and restates them.
 
+**Measured baseline (2026-11-16, full corpus, default planner, 180 s limit):** on the OMR sets the web
+app plans in a median of 8.5 s and a 95th percentile of 92.8 s, times out on 178 of 1,833 files, and
+places 23.2% of pieces joined to nothing; on the reference sets the median is 97 s and 3 of 6 time out.
+Goal 3 restated against that: a median under 1 s and a 95th percentile under 10 s on the OMR sets, no
+time-outs, and every reference set planned.
+
 ## Non-goals
 
 - Windows, Linux, iPad, web.

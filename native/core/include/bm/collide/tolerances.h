@@ -9,7 +9,7 @@ namespace bm::collide {
 inline constexpr double kSkin = 0.5;
 
 /// Two triangles must cross by more than this to count; below it they are touching.
-inline constexpr double kTouch = 1e-4;
+inline constexpr double kTouch = 0.05;
 
 /// How far a mate's exempt volume reaches beyond the connector's own radius: a clip's jaws,
 /// a tyre's bead and a socket's wall are just outside the connector they hold.
@@ -18,6 +18,10 @@ inline constexpr double kZonePad = 2.0;
 /// The exempt radius for a mate with no size of its own (a hinge or wheel record that is
 /// only a point and an axis).
 inline constexpr double kGenericZone = 10.0;
+
+/// A mate that holds by stretching (a rubber tyre on its rim) lets the two pieces cross
+/// anywhere: its zone is everything.
+inline constexpr double kElasticZone = 1e9;
 
 /// Spacing of the poses checked along a move. Equal to the skin, so nothing thicker than
 /// the skin can be stepped over.

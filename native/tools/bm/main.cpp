@@ -15,6 +15,8 @@ int cmdVersion(const bm::cli::Args&) {
 const bm::cli::Command kCommands[] = {
     {"load", "load a model file and describe it", bm::cli::cmdLoad},
     {"joints", "find every joint in a model; --why <part> explains unjoined pieces", bm::cli::cmdJoints},
+    {"overlaps", "list the pieces of a model that pass through each other", bm::cli::cmdOverlaps},
+    {"shape", "describe a part's collision shape (diagnostic)", bm::cli::cmdShape},
     {"audit", "load every model in a corpus manifest and write the scoreboard", bm::cli::cmdAudit},
     {"version", "print the engine version", cmdVersion},
 };

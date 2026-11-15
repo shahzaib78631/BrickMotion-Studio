@@ -5,6 +5,7 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 #include <map>
+#include "bm/collide/world.h"
 #include "bm/connect/graph.h"
 #include "bm/ldraw/library.h"
 #include "bm/ldraw/part_cache.h"
@@ -32,12 +33,21 @@ struct Row {
   int partsJoined = 0;        ///< the most non-segment pieces in any one group
   int joints[connect::kJointKinds] = {};         ///< connections per connect::JointKind
   double graphMs = 0;
+  // Collision (present when a shape cache was given too).
+  bool hasCollision = false;
+  int overlaps = 0;        ///< piece pairs that interpenetrate (duplicates not included)
+  int overlapsJoined = 0;  ///< of those, pairs that are also joined to each other
+  int overlapPieces = 0;   ///< pieces in at least one such pair
+  int duplicates = 0;      ///< pairs that are the same part at the same pose
+  double collisionMs = 0;
+  std::map<std::string, int> overlapPairs;  ///< "partA + partB" -> overlapping pairs
+
   std::map<std::string, int> noConnectorParts;  ///< part -> pieces, for parts with no connectors
   std::map<std::string, int> unmatedParts;      ///< part -> pieces that have connectors but joined nothing
 };
 
 /// Loads one model and every distinct part it uses. Never throws: a failure is a row.
-Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Library& library, ldraw::PartCache& cache, connect::ConnectorDb* connectors = nullptr);
+Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Library& library, ldraw::PartCache& cache, connect::ConnectorDb* connectors = nullptr, collide::ShapeCache* shapes = nullptr);
 
 nlohmann::json toJson(const Row& row);
 

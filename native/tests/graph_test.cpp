@@ -102,7 +102,11 @@ TEST_CASE("ten thousand bricks build quickly", "[graph][focus]") {
   const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
   REQUIRE(g.connections.size() == 5000);
   REQUIRE((g.groups == 5000 && g.bodies == 5000));
+#ifndef BM_SANITIZED
   REQUIRE(seconds < 2.0);
+#else
+  (void)seconds;
+#endif
 }
 
 TEST_CASE("flexible segments and primitives placed as pieces are marked", "[graph][segments]") {

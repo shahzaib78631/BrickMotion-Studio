@@ -80,11 +80,16 @@ Report findOverlaps(const Model& model, const connect::Graph& graph, ldraw::Part
   }
   std::sort(order.begin(), order.end(), [&](uint32_t a, uint32_t b) { return boxes[a].min.x < boxes[b].min.x; });
 
+  // The pair's mate zones; returns whether the two are joined at all.
   auto zonesFor = [&](uint32_t a, uint32_t b, std::vector<Zone>& out) {
     out.clear();
+    bool joined = false;
     const auto at = std::lower_bound(graph.connections.begin(), graph.connections.end(), std::make_pair(a, b), [](const connect::Connection& c, const std::pair<uint32_t, uint32_t>& key) { return c.a != key.first ? c.a < key.first : c.b < key.second; });
-    for (auto it = at; it != graph.connections.end() && it->a == a && it->b == b; ++it)
+    for (auto it = at; it != graph.connections.end() && it->a == a && it->b == b; ++it) {
+      joined = joined || it->joint.kind != connect::JointKind::Flexible;
       for (uint32_t z = it->firstZone; z < it->firstZone + it->zoneCount; z++) out.push_back({graph.zones[z].a, graph.zones[z].b, graph.zones[z].radius});
+    }
+    return joined;
   };
 
   std::vector<Zone> zones;
@@ -96,12 +101,12 @@ Report findOverlaps(const Model& model, const connect::Graph& graph, ldraw::Part
       const uint32_t lo = std::min(a, b), hi = std::max(a, b);
       report.tested++;
       if (samePose(pieces[lo], pieces[hi])) {
-        report.overlaps.push_back({lo, hi, pieces[lo].world.t, true});
+        report.overlaps.push_back({lo, hi, pieces[lo].world.t, true, {}});
         continue;
       }
-      zonesFor(lo, hi, zones);
+      const bool joined = zonesFor(lo, hi, zones);
       Hit hit;
-      if (overlap(*shapes[lo], pieces[lo].world, *shapes[hi], pieces[hi].world, zones, &hit)) report.overlaps.push_back({lo, hi, hit.point, false});
+      if (overlap(*shapes[lo], pieces[lo].world, *shapes[hi], pieces[hi].world, zones, &hit, joined ? Depth::Joined : Depth::Skin)) report.overlaps.push_back({lo, hi, hit.point, false, hit});
     }
   }
   std::sort(report.overlaps.begin(), report.overlaps.end(), [](const Overlap& x, const Overlap& y) { return x.a != y.a ? x.a < y.a : x.b < y.b; });

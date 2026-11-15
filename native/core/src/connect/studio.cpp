@@ -123,7 +123,16 @@ std::vector<Connector> parseStudioConn(std::string_view b, bool* complete) {
       const double length = read<float>(b, body + 2);
       if (std::isfinite(length) && length > 0 && length < 2000) {
         const Vec3 axis = h.axis();
-        if (type == 0x2) out.push_back(cylinder(Gender::Female, 'R', 6, h.pos, axis, length, true, true, true));
+        if (type == 0x2) {
+          // Studio stores a Technic hole as a bare length. Every such hole is countersunk 2 LDU
+          // at each mouth, where a pin's collar sits; without that a real pin does not fit.
+          Connector hole = cylinder(Gender::Female, 'R', 6, h.pos, axis, length, true, true, true);
+          if (length >= 8) {
+            hole.profile = {{'R', 8, 0, 2}, {'R', 6, 2, length - 4}, {'R', 8, length - 2, 2}};
+            hole.radius = 8;
+          }
+          out.push_back(std::move(hole));
+        }
         else if (type == 0x3) out.push_back(cylinder(Gender::Male, 'R', 6, h.pos + axis * length, axis * -1.0, length, true, false, true));  // stored from the tip
         else if (type == 0x7) out.push_back(cylinder(Gender::Male, 'A', 6, h.pos, axis, length, true, true, true));
         else if (type == 0x6) out.push_back(cylinder(Gender::Female, 'A', 6, h.pos, axis, length, true, true, true));

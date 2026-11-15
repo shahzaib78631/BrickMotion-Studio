@@ -158,3 +158,34 @@ TEST_CASE("the real Studio library agrees with known parts", "[studio][data]") {
   REQUIRE(hinge);
   REQUIRE(lib.find("nosuchpart.dat")->empty());
 }
+
+TEST_CASE("a Studio pin hole takes a real pin with its collar at the mouth", "[studio][review]") {
+  std::string bytes;
+  plain(bytes, 0x20000, {0, 0, 1}, {60, 10, -60}, 20);  // a frame's hole: z from -60 to -40
+  const auto hole = parseStudioConn(bytes);
+  REQUIRE(hole.size() == 1);
+  REQUIRE(hole[0].profile.size() == 3);  // countersunk at both ends, like every Technic hole
+  REQUIRE((hole[0].profile[0].radius == 8 && hole[0].profile[0].length == 2 && hole[0].profile[1].radius == 6 && hole[0].profile[1].length == 16));
+  // A friction pin, 40 long with a collar in the middle, centred on the hole's mouth.
+  Connector pin;
+  pin.kind = SnapKind::Cyl;
+  pin.gender = Gender::Male;
+  pin.start = {60, 10, -80};
+  pin.axis = {0, 0, 1};
+  pin.side = {1, 0, 0};
+  pin.length = 40;
+  pin.radius = 8;
+  pin.profile = {{'L', 6.25, 0, 2}, {'R', 6, 2, 16}, {'R', 8, 18, 4}, {'R', 6, 22, 16}, {'L', 6.25, 38, 2}};
+  pin.openStart = pin.openEnd = true;
+  pin.slide = true;
+  const auto m = mate(pin, hole[0]);
+  REQUIRE(m.has_value());
+  REQUIRE(m->grip >= 16);
+  // A short hole (a thin liftarm, 10 deep) is countersunk too; a very short one is left plain.
+  std::string thin;
+  plain(thin, 0x20000, {0, 0, 1}, {0, 0, 0}, 10);
+  plain(thin, 0x20000, {0, 0, 1}, {0, 0, 0}, 3);
+  const auto t = parseStudioConn(thin);
+  REQUIRE((t[0].profile.size() == 3 && t[0].profile[1].length == 6));
+  REQUIRE(t[1].profile.size() == 1);
+}

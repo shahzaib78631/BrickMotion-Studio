@@ -14,16 +14,16 @@ bool finite(const Xform& x) {
 struct Walk {
   const Shape& a;
   const Shape& b;
-  const std::vector<Vec3f>& surfaceA;
-  const std::vector<Vec3f>& surfaceB;
+  bool innerOfA;     // a's inner surface against b's true one, or the other way round
+  bool innerOfB;
   const Xform& rel;  // b's space -> a's space
   const Xform& xa;   // a's space -> model space
   const std::vector<Zone>& zones;
   Hit* hit;
   float r[9], absR[9], t[3];
 
-  Walk(const Shape& a_, const Shape& b_, const std::vector<Vec3f>& sa, const std::vector<Vec3f>& sb, const Xform& rel_, const Xform& xa_, const std::vector<Zone>& zones_, Hit* hit_)
-      : a(a_), b(b_), surfaceA(sa), surfaceB(sb), rel(rel_), xa(xa_), zones(zones_), hit(hit_) {
+  Walk(const Shape& a_, const Shape& b_, bool innerOfA_, bool innerOfB_, const Xform& rel_, const Xform& xa_, const std::vector<Zone>& zones_, Hit* hit_)
+      : a(a_), b(b_), innerOfA(innerOfA_), innerOfB(innerOfB_), rel(rel_), xa(xa_), zones(zones_), hit(hit_) {
     for (int i = 0; i < 9; i++) {
       r[i] = static_cast<float>(rel.r.m[i]);
       absR[i] = std::abs(r[i]) + 1e-6f;  // a little wider, so rounding never hides a box
@@ -32,6 +32,9 @@ struct Walk {
     t[1] = static_cast<float>(rel.t.y);
     t[2] = static_cast<float>(rel.t.z);
   }
+
+  /// Corner `c` of triangle `tri` of `s`, on its inner or its true surface.
+  static const Vec3f& corner(const Shape& s, uint32_t tri, uint32_t c, bool inner) { return inner ? s.inner[tri * 3 + c] : s.outer[s.triangles[tri * 3 + c]]; }
 
   /// Whether a's node box and b's node box (carried into a's space as a box) overlap.
   bool boxes(const Node& na, const Node& nb) const {
@@ -52,16 +55,21 @@ struct Walk {
 
   bool leaves(const Node& na, const Node& nb) const {
     for (uint32_t i = na.left; i < na.left + na.count; i++) {
-      const Vec3f ta[3] = {surfaceA[a.triangles[i * 3]], surfaceA[a.triangles[i * 3 + 1]], surfaceA[a.triangles[i * 3 + 2]]};
+      const Vec3f ta[3] = {corner(a, i, 0, innerOfA), corner(a, i, 1, innerOfA), corner(a, i, 2, innerOfA)};
       for (uint32_t j = nb.left; j < nb.left + nb.count; j++) {
-        const Vec3f tb[3] = {carry(surfaceB[b.triangles[j * 3]]), carry(surfaceB[b.triangles[j * 3 + 1]]), carry(surfaceB[b.triangles[j * 3 + 2]])};
+        const Vec3f tb[3] = {carry(corner(b, j, 0, innerOfB)), carry(corner(b, j, 1, innerOfB)), carry(corner(b, j, 2, innerOfB))};
         Vec3f where;
         if (!trianglesCross(ta, tb, &where)) continue;
         const Vec3 world = xa.apply({where.x, where.y, where.z});
         bool exempt = false;
         for (const Zone& z : zones) exempt = exempt || inside(z, world);
         if (exempt) continue;
-        if (hit) hit->point = world;
+        if (hit) {
+          hit->point = world;
+          hit->triangleA = i;
+          hit->triangleB = j;
+          hit->innerOfA = innerOfA;
+        }
         return true;
       }
     }
@@ -100,12 +108,13 @@ bool inside(const Zone& zone, Vec3 p) {
   return length(p - (zone.a + ab * u)) <= zone.radius;
 }
 
-bool overlap(const Shape& a, const Xform& xa, const Shape& b, const Xform& xb, const std::vector<Zone>& zones, Hit* hit) {
+bool overlap(const Shape& a, const Xform& xa, const Shape& b, const Xform& xb, const std::vector<Zone>& zones, Hit* hit, Depth depth) {
   if (a.nodes.empty() || b.nodes.empty() || !finite(xa) || !finite(xb)) return false;
   if (std::abs(determinant(xa.r)) < 1e-12 || std::abs(determinant(xb.r)) < 1e-12) return false;
   const Xform rel = xa.inverse() * xb;
   if (!finite(rel)) return false;
-  return Walk(a, b, a.inner, b.outer, rel, xa, zones, hit).run() || Walk(a, b, a.outer, b.inner, rel, xa, zones, hit).run();
+  if (depth == Depth::Joined) return Walk(a, b, true, true, rel, xa, zones, hit).run();
+  return Walk(a, b, true, false, rel, xa, zones, hit).run() || Walk(a, b, false, true, rel, xa, zones, hit).run();
 }
 
 }  // namespace bm::collide

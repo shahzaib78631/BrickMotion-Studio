@@ -14,6 +14,7 @@ struct Overlap {
   uint32_t a = 0, b = 0;   ///< piece indices, a < b
   Vec3 point;              ///< where their surfaces cross, model space
   bool duplicate = false;  ///< the same part at the same pose: one piece placed twice
+  Hit hit;                 ///< the crossing triangles, for diagnosis
 };
 
 struct Report {

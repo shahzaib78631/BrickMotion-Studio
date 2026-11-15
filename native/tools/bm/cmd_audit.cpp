@@ -84,11 +84,12 @@ int cmdAudit(const Args& args) {
     connect::loadBricknetJoints(jointText.str(), connectors);
   }
   if (shadow.size() == 0) std::fprintf(stderr, "bm: no shadow library at %s; no joints will be found (set BM_SHADOW_DIR)\n", shadowDir.c_str());
+  collide::ShapeCache shapes;
   std::vector<audit::Row> rows(entries.size());
   JobPool pool(static_cast<unsigned>(threads));
   size_t printed = 0;
   pool.parallelFor(
-      entries.size(), [&](size_t i) { rows[i] = audit::loadRow(entries[i].file, entries[i].id, library, cache, &connectors); }, nullptr,
+      entries.size(), [&](size_t i) { rows[i] = audit::loadRow(entries[i].file, entries[i].id, library, cache, &connectors, flag(args, "--no-collision") ? nullptr : &shapes); }, nullptr,
       [&](size_t done, size_t total) {
         if (done != printed) {
           printed = done;
@@ -126,6 +127,8 @@ int cmdAudit(const Args& args) {
       for (size_t i = 0; i < list.size() && i < 400; i++) j["top"].push_back({list[i].first, list[i].second});
       return j;
     };
+    nlohmann::json overlapPairs = ranked(&audit::Row::overlapPairs);
+    std::ofstream(fs::path(outDir) / "overlap-pairs.json") << overlapPairs.dump(1) << "\n";
     nlohmann::json unjoined;
     unjoined["noConnectors"] = ranked(&audit::Row::noConnectorParts);
     unjoined["connectorsButNothingMated"] = ranked(&audit::Row::unmatedParts);

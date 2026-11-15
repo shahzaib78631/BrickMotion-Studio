@@ -84,7 +84,11 @@ TEST_CASE("ten thousand bricks are checked quickly", "[collide][world][focus]") 
   const Report rep = findOverlaps(m, g, r.parts, r.shapes);
   const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
   REQUIRE(rep.overlaps.empty());
+#ifndef BM_SANITIZED
   REQUIRE(seconds < 3.0);
+#else
+  (void)seconds;
+#endif
 }
 
 TEST_CASE("the world answers for one more shape, still or moving", "[collide][world][sweep]") {

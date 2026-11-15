@@ -10,15 +10,14 @@ namespace bm::collide {
 namespace {
 
 constexpr uint32_t kLeafSize = 4;
-constexpr double kSameFace = 0.95;    // normals closer than this (cosine) belong to one face
-constexpr size_t kMaxFacesAtVertex = 8;
 
 struct Builder {
   const std::vector<Vec3f>& points;
-  const std::vector<Vec3f>& inner;
-  std::vector<uint32_t>& tris;  // 3 per triangle; reordered in place
+  const std::vector<Vec3f>& inner;  // 3 per triangle, moves with it
+  std::vector<uint32_t>& tris;      // 3 per triangle; reordered in place
   std::vector<Node>& nodes;
-  std::vector<Vec3f> centroids;  // per triangle, moves with it
+  std::vector<Vec3f> centroids;     // per triangle, moves with it
+  std::vector<Vec3f>& innerMutable;
 
   void bounds(uint32_t first, uint32_t count, Node& n) const {
     for (int k = 0; k < 3; k++) {
@@ -27,7 +26,7 @@ struct Builder {
     }
     for (uint32_t t = first; t < first + count; t++)
       for (uint32_t c = 0; c < 3; c++)
-        for (const Vec3f* p : {&points[tris[t * 3 + c]], &inner[tris[t * 3 + c]]}) {
+        for (const Vec3f* p : {&points[tris[t * 3 + c]], &inner[t * 3 + c]}) {
           const float v[3] = {p->x, p->y, p->z};
           for (int k = 0; k < 3; k++) {
             n.min[k] = std::min(n.min[k], v[k]);
@@ -37,7 +36,10 @@ struct Builder {
   }
 
   void swapTriangles(uint32_t i, uint32_t j) {
-    for (uint32_t c = 0; c < 3; c++) std::swap(tris[i * 3 + c], tris[j * 3 + c]);
+    for (uint32_t c = 0; c < 3; c++) {
+      std::swap(tris[i * 3 + c], tris[j * 3 + c]);
+      std::swap(innerMutable[i * 3 + c], innerMutable[j * 3 + c]);
+    }
     std::swap(centroids[i], centroids[j]);
   }
 
@@ -57,10 +59,10 @@ struct Builder {
         axis = k;
       }
     auto key = [&](uint32_t t) { return axis == 0 ? centroids[t].x : axis == 1 ? centroids[t].y : centroids[t].z; };
-    std::vector<uint32_t> order(count);
-    std::iota(order.begin(), order.end(), first);
-    std::nth_element(order.begin(), order.begin() + count / 2, order.end(), [&](uint32_t x, uint32_t y) { return key(x) < key(y); });
-    const float pivot = key(order[count / 2]);
+    std::vector<float> keys(count);
+    for (uint32_t t = 0; t < count; t++) keys[t] = key(first + t);
+    std::nth_element(keys.begin(), keys.begin() + count / 2, keys.end());
+    const float pivot = keys[count / 2];
     // Partition in place: triangles below the pivot first; ties fill up to the middle.
     uint32_t mid = first;
     for (uint32_t t = first; t < first + count; t++)
@@ -78,6 +80,8 @@ struct Builder {
   }
 };
 
+uint64_t edgeKey(uint32_t a, uint32_t b) { return (static_cast<uint64_t>(std::min(a, b)) << 32) | std::max(a, b); }
+
 }  // namespace
 
 Shape buildShape(const ldraw::Mesh& mesh) {
@@ -85,43 +89,117 @@ Shape buildShape(const ldraw::Mesh& mesh) {
   const size_t vertexCount = mesh.positions.size() / 3;
   auto point = [&](uint32_t i) { return Vec3{mesh.positions[i * 3], mesh.positions[i * 3 + 1], mesh.positions[i * 3 + 2]}; };
 
-  // Keep the triangles that have an area, and note each one's normal at its three corners.
-  std::vector<std::vector<Vec3>> faces(vertexCount);  // distinct face normals meeting at each vertex
+  // Keep the triangles that have an area.
+  std::vector<Vec3> normals;
   for (size_t t = 0; t + 2 < mesh.triangles.size(); t += 3) {
     const uint32_t i = mesh.triangles[t], j = mesh.triangles[t + 1], k = mesh.triangles[t + 2];
     if (i >= vertexCount || j >= vertexCount || k >= vertexCount) continue;
     const Vec3 n = cross(point(j) - point(i), point(k) - point(i));
     const double area = length(n);
     if (!(area > 1e-9)) continue;
-    const Vec3 unit = n * (1 / area);
     shape.triangles.insert(shape.triangles.end(), {i, j, k});
-    for (uint32_t v : {i, j, k}) {
-      std::vector<Vec3>& list = faces[v];
-      const bool known = std::any_of(list.begin(), list.end(), [&](const Vec3& f) { return dot(f, unit) > kSameFace; });
-      if (!known && list.size() < kMaxFacesAtVertex) list.push_back(unit);
-    }
+    normals.push_back(n * (1 / area));
   }
   if (shape.triangles.empty()) return shape;
+  const uint32_t count = static_cast<uint32_t>(shape.triangles.size() / 3);
 
-  // Move each vertex against the faces that meet there. For faces at right angles this moves
-  // each of them in by exactly the skin.
   shape.outer.resize(vertexCount);
-  shape.inner.resize(vertexCount);
   for (uint32_t v = 0; v < vertexCount; v++) {
-    Vec3 sum;
-    for (const Vec3& f : faces[v]) sum = sum + f;
-    Vec3 move;
-    if (length(sum) > 0.3) {  // otherwise the faces cancel: two-sided geometry, left where it is
-      move = sum * -kSkin;
-      if (length(move) > 2 * kSkin) move = move * (2 * kSkin / length(move));
-    }
-    const Vec3 p = point(v), q = p + move;
+    const Vec3 p = point(v);
     shape.outer[v] = {static_cast<float>(p.x), static_cast<float>(p.y), static_cast<float>(p.z)};
-    shape.inner[v] = {static_cast<float>(q.x), static_cast<float>(q.y), static_cast<float>(q.z)};
   }
 
-  const uint32_t count = static_cast<uint32_t>(shape.triangles.size() / 3);
-  Builder b{shape.outer, shape.inner, shape.triangles, shape.nodes, {}};
+  // Which triangles share each edge.
+  std::unordered_map<uint64_t, std::vector<uint32_t>> edges;
+  edges.reserve(count * 3);
+  for (uint32_t t = 0; t < count; t++)
+    for (uint32_t e = 0; e < 3; e++) edges[edgeKey(shape.triangles[t * 3 + e], shape.triangles[t * 3 + (e + 1) % 3])].push_back(t);
+
+  // How far each edge of each triangle must be trimmed back. Where the surface turns outward
+  // across an edge by an angle a (between the two normals), a point a skin below this face
+  // is a skin below the neighbouring face too only if it is skin * tan(a / 2) back from the
+  // edge: nothing for a flat or inward-turning edge, one skin for a right angle, more for a
+  // sharper one. An edge where the surface ends is trimmed by one skin.
+  const double kNoInside = 1e6;
+  std::vector<float> trim(static_cast<size_t>(count) * 3, 0);
+  for (uint32_t t = 0; t < count; t++) {
+    const Vec3& n = normals[t];
+    for (uint32_t e = 0; e < 3; e++) {
+      const uint32_t i = shape.triangles[t * 3 + e], j = shape.triangles[t * 3 + (e + 1) % 3];
+      const std::vector<uint32_t>& share = edges[edgeKey(i, j)];
+      double amount = share.size() < 2 ? kSkin : 0;
+      for (uint32_t other : share) {
+        if (other == t) continue;
+        const double c = dot(n, normals[other]);
+        if (c > 0.99999) continue;  // flat
+        // Outward (convex) if the neighbour's far corner lies behind this triangle's plane.
+        Vec3 far = point(i);
+        for (uint32_t k = 0; k < 3; k++) {
+          const uint32_t w = shape.triangles[other * 3 + k];
+          if (w != i && w != j) far = point(w);
+        }
+        if (dot(far - point(i), n) > 1e-6) continue;  // turns inward: the neighbour is no closer
+        // Back to back (a sheet with two sides): no distance is enough, the face has no inside.
+        amount = std::max(amount, c <= -0.9999 ? kNoInside : kSkin * std::sqrt((1 - c) / (1 + c)));
+      }
+      trim[t * 3 + e] = static_cast<float>(amount);
+    }
+  }
+
+  // The triangles around each vertex.
+  std::vector<std::vector<uint32_t>> around(vertexCount);
+  for (uint32_t t = 0; t < count; t++)
+    for (uint32_t c = 0; c < 3; c++) around[shape.triangles[t * 3 + c]].push_back(t);
+
+  // The inner surface. A flat face is usually several triangles; it is trimmed as one face:
+  // each corner moves, within the face, until it is far enough from every trimmed edge of the
+  // face that meets at that corner. Triangles of one face therefore stay joined.
+  shape.inner.resize(static_cast<size_t>(count) * 3);
+  struct Limit {
+    Vec3 dir;       // into the face, across a trimmed edge
+    double amount;  // how far the corner must be from that edge
+  };
+  std::vector<Limit> limits;  // for one corner
+  for (uint32_t t = 0; t < count; t++) {
+    const Vec3& n = normals[t];
+    Vec3 corner[3];
+    bool ok = true;
+    for (uint32_t c = 0; c < 3 && ok; c++) {
+      const uint32_t v = shape.triangles[t * 3 + c];
+      limits.clear();
+      for (uint32_t o : around[v]) {
+        if (dot(normals[o], n) < 0.9995) continue;  // not part of this flat face
+        for (uint32_t e = 0; e < 3; e++) {
+          if (trim[o * 3 + e] <= 0) continue;
+          const uint32_t i = shape.triangles[o * 3 + e], j = shape.triangles[o * 3 + (e + 1) % 3];
+          if (i != v && j != v) continue;
+          const Vec3 dir = normalized(cross(n, point(j) - point(i)));
+          if (length(dir) > 0.5 && limits.size() < 8) limits.push_back({dir, trim[o * 3 + e]});
+        }
+      }
+      // The smallest move that satisfies every limit (cyclic projection).
+      Vec3 move;
+      for (int pass = 0; pass < 64; pass++)
+        for (const Limit& l : limits) {
+          const double lack = l.amount - dot(move, l.dir);
+          if (lack > 0) move = move + l.dir * lack;
+        }
+      for (const Limit& l : limits) ok = ok && dot(move, l.dir) >= l.amount - 1e-3;  // no such move: the face is too thin here
+      ok = ok && length(move) < kNoInside / 2;
+      corner[c] = point(v) + move - n * kSkin;
+    }
+    // Trimming must leave a triangle the same way round; otherwise it was too small to keep.
+    if (ok) {
+      const Vec3 m = cross(corner[1] - corner[0], corner[2] - corner[0]);
+      ok = dot(m, n) > 1e-6 && std::isfinite(m.x) && std::isfinite(m.y) && std::isfinite(m.z);
+    }
+    for (uint32_t c = 0; c < 3; c++) {
+      const Vec3 p = ok ? corner[c] : point(shape.triangles[t * 3]) - n * kSkin;  // three equal points: no area, never crosses anything
+      shape.inner[t * 3 + c] = {static_cast<float>(p.x), static_cast<float>(p.y), static_cast<float>(p.z)};
+    }
+  }
+
+  Builder b{shape.outer, shape.inner, shape.triangles, shape.nodes, {}, shape.inner};
   b.centroids.resize(count);
   for (uint32_t t = 0; t < count; t++) {
     const Vec3f& p = shape.outer[shape.triangles[t * 3]];

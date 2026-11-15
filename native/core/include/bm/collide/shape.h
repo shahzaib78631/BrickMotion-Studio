@@ -28,8 +28,11 @@ struct Node {
 
 struct Shape {
   std::vector<Vec3f> outer;         ///< the mesh's vertices: the part's true surface
-  std::vector<Vec3f> inner;         ///< the same vertices moved inward by kSkin
-  std::vector<uint32_t> triangles;  ///< 3 indices per triangle, in tree order
+  std::vector<uint32_t> triangles;  ///< 3 indices into `outer` per triangle, in tree order
+  /// The inner surface: 3 points per triangle, in the same order as `triangles`. Each
+  /// triangle is moved inward by kSkin along its own normal and trimmed back from the edges
+  /// where the surface turns outward. A triangle too small to survive that has three equal points.
+  std::vector<Vec3f> inner;
   std::vector<Node> nodes;          ///< nodes[0] is the root; boxes hold both surfaces; empty if no triangles
   Box bounds;                       ///< of the outer surface; empty if there are no triangles
 };
@@ -39,8 +42,12 @@ struct Shape {
 /// do not count. (Pulling both in by the same amount would not work: two aligned bricks
 /// pushed into each other would only ever have coplanar, touching faces.)
 ///
-/// A vertex moves against the normals of the faces that meet at it, so each of those faces
-/// moves in by kSkin; a vertex of two-sided geometry (whose normals cancel) stays put.
+/// The inner surface is built face by face, not by moving shared corners: a corner shared by
+/// a sloped face and the faces around it has no single inward direction, and moving it tilts
+/// the sloped face out through its own edge. Each face keeps its plane's direction and is
+/// trimmed back from each edge by as much as the turn of the surface there requires: one
+/// skin at a brick's rim, a tenth of that between the facets of a cylinder, so round parts
+/// keep their inner surface.
 /// Triangles with no area or with bad indices are dropped.
 Shape buildShape(const ldraw::Mesh& mesh);
 
