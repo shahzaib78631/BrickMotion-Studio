@@ -47,3 +47,29 @@ def test_many_models_are_ordered_quickly():
     t = time.time()
     assert segment_blocks(looks, switch=0.2) == list(range(n - 1, -1, -1))
     assert time.time() - t < 5
+
+
+def _cand(name, booklet, omr, look, own_order, ok=True):
+    return {"name": name, "ok": ok, "booklet_coverage": booklet, "omr_coverage": omr, "look": look, "own_order": own_order}
+
+
+def test_a_reordering_that_only_covers_more_of_the_file_loses():
+    # 40353: the booklet builds some of the file's models; moving runs pairs more file steps, wrongly
+    cands = [_cand("file", 1.0, 0.448, 0.683, True), _cand("moved", 1.0, 0.581, 0.522, False),
+             _cand("moved2", 0.977, 0.429, 0.684, False)]
+    from booklet_mpd.audit import pick_candidate
+    assert pick_candidate(cands)["name"] == "file"
+
+
+def test_a_reordering_the_pictures_clearly_prefer_wins():
+    # 42076: the truck first
+    cands = [_cand("file", 0.954, 0.974, 0.468, True), _cand("truck first", 0.964, 0.957, 0.537, False),
+             _cand("subs first", 0.977, 0.983, 0.488, False)]
+    from booklet_mpd.audit import pick_candidate
+    assert pick_candidate(cands)["name"] == "truck first"
+
+
+def test_a_candidate_that_explains_far_fewer_booklet_steps_loses():
+    cands = [_cand("file", 0.98, 0.9, 0.5, True), _cand("few", 0.6, 0.3, 0.9, False)]
+    from booklet_mpd.audit import pick_candidate
+    assert pick_candidate(cands)["name"] == "file"

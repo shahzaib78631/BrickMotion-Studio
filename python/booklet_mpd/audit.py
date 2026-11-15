@@ -98,6 +98,23 @@ def part_look(lib, folder: Path, steps: list, omr_steps: list):
 SWITCH = 0.2  # the cost of starting another model when fitting the booklet as one stretch per model
 
 
+BOOKLET_SLACK = 0.05   # candidates explaining this much less of the booklet than the best one are dropped
+OWN_ORDER_EDGE = 0.02  # a reordering must look this much better than the file's own order to be chosen
+
+
+def pick_candidate(cands: list[dict]):
+    """The pairing to keep. Every booklet step should be explained, so candidates well below the best booklet
+    coverage are out; then the callout pictures decide (`look`). File coverage does not: a booklet may build
+    only some of the file (40353), and reordering the file pairs more of its steps by chance. The file's own
+    step order is kept unless a reordering looks clearly better (42076: truck first). Without pictures (look 0)
+    the counts decide: one-to-one pairs, then count similarity."""
+    pool = [c for c in cands if c["ok"]] or cands
+    top = max(c["booklet_coverage"] for c in pool)
+    pool = [c for c in pool if c["booklet_coverage"] >= top - BOOKLET_SLACK]
+    return max(pool, key=lambda c: (c["look"] + (OWN_ORDER_EDGE if c["own_order"] and c["look"] > 0 else 0.0),
+                                    round(c["booklet_coverage"], 2), c.get("one_to_one", 0), c.get("similarity", 0.0)))
+
+
 def group_look(look, groups) -> float:
     """Mean picture agreement (part_look) over an alignment's groups; 0 without pictures."""
     values = [v for v in (look(b, o) for b, o in groups) if v is not None] if look is not None else []
@@ -264,7 +281,7 @@ def audit_pair(pair: Pair, work_dir: Path, lib=None) -> dict:
     result["booklet_steps"] = len(steps)
     result["steps_with_picture"] = sum(1 for s in steps if s.get("picture"))
     totals = [sum(c["count"] for c in s["callout"]) for s in steps]
-    best, errors = None, []
+    cands, errors = [], []
     for omr, mode, loader in ((omr, mode, loader) for omr in model_files(pair.omr) for mode, loader in TRUTH_LOADERS.items()):
         try:
             found: list[str] = []
@@ -291,19 +308,18 @@ def audit_pair(pair: Pair, work_dir: Path, lib=None) -> dict:
             ordered = [omr_steps[i] for i in order]
             look = part_look(lib, Path(work_dir) / f"{pair.set_number}-{pair.booklet}", steps, ordered) if lib is not None else None
             alignment = align_groups(totals, [len(s) for s in ordered], part_sim=look)
-            one_to_one = sum(1 for b, o in alignment.groups if len(b) == 1 and len(o) == 1)
-            covered = min(alignment.booklet_coverage, alignment.omr_coverage)
-            # counts let many orders cover nearly everything (a booklet step can merge with its neighbours); among
-            # those, the one whose callout pictures look most like the paired parts is the booklet's (42076)
-            key = (alignment.ok, round(covered, 1), group_look(look, alignment.groups), round(covered, 2), one_to_one,
-                   alignment.mean_similarity)
-            if best is None or key > best[0]:
-                best = (key, mode, [len(s) for s in omr_steps], alignment, found, omr, order)
+            cands.append({"ok": alignment.ok, "booklet_coverage": alignment.booklet_coverage,
+                          "omr_coverage": alignment.omr_coverage, "look": group_look(look, alignment.groups),
+                          "own_order": order == sorted(order),
+                          "one_to_one": sum(1 for b, o in alignment.groups if len(b) == 1 and len(o) == 1),
+                          "similarity": alignment.mean_similarity,
+                          "best": (mode, [len(s) for s in omr_steps], alignment, found, omr, order)})
+    best = pick_candidate(cands)["best"] if cands else None
     if best is None:
         result["extraction_error"] = "; ".join(errors)
         result["alignment_reason"] = "OMR unreadable"
         return result
-    _key, mode, sizes, alignment, warnings, omr, order = best
+    mode, sizes, alignment, warnings, omr, order = best
     blocks = omr_blocks(alignment.groups)               # contiguous in the order the booklet builds
     alignment.groups = [(b, [order[o] for o in os]) for b, os in alignment.groups]
     result.update(omr_file=str(omr), omr_steps=len(sizes), truth_mode=mode, alignment_ok=alignment.ok, alignment_reason=alignment.reason,
