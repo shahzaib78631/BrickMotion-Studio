@@ -21,6 +21,10 @@ struct Graph {
   std::vector<uint32_t> group;  ///< per piece: id of the connected group it is in (any joint)
   std::vector<uint32_t> body;   ///< per piece: id of its rigid body (fixed joints only)
   std::vector<uint8_t> hasConnectors;  ///< per piece: its part has at least one connector
+  /// Per piece: it is a stretch of a flexible element (hose, cable, string) or a bare
+  /// primitive placed in the model, not a part that connects by itself.
+  std::vector<uint8_t> isSegment;
+  uint32_t segments = 0;
   uint32_t groups = 0, bodies = 0;
   uint32_t largestGroup = 0;       ///< pieces in the largest group
   uint32_t attached = 0;           ///< pieces with at least one connection

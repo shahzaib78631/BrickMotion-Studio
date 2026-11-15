@@ -146,3 +146,42 @@ TEST_CASE("real parts", "[connectors][data]") {
   const auto technic = db.get("3700.dat");
   REQUIRE(std::any_of(technic->begin(), technic->end(), [](const Connector& x) { return x.gender == Gender::Female && x.openStart && x.openEnd && x.length >= 20; }));
 }
+
+TEST_CASE("an included shadow file brings its SNAP_CLEAR with it", "[connectors][review]") {
+  Fixture f;
+  REQUIRE(f.db.get("pinbase.dat")->size() == 1);
+  const auto variant = f.db.get("pinvar.dat");  // includes pinbase; must not also inherit the stud
+  REQUIRE(variant->size() == 1);
+  REQUIRE_THAT(variant->at(0).length, WithinAbs(40, 1e-9));
+}
+
+TEST_CASE("hinge fingers are centred on their position unless told otherwise", "[connectors][review]") {
+  const ShadowInfo s = parseShadow("0 !LDCAD SNAP_FGR [genderOfs=M] [seq=6 4 6] [radius=4]\n0 !LDCAD SNAP_FGR [genderOfs=M] [seq=4] [radius=4] [center=false]\n");
+  REQUIRE(s.snaps.at(0).center);
+  REQUIRE_FALSE(s.snaps.at(1).center);
+}
+
+TEST_CASE("a part embedded in a model as '<set> - <part>.dat' uses that part's connector data", "[connectors][embedded]") {
+  Fixture f;
+  const ldraw::Library model = f.lib.withInline(ldraw::parseMpd(
+      "0 FILE 42131 - c1x1.dat\n0 c1x1\n1 16 0 0 0 10 0 0 0 24 0 0 0 10 box.dat\n1 16 0 0 0 1 0 0 0 1 0 0 0 1 stud.dat\n", "m.mpd"));
+  const auto c = f.db.get("42131 - c1x1.dat", &model);
+  REQUIRE(c->size() == 2);  // the inherited stud and the socket from c1x1's shadow file
+  REQUIRE(count(*c, Gender::Female) == 1);
+}
+
+TEST_CASE("extra connectors can be registered for a part", "[connectors][seats]") {
+  Fixture f;
+  REQUIRE(loadWheelSeats(R"({"seats":[{"part":"tyre","role":"tyre","axis":[0,0,1],"radius":13.85,"width":16},
+                                      {"part":"rim","role":"rim","axis":[0,0,1],"radius":12.5,"width":20},
+                                      {"part":"bad","role":"??","axis":[0,0,0],"radius":-1,"width":2}, 7]})", f.db) == 2);
+  const auto tyre = f.db.get("tyre.dat");
+  REQUIRE(tyre->size() == 1);
+  REQUIRE(tyre->at(0).gender == Gender::Female);
+  REQUIRE(tyre->at(0).source == Source::Geometry);
+  REQUIRE(near(tyre->at(0).axis, {0, 0, 1}));
+  REQUIRE(near(tyre->at(0).start, {0, 0, -8}));  // centred on the part's origin
+  REQUIRE(tyre->at(0).profile.at(0).shape == 'T');
+  REQUIRE(f.db.get("rim.dat")->at(0).gender == Gender::Male);
+  REQUIRE(loadWheelSeats("not json", f.db) == 0);
+}

@@ -147,12 +147,15 @@ TEST_CASE("many threads asking for the same parts flatten each once", "[ldraw][c
   PartCache cache(lib, box.cache);
   const std::vector<std::string> names = {"3001.dat", "3005.dat", "mirror.dat", "inv.dat", "colors.dat", "cw.dat"};
   std::vector<std::thread> threads;
+  std::atomic<int> missing{0};  // the test framework's checks are not safe to call from threads
   for (int t = 0; t < 8; t++)
     threads.emplace_back([&] {
       for (int round = 0; round < 20; round++)
-        for (const auto& n : names) REQUIRE(cache.get(n) != nullptr);
+        for (const auto& n : names)
+          if (cache.get(n) == nullptr) missing++;
     });
   for (auto& th : threads) th.join();
+  REQUIRE(missing.load() == 0);
   const auto s = cache.stats();
   REQUIRE(s.flattened == names.size());
   REQUIRE(s.flattened + s.memoryHits == 8 * 20 * names.size());

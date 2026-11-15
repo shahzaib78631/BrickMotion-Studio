@@ -69,28 +69,57 @@ Sagrada 21065 is not in `samples/`, so its cold/warm load target (< 5 s / < 1 s)
   are within noise of a whole number.
 - A reference to a model file under the library's `models/` folder is expanded as a submodel.
 
-## Phase 2 results so far (2026-11-15): joints from the LDCad shadow library
+## Phase 2 results (2026-11-15): joints
 
-`bm joints <file> [--why <part>]` lists a model's joints and explains unjoined pieces. `bm audit` now adds joint
-columns and writes `unjoined-parts.json`. The shadow library is read from `BM_SHADOW_DIR` (default
-`vendor/LDCadShadowLibrary`, CC BY-SA 4.0).
+`bm joints <file> [--why <part>]` lists a model's joints and, for pieces that joined nothing, the nearest
+connectors and why each was rejected. `bm audit` adds joint columns and writes `unjoined-parts.json`.
+
+Connector data: the LDCad shadow library (`BM_SHADOW_DIR`, default `vendor/LDCadShadowLibrary`, CC BY-SA 4.0)
+and measured tyre bores and rim seats (`native/data/wheel-seats.json`, exported from
+`src/data/wheelSeats.generated.ts`).
 
 Pieces in the largest connected group, on models both engines measured:
 
-| Source | Native | Web |
-|---|---|---|
-| OMR (99 models) | 75.4% | 57.1% |
-| Reference sets (6) | 76.8% | 34.5% |
-| MOC (12) | 68.0% | 59.8% |
-| BrickNet (2,000) | 95.0% (1,504 fully joined) | 78.6% (637 fully joined) |
+| Source | Models | Native | Web | Fully joined models, native / web |
+|---|---|---|---|---|
+| OMR | 768 | 65.9% | 37.4% | 116 / 39 |
+| Reference sets | 6 | 77.6% | 34.5% | 0 / 0 |
+| MOC | 12 | 69.2% | 59.8% | 0 / 0 |
+| BrickNet | 2,000 | 96.6% | 78.6% | 1,620 / 637 |
 
-Whole corpus, native: 81.1% of pieces have at least one joint; graph time median 1.2 ms, 95th percentile 22 ms per model.
+Whole corpus (3,854 models, 872,970 pieces), native:
 
-Still unjoined, and what the next connector source must cover:
+- 154,064 pieces are stretches of hoses, cables and strings, or bare primitives, placed as pieces. They are
+  marked as segments and are not expected to connect one by one.
+- Of the remaining pieces, **97.8% have at least one joint**.
+- 1,905 models are a single connected group.
+- The joint graph takes a median of 2.9 ms per model (95th percentile 54 ms, measured while the baseline job
+  was also running).
 
-- 142,288 pieces (16%) use parts with no connector data. Most are flexible-element segments placed as pieces
-  (`4-4cyli`, `166`/`71533k03` pneumatic tube, `u9218` and `932` cable, `756`/`754` hose, LSynth `ls60` parts):
-  these need to be grouped into one flexible part with connectors at its ends. Tyres (`6015`, `50951`) need wheel seats.
-- 22,838 pieces have connectors but mated nothing: `77` hose segments (10,700), then `2780` pins, `4593`, `6141`,
-  `98138`, `3641` tyres, `3820` hands. Use `bm joints <file> --why <part>` to see the rejected near-misses.
-- Not yet read: BrickLink Studio connectivity, BrickNet joint labels, Kinebrick, mesh detection.
+A model file often holds several separate things (minifigures, spare builds), so 100% in one group is not
+the target for every file; "pieces with at least one joint" is the cleaner measure.
+
+### What is still unjoined
+
+About 16,000 non-segment pieces, from `unjoined-parts.json`:
+
+- **Has connectors, mated nothing (10,933):** Technic pins `2780` (756) sitting in holes of parts with no hole
+  data; tyres `6015`, `3641`, `30028`, `3139`, `87697` whose wheels have no seat data; round 1x1 parts `98138`,
+  `6141`, `3062b` (hollow-stud primitives `stud4`/`stud4a` carry no connector); hinge parts `43722`/`43723`,
+  `4593`. Some are genuinely built at angles no connection allows (`6141` at 15 degrees in 10037).
+- **No connector data at all (5,231):** chain links `30104k02`, window glass `4862`/`60602`, parts embedded
+  under names the data does not know, a few custom parts.
+
+Not read yet, and what each should add: BrickLink Studio connectivity (studs and anti-studs for about 9,200
+parts, installed at `/Applications/Studio 2.0/ldraw/connectivity`), BrickNet joint labels (hinges and balls
+for 1,524 parts), Kinebrick connections, and detection on the part mesh for parts no source covers.
+Flexible segments still need grouping into one part with connectors at its two ends.
+
+### Rules the corpus corrected
+
+- Axes within 3.5 degrees count as parallel (was 2): minifig hands and arms are stored with rounded angles.
+- Hinge fingers mate when one half's fingers sit in the other half's gaps. `genderOfs` says what the
+  sequence starts with, not which half it is, and fingers are centred on their position.
+- A shadow file pulled in with `SNAP_INCL` brings its `SNAP_CLEAR` with it (pin `2780` includes `3673`).
+- A part embedded in a model as `<set> - <part>.dat` uses `<part>`'s connector data.
+- A piece whose library description starts with `~`, or that is a primitive, is a segment, not a part.

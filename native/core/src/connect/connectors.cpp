@@ -6,6 +6,7 @@
 #include <shared_mutex>
 #include <sstream>
 #include <unordered_map>
+#include <nlohmann/json.hpp>
 
 namespace bm::connect {
 namespace {
@@ -113,6 +114,7 @@ struct ConnectorDb::State {
   const ShadowLibrary& shadow;
   std::shared_mutex mutex;
   std::unordered_map<std::string, std::shared_ptr<const std::vector<Connector>>> memo;
+  std::unordered_map<std::string, std::vector<Connector>> extras;  // from sources other than the shadow library
 
   /// The snaps a shadow file defines itself, with its includes expanded.
   void own(const std::string& file, const Xform& xf, std::vector<std::string>& includeStack, std::vector<Connector>& out) const {
@@ -132,15 +134,35 @@ struct ConnectorDb::State {
     includeStack.pop_back();
   }
 
+  /// Model files embed parts that were not in the library yet as "<set> - <part>.dat". The
+  /// connector data is filed under the part's own name.
+  static std::string embeddedName(const std::string& name) {
+    const size_t at = name.rfind(" - ");
+    return at == std::string::npos ? name : name.substr(at + 3);
+  }
+
+  void clears(const std::string& file, size_t depth, bool& all, std::vector<std::string>& ids) const {
+    const ShadowInfo* info = shadow.find(file);
+    if (!info || depth > kMaxIncludeDepth) return;
+    all = all || info->clearAll;
+    ids.insert(ids.end(), info->clearIds.begin(), info->clearIds.end());
+    for (const Include& inc : info->includes) clears(inc.ref, depth + 1, all, ids);
+  }
+
   /// `cut` is set when a reference loop was skipped: such a result depends on where the walk
   /// started, so it is not kept for other parts to reuse.
   std::shared_ptr<const std::vector<Connector>> compute(const std::string& name, const ldraw::Library& lib, std::vector<std::string>& stack, bool& cut) {
     auto out = std::make_shared<std::vector<Connector>>();
     std::vector<std::string> includeStack;
-    own(name, Xform::identity(), includeStack, *out);
+    const std::string dataName = lib.isInline(name) ? embeddedName(name) : name;
+    own(dataName, Xform::identity(), includeStack, *out);
+    if (const auto it = extras.find(dataName); it != extras.end()) out->insert(out->end(), it->second.begin(), it->second.end());
     const ldraw::File* file = lib.find(name);
-    const ShadowInfo* info = shadow.find(name);
-    if (!file || (info && info->clearAll)) return out;
+    // What this file's shadow, and the shadow files it includes, say to drop from its subfiles.
+    bool clearAll = false;
+    std::vector<std::string> clearIds;
+    clears(dataName, 0, clearAll, clearIds);
+    if (!file || clearAll) return out;
     if (stack.size() >= kMaxDepth) {
       cut = true;
       return out;
@@ -154,7 +176,7 @@ struct ConnectorDb::State {
       }
       const auto child = resolve(c.file, lib, stack, cut);
       for (const Connector& inherited : *child) {
-        if (info && !inherited.id.empty() && std::find(info->clearIds.begin(), info->clearIds.end(), inherited.id) != info->clearIds.end()) continue;
+        if (!inherited.id.empty() && std::find(clearIds.begin(), clearIds.end(), inherited.id) != clearIds.end()) continue;
         if (out->size() >= kMaxConnectorsPerPart) break;
         out->push_back(transformed(inherited, c.xf));
       }
@@ -181,7 +203,7 @@ struct ConnectorDb::State {
   }
 };
 
-ConnectorDb::ConnectorDb(const ldraw::Library& library, const ShadowLibrary& shadow) : state_(new State{library, shadow, {}, {}}) {}
+ConnectorDb::ConnectorDb(const ldraw::Library& library, const ShadowLibrary& shadow) : state_(new State{library, shadow, {}, {}, {}}) {}
 ConnectorDb::~ConnectorDb() = default;
 
 std::shared_ptr<const std::vector<Connector>> ConnectorDb::get(std::string_view partName, const ldraw::Library* modelLibrary) {
@@ -190,6 +212,46 @@ std::shared_ptr<const std::vector<Connector>> ConnectorDb::get(std::string_view 
   std::vector<std::string> stack;
   bool cut = false;
   return state_->resolve(name, modelLibrary ? *modelLibrary : state_->library, stack, cut);
+}
+
+void ConnectorDb::add(std::string_view partName, std::vector<Connector> connectors) {
+  std::string name = ldraw::normalizeName(partName);
+  if (name.find('.') == std::string::npos) name += ".dat";
+  std::unique_lock lock(state_->mutex);
+  auto& list = state_->extras[name];
+  list.insert(list.end(), std::make_move_iterator(connectors.begin()), std::make_move_iterator(connectors.end()));
+  state_->memo.clear();
+}
+
+size_t loadWheelSeats(std::string_view json, ConnectorDb& db) {
+  const nlohmann::json doc = nlohmann::json::parse(json.begin(), json.end(), nullptr, false);
+  if (!doc.is_object() || !doc.contains("seats") || !doc["seats"].is_array()) return 0;
+  size_t added = 0;
+  for (const nlohmann::json& s : doc["seats"]) {
+    if (!s.is_object() || !s.contains("part") || !s["part"].is_string() || !s.contains("role") || !s["role"].is_string()) continue;
+    const std::string role = s["role"].get<std::string>();
+    if (role != "tyre" && role != "rim") continue;
+    if (!s.contains("axis") || !s["axis"].is_array() || s["axis"].size() != 3 || !s["axis"][0].is_number() || !s["axis"][1].is_number() || !s["axis"][2].is_number()) continue;
+    if (!s.contains("radius") || !s["radius"].is_number() || !s.contains("width") || !s["width"].is_number()) continue;
+    const Vec3 axis{s["axis"][0].get<double>(), s["axis"][1].get<double>(), s["axis"][2].get<double>()};
+    const double radius = s["radius"].get<double>(), width = s["width"].get<double>();
+    if (length(axis) < 1e-9 || radius <= 0 || width <= 0) continue;
+    Connector c;
+    c.kind = SnapKind::Cyl;
+    c.gender = role == "tyre" ? Gender::Female : Gender::Male;
+    c.source = Source::Geometry;
+    c.axis = normalized(axis);
+    c.side = perpendicular(c.axis, {1, 0, 0});
+    c.length = width;
+    c.radius = radius;
+    c.start = c.axis * (-width / 2);
+    c.profile = {{'T', radius, 0, width}};
+    c.openStart = c.openEnd = true;
+    c.id = "wheelseat";
+    db.add(s["part"].get<std::string>(), {std::move(c)});
+    added++;
+  }
+  return added;
 }
 
 }  // namespace bm::connect

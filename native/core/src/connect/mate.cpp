@@ -35,6 +35,12 @@ enum class Fit { Grips, Loose, Clashes };
 
 /// How a male section sits in a female one it overlaps.
 Fit fit(const ProfileSection& m, const ProfileSection& f, bool& keyed) {
+  if (m.shape == 'T' || f.shape == 'T') {
+    // A tyre bore takes a rim seat and nothing else, and holds it without turning.
+    if (m.shape != f.shape || std::abs(m.radius - f.radius) > kTyreSlack) return Fit::Loose;
+    keyed = true;
+    return Fit::Grips;
+  }
   if (m.shape == 'L') return std::abs(m.radius - f.radius) <= kRadiusSlack ? Fit::Grips : Fit::Loose;  // a lip gives way
   if (f.shape == 'L') return Fit::Loose;
   if (f.shape == 'A' && m.shape != 'A') {
@@ -120,17 +126,48 @@ std::optional<Mate> barInClip(const Connector& bar, const Connector& clip) {
   return out;
 }
 
+/// The solid (finger) and empty (gap) stretches of a finger connector along its own axis.
+void fingerSpans(const Connector& c, std::vector<std::pair<double, double>>& solids, std::vector<std::pair<double, double>>& gaps) {
+  double at = 0;
+  bool solid = c.gender == Gender::Male;
+  for (double w : c.seq) {
+    (solid ? solids : gaps).emplace_back(at, at + w);
+    at += w;
+    solid = !solid;
+  }
+}
+
+/// Two hinge halves mesh when they share an axis and the fingers of one sit in the gaps of
+/// the other without the fingers colliding.
 std::optional<Mate> fingers(const Connector& a, const Connector& b) {
-  if (a.gender == b.gender) return std::nullopt;
   if (a.group != b.group) return std::nullopt;
   if (std::abs(a.radius - b.radius) > kRadiusSlack) return std::nullopt;
   if (!parallel(a.axis, b.axis) || offLine(b.start, a.start, a.axis) > kAxisOffset) return std::nullopt;
   const double sign = dot(a.axis, b.axis) > 0 ? 1 : -1;
   const double t0 = dot(b.start - a.start, a.axis);
-  const double ov = overlap(std::min(t0, t0 + sign * b.length), std::max(t0, t0 + sign * b.length), 0, a.length);
-  if (ov < 0.5 * std::min(a.length, b.length) || ov < kMinGrip) return std::nullopt;
+  std::vector<std::pair<double, double>> solidA, gapA, solidB, gapB;
+  fingerSpans(a, solidA, gapA);
+  fingerSpans(b, solidB, gapB);
+  auto onA = [&](std::vector<std::pair<double, double>>& spans) {  // b's spans on a's axis
+    for (auto& [lo, hi] : spans) {
+      const double p = t0 + sign * lo, q = t0 + sign * hi;
+      lo = std::min(p, q);
+      hi = std::max(p, q);
+    }
+  };
+  onA(solidB);
+  onA(gapB);
+  auto shared = [](const std::vector<std::pair<double, double>>& x, const std::vector<std::pair<double, double>>& y) {
+    double total = 0;
+    for (const auto& [a0, a1] : x)
+      for (const auto& [b0, b1] : y) total += std::max(0.0, overlap(a0, a1, b0, b1));
+    return total;
+  };
+  if (shared(solidA, solidB) > kMinInterference) return std::nullopt;
+  const double meshed = shared(solidA, gapB) + shared(solidB, gapA);
+  if (meshed < kMinGrip) return std::nullopt;
   Mate out;
-  out.grip = ov;
+  out.grip = meshed;
   out.freedom = {true, false, false, a.start + a.axis * (a.length / 2), a.axis};
   return out;
 }

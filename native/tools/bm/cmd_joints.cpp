@@ -2,6 +2,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <map>
 #include "bm/connect/graph.h"
 #include "bm/io.h"
@@ -28,6 +30,12 @@ int cmdJoints(const Args& args) {
     const ldraw::Library library(ldraw);
     const connect::ShadowLibrary shadow(shadowDir);
     connect::ConnectorDb db(library, shadow);
+    {
+      std::ifstream seats(fs::path(ldraw).parent_path().parent_path() / "native" / "data" / "wheel-seats.json");
+      std::stringstream text;
+      text << seats.rdbuf();
+      connect::loadWheelSeats(text.str(), db);
+    }
     ldraw::PartCache cache(library, ldraw::PartCache::defaultDirectory());
     const Model model = io::load(fs::path(std::string(args[0])), library, &cache);
     const connect::Graph g = connect::buildGraph(model, db);

@@ -3,9 +3,10 @@
 
 namespace bm::connect {
 
-/// Two axes count as parallel above this cosine (about 2 degrees). Keeps a tilted part from
-/// mating while allowing for the rounding in real model files.
-inline constexpr double kAxisParallel = 0.9994;
+/// Two axes count as parallel above this cosine (3.5 degrees). Model files and connector
+/// data round their rotations to four decimals, which is worth up to about 2.5 degrees on a
+/// minifig hand or arm; the next real angle a part is built at (a hinge step) is far larger.
+inline constexpr double kAxisParallel = 0.998135;
 
 /// How far a male connector's start may sit off the female's axis. Real files place parts
 /// to 0.5-1 LDU at worst; a neighbouring stud is 20 away.
@@ -30,6 +31,9 @@ inline constexpr double kAxleCoreRatio = 2.0 / 3.0;
 /// Ball centres, generic connector positions, and "the same line" when combining mates.
 inline constexpr double kPointMatch = 2.0;
 inline constexpr double kLineMatch = 1.0;
+
+/// A rubber tyre stretches onto its rim: the measured bore and seat radii may differ by this.
+inline constexpr double kTyreSlack = 3.0;
 
 /// A clip with no stated length holds this much bar.
 inline constexpr double kMinClipLength = 2.0;

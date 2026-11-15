@@ -197,6 +197,9 @@ ShadowInfo parseShadow(std::string_view text) {
     } else if (cmd == "snap_fgr") {
       def.kind = SnapKind::Finger;
       def.seq = numbers(get("seq"));
+      // Fingers are laid out about their position: a one-finger half and the two-finger half
+      // it sits in are both written at the hinge's centre.
+      def.center = lower(get("center")) != "false";
       if (p.count("radius") == 0) def.radius = kDefaultFingerRadius;
       else if (!number(get("radius"), def.radius) || def.radius <= 0) continue;
       if (gender("genderofs", def.gender) && !def.seq.empty()) info.snaps.push_back(std::move(def));

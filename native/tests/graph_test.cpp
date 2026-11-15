@@ -104,3 +104,17 @@ TEST_CASE("ten thousand bricks build quickly", "[graph][focus]") {
   REQUIRE((g.groups == 5000 && g.bodies == 5000));
   REQUIRE(seconds < 2.0);
 }
+
+TEST_CASE("flexible segments and primitives placed as pieces are marked", "[graph][segments]") {
+  World w;
+  const Graph g = w.graph(piece("c2x4.dat", 0, 0, 0) + piece("seg.dat", 200, 0, 0) + piece("segold.dat", 300, 0, 0) + piece("box.dat", 400, 0, 0) + piece("plain.dat", 500, 0, 0));
+  REQUIRE(g.isSegment == std::vector<uint8_t>{0, 1, 1, 1, 0});
+  REQUIRE(g.segments == 3);
+}
+
+TEST_CASE("anything the library marks as not for use on its own is a segment", "[graph][segments]") {
+  World w;
+  const ldraw::Library model = w.lib.withInline(ldraw::parseMpd("0 FILE main.ldr\n1 4 0 0 0 1 0 0 0 1 0 0 0 1 8258 - ls70.dat\n1 4 50 0 0 1 0 0 0 1 0 0 0 1 cable.dat\n1 4 90 0 0 1 0 0 0 1 0 0 0 1 mine.dat\n0 FILE 8258 - ls70.dat\n3 16 0 0 0 1 0 0 0 0 1\n0 FILE mine.dat\n0 My own part\n3 16 0 0 0 1 0 0 0 0 1\n", "m.mpd"));
+  const Graph g = w.graph("0 FILE main.ldr\n1 4 0 0 0 1 0 0 0 1 0 0 0 1 8258 - ls70.dat\n1 4 50 0 0 1 0 0 0 1 0 0 0 1 cable.dat\n1 4 90 0 0 1 0 0 0 1 0 0 0 1 mine.dat\n0 FILE 8258 - ls70.dat\n3 16 0 0 0 1 0 0 0 0 1\n0 FILE mine.dat\n0 My own part\n3 16 0 0 0 1 0 0 0 0 1\n");
+  REQUIRE(g.isSegment == std::vector<uint8_t>{1, 1, 0});
+}

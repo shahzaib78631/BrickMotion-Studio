@@ -70,6 +70,12 @@ int cmdAudit(const Args& args) {
   ldraw::PartCache cache(library, cacheDir);
   const connect::ShadowLibrary shadow(shadowDir);
   connect::ConnectorDb connectors(library, shadow);
+  {
+    std::ifstream seats(repo / "native" / "data" / "wheel-seats.json");
+    std::stringstream text;
+    text << seats.rdbuf();
+    connect::loadWheelSeats(text.str(), connectors);
+  }
   if (shadow.size() == 0) std::fprintf(stderr, "bm: no shadow library at %s; no joints will be found (set BM_SHADOW_DIR)\n", shadowDir.c_str());
   std::vector<audit::Row> rows(entries.size());
   JobPool pool(static_cast<unsigned>(threads));

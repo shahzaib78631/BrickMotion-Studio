@@ -52,6 +52,19 @@ def main() -> int:
     for label, table in (("unknown only to native", only_native), ("unknown only to web", only_web)):
         top = sorted(table.items(), key=lambda kv: -kv[1])[:25]
         print(f"  {label}: {len(table)} parts" + ("" if not top else " — " + ", ".join(f"{p} ({n})" for p, n in top)))
+    # Joints: largest connected group and fully joined models, per source, on shared models.
+    joint = [i for i in both if "joined" in native[i] and web[i].get("joined") is not None]
+    if joint:
+        print("joints, on models both engines measured (largest group as a share of pieces):")
+        sources = sorted({i.split("/")[0] for i in joint})
+        for src in sources:
+            ids = [i for i in joint if i.split("/")[0] == src]
+            pieces = sum(native[i]["pieces"] for i in ids) or 1
+            nj, wj = sum(native[i]["joined"] for i in ids), sum(web[i]["joined"] for i in ids)
+            nf, wf = sum(native[i]["groups"] == 1 for i in ids), sum(web[i]["groups"] == 1 for i in ids)
+            ng, wg = sum(native[i]["groups"] for i in ids), sum(web[i]["groups"] for i in ids)
+            print(f"  {src:10} {len(ids):5} models  native {100.0 * nj / pieces:5.1f}%  web {100.0 * wj / pieces:5.1f}%"
+                  f"   fully joined: native {nf}, web {wf}   groups: native {ng}, web {wg}")
     return 0
 
 

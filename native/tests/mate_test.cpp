@@ -217,3 +217,54 @@ TEST_CASE("a mirrored connector still mates", "[mate][focus]") {
   const Xform mirror{Mat3{{-1, 0, 0, 0, 1, 0, 0, 0, 1}}, {7, 0, 0}};
   REQUIRE(mate(transformed(stud({0, 24, 0}), mirror), transformed(socket({0, 24, 0}), mirror)).has_value());
 }
+
+namespace {
+Connector finger(Gender first, std::vector<double> seq, Vec3 centre, Vec3 axis = {1, 0, 0}) {
+  Connector c;
+  c.kind = SnapKind::Finger;
+  c.gender = first;
+  c.axis = normalized(axis);
+  c.side = {0, 1, 0};
+  for (double w : seq) c.length += w;
+  c.seq = std::move(seq);
+  c.radius = 4;
+  c.start = centre - c.axis * (c.length / 2);
+  return c;
+}
+}  // namespace
+
+TEST_CASE("hinge fingers mate when one's fingers sit in the other's gaps", "[mate][fingers]") {
+  // A base with two fingers and a gap between them, and a stick whose one finger fills the gap:
+  // both are written "male first", which says what the sequence starts with, not which half it is.
+  const Connector base = finger(Gender::Male, {6, 4, 6}, {0, 0, 0});
+  const Connector stick = finger(Gender::Male, {4}, {0, 0, 0});
+  const auto m = mate(base, stick);
+  REQUIRE(m.has_value());
+  REQUIRE((m->freedom.rotates && !m->freedom.slides));
+  REQUIRE(mate(stick, base).has_value());
+  REQUIRE(mate(base, finger(Gender::Male, {4}, {0, 0, 0}, {-1, 0, 0})).has_value());  // seen from the other end
+  REQUIRE_FALSE(mate(base, finger(Gender::Male, {4}, {5, 0, 0})).has_value());        // on top of a finger
+  REQUIRE_FALSE(mate(base, finger(Gender::Male, {6, 4, 6}, {0, 0, 0})).has_value());  // two bases
+  // Gap-first and finger-first halves of the same pattern interleave.
+  REQUIRE(mate(finger(Gender::Female, {18, 4, 18}, {0, 0, 0}), finger(Gender::Male, {18, 4, 18}, {0, 0, 0})).has_value());
+}
+
+TEST_CASE("axes a few degrees apart still mate; real files round their angles", "[mate]") {
+  const double a = 2.5 * 3.14159265358979 / 180;
+  REQUIRE(mate(stud({0, 24, 0}, {std::sin(a), -std::cos(a), 0}), socket({0, 24, 0})).has_value());
+  const double b = 6 * 3.14159265358979 / 180;
+  REQUIRE_FALSE(mate(stud({0, 24, 0}, {std::sin(b), -std::cos(b), 0}), socket({0, 24, 0})).has_value());
+}
+
+TEST_CASE("a tyre sits on a rim of about its bore and does not turn on it", "[mate][seats]") {
+  auto seat = [](Gender g, double radius, double width, Vec3 centre) {
+    return cyl(g, centre - Vec3{0, 0, width / 2}, {0, 0, 1}, {{'T', radius, 0, width}}, true, true);
+  };
+  const auto m = mate(seat(Gender::Female, 13.85, 16, {0, 0, 0}), seat(Gender::Male, 12.5, 20, {0, 0, 0}));
+  REQUIRE(m.has_value());
+  REQUIRE((!m->freedom.rotates && !m->freedom.slides));
+  REQUIRE_FALSE(mate(seat(Gender::Female, 13.85, 16, {0, 0, 0}), seat(Gender::Male, 21, 20, {0, 0, 0})).has_value());  // far too big a rim
+  REQUIRE_FALSE(mate(seat(Gender::Female, 13.85, 16, {0, 0, 40}), seat(Gender::Male, 12.5, 20, {0, 0, 0})).has_value());  // beside it
+  // A tyre bore is not a pin hole, and a rim is not a pin.
+  REQUIRE_FALSE(mate(seat(Gender::Female, 6, 16, {0, 0, 0}), cyl(Gender::Male, {0, 0, -8}, {0, 0, 1}, {{'R', 6, 0, 16}}, true, true)).has_value());
+}

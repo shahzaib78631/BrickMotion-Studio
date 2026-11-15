@@ -39,8 +39,10 @@ Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Libr
       for (const connect::Connection& c : g.connections) row.joints[static_cast<int>(c.joint.kind)]++;
       std::vector<uint8_t> connected(model.pieces().size(), 0);
       for (const connect::Connection& c : g.connections) connected[c.a] = connected[c.b] = 1;
+      row.segments = static_cast<int>(g.segments);
       for (size_t i = 0; i < model.pieces().size(); i++) {
-        if (connected[i]) continue;
+        if (!g.isSegment[i] && connected[i]) row.partsAttached++;
+        if (connected[i] || g.isSegment[i]) continue;
         (g.hasConnectors[i] ? row.unmatedParts : row.noConnectorParts)[model.pieces()[i].part]++;
       }
       row.graphMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - graphStart).count();
@@ -73,6 +75,8 @@ nlohmann::json toJson(const Row& row) {
     j["attached"] = row.attached;
     j["bodies"] = row.bodies;
     j["withoutConnectors"] = row.withoutConnectors;
+    j["segments"] = row.segments;
+    j["partsAttached"] = row.partsAttached;
     for (int k = 0; k < 5; k++) j["joints"][connect::name(static_cast<connect::JointKind>(k))] = row.joints[k];
     j["graphMs"] = row.graphMs;
   }
@@ -83,6 +87,7 @@ nlohmann::json summarize(const std::vector<Row>& rows) {
   long pieces = 0, unknown = 0, missingSubs = 0, failed = 0;
   long joined = 0, attached = 0, groups = 0, bodies = 0, withoutConnectors = 0, fullyJoined = 0, graphed = 0, graphedPieces = 0;
   long joints[5] = {};
+  long segments = 0, partsAttached = 0;
   std::vector<double> graphTimes;
   std::set<std::string> distinct;
   std::vector<double> times;
@@ -104,6 +109,8 @@ nlohmann::json summarize(const std::vector<Row>& rows) {
     groups += r.groups;
     bodies += r.bodies;
     withoutConnectors += r.withoutConnectors;
+    segments += r.segments;
+    partsAttached += r.partsAttached;
     if (r.pieces > 0 && r.groups == 1) fullyJoined++;
     for (int k = 0; k < 5; k++) joints[k] += r.joints[k];
     graphTimes.push_back(r.graphMs);
@@ -135,6 +142,9 @@ nlohmann::json summarize(const std::vector<Row>& rows) {
     t["fullyJoinedModels"] = fullyJoined;
     t["joinedPercent"] = 100.0 * static_cast<double>(joined) / total;
     t["attachedPercent"] = 100.0 * static_cast<double>(attached) / total;
+    t["segments"] = segments;
+    // Of the pieces that are real parts (not hose or cable segments): how many are joined.
+    t["partsAttachedPercent"] = 100.0 * static_cast<double>(partsAttached) / static_cast<double>(std::max(1L, graphedPieces - segments));
     for (int k = 0; k < 5; k++) t["joints"][connect::name(static_cast<connect::JointKind>(k))] = joints[k];
     std::sort(graphTimes.begin(), graphTimes.end());
     s["p50"]["graphMs"] = graphTimes[graphTimes.size() / 2];

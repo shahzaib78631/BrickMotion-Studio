@@ -14,7 +14,7 @@ enum class Source : uint8_t { Shadow, Studio, BrickNet, Kinebrick, Geometry, Ove
 
 /// One stretch of a cylinder connector, measured from the connector's start along its axis.
 struct ProfileSection {
-  char shape = 'R';  ///< 'R' round, 'A' axle, 'S' square, 'L' flexible lip
+  char shape = 'R';  ///< 'R' round, 'A' axle, 'S' square, 'L' flexible lip, 'T' tyre seat
   double radius = 0, start = 0, length = 0;
 };
 
@@ -31,7 +31,9 @@ struct Connector {
   bool slide = false;
   bool openStart = true, openEnd = false;  ///< Cyl: which ends a mate can pass through
   std::string id, group, match, placement, bounding;
-  std::vector<double> seq;  ///< Finger: widths of fingers and gaps, from `start`
+  /// Finger: alternating widths from `start`; the first is a finger when `gender` is Male,
+  /// a gap when Female.
+  std::vector<double> seq;
 };
 
 /// The connector placed by `xf`. Lengths follow the scale along the axis, radii the scale
@@ -53,9 +55,18 @@ class ConnectorDb {
   /// computed on each call and not shared. Never null; unknown parts have none.
   std::shared_ptr<const std::vector<Connector>> get(std::string_view partName, const ldraw::Library* modelLibrary = nullptr);
 
+  /// Registers connectors for a part from a source other than the shadow library. They are
+  /// added to whatever the part already has. Call before the first get().
+  void add(std::string_view partName, std::vector<Connector> connectors);
+
  private:
   struct State;
   std::unique_ptr<State> state_;
 };
+
+/// Reads measured tyre bores and wheel-rim seats (native/data/wheel-seats.json) into `db`
+/// as connectors of shape 'T', centred on the part's origin. Returns how many were added;
+/// malformed entries are skipped.
+size_t loadWheelSeats(std::string_view json, ConnectorDb& db);
 
 }  // namespace bm::connect

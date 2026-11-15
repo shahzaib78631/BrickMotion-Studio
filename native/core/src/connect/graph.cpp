@@ -60,6 +60,45 @@ std::vector<uint32_t> twins(const Model& model) {
   return out;
 }
 
+bool hasWord(std::string text, const char* word) {
+  for (char& c : text)
+    if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+  return text.find(word) != std::string::npos;
+}
+
+/// Whether a placed "part" is really a stretch of a flexible element or a bare primitive.
+/// The library says so itself: a primitive lives under p/, and a part that is not meant to
+/// be used alone has a description starting with '~' ("~Hose Flexible Segment",
+/// "~Electric Cable 3LDU Twin"). Files
+/// that tools generate inside a model for bent hoses and cables are named by their segment
+/// type ("LS60", "...wireseg"). A "~Moved to X" file is judged by what it moved to.
+bool segmentPart(const std::string& part, const ldraw::Library& lib, int depth = 0) {
+  const ldraw::File* file = lib.find(part);
+  if (!file) return false;
+  if (!lib.isInline(part)) {
+    if (const auto path = lib.resolve(part)) {
+      const std::string dir = path->parent_path().generic_string();
+      if (dir.size() >= 2 && (dir.find("/p/") != std::string::npos || dir.compare(dir.size() - 2, 2, "/p") == 0)) return true;
+    }
+  }
+  const std::string& d = file->description;
+  if (d.rfind("~Moved to", 0) == 0) {
+    for (const ldraw::Command& c : file->cmds)
+      if (c.type == ldraw::Cmd::Ref) return depth < 8 && segmentPart(c.file, lib, depth + 1);
+    return false;
+  }
+  if (!d.empty() && d[0] == '~') return true;
+  if (hasWord(d, "segment") || hasWord(part, "wireseg")) return true;
+  if (lib.isInline(part)) {
+    // Generated hose and cable stretches: "<set> - ls70.dat", or described as "LS70".
+    const size_t at = part.rfind(" - ");
+    const std::string tail = at == std::string::npos ? part : part.substr(at + 3);
+    auto lsynth = [](const std::string& t) { return t.size() >= 3 && (t[0] == 'l' || t[0] == 'L') && (t[1] == 's' || t[1] == 'S') && t[2] >= '0' && t[2] <= '9'; };
+    if (lsynth(tail) || lsynth(d)) return true;
+  }
+  return false;
+}
+
 }  // namespace
 
 Graph buildGraph(const Model& model, ConnectorDb& db) {
@@ -67,6 +106,16 @@ Graph buildGraph(const Model& model, ConnectorDb& db) {
   const uint32_t n = static_cast<uint32_t>(pieces.size());
   Graph g;
   g.hasConnectors.assign(n, 0);
+  g.isSegment.assign(n, 0);
+  {
+    std::unordered_map<std::string, bool> known;
+    for (uint32_t i = 0; i < n; i++) {
+      auto it = known.find(pieces[i].part);
+      if (it == known.end()) it = known.emplace(pieces[i].part, segmentPart(pieces[i].part, model.library())).first;
+      g.isSegment[i] = it->second;
+      g.segments += it->second;
+    }
+  }
 
   // Every connector of every piece, in model space.
   std::vector<Placed> placed;
