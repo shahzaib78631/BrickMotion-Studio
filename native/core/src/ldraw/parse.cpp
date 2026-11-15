@@ -202,6 +202,12 @@ bool metaLine(std::string_view line, std::string_view keyword, std::string_view&
   return true;
 }
 
+/// Text saved by Windows tools often starts with a UTF-8 byte-order mark.
+std::string_view withoutBom(std::string_view text) {
+  if (text.size() >= 3 && text.substr(0, 3) == "\xEF\xBB\xBF") text.remove_prefix(3);
+  return text;
+}
+
 }  // namespace
 
 std::string normalizeName(std::string_view name) {
@@ -219,11 +225,13 @@ File parse(std::string_view text, std::string_view name) {
   uint64_t h = 1469598103934665603ull;
   for (unsigned char c : text) h = (h ^ c) * 1099511628211ull;
   p.file.hash = h ? h : 1;  // 0 is reserved for "no such file"
+  text = withoutBom(text);
   eachLine(text, [&](std::string_view l) { p.line(l); });
   return std::move(p.file);
 }
 
 std::vector<File> parseMpd(std::string_view text, std::string_view name) {
+  text = withoutBom(text);
   // Find the section boundaries first, then parse each file's own text.
   struct Section {
     std::string name;
@@ -232,6 +240,7 @@ std::vector<File> parseMpd(std::string_view text, std::string_view name) {
   };
   std::vector<Section> sections;
   bool open = false;
+  bool leading = false;  // geometry before the first FILE line: an unnamed main file
   size_t at = 0;
   auto close = [&](size_t end) {
     if (open) sections.back().end = end;
@@ -255,9 +264,20 @@ std::vector<File> parseMpd(std::string_view text, std::string_view name) {
         close(at);
       }
     }
+    if (sections.empty() && !leading) {
+      const std::string_view body = trim(line);
+      leading = body.size() > 1 && body[0] >= '1' && body[0] <= '5' && isSpace(body[1]);
+    }
     at = end + 1;
   }
   std::vector<File> files;
+  if (leading && !sections.empty()) {
+    // Everything up to the first FILE or !DATA line; that line starts with "0", so searching
+    // back from the section's body for the line start finds where the leading part ends.
+    const size_t firstBody = sections.front().begin;
+    const size_t lineStart = firstBody >= 2 ? text.rfind('\n', firstBody - 2) : std::string_view::npos;
+    files.push_back(parse(text.substr(0, lineStart == std::string_view::npos ? 0 : lineStart + 1), name));
+  }
   for (const Section& s : sections)
     if (!s.data) files.push_back(parse(text.substr(s.begin, s.end - s.begin), s.name));
   if (files.empty()) files.push_back(parse(text, name));

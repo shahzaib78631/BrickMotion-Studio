@@ -40,7 +40,7 @@ cached in `~/Library/Caches/BrickMotion/parts`.
 
 ## Phase 1 results (2026-11-15, M1 Pro, 10 threads)
 
-Corpus: 3,854 models (1,833 OMR files, 2,000 BrickNet, 12 MOC, 6 reference, 3 fixtures), 871,624 pieces.
+Corpus: 3,854 models (1,833 OMR files, 2,000 BrickNet, 12 MOC, 6 reference, 3 fixtures), 872,970 pieces.
 
 | | Result |
 |---|---|
@@ -51,7 +51,7 @@ Corpus: 3,854 models (1,833 OMR files, 2,000 BrickNet, 12 MOC, 6 reference, 3 fi
 | 5590 (1,258 pieces), cold | 161 ms, plus 199 ms to index the library |
 | Unknown parts | 4 uses of 3 distinct parts, the same ones the web engine reports |
 
-Against the web engine's baseline (2,002 models measured so far): piece counts are equal on 2,001.
+Against the web engine's baseline (2,077 models measured so far): piece counts are equal on 2,076.
 
 **The one difference is a web-engine fault.** `omr/10143-1` (Death Star II) nests submodels 24 deep.
 The web app stops at 16 levels (`MAX_DEPTH` in `src/model/assemble.ts`) and silently drops 224 of the

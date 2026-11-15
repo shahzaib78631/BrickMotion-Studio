@@ -109,6 +109,8 @@ TEST_CASE("bad plan files are errors with a message, never a crash", "[io][plan]
   REQUIRE(fails("{\"format\":\"brickmotion-plan\",\"version\":1,\"name\":\"x\",\"steps\":{}}"));
   REQUIRE(fails(std::string("{\"format\":\"brickmotion-plan\",\"name\":\"\xff\xfe\",\"steps\":[]}")));  // not UTF-8
   REQUIRE(fails("{\"format\":\"brickmotion-plan\",\"version\":1,\"name\":\"x\",\"steps\":[{\"pieces\":[{\"part\":3}]}]}"));
+  // A turn that is not a quarter turn has no grid placement.
+  REQUIRE(fails("{\"format\":\"brickmotion-plan\",\"version\":1,\"name\":\"x\",\"steps\":[{\"pieces\":[{\"part\":\"3001\",\"x\":0,\"y\":0,\"z\":0,\"rot\":45}]}]}"));
   REQUIRE(fails("{\"format\":\"brickmotion-plan\",\"version\":1,\"name\":\"x\",\"steps\":[{\"pieces\":[{\"part\":\"3001\",\"color\":4}]}]}"));  // no placement
 }
 

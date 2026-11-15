@@ -114,3 +114,21 @@ TEST_CASE("a plain file is an MPD with one file", "[ldraw][parse]") {
   REQUIRE(files[0].name == "car.ldr");
   REQUIRE(files[0].description == "Car");
 }
+
+TEST_CASE("a byte-order mark at the start is not part of the first line", "[ldraw][parse][review]") {
+  const File f = parse("\xEF\xBB\xBF" "1 4 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n");
+  REQUIRE(f.skipped == 0);
+  REQUIRE(f.cmds.size() == 1);
+  const std::vector<File> files = parseMpd("\xEF\xBB\xBF" "0 FILE main.ldr\n1 16 0 0 0 1 0 0 0 1 0 0 0 1 sub.ldr\n0 FILE sub.ldr\n1 4 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n", "x.mpd");
+  REQUIRE(files.size() == 2);
+  REQUIRE(files[0].name == "main.ldr");
+}
+
+TEST_CASE("geometry before the first FILE line is the main file", "[ldraw][parse][review]") {
+  const std::vector<File> files = parseMpd("0 Untitled\n1 16 0 0 0 1 0 0 0 1 0 0 0 1 sub.ldr\n0 FILE sub.ldr\n1 4 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n", "Top.mpd");
+  REQUIRE(files.size() == 2);
+  REQUIRE(files[0].name == "top.mpd");
+  REQUIRE(files[0].cmds.at(0).file == "sub.ldr");
+  // Only comments before the first FILE: no extra file.
+  REQUIRE(parseMpd("0 Just a header comment\n0 FILE a.ldr\n1 4 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n", "x.mpd").size() == 1);
+}

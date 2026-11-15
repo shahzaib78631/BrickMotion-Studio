@@ -40,6 +40,10 @@ void checkItem(const Json& item, const std::string& where, std::vector<std::stri
   if (item.contains("rot")) {
     for (const char* key : {"x", "y", "z", "rot"})
       if (!item.contains(key) || !item[key].is_number()) errors.push_back(where + "." + key + ": must be a number");
+    if (item["rot"].is_number()) {
+      const double rot = item["rot"].get<double>();
+      if (rot != 0 && rot != 90 && rot != 180 && rot != 270) errors.push_back(where + ".rot: must be 0, 90, 180 or 270");
+    }
   } else if (!numbers("ldu", 3) || !numbers("matrix", 9)) {
     errors.push_back(where + ": needs a grid placement (x, y, z, rot) or an exact one (ldu, matrix)");
   }
