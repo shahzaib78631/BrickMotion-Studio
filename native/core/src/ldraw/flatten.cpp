@@ -80,7 +80,7 @@ struct Walker {
 
   void file(const std::string& name, const Xform& xf, int color, bool flip, bool cullable) {
     const File* f = lib.find(name);
-    deps.emplace(name, f ? f->hash : 0);
+    deps.emplace(name, f ? lib.stamp(name) : 0);
     if (!f || stack.size() >= static_cast<size_t>(kMaxDepth) || std::find(stack.begin(), stack.end(), name) != stack.end()) {
       miss(name);
       return;

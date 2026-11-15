@@ -17,7 +17,7 @@ struct Mesh {
   std::vector<float> edges;         ///< xyz pairs: the part's outline lines
   Box bounds;                       ///< of triangles and edges; empty when there is no geometry
   std::vector<std::string> missing; ///< subfiles that were not found, or closed a reference loop
-  /// Every file the part is made of with its content hash (0 = missing), sorted by name.
+  /// Every file the part is made of with its Library::stamp (0 = missing), sorted by name.
   std::vector<std::pair<std::string, uint64_t>> deps;
   uint64_t sourceHash = 0;          ///< over `deps`: changes when any of those files changes
 };

@@ -30,6 +30,7 @@ struct Library::Disk {
   std::unordered_map<int, Color> colors;
   mutable std::shared_mutex mutex;  // guards index and parsed
   mutable std::unordered_map<std::string, std::unique_ptr<File>> parsed;  // null: unreadable
+  mutable std::unordered_map<std::string, uint64_t> stamps;
 
   /// Lists `dir` under names relative to it. The first file to claim a name keeps it.
   void scan(const fs::path& dir, bool recursive) {
@@ -112,6 +113,28 @@ std::optional<fs::path> Library::resolve(std::string_view rawName) const {
 uint64_t Library::contentHash(std::string_view name) const {
   const File* f = find(name);
   return f ? f->hash : 0;
+}
+
+uint64_t Library::stamp(std::string_view rawName) const {
+  const std::string name = normalizeName(rawName);
+  if (inline_) {
+    if (const auto it = inline_->find(name); it != inline_->end()) return it->second.hash;
+  }
+  fs::path path;
+  {
+    std::shared_lock lock(disk_->mutex);
+    if (const auto it = disk_->stamps.find(name); it != disk_->stamps.end()) return it->second;
+    const auto at = disk_->index.find(name);
+    if (at == disk_->index.end()) return 0;
+    path = at->second;
+  }
+  std::error_code ec;
+  const auto size = fs::file_size(path, ec);
+  const auto time = fs::last_write_time(path, ec).time_since_epoch().count();
+  uint64_t h = ec ? 0 : (static_cast<uint64_t>(size) * 0x9E3779B97F4A7C15ull) ^ (static_cast<uint64_t>(time) * 0xC2B2AE3D27D4EB4Full);
+  if (!ec && h == 0) h = 1;
+  std::unique_lock lock(disk_->mutex);
+  return disk_->stamps.emplace(name, h).first->second;
 }
 
 const std::unordered_map<int, Color>& Library::colors() const { return disk_->colors; }

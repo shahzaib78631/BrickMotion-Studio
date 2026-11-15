@@ -49,6 +49,10 @@ class Library {
   bool isInline(std::string_view name) const;
   /// Hash of the file's text; 0 when absent.
   uint64_t contentHash(std::string_view name) const;
+  /// A cheap fingerprint that changes when the file changes; 0 when absent. For a file on
+  /// disk it comes from its size and modification time (no read), taken once per library;
+  /// for an inline file it is the content hash.
+  uint64_t stamp(std::string_view name) const;
 
   const std::unordered_map<int, Color>& colors() const;
 
