@@ -14,6 +14,7 @@ function tree() {
   for (const f of ['10001-1/main.mpd', '10002-1/a.mpd', '10002-1/b.ldr']) put(join(data, 'omr/models', f));
   put(join(data, 'omr/models/10002-1/info.json'));
   for (let i = 0; i < 5000; i++) put(join(data, 'bricknet/models', `sft_${String(i).padStart(5, '0')}.ldr`));
+  for (const f of ['a.mpd', 'b.io', 'c.lxf', 'd.mpd copy', 'e.dat']) put(join(data, 'MOC', f));
   put(join(repo, 'tests/fixtures/models/car.mpd'));
   put(join(repo, 'tests/fixtures/ldraw/LDConfig.ldr'));
   put(join(repo, 'samples/8880-1.mpd'));
@@ -28,9 +29,11 @@ test('lists omr files, a fixed bricknet sample, reference sets and fixtures', ()
   expect(count('omr')).toBe(3);
   expect(count('bricknet')).toBe(2000);
   expect(count('fixture')).toBe(1);
+  expect(m.filter(e => e.source === 'moc').map(e => e.path)).toEqual(['MOC/a.mpd', 'MOC/b.io']);
+  expect(m.filter(e => e.source === 'moc').every(e => e.tier === 'smoke')).toBe(true);
   expect(m.filter(e => e.source === 'reference').map(e => e.id)).toEqual(['reference/samples/8880-1.mpd']);
   expect(m.map(e => e.id)).toEqual([...m.map(e => e.id)].sort());
-  for (const e of m) expect(existsSync(join(e.source === 'omr' || e.source === 'bricknet' ? data : repo, e.path))).toBe(true);
+  for (const e of m) expect(existsSync(join(e.source === 'omr' || e.source === 'bricknet' || e.source === 'moc' ? data : repo, e.path))).toBe(true);
 });
 
 test('is the same on a second call, and marks the smoke tier', () => {

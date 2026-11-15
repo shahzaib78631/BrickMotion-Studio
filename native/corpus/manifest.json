@@ -12018,6 +12018,78 @@
     "tier": "smoke"
   },
   {
+    "id": "moc/10001-1.mpd",
+    "path": "MOC/10001-1.mpd",
+    "source": "moc",
+    "tier": "smoke"
+  },
+  {
+    "id": "moc/10156-1.mpd",
+    "path": "MOC/10156-1.mpd",
+    "source": "moc",
+    "tier": "smoke"
+  },
+  {
+    "id": "moc/31039_Blue_Power_Jet_SUBMODEL_BUILD_v3.mpd",
+    "path": "MOC/31039_Blue_Power_Jet_SUBMODEL_BUILD_v3.mpd",
+    "source": "moc",
+    "tier": "smoke"
+  },
+  {
+    "id": "moc/31153-1.mpd",
+    "path": "MOC/31153-1.mpd",
+    "source": "moc",
+    "tier": "smoke"
+  },
+  {
+    "id": "moc/41496 - Supergirl & Martian Manhunter.mpd",
+    "path": "MOC/41496 - Supergirl & Martian Manhunter.mpd",
+    "source": "moc",
+    "tier": "smoke"
+  },
+  {
+    "id": "moc/41498 - Boba Fett & Han Solo In Carbonite.mpd",
+    "path": "MOC/41498 - Boba Fett & Han Solo In Carbonite.mpd",
+    "source": "moc",
+    "tier": "smoke"
+  },
+  {
+    "id": "moc/5590_-_whirl_n_wheel_super_truck.mpd",
+    "path": "MOC/5590_-_whirl_n_wheel_super_truck.mpd",
+    "source": "moc",
+    "tier": "smoke"
+  },
+  {
+    "id": "moc/6389-1.ldr",
+    "path": "MOC/6389-1.ldr",
+    "source": "moc",
+    "tier": "smoke"
+  },
+  {
+    "id": "moc/Injector Drill STUDIO file.io",
+    "path": "MOC/Injector Drill STUDIO file.io",
+    "source": "moc",
+    "tier": "smoke"
+  },
+  {
+    "id": "moc/Kombi Pickup.io",
+    "path": "MOC/Kombi Pickup.io",
+    "source": "moc",
+    "tier": "smoke"
+  },
+  {
+    "id": "moc/MOC-273843_Legopharos_Bell_Tower.io",
+    "path": "MOC/MOC-273843_Legopharos_Bell_Tower.io",
+    "source": "moc",
+    "tier": "smoke"
+  },
+  {
+    "id": "moc/modern_fighter_jet.mpd",
+    "path": "MOC/modern_fighter_jet.mpd",
+    "source": "moc",
+    "tier": "smoke"
+  },
+  {
     "id": "omr/10001-1/10001-1.mpd",
     "path": "omr/models/10001-1/10001-1.mpd",
     "source": "omr",

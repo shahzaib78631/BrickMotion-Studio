@@ -1,0 +1,32 @@
+{
+  "engine": "web",
+  "date": "2026-11-15",
+  "tier": "smoke",
+  "models": 59,
+  "failed": 5,
+  "errors": {
+    "timeout": 5
+  },
+  "totals": {
+    "pieces": 17250,
+    "joined": 9275,
+    "groups": 3410,
+    "overlaps": 0,
+    "floating": 7,
+    "unknownParts": 0,
+    "fullyJoinedModels": 7,
+    "planned": 54,
+    "planOk": 54,
+    "planFlagged": 1841,
+    "buildFloating": 3853,
+    "modelsWithBuildFloating": 54
+  },
+  "p50": {
+    "loadMs": 123.49220799999998,
+    "planMs": 5606.064832999999
+  },
+  "p95": {
+    "loadMs": 556.955833,
+    "planMs": 98471.494
+  }
+}
