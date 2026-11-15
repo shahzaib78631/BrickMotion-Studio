@@ -2,6 +2,8 @@
 
 * Ids: a predicted id counts as the answer key's id when it is the same physical part (same base
   number, or an identical LDraw triangle mesh): booklets and OMR files name aliases differently.
+* Moulds: two moulds of one part (MOULD_VARIANTS) count as one: the booklet's element may name one and the
+  answer key the other. Only pairs the owner agreed to are listed.
 * Frame: a free-run model (or a first step) is built in its own frame, so before scoring it is moved
   by the rigid transform that best maps it onto the answer key (tried from each predicted/true pair
   of the same part and colour, rotations restricted to the 24 cube turns).
@@ -17,6 +19,7 @@ from ..metrics import chamfer_distance
 from ..score import exact_flags
 
 _GEQ: dict = {}
+MOULD_VARIANTS = [{"2780", "61332"}]     # black Technic friction pin, slotted and type 2 (42120)
 LDCONFIG = __import__("pathlib").Path(__file__).resolve().parents[3] / "public/ldraw/LDConfig.ldr"
 
 
@@ -34,6 +37,8 @@ def same_colour(a: int, b: int) -> bool:
 def same_part(lib, a: str, b: str) -> bool:
     a, b = _plain(a), _plain(b)
     if a == b or base_number(a) == base_number(b):
+        return True
+    if any(a in group and b in group for group in MOULD_VARIANTS):
         return True
     key = (id(lib), *sorted((a, b)))
     if key not in _GEQ:

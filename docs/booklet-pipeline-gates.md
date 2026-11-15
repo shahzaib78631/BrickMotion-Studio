@@ -336,4 +336,6 @@ Still open:
   - On the old keys the same reader scores 88.7%; the overlay adds +3 parts.
   - Validation is aggregate only, so which new pairings are wrong is not looked at.
 - Largest Technic "miss" (24 parts): the key embeds 61332 (black friction pin, type 2) and the booklet's element
-  is 2780, the older mould of the same pin. They are not merged; that is a decision for the owner.
+  is 2780, the older mould of the same pin. Merged with the owner's OK (`evaluate.MOULD_VARIANTS`).
+  - Train after the merge: **93.0%**, 85.8% of steps (Technic 80.3% → 82.6%).
+  - Validation and Sagrada are unchanged.
