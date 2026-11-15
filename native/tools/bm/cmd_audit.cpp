@@ -49,6 +49,9 @@ int cmdAudit(const Args& args) {
     return kFailure;
   }
 
+  const char* shadowEnv = std::getenv("BM_SHADOW_DIR");
+  const fs::path shadowDir = shadowEnv ? fs::path(shadowEnv) : repo / "vendor" / "LDCadShadowLibrary";
+
   struct Entry {
     std::string id;
     fs::path file;
@@ -65,11 +68,14 @@ int cmdAudit(const Args& args) {
   const auto started = std::chrono::steady_clock::now();
   const ldraw::Library library(ldrawDir);
   ldraw::PartCache cache(library, cacheDir);
+  const connect::ShadowLibrary shadow(shadowDir);
+  connect::ConnectorDb connectors(library, shadow);
+  if (shadow.size() == 0) std::fprintf(stderr, "bm: no shadow library at %s; no joints will be found (set BM_SHADOW_DIR)\n", shadowDir.c_str());
   std::vector<audit::Row> rows(entries.size());
   JobPool pool(static_cast<unsigned>(threads));
   size_t printed = 0;
   pool.parallelFor(
-      entries.size(), [&](size_t i) { rows[i] = audit::loadRow(entries[i].file, entries[i].id, library, cache); }, nullptr,
+      entries.size(), [&](size_t i) { rows[i] = audit::loadRow(entries[i].file, entries[i].id, library, cache, &connectors); }, nullptr,
       [&](size_t done, size_t total) {
         if (done != printed) {
           printed = done;
@@ -90,6 +96,26 @@ int cmdAudit(const Args& args) {
     std::ofstream rowsOut(fs::path(outDir) / "rows.jsonl");
     for (const audit::Row& r : rows) rowsOut << audit::toJson(r).dump() << "\n";
     std::ofstream(fs::path(outDir) / "summary.json") << summary.dump(2) << "\n";
+    // Which parts account for the pieces that joined nothing: the work list for connector data.
+    auto ranked = [&](std::map<std::string, int> audit::Row::*field) {
+      std::map<std::string, int> total;
+      for (const audit::Row& r : rows)
+        for (const auto& [part, count] : r.*field) total[part] += count;
+      std::vector<std::pair<std::string, int>> list(total.begin(), total.end());
+      std::sort(list.begin(), list.end(), [](const auto& a, const auto& b) { return a.second != b.second ? a.second > b.second : a.first < b.first; });
+      long pieces = 0;
+      for (const auto& e : list) pieces += e.second;
+      nlohmann::json j;
+      j["parts"] = list.size();
+      j["pieces"] = pieces;
+      j["top"] = nlohmann::json::array();
+      for (size_t i = 0; i < list.size() && i < 400; i++) j["top"].push_back({list[i].first, list[i].second});
+      return j;
+    };
+    nlohmann::json unjoined;
+    unjoined["noConnectors"] = ranked(&audit::Row::noConnectorParts);
+    unjoined["connectorsButNothingMated"] = ranked(&audit::Row::unmatedParts);
+    std::ofstream(fs::path(outDir) / "unjoined-parts.json") << unjoined.dump(1) << "\n";
     if (!rowsOut) {
       std::fprintf(stderr, "bm: cannot write to %s\n", outDir.c_str());
       return kFailure;

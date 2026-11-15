@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include "bm/connect/tolerances.h"
 
 namespace bm::connect {
@@ -16,6 +17,19 @@ double offLine(Vec3 p, Vec3 origin, Vec3 axis) {
 bool parallel(Vec3 a, Vec3 b) { return std::abs(dot(a, b)) >= kAxisParallel; }
 
 double overlap(double lo1, double hi1, double lo2, double hi2) { return std::min(hi1, hi2) - std::max(lo1, lo2); }
+
+std::string fmt(double v) {
+  char buf[32];
+  std::snprintf(buf, sizeof buf, "%.1f", v);
+  return buf;
+}
+
+/// "R6x4 R8x2": a profile in a few characters.
+std::string shapeOf(const Connector& c) {
+  std::string out;
+  for (const ProfileSection& s : c.profile) out += (out.empty() ? "" : " ") + std::string(1, s.shape) + fmt(s.radius) + "x" + fmt(s.length);
+  return out;
+}
 
 enum class Fit { Grips, Loose, Clashes };
 
@@ -35,21 +49,25 @@ Fit fit(const ProfileSection& m, const ProfileSection& f, bool& keyed) {
   return Fit::Grips;
 }
 
-std::optional<Mate> cylinders(const Connector& m, const Connector& f) {
+std::optional<Mate> cylinders(const Connector& m, const Connector& f, std::string* why = nullptr) {
+  auto no = [&](std::string reason) -> std::optional<Mate> {
+    if (why) *why = std::move(reason);
+    return std::nullopt;
+  };
   const double d = dot(m.axis, f.axis);
-  if (std::abs(d) < kAxisParallel) return std::nullopt;
-  if (offLine(m.start, f.start, f.axis) > kAxisOffset) return std::nullopt;
+  if (std::abs(d) < kAxisParallel) return no("axes " + fmt(std::acos(std::min(1.0, std::abs(d))) * 180 / 3.14159265358979) + " deg apart");
+  if (offLine(m.start, f.start, f.axis) > kAxisOffset) return no(fmt(offLine(m.start, f.start, f.axis)) + " off axis");
   const double sign = d > 0 ? 1 : -1;
   const double t0 = dot(m.start - f.start, f.axis);
   const double lo = std::min(t0, t0 + sign * m.length), hi = std::max(t0, t0 + sign * m.length);
 
   // A closed end cannot be passed, and a blind hole is entered base-last through its opening.
-  if (!f.openEnd && hi > f.length + kMinInterference) return std::nullopt;
-  if (!f.openStart && lo < -kMinInterference) return std::nullopt;
+  if (!f.openEnd && hi > f.length + kMinInterference) return no("runs " + fmt(hi - f.length) + " past the closed end");
+  if (!f.openStart && lo < -kMinInterference) return no("runs " + fmt(-lo) + " past the closed start");
   const bool doubleEnded = m.openStart && m.openEnd;
   if (!doubleEnded) {
-    if (f.openStart && !f.openEnd && sign < 0) return std::nullopt;
-    if (!f.openStart && f.openEnd && sign > 0) return std::nullopt;
+    if (f.openStart && !f.openEnd && sign < 0) return no("enters through the closed end");
+    if (!f.openStart && f.openEnd && sign > 0) return no("enters through the closed start");
   }
 
   double grip = 0, clash = 0, gripLo = 1e300, gripHi = -1e300;
@@ -73,7 +91,8 @@ std::optional<Mate> cylinders(const Connector& m, const Connector& f) {
       }
     }
   }
-  if (clash > kMinInterference || grip < kMinGrip) return std::nullopt;
+  if (clash > kMinInterference) return no("clash " + fmt(clash) + " (male " + shapeOf(m) + " in female " + shapeOf(f) + ")");
+  if (grip < kMinGrip) return no("grip " + fmt(grip) + " (male " + shapeOf(m) + " at " + fmt(lo) + ".." + fmt(hi) + " in female " + shapeOf(f) + ")");
   Mate out;
   out.grip = grip;
   out.freedom.rotates = !keyed;
@@ -200,6 +219,19 @@ Joint combine(const std::vector<Freedom>& mates) {
   else if (slides) joint.kind = JointKind::Prismatic;
   else joint.kind = JointKind::Fixed;
   return joint;
+}
+
+std::string whyNot(const Connector& a, const Connector& b) {
+  if (mate(a, b)) return "";
+  if (a.kind == SnapKind::Cyl && b.kind == SnapKind::Cyl) {
+    if (a.gender == b.gender) return "same gender";
+    std::string why;
+    a.gender == Gender::Male ? cylinders(a, b, &why) : cylinders(b, a, &why);
+    return why;
+  }
+  auto kind = [](const Connector& c) { return c.kind == SnapKind::Cyl ? "cylinder" : c.kind == SnapKind::Clip ? "clip" : c.kind == SnapKind::Finger ? "finger" : "generic"; };
+  if (a.kind != b.kind && !((a.kind == SnapKind::Cyl && b.kind == SnapKind::Clip) || (a.kind == SnapKind::Clip && b.kind == SnapKind::Cyl))) return std::string(kind(a)) + " and " + kind(b) + " do not pair";
+  return std::string(kind(a)) + "/" + kind(b) + " do not line up";
 }
 
 const char* name(JointKind kind) {

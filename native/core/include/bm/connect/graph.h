@@ -1,6 +1,7 @@
 #pragma once
 // Every joint in a model: which pieces are connected, how, and which move as one body.
 #include <cstdint>
+#include <string>
 #include <vector>
 #include "bm/connect/mate.h"
 #include "bm/model.h"
@@ -30,5 +31,14 @@ struct Graph {
 /// combines the mates of each piece pair into one joint, and groups the pieces.
 /// Pieces at an identical pose with the same part (duplicates) are not paired with each other.
 Graph buildGraph(const Model& model, ConnectorDb& connectors);
+
+/// For a piece that joined nothing: its closest connector pairs with other pieces and why
+/// each did not mate.
+struct NearMiss {
+  uint32_t other = 0;    ///< the other piece
+  double distance = 0;   ///< between the two connectors' starts, LDU
+  std::string reason;    ///< from whyNot()
+};
+std::vector<NearMiss> nearMisses(const Model& model, ConnectorDb& connectors, uint32_t piece, double within = 30.0, size_t limit = 5);
 
 }  // namespace bm::connect

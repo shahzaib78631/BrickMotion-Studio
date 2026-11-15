@@ -1,6 +1,7 @@
 #pragma once
 // Whether two connectors are joined, and what the joint between two pieces lets them do.
 #include <optional>
+#include <string>
 #include <vector>
 #include "bm/connect/connectors.h"
 
@@ -26,6 +27,10 @@ struct Mate {
 /// pins, axles and bars are all cylinders with different profiles, so one rule covers them,
 /// in any orientation.
 std::optional<Mate> mate(const Connector& a, const Connector& b);
+
+/// Why `a` and `b` do not mate, in a few words ("3.2 off axis", "clash 4.0", "grip 0.4");
+/// empty when they do. For diagnosing pieces that stay unjoined.
+std::string whyNot(const Connector& a, const Connector& b);
 
 enum class JointKind : uint8_t { Fixed, Revolute, Prismatic, Cylindrical, Spherical };
 

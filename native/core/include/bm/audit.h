@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 #include <nlohmann/json.hpp>
+#include <map>
+#include "bm/connect/graph.h"
 #include "bm/ldraw/library.h"
 #include "bm/ldraw/part_cache.h"
 
@@ -17,10 +19,22 @@ struct Row {
   std::vector<std::string> unknownParts;      ///< part ids (no ".dat") that are not in the library, sorted
   std::vector<std::string> missingSubmodels;  ///< sorted
   double loadMs = 0;    ///< parse, expand and fetch every distinct part's mesh
+
+  // Joints (present when a connector database was given).
+  bool hasGraph = false;
+  int joined = 0;             ///< pieces in the largest connected group
+  int groups = 0;
+  int attached = 0;           ///< pieces with at least one connection
+  int bodies = 0;             ///< rigid bodies
+  int withoutConnectors = 0;  ///< pieces whose part has no connector data
+  int joints[5] = {};         ///< connections per connect::JointKind
+  double graphMs = 0;
+  std::map<std::string, int> noConnectorParts;  ///< part -> pieces, for parts with no connectors
+  std::map<std::string, int> unmatedParts;      ///< part -> pieces that have connectors but joined nothing
 };
 
 /// Loads one model and every distinct part it uses. Never throws: a failure is a row.
-Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Library& library, ldraw::PartCache& cache);
+Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Library& library, ldraw::PartCache& cache, connect::ConnectorDb* connectors = nullptr);
 
 nlohmann::json toJson(const Row& row);
 

@@ -68,3 +68,29 @@ Sagrada 21065 is not in `samples/`, so its cold/warm load target (< 5 s / < 1 s)
 - Exact (`ldu`/`matrix`) placements in a plan are used as written; the web app snaps values that
   are within noise of a whole number.
 - A reference to a model file under the library's `models/` folder is expanded as a submodel.
+
+## Phase 2 results so far (2026-11-15): joints from the LDCad shadow library
+
+`bm joints <file> [--why <part>]` lists a model's joints and explains unjoined pieces. `bm audit` now adds joint
+columns and writes `unjoined-parts.json`. The shadow library is read from `BM_SHADOW_DIR` (default
+`vendor/LDCadShadowLibrary`, CC BY-SA 4.0).
+
+Pieces in the largest connected group, on models both engines measured:
+
+| Source | Native | Web |
+|---|---|---|
+| OMR (99 models) | 75.4% | 57.1% |
+| Reference sets (6) | 76.8% | 34.5% |
+| MOC (12) | 68.0% | 59.8% |
+| BrickNet (2,000) | 95.0% (1,504 fully joined) | 78.6% (637 fully joined) |
+
+Whole corpus, native: 81.1% of pieces have at least one joint; graph time median 1.2 ms, 95th percentile 22 ms per model.
+
+Still unjoined, and what the next connector source must cover:
+
+- 142,288 pieces (16%) use parts with no connector data. Most are flexible-element segments placed as pieces
+  (`4-4cyli`, `166`/`71533k03` pneumatic tube, `u9218` and `932` cable, `756`/`754` hose, LSynth `ls60` parts):
+  these need to be grouped into one flexible part with connectors at its ends. Tyres (`6015`, `50951`) need wheel seats.
+- 22,838 pieces have connectors but mated nothing: `77` hose segments (10,700), then `2780` pins, `4593`, `6141`,
+  `98138`, `3641` tyres, `3820` hands. Use `bm joints <file> --why <part>` to see the rejected near-misses.
+- Not yet read: BrickLink Studio connectivity, BrickNet joint labels, Kinebrick, mesh detection.

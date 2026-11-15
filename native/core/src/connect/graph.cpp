@@ -164,4 +164,31 @@ Graph buildGraph(const Model& model, ConnectorDb& db) {
   return g;
 }
 
+std::vector<NearMiss> nearMisses(const Model& model, ConnectorDb& db, uint32_t piece, double within, size_t limit) {
+  std::vector<NearMiss> out;
+  const std::vector<Piece>& pieces = model.pieces();
+  if (piece >= pieces.size()) return out;
+  std::vector<Connector> mine;
+  for (const Connector& c : *db.get(pieces[piece].part, &model.library())) mine.push_back(transformed(c, pieces[piece].world));
+  // A linear scan: this is a diagnostic for single pieces, not part of building the graph.
+  for (uint32_t i = 0; i < pieces.size(); i++) {
+    if (i == piece) continue;
+    const auto theirs = db.get(pieces[i].part, &model.library());
+    for (const Connector& raw : *theirs) {
+      const Connector c = transformed(raw, pieces[i].world);
+      for (const Connector& m : mine) {
+        // Closest approach of the two connector segments' ends, cheaply: start to start, start to end.
+        const double d = std::min({length(c.start - m.start), length(c.start + c.axis * c.length - m.start), length(c.start - (m.start + m.axis * m.length))});
+        if (d > within) continue;
+        const std::string why = whyNot(m, c);
+        if (why.empty() || why == "same gender") continue;
+        out.push_back({i, d, why});
+      }
+    }
+  }
+  std::sort(out.begin(), out.end(), [](const NearMiss& a, const NearMiss& b) { return a.distance < b.distance; });
+  if (out.size() > limit) out.resize(limit);
+  return out;
+}
+
 }  // namespace bm::connect
