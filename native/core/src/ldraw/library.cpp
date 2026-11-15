@@ -35,9 +35,12 @@ struct Library::Disk {
   void scan(const fs::path& dir, bool recursive) {
     std::error_code ec;
     if (!fs::is_directory(dir, ec)) return;
+    const size_t prefix = dir.generic_string().size() + 1;
     auto add = [&](const fs::directory_entry& e) {
       if (!e.is_regular_file(ec) || !isLDrawFile(e.path())) return;
-      index.emplace(normalizeName(fs::relative(e.path(), dir, ec).generic_string()), e.path());
+      // The name is the path below `dir`; cut by length, since fs::relative is slow over 25,000 files.
+      const std::string full = e.path().generic_string();
+      if (full.size() > prefix) index.emplace(normalizeName(std::string_view(full).substr(prefix)), e.path());
     };
     if (recursive) {
       for (auto it = fs::recursive_directory_iterator(dir, fs::directory_options::skip_permission_denied, ec); !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) add(*it);
