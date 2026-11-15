@@ -4,6 +4,7 @@
 #include <cmath>
 #include <numeric>
 #include <unordered_map>
+#include "bm/collide/tolerances.h"
 #include "bm/connect/tolerances.h"
 
 namespace bm::connect {
@@ -173,7 +174,15 @@ Graph buildGraph(const Model& model, ConnectorDb& db) {
   // Mates, gathered per piece pair.
   struct Pair {
     std::vector<Freedom> freedoms;
+    std::vector<MateZone> zones;
     double grip = 0;
+  };
+  // The volume a mate occupies: along the shorter of the two connectors (the clip, not the
+  // whole bar it holds), a little wider than the wider of them.
+  auto zoneOf = [](const Connector& x, const Connector& y) {
+    if (x.kind == SnapKind::Generic || y.kind == SnapKind::Generic) return MateZone{x.start, x.start, std::max({x.radius, y.radius, collide::kGenericZone}) + collide::kZonePad};
+    const Connector& s = x.length <= y.length ? x : y;
+    return MateZone{s.start, s.start + s.axis * s.length, std::max(x.radius, y.radius) + collide::kZonePad};
   };
   std::unordered_map<uint64_t, Pair> pairs;
   for (uint64_t key : candidates) {
@@ -184,6 +193,7 @@ Graph buildGraph(const Model& model, ConnectorDb& db) {
     const uint32_t lo = std::min(a.piece, b.piece), hi = std::max(a.piece, b.piece);
     Pair& pair = pairs[(static_cast<uint64_t>(lo) << 32) | hi];
     pair.freedoms.push_back(m->freedom);
+    pair.zones.push_back(zoneOf(a.connector, b.connector));
     pair.grip += m->grip;
   }
 
@@ -197,6 +207,9 @@ Graph buildGraph(const Model& model, ConnectorDb& db) {
     c.joint = combine(pair.freedoms);
     c.mates = static_cast<uint16_t>(std::min<size_t>(pair.freedoms.size(), 65535));
     c.grip = pair.grip;
+    c.firstZone = static_cast<uint32_t>(g.zones.size());
+    c.zoneCount = static_cast<uint32_t>(pair.zones.size());
+    g.zones.insert(g.zones.end(), pair.zones.begin(), pair.zones.end());
     groups.join(c.a, c.b);
     if (c.joint.kind == JointKind::Fixed) bodies.join(c.a, c.b);
     attached[c.a] = attached[c.b] = 1;

@@ -8,16 +8,26 @@
 
 namespace bm::connect {
 
+/// The volume of one mate, in model space: a capsule (a sphere when a == b). Inside it the
+/// two joined pieces are allowed to cross, which is how a stud sits in its socket and a bar
+/// in its clip without counting as a collision.
+struct MateZone {
+  Vec3 a, b;
+  double radius = 0;
+};
+
 /// The joint between two pieces (indices into Model::pieces(), a < b).
 struct Connection {
   uint32_t a = 0, b = 0;
   Joint joint;
   uint16_t mates = 0;  ///< connector pairs it is made of
   double grip = 0;     ///< total engaged length, LDU
+  uint32_t firstZone = 0, zoneCount = 0;  ///< its mates' zones in Graph::zones
 };
 
 struct Graph {
   std::vector<Connection> connections;  ///< sorted by (a, b)
+  std::vector<MateZone> zones;          ///< see Connection::firstZone
   std::vector<uint32_t> group;  ///< per piece: id of the connected group it is in (any joint)
   std::vector<uint32_t> body;   ///< per piece: id of its rigid body (fixed joints only)
   std::vector<uint8_t> hasConnectors;  ///< per piece: its part has at least one connector

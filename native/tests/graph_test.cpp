@@ -138,3 +138,18 @@ TEST_CASE("a hose that reaches nothing is still one element, and two hoses are t
   const Graph far = w.graph(piece("c1x1.dat", 0, 0, 0) + piece("seg.dat", 300, 0, 0));
   REQUIRE(far.groups == 2);
 }
+
+TEST_CASE("each mate leaves a zone around it for the collision check", "[graph][zones]") {
+  World w;
+  const Graph g = w.graph(piece("c2x4.dat", 0, 0, 0) + piece("c2x4.dat", 0, -24, 0));
+  REQUIRE(g.connections.size() == 1);
+  REQUIRE(g.connections[0].zoneCount == 8);
+  REQUIRE(g.zones.size() == 8);
+  for (uint32_t i = g.connections[0].firstZone; i < g.connections[0].firstZone + g.connections[0].zoneCount; i++) {
+    const MateZone& z = g.zones[i];
+    REQUIRE(z.radius == 8);  // a stud's 6 plus the pad
+    REQUIRE(std::abs(length(z.b - z.a) - 4) < 1e-9);  // a stud's length
+    REQUIRE((std::min(z.a.y, z.b.y) > -4.01 && std::max(z.a.y, z.b.y) < 0.01));  // between the two bricks
+  }
+  REQUIRE(w.graph(piece("c2x4.dat", 0, 0, 0) + piece("c2x4.dat", 500, 0, 0)).zones.empty());
+}

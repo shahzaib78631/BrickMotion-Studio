@@ -1,32 +1,33 @@
 {
   "engine": "web",
   "date": "2026-11-15",
-  "tier": "smoke",
-  "models": 71,
+  "tier": "full",
+  "models": 3854,
   "failed": 0,
   "errors": {
-    "plan-timeout": 6
+    "plan-timeout": 182,
+    "AssemblyPlanningError": 67
   },
   "totals": {
-    "pieces": 38986,
-    "joined": 18613,
-    "groups": 7829,
+    "pieces": 872706,
+    "joined": 340796,
+    "groups": 318256,
     "overlaps": 0,
-    "floating": 33,
-    "unknownParts": 1,
-    "fullyJoinedModels": 7,
-    "planned": 71,
-    "planOk": 65,
-    "planFlagged": 2958,
-    "buildFloating": 5287,
-    "modelsWithBuildFloating": 65
+    "floating": 6321,
+    "unknownParts": 8,
+    "fullyJoinedModels": 692,
+    "planned": 3854,
+    "planOk": 3605,
+    "planFlagged": 29074,
+    "buildFloating": 101165,
+    "modelsWithBuildFloating": 3394
   },
   "p50": {
-    "loadMs": 177.792875,
-    "planMs": 13088.984459
+    "loadMs": 62.188417000000015,
+    "planMs": 2023.188917
   },
   "p95": {
-    "loadMs": 556.955833,
-    "planMs": 180000
+    "loadMs": 629.117041,
+    "planMs": 162987.54975
   }
 }
