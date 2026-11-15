@@ -1,0 +1,6 @@
+{"format":"brickmotion-plan","version":1,"name":"Tower","futureTop":{"keep":[1,2,3]},
+ "steps":[
+  {"title":"Base","futureStep":true,"pieces":[{"part":"3001","color":4,"x":0,"y":0,"z":0,"rot":0,"futurePiece":"x"},{"part":"3005","color":"Red","x":4,"y":0,"z":0,"rot":0}]},
+  {"pieces":[{"submodel":"cap","x":0,"y":3,"z":0,"rot":90},{"id":"raw1","part":"3005","color":1,"ldu":[100,-24,0],"matrix":[1,0,0,0,1,0,0,0,1]},{"part":"3005","color":"no-such-colour","x":9,"y":0,"z":0,"rot":0}]}],
+ "submodels":{"cap":{"steps":[{"pieces":[{"part":"3005","color":16,"x":0,"y":0,"z":0,"rot":0},{"part":"mine","color":2,"x":1,"y":0,"z":0,"rot":0}]}]}},
+ "parts":{"mine.dat":"0 Mine\n0 BFC CERTIFY CCW\n1 16 0 0 0 10 0 0 0 8 0 0 0 10 box.dat\n"}}

@@ -33,7 +33,7 @@ struct Sandbox {
 
 bool sameMesh(const Mesh& a, const Mesh& b) {
   return a.positions == b.positions && a.triangles == b.triangles && a.triColor == b.triColor && a.edges == b.edges && a.missing == b.missing &&
-         a.deps == b.deps && a.sourceHash == b.sourceHash && a.bounds.min == b.bounds.min && a.bounds.max == b.bounds.max;
+         a.deps == b.deps && a.sourceHash == b.sourceHash && a.bounds.min == b.bounds.min && a.bounds.max == b.bounds.max && a.body.min == b.body.min && a.body.max == b.body.max;
 }
 }  // namespace
 

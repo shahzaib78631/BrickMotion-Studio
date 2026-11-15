@@ -16,6 +16,7 @@ struct Mesh {
   std::vector<int32_t> triColor;    ///< per triangle; 16 = the piece's own colour
   std::vector<float> edges;         ///< xyz pairs: the part's outline lines
   Box bounds;                       ///< of triangles and edges; empty when there is no geometry
+  Box body;                         ///< bounds without the studs on top; what grid placement measures
   std::vector<std::string> missing; ///< subfiles that were not found, or closed a reference loop
   /// Every file the part is made of with its Library::stamp (0 = missing), sorted by name.
   std::vector<std::pair<std::string, uint64_t>> deps;

@@ -41,6 +41,7 @@ TEST_CASE("subfiles are placed and summed", "[ldraw][flatten]") {
   const Mesh m = flatten("3001", lib);  // ".dat" may be left off
   REQUIRE_THAT(signedVolume(m), WithinAbs(80.0 * 24 * 40 + 12.0 * 4 * 12, 1e-6));
   REQUIRE((m.bounds.min == Vec3{-40, -4, -20} && m.bounds.max == Vec3{40, 24, 20}));
+  REQUIRE((m.body.min == Vec3{-40, 0, -20} && m.body.max == Vec3{40, 24, 20}));  // without the stud on top
 }
 
 TEST_CASE("a mirrored reference still faces outward", "[ldraw][flatten]") {

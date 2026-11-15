@@ -35,6 +35,12 @@ bool isCurvedPrimitive(std::string_view name) {
   return digits() && i < name.size() && name[i++] == '-' && digits() && name.find('/') == std::string_view::npos;
 }
 
+/// stud.dat, stud2.dat, stud-logo4.dat, ... in any directory.
+bool isStudName(std::string_view name) {
+  if (const size_t slash = name.rfind('/'); slash != std::string_view::npos) name.remove_prefix(slash + 1);
+  return name.rfind("stud", 0) == 0 && name.size() > 4 && name.substr(name.size() - 4) == ".dat";
+}
+
 struct Walker {
   const Library& lib;
   const FlattenOptions& opts;
@@ -47,7 +53,8 @@ struct Walker {
     if (std::find(mesh.missing.begin(), mesh.missing.end(), name) == mesh.missing.end()) mesh.missing.push_back(name);
   }
 
-  uint32_t vertex(Vec3 p) {
+  uint32_t vertex(Vec3 p, bool inStud) {
+    if (!inStud) mesh.body.grow(p);
     const Key key{std::llround(p.x * kWeld), std::llround(p.y * kWeld), std::llround(p.z * kWeld)};
     const auto [it, isNew] = welded.emplace(key, static_cast<uint32_t>(mesh.positions.size() / 3));
     if (isNew) {
@@ -57,8 +64,8 @@ struct Walker {
     return it->second;
   }
 
-  void triangle(Vec3 a, Vec3 b, Vec3 c, int color, bool reverse, bool twoSided) {
-    const uint32_t i = vertex(a), j = vertex(b), k = vertex(c);
+  void triangle(Vec3 a, Vec3 b, Vec3 c, int color, bool reverse, bool twoSided, bool inStud) {
+    const uint32_t i = vertex(a, inStud), j = vertex(b, inStud), k = vertex(c, inStud);
     if (i == j || j == k || i == k) return;  // collapsed by welding
     auto emit = [&](uint32_t p, uint32_t q, uint32_t r) {
       mesh.triangles.insert(mesh.triangles.end(), {p, q, r});
@@ -78,7 +85,7 @@ struct Walker {
     return name;
   }
 
-  void file(const std::string& name, const Xform& xf, int color, bool flip, bool cullable) {
+  void file(const std::string& name, const Xform& xf, int color, bool flip, bool cullable, bool inStud) {
     const File* f = lib.find(name);
     deps.emplace(name, f ? lib.stamp(name) : 0);
     if (!f || stack.size() >= static_cast<size_t>(kMaxDepth) || std::find(stack.begin(), stack.end(), name) != stack.end()) {
@@ -105,23 +112,31 @@ struct Walker {
           if (c.clip >= 0) clip = c.clip == 1;
           break;
         case Cmd::Tri:
-          triangle(point(c.pts), point(c.pts + 3), point(c.pts + 6), own, reverse, twoSided);
+          triangle(point(c.pts), point(c.pts + 3), point(c.pts + 6), own, reverse, twoSided, inStud);
           break;
         case Cmd::Quad:
-          triangle(point(c.pts), point(c.pts + 3), point(c.pts + 6), own, reverse, twoSided);
-          triangle(point(c.pts), point(c.pts + 6), point(c.pts + 9), own, reverse, twoSided);
+          triangle(point(c.pts), point(c.pts + 3), point(c.pts + 6), own, reverse, twoSided, inStud);
+          triangle(point(c.pts), point(c.pts + 6), point(c.pts + 9), own, reverse, twoSided, inStud);
           break;
         case Cmd::Line: {
           const Vec3 a = point(c.pts), b = point(c.pts + 3);
           mesh.edges.insert(mesh.edges.end(), {static_cast<float>(a.x), static_cast<float>(a.y), static_cast<float>(a.z), static_cast<float>(b.x), static_cast<float>(b.y), static_cast<float>(b.z)});
           mesh.bounds.grow(a);
           mesh.bounds.grow(b);
+          if (!inStud) {
+            mesh.body.grow(a);
+            mesh.body.grow(b);
+          }
           break;
         }
-        case Cmd::Ref:
+        case Cmd::Ref: {
           // A mirroring placement turns the subfile's faces inside out, as INVERTNEXT does.
-          file(substitute(c.file), xf * c.xf, own, flip != (c.invert != (determinant(c.xf.r) < 0)), !twoSided);
+          const Xform placed = xf * c.xf;
+          // A stud standing on top of the part is not part of its body.
+          const bool stud = inStud || (isStudName(c.file) && placed.r.m[4] > 0);
+          file(substitute(c.file), placed, own, flip != (c.invert != (determinant(c.xf.r) < 0)), !twoSided, stud);
           break;
+        }
         case Cmd::Step:
           break;
       }
@@ -148,7 +163,8 @@ Mesh flatten(std::string_view partName, const Library& library, const FlattenOpt
   std::string name = normalizeName(partName);
   if (name.find('.') == std::string::npos) name += ".dat";
   Walker w{library, options, {}, {}, {}, {}};
-  w.file(name, Xform::identity(), 16, false, true);
+  w.file(name, Xform::identity(), 16, false, true, false);
+  if (w.mesh.body.empty()) w.mesh.body = w.mesh.bounds;
   w.mesh.deps.assign(w.deps.begin(), w.deps.end());
   w.mesh.sourceHash = hashDeps(w.mesh.deps);
   return std::move(w.mesh);

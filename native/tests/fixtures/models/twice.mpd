@@ -1,0 +1,17 @@
+0 FILE main.ldr
+0 Main
+1 4 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat
+0 STEP
+1 16 100 0 0 1 0 0 0 1 0 0 0 1 wheel pair.ldr
+0 STEP
+1 2 0 0 200 0 0 1 0 1 0 -1 0 0 wheel pair.ldr
+1 7 0 -24 0 1 0 0 0 1 0 0 0 1 custom.dat
+0 FILE wheel pair.ldr
+0 Wheels
+1 16 0 0 0 1 0 0 0 1 0 0 0 1 3005.dat
+0 STEP
+1 1 20 0 0 1 0 0 0 1 0 0 0 1 3005.dat
+0 FILE custom.dat
+0 Custom part
+0 BFC CERTIFY CCW
+1 16 0 0 0 5 0 0 0 5 0 0 0 5 box.dat

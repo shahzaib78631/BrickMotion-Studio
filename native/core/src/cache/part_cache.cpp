@@ -111,6 +111,7 @@ std::string encode(const Mesh& m) {
   w.put(static_cast<uint32_t>(m.missing.size()));
   for (const std::string& name : m.missing) w.text(name);
   for (double v : {m.bounds.min.x, m.bounds.min.y, m.bounds.min.z, m.bounds.max.x, m.bounds.max.y, m.bounds.max.z}) w.put(v);
+  for (double v : {m.body.min.x, m.body.min.y, m.body.min.z, m.body.max.x, m.body.max.y, m.body.max.z}) w.put(v);
   w.array(m.positions);
   w.array(m.triangles);
   w.array(m.triColor);
@@ -132,6 +133,9 @@ bool decode(const unsigned char* data, size_t size, Mesh& m) {
   for (double& v : b) v = r.get<double>();
   m.bounds.min = {b[0], b[1], b[2]};
   m.bounds.max = {b[3], b[4], b[5]};
+  for (double& v : b) v = r.get<double>();
+  m.body.min = {b[0], b[1], b[2]};
+  m.body.max = {b[3], b[4], b[5]};
   r.array(m.positions);
   r.array(m.triangles);
   r.array(m.triColor);
