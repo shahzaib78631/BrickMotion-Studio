@@ -1,0 +1,7 @@
+file(GLOB BM_TEST_SOURCES CONFIGURE_DEPENDS *_test.cpp)
+add_executable(bmcore_tests ${BM_TEST_SOURCES})
+target_link_libraries(bmcore_tests PRIVATE bmcore bm_warnings Catch2::Catch2WithMain)
+target_compile_definitions(bmcore_tests PRIVATE BM_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
+include(Catch)
+catch_discover_tests(bmcore_tests)
