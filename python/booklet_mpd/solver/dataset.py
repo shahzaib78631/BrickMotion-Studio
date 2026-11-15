@@ -127,7 +127,7 @@ def cases(set_number: str, with_images: bool = True, max_parts: int = 400) -> li
     pair = pairs()[set_number]
     extract, _folder = extract_of(set_number)
     steps = extract["steps"]
-    scoped = build_scoped_steps(str(pair.omr), expand_submodels=row["truth_mode"] == "expand", warnings=[])
+    scoped = build_scoped_steps(row.get("omr_file") or str(pair.omr), expand_submodels=row["truth_mode"] == "expand", warnings=[])
     groups = row["groups"]
     visible, context = group_visible(scoped, groups), group_context(scoped, groups)
     if row["truth_mode"] == "lump":         # one flat model: separately built assemblies must be found

@@ -242,7 +242,8 @@ def truth_model(set_number: str) -> list:
     """The answer key's whole model, every submodel expanded into the main model's frame."""
     from .dataset import pairs
     from .mepnet import flatten, parse_mpd
-    files = parse_mpd(Path(pairs()[set_number].omr).read_text(errors="replace"))
+    from .dataset import audit_rows
+    files = parse_mpd(Path(audit_rows()[set_number].get("omr_file") or pairs()[set_number].omr).read_text(errors="replace"))
     return flatten(files, next(iter(files)), np.eye(4))
 
 

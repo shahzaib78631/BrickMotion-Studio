@@ -99,3 +99,32 @@ def test_audit_survives_one_malformed_omr_line_and_records_it(tmp_path):
     mpd.write_text("\n".join(["0 FILE a.ldr", good, good, "0 STEP", good, good, good, bad, "0 STEP", "0 NOFILE"]) + "\n")
     r = audit_pair(pair(tmp_path, pdf, mpd), tmp_path / "work")
     assert r["alignment_ok"] is True and len(r["omr_warnings"]) >= 1
+
+
+def test_audit_picks_the_alternate_model_the_booklet_builds(tmp_path):
+    """A 3-in-1 booklet can build an alternate model (31088: Angler-Fish): the audit tries every model file
+    of the set and keeps the one the booklet's steps align with."""
+    pdf = tmp_path / "b.pdf"
+    make_pdf(pdf)
+    models = tmp_path / "31088-1"
+    models.mkdir()
+    main, alt = models / "31088-1.mpd", models / "31088-1_Alt.mpd"
+    make_mpd(main, [9, 9, 9, 9])
+    make_mpd(alt, [2, 3])
+    r = audit_pair(pair(tmp_path, pdf, main), tmp_path / "work")
+    assert r["omr_file"] == str(alt) and r["aligned"] == [[0, 0], [1, 1]]
+
+
+def test_audit_pairs_a_submodel_the_booklet_builds_first(tmp_path):
+    """31088's booklet builds the little fish first; the model file expands it last (where the main model
+    uses it). The audit may move a sub-model's block of steps to pair them; pairs keep the file's step numbers."""
+    pdf, mpd = tmp_path / "b.pdf", tmp_path / "m.mpd"
+    make_pdf(pdf)                                               # booklet steps: 2 pieces, then 3
+    mpd.write_text("\n".join(["0 FILE main.ldr"] + ["1 4 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat"] * 3 + ["0 STEP",
+                              "1 4 0 -24 0 1 0 0 0 1 0 0 0 1 sub.ldr", "0 STEP", "0 NOFILE",
+                              "0 FILE sub.ldr"] + ["1 2 0 0 0 1 0 0 0 1 0 0 0 1 3003.dat"] * 2 + ["0 STEP", "0 NOFILE"]) + "\n")
+    r = audit_pair(pair(tmp_path, pdf, mpd), tmp_path / "work")
+    assert r["truth_mode"] == "expand"
+    assert [b for b, _o in r["aligned"]] == [0, 1]
+    first_omr, second_omr = (o for _b, o in r["aligned"])
+    assert first_omr > second_omr                               # the sub-model's step, then the main model's
