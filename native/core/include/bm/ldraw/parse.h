@@ -33,6 +33,7 @@ struct File {
   std::vector<std::string> help;  ///< `0 !HELP` lines
   std::vector<Command> cmds;
   int skipped = 0;  ///< malformed lines that were dropped
+  uint64_t hash = 0;  ///< FNV-1a of the source text: changes when the file's bytes change
 };
 
 /// Trims, turns '\' into '/', lower-cases (ASCII).

@@ -216,6 +216,9 @@ std::string normalizeName(std::string_view name) {
 File parse(std::string_view text, std::string_view name) {
   Parser p;
   p.file.name = normalizeName(name);
+  uint64_t h = 1469598103934665603ull;
+  for (unsigned char c : text) h = (h ^ c) * 1099511628211ull;
+  p.file.hash = h ? h : 1;  // 0 is reserved for "no such file"
   eachLine(text, [&](std::string_view l) { p.line(l); });
   return std::move(p.file);
 }

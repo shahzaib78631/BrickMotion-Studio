@@ -1,0 +1,6 @@
+0 LDraw.org Configuration File
+0 !COLOUR Black            CODE   0   VALUE #1B2A34   EDGE #808080
+0 !COLOUR Red              CODE   4   VALUE #B40000   EDGE #333333
+0 !COLOUR Trans_Red        CODE  36   VALUE #C91A09   EDGE #880000   ALPHA 128
+0 !COLOUR Chrome_Gold      CODE 334   VALUE #DFC176   EDGE #C2982E   CHROME
+0 !COLOUR Broken           CODE  xx   VALUE #000000   EDGE #000000
