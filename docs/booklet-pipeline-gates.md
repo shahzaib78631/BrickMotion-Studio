@@ -294,3 +294,46 @@ P5 setup: a small CNN trained on 12,158 callout ↔ parts-list pairs, 2,873 of t
 **Gate 1 now:**
 - Train: **90.1%** (parts list 95.4%, no list 84.8%, Technic 74.6%).
 - Validation, 31 clean sets: **88.7%** (was 88.1%; Technic 74.4% → 80.6%).
+
+### 15 Nov: answer-key pairing, look-alike parts, Sagrada book 1
+
+**Pairing (`audit.py`, 167 sets re-audited):**
+- Alternate model files are tried (3-in-1 sets): 31088 is the Angler-Fish.
+- Sub-model runs can move to the front (a booklet builds the small fish first).
+- Root models are reordered by the callout pictures: the booklet's steps are fitted as one stretch per model
+  (exact for ≤ 8 models, relaxed above; 42112 has 28). 40413 builds blast, charlie, gelo, mvp, mvpshooter,
+  tricky; 42076 builds the truck first.
+- Choosing among candidates: booklet coverage within 0.05 of the best, then picture agreement. The file's own
+  order keeps a 0.02 edge. File coverage is not used: it let 40353 fall from 132/134 to 26/109.
+
+| Set | Before | After |
+|---|---|---|
+| 40413 | 53/116 | 126/131 |
+| 42076 | 16/121 | 51/85 |
+| 40274 | 58/69 | 62/66 |
+
+Still open:
+- 41621: its inventory does not match the key.
+- 10270: one booklet of a multi-booklet set.
+
+**Look-alikes (`parts.template_score`):**
+- LEGO draws a callout and its parts-list picture from one render, at a fixed ratio (1.33 on every booklet).
+- The scaled parts-list picture is laid over the callout with normalised correlation, small shifts and ±6%
+  scale.
+- Plate 1x3 with 3 studs vs 2 studs scored 0.944 vs 0.939 before; the overlay gives 0.94 vs 0.34.
+- It has a 0.3 share among the top 6 candidates, and is used only when some candidate overlays at ≥ 0.8.
+  Big parts are drawn smaller in callouts; ungated, this cost 40440 3 parts.
+
+**Sagrada 21065 book 1 vs the reviewed parts list (447 steps, 4,043 parts; not tuned on):**
+- Before: 98.1%, 411/447 steps.
+- After: **99.7%**, 435/447 steps.
+
+**Gate 1 now:**
+- Train: **92.5%** of parts, 85.3% of steps (parts list 96.9%, no list 85.8%, Technic 80.3%). Same answer keys,
+  overlay off: 92.4%.
+- Validation, 31 clean sets: **87.0%**.
+  - The re-audit adds 615 parts to the validation keys (4,357 → 4,972), and the reader gets 463 of them right.
+  - On the old keys the same reader scores 88.7%; the overlay adds +3 parts.
+  - Validation is aggregate only, so which new pairings are wrong is not looked at.
+- Largest Technic "miss" (24 parts): the key embeds 61332 (black friction pin, type 2) and the booklet's element
+  is 2780, the older mould of the same pin. They are not merged; that is a decision for the owner.
