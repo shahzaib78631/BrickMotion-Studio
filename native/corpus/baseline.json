@@ -2,31 +2,31 @@
   "engine": "web",
   "date": "2026-11-15",
   "tier": "smoke",
-  "models": 59,
-  "failed": 5,
+  "models": 71,
+  "failed": 0,
   "errors": {
-    "timeout": 5
+    "plan-timeout": 6
   },
   "totals": {
-    "pieces": 17250,
-    "joined": 9275,
-    "groups": 3410,
+    "pieces": 38986,
+    "joined": 18613,
+    "groups": 7829,
     "overlaps": 0,
-    "floating": 7,
-    "unknownParts": 0,
+    "floating": 33,
+    "unknownParts": 1,
     "fullyJoinedModels": 7,
-    "planned": 54,
-    "planOk": 54,
-    "planFlagged": 1841,
-    "buildFloating": 3853,
-    "modelsWithBuildFloating": 54
+    "planned": 71,
+    "planOk": 65,
+    "planFlagged": 2958,
+    "buildFloating": 5287,
+    "modelsWithBuildFloating": 65
   },
   "p50": {
-    "loadMs": 123.49220799999998,
-    "planMs": 5606.064832999999
+    "loadMs": 177.792875,
+    "planMs": 13088.984459
   },
   "p95": {
     "loadMs": 556.955833,
-    "planMs": 98471.494
+    "planMs": 180000
   }
 }
