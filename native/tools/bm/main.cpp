@@ -7,12 +7,14 @@
 #include "commands.h"
 
 namespace {
-int cmdVersion(const std::vector<std::string_view>&) {
+int cmdVersion(const bm::cli::Args&) {
   std::printf("bm %s\n", bm::version());
   return 0;
 }
 
 const bm::cli::Command kCommands[] = {
+    {"load", "load a model file and describe it", bm::cli::cmdLoad},
+    {"audit", "load every model in a corpus manifest and write the scoreboard", bm::cli::cmdAudit},
     {"version", "print the engine version", cmdVersion},
 };
 
