@@ -29,7 +29,8 @@ struct Row {
   int withoutConnectors = 0;  ///< pieces whose part has no connector data
   int segments = 0;           ///< flexible-element segments and bare primitives placed as pieces
   int partsAttached = 0;      ///< non-segment pieces with at least one connection
-  int joints[5] = {};         ///< connections per connect::JointKind
+  int partsJoined = 0;        ///< the most non-segment pieces in any one group
+  int joints[connect::kJointKinds] = {};         ///< connections per connect::JointKind
   double graphMs = 0;
   std::map<std::string, int> noConnectorParts;  ///< part -> pieces, for parts with no connectors
   std::map<std::string, int> unmatedParts;      ///< part -> pieces that have connectors but joined nothing

@@ -185,3 +185,65 @@ TEST_CASE("extra connectors can be registered for a part", "[connectors][seats]"
   REQUIRE(f.db.get("rim.dat")->at(0).gender == Gender::Male);
   REQUIRE(loadWheelSeats("not json", f.db) == 0);
 }
+
+#include <fstream>
+#include "bm/connect/studio.h"
+
+namespace {
+/// A Studio grid record with an identity frame, as bytes.
+std::string studioGrid(int32_t code, float x, float y, float z, int nx, int nz) {
+  std::string out;
+  auto put = [&](auto v) { out.append(reinterpret_cast<const char*>(&v), sizeof v); };
+  put(code);
+  for (float v : {1.f, 0.f, 0.f, 0.f, 1.f, 0.f, 0.f, 0.f, 1.f, x, y, z}) put(v);
+  put(static_cast<int16_t>(nz * 2));
+  put(static_cast<int16_t>(nx * 2));
+  out.append(static_cast<size_t>(8 + 16 * nx * nz + 8 * (nx + nz) - 4), '\0');
+  return out;
+}
+}  // namespace
+
+TEST_CASE("Studio data fills in what the shadow library lacks, without doubling what it has", "[connectors][studio]") {
+  const fs::path dir = fs::temp_directory_path() / "bm_studio_merge_test";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+  auto write = [&](const char* name, const std::string& bytes) { std::ofstream(dir / name, std::ios::binary) << bytes; };
+  write("plain.conn", studioGrid(0x170003, -10, 0, 10, 1, 1) + studioGrid(0x2, -10, 24, 10, 1, 1));  // a part with no shadow data
+  write("c1x1.conn", studioGrid(0x170003, -10, 0, 10, 1, 1) + studioGrid(0x2, -10, 24, 10, 1, 1));   // same as its shadow data
+  write("c2x4.conn", studioGrid(0x2, -40, 12, 20, 1, 1));                                             // one socket the shadow data does not have
+  Fixture f;
+  const StudioLibrary studio(dir);
+  f.db.setStudio(&studio);
+  const auto plain = f.db.get("plain.dat");
+  REQUIRE(plain->size() == 2);
+  REQUIRE(plain->at(0).source == Source::Studio);
+  REQUIRE(f.db.get("c1x1.dat")->size() == 2);  // nothing added
+  const auto brick = f.db.get("c2x4.dat");
+  REQUIRE(brick->size() == 17);
+  REQUIRE(std::count_if(brick->begin(), brick->end(), [](const Connector& x) { return x.source == Source::Studio; }) == 1);
+  // An embedded copy of the part gets the same data.
+  const ldraw::Library model = f.lib.withInline(ldraw::parseMpd("0 FILE 999 - plain.dat\n0 plain\n3 16 0 0 0 1 0 0 0 0 1\n", "m.mpd"));
+  REQUIRE(f.db.get("999 - plain.dat", &model)->size() == 2);
+  fs::remove_all(dir);
+}
+
+TEST_CASE("BrickNet hinge and ball rows become connectors", "[connectors][bricknet]") {
+  Fixture f;
+  REQUIRE(loadBricknetJoints(R"({"parts":{"plain":[["hinge",3,0,-32,5,60,0,-90],["ball",1,1,0,10,0]],
+                                          "c1x1":[["hinge",3,1,0,0,0,90,0]],
+                                          "bad":[["hinge",3],["what",1,0,0,0,0],7]}})", f.db) == 3);
+  const auto c = f.db.get("plain.dat");
+  REQUIRE(c->size() == 2);
+  const Connector& hinge = c->at(0);
+  REQUIRE((hinge.kind == SnapKind::Generic && hinge.source == Source::BrickNet && hinge.placement == "hinge" && hinge.group == "bricknet-hinge-3"));
+  REQUIRE(hinge.gender == Gender::Male);  // "in"
+  REQUIRE(near(hinge.start, {-32, 5, 60}));
+  REQUIRE(near(hinge.axis, {-1, 0, 0}, 1e-6));  // roll -90 lays the frame's -Y along -x
+  const Connector& ball = c->at(1);
+  REQUIRE((ball.gender == Gender::Female && ball.placement == "free" && ball.group == "bricknet-ball-1"));
+  const auto brick = f.db.get("c1x1.dat");
+  const auto added = std::find_if(brick->begin(), brick->end(), [](const Connector& x) { return x.source == Source::BrickNet; });
+  REQUIRE(added != brick->end());
+  REQUIRE(near(added->axis, {0, 0, -1}, 1e-6));  // pitch 90
+  REQUIRE(loadBricknetJoints("[]", f.db) == 0);
+}

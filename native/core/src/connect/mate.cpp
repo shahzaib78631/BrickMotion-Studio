@@ -179,6 +179,12 @@ std::optional<Mate> generics(const Connector& a, const Connector& b) {
   auto isBall = [](const Connector& c) { return c.bounding.rfind("sph", 0) == 0 || c.placement == "free"; };
   Mate out;
   out.grip = std::max(a.radius, b.radius);
+  if (a.placement == "hinge" || b.placement == "hinge") {
+    // Two hinge halves: they share the hinge line and turn about it.
+    if (!parallel(a.axis, b.axis)) return std::nullopt;
+    out.freedom = {true, false, false, a.start, a.axis};
+    return out;
+  }
   out.freedom.ball = isBall(a) || isBall(b);
   out.freedom.point = a.start;
   out.freedom.axis = a.axis;
@@ -278,6 +284,7 @@ const char* name(JointKind kind) {
     case JointKind::Prismatic: return "prismatic";
     case JointKind::Cylindrical: return "cylindrical";
     case JointKind::Spherical: return "spherical";
+    case JointKind::Flexible: return "flexible";
   }
   return "fixed";
 }

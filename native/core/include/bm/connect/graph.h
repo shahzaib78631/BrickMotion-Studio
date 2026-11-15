@@ -25,8 +25,10 @@ struct Graph {
   /// primitive placed in the model, not a part that connects by itself.
   std::vector<uint8_t> isSegment;
   uint32_t segments = 0;
+  uint32_t flexibleRuns = 0;  ///< flexible elements made of two or more segments
   uint32_t groups = 0, bodies = 0;
   uint32_t largestGroup = 0;       ///< pieces in the largest group
+  uint32_t largestGroupParts = 0;  ///< the most non-segment pieces any one group holds
   uint32_t attached = 0;           ///< pieces with at least one connection
   uint32_t withoutConnectors = 0;  ///< pieces whose part has no connector at all
 };

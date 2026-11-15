@@ -55,6 +55,11 @@ class ConnectorDb {
   /// computed on each call and not shared. Never null; unknown parts have none.
   std::shared_ptr<const std::vector<Connector>> get(std::string_view partName, const ldraw::Library* modelLibrary = nullptr);
 
+  /// Adds BrickLink Studio's connectivity as a second source (must outlive the database).
+  /// A Studio connector is added only where the part has no connector already doing the same
+  /// job at that place, so the shadow library stays the primary source. Call before get().
+  void setStudio(const class StudioLibrary* studio);
+
   /// Registers connectors for a part from a source other than the shadow library. They are
   /// added to whatever the part already has. Call before the first get().
   void add(std::string_view partName, std::vector<Connector> connectors);
@@ -68,5 +73,10 @@ class ConnectorDb {
 /// as connectors of shape 'T', centred on the part's origin. Returns how many were added;
 /// malformed entries are skipped.
 size_t loadWheelSeats(std::string_view json, ConnectorDb& db);
+
+/// Reads hinge and ball joints from BrickNet's catalogue (native/data/bricknet-joints.json).
+/// A hinge half turns about its axis; halves of one type mate ("in" with "on"). Returns how
+/// many connectors were added; malformed rows are skipped.
+size_t loadBricknetJoints(std::string_view json, ConnectorDb& db);
 
 }  // namespace bm::connect

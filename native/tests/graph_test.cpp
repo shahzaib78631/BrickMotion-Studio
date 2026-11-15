@@ -118,3 +118,23 @@ TEST_CASE("anything the library marks as not for use on its own is a segment", "
   const Graph g = w.graph("0 FILE main.ldr\n1 4 0 0 0 1 0 0 0 1 0 0 0 1 8258 - ls70.dat\n1 4 50 0 0 1 0 0 0 1 0 0 0 1 cable.dat\n1 4 90 0 0 1 0 0 0 1 0 0 0 1 mine.dat\n0 FILE 8258 - ls70.dat\n3 16 0 0 0 1 0 0 0 0 1\n0 FILE mine.dat\n0 My own part\n3 16 0 0 0 1 0 0 0 0 1\n");
   REQUIRE(g.isSegment == std::vector<uint8_t>{1, 1, 0});
 }
+
+TEST_CASE("a run of hose segments is one flexible element joined to the parts at its ends", "[graph][flexible]") {
+  World w;
+  const Graph g = w.graph(piece("c1x1.dat", 0, 0, 0) + piece("seg.dat", 20, 0, 0) + piece("seg.dat", 30, 0, 0) + piece("seg.dat", 40, 0, 0) + piece("c1x1.dat", 60, 0, 0));
+  REQUIRE(g.groups == 1);
+  REQUIRE(g.flexibleRuns == 1);
+  REQUIRE(g.bodies == 5);  // nothing here is rigidly joined
+  REQUIRE(std::count_if(g.connections.begin(), g.connections.end(), [](const Connection& c) { return c.joint.kind == JointKind::Flexible; }) == 4);
+  REQUIRE(g.attached == 5);
+}
+
+TEST_CASE("a hose that reaches nothing is still one element, and two hoses are two", "[graph][flexible]") {
+  World w;
+  const Graph g = w.graph(piece("seg.dat", 0, 0, 0) + piece("seg.dat", 10, 0, 0) + piece("seg.dat", 500, 0, 0) + piece("seg.dat", 510, 0, 0) + piece("c2x4.dat", 2000, 0, 0));
+  REQUIRE(g.flexibleRuns == 2);
+  REQUIRE(g.groups == 3);
+  // A lone segment next to a part does not get glued to something far away.
+  const Graph far = w.graph(piece("c1x1.dat", 0, 0, 0) + piece("seg.dat", 300, 0, 0));
+  REQUIRE(far.groups == 2);
+}

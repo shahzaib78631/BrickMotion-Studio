@@ -71,49 +71,72 @@ Sagrada 21065 is not in `samples/`, so its cold/warm load target (< 5 s / < 1 s)
 
 ## Phase 2 results (2026-11-15): joints
 
-`bm joints <file> [--why <part>]` lists a model's joints and, for pieces that joined nothing, the nearest
-connectors and why each was rejected. `bm audit` adds joint columns and writes `unjoined-parts.json`.
+```bash
+native/build/tools/bm/bm joints <file> [--why <part>] [--groups] [--no-studio]
+```
 
-Connector data: the LDCad shadow library (`BM_SHADOW_DIR`, default `vendor/LDCadShadowLibrary`, CC BY-SA 4.0)
-and measured tyre bores and rim seats (`native/data/wheel-seats.json`, exported from
-`src/data/wheelSeats.generated.ts`).
+Lists a model's joints. `--why <part>` shows, for unjoined pieces of that part, the nearest connectors and
+why each was rejected; `--groups` shows the largest groups and what nearly joins them. `bm audit` adds joint
+columns and writes `unjoined-parts.json`.
+
+### Connector sources
+
+| Source | Where | What it gives |
+|---|---|---|
+| LDCad shadow library | `BM_SHADOW_DIR`, default `vendor/LDCadShadowLibrary` (CC BY-SA 4.0) | the primary source: 4,292 files, inherited through subfiles |
+| BrickLink Studio connectivity | `BM_STUDIO_DIR`, default `/Applications/Studio 2.0/ldraw/connectivity` | 9,271 files: studs, anti-studs, pin holes, pins, axles, axle holes, paired hinge and wheel halves. Added only where the part has nothing doing the same job. Read from the installed app; not in this repository |
+| Wheel seats | `native/data/wheel-seats.json` | measured tyre bores and rim seats for 173 parts |
+| BrickNet joints | `native/data/bricknet-joints.json` (catalogue code MIT) | hinge and ball joints for 1,524 parts |
+
+The Studio format is unpublished; `core/include/bm/connect/studio.h` lists the record types that are read
+and the parts each was checked on. Every other record type is skipped.
+
+### Against the web engine
 
 Pieces in the largest connected group, on models both engines measured:
 
-| Source | Models | Native | Web | Fully joined models, native / web |
-|---|---|---|---|---|
-| OMR | 768 | 65.9% | 37.4% | 116 / 39 |
-| Reference sets | 6 | 77.6% | 34.5% | 0 / 0 |
-| MOC | 12 | 69.2% | 59.8% | 0 / 0 |
-| BrickNet | 2,000 | 96.6% | 78.6% | 1,620 / 637 |
+| Source | Models | Native | Web | Fully joined models, native / web | Groups, native / web |
+|---|---|---|---|---|---|
+| OMR | 914 | 80.3% | 37.3% | 226 / 43 | 10,675 / 169,974 |
+| Reference sets | 6 | 84.4% | 34.5% | 1 / 0 | 97 / 2,428 |
+| MOC | 12 | 75.3% | 59.8% | 0 / 0 | 419 / 1,541 |
+| BrickNet | 2,000 | 98.0% | 78.6% | 1,780 / 637 | 2,436 / 9,624 |
 
 Whole corpus (3,854 models, 872,970 pieces), native:
 
-- 154,064 pieces are stretches of hoses, cables and strings, or bare primitives, placed as pieces. They are
-  marked as segments and are not expected to connect one by one.
-- Of the remaining pieces, **97.8% have at least one joint**.
-- 1,905 models are a single connected group.
-- The joint graph takes a median of 2.9 ms per model (95th percentile 54 ms, measured while the baseline job
-  was also running).
+- 98.7% of pieces have at least one joint; 2,232 models are one connected group.
+- 154,064 pieces are stretches of hoses, cables and strings. Consecutive stretches are chained into one
+  flexible element whose ends attach to the parts they meet (153,218 flexible joints).
+- Joint kinds: 358,986 fixed, 343,359 revolute, 193,402 turning-and-sliding, 74,406 sliding, 1,710 ball.
+- The joint graph takes a median of 2.7 ms per model, 95th percentile 53 ms; the whole corpus, loading
+  included, takes 8.2 s on 10 threads.
 
-A model file often holds several separate things (minifigures, spare builds), so 100% in one group is not
-the target for every file; "pieces with at least one joint" is the cleaner measure.
+Reference sets: 8880 is 96.8% one group with 99.2% of pieces attached; 42000 is 99.3%; the helicopter is
+one group; every piece of 5590 is attached, in two groups.
 
-### What is still unjoined
+A model file often holds several separate things (train cars, minifigures, two BrickHeadz), so one group
+per file is not the target for every file. `moc/10001-1` is 53 groups because it is several vehicles.
 
-About 16,000 non-segment pieces, from `unjoined-parts.json`:
+### What is still unjoined: about 11,300 pieces (1.3%)
 
-- **Has connectors, mated nothing (10,933):** Technic pins `2780` (756) sitting in holes of parts with no hole
-  data; tyres `6015`, `3641`, `30028`, `3139`, `87697` whose wheels have no seat data; round 1x1 parts `98138`,
-  `6141`, `3062b` (hollow-stud primitives `stud4`/`stud4a` carry no connector); hinge parts `43722`/`43723`,
-  `4593`. Some are genuinely built at angles no connection allows (`6141` at 15 degrees in 10037).
-- **No connector data at all (5,231):** chain links `30104k02`, window glass `4862`/`60602`, parts embedded
-  under names the data does not know, a few custom parts.
+- **Has connectors, mated nothing (7,718).** Looked at with `--why`:
+  - `2780` pins (756): the pin lies outside the hole it is next to, in a part with no hole data.
+  - `98138`, `6141` round 1x1 parts (880): mostly placed 13 to 63 degrees off any stud, as decoration.
+  - `3069b` tiles (172): placed half a stud off, which no stud holds.
+  - `3062b` (180): placed 1 LDU above where a stud would reach.
+  - Window glass `60602`, `4862` (373): glass sits in a frame's groove; there is no connector type for that yet.
+- **No connector data (3,594):** chain links `30104k02`, embedded copies of parts under names no source knows
+  (`42069 - 88323`), custom parts (`myrubbercyl`).
+- `moc/modern_fighter_jet.mpd` is 28.6% attached: its pieces are not placed on each other's studs.
 
-Not read yet, and what each should add: BrickLink Studio connectivity (studs and anti-studs for about 9,200
-parts, installed at `/Applications/Studio 2.0/ldraw/connectivity`), BrickNet joint labels (hinges and balls
-for 1,524 parts), Kinebrick connections, and detection on the part mesh for parts no source covers.
-Flexible segments still need grouping into one part with connectors at its two ends.
+### Not done
+
+- No check yet that the engine does not join things that are *not* joined. BrickNet's joint labels are the
+  planned truth for that ("joint agreement" in the design).
+- Kinebrick data and detection from the part mesh are not read. Studio record types `0xd0000`, `0xa0000`,
+  `0xc0000` and others are not understood.
+- A glass-in-frame connector, and magnets (train couplings), do not exist yet.
+- A flexible element is attached by nearness at its ends, not by a typed end connector.
 
 ### Rules the corpus corrected
 

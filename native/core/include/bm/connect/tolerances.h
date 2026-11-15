@@ -38,6 +38,14 @@ inline constexpr double kTyreSlack = 3.0;
 /// A clip with no stated length holds this much bar.
 inline constexpr double kMinClipLength = 2.0;
 
+/// Consecutive segments of one hose or cable lie this close together (origin to origin).
+/// Generated segments are a few LDU long; a gap larger than this starts another element.
+inline constexpr double kSegmentGap = 40.0;
+
+/// How near a part's connector must be to the end of a flexible element for the element
+/// to count as attached there.
+inline constexpr double kSegmentReach = 14.0;
+
 /// Spatial hash cell for finding candidate pairs. Larger than any connector radius.
 inline constexpr double kHashCell = 16.0;
 

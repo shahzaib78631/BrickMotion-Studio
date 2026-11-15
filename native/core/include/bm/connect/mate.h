@@ -32,7 +32,10 @@ std::optional<Mate> mate(const Connector& a, const Connector& b);
 /// empty when they do. For diagnosing pieces that stay unjoined.
 std::string whyNot(const Connector& a, const Connector& b);
 
-enum class JointKind : uint8_t { Fixed, Revolute, Prismatic, Cylindrical, Spherical };
+/// Flexible: the two pieces are stretches of one hose, cable or string, or a part such an
+/// element is attached to. It holds them together without fixing their relative pose.
+enum class JointKind : uint8_t { Fixed, Revolute, Prismatic, Cylindrical, Spherical, Flexible };
+inline constexpr int kJointKinds = 6;
 
 struct Joint {
   JointKind kind = JointKind::Fixed;

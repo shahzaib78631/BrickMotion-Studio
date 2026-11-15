@@ -202,13 +202,69 @@ Graph buildGraph(const Model& model, ConnectorDb& db) {
     attached[c.a] = attached[c.b] = 1;
     g.connections.push_back(c);
   }
+  // Flexible elements. A bent hose or cable is stored as a run of short segment pieces, one
+  // after another in the file. The run is one element: its segments are chained, and each end
+  // is attached to the part it meets there (the piece next to it in the file if that is close,
+  // otherwise whichever part has a connector at the end).
+  auto flex = [&](uint32_t a, uint32_t b) {
+    Connection c;
+    c.a = std::min(a, b);
+    c.b = std::max(a, b);
+    c.joint.kind = JointKind::Flexible;
+    c.joint.point = pieces[b].world.t;
+    c.joint.axis = {0, -1, 0};
+    groups.join(a, b);
+    attached[a] = attached[b] = 1;
+    g.connections.push_back(c);
+  };
+  auto near = [&](uint32_t a, uint32_t b, double reach) { return length(pieces[a].world.t - pieces[b].world.t) <= reach; };
+  auto attachEnd = [&](uint32_t end, uint32_t neighbour, bool haveNeighbour) {
+    if (haveNeighbour && !g.isSegment[neighbour] && pieces[neighbour].path == pieces[end].path && near(end, neighbour, kSegmentGap)) {
+      flex(end, neighbour);
+      return;
+    }
+    double best = kSegmentReach;
+    uint32_t who = n;
+    for (const Placed& p : placed) {
+      if (g.isSegment[p.piece]) continue;
+      const double d = std::min(length(p.connector.start - pieces[end].world.t), length(p.connector.start + p.connector.axis * p.connector.length - pieces[end].world.t));
+      if (d < best) {
+        best = d;
+        who = p.piece;
+      }
+    }
+    if (who != n) flex(end, who);
+  };
+  for (uint32_t i = 0; i < n;) {
+    if (!g.isSegment[i]) {
+      i++;
+      continue;
+    }
+    uint32_t last = i;
+    while (last + 1 < n && g.isSegment[last + 1] && pieces[last + 1].path == pieces[i].path && near(last, last + 1, kSegmentGap)) {
+      flex(last, last + 1);
+      last++;
+    }
+    if (last > i) g.flexibleRuns++;
+    attachEnd(i, i - 1, i > 0);
+    attachEnd(last, last + 1, last + 1 < n);
+    i = last + 1;
+  }
+
   std::sort(g.connections.begin(), g.connections.end(), [](const Connection& x, const Connection& y) { return x.a != y.a ? x.a < y.a : x.b < y.b; });
+
+  // An element's end can reach the same part by both routes; keep one connection per pair.
+  g.connections.erase(std::unique(g.connections.begin(), g.connections.end(), [](const Connection& x, const Connection& y) { return x.a == y.a && x.b == y.b; }), g.connections.end());
 
   g.groups = groups.label(g.group);
   g.bodies = bodies.label(g.body);
   std::vector<uint32_t> sizes(g.groups, 0);
   for (uint32_t id : g.group) sizes[id]++;
   for (uint32_t s : sizes) g.largestGroup = std::max(g.largestGroup, s);
+  std::vector<uint32_t> partSizes(g.groups, 0);
+  for (uint32_t i = 0; i < n; i++)
+    if (!g.isSegment[i]) partSizes[g.group[i]]++;
+  for (uint32_t s : partSizes) g.largestGroupParts = std::max(g.largestGroupParts, s);
   g.attached = static_cast<uint32_t>(std::count(attached.begin(), attached.end(), 1));
   return g;
 }

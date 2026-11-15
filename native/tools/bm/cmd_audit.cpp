@@ -6,6 +6,7 @@
 #include <sstream>
 #include "bm/audit.h"
 #include "bm/jobs.h"
+#include "bm/connect/studio.h"
 #include "commands.h"
 
 namespace bm::cli {
@@ -70,11 +71,17 @@ int cmdAudit(const Args& args) {
   ldraw::PartCache cache(library, cacheDir);
   const connect::ShadowLibrary shadow(shadowDir);
   connect::ConnectorDb connectors(library, shadow);
+  const connect::StudioLibrary studio(flag(args, "--no-studio") ? fs::path() : connect::StudioLibrary::defaultDirectory());
+  connectors.setStudio(&studio);
   {
     std::ifstream seats(repo / "native" / "data" / "wheel-seats.json");
     std::stringstream text;
     text << seats.rdbuf();
     connect::loadWheelSeats(text.str(), connectors);
+    std::ifstream joints(repo / "native" / "data" / "bricknet-joints.json");
+    std::stringstream jointText;
+    jointText << joints.rdbuf();
+    connect::loadBricknetJoints(jointText.str(), connectors);
   }
   if (shadow.size() == 0) std::fprintf(stderr, "bm: no shadow library at %s; no joints will be found (set BM_SHADOW_DIR)\n", shadowDir.c_str());
   std::vector<audit::Row> rows(entries.size());
@@ -94,6 +101,7 @@ int cmdAudit(const Args& args) {
   nlohmann::json summary = audit::summarize(rows);
   summary["tier"] = tier;
   summary["threads"] = pool.threads();
+  summary["sources"] = {{"shadowFiles", shadow.size()}, {"studioFiles", studio.size()}};
   summary["wallSeconds"] = seconds;
   const auto stats = cache.stats();
   summary["parts"] = {{"fromCache", stats.diskHits}, {"flattened", stats.flattened}, {"rebuilt", stats.rebuilt}};

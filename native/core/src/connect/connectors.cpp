@@ -1,4 +1,6 @@
 #include "bm/connect/connectors.h"
+#include "bm/connect/studio.h"
+#include "bm/connect/tolerances.h"
 
 #include <algorithm>
 #include <cmath>
@@ -115,6 +117,7 @@ struct ConnectorDb::State {
   std::shared_mutex mutex;
   std::unordered_map<std::string, std::shared_ptr<const std::vector<Connector>>> memo;
   std::unordered_map<std::string, std::vector<Connector>> extras;  // from sources other than the shadow library
+  const StudioLibrary* studio = nullptr;
 
   /// The snaps a shadow file defines itself, with its includes expanded.
   void own(const std::string& file, const Xform& xf, std::vector<std::string>& includeStack, std::vector<Connector>& out) const {
@@ -162,7 +165,10 @@ struct ConnectorDb::State {
     bool clearAll = false;
     std::vector<std::string> clearIds;
     clears(dataName, 0, clearAll, clearIds);
-    if (!file || clearAll) return out;
+    if (!file || clearAll) {
+      mergeStudio(dataName, *out);
+      return out;
+    }
     if (stack.size() >= kMaxDepth) {
       cut = true;
       return out;
@@ -182,7 +188,38 @@ struct ConnectorDb::State {
       }
     }
     stack.pop_back();
+    mergeStudio(dataName, *out);
     return out;
+  }
+
+  /// Whether `list` already has a connector doing `c`'s job where `c` is.
+  static bool covered(const Connector& c, const std::vector<Connector>& list) {
+    for (const Connector& have : list) {
+      if (have.kind != c.kind || have.gender != c.gender) continue;
+      if (c.kind == SnapKind::Generic) {
+        if (have.group == c.group && length(have.start - c.start) <= kPointMatch) return true;
+        continue;
+      }
+      if (std::abs(dot(have.axis, c.axis)) < kAxisParallel) continue;
+      const Vec3 v = c.start - have.start;
+      if (length(v - have.axis * dot(v, have.axis)) > kAxisOffset) continue;
+      // On the same line: the same connector if they overlap along it.
+      const double sign = dot(have.axis, c.axis) > 0 ? 1 : -1, t0 = dot(v, have.axis);
+      const double lo = std::min(t0, t0 + sign * c.length), hi = std::max(t0, t0 + sign * c.length);
+      if (std::min(hi, have.length) - std::max(lo, 0.0) > -kRadiusSlack) return true;
+    }
+    return false;
+  }
+
+  void mergeStudio(const std::string& dataName, std::vector<Connector>& out) const {
+    if (!studio) return;
+    const auto extra = studio->find(dataName);
+    // Checked against what the part had before, so a Studio grid is taken whole or cell by cell.
+    const size_t before = out.size();
+    for (const Connector& c : *extra) {
+      const std::vector<Connector> existing(out.begin(), out.begin() + static_cast<std::ptrdiff_t>(before));
+      if (!covered(c, existing) && out.size() < kMaxConnectorsPerPart) out.push_back(c);
+    }
   }
 
   std::shared_ptr<const std::vector<Connector>> resolve(const std::string& name, const ldraw::Library& lib, std::vector<std::string>& stack, bool& cut) {
@@ -203,7 +240,7 @@ struct ConnectorDb::State {
   }
 };
 
-ConnectorDb::ConnectorDb(const ldraw::Library& library, const ShadowLibrary& shadow) : state_(new State{library, shadow, {}, {}, {}}) {}
+ConnectorDb::ConnectorDb(const ldraw::Library& library, const ShadowLibrary& shadow) : state_(new State{library, shadow, {}, {}, {}, nullptr}) {}
 ConnectorDb::~ConnectorDb() = default;
 
 std::shared_ptr<const std::vector<Connector>> ConnectorDb::get(std::string_view partName, const ldraw::Library* modelLibrary) {
@@ -212,6 +249,12 @@ std::shared_ptr<const std::vector<Connector>> ConnectorDb::get(std::string_view 
   std::vector<std::string> stack;
   bool cut = false;
   return state_->resolve(name, modelLibrary ? *modelLibrary : state_->library, stack, cut);
+}
+
+void ConnectorDb::setStudio(const StudioLibrary* studio) {
+  std::unique_lock lock(state_->mutex);
+  state_->studio = studio;
+  state_->memo.clear();
 }
 
 void ConnectorDb::add(std::string_view partName, std::vector<Connector> connectors) {
@@ -250,6 +293,46 @@ size_t loadWheelSeats(std::string_view json, ConnectorDb& db) {
     c.id = "wheelseat";
     db.add(s["part"].get<std::string>(), {std::move(c)});
     added++;
+  }
+  return added;
+}
+
+size_t loadBricknetJoints(std::string_view json, ConnectorDb& db) {
+  const nlohmann::json doc = nlohmann::json::parse(json.begin(), json.end(), nullptr, false);
+  if (!doc.is_object() || !doc.contains("parts") || !doc["parts"].is_object()) return 0;
+  size_t added = 0;
+  for (const auto& [part, rows] : doc["parts"].items()) {
+    if (!rows.is_array()) continue;
+    std::vector<Connector> list;
+    for (const nlohmann::json& row : rows) {
+      if (!row.is_array() || row.size() < 6 || !row[0].is_string()) continue;
+      bool numbers = true;
+      for (size_t i = 1; i < row.size(); i++) numbers = numbers && row[i].is_number();
+      if (!numbers) continue;
+      const std::string family = row[0].get<std::string>();
+      const bool hinge = family == "hinge";
+      if ((!hinge && family != "ball") || (hinge && row.size() < 8)) continue;
+      Connector c;
+      c.kind = SnapKind::Generic;
+      c.source = Source::BrickNet;
+      c.gender = row[2].get<int>() == 0 ? Gender::Male : Gender::Female;  // "in" is the male half
+      c.start = {row[3].get<double>(), row[4].get<double>(), row[5].get<double>()};
+      c.group = "bricknet-" + family + "-" + std::to_string(row[1].get<int>());
+      c.axis = {0, -1, 0};
+      if (hinge) {
+        // The frame is pitch about x then roll about z; the hinge line is its -Y.
+        const double rad = 3.14159265358979323846 / 180.0, pitch = row[6].get<double>() * rad, roll = row[7].get<double>() * rad;
+        c.axis = normalized(Vec3{std::sin(roll), -std::cos(pitch) * std::cos(roll), -std::sin(pitch) * std::cos(roll)});
+        c.placement = "hinge";
+      } else {
+        c.placement = "free";
+        c.bounding = "sph";
+      }
+      c.side = perpendicular(c.axis, {1, 0, 0});
+      list.push_back(std::move(c));
+    }
+    added += list.size();
+    if (!list.empty()) db.add(part, std::move(list));
   }
   return added;
 }
