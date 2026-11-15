@@ -112,6 +112,33 @@ def similarity(a: Descriptor, b: Descriptor, ratio: float | None = None) -> floa
     return (1 - SIZE_WEIGHT) * base + SIZE_WEIGHT * size
 
 
+TEMPLATE_WEIGHT = float(os.environ.get("TEMPLATE_W", "0.3"))   # share of the overlay term among the top candidates
+TEMPLATE_MIN = float(os.environ.get("TEMPLATE_MIN", "0.8"))  # best overlay below this: scale is off, term unused
+TEMPLATE_TOP = 6          # candidates per callout picture that get the overlay term
+TEMPLATE_SCALES = (0.94, 0.97, 1.0, 1.03, 1.06)
+
+
+def template_score(call: np.ndarray | None, listed: np.ndarray | None, ratio: float) -> float:
+    """How well the parts-list picture, scaled by the booklet's callout / parts-list ratio, lies over the
+    callout picture: the best normalised correlation of the grey images over small shifts and +-6% scale.
+    Both are LEGO's drawing of one render, so the same part matches almost pixel for pixel while a
+    look-alike (3 studs vs 2) does not. 0 without a picture."""
+    if call is None or listed is None or not ratio:
+        return 0.0
+    a = cv2.cvtColor(call, cv2.COLOR_RGB2GRAY).astype(np.float32)
+    b = cv2.cvtColor(listed, cv2.COLOR_RGB2GRAY).astype(np.float32)
+    best = 0.0
+    for k in TEMPLATE_SCALES:
+        r = ratio * k
+        bb = cv2.resize(b, (max(1, round(b.shape[1] * r)), max(1, round(b.shape[0] * r))), interpolation=cv2.INTER_AREA)
+        small, big = (bb, a) if bb.shape[0] <= a.shape[0] and bb.shape[1] <= a.shape[1] else (a, bb)
+        big = cv2.copyMakeBorder(big, 8, 8, 8, 8, cv2.BORDER_REPLICATE)
+        if small.shape[0] > big.shape[0] or small.shape[1] > big.shape[1] or small.std() < 1e-3:
+            continue
+        best = max(best, float(cv2.matchTemplate(big, small, cv2.TM_CCOEFF_NORMED).max()))
+    return best
+
+
 def size_ratio(descs: dict, inv_desc: list, confident: float = 0.85) -> float | None:
     """Callout / parts-list drawing scale: median size ratio of confident best matches (shape, colour
     and aspect only). None when too few callouts match confidently."""
@@ -209,10 +236,12 @@ OVER_PENALTY = 0.3        # per piece beyond an element's printed count
 
 
 def assign(descs: dict, totals: dict, inv_desc: list, counts: list[int], ratio: float | None = None,
-           learned: dict | None = None) -> dict:
+           learned: dict | None = None, template: tuple | None = None) -> dict:
     """Callout picture group -> (element index, similarity, margin to the runner-up element).
     Maximise total similarity subject to each group taking one element, with soft count terms:
-    an element's printed count should be consumed (callout totals summed), not exceeded."""
+    an element's printed count should be consumed (callout totals summed), not exceeded.
+    `template`: (callout picture per group, parts-list picture per element) for `template_score`, which
+    re-scores each group's TEMPLATE_TOP best elements (the others lose its share)."""
     from scipy.optimize import Bounds, LinearConstraint, milp
 
     keys = [k for k, d in descs.items() if d is not None]
@@ -225,6 +254,18 @@ def assign(descs: dict, totals: dict, inv_desc: list, counts: list[int], ratio: 
         cos = np.array([[learned[k][j] if k in learned else 0.0 for j in elems] for k in keys])
         has = np.array([k in learned for k in keys])[:, None]
         sim = np.where(has, (1 - PARTSNET_WEIGHT) * sim + PARTSNET_WEIGHT * cos, sim)
+    if template:                        # overlay of the scaled parts-list picture on the callout, top candidates
+        call_of, listed = template
+        for g, k in enumerate(keys):
+            if call_of.get(k) is None:
+                continue
+            top = np.argsort(-sim[g])[:TEMPLATE_TOP]
+            scores = [template_score(call_of[k], listed[elems[e]], ratio) for e in top]
+            if max(scores) < TEMPLATE_MIN:      # nothing lies over it: a big part drawn smaller in the callout
+                continue
+            sim[g] *= 1 - TEMPLATE_WEIGHT                       # the rest count as no overlay at all
+            for e, score in zip(top, scores):
+                sim[g, e] += TEMPLATE_WEIGHT * score
     G, E = sim.shape
     n = G * E + 2 * E                   # x_ge, unused_e, over_e
     c = np.zeros(n)
@@ -417,8 +458,11 @@ def read_parts(lib, extract: dict, folder: Path, index: dict, client=None, fallb
     ratio = size_ratio(descs, inv_desc, RENDERED_CONFIDENT if used_fallback else 0.85)   # parts-list scale, or callout px per LDU
     if ratio is None and used_fallback:
         ratio = CALLOUT_PX_PER_LDU
+    overlay = None
+    if not used_fallback and ratio and TEMPLATE_WEIGHT > 0:     # LEGO's own parts-list art, at a known scale
+        overlay = (pictures, [_read(folder, e.get("crop")) for e in inventory])
     assigned = assign(descs, totals, inv_desc, [int(e.get("count", 0) or 0) for e in inventory], ratio,
-                      learned=None if used_fallback else _learned(pictures, inventory, folder))
+                      learned=None if used_fallback else _learned(pictures, inventory, folder), template=overlay)
     steps_out = []
     unresolved_total = 0
     for si, step in enumerate(extract["steps"]):
