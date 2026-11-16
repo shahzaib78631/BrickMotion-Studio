@@ -126,6 +126,7 @@ struct World::State {
   std::vector<std::shared_ptr<const Shape>> shapes;
   std::vector<Xform> poses;
   std::vector<Box> boxes;
+  std::vector<Box> innerBoxes;   // of each piece's inner surface, in the model
   std::vector<uint32_t> byMinX;  // pieces with geometry, sorted by their box's min x
   double widest = 0;             // the largest box extent along x, to bound the scan
   mutable std::mutex memoLock;
@@ -136,10 +137,23 @@ World::World(const Model& model, ldraw::PartCache& parts, ShapeCache& shapeCache
   state_->shapes = shapesOf(model, parts, shapeCache);
   const uint32_t n = static_cast<uint32_t>(model.pieces().size());
   state_->boxes.resize(n);
+  state_->innerBoxes.resize(n);
+  std::unordered_map<const Shape*, Box> innerLocal;
   for (uint32_t i = 0; i < n; i++) {
     state_->poses.push_back(model.pieces()[i].world);
     if (state_->shapes[i]->nodes.empty()) continue;
     state_->boxes[i] = state_->shapes[i]->bounds.transformed(state_->poses[i]);
+    {
+      // The inner surface's own box: two pieces can only cross where the inner surface of one
+      // reaches the true surface of the other.
+      auto found = innerLocal.find(state_->shapes[i].get());
+      if (found == innerLocal.end()) {
+        Box b;
+        for (const Vec3f& p : state_->shapes[i]->inner) b.grow({p.x, p.y, p.z});
+        found = innerLocal.emplace(state_->shapes[i].get(), b).first;
+      }
+      state_->innerBoxes[i] = found->second.transformed(state_->poses[i]);
+    }
     if (state_->boxes[i].empty() || !std::isfinite(state_->boxes[i].min.x) || !std::isfinite(state_->boxes[i].max.x)) continue;
     state_->byMinX.push_back(i);
     state_->widest = std::max(state_->widest, state_->boxes[i].max.x - state_->boxes[i].min.x);
@@ -197,22 +211,41 @@ uint64_t mix(uint64_t h, Vec3 v, double grain) { return mix(mix(mix(h, v.x, grai
 double World::pairTravel(uint32_t p, const Xform& from, const Box& fromBox, uint32_t q, Vec3 direction, double distance, const std::vector<Zone>& allZones, double tolerance) const {
   const State& s = *state_;
   const std::vector<Zone> zones = zonesNear(allZones, s.boxes[q]);
-  // When the moving box can touch the obstacle's box at all.
-  double enter = 0, leave = distance;
-  const double lo[3] = {fromBox.min.x, fromBox.min.y, fromBox.min.z}, hi[3] = {fromBox.max.x, fromBox.max.y, fromBox.max.z};
-  const Box& ob = s.boxes[q];
-  const double olo[3] = {ob.min.x, ob.min.y, ob.min.z}, ohi[3] = {ob.max.x, ob.max.y, ob.max.z};
-  const double d[3] = {direction.x, direction.y, direction.z};
-  for (int i = 0; i < 3; i++) {
-    if (std::abs(d[i]) < 1e-12) {
-      if (hi[i] < olo[i] || lo[i] > ohi[i]) return distance;
-      continue;
+  // When the two can cross at all: while the inner surface of one is within the box of the other.
+  const Vec3 offset = from.t - s.poses[p].t;  // this leg starts with the piece moved by this much
+  auto window = [&](Box moving, const Box& still, double& enter, double& leave) {
+    moving.min = moving.min + offset, moving.max = moving.max + offset;
+    enter = 0, leave = distance;
+    if (moving.empty() || still.empty()) return false;
+    const double lo[3] = {moving.min.x, moving.min.y, moving.min.z}, hi[3] = {moving.max.x, moving.max.y, moving.max.z};
+    const double olo[3] = {still.min.x, still.min.y, still.min.z}, ohi[3] = {still.max.x, still.max.y, still.max.z};
+    const double d[3] = {direction.x, direction.y, direction.z};
+    for (int i = 0; i < 3; i++) {
+      if (std::abs(d[i]) < 1e-12) {
+        if (hi[i] < olo[i] || lo[i] > ohi[i]) return false;
+        continue;
+      }
+      double t0 = (olo[i] - hi[i]) / d[i], t1 = (ohi[i] - lo[i]) / d[i];
+      if (t0 > t1) std::swap(t0, t1);
+      enter = std::max(enter, t0), leave = std::min(leave, t1);
     }
-    double t0 = (olo[i] - hi[i]) / d[i], t1 = (ohi[i] - lo[i]) / d[i];
-    if (t0 > t1) std::swap(t0, t1);
-    enter = std::max(enter, t0), leave = std::min(leave, t1);
+    return enter <= leave;
+  };
+  double enter = distance, leave = 0, e, l;
+  bool any = false;
+  bool turned = false;
+  for (int i = 0; i < 9; i++) turned = turned || std::abs(from.r.m[i] - s.poses[p].r.m[i]) > 1e-9;
+  if (turned) {
+    // The leg starts with the piece turned: its boxes in the model no longer describe it. Its
+    // true box at the start of the leg does, less sharply.
+    Box atStart = fromBox;
+    atStart.min = atStart.min - offset, atStart.max = atStart.max - offset;
+    any = window(atStart, s.boxes[q], enter, leave);
+  } else {
+    if (window(s.innerBoxes[p], s.boxes[q], e, l)) enter = std::min(enter, e), leave = std::max(leave, l), any = true;
+    if (window(s.boxes[p], s.innerBoxes[q], e, l)) enter = std::min(enter, e), leave = std::max(leave, l), any = true;
   }
-  if (enter > leave) return distance;
+  if (!any) return distance;
 
   const Xform toObstacle = inverseOf(s.poses[q]);
   const Xform rel = toObstacle * from;

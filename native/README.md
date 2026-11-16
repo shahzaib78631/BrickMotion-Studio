@@ -439,7 +439,7 @@ no failures. Kinematics: median 2.5 ms, 95th percentile 186 ms per model.
 - **Joint strength** in stability (the linear program over stud forces), and pieces that rest on others
   without a joint. One floor per file is assumed.
 - **Speed.** Dense QR per group: 8880 takes 3.4 s, a core over 400 bodies is refused. Finding shifts takes
-  0.7 s per seat. Scoring one set against its truth list takes about 2 minutes because it drives freedoms.
+  0.7 s per seat. Scoring a set against its truth list takes minutes because it drives freedoms: 42000 took about 6 minutes on a busy machine.
 - Which way a linear actuator's input turns to extend is assumed (right-hand thread).
 - Not scored against truth: `vehicle`, `scrub`, `bumpSteer`, `suggested`.
 - Reviews were self-reviews. (207 tests pass; ASan with UBSan and TSan runs of the suite are clean.)
