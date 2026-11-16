@@ -74,7 +74,7 @@ std::vector<uint32_t> carriers(const System& sys) {
       out[i] = g.housing;
       continue;
     }
-    if (g.mesh.kind == MeshKind::Clutch) continue;
+    if (g.mesh.kind == MeshKind::Clutch || g.mesh.kind == MeshKind::Cv) continue;
     const std::vector<uint32_t> ofA = holders(g.a, g.mesh.pointA, g.mesh.axisA);
     if (g.mesh.kind == MeshKind::Rack) {
       // A rack needs only the gear's holder; prefer one the rack is linked to.
@@ -204,6 +204,18 @@ Equations equations(const System& sys, const std::vector<int>& column, size_t co
       double* still = b.row();
       b.turning(still, g.b, axis, 1);
       b.turning(still, h, axis, -1);
+      continue;
+    }
+    if (m.kind == MeshKind::Cv) {
+      // The two shafts turn alike: what one turns against the other has no part along the
+      // line that halves the angle between them (the joint's own plane is square to it).
+      const Vec3 shaftA = normalized(pose(g.a).r * m.axisA);
+      Vec3 shaftB = normalized(pose(g.b).r * m.axisB);
+      if (dot(shaftA, shaftB) < 0) shaftB = -shaftB;
+      const Vec3 half = normalized(shaftA + shaftB);
+      double* r = b.row();
+      b.turning(r, g.a, half, 1);
+      b.turning(r, g.b, half, -1);
       continue;
     }
     if (m.kind == MeshKind::Clutch) {

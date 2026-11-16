@@ -199,6 +199,8 @@ Graph buildGraph(const Model& model, ConnectorDb& db, const kin::GearDb* gears) 
     std::vector<Freedom> freedoms;
     std::vector<MateZone> zones;
     double grip = 0;
+    bool cv = false;       ///< one of its mates is a constant-velocity joint
+    Vec3 cvPoint, shaftLo, shaftHi;  ///< its centre, and the shafts of the lower and higher piece
   };
   // The volume a mate occupies: along the shorter of the two connectors (the clip, not the
   // whole bar it holds), a little wider than the wider of them.
@@ -223,6 +225,12 @@ Graph buildGraph(const Model& model, ConnectorDb& db, const kin::GearDb* gears) 
       for (double& seat : pair.freedoms.back().seats) seat = -seat;
     pair.zones.push_back(zoneOf(a.connector, b.connector));
     pair.grip += m->grip;
+    if (m->freedom.passesTurning) {
+      pair.cv = true;
+      pair.cvPoint = m->freedom.point;
+      pair.shaftLo = a.piece == lo ? m->freedom.shaftFirst : m->freedom.shaftSecond;
+      pair.shaftHi = a.piece == lo ? m->freedom.shaftSecond : m->freedom.shaftFirst;
+    }
   }
 
   UnionFind groups(n), bodies(n);
@@ -232,6 +240,22 @@ Graph buildGraph(const Model& model, ConnectorDb& db, const kin::GearDb* gears) 
     Connection c;
     c.a = static_cast<uint32_t>(key >> 32);
     c.b = static_cast<uint32_t>(key & 0xFFFFFFFFu);
+    if (pair.cv) {
+      // The joint is the measured one. Other sources describe the same ball at the same place
+      // in their own terms (one as a plain ball, one as a hinge); those say nothing more.
+      std::vector<Freedom> kept;
+      for (const Freedom& f : pair.freedoms)
+        if (f.passesTurning || length(f.point - pair.cvPoint) > kBallSeat * kCvReach) kept.push_back(f);
+      pair.freedoms = std::move(kept);
+      kin::GearMesh shaft;
+      shaft.kind = kin::MeshKind::Cv;
+      shaft.a = c.a;
+      shaft.b = c.b;
+      shaft.axisA = shaft.tangent = pair.shaftLo;
+      shaft.axisB = pair.shaftHi;
+      shaft.pointA = shaft.pointB = shaft.point = pair.cvPoint;
+      g.shafts.push_back(shaft);
+    }
     c.joint = combine(pair.freedoms);
     c.friction = std::any_of(pair.freedoms.begin(), pair.freedoms.end(), [](const Freedom& f) { return f.friction; });
     if (pair.freedoms.size() == 1 && (c.joint.kind == JointKind::Prismatic || c.joint.kind == JointKind::Cylindrical)) {

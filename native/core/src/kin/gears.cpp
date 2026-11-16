@@ -298,6 +298,7 @@ const char* name(MeshKind kind) {
     case MeshKind::Rack: return "rack";
     case MeshKind::Screw: return "screw";
     case MeshKind::Clutch: return "clutch";
+    case MeshKind::Cv: return "cv";
   }
   return "parallel";
 }

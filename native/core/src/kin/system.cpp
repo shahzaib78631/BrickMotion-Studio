@@ -265,6 +265,10 @@ System buildSystem(const Model& model, const connect::Graph& graph, ldraw::PartC
     if (m.a >= n || m.b >= n || sys.bodyOf[m.a] == sys.bodyOf[m.b]) continue;
     sys.gearings.push_back({sys.bodyOf[m.a], sys.bodyOf[m.b], m, UINT32_MAX});
   }
+  for (const GearMesh& m : graph.shafts) {
+    if (m.a >= n || m.b >= n || sys.bodyOf[m.a] == sys.bodyOf[m.b]) continue;
+    sys.gearings.push_back({sys.bodyOf[m.a], sys.bodyOf[m.b], m, UINT32_MAX});
+  }
   for (const GearMesh& m : graph.screws) {
     if (m.a >= n || m.b >= n || m.housing >= n) continue;
     const uint32_t input = sys.bodyOf[m.a], piston = sys.bodyOf[m.b], housing = sys.bodyOf[m.housing];

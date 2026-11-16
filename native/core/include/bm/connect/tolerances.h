@@ -58,4 +58,8 @@ inline constexpr double kHashCell = 16.0;
 /// lipped fit clicks home. Detents in LDraw profiles are whole LDU apart.
 inline constexpr double kSeatStep = 0.25;
 
+/// Other sources' connectors within kBallSeat times this (LDU) of a constant-velocity joint's
+/// centre describe that same joint: the ball's own radius in every part that has one.
+inline constexpr double kCvReach = 6.0;
+
 }  // namespace bm::connect

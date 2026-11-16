@@ -36,6 +36,10 @@ struct Connector {
   std::vector<double> seq;
 };
 
+/// The group of a constant-velocity joint's ball and cup (extra-connectors.json, "cv-ball" and
+/// "cv-cup"): `axis` is then the shaft the part turns about.
+inline constexpr const char* kCvGroup = "cv";
+
 /// The connector placed by `xf`. Lengths follow the scale along the axis, radii the scale
 /// across it, so a stretched or mirrored reference gives a correct connector.
 Connector transformed(const Connector& c, const Xform& xf);

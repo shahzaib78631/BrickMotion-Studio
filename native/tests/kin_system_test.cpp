@@ -333,3 +333,28 @@ TEST_CASE("a pin joint to a '~' part is kept, not replaced by a flexible attachm
   REQUIRE(graph.connections[0].joint.kind == JointKind::Cylindrical);
   REQUIRE(graph.connections[0].friction);
 }
+
+TEST_CASE("a half-shaft's constant-velocity joints are balls that pass turning", "[graph][cv][data]") {
+  const char* dir = std::getenv("BM_LDRAW_DIR");
+  const char* shadowDir = std::getenv("BM_SHADOW_DIR");
+  if (!dir || !shadowDir) SKIP("BM_LDRAW_DIR / BM_SHADOW_DIR not set");
+  const ldraw::Library lib(dir);
+  const connect::ShadowLibrary shadow(shadowDir);
+  connect::ConnectorDb db(lib, shadow);
+  const connect::StudioLibrary studio(connect::StudioLibrary::defaultDirectory());
+  db.setStudio(&studio);  // Studio calls the same joint a hinge; the measured joint stands
+  std::ifstream in(fs::path(dir).parent_path().parent_path() / "native" / "data" / "extra-connectors.json");
+  std::stringstream data;
+  data << in.rdbuf();
+  REQUIRE(connect::loadExtraConnectors(data.str(), db) > 0);
+  // The cup, then the driver whose ball sits in it, both along x as in set 42000.
+  const char* alongX = "0 0 1 0 1 0 -1 0 0";
+  const Model model = load(piece("92906.dat", -60, -60, 640, alongX) + piece("32494.dat", -60, -60, 640, alongX), lib);
+  const connect::Graph graph = connect::buildGraph(model, db);
+  REQUIRE(graph.connections.size() == 1);
+  REQUIRE(graph.connections[0].joint.kind == JointKind::Spherical);
+  REQUIRE(graph.shafts.size() == 1);
+  REQUIRE(graph.shafts[0].kind == MeshKind::Cv);
+  REQUIRE_THAT(std::abs(graph.shafts[0].axisA.x), WithinAbs(1, 1e-9));
+  REQUIRE_THAT(std::abs(graph.shafts[0].axisB.x), WithinAbs(1, 1e-9));
+}

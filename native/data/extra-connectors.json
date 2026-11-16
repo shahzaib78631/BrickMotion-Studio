@@ -94,6 +94,57 @@
         "radius": 6,
         "note": "parts/4255.dat: the tube's mouth, 4-4cyli of radius 6 at y 38, to the tube's end at y 58"
       }
+    ],
+    "92906": [
+      {
+        "kind": "cv-cup",
+        "at": [
+          0,
+          0,
+          0
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "radius": 6,
+        "note": "The cup of 'Technic Steering Constant Velocity 4.8mm Joint Female': the shadow library's SNAP_GEN nudge1 (sph 6) at 0 0 0; the shaft is its own axle, along z in parts/92906.dat."
+      }
+    ],
+    "32494": [
+      {
+        "kind": "cv-ball",
+        "at": [
+          0,
+          0,
+          0
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "radius": 6,
+        "note": "The ball of 'Technic Wheel Spindle Axle Driver': SNAP_GEN nudge1 (sph 6) at 0 0 0; the shaft is its axle hole, along z in parts/32494.dat."
+      }
+    ],
+    "92909": [
+      {
+        "kind": "cv-cup",
+        "at": [
+          0,
+          0,
+          30
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "radius": 6,
+        "note": "The cup inside 'Technic Steering Wheel Hub for Portal Axle': SNAP_GEN nudge1 (sph 6) at 0 0 30; the hub turns about z in parts/92909.dat."
+      }
     ]
   }
 }

@@ -348,14 +348,15 @@ size_t loadExtraConnectors(std::string_view json, ConnectorDb& db) {
       if (!row.is_object() || !row.contains("kind") || !row["kind"].is_string() || !row.contains("at") || !row["at"].is_array() || row["at"].size() != 3) continue;
       if (!row.contains("radius") || !row["radius"].is_number() || !(row["radius"].get<double>() > 0)) continue;
       const std::string kind = row["kind"].get<std::string>();
-      const bool round = kind == "ball" || kind == "socket", shaft = kind == "rod" || kind == "bore";
+      const bool cv = kind == "cv-ball" || kind == "cv-cup";
+      const bool round = kind == "ball" || kind == "socket" || cv, shaft = kind == "rod" || kind == "bore";
       if (!round && !shaft) continue;
       bool numbers = true;
       for (const nlohmann::json& v : row["at"]) numbers = numbers && v.is_number();
       if (!numbers) continue;
       Connector c;
       c.source = Source::Override;
-      c.gender = kind == "ball" || kind == "rod" ? Gender::Male : Gender::Female;
+      c.gender = kind == "ball" || kind == "rod" || kind == "cv-ball" ? Gender::Male : Gender::Female;
       c.start = {row["at"][0].get<double>(), row["at"][1].get<double>(), row["at"][2].get<double>()};
       c.radius = row["radius"].get<double>();
       c.axis = {0, -1, 0};
@@ -365,6 +366,14 @@ size_t loadExtraConnectors(std::string_view json, ConnectorDb& db) {
         c.match = "size";
         c.placement = "free";
         c.bounding = "sph";
+        if (cv) {
+          // A constant-velocity joint: a ball in a cup that also passes turning about the shaft.
+          if (!row.contains("axis") || !row["axis"].is_array() || row["axis"].size() != 3 || !row["axis"][0].is_number() || !row["axis"][1].is_number() || !row["axis"][2].is_number()) continue;
+          const Vec3 shaftAxis{row["axis"][0].get<double>(), row["axis"][1].get<double>(), row["axis"][2].get<double>()};
+          if (!(length(shaftAxis) > 0)) continue;
+          c.group = kCvGroup;
+          c.axis = normalized(shaftAxis);
+        }
       } else {
         // A smooth rod sliding and turning in a smooth bore that is open at both ends.
         if (!row.contains("axis") || !row["axis"].is_array() || row["axis"].size() != 3 || !row.contains("length") || !row["length"].is_number() || !(row["length"].get<double>() > 0)) continue;

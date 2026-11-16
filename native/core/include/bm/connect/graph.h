@@ -40,6 +40,9 @@ struct Graph {
   /// Screws: an input and a piston held in one housing (kin::MeshKind::Screw). Not in `meshes`:
   /// they are joined to the housing already and need no zone.
   std::vector<kin::GearMesh> screws;
+  /// Constant-velocity joints (kin::MeshKind::Cv): a and b are also joined by a ball; this is
+  /// the turning it passes. axisA and axisB are the two shafts.
+  std::vector<kin::GearMesh> shafts;
   std::vector<uint32_t> group;  ///< per piece: id of the connected group it is in (any joint)
   std::vector<uint32_t> body;   ///< per piece: id of its rigid body (fixed joints only)
   std::vector<uint8_t> hasConnectors;  ///< per piece: its part has at least one connector

@@ -21,6 +21,10 @@ struct Freedom {
   /// mate is made to be slid from one to the next, so it is not a friction fit.
   std::vector<double> seats = {};
   bool seatsMoveFirst = false;  ///< the male is the first connector given to mate()
+  /// A constant-velocity joint: besides being a ball, it passes turning from one shaft to the
+  /// other. `shaftFirst` and `shaftSecond` are the shafts of the two connectors given to mate().
+  bool passesTurning = false;
+  Vec3 shaftFirst = {}, shaftSecond = {};
 };
 
 struct Mate {

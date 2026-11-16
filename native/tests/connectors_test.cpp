@@ -295,3 +295,29 @@ TEST_CASE("extra connector rows: a rod in a bore slides and turns", "[connectors
   rod.start = {0, 200, 0};  // pulled right out
   REQUIRE_FALSE(mate(rod, bore));
 }
+
+TEST_CASE("extra connector rows: a constant-velocity ball in its cup passes turning", "[connectors][extra][cv]") {
+  Fixture f;
+  REQUIRE(loadExtraConnectors(R"({"parts":{
+      "plain":[{"kind":"cv-ball","at":[0,0,0],"axis":[0,0,2],"radius":6},
+               {"kind":"cv-cup","at":[0,0,30],"axis":[0,0,1],"radius":6},
+               {"kind":"cv-ball","at":[0,0,0],"radius":6},
+               {"kind":"cv-cup","at":[0,0,0],"axis":[0,0,0],"radius":6}]}})", f.db) == 2);
+  const auto c = f.db.get("plain.dat");
+  REQUIRE(c->size() == 2);
+  Connector ball = c->at(0), cup = c->at(1);
+  REQUIRE((ball.gender == Gender::Male && cup.gender == Gender::Female && ball.group == kCvGroup && near(ball.axis, {0, 0, 1})));
+  // The ball seated 5 LDU short of the cup's centre, as files have them, with its shaft bent.
+  ball.start = {0, 0, 25};
+  ball.axis = normalized(Vec3{0, 0.2, 1});
+  const auto m = mate(ball, cup);
+  REQUIRE(m.has_value());
+  REQUIRE((m->freedom.ball && m->freedom.passesTurning));
+  REQUIRE(near(m->freedom.point, {0, 0, 30}));  // the cup holds the centre
+  REQUIRE((near(m->freedom.shaftFirst, ball.axis) && near(m->freedom.shaftSecond, {0, 0, 1})));
+  const auto other = mate(cup, ball);
+  REQUIRE((other && near(other->freedom.shaftFirst, {0, 0, 1}) && near(other->freedom.shaftSecond, ball.axis)));
+  // It is not a plain ball: a measured ball does not seat in a cv cup.
+  REQUIRE(loadExtraConnectors(R"({"parts":{"inner":[{"kind":"ball","at":[0,0,30],"radius":6}]}})", f.db) == 1);
+  REQUIRE_FALSE(mate(f.db.get("inner.dat")->at(0), cup));
+}

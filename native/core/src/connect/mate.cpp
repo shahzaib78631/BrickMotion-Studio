@@ -232,6 +232,12 @@ std::optional<Mate> generics(const Connector& a, const Connector& b) {
   out.freedom.ball = isBall(a) || isBall(b);
   out.freedom.point = a.start;
   out.freedom.axis = a.axis;
+  if (a.group == kCvGroup) {
+    out.freedom.passesTurning = true;
+    out.freedom.shaftFirst = a.axis;
+    out.freedom.shaftSecond = b.axis;
+    out.freedom.point = a.gender == Gender::Female ? a.start : b.start;  // the cup holds the centre
+  }
   return out;
 }
 

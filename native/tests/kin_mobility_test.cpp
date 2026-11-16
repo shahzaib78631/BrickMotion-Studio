@@ -314,3 +314,32 @@ TEST_CASE("a clutch makes two bodies on one line turn together", "[kin][mobility
   REQUIRE(ratios.size() == 1);
   REQUIRE((ratios[0].exact && ratios[0].num == 1 && ratios[0].den == 1));
 }
+
+TEST_CASE("a constant-velocity joint turns two shafts alike at any bend", "[kin][mobility][cv]") {
+  // Shaft 1 turns in the ground about z; shaft 2 about a line bent 30 degrees from it; they
+  // meet in a ball at the origin.
+  const Vec3 bent = normalized(Vec3{0, std::sin(0.5236), std::cos(0.5236)});
+  Rig r(3);
+  r.link(0, 1, JointKind::Revolute, {0, 0, -50}, kZ);
+  r.link(0, 2, JointKind::Revolute, bent * 50, bent);
+  r.link(1, 2, JointKind::Spherical, {0, 0, 0}, kZ);
+  // The ball alone passes nothing: each shaft turns by itself.
+  const Mobility loose = mobility(r.sys);
+  REQUIRE(throughRatios(r.sys, loose, 1, 2).empty());
+  GearMesh m;
+  m.kind = MeshKind::Cv;
+  m.axisA = m.tangent = kZ;
+  m.axisB = -bent;  // the file may give a shaft either way round
+  r.sys.gearings.push_back({1, 2, m, UINT32_MAX});
+  const Mobility joined = mobility(r.sys);
+  REQUIRE(joined.solved);
+  const std::vector<Ratio> ratios = throughRatios(r.sys, joined, 1, 2);
+  REQUIRE(ratios.size() == 1);
+  REQUIRE_THAT(std::abs(ratios[0].value), WithinAbs(1, 1e-9));
+  // And the two turn the same way round the bend, not against each other.
+  const Freedom* f = nullptr;
+  for (const Freedom& x : joined.freedoms)
+    if (twistOf(x, 1).angular.z != 0) f = &x;
+  REQUIRE(f);
+  REQUIRE(dot(twistOf(*f, 1).angular, kZ) * dot(twistOf(*f, 2).angular, bent) > 0);
+}
