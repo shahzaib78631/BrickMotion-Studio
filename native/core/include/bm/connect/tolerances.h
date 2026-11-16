@@ -32,6 +32,11 @@ inline constexpr double kAxleCoreRatio = 2.0 / 3.0;
 inline constexpr double kPointMatch = 2.0;
 inline constexpr double kLineMatch = 1.0;
 
+/// How far, as a share of its radius, a ball's centre may be from its socket's. Official
+/// files place a link between two balls it does not exactly span: 42000's steering links sit
+/// 5 to 6.8 LDU off their radius-8 balls. At a full radius the ball would be out of the cup.
+inline constexpr double kBallSeat = 0.9;
+
 /// A rubber tyre stretches onto its rim: the measured bore and seat radii may differ by this.
 inline constexpr double kTyreSlack = 3.0;
 

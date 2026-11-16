@@ -1,0 +1,18 @@
+{
+  "format": "brickmotion-extra-connectors",
+  "version": 1,
+  "source": "Measured from the LDraw part files for parts that no connector source covers. Each row says where its numbers come from.",
+  "parts": {
+    "6628": [
+      {"kind": "ball", "at": [-10, 0, 0], "radius": 8, "note": "8-8sphe.dat scaled 8 at -10 0 0 in parts/6628.dat"}
+    ],
+    "32293": [
+      {"kind": "socket", "at": [0, 0, 0], "radius": 8, "note": "s/32293s01.dat (the socket end) placed at 0 0 0 in parts/32293.dat"},
+      {"kind": "socket", "at": [0, 0, 160], "radius": 8, "note": "s/32293s01.dat placed at 0 0 160"}
+    ],
+    "2739a": [
+      {"kind": "socket", "at": [0, 0, 0], "radius": 8, "note": "s/2739as01.dat (the socket end) placed at 0 0 0 in parts/2739a.dat"},
+      {"kind": "socket", "at": [0, 0, 100], "radius": 8, "note": "s/2739as01.dat placed at 0 0 100"}
+    ]
+  }
+}

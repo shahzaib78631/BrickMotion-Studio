@@ -89,6 +89,12 @@ Report findOverlaps(const Model& model, const connect::Graph& graph, ldraw::Part
       joined = joined || it->joint.kind != connect::JointKind::Flexible;
       for (uint32_t z = it->firstZone; z < it->firstZone + it->zoneCount; z++) out.push_back({graph.zones[z].a, graph.zones[z].b, graph.zones[z].radius});
     }
+    // Meshed gears are not joined, but their teeth interleave.
+    const auto mesh = std::lower_bound(graph.meshes.begin(), graph.meshes.end(), std::make_pair(a, b), [](const kin::GearMesh& m, const std::pair<uint32_t, uint32_t>& key) { return std::make_pair(std::min(m.a, m.b), std::max(m.a, m.b)) < key; });
+    if (mesh != graph.meshes.end() && std::min(mesh->a, mesh->b) == a && std::max(mesh->a, mesh->b) == b) {
+      const connect::MateZone& z = graph.meshZones[static_cast<size_t>(mesh - graph.meshes.begin())];
+      out.push_back({z.a, z.b, z.radius});
+    }
     return joined;
   };
 

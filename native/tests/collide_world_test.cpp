@@ -26,9 +26,9 @@ struct Rig {
     fs::remove(file);
     return m;
   }
-  Report check(const std::string& text) {
+  Report check(const std::string& text, const kin::GearDb* gears = nullptr) {
     const Model m = model(text);
-    return findOverlaps(m, connect::buildGraph(m, db), parts, shapes);
+    return findOverlaps(m, connect::buildGraph(m, db, gears), parts, shapes);
   }
 };
 std::string piece(const char* part, double x, double y, double z) {
@@ -119,4 +119,14 @@ TEST_CASE("the world answers for one more shape, still or moving", "[collide][wo
   const double c = std::sqrt(0.5);
   REQUIRE(world.sweep(*brick, at(-300, 0, 0), Xform{Mat3{{c, 0, c, 0, 1, 0, -c, 0, c}}, {0, 0, 0}}).has_value());
   REQUIRE_FALSE(world.sweep(*brick, at(0, -100, 0), at(0, -100, 0)).has_value());  // not moving, in free space
+}
+
+TEST_CASE("the teeth of meshed gears may interleave; gears jammed together may not", "[collide][world][meshes]") {
+  Rig r;
+  kin::GearDb gears;
+  REQUIRE(gears.load(R"({"parts":{"3005":[{"kind":"spur","teeth":8,"axis":[0,1,0],"centre":[0,12,0],"pitchRadius":9.5,"width":24}]}})") == 1);
+  const std::string meshed = piece("3005.dat", 0, 0, 0) + piece("3005.dat", 19, 0, 0);  // the boxes cross by 1 LDU
+  REQUIRE(r.check(meshed).overlaps.size() == 1);        // without the gear table they are just two crossing boxes
+  REQUIRE(r.check(meshed, &gears).overlaps.empty());
+  REQUIRE(r.check(piece("3005.dat", 0, 0, 0) + piece("3005.dat", 16, 0, 0), &gears).overlaps.size() == 1);  // 3 too close: not a mesh
 }

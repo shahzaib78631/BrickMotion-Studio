@@ -17,7 +17,7 @@ int cmdJoints(const Args& args) {
   bool bad = false;
   const std::string why = option(args, "--why", "", bad);
   if (bad || args.empty() || args[0].rfind("--", 0) == 0) {
-    std::fprintf(stderr, "usage: bm joints <file> [--why <part>] [--groups] [--no-studio]\n");
+    std::fprintf(stderr, "usage: bm joints <file> [--why <part>] [--groups] [--meshes] [--no-studio]\n");
     return kUsage;
   }
   const std::string ldraw = defaultLDrawDir();
@@ -33,19 +33,11 @@ int cmdJoints(const Args& args) {
     connect::ConnectorDb db(library, shadow);
     const connect::StudioLibrary studio(flag(args, "--no-studio") ? fs::path() : connect::StudioLibrary::defaultDirectory());
     db.setStudio(&studio);
-    {
-      std::ifstream seats(fs::path(ldraw).parent_path().parent_path() / "native" / "data" / "wheel-seats.json");
-      std::stringstream text;
-      text << seats.rdbuf();
-      connect::loadWheelSeats(text.str(), db);
-      std::ifstream joints(fs::path(ldraw).parent_path().parent_path() / "native" / "data" / "bricknet-joints.json");
-      std::stringstream jointText;
-      jointText << joints.rdbuf();
-      connect::loadBricknetJoints(jointText.str(), db);
-    }
+    kin::GearDb gears;
+    loadEngineData(fs::path(ldraw).parent_path().parent_path(), db, gears);
     ldraw::PartCache cache(library, ldraw::PartCache::defaultDirectory());
     const Model model = io::load(fs::path(std::string(args[0])), library, &cache);
-    const connect::Graph g = connect::buildGraph(model, db);
+    const connect::Graph g = connect::buildGraph(model, db, &gears);
     int kinds[connect::kJointKinds] = {};
     for (const connect::Connection& c : g.connections) kinds[static_cast<int>(c.joint.kind)]++;
     const double n = std::max<size_t>(1, model.pieces().size());
@@ -53,6 +45,10 @@ int cmdJoints(const Args& args) {
     for (int k = 0; k < connect::kJointKinds; k++) std::printf("  %-12s%d\n", connect::name(static_cast<connect::JointKind>(k)), kinds[k]);
     std::printf("groups        %u (largest holds %u pieces, %.1f%%)\nrigid bodies  %u\nattached      %u (%.1f%%)\nno connectors %u\n", g.groups, g.largestGroup, 100.0 * g.largestGroup / n, g.bodies, g.attached,
                 100.0 * g.attached / n, g.withoutConnectors);
+    std::printf("gear meshes   %zu\n", g.meshes.size());
+    if (flag(args, "--meshes"))
+      for (const kin::GearMesh& m : g.meshes)
+        std::printf("  %-9s %-12s %3dT  x  %-12s %3dT  at %.0f %.0f %.0f\n", kin::name(m.kind), model.pieces()[m.a].part.c_str(), m.teethA, model.pieces()[m.b].part.c_str(), m.teethB, m.point.x, m.point.y, m.point.z);
 
     std::vector<uint8_t> connected(model.pieces().size(), 0);
     for (const connect::Connection& c : g.connections) connected[c.a] = connected[c.b] = 1;

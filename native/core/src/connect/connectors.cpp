@@ -337,4 +337,39 @@ size_t loadBricknetJoints(std::string_view json, ConnectorDb& db) {
   return added;
 }
 
+size_t loadExtraConnectors(std::string_view json, ConnectorDb& db) {
+  const nlohmann::json doc = nlohmann::json::parse(json.begin(), json.end(), nullptr, false);
+  if (!doc.is_object() || !doc.contains("parts") || !doc["parts"].is_object()) return 0;
+  size_t added = 0;
+  for (const auto& [part, rows] : doc["parts"].items()) {
+    if (!rows.is_array()) continue;
+    std::vector<Connector> list;
+    for (const nlohmann::json& row : rows) {
+      if (!row.is_object() || !row.contains("kind") || !row["kind"].is_string() || !row.contains("at") || !row["at"].is_array() || row["at"].size() != 3) continue;
+      if (!row.contains("radius") || !row["radius"].is_number() || !(row["radius"].get<double>() > 0)) continue;
+      const std::string kind = row["kind"].get<std::string>();
+      if (kind != "ball" && kind != "socket") continue;
+      bool numbers = true;
+      for (const nlohmann::json& v : row["at"]) numbers = numbers && v.is_number();
+      if (!numbers) continue;
+      Connector c;
+      c.kind = SnapKind::Generic;
+      c.source = Source::Override;
+      c.gender = kind == "ball" ? Gender::Male : Gender::Female;
+      c.start = {row["at"][0].get<double>(), row["at"][1].get<double>(), row["at"][2].get<double>()};
+      c.radius = row["radius"].get<double>();
+      c.group = "ball";
+      c.match = "size";
+      c.placement = "free";
+      c.bounding = "sph";
+      c.axis = {0, -1, 0};
+      c.side = perpendicular(c.axis, {1, 0, 0});
+      list.push_back(std::move(c));
+    }
+    added += list.size();
+    if (!list.empty()) db.add(part, std::move(list));
+  }
+  return added;
+}
+
 }  // namespace bm::connect

@@ -73,23 +73,15 @@ int cmdAudit(const Args& args) {
   connect::ConnectorDb connectors(library, shadow);
   const connect::StudioLibrary studio(flag(args, "--no-studio") ? fs::path() : connect::StudioLibrary::defaultDirectory());
   connectors.setStudio(&studio);
-  {
-    std::ifstream seats(repo / "native" / "data" / "wheel-seats.json");
-    std::stringstream text;
-    text << seats.rdbuf();
-    connect::loadWheelSeats(text.str(), connectors);
-    std::ifstream joints(repo / "native" / "data" / "bricknet-joints.json");
-    std::stringstream jointText;
-    jointText << joints.rdbuf();
-    connect::loadBricknetJoints(jointText.str(), connectors);
-  }
+  kin::GearDb gears;
+  loadEngineData(repo, connectors, gears);
   if (shadow.size() == 0) std::fprintf(stderr, "bm: no shadow library at %s; no joints will be found (set BM_SHADOW_DIR)\n", shadowDir.c_str());
   collide::ShapeCache shapes;
   std::vector<audit::Row> rows(entries.size());
   JobPool pool(static_cast<unsigned>(threads));
   size_t printed = 0;
   pool.parallelFor(
-      entries.size(), [&](size_t i) { rows[i] = audit::loadRow(entries[i].file, entries[i].id, library, cache, &connectors, flag(args, "--no-collision") ? nullptr : &shapes); }, nullptr,
+      entries.size(), [&](size_t i) { rows[i] = audit::loadRow(entries[i].file, entries[i].id, library, cache, &connectors, flag(args, "--no-collision") ? nullptr : &shapes, &gears); }, nullptr,
       [&](size_t done, size_t total) {
         if (done != printed) {
           printed = done;

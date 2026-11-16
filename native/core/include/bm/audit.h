@@ -32,6 +32,7 @@ struct Row {
   int partsAttached = 0;      ///< non-segment pieces with at least one connection
   int partsJoined = 0;        ///< the most non-segment pieces in any one group
   int joints[connect::kJointKinds] = {};         ///< connections per connect::JointKind
+  int meshes = 0;             ///< engaged gear pairs
   double graphMs = 0;
   // Collision (present when a shape cache was given too).
   bool hasCollision = false;
@@ -47,7 +48,7 @@ struct Row {
 };
 
 /// Loads one model and every distinct part it uses. Never throws: a failure is a row.
-Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Library& library, ldraw::PartCache& cache, connect::ConnectorDb* connectors = nullptr, collide::ShapeCache* shapes = nullptr);
+Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Library& library, ldraw::PartCache& cache, connect::ConnectorDb* connectors = nullptr, collide::ShapeCache* shapes = nullptr, const kin::GearDb* gears = nullptr);
 
 nlohmann::json toJson(const Row& row);
 

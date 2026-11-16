@@ -157,3 +157,22 @@ TEST_CASE("each mate leaves a zone around it for the collision check", "[graph][
   }
   REQUIRE(w.graph(piece("c2x4.dat", 0, 0, 0) + piece("c2x4.dat", 500, 0, 0)).zones.empty());
 }
+
+TEST_CASE("gears in mesh are a coupling, not a joint", "[graph][meshes]") {
+  World w;
+  kin::GearDb gears;
+  // The 1x1 fixture brick stands in for a gear on a vertical shaft: radius 9.5, so two of them mesh 19 apart.
+  REQUIRE(gears.load(R"({"parts":{"3005":[{"kind":"spur","teeth":8,"axis":[0,1,0],"centre":[0,12,0],"pitchRadius":9.5,"width":24}]}})") == 1);
+  static int counter = 0;
+  const fs::path file = fs::temp_directory_path() / ("bm_graph_mesh_test_" + std::to_string(::getpid()) + "_" + std::to_string(counter++) + ".ldr");
+  { std::ofstream out(file); out << piece("3005.dat", 0, 0, 0) + piece("3005.dat", 19, 0, 0) + piece("3005.dat", 200, 0, 0); }
+  const Model model = io::load(file, w.lib);
+  fs::remove(file);
+  const Graph g = buildGraph(model, w.db, &gears);
+  REQUIRE(g.meshes.size() == 1);
+  REQUIRE((g.meshes[0].a == 0 && g.meshes[0].b == 1));
+  REQUIRE(g.meshZones.size() == 1);
+  REQUIRE(g.meshZones[0].radius > 8);
+  REQUIRE(g.group[0] != g.group[1]);  // each gear is held by its own shaft
+  REQUIRE(buildGraph(model, w.db).meshes.empty());
+}

@@ -25,6 +25,10 @@ inline constexpr double kElasticZone = 1e9;
 
 /// Spacing of the poses checked along a move. Equal to the skin, so nothing thicker than
 /// the skin can be stepped over.
+/// How far a gear's teeth reach beyond its pitch circle, and a rack's beyond its pitch line.
+/// Technic teeth are about 2.5 LDU either side of the pitch circle; 3 covers the modelled tips.
+inline constexpr double kToothReach = 3.0;
+
 inline constexpr double kSweepStep = kSkin;
 
 /// The most poses one move is checked at, however long it is.

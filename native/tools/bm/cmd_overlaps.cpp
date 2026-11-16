@@ -29,17 +29,12 @@ int cmdOverlaps(const Args& args) {
     connect::ConnectorDb db(library, shadow);
     const connect::StudioLibrary studio(flag(args, "--no-studio") ? fs::path() : connect::StudioLibrary::defaultDirectory());
     db.setStudio(&studio);
-    for (const char* name : {"wheel-seats.json", "bricknet-joints.json"}) {
-      std::ifstream in(repo / "native" / "data" / name);
-      std::stringstream text;
-      text << in.rdbuf();
-      if (std::string(name) == "wheel-seats.json") connect::loadWheelSeats(text.str(), db);
-      else connect::loadBricknetJoints(text.str(), db);
-    }
+    kin::GearDb gears;
+    loadEngineData(repo, db, gears);
     ldraw::PartCache cache(library, ldraw::PartCache::defaultDirectory());
     collide::ShapeCache shapes;
     const Model model = io::load(fs::path(std::string(args[0])), library, &cache);
-    const connect::Graph graph = connect::buildGraph(model, db);
+    const connect::Graph graph = connect::buildGraph(model, db, &gears);
     const collide::Report report = collide::findOverlaps(model, graph, cache, shapes);
     std::printf("pieces    %zu\ntested    %u pairs whose boxes meet\noverlaps  %zu\n", model.pieces().size(), report.tested, report.overlaps.size());
     size_t shown = 0;

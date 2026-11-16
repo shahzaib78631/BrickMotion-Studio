@@ -100,9 +100,32 @@ bool segmentPart(const std::string& part, const ldraw::Library& lib, int depth =
   return false;
 }
 
+/// Where the teeth of a mesh interleave: the lens the two tip circles share, the length of
+/// the shared tooth width.
+MateZone meshZone(const kin::GearMesh& m) {
+  const double tip = collide::kToothReach;
+  auto offLine = [](Vec3 p, Vec3 origin, Vec3 axis) {
+    const Vec3 v = p - origin;
+    return length(v - axis * dot(v, axis));
+  };
+  const double ra = offLine(m.point, m.pointA, m.axisA);
+  double half = 0;
+  if (m.kind == kin::MeshKind::Rack) {
+    half = std::sqrt(4 * ra * tip);  // a circle of ra + tip over a line ra - tip from its centre
+    // A capsule along the rack, wide enough to take in the teeth across the gear's width.
+    return {m.point - m.tangent * half, m.point + m.tangent * half, std::hypot(tip, m.width / 2) + collide::kZonePad};
+  }
+  const double rb = m.kind == kin::MeshKind::Worm ? ra : offLine(m.point, m.pointB, m.axisB);
+  const double A = ra + tip, B = rb + tip, d = ra + rb;
+  const double x = (d * d + A * A - B * B) / (2 * d);
+  half = std::sqrt(std::max(0.0, A * A - x * x));
+  const Vec3 along = m.axisA * (m.width / 2);
+  return {m.point - along, m.point + along, half + collide::kZonePad};
+}
+
 }  // namespace
 
-Graph buildGraph(const Model& model, ConnectorDb& db) {
+Graph buildGraph(const Model& model, ConnectorDb& db, const kin::GearDb* gears) {
   const std::vector<Piece>& pieces = model.pieces();
   const uint32_t n = static_cast<uint32_t>(pieces.size());
   Graph g;
@@ -182,7 +205,7 @@ Graph buildGraph(const Model& model, ConnectorDb& db) {
   auto zoneOf = [](const Connector& x, const Connector& y) {
     auto elastic = [](const Connector& c) { return (!c.profile.empty() && c.profile[0].shape == 'T') || c.group.rfind("studio-wheel-", 0) == 0; };
     if (elastic(x) || elastic(y)) return MateZone{x.start, x.start, collide::kElasticZone};
-    if (x.kind == SnapKind::Generic || y.kind == SnapKind::Generic) return MateZone{x.start, x.start, std::max({x.radius, y.radius, collide::kGenericZone}) + collide::kZonePad};
+    if (x.kind == SnapKind::Generic || y.kind == SnapKind::Generic) return MateZone{x.start, y.start, std::max({x.radius, y.radius, collide::kGenericZone}) + collide::kZonePad};
     const Connector& s = x.length <= y.length ? x : y;
     return MateZone{s.start, s.start + s.axis * s.length, std::max(x.radius, y.radius) + collide::kZonePad};
   };
@@ -281,6 +304,11 @@ Graph buildGraph(const Model& model, ConnectorDb& db) {
     if (!g.isSegment[i]) partSizes[g.group[i]]++;
   for (uint32_t s : partSizes) g.largestGroupParts = std::max(g.largestGroupParts, s);
   g.attached = static_cast<uint32_t>(std::count(attached.begin(), attached.end(), 1));
+  if (gears) {
+    g.meshes = kin::findMeshes(model, *gears);
+    g.meshZones.reserve(g.meshes.size());
+    for (const kin::GearMesh& m : g.meshes) g.meshZones.push_back(meshZone(m));
+  }
   return g;
 }
 

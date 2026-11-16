@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include "bm/connect/mate.h"
+#include "bm/kin/gears.h"
 #include "bm/model.h"
 
 namespace bm::connect {
@@ -28,6 +29,11 @@ struct Connection {
 struct Graph {
   std::vector<Connection> connections;  ///< sorted by (a, b)
   std::vector<MateZone> zones;          ///< see Connection::firstZone
+  /// Gears whose teeth are engaged, sorted by (lower piece, higher piece). A mesh is a coupling,
+  /// not a joint: each gear is held by its own shaft, so meshed gears are not thereby in one
+  /// group. `meshZones[i]` is where the teeth of `meshes[i]` interleave.
+  std::vector<kin::GearMesh> meshes;
+  std::vector<MateZone> meshZones;
   std::vector<uint32_t> group;  ///< per piece: id of the connected group it is in (any joint)
   std::vector<uint32_t> body;   ///< per piece: id of its rigid body (fixed joints only)
   std::vector<uint8_t> hasConnectors;  ///< per piece: its part has at least one connector
@@ -46,7 +52,8 @@ struct Graph {
 /// Finds every mated connector pair with a spatial hash (time roughly linear in pieces),
 /// combines the mates of each piece pair into one joint, and groups the pieces.
 /// Pieces at an identical pose with the same part (duplicates) are not paired with each other.
-Graph buildGraph(const Model& model, ConnectorDb& connectors);
+/// With `gears`, also finds the gear meshes.
+Graph buildGraph(const Model& model, ConnectorDb& connectors, const kin::GearDb* gears = nullptr);
 
 /// For a piece that joined nothing: its closest connector pairs with other pieces and why
 /// each did not mate.

@@ -79,4 +79,10 @@ size_t loadWheelSeats(std::string_view json, ConnectorDb& db);
 /// many connectors were added; malformed rows are skipped.
 size_t loadBricknetJoints(std::string_view json, ConnectorDb& db);
 
+/// Reads connectors for parts no other source covers (native/data/extra-connectors.json):
+/// rows of {"kind": "ball" | "socket", "at": [x, y, z], "radius": r} per part. A ball mates a
+/// socket of its own size at the same centre and makes a ball joint. Returns how many
+/// connectors were added; malformed rows are skipped.
+size_t loadExtraConnectors(std::string_view json, ConnectorDb& db);
+
 }  // namespace bm::connect

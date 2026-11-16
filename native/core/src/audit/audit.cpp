@@ -9,7 +9,7 @@
 
 namespace bm::audit {
 
-Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Library& library, ldraw::PartCache& cache, connect::ConnectorDb* connectors, collide::ShapeCache* shapes) {
+Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Library& library, ldraw::PartCache& cache, connect::ConnectorDb* connectors, collide::ShapeCache* shapes, const kin::GearDb* gears) {
   Row row;
   row.id = std::move(id);
   const auto started = std::chrono::steady_clock::now();
@@ -29,12 +29,13 @@ Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Libr
     row.loadMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
     if (connectors) {
       const auto graphStart = std::chrono::steady_clock::now();
-      const connect::Graph g = connect::buildGraph(model, *connectors);
+      const connect::Graph g = connect::buildGraph(model, *connectors, gears);
       row.hasGraph = true;
       row.joined = static_cast<int>(g.largestGroup);
       row.groups = static_cast<int>(g.groups);
       row.attached = static_cast<int>(g.attached);
       row.bodies = static_cast<int>(g.bodies);
+      row.meshes = static_cast<int>(g.meshes.size());
       row.withoutConnectors = static_cast<int>(g.withoutConnectors);
       for (const connect::Connection& c : g.connections) row.joints[static_cast<int>(c.joint.kind)]++;
       std::vector<uint8_t> connected(model.pieces().size(), 0);
@@ -102,6 +103,7 @@ nlohmann::json toJson(const Row& row) {
     j["partsAttached"] = row.partsAttached;
     j["partsJoined"] = row.partsJoined;
     for (int k = 0; k < connect::kJointKinds; k++) j["joints"][connect::name(static_cast<connect::JointKind>(k))] = row.joints[k];
+    j["meshes"] = row.meshes;
     j["graphMs"] = row.graphMs;
   }
   if (row.hasCollision) {

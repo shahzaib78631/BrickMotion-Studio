@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include "bm/connect/connectors.h"
+#include "bm/connect/mate.h"
 
 using namespace bm;
 using namespace bm::connect;
@@ -246,4 +247,29 @@ TEST_CASE("BrickNet hinge and ball rows become connectors", "[connectors][brickn
   REQUIRE(added != brick->end());
   REQUIRE(near(added->axis, {0, 0, -1}, 1e-6));  // pitch 90
   REQUIRE(loadBricknetJoints("[]", f.db) == 0);
+}
+
+TEST_CASE("extra connector rows: balls and sockets for parts no source covers", "[connectors][extra]") {
+  Fixture f;
+  REQUIRE(loadExtraConnectors(R"({"parts":{
+      "plain":[{"kind":"ball","at":[-10,0,0],"radius":8,"note":"measured"},
+               {"kind":"socket","at":[0,0,160],"radius":8},
+               {"kind":"ball","at":[0,0],"radius":8},
+               {"kind":"ball","at":[0,0,0],"radius":0},
+               {"kind":"ball","at":[0,"y",0],"radius":8},
+               {"kind":"wedge","at":[0,0,0],"radius":8},
+               "nonsense"],
+      "bad":7}})", f.db) == 2);
+  const auto c = f.db.get("plain.dat");
+  REQUIRE(c->size() == 2);
+  REQUIRE((c->at(0).gender == Gender::Male && c->at(0).source == Source::Override && near(c->at(0).start, {-10, 0, 0}) && c->at(0).radius == 8));
+  REQUIRE((c->at(1).gender == Gender::Female && near(c->at(1).start, {0, 0, 160})));
+  // A ball in a socket of its size is a ball joint; in a socket of another size it is nothing.
+  Connector ball = c->at(0), socket = c->at(1);
+  socket.start = ball.start;
+  const auto m = mate(ball, socket);
+  REQUIRE((m && m->freedom.ball));
+  socket.radius = 5;
+  REQUIRE_FALSE(mate(ball, socket));
+  REQUIRE(loadExtraConnectors("nope", f.db) == 0);
 }

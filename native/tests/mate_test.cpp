@@ -268,3 +268,27 @@ TEST_CASE("a tyre sits on a rim of about its bore and does not turn on it", "[ma
   // A tyre bore is not a pin hole, and a rim is not a pin.
   REQUIRE_FALSE(mate(seat(Gender::Female, 6, 16, {0, 0, 0}), cyl(Gender::Male, {0, 0, -8}, {0, 0, 1}, {{'R', 6, 0, 16}}, true, true)).has_value());
 }
+
+TEST_CASE("a measured ball is in its socket while its centre is inside the cup", "[mate][ball]") {
+  Connector ball, socket;
+  for (Connector* c : {&ball, &socket}) {
+    c->kind = SnapKind::Generic;
+    c->group = "ball";
+    c->match = "size";
+    c->placement = "free";
+    c->bounding = "sph";
+    c->radius = 8;
+    c->source = Source::Override;
+    c->axis = {0, -1, 0};
+  }
+  ball.gender = Gender::Male;
+  socket.gender = Gender::Female;
+  socket.start = {6.8, 0, 0};  // as far off as 42000's pushrods
+  REQUIRE(mate(ball, socket));
+  socket.start = {7.5, 0, 0};
+  REQUIRE_FALSE(mate(ball, socket));
+  // Balls whose size is not a measurement keep the tight rule.
+  ball.source = socket.source = Source::Shadow;
+  socket.start = {3, 0, 0};
+  REQUIRE_FALSE(mate(ball, socket));
+}

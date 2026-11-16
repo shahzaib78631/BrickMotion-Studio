@@ -174,9 +174,14 @@ std::optional<Mate> fingers(const Connector& a, const Connector& b) {
 
 std::optional<Mate> generics(const Connector& a, const Connector& b) {
   if (a.gender == b.gender || a.group != b.group) return std::nullopt;
-  if (length(a.start - b.start) > kPointMatch) return std::nullopt;
-  if ((a.match == "size" || b.match == "size") && std::abs(a.radius - b.radius) > kRadiusSlack) return std::nullopt;
   auto isBall = [](const Connector& c) { return c.bounding.rfind("sph", 0) == 0 || c.placement == "free"; };
+  // A ball of measured size is in its socket while its centre is within kBallSeat of a radius of
+  // the socket's: files set links between two balls whose distance they do not quite span.
+  // Only radii measured for the purpose are trusted: a shadow file's "sph" is a bounding size.
+  const bool sizedBalls = isBall(a) && isBall(b) && a.radius > 0 && b.radius > 0 && a.source == Source::Override && b.source == Source::Override;
+  const double reach = sizedBalls ? std::max(kPointMatch, kBallSeat * std::min(a.radius, b.radius)) : kPointMatch;
+  if (length(a.start - b.start) > reach) return std::nullopt;
+  if ((a.match == "size" || b.match == "size") && std::abs(a.radius - b.radius) > kRadiusSlack) return std::nullopt;
   Mate out;
   out.grip = std::max(a.radius, b.radius);
   if (a.placement == "hinge" || b.placement == "hinge") {
