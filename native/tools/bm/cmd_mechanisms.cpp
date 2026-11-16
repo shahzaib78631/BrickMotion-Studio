@@ -6,6 +6,8 @@
 #include "bm/connect/graph.h"
 #include "bm/connect/studio.h"
 #include "bm/io.h"
+#include <map>
+#include "bm/kin/mobility.h"
 #include "bm/kin/system.h"
 #include "commands.h"
 
@@ -14,7 +16,7 @@ namespace fs = std::filesystem;
 
 int cmdMechanisms(const Args& args) {
   if (args.empty() || args[0].rfind("--", 0) == 0) {
-    std::fprintf(stderr, "usage: bm mechanisms <file> [--no-travel] [--links] [--no-studio]\n");
+    std::fprintf(stderr, "usage: bm mechanisms <file> [--no-travel] [--links] [--all] [--no-studio]\n");
     return kUsage;
   }
   const std::string ldraw = defaultLDrawDir();
@@ -57,6 +59,39 @@ int cmdMechanisms(const Args& args) {
       };
       for (const kin::Link& l : sys.links)
         std::printf("  %-12s %-22s %-22s at %.0f %.0f %.0f along %.2f %.2f %.2f\n", connect::name(l.kind), label(l.a).c_str(), label(l.b).c_str(), l.point.x, l.point.y, l.point.z, l.axis.x, l.axis.y, l.axis.z);
+    }
+    const auto solveStart = std::chrono::steady_clock::now();
+    const kin::Mobility mob = kin::mobility(sys);
+    const double solveMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - solveStart).count();
+    size_t locals = 0;
+    for (const kin::Freedom& f : mob.freedoms) locals += f.local;
+    std::printf("freedoms      %zu (%zu of single bodies on one link, %zu others)\nsolved        %zu bodies in %.0f ms%s%s\n", mob.freedoms.size(), locals, mob.freedoms.size() - locals, mob.solvedBodies, solveMs,
+                mob.solved ? "" : "; NOT SOLVED: ", mob.reason.c_str());
+    auto describe = [&](uint32_t body) {
+      std::string text = model.pieces()[sys.pieces[body].front()].part;
+      if (text.size() > 4) text.resize(text.size() - 4);
+      if (sys.size[body] > 1) text += "+" + std::to_string(sys.size[body] - 1);
+      return text;
+    };
+    size_t shown = 0;
+    for (size_t i = 0; i < mob.freedoms.size(); i++) {
+      const kin::Freedom& f = mob.freedoms[i];
+      if (f.local && !flag(args, "--all")) continue;
+      if (shown++ >= 40) break;
+      size_t pieces = 0;
+      for (uint32_t b : f.bodies) pieces += sys.size[b];
+      std::printf("  #%zu moves %zu bodies (%zu pieces):", i, f.bodies.size(), pieces);
+      // The bodies with the most pieces say most about what it is.
+      std::vector<uint32_t> order = f.bodies;
+      std::sort(order.begin(), order.end(), [&](uint32_t x, uint32_t y) { return sys.size[x] > sys.size[y]; });
+      for (size_t k = 0; k < order.size() && k < 6; k++) std::printf(" %s", describe(order[k]).c_str());
+      std::printf("%s\n", order.size() > 6 ? " ..." : "");
+      for (const kin::Gearing& g : sys.gearings) {
+        const auto r = kin::ratio(f, g.a, g.b);
+        if (!r || !mob.moves[g.b] || kin::twistOf(f, g.b).angular == Vec3{}) continue;
+        if (r->exact) std::printf("      %s %dT : %s %dT   %d/%d\n", describe(g.a).c_str(), g.mesh.teethA, describe(g.b).c_str(), g.mesh.teethB, r->num, r->den);
+        else std::printf("      %s %dT : %s %dT   %.4f\n", describe(g.a).c_str(), g.mesh.teethA, describe(g.b).c_str(), g.mesh.teethB, r->value);
+      }
     }
     return 0;
   } catch (const std::exception& e) {

@@ -34,4 +34,20 @@ inline constexpr double kMinFaceShare = 2.0;
 /// (a piston, a driving ring) travels 4 or more.
 inline constexpr double kMinTravel = 2.0;
 
+/// A gear's shaft line, measured from its teeth, and the line of the link it turns on are the
+/// same shaft when this close. Files set bevels up to kBevelSlack off.
+inline constexpr double kShaftMatch = 4.0;
+
+/// An equation adds to the rank when what is left of it, after the others, is more than this
+/// share of the largest. Equations are in radians and studs, so a link that a file misplaces
+/// by a hundredth of an LDU still closes; one misplaced by more really is a different link.
+inline constexpr double kRankTol = 1e-6;
+
+/// A twist smaller than this (radians, or studs, per unit of the freedom) is no motion.
+inline constexpr double kStill = 1e-7;
+
+/// The most bodies solved together. The work grows with the cube of this; 400 bodies take a
+/// few seconds. Larger moving cores are reported as not solved rather than attempted.
+inline constexpr int kMaxSolveBodies = 400;
+
 }  // namespace bm::kin

@@ -152,13 +152,14 @@ Mobility mobility(const System&);
 /// Turns of `b` per turn of `a` (each about its own link axis to ground or its shaft line) in freedom `f`,
 /// as a reduced fraction when both are on geared shafts; nullopt when either does not turn in it.
 struct Ratio { int num = 0, den = 1; double value = 0; };
-std::optional<Ratio> ratio(const System&, const Mobility&, size_t freedom, uint32_t bodyA, uint32_t bodyB);
+std::optional<Ratio> ratio(const Freedom&, uint32_t bodyA, uint32_t bodyB);
 }
 ```
-- Unknowns: 6 per non-ground body. Rows: a revolute link 5, prismatic 5, cylindrical 4, spherical 3, a gearing 1 (`ωA·axisA·teethA − sign·ωB·axisB·teethB = 0`, written with the two shaft lines; a rack `ωA·r = v·dir`). Lengths are scaled by 1/20 so rows are comparable. `kRankTol = 1e-7`.
-- Before the algebra, bodies with a single link and no gearing are stripped and reported as `local` freedoms, repeatedly; each connected component of the rest is solved by itself. A component of more than `kMaxSolveBodies = 400` bodies gives `solved = false` with the count (Review Focus 5).
-- The null-space basis is rotated so freedoms are as separate as possible: reduced row echelon over bodies, so each freedom has a body no other freedom moves where one exists.
-- `ratio` takes tooth counts along the gearing path between the two shafts when one exists (exact), and checks it against the twists.
+- Unknowns: 6 per free body. Rows (`kin/constraints.h`, shared with Task 5): a revolute link 5, prismatic 5, cylindrical 4, spherical 3, a gearing 1. Lengths are divided by 20 so rows are comparable. `kRankTol = 1e-6`.
+- **A gearing's row is in tooth counts** when one body carries both shafts (each gear turns against it about its own shaft line, within `kShaftMatch = 4` LDU): `teethA (wA - wC).axisA = +-teethB (wB - wC).axisB`. The ratio is then exact however the file placed the gears. Without a common carrier (a planet against a side gear held elsewhere, a rack riding on a linkage) the row is the equality of the two tooth speeds at `GearMesh::point`.
+- The largest body of every separate group stands still. Bodies with a single link and no gearing are taken off first and reported as freedoms of their own (`local` when nothing hangs on them); what is left is split at the bodies that stand still and each part solved by itself. A part of more than `kMaxSolveBodies = 400` bodies gives `solved = false` with the count (Review Focus 5).
+- The null-space basis is separated by reduced row echelon with complete pivoting, so each freedom has a coordinate no other freedom has.
+- `ratio(freedom, a, b)` is the quotient of the two turning rates, given also as a fraction in lowest terms (continued fractions, denominator up to 1000) when it is one to 1e-9.
 
 - [ ] Tests: `nullSpace` of a rank-deficient 3×3, of a full-rank matrix (empty), of a zero matrix (identity size); a single revolute link → 1 freedom; a four-bar → 1 freedom moving 3 bodies; a triangle of three revolute links → 0; two shafts with 8T and 24T → 1 freedom and ratio −1/3 exactly; three gears in a ring on parallel shafts with tooth counts that cannot agree → those shafts locked (Review Focus 4); a rack and pinion → 1 freedom, rack linear speed `r·ω`; a differential (three bevels on a carrier) → 2 freedoms; an empty system → no freedoms.
 - [ ] RED, implement, GREEN, commit `feat(native): degrees of freedom from the joints`.
