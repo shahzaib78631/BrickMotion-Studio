@@ -32,6 +32,9 @@ struct Connection {
 struct Graph {
   std::vector<Connection> connections;  ///< sorted by (a, b)
   std::vector<MateZone> zones;          ///< see Connection::firstZone
+  /// One per zone, in step with `zones`: how that mate comes apart, with `axis` signed as the
+  /// way piece `b` leaves piece `a` (the opposite is how `a` leaves `b`).
+  std::vector<Release> releases;
   /// Gears whose teeth are engaged, sorted by (lower piece, higher piece). A mesh is a coupling,
   /// not a joint: each gear is held by its own shaft, so meshed gears are not thereby in one
   /// group. `meshZones[i]` is where the teeth of `meshes[i]` interleave.

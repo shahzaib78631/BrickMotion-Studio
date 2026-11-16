@@ -144,6 +144,28 @@ std::optional<Mate> cylinders(const Connector& m, const Connector& f, std::strin
     if (!out.freedom.seats.empty()) out.freedom.friction = false;
   }
   out.freedom.point = f.start + f.axis * ((gripLo + gripHi) / 2);
+
+  // How it comes apart. The male cannot leave towards a closed end, nor drag a rigid section
+  // through a stretch of the hole that is narrower than it (a pin's collar, an axle's stop).
+  bool plus = f.openEnd, minus = f.openStart;  // free to leave along +axis / -axis of the hole
+  for (const ProfileSection& ms : m.profile) {
+    if (ms.shape == 'L' || ms.shape == 'T') continue;  // a lip gives; a tyre stretches
+    const double a = t0 + sign * ms.start, b = t0 + sign * (ms.start + ms.length);
+    const double mLo = std::min(a, b), mHi = std::max(a, b);
+    for (const ProfileSection& fs : f.profile) {
+      if (fs.shape == 'L' || fs.shape == 'T' || ms.radius <= fs.radius + kRadiusSlack) continue;
+      if (fs.start + fs.length > mHi + kMinInterference) plus = false;
+      if (fs.start < mLo - kMinInterference) minus = false;
+    }
+  }
+  out.release.axis = f.axis;
+  out.release.travel = std::max(0.0, std::min(hi, f.length) - std::max(lo, 0.0));
+  if (plus == minus) {
+    out.release.kind = ReleaseKind::Either;  // both ways, or (a part held both ways) no saying
+  } else {
+    out.release.kind = ReleaseKind::Along;
+    if (minus) out.release.axis = -f.axis;
+  }
   return out;
 }
 
@@ -162,6 +184,10 @@ std::optional<Mate> barInClip(const Connector& bar, const Connector& clip) {
   Mate out;
   out.grip = grip;
   out.freedom = {true, bar.slide || clip.slide, false, clip.start + clip.axis * (clipLength / 2), clip.axis, true, {}, false};
+  out.release.kind = ReleaseKind::Across;
+  out.release.axis = clip.axis;
+  out.release.travel = 2 * clip.radius;  // the bar is out once it has cleared the jaws
+  out.release.orAlong = true;
   return out;
 }
 
@@ -208,6 +234,9 @@ std::optional<Mate> fingers(const Connector& a, const Connector& b) {
   Mate out;
   out.grip = meshed;
   out.freedom = {true, false, false, a.start + a.axis * (a.length / 2), a.axis, false, {}, false};
+  out.release.kind = ReleaseKind::Either;  // along the hinge pin
+  out.release.axis = a.axis;
+  out.release.travel = meshed;
   return out;
 }
 
@@ -227,6 +256,9 @@ std::optional<Mate> generics(const Connector& a, const Connector& b) {
     // Two hinge halves: they share the hinge line and turn about it.
     if (!parallel(a.axis, b.axis)) return std::nullopt;
     out.freedom = {true, false, false, a.start, a.axis, false, {}, false};
+    out.release.kind = ReleaseKind::Either;
+    out.release.axis = a.axis;
+    out.release.travel = out.grip;
     return out;
   }
   out.freedom.ball = isBall(a) || isBall(b);
@@ -249,10 +281,14 @@ std::optional<Mate> mate(const Connector& a, const Connector& b) {
   if (a.kind == SnapKind::Cyl && b.kind == SnapKind::Cyl) {
     if (a.gender == b.gender) return std::nullopt;
     std::optional<Mate> m = a.gender == Gender::Male ? cylinders(a, b) : cylinders(b, a);
-    if (m) m->freedom.seatsMoveFirst = a.gender == Gender::Male;
+    if (m) m->freedom.seatsMoveFirst = m->release.maleIsFirst = a.gender == Gender::Male;
     return m;
   }
-  if (a.kind == SnapKind::Cyl && b.kind == SnapKind::Clip) return a.gender == Gender::Male ? barInClip(a, b) : std::nullopt;
+  if (a.kind == SnapKind::Cyl && b.kind == SnapKind::Clip) {
+    std::optional<Mate> m = a.gender == Gender::Male ? barInClip(a, b) : std::nullopt;
+    if (m) m->release.maleIsFirst = true;  // the bar is what leaves
+    return m;
+  }
   if (a.kind == SnapKind::Clip && b.kind == SnapKind::Cyl) return b.gender == Gender::Male ? barInClip(b, a) : std::nullopt;
   if (a.kind == SnapKind::Finger && b.kind == SnapKind::Finger) return fingers(a, b);
   if (a.kind == SnapKind::Generic && b.kind == SnapKind::Generic) return generics(a, b);

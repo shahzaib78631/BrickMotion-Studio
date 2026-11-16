@@ -27,9 +27,25 @@ struct Freedom {
   Vec3 shaftFirst = {}, shaftSecond = {};
 };
 
+/// How one mate comes apart: the directions the *male* connector's piece may leave along.
+enum class ReleaseKind : uint8_t {
+  Along,   ///< one way along `axis` (a stud lifts off, a pin with a collar, a blind hole)
+  Either,  ///< either way along `axis` (an axle through an open hole, a hinge pin)
+  Across,  ///< any direction square to `axis`, which is the bar (a clip opens sideways)
+  Any,     ///< no constraint of its own (a ball, a flexible end): the sweep alone decides
+};
+struct Release {
+  ReleaseKind kind = ReleaseKind::Any;
+  Vec3 axis = {};       ///< unit; for Along it points the way the male leaves
+  double travel = 0;    ///< LDU the male moves along `axis` before the mate lets go
+  bool orAlong = false; ///< Across: it may also slide off either way along `axis` (a bar pulled out of its clip)
+  bool maleIsFirst = false;  ///< the male is the first connector given to mate()
+};
+
 struct Mate {
   Freedom freedom;
   double grip = 0;  ///< LDU of matched engagement
+  Release release = {};
 };
 
 /// Whether `a` and `b` (both in the same space) are joined. Order does not matter.

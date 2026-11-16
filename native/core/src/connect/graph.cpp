@@ -198,6 +198,7 @@ Graph buildGraph(const Model& model, ConnectorDb& db, const kin::GearDb* gears) 
   struct Pair {
     std::vector<Freedom> freedoms;
     std::vector<MateZone> zones;
+    std::vector<Release> releases;  ///< in step with `zones`
     double grip = 0;
     bool cv = false;       ///< one of its mates is a constant-velocity joint
     Vec3 cvPoint, shaftLo, shaftHi;  ///< its centre, and the shafts of the lower and higher piece
@@ -225,6 +226,9 @@ Graph buildGraph(const Model& model, ConnectorDb& db, const kin::GearDb* gears) 
       for (double& seat : pair.freedoms.back().seats) seat = -seat;
     pair.zones.push_back(zoneOf(a.connector, b.connector));
     pair.grip += m->grip;
+    Release release = m->release;
+    if ((release.maleIsFirst ? a.piece : b.piece) != hi) release.axis = -release.axis;  // kept as how `hi` leaves `lo`
+    pair.releases.push_back(release);
     if (m->freedom.passesTurning) {
       pair.cv = true;
       pair.cvPoint = m->freedom.point;
@@ -267,6 +271,7 @@ Graph buildGraph(const Model& model, ConnectorDb& db, const kin::GearDb* gears) 
     c.firstZone = static_cast<uint32_t>(g.zones.size());
     c.zoneCount = static_cast<uint32_t>(pair.zones.size());
     g.zones.insert(g.zones.end(), pair.zones.begin(), pair.zones.end());
+    g.releases.insert(g.releases.end(), pair.releases.begin(), pair.releases.end());
     groups.join(c.a, c.b);
     if (c.joint.kind == JointKind::Fixed) bodies.join(c.a, c.b);
     attached[c.a] = attached[c.b] = 1;

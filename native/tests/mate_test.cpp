@@ -315,3 +315,28 @@ TEST_CASE("a lipped hole on a ridged shaft has seats, and is not a friction fit"
   const auto keyed = mate(axle({0, 0, 0}, x, 40), axleHole({10, 0, 0}, x, 20));
   REQUIRE((keyed && keyed->freedom.friction && keyed->freedom.seats.empty()));
 }
+
+TEST_CASE("each mate says how it comes apart", "[mate][release]") {
+  const Vec3 x{1, 0, 0};
+  // A stud lifts off along its own axis, out of the socket's opening, by its own height.
+  const auto stud1 = mate(stud({0, 24, 0}), socket({0, 24, 0}));
+  REQUIRE(stud1.has_value());
+  REQUIRE(stud1->release.kind == ReleaseKind::Along);
+  REQUIRE_THAT(stud1->release.travel, WithinAbs(4, 1e-9));
+  REQUIRE(stud1->release.maleIsFirst);
+  REQUIRE_FALSE(mate(socket({0, 24, 0}), stud({0, 24, 0}))->release.maleIsFirst);
+  // It leaves against the way the socket runs in from its opening.
+  REQUIRE_THAT(dot(stud1->release.axis, socket({0, 24, 0}).axis), WithinAbs(-1, 1e-9));
+  // An axle through an open cross hole slides out either way.
+  const auto shaft = mate(axle({0, 0, 0}, x, 40), axleHole({10, 0, 0}, x, 20));
+  REQUIRE((shaft && shaft->release.kind == ReleaseKind::Either));
+  REQUIRE_THAT(shaft->release.travel, WithinAbs(20, 1e-9));
+  // A pin in a hole at one end of it: its collar cannot be dragged through the hole, so it
+  // leaves the way its collar is.
+  const auto pinned = mate(pin({0, 0, 0}, x), pinHole({0, 0, 0}, x));  // the hole takes the pin's +x half
+  REQUIRE((pinned && pinned->release.kind == ReleaseKind::Along));
+  REQUIRE_THAT(pinned->release.axis.x, WithinAbs(-1, 1e-9));
+  const auto otherHalf = mate(pin({0, 0, 0}, x), pinHole({-20, 0, 0}, x));
+  REQUIRE((otherHalf && otherHalf->release.kind == ReleaseKind::Along));
+  REQUIRE_THAT(otherHalf->release.axis.x, WithinAbs(1, 1e-9));
+}
