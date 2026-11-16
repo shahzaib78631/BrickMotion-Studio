@@ -27,7 +27,7 @@
 Inputs the spec implies and no happy-path test would meet. Each has its test in the task named.
 
 1. **A piece joined to nothing in the file** (1.3% of corpus pieces: stickers, parts with no connector data). It cannot be placed "joined to something built". Expected: placed after what it rests on, flagged `Unjoined`, never counted as certified, and never blocks the rest of the plan. (Task 5)
-2. **A piece held by two connections that release along different lines** (a beam on two pins at right angles; a plate under a SNOT bracket). Expected: grouped with a neighbour into a unit that does have a common direction; if no group up to `kMaxGroup` has one, flagged `NoDirection`. (Task 6)
+2. **A piece held by two connections that release along different lines** (a beam on two pins at right angles; a plate under a SNOT bracket). Expected: grouped with a neighbour into a unit that does have a common direction; if no group up to `kMaxGroup` has one, flagged `NoDirection`. (Tasks 4 and 5)
 3. **A piece that can only leave through a gap narrower than the sweep step** (a tile between two walls with 0.2 LDU clearance). The sampled sweep must not call a grazing path clear by stepping over the obstacle, and must not call an exact fit blocked. (Task 3)
 4. **A file with several separate assemblies, or one that is empty, or one piece.** Expected: each group planned by itself on the floor; empty gives an empty plan; one piece gives one move from staging. (Task 5)
 5. **An authored flight that passes through another piece.** Expected: kept exactly as authored, flagged `AuthoredCrossing`; the planner never replaces what the author set. (Task 8)
@@ -247,7 +247,9 @@ struct Plan {
   std::vector<Plan> subs;         ///< how each multi-piece unit is itself built, on the floor
   double planMs = 0;
   bool complete = true;           ///< false when cancelled
+  std::vector<std::string> notes; ///< things the author should know that belong to no one move (Task 8)
 };
+struct Constraints;  // Task 8
 struct Options {
   const CancelToken* cancel = nullptr;
   JobPool* pool = nullptr;        ///< null: JobPool::shared()
@@ -272,7 +274,7 @@ Plan plan(const Model&, const connect::Graph&, ldraw::PartCache&, collide::Shape
 6. Remove it. Append the move. Mark dirty: every present piece joined to a removed piece, and every piece whose recorded blocker was a removed piece. Go to 2.
 7. Reverse the moves. A multi-piece unit gets a `sub` plan: the same loop on the unit's pieces alone, with its own bounds.
 
-**Unjoined pieces** (no connection in the graph) are not in any group. Each is placed after the present pieces its box rests on (within `kFloorSlack` above them, overlapping in plan view), dropped straight down along `down` if that sweep is clear, flag `Unjoined` (Review Focus 1). They never hold up a group.
+**Unjoined pieces** (no connection in the graph) are not in any group. Each is placed after the present pieces its box rests on (within `stable::kFloorSlack` above them, overlapping in plan view), dropped straight down along `down` if that sweep is clear, flag `Unjoined` (Review Focus 1). They never hold up a group.
 
 **Stability** is not a hard rule of the spec and is not enforced here; `stable::check` with `Options::present` is run by the certifier and reported (Task 7) so tipping steps are visible.
 
