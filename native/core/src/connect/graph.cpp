@@ -309,6 +309,30 @@ Graph buildGraph(const Model& model, ConnectorDb& db, const kin::GearDb* gears) 
     g.meshes = kin::findMeshes(model, *gears);
     g.meshZones.reserve(g.meshes.size());
     for (const kin::GearMesh& m : g.meshes) g.meshZones.push_back(meshZone(m));
+    // Screws: a housing with its input and its piston joined to it.
+    for (uint32_t h = 0; h < n; h++) {
+      const kin::GearDb::Screw* screw = gears->screw(pieces[h].part);
+      if (!screw) continue;
+      const Connection *input = nullptr, *piston = nullptr;
+      for (const Connection& c : g.connections) {
+        if (c.a != h && c.b != h) continue;
+        const std::string other = kin::barePart(pieces[c.a == h ? c.b : c.a].part);
+        if (other == screw->input) input = &c;
+        else if (other == screw->piston) piston = &c;
+      }
+      if (!input || !piston) continue;
+      kin::GearMesh m;
+      m.kind = kin::MeshKind::Screw;
+      m.a = input->a == h ? input->b : input->a;
+      m.b = piston->a == h ? piston->b : piston->a;
+      m.housing = h;
+      m.travel = screw->lead;
+      // The line is the piston's; it points the way the piston goes out.
+      const Vec3 out = pieces[m.b].world.t - pieces[m.a].world.t;
+      m.axisA = m.axisB = m.tangent = dot(piston->joint.axis, out) < 0 ? -piston->joint.axis : piston->joint.axis;
+      m.pointA = m.pointB = m.point = piston->joint.point;
+      g.screws.push_back(m);
+    }
   }
   return g;
 }

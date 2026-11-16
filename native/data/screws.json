@@ -1,0 +1,13 @@
+{
+  "format": "brickmotion-screws",
+  "version": 1,
+  "source": "Parts with a screw inside: turning the input moves the piston along the same line. The lead is not in the LDraw shape, so each row says where its number comes from.",
+  "parts": {
+    "92693c01": {
+      "input": "92695",
+      "piston": "92696",
+      "leadLduPerTurn": 3.015075,
+      "note": "60 LDU of travel in 19.9 turns of the input, as measured by builders and recorded by Kinebrick (erik-larsen/kinebrick, CC BY-SA 4.0). Which way the input turns to extend is not recorded; a right-hand thread is assumed."
+    }
+  }
+}

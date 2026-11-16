@@ -216,3 +216,14 @@ TEST_CASE("the reference sets contain their hand-checked gear meshes", "[kin][ge
     REQUIRE(checked > 0);
   }
 }
+
+TEST_CASE("screw rows are read, and bad ones skipped", "[kin][gears][screw]") {
+  bm::kin::GearDb db;
+  REQUIRE(db.loadScrews(R"({"parts":{"92693c01":{"input":"92695.dat","piston":"92696","leadLduPerTurn":3.0},
+    "1":{"input":"2","piston":"3","leadLduPerTurn":0}, "4":{"input":"5"}, "6":7}})") == 1);
+  const auto* s = db.screw("92693C01.dat");
+  REQUIRE(s);
+  REQUIRE((s->input == "92695" && s->piston == "92696" && s->lead == 3.0));
+  REQUIRE(db.screw("1") == nullptr);
+  REQUIRE(db.loadScrews("not json") == 0);
+}

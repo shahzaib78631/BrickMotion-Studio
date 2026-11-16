@@ -44,7 +44,7 @@ void Contact::zonesFor(uint32_t lo, uint32_t hi, std::vector<collide::Zone>& out
   }
 }
 
-bool Contact::blocked(const std::vector<uint32_t>& moved, const std::vector<uint32_t>& bodyOf, const std::vector<Xform>& motion, std::pair<uint32_t, uint32_t>* who) {
+bool Contact::blocked(const std::vector<uint32_t>& moved, const std::vector<uint32_t>& bodyOf, const std::vector<Xform>& motion, std::pair<uint32_t, uint32_t>* who, const std::vector<uint8_t>* ignore) {
   const auto& pieces = model_.pieces();
   const uint32_t n = static_cast<uint32_t>(pieces.size());
   if (bodyOf.size() != n) return false;
@@ -62,6 +62,7 @@ bool Contact::blocked(const std::vector<uint32_t>& moved, const std::vector<uint
     const Xform poseP = motionOf(p) * pieces[p].world;
     for (uint32_t q = 0; q < n; q++) {
       if (!shapes_[q] || bodyOf[q] == bodyOf[p] || !boxesMeet(box[p], box[q])) continue;
+      if (ignore && bodyOf[q] < ignore->size() && (*ignore)[bodyOf[q]]) continue;
       const uint32_t lo = std::min(p, q), hi = std::max(p, q);
       bool joined = false;
       zonesFor(lo, hi, zones, joined);

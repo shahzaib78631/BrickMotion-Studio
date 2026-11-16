@@ -105,6 +105,7 @@ System buildSystem(const Model& model, const connect::Graph& graph, ldraw::PartC
         members[root[i]].push_back(i);
       }
       std::vector<Xform> motion(n);
+      std::vector<uint8_t> linked(n, 0);
       for (uint32_t ci : live) {
         const Connection& c = graph.connections[ci];
         if (!slides(c.joint.kind) || slideState[ci] == 2) continue;
@@ -112,9 +113,19 @@ System buildSystem(const Model& model, const connect::Graph& graph, ldraw::PartC
         if (A == B) continue;
         const uint32_t mover = uf.count[A] <= uf.count[B] ? A : B;
         if (slideState[ci] == 1 && testedSize[ci] == uf.count[mover]) continue;  // nothing has changed since it was found free
+        // What the mover is joined to by some other link is not an obstacle: whether that
+        // link lets it go is for the equations to say. Its partner in this slide is one.
+        std::fill(linked.begin(), linked.end(), 0);
+        const uint32_t partner = mover == A ? B : A;
+        for (uint32_t other : live) {
+          if (slideState[other] == 2 && !turns(graph.connections[other].joint.kind)) continue;
+          const uint32_t X = uf.find(graph.connections[other].a), Y = uf.find(graph.connections[other].b);
+          if (X == mover && Y != partner) linked[Y] = 1;
+          if (Y == mover && X != partner) linked[X] = 1;
+        }
         auto freeAlong = [&](double sign) {
           motion[mover].t = c.joint.axis * (sign * kMinTravel);
-          return !contact->blocked(members[mover], root, motion);
+          return !contact->blocked(members[mover], root, motion, nullptr, &linked);
         };
         const bool moves = freeAlong(1) || freeAlong(-1);
         motion[mover].t = {};
@@ -247,7 +258,13 @@ System buildSystem(const Model& model, const connect::Graph& graph, ldraw::PartC
 
   for (const GearMesh& m : graph.meshes) {
     if (m.a >= n || m.b >= n || sys.bodyOf[m.a] == sys.bodyOf[m.b]) continue;
-    sys.gearings.push_back({sys.bodyOf[m.a], sys.bodyOf[m.b], m});
+    sys.gearings.push_back({sys.bodyOf[m.a], sys.bodyOf[m.b], m, UINT32_MAX});
+  }
+  for (const GearMesh& m : graph.screws) {
+    if (m.a >= n || m.b >= n || m.housing >= n) continue;
+    const uint32_t input = sys.bodyOf[m.a], piston = sys.bodyOf[m.b], housing = sys.bodyOf[m.housing];
+    if (input == piston || input == housing || piston == housing) continue;  // something holds it: it does not work
+    sys.gearings.push_back({input, piston, m, housing});
   }
   return sys;
 }

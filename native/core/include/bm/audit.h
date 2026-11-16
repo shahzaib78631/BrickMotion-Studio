@@ -42,6 +42,14 @@ struct Row {
   int duplicates = 0;      ///< pairs that are the same part at the same pose
   double collisionMs = 0;
   std::map<std::string, int> overlapPairs;  ///< "partA + partB" -> overlapping pairs
+  // Kinematics (present when a shape cache was given).
+  bool hasKinematics = false;
+  int movingBodies = 0;    ///< bodies after slides that do not move are removed
+  int links = 0;           ///< joints between those bodies
+  int freedoms = 0;        ///< independent ways the model can move
+  int mechanisms = 0;      ///< of those, the ones that move more than one body about one link
+  bool solved = false;     ///< the freedoms were found (false: too large, see kin::Mobility::reason)
+  double kinMs = 0;
 
   std::map<std::string, int> noConnectorParts;  ///< part -> pieces, for parts with no connectors
   std::map<std::string, int> unmatedParts;      ///< part -> pieces that have connectors but joined nothing

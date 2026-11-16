@@ -191,6 +191,31 @@ size_t GearDb::load(std::string_view text) {
   return added;
 }
 
+size_t GearDb::loadScrews(std::string_view text) {
+  const json doc = json::parse(text, nullptr, false);
+  if (!doc.is_object() || !doc.contains("parts") || !doc["parts"].is_object()) return 0;
+  std::map<std::string, Screw> all(screws_.begin(), screws_.end());
+  size_t added = 0;
+  for (const auto& [part, row] : doc["parts"].items()) {
+    if (!row.is_object() || !row.contains("input") || !row["input"].is_string() || !row.contains("piston") || !row["piston"].is_string()) continue;
+    if (!row.contains("leadLduPerTurn") || !row["leadLduPerTurn"].is_number()) continue;
+    const double lead = row["leadLduPerTurn"].get<double>();
+    if (!(lead > 0)) continue;
+    all[bare(part)] = Screw{bare(row["input"].get<std::string>()), bare(row["piston"].get<std::string>()), lead};
+    added++;
+  }
+  screws_.assign(all.begin(), all.end());
+  return added;
+}
+
+const GearDb::Screw* GearDb::screw(std::string_view part) const {
+  const std::string key = bare(part);
+  const auto it = std::lower_bound(screws_.begin(), screws_.end(), key, [](const auto& row, const std::string& k) { return row.first < k; });
+  return it != screws_.end() && it->first == key ? &it->second : nullptr;
+}
+
+std::string barePart(std::string_view part) { return bare(part); }
+
 const std::vector<Toothed>& GearDb::get(std::string_view part) const {
   static const std::vector<Toothed> none;
   auto find = [&](const std::string& key) -> const std::vector<Toothed>* {
@@ -271,6 +296,7 @@ const char* name(MeshKind kind) {
     case MeshKind::Crossed: return "crossed";
     case MeshKind::Worm: return "worm";
     case MeshKind::Rack: return "rack";
+    case MeshKind::Screw: return "screw";
   }
   return "parallel";
 }

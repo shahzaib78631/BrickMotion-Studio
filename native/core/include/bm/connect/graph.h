@@ -35,6 +35,9 @@ struct Graph {
   /// group. `meshZones[i]` is where the teeth of `meshes[i]` interleave.
   std::vector<kin::GearMesh> meshes;
   std::vector<MateZone> meshZones;
+  /// Screws: an input and a piston held in one housing (kin::MeshKind::Screw). Not in `meshes`:
+  /// they are joined to the housing already and need no zone.
+  std::vector<kin::GearMesh> screws;
   std::vector<uint32_t> group;  ///< per piece: id of the connected group it is in (any joint)
   std::vector<uint32_t> body;   ///< per piece: id of its rigid body (fixed joints only)
   std::vector<uint8_t> hasConnectors;  ///< per piece: its part has at least one connector

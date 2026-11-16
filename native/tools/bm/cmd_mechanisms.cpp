@@ -69,7 +69,7 @@ int cmdMechanisms(const Args& args) {
     const double solveMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - solveStart).count();
     size_t locals = 0;
     for (const kin::Freedom& f : mob.freedoms) locals += f.local;
-    std::printf("freedoms      %zu (%zu of single bodies on one link, %zu others)\nsolved        %zu bodies in %.0f ms%s%s\n", mob.freedoms.size(), locals, mob.freedoms.size() - locals, mob.solvedBodies, solveMs,
+    std::printf("freedoms      %zu (%zu of a body hanging on one link, %zu others)\nsolved        %zu bodies in %.0f ms%s%s\n", mob.freedoms.size(), locals, mob.freedoms.size() - locals, mob.solvedBodies, solveMs,
                 mob.solved ? "" : "; NOT SOLVED: ", mob.reason.c_str());
     auto describe = [&](uint32_t body) {
       std::string text = model.pieces()[sys.pieces[body].front()].part;

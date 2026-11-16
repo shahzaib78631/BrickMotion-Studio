@@ -125,9 +125,9 @@ Mobility mobility(const System& sys) {
       Freedom f;
       std::map<uint32_t, Twist> twists{{b, t}};
       finish(f, twists);
-      f.local = f.bodies.size() == 1;
+      f.local = true;
       f.link = hangLink[b];
-      (f.local ? locals : others).push_back(std::move(f));
+      locals.push_back(std::move(f));
     }
   }
 

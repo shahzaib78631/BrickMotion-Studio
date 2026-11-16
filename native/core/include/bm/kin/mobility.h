@@ -19,8 +19,9 @@ inline Vec3 velocityAt(const Twist& t, Vec3 p) { return t.linear + cross(t.angul
 struct Freedom {
   std::vector<uint32_t> bodies;  ///< the bodies it moves, ascending
   std::vector<Twist> twists;     ///< one per entry of `bodies`; scaled so the fastest turns at 1 (or, if nothing turns, moves at 1)
-  /// It moves one body about the one link that holds it (a free wheel, a pin spinning in its
-  /// holes): true of most freedoms in a model, and of none of its mechanisms.
+  /// It moves one body, and whatever hangs on that body, about the one link that holds it (a
+  /// free wheel, a pin spinning in its hole, a door with its handle): true of most freedoms in
+  /// a model, and of none of its mechanisms.
   bool local = false;
   uint32_t link = UINT32_MAX;    ///< local: that link
 };

@@ -38,13 +38,26 @@ class GearDb {
   const std::vector<Toothed>& get(std::string_view part) const;
   size_t size() const { return parts_.size(); }
 
+  /// A part with a screw inside it: turning the piece of part `input` held in it moves the
+  /// piece of part `piston` held in it `lead` LDU per turn, without turning it.
+  struct Screw {
+    std::string input, piston;
+    double lead = 0;
+  };
+  /// Reads native/data/screws.json. Returns the parts added.
+  size_t loadScrews(std::string_view json);
+  /// The part's screw, or null.
+  const Screw* screw(std::string_view part) const;
+
  private:
   std::vector<std::pair<std::string, std::vector<Toothed>>> parts_;  ///< sorted by name
+  std::vector<std::pair<std::string, Screw>> screws_;                ///< sorted by name
 };
 
 /// Parallel: side by side on parallel shafts. Crossed: bevels on shafts that meet at a right
-/// angle. Worm: a worm (a) driving a gear (b). Rack: a gear (a) on a rack (b).
-enum class MeshKind : uint8_t { Parallel, Crossed, Worm, Rack };
+/// angle. Worm: a worm (a) driving a gear (b). Rack: a gear (a) on a rack (b). Screw: an input
+/// (a) whose turning moves a piston (b) along its own line, both held in one housing.
+enum class MeshKind : uint8_t { Parallel, Crossed, Worm, Rack, Screw };
 
 /// Two pieces whose teeth are engaged.
 ///
@@ -56,11 +69,12 @@ struct GearMesh {
   uint32_t a = 0, b = 0;  ///< piece indices
   MeshKind kind = MeshKind::Parallel;
   int teethA = 0, teethB = 0;  ///< a rack has 0
-  double travel = 0;  ///< rack: LDU it moves per turn of the gear; worm: its lead
+  double travel = 0;  ///< rack: LDU it moves per turn of the gear; worm, screw: its lead
   Vec3 point, tangent;
   Vec3 axisA, pointA;  ///< a's shaft line
   Vec3 axisB, pointB;  ///< b's shaft line; a rack: its direction of travel
   double width = 0;    ///< shared tooth width at `point`, along axisA
+  uint32_t housing = UINT32_MAX;  ///< screw: the piece that holds both
 };
 
 /// A ring of teeth on a piece.
@@ -74,6 +88,9 @@ struct PlacedTeeth {
 std::vector<GearMesh> findMeshes(const std::vector<PlacedTeeth>& teeth);
 /// Every engaged pair of pieces in the model.
 std::vector<GearMesh> findMeshes(const Model& model, const GearDb& gears);
+
+/// The same part name without ".dat", in lower case.
+std::string barePart(std::string_view part);
 
 const char* name(MeshKind kind);
 

@@ -91,7 +91,7 @@ TEST_CASE("an arm on a hinge carries the wheel on its end", "[kin][mobility]") {
   const Mobility m = mobility(r.sys);
   REQUIRE(m.freedoms.size() == 2);
   REQUIRE((m.freedoms[0].local && m.freedoms[0].bodies == std::vector<uint32_t>{2}));
-  REQUIRE((!m.freedoms[1].local && m.freedoms[1].bodies == std::vector<uint32_t>{1, 2}));
+  REQUIRE((m.freedoms[1].local && m.freedoms[1].bodies == std::vector<uint32_t>{1, 2}));  // still one link's own freedom
   // Swinging the arm moves the wheel's centre about the hinge.
   REQUIRE_THAT(velocityAt(twistOf(m.freedoms[1], 2), {100, 0, 0}).y, WithinAbs(100, 1e-9));
 }
@@ -249,4 +249,29 @@ TEST_CASE("a moving core over the limit is reported, not attempted", "[kin][mobi
   const Mobility m = mobility(r.sys);
   REQUIRE_FALSE(m.solved);
   REQUIRE(m.reason.find("499") != std::string::npos);
+}
+
+TEST_CASE("a screw moves its piston by the lead for each turn of the input", "[kin][mobility][screw]") {
+  // Housing 1 swings on the ground; input 2 turns in it, piston 3 slides out of it.
+  Rig r(4);
+  r.link(0, 1, JointKind::Revolute, {0, 0, 0}, kX);
+  r.link(1, 2, JointKind::Revolute, {0, 0, 10}, kZ);
+  r.link(1, 3, JointKind::Cylindrical, {0, 0, 80}, kZ);
+  GearMesh m;
+  m.kind = MeshKind::Screw;
+  m.travel = 3.0;
+  m.axisA = m.axisB = m.tangent = kZ;
+  m.pointA = m.pointB = m.point = {0, 0, 80};
+  r.sys.gearings.push_back({2, 3, m, 1});
+  const Mobility mob = mobility(r.sys);
+  REQUIRE(mob.solved);
+  // Two freedoms: the housing swings (carrying both), and the screw.
+  const Freedom* screw = nullptr;
+  for (const Freedom& f : mob.freedoms)
+    if (twistOf(f, 1).angular == Vec3{} && twistOf(f, 2).angular.z != 0) screw = &f;
+  REQUIRE(mob.freedoms.size() == 2);
+  REQUIRE(screw);
+  const Twist input = twistOf(*screw, 2), piston = twistOf(*screw, 3);
+  REQUIRE_THAT(piston.angular.z, WithinAbs(0, 1e-9));  // the piston does not turn
+  REQUIRE_THAT(velocityAt(piston, {0, 0, 80}).z / input.angular.z, WithinAbs(3.0 / (2 * 3.14159265358979323846), 1e-9));
 }

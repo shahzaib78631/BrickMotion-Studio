@@ -256,3 +256,27 @@ TEST_CASE("real beams, pins, an axle and its bushes", "[kin][system][data]") {
   REQUIRE(untested.bodies == 2);
   REQUIRE(untested.links[0].kind == JointKind::Cylindrical);
 }
+
+TEST_CASE("what a sliding piece is linked to does not stop it; what it merely touches does", "[kin][system][travel]") {
+  const Vec3 x{1, 0, 0};
+  auto slideKind = [&](bool neighboursLinked) {
+    Hand h;
+    // A slider between two neighbours that touch its sides; it slides along x in a far partner.
+    const uint32_t slider = h.add(0), left = h.add(-20), right = h.add(20), partner = h.add(0, 0, 200);
+    h.join(slider, partner, JointKind::Cylindrical, {0, 0, 0}, x);
+    if (neighboursLinked) {
+      // Rods hinged to the slider: whether they let it go is for the equations.
+      h.join(slider, left, JointKind::Revolute, {-10, 0, 0}, kZ);
+      h.join(slider, right, JointKind::Revolute, {10, 0, 0}, kZ);
+    } else {
+      h.join(partner, left, JointKind::Fixed, {}, kZ);
+      h.join(partner, right, JointKind::Fixed, {}, kZ);
+    }
+    const System sys = h.build(true);
+    for (const Link& l : sys.links)
+      if ((l.pieceA == slider && l.pieceB == partner) || (l.pieceA == partner && l.pieceB == slider)) return l.kind;
+    return JointKind::Fixed;
+  };
+  REQUIRE(slideKind(true) == JointKind::Cylindrical);
+  REQUIRE(slideKind(false) == JointKind::Revolute);
+}

@@ -17,6 +17,7 @@ void loadEngineData(const std::filesystem::path& repo, connect::ConnectorDb& con
   connect::loadBricknetJoints(read("bricknet-joints.json"), connectors);
   connect::loadExtraConnectors(read("extra-connectors.json"), connectors);
   gears.load(read("gears.json"));
+  gears.loadScrews(read("screws.json"));
 }
 
 }  // namespace bm::cli

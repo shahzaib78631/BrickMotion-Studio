@@ -22,6 +22,7 @@ struct Link {
 struct Gearing {
   uint32_t a = 0, b = 0;  ///< the bodies of mesh.a and mesh.b
   GearMesh mesh;
+  uint32_t housing = UINT32_MAX;  ///< screw: the body of mesh.housing
 };
 
 struct System {

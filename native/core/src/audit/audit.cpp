@@ -1,4 +1,5 @@
 #include "bm/audit.h"
+#include "bm/kin/mobility.h"
 
 #include <algorithm>
 #include <chrono>
@@ -69,6 +70,16 @@ Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Libr
         }
         row.overlapPieces = static_cast<int>(involved.size());
         row.collisionMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - collideStart).count();
+        const auto kinStart = std::chrono::steady_clock::now();
+        const kin::System sys = kin::buildSystem(model, g, &cache, shapes);
+        const kin::Mobility mob = kin::mobility(sys);
+        row.hasKinematics = true;
+        row.movingBodies = static_cast<int>(sys.bodies);
+        row.links = static_cast<int>(sys.links.size());
+        row.solved = mob.solved;
+        row.freedoms = static_cast<int>(mob.freedoms.size());
+        for (const kin::Freedom& f : mob.freedoms) row.mechanisms += !f.local;
+        row.kinMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - kinStart).count();
       }
     }
     row.ok = true;
@@ -113,6 +124,14 @@ nlohmann::json toJson(const Row& row) {
     j["duplicates"] = row.duplicates;
     j["collisionMs"] = row.collisionMs;
   }
+  if (row.hasKinematics) {
+    j["movingBodies"] = row.movingBodies;
+    j["links"] = row.links;
+    j["freedoms"] = row.freedoms;
+    j["mechanisms"] = row.mechanisms;
+    j["solved"] = row.solved;
+    j["kinMs"] = row.kinMs;
+  }
   return j;
 }
 
@@ -123,6 +142,8 @@ nlohmann::json summarize(const std::vector<Row>& rows) {
   long segments = 0, partsAttached = 0, partsJoined = 0;
   std::vector<double> graphTimes, collisionTimes;
   long overlaps = 0, overlapsJoined = 0, overlapPieces = 0, duplicates = 0, cleanModels = 0, collided = 0;
+  long kinModels = 0, movingBodies = 0, freedoms = 0, mechanisms = 0, unsolved = 0, withMechanisms = 0;
+  std::vector<double> kinTimes;
   std::set<std::string> distinct;
   std::vector<double> times;
   for (const Row& r : rows) {
@@ -157,6 +178,14 @@ nlohmann::json summarize(const std::vector<Row>& rows) {
     duplicates += r.duplicates;
     if (r.overlaps == 0) cleanModels++;
     collisionTimes.push_back(r.collisionMs);
+    if (!r.hasKinematics) continue;
+    kinModels++;
+    movingBodies += r.movingBodies;
+    freedoms += r.freedoms;
+    mechanisms += r.mechanisms;
+    unsolved += !r.solved;
+    if (r.mechanisms > 0) withMechanisms++;
+    kinTimes.push_back(r.kinMs);
   }
   std::sort(times.begin(), times.end());
   auto quantile = [&](double q) -> nlohmann::json {
@@ -205,6 +234,18 @@ nlohmann::json summarize(const std::vector<Row>& rows) {
     std::sort(collisionTimes.begin(), collisionTimes.end());
     s["p50"]["collisionMs"] = collisionTimes[collisionTimes.size() / 2];
     s["p95"]["collisionMs"] = collisionTimes[std::min(collisionTimes.size() - 1, static_cast<size_t>(0.95 * static_cast<double>(collisionTimes.size())))];
+  }
+  if (kinModels > 0) {
+    nlohmann::json& t = s["totals"];
+    t["movingBodies"] = movingBodies;
+    t["freedoms"] = freedoms;
+    t["mechanisms"] = mechanisms;
+    t["modelsWithMechanisms"] = withMechanisms;
+    t["unsolvedModels"] = unsolved;
+    std::sort(kinTimes.begin(), kinTimes.end());
+    s["p50"]["kinMs"] = kinTimes[kinTimes.size() / 2];
+    s["p95"]["kinMs"] = kinTimes[std::min(kinTimes.size() - 1, static_cast<size_t>(0.95 * static_cast<double>(kinTimes.size())))];
+    s["max"]["kinMs"] = kinTimes.back();
   }
   return s;
 }

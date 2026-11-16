@@ -20,8 +20,9 @@ class Contact {
   /// after its placement), some piece of `moved` overlaps a piece of another body that it does
   /// not already overlap at rest. A pair's mate and mesh zones are exempt only if the pair
   /// needs them at rest; they move with the lower-numbered piece of the pair. Segments and pieces without geometry never
-  /// collide. If `who` is given it receives the two pieces.
-  bool blocked(const std::vector<uint32_t>& moved, const std::vector<uint32_t>& bodyOf, const std::vector<Xform>& motion, std::pair<uint32_t, uint32_t>* who = nullptr);
+  /// collide. If `who` is given it receives the two pieces. Bodies flagged in `ignore` (indexed
+  /// like `motion`) are not obstacles.
+  bool blocked(const std::vector<uint32_t>& moved, const std::vector<uint32_t>& bodyOf, const std::vector<Xform>& motion, std::pair<uint32_t, uint32_t>* who = nullptr, const std::vector<uint8_t>* ignore = nullptr);
 
  private:
   const Model& model_;

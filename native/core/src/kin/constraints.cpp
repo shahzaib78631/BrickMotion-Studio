@@ -70,6 +70,10 @@ std::vector<uint32_t> carriers(const System& sys) {
   };
   for (size_t i = 0; i < sys.gearings.size(); i++) {
     const Gearing& g = sys.gearings[i];
+    if (g.mesh.kind == MeshKind::Screw) {
+      out[i] = g.housing;
+      continue;
+    }
     const std::vector<uint32_t> ofA = holders(g.a, g.mesh.pointA, g.mesh.axisA);
     if (g.mesh.kind == MeshKind::Rack) {
       // A rack needs only the gear's holder; prefer one the rack is linked to.
@@ -185,6 +189,22 @@ Equations equations(const System& sys, const std::vector<int>& column, size_t co
   for (uint32_t gi : gearings) {
     const Gearing& g = sys.gearings[gi];
     const GearMesh& m = g.mesh;
+    if (m.kind == MeshKind::Screw) {
+      // In the housing, the piston moves along the line by the lead for each turn of the
+      // input, and does not turn.
+      const uint32_t h = g.housing;
+      const Vec3 axis = normalized(pose(h).r * m.axisA), p = pose(h).apply(m.point);
+      const double advance = m.travel / (2 * kPi) / kLengthUnit;
+      double* r = b.row();
+      b.moving(r, g.b, p, axis, 1);
+      b.moving(r, h, p, axis, -1);
+      b.turning(r, g.a, axis, -advance);
+      b.turning(r, h, axis, advance);
+      double* still = b.row();
+      b.turning(still, g.b, axis, 1);
+      b.turning(still, h, axis, -1);
+      continue;
+    }
     double* r = b.row();
     const Vec3 axisA = normalized(pose(g.a).r * m.axisA), axisB = normalized(pose(g.b).r * m.axisB);
     // Which way each gear's teeth go past the meeting point when it turns about its own shaft.
