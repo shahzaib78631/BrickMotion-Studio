@@ -130,3 +130,41 @@ TEST_CASE("the teeth of meshed gears may interleave; gears jammed together may n
   REQUIRE(r.check(meshed, &gears).overlaps.empty());
   REQUIRE(r.check(piece("3005.dat", 0, 0, 0) + piece("3005.dat", 16, 0, 0), &gears).overlaps.size() == 1);  // 3 too close: not a mesh
 }
+
+TEST_CASE("how far a unit can travel before it meets a present piece", "[collide][world][travel]") {
+  Rig r;
+  // Piece 0 is the mover (a 1x1: 20 wide); piece 1 a wall 30 LDU away, so a 10 LDU gap; piece 2 far off.
+  const Model m = r.model(piece("c1x1.dat", 0, 0, 0) + piece("c1x1.dat", 30, 0, 0) + piece("c1x1.dat", 0, 0, 300) + piece("c1x1.dat", -20, 0, 0));
+  const World w(m, r.parts, r.shapes);
+  uint32_t blocker = 7;
+  // Touching, and passing by less than the skin, is not a hit: it stops within the skin of the gap.
+  const double reached = w.clearTravel({0}, {1, 0, 0}, 100, nullptr, {}, &blocker);
+  REQUIRE(reached >= 10.0);
+  REQUIRE(reached <= 10.0 + 2 * kSkin + 0.1);
+  REQUIRE(blocker == 1);
+  // Away from everything it goes the whole way.
+  REQUIRE(w.clearTravel({0}, {0, -1, 0}, 100, nullptr, {}, &blocker) == 100);
+  REQUIRE(blocker == UINT32_MAX);
+  // With the wall not there, nothing stops it.
+  World::Present present{1, 0, 1, 1};
+  REQUIRE(w.clearTravel({0}, {1, 0, 0}, 100, &present) == 100);
+  // Two pieces moving as one never stop on each other, and stop when either meets something.
+  const double pair = w.clearTravel({0, 3}, {1, 0, 0}, 100, nullptr, {}, &blocker);
+  REQUIRE(pair >= 10.0);
+  REQUIRE(pair <= 11.2);
+  REQUIRE(blocker == 1);
+  // A later leg starts from where the unit has got to.
+  Xform up;
+  up.t = {0, -50, 0};
+  REQUIRE(w.clearTravel({0}, {1, 0, 0}, 100, nullptr, {}, nullptr, up) == 100);
+  // near() respects the mask.
+  std::vector<uint32_t> found;
+  w.near(w.box(0), nullptr, found);
+  REQUIRE(found == std::vector<uint32_t>{0, 3});
+  w.near(w.box(0), &present, found);
+  REQUIRE(found == std::vector<uint32_t>{0, 3});
+  present[3] = 0;
+  w.near(w.box(0), &present, found);
+  REQUIRE(found == std::vector<uint32_t>{0});
+  REQUIRE(w.clearTravel({0}, {0, 0, 0}, 100, nullptr) == 0);
+}

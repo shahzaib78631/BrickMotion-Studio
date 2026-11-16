@@ -145,6 +145,90 @@ World::World(const Model& model, ldraw::PartCache& parts, ShapeCache& shapeCache
 World::~World() = default;
 size_t World::size() const { return state_->poses.size(); }
 
+const Shape& World::shape(uint32_t piece) const { return *state_->shapes[piece]; }
+const Box& World::box(uint32_t piece) const { return state_->boxes[piece]; }
+const Xform& World::pose(uint32_t piece) const { return state_->poses[piece]; }
+
+void World::near(const Box& box, const Present* present, std::vector<uint32_t>& out) const {
+  out.clear();
+  if (box.empty() || !std::isfinite(box.min.x) || !std::isfinite(box.max.x)) return;
+  const State& s = *state_;
+  auto first = std::lower_bound(s.byMinX.begin(), s.byMinX.end(), box.min.x - s.widest, [&](uint32_t i, double x) { return s.boxes[i].min.x < x; });
+  for (auto it = first; it != s.byMinX.end() && s.boxes[*it].min.x <= box.max.x; ++it) {
+    const uint32_t i = *it;
+    if (present && (i >= present->size() || !(*present)[i])) continue;
+    if (boxesMeet(box, s.boxes[i])) out.push_back(i);
+  }
+  std::sort(out.begin(), out.end());
+}
+
+double World::clearTravel(const std::vector<uint32_t>& unit, Vec3 direction, double distance, const Present* present, const std::vector<Zone>& zones, uint32_t* blocker, const Xform& start, double tolerance) const {
+  const State& s = *state_;
+  if (blocker) *blocker = UINT32_MAX;
+  if (!(distance > 0) || !(length(direction) > 0)) return 0;
+  direction = normalized(direction);
+  // What each unit piece could meet anywhere along the way.
+  struct Mover {
+    uint32_t piece;
+    Xform at;  // where it starts this leg
+    Box startBox;
+    std::vector<uint32_t> obstacles;
+  };
+  std::vector<Mover> movers;
+  std::vector<uint32_t> found;
+  for (uint32_t p : unit) {
+    if (p >= s.shapes.size() || s.shapes[p]->nodes.empty()) continue;
+    Mover m{p, start * s.poses[p], {}, {}};
+    m.startBox = s.shapes[p]->bounds.transformed(m.at);
+    Box swept = m.startBox;
+    swept.grow(m.startBox.min + direction * distance);
+    swept.grow(m.startBox.max + direction * distance);
+    near(swept, present, found);
+    for (uint32_t q : found) {
+      if (std::binary_search(unit.begin(), unit.end(), q)) continue;
+      // What already crosses it where the model has it is not this move's doing.
+      if (boxesMeet(s.boxes[p], s.boxes[q]) && overlap(*s.shapes[p], s.poses[p], *s.shapes[q], s.poses[q], zones)) continue;
+      m.obstacles.push_back(q);
+    }
+    if (!m.obstacles.empty()) movers.push_back(std::move(m));
+  }
+  if (movers.empty()) return distance;
+  auto hitAt = [&](double t) -> uint32_t {
+    Xform shift;
+    shift.t = direction * t;
+    for (const Mover& m : movers) {
+      Box box = m.startBox;
+      box.min = box.min + shift.t;
+      box.max = box.max + shift.t;
+      const Xform pose = shift * m.at;
+      for (uint32_t q : m.obstacles)
+        if (boxesMeet(box, s.boxes[q]) && overlap(*s.shapes[m.piece], pose, *s.shapes[q], s.poses[q], zones)) return q;
+    }
+    return UINT32_MAX;
+  };
+  double clear = 0;
+  const int steps = std::max(1, static_cast<int>(std::ceil(distance / kSweepStep)));
+  for (int i = 0; i <= steps; i++) {
+    const double t = std::min(distance, i * kSweepStep);
+    uint32_t q = hitAt(t);
+    if (q == UINT32_MAX) {
+      clear = t;
+      continue;
+    }
+    // Back to the last clear pose.
+    double lo = clear, hi = t;
+    while (hi - lo > tolerance) {
+      const double mid = (lo + hi) / 2;
+      const uint32_t at = hitAt(mid);
+      if (at == UINT32_MAX) lo = mid;
+      else hi = mid, q = at;
+    }
+    if (blocker) *blocker = q;
+    return lo;
+  }
+  return distance;
+}
+
 std::optional<uint32_t> World::hits(const Shape& shape, const Xform& xf, const std::vector<uint32_t>& ignore, const std::vector<Zone>& zones) const {
   if (shape.nodes.empty()) return std::nullopt;
   const Box box = shape.bounds.transformed(xf);

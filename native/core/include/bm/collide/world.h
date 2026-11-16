@@ -50,6 +50,25 @@ class World {
 
   size_t size() const;
 
+  /// Which pieces are there, indexed like Model::pieces(). Null means all of them.
+  using Present = std::vector<uint8_t>;
+  /// The model's own piece `piece`: its shape (never null; empty if it has no geometry), its
+  /// box in the model, and its placement.
+  const Shape& shape(uint32_t piece) const;
+  const Box& box(uint32_t piece) const;
+  const Xform& pose(uint32_t piece) const;
+  /// Present pieces whose boxes meet `box`, ascending.
+  void near(const Box& box, const Present* present, std::vector<uint32_t>& out) const;
+  /// How far (LDU, up to `distance`) the pieces of `unit`, moving as one from where the model has
+  /// them, can travel along unit vector `direction` before any of them interpenetrates a present
+  /// piece outside the unit; `distance` if nothing stops them. Sampled every kSweepStep and, at
+  /// the first hit, bisected back to the last clear pose within `tolerance`. Crossings inside
+  /// `zones` (fixed in the model) are exempt. A pair that already overlaps where the model
+  /// has it is not this move's doing and is left out. `blocker` receives what stopped it.
+  /// `start` moves the whole unit first (a later leg of a flight). Thread-safe.
+  double clearTravel(const std::vector<uint32_t>& unit, Vec3 direction, double distance, const Present* present, const std::vector<Zone>& zones = {}, uint32_t* blocker = nullptr,
+                     const Xform& start = {}, double tolerance = 0.05) const;
+
  private:
   struct State;
   std::unique_ptr<State> state_;
