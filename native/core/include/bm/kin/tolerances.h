@@ -50,4 +50,14 @@ inline constexpr double kStill = 1e-7;
 /// few seconds. Larger moving cores are reported as not solved rather than attempted.
 inline constexpr int kMaxSolveBodies = 400;
 
+/// The driver moves at most this far between corrections: radians, or (times 20) LDU.
+inline constexpr double kDriveStep = 0.05;
+
+/// The joints count as closed when every equation is within this (radians, or studs).
+inline constexpr double kCloseTol = 1e-10;
+
+/// Newton steps allowed to close the joints after each move. It converges in three or four
+/// when it converges at all.
+inline constexpr int kMaxNewton = 20;
+
 }  // namespace bm::kin

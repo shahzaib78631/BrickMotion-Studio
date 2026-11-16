@@ -171,16 +171,16 @@ std::optional<Ratio> ratio(const Freedom&, uint32_t bodyA, uint32_t bodyB);
 **Interfaces — produces:**
 ```cpp
 namespace bm::kin {
-struct Pose { std::vector<Xform> body; bool converged = true; };   // each body's motion from its rest pose
-/// Moves along `freedom` by `amount` (radians of its fastest-turning body, or LDU when nothing turns),
-/// from `from` (rest when null), in steps of at most kDriveStep, correcting each step by Newton on the
-/// link constraints until the residual is under kCloseTol or kMaxNewton iterations pass.
-Pose drive(const System&, const Mobility&, size_t freedom, double amount, const Pose* from = nullptr);
-/// A piece's placement in a pose.
+struct Pose { std::vector<Xform> body; bool converged = true; double reached = 0; };   // each body's motion from its rest pose
+/// Moves along mob.freedoms[freedom] so that `driver` turns `amount` radians (or, if it does not turn in
+/// it, travels `amount` LDU) from `from` (rest when null). Steps of at most kDriveStep, each followed by
+/// Newton on the link equations until every residual is under kCloseTol or kMaxNewton iterations pass.
+Pose drive(const System&, const Mobility&, size_t freedom, uint32_t driver, double amount, const Pose* from = nullptr);
 Xform placed(const Model&, const System&, const Pose&, uint32_t piece);
+Xform moved(const Twist&, double t);   // the screw motion of a twist held for a time
 }
 ```
-`kDriveStep = 0.05` rad or 1 LDU; `kCloseTol = 1e-6` (scaled lengths); `kMaxNewton = 20`. Gearings are integrated exactly: a geared shaft's angle is the driver's angle times the tooth ratio, not the sum of steps.
+`kDriveStep = 0.05` rad or 1 LDU; `kCloseTol = 1e-10`; `kMaxNewton = 20`. Everything joined to the freedom's bodies, up to bodies that stand still, takes part, so a piston at its dead point is carried. Each step moves along the current null-space direction nearest the previous step's; the correction has one extra equation that keeps it from taking the driver forwards or back. Forwards is the way the freedom moves the driver at rest. Gear rows are in tooth counts and each step is an exact screw motion, so ratios do not drift.
 
 - [ ] Tests: a crank turned 2π returns every body to rest (within 1e-6); a four-bar's coupler stays its length through a full turn of the crank; a slider-crank's slider travels twice the crank radius; 8T driving 24T by one turn leaves the 24T at exactly −120°; driving past where a four-bar can go reports `converged = false` and the last good pose.
 - [ ] RED, implement, GREEN, commit `feat(native): drive a freedom to a pose`.
