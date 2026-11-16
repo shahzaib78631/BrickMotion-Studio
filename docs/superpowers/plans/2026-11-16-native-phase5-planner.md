@@ -10,6 +10,17 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-15-native-rewrite-design.md`, section "5. Assembly planner and animation" and "Proving it: the corpus scoreboard". Read both before starting.
 
+> **Status 2026-11-16.** Built and committed in one pass, simpler than written below in places:
+> - Tasks 1–7 done. A release is one struct per mate, in step with `Graph::zones` (`Across` for a clip with
+>   `orAlong`; a ball is `Any`). Queries on part of a model are `World::clearTravel` / `near` on piece indices.
+>   The certifier does not compute `tips`.
+> - Task 8 done for top-level items of a plan file (not inside submodels). An authored `after` loop is not detected.
+> - Task 9 in part: cancel and budget work; there is no cross-run `Cache` (the `World` remembers pair sweeps within a run).
+> - Task 10 in part: staging, flights, hover, camera and JSON are done; `writeInto` a plan document is not, and
+>   the staging and crossing legs of a flight are not swept.
+> - Task 11 in part: scorer and six fixture cases; no clip, hand, sword, wheel, tyre, hinge or ball case yet, and none from the reference sets.
+> - Task 12: see `native/README.md`, "Phase 5 results". **The speed target is not met.**
+
 ## Global Constraints
 
 - All code under `native/`, namespace `bm::plan`; headers in `native/core/include/bm/plan/`, sources in `native/core/src/plan/`, tests in `native/tests/plan_*_test.cpp`. CMake globs sources: new files need no list edit, but re-run `cmake -S native -B native/build` once after adding the first file.

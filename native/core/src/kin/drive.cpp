@@ -173,7 +173,7 @@ Pose drive(const System& sys, const Mobility& mob, size_t freedomIndex, uint32_t
     }
     const double perUnit = turns ? fastest : fastest / kLengthUnit;  // of the fastest body, per unit the driver goes
     if (perUnit > kMaxDriveGearing) break;  // the driver hardly moves in this motion at all
-    const double step = std::min((turns ? stride : stride * kLengthUnit) / std::max(1.0, perUnit), total - done);
+    const double step = std::min((turns ? stride : stride * kLengthUnit) / std::clamp(perUnit, 1.0, kMaxStepCut), total - done);
     std::vector<Xform> trial = pose.body;
     apply(trial, next, direction * step);
 

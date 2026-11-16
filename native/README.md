@@ -443,3 +443,79 @@ no failures. Kinematics: median 2.5 ms, 95th percentile 186 ms per model.
 - Which way a linear actuator's input turns to extend is assumed (right-hand thread).
 - Not scored against truth: `vehicle`, `scrub`, `bumpSteer`, `suggested`.
 - Reviews were self-reviews. (207 tests pass; ASan with UBSan and TSan runs of the suite are clean.)
+
+## Phase 5 results (2026-11-16): the assembly planner
+
+```bash
+native/build/tools/bm/bm plan <file> [--truth native/corpus/insertion-truth.json] [--explain <part>] [--out plan.json] [--budget <seconds>]
+native/build/tools/bm/bm audit --manifest native/corpus/manifest.json --plan <seconds per model> [--only <id prefix>] [--no-kinematics]
+```
+
+`bm plan` prints the build: how many moves, how many the certifier passes, and the first moves it does not,
+each with its reason. `--explain <part>` shows, for every piece of a part, how each of its mates comes apart,
+which directions that leaves, and what is in the way.
+
+### How it works
+
+- **Releases.** Every mate records how it comes apart, read off the two connectors: a stud lifts off along its
+  axis; a pin leaves the way its collar is, because the collar cannot be dragged through the hole; an axle
+  through an open hole slides out either way; a bar leaves a clip sideways or along itself; a ball has no
+  direction of its own.
+- **Taking the model apart.** A unit can leave when one direction satisfies every release it has with what is
+  still there, the sweep out of its seat is clear (its own mates' zones are carried along as a corridor;
+  nothing else is exempt), a straight way or a way with one turn leads to open air, and what is left stays
+  joined. Among the units that can leave it takes the one that continues the current submodel, then the latest
+  file step, then the highest, then the outermost. The build is that order reversed.
+- **Going in together.** When no single piece can leave, it tries the smallest submodel use that holds the
+  piece, its rigid body, then a group grown from it until its mates agree on a direction. Such a unit gets its
+  own sub-plan and is built first.
+- **Never silently wrong.** A piece the planner cannot show going in is still placed, flagged with why
+  (`blocked`, `no-direction`, `no-exit`, `unjoined`, `budget`), and does not fly: it appears at its seat.
+- **The certifier** shares no code with the planner. It replays the finished plan and checks, for every move,
+  that it lands joined to something built, that no sampled pose of its flight passes through a placed piece,
+  and that its last leg satisfies every mate it makes. Only it may call a move certified.
+- **The author's word stands:** a pinned step order, `after`, an insertion axis and a flight from the plan
+  file are kept; a flight that passes through something is kept and flagged.
+- **Timeline:** each unit waits at its own spot on the floor, lifts off, crosses above the model and follows
+  the plan's path into its seat, holding still before the last leg. One camera key a second.
+
+### What the corpus shows
+
+Budget 20 s per model for BrickNet, 30 s for the OMR sample, 300 s for the reference sets; one planner thread
+per model (the audit runs ten models at once).
+
+| Source | Models | Every move certified | Moves | Certified | Flagged | Floating | Crossings | Off axis | Plan time, median / p95 | Web engine |
+|---|---|---|---|---|---|---|---|---|---|---|
+| BrickNet, all 2,000 | 2000 | 1608 | 52469 | 97.6% | 1246 | 0 | 4 | 0 | 0.48 s / 4.1 s | 0.36 s / 6.4 s; 11,384 floating; 2,243 flagged |
+
+Not measured when this was written: OMR sample, reference sets (the runs had not finished). One reference model was planned by hand: the helicopter (305 pieces) takes about 15 s, with 311 of 319 moves certified, 8 flagged, none floating, crossing or off axis.
+
+- **No piece is placed floating and none goes in off its connector's axis**, on any model planned. The web
+  engine placed 11,384 of BrickNet's 51,916 pieces (22%) joined to nothing built.
+- **Crossings are not zero.** On BrickNet the certifier finds 4 moves, all in one model (`sft_23628`, four
+  `11090` bar holders against a dish), that the planner swept clear from the seat outward and the certifier,
+  sampling the same line inward from the other end, does not. Both sample every 0.5 LDU; the two grids differ.
+  This is the sampled sweep's known limit showing up, and it is why the certifier exists.
+- Six hand-checked insertion cases pass (`native/corpus/insertion-truth.json`): a pin into beams, an axle
+  through a beam, a bush onto an axle, bricks onto studs, and a plate onto a sideways stud.
+
+### What the corpus corrected
+
+- Groups of a file were planned as if each were alone. 71 BrickNet models then had flights passing through
+  a group built earlier. What is built before a group now stands in its way.
+- Sweeping a whole unit pose by pose spent nearly all its time on triangles of mated pairs. Sweeps are now
+  pair by pair, sampled only where the two boxes can meet, and remembered: a model repeats the same pairs.
+
+### Not done
+
+- **Speed. The spec's target is not met.** Planning is about as fast as the web engine on BrickNet's small models and takes 15 s for the 305-piece helicopter, against a goal of under 1 s for a median OMR set. The time is in triangle tests of a piece sliding out of
+  its own mate. Nothing here re-plans incrementally after an edit; the only memory is within one run.
+- **Curved and turning insertions** (a hinge swung shut, a tyre stretched on). Every leg is a straight line.
+  These show up as `blocked` and `no-exit`.
+- **A continuous sweep.** Flights are sampled every 0.5 LDU.
+- **Writing the plan back into a plan file** for the app (`writeInto`); `bm plan --out` writes its own JSON.
+  The legs of a flight before the plan's path (staging, lift, crossing) are not swept.
+- **Insertion truth** has no clip, hand, sword, wheel, tyre, hinge or ball case, and none from the reference sets.
+- Authored constraints inside submodels; detecting a loop among the author's `after` constraints.
+- Tipping during the build is not reported. Stability is not a rule of the planner.
+- Reviews were self-reviews.

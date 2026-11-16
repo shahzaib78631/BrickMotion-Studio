@@ -60,6 +60,10 @@ inline constexpr double kCloseTol = 1e-10;
 /// the motion and driving it further is given up.
 inline constexpr double kMaxDriveGearing = 1000.0;
 
+/// A drive step is cut down by at most this for a body that goes faster than the driver, so a
+/// long train costs a bounded number of steps.
+inline constexpr double kMaxStepCut = 8.0;
+
 /// A joint the file has out of line by up to this (studs: two ten-thousandths of an LDU) is
 /// closed as far as it can be when no correction closes it further. Set from what files
 /// show: 42000's wing linkage stays about 1e-6 out however it is driven. A mechanism at the
