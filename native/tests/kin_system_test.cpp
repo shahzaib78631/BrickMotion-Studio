@@ -209,6 +209,8 @@ TEST_CASE("ten thousand rigidly joined pieces reduce in well under a second", "[
   REQUIRE((sys.bodies == 1 && sys.links.empty()));
 #ifndef BM_SANITIZED
   REQUIRE(ms < 1000);
+#else
+  (void)ms;  // a sanitized build is not timed
 #endif
 }
 

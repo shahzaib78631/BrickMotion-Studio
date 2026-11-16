@@ -251,7 +251,9 @@ model stands. `bm audit` adds `meshes`, `movingBodies`, `links`, `freedoms`, `me
 The two engines do not score the same set of checks, so the columns are not a like-for-like comparison.
 
 The four 8880 ratios come out exact (2.25, 1.5, 0.75, 0.5), neutral is found at rest, and both rings are
-found to couple both their clutch gears. The phase's goal, "8880 and 42000 cases pass", is **not met**: five
+found to couple both their clutch gears. The rear rack is missed because its 8-tooth pinion (at y = -94) sits
+6 LDU from the rack's tooth line (y = -78) in the file, beyond the 4.5 LDU a rack mesh allows; whether the
+file or the tolerance is at fault is not settled. The phase's goal, "8880 and 42000 cases pass", is **not met**: five
 scored checks still miss.
 
 42000's four misses:
@@ -336,4 +338,4 @@ no failures. Kinematics: median 2.5 ms, 95th percentile 186 ms per model.
   0.7 s per seat. Scoring one set against its truth list takes about 2 minutes because it drives freedoms.
 - Which way a linear actuator's input turns to extend is assumed (right-hand thread).
 - Not scored against truth: `vehicle`, `scrub`, `bumpSteer`, `suggested`.
-- ASan and TSan were not rerun for this phase. Reviews were self-reviews.
+- Reviews were self-reviews. (207 tests pass; ASan with UBSan and TSan runs of the suite are clean.)
