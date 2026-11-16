@@ -348,21 +348,38 @@ size_t loadExtraConnectors(std::string_view json, ConnectorDb& db) {
       if (!row.is_object() || !row.contains("kind") || !row["kind"].is_string() || !row.contains("at") || !row["at"].is_array() || row["at"].size() != 3) continue;
       if (!row.contains("radius") || !row["radius"].is_number() || !(row["radius"].get<double>() > 0)) continue;
       const std::string kind = row["kind"].get<std::string>();
-      if (kind != "ball" && kind != "socket") continue;
+      const bool round = kind == "ball" || kind == "socket", shaft = kind == "rod" || kind == "bore";
+      if (!round && !shaft) continue;
       bool numbers = true;
       for (const nlohmann::json& v : row["at"]) numbers = numbers && v.is_number();
       if (!numbers) continue;
       Connector c;
-      c.kind = SnapKind::Generic;
       c.source = Source::Override;
-      c.gender = kind == "ball" ? Gender::Male : Gender::Female;
+      c.gender = kind == "ball" || kind == "rod" ? Gender::Male : Gender::Female;
       c.start = {row["at"][0].get<double>(), row["at"][1].get<double>(), row["at"][2].get<double>()};
       c.radius = row["radius"].get<double>();
-      c.group = "ball";
-      c.match = "size";
-      c.placement = "free";
-      c.bounding = "sph";
       c.axis = {0, -1, 0};
+      if (round) {
+        c.kind = SnapKind::Generic;
+        c.group = "ball";
+        c.match = "size";
+        c.placement = "free";
+        c.bounding = "sph";
+      } else {
+        // A smooth rod sliding and turning in a smooth bore that is open at both ends.
+        if (!row.contains("axis") || !row["axis"].is_array() || row["axis"].size() != 3 || !row.contains("length") || !row["length"].is_number() || !(row["length"].get<double>() > 0)) continue;
+        bool axisOk = true;
+        for (const nlohmann::json& v : row["axis"]) axisOk = axisOk && v.is_number();
+        if (!axisOk) continue;
+        const Vec3 axis{row["axis"][0].get<double>(), row["axis"][1].get<double>(), row["axis"][2].get<double>()};
+        if (!(length(axis) > 0)) continue;
+        c.kind = SnapKind::Cyl;
+        c.axis = normalized(axis);
+        c.length = row["length"].get<double>();
+        c.profile = {{'R', c.radius, 0, c.length}};
+        c.slide = true;
+        c.openStart = c.openEnd = true;
+      }
       c.side = perpendicular(c.axis, {1, 0, 0});
       list.push_back(std::move(c));
     }

@@ -212,8 +212,26 @@ System buildSystem(const Model& model, const connect::Graph& graph, ldraw::PartC
     sys.links.push_back({key.first, key.second, joint.kind, joint.point, normalized(joint.axis), between.pieceA, between.pieceB});
   }
 
+  // Directions that differ only by the rounding of the file become one direction, so that a
+  // linkage whose pins should all be parallel is not locked by a fraction of a degree. The
+  // model's own axes come first: nearly-upright is upright.
+  {
+    std::vector<Vec3> directions{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+    for (Link& link : sys.links) {
+      if (link.kind == JointKind::Spherical) continue;
+      bool known = false;
+      for (const Vec3& d : directions) {
+        const double c = dot(link.axis, d);
+        if (std::abs(c) < kMeshAxis) continue;
+        link.axis = c < 0 ? -d : d;
+        known = true;
+        break;
+      }
+      if (!known) directions.push_back(link.axis);
+    }
+  }
   // Lines that differ only by the rounding of the file become one line, so that a shaft through
-  // two holes is not locked by a fraction of a degree.
+  // two holes is not locked by it either.
   for (size_t i = 0; i < sys.links.size(); i++) {
     Link& link = sys.links[i];
     if (link.kind == JointKind::Spherical) continue;

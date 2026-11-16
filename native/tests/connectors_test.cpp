@@ -273,3 +273,25 @@ TEST_CASE("extra connector rows: balls and sockets for parts no source covers", 
   REQUIRE_FALSE(mate(ball, socket));
   REQUIRE(loadExtraConnectors("nope", f.db) == 0);
 }
+
+TEST_CASE("extra connector rows: a rod in a bore slides and turns", "[connectors][extra]") {
+  Fixture f;
+  REQUIRE(loadExtraConnectors(R"({"parts":{
+      "plain":[{"kind":"rod","at":[0,-15,0],"axis":[0,-2,0],"length":65,"radius":6},
+               {"kind":"bore","at":[0,38,0],"axis":[0,1,0],"length":20,"radius":6},
+               {"kind":"rod","at":[0,0,0],"length":65,"radius":6},
+               {"kind":"rod","at":[0,0,0],"axis":[0,0,0],"length":65,"radius":6},
+               {"kind":"bore","at":[0,0,0],"axis":[0,1,0],"length":0,"radius":6}]}})", f.db) == 2);
+  const auto c = f.db.get("plain.dat");
+  REQUIRE(c->size() == 2);
+  Connector rod = c->at(0), bore = c->at(1);
+  REQUIRE((rod.kind == SnapKind::Cyl && rod.gender == Gender::Male && rod.slide && near(rod.axis, {0, -1, 0}) && rod.length == 65));
+  REQUIRE((bore.gender == Gender::Female && bore.openStart && bore.openEnd));
+  // The rod pushed 30 into the bore from its far end, as a shock absorber sits.
+  rod.start = {0, 88, 0};
+  const auto m = mate(rod, bore);
+  REQUIRE(m.has_value());
+  REQUIRE((m->freedom.rotates && m->freedom.slides && !m->freedom.friction));
+  rod.start = {0, 200, 0};  // pulled right out
+  REQUIRE_FALSE(mate(rod, bore));
+}
