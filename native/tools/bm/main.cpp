@@ -17,6 +17,7 @@ const bm::cli::Command kCommands[] = {
     {"joints", "find every joint in a model; --why <part> explains unjoined pieces", bm::cli::cmdJoints},
     {"overlaps", "list the pieces of a model that pass through each other", bm::cli::cmdOverlaps},
     {"mechanisms", "what can move in a model: bodies, links, gear trains", bm::cli::cmdMechanisms},
+    {"plan", "the build: an order and a flight for every piece, and what the certifier says of it", bm::cli::cmdPlan},
     {"stability", "whether a model stands: load paths to the floor, and tipping", bm::cli::cmdStability},
     {"connectors", "list a part's connectors and where each comes from (diagnostic)", bm::cli::cmdConnectors},
     {"shape", "describe a part's collision shape (diagnostic)", bm::cli::cmdShape},

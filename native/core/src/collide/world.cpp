@@ -1,5 +1,8 @@
 #include "bm/collide/world.h"
 
+#include <mutex>
+#include <unordered_map>
+
 #include <algorithm>
 #include <cmath>
 #include <numeric>
@@ -125,6 +128,8 @@ struct World::State {
   std::vector<Box> boxes;
   std::vector<uint32_t> byMinX;  // pieces with geometry, sorted by their box's min x
   double widest = 0;             // the largest box extent along x, to bound the scan
+  mutable std::mutex memoLock;
+  mutable std::unordered_map<uint64_t, double> memo;  // pairTravel and restCrossing answers
 };
 
 World::World(const Model& model, ldraw::PartCache& parts, ShapeCache& shapeCache) : state_(std::make_unique<State>()) {
@@ -162,71 +167,144 @@ void World::near(const Box& box, const Present* present, std::vector<uint32_t>& 
   std::sort(out.begin(), out.end());
 }
 
+namespace {
+Xform inverseOf(const Xform& x) {
+  Xform out;
+  out.r = bm::inverse(x.r);
+  out.t = -(out.r * x.t);
+  return out;
+}
+/// The zones that can matter to an obstacle: a crossing lies on its surface, so inside its box.
+std::vector<Zone> zonesNear(const std::vector<Zone>& zones, const Box& box) {
+  std::vector<Zone> out;
+  for (const Zone& z : zones) {
+    Box zb;
+    zb.grow(z.a), zb.grow(z.b);
+    zb.min = zb.min - Vec3{z.radius, z.radius, z.radius}, zb.max = zb.max + Vec3{z.radius, z.radius, z.radius};
+    if (boxesMeet(zb, box)) out.push_back(z);
+  }
+  return out;
+}
+uint64_t mix(uint64_t h, uint64_t v) { return (h ^ v) * 1099511628211ull; }
+uint64_t mix(uint64_t h, double v, double grain) { return mix(h, static_cast<uint64_t>(static_cast<int64_t>(std::llround(v / grain)))); }
+uint64_t mix(uint64_t h, Vec3 v, double grain) { return mix(mix(mix(h, v.x, grain), v.y, grain), v.z, grain); }
+}  // namespace
+
+/// How far one piece gets along a line before it meets one other, sampled only where their boxes
+/// can meet. The answer depends only on the two shapes, how they sit to each other, the line
+/// and the zones, all seen from the obstacle; a model repeats the same pairs many times (a pin
+/// in a hole, a brick on a brick), so answers are remembered.
+double World::pairTravel(uint32_t p, const Xform& from, const Box& fromBox, uint32_t q, Vec3 direction, double distance, const std::vector<Zone>& allZones, double tolerance) const {
+  const State& s = *state_;
+  const std::vector<Zone> zones = zonesNear(allZones, s.boxes[q]);
+  // When the moving box can touch the obstacle's box at all.
+  double enter = 0, leave = distance;
+  const double lo[3] = {fromBox.min.x, fromBox.min.y, fromBox.min.z}, hi[3] = {fromBox.max.x, fromBox.max.y, fromBox.max.z};
+  const Box& ob = s.boxes[q];
+  const double olo[3] = {ob.min.x, ob.min.y, ob.min.z}, ohi[3] = {ob.max.x, ob.max.y, ob.max.z};
+  const double d[3] = {direction.x, direction.y, direction.z};
+  for (int i = 0; i < 3; i++) {
+    if (std::abs(d[i]) < 1e-12) {
+      if (hi[i] < olo[i] || lo[i] > ohi[i]) return distance;
+      continue;
+    }
+    double t0 = (olo[i] - hi[i]) / d[i], t1 = (ohi[i] - lo[i]) / d[i];
+    if (t0 > t1) std::swap(t0, t1);
+    enter = std::max(enter, t0), leave = std::min(leave, t1);
+  }
+  if (enter > leave) return distance;
+
+  const Xform toObstacle = inverseOf(s.poses[q]);
+  const Xform rel = toObstacle * from;
+  uint64_t key = mix(mix(14695981039346656037ull, reinterpret_cast<uintptr_t>(s.shapes[p].get())), reinterpret_cast<uintptr_t>(s.shapes[q].get()));
+  for (double v : rel.r.m) key = mix(key, v, 1e-4);
+  key = mix(key, rel.t, 1e-3);
+  key = mix(key, toObstacle.r * direction, 1e-4);
+  key = mix(mix(key, distance, 1e-2), tolerance, 1e-3);
+  for (const Zone& z : zones) key = mix(mix(mix(key, toObstacle.apply(z.a), 1e-2), toObstacle.apply(z.b), 1e-2), z.radius, 1e-2);
+  {
+    std::lock_guard<std::mutex> lock(s.memoLock);
+    const auto it = s.memo.find(key);
+    if (it != s.memo.end()) return it->second;
+  }
+  auto hitAt = [&](double t) {
+    Xform pose = from;
+    pose.t = pose.t + direction * t;
+    return overlap(*s.shapes[p], pose, *s.shapes[q], s.poses[q], zones);
+  };
+  double result = distance, clear = std::max(0.0, std::floor(enter / kSweepStep) * kSweepStep - kSweepStep);
+  clear = std::max(0.0, clear);
+  for (double t = clear; t <= leave + kSweepStep && t <= distance + 1e-9; t += kSweepStep) {
+    const double at = std::min(t, distance);
+    if (!hitAt(at)) {
+      clear = at;
+      continue;
+    }
+    double a = at <= clear ? 0 : clear, b = at;
+    if (at <= clear && hitAt(0)) {  // it is in the way from the very start
+      result = 0;
+      break;
+    }
+    while (b - a > tolerance) {
+      const double mid = (a + b) / 2;
+      (hitAt(mid) ? b : a) = mid;
+    }
+    result = a;
+    break;
+  }
+  std::lock_guard<std::mutex> lock(s.memoLock);
+  s.memo.emplace(key, result);
+  return result;
+}
+
 double World::clearTravel(const std::vector<uint32_t>& unit, Vec3 direction, double distance, const Present* present, const std::vector<Zone>& zones, uint32_t* blocker, const Xform& start, double tolerance) const {
   const State& s = *state_;
   if (blocker) *blocker = UINT32_MAX;
   if (!(distance > 0) || !(length(direction) > 0)) return 0;
   direction = normalized(direction);
-  // What each unit piece could meet anywhere along the way.
-  struct Mover {
-    uint32_t piece;
-    Xform at;  // where it starts this leg
-    Box startBox;
-    std::vector<uint32_t> obstacles;
-  };
-  std::vector<Mover> movers;
+  double best = distance;
   std::vector<uint32_t> found;
   for (uint32_t p : unit) {
     if (p >= s.shapes.size() || s.shapes[p]->nodes.empty()) continue;
-    Mover m{p, start * s.poses[p], {}, {}};
-    m.startBox = s.shapes[p]->bounds.transformed(m.at);
-    Box swept = m.startBox;
-    swept.grow(m.startBox.min + direction * distance);
-    swept.grow(m.startBox.max + direction * distance);
+    const Xform from = start * s.poses[p];
+    const Box startBox = s.shapes[p]->bounds.transformed(from);
+    Box swept = startBox;
+    swept.grow(startBox.min + direction * distance);
+    swept.grow(startBox.max + direction * distance);
     near(swept, present, found);
     for (uint32_t q : found) {
       if (std::binary_search(unit.begin(), unit.end(), q)) continue;
       // What already crosses it where the model has it is not this move's doing.
-      if (boxesMeet(s.boxes[p], s.boxes[q]) && overlap(*s.shapes[p], s.poses[p], *s.shapes[q], s.poses[q], zones)) continue;
-      m.obstacles.push_back(q);
+      if (boxesMeet(s.boxes[p], s.boxes[q]) && restCrossing(p, q, zones)) continue;
+      const double got = pairTravel(p, from, startBox, q, direction, distance, zones, tolerance);
+      if (got < best) {
+        best = got;
+        if (blocker) *blocker = q;
+      }
     }
-    if (!m.obstacles.empty()) movers.push_back(std::move(m));
   }
-  if (movers.empty()) return distance;
-  auto hitAt = [&](double t) -> uint32_t {
-    Xform shift;
-    shift.t = direction * t;
-    for (const Mover& m : movers) {
-      Box box = m.startBox;
-      box.min = box.min + shift.t;
-      box.max = box.max + shift.t;
-      const Xform pose = shift * m.at;
-      for (uint32_t q : m.obstacles)
-        if (boxesMeet(box, s.boxes[q]) && overlap(*s.shapes[m.piece], pose, *s.shapes[q], s.poses[q], zones)) return q;
-    }
-    return UINT32_MAX;
-  };
-  double clear = 0;
-  const int steps = std::max(1, static_cast<int>(std::ceil(distance / kSweepStep)));
-  for (int i = 0; i <= steps; i++) {
-    const double t = std::min(distance, i * kSweepStep);
-    uint32_t q = hitAt(t);
-    if (q == UINT32_MAX) {
-      clear = t;
-      continue;
-    }
-    // Back to the last clear pose.
-    double lo = clear, hi = t;
-    while (hi - lo > tolerance) {
-      const double mid = (lo + hi) / 2;
-      const uint32_t at = hitAt(mid);
-      if (at == UINT32_MAX) lo = mid;
-      else hi = mid, q = at;
-    }
-    if (blocker) *blocker = q;
-    return lo;
+  return best;
+}
+
+/// Whether two pieces cross where the model has them, given the zones. Remembered like pairTravel.
+bool World::restCrossing(uint32_t p, uint32_t q, const std::vector<Zone>& allZones) const {
+  const State& s = *state_;
+  const std::vector<Zone> zones = zonesNear(allZones, s.boxes[q]);
+  const Xform toObstacle = inverseOf(s.poses[q]);
+  const Xform rel = toObstacle * s.poses[p];
+  uint64_t key = mix(mix(1469598103934665603ull, reinterpret_cast<uintptr_t>(s.shapes[p].get())), reinterpret_cast<uintptr_t>(s.shapes[q].get()));
+  for (double v : rel.r.m) key = mix(key, v, 1e-4);
+  key = mix(key, rel.t, 1e-3);
+  for (const Zone& z : zones) key = mix(mix(mix(key, toObstacle.apply(z.a), 1e-2), toObstacle.apply(z.b), 1e-2), z.radius, 1e-2);
+  {
+    std::lock_guard<std::mutex> lock(s.memoLock);
+    const auto it = s.memo.find(key);
+    if (it != s.memo.end()) return it->second > 0;
   }
-  return distance;
+  const bool crossing = overlap(*s.shapes[p], s.poses[p], *s.shapes[q], s.poses[q], zones);
+  std::lock_guard<std::mutex> lock(s.memoLock);
+  s.memo.emplace(key, crossing ? 1.0 : 0.0);
+  return crossing;
 }
 
 std::optional<uint32_t> World::hits(const Shape& shape, const Xform& xf, const std::vector<uint32_t>& ignore, const std::vector<Zone>& zones) const {

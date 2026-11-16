@@ -72,6 +72,8 @@ class World {
  private:
   struct State;
   std::unique_ptr<State> state_;
+  double pairTravel(uint32_t p, const Xform& from, const Box& fromBox, uint32_t q, Vec3 direction, double distance, const std::vector<Zone>& zones, double tolerance) const;
+  bool restCrossing(uint32_t p, uint32_t q, const std::vector<Zone>& zones) const;
 };
 
 }  // namespace bm::collide
