@@ -1,5 +1,7 @@
 #include "bm/audit.h"
 #include "bm/kin/mobility.h"
+#include "bm/plan/certify.h"
+#include "bm/plan/plan.h"
 #include "bm/stable/stability.h"
 
 #include <algorithm>
@@ -11,7 +13,7 @@
 
 namespace bm::audit {
 
-Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Library& library, ldraw::PartCache& cache, connect::ConnectorDb* connectors, collide::ShapeCache* shapes, const kin::GearDb* gears) {
+Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Library& library, ldraw::PartCache& cache, connect::ConnectorDb* connectors, collide::ShapeCache* shapes, const kin::GearDb* gears, double planBudget, bool kinematics) {
   Row row;
   row.id = std::move(id);
   const auto started = std::chrono::steady_clock::now();
@@ -80,6 +82,37 @@ Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Libr
         }
         row.overlapPieces = static_cast<int>(involved.size());
         row.collisionMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - collideStart).count();
+        if (planBudget > 0) {
+          plan::Options options;
+          options.budgetSeconds = planBudget;
+          const plan::Plan built = plan::plan(model, g, cache, *shapes, options);
+          const auto certifyStart = std::chrono::steady_clock::now();
+          const plan::Certificate cert = plan::certify(model, g, cache, *shapes, built);
+          row.planned = true;
+          row.planComplete = built.complete;
+          row.planMs = built.planMs;
+          row.certifyMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - certifyStart).count();
+          row.moves = cert.total;
+          row.certifiedMoves = cert.certified;
+          row.planFlagged = cert.flagged;
+          row.unjoinedMoves = cert.unjoined;
+          row.buildFloating = cert.floating;
+          row.buildCrossings = cert.crossings;
+          row.offAxis = cert.offAxis;
+          row.planOk = cert.ok();
+          std::vector<const plan::Plan*> todo{&built};
+          while (!todo.empty()) {
+            const plan::Plan* p = todo.back();
+            todo.pop_back();
+            for (const plan::Move& m : p->moves)
+              if (m.flag != plan::Flag::None) row.planFlags[plan::name(m.flag)]++;
+            for (const plan::Plan& sub : p->subs) todo.push_back(&sub);
+          }
+        }
+        if (!kinematics) {
+          row.ok = true;
+          return row;
+        }
         const auto kinStart = std::chrono::steady_clock::now();
         const kin::System sys = kin::buildSystem(model, g, &cache, shapes);
         const kin::Mobility mob = kin::mobility(sys);
@@ -139,6 +172,20 @@ nlohmann::json toJson(const Row& row) {
     j["duplicates"] = row.duplicates;
     j["collisionMs"] = row.collisionMs;
   }
+  if (row.planned) {
+    j["planOk"] = row.planOk;
+    j["planComplete"] = row.planComplete;
+    j["planMs"] = row.planMs;
+    j["certifyMs"] = row.certifyMs;
+    j["moves"] = row.moves;
+    j["certifiedMoves"] = row.certifiedMoves;
+    j["planFlagged"] = row.planFlagged;
+    j["unjoinedMoves"] = row.unjoinedMoves;
+    j["buildFloating"] = row.buildFloating;
+    j["buildCrossings"] = row.buildCrossings;
+    j["offAxis"] = row.offAxis;
+    j["planFlags"] = row.planFlags;
+  }
   if (row.hasKinematics) {
     j["movingBodies"] = row.movingBodies;
     j["links"] = row.links;
@@ -158,6 +205,8 @@ nlohmann::json summarize(const std::vector<Row>& rows) {
   std::vector<double> graphTimes, collisionTimes;
   long overlaps = 0, overlapsJoined = 0, overlapPieces = 0, duplicates = 0, cleanModels = 0, collided = 0;
   long standing = 0, unsupportedPieces = 0, tippingModels = 0;
+  long plannedModels = 0, planOk = 0, planIncomplete = 0, planMoves = 0, planCertified = 0, planFlagged = 0, planUnjoined = 0, planFloating = 0, planCrossings = 0, planOffAxis = 0;
+  std::vector<double> planTimes;
   long kinModels = 0, movingBodies = 0, freedoms = 0, mechanisms = 0, unsolved = 0, withMechanisms = 0;
   std::vector<double> kinTimes;
   std::set<std::string> distinct;
@@ -197,6 +246,19 @@ nlohmann::json summarize(const std::vector<Row>& rows) {
     duplicates += r.duplicates;
     if (r.overlaps == 0) cleanModels++;
     collisionTimes.push_back(r.collisionMs);
+    if (r.planned) {
+      plannedModels++;
+      planOk += r.planOk;
+      planIncomplete += !r.planComplete;
+      planMoves += r.moves;
+      planCertified += r.certifiedMoves;
+      planFlagged += r.planFlagged;
+      planUnjoined += r.unjoinedMoves;
+      planFloating += r.buildFloating;
+      planCrossings += r.buildCrossings;
+      planOffAxis += r.offAxis;
+      planTimes.push_back(r.planMs);
+    }
     if (!r.hasKinematics) continue;
     kinModels++;
     movingBodies += r.movingBodies;
@@ -256,6 +318,24 @@ nlohmann::json summarize(const std::vector<Row>& rows) {
     std::sort(collisionTimes.begin(), collisionTimes.end());
     s["p50"]["collisionMs"] = collisionTimes[collisionTimes.size() / 2];
     s["p95"]["collisionMs"] = collisionTimes[std::min(collisionTimes.size() - 1, static_cast<size_t>(0.95 * static_cast<double>(collisionTimes.size())))];
+  }
+  if (plannedModels > 0) {
+    nlohmann::json& t = s["totals"];
+    t["planned"] = plannedModels;
+    t["planOk"] = planOk;
+    t["planIncomplete"] = planIncomplete;
+    t["moves"] = planMoves;
+    t["certifiedMoves"] = planCertified;
+    t["certifiedPercent"] = 100.0 * static_cast<double>(planCertified) / static_cast<double>(std::max(1L, planMoves));
+    t["planFlagged"] = planFlagged;
+    t["unjoinedMoves"] = planUnjoined;
+    t["buildFloating"] = planFloating;
+    t["buildCrossings"] = planCrossings;
+    t["offAxis"] = planOffAxis;
+    std::sort(planTimes.begin(), planTimes.end());
+    s["p50"]["planMs"] = planTimes[planTimes.size() / 2];
+    s["p95"]["planMs"] = planTimes[std::min(planTimes.size() - 1, static_cast<size_t>(0.95 * static_cast<double>(planTimes.size())))];
+    s["max"]["planMs"] = planTimes.back();
   }
   if (kinModels > 0) {
     nlohmann::json& t = s["totals"];

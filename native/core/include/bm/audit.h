@@ -57,12 +57,29 @@ struct Row {
   double massGrams = 0;
   double stableMs = 0;
 
+  // The build plan (present when a plan budget was given).
+  bool planned = false;
+  bool planOk = false;        ///< every move certified
+  bool planComplete = false;  ///< the planner finished inside its budget
+  int moves = 0;              ///< sub-plans included
+  int certifiedMoves = 0;
+  int planFlagged = 0;        ///< moves the planner could not show (unjoined ones included)
+  int unjoinedMoves = 0;      ///< of those, pieces joined to nothing in the file
+  int buildFloating = 0;      ///< unflagged moves that land joined to nothing built (must be 0)
+  int buildCrossings = 0;     ///< unflagged moves whose flight passes through a placed piece (must be 0)
+  int offAxis = 0;            ///< unflagged moves whose last leg is not along their connectors (must be 0)
+  std::map<std::string, int> planFlags;  ///< flag name -> moves
+  double planMs = 0, certifyMs = 0;
+
   std::map<std::string, int> noConnectorParts;  ///< part -> pieces, for parts with no connectors
   std::map<std::string, int> unmatedParts;      ///< part -> pieces that have connectors but joined nothing
 };
 
 /// Loads one model and every distinct part it uses. Never throws: a failure is a row.
-Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Library& library, ldraw::PartCache& cache, connect::ConnectorDb* connectors = nullptr, collide::ShapeCache* shapes = nullptr, const kin::GearDb* gears = nullptr);
+/// `planBudget` (seconds) plans and certifies the build when it is positive and shapes are given;
+/// `kinematics` false leaves the mechanism columns out.
+Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Library& library, ldraw::PartCache& cache, connect::ConnectorDb* connectors = nullptr, collide::ShapeCache* shapes = nullptr, const kin::GearDb* gears = nullptr,
+            double planBudget = 0, bool kinematics = true);
 
 nlohmann::json toJson(const Row& row);
 

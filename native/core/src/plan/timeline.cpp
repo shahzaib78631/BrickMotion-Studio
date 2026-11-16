@@ -86,6 +86,11 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
       sum += l;
       f.at.push_back(total > 0 ? travel * sum / total : travel);
     }
+    // It holds still where the last leg begins, then lands.
+    if (hover > 0 && f.waypoints.size() >= 2) {
+      f.waypoints.insert(f.waypoints.end() - 1, f.waypoints[f.waypoints.size() - 2]);
+      f.at.push_back(travel + hover);
+    }
     f.at.push_back(1);  // the seat
     f.frames = perFlight;
     frame += perFlight;

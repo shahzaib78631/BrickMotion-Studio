@@ -342,6 +342,31 @@ Plan plan(const Model& model, const connect::Graph& graph, ldraw::PartCache& par
       out.moves.push_back(std::move(m));
     }
   }
+  // What the author set stands. An axis is marked; a flight replaces the planner's path, and is
+  // flagged if it passes through something already built.
+  if (options.authored) {
+    World::Present placed(n, 0);
+    for (Move& m : out.moves) {
+      if (m.unit.pieces.size() == 1) {
+        const uint32_t p = m.unit.pieces[0];
+        if (p < options.authored->insertionAxis.size() && length(options.authored->insertionAxis[p]) > 0) m.authoredAxis = true;
+        if (p < options.authored->flight.size() && options.authored->flight[p].size() >= 2 && m.flag != Flag::Budget) {
+          const std::vector<Xform>& flight = options.authored->flight[p];
+          m.path.assign(flight.rbegin(), flight.rend());  // seat first
+          m.authoredFlight = true;
+          m.flag = Flag::None;
+          const Vec3 in = m.path[0].t - m.path[1].t;
+          if (length(in) > 0) m.insertion = normalized(in);
+          for (size_t leg = m.path.size(); leg-- > 2 && m.flag == Flag::None;) {  // the seat leg is the certifier's to judge
+            const Vec3 step = m.path[leg - 1].t - m.path[leg].t;
+            const double len = length(step);
+            if (len > 0 && world.clearTravel(m.unit.pieces, step * (1 / len), len, &placed, {}, &m.blocker, m.path[leg]) < len - kTravelTol) m.flag = Flag::AuthoredCrossing;
+          }
+        }
+      }
+      for (uint32_t p : m.unit.pieces) placed[p] = 1;
+    }
+  }
   out.complete = !seq.stopped;
   out.extractions = seq.extractions;
   out.planMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
