@@ -50,6 +50,12 @@ struct Row {
   int mechanisms = 0;      ///< of those, the ones that move more than one body about one link
   bool solved = false;     ///< the freedoms were found (false: too large, see kin::Mobility::reason)
   double kinMs = 0;
+  // Stability (present with the graph).
+  bool stands = false;        ///< nothing unsupported, nothing tipping
+  int unsupportedPieces = 0;  ///< pieces that reach the floor through no joint
+  int tippingGroups = 0;      ///< groups on the floor whose weight is outside their footprint
+  double massGrams = 0;
+  double stableMs = 0;
 
   std::map<std::string, int> noConnectorParts;  ///< part -> pieces, for parts with no connectors
   std::map<std::string, int> unmatedParts;      ///< part -> pieces that have connectors but joined nothing

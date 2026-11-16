@@ -56,6 +56,10 @@ inline constexpr double kDriveStep = 0.05;
 /// The joints count as closed when every equation is within this (radians, or studs).
 inline constexpr double kCloseTol = 1e-10;
 
+/// A joint the file has out of line by up to this (studs: a five-hundredth of an LDU) is
+/// closed as far as it can be when no correction is left that would close it further.
+inline constexpr double kCloseSlack = 1e-3;
+
 /// Newton steps allowed to close the joints after each move. It converges in three or four
 /// when it converges at all.
 inline constexpr int kMaxNewton = 20;

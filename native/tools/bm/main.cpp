@@ -17,6 +17,7 @@ const bm::cli::Command kCommands[] = {
     {"joints", "find every joint in a model; --why <part> explains unjoined pieces", bm::cli::cmdJoints},
     {"overlaps", "list the pieces of a model that pass through each other", bm::cli::cmdOverlaps},
     {"mechanisms", "what can move in a model: bodies, links, gear trains", bm::cli::cmdMechanisms},
+    {"stability", "whether a model stands: load paths to the floor, and tipping", bm::cli::cmdStability},
     {"shape", "describe a part's collision shape (diagnostic)", bm::cli::cmdShape},
     {"audit", "load every model in a corpus manifest and write the scoreboard", bm::cli::cmdAudit},
     {"version", "print the engine version", cmdVersion},
@@ -24,7 +25,7 @@ const bm::cli::Command kCommands[] = {
 
 void usage(std::FILE* out) {
   std::fprintf(out, "usage: bm <command> [args]\n\ncommands:\n");
-  for (const auto& c : kCommands) std::fprintf(out, "  %-10s %s\n", c.name, c.help);
+  for (const auto& c : kCommands) std::fprintf(out, "  %-11s %s\n", c.name, c.help);
 }
 }  // namespace
 

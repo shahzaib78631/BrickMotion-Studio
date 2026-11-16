@@ -1,5 +1,6 @@
 #include "bm/audit.h"
 #include "bm/kin/mobility.h"
+#include "bm/stable/stability.h"
 
 #include <algorithm>
 #include <chrono>
@@ -49,6 +50,15 @@ Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Libr
         (g.hasConnectors[i] ? row.unmatedParts : row.noConnectorParts)[model.pieces()[i].part]++;
       }
       row.graphMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - graphStart).count();
+      {
+        const auto stableStart = std::chrono::steady_clock::now();
+        const stable::Result st = stable::check(model, g, cache);
+        row.stands = st.stands;
+        row.unsupportedPieces = static_cast<int>(st.unsupported.size());
+        row.tippingGroups = static_cast<int>(st.tipping.size());
+        row.massGrams = st.mass;
+        row.stableMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - stableStart).count();
+      }
       if (shapes) {
         const auto collideStart = std::chrono::steady_clock::now();
         const collide::Report report = collide::findOverlaps(model, g, cache, *shapes);
@@ -116,6 +126,11 @@ nlohmann::json toJson(const Row& row) {
     for (int k = 0; k < connect::kJointKinds; k++) j["joints"][connect::name(static_cast<connect::JointKind>(k))] = row.joints[k];
     j["meshes"] = row.meshes;
     j["graphMs"] = row.graphMs;
+    j["stands"] = row.stands;
+    j["unsupportedPieces"] = row.unsupportedPieces;
+    j["tippingGroups"] = row.tippingGroups;
+    j["massGrams"] = row.massGrams;
+    j["stableMs"] = row.stableMs;
   }
   if (row.hasCollision) {
     j["overlaps"] = row.overlaps;
@@ -142,6 +157,7 @@ nlohmann::json summarize(const std::vector<Row>& rows) {
   long segments = 0, partsAttached = 0, partsJoined = 0;
   std::vector<double> graphTimes, collisionTimes;
   long overlaps = 0, overlapsJoined = 0, overlapPieces = 0, duplicates = 0, cleanModels = 0, collided = 0;
+  long standing = 0, unsupportedPieces = 0, tippingModels = 0;
   long kinModels = 0, movingBodies = 0, freedoms = 0, mechanisms = 0, unsolved = 0, withMechanisms = 0;
   std::vector<double> kinTimes;
   std::set<std::string> distinct;
@@ -170,6 +186,9 @@ nlohmann::json summarize(const std::vector<Row>& rows) {
     if (r.pieces > 0 && r.groups == 1) fullyJoined++;
     for (int k = 0; k < connect::kJointKinds; k++) joints[k] += r.joints[k];
     graphTimes.push_back(r.graphMs);
+    standing += r.stands;
+    unsupportedPieces += r.unsupportedPieces;
+    tippingModels += r.tippingGroups > 0;
     if (!r.hasCollision) continue;
     collided++;
     overlaps += r.overlaps;
@@ -219,6 +238,9 @@ nlohmann::json summarize(const std::vector<Row>& rows) {
     t["partsJoinedPercent"] = 100.0 * static_cast<double>(partsJoined) / static_cast<double>(std::max(1L, graphedPieces - segments));
     t["partsAttachedPercent"] = 100.0 * static_cast<double>(partsAttached) / static_cast<double>(std::max(1L, graphedPieces - segments));
     for (int k = 0; k < connect::kJointKinds; k++) t["joints"][connect::name(static_cast<connect::JointKind>(k))] = joints[k];
+    t["standingModels"] = standing;
+    t["unsupportedPieces"] = unsupportedPieces;
+    t["tippingModels"] = tippingModels;
     std::sort(graphTimes.begin(), graphTimes.end());
     s["p50"]["graphMs"] = graphTimes[graphTimes.size() / 2];
     s["p95"]["graphMs"] = graphTimes[std::min(graphTimes.size() - 1, static_cast<size_t>(0.95 * static_cast<double>(graphTimes.size())))];

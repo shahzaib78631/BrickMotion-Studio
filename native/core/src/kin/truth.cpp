@@ -1,4 +1,5 @@
 #include "bm/kin/truth.h"
+#include "bm/kin/drive.h"
 
 #include <memory>
 
@@ -18,6 +19,13 @@ constexpr double kNear = 12.0;
 /// An axis in the list and a motion found agree above this cosine (18 degrees): the lists
 /// give axes to two decimals, and a piston's line is rarely square to anything.
 constexpr double kAxisAgree = 0.95;
+/// How far a function's driver is driven to see what it moves: radians, or LDU.
+constexpr double kDriveTurn = 6.283185307179586, kDriveTravel = 20.0;
+constexpr int kDriveStretches = 8;
+/// The step it is driven at: coarser than a drive made to be looked at.
+constexpr double kScoreStep = 0.2;
+/// A piece has moved when its middle has gone this far (LDU) or it has turned one degree.
+constexpr double kMovedLdu = 0.5, kMovedTurn = 0.017453;
 
 bool readVec(const json& j, Vec3& out) {
   if (!j.is_array() || j.size() != 3 || !j[0].is_number() || !j[1].is_number() || !j[2].is_number()) return false;
@@ -154,21 +162,45 @@ struct Scorer {
       }
       size_t best = 0;
       bool driven = false, disturbed = false;
-      auto works = [&](const Mobility& m) {
-        for (const Freedom& f : m.freedoms) {
+      // First as the model stands, from the rates alone. A piece that only starts to move once
+      // the driver has gone some way (an actuator's housing, square to its work at rest) shows
+      // when the freedom is driven, so then that is done.
+      auto works = [&](const System& in, const Mobility& m) {
+        for (size_t fi = 0; fi < m.freedoms.size(); fi++) {
+          const Freedom& f = m.freedoms[fi];
           if (!moves(f, driver)) continue;
           driven = true;
-          const size_t moved = static_cast<size_t>(std::count_if(movers.begin(), movers.end(), [&](int p) { return moves(f, p); }));
-          const bool stays = std::none_of(stayers.begin(), stayers.end(), [&](int p) { return moves(f, p); });
+          size_t moved = static_cast<size_t>(std::count_if(movers.begin(), movers.end(), [&](int p) { return moves(f, p); }));
+          bool stays = std::none_of(stayers.begin(), stayers.end(), [&](int p) { return moves(f, p); });
           if (moved == movers.size() && stays) return true;
+          if (moved > 0 && moved < movers.size() && stays) {
+            const bool turning = length(twistOf(f, body(driver)).angular) > 1e-6;
+            Pose pose;
+            auto movedIn = [&](int p) {
+              const Xform& x = pose.body[body(p)];
+              if (length(x.apply(at(p)) - at(p)) >= kMovedLdu) return true;
+              for (Vec3 e : {Vec3{1, 0, 0}, Vec3{0, 1, 0}, Vec3{0, 0, 1}})
+                if (length(x.r * e - e) >= kMovedTurn) return true;
+              return false;
+            };
+            // A stretch at a time, up to a whole turn, until everything listed has moved.
+            for (int stretch = 0; stretch < kDriveStretches; stretch++) {
+              pose = drive(in, m, fi, body(driver), (turning ? kDriveTurn : kDriveTravel) / kDriveStretches, stretch ? &pose : nullptr, kScoreStep);
+              if (pose.body.size() != in.bodies) break;
+              moved = static_cast<size_t>(std::count_if(movers.begin(), movers.end(), movedIn));
+              stays = std::none_of(stayers.begin(), stayers.end(), movedIn);
+              if (moved == movers.size() && stays) return true;
+              if (!pose.converged) break;
+            }
+          }
           if (moved >= best) best = moved, disturbed = !stays;
         }
         return false;
       };
-      if (works(mob)) return done(TruthResult::Hit);
+      if (works(sys, mob)) return done(TruthResult::Hit);
       // A function behind a selector works once the selector is shifted to it.
       for (size_t i = 0; i < shiftCount(); i++)
-        if (!(*shifts)[i].turnsWith.empty() && works(with(i))) return done(TruthResult::Hit, "with a selector shifted");
+        if (!(*shifts)[i].turnsWith.empty() && works(shifted(sys, {(*shifts)[i]}), with(i))) return done(TruthResult::Hit, "with a selector shifted");
       if (!driven) return done(TruthResult::Missing, "nothing moves the driver");
       return done(TruthResult::Missing, text("the driver's freedom moves %.0f of %.0f listed pieces", static_cast<double>(best), static_cast<double>(movers.size())) + (disturbed ? ", and one that should stay" : ""));
     }

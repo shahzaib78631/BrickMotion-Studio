@@ -32,7 +32,7 @@ Xform moved(const Twist& twist, double t) {
   return out;
 }
 
-Pose drive(const System& sys, const Mobility& mob, size_t freedomIndex, uint32_t driver, double amount, const Pose* from) {
+Pose drive(const System& sys, const Mobility& mob, size_t freedomIndex, uint32_t driver, double amount, const Pose* from, double stride) {
   Pose pose;
   pose.body.assign(sys.bodies, Xform{});
   if (from && from->body.size() == sys.bodies) pose.body = from->body;
@@ -126,7 +126,7 @@ Pose drive(const System& sys, const Mobility& mob, size_t freedomIndex, uint32_t
     const double s = speed(next);
     if (!(s > 1e-6)) break;  // the driver can go no further this way
     for (double& x : next) x /= s;
-    const double step = std::min(turns ? kDriveStep : kDriveStep * kLengthUnit, total - done);
+    const double step = std::min(turns ? stride : stride * kLengthUnit, total - done);
     std::vector<Xform> trial = pose.body;
     apply(trial, next, direction * step);
 
@@ -146,6 +146,12 @@ Pose drive(const System& sys, const Mobility& mob, size_t freedomIndex, uint32_t
       for (size_t i = 0; i < at.residual.size(); i++) rhs[i] = -at.residual[i];
       const std::vector<double> fix = solveLeastNorm(held, rhs, kRankTol);
       if (!(worst(fix) < 1.0)) break;  // not a small correction: the joints cannot be closed from here
+      // Nothing left to correct: what remains is what the file itself has a little out of
+      // line, which the freedoms were found in spite of.
+      if (worst(fix) <= kCloseTol && worst(at.residual) <= kCloseSlack) {
+        closed = true;
+        break;
+      }
       apply(trial, fix, 1.0);
     }
     if (!closed) break;

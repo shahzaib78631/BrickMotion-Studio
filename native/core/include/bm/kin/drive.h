@@ -3,6 +3,7 @@
 #include <vector>
 #include "bm/kin/mobility.h"
 #include "bm/kin/system.h"
+#include "bm/kin/tolerances.h"
 #include "bm/model.h"
 
 namespace bm::kin {
@@ -25,7 +26,9 @@ struct Pose {
 /// by Newton iteration on the same equations the freedoms came from. Gear ratios hold exactly
 /// throughout: a gear's turn is its driver's times the ratio of their teeth, not a sum of
 /// corrected steps.
-Pose drive(const System& sys, const Mobility& mob, size_t freedom, uint32_t driver, double amount, const Pose* from = nullptr);
+/// `step` is the most the driver advances between corrections (radians; times 20 for LDU):
+/// larger is faster and follows a tight mechanism less surely.
+Pose drive(const System& sys, const Mobility& mob, size_t freedom, uint32_t driver, double amount, const Pose* from = nullptr, double step = kDriveStep);
 
 /// Where a piece is in a pose.
 Xform placed(const Model& model, const System& sys, const Pose& pose, uint32_t piece);
