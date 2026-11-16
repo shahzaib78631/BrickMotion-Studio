@@ -1,5 +1,7 @@
 #include "bm/kin/drive.h"
 
+#include <limits>
+
 #include <algorithm>
 #include <cmath>
 #include "bm/kin/constraints.h"
@@ -58,13 +60,49 @@ Pose drive(const System& sys, const Mobility& mob, size_t freedomIndex, uint32_t
     for (const Link& l : sys.links) reach(l.a, l.b);
     for (const Gearing& g : sys.gearings) reach(g.a, g.b);
   }
+  // A body that hangs on one link and is simply carried by what it hangs on (a pin in a
+  // moving beam) needs no equations: it is left out and given its carrier's pose at the end.
+  std::vector<std::pair<uint32_t, uint32_t>> carried;  // (body, what carries it), in the order taken off
+  {
+    std::vector<uint8_t> geared(sys.bodies, 0);
+    for (const Gearing& g : sys.gearings) {
+      geared[g.a] = geared[g.b] = 1;
+      if (g.housing < sys.bodies) geared[g.housing] = 1;
+    }
+    auto same = [](const Twist& x, const Twist& y) { return length(x.angular - y.angular) <= kStill && length(x.linear - y.linear) <= kStill * kLengthUnit; };
+    for (bool took = true; took;) {
+      took = false;
+      std::vector<uint32_t> degree(sys.bodies, 0), other(sys.bodies, UINT32_MAX);
+      for (const Link& l : sys.links) {
+        if (l.a >= sys.bodies || l.b >= sys.bodies) continue;
+        if (in[l.a]) degree[l.a]++, other[l.a] = l.b;
+        if (in[l.b]) degree[l.b]++, other[l.b] = l.a;
+      }
+      for (uint32_t b : bodies) {
+        if (!in[b] || degree[b] != 1 || geared[b] || b == driver) continue;
+        const uint32_t carrier = other[b];
+        if (!in[carrier] && !held(carrier)) continue;
+        if (!same(twistOf(freedom, b), twistOf(freedom, carrier))) continue;
+        in[b] = 0;
+        carried.emplace_back(b, carrier);
+        took = true;
+        break;  // degrees have changed
+      }
+    }
+    bodies.erase(std::remove_if(bodies.begin(), bodies.end(), [&](uint32_t b) { return !in[b]; }), bodies.end());
+  }
   std::sort(bodies.begin(), bodies.end());
   std::vector<int> column(sys.bodies, -1);
   for (size_t i = 0; i < bodies.size(); i++) column[bodies[i]] = static_cast<int>(6 * i);
   const size_t columns = 6 * bodies.size();
   std::vector<uint32_t> links, gearings;
-  for (uint32_t i = 0; i < sys.links.size(); i++)
-    if (column[sys.links[i].a] >= 0 || column[sys.links[i].b] >= 0) links.push_back(i);
+  std::vector<uint8_t> left(sys.bodies, 0);
+  for (const auto& [body, carrier] : carried) left[body] = 1;
+  for (uint32_t i = 0; i < sys.links.size(); i++) {
+    const Link& l = sys.links[i];
+    if (left[l.a] || left[l.b]) continue;  // a carried body holds nothing
+    if (column[l.a] >= 0 || column[l.b] >= 0) links.push_back(i);
+  }
   for (uint32_t i = 0; i < sys.gearings.size(); i++)
     if (column[sys.gearings[i].a] >= 0 || column[sys.gearings[i].b] >= 0) gearings.push_back(i);
 
@@ -132,6 +170,7 @@ Pose drive(const System& sys, const Mobility& mob, size_t freedomIndex, uint32_t
 
     // Close the joints again.
     bool closed = false;
+    double before = std::numeric_limits<double>::infinity();  // the residual one correction ago
     for (int it = 0; it < kMaxNewton; it++) {
       const Equations at = equations(sys, column, columns, links, gearings, &trial);
       if (worst(at.residual) <= kCloseTol) {
@@ -146,12 +185,14 @@ Pose drive(const System& sys, const Mobility& mob, size_t freedomIndex, uint32_t
       for (size_t i = 0; i < at.residual.size(); i++) rhs[i] = -at.residual[i];
       const std::vector<double> fix = solveLeastNorm(held, rhs, kRankTol);
       if (!(worst(fix) < 1.0)) break;  // not a small correction: the joints cannot be closed from here
-      // Nothing left to correct: what remains is what the file itself has a little out of
-      // line, which the freedoms were found in spite of.
-      if (worst(fix) <= kCloseTol && worst(at.residual) <= kCloseSlack) {
+      // Nothing left to correct, or correcting no longer helps: what remains is what the file
+      // itself has a little out of line, which the freedoms were found in spite of.
+      const double now = worst(at.residual);
+      if (now <= kCloseSlack && (worst(fix) <= kCloseTol || now >= 0.99 * before)) {
         closed = true;
         break;
       }
+      before = now;
       apply(trial, fix, 1.0);
     }
     if (!closed) break;
@@ -160,6 +201,7 @@ Pose drive(const System& sys, const Mobility& mob, size_t freedomIndex, uint32_t
     done += step;
     pose.reached = direction * done;
   }
+  for (auto it = carried.rbegin(); it != carried.rend(); ++it) pose.body[it->first] = pose.body[it->second];
   pose.converged = done >= total - 1e-12;
   return pose;
 }

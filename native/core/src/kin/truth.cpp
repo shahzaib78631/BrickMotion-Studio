@@ -19,9 +19,11 @@ constexpr double kNear = 12.0;
 /// An axis in the list and a motion found agree above this cosine (18 degrees): the lists
 /// give axes to two decimals, and a piston's line is rarely square to anything.
 constexpr double kAxisAgree = 0.95;
-/// How far a function's driver is driven to see what it moves: radians, or LDU.
-constexpr double kDriveTurn = 6.283185307179586, kDriveTravel = 20.0;
-constexpr int kDriveStretches = 8;
+/// How far a function's driver is driven, a stretch at a time, to see what it moves: radians,
+/// or LDU. Eight turns of a knob take a linear actuator a third of its stroke, enough for the
+/// housing to swing; until joint limits are known nothing says where the real range ends.
+constexpr double kDriveTurn = 8 * 6.283185307179586, kDriveTravel = 80.0;
+constexpr int kDriveStretches = 32;
 /// The step it is driven at: coarser than a drive made to be looked at.
 constexpr double kScoreStep = 0.2;
 /// A piece has moved when its middle has gone this far (LDU) or it has turned one degree.
@@ -198,7 +200,7 @@ struct Scorer {
                 if (length(x.r * e - e) >= kMovedTurn) return true;
               return false;
             };
-            // A stretch at a time, up to a whole turn, until everything listed has moved.
+            // A stretch at a time until everything listed has moved.
             for (int stretch = 0; stretch < kDriveStretches; stretch++) {
               pose = drive(in, m, fi, body(driver), (turning ? kDriveTurn : kDriveTravel) / kDriveStretches, stretch ? &pose : nullptr, kScoreStep);
               if (pose.body.size() != in.bodies) break;
