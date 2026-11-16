@@ -9,14 +9,18 @@
 #include <map>
 #include "bm/kin/mobility.h"
 #include "bm/kin/system.h"
+#include "bm/kin/truth.h"
+#include <fstream>
 #include "commands.h"
 
 namespace bm::cli {
 namespace fs = std::filesystem;
 
 int cmdMechanisms(const Args& args) {
-  if (args.empty() || args[0].rfind("--", 0) == 0) {
-    std::fprintf(stderr, "usage: bm mechanisms <file> [--no-travel] [--links] [--all] [--no-studio]\n");
+  bool bad = false;
+  const std::string truthPath = option(args, "--truth", "", bad);
+  if (bad || args.empty() || args[0].rfind("--", 0) == 0) {
+    std::fprintf(stderr, "usage: bm mechanisms <file> [--truth <expected.json>] [--no-travel] [--links] [--all] [--no-studio]\n");
     return kUsage;
   }
   const std::string ldraw = defaultLDrawDir();
@@ -73,6 +77,19 @@ int cmdMechanisms(const Args& args) {
       if (sys.size[body] > 1) text += "+" + std::to_string(sys.size[body] - 1);
       return text;
     };
+    if (!truthPath.empty()) {
+      std::ifstream in(truthPath);
+      const nlohmann::json expected = nlohmann::json::parse(in, nullptr, false);
+      if (!expected.is_object()) {
+        std::fprintf(stderr, "bm: cannot read %s\n", truthPath.c_str());
+        return kFailure;
+      }
+      const kin::TruthScore score = kin::score(model, graph, sys, mob, cache, expected);
+      std::printf("truth         %d of %d scored checks (%d not scored, %d unresolved)\n", score.hit, score.scored(), score.notScored, score.unresolved);
+      for (const kin::TruthLine& line : score.lines)
+        std::printf("  %-10s %-11s %s%s%s\n", kin::name(line.result), line.type.c_str(), line.label.c_str(), line.detail.empty() ? "" : "  -- ", line.detail.c_str());
+      return 0;
+    }
     size_t shown = 0;
     for (size_t i = 0; i < mob.freedoms.size(); i++) {
       const kin::Freedom& f = mob.freedoms[i];
