@@ -22,6 +22,7 @@ struct Connection {
   uint32_t a = 0, b = 0;
   Joint joint;
   uint16_t mates = 0;  ///< connector pairs it is made of
+  bool friction = false;  ///< one of its mates grips (see Freedom::friction)
   double grip = 0;     ///< total engaged length, LDU
   uint32_t firstZone = 0, zoneCount = 0;  ///< its mates' zones in Graph::zones
 };

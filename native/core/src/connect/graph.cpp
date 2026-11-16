@@ -230,6 +230,7 @@ Graph buildGraph(const Model& model, ConnectorDb& db, const kin::GearDb* gears) 
     c.a = static_cast<uint32_t>(key >> 32);
     c.b = static_cast<uint32_t>(key & 0xFFFFFFFFu);
     c.joint = combine(pair.freedoms);
+    c.friction = std::any_of(pair.freedoms.begin(), pair.freedoms.end(), [](const Freedom& f) { return f.friction; });
     c.mates = static_cast<uint16_t>(std::min<size_t>(pair.freedoms.size(), 65535));
     c.grip = pair.grip;
     c.firstZone = static_cast<uint32_t>(g.zones.size());

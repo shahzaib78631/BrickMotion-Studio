@@ -29,4 +29,9 @@ inline constexpr double kRackTilt = 0.8525;
 /// Two parallel gears must share at least this much tooth width to drive each other.
 inline constexpr double kMinFaceShare = 2.0;
 
+/// A slide is real when the piece can move this far along it without running into something.
+/// Parts that are stopped sit against each other (0 to 1 LDU of play in files); a real slide
+/// (a piston, a driving ring) travels 4 or more.
+inline constexpr double kMinTravel = 2.0;
+
 }  // namespace bm::kin

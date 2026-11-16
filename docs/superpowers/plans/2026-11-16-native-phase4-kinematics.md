@@ -112,13 +112,13 @@ struct System {
   std::vector<uint32_t> heldSlides;  // connection indices whose slide was found not to move
 };
 struct SystemOptions { bool testTravel = true; };
-System buildSystem(const Model&, const connect::Graph&, ldraw::PartCache&, collide::ShapeCache&, SystemOptions = {});
+System buildSystem(const Model&, const connect::Graph&, ldraw::PartCache*, collide::ShapeCache*, SystemOptions = {});
 }
 ```
 How bodies are made, in order, repeated until nothing changes:
 1. Start from the graph's rigid bodies. Flexible joints are dropped (a hose holds nothing rigidly); segments are their own bodies and are left out of the system.
 2. **Snap axes:** link axes within `kMeshAxis` of each other and lines within `connect::kLineMatch` are replaced by their common line (Review Focus 2).
-3. **A slide that is held:** a link that slides loses its slide when the mate grips through a lip (`'L'` section) or is keyed (`'A'` in `'A'`: a friction fit) and neither connector is marked `slide`; or, with `testTravel`, when moving the smaller body `kMinTravel = 2` LDU each way along the axis makes an overlap it did not have in both directions.
+3. **A slide that is held:** a friction fit (a keyed axle, `'A'` in `'A'`; a snap lip, an `'L'` section inside the hole; a clip) holds where it was pushed, always. Any other slide is held, with `testTravel`, when moving the smaller body `kMinTravel = 2` LDU along the axis makes a new overlap in both directions. Travel is tested only after the merges that need no collision have settled, so an axle moves with its bushes. A pair that fits cleanly at rest without its mate zones (a pin's collar in its countersink) is tested on true geometry.
 4. **Combine parallel links:** all links between the same two bodies are combined with `connect::combine`; a result of Fixed merges the bodies.
 5. **Bridge through a pin:** a body whose only links are two coaxial turning links (a pin through two beams) is kept, and a coaxial Revolute/Cylindrical link is added between its two neighbours, so step 4 sees both pins of a two-pin joint (Review Focus 1).
 

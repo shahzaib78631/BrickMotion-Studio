@@ -13,6 +13,9 @@ struct Freedom {
   bool slides = false;   ///< along `axis`
   bool ball = false;     ///< any rotation about `point`
   Vec3 point, axis;
+  /// The fit grips: a keyed axle, a snap lip, a clip. Such a mate can be slid by hand but does
+  /// not slide by itself, which matters to what moves in a mechanism.
+  bool friction = false;
 };
 
 struct Mate {

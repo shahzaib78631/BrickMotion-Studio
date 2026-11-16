@@ -22,6 +22,7 @@ int cmdAudit(const Args& args);
 int cmdJoints(const Args& args);
 int cmdOverlaps(const Args& args);
 int cmdShape(const Args& args);
+int cmdMechanisms(const Args& args);
 
 }  // namespace bm::cli
 namespace bm::connect {

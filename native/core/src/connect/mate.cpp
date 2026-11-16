@@ -77,13 +77,14 @@ std::optional<Mate> cylinders(const Connector& m, const Connector& f, std::strin
   }
 
   double grip = 0, clash = 0, gripLo = 1e300, gripHi = -1e300;
-  bool keyed = false;
+  bool keyed = false, lip = false;
   for (const ProfileSection& ms : m.profile) {
     const double a = t0 + sign * ms.start, b = t0 + sign * (ms.start + ms.length);
     const double mLo = std::min(a, b), mHi = std::max(a, b);
     for (const ProfileSection& fs : f.profile) {
       const double ov = overlap(mLo, mHi, fs.start, fs.start + fs.length);
       if (ov <= 0) continue;
+      lip = lip || ms.shape == 'L';  // a snap lip inside the hole keeps the pin from sliding out
       bool pairKeyed = false;
       switch (fit(ms, fs, pairKeyed)) {
         case Fit::Clashes: clash += ov; break;
@@ -103,6 +104,7 @@ std::optional<Mate> cylinders(const Connector& m, const Connector& f, std::strin
   out.grip = grip;
   out.freedom.rotates = !keyed;
   out.freedom.slides = m.slide || f.slide;
+  out.freedom.friction = keyed || lip;
   out.freedom.axis = f.axis;
   out.freedom.point = f.start + f.axis * ((gripLo + gripHi) / 2);
   return out;
@@ -122,7 +124,7 @@ std::optional<Mate> barInClip(const Connector& bar, const Connector& clip) {
   if (grip < kMinGrip) return std::nullopt;
   Mate out;
   out.grip = grip;
-  out.freedom = {true, bar.slide || clip.slide, false, clip.start + clip.axis * (clipLength / 2), clip.axis};
+  out.freedom = {true, bar.slide || clip.slide, false, clip.start + clip.axis * (clipLength / 2), clip.axis, true};
   return out;
 }
 
