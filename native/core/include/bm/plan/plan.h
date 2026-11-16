@@ -39,6 +39,8 @@ struct Extraction {
   std::vector<Xform> path;        ///< the unit's motion from its seat: identity first, open air last; straight legs between
   uint32_t blocker = UINT32_MAX;  ///< when !ok: a piece in the way of the attempt that got furthest
   Flag why = Flag::None;          ///< when !ok: NoDirection, Blocked or NoExit
+  std::vector<uint32_t> stoppedBy;  ///< when !ok: every piece that stopped one of the attempts, ascending
+  std::vector<Vec3> tried;          ///< when !ok: the directions its connectors allowed
 };
 
 struct Move {

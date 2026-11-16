@@ -152,6 +152,12 @@ Extraction extract(const Context& ctx, const Unit& unit, const World::Present* p
     leaves = leaveDirections(ctx, unit, present);
   }
   if (leaves.empty()) return best;
+  std::vector<uint32_t> stoppedBy;
+  auto stopped = [&](uint32_t who) {
+    if (who != UINT32_MAX) stoppedBy.push_back(who);
+  };
+  std::vector<Vec3> tried;
+  for (const Leave& l : leaves) tried.push_back(l.direction);
   const std::vector<Held> held = heldBy(ctx, unit, present);
   const Box box = boxOf(ctx, unit);
   const Vec3 up = -ctx.down;
@@ -166,8 +172,9 @@ Extraction extract(const Context& ctx, const Unit& unit, const World::Present* p
       for (double s = 0; s <= seat + stride; s += stride) corridor.push_back({h.zone.a + d * s, h.zone.b + d * s, h.zone.radius});
     }
     uint32_t blocker = UINT32_MAX;
-    const double got = ctx.world.clearTravel(unit.pieces, d, seat, present, corridor, &blocker);
+    const double got = ctx.world.clearTravel(unit.pieces, d, seat, present, corridor, &blocker, {}, 0.05, seat - kTravelTol);
     if (got < seat - kTravelTol) {
+      stopped(blocker);
       if (got > furthest) furthest = got, best.why = Flag::Blocked, best.blocker = blocker, best.direction = d, best.seatTravel = leave.travel;
       continue;
     }
@@ -179,7 +186,10 @@ Extraction extract(const Context& ctx, const Unit& unit, const World::Present* p
       const double need = exitDistance(fromBox, bounds, way, kExitMargin);
       if (!std::isfinite(need)) return -1;
       if (need <= 0) return 0;
-      const double reached = ctx.world.clearTravel(unit.pieces, way, need, present, {}, who, from);
+      uint32_t hit = UINT32_MAX;
+      const double reached = ctx.world.clearTravel(unit.pieces, way, need, present, {}, &hit, from, 0.05, need - kTravelTol);
+      if (who) *who = hit;
+      if (reached < need - kTravelTol) stopped(hit);
       return reached >= need - kTravelTol ? need : -1;
     };
     std::vector<Vec3> ways{d, up};
@@ -200,7 +210,9 @@ Extraction extract(const Context& ctx, const Unit& unit, const World::Present* p
     // One turn: as far as it goes one way, then out another.
     for (const Vec3& first : ways) {
       if (!turns) break;
-      const double room = ctx.world.clearTravel(unit.pieces, first, exitDistance(at, bounds, first, kExitMargin), present, {}, nullptr, seated);
+      uint32_t wall = UINT32_MAX;
+      const double room = ctx.world.clearTravel(unit.pieces, first, exitDistance(at, bounds, first, kExitMargin), present, {}, &wall, seated);
+      stopped(wall);
       if (room < kMinLeg) continue;
       const Xform turned = shifted(d * seat + first * room);
       Box turnedBox = at;
@@ -218,6 +230,10 @@ Extraction extract(const Context& ctx, const Unit& unit, const World::Present* p
     }
     if (seat > furthest) furthest = seat, best.why = Flag::NoExit, best.blocker = exitBlocker, best.direction = d, best.seatTravel = leave.travel;
   }
+  std::sort(stoppedBy.begin(), stoppedBy.end());
+  stoppedBy.erase(std::unique(stoppedBy.begin(), stoppedBy.end()), stoppedBy.end());
+  best.stoppedBy = std::move(stoppedBy);
+  best.tried = std::move(tried);
   return best;
 }
 

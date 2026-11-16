@@ -86,9 +86,9 @@ struct Sequencer {
     if (!bounds.empty()) centre = (bounds.min + bounds.max) * 0.5;
     size_t left = set.size();
     std::vector<Extraction> single(n);
-    std::vector<uint8_t> dirty(n, 0), seen(n, 0);
+    std::vector<uint8_t> dirty(n, 0), seen(n, 0), reason(n, 0);  // dirty: 1 its mates changed, 2 it must be tried again
     std::vector<uint32_t> stack, todo;
-    for (uint32_t p : set) dirty[p] = 1;
+    for (uint32_t p : set) dirty[p] = 2;
     // What must be built after what (the author's), as "cannot be removed while these are present".
     std::vector<std::vector<uint32_t>> removeFirst(n);
     if (options.authored) {
@@ -121,11 +121,16 @@ struct Sequencer {
         for (uint32_t ci : ctx.connectionsOf[p]) {
           const Connection& c = ctx.graph.connections[ci];
           const uint32_t other = c.a == p ? c.b : c.a;
-          if (present[other]) dirty[other] = 1;
+          if (present[other] && !dirty[other]) dirty[other] = 1;  // its mates have changed: perhaps its directions too
         }
       }
       for (uint32_t q : set)
-        if (present[q] && !single[q].ok && single[q].blocker != UINT32_MAX && std::binary_search(m.unit.pieces.begin(), m.unit.pieces.end(), single[q].blocker)) dirty[q] = 1;
+        if (present[q] && !single[q].ok)
+          for (uint32_t stop : single[q].stoppedBy)
+            if (std::binary_search(m.unit.pieces.begin(), m.unit.pieces.end(), stop)) {
+              dirty[q] = 2;  // something that stopped it has gone: it must be tried again
+              break;
+            }
       last = &ctx.model.pieces()[m.unit.pieces.front()];
       removed.push_back(std::move(m));
     };
@@ -158,12 +163,28 @@ struct Sequencer {
       // Try again whatever has changed around it.
       todo.clear();
       for (uint32_t p : set)
-        if (present[p] && dirty[p]) todo.push_back(p), dirty[p] = 0;
+        if (present[p] && dirty[p]) todo.push_back(p), reason[p] = dirty[p], dirty[p] = 0;
+      std::vector<uint8_t> skipped(todo.size(), 0);
       pool.parallelFor(todo.size(), [&](size_t i) {
         const uint32_t p = todo[i];
+        // Only its mates changed. If the directions they allow are the same as before, every
+        // attempt would meet the same pieces as before, which are all still there.
+        if (reason[p] == 1 && single[p].ok) {  // what could leave still can: only things in its way have gone
+          skipped[i] = 1;
+          return;
+        }
+        if (reason[p] == 1 && !single[p].ok && !single[p].tried.empty() && length(authoredAxis(p)) == 0) {
+          const std::vector<Leave> now = leaveDirections(ctx, unitOf({p}), &present);
+          bool same = now.size() == single[p].tried.size();
+          for (size_t k = 0; same && k < now.size(); k++) same = dot(now[k].direction, single[p].tried[k]) >= kReleaseAgree;
+          if (same) {
+            skipped[i] = 1;
+            return;
+          }
+        }
         single[p] = extract(ctx, unitOf({p}), &present, bounds, authoredAxis(p), false);
       });
-      extractions += todo.size();
+      for (uint8_t sk : skipped) extractions += !sk;
       // The best piece that can leave without splitting what is left.
       std::vector<uint32_t> ready;
       for (uint32_t p : set)

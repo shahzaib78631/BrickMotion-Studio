@@ -257,7 +257,7 @@ double World::pairTravel(uint32_t p, const Xform& from, const Box& fromBox, uint
   return result;
 }
 
-double World::clearTravel(const std::vector<uint32_t>& unit, Vec3 direction, double distance, const Present* present, const std::vector<Zone>& zones, uint32_t* blocker, const Xform& start, double tolerance) const {
+double World::clearTravel(const std::vector<uint32_t>& unit, Vec3 direction, double distance, const Present* present, const std::vector<Zone>& zones, uint32_t* blocker, const Xform& start, double tolerance, double enough) const {
   const State& s = *state_;
   if (blocker) *blocker = UINT32_MAX;
   if (!(distance > 0) || !(length(direction) > 0)) return 0;
@@ -272,7 +272,25 @@ double World::clearTravel(const std::vector<uint32_t>& unit, Vec3 direction, dou
     swept.grow(startBox.min + direction * distance);
     swept.grow(startBox.max + direction * distance);
     near(swept, present, found);
-    for (uint32_t q : found) {
+    // Nearest along the way first, so that what stops it is met early; what its box cannot
+    // reach before the best so far cannot stop it sooner.
+    auto reach = [&](uint32_t q) {
+      const Box& ob = s.boxes[q];
+      const double lo[3] = {startBox.min.x, startBox.min.y, startBox.min.z}, hi[3] = {startBox.max.x, startBox.max.y, startBox.max.z};
+      const double olo[3] = {ob.min.x, ob.min.y, ob.min.z}, ohi[3] = {ob.max.x, ob.max.y, ob.max.z};
+      const double d[3] = {direction.x, direction.y, direction.z};
+      double enter = 0;
+      for (int i = 0; i < 3; i++) {
+        if (std::abs(d[i]) < 1e-12) continue;
+        enter = std::max(enter, std::min((olo[i] - hi[i]) / d[i], (ohi[i] - lo[i]) / d[i]));
+      }
+      return enter;
+    };
+    std::vector<std::pair<double, uint32_t>> ordered;
+    for (uint32_t q : found) ordered.emplace_back(reach(q), q);
+    std::sort(ordered.begin(), ordered.end());
+    for (const auto& [enter, q] : ordered) {
+      if (enter > best) break;
       if (std::binary_search(unit.begin(), unit.end(), q)) continue;
       // What already crosses it where the model has it is not this move's doing.
       if (boxesMeet(s.boxes[p], s.boxes[q]) && restCrossing(p, q, zones)) continue;
@@ -280,6 +298,7 @@ double World::clearTravel(const std::vector<uint32_t>& unit, Vec3 direction, dou
       if (got < best) {
         best = got;
         if (blocker) *blocker = q;
+        if (best < enough) return best;  // it does not get as far as it must: no need to know more
       }
     }
   }
