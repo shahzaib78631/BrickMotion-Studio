@@ -16,8 +16,9 @@ namespace fs = std::filesystem;
 int cmdJoints(const Args& args) {
   bool bad = false;
   const std::string why = option(args, "--why", "", bad);
+  const std::string of = option(args, "--of", "", bad);
   if (bad || args.empty() || args[0].rfind("--", 0) == 0) {
-    std::fprintf(stderr, "usage: bm joints <file> [--why <part>] [--groups] [--meshes] [--no-studio]\n");
+    std::fprintf(stderr, "usage: bm joints <file> [--why <part>] [--of <part>] [--groups] [--meshes] [--no-studio]\n");
     return kUsage;
   }
   const std::string ldraw = defaultLDrawDir();
@@ -96,6 +97,19 @@ int cmdJoints(const Args& args) {
       }
     }
 
+    if (!of.empty()) {
+      // Every connection of every piece of one part.
+      std::string part = ldraw::normalizeName(of);
+      if (part.size() < 4 || part.compare(part.size() - 4, 4, ".dat") != 0) part += ".dat";
+      for (const connect::Connection& c : g.connections) {
+        const bool first = model.pieces()[c.a].part == part, second = model.pieces()[c.b].part == part;
+        if (!first && !second) continue;
+        const uint32_t self = first ? c.a : c.b, other = first ? c.b : c.a;
+        const Vec3 at = model.pieces()[self].world.t;
+        std::printf("  %s at %.0f %.0f %.0f  %-11s %-14s at %.0f %.0f %.0f along %.2f %.2f %.2f  mates %u grip %.0f%s%s\n", part.c_str(), at.x, at.y, at.z, connect::name(c.joint.kind), model.pieces()[other].part.c_str(), c.joint.point.x,
+                    c.joint.point.y, c.joint.point.z, c.joint.axis.x, c.joint.axis.y, c.joint.axis.z, static_cast<unsigned>(c.mates), c.grip, c.friction ? " friction" : "", c.seats.empty() ? "" : " seats");
+      }
+    }
     if (!why.empty()) {
       std::string part = ldraw::normalizeName(why);
       if (part.find('.') == std::string::npos) part += ".dat";

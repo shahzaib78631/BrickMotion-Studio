@@ -24,6 +24,7 @@ int cmdOverlaps(const Args& args);
 int cmdShape(const Args& args);
 int cmdMechanisms(const Args& args);
 int cmdStability(const Args& args);
+int cmdConnectors(const Args& args);
 
 }  // namespace bm::cli
 namespace bm::connect {

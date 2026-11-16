@@ -297,9 +297,15 @@ Graph buildGraph(const Model& model, ConnectorDb& db, const kin::GearDb* gears) 
     i = last + 1;
   }
 
-  std::sort(g.connections.begin(), g.connections.end(), [](const Connection& x, const Connection& y) { return x.a != y.a ? x.a < y.a : x.b < y.b; });
+  // A real joint sorts before a flexible attachment of the same pair, so it is the one kept.
+  std::sort(g.connections.begin(), g.connections.end(), [](const Connection& x, const Connection& y) {
+    if (x.a != y.a) return x.a < y.a;
+    if (x.b != y.b) return x.b < y.b;
+    return (x.joint.kind == JointKind::Flexible) < (y.joint.kind == JointKind::Flexible);
+  });
 
-  // An element's end can reach the same part by both routes; keep one connection per pair.
+  // An element's end can reach the same part by both routes, or reach a part it is already
+  // pinned to (a shock absorber's rod is such a "~" part); keep one connection per pair.
   g.connections.erase(std::unique(g.connections.begin(), g.connections.end(), [](const Connection& x, const Connection& y) { return x.a == y.a && x.b == y.b; }), g.connections.end());
 
   g.groups = groups.label(g.group);

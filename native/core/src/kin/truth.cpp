@@ -88,6 +88,19 @@ struct Scorer {
     const Vec3 v = velocityAt(twistOf(f, body(p)), at(p));
     return length(v) > 1e-4 && std::abs(dot(v, axis)) >= kAxisAgree * length(v);
   }
+  /// Whether, in this freedom, the piece's body moves along `axis` against a body it is joined
+  /// to by a slide along that axis.
+  bool slidesInPartner(const Freedom& f, int p, Vec3 axis) const {
+    const uint32_t b = body(p);
+    for (const Link& l : sys.links) {
+      if (l.a != b && l.b != b) continue;
+      if (l.kind != connect::JointKind::Prismatic && l.kind != connect::JointKind::Cylindrical) continue;
+      if (std::abs(dot(l.axis, axis)) < kAxisAgree) continue;
+      const Vec3 v = velocityAt(twistOf(f, l.a), l.point) - velocityAt(twistOf(f, l.b), l.point);
+      if (std::abs(dot(v, l.axis)) > 1e-4) return true;
+    }
+    return false;
+  }
   const GearMesh* mesh(int a, int b) const {
     for (const GearMesh& m : graph.meshes)
       if ((static_cast<int>(m.a) == a && static_cast<int>(m.b) == b) || (static_cast<int>(m.a) == b && static_cast<int>(m.b) == a)) return &m;
@@ -113,6 +126,8 @@ struct Scorer {
       for (const Freedom& f : mob.freedoms) {
         any = any || moves(f, p);
         if (type == "rotates" ? turnsAbout(f, p, axis) : travelsAlong(f, p, axis)) return done(TruthResult::Hit);
+        // A rod slides in its cylinder just as well when it is the cylinder that moves.
+        if (type == "slides" && slidesInPartner(f, p, axis)) return done(TruthResult::Hit, "against what it slides in");
       }
       return done(TruthResult::Missing, any ? "it moves, but not that way" : "nothing moves it");
     }

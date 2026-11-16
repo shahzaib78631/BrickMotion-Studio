@@ -75,3 +75,35 @@ TEST_CASE("a hand-checked list is scored against the freedoms found", "[kin][tru
   REQUIRE(score(model, graph, sys, mob, parts, nlohmann::json::parse(R"({"mechanisms": 3})")).lines.empty());
   REQUIRE(score(model, graph, System{}, mob, parts, expected).lines.empty());  // a system of another model
 }
+
+TEST_CASE("a rod that stands still slides in a cylinder that moves", "[kin][truth]") {
+  const ldraw::Library lib(fs::path(BM_FIXTURES) / "lib");
+  ldraw::PartCache parts(lib, fs::temp_directory_path() / "bm_kin_truth_cache");
+  const fs::path file = fs::temp_directory_path() / ("bm_kin_truth_rod_" + std::to_string(::getpid()) + ".ldr");
+  {
+    std::ofstream out(file);
+    for (int x : {0, 100, 200}) out << "1 4 " << x << " 0 0 1 0 0 0 1 0 0 0 1 3005.dat\n";
+  }
+  const Model model = io::load(file, lib);
+  fs::remove(file);
+  // Frame 0; cylinder 1 slides on the frame along x; rod 2 is pinned to the frame and runs in the cylinder.
+  System sys;
+  sys.bodies = 3;
+  sys.size = {10, 1, 1};
+  sys.bodyOf = {0, 1, 2};
+  sys.pieces = {{0}, {1}, {2}};
+  sys.links.push_back({0, 1, JointKind::Prismatic, {100, 12, 0}, {1, 0, 0}, 0, 1});
+  sys.links.push_back({0, 2, JointKind::Revolute, {200, 12, 0}, {0, 0, 1}, 0, 2});
+  sys.links.push_back({1, 2, JointKind::Cylindrical, {150, 12, 0}, {1, 0, 0}, 1, 2});
+  const Mobility mob = mobility(sys);
+  const auto expected = nlohmann::json::parse(R"({"mechanisms": [{"id": "m", "checks": [
+    {"type": "slides", "label": "rod", "part": {"part": "3005", "at": [200, 12, 0]}, "axis": [1, 0, 0]},
+    {"type": "slides", "label": "rod, wrong axis", "part": {"part": "3005", "at": [200, 12, 0]}, "axis": [0, 1, 0]},
+    {"type": "slides", "label": "cylinder", "part": {"part": "3005", "at": [100, 12, 0]}, "axis": [1, 0, 0]}
+  ]}]})");
+  const TruthScore s = score(model, connect::Graph{}, sys, mob, parts, expected);
+  REQUIRE(s.lines.size() == 3);
+  REQUIRE(s.lines[0].result == TruthResult::Hit);
+  REQUIRE(s.lines[1].result == TruthResult::Missing);
+  REQUIRE(s.lines[2].result == TruthResult::Hit);
+}

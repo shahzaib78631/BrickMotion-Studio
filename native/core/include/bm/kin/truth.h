@@ -35,6 +35,7 @@ struct TruthScore {
 /// LDU unless the file sets "toleranceLdu"). Judged from the freedoms as they are in the
 /// model's own pose:
 /// - `rotates` / `slides`: some freedom turns the piece about, or moves it along, the axis.
+///   `slides` is also met when the piece stands and what it slides in moves along that axis.
 /// - `gearMesh` / `rackPinion`: the two pieces are meshed, in the stated ratio if one is given.
 /// - `fourBar`: some freedom moves the coupler while turning every arm about the axis.
 /// - `function`: some freedom moves the driver and every piece listed as moving, and none

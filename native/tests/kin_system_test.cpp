@@ -315,3 +315,21 @@ TEST_CASE("a driving ring clicks along its joiner and takes the clutch gear it i
   REQUIRE(in.gearings.size() == sys.gearings.size() + 1);
   REQUIRE(in.gearings.back().mesh.kind == MeshKind::Clutch);
 }
+
+TEST_CASE("a pin joint to a '~' part is kept, not replaced by a flexible attachment", "[graph][flexible][data]") {
+  const char* dir = std::getenv("BM_LDRAW_DIR");
+  const char* shadowDir = std::getenv("BM_SHADOW_DIR");
+  if (!dir || !shadowDir) SKIP("BM_LDRAW_DIR / BM_SHADOW_DIR not set");
+  const ldraw::Library lib(dir);
+  const connect::ShadowLibrary shadow(shadowDir);
+  connect::ConnectorDb db(lib, shadow);
+  // A shock absorber's rod ("~Technic Shock Absorber 6.5L Piston Rod") with the pin of a half
+  // beam through its eye, as in set 42000. The rod counts as a stretch of a flexible element,
+  // so its end is also attached to the nearest part: the same half beam.
+  const std::string text = piece("33299.dat", -60, -100, 620, "0 0 1 0 -1 0 1 0 0") + piece("4254.dat", -20, -120, 620, "-1 0 0 0 0 1 0 1 0");
+  const Model model = load(text, lib);
+  const connect::Graph graph = connect::buildGraph(model, db);
+  REQUIRE(graph.connections.size() == 1);
+  REQUIRE(graph.connections[0].joint.kind == JointKind::Cylindrical);
+  REQUIRE(graph.connections[0].friction);
+}
