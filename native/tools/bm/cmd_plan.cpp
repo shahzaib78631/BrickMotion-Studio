@@ -12,6 +12,7 @@
 #include "bm/plan/certify.h"
 #include "bm/plan/plan.h"
 #include "bm/plan/timeline.h"
+#include "bm/plan/truth.h"
 #include "commands.h"
 
 namespace bm::cli {
@@ -23,8 +24,9 @@ int cmdPlan(const Args& args) {
   const std::string outPath = option(args, "--out", "", bad);
   const std::string budget = option(args, "--budget", "0", bad);
   const std::string threads = option(args, "--threads", "0", bad);
+  const std::string truthPath = option(args, "--truth", "", bad);
   if (bad || args.empty() || args[0].rfind("--", 0) == 0) {
-    std::fprintf(stderr, "usage: bm plan <file> [--explain <part>] [--out <plan.json>] [--json] [--budget <seconds>] [--threads N] [--no-certify] [--no-studio]\n");
+    std::fprintf(stderr, "usage: bm plan <file> [--truth <insertion-truth.json>] [--explain <part>] [--out <plan.json>] [--json] [--budget <seconds>] [--threads N] [--no-certify] [--no-studio]\n");
     return kUsage;
   }
   const std::string ldraw = defaultLDrawDir();
@@ -90,6 +92,19 @@ int cmdPlan(const Args& args) {
       std::printf("  #%zu %s%s at %.0f %.0f %.0f: %s%s%s\n", i, p.part.c_str(), m.unit.pieces.size() > 1 ? (" +" + std::to_string(m.unit.pieces.size() - 1)).c_str() : "", p.world.t.x, p.world.t.y, p.world.t.z, why.c_str(),
                   m.blocker != UINT32_MAX ? ", in the way: " : "", m.blocker != UINT32_MAX ? model.pieces()[m.blocker].part.c_str() : "");
       shown++;
+    }
+    if (!truthPath.empty()) {
+      std::ifstream in(truthPath);
+      const nlohmann::json doc = nlohmann::json::parse(in, nullptr, false);
+      nlohmann::json mine = nlohmann::json::array();
+      const std::string file = fs::path(std::string(args[0])).filename().string();
+      if (doc.is_object() && doc.contains("cases") && doc["cases"].is_array())
+        for (const nlohmann::json& c : doc["cases"])
+          if (c.is_object() && c.contains("file") && c["file"].is_string() && fs::path(c["file"].get<std::string>()).filename().string() == file) mine.push_back(c);
+      const plan::InsertionScore score = plan::scoreInsertion(model, cache, plan, mine);
+      std::printf("insertion     %d of %d hand-checked cases (%d unresolved)\n", score.hit, score.hit + score.missing, score.unresolved);
+      for (const plan::InsertionLine& line : score.lines)
+        std::printf("  %-10s %s%s%s\n", line.result == plan::InsertionLine::Result::Hit ? "hit" : line.result == plan::InsertionLine::Result::Missing ? "missing" : "unresolved", line.id.c_str(), line.detail.empty() ? "" : "  -- ", line.detail.c_str());
     }
     if (!explain.empty()) {
       std::string part = ldraw::normalizeName(explain);

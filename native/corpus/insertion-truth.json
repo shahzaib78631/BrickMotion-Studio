@@ -1,0 +1,121 @@
+{
+ "format": "brickmotion-insertion-truth",
+ "version": 1,
+ "about": "Hand-checked cases of how a piece goes into its seat. A piece is named by its part and the centre of its box in the model (within 12 LDU). 'axis' is the way it travels into the seat; 'either' allows the opposite. The owner grows this list.",
+ "cases": [
+  {
+   "id": "pin-into-beams",
+   "file": "native/tests/fixtures/plan/pin.ldr",
+   "piece": {
+    "part": "2780",
+    "at": [
+     0,
+     10,
+     -40
+    ]
+   },
+   "axis": [
+    0,
+    1,
+    0
+   ],
+   "either": true,
+   "why": "A pin slides along its hole: the holes of both beams run along y."
+  },
+  {
+   "id": "brick-onto-studs",
+   "file": "native/tests/fixtures/plan/stack.ldr",
+   "piece": {
+    "part": "3003",
+    "at": [
+     0,
+     -38,
+     0
+    ]
+   },
+   "axis": [
+    0,
+    1,
+    0
+   ],
+   "either": false,
+   "why": "A brick presses down onto the studs under it, along the stud axis."
+  },
+  {
+   "id": "brick-onto-brick",
+   "file": "native/tests/fixtures/plan/stack.ldr",
+   "piece": {
+    "part": "3001",
+    "at": [
+     0,
+     -14,
+     0
+    ]
+   },
+   "axis": [
+    0,
+    1,
+    0
+   ],
+   "either": false,
+   "why": "As above, for the middle brick."
+  },
+  {
+   "id": "plate-onto-side-stud",
+   "file": "native/tests/fixtures/plan/snot.ldr",
+   "piece": {
+    "part": "3024",
+    "at": [
+     0,
+     10,
+     -16
+    ]
+   },
+   "axis": [
+    0,
+    0,
+    1
+   ],
+   "either": false,
+   "why": "A sideways stud takes its piece along the stud's own axis, here +z into the brick's side."
+  },
+  {
+   "id": "axle-through-beam",
+   "file": "native/tests/fixtures/plan/axle.ldr",
+   "piece": {
+    "part": "3705",
+    "at": [
+     0,
+     0,
+     0
+    ]
+   },
+   "axis": [
+    0,
+    1,
+    0
+   ],
+   "either": true,
+   "why": "An axle slides along the hole it goes through."
+  },
+  {
+   "id": "bush-onto-axle",
+   "file": "native/tests/fixtures/plan/axle.ldr",
+   "piece": {
+    "part": "4265c",
+    "at": [
+     0,
+     -15,
+     0
+    ]
+   },
+   "axis": [
+    0,
+    1,
+    0
+   ],
+   "either": true,
+   "why": "A bush slides onto its axle along the axle."
+  }
+ ]
+}

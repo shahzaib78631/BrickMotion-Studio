@@ -346,3 +346,48 @@ TEST_CASE("pinned order and the author's own flight are kept", "[plan][constrain
   REQUIRE(bad.path.size() == 3);
   REQUIRE(bad.flag == Flag::AuthoredCrossing);
 }
+
+#include "bm/connect/studio.h"
+#include "bm/plan/truth.h"
+
+TEST_CASE("hand-checked insertions: pins, axles, bushes, studs from above and from the side", "[plan][truth][data]") {
+  const char* dir = std::getenv("BM_LDRAW_DIR");
+  const char* shadowDir = std::getenv("BM_SHADOW_DIR");
+  if (!dir || !shadowDir) SKIP("BM_LDRAW_DIR / BM_SHADOW_DIR not set");
+  const ldraw::Library lib(dir);
+  const connect::ShadowLibrary shadow(shadowDir);
+  connect::ConnectorDb db(lib, shadow);
+  ldraw::PartCache parts(lib, ldraw::PartCache::defaultDirectory());
+  collide::ShapeCache shapes;
+  const fs::path repo = fs::path(dir).parent_path().parent_path();
+  std::ifstream in(repo / "native" / "corpus" / "insertion-truth.json");
+  const nlohmann::json doc = nlohmann::json::parse(in, nullptr, false);
+  REQUIRE(doc.is_object());
+  int cases = 0;
+  for (const char* name : {"pin.ldr", "stack.ldr", "snot.ldr", "axle.ldr"}) {
+    const Model model = io::load(fs::path(BM_FIXTURES) / "plan" / name, lib);
+    const connect::Graph graph = connect::buildGraph(model, db);
+    const Plan p = bm::plan::plan(model, graph, parts, shapes);
+    const Certificate cert = certify(model, graph, parts, shapes, p);
+    INFO(name);
+    REQUIRE(cert.ok());
+    nlohmann::json mine = nlohmann::json::array();
+    for (const nlohmann::json& c : doc["cases"])
+      if (fs::path(c["file"].get<std::string>()).filename().string() == name) mine.push_back(c);
+    const InsertionScore score = scoreInsertion(model, parts, p, mine);
+    REQUIRE(score.missing == 0);
+    REQUIRE(score.unresolved == 0);
+    REQUIRE(score.hit == static_cast<int>(mine.size()));
+    cases += score.hit;
+  }
+  REQUIRE(cases == 6);
+  // A wrong axis is a miss that says by how much; a piece that is not there is unresolved.
+  const Model model = io::load(fs::path(BM_FIXTURES) / "plan" / "stack.ldr", lib);
+  const connect::Graph graph = connect::buildGraph(model, db);
+  const Plan p = bm::plan::plan(model, graph, parts, shapes);
+  const auto wrong = nlohmann::json::parse(R"([{"id":"sideways","piece":{"part":"3003","at":[0,-38,0]},"axis":[1,0,0]},
+                                             {"id":"nowhere","piece":{"part":"3003","at":[500,0,0]},"axis":[0,1,0]}, 7])");
+  const InsertionScore score = scoreInsertion(model, parts, p, wrong);
+  REQUIRE((score.missing == 1 && score.unresolved == 2));
+  REQUIRE(score.lines[0].detail.find("90 degrees") != std::string::npos);
+}

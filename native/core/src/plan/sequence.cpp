@@ -71,10 +71,13 @@ struct Sequencer {
 
   /// Takes `set` (joined pieces, or all of a unit's) apart; `out` gets the moves in build order.
   /// `depth` bounds how far units of units go.
-  void takeApart(const std::vector<uint32_t>& set, Plan& out, int depth) {
+  void takeApart(const std::vector<uint32_t>& set, Plan& out, int depth, const World::Present* built = nullptr) {
     const size_t n = ctx.model.pieces().size();
-    World::Present present(n, 0);
+    // What was built before this set stands where it is the whole time, in the way like anything else.
+    World::Present present = built ? *built : World::Present(n, 0);
     Box bounds;
+    for (uint32_t p = 0; p < n; p++)
+      if (present[p]) bounds.merge(ctx.world.box(p));
     Vec3 centre{};
     for (uint32_t p : set) {
       present[p] = 1;
@@ -323,7 +326,11 @@ Plan plan(const Model& model, const connect::Graph& graph, ldraw::PartCache& par
     else order.push_back(std::move(list));
   }
   std::sort(order.begin(), order.end(), [](const auto& a, const auto& b) { return a.size() != b.size() ? a.size() > b.size() : a.front() < b.front(); });
-  for (const std::vector<uint32_t>& set : order) seq.takeApart(set, out, 0);
+  World::Present built(n, 0);
+  for (const std::vector<uint32_t>& set : order) {
+    seq.takeApart(set, out, 0, &built);
+    for (uint32_t p : set) built[p] = 1;
+  }
 
   // A piece joined to nothing in the file cannot be put in "joined to what is built". It is set
   // down after everything else, from above if the way is clear, and says so.
