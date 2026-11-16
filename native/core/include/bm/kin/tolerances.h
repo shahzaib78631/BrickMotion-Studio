@@ -56,9 +56,15 @@ inline constexpr double kDriveStep = 0.05;
 /// The joints count as closed when every equation is within this (radians, or studs).
 inline constexpr double kCloseTol = 1e-10;
 
-/// A joint the file has out of line by up to this (studs: a five-hundredth of an LDU) is
-/// closed as far as it can be when no correction is left that would close it further.
-inline constexpr double kCloseSlack = 1e-3;
+/// When some body goes this many times faster than the driver, the driver is not what moves
+/// the motion and driving it further is given up.
+inline constexpr double kMaxDriveGearing = 1000.0;
+
+/// A joint the file has out of line by up to this (studs: two ten-thousandths of an LDU) is
+/// closed as far as it can be when no correction closes it further. Set from what files
+/// show: 42000's wing linkage stays about 1e-6 out however it is driven. A mechanism at the
+/// end of its travel opens by far more than this and is stopped.
+inline constexpr double kCloseSlack = 1e-5;
 
 /// Newton steps allowed to close the joints after each move. It converges in three or four
 /// when it converges at all.

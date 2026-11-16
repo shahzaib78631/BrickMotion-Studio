@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include "bm/kin/constraints.h"
 #include "bm/kin/drive.h"
 
 using namespace bm;
@@ -148,9 +149,10 @@ TEST_CASE("a linkage driven past what it can do stops at its last good pose", "[
   REQUIRE_FALSE(stuck.converged);
   REQUIRE(std::abs(stuck.reached) > 0.1);
   REQUIRE(std::abs(stuck.reached) < 2 * kPi);
-  // Every joint is still closed in the pose it stopped at.
-  REQUIRE_THAT(length(stuck.body[1].apply({40, 0, 0}) - stuck.body[2].apply({40, 0, 0})), WithinAbs(0, 1e-7));
-  REQUIRE_THAT(length(stuck.body[3].apply({85, 21.794494717703369, 0}) - stuck.body[2].apply({85, 21.794494717703369, 0})), WithinAbs(0, 1e-7));
+  // Every joint is still closed in the pose it stopped at, to within what a step accepts.
+  const double closed = 2 * kCloseSlack * kLengthUnit;
+  REQUIRE_THAT(length(stuck.body[1].apply({40, 0, 0}) - stuck.body[2].apply({40, 0, 0})), WithinAbs(0, closed));
+  REQUIRE_THAT(length(stuck.body[3].apply({85, 21.794494717703369, 0}) - stuck.body[2].apply({85, 21.794494717703369, 0})), WithinAbs(0, closed));
 }
 
 TEST_CASE("nothing to do: no amount, a driver that does not move, a body out of range", "[kin][drive]") {

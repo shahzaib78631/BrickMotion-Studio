@@ -244,6 +244,110 @@ model stands. `bm audit` adds `meshes`, `movingBodies`, `links`, `freedoms`, `me
 | Set | Scored checks passed | Web engine, as `benchmarks/mechanisms/README.md` records it | What is missed here |
 |---|---|---|---|
 | 5590 | 15 of 15 | 17 of 17 | nothing; 5 checks not scored (vehicle, scrub, suggestions) |
+| 42000 | 20 of 20 | phase 3: 16 of 18 | nothing; 3 not scored (vehicle, bump steer) |
+| 8880, axle-fix copy | 15 of 16 | phase 3: 7 of 9; gearbox modes 4 of 4 | steering wheel to the rear rack: a defect of the file, below |
+| 8880, as published | 13 of 16 | phase 3: 7 of 9; gearbox modes 5 of 7 | the same, and 2nd and 4th gear, which the file cannot reach (a gear has no axle) |
+| 8880, axle fix and rear rack one plate higher | 16 of 16 | — | nothing |
+
+The two engines do not score the same set of checks, so the columns are not a like-for-like comparison.
+
+The four 8880 ratios come out exact (2.25, 1.5, 0.75, 0.5), neutral is found at rest, and both rings are
+found to couple both their clutch gears.
+
+**Every check passes that the files allow.** The three that remain on 8880 are defects of the published file:
+
+- **A gear with no axle** (known to the benchmark): the 8T `3647` at (-60, -14, -70). `samples/8880-1-axle-fix.mpd` adds it.
+- **The rear rack does not reach its pinions.** The rack module (`8880 - step19.ldr`) is placed at y = -60 at
+  the front and y = -64 at the rear, under pinions on the same axle height (y = -94). The front 16-tooth
+  pinions mesh (2 LDU from the tooth line). The rear 8-tooth pinions' tips end at y = -82 and the rack's
+  teeth start at y = -78: they do not touch. Placing the rear module one plate higher (line 299 of the
+  axle-fix copy, `1 8 0 -64 430 ...` to `1 8 0 -72 430 ...`) puts the tooth line on the pinions' pitch
+  line exactly, adds no overlap, and the steering wheel then moves both racks. The truth list's position for
+  that rack has to move with it (`[-40, -71, 430]` to `[-40, -79, 430]`), so this copy is not committed;
+  the mesh tolerance was not widened to 8 LDU to hide it.
+
+What closed 42000's four misses, none of them by a rule about a part:
+
+- **Rear wheel to crankshaft.** Constant-velocity joints are measured data (`cv-ball` and `cv-cup` rows in
+  `native/data/extra-connectors.json`): a ball joint that also passes turning, one equation.
+- **Left rear wishbone to its shock.** A shock absorber's rod is a "~" part, so its end was also attached as
+  a flexible element to the nearest part, and that attachment replaced the pin joint between the same two
+  pieces. A real joint now always wins.
+- **Front shock rod.** It was right all along: the rod stands still and the cylinder moves. `slides` is now
+  also met against what the piece slides in.
+- **Rear wing actuator.** The housing swings only as the stroke grows (0.5 LDU after two turns of the knob).
+  Function checks now drive up to eight turns, and a drive step closes when corrections stop helping.
+
+### How it works
+
+- Each part has its **true surface** and an **inner surface**: every face moved inward by the skin (0.5 LDU)
+  along its own normal and trimmed back from each edge by what the turn of the surface there requires
+  (`skin * tan(angle / 2)`). A flat face made of several triangles is trimmed as one face.
+- Two pieces interpenetrate when the inner surface of one crosses the true surface of the other. Pieces that
+  touch, or overlap by less than the skin, do not.
+- Joined pieces may cross inside each mate's **zone** (a stud in its socket, a bar in its clip), and
+  elsewhere need two skins of overlap to count. A mate that holds by stretching (a tyre on a rim) exempts
+  the pair.
+- A model is checked with a sort-and-sweep over piece boxes, then tree against tree. `World::hits` and
+  `World::sweep` answer for one more shape, still or moving (sampled every 0.5 LDU).
+
+### What the corpus shows
+
+| Source | Models | Models with no overlap | Pieces in an overlap |
+|---|---|---|---|
+| BrickNet | 2,000 | 1,953 | 0.27% |
+| OMR | 1,833 | 573 | 4.99% |
+| MOC | 12 | 2 | 7.47% |
+| Reference sets | 6 | 0 | 9.43% |
+
+25,086 overlapping pairs in 872,970 pieces; 402 exact duplicates. 95% of the pairs are between pieces that
+are **not joined**, and the commonest are things the engine does not model yet, not faults in the test:
+
+- **Gears in mesh** (`6589`, `32270`, `32269`, `4143`, `4019`, racks): teeth interleave. Needs gear recognition (phase 4).
+- **Tread links and chains** (`57518` + `57519`/`57520`, `30104k02`): hinged to each other with no connector data.
+- **Ball links** (`6628` + `32293`, tow balls): no ball data for these parts, so they are not joined.
+- **Decoration placed through itself** (`98138`, `6141` round 1x1s): real overlaps in the files.
+- **Window glass in a frame** (`3853` + `3004`/`3005`), minifig accessories over a torso (`3838`).
+
+Reference sets: 5590 has 16 overlapping pairs in 1,258 pieces, 42000 has 32 in 1,377, 8880 has 109 in 1,410,
+nearly all gears, pistons and links.
+
+Whole corpus with loading, joints and collision: 78 s on 10 threads (collision is most of it; median 52 ms
+per model, 95th percentile about 1.5 s).
+
+### What the corpus corrected
+
+- Moving shared corners inward (the first design) tilts a sloped face out through its own edge, which
+  reported a stud resting under a sloped panel as an overlap. The inner surface is now built face by face.
+- Pulling both pieces in equally cannot see two aligned bricks pushed into each other: their faces stay
+  coplanar. One piece's inner surface is tested against the other's true surface.
+- Studio stores a Technic hole as a bare length; a pin's collar needs the 2 LDU countersink at each mouth.
+  This also joined the pins that phase 2 had left loose.
+
+### Not done
+
+- Clearance distance between shapes; a continuous sweep (it is sampled); a piece wholly inside another's solid.
+- Speed: no SIMD, and joined pairs are searched linearly for their zones.
+- The reference sets will not be clean until treads and chains are joints (gear meshes and ball links were done in phase 4).
+
+## Phase 4 results (2026-11-16): kinematics, mechanisms, stability
+
+```bash
+native/build/tools/bm/bm mechanisms <file> [--truth <expected.json>] [--links] [--all] [--no-travel]
+native/build/tools/bm/bm stability <file>
+native/build/tools/bm/bm joints <file> --meshes
+```
+
+`bm mechanisms` lists what can move: bodies, links, gear trains with their ratios, shifts, and (with
+`--truth`) the score against a hand-checked list in `benchmarks/mechanisms/`. `bm stability` says whether a
+model stands. `bm audit` adds `meshes`, `movingBodies`, `links`, `freedoms`, `mechanisms`, `solved`, `kinMs`,
+`stands`, `unsupportedPieces`, `tippingGroups` and `massGrams`.
+
+### Mechanism truth
+
+| Set | Scored checks passed | Web engine, as `benchmarks/mechanisms/README.md` records it | What is missed here |
+|---|---|---|---|
+| 5590 | 15 of 15 | 17 of 17 | nothing; 5 checks not scored (vehicle, scrub, suggestions) |
 | 8880, axle-fix copy | 15 of 16 | phase 3: 7 of 9; gearbox modes 4 of 4 | steering wheel to the rear rack |
 | 8880, as published | 13 of 16 | phase 3: 7 of 9; gearbox modes 5 of 7 | the same, and 2nd and 4th gear, which the file cannot reach (a gear has no axle) |
 | 42000 | 16 of 20 | phase 3: 16 of 18 | four checks, below; 3 not scored |
@@ -330,7 +434,7 @@ no failures. Kinematics: median 2.5 ms, 95th percentile 186 ms per model.
 
 - **Joint limits** (`range`): how far a freedom goes before pieces collide. Shock strokes, steering lock and
   hinge stops are unknown.
-- **CV and universal joints**, **tread links and chains on sprockets**, hub ball data for 42000's `11949`.
+- **Tread links and chains on sprockets.** (Universal joints need nothing: their two pins are two hinges. CV joints are data.)
 - **Names** for mechanisms, and so a meaningful mechanism count.
 - **Joint strength** in stability (the linear program over stud forces), and pieces that rest on others
   without a joint. One floor per file is assumed.

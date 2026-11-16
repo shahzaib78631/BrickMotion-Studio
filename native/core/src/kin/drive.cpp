@@ -164,7 +164,16 @@ Pose drive(const System& sys, const Mobility& mob, size_t freedomIndex, uint32_t
     const double s = speed(next);
     if (!(s > 1e-6)) break;  // the driver can go no further this way
     for (double& x : next) x /= s;
-    const double step = std::min(turns ? stride : stride * kLengthUnit, total - done);
+    // No body moves further in one step than the driver may: where the driver is the slow
+    // end of a train, the step is cut down to what the fastest body can follow.
+    double fastest = 0;
+    for (size_t i = 0; i < bodies.size(); i++) {
+      const double* v = &next[6 * i];
+      fastest = std::max({fastest, length(Vec3{v[0], v[1], v[2]}), length(Vec3{v[3], v[4], v[5]})});
+    }
+    const double perUnit = turns ? fastest : fastest / kLengthUnit;  // of the fastest body, per unit the driver goes
+    if (perUnit > kMaxDriveGearing) break;  // the driver hardly moves in this motion at all
+    const double step = std::min((turns ? stride : stride * kLengthUnit) / std::max(1.0, perUnit), total - done);
     std::vector<Xform> trial = pose.body;
     apply(trial, next, direction * step);
 

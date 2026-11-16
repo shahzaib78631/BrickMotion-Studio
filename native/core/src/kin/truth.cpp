@@ -28,6 +28,8 @@ constexpr int kDriveStretches = 32;
 constexpr double kScoreStep = 0.2;
 /// A piece has moved when its middle has gone this far (LDU) or it has turned one degree.
 constexpr double kMovedLdu = 0.5, kMovedTurn = 0.017453;
+/// A driven piece that has gone less than this (LDU, and radians of turn) has not been moved at all.
+constexpr double kUntouchedLdu = 1e-6, kUntouchedTurn = 1e-9;
 
 bool readVec(const json& j, Vec3& out) {
   if (!j.is_array() || j.size() != 3 || !j[0].is_number() || !j[1].is_number() || !j[2].is_number()) return false;
@@ -188,11 +190,18 @@ struct Scorer {
           if (!moves(f, driver)) continue;
           driven = true;
           size_t moved = static_cast<size_t>(std::count_if(movers.begin(), movers.end(), [&](int p) { return moves(f, p); }));
+          const size_t atRest = moved;
           bool stays = std::none_of(stayers.begin(), stayers.end(), [&](int p) { return moves(f, p); });
           if (moved == movers.size() && stays) return true;
           if (moved > 0 && moved < movers.size() && stays) {
             const bool turning = length(twistOf(f, body(driver)).angular) > 1e-6;
             Pose pose;
+            // A listed piece the drive has not moved at all is not part of this motion, however
+            // far it is driven.
+            auto untouched = [&](int p) {
+              const Xform& x = pose.body[body(p)];
+              return length(x.apply(at(p)) - at(p)) < kUntouchedLdu && length(x.r * Vec3{1, 0, 0} - Vec3{1, 0, 0}) + length(x.r * Vec3{0, 1, 0} - Vec3{0, 1, 0}) < kUntouchedTurn;
+            };
             auto movedIn = [&](int p) {
               const Xform& x = pose.body[body(p)];
               if (length(x.apply(at(p)) - at(p)) >= kMovedLdu) return true;
@@ -207,9 +216,10 @@ struct Scorer {
               moved = static_cast<size_t>(std::count_if(movers.begin(), movers.end(), movedIn));
               stays = std::none_of(stayers.begin(), stayers.end(), movedIn);
               if (moved == movers.size() && stays) return true;
-              if (!pose.converged) break;
+              if (!pose.converged || std::any_of(movers.begin(), movers.end(), untouched)) break;
             }
           }
+          moved = std::max(moved, atRest);  // what it moves from rest still counts in the report
           if (moved >= best) best = moved, disturbed = !stays;
         }
         return false;
