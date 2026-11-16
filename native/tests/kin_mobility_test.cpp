@@ -21,7 +21,7 @@ struct Rig {
     sys.pieces.resize(bodies);
     for (uint32_t b = 0; b < bodies; b++) sys.pieces[b] = {b}, sys.bodyOf.push_back(b);
   }
-  void link(uint32_t a, uint32_t b, JointKind kind, Vec3 point, Vec3 axis) { sys.links.push_back({std::min(a, b), std::max(a, b), kind, point, axis, a, b}); }
+  void link(uint32_t a, uint32_t b, JointKind kind, Vec3 point, Vec3 axis) { sys.links.push_back({std::min(a, b), std::max(a, b), kind, point, axis, a, b, {}}); }
   /// Meshes the gears on bodies a and b; each `Toothed` is in model space.
   void mesh(uint32_t a, const Toothed& ta, uint32_t b, const Toothed& tb) {
     const auto found = findMeshes({{a, ta, false}, {b, tb, false}});
@@ -274,4 +274,43 @@ TEST_CASE("a screw moves its piston by the lead for each turn of the input", "[k
   const Twist input = twistOf(*screw, 2), piston = twistOf(*screw, 3);
   REQUIRE_THAT(piston.angular.z, WithinAbs(0, 1e-9));  // the piston does not turn
   REQUIRE_THAT(velocityAt(piston, {0, 0, 80}).z / input.angular.z, WithinAbs(3.0 / (2 * 3.14159265358979323846), 1e-9));
+}
+
+TEST_CASE("through a differential the ratio is that of the car on a straight road", "[kin][mobility][ratio]") {
+  // As the differential above, with the side gears' shafts running in the carrier.
+  Rig r(5);
+  r.link(0, 1, JointKind::Revolute, {0, 0, 0}, kX);
+  r.link(1, 2, JointKind::Revolute, {-15, 0, 0}, kX);
+  r.link(1, 3, JointKind::Revolute, {15, 0, 0}, kX);
+  r.link(1, 4, JointKind::Revolute, {0, 0, 15}, kZ);
+  r.mesh(2, bevel(12, {-15, 0, 0}, kX, {1, 0, 0}), 4, bevel(12, {0, 0, 15}, kZ, {0, 0, -1}));
+  r.mesh(3, bevel(12, {15, 0, 0}, kX, {-1, 0, 0}), 4, bevel(12, {0, 0, 15}, kZ, {0, 0, -1}));
+  const Mobility m = mobility(r.sys);
+  REQUIRE(m.freedoms.size() == 2);
+  // One side gear against the carrier: 1 with the other side turning alike, not the 1/2 or 2
+  // of a wheel held still.
+  const std::vector<Ratio> through = throughRatios(r.sys, m, 2, 1);
+  REQUIRE(through.size() == 1);
+  REQUIRE_THAT(through[0].value, WithinAbs(1, 1e-9));
+  // Bodies nothing joins have no ratio.
+  REQUIRE(throughRatios(r.sys, m, 0, 1).empty());
+}
+
+TEST_CASE("a clutch makes two bodies on one line turn together", "[kin][mobility][shift]") {
+  // Shaft 1 turns in the ground; ring 2 slides on it; gear 3 runs loose on the same line.
+  Rig r(4);
+  r.link(0, 1, JointKind::Revolute, {0, 0, 0}, kZ);
+  r.link(1, 2, JointKind::Prismatic, {0, 0, 20}, kZ);
+  r.link(0, 3, JointKind::Revolute, {0, 0, 40}, kZ);
+  const Mobility loose = mobility(r.sys);
+  for (const Freedom& f : loose.freedoms) REQUIRE_FALSE((twistOf(f, 1).angular.z != 0 && twistOf(f, 3).angular.z != 0));
+  GearMesh m;
+  m.kind = MeshKind::Clutch;
+  m.axisA = m.axisB = m.tangent = kZ;
+  r.sys.gearings.push_back({2, 3, m, UINT32_MAX});
+  const Mobility engaged = mobility(r.sys);
+  REQUIRE(engaged.solved);
+  const std::vector<Ratio> ratios = throughRatios(r.sys, engaged, 1, 3);
+  REQUIRE(ratios.size() == 1);
+  REQUIRE((ratios[0].exact && ratios[0].num == 1 && ratios[0].den == 1));
 }

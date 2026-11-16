@@ -218,6 +218,9 @@ Graph buildGraph(const Model& model, ConnectorDb& db, const kin::GearDb* gears) 
     const uint32_t lo = std::min(a.piece, b.piece), hi = std::max(a.piece, b.piece);
     Pair& pair = pairs[(static_cast<uint64_t>(lo) << 32) | hi];
     pair.freedoms.push_back(m->freedom);
+    // Seats are kept as moves of the higher-numbered piece.
+    if ((m->freedom.seatsMoveFirst ? a.piece : b.piece) != hi)
+      for (double& seat : pair.freedoms.back().seats) seat = -seat;
     pair.zones.push_back(zoneOf(a.connector, b.connector));
     pair.grip += m->grip;
   }
@@ -231,6 +234,10 @@ Graph buildGraph(const Model& model, ConnectorDb& db, const kin::GearDb* gears) 
     c.b = static_cast<uint32_t>(key & 0xFFFFFFFFu);
     c.joint = combine(pair.freedoms);
     c.friction = std::any_of(pair.freedoms.begin(), pair.freedoms.end(), [](const Freedom& f) { return f.friction; });
+    if (pair.freedoms.size() == 1 && (c.joint.kind == JointKind::Prismatic || c.joint.kind == JointKind::Cylindrical)) {
+      const double way = dot(pair.freedoms[0].axis, c.joint.axis) < 0 ? -1 : 1;
+      for (double seat : pair.freedoms[0].seats) c.seats.push_back(seat * way);
+    }
     c.mates = static_cast<uint16_t>(std::min<size_t>(pair.freedoms.size(), 65535));
     c.grip = pair.grip;
     c.firstZone = static_cast<uint32_t>(g.zones.size());

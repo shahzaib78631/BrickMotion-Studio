@@ -5,6 +5,7 @@
 #include <nlohmann/json.hpp>
 #include "bm/connect/graph.h"
 #include "bm/kin/mobility.h"
+#include "bm/kin/shift.h"
 #include "bm/kin/system.h"
 #include "bm/ldraw/part_cache.h"
 #include "bm/model.h"
@@ -37,10 +38,13 @@ struct TruthScore {
 /// - `gearMesh` / `rackPinion`: the two pieces are meshed, in the stated ratio if one is given.
 /// - `fourBar`: some freedom moves the coupler while turning every arm about the axis.
 /// - `function`: some freedom moves the driver and every piece listed as moving, and none
-///   listed as staying.
+///   listed as staying; if not as the model stands, then with one of `shifts` made.
+/// - `shifts`: the ring, slid to its seats, turns with each of the listed gears.
+/// - `shiftMode`: with one of `shifts` made, the input turns `ratio` times for each turn of
+///   the output; a null ratio means that as the model stands nothing turns both.
 /// Other check types are reported as not scored. Never throws on a malformed file: a check
 /// that cannot be read is unresolved.
-TruthScore score(const Model& model, const connect::Graph& graph, const System& sys, const Mobility& mob, ldraw::PartCache& parts, const nlohmann::json& expected);
+TruthScore score(const Model& model, const connect::Graph& graph, const System& sys, const Mobility& mob, ldraw::PartCache& parts, const nlohmann::json& expected, const std::vector<Shift>* shifts = nullptr);
 
 const char* name(TruthResult result);
 

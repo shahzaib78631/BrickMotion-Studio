@@ -54,4 +54,8 @@ inline constexpr double kSegmentReach = 14.0;
 /// Spatial hash cell for finding candidate pairs. Larger than any connector radius.
 inline constexpr double kHashCell = 16.0;
 
+/// Step, in LDU, at which offsets along a hole are tried when looking for the places a
+/// lipped fit clicks home. Detents in LDraw profiles are whole LDU apart.
+inline constexpr double kSeatStep = 0.25;
+
 }  // namespace bm::connect

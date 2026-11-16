@@ -9,6 +9,7 @@
 #include <map>
 #include "bm/kin/mobility.h"
 #include "bm/kin/system.h"
+#include "bm/kin/shift.h"
 #include "bm/kin/truth.h"
 #include <fstream>
 #include "commands.h"
@@ -77,6 +78,16 @@ int cmdMechanisms(const Args& args) {
       if (sys.size[body] > 1) text += "+" + std::to_string(sys.size[body] - 1);
       return text;
     };
+    const auto shiftStart = std::chrono::steady_clock::now();
+    const std::vector<kin::Shift> shifts = kin::findShifts(model, graph, sys, cache, shapes);
+    if (!shifts.empty()) {
+      std::printf("shifts        %zu in %.0f ms\n", shifts.size(), std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - shiftStart).count());
+      for (const kin::Shift& sh : shifts) {
+        std::printf("  %s moved %.0f %.0f %.0f turns with", describe(sh.body).c_str(), sh.move.x, sh.move.y, sh.move.z);
+        for (uint32_t b : sh.turnsWith) std::printf(" %s", describe(b).c_str());
+        std::printf("%s\n", sh.turnsWith.empty() ? " nothing" : "");
+      }
+    }
     if (!truthPath.empty()) {
       std::ifstream in(truthPath);
       const nlohmann::json expected = nlohmann::json::parse(in, nullptr, false);
@@ -84,7 +95,7 @@ int cmdMechanisms(const Args& args) {
         std::fprintf(stderr, "bm: cannot read %s\n", truthPath.c_str());
         return kFailure;
       }
-      const kin::TruthScore score = kin::score(model, graph, sys, mob, cache, expected);
+      const kin::TruthScore score = kin::score(model, graph, sys, mob, cache, expected, &shifts);
       std::printf("truth         %d of %d scored checks (%d not scored, %d unresolved)\n", score.hit, score.scored(), score.notScored, score.unresolved);
       for (const kin::TruthLine& line : score.lines)
         std::printf("  %-10s %-11s %s%s%s\n", kin::name(line.result), line.type.c_str(), line.label.c_str(), line.detail.empty() ? "" : "  -- ", line.detail.c_str());

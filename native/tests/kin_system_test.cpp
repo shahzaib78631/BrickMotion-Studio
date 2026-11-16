@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include "bm/connect/studio.h"
 #include "bm/io.h"
+#include "bm/kin/shift.h"
 #include "bm/kin/system.h"
 
 using namespace bm;
@@ -279,4 +280,36 @@ TEST_CASE("what a sliding piece is linked to does not stop it; what it merely to
   };
   REQUIRE(slideKind(true) == JointKind::Cylindrical);
   REQUIRE(slideKind(false) == JointKind::Revolute);
+}
+
+TEST_CASE("a driving ring clicks along its joiner and takes the clutch gear it is pushed into", "[kin][system][shift][data]") {
+  const char* dir = std::getenv("BM_LDRAW_DIR");
+  const char* shadowDir = std::getenv("BM_SHADOW_DIR");
+  if (!dir || !shadowDir) SKIP("BM_LDRAW_DIR / BM_SHADOW_DIR not set");
+  const ldraw::Library lib(dir);
+  const connect::ShadowLibrary shadow(shadowDir);
+  connect::ConnectorDb db(lib, shadow);
+  ldraw::PartCache parts(lib, ldraw::PartCache::defaultDirectory());
+  collide::ShapeCache shapes;
+  // The selector of set 42000: joiner and ring between two clutch gears, on two axles along x.
+  const char *alongX = "0 0 1 0 1 0 -1 0 0", *alongXBack = "0 0 -1 0 1 0 1 0 0";
+  const std::string text = piece("3737.dat", 0, 0, 0, "-1 0 0 0 1 0 0 0 -1") + piece("32073.dat", -150, 0, 0) + piece("6538b.dat", -100, 0, 0, alongX) + piece("6539.dat", -100.25, 0, 0, alongX) +
+                           piece("6542b.dat", -70, 0, 0, alongXBack) + piece("6542b.dat", -130, 0, 0, alongX);
+  const Model model = load(text, lib);
+  const connect::Graph graph = connect::buildGraph(model, db);
+  const System sys = buildSystem(model, graph, &parts, &shapes);
+  const uint32_t ring = sys.bodyOf[3], nearGear = sys.bodyOf[4], farGear = sys.bodyOf[5];
+  REQUIRE(ring != sys.bodyOf[2]);  // the ring is not held on the joiner
+  REQUIRE((nearGear != farGear && nearGear != sys.bodyOf[2] && farGear != sys.bodyOf[2]));
+  const std::vector<Shift> shifts = findShifts(model, graph, sys, parts, shapes);
+  REQUIRE(shifts.size() == 2);
+  for (const Shift& s : shifts) {
+    REQUIRE(s.body == ring);
+    REQUIRE_THAT(std::abs(s.move.x), WithinAbs(10, 0.3));
+    REQUIRE(s.turnsWith == std::vector<uint32_t>{s.move.x > 0 ? nearGear : farGear});
+  }
+  // With the ring pushed in, the gear is coupled to it.
+  const System in = shifted(sys, {shifts[0]});
+  REQUIRE(in.gearings.size() == sys.gearings.size() + 1);
+  REQUIRE(in.gearings.back().mesh.kind == MeshKind::Clutch);
 }

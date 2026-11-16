@@ -55,6 +55,39 @@ Fit fit(const ProfileSection& m, const ProfileSection& f, bool& keyed) {
   return Fit::Grips;
 }
 
+/// Where else along the hole the male sits without bending the hole's lips: the middles of
+/// the stretches of offsets (male moved along the female's axis) at which no rigid male
+/// section wider than a lip lies under that lip. A stretch counts only if the lips must bend
+/// to enter and to leave it, so sliding right out of the hole is not a seat. Empty unless it
+/// is seated where it is.
+std::vector<double> seats(const Connector& m, const Connector& f, double t0, double sign) {
+  std::vector<double> out;
+  if (std::none_of(f.profile.begin(), f.profile.end(), [](const ProfileSection& s) { return s.shape == 'L'; })) return out;
+  auto seated = [&](double offset) {
+    for (const ProfileSection& ms : m.profile) {
+      if (ms.shape == 'L') continue;
+      const double a = t0 + offset + sign * ms.start, b = t0 + offset + sign * (ms.start + ms.length);
+      for (const ProfileSection& fs : f.profile)
+        if (fs.shape == 'L' && ms.radius > fs.radius + kRadiusSlack && overlap(std::min(a, b), std::max(a, b), fs.start, fs.start + fs.length) > kMinInterference) return false;
+    }
+    return true;
+  };
+  if (!seated(0)) return out;
+  const int steps = static_cast<int>(std::ceil(f.length / kSeatStep));
+  int runStart = 0;
+  bool inRun = false;
+  for (int i = -steps; i <= steps + 1; i++) {
+    const bool here = i <= steps && seated(i * kSeatStep);
+    if (here && !inRun) runStart = i, inRun = true;
+    if (!here && inRun) {
+      inRun = false;
+      const bool bounded = runStart > -steps && i <= steps, rest = runStart <= 0 && 0 < i;
+      if (bounded && !rest) out.push_back((runStart + i - 1) * kSeatStep / 2);
+    }
+  }
+  return out;
+}
+
 std::optional<Mate> cylinders(const Connector& m, const Connector& f, std::string* why = nullptr) {
   auto no = [&](std::string reason) -> std::optional<Mate> {
     if (why) *why = std::move(reason);
@@ -106,6 +139,10 @@ std::optional<Mate> cylinders(const Connector& m, const Connector& f, std::strin
   out.freedom.slides = m.slide || f.slide;
   out.freedom.friction = keyed || lip;
   out.freedom.axis = f.axis;
+  if (out.freedom.slides) {
+    out.freedom.seats = seats(m, f, t0, sign);
+    if (!out.freedom.seats.empty()) out.freedom.friction = false;
+  }
   out.freedom.point = f.start + f.axis * ((gripLo + gripHi) / 2);
   return out;
 }
@@ -124,7 +161,7 @@ std::optional<Mate> barInClip(const Connector& bar, const Connector& clip) {
   if (grip < kMinGrip) return std::nullopt;
   Mate out;
   out.grip = grip;
-  out.freedom = {true, bar.slide || clip.slide, false, clip.start + clip.axis * (clipLength / 2), clip.axis, true};
+  out.freedom = {true, bar.slide || clip.slide, false, clip.start + clip.axis * (clipLength / 2), clip.axis, true, {}, false};
   return out;
 }
 
@@ -170,7 +207,7 @@ std::optional<Mate> fingers(const Connector& a, const Connector& b) {
   if (meshed < kMinGrip) return std::nullopt;
   Mate out;
   out.grip = meshed;
-  out.freedom = {true, false, false, a.start + a.axis * (a.length / 2), a.axis};
+  out.freedom = {true, false, false, a.start + a.axis * (a.length / 2), a.axis, false, {}, false};
   return out;
 }
 
@@ -189,7 +226,7 @@ std::optional<Mate> generics(const Connector& a, const Connector& b) {
   if (a.placement == "hinge" || b.placement == "hinge") {
     // Two hinge halves: they share the hinge line and turn about it.
     if (!parallel(a.axis, b.axis)) return std::nullopt;
-    out.freedom = {true, false, false, a.start, a.axis};
+    out.freedom = {true, false, false, a.start, a.axis, false, {}, false};
     return out;
   }
   out.freedom.ball = isBall(a) || isBall(b);
@@ -205,7 +242,9 @@ Vec3 anyUnit(Vec3 v) { return length(v) > 0 ? normalized(v) : Vec3{0, -1, 0}; }
 std::optional<Mate> mate(const Connector& a, const Connector& b) {
   if (a.kind == SnapKind::Cyl && b.kind == SnapKind::Cyl) {
     if (a.gender == b.gender) return std::nullopt;
-    return a.gender == Gender::Male ? cylinders(a, b) : cylinders(b, a);
+    std::optional<Mate> m = a.gender == Gender::Male ? cylinders(a, b) : cylinders(b, a);
+    if (m) m->freedom.seatsMoveFirst = a.gender == Gender::Male;
+    return m;
   }
   if (a.kind == SnapKind::Cyl && b.kind == SnapKind::Clip) return a.gender == Gender::Male ? barInClip(a, b) : std::nullopt;
   if (a.kind == SnapKind::Clip && b.kind == SnapKind::Cyl) return b.gender == Gender::Male ? barInClip(b, a) : std::nullopt;

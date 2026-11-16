@@ -60,4 +60,8 @@ inline constexpr double kCloseTol = 1e-10;
 /// when it converges at all.
 inline constexpr int kMaxNewton = 20;
 
+/// The step, in radians, at which a slid body is turned round its line to see what has it by
+/// the teeth: one degree, finer than the play of a dog clutch.
+inline constexpr double kClutchStep = 0.017453292519943295;
+
 }  // namespace bm::kin

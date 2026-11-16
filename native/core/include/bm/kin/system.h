@@ -16,6 +16,8 @@ struct Link {
   connect::JointKind kind = connect::JointKind::Revolute;  ///< Revolute, Prismatic, Cylindrical or Spherical
   Vec3 point, axis;       ///< the line it turns about or slides along; a ball's centre
   uint32_t pieceA = 0, pieceB = 0;  ///< a pair of pieces it joins, pieceA in body a
+  /// Other places along `axis` where it clicks home: body b moved by this against a.
+  std::vector<Vec3> seats = {};
 };
 
 /// A gear mesh between two bodies.

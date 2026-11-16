@@ -74,6 +74,7 @@ std::vector<uint32_t> carriers(const System& sys) {
       out[i] = g.housing;
       continue;
     }
+    if (g.mesh.kind == MeshKind::Clutch) continue;
     const std::vector<uint32_t> ofA = holders(g.a, g.mesh.pointA, g.mesh.axisA);
     if (g.mesh.kind == MeshKind::Rack) {
       // A rack needs only the gear's holder; prefer one the rack is linked to.
@@ -203,6 +204,13 @@ Equations equations(const System& sys, const std::vector<int>& column, size_t co
       double* still = b.row();
       b.turning(still, g.b, axis, 1);
       b.turning(still, h, axis, -1);
+      continue;
+    }
+    if (m.kind == MeshKind::Clutch) {
+      const Vec3 axis = normalized(pose(g.a).r * m.axisA);
+      double* r = b.row();
+      b.turning(r, g.a, axis, 1);
+      b.turning(r, g.b, axis, -1);
       continue;
     }
     double* r = b.row();

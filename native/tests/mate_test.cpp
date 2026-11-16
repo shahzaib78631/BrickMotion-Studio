@@ -292,3 +292,26 @@ TEST_CASE("a measured ball is in its socket while its centre is inside the cup",
   socket.start = {3, 0, 0};
   REQUIRE_FALSE(mate(ball, socket));
 }
+
+TEST_CASE("a lipped hole on a ridged shaft has seats, and is not a friction fit", "[mate][seats]") {
+  // A driving ring on its joiner, as the shadow library has them: the joiner's ridges (10)
+  // pass the ring's lips (9) to click 10 either way.
+  const Vec3 x{1, 0, 0};
+  const Connector joiner = cyl(Gender::Male, {-20, 0, 0}, x, {{'A', 9, 0, 9}, {'A', 10, 0, 2}, {'A', 9, 0, 8}, {'A', 10, 0, 2}, {'A', 9, 0, 8}, {'A', 10, 0, 2}, {'A', 9, 0, 9}}, true, true, true);
+  const Connector ring = cyl(Gender::Female, {-20, 0, 0}, x, {{'A', 10, 0, 11}, {'L', 9, 0, 8}, {'A', 10, 0, 2}, {'L', 9, 0, 8}, {'A', 10, 0, 11}}, true, true, false);
+  const auto m = mate(joiner, ring);
+  REQUIRE(m.has_value());
+  REQUIRE((m->freedom.slides && !m->freedom.rotates && !m->freedom.friction));
+  REQUIRE(m->freedom.seatsMoveFirst);
+  REQUIRE(m->freedom.seats.size() == 2);
+  REQUIRE_THAT(m->freedom.seats[0], WithinAbs(-10, 0.26));
+  REQUIRE_THAT(m->freedom.seats[1], WithinAbs(10, 0.26));
+  REQUIRE_FALSE(mate(ring, joiner)->freedom.seatsMoveFirst);
+  // A pin's own lip in a plain hole has one seat only, and grips.
+  const auto pinned = mate(pin({0, 0, 0}, x), pinHole({0, 0, 0}, x));
+  REQUIRE(pinned.has_value());
+  REQUIRE((pinned->freedom.seats.empty() && pinned->freedom.friction));
+  // An axle in a cross hole with no lips grips as before.
+  const auto keyed = mate(axle({0, 0, 0}, x, 40), axleHole({10, 0, 0}, x, 20));
+  REQUIRE((keyed && keyed->freedom.friction && keyed->freedom.seats.empty()));
+}

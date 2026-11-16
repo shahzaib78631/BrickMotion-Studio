@@ -93,6 +93,8 @@ System buildSystem(const Model& model, const connect::Graph& graph, ldraw::PartC
       if (c.friction) {
         slideState[ci] = 2;
         changed = true;
+      } else if (!c.seats.empty()) {
+        slideState[ci] = 1;  // it clicks from seat to seat: the lips give, so no collision test says anything
       } else if (!travel) {
         slideState[ci] = 1;
       }
@@ -108,7 +110,7 @@ System buildSystem(const Model& model, const connect::Graph& graph, ldraw::PartC
       std::vector<uint8_t> linked(n, 0);
       for (uint32_t ci : live) {
         const Connection& c = graph.connections[ci];
-        if (!slides(c.joint.kind) || slideState[ci] == 2) continue;
+        if (!slides(c.joint.kind) || slideState[ci] == 2 || !c.seats.empty()) continue;
         const uint32_t A = uf.find(c.a), B = uf.find(c.b);
         if (A == B) continue;
         const uint32_t mover = uf.count[A] <= uf.count[B] ? A : B;
@@ -199,6 +201,7 @@ System buildSystem(const Model& model, const connect::Graph& graph, ldraw::PartC
   struct Between {
     std::vector<Freedom> freedoms;
     uint32_t pieceA = 0, pieceB = 0;
+    std::vector<Vec3> seats;
   };
   std::map<std::pair<uint32_t, uint32_t>, Between> pairs;
   for (uint32_t ci : live) {
@@ -215,12 +218,14 @@ System buildSystem(const Model& model, const connect::Graph& graph, ldraw::PartC
       between.pieceA = pa;
       between.pieceB = pb;
     }
+    for (double seat : c.seats) between.seats.push_back(c.joint.axis * (pb == c.b ? seat : -seat));
     between.freedoms.push_back(freedomOf(slideState[ci] == 2 ? withoutSlide(c.joint.kind) : c.joint.kind, c.joint.point, c.joint.axis));
   }
   for (const auto& [key, between] : pairs) {
     const connect::Joint joint = connect::combine(between.freedoms);
     if (joint.kind == JointKind::Fixed) continue;  // cannot happen: such pairs were merged
-    sys.links.push_back({key.first, key.second, joint.kind, joint.point, normalized(joint.axis), between.pieceA, between.pieceB});
+    sys.links.push_back({key.first, key.second, joint.kind, joint.point, normalized(joint.axis), between.pieceA, between.pieceB, {}});
+    if (between.freedoms.size() == 1 && slides(joint.kind)) sys.links.back().seats = between.seats;
   }
 
   // Directions that differ only by the rounding of the file become one direction, so that a

@@ -56,8 +56,9 @@ class GearDb {
 
 /// Parallel: side by side on parallel shafts. Crossed: bevels on shafts that meet at a right
 /// angle. Worm: a worm (a) driving a gear (b). Rack: a gear (a) on a rack (b). Screw: an input
-/// (a) whose turning moves a piston (b) along its own line, both held in one housing.
-enum class MeshKind : uint8_t { Parallel, Crossed, Worm, Rack, Screw };
+/// (a) whose turning moves a piston (b) along its own line, both held in one housing. Clutch:
+/// two bodies on one line that turn together (a driving ring pushed into its gear).
+enum class MeshKind : uint8_t { Parallel, Crossed, Worm, Rack, Screw, Clutch };
 
 /// Two pieces whose teeth are engaged.
 ///

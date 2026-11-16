@@ -220,4 +220,75 @@ std::optional<Ratio> ratio(const Freedom& f, uint32_t bodyA, uint32_t bodyB) {
   return out;
 }
 
+std::vector<Ratio> throughRatios(const System& sys, const Mobility& mob, uint32_t bodyA, uint32_t bodyB) {
+  // The freedoms that turn either body, and those that share a moving body with them.
+  std::vector<size_t> use;
+  std::vector<uint8_t> taken(mob.freedoms.size(), 0), reached(sys.bodies, 0);
+  auto take = [&](size_t i) {
+    taken[i] = 1;
+    use.push_back(i);
+    for (uint32_t b : mob.freedoms[i].bodies)
+      if (b < sys.bodies) reached[b] = 1;
+  };
+  for (size_t i = 0; i < mob.freedoms.size(); i++) {
+    const Freedom& f = mob.freedoms[i];
+    if (f.local) continue;
+    if (length(twistOf(f, bodyA).angular) > kStill || length(twistOf(f, bodyB).angular) > kStill) take(i);
+  }
+  for (bool grew = true; grew;) {
+    grew = false;
+    for (size_t i = 0; i < mob.freedoms.size(); i++) {
+      const Freedom& f = mob.freedoms[i];
+      if (taken[i] || f.local) continue;
+      if (std::any_of(f.bodies.begin(), f.bodies.end(), [&](uint32_t b) { return b < sys.bodies && reached[b]; })) take(i), grew = true;
+    }
+  }
+  std::vector<Ratio> out;
+  auto add = [&](const Freedom& f) {
+    if (length(twistOf(f, bodyB).angular) <= kStill) return;
+    if (const auto r = ratio(f, bodyA, bodyB)) out.push_back(*r);
+  };
+  if (use.empty()) return out;
+
+  // One row for each gear carried by a body that turns: the gear does not turn on its carrier.
+  const std::vector<uint32_t> carrier = carriers(sys);
+  std::vector<double> rows;
+  size_t count = 0;
+  for (size_t gi = 0; gi < sys.gearings.size(); gi++) {
+    const uint32_t c = carrier[gi];
+    const Gearing& g = sys.gearings[gi];
+    if (c == UINT32_MAX || g.mesh.kind == MeshKind::Screw || g.mesh.kind == MeshKind::Rack) continue;
+    if (std::none_of(use.begin(), use.end(), [&](size_t i) { return length(twistOf(mob.freedoms[i], c).angular) > kStill; })) continue;
+    for (int side = 0; side < 2; side++) {
+      const uint32_t gear = side ? g.b : g.a;
+      const Vec3 axis = side ? g.mesh.axisB : g.mesh.axisA;
+      for (size_t i : use) rows.push_back(dot(twistOf(mob.freedoms[i], gear).angular - twistOf(mob.freedoms[i], c).angular, axis));
+      count++;
+    }
+  }
+  if (count > 0) {
+    Matrix m(count, use.size());
+    m.v = rows;
+    const Matrix free = nullSpace(m, kRankTol);
+    for (size_t k = 0; k < free.cols; k++) {
+      std::map<uint32_t, Twist> sum;
+      for (size_t j = 0; j < use.size(); j++) {
+        const Freedom& f = mob.freedoms[use[j]];
+        const double x = free.at(j, k);
+        for (size_t b = 0; b < f.bodies.size(); b++) {
+          Twist& t = sum[f.bodies[b]];
+          t.angular = t.angular + f.twists[b].angular * x;
+          t.linear = t.linear + f.twists[b].linear * x;
+        }
+      }
+      Freedom combined;
+      for (const auto& [body, twist] : sum) combined.bodies.push_back(body), combined.twists.push_back(twist);
+      add(combined);
+    }
+    if (!out.empty()) return out;
+  }
+  for (size_t i : use) add(mob.freedoms[i]);
+  return out;
+}
+
 }  // namespace bm::kin

@@ -1,5 +1,7 @@
 #include "bm/kin/truth.h"
 
+#include <memory>
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -36,6 +38,16 @@ struct Scorer {
   const Mobility& mob;
   std::vector<Vec3> centre;  ///< per piece: the middle of its box in the model
   double tolerance = kNear;
+  const std::vector<Shift>* shifts = nullptr;
+  mutable std::vector<std::unique_ptr<Mobility>> shiftMob;  ///< per shift, once asked for
+
+  /// The freedoms with one shift made and every other left where it is.
+  const Mobility& with(size_t shift) const {
+    if (shiftMob.size() != shifts->size()) shiftMob.resize(shifts->size());
+    if (!shiftMob[shift]) shiftMob[shift] = std::make_unique<Mobility>(mobility(shifted(sys, {(*shifts)[shift]})));
+    return *shiftMob[shift];
+  }
+  size_t shiftCount() const { return shifts ? shifts->size() : 0; }
 
   /// The piece a reference names, or -1.
   int piece(const json& ref) const {
@@ -142,16 +154,68 @@ struct Scorer {
       }
       size_t best = 0;
       bool driven = false, disturbed = false;
-      for (const Freedom& f : mob.freedoms) {
-        if (!moves(f, driver)) continue;
-        driven = true;
-        const size_t moved = static_cast<size_t>(std::count_if(movers.begin(), movers.end(), [&](int p) { return moves(f, p); }));
-        const bool stays = std::none_of(stayers.begin(), stayers.end(), [&](int p) { return moves(f, p); });
-        if (moved == movers.size() && stays) return done(TruthResult::Hit);
-        if (moved >= best) best = moved, disturbed = !stays;
-      }
+      auto works = [&](const Mobility& m) {
+        for (const Freedom& f : m.freedoms) {
+          if (!moves(f, driver)) continue;
+          driven = true;
+          const size_t moved = static_cast<size_t>(std::count_if(movers.begin(), movers.end(), [&](int p) { return moves(f, p); }));
+          const bool stays = std::none_of(stayers.begin(), stayers.end(), [&](int p) { return moves(f, p); });
+          if (moved == movers.size() && stays) return true;
+          if (moved >= best) best = moved, disturbed = !stays;
+        }
+        return false;
+      };
+      if (works(mob)) return done(TruthResult::Hit);
+      // A function behind a selector works once the selector is shifted to it.
+      for (size_t i = 0; i < shiftCount(); i++)
+        if (!(*shifts)[i].turnsWith.empty() && works(with(i))) return done(TruthResult::Hit, "with a selector shifted");
       if (!driven) return done(TruthResult::Missing, "nothing moves the driver");
       return done(TruthResult::Missing, text("the driver's freedom moves %.0f of %.0f listed pieces", static_cast<double>(best), static_cast<double>(movers.size())) + (disturbed ? ", and one that should stay" : ""));
+    }
+    if (type == "shifts") {
+      const int ring = c.contains("ring") ? piece(c["ring"]) : -1;
+      if (ring < 0 || !c.contains("gears") || !c["gears"].is_array()) return done(TruthResult::Unresolved, "ring or gears not found");
+      size_t coupled = 0, listed = 0;
+      for (const json& ref : c["gears"]) {
+        const int gear = piece(ref);
+        if (gear < 0) return done(TruthResult::Unresolved, "gear not found");
+        listed++;
+        for (size_t i = 0; i < shiftCount(); i++) {
+          const Shift& sh = (*shifts)[i];
+          if (sh.body == body(ring) && std::find(sh.turnsWith.begin(), sh.turnsWith.end(), body(gear)) != sh.turnsWith.end()) {
+            coupled++;
+            break;
+          }
+        }
+      }
+      if (coupled == listed) return done(TruthResult::Hit);
+      return done(TruthResult::Missing, text("the ring couples %.0f of %.0f gears", static_cast<double>(coupled), static_cast<double>(listed)));
+    }
+    if (type == "shiftMode") {
+      const int input = c.contains("input") ? piece(c["input"]) : -1, output = c.contains("output") ? piece(c["output"]) : -1;
+      if (input < 0 || output < 0 || !c.contains("ratio")) return done(TruthResult::Unresolved, "input, output or ratio not found");
+      // Turns of the input for each turn of the output, in each freedom that turns both.
+      auto ratios = [&](const System& in, const Mobility& m) {
+        std::vector<double> out;
+        for (const Ratio& r : throughRatios(in, m, body(output), body(input)))
+          if (std::abs(r.value) > 1e-9) out.push_back(std::abs(r.value));
+        return out;
+      };
+      if (c["ratio"].is_null()) {
+        const std::vector<double> rest = ratios(sys, mob);
+        return rest.empty() ? done(TruthResult::Hit) : done(TruthResult::Missing, text("at rest the input turns %.3f times per turn of the output", rest.front()));
+      }
+      if (!c["ratio"].is_number()) return done(TruthResult::Unresolved, "ratio is not a number");
+      const double want = c["ratio"].get<double>();
+      std::string found;
+      for (size_t i = 0; i < shiftCount(); i++) {
+        if ((*shifts)[i].turnsWith.empty()) continue;
+        for (double r : ratios(shifted(sys, {(*shifts)[i]}), with(i))) {
+          if (std::abs(r - want) <= 0.002) return done(TruthResult::Hit);
+          found += text(" %.3f", r);
+        }
+      }
+      return done(TruthResult::Missing, found.empty() ? "no shift joins the input to the output" : "ratios found:" + found);
     }
     return done(TruthResult::NotScored);
   }
@@ -159,10 +223,10 @@ struct Scorer {
 
 }  // namespace
 
-TruthScore score(const Model& model, const connect::Graph& graph, const System& sys, const Mobility& mob, ldraw::PartCache& parts, const json& expected) {
+TruthScore score(const Model& model, const connect::Graph& graph, const System& sys, const Mobility& mob, ldraw::PartCache& parts, const json& expected, const std::vector<Shift>* shifts) {
   TruthScore out;
   if (!expected.is_object() || !expected.contains("mechanisms") || !expected["mechanisms"].is_array() || sys.bodyOf.size() != model.pieces().size()) return out;
-  Scorer scorer{model, graph, sys, mob, {}, kNear};
+  Scorer scorer{model, graph, sys, mob, {}, kNear, shifts, {}};
   if (expected.contains("toleranceLdu") && expected["toleranceLdu"].is_number()) scorer.tolerance = expected["toleranceLdu"].get<double>();
   for (const Piece& p : model.pieces()) {
     const Box box = model.mesh(p.part, parts)->bounds.transformed(p.world);

@@ -53,4 +53,12 @@ struct Ratio {
 };
 std::optional<Ratio> ratio(const Freedom& f, uint32_t bodyA, uint32_t bodyB);
 
+/// Turns of body `b` per turn of body `a` through whatever joins them, one value for each
+/// independent way the two turn together. Where a differential lies between them the answer
+/// depends on what its other output does, so it is taken turning as one piece (the car on a
+/// straight road): every gear carried round by a turning body turns with that body. If that
+/// leaves no motion that turns both (a planetary reduction, whose ring is held), the freedoms
+/// are used as they are.
+std::vector<Ratio> throughRatios(const System& sys, const Mobility& mob, uint32_t bodyA, uint32_t bodyB);
+
 }  // namespace bm::kin

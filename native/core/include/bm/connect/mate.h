@@ -16,6 +16,11 @@ struct Freedom {
   /// The fit grips: a keyed axle, a snap lip, a clip. Such a mate can be slid by hand but does
   /// not slide by itself, which matters to what moves in a mechanism.
   bool friction = false;
+  /// Other places along `axis` where the mate clicks home (a driving ring on its toothed
+  /// joiner has three): how far the male connector's piece is moved to get there. Such a
+  /// mate is made to be slid from one to the next, so it is not a friction fit.
+  std::vector<double> seats = {};
+  bool seatsMoveFirst = false;  ///< the male is the first connector given to mate()
 };
 
 struct Mate {

@@ -23,6 +23,8 @@ struct Connection {
   Joint joint;
   uint16_t mates = 0;  ///< connector pairs it is made of
   bool friction = false;  ///< one of its mates grips (see Freedom::friction)
+  /// Other places it clicks home: piece b moved by this much along joint.axis (see Freedom::seats).
+  std::vector<double> seats = {};
   double grip = 0;     ///< total engaged length, LDU
   uint32_t firstZone = 0, zoneCount = 0;  ///< its mates' zones in Graph::zones
 };
