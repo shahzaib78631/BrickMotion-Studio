@@ -30,6 +30,11 @@
 
 ---
 
+> **Status 2026-11-16.** Tasks 1–5 and 7 done. Task 6 done in part: shift states (detent seats, clutch by
+> collision, `shifted()`), but no `range()` from collision. Task 8 (names) not started. Task 9 done in part:
+> mass, load path and tipping, but no linear program for joint strength. Task 10 done except the ASan/TSan
+> runs. Results and what is missed: `native/README.md`, "Phase 4 results".
+
 ### Task 1: Gear teeth and gear meshes
 
 **Files:** Create `native/tools/gears_from_part_functions.py`, `native/data/gears.json`, `native/core/include/bm/kin/tolerances.h`, `native/core/include/bm/kin/gears.h`, `native/core/src/kin/gears.cpp`; Test `native/tests/kin_gears_test.cpp`.
