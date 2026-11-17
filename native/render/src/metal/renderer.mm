@@ -80,7 +80,7 @@ void Renderer::Impl::upload(const std::vector<std::pair<uint32_t, uint32_t>>& ch
   if (changed.empty()) return;
   if (moved) shadowDetail = heightDetail = -1;
   for (auto& queue : pending) queue.insert(queue.end(), changed.begin(), changed.end());
-  idsReady = false;
+  // The pick map stays: it is of the last frame drawn, which a change does not alter.
 }
 
 void Renderer::Impl::flush(int slot) {
@@ -148,8 +148,9 @@ void Renderer::Impl::drawIds() {
     d.storageMode = MTLStorageModePrivate;
     idDepth = [dev newTextureWithDescriptor:d];
   }
-  // Every copy of the instances is current once nothing is queued; use the last frame's.
-  flush(lastSlot);
+  // The last frame's copy of the instances, as it was drawn: changes queued since are for the
+  // frames to come, and are not written here (the GPU may still be reading this copy; it only
+  // reads it here too). So the pick is of the picture last shown.
   FrameUniforms fu{};
   fu.viewProj = simdFrom(multiply(projectionMatrix(lastCamera), viewMatrix(lastCamera, scene.origin)));
   if (!pickList || pickList.length < std::max<size_t>(1, lastList.size()) * sizeof(uint32_t))

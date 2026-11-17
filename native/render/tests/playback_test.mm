@@ -126,3 +126,21 @@ TEST_CASE("the key light's shadow is drawn again only when a piece moves", "[gpu
   fresh.renderer->setFrame(b.plan, b.timeline, 40);
   REQUIRE(compare(fresh.shot(options), rig.shot(options)).meanAbs == 0);
 }
+
+TEST_CASE("a pick after the pieces move, before the next frame, finds what the last frame showed", "[gpu][playback][picking]") {
+  NEED_GPU();
+  bmtest::GpuRig rig(kStack);
+  REQUIRE(rig.renderer);
+  const Build b;
+  rig.shot(bmtest::plainOptions());
+  // The bottom brick's front face, at rest.
+  const auto [x, y] = rig.pixel({0, 12, -10});
+  INFO("front of piece 0 at " << x << "," << y);
+  REQUIRE(rig.renderer->pick(x, y) == 0);
+  // At frame 0 it waits at its staging point, 120 to the right; nothing has been drawn since.
+  rig.renderer->setFrame(b.plan, b.timeline, 0);
+  REQUIRE(rig.renderer->pick(x, y) == 0);
+  // Once that frame is drawn, the pick follows it.
+  rig.shot(bmtest::plainOptions());
+  REQUIRE(rig.renderer->pick(x, y) != 0);
+}
