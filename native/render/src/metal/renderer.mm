@@ -79,7 +79,7 @@ const GpuMesh& Renderer::Impl::mesh(const Group& group, Detail detail) {
 
 void Renderer::Impl::upload(const std::vector<std::pair<uint32_t, uint32_t>>& changed, bool moved) {
   if (changed.empty()) return;
-  if (moved) shadowDetail = -1;
+  if (moved) shadowDetail = heightDetail = -1;
   for (auto& queue : pending) queue.insert(queue.end(), changed.begin(), changed.end());
   idsReady = false;
 }

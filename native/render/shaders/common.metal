@@ -25,7 +25,9 @@ struct FrameUniforms {
   float4 lens;            // x: tan of half the vertical angle of view; y, z: pixels per LDU where outlines are gone and fully shown
   float4 selection;       // rgb: the outline's colour, linear; w: its width in pixels, 0 when nothing selected is in view
   float4 lights[4];       // xyz: toward each of the four lights, world; w: its strength (lights[0] is the key, which casts the shadow)
-  float4 rig;             // x: the white world's strength; y: sin^2 of each light's angular radius
+  float4 rig;             // x: the white world's strength; y: sin^2 of each light's angular radius; z: the power occlusion is raised to on bricks
+  float4x4 heightProj;    // world to the height map (floor_light.metal)
+  float4 floorLook;       // x, y: nearest and furthest a floor point looks (LDU); z: 1 when the floor's light is worked out; w: the power the sky's share is raised to
 };
 
 // One per draw. Must match DrawUniforms in src/metal/impl.h.
@@ -73,6 +75,14 @@ float3 studioRadiance(float3 d, float3 keyDirection, float4 room, float4 strips)
 
 // The key light's soft shadow (shadow.metal): 1 lit, 0 in shadow.
 float keyShadow(float3 world, float3 n, constant FrameUniforms& frame, depth2d<float> shadowMap, sampler shadowSampler, float turn);
+// What share of each light reaches the floor through each direction and elevation bin.
+struct FloorBins {
+  float weight[4][48][16];
+  float4 lit;
+};
+// The share of a white floor's light that reaches the floor at `world` (floor_light.metal).
+float floorLight(float3 world, constant FrameUniforms& frame, constant FloorBins& bins, texture2d<float> heights, uint2 cell, bool sky, bool key);
+
 // One of 16 turns, a different one at each of the 16 places in a 4 x 4 tile (in Bayer's order,
 // so neighbours differ most): a 4 x 4 average sees each once.
 inline float tileTurn(uint2 at) {

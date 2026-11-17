@@ -127,11 +127,19 @@ inline constexpr float kSelectionWidth = 2.0f;
 inline constexpr float kAoRadius = 128.0f;
 inline constexpr float kAoBias = 0.1f;
 inline constexpr float kAoStrength = 1.0f;
-/// The occlusion found is raised to these powers before it dims a brick's light from the
-/// surroundings and the floor's: a brick's own light is half from the fills, which reach in
-/// past what hides the world, and the floor shows only what is taken from it. Fitted as above.
+/// The occlusion found is raised to this power before it dims a brick's light from the
+/// surroundings: half of that light is from the fills, which reach in past what hides the
+/// world. Fitted as above. (The floor's light is worked out apart: floor_light.metal.)
 inline constexpr float kAoBrickPower = 1.5f;
-inline constexpr float kAoFloorPower = 4.0f;
+/// The floor's light (floor_light.metal): the side of the height map over the model (texels),
+/// and how far out (as a share of the floor's radius) a floor point looks for what hides its sky.
+inline constexpr int kHeightMapSize = 1024;
+inline constexpr float kFloorLookShare = 0.35f;
+/// EyeSight's ground, as fitted in scripts/neural/blender/render.py: the shadow of the four
+/// lights alone (the key at kFloorKeyShare of its strength), times the share of the white
+/// world it sees raised to kFloorSkyPower.
+inline constexpr float kFloorKeyShare = 0.807f;
+inline constexpr float kFloorSkyPower = 0.587f;
 /// How far a culled, level-of-detail frame may be from the same frame drawn in full: mean
 /// absolute difference per channel, and over the worst kBlock square (0..255).
 inline constexpr double kDetailMeanTolerance = 0.5;

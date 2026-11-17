@@ -45,7 +45,10 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   const LightRig rig = studioLights(camera, options.lightsFollowCamera);
   const bm::Vec3 toward = rig.toward[0];
   const bool redrawShadow = options.shadows && (!shadowMap || shadowDetail != casterDetail || length(toward - shadowToward) > 1e-9);
-  if (redrawShadow) {
+  // The height map, for the floor's light, only when a piece has moved, appeared or gone.
+  const bool floorLit = options.shadows || options.ambientOcclusion;
+  const bool redrawHeight = floorLit && (!heightMap || heightDetail != casterDetail);
+  if (redrawShadow || redrawHeight) {
     std::vector<uint32_t> shown;
     for (uint32_t g = 0; g < scene.groups.size(); g++) {
       const Group& group = scene.groups[g];
@@ -80,6 +83,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   const double diagonal = b.empty() ? 1.0 : std::max(1.0, length(b.max - b.min));
   const bm::Vec3 middle = b.empty() ? scene.origin : (b.min + b.max) * 0.5;
   const KeyLight key = keyLight(liveBounds, scene.origin, toward, kShadowMapSize, kFloorExtent * diagonal);
+  const KeyLight above = keyLight(liveBounds, scene.origin, bm::Vec3{0, -1, 0}, kHeightMapSize, 0);
 
   FrameUniforms fu{};
   fu.viewProj = simdFrom(multiply(projectionMatrix(camera), viewMatrix(camera, scene.origin)));
@@ -89,7 +93,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   fu.keyDirection = simd_make_float4(static_cast<float>(toward.x), static_cast<float>(toward.y), static_cast<float>(toward.z), rig.strength[0]);
   for (int i = 0; i < 4; i++)
     fu.lights[i] = simd_make_float4(static_cast<float>(rig.toward[i].x), static_cast<float>(rig.toward[i].y), static_cast<float>(rig.toward[i].z), rig.strength[i]);
-  fu.rig = simd_make_float4(kWorldStrength, kRigSinSquared, kAoBrickPower, kAoFloorPower);
+  fu.rig = simd_make_float4(kWorldStrength, kRigSinSquared, kAoBrickPower, 0);
   fu.background = simd_make_float4(options.background[0], options.background[1], options.background[2], 1);
   fu.viewport = simd_make_float4(static_cast<float>(width), static_cast<float>(height), 1.0f / static_cast<float>(width), 1.0f / static_cast<float>(height));
   fu.room = roomVector();
@@ -100,6 +104,37 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   fu.lens = simd_make_float4(static_cast<float>(std::tan(camera.fovY / 2)), static_cast<float>(kEdgeStudPixels / kStudLdu), static_cast<float>(kEdgeStudFullPixels / kStudLdu), 0);
   const simd_float3 accent = simd_make_float3(linearFromSrgb(kSelectionRgb[0]), linearFromSrgb(kSelectionRgb[1]), linearFromSrgb(kSelectionRgb[2]));
   fu.selection = simd_make_float4(accent.x, accent.y, accent.z, selected.empty() ? 0.0f : kSelectionWidth);
+  fu.heightProj = simdFrom(above.matrix);
+  fu.floorLook = simd_make_float4(static_cast<float>(std::max(1.0, above.texel)), static_cast<float>(kFloorLookShare * kFloorExtent * diagonal), floorLit && !liveBounds.empty() ? 1.0f : 0.0f, kFloorSkyPower);
+  // How much of each light's disk each of the floor's 12 directions and 16 elevation bins
+  // holds (floor_light.metal), with each bin's light on a level floor (even in sin^2 elevation).
+  id<MTLBuffer> binsBuffer = floorBins.get(dev, frame, sizeof(FloorBins));
+  FloorBins& bins = *static_cast<FloorBins*>(binsBuffer.contents);
+  for (int i = 0; i < 4; i++) {
+    const bm::Vec3 t = normalized(rig.toward[i]);
+    const double cosRadius = std::sqrt(1.0 - kRigSinSquared);
+    for (int d = 0; d < 48; d++)
+      for (int b = 0; b < 16; b++) {
+        int inside = 0;
+        for (int u = 0; u < 4; u++)
+          for (int v = 0; v < 4; v++) {
+            const double azimuth = (d / 4.0 + (u + 0.5) / 4 - 0.5) * (2 * M_PI / 12), s = (b + (v + 0.5) / 4) / 16;
+            const double up = std::sqrt(s), across = std::sqrt(1 - s);
+            const bm::Vec3 dir{across * std::cos(azimuth), -up, across * std::sin(azimuth)};
+            if (dot(dir, t) > cosRadius) inside++;
+          }
+        bins.weight[i][d][b] = static_cast<float>(inside) / 16.0f;
+      }
+    // A level floor's light from it: E diskLight(cos) / pi, as brick.metal's diskLight has it.
+    const double c = std::max(-1.0, std::min(1.0, -t.y)), sinSq = kRigSinSquared;
+    double disk = std::max(c, 0.0);
+    if (c * c <= sinSq) {
+      const double sinT = std::sqrt(1 - c * c), x = std::sqrt(1 / sinSq - 1), y = -x * (c / std::max(sinT, 1e-5));
+      const double sinTy = sinT * std::sqrt(std::max(1 - y * y, 0.0));
+      disk = std::max((c * std::acos(std::max(-1.0, std::min(1.0, y))) - x * sinTy) * sinSq + std::atan(sinTy / x), 0.0) / (M_PI * sinSq);
+    }
+    bins.lit[i] = static_cast<float>(rig.strength[i] * disk / M_PI * (i == 0 ? kFloorKeyShare : 1.0f));
+  }
   id<MTLBuffer> frameBuffer = frameUniforms.get(dev, frame, sizeof fu);
   std::memcpy(frameBuffer.contents, &fu, sizeof fu);
 
@@ -155,6 +190,36 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
       [enc drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:gpu.indexCount indexType:MTLIndexTypeUInt32 indexBuffer:gpu.indices indexBufferOffset:0 instanceCount:batch.count];
       stats.drawCalls++;
       stats.shadowTriangles += static_cast<uint64_t>(gpu.indexCount / 3) * batch.count;
+    }
+    [enc endEncoding];
+  }
+  // The height map over the model, for the floor's light.
+  if (floorLit && !heightMap) {
+    MTLTextureDescriptor* d = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRG16Float width:kHeightMapSize height:kHeightMapSize mipmapped:NO];
+    d.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+    d.storageMode = MTLStorageModePrivate;
+    heightMap = [dev newTextureWithDescriptor:d];
+  }
+  if (redrawHeight && heightMap) {
+    heightDetail = casterDetail;
+    MTLRenderPassDescriptor* pass = [MTLRenderPassDescriptor new];
+    pass.colorAttachments[0].texture = heightMap;
+    pass.colorAttachments[0].loadAction = MTLLoadActionClear;
+    pass.colorAttachments[0].clearColor = MTLClearColorMake(65504, 65504, 0, 0);  // nothing: no top, no underside
+    pass.colorAttachments[0].storeAction = MTLStoreActionStore;
+    id<MTLRenderCommandEncoder> enc = [commands renderCommandEncoderWithDescriptor:pass];
+    [enc setRenderPipelineState:pipelines.height];
+    [enc setCullMode:MTLCullModeNone];
+    [enc setVertexBuffer:frameBuffer offset:0 atIndex:1];
+    [enc setVertexBuffer:visibleBuffer offset:0 atIndex:4];
+    for (const Batch& batch : casters) {
+      const GpuMesh& gpu = mesh(scene.groups[batch.group], batch.detail);
+      if (!gpu.indexCount) continue;
+      [enc setVertexBuffer:gpu.vertices offset:0 atIndex:0];
+      [enc setVertexBuffer:instanceBuffers[batch.group][slot] offset:0 atIndex:3];
+      [enc setVertexBufferOffset:batch.first * sizeof(uint32_t) atIndex:4];
+      [enc drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:gpu.indexCount indexType:MTLIndexTypeUInt32 indexBuffer:gpu.indices indexBufferOffset:0 instanceCount:batch.count];
+      stats.drawCalls++;
     }
     [enc endEncoding];
   }
@@ -280,7 +345,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   }
 
   // Ambient occlusion at half size, then blurred.
-  if (options.ambientOcclusion || options.shadows) {
+  if (floorLit) {
     struct AoUniforms {
       simd_float4 lens, shape, size, eye, right, up, forward;
     } u;
@@ -307,9 +372,12 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
         [enc setFragmentTexture:depth atIndex:0];
         [enc setFragmentTexture:shadowTexture atIndex:1];
         [enc setFragmentSamplerState:pipelines.shadowSampler atIndex:1];
+        [enc setFragmentTexture:heightMap atIndex:2];
+        [enc setFragmentBuffer:binsBuffer offset:0 atIndex:2];
       } else {
         [enc setFragmentTexture:aoRaw atIndex:0];
         [enc setFragmentTexture:depth atIndex:1];
+        [enc setFragmentTexture:ambient atIndex:2];
       }
       [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
       [enc endEncoding];

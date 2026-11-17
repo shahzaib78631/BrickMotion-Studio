@@ -27,7 +27,7 @@ MTLVertexDescriptor* brickVertices() {
 }
 
 /// How a pipeline writes into the main pass's three targets.
-enum class Writes { Opaque, Floor, Over, Transparent, Single };
+enum class Writes { Opaque, Floor, Over, Transparent, Single, Least };
 
 id<MTLRenderPipelineState> make(Device& device, NSString* vertex, NSString* fragment, Writes writes, MTLPixelFormat single, MTLPixelFormat depth, int samples, MTLVertexDescriptor* vertices,
                                 std::string& error) {
@@ -38,8 +38,14 @@ id<MTLRenderPipelineState> make(Device& device, NSString* vertex, NSString* frag
   d.depthAttachmentPixelFormat = depth;
   d.rasterSampleCount = static_cast<NSUInteger>(samples);
   d.vertexDescriptor = vertices;
-  if (writes == Writes::Single) {
+  if (writes == Writes::Single || writes == Writes::Least) {
     d.colorAttachments[0].pixelFormat = single;
+    if (writes == Writes::Least) {  // each channel keeps the least written to it
+      MTLRenderPipelineColorAttachmentDescriptor* c = d.colorAttachments[0];
+      c.blendingEnabled = YES;
+      c.rgbBlendOperation = c.alphaBlendOperation = MTLBlendOperationMin;
+      c.sourceRGBBlendFactor = c.sourceAlphaBlendFactor = c.destinationRGBBlendFactor = c.destinationAlphaBlendFactor = MTLBlendFactorOne;
+    }
   } else {
     MTLRenderPipelineColorAttachmentDescriptor* c = d.colorAttachments[0];
     MTLRenderPipelineColorAttachmentDescriptor* sum = d.colorAttachments[1];
@@ -88,6 +94,7 @@ Pipelines makePipelines(Device& device, std::string& error) {
   p.ao = make(device, @"screenVertex", @"aoFragment", Writes::Single, MTLPixelFormatRG8Unorm, none, 1, nil, error);
   p.aoBlur = make(device, @"screenVertex", @"aoBlurFragment", Writes::Single, MTLPixelFormatRG8Unorm, none, 1, nil, error);
   p.edges = make(device, @"edgeVertex", @"edgeFragment", Writes::Over, none, depth32, kSamples, nil, error);
+  p.height = make(device, @"heightVertex", @"heightFragment", Writes::Least, MTLPixelFormatRG16Float, none, 1, brickVertices(), error);
   p.shadow = make(device, @"shadowVertex", nil, Writes::Single, none, depth32, 1, brickVertices(), error);
   p.composite = make(device, @"screenVertex", @"compositeFragment", Writes::Single, MTLPixelFormatBGRA8Unorm_sRGB, none, 1, nil, error);
   p.environment = make(device, @"screenVertex", @"environmentFragment", Writes::Single, MTLPixelFormatRGBA16Float, none, 1, nil, error);
@@ -107,7 +114,7 @@ Pipelines makePipelines(Device& device, std::string& error) {
   sh.compareFunction = MTLCompareFunctionLessEqual;  // the shadow map is an ordinary depth map: nearer the light is less
   sh.sAddressMode = sh.tAddressMode = MTLSamplerAddressModeClampToEdge;
   p.shadowSampler = [device.device newSamplerStateWithDescriptor:sh];
-  p.ok = p.ao && p.aoBlur && p.mask && p.ids && p.brick && p.transparent && p.floor && p.edges && p.shadow && p.composite && p.environment && p.depthWrite && p.shadowDepth && p.smooth && p.shadowSampler;
+  p.ok = p.height && p.ao && p.aoBlur && p.mask && p.ids && p.brick && p.transparent && p.floor && p.edges && p.shadow && p.composite && p.environment && p.depthWrite && p.shadowDepth && p.smooth && p.shadowSampler;
   return p;
 }
 

@@ -31,6 +31,16 @@ struct FrameUniforms {
   simd_float4 selection;
   simd_float4 lights[4];  // xyz toward each light (world), w its strength
   simd_float4 rig;        // x world strength, y sin^2 of the lights' radius
+  simd_float4x4 heightProj;  // world to the height map (xy, as shadowProj)
+  simd_float4 floorLook;     // x: nearest, y: furthest a floor point looks (LDU); z: 1 when the floor's light is worked out; w: the power the sky's share is raised to
+};
+
+// How much of each light (index) the floor sees through each of 48 azimuths (each the middle
+// of a 30-degree sector, as the floor's 12 directions, turned by quarters, are) and 16
+// elevation bins (floor_light.metal); must match FloorBins there.
+struct FloorBins {
+  float weight[4][48][16];
+  simd_float4 lit;  // each light's light on a bare white floor (E diskLight / pi)
 };
 
 // Must match DrawUniforms in shaders/common.metal.
@@ -66,7 +76,7 @@ inline constexpr MTLPixelFormat kColorFormat = MTLPixelFormatRGBA16Float, kAccum
                                 kAmbientFormat = MTLPixelFormatRGBA16Float;
 
 struct Pipelines {
-  id<MTLRenderPipelineState> brick = nil, transparent = nil, floor = nil, edges = nil, shadow = nil, composite = nil, environment = nil, mask = nil, ids = nil, ao = nil, aoBlur = nil;
+  id<MTLRenderPipelineState> height = nil, brick = nil, transparent = nil, floor = nil, edges = nil, shadow = nil, composite = nil, environment = nil, mask = nil, ids = nil, ao = nil, aoBlur = nil;
   id<MTLDepthStencilState> depthWrite = nil, depthRead = nil, depthNone = nil, shadowDepth = nil;
   id<MTLSamplerState> smooth = nil, shadowSampler = nil;
   bool ok = false;
@@ -108,6 +118,8 @@ struct Renderer::Impl {
   id<MTLTexture> aoRaw = nil, aoSoft = nil;  // ambient occlusion, half size
   void makeTargets();
   id<MTLTexture> shadowMap = nil;  // made the first time shadows are drawn
+  id<MTLTexture> heightMap = nil;  // over the model, from above: r -(highest top), g lowest underside, above the floor
+  int heightDetail = -1;           // the detail it was drawn at; -1: to draw again
   // The shadow map holds the poses now shown, drawn at this detail (-1: not drawn since a
   // piece last moved or appeared). Kept from frame to frame while nothing moves.
   int shadowDetail = -1;
@@ -130,7 +142,7 @@ struct Renderer::Impl {
   id<MTLBuffer> pickList = nil;
   void drawIds();
 
-  FrameBuffer frameUniforms, drawUniforms, visible;
+  FrameBuffer frameUniforms, drawUniforms, visible, floorBins;
   uint64_t frame = 0;
   dispatch_semaphore_t inFlight = nil;
   std::atomic<double> gpuMs{0};  // written when a frame finishes, on Metal's thread
