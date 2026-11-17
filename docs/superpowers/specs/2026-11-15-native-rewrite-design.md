@@ -70,6 +70,11 @@ places 23.2% of pieces joined to nothing; on the reference sets the median is 97
 Goal 3 restated against that: a median under 1 s and a 95th percentile under 10 s on the OMR sets, no
 time-outs, and every reference set planned.
 
+Goal 5 measured (2026-11-17, phase 6): no complete Sagrada 21065 file exists, so the scene is 10030-1
+repeated 2×2 (12,148 pieces) at 1920×1200 on an M1 Pro. Orbiting with nothing moving, the 95th percentile
+frame is 7.2 to 8.6 ms (120 fps is 8.33 ms; met in two of three runs on a loaded machine); while a build
+plays, 11.4 to 13.3 ms (about 80 fps). See `native/README.md`, "Phase 6 results".
+
 ## Non-goals
 
 - Windows, Linux, iPad, web.

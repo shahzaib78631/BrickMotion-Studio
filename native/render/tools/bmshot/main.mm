@@ -182,8 +182,13 @@ int main(int argc, char** argv) {
       std::fprintf(stderr, "bmshot: cannot write %s\n", out.c_str());
       return kFailure;
     }
+    size_t skipped = 0, placeholders = 0;
+    for (const auto& [g, k] : renderer->scene().where) {
+      if (g >= renderer->scene().groups.size()) skipped++;
+      else if (renderer->scene().groups[g].placeholder) placeholders++;
+    }
     if (stats)
-      std::printf("{\"cpuMs\":%.3f,\"gpuMs\":%.3f,\"drawCalls\":%u,\"instances\":%u,\"culled\":%u,\"triangles\":%llu,\"byDetail\":[%u,%u,%u],\"pieces\":%zu}\n", s.cpuMs, s.gpuMs,
+      std::printf("{\"skipped\":%zu,\"placeholders\":%zu,\"cpuMs\":%.3f,\"gpuMs\":%.3f,\"drawCalls\":%u,\"instances\":%u,\"culled\":%u,\"triangles\":%llu,\"byDetail\":[%u,%u,%u],\"pieces\":%zu}\n", skipped, placeholders, s.cpuMs, s.gpuMs,
                   s.drawCalls, s.instances, s.culled, static_cast<unsigned long long>(s.triangles), s.byDetail[0], s.byDetail[1], s.byDetail[2], model.pieces().size());
     return kOk;
   } catch (const std::exception& e) {

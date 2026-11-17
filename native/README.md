@@ -546,3 +546,102 @@ of 9.1 s. The largest, 10030-1 (3,037 pieces), takes 12.1 s alone. Reference set
 - Authored constraints inside submodels; detecting a loop among the author's `after` constraints.
 - Tipping during the build is not reported. Stability is not a rule of the planner.
 - Reviews were self-reviews.
+
+## Phase 6 results (2026-11-17): the Metal viewport
+
+```bash
+native/build/render/bmshot <file> --out shot.png [--size WxH] [--frame N] [--azimuth a --elevation e] [--select 3,7] [--stats]
+native/build/render/bmshot <file> --bench 600 [--repeat 2x2] [--size 1920x1200] [--no-edges|--no-shadows|--no-ao|--detail 0|1|2]
+native/build/render/bmshot <file> --repeat 2x2 --save-model scene.ldr
+native/build/render/bmview.app/Contents/MacOS/bmview <file> [--play]
+```
+
+`bmshot` draws one frame offscreen to a PNG; `--frame N` plans the model as `bm plan` does and poses it at that
+frame of the build, with the timeline's camera. `--bench` orbits once round the model and prints frame times as
+JSON. `bmview` is one window: left drag orbits, right drag or two fingers pan, pinch or the wheel zoom toward the
+cursor, a click selects, a double-click frames the selection (or the model); space plays, the arrows step,
+Home and End jump, F frames, E / S / A toggle edges, shadows and ambient occlusion, I the readout.
+
+### How it works
+
+- **Two halves.** `native/render/src/prep` is portable C++ with no Apple headers: render meshes, levels of
+  detail, instance groups per (part, colour), poses per frame, culling. `src/metal` owns every Metal object.
+  Nothing in `bmrender` changes engine state.
+- **Shaders compile at run time** from text embedded in the library, because the offline Metal compiler is an
+  optional download; a test compiles them, so a mistake fails the tests, not the first launch.
+- **Normals are angle-weighted** (area weighting leaves a 16-sided cylinder's normals 3.8° off radial).
+- **Three levels of detail per part**: full, the library's low-resolution primitives (`p/8`), and its box. Each
+  part's mesh records how far its low-resolution primitives stray from the full ones (`Mesh::lowError`, part
+  cache version 2). A part is drawn in full only while that error would cover half a pixel on its near side;
+  boxes below 6 pixels. Outline edges are drawn while a stud spans 4 pixels, faded in up to 8 — the far
+  42000-1 drawn in full had grey tyres, because black's LDraw edge colour is light grey.
+- **Culling is on the CPU**, on the job pool: 12,000 boxes take well under a millisecond, so the spec's "GPU
+  culling" was not worth it here (cpu p95 0.5 ms on the gate scene).
+- **The frame**: reversed depth; 4× multisampling into memoryless tile targets; a 4096² key-light shadow map
+  fitted and texel-snapped to where the shown pieces are now, 3×3 PCF; a floor that writes darkness as coverage
+  and depth; ambient occlusion from the resolved depth at half size, applied only to the ambient share of each
+  pixel; transparent pieces by weighted blended order-independent transparency whose layers are rounded to
+  half and summed in 32 bits, with reveal as summed optical depth, so the picture does not depend on the order
+  pieces are listed; a studio room with a softbox and two strip lights; a neutral tone curve.
+- **The shadow map is kept while nothing moves**, and drawn again when a piece moves, appears or goes, or the
+  casters' detail changes (selecting does not count).
+- **Picking** draws piece numbers once per frame, on the first pick after it. The selection outline (2 px,
+  #007AFF) is drawn from a mask without depth, so it shows where other pieces hide the selected one.
+- **Instances are kept in three copies**, used in turn with frames in flight, so a pose change is never written
+  into a buffer the GPU is reading.
+- **Equivalence**: culled, level-of-detail frames are held to the full picture (mean difference under 0.5,
+  no 8×8 block over 6.0) on the helicopter from four sides (worst block 4.75) and 42000-1 at six times the
+  framing distance (worst block 4.12).
+
+### Benchmark (M1 Pro, 1920×1200, 600 frames orbiting once, nothing moving)
+
+| Scene | Pieces | Triangles drawn | cpu p50 / p95 ms | gpu p50 / p95 ms | frame p50 / p95 ms | Full / Low / Box |
+|---|---:|---:|---|---|---|---|
+| helicopter | 305 | 133,996 | 0.21 / 0.31 | 1.40 / 1.83 | 1.64 / 2.10 | 118 / 187 / 0 |
+| 10030-1 | 3,037 | 2,343,801 | 0.30 / 0.54 | 2.90 / 3.43 | 3.23 / 3.90 | 20 / 3,017 / 0 |
+| 10030-1 × 4 (gate), run 1 | 12,148 | 9,352,004 | 0.40 / 0.52 | 6.07 / 8.25 | 6.48 / **8.64** | 18 / 12,130 / 0 |
+| 10030-1 × 4 (gate), run 2 | 12,148 | 9,352,004 | 0.35 / 0.48 | 5.40 / 7.24 | 5.75 / **7.63** | 18 / 12,130 / 0 |
+| 10030-1 × 4 (gate), run 3 | 12,148 | 9,352,004 | 0.36 / 0.48 | 5.37 / 6.76 | 5.73 / **7.23** | 18 / 12,130 / 0 |
+
+The gate is 8.33 ms (120 fps) at the 95th percentile. No complete Sagrada 21065 file exists, so the gate scene
+is 10030-1 repeated 2×2. The machine was not quiet: leftover Python workers held load averages of 9 to 14.
+Before the two fixes of this phase the gate scene's p95 was 17.4 ms; choosing detail by each part's own error
+brought it to about 12, keeping the shadow map to the figures above. **While a build plays the shadow map is
+drawn every frame**, and the gate scene's p95 was then 11.4 to 13.3 ms (measured before the map was kept, under
+the same load).
+
+### The 71-model smoke sweep
+
+Every `smoke` model in the manifest (25 BrickNet, 25 OMR, 12 MOC, 6 reference, 3 fixtures; 39,210 pieces)
+drawn with `bmshot --stats` at 640×400: all 71 exit 0 and write an image; piece counts equal `bm load`'s on all
+71; no piece skipped; 98 placeholder boxes, all in moc/6389-1, whose `ls00.dat` is not in the library. The
+first frame, which includes building every mesh's GPU buffers, takes a median 4.1 ms (most: 15.0 ms, the
+Legopharos bell tower). The contact sheet of all 71 shows nothing wrong.
+
+### What the corpus corrected
+
+- Low detail keeps 50 to 80% of a part's triangles, not under 60% as planned: the gain from `p/8` is in studs and
+  tubes. Choosing detail by screen size alone either broke equivalence (worst block 10.2) or kept too much in
+  full; the recorded error per part fixed both.
+- The first transparency sums in half precision changed 66 pixels by one level with the order pieces were
+  listed.
+- In an even room chrome was one flat grey; the strip lights were added for it.
+- Real files use direct colours (`0x2RRGGBB`), now read.
+
+### Not done
+
+- **The gate holds in two of three runs** (p95 8.64, 7.63, 7.23 ms, on a loaded machine) **with nothing
+  moving, and not during playback** (11.4 to 13.3 ms). The next fixes, not made: draw shadow casters as boxes
+  below a size in the light's map, and draw edges for fewer pieces while moving; edges and the shadow pass are
+  the largest costs left (about 6 and 4 ms of the 17.4 before the fixes).
+- **bmview checked from the shell only**: the window shows the helicopter and the gate scene within 0.9 s;
+  playback advances frames; idle after planning it uses 0.0% CPU and draws nothing. Not checked, because this
+  session could not see the screen: smoothness and the readout on a 120 Hz display, pieces seating while
+  scrubbing, the click outline in the window, full screen and moving between displays of different scale, and
+  orbiting the gate scene in the window.
+- Planning in bmview takes as long as `bm plan`; until it is done the title says "planning…" and space does
+  nothing. Framing the selection uses the pieces' rest boxes, not where they are mid-flight.
+- Not in this phase: bevels, contact shadows beyond the key light, HDRI files, depth of field, motion blur, looks,
+  gizmos and overlays other than the selection outline and the readout. Transparent pieces cast no shadow and
+  cull their back faces (thick glass looks lighter than in a path tracer). The look is matched by eye later.
+- Reviews were self-reviews.

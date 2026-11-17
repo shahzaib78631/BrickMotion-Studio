@@ -1,6 +1,12 @@
 # Native Phase 6: Metal Viewport — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Status (2026-11-17): done, gate partly met.** Tasks 1–11 committed on `feat/native-engine`
+> (e8a4d87 … the `docs(native): phase 6 results` commit). The 120 fps gate (10030-1 ×4, 12,148 pieces,
+> 1920×1200) is met in two of three runs with nothing moving (p95 8.64 / 7.63 / 7.23 ms) and not while a
+> build plays (11.4–13.3 ms). bmview was checked from the shell only; its interactive checks are open.
+> ASan and TSan clean; 283 tests pass; all 71 smoke models draw. Results: `native/README.md`, "Phase 6 results".
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** A Mac window that shows any model the engine loads, plays its build animation, and holds 120 frames a second on a 12,000-piece scene on an M1 Pro, drawn by a new library `bmrender` that only reads engine state.
 
@@ -142,7 +148,7 @@ Difference compare(const Image& a, const Image& b);
 
 CMake: `bmrender` is `STATIC`, sources `src/prep/*.cpp` and `src/metal/*.mm`, `PUBLIC include`, links `bmcore` publicly and `bm_warnings` privately, plus `"-framework Metal" "-framework QuartzCore" "-framework ImageIO" "-framework CoreGraphics" "-framework Foundation"`. `.mm` files compile with `-fobjc-arc`. `bmrender_tests` globs `tests/*_test.cpp` and `tests/*_test.mm`, links `Catch2::Catch2WithMain`, gets `BM_FIXTURES` pointing at `native/tests/fixtures` (reuse the core fixtures: `lib/` has `3001.dat`, `3005.dat`, `c1x1.dat`), and is registered with `catch_discover_tests`.
 
-- [ ] **Step 1: Write the failing tests** in `image_test.cpp`:
+- [x] **Step 1: Write the failing tests** in `image_test.cpp`:
 ```cpp
 TEST_CASE("an image written as a PNG reads back the same", "[image]") {
   bmr::Image img{3, 2, std::vector<uint8_t>(24, 0)};
@@ -165,10 +171,10 @@ TEST_CASE("a small wrong patch shows in the worst block, not only the mean", "[i
   REQUIRE_FALSE(bmr::compare(a, bmr::Image{8, 8, std::vector<uint8_t>(256, 0)}).sameSize);
 }
 ```
-- [ ] **Step 2: Run** `cmake --build native/build && native/build/render/bmrender_tests "[image]"` — expect a build failure (no such headers).
-- [ ] **Step 3: Implement.** `png.mm` uses `CGImageDestination` / `CGImageSource` with `kCGImageAlphaLast` data so alpha is not premultiplied (the first test catches premultiplication on the `128` pixel).
-- [ ] **Step 4: Run the tests and the whole suite** — all pass.
-- [ ] **Step 5: Commit** `feat(native): bmrender library skeleton, image type and PNG`.
+- [x] **Step 2: Run** `cmake --build native/build && native/build/render/bmrender_tests "[image]"` — expect a build failure (no such headers).
+- [x] **Step 3: Implement.** `png.mm` uses `CGImageDestination` / `CGImageSource` with `kCGImageAlphaLast` data so alpha is not premultiplied (the first test catches premultiplication on the `128` pixel).
+- [x] **Step 4: Run the tests and the whole suite** — all pass.
+- [x] **Step 5: Commit** `feat(native): bmrender library skeleton, image type and PNG`.
 
 ### Task 2: Render meshes — normals, edges and three levels of detail
 
@@ -209,7 +215,7 @@ class MeshLibrary {
 ```
 Tolerances: `kCreaseDegrees = 35.0` (LDraw curved primitives turn 22.5° per facet at 16 sides and 45° at 8, real edges are 90°: 35° smooths a 16-sided cylinder and keeps every true edge; an 8-sided low-detail cylinder is therefore faceted, which is correct at the size it is shown).
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
 ```cpp
 TEST_CASE("a brick's faces are flat and its normals point outward", "[mesh]") {
   const auto lib = ldraw::Library(fs::path(BM_FIXTURES) / "lib");
@@ -234,10 +240,10 @@ TEST_CASE("low detail has fewer triangles for a round part and the same bounds w
 TEST_CASE("low-resolution primitives are used where they exist", "[ldraw][flatten][data]") { /* in native/tests: flatten("3941.dat", lib, {.lowResPrimitives = true}).triangles.size() < flatten("3941.dat", lib).triangles.size() */ }
 ```
 Write the commented tests out in full; the comment gives the assertion and the values.
-- [ ] **Step 2: Run, see them fail.**
-- [ ] **Step 3: Implement.** Corner splitting: for each vertex, group its incident triangles greedily by normal agreement (compare with the group's running area-weighted normal), one output vertex per (position, group, colour).
-- [ ] **Step 4: Run the tests and the whole suite.** The part cache directory for low detail is `PartCache::defaultDirectory().parent_path() / "parts-low"`.
-- [ ] **Step 5: Commit** `feat(native): render meshes with creased normals and a low-detail level`.
+- [x] **Step 2: Run, see them fail.**
+- [x] **Step 3: Implement.** Corner splitting: for each vertex, group its incident triangles greedily by normal agreement (compare with the group's running area-weighted normal), one output vertex per (position, group, colour).
+- [x] **Step 4: Run the tests and the whole suite.** The part cache directory for low detail is `PartCache::defaultDirectory().parent_path() / "parts-low"`.
+- [x] **Step 5: Commit** `feat(native): render meshes with creased normals and a low-detail level`.
 
 ### Task 3: Materials, the scene, and poses per frame
 
@@ -301,7 +307,7 @@ Material values by finish (the web app's, `src/render/materials.ts:123-138`, so 
 
 Solid is the web app's default look, "BrickLink plastic" (`src/render/looks.ts:412`: roughness 0.38, clearcoat 0.35, clearcoat roughness 0.2). The other rows are the per-finish overrides at `src/render/materials.ts:135-138`, which change roughness and metalness and leave the look's clearcoat, except rubber, which has none. Trans roughness is this plan's value: the web app's glass is a separate optics model that phase 6 does not port. The clearcoat lobe's own roughness is `kClearcoatRoughness = 0.2`.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
 ```cpp
 TEST_CASE("sRGB becomes linear by the sRGB curve", "[material]") {
   ldraw::Color c; c.rgb = 0x808080;
@@ -327,8 +333,8 @@ TEST_CASE("a frame's poses depend only on the frame", "[scene][playback]") {
 }
 TEST_CASE("an empty model gives an empty scene", "[scene]") {}
 ```
-- [ ] **Step 2: Run, see them fail.** - [ ] **Step 3: Implement.** - [ ] **Step 4: Run all tests.**
-- [ ] **Step 5: Commit** `feat(native): render scene grouped by part and material, with poses per frame`.
+- [x] **Step 2: Run, see them fail.** - [x] **Step 3: Implement.** - [x] **Step 4: Run all tests.**
+- [x] **Step 5: Commit** `feat(native): render scene grouped by part and material, with poses per frame`.
 
 ### Task 4: Camera, and the Metal device with every shader compiled
 
@@ -369,7 +375,7 @@ Private `device.h`: `struct Device { id<MTLDevice> device; id<MTLCommandQueue> q
 
 `embed_shaders.cmake` writes `${CMAKE_CURRENT_BINARY_DIR}/shaders_embedded.cpp` defining `extern const char* const kShaderSource;` as the concatenation of `common.metal` followed by the other files in name order, as raw string literals (split each file into chunks under 16,000 characters; one literal has a compiler limit). It reruns when any `.metal` file changes (`add_custom_command` with `DEPENDS`).
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
 ```cpp
 TEST_CASE("the framing camera has the whole box in view", "[camera]") {
   const Box box{{-100, -300, -50}, {100, 0, 50}};
@@ -390,8 +396,8 @@ TEST_CASE("every shader compiles", "[gpu][shaders]") {
   REQUIRE(bmr::sharedDevice() != nullptr);
 }
 ```
-- [ ] **Step 2: Run, see them fail.** - [ ] **Step 3: Implement.** - [ ] **Step 4: Run all tests.**
-- [ ] **Step 5: Commit** `feat(native): camera, frustum, and a Metal device whose shaders compile under test`.
+- [x] **Step 2: Run, see them fail.** - [x] **Step 3: Implement.** - [x] **Step 4: Run all tests.**
+- [x] **Step 5: Commit** `feat(native): camera, frustum, and a Metal device whose shaders compile under test`.
 
 ### Task 5: The first frame — instanced opaque bricks, lit, to a PNG
 
@@ -439,7 +445,7 @@ Decisions:
 
 `bmshot <model file> --out <png> [--size WxH] [--frame N] [--azimuth a --elevation e] [--no-edges] [--no-shadows] [--no-ao] [--detail 0|1|2] [--stats]` frames the model with `OrbitCamera::framing`, draws offscreen, writes the PNG, and with `--stats` prints `FrameStats` as one line of JSON. Exit codes as `bm`: 0, 1 failure, 2 usage.
 
-- [ ] **Step 1: Write the failing tests** (all `[gpu]`; helper `Image shot(const std::string& ldrText, FrameOptions, int w = 256, int h = 256)` builds a model from text as `native/tests/collide_world_test.cpp`'s `Rig::model` does):
+- [x] **Step 1: Write the failing tests** (all `[gpu]`; helper `Image shot(const std::string& ldrText, FrameOptions, int w = 256, int h = 256)` builds a model from text as `native/tests/collide_world_test.cpp`'s `Rig::model` does):
 ```cpp
 TEST_CASE("one red brick fills the middle of the frame with red and leaves the corners background", "[gpu][frame]") {
   const Image img = shot(piece("3005.dat", 0, 0, 0, /*color*/ 4), plain());   // plain(): no edges, shadows, ao, floor
@@ -454,9 +460,9 @@ TEST_CASE("an empty model, a model of only missing parts, and a zero-size target
 TEST_CASE("the same frame drawn twice is the same image", "[gpu][frame]") { /* compare == 0 exactly */ }
 TEST_CASE("chrome reflects the room; rubber does not", "[gpu][frame]") { /* variance of luminance across a curved 3062b in chrome (383) > 4 x that in rubber black (256) */ }
 ```
-- [ ] **Step 2: Run, see them fail.** - [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run all tests; look at the picture.** Run `native/build/render/bmshot samples/helicopter/helicopter.mpd --out <scratch>/heli.png --size 1600x1000` and open it. It must read as a lit plastic model: correct colours, no black or inside-out pieces, no missing pieces against `bm load`'s piece count. If something looks wrong, find the cause before going on; a test that passes on a picture that is wrong is a missing test — add it.
-- [ ] **Step 5: Commit** `feat(native): first frame — instanced, lit bricks drawn offscreen, and bmshot`.
+- [x] **Step 2: Run, see them fail.** - [x] **Step 3: Implement.**
+- [x] **Step 4: Run all tests; look at the picture.** Run `native/build/render/bmshot samples/helicopter/helicopter.mpd --out <scratch>/heli.png --size 1600x1000` and open it. It must read as a lit plastic model: correct colours, no black or inside-out pieces, no missing pieces against `bm load`'s piece count. If something looks wrong, find the cause before going on; a test that passes on a picture that is wrong is a missing test — add it.
+- [x] **Step 5: Commit** `feat(native): first frame — instanced, lit bricks drawn offscreen, and bmshot`.
 
 ### Task 6: Shadow, floor, edges and transparent parts
 
@@ -469,7 +475,7 @@ Decisions:
 - **Edges:** each mesh's `edges` as instanced line segments in the group's `Material::edge` colour, `kEdgeOpacity = 0.3` (the web app's `EDGE_OPACITY`, `src/render/materials.ts:192`), depth-tested with a small bias toward the eye, drawn only for `Detail::Full` instances.
 - **Transparent groups:** drawn after everything opaque with depth writes off, using weighted blended order-independent transparency (McGuire and Bavoil 2013): accumulate premultiplied colour times weight into `RGBA16Float` and revealage into `R8Unorm`, composite once. Weight `w = alpha * clamp(0.03 / (1e-5 + pow(viewDepth / kOitDepthScale, 4)), 1e-2, 3e3)` with `kOitDepthScale = 2000` LDU. This is chosen over sorting because pieces interpenetrate at studs and sorting by centre flickers during playback.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
 ```cpp
 TEST_CASE("a brick casts a shadow on the floor on the side away from the key light", "[gpu][frame]") {}   // floor pixel in shadow darker by > 15 levels than a floor pixel on the lit side; with shadows off, equal within 2
 TEST_CASE("a brick behind a transparent brick shows through it, tinted", "[gpu][frame]") {}        // blue brick behind trans-red: centre pixel has red > 60 and blue > 60
@@ -478,8 +484,8 @@ TEST_CASE("edges darken a brick's outline and nothing else", "[gpu][frame]") {} 
 TEST_CASE("the floor has no visible edge", "[gpu][frame]") {}   // far corners of a wide low shot equal the background within 2 levels
 ```
 Write each out with the pixel positions you derive from the framing camera; state in a comment how each position was chosen.
-- [ ] **Step 2: Run, see them fail.** - [ ] **Step 3: Implement.** - [ ] **Step 4: Run all tests; look at the helicopter and at `samples/42000-1.mpd` again.**
-- [ ] **Step 5: Commit** `feat(native): key-light shadow, floor, outline edges and order-independent transparency`.
+- [x] **Step 2: Run, see them fail.** - [x] **Step 3: Implement.** - [x] **Step 4: Run all tests; look at the helicopter and at `samples/42000-1.mpd` again.**
+- [x] **Step 5: Commit** `feat(native): key-light shadow, floor, outline edges and order-independent transparency`.
 
 ### Task 7: Culling and levels of detail, proven not to change the picture
 
@@ -499,7 +505,7 @@ std::vector<Visible> cull(const Scene& scene, const std::vector<bm::Box>& meshBo
 ```
 Tolerances: `kFullPixels = 48` (below this a stud is under 3 pixels wide and 16-sided and 8-sided studs cannot be told apart), `kLowPixels = 6` (below this a piece is a few pixels and its box is indistinguishable). These are starting values: the test below is what holds them, and Task 9 may raise them only while that test still passes.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
 ```cpp
 TEST_CASE("pieces outside the view are culled and those inside are kept", "[cull]") {}      // a row of 100 bricks along x, camera seeing the middle 20: culled + kept == 100; every kept box intersects the frustum; no box fully inside is culled
 TEST_CASE("detail falls with size on screen and nothing is dropped", "[cull]") {}            // one brick at distances giving 200, 20 and 2 px: Full, Low, Box
@@ -512,9 +518,9 @@ TEST_CASE("a far model is mostly low detail and boxes, and still looks like itse
   // 42000-1.mpd framed, then distance x 6: byDetail[0] < 10% of instances; against the forced-full frame meanAbs < 0.5, worstBlock < 6.0
 }
 ```
-- [ ] **Step 2: Run, see them fail.** - [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run all tests.** If the equivalence test fails, the fix is in the level-of-detail mesh or the thresholds, never in the tolerance.
-- [ ] **Step 5: Commit** `perf(native): frustum culling and three levels of detail, equal to the full picture within tolerance`.
+- [x] **Step 2: Run, see them fail.** - [x] **Step 3: Implement.**
+- [x] **Step 4: Run all tests.** If the equivalence test fails, the fix is in the level-of-detail mesh or the thresholds, never in the tolerance.
+- [x] **Step 5: Commit** `perf(native): frustum culling and three levels of detail, equal to the full picture within tolerance`.
 
 ### Task 8: Playback, picking, selection, and resize
 
@@ -527,7 +533,7 @@ Decisions:
 - **`setFrame`** calls `applyFrame` and uploads only the changed instances.
 - **`resize`** recreates the size-dependent targets; a size under 1 in either direction is held and `draw` returns zeroed stats.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
 ```cpp
 TEST_CASE("the piece under a pixel is the nearest one; the background is none", "[gpu][picking]") {}   // two bricks, one in front: centre -> the front one's index; a corner -> UINT32_MAX; out of range -> UINT32_MAX
 TEST_CASE("a transparent piece in front is the one picked", "[gpu][picking]") {}
@@ -536,8 +542,8 @@ TEST_CASE("at the last frame the picture is the finished model; at the first no 
 TEST_CASE("going back to a frame gives the picture it gave before", "[gpu][playback]") {}             // frames 5, 40, 5: first and third identical
 TEST_CASE("resizing, to zero and back, keeps drawing", "[gpu][frame]") {}                              // 256x256 -> 0x0 (stats all zero, no crash) -> 512x300: image has that size and the brick is in the middle
 ```
-- [ ] **Step 2: Run, see them fail.** - [ ] **Step 3: Implement.** - [ ] **Step 4: Run all tests.**
-- [ ] **Step 5: Commit** `feat(native): playback of a build, picking, selection outline, resize`.
+- [x] **Step 2: Run, see them fail.** - [x] **Step 3: Implement.** - [x] **Step 4: Run all tests.**
+- [x] **Step 5: Commit** `feat(native): playback of a build, picking, selection outline, resize`.
 
 ### Task 9: The benchmark, ambient occlusion, and the 120 fps gate
 
@@ -554,14 +560,14 @@ native/build/render/bmshot $BM_DATA_DIR/omr/models/10030-1/10030-1.mpd --repeat 
 ```
 Pass: `pieces == 12148` and `frameMs.p95 < 8.33`.
 
-- [ ] **Step 1:** tests for `repeated` (piece count × copies, bounds grow by the grid, ids unique) and ambient occlusion; **Step 2:** fail; **Step 3:** implement; **Step 4:** pass; **Step 5:** commit `feat(native): ambient occlusion and the viewport benchmark`.
-- [ ] **Step 6: Run the gate three times; record all three results.** Also run it on `samples/helicopter/helicopter.mpd` and on `10030-1` alone.
-- [ ] **Step 7: If the gate fails, follow the reasoning rules — one cause at a time.** Read `gpuMs` against `cpuMs` to see which side is over. Then measure before choosing; the fixes this plan permits, in the order to consider them, each only if the measurement points at it and each followed by the Task 7 equivalence test:
+- [x] **Step 1:** tests for `repeated` (piece count × copies, bounds grow by the grid, ids unique) and ambient occlusion; **Step 2:** fail; **Step 3:** implement; **Step 4:** pass; **Step 5:** commit `feat(native): ambient occlusion and the viewport benchmark`.
+- [x] **Step 6: Run the gate three times; record all three results.** Also run it on `samples/helicopter/helicopter.mpd` and on `10030-1` alone.
+- [x] **Step 7: If the gate fails, follow the reasoning rules — one cause at a time.** Read `gpuMs` against `cpuMs` to see which side is over. Then measure before choosing; the fixes this plan permits, in the order to consider them, each only if the measurement points at it and each followed by the Task 7 equivalence test:
   1. *CPU over budget in culling or list building:* a bounding-volume tree over instances at rest so whole subtrees are culled at once; pieces in flight are tested individually.
   2. *GPU over budget in vertex work* (triangle count in the stats is high, time falls when `--detail 2` is forced): raise `kFullPixels` while the equivalence test passes; then merge static, far, `Detail::Box` instances into one draw.
   3. *GPU over budget in fragment work* (time falls sharply at half the size): ambient occlusion at quarter resolution, a 2048² shadow map, 2× MSAA — each measured separately, and each one's effect on the picture recorded.
   Stop after these. Do not add occlusion culling, meshlets or indirect draws in this phase; if the gate still fails, that is the result, and the "Not done" section says what the profile shows the next fix would be.
-- [ ] **Step 8: Commit each fix separately** as `perf(native): <what is now true>` with the before and after `frameMs.p95` in the commit body.
+- [x] **Step 8: Commit each fix separately** as `perf(native): <what is now true>` with the before and after `frameMs.p95` in the commit body.
 
 ### Task 10: `bmview` — the window
 
@@ -578,8 +584,8 @@ Pass: `pieces == 12148` and `frameMs.p95 < 8.33`.
 
 There is no automated test for the window itself. Its logic is in `OrbitCamera`, `Renderer` and `applyFrame`, which are tested.
 
-- [ ] **Step 1: Implement.**
-- [ ] **Step 2: Verify by using it,** and record each line as checked or failed in the results:
+- [x] **Step 1: Implement.**
+- [~] **Step 2: Verify by using it,** (lines 1 and 6 checked from the shell; 2-5 and 7 need someone at the screen — see the results) and record each line as checked or failed in the results:
   1. `bmview samples/helicopter/helicopter.mpd` shows the model within one second of launch.
   2. Orbit, pan and zoom are smooth and the readout shows under 8.33 ms on a 120 Hz display.
   3. Space plays the build; pieces fly in and seat; scrubbing back with the arrow keys shows earlier frames correctly.
@@ -587,15 +593,15 @@ There is no automated test for the window itself. Its logic is in `OrbitCamera`,
   5. Resizing the window, entering full screen, and dragging it to a display of another scale factor keep the picture sharp and undistorted.
   6. With the window idle for ten seconds, Activity Monitor shows `bmview` near 0% GPU.
   7. `bmview <the 2x2 benchmark scene saved by bmshot --repeat 2x2 --save-model>` orbits at the frame time the gate measured.
-- [ ] **Step 3: Commit** `feat(native): bmview, a window on the Metal viewport`.
+- [x] **Step 3: Commit** `feat(native): bmview, a window on the Metal viewport`.
 
 ### Task 11: Sanitizers, results, status
 
-- [ ] **Step 1:** Build and run the whole suite under `-DBM_SANITIZE=address` and `-DBM_SANITIZE=thread`; fix every finding (GPU tests may be slower: time limits are already disabled under `BM_SANITIZED`).
-- [ ] **Step 2:** Run `bmshot --stats` over every `smoke`-tier model in `native/corpus/manifest.json` (71 files). Every one must exit 0 and write an image; record piece count against `bm load`, skipped pieces, placeholder pieces and frame time. Look at a contact sheet of all 71 images; anything that looks wrong is a bug to find or a line under "Not done".
-- [ ] **Step 3:** Write `## Phase 6 results (<date>): the Metal viewport` in `native/README.md` after the phase 5 section: commands, how it works (one paragraph per decision above that survived), the benchmark table (scene, pieces, triangles, cpu/gpu/frame p50 and p95, detail split — helicopter, 10030-1, the 2 × 2 gate scene), the 71-model sweep, "What the corpus corrected", and "Not done" (everything under "Not in this plan", every failed line of Task 10 Step 2, the gate if missed). Update the spec's goal 5 line with the measured figure, as goal 3 was restated.
-- [ ] **Step 4:** Add the dated status block at the top of this file; tick the boxes that are done.
-- [ ] **Step 5:** Self-review: read the diff of the whole phase against "Global Constraints", "Review Focus" and the working rules, and fix what does not meet them. Then commit `docs(native): phase 6 results`.
+- [x] **Step 1:** Build and run the whole suite under `-DBM_SANITIZE=address` and `-DBM_SANITIZE=thread`; fix every finding (GPU tests may be slower: time limits are already disabled under `BM_SANITIZED`).
+- [x] **Step 2:** Run `bmshot --stats` over every `smoke`-tier model in `native/corpus/manifest.json` (71 files). Every one must exit 0 and write an image; record piece count against `bm load`, skipped pieces, placeholder pieces and frame time. Look at a contact sheet of all 71 images; anything that looks wrong is a bug to find or a line under "Not done".
+- [x] **Step 3:** Write `## Phase 6 results (<date>): the Metal viewport` in `native/README.md` after the phase 5 section: commands, how it works (one paragraph per decision above that survived), the benchmark table (scene, pieces, triangles, cpu/gpu/frame p50 and p95, detail split — helicopter, 10030-1, the 2 × 2 gate scene), the 71-model sweep, "What the corpus corrected", and "Not done" (everything under "Not in this plan", every failed line of Task 10 Step 2, the gate if missed). Update the spec's goal 5 line with the measured figure, as goal 3 was restated.
+- [x] **Step 4:** Add the dated status block at the top of this file; tick the boxes that are done.
+- [x] **Step 5:** Self-review: read the diff of the whole phase against "Global Constraints", "Review Focus" and the working rules, and fix what does not meet them. Then commit `docs(native): phase 6 results`.
 
 ---
 

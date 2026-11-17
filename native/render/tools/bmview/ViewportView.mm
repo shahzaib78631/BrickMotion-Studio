@@ -224,16 +224,10 @@ constexpr double kReadoutSeconds = 0.25;
 - (void)frameModel { [self frameBounds:_session->renderer->scene().bounds]; }
 
 - (void)frameSelectionOrModel {
-  const bm::Model& model = *_session->model;
   const bmr::Scene& scene = _session->renderer->scene();
   bm::Box box;
-  for (size_t i = 0; i < scene.where.size(); i++) {
-    const auto [g, k] = scene.where[i];
-    if (!(scene.groups[g].instances[k].flags & bmr::kSelected)) continue;
-    const bm::Piece& piece = model.pieces()[i];
-    const bm::Box part = model.mesh(piece.part, *_session->full)->bounds;
-    box.merge(part.empty() ? bm::kPlaceholderBox.transformed(piece.world) : part.transformed(piece.world));
-  }
+  for (const auto& [g, k] : scene.where)
+    if (g < scene.groups.size() && (scene.groups[g].instances[k].flags & bmr::kSelected)) box.merge(scene.groups[g].restBoxes[k]);
   if (box.empty()) [self frameModel];
   else [self frameBounds:box];
 }
