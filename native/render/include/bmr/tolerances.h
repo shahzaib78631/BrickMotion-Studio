@@ -16,4 +16,26 @@ inline constexpr double kCreaseDegrees = 35.0;
 /// The colour of a triangle whose colour code is not in the table: mid grey, as bm::ldraw::Color's default.
 inline constexpr unsigned kUnknownColor = 0xFF888888u;
 
+/// Surfaces by finish: roughness, metalness, clearcoat.
+/// Solid is the web app's default look, "BrickLink plastic" (src/render/looks.ts:412). Chrome,
+/// metal, pearl and rubber are its per-finish overrides (src/render/materials.ts:135-138), which
+/// leave the look's clearcoat except on rubber. Transparent plastic's roughness is this
+/// renderer's own: the web app's glass is a separate optics model that is not ported here.
+struct Surface {
+  float roughness, metalness, clearcoat;
+};
+inline constexpr Surface kSolid{0.38f, 0.0f, 0.35f};
+inline constexpr Surface kTrans{0.05f, 0.0f, 0.35f};
+inline constexpr Surface kChrome{0.08f, 1.0f, 0.35f};
+inline constexpr Surface kMetal{0.20f, 0.7f, 0.35f};
+inline constexpr Surface kPearl{0.10f, 0.5f, 0.35f};
+inline constexpr Surface kRubber{0.86f, 0.0f, 0.0f};
+/// The roughness of the clearcoat layer itself (the same look).
+inline constexpr float kClearcoatRoughness = 0.2f;
+
+/// A missing part: the web app's placeholder (src/render/materials.ts:188).
+inline constexpr unsigned kPlaceholderRgb = 0xb8bcc2;
+inline constexpr float kPlaceholderAlpha = 0.6f;
+inline constexpr float kPlaceholderRoughness = 0.6f;
+
 }  // namespace bmr
