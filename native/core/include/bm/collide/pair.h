@@ -1,5 +1,6 @@
 #pragma once
 // Whether two placed parts interpenetrate.
+#include <cstddef>
 #include <vector>
 #include "bm/collide/shape.h"
 
@@ -30,6 +31,13 @@ enum class Depth { Skin, Joined };
 /// Touching, and overlap of less than kSkin, is not interpenetration. Never throws; shapes
 /// with no triangles and transforms that are not finite or not invertible never overlap.
 bool overlap(const Shape& a, const Xform& xa, const Shape& b, const Xform& xb, const std::vector<Zone>& zones = {}, Hit* hit = nullptr, Depth depth = Depth::Skin);
+
+/// `a` is carried from `xa` along unit vector `direction` (model space, no turning) by each of
+/// the `count` travels in `at`, which ascend. Returns the index of the first travel at which
+/// overlap(a, there, b, xb, zones) holds, or `count` if none. It gives what calling overlap()
+/// at each travel would, for the cost of one walk of the two trees for the whole way: the walk
+/// finds when each pair of triangles can touch at all, and only those are looked at.
+size_t firstOverlap(const Shape& a, const Xform& xa, Vec3 direction, const double* at, size_t count, const Shape& b, const Xform& xb, const std::vector<Zone>& zones = {});
 
 /// Whether `p` lies inside `zone`.
 bool inside(const Zone& zone, Vec3 p);

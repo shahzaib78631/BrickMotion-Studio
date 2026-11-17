@@ -21,18 +21,23 @@ struct Builder {
 
   void bounds(uint32_t first, uint32_t count, Node& n) const {
     for (int k = 0; k < 3; k++) {
-      n.min[k] = 1e30f;
-      n.max[k] = -1e30f;
+      n.min[k] = n.imin[k] = 1e30f;
+      n.max[k] = n.imax[k] = -1e30f;
     }
-    for (uint32_t t = first; t < first + count; t++)
-      for (uint32_t c = 0; c < 3; c++)
-        for (const Vec3f* p : {&points[tris[t * 3 + c]], &inner[t * 3 + c]}) {
-          const float v[3] = {p->x, p->y, p->z};
-          for (int k = 0; k < 3; k++) {
-            n.min[k] = std::min(n.min[k], v[k]);
-            n.max[k] = std::max(n.max[k], v[k]);
-          }
-        }
+    auto grow = [](float* lo, float* hi, const Vec3f& p) {
+      const float v[3] = {p.x, p.y, p.z};
+      for (int k = 0; k < 3; k++) {
+        lo[k] = std::min(lo[k], v[k]);
+        hi[k] = std::max(hi[k], v[k]);
+      }
+    };
+    for (uint32_t t = first; t < first + count; t++) {
+      for (uint32_t c = 0; c < 3; c++) grow(n.min, n.max, points[tris[t * 3 + c]]);
+      // An inner triangle with three equal points has no area and crosses nothing: it is in no box.
+      const Vec3f &a = inner[t * 3], &b = inner[t * 3 + 1];
+      if (a.x == b.x && a.y == b.y && a.z == b.z) continue;
+      for (uint32_t c = 0; c < 3; c++) grow(n.imin, n.imax, inner[t * 3 + c]);
+    }
   }
 
   void swapTriangles(uint32_t i, uint32_t j) {

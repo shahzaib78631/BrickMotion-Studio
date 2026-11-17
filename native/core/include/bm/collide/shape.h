@@ -22,7 +22,8 @@ bool trianglesCross(const Vec3f a[3], const Vec3f b[3], Vec3f* where = nullptr);
 /// A node of the bounding-volume tree. A leaf (count > 0) covers `count` triangles starting
 /// at triangle `left`; an inner node's children are nodes `left` and `left + 1`.
 struct Node {
-  float min[3], max[3];
+  float min[3], max[3];    ///< box of the true surface under this node
+  float imin[3], imax[3];  ///< box of the inner surface under it; min > max when none of it survives
   uint32_t left = 0, count = 0;
 };
 
@@ -33,7 +34,7 @@ struct Shape {
   /// triangle is moved inward by kSkin along its own normal and trimmed back from the edges
   /// where the surface turns outward. A triangle too small to survive that has three equal points.
   std::vector<Vec3f> inner;
-  std::vector<Node> nodes;          ///< nodes[0] is the root; boxes hold both surfaces; empty if no triangles
+  std::vector<Node> nodes;          ///< nodes[0] is the root; one box per surface; empty if no triangles
   Box bounds;                       ///< of the outer surface; empty if there are no triangles
 };
 

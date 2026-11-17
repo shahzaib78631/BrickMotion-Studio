@@ -495,7 +495,9 @@ Not measured when this was written: OMR sample, reference sets (the runs had not
 - **Crossings are not zero.** On BrickNet the certifier finds 4 moves, all in one model (`sft_23628`, four
   `11090` bar holders against a dish), that the planner swept clear from the seat outward and the certifier,
   sampling the same line inward from the other end, does not. Both sample every 0.5 LDU; the two grids differ.
-  This is the sampled sweep's known limit showing up, and it is why the certifier exists.
+  Checked on the same world: the exit leg is clear sampled outward and blocked 21 LDU along sampled inward, so the
+  piece grazes the dish over less than one 0.5 LDU step. This is the sampled sweep's known limit showing up,
+  and it is why the certifier exists.
 - Six hand-checked insertion cases pass (`native/corpus/insertion-truth.json`): a pin into beams, an axle
   through a beam, a bush onto an axle, bricks onto studs, and a plate onto a sideways stud.
 

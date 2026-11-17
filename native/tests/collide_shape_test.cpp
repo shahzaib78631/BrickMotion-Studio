@@ -159,11 +159,16 @@ TEST_CASE("the tree reaches every triangle and its boxes contain them", "[collid
     REQUIRE(n.count <= 4);
     for (uint32_t t = n.left; t < n.left + n.count; t++) {
       REQUIRE(seen.insert(t).second);  // each triangle in exactly one leaf
-      for (int k = 0; k < 3; k++) {
-        for (const Vec3f* q : {&shape.outer[shape.triangles[t * 3 + static_cast<uint32_t>(k)]], &shape.inner[t * 3 + static_cast<uint32_t>(k)]}) {
-          const Vec3f& p = *q;
-          REQUIRE((p.x >= n.min[0] - 1e-4 && p.x <= n.max[0] + 1e-4 && p.y >= n.min[1] - 1e-4 && p.y <= n.max[1] + 1e-4 && p.z >= n.min[2] - 1e-4 && p.z <= n.max[2] + 1e-4));
-        }
+      // The true surface is in one box, the inner surface in the other; an inner triangle with
+      // no area is in neither.
+      const Vec3f &i0 = shape.inner[t * 3], &i1 = shape.inner[t * 3 + 1];
+      const bool flat = i0.x == i1.x && i0.y == i1.y && i0.z == i1.z;
+      for (uint32_t k = 0; k < 3; k++) {
+        const Vec3f& p = shape.outer[shape.triangles[t * 3 + k]];
+        REQUIRE((p.x >= n.min[0] - 1e-4 && p.x <= n.max[0] + 1e-4 && p.y >= n.min[1] - 1e-4 && p.y <= n.max[1] + 1e-4 && p.z >= n.min[2] - 1e-4 && p.z <= n.max[2] + 1e-4));
+        if (flat) continue;
+        const Vec3f& q = shape.inner[t * 3 + k];
+        REQUIRE((q.x >= n.imin[0] - 1e-4 && q.x <= n.imax[0] + 1e-4 && q.y >= n.imin[1] - 1e-4 && q.y <= n.imax[1] + 1e-4 && q.z >= n.imin[2] - 1e-4 && q.z <= n.imax[2] + 1e-4));
       }
     }
   }

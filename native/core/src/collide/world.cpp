@@ -265,19 +265,22 @@ double World::pairTravel(uint32_t p, const Xform& from, const Box& fromBox, uint
     pose.t = pose.t + direction * t;
     return overlap(*s.shapes[p], pose, *s.shapes[q], s.poses[q], zones);
   };
-  double result = distance, clear = std::max(0.0, std::floor(enter / kSweepStep) * kSweepStep - kSweepStep);
-  clear = std::max(0.0, clear);
-  for (double t = clear; t <= leave + kSweepStep && t <= distance + 1e-9; t += kSweepStep) {
-    const double at = std::min(t, distance);
-    if (!hitAt(at)) {
-      clear = at;
-      continue;
-    }
-    double a = at <= clear ? 0 : clear, b = at;
-    if (at <= clear && hitAt(0)) {  // it is in the way from the very start
+  // The poses to look at: every kSweepStep while the two can cross.
+  std::vector<double> at;
+  for (double t = std::max(0.0, std::floor(enter / kSweepStep) * kSweepStep - kSweepStep); t <= leave + kSweepStep && t <= distance + 1e-9; t += kSweepStep) at.push_back(std::min(t, distance));
+  // The first of them that hits. A stretch of the way is looked at in one go (firstOverlap), so
+  // that two pieces passing without touching cost one look; the stretches grow as the way
+  // stays clear, so that a hit near the start costs little too.
+  double result = distance;
+  for (size_t begin = 0, stretch = 8; begin < at.size(); begin += stretch, stretch *= 4) {
+    const size_t count = std::min(at.size() - begin, stretch);
+    const size_t i = begin + firstOverlap(*s.shapes[p], from, direction, at.data() + begin, count, *s.shapes[q], s.poses[q], zones);
+    if (i == begin + count) continue;
+    if (i == 0 && hitAt(0)) {  // it is in the way from the very start
       result = 0;
       break;
     }
+    double a = i == 0 ? 0 : at[i - 1], b = at[i];
     while (b - a > tolerance) {
       const double mid = (a + b) / 2;
       (hitAt(mid) ? b : a) = mid;

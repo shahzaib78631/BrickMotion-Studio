@@ -118,3 +118,80 @@ TEST_CASE("joined pieces are allowed a second skin of overlap", "[collide][pair]
   REQUIRE(overlap(brick(), at(0, 0, 0), brick(), at(17, 0, 3), {}, nullptr, Depth::Joined));
   REQUIRE(overlap(brick(), at(0, 0, 0), brick(), at(2, -21, 3), {}, nullptr, Depth::Joined));
 }
+
+namespace {
+/// What firstOverlap must give: overlap() asked at every travel in turn.
+size_t poseByPose(const Shape& a, const Xform& xa, Vec3 direction, const std::vector<double>& at, const Shape& b, const Xform& xb, const std::vector<Zone>& zones) {
+  for (size_t i = 0; i < at.size(); i++) {
+    Xform pose = xa;
+    pose.t = pose.t + direction * at[i];
+    if (overlap(a, pose, b, xb, zones)) return i;
+  }
+  return at.size();
+}
+std::vector<double> every(double step, double upTo) {
+  std::vector<double> at;
+  for (double t = 0; t <= upTo; t += step) at.push_back(t);
+  return at;
+}
+}  // namespace
+
+TEST_CASE("a whole way looked at in one go gives what looking pose by pose gives", "[collide][pair][sweep]") {
+  const std::vector<double> travels = every(0.5, 80);
+  struct Case {
+    Xform start;
+    Vec3 direction;
+  };
+  const double r = std::sqrt(0.5);
+  const Case cases[] = {
+      {at(-60, 0, 0), {1, 0, 0}},        // straight into the other brick
+      {at(-60, 0, 20), {1, 0, 0}},       // past it, sharing a wall plane all the way: never a hit
+      {at(-60, 0, 19.2), {1, 0, 0}},     // past it 0.8 inside its wall: a hit
+      {at(-60, 0, 19.7), {1, 0, 0}},     // past it 0.3 inside its wall: under the skin, never a hit
+      {at(0, -60, 0), {0, 1, 0}},        // down onto it
+      {at(-40, -40, 3), {r, r, 0}},      // at a slant
+      {at(-60, 30, 0), {1, 0, 0}},       // underneath, clear
+      {at(0, 0, 0), {1, 0, 0}},          // starting inside it
+  };
+  for (const Case& c : cases) {
+    INFO("from " << c.start.t.x << " " << c.start.t.y << " " << c.start.t.z << " along " << c.direction.x << " " << c.direction.y << " " << c.direction.z);
+    REQUIRE(firstOverlap(brick(), c.start, c.direction, travels.data(), travels.size(), brick(), at(0, 0, 0)) == poseByPose(brick(), c.start, c.direction, travels, brick(), at(0, 0, 0), {}));
+  }
+  // The moving piece turned, and a zone that forgives the first part of the hit.
+  Xform turned = at(-60, 2, 5);
+  turned.r = Mat3{{r, 0, r, 0, 1, 0, -r, 0, r}};
+  const std::vector<Zone> zone{{{-10, -10, 5}, {-10, 40, 5}, 6}};  // along the wall's edge where the corner arrives
+  REQUIRE(firstOverlap(brick(), turned, {1, 0, 0}, travels.data(), travels.size(), brick(), at(0, 0, 0)) == poseByPose(brick(), turned, {1, 0, 0}, travels, brick(), at(0, 0, 0), {}));
+  REQUIRE(firstOverlap(brick(), turned, {1, 0, 0}, travels.data(), travels.size(), brick(), at(0, 0, 0), zone) == poseByPose(brick(), turned, {1, 0, 0}, travels, brick(), at(0, 0, 0), zone));
+  REQUIRE(poseByPose(brick(), turned, {1, 0, 0}, travels, brick(), at(0, 0, 0), zone) > poseByPose(brick(), turned, {1, 0, 0}, travels, brick(), at(0, 0, 0), {}));
+  REQUIRE(firstOverlap(brick(), at(0, 0, 0), {1, 0, 0}, travels.data(), 0, brick(), at(0, 0, 0)) == 0);  // no travels: none hits
+}
+
+TEST_CASE("real parts passing closely: one go gives what pose by pose gives", "[collide][pair][sweep][data]") {
+  const char* dir = std::getenv("BM_LDRAW_DIR");
+  if (!dir) SKIP("BM_LDRAW_DIR is not set");
+  const ldraw::Library library(dir);
+  const Shape round = buildShape(ldraw::flatten("3941.dat", library));  // a 2x2 round brick
+  const Shape pin = buildShape(ldraw::flatten("2780.dat", library));
+  const Shape beam = buildShape(ldraw::flatten("32524.dat", library));  // a 1x7 liftarm
+  const std::vector<double> travels = every(0.5, 120);
+  const double r = std::sqrt(0.5);
+  int hitsSeen = 0, clearSeen = 0;
+  auto same = [&](const Shape& a, const Xform& xa, Vec3 d, const Shape& b) {
+    const size_t want = poseByPose(a, xa, d, travels, b, at(0, 0, 0), {});
+    INFO("from " << xa.t.x << " " << xa.t.y << " " << xa.t.z << " along " << d.x << " " << d.y << " " << d.z);
+    REQUIRE(firstOverlap(a, xa, d, travels.data(), travels.size(), b, at(0, 0, 0)) == want);
+    (want < travels.size() ? hitsSeen : clearSeen)++;
+  };
+  for (double offset : {0.0, 20.0, 38.0, 39.4, 39.8, 40.0, 41.0})  // through, grazing and beside another round brick
+    for (Vec3 d : {Vec3{1, 0, 0}, Vec3{0, 1, 0}, Vec3{r, 0, r}}) {
+      same(round, at(-60 * d.x + offset * d.z, -60 * d.y, -60 * d.z + offset * (d.x + d.y)), d, round);
+    }
+  for (double y : {-2.0, 0.0, 10.0, 12.0})  // a pin along x passing a liftarm's holes
+    for (double z : {-9.6, 0.0, 9.0, 11.0}) same(pin, at(-90, y, z), {1, 0, 0}, beam);
+  Xform tipped = at(-80, 6, 3);
+  tipped.r = Mat3{{r, -r, 0, r, r, 0, 0, 0, 1}};
+  same(pin, tipped, {1, 0, 0}, beam);
+  REQUIRE(hitsSeen > 5);
+  REQUIRE(clearSeen > 5);
+}
