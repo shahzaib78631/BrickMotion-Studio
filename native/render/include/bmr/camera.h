@@ -71,6 +71,9 @@ struct OrbitCamera {
   /// still pictures, and for "frame the model" from where the user is looking.
   static OrbitCamera fitted(const bm::Box& bounds, double fovY, double aspect, double azimuth, double elevation);
   static OrbitCamera from(const bm::plan::CameraKey& key);
+  /// The timeline's camera at `frame`: between the keys either side of it, the turn the short
+  /// way round. The default camera if the timeline has no keys.
+  static OrbitCamera along(const bm::plan::Timeline& timeline, double frame);
 };
 
 }  // namespace bmr

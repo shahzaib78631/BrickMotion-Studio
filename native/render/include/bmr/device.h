@@ -7,5 +7,7 @@ namespace bmr {
 bool gpuAvailable();
 /// The shader compiler's message when it failed, otherwise "". Never null.
 const char* shaderError();
+/// The id<MTLDevice> every renderer draws with (for a CAMetalLayer), or null when gpuAvailable() is false.
+void* gpuDevice();
 
 }  // namespace bmr

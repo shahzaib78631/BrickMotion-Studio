@@ -3,6 +3,7 @@
 #import <Metal/Metal.h>
 #import <QuartzCore/QuartzCore.h>
 #include <array>
+#include <atomic>
 #include <map>
 #include <simd/simd.h>
 #include <string>
@@ -129,7 +130,7 @@ struct Renderer::Impl {
   FrameBuffer frameUniforms, drawUniforms, visible;
   uint64_t frame = 0;
   dispatch_semaphore_t inFlight = nil;
-  double gpuMs = 0;
+  std::atomic<double> gpuMs{0};  // written when a frame finishes, on Metal's thread
   bool drewOffscreen = false;
 
   FrameStats draw(const Camera& camera, const FrameOptions& options, id<CAMetalDrawable> drawable);

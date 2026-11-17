@@ -43,6 +43,10 @@ Device* sharedDevice() {
 }
 
 bool gpuAvailable() { return sharedDevice() != nullptr; }
+void* gpuDevice() {
+  Device* d = sharedDevice();
+  return d ? (__bridge void*)d->device : nullptr;
+}
 const char* shaderError() {
   sharedDevice();
   return gError.c_str();

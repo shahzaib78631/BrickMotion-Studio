@@ -225,4 +225,20 @@ OrbitCamera OrbitCamera::from(const bm::plan::CameraKey& key) {
   return o;
 }
 
+OrbitCamera OrbitCamera::along(const bm::plan::Timeline& timeline, double frame) {
+  const auto& keys = timeline.camera;
+  if (keys.empty()) return {};
+  size_t i = 0;
+  while (i + 1 < keys.size() && keys[i + 1].frame <= frame) i++;
+  OrbitCamera a = from(keys[i]);
+  if (i + 1 >= keys.size() || keys[i + 1].frame <= keys[i].frame || frame <= keys[i].frame) return a;
+  const OrbitCamera b = from(keys[i + 1]);
+  const double s = std::clamp((frame - keys[i].frame) / (keys[i + 1].frame - keys[i].frame), 0.0, 1.0);
+  a.target = a.target + (b.target - a.target) * s;
+  a.distance += (b.distance - a.distance) * s;
+  a.azimuth += std::remainder(b.azimuth - a.azimuth, 2 * M_PI) * s;
+  a.elevation += (b.elevation - a.elevation) * s;
+  return a;
+}
+
 }  // namespace bmr

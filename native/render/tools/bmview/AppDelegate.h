@@ -1,0 +1,7 @@
+#pragma once
+#import <AppKit/AppKit.h>
+
+/// Opens one model in one window; the app ends when the window closes.
+@interface AppDelegate : NSObject <NSApplicationDelegate, NSWindowDelegate>
+- (instancetype)initWithFile:(NSString*)path play:(BOOL)play;
+@end

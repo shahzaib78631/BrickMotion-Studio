@@ -9,17 +9,15 @@
 #include <string>
 #include <string_view>
 #include <vector>
-#include "bm/connect/graph.h"
-#include "bm/connect/studio.h"
 #include "bm/io.h"
 #include "bm/ldraw/part_cache.h"
 #include "bm/plan/plan.h"
 #include "bm/plan/timeline.h"
-#include "commands.h"
 #include "bmr/device.h"
 #include "bmr/image.h"
 #include "bmr/renderer.h"
 #include "bmr/scene.h"
+#include "engine.h"
 
 namespace fs = std::filesystem;
 using namespace bm;
@@ -31,35 +29,9 @@ constexpr int kOk = 0, kFailure = 1, kUsage = 2;
 int usage() {
   std::fprintf(stderr,
                "usage: bmshot <model file> --out <png> [--size WxH] [--frame N] [--azimuth a --elevation e] [--no-edges] [--no-shadows] [--no-ao] [--no-floor]\n"
-               "              [--no-cull] [--detail 0|1|2] [--select piece,piece,...] [--stats]\n"
+               "              [--no-cull] [--detail 0|1|2] [--select piece,piece,...] [--stats] [--repeat CxR] [--save-model <ldr>]\n"
                "       bmshot <model file> --bench <frames> [--repeat CxR] [--size WxH] [--detail 0|1|2] [--no-...]\n");
   return kUsage;
-}
-
-std::string ldrawDir() {
-  if (const char* dir = std::getenv("BM_LDRAW_DIR")) return dir;
-  std::error_code ec;
-  for (fs::path at = fs::current_path(ec); !at.empty(); at = at.parent_path()) {
-    if (fs::exists(at / "public" / "ldraw" / "LDConfig.ldr", ec)) return (at / "public" / "ldraw").string();
-    if (at == at.root_path()) break;
-  }
-  return "";
-}
-
-/// The timeline's camera at `frame`: between the keys either side of it, the turn the short way round.
-bmr::OrbitCamera cameraAt(const plan::Timeline& t, int frame) {
-  const auto& keys = t.camera;
-  size_t i = 0;
-  while (i + 1 < keys.size() && keys[i + 1].frame <= frame) i++;
-  bmr::OrbitCamera a = bmr::OrbitCamera::from(keys[i]);
-  if (i + 1 >= keys.size() || keys[i + 1].frame <= keys[i].frame) return a;
-  const bmr::OrbitCamera b = bmr::OrbitCamera::from(keys[i + 1]);
-  const double s = std::clamp(double(frame - keys[i].frame) / (keys[i + 1].frame - keys[i].frame), 0.0, 1.0);
-  a.target = a.target + (b.target - a.target) * s;
-  a.distance += (b.distance - a.distance) * s;
-  a.azimuth += std::remainder(b.azimuth - a.azimuth, 2 * M_PI) * s;
-  a.elevation += (b.elevation - a.elevation) * s;
-  return a;
 }
 
 struct Spread {
@@ -105,7 +77,7 @@ int main(int argc, char** argv) {
   std::vector<std::string_view> args(argv + 1, argv + argc);
   if (args.empty() || args[0].rfind("--", 0) == 0) return usage();
   const fs::path input{std::string(args[0])};
-  std::string out;
+  std::string out, saveModel;
   int width = 1600, height = 1000, detail = -1;
   double azimuth = NAN, elevation = NAN;
   bmr::FrameOptions options;
@@ -119,6 +91,7 @@ int main(int argc, char** argv) {
       return std::string(args[++i]);
     };
     if (a == "--out") out = value();
+    else if (a == "--save-model") saveModel = value();
     else if (a == "--size") {
       const std::string v = value();
       if (std::sscanf(v.c_str(), "%dx%d", &width, &height) != 2 || width < 1 || height < 1) return usage();
@@ -152,13 +125,13 @@ int main(int argc, char** argv) {
     }
     else return usage();
   }
-  if (out.empty() && benchFrames == 0) return usage();
+  if (out.empty() && benchFrames == 0 && saveModel.empty()) return usage();
   options.forceDetail = detail;
   if (!bmr::gpuAvailable()) {
     std::fprintf(stderr, "bmshot: no Metal device\n");
     return kFailure;
   }
-  const std::string ldraw = ldrawDir();
+  const std::string ldraw = bmtools::ldrawDir();
   if (ldraw.empty()) {
     std::fprintf(stderr, "bmshot: no LDraw library found; set BM_LDRAW_DIR\n");
     return kFailure;
@@ -171,6 +144,18 @@ int main(int argc, char** argv) {
     ldraw::PartCache low(library, ldraw::PartCache::defaultDirectory().parent_path() / "parts-low", lowOptions);
     const Model loaded = io::load(input, library, &full);
     const Model model = columns * rows > 1 ? bmr::repeated(loaded, full, columns, rows, 80) : loaded;
+    if (!saveModel.empty()) {
+      // The scene drawn, as one flattened LDraw file (bmview can open the benchmark's scene).
+      std::FILE* f = std::fopen(saveModel.c_str(), "wb");
+      const std::string text = io::toLDraw(model);
+      if (!f || std::fwrite(text.data(), 1, text.size(), f) != text.size()) {
+        if (f) std::fclose(f);
+        std::fprintf(stderr, "bmshot: cannot write %s\n", saveModel.c_str());
+        return kFailure;
+      }
+      std::fclose(f);
+      if (out.empty() && benchFrames == 0) return kOk;
+    }
     auto renderer = bmr::Renderer::create(model, full, low);
     if (!renderer) {
       std::fprintf(stderr, "bmshot: cannot draw here: %s\n", bmr::shaderError());
@@ -186,21 +171,10 @@ int main(int argc, char** argv) {
     plan::Plan plan;
     plan::Timeline timeline;
     if (frame >= 0) {
-      // Planned as `bm plan` plans it.
-      const fs::path repo = fs::path(ldraw).parent_path().parent_path();
-      const char* shadowEnv = std::getenv("BM_SHADOW_DIR");
-      const connect::ShadowLibrary shadow(shadowEnv ? fs::path(shadowEnv) : repo / "vendor" / "LDCadShadowLibrary");
-      connect::ConnectorDb db(library, shadow);
-      const connect::StudioLibrary studio(connect::StudioLibrary::defaultDirectory());
-      db.setStudio(&studio);
-      kin::GearDb gears;
-      cli::loadEngineData(repo, db, gears);
-      collide::ShapeCache shapes;
-      const connect::Graph graph = connect::buildGraph(model, db, &gears);
-      plan = plan::plan(model, graph, full, shapes, plan::Options{});
-      timeline = plan::buildTimeline(model, full, plan);
+      bmtools::Planned planned = bmtools::planModel(model, library, full, ldraw);
+      plan = std::move(planned.plan), timeline = std::move(planned.timeline);
       renderer->setFrame(plan, timeline, frame);
-      if (!timeline.camera.empty() && std::isnan(azimuth) && std::isnan(elevation)) orbit = cameraAt(timeline, frame);
+      if (!timeline.camera.empty() && std::isnan(azimuth) && std::isnan(elevation)) orbit = bmr::OrbitCamera::along(timeline, frame);
       std::fprintf(stderr, "bmshot: frame %d of %d\n", frame, timeline.frames);
     }
     const bmr::FrameStats s = renderer->draw(orbit.camera(aspect, renderer->scene().bounds), options);

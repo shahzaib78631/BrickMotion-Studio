@@ -25,7 +25,15 @@ endif()
 catch_discover_tests(bmrender_tests)
 
 # bmshot plans a model as `bm plan` does, so it shares bm's engine-data loader.
-add_executable(bmshot tools/bmshot/main.mm ${CMAKE_SOURCE_DIR}/tools/bm/data.cpp)
-target_include_directories(bmshot PRIVATE ${CMAKE_SOURCE_DIR}/tools/bm)
+add_library(bmtools_common STATIC tools/common/engine.cpp ${CMAKE_SOURCE_DIR}/tools/bm/data.cpp)
+target_include_directories(bmtools_common PUBLIC tools/common PRIVATE ${CMAKE_SOURCE_DIR}/tools/bm)
+target_link_libraries(bmtools_common PUBLIC bmcore PRIVATE bm_warnings)
+add_executable(bmshot tools/bmshot/main.mm)
 target_compile_options(bmshot PRIVATE $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
-target_link_libraries(bmshot PRIVATE bmrender bm_warnings)
+target_link_libraries(bmshot PRIVATE bmrender bmtools_common bm_warnings)
+
+# bmview: a window on the viewport.
+add_executable(bmview MACOSX_BUNDLE tools/bmview/main.mm tools/bmview/AppDelegate.mm tools/bmview/ViewportView.mm)
+set_target_properties(bmview PROPERTIES MACOSX_BUNDLE_BUNDLE_NAME bmview MACOSX_BUNDLE_GUI_IDENTIFIER com.brickmotion.bmview)
+target_compile_options(bmview PRIVATE $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
+target_link_libraries(bmview PRIVATE bmrender bmtools_common bm_warnings "-framework AppKit" "-framework QuartzCore" "-framework Metal")

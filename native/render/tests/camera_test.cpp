@@ -176,3 +176,21 @@ TEST_CASE("orbiting and zooming stay within their limits; a camera key converts"
   for (float v : projectionMatrix(odd).m) REQUIRE(std::isfinite(v));
   REQUIRE(OrbitCamera::framing(Box{}, 0.6, 1).distance > 0);
 }
+
+TEST_CASE("the timeline's camera is its keys, and between them the turn goes the short way round", "[camera]") {
+  plan::Timeline t;
+  REQUIRE(OrbitCamera::along(t, 5).distance == OrbitCamera{}.distance);  // no keys: the default
+  plan::CameraKey a, b;
+  a.frame = 0, a.target = {0, 0, 0}, a.distance = 400, a.azimuth = 3.0, a.elevation = 0.2;
+  b.frame = 30, b.target = {30, 0, 0}, b.distance = 600, b.azimuth = -3.0, b.elevation = 0.4;
+  t.camera = {a, b};
+  const OrbitCamera start = OrbitCamera::along(t, 0), end = OrbitCamera::along(t, 99);
+  REQUIRE(start.azimuth == Catch::Approx(3.0));
+  REQUIRE(end.distance == Catch::Approx(600));
+  const OrbitCamera mid = OrbitCamera::along(t, 15);
+  REQUIRE(mid.target.x == Catch::Approx(15));
+  REQUIRE(mid.distance == Catch::Approx(500));
+  REQUIRE(mid.elevation == Catch::Approx(0.3));
+  // From 3.0 to -3.0 the short way is through pi, not through 0.
+  REQUIRE(std::abs(std::remainder(mid.azimuth - M_PI, 2 * M_PI)) < 1e-9);
+}

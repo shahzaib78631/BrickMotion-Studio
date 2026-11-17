@@ -327,9 +327,9 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   lastSeen = seen;
 
   dispatch_semaphore_t done = inFlight;
-  double* gpu = &gpuMs;
+  std::atomic<double>* gpu = &gpuMs;
   [commands addCompletedHandler:^(id<MTLCommandBuffer> finished) {
-    *gpu = (finished.GPUEndTime - finished.GPUStartTime) * 1000.0;
+    gpu->store((finished.GPUEndTime - finished.GPUStartTime) * 1000.0);
     dispatch_semaphore_signal(done);
   }];
   if (drawable) [commands presentDrawable:drawable];
