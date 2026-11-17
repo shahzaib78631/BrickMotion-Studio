@@ -1,4 +1,5 @@
 // Drawing a build as it plays, and resizing.
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include "bmr/device.h"
 #include "gpu_rig.h"
@@ -143,4 +144,24 @@ TEST_CASE("a pick after the pieces move, before the next frame, finds what the l
   // Once that frame is drawn, the pick follows it.
   rig.shot(bmtest::plainOptions());
   REQUIRE(rig.renderer->pick(x, y) != 0);
+}
+
+TEST_CASE("the selection's bounds are where the selected pieces are shown now", "[gpu][playback]") {
+  NEED_GPU();
+  bmtest::GpuRig rig(kStack);
+  REQUIRE(rig.renderer);
+  const Build b;
+  REQUIRE(rig.renderer->selectionBounds().empty());
+  rig.renderer->select({0, 3});
+  // At rest: the bottom brick and the top one, 1x1 bricks from y = -72 to 24.
+  bm::Box rest = rig.renderer->selectionBounds();
+  REQUIRE(rest.min.x == Catch::Approx(-10).margin(0.01));
+  REQUIRE(rest.min.y == Catch::Approx(-72).margin(0.01));
+  REQUIRE(rest.max.y == Catch::Approx(24).margin(0.01));
+  // At frame 0 the bottom one waits 120 to the right and the top one is not shown yet.
+  rig.renderer->setFrame(b.plan, b.timeline, 0);
+  const bm::Box now = rig.renderer->selectionBounds();
+  REQUIRE(now.min.x == Catch::Approx(110).margin(0.01));
+  REQUIRE(now.max.x == Catch::Approx(130).margin(0.01));
+  REQUIRE(now.min.y == Catch::Approx(0).margin(0.01));
 }

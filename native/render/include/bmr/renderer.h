@@ -67,6 +67,9 @@ class Renderer {
   /// Exactly these pieces are selected (outlined in the accent colour, even where hidden
   /// behind others). Unknown pieces are ignored.
   void select(const std::vector<uint32_t>& pieces);
+  /// World space: the selected pieces where they are shown now (as the last setFrame or
+  /// setRest put them), hidden ones left out. Empty when none is shown.
+  bm::Box selectionBounds() const;
 
  private:
   Renderer();

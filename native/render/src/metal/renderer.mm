@@ -91,22 +91,39 @@ void Renderer::Impl::flush(int slot) {
   pending[slot].clear();
 }
 
+namespace {
+/// World space: a part's box (part space) under an instance's placement, as an axis-aligned box.
+bm::Box placedBox(const Instance& in, const bm::Box& part, bm::Vec3 origin) {
+  const bm::Vec3 c = (part.min + part.max) * 0.5, h = (part.max - part.min) * 0.5;
+  const float* m = in.model;
+  const bm::Vec3 at{m[0] * c.x + m[1] * c.y + m[2] * c.z + m[3], m[4] * c.x + m[5] * c.y + m[6] * c.z + m[7], m[8] * c.x + m[9] * c.y + m[10] * c.z + m[11]};
+  const bm::Vec3 half{std::abs(m[0]) * h.x + std::abs(m[1]) * h.y + std::abs(m[2]) * h.z, std::abs(m[4]) * h.x + std::abs(m[5]) * h.y + std::abs(m[6]) * h.z,
+                      std::abs(m[8]) * h.x + std::abs(m[9]) * h.y + std::abs(m[10]) * h.z};
+  return bm::Box{at - half + origin, at + half + origin};
+}
+}  // namespace
+
 void Renderer::Impl::updateLiveBounds() {
   bm::Box b;
   for (size_t g = 0; g < scene.groups.size(); g++) {
     const bm::Box& part = parts[g].bounds;
     if (part.empty()) continue;
-    const bm::Vec3 c = (part.min + part.max) * 0.5, h = (part.max - part.min) * 0.5;
-    for (const Instance& in : scene.groups[g].instances) {
-      if (in.flags & kHidden) continue;
-      const float* m = in.model;
-      const bm::Vec3 at{m[0] * c.x + m[1] * c.y + m[2] * c.z + m[3], m[4] * c.x + m[5] * c.y + m[6] * c.z + m[7], m[8] * c.x + m[9] * c.y + m[10] * c.z + m[11]};
-      const bm::Vec3 half{std::abs(m[0]) * h.x + std::abs(m[1]) * h.y + std::abs(m[2]) * h.z, std::abs(m[4]) * h.x + std::abs(m[5]) * h.y + std::abs(m[6]) * h.z,
-                          std::abs(m[8]) * h.x + std::abs(m[9]) * h.y + std::abs(m[10]) * h.z};
-      b.merge(bm::Box{at - half + scene.origin, at + half + scene.origin});
-    }
+    for (const Instance& in : scene.groups[g].instances)
+      if (!(in.flags & kHidden)) b.merge(placedBox(in, part, scene.origin));
   }
   liveBounds = b.empty() ? scene.bounds : b;
+}
+
+bm::Box Renderer::selectionBounds() const {
+  const Impl& impl = *impl_;
+  bm::Box b;
+  for (size_t g = 0; g < impl.scene.groups.size(); g++) {
+    const bm::Box& part = impl.parts[g].bounds;
+    if (part.empty()) continue;
+    for (const Instance& in : impl.scene.groups[g].instances)
+      if ((in.flags & kSelected) && !(in.flags & kHidden)) b.merge(placedBox(in, part, impl.scene.origin));
+  }
+  return b;
 }
 
 void Renderer::setFrame(const bm::plan::Plan& plan, const bm::plan::Timeline& timeline, int frame) {

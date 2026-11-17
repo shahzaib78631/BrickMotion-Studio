@@ -223,10 +223,7 @@ constexpr double kReadoutSeconds = 0.25;
 - (void)frameModel { [self frameBounds:_session->renderer->scene().bounds]; }
 
 - (void)frameSelectionOrModel {
-  const bmr::Scene& scene = _session->renderer->scene();
-  bm::Box box;
-  for (const auto& [g, k] : scene.where)
-    if (g < scene.groups.size() && (scene.groups[g].instances[k].flags & bmr::kSelected)) box.merge(scene.groups[g].restBoxes[k]);
+  const bm::Box box = _session->renderer->selectionBounds();  // where the selected pieces are shown now, mid-flight too
   if (box.empty()) [self frameModel];
   else [self frameBounds:box];
 }
