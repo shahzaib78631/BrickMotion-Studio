@@ -146,10 +146,11 @@ TEST_CASE("an empty model, a model of only missing parts, and a zero-size target
   r->resize(0, 0);
   const FrameStats stats = r->draw(Camera{}, plain());
   REQUIRE(stats.drawCalls == 0);
+  REQUIRE_FALSE(stats.submitted);  // nothing to draw into: the caller is to draw again
   r->resize(-5, 40);
-  r->draw(Camera{}, plain());
+  REQUIRE_FALSE(r->draw(Camera{}, plain()).submitted);
   r->resize(32, 32);
-  r->draw(Camera{}, plain());
+  REQUIRE(r->draw(Camera{}, plain()).submitted);
   REQUIRE(r->readback().width == 32);
 }
 

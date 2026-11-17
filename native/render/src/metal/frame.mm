@@ -423,6 +423,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   }];
   if (drawable) [commands presentDrawable:drawable];
   [commands commit];
+  stats.submitted = true;
   stats.cpuMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
   if (!drawable) {
     [commands waitUntilCompleted];

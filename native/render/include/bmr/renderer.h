@@ -29,6 +29,7 @@ struct FrameStats {
   uint32_t byDetail[3] = {0, 0, 0};  ///< instances drawn at Full, Low, Box
   bool shadowDrawn = false;          ///< the key light's shadow map was drawn again this frame (it is kept while nothing moves)
   uint64_t shadowTriangles = 0;      ///< drawn into it, when it was
+  bool submitted = false;            ///< the frame went to the GPU: false with nothing to draw into (no size, or a drawable that has not caught up with a resize)
 };
 
 class Renderer {
@@ -46,7 +47,8 @@ class Renderer {
   void resize(int width, int height);
   /// Draws one frame: into `drawable` (an id<CAMetalDrawable>, passed as void*, presented when
   /// done) or, when null, into the renderer's own picture, waiting until it is finished.
-  /// Never throws; with nothing to draw into it returns stats of zero.
+  /// Never throws; with nothing to draw into it returns stats of zero (submitted false), and
+  /// the caller should draw again once there is.
   FrameStats draw(const Camera& camera, const FrameOptions& options = {}, void* drawable = nullptr);
   /// The last frame drawn without a drawable. Empty if there is none.
   Image readback();

@@ -145,14 +145,14 @@ constexpr double kReadoutSeconds = 0.25;
     link.paused = YES;  // nothing changed: an idle window draws nothing
     return;
   }
-  _dirty = false;
   bmr::Renderer& r = *_session->renderer;
   const bmr::FrameStats s = r.draw(_orbit.camera(self.aspect, r.scene().bounds), _options, (__bridge void*)update.drawable);
-  if (s.instances || s.drawCalls) {
+  // A frame not sent (the drawable had not caught up with a resize) is drawn on the next refresh.
+  _dirty = _playing || (!s.submitted && _width > 0 && _height > 0);
+  if (s.submitted) {
     _lastStats = s;
     _cpuSum += s.cpuMs, _gpuSum += r.lastGpuMs(), _framesSummed++;
   }
-  if (_playing) _dirty = true;
 }
 
 /// Playback goes by the clock: frames that could not be drawn in time are skipped.
