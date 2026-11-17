@@ -59,4 +59,9 @@ std::vector<std::pair<uint32_t, uint32_t>> applyRest(Scene& scene, const bm::Mod
 /// Marks exactly these pieces selected. Returns what changed. Unknown pieces are ignored.
 std::vector<std::pair<uint32_t, uint32_t>> applySelection(Scene& scene, const std::vector<uint32_t>& pieces);
 
+/// For benchmarks: `columns` x `rows` copies of a model on a grid in x and z, each copy one
+/// model's width (or depth) plus `gapLdu` from the next. Piece ids are prefixed "r<copy>/".
+/// The copies are measured with `parts`; missing parts count as their placeholder box.
+bm::Model repeated(const bm::Model& model, bm::ldraw::PartCache& parts, int columns, int rows, double gapLdu);
+
 }  // namespace bmr

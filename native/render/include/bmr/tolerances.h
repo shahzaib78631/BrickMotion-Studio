@@ -100,6 +100,13 @@ inline constexpr double kEdgeFullPixels = 96;
 /// The selection's outline: the system accent blue (#007AFF, sRGB 0-255), this many pixels wide.
 inline constexpr unsigned kSelectionRgb[3] = {0, 122, 255};
 inline constexpr float kSelectionWidth = 2.0f;
+/// Ambient occlusion: how far (LDU) a surface looks for what hides its surroundings (a stud is
+/// 4 high, a plate 8, so this reaches a brick's corner but not the next brick over); how many
+/// degrees above a surface something must rise before it counts (as a cosine, 0.1: about 6
+/// degrees, so a gently curved surface does not shade itself); and how strongly it darkens.
+inline constexpr float kAoRadius = 16.0f;
+inline constexpr float kAoBias = 0.1f;
+inline constexpr float kAoStrength = 1.0f;
 /// How far a culled, level-of-detail frame may be from the same frame drawn in full: mean
 /// absolute difference per channel, and over the worst kBlock square (0..255).
 inline constexpr double kDetailMeanTolerance = 0.5;

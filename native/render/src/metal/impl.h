@@ -56,10 +56,13 @@ struct FrameBuffer {
 /// transparency sums. Every pipeline drawn in that pass declares all three. The sums are
 /// 32-bit while each layer is rounded to 16 (shaders/brick.metal): a sum of a few such
 /// numbers is exact, so it does not depend on the order the layers come in.
-inline constexpr MTLPixelFormat kColorFormat = MTLPixelFormatRGBA16Float, kAccumFormat = MTLPixelFormatRGBA32Float, kRevealFormat = MTLPixelFormatR32Float;
+/// The fourth holds, per pixel, the share of an opaque surface's light that came from the
+/// surroundings (r: ambient occlusion dims only that), and how much of the pixel is floor (g).
+inline constexpr MTLPixelFormat kColorFormat = MTLPixelFormatRGBA16Float, kAccumFormat = MTLPixelFormatRGBA32Float, kRevealFormat = MTLPixelFormatR32Float,
+                                kAmbientFormat = MTLPixelFormatRG16Float;
 
 struct Pipelines {
-  id<MTLRenderPipelineState> brick = nil, transparent = nil, floor = nil, edges = nil, shadow = nil, composite = nil, environment = nil, mask = nil, ids = nil;
+  id<MTLRenderPipelineState> brick = nil, transparent = nil, floor = nil, edges = nil, shadow = nil, composite = nil, environment = nil, mask = nil, ids = nil, ao = nil, aoBlur = nil;
   id<MTLDepthStencilState> depthWrite = nil, depthRead = nil, depthNone = nil, shadowDepth = nil;
   id<MTLSamplerState> smooth = nil, shadowSampler = nil;
   bool ok = false;
@@ -96,7 +99,9 @@ struct Renderer::Impl {
 
   // Targets, remade when the size changes.
   int width = 0, height = 0;
-  id<MTLTexture> colorMs = nil, depthMs = nil, accumMs = nil, revealMs = nil, color = nil, accum = nil, reveal = nil, final = nil, placeholderShadow = nil;
+  id<MTLTexture> colorMs = nil, depthMs = nil, accumMs = nil, revealMs = nil, ambientMs = nil, color = nil, accum = nil, reveal = nil, ambient = nil, depth = nil, final = nil,
+                placeholderShadow = nil;
+  id<MTLTexture> aoRaw = nil, aoSoft = nil;  // ambient occlusion, half size
   void makeTargets();
   id<MTLTexture> shadowMap = nil;  // made the first time shadows are drawn
   id<MTLTexture> mask = nil;       // selected pieces, one sample

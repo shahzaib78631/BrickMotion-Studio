@@ -377,3 +377,25 @@ TEST_CASE("a far model is mostly low detail and boxes, and still looks like itse
   REQUIRE(d.meanAbs < kDetailMeanTolerance);
   REQUIRE(d.worstBlock < kDetailBlockTolerance);
 }
+
+TEST_CASE("a brick standing on a plate darkens the plate beside it", "[gpu][frame]") {
+  NEED_GPU();
+  // A plate of nine 2x4 bricks (each 80 x 24 x 40, top at y = 24) with a 1x1 brick standing on
+  // its middle (x and z within +-10). Seen from the front left, the brick's left face meets the
+  // plate along x = -10. A plate point 1.5 units from it is in the brick's ambient shadow; one
+  // 35 units away (more than twice kAoRadius) is not.
+  std::string text = piece("3005.dat", 0, 0, 0, 4);
+  for (int i = -1; i <= 1; i++)
+    for (int k = -1; k <= 1; k++) text += piece("3001.dat", 80.0 * i, 24, 40.0 * k, 0x2A0A0A0);
+  FrameOptions withAo = plain();
+  withAo.ambientOcclusion = true;
+  const Shot on = shotOf(text, withAo, 256, 256, nullptr, 0.6, 0.6);
+  const auto [nx, ny] = on.pixel({-11.5, 24, 0});
+  const auto [fx, fy] = on.pixel({-45, 24, 0});
+  INFO("near " << nx << "," << ny << " far " << fx << "," << fy);
+  const double near = luminance(on.image.at(nx, ny)), far = luminance(on.image.at(fx, fy));
+  INFO("near " << near << " far " << far);
+  REQUIRE(far - near > 8);
+  const Shot off = shotOf(text, plain(), 256, 256, nullptr, 0.6, 0.6);
+  REQUIRE(std::abs(luminance(off.image.at(nx, ny)) - luminance(off.image.at(fx, fy))) <= 2);
+}

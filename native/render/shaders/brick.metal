@@ -85,12 +85,23 @@ Lit shade(float3 base, float roughness, float metalness, float clearcoat, float3
   return out;
 }
 
-fragment float4 brickFragment(BrickOut in [[stage_in]], constant FrameUniforms& frame [[buffer(1)]], constant DrawUniforms& draw [[buffer(2)]], texturecube<float> reflection [[texture(0)]],
+// An opaque surface: its light, and the share of it that came from the surroundings.
+struct OpaqueOut {
+  float4 color [[color(0)]];
+  float2 ambient [[color(3)]];  // r: ambient share, g: floor (0 here)
+};
+
+float luminanceOf(float3 c) { return dot(c, float3(0.2126, 0.7152, 0.0722)); }
+
+fragment OpaqueOut brickFragment(BrickOut in [[stage_in]], constant FrameUniforms& frame [[buffer(1)]], constant DrawUniforms& draw [[buffer(2)]], texturecube<float> reflection [[texture(0)]],
                                   texturecube<float> received [[texture(1)]], depth2d<float> shadowMap [[texture(2)]], sampler smooth [[sampler(0)]], sampler shadowSampler [[sampler(1)]]) {
   float3 base = in.fixedColor.a > 0.5 && draw.surface.w < 0.5 ? in.fixedColor.rgb : draw.base.rgb;
   float3 n = normalize(in.normal), v = normalize(frame.eye.xyz - in.world);
   Lit lit = shade(base, draw.surface.x, draw.surface.y, draw.surface.z, n, v, in.world, frame, reflection, received, shadowMap, smooth, shadowSampler);
-  return float4(lit.color, 1.0);  // rgb times coverage, coverage
+  OpaqueOut out;
+  out.color = float4(lit.color, 1.0);  // rgb times coverage, coverage
+  out.ambient = float2(saturate(luminanceOf(lit.ambient) / max(luminanceOf(lit.color), 1e-4)), 0.0);
+  return out;
 }
 
 // Transparent pieces: weighted blended order-independent transparency (McGuire and Bavoil 2013).

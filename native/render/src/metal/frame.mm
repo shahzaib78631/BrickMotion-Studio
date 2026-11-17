@@ -2,6 +2,7 @@
 #import "metal/impl.h"
 
 #include <chrono>
+#include <cmath>
 #include "bmr/cull.h"
 #include "bmr/material.h"
 #include "bmr/tolerances.h"
@@ -148,19 +149,21 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   // The model, multisampled, resolved into `color`, `accum` and `reveal`.
   {
     MTLRenderPassDescriptor* pass = [MTLRenderPassDescriptor new];
-    id<MTLTexture> ms[3] = {colorMs, accumMs, revealMs}, resolved[3] = {color, accum, reveal};
-    const MTLClearColor clears[3] = {MTLClearColorMake(0, 0, 0, 0), MTLClearColorMake(0, 0, 0, 0), MTLClearColorMake(0, 0, 0, 0)};  // nothing drawn: no coverage, no optical depth
-    for (int i = 0; i < 3; i++) {
+    id<MTLTexture> ms[4] = {colorMs, accumMs, revealMs, ambientMs}, resolved[4] = {color, accum, reveal, ambient};
+    for (int i = 0; i < 4; i++) {
       pass.colorAttachments[i].texture = ms[i];
       pass.colorAttachments[i].resolveTexture = resolved[i];
       pass.colorAttachments[i].loadAction = MTLLoadActionClear;
-      pass.colorAttachments[i].clearColor = clears[i];
+      pass.colorAttachments[i].clearColor = MTLClearColorMake(0, 0, 0, 0);  // nothing drawn: no coverage, no optical depth, no ambient share
       pass.colorAttachments[i].storeAction = MTLStoreActionMultisampleResolve;
     }
     pass.depthAttachment.texture = depthMs;
     pass.depthAttachment.loadAction = MTLLoadActionClear;
     pass.depthAttachment.clearDepth = 0;  // reversed depth: 0 is the far plane
-    pass.depthAttachment.storeAction = MTLStoreActionDontCare;
+    // One sample of depth kept, for ambient occlusion.
+    pass.depthAttachment.storeAction = options.ambientOcclusion ? MTLStoreActionMultisampleResolve : MTLStoreActionDontCare;
+    pass.depthAttachment.resolveTexture = options.ambientOcclusion ? depth : nil;
+    pass.depthAttachment.depthResolveFilter = MTLMultisampleDepthResolveFilterSample0;
     id<MTLRenderCommandEncoder> enc = [commands renderCommandEncoderWithDescriptor:pass];
     [enc setVertexBuffer:frameBuffer offset:0 atIndex:1];
     [enc setFragmentBuffer:frameBuffer offset:0 atIndex:1];
@@ -203,7 +206,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     if (options.floor) {
       [enc setCullMode:MTLCullModeNone];
       [enc setRenderPipelineState:pipelines.floor];
-      [enc setDepthStencilState:pipelines.depthRead];
+      [enc setDepthStencilState:pipelines.depthWrite];  // in the depth buffer, so ambient occlusion sees it
       [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
       stats.drawCalls++;
     }
@@ -261,7 +264,35 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     [enc endEncoding];
   }
 
-  // Background, transparency, selection outline, tone curve, sRGB.
+  // Ambient occlusion at half size, then blurred.
+  if (options.ambientOcclusion) {
+    struct AoUniforms {
+      simd_float4 lens, shape, size;
+    } u;
+    const float tanY = static_cast<float>(std::tan(camera.fovY / 2));
+    u.lens = simd_make_float4(tanY, tanY * static_cast<float>(camera.aspect), static_cast<float>(camera.near), static_cast<float>(camera.far));
+    u.shape = simd_make_float4(kAoRadius, kAoBias, kAoStrength, static_cast<float>(width));
+    u.size = simd_make_float4(static_cast<float>(height), static_cast<float>(aoRaw.width), static_cast<float>(aoRaw.height), 0);
+    for (int pass = 0; pass < 2; pass++) {
+      MTLRenderPassDescriptor* d = [MTLRenderPassDescriptor new];
+      d.colorAttachments[0].texture = pass == 0 ? aoRaw : aoSoft;
+      d.colorAttachments[0].loadAction = MTLLoadActionDontCare;
+      d.colorAttachments[0].storeAction = MTLStoreActionStore;
+      id<MTLRenderCommandEncoder> enc = [commands renderCommandEncoderWithDescriptor:d];
+      [enc setRenderPipelineState:pass == 0 ? pipelines.ao : pipelines.aoBlur];
+      [enc setFragmentBytes:&u length:sizeof u atIndex:0];
+      if (pass == 0) {
+        [enc setFragmentTexture:depth atIndex:0];
+      } else {
+        [enc setFragmentTexture:aoRaw atIndex:0];
+        [enc setFragmentTexture:depth atIndex:1];
+      }
+      [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
+      [enc endEncoding];
+    }
+  }
+
+  // Background, transparency, ambient occlusion, selection outline, tone curve, sRGB.
   {
     MTLRenderPassDescriptor* pass = [MTLRenderPassDescriptor new];
     pass.colorAttachments[0].texture = target;
@@ -274,6 +305,9 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     [enc setFragmentTexture:accum atIndex:1];
     [enc setFragmentTexture:reveal atIndex:2];
     [enc setFragmentTexture:mask atIndex:3];
+    [enc setFragmentTexture:ambient atIndex:4];
+    [enc setFragmentTexture:aoSoft atIndex:5];
+    [enc setFragmentSamplerState:pipelines.smooth atIndex:0];
     [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
     [enc endEncoding];
   }

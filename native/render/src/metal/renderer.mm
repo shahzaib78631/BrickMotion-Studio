@@ -186,7 +186,7 @@ void Renderer::Impl::drawIds() {
 }
 
 void Renderer::Impl::makeTargets() {
-  colorMs = depthMs = accumMs = revealMs = color = accum = reveal = final = mask = nil;
+  colorMs = depthMs = accumMs = revealMs = ambientMs = color = accum = reveal = ambient = depth = final = mask = aoRaw = aoSoft = nil;
   if (width < 1 || height < 1) return;
   auto make = [&](MTLPixelFormat format, int samples, MTLTextureUsage usage, MTLStorageMode storage) {
     MTLTextureDescriptor* d = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:format width:static_cast<NSUInteger>(width) height:static_cast<NSUInteger>(height) mipmapped:NO];
@@ -203,11 +203,21 @@ void Renderer::Impl::makeTargets() {
   depthMs = make(MTLPixelFormatDepth32Float, kSamples, MTLTextureUsageRenderTarget, tile);
   accumMs = make(kAccumFormat, kSamples, MTLTextureUsageRenderTarget, tile);
   revealMs = make(kRevealFormat, kSamples, MTLTextureUsageRenderTarget, tile);
+  ambientMs = make(kAmbientFormat, kSamples, MTLTextureUsageRenderTarget, tile);
   const MTLTextureUsage readable = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
   color = make(kColorFormat, 1, readable, MTLStorageModePrivate);
   accum = make(kAccumFormat, 1, readable, MTLStorageModePrivate);
   reveal = make(kRevealFormat, 1, readable, MTLStorageModePrivate);
   mask = make(MTLPixelFormatR8Unorm, 1, readable, MTLStorageModePrivate);
+  ambient = make(kAmbientFormat, 1, readable, MTLStorageModePrivate);
+  depth = make(MTLPixelFormatDepth32Float, 1, readable, MTLStorageModePrivate);
+  {
+    const int fullW = width, fullH = height;
+    width = (fullW + 1) / 2, height = (fullH + 1) / 2;  // make() reads the size
+    aoRaw = make(MTLPixelFormatR8Unorm, 1, readable, MTLStorageModePrivate);
+    aoSoft = make(MTLPixelFormatR8Unorm, 1, readable, MTLStorageModePrivate);
+    width = fullW, height = fullH;
+  }
   final = make(MTLPixelFormatBGRA8Unorm_sRGB, 1, MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead, MTLStorageModeShared);
 }
 

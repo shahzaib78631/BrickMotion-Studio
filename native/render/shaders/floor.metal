@@ -16,10 +16,18 @@ vertex FloorOut floorVertex(uint id [[vertex_id]], constant FrameUniforms& frame
   return out;
 }
 
-fragment float4 floorFragment(FloorOut in [[stage_in]], constant FrameUniforms& frame [[buffer(1)]], depth2d<float> shadowMap [[texture(2)]], sampler shadowSampler [[sampler(1)]]) {
+struct FloorColor {
+  float4 color [[color(0)]];
+  float2 ambient [[color(3)]];  // g: this is floor
+};
+
+fragment FloorColor floorFragment(FloorOut in [[stage_in]], constant FrameUniforms& frame [[buffer(1)]], depth2d<float> shadowMap [[texture(2)]], sampler shadowSampler [[sampler(1)]]) {
   float lit = frame.switches.x > 0.5 ? keyShadow(in.world, float3(0, -1, 0), frame, shadowMap, shadowSampler) : 1.0;
   float reach = frame.floorPlane.y;
   float fade = 1.0 - smoothstep(0.5 * reach, reach, length(in.world.xz - frame.floorCentre.xy));
   float dark = frame.floorCentre.z * (1.0 - lit) * fade;
-  return float4(0, 0, 0, dark);
+  FloorColor out;
+  out.color = float4(0, 0, 0, dark);
+  out.ambient = float2(0, 1);
+  return out;
 }
