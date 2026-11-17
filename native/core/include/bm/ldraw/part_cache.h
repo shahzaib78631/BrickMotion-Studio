@@ -32,6 +32,9 @@ class PartCache {
     size_t rebuilt = 0;     ///< built because the cache file was stale or damaged
   };
   Stats stats() const;
+  const Library& library() const;
+  const std::filesystem::path& directory() const;
+  const FlattenOptions& options() const;
 
   /// Where the command-line tool keeps its cache: ~/Library/Caches/BrickMotion/parts.
   static std::filesystem::path defaultDirectory();

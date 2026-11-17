@@ -33,7 +33,7 @@ struct Header {
 };
 static_assert(sizeof(Header) == 40);
 
-uint32_t optionBits(const FlattenOptions& o) { return (o.hiResPrimitives ? 1u : 0u) | (o.logoStuds ? 2u : 0u) | (o.lowResPrimitives ? 4u : 0u); }
+uint32_t optionBits(const FlattenOptions& o) { return (o.hiResPrimitives ? 1u : 0u) | (o.logoStuds ? 2u : 0u) | (o.lowResPrimitives ? 4u : 0u) | (o.noStuds ? 8u : 0u); }
 
 uint64_t checksum(const unsigned char* data, size_t size) {
   uint64_t h = 0x9E3779B97F4A7C15ull ^ size;
@@ -292,6 +292,10 @@ std::shared_ptr<const Mesh> PartCache::get(std::string_view partName) {
   if (!built) state_->memoryHits++;
   return entry->mesh;
 }
+
+const Library& PartCache::library() const { return state_->library; }
+const fs::path& PartCache::directory() const { return state_->dir; }
+const FlattenOptions& PartCache::options() const { return state_->options; }
 
 PartCache::Stats PartCache::stats() const { return {state_->memoryHits, state_->diskHits, state_->flattened, state_->rebuilt}; }
 

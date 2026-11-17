@@ -119,11 +119,16 @@ struct MeshLibrary::State {
   const bm::Model& model;
   bm::ldraw::PartCache& full;
   bm::ldraw::PartCache& low;
+  std::unique_ptr<bm::ldraw::PartCache> bare;  // as `low`, without studs: for Detail::Shadow
   std::mutex mutex;
   std::map<std::pair<std::string, int>, std::shared_ptr<const RenderMesh>> made;
 };
 
-MeshLibrary::MeshLibrary(const bm::Model& model, bm::ldraw::PartCache& full, bm::ldraw::PartCache& low) : state_(new State{model, full, low, {}, {}}) {}
+MeshLibrary::MeshLibrary(const bm::Model& model, bm::ldraw::PartCache& full, bm::ldraw::PartCache& low) : state_(new State{model, full, low, nullptr, {}, {}}) {
+  bm::ldraw::FlattenOptions bare = low.options();
+  bare.noStuds = true;
+  state_->bare = std::make_unique<bm::ldraw::PartCache>(low.library(), low.directory(), bare);
+}
 MeshLibrary::~MeshLibrary() = default;
 
 std::shared_ptr<const RenderMesh> MeshLibrary::get(const std::string& part, Detail detail) {
@@ -142,6 +147,12 @@ std::shared_ptr<const RenderMesh> MeshLibrary::get(const std::string& part, Deta
     const std::shared_ptr<const RenderMesh> whole = get(part, Detail::Full);
     if (detail == Detail::Box) {
       mesh = std::make_shared<const RenderMesh>(boxMesh(whole->bounds));
+    } else if (detail == Detail::Shadow) {
+      mesh = get(part, Detail::Low);
+      if (!mesh->empty() && !s.model.library().isInline(part)) {
+        RenderMesh bare = buildRenderMesh(*s.bare->get(part), s.model.library().colors());
+        if (!bare.empty() && bare.indices.size() < mesh->indices.size()) mesh = std::make_shared<const RenderMesh>(std::move(bare));
+      }
     } else {
       mesh = whole;
       if (!whole->empty() && !s.model.library().isInline(part)) {

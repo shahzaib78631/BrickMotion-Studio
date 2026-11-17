@@ -55,9 +55,11 @@ int bench(bmr::Renderer& renderer, const Model& model, int frames, int width, in
   bmr::OrbitCamera orbit = bmr::OrbitCamera::framing(renderer.scene().bounds, 0.6, aspect);
   std::vector<double> cpu, gpu, total;
   bmr::FrameStats last;
+  uint64_t shadowTriangles = 0;  // the most drawn into the shadow map in one frame
   for (int i = 0; i < kWarmUp + frames; i++) {
     orbit.azimuth = 2 * M_PI * i / (kWarmUp + frames);
     last = renderer.draw(orbit.camera(aspect, renderer.scene().bounds), options);
+    shadowTriangles = std::max(shadowTriangles, last.shadowTriangles);
     if (i < kWarmUp) continue;
     cpu.push_back(last.cpuMs), gpu.push_back(last.gpuMs), total.push_back(last.cpuMs + last.gpuMs);
   }
@@ -66,8 +68,8 @@ int bench(bmr::Renderer& renderer, const Model& model, int frames, int width, in
     std::snprintf(buf, sizeof buf, "{\"p50\":%.3f,\"p95\":%.3f,\"max\":%.3f}", s.p50, s.p95, s.max);
     return std::string(buf);
   };
-  std::printf("{\"pieces\":%zu,\"size\":\"%dx%d\",\"triangles\":%llu,\"frames\":%d,\"cpuMs\":%s,\"gpuMs\":%s,\"frameMs\":%s,\"byDetail\":[%u,%u,%u],\"drawCalls\":%u,\"culled\":%u}\n",
-              model.pieces().size(), width, height, static_cast<unsigned long long>(last.triangles), frames, json(spread(cpu)).c_str(), json(spread(gpu)).c_str(), json(spread(total)).c_str(),
+  std::printf("{\"pieces\":%zu,\"size\":\"%dx%d\",\"triangles\":%llu,\"shadowTriangles\":%llu,\"frames\":%d,\"cpuMs\":%s,\"gpuMs\":%s,\"frameMs\":%s,\"byDetail\":[%u,%u,%u],\"drawCalls\":%u,\"culled\":%u}\n",
+              model.pieces().size(), width, height, static_cast<unsigned long long>(last.triangles), static_cast<unsigned long long>(shadowTriangles), frames, json(spread(cpu)).c_str(), json(spread(gpu)).c_str(), json(spread(total)).c_str(),
               last.byDetail[0], last.byDetail[1], last.byDetail[2], last.drawCalls, last.culled);
   return kOk;
 }

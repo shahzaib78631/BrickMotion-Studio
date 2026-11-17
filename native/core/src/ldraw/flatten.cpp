@@ -137,6 +137,7 @@ struct Walker {
           // A mirroring placement turns the subfile's faces inside out, as INVERTNEXT does.
           const Xform placed = xf * c.xf;
           // A stud standing on top of the part is not part of its body.
+          if (opts.noStuds && isStudName(c.file)) break;
           const bool stud = inStud || (isStudName(c.file) && placed.r.m[4] > 0);
           const std::string name = substitute(c.file);
           const size_t before = mesh.positions.size();

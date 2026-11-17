@@ -38,7 +38,9 @@ RenderMesh buildRenderMesh(const bm::ldraw::Mesh& mesh, const std::unordered_map
 /// part. An empty box gives an empty mesh.
 RenderMesh boxMesh(const bm::Box& box);
 
-enum class Detail : uint8_t { Full = 0, Low = 1, Box = 2 };
+/// Shadow: the Low mesh without its studs (FlattenOptions::noStuds), which the key light's
+/// shadow map is drawn from; never drawn to be seen.
+enum class Detail : uint8_t { Full = 0, Low = 1, Box = 2, Shadow = 3 };
 
 /// The render meshes of the parts of one model, built on first use. Thread-safe.
 class MeshLibrary {
@@ -49,7 +51,8 @@ class MeshLibrary {
   MeshLibrary(const MeshLibrary&) = delete;
   MeshLibrary& operator=(const MeshLibrary&) = delete;
   /// Never null. Low is the Full mesh itself when the low-resolution one has no fewer
-  /// triangles (or is one of the model's own inline parts); Box is the box of the Full mesh.
+  /// triangles (or is one of the model's own inline parts); Box is the box of the Full mesh;
+  /// Shadow is the Low mesh, or one without studs when that has fewer triangles.
   /// A part with no geometry gives an empty mesh at every level.
   std::shared_ptr<const RenderMesh> get(const std::string& part, Detail detail);
 

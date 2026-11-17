@@ -38,6 +38,10 @@ struct FlattenOptions {
   /// Use the library's low-resolution files (p/8: 8-sided curves and studs) wherever one of
   /// the same name exists. For pieces drawn small. Wins over hiResPrimitives.
   bool lowResPrimitives = false;
+  /// Leave out every stud primitive (p/stud*.dat: the studs on top and the tubes and rings
+  /// under): what is left lies inside the whole part, so it can cast the part's shadow
+  /// without shadowing the part's own faces. Only for casting shadows.
+  bool noStuds = false;
 };
 
 /// Hash of a dependency list, as stored in Mesh::sourceHash.

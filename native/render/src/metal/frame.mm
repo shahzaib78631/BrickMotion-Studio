@@ -41,7 +41,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   }
   // The shadow map is drawn again only when a piece has moved, appeared or gone since it was,
   // or it was drawn at another detail.
-  const int casterDetail = forced ? options.forceDetail : static_cast<int>(Detail::Low);
+  const int casterDetail = forced ? options.forceDetail : static_cast<int>(Detail::Shadow);
   const LightRig rig = studioLights(camera, options.lightsFollowCamera);
   const bm::Vec3 toward = rig.toward[0];
   const bool redrawShadow = options.shadows && (!shadowMap || shadowDetail != casterDetail || length(toward - shadowToward) > 1e-9);
@@ -154,6 +154,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
       [enc setVertexBufferOffset:batch.first * sizeof(uint32_t) atIndex:4];
       [enc drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:gpu.indexCount indexType:MTLIndexTypeUInt32 indexBuffer:gpu.indices indexBufferOffset:0 instanceCount:batch.count];
       stats.drawCalls++;
+      stats.shadowTriangles += static_cast<uint64_t>(gpu.indexCount / 3) * batch.count;
     }
     [enc endEncoding];
   }

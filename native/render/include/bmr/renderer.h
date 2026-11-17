@@ -28,6 +28,7 @@ struct FrameStats {
   uint64_t triangles = 0;
   uint32_t byDetail[3] = {0, 0, 0};  ///< instances drawn at Full, Low, Box
   bool shadowDrawn = false;          ///< the key light's shadow map was drawn again this frame (it is kept while nothing moves)
+  uint64_t shadowTriangles = 0;      ///< drawn into it, when it was
 };
 
 class Renderer {
