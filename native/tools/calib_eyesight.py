@@ -1,10 +1,12 @@
 """Measures how far bmshot's picture is from EyeSight's on the calibration scene.
 
-    python/.venv/bin/python native/tools/calib_eyesight.py [--out DIR] [--azimuths 0,90,180,270] [-- extra bmshot flags]
+    python/.venv/bin/python native/tools/calib_eyesight.py [--scene calib|glass] [--out DIR] [--azimuths 0,90,180,270] [-- extra bmshot flags]
 
 The scene (native/corpus/calib/calib.ldr) and the four EyeSight renders beside it come from
 src/dev/calibScene.ts and scripts/render-eyesight-calib.ts: 960x540, a camera 25 studs from the
 scene centre, 25 degrees up, a 30 degree vertical field of view, BUILD_FL lights, white world.
+The glass scene (glass.ldr, glass_az*.png) comes from native/tools/render_eyesight_glass.ts, with
+the same cameras.
 
 Prints, per azimuth and on average, the RMSE (sRGB 0-255) over the whole picture, over the
 bricks, and over the floor around them, and the mean brightness of each; writes a side-by-side
@@ -31,9 +33,9 @@ def camera(az_deg):
     return ldraw(eye), ldraw(CENTRE)
 
 
-def shot(out, az, extra):
+def shot(scene, out, az, extra):
     eye, target = camera(az)
-    args = [BMSHOT, os.path.join(CALIB, 'calib.ldr'), '--out', out, '--size', '960x540', '--fov', '30',
+    args = [BMSHOT, os.path.join(CALIB, scene + '.ldr'), '--out', out, '--size', '960x540', '--fov', '30',
             '--eye', '%g,%g,%g' % eye, '--target', '%g,%g,%g' % target] + extra
     env = dict(os.environ, BM_LDRAW_DIR=os.environ.get('BM_LDRAW_DIR', os.path.join(REPO, 'public', 'ldraw')))
     subprocess.run(args, check=True, env=env, stdout=subprocess.DEVNULL)
@@ -46,6 +48,7 @@ def rmse(a, b, mask):
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument('--scene', default='calib', choices=['calib', 'glass'])
     ap.add_argument('--out', default=os.path.join(REPO, 'native', 'build', 'calib'))
     ap.add_argument('--azimuths', default='0,90,180,270')
     ap.add_argument('extra', nargs='*', help='more bmshot flags, after --')
@@ -53,10 +56,10 @@ def main():
     os.makedirs(o.out, exist_ok=True)
     rows = []
     for az in [int(a) for a in o.azimuths.split(',')]:
-        ref = np.asarray(Image.open(os.path.join(CALIB, 'calib_az%d.png' % az)).convert('RGB')).astype(np.float64)
-        ours = shot(os.path.join(o.out, 'ours_az%d.png' % az), az, o.extra)
+        ref = np.asarray(Image.open(os.path.join(CALIB, '%s_az%d.png' % (o.scene, az))).convert('RGB')).astype(np.float64)
+        ours = shot(o.scene, os.path.join(o.out, '%s_ours_az%d.png' % (o.scene, az)), az, o.extra)
         # Where the bricks are: a plain picture with no floor, shadow or occlusion, against black.
-        plain = shot(os.path.join(o.out, 'mask_az%d.png' % az), az, ['--no-floor', '--no-shadows', '--no-ao', '--no-edges', '--background', '0,0,0'])
+        plain = shot(o.scene, os.path.join(o.out, '%s_mask_az%d.png' % (o.scene, az)), az, ['--no-floor', '--no-shadows', '--no-ao', '--no-edges', '--background', '0,0,0'])
         bricks = plain.max(axis=2) > 3
         near = np.zeros_like(bricks)
         ys, xs = np.nonzero(bricks)
@@ -69,12 +72,12 @@ def main():
                  brickLum=(lum(ref, bricks), lum(ours, bricks)), floorLum=(lum(ref, floor), lum(ours, floor)))
         rows.append(r)
         diff = np.clip(128 + (ours - ref) * 2, 0, 255)
-        Image.fromarray(np.concatenate([ref, ours, diff], axis=1).astype(np.uint8)).save(os.path.join(o.out, 'side_az%d.png' % az))
+        Image.fromarray(np.concatenate([ref, ours, diff], axis=1).astype(np.uint8)).save(os.path.join(o.out, '%s_side_az%d.png' % (o.scene, az)))
         print('az %3d  rmse all %5.2f  bricks %5.2f  floor %5.2f   brick lum ref %5.1f ours %5.1f   floor lum ref %5.1f ours %5.1f' %
               (az, r['all'], r['bricks'], r['floor'], *r['brickLum'], *r['floorLum']))
     mean = lambda k: sum(r[k] for r in rows) / len(rows)
     print('mean    rmse all %5.2f  bricks %5.2f  floor %5.2f' % (mean('all'), mean('bricks'), mean('floor')))
-    json.dump(rows, open(os.path.join(o.out, 'scores.json'), 'w'), indent=1)
+    json.dump(rows, open(os.path.join(o.out, '%s_scores.json' % o.scene), 'w'), indent=1)
 
 
 if __name__ == '__main__':
