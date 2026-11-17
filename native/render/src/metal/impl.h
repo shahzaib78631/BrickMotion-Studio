@@ -135,6 +135,9 @@ struct Renderer::Impl {
   void drawIds();
 
   FrameBuffer frameUniforms, drawUniforms, visible, floorBins;
+  // The floor's table of light per direction and elevation, for the lights it was made for.
+  std::unique_ptr<FloorBins> floorTable;
+  bm::Vec3 floorTableToward[4];
   uint64_t frame = 0;
   dispatch_semaphore_t inFlight = nil;
   std::atomic<double> gpuMs{0};  // written when a frame finishes, on Metal's thread

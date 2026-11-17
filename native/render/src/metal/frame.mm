@@ -45,8 +45,11 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   const LightRig rig = studioLights(camera, options.lightsFollowCamera);
   const bm::Vec3 toward = rig.toward[0];
   const bool redrawShadow = options.shadows && (!shadowMap || shadowDetail != casterDetail || length(toward - shadowToward) > 1e-9);
-  // The height map, for the floor's light, only when a piece has moved, appeared or gone.
-  const bool floorLit = options.shadows || options.ambientOcclusion;
+  // The half-size pass (occlusion, the key's shadow, the floor's light) runs with either on;
+  // the height map, for the floor's light, is kept only while the floor is drawn too, and is
+  // drawn again only when a piece has moved, appeared or gone.
+  const bool screenPass = options.shadows || options.ambientOcclusion;
+  const bool floorLit = screenPass && options.floor;
   const bool redrawHeight = floorLit && (!heightMap || heightDetail != casterDetail);
   if (redrawShadow || redrawHeight) {
     std::vector<uint32_t> shown;
@@ -105,10 +108,15 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   fu.heightProj = simdFrom(above.matrix);
   fu.floorLook = simd_make_float4(static_cast<float>(std::max(1.0, above.texel)), static_cast<float>(kFloorLookShare * kFloorExtent * diagonal), floorLit && !liveBounds.empty() ? 1.0f : 0.0f, kFloorSkyPower);
   // How much of each light's disk each of the floor's 12 directions and 16 elevation bins
-  // holds (floor_light.metal), with each bin's light on a level floor (even in sin^2 elevation).
+  // holds (floor_light.metal), with each bin's light on a level floor (even in sin^2 elevation):
+  // worked out again only when the lights have turned.
   id<MTLBuffer> binsBuffer = floorBins.get(dev, frame, sizeof(FloorBins));
-  FloorBins& bins = *static_cast<FloorBins*>(binsBuffer.contents);
-  for (int i = 0; i < 4; i++) {
+  bool sameRig = floorTable != nullptr;
+  for (int i = 0; i < 4 && sameRig; i++) sameRig = length(rig.toward[i] - floorTableToward[i]) <= 1e-12;
+  if (floorLit && !floorTable) floorTable = std::make_unique<FloorBins>();
+  for (int i = 0; i < 4 && floorLit && !sameRig; i++) {
+    FloorBins& bins = *floorTable;
+    floorTableToward[i] = rig.toward[i];
     const bm::Vec3 t = normalized(rig.toward[i]);
     const double cosRadius = std::sqrt(1.0 - kRigSinSquared);
     for (int d = 0; d < 48; d++)
@@ -133,6 +141,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     }
     bins.lit[i] = static_cast<float>(rig.strength[i] * disk / M_PI * (i == 0 ? kFloorKeyShare : 1.0f));
   }
+  if (floorLit) std::memcpy(binsBuffer.contents, floorTable.get(), sizeof(FloorBins));
   id<MTLBuffer> frameBuffer = frameUniforms.get(dev, frame, sizeof fu);
   std::memcpy(frameBuffer.contents, &fu, sizeof fu);
 
@@ -340,7 +349,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   }
 
   // Ambient occlusion at half size, then blurred.
-  if (floorLit) {
+  if (screenPass) {
     struct AoUniforms {
       simd_float4 lens, shape, size, eye, right, up, forward;
     } u;
