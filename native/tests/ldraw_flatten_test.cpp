@@ -132,3 +132,19 @@ TEST_CASE("real bricks have the documented size and face outward", "[ldraw][flat
   const Mesh hi = flatten("3001.dat", lib, FlattenOptions{.hiResPrimitives = true});
   REQUIRE(hi.triangles.size() > m.triangles.size());
 }
+
+TEST_CASE("low-resolution primitives are used where they exist", "[ldraw][flatten][data]") {
+  const char* dir = std::getenv("BM_LDRAW_DIR");
+  if (!dir) SKIP("BM_LDRAW_DIR is not set");
+  const Library lib(dir);
+  FlattenOptions low;
+  low.lowResPrimitives = true;
+  const Mesh full = flatten("3941.dat", lib), coarse = flatten("3941.dat", lib, low);  // a 2x2 round brick
+  REQUIRE(coarse.triangles.size() < full.triangles.size());
+  REQUIRE_FALSE(coarse.triangles.empty());
+  REQUIRE(coarse.missing.empty());
+  // Low wins when both are asked for.
+  FlattenOptions both = low;
+  both.hiResPrimitives = true;
+  REQUIRE(flatten("3941.dat", lib, both).triangles.size() == coarse.triangles.size());
+}

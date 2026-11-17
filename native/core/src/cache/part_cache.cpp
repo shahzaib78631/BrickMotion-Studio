@@ -33,7 +33,7 @@ struct Header {
 };
 static_assert(sizeof(Header) == 40);
 
-uint32_t optionBits(const FlattenOptions& o) { return (o.hiResPrimitives ? 1u : 0u) | (o.logoStuds ? 2u : 0u); }
+uint32_t optionBits(const FlattenOptions& o) { return (o.hiResPrimitives ? 1u : 0u) | (o.logoStuds ? 2u : 0u) | (o.lowResPrimitives ? 4u : 0u); }
 
 uint64_t checksum(const unsigned char* data, size_t size) {
   uint64_t h = 0x9E3779B97F4A7C15ull ^ size;

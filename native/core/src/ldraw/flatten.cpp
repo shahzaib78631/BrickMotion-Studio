@@ -75,11 +75,15 @@ struct Walker {
     if (twoSided || reverse) emit(i, k, j);
   }
 
-  /// The file a reference means, after the hi-res and logo substitutions.
+  /// The file a reference means, after the logo, low-res and hi-res substitutions.
   std::string substitute(const std::string& name) const {
     if (opts.logoStuds) {
       if (name == "stud.dat" && lib.find("stud-logo4.dat")) return "stud-logo4.dat";
       if (name == "stud2.dat" && lib.find("stud2-logo4.dat")) return "stud2-logo4.dat";
+    }
+    if (opts.lowResPrimitives) {
+      if (name.find('/') == std::string::npos && lib.find("8/" + name)) return "8/" + name;
+      return name;
     }
     if (opts.hiResPrimitives && isCurvedPrimitive(name) && lib.find("48/" + name)) return "48/" + name;
     return name;

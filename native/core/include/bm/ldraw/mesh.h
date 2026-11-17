@@ -26,6 +26,9 @@ struct Mesh {
 struct FlattenOptions {
   bool hiResPrimitives = false;  ///< use p/48 curved primitives where they exist
   bool logoStuds = false;        ///< studs with the logo (stud-logo4.dat)
+  /// Use the library's low-resolution files (p/8: 8-sided curves and studs) wherever one of
+  /// the same name exists. For pieces drawn small. Wins over hiResPrimitives.
+  bool lowResPrimitives = false;
 };
 
 /// Hash of a dependency list, as stored in Mesh::sourceHash.
