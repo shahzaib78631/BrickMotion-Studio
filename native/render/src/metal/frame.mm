@@ -20,7 +20,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   // view or not, since one out of view can shadow one in it; at low detail unless a detail is
   // forced, as a shadow does not show a stud's sides).
   const bool forced = options.forceDetail >= 0 && options.forceDetail <= 2;
-  const std::vector<Visible> inView = cull(scene, meshBounds, camera, height, options.forceDetail, options.cull);
+  const std::vector<Visible> inView = cull(scene, parts, camera, height, options.forceDetail, options.cull);
   std::vector<uint32_t> list;
   std::vector<Batch> seen, casters;
   auto add = [&](std::vector<Batch>& into, uint32_t g, Detail d, const std::vector<uint32_t>& instances) {
@@ -32,8 +32,11 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
       if (list.size() > first) into.push_back({g, d, mirrored != 0, first, static_cast<uint32_t>(list.size()) - first});
     }
   };
+  std::vector<Batch> outlined;  // whose outlines show, at the detail they are drawn at
   for (uint32_t g = 0; g < scene.groups.size(); g++) {
     for (int d = 0; d < 3; d++) add(seen, g, static_cast<Detail>(d), inView[g].byDetail[d]);
+    if (options.edges)
+      for (int d = 0; d < 2; d++) add(outlined, g, static_cast<Detail>(d), inView[g].edges[d]);
     stats.culled += inView[g].culled;
   }
   if (options.shadows) {
@@ -86,25 +89,25 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   const double floorY = (b.empty() ? 0.0 : b.max.y - scene.origin.y) + kFloorLift;
   fu.floorPlane = simd_make_float4(static_cast<float>(floorY), static_cast<float>(kFloorExtent * diagonal), static_cast<float>(key.texel), kShadowBias);
   fu.floorCentre = simd_make_float4(static_cast<float>(middle.x - scene.origin.x), static_cast<float>(middle.z - scene.origin.z), kFloorShadow, kOitDepthScale);
-  fu.lens = simd_make_float4(static_cast<float>(std::tan(camera.fovY / 2)), static_cast<float>(kFullPixels), static_cast<float>(kEdgeFullPixels), 0);
+  fu.lens = simd_make_float4(static_cast<float>(std::tan(camera.fovY / 2)), static_cast<float>(kEdgeStudPixels / kStudLdu), static_cast<float>(kEdgeStudFullPixels / kStudLdu), 0);
   const simd_float3 accent = simd_make_float3(linearFromSrgb(kSelectionRgb[0]), linearFromSrgb(kSelectionRgb[1]), linearFromSrgb(kSelectionRgb[2]));
   fu.selection = simd_make_float4(accent.x, accent.y, accent.z, selected.empty() ? 0.0f : kSelectionWidth);
   id<MTLBuffer> frameBuffer = frameUniforms.get(dev, frame, sizeof fu);
   std::memcpy(frameBuffer.contents, &fu, sizeof fu);
 
-  // One DrawUniforms per batch, the shadow casters' after the seen ones.
-  const size_t batchCount = seen.size() + casters.size();
+  // One DrawUniforms per batch: the seen ones, then the shadow casters', then the outlined.
+  const size_t batchCount = seen.size() + casters.size() + outlined.size();
   id<MTLBuffer> drawBuffer = drawUniforms.get(dev, frame, std::max<size_t>(1, batchCount) * sizeof(DrawUniforms));
   auto* du = static_cast<DrawUniforms*>(drawBuffer.contents);
   for (size_t i = 0; i < batchCount; i++) {
-    const Batch& batch = i < seen.size() ? seen[i] : casters[i - seen.size()];
+    const Batch& batch = i < seen.size() ? seen[i] : i < seen.size() + casters.size() ? casters[i - seen.size()] : outlined[i - seen.size() - casters.size()];
     const Group& group = scene.groups[batch.group];
     const Material& m = group.material;
     du[i].base = simd_make_float4(m.base[0], m.base[1], m.base[2], m.alpha);
     du[i].surface = simd_make_float4(m.roughness, m.metalness, m.clearcoat, group.placeholder ? 1 : 0);
     du[i].edge = simd_make_float4(m.edge[0], m.edge[1], m.edge[2], kEdgeOpacity);
     du[i].flip = simd_make_float4(batch.mirrored ? -1 : 1, 0, 0, 0);
-    const bm::Box& part = meshBounds[batch.group];
+    const bm::Box& part = parts[batch.group].bounds;
     const bm::Vec3 c = part.empty() ? bm::Vec3{} : (part.min + part.max) * 0.5;
     du[i].sphere = simd_make_float4(static_cast<float>(c.x), static_cast<float>(c.y), static_cast<float>(c.z), part.empty() ? 0.0f : static_cast<float>(length(part.max - part.min) / 2));
   }
@@ -217,9 +220,9 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
       [enc setDepthStencilState:pipelines.depthRead];
       const float nearer = kEdgeNearer;
       [enc setVertexBytes:&nearer length:sizeof nearer atIndex:5];
-      for (size_t i = 0; i < seen.size(); i++) {
-        const Batch& batch = seen[i];
-        if (batch.detail != Detail::Full) continue;
+      for (size_t k = 0; k < outlined.size(); k++) {
+        const Batch& batch = outlined[k];
+        const size_t i = seen.size() + casters.size() + k;  // its DrawUniforms
         const GpuMesh& gpu = mesh(scene.groups[batch.group], batch.detail);
         if (!gpu.edgeVertices) continue;
         [enc setVertexBuffer:gpu.edges offset:0 atIndex:0];

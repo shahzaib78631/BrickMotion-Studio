@@ -88,15 +88,18 @@ inline constexpr float kEdgeNearer = 0.002f;
 /// layer's weight falls by its fourth power.
 inline constexpr float kOitDepthScale = 2000.0f;
 
-/// Levels of detail, by how tall a piece's bounding sphere looks on screen. Below kFullPixels a
-/// stud is under three pixels wide, where 16- and 8-sided studs cannot be told apart; below
-/// kLowPixels a piece is a few pixels and its box looks the same. Starting values: the
-/// equivalence tests in frame_test.mm hold them.
-inline constexpr double kFullPixels = 48;
+/// Levels of detail. A piece is drawn at full detail where its low-detail mesh would be at
+/// least kLowErrorPixels off on screen (bm::ldraw::Mesh::lowError, at the near side of the
+/// piece), at low detail otherwise, and as its box once the whole piece is under kLowPixels
+/// tall, where a box looks the same. The equivalence tests in frame_test.mm hold these.
+inline constexpr double kLowErrorPixels = 0.5;
 inline constexpr double kLowPixels = 6;
-/// Outline lines fade in between kFullPixels (none: low detail has none either, so nothing
-/// pops when a piece changes detail) and kEdgeFullPixels (all of kEdgeOpacity).
-inline constexpr double kEdgeFullPixels = 96;
+/// Outline lines fade with how wide a stud (kStudLdu across) looks at the near side of the
+/// piece: gone below kEdgeStudPixels, where the lines on a stud would be a dot of noise (and
+/// black's light-grey edges turn a far tyre grey), all of kEdgeOpacity from kEdgeStudFullPixels.
+inline constexpr double kStudLdu = 12;
+inline constexpr double kEdgeStudPixels = 4;
+inline constexpr double kEdgeStudFullPixels = 8;
 /// The selection's outline: the system accent blue (#007AFF, sRGB 0-255), this many pixels wide.
 inline constexpr unsigned kSelectionRgb[3] = {0, 122, 255};
 inline constexpr float kSelectionWidth = 2.0f;

@@ -12,7 +12,12 @@ double projectedPixels(double radius, double distance, double fovY, int viewport
   return radius / (distance * std::tan(fovY / 2)) * viewportHeight;
 }
 
-std::vector<Visible> cull(const Scene& scene, const std::vector<bm::Box>& meshBounds, const Camera& camera, int viewportHeight, int forceDetail, bool frustum, bm::JobPool* pool) {
+double pixelsPerLdu(double distance, double fovY, int viewportHeight) {
+  if (viewportHeight < 1) return 0;
+  return viewportHeight / (2 * std::max(distance, kNearest) * std::tan(fovY / 2));
+}
+
+std::vector<Visible> cull(const Scene& scene, const std::vector<PartShape>& parts, const Camera& camera, int viewportHeight, int forceDetail, bool frustum, bm::JobPool* pool) {
   std::vector<Visible> out(scene.groups.size());
   const Frustum planes = frustumOf(camera, scene.origin);
   const bool inViewOnly = frustum;
@@ -22,7 +27,8 @@ std::vector<Visible> cull(const Scene& scene, const std::vector<bm::Box>& meshBo
   (pool ? *pool : bm::JobPool::shared()).parallelFor(scene.groups.size(), [&](size_t g) {
     const Group& group = scene.groups[g];
     Visible& v = out[g];
-    const bm::Box part = g < meshBounds.size() ? meshBounds[g] : bm::Box{};
+    const bm::Box part = g < parts.size() ? parts[g].bounds : bm::Box{};
+    const double lowError = g < parts.size() ? parts[g].lowError : 0.0;
     const bool none = part.empty();
     const bm::Vec3 centre = none ? bm::Vec3{} : (part.min + part.max) * 0.5, half = none ? bm::Vec3{} : (part.max - part.min) * 0.5;
     for (uint32_t i = 0; i < group.instances.size(); i++) {
@@ -39,13 +45,19 @@ std::vector<Visible> cull(const Scene& scene, const std::vector<bm::Box>& meshBo
         continue;
       }
       int detail = 0;
-      if (forced) {
+      bool edges = true;
+      if (!none) {
+        const double radius = length(h), distance = length(c - eye);
+        const double perLdu = pixelsPerLdu(distance - radius, camera.fovY, viewportHeight);
+        edges = kStudLdu * perLdu >= kEdgeStudPixels;
+        if (forced) detail = forceDetail;
+        else if (lowError * perLdu >= kLowErrorPixels) detail = 0;
+        else detail = 2 * projectedPixels(radius, distance, camera.fovY, viewportHeight) >= kLowPixels ? 1 : 2;
+      } else if (forced) {
         detail = forceDetail;
-      } else if (!none) {
-        const double pixels = 2 * projectedPixels(length(h), length(c - eye), camera.fovY, viewportHeight);
-        detail = pixels >= kFullPixels ? 0 : pixels >= kLowPixels ? 1 : 2;
       }
       v.byDetail[detail].push_back(i);
+      if (edges && detail < 2) v.edges[detail].push_back(i);
     }
   });
   return out;

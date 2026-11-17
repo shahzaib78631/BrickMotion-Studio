@@ -23,6 +23,7 @@ struct RenderMesh {
   std::vector<uint32_t> indices;  ///< triangles, counter-clockwise seen from outside
   std::vector<float> edges;       ///< xyz pairs: the part's outline lines
   bm::Box bounds;                 ///< of the triangles; empty if there are none
+  float lowError = 0;             ///< LDU: how far this coarse mesh may be from the full one (bm::ldraw::Mesh::lowError)
   bool empty() const { return indices.empty(); }
 };
 

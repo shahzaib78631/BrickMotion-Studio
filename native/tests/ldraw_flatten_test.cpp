@@ -1,3 +1,4 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <algorithm>
@@ -147,4 +148,10 @@ TEST_CASE("low-resolution primitives are used where they exist", "[ldraw][flatte
   FlattenOptions both = low;
   both.hiResPrimitives = true;
   REQUIRE(flatten("3941.dat", lib, both).triangles.size() == coarse.triangles.size());
+  // How far the coarse curves may be: the largest thing replaced on a 2x2 round brick is its
+  // round body, radius 20; a plain 2x4 brick's are the tubes underneath, radius 8 (its studs
+  // are 6); the full mesh says 0.
+  REQUIRE(full.lowError == 0);
+  REQUIRE(coarse.lowError == Catch::Approx(kLowResError * 20).margin(0.05));
+  REQUIRE(flatten("3001.dat", lib, low).lowError == Catch::Approx(kLowResError * 8).margin(0.02));
 }

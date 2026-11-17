@@ -31,7 +31,8 @@ std::unique_ptr<Renderer> Renderer::create(const bm::Model& model, bm::ldraw::Pa
     impl.meshes = std::make_unique<MeshLibrary>(model, full, low);
     impl.scene = buildScene(model, full);
     impl.inFlight = dispatch_semaphore_create(3);
-    for (const Group& g : impl.scene.groups) impl.meshBounds.push_back(g.placeholder ? bm::kPlaceholderBox : impl.meshes->get(g.part, Detail::Full)->bounds);
+    for (const Group& g : impl.scene.groups)
+      impl.parts.push_back(g.placeholder ? PartShape{bm::kPlaceholderBox, 0} : PartShape{impl.meshes->get(g.part, Detail::Full)->bounds, impl.meshes->get(g.part, Detail::Low)->lowError});
     for (const Group& g : impl.scene.groups) {
       const size_t bytes = std::max<size_t>(1, g.instances.size()) * sizeof(Instance);
       std::array<id<MTLBuffer>, 3> copies;
@@ -89,7 +90,7 @@ void Renderer::Impl::flush(int slot) {
 void Renderer::Impl::updateLiveBounds() {
   bm::Box b;
   for (size_t g = 0; g < scene.groups.size(); g++) {
-    const bm::Box& part = meshBounds[g];
+    const bm::Box& part = parts[g].bounds;
     if (part.empty()) continue;
     const bm::Vec3 c = (part.min + part.max) * 0.5, h = (part.max - part.min) * 0.5;
     for (const Instance& in : scene.groups[g].instances) {

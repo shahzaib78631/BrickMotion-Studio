@@ -20,6 +20,7 @@ struct Corner {
 
 RenderMesh buildRenderMesh(const bm::ldraw::Mesh& mesh, const std::unordered_map<int, bm::ldraw::Color>& colors) {
   RenderMesh out;
+  out.lowError = mesh.lowError;
   const size_t vertexCount = mesh.positions.size() / 3;
   auto point = [&](uint32_t i) { return Vec3{mesh.positions[i * 3], mesh.positions[i * 3 + 1], mesh.positions[i * 3 + 2]}; };
   auto colorOf = [&](size_t triangle) -> uint32_t {

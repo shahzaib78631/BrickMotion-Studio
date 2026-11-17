@@ -22,7 +22,7 @@ struct FrameUniforms {
   float4 switches;        // x: shadows on, y: ambient occlusion on, z: highest mip of the reflection cube, w: clearcoat roughness
   float4 floorPlane;      // x: the floor's y (world), y: how far it reaches from its centre, z: shadow texel size (LDU), w: shadow bias in texels
   float4 floorCentre;     // x, y: the floor's centre (world x and z), z: how much full shadow darkens it, w: kOitDepthScale
-  float4 lens;            // x: tan of half the vertical angle of view, y, z: the on-screen heights (pixels) where edges are gone and fully shown
+  float4 lens;            // x: tan of half the vertical angle of view; y, z: pixels per LDU where outlines are gone and fully shown
   float4 selection;       // rgb: the outline's colour, linear; w: its width in pixels, 0 when nothing selected is in view
 };
 

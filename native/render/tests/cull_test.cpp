@@ -16,9 +16,10 @@ struct Rig {
 // The fixture 3005 is a box 20 wide, 24 tall (y 0..24), 20 deep.
 const Box kBrick{{-10, 0, -10}, {10, 24, 10}};
 
-std::vector<Box> boundsOf(const Scene& s) {
-  std::vector<Box> out;
-  for (const Group& g : s.groups) out.push_back(g.part == "3005.dat" ? kBrick : Box{{-20, 0, -40}, {20, 24, 40}});
+// A low-detail error of half an LDU for every part (the fixture library has no p/8 of its own).
+std::vector<PartShape> boundsOf(const Scene& s) {
+  std::vector<PartShape> out;
+  for (const Group& g : s.groups) out.push_back({g.part == "3005.dat" ? kBrick : Box{{-20, 0, -40}, {20, 24, 40}}, 0.5f});
   return out;
 }
 // The box of an instance under its matrix, in world space less the origin, by its eight corners.
@@ -69,30 +70,48 @@ TEST_CASE("pieces outside the view are culled and those inside are kept", "[cull
   }
 }
 
-TEST_CASE("detail falls with size on screen and nothing is dropped", "[cull]") {
+TEST_CASE("detail goes by how far the coarse mesh would be off on screen, and nothing is dropped", "[cull]") {
   Rig r;
   const Model m = bmtest::modelFrom(piece("3005.dat", 0, 0, 0, 4), r.lib);
   const Scene s = buildScene(m, r.parts);
-  // The brick's sphere is sqrt(10^2 + 12^2 + 10^2) = 18.5 across its middle; it looks
-  // 2 * 18.5 * 1000 / (d * tan 0.3) pixels tall from distance d in a view 1000 tall.
-  const double radius = std::sqrt(344.0);
-  int expected = 0;
-  for (double pixels : {200.0, 20.0, 2.0}) {
-    Camera c;
-    c.target = {0, 12, 0};
-    c.eye = {0, 12, -2 * radius * 1000 / (pixels * std::tan(0.3))};
-    c.near = 1, c.far = 1e7;
-    const std::vector<Visible> v = cull(s, boundsOf(s), c, 1000);
-    INFO(pixels << " px");
+  // The brick's sphere has radius sqrt(10^2 + 12^2 + 10^2) = 18.5. From distance d (to its
+  // centre) in a view 1000 tall, an LDU at its near side looks 1000 / (2 (d - 18.5) tan 0.3)
+  // pixels, so its low-detail error of 0.5 LDU looks half that; the whole sphere looks
+  // 2 * 18.5 * 1000 / (d tan 0.3) tall.
+  const double radius = std::sqrt(344.0), t = std::tan(0.3);
+  struct Case {
+    double distance;
+    int detail;
+  };
+  const Case cases[] = {
+      {radius + 1000 / (2 * t * 2.0), 0},    // an LDU 2 px: off by 1 px at low detail: full
+      {radius + 1000 / (2 * t * 0.5), 1},    // an LDU 0.5 px: off by 0.25 px: low
+      {2 * radius * 1000 / (3.0 * t), 2},    // 3 px tall: a box
+  };
+  for (const Case& c : cases) {
+    Camera cam;
+    cam.target = {0, 12, 0};
+    cam.eye = {0, 12, -c.distance};
+    cam.near = 1, cam.far = 1e8;
+    const std::vector<Visible> v = cull(s, boundsOf(s), cam, 1000);
+    INFO("distance " << c.distance);
     REQUIRE(v[0].culled == 0);
-    for (int d = 0; d < 3; d++) REQUIRE(v[0].byDetail[d].size() == (d == expected ? 1u : 0u));
-    expected++;
+    for (int d = 0; d < 3; d++) REQUIRE(v[0].byDetail[d].size() == (d == c.detail ? 1u : 0u));
   }
+  // A part with no low-detail error is low detail (the same mesh) however near.
+  Camera near;
+  near.target = {0, 12, 0}, near.eye = {0, 12, -60};
+  std::vector<PartShape> exact = boundsOf(s);
+  exact[0].lowError = 0;
+  REQUIRE(cull(s, exact, near, 1000)[0].byDetail[1].size() == 1);
   REQUIRE(projectedPixels(radius, 1, 0.6, 1000) == 1000);  // the eye inside the sphere
   // Forced detail puts everything kept at that level.
-  Camera c;
-  c.target = {0, 12, 0}, c.eye = {0, 12, -100};
-  REQUIRE(cull(s, boundsOf(s), c, 1000, 2)[0].byDetail[2].size() == 1);
+  REQUIRE(cull(s, boundsOf(s), near, 1000, 2)[0].byDetail[2].size() == 1);
+  // Outlines show while a stud (12 LDU) looks 4 px or more at the near side.
+  Camera far = near;
+  far.eye = {0, 12, -(radius + 12 * 1000 / (2 * t * 3.0))};  // a stud 3 px wide
+  REQUIRE(cull(s, boundsOf(s), far, 1000)[0].edges[1].empty());
+  REQUIRE(cull(s, boundsOf(s), near, 1000)[0].edges[0].size() + cull(s, boundsOf(s), near, 1000)[0].edges[1].size() == 1);
 }
 
 TEST_CASE("culling is the same on one thread and many", "[cull]") {

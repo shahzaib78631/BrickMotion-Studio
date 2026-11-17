@@ -15,6 +15,10 @@ struct Mesh {
   std::vector<uint32_t> triangles;  ///< 3 indices each, counter-clockwise seen from outside
   std::vector<int32_t> triColor;    ///< per triangle; 16 = the piece's own colour
   std::vector<float> edges;         ///< xyz pairs: the part's outline lines
+  /// With FlattenOptions::lowResPrimitives: how far, in LDU, the 8-sided curves put in may be
+  /// from the 16-sided ones they replace (kLowResError times the largest radius replaced).
+  /// 0 when nothing was replaced.
+  float lowError = 0;
   Box bounds;                       ///< of triangles and edges; empty when there is no geometry
   Box body;                         ///< bounds without the studs on top; what grid placement measures
   std::vector<std::string> missing; ///< subfiles that were not found, or closed a reference loop
@@ -22,6 +26,11 @@ struct Mesh {
   std::vector<std::pair<std::string, uint64_t>> deps;
   uint64_t sourceHash = 0;          ///< over `deps`: changes when any of those files changes
 };
+
+/// How far an 8-sided polygon's sides can be from a 16-sided one's, per unit of radius: an
+/// 8-gon's side lies 1 - cos(pi / 8) of the radius inside the circle at its middle, where the
+/// 16-gon has a corner on it.
+inline constexpr double kLowResError = 0.0761;
 
 struct FlattenOptions {
   bool hiResPrimitives = false;  ///< use p/48 curved primitives where they exist

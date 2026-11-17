@@ -1,7 +1,7 @@
-// Outline lines: each mesh's edges, drawn for every instance shown at full detail, a little
-// nearer the eye than the faces they lie on, in the material's edge colour. They fade out as
-// the piece gets small on screen, and are gone by the size where it drops to low detail (which
-// has none): far off, lines a pixel wide would cover a piece (black's edges are light grey).
+// Outline lines: each mesh's edges, drawn for every instance shown at full or low detail, a
+// little nearer the eye than the faces they lie on, in the material's edge colour. They fade
+// out as studs get small on screen (bmr::cull leaves out those already gone): far off, lines a
+// pixel wide would cover a piece (black's edges are light grey).
 
 struct EdgeOut {
   float4 position [[position]];
@@ -15,10 +15,10 @@ vertex EdgeOut edgeVertex(uint vid [[vertex_id]], uint iid [[instance_id]], cons
   EdgeOut out;
   out.position = frame.viewProj * float4(placePoint(inst, float3(points[vid])), 1.0);
   out.position.z *= 1.0 + nearer;  // depth is reversed: larger is nearer
-  // How tall the piece's sphere looks, in pixels (as bmr::cull reckons it).
+  // How many pixels an LDU looks at the near side of the piece's sphere (as bmr::cull reckons it).
   float distance = length(placePoint(inst, draw.sphere.xyz) - frame.eye.xyz);
-  float pixels = distance > draw.sphere.w ? 2.0 * draw.sphere.w / (distance * frame.lens.x) * frame.viewport.y : frame.viewport.y;
-  out.fade = smoothstep(frame.lens.y, frame.lens.z, pixels);
+  float perLdu = frame.viewport.y / (2.0 * max(distance - draw.sphere.w, 1.0) * frame.lens.x);
+  out.fade = smoothstep(frame.lens.y, frame.lens.z, perLdu);
   return out;
 }
 

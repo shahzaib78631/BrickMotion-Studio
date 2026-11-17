@@ -7,6 +7,7 @@
 #include <simd/simd.h>
 #include <string>
 #include <vector>
+#include "bmr/cull.h"
 #include "bmr/render_mesh.h"
 #include "bmr/renderer.h"
 #include "metal/device.h"
@@ -91,7 +92,7 @@ struct Renderer::Impl {
   std::vector<std::pair<uint32_t, uint32_t>> pending[3];
   bm::Box liveBounds;  // world space: where the shown pieces are now (the shadow is fitted to it)
   void updateLiveBounds();
-  std::vector<bm::Box> meshBounds;  // per group, part space, at full detail
+  std::vector<PartShape> parts;  // per group: its part's bounds at full detail, and its low-detail error
   std::map<std::pair<std::string, int>, GpuMesh> gpuMeshes;  // (part, detail); a placeholder's part is ""
   const GpuMesh& mesh(const Group& group, Detail detail);
   void upload(const std::vector<std::pair<uint32_t, uint32_t>>& changed);  // queues them for every copy

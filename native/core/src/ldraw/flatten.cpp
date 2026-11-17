@@ -138,7 +138,20 @@ struct Walker {
           const Xform placed = xf * c.xf;
           // A stud standing on top of the part is not part of its body.
           const bool stud = inStud || (isStudName(c.file) && placed.r.m[4] > 0);
-          file(substitute(c.file), placed, own, flip != (c.invert != (determinant(c.xf.r) < 0)), !twoSided, stud);
+          const std::string name = substitute(c.file);
+          const size_t before = mesh.positions.size();
+          file(name, placed, own, flip != (c.invert != (determinant(c.xf.r) < 0)), !twoSided, stud);
+          if (name != c.file && name.rfind("8/", 0) == 0) {
+            // How big what was replaced is: its radius, whichever way its axis lies, is the
+            // middle one of its three half-sizes (a cylinder's or a ring's two equal ones).
+            Box swapped;
+            for (size_t v = before; v + 2 < mesh.positions.size(); v += 3) swapped.grow({mesh.positions[v], mesh.positions[v + 1], mesh.positions[v + 2]});
+            if (!swapped.empty()) {
+              double h[3] = {(swapped.max.x - swapped.min.x) / 2, (swapped.max.y - swapped.min.y) / 2, (swapped.max.z - swapped.min.z) / 2};
+              std::sort(h, h + 3);
+              mesh.lowError = std::max(mesh.lowError, static_cast<float>(kLowResError * h[1]));
+            }
+          }
           break;
         }
         case Cmd::Step:
