@@ -120,69 +120,93 @@ TEST_CASE("joined pieces are allowed a second skin of overlap", "[collide][pair]
 }
 
 namespace {
-/// What firstOverlap must give: overlap() asked at every travel in turn.
-size_t poseByPose(const Shape& a, const Xform& xa, Vec3 direction, const std::vector<double>& at, const Shape& b, const Xform& xb, const std::vector<Zone>& zones) {
-  for (size_t i = 0; i < at.size(); i++) {
+/// Where overlap(), asked pose by pose every `step` along the way, first holds; -1 if nowhere.
+double poseByPose(const Shape& a, const Xform& xa, Vec3 direction, double distance, double step, const Shape& b, const Xform& xb, const std::vector<Zone>& zones = {}) {
+  for (double t = 0; t <= distance; t += step) {
     Xform pose = xa;
-    pose.t = pose.t + direction * at[i];
-    if (overlap(a, pose, b, xb, zones)) return i;
+    pose.t = pose.t + direction * t;
+    if (overlap(a, pose, b, xb, zones)) return t;
   }
-  return at.size();
+  return -1;
 }
-std::vector<double> every(double step, double upTo) {
-  std::vector<double> at;
-  for (double t = 0; t <= upTo; t += step) at.push_back(t);
-  return at;
+/// What firstCrossing must give, against overlap() asked pose by pose every `step`: a travel
+/// within kCrossingResolution of one at which they do cross, and none of those poses crossing
+/// before it; or, if it finds none, none of those poses crossing either. Returns the travel
+/// (-1 for none).
+double agrees(const Shape& a, const Xform& xa, Vec3 direction, double distance, double step, const Shape& b, const Xform& xb, const std::vector<Zone>& zones = {}) {
+  const double found = firstCrossing(a, xa, direction, distance, b, xb, zones);
+  const double seen = poseByPose(a, xa, direction, distance, step, b, xb, zones);
+  INFO("from " << xa.t.x << " " << xa.t.y << " " << xa.t.z << " along " << direction.x << " " << direction.y << " " << direction.z << ": found " << found << ", pose by pose " << seen);
+  if (!(found <= distance)) {
+    REQUIRE(seen < 0);
+    return -1;
+  }
+  Xform there = xa;
+  there.t = there.t + direction * (found + kCrossingResolution);
+  REQUIRE(overlap(a, there, b, xb, zones));
+  if (seen >= 0) REQUIRE(found <= seen + kCrossingResolution);
+  return found;
 }
 }  // namespace
 
-TEST_CASE("a whole way looked at in one go gives what looking pose by pose gives", "[collide][pair][sweep]") {
-  const std::vector<double> travels = every(0.5, 80);
+TEST_CASE("the first crossing along a way is where looking pose by pose finds it first", "[collide][pair][sweep]") {
   struct Case {
     Xform start;
     Vec3 direction;
+    bool hits;
   };
   const double r = std::sqrt(0.5);
   const Case cases[] = {
-      {at(-60, 0, 0), {1, 0, 0}},        // straight into the other brick
-      {at(-60, 0, 20), {1, 0, 0}},       // past it, sharing a wall plane all the way: never a hit
-      {at(-60, 0, 19.2), {1, 0, 0}},     // past it 0.8 inside its wall: a hit
-      {at(-60, 0, 19.7), {1, 0, 0}},     // past it 0.3 inside its wall: under the skin, never a hit
-      {at(0, -60, 0), {0, 1, 0}},        // down onto it
-      {at(-40, -40, 3), {r, r, 0}},      // at a slant
-      {at(-60, 30, 0), {1, 0, 0}},       // underneath, clear
-      {at(0, 0, 0), {1, 0, 0}},          // starting inside it
+      {at(-60, 0, 0), {1, 0, 0}, true},       // straight into the other brick
+      {at(-60, 0, 20), {1, 0, 0}, false},     // past it, sharing a wall plane all the way: never a hit
+      {at(-60, 0, 19.2), {1, 0, 0}, true},    // past it 0.8 inside its wall: a hit
+      {at(-60, 0, 19.7), {1, 0, 0}, false},   // past it 0.3 inside its wall: under the skin, never a hit
+      {at(0, -60, 0), {0, 1, 0}, true},       // down onto it
+      {at(-40, -40, 3), {r, r, 0}, true},     // at a slant
+      {at(-60, 30, 0), {1, 0, 0}, false},     // underneath, clear
+      {at(0, 0, 0), {1, 0, 0}, true},         // starting on top of it, its double: crossing as soon as it moves
   };
-  for (const Case& c : cases) {
-    INFO("from " << c.start.t.x << " " << c.start.t.y << " " << c.start.t.z << " along " << c.direction.x << " " << c.direction.y << " " << c.direction.z);
-    REQUIRE(firstOverlap(brick(), c.start, c.direction, travels.data(), travels.size(), brick(), at(0, 0, 0)) == poseByPose(brick(), c.start, c.direction, travels, brick(), at(0, 0, 0), {}));
-  }
+  for (const Case& c : cases) REQUIRE((agrees(brick(), c.start, c.direction, 80, 0.01, brick(), at(0, 0, 0)) >= 0) == c.hits);
+  // Straight in, it stops where the skin is used up: 60 to touching, a skin and a touch more to cross.
+  const double in = firstCrossing(brick(), at(-60, 0, 0), {1, 0, 0}, 80, brick(), at(0, 0, 0));
+  REQUIRE(in > 40 + kSkin);
+  REQUIRE(in < 40 + kSkin + 0.1);
+  REQUIRE(firstCrossing(brick(), at(5, 0, 0), {1, 0, 0}, 80, brick(), at(0, 0, 0)) == 0);  // in the way from the start
   // The moving piece turned, and a zone that forgives the first part of the hit.
   Xform turned = at(-60, 2, 5);
   turned.r = Mat3{{r, 0, r, 0, 1, 0, -r, 0, r}};
   const std::vector<Zone> zone{{{-10, -10, 5}, {-10, 40, 5}, 6}};  // along the wall's edge where the corner arrives
-  REQUIRE(firstOverlap(brick(), turned, {1, 0, 0}, travels.data(), travels.size(), brick(), at(0, 0, 0)) == poseByPose(brick(), turned, {1, 0, 0}, travels, brick(), at(0, 0, 0), {}));
-  REQUIRE(firstOverlap(brick(), turned, {1, 0, 0}, travels.data(), travels.size(), brick(), at(0, 0, 0), zone) == poseByPose(brick(), turned, {1, 0, 0}, travels, brick(), at(0, 0, 0), zone));
-  REQUIRE(poseByPose(brick(), turned, {1, 0, 0}, travels, brick(), at(0, 0, 0), zone) > poseByPose(brick(), turned, {1, 0, 0}, travels, brick(), at(0, 0, 0), {}));
-  REQUIRE(firstOverlap(brick(), at(0, 0, 0), {1, 0, 0}, travels.data(), 0, brick(), at(0, 0, 0)) == 0);  // no travels: none hits
+  const double bare = agrees(brick(), turned, {1, 0, 0}, 80, 0.01, brick(), at(0, 0, 0));
+  const double forgiven = agrees(brick(), turned, {1, 0, 0}, 80, 0.01, brick(), at(0, 0, 0), zone);
+  REQUIRE(bare >= 0);
+  REQUIRE(forgiven > bare);
+  // No way to go: only where it starts is looked at.
+  REQUIRE(firstCrossing(brick(), at(-60, 0, 0), {1, 0, 0}, 0, brick(), at(0, 0, 0)) > 0);
+  REQUIRE(firstCrossing(brick(), at(5, 0, 0), {1, 0, 0}, 0, brick(), at(0, 0, 0)) == 0);
 }
 
-TEST_CASE("real parts passing closely: one go gives what pose by pose gives", "[collide][pair][sweep][data]") {
+TEST_CASE("a crossing that lasts a fraction of a step of the way is found", "[collide][pair][sweep]") {
+  // Corner past corner on a slant: 0.6 into each other at the closest, at a travel of 40.25,
+  // and more than a skin only for about a tenth of a step either side of it.
+  const double s = std::sqrt(0.5);
+  const Xform start = at(19.4 - 40.25 * s, 0, 19.4 + 40.25 * s);
+  const Vec3 d{s, 0, -s};
+  REQUIRE(poseByPose(brick(), start, d, 80, kSweepStep, brick(), at(0, 0, 0)) < 0);  // stepped over
+  const double found = agrees(brick(), start, d, 80, 0.001, brick(), at(0, 0, 0));
+  REQUIRE(found > 40.25 - kSweepStep / 2);
+  REQUIRE(found < 40.25);
+}
+
+TEST_CASE("real parts passing closely: the first crossing is where pose by pose finds it", "[collide][pair][sweep][data]") {
   const char* dir = std::getenv("BM_LDRAW_DIR");
   if (!dir) SKIP("BM_LDRAW_DIR is not set");
   const ldraw::Library library(dir);
   const Shape round = buildShape(ldraw::flatten("3941.dat", library));  // a 2x2 round brick
   const Shape pin = buildShape(ldraw::flatten("2780.dat", library));
   const Shape beam = buildShape(ldraw::flatten("32524.dat", library));  // a 1x7 liftarm
-  const std::vector<double> travels = every(0.5, 120);
   const double r = std::sqrt(0.5);
   int hitsSeen = 0, clearSeen = 0;
-  auto same = [&](const Shape& a, const Xform& xa, Vec3 d, const Shape& b) {
-    const size_t want = poseByPose(a, xa, d, travels, b, at(0, 0, 0), {});
-    INFO("from " << xa.t.x << " " << xa.t.y << " " << xa.t.z << " along " << d.x << " " << d.y << " " << d.z);
-    REQUIRE(firstOverlap(a, xa, d, travels.data(), travels.size(), b, at(0, 0, 0)) == want);
-    (want < travels.size() ? hitsSeen : clearSeen)++;
-  };
+  auto same = [&](const Shape& a, const Xform& xa, Vec3 d, const Shape& b) { (agrees(a, xa, d, 120, 0.02, b, at(0, 0, 0)) >= 0 ? hitsSeen : clearSeen)++; };
   for (double offset : {0.0, 20.0, 38.0, 39.4, 39.8, 40.0, 41.0})  // through, grazing and beside another round brick
     for (Vec3 d : {Vec3{1, 0, 0}, Vec3{0, 1, 0}, Vec3{r, 0, r}}) {
       same(round, at(-60 * d.x + offset * d.z, -60 * d.y, -60 * d.z + offset * (d.x + d.y)), d, round);

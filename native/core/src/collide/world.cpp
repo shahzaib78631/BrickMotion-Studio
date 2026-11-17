@@ -240,8 +240,8 @@ uint64_t mix(uint64_t h, double v, double grain) { return mix(h, static_cast<uin
 uint64_t mix(uint64_t h, Vec3 v, double grain) { return mix(mix(mix(h, v.x, grain), v.y, grain), v.z, grain); }
 }  // namespace
 
-/// How far one piece gets along a line before it meets one other, sampled only where their boxes
-/// can meet. The answer depends only on the two shapes, how they sit to each other, the line
+/// How far one piece gets along a line before it meets one other, looked at only where their
+/// boxes can meet. The answer depends only on the two shapes, how they sit to each other, the line
 /// and the zones, all seen from the obstacle; a model repeats the same pairs many times (a pin
 /// in a hole, a brick on a brick), so answers are remembered.
 double World::pairTravel(uint32_t p, const Xform& from, const Box& fromBox, uint32_t q, Vec3 direction, double distance, const std::vector<Zone>& allZones, double tolerance) const {
@@ -296,32 +296,19 @@ double World::pairTravel(uint32_t p, const Xform& from, const Box& fromBox, uint
     const auto it = s.memo.find(key);
     if (it != s.memo.end()) return it->second;
   }
-  auto hitAt = [&](double t) {
-    Xform pose = from;
-    pose.t = pose.t + direction * t;
-    return overlap(*s.shapes[p], pose, *s.shapes[q], s.poses[q], zones);
-  };
-  // The poses to look at: every kSweepStep while the two can cross.
-  std::vector<double> at;
-  for (double t = std::max(0.0, std::floor(enter / kSweepStep) * kSweepStep - kSweepStep); t <= leave + kSweepStep && t <= distance + 1e-9; t += kSweepStep) at.push_back(std::min(t, distance));
-  // The first of them that hits. A stretch of the way is looked at in one go (firstOverlap), so
-  // that two pieces passing without touching cost one look; the stretches grow as the way
-  // stays clear, so that a hit near the start costs little too.
+  // Where the two first cross, however briefly (firstCrossing), while they can cross at all; it
+  // stops `tolerance` short of there. A stretch of the way is looked at in one go, so that two
+  // pieces passing without touching cost one look; the stretches grow as the way stays clear,
+  // so that a hit near the start costs little too.
+  const double lo = std::max(0.0, enter - kSweepStep), hi = std::min(distance, leave + kSweepStep);
   double result = distance;
-  for (size_t begin = 0, stretch = 8; begin < at.size(); begin += stretch, stretch *= 4) {
-    const size_t count = std::min(at.size() - begin, stretch);
-    const size_t i = begin + firstOverlap(*s.shapes[p], from, direction, at.data() + begin, count, *s.shapes[q], s.poses[q], zones);
-    if (i == begin + count) continue;
-    if (i == 0 && hitAt(0)) {  // it is in the way from the very start
-      result = 0;
-      break;
-    }
-    double a = i == 0 ? 0 : at[i - 1], b = at[i];
-    while (b - a > tolerance) {
-      const double mid = (a + b) / 2;
-      (hitAt(mid) ? b : a) = mid;
-    }
-    result = a;
+  for (double begin = lo, stretch = 8 * kSweepStep; begin < hi; begin += stretch, stretch *= 4) {
+    const double length = std::min(stretch, hi - begin);
+    Xform at = from;
+    at.t = at.t + direction * begin;
+    const double first = firstCrossing(*s.shapes[p], at, direction, length, *s.shapes[q], s.poses[q], zones);
+    if (!(first <= length)) continue;
+    result = std::max(0.0, begin + first - tolerance);
     break;
   }
   std::lock_guard<std::mutex> lock(s.memoLock);

@@ -167,7 +167,7 @@ nlohmann::json toJson(const Plan& plan, const Certificate* cert, const Model& mo
   nlohmann::json out = planJson(plan, cert, model);
   out["format"] = "brickmotion-native-plan";
   out["version"] = 1;
-  out["sweep"] = "sampled 0.5";
+  out["sweep"] = "continuous 0.001";  // legs are checked along their length, to collide::kCrossingResolution
   out["planMs"] = plan.planMs;
   out["complete"] = plan.complete;
   out["notes"] = plan.notes;

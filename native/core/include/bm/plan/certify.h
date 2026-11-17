@@ -23,9 +23,9 @@ struct Certificate {
   bool ok() const { return total == certified; }
 };
 
-/// Checks every move in build order. Flights are sampled every collide::kSweepStep with the
-/// collision skin, so something thinner than the skin between two samples can be missed: this is
-/// a sampled check, not a continuous proof.
+/// Checks every move in build order. Each straight leg of a flight is checked along its whole
+/// length, not at sampled poses (World::clearTravel): a crossing is found however briefly it
+/// lasts, down to collide::kCrossingResolution of travel.
 Certificate certify(const Model& model, const connect::Graph& graph, ldraw::PartCache& parts, collide::ShapeCache& shapes, const Plan& plan);
 
 }  // namespace bm::plan

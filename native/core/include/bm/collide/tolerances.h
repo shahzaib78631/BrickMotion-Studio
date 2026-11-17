@@ -23,13 +23,18 @@ inline constexpr double kGenericZone = 10.0;
 /// anywhere: its zone is everything.
 inline constexpr double kElasticZone = 1e9;
 
-/// Spacing of the poses checked along a move. Equal to the skin, so nothing thicker than
-/// the skin can be stepped over.
 /// How far a gear's teeth reach beyond its pitch circle, and a rack's beyond its pitch line.
 /// Technic teeth are about 2.5 LDU either side of the pitch circle; 3 covers the modelled tips.
 inline constexpr double kToothReach = 3.0;
 
+/// Spacing of the poses checked along a move that turns (World::sweep), and the unit a straight
+/// move is looked at in stretches of. Equal to the skin. A straight move is not sampled
+/// (firstCrossing): samples this far apart step over a graze, two corners passing each other a
+/// little more than a skin apart, that lasts a fraction of a step.
 inline constexpr double kSweepStep = kSkin;
+
+/// How closely firstCrossing() places where two pieces moving past each other begin to cross.
+inline constexpr double kCrossingResolution = 1e-3;
 
 /// The most poses one move is checked at, however long it is.
 inline constexpr int kMaxSweepSteps = 4096;

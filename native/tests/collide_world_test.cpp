@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <unistd.h>
@@ -196,6 +197,42 @@ TEST_CASE("a mate's zone lets the two pieces it joins cross there, and no other 
   REQUIRE_FALSE(w.hits(*brick, into, {0}, {everywhere}).has_value());
   everywhere.first = 2;
   REQUIRE(w.hits(*brick, into, {0}, {everywhere}) == std::optional<uint32_t>(1));
+}
+
+TEST_CASE("a graze shorter than a step of the sweep is found, from either end of the way", "[collide][world][travel]") {
+  Rig r;
+  // Piece 1 passes piece 0 on a slant, corner by corner: at the closest their corners are 0.6
+  // into each other, more than the skin, but only for a tenth or so of a step of the way.
+  // Piece 0 is half as tall and sits halfway up piece 1, so that the corners of piece 1's inner
+  // surface, where the probe points are, pass above and below it: only the sweep can find this.
+  const double s = std::sqrt(0.5), peak = 40.25, way = 80.25;
+  const Vec3 d{s, 0, -s};
+  const Model m = r.model("1 4 0 6 0 1 0 0 0 0.5 0 0 0 1 3005.dat\n" + piece("3005.dat", 19.4 - peak * s, 0, 19.4 + peak * s));
+  const World w(m, r.parts, r.shapes);
+  // Where the two cross, looked at pose by pose a thousandth apart.
+  double first = -1, last = -1;
+  for (double t = 0; t <= way; t += 0.001) {
+    Xform at = w.pose(1);
+    at.t = at.t + d * t;
+    if (overlap(w.shape(1), at, w.shape(0), w.pose(0))) last = t, first = first < 0 ? t : first;
+  }
+  REQUIRE(first > peak - 0.25);
+  REQUIRE(last < peak + 0.25);
+  REQUIRE(last >= first);
+  // From the start it is stopped just short of where they first cross.
+  uint32_t blocker = 7;
+  const double forward = w.clearTravel({1}, d, way, nullptr, {}, &blocker);
+  REQUIRE(forward < first);
+  REQUIRE(forward > first - 0.1);
+  REQUIRE(blocker == 0);
+  // From the far end back, just short of where they last cross.
+  Xform end;
+  end.t = d * way;
+  blocker = 7;
+  const double back = w.clearTravel({1}, d * -1.0, way, nullptr, {}, &blocker, end);
+  REQUIRE(back < way - last);
+  REQUIRE(back > way - last - 0.1);
+  REQUIRE(blocker == 0);
 }
 
 TEST_CASE("asked only whether it gets far enough, the answer says so and names what stops it", "[collide][world][travel]") {

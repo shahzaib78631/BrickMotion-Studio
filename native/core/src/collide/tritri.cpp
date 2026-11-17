@@ -1,4 +1,5 @@
 #include <cmath>
+#include <limits>
 #include "bm/collide/shape.h"
 
 namespace bm::collide {
@@ -22,11 +23,11 @@ void crossing(const Vec3 v[3], const double d[3], Vec3& p0, Vec3& p1) {
 
 }  // namespace
 
-bool trianglesCross(const Vec3f af[3], const Vec3f bf[3], Vec3f* where) {
-  const Vec3 a[3] = {d3(af[0]), d3(af[1]), d3(af[2])}, b[3] = {d3(bf[0]), d3(bf[1]), d3(bf[2])};
+double crossLength(const Vec3 a[3], const Vec3 b[3], Vec3* where) {
+  constexpr double none = -std::numeric_limits<double>::infinity();
   const Vec3 na = cross(a[1] - a[0], a[2] - a[0]), nb = cross(b[1] - b[0], b[2] - b[0]);
   const double la = length(na), lb = length(nb);
-  if (!(la > 1e-12) || !(lb > 1e-12)) return false;  // no area (or not finite)
+  if (!(la > 1e-12) || !(lb > 1e-12)) return none;  // no area (or not finite)
   const Vec3 ua = na * (1 / la), ub = nb * (1 / lb);
 
   // Each triangle must have corners strictly on both sides of the other's plane.
@@ -42,12 +43,12 @@ bool trianglesCross(const Vec3f af[3], const Vec3f bf[3], Vec3f* where) {
     posB = posB || db[i] > 0;
     negB = negB || db[i] < 0;
   }
-  if (!(posA && negA && posB && negB)) return false;
+  if (!(posA && negA && posB && negB)) return none;
 
   // Both cross the line where the planes meet; they cross each other if those stretches overlap.
   const Vec3 line = cross(ua, ub);
   const double ll = length(line);
-  if (!(ll > 1e-9)) return false;
+  if (!(ll > 1e-9)) return none;
   const Vec3 dir = line * (1 / ll);
   Vec3 a0, a1, b0, b1;
   crossing(a, da, a0, a1);
@@ -59,12 +60,18 @@ bool trianglesCross(const Vec3f af[3], const Vec3f bf[3], Vec3f* where) {
   }
   if (tb0 > tb1) std::swap(tb0, tb1);
   const double lo = std::max(ta0, tb0), hi = std::min(ta1, tb1);
-  if (!(hi - lo > kTouch)) return false;
-  if (where) {
+  if (where && hi > lo) {
     const double span = ta1 - ta0, t = span > 0 ? ((lo + hi) / 2 - ta0) / span : 0;
-    const Vec3 p = a0 + (a1 - a0) * t;
-    *where = {static_cast<float>(p.x), static_cast<float>(p.y), static_cast<float>(p.z)};
+    *where = a0 + (a1 - a0) * t;
   }
+  return hi - lo;
+}
+
+bool trianglesCross(const Vec3f af[3], const Vec3f bf[3], Vec3f* where) {
+  const Vec3 a[3] = {d3(af[0]), d3(af[1]), d3(af[2])}, b[3] = {d3(bf[0]), d3(bf[1]), d3(bf[2])};
+  Vec3 p;
+  if (!(crossLength(a, b, where ? &p : nullptr) > kTouch)) return false;
+  if (where) *where = {static_cast<float>(p.x), static_cast<float>(p.y), static_cast<float>(p.z)};
   return true;
 }
 

@@ -63,17 +63,16 @@ class World {
   void near(const Box& box, const Present* present, std::vector<uint32_t>& out) const;
   /// How far (LDU, up to `distance`) the pieces of `unit`, moving as one from where the model has
   /// them, can travel along unit vector `direction` before any of them interpenetrates a present
-  /// piece outside the unit; `distance` if nothing stops them. Sampled every kSweepStep and, at
-  /// the first hit, bisected back to the last clear pose within `tolerance`. Crossings inside
-  /// `zones` (fixed in the model) are exempt, each only between the pieces it names (Zone). A
-  /// pair that already overlaps where the model has it is not this move's doing and is left
-  /// out. `blocker` receives what stopped it.
+  /// piece outside the unit; `distance` if nothing stops them. Not sampled: where each pair first
+  /// crosses is found however briefly the crossing lasts (firstCrossing), and the answer is
+  /// `tolerance` short of the first. Crossings inside `zones` (fixed in the model) are exempt,
+  /// each only between the pieces it names (Zone). A pair that already overlaps where the model
+  /// has it is not this move's doing and is left out. `blocker` receives what stopped it.
   /// `start` moves the whole unit first (a later leg of a flight). With `enough` set, the search
   /// stops at the first obstacle that holds it short of that: the answer is then some travel
   /// under `enough`, not necessarily the least. A point a skin inside a moving piece that
   /// passes through an obstacle's surface also counts as stopped there, and is looked for
-  /// first: it is exact, where the sampled poses can step over a graze thinner than their
-  /// spacing, and it is cheap. Thread-safe.
+  /// first, as it is cheap. Thread-safe.
   double clearTravel(const std::vector<uint32_t>& unit, Vec3 direction, double distance, const Present* present, const std::vector<Zone>& zones = {}, uint32_t* blocker = nullptr,
                      const Xform& start = {}, double tolerance = 0.05, double enough = 0) const;
 

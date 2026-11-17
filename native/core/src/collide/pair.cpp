@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace bm::collide {
 namespace {
@@ -31,6 +32,74 @@ struct Span {
 
 /// How far inside a triangle (as a share of it) a line must pass to count as passing through it.
 constexpr double kInsideTriangle = 1e-3;
+
+/// Spacing of the travels looked at along one pair's crossing when part of it is inside a zone.
+constexpr double kZoneStep = kSweepStep / 4;
+
+Vec3 d3(const Vec3f& p) { return {p.x, p.y, p.z}; }
+
+/// Narrows [lo, hi] to the travels t at which `value + slope * t` is at least `floor`. False if
+/// none are left.
+bool atLeast(double value, double slope, double floor, double& lo, double& hi) {
+  if (std::abs(slope) < 1e-12) return value >= floor && lo <= hi;
+  const double t = (floor - value) / slope;
+  if (slope > 0) lo = std::max(lo, t);
+  else hi = std::min(hi, t);
+  return lo <= hi;
+}
+
+/// The least travel in [lo, hi] at which the still triangle `ta` and triangle `tb`, carried by
+/// `velocity` per unit of travel, cross as trianglesCross() decides, to within
+/// kCrossingResolution; infinity if they never do.
+/// Every corner's distance from the other triangle's plane changes in step with the travel, so
+/// the travels at which each triangle passes through the other's plane by more than kTouch on
+/// both sides are found exactly. Over those, how far the two crossings overlap (crossLength)
+/// first grows and then shrinks: the ends of each crossing are where a plane cuts the sides of
+/// a triangle, the near end convex in the travel and the far end concave, so their overlap is
+/// concave. A golden-section search for its most tells whether it ever exceeds kTouch, and
+/// halving from there finds where it first does.
+double firstCross(const Vec3 ta[3], const Vec3 tb[3], Vec3 velocity, double lo, double hi) {
+  constexpr double never = std::numeric_limits<double>::infinity();
+  const Vec3 na = cross(ta[1] - ta[0], ta[2] - ta[0]), nb = cross(tb[1] - tb[0], tb[2] - tb[0]);
+  const double la = length(na), lb = length(nb);
+  if (!(la > 1e-12) || !(lb > 1e-12) || !(lo <= hi)) return never;
+  const Vec3 ua = na * (1 / la), ub = nb * (1 / lb);
+  double maxA = -never, minA = never, maxB = -never, minB = never;
+  for (int i = 0; i < 3; i++) {
+    const double da = dot(ub, ta[i] - tb[0]), db = dot(ua, tb[i] - ta[0]);
+    maxA = std::max(maxA, da), minA = std::min(minA, da), maxB = std::max(maxB, db), minB = std::min(minB, db);
+  }
+  // As tb travels, ta's corners fall back from tb's plane at this rate, and tb's rise from ta's.
+  const double fall = dot(ub, velocity), rise = dot(ua, velocity);
+  if (!atLeast(maxA, -fall, kTouch, lo, hi) || !atLeast(-minA, fall, kTouch, lo, hi) || !atLeast(maxB, rise, kTouch, lo, hi) || !atLeast(-minB, -rise, kTouch, lo, hi)) return never;
+  auto overlapAt = [&](double t) {
+    const Vec3 moved[3] = {tb[0] + velocity * t, tb[1] + velocity * t, tb[2] + velocity * t};
+    return crossLength(ta, moved);
+  };
+  double found = never;
+  constexpr double g = 0.6180339887498949;
+  double a = lo, b = hi, x1 = b - g * (b - a), x2 = a + g * (b - a), f1 = overlapAt(x1), f2 = overlapAt(x2);
+  for (int i = 0; i < 64; i++) {
+    if (f1 > kTouch || f2 > kTouch) {
+      found = f1 > kTouch ? x1 : x2;
+      break;
+    }
+    if (b - a <= kCrossingResolution) break;
+    if (f1 < f2) {  // the most is beyond x1
+      a = x1, x1 = x2, f1 = f2, x2 = a + g * (b - a), f2 = overlapAt(x2);
+    } else {
+      b = x2, x2 = x1, f2 = f1, x1 = b - g * (b - a), f1 = overlapAt(x1);
+    }
+  }
+  if (found == never) return never;
+  if (overlapAt(lo) > kTouch) return lo;
+  double clear = lo, crossing = found;
+  while (crossing - clear > kCrossingResolution) {
+    const double mid = (clear + crossing) / 2;
+    (overlapAt(mid) > kTouch ? crossing : clear) = mid;
+  }
+  return crossing;
+}
 
 struct Walk {
   const Shape& a;
@@ -195,20 +264,18 @@ bool inside(const Zone& zone, Vec3 p) {
   return length(p - (zone.a + ab * u)) <= zone.radius;
 }
 
-size_t firstOverlap(const Shape& a, const Xform& xa, Vec3 direction, const double* at, size_t count, const Shape& b, const Xform& xb, const std::vector<Zone>& zones) {
-  if (count == 0 || a.nodes.empty() || b.nodes.empty() || !finite(xa) || !finite(xb)) return count;
-  if (std::abs(determinant(xa.r)) < 1e-12 || std::abs(determinant(xb.r)) < 1e-12) return count;
-  Xform start = xa;
-  start.t = start.t + direction * at[0];
-  const double distance = at[count - 1] - at[0];
-  const Xform inv = start.inverse();
+double firstCrossing(const Shape& a, const Xform& xa, Vec3 direction, double distance, const Shape& b, const Xform& xb, const std::vector<Zone>& zones) {
+  constexpr double never = std::numeric_limits<double>::infinity();
+  if (a.nodes.empty() || b.nodes.empty() || !finite(xa) || !finite(xb) || !(distance >= 0)) return never;
+  if (std::abs(determinant(xa.r)) < 1e-12 || std::abs(determinant(xb.r)) < 1e-12) return never;
+  const Xform inv = xa.inverse();
   const Xform rel = inv * xb;
-  if (!finite(rel) || !(distance >= 0)) return count;
+  if (!finite(rel)) return never;
   // a moving along `direction` is b moving the other way, seen from a.
   const Vec3 seen = inv.r * (direction * -1.0);
   static const std::vector<Zone> none;
   std::vector<Span> spans;
-  Walk walks[2] = {Walk(a, b, true, false, rel, start, none, nullptr), Walk(a, b, false, true, rel, start, none, nullptr)};
+  Walk walks[2] = {Walk(a, b, true, false, rel, xa, none, nullptr), Walk(a, b, false, true, rel, xa, none, nullptr)};
   for (Walk& w : walks) {
     const double v[3] = {seen.x, seen.y, seen.z};
     for (int i = 0; i < 3; i++) {
@@ -220,38 +287,67 @@ size_t firstOverlap(const Shape& a, const Xform& xa, Vec3 direction, const doubl
     w.spans = &spans;
     w.run();
   }
-  if (spans.empty()) return count;
-  // Travel by travel, the pairs of triangles within reach then, each looked at as overlap() would.
+  // Pair by pair, in the order they can first meet, until none can meet before the first crossing found.
   std::sort(spans.begin(), spans.end(), [](const Span& x, const Span& y) { return x.from < y.from; });
-  std::vector<uint32_t> live;
-  size_t next = 0;
-  for (size_t k = 0; k < count; k++) {
-    const float t = static_cast<float>(at[k] - at[0]);
-    while (next < spans.size() && spans[next].from <= t + kSpanPad) live.push_back(static_cast<uint32_t>(next++));
-    for (size_t l = 0; l < live.size();) {
-      const Span& span = spans[live[l]];
-      if (span.to < t - kSpanPad) {
-        live[l] = live.back();
-        live.pop_back();
-        continue;
-      }
-      l++;
-      const Walk& w = walks[span.innerOfA ? 0 : 1];
-      const Vec3f ta[3] = {Walk::corner(a, span.a, 0, w.innerOfA), Walk::corner(a, span.a, 1, w.innerOfA), Walk::corner(a, span.a, 2, w.innerOfA)};
-      Vec3f tb[3];
-      for (uint32_t c = 0; c < 3; c++) {
-        tb[c] = w.carry(Walk::corner(b, span.b, c, w.innerOfB));
-        tb[c].x += w.velocity[0] * t, tb[c].y += w.velocity[1] * t, tb[c].z += w.velocity[2] * t;
-      }
-      Vec3f where;
-      if (!trianglesCross(ta, tb, &where)) continue;
-      const Vec3 world = start.apply({where.x, where.y, where.z}) + direction * (at[k] - at[0]);
-      bool exempt = false;
-      for (const Zone& z : zones) exempt = exempt || inside(z, world);
-      if (!exempt) return k;
+  double best = never;
+  for (const Span& span : spans) {
+    if (span.from - kSpanPad > best) break;
+    const Walk& w = walks[span.innerOfA ? 0 : 1];
+    Vec3 ta[3], tb[3];
+    for (uint32_t c = 0; c < 3; c++) {
+      ta[c] = d3(Walk::corner(a, span.a, c, w.innerOfA));
+      tb[c] = d3(w.carry(Walk::corner(b, span.b, c, w.innerOfB)));
     }
+    const double lo = std::max(0.0, static_cast<double>(span.from) - kSpanPad), hi = std::min({distance, static_cast<double>(span.to) + kSpanPad, best});
+    double t = firstCross(ta, tb, seen, lo, hi);
+    if (!(t < best)) continue;
+    if (!zones.empty()) {
+      // Inside a mate's zone a crossing does not count. b stays where it is, and a's triangle sweeps
+      // the hull of where it starts and ends; if either lies inside one zone, so does every
+      // crossing of the two. Otherwise look along the crossing for a place outside every zone.
+      auto within = [&](const Zone& z, const Vec3* points, size_t count) {
+        for (size_t k = 0; k < count; k++)
+          if (!inside(z, points[k])) return false;
+        return true;
+      };
+      Vec3 still[3], swept[6];
+      for (uint32_t c = 0; c < 3; c++) {
+        still[c] = xa.apply(tb[c]);
+        swept[c] = xa.apply(ta[c]) + direction * t, swept[c + 3] = xa.apply(ta[c]) + direction * hi;
+      }
+      bool covered = false;
+      for (const Zone& z : zones) covered = covered || within(z, still, 3) || within(z, swept, 6);
+      if (covered) continue;
+      enum { Apart, Forgiven, Counts };
+      auto state = [&](double at) {
+        const Vec3 moved[3] = {tb[0] + seen * at, tb[1] + seen * at, tb[2] + seen * at};
+        Vec3 where;
+        if (!(crossLength(ta, moved, &where) > kTouch)) return Apart;
+        const Vec3 there = xa.apply(where) + direction * at;
+        for (const Zone& z : zones)
+          if (inside(z, there)) return Forgiven;
+        return Counts;
+      };
+      double counted = -1;
+      for (double at = t; at <= hi; at += kZoneStep) {
+        const auto now = state(at);
+        if (now == Apart && at > t) break;  // past the end of their crossing
+        if (now != Counts) continue;
+        // Back to where it leaves the zone, halving the last step.
+        double before = std::max(t, at - kZoneStep), after = at;
+        while (at > t && after - before > kCrossingResolution) {
+          const double mid = (before + after) / 2;
+          (state(mid) == Counts ? after : before) = mid;
+        }
+        counted = after;
+        break;
+      }
+      if (counted < 0) continue;
+      t = counted;
+    }
+    best = t;
   }
-  return count;
+  return best;
 }
 
 double throughSurface(const Shape& b, const Xform& xb, Vec3 from, Vec3 to, Vec3* where) {

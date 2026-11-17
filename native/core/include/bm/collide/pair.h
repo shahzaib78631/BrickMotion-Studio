@@ -49,12 +49,14 @@ enum class Depth { Skin, Joined };
 /// with no triangles and transforms that are not finite or not invertible never overlap.
 bool overlap(const Shape& a, const Xform& xa, const Shape& b, const Xform& xb, const std::vector<Zone>& zones = {}, Hit* hit = nullptr, Depth depth = Depth::Skin);
 
-/// `a` is carried from `xa` along unit vector `direction` (model space, no turning) by each of
-/// the `count` travels in `at`, which ascend. Returns the index of the first travel at which
-/// overlap(a, there, b, xb, zones) holds, or `count` if none. It gives what calling overlap()
-/// at each travel would, for the cost of one walk of the two trees for the whole way: the walk
-/// finds when each pair of triangles can touch at all, and only those are looked at.
-size_t firstOverlap(const Shape& a, const Xform& xa, Vec3 direction, const double* at, size_t count, const Shape& b, const Xform& xb, const std::vector<Zone>& zones = {});
+/// `a` is carried from `xa` along unit vector `direction` (model space, no turning) by up to
+/// `distance`. Returns where overlap(a, there, b, xb, zones) first holds, to within
+/// kCrossingResolution, or infinity if it holds nowhere on the way. Not sampled: a crossing is
+/// found however briefly it lasts (down to that resolution), as when two
+/// corners pass each other a little more than a skin apart. One walk of the two trees finds when
+/// each pair of triangles can touch at all; for each such pair, when it crosses is then worked
+/// out (see pair.cpp).
+double firstCrossing(const Shape& a, const Xform& xa, Vec3 direction, double distance, const Shape& b, const Xform& xb, const std::vector<Zone>& zones = {});
 
 /// Where the straight way from `from` to `to` (model space) first passes through the true
 /// surface of `b`, as a share of the way (0..1); more than 1 if it does not. A passage along a

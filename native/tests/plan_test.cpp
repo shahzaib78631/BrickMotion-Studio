@@ -398,7 +398,7 @@ TEST_CASE("the timeline stages units on the floor and flies each to its seat", "
   const nlohmann::json j = toJson(p, nullptr, *s.model);
   REQUIRE(j["moves"].size() == 3);
   REQUIRE(j["moves"][2]["flag"] == "blocked");
-  REQUIRE(j["sweep"] == "sampled 0.5");
+  REQUIRE(j["sweep"] == "continuous 0.001");
 }
 
 #include "bm/plan/constraints.h"

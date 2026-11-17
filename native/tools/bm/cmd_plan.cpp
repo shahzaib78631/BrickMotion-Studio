@@ -73,7 +73,7 @@ int cmdPlan(const Args& args) {
     if (certifyIt) {
       const auto started = std::chrono::steady_clock::now();
       certificate = plan::certify(model, graph, cache, shapes, plan);
-      std::printf("certified     %d of %d moves (%.0f ms; flights sampled every 0.5 LDU)\n  floating    %d\n  crossings   %d\n  off axis    %d\n  flagged     %d (of them unjoined in the file: %d)\n", certificate.certified, certificate.total,
+      std::printf("certified     %d of %d moves (%.0f ms; flights checked along their length)\n  floating    %d\n  crossings   %d\n  off axis    %d\n  flagged     %d (of them unjoined in the file: %d)\n", certificate.certified, certificate.total,
                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count(), certificate.floating, certificate.crossings, certificate.offAxis, certificate.flagged, certificate.unjoined);
     }
     // The first moves that are not certified, with why.

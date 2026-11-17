@@ -19,6 +19,13 @@ struct Vec3f {
 /// given, receives a point on the line where they cross.
 bool trianglesCross(const Vec3f a[3], const Vec3f b[3], Vec3f* where = nullptr);
 
+/// What trianglesCross() decides on: each triangle must pass through the other's plane, by more
+/// than kTouch on each side, and then this is how far the two stretches where they do overlap
+/// along the line where the planes meet (negative if they miss each other along it; minus
+/// infinity if they do not pass through each other's planes, or have no area). They cross when
+/// it is more than kTouch. `where`, if given and they overlap, receives a point of the overlap.
+double crossLength(const Vec3 a[3], const Vec3 b[3], Vec3* where = nullptr);
+
 /// A node of the bounding-volume tree. A leaf (count > 0) covers `count` triangles starting
 /// at triangle `left`; an inner node's children are nodes `left` and `left + 1`.
 struct Node {
