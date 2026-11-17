@@ -488,7 +488,12 @@ per model (the audit runs ten models at once).
 |---|---|---|---|---|---|---|---|---|---|---|
 | BrickNet, all 2,000 | 2000 | 1608 | 52469 | 97.6% | 1246 | 0 | 4 | 0 | 0.48 s / 4.1 s | 0.36 s / 6.4 s; 11,384 floating; 2,243 flagged |
 
-Not measured when this was written: OMR sample, reference sets (the runs had not finished). One reference model was planned by hand: the helicopter (305 pieces) takes about 15 s, with 311 of 319 moves certified, 8 flagged, none floating, crossing or off axis.
+| OMR sample, 25 sets (2026-11-17) | 25 | 1 | 21142 | 94.3% | 1177 | 3 | 30 | 0 | 0.65 s / 6.1 s, one model at a time | 8.5 s / 92.8 s on all OMR; 178 time-outs |
+
+The BrickNet row was measured on 2026-11-16, before the speed work below. The OMR row is after it: no model
+runs out of its 30 s budget (10 of the 25 did on 2026-11-16, when the median was 16 s and 44% of moves were
+certified). Planned ten at a time, as the audit does, the same 25 take a median of 1.3 s and a 95th percentile
+of 9.1 s. The largest, 10030-1 (3,037 pieces), takes 12.1 s alone. Reference sets were not re-measured.
 
 - **No piece is placed floating and none goes in off its connector's axis**, on any model planned. The web
   engine placed 11,384 of BrickNet's 51,916 pieces (22%) joined to nothing built.
@@ -507,11 +512,27 @@ Not measured when this was written: OMR sample, reference sets (the runs had not
   a group built earlier. What is built before a group now stands in its way.
 - Sweeping a whole unit pose by pose spent nearly all its time on triangles of mated pairs. Sweeps are now
   pair by pair, sampled only where the two boxes can meet, and remembered: a model repeats the same pairs.
+- The time was then not where it was thought to be (a piece sliding out of its own mate). A profile showed a
+  handful of *unjoined* pairs passing each other without touching — round bricks past round bricks, a minifig
+  hand inside a window frame — walked through the two trees again at every 0.5 LDU, tens of thousands of times.
+  A sweep past another piece is now one walk for the whole way (`firstOverlap`): it finds when each pair of
+  triangles can touch at all and looks only at those, and a test holds it to the answer of the pose-by-pose
+  walk. Tree nodes carry one box per surface, so faces that only touch are parted at the top of the tree.
+- Most of what remained was legs that are blocked: a piece shut in tries eight ways out and each was swept in
+  full. A few points a skin inside the piece are now carried along the way first; one that passes through
+  another piece's surface settles a leg that only has to get far enough, and bounds one that is measured.
+  It is stricter than the samples, never more lenient: one crossing on 10129-1 went away with it.
+- Attempts with a turn, and attempts to take pieces out together, were made again every round. They are kept
+  until something that stopped them, or a mate, has gone.
+- Finishing the large models showed what running out of time had hidden: 30 crossings and 3 floating
+  placements on the 25 OMR sets (in 10143-1, 10030-1, 10124-1, 10134-1, 10019-1 and 10129-1). Not yet looked into.
 
 ### Not done
 
-- **Speed. The spec's target is not met.** Planning is about as fast as the web engine on BrickNet's small models and takes 15 s for the 305-piece helicopter, against a goal of under 1 s for a median OMR set. The time is in triangle tests of a piece sliding out of
-  its own mate. Nothing here re-plans incrementally after an edit; the only memory is within one run.
+- **Speed: the target is met on the 25-set OMR sample** (median 0.65 s, 95th percentile 6.1 s, no time-outs;
+  goal: under 1 s, under 10 s, none). All 1,833 OMR files and the reference sets have not been timed one at a
+  time. Nothing here re-plans incrementally after an edit; the only memory is within one run.
+- **Floating placements and crossings on OMR are not zero** (3 and 30 on the sample). The rule is none.
 - **Curved and turning insertions** (a hinge swung shut, a tyre stretched on). Every leg is a straight line.
   These show up as `blocked` and `no-exit`.
 - **A continuous sweep.** Flights are sampled every 0.5 LDU.

@@ -20,6 +20,11 @@
 >   the staging and crossing legs of a flight are not swept.
 > - Task 11 in part: scorer and six fixture cases; no clip, hand, sword, wheel, tyre, hinge or ball case yet, and none from the reference sets.
 > - Task 12: see `native/README.md`, "Phase 5 results". **The speed target is not met.**
+>
+> **Status 2026-11-17.** Speed work done (commits 424e38f, 79832c5): the 25-set OMR sample plans in a median of
+> 0.65 s and a 95th percentile of 6.1 s one model at a time, with no time-outs (was 16 s, 46 s and 10 of 25
+> out of time). Target met on the sample. Still open from this plan: floating placements and crossings on OMR
+> (3 and 30 on the sample), `writeInto`, the cross-run cache, more insertion-truth cases.
 
 ## Global Constraints
 
