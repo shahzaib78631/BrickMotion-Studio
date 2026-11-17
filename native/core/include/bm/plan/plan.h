@@ -112,7 +112,8 @@ std::vector<Leave> leaveDirections(const Context& ctx, const Unit& unit, const c
 /// only when nothing else can leave.
 Extraction extract(const Context& ctx, const Unit& unit, const collide::World::Present* present, const Box& bounds, Vec3 only = {}, bool turns = true);
 
-/// Groups the planner may move as one: uses of submodels in the file, and rigid bodies.
+/// Groups the planner may move as one: each use of a submodel in the file (each set of its
+/// pieces that are joined to each other, when they are not all), and rigid bodies.
 struct Units {
   std::vector<Unit> authored, bodies;
   std::vector<std::vector<uint32_t>> authoredOf, bodyOf;  ///< per piece: the groups holding it, smallest first

@@ -322,9 +322,35 @@ Units findUnits(const Model& model, const connect::Graph& graph) {
       from = slash + 1;
     }
   }
+  // A use goes in as one only where its pieces hold each other: each set of them joined through
+  // the use's own pieces is a unit of its own. Pieces of a use that are not joined to each other
+  // (a loose part left in a submodel, things fixed to the model each on its own) have nothing to
+  // be carried in on together, and a unit made of them would put some of them in floating.
+  std::vector<std::vector<uint32_t>> joinedTo(n);
+  for (const connect::Connection& c : graph.connections)
+    if (c.a < n && c.b < n) joinedTo[c.a].push_back(c.b), joinedTo[c.b].push_back(c.a);
+  std::vector<uint32_t> inUse(n, 0), seen(n, 0);  // per piece: the last use it was in, and looked at in
+  uint32_t use = 0;
   std::vector<Unit> authored;
-  for (auto& [use, list] : byUse)
-    if (list.size() > 1 && list.size() < n) authored.push_back({list});
+  for (auto& [name, list] : byUse) {
+    if (list.size() < 2 || list.size() >= n) continue;
+    use++;
+    for (uint32_t p : list) inUse[p] = use;
+    for (uint32_t start : list) {
+      if (seen[start] == use) continue;
+      seen[start] = use;
+      std::vector<uint32_t> set{start}, todo{start};
+      while (!todo.empty()) {
+        const uint32_t p = todo.back();
+        todo.pop_back();
+        for (uint32_t q : joinedTo[p])
+          if (inUse[q] == use && seen[q] != use) seen[q] = use, set.push_back(q), todo.push_back(q);
+      }
+      if (set.size() < 2) continue;
+      std::sort(set.begin(), set.end());
+      authored.push_back({std::move(set)});
+    }
+  }
   std::sort(authored.begin(), authored.end(), [](const Unit& a, const Unit& b) { return a.pieces.size() != b.pieces.size() ? a.pieces.size() < b.pieces.size() : a.pieces < b.pieces; });
   authored.erase(std::unique(authored.begin(), authored.end(), [](const Unit& a, const Unit& b) { return a.pieces == b.pieces; }), authored.end());
   out.authored = std::move(authored);

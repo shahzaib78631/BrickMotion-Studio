@@ -167,13 +167,25 @@ TEST_CASE("a brick shut in under another goes in first", "[plan]") {
 }
 
 TEST_CASE("each use of a submodel is a unit of its own, not every use of it at once", "[plan]") {
-  // "wheel pair.ldr" (two bricks) is used twice in main: two units, one per use.
+  // "wheel pair.ldr" (two bricks, joined) is used twice in main: two units, one per use.
   const ldraw::Library lib(fs::path(BM_FIXTURES) / "lib");
   const Model model = io::load(fs::path(BM_FIXTURES) / "models" / "twice.mpd", lib);
   REQUIRE(model.pieces().size() == 6);
   connect::Graph graph;
   graph.body.resize(model.pieces().size());
   std::iota(graph.body.begin(), graph.body.end(), 0u);
+  const auto useOf = [&](uint32_t p) {
+    const std::string& id = model.pieces()[p].id;
+    return id.find('/') == std::string::npos ? std::string{} : id.substr(0, id.find('/'));
+  };
+  for (uint32_t i = 0; i < model.pieces().size(); i++)
+    for (uint32_t j = i + 1; j < model.pieces().size(); j++)
+      if (!useOf(i).empty() && useOf(i) == useOf(j)) {
+        connect::Connection pair;
+        pair.a = i, pair.b = j;
+        graph.connections.push_back(pair);
+      }
+  REQUIRE(graph.connections.size() == 2);
   const Units units = findUnits(model, graph);
   REQUIRE(units.authored.size() == 2);
   for (const Unit& u : units.authored) {
@@ -182,6 +194,31 @@ TEST_CASE("each use of a submodel is a unit of its own, not every use of it at o
     const std::string& b = model.pieces()[u.pieces[1]].id;
     REQUIRE(a.substr(0, a.find('/')) == b.substr(0, b.find('/')));  // the same use
   }
+}
+
+TEST_CASE("a use of a submodel goes in as one only where its pieces are joined to each other", "[plan]") {
+  // apart.ldr holds two stacked bricks, joined, and a third standing off by itself: carried
+  // as one, the third would float. The joined two are a unit; the third is not in one.
+  const ldraw::Library lib(fs::path(BM_FIXTURES) / "lib");
+  const fs::path file = fs::temp_directory_path() / ("bm_plan_apart_" + std::to_string(::getpid()) + ".mpd");
+  {
+    std::ofstream out(file);
+    out << "0 FILE main.ldr\n1 16 0 0 0 1 0 0 0 1 0 0 0 1 3005.dat\n1 16 0 0 0 1 0 0 0 1 0 0 0 1 apart.ldr\n"
+           "0 FILE apart.ldr\n1 16 100 0 0 1 0 0 0 1 0 0 0 1 3005.dat\n1 16 100 -24 0 1 0 0 0 1 0 0 0 1 3005.dat\n1 16 300 0 0 1 0 0 0 1 0 0 0 1 3005.dat\n";
+  }
+  const Model model = io::load(file, lib);
+  fs::remove(file);
+  REQUIRE(model.pieces().size() == 4);
+  connect::Graph graph;
+  graph.body.resize(model.pieces().size());
+  std::iota(graph.body.begin(), graph.body.end(), 0u);
+  connect::Connection stack;
+  stack.a = 1, stack.b = 2;
+  graph.connections.push_back(stack);
+  const Units units = findUnits(model, graph);
+  REQUIRE(units.authored.size() == 1);
+  REQUIRE(units.authored[0].pieces == std::vector<uint32_t>{1, 2});
+  REQUIRE(units.authoredOf[3].empty());
 }
 
 TEST_CASE("empty, one piece, separate assemblies, and a piece joined to nothing", "[plan][focus]") {
