@@ -19,6 +19,7 @@ bool there(const World::Present* present, uint32_t piece) { return !present || (
 struct Held {
   Release release;  ///< axis signed as the way the unit leaves
   connect::MateZone zone;
+  uint32_t piece = 0, other = 0;  ///< the unit's piece, and the present piece it is joined to
 };
 
 std::vector<Held> heldBy(const Context& ctx, const Unit& unit, const World::Present* present) {
@@ -32,7 +33,7 @@ std::vector<Held> heldBy(const Context& ctx, const Unit& unit, const World::Pres
       for (uint32_t k = 0; k < c.zoneCount; k++) {
         const size_t at = static_cast<size_t>(c.firstZone) + k;
         if (at >= ctx.graph.releases.size()) break;
-        Held h{ctx.graph.releases[at], ctx.graph.zones[at]};
+        Held h{ctx.graph.releases[at], ctx.graph.zones[at], p, other};
         if (c.a == p) h.release.axis = -h.release.axis;  // stored as how b leaves a
         out.push_back(h);
       }
@@ -165,11 +166,13 @@ Extraction extract(const Context& ctx, const Unit& unit, const World::Present* p
   for (const Leave& leave : leaves) {
     const Vec3 d = leave.direction;
     const double seat = leave.travel + kClearMargin;
-    // Its own mates' zones, carried along the way out: a pin grazes its hole all the way.
+    // Its own mates' zones, carried along the way out: a pin grazes its hole all the way. Each
+    // lets only its own two pieces cross: a tyre's, which is everywhere, does not let its rim
+    // through the pin the rim slides along.
     std::vector<collide::Zone> corridor;
     for (const Held& h : held) {
       const double stride = std::max(1.0, h.zone.radius);
-      for (double s = 0; s <= seat + stride; s += stride) corridor.push_back({h.zone.a + d * s, h.zone.b + d * s, h.zone.radius});
+      for (double s = 0; s <= seat + stride; s += stride) corridor.push_back({h.zone.a + d * s, h.zone.b + d * s, h.zone.radius, h.piece, h.other});
     }
     uint32_t blocker = UINT32_MAX;
     const double got = ctx.world.clearTravel(unit.pieces, d, seat, present, corridor, &blocker, {}, 0.05, seat - kTravelTol);

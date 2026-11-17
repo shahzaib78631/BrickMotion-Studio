@@ -222,10 +222,12 @@ Xform inverseOf(const Xform& x) {
   out.t = -(out.r * x.t);
   return out;
 }
-/// The zones that can matter to an obstacle: a crossing lies on its surface, so inside its box.
-std::vector<Zone> zonesNear(const std::vector<Zone>& zones, const Box& box) {
+/// The zones that can matter to moving piece `p` against obstacle `q`: those that let the two
+/// cross, and near enough to matter (a crossing lies on the obstacle's surface, so inside its box).
+std::vector<Zone> zonesNear(const std::vector<Zone>& zones, uint32_t p, uint32_t q, const Box& box) {
   std::vector<Zone> out;
   for (const Zone& z : zones) {
+    if (!lets(z, p, q)) continue;
     Box zb;
     zb.grow(z.a), zb.grow(z.b);
     zb.min = zb.min - Vec3{z.radius, z.radius, z.radius}, zb.max = zb.max + Vec3{z.radius, z.radius, z.radius};
@@ -244,7 +246,7 @@ uint64_t mix(uint64_t h, Vec3 v, double grain) { return mix(mix(mix(h, v.x, grai
 /// in a hole, a brick on a brick), so answers are remembered.
 double World::pairTravel(uint32_t p, const Xform& from, const Box& fromBox, uint32_t q, Vec3 direction, double distance, const std::vector<Zone>& allZones, double tolerance) const {
   const State& s = *state_;
-  const std::vector<Zone> zones = zonesNear(allZones, s.boxes[q]);
+  const std::vector<Zone> zones = zonesNear(allZones, p, q, s.boxes[q]);
   // When the two can cross at all: while the inner surface of one is within the box of the other.
   const Vec3 offset = from.t - s.poses[p].t;  // this leg starts with the piece moved by this much
   auto window = [&](Box moving, const Box& still, double& enter, double& leave) {
@@ -375,7 +377,7 @@ double World::clearTravel(const std::vector<uint32_t>& unit, Vec3 direction, dou
           const double share = throughSurface(*s.shapes[q], s.poses[q], a, b, &where);
           if (share > 1) continue;
           bool exempt = false;
-          for (const Zone& z : zones) exempt = exempt || inside(z, where);
+          for (const Zone& z : zones) exempt = exempt || (lets(z, p, q) && inside(z, where));
           if (exempt || (boxesMeet(s.boxes[p], s.boxes[q]) && restCrossing(p, q, zones))) continue;
           if (blocker) *blocker = q;
           if (enough > 0) return share * reachTo;
@@ -403,7 +405,7 @@ double World::clearTravel(const std::vector<uint32_t>& unit, Vec3 direction, dou
 /// Whether two pieces cross where the model has them, given the zones. Remembered like pairTravel.
 bool World::restCrossing(uint32_t p, uint32_t q, const std::vector<Zone>& allZones) const {
   const State& s = *state_;
-  const std::vector<Zone> zones = zonesNear(allZones, s.boxes[q]);
+  const std::vector<Zone> zones = zonesNear(allZones, p, q, s.boxes[q]);
   const Xform toObstacle = inverseOf(s.poses[q]);
   const Xform rel = toObstacle * s.poses[p];
   uint64_t key = mix(mix(1469598103934665603ull, reinterpret_cast<uintptr_t>(s.shapes[p].get())), reinterpret_cast<uintptr_t>(s.shapes[q].get()));
@@ -429,11 +431,18 @@ std::optional<uint32_t> World::hits(const Shape& shape, const Xform& xf, const s
   // Pieces whose box can reach this one start no further left than box.min.x - widest.
   auto first = std::lower_bound(s.byMinX.begin(), s.byMinX.end(), box.min.x - s.widest, [&](uint32_t i, double x) { return s.boxes[i].min.x < x; });
   std::optional<uint32_t> best;
+  const bool named = std::any_of(zones.begin(), zones.end(), [](const Zone& z) { return z.first != kAnyPiece; });
+  std::vector<Zone> mine;
   for (auto it = first; it != s.byMinX.end() && s.boxes[*it].min.x <= box.max.x; ++it) {
     const uint32_t i = *it;
     if (best && i > *best) continue;  // report the lowest piece index, whatever the scan order
     if (!boxesMeet(box, s.boxes[i]) || std::find(ignore.begin(), ignore.end(), i) != ignore.end()) continue;
-    if (overlap(shape, xf, *s.shapes[i], s.poses[i], zones)) best = i;
+    if (named) {  // the shape is none of the model's pieces
+      mine.clear();
+      for (const Zone& z : zones)
+        if (lets(z, kAnyPiece, i)) mine.push_back(z);
+    }
+    if (overlap(shape, xf, *s.shapes[i], s.poses[i], named ? mine : zones)) best = i;
   }
   return best;
 }

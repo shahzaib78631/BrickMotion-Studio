@@ -169,6 +169,35 @@ TEST_CASE("how far a unit can travel before it meets a present piece", "[collide
   REQUIRE(w.clearTravel({0}, {0, 0, 0}, 100, nullptr) == 0);
 }
 
+TEST_CASE("a mate's zone lets the two pieces it joins cross there, and no other two", "[collide][world][travel]") {
+  Rig r;
+  // Piece 0 moves toward a wall (piece 1) 30 LDU away; piece 2, far off, is what it is joined to.
+  const Model m = r.model(piece("c1x1.dat", 0, 0, 0) + piece("c1x1.dat", 30, 0, 0) + piece("c1x1.dat", 0, 0, 300));
+  const World w(m, r.parts, r.shapes);
+  // The zone of a mate that holds anywhere, as a tyre's on its rim does, between piece 0 and piece 2.
+  Zone everywhere{{0, 0, 0}, {0, 0, 0}, 1e9};
+  everywhere.first = 0, everywhere.second = 2;
+  uint32_t blocker = 7;
+  REQUIRE(w.clearTravel({0}, {1, 0, 0}, 100, nullptr, {everywhere}, &blocker) <= 10.0 + 2 * kSkin + 0.1);
+  REQUIRE(blocker == 1);
+  REQUIRE(w.clearTravel({0}, {1, 0, 0}, 100, nullptr, {everywhere}, &blocker, {}, 0.05, 99.9) < 99.9);
+  REQUIRE(blocker == 1);
+  // Between piece 0 and the wall, either way round, it lets the two cross.
+  everywhere.second = 1;
+  REQUIRE(w.clearTravel({0}, {1, 0, 0}, 100, nullptr, {everywhere}) == 100);
+  REQUIRE(w.clearTravel({0}, {1, 0, 0}, 100, nullptr, {everywhere}, nullptr, {}, 0.05, 99.9) == 100);
+  everywhere.first = 1, everywhere.second = 0;
+  REQUIRE(w.clearTravel({0}, {1, 0, 0}, 100, nullptr, {everywhere}) == 100);
+  // A shape that is not one of the model's pieces: a zone naming a piece forgives only that piece.
+  const auto brick = r.shapes.get(r.parts.get("c1x1.dat"));
+  Xform into;
+  into.t = {20, 0, 0};  // 10 into the wall
+  everywhere.first = 1, everywhere.second = kAnyPiece;
+  REQUIRE_FALSE(w.hits(*brick, into, {0}, {everywhere}).has_value());
+  everywhere.first = 2;
+  REQUIRE(w.hits(*brick, into, {0}, {everywhere}) == std::optional<uint32_t>(1));
+}
+
 TEST_CASE("asked only whether it gets far enough, the answer says so and names what stops it", "[collide][world][travel]") {
   Rig r;
   const Model m = r.model(piece("c1x1.dat", 0, 0, 0) + piece("c1x1.dat", 30, 0, 0) + piece("c1x1.dat", 0, 0, 300));

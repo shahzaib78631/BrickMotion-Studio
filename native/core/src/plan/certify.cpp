@@ -73,7 +73,7 @@ struct Checker {
               if (!(length(in) > 0) || !takes(graph.releases[at], in, c.b == p)) along = false;
               const connect::MateZone& z = graph.zones[at];
               const double stride = std::max(1.0, z.radius);
-              for (double s = 0; s <= seatLength + stride; s += stride) zones.push_back({z.a - in * s, z.b - in * s, z.radius});
+              for (double s = 0; s <= seatLength + stride; s += stride) zones.push_back({z.a - in * s, z.b - in * s, z.radius, p, other});  // these two only
             }
           }
         }

@@ -49,6 +49,22 @@ struct Scene {
     graph.releases.push_back(r);
     graph.connections.push_back(c);
   }
+  /// `b` held to `a` by a mate that lets the two cross anywhere (a tyre on its rim), `b` coming
+  /// off along `leaves` over `travel`.
+  void stretch(uint32_t a, uint32_t b, Vec3 leaves, double travel) {
+    connect::Connection c;
+    c.a = std::min(a, b), c.b = std::max(a, b);
+    c.joint.kind = connect::JointKind::Fixed;
+    c.firstZone = static_cast<uint32_t>(graph.zones.size());
+    c.zoneCount = 1;
+    graph.zones.push_back({at[a], at[a], collide::kElasticZone});
+    connect::Release r;
+    r.kind = connect::ReleaseKind::Along;
+    r.axis = b == c.b ? leaves : -leaves;  // kept as how b leaves a
+    r.travel = travel;
+    graph.releases.push_back(r);
+    graph.connections.push_back(c);
+  }
   void finish() {
     static int counter = 0;
     const fs::path file = fs::temp_directory_path() / ("bm_plan_" + std::to_string(::getpid()) + "_" + std::to_string(counter++) + ".ldr");
@@ -219,6 +235,53 @@ TEST_CASE("a use of a submodel goes in as one only where its pieces are joined t
   REQUIRE(units.authored.size() == 1);
   REQUIRE(units.authored[0].pieces == std::vector<uint32_t>{1, 2});
   REQUIRE(units.authoredOf[3].empty());
+}
+
+TEST_CASE("a rim held only by its tyre is not let through the pin it is not joined to", "[plan][zones]") {
+  // The tyre's mate lets tyre and rim cross anywhere. Up out of the tyre, the rim would pass
+  // through a pin that belongs to a bigger assembly, built first. The tyre, further out, is
+  // taken off before the rim.
+  Scene s;
+  const uint32_t rim = s.add(0, 0, 0), pin = s.add(0, -24, 0), tyre = s.add(200, 0, 0);
+  const uint32_t post = s.add(-40, -24, 0), foot = s.add(-40, 0, 0);
+  s.stud(foot, post);
+  s.stud(post, pin, {1, 0, 0});
+  s.stretch(tyre, rim, kUp, 50);
+  const Plan p = s.plan();
+  const Certificate cert = s.certify(p);
+  REQUIRE(cert.crossings == 0);
+  REQUIRE(cert.floating == 0);
+  // With its tyre there, the rim cannot come up through the pin: the tyre's zone is for the tyre.
+  const collide::World world(*s.model, s.parts, s.shapes);
+  const Context ctx(*s.model, s.graph, world);
+  Box bounds;
+  for (uint32_t i = 0; i < s.at.size(); i++) bounds.merge(world.box(i));
+  const Extraction e = extract(ctx, Unit{{rim}}, nullptr, bounds);
+  REQUIRE_FALSE(e.ok);
+  REQUIRE(e.why == Flag::Blocked);
+  REQUIRE(e.blocker == pin);
+}
+
+TEST_CASE("the certifier lets a mate's zone forgive only its own two pieces", "[plan][certify][zones]") {
+  // The tyre is placed, then the rim is flown down into it through a pin it is not joined to.
+  Scene s;
+  const uint32_t rim = s.add(0, 0, 0), pin = s.add(0, -24, 0), tyre = s.add(200, 0, 0);
+  s.stretch(tyre, rim, kUp, 50);
+  s.finish();
+  Plan p;
+  for (uint32_t piece : {pin, tyre, rim}) {
+    Move m;
+    m.unit = Unit{{piece}};
+    m.insertion = {0, 1, 0};
+    m.path = {Xform{}, Xform{Mat3::identity(), {0, -60, 0}}};
+    p.moves.push_back(m);
+  }
+  const Certificate cert = s.certify(p);
+  REQUIRE(cert.moves[0].clear);
+  REQUIRE(cert.moves[1].clear);
+  REQUIRE_FALSE(cert.moves[2].clear);
+  REQUIRE(cert.moves[2].crossed == pin);
+  REQUIRE(cert.crossings == 1);
 }
 
 TEST_CASE("empty, one piece, separate assemblies, and a piece joined to nothing", "[plan][focus]") {

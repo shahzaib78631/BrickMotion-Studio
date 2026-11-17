@@ -39,7 +39,9 @@ class World {
   World& operator=(const World&) = delete;
 
   /// The first piece `shape` placed by `xf` interpenetrates, or nullopt. Pieces listed in
-  /// `ignore` are skipped; crossings inside `zones` are exempt.
+  /// `ignore` are skipped; crossings inside `zones` are exempt. `shape` is none of the model's
+  /// pieces: a zone that names two pieces does not count, one that names only `first` counts
+  /// against that piece (see Zone).
   std::optional<uint32_t> hits(const Shape& shape, const Xform& xf, const std::vector<uint32_t>& ignore = {}, const std::vector<Zone>& zones = {}) const;
 
   /// Checks the move from `from` to `to` (a straight line, turning by the shortest way) at
@@ -63,8 +65,9 @@ class World {
   /// them, can travel along unit vector `direction` before any of them interpenetrates a present
   /// piece outside the unit; `distance` if nothing stops them. Sampled every kSweepStep and, at
   /// the first hit, bisected back to the last clear pose within `tolerance`. Crossings inside
-  /// `zones` (fixed in the model) are exempt. A pair that already overlaps where the model
-  /// has it is not this move's doing and is left out. `blocker` receives what stopped it.
+  /// `zones` (fixed in the model) are exempt, each only between the pieces it names (Zone). A
+  /// pair that already overlaps where the model has it is not this move's doing and is left
+  /// out. `blocker` receives what stopped it.
   /// `start` moves the whole unit first (a later leg of a flight). With `enough` set, the search
   /// stops at the first obstacle that holds it short of that: the answer is then some travel
   /// under `enough`, not necessarily the least. A point a skin inside a moving piece that

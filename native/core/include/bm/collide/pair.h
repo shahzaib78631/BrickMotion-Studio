@@ -1,17 +1,34 @@
 #pragma once
 // Whether two placed parts interpenetrate.
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 #include "bm/collide/shape.h"
 
 namespace bm::collide {
 
+/// No piece in particular: a zone that names no pieces lets any two cross inside it.
+inline constexpr uint32_t kAnyPiece = UINT32_MAX;
+
 /// A capsule in model space (a sphere when a == b) inside which surfaces may cross: the
-/// volume of a mate between two joined pieces.
+/// volume of a mate between two joined pieces. When it names the two (model piece indices,
+/// either way round), only those two may cross there: a tyre's zone is everywhere, and lets the
+/// tyre and its rim cross anywhere, but not the rim and the pin it slides along. Naming only
+/// `first` lets that piece cross any other there; naming none lets any two. The tests of two
+/// shapes below see no pieces and take every zone given; World's queries honour the names.
 struct Zone {
   Vec3 a, b;
   double radius = 0;
+  uint32_t first = kAnyPiece, second = kAnyPiece;
 };
+
+/// Whether `zone` lets pieces `p` and `q` cross inside it. kAnyPiece stands for a shape that is
+/// not one of the model's pieces.
+inline bool lets(const Zone& zone, uint32_t p, uint32_t q) {
+  if (zone.first == kAnyPiece) return true;
+  if (zone.second == kAnyPiece) return zone.first == p || zone.first == q;
+  return (zone.first == p && zone.second == q) || (zone.first == q && zone.second == p);
+}
 
 struct Hit {
   Vec3 point;  ///< model space: a point where the surfaces cross
