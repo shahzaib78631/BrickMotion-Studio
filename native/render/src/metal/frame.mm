@@ -368,6 +368,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
         [enc setFragmentTexture:shadowTexture atIndex:1];
         [enc setFragmentSamplerState:pipelines.shadowSampler atIndex:1];
         [enc setFragmentTexture:heightMap atIndex:2];
+        [enc setFragmentTexture:ambient atIndex:3];
         [enc setFragmentBuffer:binsBuffer offset:0 atIndex:2];
       } else {
         [enc setFragmentTexture:aoRaw atIndex:0];

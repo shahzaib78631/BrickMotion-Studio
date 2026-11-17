@@ -28,7 +28,8 @@ float4 viewPoint(depth2d<float> depth, int2 p, constant AoUniforms& u) {
 }
 
 fragment float2 aoFragment(ScreenOut in [[stage_in]], constant AoUniforms& u [[buffer(0)]], constant FrameUniforms& frame [[buffer(1)]], constant FloorBins& bins [[buffer(2)]],
-                           depth2d<float> depth [[texture(0)]], depth2d<float> shadowMap [[texture(1)]], texture2d<float> heights [[texture(2)]], sampler shadowSampler [[sampler(1)]]) {
+                           depth2d<float> depth [[texture(0)]], depth2d<float> shadowMap [[texture(1)]], texture2d<float> heights [[texture(2)]], texture2d<float> shares [[texture(3)]],
+                           sampler shadowSampler [[sampler(1)]]) {
   int2 cell = int2(in.position.xy);
   int2 at = cell * 2;
   float4 p = viewPoint(depth, at, u);
@@ -42,8 +43,13 @@ fragment float2 aoFragment(ScreenOut in [[stage_in]], constant AoUniforms& u [[b
   if (dot(n, -p.xyz) < 0) n = -n;
   float3 world = u.eye.xyz + u.right.xyz * p.x + u.up.xyz * p.y - u.forward.xyz * p.z;
   // The floor: its whole light, from the height map over the model (floor_light.metal), in r.
-  if (frame.floorLook.z > 0.5 && abs(world.y - frame.floorPlane.x) < 0.5)
+  // A floor pixel is one the floor drew (shares.a) whose point is on the floor's plane, not a
+  // brick's lowest band just above it; where the floor has faded out its light does not count.
+  float4 share = shares.read(uint2(at));
+  if (share.a > 0.5 && abs(world.y - frame.floorPlane.x) < 0.5) {
+    if (frame.floorLook.z < 0.5 || share.g <= 0.0) return float2(1.0);
     return float2(floorLight(world, frame, bins, heights, uint2(cell), frame.switches.y > 0.5, frame.switches.x > 0.5), 1.0);
+  }
   float lit = 1.0;
   if (frame.switches.x > 0.5) {
     float3 worldNormal = normalize(u.right.xyz * n.x + u.up.xyz * n.y - u.forward.xyz * n.z);
@@ -78,7 +84,7 @@ fragment float2 aoFragment(ScreenOut in [[stage_in]], constant AoUniforms& u [[b
 }
 
 // The floor's r (its light) and a brick's (its occlusion) are not mixed, even where the two
-// meet at one depth: the shares target (g > 0 on the floor) says which a pixel is.
+// meet at one depth: the shares target (a = 1 on the floor) says which a pixel is.
 fragment float2 aoBlurFragment(ScreenOut in [[stage_in]], constant AoUniforms& u [[buffer(0)]], texture2d<float> ao [[texture(0)]], depth2d<float> depth [[texture(1)]],
                                texture2d<float> shares [[texture(2)]]) {
   int2 cell = int2(in.position.xy);
@@ -87,14 +93,14 @@ fragment float2 aoBlurFragment(ScreenOut in [[stage_in]], constant AoUniforms& u
   float centre = depth.read(uint2(clamp(cell * 2, int2(0), fullSize - 1)));
   if (centre <= 0.0) return float2(1.0);
   float z = viewDepth(centre, u.lens);
-  bool onFloor = shares.read(uint2(clamp(cell * 2, int2(0), fullSize - 1))).g > 0.0;
+  bool onFloor = shares.read(uint2(clamp(cell * 2, int2(0), fullSize - 1))).a > 0.5;
   float2 sum = 0;
   float weight = 0;
   for (int y = -2; y < 2; y++)
     for (int x = -2; x < 2; x++) {
       int2 q = clamp(cell + int2(x, y), int2(0), halfSize - 1);
       float d = depth.read(uint2(clamp(q * 2, int2(0), fullSize - 1)));
-      bool same = (shares.read(uint2(clamp(q * 2, int2(0), fullSize - 1))).g > 0.0) == onFloor;
+      bool same = (shares.read(uint2(clamp(q * 2, int2(0), fullSize - 1))).a > 0.5) == onFloor;
       float w = d > 0.0 && same ? exp(-abs(viewDepth(d, u.lens) - z) / (0.02 * z)) : 0.0;
       sum += ao.read(uint2(q)).rg * w;
       weight += w;

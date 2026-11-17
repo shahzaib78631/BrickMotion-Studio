@@ -118,7 +118,7 @@ Lit shade(float3 base, float roughness, float metalness, float clearcoat, float3
 // An opaque surface: its light, and the share of it that came from the surroundings.
 struct OpaqueOut {
   float4 color [[color(0)]];
-  float4 shares [[color(3)]];  // r: the share occlusion dims, b: the share the key's shadow dims; g, a: the floor's (0 here)
+  float4 shares [[color(3)]];  // r: the share occlusion dims, b: the share the key's shadow dims; g, a: the floor's (0 here: not floor)
 };
 
 float luminanceOf(float3 c) { return dot(c, float3(0.2126, 0.7152, 0.0722)); }

@@ -69,7 +69,8 @@ struct FrameBuffer {
 /// 32-bit while each layer is rounded to 16 (shaders/brick.metal): a sum of a few such
 /// numbers is exact, so it does not depend on the order the layers come in.
 /// The fourth holds, per pixel, the share of an opaque surface's light that came from the
-/// surroundings (r: ambient occlusion dims only that), and how much of the pixel is floor (g).
+/// surroundings (r: ambient occlusion dims only that), how much the floor's light counts there
+/// (g), the share the key light's shadow dims (b), and how much of the pixel is floor (a).
 inline constexpr MTLPixelFormat kColorFormat = MTLPixelFormatRGBA16Float, kAccumFormat = MTLPixelFormatRGBA32Float, kRevealFormat = MTLPixelFormatR32Float,
                                 kAmbientFormat = MTLPixelFormatRGBA16Float;
 

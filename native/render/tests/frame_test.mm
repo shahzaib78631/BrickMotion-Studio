@@ -10,6 +10,7 @@
 #include "bmr/image.h"
 #include "bmr/renderer.h"
 #include "bmr/tolerances.h"
+#include "gpu_rig.h"
 #include "helpers.h"
 
 using namespace bm;
@@ -406,4 +407,25 @@ TEST_CASE("a brick standing on a plate darkens the plate beside it", "[gpu][fram
   // moves across the plate with the angle it is seen at.
   const Shot off = shotOf(text, plain(), 256, 256, nullptr, 0.6, 0.6);
   REQUIRE(std::abs(luminance(off.image.at(nx, ny)) - luminance(off.image.at(fx, fy))) <= 4);
+}
+
+TEST_CASE("a brick's lowest band, just above the floor's plane, is shaded as the brick, not as floor", "[gpu][frame]") {
+  NEED_GPU();
+  // A 1x1 brick (24 tall, bottom at y = 24; the floor's plane is kFloorLift below that), seen
+  // square on from close to the bottom of its front face (z = -10): an LDU is about 14 pixels.
+  // Shadows and occlusion on, the floor off: nothing is near the face to darken it, so a point
+  // 0.2 LDU above its bottom edge looks like one 2 LDU above it.
+  bmtest::GpuRig rig(piece("3005.dat", 0, 0, 0, 4));
+  REQUIRE(rig.renderer);
+  rig.camera.eye = {0, 23, -40}, rig.camera.target = {0, 23, 0};
+  rig.camera.up = {0, -1, 0}, rig.camera.aspect = 1;
+  FrameOptions o = plain();
+  o.shadows = o.ambientOcclusion = true;
+  const Image img = rig.shot(o);
+  const auto [lx, ly] = rig.pixel({0, 23.8, -10});
+  const auto [hx, hy] = rig.pixel({0, 22, -10});
+  INFO("low " << lx << "," << ly << " high " << hx << "," << hy);
+  const double low = luminance(img.at(lx, ly)), high = luminance(img.at(hx, hy));
+  INFO("low " << low << " high " << high);
+  REQUIRE(std::abs(low - high) <= 3);
 }

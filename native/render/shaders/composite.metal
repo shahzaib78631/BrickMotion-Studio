@@ -7,7 +7,7 @@
 float2 upsample(texture2d<float> coarse, depth2d<float> depth, texture2d<float> shares, uint2 at) {
   int2 halfSize = int2(coarse.get_width(), coarse.get_height()), fullSize = int2(depth.get_width(), depth.get_height());
   float centre = depth.read(at);
-  bool onFloor = shares.read(at).g > 0.0;  // the floor's light and a brick's occlusion are not mixed
+  bool onFloor = shares.read(at).a > 0.5;  // the floor's light and a brick's occlusion are not mixed
   float2 h = (float2(at) + 0.5) * 0.5 - 0.5;
   int2 base = int2(floor(h));
   float2 f = h - float2(base);
@@ -18,7 +18,7 @@ float2 upsample(texture2d<float> coarse, depth2d<float> depth, texture2d<float> 
     int2 cell = clamp(base + int2(k & 1, k >> 1), int2(0), halfSize - 1);
     float d = depth.read(uint2(clamp(cell * 2, int2(0), fullSize - 1)));
     float apart = abs(d - centre) / max(centre, 1e-6);
-    if ((shares.read(uint2(clamp(cell * 2, int2(0), fullSize - 1))).g > 0.0) != onFloor) apart = 1e3;
+    if ((shares.read(uint2(clamp(cell * 2, int2(0), fullSize - 1))).a > 0.5) != onFloor) apart = 1e3;
     float2 v = coarse.read(uint2(cell)).rg;
     float w = ((k & 1) ? f.x : 1.0 - f.x) * ((k >> 1) ? f.y : 1.0 - f.y) * exp(-apart / 0.02);
     sum += v * w, weight += w;
