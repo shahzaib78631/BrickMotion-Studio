@@ -530,9 +530,13 @@ of 9.1 s. The largest, 10030-1 (3,037 pieces), takes 12.1 s alone. Reference set
 ### Not done
 
 - **Speed: the target is met on the 25-set OMR sample** (median 0.65 s, 95th percentile 6.1 s, no time-outs;
-  goal: under 1 s, under 10 s, none). All 1,833 OMR files and the reference sets have not been timed one at a
-  time. Nothing here re-plans incrementally after an edit; the only memory is within one run.
-- **Floating placements and crossings on OMR are not zero** (3 and 30 on the sample). The rule is none.
+  goal: under 1 s, under 10 s, none) **and not on all of OMR.** All 1,833 files, planned ten at a time with a
+  30 s budget (2026-11-17, 11 minutes in all): median 0.59 s, 95th percentile 15.4 s, 43 out of time (the web
+  engine: 8.5 s, 92.8 s, 178). The 43 are the largest sets (2,000 to 10,000 pieces) and some Technic sets
+  (42000-1, 42039-1). They have not been timed one at a time, nor have the reference sets.
+  Nothing here re-plans incrementally after an edit; the only memory is within one run.
+- **Floating placements and crossings on OMR are not zero**: 73 floating placements in 48 files and 713
+  crossings in 213 files, of 819,628 moves; 80.9% of moves are certified. The rule is none.
 - **Curved and turning insertions** (a hinge swung shut, a tyre stretched on). Every leg is a straight line.
   These show up as `blocked` and `no-exit`.
 - **A continuous sweep.** Flights are sampled every 0.5 LDU.
