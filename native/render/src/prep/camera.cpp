@@ -157,6 +157,30 @@ OrbitCamera OrbitCamera::framing(const bm::Box& bounds, double fovY, double aspe
   return o;
 }
 
+OrbitCamera OrbitCamera::fitted(const bm::Box& bounds, double fovY, double aspect, double azimuth, double elevation) {
+  OrbitCamera o = framing(bounds, fovY, aspect);
+  o.azimuth = azimuth;
+  o.elevation = std::min(kMaxElevation, std::max(-kMaxElevation, elevation));
+  if (bounds.empty()) return o;
+  // The view's axes: f from the eye toward the target, r to the right, u up on the screen.
+  const bm::Vec3 f = normalized(o.target - o.eye());
+  const bm::Vec3 r = normalized(cross(f, bm::Vec3{0, -1, 0}));
+  const bm::Vec3 u = cross(r, f);
+  const double tanY = std::tan(o.fovY / 2), tanX = tanY * (aspect > 0 && std::isfinite(aspect) ? aspect : 1);
+  // A corner c (from the target) is at depth distance + c.f; it is in view across when
+  // |c.r| * margin <= tanX * depth, and the same up the screen. The nearest such distance:
+  double need = kMinDistance;
+  for (int i = 0; i < 8; i++) {
+    const bm::Vec3 corner{i & 1 ? bounds.max.x : bounds.min.x, i & 2 ? bounds.max.y : bounds.min.y, i & 4 ? bounds.max.z : bounds.min.z};
+    const bm::Vec3 c = corner - o.target;
+    need = std::max(need, kFrameMargin * std::abs(dot(c, r)) / tanX - dot(c, f));
+    need = std::max(need, kFrameMargin * std::abs(dot(c, u)) / tanY - dot(c, f));
+    need = std::max(need, kNearest - dot(c, f) + 1);  // every corner in front of the eye
+  }
+  o.distance = std::min(kMaxDistance, need);
+  return o;
+}
+
 OrbitCamera OrbitCamera::from(const bm::plan::CameraKey& key) {
   OrbitCamera o;
   o.target = key.target;

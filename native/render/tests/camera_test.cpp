@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -30,6 +31,27 @@ TEST_CASE("the framing camera has the whole box in view", "[camera]") {
       }
       REQUIRE_FALSE(outside(frustumOf(c, {}), box, {}));
     }
+}
+
+TEST_CASE("a fitted camera has the box in view, touching the margin, and is no further than framing", "[camera]") {
+  const Box box{{-300, -80, -40}, {300, 0, 40}};  // long and low, as a helicopter is
+  for (double aspect : {0.5, 1.6})
+    for (double azimuth : {0.0, 0.9, 2.0})
+      for (double elevation : {0.1, 0.5}) {
+        const OrbitCamera o = OrbitCamera::fitted(box, 0.6, aspect, azimuth, elevation);
+        REQUIRE(o.distance <= OrbitCamera::framing(box, 0.6, aspect).distance + 1e-6);
+        const Camera c = o.camera(aspect, box);
+        double widest = 0;  // the largest |x| or |y| over w among the corners
+        for (int i = 0; i < 8; i++) {
+          const Vec3 corner{i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z};
+          float v[4];
+          project(c, {}, corner, v);
+          REQUIRE(v[3] > 0);
+          widest = std::max({widest, std::abs(double(v[0]) / v[3]), std::abs(double(v[1]) / v[3])});
+        }
+        REQUIRE(widest <= 1.0);
+        REQUIRE(widest == Catch::Approx(1.0 / kFrameMargin).epsilon(0.02));
+      }
 }
 
 TEST_CASE("depth is reversed: near maps to one, far to zero", "[camera]") {

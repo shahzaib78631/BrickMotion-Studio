@@ -48,4 +48,38 @@ inline constexpr double kFrameMargin = 1.15;
 /// The nearest the near plane ever is, LDU: a twentieth of a stud.
 inline constexpr double kNearest = 1.0;
 
+/// The studio. The key light comes from the front, above and a little to the right (the
+/// front of an LDraw model faces -z, and -y is up): this is the direction toward it.
+inline constexpr double kKeyDirection[3] = {0.35, -0.8, -0.5};
+/// The key light's strength, and the luminance of the room and of the soft box that stands
+/// where the key light is, in units where a white matt surface in the room alone comes out
+/// at about 0.6. Chosen by eye on white, red and black bricks; the look is calibrated later.
+inline constexpr float kKeyIntensity = 1.6f;
+inline constexpr float kRoomLuminance = 0.62f;
+inline constexpr float kBoxLuminance = 6.0f;
+/// The soft box seen from the model: full within 18 degrees of the key direction, gone by 32.
+inline constexpr float kBoxInnerCos = 0.951f;
+inline constexpr float kBoxOuterCos = 0.848f;
+/// Two tall strip lights, left and right of the model, and a floor darker than the walls: the
+/// contrast chrome and gloss need to read as shiny. A strip is full within 8 degrees of the
+/// side (cos 0.990) and gone by 20 (cos 0.940) across it; it reaches from just below the
+/// horizon to about 35 degrees up.
+inline constexpr float kStripLuminance = 2.5f;
+inline constexpr float kStripInnerCos = 0.990f;
+inline constexpr float kStripOuterCos = 0.940f;
+inline constexpr float kFloorShare = 0.3f;
+/// The two cube maps of the studio's light: side in pixels and number of mips of the
+/// reflection map (roughness 0 at mip 0 to 1 at the last), side of the map of received
+/// light, and directions gathered per pixel.
+inline constexpr int kReflectionSize = 128;
+inline constexpr int kReflectionMips = 6;
+inline constexpr int kReceivedSize = 16;
+inline constexpr int kGatherSamples = 256;
+/// Samples per pixel when drawing (multisampling).
+inline constexpr int kSamples = 4;
+
+/// How strongly a part's outline lines are drawn over it: the web app's EDGE_OPACITY
+/// (src/render/materials.ts:192).
+inline constexpr float kEdgeOpacity = 0.3f;
+
 }  // namespace bmr

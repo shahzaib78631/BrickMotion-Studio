@@ -23,3 +23,7 @@ if(BM_SANITIZE)
   target_compile_definitions(bmrender_tests PRIVATE BM_SANITIZED=1)
 endif()
 catch_discover_tests(bmrender_tests)
+
+add_executable(bmshot tools/bmshot/main.mm)
+target_compile_options(bmshot PRIVATE -fobjc-arc)
+target_link_libraries(bmshot PRIVATE bmrender bm_warnings)

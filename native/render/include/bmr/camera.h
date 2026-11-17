@@ -55,6 +55,10 @@ struct OrbitCamera {
   Camera camera(double aspect, const bm::Box& sceneBounds) const;
   /// Looking at the middle of `bounds` from far enough to have all of it in view, with kFrameMargin to spare.
   static OrbitCamera framing(const bm::Box& bounds, double fovY, double aspect);
+  /// Looking at `bounds` from this azimuth and elevation, as close as keeps its eight corners in
+  /// view with kFrameMargin to spare. Tighter than framing, but only for this one view: for
+  /// still pictures, and for "frame the model" from where the user is looking.
+  static OrbitCamera fitted(const bm::Box& bounds, double fovY, double aspect, double azimuth, double elevation);
   static OrbitCamera from(const bm::plan::CameraKey& key);
 };
 
