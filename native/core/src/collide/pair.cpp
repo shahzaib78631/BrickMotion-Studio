@@ -29,6 +29,9 @@ struct Span {
   bool innerOfA;
 };
 
+/// How far inside a triangle (as a share of it) a line must pass to count as passing through it.
+constexpr double kInsideTriangle = 1e-3;
+
 struct Walk {
   const Shape& a;
   const Shape& b;
@@ -249,6 +252,53 @@ size_t firstOverlap(const Shape& a, const Xform& xa, Vec3 direction, const doubl
     }
   }
   return count;
+}
+
+double throughSurface(const Shape& b, const Xform& xb, Vec3 from, Vec3 to, Vec3* where) {
+  if (b.nodes.empty() || !finite(xb) || std::abs(determinant(xb.r)) < 1e-12) return 2;
+  const Xform inv = xb.inverse();
+  const Vec3 o = inv.apply(from), e = inv.apply(to), d = e - o;
+  if (!(length(d) > 1e-9)) return 2;
+  const double od[3] = {o.x, o.y, o.z}, dd[3] = {d.x, d.y, d.z};
+  double best = 2;
+  std::vector<uint32_t> stack{0};
+  while (!stack.empty()) {
+    const Node& n = b.nodes[stack.back()];
+    stack.pop_back();
+    // Where along the way the line is inside the node's box.
+    double enter = 0, leave = std::min(1.0, best);
+    for (int i = 0; i < 3 && enter <= leave; i++) {
+      if (std::abs(dd[i]) < 1e-12) {
+        if (od[i] < n.min[i] || od[i] > n.max[i]) enter = 3;
+        continue;
+      }
+      double t0 = (n.min[i] - od[i]) / dd[i], t1 = (n.max[i] - od[i]) / dd[i];
+      if (t0 > t1) std::swap(t0, t1);
+      enter = std::max(enter, t0), leave = std::min(leave, t1);
+    }
+    if (enter > leave) continue;
+    if (!n.count) {
+      stack.push_back(n.left);
+      stack.push_back(n.left + 1);
+      continue;
+    }
+    for (uint32_t t = n.left; t < n.left + n.count; t++) {
+      const Vec3f &p0 = b.outer[b.triangles[t * 3]], &p1 = b.outer[b.triangles[t * 3 + 1]], &p2 = b.outer[b.triangles[t * 3 + 2]];
+      const Vec3 v0{p0.x, p0.y, p0.z}, e1 = Vec3{p1.x, p1.y, p1.z} - v0, e2 = Vec3{p2.x, p2.y, p2.z} - v0;
+      const Vec3 h = cross(d, e2);
+      const double det = dot(e1, h);
+      if (std::abs(det) < 1e-9 * length(e1) * length(e2) * length(d)) continue;  // along the triangle: no clean passage
+      const Vec3 s = o - v0;
+      const double u = dot(s, h) / det;
+      const Vec3 q = cross(s, e1);
+      const double v = dot(d, q) / det, along = dot(e2, q) / det;
+      // Well inside the triangle and the way: a passage through an edge or an end is not counted.
+      if (u < kInsideTriangle || v < kInsideTriangle || u + v > 1 - kInsideTriangle || along <= 1e-9 || along >= best) continue;
+      best = along;
+    }
+  }
+  if (best <= 1 && where) *where = from + (to - from) * best;
+  return best;
 }
 
 bool overlap(const Shape& a, const Xform& xa, const Shape& b, const Xform& xb, const std::vector<Zone>& zones, Hit* hit, Depth depth) {

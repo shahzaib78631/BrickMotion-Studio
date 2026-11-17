@@ -106,6 +106,29 @@ struct Sequencer {
     };
     std::vector<Move> removed;  // in the order taken off
     const Piece* last = nullptr;
+    // An attempt that failed fails again for as long as everything that stopped it and every
+    // mate it had are still there: pieces only ever leave. Such attempts are kept, with when
+    // they were made, and not made again until one of those has gone.
+    struct Tried {
+      Extraction found;
+      uint32_t when = 0;  // 0: never tried
+    };
+    std::vector<uint32_t> removedAt(n, 0);  // the round a piece left in
+    uint32_t round = 1;
+    std::vector<Tried> turnedBefore(n);
+    std::map<std::vector<uint32_t>, Tried> togetherBefore;
+    auto stillHolds = [&](const Unit& u, const Tried& t) {
+      if (t.when == 0) return false;
+      if (t.found.ok) return true;  // what could leave still can
+      for (uint32_t stop : t.found.stoppedBy)
+        if (removedAt[stop] >= t.when) return false;
+      for (uint32_t p : u.pieces)
+        for (uint32_t ci : ctx.connectionsOf[p]) {
+          const Connection& c = ctx.graph.connections[ci];
+          if (removedAt[c.a == p ? c.b : c.a] >= t.when) return false;
+        }
+      return true;
+    };
     auto take = [&](Unit unit, UnitSource source, const Extraction& e, Flag flag) {
       Move m;
       m.unit = std::move(unit);
@@ -117,6 +140,7 @@ struct Sequencer {
       m.blocker = e.blocker;
       for (uint32_t p : m.unit.pieces) {
         present[p] = 0;
+        removedAt[p] = round;
         left--;
         for (uint32_t ci : ctx.connectionsOf[p]) {
           const Connection& c = ctx.graph.connections[ci];
@@ -131,6 +155,7 @@ struct Sequencer {
               dirty[q] = 2;  // something that stopped it has gone: it must be tried again
               break;
             }
+      round++;
       last = &ctx.model.pieces()[m.unit.pieces.front()];
       removed.push_back(std::move(m));
     };
@@ -207,13 +232,17 @@ struct Sequencer {
       todo.clear();
       for (uint32_t p : stuck)
         if (single[p].why == Flag::NoExit) todo.push_back(p);
-      std::vector<Extraction> turned(todo.size());
-      pool.parallelFor(todo.size(), [&](size_t i) { turned[i] = extract(ctx, unitOf({todo[i]}), &present, bounds, authoredAxis(todo[i]), true); });
-      extractions += todo.size();
+      std::vector<uint32_t> again;
+      for (uint32_t p : todo)
+        if (!stillHolds(unitOf({p}), turnedBefore[p])) again.push_back(p);
+      pool.parallelFor(again.size(), [&](size_t i) { turnedBefore[again[i]] = {extract(ctx, unitOf({again[i]}), &present, bounds, authoredAxis(again[i]), true), round}; });
+      extractions += again.size();
       for (size_t i = 0; i < todo.size() && !took; i++) {
         const Unit u = unitOf({todo[i]});
-        if (!turned[i].ok || !free(u) || !staysJoined(ctx, set, present, u, stack, seen)) continue;
-        take(u, UnitSource::Piece, turned[i], Flag::None);
+        const Extraction& turned = turnedBefore[todo[i]].found;
+        if (!turned.ok || !free(u) || !staysJoined(ctx, set, present, u, stack, seen)) continue;
+        const Extraction way = turned;  // take() ends the round; the kept attempt is not touched by it
+        take(u, UnitSource::Piece, way, Flag::None);
         took = true;
       }
       if (took) continue;
@@ -232,8 +261,12 @@ struct Sequencer {
         }
         for (auto& [u, source] : tries) {
           if (!free(u) || !staysJoined(ctx, set, present, u, stack, seen)) continue;
-          const Extraction e = extract(ctx, u, &present, bounds);
-          extractions++;
+          Tried& before = togetherBefore[u.pieces];
+          if (!stillHolds(u, before)) {
+            before = {extract(ctx, u, &present, bounds), round};
+            extractions++;
+          }
+          const Extraction e = before.found;
           if (!e.ok) continue;
           take(u, source, e, Flag::None);
           took = true;

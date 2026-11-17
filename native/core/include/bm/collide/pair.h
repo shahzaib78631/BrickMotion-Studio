@@ -39,6 +39,12 @@ bool overlap(const Shape& a, const Xform& xa, const Shape& b, const Xform& xb, c
 /// finds when each pair of triangles can touch at all, and only those are looked at.
 size_t firstOverlap(const Shape& a, const Xform& xa, Vec3 direction, const double* at, size_t count, const Shape& b, const Xform& xb, const std::vector<Zone>& zones = {});
 
+/// Where the straight way from `from` to `to` (model space) first passes through the true
+/// surface of `b`, as a share of the way (0..1); more than 1 if it does not. A passage along a
+/// triangle or through its very edge is not counted, so an answer is always a clean passage
+/// through the surface. `where` receives the point.
+double throughSurface(const Shape& b, const Xform& xb, Vec3 from, Vec3 to, Vec3* where = nullptr);
+
 /// Whether `p` lies inside `zone`.
 bool inside(const Zone& zone, Vec3 p);
 

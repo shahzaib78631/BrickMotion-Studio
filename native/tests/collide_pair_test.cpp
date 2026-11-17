@@ -195,3 +195,19 @@ TEST_CASE("real parts passing closely: one go gives what pose by pose gives", "[
   REQUIRE(hitsSeen > 5);
   REQUIRE(clearSeen > 5);
 }
+
+TEST_CASE("where a straight way passes through a surface", "[collide][pair][sweep]") {
+  // The brick's body: x and z from -10 to 10, y from 0 to 24.
+  Vec3 where;
+  const double share = throughSurface(brick(), at(0, 0, 0), {-30, 12, 1}, {30, 12, 1}, &where);
+  REQUIRE(std::abs(share - 1.0 / 3) < 1e-6);  // the wall at x = -10, a third of the way
+  REQUIRE(std::abs(where.x + 10) < 1e-6);
+  REQUIRE(throughSurface(brick(), at(0, 0, 0), {-30, 12, 1}, {-12, 12, 1}) > 1);   // stops short of it
+  REQUIRE(throughSurface(brick(), at(0, 0, 0), {-30, 40, 1}, {30, 40, 1}) > 1);    // passes underneath
+  REQUIRE(throughSurface(brick(), at(0, 0, 0), {-30, 12, 1}, {-30, 12, 1}) > 1);   // no way at all
+  // The same seen with the brick moved and turned a quarter about y.
+  Xform placed = at(100, 0, 0);
+  placed.r = Mat3{{0, 0, 1, 0, 1, 0, -1, 0, 0}};
+  REQUIRE(std::abs(throughSurface(brick(), placed, {70, 12, 1}, {130, 12, 1}) - 1.0 / 3) < 1e-6);
+  REQUIRE(throughSurface(Shape{}, at(0, 0, 0), {-30, 12, 1}, {30, 12, 1}) > 1);    // nothing there
+}

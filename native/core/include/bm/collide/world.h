@@ -67,7 +67,10 @@ class World {
   /// has it is not this move's doing and is left out. `blocker` receives what stopped it.
   /// `start` moves the whole unit first (a later leg of a flight). With `enough` set, the search
   /// stops at the first obstacle that holds it short of that: the answer is then some travel
-  /// under `enough`, not necessarily the least. Thread-safe.
+  /// under `enough`, not necessarily the least. A point a skin inside a moving piece that
+  /// passes through an obstacle's surface also counts as stopped there, and is looked for
+  /// first: it is exact, where the sampled poses can step over a graze thinner than their
+  /// spacing, and it is cheap. Thread-safe.
   double clearTravel(const std::vector<uint32_t>& unit, Vec3 direction, double distance, const Present* present, const std::vector<Zone>& zones = {}, uint32_t* blocker = nullptr,
                      const Xform& start = {}, double tolerance = 0.05, double enough = 0) const;
 

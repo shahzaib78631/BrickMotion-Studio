@@ -127,6 +127,8 @@ struct World::State {
   std::vector<Xform> poses;
   std::vector<Box> boxes;
   std::vector<Box> innerBoxes;   // of each piece's inner surface, in the model
+  std::vector<const std::vector<Vec3>*> probes;  // points of each piece's inner surface, in its own space
+  std::unordered_map<const Shape*, std::vector<Vec3>> probesOf;
   std::vector<uint32_t> byMinX;  // pieces with geometry, sorted by their box's min x
   double widest = 0;             // the largest box extent along x, to bound the scan
   mutable std::mutex memoLock;
@@ -139,9 +141,41 @@ World::World(const Model& model, ldraw::PartCache& parts, ShapeCache& shapeCache
   state_->boxes.resize(n);
   state_->innerBoxes.resize(n);
   std::unordered_map<const Shape*, Box> innerLocal;
+  state_->probes.assign(n, nullptr);
   for (uint32_t i = 0; i < n; i++) {
     state_->poses.push_back(model.pieces()[i].world);
     if (state_->shapes[i]->nodes.empty()) continue;
+    {
+      // Probes: the points of the inner surface furthest out each way (along the axes and the
+      // diagonals). Each is inside the piece by a skin, so wherever one of them passes through
+      // another piece's surface the two are certainly in each other.
+      auto found = state_->probesOf.find(state_->shapes[i].get());
+      if (found == state_->probesOf.end()) {
+        const Shape& shape = *state_->shapes[i];
+        std::vector<Vec3> points;
+        for (int dx = -1; dx <= 1; dx++)
+          for (int dy = -1; dy <= 1; dy++)
+            for (int dz = -1; dz <= 1; dz++) {
+              if (!dx && !dy && !dz) continue;
+              if (std::abs(dx) + std::abs(dy) + std::abs(dz) == 2) continue;  // 6 axes and 8 diagonals
+              double best = -1e300;
+              Vec3 at;
+              bool any = false;
+              for (size_t t = 0; t + 2 < shape.inner.size(); t += 3) {
+                const Vec3f &a = shape.inner[t], &b = shape.inner[t + 1];
+                if (a.x == b.x && a.y == b.y && a.z == b.z) continue;  // a triangle that did not survive
+                for (size_t c = 0; c < 3; c++) {
+                  const Vec3f& v = shape.inner[t + c];
+                  const double reach = dx * v.x + dy * v.y + dz * v.z;
+                  if (reach > best) best = reach, at = {v.x, v.y, v.z}, any = true;
+                }
+              }
+              if (any && std::find_if(points.begin(), points.end(), [&](const Vec3& have) { return length(have - at) < 1e-6; }) == points.end()) points.push_back(at);
+            }
+        found = state_->probesOf.emplace(state_->shapes[i].get(), std::move(points)).first;
+      }
+      state_->probes[i] = &found->second;
+    }
     state_->boxes[i] = state_->shapes[i]->bounds.transformed(state_->poses[i]);
     {
       // The inner surface's own box: two pieces can only cross where the inner surface of one
@@ -325,12 +359,37 @@ double World::clearTravel(const std::vector<uint32_t>& unit, Vec3 direction, dou
     std::vector<std::pair<double, uint32_t>> ordered;
     for (uint32_t q : found) ordered.emplace_back(reach(q), q);
     std::sort(ordered.begin(), ordered.end());
+    // First, cheaply: a point a skin inside the piece that passes through another's surface
+    // means the piece is stopped by then. Asked only whether it gets as far as `enough`, that
+    // settles it; otherwise it bounds how far the sweeps below need to look.
+    if (s.probes[p]) {
+      for (const Vec3& local : *s.probes[p]) {
+        const double reachTo = enough > 0 ? enough : best;
+        const Vec3 a = from.apply(local), b = a + direction * reachTo;
+        Box way;
+        way.grow(a), way.grow(b);
+        for (const auto& [enter, q] : ordered) {
+          if (enter > reachTo) break;
+          if (!boxesMeet(way, s.boxes[q]) || std::binary_search(unit.begin(), unit.end(), q)) continue;
+          Vec3 where;
+          const double share = throughSurface(*s.shapes[q], s.poses[q], a, b, &where);
+          if (share > 1) continue;
+          bool exempt = false;
+          for (const Zone& z : zones) exempt = exempt || inside(z, where);
+          if (exempt || (boxesMeet(s.boxes[p], s.boxes[q]) && restCrossing(p, q, zones))) continue;
+          if (blocker) *blocker = q;
+          if (enough > 0) return share * reachTo;
+          best = std::min(best, share * reachTo);
+          break;  // this point gets no further; the next one may be stopped sooner
+        }
+      }
+    }
     for (const auto& [enter, q] : ordered) {
       if (enter > best) break;
       if (std::binary_search(unit.begin(), unit.end(), q)) continue;
       // What already crosses it where the model has it is not this move's doing.
       if (boxesMeet(s.boxes[p], s.boxes[q]) && restCrossing(p, q, zones)) continue;
-      const double got = pairTravel(p, from, startBox, q, direction, distance, zones, tolerance);
+      const double got = pairTravel(p, from, startBox, q, direction, best, zones, tolerance);  // no further than it is known to get
       if (got < best) {
         best = got;
         if (blocker) *blocker = q;

@@ -168,3 +168,27 @@ TEST_CASE("how far a unit can travel before it meets a present piece", "[collide
   REQUIRE(found == std::vector<uint32_t>{0});
   REQUIRE(w.clearTravel({0}, {0, 0, 0}, 100, nullptr) == 0);
 }
+
+TEST_CASE("asked only whether it gets far enough, the answer says so and names what stops it", "[collide][world][travel]") {
+  Rig r;
+  const Model m = r.model(piece("c1x1.dat", 0, 0, 0) + piece("c1x1.dat", 30, 0, 0) + piece("c1x1.dat", 0, 0, 300));
+  const World w(m, r.parts, r.shapes);
+  uint32_t blocker = 7;
+  const double exact = w.clearTravel({0}, {1, 0, 0}, 100, nullptr, {}, &blocker);
+  REQUIRE(blocker == 1);
+  // Must get 100 and cannot: some travel short of that, never more than a point inside it could go.
+  blocker = 7;
+  const double enough = w.clearTravel({0}, {1, 0, 0}, 100, nullptr, {}, &blocker, {}, 0.05, 99.9);
+  REQUIRE(enough < 99.9);
+  REQUIRE(enough <= 30.0);  // by then its far side is well inside the wall
+  REQUIRE(blocker == 1);
+  // Must get only as far as the gap: it does, and nothing is named.
+  blocker = 7;
+  REQUIRE(w.clearTravel({0}, {1, 0, 0}, 9, nullptr, {}, &blocker, {}, 0.05, 8.9) == 9);
+  REQUIRE(blocker == UINT32_MAX);
+  // A zone over the whole wall forgives it, both ways of asking.
+  const std::vector<Zone> all{{{30, 12, 0}, {30, 12, 0}, 60}};
+  REQUIRE(w.clearTravel({0}, {1, 0, 0}, 100, nullptr, all) == 100);
+  REQUIRE(w.clearTravel({0}, {1, 0, 0}, 100, nullptr, all, nullptr, {}, 0.05, 99.9) == 100);
+  REQUIRE(exact >= 10.0);
+}
