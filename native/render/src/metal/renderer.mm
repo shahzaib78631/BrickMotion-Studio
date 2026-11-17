@@ -73,8 +73,9 @@ const GpuMesh& Renderer::Impl::mesh(const Group& group, Detail detail) {
   return gpuMeshes.emplace(key, gpu).first->second;
 }
 
-void Renderer::Impl::upload(const std::vector<std::pair<uint32_t, uint32_t>>& changed) {
+void Renderer::Impl::upload(const std::vector<std::pair<uint32_t, uint32_t>>& changed, bool moved) {
   if (changed.empty()) return;
+  if (moved) shadowDetail = -1;
   for (auto& queue : pending) queue.insert(queue.end(), changed.begin(), changed.end());
   idsReady = false;
 }
@@ -119,7 +120,7 @@ void Renderer::setRest() {
   impl_->updateLiveBounds();
 }
 
-void Renderer::select(const std::vector<uint32_t>& pieces) { impl_->upload(applySelection(impl_->scene, pieces)); }
+void Renderer::select(const std::vector<uint32_t>& pieces) { impl_->upload(applySelection(impl_->scene, pieces), false); }
 
 uint32_t Renderer::pick(int x, int y) {
   Impl& impl = *impl_;

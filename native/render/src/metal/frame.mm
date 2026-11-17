@@ -39,7 +39,11 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
       for (int d = 0; d < 2; d++) add(outlined, g, static_cast<Detail>(d), inView[g].edges[d]);
     stats.culled += inView[g].culled;
   }
-  if (options.shadows) {
+  // The shadow map is drawn again only when a piece has moved, appeared or gone since it was,
+  // or it was drawn at another detail.
+  const int casterDetail = forced ? options.forceDetail : static_cast<int>(Detail::Low);
+  const bool redrawShadow = options.shadows && (!shadowMap || shadowDetail != casterDetail);
+  if (redrawShadow) {
     std::vector<uint32_t> shown;
     for (uint32_t g = 0; g < scene.groups.size(); g++) {
       const Group& group = scene.groups[g];
@@ -47,7 +51,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
       shown.clear();
       for (uint32_t i = 0; i < group.instances.size(); i++)
         if (!(group.instances[i].flags & kHidden)) shown.push_back(i);
-      add(casters, g, forced ? static_cast<Detail>(options.forceDetail) : Detail::Low, shown);
+      add(casters, g, static_cast<Detail>(casterDetail), shown);
     }
   }
 
@@ -123,7 +127,9 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     d.storageMode = MTLStorageModePrivate;
     shadowMap = [dev newTextureWithDescriptor:d];
   }
-  if (options.shadows && shadowMap) {
+  if (redrawShadow && shadowMap) {
+    shadowDetail = casterDetail;
+    stats.shadowDrawn = true;
     MTLRenderPassDescriptor* pass = [MTLRenderPassDescriptor new];
     pass.depthAttachment.texture = shadowMap;
     pass.depthAttachment.loadAction = MTLLoadActionClear;

@@ -95,7 +95,7 @@ struct Renderer::Impl {
   std::vector<PartShape> parts;  // per group: its part's bounds at full detail, and its low-detail error
   std::map<std::pair<std::string, int>, GpuMesh> gpuMeshes;  // (part, detail); a placeholder's part is ""
   const GpuMesh& mesh(const Group& group, Detail detail);
-  void upload(const std::vector<std::pair<uint32_t, uint32_t>>& changed);  // queues them for every copy
+  void upload(const std::vector<std::pair<uint32_t, uint32_t>>& changed, bool moved = true);  // queues them for every copy
   void flush(int slot);                                                       // writes the copy's queue
 
   // Targets, remade when the size changes.
@@ -105,6 +105,9 @@ struct Renderer::Impl {
   id<MTLTexture> aoRaw = nil, aoSoft = nil;  // ambient occlusion, half size
   void makeTargets();
   id<MTLTexture> shadowMap = nil;  // made the first time shadows are drawn
+  // The shadow map holds the poses now shown, drawn at this detail (-1: not drawn since a
+  // piece last moved or appeared). Kept from frame to frame while nothing moves.
+  int shadowDetail = -1;
   id<MTLTexture> mask = nil;       // selected pieces, one sample
   id<MTLTexture> ids = nil, idDepth = nil;  // piece + 1 per pixel, for picking; made on the first pick
 

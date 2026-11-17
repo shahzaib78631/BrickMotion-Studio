@@ -100,3 +100,29 @@ TEST_CASE("resizing, to zero and back, keeps drawing", "[gpu][frame]") {
   REQUIRE(mid[0] > 3 * mid[1]);
   REQUIRE(rig.renderer->pick(256, 150) == 0);
 }
+
+TEST_CASE("the key light's shadow is drawn again only when a piece moves", "[gpu][playback]") {
+  NEED_GPU();
+  bmtest::GpuRig rig(kStack);
+  REQUIRE(rig.renderer);
+  const Build b;
+  const FrameOptions options{};
+  rig.renderer->setFrame(b.plan, b.timeline, 40);
+  REQUIRE(rig.renderer->draw(rig.camera, options).shadowDrawn);
+  const FrameStats still = rig.renderer->draw(rig.camera, options);
+  REQUIRE_FALSE(still.shadowDrawn);  // the same poses: the shadow map is kept
+  rig.renderer->select({1});
+  REQUIRE_FALSE(rig.renderer->draw(rig.camera, options).shadowDrawn);  // selecting moves nothing
+  FrameOptions low = options;
+  low.forceDetail = 2;
+  REQUIRE(rig.renderer->draw(rig.camera, low).shadowDrawn);  // another detail: drawn again
+  REQUIRE(rig.renderer->draw(rig.camera, options).shadowDrawn);
+  rig.renderer->select({});
+  // Moved on and back: the picture is the one a renderer that never left frame 40 draws.
+  rig.renderer->setFrame(b.plan, b.timeline, 10);
+  REQUIRE(rig.renderer->draw(rig.camera, options).shadowDrawn);
+  rig.renderer->setFrame(b.plan, b.timeline, 40);
+  bmtest::GpuRig fresh(kStack);
+  fresh.renderer->setFrame(b.plan, b.timeline, 40);
+  REQUIRE(compare(fresh.shot(options), rig.shot(options)).meanAbs == 0);
+}
