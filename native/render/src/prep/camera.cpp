@@ -110,6 +110,8 @@ void OrbitCamera::orbit(double dAzimuth, double dElevation) {
   if (std::isfinite(dElevation)) elevation = std::min(kMaxElevation, std::max(-kMaxElevation, elevation + dElevation));
 }
 
+void OrbitCamera::drag(double dxPoints, double dyPoints) { orbit(dxPoints * kOrbitRadiansPerPoint, dyPoints * kOrbitRadiansPerPoint); }
+
 void OrbitCamera::zoom(double factor) {
   if (!(factor > 0) || !std::isfinite(factor)) return;
   distance = std::min(kMaxDistance, std::max(kMinDistance, distance * factor));

@@ -194,3 +194,39 @@ TEST_CASE("the timeline's camera is its keys, and between them the turn goes the
   // From 3.0 to -3.0 the short way is through pi, not through 0.
   REQUIRE(std::abs(std::remainder(mid.azimuth - M_PI, 2 * M_PI)) < 1e-9);
 }
+
+namespace {
+/// Where `p` lands on the screen, as -1..1 with +x right and +y up.
+std::pair<double, double> onScreen(const OrbitCamera& o, Vec3 p) {
+  Camera c = o.camera(1.0, Box{});
+  c.aspect = 1;
+  float out[4];
+  project(c, {}, p, out);
+  return {out[0] / out[3], out[1] / out[3]};
+}
+}  // namespace
+
+TEST_CASE("the model follows the pointer: a pan moves it with the drag, a turn rolls its near side with it", "[camera]") {
+  OrbitCamera o;
+  o.target = {0, 0, 0}, o.distance = 400, o.azimuth = 0.6, o.elevation = 0.45;
+  const Vec3 near = o.target + (o.eye() - o.target) * 0.25;  // a point on the side facing the viewer
+  const Vec3 centre = o.target;
+  {
+    OrbitCamera p = o;
+    p.pan(30, 0, 1000);  // dragged right
+    REQUIRE(onScreen(p, centre).first > 0.01);
+    p = o;
+    p.pan(0, 30, 1000);  // dragged down (screen y grows downward)
+    REQUIRE(onScreen(p, centre).second < -0.01);
+  }
+  {
+    OrbitCamera t = o;
+    const auto before = onScreen(t, near);
+    t.drag(30, 0);  // dragged right
+    REQUIRE(onScreen(t, near).first > before.first + 0.01);
+    t = o;
+    t.drag(0, 30);  // dragged down: the near side goes down, the top comes into view
+    REQUIRE(onScreen(t, near).second < before.second - 0.01);
+    REQUIRE(t.elevation > o.elevation);
+  }
+}

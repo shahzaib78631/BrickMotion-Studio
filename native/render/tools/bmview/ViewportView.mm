@@ -9,7 +9,6 @@
 #include "bmr/device.h"
 
 namespace {
-constexpr double kOrbitPerPoint = 0.008;  // radians per point of drag
 constexpr double kWheelZoom = 0.1;        // a wheel notch zooms by e^-0.1
 constexpr double kClickSlop = 3;          // points a press may wander and still be a click
 constexpr double kReadoutSeconds = 0.25;
@@ -260,7 +259,7 @@ constexpr double kReadoutSeconds = 0.25;
   const NSPoint at = [self convertPoint:event.locationInWindow fromView:nil];
   if (std::hypot(at.x - _pressedAt.x, at.y - _pressedAt.y) > kClickSlop) _dragged = true;
   if (!_dragged) return;
-  _orbit.orbit(-(at.x - _lastAt.x) * kOrbitPerPoint, -(at.y - _lastAt.y) * kOrbitPerPoint);
+  _orbit.drag(at.x - _lastAt.x, -(at.y - _lastAt.y));  // view points have y up; drag() takes it down
   _lastAt = at;
   [self moved];
 }

@@ -58,6 +58,9 @@ struct OrbitCamera {
   double fovY = 0.6;
 
   void orbit(double dAzimuth, double dElevation);  ///< elevation is held within +-kMaxElevation
+  /// Turns the model as if the pointer had hold of its near side: a drag of this many points,
+  /// right and down positive, at kOrbitRadiansPerPoint.
+  void drag(double dxPoints, double dyPoints);
   void zoom(double factor);                        ///< distance is multiplied, held within [kMinDistance, kMaxDistance]
   /// Slides the target across the view by a drag of this many pixels in a view this tall.
   void pan(double dxPixels, double dyPixels, double viewportHeight);

@@ -42,6 +42,8 @@ inline constexpr float kPlaceholderRoughness = 0.6f;
 /// out of sight.
 inline constexpr double kMaxElevation = 1.5533;
 inline constexpr double kMinDistance = 10;
+/// A drag in the viewport turns the model this many radians per point (half a turn over 390 points).
+inline constexpr double kOrbitRadiansPerPoint = 0.008;
 inline constexpr double kMaxDistance = 1e6;
 /// How much wider than the model a framing shot is: enough air that nothing touches the edge.
 inline constexpr double kFrameMargin = 1.15;
