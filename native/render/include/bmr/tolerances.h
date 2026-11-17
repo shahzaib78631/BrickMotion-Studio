@@ -97,6 +97,9 @@ inline constexpr double kLowPixels = 6;
 /// Outline lines fade in between kFullPixels (none: low detail has none either, so nothing
 /// pops when a piece changes detail) and kEdgeFullPixels (all of kEdgeOpacity).
 inline constexpr double kEdgeFullPixels = 96;
+/// The selection's outline: the system accent blue (#007AFF, sRGB 0-255), this many pixels wide.
+inline constexpr unsigned kSelectionRgb[3] = {0, 122, 255};
+inline constexpr float kSelectionWidth = 2.0f;
 /// How far a culled, level-of-detail frame may be from the same frame drawn in full: mean
 /// absolute difference per channel, and over the worst kBlock square (0..255).
 inline constexpr double kDetailMeanTolerance = 0.5;

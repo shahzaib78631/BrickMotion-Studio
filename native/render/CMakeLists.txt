@@ -24,6 +24,8 @@ if(BM_SANITIZE)
 endif()
 catch_discover_tests(bmrender_tests)
 
-add_executable(bmshot tools/bmshot/main.mm)
-target_compile_options(bmshot PRIVATE -fobjc-arc)
+# bmshot plans a model as `bm plan` does, so it shares bm's engine-data loader.
+add_executable(bmshot tools/bmshot/main.mm ${CMAKE_SOURCE_DIR}/tools/bm/data.cpp)
+target_include_directories(bmshot PRIVATE ${CMAKE_SOURCE_DIR}/tools/bm)
+target_compile_options(bmshot PRIVATE $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
 target_link_libraries(bmshot PRIVATE bmrender bm_warnings)

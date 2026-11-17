@@ -3,21 +3,10 @@
 
 #include <chrono>
 #include "bmr/cull.h"
+#include "bmr/material.h"
 #include "bmr/tolerances.h"
 
 namespace bmr {
-namespace {
-
-/// One draw call's worth: instances of a group at one detail, mirrored or not.
-struct Batch {
-  uint32_t group;
-  Detail detail;
-  bool mirrored;
-  uint32_t first, count;  // in the frame's list of visible instance numbers
-};
-
-}  // namespace
-
 FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& options, id<CAMetalDrawable> drawable) {
   FrameStats stats;
   const auto started = std::chrono::steady_clock::now();
@@ -58,8 +47,22 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     }
   }
 
+  // The selected pieces in view, for their outline.
+  std::vector<Batch> selected;
+  for (const Batch& batch : seen) {
+    const Group& group = scene.groups[batch.group];
+    const uint32_t first = static_cast<uint32_t>(list.size());
+    for (uint32_t k = 0; k < batch.count; k++) {
+      const uint32_t i = list[batch.first + k];
+      if (group.instances[i].flags & kSelected) list.push_back(i);
+    }
+    if (list.size() > first) selected.push_back({batch.group, batch.detail, batch.mirrored, first, static_cast<uint32_t>(list.size()) - first});
+  }
+
   dispatch_semaphore_wait(inFlight, DISPATCH_TIME_FOREVER);
   frame++;
+  const int slot = static_cast<int>(frame % 3);
+  flush(slot);
   id<MTLDevice> dev = device->device;
 
   // The floor and the key light are fitted to the model at rest.
@@ -67,7 +70,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   const double diagonal = b.empty() ? 1.0 : std::max(1.0, length(b.max - b.min));
   const bm::Vec3 middle = b.empty() ? scene.origin : (b.min + b.max) * 0.5;
   const bm::Vec3 toward{kKeyDirection[0], kKeyDirection[1], kKeyDirection[2]};
-  const KeyLight key = keyLight(b, scene.origin, toward, kShadowMapSize, kFloorExtent * diagonal);
+  const KeyLight key = keyLight(liveBounds, scene.origin, toward, kShadowMapSize, kFloorExtent * diagonal);
 
   FrameUniforms fu{};
   fu.viewProj = simdFrom(multiply(projectionMatrix(camera), viewMatrix(camera, scene.origin)));
@@ -83,6 +86,8 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   fu.floorPlane = simd_make_float4(static_cast<float>(floorY), static_cast<float>(kFloorExtent * diagonal), static_cast<float>(key.texel), kShadowBias);
   fu.floorCentre = simd_make_float4(static_cast<float>(middle.x - scene.origin.x), static_cast<float>(middle.z - scene.origin.z), kFloorShadow, kOitDepthScale);
   fu.lens = simd_make_float4(static_cast<float>(std::tan(camera.fovY / 2)), static_cast<float>(kFullPixels), static_cast<float>(kEdgeFullPixels), 0);
+  const simd_float3 accent = simd_make_float3(linearFromSrgb(kSelectionRgb[0]), linearFromSrgb(kSelectionRgb[1]), linearFromSrgb(kSelectionRgb[2]));
+  fu.selection = simd_make_float4(accent.x, accent.y, accent.z, selected.empty() ? 0.0f : kSelectionWidth);
   id<MTLBuffer> frameBuffer = frameUniforms.get(dev, frame, sizeof fu);
   std::memcpy(frameBuffer.contents, &fu, sizeof fu);
 
@@ -131,7 +136,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
       const GpuMesh& gpu = mesh(scene.groups[batch.group], batch.detail);
       if (!gpu.indexCount) continue;
       [enc setVertexBuffer:gpu.vertices offset:0 atIndex:0];
-      [enc setVertexBuffer:instanceBuffers[batch.group] offset:0 atIndex:3];
+      [enc setVertexBuffer:instanceBuffers[batch.group][slot] offset:0 atIndex:3];
       [enc setVertexBufferOffset:batch.first * sizeof(uint32_t) atIndex:4];
       [enc drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:gpu.indexCount indexType:MTLIndexTypeUInt32 indexBuffer:gpu.indices indexBufferOffset:0 instanceCount:batch.count];
       stats.drawCalls++;
@@ -178,7 +183,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
         // Triangles are counter-clockwise seen from outside; a mirrored instance shows them the other way round.
         [enc setFrontFacingWinding:batch.mirrored ? MTLWindingClockwise : MTLWindingCounterClockwise];
         [enc setVertexBuffer:gpu.vertices offset:0 atIndex:0];
-        [enc setVertexBuffer:instanceBuffers[batch.group] offset:0 atIndex:3];
+        [enc setVertexBuffer:instanceBuffers[batch.group][slot] offset:0 atIndex:3];
         [enc setVertexBufferOffset:i * sizeof(DrawUniforms) atIndex:2];
         [enc setFragmentBufferOffset:i * sizeof(DrawUniforms) atIndex:2];
         [enc setVertexBufferOffset:batch.first * sizeof(uint32_t) atIndex:4];
@@ -215,7 +220,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
         const GpuMesh& gpu = mesh(scene.groups[batch.group], batch.detail);
         if (!gpu.edgeVertices) continue;
         [enc setVertexBuffer:gpu.edges offset:0 atIndex:0];
-        [enc setVertexBuffer:instanceBuffers[batch.group] offset:0 atIndex:3];
+        [enc setVertexBuffer:instanceBuffers[batch.group][slot] offset:0 atIndex:3];
         [enc setVertexBufferOffset:i * sizeof(DrawUniforms) atIndex:2];
         [enc setFragmentBufferOffset:i * sizeof(DrawUniforms) atIndex:2];
         [enc setVertexBufferOffset:batch.first * sizeof(uint32_t) atIndex:4];
@@ -231,7 +236,32 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     [enc endEncoding];
   }
 
-  // Background, transparency, tone curve, sRGB.
+  // Where the selected pieces are, for their outline: all of each, hidden parts too.
+  if (!selected.empty()) {
+    MTLRenderPassDescriptor* pass = [MTLRenderPassDescriptor new];
+    pass.colorAttachments[0].texture = mask;
+    pass.colorAttachments[0].loadAction = MTLLoadActionClear;
+    pass.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+    pass.colorAttachments[0].storeAction = MTLStoreActionStore;
+    id<MTLRenderCommandEncoder> enc = [commands renderCommandEncoderWithDescriptor:pass];
+    [enc setRenderPipelineState:pipelines.mask];
+    [enc setCullMode:MTLCullModeNone];
+    [enc setVertexBuffer:frameBuffer offset:0 atIndex:1];
+    [enc setVertexBuffer:drawBuffer offset:0 atIndex:2];
+    [enc setVertexBuffer:visibleBuffer offset:0 atIndex:4];
+    for (const Batch& batch : selected) {
+      const GpuMesh& gpu = mesh(scene.groups[batch.group], batch.detail);
+      if (!gpu.indexCount) continue;
+      [enc setVertexBuffer:gpu.vertices offset:0 atIndex:0];
+      [enc setVertexBuffer:instanceBuffers[batch.group][slot] offset:0 atIndex:3];
+      [enc setVertexBufferOffset:batch.first * sizeof(uint32_t) atIndex:4];
+      [enc drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:gpu.indexCount indexType:MTLIndexTypeUInt32 indexBuffer:gpu.indices indexBufferOffset:0 instanceCount:batch.count];
+      stats.drawCalls++;
+    }
+    [enc endEncoding];
+  }
+
+  // Background, transparency, selection outline, tone curve, sRGB.
   {
     MTLRenderPassDescriptor* pass = [MTLRenderPassDescriptor new];
     pass.colorAttachments[0].texture = target;
@@ -243,9 +273,15 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     [enc setFragmentTexture:color atIndex:0];
     [enc setFragmentTexture:accum atIndex:1];
     [enc setFragmentTexture:reveal atIndex:2];
+    [enc setFragmentTexture:mask atIndex:3];
     [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
     [enc endEncoding];
   }
+
+  // Kept for picking.
+  drewFrame = true, idsReady = false, lastSlot = slot, lastCamera = camera;
+  lastList.assign(list.begin(), list.end());
+  lastSeen = seen;
 
   dispatch_semaphore_t done = inFlight;
   double* gpu = &gpuMs;

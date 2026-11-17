@@ -1,5 +1,7 @@
 #import "metal/impl.h"
 
+#include <cmath>
+
 #include "bmr/device.h"
 #include "bmr/tolerances.h"
 
@@ -32,10 +34,14 @@ std::unique_ptr<Renderer> Renderer::create(const bm::Model& model, bm::ldraw::Pa
     for (const Group& g : impl.scene.groups) impl.meshBounds.push_back(g.placeholder ? bm::kPlaceholderBox : impl.meshes->get(g.part, Detail::Full)->bounds);
     for (const Group& g : impl.scene.groups) {
       const size_t bytes = std::max<size_t>(1, g.instances.size()) * sizeof(Instance);
-      id<MTLBuffer> buffer = [device->device newBufferWithLength:bytes options:MTLResourceStorageModeShared];
-      if (!g.instances.empty()) std::memcpy(buffer.contents, g.instances.data(), g.instances.size() * sizeof(Instance));
-      impl.instanceBuffers.push_back(buffer);
+      std::array<id<MTLBuffer>, 3> copies;
+      for (auto& buffer : copies) {
+        buffer = [device->device newBufferWithLength:bytes options:MTLResourceStorageModeShared];
+        if (!g.instances.empty()) std::memcpy(buffer.contents, g.instances.data(), g.instances.size() * sizeof(Instance));
+      }
+      impl.instanceBuffers.push_back(copies);
     }
+    impl.liveBounds = impl.scene.bounds;
     // A depth map of one pixel, bound where the shadow map goes until there is one.
     MTLTextureDescriptor* d = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float width:1 height:1 mipmapped:NO];
     d.usage = MTLTextureUsageShaderRead | MTLTextureUsageRenderTarget;
@@ -67,14 +73,120 @@ const GpuMesh& Renderer::Impl::mesh(const Group& group, Detail detail) {
 }
 
 void Renderer::Impl::upload(const std::vector<std::pair<uint32_t, uint32_t>>& changed) {
-  for (const auto& [g, i] : changed) {
+  if (changed.empty()) return;
+  for (auto& queue : pending) queue.insert(queue.end(), changed.begin(), changed.end());
+  idsReady = false;
+}
+
+void Renderer::Impl::flush(int slot) {
+  for (const auto& [g, i] : pending[slot]) {
     if (g >= scene.groups.size() || i >= scene.groups[g].instances.size()) continue;
-    std::memcpy(static_cast<uint8_t*>(instanceBuffers[g].contents) + i * sizeof(Instance), &scene.groups[g].instances[i], sizeof(Instance));
+    std::memcpy(static_cast<uint8_t*>(instanceBuffers[g][slot].contents) + i * sizeof(Instance), &scene.groups[g].instances[i], sizeof(Instance));
   }
+  pending[slot].clear();
+}
+
+void Renderer::Impl::updateLiveBounds() {
+  bm::Box b;
+  for (size_t g = 0; g < scene.groups.size(); g++) {
+    const bm::Box& part = meshBounds[g];
+    if (part.empty()) continue;
+    const bm::Vec3 c = (part.min + part.max) * 0.5, h = (part.max - part.min) * 0.5;
+    for (const Instance& in : scene.groups[g].instances) {
+      if (in.flags & kHidden) continue;
+      const float* m = in.model;
+      const bm::Vec3 at{m[0] * c.x + m[1] * c.y + m[2] * c.z + m[3], m[4] * c.x + m[5] * c.y + m[6] * c.z + m[7], m[8] * c.x + m[9] * c.y + m[10] * c.z + m[11]};
+      const bm::Vec3 half{std::abs(m[0]) * h.x + std::abs(m[1]) * h.y + std::abs(m[2]) * h.z, std::abs(m[4]) * h.x + std::abs(m[5]) * h.y + std::abs(m[6]) * h.z,
+                          std::abs(m[8]) * h.x + std::abs(m[9]) * h.y + std::abs(m[10]) * h.z};
+      b.merge(bm::Box{at - half + scene.origin, at + half + scene.origin});
+    }
+  }
+  liveBounds = b.empty() ? scene.bounds : b;
+}
+
+void Renderer::setFrame(const bm::plan::Plan& plan, const bm::plan::Timeline& timeline, int frame) {
+  const auto changed = applyFrame(impl_->scene, *impl_->model, plan, timeline, frame);
+  if (changed.empty()) return;
+  impl_->upload(changed);
+  impl_->updateLiveBounds();
+}
+
+void Renderer::setRest() {
+  const auto changed = applyRest(impl_->scene, *impl_->model);
+  if (changed.empty()) return;
+  impl_->upload(changed);
+  impl_->updateLiveBounds();
+}
+
+void Renderer::select(const std::vector<uint32_t>& pieces) { impl_->upload(applySelection(impl_->scene, pieces)); }
+
+uint32_t Renderer::pick(int x, int y) {
+  Impl& impl = *impl_;
+  if (!impl.drewFrame || x < 0 || y < 0 || x >= impl.width || y >= impl.height) return UINT32_MAX;
+  @autoreleasepool {
+    if (!impl.idsReady) impl.drawIds();
+  }
+  if (!impl.idsReady) return UINT32_MAX;
+  uint32_t id = 0;
+  [impl.ids getBytes:&id bytesPerRow:static_cast<NSUInteger>(impl.width) * 4 fromRegion:MTLRegionMake2D(static_cast<NSUInteger>(x), static_cast<NSUInteger>(y), 1, 1) mipmapLevel:0];
+  return id == 0 ? UINT32_MAX : id - 1;
+}
+
+void Renderer::Impl::drawIds() {
+  id<MTLDevice> dev = device->device;
+  if (!ids || static_cast<int>(ids.width) != width || static_cast<int>(ids.height) != height) {
+    MTLTextureDescriptor* d = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatR32Uint width:static_cast<NSUInteger>(width) height:static_cast<NSUInteger>(height) mipmapped:NO];
+    d.usage = MTLTextureUsageRenderTarget;
+    d.storageMode = MTLStorageModeShared;
+    ids = [dev newTextureWithDescriptor:d];
+    d.pixelFormat = MTLPixelFormatDepth32Float;
+    d.storageMode = MTLStorageModePrivate;
+    idDepth = [dev newTextureWithDescriptor:d];
+  }
+  // Every copy of the instances is current once nothing is queued; use the last frame's.
+  flush(lastSlot);
+  FrameUniforms fu{};
+  fu.viewProj = simdFrom(multiply(projectionMatrix(lastCamera), viewMatrix(lastCamera, scene.origin)));
+  if (!pickList || pickList.length < std::max<size_t>(1, lastList.size()) * sizeof(uint32_t))
+    pickList = [dev newBufferWithLength:std::max<size_t>(4096, lastList.size() * sizeof(uint32_t)) options:MTLResourceStorageModeShared];
+  if (!lastList.empty()) std::memcpy(pickList.contents, lastList.data(), lastList.size() * sizeof(uint32_t));
+  DrawUniforms du{};
+  du.flip = simd_make_float4(1, 0, 0, 0);
+  id<MTLCommandBuffer> commands = [device->queue commandBuffer];
+  MTLRenderPassDescriptor* pass = [MTLRenderPassDescriptor new];
+  pass.colorAttachments[0].texture = ids;
+  pass.colorAttachments[0].loadAction = MTLLoadActionClear;
+  pass.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+  pass.colorAttachments[0].storeAction = MTLStoreActionStore;
+  pass.depthAttachment.texture = idDepth;
+  pass.depthAttachment.loadAction = MTLLoadActionClear;
+  pass.depthAttachment.clearDepth = 0;  // reversed
+  pass.depthAttachment.storeAction = MTLStoreActionDontCare;
+  id<MTLRenderCommandEncoder> enc = [commands renderCommandEncoderWithDescriptor:pass];
+  [enc setRenderPipelineState:pipelines.ids];
+  [enc setDepthStencilState:pipelines.depthWrite];
+  [enc setCullMode:MTLCullModeBack];
+  [enc setVertexBytes:&fu length:sizeof fu atIndex:1];
+  [enc setVertexBytes:&du length:sizeof du atIndex:2];
+  [enc setVertexBuffer:pickList offset:0 atIndex:4];
+  // Opaque and transparent alike: the nearest surface is the piece meant.
+  for (const Batch& batch : lastSeen) {
+    const GpuMesh& gpu = mesh(scene.groups[batch.group], batch.detail);
+    if (!gpu.indexCount) continue;
+    [enc setFrontFacingWinding:batch.mirrored ? MTLWindingClockwise : MTLWindingCounterClockwise];
+    [enc setVertexBuffer:gpu.vertices offset:0 atIndex:0];
+    [enc setVertexBuffer:instanceBuffers[batch.group][lastSlot] offset:0 atIndex:3];
+    [enc setVertexBufferOffset:batch.first * sizeof(uint32_t) atIndex:4];
+    [enc drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:gpu.indexCount indexType:MTLIndexTypeUInt32 indexBuffer:gpu.indices indexBufferOffset:0 instanceCount:batch.count];
+  }
+  [enc endEncoding];
+  [commands commit];
+  [commands waitUntilCompleted];
+  idsReady = true;
 }
 
 void Renderer::Impl::makeTargets() {
-  colorMs = depthMs = accumMs = revealMs = color = accum = reveal = final = nil;
+  colorMs = depthMs = accumMs = revealMs = color = accum = reveal = final = mask = nil;
   if (width < 1 || height < 1) return;
   auto make = [&](MTLPixelFormat format, int samples, MTLTextureUsage usage, MTLStorageMode storage) {
     MTLTextureDescriptor* d = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:format width:static_cast<NSUInteger>(width) height:static_cast<NSUInteger>(height) mipmapped:NO];
@@ -95,6 +207,7 @@ void Renderer::Impl::makeTargets() {
   color = make(kColorFormat, 1, readable, MTLStorageModePrivate);
   accum = make(kAccumFormat, 1, readable, MTLStorageModePrivate);
   reveal = make(kRevealFormat, 1, readable, MTLStorageModePrivate);
+  mask = make(MTLPixelFormatR8Unorm, 1, readable, MTLStorageModePrivate);
   final = make(MTLPixelFormatBGRA8Unorm_sRGB, 1, MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead, MTLStorageModeShared);
 }
 
@@ -104,7 +217,7 @@ void Renderer::resize(int width, int height) {
   width = std::min(width, most), height = std::min(height, most);
   if (width == impl_->width && height == impl_->height) return;
   impl_->width = width, impl_->height = height;
-  impl_->drewOffscreen = false;
+  impl_->drewOffscreen = impl_->drewFrame = impl_->idsReady = false;
   @autoreleasepool {
     impl_->makeTargets();
   }

@@ -50,6 +50,19 @@ class Renderer {
   /// The GPU time of the most recent frame that has finished (frames drawn into a drawable finish later).
   double lastGpuMs() const;
 
+  /// Poses the pieces as the timeline has them at `frame` (clamped to the timeline); only the
+  /// instances that change are sent to the GPU. The plan and timeline are read, not kept.
+  void setFrame(const bm::plan::Plan& plan, const bm::plan::Timeline& timeline, int frame);
+  /// Every piece back where the model has it, shown.
+  void setRest();
+  /// The piece under pixel (x, y) of the last frame drawn (row 0 at the top), or UINT32_MAX for
+  /// none, outside the picture, or before any frame. The first call after a frame draws the
+  /// pieces' numbers once; later calls read them.
+  uint32_t pick(int x, int y);
+  /// Exactly these pieces are selected (outlined in the accent colour, even where hidden
+  /// behind others). Unknown pieces are ignored.
+  void select(const std::vector<uint32_t>& pieces);
+
  private:
   Renderer();
   struct Impl;

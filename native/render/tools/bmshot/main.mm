@@ -1,4 +1,5 @@
 // bmshot: one picture of a model, drawn offscreen, to a PNG.
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -8,8 +9,13 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include "bm/connect/graph.h"
+#include "bm/connect/studio.h"
 #include "bm/io.h"
 #include "bm/ldraw/part_cache.h"
+#include "bm/plan/plan.h"
+#include "bm/plan/timeline.h"
+#include "commands.h"
 #include "bmr/device.h"
 #include "bmr/image.h"
 #include "bmr/renderer.h"
@@ -23,8 +29,8 @@ constexpr int kOk = 0, kFailure = 1, kUsage = 2;
 
 int usage() {
   std::fprintf(stderr,
-               "usage: bmshot <model file> --out <png> [--size WxH] [--azimuth a --elevation e] [--no-edges] [--no-shadows] [--no-ao] [--no-floor]\n"
-               "              [--no-cull] [--detail 0|1|2] [--stats]\n");
+               "usage: bmshot <model file> --out <png> [--size WxH] [--frame N] [--azimuth a --elevation e] [--no-edges] [--no-shadows] [--no-ao] [--no-floor]\n"
+               "              [--no-cull] [--detail 0|1|2] [--select piece,piece,...] [--stats]\n");
   return kUsage;
 }
 
@@ -38,6 +44,22 @@ std::string ldrawDir() {
   return "";
 }
 
+/// The timeline's camera at `frame`: between the keys either side of it, the turn the short way round.
+bmr::OrbitCamera cameraAt(const plan::Timeline& t, int frame) {
+  const auto& keys = t.camera;
+  size_t i = 0;
+  while (i + 1 < keys.size() && keys[i + 1].frame <= frame) i++;
+  bmr::OrbitCamera a = bmr::OrbitCamera::from(keys[i]);
+  if (i + 1 >= keys.size() || keys[i + 1].frame <= keys[i].frame) return a;
+  const bmr::OrbitCamera b = bmr::OrbitCamera::from(keys[i + 1]);
+  const double s = std::clamp(double(frame - keys[i].frame) / (keys[i + 1].frame - keys[i].frame), 0.0, 1.0);
+  a.target = a.target + (b.target - a.target) * s;
+  a.distance += (b.distance - a.distance) * s;
+  a.azimuth += std::remainder(b.azimuth - a.azimuth, 2 * M_PI) * s;
+  a.elevation += (b.elevation - a.elevation) * s;
+  return a;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -49,6 +71,8 @@ int main(int argc, char** argv) {
   double azimuth = NAN, elevation = NAN;
   bmr::FrameOptions options;
   bool stats = false;
+  int frame = -1;
+  std::vector<uint32_t> select;
   for (size_t i = 1; i < args.size(); i++) {
     const std::string_view a = args[i];
     auto value = [&]() -> std::string {
@@ -70,6 +94,17 @@ int main(int argc, char** argv) {
       detail = std::atoi(value().c_str());
       if (detail < 0 || detail > 2) return usage();
     } else if (a == "--stats") stats = true;
+    else if (a == "--frame") {
+      frame = std::atoi(value().c_str());
+      if (frame < 0) return usage();
+    } else if (a == "--select") {
+      std::string list = value();
+      for (size_t at = 0; at < list.size();) {
+        const size_t comma = std::min(list.find(',', at), list.size());
+        select.push_back(static_cast<uint32_t>(std::strtoul(list.substr(at, comma - at).c_str(), nullptr, 10)));
+        at = comma + 1;
+      }
+    }
     else return usage();
   }
   if (out.empty()) return usage();
@@ -96,10 +131,31 @@ int main(int argc, char** argv) {
       return kFailure;
     }
     renderer->resize(width, height);
+    renderer->select(select);
     const double aspect = double(width) / height;
     const bmr::OrbitCamera defaults;
-    const bmr::OrbitCamera orbit = bmr::OrbitCamera::fitted(renderer->scene().bounds, 0.6, aspect, std::isnan(azimuth) ? defaults.azimuth : azimuth,
-                                                            std::isnan(elevation) ? defaults.elevation : elevation);
+    bmr::OrbitCamera orbit = bmr::OrbitCamera::fitted(renderer->scene().bounds, 0.6, aspect, std::isnan(azimuth) ? defaults.azimuth : azimuth,
+                                                      std::isnan(elevation) ? defaults.elevation : elevation);
+    plan::Plan plan;
+    plan::Timeline timeline;
+    if (frame >= 0) {
+      // Planned as `bm plan` plans it.
+      const fs::path repo = fs::path(ldraw).parent_path().parent_path();
+      const char* shadowEnv = std::getenv("BM_SHADOW_DIR");
+      const connect::ShadowLibrary shadow(shadowEnv ? fs::path(shadowEnv) : repo / "vendor" / "LDCadShadowLibrary");
+      connect::ConnectorDb db(library, shadow);
+      const connect::StudioLibrary studio(connect::StudioLibrary::defaultDirectory());
+      db.setStudio(&studio);
+      kin::GearDb gears;
+      cli::loadEngineData(repo, db, gears);
+      collide::ShapeCache shapes;
+      const connect::Graph graph = connect::buildGraph(model, db, &gears);
+      plan = plan::plan(model, graph, full, shapes, plan::Options{});
+      timeline = plan::buildTimeline(model, full, plan);
+      renderer->setFrame(plan, timeline, frame);
+      if (!timeline.camera.empty() && std::isnan(azimuth) && std::isnan(elevation)) orbit = cameraAt(timeline, frame);
+      std::fprintf(stderr, "bmshot: frame %d of %d\n", frame, timeline.frames);
+    }
     const bmr::FrameStats s = renderer->draw(orbit.camera(aspect, renderer->scene().bounds), options);
     if (!bmr::writePng(renderer->readback(), out)) {
       std::fprintf(stderr, "bmshot: cannot write %s\n", out.c_str());

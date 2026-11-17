@@ -2,6 +2,7 @@
 #pragma once
 #import <Metal/Metal.h>
 #import <QuartzCore/QuartzCore.h>
+#include <array>
 #include <map>
 #include <simd/simd.h>
 #include <string>
@@ -25,6 +26,7 @@ struct FrameUniforms {
   simd_float4 floorPlane;
   simd_float4 floorCentre;
   simd_float4 lens;
+  simd_float4 selection;
 };
 
 // Must match DrawUniforms in shaders/common.metal.
@@ -57,7 +59,7 @@ struct FrameBuffer {
 inline constexpr MTLPixelFormat kColorFormat = MTLPixelFormatRGBA16Float, kAccumFormat = MTLPixelFormatRGBA32Float, kRevealFormat = MTLPixelFormatR32Float;
 
 struct Pipelines {
-  id<MTLRenderPipelineState> brick = nil, transparent = nil, floor = nil, edges = nil, shadow = nil, composite = nil, environment = nil;
+  id<MTLRenderPipelineState> brick = nil, transparent = nil, floor = nil, edges = nil, shadow = nil, composite = nil, environment = nil, mask = nil, ids = nil;
   id<MTLDepthStencilState> depthWrite = nil, depthRead = nil, depthNone = nil, shadowDepth = nil;
   id<MTLSamplerState> smooth = nil, shadowSampler = nil;
   bool ok = false;
@@ -79,18 +81,41 @@ struct Renderer::Impl {
   Pipelines pipelines;
   Environment environment;
 
-  // Per group: its instances on the GPU.
-  std::vector<id<MTLBuffer>> instanceBuffers;
+  // Per group: its instances on the GPU, three copies used in turn as frames are, so that a
+  // change is never written into a copy the GPU may still be reading. A change is queued for
+  // each copy and written into it when its turn comes.
+  std::vector<std::array<id<MTLBuffer>, 3>> instanceBuffers;
+  std::vector<std::pair<uint32_t, uint32_t>> pending[3];
+  bm::Box liveBounds;  // world space: where the shown pieces are now (the shadow is fitted to it)
+  void updateLiveBounds();
   std::vector<bm::Box> meshBounds;  // per group, part space, at full detail
   std::map<std::pair<std::string, int>, GpuMesh> gpuMeshes;  // (part, detail); a placeholder's part is ""
   const GpuMesh& mesh(const Group& group, Detail detail);
-  void upload(const std::vector<std::pair<uint32_t, uint32_t>>& changed);
+  void upload(const std::vector<std::pair<uint32_t, uint32_t>>& changed);  // queues them for every copy
+  void flush(int slot);                                                       // writes the copy's queue
 
   // Targets, remade when the size changes.
   int width = 0, height = 0;
   id<MTLTexture> colorMs = nil, depthMs = nil, accumMs = nil, revealMs = nil, color = nil, accum = nil, reveal = nil, final = nil, placeholderShadow = nil;
   void makeTargets();
   id<MTLTexture> shadowMap = nil;  // made the first time shadows are drawn
+  id<MTLTexture> mask = nil;       // selected pieces, one sample
+  id<MTLTexture> ids = nil, idDepth = nil;  // piece + 1 per pixel, for picking; made on the first pick
+
+  // What the last frame drew, kept for picking.
+  struct Batch {
+    uint32_t group;
+    Detail detail;
+    bool mirrored;
+    uint32_t first, count;  // in `list`
+  };
+  bool drewFrame = false, idsReady = false;
+  int lastSlot = 0;
+  Camera lastCamera;
+  std::vector<uint32_t> lastList;
+  std::vector<Batch> lastSeen;
+  id<MTLBuffer> pickList = nil;
+  void drawIds();
 
   FrameBuffer frameUniforms, drawUniforms, visible;
   uint64_t frame = 0;
