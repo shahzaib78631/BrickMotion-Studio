@@ -58,9 +58,12 @@ def main():
     for az in [int(a) for a in o.azimuths.split(',')]:
         ref = np.asarray(Image.open(os.path.join(CALIB, '%s_az%d.png' % (o.scene, az))).convert('RGB')).astype(np.float64)
         ours = shot(o.scene, os.path.join(o.out, '%s_ours_az%d.png' % (o.scene, az)), az, o.extra)
-        # Where the bricks are: a plain picture with no floor, shadow or occlusion, against black.
-        plain = shot(o.scene, os.path.join(o.out, '%s_mask_az%d.png' % (o.scene, az)), az, ['--no-floor', '--no-shadows', '--no-ao', '--no-edges', '--background', '0,0,0'])
-        bricks = plain.max(axis=2) > 3
+        # Where the bricks are: a plain picture with no floor, shadow or occlusion, against black
+        # and against white (glass that lets the background through shows on one or the other).
+        plainArgs = ['--no-floor', '--no-shadows', '--no-ao', '--no-edges', '--background']
+        plain = shot(o.scene, os.path.join(o.out, '%s_mask_az%d.png' % (o.scene, az)), az, plainArgs + ['0,0,0'])
+        white = shot(o.scene, os.path.join(o.out, '%s_maskw_az%d.png' % (o.scene, az)), az, plainArgs + ['255,255,255'])
+        bricks = (plain.max(axis=2) > 3) | (white.min(axis=2) < 252)
         near = np.zeros_like(bricks)
         ys, xs = np.nonzero(bricks)
         if len(ys):  # the floor around them: the bricks' box, grown by a third
@@ -69,12 +72,14 @@ def main():
         floor = near & ~bricks
         lum = lambda im, m: float(im[m].mean()) if m.any() else 0.0
         r = dict(az=az, all=rmse(ours, ref, np.ones_like(bricks)), bricks=rmse(ours, ref, bricks), floor=rmse(ours, ref, floor),
-                 brickLum=(lum(ref, bricks), lum(ours, bricks)), floorLum=(lum(ref, floor), lum(ours, floor)))
+                 brickLum=(lum(ref, bricks), lum(ours, bricks)), floorLum=(lum(ref, floor), lum(ours, floor)), pixels=(int(bricks.sum()), int(floor.sum()), int(bricks.size)))
+        # How much of the whole picture's squared error each part holds.
+        r['share'] = tuple(float(m.sum() * r[k] ** 2 / max(bricks.size * r['all'] ** 2, 1e-9)) for k, m in (('bricks', bricks), ('floor', floor)))
         rows.append(r)
         diff = np.clip(128 + (ours - ref) * 2, 0, 255)
         Image.fromarray(np.concatenate([ref, ours, diff], axis=1).astype(np.uint8)).save(os.path.join(o.out, '%s_side_az%d.png' % (o.scene, az)))
-        print('az %3d  rmse all %5.2f  bricks %5.2f  floor %5.2f   brick lum ref %5.1f ours %5.1f   floor lum ref %5.1f ours %5.1f' %
-              (az, r['all'], r['bricks'], r['floor'], *r['brickLum'], *r['floorLum']))
+        print('az %3d  rmse all %5.2f  bricks %5.2f  floor %5.2f   brick lum ref %5.1f ours %5.1f   floor lum ref %5.1f ours %5.1f   error share bricks %.2f floor %.2f' %
+              (az, r['all'], r['bricks'], r['floor'], *r['brickLum'], *r['floorLum'], *r['share']))
     mean = lambda k: sum(r[k] for r in rows) / len(rows)
     print('mean    rmse all %5.2f  bricks %5.2f  floor %5.2f' % (mean('all'), mean('bricks'), mean('floor')))
     json.dump(rows, open(os.path.join(o.out, '%s_scores.json' % o.scene), 'w'), indent=1)
