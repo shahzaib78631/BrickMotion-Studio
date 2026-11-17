@@ -73,7 +73,7 @@ void Renderer::Impl::upload(const std::vector<std::pair<uint32_t, uint32_t>>& ch
 }
 
 void Renderer::Impl::makeTargets() {
-  colorMs = depthMs = color = final = nil;
+  colorMs = depthMs = accumMs = revealMs = color = accum = reveal = final = nil;
   if (width < 1 || height < 1) return;
   auto make = [&](MTLPixelFormat format, int samples, MTLTextureUsage usage, MTLStorageMode storage) {
     MTLTextureDescriptor* d = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:format width:static_cast<NSUInteger>(width) height:static_cast<NSUInteger>(height) mipmapped:NO];
@@ -83,9 +83,17 @@ void Renderer::Impl::makeTargets() {
     d.storageMode = storage;
     return [device->device newTextureWithDescriptor:d];
   };
-  colorMs = make(MTLPixelFormatRGBA16Float, kSamples, MTLTextureUsageRenderTarget, MTLStorageModePrivate);
-  depthMs = make(MTLPixelFormatDepth32Float, kSamples, MTLTextureUsageRenderTarget, MTLStorageModePrivate);
-  color = make(MTLPixelFormatRGBA16Float, 1, MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead, MTLStorageModePrivate);
+  // The multisampled targets live only in tile memory where the GPU allows it (Apple GPUs):
+  // they are resolved within the pass and never read back.
+  const MTLStorageMode tile = [device->device supportsFamily:MTLGPUFamilyApple1] ? MTLStorageModeMemoryless : MTLStorageModePrivate;
+  colorMs = make(kColorFormat, kSamples, MTLTextureUsageRenderTarget, tile);
+  depthMs = make(MTLPixelFormatDepth32Float, kSamples, MTLTextureUsageRenderTarget, tile);
+  accumMs = make(kAccumFormat, kSamples, MTLTextureUsageRenderTarget, tile);
+  revealMs = make(kRevealFormat, kSamples, MTLTextureUsageRenderTarget, tile);
+  const MTLTextureUsage readable = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+  color = make(kColorFormat, 1, readable, MTLStorageModePrivate);
+  accum = make(kAccumFormat, 1, readable, MTLStorageModePrivate);
+  reveal = make(kRevealFormat, 1, readable, MTLStorageModePrivate);
   final = make(MTLPixelFormatBGRA8Unorm_sRGB, 1, MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead, MTLStorageModeShared);
 }
 

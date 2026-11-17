@@ -23,6 +23,7 @@ struct FrameUniforms {
   simd_float4 room;
   simd_float4 switches;
   simd_float4 floorPlane;
+  simd_float4 floorCentre;
 };
 
 // Must match DrawUniforms in shaders/common.metal.
@@ -47,10 +48,16 @@ struct FrameBuffer {
   id<MTLBuffer> get(id<MTLDevice> device, uint64_t frame, size_t bytes);
 };
 
+/// The main pass's targets: lit colour (premultiplied, coverage in alpha), then the two
+/// transparency sums. Every pipeline drawn in that pass declares all three. The sums are
+/// 32-bit while each layer is rounded to 16 (shaders/brick.metal): a sum of a few such
+/// numbers is exact, so it does not depend on the order the layers come in.
+inline constexpr MTLPixelFormat kColorFormat = MTLPixelFormatRGBA16Float, kAccumFormat = MTLPixelFormatRGBA32Float, kRevealFormat = MTLPixelFormatR32Float;
+
 struct Pipelines {
-  id<MTLRenderPipelineState> brick = nil, composite = nil, environment = nil;
-  id<MTLDepthStencilState> depthWrite = nil, depthRead = nil, depthNone = nil;
-  id<MTLSamplerState> smooth = nil, shadow = nil;
+  id<MTLRenderPipelineState> brick = nil, transparent = nil, floor = nil, edges = nil, shadow = nil, composite = nil, environment = nil;
+  id<MTLDepthStencilState> depthWrite = nil, depthRead = nil, depthNone = nil, shadowDepth = nil;
+  id<MTLSamplerState> smooth = nil, shadowSampler = nil;
   bool ok = false;
 };
 /// Builds every pipeline. `error` receives the first failure's text.
@@ -78,8 +85,9 @@ struct Renderer::Impl {
 
   // Targets, remade when the size changes.
   int width = 0, height = 0;
-  id<MTLTexture> colorMs = nil, depthMs = nil, color = nil, final = nil, placeholderShadow = nil;
+  id<MTLTexture> colorMs = nil, depthMs = nil, accumMs = nil, revealMs = nil, color = nil, accum = nil, reveal = nil, final = nil, placeholderShadow = nil;
   void makeTargets();
+  id<MTLTexture> shadowMap = nil;  // made the first time shadows are drawn
 
   FrameBuffer frameUniforms, drawUniforms, visible;
   uint64_t frame = 0;

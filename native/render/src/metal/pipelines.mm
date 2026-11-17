@@ -26,24 +26,45 @@ MTLVertexDescriptor* brickVertices() {
   return d;
 }
 
-id<MTLRenderPipelineState> make(Device& device, NSString* vertex, NSString* fragment, MTLPixelFormat color, MTLPixelFormat depth, int samples, MTLVertexDescriptor* vertices, bool blend, std::string& error) {
+/// How a pipeline writes into the main pass's three targets.
+enum class Writes { Opaque, Over, Transparent, Single };
+
+id<MTLRenderPipelineState> make(Device& device, NSString* vertex, NSString* fragment, Writes writes, MTLPixelFormat single, MTLPixelFormat depth, int samples, MTLVertexDescriptor* vertices,
+                                std::string& error) {
   MTLRenderPipelineDescriptor* d = [MTLRenderPipelineDescriptor new];
-  d.label = fragment;
+  d.label = fragment ? fragment : vertex;
   d.vertexFunction = [device.library newFunctionWithName:vertex];
-  d.fragmentFunction = [device.library newFunctionWithName:fragment];
-  d.colorAttachments[0].pixelFormat = color;
+  d.fragmentFunction = fragment ? [device.library newFunctionWithName:fragment] : nil;
   d.depthAttachmentPixelFormat = depth;
   d.rasterSampleCount = static_cast<NSUInteger>(samples);
   d.vertexDescriptor = vertices;
-  if (blend) {
-    // Colour arrives already multiplied by its coverage.
-    d.colorAttachments[0].blendingEnabled = YES;
-    d.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorOne, d.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOne;
-    d.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha, d.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+  if (writes == Writes::Single) {
+    d.colorAttachments[0].pixelFormat = single;
+  } else {
+    MTLRenderPipelineColorAttachmentDescriptor* c = d.colorAttachments[0];
+    MTLRenderPipelineColorAttachmentDescriptor* sum = d.colorAttachments[1];
+    MTLRenderPipelineColorAttachmentDescriptor* rev = d.colorAttachments[2];
+    c.pixelFormat = kColorFormat, sum.pixelFormat = kAccumFormat, rev.pixelFormat = kRevealFormat;
+    sum.writeMask = rev.writeMask = MTLColorWriteMaskNone;
+    if (writes == Writes::Over) {
+      // Colour arrives already multiplied by its coverage.
+      c.blendingEnabled = YES;
+      c.sourceRGBBlendFactor = c.sourceAlphaBlendFactor = MTLBlendFactorOne;
+      c.destinationRGBBlendFactor = c.destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+    } else if (writes == Writes::Transparent) {
+      c.writeMask = MTLColorWriteMaskNone;
+      sum.writeMask = rev.writeMask = MTLColorWriteMaskAll;
+      sum.blendingEnabled = YES;  // accum += layer
+      sum.sourceRGBBlendFactor = sum.sourceAlphaBlendFactor = MTLBlendFactorOne;
+      sum.destinationRGBBlendFactor = sum.destinationAlphaBlendFactor = MTLBlendFactorOne;
+      rev.blendingEnabled = YES;  // reveal += the layer's optical depth
+      rev.sourceRGBBlendFactor = rev.sourceAlphaBlendFactor = MTLBlendFactorOne;
+      rev.destinationRGBBlendFactor = rev.destinationAlphaBlendFactor = MTLBlendFactorOne;
+    }
   }
   NSError* err = nil;
-  id<MTLRenderPipelineState> state = d.vertexFunction && d.fragmentFunction ? [device.device newRenderPipelineStateWithDescriptor:d error:&err] : nil;
-  if (!state && error.empty()) error = std::string(fragment.UTF8String) + ": " + (err ? err.localizedDescription.UTF8String : "function not found");
+  id<MTLRenderPipelineState> state = d.vertexFunction && (d.fragmentFunction || !fragment) ? [device.device newRenderPipelineStateWithDescriptor:d error:&err] : nil;
+  if (!state && error.empty()) error = std::string(d.label.UTF8String) + ": " + (err ? err.localizedDescription.UTF8String : "function not found");
   return state;
 }
 
@@ -58,9 +79,15 @@ id<MTLDepthStencilState> depth(Device& device, MTLCompareFunction compare, bool 
 
 Pipelines makePipelines(Device& device, std::string& error) {
   Pipelines p;
-  p.brick = make(device, @"brickVertex", @"brickFragment", MTLPixelFormatRGBA16Float, MTLPixelFormatDepth32Float, kSamples, brickVertices(), false, error);
-  p.composite = make(device, @"screenVertex", @"compositeFragment", MTLPixelFormatBGRA8Unorm_sRGB, MTLPixelFormatInvalid, 1, nil, false, error);
-  p.environment = make(device, @"screenVertex", @"environmentFragment", MTLPixelFormatRGBA16Float, MTLPixelFormatInvalid, 1, nil, false, error);
+  const MTLPixelFormat none = MTLPixelFormatInvalid, depth32 = MTLPixelFormatDepth32Float;
+  p.brick = make(device, @"brickVertex", @"brickFragment", Writes::Opaque, none, depth32, kSamples, brickVertices(), error);
+  p.transparent = make(device, @"brickVertex", @"transparentFragment", Writes::Transparent, none, depth32, kSamples, brickVertices(), error);
+  p.floor = make(device, @"floorVertex", @"floorFragment", Writes::Over, none, depth32, kSamples, nil, error);
+  p.edges = make(device, @"edgeVertex", @"edgeFragment", Writes::Over, none, depth32, kSamples, nil, error);
+  p.shadow = make(device, @"shadowVertex", nil, Writes::Single, none, depth32, 1, brickVertices(), error);
+  p.composite = make(device, @"screenVertex", @"compositeFragment", Writes::Single, MTLPixelFormatBGRA8Unorm_sRGB, none, 1, nil, error);
+  p.environment = make(device, @"screenVertex", @"environmentFragment", Writes::Single, MTLPixelFormatRGBA16Float, none, 1, nil, error);
+  p.shadowDepth = depth(device, MTLCompareFunctionLessEqual, true);  // the shadow map is not reversed: nearer the light is less
   // Depth is reversed (common.metal): nearer is greater.
   p.depthWrite = depth(device, MTLCompareFunctionGreaterEqual, true);
   p.depthRead = depth(device, MTLCompareFunctionGreaterEqual, false);
@@ -73,8 +100,8 @@ Pipelines makePipelines(Device& device, std::string& error) {
   sh.minFilter = sh.magFilter = MTLSamplerMinMagFilterLinear;
   sh.compareFunction = MTLCompareFunctionLessEqual;  // the shadow map is an ordinary depth map: nearer the light is less
   sh.sAddressMode = sh.tAddressMode = MTLSamplerAddressModeClampToEdge;
-  p.shadow = [device.device newSamplerStateWithDescriptor:sh];
-  p.ok = p.brick && p.composite && p.environment && p.depthWrite && p.smooth && p.shadow;
+  p.shadowSampler = [device.device newSamplerStateWithDescriptor:sh];
+  p.ok = p.brick && p.transparent && p.floor && p.edges && p.shadow && p.composite && p.environment && p.depthWrite && p.shadowDepth && p.smooth && p.shadowSampler;
   return p;
 }
 

@@ -22,5 +22,8 @@ Material materialFor(const bm::ldraw::Color& color);
 
 /// What a part that is missing from the library is drawn with: translucent grey.
 Material placeholderMaterial();
+/// The colour an LDraw colour code names: from the library's table, or a direct colour
+/// (0x2RRGGBB opaque, 0x3RRGGBB transparent, with a darker edge), or the default grey.
+bm::ldraw::Color colorFor(const bm::ldraw::Library& library, int code);
 
 }  // namespace bmr

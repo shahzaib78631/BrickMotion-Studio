@@ -2,6 +2,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include "bmr/material.h"
+#include "helpers.h"
+
+namespace ldraw = bm::ldraw;
 
 using namespace bmr;
 using bm::ldraw::Color;
@@ -54,4 +57,17 @@ TEST_CASE("each finish has its own surface; alpha below one is transparent", "[m
   REQUIRE(missing.transparent());
   REQUIRE(missing.alpha == Catch::Approx(0.6f));
   REQUIRE(missing.roughness == Catch::Approx(0.6f));
+}
+
+TEST_CASE("direct colours are read from their code", "[material]") {
+  const ldraw::Library lib = bmtest::fixtureLibrary();
+  REQUIRE(colorFor(lib, 4).name == "Red");
+  const Color blue = colorFor(lib, 0x20000FF);
+  REQUIRE(blue.rgb == 0x0000FF);
+  REQUIRE(blue.edge == 0x00007F);
+  REQUIRE(blue.alpha == 1.0f);
+  const Color glass = colorFor(lib, 0x3FF8800);
+  REQUIRE(glass.rgb == 0xFF8800);
+  REQUIRE(glass.alpha < 1.0f);
+  REQUIRE(colorFor(lib, 12345).rgb == Color{}.rgb);
 }

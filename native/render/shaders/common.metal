@@ -20,7 +20,8 @@ struct FrameUniforms {
   float4 viewport;        // width, height, 1/width, 1/height, pixels
   float4 room;            // x: room luminance, y: soft box luminance, z: cos of the soft box's inner edge, w: of its outer edge
   float4 switches;        // x: shadows on, y: ambient occlusion on, z: highest mip of the reflection cube, w: clearcoat roughness
-  float4 floorPlane;      // x: the floor's y (world), y: how far it reaches, z: shadow texel size, w: shadow bias in texels
+  float4 floorPlane;      // x: the floor's y (world), y: how far it reaches from its centre, z: shadow texel size (LDU), w: shadow bias in texels
+  float4 floorCentre;     // x, y: the floor's centre (world x and z), z: how much full shadow darkens it, w: kOitDepthScale
 };
 
 // One per draw. Must match DrawUniforms in src/metal/impl.h.

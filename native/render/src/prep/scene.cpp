@@ -67,8 +67,7 @@ Scene buildScene(const bm::Model& model, bm::ldraw::PartCache& parts, size_t* sk
       found = boxOf.emplace(p.part, std::make_pair(none ? bm::kPlaceholderBox : mesh->bounds, none)).first;
     }
     const bool placeholder = found->second.second;
-    const auto colorIt = model.library().colors().find(p.color);
-    const Material material = placeholder ? placeholderMaterial() : colorIt != model.library().colors().end() ? materialFor(colorIt->second) : materialFor(bm::ldraw::Color{});
+    const Material material = placeholder ? placeholderMaterial() : materialFor(colorFor(model.library(), p.color));
     const Key key{material.transparent(), p.part, p.color};
     Group& g = groups[key];
     if (g.instances.empty()) g.part = p.part, g.color = p.color, g.material = material, g.placeholder = placeholder;

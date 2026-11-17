@@ -54,6 +54,39 @@ TEST_CASE("a fitted camera has the box in view, touching the margin, and is no f
       }
 }
 
+TEST_CASE("the key light's map holds the whole box and does not crawl when it moves a little", "[camera]") {
+  const Vec3 toward{0.35, -0.8, -0.5};
+  const Box box{{-100, -300, -50}, {100, 0, 50}};
+  const KeyLight k = keyLight(box, {}, toward, 4096, 500);
+  REQUIRE(k.texel > 0);
+  for (int i = 0; i < 8; i++) {
+    const Vec3 corner{i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z};
+    float v[4];
+    transform(k.matrix, corner, v);
+    REQUIRE(std::abs(v[0]) < 1);
+    REQUIRE(std::abs(v[1]) < 1);
+    REQUIRE(v[2] > 0);
+    REQUIRE(v[2] < 1);
+  }
+  // Nearer the light is less.
+  float high[4], low[4];
+  transform(k.matrix, Vec3{0, -300, 0}, high);
+  transform(k.matrix, Vec3{0, 0, 0}, low);
+  REQUIRE(high[2] < low[2]);
+  // Moved by a tenth of a texel: the same side, and a fixed point lands within a hair of a
+  // whole number of texels from where it was.
+  const Vec3 nudge{k.texel * 0.1, 0, 0};
+  const KeyLight moved = keyLight(Box{box.min + nudge, box.max + nudge}, {}, toward, 4096, 500);
+  REQUIRE(moved.texel == Catch::Approx(k.texel));
+  float a[4], b[4];
+  transform(k.matrix, Vec3{17, -40, 3}, a);
+  transform(moved.matrix, Vec3{17, -40, 3}, b);
+  for (int c = 0; c < 2; c++) {
+    const double texels = (double(a[c]) - b[c]) / 2 * 4096;
+    REQUIRE(std::abs(texels - std::round(texels)) < 0.01);
+  }
+}
+
 TEST_CASE("depth is reversed: near maps to one, far to zero", "[camera]") {
   Camera c;
   c.eye = {0, 0, 100}, c.target = {0, 0, 0}, c.near = 10, c.far = 1000;

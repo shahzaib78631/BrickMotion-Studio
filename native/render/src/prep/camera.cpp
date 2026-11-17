@@ -181,6 +181,41 @@ OrbitCamera OrbitCamera::fitted(const bm::Box& bounds, double fovY, double aspec
   return o;
 }
 
+KeyLight keyLight(const bm::Box& bounds, bm::Vec3 origin, bm::Vec3 towardLight, int mapSize, double beyond) {
+  KeyLight out;
+  for (float& v : out.matrix.m) v = 0;
+  out.matrix.m[0] = out.matrix.m[5] = out.matrix.m[10] = out.matrix.m[15] = 1;
+  if (bounds.empty() || mapSize < 1 || !(length(towardLight) > 0)) return out;
+  // The light's axes: f along its travel, r and u across it.
+  const bm::Vec3 f = -normalized(towardLight);
+  bm::Vec3 r = cross(f, bm::Vec3{0, -1, 0});
+  r = length(r) > 1e-6 ? normalized(r) : bm::Vec3{1, 0, 0};
+  const bm::Vec3 u = cross(r, f);
+  double lo[3] = {1e300, 1e300, 1e300}, hi[3] = {-1e300, -1e300, -1e300};
+  for (int i = 0; i < 8; i++) {
+    const bm::Vec3 c = bm::Vec3{i & 1 ? bounds.max.x : bounds.min.x, i & 2 ? bounds.max.y : bounds.min.y, i & 4 ? bounds.max.z : bounds.min.z} - origin;
+    const double v[3] = {dot(c, r), dot(c, u), dot(c, f)};
+    for (int k = 0; k < 3; k++) lo[k] = std::min(lo[k], v[k]), hi[k] = std::max(hi[k], v[k]);
+  }
+  // Side: the larger extent with a texel to spare, up to the next eighth of a power of two.
+  const double extent = std::max({hi[0] - lo[0], hi[1] - lo[1], 1.0}) * (1.0 + 2.0 / mapSize);
+  const double step = std::exp2(std::floor(std::log2(extent)) - 3);
+  const double side = std::ceil(extent / step) * step;
+  out.texel = side / mapSize;
+  // The corner on whole texels, the box in the middle.
+  double x0 = std::floor(((lo[0] + hi[0]) / 2 - side / 2) / out.texel) * out.texel;
+  double y0 = std::floor(((lo[1] + hi[1]) / 2 - side / 2) / out.texel) * out.texel;
+  const double near = lo[2] - 1, far = hi[2] + std::max(0.0, beyond) + 1;
+  const double sx = 2 / side, sz = 1 / (far - near);
+  // Rows: x = sx (p.r - x0) - 1, y = sx (p.u - y0) - 1, z = sz (p.f - near).
+  float* m = out.matrix.m;  // column-major: m[column * 4 + row]
+  m[0] = static_cast<float>(sx * r.x), m[4] = static_cast<float>(sx * r.y), m[8] = static_cast<float>(sx * r.z), m[12] = static_cast<float>(-sx * x0 - 1);
+  m[1] = static_cast<float>(sx * u.x), m[5] = static_cast<float>(sx * u.y), m[9] = static_cast<float>(sx * u.z), m[13] = static_cast<float>(-sx * y0 - 1);
+  m[2] = static_cast<float>(sz * f.x), m[6] = static_cast<float>(sz * f.y), m[10] = static_cast<float>(sz * f.z), m[14] = static_cast<float>(-sz * near);
+  m[3] = m[7] = m[11] = 0, m[15] = 1;
+  return out;
+}
+
 OrbitCamera OrbitCamera::from(const bm::plan::CameraKey& key) {
   OrbitCamera o;
   o.target = key.target;

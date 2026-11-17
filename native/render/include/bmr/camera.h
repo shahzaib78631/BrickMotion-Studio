@@ -38,6 +38,17 @@ Frustum frustumOf(const Camera& camera, bm::Vec3 origin);
 /// is certainly not in view; one near a corner of the view may be reported inside when it is not.
 bool outside(const Frustum& frustum, const bm::Box& box, bm::Vec3 origin);
 
+/// The key light's view: world space less `origin` to the shadow map's clip space (x, y in
+/// -1..1, depth 0..1, nearer the light is less), fitted to `bounds` seen along the light and
+/// reaching `beyond` further from the light (for the floor under the model). The map's side
+/// is rounded up in steps of an eighth of a power of two and its corner snapped to whole
+/// texels, so a model that moves a little does not make its shadow crawl.
+struct KeyLight {
+  Mat4 matrix;
+  double texel = 1;  ///< LDU per texel
+};
+KeyLight keyLight(const bm::Box& bounds, bm::Vec3 origin, bm::Vec3 towardLight, int mapSize, double beyond);
+
 /// A camera on a sphere around a target: what the window's mouse and the timeline drive.
 struct OrbitCamera {
   bm::Vec3 target;

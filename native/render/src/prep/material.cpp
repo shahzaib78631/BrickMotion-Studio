@@ -36,6 +36,21 @@ Material materialFor(const bm::ldraw::Color& color) {
   return m;
 }
 
+bm::ldraw::Color colorFor(const bm::ldraw::Library& library, int code) {
+  const auto found = library.colors().find(code);
+  if (found != library.colors().end()) return found->second;
+  bm::ldraw::Color c;
+  c.code = code;
+  const uint32_t kind = static_cast<uint32_t>(code) >> 24;
+  if (code >= 0 && (kind == 2 || kind == 3)) {
+    c.rgb = static_cast<uint32_t>(code) & 0xFFFFFF;
+    // Half the colour, as LDraw editors draw a direct colour's edges.
+    c.edge = ((c.rgb >> 1) & 0x7F7F7F);
+    if (kind == 3) c.alpha = 0.5f, c.finish = bm::ldraw::Finish::Trans;
+  }
+  return c;
+}
+
 Material placeholderMaterial() {
   Material m;
   setRgb(m.base, kPlaceholderRgb);

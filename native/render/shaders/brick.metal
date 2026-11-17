@@ -92,3 +92,29 @@ fragment float4 brickFragment(BrickOut in [[stage_in]], constant FrameUniforms& 
   Lit lit = shade(base, draw.surface.x, draw.surface.y, draw.surface.z, n, v, in.world, frame, reflection, received, shadowMap, smooth, shadowSampler);
   return float4(lit.color, 1.0);  // rgb times coverage, coverage
 }
+
+// Transparent pieces: weighted blended order-independent transparency (McGuire and Bavoil 2013).
+// Every layer adds its colour, weighted by opacity and nearness, to `accum`, and its optical
+// depth (-log of what it lets through) to `reveal`; the last pass divides the one sum by its
+// weight and takes exp(-reveal) as what all the layers let through together. Each layer's
+// numbers are rounded to half precision here and summed in 32-bit targets, where a sum of a
+// few of them is exact: the picture is the same whatever order the layers arrive in.
+struct OitOut {
+  float4 accum [[color(1)]];
+  float reveal [[color(2)]];
+};
+
+fragment OitOut transparentFragment(BrickOut in [[stage_in]], constant FrameUniforms& frame [[buffer(1)]], constant DrawUniforms& draw [[buffer(2)]],
+                                   texturecube<float> reflection [[texture(0)]], texturecube<float> received [[texture(1)]], depth2d<float> shadowMap [[texture(2)]],
+                                   sampler smooth [[sampler(0)]], sampler shadowSampler [[sampler(1)]]) {
+  float3 base = in.fixedColor.a > 0.5 && draw.surface.w < 0.5 ? in.fixedColor.rgb : draw.base.rgb;
+  float3 n = normalize(in.normal), v = normalize(frame.eye.xyz - in.world);
+  Lit lit = shade(base, draw.surface.x, draw.surface.y, draw.surface.z, n, v, in.world, frame, reflection, received, shadowMap, smooth, shadowSampler);
+  float a = draw.base.a;
+  float depth = length(frame.eye.xyz - in.world) / frame.floorCentre.w;
+  float w = a * clamp(0.03 / (1e-5 + depth * depth * depth * depth), 1e-2, 3e3);
+  OitOut out;
+  out.accum = float4(half4(float4(lit.color * a, a) * w));
+  out.reveal = float(half(-log(max(1.0 - a, 1e-4))));
+  return out;
+}

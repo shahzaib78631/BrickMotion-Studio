@@ -68,6 +68,25 @@ inline constexpr float kStripLuminance = 2.5f;
 inline constexpr float kStripInnerCos = 0.990f;
 inline constexpr float kStripOuterCos = 0.940f;
 inline constexpr float kFloorShare = 0.3f;
+
+/// Shadow: the key light's depth map, its side in texels; how far a receiving point is pushed
+/// out along its normal before the map is read, in texels (it keeps flat faces from shadowing
+/// themselves); and the slope-scaled depth bias of the map itself.
+inline constexpr int kShadowMapSize = 4096;
+inline constexpr float kShadowBias = 1.5f;
+inline constexpr float kShadowSlopeBias = 2.0f;
+/// Floor: a plane just under the model (kFloorLift LDU below its lowest point, +y being down),
+/// kFloorExtent times the model's diagonal across, the background's colour. It shows only
+/// what falls on it: full shadow darkens it by kFloorShadow, fading out toward its rim.
+inline constexpr double kFloorExtent = 4.0;
+inline constexpr double kFloorLift = 0.05;
+inline constexpr float kFloorShadow = 0.45f;
+/// Outline lines are drawn this fraction of their distance nearer the eye, so they win over
+/// the faces they lie on.
+inline constexpr float kEdgeNearer = 0.002f;
+/// Weighted blended transparency (McGuire and Bavoil 2013): the depth, in LDU, over which a
+/// layer's weight falls by its fourth power.
+inline constexpr float kOitDepthScale = 2000.0f;
 /// The two cube maps of the studio's light: side in pixels and number of mips of the
 /// reflection map (roughness 0 at mip 0 to 1 at the last), side of the map of received
 /// light, and directions gathered per pixel.
