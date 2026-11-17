@@ -38,6 +38,8 @@ RenderMesh buildRenderMesh(const bm::ldraw::Mesh& mesh, const std::unordered_map
     uint32_t color;
   };
   std::vector<Tri> tris;
+  const size_t firstUnder = mesh.triangles.size() / 3 - std::min<size_t>(mesh.underside, mesh.triangles.size() / 3);
+  size_t top = 0;  // triangles kept before the underside
   for (size_t t = 0; t * 3 + 2 < mesh.triangles.size(); t++) {
     const uint32_t i = mesh.triangles[t * 3], j = mesh.triangles[t * 3 + 1], k = mesh.triangles[t * 3 + 2];
     if (i >= vertexCount || j >= vertexCount || k >= vertexCount) continue;
@@ -45,6 +47,7 @@ RenderMesh buildRenderMesh(const bm::ldraw::Mesh& mesh, const std::unordered_map
     const double area = length(n);
     if (!(area > 1e-9) || !std::isfinite(area)) continue;
     tris.push_back({{i, j, k}, n * (1 / area), colorOf(t)});
+    if (t < firstUnder) top++;
   }
   // Two passes over each corner: first gather the triangles that agree, then name them.
   // A triangle joins the first gathering at its corner that has its colour and whose normal
@@ -84,6 +87,8 @@ RenderMesh buildRenderMesh(const bm::ldraw::Mesh& mesh, const std::unordered_map
   for (size_t t = 0; t < tris.size(); t++)
     for (int c = 0; c < 3; c++) out.indices.push_back(at[tris[t].v[c]][slot[t * 3 + static_cast<size_t>(c)]].index);
   if (!out.indices.empty()) out.edges = mesh.edges;
+  out.topIndices = static_cast<uint32_t>(top * 3);
+  out.bottom = mesh.bottom;
   return out;
 }
 
@@ -112,6 +117,7 @@ RenderMesh boxMesh(const bm::Box& box) {
     else out.indices.insert(out.indices.end(), {first, first + 2, first + 1, first, first + 3, first + 2});
   }
   out.bounds = box;
+  out.topIndices = static_cast<uint32_t>(out.indices.size());
   return out;
 }
 

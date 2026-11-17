@@ -1,0 +1,7 @@
+0 A block with a pin under it, within it, and a stud hanging below it: only the pin is its underside
+0 Name: under.dat
+0 BFC CERTIFY CCW
+1 16 0 0 0 20 0 0 0 24 0 0 0 10 box.dat
+1 16 0 0 0 1 0 0 0 1 0 0 0 1 stud.dat
+1 16 -10 20 0 1 0 0 0 -1 0 0 0 1 stud.dat
+1 16 10 24 0 1 0 0 0 -1 0 0 0 1 stud.dat

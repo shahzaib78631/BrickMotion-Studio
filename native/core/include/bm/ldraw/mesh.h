@@ -19,6 +19,12 @@ struct Mesh {
   /// from the 16-sided ones they replace (kLowResError times the largest radius replaced).
   /// 0 when nothing was replaced.
   float lowError = 0;
+  /// The last `underside` triangles are the part's underside: the tubes, pins and rings under
+  /// it (stud primitives placed upside down) that lie within the box of the rest of its
+  /// geometry, so seen only through its open bottom, from below `bottom` (+y is down; the
+  /// lowest point of that geometry). 0 when there are none.
+  uint32_t underside = 0;
+  float bottom = 0;
   Box bounds;                       ///< of triangles and edges; empty when there is no geometry
   Box body;                         ///< bounds without the studs on top; what grid placement measures
   std::vector<std::string> missing; ///< subfiles that were not found, or closed a reference loop

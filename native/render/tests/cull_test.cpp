@@ -1,5 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
+#include <algorithm>
 #include <cmath>
+#include <tuple>
 #include "bmr/cull.h"
 #include "bmr/tolerances.h"
 #include "helpers.h"
@@ -135,4 +137,56 @@ TEST_CASE("culling is the same on one thread and many", "[cull]") {
     for (int d = 0; d < 3; d++) REQUIRE(a[g].byDetail[d] == b[g].byDetail[d]);
   }
   REQUIRE(culled > 0);
+}
+
+TEST_CASE("a piece seen from above its bottom is drawn without its underside, one seen from below whole", "[cull]") {
+  Rig r;
+  // An upright brick at the origin and one turned upside down (half a turn about x) to its
+  // right, both with their bottoms at part-space y = 24.
+  const Model m = bmtest::modelFrom(piece("3005.dat", 0, 0, 0, 4) + "1 4 100 24 0 1 0 0 0 -1 0 0 0 -1 3005.dat\n", r.lib);
+  const Scene s = buildScene(m, r.parts);
+  std::vector<PartShape> parts = boundsOf(s);
+  for (PartShape& p : parts) p.bottom = 24;
+  auto split = [&](Camera c, bool frustum = true) {
+    const std::vector<Visible> v = cull(s, parts, c, 1000, -1, frustum);
+    std::vector<uint32_t> above, below;
+    for (int d = 0; d < 2; d++) {
+      REQUIRE(v[0].above[d].size() + v[0].below[d].size() == v[0].byDetail[d].size());
+      above.insert(above.end(), v[0].above[d].begin(), v[0].above[d].end());
+      below.insert(below.end(), v[0].below[d].begin(), v[0].below[d].end());
+    }
+    return std::make_pair(above, below);
+  };
+  const uint32_t upright = s.where[0].second, flipped = s.where[1].second;
+  Camera high;
+  high.eye = {50, -400, -300}, high.target = {50, 12, 0};
+  auto [a, b] = split(high);
+  REQUIRE(a == std::vector<uint32_t>{upright});  // the eye is above the upright one's bottom
+  REQUIRE(b == std::vector<uint32_t>{flipped});  // and below the flipped one's, which faces up
+  Camera low;
+  low.eye = {50, 400, -300}, low.target = {50, 12, 0}, low.up = {0, -1, 0};
+  std::tie(a, b) = split(low);
+  REQUIRE(a == std::vector<uint32_t>{flipped});
+  REQUIRE(b == std::vector<uint32_t>{upright});
+  // Level with the bottom (within kUndersideSlack) the underside is drawn.
+  Camera level;
+  level.eye = {0, 24 - kUndersideSlack / 2, -300}, level.target = {0, 24 - kUndersideSlack / 2, 0};
+  std::tie(a, b) = split(level);
+  REQUIRE(std::find(b.begin(), b.end(), upright) != b.end());
+  // Without culling nothing is left out.
+  std::tie(a, b) = split(high, false);
+  REQUIRE(a.empty());
+  REQUIRE(b.size() == 2);
+  // A part with no underside (bottom left at its default) is always drawn whole.
+  parts = boundsOf(s);
+  std::tie(a, b) = split(high);
+  REQUIRE(a.empty());
+  // So is a transparent one: its underside shows through it.
+  const Scene glass = buildScene(bmtest::modelFrom(piece("3005.dat", 0, 0, 0, 36), r.lib), r.parts);
+  REQUIRE(glass.groups[0].material.transparent());
+  std::vector<PartShape> glassParts = boundsOf(glass);
+  glassParts[0].bottom = 24;
+  const std::vector<Visible> v = cull(glass, glassParts, high, 1000);
+  REQUIRE(v[0].above[0].size() + v[0].above[1].size() == 0);
+  REQUIRE(v[0].below[0].size() + v[0].below[1].size() == 1);
 }

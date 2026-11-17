@@ -54,6 +54,7 @@ struct DrawUniforms {
 struct GpuMesh {
   id<MTLBuffer> vertices = nil, indices = nil, edges = nil;
   uint32_t indexCount = 0, edgeVertices = 0;
+  uint32_t topIndexCount = 0;  // the first of the indices: all but the underside (RenderMesh::topIndices)
 };
 
 /// A buffer rewritten every frame. Three copies are kept and used in turn, so the GPU can
@@ -125,6 +126,7 @@ struct Renderer::Impl {
     Detail detail;
     bool mirrored;
     uint32_t first, count;  // in `list`
+    bool top = false;       // the eye is above these instances' bottoms: their undersides are left out
   };
   bool drewFrame = false, idsReady = false;
   int lastSlot = 0;

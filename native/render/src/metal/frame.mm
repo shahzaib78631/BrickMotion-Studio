@@ -23,18 +23,23 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   const std::vector<Visible> inView = cull(scene, parts, camera, height, options.forceDetail, options.cull);
   std::vector<uint32_t> list;
   std::vector<Batch> seen, casters;
-  auto add = [&](std::vector<Batch>& into, uint32_t g, Detail d, const std::vector<uint32_t>& instances) {
+  auto add = [&](std::vector<Batch>& into, uint32_t g, Detail d, const std::vector<uint32_t>& instances, bool top = false) {
     const Group& group = scene.groups[g];
     for (int mirrored = 0; mirrored < 2; mirrored++) {
       const uint32_t first = static_cast<uint32_t>(list.size());
       for (uint32_t i : instances)
         if (((group.instances[i].flags & kMirrored) != 0) == (mirrored != 0)) list.push_back(i);
-      if (list.size() > first) into.push_back({g, d, mirrored != 0, first, static_cast<uint32_t>(list.size()) - first});
+      if (list.size() > first) into.push_back({g, d, mirrored != 0, first, static_cast<uint32_t>(list.size()) - first, top});
     }
   };
   std::vector<Batch> outlined;  // whose outlines show, at the detail they are drawn at
   for (uint32_t g = 0; g < scene.groups.size(); g++) {
-    for (int d = 0; d < 3; d++) add(seen, g, static_cast<Detail>(d), inView[g].byDetail[d]);
+    // Seen from above, a piece's underside (the tubes and pins in it) is left out.
+    for (int d = 0; d < 2; d++) {
+      add(seen, g, static_cast<Detail>(d), inView[g].above[d], true);
+      add(seen, g, static_cast<Detail>(d), inView[g].below[d]);
+    }
+    add(seen, g, Detail::Box, inView[g].byDetail[2]);
     if (options.edges)
       for (int d = 0; d < 2; d++) add(outlined, g, static_cast<Detail>(d), inView[g].edges[d]);
     stats.culled += inView[g].culled;
@@ -72,7 +77,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
       const uint32_t i = list[batch.first + k];
       if (group.instances[i].flags & kSelected) list.push_back(i);
     }
-    if (list.size() > first) selected.push_back({batch.group, batch.detail, batch.mirrored, first, static_cast<uint32_t>(list.size()) - first});
+    if (list.size() > first) selected.push_back({batch.group, batch.detail, batch.mirrored, first, static_cast<uint32_t>(list.size()) - first, batch.top});
   }
 
   dispatch_semaphore_wait(inFlight, DISPATCH_TIME_FOREVER);
@@ -274,10 +279,11 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
         [enc setVertexBufferOffset:i * sizeof(DrawUniforms) atIndex:2];
         [enc setFragmentBufferOffset:i * sizeof(DrawUniforms) atIndex:2];
         [enc setVertexBufferOffset:batch.first * sizeof(uint32_t) atIndex:4];
-        [enc drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:gpu.indexCount indexType:MTLIndexTypeUInt32 indexBuffer:gpu.indices indexBufferOffset:0 instanceCount:batch.count];
+        const uint32_t indexCount = batch.top ? gpu.topIndexCount : gpu.indexCount;
+        [enc drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:indexCount indexType:MTLIndexTypeUInt32 indexBuffer:gpu.indices indexBufferOffset:0 instanceCount:batch.count];
         stats.drawCalls++;
         stats.instances += batch.count;
-        stats.triangles += static_cast<uint64_t>(gpu.indexCount / 3) * batch.count;
+        stats.triangles += static_cast<uint64_t>(indexCount / 3) * batch.count;
         stats.byDetail[static_cast<int>(batch.detail)] += batch.count;
       }
     };
@@ -342,7 +348,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
       [enc setVertexBuffer:gpu.vertices offset:0 atIndex:0];
       [enc setVertexBuffer:instanceBuffers[batch.group][slot] offset:0 atIndex:3];
       [enc setVertexBufferOffset:batch.first * sizeof(uint32_t) atIndex:4];
-      [enc drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:gpu.indexCount indexType:MTLIndexTypeUInt32 indexBuffer:gpu.indices indexBufferOffset:0 instanceCount:batch.count];
+      [enc drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:batch.top ? gpu.topIndexCount : gpu.indexCount indexType:MTLIndexTypeUInt32 indexBuffer:gpu.indices indexBufferOffset:0 instanceCount:batch.count];
       stats.drawCalls++;
     }
     [enc endEncoding];

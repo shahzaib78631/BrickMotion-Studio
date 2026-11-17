@@ -29,6 +29,8 @@ std::vector<Visible> cull(const Scene& scene, const std::vector<PartShape>& part
     Visible& v = out[g];
     const bm::Box part = g < parts.size() ? parts[g].bounds : bm::Box{};
     const double lowError = g < parts.size() ? parts[g].lowError : 0.0;
+    // A transparent piece's underside shows through its walls: it is always drawn whole.
+    const double bottom = g < parts.size() && !group.material.transparent() ? parts[g].bottom : -1e300;
     const bool none = part.empty();
     const bm::Vec3 centre = none ? bm::Vec3{} : (part.min + part.max) * 0.5, half = none ? bm::Vec3{} : (part.max - part.min) * 0.5;
     for (uint32_t i = 0; i < group.instances.size(); i++) {
@@ -58,6 +60,16 @@ std::vector<Visible> cull(const Scene& scene, const std::vector<PartShape>& part
       }
       v.byDetail[detail].push_back(i);
       if (edges && detail < 2) v.edges[detail].push_back(i);
+      if (detail < 2) {
+        // The eye's height in the part's own space: by the inverse matrix's second row (the
+        // cross product of the third and first columns, over the determinant). An eye less
+        // than kUndersideSlack above the bottom still gets the underside.
+        const bm::Vec3 c0{m[0], m[4], m[8]}, c1{m[1], m[5], m[9]}, c2{m[2], m[6], m[10]};
+        const double det = dot(c0, cross(c1, c2));
+        const bm::Vec3 offset = eye - bm::Vec3{m[3], m[7], m[11]};
+        const double y = std::abs(det) > 1e-12 ? dot(cross(c2, c0), offset) / det : 1e300;
+        (inViewOnly && y < bottom - kUndersideSlack ? v.above : v.below)[detail].push_back(i);
+      }
     }
   });
   return out;

@@ -155,3 +155,55 @@ TEST_CASE("low-resolution primitives are used where they exist", "[ldraw][flatte
   REQUIRE(coarse.lowError == Catch::Approx(kLowResError * 20).margin(0.05));
   REQUIRE(flatten("3001.dat", lib, low).lowError == Catch::Approx(kLowResError * 8).margin(0.02));
 }
+
+TEST_CASE("a part's underside goes last: the upside-down studs within the rest of it", "[ldraw][flatten]") {
+  const Library lib = fixtureLib();
+  // A 40 x 24 x 20 block, a stud on top, a pin under it within the block (x -16..-4, y 20..24)
+  // and a stud hanging below it (y 24..28). The underside is the pin's 12 triangles and the
+  // hanging stud's face against the block's bottom (2, which nothing can see); its sides and
+  // end, below the block, are not.
+  const Mesh m = flatten("under.dat", lib);
+  REQUIRE(m.triColor.size() == 48);
+  REQUIRE(m.underside == 14);
+  REQUIRE(m.bottom == 24.0f);
+  int pin = 0;
+  for (size_t t = m.triColor.size() - m.underside; t < m.triColor.size(); t++) {
+    bool inPin = true;
+    for (int c = 0; c < 3; c++) {
+      const uint32_t v = m.triangles[t * 3 + static_cast<size_t>(c)] * 3;
+      INFO("triangle " << t);
+      REQUIRE(m.positions[v + 1] >= 20 - 1e-4);
+      REQUIRE(m.positions[v + 1] <= 24 + 1e-4);
+      inPin = inPin && m.positions[v] <= -4 + 1e-4;
+    }
+    pin += inPin ? 1 : 0;
+  }
+  REQUIRE(pin == 12);
+  REQUIRE_THAT(signedVolume(m), WithinAbs(40.0 * 24 * 20 + 3 * 12 * 4 * 12, 1e-6));  // reordering keeps every face
+  // A part with nothing upside down under it, or with its studs left out, has none.
+  REQUIRE(flatten("3005.dat", lib).underside == 0);
+  REQUIRE(flatten("under.dat", lib, FlattenOptions{.noStuds = true}).underside == 0);
+}
+
+TEST_CASE("a real brick's tubes are its underside, and its studs are not", "[ldraw][flatten][data]") {
+  const char* dir = std::getenv("BM_LDRAW_DIR");
+  if (!dir) SKIP("BM_LDRAW_DIR is not set");
+  const Library lib(dir);
+  for (bool low : {false, true}) {
+    FlattenOptions o;
+    o.lowResPrimitives = low;
+    const Mesh m = flatten("3001.dat", lib, o);  // 2x4 brick: 8 studs on top, 3 tubes under
+    INFO("low " << low);
+    REQUIRE(m.underside > 0);
+    REQUIRE(m.underside < m.triColor.size() / 2);
+    REQUIRE(m.bottom == Catch::Approx(24));
+    // Every underside corner is under the top (y > 0) and within the walls.
+    for (size_t t = m.triColor.size() - m.underside; t < m.triColor.size(); t++)
+      for (int c = 0; c < 3; c++) {
+        const uint32_t v = m.triangles[t * 3 + static_cast<size_t>(c)] * 3;
+        REQUIRE(m.positions[v + 1] >= 0);
+        REQUIRE(std::abs(m.positions[v]) <= 40 + 1e-3);
+        REQUIRE(std::abs(m.positions[v + 2]) <= 20 + 1e-3);
+      }
+  }
+}

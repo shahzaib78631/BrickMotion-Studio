@@ -24,6 +24,12 @@ struct RenderMesh {
   std::vector<float> edges;       ///< xyz pairs: the part's outline lines
   bm::Box bounds;                 ///< of the triangles; empty if there are none
   float lowError = 0;             ///< LDU: how far this coarse mesh may be from the full one (bm::ldraw::Mesh::lowError)
+  /// The first `topIndices` indices are all an eye above `bottom` (+y down, part space) can
+  /// see; the rest are the part's underside (bm::ldraw::Mesh::underside). All of them when
+  /// there is none.
+  uint32_t topIndices = 0;
+  float bottom = 0;
+  bool hasUnderside() const { return topIndices < indices.size(); }
   bool empty() const { return indices.empty(); }
 };
 

@@ -18,7 +18,7 @@ namespace fs = std::filesystem;
 namespace {
 
 constexpr char kMagic[4] = {'B', 'M', 'P', '1'};
-constexpr uint32_t kVersion = 2;  // 2: Mesh::lowError
+constexpr uint32_t kVersion = 3;  // 2: Mesh::lowError; 3: Mesh::underside and bottom, the underside last
 
 // File layout, little-endian (the only byte order this engine runs on):
 //   Header, then the payload: dependency table, missing-name table, bounds, the four arrays.
@@ -117,6 +117,8 @@ std::string encode(const Mesh& m) {
   w.array(m.triColor);
   w.array(m.edges);
   w.put(m.lowError);
+  w.put(m.underside);
+  w.put(m.bottom);
   return std::move(w.out);
 }
 
@@ -142,11 +144,13 @@ bool decode(const unsigned char* data, size_t size, Mesh& m) {
   r.array(m.triColor);
   r.array(m.edges);
   m.lowError = r.get<float>();
+  m.underside = r.get<uint32_t>();
+  m.bottom = r.get<float>();
   if (!r.ok || r.at != r.end) return false;
   // Indices must point at real vertices: a mesh that decodes but indexes out of range would
   // crash its users later.
   const size_t vertices = m.positions.size() / 3;
-  if (m.positions.size() % 3 || m.triangles.size() % 3 || m.edges.size() % 6 || m.triColor.size() != m.triangles.size() / 3) return false;
+  if (m.positions.size() % 3 || m.triangles.size() % 3 || m.edges.size() % 6 || m.triColor.size() != m.triangles.size() / 3 || m.underside > m.triColor.size()) return false;
   for (uint32_t i : m.triangles)
     if (i >= vertices) return false;
   return true;

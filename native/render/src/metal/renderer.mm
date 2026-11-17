@@ -34,8 +34,15 @@ std::unique_ptr<Renderer> Renderer::create(const bm::Model& model, bm::ldraw::Pa
     impl.meshes = std::make_unique<MeshLibrary>(model, full, low);
     impl.scene = buildScene(model, full);
     impl.inFlight = dispatch_semaphore_create(3);
-    for (const Group& g : impl.scene.groups)
-      impl.parts.push_back(g.placeholder ? PartShape{bm::kPlaceholderBox, 0} : PartShape{impl.meshes->get(g.part, Detail::Full)->bounds, impl.meshes->get(g.part, Detail::Low)->lowError});
+    for (const Group& g : impl.scene.groups) {
+      if (g.placeholder) {
+        impl.parts.push_back(PartShape{bm::kPlaceholderBox, 0});
+        continue;
+      }
+      const auto full = impl.meshes->get(g.part, Detail::Full), low = impl.meshes->get(g.part, Detail::Low);
+      const bool under = full->hasUnderside() || low->hasUnderside();
+      impl.parts.push_back(PartShape{full->bounds, low->lowError, under ? static_cast<double>(full->hasUnderside() ? full->bottom : low->bottom) : -1e300});
+    }
     for (const Group& g : impl.scene.groups) {
       const size_t bytes = std::max<size_t>(1, g.instances.size()) * sizeof(Instance);
       std::array<id<MTLBuffer>, 3> copies;
@@ -68,6 +75,7 @@ const GpuMesh& Renderer::Impl::mesh(const Group& group, Detail detail) {
     gpu.vertices = [device->device newBufferWithBytes:cpu->vertices.data() length:cpu->vertices.size() * sizeof(Vertex) options:MTLResourceStorageModeShared];
     gpu.indices = [device->device newBufferWithBytes:cpu->indices.data() length:cpu->indices.size() * sizeof(uint32_t) options:MTLResourceStorageModeShared];
     gpu.indexCount = static_cast<uint32_t>(cpu->indices.size());
+    gpu.topIndexCount = cpu->topIndices;
     if (!cpu->edges.empty()) {
       gpu.edges = [device->device newBufferWithBytes:cpu->edges.data() length:cpu->edges.size() * sizeof(float) options:MTLResourceStorageModeShared];
       gpu.edgeVertices = static_cast<uint32_t>(cpu->edges.size() / 3);
@@ -200,7 +208,7 @@ void Renderer::Impl::drawIds() {
     [enc setVertexBuffer:gpu.vertices offset:0 atIndex:0];
     [enc setVertexBuffer:instanceBuffers[batch.group][lastSlot] offset:0 atIndex:3];
     [enc setVertexBufferOffset:batch.first * sizeof(uint32_t) atIndex:4];
-    [enc drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:gpu.indexCount indexType:MTLIndexTypeUInt32 indexBuffer:gpu.indices indexBufferOffset:0 instanceCount:batch.count];
+    [enc drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:batch.top ? gpu.topIndexCount : gpu.indexCount indexType:MTLIndexTypeUInt32 indexBuffer:gpu.indices indexBufferOffset:0 instanceCount:batch.count];
   }
   [enc endEncoding];
   [commands commit];

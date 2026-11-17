@@ -48,6 +48,7 @@ struct Walker {
   std::unordered_map<Key, uint32_t, KeyHash> welded;
   std::vector<std::string> stack;  // files being expanded, to stop reference loops
   std::map<std::string, uint64_t> deps;
+  std::vector<uint8_t> kinds;  // per triangle: 0 the part's own, 1 in a stud on top, 2 in one placed upside down (under)
 
   void miss(const std::string& name) {
     if (std::find(mesh.missing.begin(), mesh.missing.end(), name) == mesh.missing.end()) mesh.missing.push_back(name);
@@ -64,12 +65,13 @@ struct Walker {
     return it->second;
   }
 
-  void triangle(Vec3 a, Vec3 b, Vec3 c, int color, bool reverse, bool twoSided, bool inStud) {
+  void triangle(Vec3 a, Vec3 b, Vec3 c, int color, bool reverse, bool twoSided, bool inStud, bool under) {
     const uint32_t i = vertex(a, inStud), j = vertex(b, inStud), k = vertex(c, inStud);
     if (i == j || j == k || i == k) return;  // collapsed by welding
     auto emit = [&](uint32_t p, uint32_t q, uint32_t r) {
       mesh.triangles.insert(mesh.triangles.end(), {p, q, r});
       mesh.triColor.push_back(color);
+      kinds.push_back(under ? 2 : inStud ? 1 : 0);
     };
     if (twoSided || !reverse) emit(i, j, k);
     if (twoSided || reverse) emit(i, k, j);
@@ -89,7 +91,7 @@ struct Walker {
     return name;
   }
 
-  void file(const std::string& name, const Xform& xf, int color, bool flip, bool cullable, bool inStud) {
+  void file(const std::string& name, const Xform& xf, int color, bool flip, bool cullable, bool inStud, bool under) {
     const File* f = lib.find(name);
     deps.emplace(name, f ? lib.stamp(name) : 0);
     if (!f || stack.size() >= static_cast<size_t>(kMaxDepth) || std::find(stack.begin(), stack.end(), name) != stack.end()) {
@@ -116,11 +118,11 @@ struct Walker {
           if (c.clip >= 0) clip = c.clip == 1;
           break;
         case Cmd::Tri:
-          triangle(point(c.pts), point(c.pts + 3), point(c.pts + 6), own, reverse, twoSided, inStud);
+          triangle(point(c.pts), point(c.pts + 3), point(c.pts + 6), own, reverse, twoSided, inStud, under);
           break;
         case Cmd::Quad:
-          triangle(point(c.pts), point(c.pts + 3), point(c.pts + 6), own, reverse, twoSided, inStud);
-          triangle(point(c.pts), point(c.pts + 6), point(c.pts + 9), own, reverse, twoSided, inStud);
+          triangle(point(c.pts), point(c.pts + 3), point(c.pts + 6), own, reverse, twoSided, inStud, under);
+          triangle(point(c.pts), point(c.pts + 6), point(c.pts + 9), own, reverse, twoSided, inStud, under);
           break;
         case Cmd::Line: {
           const Vec3 a = point(c.pts), b = point(c.pts + 3);
@@ -139,9 +141,11 @@ struct Walker {
           // A stud standing on top of the part is not part of its body.
           if (opts.noStuds && isStudName(c.file)) break;
           const bool stud = inStud || (isStudName(c.file) && placed.r.m[4] > 0);
+          // A stud placed upside down is a tube, pin or ring under the part.
+          const bool down = !stud && (under || (isStudName(c.file) && placed.r.m[4] < 0));
           const std::string name = substitute(c.file);
           const size_t before = mesh.positions.size();
-          file(name, placed, own, flip != (c.invert != (determinant(c.xf.r) < 0)), !twoSided, stud);
+          file(name, placed, own, flip != (c.invert != (determinant(c.xf.r) < 0)), !twoSided, stud, down);
           if (name != c.file && name.rfind("8/", 0) == 0) {
             // How big what was replaced is: its radius, whichever way its axis lies, is the
             // middle one of its three half-sizes (a cylinder's or a ring's two equal ones).
@@ -180,9 +184,47 @@ uint64_t hashDeps(const std::vector<std::pair<std::string, uint64_t>>& deps) {
 Mesh flatten(std::string_view partName, const Library& library, const FlattenOptions& options) {
   std::string name = normalizeName(partName);
   if (name.find('.') == std::string::npos) name += ".dat";
-  Walker w{library, options, {}, {}, {}, {}};
-  w.file(name, Xform::identity(), 16, false, true, false);
+  Walker w{library, options, {}, {}, {}, {}, {}};
+  w.file(name, Xform::identity(), 16, false, true, false, false);
   if (w.mesh.body.empty()) w.mesh.body = w.mesh.bounds;
+  // The underside last: the triangles under the part that lie within the box of its own
+  // geometry (neither on top nor under), each corner within kWeld of it.
+  Mesh& m = w.mesh;
+  auto corner = [&](uint32_t t, int c) {
+    const uint32_t v = m.triangles[t * 3 + static_cast<uint32_t>(c)];
+    return Vec3{m.positions[v * 3], m.positions[v * 3 + 1], m.positions[v * 3 + 2]};
+  };
+  const uint32_t count = static_cast<uint32_t>(m.triColor.size());
+  Box frame;
+  for (uint32_t t = 0; t < count; t++)
+    if (w.kinds[t] == 0)
+      for (int c = 0; c < 3; c++) frame.grow(corner(t, c));
+  if (!frame.empty()) {
+    const double slack = 1 / kWeld;
+    auto within = [&](uint32_t t) {
+      for (int c = 0; c < 3; c++) {
+        const Vec3 p = corner(t, c);
+        if (p.x < frame.min.x - slack || p.x > frame.max.x + slack || p.y < frame.min.y - slack || p.y > frame.max.y + slack || p.z < frame.min.z - slack ||
+            p.z > frame.max.z + slack)
+          return false;
+      }
+      return true;
+    };
+    std::vector<uint32_t> order, last;
+    for (uint32_t t = 0; t < count; t++) (w.kinds[t] == 2 && within(t) ? last : order).push_back(t);
+    if (!last.empty()) {
+      m.underside = static_cast<uint32_t>(last.size());
+      m.bottom = static_cast<float>(frame.max.y);
+      order.insert(order.end(), last.begin(), last.end());
+      std::vector<uint32_t> triangles(m.triangles.size());
+      std::vector<int32_t> colors(m.triColor.size());
+      for (uint32_t t = 0; t < count; t++) {
+        for (int c = 0; c < 3; c++) triangles[t * 3 + static_cast<uint32_t>(c)] = m.triangles[order[t] * 3 + static_cast<uint32_t>(c)];
+        colors[t] = m.triColor[order[t]];
+      }
+      m.triangles = std::move(triangles), m.triColor = std::move(colors);
+    }
+  }
   w.mesh.deps.assign(w.deps.begin(), w.deps.end());
   w.mesh.sourceHash = hashDeps(w.mesh.deps);
   return std::move(w.mesh);

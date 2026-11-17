@@ -88,6 +88,9 @@ inline constexpr float kOitDepthScale = 2000.0f;
 /// hold these: boxes from 6 pixels put a kBlock square of 42000-1 7.6 levels off (over
 /// kDetailBlockTolerance).
 inline constexpr double kLowErrorPixels = 0.5;
+/// A part's underside (the tubes and pins under it) is left out while the eye is more than
+/// this many LDU above its bottom, in the part's own space.
+inline constexpr double kUndersideSlack = 0.5;
 inline constexpr double kLowPixels = 3;
 /// Outline lines fade with how wide a stud (kStudLdu across) looks at the near side of the
 /// piece: gone below kEdgeStudPixels, where the lines on a stud would be a dot of noise (and
