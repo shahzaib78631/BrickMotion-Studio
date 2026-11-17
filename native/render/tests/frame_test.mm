@@ -261,6 +261,64 @@ TEST_CASE("two overlapping transparent bricks look the same whichever is listed 
   REQUIRE(d.meanAbs == 0);
 }
 
+TEST_CASE("glass shadows the floor as an opaque brick does, and the floor seen through it shows no shadow", "[gpu][frame]") {
+  NEED_GPU();
+  // EyeSight's ground is a shadow catcher (native/corpus/calib/glass.ldr): glass on it casts
+  // the shadow an opaque piece would, and the floor seen through glass is not shadowed. Seen
+  // from well above, so that much of the floor is behind the glass and much of the shadow is not.
+  FrameOptions lit;
+  lit.edges = false;
+  FrameOptions unlit = lit;  // the floor drawn, its light not worked out
+  unlit.shadows = unlit.ambientOcclusion = false;
+  const std::string glass = piece("3005.dat", 0, 0, 0, 36), solid = piece("3005.dat", 0, 0, 0, 4);
+  auto at = [&](const std::string& text, const FrameOptions& o) { return shotOf(text, o, 256, 256, nullptr, 0.6, 0.9, 2).image; };
+  const Image glassLit = at(glass, lit), glassUnlit = at(glass, unlit), solidLit = at(solid, lit);
+  // Where each brick is: the plain pictures (no floor), not the background.
+  const Image glassPlain = at(glass, plain()), solidPlain = at(solid, plain());
+  const uint8_t* background = glassPlain.at(0, 0);
+  auto brick = [&](int x, int y) {
+    if (x < 0 || y < 0 || x >= 256 || y >= 256) return false;
+    return channelGap(glassPlain.at(x, y), background) > 0 || channelGap(solidPlain.at(x, y), background) > 0;
+  };
+  auto glassAt = [&](int x, int y) { return x >= 0 && y >= 0 && x < 256 && y < 256 && channelGap(glassPlain.at(x, y), background) > 0; };
+  // Within `r` pixels of a pixel: all glass, or no brick at all.
+  auto allGlass = [&](int x, int y, int r) {
+    for (int dy = -r; dy <= r; dy++)
+      for (int dx = -r; dx <= r; dx++)
+        if (!glassAt(x + dx, y + dy)) return false;
+    return true;
+  };
+  auto clear = [&](int x, int y, int r) {
+    for (int dy = -r; dy <= r; dy++)
+      for (int dx = -r; dx <= r; dx++)
+        if (brick(x + dx, y + dy)) return false;
+    return true;
+  };
+  // The floor's light is smoothed over a few pixels (the half-size pass, its blur, and the
+  // upsample), so the floor next to a brick's outline is left out.
+  const int band = 6;
+  int behind = 0, behindOff = 0, around = 0, aroundOff = 0, shaded = 0;
+  for (int y = 0; y < 256; y++)
+    for (int x = 0; x < 256; x++) {
+      if (allGlass(x, y, 2)) {
+        behind++;
+        // Up to 2 apart: the glass's own key light is dithered (keyShadow) with shadows on. The
+        // floor under it is in the brick's full shadow, which would take off tens of levels.
+        if (channelGap(glassLit.at(x, y), glassUnlit.at(x, y)) > 2) behindOff++;
+      } else if (clear(x, y, band)) {
+        around++;
+        if (channelGap(glassLit.at(x, y), solidLit.at(x, y)) > 1) aroundOff++;
+        if (luminance(glassUnlit.at(x, y)) - luminance(glassLit.at(x, y)) > 3) shaded++;
+      }
+    }
+  INFO("through glass " << behind << " (" << behindOff << " differ with the floor's light on), around " << around << " (" << aroundOff << " differ from an opaque brick's, "
+                        << shaded << " in its shadow)");
+  REQUIRE(behind > 400);
+  REQUIRE(behindOff == 0);
+  REQUIRE(shaded > 100);
+  REQUIRE(aroundOff == 0);
+}
+
 TEST_CASE("edges darken a brick's outline and nothing else", "[gpu][frame]") {
   NEED_GPU();
   FrameOptions withEdges = plain();
