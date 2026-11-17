@@ -296,6 +296,55 @@ TEST_CASE("extra connector rows: a rod in a bore slides and turns", "[connectors
   REQUIRE_FALSE(mate(rod, bore));
 }
 
+TEST_CASE("extra connector rows: a bore of stretches takes a pin with its collar in the counterbore", "[connectors][extra]") {
+  Fixture f;
+  REQUIRE(loadExtraConnectors(R"({"parts":{
+      "plain":[{"kind":"bore","at":[0,0,2],"axis":[0,0,1],"secs":"R 6 16  R 8 2"},
+               {"kind":"bore","at":[0,0,2],"axis":[0,0,1],"length":18,"radius":6},
+               {"kind":"bore","at":[0,0,8],"axis":[0,0,-1],"secs":"R 4 10  R 5 2","caps":"one","slide":false},
+               {"kind":"bore","at":[0,0,0],"axis":[0,0,1],"secs":"R 6"},
+               {"kind":"bore","at":[0,0,0],"axis":[0,0,1],"secs":"Q 6 16"},
+               {"kind":"bore","at":[0,0,0],"axis":[0,0,1],"secs":"R 6 16","radius":6},
+               {"kind":"bore","at":[0,0,0],"axis":[0,0,1],"secs":"R 6 16","caps":"lid"},
+               {"kind":"bore","at":[0,0,0],"axis":[0,0,1],"secs":"R 6 16","caps":1},
+               {"kind":"bore","at":[0,0,0],"axis":[0,0,1],"secs":"R 6 16","slide":"no"}]}})", f.db) == 3);
+  const auto c = f.db.get("plain.dat");
+  REQUIRE(c->size() == 3);
+  const Connector& hole = c->at(0);
+  REQUIRE((hole.kind == SnapKind::Cyl && hole.gender == Gender::Female && hole.slide && hole.openStart && hole.openEnd));
+  REQUIRE((hole.profile.size() == 2 && hole.profile[1].shape == 'R' && hole.profile[1].start == 16 && hole.profile[1].radius == 8));
+  REQUIRE((hole.length == 18 && hole.radius == 8 && near(hole.start, {0, 0, 2}) && near(hole.axis, {0, 0, 1})));
+  // A Technic pin as the shadow library has it (3673), from z 0 to 40: its collar (R 8 from
+  // 18 to 22) sits in the counterbore and its shaft in the hole.
+  auto pin = [](const char* secs, Vec3 start, Vec3 axis, bool capped) {
+    Connector m;
+    m.gender = Gender::Male;
+    m.start = start, m.axis = axis, m.side = {1, 0, 0};  // every axis here runs along z
+    m.openEnd = !capped;
+    for (const Section& s : parseSections(secs)) {
+      m.profile.push_back({s.shape, s.radius, m.length, s.length});
+      m.length += s.length;
+      m.radius = std::max(m.radius, s.radius);
+    }
+    return m;
+  };
+  const Connector technic = pin("L_ 6.25 2  R 6 16  R 8 4  R 6 16  _L 6.25 2", {0, 0, 0}, {0, 0, 1}, false);
+  REQUIRE(technic.length == 40);
+  const auto m = mate(technic, hole);
+  REQUIRE(m.has_value());
+  REQUIRE((m->freedom.rotates && m->freedom.slides));
+  // A plain bore of the hole's length has no counterbore: the collar would be inside it.
+  REQUIRE_FALSE(mate(technic, c->at(1)));
+  // A blind hole that holds its pin from sliding (a wheel's on its holder's pin, wpin.dat)
+  // takes it through its mouth only.
+  const Connector& blind = c->at(2);
+  REQUIRE((blind.openStart && !blind.openEnd && !blind.slide && blind.length == 12 && blind.radius == 5));
+  const auto held = mate(pin("R 4 11  _L 4.25 1", {0, 0, 8}, {0, 0, -1}, true), blind);
+  REQUIRE(held.has_value());
+  REQUIRE((held->freedom.rotates && !held->freedom.slides));
+  REQUIRE_FALSE(mate(pin("R 4 11  _L 4.25 1", {0, 0, -4}, {0, 0, 1}, true), blind));
+}
+
 TEST_CASE("extra connector rows: a constant-velocity ball in its cup passes turning", "[connectors][extra][cv]") {
   Fixture f;
   REQUIRE(loadExtraConnectors(R"({"parts":{

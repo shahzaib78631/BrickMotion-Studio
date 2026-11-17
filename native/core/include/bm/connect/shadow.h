@@ -60,6 +60,10 @@ ShadowInfo parseShadow(std::string_view text);
 /// "C 2 1 20 0": 2 along x centred on the position, 1 along z, 20 apart. No grid: one copy.
 std::vector<Vec3> gridOffsets(std::string_view grid);
 
+/// The stretches a `secs` parameter gives: shape, radius and length of each, in order.
+/// "R 8 2   R 6 16   _L 6.25 2" is a Technic pin's half. Empty if any of it is malformed.
+std::vector<Section> parseSections(std::string_view secs);
+
 /// The shadow directory (parts/, p/ like the LDraw library). Thread-safe; files are parsed
 /// on first use and kept.
 class ShadowLibrary {

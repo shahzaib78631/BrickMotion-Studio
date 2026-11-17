@@ -86,7 +86,10 @@ size_t loadBricknetJoints(std::string_view json, ConnectorDb& db);
 /// Reads connectors for parts no other source covers (native/data/extra-connectors.json):
 /// rows of {"kind", "at": [x, y, z], "radius": r} per part. A "ball" mates a "socket" of its
 /// own size at the same centre and makes a ball joint. A "rod" (with "axis" and "length") in
-/// a "bore" slides and turns: a shock absorber's rod in its tube. Returns how many
+/// a "bore" slides and turns: a shock absorber's rod in its tube. A rod or bore may instead be
+/// given as stretches, "secs" in the shadow library's notation in place of "radius" and
+/// "length" ("R 6 16  R 8 2": a pin hole and its counterbore); "caps" closes its ends and
+/// "slide": false holds it from sliding, as the shadow library's do. Returns how many
 /// connectors were added; malformed rows are skipped.
 size_t loadExtraConnectors(std::string_view json, ConnectorDb& db);
 

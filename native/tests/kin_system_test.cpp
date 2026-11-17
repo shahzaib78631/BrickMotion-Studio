@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
@@ -332,6 +333,42 @@ TEST_CASE("a pin joint to a '~' part is kept, not replaced by a flexible attachm
   REQUIRE(graph.connections.size() == 1);
   REQUIRE(graph.connections[0].joint.kind == JointKind::Cylindrical);
   REQUIRE(graph.connections[0].friction);
+}
+
+TEST_CASE("a rim whose hub is a plain pin hole turns on the pin through it", "[graph][wheels][data]") {
+  const char* dir = std::getenv("BM_LDRAW_DIR");
+  const char* shadowDir = std::getenv("BM_SHADOW_DIR");
+  if (!dir || !shadowDir) SKIP("BM_LDRAW_DIR / BM_SHADOW_DIR not set");
+  const ldraw::Library lib(dir);
+  const connect::ShadowLibrary shadow(shadowDir);
+  auto measured = [&](connect::ConnectorDb& db) {
+    std::ifstream in(fs::path(dir).parent_path().parent_path() / "native" / "data" / "extra-connectors.json");
+    std::stringstream data;
+    data << in.rdbuf();
+    REQUIRE(connect::loadExtraConnectors(data.str(), db) > 0);
+  };
+  // 51377's hub is a pin hole along z from z 2, its counterbore at 18..20. A Technic pin turned
+  // to run along z from 0 to 40 has its collar (18..22) in the counterbore.
+  const Model model = load(piece("51377.dat", 0, 0, 0) + piece("3673.dat", 0, 0, 20, "0 0 -1 0 1 0 1 0 0"), lib);
+  connect::ConnectorDb bare(lib, shadow);
+  REQUIRE(connect::buildGraph(model, bare).connections.empty());  // the shadow library has no hole there
+  connect::ConnectorDb db(lib, shadow);
+  measured(db);
+  const connect::Graph graph = connect::buildGraph(model, db);
+  REQUIRE(graph.connections.size() == 1);
+  REQUIRE(graph.connections[0].joint.kind == JointKind::Cylindrical);
+  // 6014b is 6014a with a notched hole: it gets the very hole the shadow library gives 6014a.
+  auto hole = [&](const char* part) {
+    const auto list = db.get(part);
+    const auto it = std::find_if(list->begin(), list->end(), [](const connect::Connector& c) { return c.kind == connect::SnapKind::Cyl && c.gender == connect::Gender::Female; });
+    REQUIRE(it != list->end());
+    return *it;
+  };
+  const connect::Connector a = hole("6014a.dat"), b = hole("6014b.dat");
+  REQUIRE((length(a.start - b.start) < 1e-9 && length(a.axis - b.axis) < 1e-9 && a.slide == b.slide && a.openStart == b.openStart && a.openEnd == b.openEnd));
+  REQUIRE(a.profile.size() == b.profile.size());
+  for (size_t i = 0; i < a.profile.size(); i++)
+    REQUIRE((a.profile[i].shape == b.profile[i].shape && a.profile[i].radius == b.profile[i].radius && a.profile[i].start == b.profile[i].start && a.profile[i].length == b.profile[i].length));
 }
 
 TEST_CASE("a half-shaft's constant-velocity joints are balls that pass turning", "[graph][cv][data]") {

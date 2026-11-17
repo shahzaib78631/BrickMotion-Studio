@@ -114,6 +114,8 @@ std::vector<Section> sections(std::string_view value) {
 
 }  // namespace
 
+std::vector<Section> parseSections(std::string_view secs) { return sections(secs); }
+
 std::vector<Vec3> gridOffsets(std::string_view grid) {
   const std::vector<Vec3> single{{0, 0, 0}};
   const std::vector<std::string_view> t = words(grid);

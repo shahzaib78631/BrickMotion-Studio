@@ -346,11 +346,17 @@ size_t loadExtraConnectors(std::string_view json, ConnectorDb& db) {
     std::vector<Connector> list;
     for (const nlohmann::json& row : rows) {
       if (!row.is_object() || !row.contains("kind") || !row["kind"].is_string() || !row.contains("at") || !row["at"].is_array() || row["at"].size() != 3) continue;
-      if (!row.contains("radius") || !row["radius"].is_number() || !(row["radius"].get<double>() > 0)) continue;
       const std::string kind = row["kind"].get<std::string>();
       const bool cv = kind == "cv-ball" || kind == "cv-cup";
       const bool round = kind == "ball" || kind == "socket" || cv, shaft = kind == "rod" || kind == "bore";
       if (!round && !shaft) continue;
+      // A rod or bore given as stretches ("secs") takes its radius and length from them.
+      const bool stretches = shaft && row.contains("secs");
+      if (stretches) {
+        if (!row["secs"].is_string() || row.contains("radius") || row.contains("length")) continue;
+      } else if (!row.contains("radius") || !row["radius"].is_number() || !(row["radius"].get<double>() > 0)) {
+        continue;
+      }
       bool numbers = true;
       for (const nlohmann::json& v : row["at"]) numbers = numbers && v.is_number();
       if (!numbers) continue;
@@ -358,7 +364,7 @@ size_t loadExtraConnectors(std::string_view json, ConnectorDb& db) {
       c.source = Source::Override;
       c.gender = kind == "ball" || kind == "rod" || kind == "cv-ball" ? Gender::Male : Gender::Female;
       c.start = {row["at"][0].get<double>(), row["at"][1].get<double>(), row["at"][2].get<double>()};
-      c.radius = row["radius"].get<double>();
+      c.radius = stretches ? 0 : row["radius"].get<double>();
       c.axis = {0, -1, 0};
       if (round) {
         c.kind = SnapKind::Generic;
@@ -375,8 +381,13 @@ size_t loadExtraConnectors(std::string_view json, ConnectorDb& db) {
           c.axis = normalized(shaftAxis);
         }
       } else {
-        // A smooth rod sliding and turning in a smooth bore that is open at both ends.
-        if (!row.contains("axis") || !row["axis"].is_array() || row["axis"].size() != 3 || !row.contains("length") || !row["length"].is_number() || !(row["length"].get<double>() > 0)) continue;
+        // A smooth rod sliding and turning in a smooth bore that is open at both ends. Or, with
+        // "secs", one made of stretches in the shadow library's notation, from `at` along
+        // `axis`: "R 6 16  R 8 2" is a pin hole with its counterbore at the far end, "A 6 20"
+        // an axle hole. "caps" closes ends as the shadow library's does: "one" (or "b") the
+        // far end, "a" the near one, "two" both; "none", the default, neither. "slide": false
+        // holds what is in it from sliding, as a wheel's hole on its holder's pin.
+        if (!row.contains("axis") || !row["axis"].is_array() || row["axis"].size() != 3) continue;
         bool axisOk = true;
         for (const nlohmann::json& v : row["axis"]) axisOk = axisOk && v.is_number();
         if (!axisOk) continue;
@@ -384,10 +395,34 @@ size_t loadExtraConnectors(std::string_view json, ConnectorDb& db) {
         if (!(length(axis) > 0)) continue;
         c.kind = SnapKind::Cyl;
         c.axis = normalized(axis);
-        c.length = row["length"].get<double>();
-        c.profile = {{'R', c.radius, 0, c.length}};
+        if (stretches) {
+          const std::vector<Section> parsed = parseSections(row["secs"].get<std::string>());
+          double cursor = 0;
+          for (const Section& s : parsed) {
+            c.profile.push_back({s.shape, s.radius, cursor, s.length});
+            cursor += s.length;
+            c.radius = std::max(c.radius, s.radius);
+          }
+          c.length = cursor;
+          if (!(c.length > 0)) continue;
+        } else {
+          if (!row.contains("length") || !row["length"].is_number() || !(row["length"].get<double>() > 0)) continue;
+          c.length = row["length"].get<double>();
+          c.profile = {{'R', c.radius, 0, c.length}};
+        }
         c.slide = true;
-        c.openStart = c.openEnd = true;
+        if (row.contains("slide")) {
+          if (!row["slide"].is_boolean()) continue;
+          c.slide = row["slide"].get<bool>();
+        }
+        std::string caps = "none";
+        if (row.contains("caps")) {
+          if (!row["caps"].is_string()) continue;
+          caps = row["caps"].get<std::string>();
+        }
+        if (caps != "none" && caps != "one" && caps != "two" && caps != "a" && caps != "b") continue;
+        c.openStart = caps == "none" || caps == "one" || caps == "b";
+        c.openEnd = caps == "none" || caps == "a";
       }
       c.side = perpendicular(c.axis, {1, 0, 0});
       list.push_back(std::move(c));

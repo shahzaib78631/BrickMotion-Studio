@@ -145,6 +145,110 @@
         "radius": 6,
         "note": "The cup inside 'Technic Steering Wheel Hub for Portal Axle': SNAP_GEN nudge1 (sph 6) at 0 0 30; the hub turns about z in parts/92909.dat."
       }
+    ],
+    "51377": [
+      {
+        "kind": "bore",
+        "at": [
+          0,
+          0,
+          2
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "secs": "R 6 16  R 8 2",
+        "note": "The hub's pin hole, in s/51377s02.dat (placed at the origin, unturned): 4-4cyli of radius 6 from z 2 to 18, then peghole.dat (the counterbore: radius 8, 2 deep) from z 18 to 20, open at both ends. Neither primitive has a snap in the shadow library. Part file: parts/51377.dat."
+      }
+    ],
+    "30285": [
+      {
+        "kind": "bore",
+        "at": [
+          0,
+          0,
+          2
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "secs": "R 6 16  R 8 2",
+        "note": "The hub's pin hole, in s/51377s02.dat (placed at the origin, unturned): 4-4cyli of radius 6 from z 2 to 18, then peghole.dat (the counterbore: radius 8, 2 deep) from z 18 to 20, open at both ends. Neither primitive has a snap in the shadow library. Part file: parts/30285.dat."
+      }
+    ],
+    "30155": [
+      {
+        "kind": "bore",
+        "at": [
+          0,
+          0,
+          -8
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "secs": "R 6 16",
+        "note": "parts/30155.dat: the hub's pin hole, 4-4cylo of radius 6 from z -8 to 8, with 4-4ring3 (radius 6 to 8) at each end and no counterbore."
+      }
+    ],
+    "2998": [
+      {
+        "kind": "bore",
+        "at": [
+          0,
+          0,
+          0
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "secs": "R 8 2  R 6 16  R 8 2",
+        "note": "The hub's pin hole, in s/2998a.dat placed at 0 0 13 in parts/2998.dat (turned about z): peghole.dat (radius 8, 2 deep) from z 0 to 2, 4-4cyli of radius 6 from 2 to 18, peghole.dat from 20 back to 18. The shadow library's connhole. The six holes in the spokes (s/2998b.dat) are not here."
+      }
+    ],
+    "6580a": [
+      {
+        "kind": "bore",
+        "at": [
+          0,
+          0,
+          1
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "secs": "A 6 20",
+        "note": "The hub's axle hole: s/6580b.dat, placed twice at 0 0 22 in parts/6580a.dat with its x along -z, holds axlehol6.dat (the hole's teeth) from its x 1 to 21, so from z 21 to 1. axlehol6 has no snap in the shadow library."
+      }
+    ],
+    "6014b": [
+      {
+        "kind": "bore",
+        "at": [
+          0,
+          0,
+          8
+        ],
+        "axis": [
+          0,
+          0,
+          -1
+        ],
+        "secs": "R 4 10  R 5 2",
+        "caps": "one",
+        "slide": false,
+        "note": "The hole 6014a has (the same body, s/6014s01.dat, and a hole of radius 4 from z 8 inward), here notched: wpinhol2.dat, which has no snap in the shadow library. This is the connector the shadow library gives 6014a, its SNAP_INCL of 4624.dat: a SNAP_CYL at 0 0 8 with its sections along -z."
+      }
     ]
   }
 }
