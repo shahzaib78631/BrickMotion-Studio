@@ -16,13 +16,11 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   if (drawable && (static_cast<int>(target.width) != width || static_cast<int>(target.height) != height)) return stats;  // the layer has not caught up with a resize
 
   // Which instances, at which detail: what the eye sees (opaque groups first, as the scene
-  // orders them, then transparent ones), and what casts a shadow (every opaque piece shown, in
-  // view or not, since one out of view can shadow one in it; at low detail unless a detail is
-  // forced, as a shadow does not show a stud's sides).
+  // orders them, then transparent ones), and what the maps are drawn from (below).
   const bool forced = options.forceDetail >= 0 && options.forceDetail <= 2;
   const std::vector<Visible> inView = cull(scene, parts, camera, height, options.forceDetail, options.cull);
   std::vector<uint32_t> list;
-  std::vector<Batch> seen, casters;
+  std::vector<Batch> seen;
   auto add = [&](std::vector<Batch>& into, uint32_t g, Detail d, const std::vector<uint32_t>& instances, bool top = false) {
     const Group& group = scene.groups[g];
     for (int mirrored = 0; mirrored < 2; mirrored++) {
@@ -44,29 +42,128 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
       for (int d = 0; d < 2; d++) add(outlined, g, static_cast<Detail>(d), inView[g].edges[d]);
     stats.culled += inView[g].culled;
   }
-  // The shadow map is drawn again only when a piece has moved, appeared or gone since it was,
-  // or it was drawn at another detail.
+  // What casts, into the key light's depth map and the height map over the model: every opaque
+  // piece shown, in view or not (one out of view can shadow one in it), at low detail without
+  // studs unless a detail is forced (a shadow does not show a stud's sides).
   const int casterDetail = forced ? options.forceDetail : static_cast<int>(Detail::Shadow);
   const LightRig rig = studioLights(camera, options.lightsFollowCamera);
-  const bm::Vec3 toward = rig.toward[0];
-  const bool redrawShadow = options.shadows && (!shadowMap || shadowDetail != casterDetail || length(toward - shadowToward) > 1e-9);
+  const bm::Vec3 toward = rig.toward[0], down{0, -1, 0};
   // The half-size pass (occlusion, the key's shadow, the floor's light) runs with either on;
-  // the height map, for the floor's light, is kept only while the floor is drawn too, and is
-  // drawn again only when a piece has moved, appeared or gone.
+  // the height map, for the floor's light, is kept only while the floor is drawn too.
   const bool screenPass = options.shadows || options.ambientOcclusion;
   const bool floorLit = screenPass && options.floor;
-  const bool redrawHeight = floorLit && (!heightMap || heightDetail != casterDetail);
-  if (redrawShadow || redrawHeight) {
-    std::vector<uint32_t> shown;
-    for (uint32_t g = 0; g < scene.groups.size(); g++) {
+  // The floor is fitted to the model at rest; a map, when it is begun, to where the pieces are
+  // then and to the model at rest, where every flight ends.
+  const bm::Box& b = scene.bounds;
+  const double diagonal = b.empty() ? 1.0 : std::max(1.0, length(b.max - b.min));
+  const bm::Vec3 middle = b.empty() ? scene.origin : (b.min + b.max) * 0.5;
+  bm::Box fitted = liveBounds;
+  fitted.merge(scene.bounds);
+  const KeyLight key = keyLight(fitted, scene.origin, toward, kShadowMapSize, kFloorExtent * diagonal);
+  const KeyLight above = keyLight(fitted, scene.origin, down, kHeightMapSize, 0);
+  const uint64_t now = frame + 1;  // this frame's number (counted below)
+  std::vector<uint32_t> shown;
+  // Into `into`: the opaque pieces shown in groups [begin, end) that `keep` (group, instance) takes.
+  auto casting = [&](std::vector<Batch>& into, uint32_t begin, uint32_t end, auto keep) {
+    for (uint32_t g = begin; g < end; g++) {
       const Group& group = scene.groups[g];
       if (group.material.transparent()) continue;
       shown.clear();
       for (uint32_t i = 0; i < group.instances.size(); i++)
-        if (!(group.instances[i].flags & kHidden)) shown.push_back(i);
-      add(casters, g, static_cast<Detail>(casterDetail), shown);
+        if (!(group.instances[i].flags & kHidden) && keep(g, i)) shown.push_back(i);
+      add(into, g, static_cast<Detail>(casterDetail), shown);
     }
-  }
+  };
+  // What a map draws this frame (CasterMap): all of it (into front), a share of it (into back,
+  // and back is shown from this frame when it is the last), and what moved since the one shown
+  // was begun (over a copy of it).
+  struct MapWork {
+    std::vector<Batch> share, movers;
+    bool whole = false, clear = false, swap = false;
+  };
+  const bool overFrames = options.mapTrianglesPerFrame > 0;
+  auto stale = [&](const CasterMap& map, bm::Vec3 dir) { return lastChange >= map.front.cutoff || length(dir - map.front.toward) > 1e-9; };
+  // Whether every piece in `batches` lies across a map seen through `matrix` (its depth does
+  // not matter: the key's map clamps it, the height map has none).
+  auto covers = [&](const Mat4& matrix, const std::vector<Batch>& batches) {
+    for (const Batch& batch : batches) {
+      const Group& group = scene.groups[batch.group];
+      for (uint32_t k = 0; k < batch.count; k++) {
+        const bm::Box box = placedBox(group.instances[list[batch.first + k]], parts[batch.group].bounds, bm::Vec3{});
+        for (int c = 0; c < 8; c++) {
+          float clip[4];
+          transform(matrix, bm::Vec3{c & 1 ? box.max.x : box.min.x, c & 2 ? box.max.y : box.min.y, c & 4 ? box.max.z : box.min.z}, clip);
+          if (std::abs(clip[0]) > clip[3] || std::abs(clip[1]) > clip[3]) return false;
+        }
+      }
+    }
+    return true;
+  };
+  auto plan = [&](CasterMap& map, bool on, const KeyLight& fit, bm::Vec3 dir) {
+    MapWork w;
+    const uint32_t groups = static_cast<uint32_t>(scene.groups.size());
+    if (!on) {
+      map.building = false;
+      return w;
+    }
+    auto whole = [&] {
+      map.building = false;
+      map.front.matrix = fit.matrix, map.front.texel = fit.texel, map.front.toward = dir, map.front.detail = casterDetail, map.front.cutoff = now + 1;
+      w = MapWork{};
+      w.whole = w.clear = true;
+      casting(w.share, 0, groups, [](uint32_t, uint32_t) { return true; });
+      return w;
+    };
+    const bool old = stale(map, dir);
+    if (!map.front.texture || map.front.detail != casterDetail || (old && (!overFrames || dot(dir, map.front.toward) < std::cos(kMapTurnLimit)))) return whole();
+    if (!overFrames) {
+      map.building = false;
+      return w;
+    }
+    if (!map.building && old) {
+      // Begun now, with what has not moved since the frame before (what is moving now is
+      // drawn over it until the next); in shares of about equal triangles, whole groups each.
+      map.back.matrix = fit.matrix, map.back.texel = fit.texel, map.back.toward = dir, map.back.detail = casterDetail, map.back.cutoff = now;
+      std::vector<uint64_t> triangles(groups, 0);
+      uint64_t total = 0;
+      for (uint32_t g = 0; g < groups; g++) {
+        const Group& group = scene.groups[g];
+        if (group.material.transparent()) continue;
+        uint64_t count = 0;
+        for (const Instance& in : group.instances) count += (in.flags & kHidden) ? 0 : 1;
+        if (count) triangles[g] = count * (mesh(group, static_cast<Detail>(casterDetail)).indexCount / 3);
+        total += triangles[g];
+      }
+      const uint64_t shares = std::max<uint64_t>(1, (total + options.mapTrianglesPerFrame - 1) / options.mapTrianglesPerFrame);
+      map.ends.clear();
+      uint64_t sum = 0;
+      for (uint32_t g = 0; g < groups && map.ends.size() + 1 < shares; g++) {
+        sum += triangles[g];
+        if (sum * shares >= total * (map.ends.size() + 1)) map.ends.push_back(g + 1);
+      }
+      map.ends.push_back(groups);
+      map.done = 0, map.building = true;
+    }
+    // The map shown this frame: back, once its last share is drawn now.
+    w.swap = map.building && map.done + 1 == map.ends.size();
+    const CasterMap::Side& shown = w.swap ? map.back : map.front;
+    const uint64_t cutoff = shown.cutoff;
+    if (lastChange >= cutoff) casting(w.movers, 0, groups, [&](uint32_t g, uint32_t i) { return changedAt[g][i] >= cutoff; });
+    // A piece moved out of what that map covers: drawn whole now.
+    if (!covers(shown.matrix, w.movers)) return whole();
+    if (map.building) {
+      const uint32_t begin = map.done ? map.ends[map.done - 1] : 0, end = map.ends[map.done];
+      const uint64_t before = map.back.cutoff;
+      casting(w.share, begin, end, [&](uint32_t g, uint32_t i) { return changedAt[g][i] < before; });
+      w.clear = map.done == 0;
+      map.done++;
+    }
+    return w;
+  };
+  MapWork shadowWork = plan(shadow, options.shadows, key, toward), heightWork = plan(heights, floorLit, above, down);
+  // The maps as this frame reads them (copies: drawMap swaps the sides below).
+  const CasterMap::Side keyShown = shadowWork.swap ? shadow.back : shadow.front;
+  const CasterMap::Side heightShown = heightWork.swap ? heights.back : heights.front;
 
   // The selected pieces in view, for their outline.
   std::vector<Batch> selected;
@@ -86,16 +183,9 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   flush(slot);
   id<MTLDevice> dev = device->device;
 
-  // The floor and the key light are fitted to the model at rest.
-  const bm::Box& b = scene.bounds;
-  const double diagonal = b.empty() ? 1.0 : std::max(1.0, length(b.max - b.min));
-  const bm::Vec3 middle = b.empty() ? scene.origin : (b.min + b.max) * 0.5;
-  const KeyLight key = keyLight(liveBounds, scene.origin, toward, kShadowMapSize, kFloorExtent * diagonal);
-  const KeyLight above = keyLight(liveBounds, scene.origin, bm::Vec3{0, -1, 0}, kHeightMapSize, 0);
-
   FrameUniforms fu{};
   fu.viewProj = simdFrom(multiply(projectionMatrix(camera), viewMatrix(camera, scene.origin)));
-  fu.shadowProj = simdFrom(key.matrix);
+  fu.shadowProj = simdFrom(options.shadows ? keyShown.matrix : key.matrix);
   const bm::Vec3 eye = camera.eye - scene.origin;
   fu.eye = simd_make_float4(static_cast<float>(eye.x), static_cast<float>(eye.y), static_cast<float>(eye.z), 1);
   for (int i = 0; i < 4; i++)
@@ -105,13 +195,13 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   fu.viewport = simd_make_float4(static_cast<float>(width), static_cast<float>(height), 1.0f / static_cast<float>(width), 1.0f / static_cast<float>(height));
   fu.switches = simd_make_float4(options.shadows ? 1 : 0, options.ambientOcclusion ? 1 : 0, 0, 0);
   const double floorY = (b.empty() ? 0.0 : b.max.y - scene.origin.y) + kFloorLift;
-  fu.floorPlane = simd_make_float4(static_cast<float>(floorY), static_cast<float>(kFloorExtent * diagonal), static_cast<float>(key.texel), kShadowBias);
+  fu.floorPlane = simd_make_float4(static_cast<float>(floorY), static_cast<float>(kFloorExtent * diagonal), static_cast<float>(options.shadows ? keyShown.texel : key.texel), kShadowBias);
   fu.floorCentre = simd_make_float4(static_cast<float>(middle.x - scene.origin.x), static_cast<float>(middle.z - scene.origin.z), kFloorShadow, kOitDepthScale);
   fu.lens = simd_make_float4(static_cast<float>(std::tan(camera.fovY / 2)), static_cast<float>(kEdgeStudPixels / kStudLdu), static_cast<float>(kEdgeStudFullPixels / kStudLdu), 0);
   const simd_float3 accent = simd_make_float3(linearFromSrgb(kSelectionRgb[0]), linearFromSrgb(kSelectionRgb[1]), linearFromSrgb(kSelectionRgb[2]));
   fu.selection = simd_make_float4(accent.x, accent.y, accent.z, selected.empty() ? 0.0f : kSelectionWidth);
-  fu.heightProj = simdFrom(above.matrix);
-  fu.floorLook = simd_make_float4(static_cast<float>(std::max(1.0, above.texel)), static_cast<float>(kFloorLookShare * kFloorExtent * diagonal), floorLit && !liveBounds.empty() ? 1.0f : 0.0f, kFloorSkyPower);
+  fu.heightProj = simdFrom(floorLit ? heightShown.matrix : above.matrix);
+  fu.floorLook = simd_make_float4(static_cast<float>(std::max(1.0, floorLit ? heightShown.texel : above.texel)), static_cast<float>(kFloorLookShare * kFloorExtent * diagonal), floorLit && !liveBounds.empty() ? 1.0f : 0.0f, kFloorSkyPower);
   // How much of each light's disk each of the floor's 12 directions and 16 elevation bins
   // holds (floor_light.metal), with each bin's light on a level floor (even in sin^2 elevation):
   // worked out again only when the lights have turned.
@@ -150,12 +240,12 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   id<MTLBuffer> frameBuffer = frameUniforms.get(dev, frame, sizeof fu);
   std::memcpy(frameBuffer.contents, &fu, sizeof fu);
 
-  // One DrawUniforms per batch: the seen ones, then the shadow casters', then the outlined.
-  const size_t batchCount = seen.size() + casters.size() + outlined.size();
+  // One DrawUniforms per batch: the seen ones, then the outlined.
+  const size_t batchCount = seen.size() + outlined.size();
   id<MTLBuffer> drawBuffer = drawUniforms.get(dev, frame, std::max<size_t>(1, batchCount) * sizeof(DrawUniforms));
   auto* du = static_cast<DrawUniforms*>(drawBuffer.contents);
   for (size_t i = 0; i < batchCount; i++) {
-    const Batch& batch = i < seen.size() ? seen[i] : i < seen.size() + casters.size() ? casters[i - seen.size()] : outlined[i - seen.size() - casters.size()];
+    const Batch& batch = i < seen.size() ? seen[i] : outlined[i - seen.size()];
     const Group& group = scene.groups[batch.group];
     const Material& m = group.material;
     du[i].base = simd_make_float4(m.base[0], m.base[1], m.base[2], m.alpha);
@@ -171,29 +261,41 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
 
   id<MTLCommandBuffer> commands = [device->queue commandBuffer];
 
-  // The key light's depth map.
-  if (options.shadows && !shadowMap) {
-    MTLTextureDescriptor* d = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float width:kShadowMapSize height:kShadowMapSize mipmapped:NO];
+  // The maps: what each draws this frame, then the texture read from it.
+  auto mapTexture = [&](MTLPixelFormat format, int size) {
+    MTLTextureDescriptor* d = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:format width:static_cast<NSUInteger>(size) height:static_cast<NSUInteger>(size) mipmapped:NO];
     d.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
     d.storageMode = MTLStorageModePrivate;
-    shadowMap = [dev newTextureWithDescriptor:d];
-  }
-  if (redrawShadow && shadowMap) {
-    shadowDetail = casterDetail, shadowToward = toward;
-    stats.shadowDrawn = true;
+    return [dev newTextureWithDescriptor:d];
+  };
+  // `batches` into a map (depth: the key light's, else the height map), seen through `matrix`.
+  auto drawInto = [&](bool depth, id<MTLTexture> into, bool clear, const Mat4& matrix, const std::vector<Batch>& batches) {
     MTLRenderPassDescriptor* pass = [MTLRenderPassDescriptor new];
-    pass.depthAttachment.texture = shadowMap;
-    pass.depthAttachment.loadAction = MTLLoadActionClear;
-    pass.depthAttachment.clearDepth = 1;
-    pass.depthAttachment.storeAction = MTLStoreActionStore;
+    if (depth) {
+      pass.depthAttachment.texture = into;
+      pass.depthAttachment.loadAction = clear ? MTLLoadActionClear : MTLLoadActionLoad;
+      pass.depthAttachment.clearDepth = 1;
+      pass.depthAttachment.storeAction = MTLStoreActionStore;
+    } else {
+      pass.colorAttachments[0].texture = into;
+      pass.colorAttachments[0].loadAction = clear ? MTLLoadActionClear : MTLLoadActionLoad;
+      pass.colorAttachments[0].clearColor = MTLClearColorMake(65504, 65504, 0, 0);  // nothing: no top, no underside
+      pass.colorAttachments[0].storeAction = MTLStoreActionStore;
+    }
     id<MTLRenderCommandEncoder> enc = [commands renderCommandEncoderWithDescriptor:pass];
-    [enc setRenderPipelineState:pipelines.shadow];
-    [enc setDepthStencilState:pipelines.shadowDepth];
+    [enc setRenderPipelineState:depth ? pipelines.shadow : pipelines.height];
+    if (depth) {
+      [enc setDepthStencilState:pipelines.shadowDepth];
+      [enc setDepthBias:0 slopeScale:kShadowSlopeBias clamp:0];
+      [enc setDepthClipMode:MTLDepthClipModeClamp];  // a caster nearer the light than the map's box still casts
+    }
     [enc setCullMode:MTLCullModeNone];
-    [enc setDepthBias:0 slopeScale:kShadowSlopeBias clamp:0];
+    const simd_float4x4 m = simdFrom(matrix);
+    [enc setVertexBytes:&m length:sizeof m atIndex:2];
     [enc setVertexBuffer:frameBuffer offset:0 atIndex:1];
     [enc setVertexBuffer:visibleBuffer offset:0 atIndex:4];
-    for (const Batch& batch : casters) {
+    uint64_t triangles = 0;
+    for (const Batch& batch : batches) {
       const GpuMesh& gpu = mesh(scene.groups[batch.group], batch.detail);
       if (!gpu.indexCount) continue;
       [enc setVertexBuffer:gpu.vertices offset:0 atIndex:0];
@@ -201,40 +303,31 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
       [enc setVertexBufferOffset:batch.first * sizeof(uint32_t) atIndex:4];
       [enc drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:gpu.indexCount indexType:MTLIndexTypeUInt32 indexBuffer:gpu.indices indexBufferOffset:0 instanceCount:batch.count];
       stats.drawCalls++;
-      stats.shadowTriangles += static_cast<uint64_t>(gpu.indexCount / 3) * batch.count;
+      triangles += static_cast<uint64_t>(gpu.indexCount / 3) * batch.count;
     }
     [enc endEncoding];
-  }
-  // The height map over the model, for the floor's light.
-  if (floorLit && !heightMap) {
-    MTLTextureDescriptor* d = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRG16Float width:kHeightMapSize height:kHeightMapSize mipmapped:NO];
-    d.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
-    d.storageMode = MTLStorageModePrivate;
-    heightMap = [dev newTextureWithDescriptor:d];
-  }
-  if (redrawHeight && heightMap) {
-    heightDetail = casterDetail;
-    MTLRenderPassDescriptor* pass = [MTLRenderPassDescriptor new];
-    pass.colorAttachments[0].texture = heightMap;
-    pass.colorAttachments[0].loadAction = MTLLoadActionClear;
-    pass.colorAttachments[0].clearColor = MTLClearColorMake(65504, 65504, 0, 0);  // nothing: no top, no underside
-    pass.colorAttachments[0].storeAction = MTLStoreActionStore;
-    id<MTLRenderCommandEncoder> enc = [commands renderCommandEncoderWithDescriptor:pass];
-    [enc setRenderPipelineState:pipelines.height];
-    [enc setCullMode:MTLCullModeNone];
-    [enc setVertexBuffer:frameBuffer offset:0 atIndex:1];
-    [enc setVertexBuffer:visibleBuffer offset:0 atIndex:4];
-    for (const Batch& batch : casters) {
-      const GpuMesh& gpu = mesh(scene.groups[batch.group], batch.detail);
-      if (!gpu.indexCount) continue;
-      [enc setVertexBuffer:gpu.vertices offset:0 atIndex:0];
-      [enc setVertexBuffer:instanceBuffers[batch.group][slot] offset:0 atIndex:3];
-      [enc setVertexBufferOffset:batch.first * sizeof(uint32_t) atIndex:4];
-      [enc drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:gpu.indexCount indexType:MTLIndexTypeUInt32 indexBuffer:gpu.indices indexBufferOffset:0 instanceCount:batch.count];
-      stats.drawCalls++;
+    if (depth) stats.shadowDrawn = true, stats.shadowTriangles += triangles;
+  };
+  auto drawMap = [&](CasterMap& map, const MapWork& w, bool on, bool depth, MTLPixelFormat format, int size) -> id<MTLTexture> {
+    if (!on) return nil;
+    if (w.whole) stats.mapWhole = true;
+    if (w.clear || !w.share.empty()) {
+      CasterMap::Side& side = w.whole ? map.front : map.back;
+      if (!side.texture) side.texture = mapTexture(format, size);
+      drawInto(depth, side.texture, w.clear, side.matrix, w.share);
     }
-    [enc endEncoding];
-  }
+    if (w.swap) std::swap(map.front, map.back), map.building = false;
+    if (w.movers.empty()) return map.front.texture;
+    if (!map.live) map.live = mapTexture(format, size);
+    id<MTLBlitCommandEncoder> blit = [commands blitCommandEncoder];
+    [blit copyFromTexture:map.front.texture toTexture:map.live];
+    [blit endEncoding];
+    drawInto(depth, map.live, false, map.front.matrix, w.movers);
+    return map.live;
+  };
+  id<MTLTexture> shadowMap = drawMap(shadow, shadowWork, options.shadows, true, MTLPixelFormatDepth32Float, kShadowMapSize);
+  id<MTLTexture> heightMap = drawMap(heights, heightWork, floorLit, false, MTLPixelFormatRG16Float, kHeightMapSize);
+  stats.settling = overFrames && ((options.shadows && (shadow.building || stale(shadow, toward))) || (floorLit && (heights.building || stale(heights, down))));
   id<MTLTexture> shadowTexture = options.shadows && shadowMap ? shadowMap : placeholderShadow;
 
   // The model, multisampled, resolved into `color`, `accum` and `reveal`.
@@ -309,7 +402,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
       [enc setVertexBytes:&nearer length:sizeof nearer atIndex:5];
       for (size_t k = 0; k < outlined.size(); k++) {
         const Batch& batch = outlined[k];
-        const size_t i = seen.size() + casters.size() + k;  // its DrawUniforms
+        const size_t i = seen.size() + k;  // its DrawUniforms
         const GpuMesh& gpu = mesh(scene.groups[batch.group], batch.detail);
         if (!gpu.edgeVertices) continue;
         [enc setVertexBuffer:gpu.edges offset:0 atIndex:0];

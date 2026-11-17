@@ -551,14 +551,15 @@ of 9.1 s. The largest, 10030-1 (3,037 pieces), takes 12.1 s alone. Reference set
 
 ```bash
 native/build/render/bmshot <file> --out shot.png [--size WxH] [--frame N] [--azimuth a --elevation e] [--select 3,7] [--stats]
-native/build/render/bmshot <file> --bench 600 [--repeat 2x2] [--size 1920x1200] [--no-edges|--no-shadows|--no-ao|--detail 0|1|2]
+native/build/render/bmshot <file> --bench 600 [--frame N] [--repeat 2x2] [--size 1920x1200] [--maps-whole] [--no-edges|--no-shadows|--no-ao|--detail 0|1|2]
 native/build/render/bmshot <file> --repeat 2x2 --save-model scene.ldr
 native/build/render/bmview.app/Contents/MacOS/bmview <file> [--play]
 ```
 
 `bmshot` draws one frame offscreen to a PNG; `--frame N` plans the model as `bm plan` does and poses it at that
 frame of the build, with the timeline's camera. `--bench` orbits once round the model and prints frame times as
-JSON. `bmview` is one window: left drag orbits, right drag or two fingers pan, pinch or the wheel zoom toward the
+JSON, drawing as the viewer does (the maps drawn again over frames; `--maps-whole` draws them whole); with
+`--frame N` the build also plays, one timeline frame per frame drawn from N. `bmview` is one window: left drag orbits, right drag or two fingers pan, pinch or the wheel zoom toward the
 cursor, a click selects, a double-click frames the selection (or the model); space plays, the arrows step,
 Home and End jump, F frames, E / S / A toggle edges, shadows and ambient occlusion, I the readout.
 
@@ -583,8 +584,13 @@ Home and End jump, F frames, E / S / A toggle edges, shadows and ambient occlusi
   pixel; transparent pieces by weighted blended order-independent transparency whose layers are rounded to
   half and summed in 32 bits, with reveal as summed optical depth, so the picture does not depend on the order
   pieces are listed; a studio room with a softbox and two strip lights; a neutral tone curve.
-- **The shadow map is kept while nothing moves**, and drawn again when a piece moves, appears or goes, or the
-  casters' detail changes (selecting does not count).
+- **The key light's map and the height map are kept while nothing moves**, and are stale when a piece moves,
+  appears or goes, the key light turns, or the casters' detail changes (selecting does not count). A still draws
+  a stale map whole. The viewer and the benchmark draw it again over frames (`FrameOptions::mapTrianglesPerFrame`,
+  1 million triangles a frame, four frames on the gate scene) while the last complete one is shown, with what
+  moved since it was begun drawn each frame over a copy of it; a light turned over 30° or a moving piece outside
+  the map draws it whole. A map shown is at most two builds old, and a resting piece that starts to move can stay
+  in it that long (held to the equivalence tolerances; gone once the maps catch up).
 - **Picking** draws piece numbers once per frame, on the first pick after it. The selection outline (2 px,
   #007AFF) is drawn from a mask without depth, so it shows where other pieces hide the selected one.
 - **Instances are kept in three copies**, used in turn with frames in flight, so a pose change is never written

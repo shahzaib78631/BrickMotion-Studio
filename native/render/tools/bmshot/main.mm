@@ -18,6 +18,7 @@
 #include "bmr/material.h"
 #include "bmr/renderer.h"
 #include "bmr/scene.h"
+#include "bmr/tolerances.h"
 #include "engine.h"
 
 namespace fs = std::filesystem;
@@ -31,7 +32,7 @@ int usage() {
   std::fprintf(stderr,
                "usage: bmshot <model file> --out <png> [--size WxH] [--frame N] [--azimuth a --elevation e | --eye x,y,z --target x,y,z] [--fov deg] [--no-edges] [--no-shadows] [--no-ao] [--no-floor]\n"
                "              [--no-cull] [--lights-fixed] [--background r,g,b] [--detail 0|1|2] [--select piece,piece,...] [--stats] [--repeat CxR] [--save-model <ldr>]\n"
-               "       bmshot <model file> --bench <frames> [--repeat CxR] [--size WxH] [--detail 0|1|2] [--no-...]\n");
+               "       bmshot <model file> --bench <frames> [--frame N] [--repeat CxR] [--size WxH] [--detail 0|1|2] [--maps-whole] [--no-...]\n");
   return kUsage;
 }
 
@@ -48,19 +49,27 @@ Spread spread(std::vector<double> v) {
 }
 
 /// Frames drawn offscreen, one after another, as the camera goes once round the model at the
-/// framing distance. The first kWarmUp are left out (pipelines and buffers settling).
-int bench(bmr::Renderer& renderer, const Model& model, int frames, int width, int height, const bmr::FrameOptions& options) {
+/// framing distance. The first kWarmUp are left out (pipelines and buffers settling). With a
+/// timeline, the build plays as well, one of its frames per frame drawn from `first` on.
+int bench(bmr::Renderer& renderer, const Model& model, int frames, int width, int height, const bmr::FrameOptions& options, const plan::Plan* plan = nullptr,
+          const plan::Timeline* timeline = nullptr, int first = 0) {
   constexpr int kWarmUp = 30;
   const double aspect = double(width) / height;
   bmr::OrbitCamera orbit = bmr::OrbitCamera::framing(renderer.scene().bounds, 0.6, aspect);
+  bmr::FrameOptions viewer = options;  // as the viewer draws: the maps drawn again over frames, unless --maps-whole
+  if (viewer.mapTrianglesPerFrame == 0) viewer.mapTrianglesPerFrame = bmr::kMapTrianglesPerFrame;
+  if (viewer.mapTrianglesPerFrame == UINT64_MAX) viewer.mapTrianglesPerFrame = 0;
   std::vector<double> cpu, gpu, total;
   bmr::FrameStats last;
   uint64_t shadowTriangles = 0;  // the most drawn into the shadow map in one frame
+  int wholeMaps = 0;             // frames before which a map was drawn whole
   for (int i = 0; i < kWarmUp + frames; i++) {
     orbit.azimuth = 2 * M_PI * i / (kWarmUp + frames);
-    last = renderer.draw(orbit.camera(aspect, renderer.scene().bounds), options);
+    if (plan && timeline) renderer.setFrame(*plan, *timeline, std::min(first + i, timeline->frames));
+    last = renderer.draw(orbit.camera(aspect, renderer.scene().bounds), viewer);
     shadowTriangles = std::max(shadowTriangles, last.shadowTriangles);
     if (i < kWarmUp) continue;
+    wholeMaps += last.mapWhole ? 1 : 0;
     cpu.push_back(last.cpuMs), gpu.push_back(last.gpuMs), total.push_back(last.cpuMs + last.gpuMs);
   }
   auto json = [](const Spread& s) {
@@ -68,8 +77,8 @@ int bench(bmr::Renderer& renderer, const Model& model, int frames, int width, in
     std::snprintf(buf, sizeof buf, "{\"p50\":%.3f,\"p95\":%.3f,\"max\":%.3f}", s.p50, s.p95, s.max);
     return std::string(buf);
   };
-  std::printf("{\"pieces\":%zu,\"size\":\"%dx%d\",\"triangles\":%llu,\"shadowTriangles\":%llu,\"frames\":%d,\"cpuMs\":%s,\"gpuMs\":%s,\"frameMs\":%s,\"byDetail\":[%u,%u,%u],\"drawCalls\":%u,\"culled\":%u}\n",
-              model.pieces().size(), width, height, static_cast<unsigned long long>(last.triangles), static_cast<unsigned long long>(shadowTriangles), frames, json(spread(cpu)).c_str(), json(spread(gpu)).c_str(), json(spread(total)).c_str(),
+  std::printf("{\"pieces\":%zu,\"size\":\"%dx%d\",\"triangles\":%llu,\"shadowTriangles\":%llu,\"wholeMapFrames\":%d,\"frames\":%d,\"cpuMs\":%s,\"gpuMs\":%s,\"frameMs\":%s,\"byDetail\":[%u,%u,%u],\"drawCalls\":%u,\"culled\":%u}\n",
+              model.pieces().size(), width, height, static_cast<unsigned long long>(last.triangles), static_cast<unsigned long long>(shadowTriangles), wholeMaps, frames, json(spread(cpu)).c_str(), json(spread(gpu)).c_str(), json(spread(total)).c_str(),
               last.byDetail[0], last.byDetail[1], last.byDetail[2], last.drawCalls, last.culled);
   return kOk;
 }
@@ -113,6 +122,7 @@ int main(int argc, char** argv) {
     else if (a == "--no-floor") options.floor = false;
     else if (a == "--no-cull") options.cull = false;
     else if (a == "--lights-fixed") options.lightsFollowCamera = false;
+    else if (a == "--maps-whole") options.mapTrianglesPerFrame = UINT64_MAX;  // bench only: every stale map drawn whole
     else if (a == "--background") {
       unsigned r = 0, g = 0, b = 0;
       if (std::sscanf(value().c_str(), "%u,%u,%u", &r, &g, &b) != 3) return usage();
@@ -142,6 +152,7 @@ int main(int argc, char** argv) {
     else return usage();
   }
   if (out.empty() && benchFrames == 0 && saveModel.empty()) return usage();
+  if (benchFrames == 0) options.mapTrianglesPerFrame = 0;  // a still is drawn whole
   options.forceDetail = detail;
   if (!bmr::gpuAvailable()) {
     std::fprintf(stderr, "bmshot: cannot draw here: %s\n", *bmr::shaderError() ? bmr::shaderError() : "no Metal device");
@@ -179,7 +190,7 @@ int main(int argc, char** argv) {
     }
     renderer->resize(width, height);
     renderer->select(select);
-    if (benchFrames > 0) return bench(*renderer, model, benchFrames, width, height, options);
+    if (benchFrames > 0 && frame < 0) return bench(*renderer, model, benchFrames, width, height, options);
     const double aspect = double(width) / height;
     const bmr::OrbitCamera defaults;
     bmr::OrbitCamera orbit = bmr::OrbitCamera::fitted(renderer->scene().bounds, 0.6, aspect, std::isnan(azimuth) ? defaults.azimuth : azimuth,
@@ -201,6 +212,7 @@ int main(int argc, char** argv) {
       renderer->setFrame(plan, timeline, frame);
       if (!timeline.camera.empty() && std::isnan(azimuth) && std::isnan(elevation)) orbit = bmr::OrbitCamera::along(timeline, frame);
       std::fprintf(stderr, "bmshot: frame %d of %d\n", frame, timeline.frames);
+      if (benchFrames > 0) return bench(*renderer, model, benchFrames, width, height, options, &plan, &timeline, frame);
     }
     const bmr::FrameStats s = renderer->draw(orbit.camera(aspect, renderer->scene().bounds), options);
     if (!bmr::writePng(renderer->readback(), out)) {

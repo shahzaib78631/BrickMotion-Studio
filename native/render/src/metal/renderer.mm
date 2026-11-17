@@ -51,6 +51,7 @@ std::unique_ptr<Renderer> Renderer::create(const bm::Model& model, bm::ldraw::Pa
         if (!g.instances.empty()) std::memcpy(buffer.contents, g.instances.data(), g.instances.size() * sizeof(Instance));
       }
       impl.instanceBuffers.push_back(copies);
+      impl.changedAt.emplace_back(g.instances.size(), 0);
     }
     impl.liveBounds = impl.scene.bounds;
     // A depth map of one pixel, bound where the shadow map goes until there is one.
@@ -86,7 +87,12 @@ const GpuMesh& Renderer::Impl::mesh(const Group& group, Detail detail) {
 
 void Renderer::Impl::upload(const std::vector<std::pair<uint32_t, uint32_t>>& changed, bool moved) {
   if (changed.empty()) return;
-  if (moved) shadowDetail = heightDetail = -1;
+  if (moved) {
+    // First shown by the next frame drawn.
+    lastChange = frame + 1;
+    for (const auto& [g, i] : changed)
+      if (g < changedAt.size() && i < changedAt[g].size()) changedAt[g][i] = lastChange;
+  }
   for (auto& queue : pending) queue.insert(queue.end(), changed.begin(), changed.end());
   // The pick map stays: it is of the last frame drawn, which a change does not alter.
 }
@@ -98,18 +104,6 @@ void Renderer::Impl::flush(int slot) {
   }
   pending[slot].clear();
 }
-
-namespace {
-/// World space: a part's box (part space) under an instance's placement, as an axis-aligned box.
-bm::Box placedBox(const Instance& in, const bm::Box& part, bm::Vec3 origin) {
-  const bm::Vec3 c = (part.min + part.max) * 0.5, h = (part.max - part.min) * 0.5;
-  const float* m = in.model;
-  const bm::Vec3 at{m[0] * c.x + m[1] * c.y + m[2] * c.z + m[3], m[4] * c.x + m[5] * c.y + m[6] * c.z + m[7], m[8] * c.x + m[9] * c.y + m[10] * c.z + m[11]};
-  const bm::Vec3 half{std::abs(m[0]) * h.x + std::abs(m[1]) * h.y + std::abs(m[2]) * h.z, std::abs(m[4]) * h.x + std::abs(m[5]) * h.y + std::abs(m[6]) * h.z,
-                      std::abs(m[8]) * h.x + std::abs(m[9]) * h.y + std::abs(m[10]) * h.z};
-  return bm::Box{at - half + origin, at + half + origin};
-}
-}  // namespace
 
 void Renderer::Impl::updateLiveBounds() {
   bm::Box b;

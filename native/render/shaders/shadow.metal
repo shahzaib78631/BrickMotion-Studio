@@ -1,14 +1,15 @@
-// The key light's shadow: a depth map seen from the light (frame.shadowProj), drawn from the
-// opaque pieces before the frame, and read with a 3 x 3 comparison filter.
+// The key light's shadow: a depth map seen from the light, drawn from the opaque pieces (with
+// the map's own matrix, `map`: one being drawn over frames is not yet the one shown, whose
+// matrix is frame.shadowProj), and read with a soft comparison filter.
 
 struct ShadowIn {
   float3 position [[attribute(0)]];
 };
 
-vertex float4 shadowVertex(ShadowIn in [[stage_in]], uint iid [[instance_id]], constant FrameUniforms& frame [[buffer(1)]], const device InstanceData* instances [[buffer(3)]],
+vertex float4 shadowVertex(ShadowIn in [[stage_in]], uint iid [[instance_id]], constant float4x4& map [[buffer(2)]], const device InstanceData* instances [[buffer(3)]],
                            const device uint* visible [[buffer(4)]]) {
   InstanceData inst = instances[visible[iid]];
-  return frame.shadowProj * float4(placePoint(inst, in.position), 1.0);
+  return map * float4(placePoint(inst, in.position), 1.0);
 }
 
 // How much of the key light reaches a point: 1 lit, 0 in shadow. Outside the map is lit.

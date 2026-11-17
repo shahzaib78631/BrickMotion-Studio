@@ -2,6 +2,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include "bmr/device.h"
+#include "bmr/tolerances.h"
 #include "gpu_rig.h"
 
 using namespace bm;
@@ -164,4 +165,72 @@ TEST_CASE("the selection's bounds are where the selected pieces are shown now", 
   REQUIRE(now.min.x == Catch::Approx(110).margin(0.01));
   REQUIRE(now.max.x == Catch::Approx(130).margin(0.01));
   REQUIRE(now.min.y == Catch::Approx(0).margin(0.01));
+}
+
+namespace {
+/// Six bricks in six colours (six groups, so six shares when the maps are drawn over frames),
+/// stacked in a stair.
+std::string stair() {
+  std::string text;
+  const int colors[6] = {4, 1, 2, 14, 0, 15};
+  for (int i = 0; i < 6; i++) text += piece("3005.dat", 20.0 * i, -24.0 * i, 0, colors[i]);
+  return text;
+}
+}  // namespace
+
+TEST_CASE("maps drawn over frames come to the picture drawn whole, and the first is whole", "[gpu][playback]") {
+  NEED_GPU();
+  bmtest::GpuRig rig(stair());
+  REQUIRE(rig.renderer);
+  FrameOptions over{};
+  over.mapTrianglesPerFrame = 1;  // a group a frame
+  const FrameStats first = rig.renderer->draw(rig.camera, over);
+  REQUIRE_FALSE(first.settling);
+  {
+    bmtest::GpuRig whole(stair());
+    REQUIRE(compare(whole.shot(FrameOptions{}), rig.renderer->readback()).meanAbs == 0);
+  }
+  // Turned a little (the lights turn with it): the old maps are shown while new ones are drawn.
+  bmr::OrbitCamera o = bmr::OrbitCamera::framing(rig.renderer->scene().bounds, 0.6, 1.0);
+  o.azimuth = 0.8, o.elevation = 0.45;
+  rig.camera = o.camera(1.0, rig.renderer->scene().bounds);
+  int draws = 0;
+  for (bool settling = true; settling && draws < 20; draws++) settling = rig.renderer->draw(rig.camera, over).settling;
+  REQUIRE(draws >= 6);
+  REQUIRE(draws < 20);
+  bmtest::GpuRig turned(stair());
+  turned.camera = rig.camera;
+  REQUIRE(compare(turned.shot(FrameOptions{}), rig.renderer->readback()).meanAbs == 0);
+}
+
+TEST_CASE("with maps drawn over frames, a piece in flight casts its shadow where it is", "[gpu][playback]") {
+  NEED_GPU();
+  const Build b;
+  // Lights fixed, so only the pieces' moving makes the maps stale; a group a frame, the slowest
+  // the maps can be drawn again here.
+  FrameOptions over{}, whole{};
+  over.lightsFollowCamera = whole.lightsFollowCamera = false;
+  over.mapTrianglesPerFrame = 1;
+  // The key light's shadow alone (no floor, so no height map): where each piece is, every frame.
+  // A resting piece that starts to move may stay in a map begun before it moved (at most two
+  // builds); with the floor's light that is held to the detail tolerances, and it is gone once
+  // the maps have been drawn again after the last piece landed.
+  for (const bool floor : {false, true}) {
+    bmtest::GpuRig rig(kStack), ref(kStack);
+    REQUIRE(rig.renderer);
+    over.floor = whole.floor = floor;
+    for (int f = 0; f <= b.timeline.frames; f++) {
+      rig.renderer->setFrame(b.plan, b.timeline, f);
+      ref.renderer->setFrame(b.plan, b.timeline, f);
+      const Difference c = compare(ref.shot(whole), rig.shot(over));
+      INFO("floor " << floor << ", frame " << f << ": mean " << c.meanAbs << ", worst block " << c.worstBlock);
+      if (!floor) REQUIRE(c.meanAbs < 0.02);
+      REQUIRE(c.meanAbs < kDetailMeanTolerance);
+      REQUIRE(c.worstBlock < kDetailBlockTolerance);
+    }
+    int draws = 0;
+    for (bool settling = true; settling && draws < 20; draws++) settling = rig.renderer->draw(rig.camera, over).settling;
+    REQUIRE(draws < 20);
+    REQUIRE(compare(ref.shot(whole), rig.renderer->readback()).meanAbs == 0);
+  }
 }

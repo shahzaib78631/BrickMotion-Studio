@@ -1,5 +1,6 @@
 #pragma once
 // Every number the renderer uses. Lengths are LDU unless a line says pixels.
+#include <cstdint>
 
 namespace bmr {
 
@@ -68,6 +69,16 @@ inline constexpr double kNearest = 1.0;
 inline constexpr int kShadowMapSize = 2048;
 inline constexpr float kShadowBias = 1.5f;
 inline constexpr float kShadowSlopeBias = 2.0f;
+/// Drawing the shadow map and the height map again over frames (FrameOptions::mapTrianglesPerFrame):
+/// about this many triangles a frame for each, as the viewer and the benchmark draw them. The
+/// gate scene's casters are 3.8 million triangles, which cost 1.6 ms drawn at once; in four
+/// shares its frame p95 is under 8.33 ms with the lights turning, and in playback (1.5 million,
+/// three shares, was 0.1 ms slower). A map shown is then at most two builds (eight frames) old.
+inline constexpr uint64_t kMapTrianglesPerFrame = 1000000;
+/// A light that turned further than this (radians, 30 degrees) since its shadow map was begun
+/// has the map drawn whole at once, not over frames: the view jumped, and a shadow that far
+/// behind would show.
+inline constexpr double kMapTurnLimit = 0.5236;
 /// Floor: a plane just under the model (kFloorLift LDU below its lowest point, +y being down),
 /// kFloorExtent times the model's diagonal across, the background's colour. It shows only
 /// what falls on it: full shadow darkens it by kFloorShadow, fading out toward its rim.

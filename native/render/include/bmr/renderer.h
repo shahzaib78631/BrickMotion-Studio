@@ -18,6 +18,11 @@ struct FrameOptions {
   bool cull = true;      ///< leave out what is not in view
   bool lightsFollowCamera = true;  ///< the light rig turns with the camera's heading (EyeSight's BUILD_FL), or stays fixed to the model
   int forceDetail = -1;  ///< -1: by size on screen; 0, 1, 2: that level of detail for everything (tests, benchmark)
+  /// 0: a stale shadow or height map is drawn again whole before the frame. Otherwise it is
+  /// drawn again over frames, about this many triangles of it a frame, the last one complete
+  /// still shown meanwhile, with what moved since it was begun drawn over it (for a viewer:
+  /// tolerances.h kMapTrianglesPerFrame). FrameStats::settling says when to draw again.
+  uint64_t mapTrianglesPerFrame = 0;
   float background[3] = {1, 1, 1};  ///< linear
 };
 
@@ -27,9 +32,11 @@ struct FrameStats {
   uint32_t drawCalls = 0, instances = 0, culled = 0;
   uint64_t triangles = 0;
   uint32_t byDetail[3] = {0, 0, 0};  ///< instances drawn at Full, Low, Box
-  bool shadowDrawn = false;          ///< the key light's shadow map was drawn again this frame (it is kept while nothing moves)
-  uint64_t shadowTriangles = 0;      ///< drawn into it, when it was
+  bool shadowDrawn = false;          ///< something was drawn into the key light's shadow map this frame (it is kept while nothing moves)
+  uint64_t shadowTriangles = 0;      ///< drawn into it, when something was
   bool submitted = false;            ///< the frame went to the GPU: false with nothing to draw into (no size, or a drawable that has not caught up with a resize)
+  bool mapWhole = false;             ///< a shadow or height map was drawn whole before this frame (not over frames)
+  bool settling = false;             ///< a map is being drawn over frames (FrameOptions::mapTrianglesPerFrame): draw again, even with nothing changed
 };
 
 class Renderer {

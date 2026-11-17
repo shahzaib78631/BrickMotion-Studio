@@ -4,6 +4,7 @@
 #import <QuartzCore/QuartzCore.h>
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <map>
 #include <simd/simd.h>
 #include <string>
@@ -75,6 +76,29 @@ struct FrameBuffer {
 inline constexpr MTLPixelFormat kColorFormat = MTLPixelFormatRGBA16Float, kAccumFormat = MTLPixelFormatRGBA32Float, kRevealFormat = MTLPixelFormatR32Float,
                                 kAmbientFormat = MTLPixelFormatRGBA16Float;
 
+/// A map drawn from what casts (every opaque piece shown, in view or not): the key light's depth
+/// map, or the height map over the model. It is kept from frame to frame, and is stale once a
+/// piece has moved, appeared or gone since it was begun, or (the key's) the light has turned.
+/// A stale map is drawn again whole, at once; or, with FrameOptions::mapTrianglesPerFrame, a
+/// share of the groups a frame into `back` while `front` is still shown, what has moved since
+/// `front` was begun being drawn each frame over a copy of it (`live`). A light that turned
+/// further than kMapTurnLimit, or a detail changed, has it drawn whole at once.
+struct CasterMap {
+  struct Side {
+    id<MTLTexture> texture = nil;
+    Mat4 matrix;          // world (less the scene's origin) to the map
+    double texel = 1;     // LDU per texel
+    bm::Vec3 toward;      // toward the light it is seen from
+    int detail = -1;      // the detail its casters are drawn at; -1: not drawn
+    uint64_t cutoff = 0;  // it holds the pieces shown whose Impl::changedAt is before this frame
+  };
+  Side front, back;
+  id<MTLTexture> live = nil;
+  bool building = false;       // back is being drawn
+  std::vector<uint32_t> ends;  // back's shares: each the group after its last
+  size_t done = 0;             // how many shares of back are drawn
+};
+
 struct Pipelines {
   id<MTLRenderPipelineState> height = nil, brick = nil, transparent = nil, floor = nil, edges = nil, shadow = nil, composite = nil, mask = nil, ids = nil, ao = nil, aoBlur = nil;
   id<MTLDepthStencilState> depthWrite = nil, depthRead = nil, depthNone = nil, shadowDepth = nil;
@@ -110,13 +134,13 @@ struct Renderer::Impl {
                 placeholderShadow = nil;
   id<MTLTexture> aoRaw = nil, aoSoft = nil;  // ambient occlusion, half size
   void makeTargets();
-  id<MTLTexture> shadowMap = nil;  // made the first time shadows are drawn
-  id<MTLTexture> heightMap = nil;  // over the model, from above: r -(highest top), g lowest underside, above the floor
-  int heightDetail = -1;           // the detail it was drawn at; -1: to draw again
-  // The shadow map holds the poses now shown, drawn at this detail (-1: not drawn since a
-  // piece last moved or appeared). Kept from frame to frame while nothing moves.
-  int shadowDetail = -1;
-  bm::Vec3 shadowToward;  // the key light's direction it was drawn for
+  // The key light's depth map, and the height map over the model (from above: r -(highest
+  // top), g lowest underside, above the floor).
+  CasterMap shadow, heights;
+  // Per group, per instance: the first frame that showed it where it is now (0: where it was
+  // made); and the latest of them.
+  std::vector<std::vector<uint64_t>> changedAt;
+  uint64_t lastChange = 0;
   id<MTLTexture> mask = nil;       // selected pieces, one sample
   id<MTLTexture> ids = nil, idDepth = nil;  // piece + 1 per pixel, for picking; made on the first pick
 
@@ -147,6 +171,16 @@ struct Renderer::Impl {
 
   FrameStats draw(const Camera& camera, const FrameOptions& options, id<CAMetalDrawable> drawable);
 };
+
+/// World space: a part's box (part space) under an instance's placement, as an axis-aligned box.
+inline bm::Box placedBox(const Instance& in, const bm::Box& part, bm::Vec3 origin) {
+  const bm::Vec3 c = (part.min + part.max) * 0.5, h = (part.max - part.min) * 0.5;
+  const float* m = in.model;
+  const bm::Vec3 at{m[0] * c.x + m[1] * c.y + m[2] * c.z + m[3], m[4] * c.x + m[5] * c.y + m[6] * c.z + m[7], m[8] * c.x + m[9] * c.y + m[10] * c.z + m[11]};
+  const bm::Vec3 half{std::abs(m[0]) * h.x + std::abs(m[1]) * h.y + std::abs(m[2]) * h.z, std::abs(m[4]) * h.x + std::abs(m[5]) * h.y + std::abs(m[6]) * h.z,
+                      std::abs(m[8]) * h.x + std::abs(m[9]) * h.y + std::abs(m[10]) * h.z};
+  return bm::Box{at - half + origin, at + half + origin};
+}
 
 inline simd_float4x4 simdFrom(const Mat4& m) {
   simd_float4x4 out;

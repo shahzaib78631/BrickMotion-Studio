@@ -19,12 +19,13 @@ struct HeightOut {
   float height;  // above the floor
 };
 
-vertex HeightOut heightVertex(HeightIn in [[stage_in]], uint iid [[instance_id]], constant FrameUniforms& frame [[buffer(1)]], const device InstanceData* instances [[buffer(3)]],
-                              const device uint* visible [[buffer(4)]]) {
+// Drawn with the map's own matrix (`map`), as shadowVertex is.
+vertex HeightOut heightVertex(HeightIn in [[stage_in]], uint iid [[instance_id]], constant FrameUniforms& frame [[buffer(1)]], constant float4x4& map [[buffer(2)]],
+                              const device InstanceData* instances [[buffer(3)]], const device uint* visible [[buffer(4)]]) {
   InstanceData inst = instances[visible[iid]];
   float3 p = placePoint(inst, in.position);
   HeightOut out;
-  out.position = frame.heightProj * float4(p, 1.0);
+  out.position = map * float4(p, 1.0);
   out.position.z = 0.5;  // no depth: the target keeps the least of each channel
   out.height = frame.floorPlane.x - p.y;
   return out;

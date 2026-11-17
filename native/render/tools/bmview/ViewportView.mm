@@ -7,6 +7,7 @@
 #include "bm/plan/timeline.h"
 #include "bmr/camera.h"
 #include "bmr/device.h"
+#include "bmr/tolerances.h"
 
 namespace {
 constexpr double kWheelZoom = 0.1;        // a wheel notch zooms by e^-0.1
@@ -50,6 +51,8 @@ constexpr double kReadoutSeconds = 0.25;
   _session = session;
   _frame = -1;
   _dirty = true;
+  // The shadow and height maps are drawn again over frames while the view turns or pieces move.
+  _options.mapTrianglesPerFrame = bmr::kMapTrianglesPerFrame;
   self.wantsLayer = YES;
   self.layerContentsRedrawPolicy = NSViewLayerContentsRedrawNever;
 
@@ -147,8 +150,9 @@ constexpr double kReadoutSeconds = 0.25;
   }
   bmr::Renderer& r = *_session->renderer;
   const bmr::FrameStats s = r.draw(_orbit.camera(self.aspect, r.scene().bounds), _options, (__bridge void*)update.drawable);
-  // A frame not sent (the drawable had not caught up with a resize) is drawn on the next refresh.
-  _dirty = _playing || (!s.submitted && _width > 0 && _height > 0);
+  // A frame not sent (the drawable had not caught up with a resize) is drawn on the next
+  // refresh, as is one whose maps are still being drawn over frames.
+  _dirty = _playing || s.settling || (!s.submitted && _width > 0 && _height > 0);
   if (s.submitted) {
     _lastStats = s;
     _cpuSum += s.cpuMs, _gpuSum += r.lastGpuMs(), _framesSummed++;
