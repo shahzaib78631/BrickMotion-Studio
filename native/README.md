@@ -578,12 +578,13 @@ Home and End jump, F frames, E / S / A toggle edges, shadows and ambient occlusi
   42000-1 drawn in full had grey tyres, because black's LDraw edge colour is light grey.
 - **Culling is on the CPU**, on the job pool: 12,000 boxes take well under a millisecond, so the spec's "GPU
   culling" was not worth it here (cpu p95 0.5 ms on the gate scene).
-- **The frame**: reversed depth; 4× multisampling into memoryless tile targets; a 4096² key-light shadow map
-  fitted and texel-snapped to where the shown pieces are now, 3×3 PCF; a floor that writes darkness as coverage
-  and depth; ambient occlusion from the resolved depth at half size, applied only to the ambient share of each
-  pixel; transparent pieces by weighted blended order-independent transparency whose layers are rounded to
-  half and summed in 32 bits, with reveal as summed optical depth, so the picture does not depend on the order
-  pieces are listed; a studio room with a softbox and two strip lights; a neutral tone curve.
+- **The frame**: reversed depth; 4× multisampling into memoryless tile targets; EyeSight's studio light (below);
+  a 2048² key-light shadow map fitted and texel-snapped to where the shown pieces are now, drawn from stud-free
+  meshes, soft (PCSS) and worked out at half size; a shadow-catching floor whose light comes from a height map
+  over the model; ambient occlusion from the resolved depth at half size, applied only to the ambient share of
+  each pixel; transparent pieces by weighted blended order-independent transparency whose layers are rounded to
+  half and summed in 32 bits, so the picture does not depend on the order pieces are listed; linear light
+  clipped at white, as EyeSight's Standard view.
 - **The key light's map and the height map are kept while nothing moves**, and are stale when a piece moves,
   appears or goes, the key light turns, or the casters' detail changes (selecting does not count). A still draws
   a stale map whole. The viewer and the benchmark draw it again over frames (`FrameOptions::mapTrianglesPerFrame`,
@@ -598,6 +599,43 @@ Home and End jump, F frames, E / S / A toggle edges, shadows and ambient occlusi
 - **Equivalence**: culled, level-of-detail frames are held to the full picture (mean difference under 0.5,
   no 8×8 block over 6.0) on the helicopter from four sides (worst block 4.75) and 42000-1 at six times the
   framing distance (worst block 4.12).
+
+### The look, against EyeSight (2026-11-17)
+
+`native/tools/calib_eyesight.py` draws two scenes from the cameras EyeSight (Blender Cycles) rendered them from,
+four azimuths each, and scores RMSE (sRGB) over the picture, the bricks and the floor; with glass it splits the
+bricks into glass and the solid pieces not behind it. `calib.ldr` is the web calibration scene; `glass.ldr`
+holds clear, red, light blue, yellow and green 2×2 bricks, a round brick, a raised tile and a brick on a white one.
+
+- **Light**: EyeSight's BUILD_FL rig as fitted in `scripts/neural/blender/render.py`: four distant disk lights,
+  45° in radius, turning with the camera's heading, and a uniform white world; plastic of roughness 0.1 under a
+  clear coat; Studio's own linear colours.
+- **The floor** is a shadow catcher, as EyeSight's ground. Its light is worked out from a height map over the
+  model: 12 directions from each floor point, each hiding elevation bins of the sky and of each light's disk.
+  Glass shadows it as an opaque piece does (letting half the light through scored floor 14.9 against 6.0).
+- **Glass** (transparent, not a placeholder) has no matt light. Each surface drawn is one wall: it blocks 2F/(1+F)
+  (Schlick, IOR 1.49), absorbs 2.0 × (1 − colour) of optical depth over the cosine inside, and returns its mirror
+  direction's light (outer face F, inner face F(1−F)²t²). A box counts as two walls. The floor or background seen
+  through glass is at 0.58 of the background with no shadow: through clear glass EyeSight shows its ground at
+  0.45–0.55 of the open floor whatever the number of walls, as a refracted ray does not see a shadow catcher.
+  Fitted on each glass piece's mean colour, three pieces held out.
+
+| Scene (RMSE, `--no-edges`) | All | Bricks | Floor | Glass | Solid |
+|---|---:|---:|---:|---:|---:|
+| calib, EyeSight's colours only (f140e91) | 20.92 | 35.91 | 19.79 | | |
+| calib, now | 7.36 | 17.92 | 3.90 | | |
+| glass, before glass was worked on (0421704) | 32.64 | 71.72 | 24.82 | | |
+| glass, now (35948ce) | 17.57 | 46.08 | 5.96 | 49.72 | 17.14 |
+
+Glass pieces' mean colours are 56.7 levels off (RMS) before and 10.4 now; the six fitted ones are within 7, the
+held-out round brick is 9 too light, the blue brick on the white one 21–26 too light and the thin tile 9–22 too
+dark: refraction (bent interiors, dark rims) and wall thickness are not modelled.
+
+**Speed since then**: the key light's map is drawn from stud-free meshes, pieces seen from above leave out their
+undersides, and the two maps are drawn again over frames while the last complete one is shown. The gate scene
+with the lights turning with the camera, at 35948ce: frame p95 6.9–7.5 ms orbiting and 7.6 ms in playback in a
+quiet sitting, up to 8.2 in both on a loaded one (gate 8.33), with no map drawn whole. The glass model's own cost
+is within that noise (A/B in one sitting against df0cd83).
 
 ### Benchmark (M1 Pro, 1920×1200, 600 frames orbiting once, nothing moving)
 
@@ -636,10 +674,9 @@ Legopharos bell tower). The contact sheet of all 71 shows nothing wrong.
 
 ### Not done
 
-- **The gate holds in two of three runs** (p95 8.64, 7.63, 7.23 ms, on a loaded machine) **with nothing
-  moving, and not during playback** (11.4 to 13.3 ms). The next fixes, not made: draw shadow casters as boxes
-  below a size in the light's map, and draw edges for fewer pieces while moving; edges and the shadow pass are
-  the largest costs left (about 6 and 4 ms of the 17.4 before the fixes).
+- The table above is from the end of phase 6. **The gate now holds orbiting and in playback** with the lights
+  turning (above); the first frame after a jump of over 30°, or a piece leaving the maps' cover, draws the maps
+  whole, and is slower.
 - **bmview checked from the shell only**: the window shows the helicopter and the gate scene within 0.9 s;
   playback advances frames; idle after planning it uses 0.0% CPU and draws nothing. Not checked, because this
   session could not see the screen: smoothness and the readout on a 120 Hz display, pieces seating while
@@ -648,6 +685,6 @@ Legopharos bell tower). The contact sheet of all 71 shows nothing wrong.
 - Planning in bmview takes as long as `bm plan`; until it is done the title says "planning…" and space does
   nothing. Framing the selection uses the pieces' rest boxes, not where they are mid-flight.
 - Not in this phase: bevels, contact shadows beyond the key light, HDRI files, depth of field, motion blur, looks,
-  gizmos and overlays other than the selection outline and the readout. Transparent pieces cast no shadow and
-  cull their back faces (thick glass looks lighter than in a path tracer). The look is matched by eye later.
+  gizmos and overlays other than the selection outline and the readout. Glass casts onto the floor but not onto
+  bricks (it made no difference to the solid pieces' score); refraction and wall thickness are not modelled.
 - Reviews were self-reviews.
