@@ -26,6 +26,7 @@ struct FrameUniforms {
   float4 rig;             // x: the white world's strength; y: sin^2 of each light's angular radius; z: the power occlusion is raised to on bricks
   float4x4 heightProj;    // world to the height map (floor_light.metal)
   float4 floorLook;       // x, y: nearest and furthest a floor point looks (LDU); z: 1 when the floor's light is worked out; w: the power the sky's share is raised to
+  float4 glass;           // x: glass's absorption, y: the floor's level seen through glass, z: glass's IOR (tolerances.h kGlass*)
 };
 
 // One per draw. Must match DrawUniforms in src/metal/impl.h.
@@ -33,7 +34,7 @@ struct DrawUniforms {
   float4 base;     // rgb linear, a: opacity
   float4 surface;  // roughness, metalness, clearcoat, 1 if the group is a placeholder
   float4 edge;     // rgb linear, a: opacity of outline lines
-  float4 flip;     // x: -1 for mirrored instances (their normals come out inverted), else 1
+  float4 flip;     // x: -1 for mirrored instances (their normals come out inverted), else 1; y: the walls a face stands for (glass): 2 for a box, the two a ray through the part crosses, else 1
   float4 sphere;   // the part's bounding sphere: centre (part space), radius
 };
 

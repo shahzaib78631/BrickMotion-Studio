@@ -91,6 +91,21 @@ inline constexpr float kEdgeNearer = 0.002f;
 /// Weighted blended transparency (McGuire and Bavoil 2013): the depth, in LDU, over which a
 /// layer's weight falls by its fourth power.
 inline constexpr float kOitDepthScale = 2000.0f;
+/// Glass: a transparent piece that is not a placeholder (shaders/brick.metal glassFragment),
+/// as EyeSight's (Principled transmission, IOR 1.49, absorbing by 1 - its colour). It has no
+/// matt light. Each surface drawn is one wall, so two faces: it reflects 2F / (1 + F) of what
+/// its mirror direction sees, F being Schlick's from kGlassIor, and lets the rest through, less
+/// kGlassAbsorption (1 - linear colour) of optical depth over the cosine of the ray inside it.
+/// The floor (or the background) seen through glass is at kFloorThroughGlass of the background,
+/// with no shadow: EyeSight's ground is a shadow catcher, and a refracted ray does not see it
+/// as the camera does (through clear glass the floor is at 0.45-0.55 of the open floor, whether
+/// through one wall or four). Both numbers fitted on native/corpus/calib/glass.ldr, on each
+/// glass piece's mean colour: kFloorThroughGlass on the two clear 2x2 bricks, then
+/// kGlassAbsorption on the four coloured ones (the round brick, the tile and the brick on the
+/// white one held out).
+inline constexpr float kGlassIor = 1.49f;
+inline constexpr float kGlassAbsorption = 2.0f;
+inline constexpr float kFloorThroughGlass = 0.58f;
 
 /// Levels of detail. A piece is drawn at full detail where its low-detail mesh would be at
 /// least kLowErrorPixels off on screen (bm::ldraw::Mesh::lowError, at the near side of the

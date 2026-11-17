@@ -18,15 +18,15 @@ vertex FloorOut floorVertex(uint id [[vertex_id]], constant FrameUniforms& frame
 
 struct FloorColor {
   float4 color [[color(0)]];
-  float4 shares [[color(3)]];  // g: how much the floor's light (from the half-size pass) counts here; a: 1, floor
+  float4 shares [[color(3)]];  // g: 1, open floor (glass in front clears it); a: 1, floor
 };
 
 // A shadow catcher, as EyeSight's ground is: the background, times the share of a white
 // floor's light that reaches it past the model (floor_light.metal, worked out in the half-size
-// pass), fading out toward the floor's rim.
+// pass, fading out toward the floor's rim there).
 fragment FloorColor floorFragment(FloorOut in [[stage_in]], constant FrameUniforms& frame [[buffer(1)]]) {
   FloorColor out;
   out.color = float4(0);
-  out.shares = float4(0, floorFade(in.world, frame), 0, 1);
+  out.shares = float4(0, 1, 0, 1);
   return out;
 }

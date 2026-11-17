@@ -136,19 +136,52 @@ fragment OpaqueOut brickFragment(BrickOut in [[stage_in]], constant FrameUniform
 }
 
 // Transparent pieces: weighted blended order-independent transparency (McGuire and Bavoil 2013).
-// Every layer adds its colour, weighted by opacity and nearness, to `accum`, and its optical
-// depth (-log of what it lets through) to `reveal`; the last pass divides the one sum by its
-// weight and takes exp(-reveal) as what all the layers let through together. Each layer's
-// numbers are rounded to half precision here and summed in 32-bit targets, where a sum of a
-// few of them is exact: the picture is the same whatever order the layers arrive in.
-// Where glass is in front of the floor, the floor shows no shadow (shares.g, the only channel
-// written there, is 0): EyeSight's ground is a shadow catcher, which seen through a refracting
-// surface shows none (native/corpus/calib/glass.ldr).
+// Every layer adds the colour it covers with, weighted by that coverage and nearness, to
+// `accum`; and to `reveal` its optical depth: what it absorbs, per channel (rgb), and what it
+// covers with that colour (a). The last pass divides the one sum by its weight and lets
+// through exp(-reveal) of what is behind. Each layer's numbers are rounded to half precision
+// here and summed in 32-bit targets, where a sum of a few of them is exact: the picture is the
+// same whatever order the layers arrive in.
 struct OitOut {
   float4 accum [[color(1)]];
-  float reveal [[color(2)]];
-  float4 shares [[color(3)]];
+  float4 reveal [[color(2)]];
+  float4 shares [[color(3)]];  // glass only: g, 0 (the floor behind it is not open floor)
 };
+
+float oitWeight(float3 world, constant FrameUniforms& frame) {
+  float depth = length(frame.eye.xyz - world) / frame.floorCentre.w;
+  return clamp(0.03 / (1e-5 + depth * depth * depth * depth), 1e-2, 3e3);
+}
+
+// Glass (tolerances.h kGlass*): no matt light. A surface drawn is one wall, two faces: it
+// lets through 1 - 2F / (1 + F) (a, in `reveal`), less what its colour absorbs along the ray
+// inside it (rgb). What its mirror direction sees (the white world and the lights' disks) it
+// returns from the outer face as it is, F of it, and from the inner face through the wall and
+// back, F (1 - F)^2 t^2 of it, t being what the wall lets through.
+fragment OitOut glassFragment(BrickOut in [[stage_in]], constant FrameUniforms& frame [[buffer(1)]], constant DrawUniforms& draw [[buffer(2)]]) {
+  float3 base = in.fixedColor.a > 0.5 ? in.fixedColor.rgb : draw.base.rgb;
+  float3 n = normalize(in.normal), v = normalize(frame.eye.xyz - in.world);
+  float nv = saturate(abs(dot(n, v)));
+  float ior = frame.glass.z, f0 = (ior - 1.0) / (ior + 1.0);
+  float f = schlick(f0 * f0, nv);
+  float reflects = 2.0 * f / (1.0 + f);
+  float inside = sqrt(1.0 - (1.0 - nv * nv) / (ior * ior));  // the cosine of the ray inside the wall
+  float3 r = reflect(-v, n);
+  float cosRadius = sqrt(1.0 - frame.rig.y);
+  float3 seen = float3(frame.rig.x);
+  for (int i = 0; i < 4; i++)
+    seen += frame.lights[i].w / (3.14159265 * frame.rig.y) * smoothstep(cosRadius - 0.02, cosRadius + 0.02, dot(r, frame.lights[i].xyz));
+  float3 absorbs = frame.glass.x * saturate(1.0 - base) / inside, through = exp(-absorbs);
+  float walls = draw.flip.y;  // a box's face stands for both walls a ray through the part crosses
+  float w = oitWeight(in.world, frame) * walls;
+  OitOut out;
+  out.accum = float4(half4(float4(seen * (f + f * (1.0 - f) * (1.0 - f) * through * through), reflects) * w));
+  out.reveal = float4(half4(float4(absorbs, -log(max(1.0 - reflects, 1e-4))) * walls));
+  out.shares = float4(0.0);
+  return out;
+}
+
+// Anything else transparent (a placeholder): its colour over what is behind, at its opacity.
 
 fragment OitOut transparentFragment(BrickOut in [[stage_in]], constant FrameUniforms& frame [[buffer(1)]], constant DrawUniforms& draw [[buffer(2)]],
                                    depth2d<float> shadowMap [[texture(0)]], sampler shadowSampler [[sampler(1)]]) {
@@ -156,11 +189,10 @@ fragment OitOut transparentFragment(BrickOut in [[stage_in]], constant FrameUnif
   float3 n = normalize(in.normal), v = normalize(frame.eye.xyz - in.world);
   Lit lit = shade(base, draw.surface.x, draw.surface.y, draw.surface.z, n, v, in.world, frame, true, uint2(in.position.xy), shadowMap, shadowSampler);
   float a = draw.base.a;
-  float depth = length(frame.eye.xyz - in.world) / frame.floorCentre.w;
-  float w = a * clamp(0.03 / (1e-5 + depth * depth * depth * depth), 1e-2, 3e3);
+  float w = a * oitWeight(in.world, frame);
   OitOut out;
   out.accum = float4(half4(float4(lit.color * a, a) * w));
-  out.reveal = float(half(-log(max(1.0 - a, 1e-4))));
-  out.shares = float4(0.0);
+  out.reveal = float4(0.0, 0.0, 0.0, float(half(-log(max(1.0 - a, 1e-4)))));
+  out.shares = float4(0.0);  // not written (pipelines.mm)
   return out;
 }

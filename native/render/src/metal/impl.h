@@ -32,6 +32,7 @@ struct FrameUniforms {
   simd_float4 rig;        // x world strength, y sin^2 of the lights' radius
   simd_float4x4 heightProj;  // world to the height map (xy, as shadowProj)
   simd_float4 floorLook;     // x: nearest, y: furthest a floor point looks (LDU); z: 1 when the floor's light is worked out; w: the power the sky's share is raised to
+  simd_float4 glass;         // x: kGlassAbsorption, y: kFloorThroughGlass, z: kGlassIor
 };
 
 // How much of each light (index) the floor sees through each of 48 azimuths (each the middle
@@ -73,7 +74,7 @@ struct FrameBuffer {
 /// The fourth holds, per pixel, the share of an opaque surface's light that came from the
 /// surroundings (r: ambient occlusion dims only that), how much the floor's light counts there
 /// (g), the share the key light's shadow dims (b), and how much of the pixel is floor (a).
-inline constexpr MTLPixelFormat kColorFormat = MTLPixelFormatRGBA16Float, kAccumFormat = MTLPixelFormatRGBA32Float, kRevealFormat = MTLPixelFormatR32Float,
+inline constexpr MTLPixelFormat kColorFormat = MTLPixelFormatRGBA16Float, kAccumFormat = MTLPixelFormatRGBA32Float, kRevealFormat = MTLPixelFormatRGBA32Float,
                                 kAmbientFormat = MTLPixelFormatRGBA16Float;
 
 /// A map drawn from what casts (every opaque piece shown, in view or not): the key light's depth
@@ -100,7 +101,7 @@ struct CasterMap {
 };
 
 struct Pipelines {
-  id<MTLRenderPipelineState> height = nil, brick = nil, transparent = nil, floor = nil, edges = nil, shadow = nil, composite = nil, mask = nil, ids = nil, ao = nil, aoBlur = nil;
+  id<MTLRenderPipelineState> height = nil, brick = nil, glass = nil, transparent = nil, floor = nil, edges = nil, shadow = nil, composite = nil, mask = nil, ids = nil, ao = nil, aoBlur = nil;
   id<MTLDepthStencilState> depthWrite = nil, depthRead = nil, depthNone = nil, shadowDepth = nil;
   id<MTLSamplerState> smooth = nil, shadowSampler = nil;
   bool ok = false;

@@ -205,6 +205,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   const simd_float3 accent = simd_make_float3(linearFromSrgb(kSelectionRgb[0]), linearFromSrgb(kSelectionRgb[1]), linearFromSrgb(kSelectionRgb[2]));
   fu.selection = simd_make_float4(accent.x, accent.y, accent.z, selected.empty() ? 0.0f : kSelectionWidth);
   fu.heightProj = simdFrom(floorLit ? heightShown.matrix : above.matrix);
+  fu.glass = simd_make_float4(kGlassAbsorption, kFloorThroughGlass, kGlassIor, 0);
   fu.floorLook = simd_make_float4(static_cast<float>(std::max(1.0, floorLit ? heightShown.texel : above.texel)), static_cast<float>(kFloorLookShare * kFloorExtent * diagonal), floorLit && !liveBounds.empty() ? 1.0f : 0.0f, kFloorSkyPower);
   // How much of each light's disk each of the floor's 12 directions and 16 elevation bins
   // holds (floor_light.metal), with each bin's light on a level floor (even in sin^2 elevation):
@@ -255,7 +256,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     du[i].base = simd_make_float4(m.base[0], m.base[1], m.base[2], m.alpha);
     du[i].surface = simd_make_float4(m.roughness, m.metalness, m.clearcoat, group.placeholder ? 1 : 0);
     du[i].edge = simd_make_float4(m.edge[0], m.edge[1], m.edge[2], kEdgeOpacity);
-    du[i].flip = simd_make_float4(batch.mirrored ? -1 : 1, 0, 0, 0);
+    du[i].flip = simd_make_float4(batch.mirrored ? -1 : 1, batch.detail == Detail::Box ? 2 : 1, 0, 0);
     const bm::Box& part = parts[batch.group].bounds;
     const bm::Vec3 c = part.empty() ? bm::Vec3{} : (part.min + part.max) * 0.5;
     du[i].sphere = simd_make_float4(static_cast<float>(c.x), static_cast<float>(c.y), static_cast<float>(c.z), part.empty() ? 0.0f : static_cast<float>(length(part.max - part.min) / 2));
@@ -362,11 +363,13 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     [enc setFragmentTexture:shadowTexture atIndex:0];
     [enc setFragmentSamplerState:pipelines.shadowSampler atIndex:1];
 
-    auto bricks = [&](bool transparent) {
+    // Opaque pieces, glass (transparent ones), and placeholders (missing parts, translucent).
+    enum class Kind { Opaque, Glass, Placeholder };
+    auto bricks = [&](Kind kind) {
       for (size_t i = 0; i < seen.size(); i++) {
         const Batch& batch = seen[i];
         const Group& group = scene.groups[batch.group];
-        if (group.material.transparent() != transparent) continue;
+        if ((!group.material.transparent() ? Kind::Opaque : group.placeholder ? Kind::Placeholder : Kind::Glass) != kind) continue;
         const GpuMesh& gpu = mesh(group, batch.detail);
         if (!gpu.indexCount) continue;
         // Triangles are counter-clockwise seen from outside; a mirrored instance shows them the other way round.
@@ -388,7 +391,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     [enc setCullMode:MTLCullModeBack];
     [enc setRenderPipelineState:pipelines.brick];
     [enc setDepthStencilState:pipelines.depthWrite];
-    bricks(false);
+    bricks(Kind::Opaque);
 
     if (options.floor) {
       [enc setCullMode:MTLCullModeNone];
@@ -420,9 +423,11 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     }
 
     [enc setCullMode:MTLCullModeBack];
-    [enc setRenderPipelineState:pipelines.transparent];
     [enc setDepthStencilState:pipelines.depthRead];
-    bricks(true);
+    [enc setRenderPipelineState:pipelines.glass];
+    bricks(Kind::Glass);
+    [enc setRenderPipelineState:pipelines.transparent];
+    bricks(Kind::Placeholder);
     [enc endEncoding];
   }
 

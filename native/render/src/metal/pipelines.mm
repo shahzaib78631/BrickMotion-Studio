@@ -27,7 +27,7 @@ MTLVertexDescriptor* brickVertices() {
 }
 
 /// How a pipeline writes into the main pass's three targets.
-enum class Writes { Opaque, Floor, Over, Transparent, Single, Least };
+enum class Writes { Opaque, Floor, Over, Glass, Transparent, Single, Least };
 
 id<MTLRenderPipelineState> make(Device& device, NSString* vertex, NSString* fragment, Writes writes, MTLPixelFormat single, MTLPixelFormat depth, int samples, MTLVertexDescriptor* vertices,
                                 std::string& error) {
@@ -59,7 +59,7 @@ id<MTLRenderPipelineState> make(Device& device, NSString* vertex, NSString* frag
       c.blendingEnabled = YES;
       c.sourceRGBBlendFactor = c.sourceAlphaBlendFactor = MTLBlendFactorOne;
       c.destinationRGBBlendFactor = c.destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
-    } else if (writes == Writes::Transparent) {
+    } else if (writes == Writes::Glass || writes == Writes::Transparent) {
       c.writeMask = MTLColorWriteMaskNone;
       sum.writeMask = rev.writeMask = MTLColorWriteMaskAll;
       sum.blendingEnabled = YES;  // accum += layer
@@ -68,8 +68,8 @@ id<MTLRenderPipelineState> make(Device& device, NSString* vertex, NSString* frag
       rev.blendingEnabled = YES;  // reveal += the layer's optical depth
       rev.sourceRGBBlendFactor = rev.sourceAlphaBlendFactor = MTLBlendFactorOne;
       rev.destinationRGBBlendFactor = rev.destinationAlphaBlendFactor = MTLBlendFactorOne;
-      // How much the floor's light counts (shaders/brick.metal): none where glass is in front.
-      amb.writeMask = MTLColorWriteMaskGreen;
+      // Glass clears shares.g, which says the floor there is open (shaders/brick.metal).
+      if (writes == Writes::Glass) amb.writeMask = MTLColorWriteMaskGreen;
     }
   }
   NSError* err = nil;
@@ -91,6 +91,7 @@ Pipelines makePipelines(Device& device, std::string& error) {
   Pipelines p;
   const MTLPixelFormat none = MTLPixelFormatInvalid, depth32 = MTLPixelFormatDepth32Float;
   p.brick = make(device, @"brickVertex", @"brickFragment", Writes::Opaque, none, depth32, kSamples, brickVertices(), error);
+  p.glass = make(device, @"brickVertex", @"glassFragment", Writes::Glass, none, depth32, kSamples, brickVertices(), error);
   p.transparent = make(device, @"brickVertex", @"transparentFragment", Writes::Transparent, none, depth32, kSamples, brickVertices(), error);
   p.floor = make(device, @"floorVertex", @"floorFragment", Writes::Floor, none, depth32, kSamples, nil, error);
   p.ao = make(device, @"screenVertex", @"aoFragment", Writes::Single, MTLPixelFormatRG8Unorm, none, 1, nil, error);
@@ -115,7 +116,7 @@ Pipelines makePipelines(Device& device, std::string& error) {
   sh.compareFunction = MTLCompareFunctionLessEqual;  // the shadow map is an ordinary depth map: nearer the light is less
   sh.sAddressMode = sh.tAddressMode = MTLSamplerAddressModeClampToEdge;
   p.shadowSampler = [device.device newSamplerStateWithDescriptor:sh];
-  p.ok = p.height && p.ao && p.aoBlur && p.mask && p.ids && p.brick && p.transparent && p.floor && p.edges && p.shadow && p.composite && p.depthWrite && p.shadowDepth && p.smooth && p.shadowSampler;
+  p.ok = p.height && p.ao && p.aoBlur && p.mask && p.ids && p.brick && p.glass && p.transparent && p.floor && p.edges && p.shadow && p.composite && p.depthWrite && p.shadowDepth && p.smooth && p.shadowSampler;
   return p;
 }
 

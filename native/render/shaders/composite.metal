@@ -40,16 +40,27 @@ fragment float4 compositeFragment(ScreenOut in [[stage_in]], constant FrameUnifo
   float ao = seen.r, keyLit = seen.g;
   float4 share = ambient.read(at);
   c.rgb *= saturate(1.0 - share.r * (1.0 - pow(ao, frame.rig.z)) - share.b * (1.0 - keyLit));
-  // The transparent layers, over what is behind them: their weighted mean colour, covering
-  // as much as they do not let through.
-  float4 sum = accum.read(at);
-  float covered = sum.a > 1e-6 ? saturate(1.0 - exp(-reveal.read(at).r)) : 0.0;
-  float3 mean = sum.a > 1e-6 ? sum.rgb / sum.a : float3(0);
-  c = float4(mean * covered + c.rgb * (1.0 - covered), covered + c.a * (1.0 - covered));
-  // Out as EyeSight's renders are (Standard view): linear light, clipped at white.
+  // What is behind the transparent layers: the opaque picture over the background, where the
+  // floor is open (share.g) with the floor's light (ao.r there). Linear light, clipped at white,
+  // as EyeSight's renders are (Standard view).
   float3 lit = c.a > 1e-4 ? saturate(c.rgb / c.a) : float3(0);
-  float3 out = mix(frame.background.rgb, lit, saturate(c.a));
-  out *= 1.0 - share.g * (1.0 - ao);
+  float3 behind = mix(frame.background.rgb, lit, saturate(c.a)) * (1.0 - share.g * (1.0 - ao));
+  // The transparent layers: they let through exp(-depth) of what is behind (rgb what they
+  // absorb, a what they cover), and cover it with their weighted mean colour.
+  float4 sum = accum.read(at);
+  float4 depthOf = reveal.read(at);
+  // The floor or the background seen through glass: at the floor's own level there, unshadowed
+  // (tolerances.h kFloorThroughGlass). The floor there is floor (share.a) that glass has cleared
+  // share.g on; the background, what is neither floor nor opaque where something transparent is
+  // in front: at least one glass wall face on (the least a wall covers), roughly, as
+  // placeholders count too.
+  float f0 = (frame.glass.z - 1.0) / (frame.glass.z + 1.0);
+  f0 *= f0;
+  float glassIn = saturate(depthOf.a / -log(1.0 - 2.0 * f0 / (1.0 + f0)));
+  float through = saturate(share.a - share.g) + saturate(1.0 - c.a - share.a) * glassIn;
+  behind -= frame.background.rgb * through * (1.0 - frame.glass.y);
+  float3 mean = sum.a > 1e-6 ? sum.rgb / sum.a : float3(0);
+  float3 out = behind * exp(-depthOf.rgb - depthOf.a) + mean * (1.0 - exp(-depthOf.a));
   // The selection's outline: just outside where the selected pieces are, within its width.
   int width = int(frame.selection.w);
   if (width > 0 && mask.read(at).r < 0.5) {

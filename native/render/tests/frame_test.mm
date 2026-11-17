@@ -243,12 +243,20 @@ TEST_CASE("a brick behind a transparent brick shows through it, tinted", "[gpu][
   // Blue (direct colour 0x20000FF) at the origin; transparent red 22 units nearer the eye along
   // the camera's level direction (azimuth 0.6: the eye is toward (-sin 0.6, -cos 0.6) in x, z).
   // The framing target is the middle of the two, so the middle pixel looks through both.
+  // Glass absorbs (tolerances.h kGlassAbsorption): red glass takes most of the blue brick's
+  // blue, and what comes through is redder than the bare blue brick.
   const double ax = -std::sin(0.6) * 22, az = -std::cos(0.6) * 22;
-  const Image img = shot(piece("3005.dat", 0, 0, 0, 0x20000FF) + piece("3005.dat", ax, 0, az, 36), plain());
-  const uint8_t* mid = img.at(128, 128);
-  INFO("middle " << int(mid[0]) << " " << int(mid[1]) << " " << int(mid[2]));
-  REQUIRE(mid[0] > 60);
-  REQUIRE(mid[2] > 60);
+  const std::string blue = piece("3005.dat", 0, 0, 0, 0x20000FF), red = piece("3005.dat", ax, 0, az, 36);
+  const Image both = shot(blue + red, plain()), glassAlone = shot(red, plain()), blueAlone = shot(blue, plain());
+  const uint8_t *mid = both.at(128, 128), *glass = glassAlone.at(128, 128), *bare = blueAlone.at(128, 128);
+  INFO("middle " << int(mid[0]) << " " << int(mid[1]) << " " << int(mid[2]) << ", the glass over the background " << int(glass[0]) << " " << int(glass[1]) << " " << int(glass[2])
+                 << ", the blue brick bare " << int(bare[0]) << " " << int(bare[1]) << " " << int(bare[2]));
+  // It shows through: the glass in front of it is not as it is in front of the background.
+  REQUIRE(channelGap(mid, glass) > 30);
+  // Tinted: red against blue, it is redder than the bare blue brick by much.
+  REQUIRE(int(mid[0]) - int(mid[2]) > int(bare[0]) - int(bare[2]) + 60);
+  // And it is still bluer than green, as the brick behind is.
+  REQUIRE(mid[2] > mid[1]);
 }
 
 TEST_CASE("two overlapping transparent bricks look the same whichever is listed first", "[gpu][frame]") {
