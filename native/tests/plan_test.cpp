@@ -166,6 +166,24 @@ TEST_CASE("a brick shut in under another goes in first", "[plan]") {
   REQUIRE(cert.crossings == 0);
 }
 
+TEST_CASE("each use of a submodel is a unit of its own, not every use of it at once", "[plan]") {
+  // "wheel pair.ldr" (two bricks) is used twice in main: two units, one per use.
+  const ldraw::Library lib(fs::path(BM_FIXTURES) / "lib");
+  const Model model = io::load(fs::path(BM_FIXTURES) / "models" / "twice.mpd", lib);
+  REQUIRE(model.pieces().size() == 6);
+  connect::Graph graph;
+  graph.body.resize(model.pieces().size());
+  std::iota(graph.body.begin(), graph.body.end(), 0u);
+  const Units units = findUnits(model, graph);
+  REQUIRE(units.authored.size() == 2);
+  for (const Unit& u : units.authored) {
+    REQUIRE(u.pieces.size() == 2);
+    const std::string& a = model.pieces()[u.pieces[0]].id;
+    const std::string& b = model.pieces()[u.pieces[1]].id;
+    REQUIRE(a.substr(0, a.find('/')) == b.substr(0, b.find('/')));  // the same use
+  }
+}
+
 TEST_CASE("empty, one piece, separate assemblies, and a piece joined to nothing", "[plan][focus]") {
   Scene empty;
   const Plan none = empty.plan();

@@ -309,12 +309,21 @@ Units findUnits(const Model& model, const connect::Graph& graph) {
   const uint32_t n = static_cast<uint32_t>(pieces.size());
   out.authoredOf.resize(n);
   out.bodyOf.resize(n);
-  // Every use of a submodel: the pieces that share a path prefix. Deepest first, so smallest first.
-  std::map<std::vector<std::string>, std::vector<uint32_t>> byPath;
-  for (uint32_t i = 0; i < n; i++)
-    for (size_t depth = pieces[i].path.size(); depth >= 1; depth--) byPath[std::vector<std::string>(pieces[i].path.begin(), pieces[i].path.begin() + static_cast<long>(depth))].push_back(i);
+  // Every use of a submodel: the pieces whose ids start with that use's item ("<item>/" per
+  // level). Not the submodel's name: two uses of one submodel are two things, in two places.
+  std::map<std::string, std::vector<uint32_t>> byUse;
+  for (uint32_t i = 0; i < n; i++) {
+    const std::string& id = pieces[i].id;
+    size_t from = 0;
+    for (size_t depth = 0; depth < pieces[i].path.size(); depth++) {
+      const size_t slash = id.find('/', from);
+      if (slash == std::string::npos) break;
+      byUse[id.substr(0, slash)].push_back(i);
+      from = slash + 1;
+    }
+  }
   std::vector<Unit> authored;
-  for (auto& [path, list] : byPath)
+  for (auto& [use, list] : byUse)
     if (list.size() > 1 && list.size() < n) authored.push_back({list});
   std::sort(authored.begin(), authored.end(), [](const Unit& a, const Unit& b) { return a.pieces.size() != b.pieces.size() ? a.pieces.size() < b.pieces.size() : a.pieces < b.pieces; });
   authored.erase(std::unique(authored.begin(), authored.end(), [](const Unit& a, const Unit& b) { return a.pieces == b.pieces; }), authored.end());
