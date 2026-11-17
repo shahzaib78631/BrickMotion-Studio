@@ -29,6 +29,7 @@ std::unique_ptr<Renderer> Renderer::create(const bm::Model& model, bm::ldraw::Pa
     impl.meshes = std::make_unique<MeshLibrary>(model, full, low);
     impl.scene = buildScene(model, full);
     impl.inFlight = dispatch_semaphore_create(3);
+    for (const Group& g : impl.scene.groups) impl.meshBounds.push_back(g.placeholder ? bm::kPlaceholderBox : impl.meshes->get(g.part, Detail::Full)->bounds);
     for (const Group& g : impl.scene.groups) {
       const size_t bytes = std::max<size_t>(1, g.instances.size()) * sizeof(Instance);
       id<MTLBuffer> buffer = [device->device newBufferWithLength:bytes options:MTLResourceStorageModeShared];

@@ -87,6 +87,20 @@ inline constexpr float kEdgeNearer = 0.002f;
 /// Weighted blended transparency (McGuire and Bavoil 2013): the depth, in LDU, over which a
 /// layer's weight falls by its fourth power.
 inline constexpr float kOitDepthScale = 2000.0f;
+
+/// Levels of detail, by how tall a piece's bounding sphere looks on screen. Below kFullPixels a
+/// stud is under three pixels wide, where 16- and 8-sided studs cannot be told apart; below
+/// kLowPixels a piece is a few pixels and its box looks the same. Starting values: the
+/// equivalence tests in frame_test.mm hold them.
+inline constexpr double kFullPixels = 48;
+inline constexpr double kLowPixels = 6;
+/// Outline lines fade in between kFullPixels (none: low detail has none either, so nothing
+/// pops when a piece changes detail) and kEdgeFullPixels (all of kEdgeOpacity).
+inline constexpr double kEdgeFullPixels = 96;
+/// How far a culled, level-of-detail frame may be from the same frame drawn in full: mean
+/// absolute difference per channel, and over the worst kBlock square (0..255).
+inline constexpr double kDetailMeanTolerance = 0.5;
+inline constexpr double kDetailBlockTolerance = 6.0;
 /// The two cube maps of the studio's light: side in pixels and number of mips of the
 /// reflection map (roughness 0 at mip 0 to 1 at the last), side of the map of received
 /// light, and directions gathered per pixel.

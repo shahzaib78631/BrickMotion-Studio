@@ -24,6 +24,7 @@ struct FrameUniforms {
   simd_float4 switches;
   simd_float4 floorPlane;
   simd_float4 floorCentre;
+  simd_float4 lens;
 };
 
 // Must match DrawUniforms in shaders/common.metal.
@@ -32,6 +33,7 @@ struct DrawUniforms {
   simd_float4 surface;
   simd_float4 edge;
   simd_float4 flip;
+  simd_float4 sphere;
 };
 
 /// A part's mesh at one level of detail, on the GPU.
@@ -79,6 +81,7 @@ struct Renderer::Impl {
 
   // Per group: its instances on the GPU.
   std::vector<id<MTLBuffer>> instanceBuffers;
+  std::vector<bm::Box> meshBounds;  // per group, part space, at full detail
   std::map<std::pair<std::string, int>, GpuMesh> gpuMeshes;  // (part, detail); a placeholder's part is ""
   const GpuMesh& mesh(const Group& group, Detail detail);
   void upload(const std::vector<std::pair<uint32_t, uint32_t>>& changed);

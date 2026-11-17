@@ -22,6 +22,7 @@ struct FrameUniforms {
   float4 switches;        // x: shadows on, y: ambient occlusion on, z: highest mip of the reflection cube, w: clearcoat roughness
   float4 floorPlane;      // x: the floor's y (world), y: how far it reaches from its centre, z: shadow texel size (LDU), w: shadow bias in texels
   float4 floorCentre;     // x, y: the floor's centre (world x and z), z: how much full shadow darkens it, w: kOitDepthScale
+  float4 lens;            // x: tan of half the vertical angle of view, y, z: the on-screen heights (pixels) where edges are gone and fully shown
 };
 
 // One per draw. Must match DrawUniforms in src/metal/impl.h.
@@ -30,6 +31,7 @@ struct DrawUniforms {
   float4 surface;  // roughness, metalness, clearcoat, 1 if the group is a placeholder
   float4 edge;     // rgb linear, a: opacity of outline lines
   float4 flip;     // x: -1 for mirrored instances (their normals come out inverted), else 1
+  float4 sphere;   // the part's bounding sphere: centre (part space), radius
 };
 
 // One per piece. Must match bmr::Instance (include/bmr/scene.h): 56 bytes.

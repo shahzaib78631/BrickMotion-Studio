@@ -2,6 +2,7 @@
 #import "metal/impl.h"
 
 #include <chrono>
+#include "bmr/cull.h"
 #include "bmr/tolerances.h"
 
 namespace bmr {
@@ -25,27 +26,37 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   if (drawable && (static_cast<int>(target.width) != width || static_cast<int>(target.height) != height)) return stats;  // the layer has not caught up with a resize
 
   // Which instances, at which detail: what the eye sees (opaque groups first, as the scene
-  // orders them, then transparent ones), and what casts a shadow (every opaque piece shown,
-  // in view or not: a piece out of view can shadow one in it).
+  // orders them, then transparent ones), and what casts a shadow (every opaque piece shown, in
+  // view or not, since one out of view can shadow one in it; at low detail unless a detail is
+  // forced, as a shadow does not show a stud's sides).
+  const bool forced = options.forceDetail >= 0 && options.forceDetail <= 2;
+  const std::vector<Visible> inView = cull(scene, meshBounds, camera, height, options.forceDetail, options.cull);
   std::vector<uint32_t> list;
   std::vector<Batch> seen, casters;
-  const Detail detail = options.forceDetail >= 0 && options.forceDetail <= 2 ? static_cast<Detail>(options.forceDetail) : Detail::Full;
-  auto collect = [&](std::vector<Batch>& into, uint32_t g, Detail d) {
+  auto add = [&](std::vector<Batch>& into, uint32_t g, Detail d, const std::vector<uint32_t>& instances) {
     const Group& group = scene.groups[g];
     for (int mirrored = 0; mirrored < 2; mirrored++) {
       const uint32_t first = static_cast<uint32_t>(list.size());
-      for (uint32_t i = 0; i < group.instances.size(); i++) {
-        const uint32_t flags = group.instances[i].flags;
-        if ((flags & kHidden) || ((flags & kMirrored) != 0) != (mirrored != 0)) continue;
-        list.push_back(i);
-      }
+      for (uint32_t i : instances)
+        if (((group.instances[i].flags & kMirrored) != 0) == (mirrored != 0)) list.push_back(i);
       if (list.size() > first) into.push_back({g, d, mirrored != 0, first, static_cast<uint32_t>(list.size()) - first});
     }
   };
-  for (uint32_t g = 0; g < scene.groups.size(); g++) collect(seen, g, detail);
-  if (options.shadows)
-    for (uint32_t g = 0; g < scene.groups.size(); g++)
-      if (!scene.groups[g].material.transparent()) collect(casters, g, detail);
+  for (uint32_t g = 0; g < scene.groups.size(); g++) {
+    for (int d = 0; d < 3; d++) add(seen, g, static_cast<Detail>(d), inView[g].byDetail[d]);
+    stats.culled += inView[g].culled;
+  }
+  if (options.shadows) {
+    std::vector<uint32_t> shown;
+    for (uint32_t g = 0; g < scene.groups.size(); g++) {
+      const Group& group = scene.groups[g];
+      if (group.material.transparent()) continue;
+      shown.clear();
+      for (uint32_t i = 0; i < group.instances.size(); i++)
+        if (!(group.instances[i].flags & kHidden)) shown.push_back(i);
+      add(casters, g, forced ? static_cast<Detail>(options.forceDetail) : Detail::Low, shown);
+    }
+  }
 
   dispatch_semaphore_wait(inFlight, DISPATCH_TIME_FOREVER);
   frame++;
@@ -71,6 +82,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   const double floorY = (b.empty() ? 0.0 : b.max.y - scene.origin.y) + kFloorLift;
   fu.floorPlane = simd_make_float4(static_cast<float>(floorY), static_cast<float>(kFloorExtent * diagonal), static_cast<float>(key.texel), kShadowBias);
   fu.floorCentre = simd_make_float4(static_cast<float>(middle.x - scene.origin.x), static_cast<float>(middle.z - scene.origin.z), kFloorShadow, kOitDepthScale);
+  fu.lens = simd_make_float4(static_cast<float>(std::tan(camera.fovY / 2)), static_cast<float>(kFullPixels), static_cast<float>(kEdgeFullPixels), 0);
   id<MTLBuffer> frameBuffer = frameUniforms.get(dev, frame, sizeof fu);
   std::memcpy(frameBuffer.contents, &fu, sizeof fu);
 
@@ -86,6 +98,9 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     du[i].surface = simd_make_float4(m.roughness, m.metalness, m.clearcoat, group.placeholder ? 1 : 0);
     du[i].edge = simd_make_float4(m.edge[0], m.edge[1], m.edge[2], kEdgeOpacity);
     du[i].flip = simd_make_float4(batch.mirrored ? -1 : 1, 0, 0, 0);
+    const bm::Box& part = meshBounds[batch.group];
+    const bm::Vec3 c = part.empty() ? bm::Vec3{} : (part.min + part.max) * 0.5;
+    du[i].sphere = simd_make_float4(static_cast<float>(c.x), static_cast<float>(c.y), static_cast<float>(c.z), part.empty() ? 0.0f : static_cast<float>(length(part.max - part.min) / 2));
   }
   id<MTLBuffer> visibleBuffer = visible.get(dev, frame, std::max<size_t>(1, list.size()) * sizeof(uint32_t));
   if (!list.empty()) std::memcpy(visibleBuffer.contents, list.data(), list.size() * sizeof(uint32_t));
@@ -201,6 +216,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
         if (!gpu.edgeVertices) continue;
         [enc setVertexBuffer:gpu.edges offset:0 atIndex:0];
         [enc setVertexBuffer:instanceBuffers[batch.group] offset:0 atIndex:3];
+        [enc setVertexBufferOffset:i * sizeof(DrawUniforms) atIndex:2];
         [enc setFragmentBufferOffset:i * sizeof(DrawUniforms) atIndex:2];
         [enc setVertexBufferOffset:batch.first * sizeof(uint32_t) atIndex:4];
         [enc drawPrimitives:MTLPrimitiveTypeLine vertexStart:0 vertexCount:gpu.edgeVertices instanceCount:batch.count];

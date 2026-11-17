@@ -2,11 +2,13 @@
 #include <catch2/catch_test_macros.hpp>
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <utility>
 #include "bmr/device.h"
 #include "bmr/image.h"
 #include "bmr/renderer.h"
+#include "bmr/tolerances.h"
 #include "helpers.h"
 
 using namespace bm;
@@ -302,4 +304,76 @@ TEST_CASE("the floor has no visible edge", "[gpu][frame]") {
     }
   INFO("pixels off the background " << off << " beyond " << reach << " px");
   REQUIRE(off == 0);
+}
+
+namespace {
+/// A model file from the real library, drawn framed at `azimuth`, from `zoomOut` times the framing distance.
+Shot shotOfFile(const std::filesystem::path& file, const ldraw::Library& lib, const FrameOptions& options, int w, int h, double azimuth, double zoomOut = 1) {
+  ldraw::PartCache full{lib, ldraw::PartCache::defaultDirectory()};
+  ldraw::FlattenOptions lowOptions;
+  lowOptions.lowResPrimitives = true;
+  ldraw::PartCache low{lib, ldraw::PartCache::defaultDirectory().parent_path() / "parts-low", lowOptions};
+  const Model model = io::load(file, lib, &full);
+  auto r = Renderer::create(model, full, low);
+  REQUIRE(r);
+  r->resize(w, h);
+  OrbitCamera orbit = OrbitCamera::framing(r->scene().bounds, 0.6, double(w) / h);
+  orbit.azimuth = azimuth;
+  orbit.distance *= zoomOut;
+  Shot s;
+  s.camera = orbit.camera(double(w) / h, r->scene().bounds);
+  s.origin = r->scene().origin;
+  s.stats = r->draw(s.camera, options);
+  s.image = r->readback();
+  if (const char* dump = std::getenv("BMR_DUMP")) {
+    static int n = 0;
+    writePng(s.image, std::filesystem::path(dump) / ("file" + std::to_string(n++) + ".png"));
+  }
+  return s;
+}
+
+FrameOptions everything() {
+  FrameOptions o;
+  o.cull = false;
+  o.forceDetail = 0;
+  return o;
+}
+
+std::filesystem::path samples() { return std::filesystem::path(BM_FIXTURES).parent_path().parent_path().parent_path() / "samples"; }
+}  // namespace
+
+TEST_CASE("a culled, level-of-detail frame matches the full frame", "[gpu][frame][data]") {
+  NEED_GPU();
+  const char* dir = std::getenv("BM_LDRAW_DIR");
+  if (!dir) SKIP("BM_LDRAW_DIR is not set");
+  const ldraw::Library lib{std::filesystem::path(dir)};
+  for (double azimuth : {0.6, 2.2, 3.8, 5.4}) {
+    const Shot full = shotOfFile(samples() / "helicopter" / "helicopter.mpd", lib, everything(), 1600, 1000, azimuth);
+    const Shot fast = shotOfFile(samples() / "helicopter" / "helicopter.mpd", lib, FrameOptions{}, 1600, 1000, azimuth);
+    const Difference d = compare(full.image, fast.image);
+    INFO("azimuth " << azimuth << " meanAbs " << d.meanAbs << " worstBlock " << d.worstBlock << " by detail " << fast.stats.byDetail[0] << "/" << fast.stats.byDetail[1] << "/"
+                    << fast.stats.byDetail[2]);
+    REQUIRE(d.meanAbs < kDetailMeanTolerance);
+    REQUIRE(d.worstBlock < kDetailBlockTolerance);
+    if (std::getenv("BMR_REPORT")) std::printf("helicopter azimuth %.1f: meanAbs %.3f worstBlock %.2f\n", azimuth, d.meanAbs, d.worstBlock);
+  }
+}
+
+TEST_CASE("a far model is mostly low detail and boxes, and still looks like itself", "[gpu][frame][data]") {
+  NEED_GPU();
+  const char* dir = std::getenv("BM_LDRAW_DIR");
+  if (!dir) SKIP("BM_LDRAW_DIR is not set");
+  const ldraw::Library lib{std::filesystem::path(dir)};
+  const Shot full = shotOfFile(samples() / "42000-1.mpd", lib, everything(), 1600, 1000, 0.6, 6);
+  const Shot fast = shotOfFile(samples() / "42000-1.mpd", lib, FrameOptions{}, 1600, 1000, 0.6, 6);
+  const uint32_t all = fast.stats.byDetail[0] + fast.stats.byDetail[1] + fast.stats.byDetail[2];
+  INFO("by detail " << fast.stats.byDetail[0] << "/" << fast.stats.byDetail[1] << "/" << fast.stats.byDetail[2]);
+  REQUIRE(all == full.stats.instances);
+  REQUIRE(fast.stats.byDetail[0] < all / 10);
+  const Difference d = compare(full.image, fast.image);
+  INFO("meanAbs " << d.meanAbs << " worstBlock " << d.worstBlock);
+  if (std::getenv("BMR_REPORT"))
+    std::printf("42000-1 x6: by detail %u/%u/%u meanAbs %.3f worstBlock %.2f\n", fast.stats.byDetail[0], fast.stats.byDetail[1], fast.stats.byDetail[2], d.meanAbs, d.worstBlock);
+  REQUIRE(d.meanAbs < kDetailMeanTolerance);
+  REQUIRE(d.worstBlock < kDetailBlockTolerance);
 }
