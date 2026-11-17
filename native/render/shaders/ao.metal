@@ -45,9 +45,11 @@ fragment float2 aoFragment(ScreenOut in [[stage_in]], constant AoUniforms& u [[b
   // The floor: its whole light, from the height map over the model (floor_light.metal), in r.
   // A floor pixel is one the floor drew (shares.a) whose point is on the floor's plane, not a
   // brick's lowest band just above it; where the floor has faded out its light does not count.
+  // (Not shares.g, which glass in front also clears: the light is worked out under glass too,
+  // or the 1 there would be smoothed out onto the floor around it.)
   float4 share = shares.read(uint2(at));
   if (share.a > 0.5 && abs(world.y - frame.floorPlane.x) < 0.5) {
-    if (frame.floorLook.z < 0.5 || share.g <= 0.0) return float2(1.0);
+    if (frame.floorLook.z < 0.5 || floorFade(world, frame) <= 0.0) return float2(1.0);
     return float2(floorLight(world, frame, bins, heights, uint2(cell), frame.switches.y > 0.5, frame.switches.x > 0.5), 1.0);
   }
   float lit = 1.0;

@@ -68,6 +68,8 @@ id<MTLRenderPipelineState> make(Device& device, NSString* vertex, NSString* frag
       rev.blendingEnabled = YES;  // reveal += the layer's optical depth
       rev.sourceRGBBlendFactor = rev.sourceAlphaBlendFactor = MTLBlendFactorOne;
       rev.destinationRGBBlendFactor = rev.destinationAlphaBlendFactor = MTLBlendFactorOne;
+      // How much the floor's light counts (shaders/brick.metal): none where glass is in front.
+      amb.writeMask = MTLColorWriteMaskGreen;
     }
   }
   NSError* err = nil;

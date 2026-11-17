@@ -63,11 +63,12 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   const KeyLight above = keyLight(fitted, scene.origin, down, kHeightMapSize, 0);
   const uint64_t now = frame + 1;  // this frame's number (counted below)
   std::vector<uint32_t> shown;
-  // Into `into`: the opaque pieces shown in groups [begin, end) that `keep` (group, instance) takes.
-  auto casting = [&](std::vector<Batch>& into, uint32_t begin, uint32_t end, auto keep) {
+  // Into `into`: the pieces shown in groups [begin, end) that `keep` (group, instance) takes,
+  // opaque ones, and glass too with `glass`.
+  auto casting = [&](std::vector<Batch>& into, uint32_t begin, uint32_t end, bool glass, auto keep) {
     for (uint32_t g = begin; g < end; g++) {
       const Group& group = scene.groups[g];
-      if (group.material.transparent()) continue;
+      if (group.material.transparent() && !glass) continue;
       shown.clear();
       for (uint32_t i = 0; i < group.instances.size(); i++)
         if (!(group.instances[i].flags & kHidden) && keep(g, i)) shown.push_back(i);
@@ -99,7 +100,10 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     }
     return true;
   };
-  auto plan = [&](CasterMap& map, bool on, const KeyLight& fit, bm::Vec3 dir) {
+  // `glass`: transparent pieces cast too. They do into the height map: EyeSight's ground is a
+  // shadow catcher, and glass shadows it as an opaque piece would (native/corpus/calib/glass.ldr:
+  // floor RMSE 6.0 so, 14.9 letting half the light through).
+  auto plan = [&](CasterMap& map, bool on, const KeyLight& fit, bm::Vec3 dir, bool glass) {
     MapWork w;
     const uint32_t groups = static_cast<uint32_t>(scene.groups.size());
     if (!on) {
@@ -111,7 +115,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
       map.front.matrix = fit.matrix, map.front.texel = fit.texel, map.front.toward = dir, map.front.detail = casterDetail, map.front.cutoff = now + 1;
       w = MapWork{};
       w.whole = w.clear = true;
-      casting(w.share, 0, groups, [](uint32_t, uint32_t) { return true; });
+      casting(w.share, 0, groups, glass, [](uint32_t, uint32_t) { return true; });
       return w;
     };
     const bool old = stale(map, dir);
@@ -128,7 +132,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
       uint64_t total = 0;
       for (uint32_t g = 0; g < groups; g++) {
         const Group& group = scene.groups[g];
-        if (group.material.transparent()) continue;
+        if (group.material.transparent() && !glass) continue;
         uint64_t count = 0;
         for (const Instance& in : group.instances) count += (in.flags & kHidden) ? 0 : 1;
         if (count) triangles[g] = count * (mesh(group, static_cast<Detail>(casterDetail)).indexCount / 3);
@@ -148,19 +152,19 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     w.swap = map.building && map.done + 1 == map.ends.size();
     const CasterMap::Side& shown = w.swap ? map.back : map.front;
     const uint64_t cutoff = shown.cutoff;
-    if (lastChange >= cutoff) casting(w.movers, 0, groups, [&](uint32_t g, uint32_t i) { return changedAt[g][i] >= cutoff; });
+    if (lastChange >= cutoff) casting(w.movers, 0, groups, glass, [&](uint32_t g, uint32_t i) { return changedAt[g][i] >= cutoff; });
     // A piece moved out of what that map covers: drawn whole now.
     if (!covers(shown.matrix, w.movers)) return whole();
     if (map.building) {
       const uint32_t begin = map.done ? map.ends[map.done - 1] : 0, end = map.ends[map.done];
       const uint64_t before = map.back.cutoff;
-      casting(w.share, begin, end, [&](uint32_t g, uint32_t i) { return changedAt[g][i] < before; });
+      casting(w.share, begin, end, glass, [&](uint32_t g, uint32_t i) { return changedAt[g][i] < before; });
       w.clear = map.done == 0;
       map.done++;
     }
     return w;
   };
-  MapWork shadowWork = plan(shadow, options.shadows, key, toward), heightWork = plan(heights, floorLit, above, down);
+  MapWork shadowWork = plan(shadow, options.shadows, key, toward, false), heightWork = plan(heights, floorLit, above, down, true);
   // The maps as this frame reads them (copies: drawMap swaps the sides below).
   const CasterMap::Side keyShown = shadowWork.swap ? shadow.back : shadow.front;
   const CasterMap::Side heightShown = heightWork.swap ? heights.back : heights.front;

@@ -64,6 +64,11 @@ struct FloorBins {
 };
 // The share of a white floor's light that reaches the floor at `world` (floor_light.metal).
 float floorLight(float3 world, constant FrameUniforms& frame, constant FloorBins& bins, texture2d<float> heights, uint2 cell, bool sky, bool key);
+// How much the floor's light counts at `world`: all of it near the model, none toward the rim.
+inline float floorFade(float3 world, constant FrameUniforms& frame) {
+  float reach = frame.floorPlane.y;
+  return 1.0 - smoothstep(0.15 * reach, 0.35 * reach, length(world.xz - frame.floorCentre.xy));
+}
 
 // One of 16 turns, a different one at each of the 16 places in a 4 x 4 tile (in Bayer's order,
 // so neighbours differ most): a 4 x 4 average sees each once.

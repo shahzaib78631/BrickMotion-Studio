@@ -25,10 +25,8 @@ struct FloorColor {
 // floor's light that reaches it past the model (floor_light.metal, worked out in the half-size
 // pass), fading out toward the floor's rim.
 fragment FloorColor floorFragment(FloorOut in [[stage_in]], constant FrameUniforms& frame [[buffer(1)]]) {
-  float reach = frame.floorPlane.y;
-  float fade = 1.0 - smoothstep(0.15 * reach, 0.35 * reach, length(in.world.xz - frame.floorCentre.xy));
   FloorColor out;
   out.color = float4(0);
-  out.shares = float4(0, fade, 0, 1);
+  out.shares = float4(0, floorFade(in.world, frame), 0, 1);
   return out;
 }

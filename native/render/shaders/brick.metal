@@ -141,9 +141,13 @@ fragment OpaqueOut brickFragment(BrickOut in [[stage_in]], constant FrameUniform
 // weight and takes exp(-reveal) as what all the layers let through together. Each layer's
 // numbers are rounded to half precision here and summed in 32-bit targets, where a sum of a
 // few of them is exact: the picture is the same whatever order the layers arrive in.
+// Where glass is in front of the floor, the floor shows no shadow (shares.g, the only channel
+// written there, is 0): EyeSight's ground is a shadow catcher, which seen through a refracting
+// surface shows none (native/corpus/calib/glass.ldr).
 struct OitOut {
   float4 accum [[color(1)]];
   float reveal [[color(2)]];
+  float4 shares [[color(3)]];
 };
 
 fragment OitOut transparentFragment(BrickOut in [[stage_in]], constant FrameUniforms& frame [[buffer(1)]], constant DrawUniforms& draw [[buffer(2)]],
@@ -157,5 +161,6 @@ fragment OitOut transparentFragment(BrickOut in [[stage_in]], constant FrameUnif
   OitOut out;
   out.accum = float4(half4(float4(lit.color * a, a) * w));
   out.reveal = float(half(-log(max(1.0 - a, 1e-4))));
+  out.shares = float4(0.0);
   return out;
 }
