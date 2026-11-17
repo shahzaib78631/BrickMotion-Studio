@@ -28,7 +28,7 @@ constexpr int kOk = 0, kFailure = 1, kUsage = 2;
 
 int usage() {
   std::fprintf(stderr,
-               "usage: bmshot <model file> --out <png> [--size WxH] [--frame N] [--azimuth a --elevation e] [--no-edges] [--no-shadows] [--no-ao] [--no-floor]\n"
+               "usage: bmshot <model file> --out <png> [--size WxH] [--frame N] [--azimuth a --elevation e | --eye x,y,z --target x,y,z] [--fov deg] [--no-edges] [--no-shadows] [--no-ao] [--no-floor]\n"
                "              [--no-cull] [--detail 0|1|2] [--select piece,piece,...] [--stats] [--repeat CxR] [--save-model <ldr>]\n"
                "       bmshot <model file> --bench <frames> [--repeat CxR] [--size WxH] [--detail 0|1|2] [--no-...]\n");
   return kUsage;
@@ -79,7 +79,9 @@ int main(int argc, char** argv) {
   const fs::path input{std::string(args[0])};
   std::string out, saveModel;
   int width = 1600, height = 1000, detail = -1;
-  double azimuth = NAN, elevation = NAN;
+  double azimuth = NAN, elevation = NAN, fovDegrees = NAN;
+  bool explicitCamera = false;
+  Vec3 eye, target;
   bmr::FrameOptions options;
   bool stats = false;
   int frame = -1, benchFrames = 0, columns = 1, rows = 1;
@@ -95,7 +97,12 @@ int main(int argc, char** argv) {
     else if (a == "--size") {
       const std::string v = value();
       if (std::sscanf(v.c_str(), "%dx%d", &width, &height) != 2 || width < 1 || height < 1) return usage();
-    } else if (a == "--azimuth") azimuth = std::atof(value().c_str());
+    } else if (a == "--eye" || a == "--target") {
+      Vec3& v = a == "--eye" ? eye : target;
+      if (std::sscanf(value().c_str(), "%lf,%lf,%lf", &v.x, &v.y, &v.z) != 3) return usage();
+      explicitCamera = true;
+    } else if (a == "--fov") fovDegrees = std::atof(value().c_str());
+    else if (a == "--azimuth") azimuth = std::atof(value().c_str());
     else if (a == "--elevation") elevation = std::atof(value().c_str());
     else if (a == "--no-edges") options.edges = false;
     else if (a == "--no-shadows") options.shadows = false;
@@ -168,6 +175,15 @@ int main(int argc, char** argv) {
     const bmr::OrbitCamera defaults;
     bmr::OrbitCamera orbit = bmr::OrbitCamera::fitted(renderer->scene().bounds, 0.6, aspect, std::isnan(azimuth) ? defaults.azimuth : azimuth,
                                                       std::isnan(elevation) ? defaults.elevation : elevation);
+    if (explicitCamera) {
+      // An LDraw-space camera (y down), as another renderer was given it.
+      const Vec3 from = eye - target;
+      orbit.target = target, orbit.distance = length(from);
+      if (!(orbit.distance > 0)) return usage();
+      orbit.elevation = std::asin(std::clamp(-from.y / orbit.distance, -1.0, 1.0));
+      orbit.azimuth = std::atan2(-from.x, -from.z);
+    }
+    if (std::isfinite(fovDegrees)) orbit.fovY = fovDegrees * M_PI / 180;
     plan::Plan plan;
     plan::Timeline timeline;
     if (frame >= 0) {

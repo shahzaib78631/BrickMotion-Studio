@@ -20,6 +20,10 @@ float linearFromSrgb(unsigned channel);
 /// (tolerances.h has the table and where each value is from).
 Material materialFor(const bm::ldraw::Color& color);
 
+/// BrickLink Studio's own linear colour for an LDraw colour (by its name and finish), or null
+/// if Studio has none. materialFor uses it in place of LDraw's sRGB value.
+const float* studioColor(const bm::ldraw::Color& color);
+
 /// What a part that is missing from the library is drawn with: translucent grey.
 Material placeholderMaterial();
 /// The colour an LDraw colour code names: from the library's table, or a direct colour
