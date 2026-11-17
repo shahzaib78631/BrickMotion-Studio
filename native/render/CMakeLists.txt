@@ -1,7 +1,13 @@
 # bmrender: draws what bmcore holds. src/prep is portable C++ (no Apple headers); src/metal owns Metal.
 file(GLOB BMRENDER_PREP CONFIGURE_DEPENDS src/prep/*.cpp)
 file(GLOB BMRENDER_METAL CONFIGURE_DEPENDS src/metal/*.mm)
-add_library(bmrender STATIC ${BMRENDER_PREP} ${BMRENDER_METAL})
+# The shaders travel inside the library as text (see cmake/embed_shaders.cmake).
+file(GLOB BMRENDER_SHADERS CONFIGURE_DEPENDS shaders/*.metal)
+set(BMRENDER_SHADER_CPP ${CMAKE_CURRENT_BINARY_DIR}/shaders_embedded.cpp)
+add_custom_command(OUTPUT ${BMRENDER_SHADER_CPP}
+  COMMAND ${CMAKE_COMMAND} -DSHADER_DIR=${CMAKE_CURRENT_SOURCE_DIR}/shaders -DOUT=${BMRENDER_SHADER_CPP} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed_shaders.cmake
+  DEPENDS ${BMRENDER_SHADERS} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed_shaders.cmake VERBATIM)
+add_library(bmrender STATIC ${BMRENDER_PREP} ${BMRENDER_METAL} ${BMRENDER_SHADER_CPP})
 target_include_directories(bmrender PUBLIC include PRIVATE src)
 target_compile_options(bmrender PRIVATE $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
 target_link_libraries(bmrender PUBLIC bmcore PRIVATE bm_warnings

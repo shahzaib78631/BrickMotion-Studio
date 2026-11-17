@@ -38,4 +38,14 @@ inline constexpr unsigned kPlaceholderRgb = 0xb8bcc2;
 inline constexpr float kPlaceholderAlpha = 0.6f;
 inline constexpr float kPlaceholderRoughness = 0.6f;
 
+/// The orbit camera's limits: it never goes over the top (89 degrees), nor inside a stud or
+/// out of sight.
+inline constexpr double kMaxElevation = 1.5533;
+inline constexpr double kMinDistance = 10;
+inline constexpr double kMaxDistance = 1e6;
+/// How much wider than the model a framing shot is: enough air that nothing touches the edge.
+inline constexpr double kFrameMargin = 1.15;
+/// The nearest the near plane ever is, LDU: a twentieth of a stud.
+inline constexpr double kNearest = 1.0;
+
 }  // namespace bmr
