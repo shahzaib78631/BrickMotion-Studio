@@ -31,7 +31,6 @@ std::unique_ptr<Renderer> Renderer::create(const bm::Model& model, bm::ldraw::Pa
       std::fprintf(stderr, "bmrender: %s\n", error.c_str());  // a shader that does not compile is a bug, and says so
       return nullptr;
     }
-    impl.environment = makeEnvironment(*device, impl.pipelines);
     impl.meshes = std::make_unique<MeshLibrary>(model, full, low);
     impl.scene = buildScene(model, full);
     impl.inFlight = dispatch_semaphore_create(3);

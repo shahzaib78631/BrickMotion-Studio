@@ -15,11 +15,9 @@ struct FrameUniforms {
   float4x4 viewProj;      // world to clip
   float4x4 shadowProj;    // world to the key light's shadow map (xy 0..1, z depth)
   float4 eye;             // xyz: the eye, world
-  float4 keyDirection;    // xyz: toward the key light, world; w: its intensity
   float4 background;      // rgb, linear
   float4 viewport;        // width, height, 1/width, 1/height, pixels
-  float4 room;            // x: room luminance, y: soft box luminance, z: cos of the soft box's inner edge, w: of its outer edge
-  float4 switches;        // x: shadows on, y: ambient occlusion on, z: highest mip of the reflection cube, w: clearcoat roughness
+  float4 switches;        // x: shadows on, y: ambient occlusion on; z, w: unused
   float4 floorPlane;      // x: the floor's y (world), y: how far it reaches from its centre, z: shadow texel size (LDU), w: shadow bias in texels
   float4 floorCentre;     // x, y: the floor's centre (world x and z), z: how much full shadow darkens it, w: kOitDepthScale
   float4 lens;            // x: tan of half the vertical angle of view; y, z: pixels per LDU where outlines are gone and fully shown
@@ -56,22 +54,6 @@ float3 placeNormal(InstanceData i, float3 n) {
 }
 
 float3 linearFromSrgb(float3 c) { return mix(c / 12.92, pow((c + 0.055) / 1.055, float3(2.4)), step(float3(0.04045), c)); }
-
-// The studio the model stands in, as light arriving from direction `d` (world; -y is up):
-// a white room, darker toward the floor, with one large soft box where the key light is and a
-// tall strip light on each side (left and right, -x and +x). The strips and the dark floor are
-// what a shiny piece shows: in an even room chrome is one flat grey.
-// strips: x luminance, y and z cos of a strip's inner and outer edge (across it), w the floor's
-// share of the room's luminance.
-float3 studioRadiance(float3 d, float3 keyDirection, float4 room, float4 strips) {
-  float up = -d.y;
-  float wall = room.x * mix(strips.w, 1.0, smoothstep(-0.35, 0.35, up));
-  float box = room.y * smoothstep(room.w, room.z, dot(d, keyDirection));
-  float2 across = normalize(float2(d.x, d.z) + float2(1e-6, 0));
-  float side = smoothstep(strips.z, strips.y, abs(across.x));
-  float tall = smoothstep(-0.15, 0.05, up) * (1.0 - smoothstep(0.55, 0.75, up));
-  return float3(wall + box + strips.x * side * tall);
-}
 
 // The key light's soft shadow (shadow.metal): 1 lit, 0 in shadow.
 float keyShadow(float3 world, float3 n, constant FrameUniforms& frame, depth2d<float> shadowMap, sampler shadowSampler, float turn);

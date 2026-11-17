@@ -90,14 +90,12 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   fu.shadowProj = simdFrom(key.matrix);
   const bm::Vec3 eye = camera.eye - scene.origin;
   fu.eye = simd_make_float4(static_cast<float>(eye.x), static_cast<float>(eye.y), static_cast<float>(eye.z), 1);
-  fu.keyDirection = simd_make_float4(static_cast<float>(toward.x), static_cast<float>(toward.y), static_cast<float>(toward.z), rig.strength[0]);
   for (int i = 0; i < 4; i++)
     fu.lights[i] = simd_make_float4(static_cast<float>(rig.toward[i].x), static_cast<float>(rig.toward[i].y), static_cast<float>(rig.toward[i].z), rig.strength[i]);
   fu.rig = simd_make_float4(kWorldStrength, kRigSinSquared, kAoBrickPower, 0);
   fu.background = simd_make_float4(options.background[0], options.background[1], options.background[2], 1);
   fu.viewport = simd_make_float4(static_cast<float>(width), static_cast<float>(height), 1.0f / static_cast<float>(width), 1.0f / static_cast<float>(height));
-  fu.room = roomVector();
-  fu.switches = simd_make_float4(options.shadows ? 1 : 0, options.ambientOcclusion ? 1 : 0, static_cast<float>(kReflectionMips - 1), kClearcoatRoughness);
+  fu.switches = simd_make_float4(options.shadows ? 1 : 0, options.ambientOcclusion ? 1 : 0, 0, 0);
   const double floorY = (b.empty() ? 0.0 : b.max.y - scene.origin.y) + kFloorLift;
   fu.floorPlane = simd_make_float4(static_cast<float>(floorY), static_cast<float>(kFloorExtent * diagonal), static_cast<float>(key.texel), kShadowBias);
   fu.floorCentre = simd_make_float4(static_cast<float>(middle.x - scene.origin.x), static_cast<float>(middle.z - scene.origin.z), kFloorShadow, kOitDepthScale);
@@ -250,10 +248,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     [enc setVertexBuffer:drawBuffer offset:0 atIndex:2];
     [enc setFragmentBuffer:drawBuffer offset:0 atIndex:2];
     [enc setVertexBuffer:visibleBuffer offset:0 atIndex:4];
-    [enc setFragmentTexture:environment.reflection atIndex:0];
-    [enc setFragmentTexture:environment.received atIndex:1];
-    [enc setFragmentTexture:shadowTexture atIndex:2];
-    [enc setFragmentSamplerState:pipelines.smooth atIndex:0];
+    [enc setFragmentTexture:shadowTexture atIndex:0];
     [enc setFragmentSamplerState:pipelines.shadowSampler atIndex:1];
 
     auto bricks = [&](bool transparent) {

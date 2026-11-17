@@ -123,8 +123,8 @@ struct OpaqueOut {
 
 float luminanceOf(float3 c) { return dot(c, float3(0.2126, 0.7152, 0.0722)); }
 
-fragment OpaqueOut brickFragment(BrickOut in [[stage_in]], constant FrameUniforms& frame [[buffer(1)]], constant DrawUniforms& draw [[buffer(2)]], texturecube<float> reflection [[texture(0)]],
-                                  texturecube<float> received [[texture(1)]], depth2d<float> shadowMap [[texture(2)]], sampler smooth [[sampler(0)]], sampler shadowSampler [[sampler(1)]]) {
+fragment OpaqueOut brickFragment(BrickOut in [[stage_in]], constant FrameUniforms& frame [[buffer(1)]], constant DrawUniforms& draw [[buffer(2)]], depth2d<float> shadowMap [[texture(0)]],
+                                  sampler shadowSampler [[sampler(1)]]) {
   float3 base = in.fixedColor.a > 0.5 && draw.surface.w < 0.5 ? in.fixedColor.rgb : draw.base.rgb;
   float3 n = normalize(in.normal), v = normalize(frame.eye.xyz - in.world);
   Lit lit = shade(base, draw.surface.x, draw.surface.y, draw.surface.z, n, v, in.world, frame, false, uint2(in.position.xy), shadowMap, shadowSampler);
@@ -147,8 +147,7 @@ struct OitOut {
 };
 
 fragment OitOut transparentFragment(BrickOut in [[stage_in]], constant FrameUniforms& frame [[buffer(1)]], constant DrawUniforms& draw [[buffer(2)]],
-                                   texturecube<float> reflection [[texture(0)]], texturecube<float> received [[texture(1)]], depth2d<float> shadowMap [[texture(2)]],
-                                   sampler smooth [[sampler(0)]], sampler shadowSampler [[sampler(1)]]) {
+                                   depth2d<float> shadowMap [[texture(0)]], sampler shadowSampler [[sampler(1)]]) {
   float3 base = in.fixedColor.a > 0.5 && draw.surface.w < 0.5 ? in.fixedColor.rgb : draw.base.rgb;
   float3 n = normalize(in.normal), v = normalize(frame.eye.xyz - in.world);
   Lit lit = shade(base, draw.surface.x, draw.surface.y, draw.surface.z, n, v, in.world, frame, true, uint2(in.position.xy), shadowMap, shadowSampler);

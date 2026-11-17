@@ -97,7 +97,6 @@ Pipelines makePipelines(Device& device, std::string& error) {
   p.height = make(device, @"heightVertex", @"heightFragment", Writes::Least, MTLPixelFormatRG16Float, none, 1, brickVertices(), error);
   p.shadow = make(device, @"shadowVertex", nil, Writes::Single, none, depth32, 1, brickVertices(), error);
   p.composite = make(device, @"screenVertex", @"compositeFragment", Writes::Single, MTLPixelFormatBGRA8Unorm_sRGB, none, 1, nil, error);
-  p.environment = make(device, @"screenVertex", @"environmentFragment", Writes::Single, MTLPixelFormatRGBA16Float, none, 1, nil, error);
   p.mask = make(device, @"brickVertex", @"maskFragment", Writes::Single, MTLPixelFormatR8Unorm, none, 1, brickVertices(), error);
   p.ids = make(device, @"brickVertex", @"idFragment", Writes::Single, MTLPixelFormatR32Uint, depth32, 1, brickVertices(), error);
   p.shadowDepth = depth(device, MTLCompareFunctionLessEqual, true);  // the shadow map is not reversed: nearer the light is less
@@ -114,7 +113,7 @@ Pipelines makePipelines(Device& device, std::string& error) {
   sh.compareFunction = MTLCompareFunctionLessEqual;  // the shadow map is an ordinary depth map: nearer the light is less
   sh.sAddressMode = sh.tAddressMode = MTLSamplerAddressModeClampToEdge;
   p.shadowSampler = [device.device newSamplerStateWithDescriptor:sh];
-  p.ok = p.height && p.ao && p.aoBlur && p.mask && p.ids && p.brick && p.transparent && p.floor && p.edges && p.shadow && p.composite && p.environment && p.depthWrite && p.shadowDepth && p.smooth && p.shadowSampler;
+  p.ok = p.height && p.ao && p.aoBlur && p.mask && p.ids && p.brick && p.transparent && p.floor && p.edges && p.shadow && p.composite && p.depthWrite && p.shadowDepth && p.smooth && p.shadowSampler;
   return p;
 }
 
