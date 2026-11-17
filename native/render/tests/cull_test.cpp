@@ -77,7 +77,7 @@ TEST_CASE("detail goes by how far the coarse mesh would be off on screen, and no
   // The brick's sphere has radius sqrt(10^2 + 12^2 + 10^2) = 18.5. From distance d (to its
   // centre) in a view 1000 tall, an LDU at its near side looks 1000 / (2 (d - 18.5) tan 0.3)
   // pixels, so its low-detail error of 0.5 LDU looks half that; the whole sphere looks
-  // 2 * 18.5 * 1000 / (d tan 0.3) tall.
+  // 2 * 18.5 * 1000 / (2 d tan 0.3) tall.
   const double radius = std::sqrt(344.0), t = std::tan(0.3);
   struct Case {
     double distance;
@@ -86,7 +86,8 @@ TEST_CASE("detail goes by how far the coarse mesh would be off on screen, and no
   const Case cases[] = {
       {radius + 1000 / (2 * t * 2.0), 0},    // an LDU 2 px: off by 1 px at low detail: full
       {radius + 1000 / (2 * t * 0.5), 1},    // an LDU 0.5 px: off by 0.25 px: low
-      {2 * radius * 1000 / (3.0 * t), 2},    // 3 px tall: a box
+      {radius * 1000 / (2.5 * t), 2},        // 2.5 px tall: a box
+      {radius * 1000 / (3.5 * t), 1},        // 3.5 px tall: still low detail
   };
   for (const Case& c : cases) {
     Camera cam;

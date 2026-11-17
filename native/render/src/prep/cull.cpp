@@ -52,7 +52,7 @@ std::vector<Visible> cull(const Scene& scene, const std::vector<PartShape>& part
         edges = kStudLdu * perLdu >= kEdgeStudPixels;
         if (forced) detail = forceDetail;
         else if (lowError * perLdu >= kLowErrorPixels) detail = 0;
-        else detail = 2 * projectedPixels(radius, distance, camera.fovY, viewportHeight) >= kLowPixels ? 1 : 2;
+        else detail = projectedPixels(radius, distance, camera.fovY, viewportHeight) >= kLowPixels ? 1 : 2;
       } else if (forced) {
         detail = forceDetail;
       }

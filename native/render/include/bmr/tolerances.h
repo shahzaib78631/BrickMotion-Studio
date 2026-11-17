@@ -83,10 +83,12 @@ inline constexpr float kOitDepthScale = 2000.0f;
 
 /// Levels of detail. A piece is drawn at full detail where its low-detail mesh would be at
 /// least kLowErrorPixels off on screen (bm::ldraw::Mesh::lowError, at the near side of the
-/// piece), at low detail otherwise, and as its box once the whole piece is under kLowPixels
-/// tall, where a box looks the same. The equivalence tests in frame_test.mm hold these.
+/// piece), at low detail otherwise, and as its box once the whole piece (its bounding sphere)
+/// is under kLowPixels tall, where a box looks the same. The equivalence tests in frame_test.mm
+/// hold these: boxes from 6 pixels put a kBlock square of 42000-1 7.6 levels off (over
+/// kDetailBlockTolerance).
 inline constexpr double kLowErrorPixels = 0.5;
-inline constexpr double kLowPixels = 6;
+inline constexpr double kLowPixels = 3;
 /// Outline lines fade with how wide a stud (kStudLdu across) looks at the near side of the
 /// piece: gone below kEdgeStudPixels, where the lines on a stud would be a dot of noise (and
 /// black's light-grey edges turn a far tyre grey), all of kEdgeOpacity from kEdgeStudFullPixels.
