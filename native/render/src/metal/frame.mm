@@ -42,7 +42,9 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   // The shadow map is drawn again only when a piece has moved, appeared or gone since it was,
   // or it was drawn at another detail.
   const int casterDetail = forced ? options.forceDetail : static_cast<int>(Detail::Low);
-  const bool redrawShadow = options.shadows && (!shadowMap || shadowDetail != casterDetail);
+  const LightRig rig = studioLights(camera, options.lightsFollowCamera);
+  const bm::Vec3 toward = rig.toward[0];
+  const bool redrawShadow = options.shadows && (!shadowMap || shadowDetail != casterDetail || length(toward - shadowToward) > 1e-9);
   if (redrawShadow) {
     std::vector<uint32_t> shown;
     for (uint32_t g = 0; g < scene.groups.size(); g++) {
@@ -77,7 +79,6 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   const bm::Box& b = scene.bounds;
   const double diagonal = b.empty() ? 1.0 : std::max(1.0, length(b.max - b.min));
   const bm::Vec3 middle = b.empty() ? scene.origin : (b.min + b.max) * 0.5;
-  const bm::Vec3 toward{kKeyDirection[0], kKeyDirection[1], kKeyDirection[2]};
   const KeyLight key = keyLight(liveBounds, scene.origin, toward, kShadowMapSize, kFloorExtent * diagonal);
 
   FrameUniforms fu{};
@@ -85,7 +86,10 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   fu.shadowProj = simdFrom(key.matrix);
   const bm::Vec3 eye = camera.eye - scene.origin;
   fu.eye = simd_make_float4(static_cast<float>(eye.x), static_cast<float>(eye.y), static_cast<float>(eye.z), 1);
-  fu.keyDirection = keyDirectionVector();
+  fu.keyDirection = simd_make_float4(static_cast<float>(toward.x), static_cast<float>(toward.y), static_cast<float>(toward.z), rig.strength[0]);
+  for (int i = 0; i < 4; i++)
+    fu.lights[i] = simd_make_float4(static_cast<float>(rig.toward[i].x), static_cast<float>(rig.toward[i].y), static_cast<float>(rig.toward[i].z), rig.strength[i]);
+  fu.rig = simd_make_float4(kWorldStrength, kRigSinSquared, kAoBrickPower, kAoFloorPower);
   fu.background = simd_make_float4(options.background[0], options.background[1], options.background[2], 1);
   fu.viewport = simd_make_float4(static_cast<float>(width), static_cast<float>(height), 1.0f / static_cast<float>(width), 1.0f / static_cast<float>(height));
   fu.room = roomVector();
@@ -128,7 +132,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     shadowMap = [dev newTextureWithDescriptor:d];
   }
   if (redrawShadow && shadowMap) {
-    shadowDetail = casterDetail;
+    shadowDetail = casterDetail, shadowToward = toward;
     stats.shadowDrawn = true;
     MTLRenderPassDescriptor* pass = [MTLRenderPassDescriptor new];
     pass.depthAttachment.texture = shadowMap;
@@ -169,9 +173,10 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     pass.depthAttachment.texture = depthMs;
     pass.depthAttachment.loadAction = MTLLoadActionClear;
     pass.depthAttachment.clearDepth = 0;  // reversed depth: 0 is the far plane
-    // One sample of depth kept, for ambient occlusion.
-    pass.depthAttachment.storeAction = options.ambientOcclusion ? MTLStoreActionMultisampleResolve : MTLStoreActionDontCare;
-    pass.depthAttachment.resolveTexture = options.ambientOcclusion ? depth : nil;
+    // One sample of depth kept, for ambient occlusion and the key light's shadow.
+    const bool keepDepth = options.ambientOcclusion || options.shadows;
+    pass.depthAttachment.storeAction = keepDepth ? MTLStoreActionMultisampleResolve : MTLStoreActionDontCare;
+    pass.depthAttachment.resolveTexture = keepDepth ? depth : nil;
     pass.depthAttachment.depthResolveFilter = MTLMultisampleDepthResolveFilterSample0;
     id<MTLRenderCommandEncoder> enc = [commands renderCommandEncoderWithDescriptor:pass];
     [enc setVertexBuffer:frameBuffer offset:0 atIndex:1];
@@ -274,10 +279,16 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   }
 
   // Ambient occlusion at half size, then blurred.
-  if (options.ambientOcclusion) {
+  if (options.ambientOcclusion || options.shadows) {
     struct AoUniforms {
-      simd_float4 lens, shape, size;
+      simd_float4 lens, shape, size, eye, right, up, forward;
     } u;
+    {
+      // The camera's axes in world space, as viewMatrix makes them.
+      const bm::Vec3 f = normalized(camera.target - camera.eye), r = normalized(cross(f, camera.up)), up = cross(r, f), e = camera.eye - scene.origin;
+      auto v4 = [](bm::Vec3 v) { return simd_make_float4(static_cast<float>(v.x), static_cast<float>(v.y), static_cast<float>(v.z), 0); };
+      u.eye = v4(e), u.right = v4(r), u.up = v4(up), u.forward = v4(f);
+    }
     const float tanY = static_cast<float>(std::tan(camera.fovY / 2));
     u.lens = simd_make_float4(tanY, tanY * static_cast<float>(camera.aspect), static_cast<float>(camera.near), static_cast<float>(camera.far));
     u.shape = simd_make_float4(kAoRadius, kAoBias, kAoStrength, static_cast<float>(width));
@@ -291,7 +302,10 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
       [enc setRenderPipelineState:pass == 0 ? pipelines.ao : pipelines.aoBlur];
       [enc setFragmentBytes:&u length:sizeof u atIndex:0];
       if (pass == 0) {
+        [enc setFragmentBuffer:frameBuffer offset:0 atIndex:1];
         [enc setFragmentTexture:depth atIndex:0];
+        [enc setFragmentTexture:shadowTexture atIndex:1];
+        [enc setFragmentSamplerState:pipelines.shadowSampler atIndex:1];
       } else {
         [enc setFragmentTexture:aoRaw atIndex:0];
         [enc setFragmentTexture:depth atIndex:1];
@@ -316,6 +330,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     [enc setFragmentTexture:mask atIndex:3];
     [enc setFragmentTexture:ambient atIndex:4];
     [enc setFragmentTexture:aoSoft atIndex:5];
+    [enc setFragmentTexture:depth atIndex:6];
     [enc setFragmentSamplerState:pipelines.smooth atIndex:0];
     [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
     [enc endEncoding];

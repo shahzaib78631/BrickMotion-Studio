@@ -85,8 +85,8 @@ Pipelines makePipelines(Device& device, std::string& error) {
   p.brick = make(device, @"brickVertex", @"brickFragment", Writes::Opaque, none, depth32, kSamples, brickVertices(), error);
   p.transparent = make(device, @"brickVertex", @"transparentFragment", Writes::Transparent, none, depth32, kSamples, brickVertices(), error);
   p.floor = make(device, @"floorVertex", @"floorFragment", Writes::Floor, none, depth32, kSamples, nil, error);
-  p.ao = make(device, @"screenVertex", @"aoFragment", Writes::Single, MTLPixelFormatR8Unorm, none, 1, nil, error);
-  p.aoBlur = make(device, @"screenVertex", @"aoBlurFragment", Writes::Single, MTLPixelFormatR8Unorm, none, 1, nil, error);
+  p.ao = make(device, @"screenVertex", @"aoFragment", Writes::Single, MTLPixelFormatRG8Unorm, none, 1, nil, error);
+  p.aoBlur = make(device, @"screenVertex", @"aoBlurFragment", Writes::Single, MTLPixelFormatRG8Unorm, none, 1, nil, error);
   p.edges = make(device, @"edgeVertex", @"edgeFragment", Writes::Over, none, depth32, kSamples, nil, error);
   p.shadow = make(device, @"shadowVertex", nil, Writes::Single, none, depth32, 1, brickVertices(), error);
   p.composite = make(device, @"screenVertex", @"compositeFragment", Writes::Single, MTLPixelFormatBGRA8Unorm_sRGB, none, 1, nil, error);

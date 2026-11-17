@@ -1,4 +1,5 @@
 // Whole frames drawn on the GPU, checked by their pixels.
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <algorithm>
 #include <cmath>
@@ -208,26 +209,31 @@ int channelGap(const uint8_t* a, const uint8_t* b) {
 TEST_CASE("a brick casts a shadow on the floor on the side away from the key light", "[gpu][frame]") {
   NEED_GPU();
   // The fixture 3005 is a box 20 x 24 x 20 standing on y = 24, which is where the floor goes.
-  // Toward the key light is (0.35, -0.8, -0.5): right, up and to the front, so the shadow
-  // falls to the left and back. The top edge's shadow lands 24 / 0.8 = 30 units along
-  // (-0.35, 0.5) from under it, about (-10.5, +15): (-8, 24, 18) is inside it. (18, 24, 0) is to
-  // the right, toward the light: lit. The camera looks down from behind (azimuth pi, elevation
-  // 1.1) so the floor behind the brick is not hidden by it, from three times the framing distance.
+  // The key light turns with the camera (studioLights); the brick's top centre casts its shadow
+  // 24 / -toward.y along -toward from under it. A floor point most of the way there is in the
+  // shadow; one as far the other way, toward the light, is not. The camera looks almost
+  // straight down so neither is hidden by the brick. The key gives about a fifth of a white
+  // floor's light (the world and three fills the rest), so even a full shadow takes off at most
+  // about 27 of 255; a 45-degree disk behind a brick this low is about half hidden.
   FrameOptions shadowed = plain();
   shadowed.floor = shadowed.shadows = true;
-  const std::string brick = piece("3005.dat", 0, 0, 0, 4);
-  const Shot on = shotOf(brick, shadowed, 256, 256, nullptr, 3.14159265, 1.1, 3);
-  const auto [sx, sy] = on.pixel({-8, 24, 18});
-  const auto [lx, ly] = on.pixel({18, 24, 0});
-  INFO("shadowed point at " << sx << "," << sy << " lit point at " << lx << "," << ly);
-  const double dark = luminance(on.image.at(sx, sy)), lit = luminance(on.image.at(lx, ly));
-  INFO("lit " << lit << " shadowed " << dark);
-  REQUIRE(lit - dark > 15);
-
   FrameOptions unshadowed = shadowed;
   unshadowed.shadows = false;
-  const Shot off = shotOf(brick, unshadowed, 256, 256, nullptr, 3.14159265, 1.1, 3);
-  REQUIRE(std::abs(luminance(off.image.at(sx, sy)) - luminance(off.image.at(lx, ly))) <= 2);
+  const std::string brick = piece("3005.dat", 0, 0, 0, 4);
+  const Shot on = shotOf(brick, shadowed, 256, 256, nullptr, 3.14159265, 1.35, 3);
+  const Shot off = shotOf(brick, unshadowed, 256, 256, nullptr, 3.14159265, 1.35, 3);
+  const Vec3 toward = studioLights(on.camera, true).toward[0];
+  REQUIRE(toward.y < 0);  // the key is above
+  const double reach = 24 / -toward.y;
+  const auto [sx, sy] = on.pixel({-toward.x * reach * 0.6, 24, -toward.z * reach * 0.6});
+  const auto [lx, ly] = on.pixel({toward.x * reach * 0.75, 24, toward.z * reach * 0.75});
+  INFO("shadowed point at " << sx << "," << sy << " lit point at " << lx << "," << ly);
+  const double darkOn = luminance(on.image.at(sx, sy)), darkOff = luminance(off.image.at(sx, sy));
+  const double litOn = luminance(on.image.at(lx, ly)), litOff = luminance(off.image.at(lx, ly));
+  INFO("shadowed " << darkOn << " (" << darkOff << " without shadows), lit " << litOn << " (" << litOff << ")");
+  REQUIRE(darkOff - darkOn > 8);
+  REQUIRE(std::abs(litOff - litOn) <= 3);
+  REQUIRE(linearFromSrgb(999) == Catch::Approx(1.0f));
 }
 
 TEST_CASE("a brick behind a transparent brick shows through it, tinted", "[gpu][frame]") {
@@ -396,6 +402,8 @@ TEST_CASE("a brick standing on a plate darkens the plate beside it", "[gpu][fram
   const double near = luminance(on.image.at(nx, ny)), far = luminance(on.image.at(fx, fy));
   INFO("near " << near << " far " << far);
   REQUIRE(far - near > 8);
+  // Without occlusion the two differ only by the glossy reflection of the wide lights, which
+  // moves across the plate with the angle it is seen at.
   const Shot off = shotOf(text, plain(), 256, 256, nullptr, 0.6, 0.6);
-  REQUIRE(std::abs(luminance(off.image.at(nx, ny)) - luminance(off.image.at(fx, fy))) <= 2);
+  REQUIRE(std::abs(luminance(off.image.at(nx, ny)) - luminance(off.image.at(fx, fy))) <= 4);
 }

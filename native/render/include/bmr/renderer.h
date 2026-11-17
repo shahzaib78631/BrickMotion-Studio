@@ -16,6 +16,7 @@ namespace bmr {
 struct FrameOptions {
   bool edges = true, shadows = true, ambientOcclusion = true, floor = true;
   bool cull = true;      ///< leave out what is not in view
+  bool lightsFollowCamera = true;  ///< the light rig turns with the camera's heading (EyeSight's BUILD_FL), or stays fixed to the model
   int forceDetail = -1;  ///< -1: by size on screen; 0, 1, 2: that level of detail for everything (tests, benchmark)
   float background[3] = {1, 1, 1};  ///< linear
 };

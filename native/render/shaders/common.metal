@@ -24,6 +24,8 @@ struct FrameUniforms {
   float4 floorCentre;     // x, y: the floor's centre (world x and z), z: how much full shadow darkens it, w: kOitDepthScale
   float4 lens;            // x: tan of half the vertical angle of view; y, z: pixels per LDU where outlines are gone and fully shown
   float4 selection;       // rgb: the outline's colour, linear; w: its width in pixels, 0 when nothing selected is in view
+  float4 lights[4];       // xyz: toward each of the four lights, world; w: its strength (lights[0] is the key, which casts the shadow)
+  float4 rig;             // x: the white world's strength; y: sin^2 of each light's angular radius
 };
 
 // One per draw. Must match DrawUniforms in src/metal/impl.h.
@@ -67,6 +69,15 @@ float3 studioRadiance(float3 d, float3 keyDirection, float4 room, float4 strips)
   float side = smoothstep(strips.z, strips.y, abs(across.x));
   float tall = smoothstep(-0.15, 0.05, up) * (1.0 - smoothstep(0.55, 0.75, up));
   return float3(wall + box + strips.x * side * tall);
+}
+
+// The key light's soft shadow (shadow.metal): 1 lit, 0 in shadow.
+float keyShadow(float3 world, float3 n, constant FrameUniforms& frame, depth2d<float> shadowMap, sampler shadowSampler, float turn);
+// One of 16 turns, a different one at each of the 16 places in a 4 x 4 tile (in Bayer's order,
+// so neighbours differ most): a 4 x 4 average sees each once.
+inline float tileTurn(uint2 at) {
+  const uint bayer[16] = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
+  return float(bayer[(at.y & 3) * 4 + (at.x & 3)]) * (6.2831853 / 16.0);
 }
 
 // A triangle that covers the screen, from the vertex number alone.

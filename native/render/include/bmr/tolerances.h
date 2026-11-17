@@ -24,14 +24,28 @@ inline constexpr unsigned kUnknownColor = 0xFF888888u;
 struct Surface {
   float roughness, metalness, clearcoat;
 };
-inline constexpr Surface kSolid{0.38f, 0.0f, 0.35f};
-inline constexpr Surface kTrans{0.05f, 0.0f, 0.35f};
-inline constexpr Surface kChrome{0.08f, 1.0f, 0.35f};
-inline constexpr Surface kMetal{0.20f, 0.7f, 0.35f};
-inline constexpr Surface kPearl{0.10f, 0.5f, 0.35f};
+/// Solid and transparent plastic are EyeSight's, as fitted in scripts/neural/blender/render.py
+/// (roughness 0.1, IOR 1.45, a clear coat of weight 0.25 with roughness 0); the clearcoat
+/// number here is that weight.
+inline constexpr Surface kSolid{0.10f, 0.0f, 0.25f};
+inline constexpr Surface kTrans{0.02f, 0.0f, 0.25f};
+inline constexpr Surface kChrome{0.08f, 1.0f, 0.25f};
+inline constexpr Surface kMetal{0.20f, 0.7f, 0.25f};
+inline constexpr Surface kPearl{0.10f, 0.5f, 0.25f};
 inline constexpr Surface kRubber{0.86f, 0.0f, 0.0f};
-/// The roughness of the clearcoat layer itself (the same look).
-inline constexpr float kClearcoatRoughness = 0.2f;
+/// The roughness of the clearcoat layer itself.
+inline constexpr float kClearcoatRoughness = 0.0f;
+
+/// EyeSight's BUILD_FL light preset, as fitted to its renders (scripts/neural/blender/render.py,
+/// RMSE about 6 against EyeSight): four distant lights, each a disk 45 degrees in radius as seen
+/// from the model (Studio's light "size" 1.0), toward-light vectors in the camera's heading
+/// frame (x to the right of the camera, y away from it along the ground, z up), the first the
+/// key; and a uniform white world of strength kWorldStrength. Strengths are irradiance at
+/// normal incidence; a white matt face lit by the world alone comes out at kWorldStrength.
+inline constexpr double kRigToward[4][3] = {{-0.02431, -0.01808, 0.02612}, {-0.02278, 0.02614, 0.01995}, {0.02438, -0.00616, 0.03111}, {0.02636, 0.02253, 0.01995}};
+inline constexpr float kRigStrength[4] = {1.187f, 0.751f, 0.751f, 0.751f};
+inline constexpr float kRigSinSquared = 0.5f;  // sin^2 of the disks' 45-degree radius
+inline constexpr float kWorldStrength = 0.415f;
 
 /// A missing part: the web app's placeholder (src/render/materials.ts:188).
 inline constexpr unsigned kPlaceholderRgb = 0xb8bcc2;
@@ -74,7 +88,7 @@ inline constexpr float kFloorShare = 0.3f;
 /// Shadow: the key light's depth map, its side in texels; how far a receiving point is pushed
 /// out along its normal before the map is read, in texels (it keeps flat faces from shadowing
 /// themselves); and the slope-scaled depth bias of the map itself.
-inline constexpr int kShadowMapSize = 4096;
+inline constexpr int kShadowMapSize = 2048;
 inline constexpr float kShadowBias = 1.5f;
 inline constexpr float kShadowSlopeBias = 2.0f;
 /// Floor: a plane just under the model (kFloorLift LDU below its lowest point, +y being down),
@@ -105,13 +119,19 @@ inline constexpr double kEdgeStudFullPixels = 8;
 /// The selection's outline: the system accent blue (#007AFF, sRGB 0-255), this many pixels wide.
 inline constexpr unsigned kSelectionRgb[3] = {0, 122, 255};
 inline constexpr float kSelectionWidth = 2.0f;
-/// Ambient occlusion: how far (LDU) a surface looks for what hides its surroundings (a stud is
-/// 4 high, a plate 8, so this reaches a brick's corner but not the next brick over); how many
+/// Ambient occlusion: how far (LDU) a surface looks for what hides its surroundings; how many
 /// degrees above a surface something must rise before it counts (as a cosine, 0.1: about 6
 /// degrees, so a gently curved surface does not shade itself); and how strongly it darkens.
-inline constexpr float kAoRadius = 16.0f;
+/// The reach is wide (more than six bricks) because it also stands in for the floor's share of
+/// EyeSight's white world, which a whole model hides; fitted on native/corpus/calib.
+inline constexpr float kAoRadius = 128.0f;
 inline constexpr float kAoBias = 0.1f;
 inline constexpr float kAoStrength = 1.0f;
+/// The occlusion found is raised to these powers before it dims a brick's light from the
+/// surroundings and the floor's: a brick's own light is half from the fills, which reach in
+/// past what hides the world, and the floor shows only what is taken from it. Fitted as above.
+inline constexpr float kAoBrickPower = 1.5f;
+inline constexpr float kAoFloorPower = 4.0f;
 /// How far a culled, level-of-detail frame may be from the same frame drawn in full: mean
 /// absolute difference per channel, and over the worst kBlock square (0..255).
 inline constexpr double kDetailMeanTolerance = 0.5;

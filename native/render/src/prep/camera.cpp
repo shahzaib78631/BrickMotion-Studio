@@ -227,6 +227,23 @@ OrbitCamera OrbitCamera::from(const bm::plan::CameraKey& key) {
   return o;
 }
 
+LightRig studioLights(const Camera& camera, bool followHeading) {
+  // The rig's frame: right of the camera, away from it along the ground, and up (-y).
+  const Vec3 up{0, -1, 0};
+  Vec3 ahead{0, 0, 1};  // the front view looks along +z
+  if (followHeading) {
+    const Vec3 f = camera.target - camera.eye;
+    if (std::hypot(f.x, f.z) > 1e-9) ahead = normalized(Vec3{f.x, 0, f.z});
+  }
+  const Vec3 right = normalized(cross(ahead, up));  // the camera's right on screen, as basis() makes it
+  LightRig rig;
+  for (int i = 0; i < 4; i++) {
+    rig.toward[i] = normalized(right * kRigToward[i][0] + ahead * kRigToward[i][1] + up * kRigToward[i][2]);
+    rig.strength[i] = kRigStrength[i];
+  }
+  return rig;
+}
+
 OrbitCamera OrbitCamera::along(const bm::plan::Timeline& timeline, double frame) {
   const auto& keys = timeline.camera;
   if (keys.empty()) return {};

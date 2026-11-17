@@ -29,6 +29,8 @@ struct FrameUniforms {
   simd_float4 floorCentre;
   simd_float4 lens;
   simd_float4 selection;
+  simd_float4 lights[4];  // xyz toward each light (world), w its strength
+  simd_float4 rig;        // x world strength, y sin^2 of the lights' radius
 };
 
 // Must match DrawUniforms in shaders/common.metal.
@@ -61,7 +63,7 @@ struct FrameBuffer {
 /// The fourth holds, per pixel, the share of an opaque surface's light that came from the
 /// surroundings (r: ambient occlusion dims only that), and how much of the pixel is floor (g).
 inline constexpr MTLPixelFormat kColorFormat = MTLPixelFormatRGBA16Float, kAccumFormat = MTLPixelFormatRGBA32Float, kRevealFormat = MTLPixelFormatR32Float,
-                                kAmbientFormat = MTLPixelFormatRG16Float;
+                                kAmbientFormat = MTLPixelFormatRGBA16Float;
 
 struct Pipelines {
   id<MTLRenderPipelineState> brick = nil, transparent = nil, floor = nil, edges = nil, shadow = nil, composite = nil, environment = nil, mask = nil, ids = nil, ao = nil, aoBlur = nil;
@@ -109,6 +111,7 @@ struct Renderer::Impl {
   // The shadow map holds the poses now shown, drawn at this detail (-1: not drawn since a
   // piece last moved or appeared). Kept from frame to frame while nothing moves.
   int shadowDetail = -1;
+  bm::Vec3 shadowToward;  // the key light's direction it was drawn for
   id<MTLTexture> mask = nil;       // selected pieces, one sample
   id<MTLTexture> ids = nil, idDepth = nil;  // piece + 1 per pixel, for picking; made on the first pick
 

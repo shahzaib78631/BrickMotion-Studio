@@ -50,6 +50,15 @@ struct KeyLight {
 KeyLight keyLight(const bm::Box& bounds, bm::Vec3 origin, bm::Vec3 towardLight, int mapSize, double beyond);
 
 /// A camera on a sphere around a target: what the window's mouse and the timeline drive.
+/// The studio's four lights for this camera: toward each light (unit, world, -y up) and its
+/// strength (tolerances.h kRig*). With `followHeading` the rig turns with the camera about the
+/// vertical, as EyeSight's does; otherwise it is fixed to the model as seen from the front.
+struct LightRig {
+  bm::Vec3 toward[4];
+  float strength[4];
+};
+LightRig studioLights(const Camera& camera, bool followHeading);
+
 struct OrbitCamera {
   bm::Vec3 target;
   double distance = 400;

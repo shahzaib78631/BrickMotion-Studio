@@ -55,9 +55,9 @@ def main():
     for az in [int(a) for a in o.azimuths.split(',')]:
         ref = np.asarray(Image.open(os.path.join(CALIB, 'calib_az%d.png' % az)).convert('RGB')).astype(np.float64)
         ours = shot(os.path.join(o.out, 'ours_az%d.png' % az), az, o.extra)
-        # Where the bricks are: a plain picture with no floor, shadow or occlusion, against white.
-        plain = shot(os.path.join(o.out, 'mask_az%d.png' % az), az, ['--no-floor', '--no-shadows', '--no-ao', '--no-edges'])
-        bricks = np.abs(plain - 255).max(axis=2) > 3
+        # Where the bricks are: a plain picture with no floor, shadow or occlusion, against black.
+        plain = shot(os.path.join(o.out, 'mask_az%d.png' % az), az, ['--no-floor', '--no-shadows', '--no-ao', '--no-edges', '--background', '0,0,0'])
+        bricks = plain.max(axis=2) > 3
         near = np.zeros_like(bricks)
         ys, xs = np.nonzero(bricks)
         if len(ys):  # the floor around them: the bricks' box, grown by a third

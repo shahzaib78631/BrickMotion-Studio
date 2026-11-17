@@ -1,5 +1,6 @@
 #import "metal/impl.h"
 
+#include <cstdio>
 #include <cmath>
 
 #include "bmr/device.h"
@@ -26,7 +27,10 @@ std::unique_ptr<Renderer> Renderer::create(const bm::Model& model, bm::ldraw::Pa
     impl.model = &model;
     std::string error;
     impl.pipelines = makePipelines(*device, error);
-    if (!impl.pipelines.ok) return nullptr;
+    if (!impl.pipelines.ok) {
+      std::fprintf(stderr, "bmrender: %s\n", error.c_str());  // a shader that does not compile is a bug, and says so
+      return nullptr;
+    }
     impl.environment = makeEnvironment(*device, impl.pipelines);
     impl.meshes = std::make_unique<MeshLibrary>(model, full, low);
     impl.scene = buildScene(model, full);
@@ -216,8 +220,8 @@ void Renderer::Impl::makeTargets() {
   {
     const int fullW = width, fullH = height;
     width = (fullW + 1) / 2, height = (fullH + 1) / 2;  // make() reads the size
-    aoRaw = make(MTLPixelFormatR8Unorm, 1, readable, MTLStorageModePrivate);
-    aoSoft = make(MTLPixelFormatR8Unorm, 1, readable, MTLStorageModePrivate);
+    aoRaw = make(MTLPixelFormatRG8Unorm, 1, readable, MTLStorageModePrivate);
+    aoSoft = make(MTLPixelFormatRG8Unorm, 1, readable, MTLStorageModePrivate);
     width = fullW, height = fullH;
   }
   final = make(MTLPixelFormatBGRA8Unorm_sRGB, 1, MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead, MTLStorageModeShared);

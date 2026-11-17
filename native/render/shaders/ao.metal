@@ -2,13 +2,15 @@
 // at half size. For each pixel, 8 directions across the screen, 4 steps each out to kAoRadius
 // (LDU, as far as it reaches on screen): in each direction the highest point above the
 // surface's plane (the horizon) occludes in proportion to its angle, fading with distance.
-// Then a 4 x 4 blur that does not cross depth edges. The last pass dims only the light that
-// came from the surroundings by it (and the floor, which has no other light).
+// The key light's soft shadow is worked out here too, at the same points, so that the same
+// blur smooths its sampling. Then a 4 x 4 blur that does not cross depth edges. The last pass
+// dims by them only the light that came from the surroundings, and from the key.
 
 struct AoUniforms {
   float4 lens;   // tan of half the angle of view up and across, near, far
   float4 shape;  // radius (LDU), bias (cosine), strength, full-size width
   float4 size;   // full-size height, half width, half height, unused
+  float4 eye, right, up, forward;  // the camera in world space (xyz), to carry view-space points there
 };
 
 // View-space depth (positive, LDU) from reversed depth.
@@ -25,11 +27,12 @@ float4 viewPoint(depth2d<float> depth, int2 p, constant AoUniforms& u) {
   return float4(ndc.x * z * u.lens.y, ndc.y * z * u.lens.x, -z, 1.0);
 }
 
-fragment float aoFragment(ScreenOut in [[stage_in]], constant AoUniforms& u [[buffer(0)]], depth2d<float> depth [[texture(0)]]) {
+fragment float2 aoFragment(ScreenOut in [[stage_in]], constant AoUniforms& u [[buffer(0)]], constant FrameUniforms& frame [[buffer(1)]], depth2d<float> depth [[texture(0)]],
+                           depth2d<float> shadowMap [[texture(1)]], sampler shadowSampler [[sampler(1)]]) {
   int2 cell = int2(in.position.xy);
   int2 at = cell * 2;
   float4 p = viewPoint(depth, at, u);
-  if (p.w == 0) return 1.0;
+  if (p.w == 0) return float2(1.0);
   // The surface's normal from its neighbours, each side taking the nearer in depth so a silhouette does not bend it.
   float4 l = viewPoint(depth, at - int2(1, 0), u), r = viewPoint(depth, at + int2(1, 0), u);
   float4 t = viewPoint(depth, at - int2(0, 1), u), b = viewPoint(depth, at + int2(0, 1), u);
@@ -37,9 +40,16 @@ fragment float aoFragment(ScreenOut in [[stage_in]], constant AoUniforms& u [[bu
   float3 dy = (b.w > 0 && (t.w == 0 || abs(b.z - p.z) < abs(t.z - p.z))) ? p.xyz - b.xyz : t.xyz - p.xyz;
   float3 n = normalize(cross(dx, dy));
   if (dot(n, -p.xyz) < 0) n = -n;
+  float lit = 1.0;
+  if (frame.switches.x > 0.5) {
+    float3 world = u.eye.xyz + u.right.xyz * p.x + u.up.xyz * p.y - u.forward.xyz * p.z;
+    float3 worldNormal = normalize(u.right.xyz * n.x + u.up.xyz * n.y - u.forward.xyz * n.z);
+    lit = keyShadow(world, worldNormal, frame, shadowMap, shadowSampler, tileTurn(uint2(cell)));
+  }
+  if (frame.switches.y < 0.5) return float2(1.0, lit);
   float radius = u.shape.x;
-  float reach = min(radius / (-p.z * u.lens.x) * u.size.x * 0.5, 64.0);  // pixels
-  if (reach < 1.0) return 1.0;
+  float reach = min(radius / (-p.z * u.lens.x) * u.size.x * 0.5, 160.0);  // pixels
+  if (reach < 1.0) return float2(1.0, lit);
   // A fixed 4 x 4 pattern turns the directions and offsets the steps from pixel to pixel; the blur removes it.
   const float pattern[16] = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
   float jitter = (pattern[(cell.y & 3) * 4 + (cell.x & 3)] + 0.5) / 16.0;
@@ -61,24 +71,25 @@ fragment float aoFragment(ScreenOut in [[stage_in]], constant AoUniforms& u [[bu
     }
     sum += most;
   }
-  return saturate(1.0 - u.shape.z * sum / 8.0);
+  return float2(saturate(1.0 - u.shape.z * sum / 8.0), lit);
 }
 
-fragment float aoBlurFragment(ScreenOut in [[stage_in]], constant AoUniforms& u [[buffer(0)]], texture2d<float> ao [[texture(0)]], depth2d<float> depth [[texture(1)]]) {
+fragment float2 aoBlurFragment(ScreenOut in [[stage_in]], constant AoUniforms& u [[buffer(0)]], texture2d<float> ao [[texture(0)]], depth2d<float> depth [[texture(1)]]) {
   int2 cell = int2(in.position.xy);
   int2 halfSize = int2(u.size.y, u.size.z);
   int2 fullSize = int2(u.shape.w, u.size.x);
   float centre = depth.read(uint2(clamp(cell * 2, int2(0), fullSize - 1)));
-  if (centre <= 0.0) return 1.0;
+  if (centre <= 0.0) return float2(1.0);
   float z = viewDepth(centre, u.lens);
-  float sum = 0, weight = 0;
+  float2 sum = 0;
+  float weight = 0;
   for (int y = -2; y < 2; y++)
     for (int x = -2; x < 2; x++) {
       int2 q = clamp(cell + int2(x, y), int2(0), halfSize - 1);
       float d = depth.read(uint2(clamp(q * 2, int2(0), fullSize - 1)));
       float w = d > 0.0 ? exp(-abs(viewDepth(d, u.lens) - z) / (0.02 * z)) : 0.0;
-      sum += ao.read(uint2(q)).r * w;
+      sum += ao.read(uint2(q)).rg * w;
       weight += w;
     }
-  return weight > 0 ? sum / weight : 1.0;
+  return weight > 0 ? sum / weight : float2(1.0);
 }

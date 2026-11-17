@@ -15,6 +15,7 @@
 #include "bm/plan/timeline.h"
 #include "bmr/device.h"
 #include "bmr/image.h"
+#include "bmr/material.h"
 #include "bmr/renderer.h"
 #include "bmr/scene.h"
 #include "engine.h"
@@ -29,7 +30,7 @@ constexpr int kOk = 0, kFailure = 1, kUsage = 2;
 int usage() {
   std::fprintf(stderr,
                "usage: bmshot <model file> --out <png> [--size WxH] [--frame N] [--azimuth a --elevation e | --eye x,y,z --target x,y,z] [--fov deg] [--no-edges] [--no-shadows] [--no-ao] [--no-floor]\n"
-               "              [--no-cull] [--detail 0|1|2] [--select piece,piece,...] [--stats] [--repeat CxR] [--save-model <ldr>]\n"
+               "              [--no-cull] [--lights-fixed] [--background r,g,b] [--detail 0|1|2] [--select piece,piece,...] [--stats] [--repeat CxR] [--save-model <ldr>]\n"
                "       bmshot <model file> --bench <frames> [--repeat CxR] [--size WxH] [--detail 0|1|2] [--no-...]\n");
   return kUsage;
 }
@@ -109,6 +110,12 @@ int main(int argc, char** argv) {
     else if (a == "--no-ao") options.ambientOcclusion = false;
     else if (a == "--no-floor") options.floor = false;
     else if (a == "--no-cull") options.cull = false;
+    else if (a == "--lights-fixed") options.lightsFollowCamera = false;
+    else if (a == "--background") {
+      unsigned r = 0, g = 0, b = 0;
+      if (std::sscanf(value().c_str(), "%u,%u,%u", &r, &g, &b) != 3) return usage();
+      options.background[0] = bmr::linearFromSrgb(r), options.background[1] = bmr::linearFromSrgb(g), options.background[2] = bmr::linearFromSrgb(b);
+    }
     else if (a == "--detail") {
       detail = std::atoi(value().c_str());
       if (detail < 0 || detail > 2) return usage();
@@ -135,7 +142,7 @@ int main(int argc, char** argv) {
   if (out.empty() && benchFrames == 0 && saveModel.empty()) return usage();
   options.forceDetail = detail;
   if (!bmr::gpuAvailable()) {
-    std::fprintf(stderr, "bmshot: no Metal device\n");
+    std::fprintf(stderr, "bmshot: cannot draw here: %s\n", *bmr::shaderError() ? bmr::shaderError() : "no Metal device");
     return kFailure;
   }
   const std::string ldraw = bmtools::ldrawDir();

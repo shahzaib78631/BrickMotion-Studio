@@ -35,8 +35,8 @@ TEST_CASE("each finish has its own surface; alpha below one is transparent", "[m
     Finish finish;
     float roughness, metalness, clearcoat;
   };
-  for (const Want& w : {Want{Finish::Solid, 0.38f, 0.0f, 0.35f}, Want{Finish::Trans, 0.05f, 0.0f, 0.35f}, Want{Finish::Chrome, 0.08f, 1.0f, 0.35f}, Want{Finish::Metal, 0.20f, 0.7f, 0.35f},
-                        Want{Finish::Pearl, 0.10f, 0.5f, 0.35f}, Want{Finish::Rubber, 0.86f, 0.0f, 0.0f}}) {
+  for (const Want& w : {Want{Finish::Solid, 0.10f, 0.0f, 0.25f}, Want{Finish::Trans, 0.02f, 0.0f, 0.25f}, Want{Finish::Chrome, 0.08f, 1.0f, 0.25f}, Want{Finish::Metal, 0.20f, 0.7f, 0.25f},
+                        Want{Finish::Pearl, 0.10f, 0.5f, 0.25f}, Want{Finish::Rubber, 0.86f, 0.0f, 0.0f}}) {
     Color c;
     c.finish = w.finish;
     const Material m = materialFor(c);
