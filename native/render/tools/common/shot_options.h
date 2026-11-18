@@ -1,0 +1,36 @@
+#pragma once
+// What bmshot and bmexport share: the picture's size, the frame, the camera, the rig's heading,
+// the background and repeating the model for benchmarks.
+#include <cmath>
+#include <string>
+#include <string_view>
+#include <vector>
+#include "bm/math.h"
+#include "bm/plan/timeline.h"
+#include "bmr/camera.h"
+
+namespace bmtools {
+
+struct ShotOptions {
+  std::string out;
+  int width = 1600, height = 1000;
+  int frame = -1;  ///< -1: the model as it is, not a moment of its build
+  double azimuth = NAN, elevation = NAN, fovDegrees = NAN;
+  bool explicitCamera = false;  ///< --eye and --target given (LDraw space, y down)
+  bm::Vec3 eye, target;
+  int columns = 1, rows = 1;    ///< --repeat
+  bool lightsFollow = false;    ///< --lights-follow; --lights-fixed (the default) sets it false
+  bool backgroundSet = false;
+  float background[3] = {1, 1, 1};  ///< linear
+};
+
+/// Reads the option at args[i] (and its value, moving `i` past it). 1: it was one of these; 0:
+/// it is not, `i` unchanged; -1: it was, with a bad value.
+int parseShotOption(ShotOptions& options, const std::vector<std::string_view>& args, size_t& i);
+
+/// The camera of a still: fitted to `bounds` from the given or default heading; or at --eye
+/// looking at --target; or, at a frame of a build with no heading given, the timeline's camera
+/// there. --fov sets the lens (not of the timeline's camera). False only if --eye is --target.
+bool shotCamera(const ShotOptions& options, const bm::Box& bounds, const bm::plan::Timeline* timeline, bmr::OrbitCamera& out);
+
+}  // namespace bmtools

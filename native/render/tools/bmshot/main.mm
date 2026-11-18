@@ -20,6 +20,7 @@
 #include "bmr/scene.h"
 #include "bmr/tolerances.h"
 #include "engine.h"
+#include "shot_options.h"
 
 namespace fs = std::filesystem;
 using namespace bm;
@@ -89,47 +90,30 @@ int main(int argc, char** argv) {
   std::vector<std::string_view> args(argv + 1, argv + argc);
   if (args.empty() || args[0].rfind("--", 0) == 0) return usage();
   const fs::path input{std::string(args[0])};
-  std::string out, saveModel;
-  int width = 1600, height = 1000, detail = -1;
-  double azimuth = NAN, elevation = NAN, fovDegrees = NAN;
-  bool explicitCamera = false;
-  Vec3 eye, target;
+  bmtools::ShotOptions shot;
+  std::string saveModel;
+  int detail = -1;
   bmr::FrameOptions options;
   bool stats = false;
-  int frame = -1, benchFrames = 0, columns = 1, rows = 1;
+  int benchFrames = 0;
   std::vector<uint32_t> select;
   for (size_t i = 1; i < args.size(); i++) {
+    const int shared = bmtools::parseShotOption(shot, args, i);
+    if (shared < 0) return usage();
+    if (shared > 0) continue;
     const std::string_view a = args[i];
     auto value = [&]() -> std::string {
       if (i + 1 >= args.size()) return {};
       return std::string(args[++i]);
     };
-    if (a == "--out") out = value();
-    else if (a == "--save-model") saveModel = value();
-    else if (a == "--size") {
-      const std::string v = value();
-      if (std::sscanf(v.c_str(), "%dx%d", &width, &height) != 2 || width < 1 || height < 1) return usage();
-    } else if (a == "--eye" || a == "--target") {
-      Vec3& v = a == "--eye" ? eye : target;
-      if (std::sscanf(value().c_str(), "%lf,%lf,%lf", &v.x, &v.y, &v.z) != 3) return usage();
-      explicitCamera = true;
-    } else if (a == "--fov") fovDegrees = std::atof(value().c_str());
-    else if (a == "--azimuth") azimuth = std::atof(value().c_str());
-    else if (a == "--elevation") elevation = std::atof(value().c_str());
+    if (a == "--save-model") saveModel = value();
     else if (a == "--no-edges") options.edges = false;
     else if (a == "--no-shadows") options.shadows = false;
     else if (a == "--no-ao") options.ambientOcclusion = false;
     else if (a == "--no-floor") options.floor = false;
     else if (a == "--no-cull") options.cull = false;
-    else if (a == "--lights-fixed") options.lightsFollowCamera = false;
-    else if (a == "--lights-follow") options.lightsFollowCamera = true;
     else if (a == "--raytraced-glass") options.refractiveGlass = true;
     else if (a == "--maps-whole") options.mapTrianglesPerFrame = UINT64_MAX;  // bench only: every stale map drawn whole
-    else if (a == "--background") {
-      unsigned r = 0, g = 0, b = 0;
-      if (std::sscanf(value().c_str(), "%u,%u,%u", &r, &g, &b) != 3) return usage();
-      options.background[0] = bmr::linearFromSrgb(r), options.background[1] = bmr::linearFromSrgb(g), options.background[2] = bmr::linearFromSrgb(b);
-    }
     else if (a == "--detail") {
       detail = std::atoi(value().c_str());
       if (detail < 0 || detail > 2) return usage();
@@ -137,12 +121,6 @@ int main(int argc, char** argv) {
     else if (a == "--bench") {
       benchFrames = std::atoi(value().c_str());
       if (benchFrames < 1) return usage();
-    } else if (a == "--repeat") {
-      const std::string v = value();
-      if (std::sscanf(v.c_str(), "%dx%d", &columns, &rows) != 2 || columns < 1 || rows < 1) return usage();
-    } else if (a == "--frame") {
-      frame = std::atoi(value().c_str());
-      if (frame < 0) return usage();
     } else if (a == "--select") {
       std::string list = value();
       for (size_t at = 0; at < list.size();) {
@@ -153,6 +131,10 @@ int main(int argc, char** argv) {
     }
     else return usage();
   }
+  options.lightsFollowCamera = shot.lightsFollow;
+  if (shot.backgroundSet) std::copy(std::begin(shot.background), std::end(shot.background), std::begin(options.background));
+  const std::string& out = shot.out;
+  const int width = shot.width, height = shot.height, frame = shot.frame, columns = shot.columns, rows = shot.rows;
   if (out.empty() && benchFrames == 0 && saveModel.empty()) return usage();
   if (benchFrames == 0) options.mapTrianglesPerFrame = 0;  // a still is drawn whole
   options.forceDetail = detail;
@@ -194,25 +176,15 @@ int main(int argc, char** argv) {
     renderer->select(select);
     if (benchFrames > 0 && frame < 0) return bench(*renderer, model, benchFrames, width, height, options);
     const double aspect = double(width) / height;
-    const bmr::OrbitCamera defaults;
-    bmr::OrbitCamera orbit = bmr::OrbitCamera::fitted(renderer->scene().bounds, 0.6, aspect, std::isnan(azimuth) ? defaults.azimuth : azimuth,
-                                                      std::isnan(elevation) ? defaults.elevation : elevation);
-    if (explicitCamera) {
-      // An LDraw-space camera (y down), as another renderer was given it.
-      const Vec3 from = eye - target;
-      orbit.target = target, orbit.distance = length(from);
-      if (!(orbit.distance > 0)) return usage();
-      orbit.elevation = std::asin(std::clamp(-from.y / orbit.distance, -1.0, 1.0));
-      orbit.azimuth = std::atan2(-from.x, -from.z);
-    }
-    if (std::isfinite(fovDegrees)) orbit.fovY = fovDegrees * M_PI / 180;
+    bmr::OrbitCamera orbit;
+    if (!bmtools::shotCamera(shot, renderer->scene().bounds, nullptr, orbit)) return usage();
     plan::Plan plan;
     plan::Timeline timeline;
     if (frame >= 0) {
       bmtools::Planned planned = bmtools::planModel(model, library, full, ldraw);
       plan = std::move(planned.plan), timeline = std::move(planned.timeline);
       renderer->setFrame(plan, timeline, frame);
-      if (!timeline.camera.empty() && std::isnan(azimuth) && std::isnan(elevation)) orbit = bmr::OrbitCamera::along(timeline, frame);
+      bmtools::shotCamera(shot, renderer->scene().bounds, &timeline, orbit);
       std::fprintf(stderr, "bmshot: frame %d of %d\n", frame, timeline.frames);
       if (benchFrames > 0) return bench(*renderer, model, benchFrames, width, height, options, &plan, &timeline, frame);
     }
