@@ -130,4 +130,12 @@ Unit growUnit(const Context& ctx, uint32_t piece, const collide::World::Present*
 /// Plans the whole model. Never throws for a model that loaded; what it cannot do is flagged.
 Plan plan(const Model& model, const connect::Graph& graph, ldraw::PartCache& parts, collide::ShapeCache& shapes, const Options& options = {});
 
+/// The step a piece is placed in at each level of the file: the root's first, then the step
+/// within each submodel it sits in (read from Piece::id, "<step>:<item>/..."; {Piece::step} for
+/// an id of another form).
+std::vector<int> stepsOf(const Piece& piece);
+/// Whether steps `a` come after steps `b` in the build, level by level. A submodel is built
+/// before the rest of the step that places it: {5} is after {5, 3}.
+bool laterSteps(const std::vector<int>& a, const std::vector<int>& b);
+
 }  // namespace bm::plan

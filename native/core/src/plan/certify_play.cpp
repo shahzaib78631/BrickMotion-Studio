@@ -35,13 +35,17 @@ PlayCheck certifyPlay(const Model& model, const connect::Graph& graph, ldraw::Pa
     if (!world.box(p).empty()) floor = std::max(floor, farAlong(world.box(p), down));
 
   // The order against the file's steps, and what goes in from below.
-  std::vector<int> lowest(plan.moves.size(), 0), highest(plan.moves.size(), 0);
+  // Steps level by level (stepsOf): a submodel's own steps count too.
+  std::vector<std::vector<int>> lowest(plan.moves.size()), highest(plan.moves.size());
   for (size_t i = 0; i < plan.moves.size(); i++) {
     const Move& m = plan.moves[i];
-    lowest[i] = std::numeric_limits<int>::max(), highest[i] = std::numeric_limits<int>::min();
-    for (uint32_t p : m.unit.pieces) lowest[i] = std::min(lowest[i], model.pieces()[p].step), highest[i] = std::max(highest[i], model.pieces()[p].step);
+    for (uint32_t p : m.unit.pieces) {
+      const std::vector<int> s = stepsOf(model.pieces()[p]);
+      if (lowest[i].empty() || laterSteps(lowest[i], s)) lowest[i] = s;
+      if (highest[i].empty() || laterSteps(s, highest[i])) highest[i] = s;
+    }
     for (size_t j = 0; j < i; j++)
-      if (lowest[j] > highest[i]) out.inversions++;
+      if (!lowest[j].empty() && !highest[i].empty() && laterSteps(lowest[j], highest[i])) out.inversions++;
     if (m.flag == Flag::None && dot(m.insertion, down) < -0.5) out.upward++;
   }
 

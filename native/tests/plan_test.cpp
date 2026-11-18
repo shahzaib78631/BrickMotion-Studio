@@ -28,8 +28,18 @@ struct Scene {
   connect::Graph graph;
   std::unique_ptr<Model> model;
 
+  std::string sub;  ///< a submodel, placed where the first addIn was called
   /// Starts the file's next build step.
   void step() { text += "0 STEP\n"; }
+  /// Starts the submodel's next build step.
+  void subStep() { sub += "0 STEP\n"; }
+  /// A brick in the submodel (calls to it come one after another: the submodel is placed once).
+  uint32_t addIn(double x, double y, double z) {
+    if (sub.empty()) text += "1 16 0 0 0 1 0 0 0 1 0 0 0 1 sub.ldr\n";
+    sub += "1 4 " + std::to_string(x) + " " + std::to_string(y) + " " + std::to_string(z) + " 1 0 0 0 1 0 0 0 1 3005.dat\n";
+    at.push_back({x, y, z});
+    return static_cast<uint32_t>(at.size() - 1);
+  }
   uint32_t add(double x, double y, double z) {
     text += "1 4 " + std::to_string(x) + " " + std::to_string(y) + " " + std::to_string(z) + " 1 0 0 0 1 0 0 0 1 3005.dat\n";
     at.push_back({x, y, z});
@@ -69,8 +79,8 @@ struct Scene {
   }
   void finish() {
     static int counter = 0;
-    const fs::path file = fs::temp_directory_path() / ("bm_plan_" + std::to_string(::getpid()) + "_" + std::to_string(counter++) + ".ldr");
-    { std::ofstream out(file); out << text; }
+    const fs::path file = fs::temp_directory_path() / ("bm_plan_" + std::to_string(::getpid()) + "_" + std::to_string(counter++) + (sub.empty() ? ".ldr" : ".mpd"));
+    { std::ofstream out(file); out << (sub.empty() ? text : "0 FILE main.ldr\n" + text + "0 FILE sub.ldr\n" + sub); }
     model = std::make_unique<Model>(io::load(file, lib));
     fs::remove(file);
     const uint32_t n = static_cast<uint32_t>(at.size());
@@ -760,4 +770,35 @@ TEST_CASE("a flight does not stop at its corners before it lands", "[plan][timel
     REQUIRE(length(poseAt(f, f.startFrame + f.frames).t) == 0);
   }
   REQUIRE(certifyPlay(*s.model, s.graph, s.parts, s.shapes, p, t).crossings == 0);
+}
+
+TEST_CASE("a submodel's own steps lead inside it", "[plan][steps]") {
+  Scene s;
+  const uint32_t x0 = s.addIn(0, 0, 0), x1 = s.addIn(0, -24, 0);  // the submodel's step 0: a stack
+  s.subStep();
+  const uint32_t y = s.addIn(40, 0, 0);  // its step 1: a low brick beside it
+  s.step();
+  const uint32_t z = s.add(0, -48, 0);  // the model's step 1, on the stack
+  s.stud(x0, x1), s.stud(x0, y, {1, 0, 0}), s.stud(x1, z);
+  const Plan p = s.plan();
+  REQUIRE(s.model->pieces()[y].id == "0:0/1:0");
+  REQUIRE(stepsOf(s.model->pieces()[y]) == std::vector<int>{0, 1});
+  REQUIRE(laterSteps({0, 1}, {0, 0}));
+  REQUIRE(laterSteps({0}, {0, 5}));  // the rest of the step that places a submodel comes after it
+  REQUIRE_FALSE(laterSteps({0, 5}, {1}));
+  REQUIRE(order(p) == std::vector<uint32_t>{x0, x1, y, z});
+  REQUIRE(played(s, p).inversions == 0);
+}
+
+TEST_CASE("two groups standing on the table are built apart, then bridged", "[plan][ground]") {
+  Scene s;
+  const uint32_t l = s.add(0, 0, 0), r = s.add(60, 0, 0), b = s.add(0, -24, 0);
+  s.stud(l, b), s.stud(r, b);  // b is held by both: without it, l and r are apart
+  const Plan p = s.plan();
+  REQUIRE(p.moves.size() == 3);
+  REQUIRE(p.moves.back().unit.pieces == std::vector<uint32_t>{b});
+  REQUIRE(played(s, p).crossings == 0);
+  const Certificate c = s.certify(p);
+  REQUIRE(c.floating == 0);  // the second one stands on the table: it is not in the air
+  REQUIRE(c.certified == 3);
 }

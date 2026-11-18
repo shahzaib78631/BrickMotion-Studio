@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include "bm/plan/tolerances.h"
 
 namespace bm::plan {
@@ -37,6 +38,10 @@ struct Checker {
     if (within)
       for (uint32_t p : *within) inside[p] = 1;
     std::vector<uint8_t> groupStarted(graph.groups + 1, 0);
+    // The table: the lowest of what is checked (a sub-assembly stands on its own lowest). LDraw's down is +y.
+    double table = -std::numeric_limits<double>::infinity();
+    for (uint32_t p = 0; p < n; p++)
+      if (inside[p] && !world.box(p).empty()) table = std::max(table, world.box(p).max.y);
     for (const Move& m : plan.moves) {
       MoveCheck check;
       out.total++;
@@ -78,6 +83,9 @@ struct Checker {
           }
         }
         if (starts) check.joined = true;
+        // Or it stands on the table, beside what is built: a second group started apart.
+        for (uint32_t p : m.unit.pieces)
+          if (!world.box(p).empty() && world.box(p).max.y >= table - 0.5) check.joined = true;
         check.alongConnector = along && (length(in) > 0 || m.path.empty());
         if (m.path.empty()) check.alongConnector = false;  // no flight was shown at all
         // Rule 2: every leg of the flight, from open air to the seat.

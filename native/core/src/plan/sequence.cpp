@@ -11,6 +11,28 @@
 #include "blocker_index.h"
 
 namespace bm::plan {
+
+std::vector<int> stepsOf(const Piece& piece) {
+  std::vector<int> out;
+  size_t at = 0;
+  while (at <= piece.id.size()) {
+    const size_t slash = piece.id.find('/', at);
+    const std::string level = piece.id.substr(at, slash == std::string::npos ? std::string::npos : slash - at);
+    const size_t colon = level.find(':');
+    if (colon == std::string::npos || colon == 0 || level.find_first_not_of("0123456789") != colon) return {piece.step};
+    out.push_back(std::atoi(level.c_str()));
+    if (slash == std::string::npos) break;
+    at = slash + 1;
+  }
+  if (out.empty()) return {piece.step};
+  return out;
+}
+
+bool laterSteps(const std::vector<int>& a, const std::vector<int>& b) {
+  for (size_t i = 0; i < a.size() && i < b.size(); i++)
+    if (a[i] != b[i]) return a[i] > b[i];
+  return a.size() < b.size();
+}
 namespace {
 
 using collide::World;
@@ -169,6 +191,8 @@ struct Sequencer {
     if (!bounds.empty()) centre = (bounds.min + bounds.max) * 0.5;
     size_t left = set.size();
     std::vector<Extraction> single(n);
+    std::vector<std::vector<int>> stepKey(n);  // each piece's steps, level by level
+    for (uint32_t p = 0; p < n; p++) stepKey[p] = stepsOf(ctx.model.pieces()[p]);
     BlockerIndex blockerIndex(n);
     std::vector<uint8_t> dirty(n, 0), seen(n, 0), reason(n, 0);  // dirty: 1 its mates changed, 2 it must be tried again
     std::vector<uint32_t> stack, todo;
@@ -204,10 +228,60 @@ struct Sequencer {
       joinedAlone = reached == set.size();
     }
     Joined cuts(ctx, n);
-    auto joined = [&](const Unit& u) {
+    auto oneLeft = [&](const Unit& u) {  // what is left without `u` is one joined whole
       if (joinedAlone && std::all_of(u.pieces.begin(), u.pieces.end(), [&](uint32_t q) { return inSet[q] != 0; }))
         if (const std::optional<bool> known = cuts.without(present, u, left - u.pieces.size())) return *known;
       return staysJoined(ctx, set, present, u, stack, seen);
+    };
+    // What rests on the table: the set's lowest pieces (a sub-assembly is built resting on its own).
+    constexpr double kOnTable = 0.5;  // LDU
+    auto bottomOf = [&](uint32_t p) {
+      const Box& b = ctx.world.box(p);
+      double hi = -std::numeric_limits<double>::infinity();
+      for (int c = 0; c < 8; c++) hi = std::max(hi, dot(ctx.down, Vec3{c & 1 ? b.max.x : b.min.x, c & 2 ? b.max.y : b.min.y, c & 4 ? b.max.z : b.min.z}));
+      return hi;
+    };
+    double setFloor = -std::numeric_limits<double>::infinity();
+    for (uint32_t p : set)
+      if (!ctx.world.box(p).empty()) setFloor = std::max(setFloor, bottomOf(p));
+    std::vector<uint8_t> onTable(n, 0);
+    size_t onTableLeft = 0;
+    for (uint32_t p : set)
+      if (!ctx.world.box(p).empty() && bottomOf(p) >= setFloor - kOnTable) onTable[p] = 1, onTableLeft += present[p] ? 1 : 0;
+    // Every group of what is left rests on the table: groups may stand apart, none may hang in the air.
+    auto allRest = [&](const Unit& u) {
+      std::fill(seen.begin(), seen.end(), 0);
+      for (uint32_t q : u.pieces) seen[q] = 1;
+      for (uint32_t start : set) {
+        if (!present[start] || seen[start]) continue;
+        bool rests = false;
+        stack.assign(1, start);
+        seen[start] = 1;
+        while (!stack.empty()) {
+          const uint32_t p = stack.back();
+          stack.pop_back();
+          rests = rests || onTable[p];
+          for (uint32_t ci : ctx.connectionsOf[p]) {
+            const Connection& c = ctx.graph.connections[ci];
+            const uint32_t other = c.a == p ? c.b : c.a;
+            if (seen[other] || !present[other] || !inSet[other]) continue;
+            seen[other] = 1;
+            stack.push_back(other);
+          }
+        }
+        if (!rests) return false;
+      }
+      return true;
+    };
+    // Whether `u` may be taken now. What is built stands on the table or is held by what does;
+    // only when nothing can be taken so (`relaxed`) is what is left only kept joined, as before.
+    bool relaxed = false;
+    auto joined = [&](const Unit& u) {
+      if (u.pieces.size() >= left) return true;
+      size_t resting = onTableLeft;
+      for (uint32_t q : u.pieces) resting -= (onTable[q] && present[q]) ? 1 : 0;
+      if (oneLeft(u)) return relaxed || resting > 0;
+      return resting > 0 && allRest(u);
     };
     // What must be built after what (the author's), as "cannot be removed while these are present".
     std::vector<std::vector<uint32_t>> removeFirst(n);
@@ -266,7 +340,10 @@ struct Sequencer {
       m.path = flag == Flag::None ? e.path : std::vector<Xform>{};
       m.flag = flag;
       m.blocker = e.blocker;
+      if (joinedAlone && !oneLeft(m.unit)) joinedAlone = false;  // groups standing apart: Joined cannot tell now
+      relaxed = false;
       for (uint32_t p : m.unit.pieces) {
+        if (onTable[p] && present[p]) onTableLeft--;
         present[p] = 0;
         removedAt[p] = round;
         left--;
@@ -308,8 +385,7 @@ struct Sequencer {
     };
     // Across steps (only when the latest step has nothing that can leave): later steps first.
     auto before = [&](uint32_t a, uint32_t b) {
-      const int sa = ctx.model.pieces()[a].step, sb = ctx.model.pieces()[b].step;
-      if (sa != sb) return sa > sb;
+      if (stepKey[a] != stepKey[b]) return laterSteps(stepKey[a], stepKey[b]);
       return ranked(a, b);
     };
     // Pieces that go in together, tried as one; false if they cannot leave now.
@@ -399,20 +475,38 @@ struct Sequencer {
       }
       // The file's steps lead: the latest step that still has pieces is taken apart first, its
       // submodels as one, then its pieces, then those of its pieces that only leave together.
-      int frontier = std::numeric_limits<int>::min();
+      std::vector<int> frontier;
+      bool any = false;
       for (uint32_t p : set)
-        if (present[p]) frontier = std::max(frontier, ctx.model.pieces()[p].step);
+        if (present[p] && (!any || laterSteps(stepKey[p], frontier))) frontier = stepKey[p], any = true;
       std::vector<uint32_t> latest;
       for (uint32_t p : set)
-        if (present[p] && ctx.model.pieces()[p].step == frontier) latest.push_back(p);
+        if (present[p] && stepKey[p] == frontier) latest.push_back(p);
       std::sort(latest.begin(), latest.end(), ranked);
-      auto ofLatest = [&](const Unit& u) { return std::all_of(u.pieces.begin(), u.pieces.end(), [&](uint32_t q) { return ctx.model.pieces()[q].step >= frontier; }); };
+      auto ofLatest = [&](const Unit& u) { return std::all_of(u.pieces.begin(), u.pieces.end(), [&](uint32_t q) { return !laterSteps(frontier, stepKey[q]); }); };
+      // A submodel is placed in the step of its use: its pieces' steps up to its own level.
+      auto placedLatest = [&](const Unit& u) {
+        if (u.pieces.empty()) return false;
+        const std::string& first = ctx.model.pieces()[u.pieces.front()].id;
+        size_t common = first.size();
+        for (uint32_t q : u.pieces) {
+          const std::string& id = ctx.model.pieces()[q].id;
+          size_t k = 0;
+          while (k < common && k < id.size() && id[k] == first[k]) k++;
+          common = k;
+        }
+        const size_t levels = static_cast<size_t>(std::count(first.begin(), first.begin() + static_cast<std::ptrdiff_t>(common), '/'));
+        std::vector<int> placed = stepKey[u.pieces.front()];
+        if (levels == 0 || levels >= placed.size()) return ofLatest(u);
+        placed.resize(levels);
+        return !laterSteps(frontier, placed);
+      };
       bool took = false;
       if (depth < 4)
         for (uint32_t p : latest) {  // a submodel placed in this step, the outermost use first
           for (size_t k = units.authoredOf[p].size(); k-- > 0 && !took;) {
             const Unit& u = units.authored[units.authoredOf[p][k]];
-            if (whole(u) && ofLatest(u)) took = together(u, UnitSource::Authored);
+            if (whole(u) && placedLatest(u)) took = together(u, UnitSource::Authored);
           }
           if (took || outOfTime()) break;
         }
@@ -478,7 +572,7 @@ struct Sequencer {
         std::vector<uint8_t> inWay(present.size(), 0);
         for (uint32_t p : latest)
           for (uint32_t q : single[p].stoppedBy)
-            if (q < present.size() && present[q] && ctx.model.pieces()[q].step < frontier) inWay[q] = 1;
+            if (q < present.size() && present[q] && laterSteps(frontier, stepKey[q])) inWay[q] = 1;
         std::vector<uint32_t> blockers;
         for (uint32_t q : set)
           if (inWay[q] && single[q].ok) blockers.push_back(q);
@@ -532,6 +626,11 @@ struct Sequencer {
           }
       }
       if (took) continue;
+      // Nothing can be taken with what is left standing: ask only that it stays joined.
+      if (!relaxed) {
+        relaxed = true;
+        continue;
+      }
       // Still nothing: the engine cannot show how this piece goes in, and says so on it.
       for (uint32_t p : stuck) {
         const Unit u = unitOf({p});
