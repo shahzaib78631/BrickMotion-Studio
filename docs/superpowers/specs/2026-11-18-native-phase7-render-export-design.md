@@ -24,7 +24,9 @@ export (`src/export/exportVideo.ts`, `pathTracedStill.ts`, `src/audio/snapSound.
   of the scene copied to world space, one CPU BVH plus one Metal primitive acceleration structure,
   rebuilt whenever a piece moves; exact Fresnel and Snell through the walls (`glass_transport.metal`).
 - The look, fitted against EyeSight (README, "The look, against EyeSight"): its BUILD_FL rig (four
-  distant disk lights, 45° in radius, turning with the camera's heading, white world), plastic of
+  distant disk lights, 45° in radius, white world; the viewport turns them with the camera's heading,
+  `lightsFollowCamera`, though a probe of EyeSight on 2026-11-17 found its lights fixed in the world:
+  open below), plastic of
   roughness 0.1 under a clear coat, Studio's linear colours, the floor a shadow catcher, glass IOR
   1.49. `native/tools/calib_eyesight.py` scores a picture against EyeSight's renders of `calib.ldr`
   and `glass.ldr` from four azimuths (viewport now: RMSE 7.36 calib, 17.57 glass).
@@ -81,7 +83,7 @@ ray-tracing hardware: Metal's intersector runs on the shader cores there, faster
   linearly transformed cosines), and solve the light between patches as a hierarchical linear system
   updated as pieces move. No noise and deterministic, aimed at the live viewport, not at stills and
   film. Not phase 7's way: it is research of months; its cost is unproven where it matters (EyeSight's
-  four lights are disks 45° across, so nearly every nearby part falls in them; LDraw parts are far
+  four lights are disks 90° across, so nearly every nearby part falls in them; LDraw parts are far
   from convex; a flying piece changes what static patches see of each other, not only its own rows
   of the system; bricks touching everywhere is where patch methods leak light); and glass leaving one
   piece mostly enters another, so it needs ray queries between parts anyway. It needs a reference to
@@ -97,7 +99,7 @@ ray-tracing hardware: Metal's intersector runs on the shader cores there, faster
 - **Surfaces** from `Material`: plastic is diffuse under a GGX clear coat; metals a tinted GGX
   conductor; transparent colours a dielectric of IOR 1.49 with absorption by distance travelled,
   fitted with the harness; printed parts take their vertex colours.
-- **Light:** EyeSight's BUILD_FL by default (as the viewport); the web app's photo rigs as options.
+- **Light:** EyeSight's BUILD_FL by default, its lights where the owner settles (open, 3); the web app's photo rigs as options.
   The floor is a shadow catcher as in EyeSight (what a ray bent through glass sees of it is fitted).
   No outline lines (EyeSight has none).
 - **Denoise:** OIDN's RT filter with albedo and normal, per frame for film; `--no-denoise` keeps
@@ -121,6 +123,10 @@ ray-tracing hardware: Metal's intersector runs on the shader cores there, faster
    2026-08-18) into a vendor directory outside git? Without it the stills are not denoised.
 2. **The uncommitted render work** (glass behind its flag, rounded edges, stud roots, the composite
    fix): phase 7 changes `native/render` too, so it should land first, as its own commits.
+3. **Where the lights are.** EyeSight's BUILD_FL lights measured fixed in the world (2026-11-17: the
+   picture at azimuth 0 with the rig turned 90° matches azimuth 270 to EyeSight's own repeat noise);
+   the viewport turns them with the camera's heading by default. Stills and film should do what EyeSight
+   does unless the owner prefers the viewport's choice; the default of `lightsFollowCamera` is theirs.
 
 ## Left to the builder
 
