@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
+#include <numeric>
 #include "bm/plan/tolerances.h"
 
 namespace bm::plan {
@@ -44,20 +46,8 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
   double cursor = 0, rowAway = awayHi + 2 * kExitMargin, rowDepth = 0;
   const int perFlight = std::max(1, static_cast<int>(std::lround(style.fps / std::max(0.01, style.piecesPerSecond) * std::max(0.01, style.time))));
   int frame = 0;
-  for (uint32_t mi = 0; mi < plan.moves.size(); mi++) {
-    const Move& m = plan.moves[mi];
-    Flight f;
-    f.move = mi;
-    f.startFrame = frame;
-    Box box;
-    for (uint32_t p : m.unit.pieces) box.merge(boxes[p]);
-    if (m.flag != Flag::None || m.path.empty() || box.empty()) {
-      f.waypoints = {Xform{}};
-      f.at = {1};
-      out.flights.push_back(std::move(f));
-      continue;
-    }
-    // Its spot on the floor.
+  // A unit's spot on the floor: its motion from its seat, in the model.
+  auto spotFor = [&](const Box& box) {
     double lo, hi, depthLo, depthHi, top, bottom;
     span(box, along, lo, hi);
     span(box, away, depthLo, depthHi);
@@ -67,11 +57,50 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
     const Vec3 move = along * (alongLo + cursor - lo) + away * (rowAway - depthLo) + down * (floor - bottom);
     cursor += width;
     rowDepth = std::max(rowDepth, depth);
+    return move;
+  };
+  // One move's flight. `base` is where the unit it helps build stands while it is built (zero at
+  // the top): the flight's poses are motions from its seat in that unit, which carries them. A
+  // unit that is built of moves of its own (Move::sub) is first built there, piece by piece, on
+  // its own spot on the floor, and then flies in whole.
+  std::function<void(const Plan&, uint32_t, int, Vec3, uint32_t, int)> fly = [&](const Plan& p, uint32_t mi, int parent, Vec3 base, uint32_t top, int level) {
+    const Move& m = p.moves[mi];
+    Flight f;
+    f.move = top;
+    f.parent = parent;
+    f.depth = level;
+    f.pieces = m.unit.pieces;
+    f.flag = m.flag;
+    f.insertion = m.insertion;
+    f.seatTravel = m.seatTravel;
+    Box box;
+    for (uint32_t q : m.unit.pieces) box.merge(boxes[q]);
+    if (m.flag != Flag::None || m.path.empty() || box.empty()) {
+      f.startFrame = frame;
+      f.waypoints = {Xform{}};
+      f.at = {1};
+      out.flights.push_back(std::move(f));
+      return;
+    }
+    const Vec3 spot = spotFor(box);  // in the model
+    const Vec3 move = spot - base;   // from its seat in the unit it helps build
     f.staging = shifted(move);
+    const int self = static_cast<int>(out.flights.size());
+    out.flights.push_back(Flight{});  // its place, filled in once its own build is laid out
+    if (m.sub >= 0 && static_cast<size_t>(m.sub) < p.subs.size() && level < 8) {
+      const Plan& sub = p.subs[static_cast<size_t>(m.sub)];
+      for (uint32_t k = 0; k < sub.moves.size(); k++) fly(sub, k, self, spot, top, level + 1);
+    }
+    f.startFrame = frame;
     // Up, across above everything, down to where the plan's path begins, then the path.
+    double unitTop, bottom;
+    span(box, down, unitTop, bottom);
     const Vec3 open = m.path.back().t;
     const double clearance = (floorLo - kExitMargin) - bottom;  // along `down`: the unit's underside a margin above everything
-    auto raised = [&](Vec3 t) { return t + down * (std::min(clearance, dot(t, down)) - dot(t, down)); };
+    auto raised = [&](Vec3 t) {
+      const double at = dot(t + base, down);
+      return t + down * (std::min(clearance, at) - at);
+    };
     f.waypoints = {f.staging, shifted(raised(move)), shifted(raised(open))};
     for (size_t k = m.path.size(); k-- > 0;) f.waypoints.push_back(m.path[k]);
     // Time by distance, except the last leg, which is the landing.
@@ -124,7 +153,24 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
     }
     f.frames = perFlight;
     frame += perFlight;
-    out.flights.push_back(std::move(f));
+    out.flights[static_cast<size_t>(self)] = std::move(f);
+  };
+  for (uint32_t mi = 0; mi < plan.moves.size(); mi++) fly(plan, mi, -1, Vec3{}, mi, 0);
+  // In the order they are played; a unit's place follows its own build.
+  {
+    std::vector<size_t> order(out.flights.size());
+    std::iota(order.begin(), order.end(), size_t{0});
+    std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) { return out.flights[a].startFrame < out.flights[b].startFrame; });
+    std::vector<int> at(order.size());
+    for (size_t i = 0; i < order.size(); i++) at[order[i]] = static_cast<int>(i);
+    std::vector<Flight> sorted;
+    sorted.reserve(order.size());
+    for (size_t i : order) {
+      Flight f = std::move(out.flights[i]);
+      if (f.parent >= 0) f.parent = at[static_cast<size_t>(f.parent)];
+      sorted.push_back(std::move(f));
+    }
+    out.flights = std::move(sorted);
   }
   out.frames = frame;
   // A camera that follows the build: one key a second, looking at what is being placed.
@@ -135,12 +181,25 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
   for (int at = 0; at <= out.frames; at += second) {
     while (fi + 1 < out.flights.size() && out.flights[fi].startFrame + out.flights[fi].frames < at) fi++;
     Box seat;
-    for (uint32_t p : plan.moves[out.flights[fi].move].unit.pieces) seat.merge(boxes[p]);
+    for (uint32_t p : out.flights[fi].pieces) seat.merge(boxes[p]);
     const Vec3 target = seat.empty() ? centre : centre * 0.7 + (seat.min + seat.max) * 0.15;
     const double progress = out.frames > 0 ? static_cast<double>(at) / out.frames : 0;
     out.camera.push_back({at, target, 2.4 * radius + 100, 0.7854 + 1.5708 * progress, 0.4363});
   }
   return out;
+}
+
+Xform motionAt(const Timeline& t, size_t flight, int frame) {
+  Xform x = poseAt(t.flights[flight], frame);
+  for (int up = t.flights[flight].parent, guard = 0; up >= 0 && static_cast<size_t>(up) < t.flights.size() && guard < 64; up = t.flights[static_cast<size_t>(up)].parent, guard++)
+    x = poseAt(t.flights[static_cast<size_t>(up)], frame) * x;
+  return x;
+}
+
+const std::vector<uint32_t>& piecesOf(const Flight& f, const Plan& plan) {
+  static const std::vector<uint32_t> none;
+  if (!f.pieces.empty()) return f.pieces;
+  return f.move < plan.moves.size() ? plan.moves[f.move].unit.pieces : none;
 }
 
 Xform poseAt(const Flight& f, int frame) {

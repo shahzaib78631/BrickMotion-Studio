@@ -110,15 +110,24 @@ std::vector<std::pair<uint32_t, uint32_t>> applyFrame(Scene& scene, const bm::Mo
   std::vector<Xform> pose(n);
   std::vector<uint8_t> hidden(n, 0);
   for (size_t i = 0; i < n; i++) pose[i] = pieces[i].world;
-  for (const bm::plan::Flight& flight : timeline.flights) {
-    if (flight.move >= plan.moves.size()) continue;
+  // A piece goes where the innermost flight that moves it says, carried by the units it is in.
+  std::vector<int> owner(n, -1);
+  for (size_t fi = 0; fi < timeline.flights.size(); fi++) {
+    const bm::plan::Flight& flight = timeline.flights[fi];
+    if (flight.pieces.empty() && flight.move >= plan.moves.size()) continue;
+    for (uint32_t p : bm::plan::piecesOf(flight, plan))
+      if (p < n && (owner[p] < 0 || timeline.flights[static_cast<size_t>(owner[p])].depth < flight.depth)) owner[p] = static_cast<int>(fi);
+  }
+  std::vector<Xform> motion(timeline.flights.size());
+  std::vector<uint8_t> known(timeline.flights.size(), 0);
+  for (size_t i = 0; i < n; i++) {
+    if (owner[i] < 0) continue;
+    const size_t fi = static_cast<size_t>(owner[i]);
+    const bm::plan::Flight& flight = timeline.flights[fi];
+    if (!known[fi]) motion[fi] = bm::plan::motionAt(timeline, fi, frame), known[fi] = 1;
     const bool flies = flight.frames > 0 && !flight.waypoints.empty();
-    const Xform motion = flies ? bm::plan::poseAt(flight, frame) : Xform{};
-    for (uint32_t p : plan.moves[flight.move].unit.pieces) {
-      if (p >= n) continue;
-      if (flies) pose[p] = motion * pieces[p].world;
-      else hidden[p] = frame < flight.startFrame;
-    }
+    if (!flies && frame < flight.startFrame) hidden[i] = 1;
+    pose[i] = motion[fi] * pieces[i].world;
   }
   std::vector<std::pair<uint32_t, uint32_t>> changed;
   for (uint32_t i = 0; i < n; i++) {

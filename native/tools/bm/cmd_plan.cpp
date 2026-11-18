@@ -77,7 +77,23 @@ int cmdPlan(const Args& args) {
                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count(), certificate.floating, certificate.crossings, certificate.offAxis, certificate.flagged, certificate.unjoined);
       const plan::Timeline played = plan::buildTimeline(model, cache, plan);
       const plan::PlayCheck play = plan::certifyPlay(model, graph, cache, shapes, plan, played);
-      std::printf("played        %d flights: crossings %d, under floor %d\n  upward      %d\n  inversions  %d\n", play.flights, play.crossings, play.underFloor, play.upward, play.inversions);
+      std::printf("played        %d flights: crossings %d, under floor %d\n  upward      %d\n  inversions  %d\n  strict      %d (every frame shown, turns included, nothing let off but a piece's own mates at its seat)\n", play.flights, play.crossings, play.underFloor, play.upward, play.inversions, play.strictCrossings);
+      for (uint32_t fi : play.crossed) {
+        const plan::Flight& f = played.flights[fi];
+        const Piece& a = model.pieces()[f.pieces.empty() ? plan.moves[f.move].unit.pieces.front() : f.pieces.front()];
+        std::printf("    crossing: %s %s%s depth %d\n", a.part.c_str(), a.id.c_str(), f.pieces.size() > 1 ? " (+more)" : "", f.depth);
+      }
+      for (uint32_t fi : play.under) {
+        const plan::Flight& f = played.flights[fi];
+        const Piece& a = model.pieces()[f.pieces.empty() ? plan.moves[f.move].unit.pieces.front() : f.pieces.front()];
+        std::printf("    under floor: %s %s depth %d insertion %.2f %.2f %.2f\n", a.part.c_str(), a.id.c_str(), f.depth, f.insertion.x, f.insertion.y, f.insertion.z);
+      }
+      for (size_t k = 0; k < play.strict.size() && k < 20; k++) {
+        const plan::PlayCheck::Strict& c = play.strict[k];
+        const Piece& a = model.pieces()[c.piece];
+        const Piece& b = model.pieces()[c.other];
+        std::printf("    frame %d: %s %s through %s %s%s\n", c.frame, a.part.c_str(), a.id.c_str(), b.part.c_str(), b.id.c_str(), played.flights[c.flight].depth > 0 ? " (in a unit's own build)" : "");
+      }
     }
     // The first moves that are not certified, with why.
     int shown = 0;

@@ -17,7 +17,16 @@ struct Style {
 
 /// One unit's flight. Every pose is a motion from the unit's seat, as in Move::path.
 struct Flight {
-  uint32_t move = 0;             ///< index into Plan::moves
+  uint32_t move = 0;             ///< index into Plan::moves: the top-level move it is, or helps build
+  /// What it moves, and the flight of the unit it helps build (-1: none): a unit with moves of its
+  /// own (Move::sub) is built piece by piece on its spot on the floor before it flies in, and
+  /// its flight carries theirs (motionAt). Empty `pieces`: Plan::moves[move]'s.
+  std::vector<uint32_t> pieces;
+  int parent = -1;
+  int depth = 0;                 ///< how many units it is inside
+  Flag flag = Flag::None;
+  Vec3 insertion;
+  double seatTravel = 0;
   int startFrame = 0, frames = 0;  ///< frames == 0: the unit appears at its seat (a flagged move does not fly)
   Xform staging;                 ///< where it waits on the floor
   std::vector<Xform> waypoints;  ///< staging first, seat (identity) last
@@ -37,7 +46,7 @@ struct CameraKey {
 };
 
 struct Timeline {
-  std::vector<Flight> flights;  ///< in build order, one per top-level move
+  std::vector<Flight> flights;  ///< in the order played: one per move, a unit's own build before it
   std::vector<CameraKey> camera;  ///< one per second
   int frames = 0;
 };
@@ -49,6 +58,13 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
 
 /// The unit's motion from its seat at a frame: staging before its flight, the seat after it.
 Xform poseAt(const Flight& flight, int frame);
+
+/// A flight's motion in the model at a frame: its own (poseAt), carried by the flights of the
+/// units it helps build.
+Xform motionAt(const Timeline& timeline, size_t flight, int frame);
+
+/// The pieces a flight moves (Flight::pieces, or its move's).
+const std::vector<uint32_t>& piecesOf(const Flight& flight, const Plan& plan);
 
 /// Where the unit's flight takes it, start to seat, as straight segments: the corners of its
 /// straight legs, and points at most `spacing` LDU apart along anything curved. What poseAt plays

@@ -34,9 +34,17 @@ struct PlayCheck {
   int crossings = 0;   ///< flights that pass through a piece already placed
   int underFloor = 0;  ///< flights that take their unit below the model's base by more than its seat travel
   int upward = 0;      ///< flown moves that go in against `down` (from below)
-  int inversions = 0;  ///< pairs of moves built against the file's steps
-  std::vector<uint32_t> crossed;  ///< the move of each crossing flight
-  std::vector<uint32_t> under;    ///< the move of each flight under the floor
+  int inversions = 0;  ///< pairs of pieces' placements built against the file's steps
+  std::vector<uint32_t> crossed;  ///< the flight (Timeline::flights) of each crossing flight
+  std::vector<uint32_t> under;    ///< the flight of each flight under the floor
+  /// The strict check: every frame as shown, turns included, raw overlap with nothing let off but
+  /// the moving piece's own mates' zones near its seat and what already crosses at rest.
+  struct Strict {
+    uint32_t flight = 0, piece = 0, other = 0;
+    int frame = 0;
+  };
+  int strictCrossings = 0;      ///< flights that cross a placed piece in some frame
+  std::vector<Strict> strict;   ///< the first crossing of each
 };
 struct Timeline;
 /// Sweeps every flight of `timeline` as played (playedPath), in order, against the pieces of every

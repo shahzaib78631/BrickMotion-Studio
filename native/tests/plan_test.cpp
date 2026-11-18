@@ -677,9 +677,46 @@ TEST_CASE("a sub-assembly is swept as one", "[plan][play]") {
   p.moves.push_back(m);
   p.subs.push_back(inner);
   const PlayCheck k = played(s, p);
-  REQUIRE(k.flights == 1);
+  REQUIRE(k.flights == 3);  // its two pieces, built on its spot, then the unit
   REQUIRE(k.crossings == 0);
   REQUIRE(k.underFloor == 0);
+  REQUIRE(k.strictCrossings == 0);
+}
+
+TEST_CASE("a unit is built piece by piece on its spot before it flies in whole", "[plan][play]") {
+  Scene s;
+  const uint32_t a = s.add(0, 0, 0), b = s.add(0, -24, 0);
+  s.stud(a, b);
+  const Plan inner = s.plan();
+  REQUIRE(inner.moves.size() == 2);
+  Plan p;
+  Move m;
+  m.unit.pieces = {a, b};
+  m.source = UnitSource::Grown;
+  m.insertion = {0, 1, 0};
+  m.path = {Xform{}, shiftedBy({0, -30, 0}), shiftedBy({0, -300, 0})};
+  m.sub = 0;
+  p.moves.push_back(m);
+  p.subs.push_back(inner);
+  const Timeline t = buildTimeline(*s.model, s.parts, p);
+  REQUIRE(t.flights.size() == 3);
+  const Flight& unit = t.flights[2];
+  REQUIRE(unit.parent == -1);
+  REQUIRE(unit.pieces == std::vector<uint32_t>{a, b});
+  for (size_t i = 0; i < 2; i++) {
+    const Flight& f = t.flights[i];
+    REQUIRE(f.parent == 2);
+    REQUIRE(f.depth == 1);
+    REQUIRE(f.pieces.size() == 1);
+    REQUIRE(f.startFrame + f.frames <= unit.startFrame);
+    // Seated in the unit, the unit still on its spot: the piece stands there.
+    const Xform there = motionAt(t, i, unit.startFrame);
+    REQUIRE(length(there.t - unit.staging.t) < 1e-9);
+    // Before its flight it waits on its own spot, not the unit's.
+    REQUIRE(length(motionAt(t, i, 0).t - unit.staging.t) > 1);
+  }
+  // Flown in, everything is at its seat.
+  for (size_t i = 0; i < 3; i++) REQUIRE(length(motionAt(t, i, t.frames).t) < 1e-9);
 }
 
 TEST_CASE("a piece hung under a bridge leaves sideways, not through the floor", "[plan][floor]") {
