@@ -4,6 +4,7 @@
 #include <unordered_map>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <numeric>
 #include <unordered_map>
@@ -180,26 +181,43 @@ World::World(const Model& model, ldraw::PartCache& parts, ShapeCache& shapeCache
       auto found = state_->probesOf.find(state_->shapes[i].get());
       if (found == state_->probesOf.end()) {
         const Shape& shape = *state_->shapes[i];
-        std::vector<Vec3> points;
+        // Gather the same 6 axial and 8 diagonal extrema in one triangle pass.
+        // For large custom parts this avoids scanning the entire inner mesh 14 times.
+        std::array<std::array<int, 3>, 14> dirs{};
+        size_t dirCount = 0;
         for (int dx = -1; dx <= 1; dx++)
           for (int dy = -1; dy <= 1; dy++)
             for (int dz = -1; dz <= 1; dz++) {
               if (!dx && !dy && !dz) continue;
-              if (std::abs(dx) + std::abs(dy) + std::abs(dz) == 2) continue;  // 6 axes and 8 diagonals
-              double best = -1e300;
-              Vec3 at;
-              bool any = false;
-              for (size_t t = 0; t + 2 < shape.inner.size(); t += 3) {
-                const Vec3f &a = shape.inner[t], &b = shape.inner[t + 1];
-                if (a.x == b.x && a.y == b.y && a.z == b.z) continue;  // a triangle that did not survive
-                for (size_t c = 0; c < 3; c++) {
-                  const Vec3f& v = shape.inner[t + c];
-                  const double reach = dx * v.x + dy * v.y + dz * v.z;
-                  if (reach > best) best = reach, at = {v.x, v.y, v.z}, any = true;
-                }
-              }
-              if (any && std::find_if(points.begin(), points.end(), [&](const Vec3& have) { return length(have - at) < 1e-6; }) == points.end()) points.push_back(at);
+              if (std::abs(dx) + std::abs(dy) + std::abs(dz) == 2) continue;
+              dirs[dirCount++] = {dx, dy, dz};
             }
+        std::array<double, 14> best;
+        best.fill(-1e300);
+        std::array<Vec3, 14> extrema{};
+        std::array<uint8_t, 14> valid{};
+        for (size_t t = 0; t + 2 < shape.inner.size(); t += 3) {
+          const Vec3f &a = shape.inner[t], &b = shape.inner[t + 1];
+          if (a.x == b.x && a.y == b.y && a.z == b.z) continue;
+          for (size_t c = 0; c < 3; c++) {
+            const Vec3f& v = shape.inner[t + c];
+            for (size_t d = 0; d < dirCount; d++) {
+              const auto& dir = dirs[d];
+              const double reach = dir[0] * v.x + dir[1] * v.y + dir[2] * v.z;
+              if (reach > best[d]) {
+                best[d] = reach;
+                extrema[d] = {v.x, v.y, v.z};
+                valid[d] = 1;
+              }
+            }
+          }
+        }
+        std::vector<Vec3> points;
+        for (size_t d = 0; d < dirCount; d++) {
+          if (!valid[d]) continue;
+          const Vec3 at = extrema[d];
+          if (std::find_if(points.begin(), points.end(), [&](const Vec3& have) { return length(have - at) < 1e-6; }) == points.end()) points.push_back(at);
+        }
         found = state_->probesOf.emplace(state_->shapes[i].get(), std::move(points)).first;
       }
       state_->probes[i] = &found->second;

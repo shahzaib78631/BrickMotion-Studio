@@ -103,3 +103,17 @@ TEST_CASE("an empty file is an empty model; a missing file is an error", "[model
   REQUIRE_THROWS_AS(io::load("/nonexistent/x.ldr", library), io::Error);
   REQUIRE_THROWS_AS(io::load(fs::path(BM_FIXTURES), library), io::Error);  // a directory
 }
+
+TEST_CASE("inline part meshes are cached per model and shared by model copies", "[model][cache]") {
+  const ldraw::Library library = lib();
+  Model m = io::load(fx("twice.mpd"), library);
+  ldraw::PartCache cache(library, fs::temp_directory_path() / "bm_model_test_cache");
+  REQUIRE(m.library().isInline("custom.dat"));
+  const auto a = m.mesh("custom.dat", cache);
+  const auto b = m.mesh("custom.dat", cache);
+  REQUIRE(a == b);
+  REQUIRE(m.mesh(" CUSTOM.DAT ", cache) == a);
+  REQUIRE_FALSE(a->triangles.empty());
+  const Model copy = m;
+  REQUIRE(copy.mesh("custom.dat", cache) == a);
+}

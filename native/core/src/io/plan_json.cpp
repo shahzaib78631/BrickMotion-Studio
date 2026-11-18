@@ -8,7 +8,8 @@
 
 namespace bm::io {
 
-Model modelFromLDraw(std::string_view text, const std::string& fileName, const ldraw::Library& library);
+Model modelFromLDraw(std::string_view text, const std::string& fileName, const ldraw::Library& library,
+                     std::vector<ldraw::File> embeddedParts = {}, size_t studioCustomPartsAvailable = 0);
 
 namespace {
 
@@ -295,7 +296,10 @@ Model load(const std::filesystem::path& path, const ldraw::Library& library, ldr
   const Format format = sniff(path, std::string_view(bytes).substr(0, 4096));
   const std::string name = path.filename().string();
   if (format == Format::LDraw) return modelFromLDraw(bytes, name, library);
-  if (format == Format::StudioIo) return modelFromLDraw(readStudioIo(bytes), name, library);
+  if (format == Format::StudioIo) {
+    StudioArchive archive = readStudioArchive(bytes);
+    return modelFromLDraw(archive.model, name, library, std::move(archive.customParts), archive.availableCustomParts);
+  }
   const PlanDoc doc = format == Format::Project ? readProject(bytes) : readPlan(bytes);
   if (cache) return fromPlan(doc, library, *cache);
   ldraw::PartCache own(library, ldraw::PartCache::defaultDirectory());

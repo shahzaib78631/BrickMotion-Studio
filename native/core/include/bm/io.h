@@ -45,6 +45,20 @@ Model fromPlan(const PlanDoc& doc, const ldraw::Library& library, ldraw::PartCac
 /// The plan inside a project (.brickmotion) file. Throws Error if it is not a version-1 project.
 PlanDoc readProject(std::string_view text);
 
+/// An imported Studio archive. Only referenced custom .dat files (and their referenced
+/// subparts/primitives) are inflated and parsed. The original archive is not retained.
+/// Studio .conn and .col metadata and texture images are intentionally not imported.
+struct StudioArchive {
+  std::string model;
+  std::vector<ldraw::File> customParts;
+  size_t availableCustomParts = 0;
+};
+
+/// Reads the model and its reachable embedded CustomParts geometry. Parsed parts use
+/// canonical LDraw names and can be merged into a model-scoped Library with withInline().
+/// Raises Error for invalid archive entries, unsafe paths or invalid CRCs.
+StudioArchive readStudioArchive(std::string_view bytes);
+
 /// The LDraw model inside a BrickLink Studio .io archive (a ZIP, sometimes protected with
 /// Studio's public format password). Throws Error for anything else.
 std::string readStudioIo(std::string_view bytes);

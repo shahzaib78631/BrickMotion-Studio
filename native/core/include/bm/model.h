@@ -24,6 +24,9 @@ struct LoadReport {
   std::vector<std::string> cycles;         ///< submodel loops, as "a > b > a"; the closing use is dropped
   std::vector<std::string> unknownColors;  ///< colour names that are not in the colour table
   int skippedLines = 0;                    ///< malformed LDraw lines
+  size_t studioCustomPartsAvailable = 0;    ///< .dat entries inside a Studio .io archive
+  size_t studioCustomPartsLoaded = 0;       ///< reachable .dat files loaded from that archive
+  size_t studioCustomPartSkippedLines = 0;  ///< malformed lines in loaded embedded custom parts
 };
 
 /// The box a missing part is given, so a model with unknown parts still has a size.
@@ -57,7 +60,9 @@ class Model {
   Box bounds(ldraw::PartCache& cache) const;
 
  private:
+  struct InlineMeshCache;
   Data data_;
+  std::shared_ptr<InlineMeshCache> inlineMeshes_;
   int stepCount_ = 0;
 };
 

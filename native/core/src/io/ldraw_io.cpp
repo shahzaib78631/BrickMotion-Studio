@@ -115,12 +115,32 @@ void partFile(std::string& out, const ldraw::File& f) {
 }  // namespace
 
 /// Builds a model from LDraw text. Defined here, declared for load() in io.cpp.
-Model modelFromLDraw(std::string_view text, const std::string& fileName, const ldraw::Library& library) {
+Model modelFromLDraw(std::string_view text, const std::string& fileName, const ldraw::Library& library,
+                     std::vector<ldraw::File> embeddedParts, size_t studioCustomPartsAvailable) {
   std::vector<ldraw::File> files = ldraw::parseMpd(text, fileName);
   const std::string rootName = files.front().name;
-  Model::Data data{{}, {}, {}, library.withInline(files), {}};
-  for (const ldraw::File& f : files)
-    if (endsWith(f.name, ".dat")) data.inlineParts.push_back(f);
+  // Archive geometry is scoped to this model, never installed into the process-global
+  // library or written onto disk. A .dat declared in the MPD overrides an archive part
+  // of the same name, which in turn overrides the installed LDraw library.
+  std::vector<ldraw::File> merged = std::move(embeddedParts);
+  const size_t embeddedCount = merged.size();
+  for (ldraw::File& f : files) merged.push_back(std::move(f));
+  std::unordered_set<std::string> unique;
+  std::vector<std::string> partNames;
+  for (const ldraw::File& f : merged)
+    if (endsWith(f.name, ".dat") && unique.insert(f.name).second)
+      partNames.push_back(f.name);
+  // Inspect embedded metadata before moving the files into Library. Accessing
+  // `merged` after withInline(std::move(merged)) would be undefined behaviour.
+  size_t customSkippedLines = 0;
+  for (size_t i = 0; i < embeddedCount; ++i)
+    customSkippedLines += static_cast<size_t>(merged[i].skipped);
+  Model::Data data{{}, {}, {}, library.withInline(std::move(merged)), {}};
+  data.report.studioCustomPartsAvailable = studioCustomPartsAvailable;
+  data.report.studioCustomPartsLoaded = embeddedCount;
+  data.report.studioCustomPartSkippedLines = customSkippedLines;
+  data.inlineParts.reserve(partNames.size());
+  for (const std::string& part : partNames) data.inlineParts.push_back(*data.library.find(part));
   const ldraw::File* root = data.library.find(rootName);
   Expander e{data.library, data, {rootName}, {}};
   std::vector<std::string> path;

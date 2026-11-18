@@ -3,6 +3,12 @@
 The C++ rewrite of BrickMotion Studio. Design: `docs/superpowers/specs/2026-11-15-native-rewrite-design.md`.
 
 - `core/` — `bmcore`, the portable C++20 engine library (no Apple headers).
+
+**Studio custom-part collision verification:** `bm load <file> --check-geometry --json`
+reports transitive geometry dependencies and missing collider shapes.
+`--strict-geometry` is a CI gate for structural completeness. The embedded
+custom-part importer, plan-certifier regressions and M1 instructions are described
+in [`EMBEDDED_COLLISION_VALIDATION.md`](EMBEDDED_COLLISION_VALIDATION.md).
 - `tools/bm/` — `bm`, the command-line tool; every engine feature runs from here.
 - `tests/` — Catch2 tests.
 - `corpus/` — the list of models both engines are measured on, and the web engine's baseline.
@@ -30,7 +36,7 @@ Tests tagged `[data]` need `BM_LDRAW_DIR` and are skipped without it.
 ## Commands
 
 ```bash
-native/build/tools/bm/bm load <file> [--json]
+native/build/tools/bm/bm load <file> [--json] [--check-geometry] [--strict-geometry]
 native/build/tools/bm/bm audit --manifest native/corpus/manifest.json [--tier smoke|full] [--out <dir>] [--threads N]
 python3 native/tools/compare_scoreboards.py .cache/native-baseline <out>/rows.jsonl
 ```
@@ -632,3 +638,10 @@ Legopharos bell tower). The contact sheet of all 71 shows nothing wrong.
   gizmos and overlays other than the selection outline and the readout. Glass casts onto the floor but not onto
   bricks (it made no difference to the solid pieces' score); refraction and wall thickness are not modelled.
 - Reviews were self-reviews.
+
+## M1 follow-up optimization pass (2026-11-18)
+
+See `M1_OPTIMIZATION_NOTES.md` for the user-supplied five-model complexity summary,
+inline geometry caching, optimized world probe preparation, sequencer blocker-dependency
+index, isolated verification, and an M1 profiling script in `tools/perf/m1_profile.sh`.
+These are measured isolated optimizations, not yet full macOS planning speed claims.

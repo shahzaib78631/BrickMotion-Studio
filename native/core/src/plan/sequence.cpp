@@ -7,6 +7,7 @@
 #include <numeric>
 #include <optional>
 #include "bm/plan/tolerances.h"
+#include "blocker_index.h"
 
 namespace bm::plan {
 namespace {
@@ -167,6 +168,7 @@ struct Sequencer {
     if (!bounds.empty()) centre = (bounds.min + bounds.max) * 0.5;
     size_t left = set.size();
     std::vector<Extraction> single(n);
+    BlockerIndex blockerIndex(n);
     std::vector<uint8_t> dirty(n, 0), seen(n, 0), reason(n, 0);  // dirty: 1 its mates changed, 2 it must be tried again
     std::vector<uint32_t> stack, todo;
     for (uint32_t p : set) dirty[p] = 2;
@@ -273,13 +275,11 @@ struct Sequencer {
           if (present[other] && !dirty[other]) dirty[other] = 1;  // its mates have changed: perhaps its directions too
         }
       }
-      for (uint32_t q : set)
-        if (present[q] && !single[q].ok)
-          for (uint32_t stop : single[q].stoppedBy)
-            if (std::binary_search(m.unit.pieces.begin(), m.unit.pieces.end(), stop)) {
-              dirty[q] = 2;  // something that stopped it has gone: it must be tried again
-              break;
-            }
+      for (uint32_t removedPiece : m.unit.pieces)
+        blockerIndex.blockerRemoved(removedPiece, [&](uint32_t q) {
+          if (present[q] && !single[q].ok)
+            dirty[q] = 2;  // a known obstacle was removed: retry its extraction
+        });
       round++;
       last = &ctx.model.pieces()[m.unit.pieces.front()];
       removed.push_back(std::move(m));
@@ -334,7 +334,12 @@ struct Sequencer {
         }
         single[p] = extract(ctx, unitOf({p}), &present, bounds, authoredAxis(p), false);
       });
-      for (uint8_t sk : skipped) extractions += !sk;
+      for (size_t i = 0; i < todo.size(); i++) {
+        if (skipped[i]) continue;
+        extractions++;
+        const uint32_t p = todo[i];
+        blockerIndex.updated(p, single[p].stoppedBy, single[p].ok);
+      }
       // The best piece that can leave without splitting what is left.
       std::vector<uint32_t> ready;
       for (uint32_t p : set)

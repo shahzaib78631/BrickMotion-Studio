@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <algorithm>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cstdlib>
 #include <filesystem>
@@ -163,4 +164,82 @@ TEST_CASE("damaged Studio archives are errors", "[io][studio]") {
   REQUIRE_THROWS_AS(io::readStudioIo(""), io::Error);
   std::string junk(4096, 'P');
   REQUIRE_THROWS_AS(io::readStudioIo(junk), io::Error);
+}
+
+TEST_CASE("Studio .io imports reachable custom parts including nested subparts and primitives", "[io][studio][embedded]") {
+  const ldraw::Library library = lib();
+  const fs::path dir = fs::path(BM_FIXTURES) / "studio";
+  for (const char* name : {"embedded.io", "stored.io", "encrypted.io", "unreferenced_corrupt.io"}) {
+    INFO(name);
+    const std::string bytes = slurp(dir / name);
+    const io::StudioArchive archive = io::readStudioArchive(bytes);
+    REQUIRE(archive.model == io::readStudioIo(bytes));
+    REQUIRE(archive.availableCustomParts == 6);
+    REQUIRE(archive.customParts.size() == 4);  // other files were never inflated
+    std::vector<std::string> partNames;
+    for (const ldraw::File& f : archive.customParts) partNames.push_back(f.name);
+    std::sort(partNames.begin(), partNames.end());
+    REQUIRE((partNames == std::vector<std::string>{"48/ring.dat", "box4.dat", "fancy.dat", "s/smoke.dat"}));
+
+    const Model model = io::load(dir / name, library);
+    REQUIRE(model.pieces().size() == 2);
+    REQUIRE(model.report().missing.empty());
+    REQUIRE(model.report().studioCustomPartsAvailable == 6);
+    REQUIRE(model.report().studioCustomPartsLoaded == 4);
+    REQUIRE(model.inlineParts().size() == 5);  // four from ZIP, one MPD override
+    REQUIRE(model.library().isInline("fancy.dat"));
+    REQUIRE(model.library().isInline("s/smoke.dat"));
+    REQUIRE(model.library().isInline("box4.dat"));
+    REQUIRE(model.library().isInline("48/ring.dat"));
+    REQUIRE(model.library().isInline("override.dat"));
+    REQUIRE_FALSE(model.library().isInline("unused.dat"));
+
+    const auto fancy = ldraw::flatten("fancy.dat", model.library());
+    REQUIRE(fancy.missing.empty());
+    REQUIRE(fancy.triangles.size() == 6); // 2 triangles, via two differently nested .dat references
+    const auto overridePart = ldraw::flatten("override.dat", model.library());
+    REQUIRE(overridePart.missing.empty());
+    REQUIRE(overridePart.triangles.size() == 3); // MPD definition wins over 2-triangle ZIP file
+
+    ldraw::PartCache cache(library, fs::temp_directory_path() / "bm_io_studio_cache");
+    const auto first = model.mesh("fancy.dat", cache), second = model.mesh("FANCY.DAT", cache);
+    REQUIRE(first == second); // shared per-model mesh cache, not global disk cache
+    REQUIRE(first->triangles == fancy.triangles);
+
+    // An exported MPD retains all custom geometry even if the Studio .io is no longer there.
+    const fs::path exported = fs::temp_directory_path() / "bm_studio_embedded_roundtrip.mpd";
+    { std::ofstream out(exported); out << io::toLDraw(model); }
+    const Model restored = io::load(exported, library);
+    REQUIRE(restored.library().isInline("48/ring.dat"));
+    REQUIRE(restored.inlineParts().size() == 5);
+    REQUIRE(ldraw::flatten("fancy.dat", restored.library()).triangles == fancy.triangles);
+    fs::remove(exported);
+  }
+}
+
+TEST_CASE("Studio embedded part names and payloads are validated before use", "[io][studio][security]") {
+  const fs::path dir = fs::path(BM_FIXTURES) / "studio";
+  for (const char* name : {"duplicate.io", "traversal.io", "corrupt.io", "oversize.io"}) {
+    INFO(name);
+    REQUIRE_THROWS_AS(io::readStudioArchive(slurp(dir / name)), io::Error);
+    REQUIRE_THROWS_AS(io::load(dir / name, lib()), io::Error);
+  }
+}
+
+TEST_CASE("embedded geometry cannot leak across independently loaded Studio models", "[io][studio][embedded][cache]") {
+  const ldraw::Library library = lib();
+  const fs::path dir = fs::path(BM_FIXTURES) / "studio";
+  const Model a = io::load(dir / "embedded.io", library);
+  const Model b = io::load(dir / "isolated.io", library);
+  ldraw::PartCache cache(library, fs::temp_directory_path() / "bm_io_studio_isolation_cache");
+  const auto meshA = a.mesh("fancy.dat", cache), meshB = b.mesh("fancy.dat", cache);
+  REQUIRE(meshA != meshB);
+  REQUIRE(meshA->positions != meshB->positions);
+  REQUIRE(meshA->triangles.size() == meshB->triangles.size());
+  REQUIRE(a.mesh("fancy.dat", cache) == meshA);
+  REQUIRE(b.mesh("fancy.dat", cache) == meshB);
+  REQUIRE(a.library().contentHash("box4.dat") != b.library().contentHash("box4.dat"));
+  REQUIRE_FALSE(library.isInline("fancy.dat"));
+  const Model copied = a;
+  REQUIRE(copied.mesh("fancy.dat", cache) == meshA);
 }
