@@ -381,20 +381,31 @@ double World::clearTravel(const std::vector<uint32_t>& unit, Vec3 direction, dou
         const Vec3 a = from.apply(local), b = a + direction * reachTo;
         Box way;
         way.grow(a), way.grow(b);
+        // The nearest surface it passes through stops it. Pieces come in the order their boxes
+        // are met, which is not the order their surfaces are: one whose box is met first may be
+        // passed into later than another. Only a piece whose box is met before the nearest so
+        // far can be nearer still.
+        double nearest = 1;  // as a share of reachTo
+        uint32_t by = UINT32_MAX;
         for (const auto& [enter, q] : ordered) {
-          if (enter > reachTo) break;
+          if (enter > nearest * reachTo) break;
           if (!boxesMeet(way, s.boxes[q]) || std::binary_search(unit.begin(), unit.end(), q)) continue;
           Vec3 where;
           const double share = throughSurface(*s.shapes[q], s.poses[q], a, b, &where);
-          if (share > 1) continue;
+          if (share > 1 || (by != UINT32_MAX && share >= nearest)) continue;
           bool exempt = false;
           for (const Zone& z : zones) exempt = exempt || (lets(z, p, q) && inside(z, where));
           if (exempt || (boxesMeet(s.boxes[p], s.boxes[q]) && restCrossing(p, q, zones))) continue;
-          if (blocker) *blocker = q;
-          if (enough > 0) return share * reachTo;
-          best = std::min(best, share * reachTo);
-          break;  // this point gets no further; the next one may be stopped sooner
+          nearest = share, by = q;
+          if (enough > 0) break;  // asked only whether it gets that far: any surface settles it
         }
+        if (by == UINT32_MAX) continue;
+        // Short of it by the tolerance, as for a crossing: stopped right on the surface, the
+        // next leg would start where rounding decides which side of it the point is.
+        const double stop = std::max(0.0, nearest * reachTo - tolerance);
+        if (blocker) *blocker = by;
+        if (enough > 0) return stop;
+        best = std::min(best, stop);
       }
     }
     for (const auto& [enter, q] : ordered) {

@@ -236,6 +236,57 @@ TEST_CASE("a graze shorter than a step of the sweep is found, from either end of
   REQUIRE(blocker == 0);
 }
 
+TEST_CASE("a unit stops the tolerance short of where a point a skin inside it meets a surface", "[collide][world][travel]") {
+  Rig r;
+  // The mover's inner surface is a skin inside its face at x = 10, so its corners there meet the
+  // wall's face at x = 20 after 10.5. Stopping exactly there leaves the next leg to start on the
+  // surface, where rounding decides which side of it the corner is (OMR 41015-1).
+  const Model m = r.model(piece("c1x1.dat", 0, 0, 0) + piece("c1x1.dat", 30, 0, 0));
+  const World w(m, r.parts, r.shapes);
+  uint32_t blocker = 7;
+  const double reached = w.clearTravel({0}, {1, 0, 0}, 100, nullptr, {}, &blocker);
+  REQUIRE(blocker == 1);
+  REQUIRE(reached >= 10 + kSkin - 0.05 - kCrossingResolution);
+  REQUIRE(reached <= 10 + kSkin - 0.05 + kCrossingResolution);
+  REQUIRE(w.clearTravel({0}, {1, 0, 0}, 100, nullptr, {}, nullptr, {}, 0.2) <= 10 + kSkin - 0.2 + kCrossingResolution);
+  // Asked only whether it gets as far as just past that point, it stops as far short of it.
+  REQUIRE(w.clearTravel({0}, {1, 0, 0}, 100, nullptr, {}, nullptr, {}, 0.05, 10.6) <= 10 + kSkin - 0.05 + kCrossingResolution);
+  // From there it is clear, and can go back the way it came.
+  Xform there;
+  there.t = {reached, 0, 0};
+  REQUIRE(w.clearTravel({0}, {-1, 0, 0}, 5, nullptr, {}, nullptr, there) == 5);
+}
+
+TEST_CASE("a point inside the unit is stopped by the nearest surface it meets, whichever piece is looked at first", "[collide][world][travel][data]") {
+  const char* dir = std::getenv("BM_LDRAW_DIR");
+  if (!dir) SKIP("BM_LDRAW_DIR is not set");
+  const ldraw::Library lib(dir);
+  ldraw::PartCache parts(lib, ldraw::PartCache::defaultDirectory());
+  ShapeCache shapes;
+  // From OMR 10218-1: a piece slid along z past two 1x6 bricks, one stacked on the other. Both
+  // boxes are met at once, so the lower brick, listed first, is looked at first; one of the
+  // piece's inner points passes into it after 255.83 but into the upper brick already after 251.81.
+  const fs::path file = fs::temp_directory_path() / ("bm_world_nearest_" + std::to_string(::getpid()) + ".ldr");
+  {
+    std::ofstream out(file);
+    out << "1 14 -10 -128 30 -1 0 0 0 1 0 0 0 -1 33320.dat\n"
+        << "1 379 -20 -144 310 1 0 0 0 1 0 0 0 1 3009.dat\n"
+        << "1 379 40 -168 310 1 0 0 0 1 0 0 0 1 3009.dat\n";
+  }
+  const Model m = io::load(file, lib, &parts);
+  fs::remove(file);
+  REQUIRE(m.pieces().size() == 3);
+  const World w(m, parts, shapes);
+  uint32_t blocker = UINT32_MAX;
+  const double reached = w.clearTravel({0}, {0, 0, 1}, 340.421, nullptr, {}, &blocker);
+  REQUIRE(blocker == 2);
+  REQUIRE(reached < 251.81 - 0.05);
+  // Where it stops it is clear, and can go back the way it came.
+  Xform there;
+  there.t = {0, 0, reached};
+  REQUIRE(w.clearTravel({0}, {0, 0, -1}, reached, nullptr, {}, nullptr, there) == reached);
+}
+
 TEST_CASE("what is remembered about one way is never the answer for the opposite way", "[collide][world][travel][data]") {
   const char* dir = std::getenv("BM_LDRAW_DIR");
   if (!dir) SKIP("BM_LDRAW_DIR is not set");
