@@ -30,7 +30,10 @@ export (`src/export/exportVideo.ts`, `pathTracedStill.ts`, `src/audio/snapSound.
   and `glass.ldr` from four azimuths (viewport now: RMSE 6.53 calib, 17.79 glass).
 - The timeline (phase 5): 30 fps, one flight per move with its start and length, a camera key a second.
 - Sound in the web app: CC0 recordings of real snaps (`public/sounds/snaps/*.wav`, 244 KB, credits in
-  `CREDITS.txt`) picked by part size, layered over a synthesised thump and ring, one per seating.
+  `CREDITS.txt`) picked by part size, layered over a synthesised thump and ring, one per seating. Its
+  fallback, `seat()` in `src/audio/snapSound.ts`, needs no files: a slide, a click per stud row, plastic
+  ring modes, a body thump and a room, with numbers fitted by ear to real snaps. Phase 7 uses no recordings
+  (settled, 4).
 
 ## Goals (phase 7 is done when)
 
@@ -38,7 +41,8 @@ export (`src/export/exportVideo.ts`, `pathTracedStill.ts`, `src/audio/snapSound.
    writes a denoised path-traced picture. Same inputs and seed: the same picture, bit for bit.
 2. `bmexport video <model> --out build.mp4 [--renderer path|viewport] [--samples S] [--no-sound]`
    writes an MP4 of the whole build (H.264, or HEVC with `--codec hevc`) that plays in QuickTime, with
-   the snap track. Frame N of the film is the still of frame N. `bmexport frames` writes PNGs instead.
+   the snap track. Frame N of the film is the still of frame N. `bmexport frames` writes PNGs instead,
+   `bmexport sound` the snap track alone as a WAV, to be judged by ear.
 3. The look: `calib.ldr` and `glass.ldr` scored with `calib_eyesight.py`, shown side by side with
    EyeSight for the owner to judge by eye (the spec's bar), and no worse than the viewport on any column.
 4. Part acceleration structures are built once per part per run; a frame where pieces move rebuilds
@@ -108,10 +112,19 @@ ray-tracing hardware: Metal's intersector runs on the shader cores there, faster
 - **Long films:** a path-traced film of a large build runs for hours (3,000 moves at two pieces a
   second is 25 minutes of film, 45,000 frames). `frames` takes a frame range and skips frames already
   on disk, so a render can stop and go on; `video --from-frames <dir>` makes the MP4 and its sound from them.
-- **Sound:** snaps at each flight's seating frame, chosen and varied as the web app does, from the
-  same CC0 recordings, mixed by portable C++ at 48 kHz and written as AAC into the MP4. My call
-  against the spec's AVAudioEngine: a mix of short one-shot samples gains nothing from it, and plain
-  C++ can be tested sample for sample.
+- **Sound:** simulated in portable C++ (settled, 4), no sound files: each seating is synthesised from
+  what is seating and onto what, at the first frame the unit is in its seat, mixed at 48 kHz and
+  written as AAC into the MP4. What the simulation is, my call: the structure of the web's `seat()`
+  (slide, a click per row, ring, thump, room), driven by data the web never had. The clicks come from
+  the connections made (`connect::Connection`: how many mates, a pin's friction ridge, an axle's grip
+  with no click, the joint kind); each click is a short force pulse into the ring modes of the landing
+  part, taken as a thin ABS plate the size of its footprint, and of what it lands on, so a 1x1 tile
+  ticks high and a 2x4 brick on a large model knocks low; the thump deepens as the model grows; the
+  slide lasts as long as the unit's last travel into its seat; the snap is panned to where the unit is
+  on screen. Its constants are starting values, tuned by ear. A flagged move appears without a flight
+  and makes no sound. Deterministic (its own random numbers, seeded by move), mixed in blocks so a
+  25-minute film's track is never held whole. Plain C++ rather than the spec's AVAudioEngine: it can be
+  tested sample for sample.
 - **Tool:** a new `bmexport` (the library already owns the name `bmrender`), sharing `bmshot`'s
   camera and model options.
 
@@ -123,6 +136,8 @@ ray-tracing hardware: Metal's intersector runs on the shader cores there, faster
    composite fix).
 3. **Where the lights are:** fixed to the model, as EyeSight's are, with strengths fitted to its renders
    (66a6a80); stills and film do the same.
+4. **Sound** is simulated in C++, not played from recordings ("real simulated sound… it will feel like
+   real assembly"; numpy was named only as an example of the kind of thing, the code is C++).
 
 ## Left to the builder
 
