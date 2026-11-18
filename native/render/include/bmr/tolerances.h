@@ -117,6 +117,14 @@ inline constexpr float kGlassIor = 1.49f;
 inline constexpr float kGlassAbsorption = 2.0f;
 inline constexpr float kFloorThroughGlass = 0.58f;
 
+/// The path tracer (shaders/path_trace.metal). At most kPathMaxBounces bounces, Russian roulette
+/// after three. Glass absorbs kGlassAbsorption (1 - colour) a wall, as the viewport does; a wall
+/// taken as kPathGlassWall LDU thick (an LDraw brick's wall) gives its absorption by distance.
+/// A dispatch traces about kPathRaysPerPass camera rays, so no one GPU command runs long.
+inline constexpr uint32_t kPathMaxBounces = 16;
+inline constexpr float kPathGlassWall = 4.0f;
+inline constexpr size_t kPathRaysPerPass = 4u << 20;
+
 /// Levels of detail. A piece is drawn at full detail where its low-detail mesh would be at
 /// least kLowErrorPixels off on screen (bm::ldraw::Mesh::lowError, at the near side of the
 /// piece), at low detail otherwise, and as its box once the whole piece (its bounding sphere)

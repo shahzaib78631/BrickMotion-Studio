@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include "bmr/tolerances.h"
 
 namespace bmr {
 
@@ -106,6 +107,34 @@ void PathScene::prepare(const Scene& scene, MeshLibrary& meshes) {
     s.tracedStructure.push_back(structure);
   }
   s.stats.instances = static_cast<uint32_t>(s.traced.size());
+  s.origin = scene.origin;
+  s.floorY = static_cast<float>((scene.bounds.empty() ? 0.0 : scene.bounds.max.y - scene.origin.y) + kFloorLift);
+  std::vector<PtMaterialGpu> materials;
+  for (const Group& g : scene.groups) {
+    const Material& m = g.material;
+    const float kind = g.placeholder ? 2.0f : m.transparent() ? 1.0f : 0.0f;
+    materials.push_back({simd_make_float4(m.base[0], m.base[1], m.base[2], m.alpha), simd_make_float4(m.roughness, m.metalness, m.clearcoat, kind)});
+  }
+  s.materialTable = materials.empty() ? nil : [s.device->device newBufferWithBytes:materials.data() length:materials.size() * sizeof(PtMaterialGpu) options:MTLResourceStorageModeShared];
+  std::vector<PtMeshGpu> refs;
+  for (const PartStructure& p : s.structures) refs.push_back({p.vertices.gpuAddress, p.indices.gpuAddress});
+  s.meshTable = refs.empty() ? nil : [s.device->device newBufferWithBytes:refs.data() length:refs.size() * sizeof(PtMeshGpu) options:MTLResourceStorageModeShared];
+  std::vector<PtInstanceGpu> table;
+  for (size_t i = 0; i < s.traced.size(); i++) {
+    const float* m = s.traced[i].model;
+    // Columns of the 3x3 part: their cross products are the cofactor's columns, which carry normals.
+    const simd_float3 c0 = simd_make_float3(m[0], m[4], m[8]), c1 = simd_make_float3(m[1], m[5], m[9]), c2 = simd_make_float3(m[2], m[6], m[10]);
+    const float sign = simd_dot(c0, simd_cross(c1, c2)) < 0 ? -1.0f : 1.0f;
+    PtInstanceGpu g{};
+    for (int r = 0; r < 3; r++) g.row[r] = simd_make_float4(m[4 * r], m[4 * r + 1], m[4 * r + 2], m[4 * r + 3]);
+    g.ncol[0] = simd_make_float4(simd_cross(c1, c2) * sign, 0);
+    g.ncol[1] = simd_make_float4(simd_cross(c2, c0) * sign, 0);
+    g.ncol[2] = simd_make_float4(simd_cross(c0, c1) * sign, 0);
+    g.structure = s.tracedStructure[i];
+    g.material = s.traced[i].material;
+    table.push_back(g);
+  }
+  s.instanceTable = table.empty() ? nil : [s.device->device newBufferWithBytes:table.data() length:table.size() * sizeof(PtInstanceGpu) options:MTLResourceStorageModeShared];
   s.instances = nil;
   s.instanceDescriptors = nil;
   if (!s.traced.empty()) {
