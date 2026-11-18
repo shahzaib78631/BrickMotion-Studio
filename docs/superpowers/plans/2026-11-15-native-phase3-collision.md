@@ -4,7 +4,7 @@
 
 **Goal:** One collision implementation on the exact part meshes that says whether two placed pieces interpenetrate, finds every overlap in a model, and checks a moving piece along a path — without flagging pieces that merely touch or are properly connected.
 
-**Architecture:** A new `bm::collide` module. Each part gets a `Shape`: its mesh pulled inward by half a skin, with a bounding-volume tree over the triangles. Two pieces overlap when their pulled-in surfaces cross, so surfaces that touch or overlap by less than the skin do not count. Where two pieces are joined, the volume of each mate (a stud in its socket, a bar in its clip) is exempt, taken from the connection graph, which replaces per-part exceptions with one rule. A model is checked with a sort-and-sweep over piece boxes, then tree-against-tree per candidate pair.
+**Architecture:** A new `bm::collide` module. Each part gets a `Shape`: its true surface, the same surface pulled inward by the skin, and a bounding-volume tree over the triangles. Two pieces overlap when the inner surface of one crosses the true surface of the other, so surfaces that touch or overlap by less than the skin do not count. Where two pieces are joined, the volume of each mate (a stud in its socket, a bar in its clip) is exempt, taken from the connection graph, which replaces per-part exceptions with one rule. A model is checked with a sort-and-sweep over piece boxes, then tree-against-tree per candidate pair.
 
 **Tech Stack:** as before (C++20, Catch2).
 
