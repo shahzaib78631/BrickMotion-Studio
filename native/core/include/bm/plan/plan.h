@@ -121,8 +121,10 @@ struct Units {
 Units findUnits(const Model& model, const connect::Graph& graph);
 
 /// Grows a unit from `piece`, one present neighbour at a time, until its mates with the rest
-/// agree on a direction. Empty when none up to kMaxGroup does.
-Unit growUnit(const Context& ctx, uint32_t piece, const collide::World::Present* present);
+/// agree on a direction. Empty when none up to kMaxGroup does. `read`, if given, receives every
+/// piece whose presence the answer depends on (some more than once): while none of those
+/// changes, the answer does not.
+Unit growUnit(const Context& ctx, uint32_t piece, const collide::World::Present* present, std::vector<uint32_t>* read = nullptr);
 
 /// Plans the whole model. Never throws for a model that loaded; what it cannot do is flagged.
 Plan plan(const Model& model, const connect::Graph& graph, ldraw::PartCache& parts, collide::ShapeCache& shapes, const Options& options = {});

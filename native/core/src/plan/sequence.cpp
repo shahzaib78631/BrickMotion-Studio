@@ -5,6 +5,7 @@
 #include <cmath>
 #include <map>
 #include <numeric>
+#include <optional>
 #include "bm/plan/tolerances.h"
 
 namespace bm::plan {
@@ -49,6 +50,86 @@ bool staysJoined(const Context& ctx, const std::vector<uint32_t>& set, const Wor
   return reached == left;
 }
 
+/// The same question, asked of a set whose present pieces are joined to each other and to
+/// nothing else present. Then what is left is joined exactly when the pieces the unit touches
+/// are joined to each other without it: any way between two pieces that went through the unit
+/// can go round it instead, from where it went in to where it came out. So the search starts
+/// from those pieces at once, a step from each in turn, and searches that meet go on as one
+/// until all have met; one that runs out of pieces to reach first has found pieces held to the
+/// rest only through the unit. That costs what the smaller side of a cut costs, not the whole set.
+class Joined {
+ public:
+  Joined(const Context& ctx, size_t n) : ctx_(ctx), mark_(n, 0), from_(n, 0) {}
+
+  /// Whether the present pieces of the set stay joined without `unit` (all of whose pieces are
+  /// present), `leftAfter` of them being left; nothing if it cannot tell (the unit touches
+  /// nothing present).
+  std::optional<bool> without(const World::Present& present, const Unit& unit, size_t leftAfter) {
+    if (leftAfter <= 1) return true;
+    if (++stamp_ == 0) {
+      std::fill(mark_.begin(), mark_.end(), 0);
+      stamp_ = 1;
+    }
+    for (uint32_t p : unit.pieces) mark_[p] = stamp_, from_[p] = kUnit;
+    parent_.clear();
+    size_t searches = 0;
+    for (uint32_t p : unit.pieces)
+      for (uint32_t ci : ctx_.connectionsOf[p]) {
+        const uint32_t q = other(ci, p);
+        if (!present[q] || mark_[q] == stamp_) continue;
+        mark_[q] = stamp_, from_[q] = static_cast<uint32_t>(searches);
+        if (fronts_.size() <= searches) fronts_.emplace_back();
+        fronts_[searches].assign(1, q);
+        parent_.push_back(static_cast<uint32_t>(searches));
+        searches++;
+      }
+    if (searches == 0) return std::nullopt;
+    size_t apart = searches;
+    while (apart > 1) {
+      for (uint32_t s = 0; s < searches && apart > 1; s++) {
+        if (parent_[s] != s) continue;  // gone on as part of another
+        std::vector<uint32_t>& front = fronts_[s];
+        if (front.empty()) return false;  // all it can reach is held to the rest only through the unit
+        const uint32_t p = front.back();
+        front.pop_back();
+        for (uint32_t ci : ctx_.connectionsOf[p]) {
+          const uint32_t q = other(ci, p);
+          if (!present[q]) continue;
+          if (mark_[q] != stamp_) {
+            mark_[q] = stamp_, from_[q] = s;
+            front.push_back(q);
+            continue;
+          }
+          if (from_[q] == kUnit) continue;
+          const uint32_t t = root(from_[q]);
+          if (t == s) continue;
+          parent_[t] = s;  // they meet: one search from here on
+          front.insert(front.end(), fronts_[t].begin(), fronts_[t].end());
+          fronts_[t].clear();
+          apart--;
+        }
+      }
+    }
+    return true;
+  }
+
+ private:
+  static constexpr uint32_t kUnit = UINT32_MAX;
+  uint32_t other(uint32_t ci, uint32_t p) const {
+    const Connection& c = ctx_.graph.connections[ci];
+    return c.a == p ? c.b : c.a;
+  }
+  uint32_t root(uint32_t s) {
+    while (parent_[s] != s) s = parent_[s] = parent_[parent_[s]];
+    return s;
+  }
+  const Context& ctx_;
+  std::vector<uint32_t> mark_, from_;  // per piece: the search that reached it (when mark_ is stamp_)
+  uint32_t stamp_ = 0;
+  std::vector<uint32_t> parent_;  // per search: the one it went on as
+  std::vector<std::vector<uint32_t>> fronts_;
+};
+
 struct Sequencer {
   const Context& ctx;
   const Units& units;
@@ -89,6 +170,42 @@ struct Sequencer {
     std::vector<uint8_t> dirty(n, 0), seen(n, 0), reason(n, 0);  // dirty: 1 its mates changed, 2 it must be tried again
     std::vector<uint32_t> stack, todo;
     for (uint32_t p : set) dirty[p] = 2;
+    // Whether the set's pieces are joined to each other and to nothing else present. Every piece
+    // taken out leaves them so (only what stays joined is taken), and then Joined can tell.
+    std::vector<uint8_t> inSet(n, 0);
+    for (uint32_t p : set) inSet[p] = 1;
+    bool joinedAlone = !set.empty();
+    for (uint32_t p : set)
+      for (uint32_t ci : ctx.connectionsOf[p]) {
+        const Connection& c = ctx.graph.connections[ci];
+        const uint32_t other = c.a == p ? c.b : c.a;
+        if (present[other] && !inSet[other]) joinedAlone = false;
+      }
+    if (joinedAlone) {
+      std::fill(seen.begin(), seen.end(), 0);
+      stack.assign(1, set.front());
+      seen[set.front()] = 1;
+      size_t reached = 0;
+      while (!stack.empty()) {
+        const uint32_t p = stack.back();
+        stack.pop_back();
+        reached++;
+        for (uint32_t ci : ctx.connectionsOf[p]) {
+          const Connection& c = ctx.graph.connections[ci];
+          const uint32_t other = c.a == p ? c.b : c.a;
+          if (seen[other] || !inSet[other]) continue;
+          seen[other] = 1;
+          stack.push_back(other);
+        }
+      }
+      joinedAlone = reached == set.size();
+    }
+    Joined cuts(ctx, n);
+    auto joined = [&](const Unit& u) {
+      if (joinedAlone && std::all_of(u.pieces.begin(), u.pieces.end(), [&](uint32_t q) { return inSet[q] != 0; }))
+        if (const std::optional<bool> known = cuts.without(present, u, left - u.pieces.size())) return *known;
+      return staysJoined(ctx, set, present, u, stack, seen);
+    };
     // What must be built after what (the author's), as "cannot be removed while these are present".
     std::vector<std::vector<uint32_t>> removeFirst(n);
     if (options.authored) {
@@ -117,6 +234,14 @@ struct Sequencer {
     uint32_t round = 1;
     std::vector<Tried> turnedBefore(n);
     std::map<std::vector<uint32_t>, Tried> togetherBefore;
+    // A unit grown from a piece is the same again for as long as every piece whose presence the
+    // growing looked at is as it was.
+    struct Grown {
+      Unit unit;
+      uint32_t when = 0;          // 0: never grown
+      std::vector<uint32_t> read;  // the pieces it looked at
+    };
+    std::vector<Grown> grownBefore(n);
     auto stillHolds = [&](const Unit& u, const Tried& t) {
       if (t.when == 0) return false;
       if (t.found.ok) return true;  // what could leave still can
@@ -218,7 +343,7 @@ struct Sequencer {
       bool took = false;
       for (uint32_t p : ready) {
         const Unit u = unitOf({p});
-        if (!free(u) || !staysJoined(ctx, set, present, u, stack, seen)) continue;
+        if (!free(u) || !joined(u)) continue;
         take(u, UnitSource::Piece, single[p], Flag::None);
         took = true;
         break;
@@ -240,7 +365,7 @@ struct Sequencer {
       for (size_t i = 0; i < todo.size() && !took; i++) {
         const Unit u = unitOf({todo[i]});
         const Extraction& turned = turnedBefore[todo[i]].found;
-        if (!turned.ok || !free(u) || !staysJoined(ctx, set, present, u, stack, seen)) continue;
+        if (!turned.ok || !free(u) || !joined(u)) continue;
         const Extraction way = turned;  // take() ends the round; the kept attempt is not touched by it
         take(u, UnitSource::Piece, way, Flag::None);
         took = true;
@@ -256,11 +381,21 @@ struct Sequencer {
             if (whole(units.authored[gi])) tries.emplace_back(units.authored[gi], UnitSource::Authored);
           for (uint32_t gi : units.bodyOf[p])
             if (whole(units.bodies[gi])) tries.emplace_back(units.bodies[gi], UnitSource::Body);
-          Unit grown = growUnit(ctx, p, &present);
-          if (grown.pieces.size() > 1 && grown.pieces.size() < left) tries.emplace_back(std::move(grown), UnitSource::Grown);
+          Grown& grown = grownBefore[p];
+          if (grown.when == 0 || std::any_of(grown.read.begin(), grown.read.end(), [&](uint32_t q) { return removedAt[q] >= grown.when; })) {
+            grown.read.clear();
+            grown.unit = growUnit(ctx, p, &present, &grown.read);
+            std::sort(grown.read.begin(), grown.read.end());
+            grown.read.erase(std::unique(grown.read.begin(), grown.read.end()), grown.read.end());
+            grown.when = round;
+          }
+          if (grown.unit.pieces.size() > 1 && grown.unit.pieces.size() < left) tries.emplace_back(grown.unit, UnitSource::Grown);
         }
         for (auto& [u, source] : tries) {
-          if (!free(u) || !staysJoined(ctx, set, present, u, stack, seen)) continue;
+          // An attempt that failed and would fail again needs no other check.
+          const auto known = togetherBefore.find(u.pieces);
+          if (known != togetherBefore.end() && !known->second.found.ok && stillHolds(u, known->second)) continue;
+          if (!free(u) || !joined(u)) continue;
           Tried& before = togetherBefore[u.pieces];
           if (!stillHolds(u, before)) {
             before = {extract(ctx, u, &present, bounds), round};
@@ -277,7 +412,7 @@ struct Sequencer {
       // Still nothing: the engine cannot show how this piece goes in, and says so on it.
       for (uint32_t p : stuck) {
         const Unit u = unitOf({p});
-        if (!staysJoined(ctx, set, present, u, stack, seen)) continue;
+        if (!joined(u)) continue;
         take(u, UnitSource::Piece, single[p], single[p].why == Flag::None ? Flag::Blocked : single[p].why);
         took = true;
         break;
@@ -285,6 +420,7 @@ struct Sequencer {
       if (!took) {  // cannot happen for a joined set: some piece is always not a cut piece
         const uint32_t p = stuck.front();
         take(unitOf({p}), UnitSource::Piece, single[p], Flag::Blocked);
+        joinedAlone = false;  // what is left may not be joined now
       }
     }
     std::reverse(removed.begin(), removed.end());
@@ -367,11 +503,23 @@ Units findUnits(const Model& model, const connect::Graph& graph) {
   return out;
 }
 
-Unit growUnit(const Context& ctx, uint32_t piece, const World::Present* present) {
-  auto there = [&](uint32_t p) { return !present || (p < present->size() && (*present)[p]); };
+Unit growUnit(const Context& ctx, uint32_t piece, const World::Present* present, std::vector<uint32_t>* read) {
+  auto there = [&](uint32_t p) {
+    if (read) read->push_back(p);
+    return !present || (p < present->size() && (*present)[p]);
+  };
   Unit unit{{piece}};
+  // What leaveDirections looks at: the unit's pieces and what they are joined to.
+  auto noting = [&](Unit u) {
+    if (read)
+      for (uint32_t p : u.pieces) {
+        read->push_back(p);
+        for (uint32_t ci : ctx.connectionsOf[p]) read->push_back(ctx.graph.connections[ci].a == p ? ctx.graph.connections[ci].b : ctx.graph.connections[ci].a);
+      }
+    return u;
+  };
   while (static_cast<int>(unit.pieces.size()) < kMaxGroup) {
-    if (unit.pieces.size() > 1 && !leaveDirections(ctx, unit, present).empty()) return unit;
+    if (unit.pieces.size() > 1 && !leaveDirections(ctx, unit, present).empty()) return noting(unit);
     // The neighbour that ties it down least to the rest: the one with the fewest other joints.
     uint32_t best = UINT32_MAX;
     size_t bestTies = 0;
@@ -391,8 +539,9 @@ Unit growUnit(const Context& ctx, uint32_t piece, const World::Present* present)
     if (best == UINT32_MAX) break;
     unit.pieces.insert(std::upper_bound(unit.pieces.begin(), unit.pieces.end(), best), best);
   }
-  if (unit.pieces.size() > 1 && !leaveDirections(ctx, unit, present).empty()) return unit;
-  return {};
+  const bool leaves = unit.pieces.size() > 1 && !leaveDirections(ctx, unit, present).empty();
+  noting(unit);
+  return leaves ? unit : Unit{};
 }
 
 Plan plan(const Model& model, const connect::Graph& graph, ldraw::PartCache& parts, collide::ShapeCache& shapes, const Options& options) {
