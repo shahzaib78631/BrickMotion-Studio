@@ -13,6 +13,7 @@
 namespace bm::plan {
 
 std::vector<int> stepsOf(const Piece& piece) {
+  if (!piece.steps.empty()) return piece.steps;
   std::vector<int> out;
   size_t at = 0;
   while (at <= piece.id.size()) {
@@ -160,7 +161,7 @@ class Joined {
 };
 
 struct Sequencer {
-  const Context& ctx;
+  Context& ctx;  // its floor is a sub-assembly's own while that is taken apart
   const Units& units;
   const Options& options;
   JobPool& pool;
@@ -183,6 +184,22 @@ struct Sequencer {
   /// `depth` bounds how far units of units go.
   void takeApart(const std::vector<uint32_t>& set, Plan& out, int depth, const World::Present* built = nullptr) {
     const size_t n = ctx.model.pieces().size();
+    // A unit is built on its own, standing on the table: its floor is its own lowest, and
+    // nothing of it goes in from under that.
+    struct Floor {
+      Context& ctx;
+      double was;
+      ~Floor() { ctx.floor = was; }
+    } floorGuard{ctx, ctx.floor};
+    if (depth > 0) {
+      double lowest = -std::numeric_limits<double>::infinity();
+      for (uint32_t p : set) {
+        const Box& b = ctx.world.box(p);
+        if (b.empty()) continue;
+        for (int c = 0; c < 8; c++) lowest = std::max(lowest, dot(ctx.down, Vec3{c & 1 ? b.max.x : b.min.x, c & 2 ? b.max.y : b.min.y, c & 4 ? b.max.z : b.min.z}));
+      }
+      if (std::isfinite(lowest)) ctx.floor = lowest;
+    }
     // What was built before this set stands where it is the whole time, in the way like anything else.
     World::Present present = built ? *built : World::Present(n, 0);
     Box bounds;
@@ -200,6 +217,7 @@ struct Sequencer {
     for (uint32_t p = 0; p < n; p++) stepKey[p] = stepsOf(ctx.model.pieces()[p]);
     BlockerIndex blockerIndex(n);
     std::vector<uint8_t> dirty(n, 0), seen(n, 0), reason(n, 0);  // dirty: 1 its mates changed, 2 it must be tried again
+    std::vector<uint8_t> deferred(n, 0);  // could not leave with its step: goes in before it
     std::vector<uint32_t> stack, todo;
     for (uint32_t p : set) dirty[p] = 2;
     // Whether the set's pieces are joined to each other and to nothing else present. Every piece
@@ -394,6 +412,7 @@ struct Sequencer {
       return ranked(a, b);
     };
     // Pieces that go in together, tried as one; false if they cannot leave now.
+    std::vector<int> frontier;
     auto together = [&](const Unit& u, UnitSource source) {
       const auto known = togetherBefore.find(u.pieces);
       if (known != togetherBefore.end() && !known->second.found.ok && stillHolds(u, known->second)) return false;
@@ -480,13 +499,18 @@ struct Sequencer {
       }
       // The file's steps lead: the latest step that still has pieces is taken apart first, its
       // submodels as one, then its pieces, then those of its pieces that only leave together.
-      std::vector<int> frontier;
+      // A piece that could not leave with its step (deferred) goes in earlier: it joins every
+      // later round until it can leave, so it is built as late as it can be, alone.
+      frontier.clear();
       bool any = false;
       for (uint32_t p : set)
-        if (present[p] && (!any || laterSteps(stepKey[p], frontier))) frontier = stepKey[p], any = true;
+        if (present[p] && !deferred[p] && (!any || laterSteps(stepKey[p], frontier))) frontier = stepKey[p], any = true;
+      if (!any)
+        for (uint32_t p : set)
+          if (present[p] && (!any || laterSteps(stepKey[p], frontier))) frontier = stepKey[p], any = true;
       std::vector<uint32_t> latest;
       for (uint32_t p : set)
-        if (present[p] && stepKey[p] == frontier) latest.push_back(p);
+        if (present[p] && (stepKey[p] == frontier || deferred[p])) latest.push_back(p);
       std::sort(latest.begin(), latest.end(), ranked);
       auto ofLatest = [&](const Unit& u) { return std::all_of(u.pieces.begin(), u.pieces.end(), [&](uint32_t q) { return !laterSteps(frontier, stepKey[q]); }); };
       // A submodel is placed in the step of its use: its pieces' steps up to its own level.
@@ -527,12 +551,46 @@ struct Sequencer {
       if (took) continue;
       turnAll(latest);
       if (takeTurned(latest)) continue;
+      // An earlier step's piece that frees one of the latest step's pieces: in its way, or holding
+      // it where it has no way out at all, or doing so for a piece that is in its way, nearest first.
+      auto takeInWay = [&]() -> bool {
+        std::vector<uint32_t> hop(present.size(), UINT32_MAX), queue;
+        for (uint32_t p : latest)
+          if (!single[p].ok) hop[p] = 0, queue.push_back(p);
+        std::vector<uint32_t> ready;
+        auto reach = [&](uint32_t from, uint32_t q) {
+          if (q >= present.size() || !present[q] || hop[q] != UINT32_MAX) return;
+          hop[q] = hop[from] + 1;
+          if (single[q].ok) {
+            if (laterSteps(frontier, stepKey[q])) ready.push_back(q);
+          } else {
+            queue.push_back(q);
+          }
+        };
+        for (size_t k = 0; k < queue.size(); k++) {
+          const uint32_t q = queue[k];
+          for (uint32_t r : single[q].stoppedBy) reach(q, r);
+          if (single[q].why == Flag::NoDirection || single[q].why == Flag::Blocked)
+            for (uint32_t ci : ctx.connectionsOf[q]) {
+              const Connection& c = ctx.graph.connections[ci];
+              reach(q, c.a == q ? c.b : c.a);
+            }
+        }
+        std::stable_sort(ready.begin(), ready.end(), [&](uint32_t a, uint32_t b) { return hop[a] != hop[b] ? hop[a] < hop[b] : before(a, b); });
+        for (uint32_t q : ready) {
+          const Unit u = unitOf({q});
+          if (!free(u) || !joined(u)) continue;
+          take(u, UnitSource::Piece, single[q], Flag::None);
+          return true;
+        }
+        return false;
+      };
       if (depth < 4) {  // the step's own pieces joined to each other, as one
         std::vector<uint8_t> inStep(present.size(), 0), done(present.size(), 0);
-        for (uint32_t p : latest) inStep[p] = 1;
+        for (uint32_t p : latest) inStep[p] = stepKey[p] == frontier ? 1 : 0;
         for (uint32_t p : latest) {
           if (took || outOfTime()) break;
-          if (done[p] || single[p].ok) continue;
+          if (done[p] || single[p].ok || !inStep[p]) continue;
           Unit u;
           std::vector<uint32_t> todoStep{p};
           done[p] = 1;
@@ -562,8 +620,18 @@ struct Sequencer {
           if (grown.pieces.size() > 1 && grown.pieces.size() < left && ofLatest(grown)) took = together(grown, UnitSource::Grown);
         }
       if (took) continue;
+      {  // what of this step cannot leave yet goes in before it
+        bool more = false, rest = false;
+        for (uint32_t p : latest)
+          if (!single[p].ok && !deferred[p]) deferred[p] = 1, more = true;
+        for (uint32_t p : set)
+          if (present[p] && !deferred[p]) rest = true;
+        if (more && rest) continue;
+      }
       // Nothing of the latest step can leave alone or with its own step. Borrow as little as helps:
-      // first a unit grown from one of its pieces into earlier steps (what it is attached to)...
+      // first an earlier piece that frees one of its pieces, then a unit grown from one of its
+      // pieces into earlier steps (what it is attached to)...
+      if (takeInWay()) continue;
       if (depth < 4)
         for (uint32_t p : latest) {
           if (took || outOfTime()) break;
@@ -571,25 +639,6 @@ struct Sequencer {
           const Unit& grown = grownFrom(p);
           if (grown.pieces.size() > 1 && grown.pieces.size() < left) took = together(grown, UnitSource::Grown);
         }
-      if (took) continue;
-      // ...then an earlier step's piece that is in the way of one of its pieces...
-      {
-        std::vector<uint8_t> inWay(present.size(), 0);
-        for (uint32_t p : latest)
-          for (uint32_t q : single[p].stoppedBy)
-            if (q < present.size() && present[q] && laterSteps(frontier, stepKey[q])) inWay[q] = 1;
-        std::vector<uint32_t> blockers;
-        for (uint32_t q : set)
-          if (inWay[q] && single[q].ok) blockers.push_back(q);
-        std::sort(blockers.begin(), blockers.end(), before);
-        for (uint32_t q : blockers) {
-          const Unit u = unitOf({q});
-          if (!free(u) || !joined(u)) continue;
-          take(u, UnitSource::Piece, single[q], Flag::None);
-          took = true;
-          break;
-        }
-      }
       if (took) continue;
       // ...and only then any earlier step's piece (each built after the step: an inversion, which
       // certifyPlay counts), later steps first.
@@ -613,6 +662,7 @@ struct Sequencer {
       turnAll(stuck);
       if (takeTurned(stuck)) continue;
       // Nothing leaves alone: pieces that must go in together.
+      std::vector<std::pair<Unit, UnitSource>> allTries;
       for (uint32_t p : stuck) {
         if (took || outOfTime()) break;
         std::vector<std::pair<Unit, UnitSource>> tries;
@@ -624,11 +674,21 @@ struct Sequencer {
           const Unit& grown = grownFrom(p);
           if (grown.pieces.size() > 1 && grown.pieces.size() < left) tries.emplace_back(grown, UnitSource::Grown);
         }
-        for (auto& [u, source] : tries)
+        for (auto& t : tries) allTries.push_back(std::move(t));
+      }
+      if (!took) {  // the author's units first, then the smallest
+        std::stable_sort(allTries.begin(), allTries.end(), [](const auto& a, const auto& b) {
+          const bool aa = a.second == UnitSource::Authored, ab = b.second == UnitSource::Authored;
+          if (aa != ab) return aa;
+          return a.first.pieces.size() < b.first.pieces.size();
+        });
+        for (auto& [u, source] : allTries) {
+          if (outOfTime()) break;
           if (together(u, source)) {
             took = true;
             break;
           }
+        }
       }
       if (took) continue;
       // Nothing can be taken with what is left standing: ask only that it stays joined.
@@ -777,7 +837,7 @@ Plan plan(const Model& model, const connect::Graph& graph, ldraw::PartCache& par
   const uint32_t n = static_cast<uint32_t>(model.pieces().size());
   if (n == 0) return out;
   const World world(model, parts, shapes);
-  const Context ctx(model, graph, world, options.down);
+  Context ctx(model, graph, world, options.down);
   const Units units = findUnits(model, graph);
   Sequencer seq{ctx, units, options, options.pool ? *options.pool : JobPool::shared(), started, 0, false};
 

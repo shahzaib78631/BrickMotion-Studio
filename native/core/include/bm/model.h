@@ -16,6 +16,7 @@ struct Piece {
   Xform world;                    ///< placement in the model, LDU
   int step = 0;                   ///< build step in the root model, from 0
   std::vector<std::string> path;  ///< the submodels it sits in, outermost first
+  std::vector<int> steps;         ///< its step at each level, root first; empty: read from the id, else `step`
 };
 
 /// What loading could not make sense of. A model with a non-empty report still loads.

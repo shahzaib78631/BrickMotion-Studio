@@ -222,18 +222,22 @@ struct PlanBuilder {
     return nodes;
   }
 
-  void collect(const std::vector<Node>& nodes, const Xform& parent, const std::string& prefix, int rootStep, bool root, std::vector<std::string>& path) {
+  // `steps`: the step at each level above, root first; a submodel's own steps are kept, so the
+  // planner can follow them inside it.
+  void collect(const std::vector<Node>& nodes, const Xform& parent, const std::string& prefix, int rootStep, bool root, std::vector<std::string>& path, std::vector<int>& steps) {
     for (const Node& n : nodes) {
       const Xform world = parent * n.local;
       const std::string id = prefix.empty() ? n.id : prefix + "/" + n.id;
       const int step = root ? n.step : rootStep;
+      steps.push_back(n.step);
       if (n.sub) {
         path.push_back(n.name);
-        collect(n.children, world, id, step, false, path);
+        collect(n.children, world, id, step, false, path, steps);
         path.pop_back();
       } else {
-        out.pieces.push_back(Piece{id, n.name, n.color, world, step, path});
+        out.pieces.push_back(Piece{id, n.name, n.color, world, step, path, steps});
       }
+      steps.pop_back();
     }
   }
 };
@@ -276,7 +280,8 @@ Model fromPlan(const PlanDoc& doc, const ldraw::Library& library, ldraw::PartCac
   PlanBuilder b{doc.json, data.library, cache, data, {}, {}};
   std::vector<std::string> stack, path;
   const std::vector<Node> nodes = b.model("", doc.json["steps"], stack);
-  b.collect(nodes, Xform::identity(), "", 0, true, path);
+  std::vector<int> steps;
+  b.collect(nodes, Xform::identity(), "", 0, true, path, steps);
   return Model(std::move(data));
 }
 

@@ -56,7 +56,7 @@ struct Expander {
         continue;
       }
       if (!lib.find(c.file)) addOnce(out.report.missing, c.file);
-      out.pieces.push_back(Piece{id, c.file, own, world, atStep, path});
+      out.pieces.push_back(Piece{id, c.file, own, world, atStep, path, {}});
     }
   }
 };

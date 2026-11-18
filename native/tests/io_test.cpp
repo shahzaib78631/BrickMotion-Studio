@@ -243,3 +243,21 @@ TEST_CASE("embedded geometry cannot leak across independently loaded Studio mode
   const Model copied = a;
   REQUIRE(copied.mesh("fancy.dat", cache) == meshA);
 }
+
+TEST_CASE("a plan file's submodels keep their own steps", "[io][plan]") {
+  const ldraw::Library library = lib();
+  ldraw::PartCache cache(library, fs::temp_directory_path() / "bm_io_test_cache");
+  const std::string text = R"({"format":"brickmotion-plan","version":1,"name":"x",
+    "submodels":{"arm":{"steps":[{"pieces":[{"part":"3001","color":4,"ldu":[0,0,0],"matrix":[1,0,0,0,1,0,0,0,1],"id":"a"}]},
+                                 {"pieces":[{"part":"3001","color":4,"ldu":[0,-24,0],"matrix":[1,0,0,0,1,0,0,0,1],"id":"b"}]}]}},
+    "steps":[{"pieces":[{"part":"3001","color":1,"ldu":[0,24,0],"matrix":[1,0,0,0,1,0,0,0,1],"id":"r"}]},
+             {"pieces":[{"submodel":"arm","ldu":[0,0,0],"matrix":[1,0,0,0,1,0,0,0,1],"id":"s"}]}]})";
+  const Model m = io::fromPlan(io::readPlan(text), library, cache);
+  REQUIRE(m.pieces().size() == 3);
+  for (const Piece& p : m.pieces()) {
+    if (p.id == "r") REQUIRE(p.steps == std::vector<int>{0});
+    if (p.id == "s/a") REQUIRE(p.steps == std::vector<int>{1, 0});
+    if (p.id == "s/b") REQUIRE(p.steps == std::vector<int>{1, 1});
+    REQUIRE(p.step == (p.id == "r" ? 0 : 1));  // the root step is as before
+  }
+}
