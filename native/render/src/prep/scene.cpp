@@ -125,8 +125,7 @@ std::vector<std::pair<uint32_t, uint32_t>> applyFrame(Scene& scene, const bm::Mo
     const size_t fi = static_cast<size_t>(owner[i]);
     const bm::plan::Flight& flight = timeline.flights[fi];
     if (!known[fi]) motion[fi] = bm::plan::motionAt(timeline, fi, frame), known[fi] = 1;
-    const bool flies = flight.frames > 0 && !flight.waypoints.empty();
-    if (!flies && frame < flight.startFrame) hidden[i] = 1;
+    if (!bm::plan::shownAt(flight, frame)) hidden[i] = 1;
     pose[i] = motion[fi] * pieces[i].world;
   }
   std::vector<std::pair<uint32_t, uint32_t>> changed;

@@ -662,6 +662,30 @@ TEST_CASE("inversions count moves built against their steps", "[plan][play]") {
   REQUIRE(played(s, p).inversions == 1);
 }
 
+TEST_CASE("the strict check sees pieces waiting on the floor", "[plan][play]") {
+  Scene s;
+  const uint32_t a = s.add(0, 0, 0), b = s.add(0, -24, 0);
+  s.stud(a, b);
+  const Plan p = s.plan();
+  Timeline t = buildTimeline(*s.model, s.parts, p);
+  REQUIRE(t.flights.size() == 2);
+  REQUIRE(certifyPlay(*s.model, s.graph, s.parts, s.shapes, p, t).strictCrossings == 0);
+  // The first flight sent through where the second piece waits.
+  const size_t first = piecesOf(t.flights[0], p).front() == a ? 0 : 1;
+  Flight& f = t.flights[first];
+  const uint32_t other = first == 0 ? b : a;
+  const Flight& waits = t.flights[1 - first];
+  REQUIRE(waits.startFrame > f.startFrame);
+  Xform through;
+  through.t = waits.staging.t + s.at[other] - s.at[piecesOf(f, p).front()];
+  f.waypoints = {f.staging, through, Xform{}};
+  f.at = {0, 0.5, 1};
+  f.air.clear(), f.airAt.clear(), f.airLeg.clear();
+  const PlayCheck k = certifyPlay(*s.model, s.graph, s.parts, s.shapes, p, t);
+  REQUIRE(k.strictCrossings == 1);
+  REQUIRE(k.strict.front().other == other);
+}
+
 TEST_CASE("a sub-assembly is swept as one", "[plan][play]") {
   Scene s;
   const uint32_t a = s.add(0, 0, 0), b = s.add(0, -24, 0);

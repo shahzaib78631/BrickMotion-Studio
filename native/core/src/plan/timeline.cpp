@@ -152,6 +152,8 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
       if (!(along > 0)) f.air.clear(), f.airAt.clear(), f.airLeg.clear();
     }
     f.frames = perFlight;
+    f.pathAt = f.at.size() > 2 ? f.at[2] * perFlight : 0;
+    f.seatAt = f.at.size() >= 2 ? f.at[f.at.size() - 2] * perFlight : 0;
     frame += perFlight;
     out.flights[static_cast<size_t>(self)] = std::move(f);
   };
@@ -189,7 +191,7 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
   return out;
 }
 
-Xform motionAt(const Timeline& t, size_t flight, int frame) {
+Xform motionAt(const Timeline& t, size_t flight, double frame) {
   Xform x = poseAt(t.flights[flight], frame);
   for (int up = t.flights[flight].parent, guard = 0; up >= 0 && static_cast<size_t>(up) < t.flights.size() && guard < 64; up = t.flights[static_cast<size_t>(up)].parent, guard++)
     x = poseAt(t.flights[static_cast<size_t>(up)], frame) * x;
@@ -202,11 +204,26 @@ const std::vector<uint32_t>& piecesOf(const Flight& f, const Plan& plan) {
   return f.move < plan.moves.size() ? plan.moves[f.move].unit.pieces : none;
 }
 
-Xform poseAt(const Flight& f, int frame) {
+bool shownAt(const Flight& f, double frame) {
+  const bool flies = f.frames > 0 && !f.waypoints.empty();
+  return frame >= (flies ? f.appearFrame : f.startFrame);
+}
+
+std::vector<int> owners(const Timeline& t, const Plan& plan, size_t n) {
+  std::vector<int> owner(n, -1);
+  for (size_t fi = 0; fi < t.flights.size(); fi++)
+    for (uint32_t p : piecesOf(t.flights[fi], plan))
+      if (p < n && (owner[p] < 0 || t.flights[static_cast<size_t>(owner[p])].depth < t.flights[fi].depth)) owner[p] = static_cast<int>(fi);
+  return owner;
+}
+
+Xform poseAt(const Flight& f, int frame) { return poseAt(f, static_cast<double>(frame)); }
+
+Xform poseAt(const Flight& f, double frame) {
   if (f.waypoints.empty()) return {};
   if (f.frames <= 0 || frame >= f.startFrame + f.frames) return f.waypoints.back();
   if (frame <= f.startFrame) return f.waypoints.front();
-  const double u = static_cast<double>(frame - f.startFrame) / f.frames;
+  const double u = (frame - f.startFrame) / f.frames;
   if (!f.air.empty() && f.hoverAt < f.at.size() && u < f.at[f.hoverAt]) {
     double v = u / f.at[f.hoverAt];
     v = v * v * (3 - 2 * v);  // one ease in, one ease out over the whole of the open air

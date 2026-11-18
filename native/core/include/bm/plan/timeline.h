@@ -28,6 +28,10 @@ struct Flight {
   Vec3 insertion;
   double seatTravel = 0;
   int startFrame = 0, frames = 0;  ///< frames == 0: the unit appears at its seat (a flagged move does not fly)
+  int appearFrame = 0;           ///< when its pieces are first shown, waiting on the floor (a flight that does not fly: startFrame)
+  /// Frames from startFrame to where the plan's own path begins, and to where the last leg, into
+  /// the seat, begins (it ends at rest at startFrame + frames).
+  double pathAt = 0, seatAt = 0;
   Xform staging;                 ///< where it waits on the floor
   std::vector<Xform> waypoints;  ///< staging first, seat (identity) last
   std::vector<double> at;        ///< 0..1 for each waypoint; the last leg takes Style::landing
@@ -58,10 +62,16 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
 
 /// The unit's motion from its seat at a frame: staging before its flight, the seat after it.
 Xform poseAt(const Flight& flight, int frame);
+/// The same between frames.
+Xform poseAt(const Flight& flight, double frame);
+/// Whether a flight's pieces are shown at a frame.
+bool shownAt(const Flight& flight, double frame);
+/// Each piece's innermost flight (-1: none), indexed like Model::pieces().
+std::vector<int> owners(const Timeline& timeline, const Plan& plan, size_t pieces);
 
 /// A flight's motion in the model at a frame: its own (poseAt), carried by the flights of the
 /// units it helps build.
-Xform motionAt(const Timeline& timeline, size_t flight, int frame);
+Xform motionAt(const Timeline& timeline, size_t flight, double frame);
 
 /// The pieces a flight moves (Flight::pieces, or its move's).
 const std::vector<uint32_t>& piecesOf(const Flight& flight, const Plan& plan);

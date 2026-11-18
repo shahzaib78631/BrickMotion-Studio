@@ -88,11 +88,17 @@ int cmdPlan(const Args& args) {
         const Piece& a = model.pieces()[f.pieces.empty() ? plan.moves[f.move].unit.pieces.front() : f.pieces.front()];
         std::printf("    under floor: %s %s depth %d insertion %.2f %.2f %.2f\n", a.part.c_str(), a.id.c_str(), f.depth, f.insertion.x, f.insertion.y, f.insertion.z);
       }
+      {
+        int byLeg[3] = {0, 0, 0};
+        for (const plan::PlayCheck::Strict& c : play.strict) byLeg[static_cast<int>(c.leg)]++;
+        std::printf("  strict by leg: transit %d, path %d, seat %d\n", byLeg[0], byLeg[1], byLeg[2]);
+      }
       for (size_t k = 0; k < play.strict.size() && k < 20; k++) {
         const plan::PlayCheck::Strict& c = play.strict[k];
         const Piece& a = model.pieces()[c.piece];
         const Piece& b = model.pieces()[c.other];
-        std::printf("    frame %d: %s %s through %s %s%s\n", c.frame, a.part.c_str(), a.id.c_str(), b.part.c_str(), b.id.c_str(), played.flights[c.flight].depth > 0 ? " (in a unit's own build)" : "");
+        static const char* legs[] = {"transit", "path", "seat"};
+        std::printf("    frame %.2f %s: %s %s through %s %s%s\n", c.at, legs[static_cast<int>(c.leg)], a.part.c_str(), a.id.c_str(), b.part.c_str(), b.id.c_str(), played.flights[c.flight].depth > 0 ? " (in a unit's own build)" : "");
       }
     }
     // The first moves that are not certified, with why.

@@ -105,6 +105,8 @@ Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Libr
             const plan::Timeline played = plan::buildTimeline(model, cache, built);
             const plan::PlayCheck play = plan::certifyPlay(model, g, cache, *shapes, built, played);
             row.playedCrossings = play.crossings, row.playedStrict = play.strictCrossings, row.playedUnder = play.underFloor;
+            for (const plan::PlayCheck::Strict& c : play.strict)
+              (c.leg == plan::PlayCheck::Leg::Transit ? row.playedStrictTransit : c.leg == plan::PlayCheck::Leg::Path ? row.playedStrictPath : row.playedStrictSeat)++;
             row.playedUpward = play.upward, row.playedInversions = play.inversions;
             for (const plan::Move& m : built.moves)
               if (m.unit.pieces.size() > 1 && m.source != plan::UnitSource::Authored) {
@@ -198,6 +200,7 @@ nlohmann::json toJson(const Row& row) {
     j["offAxis"] = row.offAxis;
     j["playedCrossings"] = row.playedCrossings;
     j["playedStrict"] = row.playedStrict;
+    j["playedStrictLegs"] = {row.playedStrictTransit, row.playedStrictPath, row.playedStrictSeat};
     j["playedUnder"] = row.playedUnder;
     j["playedUpward"] = row.playedUpward;
     j["playedInversions"] = row.playedInversions;
@@ -224,7 +227,7 @@ nlohmann::json summarize(const std::vector<Row>& rows) {
   std::vector<double> graphTimes, collisionTimes;
   long overlaps = 0, overlapsJoined = 0, overlapPieces = 0, duplicates = 0, cleanModels = 0, collided = 0;
   long standing = 0, unsupportedPieces = 0, tippingModels = 0;
-  long plannedModels = 0, planOk = 0, planIncomplete = 0, planMoves = 0, planCertified = 0, planFlagged = 0, planUnjoined = 0, planFloating = 0, planCrossings = 0, planOffAxis = 0, playedCrossings = 0, playedStrict = 0, playedUnder = 0, playedUpward = 0, playedInversions = 0, unitPieces = 0;
+  long plannedModels = 0, planOk = 0, planIncomplete = 0, planMoves = 0, planCertified = 0, planFlagged = 0, planUnjoined = 0, planFloating = 0, planCrossings = 0, planOffAxis = 0, playedCrossings = 0, playedStrict = 0, strictLeg[3] = {0, 0, 0}, playedUnder = 0, playedUpward = 0, playedInversions = 0, unitPieces = 0;
   std::vector<double> planTimes;
   long kinModels = 0, movingBodies = 0, freedoms = 0, mechanisms = 0, unsolved = 0, withMechanisms = 0;
   std::vector<double> kinTimes;
@@ -277,6 +280,7 @@ nlohmann::json summarize(const std::vector<Row>& rows) {
       planCrossings += r.buildCrossings;
       planOffAxis += r.offAxis;
       playedCrossings += r.playedCrossings, playedStrict += r.playedStrict, playedUnder += r.playedUnder;
+      strictLeg[0] += r.playedStrictTransit, strictLeg[1] += r.playedStrictPath, strictLeg[2] += r.playedStrictSeat;
       playedUpward += r.playedUpward, playedInversions += r.playedInversions, unitPieces += r.unitPieces;
       planTimes.push_back(r.planMs);
     }
@@ -355,6 +359,7 @@ nlohmann::json summarize(const std::vector<Row>& rows) {
     t["offAxis"] = planOffAxis;
     t["playedCrossings"] = playedCrossings;
     t["playedStrict"] = playedStrict;
+    t["playedStrictLegs"] = {strictLeg[0], strictLeg[1], strictLeg[2]};
     t["playedUnder"] = playedUnder;
     t["playedUpward"] = playedUpward;
     t["playedInversions"] = playedInversions;

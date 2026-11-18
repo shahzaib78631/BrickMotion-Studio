@@ -39,9 +39,14 @@ struct PlayCheck {
   std::vector<uint32_t> under;    ///< the flight of each flight under the floor
   /// The strict check: every frame as shown, turns included, raw overlap with nothing let off but
   /// the moving piece's own mates' zones near its seat and what already crosses at rest.
+  /// Every piece shown is an obstacle where the timeline has it: built, waiting on the floor, or
+  /// in a unit on its spot. Sampled so nothing moves more than collide::kSweepStep between samples.
+  enum class Leg : uint8_t { Transit, Path, Seat };  ///< floor to the plan's path; the plan's path; into the seat
   struct Strict {
     uint32_t flight = 0, piece = 0, other = 0;
     int frame = 0;
+    double at = 0;  ///< the exact time, in frames
+    Leg leg = Leg::Transit;
   };
   int strictCrossings = 0;      ///< flights that cross a placed piece in some frame
   std::vector<Strict> strict;   ///< the first crossing of each
