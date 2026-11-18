@@ -553,7 +553,34 @@ TEST_CASE("a unit taken out of its seat stops short of what it would cross there
   REQUIRE(e.ok);
   REQUIRE(e.path.size() >= 2);
   const double drawn = dot(e.path[1].t, out);
-  CHECK(drawn >= seat - kTravelTol);
+  CHECK(drawn >= seat - kTravelTol - 1e-9);
   CHECK(drawn <= seat);
   REQUIRE_FALSE(collide::overlap(world.shape(pin), e.path[1] * world.pose(pin), world.shape(longPin), world.pose(longPin)));
+}
+
+TEST_CASE("a unit out of its seat rests at its seat whatever was asked before", "[plan][zones]") {
+  // How far one piece gets past another is remembered, and the answer kept for a travel is
+  // also given for any within 0.01 of it: here the first unit's seat, a few thousandths short of
+  // the second's. Which unit is looked at first is up to the threads, so where a unit rests out
+  // of its seat must not depend on it.
+  Scene s;
+  // Each upper brick is sunk 2 LDU into its lower one, which their mate lets them do, so that
+  // the two are looked at on the way out (two pieces whose boxes only touch never are).
+  const uint32_t lowerA = s.add(0, 0, 0), upperA = s.add(0, -22, 0);
+  const uint32_t lowerB = s.add(200, 0, 0), upperB = s.add(200, -22, 0);
+  s.stretch(lowerA, upperA, kUp, 3.997);
+  s.stretch(lowerB, upperB, kUp, 4.0);
+  s.finish();
+  const collide::World world(*s.model, s.parts, s.shapes);
+  const Context ctx(*s.model, s.graph, world);
+  Box bounds;
+  for (uint32_t i = 0; i < s.at.size(); i++) bounds.merge(world.box(i));
+  const Extraction a = extract(ctx, Unit{{upperA}}, nullptr, bounds, kUp);
+  const Extraction b = extract(ctx, Unit{{upperB}}, nullptr, bounds, kUp);
+  REQUIRE(a.ok);
+  REQUIRE(b.ok);
+  REQUIRE(a.path.size() >= 2);
+  REQUIRE(b.path.size() >= 2);
+  CHECK_THAT(dot(a.path[1].t, kUp), WithinAbs(3.997 + kClearMargin, 1e-9));
+  CHECK_THAT(dot(b.path[1].t, kUp), WithinAbs(4.0 + kClearMargin, 1e-9));
 }

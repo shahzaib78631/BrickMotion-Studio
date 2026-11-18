@@ -18,6 +18,13 @@ inline constexpr double kClearMargin = 4.0;
 /// first contact stops within this.
 inline constexpr double kTravelTol = 0.1;
 
+/// LDU short of its seat that a unit's way out may be found to end and the unit still rest at
+/// the seat. A way that is clear is found to end a little short at times: an answer is kept
+/// for travels within 0.01 of the one asked first, and given as that one. A way that is
+/// stopped is found to end 0.05 short of where it crosses, so one found to end this near the
+/// seat crosses past it. Between the two.
+inline constexpr double kSeatSlack = 0.03;
+
 /// LDU outside the box of everything built where a flight is in open air: one stud.
 inline constexpr double kExitMargin = 20.0;
 

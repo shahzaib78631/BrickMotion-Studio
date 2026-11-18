@@ -181,10 +181,13 @@ Extraction extract(const Context& ctx, const Unit& unit, const World::Present* p
       if (got > furthest) furthest = got, best.why = Flag::Blocked, best.blocker = blocker, best.direction = d, best.seatTravel = leave.travel;
       continue;
     }
-    // Out of its seat, to within kTravelTol. It stops where the way is clear, short of anything
-    // it came up against, not at the seat itself: every leg after starts there, and a hair
-    // further on it may already cross that piece (an axle pin's end in a long pin's, OMR 9396-1).
-    const double drawn = std::min(got, seat);
+    // Out of its seat, to within kTravelTol. With nothing met before the seat it rests there.
+    // With something met short of it (an axle pin's end in a long pin's, OMR 9396-1) it rests
+    // kTravelTol short, as far as the check above vouches the way is clear, since every leg after
+    // starts where it rests. Never where it was found to stop: how far a piece gets is
+    // remembered for nearby travels, so that differs by a hair with the order pieces are looked
+    // at in, and so with the number of threads.
+    const double drawn = got >= seat - kSeatSlack ? seat : seat - kTravelTol;
     const Xform seated = shifted(d * drawn);
     Box at = box;
     at.min = at.min + d * drawn, at.max = at.max + d * drawn;
