@@ -717,6 +717,10 @@ TEST_CASE("a turned piece waits upright as drawn, lands exactly at its seat, and
       on = on || here;
     }
     REQUIRE(on);
+    if (piecesOf(f, p).front() == b) {  // drawn turned, it waits its part's own way round and turns on the way
+      REQUIRE(std::abs(f.staging.r.m[0] - 1) > 1e-6);
+      REQUIRE(f.routeTurn.front() < 1);
+    }
   }
   REQUIRE(certifyPlay(*s.model, s.graph, s.parts, s.shapes, p, t).strictCrossings == 0);
 }

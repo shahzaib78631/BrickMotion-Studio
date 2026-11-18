@@ -615,7 +615,7 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
         auto columnExact = [&](Vec3 v) {
           const double topH = standing(v.x, v.z, rh) + kClearMargin + below;
           if (topH <= up(v)) return true;
-          for (double h = 0; h <= topH - up(v) + 2; h += 2) {
+          for (double h = 0; h <= topH - up(v) + collide::kSweepStep; h += collide::kSweepStep) {
             Xform move;
             move.t = v - seatPivot + Vec3{0, -h, 0};
             for (uint32_t p : unit) {
@@ -769,7 +769,7 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
       // Checks the way across exactly, as it will be played: each piece against what stands then.
       std::vector<uint32_t> near;
       auto clearAcross = [&](const Flight& trial, double sJoin) {
-        const double step = 2;
+        const double step = collide::kSweepStep;  // as finely as the strict check looks
         double turned = 0;  // how far a corner of the unit sweeps in turning, at most
         if (turning) turned = r3 * 2 * std::acos(std::clamp(std::abs(q0.w), 0.0, 1.0));
         const int samples = std::max(2, static_cast<int>(std::ceil((sJoin + turned) / step)));
