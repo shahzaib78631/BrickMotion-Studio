@@ -1,15 +1,34 @@
 #pragma once
 // From a plan to an animation: where each unit waits, how it flies in, when, and a camera.
+#include <filesystem>
 #include <nlohmann/json.hpp>
 #include "bm/plan/certify.h"
 #include "bm/plan/plan.h"
+#include "bm/plan/staging.h"
 
 namespace bm::plan {
 
+/// How each leg of a flight is eased, as in the web app: minimum jerk, cosine, quintic, none.
+enum class Ease : uint8_t { Smooth, Gentle, Soft, Linear };
+double eased(Ease ease, double u);
+bool parse(const std::string& name, Ease& out);
+
 struct Style {
   double fps = 30;
-  double piecesPerSecond = 2;  ///< how fast the build goes
+  double piecesPerSecond = 2;  ///< how fast the build goes: a flight lasts at least 0.85 of a piece's slot, 0.35 s to 0.9 s, as the web's one by one
   double time = 1;             ///< multiplies every flight's length (2 = twice as slow)
+  double gap = 0.05;           ///< seconds between one piece landing and the next leaving
+  double stepPause = 0.25;     ///< seconds held where the build moves to its next step (at most a fifth of the build in all)
+  /// The floor, as in the web app.
+  staging::Style floorStyle = staging::Style::Packed;
+  staging::Sort floorSort = staging::Sort::Step;
+  staging::Sides floorSides = staging::Sides::FrontBack;
+  staging::Match floorMatch = staging::Match::Fill;
+  double floorAspect = 1;
+  Ease ease = Ease::Smooth;
+  /// The way through the air: never closer than `clearance` above anything in the way (a brick),
+  /// never faster than `speed`, and into the seat no faster than `seatSpeed` (LDU a second).
+  double clearance = 24, speed = 6000, seatSpeed = 400;
   double landing = 0.25;       ///< share of a flight spent on the last leg, into the seat
   double hover = 0.1;          ///< share spent holding still at the start of that leg
   double corner = 20;          ///< LDU: the largest radius its own corners in open air are rounded to (under kExitMargin)
@@ -41,6 +60,26 @@ struct Flight {
   std::vector<double> airAt;     ///< distance along `air` to each point
   std::vector<uint32_t> airLeg;  ///< the waypoint whose pose each point of `air` takes its rotation from
   uint32_t hoverAt = 0;          ///< the waypoint `air` ends at
+  /// The flight as flown (empty `route`: the waypoints above). The unit turns about `pivot` (where
+  /// its middle is at its seat) and the pivot follows `route` (the unit's frame, as motions are):
+  /// motion = [R, c - R * pivot]. It waits turned by `turnFrom` and turns to its seat's way
+  /// between `turnStart` and `turnEnd` (distances along the route).
+  std::vector<Vec3> route;
+  std::vector<double> routeAt;  ///< distance along route to each point
+  Vec3 pivot;
+  Mat3 turnFrom;
+  double turnStart = 0, turnEnd = 0;
+  std::vector<double> routeTurn;  ///< how much of its turn is done at each point of route (0..1), eased; empty: by turnStart/turnEnd
+  /// The legs as timed: each eased from rest to rest, `frames` long from `start` (frames from
+  /// startFrame), over route distances `from` to `to`. The last leg is the one into the seat.
+  struct Phase {
+    double start = 0, frames = 0, from = 0, to = 0;
+  };
+  std::vector<Phase> phases;
+  Ease ease = Ease::Smooth;
+  double liftAt = 0;      ///< frames from startFrame when it has lifted clear of the floor
+  double seatFrames = 0;  ///< how long the last leg, into the seat, takes
+  bool fallback = false;  ///< no way through the air was found clear: it flies above everything
 };
 
 struct CameraKey {
@@ -55,9 +94,14 @@ struct Timeline {
   int frames = 0;
 };
 
-/// Staging is a row of spots on the floor beside the model, in build order, each as wide as its
-/// unit plus a stud. A flight lifts off, crosses above everything built, and follows the plan's
-/// path into the seat. The legs before the plan's path are not swept: only the path is certified.
+/// Staging is the web app's floor: bands round the model, each unit built on a spot of its own
+/// beside it with bands of its own. A piece waits turned as it is drawn (its part's own way up);
+/// it lifts, turns on the way, crosses just above what is in its way (built, waiting, on a
+/// spot), joins the plan's path as low as it can, and follows it into the seat.
+/// The floor and easing a project (.brickmotion) was saved with in the web app; defaults for
+/// anything else, or anything it does not say.
+Style styleOf(const std::filesystem::path& project);
+
 Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& plan, const Style& style = {}, Vec3 down = {0, 1, 0});
 
 /// The unit's motion from its seat at a frame: staging before its flight, the seat after it.

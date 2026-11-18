@@ -120,7 +120,7 @@ int still(const std::vector<std::string_view>& args) {
     bmr::OrbitCamera orbit;
     if (!bmtools::shotCamera(shot, scene.bounds, nullptr, orbit)) return usage();
     if (shot.frame >= 0) {
-      const bmtools::Planned planned = bmtools::planModel(model, library, full, ldraw);
+      const bmtools::Planned planned = bmtools::planModel(model, library, full, ldraw, {}, bm::plan::styleOf(input));
       bmr::applyFrame(scene, model, planned.plan, planned.timeline, shot.frame);
       bmtools::shotCamera(shot, scene.bounds, &planned.timeline, orbit);
       std::fprintf(stderr, "bmexport: frame %d of %d\n", shot.frame, planned.timeline.frames);
@@ -215,7 +215,7 @@ int sound(const std::vector<std::string_view>& args) {
     const ldraw::Library library(ldraw);
     ldraw::PartCache full(library, ldraw::PartCache::defaultDirectory());
     const Model model = io::load(input, library, &full);
-    const bmtools::Planned planned = bmtools::planModel(model, library, full, ldraw);
+    const bmtools::Planned planned = bmtools::planModel(model, library, full, ldraw, {}, bm::plan::styleOf(input));
     const bmr::Scene scene = bmr::buildScene(model, full);
     std::vector<Box> boxes(model.pieces().size());
     for (size_t p = 0; p < boxes.size() && p < scene.where.size(); p++) {

@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <functional>
 #include <map>
 #include "bm/connect/graph.h"
@@ -25,6 +26,7 @@ int cmdPlan(const Args& args) {
   const std::string budget = option(args, "--budget", "0", bad);
   const std::string threads = option(args, "--threads", "0", bad);
   const std::string truthPath = option(args, "--truth", "", bad);
+  const std::string timelinePath = option(args, "--timeline", "", bad);
   if (bad || args.empty() || args[0].rfind("--", 0) == 0) {
     std::fprintf(stderr, "usage: bm plan <file> [--truth <insertion-truth.json>] [--explain <part>] [--out <plan.json>] [--json] [--budget <seconds>] [--threads N] [--no-certify] [--no-studio]\n");
     return kUsage;
@@ -75,8 +77,30 @@ int cmdPlan(const Args& args) {
       certificate = plan::certify(model, graph, cache, shapes, plan);
       std::printf("certified     %d of %d moves (%.0f ms; flights checked along their length)\n  floating    %d\n  crossings   %d\n  off axis    %d\n  flagged     %d (of them unjoined in the file: %d)\n", certificate.certified, certificate.total,
                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count(), certificate.floating, certificate.crossings, certificate.offAxis, certificate.flagged, certificate.unjoined);
-      const plan::Timeline played = plan::buildTimeline(model, cache, plan);
+      const plan::Timeline played = plan::buildTimeline(model, cache, plan, plan::styleOf(fs::path(std::string(args[0]))));
       const plan::PlayCheck play = plan::certifyPlay(model, graph, cache, shapes, plan, played);
+      if (!timelinePath.empty()) {  // each flight as played: when, and how high its pieces go
+        nlohmann::json j = plan::toJson(played);
+        const std::vector<int> owner = plan::owners(played, plan, model.pieces().size());
+        for (size_t fi = 0; fi < played.flights.size(); fi++) {
+          const plan::Flight& f = played.flights[fi];
+          nlohmann::json& o = j["flights"][fi];
+          double highest = std::numeric_limits<double>::infinity(), floorBottom = 0;
+          for (uint32_t p : plan::piecesOf(f, plan)) o["ids"].push_back(model.pieces()[p].id);
+          for (int frame = f.startFrame; frame <= f.startFrame + f.frames; frame++)
+            for (uint32_t p : plan::piecesOf(f, plan)) {
+              const auto mesh = model.mesh(model.pieces()[p].part, cache);
+              if (!mesh) continue;
+              const Box b = mesh->bounds.transformed(plan::motionAt(played, static_cast<size_t>(owner[p]), frame) * model.pieces()[p].world);
+              highest = std::min(highest, b.max.y);
+              if (frame == f.startFrame) floorBottom = std::max(floorBottom, b.max.y);
+            }
+          o["appearFrame"] = f.appearFrame, o["liftAt"] = f.liftAt, o["fallback"] = f.fallback, o["depth"] = f.depth;
+          o["highestBottom"] = highest, o["floorBottom"] = floorBottom;
+        }
+        std::ofstream out(timelinePath);
+        out << j.dump(1) << "\n";
+      }
       std::printf("played        %d flights: crossings %d, under floor %d\n  upward      %d\n  inversions  %d\n  strict      %d (every frame shown, turns included, nothing let off but a piece's own mates at its seat)\n", play.flights, play.crossings, play.underFloor, play.upward, play.inversions, play.strictCrossings);
       for (uint32_t fi : play.crossed) {
         const plan::Flight& f = played.flights[fi];

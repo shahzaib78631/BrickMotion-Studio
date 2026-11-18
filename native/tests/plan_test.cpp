@@ -383,28 +383,31 @@ TEST_CASE("the timeline stages units on the floor and flies each to its seat", "
   style.fps = 30, style.piecesPerSecond = 2;
   const Timeline t = buildTimeline(*s.model, s.parts, p, style);
   REQUIRE(t.flights.size() == 3);
-  REQUIRE(t.frames == 30);  // two flights of 15 frames
   REQUIRE(t.flights[2].frames == 0);
   for (size_t i = 0; i < 2; i++) {
     const Flight& f = t.flights[i];
-    REQUIRE(f.frames == 15);
-    REQUIRE(f.waypoints.size() == f.at.size());
-    REQUIRE(length(f.waypoints.back().t) == 0);  // the seat
-    REQUIRE(length(poseAt(f, f.startFrame + f.frames).t) == 0);
+    REQUIRE(f.frames >= 13);  // at least the web's 0.85 of a slot: 0.425 s
+    REQUIRE(f.route.size() >= 2);
+    REQUIRE(poseAt(f, f.startFrame + f.frames).t == Vec3{});  // the seat, exactly
+    REQUIRE(poseAt(f, static_cast<double>(f.startFrame + f.frames) - 1e-9).r.m[0] == 1);  // turned to its seat's way before it lands
     REQUIRE_THAT(length(poseAt(f, f.startFrame).t - f.staging.t), WithinAbs(0, 1e-9));
     // It waits on the floor (the model's lowest level, y = 24) clear of the model.
     const double bottom = s.at[p.moves[i].unit.pieces[0]].y + 24 + f.staging.t.y;
     REQUIRE_THAT(bottom, WithinAbs(24, 1e-6));
     REQUIRE(std::abs(f.staging.t.x) + std::abs(f.staging.t.z) > 30);
-    // The last leg is the landing: the seat leg of the plan.
-    REQUIRE_THAT(f.at[f.at.size() - 2], WithinAbs(1 - style.landing, 1e-9));
-    // Before it, the hover: two waypoints at the same pose.
-    REQUIRE_THAT(f.at[f.at.size() - 3], WithinAbs(1 - style.landing - style.hover, 1e-9));
-    REQUIRE(length(f.waypoints[f.waypoints.size() - 2].t - f.waypoints[f.waypoints.size() - 3].t) == 0);
+    // The last leg is the landing, eased on its own, from rest to rest.
+    REQUIRE(f.phases.size() >= 2);
+    REQUIRE(f.seatFrames > 0);
+    REQUIRE_THAT(f.seatAt + f.seatFrames, WithinAbs(f.frames, 1e-9));
     double step = 0;
     for (int frame = f.startFrame; frame < f.startFrame + f.frames; frame++) step = std::max(step, length(poseAt(f, frame + 1).t - poseAt(f, frame).t));
-    REQUIRE(step < 400);  // no jump
+    REQUIRE(step < 60);  // no jump: never faster than the speed cap allows
+    // Above everything in the way, but not far above: a brick's clearance over what stands.
+    double highest = 0;
+    for (int frame = f.startFrame; frame <= f.startFrame + f.frames; frame++) highest = std::max(highest, -poseAt(f, frame).t.y);
+    REQUIRE(highest < 300);
   }
+  REQUIRE(t.flights[1].startFrame >= t.flights[0].startFrame + t.flights[0].frames);  // one after another
   REQUIRE(length((t.flights[0].staging.t + s.at[p.moves[0].unit.pieces[0]]) - (t.flights[1].staging.t + s.at[p.moves[1].unit.pieces[0]])) >= 20);  // each its own spot
   REQUIRE_FALSE(t.camera.empty());
   const nlohmann::json j = toJson(p, nullptr, *s.model);
@@ -680,7 +683,7 @@ TEST_CASE("the strict check sees pieces waiting on the floor", "[plan][play]") {
   through.t = waits.staging.t + s.at[other] - s.at[piecesOf(f, p).front()];
   f.waypoints = {f.staging, through, Xform{}};
   f.at = {0, 0.5, 1};
-  f.air.clear(), f.airAt.clear(), f.airLeg.clear();
+  f.air.clear(), f.airAt.clear(), f.airLeg.clear(), f.route.clear(), f.phases.clear();
   const PlayCheck k = certifyPlay(*s.model, s.graph, s.parts, s.shapes, p, t);
   REQUIRE(k.strictCrossings == 1);
   REQUIRE(k.strict.front().other == other);
@@ -815,12 +818,14 @@ TEST_CASE("a flight does not stop at its corners before it lands", "[plan][timel
   style.fps = 30, style.piecesPerSecond = 0.25;  // 120 frames a flight
   const Timeline t = buildTimeline(*s.model, s.parts, p, style);
   for (const Flight& f : t.flights) {
-    REQUIRE(f.frames == 120);
-    const double hover = f.at[f.at.size() - 3];  // where it holds before landing
+    REQUIRE(f.frames == 27);  // the web's longest: 0.9 s
+    // Lift, across, down, and along the plan's way to the seat leg: one ease, no stop between.
+    const Flight::Phase& ph = f.phases.front();
     std::vector<double> steps;
-    for (int frame = f.startFrame; frame < f.startFrame + f.frames; frame++) {
-      const double u = static_cast<double>(frame - f.startFrame) / f.frames;
-      if (u >= 0.1 && u + 1.0 / f.frames <= hover - 0.05) steps.push_back(length(poseAt(f, frame + 1).t - poseAt(f, frame).t));
+    for (int k = 0; k < 200; k++) {
+      const double u = 0.15 + 0.7 * k / 200.0, du = 0.7 / 200.0;
+      const double a0 = f.startFrame + ph.start + ph.frames * u, a1 = a0 + ph.frames * du;
+      steps.push_back(length(poseAt(f, a1).t - poseAt(f, a0).t));
     }
     REQUIRE(steps.size() > 20);
     std::vector<double> sorted = steps;

@@ -97,7 +97,7 @@ std::string describe(const bm::LoadReport& r) {
     try {
       bm::plan::Options options;
       options.cancel = &session->cancel;
-      planned = bmtools::planModel(*session->model, *session->library, *session->full, session->ldraw, options);
+      planned = bmtools::planModel(*session->model, *session->library, *session->full, session->ldraw, options, bm::plan::styleOf(session->file));
     } catch (const std::exception& e) {
       error = e.what();
     }

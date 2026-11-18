@@ -21,7 +21,7 @@ std::string ldrawDir() {
   return "";
 }
 
-Planned planModel(const Model& model, const ldraw::Library& library, ldraw::PartCache& full, const fs::path& ldraw, const plan::Options& options) {
+Planned planModel(const Model& model, const ldraw::Library& library, ldraw::PartCache& full, const fs::path& ldraw, const plan::Options& options, const plan::Style& style) {
   const fs::path repo = ldraw.parent_path().parent_path();
   const char* shadowEnv = std::getenv("BM_SHADOW_DIR");
   const connect::ShadowLibrary shadow(shadowEnv ? fs::path(shadowEnv) : repo / "vendor" / "LDCadShadowLibrary");
@@ -34,7 +34,7 @@ Planned planModel(const Model& model, const ldraw::Library& library, ldraw::Part
   Planned out;
   out.graph = connect::buildGraph(model, db, &gears);
   out.plan = plan::plan(model, out.graph, full, shapes, options);
-  out.timeline = plan::buildTimeline(model, full, out.plan);
+  out.timeline = plan::buildTimeline(model, full, out.plan, style);
   return out;
 }
 

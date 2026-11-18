@@ -66,7 +66,7 @@ std::vector<SnapEvent> snapEvents(const bm::Model& model, const bm::connect::Gra
       e.built.merge(e.unit);
       e.builtPieces = builtPieces;
       const double landing = flight.at.size() >= 2 ? flight.at.back() - flight.at[flight.at.size() - 2] : 1.0;
-      e.seatSeconds = landing * flight.frames / fps;
+      e.seatSeconds = flight.seatFrames > 0 ? flight.seatFrames / fps : landing * flight.frames / fps;
       if (!e.unit.empty() && screenX) {
         const double x = screenX(e.frame, (e.unit.min + e.unit.max) * 0.5);
         e.pan = std::isfinite(x) ? std::clamp(x, -1.0, 1.0) : 0.0;

@@ -21,6 +21,6 @@ struct Planned {
 };
 /// Planned as `bm plan` plans it, with the engine data beside the LDraw library's repository.
 Planned planModel(const bm::Model& model, const bm::ldraw::Library& library, bm::ldraw::PartCache& full, const std::filesystem::path& ldraw,
-                  const bm::plan::Options& options = {});
+                  const bm::plan::Options& options = {}, const bm::plan::Style& style = {});
 
 }  // namespace bmtools

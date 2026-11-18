@@ -181,7 +181,7 @@ int main(int argc, char** argv) {
     plan::Plan plan;
     plan::Timeline timeline;
     if (frame >= 0) {
-      bmtools::Planned planned = bmtools::planModel(model, library, full, ldraw);
+      bmtools::Planned planned = bmtools::planModel(model, library, full, ldraw, {}, bm::plan::styleOf(input));
       plan = std::move(planned.plan), timeline = std::move(planned.timeline);
       renderer->setFrame(plan, timeline, frame);
       bmtools::shotCamera(shot, renderer->scene().bounds, &timeline, orbit);
