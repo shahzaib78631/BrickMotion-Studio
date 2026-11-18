@@ -25,6 +25,14 @@
 > 0.65 s and a 95th percentile of 6.1 s one model at a time, with no time-outs (was 16 s, 46 s and 10 of 25
 > out of time). Target met on the sample. Still open from this plan: floating placements and crossings on OMR
 > (3 and 30 on the sample), `writeInto`, the cross-run cache, more insertion-truth cases.
+>
+> **Status 2026-11-18.** No move passes through another piece and nothing is placed floating on all of OMR
+> (1,833 files) and all of BrickNet (2,000), 30 s a model: commits dbb16a5, ee3809b, a3c07b0, 89420d0, f3985ff,
+> 09c5bb2, 39b6257, 375639e, 019abcd, 7b1ae33 and e88a0a4 (README, "What the corpus corrected"). A straight leg
+> is checked along its whole length, to 0.001 LDU; 1 and 8 threads plan the same to 1e-6. Speed (cc70deb): all
+> of OMR ten at a time, median 0.43 s, 95th percentile 8.8 s, 13 out of time; the time-outs miss the target.
+> Still open from this plan: those 13, `writeInto`, the cross-run cache, more insertion-truth cases, and
+> curved or turning insertions.
 
 ## Global Constraints
 

@@ -184,8 +184,9 @@ they cross. `bm shape` describes a part's collision shape. `bm audit` adds overl
 - Joined pieces may cross inside each mate's **zone** (a stud in its socket, a bar in its clip), and
   elsewhere need two skins of overlap to count. A mate that holds by stretching (a tyre on a rim) exempts
   the pair.
-- A model is checked with a sort-and-sweep over piece boxes, then tree against tree. `World::hits` and
-  `World::sweep` answer for one more shape, still or moving (sampled every 0.5 LDU).
+- A model is checked with a sort-and-sweep over piece boxes, then tree against tree. `World::hits` answers
+  for one more shape at rest, `World::clearTravel` for pieces moving in a straight line (exact to 0.001 LDU
+  since phase 5, `firstCrossing`), and `World::sweep` for a move that turns (sampled every 0.5 LDU).
 
 ### What the corpus shows
 
@@ -222,7 +223,8 @@ per model, 95th percentile about 1.5 s).
 
 ### Not done
 
-- Clearance distance between shapes; a continuous sweep (it is sampled); a piece wholly inside another's solid.
+- Clearance distance between shapes; a continuous sweep for a move that turns (`World::sweep` is sampled;
+  straight moves are exact since phase 5); a piece wholly inside another's solid.
 - Speed: no SIMD, and joined pairs are searched linearly for their zones.
 - The reference sets will not be clean until treads and chains are joints (gear meshes and ball links were done in phase 4).
 
@@ -277,96 +279,6 @@ What closed 42000's four misses, none of them by a rule about a part:
   also met against what the piece slides in.
 - **Rear wing actuator.** The housing swings only as the stroke grows (0.5 LDU after two turns of the knob).
   Function checks now drive up to eight turns, and a drive step closes when corrections stop helping.
-
-### How it works
-
-- Each part has its **true surface** and an **inner surface**: every face moved inward by the skin (0.5 LDU)
-  along its own normal and trimmed back from each edge by what the turn of the surface there requires
-  (`skin * tan(angle / 2)`). A flat face made of several triangles is trimmed as one face.
-- Two pieces interpenetrate when the inner surface of one crosses the true surface of the other. Pieces that
-  touch, or overlap by less than the skin, do not.
-- Joined pieces may cross inside each mate's **zone** (a stud in its socket, a bar in its clip), and
-  elsewhere need two skins of overlap to count. A mate that holds by stretching (a tyre on a rim) exempts
-  the pair.
-- A model is checked with a sort-and-sweep over piece boxes, then tree against tree. `World::hits` and
-  `World::sweep` answer for one more shape, still or moving (sampled every 0.5 LDU).
-
-### What the corpus shows
-
-| Source | Models | Models with no overlap | Pieces in an overlap |
-|---|---|---|---|
-| BrickNet | 2,000 | 1,953 | 0.27% |
-| OMR | 1,833 | 573 | 4.99% |
-| MOC | 12 | 2 | 7.47% |
-| Reference sets | 6 | 0 | 9.43% |
-
-25,086 overlapping pairs in 872,970 pieces; 402 exact duplicates. 95% of the pairs are between pieces that
-are **not joined**, and the commonest are things the engine does not model yet, not faults in the test:
-
-- **Gears in mesh** (`6589`, `32270`, `32269`, `4143`, `4019`, racks): teeth interleave. Needs gear recognition (phase 4).
-- **Tread links and chains** (`57518` + `57519`/`57520`, `30104k02`): hinged to each other with no connector data.
-- **Ball links** (`6628` + `32293`, tow balls): no ball data for these parts, so they are not joined.
-- **Decoration placed through itself** (`98138`, `6141` round 1x1s): real overlaps in the files.
-- **Window glass in a frame** (`3853` + `3004`/`3005`), minifig accessories over a torso (`3838`).
-
-Reference sets: 5590 has 16 overlapping pairs in 1,258 pieces, 42000 has 32 in 1,377, 8880 has 109 in 1,410,
-nearly all gears, pistons and links.
-
-Whole corpus with loading, joints and collision: 78 s on 10 threads (collision is most of it; median 52 ms
-per model, 95th percentile about 1.5 s).
-
-### What the corpus corrected
-
-- Moving shared corners inward (the first design) tilts a sloped face out through its own edge, which
-  reported a stud resting under a sloped panel as an overlap. The inner surface is now built face by face.
-- Pulling both pieces in equally cannot see two aligned bricks pushed into each other: their faces stay
-  coplanar. One piece's inner surface is tested against the other's true surface.
-- Studio stores a Technic hole as a bare length; a pin's collar needs the 2 LDU countersink at each mouth.
-  This also joined the pins that phase 2 had left loose.
-
-### Not done
-
-- Clearance distance between shapes; a continuous sweep (it is sampled); a piece wholly inside another's solid.
-- Speed: no SIMD, and joined pairs are searched linearly for their zones.
-- The reference sets will not be clean until treads and chains are joints (gear meshes and ball links were done in phase 4).
-
-## Phase 4 results (2026-11-16): kinematics, mechanisms, stability
-
-```bash
-native/build/tools/bm/bm mechanisms <file> [--truth <expected.json>] [--links] [--all] [--no-travel]
-native/build/tools/bm/bm stability <file>
-native/build/tools/bm/bm joints <file> --meshes
-```
-
-`bm mechanisms` lists what can move: bodies, links, gear trains with their ratios, shifts, and (with
-`--truth`) the score against a hand-checked list in `benchmarks/mechanisms/`. `bm stability` says whether a
-model stands. `bm audit` adds `meshes`, `movingBodies`, `links`, `freedoms`, `mechanisms`, `solved`, `kinMs`,
-`stands`, `unsupportedPieces`, `tippingGroups` and `massGrams`.
-
-### Mechanism truth
-
-| Set | Scored checks passed | Web engine, as `benchmarks/mechanisms/README.md` records it | What is missed here |
-|---|---|---|---|
-| 5590 | 15 of 15 | 17 of 17 | nothing; 5 checks not scored (vehicle, scrub, suggestions) |
-| 8880, axle-fix copy | 15 of 16 | phase 3: 7 of 9; gearbox modes 4 of 4 | steering wheel to the rear rack |
-| 8880, as published | 13 of 16 | phase 3: 7 of 9; gearbox modes 5 of 7 | the same, and 2nd and 4th gear, which the file cannot reach (a gear has no axle) |
-| 42000 | 16 of 20 | phase 3: 16 of 18 | four checks, below; 3 not scored |
-
-The two engines do not score the same set of checks, so the columns are not a like-for-like comparison.
-
-The four 8880 ratios come out exact (2.25, 1.5, 0.75, 0.5), neutral is found at rest, and both rings are
-found to couple both their clutch gears. The rear rack is missed because its 8-tooth pinion (at y = -94) sits
-6 LDU from the rack's tooth line (y = -78) in the file, beyond the 4.5 LDU a rack mesh allows; whether the
-file or the tolerance is at fault is not settled. The phase's goal, "8880 and 42000 cases pass", is **not met**: five
-scored checks still miss.
-
-42000's four misses:
-
-- **Rear wheel to crankshaft**: the drive goes through CV joints, and no joint here passes turning across a bend.
-- **Front shock rod**, **left rear wishbone to rocker and shock**: the suspension loop locks. Driving the
-  wishbone gets 0.2 rad and stops. Not yet diagnosed.
-- **Knob to the rear wing actuator**: with the selector shifted the piston moves, but the housing does not
-  swing within one turn of the knob. The cover actuators on the other position pass.
 
 ### How it works
 
@@ -472,8 +384,9 @@ which directions that leaves, and what is in the way.
 - **Never silently wrong.** A piece the planner cannot show going in is still placed, flagged with why
   (`blocked`, `no-direction`, `no-exit`, `unjoined`, `budget`), and does not fly: it appears at its seat.
 - **The certifier** shares no code with the planner. It replays the finished plan and checks, for every move,
-  that it lands joined to something built, that no sampled pose of its flight passes through a placed piece,
-  and that its last leg satisfies every mate it makes. Only it may call a move certified.
+  that it lands joined to something built, that no leg of its flight passes through a placed piece (each leg
+  is checked along its whole length, to 0.001 LDU, since 2026-11-18), and that its last leg satisfies every
+  mate it makes. Only it may call a move certified.
 - **The author's word stands:** a pinned step order, `after`, an insertion axis and a flight from the plan
   file are kept; a flight that passes through something is kept and flagged.
 - **Timeline:** each unit waits at its own spot on the floor, lifts off, crosses above the model and follows
@@ -481,28 +394,30 @@ which directions that leaves, and what is in the way.
 
 ### What the corpus shows
 
-Budget 20 s per model for BrickNet, 30 s for the OMR sample, 300 s for the reference sets; one planner thread
-per model (the audit runs ten models at once).
+Every file of OMR and BrickNet on 2026-11-18 at `cc70deb`: 30 s a model, ten models at a time with one planner
+thread each, as `bm audit` runs. The earlier rows are kept to compare with: BrickNet on 2026-11-16 had a 20 s
+budget, and the OMR sample on 2026-11-17 was planned one model at a time. Reference sets (300 s) were not
+re-measured.
 
 | Source | Models | Every move certified | Moves | Certified | Flagged | Floating | Crossings | Off axis | Plan time, median / p95 | Web engine |
 |---|---|---|---|---|---|---|---|---|---|---|
-| BrickNet, all 2,000 | 2000 | 1608 | 52469 | 97.6% | 1246 | 0 | 4 | 0 | 0.48 s / 4.1 s | 0.36 s / 6.4 s; 11,384 floating; 2,243 flagged |
+| OMR, all (2026-11-18) | 1833 | 348 | 821747 | 88.9% | 91424 | 0 | 0 | 0 | 0.43 s / 8.8 s; 13 out of time | 8.5 s / 92.8 s; 178 out of time |
+| BrickNet, all 2,000 (2026-11-18) | 2000 | 1626 | 52428 | 98.2% | 929 | 0 | 0 | 0 | 0.04 s / 0.21 s | 0.36 s / 6.4 s; 11,384 floating; 2,243 flagged |
+| BrickNet, all 2,000 (2026-11-16) | 2000 | 1608 | 52469 | 97.6% | 1246 | 0 | 4 | 0 | 0.48 s / 4.1 s | |
+| OMR sample, 25 sets (2026-11-17) | 25 | 1 | 21142 | 94.3% | 1177 | 3 | 30 | 0 | 0.65 s / 6.1 s, one model at a time | |
 
-| OMR sample, 25 sets (2026-11-17) | 25 | 1 | 21142 | 94.3% | 1177 | 3 | 30 | 0 | 0.65 s / 6.1 s, one model at a time | 8.5 s / 92.8 s on all OMR; 178 time-outs |
-
-The BrickNet row was measured on 2026-11-16, before the speed work below. The OMR row is after it: no model
-runs out of its 30 s budget (10 of the 25 did on 2026-11-16, when the median was 16 s and 44% of moves were
-certified). Planned ten at a time, as the audit does, the same 25 take a median of 1.3 s and a 95th percentile
-of 9.1 s. The largest, 10030-1 (3,037 pieces), takes 12.1 s alone. Reference sets were not re-measured.
+On OMR the flagged moves include those of the 13 models out of time, whose untried pieces are flagged `budget`.
+On 2026-11-17 no model of the OMR sample ran out of its 30 s budget (10 of the 25 had on 2026-11-16, when the
+median was 16 s and 44% of moves were certified); ten at a time the same 25 took a median of 1.3 s and a 95th
+percentile of 9.1 s.
 
 - **No piece is placed floating and none goes in off its connector's axis**, on any model planned. The web
   engine placed 11,384 of BrickNet's 51,916 pieces (22%) joined to nothing built.
-- **Crossings are not zero.** On BrickNet the certifier finds 4 moves, all in one model (`sft_23628`, four
-  `11090` bar holders against a dish), that the planner swept clear from the seat outward and the certifier,
-  sampling the same line inward from the other end, does not. Both sample every 0.5 LDU; the two grids differ.
-  Checked on the same world: the exit leg is clear sampled outward and blocked 21 LDU along sampled inward, so the
-  piece grazes the dish over less than one 0.5 LDU step. This is the sampled sweep's known limit showing up,
-  and it is why the certifier exists.
+- **No move passes through another piece** on all of BrickNet and all of OMR (2026-11-18, below). On
+  2026-11-16 the certifier found 4 on BrickNet, all in one model (`sft_23628`, four `11090` bar holders
+  against a dish): the planner swept the exit leg clear from the seat outward and the certifier, sampling the
+  same line inward, found it blocked, because the holder grazes the dish over less than one 0.5 LDU step.
+  Legs are no longer sampled.
 - Six hand-checked insertion cases pass (`native/corpus/insertion-truth.json`): a pin into beams, an axle
   through a beam, a bush onto an axle, bricks onto studs, and a plate onto a sideways stud.
 
@@ -525,21 +440,50 @@ of 9.1 s. The largest, 10030-1 (3,037 pieces), takes 12.1 s alone. Reference set
 - Attempts with a turn, and attempts to take pieces out together, were made again every round. They are kept
   until something that stopped them, or a mate, has gone.
 - Finishing the large models showed what running out of time had hidden: 30 crossings and 3 floating
-  placements on the 25 OMR sets (in 10143-1, 10030-1, 10124-1, 10134-1, 10019-1 and 10129-1). Not yet looked into.
+  placements on the 25 OMR sets, and on all of OMR (30 s budget) 713 crossings and 73 floating placements.
+  What closed them (all of OMR, 30 s budget, each against the one before):
+  - A submodel used several times went in as one unit for all its uses at once, and a use whose pieces hold
+    nothing of each other went in as one too, so pieces landed floating. A unit is now one use, and only
+    where its pieces are joined (`dbb16a5`, `ee3809b`): floating 69 → 0.
+  - A mate's zone let any two pieces cross inside it: a tyre's zone, which is everywhere around the rim, let
+    the rim through the pin it slides along. A zone now names its two pieces (`a3c07b0`): crossings 738 → 685,
+    BrickNet 10 → 4. Rims whose hub is a pin or axle hole are joined to what goes through them (`89420d0`).
+  - Crossings narrower than the 0.5 LDU sample step (median 0.19 LDU, 508 of 562 measured): a straight leg is
+    now checked along its whole length (`firstCrossing`): where each pair of triangles first crosses is found
+    exactly, to 0.001 LDU (`f3985ff`): 691 → 120, BrickNet 4 → 0.
+  - The search for where two triangles first cross took the ends of the crossing at a corner near the line
+    where their planes meet, not where a plane cuts a side (`09c5bb2`): 120 → 7.
+  - The memory of answered sweeps hashed a direction and its opposite to the same key about half the time, so
+    a leg could be given the answer for the way back (`39b6257`): 7 → 5. A point inside a moving piece that
+    met a surface stopped on it, not short of it, and not at the nearest one (`375639e`): 5 → 1.
+  - A crossing in the first or last ten-thousandths of a leg was missed: the search looked only between the
+    ends (`019abcd`): 1 → 0. The piece in it, an axle pin in 9396-1, had been taken out of its seat to within
+    the 0.1 LDU tolerance but put down at the full depth, a hair into the end of a long pin; it now stops where
+    its way was clear (`7b1ae33`). Where that is came from the memory of answered sweeps, which keeps one
+    answer for travels within 0.01 LDU of each other, so the same model planned differently on 1 and 8
+    threads (a seat leg of 7.999912 against 8.0). A unit now rests at its seat, or 0.1 LDU short of it when
+    something is met before it (`e88a0a4`); 1 and 8 threads plan the same to 1e-6.
+- On the largest sets the time then went to bookkeeping more than to collision: in 42131-1 (6,771 pieces, out
+  of time) 40% of the busy time was asking whether what is left stays joined, a walk over every piece still
+  there for each unit that could leave. That walk now starts from the pieces the unit touches and stops once
+  they have met, so it costs the smaller side of the cut; a grown group is kept until a piece it looked at is
+  taken out, and a failed attempt that would fail again is passed over (`cc70deb`). Plans do not change. All
+  of OMR, ten at a time: 95th percentile 10.5 → 8.8 s, out of time 27 → 13. One at a time, 82 files of about
+  2,000 moves or more take 0.42 of the time (10276-1: 244 → 18 s).
 
 ### Not done
 
-- **Speed: the target is met on the 25-set OMR sample** (median 0.65 s, 95th percentile 6.1 s, no time-outs;
-  goal: under 1 s, under 10 s, none) **and not on all of OMR.** All 1,833 files, planned ten at a time with a
-  30 s budget (2026-11-17, 11 minutes in all): median 0.59 s, 95th percentile 15.4 s, 43 out of time (the web
-  engine: 8.5 s, 92.8 s, 178). The 43 are the largest sets (2,000 to 10,000 pieces) and some Technic sets
-  (42000-1, 42039-1). They have not been timed one at a time, nor have the reference sets.
-  Nothing here re-plans incrementally after an edit; the only memory is within one run.
-- **Floating placements and crossings on OMR are not zero**: 73 floating placements in 48 files and 713
-  crossings in 213 files, of 819,628 moves; 80.9% of moves are certified. The rule is none.
+- **Speed: on all of OMR the median and the 95th percentile meet the target, and the time-outs do not.** All
+  1,833 files, ten at a time, 30 s a model (2026-11-18, 8 minutes in all): median 0.43 s, 95th percentile 8.8 s,
+  13 out of time (goal: under 1 s, under 10 s, none; the web engine: 8.5 s, 92.8 s, 178). The 13 are sets of
+  3,000 to 10,800 pieces, mostly Technic (42131-1, 42100-1, 42043-1, 31203-1). One at a time with all threads,
+  all of the 94 largest files finish, the slowest, 42131-1, in 41 s; one takes over 30 s, 23 over 10 s
+  (measured with the owner's M1 pass, not yet committed; 12 of the 94 ran alongside other work).
+  The time grows faster than the model: the 206 files of 1,000 moves or more take 63% of the plan time. In
+  42131-1 92% of the busy time is now collision sweeps, and most of the planner's threads are idle most of the
+  time. Nothing here re-plans incrementally after an edit; the only memory is within one run.
 - **Curved and turning insertions** (a hinge swung shut, a tyre stretched on). Every leg is a straight line.
   These show up as `blocked` and `no-exit`.
-- **A continuous sweep.** Flights are sampled every 0.5 LDU.
 - **Writing the plan back into a plan file** for the app (`writeInto`); `bm plan --out` writes its own JSON.
   The legs of a flight before the plan's path (staging, lift, crossing) are not swept.
 - **Insertion truth** has no clip, hand, sword, wheel, tyre, hinge or ball case, and none from the reference sets.
