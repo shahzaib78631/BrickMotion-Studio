@@ -509,3 +509,51 @@ TEST_CASE("hand-checked insertions: pins, axles, bushes, studs from above and fr
   REQUIRE((score.missing == 1 && score.unresolved == 2));
   REQUIRE(score.lines[0].detail.find("90 degrees") != std::string::npos);
 }
+
+#include "bm/collide/pair.h"
+
+TEST_CASE("a unit taken out of its seat stops short of what it would cross there", "[plan][data]") {
+  const char* dir = std::getenv("BM_LDRAW_DIR");
+  const char* shadowDir = std::getenv("BM_SHADOW_DIR");
+  if (!dir || !shadowDir) SKIP("BM_LDRAW_DIR / BM_SHADOW_DIR not set");
+  const ldraw::Library lib(dir);
+  const connect::ShadowLibrary shadow(shadowDir);
+  connect::ConnectorDb db(lib, shadow);
+  ldraw::PartCache parts(lib, ldraw::PartCache::defaultDirectory());
+  collide::ShapeCache shapes;
+  // From OMR 9396-1, once the beam it also went through has gone: an axle pin (43093) held in a
+  // 64683 leaves along its own axis, and its end meets the end of a long pin (6558) a hair
+  // before it is all the way out of its seat. That is out within kTravelTol, but where it stops
+  // must cross nothing: every leg after starts there.
+  const fs::path file = fs::temp_directory_path() / ("bm_plan_seat_" + std::to_string(::getpid()) + ".ldr");
+  {
+    std::ofstream out(file);
+    out << "1 1 -117.879 -147.496 120 0.923879 -0.382683 0 0.382683 0.923879 0 0 0 1 43093.dat\n"
+           "1 14 -127.118 -151.323 80 0.382683 0.923879 0 -0.923879 0.382683 0 0 0 1 64683.dat\n"
+           "1 1 -80 -100 110 0 0 1 1 0 0 0 1 0 6558.dat\n";
+  }
+  const Model model = io::load(file, lib);
+  fs::remove(file);
+  const connect::Graph graph = connect::buildGraph(model, db);
+  const collide::World world(model, parts, shapes);
+  const Context ctx(model, graph, world);
+  const collide::World::Present present(model.pieces().size(), 1);
+  Box bounds;
+  for (uint32_t i = 0; i < model.pieces().size(); i++) bounds.merge(world.box(i));
+  const uint32_t pin = 0, longPin = 2;
+  const Vec3 out = normalized(Vec3{0.923879, 0.382683, 0});
+  double seat = -1;
+  for (const Leave& l : leaveDirections(ctx, Unit{{pin}}, &present))
+    if (dot(l.direction, out) > 0.9999) seat = l.travel + kClearMargin;
+  REQUIRE(seat > 0);
+  Xform atSeat = world.pose(pin);
+  atSeat.t = atSeat.t + out * seat;
+  REQUIRE(collide::overlap(world.shape(pin), atSeat, world.shape(longPin), world.pose(longPin)));
+  const Extraction e = extract(ctx, Unit{{pin}}, &present, bounds, out);
+  REQUIRE(e.ok);
+  REQUIRE(e.path.size() >= 2);
+  const double drawn = dot(e.path[1].t, out);
+  CHECK(drawn >= seat - kTravelTol);
+  CHECK(drawn <= seat);
+  REQUIRE_FALSE(collide::overlap(world.shape(pin), e.path[1] * world.pose(pin), world.shape(longPin), world.pose(longPin)));
+}

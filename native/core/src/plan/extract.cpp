@@ -181,10 +181,13 @@ Extraction extract(const Context& ctx, const Unit& unit, const World::Present* p
       if (got > furthest) furthest = got, best.why = Flag::Blocked, best.blocker = blocker, best.direction = d, best.seatTravel = leave.travel;
       continue;
     }
-    // Out of its seat. Now to open air by straight legs.
-    const Xform seated = shifted(d * seat);
+    // Out of its seat, to within kTravelTol. It stops where the way is clear, short of anything
+    // it came up against, not at the seat itself: every leg after starts there, and a hair
+    // further on it may already cross that piece (an axle pin's end in a long pin's, OMR 9396-1).
+    const double drawn = std::min(got, seat);
+    const Xform seated = shifted(d * drawn);
     Box at = box;
-    at.min = at.min + d * seat, at.max = at.max + d * seat;
+    at.min = at.min + d * drawn, at.max = at.max + d * drawn;
     auto leg = [&](const Xform& from, const Box& fromBox, Vec3 way, uint32_t* who) -> double {  // how far it gets, and how far it needs
       const double need = exitDistance(fromBox, bounds, way, kExitMargin);
       if (!std::isfinite(need)) return -1;
@@ -205,7 +208,7 @@ Extraction extract(const Context& ctx, const Unit& unit, const World::Present* p
       best = {};
       best.ok = true, best.direction = d, best.seatTravel = leave.travel;
       best.path = {Xform{}, seated};
-      if (need > 0) best.path.push_back(shifted(d * seat + w * need));
+      if (need > 0) best.path.push_back(shifted(d * drawn + w * need));
       out = true;
       break;
     }
@@ -217,7 +220,7 @@ Extraction extract(const Context& ctx, const Unit& unit, const World::Present* p
       const double room = ctx.world.clearTravel(unit.pieces, first, exitDistance(at, bounds, first, kExitMargin), present, {}, &wall, seated);
       stopped(wall);
       if (room < kMinLeg) continue;
-      const Xform turned = shifted(d * seat + first * room);
+      const Xform turned = shifted(d * drawn + first * room);
       Box turnedBox = at;
       turnedBox.min = turnedBox.min + first * room, turnedBox.max = turnedBox.max + first * room;
       for (const Vec3& second : ways) {
@@ -227,7 +230,7 @@ Extraction extract(const Context& ctx, const Unit& unit, const World::Present* p
         best = {};
         best.ok = true, best.direction = d, best.seatTravel = leave.travel;
         best.path = {Xform{}, seated, turned};
-        if (need > 0) best.path.push_back(shifted(d * seat + first * room + second * need));
+        if (need > 0) best.path.push_back(shifted(d * drawn + first * room + second * need));
         return best;
       }
     }
