@@ -106,7 +106,12 @@ Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Libr
             const plan::PlayCheck play = plan::certifyPlay(model, g, cache, *shapes, built, played);
             row.playedCrossings = play.crossings, row.playedStrict = play.strictCrossings, row.playedUnder = play.underFloor;
             for (const plan::PlayCheck::Strict& c : play.strict)
+            {
               (c.leg == plan::PlayCheck::Leg::Transit ? row.playedStrictTransit : c.leg == plan::PlayCheck::Leg::Path ? row.playedStrictPath : row.playedStrictSeat)++;
+              if (c.leg != plan::PlayCheck::Leg::Transit) continue;
+              const plan::Flight& f = played.flights[c.flight];
+              (c.at < f.startFrame + f.liftAt ? row.transitFloor : f.fallback ? row.transitFallback : row.transitMissed)++;  // on the floor; no way found; the builder's check let it by
+            }
             row.playedUpward = play.upward, row.playedInversions = play.inversions;
             for (const plan::Move& m : built.moves)
               if (m.unit.pieces.size() > 1 && m.source != plan::UnitSource::Authored) {
@@ -201,6 +206,7 @@ nlohmann::json toJson(const Row& row) {
     j["playedCrossings"] = row.playedCrossings;
     j["playedStrict"] = row.playedStrict;
     j["playedStrictLegs"] = {row.playedStrictTransit, row.playedStrictPath, row.playedStrictSeat};
+    j["transitKinds"] = {row.transitFloor, row.transitFallback, row.transitMissed};
     j["playedUnder"] = row.playedUnder;
     j["playedUpward"] = row.playedUpward;
     j["playedInversions"] = row.playedInversions;

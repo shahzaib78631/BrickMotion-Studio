@@ -68,7 +68,7 @@ struct Row {
   int buildFloating = 0;      ///< unflagged moves that land joined to nothing built (must be 0)
   int buildCrossings = 0;     ///< unflagged moves whose flight passes through a placed piece (must be 0)
   int offAxis = 0;            ///< unflagged moves whose last leg is not along their connectors (must be 0)
-  int playedCrossings = 0, playedStrict = 0, playedStrictTransit = 0, playedStrictPath = 0, playedStrictSeat = 0, playedUnder = 0, playedUpward = 0, playedInversions = 0;  ///< certifyPlay on the timeline
+  int playedCrossings = 0, playedStrict = 0, playedStrictTransit = 0, playedStrictPath = 0, playedStrictSeat = 0, transitFloor = 0, transitFallback = 0, transitMissed = 0, playedUnder = 0, playedUpward = 0, playedInversions = 0;  ///< certifyPlay on the timeline
   int unitPieces = 0;         ///< pieces built in a unit of more than one (not counting the author's submodels)
   int largestUnit = 0;        ///< pieces in the largest such unit
   std::map<std::string, int> planFlags;  ///< flag name -> moves

@@ -45,6 +45,14 @@ Style styleOf(const std::filesystem::path& project) {
   if (video.is_object() && video.contains("floorAspect") && video["floorAspect"].is_number()) style.floorAspect = video["floorAspect"].get<double>();
   const nlohmann::json motion = j.contains("plan") && j["plan"].is_object() && j["plan"].contains("motion") ? j["plan"]["motion"] : nlohmann::json();
   parse(text(motion, "ease"), style.ease);
+  auto number = [&](const char* key, double& out) {
+    if (video.is_object() && video.contains(key) && video[key].is_number()) out = video[key].get<double>();
+  };
+  number("targetSeconds", style.targetSeconds);
+  number("introSeconds", style.introSeconds);
+  number("buildSeconds", style.buildSeconds);
+  number("outroSeconds", style.outroSeconds);
+  if (video.is_object() && video.contains("heroOrbit") && video["heroOrbit"].is_boolean()) style.heroOrbit = video["heroOrbit"].get<bool>();
   return style;
 }
 
@@ -520,7 +528,32 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
     tempDirty = false;
   };
   std::vector<uint8_t> shownBefore(count, 0);
-  const double flightSeconds = std::clamp(0.85 / std::max(0.01, style.piecesPerSecond), 0.35, 0.9);
+  // Pacing, as the web's one by one: each flight 0.85 of a piece's slot, 0.35 s to 0.9 s, and a
+  // pause at each step. With a length set, the slot is the build's share of it.
+  int flyingUnits = 0, stepCount = 0;
+  {
+    std::vector<int> last;
+    for (size_t i = 0; i < count; i++) {
+      const Node& nd = nodes[i];
+      const Move& m = nd.plan->moves[nd.mi];
+      if (m.flag != Flag::None || m.path.empty() || boxOf(m.unit.pieces).empty()) continue;
+      flyingUnits++;
+      if (nd.own >= 0) continue;
+      const std::vector<int> key = stepsOf(pieces[m.unit.pieces.front()]);
+      if (stepCount == 0 || key != last) stepCount++;
+      last = key;
+    }
+  }
+  double flightSeconds = std::clamp(0.85 / std::max(0.01, style.piecesPerSecond), 0.35, 0.9), webPause = -1;
+  if (style.targetSeconds > 0) {
+    const double intro = std::clamp(style.introSeconds >= 0 ? style.introSeconds : 1.0, 0.2, 120.0);
+    const double outro = std::clamp(style.outroSeconds >= 0 ? style.outroSeconds : (style.heroOrbit ? 3.0 : 0.5), 0.2, 120.0);
+    const double base = std::max(1.0, style.buildSeconds >= 0 ? style.buildSeconds : style.targetSeconds - intro - outro);
+    const double pauseTotal = stepCount > 1 ? std::min(0.25 * (stepCount - 1), 0.2 * base) : 0;
+    const double slot = flyingUnits > 0 ? (base - pauseTotal) / flyingUnits : base - pauseTotal;
+    flightSeconds = std::clamp(slot * 0.85, 0.35, 0.9);
+    webPause = stepCount > 1 ? pauseTotal / (stepCount - 1) : 0;
+  }
   // Each flight's timing in seconds first, then laid out in frames.
   for (size_t i = 0; i < count; i++) {
     Node& nd = nodes[i];
@@ -894,7 +927,7 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
       flying += nd.f.frames / fps;
     }
   }
-  const double pause = changes > 0 ? std::min(style.stepPause, 0.2 * flying / changes) : 0;
+  const double pause = webPause >= 0 ? webPause : changes > 0 ? std::min(style.stepPause, 0.2 * flying / changes) : 0;
   double clock = 0;  // frames
   {
     std::vector<int> last;

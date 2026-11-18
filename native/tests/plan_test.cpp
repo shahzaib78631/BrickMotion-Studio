@@ -689,6 +689,38 @@ TEST_CASE("the strict check sees pieces waiting on the floor", "[plan][play]") {
   REQUIRE(k.strict.front().other == other);
 }
 
+TEST_CASE("a turned piece waits upright as drawn, lands exactly at its seat, and keeps to its path once on it", "[plan][timeline]") {
+  Scene s;
+  const uint32_t a = s.add(0, 0, 0);
+  // b sits on a turned a quarter about the vertical.
+  s.text += "1 4 0 -24 0 0 0 1 0 1 0 -1 0 0 3005.dat\n";
+  s.at.push_back({0, -24, 0});
+  const uint32_t b = 1;
+  s.stud(a, b);
+  const Plan p = s.plan();
+  const Timeline t = buildTimeline(*s.model, s.parts, p);
+  REQUIRE(t.flights.size() == 2);
+  for (const Flight& f : t.flights) {
+    const Xform end = poseAt(f, f.startFrame + f.frames);
+    REQUIRE(end.t == Vec3{});
+    for (int i = 0; i < 3; i++)
+      for (int j = 0; j < 3; j++) REQUIRE_THAT(end.r.m[i * 3 + j], WithinAbs(i == j ? 1 : 0, 1e-12));
+    // Waiting, its vertical stays vertical: the floor turns it only about the up axis, if at all.
+    const Vec3 up = f.staging.r * Vec3{0, 1, 0};
+    REQUIRE_THAT(up.y, WithinAbs(1, 1e-9));
+    // Once the route reaches the plan's path (straight down onto the seat), it never leaves it.
+    REQUIRE(!f.route.empty());
+    bool on = false;
+    for (const Vec3& c : f.route) {
+      const bool here = std::abs(c.x - f.pivot.x) < 1e-6 && std::abs(c.z - f.pivot.z) < 1e-6;
+      if (on) REQUIRE(here);
+      on = on || here;
+    }
+    REQUIRE(on);
+  }
+  REQUIRE(certifyPlay(*s.model, s.graph, s.parts, s.shapes, p, t).strictCrossings == 0);
+}
+
 TEST_CASE("a sub-assembly is swept as one", "[plan][play]") {
   Scene s;
   const uint32_t a = s.add(0, 0, 0), b = s.add(0, -24, 0);

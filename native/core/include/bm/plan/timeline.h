@@ -19,6 +19,11 @@ struct Style {
   double time = 1;             ///< multiplies every flight's length (2 = twice as slow)
   double gap = 0.05;           ///< seconds between one piece landing and the next leaving
   double stepPause = 0.25;     ///< seconds held where the build moves to its next step (at most a fifth of the build in all)
+  /// The video's length as the web sets it (targetSeconds > 0: on), which then decides the
+  /// flights and pauses as the web's one-by-one pacing does (src/anim/pacing.ts choosePacing).
+  /// Negative intro/build/outro: not set.
+  double targetSeconds = 0, introSeconds = -1, buildSeconds = -1, outroSeconds = -1;
+  bool heroOrbit = false;
   /// The floor, as in the web app.
   staging::Style floorStyle = staging::Style::Packed;
   staging::Sort floorSort = staging::Sort::Step;
@@ -28,7 +33,7 @@ struct Style {
   Ease ease = Ease::Smooth;
   /// The way through the air: never closer than `clearance` above anything in the way (a brick),
   /// never faster than `speed`, and into the seat no faster than `seatSpeed` (LDU a second).
-  double clearance = 24, speed = 6000, seatSpeed = 400;
+  double clearance = 24, speed = 10000, seatSpeed = 400;
   double landing = 0.25;       ///< share of a flight spent on the last leg, into the seat
   double hover = 0.1;          ///< share spent holding still at the start of that leg
   double corner = 20;          ///< LDU: the largest radius its own corners in open air are rounded to (under kExitMargin)
