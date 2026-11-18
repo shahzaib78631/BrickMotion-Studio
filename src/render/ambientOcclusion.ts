@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
+import { CortaoPass } from './cortao/pass';
 
 /** How strong and how wide the ambient occlusion is (world units: 1 = one stud). */
-export type AOSettings = { intensity: number; radius: number; /** occlusion kept on upright faces (0–1, default 0.4) */ sides?: number; /** darkening curve exponent (default 1.35) */ power?: number; /** how thick a surface GTAO assumes, in studs (default 1.2) */ thickness?: number; /** a second, wide-radius occlusion at half resolution: how much of the sky the surroundings hide (radius in studs, strength 0–1.5) */ wide?: { radius: number; strength: number } };
+export type AOSettings = { algorithm?: 'gtao' | 'cortao'; intensity: number; radius: number; /** occlusion kept on upright faces (0–1, default 0.4) */ sides?: number; /** darkening curve exponent (default 1.35) */ power?: number; /** how thick a surface GTAO assumes, in studs (default 1.2) */ thickness?: number; /** a second, wide-radius occlusion at half resolution: how much of the sky the surroundings hide (radius in studs, strength 0–1.5) */ wide?: { radius: number; strength: number } };
 
 /** Half-width of the fake rounded edge, in studs (a real brick's is about 0.02). */
 const BEVEL_STUDS = 0.022;
@@ -26,6 +27,8 @@ export class StudioAO {
   private pass: GTAOPass;
   private wide: GTAOPass;
   private wideIntensity = 0;
+  private algorithm: 'gtao' | 'cortao' = 'gtao';
+  private cortao: CortaoPass | null = null;
   private quad: FullScreenQuad;
   private material: THREE.ShaderMaterial;
   private perspective = true;
@@ -239,6 +242,7 @@ export class StudioAO {
   }
 
   set(settings: AOSettings): void {
+    this.algorithm = settings.algorithm ?? 'gtao';
     this.aoIntensity = settings.intensity;
     this.material.uniforms.sides.value = settings.sides ?? 0.4;
     this.material.uniforms.power.value = settings.power ?? 1.35;
@@ -288,8 +292,10 @@ export class StudioAO {
     renderer.shadowMap.autoUpdate = false;
     try {
       if (useAO) {
-        pass.render(renderer, null as unknown as THREE.WebGLRenderTarget, null as unknown as THREE.WebGLRenderTarget, 0, false);
-        if (this.wideIntensity > 0) this.wide.render(renderer, null as unknown as THREE.WebGLRenderTarget, null as unknown as THREE.WebGLRenderTarget, 0, false);
+        if (this.algorithm !== 'cortao') {
+          pass.render(renderer, null as unknown as THREE.WebGLRenderTarget, null as unknown as THREE.WebGLRenderTarget, 0, false);
+          if (this.wideIntensity > 0) this.wide.render(renderer, null as unknown as THREE.WebGLRenderTarget, null as unknown as THREE.WebGLRenderTarget, 0, false);
+        }
       } else {
         // the edges only need normals and depth
         const g = this.internals;
@@ -305,7 +311,7 @@ export class StudioAO {
     renderer.setScissor(scissor);
     renderer.setScissorTest(scissorTest);
     const u = this.material.uniforms;
-    u.intensity.value = useAO ? this.aoIntensity : 0;
+    u.intensity.value = useAO && this.algorithm !== 'cortao' ? this.aoIntensity : 0;
     u.tAO.value = pass.pdRenderTarget.texture;
     u.tAO2.value = this.wide.pdRenderTarget.texture;
     u.wideK.value = useAO ? this.wideIntensity : 0;
@@ -333,7 +339,36 @@ export class StudioAO {
     }
   }
 
+  /** Computes the reference AO before the beauty pass. No artistic remap. */
+  prepareCortao(renderer: THREE.WebGLRenderer, camera: THREE.PerspectiveCamera | THREE.OrthographicCamera, enabled: boolean) {
+    if (this.algorithm !== 'cortao' || !enabled || this.aoIntensity <= 0) return null;
+    const viewport = renderer.getViewport(new THREE.Vector4()), scissor = renderer.getScissor(new THREE.Vector4());
+    const scissorTest = renderer.getScissorTest(), target = renderer.getRenderTarget();
+    const shadows = renderer.shadowMap.autoUpdate;
+    renderer.shadowMap.autoUpdate = false;
+    try {
+      this.pass.camera = camera;
+      this.cortao ??= new CortaoPass();
+      this.renderCortao(renderer, camera, this.pass, this.cortao);
+      return { tight: this.pass.pdRenderTarget.texture, wide: null, strength: this.aoIntensity, wideStrength: 0 };
+    } finally {
+      renderer.setRenderTarget(target); renderer.setViewport(viewport); renderer.setScissor(scissor);
+      renderer.setScissorTest(scissorTest); renderer.shadowMap.autoUpdate = shadows;
+    }
+  }
+
+  private renderCortao(renderer: THREE.WebGLRenderer, camera: THREE.PerspectiveCamera | THREE.OrthographicCamera,
+    pass: GTAOPass, cortao: CortaoPass): void {
+    const g = pass as unknown as StudioAO['internals'];
+    g._overrideVisibility();
+    try { g._renderOverride(renderer, g.normalMaterial, g.normalRenderTarget, 0x7777ff, 1); }
+    finally { g._restoreVisibility(); }
+    cortao.render(renderer, camera, pass.depthTexture, g.normalRenderTarget.texture,
+      pass.pdRenderTarget, pass.gtaoMaterial.uniforms.radius.value);
+  }
+
   dispose(): void {
+    this.cortao?.dispose();
     this.pass.dispose();
     this.wide.dispose();
     this.quad.dispose();

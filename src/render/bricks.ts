@@ -2,7 +2,9 @@ import * as THREE from 'three';
 import type { ColorDef } from '../ldraw/colors';
 import type { PartGeometry } from '../ldraw/geometry';
 import type { Instance } from '../model/assemble';
-import { edgeMaterialFor, materialFor, placeholderMaterial, wireMaterial } from './materials';
+import { ensureGlassThickness } from './glassThickness';
+import { brickHex, EDGE_OPACITY, edgeMaterialFor, materialFor, placeholderMaterial, wireMaterial } from './materials';
+import type { Materials, Palette } from './looks';
 
 /** World scale: 1 world unit = 1 stud (20 LDU), +Y up. */
 export const LDU = 1 / 20;
@@ -29,6 +31,8 @@ export class BrickRenderer {
   /** faint outline edges, one per (part, color) group, sharing that group's instance matrices */
   private edges: THREE.LineSegments[] = [];
   private edgesOn = true;
+  private edgeStyle = { color: null as string | null, opacity: EDGE_OPACITY, match: false, lightness: -0.35, palette: 'studio' as Palette };
+  private edgeMaterials = new Map<number, THREE.LineBasicMaterial>();
   /** Outlines only, no solid faces: a see-through wireframe of the model. */
   private wireframeOn = false;
   /** The ink every wireframe line is drawn in, so it reads on any brick colour. */
@@ -39,6 +43,8 @@ export class BrickRenderer {
   /** bumped when the set of pieces changes / when any piece moves (consumers like the dome visibility rebuild or refit on these) */
   structureVersion = 0;
   poseVersion = 0;
+  /** Selection tint and outlines redraw the editor without invalidating shadows. */
+  appearanceVersion = 0;
   private instances: Instance[] = [];
   private highlight = new Map<string, 'select' | 'warn'>();
 
@@ -74,6 +80,7 @@ export class BrickRenderer {
       }
       let groupMesh: THREE.InstancedMesh | null = null;
       for (const p of parts) {
+        if ((p.material as THREE.MeshPhysicalMaterial).transmission > 0) ensureGlassThickness(p.geometry);
         const mesh = new THREE.InstancedMesh(p.geometry, p.material, group.length);
         mesh.userData.brickColor = first.color;
         // Instances travel far from their assembled positions. Three.js would
@@ -106,7 +113,7 @@ export class BrickRenderer {
         g.setAttribute('position', geo.edges.getAttribute('position'));
         g.setAttribute('instanceMatrix', groupMesh.instanceMatrix);
         g.instanceCount = group.length;
-        const lines = new THREE.LineSegments(g, edgeMaterialFor(this.colors.get(first.color)));
+        const lines = new THREE.LineSegments(g, this.edgeMaterial(first.color));
         // the part's colour, kept so the wireframe can hand the line back when it ends
         lines.userData.edgeColor = first.color;
         lines.frustumCulled = false;
@@ -121,14 +128,21 @@ export class BrickRenderer {
   }
 
   setMatrices(get: (key: string) => THREE.Matrix4 | null): void {
-    this.poseVersion++;
+    const touched = new Set<THREE.InstancedMesh>();
     for (const [key, slots] of this.slots) {
-      const m = get(key) ?? HIDDEN;
-      for (const s of slots) s.mesh.setMatrixAt(s.index, m);
+      const matrix = get(key) ?? HIDDEN;
+      for (const slot of slots) {
+        const values = slot.mesh.instanceMatrix.array, offset = slot.index * 16;
+        // GPU matrices are float32. Compare at the same precision so replaying
+        // a double-precision rest pose does not dirty identical buffers forever.
+        if (!matrix.elements.some((value, i) => values[offset + i] !== Math.fround(value))) continue;
+        slot.mesh.setMatrixAt(slot.index, matrix);
+        touched.add(slot.mesh);
+      }
     }
-    for (const mesh of this.meshes) {
+    if (touched.size) this.poseVersion++;
+    for (const mesh of touched) {
       mesh.instanceMatrix.needsUpdate = true;
-      // picking recomputes it from the new matrices when needed
       mesh.boundingSphere = null;
     }
   }
@@ -171,10 +185,13 @@ export class BrickRenderer {
     for (const [key, slots] of this.slots) {
       const h = this.highlight.get(key);
       for (const s of slots) {
-        s.mesh.setColorAt(s.index, h ? TINT[h] : TINT.none);
+        const color = h ? TINT[h] : TINT.none, values = s.mesh.instanceColor?.array, offset = s.index * 3;
+        if (values && values[offset] === Math.fround(color.r) && values[offset + 1] === Math.fround(color.g) && values[offset + 2] === Math.fround(color.b)) continue;
+        s.mesh.setColorAt(s.index, color);
         touched.add(s.mesh);
       }
     }
+    if (touched.size) this.appearanceVersion++;
     for (const m of touched) if (m.instanceColor) m.instanceColor.needsUpdate = true;
   }
 
@@ -204,8 +221,48 @@ export class BrickRenderer {
 
   /** Shows or hides the faint outline edges. */
   setEdges(on: boolean): void {
+    if (this.edgesOn !== on) this.appearanceVersion++;
     this.edgesOn = on;
     this.applyWireframe();
+  }
+
+  /** Renderer-owned materials: changing preview outlines cannot recolour another studio/export. */
+  setEdgeStyle(options: Partial<Pick<Materials, 'edgeColor' | 'edgeOpacity' | 'edgeMatch' | 'edgeLightness' | 'palette'>>): void {
+    const next = { color: options.edgeColor ?? null, opacity: options.edgeOpacity ?? EDGE_OPACITY,
+      match: options.edgeMatch ?? false, lightness: options.edgeLightness ?? -0.35, palette: options.palette ?? 'studio' };
+    const changed = Object.keys(next).some(key => next[key as keyof typeof next] !== this.edgeStyle[key as keyof typeof next]);
+    this.edgeStyle = next;
+    if (changed || next.match) {
+      for (const [code, material] of this.edgeMaterials) this.styleEdge(material, code);
+      this.appearanceVersion++;
+    }
+  }
+
+  private edgeMaterial(code: number): THREE.LineBasicMaterial {
+    let material = this.edgeMaterials.get(code);
+    if (!material) {
+      material = edgeMaterialFor(this.colors.get(code)).clone();
+      material.defines = { USE_INSTANCING: '' };
+      this.styleEdge(material, code);
+      this.edgeMaterials.set(code, material);
+    }
+    return material;
+  }
+
+  private styleEdge(material: THREE.LineBasicMaterial, code: number): void {
+    const definition = this.colors.get(code), base = edgeMaterialFor(definition), style = this.edgeStyle;
+    material.color.copy(base.color);
+    if (style.match) {
+      if (definition?.finish === 'trans') material.color.set(style.palette === 'studio' ? brickHex(definition) : definition.hex);
+      else material.color.copy((materialFor(definition, false) as THREE.MeshPhysicalMaterial).color);
+      if (style.lightness !== 0) {
+        const hsl = material.color.getHSL({ h: 0, s: 0, l: 0 }, THREE.SRGBColorSpace);
+        hsl.l = style.lightness < 0 ? hsl.l * (1 + style.lightness) : hsl.l + (1 - hsl.l) * style.lightness;
+        material.color.setHSL(hsl.h, hsl.s, hsl.l, THREE.SRGBColorSpace);
+      }
+    } else if (style.color) material.color.set(style.color);
+    // Transparent bricks retain their softer outlines at the default opacity.
+    material.opacity = style.opacity * base.opacity / EDGE_OPACITY;
   }
 
   /**
@@ -213,6 +270,8 @@ export class BrickRenderer {
    * hidden. Picking still works — the ray caster does not skip invisible meshes.
    */
   setWireframe(on: boolean, ink?: number): void {
+    if (on !== this.wireframeOn) this.poseVersion++;
+    if (ink !== undefined && ink !== this.wireInk) this.appearanceVersion++;
     if (ink !== undefined) this.wireInk = ink;
     this.wireframeOn = on;
     this.applyWireframe();
@@ -228,7 +287,7 @@ export class BrickRenderer {
     for (const line of this.edges) {
       line.material = this.wireframeOn
         ? wireMaterial(this.wireInk)
-        : edgeMaterialFor(this.colors.get(line.userData.edgeColor as number));
+        : this.edgeMaterial(line.userData.edgeColor as number);
       line.visible = this.wireframeOn || this.edgesOn;
     }
   }
@@ -248,6 +307,8 @@ export class BrickRenderer {
       l.geometry.dispose(); // only the wrapper: the position and matrix buffers belong to the part and its mesh
     }
     this.edges = [];
+    for (const material of this.edgeMaterials.values()) material.dispose();
+    this.edgeMaterials.clear();
     this.slots.clear();
     this.keyAt.clear();
   }

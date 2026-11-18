@@ -29,7 +29,7 @@ vision = [
 vision-train = ["torch>=2.0"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["assembly_model", "instructions_pdf", "brickheadz"]
+packages = ["assembly_model", "instructions_pdf", "brickheadz", "booklet_mpd", "studio_builder"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

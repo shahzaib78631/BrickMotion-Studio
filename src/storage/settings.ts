@@ -11,7 +11,7 @@ import { DEFAULT_CAMERA_SETTINGS, type CameraFraming, type CameraSettings } from
 import { isVideoFormat, type VideoFormat } from '../export/formats';
 import { isTransitionSettings, type TransitionPreset } from '../anim/cameraTrack/presets';
 
-export type ViewportRenderer = 'live' | 'studio-path' | 'studio-hybrid';
+export type ViewportRenderer = 'live' | 'studio-path' | 'studio-hybrid' | 'threert';
 
 export type Settings = {
   /** Bumped when stored settings need a one-time upgrade on load. */
@@ -124,7 +124,7 @@ export function sanitizeSettings(stored: Partial<Settings>): Settings {
   if (!['front-back', 'front', 'behind', 'sides', 'around'].includes(video.floorSides)) video.floorSides = 'front-back';
   if (typeof video.snapSound !== 'boolean') video.snapSound = DEFAULT_SETTINGS.video.snapSound;
   if (video.videoEngine !== 'path' && video.videoEngine !== 'studio-path') video.videoEngine = 'live';
-  if (video.viewportRenderer !== 'studio-path' && video.viewportRenderer !== 'studio-hybrid') video.viewportRenderer = 'live';
+  if (video.viewportRenderer !== 'studio-path' && video.viewportRenderer !== 'studio-hybrid' && video.viewportRenderer !== 'threert') video.viewportRenderer = 'live';
   if (!PATH_SAMPLE_OPTIONS.includes(video.pathSamples as (typeof PATH_SAMPLE_OPTIONS)[number])) video.pathSamples = 64;
   if (typeof s.showSelectionBar !== 'boolean') s.showSelectionBar = DEFAULT_SETTINGS.showSelectionBar;
   if (typeof s.collision !== 'boolean') s.collision = DEFAULT_SETTINGS.collision;
@@ -138,7 +138,7 @@ export function sanitizeSettings(stored: Partial<Settings>): Settings {
   s.cameraPresets = sanitizePresets(s.cameraPresets);
   for (const key of ['introSeconds', 'buildSeconds', 'outroSeconds'] as const) {
     const value = video[key];
-    if (value !== null && (!Number.isFinite(value) || value < (key === 'buildSeconds' ? 1 : 0.2) || value > 120)) video[key] = null;
+    if (value !== null && (!Number.isFinite(value) || value < (key === 'buildSeconds' ? 1 : 0.2) || value > (key === 'buildSeconds' ? 1800 : 120))) video[key] = null;
   }
   return { ...DEFAULT_SETTINGS, ...s, video };
 }

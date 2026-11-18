@@ -1,3 +1,4 @@
+import { SpatialHash } from '../model/spatialHash';
 import { cupGripFits } from './jointContact';
 import type { Box } from '../ldraw/flatten';
 import type { AssemblyHints, AssemblyRole } from '../plan/types';
@@ -82,7 +83,18 @@ export function buildAssemblyGraph<T extends AssemblyItem>(items: T[], inferSupp
       problems.push({ code: 'invalid-axis', items: [item.id], message: `"${item.id}" needs a finite, non-zero insertionAxis.` });
   }
   if (problems.length) throw new AssemblyPlanningError(problems);
-  const role = (item: T) => item.assembly?.role ?? assemblyRole(item.part);
+  const roles = new Map(items.map(item => [item, item.assembly?.role ?? assemblyRole(item.part)]));
+  const role = (item: T) => roles.get(item)!;
+  // Support/tuck rules require overlapping X/Z footprints and at most a
+  // five-LDU vertical gap. Preserve original candidate order after broad phase.
+  const spatial = new SpatialHash();
+  items.forEach((item, i) => spatial.insert(i, item.box));
+  const neighbours = new Map<T, T[]>();
+  const nearby = (item: T) => {
+    let found = neighbours.get(item);
+    if (!found) { found = spatial.query(item.box, 5).sort((a, b) => a - b).map(i => items[i]); neighbours.set(item, found); }
+    return found;
+  };
   const parents = new Map(items.map((item) => [item.id, [] as string[]]));
   const dependencies: Dependency[] = [];
   const add = (parent: string, child: string, reason: Dependency['reason']) => {
@@ -155,7 +167,7 @@ export function buildAssemblyGraph<T extends AssemblyItem>(items: T[], inferSupp
 
   if (inferSupport) for (const item of items) {
     if (item.assembly?.root || item.assembly?.attachTo || parents.get(item.id)!.length) continue;
-    for (const other of items) {
+    for (const other of nearby(item)) {
       if (other === item) continue;
       // Side-mounted anatomy is attached to its parent, not a support for the
       // parent's torso just because its loose AABB extends farther down.
@@ -177,7 +189,7 @@ export function buildAssemblyGraph<T extends AssemblyItem>(items: T[], inferSupp
   // if something is already under it.
   if (inferSupport) for (const item of items) {
     if (item.assembly?.root || item.assembly?.attachTo) continue;
-    for (const other of items) {
+    for (const other of nearby(item)) {
       if (other === item || other.assembly?.root) continue;
       if (['hand', 'arm', 'headwear'].includes(role(other)) || ['hand', 'arm', 'headwear'].includes(role(item))) continue;
       const a = item.box, b = other.box;

@@ -309,3 +309,8 @@
 .bm-generate-card { display: flex; flex-direction: column; gap: 4px; padding: 10px; margin: 8px 0; border: 1px solid var(--line, #e5e7eb); border-radius: 10px; }
 .bm-generate-ok { font-size: 12px; color: #15803d; font-weight: 600; }
 .bm-generate-bad { font-size: 12px; color: #b91c1c; font-weight: 600; }
+
+/* Staging: turn the whole staging area about the model */
+.bm-staging-turn { display: flex; align-items: center; gap: 8px; }
+.bm-staging-turn input[type="range"] { flex: 1; min-width: 0; }
+.bm-staging-turn .bm-staging-turn-deg { width: 56px; }

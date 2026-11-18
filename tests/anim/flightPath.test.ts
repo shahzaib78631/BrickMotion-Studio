@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { bakeBuildFlights } from '../../src/anim/bakeBuild';
 import { emptyAnimation, trackOf, valuesAt } from '../../src/anim/keyframes';
 import { displayPivot, makeKeyframePose } from '../../src/anim/keyframePose';
-import { addPathKey, deletePathKey, flightPath, locationFrames, pathHits, setPathKey, unbakeFlight } from '../../src/anim/flightPath';
+import { addPathKey, deletePathKey, flightPath, foldGroupPath, groupFlightPath, groupPathOf, groupPathOpen, locationFrames, pathHits, seedGroupPath, setPathKey, unbakeFlight } from '../../src/anim/flightPath';
 import type { Move, Timeline, Track } from '../../src/anim/timeline';
 import type { Instance } from '../../src/model/assemble';
 import { importLDraw } from '../../src/io/ldrawImport';
@@ -93,5 +93,37 @@ describe('a baked flight path', () => {
     const straight = makeKeyframePose(parts, new Map(), baked(), '', source());
     const clean = pathHits(parts, (f) => { const m = new Map(straight(f)); m.set('other', parts[1].world); return m; }, bases, metrics, 'brick', [frames.at(-1)!]);
     expect(clean.size).toBe(0);
+  });
+});
+
+describe('a submodel flight path', () => {
+  const sub = [instance('sub/a'), instance('sub/b', 100)];
+  const tl = (): Timeline => { const t = source(); t.tracks = new Map([['sub/a', track(0)], ['sub/b', track(100)]]); return t; };
+  const bakedSub = () => bakeBuildFlights(emptyAnimation(), '', sub, new Map(), tl(), { targets: ['sub'] }).animation;
+
+  it('is only open once seeded, through a representative baked part', () => {
+    const a = bakedSub();
+    expect(groupPathOf(a, '', 'sub')?.leaves.sort()).toEqual(['sub/a', 'sub/b']);
+    expect(groupPathOpen(a, '', 'sub')).toBe(false);
+    expect(groupPathOpen(seedGroupPath(a, '', 'sub'), '', 'sub')).toBe(true);
+    expect(groupPathOf(a, '', 'sub/a')).toBeNull();
+  });
+
+  it('seeding changes nothing; moving a point moves every part, and folding keeps that in the parts', () => {
+    const seeded = seedGroupPath(bakedSub(), '', 'sub');
+    const path = groupPathOf(seeded, '', 'sub')!;
+    const plain = flightPath(seeded, '', sub.find((i) => i.key === path.rep)!, sub.find((i) => i.key === path.rep)!.world)!;
+    const drawn = groupFlightPath(seeded, '', path, sub.find((i) => i.key === path.rep)!, sub.find((i) => i.key === path.rep)!.world)!;
+    expect(drawn.keys.map((k) => k.at.toArray())).toEqual(plain.keys.map((k) => k.at.toArray()));
+    const mid = Math.round((drawn.keys[0].frame + drawn.keys.at(-1)!.frame) / 2);
+    const moved = setPathKey(addPathKey(seeded, '', 'sub', mid), '', 'sub', mid, [0, 4, 0]);
+    const fold = foldGroupPath(moved, '', 'sub');
+    expect(trackOf(fold, '', 'sub')).toBeUndefined();
+    for (const leaf of ['sub/a', 'sub/b']) {
+      const want = valuesAt(seeded, '', leaf, mid)['location.y'] + 4;
+      expect(valuesAt(fold, '', leaf, mid)['location.y']).toBeCloseTo(want, 2);
+    }
+    // handing the submodel back removes the parts' flights and the shared offset
+    expect(unbakeFlight(moved, '', 'sub').tracks).toHaveLength(0);
   });
 });

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { transportGlass } from './glassOptics';
 import { WebGPURenderer, RectAreaLightNode } from 'three/webgpu';
 import { RectAreaLightTexturesLib } from 'three/addons/lights/RectAreaLightTexturesLib.js';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
@@ -112,7 +113,7 @@ export class StudioPathRenderer {
       const glass = def?.finish === 'trans';
       const color = glass ? original.color.clone() : def ? pathTraceColor(def, this.palette === 'studio' ? 'studio' : 'ldraw') : original.color?.clone() ?? new THREE.Color(0xcccccc);
       if (!glass) color.multiplyScalar(STUDIO_PATH_PROFILE.albedo);
-      value = new THREE.MeshPhysicalMaterial({ color, roughness: solid ? STUDIO_PATH_PROFILE.roughness : original.roughness, clearcoat: 0, ior: glass ? original.ior : 1.45, metalness: original.metalness ?? 0, transparent: original.transparent, opacity: original.opacity, transmission: original.transmission ?? 0, thickness: original.thickness ?? 0, attenuationColor: original.attenuationColor, attenuationDistance: original.attenuationDistance, side: original.side, emissive: original.emissive, emissiveIntensity: original.emissiveIntensity ?? 1 });
+      value = glass ? transportGlass(original, undefined, this.palette) : new THREE.MeshPhysicalMaterial({ color, roughness: solid ? STUDIO_PATH_PROFILE.roughness : original.roughness, clearcoat: 0, ior: glass ? original.ior : 1.45, metalness: original.metalness ?? 0, transparent: original.transparent, opacity: original.opacity, transmission: original.transmission ?? 0, thickness: original.thickness ?? 0, attenuationColor: original.attenuationColor, attenuationDistance: original.attenuationDistance, side: original.side, emissive: original.emissive, emissiveIntensity: original.emissiveIntensity ?? 1 });
       materials.set(key, value); this.resources.push(value); return value;
     };
     this.studio.bricks.root.updateMatrixWorld(true);

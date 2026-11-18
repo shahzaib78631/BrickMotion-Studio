@@ -20,6 +20,35 @@ export function emptyAnimation(): KeyframeAnimation {
 export function animationOf(animation: KeyframeAnimation | undefined): KeyframeAnimation {
   return animation ?? DEFAULT_ANIMATION;
 }
+/**
+ * The scene at another frame rate, keeping every moment in seconds: keys, the frame range
+ * and each Build layer's start move to the frame that is the same time at `fps`. Without
+ * this, baked flights keep their frame numbers and play faster or slower than the Build
+ * they were baked from. Lowering the rate can land keys on one frame; the later one stays.
+ */
+export function changeFps(animation: KeyframeAnimation, fps: number): KeyframeAnimation {
+  if (!Number.isInteger(fps) || fps < 1 || fps > 120) throw new Error('FPS must be a whole number from 1 to 120.');
+  if (fps === animation.fps) return animation;
+  const start = animation.startFrame;
+  const at = (frame: number) => start + Math.round(((frame - start) * fps) / animation.fps);
+  const endFrame = Math.max(start + 1, at(animation.endFrame));
+  if (endFrame > 20000) throw new Error(`At ${fps} FPS this scene would exceed the 20,000-frame limit. Shorten it or pick a lower rate.`);
+  const tracks = animation.tracks.map((track) => ({
+    ...track,
+    channels: Object.fromEntries(Object.entries(track.channels).map(([channel, keys]) => {
+      const out: AnimationKey[] = [];
+      for (const key of keys ?? []) {
+        const moved = { ...key, frame: at(key.frame) };
+        if (out.length && out[out.length - 1].frame === moved.frame) out[out.length - 1] = moved;
+        else out.push(moved);
+      }
+      return [channel, out];
+    })) as ObjectAnimationTrack['channels'],
+  }));
+  const buildLayers = animation.buildLayers && Object.fromEntries(Object.entries(animation.buildLayers)
+    .map(([model, layer]) => [model, { ...layer, startFrame: Math.min(endFrame, at(layer.startFrame)) }]));
+  return { ...animation, fps, endFrame, tracks, ...(buildLayers ? { buildLayers } : {}) };
+}
 export const defaultValue = (channel: AnimationChannel): number => channel === 'visibility' || channel.startsWith('scale.') ? 1 : 0;
 export const refId = (ref: KeyRef): string => JSON.stringify([ref.model, ref.target, ref.channel, ref.frame]);
 export const trackId = (model: string, target: string): string => JSON.stringify([model, target]);

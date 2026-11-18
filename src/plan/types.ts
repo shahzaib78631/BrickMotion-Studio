@@ -142,6 +142,8 @@ export type Plan = {
   cameraTracks?: CameraTracks;
   /** Freeze blocks on the Build timeline, per editable model: the build stops, the camera keeps moving. */
   pauses?: Record<string, Pause[]>;
+  /** The staging area (where pieces wait) turned about the model, in degrees, per editable model. */
+  stagingTurns?: Record<string, number>;
   assemblySpot?: AssemblySpot;
   /**
    * Overrides for planner-generated work bays (Construction V2/V3 anatomical

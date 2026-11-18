@@ -17,9 +17,11 @@
  * traced frame by frame: moved pieces only refit the ray-tracing tree.
  */
 import * as THREE from 'three';
+import { applyGlassOptics } from '../render/glassOptics';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 import { WebGLPathTracer } from 'three-gpu-pathtracer';
+import { stabilizePathTracer } from '../render/pathTracerNumerics';
 import { ENVIRONMENTS, floorColorOf, floorFor, sceneOf, takesFloorColor, type Materials, type StudioLook } from '../render/looks';
 import { LensPass } from '../render/depthOfField';
 import type { ColorDef } from '../ldraw/colors';
@@ -116,6 +118,7 @@ export class PathTraceSession {
     const floorScene = baseScene(studio, environment, floorColor, opts.groundY, disposables);
     const tracer = () => {
       const t = new WebGLPathTracer(renderer);
+      stabilizePathTracer(t);
       // EyeSight (Cycles) parity: diffuse ≤ 3 + glossy ≤ 4 + headroom, 32 transmissive
       // bounces, full glossy filtering (filter_glossy = 1.0)
       Object.assign(t, { renderToCanvas: true, synchronizeRenderSize: true, dynamicLowRes: false, rasterizeScene: false, minSamples: 0, renderDelay: 0, fadeDuration: 0, bounces: 8, transmissiveBounces: 32, filterGlossyFactor: 1.0 });
@@ -238,16 +241,7 @@ export function tracedMaterial(source: THREE.Material, materials: Materials | un
   const m = source.clone() as THREE.MeshPhysicalMaterial;
   const color = m.userData?.bmColor as ColorDef | undefined;
   if (m.isMeshPhysicalMaterial && color?.finish === 'trans') {
-    if (materials?.glass === 'clear') {
-      const tint = m.attenuationColor.clone();
-      // tinted through its depth like coloured glass; a light tint on each surface
-      Object.assign(m, { transparent: false, opacity: 1, depthWrite: true, transmission: 1, ior: 1.52, roughness: 0.02, metalness: 0, thickness: 1, attenuationDistance: 2.5 });
-      m.attenuationColor.copy(tint);
-      m.color.copy(tint).lerp(new THREE.Color('#ffffff'), 0.55);
-    } else if (materials?.glass === 'milky') {
-      // LGEO lg_milky_finish: frosted, faintly lit from inside
-      Object.assign(m, { transparent: false, opacity: 1, depthWrite: true, transmission: 0.3, ior: 1.52, roughness: 0.55, metalness: 0, thickness: 0.5 });
-    }
+    applyGlassOptics(m, color, materials?.glass ?? m.userData.bmGlass?.look ?? 'soft', materials?.palette ?? m.userData.bmGlass?.palette ?? 'studio');
   }
   const glow = (m.userData?.bmGlow as number) ?? 0;
   if (glow > 0 && 'emissiveIntensity' in m) m.emissiveIntensity = glow * PT_GLOW_GAIN;

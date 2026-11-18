@@ -1,12 +1,15 @@
 import type { Studio } from '../render/studio';
 import type { StudioPathRenderer } from '../render/studioPathRenderer';
 import type { Palette } from '../render/looks';
+import type { ThreeRTRenderer } from '../render/threeRTRenderer';
+import type { ViewportRenderer } from '../storage/settings';
 
 /** Owns the second canvas; the original canvas keeps all pointer/editing controls. */
 export class ViewportPathMode {
   private canvas = document.createElement('canvas');
   private status = document.createElement('output');
-  private engine: StudioPathRenderer | null = null;
+  private engine: StudioPathRenderer | ThreeRTRenderer | null = null;
+  private family: 'studio' | 'threert' | null = null;
   private generation = 0;
   private active = false;
   private failed = false;
@@ -22,23 +25,34 @@ export class ViewportPathMode {
     input.before(this.canvas); input.parentElement!.append(this.status);
   }
 
-  render(mode: 'live' | 'studio-path' | 'studio-hybrid', palette: Palette, frame?: { x: number; y: number; width: number; height: number }): boolean {
+  render(mode: ViewportRenderer, palette: Palette, frame?: { x: number; y: number; width: number; height: number }): boolean {
     if (mode === 'live') {
+      if (this.active || this.status.style.display !== 'none') this.stop();
+      return false;
+    }
+    const family = mode === 'threert' ? 'threert' : 'studio';
+    if (this.active && this.family !== family) this.stop();
+    if (family === 'threert' && (this.studio.projection === 'ortho' || this.studio.bricks.wireframe() || this.studio.camera.view?.enabled)) {
       if (this.active) this.stop();
+      this.status.style.display = '';
+      this.status.textContent = 'ThreeRT paused · using current viewport for wire, orthographic or cropped views';
       return false;
     }
     const bounds = this.input.getBoundingClientRect();
     const width = Math.max(1, Math.round(frame?.width ?? bounds.width));
     const height = Math.max(1, Math.round(frame?.height ?? bounds.height));
     if (!this.active) {
-      this.active = true; this.failed = false;
+      this.active = true; this.failed = false; this.family = family;
       // A previous async initialization may still be finishing after a switch.
       // Give each generation its own canvas/context so its cleanup is isolated.
       const canvas = this.canvas.cloneNode(false) as HTMLCanvasElement;
       this.canvas.replaceWith(canvas); this.canvas = canvas;
-      this.status.style.display = ''; this.status.textContent = 'Studio path · loading…';
+      this.status.style.display = ''; this.status.textContent = `${family === 'threert' ? 'ThreeRT' : 'Studio path'} · loading…`;
       const generation = ++this.generation;
-      void import('../render/studioPathRenderer').then(({ StudioPathRenderer }) => StudioPathRenderer.create(canvas, this.studio, { width, height, palette, samples: 64, interactive: true })).then((engine) => {
+      const pending = family === 'threert'
+        ? import('../render/threeRTRenderer').then(({ ThreeRTRenderer }) => ThreeRTRenderer.create(canvas, this.studio, { width, height, palette }))
+        : import('../render/studioPathRenderer').then(({ StudioPathRenderer }) => StudioPathRenderer.create(canvas, this.studio, { width, height, palette, samples: 64, interactive: true }));
+      void pending.then((engine) => {
         if (generation !== this.generation) { engine.dispose(); return; }
         this.engine = engine;
       }).catch((error) => { if (generation === this.generation) this.fail(error); });
@@ -49,7 +63,11 @@ export class ViewportPathMode {
       this.input.style.position = 'relative'; this.input.style.zIndex = '1';
       this.engine.setHybrid(mode === 'studio-hybrid');
       this.engine.setSize(width, height); this.engine.setPalette(palette);
-      this.engine.renderSample();
+      if (this.engine.renderSample() === false) {
+        this.canvas.style.display = 'none'; Object.assign(this.input.style, this.originalStyle);
+        this.status.textContent = 'ThreeRT · rebuilding view…';
+        return false;
+      }
       this.studio.renderOverlay(frame);
       if (performance.now() - this.statusAt > 500) { this.status.textContent = this.engine.status; this.statusAt = performance.now(); }
       return true;
@@ -60,10 +78,10 @@ export class ViewportPathMode {
     this.failed = true; this.engine?.dispose(); this.engine = null;
     this.canvas.style.display = 'none';
     Object.assign(this.input.style, this.originalStyle);
-    this.status.textContent = `Studio path unavailable: ${error instanceof Error ? error.message : String(error)} · showing current viewport`;
+    this.status.textContent = `${this.family === 'threert' ? 'ThreeRT' : 'Studio path'} unavailable: ${error instanceof Error ? error.message : String(error)} · showing current viewport`;
   }
   private stop(): void {
-    this.generation++; this.engine?.dispose(); this.engine = null; this.active = false;
+    this.generation++; this.engine?.dispose(); this.engine = null; this.active = false; this.family = null;
     this.canvas.style.display = 'none'; this.status.style.display = 'none';
     Object.assign(this.input.style, this.originalStyle);
   }

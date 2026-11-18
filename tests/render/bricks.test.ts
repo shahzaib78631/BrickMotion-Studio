@@ -27,6 +27,40 @@ const inst = (key: string, part: string, color: number, x: number): Instance => 
 
 const make = () => new BrickRenderer((p) => geoms.get(p) ?? null, fixtureColors);
 
+test('edge color and opacity are local to the renderer and preserve instancing', () => {
+  const a = make(), b = make();
+  a.setInstances([inst('a', '3001', 71, 0)]); b.setInstances([inst('b', '3001', 71, 0)]);
+  const edge = (r: BrickRenderer) => r.root.children.find(o => (o as THREE.LineSegments).isLineSegments) as THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial>;
+  const original = edge(b).material.color.getHexString(), pose = a.poseVersion;
+  a.setEdgeStyle({ edgeColor: '#ef1234', edgeOpacity: 0.75 });
+  expect(edge(a).material.color.getHexString()).toBe('ef1234'); expect(edge(a).material.opacity).toBeCloseTo(0.75);
+  expect(edge(a).material.defines).toEqual({ USE_INSTANCING: '' });
+  expect(edge(b).material.color.getHexString()).toBe(original); expect(edge(b).material.opacity).toBeCloseTo(0.3);
+  expect(a.poseVersion).toBe(pose);
+  a.setWireframe(true); a.setWireframe(false);
+  expect(edge(a).material.color.getHexString()).toBe('ef1234');
+  a.setInstances([inst('a', '3001', 71, 0)]);
+  expect(edge(a).material.color.getHexString()).toBe('ef1234');
+  a.dispose(); b.dispose();
+});
+
+test('matching edges follow each brick and span darker, exact, and lighter colors', () => {
+  const r = make(); r.setInstances([inst('a', '3001', 71, 0), inst('b', '3001', 0, 100)]);
+  const lines = r.root.children.filter(o => (o as THREE.LineSegments).isLineSegments) as THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial>[];
+  r.setEdgeStyle({ edgeMatch: true, edgeLightness: 0 });
+  for (const line of lines) {
+    const mesh = r.root.children.find(o => (o as THREE.InstancedMesh).isInstancedMesh && o.userData.brickColor === line.userData.edgeColor) as THREE.InstancedMesh<THREE.BufferGeometry, THREE.MeshPhysicalMaterial>;
+    expect(line.material.color.toArray()).toEqual(mesh.material.color.toArray());
+  }
+  r.setEdgeStyle({ edgeMatch: true, edgeLightness: -1 });
+  expect(lines.every(line => line.material.color.getHex() === 0)).toBe(true);
+  r.setEdgeStyle({ edgeMatch: true, edgeLightness: 1 });
+  expect(lines.every(line => line.material.color.getHex() === 0xffffff)).toBe(true);
+  r.setEdgeStyle({ edgeMatch: false, edgeColor: '#123456' });
+  expect(lines.every(line => line.material.color.getHexString() === '123456')).toBe(true);
+  r.dispose();
+});
+
 test('instances are grouped by part and color', () => {
   const r = make();
   r.setInstances([inst('a', '3001', 71, 200), inst('b', '3001', 71, 300), inst('c', '3001', 71, 400), inst('d', '3020', 0, 0)]);
@@ -63,4 +97,43 @@ test('unknown parts render as placeholder boxes', () => {
   const r = make();
   r.setInstances([{ ...inst('x', 'nope', 71, 0), placeholder: true }]);
   expect(r.meshCount()).toBe(1);
+});
+
+test('wireframe visibility invalidates shadow poses only when visibility changes', () => {
+  const r = make();
+  r.setInstances([inst('a', '3001', 71, 0)]);
+  const before = r.poseVersion;
+  r.setWireframe(true);
+  expect(r.poseVersion).toBe(before + 1);
+  r.setWireframe(true, 0xff0000);
+  expect(r.poseVersion).toBe(before + 1);
+  r.setWireframe(false);
+  expect(r.poseVersion).toBe(before + 2);
+  r.dispose();
+});
+
+test('replaying the same pose preserves GPU buffers, bounds and shadow revision', () => {
+ const r = make();
+ const instance = inst('a', '3001', 4, 0);
+ r.setInstances([instance]);
+ const transform = new THREE.Matrix4().makeTranslation(1/3, 4, 5);
+ r.setMatrices(() => transform);
+ const revision=r.poseVersion;
+ const mesh=r.root.children.find(o=>(o as THREE.InstancedMesh).isInstancedMesh) as THREE.InstancedMesh;
+ mesh.computeBoundingSphere();const bounds=mesh.boundingSphere,version=mesh.instanceMatrix.version;
+ r.setMatrices(() => transform.clone());
+ expect(r.poseVersion).toBe(revision);expect(mesh.instanceMatrix.version).toBe(version);expect(mesh.boundingSphere).toBe(bounds);
+ r.setMatrices(() => transform.clone().setPosition(1,2,3));
+ expect(r.poseVersion).toBe(revision+1);expect(mesh.boundingSphere).toBeNull();
+ r.dispose();
+});
+
+test('selection invalidates appearance once without dirtying shadows or unchanged colours', () => {
+ const r=make();r.setInstances([inst('a','3001',4,0)]);
+ const before=r.appearanceVersion,pose=r.poseVersion;
+ r.setHighlight(new Set(['a']),'select');
+ expect(r.appearanceVersion).toBe(before+1);expect(r.poseVersion).toBe(pose);
+ r.setHighlight(new Set(['a']),'select');expect(r.appearanceVersion).toBe(before+1);
+ r.setHighlight(new Set(),'select');expect(r.appearanceVersion).toBe(before+2);
+ r.dispose();
 });

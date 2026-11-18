@@ -97,7 +97,6 @@ export function mateAxis(
   // hinge fingers pair with fingers of the opposite gender offset; everything else male-female
   if (a.snap.gender === b.snap.gender) return null;
   const [male, female] = a.snap.gender === "M" ? [a, b] : [b, a];
-  if (!fits(male.snap, female.snap)) return null;
   const c = dot(male.axis, female.axis);
   if (Math.abs(c) < PARALLEL) return null;
   // distance between the two axis lines (they are parallel)
@@ -121,6 +120,9 @@ export function mateAxis(
   const overlap =
     Math.min(m1, Math.max(f0, f1)) - Math.max(m0, Math.min(f0, f1));
   if (overlap < -0.5) return null;
+  // Most broad-phase candidates are on different stud columns. Reject their
+  // positions before testing connector shapes (and allocating shape sets).
+  if (!fits(male.snap, female.snap)) return null;
   return male.axis;
 }
 
@@ -174,6 +176,12 @@ function genericMate(
       return null;
   } else if (Math.hypot(w[0], w[1], w[2]) > ballSlop(a.snap, b.snap)) return null;
   return a.axis;
+}
+
+/** Connectivity checks only need one mate, even on a baseplate with hundreds of snaps. */
+export function hasSnapMate(a: WorldSnap[], b: WorldSnap[]): boolean {
+  for (const x of a) for (const y of b) if (mateAxis(x, y)) return true;
+  return false;
 }
 
 /** Every distinct axis along which two placed parts are joined (empty when not connected). */

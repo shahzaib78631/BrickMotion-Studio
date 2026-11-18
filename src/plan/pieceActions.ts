@@ -263,6 +263,24 @@ export function setAssemblySpot(p: Plan, spot: AssemblySpot | null): Plan {
   return { ...p, assemblySpot: spot };
 }
 
+/** How far the staging area of model `m` is turned about it, in degrees (-180..180). */
+export function stagingTurnOf(p: Plan, m: ModelName): number {
+  return p.stagingTurns?.[m] ?? 0;
+}
+
+/** Turns the staging area of model `m` to `deg` (wrapped to -180..180); 0 removes the key. */
+export function setStagingTurn(p: Plan, m: ModelName, deg: number): Plan {
+  if (!Number.isFinite(deg)) return p;
+  let d = Math.round((((deg % 360) + 540) % 360 - 180) * 10) / 10;
+  if (d === -180) d = 180;
+  if (Object.is(d, -0)) d = 0;
+  if (stagingTurnOf(p, m) === d) return p;
+  const { [m]: _, ...others } = p.stagingTurns ?? {};
+  const turns = d ? { ...others, [m]: d } : others;
+  const { stagingTurns: _old, ...rest } = p;
+  return Object.keys(turns).length ? { ...rest, stagingTurns: turns } : rest as Plan;
+}
+
 /** Whether the loose floor layout moves and turns with the main spot. On is the default (no key). */
 export function setLoosePiecesFollow(p: Plan, loosePiecesFollow: boolean): Plan {
   if ((p.loosePiecesFollow !== false) === loosePiecesFollow) return p;

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { clipPatch, lengthPatch } from '../anim/pacing';
 import type { Timeline } from '../anim/timeline';
 import type { LogoCorner } from '../export/exportVideo';
 import { FPS_OPTIONS, type ExportFps } from '../export/frameRates';
@@ -92,7 +93,7 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
       </p>}
       {!manual && <label className="nx-field">
         Length <b>{formatLength(s.targetSeconds)}</b>
-        <input type="range" min={5} max={600} step={5} value={s.targetSeconds} onChange={(e) => s.set({ targetSeconds: Number(e.target.value) })} />
+        <input type="range" min={5} max={600} step={5} value={s.targetSeconds} onChange={(e) => s.set(lengthPatch(s, Number(e.target.value)))} />
       </label>}
       {!manual && timeline && (
         <p className="nx-fine">
@@ -156,12 +157,12 @@ export function VideoPanel({ timeline, onExport }: { timeline: Timeline | null; 
                   const raw = e.currentTarget.value;
                   if (!raw) return s.set({ [key]: null });
                   const num = Number(raw);
-                  if (Number.isFinite(num)) s.set({ [key]: Math.min(key === 'buildSeconds' ? 1800 : 120, Math.max(key === 'buildSeconds' ? 1 : 0.2, num)) });
+                  if (Number.isFinite(num)) s.set(clipPatch(s, key, Math.min(key === 'buildSeconds' ? 1800 : 120, Math.max(key === 'buildSeconds' ? 1 : 0.2, num))));
                 }} />
             </label>
           ))}
         </div>
-        <span className="nx-hint">Empty fields follow Length. You can also drag a clip's edge in the timeline.</span>
+        <span className="nx-hint">Empty fields follow Length. You can also drag a clip's edge in the timeline. With a custom Build, Length and the clips stay in step.</span>
       </details>
 
       </>}

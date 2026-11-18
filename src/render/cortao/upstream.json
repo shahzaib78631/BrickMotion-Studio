@@ -1,0 +1,11 @@
+{
+  "repository": "https://github.com/theagentd/CORTAO",
+  "commit": "9e8771f0ed72cae0f8b5dde30986a469ea5e07db",
+  "sha256": {
+    "CORTAOBase.glsl": "5d464ba1d7e773853e05dc5ea0773bfc84f1cd45deea200e865d6198aed6576f",
+    "CORTAOPrepass.glsl": "928ac17d94995ea1b816861c38fa8f399d7dfc814694ded8f2b55fafbfaafba4",
+    "CORTAOMainPass.glsl": "bd656c769b10248e8407539ebaf7b0e49f5a3507ad37d6cc0a2621f8070a7074",
+    "CORTAOFilterPass.glsl": "9c7585ed71c0ddd508d275f0fa4064e615894dc1660ab87e9773a30a4701136f"
+  },
+  "lookupSha256": "d1796d1b1596f3681745d109940ad5f3d1b74d12ec2c8e81e0b3a077747e23b5"
+}

@@ -12,8 +12,10 @@ export type FlightEdit = {
   request: string | null;
   hits: ReadonlySet<number>;
   select: KeyRef[] | null;
-  set(next: Partial<Pick<FlightEdit, 'request' | 'hits' | 'select'>>): void;
+  /** the frames of the path points picked in the viewport (shift-click adds or removes one) */
+  points: ReadonlySet<number>;
+  set(next: Partial<Pick<FlightEdit, 'request' | 'hits' | 'select' | 'points'>>): void;
 };
 export const useFlightEdit = create<FlightEdit>((set) => ({
-  request: null, hits: new Set(), select: null, set: (next) => set(next),
+  request: null, hits: new Set(), select: null, points: new Set(), set: (next) => set(next),
 }));

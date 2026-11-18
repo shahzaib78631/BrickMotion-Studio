@@ -1,3 +1,4 @@
+import { triangleData } from './triangleData';
 /** Numeric, bounded contact certificates. No renderer or external runtime required. */
 export type SurfaceTree = {
   min: [number, number, number]; max: [number, number, number];
@@ -23,12 +24,12 @@ function segSq(px: number, py: number, pz: number, ax: number, ay: number, az: n
 }
 
 /** pointTriangleSquared on plain numbers: the triangle is tr[i..i+8]. No allocation. */
-function triSq(px: number, py: number, pz: number, tr: Float32Array, i: number): number {
+function triSq(px: number, py: number, pz: number, tr: Float32Array, i: number, data: Float64Array, at: number): number {
   const ax = tr[i], ay = tr[i + 1], az = tr[i + 2], bx = tr[i + 3], by = tr[i + 4], bz = tr[i + 5], cx = tr[i + 6], cy = tr[i + 7], cz = tr[i + 8];
-  const abx = bx - ax, aby = by - ay, abz = bz - az, acx = cx - ax, acy = cy - ay, acz = cz - az;
+  const abx = data[at], aby = data[at + 1], abz = data[at + 2], acx = data[at + 3], acy = data[at + 4], acz = data[at + 5];
   const apx = px - ax, apy = py - ay, apz = pz - az;
-  const nx = aby * acz - abz * acy, ny = abz * acx - abx * acz, nz = abx * acy - aby * acx;
-  const nn = nx * nx + ny * ny + nz * nz;
+  const nx = data[at + 6], ny = data[at + 7], nz = data[at + 8];
+  const nn = data[at + 9];
   if (nn < 1e-24) return Math.min(segSq(px, py, pz, ax, ay, az, bx, by, bz), segSq(px, py, pz, bx, by, bz, cx, cy, cz), segSq(px, py, pz, cx, cy, cz, ax, ay, az));
   const d1 = abx * apx + aby * apy + abz * apz, d2 = acx * apx + acy * apy + acz * apz;
   if (d1 <= 0 && d2 <= 0) return apx * apx + apy * apy + apz * apz;
@@ -101,7 +102,7 @@ export function segmentTouchesSurface(
   const speed2 = dot(d, d);
   if (speed2 <= 1e-24 || !surface.tree.count) return false;
   const tol2 = tolerance * tolerance;
-  const tr = surface.tris;
+  const tr = surface.tris, data = triangleData(tr);
   const pending: [number, number, number][] = [[fromT, toT, 0]];
   let intervals = 0, visits = 0, triangles = 0;
   while (pending.length) {
@@ -122,14 +123,13 @@ export function segmentTouchesSurface(
       for (let j = node.first; j < node.first + node.count; j++) {
         if (++triangles > 32768) return false;
         const i = j * 9;
-        const abx = tr[i + 3] - tr[i], aby = tr[i + 4] - tr[i + 1], abz = tr[i + 5] - tr[i + 2];
-        const acx = tr[i + 6] - tr[i], acy = tr[i + 7] - tr[i + 1], acz = tr[i + 8] - tr[i + 2];
-        const nx = aby * acz - abz * acy, ny = abz * acx - abx * acz, nz = abx * acy - aby * acx;
-        const normal2 = nx * nx + ny * ny + nz * nz, tangent = nx * d[0] + ny * d[1] + nz * d[2];
+        const at = j * 10;
+        const nx = data[at + 6], ny = data[at + 7], nz = data[at + 8];
+        const normal2 = data[at + 9], tangent = nx * d[0] + ny * d[1] + nz * d[2];
         if (normal2 < 1e-24 || tangent * tangent > normalRatio * normal2 * speed2) continue;
-        if (triSq(px, py, pz, tr, i) > tol2) continue;
+        if (triSq(px, py, pz, tr, i, data, at) > tol2) continue;
         nearTangent = true;
-        if (triSq(sx, sy, sz, tr, i) <= tol2 && triSq(ex, ey, ez, tr, i) <= tol2) { certified = true; break; }
+        if (triSq(sx, sy, sz, tr, i, data, at) <= tol2 && triSq(ex, ey, ez, tr, i, data, at) <= tol2) { certified = true; break; }
       }
     }
     if (certified) continue;

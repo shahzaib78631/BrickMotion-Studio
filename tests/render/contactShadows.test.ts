@@ -28,3 +28,50 @@ test('contact shadows follow the cove and retain floor-camera texture coordinate
   expect(shadow.plane.geometry.getAttribute('position').count).toBe(4);
   shadow.dispose(); sweep.dispose();
 });
+
+test('stationary bricks reuse contact shadows; pose, structure, transform and settings redraw them', () => {
+  let draws = 0;
+  const renderer = {
+    autoClear: true,
+    getRenderTarget: () => null,
+    getClearAlpha: () => 1,
+    getClearColor: (color: THREE.Color) => color.set(0),
+    getScissorTest: () => false,
+    setScissorTest: () => {},
+    setClearColor: () => {},
+    setRenderTarget: () => {},
+    render: () => { draws++; },
+  } as unknown as THREE.WebGLRenderer;
+  const shadow = new ContactShadows(32);
+  const bricks = new THREE.Group();
+  const scene = new THREE.Scene();
+  scene.add(bricks);
+  const box = new THREE.Box3(new THREE.Vector3(-1, 0, -1), new THREE.Vector3(1, 2, 1));
+  shadow.fitTo(box, 0);
+  const redraw = (structure: number, pose: number) => {
+    const before = draws;
+    shadow.update(renderer, bricks, structure, pose);
+    expect(draws).toBeGreaterThan(before);
+    expect(bricks.parent).toBe(scene);
+  };
+  redraw(1, 1);
+  const first = draws;
+  for (let frame = 0; frame < 60; frame++) shadow.update(renderer, bricks, 1, 1);
+  expect(draws).toBe(first);
+  redraw(1, 2);
+  redraw(2, 2);
+  bricks.position.x = 1;
+  redraw(2, 2);
+  shadow.set(0.5, '#123456');
+  redraw(2, 2);
+  shadow.setWide(2, 0.3);
+  redraw(2, 2);
+  shadow.fitTo(box, -1);
+  redraw(2, 2);
+  // Offscreen callers without version tracking retain the unconditional path.
+  const before = draws;
+  shadow.update(renderer, bricks);
+  shadow.update(renderer, bricks);
+  expect(draws).toBeGreaterThan(before);
+  shadow.dispose();
+});

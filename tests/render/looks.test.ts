@@ -1,6 +1,12 @@
 import { expect, test } from 'vitest';
 import { DEFAULT_MATERIALS, FINISHES, PALETTES, SCENES, finishWithClay, floorFor, paletteOf, sanitizeMaterials, sceneOf, scenePixels } from '../../src/render/looks';
 
+test('stored edge style validates color, clamps sliders and preserves matching choices', () => {
+  expect(sanitizeMaterials({ edgeColor: '#ABCDEF', edgeOpacity: 2, edgeMatch: true, edgeLightness: -2 })).toMatchObject({ edgeColor: '#abcdef', edgeOpacity: 1, edgeMatch: true, edgeLightness: -1 });
+  expect(sanitizeMaterials({ edgeColor: 'invalid', edgeOpacity: NaN, edgeMatch: 'yes', edgeLightness: Infinity })).toMatchObject({ edgeColor: null, edgeOpacity: 0.3, edgeMatch: false, edgeLightness: -0.35 });
+  expect(sanitizeMaterials({ edgeOpacity: 0, edgeLightness: 0 })).toMatchObject({ edgeOpacity: 0, edgeLightness: 0 });
+});
+
 test('every scene has a unique id and a backdrop that spans bottom to top', () => {
   expect(new Set(SCENES.map((s) => s.id)).size).toBe(SCENES.length);
   for (const s of SCENES) {
@@ -20,7 +26,7 @@ test('the backdrop pixels follow the stops and the pool of light brightens the d
 
 test('materials from storage are sanitised, and auto floors follow the scene', () => {
   expect(sanitizeMaterials(undefined)).toEqual(DEFAULT_MATERIALS);
-  expect(sanitizeMaterials({ finish: 'glossy', texture: 'nope', floor: 'wood' })).toEqual({ finish: 'glossy', palette: 'studio', texture: 'none', floor: 'wood', studLogos: true, detail: 'standard', roundedEdges: true, ao: { enabled: true, strength: null, radius: null }, contactShadows: 0.5, clearShadow: 0.12, environment: 'studio', glow: { colors: [], strength: 1.5 }, glass: 'soft', lens: { blur: 'off', focus: 0.4 }, floorColor: null, sweepCurve: 0.6 });
+  expect(sanitizeMaterials({ finish: 'glossy', texture: 'nope', floor: 'wood' })).toEqual({ finish: 'glossy', palette: 'studio', texture: 'none', floor: 'wood', studLogos: true, detail: 'standard', roundedEdges: true, ao: { enabled: true, strength: null, radius: null }, contactShadows: 0.5, clearShadow: 0.12, environment: 'studio', glow: { colors: [], strength: 1.5 }, glass: 'soft', lens: { blur: 'off', focus: 0.4 }, floorColor: null, edgeColor: null, edgeOpacity: 0.3, edgeMatch: false, edgeLightness: -0.35, sweepCurve: 0.6 });
   expect(floorFor('white', 'auto')).toBe('reflective');
   expect(floorFor('soft', 'auto')).toBe('shadow');
   expect(floorFor('soft', 'concrete')).toBe('concrete');

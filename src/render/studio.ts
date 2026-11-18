@@ -1,3 +1,4 @@
+import { ShadowCache } from './shadowCache';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { createSoftboxEnvironment } from './softboxEnvironment';
@@ -6,6 +7,7 @@ import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 import { geometryOf, getColors, onGeometryChange, setPartDetail, setStudLogos } from '../state/partService';
 import { useSmoothSoftShadows } from './softShadows';
 import { StudioAO } from './ambientOcclusion';
+import { bindCortaoLighting, installCortaoLighting } from './cortao/lighting';
 import { ContactShadows } from './contactShadows';
 import { NeuralShade } from './neuralShade';
 import { GBuffer } from './gbuffer';
@@ -228,6 +230,8 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
   // the shadow catcher drawn over a lit or mirrored floor
   // the curved studio sweep (floor 'sweep'): floor and back wall in one lit surface
   const sweep = new Sweep();
+  installCortaoLighting(litFloor);
+  installCortaoLighting(sweep.mesh.material);
   scene.add(sweep.mesh);
   const shadowOver = new THREE.Mesh(floor.geometry, shadowFloor);
   shadowOver.rotation.x = -Math.PI / 2;
@@ -323,13 +327,19 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
   scene.add(bricks.root);
   // part geometry rebuilt (stud logos switched): redraw the same instances in the same pose
   const stopGeometry = onGeometryChange(() => bricks.refresh());
-  const ao = new StudioAO(scene, camera, () => [bricks.root, floor, shadowOver]);
+  const ao = new StudioAO(scene, camera, () => [bricks.root, floor, shadowOver, sweep.mesh]);
   const aoOn = () => ao.active(render.ao !== false);
   const keyDir = new THREE.Vector3();
   const finish = (pr: number, w: number, h: number) => {
     ao.setSize(w * pr, h * pr);
     keyDir.copy(key.position).sub(key.target.position).normalize();
     ao.render(renderer, active, keyDir, render.ao !== false);
+  };
+  const prepareAO = (w: number, h: number, x = 0, y = 0) => {
+    const pr = renderer.getPixelRatio();
+    ao.setSize(w * pr, h * pr);
+    const result = ao.prepareCortao(renderer, active, render.ao !== false);
+    if (result) bindCortaoLighting(result.tight, result.wide, new THREE.Vector4(x * pr, y * pr, w * pr, h * pr), result.strength, result.wideStrength, active);
   };
   const lighting = new SceneLighting(scene, typeof HTMLCanvasElement !== 'undefined' && canvas instanceof HTMLCanvasElement);
   let sceneSetup: SceneSetup | undefined;
@@ -419,6 +429,7 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
     } else if (reflection) reflection.visible = false;
   };
   const setLook = (next: StudioLook) => {
+    shadowRevision++;
     look = sceneOf(next).id;
     referenceOptions = sceneOf(look).referenceLighting ? { ...DEFAULT_REFERENCE_LIGHTING, strengths: [...DEFAULT_REFERENCE_LIGHTING.strengths] } : null;
     if (referenceOptions) referenceRig.configure(referenceOptions);
@@ -466,13 +477,25 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
   };
   /** The scene's occlusion, with the user's on/off and strength/reach overrides. */
   const applyAO = () => ao.set(aoFor(look, materials.ao));
+  const shadowCache = new ShadowCache();
+  let shadowRevision = 0;
   let materialVersion = 0;
   const setMaterials = (m: Materials) => {
+    const edgeChanged = (['edgeColor', 'edgeOpacity', 'edgeMatch', 'edgeLightness'] as const).some(key => !Object.is(materials[key], m[key]));
+    const onlyEdges = edgeChanged && (Object.keys({ ...materials, ...m }) as (keyof Materials)[]).every(key =>
+      key === 'edgeColor' || key === 'edgeOpacity' || key === 'edgeMatch' || key === 'edgeLightness' || Object.is(materials[key], m[key]));
+    if (onlyEdges) {
+      materials = { ...m };
+      bricks.setEdgeStyle(m);
+      return;
+    }
     materialVersion++;
+    shadowRevision++;
     const envChanged = m.environment !== materials.environment;
     materials = { ...m };
     if (envChanged) applyEnvironment(m.environment);
     setBrickMaterials(m);
+    bricks.setEdgeStyle(m);
     void setStudLogos(m.studLogos);
     void setPartDetail(m.detail ?? 'standard');
     // high detail has real rounded edges in the geometry: no screen-space imitation on top
@@ -520,6 +543,7 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
     get materialVersion() { return materialVersion; },
     lighting,
     setSceneSetup(setup, helpers = false, selectedId = null, frameAspect = aspect) {
+      shadowRevision++;
       sceneSetup = setup;
       lighting.apply(setup, helpers, selectedId, frameAspect);
       if (lightBounds) lighting.fitTo(lightBounds);
@@ -530,6 +554,7 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
     setRenderOptions,
     setMaterials,
     setReferenceLighting(options) {
+      shadowRevision++;
       referenceOptions = options ? { ...options, strengths: [...options.strengths] } : null;
       if (referenceOptions) referenceRig.configure(referenceOptions);
       renderer.shadowMap.type = referenceOptions?.specularVisibility ? THREE.BasicShadowMap : THREE.PCFShadowMap;
@@ -619,13 +644,15 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
       }
     },
     render(frame) {
+      bindCortaoLighting(null);
       const reference = referenceRig.group.visible ? referenceOptions : null;
       setReferenceMaterialMode(reference !== null);
       bindReferenceLighting(reference, referenceRig.shadowMatrices);
       if (reference) referenceRig.update(active, lightCenter, lightRadius, bricks.structureVersion, bricks.poseVersion);
       sweep.face(active);
+      shadowCache.update(scene, bricks.root, bricks.structureVersion, bricks.poseVersion, shadowRevision);
       contact.setSurface(sweep.mesh.visible ? sweep.mesh : null);
-      contact.update(renderer, bricks.root);
+      contact.update(renderer, bricks.root, bricks.structureVersion, bricks.poseVersion);
       if (frame) {
         // Render to the true output aspect ratio, not a squeezed full-width canvas.
         // Scissor coordinates are bottom-left in Three.js, CSS coordinates top-left.
@@ -640,6 +667,7 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
         renderer.setViewport(x, y, w, h);
         renderer.setScissor(x, y, w, h);
         renderer.setScissorTest(true);
+        prepareAO(w, h, x, y);
         renderer.render(scene, active);
         if (aoOn()) finish(renderer.getPixelRatio(), w, h);
         renderer.setScissorTest(false);
@@ -649,10 +677,12 @@ export function createStudio(canvas: HTMLCanvasElement | OffscreenCanvas, opts: 
         renderer.setScissorTest(false);
         // A previous letterboxed render may have left an opaque clear colour behind.
         if (transparent) renderer.setClearColor(0x000000, 0);
+        prepareAO(sizeW, sizeH);
         renderer.render(scene, active);
         if (aoOn()) finish(renderer.getPixelRatio(), sizeW, sizeH);
         if (neural) neuralPass();
       }
+      bindCortaoLighting(null);
     },
     dispose() {
       stopGeometry();

@@ -1,0 +1,12 @@
+{
+  "repository": "https://github.com/meshy-dev/ThreeRT",
+  "revision": "10fdc7738835d5b4c19438141fe28009a1d66d6b",
+  "rust": "1.100.0",
+  "wasmBindgen": "0.2.130",
+  "patch": "src/render/threert/host.rs (lifecycle and submission backpressure only)",
+  "hostSha256": "47ecb38a393573c9c91ea253050b8310b3eee53d58a74f1a82923797c8c389ca",
+  "sha256": {
+    "threert_web.js": "93ef1bf386ec5d6cfd11b8680e38d7bcee6855946502a79282cb57e1ee9976a3",
+    "threert_web_bg.wasm": "226a8796213c8c8521cdf45e25c8a4caf87c38fd0bbc9f8bc6af641c2fdf487a"
+  }
+}

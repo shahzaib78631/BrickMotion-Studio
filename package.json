@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:collision-kernel": "node scripts/build-collision-kernel.cjs",
+    "build:threert": "node scripts/build-threert.cjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "setup": "tsx scripts/setup-data.ts",
@@ -30,6 +32,7 @@
     "test:scene": "vitest run tests/render/sceneSetup.test.ts",
     "verify:scene:offline": "node scripts/verify-scene-studio-offline.cjs",
     "instructions": "tsx scripts/instructions-to-mpd.ts",
+    "studio:builder": "node scripts/studio-builder.mjs",
     "brickheadz:build": "cd python && uv run python -m brickheadz all --corpus ../dist/ldraw_brickheadz --out ../.cache/brickheadz",
     "brickheadz:sample": "cd python && uv run python -m brickheadz sample --count 20 --seed 7 --out ../.cache/brickheadz/gen",
     "brickheadz:verify": "tsx scripts/validate-brickheadz.ts public/ldraw .cache/brickheadz/gen",

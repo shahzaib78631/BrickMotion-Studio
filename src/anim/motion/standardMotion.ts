@@ -405,10 +405,14 @@ export function buildStandardMotionTimeline(asm: Assembly, metrics: Metrics, opt
   let best: { timeline: Timeline; score: number; proposal: LogicalProposal | null } | null = null;
   let failed: Error | null = null;
   let tested = 0;
+  // Every proposal uses the same immutable part meshes. Relative-pose collision
+  // results survive a different editorial order; do not ray-test the same
+  // mating geometry again for each whole-plan proposal.
+  const collisionMemo = { insertion: new Map<string, boolean>(), translation: new Map<string, boolean>() };
   for (const proposal of choices) {
     try {
       const candidate = buildTimeline(proposal?.assembly ?? asm, metrics, { ...opts, planner: 'legacy' },
-        onProgress, layoutBox, workBaySpots);
+        onProgress, layoutBox, workBaySpots, collisionMemo);
       if (candidate.tracks.size !== asm.instances.length || asm.instances.some(i => !candidate.tracks.has(i.key)))
         throw new Error('Standard returned an incomplete assembly.');
       const timeline = singlePass ? candidate :

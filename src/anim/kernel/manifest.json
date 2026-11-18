@@ -1,0 +1,25 @@
+{
+  "abi": 1,
+  "sourceSha256": "611b24d74ec7a8420aee5c6ef7a6bd96aee34fa25224426718d6c2cc9a61202c",
+  "binarySha256": "5567bf0c3d1f6d4dd8ec683a5b74a7d7b72080993c87910aac084de19e1d780b",
+  "compiler": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+  "flags": [
+    "--target",
+    "wasm32-unknown-unknown",
+    "--crate-type",
+    "cdylib",
+    "--edition",
+    "2021",
+    "-O",
+    "-C",
+    "panic=abort",
+    "-C",
+    "link-arg=--initial-memory=2097152",
+    "-C",
+    "link-arg=--max-memory=268435456",
+    "-C",
+    "link-arg=--export=__heap_base",
+    "-C",
+    "strip=symbols"
+  ]
+}

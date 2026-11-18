@@ -60,3 +60,16 @@ test('hinge fingers mate only with fingers of the same group', () => {
   expect(mateAxes(here, worldSnaps([finger('F')], at(0, 0, 0)))).toHaveLength(0);
   expect(mateAxes(worldSnaps([finger('M')], at(0, 0, 0)), worldSnaps([finger('F')], at(0, 0, 0)))).toHaveLength(1);
 });
+
+test('connectivity-only matching agrees with all mating axes and stops at the first mate', async () => {
+  const { hasSnapMate } = await import('../../src/anim/snapMates');
+  const a = worldSnaps([stud], at(0, 0, 0));
+  for (const x of [0, 1, 40]) for (const y of [-8, -40]) {
+    const b = worldSnaps([socket], at(x, y, 0));
+    expect(hasSnapMate(a, b)).toBe(mateAxes(a, b).length > 0);
+  }
+  expect(hasSnapMate([], a)).toBe(false);
+  const b = worldSnaps([socket], at(0, -8, 0));
+  Object.defineProperty(b, 1, { get: () => { throw new Error('should stop at first mate'); } });
+  expect(hasSnapMate(a, b)).toBe(true);
+});

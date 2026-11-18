@@ -1,12 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import {
-  allKeyRefs, animationOf, boundedFrame, CHANNELS, TRANSFORM_CHANNELS, copyKeys, deleteKeys, insertKeys,
+  allKeyRefs, animationOf, boundedFrame, changeFps, CHANNELS, TRANSFORM_CHANNELS, copyKeys, deleteKeys, insertKeys,
   moveKeys, pasteKeys, refId, selectedKeys, setInterpolation, trackOf, valuesAt,
   type KeyClipboard, type KeyRef,
 } from '../anim/keyframes';
 import { buildLayerAt, linkBuildLayer, unlinkBuildLayer, updateBuildLayer } from '../anim/buildLayer';
 import { bakeBuildFlights, isBakedFlight } from '../anim/bakeBuild';
-import { fullPathKeys, locationFrames, unbakeFlight } from '../anim/flightPath';
+import { foldGroupPath, fullPathKeys, locationFrames, seedGroupPath, unbakeFlight } from '../anim/flightPath';
 import { flightFromKeys } from '../anim/customFlight';
 import { setPieceFlight } from '../plan/pieceActions';
 import { placedMatrix } from './modelPlacement';
@@ -499,6 +499,8 @@ export function KeyframeTimeline({ timeline, planning, buildError, instances, pl
       if (fresh.length) next = bakeBuildFlights(next, editingModel, instances, placements, timeline, { targets: fresh.map((inst) => inst.key) }).animation;
       // every path point keys X, Y and Z, so dragging one cannot move the rest of the path
       for (const inst of leaves) next = fullPathKeys(next, editingModel, inst.key);
+      // a submodel's path: one shared offset over all its parts, so one point moves the lot
+      if (!leaves.some((inst) => inst.key === id)) next = seedGroupPath(next, editingModel, id);
     } catch (error) { setLayerError(error instanceof Error ? error.message : String(error)); return; }
     if (next !== animation) applyAnimation(() => next);
     setLayerError('');
@@ -541,9 +543,11 @@ export function KeyframeTimeline({ timeline, planning, buildError, instances, pl
     if (!timeline) return;
     const flights = new Map<string, FlightPose[]>();
     try {
+      // a submodel's shared path offset goes into each part's own keys first
+      const keyed = activeObject ? foldGroupPath(animation, editingModel, activeObject) : animation;
       for (const inst of focusedLeaves) {
-        if (!isBakedFlight(animation, editingModel, inst.key)) continue;
-        const flight = flightFromKeys(animation, editingModel, inst, placedMatrix(inst, placements), timeline);
+        if (!isBakedFlight(keyed, editingModel, inst.key)) continue;
+        const flight = flightFromKeys(keyed, editingModel, inst, placedMatrix(inst, placements), timeline);
         if (flight) flights.set(inst.key, flight);
       }
     } catch (error) { setLayerError(error instanceof Error ? error.message : String(error)); return; }
@@ -792,7 +796,8 @@ export function KeyframeTimeline({ timeline, planning, buildError, instances, pl
             </select></label>
             <div className="bm-key-toolrow"><button disabled={!selected.length} onClick={copy}><Ic name="file" /> Copy</button><button disabled={!clipboard.length} onClick={paste}><Ic name="plus" /> Paste</button><button disabled={!selected.length} onClick={() => remove(selected)}><Ic name="trash" /> Delete</button></div>
             <div className="bm-key-section-title">Scene range</div>
-            <div className="bm-key-settingsrow"><label>FPS <input aria-label="Animation frames per second" type="number" min={1} max={120} value={fps} onChange={(e) => { const v = Number(e.target.value); if (Number.isInteger(v) && v >= 1 && v <= 120) applyAnimation((a) => ({ ...a, fps: v })); }} /></label></div>
+            <div className="bm-key-settingsrow"><label title="Keys keep their timing in seconds when the rate changes">FPS <LayerNumberField value={fps} label="Animation frames per second" min={1} max={120} step={1}
+              onCommit={(v) => { try { applyAnimation((a) => changeFps(a, v)); setLayerError(''); } catch (error) { setLayerError(error instanceof Error ? error.message : String(error)); } }} /></label></div>
             <div className="bm-key-settingsrow"><label>Start <input aria-label="Animation start frame" type="number" min={0} max={latestStart} value={animation.startFrame} onChange={(e) => { const v = Number(e.target.value); if (Number.isInteger(v) && v >= 0 && v <= latestStart) applyAnimation((a) => ({ ...a, startFrame: v })); }} /></label><label>End <input aria-label="Animation end frame" type="number" min={earliestEnd} max={20000} value={animation.endFrame} onChange={(e) => { const v = Number(e.target.value); if (Number.isInteger(v) && v >= earliestEnd && v <= 20000) applyAnimation((a) => ({ ...a, endFrame: v })); }} /></label></div>
           </div>
         </aside>

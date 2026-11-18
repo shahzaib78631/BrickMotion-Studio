@@ -18,10 +18,12 @@ import argparse
 import csv
 import json
 import os
+import random
 import re
 import time
 from datetime import datetime, timezone
 from urllib.parse import unquote, urljoin, urlsplit
+from uuid import uuid4
 
 import requests
 from bs4 import BeautifulSoup
@@ -57,9 +59,15 @@ def fetch(session, url):
 
 
 def find_browse_pages(soup):
-    """Use page links and thumbnail cache paths to discover candidate folders."""
+    """Read only Random Pages, excluding the fixed Popular Pages list."""
+    heading = soup.find("h2", string=lambda text: text and text.strip() == "Random Pages")
+    if heading is None:
+        raise ValueError("Bricksafe browse page is missing its Random Pages section")
+    section = heading.parent.find_next_sibling("div", class_="cube-portfolio")
+    if section is None:
+        raise ValueError("Bricksafe Random Pages section has no page grid")
     pages = set()
-    for tag in soup.select("[href], [src], [data-src]"):
+    for tag in section.select("[href], [src], [data-src]"):
         for attribute in ("href", "src", "data-src"):
             raw = tag.get(attribute)
             if not raw:
@@ -83,6 +91,12 @@ def find_browse_pages(soup):
                     folder = "/".join(segments[1:-2])
                     pages.add(BASE + "/pages/" + folder + "/")
     return pages
+
+
+def fetch_random_pages(session):
+    # Browse renders a server-selected random sample. A unique query prevents
+    # intermediary caches from serving the same sample on subsequent rounds/runs.
+    return find_browse_pages(fetch(session, BASE + "/browse?sample=" + uuid4().hex))
 
 
 def find_model_files(soup, page_url):
@@ -158,12 +172,13 @@ def main():
         for round_number in range(1, args.max_rounds + 1):
             rounds = round_number
             try:
-                browse = fetch(session, BASE + "/browse")
-            except requests.RequestException as exc:
-                print(f"Browse request failed: {exc}", flush=True)
+                sampled = fetch_random_pages(session)
+            except (requests.RequestException, ValueError) as exc:
+                print(f"Random-page request failed: {exc}", flush=True)
                 break
 
-            fresh = sorted(find_browse_pages(browse) - visited)
+            fresh = sorted(sampled - visited)
+            random.shuffle(fresh)
             candidates += len(fresh)
             print(f"Round {round_number}: {len(fresh)} new candidates", flush=True)
 

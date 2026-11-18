@@ -1,3 +1,5 @@
+import * as THREE from 'three';
+import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 import { expect, test } from 'vitest';
 import { buildPartGeometry } from '../../src/ldraw/geometry';
 import { PartLibrary } from '../../src/ldraw/library';
@@ -9,10 +11,18 @@ test('main-color geometry keeps every triangle and has normals', async () => {
   const flat = (await lib.loadPart('3001'))!;
   const g = buildPartGeometry(flat);
   const triCount = flat.tris.get(16)!.length / 9;
-  expect(g.main!.getAttribute('position').count).toBe(triCount * 3);
+  expect(g.main!.index!.count).toBe(triCount * 3);
+  expect(g.main!.getAttribute('position').count).toBeLessThan(triCount * 3);
+  // Expanding the index reproduces every original position in triangle order.
+  const expanded = g.main!.toNonIndexed();
+  expect(Array.from(expanded.getAttribute('position').array)).toEqual(Array.from(new Float32Array(flat.tris.get(16)!)));
+  const original = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(flat.tris.get(16)!, 3));
+  const expected = toCreasedNormals(original, Math.PI / 6);
+  expect(Array.from(expanded.getAttribute('normal').array)).toEqual(Array.from(expected.getAttribute('normal').array));
+  original.dispose(); expected.dispose(); expanded.dispose();
   expect(g.main!.getAttribute('normal')).toBeDefined();
   const generated = g.main!.getAttribute('bmGenerated');
-  expect(generated.count).toBe(triCount * 3);
+  expect(generated.count).toBe(g.main!.getAttribute('position').count);
   for (const value of generated.array) {
     expect(value).toBeGreaterThanOrEqual(0); expect(value).toBeLessThanOrEqual(1);
   }

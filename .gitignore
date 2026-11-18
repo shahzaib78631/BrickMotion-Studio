@@ -3,9 +3,12 @@ dist
 .cache
 public/ldraw
 public/data
+public/_booklet
 .superpowers
 vendor/
 
 # Real-model benchmark inputs (not redistributed; see benchmarks/mechanisms)
 samples/5590_-_whirl_n_wheel_super_truck.mpd
 samples/42000-1.mpd
+models
+output

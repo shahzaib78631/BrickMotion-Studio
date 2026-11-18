@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type KeyboardEvent as RKeyboardEvent } from 'react';
+import { clipPatch } from '../anim/pacing';
 import type { StepSpan, Timeline } from '../anim/timeline';
 import { modelSteps, updateStep } from '../plan/ops';
 import { useAppSettings } from '../state/appSettings';
@@ -191,11 +192,27 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
     e.stopPropagation();
     const releaseSelection = stopSelection();
     const x0 = e.clientX;
+    // Held near either edge of the timeline, the edge scrolls it (and keeps scrolling while
+    // the pointer rests there), so one drag can make a clip as long as it needs to be.
+    const el = scrollRef.current;
+    const scroll0 = el?.scrollLeft ?? 0;
+    let lastX = x0;
     let next = start;
-    const move = (ev: PointerEvent) => {
-      next = rounded(clamp(start + (ev.clientX - x0) / px, min, max));
+    const update = () => {
+      next = rounded(clamp(start + (lastX - x0 + (el ? el.scrollLeft - scroll0 : 0)) / px, min, max));
       setTrimPreview({ kind, index, seconds: next });
     };
+    const move = (ev: PointerEvent) => { lastX = ev.clientX; update(); };
+    let frame = 0;
+    const tick = () => {
+      if (el) {
+        const before = el.scrollLeft;
+        edgeScroll(el, lastX);
+        if (el.scrollLeft !== before) update();
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
     const done = (ev: PointerEvent) => {
       move(ev);
       cleanup();
@@ -204,6 +221,7 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
     };
     const cancel = () => cleanup();
     const cleanup = () => {
+      cancelAnimationFrame(frame);
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', done);
       window.removeEventListener('pointercancel', cancel);
@@ -216,17 +234,22 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
     window.addEventListener('pointercancel', cancel);
   };
 
+  /** A clip's new duration; with a custom Build, the video Length follows the new total. */
+  const setClip = (key: 'introSeconds' | 'buildSeconds' | 'outroSeconds', value: number) => {
+    const settings = useAppSettings.getState();
+    settings.set(clipPatch(settings, key, value));
+  };
   const trimCamera = (e: RPointerEvent, kind: 'intro' | 'build' | 'outro') => {
     if (!tl) return;
     const seconds = kind === 'intro' ? tl.intro : kind === 'build' ? tl.buildEnd - tl.intro : tl.duration - tl.buildEnd;
     const key = kind === 'intro' ? 'introSeconds' : kind === 'build' ? 'buildSeconds' : 'outroSeconds';
-    beginTrim(e, kind, seconds, kind === 'build' ? 1 : 0.2, 120, (value) => useAppSettings.getState().set({ [key]: value }));
+    beginTrim(e, kind, seconds, kind === 'build' ? 1 : 0.2, kind === 'build' ? 1800 : 120, (value) => setClip(key, value));
   };
   const keyTrim = (e: RKeyboardEvent, kind: 'intro' | 'build' | 'outro', value: number) => {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     e.preventDefault(); e.stopPropagation();
     const key = kind === 'intro' ? 'introSeconds' : kind === 'build' ? 'buildSeconds' : 'outroSeconds';
-    useAppSettings.getState().set({ [key]: rounded(clamp(value + (e.key === 'ArrowLeft' ? -0.1 : 0.1), kind === 'build' ? 1 : 0.2, 120)) });
+    setClip(key, rounded(clamp(value + (e.key === 'ArrowLeft' ? -0.1 : 0.1), kind === 'build' ? 1 : 0.2, kind === 'build' ? 1800 : 120)));
   };
   const trimStep = (e: RPointerEvent, span: StepSpan) => {
     const data = steps[span.index];
@@ -270,7 +293,8 @@ export function BuildTimeline({ timeline: tl, planning = false, error = '', prog
   };
   const step = tl ? tickStep(px) : 1;
   const ticks = tl ? Array.from({ length: Math.floor(dur / step) + 1 }, (_, i) => i * step) : [];
-  const contentWidth = Math.max(width, X(Math.max(dur, previewDuration)) + PAD);
+  // while a clip is trimmed, a screen of room past its end, so the timeline can scroll on
+  const contentWidth = Math.max(width, X(Math.max(dur, previewDuration)) + PAD + (trimPreview ? width : 0));
   const camTrack = plan.cameraTracks?.[editingModel]?.build;
   const hasTrack = !!camTrack?.keys.length;
   const directCamera = (style: DirectorStyle) => {

@@ -1,3 +1,4 @@
+import { FrameGate } from '../render/frameGate';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -17,7 +18,7 @@ import { SPOT_DRAG_TYPE, draggedSpot } from './AssemblyPanel';
 import { SpotMarkers } from './spotMarkers';
 import { WayHandle, ldrawToView, viewToLdraw } from './wayHandle';
 import { FlightPathOverlay } from './flightPathOverlay';
-import { addPathKey, flightPath, pathHits, pathKeyRefs } from '../anim/flightPath';
+import { addPathKey, flightPath, groupFlightPath, groupPathOf, groupPathOpen, pathHits, pathKeyRefs } from '../anim/flightPath';
 import { isBakedFlight } from '../anim/bakeBuild';
 import { useFlightEdit } from '../state/flightEdit';
 import { snapWay, wayForArrow } from '../anim/flightDirection';
@@ -110,8 +111,11 @@ function frame(camera: THREE.PerspectiveCamera | THREE.OrthographicCamera, contr
 function pathPiece(s = useStudio.getState()): string | null {
   if (s.mode !== 'edit' || s.timelineEditor !== 'timeline' || s.selection.model !== s.editingModel || s.selection.ids.length !== 1) return null;
   const id = s.selection.ids[0];
-  return isBakedFlight(s.plan.animation, s.editingModel, id) ? id : null;
+  return openFlightPath(s.plan.animation, s.editingModel, id) ? id : null;
 }
+/** A baked piece, or a submodel whose parts are baked and whose path has been opened. */
+const openFlightPath = (animation: Parameters<typeof isBakedFlight>[0], model: string, id: string): boolean =>
+  isBakedFlight(animation, model, id) || groupPathOpen(animation, model, id);
 const isTyping = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName));
 
 
@@ -184,12 +188,21 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
   const placing = mode === 'edit' && timelineEditor === 'build' && (tool === 'move' || ((gizmoEnabled || aimWay) && selection.model === editingModel && selection.ids.length > 0));
   /** the Build view shows the build animation at the playhead, with the editor's own camera */
   const engaged = mode === 'edit' && timelineEditor === 'build' && follow && !!timeline && !placing;
-  /** following the build, even while a new plan is being made (the timeline is missing for a moment) */
-  const following = mode === 'edit' && timelineEditor === 'build' && follow && !placing;
+  /**
+   * following the build, even while a new plan is being made (the timeline is missing for a moment)
+   * and while a piece is selected for placing: selecting a piece to reorder it must not end
+   * following, or scrubbing afterwards would count as a fresh start and re-frame the camera.
+   */
+  const following = mode === 'edit' && timelineEditor === 'build' && follow;
   /** what the render loop needs while engaged: the timeline and the pose at a time */
   const live = useRef<{ tl: Timeline; pose: (t: number) => (key: string) => THREE.Matrix4 | null; dirty: boolean; override?: Map<string, THREE.Matrix4> } | null>(null);
   /** Timeline mode uses a separate, non-destructive matrix sampler. */
   const keyScene = useRef<{ at: (frame: number) => Map<string, THREE.Matrix4 | null>; bases: Map<string, THREE.Matrix4>; dirty: boolean } | null>(null);
+  /** dragging several picked path points at once: their frames and the location they had at the start */
+  const pickedPoints = useFlightEdit((s) => s.points);
+  const pointGesture = useRef<{ base: Plan; model: string; target: string; values: Map<number, [number, number, number]> } | null>(null);
+  /** the open path's points (view space), for the gizmo that moves the picked ones together */
+  const pathKeysRef = useRef<{ frame: number; at: THREE.Vector3 }[]>([]);
   const keyGesture = useRef<{ base: Plan; ids: string[]; model: string; frame: number; values: Map<string, ChannelValues> } | null>(null);
   const studioLook = useAppSettings((s) => s.studioLook);
   const materials = useAppSettings((s) => s.materials);
@@ -345,6 +358,13 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       } else if (e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'b' && !e.altKey) {
         if (!useSceneView.getState().cameraView) return;
         useSceneView.setState({ regionTool: true });
+      } else if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'a' && pathPiece() && pathKeysRef.current.length) {
+        // an open flight path: every point of it picked, to move together
+        const state = useStudio.getState(), frames = pathKeysRef.current.map((k) => k.frame);
+        useFlightEdit.getState().set({ points: new Set(frames),
+          select: frames.flatMap((f) => pathKeyRefs(state.plan.animation, state.editingModel, state.selection.ids[0], f)) });
+      } else if (e.key === 'Escape' && pathPiece() && useFlightEdit.getState().points.size > 1) {
+        useFlightEdit.getState().set({ points: new Set() });
       } else if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'b') {
         useStudio.getState().apply((p) => ({ ...p, sceneSetup: { ...sceneSetupOf(p.sceneSetup), region: null } }));
       } else return;
@@ -382,6 +402,19 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
           if (first && !isGrid(first)) gizmoFree = first.matrix;
         }
         if (current.timelineEditor === 'timeline') {
+          const picked = useFlightEdit.getState().points;
+          const pathTarget = pathPiece(current);
+          if (pathTarget && picked.size > 1) {
+            useKeyframePlayback.getState().set({ playing: false });
+            const values = new Map<number, [number, number, number]>();
+            for (const frame of picked) {
+              const v = valuesAt(current.plan.animation, current.editingModel, pathTarget, frame);
+              values.set(frame, [v['location.x'], v['location.y'], v['location.z']]);
+            }
+            pointGesture.current = { base: current.plan, model: current.editingModel, target: pathTarget, values };
+            current.beginGesture();
+            return;
+          }
           // Auto Key records any move; a piece whose flight path is open is always keyed
           if ((!useKeyframePlayback.getState().autoKey && !pathPiece(current)) || !current.selection.ids.length) return;
           useKeyframePlayback.getState().set({ playing: false });
@@ -425,6 +458,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       } else {
         if (readoutRef.current) readoutRef.current.hidden = true;
         keyGesture.current = null;
+        pointGesture.current = null;
         // A spot drag is a single undoable commit. No replanning during motion.
         if (spotDrag.current?.pending) {
           const { ref, pending } = spotDrag.current;
@@ -463,6 +497,19 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       const state = useStudio.getState();
       const original = state.gesture;
       if (!draggingGizmo.current) return;
+      const many = pointGesture.current;
+      if (many && state.timelineEditor === 'timeline') {
+        const move = proxy.position.clone().sub(origin.current);
+        const by = [move.x, move.y, move.z].map((n) => Math.round(n * 10) / 10);
+        let next = animationOf(many.base.animation);
+        for (const [frame, at] of many.values) {
+          next = insertKeys(next, frame, (['x', 'y', 'z'] as const).map((axis, i) => ({
+            model: many.model, target: many.target, channel: `location.${axis}` as const, value: Math.round((at[i] + by[i]) * 1000) / 1000,
+          })));
+        }
+        state.apply((p) => ({ ...p, animation: next }));
+        return;
+      }
       const keyed = keyGesture.current;
       if (keyed && state.timelineEditor === 'timeline') {
         const updates: KeyUpdate[] = [];
@@ -734,6 +781,10 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
         scene: useStudio.getState().plan.sceneSetup,
       });
     };
+    const frameGate = new FrameGate();
+    const redrawEvents = ['pointermove', 'pointerdown', 'pointerup', 'wheel', 'keydown'] as const;
+    for (const event of redrawEvents) window.addEventListener(event, frameGate.invalidate, { passive: true });
+    void studio.ready?.().then(frameGate.invalidate);
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
       const dt = Math.min(0.1, (now - last) / 1000);
@@ -947,7 +998,16 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
         heldShot = false;
         const renderFrame = viewportApi.scene?.prepareRender();
         const settings = useAppSettings.getState();
-        if (!pathMode.render(settings.viewportRenderer, settings.materials.palette, renderFrame)) studio.render(renderFrame);
+        const camera = studio.camera;
+        const redraw = frameGate.shouldRender(now, [
+          useStudio.getState(), settings, useSceneView.getState(), usePlayback.getState(),
+          useKeyframePlayback.getState(), useMechanismLab.getState(), usePlacing.getState(),
+          useFlightEdit.getState(), useSuggest.getState(),
+          studio.bricks.structureVersion, studio.bricks.poseVersion, studio.bricks.appearanceVersion, studio.materialVersion,
+          ...camera.position.toArray(), ...camera.quaternion.toArray(), ...camera.projectionMatrix.elements,
+          renderFrame?.x, renderFrame?.y, renderFrame?.width, renderFrame?.height,
+        ], settings.viewportRenderer !== 'live');
+        if (redraw && !pathMode.render(settings.viewportRenderer, settings.materials.palette, renderFrame)) studio.render(renderFrame);
       }
     };
     raf = requestAnimationFrame(loop);
@@ -959,6 +1019,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     ro.observe(wrapRef.current!);
     return () => {
       cancelAnimationFrame(raf);
+      for (const event of redrawEvents) window.removeEventListener(event, frameGate.invalidate);
       controls.removeEventListener('start', onGrab);
       controls.removeEventListener('end', onKeyView);
       ro.disconnect();
@@ -1080,6 +1141,21 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       transform.detach();
       return;
     }
+    const picked = useFlightEdit.getState().points;
+    const pickedAt = pathOpen && timelineEditor === 'timeline' && picked.size > 1
+      ? pathKeysRef.current.filter((k) => picked.has(k.frame)) : [];
+    if (pickedAt.length > 1) {
+      // several path points picked: one gizmo at their centre moves them all
+      proxy.position.copy(pickedAt.reduce((sum, k) => sum.add(k.at), new THREE.Vector3()).multiplyScalar(1 / pickedAt.length));
+      proxy.quaternion.identity();
+      proxy.scale.setScalar(1);
+      transform.setMode('translate');
+      transform.setSpace('world');
+      transform.showE = false; transform.showXYZE = false;
+      transform.enabled = true;
+      transform.attach(proxy);
+      return;
+    }
     const bounds = new THREE.Box3();
     if (timelineEditor === 'timeline') {
       const at = makeKeyframePose(model.view.instances, shown, plan.animation, editingModel, timeline)(keyframeAtRest);
@@ -1140,17 +1216,21 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     transform.enabled = true;
     transform.attach(proxy);
   }, [selection, editingModel, model.view, model.assembly, gizmoEnabled, gizmoMode, gizmoSpace,
-    smartJointsEnabled, mode, spotSel, plan, timeline, timelineEditor, autoKey, keyframeAtRest, sceneSelected, laidOut]);
+    smartJointsEnabled, mode, spotSel, plan, timeline, timelineEditor, autoKey, keyframeAtRest, sceneSelected, laidOut, pickedPoints]);
 
   // The open flight path (Timeline view, one baked piece selected): line, keyframe dots, and
   // red where it goes through a piece that is already built. The check runs once edits settle.
   const pathId = mode === 'edit' && timelineEditor === 'timeline' && selection.model === editingModel && selection.ids.length === 1 &&
-    isBakedFlight(plan.animation, editingModel, selection.ids[0]) ? selection.ids[0] : null;
+    openFlightPath(plan.animation, editingModel, selection.ids[0]) ? selection.ids[0] : null;
   const drawnPath = useMemo(() => {
-    const inst = pathId ? model.view.instances.find((i) => i.key === pathId) : undefined;
-    if (!pathId || !inst) return null;
+    if (!pathId) return null;
     const shown = instancePlacements(plan, editingModel, model.assembly);
-    const path = flightPath(plan.animation, editingModel, inst, placedMatrix(inst, shown));
+    const group = groupPathOf(plan.animation, editingModel, pathId);
+    const inst = model.view.instances.find((i) => i.key === (group ? group.rep : pathId));
+    if (!inst) return null;
+    const path = group
+      ? groupFlightPath(plan.animation, editingModel, group, inst, placedMatrix(inst, shown))
+      : flightPath(plan.animation, editingModel, inst, placedMatrix(inst, shown));
     return path ? { path, shown } : null;
   }, [pathId, plan, editingModel, model.view, model.assembly]);
   const pathHitFrames = useFlightEdit((s) => s.hits);
@@ -1158,8 +1238,17 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
     const overlay = pathRef.current;
     if (!overlay) return;
     if (!drawnPath) { overlay.hide(); return; }
-    overlay.set(drawnPath.path, pathHitFrames, keyframeAtRest);
-  }, [drawnPath, pathHitFrames, keyframeAtRest]);
+    overlay.set(drawnPath.path, pathHitFrames, keyframeAtRest, pickedPoints);
+  }, [drawnPath, pathHitFrames, keyframeAtRest, pickedPoints]);
+  pathKeysRef.current = drawnPath?.path.keys ?? [];
+  // picking belongs to one open path: another piece, or none, starts over
+  useEffect(() => { useFlightEdit.getState().set({ points: new Set() }); }, [pathId]);
+  // points that no longer exist (deleted, or the path changed) drop out of the pick
+  useEffect(() => {
+    const have = new Set(drawnPath?.path.keys.map((k) => k.frame));
+    const now = useFlightEdit.getState().points;
+    if ([...now].some((f) => !have.has(f))) useFlightEdit.getState().set({ points: new Set([...now].filter((f) => have.has(f))) });
+  }, [drawnPath]);
   useEffect(() => {
     useFlightEdit.getState().set({ hits: new Set() });
     if (!drawnPath || !pathId) return;
@@ -1171,7 +1260,7 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
       // about 120 checks along the path; a hit marks the stretch up to the checks either side
       const every = Math.max(1, Math.ceil(path.samples.length / 120));
       const checked = path.samples.filter((_, k) => k % every === 0 || k === path.samples.length - 1).map((p) => p.frame);
-      const hit = pathHits(instances, pose, bases, metricsOf, pathId, checked);
+      const hit = pathHits(instances, pose, bases, metricsOf, groupPathOf(plan.animation, editingModel, pathId)?.rep ?? pathId, checked);
       const red = new Set<number>();
       checked.forEach((f, k) => {
         if (!hit.has(f)) return;
@@ -2061,7 +2150,12 @@ export function Viewport({ model, timeline = null, showSpots = true }: {
             const keyFrame = pathRef.current.pickKey(ray);
             if (keyFrame !== null) {
               useKeyframePlayback.getState().set({ playing: false, frame: keyFrame });
-              useFlightEdit.getState().set({ select: pathKeyRefs(st().plan.animation, st().editingModel, pathId, keyFrame) });
+              // shift-click adds a point to the pick (or takes it out); a plain click picks just that one
+              const was = useFlightEdit.getState().points;
+              const points = new Set(e.shiftKey ? was : []);
+              if (e.shiftKey && was.has(keyFrame)) points.delete(keyFrame); else points.add(keyFrame);
+              const model = st().editingModel, anim = st().plan.animation;
+              useFlightEdit.getState().set({ points, select: [...points].flatMap((f) => pathKeyRefs(anim, model, pathId, f)) });
               return;
             }
             // on the line itself: leave the selection alone (a double-click there adds a point)

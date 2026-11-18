@@ -15,6 +15,31 @@ const CREASE = Math.PI / 6;
 /** Fillet width of a rounded edge, LDU (a real brick's is about 0.2 mm, 0.5 LDU). */
 const BEVEL_WIDTH = 0.45;
 
+/** Share identical GPU vertices without changing a triangle, normal or UV seam.
+ * LDraw is triangle soup; repeated instances otherwise run the vertex shader
+ * again for every corner, in every beauty/depth/transmission/shadow pass. */
+function indexVertices(source: THREE.BufferGeometry): THREE.BufferGeometry {
+  const names = Object.keys(source.attributes);
+  const attributes = names.map(name => source.getAttribute(name) as THREE.BufferAttribute);
+  const unique = new Map<string, number>(), representatives: number[] = [], indices: number[] = [];
+  for (let i = 0; i < attributes[0].count; i++) {
+    let key = '';
+    for (const a of attributes) for (let c = 0; c < a.itemSize; c++) key += `${a.getComponent(i, c)},`;
+    let index = unique.get(key);
+    if (index === undefined) { index = representatives.length; unique.set(key, index); representatives.push(i); }
+    indices.push(index);
+  }
+  for (let n = 0; n < names.length; n++) {
+    const a = attributes[n], values = new Float32Array(representatives.length * a.itemSize);
+    representatives.forEach((original, i) => {
+      for (let c = 0; c < a.itemSize; c++) values[i * a.itemSize + c] = a.getComponent(original, c);
+    });
+    source.setAttribute(names[n], new THREE.BufferAttribute(values, a.itemSize, a.normalized));
+  }
+  source.setIndex(indices);
+  return source;
+}
+
 /** Render options for part geometry. */
 export type GeometryOptions = {
   /** rounded sharp outside edges (see bevel.ts); single-sided, BFC-certified faces only */
@@ -49,7 +74,7 @@ function toGeometry(pts: number[] | undefined, bevel = false): THREE.BufferGeome
     generated[i * 3 + 2] = size.z > 1e-8 ? (position.getZ(i) - box.min.z) / size.z : 0;
   }
   creased.setAttribute('bmGenerated', new THREE.BufferAttribute(generated, 3));
-  return creased;
+  return indexVertices(creased);
 }
 
 /** Builds three.js geometry in LDraw part space (LDU, -Y up). */

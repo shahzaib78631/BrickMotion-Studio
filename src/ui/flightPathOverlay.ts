@@ -5,6 +5,7 @@ const PATH = 0x3aa7ff;
 const HIT = 0xff3b30;
 const KEY = 0xffffff;
 const CURRENT = 0xffb020;
+const PICKED = 0x2dd4bf;
 const DOT = 0.16;
 
 /**
@@ -19,6 +20,7 @@ export class FlightPathOverlay {
   private readonly hit: THREE.LineSegments;
   private readonly dotGeometry = new THREE.SphereGeometry(DOT, 14, 10);
   private readonly dotMaterial = new THREE.MeshBasicMaterial({ color: KEY, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95 });
+  private readonly pickedMaterial = new THREE.MeshBasicMaterial({ color: PICKED, depthTest: false, depthWrite: false, transparent: true });
   private readonly currentMaterial = new THREE.MeshBasicMaterial({ color: CURRENT, depthTest: false, depthWrite: false, transparent: true });
   private dots: THREE.Mesh[] = [];
   private path: FlightPath | null = null;
@@ -37,16 +39,17 @@ export class FlightPathOverlay {
   }
 
   /** Draws `path`; `hits` are frames inside another piece, `frame` the playhead. */
-  set(path: FlightPath, hits: ReadonlySet<number>, frame: number): void {
+  set(path: FlightPath, hits: ReadonlySet<number>, frame: number, picked: ReadonlySet<number> = new Set()): void {
     this.path = path;
     this.line.geometry.dispose();
     this.line.geometry = new THREE.BufferGeometry().setFromPoints(path.samples.map((s) => s.at));
     this.setHits(hits);
     for (const dot of this.dots) this.group.remove(dot);
     this.dots = path.keys.map((key) => {
-      const dot = new THREE.Mesh(this.dotGeometry, key.frame === frame ? this.currentMaterial : this.dotMaterial);
+      const isPicked = picked.has(key.frame);
+      const dot = new THREE.Mesh(this.dotGeometry, isPicked ? this.pickedMaterial : key.frame === frame ? this.currentMaterial : this.dotMaterial);
       dot.position.copy(key.at);
-      if (key.frame === frame) dot.scale.setScalar(1.5);
+      if (key.frame === frame || isPicked) dot.scale.setScalar(1.5);
       dot.renderOrder = 13;
       dot.userData.frame = key.frame;
       this.group.add(dot);
@@ -105,5 +108,6 @@ export class FlightPathOverlay {
     this.dotGeometry.dispose();
     this.dotMaterial.dispose();
     this.currentMaterial.dispose();
+    this.pickedMaterial.dispose();
   }
 }

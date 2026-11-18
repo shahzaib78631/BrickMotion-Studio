@@ -1,11 +1,13 @@
-import { applyFloorShifts, applyFloorTurns, applyAssemblySpotTransform } from '../anim/timeline';
+import { applyFloorShifts, applyFloorTurns, applyAssemblySpotTransform, applyStagingTurn } from '../anim/timeline';
 import { applyMotionStyle, cleanStyle, mergeStyles } from '../anim/motionStyle';
 import type { Unit } from '../anim/timelineData';
 import { findItem } from '../plan/ops';
 import { isSub, type MotionStyle } from '../plan/types';
-import { flightsByKey, floorShiftsByKey, floorTurnsByKey, resetFloorShifts } from '../plan/pieceActions';
+import { flightsByKey, floorShiftsByKey, floorTurnsByKey, resetFloorShifts, stagingTurnOf } from '../plan/pieceActions';
 import { applyPauses } from '../anim/pauses';
 import { applyCustomFlights } from '../anim/customFlight';
+import { applySubmodelKeyframes } from '../anim/submodelKeyframes';
+import { assemble } from '../model/assemble';
 import type { Timeline } from '../anim/timeline';
 import { decodeTimeline, type EncodedTimeline } from '../anim/timelineCodec';
 import type { PlanRequest } from '../anim/timeline.worker';
@@ -34,7 +36,7 @@ function baseOf(p: Plan): { plan: Plan; key: string } {
     let plan = resetFloorShifts(p);
     // Editor-only viewing state and selection groups never invalidate a timeline.
     // Pause blocks re-time the finished timeline (applyPauses), like motion styles.
-    const { showModelAtSpot: _view, sceneSetup: _scene, motion: _motion, pauses: _pauses, ...withoutView } = plan;
+    const { showModelAtSpot: _view, sceneSetup: _scene, motion: _motion, pauses: _pauses, stagingTurns: _staging, ...withoutView } = plan;
     plan = withoutView as Plan;
     // "Loose pieces follow on" (the default): the main spot is applied to the planned
     // timeline as one rigid transform, so it is not part of the planning cache key —
@@ -142,7 +144,10 @@ export function planTimeline(plan: Plan, model: string, opts: AnimOptions, lane:
   const base = baseOf(plan).plan;
   const planned = planBase(base, model, opts, lane, onProgress);
   if (!withShifts) return planned;
-  const styled = planned.then((tl) => applyMotionStyle(tl, motionResolver(plan, model, plan.motion)));
+  const motioned = planned.then((tl) => applyMotionStyle(tl, motionResolver(plan, model, plan.motion)));
+  // the whole staging area turned about the model, before any one piece is turned or dragged
+  const staging = stagingTurnOf(plan, model);
+  const styled = staging ? motioned.then((tl) => applyStagingTurn(tl, staging)) : motioned;
   // a turn is applied first (about the middle of where the piece waits), then the drag offset
   const turns = floorTurnsByKey(plan, model);
   const turned = turns.size ? styled.then((tl) => applyFloorTurns(tl, turns)) : styled;
@@ -158,6 +163,8 @@ export function planTimeline(plan: Plan, model: string, opts: AnimOptions, lane:
   }
   // last: a flight is kept in its seat's own frame, so the main spot turns it too
   if (flights.size) res = res.then((tl) => applyCustomFlights(tl, flights));
+  res = res.then(tl => applySubmodelKeyframes(tl, plan.animation, model,
+    name => assemble(scopedPlan(plan, name), metricsOf, getColors())));
   // very last: a pause is a pure clock change of the finished timeline
   // (the editor adds them itself, so a pause edit never waits for the planner)
   const pauses = withPauses ? plan.pauses?.[model] : undefined;

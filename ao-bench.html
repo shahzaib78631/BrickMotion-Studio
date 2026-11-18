@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>BrickMotion AO comparison</title>
+<style>body{background:#20232a;color:#eee;font:15px system-ui;margin:24px}button,input,select{font:inherit;margin:8px;padding:6px}canvas{max-width:100%;height:auto}#shots{display:flex;gap:12px;flex-wrap:wrap}figure{margin:0;max-width:48%}figure img{width:100%}pre{white-space:pre-wrap}a{color:#9cf}</style></head>
+<body><h1>GTAO / CORTAO experiment</h1><p>Same model, camera, materials and resolution. CORTAO uses the reference 16-ray lookup table, 16 depth samples, fixed noise and spatial filtering. GTAO uses the app's existing settings.</p>
+<input id="file" type="file" accept=".io,.ldr,.mpd"><button id="compare">Compare</button>
+<label>Projection <select id="projection"><option value="perspective">Perspective</option><option value="ortho">Orthographic</option></select></label>
+<button id="orbit">Orbit comparison</button><button id="moving">Moving parts comparison</button><p id="status">Loading…</p><canvas id="canvas"></canvas><div id="shots"></div><pre id="results"></pre>
+<script type="module" src="/src/dev/aoBench.ts"></script></body></html>

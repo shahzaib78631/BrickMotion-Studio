@@ -1,4 +1,4 @@
-import { clamp, clamp01 } from './easing';
+import { clamp, clamp01, minimumJerk } from './easing';
 import type { MotionEase, MotionStyle } from '../plan/types';
 import type { Timeline, Track } from './timeline';
 import type { Unit } from './timelineData';
@@ -20,7 +20,7 @@ export const MOTION_LIMITS = {
 } as const;
 
 const EASE: Record<MotionEase, (u: number) => number> = {
-  smooth: (u) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2),
+  smooth: minimumJerk,
   gentle: (u) => -(Math.cos(Math.PI * u) - 1) / 2,
   soft: (u) => (u < 0.5 ? 16 * u ** 5 : 1 - Math.pow(-2 * u + 2, 5) / 2),
   linear: (u) => u,

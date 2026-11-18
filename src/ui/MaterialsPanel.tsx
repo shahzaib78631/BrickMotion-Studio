@@ -280,7 +280,22 @@ export function MaterialsPanel({ model }: { model?: ModelState }) {
             swatch={<span className="bm-mat-swatch" style={{ background: EDGE_SWATCH(false) }} />} />
         </div>
         <label className="nx-check"><input type="checkbox" checked={s.edgeLines} onChange={(e) => s.set({ edgeLines: e.target.checked })} /> Edge lines</label>
+        <label className="nx-check"><input type="checkbox" aria-label="Match brick colors" checked={m.edgeMatch ?? false} disabled={!s.edgeLines}
+          onChange={(e) => setMaterials({ edgeMatch: e.target.checked })} /> Match brick colors</label>
+        {m.edgeMatch ? <label className="bm-mat-slider">Lightness <span>{(m.edgeLightness ?? -0.35) === 0 ? 'Match' : `${Math.round(Math.abs(m.edgeLightness ?? -0.35) * 100)}% ${(m.edgeLightness ?? -0.35) < 0 ? 'darker' : 'lighter'}`}</span>
+          <input type="range" aria-label="Edge line lightness" min={-1} max={1} step={0.01} disabled={!s.edgeLines} value={m.edgeLightness ?? -0.35}
+            onChange={(e) => setMaterials({ edgeLightness: Number(e.target.value) })} />
+        </label> : <div className="bm-mat-row">
+          <label>Line color <input type="color" aria-label="Edge line color" disabled={!s.edgeLines} value={m.edgeColor ?? '#333333'}
+            onChange={(e) => setMaterials({ edgeColor: e.target.value.toLowerCase() })} /></label>
+          <button type="button" disabled={!s.edgeLines || !m.edgeColor} onClick={() => setMaterials({ edgeColor: null })}>Part defaults</button>
+        </div>}
+        <label className="bm-mat-slider">Line opacity <span>{Math.round((m.edgeOpacity ?? 0.3) * 100)}%</span>
+          <input type="range" aria-label="Edge line opacity" min={0} max={1} step={0.01} disabled={!s.edgeLines} value={m.edgeOpacity ?? 0.3}
+            onChange={(e) => setMaterials({ edgeOpacity: Number(e.target.value) })} />
+        </label>
         <span className="nx-hint">Rounded edges are a lighting effect, not new geometry. Edge lines draw the thin LDraw outlines; render scenes start with them off.</span>
+        <span className="nx-hint">Match uses each brick's color; move Lightness left for darker lines or right for lighter lines. Transparent parts keep softer lines. Lines appear in Current viewport and live captures.</span>
       </Section>
 
       <Section title="Glowing parts" value={m.glow.colors.length ? `${m.glow.colors.length} colour${m.glow.colors.length === 1 ? '' : 's'}` : 'None'}>
@@ -309,7 +324,7 @@ export function MaterialsPanel({ model }: { model?: ModelState }) {
               swatch={<span className="bm-mat-swatch" style={{ background: GLASS_SWATCH[g.id] }} />} />
           ))}
         </div>
-        <span className="nx-hint">Clear glass bends and tints the light passing through transparent parts, like real windshields and bottles. The current viewport approximates thin transparent walls. Studio path traces internal surfaces for more accurate glass. Soft softens reflections; Milky gives a frosted finish.</span>
+        <span className="nx-hint">Clear glass bends and tints the light passing through transparent parts, like real windshields and bottles. The viewport estimates wall thickness from each part’s geometry. Path tracing follows internal surfaces and stacked glass more accurately. Soft softens reflections; Milky gives a frosted finish.</span>
       </Section>
 
       <Section title="Camera lens" value={LENS_BLURS.find((b) => b.id === m.lens.blur)?.label}>
@@ -327,6 +342,14 @@ export function MaterialsPanel({ model }: { model?: ModelState }) {
       </Section>
 
       <Section title="Ambient occlusion" value={!m.ao.enabled ? 'Off' : m.ao.strength === null && m.ao.radius === null ? 'Scene' : 'Custom'}>
+        <label className="bm-mat-row">Method
+          <select aria-label="Ambient occlusion method" value={m.ao.algorithm ?? 'gtao'}
+            onChange={e => setAO({ algorithm: e.target.value === 'cortao' ? 'cortao' : 'gtao' })}>
+            <option value="gtao">GTAO</option>
+            <option value="cortao">CORTAO (reference)</option>
+          </select>
+        </label>
+        {m.ao.algorithm === 'cortao' && <span className="nx-hint">Circular-occluder AO with the reference spatial filter. Fine grain can remain while the camera or parts move.</span>}
         <div className="bm-mat-row">
           <label className="nx-check"><input type="checkbox" checked={m.ao.enabled} onChange={(e) => setAO({ enabled: e.target.checked })} /> On</label>
           <button type="button" className="nx-btn" disabled={m.ao.strength === null && m.ao.radius === null} onClick={() => setAO({ strength: null, radius: null })}>Use scene values</button>

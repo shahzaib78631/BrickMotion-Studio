@@ -3,3 +3,10 @@ export const clamp01 = (v: number) => clamp(v, 0, 1);
 export const lerp = (a: number, b: number, u: number) => a + (b - a) * u;
 export const easeInOutCubic = (u: number) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
 export const easeOutCubic = (u: number) => 1 - Math.pow(1 - u, 3);
+
+/** Minimum integrated squared jerk for a rest-to-rest, fixed-duration phase.
+ * Position, velocity and acceleration are continuous, including at its midpoint. */
+export const minimumJerk = (u: number): number => {
+  const t = clamp01(u);
+  return t * t * t * (10 + t * (-15 + 6 * t));
+};

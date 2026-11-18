@@ -97,10 +97,96 @@ export function deletePathKey(animation: KeyframeAnimation, model: string, targe
   return deleteKeys(animation, pathKeyRefs(animation, model, target, frame));
 }
 
+/**
+ * A submodel's flight path. Its parts are baked one by one; the submodel's own track (its
+ * location keys) is a shared offset laid over all of them, so one path point moves the whole
+ * submodel. The path is drawn through one representative baked part (the one with the most
+ * location keys) plus that offset.
+ */
+export type GroupPath = { group: string; leaves: string[]; rep: string };
+
+/** The baked parts inside `group`, or null when `group` is a piece itself or has none. */
+export function groupPathOf(animation: KeyframeAnimation | undefined, model: string, group: string): GroupPath | null {
+  if (!animation || isLeafTrack(animation, model, group)) return null;
+  const leaves = animation.tracks
+    .filter((t) => t.model === model && t.source === 'baked-flight' && t.target.startsWith(`${group}/`))
+    .map((t) => t.target);
+  if (!leaves.length) return null;
+  let rep = leaves[0], most = -1;
+  for (const leaf of leaves) {
+    const n = locationFrames(animation, model, leaf).length;
+    if (n > most) { most = n; rep = leaf; }
+  }
+  return { group, leaves, rep };
+}
+const isLeafTrack = (a: KeyframeAnimation, model: string, key: string) =>
+  a.tracks.some((t) => t.model === model && t.target === key && t.source === 'baked-flight');
+
+/** Whether the submodel's offset track has path points (the path is open to edit). */
+export const groupPathOpen = (animation: KeyframeAnimation | undefined, model: string, group: string): boolean =>
+  !!groupPathOf(animation, model, group) && locationFrames(animation, model, group).length > 0;
+
+/** Opens a submodel's path: an offset key (zero, so nothing moves yet) at every point of the representative part's path. */
+export function seedGroupPath(animation: KeyframeAnimation, model: string, group: string): KeyframeAnimation {
+  const path = groupPathOf(animation, model, group);
+  if (!path) return animation;
+  const frames = locationFrames(animation, model, path.rep).filter((f) => visibleAt(animation, model, path.rep, f));
+  return fullPathKeys(animation, model, group, frames);
+}
+
+/**
+ * The drawn path of a submodel: its representative part's path with the shared offset added.
+ * Path points are the offset's own keys, which are the ones an edit moves.
+ */
+export function groupFlightPath(animation: KeyframeAnimation | undefined, model: string, path: GroupPath, rep: Instance, base: THREE.Matrix4): FlightPath | null {
+  const own = locationFrames(animation, model, path.group).filter((f) => visibleAt(animation, model, path.rep, f));
+  if (!own.length) return null;
+  const pivot = displayPivot(rep, base);
+  const at = (f: number) => centreAt(animation, model, path.rep, pivot, f).add(offsetAt(animation, model, path.group, f));
+  const frames = locationFrames(animation, model, path.rep).filter((f) => visibleAt(animation, model, path.rep, f));
+  const all = [...new Set([...frames, ...own])].sort((a, b) => a - b);
+  const first = all[0], last = all[all.length - 1];
+  const step = Math.max(1, Math.ceil((last - first) / MAX_SAMPLES));
+  const samples: PathPoint[] = [];
+  for (let f = first; f <= last; f += step) if (visibleAt(animation, model, path.rep, f)) samples.push({ frame: f, at: at(f) });
+  if (samples[samples.length - 1]?.frame !== last) samples.push({ frame: last, at: at(last) });
+  return { target: path.group, keys: own.map((frame) => ({ frame, at: at(frame) })), samples };
+}
+const offsetAt = (animation: KeyframeAnimation | undefined, model: string, target: string, frame: number) => {
+  const v = valuesAt(animation, model, target, frame);
+  return new THREE.Vector3(v['location.x'], v['location.y'], v['location.z']);
+};
+
+/**
+ * Bakes the submodel's shared offset into each of its parts' own location keys and drops the
+ * offset, so each part's flight alone carries the edited path (what "Use in Build" reads).
+ */
+export function foldGroupPath(animation: KeyframeAnimation, model: string, group: string): KeyframeAnimation {
+  const path = groupPathOf(animation, model, group);
+  if (!path) return animation;
+  const groupFrames = locationFrames(animation, model, group);
+  if (!groupFrames.length) return animation;
+  let next = animation;
+  for (const leaf of path.leaves) {
+    const frames = [...new Set([...locationFrames(animation, model, leaf), ...groupFrames])];
+    for (const frame of frames) {
+      const own = valuesAt(animation, model, leaf, frame), off = offsetAt(animation, model, group, frame);
+      next = insertKeys(next, frame, LOCATION.map((channel, i) => ({
+        model, target: leaf, channel, value: Math.round((own[channel] + off.getComponent(i)) * 1000) / 1000,
+      })));
+    }
+  }
+  const tracks = next.tracks.filter((t) => !(t.model === model && t.target === group && t.source !== 'baked-flight'));
+  return { ...next, tracks };
+}
+
 /** Hands a piece back to the planner: its baked flight keys (and any baked leaves inside it) go. */
 export function unbakeFlight(animation: KeyframeAnimation, model: string, target: string): KeyframeAnimation {
-  const tracks = animation.tracks.filter((t) => !(t.model === model && t.source === 'baked-flight' &&
-    (t.target === target || t.target.startsWith(`${target}/`))));
+  const tracks = animation.tracks.filter((t) => !(t.model === model && (
+    (t.source === 'baked-flight' && (t.target === target || t.target.startsWith(`${target}/`))) ||
+    // a submodel's shared path offset goes with its parts' flights
+    (t.target === target && t.source !== 'baked-flight' && groupPathOf(animation, model, target) !== null && onlyLocation(t))
+  )));
   return tracks.length === animation.tracks.length ? animation : { ...animation, tracks };
 }
 
@@ -145,3 +231,6 @@ export function pathHits(
   }
   return hits;
 }
+
+const onlyLocation = (t: { channels: Partial<Record<AnimationChannel, unknown[]>> }) =>
+  Object.entries(t.channels).every(([ch, keys]) => LOCATION.includes(ch as AnimationChannel) || !keys?.length);

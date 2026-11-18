@@ -101,6 +101,28 @@ const PIECE_MIN_FLIGHT = 0.35;
 export const SEQUENTIAL_GAP = 0.05;
 
 /** Decides how fast pieces arrive so the build fits the target length. */
+/** The settings that decide how long the video is. */
+export type LengthSettings = { targetSeconds: number; introSeconds: number | null; buildSeconds: number | null; outroSeconds: number | null; heroOrbit: boolean };
+const r1 = (v: number) => Math.round(v * 10) / 10;
+const introOf = (s: LengthSettings) => clamp(s.introSeconds ?? INTRO, 0.2, 120);
+const outroOf = (s: LengthSettings) => clamp(s.outroSeconds ?? (s.heroOrbit ? 3.0 : 0.5), 0.2, 120);
+
+/**
+ * Setting the video Length. With a custom Build (set by dragging a clip edge), the Build
+ * is refitted so the video comes out at that length; otherwise Length alone decides it.
+ */
+export function lengthPatch(s: LengthSettings, seconds: number): Partial<LengthSettings> {
+  if (s.buildSeconds === null) return { targetSeconds: seconds };
+  return { targetSeconds: seconds, buildSeconds: r1(clamp(seconds - introOf(s) - outroOf(s), 1, 1800)) };
+}
+
+/** Setting one clip's duration. With a custom Build, Length follows the new total. */
+export function clipPatch(s: LengthSettings, key: 'introSeconds' | 'buildSeconds' | 'outroSeconds', value: number): Partial<LengthSettings> {
+  const next = { ...s, [key]: value };
+  if (next.buildSeconds === null) return { [key]: value };
+  return { [key]: value, targetSeconds: r1(introOf(next) + next.buildSeconds + outroOf(next)) };
+}
+
 export function choosePacing(units: number, steps: number, opts: AnimOptions): Pacing {
   const intro = clamp(opts.introSeconds ?? INTRO, 0.2, 120);
   const outro = clamp(opts.outroSeconds ?? (opts.heroOrbit ? 3.0 : 0.5), 0.2, 120);

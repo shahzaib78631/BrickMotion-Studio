@@ -15,7 +15,8 @@ import { factorAffine, type AffineFactors } from './affineTransform';
 import type { Box } from '../ldraw/flatten';
 import { moveAssembly, placementMatrix, transformBox, unionBox, type ANode, type Assembly, type Instance, type Metrics } from '../model/assemble';
 import type { AssemblySpot, Plan } from '../plan/types';
-import { clamp01, easeInOutCubic, lerp } from './easing';
+import { clamp01, lerp } from './easing';
+import { canonicalTranslationInterval } from './translationInterval';
 import { easeOf, inverse, landingWarp } from './motionStyle';
 import { hash01, layoutFloor, STYLE_AREA, type FloorItem, type LayoutStyle, type Region } from './floorLayout';
 import { createFrameStagingSpace } from './cameraFrameLayout';
@@ -349,7 +350,7 @@ export const DEFAULT_ACCESS_WORK = 1500;
  * model's own (a moved main spot with "loose pieces follow" off keeps the automatic
  * floor where it was). Null = lay out around the model itself, as always.
  */
-export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProgress?: (p: PlanningProgress) => void, layoutBox: Box | null = null, workBaySpots: Record<string, AssemblySpot> = {}): Timeline {
+export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions, onProgress?: (p: PlanningProgress) => void, layoutBox: Box | null = null, workBaySpots: Record<string, AssemblySpot> = {}, collisionMemo?: PlanMemo): Timeline {
   if (opts.planner === 'standard-motion') return buildStandardMotionTimeline(asm, metrics, opts, onProgress, layoutBox, workBaySpots);
   if (opts.planner === 'standard-motion-v4') return buildStandardMotionV4Timeline(asm, metrics, opts, onProgress, layoutBox, workBaySpots);
   if (opts.planner === 'assembly-artifact') {
@@ -403,7 +404,7 @@ export function buildTimeline(asm: Assembly, metrics: Metrics, opts: AnimOptions
   let retryStart: number | undefined;
   let retryWork = 0;
   // mesh checks depend only on final poses, so every pass (each reorder, the fallback) shares them
-  const memo: PlanMemo = { insertion: new Map(), translation: new Map() };
+  const memo: PlanMemo = collisionMemo ?? { insertion: new Map(), translation: new Map() };
   const work = Number.isFinite(opts.accessSearchWork) ? Math.max(0, Math.min(20000, opts.accessSearchWork!)) : DEFAULT_ACCESS_WORK;
   const milliseconds = opts.accessSearchMilliseconds == null ? Infinity : Number.isFinite(opts.accessSearchMilliseconds) ? Math.max(0, Math.min(10000, opts.accessSearchMilliseconds)) : 0;
   try {
@@ -1649,18 +1650,22 @@ function endpointPair(from: THREE.Matrix4, to: THREE.Matrix4): Decomposed {
 }
 function endpoints(m: Move): Decomposed { return endpointPair(m.from, m.to); }
 
+/** The shared monotone playback clock. Collision segment boundaries must use
+ * this same clock, including authored holds/landing warps and easing. */
+export function flightClock(m: Move, u: number): number {
+  u = clamp01((u - m.hold) / (1 - m.hold));
+  const lateral = !m.translationPath && !m.posePath?.length && !m.rigidDeltas?.length && m.entry.some(v => v !== 0);
+  return m.style ? landingWarp(u, m.style, lateral ? SIDE_INSERT_START : LOWER_START) : u;
+}
+
 export function flightPose(m: Move, u: number, out: THREE.Matrix4): THREE.Matrix4 {
   if (m.stationary) {
     out.copy(m.from);
     if (m.rel) out.multiply(m.rel);
     return out;
   }
-  u = clamp01((u - m.hold) / (1 - m.hold));
+  u = flightClock(m, u);
   const ease = easeOf(m.style?.ease);
-  if (m.style) {
-    const lateral = !m.translationPath && !m.posePath?.length && !m.rigidDeltas?.length && m.entry.some((v) => v !== 0);
-    u = landingWarp(u, m.style, lateral ? SIDE_INSERT_START : LOWER_START);
-  }
   if (u <= 0 || u >= 1) {
     out.copy(u <= 0 ? m.from : m.to);
     if (m.rel) out.multiply(m.rel);
@@ -1782,7 +1787,10 @@ function memberRadius(body: Box, move: Move): number {
 
 function intervalRotationPadding(move: Move, body: Box, local0: number, local1: number): number {
   const end = move.entry.some((v) => v !== 0) ? SIDE_CRUISE_END : LOWER_START;
-  const progress = (u: number) => easeInOutCubic(clamp01((u - LIFT_END) / (end - LIFT_END)));
+  const progress = (u: number) => {
+    const at = move.style ? landingWarp(u, move.style, move.entry.some(v => v !== 0) ? SIDE_INSERT_START : LOWER_START) : u;
+    return easeOf(move.style?.ease)(clamp01((at - LIFT_END) / (end - LIFT_END)));
+  };
   const d = endpoints(move);
   return rotationPadding(memberRadius(body, move), d.q0.angleTo(d.q1) * Math.abs(progress(local1) - progress(local0)));
 }
@@ -1824,8 +1832,8 @@ function verifiedInsertion(member: Member, block: RestingBlock, way: Way, metric
   // the same way gives the same answer: reuse it for the whole plan.
   const entryLength = Math.hypot(...member.move.entry) || Infinity;
   const far = entryLength >= sweepReach(piece.box, block.box, way) + 1.5;
-  const id = memo && [member.key, block.key, holder ? 1 : 0, way.map((v) => v.toFixed(4)).join(','), far ? 'far' : entryLength.toFixed(3),
-    ...world.elements.map((v) => v.toFixed(3)), ...block.pose.elements.map((v) => v.toFixed(3))].join('|');
+  const id = memo && [byKey.get(member.key)!.part, block.part, holder ? 1 : 0, way.join(','), far ? 'far' : entryLength,
+    translatedPairKey(world, block.pose)].join('|');
   const known = id ? memo!.get(id) : undefined;
   if (known !== undefined) return known;
   const result = sweepInsertion(member, block, way, byKey, holder, piece, neighbour, world, entryLength);
@@ -1845,12 +1853,41 @@ function sweepInsertion(member: Member, block: RestingBlock, way: Way, byKey: Ma
   return slopNudges(way).some((offset) => crossings(nudged(piece, offset), [neighbour], way, scratch, cap, distance, joint) <= cap);
 }
 
+/** Translation-invariant cache identity. Keep full precision, all linear
+ * components and the world axes: slop nudges and scale tolerances use them. */
+function translatedPairKey(moving: THREE.Matrix4, fixed: THREE.Matrix4, relative?: readonly number[]): string {
+  const a = moving.elements, b = fixed.elements;
+  return [a[0],a[1],a[2],a[4],a[5],a[6],a[8],a[9],a[10],
+    b[0],b[1],b[2],b[4],b[5],b[6],b[8],b[9],b[10],
+    ...(relative ?? [a[12]-b[12],a[13]-b[13],a[14]-b[14]])].join(',');
+}
+
+/** Certificates depend only on the portion where the two full part AABBs
+ * can interact. Different sky lanes often extend the same straight sweep in
+ * empty space. Canonicalise those extensions, preserving direction, world
+ * orientation, scale and the complete narrow-phase check on cache misses. */
+function translationSweepKeys(own: Box, other: Box, from: THREE.Matrix4, to: THREE.Matrix4, fixed: THREE.Matrix4): [string, string] {
+  const start = [12,13,14].map(k => from.elements[k] - fixed.elements[k]);
+  const end = [12,13,14].map(k => to.elements[k] - fixed.elements[k]);
+  const axes = [0,1,2].filter(k => start[k] !== end[k]);
+  let mode = 'raw';
+  if (axes.length === 1) {
+    const axis = axes[0];
+    mode = `axis-${axis}-${Math.sign(end[axis] - start[axis])}`;
+    const movingBounds = transformBox(own, from.clone().setPosition(0,0,0));
+    const fixedBounds = transformBox(other, fixed.clone().setPosition(0,0,0));
+    const interval = canonicalTranslationInterval(movingBounds, fixedBounds, axis, start[axis], end[axis]);
+    start[axis] = interval[0]; end[axis] = interval[1];
+  }
+  return [mode + '|' + translatedPairKey(from, fixed, start), translatedPairKey(to, fixed, end)];
+}
+
 /** Fail closed on missing meshes and orientation changes. */
 function verifiedTranslation(member: Member, block: RestingBlock, from: THREE.Matrix4, to: THREE.Matrix4, metrics: Metrics, byKey: Map<string, Instance>, memo?: Map<string, boolean>): boolean {
   const own = metrics(byKey.get(member.key)!.part), other = metrics(block.part);
   if (!own.mesh?.length || !other.mesh?.length || own.placeholder || other.placeholder) return false;
   if ([0,1,2,4,5,6,8,9,10].some((k) => Math.abs(from.elements[k] - to.elements[k]) > 1e-8)) return false;
-  const id = memo && [member.key, block.key, ...from.elements, ...to.elements, ...block.pose.elements].map((v) => (typeof v === 'number' ? v.toFixed(3) : v)).join('|');
+  const id = memo && [byKey.get(member.key)!.part, block.part, ...translationSweepKeys(own.full, other.full, from, to, block.pose)].join('|');
   const known = id ? memo!.get(id) : undefined;
   if (known !== undefined) return known;
   const clear = sweepTranslation(own, other, block, from, to);
@@ -1935,7 +1972,10 @@ function routeHitsResting(
   // The phase shortcut is therefore valid only for fixed orientation; rotating
   // flights always run the swept samples (including rigid submodel members).
   const rotates = members.some(({ move }) => turns(move));
-  if (!rotates && blockers.every(({ box }) => coarse.every((path) => !boxIntersects(box, path)))) return false;
+  if (!rotates) {
+    blockers = blockers.filter(({ box }) => coarse.some(path => boxIntersects(box, path)));
+    if (!blockers.length) return false;
+  }
   const times = [...new Set([
     0, 1, ...Array.from({ length: ROUTE_SAMPLES + 1 }, (_, n) => n / ROUTE_SAMPLES),
     ...members.flatMap(({ move }) => [move.hold, ...cuts.map((c) => move.hold + (1 - move.hold) * c)]),
@@ -1946,15 +1986,21 @@ function routeHitsResting(
     const u0 = times[n - 1], u1 = times[n];
     const left = unit.start + u0 * unit.dur, right = unit.start + u1 * unit.dur;
     const next = members.map(({ move, body }) => transformBox(body, flightPose(move, u1, new THREE.Matrix4())));
+    // These bounds depend on the moving member and time interval, never on
+    // the blocker. Compute them once rather than once per installed part.
+    const intervals = members.map(({ move, body }, k) => {
+      const local0 = clamp01((u0 - move.hold) / (1 - move.hold));
+      const local1 = clamp01((u1 - move.hold) / (1 - move.hold));
+      const pad = intervalRotationPadding(move, body, local0, local1);
+      const envelope = unionBox(previous[k], next[k]);
+      for (let axis = 0; axis < 3; axis++) { envelope.min[axis] -= pad; envelope.max[axis] += pad; }
+      return { local0, local1, pad, envelope };
+    });
     for (const block of blockers) {
       if (block.end <= left || block.start >= right) continue;
       for (let k = 0; k < next.length; k++) {
-        const { move, body } = members[k];
-        const local0 = clamp01((u0 - move.hold) / (1 - move.hold));
-        const local1 = clamp01((u1 - move.hold) / (1 - move.hold));
-        const pad = intervalRotationPadding(move, body, local0, local1);
-        const envelope = unionBox(previous[k], next[k]);
-        for (let axis = 0; axis < 3; axis++) { envelope.min[axis] -= pad; envelope.max[axis] += pad; }
+        const { move } = members[k];
+        const { local0, local1, pad, envelope } = intervals[k];
         if (!boxIntersects(envelope, block.box)) continue;
         if (pad < 1e-9 && !sweptIntersects(previous[k], next[k], block.box)) continue;
         const insertion = move.entry.some((v) => v !== 0) ? SIDE_INSERT_START : LOWER_START;
@@ -2253,6 +2299,53 @@ export function applyFloorTurns(tl: Timeline, turns: Map<string, number>): Timel
     });
   }
   return { ...tl, tracks };
+}
+
+/**
+ * The whole staging area turned `deg` about the model's footprint centre: every waiting
+ * piece's spot swings round the model, which stays where it is. A flight starts from the
+ * turned spot and the turn fades out along its route (as a drag offset does), so it still
+ * lands on its seat as planned. Applied to the planned timeline: changing it never re-plans.
+ */
+export function applyStagingTurn(tl: Timeline, deg: number): Timeline {
+  if (!Number.isFinite(deg) || Math.abs(deg) < 1e-6) return tl;
+  const cx = (tl.modelBox.min[0] + tl.modelBox.max[0]) / 2;
+  const cz = (tl.modelBox.min[2] + tl.modelBox.max[2]) / 2;
+  const about = (d: number) => new THREE.Matrix4().makeTranslation(cx, 0, cz).multiply(yaw(d)).multiply(new THREE.Matrix4().makeTranslation(-cx, 0, -cz));
+  const R = about(deg);
+  const tracks = new Map(tl.tracks);
+  let sceneBox = tl.sceneBox;
+  for (const [key, tr] of tl.tracks) {
+    const first = tr.moves[0];
+    if (!first || first.stationary) continue;
+    const floorBox = transformBox(tr.floorBox, R);
+    sceneBox = unionBox(sceneBox, floorBox);
+    const moves = tr.moves.map((mv, i): Move => {
+      if (i !== 0) return mv;
+      // a translation path keeps the waiting orientation all the way; as poses, the turn
+      // of the piece itself can fade too
+      let posePath = mv.posePath;
+      if (!posePath?.length && mv.translationPath?.length) {
+        posePath = mv.translationPath.map((p) => mv.from.clone().setPosition(
+          mv.from.elements[12] + p[0], mv.from.elements[13] + p[1], mv.from.elements[14] + p[2]));
+        posePath[posePath.length - 1] = mv.to.clone();
+      }
+      let poses: Move['posePath'];
+      if (posePath?.length) {
+        const w = fadeWeights(posePath.map((m) => new THREE.Vector3().setFromMatrixPosition(m)), mv.kinematicSegments?.map((g) => g.index));
+        poses = posePath.map((m, k) => about(deg * (1 - w[k])).multiply(m));
+      }
+      let rigidDeltas: Move['rigidDeltas'];
+      if (mv.rigidDeltas?.length) {
+        const pivot = new THREE.Vector3(...(mv.rigidPivot ?? [0, 0, 0]));
+        const w = fadeWeights(mv.rigidDeltas.map((m) => pivot.clone().applyMatrix4(m)));
+        rigidDeltas = mv.rigidDeltas.map((m, k) => about(deg * (1 - w[k])).multiply(m));
+      }
+      return { ...mv, from: R.clone().multiply(mv.from), posePath: poses, translationPath: poses ? undefined : mv.translationPath, rigidDeltas };
+    });
+    tracks.set(key, { ...tr, floor: R.clone().multiply(tr.floor), floorBox, moves });
+  }
+  return { ...tl, tracks, sceneBox };
 }
 
 export function applyFloorShifts(tl: Timeline, shifts: Map<string, [number, number]>): Timeline {

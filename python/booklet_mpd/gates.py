@@ -257,6 +257,83 @@ def summarise_camera_selection(results: list[dict]) -> dict:
             "pass": {"camera": "p90 <= 1.5 px on >= 95% of steps", "selection": ">= 95% parts exact"}}
 
 
+def one_move_check(score, base: list, truth: list, alternatives: dict) -> dict:
+    """Gate 4s for one step. `score(model)`: the whole-model score; `truth`: the new parts at their true poses;
+    `alternatives[i]`: other poses for new part i. Per part: how many single moves (part i to one alternative,
+    the rest kept true) score higher than the true layout, and the best such margin."""
+    s0 = score(base + truth)
+    beaten, margin = [], []
+    for i, (part, colour, m_true) in enumerate(truth):
+        best, count = -np.inf, 0
+        for m in alternatives.get(i, []):
+            if np.allclose(m, m_true, atol=0.1):
+                continue
+            moved = list(truth)
+            moved[i] = (part, colour, m)
+            gap = score(base + moved) - s0
+            best = max(best, gap)
+            count += gap > 1e-9
+        beaten.append(count)
+        margin.append(float(best) if np.isfinite(best) else None)
+    return {"truth": float(s0), "beaten": beaten, "margin": margin, "truth_best": not any(beaten)}
+
+
+SCORE_K = 16       # alternatives per part (the per-part ranking's best), gate 4s
+
+
+def score_oracle(set_number: str, scorer=None) -> dict:
+    """Gate 4s for one set: steps drawn in place, oracle camera, the completed-model score of the solver.
+    `scorer(lib, model, classes, codes, on_ink, view) -> float` replaces that score (to try another)."""
+    from assembly_model.ldraw import load_library
+    from .solver.candidates import candidates
+    from .solver.collide import Collider
+    from .solver.dataset import cases
+    from .solver.edges import NEAR_INK, ink_distance
+    from .solver.picture import Picture
+    from .solver.place import Scene, distinct, score_candidates
+    from .solver.register import Aligner
+    from .solver.step import MIN_ARROW_PIXELS, solve
+    from .viewfit import BOOKLET_SCALE
+    lib = load_library(str(ROOT / "public/ldraw"))
+    collider = Collider(lib, use_oracle=True)
+    rows = []
+    for case in cases(set_number):
+        base = case.visible if case.visible else []
+        row = {"step": case.step_number, "parts": len(case.added)}
+        if case.rgb is None or not base or not case.added:
+            continue
+        try:
+            full = base + list(case.added)
+            oracle = solve(lib, full, [], case.rgb, case.pts_per_px, collider=collider)
+            pic = Picture.from_rgb(case.rgb, case.pts_per_px, BOOKLET_SCALE / case.pts_per_px if case.pts_per_px else None)
+            if int(pic.arrows.sum()) >= MIN_ARROW_PIXELS or case.subbuilds:
+                continue                                    # drawn apart: the true layout is not what is drawn
+            codes = sorted({c for _p, c, _m in full})
+            classes = pic.classes(codes)
+            ink = ink_distance(pic.rgb)
+            on_ink = ink <= NEAR_INK
+            view = oracle.view
+            if scorer is None:
+                score = lambda model: float(Aligner(lib, model, classes, codes, on_ink=on_ink).evaluate(view)[0])
+            else:
+                score = lambda model: float(scorer(lib, model, classes, codes, on_ink, view))
+            alternatives = {}
+            for i, (part, colour, _m) in enumerate(case.added):
+                others = base + [x for k, x in enumerate(case.added) if k != i]
+                scene = Scene.build(lib, others, view, classes, codes, ink)
+                scene.picture = pic
+                cands = distinct(lib, part, candidates(lib, part, others))
+                scored = sorted(score_candidates(lib, scene, part, colour, cands, deltas=(0.0,)) if cands else [],
+                                key=lambda sc: -sc.score)
+                alternatives[i] = [np.asarray(sc.candidate["matrix"], float) for sc in scored[:SCORE_K]]
+            row.update(one_move_check(score, base, list(case.added), alternatives))
+        except Exception as e:
+            row["error"] = f"{type(e).__name__}: {e}"[:200]
+        rows.append(row)
+        print(set_number, json.dumps(row, default=float), flush=True)
+    return {"set": set_number, "rows": rows}
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--sets", nargs="*", default=TEST_SETS)

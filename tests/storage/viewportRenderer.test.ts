@@ -23,3 +23,10 @@ test('hybrid preview persists independently of full-quality video export', async
   expect(toSettings(useAppSettings.getState()).video).toMatchObject({ viewportRenderer: 'studio-hybrid', videoEngine: 'studio-path' });
   expect(sanitizeSettings({ video: { videoEngine: 'studio-hybrid' } as never }).video.videoEngine).toBe('live');
 });
+
+test('ThreeRT preview persists independently of existing video renderers', async () => {
+  const stored = sanitizeSettings({ video: { viewportRenderer: 'threert', videoEngine: 'studio-path' } as never });
+  await applySettings(stored);
+  expect(toSettings(useAppSettings.getState()).video).toMatchObject({ viewportRenderer: 'threert', videoEngine: 'studio-path' });
+  expect(sanitizeSettings({ video: { videoEngine: 'threert' } as never }).video.videoEngine).toBe('live');
+});

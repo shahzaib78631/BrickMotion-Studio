@@ -32,6 +32,12 @@ export type Materials = { finish: BrickFinish; /** where a brick's colour comes 
   /** depth of field for final renders and MP4 export */ lens: LensChoice;
   /** the floor colour or texture tint (sRGB hex); null: the scene's own */
   floorColor?: string | null;
+  /** LDraw edge colours by default; optionally use one custom colour or match each brick. */
+  edgeColor?: string | null;
+  edgeOpacity?: number;
+  edgeMatch?: boolean;
+  /** Relative HSL lightness: -1 black, 0 unchanged, +1 white. */
+  edgeLightness?: number;
   /** how big the curved sweep's bend is, 0 (a tight corner) to 1 (a long, soft curve) */
   sweepCurve?: number };
 /** Light-up parts, by LDraw colour code. `strength` scales how bright they glow. */
@@ -76,19 +82,20 @@ export const ENVIRONMENTS = [
 ] as const;
 export type EnvironmentId = (typeof ENVIRONMENTS)[number]['id'];
 /** Ambient occlusion. `strength` (0–1.5) and `radius` (studs) are null to use the scene's own values. */
-export type AOChoice = { enabled: boolean; strength: number | null; radius: number | null };
+export type AOChoice = { algorithm?: 'gtao' | 'cortao'; enabled: boolean; strength: number | null; radius: number | null };
 export const AO_STRENGTH_RANGE = [0, 1.5] as const;
 export const AO_RADIUS_RANGE = [0.1, 1.5] as const;
 /** The occlusion a scene ends up with once the user's choice is applied. */
-export function aoFor(look: StudioLook, choice: AOChoice): { intensity: number; radius: number; sides?: number; power?: number; thickness?: number; wide?: { radius: number; strength: number } } {
+export function aoFor(look: StudioLook, choice: AOChoice): { algorithm?: 'gtao' | 'cortao'; intensity: number; radius: number; sides?: number; power?: number; thickness?: number; wide?: { radius: number; strength: number } } {
   const scene = sceneOf(look);
   return {
+    ...(choice.algorithm === 'cortao' ? { algorithm: 'cortao' as const } : {}),
     sides: scene.aoSides, power: scene.aoPower, thickness: scene.aoThickness, wide: scene.aoWide,
     intensity: choice.enabled ? choice.strength ?? scene.ao ?? 0 : 0,
     radius: choice.radius ?? scene.aoRadius ?? 0.45,
   };
 }
-export const DEFAULT_MATERIALS: Materials = { finish: 'eyesight', palette: 'studio', texture: 'none', floor: 'auto', studLogos: true, detail: 'standard', roundedEdges: true, ao: { enabled: true, strength: null, radius: null }, contactShadows: 0.5, clearShadow: 0.12, environment: 'studio', glow: { colors: [], strength: 1.5 }, glass: 'soft', lens: { blur: 'off', focus: 0.4 }, floorColor: null, sweepCurve: 0.6 };
+export const DEFAULT_MATERIALS: Materials = { finish: 'eyesight', palette: 'studio', texture: 'none', floor: 'auto', studLogos: true, detail: 'standard', roundedEdges: true, ao: { enabled: true, strength: null, radius: null }, contactShadows: 0.5, clearShadow: 0.12, environment: 'studio', glow: { colors: [], strength: 1.5 }, glass: 'soft', lens: { blur: 'off', focus: 0.4 }, floorColor: null, edgeColor: null, edgeOpacity: 0.3, edgeMatch: false, edgeLightness: -0.35, sweepCurve: 0.6 };
 
 type RGB = readonly [number, number, number];
 /** Relative direction from the subject towards each studio light (Y is up). */
@@ -467,6 +474,10 @@ export function sanitizeMaterials(v: unknown): Materials {
     glass: o.glass === 'clear' ? 'clear' : o.glass === 'milky' ? 'milky' : 'soft',
     lens: sanitizeLens(o.lens),
     floorColor: typeof o.floorColor === 'string' && /^#[0-9a-f]{6}$/i.test(o.floorColor) ? o.floorColor.toLowerCase() : null,
+    edgeColor: typeof o.edgeColor === 'string' && /^#[0-9a-f]{6}$/i.test(o.edgeColor) ? o.edgeColor.toLowerCase() : null,
+    edgeOpacity: clampOrNull(o.edgeOpacity, [0, 1]) ?? 0.3,
+    edgeMatch: typeof o.edgeMatch === 'boolean' ? o.edgeMatch : false,
+    edgeLightness: clampOrNull(o.edgeLightness, [-1, 1]) ?? -0.35,
     sweepCurve: clampOrNull(o.sweepCurve, [0, 1]) ?? DEFAULT_MATERIALS.sweepCurve,
   };
 }
@@ -494,6 +505,7 @@ const clampOrNull = (v: unknown, [lo, hi]: readonly [number, number]): number | 
 function sanitizeAO(v: unknown): AOChoice {
   const o = (v && typeof v === 'object' ? v : {}) as Partial<Record<keyof AOChoice, unknown>>;
   return {
+    ...(o.algorithm === 'cortao' ? { algorithm: 'cortao' as const } : {}),
     enabled: typeof o.enabled === 'boolean' ? o.enabled : DEFAULT_MATERIALS.ao.enabled,
     strength: clampOrNull(o.strength, AO_STRENGTH_RANGE),
     radius: clampOrNull(o.radius, AO_RADIUS_RANGE),

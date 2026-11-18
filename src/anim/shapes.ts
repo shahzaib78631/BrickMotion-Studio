@@ -1,3 +1,6 @@
+import { compiledSweepHits } from './collisionKernel';
+import { spreadProbeOrder } from './probeOrder';
+import { triangleData } from './triangleData';
 import * as THREE from 'three';
 import { inJointContact, type JointContact, type JointPair } from './jointContact';
 import type { Box } from '../ldraw/flatten';
@@ -87,7 +90,16 @@ function build(src: Float32Array, twoSidedFrom: number): Shape {
     const t = tri * 9;
     for (let k = 0; k < 3; k++) points[j * 3 + k] = src[t + k] + u * (src[t + 3 + k] - src[t + k]) + v * (src[t + 6 + k] - src[t + k]);
   }
-  return { tris, points, tree, twoSided };
+  // Surface-area sampling follows source triangle order. Interleave the exact
+  // same probes across the entire surface so a blocked direction is discovered
+  // early instead of after scanning one whole side. No probe is dropped.
+  const spread = new Float32Array(points.length);
+  const probes = spreadProbeOrder(count);
+  for (let i = 0; i < count; i++) {
+    const source = probes[i] * 3;
+    spread[i * 3] = points[source]; spread[i * 3 + 1] = points[source + 1]; spread[i * 3 + 2] = points[source + 2];
+  }
+  return { tris, points: spread, tree, twoSided };
 }
 
 /** ray-box slab test: whether o + t·d meets the box for some t in [0, maxT] */
@@ -114,60 +126,75 @@ function rayMeetsBox(o: number[], d: number[], min: number[], max: number[], max
  */
 /** reused traversal stack: nearestHit is the planner's innermost loop */
 let hitStack: TreeNode[] = new Array(64);
+let hitEntries: number[] = new Array(64);
 
 function nearestHit(s: Shape, o: number[], d: number[], fromT: number, toT: number): { t: number; enters: boolean } {
-  const tr = s.tris;
+  const tr = s.tris, data = triangleData(tr);
   const ox = o[0], oy = o[1], oz = o[2], dx = d[0], dy = d[1], dz = d[2];
   // slab test with the inverse direction worked out once per ray (same result as rayMeetsBox)
   const px0 = Math.abs(dx) < 1e-12, py0 = Math.abs(dy) < 1e-12, pz0 = Math.abs(dz) < 1e-12;
   const ix = 1 / dx, iy = 1 / dy, iz = 1 / dz;
-  const meets = (min: number[], max: number[], maxT: number): boolean => {
-    let t0 = 0, t1 = maxT;
-    if (px0) { if (ox < min[0] || ox > max[0]) return false; }
+  const entry = (min: number[], max: number[], maxT: number): number => {
+    let t0 = Math.max(0, fromT), t1 = maxT;
+    if (px0) { if (ox < min[0] || ox > max[0]) return Infinity; }
     else {
       let a = (min[0] - ox) * ix, b = (max[0] - ox) * ix;
       if (a > b) { const c = a; a = b; b = c; }
       if (a > t0) t0 = a;
       if (b < t1) t1 = b;
-      if (t0 > t1) return false;
+      if (t0 > t1) return Infinity;
     }
-    if (py0) { if (oy < min[1] || oy > max[1]) return false; }
+    if (py0) { if (oy < min[1] || oy > max[1]) return Infinity; }
     else {
       let a = (min[1] - oy) * iy, b = (max[1] - oy) * iy;
       if (a > b) { const c = a; a = b; b = c; }
       if (a > t0) t0 = a;
       if (b < t1) t1 = b;
-      if (t0 > t1) return false;
+      if (t0 > t1) return Infinity;
     }
-    if (pz0) { if (oz < min[2] || oz > max[2]) return false; }
+    if (pz0) { if (oz < min[2] || oz > max[2]) return Infinity; }
     else {
       let a = (min[2] - oz) * iz, b = (max[2] - oz) * iz;
       if (a > b) { const c = a; a = b; b = c; }
       if (a > t0) t0 = a;
       if (b < t1) t1 = b;
-      if (t0 > t1) return false;
+      if (t0 > t1) return Infinity;
     }
-    return true;
+    return t0;
   };
   let stack = hitStack, top = 0;
-  stack[top++] = s.tree;
-  let best = toT;
+  let entries = hitEntries;
+  stack[top] = s.tree; entries[top++] = entry(s.tree.min, s.tree.max, toT);
+  let best = toT, bestLeaf = Infinity, bestTriangle = -1;
   let found = false;
   let enters = false;
   while (top) {
-    const nd = stack[--top];
-    if (!nd.count || !meets(nd.min, nd.max, best)) continue;
+    const nd = stack[--top], near = entries[top];
+    if (!nd.count || !Number.isFinite(near) || near > best) continue;
     if (nd.left) {
-      if (top + 2 > stack.length) hitStack = stack = stack.concat(new Array(stack.length));
-      stack[top++] = nd.left;
-      stack[top++] = nd.right!;
+      if (top + 2 > stack.length) {
+        hitStack = stack = stack.concat(new Array(stack.length));
+        hitEntries = entries = entries.concat(new Array(entries.length));
+      }
+      const left = nd.left, right = nd.right!;
+      const a = entry(left.min, left.max, best), b = entry(right.min, right.max, best);
+      // Pop the nearer subtree first so its hit prunes farther nodes. Equal-hit
+      // selection below retains the old right-first DFS tie semantics exactly.
+      if (a < b) {
+        if (Number.isFinite(b)) { stack[top] = right; entries[top++] = b; }
+        if (Number.isFinite(a)) { stack[top] = left; entries[top++] = a; }
+      } else {
+        if (Number.isFinite(a)) { stack[top] = left; entries[top++] = a; }
+        if (Number.isFinite(b)) { stack[top] = right; entries[top++] = b; }
+      }
       continue;
     }
     for (let j = nd.first; j < nd.first + nd.count; j++) {
       const i = j * 9;
       // Möller–Trumbore, both faces
-      const e1x = tr[i + 3] - tr[i], e1y = tr[i + 4] - tr[i + 1], e1z = tr[i + 5] - tr[i + 2];
-      const e2x = tr[i + 6] - tr[i], e2y = tr[i + 7] - tr[i + 1], e2z = tr[i + 8] - tr[i + 2];
+      const at = j * 10;
+      const e1x = data[at], e1y = data[at + 1], e1z = data[at + 2];
+      const e2x = data[at + 3], e2y = data[at + 4], e2z = data[at + 5];
       const qx0 = dy * e2z - dz * e2y, qy0 = dz * e2x - dx * e2z, qz0 = dx * e2y - dy * e2x;
       const det = e1x * qx0 + e1y * qy0 + e1z * qz0;
       if (Math.abs(det) < 1e-9) continue;
@@ -179,8 +206,8 @@ function nearestHit(s: Shape, o: number[], d: number[], fromT: number, toT: numb
       const v = (dx * qx + dy * qy + dz * qz) * inv;
       if (v < 0 || u + v > 1) continue;
       const t = (e2x * qx + e2y * qy + e2z * qz) * inv;
-      if (t > fromT && t <= best) {
-        best = t;
+      if (t > fromT && (t < best || t === best && (!found || nd.first < bestLeaf || nd.first === bestLeaf && j > bestTriangle))) {
+        best = t; bestLeaf = nd.first; bestTriangle = j;
         found = true;
         // det > 0: the ray meets the counter-clockwise (outer) side, going in
         enters = det > 0 || s.twoSided[j] === 1;
@@ -252,6 +279,11 @@ export function sweepReach(a: Box, b: Box, d: readonly number[]): number {
   return clearDistance(a, b, d as number[]) + STUD_REACH;
 }
 
+/** A remembered rejection is only an ordering hint. It is rechecked at the
+ * current poses; when it clears, every remaining original probe is still tested. */
+type RejectionHint = { indices: Uint16Array; mask: Uint8Array };
+const rejectionHints = new WeakMap<Shape, WeakMap<Shape, RejectionHint>>();
+
 /** points of `from` (its own space), moved into `into`'s space, swept along d (world) — count hits */
 function sweepHits(from: Placed, into: Placed, d: number[], maxT: number, toLocal: THREE.Matrix4, intoInv: THREE.Matrix4, limit: number, joint?: JointContact): number {
   const m = toLocal.elements;
@@ -261,16 +293,40 @@ function sweepHits(from: Placed, into: Placed, d: number[], maxT: number, toLoca
   // Keep the tolerance in world LDU even for scaled/sheared imported parts.
   const scale = maximumLinearScale(into.world.elements);
   const contactTolerance = Number.isFinite(scale) && scale > 0 ? CONTACT / scale : 0;
+  if (!joint) {
+    const compiled = compiledSweepHits(from.shape, into.shape, d, maxT, toLocal, intoInv, contactTolerance, limit);
+    if (compiled !== undefined) return compiled;
+  }
   const p = from.shape.points;
   const tree = into.shape.tree;
   let hits = 0;
   const o = [0, 0, 0];
-  for (let i = 0; i < p.length; i += 3) {
+  const hint = limit < 256 ? rejectionHints.get(from.shape)?.get(into.shape) : undefined;
+  let cursor = 0;
+  const hitSlots: number[] = [];
+  for (let sample = 0; sample < p.length / 3; sample++) {
+    let slot: number;
+    if (hint && sample < hint.indices.length) slot = hint.indices[sample];
+    else { while (hint?.mask[cursor]) cursor++; slot = cursor++; }
+    const i = slot * 3;
     o[0] = m[0] * p[i] + m[4] * p[i + 1] + m[8] * p[i + 2] + m[12];
     o[1] = m[1] * p[i] + m[5] * p[i + 1] + m[9] * p[i + 2] + m[13];
     o[2] = m[2] * p[i] + m[6] * p[i + 1] + m[10] * p[i + 2] + m[14];
     if (!rayMeetsBox(o, dl, tree.min, tree.max, maxT)) continue;
-    if (passesThrough(into.shape, o, dl, maxT <= CONTACT ? 0 : CONTACT, maxT, contactTolerance, joint) && ++hits > limit) return hits;
+    if (!passesThrough(into.shape, o, dl, maxT <= CONTACT ? 0 : CONTACT, maxT, contactTolerance, joint)) continue;
+    if (limit < 256) hitSlots.push(slot);
+    if (++hits > limit) {
+      // Reuse an adequate existing hint without allocating another mask. Hints
+      // never certify anything: all of their probes were re-tested above.
+      if (limit < 256 && (!hint || sample >= hint.indices.length)) {
+        let hints = rejectionHints.get(from.shape);
+        if (!hints) rejectionHints.set(from.shape, (hints = new WeakMap()));
+        const mask = new Uint8Array(p.length / 3);
+        for (const index of hitSlots) mask[index] = 1;
+        hints.set(into.shape, { indices: new Uint16Array(hitSlots), mask });
+      }
+      return hits;
+    }
   }
   return hits;
 }

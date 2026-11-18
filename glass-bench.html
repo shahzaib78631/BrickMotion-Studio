@@ -1,0 +1,7 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>BrickMotion glass comparison</title>
+<style>body{font:15px system-ui;background:#20242b;color:#eee;margin:24px}button,select{font:inherit;padding:6px;margin:6px}canvas{max-width:100%}#shots{display:flex;flex-wrap:wrap;gap:12px}figure{margin:0;max-width:48%}figure img{width:100%}pre{white-space:pre-wrap}</style>
+<h1>Transparent plastic comparison</h1><p>Left: one tile. Centre: adjacent tiles. Right: three stacked plates. All views use the same geometry, camera and environment. Optical tint is a palette proxy, not a measurement of the photographed part.</p>
+<label>Colour <select id="color"><option value="43">Transparent light blue</option><option value="41">Transparent medium blue</option><option value="47">Clear</option><option value="36">Transparent red</option></select></label>
+<label>Surface <select id="look"><option value="clear">Clear</option><option value="soft">Soft</option><option value="milky">Milky</option></select></label>
+<button id="compare">Render comparison</button><p id="status">Loading…</p><canvas id="canvas"></canvas><div id="shots"></div><pre id="results"></pre>
+<script type="module" src="/src/dev/glassBench.ts"></script></html>

@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { cortaoLightingShader, installCortaoDraw } from './cortao/lighting';
+import { applyGlassOptics } from './glassOptics';
 import { materialName, type ColorDef } from '../ldraw/colors';
 import { EYESIGHT_COLORS } from '../data/eyesightColors.generated';
 import { referenceMaterialShader } from './referenceLighting';
@@ -72,15 +74,19 @@ const TEXTURE_BODY = /* glsl */ `
 `;
 
 function installTexture(m: THREE.MeshPhysicalMaterial) {
+  installCortaoDraw(m);
   m.onBeforeCompile = (shader) => {
+    cortaoLightingShader(shader);
     const color = m.userData.bmColor as ColorDef | undefined;
     if (referenceMaterialMode) referenceMaterialShader(shader, color?.finish === 'solid', color?.code === 0);
     if (color?.finish === 'trans') {
-      // Thickness is stored in world studs. Three scales it by modelMatrix,
-      // but our LDraw root already converts LDU to studs (1/20).
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute float bmGlassThickness; varying float vBmGlassThickness;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBmGlassThickness = bmGlassThickness;');
+      shader.fragmentShader = 'varying float vBmGlassThickness;\n' + shader.fragmentShader;
       shader.fragmentShader = shader.fragmentShader.replace('#include <transmission_fragment>',
         THREE.ShaderChunk.transmission_fragment.replace('material.thickness = thickness;',
-          'material.thickness = thickness / max(length(modelMatrix[0].xyz), 0.000001);'));
+          'material.thickness = vBmGlassThickness > 0.0 ? vBmGlassThickness : thickness;'));
     }
     const id = (m.userData.bmTexture as number) ?? 0;
     shader.defines = { ...(shader.defines ?? {}), BM_TEXTURE: id };
@@ -94,7 +100,7 @@ function installTexture(m: THREE.MeshPhysicalMaterial) {
       .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nroughnessFactor = clamp(mix(roughnessFactor + bmRough, 0.06, bmSpark), 0.04, 1.0);\nmetalnessFactor = mix(metalnessFactor, 1.0, bmSpark);')
       .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nif (bmBump > 0.0) normal = bmPerturb(-vViewPosition, normal, vec2(dFdx(bmH), dFdy(bmH)) * bmBump, faceDirection);');
   };
-  m.customProgramCacheKey = () => `bm-texture-${(m.userData.bmTexture as number) ?? 0}|reference-${referenceMaterialMode ? `${m.userData.bmColor?.finish === 'solid' ? 'solid' : 'special'}-${m.userData.bmColor?.code === 0 ? 'dark' : 'base'}` : 'off'}`;
+  m.customProgramCacheKey = () => `bm-glass-walls-v1|bm-texture-${(m.userData.bmTexture as number) ?? 0}|reference-${referenceMaterialMode ? `${m.userData.bmColor?.finish === 'solid' ? 'solid' : 'special'}-${m.userData.bmColor?.code === 0 ? 'dark' : 'base'}` : 'off'}`;
 }
 
 /**
@@ -124,25 +130,7 @@ function style(m: THREE.MeshPhysicalMaterial, c: ColorDef) {
   m.sheenColor.set(f.tint && c.finish !== 'trans' ? f.tint : paletteHex(c)).lerp(new THREE.Color('#ffffff'), 0.5);
   if (!f.tint || c.finish === 'trans') {
     if (c.finish === 'trans') {
-      // Physical transmission already reveals the background. Alpha blending on top
-      // fades reflections and stacks washed-out faces across a hollow part.
-      const tint = new THREE.Color(paletteHex(c));
-      const milky = profile.glass === 'milky';
-      Object.assign(m, {
-        transparent: false, opacity: 1, depthWrite: true,
-        transmission: milky ? 0.3 : profile.glass === 'clear' ? 1 : 0.92,
-        roughness: milky ? 0.55 : profile.glass === 'clear' ? 0.02 : 0.1,
-        metalness: 0, clearcoat: 0, ior: 1.52,
-        // The live transmission pass approximates one wall, not the entire
-        // hollow part. A half-stud slab displaces samples into adjacent bricks
-        // and makes each faceted wall look like a separate broken prism.
-        thickness: milky ? 0.08 : 0.06,
-        attenuationDistance: 0.3,
-      });
-      // Beer–Lambert absorption takes log(tint). A zero channel absorbs all
-      // light at every nonzero thickness, turning saturated glass into paint.
-      m.attenuationColor.setRGB(Math.max(0.02, tint.r), Math.max(0.02, tint.g), Math.max(0.02, tint.b));
-      m.color.copy(tint).lerp(new THREE.Color('#ffffff'), milky ? 0.35 : 0.8);
+      applyGlassOptics(m, c, profile.glass, profile.palette);
     }
     else if (c.finish === 'chrome') Object.assign(m, { metalness: 1, roughness: 0.08 });
     else if (c.finish === 'metal') Object.assign(m, { metalness: 0.7, roughness: 0.2 });

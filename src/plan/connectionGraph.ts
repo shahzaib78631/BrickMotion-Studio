@@ -58,33 +58,33 @@ export function modelConnections(asm: Assembly, metrics: Metrics): MatedConnecti
     list.push(i);
   });
   const endOf = (i: Instance): ConnectionEnd => ({ key: i.key, itemId: i.itemId, part: i.part, model: i.model });
-  const seen = new Set<string>();
   const out: MatedConnection[] = [];
   for (const [key, ids] of cells) {
     const [cx, cy, cz] = key.split(',').map(Number);
-    // mates are within MATE_DIST < CELL, so the neighbourhood of one end's cell holds the other
-    const candidates = new Set<number>();
-    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
-      for (const id of cells.get(`${cx + dx},${cy + dy},${cz + dz}`) ?? []) candidates.add(id);
-    }
-    const list = [...candidates];
-    for (let p = 0; p < list.length; p++) for (let q = p + 1; q < list.length; q++) {
-      const A = entries[list[p]], B = entries[list[q]];
-      if (A.inst.key === B.inst.key || A.type !== B.type || A.gender === B.gender) continue;
-      const dot = A.axis[0] * B.axis[0] + A.axis[1] * B.axis[1] + A.axis[2] * B.axis[2];
-      if (dot > ANTI) continue;
-      if (A.joint && B.joint && A.joint !== B.joint) continue;
-      if (Math.hypot(A.pos[0] - B.pos[0], A.pos[1] - B.pos[1], A.pos[2] - B.pos[2]) > MATE_DIST) continue;
-      const pair = `${Math.min(list[p], list[q])}:${Math.max(list[p], list[q])}`;
-      if (seen.has(pair)) continue;
-      seen.add(pair);
-      const male = A.gender === 'M' ? A : B;
-      out.push({
-        a: endOf(A.inst), b: endOf(B.inst), maleKey: male.inst.key,
-        type: A.type, pos: [...male.pos] as Vec3, axis: [...male.axis] as Vec3,
-        ...(A.grip || B.grip ? { grip: true } : {}),
-        ...(A.joint ? { joint: A.joint } : {}),
-      });
+    // Each cell pair is visited once. Mates are within MATE_DIST < CELL,
+    // so only this cell and the forward half of its 26 neighbours matter.
+    for (let dx = 0; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+      if (dx === 0 && (dy < 0 || (dy === 0 && dz < 0))) continue;
+      const sameCell = dx === 0 && dy === 0 && dz === 0;
+      const others = cells.get(`${cx + dx},${cy + dy},${cz + dz}`);
+      if (!others) continue;
+      for (let p = 0; p < ids.length; p++) {
+        for (let q = sameCell ? p + 1 : 0; q < others.length; q++) {
+          const A = entries[ids[p]], B = entries[others[q]];
+          if (A.inst.key === B.inst.key || A.type !== B.type || A.gender === B.gender) continue;
+          const dot = A.axis[0] * B.axis[0] + A.axis[1] * B.axis[1] + A.axis[2] * B.axis[2];
+          if (dot > ANTI) continue;
+          if (A.joint && B.joint && A.joint !== B.joint) continue;
+          if (Math.hypot(A.pos[0] - B.pos[0], A.pos[1] - B.pos[1], A.pos[2] - B.pos[2]) > MATE_DIST) continue;
+          const male = A.gender === 'M' ? A : B;
+          out.push({
+            a: endOf(A.inst), b: endOf(B.inst), maleKey: male.inst.key,
+            type: A.type, pos: [...male.pos] as Vec3, axis: [...male.axis] as Vec3,
+            ...(A.grip || B.grip ? { grip: true } : {}),
+            ...(A.joint ? { joint: A.joint } : {}),
+          });
+        }
+      }
     }
   }
   return out;

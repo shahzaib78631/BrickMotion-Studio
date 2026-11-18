@@ -2,7 +2,7 @@ import type { Box } from '../ldraw/flatten';
 import type { Assembly, Instance } from './assemble';
 import { SpatialHash } from './spatialHash';
 import type { Snap } from '../ldraw/shadow';
-import { mateAxes, worldSnaps, type WorldSnap } from '../anim/snapMates';
+import { hasSnapMate, worldSnaps, type WorldSnap } from '../anim/snapMates';
 import { discoverPlacedAttachments } from './attachmentPlacements';
 
 export type WarningKind = 'unknown-part' | 'unknown-color' | 'missing-submodel' | 'submodel-cycle' | 'overlap' | 'floating' | 'assembly-spot' | 'weak';
@@ -86,7 +86,7 @@ export function validate(
     // touching: small gap (or overlap) on one axis, real contact area on the other two
     const touching = [0, 1, 2].some((k) => o[k] >= -CONTACT_GAP && o.filter((_, m) => m !== k).every((v) => v > OVERLAP));
     if (touching) parent[find(i)] = find(j);
-    else if (snapsOf && find(i) !== find(j) && mateAxes(snapsAt(i), snapsAt(j)).length) parent[find(i)] = find(j);
+    else if (snapsOf && find(i) !== find(j) && hasSnapMate(snapsAt(i), snapsAt(j))) parent[find(i)] = find(j);
   }
 
   // Reviewed friction slots can connect bodies without any LDCad socket

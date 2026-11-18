@@ -97,10 +97,11 @@ export function ViewportChrome({ model, onMakeSubmodel }: { model: ModelState; o
     {showGrid && <div className="bm-screen-grid" aria-hidden="true" />}
     <div className="bm-viewport-top-left bm-floating-group" role="group" aria-label="Viewport display">
       <ViewsDropdown />
-      <select aria-label="Viewport renderer" title="Studio path uses the reviewed lighting preset, glossy reflections and progressive denoising" value={viewportRenderer} onChange={(e) => useAppSettings.getState().set({ viewportRenderer: e.target.value === 'studio-hybrid' ? 'studio-hybrid' : e.target.value === 'studio-path' ? 'studio-path' : 'live' })}>
+      <select aria-label="Viewport renderer" title="ThreeRT uses its own studio lighting and experimental glass; choose Current viewport for the full scene settings" value={viewportRenderer} onChange={(e) => useAppSettings.getState().set({ viewportRenderer: e.target.value === 'threert' ? 'threert' : e.target.value === 'studio-hybrid' ? 'studio-hybrid' : e.target.value === 'studio-path' ? 'studio-path' : 'live' })}>
         <option value="live">Current viewport</option>
         <option value="studio-path">Studio path</option>
         <option value="studio-hybrid">Studio hybrid (preview)</option>
+        <option value="threert">ThreeRT (experimental)</option>
       </select>
       <button className={view === 'user' ? 'selected' : ''} onClick={() => { viewportApi.views?.setProjection('perspective'); if (view === 'top') viewportApi.views?.orbit(34, -46); else if (view === 'bottom') viewportApi.views?.orbit(34, 46); else viewportApi.views?.orbit(18, 8); }}>3D</button>
       <button className={laidOut ? 'selected' : ''} aria-pressed={laidOut} title="Lay out every part on the floor" onClick={toggleSplit}>Split</button>

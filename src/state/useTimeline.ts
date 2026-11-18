@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { applyPauses } from '../anim/pauses';
+import { applySubmodelKeyframes } from '../anim/submodelKeyframes';
+import { assemble } from '../model/assemble';
+import { scopedPlan } from './useModel';
+import { metricsOf, getColors } from './partService';
 import type { Timeline } from '../anim/timeline';
 import type { PlanningProgress } from '../anim/planning';
 import type { AnimOptions } from '../anim/pacing';
@@ -87,7 +91,12 @@ export function useTimeline(ready: boolean, plan: Plan, model: string, opts: Ani
   // Pause blocks re-time the planned timeline here, so editing one never plans again.
   const pauses = plan.pauses?.[model];
   const shown = ready && mine && state.status === 'ready' && (current || !autoPlan) ? state.timeline : null;
-  const timeline = useMemo(() => (shown && pauses?.length ? applyPauses(shown, pauses) : shown), [shown, pauses]);
+  // Saved child keys are a playback overlay, so editing one refreshes the
+  // parent without invalidating or restarting its geometry planner.
+  const composed = useMemo(() => shown ? applySubmodelKeyframes(shown, plan.animation, model,
+    name => assemble(scopedPlan(plan, name), metricsOf, getColors())) : null,
+    [shown, plan.animation, model]);
+  const timeline = useMemo(() => (composed && pauses?.length ? applyPauses(composed, pauses) : composed), [composed, pauses]);
   return {
     timeline,
     planning: ready && !dragging && (state.status === 'planning' || (!current && willPlan)),

@@ -16,7 +16,8 @@ import { transformBox, unionBox, type Assembly, type Metrics } from '../../../mo
 import { MeshOracle } from '../../construction/collision';
 import type { ConstructionModel, ConstructionNode, SearchStats } from '../../construction/types';
 import type { V3 } from '../../construction/math';
-import { flightPose, poseAt, type Move, type Timeline } from '../../timeline';
+import { flightClock, flightPose, poseAt, type Move, type Timeline } from '../../timeline';
+import { easeOf } from '../../motionStyle';
 import { interpolateJointSegment } from '../jointKinematics';
 import type { MechanismGraph } from './mechanismGraph';
 
@@ -67,10 +68,9 @@ const sameLinear = (a: THREE.Matrix4,b: THREE.Matrix4) =>
 const xyz = (m: THREE.Matrix4): V3 => [m.elements[12],m.elements[13],m.elements[14]];
 const deltaOf = (a: THREE.Matrix4,b: THREE.Matrix4): V3 =>
   [b.elements[12]-a.elements[12],b.elements[13]-a.elements[13],b.elements[14]-a.elements[14]];
-const cubic = (v: number): number => v < 0.5 ? 4*v*v*v : 1 - Math.pow(-2*v+2,3)/2;
 const clamp = (v:number) => Math.max(0,Math.min(1,v));
 const phase = (move: Move, u: number, n:number): number =>
-  cubic(clamp((u - move.hold) / (1 - move.hold))) * (n-1);
+  easeOf(move.style?.ease)(flightClock(move, u)) * (n-1);
 const corners = (box: Box): V3[] => {
   const out: V3[] = [];
   for (const x of [box.min[0],box.max[0]]) for (const y of [box.min[1],box.max[1]])
@@ -250,10 +250,14 @@ function splitTimes(tl:Timeline,key:string,lo:number,hi:number):number[] {
     if(m.posePath?.length && !m.translationPath) {
       const count=m.posePath.length-1;
       for(let i=1;i<count;i++) {
-        // Invert the monotone cubic to locate exact playback segment changes.
-        const x=i/count;
-        const f=x<.5 ? Math.cbrt(x/4) : 1-Math.cbrt((1-x)/4);
-        const time=start+(m.hold+(1-m.hold)*f)*u.dur;
+        // Invert the actual monotone playback clock, including minimum-jerk
+        // easing and authored holds. A cubic inverse would split the wrong times.
+        let left=0,right=1;
+        for(let iteration=0;iteration<48;iteration++) {
+          const mid=(left+right)/2;
+          if(phase(m,mid,m.posePath.length)<i)left=mid;else right=mid;
+        }
+        const time=start+right*u.dur;
         if(time>lo+EPS&&time<hi-EPS)result.push(time);
       }
     }

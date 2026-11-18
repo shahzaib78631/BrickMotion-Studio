@@ -8,8 +8,8 @@ import { VerticalBlurShader } from 'three/addons/shaders/VerticalBlurShader.js';
  * up and draws the bricks as darkness that fades with height (`reach` studs), the result
  * is blurred twice, and a transparent plane lays it on the floor. It catches what the key
  * light's shadow misses: the soft dark pool right under and between parts that makes a
- * model sit on the surface instead of floating. Redrawn every frame, so moving parts
- * carry their own.
+ * model sit on the surface instead of floating. Versioned callers reuse the texture
+ * until the bricks or shadow settings change; moving parts still carry their own.
  */
 export class ContactShadows {
   readonly plane: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
@@ -36,6 +36,7 @@ export class ContactShadows {
   private strength = 0.5;
   private blur = 2.5;
   private readonly clear = new THREE.Color();
+  private rendered: { bricks: THREE.Object3D; structure: number; pose: number; matrix: number[] } | null = null;
 
   constructor(size = 512) {
     const rt = () => new THREE.WebGLRenderTarget(size, size, { depthBuffer: true });
@@ -81,6 +82,7 @@ export class ContactShadows {
 
   /** Shadow strength 0–1 (0 hides it), the colour it darkens towards, and the share of that strength clear parts get (0–1). */
   set(strength: number, tint: THREE.ColorRepresentation, clearShare = 0.12, wide?: { spread: number; weight: number }) {
+    this.rendered = null;
     this.wide.weight.value = wide?.weight ?? 0;
     this.wideSpread = wide?.spread ?? 1;
     this.strength = Math.min(1, Math.max(0, strength));
@@ -93,6 +95,7 @@ export class ContactShadows {
 
   /** The wide layer: its blur as a multiple of the tight one, and how much of it shows (0 = off). */
   setWide(spread: number, weight: number) {
+    this.rendered = null;
     this.wideSpread = spread;
     this.wide.weight.value = weight;
   }
@@ -103,6 +106,7 @@ export class ContactShadows {
 
   /** Covers `box` (world units) on the floor at `groundY`; parts higher than `reach` above it cast nothing. */
   fitTo(box: THREE.Box3, groundY: number, reach = 2.5, spread = 1) {
+    this.rendered = null;
     const size = box.getSize(new THREE.Vector3());
     const c = box.getCenter(new THREE.Vector3());
     const span = Math.max(size.x, size.z) * 1.25 + reach * 4;
@@ -153,8 +157,13 @@ export class ContactShadows {
   }
 
   /** Redraws the shadow from `bricks` (moved into a private scene for the draw and put back). */
-  update(renderer: THREE.WebGLRenderer, bricks: THREE.Object3D) {
+  update(renderer: THREE.WebGLRenderer, bricks: THREE.Object3D, structure?: number, pose?: number) {
     if (!this.on) return;
+    bricks.updateWorldMatrix(true, false);
+    const previous = this.rendered;
+    if (structure !== undefined && pose !== undefined && previous?.bricks === bricks &&
+      previous.structure === structure && previous.pose === pose &&
+      previous.matrix.every((v, i) => v === bricks.matrixWorld.elements[i])) return;
     const parent = bricks.parent;
     const prevTarget = renderer.getRenderTarget();
     const prevAlpha = renderer.getClearAlpha();
@@ -217,6 +226,8 @@ export class ContactShadows {
     renderer.setClearColor(this.clear, prevAlpha);
     renderer.setScissorTest(prevScissor);
     renderer.autoClear = prevAutoClear;
+    this.rendered = structure !== undefined && pose !== undefined
+      ? { bricks, structure, pose, matrix: bricks.matrixWorld.elements.slice() } : null;
   }
 
   private pass(renderer: THREE.WebGLRenderer, mat: THREE.ShaderMaterial, from: THREE.WebGLRenderTarget, to: THREE.WebGLRenderTarget, spread: number) {

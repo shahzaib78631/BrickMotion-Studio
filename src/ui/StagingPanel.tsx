@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { animOptions, useAppSettings } from '../state/appSettings';
 import { useStudio } from '../state/store';
 import type { FloorStyle } from '../anim/pacing';
@@ -5,7 +6,7 @@ import type { Timeline } from '../anim/timeline';
 import { fitAndApplyStagingCamera } from './stagingCameraActions';
 import { formatAspect } from '../export/formats';
 import { modelSteps, setRootHint } from '../plan/ops';
-import { resetFloorShifts } from '../plan/pieceActions';
+import { resetFloorShifts, setStagingTurn, stagingTurnOf } from '../plan/pieceActions';
 import { Card, Section } from './MaterialsPanel';
 import { Ic } from './icons';
 import { activeSceneCamera, sceneSetupOf } from '../render/sceneSetup';
@@ -47,6 +48,20 @@ function StagingDiagram({ id }: { id: FloorStyle }) {
 
 
 /** Staging: how pieces wait on the floor before they fly in, and the order they go on. */
+/** Degrees typed in: applied on Enter or leaving the field, so typing "90" is one undo step. */
+function TurnField({ value, onCommit }: { value: number; onCommit(v: number): void }) {
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => setDraft(String(value)), [value]);
+  const commit = () => {
+    const n = Number(draft);
+    if (draft.trim() && Number.isFinite(n)) onCommit(n);
+    else setDraft(String(value));
+  };
+  return <input type="number" className="bm-staging-turn-deg" aria-label="Staging turn in degrees" min={-180} max={180} step={1} value={draft}
+    onChange={(e) => setDraft(e.target.value)} onBlur={commit}
+    onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setDraft(String(value)); e.currentTarget.blur(); } }} />;
+}
+
 export function StagingPanel({ timeline, planning, planError, onRetry }: { timeline?: Timeline | null; planning?: boolean; planError?: string; onRetry?: () => void }) {
   const s = useAppSettings();
   const v2 = ['construction-v2', 'construction-auto', 'construction-v3', 'construction-v3-auto', 'construction-v4'].includes(s.planner ?? '');
@@ -98,6 +113,8 @@ export function StagingPanel({ timeline, planning, planError, onRetry }: { timel
       } });
     } else s.set({ floorStyle: style, frameStagingPending: false, frameStagingPrevious: null });
   };
+  const turn = stagingTurnOf(plan, model);
+  const turnTo = (deg: number) => useStudio.getState().apply((p) => setStagingTurn(p, model, deg));
   const force = (root: boolean) => useStudio.getState().apply((p) => setRootHint(p, model, ids, root));
   return (
     <div className="nx-pane bm-materials bm-staging" aria-label="Staging">
@@ -161,6 +178,19 @@ export function StagingPanel({ timeline, planning, planError, onRetry }: { timel
         <span className="nx-hint">{v2
           ? 'The construction planners lay out their own work bays, so staging applies to the standard planners only.'
           : 'How the pieces wait on the floor before they fly in. Rows with "By colour" or "By part" give tidy product-shot rows. Showcase, Gallery and Camera fan centre the pieces around the build. Camera frame uses the captured camera projection, only after you press Arrange pieces in frame. Camera adjustments and staging controls stay as drafts until then. Other layouts update immediately.'}</span>
+      </Section>
+
+      <Section title="Turn" value={turn ? `${turn}°` : undefined}>
+        <div className="bm-staging-turn">
+          <input type="range" aria-label="Turn the waiting pieces about the model" min={-180} max={180} step={1} value={turn}
+            onPointerDown={() => useStudio.getState().beginGesture()}
+            onPointerUp={() => useStudio.getState().endGesture()}
+            onBlur={() => { if (useStudio.getState().gesture) useStudio.getState().endGesture(); }}
+            onChange={(e) => turnTo(Number(e.target.value))} />
+          <TurnField value={turn} onCommit={turnTo} />
+          <button className="nx-btn nx-sm" disabled={!turn} title="Put the staging area back where it was planned" onClick={() => turnTo(0)}><Ic name="undo" /> Reset</button>
+        </div>
+        <span className="nx-hint">Swings all the waiting pieces round the model, which stays where it is. Instant: nothing is planned again.</span>
       </Section>
 
       <Section title="Waiting pieces" value={moved ? `${moved} moved` : undefined}>

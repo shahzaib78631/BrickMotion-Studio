@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import type { Assembly, Instance } from '../../src/model/assemble';
 import { connectionChecks, modelConnections } from '../../src/plan/connectionGraph';
-import { partConnectors } from '../../src/plan/connectors';
+import { partConnectors, worldConnectors } from '../../src/plan/connectors';
 import { realMetrics, realPartsReady as ready } from '../helpers/realParts';
 
 const inst = (key: string, part: string, world: Matrix4): Instance => ({
@@ -12,6 +12,31 @@ const inst = (key: string, part: string, world: Matrix4): Instance => ({
 const asm = (instances: Instance[]): Assembly => ({ nodes: [], instances, bounds: null, problems: [] });
 
 describe('model connection graph', () => {
+  it.skipIf(!ready)('matches an exhaustive search across positive and negative cell boundaries without duplicates', async () => {
+    const metrics = await realMetrics(['3001']);
+    const instances = [-42.1, -40, -38.1, 0, 1.9, 42.1].flatMap((x, index) => [
+      inst(`base${index}`, '3001', new Matrix4().makeTranslation(x, 0, index * 100)),
+      inst(`top${index}`, '3001', new Matrix4().makeTranslation(x + 1, -24, index * 100)),
+    ]);
+    const entries = instances.flatMap(i => worldConnectors(partConnectors(metrics(i.part)), i.world.elements)
+      .map(c => ({ ...c, key: i.key })));
+    const expected: string[] = [];
+    const signature = (a: string, b: string, type: string, pos: readonly number[]) =>
+      JSON.stringify([[a, b].sort(), type, pos]);
+    for (let i = 0; i < entries.length; i++) for (let j = i + 1; j < entries.length; j++) {
+      const a = entries[i], b = entries[j];
+      if (a.key === b.key || a.type !== b.type || a.gender === b.gender) continue;
+      if (a.axis.reduce((sum, v, k) => sum + v * b.axis[k], 0) > -0.98) continue;
+      if (a.joint && b.joint && a.joint !== b.joint) continue;
+      if (Math.hypot(...a.pos.map((v, k) => v - b.pos[k])) > 2.5) continue;
+      expected.push(signature(a.key, b.key, a.type, (a.gender === 'M' ? a : b).pos));
+    }
+    const actual = modelConnections(asm(instances), metrics)
+      .map(c => signature(c.a.key, c.b.key, c.type, c.pos));
+    expect(expected.length).toBeGreaterThan(0);
+    expect(actual.sort()).toEqual(expected.sort());
+  });
+
   it.skipIf(!ready)('finds every stud mating between two stacked 2x4 bricks', async () => {
     const metrics = await realMetrics(['3001']);
     // LDraw +Y is down: stacking a brick on top moves it −24 LDU

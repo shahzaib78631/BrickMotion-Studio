@@ -46,13 +46,13 @@ test('clear glass refracts in the path tracer and glowing parts light the scene'
   setBrickMaterials({ finish: 'studio', texture: 'none', glow: { colors: [46], strength: 1 } });
   const lamp = materialFor(transYellow, false);
   const soft = tracedMaterial(lamp, { ...DEFAULT_MATERIALS, glass: 'soft' }) as THREE.MeshPhysicalMaterial;
-  expect(soft.transmission).toBeLessThan(1);
+  expect(soft.transmission).toBe(1);
   expect(soft.emissiveIntensity).toBeGreaterThan((lamp as THREE.MeshPhysicalMaterial).emissiveIntensity);
   const clear = tracedMaterial(lamp, { ...DEFAULT_MATERIALS, glass: 'clear' }) as THREE.MeshPhysicalMaterial;
   expect(clear).toMatchObject({ transmission: 1, transparent: false, opacity: 1, ior: 1.52 });
   expect(clear.attenuationColor.equals((lamp as THREE.MeshPhysicalMaterial).attenuationColor)).toBe(true);
   // the viewport's material is untouched
-  expect((lamp as THREE.MeshPhysicalMaterial).transmission).toBeLessThan(1);
+  expect((lamp as THREE.MeshPhysicalMaterial).roughness).toBe(0.1);
   // solid bricks never turn to glass
   const brick = tracedMaterial(materialFor(red, false), { ...DEFAULT_MATERIALS, glass: 'clear' }) as THREE.MeshPhysicalMaterial;
   expect(brick.transmission).toBe(0);
@@ -119,13 +119,13 @@ test('glass settings restyle cached viewport materials without fading reflection
   const tint = material.attenuationColor.clone();
   setBrickMaterials({ finish: 'eyesight', palette: 'studio', texture: 'none', glass: 'clear' });
   expect(materialFor(transYellow, false)).toBe(material);
-  expect(material).toMatchObject({ transmission: 1, opacity: 1, transparent: false, depthWrite: true, roughness: 0.02, ior: 1.52, metalness: 0, thickness: 0.06, attenuationDistance: 0.3 });
+  expect(material).toMatchObject({ transmission: 1, opacity: 1, transparent: false, depthWrite: true, roughness: 0.02, ior: 1.52, metalness: 0, thickness: 1.2, attenuationDistance: 0.3 });
   expect(material.attenuationColor.equals(tint)).toBe(true);
   expect(material.version).toBeGreaterThan(version);
   setBrickMaterials({ finish: 'eyesight', palette: 'studio', texture: 'none', glass: 'milky' });
   expect(material).toMatchObject({ transmission: 0.3, roughness: 0.55, opacity: 1 });
   setBrickMaterials({ finish: 'eyesight', palette: 'studio', texture: 'none', glass: 'soft' });
-  expect(material).toMatchObject({ transmission: 0.92, roughness: 0.1, opacity: 1 });
+  expect(material).toMatchObject({ transmission: 1, roughness: 0.1, opacity: 1 });
 });
 
 
@@ -143,6 +143,7 @@ test('viewport glass thickness is not shrunk by the LDraw root scale', () => {
   const glass = materialFor(transYellow, false) as THREE.MeshPhysicalMaterial;
   const shader = { uniforms: {}, vertexShader: '#include <common>', fragmentShader: '#include <transmission_fragment>', defines: {} };
   glass.onBeforeCompile(shader as never, {} as THREE.WebGLRenderer);
-  expect(shader.fragmentShader).toContain('thickness / max(length(modelMatrix[0].xyz), 0.000001)');
+  expect(shader.fragmentShader).toContain('vBmGlassThickness > 0.0 ? vBmGlassThickness : thickness');
+  expect(shader.vertexShader).toContain('attribute float bmGlassThickness');
   expect(shader.fragmentShader).not.toContain('#include <transmission_fragment>');
 });
