@@ -40,6 +40,15 @@ struct RenderMesh {
 /// not in the table is kUnknownColor. Never throws.
 RenderMesh buildRenderMesh(const bm::ldraw::Mesh& mesh, const std::unordered_map<int, bm::ldraw::Color>& colors);
 
+/// Add narrow shading fillets on convex edges, retaining the original surface and underside ranges.
+void roundRenderEdges(RenderMesh& mesh, double width);
+
+/// Softens the base of standard LDraw studs embedded in a flat upper deck, without
+/// moving the surface or weakening any other LDraw outline. In particular, the
+/// explicit base ring in stud.dat is suppressed, while the top rim remains.
+/// No effect on unsupported/open cylinders, non-stud rings, or mesh bounds.
+void softenStudRoots(RenderMesh& mesh, double width);
+
 /// A box with flat normals: the furthest level of detail, and the stand-in for a missing
 /// part. An empty box gives an empty mesh.
 RenderMesh boxMesh(const bm::Box& box);

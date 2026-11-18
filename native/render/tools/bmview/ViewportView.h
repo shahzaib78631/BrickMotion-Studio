@@ -25,6 +25,7 @@ struct Session {
   std::unique_ptr<bmr::Renderer> renderer;
   std::optional<bmtools::Planned> planned;  ///< set on the main thread once planning is done
   bm::CancelToken cancel;                   ///< stops planning when the window goes
+  bool raytracedGlass = false;              ///< --raytraced-glass: start with ray-traced glass (G toggles it)
 };
 
 }  // namespace bmview

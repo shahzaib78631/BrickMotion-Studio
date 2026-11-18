@@ -4,10 +4,9 @@
 // filtering would and by how near its depth is to the pixel's, so that what was worked out on
 // one surface does not bleed onto another across a silhouette. Reversed depth is about 1 / the
 // distance, so a relative difference in it is one in distance.
-float2 upsample(texture2d<float> coarse, depth2d<float> depth, texture2d<float> shares, uint2 at) {
+float2 upsample(texture2d<float> coarse, depth2d<float> depth, bool onFloor, uint2 at) {
   int2 halfSize = int2(coarse.get_width(), coarse.get_height()), fullSize = int2(depth.get_width(), depth.get_height());
   float centre = depth.read(at);
-  bool onFloor = shares.read(at).a > 0.5;  // the floor's light and a brick's occlusion are not mixed
   float2 h = (float2(at) + 0.5) * 0.5 - 0.5;
   int2 base = int2(floor(h));
   float2 f = h - float2(base);
@@ -18,13 +17,55 @@ float2 upsample(texture2d<float> coarse, depth2d<float> depth, texture2d<float> 
     int2 cell = clamp(base + int2(k & 1, k >> 1), int2(0), halfSize - 1);
     float d = depth.read(uint2(clamp(cell * 2, int2(0), fullSize - 1)));
     float apart = abs(d - centre) / max(centre, 1e-6);
-    if ((shares.read(uint2(clamp(cell * 2, int2(0), fullSize - 1))).a > 0.5) != onFloor) apart = 1e3;
-    float2 v = coarse.read(uint2(cell)).rg;
+    float4 sample = coarse.read(uint2(cell));
+    if (sample.a < 0.5 || (sample.b > 0.5) != onFloor) continue;
+    float2 v = sample.rg;
     float w = ((k & 1) ? f.x : 1.0 - f.x) * ((k >> 1) ? f.y : 1.0 - f.y) * exp(-apart / 0.02);
     sum += v * w, weight += w;
     if (apart < best) best = apart, nearest = v;
   }
   return weight > 1e-4 ? sum / weight : nearest;
+}
+
+// The floor is sampled independently of the foreground depth. At an antialiased
+// silhouette, the resolved MSAA depth is sample 0 (often the *brick*), whereas
+// the floor and its coverage can occupy the other three samples. Rejecting
+// floor-light samples against that brick depth makes an unshadowed bright rim.
+// The floor is a single plane: nearby floor-light samples can be interpolated
+// spatially without crossing any depth discontinuity *on the floor itself*.
+float upsampleFloor(texture2d<float> coarse, uint2 at) {
+  int2 size = int2(coarse.get_width(), coarse.get_height());
+  float2 h = (float2(at) + 0.5) * 0.5 - 0.5;
+  int2 base = int2(floor(h));
+  float2 f = fract(h);
+  float sum = 0.0, weight = 0.0;
+  for (int k = 0; k < 4; ++k) {
+    int2 q = clamp(base + int2(k & 1, k >> 1), int2(0), size - 1);
+    float4 sample = coarse.read(uint2(q));
+    // .b identifies the floor; .a identifies valid depth. Do not mix brick AO
+    // (also in .r) into the floor light, even where they share an MSAA pixel.
+    if (sample.b < 0.5 || sample.a < 0.5) continue;
+    float w = ((k & 1) ? f.x : 1.0 - f.x) * ((k >> 1) ? f.y : 1.0 - f.y);
+    sum += sample.r * w;
+    weight += w;
+  }
+  if (weight > 1e-4) return sum / weight;
+
+  // Only the few pixels right against a silhouette need this fallback: the
+  // nearest half-resolution cell may contain the object at sample 0, leaving
+  // no floor sample in the bilinear footprint. A short local search recovers
+  // the floor light from just outside the silhouette. The common path above
+  // costs only four reads and needs no extra render target or pass.
+  float closest = 1e9, light = 1.0;
+  for (int y = -2; y <= 2; ++y)
+    for (int x = -2; x <= 2; ++x) {
+      int2 q = clamp(base + int2(x, y), int2(0), size - 1);
+      float4 sample = coarse.read(uint2(q));
+      if (sample.b < 0.5 || sample.a < 0.5) continue;
+      float d = dot(float2(q) - h, float2(q) - h);
+      if (d < closest) { closest = d; light = sample.r; }
+    }
+  return light;
 }
 
 fragment float4 compositeFragment(ScreenOut in [[stage_in]], constant FrameUniforms& frame [[buffer(1)]], texture2d<float> scene [[texture(0)]], texture2d<float> accum [[texture(1)]],
@@ -36,15 +77,21 @@ fragment float4 compositeFragment(ScreenOut in [[stage_in]], constant FrameUnifo
   // Occlusion (r) and the key light's shadow (g), worked out at half size and smoothed.
   // On the floor, r is instead the share of its light that reaches it.
   bool worked = frame.switches.x > 0.5 || frame.switches.y > 0.5;
-  float2 seen = worked ? upsample(occlusion, depth, ambient, at) : float2(1.0);
-  float ao = seen.r, keyLit = seen.g;
   float4 share = ambient.read(at);
+  float2 seen = worked ? upsample(occlusion, depth, false, at) : float2(1.0);
+  float floorAo = worked && share.g > 1e-4 ? upsampleFloor(occlusion, at) : 1.0;
+  float ao = seen.r, keyLit = seen.g;
   c.rgb *= saturate(1.0 - share.r * (1.0 - pow(ao, frame.rig.z)) - share.b * (1.0 - keyLit));
-  // What is behind the transparent layers: the opaque picture over the background, where the
-  // floor is open (share.g) with the floor's light (ao.r there). Linear light, clipped at white,
-  // as EyeSight's renders are (Standard view).
-  float3 lit = c.a > 1e-4 ? saturate(c.rgb / c.a) : float3(0);
-  float3 behind = mix(frame.background.rgb, lit, saturate(c.a)) * (1.0 - share.g * (1.0 - ao));
+  // MSAA resolves coverage, surface light, and floor coverage separately.
+  // Reconstruct the covered surface and uncovered floor independently; applying
+  // the floor shadow to the whole pixel instead brightens the uncovered part at
+  // silhouettes *and* darkens brick samples that should not receive it.
+  // Clamp only the per-sample light to white, preserving subpixel coverage.
+  float coverage = saturate(c.a);
+  float3 solid = c.a > 1e-4 ? saturate(c.rgb / c.a) * coverage : float3(0.0);
+  float floorCoverage = min(saturate(share.g), 1.0 - coverage);
+  float freeCoverage = max(1.0 - coverage - floorCoverage, 0.0);
+  float3 behind = solid + frame.background.rgb * (freeCoverage + floorCoverage * floorAo);
   // The transparent layers: they let through exp(-depth) of what is behind (rgb what they
   // absorb, a what they cover), and cover it with their weighted mean colour.
   float4 sum = accum.read(at);

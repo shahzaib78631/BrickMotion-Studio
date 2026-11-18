@@ -101,7 +101,7 @@ struct CasterMap {
 };
 
 struct Pipelines {
-  id<MTLRenderPipelineState> height = nil, brick = nil, glass = nil, transparent = nil, floor = nil, edges = nil, shadow = nil, composite = nil, mask = nil, ids = nil, ao = nil, aoBlur = nil;
+  id<MTLRenderPipelineState> height = nil, brick = nil, glass = nil, glassDepth = nil, glassPreview = nil, transparent = nil, floor = nil, edges = nil, shadow = nil, composite = nil, mask = nil, ids = nil, ao = nil, aoBlur = nil;
   id<MTLDepthStencilState> depthWrite = nil, depthRead = nil, depthNone = nil, shadowDepth = nil;
   id<MTLSamplerState> smooth = nil, shadowSampler = nil;
   bool ok = false;
@@ -160,6 +160,12 @@ struct Renderer::Impl {
   std::vector<Batch> lastSeen;
   id<MTLBuffer> pickList = nil;
   void drawIds();
+
+  id<MTLAccelerationStructure> glassAcceleration = nil;
+  id<MTLBuffer> glassNodes = nil, glassTriangles = nil;
+  uint32_t glassNodeCount = 0;
+  uint64_t glassRevision = UINT64_MAX;
+  void prepareGlass();
 
   FrameBuffer frameUniforms, drawUniforms, visible, floorBins;
   // The floor's table of light per direction and elevation, for the lights it was made for.

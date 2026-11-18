@@ -27,6 +27,7 @@ constexpr double kReadoutSeconds = 0.25;
   bmr::OrbitCamera _orbit;
   bmr::FrameOptions _options;
   bool _dirty;
+  CFTimeInterval _lastMotion;
   int _width, _height;  // pixels
 
   // Playback. _frame is -1 until there is a plan (the model is shown finished).
@@ -53,6 +54,7 @@ constexpr double kReadoutSeconds = 0.25;
   _dirty = true;
   // The shadow and height maps are drawn again over frames while the view turns or pieces move.
   _options.mapTrianglesPerFrame = bmr::kMapTrianglesPerFrame;
+  _options.refractiveGlass = session->raytracedGlass;
   self.wantsLayer = YES;
   self.layerContentsRedrawPolicy = NSViewLayerContentsRedrawNever;
 
@@ -149,10 +151,13 @@ constexpr double kReadoutSeconds = 0.25;
     return;
   }
   bmr::Renderer& r = *_session->renderer;
-  const bmr::FrameStats s = r.draw(_orbit.camera(self.aspect, r.scene().bounds), _options, (__bridge void*)update.drawable);
+  bmr::FrameOptions options = _options;
+  // Ray-traced glass, when asked for, once the view has been still for a moment.
+  options.refractiveGlass = _options.refractiveGlass && !_playing && CACurrentMediaTime() - _lastMotion >= 0.15;
+  const bmr::FrameStats s = r.draw(_orbit.camera(self.aspect, r.scene().bounds), options, (__bridge void*)update.drawable);
   // A frame not sent (the drawable had not caught up with a resize) is drawn on the next
   // refresh, as is one whose maps are still being drawn over frames.
-  _dirty = _playing || s.settling || (!s.submitted && _width > 0 && _height > 0);
+  _dirty = _playing || (_options.refractiveGlass && !options.refractiveGlass) || s.settling || (!s.submitted && _width > 0 && _height > 0);
   if (s.submitted) {
     _lastStats = s;
     _cpuSum += s.cpuMs, _gpuSum += r.lastGpuMs(), _framesSummed++;
@@ -234,6 +239,7 @@ constexpr double kReadoutSeconds = 0.25;
 
 /// The user moved the camera.
 - (void)moved {
+  _lastMotion = CACurrentMediaTime();
   if (_playing) _userMoved = true;
   [self changed];
 }
@@ -319,6 +325,7 @@ constexpr double kReadoutSeconds = 0.25;
     case 'e': case 'E': _options.edges = !_options.edges; break;
     case 's': case 'S': _options.shadows = !_options.shadows; break;
     case 'a': case 'A': _options.ambientOcclusion = !_options.ambientOcclusion; break;
+    case 'g': case 'G': _options.refractiveGlass = !_options.refractiveGlass; break;
     case 'i': case 'I': _readout.hidden = !_readout.hidden; [self showReadout]; return;
     default: [super keyDown:event]; return;
   }

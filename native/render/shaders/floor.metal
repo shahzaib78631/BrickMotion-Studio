@@ -25,6 +25,8 @@ struct FloorColor {
 // floor's light that reaches it past the model (floor_light.metal, worked out in the half-size
 // pass, fading out toward the floor's rim there).
 fragment FloorColor floorFragment(FloorOut in [[stage_in]], constant FrameUniforms& frame [[buffer(1)]]) {
+  // LDraw is +Y down. The shadow catcher must not occlude the model from below.
+  if (frame.eye.y >= frame.floorPlane.x) discard_fragment();
   FloorColor out;
   out.color = float4(0);
   out.shares = float4(0, 1, 0, 1);

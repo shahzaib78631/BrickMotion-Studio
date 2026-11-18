@@ -15,6 +15,11 @@ namespace bmr {
 
 struct FrameOptions {
   bool edges = true, shadows = true, ambientOcclusion = true, floor = true;
+  /// Glass ray-traced through every wall, cavity and neighbour (glass_transport.metal). Off
+  /// unless asked for (bmview and bmshot --raytraced-glass): it costs many times the frame, and
+  /// its scene is built again over all the model's triangles whenever a piece moves. Off, glass
+  /// is the fast preview.
+  bool refractiveGlass = false;
   bool cull = true;      ///< leave out what is not in view
   bool lightsFollowCamera = true;  ///< the light rig turns with the camera's heading (EyeSight's BUILD_FL), or stays fixed to the model
   int forceDetail = -1;  ///< -1: by size on screen; 0, 1, 2: that level of detail for everything (tests, benchmark)

@@ -10,6 +10,7 @@ struct AoUniforms {
   float4 lens;   // tan of half the angle of view up and across, near, far
   float4 shape;  // radius (LDU), bias (cosine), strength, full-size width
   float4 size;   // full-size height, half width, half height, unused
+  float4 samplePosition; // location of the resolved MSAA depth sample within its pixel
   float4 eye, right, up, forward;  // the camera in world space (xyz), to carry view-space points there
 };
 
@@ -23,17 +24,17 @@ float4 viewPoint(depth2d<float> depth, int2 p, constant AoUniforms& u) {
   float d = depth.read(uint2(p));
   if (d <= 0.0) return float4(0);
   float z = viewDepth(d, u.lens);
-  float2 ndc = float2((float(p.x) + 0.5) / size.x * 2.0 - 1.0, 1.0 - (float(p.y) + 0.5) / size.y * 2.0);
+  float2 ndc = float2((float(p.x) + u.samplePosition.x) / size.x * 2.0 - 1.0, 1.0 - (float(p.y) + u.samplePosition.y) / size.y * 2.0);
   return float4(ndc.x * z * u.lens.y, ndc.y * z * u.lens.x, -z, 1.0);
 }
 
-fragment float2 aoFragment(ScreenOut in [[stage_in]], constant AoUniforms& u [[buffer(0)]], constant FrameUniforms& frame [[buffer(1)]], constant FloorBins& bins [[buffer(2)]],
+fragment float4 aoFragment(ScreenOut in [[stage_in]], constant AoUniforms& u [[buffer(0)]], constant FrameUniforms& frame [[buffer(1)]], constant FloorBins& bins [[buffer(2)]],
                            depth2d<float> depth [[texture(0)]], depth2d<float> shadowMap [[texture(1)]], texture2d<float> heights [[texture(2)]], texture2d<float> shares [[texture(3)]],
                            sampler shadowSampler [[sampler(1)]]) {
   int2 cell = int2(in.position.xy);
   int2 at = cell * 2;
   float4 p = viewPoint(depth, at, u);
-  if (p.w == 0) return float2(1.0);
+  if (p.w == 0) return float4(1, 1, 0, 0);
   // The surface's normal from its neighbours, each side taking the nearer in depth so a silhouette does not bend it.
   float4 l = viewPoint(depth, at - int2(1, 0), u), r = viewPoint(depth, at + int2(1, 0), u);
   float4 t = viewPoint(depth, at - int2(0, 1), u), b = viewPoint(depth, at + int2(0, 1), u);
@@ -48,20 +49,20 @@ fragment float2 aoFragment(ScreenOut in [[stage_in]], constant AoUniforms& u [[b
   // worked out under glass too, where it is not used, or the 1 there would be smoothed out onto
   // the floor around it.
   float4 share = shares.read(uint2(at));
-  if (share.a > 0.5 && abs(world.y - frame.floorPlane.x) < 0.5) {
+  if (share.a > 0.0 && abs(world.y - frame.floorPlane.x) < 0.025) {
     float fade = floorFade(world, frame);
-    if (frame.floorLook.z < 0.5 || fade <= 0.0) return float2(1.0);
-    return float2(mix(1.0, floorLight(world, frame, bins, heights, uint2(cell), frame.switches.y > 0.5, frame.switches.x > 0.5), fade), 1.0);
+    if (frame.floorLook.z < 0.5 || fade <= 0.0) return float4(1, 1, 1, 1);
+    return float4(mix(1.0, floorLight(world, frame, bins, heights, uint2(cell), frame.switches.y > 0.5, frame.switches.x > 0.5), fade), 1, 1, 1);
   }
   float lit = 1.0;
   if (frame.switches.x > 0.5) {
     float3 worldNormal = normalize(u.right.xyz * n.x + u.up.xyz * n.y - u.forward.xyz * n.z);
     lit = keyShadow(world, worldNormal, frame, shadowMap, shadowSampler, tileTurn(uint2(cell)));
   }
-  if (frame.switches.y < 0.5) return float2(1.0, lit);
+  if (frame.switches.y < 0.5) return float4(1, lit, 0, 1);
   float radius = u.shape.x;
   float reach = min(radius / (-p.z * u.lens.x) * u.size.x * 0.5, 160.0);  // pixels
-  if (reach < 1.0) return float2(1.0, lit);
+  if (reach < 1.0) return float4(1, lit, 0, 1);
   // A fixed 4 x 4 pattern turns the directions and offsets the steps from pixel to pixel; the blur removes it.
   const float pattern[16] = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
   float jitter = (pattern[(cell.y & 3) * 4 + (cell.x & 3)] + 0.5) / 16.0;
@@ -74,6 +75,10 @@ fragment float2 aoFragment(ScreenOut in [[stage_in]], constant AoUniforms& u [[b
       float2 step = dir * reach * (float(s) + fract(jitter * 7.0 + 0.5)) / 4.0;
       float4 q = viewPoint(depth, at + int2(round(step)), u);
       if (q.w == 0) continue;
+      // The floor hides nothing: EyeSight's ground is a shadow catcher, so a brick's face sees
+      // the white world below the horizon as above it, and the bottom brick of a stack is as
+      // bright as the one on it.
+      if (abs(u.eye.y + u.right.y * q.x + u.up.y * q.y - u.forward.y * q.z - frame.floorPlane.x) < 0.5) continue;
       float3 v = q.xyz - p.xyz;
       float dist = length(v);
       if (dist < 1e-3 || dist > radius) continue;
@@ -83,30 +88,32 @@ fragment float2 aoFragment(ScreenOut in [[stage_in]], constant AoUniforms& u [[b
     }
     sum += most;
   }
-  return float2(saturate(1.0 - u.shape.z * sum / 8.0), lit);
+  return float4(saturate(1.0 - u.shape.z * sum / 8.0), lit, 0, 1);
 }
 
 // The floor's r (its light) and a brick's (its occlusion) are not mixed, even where the two
 // meet at one depth: the shares target (a = 1 on the floor) says which a pixel is.
-fragment float2 aoBlurFragment(ScreenOut in [[stage_in]], constant AoUniforms& u [[buffer(0)]], texture2d<float> ao [[texture(0)]], depth2d<float> depth [[texture(1)]],
+fragment float4 aoBlurFragment(ScreenOut in [[stage_in]], constant AoUniforms& u [[buffer(0)]], texture2d<float> ao [[texture(0)]], depth2d<float> depth [[texture(1)]],
                                texture2d<float> shares [[texture(2)]]) {
   int2 cell = int2(in.position.xy);
   int2 halfSize = int2(u.size.y, u.size.z);
   int2 fullSize = int2(u.shape.w, u.size.x);
   float centre = depth.read(uint2(clamp(cell * 2, int2(0), fullSize - 1)));
-  if (centre <= 0.0) return float2(1.0);
+  if (centre <= 0.0) return float4(1, 1, 0, 0);
   float z = viewDepth(centre, u.lens);
-  bool onFloor = shares.read(uint2(clamp(cell * 2, int2(0), fullSize - 1))).a > 0.5;
+  float4 source = ao.read(uint2(cell));
+  bool onFloor = source.b > 0.5;
   float2 sum = 0;
   float weight = 0;
   for (int y = -2; y < 2; y++)
     for (int x = -2; x < 2; x++) {
       int2 q = clamp(cell + int2(x, y), int2(0), halfSize - 1);
       float d = depth.read(uint2(clamp(q * 2, int2(0), fullSize - 1)));
-      bool same = (shares.read(uint2(clamp(q * 2, int2(0), fullSize - 1))).a > 0.5) == onFloor;
+      float4 sample = ao.read(uint2(q));
+      bool same = sample.a > 0.5 && (sample.b > 0.5) == onFloor;
       float w = d > 0.0 && same ? exp(-abs(viewDepth(d, u.lens) - z) / (0.02 * z)) : 0.0;
       sum += ao.read(uint2(q)).rg * w;
       weight += w;
     }
-  return weight > 0 ? sum / weight : float2(1.0);
+  return float4(weight > 0 ? sum / weight : source.rg, source.ba);
 }

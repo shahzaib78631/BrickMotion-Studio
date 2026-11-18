@@ -42,11 +42,33 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
       for (int d = 0; d < 2; d++) add(outlined, g, static_cast<Detail>(d), inView[g].edges[d]);
     stats.culled += inView[g].culled;
   }
+  const bool glassInView = std::any_of(seen.begin(), seen.end(), [&](const Batch& batch) {
+    const Group& g = scene.groups[batch.group];
+    return g.material.transparent() && !g.placeholder;
+  });
+  if (glassInView && options.refractiveGlass) prepareGlass();
+
   // What casts, into the key light's depth map and the height map over the model: every opaque
   // piece shown, in view or not (one out of view can shadow one in it), at low detail without
   // studs unless a detail is forced (a shadow does not show a stud's sides).
   const int casterDetail = forced ? options.forceDetail : static_cast<int>(Detail::Shadow);
-  const LightRig rig = studioLights(camera, options.lightsFollowCamera);
+  LightRig rig = studioLights(camera, options.lightsFollowCamera && !getenv("BM_LIGHTS_FIXED"));  // DEBUG HOOK: BM_LIGHTS_FIXED
+  if (const char* turn = getenv("BM_RIG_TURN")) {  // DEBUG HOOK: the rig turned about the vertical (degrees)
+    const double t = atof(turn) * M_PI / 180, c = std::cos(t), sn = std::sin(t);
+    for (int i = 0; i < 4; i++) rig.toward[i] = bm::Vec3{rig.toward[i].x * c - rig.toward[i].z * sn, rig.toward[i].y, rig.toward[i].x * sn + rig.toward[i].z * c};
+  }
+  float hookWorld = kWorldStrength;  // DEBUG HOOK
+  if (const char* sc = getenv("BM_RIG_SCALE")) {  // DEBUG HOOK: key,RL,FR,RR,world scales
+    float f[5] = {1, 1, 1, 1, 1};
+    sscanf(sc, "%f,%f,%f,%f,%f", &f[0], &f[1], &f[2], &f[3], &f[4]);
+    for (int i = 0; i < 4; i++) rig.strength[i] *= f[i];
+    hookWorld *= f[4];
+  }  // DEBUG HOOK: BM_LIGHT_ONLY=k (light k alone, as the key) or 9 (the world alone)
+  if (const char* only = getenv("BM_LIGHT_ONLY")) {
+    const int k = atoi(only);
+    if (k >= 0 && k < 4) std::swap(rig.toward[0], rig.toward[k]), std::swap(rig.strength[0], rig.strength[k]), hookWorld = 0;
+    for (int i = (k >= 0 && k < 4) ? 1 : 0; i < 4; i++) rig.strength[i] = 0;
+  }
   const bm::Vec3 toward = rig.toward[0], down{0, -1, 0};
   // The half-size pass (occlusion, the key's shadow, the floor's light) runs with either on;
   // the height map, for the floor's light, is kept only while the floor is drawn too.
@@ -194,10 +216,10 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   fu.eye = simd_make_float4(static_cast<float>(eye.x), static_cast<float>(eye.y), static_cast<float>(eye.z), 1);
   for (int i = 0; i < 4; i++)
     fu.lights[i] = simd_make_float4(static_cast<float>(rig.toward[i].x), static_cast<float>(rig.toward[i].y), static_cast<float>(rig.toward[i].z), rig.strength[i]);
-  fu.rig = simd_make_float4(kWorldStrength, kRigSinSquared, kAoBrickPower, 0);
+  fu.rig = simd_make_float4(hookWorld, kRigSinSquared, getenv("BM_AO_POWER") ? static_cast<float>(atof(getenv("BM_AO_POWER"))) : kAoBrickPower, 0);  // DEBUG HOOK
   fu.background = simd_make_float4(options.background[0], options.background[1], options.background[2], 1);
   fu.viewport = simd_make_float4(static_cast<float>(width), static_cast<float>(height), 1.0f / static_cast<float>(width), 1.0f / static_cast<float>(height));
-  fu.switches = simd_make_float4(options.shadows ? 1 : 0, options.ambientOcclusion ? 1 : 0, 0, 0);
+  fu.switches = simd_make_float4(options.shadows ? 1 : 0, options.ambientOcclusion ? 1 : 0, getenv("BM_DEBUG_VIEW") ? static_cast<float>(atof(getenv("BM_DEBUG_VIEW"))) : 0, 0);  // DEBUG HOOK
   const double floorY = (b.empty() ? 0.0 : b.max.y - scene.origin.y) + kFloorLift;
   fu.floorPlane = simd_make_float4(static_cast<float>(floorY), static_cast<float>(kFloorExtent * diagonal), static_cast<float>(options.shadows ? keyShown.texel : key.texel), kShadowBias);
   fu.floorCentre = simd_make_float4(static_cast<float>(middle.x - scene.origin.x), static_cast<float>(middle.z - scene.origin.z), kFloorShadow, kOitDepthScale);
@@ -205,7 +227,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   const simd_float3 accent = simd_make_float3(linearFromSrgb(kSelectionRgb[0]), linearFromSrgb(kSelectionRgb[1]), linearFromSrgb(kSelectionRgb[2]));
   fu.selection = simd_make_float4(accent.x, accent.y, accent.z, selected.empty() ? 0.0f : kSelectionWidth);
   fu.heightProj = simdFrom(floorLit ? heightShown.matrix : above.matrix);
-  fu.glass = simd_make_float4(kGlassAbsorption, kFloorThroughGlass, kGlassIor, 0);
+  fu.glass = simd_make_float4(kGlassAbsorption, kFloorThroughGlass, kGlassIor, options.floor && eye.y < floorY ? 1 : 0);
   fu.floorLook = simd_make_float4(static_cast<float>(std::max(1.0, floorLit ? heightShown.texel : above.texel)), static_cast<float>(kFloorLookShare * kFloorExtent * diagonal), floorLit && !liveBounds.empty() ? 1.0f : 0.0f, kFloorSkyPower);
   // How much of each light's disk each of the floor's 12 directions and 16 elevation bins
   // holds (floor_light.metal), with each bin's light on a level floor (even in sin^2 elevation):
@@ -255,7 +277,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     const Material& m = group.material;
     du[i].base = simd_make_float4(m.base[0], m.base[1], m.base[2], m.alpha);
     du[i].surface = simd_make_float4(m.roughness, m.metalness, m.clearcoat, group.placeholder ? 1 : 0);
-    du[i].edge = simd_make_float4(m.edge[0], m.edge[1], m.edge[2], kEdgeOpacity);
+    du[i].edge = simd_make_float4(m.edge[0], m.edge[1], m.edge[2], m.transparent() && !group.placeholder ? kGlassEdgeOpacity : kEdgeOpacity);
     du[i].flip = simd_make_float4(batch.mirrored ? -1 : 1, batch.detail == Detail::Box ? 2 : 1, 0, 0);
     const bm::Box& part = parts[batch.group].bounds;
     const bm::Vec3 c = part.empty() ? bm::Vec3{} : (part.min + part.max) * 0.5;
@@ -401,7 +423,12 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
       stats.drawCalls++;
     }
 
-    if (options.edges) {
+    // Draw opaque outlines before glass, and glass outlines after glass's depth
+    // and colour. Otherwise glassTransportFragment overwrites its own edges and
+    // the panes lose the darker, well-defined contours visible in EyeSight.
+    // Each outlined batch is still drawn exactly once (no extra mesh work).
+    auto drawOutlines = [&](bool glass) {
+      if (!options.edges) return;
       [enc setCullMode:MTLCullModeNone];
       [enc setRenderPipelineState:pipelines.edges];
       [enc setDepthStencilState:pipelines.depthRead];
@@ -409,8 +436,10 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
       [enc setVertexBytes:&nearer length:sizeof nearer atIndex:5];
       for (size_t k = 0; k < outlined.size(); k++) {
         const Batch& batch = outlined[k];
-        const size_t i = seen.size() + k;  // its DrawUniforms
-        const GpuMesh& gpu = mesh(scene.groups[batch.group], batch.detail);
+        const Group& group = scene.groups[batch.group];
+        if ((group.material.transparent() && !group.placeholder) != glass) continue;
+        const size_t i = seen.size() + k;
+        const GpuMesh& gpu = mesh(group, batch.detail);
         if (!gpu.edgeVertices) continue;
         [enc setVertexBuffer:gpu.edges offset:0 atIndex:0];
         [enc setVertexBuffer:instanceBuffers[batch.group][slot] offset:0 atIndex:3];
@@ -420,14 +449,34 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
         [enc drawPrimitives:MTLPrimitiveTypeLine vertexStart:0 vertexCount:gpu.edgeVertices instanceCount:batch.count];
         stats.drawCalls++;
       }
-    }
+    };
+    drawOutlines(false);
 
     [enc setCullMode:MTLCullModeBack];
     [enc setDepthStencilState:pipelines.depthRead];
-    [enc setRenderPipelineState:pipelines.glass];
-    bricks(Kind::Glass);
+    if (glassInView && options.refractiveGlass && glassNodes && glassTriangles) {
+      [enc setDepthStencilState:pipelines.depthWrite];
+      // Resolve the nearest glass surface before running the expensive transport shader.
+      [enc setRenderPipelineState:pipelines.glassDepth];
+      bricks(Kind::Glass);
+      [enc setDepthStencilState:pipelines.depthRead];
+      [enc setFragmentBuffer:glassNodes offset:0 atIndex:3];
+      [enc setFragmentBuffer:glassTriangles offset:0 atIndex:4];
+      if (glassAcceleration) {
+        [enc setFragmentAccelerationStructure:glassAcceleration atBufferIndex:6];
+        [enc useResource:glassAcceleration usage:MTLResourceUsageRead stages:MTLRenderStageFragment];
+      }
+      [enc setFragmentBytes:&glassNodeCount length:sizeof glassNodeCount atIndex:5];
+      [enc setRenderPipelineState:pipelines.glass];
+      bricks(Kind::Glass);
+    } else if (glassInView) {
+      [enc setRenderPipelineState:pipelines.glassPreview];
+      bricks(Kind::Glass);
+    }
+    [enc setDepthStencilState:pipelines.depthRead];
     [enc setRenderPipelineState:pipelines.transparent];
     bricks(Kind::Placeholder);
+    drawOutlines(true);
     [enc endEncoding];
   }
 
@@ -459,7 +508,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   // Ambient occlusion at half size, then blurred.
   if (screenPass) {
     struct AoUniforms {
-      simd_float4 lens, shape, size, eye, right, up, forward;
+      simd_float4 lens, shape, size, samplePosition, eye, right, up, forward;
     } u;
     {
       // The camera's axes in world space, as viewMatrix makes them.
@@ -467,6 +516,9 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
       auto v4 = [](bm::Vec3 v) { return simd_make_float4(static_cast<float>(v.x), static_cast<float>(v.y), static_cast<float>(v.z), 0); };
       u.eye = v4(e), u.right = v4(r), u.up = v4(up), u.forward = v4(f);
     }
+    MTLSamplePosition samples[kSamples];
+    [device->device getDefaultSamplePositions:samples count:kSamples];
+    u.samplePosition = simd_make_float4(samples[0].x, samples[0].y, 0, 0);
     const float tanY = static_cast<float>(std::tan(camera.fovY / 2));
     u.lens = simd_make_float4(tanY, tanY * static_cast<float>(camera.aspect), static_cast<float>(camera.near), static_cast<float>(camera.far));
     u.shape = simd_make_float4(kAoRadius, kAoBias, kAoStrength, static_cast<float>(width));

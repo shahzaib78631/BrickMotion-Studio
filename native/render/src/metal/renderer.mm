@@ -239,8 +239,8 @@ void Renderer::Impl::makeTargets() {
   {
     const int fullW = width, fullH = height;
     width = (fullW + 1) / 2, height = (fullH + 1) / 2;  // make() reads the size
-    aoRaw = make(MTLPixelFormatRG8Unorm, 1, readable, MTLStorageModePrivate);
-    aoSoft = make(MTLPixelFormatRG8Unorm, 1, readable, MTLStorageModePrivate);
+    aoRaw = make(MTLPixelFormatRGBA8Unorm, 1, readable, MTLStorageModePrivate);
+    aoSoft = make(MTLPixelFormatRGBA8Unorm, 1, readable, MTLStorageModePrivate);
     width = fullW, height = fullH;
   }
   final = make(MTLPixelFormatBGRA8Unorm_sRGB, 1, MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead, MTLStorageModeShared);

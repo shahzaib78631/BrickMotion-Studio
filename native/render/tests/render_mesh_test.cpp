@@ -128,8 +128,8 @@ TEST_CASE("low detail has fewer triangles for a round part and nearly the same b
   MeshLibrary meshes(model, full, low);
   const auto round = meshes.get("3941.dat", Detail::Full), roundLow = meshes.get("3941.dat", Detail::Low);
   REQUIRE(roundLow->indices.size() < round->indices.size());
-  // Measured over common parts, low detail keeps 50 to 80 percent of the triangles: a 2x4 brick about half.
-  REQUIRE(meshes.get("3001.dat", Detail::Low)->indices.size() < meshes.get("3001.dat", Detail::Full)->indices.size() * 6 / 10);
+  // Low detail still saves triangles after adding the same moulded edge bands.
+  REQUIRE(meshes.get("3001.dat", Detail::Low)->indices.size() < meshes.get("3001.dat", Detail::Full)->indices.size() * 85 / 100);
   for (double d : {roundLow->bounds.min.x - round->bounds.min.x, roundLow->bounds.max.x - round->bounds.max.x, roundLow->bounds.min.y - round->bounds.min.y, roundLow->bounds.max.y - round->bounds.max.y,
                    roundLow->bounds.min.z - round->bounds.min.z, roundLow->bounds.max.z - round->bounds.max.z})
     REQUIRE(std::abs(d) < 1.0);
@@ -142,4 +142,30 @@ TEST_CASE("low detail has fewer triangles for a round part and nearly the same b
     REQUIRE(meshes.get("nosuchpart.dat", d) != nullptr);
     REQUIRE(meshes.get("nosuchpart.dat", d)->empty());
   }
+}
+
+TEST_CASE("rounded shading stays within a narrow edge band and preserves surface area", "[mesh]") {
+  RenderMesh m = boxMesh(Box{{-10, 0, -10}, {10, 24, 10}});
+  const auto bounds = m.bounds;
+  roundRenderEdges(m, 0.45);
+  REQUIRE(m.topIndices == m.indices.size());
+  double area = 0;
+  size_t bent = 0, flat = 0;
+  for (size_t i = 0; i < m.indices.size(); i += 3) {
+    const Vertex &a = m.vertices[m.indices[i]], &b = m.vertices[m.indices[i + 1]], &c = m.vertices[m.indices[i + 2]];
+    const Vec3 cross0 = cross(P(b) - P(a), P(c) - P(a));
+    const Vec3 face = normalized(cross0);
+    area += length(cross0) / 2;
+    REQUIRE(dot(face, (P(a) + P(b) + P(c)) * (1.0 / 3) - Vec3{0, 12, 0}) > 0);
+    for (const Vertex* v : {&a, &b, &c}) {
+      REQUIRE(std::abs(length(N(*v)) - 1) < 1e-5);
+      REQUIRE(dot(N(*v), face) > 0.7);
+      if (dot(N(*v), face) < 0.99) ++bent; else ++flat;
+      REQUIRE(v->px >= bounds.min.x); REQUIRE(v->px <= bounds.max.x);
+      REQUIRE(v->py >= bounds.min.y); REQUIRE(v->py <= bounds.max.y);
+      REQUIRE(v->pz >= bounds.min.z); REQUIRE(v->pz <= bounds.max.z);
+    }
+  }
+  REQUIRE(std::abs(area - 2720) < 0.01);
+  REQUIRE(bent > 0); REQUIRE(flat > 0);
 }

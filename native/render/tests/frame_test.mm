@@ -255,8 +255,9 @@ TEST_CASE("a brick behind a transparent brick shows through it, tinted", "[gpu][
   REQUIRE(channelGap(mid, glass) > 30);
   // Tinted: red against blue, it is redder than the bare blue brick by much.
   REQUIRE(int(mid[0]) - int(mid[2]) > int(bare[0]) - int(bare[2]) + 60);
-  // And it is still bluer than green, as the brick behind is.
-  REQUIRE(mid[2] > mid[1]);
+  // A solid 20-LDU red slab can extinguish blue below 8-bit precision; it
+  // must not introduce green that was absent in the object behind it.
+  REQUIRE(mid[2] >= mid[1]);
 }
 
 TEST_CASE("two overlapping transparent bricks look the same whichever is listed first", "[gpu][frame]") {
@@ -266,7 +267,9 @@ TEST_CASE("two overlapping transparent bricks look the same whichever is listed 
   const Difference d = compare(shot(a + b + c, FrameOptions{}), shot(b + a + c, FrameOptions{}));
   INFO("meanAbs " << d.meanAbs);
   REQUIRE(d.sameSize);
-  REQUIRE(d.meanAbs == 0);
+  // Ray queries can round a coincident edge by one output level.
+  REQUIRE(d.meanAbs < 0.001);
+  REQUIRE(d.worstBlock < 0.02);
 }
 
 TEST_CASE("glass shadows the floor as an opaque brick does, and the floor seen through it shows no shadow", "[gpu][frame]") {
@@ -325,6 +328,30 @@ TEST_CASE("glass shadows the floor as an opaque brick does, and the floor seen t
   REQUIRE(behindOff == 0);
   REQUIRE(shaded > 100);
   REQUIRE(aroundOff == 0);
+}
+
+TEST_CASE("refractive glass keeps its moulded contour lines in front of the pane", "[gpu][glass]") {
+  NEED_GPU();
+  const std::string glass = piece("3005.dat", 0, 0, 0, 36);
+  FrameOptions noEdges = plain();
+  noEdges.refractiveGlass = true;
+  FrameOptions outlined = noEdges;
+  outlined.edges = true;
+  const Image clear = shot(glass, noEdges), contoured = shot(glass, outlined);
+  // Check interior edge lines (stud rims and mould seams), not just the external
+  // silhouette, where a line can fall outside the glass and survive by accident.
+  const uint8_t* background = clear.at(0, 0);
+  int changed = 0;
+  for (int y = 4; y < clear.height - 4; ++y)
+    for (int x = 4; x < clear.width - 4; ++x) {
+      bool interior = true;
+      for (int dy = -3; dy <= 3 && interior; ++dy)
+        for (int dx = -3; dx <= 3 && interior; ++dx)
+          interior = channelGap(clear.at(x + dx, y + dy), background) > 10;
+      if (interior && channelGap(clear.at(x, y), contoured.at(x, y)) > 4) ++changed;
+    }
+  INFO("interior refractive-glass contour pixels: " << changed);
+  REQUIRE(changed > 10);
 }
 
 TEST_CASE("edges darken a brick's outline and nothing else", "[gpu][frame]") {
@@ -481,7 +508,8 @@ TEST_CASE("a brick's lowest band, just above the floor's plane, is shaded as the
   // A 1x1 brick (24 tall, bottom at y = 24; the floor's plane is kFloorLift below that), seen
   // square on from close to the bottom of its front face (z = -10): an LDU is about 14 pixels.
   // Shadows and occlusion on, the floor off: nothing is near the face to darken it, so a point
-  // 0.2 LDU above its bottom edge looks like one 2 LDU above it.
+  // the rounded band 0.2 LDU above its bottom and the flat face 2 LDU above it
+  // must not acquire extra darkening from mistaking either surface for the floor.
   bmtest::GpuRig rig(piece("3005.dat", 0, 0, 0, 4));
   REQUIRE(rig.renderer);
   rig.camera.eye = {0, 23, -40}, rig.camera.target = {0, 23, 0};
@@ -494,5 +522,23 @@ TEST_CASE("a brick's lowest band, just above the floor's plane, is shaded as the
   INFO("low " << lx << "," << ly << " high " << hx << "," << hy);
   const double low = luminance(img.at(lx, ly)), high = luminance(img.at(hx, hy));
   INFO("low " << low << " high " << high);
-  REQUIRE(std::abs(low - high) <= 3);
+  const Image unoccluded = rig.shot(plain());
+  REQUIRE(std::abs(low - luminance(unoccluded.at(lx, ly))) <= 3);
+  REQUIRE(std::abs(high - luminance(unoccluded.at(hx, hy))) <= 3);
+}
+
+TEST_CASE("the shadow catcher does not hide glass or replace brick AO from below", "[gpu][frame]") {
+  NEED_GPU();
+  const std::string model = piece("3005.dat", 0, 0, 0, 36) + piece("3005.dat", 20, 0, 0, 4);
+  FrameOptions withFloor = plain();
+  withFloor.floor = withFloor.ambientOcclusion = withFloor.shadows = true;
+  FrameOptions withoutFloor = withFloor;
+  withoutFloor.floor = false;
+  for (double azimuth : {0.6, 2.1, 3.8}) {
+    const Shot a = shotOf(model, withFloor, 256, 256, nullptr, azimuth, -0.45);
+    const Shot b = shotOf(model, withoutFloor, 256, 256, nullptr, azimuth, -0.45);
+    INFO("azimuth " << azimuth);
+    REQUIRE(compare(a.image, b.image).meanAbs < 0.05);
+    REQUIRE(compare(a.image, b.image).worstBlock < 0.5);
+  }
 }

@@ -22,7 +22,7 @@ void make() {
     // The shaders are compiled here, from their text, because the offline compiler is an
     // optional download that this project does not require. A test compiles them too, so a
     // mistake in one fails the test run rather than the first launch.
-    NSMutableString* source = [NSMutableString string];
+    NSMutableString* source = [NSMutableString stringWithFormat:@"#define BM_GLASS_RAY_QUERY %d\n", device.supportsRaytracingFromRender ? 1 : 0];
     for (size_t i = 0; kShaderSource[i]; i++) [source appendString:[NSString stringWithUTF8String:kShaderSource[i]]];
     MTLCompileOptions* options = [MTLCompileOptions new];
     options.languageVersion = MTLLanguageVersion3_1;

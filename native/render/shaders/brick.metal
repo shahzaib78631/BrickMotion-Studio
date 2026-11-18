@@ -130,6 +130,7 @@ fragment OpaqueOut brickFragment(BrickOut in [[stage_in]], constant FrameUniform
   Lit lit = shade(base, draw.surface.x, draw.surface.y, draw.surface.z, n, v, in.world, frame, false, uint2(in.position.xy), shadowMap, shadowSampler);
   OpaqueOut out;
   out.color = float4(lit.color, 1.0);  // rgb times coverage, coverage
+  if (frame.switches.z > 0.5) out.color = frame.switches.z < 1.5 ? float4(n * 0.5 + 0.5, 1.0) : float4(saturate((in.world.y + 128.0) / 256.0), 0.0, 0.0, 1.0);  // DEBUG HOOK
   float total = max(luminanceOf(lit.color), 1e-4);
   out.shares = float4(saturate(luminanceOf(lit.ambient) / total), 0.0, saturate(luminanceOf(lit.key) / total), 0.0);
   return out;
@@ -162,10 +163,12 @@ fragment OitOut glassFragment(BrickOut in [[stage_in]], constant FrameUniforms& 
   float3 base = in.fixedColor.a > 0.5 ? in.fixedColor.rgb : draw.base.rgb;
   float3 n = normalize(in.normal), v = normalize(frame.eye.xyz - in.world);
   float nv = saturate(abs(dot(n, v)));
-  float ior = frame.glass.z, f0 = (ior - 1.0) / (ior + 1.0);
-  float f = schlick(f0 * f0, nv);
+  float ior = frame.glass.z, eta = 1.0 / ior;
+  float inside = sqrt(max(0.0, 1.0 - eta * eta * (1.0 - nv * nv)));
+  float rs = (eta * nv - inside) / max(eta * nv + inside, 1e-5);
+  float rp = (nv - eta * inside) / max(nv + eta * inside, 1e-5);
+  float f = 0.5 * (rs * rs + rp * rp);  // unpolarized exact dielectric Fresnel
   float reflects = 2.0 * f / (1.0 + f);
-  float inside = sqrt(1.0 - (1.0 - nv * nv) / (ior * ior));  // the cosine of the ray inside the wall
   float3 r = reflect(-v, n);
   float cosRadius = sqrt(1.0 - frame.rig.y);
   float3 seen = float3(frame.rig.x);

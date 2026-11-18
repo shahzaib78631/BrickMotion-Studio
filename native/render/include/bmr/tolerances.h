@@ -13,6 +13,12 @@ inline constexpr int kBlock = 16;
 /// 90: 35 smooths a 16-sided cylinder and keeps every true edge. An 8-sided low-detail
 /// cylinder (45 a facet) is therefore faceted, which is right at the size it is shown.
 inline constexpr double kCreaseDegrees = 35.0;
+/// Moulded edge shading band, about 0.18 mm.
+inline constexpr double kRoundedEdgeWidth = 0.45;
+/// Independent stud-to-deck shading band. Standard LDraw studs have an
+/// explicit base outline but no modelled root fillet; 0.45 LDU is 0.18 mm.
+/// Adjust this without changing the shape of unrelated moulded corners.
+inline constexpr double kStudRootWidth = 0.45;
 
 /// The colour of a triangle whose colour code is not in the table: mid grey, as bm::ldraw::Color's default.
 inline constexpr unsigned kUnknownColor = 0xFF888888u;
@@ -158,5 +164,8 @@ inline constexpr int kSamples = 4;
 /// How strongly a part's outline lines are drawn over it: the web app's EDGE_OPACITY
 /// (src/render/materials.ts:192).
 inline constexpr float kEdgeOpacity = 0.3f;
+/// Transparent moulding needs a visible rim, particularly with full transport:
+/// these lines are composited after the glass surface instead of underneath it.
+inline constexpr float kGlassEdgeOpacity = 0.55f;
 
 }  // namespace bmr
