@@ -162,6 +162,7 @@ struct World::State {
   double widest = 0;             // the largest box extent along x, to bound the scan
   mutable std::mutex memoLock;
   mutable std::unordered_map<Key, double, KeyHash> memo;  // pairTravel and restCrossing answers
+  mutable std::unordered_map<Key, std::optional<std::vector<Zone>>, KeyHash> spots;  // restSpots answers
 };
 
 World::World(const Model& model, ldraw::PartCache& parts, ShapeCache& shapeCache) : state_(std::make_unique<State>()) {
@@ -413,7 +414,13 @@ double World::clearTravel(const std::vector<uint32_t>& unit, Vec3 direction, dou
           if (share > 1 || (by != UINT32_MAX && share >= nearest)) continue;
           bool exempt = false;
           for (const Zone& z : zones) exempt = exempt || (lets(z, p, q) && inside(z, where));
-          if (exempt || (boxesMeet(s.boxes[p], s.boxes[q]) && restCrossing(p, q, zones))) continue;
+          if (!exempt && boxesMeet(s.boxes[p], s.boxes[q])) {
+            const std::optional<std::vector<Zone>> rest = restSpots(p, q, zones);
+            exempt = !rest;
+            if (rest)
+              for (const Zone& z : *rest) exempt = exempt || inside(z, where);
+          }
+          if (exempt) continue;
           nearest = share, by = q;
           if (enough > 0) break;  // asked only whether it gets that far: any surface settles it
         }
@@ -429,9 +436,13 @@ double World::clearTravel(const std::vector<uint32_t>& unit, Vec3 direction, dou
     for (const auto& [enter, q] : ordered) {
       if (enter > best) break;
       if (std::binary_search(unit.begin(), unit.end(), q)) continue;
-      // What already crosses it where the model has it is not this move's doing.
-      if (boxesMeet(s.boxes[p], s.boxes[q]) && restCrossing(p, q, zones)) continue;
-      const double got = pairTravel(p, from, startBox, q, direction, best, zones, tolerance);  // no further than it is known to get
+      // What already crosses it where the model has it is not this move's doing: there, and only there.
+      std::optional<std::vector<Zone>> rest = std::vector<Zone>{};
+      if (boxesMeet(s.boxes[p], s.boxes[q])) rest = restSpots(p, q, zones);
+      if (!rest) continue;
+      std::vector<Zone> withRest;
+      if (!rest->empty()) withRest = zones, withRest.insert(withRest.end(), rest->begin(), rest->end());
+      const double got = pairTravel(p, from, startBox, q, direction, best, rest->empty() ? zones : withRest, tolerance);  // no further than it is known to get
       if (got < best) {
         best = got;
         if (blocker) *blocker = q;
@@ -440,6 +451,40 @@ double World::clearTravel(const std::vector<uint32_t>& unit, Vec3 direction, dou
     }
   }
   return best;
+}
+
+std::optional<std::vector<Zone>> World::restSpots(uint32_t p, uint32_t q, const std::vector<Zone>& allZones) const {
+  constexpr double kSpot = 2;    // LDU round each place they cross
+  constexpr int kMostSpots = 24;  // more than this: a squeeze, not a few grazes
+  const State& s = *state_;
+  std::vector<Zone> zones = zonesNear(allZones, p, q, s.boxes[q]);
+  const Xform toObstacle = inverseOf(s.poses[q]);
+  const Xform rel = toObstacle * s.poses[p];
+  Key key;
+  key.add(3).add(reinterpret_cast<uintptr_t>(s.shapes[p].get())).add(reinterpret_cast<uintptr_t>(s.shapes[q].get()));
+  for (double v : rel.r.m) key.add(v, 1e-4);
+  key.add(rel.t, 1e-3);
+  for (const Zone& z : zones) key.add(toObstacle.apply(z.a), 1e-2).add(toObstacle.apply(z.b), 1e-2).add(z.radius, 1e-2);
+  {
+    std::lock_guard<std::mutex> lock(s.memoLock);
+    const auto it = s.spots.find(key);
+    if (it != s.spots.end()) return it->second;
+  }
+  std::optional<std::vector<Zone>> found = std::vector<Zone>{};
+  for (int i = 0;; i++) {
+    Hit hit;
+    if (!overlap(*s.shapes[p], s.poses[p], *s.shapes[q], s.poses[q], zones, &hit)) break;
+    if (i == kMostSpots) {
+      found.reset();
+      break;
+    }
+    const Zone spot{hit.point, hit.point, kSpot, p, q};
+    found->push_back(spot);
+    zones.push_back(spot);
+  }
+  std::lock_guard<std::mutex> lock(s.memoLock);
+  s.spots.emplace(key, found);
+  return found;
 }
 
 /// Whether two pieces cross where the model has them, given the zones. Remembered like pairTravel.

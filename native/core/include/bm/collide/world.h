@@ -81,6 +81,10 @@ class World {
   std::unique_ptr<State> state_;
   double pairTravel(uint32_t p, const Xform& from, const Box& fromBox, uint32_t q, Vec3 direction, double distance, const std::vector<Zone>& zones, double tolerance) const;
   bool restCrossing(uint32_t p, uint32_t q, const std::vector<Zone>& zones) const;
+  /// Where `p` and `q` cross where the model has them, outside `zones`: a small zone round each
+  /// spot, for these two only (empty: they do not cross). None: they cross in too many places to
+  /// list (a part squeezed onto another), and the pair is left out of a move altogether.
+  std::optional<std::vector<Zone>> restSpots(uint32_t p, uint32_t q, const std::vector<Zone>& zones) const;
 };
 
 }  // namespace bm::collide

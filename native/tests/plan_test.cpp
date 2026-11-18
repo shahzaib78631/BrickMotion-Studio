@@ -802,3 +802,53 @@ TEST_CASE("two groups standing on the table are built apart, then bridged", "[pl
   REQUIRE(c.floating == 0);  // the second one stands on the table: it is not in the air
   REQUIRE(c.certified == 3);
 }
+
+TEST_CASE("a lever clips into its base without passing through the base", "[plan][data]") {
+  // The helicopter's levers (4593) hang from their bases (4592): a lever's end clips between two
+  // lugs inside the base's dome. Only where they meet may they cross, not through the dome.
+  const char* dir = std::getenv("BM_LDRAW_DIR");
+  const char* shadowDir = std::getenv("BM_SHADOW_DIR");
+  if (!dir || !shadowDir) SKIP("BM_LDRAW_DIR / BM_SHADOW_DIR not set");
+  const ldraw::Library lib(dir);
+  const connect::ShadowLibrary shadow(shadowDir);
+  connect::ConnectorDb db(lib, shadow);
+  ldraw::PartCache parts(lib, ldraw::PartCache::defaultDirectory());
+  collide::ShapeCache shapes;
+  const fs::path repo = fs::path(dir).parent_path().parent_path();
+  const Model model = io::load(repo / "samples" / "helicopter" / "helicopter.mpd", lib, &parts);
+  const connect::Graph graph = connect::buildGraph(model, db);
+  const Plan p = bm::plan::plan(model, graph, parts, shapes);
+  const Certificate cert = certify(model, graph, parts, shapes, p);
+  const PlayCheck play = certifyPlay(model, graph, parts, shapes, p, buildTimeline(model, parts, p));
+  int levers = 0;
+  for (size_t i = 0; i < p.moves.size(); i++) {
+    const Move& m = p.moves[i];
+    const bool lever = std::any_of(m.unit.pieces.begin(), m.unit.pieces.end(), [&](uint32_t q) { return model.pieces()[q].part == "4593.dat"; });
+    if (!lever || m.flag != Flag::None) continue;
+    levers++;
+    INFO("move " << i << " in " << m.insertion.x << " " << m.insertion.y << " " << m.insertion.z);
+    REQUIRE(cert.moves[i].clear);
+    REQUIRE(std::find(play.crossed.begin(), play.crossed.end(), static_cast<uint32_t>(i)) == play.crossed.end());
+  }
+  REQUIRE(levers >= 2);
+}
+
+TEST_CASE("pieces that cross where the model has them are let off only there", "[plan][collide][data]") {
+  // A lever (4593) in its base (4592): the stick grazes the edges of the base's slot where the
+  // model has them. That graze is not a move's doing; the lever's end passing out through the
+  // base's dome would be.
+  const char* dir = std::getenv("BM_LDRAW_DIR");
+  if (!dir) SKIP("BM_LDRAW_DIR is not set");
+  const ldraw::Library lib(dir);
+  ldraw::PartCache parts(lib, ldraw::PartCache::defaultDirectory());
+  collide::ShapeCache shapes;
+  const fs::path file = fs::temp_directory_path() / ("bm_plan_lever_" + std::to_string(::getpid()) + ".ldr");
+  { std::ofstream out(file); out << "1 7 84 -134 130 0 0 1 0 -1 0 1 0 0 4593.dat\n1 7 84 -134 130 0 -1 0 0 0 -1 1 0 0 4592.dat\n"; }
+  const Model model = io::load(file, lib, &parts);
+  fs::remove(file);
+  const collide::World world(model, parts, shapes);
+  REQUIRE(collide::overlap(world.shape(0), world.pose(0), world.shape(1), world.pose(1)));  // they do cross, as placed
+  const collide::World::Present present{0, 1};
+  REQUIRE(world.clearTravel({0}, {0, -1, 0}, 30, &present) < 4);  // up, out through the base's dome
+  REQUIRE(world.clearTravel({0}, {1, 0, 0}, 30, &present) >= 30);  // out of the base's open underside
+}

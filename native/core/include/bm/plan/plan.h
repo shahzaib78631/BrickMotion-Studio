@@ -130,6 +130,11 @@ Unit growUnit(const Context& ctx, uint32_t piece, const collide::World::Present*
 /// Plans the whole model. Never throws for a model that loaded; what it cannot do is flagged.
 Plan plan(const Model& model, const connect::Graph& graph, ldraw::PartCache& parts, collide::ShapeCache& shapes, const Options& options = {});
 
+/// Whether a mate's zone goes along with a piece leaving along `direction`: a stud grazes its
+/// tube and a bar its clip all the way out, but what clips on across a pin or bar meets it only
+/// at the seat (ReleaseKind::Across, unless the move runs along the axis).
+bool carriesZone(const connect::Release& release, Vec3 direction);
+
 /// The step a piece is placed in at each level of the file: the root's first, then the step
 /// within each submodel it sits in (read from Piece::id, "<step>:<item>/..."; {Piece::step} for
 /// an id of another form).

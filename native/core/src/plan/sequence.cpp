@@ -28,6 +28,11 @@ std::vector<int> stepsOf(const Piece& piece) {
   return out;
 }
 
+bool carriesZone(const connect::Release& release, Vec3 direction) {
+  if (release.kind != connect::ReleaseKind::Across) return true;
+  return length(direction) > 0 && std::abs(dot(normalized(direction), release.axis)) >= kReleaseAgree;
+}
+
 bool laterSteps(const std::vector<int>& a, const std::vector<int>& b) {
   for (size_t i = 0; i < a.size() && i < b.size(); i++)
     if (a[i] != b[i]) return a[i] > b[i];

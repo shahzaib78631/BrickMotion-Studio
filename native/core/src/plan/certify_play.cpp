@@ -72,7 +72,8 @@ PlayCheck certifyPlay(const Model& model, const connect::Graph& graph, ldraw::Pa
               if (at >= graph.zones.size()) break;
               const connect::MateZone& z = graph.zones[at];
               const double stride = std::max(1.0, z.radius);
-              for (double s = 0; s <= seatLength + stride; s += stride) zones.push_back({z.a - in * s, z.b - in * s, z.radius, p, other});
+              const double carried = at < graph.releases.size() && carriesZone(graph.releases[at], in) ? seatLength + stride : 0;
+              for (double s = 0; s <= carried; s += stride) zones.push_back({z.a - in * s, z.b - in * s, z.radius, p, other});
             }
           }
       }
