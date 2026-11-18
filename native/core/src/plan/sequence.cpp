@@ -1,6 +1,7 @@
 #include "bm/plan/plan.h"
 
 #include <algorithm>
+#include <limits>
 #include <chrono>
 #include <cmath>
 #include <map>
@@ -284,14 +285,16 @@ struct Sequencer {
       last = &ctx.model.pieces()[m.unit.pieces.front()];
       removed.push_back(std::move(m));
     };
-    // The reverse of how it should be built: continue the run, later steps first, top first, outside first.
-    auto before = [&](uint32_t a, uint32_t b) {
+    // The reverse of how it should be built. Within a step: what leaves upward first (it goes in
+    // from above), then continuing the run of its submodel, then top first, outside first.
+    auto ranked = [&](uint32_t a, uint32_t b) {
       const Piece &pa = ctx.model.pieces()[a], &pb = ctx.model.pieces()[b];
+      const bool ua = single[a].ok && dot(single[a].direction, -ctx.down) > 0.5, ub = single[b].ok && dot(single[b].direction, -ctx.down) > 0.5;
+      if (ua != ub) return ua;
       if (last) {
         const bool ra = pa.path == last->path, rb = pb.path == last->path;
         if (ra != rb) return ra;
       }
-      if (pa.step != pb.step) return pa.step > pb.step;
       const Box &ba = ctx.world.box(a), &bb = ctx.world.box(b);
       const double ha = -dot(ctx.down, (ba.min + ba.max) * 0.5), hb = -dot(ctx.down, (bb.min + bb.max) * 0.5);
       if (std::abs(ha - hb) > 1) return ha > hb;
@@ -302,6 +305,60 @@ struct Sequencer {
       const double oa = radial(ba), ob = radial(bb);
       if (std::abs(oa - ob) > 1) return oa > ob;
       return a < b;
+    };
+    // Across steps (only when the latest step has nothing that can leave): later steps first.
+    auto before = [&](uint32_t a, uint32_t b) {
+      const int sa = ctx.model.pieces()[a].step, sb = ctx.model.pieces()[b].step;
+      if (sa != sb) return sa > sb;
+      return ranked(a, b);
+    };
+    // Pieces that go in together, tried as one; false if they cannot leave now.
+    auto together = [&](const Unit& u, UnitSource source) {
+      const auto known = togetherBefore.find(u.pieces);
+      if (known != togetherBefore.end() && !known->second.found.ok && stillHolds(u, known->second)) return false;
+      if (!free(u) || !joined(u)) return false;
+      Tried& tried = togetherBefore[u.pieces];
+      if (!stillHolds(u, tried)) {
+        tried = {extract(ctx, u, &present, bounds), round};
+        extractions++;
+      }
+      const Extraction e = tried.found;
+      if (!e.ok) return false;
+      take(u, source, e, Flag::None);
+      return true;
+    };
+    auto whole = [&](const Unit& u) { return u.pieces.size() < left && std::all_of(u.pieces.begin(), u.pieces.end(), [&](uint32_t q) { return present[q] != 0; }); };
+    // The unit grown from `p`, kept while nothing it looked at has changed.
+    auto grownFrom = [&](uint32_t p) -> const Unit& {
+      Grown& grown = grownBefore[p];
+      if (grown.when == 0 || std::any_of(grown.read.begin(), grown.read.end(), [&](uint32_t q) { return removedAt[q] >= grown.when; })) {
+        grown.read.clear();
+        grown.unit = growUnit(ctx, p, &present, &grown.read);
+        std::sort(grown.read.begin(), grown.read.end());
+        grown.read.erase(std::unique(grown.read.begin(), grown.read.end()), grown.read.end());
+        grown.when = round;
+      }
+      return grown.unit;
+    };
+    // The one-turn ways out of `pieces` that need one, tried again only when something changed.
+    auto turnAll = [&](const std::vector<uint32_t>& pieces) {
+      std::vector<uint32_t> again;
+      for (uint32_t p : pieces)
+        if (single[p].why == Flag::NoExit && !stillHolds(unitOf({p}), turnedBefore[p])) again.push_back(p);
+      pool.parallelFor(again.size(), [&](size_t i) { turnedBefore[again[i]] = {extract(ctx, unitOf({again[i]}), &present, bounds, authoredAxis(again[i]), true), round}; });
+      extractions += again.size();
+    };
+    auto takeTurned = [&](const std::vector<uint32_t>& pieces) {
+      for (uint32_t p : pieces) {
+        if (single[p].why != Flag::NoExit) continue;
+        const Unit u = unitOf({p});
+        const Extraction& turned = turnedBefore[p].found;
+        if (!turned.ok || !free(u) || !joined(u)) continue;
+        const Extraction way = turned;  // take() ends the round; the kept attempt is not touched by it
+        take(u, UnitSource::Piece, way, Flag::None);
+        return true;
+      }
+      return false;
     };
 
     while (left > 0) {
@@ -340,12 +397,107 @@ struct Sequencer {
         const uint32_t p = todo[i];
         blockerIndex.updated(p, single[p].stoppedBy, single[p].ok);
       }
-      // The best piece that can leave without splitting what is left.
+      // The file's steps lead: the latest step that still has pieces is taken apart first, its
+      // submodels as one, then its pieces, then those of its pieces that only leave together.
+      int frontier = std::numeric_limits<int>::min();
+      for (uint32_t p : set)
+        if (present[p]) frontier = std::max(frontier, ctx.model.pieces()[p].step);
+      std::vector<uint32_t> latest;
+      for (uint32_t p : set)
+        if (present[p] && ctx.model.pieces()[p].step == frontier) latest.push_back(p);
+      std::sort(latest.begin(), latest.end(), ranked);
+      auto ofLatest = [&](const Unit& u) { return std::all_of(u.pieces.begin(), u.pieces.end(), [&](uint32_t q) { return ctx.model.pieces()[q].step >= frontier; }); };
+      bool took = false;
+      if (depth < 4)
+        for (uint32_t p : latest) {  // a submodel placed in this step, the outermost use first
+          for (size_t k = units.authoredOf[p].size(); k-- > 0 && !took;) {
+            const Unit& u = units.authored[units.authoredOf[p][k]];
+            if (whole(u) && ofLatest(u)) took = together(u, UnitSource::Authored);
+          }
+          if (took || outOfTime()) break;
+        }
+      if (took) continue;
+      for (uint32_t p : latest) {
+        if (!single[p].ok) continue;
+        const Unit u = unitOf({p});
+        if (!free(u) || !joined(u)) continue;
+        take(u, UnitSource::Piece, single[p], Flag::None);
+        took = true;
+        break;
+      }
+      if (took) continue;
+      turnAll(latest);
+      if (takeTurned(latest)) continue;
+      if (depth < 4) {  // the step's own pieces joined to each other, as one
+        std::vector<uint8_t> inStep(present.size(), 0), done(present.size(), 0);
+        for (uint32_t p : latest) inStep[p] = 1;
+        for (uint32_t p : latest) {
+          if (took || outOfTime()) break;
+          if (done[p] || single[p].ok) continue;
+          Unit u;
+          std::vector<uint32_t> todoStep{p};
+          done[p] = 1;
+          while (!todoStep.empty()) {
+            const uint32_t q = todoStep.back();
+            todoStep.pop_back();
+            u.pieces.push_back(q);
+            for (uint32_t ci : ctx.connectionsOf[q]) {
+              const Connection& c = ctx.graph.connections[ci];
+              const uint32_t other = c.a == q ? c.b : c.a;
+              if (inStep[other] && !done[other]) done[other] = 1, todoStep.push_back(other);
+            }
+          }
+          std::sort(u.pieces.begin(), u.pieces.end());
+          if (u.pieces.size() > 1 && u.pieces.size() < left) took = together(u, UnitSource::Grown);
+        }
+      }
+      if (took) continue;
+      if (depth < 4)
+        for (uint32_t p : latest) {
+          if (took || outOfTime()) break;
+          if (single[p].ok) continue;
+          for (uint32_t gi : units.bodyOf[p])
+            if (!took && whole(units.bodies[gi]) && ofLatest(units.bodies[gi])) took = together(units.bodies[gi], UnitSource::Body);
+          if (took) break;
+          const Unit& grown = grownFrom(p);
+          if (grown.pieces.size() > 1 && grown.pieces.size() < left && ofLatest(grown)) took = together(grown, UnitSource::Grown);
+        }
+      if (took) continue;
+      // Nothing of the latest step can leave alone or with its own step. Borrow as little as helps:
+      // first a unit grown from one of its pieces into earlier steps (what it is attached to)...
+      if (depth < 4)
+        for (uint32_t p : latest) {
+          if (took || outOfTime()) break;
+          if (single[p].ok) continue;
+          const Unit& grown = grownFrom(p);
+          if (grown.pieces.size() > 1 && grown.pieces.size() < left) took = together(grown, UnitSource::Grown);
+        }
+      if (took) continue;
+      // ...then an earlier step's piece that is in the way of one of its pieces...
+      {
+        std::vector<uint8_t> inWay(present.size(), 0);
+        for (uint32_t p : latest)
+          for (uint32_t q : single[p].stoppedBy)
+            if (q < present.size() && present[q] && ctx.model.pieces()[q].step < frontier) inWay[q] = 1;
+        std::vector<uint32_t> blockers;
+        for (uint32_t q : set)
+          if (inWay[q] && single[q].ok) blockers.push_back(q);
+        std::sort(blockers.begin(), blockers.end(), before);
+        for (uint32_t q : blockers) {
+          const Unit u = unitOf({q});
+          if (!free(u) || !joined(u)) continue;
+          take(u, UnitSource::Piece, single[q], Flag::None);
+          took = true;
+          break;
+        }
+      }
+      if (took) continue;
+      // ...and only then any earlier step's piece (each built after the step: an inversion, which
+      // certifyPlay counts), later steps first.
       std::vector<uint32_t> ready;
       for (uint32_t p : set)
         if (present[p] && single[p].ok) ready.push_back(p);
       std::sort(ready.begin(), ready.end(), before);
-      bool took = false;
       for (uint32_t p : ready) {
         const Unit u = unitOf({p});
         if (!free(u) || !joined(u)) continue;
@@ -359,59 +511,25 @@ struct Sequencer {
         if (present[p]) stuck.push_back(p);
       std::sort(stuck.begin(), stuck.end(), before);
       // Nothing leaves by a straight way out. Those that do leave their seats: a way out with a turn in it.
-      todo.clear();
-      for (uint32_t p : stuck)
-        if (single[p].why == Flag::NoExit) todo.push_back(p);
-      std::vector<uint32_t> again;
-      for (uint32_t p : todo)
-        if (!stillHolds(unitOf({p}), turnedBefore[p])) again.push_back(p);
-      pool.parallelFor(again.size(), [&](size_t i) { turnedBefore[again[i]] = {extract(ctx, unitOf({again[i]}), &present, bounds, authoredAxis(again[i]), true), round}; });
-      extractions += again.size();
-      for (size_t i = 0; i < todo.size() && !took; i++) {
-        const Unit u = unitOf({todo[i]});
-        const Extraction& turned = turnedBefore[todo[i]].found;
-        if (!turned.ok || !free(u) || !joined(u)) continue;
-        const Extraction way = turned;  // take() ends the round; the kept attempt is not touched by it
-        take(u, UnitSource::Piece, way, Flag::None);
-        took = true;
-      }
-      if (took) continue;
+      turnAll(stuck);
+      if (takeTurned(stuck)) continue;
       // Nothing leaves alone: pieces that must go in together.
       for (uint32_t p : stuck) {
         if (took || outOfTime()) break;
         std::vector<std::pair<Unit, UnitSource>> tries;
-        auto whole = [&](const Unit& u) { return u.pieces.size() < left && std::all_of(u.pieces.begin(), u.pieces.end(), [&](uint32_t q) { return present[q] != 0; }); };
         if (depth < 4) {
           for (uint32_t gi : units.authoredOf[p])
             if (whole(units.authored[gi])) tries.emplace_back(units.authored[gi], UnitSource::Authored);
           for (uint32_t gi : units.bodyOf[p])
             if (whole(units.bodies[gi])) tries.emplace_back(units.bodies[gi], UnitSource::Body);
-          Grown& grown = grownBefore[p];
-          if (grown.when == 0 || std::any_of(grown.read.begin(), grown.read.end(), [&](uint32_t q) { return removedAt[q] >= grown.when; })) {
-            grown.read.clear();
-            grown.unit = growUnit(ctx, p, &present, &grown.read);
-            std::sort(grown.read.begin(), grown.read.end());
-            grown.read.erase(std::unique(grown.read.begin(), grown.read.end()), grown.read.end());
-            grown.when = round;
-          }
-          if (grown.unit.pieces.size() > 1 && grown.unit.pieces.size() < left) tries.emplace_back(grown.unit, UnitSource::Grown);
+          const Unit& grown = grownFrom(p);
+          if (grown.pieces.size() > 1 && grown.pieces.size() < left) tries.emplace_back(grown, UnitSource::Grown);
         }
-        for (auto& [u, source] : tries) {
-          // An attempt that failed and would fail again needs no other check.
-          const auto known = togetherBefore.find(u.pieces);
-          if (known != togetherBefore.end() && !known->second.found.ok && stillHolds(u, known->second)) continue;
-          if (!free(u) || !joined(u)) continue;
-          Tried& before = togetherBefore[u.pieces];
-          if (!stillHolds(u, before)) {
-            before = {extract(ctx, u, &present, bounds), round};
-            extractions++;
+        for (auto& [u, source] : tries)
+          if (together(u, source)) {
+            took = true;
+            break;
           }
-          const Extraction e = before.found;
-          if (!e.ok) continue;
-          take(u, source, e, Flag::None);
-          took = true;
-          break;
-        }
       }
       if (took) continue;
       // Still nothing: the engine cannot show how this piece goes in, and says so on it.

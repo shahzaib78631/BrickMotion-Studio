@@ -703,3 +703,34 @@ TEST_CASE("a piece under the base is built first on the table, the base pressed 
   REQUIRE(k.upward == 0);
   REQUIRE(k.crossings == 0);
 }
+
+TEST_CASE("a step's pieces that only come off together are built last, not first", "[plan][steps]") {
+  Scene s;
+  const uint32_t a = s.add(0, 0, 0), d = s.add(20, 0, 0), g0 = s.add(-60, 0, 0);  // step 0
+  s.step();
+  const uint32_t b = s.add(0, -24, 0), f = s.add(20, -24, 0), g1 = s.add(-60, -24, 0);  // step 1
+  s.step();
+  s.step();
+  const uint32_t c = s.add(0, -48, 0), h = s.add(0, -72, 0);  // step 3: a blade under its hub
+  s.stud(a, b), s.stud(d, f), s.stud(g0, g1), s.stud(a, g0, {-1, 0, 0}), s.stud(a, d, {1, 0, 0});
+  s.stud(b, f, {1, 0, 0});  // f is also joined to b sideways: b and f go on together
+  s.stud(f, h);  // the hub is held up by f
+  s.stud(c, h);  // the blade's studs are in the hub: it comes off downward, onto b (not joined)
+  const Plan p = s.plan();
+  REQUIRE(s.model->pieces()[h].step == 3);
+  REQUIRE(p.subs.size() <= 2);
+  REQUIRE(p.moves.back().unit.pieces == std::vector<uint32_t>{c, h});
+  const std::vector<uint32_t> o = order(p);
+  REQUIRE(std::find(o.begin(), o.end(), g1) < std::find(o.begin(), o.end(), c));
+  REQUIRE(played(s, p).inversions == 0);
+  REQUIRE(played(s, p).crossings == 0);
+}
+
+TEST_CASE("within a step, pieces go in from above", "[plan][steps]") {
+  Scene s;
+  const uint32_t a = s.add(0, 0, 0), b = s.add(0, -24, 0), c = s.add(0, -48, 0);
+  s.stud(a, b), s.stud(b, c);
+  const PlayCheck k = played(s, s.plan());
+  REQUIRE(k.upward == 0);
+  REQUIRE(k.inversions == 0);
+}
