@@ -1,6 +1,6 @@
 # Native phase 7: path tracer, denoise, stills, video and sound — design
 
-**Status:** draft, 2026-11-18, for the owner's approval. Nothing is built until it is approved.
+**Status:** approved by the owner, 2026-11-18 ("start phase 7"); open questions settled below.
 **Parent spec:** `2026-11-15-native-rewrite-design.md` ("bmrender", goal 6, phase 7: *CLI renders stills and video*).
 
 ## Intent
@@ -20,16 +20,14 @@ export (`src/export/exportVideo.ts`, `pathTracedStill.ts`, `src/audio/snapSound.
   where the build has them at a frame; pieces not yet in are `kHidden`), cameras, offscreen drawing and
   readback, PNG writing. Shaders are text compiled at run time (`cmake/embed_shaders.cmake`), so no
   Metal toolchain is needed.
-- The owner's ray-traced glass (uncommitted, behind `FrameOptions::refractiveGlass`): every triangle
+- The owner's ray-traced glass (111539e, behind `FrameOptions::refractiveGlass`): every triangle
   of the scene copied to world space, one CPU BVH plus one Metal primitive acceleration structure,
   rebuilt whenever a piece moves; exact Fresnel and Snell through the walls (`glass_transport.metal`).
 - The look, fitted against EyeSight (README, "The look, against EyeSight"): its BUILD_FL rig (four
-  distant disk lights, 45° in radius, white world; the viewport turns them with the camera's heading,
-  `lightsFollowCamera`, though a probe of EyeSight on 2026-11-17 found its lights fixed in the world:
-  open below), plastic of
-  roughness 0.1 under a clear coat, Studio's linear colours, the floor a shadow catcher, glass IOR
+  distant disk lights, 45° in radius, fixed to the model as EyeSight's are, white world; 66a6a80),
+  plastic of roughness 0.1 under a clear coat, Studio's linear colours, the floor a shadow catcher, glass IOR
   1.49. `native/tools/calib_eyesight.py` scores a picture against EyeSight's renders of `calib.ldr`
-  and `glass.ldr` from four azimuths (viewport now: RMSE 7.36 calib, 17.57 glass).
+  and `glass.ldr` from four azimuths (viewport now: RMSE 6.53 calib, 17.79 glass).
 - The timeline (phase 5): 30 fps, one flight per move with its start and length, a camera key a second.
 - Sound in the web app: CC0 recordings of real snaps (`public/sounds/snaps/*.wav`, 244 KB, credits in
   `CREDITS.txt`) picked by part size, layered over a synthesised thump and ring, one per seating.
@@ -99,7 +97,7 @@ ray-tracing hardware: Metal's intersector runs on the shader cores there, faster
 - **Surfaces** from `Material`: plastic is diffuse under a GGX clear coat; metals a tinted GGX
   conductor; transparent colours a dielectric of IOR 1.49 with absorption by distance travelled,
   fitted with the harness; printed parts take their vertex colours.
-- **Light:** EyeSight's BUILD_FL by default, its lights where the owner settles (open, 3); the web app's photo rigs as options.
+- **Light:** EyeSight's BUILD_FL by default, fixed to the model (settled, 3); the web app's photo rigs as options.
   The floor is a shadow catcher as in EyeSight (what a ray bent through glass sees of it is fitted).
   No outline lines (EyeSight has none).
 - **Denoise:** OIDN's RT filter with albedo and normal, per frame for film; `--no-denoise` keeps
@@ -117,16 +115,14 @@ ray-tracing hardware: Metal's intersector runs on the shader cores there, faster
 - **Tool:** a new `bmexport` (the library already owns the name `bmrender`), sharing `bmshot`'s
   camera and model options.
 
-## Open for the owner
+## Settled with the owner (2026-11-18)
 
-1. **OIDN:** download `oidn-2.5.1.arm64.macos.tar.gz` (51.4 MB, GitHub release `RenderKit/oidn`,
-   2026-08-18) into a vendor directory outside git? Without it the stills are not denoised.
-2. **The uncommitted render work** (glass behind its flag, rounded edges, stud roots, the composite
-   fix): phase 7 changes `native/render` too, so it should land first, as its own commits.
-3. **Where the lights are.** EyeSight's BUILD_FL lights measured fixed in the world (2026-11-17: the
-   picture at azimuth 0 with the rig turned 90° matches azimuth 270 to EyeSight's own repeat noise);
-   the viewport turns them with the camera's heading by default. Stills and film should do what EyeSight
-   does unless the owner prefers the viewport's choice; the default of `lightsFollowCamera` is theirs.
+1. **OIDN** 2.5.1 (`oidn-2.5.1.arm64.macos.tar.gz`, GitHub release `RenderKit/oidn`, sha256 checked)
+   is in `vendor/oidn/oidn-2.5.1.arm64.macos`, outside git. It has a CPU and a Metal device.
+2. **The render work** landed first: 111539e (glass behind its flag, rounded edges, stud roots, the
+   composite fix).
+3. **Where the lights are:** fixed to the model, as EyeSight's are, with strengths fitted to its renders
+   (66a6a80); stills and film do the same.
 
 ## Left to the builder
 
