@@ -122,6 +122,11 @@ inline constexpr float kFloorThroughGlass = 0.58f;
 /// taken as kPathGlassWall LDU thick (an LDraw brick's wall) gives its absorption by distance.
 /// A dispatch traces about kPathRaysPerPass camera rays, so no one GPU command runs long.
 inline constexpr uint32_t kPathMaxBounces = 16;
+/// The fills' strength in the path tracer, as a share of kRigStrength's: those were fitted
+/// through the viewport's shading, which has no light bounced between pieces. Fitted on
+/// native/corpus/calib (calib.ldr, then glass.ldr checked) with the floor as EyeSight's ground
+/// and glass stopping shadow rays: 0.85 against 0.7..1 (key and world 0.85..1.25 did no better).
+inline constexpr float kPathFillShare = 0.85f;
 inline constexpr float kPathGlassWall = 4.0f;
 inline constexpr size_t kPathRaysPerPass = 4u << 20;
 

@@ -4,6 +4,7 @@
 #include <cstring>
 #include "bmr/camera.h"
 #include "bmr/device.h"
+#include "bmr/material.h"
 #include "bmr/path_scene.h"
 #include "bmr/path_tracer.h"
 #include "bmr/tolerances.h"
@@ -122,6 +123,40 @@ TEST_CASE("clear glass lets more through than black plastic", "[gpu][pathtrace]"
   const PathImage g = glass.render(glass.options(64)), b = black.render(black.options(64));
   const size_t i = at(g, 32, 34);
   REQUIRE(g.beauty[i] > b.beauty[i] + 0.1f);
+}
+
+TEST_CASE("glass shades the floor as an opaque piece does, as EyeSight's ground", "[gpu][pathtrace]") {
+  NEED_RT();
+  Rig glass(piece("3005.dat", 0, 0, 0, 36), 64, 0.6, 0.6, 2), black(piece("3005.dat", 0, 0, 0, 0), 64, 0.6, 0.6, 2);
+  const PathImage g = glass.render(glass.options(64, 3)), b = black.render(black.options(64, 3));
+  // The floor in the black brick's shadow: where its picture shows the background's albedo, darkened.
+  double sumG = 0, sumB = 0;
+  int n = 0;
+  for (size_t i = 0; i < b.beauty.size(); i += 3) {
+    if (b.albedo[i] < 0.99f || b.albedo[i + 1] < 0.99f || b.albedo[i + 2] < 0.99f || b.beauty[i] > 0.9f) continue;
+    sumG += g.beauty[i], sumB += b.beauty[i], n++;
+  }
+  REQUIRE(n > 50);
+  INFO("glass " << sumG / n << " black " << sumB / n << " over " << n);  REQUIRE(std::fabs(sumG - sumB) / n < 0.01);
+}
+
+TEST_CASE("light bounced off a piece never sees the floor", "[gpu][pathtrace]") {
+  NEED_RT();
+  const char* kGrey = "41975936";  // 0x2808080: direct colour, opaque grey
+  Rig rig(piece("3005.dat", 0, 0, 0, std::atoi(kGrey)), 64, 0.6, 0.3);
+  PathOptions on = rig.options(32, 5), off = on;
+  off.floor = false;
+  const PathImage a = rig.render(on), b = rig.render(off);
+  // The middle of the picture, well inside the brick's outline: every sample there meets the brick.
+  int bricks = 0;
+  for (int y = 30; y < 34; y++)
+    for (int x = 30; x < 34; x++) {
+      const size_t i = at(b, x, y);
+      REQUIRE(b.albedo[i] < 0.9f);
+      bricks++;
+      for (int c = 0; c < 3; c++) REQUIRE(a.beauty[i + c] == b.beauty[i + c]);
+    }
+  REQUIRE(bricks == 16);
 }
 
 TEST_CASE("energy is kept: a white face under the world alone is as bright as the world", "[gpu][pathtrace]") {

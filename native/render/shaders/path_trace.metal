@@ -35,7 +35,7 @@ struct PtUniforms {
   float4 lights[4];   // toward each (unit), strength (irradiance square on)
   float4 rig;         // x world radiance, y sin^2 of the disks' radius, z cos of it, w 1 with the lights on
   float4 background;  // linear rgb
-  float4 floorPlane;  // x the floor's y (down is +y), y 1 with the floor on
+  float4 floorPlane;  // x the floor's y (down is +y), y 1 with the floor on, z the key's share in the floor's shadow
   float4 glass;       // x IOR, y absorption a wall (2 faces), z absorption an LDU, w the floor seen past a bounce
   uint4 size;         // width, height, samples in this dispatch, the first sample's index
   uint4 seed;         // low, high, 1 when there is a scene, the most bounces
@@ -135,20 +135,20 @@ inline PtHit ptTrace(float3 origin, float3 dir, constant PtUniforms& u, metal::r
   return out;
 }
 
-/// What reaches `origin` along `dir` past the pieces: 0 behind anything opaque; glass and
+/// What reaches `origin` along `dir` past the pieces: 0 behind anything opaque or glass;
 /// placeholders let some through.
 inline float3 ptShadow(float3 origin, float3 dir, constant PtUniforms& u, metal::raytracing::instance_acceleration_structure scene,
                        device const PtInstance* instances, device const PtMesh* meshes, device const PtMaterial* materials) {
+  // Glass stops a shadow ray, as in Cycles: light through glass comes only along refracted
+  // paths (which next-event estimation never draws, so they are not counted twice), and
+  // EyeSight's ground is shadowed by glass as by any piece.
   float3 through = float3(1.0f);
-  float f0 = (u.glass.x - 1.0f) / (u.glass.x + 1.0f);
-  f0 *= f0;
   for (int i = 0; i < 16; i++) {
     PtHit h = ptTrace(origin, dir, u, scene, instances, meshes);
     if (!h.hit) return through;
     PtMaterial m = materials[h.material];
-    if (m.surface.w < 0.5f) return float3(0.0f);
-    if (m.surface.w < 1.5f) through *= (1.0f - ptSchlick(f0, abs(dot(dir, h.ng)))) * exp(-0.5f * u.glass.y * (1.0f - m.base.rgb));
-    else through *= 1.0f - m.base.a;
+    if (m.surface.w < 1.5f) return float3(0.0f);
+    through *= 1.0f - m.base.a;
     if (ptMean(through) < 1e-4f) return float3(0.0f);
     origin = origin + dir * h.t + dir * kPtEps;
   }
@@ -182,11 +182,12 @@ inline float3 ptDrawDisk(constant PtUniforms& u, thread PtRng& rng) {
 kernel void pathTrace(constant PtUniforms& u [[buffer(0)]], metal::raytracing::instance_acceleration_structure scene [[buffer(1)]],
                       device const PtInstance* instances [[buffer(2)]], device const PtMesh* meshes [[buffer(3)]],
                       device const PtMaterial* materials [[buffer(4)]], device float4* accum [[buffer(5)]], device float4* catcher [[buffer(6)]],
-                      device float4* albedoSum [[buffer(7)]], device float4* normalSum [[buffer(8)]], uint2 gid [[thread_position_in_grid]]) {
+                      device float4* albedoSum [[buffer(7)]], device float4* normalSum [[buffer(8)]], device float4* skyCatcher [[buffer(9)]],
+                      uint2 gid [[thread_position_in_grid]]) {
   if (gid.x >= u.size.x || gid.y >= u.size.y) return;
   const uint pixel = gid.y * u.size.x + gid.x;
   const float3 up = float3(0.0f, -1.0f, 0.0f);
-  float4 acc = accum[pixel], catch_ = catcher[pixel], alb = albedoSum[pixel], nor = normalSum[pixel];
+  float4 acc = accum[pixel], catch_ = catcher[pixel], sky = skyCatcher[pixel], alb = albedoSum[pixel], nor = normalSum[pixel];
   for (uint k = 0; k < u.size.z; k++) {
     const uint sample = u.size.w + k;
     PtRng rng;
@@ -196,29 +197,32 @@ kernel void pathTrace(constant PtUniforms& u [[buffer(0)]], metal::raytracing::i
     float3 origin = u.eye.xyz;
     float3 dir = normalize(u.forward.xyz + u.right.xyz * (sx * u.eye.w * u.right.w) + u.up.xyz * (sy * u.eye.w));
     float3 throughput = float3(1.0f), radiance = float3(0.0f), absorb = float3(0.0f);
-    bool passedOnly = true, aov = false, floorSeen = false;
+    bool passedOnly = true, aov = false, floorSeen = false, bounced = false;
     float mattPdf = -1.0f;  // the last bounce's density when it was a matt one, for joining with the disks
     for (uint bounce = 0; bounce <= u.seed.w; bounce++) {
       PtHit h = ptTrace(origin, dir, u, scene, instances, meshes);
       if (any(absorb > 0.0f)) throughput *= exp(-absorb * (h.hit ? h.t : 1e4f));
       // The floor, where it is nearer than any piece.
-      float tf = (u.floorPlane.y > 0.5f && dir.y > 1e-6f) ? (u.floorPlane.x - origin.y) / dir.y : -1.0f;
+      // After a bounce off plastic or metal it is not there (EyeSight's ground lights nothing and
+      // shows in no reflection); seen through glass it is the background at glass.w.
+      float tf = (u.floorPlane.y > 0.5f && dir.y > 1e-6f && !bounced) ? (u.floorPlane.x - origin.y) / dir.y : -1.0f;
       if (tf > 1e-3f && (!h.hit || tf < h.t)) {
         if (bounce == 0) {
-          // The shadow catcher: how much of the floor's light the model keeps from it.
+          // The shadow catcher, as EyeSight's ground: how much of the lights' light the model
+          // keeps from the floor (the key at floorPlane.z of its strength), and, apart, how much of
+          // the white world it sees; the host makes the floor's colour of the two.
           floorSeen = true;
           float3 p = origin + dir * tf + up * kPtEps;
           float3 kept = float3(0.0f);
           float all = 0.0f;
           float3 d = ptCosine(up, rng.next(), rng.next());
-          all += kPtPi * u.rig.x;
-          kept += kPtPi * u.rig.x * ptShadow(p, d, u, scene, instances, meshes, materials);
+          sky += float4(ptShadow(p, d, u, scene, instances, meshes, materials), 1.0f);
           if (u.rig.w > 0.5f) {
             for (int i = 0; i < 4; i++) {
               float3 l = ptAround(u.lights[i].xyz, 1.0f - rng.next() * (1.0f - u.rig.z), 2.0f * kPtPi * rng.next());
               float c = dot(l, up);
               if (c <= 0.0f) continue;
-              float e = u.lights[i].w / (kPtPi * u.rig.y) * c * 2.0f * kPtPi * (1.0f - u.rig.z);
+              float e = u.lights[i].w * (i == 0 ? u.floorPlane.z : 1.0f) / (kPtPi * u.rig.y) * c * 2.0f * kPtPi * (1.0f - u.rig.z);
               all += e;
               kept += e * ptShadow(p, l, u, scene, instances, meshes, materials);
             }
@@ -280,7 +284,7 @@ kernel void pathTrace(constant PtUniforms& u [[buffer(0)]], metal::raytracing::i
         if (dot(n, ng) < 0.0f) n = -n;
         if (dot(n, -dir) <= 0.0f) n = ng;
         if (!aov) alb.rgb += base, nor.xyz += n, aov = true;
-        passedOnly = false;
+        passedOnly = false, bounced = true;
         absorb = float3(0.0f);
         const float3 v = -dir;
         const float nv = max(dot(n, v), 1e-4f);
@@ -330,6 +334,7 @@ kernel void pathTrace(constant PtUniforms& u [[buffer(0)]], metal::raytracing::i
   }
   accum[pixel] = acc;
   catcher[pixel] = catch_;
+  skyCatcher[pixel] = sky;
   albedoSum[pixel] = alb;
   normalSum[pixel] = nor;
 }

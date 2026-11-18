@@ -584,6 +584,22 @@ holds clear, red, light blue, yellow and green 2×2 bricks, a round brick, a rai
 | glass, lights turning (35948ce) | 17.57 | 46.08 | 5.96 | 49.72 | 17.14 |
 | glass, the owner's render work (111539e) | 17.93 | 47.07 | 5.98 | 50.76 | 18.17 |
 | glass, lights fixed and refitted (2026-11-18) | 17.79 | 46.54 | 6.24 | 50.37 | 15.01 |
+| calib, viewport re-measured at 5f57ac4 | 5.95 | 13.88 | 3.67 | | |
+| glass, viewport re-measured at 5f57ac4 | 17.49 | 45.70 | 6.27 | 49.49 | 14.26 |
+| calib, path tracer as first written (`bmexport still`, 512 samples, 5f57ac4) | 10.37 | 21.17 | 8.32 | | |
+| glass, path tracer as first written | 21.45 | 42.68 | 18.81 | 45.92 | 18.07 |
+| calib, path tracer fitted (512 samples) | 5.99 | 15.68 | 1.73 | | |
+| glass, path tracer fitted | 15.08 | 40.10 | 3.94 | 43.47 | 11.43 |
+
+**The path tracer** (`calib_eyesight.py --tool bmexport --samples 512`) is scored the same way, its masks drawn by
+bmshot. Three changes took it under the viewport's 2026-11-18 row on every column: its floor is EyeSight's ground
+(the lights' shadow, key at 0.807, times the white world seen to the power 0.587) instead of a physical shadow
+catcher (calib floor 8.32 → 1.66); glass stops shadow rays, as in Cycles, so the ground is shadowed by glass and
+light through glass, which arrives along refracted paths, is no longer also counted by next-event estimation (glass
+floor 14.48 → 3.86); and a ray bounced off a piece no longer sees the floor (EyeSight's ground lights nothing),
+calib bricks 21.16 → 16.40. Then the fills at 0.85 of their strength (`kPathFillShare`; key, world and the
+coat's roughness did no better). Calib bricks pass by 0.02, within the noise; the viewport as it is now does
+better there (13.88). Not modelled: refraction's dark rims and EyeSight's rounded edges.
 
 The refit only helps with the lights fixed: with them turning it scores calib 7.65 (bricks 18.39).
 

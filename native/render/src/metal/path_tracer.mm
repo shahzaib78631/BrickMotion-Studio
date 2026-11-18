@@ -67,7 +67,7 @@ PathImage PathTracer::render(PathScene& pathScene, const Camera& camera, const P
     std::fill_n(static_cast<float*>(b.contents), pixels * 4, 0.0f);
     return b;
   };
-  id<MTLBuffer> accum = zeroed(), catcher = zeroed(), albedo = zeroed(), normal = zeroed();
+  id<MTLBuffer> accum = zeroed(), catcher = zeroed(), sky = zeroed(), albedo = zeroed(), normal = zeroed();
 
   PtUniformsGpu u{};
   bm::Vec3 right, up, forward;
@@ -77,10 +77,10 @@ PathImage PathTracer::render(PathScene& pathScene, const Camera& camera, const P
   u.up = f4(up, 0);
   u.forward = f4(forward, 0);
   const LightRig rig = studioLights(camera, o.lightsFollowCamera);
-  for (int i = 0; i < 4; i++) u.lights[i] = f4(rig.toward[i], rig.strength[i]);
+  for (int i = 0; i < 4; i++) u.lights[i] = f4(rig.toward[i], rig.strength[i] * (i == 0 ? 1.0f : kPathFillShare));
   u.rig = simd_make_float4(kWorldStrength, kRigSinSquared, std::sqrt(1.0f - kRigSinSquared), o.lights ? 1.0f : 0.0f);
   u.background = simd_make_float4(o.background[0], o.background[1], o.background[2], 1);
-  u.floorPlane = simd_make_float4(s.floorY, o.floor ? 1.0f : 0.0f, 0, 0);
+  u.floorPlane = simd_make_float4(s.floorY, o.floor ? 1.0f : 0.0f, kFloorKeyShare, 0);
   u.glass = simd_make_float4(kGlassIor, kGlassAbsorption, kGlassAbsorption / kPathGlassWall, kFloorThroughGlass);
   const bool hasScene = s.instances != nil;
   u.seed = simd_make_uint4(static_cast<uint32_t>(o.seed), static_cast<uint32_t>(o.seed >> 32), hasScene ? 1u : 0u, kPathMaxBounces);
@@ -109,6 +109,7 @@ PathImage PathTracer::render(PathScene& pathScene, const Camera& camera, const P
     [enc setBuffer:catcher offset:0 atIndex:6];
     [enc setBuffer:albedo offset:0 atIndex:7];
     [enc setBuffer:normal offset:0 atIndex:8];
+    [enc setBuffer:sky offset:0 atIndex:9];
     [enc dispatchThreads:MTLSizeMake(static_cast<NSUInteger>(o.width), static_cast<NSUInteger>(o.height), 1) threadsPerThreadgroup:MTLSizeMake(8, 8, 1)];
     [enc endEncoding];
     [commands commit];
@@ -120,13 +121,16 @@ PathImage PathTracer::render(PathScene& pathScene, const Camera& camera, const P
   out.beauty.resize(pixels * 3), out.albedo.resize(pixels * 3), out.normal.resize(pixels * 3);
   const auto* a = static_cast<const simd_float4*>(accum.contents);
   const auto* c = static_cast<const simd_float4*>(catcher.contents);
+  const auto* w = static_cast<const simd_float4*>(sky.contents);
   const auto* al = static_cast<const simd_float4*>(albedo.contents);
   const auto* n = static_cast<const simd_float4*>(normal.contents);
   const float inv = 1.0f / static_cast<float>(o.samples);
   for (size_t i = 0; i < pixels; i++) {
     const float floorShare = a[i].w;
     for (int k = 0; k < 3; k++) {
-      const float ratio = c[i].w > 0 ? c[i][k] / c[i].w : 1.0f;
+      // EyeSight's ground: the lights' shadow times the share of the white world seen, raised to kFloorSkyPower.
+      const float lights = c[i].w > 0 ? c[i][k] / c[i].w : 1.0f, world = w[i].w > 0 ? w[i][k] / w[i].w : 1.0f;
+      const float ratio = lights * std::pow(world, kFloorSkyPower);
       out.beauty[i * 3 + k] = (a[i][k] + floorShare * o.background[k] * ratio) * inv;
       out.albedo[i * 3 + k] = al[i][k] * inv;
     }
