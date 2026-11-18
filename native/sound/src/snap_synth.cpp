@@ -18,84 +18,150 @@ struct Rng {
     return z ^ (z >> 31);
   }
   double uniform() { return static_cast<double>(next() >> 11) * 0x1.0p-53; }
-  double noise() { return 2 * uniform() - 1; }
 };
 
-/// The two longest sides of a box, LDU: the footprint that rings.
-void footprint(const bm::Box& b, double& a, double& c) {
+/// A box's sides, LDU, longest first.
+void sides(const bm::Box& b, double& a, double& c, double& h) {
   double e[3] = {b.max.x - b.min.x, b.max.y - b.min.y, b.max.z - b.min.z};
   std::sort(e, e + 3);
-  a = std::max(e[2], 1.0), c = std::max(e[1], 1.0);
+  a = std::max(e[2], 1.0), c = std::max(e[1], 1.0), h = std::max(e[0], 1.0);
+}
+
+/// A face as a simply supported plate: sides a, b (m), thickness h (m), density rho (kg/m^3).
+struct Plate {
+  double a = 0, b = 0, h = 0, rho = 0;
+  double tune = 1, loss = kLossFactor;  ///< a held part: kHeldFrequency, kHeldLossFactor
+  bool empty() const { return a <= 0 || b <= 0; }
+};
+Plate faceOf(const bm::Box& box, bool held = false) {
+  if (box.empty()) return {};
+  double a = 0, b = 0, h = 0;
+  sides(box, a, b, h);
+  Plate p{a * kMetresPerLdu, b * kMetresPerLdu, kAbsWall, kAbsDensity};
+  if (held) p.tune = kHeldFrequency, p.loss = kHeldLossFactor;
+  return p;
+}
+/// The model the unit is clutched into: one plate as large as its footprint, as thick as it is
+/// at most kAssemblyThickness, of hollow ABS.
+Plate assemblyOf(const bm::Box& box) {
+  if (box.empty()) return {};
+  double a = 0, b = 0, h = 0;
+  sides(box, a, b, h);
+  return {a * kMetresPerLdu, b * kMetresPerLdu, std::min(std::max(h - 4, 1.0) * kMetresPerLdu, kAssemblyThickness), kAbsDensity * kAssemblyFill, kHeldFrequency, kHeldLossFactor};
 }
 
 struct Mode {
-  double hz, gain;  ///< gain for a click at the plate's middle row, before the row's shape
+  int kind = 0;  ///< 0 a plate's (m, n); 1 a free beam's k-th bending; 2 a held beam's
   int m, n;
+  double hz;
+  double mass;    ///< modal mass, kg
+  double volume;  ///< air the mode moves per metre of its amplitude, m^3/m (net: odd-odd; else a dipole's share)
+  double loss;
 };
-
-/// A thin ABS plate's modes below the top (Kirchhoff), lowest first. A plate too small to ring
-/// below it keeps its lowest mode, at the top.
-std::vector<Mode> plateModes(const bm::Box& box, double top) {
+std::vector<Mode> modesOf(const Plate& p, double top) {
   std::vector<Mode> out;
-  if (box.empty()) return out;
-  double a = 0, b = 0;
-  footprint(box, a, b);
-  a *= kMetresPerLdu, b *= kMetresPerLdu;
-  const double d = kAbsYoung * kAbsWall * kAbsWall * kAbsWall / (12 * (1 - kAbsPoisson * kAbsPoisson));
-  const double k = M_PI / 2 * std::sqrt(d / (kAbsDensity * kAbsWall));
+  if (p.empty()) return out;
+  const double d = kAbsYoung * p.h * p.h * p.h / (12 * (1 - kAbsPoisson * kAbsPoisson));
+  const double k = M_PI / 2 * std::sqrt(d / (p.rho * p.h));
   for (int m = 1; m <= kModes; m++)
     for (int n = 1; n <= kModes; n++) {
-      const double hz = k * (std::pow(m / a, 2) + std::pow(n / b, 2));
-      if (hz < top) out.push_back({hz, 1.0 / (m * n), m, n});
+      const double hz = p.tune * k * (std::pow(m / p.a, 2) + std::pow(n / p.b, 2));
+      if (hz >= top) continue;
+      const double base = p.a * p.b / (m * n * M_PI * M_PI);
+      const bool monopole = m % 2 == 1 && n % 2 == 1;
+      const double volume = monopole ? 4 * base : base * std::min(1.0, 2 * M_PI * hz * p.a / kSoundSpeed);
+      out.push_back({0, m, n, hz, p.rho * p.h * p.a * p.b / 4, volume, p.loss});
     }
-  if (out.empty()) out.push_back({top * kSmallPartTop, 1.0, 1, 1});
   std::sort(out.begin(), out.end(), [](const Mode& x, const Mode& y) { return x.hz < y.hz; });
   return out;
 }
 
-/// The web's snapCharacter size: log2 of the studs in the footprint, 0..6.
-double sizeOf(const bm::Box& box) {
-  if (box.empty()) return 1;
-  double a = 0, b = 0;
-  footprint(box, a, b);
-  return std::log2(std::clamp(a * b / 400.0, 1.0, 64.0));
+/// The part bending as a beam along its longest side (Euler-Bernoulli), its section hollow with
+/// kAbsWall walls (solid when too thin for that): free at both ends, or held there (a part in the
+/// model). k-th mode: (beta_k L)^2 / (2 pi L^2) sqrt(E I / (rho A)).
+std::vector<Mode> beamModesOf(const bm::Box& box, bool held, double top) {
+  std::vector<Mode> out;
+  if (box.empty()) return out;
+  double a = 0, b = 0, h = 0;
+  sides(box, a, b, h);
+  if (h >= 12) h -= 4;  // a part with studs: the section is below them
+  const double length = a * kMetresPerLdu, width = b * kMetresPerLdu, height = h * kMetresPerLdu, t = kAbsWall;
+  const bool hollow = width > 3 * t && height > 3 * t;
+  const double inW = hollow ? width - 2 * t : 0, inH = hollow ? height - 2 * t : 0;
+  const double inertia = (width * std::pow(height, 3) - inW * std::pow(inH, 3)) / 12, area = width * height - inW * inH;
+  const double rho = held ? kAbsDensity : kAbsDensity;
+  const double c = std::sqrt(kAbsYoung * inertia / (rho * area));
+  constexpr double kBeta[4] = {4.730, 7.853, 10.996, 14.137};
+  for (int k = 1; k <= 4; k++) {
+    const double hz = kBeta[k - 1] * kBeta[k - 1] / (2 * M_PI * length * length) * c;
+    if (hz >= top) break;
+    // Its shape: held, sqrt2 sin(k pi u) (odd k move air net); free, sqrt2 cos((k+1) pi u), none net.
+    const double net = held && k % 2 == 1 ? std::sqrt(2.0) * 2 / (k * M_PI) : 0.0;
+    const double volume = width * length * (net > 0 ? net : std::sqrt(2.0) / ((k + 1) * M_PI) * std::min(1.0, 2 * M_PI * hz * length / kSoundSpeed));
+    out.push_back({held ? 2 : 1, k, 0, hz, rho * area * length, volume, held ? kHeldLossFactor : kLossFactor});
+  }
+  return out;
 }
 
-/// A plate struck at `at` by a half-sine force: each mode a two-pole resonator, added in.
-void strike(std::vector<double>& out, size_t at, const std::vector<Mode>& modes, double row, double level, double rate, double detune, double pulseSeconds) {
-  const size_t pulse = std::max<size_t>(2, static_cast<size_t>(std::lround(pulseSeconds * rate)));
+/// Where a force acts on a face: spread over it (a flat landing) or at a point (u, v in 0..1).
+struct Where {
+  bool spread = true;
+  double u = 0.5, v = 0.5;
+  double weight(const Mode& mode) const {
+    if (mode.kind == 1) return spread ? 0.0 : std::sqrt(2.0) * std::cos((mode.m + 1) * M_PI * u);
+    if (mode.kind == 2) return spread ? (mode.m % 2 == 1 ? std::sqrt(2.0) * 2 / (mode.m * M_PI) : 0.0) : std::sqrt(2.0) * std::sin(mode.m * M_PI * u);
+    if (spread) return mode.m % 2 == 1 && mode.n % 2 == 1 ? 16.0 / (mode.m * mode.n * M_PI * M_PI) : 0.0;
+    return std::sin(mode.m * M_PI * u) * std::sin(mode.n * M_PI * v);
+  }
+};
+
+/// The sound pressure at the microphone of a plate driven by `force` (N, one value a sample from
+/// `at`): each mode a damped oscillator, heard by the air its acceleration moves.
+void ring(std::vector<double>& out, size_t at, const std::vector<double>& force, const std::vector<Mode>& modes, const Where& where, double scale, double rate) {
+  const double dt = 1 / rate, toPressure = kAirDensity / (4 * M_PI * kMicDistance);
   for (const Mode& mode : modes) {
-    const double hz = mode.hz * detune;
-    const double w = 2 * M_PI * hz / rate;
-    if (w >= M_PI) continue;
-    const double r = std::exp(-M_PI * hz * kLossFactor / rate);
-    const double shape = std::sin(mode.m * M_PI * row) * std::sin(mode.n * M_PI * 0.5);
-    const double gain = level * mode.gain * shape * std::sin(w) * M_PI / (2.0 * static_cast<double>(pulse));
-    if (gain == 0) continue;
-    const size_t length = pulse + static_cast<size_t>(std::log(1e-5) / std::log(r)) + 1;
-    double y1 = 0, y2 = 0;
-    for (size_t j = 0; j < length && at + j < out.size(); j++) {
-      const double x = j < pulse ? std::sin(M_PI * (static_cast<double>(j) + 0.5) / static_cast<double>(pulse)) : 0.0;
-      const double y = 2 * r * std::cos(w) * y1 - r * r * y2 + x;
-      y2 = y1, y1 = y;
-      out[at + j] += gain * y;
+    const double drive = where.weight(mode) * scale / mode.mass;
+    if (drive == 0) continue;
+    const double w0 = 2 * M_PI * mode.hz, zeta = mode.loss / 2, wd = w0 * std::sqrt(1 - zeta * zeta);
+    const double r = std::exp(-zeta * w0 * dt), theta = wd * dt, b1 = r * std::sin(theta) / wd;
+    const double gain = toPressure * mode.volume * w0 * w0;
+    const size_t ringing = force.size() + static_cast<size_t>(std::log(1e-6) / std::log(r)) + 1;
+    double x1 = 0, x2 = 0, u1 = 0;
+    for (size_t j = 0; j < ringing && at + j < out.size(); j++) {
+      const double x = 2 * r * std::cos(theta) * x1 - r * r * x2 + b1 * u1;
+      u1 = j < force.size() ? force[j] * drive * dt : 0.0;
+      x2 = x1, x1 = x;
+      out[at + j] += gain * x;
     }
   }
 }
 
-/// RBJ band-pass (constant peak gain).
-struct BandPass {
-  double b0, b2, a1, a2, x1 = 0, x2 = 0, y1 = 0, y2 = 0;
-  BandPass(double hz, double q, double rate) {
-    const double w = 2 * M_PI * std::min(hz, 0.45 * rate) / rate, alpha = std::sin(w) / (2 * q), a0 = 1 + alpha;
-    b0 = alpha / a0, b2 = -alpha / a0, a1 = -2 * std::cos(w) / a0, a2 = (1 - alpha) / a0;
-  }
-  double operator()(double x) {
-    const double y = b0 * x + b2 * x2 - a1 * y1 - a2 * y2;
-    x2 = x1, x1 = x, y2 = y1, y1 = y;
-    return y;
-  }
-};
+/// A Hertz impact's force, one value a sample: a half sine of the contact time, its integral the
+/// impulse.
+std::vector<double> impact(double impulse, double seconds, double rate) {
+  const size_t n = std::max<size_t>(1, static_cast<size_t>(std::ceil(seconds * rate)));
+  std::vector<double> f(n);
+  double sum = 0;
+  for (size_t j = 0; j < n; j++) sum += f[j] = std::sin(M_PI * (static_cast<double>(j) + 0.5) / static_cast<double>(n));
+  for (double& x : f) x *= impulse * rate / sum;
+  return f;
+}
+
+/// What one force does: it rings the unit, the part it acts on (the reaction) and, through the
+/// clutch, the model.
+/// A body's modes: its face as a plate and the whole as a beam.
+std::vector<Mode> bodyModes(const Plate& face, const bm::Box& box, bool held, double rate) {
+  const double top = std::min(kTopHz, 0.45 * rate);
+  std::vector<Mode> modes = face.empty() ? std::vector<Mode>{} : modesOf(face, top);
+  const std::vector<Mode> beam = beamModesOf(box, held, top);
+  modes.insert(modes.end(), beam.begin(), beam.end());
+  return modes;
+}
+void strike(std::vector<double>& out, size_t at, const std::vector<double>& force, const SnapEvent& e, const Where& where, double rate) {
+  ring(out, at, force, bodyModes(faceOf(e.unit), e.unit, false, rate), where, 1.0, rate);
+  ring(out, at, force, bodyModes(faceOf(e.touching, true), e.touching, true, rate), where, -1.0, rate);
+  if (e.builtPieces > 0) ring(out, at, force, bodyModes(assemblyOf(e.built), bm::Box{}, true, rate), Where{false, 0.5, 0.5}, -kJointTransmission, rate);
+}
 
 /// A Schroeder room for one channel; it keeps its state from sample to sample.
 struct Room {
@@ -125,75 +191,79 @@ struct Room {
   }
 };
 
-/// The most samples a snap starts before its seat (its slide).
-size_t maxLead(double rate) { return static_cast<size_t>(std::ceil(kSlideMax * rate)) + 2; }
+size_t leadSamples(double rate) { return static_cast<size_t>(std::ceil(kSnapLeadSeconds * rate)); }
+size_t maxLead(double rate) { return leadSamples(rate); }
 int64_t seatSample(const SnapEvent& e, double fps, double rate) { return std::llround(static_cast<double>(e.frame) / fps * rate); }
 
 }  // namespace
 
+std::vector<double> ringHz(const bm::Box& box, double thickness) {
+  Plate p = faceOf(box);
+  if (thickness > 0) p.h = thickness;
+  std::vector<double> out;
+  for (const Mode& m : modesOf(p, kTopHz)) out.push_back(m.hz);
+  return out;
+}
+
+double shellMass(const bm::Box& box) {
+  if (box.empty()) return 0;
+  double a = 0, b = 0, h = 0;
+  sides(box, a, b, h);
+  a *= kMetresPerLdu, b *= kMetresPerLdu, h = std::max(h - 4, 1.0) * kMetresPerLdu;  // less its studs
+  return kAbsDensity * kAbsWall * (a * b + 2 * (a + b) * h);
+}
+
+double hertzSeconds(double mass, double speed) {
+  const double e = kAbsYoung / (2 * (1 - kAbsPoisson * kAbsPoisson));
+  return 2.868 * std::pow(mass * mass / (kContactRadius * e * e * speed), 0.2);
+}
+
 std::vector<float> synthesise(const SnapEvent& e, double fps, const SoundOptions& o, size_t& lead) {
   (void)fps;
-  const double rate = o.sampleRate;
+  const double rate = o.sampleRate, v = kPressSpeed;
   Rng rng{0xB5C0FFEEull ^ (static_cast<uint64_t>(e.move) * 0x9E3779B97F4A7C15ull)};
-  const double slideSeconds = std::clamp(e.seatSeconds, 0.0, kSlideMax);
-  const size_t slide = static_cast<size_t>(std::lround(slideSeconds * rate));
-  lead = slide + 1;
+  lead = leadSamples(rate);
   std::vector<double> x(lead + static_cast<size_t>(std::ceil(kSnapTailSeconds * rate)), 0.0);
-  const bool tall = !e.unit.empty() && e.unit.max.y - e.unit.min.y >= kTallLdu;
-  const double size = sizeOf(e.unit);
-  const double ringPitch = (1.12 - 0.05 * size) * (tall ? 0.92 : 1.0);
   const bool joined = e.mates > 0;
-  const bool clicking = joined && (e.joint == bm::connect::JointKind::Fixed || e.ridge);
-  const double detune = 1 + 0.03 * rng.noise();
+  const bool lands = !joined || e.joint == bm::connect::JointKind::Fixed || e.ridge;  // else it slides on (an axle)
+  const double mass = shellMass(e.unit);
 
-  // The slide: the unit's faces rubbing on what it goes onto, rising to the seat.
-  if (joined && slide > 0) {
-    BandPass band(kSlideHz * ringPitch * detune, kSlideQ, rate);
-    const double level = !clicking ? kSlideAloneLevel : e.ridge ? kSlideRidgeLevel : kSlideLevel;
-    const size_t fade = std::min<size_t>(slide, static_cast<size_t>(rate * 0.001));
-    for (size_t j = 0; j < slide; j++) {
-      const double t = static_cast<double>(j + 1) / static_cast<double>(slide);
-      const double out = j + fade >= slide ? static_cast<double>(slide - j) / static_cast<double>(fade + 1) : 1.0;
-      x[lead - slide + j - 1] += level * t * t * out * band(rng.noise());
-    }
+  if (e.ridge) {
+    // A Technic pin's ridge: squeezed as it goes through the hole, then letting go.
+    const size_t ramp = static_cast<size_t>(kRidgeRamp * rate), release = std::max<size_t>(1, static_cast<size_t>(kRidgeRelease * rate));
+    std::vector<double> f(ramp + release);
+    for (size_t j = 0; j < ramp; j++) f[j] = kRidgeForce * static_cast<double>(j) / static_cast<double>(ramp);
+    for (size_t j = 0; j < release; j++) f[ramp + j] = kRidgeForce * (1 - static_cast<double>(j + 1) / static_cast<double>(release));
+    const size_t letGo = lead - static_cast<size_t>(std::lround(kRidgeDepth / v * rate));
+    strike(x, letGo - ramp, f, e, Where{false, 0.5, 0.5}, rate);
   }
-  // The clicks: each row of studs (or a pin's ridge) seating, ringing the unit and what it joins.
-  if (clicking) {
-    const int clicks = e.mates <= 2 ? 2 : e.mates <= 6 ? 3 : 4;
-    const double gap = kClickGap + kClickGapPerDoubling * std::min(std::log2(static_cast<double>(e.mates)), 4.0);
-    const double top = std::min(kTopHz, 0.45 * rate);
-    const std::vector<Mode> unit = plateModes(e.unit, top), touching = plateModes(e.touching, top);
-    double fa = 0, fb = 0;
-    footprint(e.unit, fa, fb);
-    const double pulse = kPulseSeconds * std::clamp(std::sqrt(fa * fb / kPulseArea), kPulseScale[0], kPulseScale[1]);
-    double level = kClickLevel;
-    for (int k = 0; k < clicks; k++) {
-      const size_t at = lead + static_cast<size_t>(std::lround(k * gap * (1 + 0.1 * rng.noise()) * rate));
-      const double row = (k + 0.5) / clicks;
-      const double l = level * (1 + 0.05 * rng.noise());
-      strike(x, at, unit, row, l, rate, detune, pulse);
-      strike(x, at, touching, row, l * kTouchingLevel, rate, detune, pulse);
-      level *= kClickFalloff;
+  if (lands && mass > 0) {
+    // The faces meet: a Hertz impact, or two when a long part is pressed a little tilted.
+    double a = 0, b = 0, h = 0;
+    sides(e.unit, a, b, h);
+    const double impulse = mass * v * (1 + kRestitution);
+    if (a > kTiltLdu) {
+      const double tilt = (kTiltDegrees[0] + (kTiltDegrees[1] - kTiltDegrees[0]) * rng.uniform()) * M_PI / 180;
+      const double later = a * kMetresPerLdu * std::sin(tilt) / v;
+      const double t = hertzSeconds(mass / 2, v);
+      strike(x, lead, impact(kFirstShare * impulse, t, rate), e, Where{false, 0.1, 0.5}, rate);
+      strike(x, lead + static_cast<size_t>(std::lround(later * rate)), impact((1 - kFirstShare) * impulse, t, rate), e, Where{false, 0.9, 0.5}, rate);
+    } else {
+      strike(x, lead, impact(impulse, hertzSeconds(mass, v), rate), e, Where{}, rate);
     }
-  }
-  // The thump: the body of the model taking the unit, deeper as the model grows.
-  if (clicking || !joined) {
-    const double grown = std::min(std::log2(static_cast<double>(e.builtPieces) + 1) * kThumpSizePerDoubling, kThumpSizeMax);
-    const double hz = ((tall ? 105.0 : 135.0) - 6 * grown) * detune;
-    const double level = kThumpLevel * ((tall ? 0.75 : 0.5) + 0.05 * grown);
-    const double tau = ((tall ? 0.2 : 0.14) + 0.012 * grown) / std::log(1e4);
-    const size_t attack = static_cast<size_t>(rate * 0.001);
-    double phase = 0, low = 0;
-    const double lowK = 1 - std::exp(-2 * M_PI * kThumpNoiseHz / rate);
-    for (size_t j = 0; lead + j < x.size(); j++) {
-      const double t = static_cast<double>(j) / rate;
-      const double f = hz * (1 + (kThumpSweep - 1) * std::max(0.0, 1 - t / kThumpSweepSeconds));
-      phase += 2 * M_PI * f / rate;
-      const double env = (j < attack ? static_cast<double>(j) / static_cast<double>(attack) : 1.0) * std::exp(-t / tau);
-      low += lowK * (rng.noise() - low);
-      const double noise = t < kThumpNoiseSeconds ? 0.5 * low * (1 - t / kThumpNoiseSeconds) : 0.0;
-      x[lead + j] += level * (env * std::sin(phase) + noise);
+  } else if (joined) {
+    // Sliding on: friction, sticking and slipping, over the length engaged.
+    const double seconds = std::min(e.grip * kMetresPerLdu / v, kSlideMaxSeconds);
+    const size_t n = static_cast<size_t>(seconds * rate), ease = std::max<size_t>(1, static_cast<size_t>(0.005 * rate));
+    std::vector<double> f(n + 2 * ease);
+    double held = kFrictionForce;
+    for (size_t j = 0; j < f.size(); j++) {
+      if (rng.uniform() < kSlipRate / rate) held = kFrictionForce * (1 - kSlipShare * rng.uniform());
+      else held += (kFrictionForce - held) * 0.05;
+      const double in = std::min(1.0, static_cast<double>(j) / static_cast<double>(ease)), out = std::min(1.0, static_cast<double>(f.size() - j) / static_cast<double>(ease));
+      f[j] = held * 0.5 * (1 - std::cos(M_PI * in)) * 0.5 * (1 - std::cos(M_PI * out));
     }
+    strike(x, lead - std::min(lead, f.size()), f, e, Where{false, 0.5, 0.5}, rate);
   }
   std::vector<float> out(x.size());
   for (size_t j = 0; j < x.size(); j++) out[j] = static_cast<float>(x[j]);
@@ -273,7 +343,7 @@ void Mixer::render(float* left, float* right, size_t count) {
       probe.raw(l.data(), r.data(), n);
       for (size_t i = 0; i < n; i++) found = std::max({found, std::fabs(l[i]), std::fabs(r[i])});
     }
-    scale_ = options_.peak / std::max(found, 1e-9);
+    scale_ = options_.peak / std::max(found, 1e-15);
     engine_ = std::make_unique<Engine>(events_, fps_, options_);
   }
   for (size_t done = 0; done < count;) {

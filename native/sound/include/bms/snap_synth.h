@@ -1,6 +1,7 @@
 #pragma once
-// The snap track: each seating synthesised (a slide, clicks ringing the unit and what it lands on
-// as ABS plates, a thump that deepens as the model grows), panned, in a small room, normalised.
+// The snap track, from physics: each seating is an impact (Hertz contact, a hand's press) or a
+// Technic ridge letting go, or friction sliding, ringing the modes of the part, the part it lands
+// on and the model, heard as the sound those modes radiate. Panned, normalised.
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -12,9 +13,17 @@ namespace bms {
 struct SoundOptions {
   int sampleRate = 48000;
   double peak = 0.89;    ///< the loudest sample of the track
-  double room = 0.2;     ///< the reverb's share
+  double room = 0;       ///< a reverb's share; 0: dry, a close microphone on a quiet desk
   double stereo = 0.25;  ///< how far across the pan reaches
 };
+
+/// The audible modes of a box's largest face as an ABS plate, Hz, lowest first; empty when it
+/// rings above hearing. `thickness` 0: a brick's wall.
+std::vector<double> ringHz(const bm::Box& box, double thickness = 0);
+/// An ABS shell of the box (top and four walls, kAbsWall thick), kg.
+double shellMass(const bm::Box& box);
+/// How long a part of `mass` striking at `speed` stays in contact (Hertz), s.
+double hertzSeconds(double mass, double speed);
 
 /// One snap, alone and dry, mono, from `lead` samples before its seat: what the mixer pans and
 /// mixes. For tuning and tests. Never throws.

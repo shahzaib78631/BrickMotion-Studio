@@ -237,7 +237,11 @@ int soundGallery(const std::vector<std::string_view>& args) {
   std::vector<Case> cases;
   cases.push_back({"1-tile-1x1-on-plate", {event(15, 1, 1, box(20, 8, 20, -8), box(80, 8, 80, 0), 1)}, 45});
   cases.push_back({"2-brick-2x4-on-2x4", {event(15, 1, 8, box(80, 24, 40, -24), box(80, 24, 40, 0), 1)}, 45});
-  cases.push_back({"3-brick-2x4-onto-2000-pieces", {event(15, 1, 8, box(80, 24, 40, -24), box(80, 24, 40, 0), 2000)}, 45});
+  {
+    bms::SnapEvent big = event(15, 1, 8, box(80, 24, 40, -24), box(80, 24, 40, 0), 2000);
+    big.built = box(640, 320, 480, 0);  // a model about 26 x 19 cm: what rings is its size, not its count
+    cases.push_back({"3-brick-2x4-onto-2000-pieces", {big}, 45});
+  }
   {
     bms::SnapEvent pin = event(15, 1, 2, box(40, 16, 16, -16), box(120, 20, 20, 0), 1);
     pin.ridge = true, pin.joint = connect::JointKind::Revolute;
