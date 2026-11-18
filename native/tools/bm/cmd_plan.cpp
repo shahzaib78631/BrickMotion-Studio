@@ -75,6 +75,9 @@ int cmdPlan(const Args& args) {
       certificate = plan::certify(model, graph, cache, shapes, plan);
       std::printf("certified     %d of %d moves (%.0f ms; flights checked along their length)\n  floating    %d\n  crossings   %d\n  off axis    %d\n  flagged     %d (of them unjoined in the file: %d)\n", certificate.certified, certificate.total,
                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count(), certificate.floating, certificate.crossings, certificate.offAxis, certificate.flagged, certificate.unjoined);
+      const plan::Timeline played = plan::buildTimeline(model, cache, plan);
+      const plan::PlayCheck play = plan::certifyPlay(model, graph, cache, shapes, plan, played);
+      std::printf("played        %d flights: crossings %d, under floor %d\n  upward      %d\n  inversions  %d\n", play.flights, play.crossings, play.underFloor, play.upward, play.inversions);
     }
     // The first moves that are not certified, with why.
     int shown = 0;

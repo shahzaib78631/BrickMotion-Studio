@@ -28,6 +28,8 @@ struct Scene {
   connect::Graph graph;
   std::unique_ptr<Model> model;
 
+  /// Starts the file's next build step.
+  void step() { text += "0 STEP\n"; }
   uint32_t add(double x, double y, double z) {
     text += "1 4 " + std::to_string(x) + " " + std::to_string(y) + " " + std::to_string(z) + " 1 0 0 0 1 0 0 0 1 3005.dat\n";
     at.push_back({x, y, z});
@@ -583,4 +585,87 @@ TEST_CASE("a unit out of its seat rests at its seat whatever was asked before", 
   REQUIRE(b.path.size() >= 2);
   CHECK_THAT(dot(a.path[1].t, kUp), WithinAbs(3.997 + kClearMargin, 1e-9));
   CHECK_THAT(dot(b.path[1].t, kUp), WithinAbs(4.0 + kClearMargin, 1e-9));
+}
+
+// ---- what is played ----
+
+namespace {
+Xform shiftedBy(Vec3 v) {
+  Xform x;
+  x.t = v;
+  return x;
+}
+PlayCheck played(Scene& s, const Plan& p) { return certifyPlay(*s.model, s.graph, s.parts, s.shapes, p, buildTimeline(*s.model, s.parts, p)); }
+}  // namespace
+
+TEST_CASE("the play certifier passes a tower", "[plan][play]") {
+  Scene s;
+  const uint32_t a = s.add(0, 0, 0), b = s.add(0, -24, 0), c = s.add(0, -48, 0);
+  s.stud(a, b), s.stud(b, c);
+  const PlayCheck k = played(s, s.plan());
+  REQUIRE(k.flights == 3);
+  REQUIRE(k.crossings == 0);
+  REQUIRE(k.inversions == 0);  // under the floor and upward: the floor's test (the base brick goes out through it today)
+}
+
+TEST_CASE("the play certifier sees a flight through a placed piece", "[plan][play]") {
+  Scene s;
+  const uint32_t a = s.add(0, 0, 0), b = s.add(0, -24, 0), c = s.add(0, -48, 0);
+  s.stud(a, b), s.stud(b, c);
+  Plan p = s.plan();
+  REQUIRE(p.moves[2].unit.pieces == std::vector<uint32_t>{c});
+  p.moves[2].path = {Xform{}, shiftedBy({0, 30, 0}), shiftedBy({0, 200, 0})};  // up from under the floor, through a and b
+  p.moves[2].insertion = {0, -1, 0};
+  const PlayCheck k = played(s, p);
+  REQUIRE(k.crossings == 1);
+  REQUIRE(k.crossed == std::vector<uint32_t>{2});
+  REQUIRE(std::find(k.under.begin(), k.under.end(), 2u) != k.under.end());
+  REQUIRE(k.upward >= 1);
+}
+
+TEST_CASE("a flagged move is not swept", "[plan][play]") {
+  Scene s;
+  const uint32_t a = s.add(0, 0, 0), b = s.add(0, -24, 0), c = s.add(0, -48, 0);
+  s.stud(a, b), s.stud(b, c);
+  Plan p = s.plan();
+  p.moves[2].flag = Flag::Blocked;
+  p.moves[2].path = {Xform{}, shiftedBy({0, 200, 0})};
+  const PlayCheck k = played(s, p);
+  REQUIRE(k.flights == 2);
+  REQUIRE(k.crossings == 0);
+}
+
+TEST_CASE("inversions count moves built against their steps", "[plan][play]") {
+  Scene s;
+  const uint32_t a = s.add(0, 0, 0);
+  s.step();
+  const uint32_t b = s.add(0, -24, 0);
+  s.step();
+  const uint32_t c = s.add(0, -48, 0);
+  s.stud(a, b), s.stud(b, c);
+  Plan p = s.plan();
+  REQUIRE(s.model->pieces()[c].step == 2);
+  REQUIRE(played(s, p).inversions == 0);
+  std::swap(p.moves[1], p.moves[2]);  // step 2 before step 1
+  REQUIRE(played(s, p).inversions == 1);
+}
+
+TEST_CASE("a sub-assembly is swept as one", "[plan][play]") {
+  Scene s;
+  const uint32_t a = s.add(0, 0, 0), b = s.add(0, -24, 0);
+  s.stud(a, b);
+  const Plan inner = s.plan();
+  Plan p;
+  Move m;
+  m.unit.pieces = {a, b};
+  m.source = UnitSource::Grown;
+  m.insertion = {0, 1, 0};
+  m.path = {Xform{}, shiftedBy({0, -30, 0}), shiftedBy({0, -300, 0})};
+  m.sub = 0;
+  p.moves.push_back(m);
+  p.subs.push_back(inner);
+  const PlayCheck k = played(s, p);
+  REQUIRE(k.flights == 1);
+  REQUIRE(k.crossings == 0);
+  REQUIRE(k.underFloor == 0);
 }

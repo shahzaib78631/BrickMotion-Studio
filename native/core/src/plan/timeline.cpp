@@ -130,6 +130,14 @@ Xform poseAt(const Flight& f, int frame) {
   return f.waypoints.back();
 }
 
+std::vector<Vec3> playedPath(const Flight& f, double spacing) {
+  (void)spacing;  // every leg is straight
+  std::vector<Vec3> out;
+  for (const Xform& w : f.waypoints)
+    if (out.empty() || length(w.t - out.back()) > 1e-9) out.push_back(w.t);
+  return out;
+}
+
 namespace {
 nlohmann::json planJson(const Plan& plan, const Certificate* cert, const Model& model) {
   nlohmann::json moves = nlohmann::json::array();

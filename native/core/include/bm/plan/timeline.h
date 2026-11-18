@@ -43,6 +43,11 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
 /// The unit's motion from its seat at a frame: staging before its flight, the seat after it.
 Xform poseAt(const Flight& flight, int frame);
 
+/// Where the unit's flight takes it, start to seat, as straight segments: the corners of its
+/// straight legs, and points at most `spacing` LDU apart along anything curved. What poseAt plays
+/// lies on these segments.
+std::vector<Vec3> playedPath(const Flight& flight, double spacing);
+
 /// The plan for tools and tests: every move with its pieces' ids, axis, path, flag and, when a
 /// certificate is given, whether it is certified.
 nlohmann::json toJson(const Plan& plan, const Certificate* certificate, const Model& model);
