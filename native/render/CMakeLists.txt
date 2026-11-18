@@ -53,7 +53,7 @@ target_link_libraries(bmshot PRIVATE bmrender bmtools_common bm_warnings)
 # bmexport: path-traced stills, frames, the snap track and the film.
 add_executable(bmexport tools/bmexport/main.mm tools/common/shot_options.cpp)
 target_compile_options(bmexport PRIVATE $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
-target_link_libraries(bmexport PRIVATE bmrender bmtools_common bm_warnings)
+target_link_libraries(bmexport PRIVATE bmrender bmtools_common bmsound bm_warnings)
 
 # bmview: a window on the viewport.
 add_executable(bmview MACOSX_BUNDLE tools/bmview/main.mm tools/bmview/AppDelegate.mm tools/bmview/ViewportView.mm)

@@ -15,6 +15,9 @@
 #include "bmr/path_tracer.h"
 #include "bmr/render_mesh.h"
 #include "bmr/scene.h"
+#include "bms/snap_events.h"
+#include "bms/snap_synth.h"
+#include "bms/wav.h"
 #include "engine.h"
 #include "shot_options.h"
 
@@ -32,7 +35,9 @@ constexpr const char* kRigs[] = {"build-fl"};
 int usage() {
   std::fprintf(stderr,
                "usage: bmexport still <model file> --out <png> [--frame N] [--samples S] [--seed K] [--rig build-fl] [--no-denoise] [--denoise-device cpu|metal]\n"
-               "                [--size WxH] [--azimuth a --elevation e | --eye x,y,z --target x,y,z] [--fov deg] [--lights-fixed|--lights-follow] [--background r,g,b] [--repeat CxR]\n");
+               "                [--size WxH] [--azimuth a --elevation e | --eye x,y,z --target x,y,z] [--fov deg] [--lights-fixed|--lights-follow] [--background r,g,b] [--repeat CxR]\n"
+               "       bmexport sound <model file> --out <wav> [--size WxH]   the build's snaps, simulated, 48 kHz stereo (--size: the film's shape, for panning)\n"
+               "       bmexport sound-gallery <dir>                          the listening cases, one WAV each\n");
   return kUsage;
 }
 
@@ -145,11 +150,130 @@ int still(const std::vector<std::string_view>& args) {
   }
 }
 
+/// Writes to a temporary name beside `file`, then renames: a half-written file is never left.
+bool writeWavAtomically(bms::Mixer& mixer, const fs::path& file) {
+  const fs::path temporary = file.string() + ".part";
+  if (!bms::writeWav(mixer, temporary)) return false;
+  std::error_code ec;
+  fs::rename(temporary, file, ec);
+  return !ec;
+}
+
+int sound(const std::vector<std::string_view>& args) {
+  if (args.size() < 2 || args[1].rfind("--", 0) == 0) return usage();
+  const fs::path input{std::string(args[1])};
+  bmtools::ShotOptions shot;
+  shot.width = 1920, shot.height = 1080;
+  for (size_t i = 2; i < args.size(); i++) {
+    const int shared = bmtools::parseShotOption(shot, args, i);
+    if (shared <= 0) return usage();
+  }
+  if (shot.out.empty()) return usage();
+  const std::string ldraw = bmtools::ldrawDir();
+  if (ldraw.empty()) {
+    std::fprintf(stderr, "bmexport: no LDraw library found; set BM_LDRAW_DIR\n");
+    return kFailure;
+  }
+  try {
+    const ldraw::Library library(ldraw);
+    ldraw::PartCache full(library, ldraw::PartCache::defaultDirectory());
+    const Model model = io::load(input, library, &full);
+    const bmtools::Planned planned = bmtools::planModel(model, library, full, ldraw);
+    const bmr::Scene scene = bmr::buildScene(model, full);
+    std::vector<Box> boxes(model.pieces().size());
+    for (size_t p = 0; p < boxes.size() && p < scene.where.size(); p++) {
+      const auto [g, k] = scene.where[p];
+      if (g < scene.groups.size() && k < scene.groups[g].restBoxes.size()) boxes[p] = scene.groups[g].restBoxes[k];
+    }
+    const double aspect = double(shot.width) / shot.height;
+    auto screenX = [&](int frame, Vec3 point) {
+      const bmr::OrbitCamera orbit = planned.timeline.camera.empty() ? bmr::OrbitCamera::framing(scene.bounds, 0.6, aspect) : bmr::OrbitCamera::along(planned.timeline, frame);
+      const bmr::Camera c = orbit.camera(aspect, scene.bounds);
+      const Vec3 forward = normalized(c.target - c.eye), right = normalized(cross(forward, c.up));
+      const double depth = dot(point - c.eye, forward);
+      return depth > 1e-6 ? dot(point - c.eye, right) / (depth * std::tan(c.fovY / 2) * aspect) : 0.0;
+    };
+    std::vector<bms::SnapEvent> events = bms::snapEvents(model, planned.graph, planned.plan, planned.timeline, boxes, screenX);
+    const size_t count = events.size();
+    bms::Mixer mixer(std::move(events), planned.timeline.frames, plan::Style{}.fps);
+    const auto start = std::chrono::steady_clock::now();
+    if (!writeWavAtomically(mixer, shot.out)) {
+      std::fprintf(stderr, "bmexport: cannot write %s\n", shot.out.c_str());
+      return kFailure;
+    }
+    std::fprintf(stderr, "bmexport: %zu snaps over %.1f s (%d frames), mixed in %.0f ms\n", count, planned.timeline.frames / plan::Style{}.fps, planned.timeline.frames, msSince(start));
+    return kOk;
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "bmexport: %s\n", e.what());
+    return kFailure;
+  }
+}
+
+/// The phase 7 plan's listening cases, as events made by hand (so each is exactly the case named).
+int soundGallery(const std::vector<std::string_view>& args) {
+  if (args.size() != 2) return usage();
+  const fs::path dir{std::string(args[1])};
+  std::error_code ec;
+  fs::create_directories(dir, ec);
+  auto box = [](double w, double h, double d, double top) {
+    Box b;
+    b.grow({-w / 2, top - 4, -d / 2});
+    b.grow({w / 2, top + h, d / 2});
+    return b;
+  };
+  auto event = [&](int frame, uint32_t move, uint16_t mates, Box unit, Box touching, uint32_t built) {
+    bms::SnapEvent e;
+    e.frame = frame, e.move = move, e.mates = mates, e.grip = 4.0 * mates;
+    e.unit = unit, e.touching = touching, e.built = touching;
+    e.built.merge(unit);
+    e.builtPieces = built, e.seatSeconds = 0.125;
+    return e;
+  };
+  struct Case {
+    const char* name;
+    std::vector<bms::SnapEvent> events;
+    int frames;
+  };
+  std::vector<Case> cases;
+  cases.push_back({"1-tile-1x1-on-plate", {event(15, 1, 1, box(20, 8, 20, -8), box(80, 8, 80, 0), 1)}, 45});
+  cases.push_back({"2-brick-2x4-on-2x4", {event(15, 1, 8, box(80, 24, 40, -24), box(80, 24, 40, 0), 1)}, 45});
+  cases.push_back({"3-brick-2x4-onto-2000-pieces", {event(15, 1, 8, box(80, 24, 40, -24), box(80, 24, 40, 0), 2000)}, 45});
+  {
+    bms::SnapEvent pin = event(15, 1, 2, box(40, 16, 16, -16), box(120, 20, 20, 0), 1);
+    pin.ridge = true, pin.joint = connect::JointKind::Revolute;
+    cases.push_back({"4-technic-pin", {pin}, 45});
+    bms::SnapEvent axle = event(15, 1, 2, box(80, 8, 8, -8), box(120, 20, 20, 0), 1);
+    axle.joint = connect::JointKind::Cylindrical, axle.seatSeconds = 0.08;
+    cases.push_back({"5-axle", {axle}, 45});
+  }
+  {
+    std::vector<bms::SnapEvent> row;
+    for (int i = 0; i < 20; i++) {
+      bms::SnapEvent e = event(15 + 15 * i, static_cast<uint32_t>(i + 1), 2, box(40, 8, 20, -8), box(800, 8, 80, 0), static_cast<uint32_t>(i + 1));
+      e.pan = -0.8 + 1.6 * i / 19.0;
+      row.push_back(e);
+    }
+    cases.push_back({"6-twenty-1x2-plates", row, 15 + 15 * 20 + 30});
+  }
+  for (Case& c : cases) {
+    bms::Mixer mixer(std::move(c.events), c.frames, plan::Style{}.fps);
+    const fs::path file = dir / (std::string(c.name) + ".wav");
+    if (!writeWavAtomically(mixer, file)) {
+      std::fprintf(stderr, "bmexport: cannot write %s\n", file.c_str());
+      return kFailure;
+    }
+    std::printf("%s\n", file.c_str());
+  }
+  return kOk;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
   const std::vector<std::string_view> args(argv + 1, argv + argc);
   if (args.empty()) return usage();
   if (args[0] == "still") return still(args);
+  if (args[0] == "sound") return sound(args);
+  if (args[0] == "sound-gallery") return soundGallery(args);
   return usage();
 }
