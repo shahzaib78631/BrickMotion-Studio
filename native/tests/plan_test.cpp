@@ -605,7 +605,9 @@ TEST_CASE("the play certifier passes a tower", "[plan][play]") {
   const PlayCheck k = played(s, s.plan());
   REQUIRE(k.flights == 3);
   REQUIRE(k.crossings == 0);
-  REQUIRE(k.inversions == 0);  // under the floor and upward: the floor's test (the base brick goes out through it today)
+  REQUIRE(k.inversions == 0);
+  REQUIRE(k.underFloor == 0);  // the base brick does not go out through the floor
+  REQUIRE(k.upward == 0);
 }
 
 TEST_CASE("the play certifier sees a flight through a placed piece", "[plan][play]") {
@@ -668,4 +670,36 @@ TEST_CASE("a sub-assembly is swept as one", "[plan][play]") {
   REQUIRE(k.flights == 1);
   REQUIRE(k.crossings == 0);
   REQUIRE(k.underFloor == 0);
+}
+
+TEST_CASE("a piece hung under a bridge leaves sideways, not through the floor", "[plan][floor]") {
+  Scene s;
+  const uint32_t a1 = s.add(0, 0, 0), a2 = s.add(0, -24, 0), b1 = s.add(60, 0, 0), b2 = s.add(60, -24, 0);
+  const uint32_t c = s.add(20, -48, 0), d = s.add(40, -48, 0), e = s.add(20, -24, 0);
+  s.stud(a1, a2), s.stud(b1, b2), s.stud(a2, c), s.stud(b2, d), s.stud(c, d, {1, 0, 0});
+  s.stud(e, c);  // e hangs under c, its studs in c: it comes off downward
+  const Plan p = s.plan();
+  const double floor = 24;  // the bottom of a1 and b1
+  for (const Move& m : p.moves) {
+    if (m.unit.pieces != std::vector<uint32_t>{e}) continue;
+    REQUIRE(m.flag == Flag::None);
+    for (const Xform& x : m.path) REQUIRE(s.at[e].y + 24 + x.t.y <= floor + m.seatTravel + kClearMargin);
+  }
+  const PlayCheck k = played(s, p);
+  REQUIRE(k.underFloor == 0);
+  REQUIRE(k.crossings == 0);
+}
+
+TEST_CASE("a piece under the base is built first on the table, the base pressed onto it", "[plan][floor]") {
+  Scene s;
+  const uint32_t t0 = s.add(0, 0, 0), t1 = s.add(0, -24, 0), u = s.add(0, 24, 0);
+  s.stud(t0, t1);
+  s.stud(u, t0);  // u is fixed under t0, its studs in t0: it comes off downward
+  const Plan p = s.plan();
+  REQUIRE(order(p).front() == u);
+  for (const Move& m : p.moves) REQUIRE(m.flag == Flag::None);
+  const PlayCheck k = played(s, p);
+  REQUIRE(k.underFloor == 0);
+  REQUIRE(k.upward == 0);
+  REQUIRE(k.crossings == 0);
 }

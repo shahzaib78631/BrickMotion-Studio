@@ -70,7 +70,7 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
     f.staging = shifted(move);
     // Up, across above everything, down to where the plan's path begins, then the path.
     const Vec3 open = m.path.back().t;
-    const double clearance = (floorLo - kExitMargin) - top;  // along `down`: negative is up
+    const double clearance = (floorLo - kExitMargin) - bottom;  // along `down`: the unit's underside a margin above everything
     auto raised = [&](Vec3 t) { return t + down * (std::min(clearance, dot(t, down)) - dot(t, down)); };
     f.waypoints = {f.staging, shifted(raised(move)), shifted(raised(open))};
     for (size_t k = m.path.size(); k-- > 0;) f.waypoints.push_back(m.path[k]);

@@ -80,6 +80,13 @@ Xform shifted(Vec3 by) {
   return x;
 }
 
+/// The far side of a box along `d`.
+double farAlong(const Box& b, Vec3 d) {
+  double hi = -std::numeric_limits<double>::infinity();
+  for (int c = 0; c < 8; c++) hi = std::max(hi, dot(d, Vec3{c & 1 ? b.max.x : b.min.x, c & 2 ? b.max.y : b.min.y, c & 4 ? b.max.z : b.min.z}));
+  return hi;
+}
+
 }  // namespace
 
 Context::Context(const Model& m, const connect::Graph& g, const collide::World& w, Vec3 d) : model(m), graph(g), world(w), down(length(d) > 0 ? normalized(d) : Vec3{0, 1, 0}) {
@@ -88,6 +95,10 @@ Context::Context(const Model& m, const connect::Graph& g, const collide::World& 
     const Connection& c = g.connections[i];
     if (c.a < connectionsOf.size() && c.b < connectionsOf.size()) connectionsOf[c.a].push_back(i), connectionsOf[c.b].push_back(i);
   }
+  floor = -std::numeric_limits<double>::infinity();
+  for (uint32_t p = 0; p < m.pieces().size(); p++)
+    if (!w.box(p).empty()) floor = std::max(floor, farAlong(w.box(p), down));
+  if (!std::isfinite(floor)) floor = 0;
 }
 
 std::vector<Leave> leaveDirections(const Context& ctx, const Unit& unit, const World::Present* present) {
@@ -162,10 +173,17 @@ Extraction extract(const Context& ctx, const Unit& unit, const World::Present* p
   const std::vector<Held> held = heldBy(ctx, unit, present);
   const Box box = boxOf(ctx, unit);
   const Vec3 up = -ctx.down;
+  // The floor is solid: how far below it the unit would be, moved by `by` (> kTravelTol: below).
+  const double boxFar = box.empty() ? 0 : farAlong(box, ctx.down);
+  auto belowFloor = [&](Vec3 by) { return !box.empty() && boxFar + dot(ctx.down, by) - ctx.floor > kTravelTol; };
   double furthest = -1;
   for (const Leave& leave : leaves) {
     const Vec3 d = leave.direction;
     const double seat = leave.travel + kClearMargin;
+    if (belowFloor(d * seat)) {  // out of its seat only through the table
+      if (seat > furthest) furthest = seat, best.why = Flag::NoExit, best.blocker = UINT32_MAX, best.direction = d, best.seatTravel = leave.travel;
+      continue;
+    }
     // Its own mates' zones, carried along the way out: a pin grazes its hole all the way. Each
     // lets only its own two pieces cross: a tyre's, which is everywhere, does not let its rim
     // through the pin the rim slides along.
@@ -195,6 +213,7 @@ Extraction extract(const Context& ctx, const Unit& unit, const World::Present* p
       const double need = exitDistance(fromBox, bounds, way, kExitMargin);
       if (!std::isfinite(need)) return -1;
       if (need <= 0) return 0;
+      if (belowFloor(from.t + way * need)) return -1;
       uint32_t hit = UINT32_MAX;
       const double reached = ctx.world.clearTravel(unit.pieces, way, need, present, {}, &hit, from, 0.05, need - kTravelTol);
       if (who) *who = hit;
@@ -220,7 +239,9 @@ Extraction extract(const Context& ctx, const Unit& unit, const World::Present* p
     for (const Vec3& first : ways) {
       if (!turns) break;
       uint32_t wall = UINT32_MAX;
-      const double room = ctx.world.clearTravel(unit.pieces, first, exitDistance(at, bounds, first, kExitMargin), present, {}, &wall, seated);
+      double reach = exitDistance(at, bounds, first, kExitMargin);
+      if (dot(first, ctx.down) > 1e-9) reach = std::min(reach, std::max(0.0, (ctx.floor - (boxFar + dot(ctx.down, seated.t))) / dot(first, ctx.down)));
+      const double room = ctx.world.clearTravel(unit.pieces, first, reach, present, {}, &wall, seated);
       stopped(wall);
       if (room < kMinLeg) continue;
       const Xform turned = shifted(d * drawn + first * room);

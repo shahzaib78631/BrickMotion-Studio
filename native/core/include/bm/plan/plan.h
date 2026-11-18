@@ -91,6 +91,7 @@ struct Context {
   const collide::World& world;
   std::vector<std::vector<uint32_t>> connectionsOf;  ///< per piece: indices into Graph::connections
   Vec3 down{0, 1, 0};
+  double floor = 0;  ///< the model's base: the furthest any piece reaches along `down`; nothing goes below it
   Context(const Model& model, const connect::Graph& graph, const collide::World& world, Vec3 down = {0, 1, 0});
 };
 
