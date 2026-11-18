@@ -340,3 +340,35 @@ TEST_CASE("each mate says how it comes apart", "[mate][release]") {
   REQUIRE((otherHalf && otherHalf->release.kind == ReleaseKind::Along));
   REQUIRE_THAT(otherHalf->release.axis.x, WithinAbs(1, 1e-9));
 }
+
+TEST_CASE("meshed hinge fingers come apart across the pin, never through each other along it", "[mate][fingers]") {
+  // The stick's finger sits between the base's two: slid along the pin it would run into one of
+  // them. A finger hinge clips on and off over its pin, square to it.
+  const auto m = mate(finger(Gender::Male, {6, 4, 6}, {0, 0, 0}), finger(Gender::Male, {4}, {0, 0, 0}));
+  REQUIRE(m.has_value());
+  REQUIRE(m->release.kind == ReleaseKind::Across);
+  REQUIRE(std::abs(std::abs(m->release.axis.x) - 1) < 1e-9);
+  REQUIRE_FALSE(m->release.orAlong);
+  REQUIRE(m->release.travel == 8);  // over the pin: its width
+  // A finger whose neighbours are on one side only still cannot leave the other way: not along.
+  const auto end = mate(finger(Gender::Male, {6, 4}, {0, 0, 0}), finger(Gender::Female, {6, 4}, {0, 0, 0}));
+  REQUIRE(end.has_value());
+  REQUIRE_FALSE(end->release.orAlong);
+}
+
+TEST_CASE("a generic hinge says how the halves turn, not how they come apart", "[mate]") {
+  auto half = [](Gender g) {
+    Connector c;
+    c.kind = SnapKind::Generic;
+    c.gender = g;
+    c.group = "studio-hinge-26";
+    c.placement = "hinge";
+    c.axis = {0, 0, 1};
+    c.start = {30, 4, 0};
+    return c;
+  };
+  const auto m = mate(half(Gender::Male), half(Gender::Female));
+  REQUIRE(m.has_value());
+  REQUIRE(m->freedom.rotates);
+  REQUIRE(m->release.kind == ReleaseKind::Any);  // the parts' fingers or pins, and the sweep, decide
+}

@@ -234,9 +234,11 @@ std::optional<Mate> fingers(const Connector& a, const Connector& b) {
   Mate out;
   out.grip = meshed;
   out.freedom = {true, false, false, a.start + a.axis * (a.length / 2), a.axis, false, {}, false};
-  out.release.kind = ReleaseKind::Either;  // along the hinge pin
+  // Meshed fingers stand in each other's way along the pin: a finger hinge clips on and off over
+  // its pin, square to it, and lets go once moved the pin's width.
+  out.release.kind = ReleaseKind::Across;
   out.release.axis = a.axis;
-  out.release.travel = meshed;
+  out.release.travel = 2 * std::max(a.radius, b.radius);
   return out;
 }
 
@@ -256,9 +258,9 @@ std::optional<Mate> generics(const Connector& a, const Connector& b) {
     // Two hinge halves: they share the hinge line and turn about it.
     if (!parallel(a.axis, b.axis)) return std::nullopt;
     out.freedom = {true, false, false, a.start, a.axis, false, {}, false};
-    out.release.kind = ReleaseKind::Either;
-    out.release.axis = a.axis;
-    out.release.travel = out.grip;
+    // It says how the halves turn, not how they come apart: that is for the parts' own fingers or
+    // pins, and the sweep.
+    out.release.kind = ReleaseKind::Any;
     return out;
   }
   out.freedom.ball = isBall(a) || isBall(b);
