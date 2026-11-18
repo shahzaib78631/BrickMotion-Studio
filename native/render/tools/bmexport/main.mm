@@ -36,8 +36,11 @@ int usage() {
   std::fprintf(stderr,
                "usage: bmexport still <model file> --out <png> [--frame N] [--samples S] [--seed K] [--rig build-fl] [--no-denoise] [--denoise-device cpu|metal]\n"
                "                [--size WxH] [--azimuth a --elevation e | --eye x,y,z --target x,y,z] [--fov deg] [--lights-fixed|--lights-follow] [--background r,g,b] [--repeat CxR]\n"
-               "       bmexport sound <model file> --out <wav> [--size WxH]   the build's snaps, simulated, 48 kHz stereo (--size: the film's shape, for panning)\n"
-               "       bmexport sound-gallery <dir>                          the listening cases, one WAV each\n");
+               "       bmexport sound <model file> --out <wav> [--size WxH] [sound options]   the build's snaps, 48 kHz stereo (--size: the film's shape, for panning)\n"
+               "       bmexport sound-gallery <dir> [sound options]          the listening cases, one WAV each\n"
+               "         sound options: --style physics|web   physics (default): the parts' own sound; web: the web app's snap\n"
+               "                        --web-preset balanced|product|click|soft|synth   the web app's preset (implies --style web)\n"
+               "                        --recordings <dir>   the web's recorded snaps (default: the repo's public/sounds/snaps)\n");
   return kUsage;
 }
 
@@ -159,12 +162,46 @@ bool writeWavAtomically(bms::Mixer& mixer, const fs::path& file) {
   return !ec;
 }
 
+/// The sound options at args[i] (it moves past their values): 1 taken, 0 not a sound option, -1 bad.
+int parseSoundOption(bms::SoundOptions& o, const std::vector<std::string_view>& args, size_t& i) {
+  const std::string_view a = args[i];
+  if (a != "--style" && a != "--web-preset" && a != "--recordings") return 0;
+  if (i + 1 >= args.size()) return -1;
+  const std::string_view v = args[++i];
+  if (a == "--style") {
+    if (v == "physics") o.style = bms::SoundStyle::Physics;
+    else if (v == "web") o.style = bms::SoundStyle::Web;
+    else return -1;
+  } else if (a == "--web-preset") {
+    if (!bms::webPreset(v, o.web)) return -1;
+    o.style = bms::SoundStyle::Web;
+  } else {
+    o.recordings = std::string(v);
+  }
+  return 1;
+}
+bms::SoundOptions defaultSound() {
+  bms::SoundOptions o;
+  o.recordings = BM_WEB_SNAPS;
+  return o;
+}
+/// What the track will sound like, for the summary line.
+std::string describe(const bms::SoundOptions& o) {
+  if (o.style == bms::SoundStyle::Physics) return "physics";
+  if (!o.web.recorded) return "web, synthesised";
+  return bms::loadRecordings(o.recordings).empty() ? "web, synthesised (no recordings in " + o.recordings.string() + ")" : "web, recorded";
+}
+
 int sound(const std::vector<std::string_view>& args) {
   if (args.size() < 2 || args[1].rfind("--", 0) == 0) return usage();
   const fs::path input{std::string(args[1])};
   bmtools::ShotOptions shot;
   shot.width = 1920, shot.height = 1080;
+  bms::SoundOptions options = defaultSound();
   for (size_t i = 2; i < args.size(); i++) {
+    const int own = parseSoundOption(options, args, i);
+    if (own < 0) return usage();
+    if (own > 0) continue;
     const int shared = bmtools::parseShotOption(shot, args, i);
     if (shared <= 0) return usage();
   }
@@ -195,13 +232,13 @@ int sound(const std::vector<std::string_view>& args) {
     };
     std::vector<bms::SnapEvent> events = bms::snapEvents(model, planned.graph, planned.plan, planned.timeline, boxes, screenX);
     const size_t count = events.size();
-    bms::Mixer mixer(std::move(events), planned.timeline.frames, plan::Style{}.fps);
+    bms::Mixer mixer(std::move(events), planned.timeline.frames, plan::Style{}.fps, options);
     const auto start = std::chrono::steady_clock::now();
     if (!writeWavAtomically(mixer, shot.out)) {
       std::fprintf(stderr, "bmexport: cannot write %s\n", shot.out.c_str());
       return kFailure;
     }
-    std::fprintf(stderr, "bmexport: %zu snaps over %.1f s (%d frames), mixed in %.0f ms\n", count, planned.timeline.frames / plan::Style{}.fps, planned.timeline.frames, msSince(start));
+    std::fprintf(stderr, "bmexport: %zu snaps over %.1f s (%d frames), %s, mixed in %.0f ms\n", count, planned.timeline.frames / plan::Style{}.fps, planned.timeline.frames, describe(options).c_str(), msSince(start));
     return kOk;
   } catch (const std::exception& e) {
     std::fprintf(stderr, "bmexport: %s\n", e.what());
@@ -211,7 +248,10 @@ int sound(const std::vector<std::string_view>& args) {
 
 /// The phase 7 plan's listening cases, as events made by hand (so each is exactly the case named).
 int soundGallery(const std::vector<std::string_view>& args) {
-  if (args.size() != 2) return usage();
+  if (args.size() < 2 || args[1].rfind("--", 0) == 0) return usage();
+  bms::SoundOptions options = defaultSound();
+  for (size_t i = 2; i < args.size(); i++)
+    if (parseSoundOption(options, args, i) <= 0) return usage();
   const fs::path dir{std::string(args[1])};
   std::error_code ec;
   fs::create_directories(dir, ec);
@@ -260,7 +300,7 @@ int soundGallery(const std::vector<std::string_view>& args) {
     cases.push_back({"6-twenty-1x2-plates", row, 15 + 15 * 20 + 30});
   }
   for (Case& c : cases) {
-    bms::Mixer mixer(std::move(c.events), c.frames, plan::Style{}.fps);
+    bms::Mixer mixer(std::move(c.events), c.frames, plan::Style{}.fps, options);
     const fs::path file = dir / (std::string(c.name) + ".wav");
     if (!writeWavAtomically(mixer, file)) {
       std::fprintf(stderr, "bmexport: cannot write %s\n", file.c_str());

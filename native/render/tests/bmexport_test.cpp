@@ -87,3 +87,22 @@ TEST_CASE("an unknown rig is refused with the rigs there are", "[bmexport]") {
   REQUIRE(r.code == 2);
   REQUIRE(r.output.find("build-fl") != std::string::npos);
 }
+
+TEST_CASE("the snap track's style is a switch: physics, or the web app's", "[bmexport][sound]") {
+  if (!std::getenv("BM_LDRAW_DIR")) SKIP("no BM_LDRAW_DIR");
+  const fs::path physics = scratch() / "physics.wav", web = scratch() / "web.wav", product = scratch() / "product.wav";
+  const std::string args = "sound '" + model().string() + "' --out ";
+  const Run first = run(args + "'" + physics.string() + "'");
+  INFO(first.output);
+  REQUIRE(first.code == 0);
+  const Run second = run(args + "'" + web.string() + "' --style web");
+  INFO(second.output);
+  REQUIRE(second.code == 0);
+  REQUIRE(run(args + "'" + product.string() + "' --web-preset product").code == 0);
+  REQUIRE(bytes(physics).size() > 1000);
+  REQUIRE(bytes(web).size() == bytes(physics).size());
+  REQUIRE(bytes(web) != bytes(physics));
+  REQUIRE(bytes(product) != bytes(web));
+  REQUIRE(run(args + "'" + web.string() + "' --style swish").code != 0);
+  REQUIRE(run(args + "'" + web.string() + "' --web-preset sunset").code != 0);
+}

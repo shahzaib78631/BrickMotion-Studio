@@ -161,7 +161,9 @@
 
 ### Task 6: Simulated snap sound and `bmexport sound`
 
-> **Status 2026-11-18: the owner replaced "The simulation" below.** No web-app recipe (no slide noise, no thump, no click counts by mates): the sound is physics. A stud fit has no detent, so the sound is the Hertz impact of the faces meeting at a hand's press (or two, a long part pressed a little tilted); a Technic pin's ridge builds and lets go before its collar lands; an axle only rubs (stick-slip). The force rings the modes of the part (its face as a thin ABS plate, the whole as a free beam), the part it lands on and the model (held: near clamped, more loss), heard as the air those modes move at a microphone 0.3 m away. Room off by default. Constants and sources: `native/sound/include/bms/tolerances.h`; tests: `native/sound/tests/snap_synth_test.cpp`.
+> **Status 2026-11-18: the owner replaced "The simulation" below.** No web-app recipe (no slide noise, no thump, no click counts by mates): the sound is physics. A stud fit has no detent, so the sound is the Hertz impact of the faces meeting at a hand's press (or two, a long part pressed a little tilted); a Technic pin's ridge builds and lets go before its collar lands; an axle only rubs (stick-slip). The force rings the modes of the part (its face as a thin ABS plate, the whole as a free beam), the part it lands on and the model (held: near clamped, more loss), heard as the air those modes move at a microphone 0.3 m away. Room off by default. Constants and sources: `native/sound/include/bms/tolerances.h`; tests: `native/sound/tests/snap_synth_test.cpp`. The owner approved it by ear on 2026-11-18.
+>
+> **Added 2026-11-18 at the owner's request:** the web app's snap as a second style to switch to (`SoundOptions::style`, `bmexport sound --style web` / `--web-preset`), ported from src/audio and src/anim/snaps.ts: `native/sound/include/bms/web_sound.h`, tests `native/sound/tests/web_sound_test.cpp`. Physics stays the default.
 
 **Files:**
 - Create:

@@ -7,14 +7,21 @@
 #include <memory>
 #include <vector>
 #include "bms/snap_events.h"
+#include "bms/web_sound.h"
 
 namespace bms {
 
+/// Physics: the parts' own sound (bms/tolerances.h). Web: the web app's snap (bms/web_sound.h).
+enum class SoundStyle { Physics, Web };
+
 struct SoundOptions {
+  SoundStyle style = SoundStyle::Physics;
+  WebSound web;                         ///< Web: its settings (its volume scales `peak`)
+  std::filesystem::path recordings;     ///< Web: public/sounds/snaps; empty or none there: its synthesised click
   int sampleRate = 48000;
   double peak = 0.89;    ///< the loudest sample of the track
-  double room = 0;       ///< a reverb's share; 0: dry, a close microphone on a quiet desk
-  double stereo = 0.25;  ///< how far across the pan reaches
+  double room = 0;       ///< Physics: a reverb's share; 0: dry, a close microphone on a quiet desk
+  double stereo = 0.25;  ///< Physics: how far across the pan reaches
 };
 
 /// The audible modes of a box's largest face as an ABS plate, Hz, lowest first; empty when it

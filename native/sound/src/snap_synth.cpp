@@ -272,9 +272,11 @@ std::vector<float> synthesise(const SnapEvent& e, double fps, const SoundOptions
 
 struct Mixer::Engine {
   struct Playing {
-    std::vector<float> samples;
+    std::vector<float> samples;  ///< physics: mono, panned by left and right
     int64_t begin;   ///< the track sample of samples[0]
     double left, right;
+    std::vector<float> stereoLeft, stereoRight;  ///< web: already panned
+    size_t size() const { return samples.empty() ? stereoLeft.size() : samples.size(); }
   };
   const std::vector<SnapEvent>* events;
   std::vector<size_t> order;  ///< by seat, then as given
@@ -284,9 +286,18 @@ struct Mixer::Engine {
   int64_t position = 0;
   std::vector<Playing> playing;
   Room roomLeft, roomRight;
+  // the web style
+  std::vector<WebSnap> snaps;
+  std::unique_ptr<WebVoices> voices;
+  double duration = 0;
 
-  Engine(const std::vector<SnapEvent>& e, double f, const SoundOptions& options)
-      : events(&e), fps(f), o(options), roomLeft(options.sampleRate, 0.0), roomRight(options.sampleRate, kStereoSpreadSeconds) {
+  Engine(const std::vector<SnapEvent>& e, double f, const SoundOptions& options, std::shared_ptr<const std::vector<Recording>> recordings, double seconds)
+      : events(&e), fps(f), o(options), roomLeft(options.sampleRate, 0.0), roomRight(options.sampleRate, kStereoSpreadSeconds), duration(seconds) {
+    if (o.style == SoundStyle::Web) {
+      snaps = webSnaps(e, f);
+      voices = std::make_unique<WebVoices>(std::move(recordings), o.web, o.sampleRate);
+      return;
+    }
     order.resize(e.size());
     for (size_t i = 0; i < e.size(); i++) order[i] = i;
     std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) { return e[a].frame < e[b].frame; });
@@ -294,8 +305,22 @@ struct Mixer::Engine {
   void raw(double* left, double* right, size_t count) {
     const double rate = o.sampleRate;
     const int64_t early = static_cast<int64_t>(maxLead(rate));
+    const bool web = o.style == SoundStyle::Web;
+    const int64_t webEarly = static_cast<int64_t>(std::ceil(WebVoices::kLeadSeconds * rate));
     for (size_t i = 0; i < count; i++, position++) {
-      while (next < order.size() && seatSample((*events)[order[next]], fps, rate) - early <= position) {
+      // renderSnapTrack: the snaps before the end, the variant from the snap's place in the list
+      while (web && next < snaps.size() && static_cast<int64_t>(std::floor(snaps[next].t * rate)) - webEarly <= position) {
+        const WebSnap& s = snaps[next];
+        const int variant = static_cast<int>(next) * 7919 + static_cast<int>(std::floor(s.t * 1000 + 0.5));
+        next++;
+        if (!(s.t < duration)) continue;
+        StereoVoice v = voices->make(s, variant);
+        Playing p;
+        p.begin = v.begin, p.left = p.right = 0;
+        p.stereoLeft = std::move(v.left), p.stereoRight = std::move(v.right);
+        if (!p.stereoLeft.empty()) playing.push_back(std::move(p));
+      }
+      while (!web && next < order.size() && seatSample((*events)[order[next]], fps, rate) - early <= position) {
         const SnapEvent& e = (*events)[order[next++]];
         Playing p;
         size_t lead = 0;
@@ -309,16 +334,17 @@ struct Mixer::Engine {
       bool over = false;
       for (const Playing& p : playing) {
         const int64_t at = position - p.begin;
-        if (at >= static_cast<int64_t>(p.samples.size())) {
+        if (at >= static_cast<int64_t>(p.size())) {
           over = true;
           continue;
         }
         if (at < 0) continue;
-        l += p.samples[static_cast<size_t>(at)] * p.left, r += p.samples[static_cast<size_t>(at)] * p.right;
+        if (p.samples.empty()) l += p.stereoLeft[static_cast<size_t>(at)], r += p.stereoRight[static_cast<size_t>(at)];
+        else l += p.samples[static_cast<size_t>(at)] * p.left, r += p.samples[static_cast<size_t>(at)] * p.right;
       }
-      if (over) std::erase_if(playing, [&](const Playing& p) { return position - p.begin >= static_cast<int64_t>(p.samples.size()); });
-      left[i] = l + o.room * roomLeft(l);
-      right[i] = r + o.room * roomRight(r);
+      if (over) std::erase_if(playing, [&](const Playing& p) { return position - p.begin >= static_cast<int64_t>(p.size()); });
+      left[i] = web ? l : l + o.room * roomLeft(l);
+      right[i] = web ? r : r + o.room * roomRight(r);
     }
   }
 };
@@ -335,16 +361,22 @@ void Mixer::render(float* left, float* right, size_t count) {
   constexpr size_t kBlock = 8192;
   std::vector<double> l(kBlock), r(kBlock);
   if (scale_ < 0) {
+    std::shared_ptr<const std::vector<Recording>> recordings;
+    if (options_.style == SoundStyle::Web && options_.web.recorded && !options_.recordings.empty())
+      recordings = std::make_shared<const std::vector<Recording>>(loadRecordings(options_.recordings));
+    const double seconds = static_cast<double>(frames_) / fps_;
     // The peak, from one pass over the whole track.
-    Engine probe(events_, fps_, options_);
+    Engine probe(events_, fps_, options_, recordings, seconds);
     double found = 0;
     for (uint64_t at = 0; at < length(); at += kBlock) {
       const size_t n = static_cast<size_t>(std::min<uint64_t>(kBlock, length() - at));
       probe.raw(l.data(), r.data(), n);
       for (size_t i = 0; i < n; i++) found = std::max({found, std::fabs(l[i]), std::fabs(r[i])});
     }
-    scale_ = options_.peak / std::max(found, 1e-15);
-    engine_ = std::make_unique<Engine>(events_, fps_, options_);
+    // the web's renderSnapTrack: its volume scales the peak, never past 0.99
+    const double peak = options_.style == SoundStyle::Web ? std::min(0.99, options_.peak * options_.web.volume) : options_.peak;
+    scale_ = peak / std::max(found, 1e-15);
+    engine_ = std::make_unique<Engine>(events_, fps_, options_, recordings, seconds);
   }
   for (size_t done = 0; done < count;) {
     const uint64_t at = static_cast<uint64_t>(engine_->position);

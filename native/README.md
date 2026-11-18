@@ -44,6 +44,15 @@ python3 native/tools/compare_scoreboards.py .cache/native-baseline <out>/rows.js
 `bm load` reads LDraw/MPD, plan JSON, `.brickmotion` projects and Studio `.io`. Flattened parts are
 cached in `~/Library/Caches/BrickMotion/parts`.
 
+The snap track (`bmexport sound <model> --out x.wav`) has two styles:
+
+| Style | Option | What makes the sound |
+|---|---|---|
+| Physics (default) | `--style physics` | the parts themselves: a Hertz impact of the faces (a pin's ridge letting go, an axle's stick-slip), ringing the part, what it lands on and the model, heard at 0.3 m (`native/sound/include/bms/tolerances.h`) |
+| Web | `--style web`, or `--web-preset balanced\|product\|click\|soft\|synth` | the web app's snap, ported: its CC0 recordings (`public/sounds/snaps`, or `--recordings <dir>`) through its click filter over its body thump and room, or its synthesised click; same settings, presets, random numbers and merging (`native/sound/include/bms/web_sound.h`) |
+
+`bmexport sound-gallery <dir>` takes the same options.
+
 ## Phase 1 results (2026-11-15, M1 Pro, 10 threads)
 
 Corpus: 3,854 models (1,833 OMR files, 2,000 BrickNet, 12 MOC, 6 reference, 3 fixtures), 872,970 pieces.
