@@ -3,6 +3,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include "bmr/camera.h"
+#include "bmr/renderer.h"
 #include "bmr/tolerances.h"
 
 using namespace bm;
@@ -229,4 +230,24 @@ TEST_CASE("the model follows the pointer: a pan moves it with the drag, a turn r
     REQUIRE(onScreen(t, near).second < before.second - 0.01);
     REQUIRE(t.elevation > o.elevation);
   }
+}
+
+TEST_CASE("by default the studio lights stay fixed to the model, as EyeSight's do", "[camera]") {
+  // EyeSight's BUILD_FL lights are fixed in the world: its picture from one side with the rig
+  // turned a quarter matches its picture from the next side. The viewport, stills and film do
+  // the same unless asked to turn them with the camera.
+  REQUIRE_FALSE(FrameOptions{}.lightsFollowCamera);
+  Camera front, side;
+  front.eye = {0, -200, -400};
+  side.eye = {400, -200, 0};
+  const LightRig a = studioLights(front, FrameOptions{}.lightsFollowCamera);
+  const LightRig b = studioLights(side, FrameOptions{}.lightsFollowCamera);
+  for (int i = 0; i < 4; i++) {
+    CHECK(a.toward[i].x == Catch::Approx(b.toward[i].x));
+    CHECK(a.toward[i].z == Catch::Approx(b.toward[i].z));
+    CHECK(a.strength[i] == b.strength[i]);
+  }
+  // Turning with the camera, the side view's rig is the front's turned a quarter.
+  const LightRig c = studioLights(side, true);
+  CHECK(std::abs(c.toward[0].x - a.toward[0].x) + std::abs(c.toward[0].z - a.toward[0].z) > 0.1);
 }

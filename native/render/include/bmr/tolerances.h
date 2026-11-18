@@ -41,16 +41,20 @@ inline constexpr Surface kMetal{0.20f, 0.7f, 0.25f};
 inline constexpr Surface kPearl{0.10f, 0.5f, 0.25f};
 inline constexpr Surface kRubber{0.86f, 0.0f, 0.0f};
 
-/// EyeSight's BUILD_FL light preset, as fitted to its renders (scripts/neural/blender/render.py,
-/// RMSE about 6 against EyeSight): four distant lights, each a disk 45 degrees in radius as seen
-/// from the model (Studio's light "size" 1.0), toward-light vectors in the camera's heading
-/// frame (x to the right of the camera, y away from it along the ground, z up), the first the
-/// key; and a uniform white world of strength kWorldStrength. Strengths are irradiance at
-/// normal incidence; a white matt face lit by the world alone comes out at kWorldStrength.
+/// EyeSight's BUILD_FL light preset (directions from scripts/neural/blender/render.py): four
+/// distant lights, each a disk 45 degrees in radius as seen from the model (Studio's light "size"
+/// 1.0), toward-light vectors in the front view's frame (x to its right, y away from it along the
+/// ground, z up), the first the key; and a uniform white world of strength kWorldStrength.
+/// EyeSight's lights are fixed in the world: its picture at azimuth 0 with the rig turned 90
+/// degrees matches azimuth 270 to its own repeat noise (RMSE 0.37). Strengths are irradiance at
+/// normal incidence, fitted to EyeSight renders of one grey 2x2 brick lit by each light alone
+/// (the four BUILD_* presets are these lights with one made 3 times as strong, so each light's
+/// part is (preset - world - shared) / 2); a white matt face lit by the world alone comes out at
+/// kWorldStrength.
 inline constexpr double kRigToward[4][3] = {{-0.02431, -0.01808, 0.02612}, {-0.02278, 0.02614, 0.01995}, {0.02438, -0.00616, 0.03111}, {0.02636, 0.02253, 0.01995}};
-inline constexpr float kRigStrength[4] = {1.187f, 0.751f, 0.751f, 0.751f};
+inline constexpr float kRigStrength[4] = {1.79f, 0.655f, 0.655f, 0.655f};
 inline constexpr float kRigSinSquared = 0.5f;  // sin^2 of the disks' 45-degree radius
-inline constexpr float kWorldStrength = 0.415f;
+inline constexpr float kWorldStrength = 0.295f;
 
 /// A missing part: the web app's placeholder (src/render/materials.ts:188).
 inline constexpr unsigned kPlaceholderRgb = 0xb8bcc2;
@@ -143,8 +147,9 @@ inline constexpr float kAoBias = 0.1f;
 inline constexpr float kAoStrength = 1.0f;
 /// The occlusion found is raised to this power before it dims a brick's light from the
 /// surroundings: half of that light is from the fills, which reach in past what hides the
-/// world. Fitted as above. (The floor's light is worked out apart: floor_light.metal.)
-inline constexpr float kAoBrickPower = 1.5f;
+/// world. Fitted on EyeSight renders of native/corpus/calib with its lights off (NO_LIGHT, the
+/// world alone). (The floor's light is worked out apart: floor_light.metal.)
+inline constexpr float kAoBrickPower = 2.0f;
 /// The floor's light (floor_light.metal): the side of the height map over the model (texels),
 /// and how far out (as a share of the floor's radius) a floor point looks for what hides its sky.
 inline constexpr int kHeightMapSize = 1024;

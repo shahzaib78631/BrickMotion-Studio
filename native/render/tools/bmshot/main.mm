@@ -31,7 +31,7 @@ constexpr int kOk = 0, kFailure = 1, kUsage = 2;
 int usage() {
   std::fprintf(stderr,
                "usage: bmshot <model file> --out <png> [--size WxH] [--frame N] [--azimuth a --elevation e | --eye x,y,z --target x,y,z] [--fov deg] [--no-edges] [--no-shadows] [--no-ao] [--no-floor]\n"
-               "              [--no-cull] [--lights-fixed] [--raytraced-glass] [--background r,g,b] [--detail 0|1|2] [--select piece,piece,...] [--stats] [--repeat CxR] [--save-model <ldr>]\n"
+               "              [--no-cull] [--lights-fixed|--lights-follow] [--raytraced-glass] [--background r,g,b] [--detail 0|1|2] [--select piece,piece,...] [--stats] [--repeat CxR] [--save-model <ldr>]\n"
                "       bmshot <model file> --bench <frames> [--frame N] [--repeat CxR] [--size WxH] [--detail 0|1|2] [--maps-whole] [--no-...]\n");
   return kUsage;
 }
@@ -122,6 +122,7 @@ int main(int argc, char** argv) {
     else if (a == "--no-floor") options.floor = false;
     else if (a == "--no-cull") options.cull = false;
     else if (a == "--lights-fixed") options.lightsFollowCamera = false;
+    else if (a == "--lights-follow") options.lightsFollowCamera = true;
     else if (a == "--raytraced-glass") options.refractiveGlass = true;
     else if (a == "--maps-whole") options.mapTrianglesPerFrame = UINT64_MAX;  // bench only: every stale map drawn whole
     else if (a == "--background") {

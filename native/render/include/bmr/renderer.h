@@ -21,7 +21,7 @@ struct FrameOptions {
   /// is the fast preview.
   bool refractiveGlass = false;
   bool cull = true;      ///< leave out what is not in view
-  bool lightsFollowCamera = true;  ///< the light rig turns with the camera's heading (EyeSight's BUILD_FL), or stays fixed to the model
+  bool lightsFollowCamera = false;  ///< the light rig stays fixed to the model, as EyeSight's BUILD_FL does, or turns with the camera's heading
   int forceDetail = -1;  ///< -1: by size on screen; 0, 1, 2: that level of detail for everything (tests, benchmark)
   /// 0: a stale shadow or height map is drawn again whole before the frame. Otherwise it is
   /// drawn again over frames, about this many triangles of it a frame, the last one complete

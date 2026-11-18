@@ -211,7 +211,7 @@ int channelGap(const uint8_t* a, const uint8_t* b) {
 TEST_CASE("a brick casts a shadow on the floor on the side away from the key light", "[gpu][frame]") {
   NEED_GPU();
   // The fixture 3005 is a box 20 x 24 x 20 standing on y = 24, which is where the floor goes.
-  // The key light turns with the camera (studioLights); the brick's top centre casts its shadow
+  // The key light is where the options put it (studioLights); the brick's top centre casts its shadow
   // 24 / -toward.y along -toward from under it. A floor point most of the way there is in the
   // shadow; one as far the other way, toward the light, is not. The camera looks almost
   // straight down so neither is hidden by the brick. The key gives about a fifth of a white
@@ -224,7 +224,7 @@ TEST_CASE("a brick casts a shadow on the floor on the side away from the key lig
   const std::string brick = piece("3005.dat", 0, 0, 0, 4);
   const Shot on = shotOf(brick, shadowed, 256, 256, nullptr, 3.14159265, 1.35, 3);
   const Shot off = shotOf(brick, unshadowed, 256, 256, nullptr, 3.14159265, 1.35, 3);
-  const Vec3 toward = studioLights(on.camera, true).toward[0];
+  const Vec3 toward = studioLights(on.camera, shadowed.lightsFollowCamera).toward[0];
   REQUIRE(toward.y < 0);  // the key is above
   const double reach = 24 / -toward.y;
   const auto [sx, sy] = on.pixel({-toward.x * reach * 0.6, 24, -toward.z * reach * 0.6});

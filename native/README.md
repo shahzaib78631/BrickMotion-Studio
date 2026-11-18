@@ -557,9 +557,13 @@ four azimuths each, and scores RMSE (sRGB) over the picture, the bricks and the 
 bricks into glass and the solid pieces not behind it. `calib.ldr` is the web calibration scene; `glass.ldr`
 holds clear, red, light blue, yellow and green 2×2 bricks, a round brick, a raised tile and a brick on a white one.
 
-- **Light**: EyeSight's BUILD_FL rig as fitted in `scripts/neural/blender/render.py`: four distant disk lights,
-  45° in radius, turning with the camera's heading, and a uniform white world; plastic of roughness 0.1 under a
-  clear coat; Studio's own linear colours.
+- **Light**: EyeSight's BUILD_FL rig, directions as in `scripts/neural/blender/render.py`: four distant disk
+  lights, 45° in radius, and a uniform white world; plastic of roughness 0.1 under a clear coat; Studio's own
+  linear colours. The lights are fixed to the model, as EyeSight's are (its picture from one side with the rig
+  turned a quarter matches the next side's, RMSE 0.37); `bmshot --lights-follow` turns them with the camera as
+  before 2026-11-18. Their strengths (key 1.79, fills 0.655, world 0.295) are fitted to EyeSight renders of one
+  grey brick lit by each light alone, and the ambient occlusion's power on bricks (2) to its renders with the
+  lights off; occlusion samples on the floor hide nothing, as EyeSight's ground is a shadow catcher.
 - **The floor** is a shadow catcher, as EyeSight's ground. Its light is worked out from a height map over the
   model: 12 directions from each floor point, each hiding elevation bins of the sky and of each light's disk.
   Glass shadows it as an opaque piece does (letting half the light through scored floor 14.9 against 6.0).
@@ -573,9 +577,15 @@ holds clear, red, light blue, yellow and green 2×2 bricks, a round brick, a rai
 | Scene (RMSE, `--no-edges`) | All | Bricks | Floor | Glass | Solid |
 |---|---:|---:|---:|---:|---:|
 | calib, EyeSight's colours only (f140e91) | 20.92 | 35.91 | 19.79 | | |
-| calib, now | 7.36 | 17.92 | 3.90 | | |
+| calib, lights turning with the camera (35948ce) | 7.36 | 17.92 | 3.90 | | |
+| calib, the owner's render work (111539e) | 7.23 | 17.55 | 3.88 | | |
+| calib, lights fixed and refitted (2026-11-18) | 6.53 | 15.70 | 3.65 | | |
 | glass, before glass was worked on (0421704) | 32.64 | 71.72 | 24.82 | | |
-| glass, now (35948ce) | 17.57 | 46.08 | 5.96 | 49.72 | 17.14 |
+| glass, lights turning (35948ce) | 17.57 | 46.08 | 5.96 | 49.72 | 17.14 |
+| glass, the owner's render work (111539e) | 17.93 | 47.07 | 5.98 | 50.76 | 18.17 |
+| glass, lights fixed and refitted (2026-11-18) | 17.79 | 46.54 | 6.24 | 50.37 | 15.01 |
+
+The refit only helps with the lights fixed: with them turning it scores calib 7.65 (bricks 18.39).
 
 Glass pieces' mean colours are 56.7 levels off (RMS) before and 10.4 now; the six fitted ones are within 7, the
 held-out round brick is 9 too light, the blue brick on the white one 21–26 too light and the thin tile 9–22 too

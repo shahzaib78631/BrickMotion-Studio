@@ -182,13 +182,16 @@ TEST_CASE("maps drawn over frames come to the picture drawn whole, and the first
   NEED_GPU();
   bmtest::GpuRig rig(stair());
   REQUIRE(rig.renderer);
-  FrameOptions over{};
+  // Lights that turn with the camera, so that turning it makes the maps stale.
+  FrameOptions follow{};
+  follow.lightsFollowCamera = true;
+  FrameOptions over = follow;
   over.mapTrianglesPerFrame = 1;  // a group a frame
   const FrameStats first = rig.renderer->draw(rig.camera, over);
   REQUIRE_FALSE(first.settling);
   {
     bmtest::GpuRig whole(stair());
-    REQUIRE(compare(whole.shot(FrameOptions{}), rig.renderer->readback()).meanAbs == 0);
+    REQUIRE(compare(whole.shot(follow), rig.renderer->readback()).meanAbs == 0);
   }
   // Turned a little (the lights turn with it): the old maps are shown while new ones are drawn.
   bmr::OrbitCamera o = bmr::OrbitCamera::framing(rig.renderer->scene().bounds, 0.6, 1.0);
@@ -200,7 +203,7 @@ TEST_CASE("maps drawn over frames come to the picture drawn whole, and the first
   REQUIRE(draws < 20);
   bmtest::GpuRig turned(stair());
   turned.camera = rig.camera;
-  REQUIRE(compare(turned.shot(FrameOptions{}), rig.renderer->readback()).meanAbs == 0);
+  REQUIRE(compare(turned.shot(follow), rig.renderer->readback()).meanAbs == 0);
 }
 
 TEST_CASE("with maps drawn over frames, a piece in flight casts its shadow where it is", "[gpu][playback]") {
