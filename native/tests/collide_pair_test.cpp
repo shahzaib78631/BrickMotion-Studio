@@ -220,6 +220,26 @@ TEST_CASE("real parts passing closely: the first crossing is where pose by pose 
   REQUIRE(clearSeen > 5);
 }
 
+TEST_CASE("real parts whose edges slide past each other do not cross, whichever way they go", "[collide][pair][sweep][data]") {
+  const char* dir = std::getenv("BM_LDRAW_DIR");
+  if (!dir) SKIP("BM_LDRAW_DIR is not set");
+  const ldraw::Library library(dir);
+  // A steering stand lifted past a car roof (from OMR 6660-1): an edge of the stand's inner
+  // surface and an edge of the roof's lie at the same height and slide across each other,
+  // touching all the way. Near 71.4 a corner of the stand's comes within a touch of the roof's
+  // sloped face as it passes it.
+  const Shape stand = buildShape(ldraw::flatten("3829c01.dat", library));
+  const Shape roof = buildShape(ldraw::flatten("2349a.dat", library));
+  const Xform roofAt = at(0, -64, -10.5);
+  const double length = 128.81;
+  REQUIRE(std::isinf(firstCrossing(stand, at(0, 0, 0), {0, -1, 0}, length, roof, roofAt)));
+  REQUIRE(std::isinf(firstCrossing(stand, at(0, -length, 0), {0, 1, 0}, length, roof, roofAt)));
+  for (double t = 71.3; t <= 71.6; t += 0.001) {
+    INFO("at " << t);
+    REQUIRE_FALSE(overlap(stand, at(0, -t, 0), roof, roofAt));
+  }
+}
+
 TEST_CASE("where a straight way passes through a surface", "[collide][pair][sweep]") {
   // The brick's body: x and z from -10 to 10, y from 0 to 24.
   Vec3 where;

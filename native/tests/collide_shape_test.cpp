@@ -44,6 +44,20 @@ TEST_CASE("triangles that only touch, or do not meet, do not cross", "[collide][
   REQUIRE_FALSE(trianglesCross(a, sliver));
 }
 
+TEST_CASE("triangles whose edges pass each other only touch, however near a corner is to the other's plane", "[collide][tritri]") {
+  // a's top edge and b's bottom edge both lie at z = 0 and cross each other: they meet at a
+  // point. a's corner at y = 7.5 is 0.036 from b's plane, within a touch of it, yet the ends of
+  // a's crossing are still where b's plane cuts a's sides, not at that corner.
+  const Vec3f a[3] = {{0, 7.5f, 0}, {0, 0.5f, 0}, {0, 0.5f, -19}};
+  const Vec3f b[3] = {{10.5f, 11.42f, 2}, {10.5f, 7.42f, 0}, {-49.5f, 7.42f, 0}};
+  REQUIRE_FALSE(trianglesCross(a, b));
+  REQUIRE_FALSE(trianglesCross(b, a));
+  // Half a unit further down, b's foot is inside a: they cross.
+  const Vec3f into[3] = {{10.5f, 8, 1.5f}, {10.5f, 4, -0.5f}, {-49.5f, 4, -0.5f}};
+  REQUIRE(trianglesCross(a, into));
+  REQUIRE(trianglesCross(into, a));
+}
+
 namespace {
 /// A closed convex mesh from outward-wound triangles over `points`.
 ldraw::Mesh meshOf(std::vector<Vec3> points, std::vector<uint32_t> triangles) {

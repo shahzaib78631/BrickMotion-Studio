@@ -30,18 +30,20 @@ double crossLength(const Vec3 a[3], const Vec3 b[3], Vec3* where) {
   if (!(la > 1e-12) || !(lb > 1e-12)) return none;  // no area (or not finite)
   const Vec3 ua = na * (1 / la), ub = nb * (1 / lb);
 
-  // Each triangle must have corners strictly on both sides of the other's plane.
+  // Each triangle must pass through the other's plane by more than kTouch on each side: a
+  // corner nearer the plane than that counts as on it. Where it crosses is still where the plane
+  // cuts its sides. Taking that corner as an end of the crossing instead would put the end off
+  // the line where the planes meet, by up to most of a side that runs close to the plane, and
+  // make two edges that merely touch look as if they cross.
   double da[3], db[3];
   bool posA = false, negA = false, posB = false, negB = false;
   for (int i = 0; i < 3; i++) {
     da[i] = dot(ub, a[i] - b[0]);
-    if (std::abs(da[i]) < kTouch) da[i] = 0;
-    posA = posA || da[i] > 0;
-    negA = negA || da[i] < 0;
+    posA = posA || da[i] >= kTouch;
+    negA = negA || da[i] <= -kTouch;
     db[i] = dot(ua, b[i] - a[0]);
-    if (std::abs(db[i]) < kTouch) db[i] = 0;
-    posB = posB || db[i] > 0;
-    negB = negB || db[i] < 0;
+    posB = posB || db[i] >= kTouch;
+    negB = negB || db[i] <= -kTouch;
   }
   if (!(posA && negA && posB && negB)) return none;
 

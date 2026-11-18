@@ -17,7 +17,8 @@ bool finite(const Xform& x) {
 constexpr uint32_t kMaxLeaf = 4;
 
 /// LDU by which two triangles may be apart and still count as able to touch when a sweep is
-/// narrowed: twice kTouch, the most trianglesCross rounds a corner onto a plane.
+/// narrowed. Triangles that cross share points, so are not apart at all: this is only room for
+/// the rounding of single precision, with plenty to spare.
 constexpr float kSpanSlack = 0.1f;
 
 /// Travel either side of a stretch that still counts as in it: the rounding of single precision.
