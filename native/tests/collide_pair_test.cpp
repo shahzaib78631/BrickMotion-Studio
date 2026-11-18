@@ -240,6 +240,39 @@ TEST_CASE("real parts whose edges slide past each other do not cross, whichever 
   }
 }
 
+TEST_CASE("a crossing where a move starts or ends is found there, however soon it is over", "[collide][pair][sweep][data]") {
+  const char* dir = std::getenv("BM_LDRAW_DIR");
+  if (!dir) SKIP("BM_LDRAW_DIR is not set");
+  const ldraw::Library library(dir);
+  // From OMR 9396-1: an axle pin (43093) drawn out of its hole along its own axis until its end
+  // just meets the end of a long pin (6558) beyond it. Drawn out 23.99973, one pair of triangles
+  // crosses by a little more than kTouch, and moving up from there the two part within 0.0003.
+  const Shape axlePin = buildShape(ldraw::flatten("43093.dat", library));
+  const Shape longPin = buildShape(ldraw::flatten("6558.dat", library));
+  const Vec3 out{0.923879, 0.382683, 0};  // the axle pin's own axis
+  const Xform pinAt{Mat3{{0.923879, -0.382683, 0, 0.382683, 0.923879, 0, 0, 0, 1}}, {-117.879, -147.496, 120}};
+  const Xform longPinAt{Mat3{{0, 0, 1, 1, 0, 0, 0, 1, 0}}, {-80, -100, 110}};
+  const Vec3 up{0, -1, 0}, down{0, 1, 0};
+  int crossing = 0, clear = 0;
+  for (double drawn : {23.997, 23.998, 23.9985, 23.999, 23.9995, 23.99973, 24.0}) {
+    Xform xa = pinAt;
+    xa.t = xa.t + out * drawn;
+    const bool there = overlap(axlePin, xa, longPin, longPinAt);
+    (there ? crossing : clear)++;
+    INFO("drawn out " << drawn << (there ? ", crossing" : ", clear"));
+    // Moving up from there, a crossing is found at the start exactly when there is one there.
+    REQUIRE((firstCrossing(axlePin, xa, up, 10, longPin, longPinAt) == 0) == there);
+    // Coming down to there from 0.1 above, it is found exactly when the way ends in one.
+    Xform above = xa;
+    above.t = above.t + up * 0.1;
+    const double t = firstCrossing(axlePin, above, down, 0.1, longPin, longPinAt);
+    REQUIRE(std::isfinite(t) == there);
+    if (there) REQUIRE(t <= 0.1);
+  }
+  REQUIRE(crossing >= 2);
+  REQUIRE(clear >= 2);
+}
+
 TEST_CASE("where a straight way passes through a surface", "[collide][pair][sweep]") {
   // The brick's body: x and z from -10 to 10, y from 0 to 24.
   Vec3 where;

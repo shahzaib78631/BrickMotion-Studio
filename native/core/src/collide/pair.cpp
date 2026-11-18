@@ -58,7 +58,9 @@ bool atLeast(double value, double slope, double floor, double& lo, double& hi) {
 /// first grows and then shrinks: the ends of each crossing are where a plane cuts the sides of
 /// a triangle, the near end convex in the travel and the far end concave, so their overlap is
 /// concave. A golden-section search for its most tells whether it ever exceeds kTouch, and
-/// halving from there finds where it first does.
+/// halving from there finds where it first does. The search looks only between the ends, a
+/// little inside them, so the ends are looked at too: a crossing the stretch starts in may be
+/// over, and one that begins at its very end not yet begun, at every travel it looks at.
 double firstCross(const Vec3 ta[3], const Vec3 tb[3], Vec3 velocity, double lo, double hi) {
   constexpr double never = std::numeric_limits<double>::infinity();
   const Vec3 na = cross(ta[1] - ta[0], ta[2] - ta[0]), nb = cross(tb[1] - tb[0], tb[2] - tb[0]);
@@ -77,6 +79,7 @@ double firstCross(const Vec3 ta[3], const Vec3 tb[3], Vec3 velocity, double lo, 
     const Vec3 moved[3] = {tb[0] + velocity * t, tb[1] + velocity * t, tb[2] + velocity * t};
     return crossLength(ta, moved);
   };
+  if (overlapAt(lo) > kTouch) return lo;
   double found = never;
   constexpr double g = 0.6180339887498949;
   double a = lo, b = hi, x1 = b - g * (b - a), x2 = a + g * (b - a), f1 = overlapAt(x1), f2 = overlapAt(x2);
@@ -92,8 +95,8 @@ double firstCross(const Vec3 ta[3], const Vec3 tb[3], Vec3 velocity, double lo, 
       b = x2, x2 = x1, f2 = f1, x1 = b - g * (b - a), f1 = overlapAt(x1);
     }
   }
+  if (found == never && overlapAt(hi) > kTouch) found = hi;
   if (found == never) return never;
-  if (overlapAt(lo) > kTouch) return lo;
   double clear = lo, crossing = found;
   while (crossing - clear > kCrossingResolution) {
     const double mid = (clear + crossing) / 2;
