@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <unistd.h>
@@ -233,6 +234,35 @@ TEST_CASE("a graze shorter than a step of the sweep is found, from either end of
   REQUIRE(back < way - last);
   REQUIRE(back > way - last - 0.1);
   REQUIRE(blocker == 0);
+}
+
+TEST_CASE("what is remembered about one way is never the answer for the opposite way", "[collide][world][travel][data]") {
+  const char* dir = std::getenv("BM_LDRAW_DIR");
+  if (!dir) SKIP("BM_LDRAW_DIR is not set");
+  const ldraw::Library lib(dir);
+  ldraw::PartCache parts(lib, ldraw::PartCache::defaultDirectory());
+  ShapeCache shapes;
+  // From OMR 42112-1: the end of a hose beside a stud. Out of its seat one way it meets the stud;
+  // the other way it is clear. Asked the clear way first, the remembered answer was taken for the
+  // way into the stud as well: the two questions were remembered under one key.
+  const fs::path file = fs::temp_directory_path() / ("bm_world_opposite_" + std::to_string(::getpid()) + ".ldr");
+  {
+    std::ofstream out(file);
+    out << "1 0 121.528135 -200 -410.251594 0.292509412 -0.957145264 0 0 0 1 -0.955844684 -0.292907552 0 77.dat\n"
+        << "1 0 121.172549 -200 -410.360411 -0.292509412 -0.958445844 0 0 0 -1 0.955844684 -0.293305692 0 stud3a.dat\n";
+  }
+  const Model m = io::load(file, lib, &parts);
+  fs::remove(file);
+  REQUIRE(m.pieces().size() == 2);
+  const Vec3 way = normalized(Vec3{0.956383, 0, 0.292117});
+  const double distance = 5.000960484;
+  uint32_t blocker = UINT32_MAX;
+  const double ahead = World(m, parts, shapes).clearTravel({0}, way, distance, nullptr, {}, &blocker);
+  REQUIRE(blocker == 1);
+  REQUIRE(ahead < distance - 1);
+  const World w(m, parts, shapes);
+  REQUIRE(w.clearTravel({0}, -way, distance, nullptr) == distance);
+  REQUIRE(w.clearTravel({0}, way, distance, nullptr) == ahead);
 }
 
 TEST_CASE("asked only whether it gets far enough, the answer says so and names what stops it", "[collide][world][travel]") {

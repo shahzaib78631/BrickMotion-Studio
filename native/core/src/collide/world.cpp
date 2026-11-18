@@ -11,6 +11,34 @@
 namespace bm::collide {
 namespace {
 
+/// What a remembered answer is kept under. Each word goes into two lanes through a mix in which
+/// every bit of it reaches every bit of the lane, so that two different questions never share an
+/// answer. Multiplying and xoring whole words (FNV) will not do: a multiply keeps a negated word
+/// negated, and two odd words both negated xor to what they did before, so a direction and its
+/// opposite were kept under one key about half the time.
+struct Key {
+  uint64_t a = 0x243f6a8885a308d3ull, b = 0x13198a2e03707344ull;
+  static uint64_t scramble(uint64_t k) {  // MurmurHash3's finaliser
+    k ^= k >> 33;
+    k *= 0xff51afd7ed558ccdull;
+    k ^= k >> 33;
+    k *= 0xc4ceb9fe1a85ec53ull;
+    k ^= k >> 33;
+    return k;
+  }
+  Key& add(uint64_t v) {
+    a = scramble(a ^ v);
+    b = scramble(b + v + 0x9e3779b97f4a7c15ull);
+    return *this;
+  }
+  Key& add(double v, double grain) { return add(static_cast<uint64_t>(static_cast<int64_t>(std::llround(v / grain)))); }
+  Key& add(Vec3 v, double grain) { return add(v.x, grain).add(v.y, grain).add(v.z, grain); }
+  bool operator==(const Key& o) const { return a == o.a && b == o.b; }
+};
+struct KeyHash {
+  size_t operator()(const Key& k) const { return static_cast<size_t>(k.a); }
+};
+
 bool boxesMeet(const Box& a, const Box& b) {
   return a.min.x <= b.max.x && b.min.x <= a.max.x && a.min.y <= b.max.y && b.min.y <= a.max.y && a.min.z <= b.max.z && b.min.z <= a.max.z;
 }
@@ -132,7 +160,7 @@ struct World::State {
   std::vector<uint32_t> byMinX;  // pieces with geometry, sorted by their box's min x
   double widest = 0;             // the largest box extent along x, to bound the scan
   mutable std::mutex memoLock;
-  mutable std::unordered_map<uint64_t, double> memo;  // pairTravel and restCrossing answers
+  mutable std::unordered_map<Key, double, KeyHash> memo;  // pairTravel and restCrossing answers
 };
 
 World::World(const Model& model, ldraw::PartCache& parts, ShapeCache& shapeCache) : state_(std::make_unique<State>()) {
@@ -235,9 +263,6 @@ std::vector<Zone> zonesNear(const std::vector<Zone>& zones, uint32_t p, uint32_t
   }
   return out;
 }
-uint64_t mix(uint64_t h, uint64_t v) { return (h ^ v) * 1099511628211ull; }
-uint64_t mix(uint64_t h, double v, double grain) { return mix(h, static_cast<uint64_t>(static_cast<int64_t>(std::llround(v / grain)))); }
-uint64_t mix(uint64_t h, Vec3 v, double grain) { return mix(mix(mix(h, v.x, grain), v.y, grain), v.z, grain); }
 }  // namespace
 
 /// How far one piece gets along a line before it meets one other, looked at only where their
@@ -285,12 +310,11 @@ double World::pairTravel(uint32_t p, const Xform& from, const Box& fromBox, uint
 
   const Xform toObstacle = inverseOf(s.poses[q]);
   const Xform rel = toObstacle * from;
-  uint64_t key = mix(mix(14695981039346656037ull, reinterpret_cast<uintptr_t>(s.shapes[p].get())), reinterpret_cast<uintptr_t>(s.shapes[q].get()));
-  for (double v : rel.r.m) key = mix(key, v, 1e-4);
-  key = mix(key, rel.t, 1e-3);
-  key = mix(key, toObstacle.r * direction, 1e-4);
-  key = mix(mix(key, distance, 1e-2), tolerance, 1e-3);
-  for (const Zone& z : zones) key = mix(mix(mix(key, toObstacle.apply(z.a), 1e-2), toObstacle.apply(z.b), 1e-2), z.radius, 1e-2);
+  Key key;
+  key.add(1).add(reinterpret_cast<uintptr_t>(s.shapes[p].get())).add(reinterpret_cast<uintptr_t>(s.shapes[q].get()));
+  for (double v : rel.r.m) key.add(v, 1e-4);
+  key.add(rel.t, 1e-3).add(toObstacle.r * direction, 1e-4).add(distance, 1e-2).add(tolerance, 1e-3);
+  for (const Zone& z : zones) key.add(toObstacle.apply(z.a), 1e-2).add(toObstacle.apply(z.b), 1e-2).add(z.radius, 1e-2);
   {
     std::lock_guard<std::mutex> lock(s.memoLock);
     const auto it = s.memo.find(key);
@@ -395,10 +419,11 @@ bool World::restCrossing(uint32_t p, uint32_t q, const std::vector<Zone>& allZon
   const std::vector<Zone> zones = zonesNear(allZones, p, q, s.boxes[q]);
   const Xform toObstacle = inverseOf(s.poses[q]);
   const Xform rel = toObstacle * s.poses[p];
-  uint64_t key = mix(mix(1469598103934665603ull, reinterpret_cast<uintptr_t>(s.shapes[p].get())), reinterpret_cast<uintptr_t>(s.shapes[q].get()));
-  for (double v : rel.r.m) key = mix(key, v, 1e-4);
-  key = mix(key, rel.t, 1e-3);
-  for (const Zone& z : zones) key = mix(mix(mix(key, toObstacle.apply(z.a), 1e-2), toObstacle.apply(z.b), 1e-2), z.radius, 1e-2);
+  Key key;
+  key.add(2).add(reinterpret_cast<uintptr_t>(s.shapes[p].get())).add(reinterpret_cast<uintptr_t>(s.shapes[q].get()));
+  for (double v : rel.r.m) key.add(v, 1e-4);
+  key.add(rel.t, 1e-3);
+  for (const Zone& z : zones) key.add(toObstacle.apply(z.a), 1e-2).add(toObstacle.apply(z.b), 1e-2).add(z.radius, 1e-2);
   {
     std::lock_guard<std::mutex> lock(s.memoLock);
     const auto it = s.memo.find(key);
