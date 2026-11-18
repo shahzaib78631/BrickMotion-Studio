@@ -31,9 +31,9 @@ Planned planModel(const Model& model, const ldraw::Library& library, ldraw::Part
   kin::GearDb gears;
   cli::loadEngineData(repo, db, gears);
   collide::ShapeCache shapes;
-  const connect::Graph graph = connect::buildGraph(model, db, &gears);
   Planned out;
-  out.plan = plan::plan(model, graph, full, shapes, options);
+  out.graph = connect::buildGraph(model, db, &gears);
+  out.plan = plan::plan(model, out.graph, full, shapes, options);
   out.timeline = plan::buildTimeline(model, full, out.plan);
   return out;
 }

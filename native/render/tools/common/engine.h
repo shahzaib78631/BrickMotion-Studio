@@ -3,6 +3,7 @@
 // `bm plan` plans it.
 #include <filesystem>
 #include <string>
+#include "bm/connect/graph.h"
 #include "bm/ldraw/part_cache.h"
 #include "bm/model.h"
 #include "bm/plan/plan.h"
@@ -16,6 +17,7 @@ std::string ldrawDir();
 struct Planned {
   bm::plan::Plan plan;
   bm::plan::Timeline timeline;
+  bm::connect::Graph graph;  ///< the joints the plan was made from
 };
 /// Planned as `bm plan` plans it, with the engine data beside the LDraw library's repository.
 Planned planModel(const bm::Model& model, const bm::ldraw::Library& library, bm::ldraw::PartCache& full, const std::filesystem::path& ldraw,
