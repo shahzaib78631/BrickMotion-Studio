@@ -12,6 +12,7 @@ struct Style {
   double time = 1;             ///< multiplies every flight's length (2 = twice as slow)
   double landing = 0.25;       ///< share of a flight spent on the last leg, into the seat
   double hover = 0.1;          ///< share spent holding still at the start of that leg
+  double corner = 20;          ///< LDU: the largest radius its own corners in open air are rounded to (under kExitMargin)
 };
 
 /// One unit's flight. Every pose is a motion from the unit's seat, as in Move::path.
@@ -21,6 +22,12 @@ struct Flight {
   Xform staging;                 ///< where it waits on the floor
   std::vector<Xform> waypoints;  ///< staging first, seat (identity) last
   std::vector<double> at;        ///< 0..1 for each waypoint; the last leg takes Style::landing
+  /// The open-air part as flown, from staging to where the hover begins, its corners rounded:
+  /// one ease in, one ease out, no stop between. Empty: every leg eases on its own.
+  std::vector<Vec3> air;
+  std::vector<double> airAt;     ///< distance along `air` to each point
+  std::vector<uint32_t> airLeg;  ///< the waypoint whose pose each point of `air` takes its rotation from
+  uint32_t hoverAt = 0;          ///< the waypoint `air` ends at
 };
 
 struct CameraKey {

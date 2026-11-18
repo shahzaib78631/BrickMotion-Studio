@@ -92,6 +92,36 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
       f.at.push_back(travel + hover);
     }
     f.at.push_back(1);  // the seat
+    // The open air, flown as one: its own two corners (over the staging spot, over the way in)
+    // rounded, then the planner's legs as they are, up to the hover.
+    f.hoverAt = static_cast<uint32_t>(f.waypoints.size() - (hover > 0 ? 3 : 2));
+    bool turns = false;
+    for (const Xform& w : f.waypoints)
+      for (int i = 0; i < 9; i++) turns = turns || std::abs(w.r.m[i] - Mat3::identity().m[i]) > 1e-9;  // an author's flight that turns: legs as they are
+    if (!turns && f.hoverAt >= 1 && f.at[f.hoverAt] > 0) {
+      f.air.push_back(f.waypoints[0].t), f.airLeg.push_back(0);
+      for (uint32_t k = 1; k <= f.hoverAt; k++) {
+        const Vec3 c = f.waypoints[k].t;
+        if (k <= 2 && k < f.hoverAt) {
+          const Vec3 in = c - f.waypoints[k - 1].t, out = f.waypoints[k + 1].t - c;
+          const double li = length(in), lo = length(out), r = std::min({style.corner, 0.4 * li, 0.4 * lo});
+          if (r > 0.5) {
+            const Vec3 from = c - in * (r / li), to = c + out * (r / lo);
+            const int n = std::max(2, static_cast<int>(std::ceil(2 * r)));  // about a point an LDU
+            for (int i = 0; i <= n; i++) {
+              const double s = static_cast<double>(i) / n;
+              f.air.push_back(from * ((1 - s) * (1 - s)) + c * (2 * s * (1 - s)) + to * (s * s)), f.airLeg.push_back(k);
+            }
+            continue;
+          }
+        }
+        f.air.push_back(c), f.airLeg.push_back(k);
+      }
+      double along = 0;
+      f.airAt.push_back(0);
+      for (size_t i = 1; i < f.air.size(); i++) along += length(f.air[i] - f.air[i - 1]), f.airAt.push_back(along);
+      if (!(along > 0)) f.air.clear(), f.airAt.clear(), f.airLeg.clear();
+    }
     f.frames = perFlight;
     frame += perFlight;
     out.flights.push_back(std::move(f));
@@ -118,6 +148,16 @@ Xform poseAt(const Flight& f, int frame) {
   if (f.frames <= 0 || frame >= f.startFrame + f.frames) return f.waypoints.back();
   if (frame <= f.startFrame) return f.waypoints.front();
   const double u = static_cast<double>(frame - f.startFrame) / f.frames;
+  if (!f.air.empty() && f.hoverAt < f.at.size() && u < f.at[f.hoverAt]) {
+    double v = u / f.at[f.hoverAt];
+    v = v * v * (3 - 2 * v);  // one ease in, one ease out over the whole of the open air
+    const double s = v * f.airAt.back();
+    const size_t i = std::min<size_t>(f.air.size() - 2, static_cast<size_t>(std::upper_bound(f.airAt.begin(), f.airAt.end(), s) - f.airAt.begin()) - 1);
+    const double span = f.airAt[i + 1] - f.airAt[i], w = span > 0 ? (s - f.airAt[i]) / span : 1;
+    Xform x = f.waypoints[std::min<size_t>(f.airLeg[i + 1], f.waypoints.size() - 1)];
+    x.t = f.air[i] + (f.air[i + 1] - f.air[i]) * w;
+    return x;
+  }
   for (size_t k = 0; k + 1 < f.waypoints.size() && k + 1 < f.at.size(); k++) {
     if (u > f.at[k + 1]) continue;
     const double spanU = f.at[k + 1] - f.at[k];
@@ -131,10 +171,17 @@ Xform poseAt(const Flight& f, int frame) {
 }
 
 std::vector<Vec3> playedPath(const Flight& f, double spacing) {
-  (void)spacing;  // every leg is straight
+  (void)spacing;  // the rounded corners are already flown as points about an LDU apart, as poseAt plays them
   std::vector<Vec3> out;
-  for (const Xform& w : f.waypoints)
-    if (out.empty() || length(w.t - out.back()) > 1e-9) out.push_back(w.t);
+  auto add = [&](Vec3 t) {
+    if (out.empty() || length(t - out.back()) > 1e-9) out.push_back(t);
+  };
+  if (!f.air.empty()) {
+    for (const Vec3& t : f.air) add(t);
+    for (size_t k = f.hoverAt + 1; k < f.waypoints.size(); k++) add(f.waypoints[k].t);
+  } else {
+    for (const Xform& w : f.waypoints) add(w.t);
+  }
   return out;
 }
 

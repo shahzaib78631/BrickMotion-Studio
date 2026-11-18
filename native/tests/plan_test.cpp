@@ -734,3 +734,30 @@ TEST_CASE("within a step, pieces go in from above", "[plan][steps]") {
   REQUIRE(k.upward == 0);
   REQUIRE(k.inversions == 0);
 }
+
+TEST_CASE("a flight does not stop at its corners before it lands", "[plan][timeline]") {
+  Scene s;
+  const uint32_t a = s.add(0, 0, 0), b = s.add(0, -24, 0), c = s.add(0, -48, 0);
+  s.stud(a, b), s.stud(b, c);
+  const Plan p = s.plan();
+  Style style;
+  style.fps = 30, style.piecesPerSecond = 0.25;  // 120 frames a flight
+  const Timeline t = buildTimeline(*s.model, s.parts, p, style);
+  for (const Flight& f : t.flights) {
+    REQUIRE(f.frames == 120);
+    const double hover = f.at[f.at.size() - 3];  // where it holds before landing
+    std::vector<double> steps;
+    for (int frame = f.startFrame; frame < f.startFrame + f.frames; frame++) {
+      const double u = static_cast<double>(frame - f.startFrame) / f.frames;
+      if (u >= 0.1 && u + 1.0 / f.frames <= hover - 0.05) steps.push_back(length(poseAt(f, frame + 1).t - poseAt(f, frame).t));
+    }
+    REQUIRE(steps.size() > 20);
+    std::vector<double> sorted = steps;
+    std::sort(sorted.begin(), sorted.end());
+    const double median = sorted[sorted.size() / 2];
+    INFO("move " << f.move << " slowest " << sorted.front() << " median " << median);
+    REQUIRE(sorted.front() >= 0.25 * median);
+    REQUIRE(length(poseAt(f, f.startFrame + f.frames).t) == 0);
+  }
+  REQUIRE(certifyPlay(*s.model, s.graph, s.parts, s.shapes, p, t).crossings == 0);
+}
