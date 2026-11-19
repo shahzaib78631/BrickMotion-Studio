@@ -38,6 +38,10 @@ double toLinear(double c) { return c <= 0.04045 ? c / 12.92 : std::pow((c + 0.05
 
 struct Viewport::Impl {
   Session* session = nullptr;
+  /// The session's state the renderer was made from: kept alive (model, caches) until the
+  /// renderer is replaced, even when the session reopens.
+  std::shared_ptr<Session::Impl> pinned;
+  uint64_t generation = 0;
   bool owned = false;  ///< made by create(): holds a reference to the session
   bool ok = false;
   std::unique_ptr<bmr::Renderer> renderer;
@@ -84,7 +88,32 @@ struct Viewport::Impl {
 
   /// The document was edited: the renderer catches up with the edits it has not drawn, and a
   /// plan of the old model, finished or not, is dropped.
+  /// The session opened another document (Revert, a version, a reload): start again on it.
+  void reopen() {
+    if (job) {
+      job->cancel.cancel();
+      job.reset();
+    }
+    planned.reset();
+    plannedVersion = 0;
+    renderer.reset();  // before the state it was made from goes
+    pinned = session->shared();
+    generation = pinned->generation;
+    ok = false;
+    if (pinned->model && bmr::gpuAvailable()) renderer = bmr::Renderer::create(*pinned->model, *pinned->full, *pinned->low);
+    ok = renderer != nullptr;
+    if (ok && width > 0 && height > 0) renderer->resize(width, height);
+    seen = session->version();
+    seenSelection = seenHidden = UINT64_MAX;
+    frame = -1;
+    playing = wantPlay = false;
+    planError.clear();
+    dirty = true;
+  }
+
   void follow() {
+    if (session->impl().generation != generation) reopen();
+    if (!renderer) return;
     const uint64_t now = session->version();
     if (now != seen) {
       if (job) {
@@ -102,7 +131,7 @@ struct Viewport::Impl {
       planError.clear();
       dirty = true;
     }
-    if (renderer) syncView();
+    syncView();
   }
 
   /// Applies the edits after `seen`: in place when none changed the structure and all are still
@@ -153,7 +182,9 @@ struct Viewport::Impl {
     const bm::ldraw::Library* library = s.library.get();
     bm::ldraw::PartCache* full = s.full.get();
     const std::filesystem::path ldraw = s.ldraw, file = s.file;
+    std::shared_ptr<Session::Impl> keep = session->shared();  // the library and caches it reads
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+      (void)keep;
       std::optional<bmtools::Planned> planned;
       std::string error;
       try {
@@ -243,11 +274,7 @@ void* Viewport::metalDevice() { return bmr::gpuAvailable() ? bmr::gpuDevice() : 
 Viewport::Viewport(Session& session) : impl_(std::make_unique<Impl>()) {
   Impl& v = *impl_;
   v.session = &session;
-  v.seen = session.version();
-  Session::Impl& s = session.impl();
-  if (!s.model || !bmr::gpuAvailable()) return;
-  v.renderer = bmr::Renderer::create(*s.model, *s.full, *s.low);
-  v.ok = v.renderer != nullptr;
+  v.reopen();
   // The shadow and height maps are drawn again over frames while the view turns or pieces move.
   v.options.mapTrianglesPerFrame = bmr::kMapTrianglesPerFrame;
 }
@@ -277,6 +304,7 @@ void Viewport::resize(int pixelsWide, int pixelsHigh, double backingScale) {
 
 bool Viewport::draw(void* metalDrawable) {
   Impl& v = *impl_;
+  if (v.session->impl().generation != v.generation) v.reopen();
   if (!v.ok) return false;
   v.follow();
   v.collectPlan();

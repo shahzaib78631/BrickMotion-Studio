@@ -79,6 +79,30 @@ import BMApp
     return fail("the X handle moved (\(was.x),\(was.y),\(was.z)) to (\(now.x),\(now.y),\(now.z))")
   }
   if undo.undoMenuItemTitle != "Undo Move Piece" { return fail("the drag's undo is \(undo.undoMenuItemTitle)") }
-  print("selftest-edit: ok (\(steps) steps undone, \(count) pieces, gizmo drag one step)")
+  // Save, edit, Revert: the live document reads its file again, its undo goes, and the viewport
+  // follows the session into the reopened document.
+  let saved = FileManager.default.temporaryDirectory.appendingPathComponent("selftest-revert.brickmotion")
+  var finished = false, failure: (any Error)?
+  document.fileType = DocumentController.projectType
+  document.save(to: saved, ofType: DocumentController.projectType, for: .saveAsOperation) { failure = $0; finished = true }
+  while !finished { turn() }
+  if let failure { return fail("save: \(failure.localizedDescription)") }
+  if document.isDocumentEdited || document.session.dirty() { return fail("a save left the document edited") }
+  let savedCount = document.session.pieceCount()
+  view.select([0], .Replace)
+  view.deletePieces(nil)
+  turn()
+  do { try document.revert(toContentsOf: saved, ofType: DocumentController.projectType) } catch { return fail("revert: \(error.localizedDescription)") }
+  turn()
+  if document.session.pieceCount() != savedCount || undo.canUndo || !document.session.selection().isEmpty {
+    return fail("revert left \(document.session.pieceCount()) pieces, undo \(undo.canUndo)")
+  }
+  _ = view.viewport.draw(nil)
+  view.viewport.fitAll()
+  _ = view.viewport.draw(nil)
+  let p = view.viewport.pick(view.bounds.width / 2, view.bounds.height / 2)
+  if p != UInt32.max && p >= UInt32(savedCount) { return fail("the viewport picked piece \(p) of \(savedCount)") }
+  try? FileManager.default.removeItem(at: saved)
+  print("selftest-edit: ok (\(steps) steps undone, \(count) pieces, gizmo drag one step, revert)")
   return 0
 }

@@ -43,6 +43,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     file.addItem(withTitle: "Duplicate", action: #selector(NSDocument.duplicate(_:)), keyEquivalent: "S").keyEquivalentModifierMask = [.command, .shift]
     file.addItem(withTitle: "Rename…", action: #selector(NSDocument.rename(_:)), keyEquivalent: "")
     file.addItem(withTitle: "Revert To", action: #selector(NSDocument.revertToSaved(_:)), keyEquivalent: "")
+    file.addItem(withTitle: "Browse All Versions…", action: #selector(NSDocument.browseVersions(_:)), keyEquivalent: "")
+    file.addItem(.separator())
+    file.addItem(withTitle: "Export LDraw…", action: #selector(Document.exportLDraw(_:)), keyEquivalent: "e").keyEquivalentModifierMask = [.command, .shift]
     main.addItem(withTitle: "File", action: nil, keyEquivalent: "").submenu = file
 
     let edit = NSMenu(title: "Edit")

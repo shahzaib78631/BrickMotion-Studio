@@ -45,6 +45,9 @@ if args.count >= 2 && args[1] == "--version" {
   print("BrickMotion \(String(bmapp.Session.engineVersion()))")
   exit(0)
 }
+if args.contains("--save-to") {
+  exit(MainActor.assumeIsolated { headlessSave(args) })
+}
 if args.count >= 3 && args[1] == "--open" {
   let session = bmapp.Session.create()!
   let r = session.open(std.string(args[2]))

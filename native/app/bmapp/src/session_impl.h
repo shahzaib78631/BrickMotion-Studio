@@ -7,6 +7,7 @@
 #include <string>
 #include <unordered_map>
 #include "bm/doc/source.h"
+#include "bm/doc/write.h"
 #include "bm/ldraw/library.h"
 #include "bm/ldraw/part_cache.h"
 #include "bm/model.h"
@@ -20,7 +21,12 @@ struct Session::Impl {
   std::string ldraw;
   bool imported = true;
   std::unique_ptr<bm::ldraw::Library> library;
-  std::unique_ptr<bm::ldraw::PartCache> full, low;  ///< low: lowResPrimitives, for the renderer's far detail
+  std::unique_ptr<bm::ldraw::PartCache> full, low;
+  uint64_t generation = 0;
+  /// The project file as opened (or last saved): writing keeps its other keys. None for an import.
+  std::optional<bm::doc::Project> base;
+  /// A save of a changed plan has happened since opening: its file holds no timelines either.
+  bool timelinesStale = false;  ///< low: lowResPrimitives, for the renderer's far detail
 
   /// The document as its file holds it; every edit changes this.
   bm::doc::Source source;

@@ -3,7 +3,10 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <atomic>
 #include <exception>
+#include <sstream>
+#include <stdexcept>
 #include <fstream>
 #include <mutex>
 #include <iterator>
@@ -38,7 +41,7 @@ bool isProject(const std::filesystem::path& path) {
 }
 }  // namespace
 
-Session::Session() : impl_(std::make_unique<Impl>()) {}
+Session::Session() : impl_(std::make_shared<Impl>()) {}
 Session* Session::create() { return new Session(); }
 
 Session::~Session() = default;
@@ -53,11 +56,26 @@ std::string Session::ldrawDirectory() {
 }
 std::string Session::engineVersion() { return bm::version(); }
 
-OpenResult Session::open(const std::string& path) {
+namespace {
+std::atomic<uint64_t> generations{0};
+
+std::string readText(const std::filesystem::path& path) {
+  std::ifstream f(path, std::ios::binary);
+  if (!f) throw std::runtime_error("“" + path.filename().string() + "” could not be read.");
+  std::ostringstream s;
+  s << f.rdbuf();
+  return s.str();
+}
+}  // namespace
+
+/// Opens into a fresh state: `read` fills its source (and base), and only a whole success
+/// replaces what the session had.
+template <class Read>
+static OpenResult openWith(std::shared_ptr<Session::Impl>& impl, const std::string& path, Read read) {
   OpenResult result;
-  auto fresh = std::make_unique<Impl>();
+  auto fresh = std::make_shared<Session::Impl>();
   fresh->file = path;
-  fresh->ldraw = ldrawDirectory();
+  fresh->ldraw = Session::ldrawDirectory();
   if (fresh->ldraw.empty()) {
     result.error = "No LDraw library was found. Set BM_LDRAW_DIR to the folder that holds LDConfig.ldr.";
     return result;
@@ -68,18 +86,67 @@ OpenResult Session::open(const std::string& path) {
     bm::ldraw::FlattenOptions low;
     low.lowResPrimitives = true;
     fresh->low = std::make_unique<bm::ldraw::PartCache>(*fresh->library, bm::ldraw::PartCache::defaultDirectory().parent_path() / "parts-low", low);
-    fresh->source = bm::doc::fromFile(fresh->file);
+    read(*fresh);
     reflatten(*fresh);
   } catch (const std::exception& e) {
     result.error = e.what();
     return result;
   }
   fresh->imported = !isProject(fresh->file);
+  fresh->generation = ++generations;
   result.ok = true;
   result.warnings = describe(fresh->model->report());
-  impl_ = std::move(fresh);
+  impl = std::move(fresh);
   return result;
 }
+
+OpenResult Session::open(const std::string& path) {
+  return openWith(impl_, path, [](Impl& s) {
+    s.source = bm::doc::fromFile(s.file);
+    if (isProject(s.file)) s.base = bm::doc::readProjectFile(readText(s.file));
+  });
+}
+
+OpenResult Session::openBytes(const std::string& bytes, const std::string& path) {
+  return openWith(impl_, path, [&](Impl& s) {
+    s.base = bm::doc::readProjectFile(bytes);
+    s.source = bm::doc::fromPlan(bm::io::readProject(bytes));
+  });
+}
+
+uint64_t Session::generation() const { return impl_->generation; }
+
+namespace {
+/// The document as a project holds it. Plans have no colour 16 that takes its holder's colour,
+/// so an LDraw import's 16 parts are given the colour their pieces show when all agree.
+bm::doc::Source forProject(const Session::Impl& s) {
+  bm::doc::Source out = s.source;
+  if (out.origin != bm::doc::Origin::LDraw || !s.model) return out;
+  auto bake = [&](bm::doc::Def& def) {
+    for (bm::doc::Step& step : def.steps)
+      for (bm::doc::Item& item : step.items) {
+        if (item.submodel || item.color != 16) continue;
+        const auto it = s.piecesOf.find(item.id);
+        if (it == s.piecesOf.end() || it->second.empty()) continue;
+        std::set<int> colors;
+        for (uint32_t p : it->second) colors.insert(s.model->pieces()[p].color);
+        if (colors.size() != 1 || *colors.begin() == 16) continue;
+        item.color = *colors.begin();
+        item.colorText = std::to_string(item.color);
+      }
+  };
+  bake(out.root);
+  for (auto& [name, def] : out.submodels) bake(def);
+  return out;
+}
+}  // namespace
+
+std::string Session::projectBytes() const {
+  const Impl& s = *impl_;
+  return bm::doc::writeProject(s.base ? *s.base : bm::doc::Project{}, forProject(s), s.timelinesStale || dirty());
+}
+
+std::string Session::mpdBytes() const { return impl_->library ? bm::doc::writeMpd(impl_->source, *impl_->library) : ""; }
 
 size_t Session::pieceCount() const { return impl_->model ? impl_->model->pieces().size() : 0; }
 
@@ -263,7 +330,10 @@ bool Session::canRedo() const { return impl_->history.cursor < impl_->history.do
 std::string Session::undoName() const { return canUndo() ? impl_->history.done[impl_->history.cursor - 1].name : ""; }
 std::string Session::redoName() const { return canRedo() ? impl_->history.done[impl_->history.cursor].name : ""; }
 bool Session::dirty() const { return impl_->history.saved != static_cast<long>(impl_->history.cursor); }
-void Session::markSaved() { impl_->history.saved = static_cast<long>(impl_->history.cursor); }
+void Session::markSaved() {
+  if (dirty()) impl_->timelinesStale = true;
+  impl_->history.saved = static_cast<long>(impl_->history.cursor);
+}
 uint64_t Session::version() const { return impl_->version; }
 size_t Session::undoDepth() const { return impl_->history.cursor; }
 

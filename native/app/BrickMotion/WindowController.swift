@@ -20,9 +20,8 @@ final class WindowController: NSWindowController, NSToolbarDelegate {
     self.init(window: window)
     buildSplit(document)
     window.contentViewController = split
-    // An untitled import has nothing on disk to come back from until autosave can write it
-    // (phase 8 Task 12), so only saved projects reopen their windows after a relaunch.
-    window.isRestorable = document.fileURL != nil
+    // Autosave keeps untitled imports too, so every window comes back after a relaunch.
+    window.isRestorable = true
     // Setting the content controller sizes the window to the panes' minimum; start larger.
     window.setContentSize(NSSize(width: 1440, height: 900))
     let toolbar = NSToolbar(identifier: "BrickMotionDocument")

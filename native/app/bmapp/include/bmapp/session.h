@@ -33,8 +33,19 @@ class Session {
   static std::string ldrawDirectory();
   /// The engine's version, "major.minor.patch".
   static std::string engineVersion();
-  /// Any format bm::io reads. On failure the session is left empty.
+  /// Any format bm::io reads. On failure the session is left as it was. Opening (open or
+  /// openBytes) starts afresh: no undo, nothing selected or hidden, a new generation.
   OpenResult open(const std::string& path);
+  /// A .brickmotion project's bytes; `path` names it (title, errors, the planner's style).
+  OpenResult openBytes(const std::string& bytes, const std::string& path);
+  /// Different for every document opened, in any session.
+  uint64_t generation() const;
+  /// The document as a .brickmotion project the web app opens: the opened project with its plan
+  /// replaced (its planned "timelines" dropped once the plan has changed). An LDraw import's
+  /// colour-16 parts take the colour they show, wherever all their uses agree.
+  std::string projectBytes() const;
+  /// The document as an LDraw MPD.
+  std::string mpdBytes() const;
   size_t pieceCount() const;
   /// The file's name without its extension.
   std::string title() const;
@@ -108,12 +119,15 @@ class Session {
 
   struct Impl;
   Impl& impl() const { return *impl_; }
+  /// The current document's state, kept alive by whoever holds it (a viewport, a planning run)
+  /// after a reopen replaces it.
+  std::shared_ptr<Impl> shared() const { return impl_; }
 
  private:
   friend void ::bmappRetainSession(Session*);
   friend void ::bmappReleaseSession(Session*);
   std::atomic<int> refs_{1};
-  std::unique_ptr<Impl> impl_;
+  std::shared_ptr<Impl> impl_;
 } SWIFT_SHARED_REFERENCE(bmappRetainSession, bmappReleaseSession);
 
 }  // namespace bmapp
