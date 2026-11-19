@@ -1,5 +1,7 @@
 # Native Phase 8, Milestone 3a: structure editing, browser, inspector — Implementation Plan
 
+> **Status (2026-11-19): done.** Tasks 1–10 committed (ea6537b…). Results in `native/README.md` “Phase 8 M3a results”; rulings in the ledger. Not checked by hand: drag and drop, inline rename, type-select, the palette's keyboard. The final whole-branch review is a self-review.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Steps and submodels become editable with undo. The sidebar gets Models and Steps panes, the inspector its Selection, Part and Submodel tabs with colour swatches, the viewport its context menus, and every command is in one registry that drives the menu bar, the context menus and a ⌘K palette.

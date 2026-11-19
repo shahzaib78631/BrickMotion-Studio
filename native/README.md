@@ -782,3 +782,58 @@ Measured with `film/tests/corpus_film.sh` (`bm film --correct`, 16:9 and 9:16):
   - `--selftest-edit`: five edits through the real undo manager, all undone to a clean document, a gizmo drag as one step, then save and Revert on a live document;
   - `import_check.sh`: the source file's hash is unchanged after a save, and the saved piece moved 20 LDU;
   - `--snapshot`.
+
+## Phase 8 M3a results (2026-11-19): structure, browser, inspector
+
+Plan: `docs/superpowers/plans/2026-11-19-native-phase8-m3a-structure-browser-inspector.md`.
+M3 was split in two; M3a is everything that edits or shows the model's structure. Parts,
+snapping, Settings and the welcome window are M3b.
+
+### What it does
+
+- **Steps and submodels are editable**, each edit one named undo step. Steps can be inserted,
+  deleted, moved, split, merged, retitled (with notes, a 0–10 s pause and pin order), filled from
+  the selection, and reordered inside. Submodels can be made new or from a selection, extracted,
+  moved between, renamed and deleted (only when unused). Every world placement is kept. A refused
+  edit says why in a sheet and changes nothing.
+- **Open a submodel** (⌘↓, a double click on a use already selected, or Open in any pane) edits it
+  alone; ⌘↑ or the glass breadcrumb over the viewport goes back.
+- **One command registry** makes the File, Edit, Object, Step and View menus, the context menus
+  and the ⌘K palette, so a command has one title, one shortcut and one rule for when it works.
+- **Sidebar** (Models, Steps; Parts in M3b):
+  - Models: the tree of uses with counts, shared and unused marks, a filter, drag onto a row to
+    move into it, and the parts of the edited model by step with show/hide.
+  - Steps: counts, pause and pin badges, drag to reorder, and a popover editor.
+- **Inspector**: Selection (parts with counts, colour, step, submodel actions, model overview),
+  Part (colour, step, its submodels with Open, Make Unique, Replace, X/Y/Z in LDU, 90° turns),
+  Submodel (rename, uses, Open, Select Uses). The colour picker groups Solid, Transparent and
+  Metallic, searches, and keeps the last eight.
+- **Context menus** for a piece and for empty space, every item a registry command.
+- Projects saved after structure edits open in the web app: `import_check.sh` reads one back
+  with `src/io/projectFile.ts` and gets the app's piece count.
+
+### Measurements (M1 Pro)
+
+- Outline and steps rows, made again after a structural edit on 10030 ×4 (12,000+ pieces):
+  0.04 ms and 0.11 ms, after an edit of 7.9 ms (`bmapp_tests "[rows][.slow]"`). A move does not
+  make them again.
+- Open Submodel to first frame: not measured.
+
+### Tests
+
+- `bmapp_tests`: 70 cases, adding step and submodel commands, focus, rows, and showing pieces.
+- `ctest` in `native/build-app`: 531 tests pass.
+- `--selftest-panes`, through a document's real window: every menu item is a registry command and
+  no two share a shortcut; Make Submodel is one undo step; the Models tree matches the outline,
+  opens and goes back, filters, and is not rebuilt by a move; step-title typing is one undo step;
+  a step drag is Move Step; a swatch recolours and goes first in Recent; X + 20 in the Part tab
+  moves the piece 20 LDU in one step; the palette ranks "msub" and "dup" right and shows the
+  menus' shortcuts; the piece and empty-space menus hold only registry commands.
+- `import_check.sh` also saves structure edits (`--edit-structure`), checks the saved plan and
+  its unique ids, and reads it with the web reader.
+
+### Not checked by hand
+
+Drag and drop (rows, steps, piece order), inline rename, type-select, right-click versus
+right-drag orbit, the palette's keyboard, and ⌘Z inside the step editor's fields were not tried
+with a mouse and keyboard; the self-tests drive their view models.

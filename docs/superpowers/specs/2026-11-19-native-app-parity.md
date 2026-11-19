@@ -40,7 +40,7 @@ that opens the AI panel, and the Checks panel that has no rail button.
 | Templates (save, apply, use-for-imports, download, import) | TemplatesDialog.tsx | 9 | N | |
 | Rename project inline | Toolbar.tsx:322 | 8 | — | title-bar rename (document proxy) |
 | History menu: undo/redo, rebuild steps and animation, regenerate steps only / animation only | Toolbar.tsx:341-354 | 8 | N | unlimited undo coalesced per gesture; Edit menu names the action. **partial (M2): named, unlimited undo and redo, one step per gesture; rebuild/regenerate commands come with timelines (M4)** |
-| Command palette ⌘K (go to panels, import, fit, lay out, regenerate, theme) | Toolbar.tsx:268-398 | 8 | — | covers every menu command, fuzzy, shows shortcuts |
+| Command palette ⌘K (go to panels, import, fit, lay out, regenerate, theme) | Toolbar.tsx:268-398 | 8 | — | covers every menu command, fuzzy, shows shortcuts. **done (M3a): ⌘K glass palette over every enabled menu command, Open <submodel>, Go to Step n; fuzzy, shortcuts shown, recent first** |
 | Parts library update prompt | PartsUpdatePrompt.tsx | 9 | N | |
 | About | AboutDialog.tsx | 8 | — | |
 
@@ -48,14 +48,14 @@ that opens the AI panel, and the Checks panel that has no rail button.
 
 | Feature | Web | Phase | Engine | Exceeds web by |
 |---|---|---|---|---|
-| New model / submodule / from selection | ModelsPanel.tsx:203-219 | 8 | N | |
-| Search models | ModelsPanel.tsx:221 | 8 | — | |
-| Tree rows: open, show and fit, tags, counts | ModelsPanel.tsx:232-262 | 8 | P (submodel paths per piece) | outline view with type-select, keyboard nav, drag to reparent |
-| Row menu: play its build, lay out parts, view parts, export MP4/project/LDraw, import into, open another | ModelsPanel.tsx:165-191 | 8/9 | P | |
-| View parts dialog: steps tree, per-step show/hide, select, extract, move to step | PartsDialog.tsx | 8 | N | inline in the browser, not a dialog |
+| New model / submodule / from selection | ModelsPanel.tsx:203-219 | 8 | N | **done (M3a): New Submodel…, Make Submodel from Selection (⌥⌘G), Extract, Move to Model, rename and delete, all one undo step each** |
+| Search models | ModelsPanel.tsx:221 | 8 | — | **done (M3a): the Models pane filter keeps matches and their ancestors** |
+| Tree rows: open, show and fit, tags, counts | ModelsPanel.tsx:232-262 | 8 | P (submodel paths per piece) | outline view with type-select, keyboard nav, drag to reparent. **partial (M3a): open (double click/Return), show and fit, select, counts, shared/unused marks, drag onto a row to move into it; tags are M3b** |
+| Row menu: play its build, lay out parts, view parts, export MP4/project/LDraw, import into, open another | ModelsPanel.tsx:165-191 | 8/9 | P | **partial (M3a): Open, Show and Fit, Select Pieces, Rename, New/Make Submodel, Delete; play, lay out and export are M4/phase 9** |
+| View parts dialog: steps tree, per-step show/hide, select, extract, move to step | PartsDialog.tsx | 8 | N | inline in the browser, not a dialog. **done (M3a): inline “Parts in …” under the tree: steps with show/hide, select, extract, move to step** |
 | Assembly Corrector (Python engine) | ModelsPanel.tsx:266-292 | — | superseded? | native `--correct` already; confirm with owner |
 | Batch export selected / all submodules | ModelsPanel.tsx:294-305 | 9 | P (bmexport) | |
-| Breadcrumb back to main model | App.tsx:306 | 8 | — | |
+| Breadcrumb back to main model | App.tsx:306 | 8 | — | **done (M3a): glass breadcrumb over the viewport; ⌘↑ goes back a level** |
 
 ## 3. Parts and colours
 
@@ -65,7 +65,7 @@ that opens the AI panel, and the Checks panel that has no rail button.
 | Placement-hint and mirrored-pose options | PartsPanel.tsx | 8 | N | |
 | Click to add, drag into viewport to snap, drag onto timeline Parts lane | PartsPanel.tsx | 8 | N (no snap-on-drag) | connector-graph snapping |
 | Replace part | Inspector.tsx:308 | 8 | N | **done (M2): Object ▸ Replace Part… searches the library by number and description** |
-| Colour swatches (groups, search, recent), colour for new parts | ColorSwatches.tsx | 8 | P (colour table) | |
+| Colour swatches (groups, search, recent), colour for new parts | ColorSwatches.tsx | 8 | P (colour table) | **partial (M3a): Solid/Transparent/Metallic groups, search by name or code, last 8 recent; the colour for new parts is M3b** |
 
 ## 4. Viewport
 
@@ -80,9 +80,9 @@ that opens the AI panel, and the Checks panel that has no rail button.
 | Frame all, zoom −/%/+ | ViewportChrome.tsx:197 | 8 | P | |
 | Nav gizmo, view label, hidden-pieces chip, laid-out chip | NavGizmo.tsx, Viewport.tsx | 8 | N | |
 | Joint card: hinge/ball angle, turn, select rigid group, detach | Viewport.tsx:2241 | 8 | P (bm/kin) | joints from the native connection graph |
-| Mouse: click/shift-click, marquee, drag move, orbit/pan/zoom, context menu, double-click submodel | Viewport.tsx | 8 | P (pick) | trackpad pinch/rotate/two-finger pan. **partial (M2): click, ⇧-click, marquee (⌥ touching), double-click a submodel use, orbit/pan/zoom; dragging a piece itself and the context menu are M3** |
-| Piece context menu (what fits, turn waiting piece, frame, fit together, open submodel, show/lay out step, organize, move to step, rotate, raise/lower plate, clipboard, clone, use colour, hide, select ▸ same part/colour/touching/connected/step/all, delete) | PieceMenu.tsx | 8 | N | "connected" from real joints |
-| Empty-space menu | PieceMenu.tsx:135 | 8 | — | |
+| Mouse: click/shift-click, marquee, drag move, orbit/pan/zoom, context menu, double-click submodel | Viewport.tsx | 8 | P (pick) | trackpad pinch/rotate/two-finger pan. **partial (M2): click, ⇧-click, marquee (⌥ touching), double-click a submodel use, orbit/pan/zoom; dragging a piece itself and the context menu are M3**. **partial (M3a): the context menu is in; a double click on a use already selected opens it. Dragging a piece itself is M3b** |
+| Piece context menu (what fits, turn waiting piece, frame, fit together, open submodel, show/lay out step, organize, move to step, rotate, raise/lower plate, clipboard, clone, use colour, hide, select ▸ same part/colour/touching/connected/step/all, delete) | PieceMenu.tsx | 8 | N | "connected" from real joints. **partial (M3a): frame, open submodel, move to step, rotate, raise/lower, clipboard, recent colours, use this colour, hide, Select ▸, make/extract submodel, make unique, delete; what fits, fit together and lay out are M3b/M4** |
+| Empty-space menu | PieceMenu.tsx:135 | 8 | — | **done (M3a): paste, select all, show all, fit all, view presets ▸, New Submodel…** |
 | Flight path editing (double-click adds point, select points) | flightPathOverlay.ts | 9 | N | |
 
 ## 5. Editing
@@ -94,17 +94,17 @@ that opens the AI panel, and the Checks panel that has no rail button.
 | Delete, hide, isolate, show all, select all/none | keymap.ts | 8 | N | **done (M2)** |
 | Placing mode: Tab cycles grip, R turns, Esc cancels | Viewport.tsx:1553 | 8 | N | |
 | Collision-refused edits shown red and explained | ChecksPanel.tsx:47 | 8 | P (collide) | |
-| Inspector Selection: make submodule, extract, move to model, fit, group, duplicate, delete, ways to fit, marks/tags, transform fields, flies-in-from editor, part info, model overview | Inspector.tsx:174-298 | 8 | N | |
-| Inspector Part: replace, refused-edit reason, checks, connections, colour, step | Inspector.tsx:300-339 | 8 | P | |
-| New submodel dialog | NewSubmodelDialog.tsx | 8 | N | |
+| Inspector Selection: make submodule, extract, move to model, fit, group, duplicate, delete, ways to fit, marks/tags, transform fields, flies-in-from editor, part info, model overview | Inspector.tsx:174-298 | 8 | N | **partial (M3a): parts with counts, colour, step, make submodel, move to model, extract, duplicate, delete, model overview; group, tags, ways to fit, flies-in-from are M3b/M4** |
+| Inspector Part: replace, refused-edit reason, checks, connections, colour, step | Inspector.tsx:300-339 | 8 | P | **partial (M3a): part, colour, step, submodel path with Open, Make Unique, Replace, X/Y/Z fields and 90° turns; checks and connections are M3b** |
+| New submodel dialog | NewSubmodelDialog.tsx | 8 | N | **done (M3a): a name sheet with a free name offered** |
 
 ## 6. Steps and build order
 
 | Feature | Web | Phase | Engine | Exceeds web by |
 |---|---|---|---|---|
-| Step list: show all, auto-split banner, drag reorder, play, edit, expand submodels | StepsPanel.tsx | 8 | P (steps read) | |
-| Step editor: title, notes, pause, piece order, split, gather, merge | StepsPanel.tsx:44-125 | 8 | N | |
-| Step menu: select, pin order, gather, insert, move, delete | StepsPanel.tsx:317-352 | 8 | N | |
+| Step list: show all, auto-split banner, drag reorder, play, edit, expand submodels | StepsPanel.tsx | 8 | P (steps read) | **partial (M3a): list with counts, pause/pin badges and “auto”, drag reorder, select, edit; play and expand submodels are M4** |
+| Step editor: title, notes, pause, piece order, split, gather, merge | StepsPanel.tsx:44-125 | 8 | N | **done (M3a): popover with title, notes, pause (0–10 s), piece order by drag, split and merge; typing is one undo step** |
+| Step menu: select, pin order, gather, insert, move, delete | StepsPanel.tsx:317-352 | 8 | N | **done (M3a): select, insert before/after, split, merge, gather selection, pin order, edit, delete** |
 | Step callout: prev/next/all, parts, stop here / play step / play to end, separated/laid out/exploded/assembled | StepCallout.tsx | 8 | P | |
 
 ## 7. Timelines

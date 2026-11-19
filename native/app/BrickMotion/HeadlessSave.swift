@@ -1,4 +1,4 @@
-// --open <file> [--edit-move piece dx dy dz] --save-to <out.brickmotion>: opens as the app does
+// --open <file> [--edit-move piece dx dy dz] [--edit-structure] --save-to <out.brickmotion>: opens as the app does
 // (an import becomes an untitled project), edits, and saves through NSDocument's own Save As, the
 // path ⌘S takes on an untitled document. For tests; shows nothing.
 import AppKit
@@ -32,6 +32,12 @@ import BMApp
     pieces.push_back(piece)
     document.perform { document.session.move(pieces, bmapp.Vec3(x: dx, y: dy, z: dz), false) }
   }
+  if args.contains("--edit-structure") {
+    if let why = editStructure(document) {
+      print("save-to: \(why)")
+      return 1
+    }
+  }
   var finished = false, failure: (any Error)?
   document.save(to: URL(fileURLWithPath: out), ofType: DocumentController.projectType, for: .saveAsOperation) { error in
     failure = error
@@ -49,4 +55,33 @@ import BMApp
   }
   print("save-to: ok (\(document.session.pieceCount()) pieces)")
   return 0
+}
+
+/// The structure edits import_check saves and reads back: three loose pieces made into "Sub", a
+/// first step "Base" with a 1.5 s pause, a loose piece moved into it, "Sub" renamed "Sub A".
+/// Returns why one was refused, or nil.
+@MainActor private func editStructure(_ document: Document) -> String? {
+  let s = document.session
+  /// The first `n` pieces of the root model itself (not inside a submodel).
+  func loose(_ n: Int) -> [UInt32] {
+    s.selectAll()
+    let found = s.snapshot().selected.filter { $0.submodelPath.empty() }.prefix(n).map { $0.piece }
+    s.selectNone()
+    return Array(found)
+  }
+  var fields = bmapp.StepFields()
+  fields.title = "Base"
+  fields.pauseAfter = 1.5
+  let edits: [(String, () -> bmapp.Changed)] = [
+    ("make submodel", { s.makeSubmodel(ViewportView.list(loose(3)), "Sub") }),
+    ("insert step", { s.insertStep(0) }),
+    ("step fields", { s.setStepFields(0, fields, false) }),
+    ("move to step", { s.moveToStep(ViewportView.list(loose(1)), 0) }),
+    ("rename", { s.renameSubmodel("Sub", "Sub A") }),
+  ]
+  for (name, edit) in edits {
+    let changed = document.perform(edit)
+    if !changed.refused.empty() { return "\(name) refused: \(String(changed.refused))" }
+  }
+  return nil
 }
