@@ -77,6 +77,21 @@ class Session {
   /// Goes up with every change, undo and redo included.
   uint64_t version() const;
 
+  // Selection and hiding are view state: not commands, not undone, not saved. Both follow the
+  // pieces through edits (a piece deleted drops out).
+
+  void select(const std::vector<uint32_t>& pieces, SelectMode mode);
+  /// Every piece not hidden.
+  void selectAll();
+  void selectNone();
+  std::vector<uint32_t> selection() const;
+  /// Hidden pieces are neither drawn nor picked, whatever the build's playback shows.
+  void hide(const std::vector<uint32_t>& pieces);
+  void showAll();
+  std::vector<uint32_t> hidden() const;
+  /// Cheap: made once per version and selection change.
+  Snapshot snapshot() const;
+
   /// This session's address, so a caller can check a Viewport was made against it.
   uintptr_t address() const { return reinterpret_cast<uintptr_t>(this); }
 

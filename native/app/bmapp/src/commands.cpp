@@ -381,6 +381,7 @@ void reflatten(Session::Impl& s) {
   bm::doc::Flat flat = bm::doc::flatten(s.source, *s.library, *s.full);
   if (s.model) *s.model = std::move(flat.model);
   else s.model = std::make_unique<bm::Model>(std::move(flat.model));
+  s.previousRefs = std::move(s.refs);
   s.refs = std::move(flat.refs);
   s.local = std::move(flat.local);
   s.body = std::move(flat.body);

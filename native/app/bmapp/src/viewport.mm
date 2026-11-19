@@ -3,6 +3,7 @@
 #import <QuartzCore/QuartzCore.h>
 #include <algorithm>
 #include <cmath>
+#include <deque>
 #include <dispatch/dispatch.h>
 #include <exception>
 #include <mutex>
@@ -51,6 +52,7 @@ struct Viewport::Impl {
   std::optional<bmtools::Planned> planned;  ///< taken from the job on the main thread
   uint64_t plannedVersion = 0;               ///< the session's version it was planned from
   uint64_t seen = 0;                         ///< the session's version last drawn
+  uint64_t seenSelection = 0, seenHidden = 0;  ///< the session's view state last sent to the renderer
   std::string planError;
   bool playing = false, wantPlay = false, userMoved = false;
   double frame = -1;  ///< -1 until planned: the model is shown finished
@@ -65,23 +67,79 @@ struct Viewport::Impl {
     if (playing) userMoved = true;
   }
 
-  /// The document was edited: a plan of the old model, finished or not, is dropped.
+  /// Sends the session's selection and hiding to the renderer when they have changed.
+  void syncView() {
+    const Session::Impl& s = session->impl();
+    if (seenHidden != s.hiddenStamp) {
+      seenHidden = s.hiddenStamp;
+      renderer->setHidden(s.hidden);
+      dirty = true;
+    }
+    if (seenSelection != s.selectionStamp) {
+      seenSelection = s.selectionStamp;
+      renderer->select(s.selection);
+      dirty = true;
+    }
+  }
+
+  /// The document was edited: the renderer catches up with the edits it has not drawn, and a
+  /// plan of the old model, finished or not, is dropped.
   void follow() {
     const uint64_t now = session->version();
-    if (now == seen) return;
-    seen = now;
-    if (job) {
-      job->cancel.cancel();  // the planning block holds its own reference
-      job.reset();
+    if (now != seen) {
+      if (job) {
+        job->cancel.cancel();  // the planning block holds its own reference
+        job.reset();
+      }
+      if (planned) {
+        planned.reset();
+        renderer->setRest();
+      }
+      catchUp(now);
+      seen = now;
+      frame = -1;
+      playing = wantPlay = false;
+      planError.clear();
+      dirty = true;
     }
-    if (planned) {
-      planned.reset();
-      renderer->setRest();
+    if (renderer) syncView();
+  }
+
+  /// Applies the edits after `seen`: in place when none changed the structure and all are still
+  /// in the session's log, else by building the scene again.
+  void catchUp(uint64_t now) {
+    if (!renderer) return;
+    const std::deque<Changed>& log = session->impl().changes;
+    bool rebuild = log.empty() || log.front().version > seen + 1 || log.back().version != now;
+    std::vector<uint32_t> moved, recolored;
+    for (const Changed& c : log) {
+      if (c.version <= seen) continue;
+      if (c.structure) rebuild = true;
+      moved.insert(moved.end(), c.moved.begin(), c.moved.end());
+      recolored.insert(recolored.end(), c.recolored.begin(), c.recolored.end());
     }
-    frame = -1;
-    playing = wantPlay = false;
-    planError.clear();
-    dirty = true;
+    if (rebuild) {
+      renderer->modelChanged(*model());
+      seenSelection = seenHidden = UINT64_MAX;  // pieces may have new indexes: send both again
+      return;
+    }
+    auto tidy = [](std::vector<uint32_t>& v) {
+      std::sort(v.begin(), v.end());
+      v.erase(std::unique(v.begin(), v.end()), v.end());
+    };
+    tidy(moved), tidy(recolored);
+    if (!moved.empty()) renderer->modelChanged(*model(), &moved);
+    if (!recolored.empty()) renderer->recolored(recolored);
+  }
+
+  /// A point's place in the picture, in points from the top left; false when it is behind the eye.
+  bool project(const bmr::Mat4& viewProj, bm::Vec3 p, double& x, double& y) const {
+    float clip[4];
+    bmr::transform(viewProj, p, clip);
+    if (clip[3] <= 1e-6f) return false;
+    x = (clip[0] / clip[3] + 1) / 2 * width / scale;
+    y = (1 - clip[1] / clip[3]) / 2 * height / scale;
+    return true;
   }
 
   void startPlanning() {
@@ -327,6 +385,69 @@ void Viewport::seek(double seconds) {
   if (!v.planned) return;
   v.playing = false;
   v.showFrame(seconds * v.fps());
+}
+
+uint32_t Viewport::pick(double xPoints, double yPoints) {
+  Impl& v = *impl_;
+  if (!v.ok) return UINT32_MAX;
+  return v.renderer->pick(static_cast<int>(std::floor(xPoints * v.scale)), static_cast<int>(std::floor(yPoints * v.scale)));
+}
+
+std::vector<uint32_t> Viewport::marquee(double x0, double y0, double x1, double y1, bool touching) {
+  Impl& v = *impl_;
+  std::vector<uint32_t> out;
+  if (!v.ok || v.width <= 0 || v.height <= 0) return out;
+  v.follow();
+  if (x0 > x1) std::swap(x0, x1);
+  if (y0 > y1) std::swap(y0, y1);
+  const bmr::Scene& scene = v.renderer->scene();
+  const bmr::Camera camera = v.orbit.camera(v.aspect(), scene.bounds);
+  const bmr::Mat4 viewProj = bmr::multiply(bmr::projectionMatrix(camera), bmr::viewMatrix(camera, scene.origin));
+  for (const bmr::Group& g : scene.groups) {
+    const bm::Box& b = g.partBox;
+    if (b.empty()) continue;
+    for (const bmr::Instance& in : g.instances) {
+      if (in.flags & bmr::kNotShown) continue;
+      // The part's box, placed as drawn now, seen through the camera.
+      double left = 1e300, top = 1e300, right = -1e300, bottom = -1e300;
+      bool behind = false;
+      for (int corner = 0; corner < 8; corner++) {
+        const bm::Vec3 c{corner & 1 ? b.max.x : b.min.x, corner & 2 ? b.max.y : b.min.y, corner & 4 ? b.max.z : b.min.z};
+        const float* m = in.model;
+        const bm::Vec3 p{m[0] * c.x + m[1] * c.y + m[2] * c.z + m[3], m[4] * c.x + m[5] * c.y + m[6] * c.z + m[7], m[8] * c.x + m[9] * c.y + m[10] * c.z + m[11]};
+        double x = 0, y = 0;
+        if (!v.project(viewProj, p, x, y)) {
+          behind = true;
+          break;
+        }
+        left = std::min(left, x), right = std::max(right, x), top = std::min(top, y), bottom = std::max(bottom, y);
+      }
+      if (behind) continue;
+      const bool inside = left >= x0 && right <= x1 && top >= y0 && bottom <= y1;
+      const bool meets = left <= x1 && right >= x0 && top <= y1 && bottom >= y0;
+      if (touching ? meets : inside) out.push_back(in.piece);
+    }
+  }
+  std::sort(out.begin(), out.end());
+  return out;
+}
+
+void Viewport::showSelection() {
+  if (!impl_->ok) return;
+  impl_->follow();
+}
+
+void Viewport::frameSelection() {
+  Impl& v = *impl_;
+  if (!v.ok) return;
+  v.follow();
+  const bm::Box box = v.renderer->selectionBounds();
+  if (box.empty()) {
+    v.fit(v.orbit.azimuth, v.orbit.elevation);
+    return;
+  }
+  v.orbit = bmr::OrbitCamera::fitted(box, v.orbit.fovY, v.aspect(), v.orbit.azimuth, v.orbit.elevation);
+  v.moved();
 }
 
 PlanState Viewport::planState() const {

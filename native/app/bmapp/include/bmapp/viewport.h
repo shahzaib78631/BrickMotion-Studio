@@ -93,6 +93,19 @@ class Viewport {
   /// the plan (and stops a planning run), so playing again plans the edited model.
   uint64_t plannedVersion() const;
 
+  // Points are from the top left of the view.
+
+  /// The piece drawn at that point in the last frame; UINT32_MAX for none. Hidden pieces are
+  /// never picked.
+  uint32_t pick(double xPoints, double yPoints);
+  /// The pieces shown in the rectangle between two corners, in either order: wholly inside it,
+  /// or with `touching` any that reach into it. Sorted.
+  std::vector<uint32_t> marquee(double x0, double y0, double x1, double y1, bool touching);
+  /// Outlines the session's selection now (a frame drawn does so too).
+  void showSelection();
+  /// Brings the selection into view from the same side; everything when nothing shown is selected.
+  void frameSelection();
+
   struct Impl;
 
  private:
