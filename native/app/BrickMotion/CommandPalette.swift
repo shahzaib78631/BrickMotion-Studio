@@ -9,6 +9,8 @@ struct PaletteItem: Identifiable {
   let title: String
   let symbol: String?
   let shortcut: String
+  /// The menu it is in, shown when another row has the same title.
+  var detail = ""
   /// The registry command it runs, if it is one.
   let command: String?
   let run: @MainActor () -> Void
@@ -18,10 +20,16 @@ struct PaletteItem: Identifiable {
 /// submodel to open, each step to go to.
 @MainActor func paletteItems(_ context: CommandContext) -> [PaletteItem] {
   var out: [PaletteItem] = []
-  for c in Registry.all where c.menu != .none && c.id != "view.palette" && c.enabled(context) {
+  let menuNames: [MenuPlace: String] = [.file: "File", .edit: "Edit", .select: "Select", .object: "Object", .step: "Step", .view: "View"]
+  // The document's own commands (File) after the model's, so a tie goes to editing the model.
+  let ordered = Registry.all.filter { $0.menu != .file } + Registry.all.filter { $0.menu == .file }
+  for c in ordered where c.menu != .none && c.id != "view.palette" && c.enabled(context) {
     let title = c.titleFor?(context) ?? c.title
-    out.append(PaletteItem(id: c.id, title: title, symbol: c.symbol, shortcut: c.shortcut, command: c.id, run: { c.run(context) }))
+    out.append(PaletteItem(id: c.id, title: title, symbol: c.symbol, shortcut: c.shortcut, detail: menuNames[c.menu] ?? "", command: c.id,
+                           run: { c.run(context) }))
   }
+  let titles = Dictionary(grouping: out, by: \.title)
+  for i in out.indices where titles[out[i].title]?.count ?? 0 < 2 { out[i].detail = "" }
   guard let session = context.session else { return out }
   var seen = Set<String>()
   let path = session.focusPath().map { String($0) }
@@ -87,6 +95,8 @@ func paletteMatches(_ query: String, in items: [PaletteItem], recent: [String] =
 
 @MainActor final class CommandPalette: NSPanel {
   private static var current: CommandPalette?
+  /// --snapshot's app is never active: there the palette must not close or hide for that.
+  static var keepWhenInactive = false
   static let width: CGFloat = 560
   private static let recentKey = "paletteRecent"
 
@@ -112,7 +122,7 @@ func paletteMatches(_ query: String, in items: [PaletteItem], recent: [String] =
     backgroundColor = .clear
     isOpaque = false
     hasShadow = true
-    hidesOnDeactivate = false  // it closes when it stops being key
+    hidesOnDeactivate = !Self.keepWhenInactive
     let recent = UserDefaults.standard.stringArray(forKey: Self.recentKey) ?? []
     let view = PaletteView(items: paletteItems(context), recent: recent, query: query,
                            pick: { [weak self] item in
@@ -140,9 +150,8 @@ func paletteMatches(_ query: String, in items: [PaletteItem], recent: [String] =
 
   override func resignKey() {
     super.resignKey()
-    // Another window took the keyboard: the palette goes, as a menu would. (Not when nothing in
-    // the app is active, as in a --snapshot run.)
-    if isVisible && NSApp.isActive { close() }
+    // Another window took the keyboard: the palette goes, as a menu would.
+    if isVisible && !Self.keepWhenInactive { close() }
   }
 
   override func close() {
@@ -174,6 +183,9 @@ private struct PaletteView: View {
           .font(.title3)
           .focused($focused)
           .onSubmit { if results.indices.contains(index) { pick(results[index]) } }
+          // On the field itself: it has the keyboard and would take ↑↓ before an ancestor.
+          .onKeyPress(.downArrow) { index = min(index + 1, max(results.count - 1, 0)); return .handled }
+          .onKeyPress(.upArrow) { index = max(index - 1, 0); return .handled }
       }
       .padding(.horizontal, 16)
       .padding(.vertical, 14)
@@ -201,8 +213,6 @@ private struct PaletteView: View {
     .onAppear { focused = true; resize(height) }
     .onChange(of: height) { resize(height) }
     .onChange(of: query) { index = 0 }
-    .onKeyPress(.downArrow) { index = min(index + 1, max(results.count - 1, 0)); return .handled }
-    .onKeyPress(.upArrow) { index = max(index - 1, 0); return .handled }
     .onExitCommand { cancel() }
   }
 }
@@ -217,6 +227,9 @@ private struct PaletteRow: View {
         .frame(width: 20)
         .foregroundStyle(chosen ? .white : .secondary)
       Text(item.title).lineLimit(1)
+      if !item.detail.isEmpty {
+        Text(item.detail).font(.callout).foregroundStyle(chosen ? .white.opacity(0.7) : .secondary)
+      }
       Spacer()
       if !item.shortcut.isEmpty {
         Text(item.shortcut).font(.callout.monospaced()).foregroundStyle(chosen ? .white.opacity(0.85) : .secondary)

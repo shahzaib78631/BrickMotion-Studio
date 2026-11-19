@@ -100,7 +100,10 @@ enum Snapshot {
       controller.model.refresh()
       controller.model.inspectorTab = tab
     }
-    if let q = request.palette { CommandPalette.show(over: window, query: q) }
+    if let q = request.palette {
+      CommandPalette.keepWhenInactive = true
+      CommandPalette.show(over: window, query: q)
+    }
     if let k = request.editStep {
       controller.model.sidebarTab = .steps
       controller.model.editingStep = k

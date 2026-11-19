@@ -75,6 +75,18 @@ import BMApp
   turn()
   if !model.snapshot.focus.empty() { return fail("back left focus \(model.snapshot.focus)") }
 
+  // 5b. A clicked row stays selected in the tree, and ⇧-click adds rows.
+  guard let root = model.outline.first else { return fail("no root row") }
+  model.select(row: use, extend: false)
+  turn()
+  if model.selectedRows != [use.id] { return fail("a clicked row left the tree selection \(model.selectedRows)") }
+  model.select(row: root, extend: true)
+  turn()
+  if model.selectedRows != [use.id, root.id] { return fail("⇧-click left the tree selection \(model.selectedRows)") }
+  view.select([], .Replace)
+  turn()
+  if !model.selectedRows.isEmpty { return fail("a viewport selection kept the tree's rows \(model.selectedRows)") }
+
   // 6. A query keeps the rows that match and their ancestors, nothing else.
   let word = String(String(use.row.name).prefix(4)).lowercased()
   model.outlineQuery = word
@@ -155,7 +167,7 @@ import BMApp
   if paletteMatches("msub", in: items).first?.title != "Make Submodel from Selection…" {
     return fail("\"msub\" ranks \(paletteMatches("msub", in: items).prefix(3).map(\.title)) first")
   }
-  if paletteMatches("dup", in: items).first?.title != "Duplicate" {
+  if paletteMatches("dup", in: items).first?.command != "edit.duplicate" {
     return fail("\"dup\" ranks \(paletteMatches("dup", in: items).prefix(3).map(\.title)) first")
   }
 

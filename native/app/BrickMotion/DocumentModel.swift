@@ -60,7 +60,6 @@ enum SidebarTab: String, CaseIterable { case models, steps, parts }
   init(document: Document) {
     self.document = document
     snapshot = document.session.snapshot()
-    colors = Dictionary(document.session.colors().map { ($0.code, $0) }, uniquingKeysWith: { a, _ in a })
     refresh()
     observer = NotificationCenter.default.addObserver(forName: Document.didChange, object: document, queue: .main) { [weak self] _ in
       MainActor.assumeIsolated { self?.refresh() }
@@ -76,6 +75,10 @@ enum SidebarTab: String, CaseIterable { case models, steps, parts }
   /// After any change: a new snapshot, and the tree and steps when the structure moved.
   func refresh() {
     let session = document.session
+    // A new document has no library until it gets pieces: the table is read once there is one.
+    if colors.isEmpty {
+      colors = Dictionary(session.colors().map { ($0.code, $0) }, uniquingKeysWith: { a, _ in a })
+    }
     let before = snapshot.selection.count
     snapshot = session.snapshot()
     let after = snapshot.selection.count
@@ -147,13 +150,11 @@ enum SidebarTab: String, CaseIterable { case models, steps, parts }
     var pieces = Set<UInt32>()
     for id in ids { for p in document.session.piecesOfRow(std.string(id)) { pieces.insert(p) } }
     selectedRows = ids
-    let list = pieces.sorted()
-    if let viewport { viewport.select(list, .Replace) } else {
-      document.session.select(ViewportView.list(list), .Replace)
-      document.postChange()
-    }
+    // The session's selection is set (and recorded as the rows') before anyone hears of it, so
+    // the refresh the change notice runs keeps the rows selected.
+    document.session.select(ViewportView.list(pieces.sorted()), .Replace)
     rowPieces = Array(document.session.selection())
-    if rowPieces != Array(snapshot.selection) { snapshot = document.session.snapshot() }
+    if let viewport { viewport.viewStateChanged() } else { document.postChange() }
   }
 
   /// The submodel names from the root down to `row`: the focus that edits it alone.
@@ -216,7 +217,7 @@ enum SidebarTab: String, CaseIterable { case models, steps, parts }
   func items(of step: Int) -> [bmapp.ItemRow] { Array(document.session.stepItems(step)) }
 
   /// The library's colours by code, read once.
-  @ObservationIgnored let colors: [Int32: bmapp.ColorInfo]
+  @ObservationIgnored private(set) var colors: [Int32: bmapp.ColorInfo] = [:]
 
   /// Are all of the step's pieces hidden?
   func isHidden(step: Int) -> Bool {
@@ -236,9 +237,11 @@ enum SidebarTab: String, CaseIterable { case models, steps, parts }
   /// Selects a step's pieces and marks it selected in the Steps pane.
   func select(step k: Int?) {
     guard let k else { return selectedStep = nil }
-    select(pieces: Array(document.session.piecesOfStep(k)))
+    selectedRows = []
+    document.session.select(document.session.piecesOfStep(k), .Replace)
     stepPieces = Array(document.session.selection())
     selectedStep = k
+    if let viewport { viewport.viewStateChanged() } else { document.postChange() }
   }
 
   /// A drag in the Steps pane: List's offsets (the row's place before the move) to the session's.
