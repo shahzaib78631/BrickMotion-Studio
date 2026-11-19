@@ -53,7 +53,8 @@ class Session {
   Changed rotate(const std::vector<uint32_t>& pieces, Vec3 axis, double degrees, Vec3 pivot, bool continuing);
   Changed recolor(const std::vector<uint32_t>& pieces, int colorCode);
   Changed remove(const std::vector<uint32_t>& pieces);
-  /// Copies go into the same def and step as each original, offset in the world.
+  /// Copies go into the same def and step as each original, offset in the world. The copies are
+  /// selected after (paste too).
   Changed duplicate(const std::vector<uint32_t>& pieces, Vec3 offsetLdu);
   /// LDraw text: a type-1 line per piece, at its place in the world.
   std::string copy(const std::vector<uint32_t>& pieces) const;
@@ -76,6 +77,8 @@ class Session {
   void markSaved();
   /// Goes up with every change, undo and redo included.
   uint64_t version() const;
+  /// How many steps undo can go back: a growing drag leaves it, a new step raises it.
+  size_t undoDepth() const;
 
   // Selection and hiding are view state: not commands, not undone, not saved. Both follow the
   // pieces through edits (a piece deleted drops out).
@@ -89,6 +92,12 @@ class Session {
   void hide(const std::vector<uint32_t>& pieces);
   void showAll();
   std::vector<uint32_t> hidden() const;
+  /// The pieces of the root model's use that holds `piece` (just `piece` when it is in the root).
+  std::vector<uint32_t> usePieces(uint32_t piece) const;
+  /// Library parts whose name and description hold every word of `query`: an exact name first,
+  /// then the closest descriptions. Moved and obsolete parts (~) are left out. The first call reads
+  /// the library's part list (once per library, for every session).
+  std::vector<PartMatch> searchParts(const std::string& query, size_t limit) const;
   /// Cheap: made once per version and selection change.
   Snapshot snapshot() const;
 

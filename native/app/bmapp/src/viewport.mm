@@ -450,6 +450,15 @@ void Viewport::frameSelection() {
   v.moved();
 }
 
+Vec3 Viewport::selectionCenter() {
+  Impl& v = *impl_;
+  if (!v.ok) return {};
+  v.follow();
+  const bm::Box box = v.renderer->selectionBounds();
+  const bm::Vec3 c = box.empty() ? v.orbit.target : (box.min + box.max) * 0.5;
+  return {c.x, c.y, c.z};
+}
+
 PlanState Viewport::planState() const {
   const Impl& v = *impl_;
   const uint64_t now = v.session->version();

@@ -4,6 +4,7 @@ module BMApp {
   header "bmapp/session.h"
   header "bmapp/viewport.h"
   header "bmapp/doctypes.h"
+  header "bmapp/keys.h"
   requires cplusplus
   export *
 }

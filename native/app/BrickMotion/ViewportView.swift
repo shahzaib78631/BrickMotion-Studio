@@ -1,11 +1,24 @@
 // The Metal viewport: a CAMetalLayer drawn by bmapp.Viewport only when something changed.
-// Right-drag or two-finger scroll orbits, Shift pans, pinch zooms, rotate turns; Space plays.
+// Click selects (Shift toggles, double-click takes a submodel's whole use), a drag on empty space
+// marquees (Option: touching), right-drag or two-finger scroll orbits, Shift pans, pinch zooms,
+// rotate turns; Space plays. The editing keys are in EditCommands.swift.
 import AppKit
 import BMApp
 import QuartzCore
 
 final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
   let viewport: bmapp.Viewport
+  /// The document edits go through (for their undo); set by the window controller.
+  weak var document: Document? {
+    didSet {
+      // A selector observer: the centre drops it when this view goes.
+      NotificationCenter.default.removeObserver(self, name: Document.didChange, object: nil)
+      NotificationCenter.default.addObserver(self, selector: #selector(documentChanged(_:)), name: Document.didChange, object: document)
+    }
+  }
+  @objc private func documentChanged(_ note: Notification) { changed() }
+  private var pressPoint: NSPoint?
+  private var marqueeLayer: CAShapeLayer?
   /// Called on the main thread when planning starts or ends, for the toolbar's progress.
   var onPlanState: ((bmapp.PlanState) -> Void)?
   private var link: CAMetalDisplayLink?
@@ -72,7 +85,7 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
     updateBackground()
   }
 
-  private var scale: Double { Double(window?.backingScaleFactor ?? 2) }
+  var scale: Double { Double(window?.backingScaleFactor ?? 2) }
 
   private func updateSize() {
     metalLayer.contentsScale = scale
@@ -115,6 +128,70 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
   // MARK: Mouse and trackpad
 
   private func point(_ event: NSEvent) -> NSPoint { convert(event.locationInWindow, from: nil) }
+
+  /// Points from the top left, as the viewport takes them.
+  private func fromTop(_ p: NSPoint) -> (Double, Double) { (p.x, bounds.height - p.y) }
+
+  override func mouseDown(with event: NSEvent) {
+    window?.makeFirstResponder(self)
+    pressPoint = point(event)
+  }
+
+  override func mouseDragged(with event: NSEvent) {
+    guard let start = pressPoint else { return }
+    let p = point(event)
+    if marqueeLayer == nil {
+      guard hypot(p.x - start.x, p.y - start.y) > 3 else { return }
+      let (x, y) = fromTop(start)
+      guard viewport.pick(x, y) == UInt32.max else {  // a drag that starts on a piece is the gizmos' (Task 11)
+        pressPoint = nil
+        return
+      }
+      let shape = CAShapeLayer()
+      shape.fillColor = NSColor.controlAccentColor.withAlphaComponent(0.12).cgColor
+      shape.strokeColor = NSColor.controlAccentColor.cgColor
+      shape.lineWidth = 1
+      shape.contentsScale = scale
+      layer?.addSublayer(shape)
+      marqueeLayer = shape
+    }
+    let rect = NSRect(x: min(start.x, p.x), y: min(start.y, p.y), width: abs(p.x - start.x), height: abs(p.y - start.y))
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    marqueeLayer?.frame = bounds
+    marqueeLayer?.path = CGPath(rect: rect, transform: nil)
+    marqueeLayer?.lineDashPattern = event.modifierFlags.contains(.option) ? [4, 3] : nil  // dashed: touching
+    CATransaction.commit()
+  }
+
+  override func mouseUp(with event: NSEvent) {
+    defer {
+      marqueeLayer?.removeFromSuperlayer()
+      marqueeLayer = nil
+      pressPoint = nil
+    }
+    guard document != nil, let start = pressPoint else { return }
+    let shift = event.modifierFlags.contains(.shift)
+    if marqueeLayer != nil {
+      let (x0, y0) = fromTop(start), (x1, y1) = fromTop(point(event))
+      let found = viewport.marquee(x0, y0, x1, y1, event.modifierFlags.contains(.option))
+      session.select(found, shift ? .Add : .Replace)
+      viewStateChanged()
+      return
+    }
+    let (x, y) = fromTop(point(event))
+    let piece = viewport.pick(x, y)
+    if piece == UInt32.max {
+      if !shift { selectNone(nil) }
+      return
+    }
+    if event.clickCount == 2 {
+      session.select(session.usePieces(piece), shift ? .Add : .Replace)
+    } else {
+      session.select(Self.list([piece]), shift ? .Toggle : .Replace)
+    }
+    viewStateChanged()
+  }
 
   override func rightMouseDown(with event: NSEvent) { lastPoint = point(event) }
 
@@ -165,16 +242,12 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
   // MARK: Keys
 
   override func keyDown(with event: NSEvent) {
-    guard let key = event.charactersIgnoringModifiers?.lowercased(), !event.modifierFlags.contains(.command) else {
-      super.keyDown(with: event)
+    if event.charactersIgnoringModifiers == " " && !event.modifierFlags.contains(.command) {
+      togglePlay()
       return
     }
-    switch key {
-    case " ": togglePlay()
-    case "f": viewport.fitAll()
-    default: super.keyDown(with: event)
-    }
-    changed()
+    if document != nil && editKey(event) { return }
+    super.keyDown(with: event)
   }
 
   @objc func togglePlay(_ sender: Any? = nil) {

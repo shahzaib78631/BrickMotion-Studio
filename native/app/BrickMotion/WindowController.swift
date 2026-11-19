@@ -39,6 +39,7 @@ final class WindowController: NSWindowController, NSToolbarDelegate {
     sidebar.minimumThickness = 220
     sidebar.maximumThickness = 420
     let viewport = ViewportController(session: document.session)
+    viewport.viewportView.document = document
     viewport.viewportView.onPlanState = { [weak self] state in self?.showPlanning(state == .Planning) }
     let content = NSSplitViewItem(viewController: viewport)
     let inspector = NSSplitViewItem(inspectorWithViewController: NSHostingController(rootView: InspectorPlaceholder()))

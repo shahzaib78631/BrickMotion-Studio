@@ -105,6 +105,9 @@ class Viewport {
   void showSelection();
   /// Brings the selection into view from the same side; everything when nothing shown is selected.
   void frameSelection();
+  /// The middle of the selection's box as shown, the pivot R turns about; the view's target when
+  /// nothing shown is selected.
+  Vec3 selectionCenter();
 
   struct Impl;
 

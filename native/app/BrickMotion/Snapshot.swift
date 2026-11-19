@@ -11,8 +11,9 @@ struct SnapshotRequest {
   var appearance: NSAppearance.Name? = nil
   var playTo: Double? = nil
   var report: String? = nil
+  var select: [UInt32] = []
 
-  /// Reads `--snapshot out.png --open file [--size WxH] [--appearance light|dark] [--play-to s] [--report json]`.
+  /// Reads `--snapshot out.png --open file [--size WxH] [--appearance light|dark] [--play-to s] [--report json] [--select n...]`.
   static func parse(_ args: [String]) -> SnapshotRequest? {
     guard let i = args.firstIndex(of: "--snapshot"), i + 1 < args.count else { return nil }
     var r = SnapshotRequest()
@@ -30,6 +31,9 @@ struct SnapshotRequest {
     if let a = value("--appearance") { r.appearance = a == "dark" ? .darkAqua : .aqua }
     if let t = value("--play-to") { r.playTo = Double(t) }
     r.report = value("--report")
+    if let j = args.firstIndex(of: "--select") {
+      r.select = args[(j + 1)...].prefix { UInt32($0) != nil }.compactMap { UInt32($0) }
+    }
     return r
   }
 }
@@ -56,6 +60,12 @@ enum Snapshot {
     window.layoutIfNeeded()
     let viewportView = controller.viewportController.viewportView
     let viewport = viewportView.viewport
+
+    if !request.select.isEmpty {
+      var pieces = bmapp.PieceList()
+      for p in request.select { pieces.push_back(p) }
+      document.session.select(pieces, .Replace)
+    }
 
     if let t = request.playTo {
       viewport.play(true)

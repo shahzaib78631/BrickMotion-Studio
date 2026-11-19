@@ -11,7 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }
 }
 
-enum MainMenu {
+@MainActor enum MainMenu {
   static func make() -> NSMenu {
     let main = NSMenu()
     let appName = "BrickMotion"
@@ -48,11 +48,38 @@ enum MainMenu {
     let edit = NSMenu(title: "Edit")
     edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
     edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z").keyEquivalentModifierMask = [.command, .shift]
+    edit.addItem(.separator())
+    edit.addItem(withTitle: "Cut", action: #selector(ViewportView.cut(_:)), keyEquivalent: "x")
+    edit.addItem(withTitle: "Copy", action: #selector(ViewportView.copy(_:)), keyEquivalent: "c")
+    edit.addItem(withTitle: "Paste", action: #selector(ViewportView.paste(_:)), keyEquivalent: "v")
+    edit.addItem(withTitle: "Duplicate", action: #selector(ViewportView.duplicatePieces(_:)), keyEquivalent: "d")
+    edit.addItem(withTitle: "Delete", action: #selector(ViewportView.deletePieces(_:)), keyEquivalent: "")
+    edit.addItem(.separator())
+    edit.addItem(withTitle: "Select All", action: #selector(NSResponder.selectAll(_:)), keyEquivalent: "a")
+    edit.addItem(withTitle: "Select None", action: #selector(ViewportView.selectNone(_:)), keyEquivalent: "")
+    edit.addItem(.separator())
+    edit.addItem(withTitle: "Hide", action: #selector(ViewportView.hidePieces(_:)), keyEquivalent: "")
+    edit.addItem(withTitle: "Hide Others", action: #selector(ViewportView.hideOtherPieces(_:)), keyEquivalent: "")
+    edit.addItem(withTitle: "Show All", action: #selector(ViewportView.showAllPieces(_:)), keyEquivalent: "")
     main.addItem(withTitle: "Edit", action: nil, keyEquivalent: "").submenu = edit
+
+    let object = NSMenu(title: "Object")
+    object.addItem(withTitle: "Rotate 90° Clockwise", action: #selector(ViewportView.rotatePieces(_:)), keyEquivalent: "")
+    object.addItem(withTitle: "Rotate 90° Counterclockwise", action: #selector(ViewportView.rotatePiecesBack(_:)), keyEquivalent: "")
+    object.addItem(.separator())
+    object.addItem(withTitle: "Raise", action: #selector(ViewportView.raisePieces(_:)), keyEquivalent: "")
+    object.addItem(withTitle: "Lower", action: #selector(ViewportView.lowerPieces(_:)), keyEquivalent: "")
+    object.addItem(.separator())
+    object.addItem(withTitle: "Make Unique", action: #selector(ViewportView.makeUnique(_:)), keyEquivalent: "")
+    object.addItem(withTitle: "Replace Part…", action: #selector(ViewportView.replacePart(_:)), keyEquivalent: "")
+    main.addItem(withTitle: "Object", action: nil, keyEquivalent: "").submenu = object
 
     let view = NSMenu(title: "View")
     view.addItem(withTitle: "Show Sidebar", action: #selector(NSSplitViewController.toggleSidebar(_:)), keyEquivalent: "s").keyEquivalentModifierMask = [.command, .control]
     view.addItem(withTitle: "Show Inspector", action: #selector(NSSplitViewController.toggleInspector(_:)), keyEquivalent: "i").keyEquivalentModifierMask = [.command, .option]
+    view.addItem(.separator())
+    view.addItem(withTitle: "Fit All", action: #selector(ViewportView.fitAll(_:)), keyEquivalent: "")
+    view.addItem(withTitle: "Frame Selection", action: #selector(ViewportView.frameSelection(_:)), keyEquivalent: "f")
     view.addItem(.separator())
     view.addItem(withTitle: "Enter Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f").keyEquivalentModifierMask = [.command, .control]
     main.addItem(withTitle: "View", action: nil, keyEquivalent: "").submenu = view

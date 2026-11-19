@@ -1,7 +1,10 @@
 #include "bmapp/session.h"
 
 #include <algorithm>
+#include <cctype>
 #include <exception>
+#include <fstream>
+#include <mutex>
 #include <iterator>
 #include <map>
 #include <set>
@@ -113,7 +116,8 @@ std::vector<uint32_t> carried(const std::vector<uint32_t>& pieces, const std::ve
 }
 
 /// After an edit: logs it for the viewports, and after a reflatten carries the view state over.
-Changed edited(Session::Impl& s, uint64_t before, Changed c) {
+/// With `selectNew` the pieces the edit made become the selection.
+Changed edited(Session::Impl& s, uint64_t before, Changed c, bool selectNew = false) {
   if (c.version == before) return c;
   s.changes.push_back(c);
   while (s.changes.size() > Session::Impl::kChangesKept) s.changes.pop_front();
@@ -121,7 +125,15 @@ Changed edited(Session::Impl& s, uint64_t before, Changed c) {
     std::map<std::vector<bm::doc::ItemId>, uint32_t> now;
     if (!s.selection.empty() || !s.hidden.empty())
       for (uint32_t p = 0; p < s.refs.size(); p++) now.emplace(s.refs[p].chain, p);
-    s.selection = carried(s.selection, s.previousRefs, now);
+    if (selectNew) {
+      std::set<std::vector<bm::doc::ItemId>> old;
+      for (const bm::doc::PieceRef& r : s.previousRefs) old.insert(r.chain);
+      s.selection.clear();
+      for (uint32_t p = 0; p < s.refs.size(); p++)
+        if (!old.count(s.refs[p].chain)) s.selection.push_back(p);
+    } else {
+      s.selection = carried(s.selection, s.previousRefs, now);
+    }
     s.hidden = carried(s.hidden, s.previousRefs, now);
     s.previousRefs.clear();
     s.selectionStamp++, s.hiddenStamp++;
@@ -139,10 +151,11 @@ std::vector<uint32_t> known(const std::vector<uint32_t>& pieces, size_t count) {
 }
 }  // namespace
 
-#define BM_EDIT(call) \
+#define BM_EDIT(call) BM_EDIT_SELECTING(call, false)
+#define BM_EDIT_SELECTING(call, selectNew) \
   if (!impl_->model) return Changed{}; \
   const uint64_t before = impl_->version; \
-  return edited(*impl_, before, call)
+  return edited(*impl_, before, call, selectNew)
 
 Changed Session::move(const std::vector<uint32_t>& pieces, Vec3 delta, bool continuing) { BM_EDIT(moveCommand(*impl_, pieces, engine(delta), continuing)); }
 Changed Session::rotate(const std::vector<uint32_t>& pieces, Vec3 axis, double degrees, Vec3 pivot, bool continuing) {
@@ -150,14 +163,15 @@ Changed Session::rotate(const std::vector<uint32_t>& pieces, Vec3 axis, double d
 }
 Changed Session::recolor(const std::vector<uint32_t>& pieces, int code) { BM_EDIT(recolorCommand(*impl_, pieces, code)); }
 Changed Session::remove(const std::vector<uint32_t>& pieces) { BM_EDIT(removeCommand(*impl_, pieces)); }
-Changed Session::duplicate(const std::vector<uint32_t>& pieces, Vec3 offset) { BM_EDIT(duplicateCommand(*impl_, pieces, engine(offset))); }
+Changed Session::duplicate(const std::vector<uint32_t>& pieces, Vec3 offset) { BM_EDIT_SELECTING(duplicateCommand(*impl_, pieces, engine(offset)), true); }
 std::string Session::copy(const std::vector<uint32_t>& pieces) const { return impl_->model ? copyText(*impl_, pieces) : ""; }
-Changed Session::paste(const std::string& text, Vec3 offset) { BM_EDIT(pasteCommand(*impl_, text, engine(offset))); }
+Changed Session::paste(const std::string& text, Vec3 offset) { BM_EDIT_SELECTING(pasteCommand(*impl_, text, engine(offset)), true); }
 Changed Session::replacePart(const std::vector<uint32_t>& pieces, const std::string& part) { BM_EDIT(replaceCommand(*impl_, pieces, part)); }
 Changed Session::makeUnique(uint32_t piece) { BM_EDIT(makeUniqueCommand(*impl_, piece)); }
 Changed Session::undo() { BM_EDIT(undoCommand(*impl_)); }
 Changed Session::redo() { BM_EDIT(redoCommand(*impl_)); }
 #undef BM_EDIT
+#undef BM_EDIT_SELECTING
 
 void Session::select(const std::vector<uint32_t>& pieces, SelectMode mode) {
   Impl& s = *impl_;
@@ -250,6 +264,102 @@ std::string Session::redoName() const { return canRedo() ? impl_->history.done[i
 bool Session::dirty() const { return impl_->history.saved != static_cast<long>(impl_->history.cursor); }
 void Session::markSaved() { impl_->history.saved = static_cast<long>(impl_->history.cursor); }
 uint64_t Session::version() const { return impl_->version; }
+size_t Session::undoDepth() const { return impl_->history.cursor; }
+
+std::vector<uint32_t> Session::usePieces(uint32_t piece) const {
+  const Impl& s = *impl_;
+  if (piece >= s.refs.size()) return {};
+  const auto& chain = s.refs[piece].chain;
+  if (chain.size() < 2) return {piece};
+  std::vector<uint32_t> out = s.piecesOf.at(chain.front());
+  std::sort(out.begin(), out.end());
+  return out;
+}
+
+namespace {
+std::string folded(std::string_view text) {
+  std::string out;
+  for (char c : text) {
+    const char l = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    if (std::isspace(static_cast<unsigned char>(l))) {
+      if (!out.empty() && out.back() != ' ') out += ' ';
+    } else {
+      out += l;
+    }
+  }
+  if (!out.empty() && out.back() == ' ') out.pop_back();
+  return out;
+}
+
+struct CatalogEntry {
+  std::string name, description, haystack;  ///< haystack: the name and description, folded
+};
+
+/// Every part in <ldraw>/parts with its first line, read once per library directory.
+std::shared_ptr<const std::vector<CatalogEntry>> catalog(const std::string& ldraw) {
+  static std::mutex mutex;
+  static std::map<std::string, std::shared_ptr<const std::vector<CatalogEntry>>> made;
+  std::lock_guard lock(mutex);
+  if (const auto it = made.find(ldraw); it != made.end()) return it->second;
+  auto list = std::make_shared<std::vector<CatalogEntry>>();
+  std::error_code ec;
+  for (const auto& e : std::filesystem::directory_iterator(std::filesystem::path(ldraw) / "parts", ec)) {
+    std::string name = e.path().filename().string();
+    std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (name.size() < 5 || name.compare(name.size() - 4, 4, ".dat") != 0) continue;
+    std::ifstream f(e.path());
+    std::string line;
+    std::getline(f, line);
+    size_t at = line.find_first_not_of(" \t");
+    if (at == std::string::npos || line[at] != '0') continue;
+    at = line.find_first_not_of(" \t", at + 1);
+    std::string description = at == std::string::npos ? "" : line.substr(at);
+    while (!description.empty() && (description.back() == '\r' || description.back() == ' ')) description.pop_back();
+    if (description.empty() || description[0] == '~') continue;
+    list->push_back({name, description, folded(name + " " + description)});
+  }
+  std::sort(list->begin(), list->end(), [](const CatalogEntry& a, const CatalogEntry& b) { return a.name < b.name; });
+  made[ldraw] = list;
+  return list;
+}
+}  // namespace
+
+std::vector<PartMatch> Session::searchParts(const std::string& query, size_t limit) const {
+  const std::string q = folded(query);
+  if (q.empty() || impl_->ldraw.empty()) return {};
+  std::vector<std::string> words;
+  for (size_t at = 0; at < q.size();) {
+    const size_t end = std::min(q.find(' ', at), q.size());
+    words.push_back(q.substr(at, end - at));
+    at = end + 1;
+  }
+  const auto list = catalog(impl_->ldraw);
+  struct Hit {
+    int rank;
+    const CatalogEntry* entry;
+  };
+  std::vector<Hit> hits;
+  for (const CatalogEntry& e : *list) {
+    bool all = true;
+    for (const std::string& w : words)
+      if (e.haystack.find(w) == std::string::npos) {
+        all = false;
+        break;
+      }
+    if (!all) continue;
+    const std::string stem = e.name.substr(0, e.name.size() - 4), d = folded(e.description);
+    const int rank = e.name == q || stem == q ? 0 : d == q ? 1 : d.rfind(q, 0) == 0 ? 2 : stem.rfind(q, 0) == 0 ? 3 : 4;
+    hits.push_back({rank, &e});
+  }
+  std::sort(hits.begin(), hits.end(), [](const Hit& a, const Hit& b) {
+    if (a.rank != b.rank) return a.rank < b.rank;
+    if (a.entry->description.size() != b.entry->description.size()) return a.entry->description.size() < b.entry->description.size();
+    return a.entry->name < b.entry->name;
+  });
+  std::vector<PartMatch> out;
+  for (size_t i = 0; i < hits.size() && i < limit; i++) out.push_back({hits[i].entry->name, hits[i].entry->description});
+  return out;
+}
 
 }  // namespace bmapp
 

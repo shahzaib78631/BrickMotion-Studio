@@ -51,6 +51,11 @@ struct Changed {
   uint64_t version = 0;  ///< the session's version after it
 };
 
+/// A part file in the library, as Replace Part lists it.
+struct PartMatch {
+  std::string name, description;  ///< "3001.dat", "Brick  2 x  4"
+};
+
 /// One piece, described for the inspector.
 struct PieceInfo {
   uint32_t piece = 0;

@@ -44,6 +44,7 @@ target_link_libraries(BrickMotion PRIVATE bmapp
 # The bridge must hold the shapes the app relies on (Task 1 of the phase 8 plan).
 add_test(NAME brickmotion_selftest_bridge
   COMMAND $<TARGET_FILE:BrickMotion> --selftest-bridge ${CMAKE_SOURCE_DIR}/../samples/helicopter/helicopter.mpd)
+add_test(NAME brickmotion_selftest_edit COMMAND $<TARGET_FILE:BrickMotion> --selftest-edit ${CMAKE_SOURCE_DIR}/../samples/helicopter/helicopter.mpd)
 add_test(NAME brickmotion_check_plist COMMAND $<TARGET_FILE:BrickMotion> --check-plist)
 add_test(NAME brickmotion_snapshot
   COMMAND swift ${CMAKE_CURRENT_SOURCE_DIR}/tests/snapshot_check.swift $<TARGET_FILE:BrickMotion>

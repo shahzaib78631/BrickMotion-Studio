@@ -58,6 +58,9 @@ if args.count >= 3 && args[1] == "--open" {
 if args.count >= 3 && args[1] == "--selftest-bridge" {
   exit(selftestBridge(args[2]))
 }
+if args.count >= 3 && args[1] == "--selftest-edit" {
+  exit(MainActor.assumeIsolated { selftestEdit(args[2]) })
+}
 /// The bundle's document types and type declarations must list exactly bmapp::documentTypes().
 func checkPlist() -> Int32 {
   let info = Bundle.main.infoDictionary ?? [:]
@@ -88,7 +91,7 @@ if args.count >= 2 && args[1] == "--check-plist" {
 
 if args.contains("--snapshot") {
   guard let request = SnapshotRequest.parse(args) else {
-    print("usage: BrickMotion --snapshot out.png --open <file> [--size WxH] [--appearance light|dark] [--play-to s] [--report out.json]")
+    print("usage: BrickMotion --snapshot out.png --open <file> [--size WxH] [--appearance light|dark] [--play-to s] [--report out.json] [--select n...]")
     exit(2)
   }
   exit(MainActor.assumeIsolated { Snapshot.run(request) })

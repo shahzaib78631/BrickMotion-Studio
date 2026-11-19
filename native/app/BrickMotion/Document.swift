@@ -11,6 +11,49 @@ final class Document: NSDocument {
   /// Off until the project writer lands (phase 8 Task 12): autosaving needs data(ofType:).
   override class var autosavesInPlace: Bool { false }
 
+  /// Posted after an edit, an undo or redo, or a change of selection or hiding.
+  static let didChange = Notification.Name("BMDocumentDidChange")
+
+  /// Runs one edit on the session. An edit that made a new undo step registers it with the
+  /// document's undo manager under the session's name for it; a drag that grew its step does not.
+  @discardableResult
+  func perform(_ edit: () -> bmapp.Changed) -> bmapp.Changed {
+    let depth = session.undoDepth(), version = session.version()
+    let changed = edit()
+    if session.version() != version {
+      if session.undoDepth() > depth { registerUndo(redo: false) }
+      postChange()
+    }
+    return changed
+  }
+
+  /// Selection or hiding changed: the panes and the viewport follow.
+  func postChange() {
+    NotificationCenter.default.post(name: Self.didChange, object: self)
+  }
+
+  /// Registers the way back from the session's latest step (or forward again, after an undo).
+  private func registerUndo(redo: Bool) {
+    guard let manager = undoManager else { return }
+    manager.registerUndo(withTarget: self) { document in
+      MainActor.assumeIsolated { redo ? document.redoStep() : document.undoStep() }
+    }
+    manager.setActionName(String(redo ? session.redoName() : session.undoName()))
+  }
+
+  private func undoStep() {
+    session.endGesture()
+    _ = session.undo()
+    registerUndo(redo: true)
+    postChange()
+  }
+
+  private func redoStep() {
+    _ = session.redo()
+    registerUndo(redo: false)
+    postChange()
+  }
+
   override func makeWindowControllers() {
     addWindowController(WindowController(document: self))
   }
