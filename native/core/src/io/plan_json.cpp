@@ -4,6 +4,7 @@
 #include <fstream>
 #include <sstream>
 #include <unordered_map>
+#include "bm/doc/source.h"
 #include "bm/io.h"
 
 namespace bm::io {
@@ -15,7 +16,6 @@ namespace {
 
 using Json = nlohmann::ordered_json;
 
-constexpr double kStud = 20, kPlate = 8;
 constexpr int kDefaultColor = 71;
 /// The size an empty submodel is given for grid placement (one 1x1 brick).
 constexpr Box kEmptySubBox{{0, -24, 0}, {20, 0, 20}};
@@ -113,18 +113,11 @@ std::string colorKey(std::string_view name) {
 }
 
 Xform gridPlacement(const Json& item, const Box& body) {
-  const int rot = ((static_cast<int>(std::lround(item["rot"].get<double>())) % 360) + 360) % 360;
-  const double c = rot == 0 ? 1 : rot == 180 ? -1 : 0, s = rot == 90 ? 1 : rot == 270 ? -1 : 0;
-  Xform xf;
-  xf.r = Mat3{{c, 0, s, 0, 1, 0, -s, 0, c}};
-  const Box rb = body.transformed(Xform{xf.r, {}});
-  const double fw = std::max(1.0, std::round((rb.max.x - rb.min.x) / kStud)), fd = std::max(1.0, std::round((rb.max.z - rb.min.z) / kStud));
-  xf.t = {
-      (item["x"].get<double>() + fw / 2) * kStud - (rb.min.x + rb.max.x) / 2,
-      -item["y"].get<double>() * kPlate - rb.max.y,
-      (item["z"].get<double>() + fd / 2) * kStud - (rb.min.z + rb.max.z) / 2,
-  };
-  return xf;
+  doc::Placement at;
+  at.grid = true;
+  at.x = item["x"].get<double>(), at.y = item["y"].get<double>(), at.z = item["z"].get<double>();
+  at.rot = static_cast<int>(std::lround(item["rot"].get<double>()));
+  return doc::placeOnGrid(at, body);
 }
 
 Xform placement(const Json& item, const Box& body) {
