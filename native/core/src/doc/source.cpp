@@ -405,7 +405,10 @@ Source fromFile(const std::filesystem::path& path) {
   return {};
 }
 
-Flat flatten(const Source& source, const ldraw::Library& library, ldraw::PartCache& cache) {
+Flat flatten(const Source& source, const ldraw::Library& library, ldraw::PartCache& cache) { return flatten(source, library, cache, ""); }
+
+Flat flatten(const Source& source, const ldraw::Library& library, ldraw::PartCache& cache, const std::string& rootDef) {
+  const Def* top = rootDef.empty() ? nullptr : source.def(rootDef);
   Model::Data data{{}, {}, source.carried, source.inlineParts.empty() ? library : library.withInline(source.inlineParts), {}};
   // As io::load: a model's own part files, once each by name.
   for (const ldraw::File& f : source.inlineParts)
@@ -418,8 +421,9 @@ Flat flatten(const Source& source, const ldraw::Library& library, ldraw::PartCac
   for (const auto& [name, d] : source.submodels) f.defs.emplace(name, &d);
   if (source.origin == Origin::LDraw && !source.rootName.empty()) f.defs.emplace(source.rootName, &source.root);
   std::vector<std::string> stack, path;
-  if (source.origin == Origin::LDraw) stack.push_back(source.rootName);
-  const std::vector<Node> nodes = f.def("", source.root, stack);
+  if (top) stack.push_back(rootDef);
+  else if (source.origin == Origin::LDraw) stack.push_back(source.rootName);
+  const std::vector<Node> nodes = top ? f.def(rootDef, *top, stack) : f.def("", source.root, stack);
   std::vector<int> steps;
   std::vector<ItemId> chain;
   f.collect(nodes, Xform::identity(), 16, "", 0, true, path, steps, chain);

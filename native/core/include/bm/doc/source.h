@@ -100,6 +100,8 @@ struct Flat {
   std::unordered_map<ItemId, Box> body;     ///< each placed item's box in its own space (grid placement reads it)
 };
 Flat flatten(const Source& source, const ldraw::Library& library, ldraw::PartCache& cache);
+/// One def flattened as the whole model, at identity ("" or an unknown name: the root).
+Flat flatten(const Source& source, const ldraw::Library& library, ldraw::PartCache& cache, const std::string& rootDef);
 
 /// Each item's placement in its own def, as flatten puts it (grid placements need part sizes).
 /// Items flatten leaves out (a missing submodel, a loop) are not in it.

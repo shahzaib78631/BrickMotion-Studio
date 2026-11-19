@@ -194,6 +194,8 @@ void swapDef(bm::doc::Source& src, const std::string& name, size_t position, con
   else if (from) std::erase_if(src.submodels, [&](const auto& sub) { return sub.first == name; });
 }
 
+void renameFocus(Session::Impl& s, const Command& c, bool forward);
+
 void apply(Session::Impl& s, const Command& c, bool forward) {
   bm::doc::Source& src = s.source;
   std::vector<const ItemEdit*> removed, changed, inserted;
@@ -215,7 +217,7 @@ void apply(Session::Impl& s, const Command& c, bool forward) {
   };
   if (forward) {
     for (const DefEdit& d : c.defs) src.submodels.insert(src.submodels.begin() + static_cast<long>(d.position), {d.name, d.def});
-    if (c.addedRootStep) src.root.steps.emplace_back();
+    if (c.addedRootStep) src.def(c.stepDef)->steps.emplace_back();
     for (auto it = removed.rbegin(); it != removed.rend(); ++it) erase(**it);
     for (const ItemEdit* e : changed) replace(*e->before, *e->after);
     for (const ItemEdit* e : inserted) insert(*e, *e->after);
@@ -225,10 +227,20 @@ void apply(Session::Impl& s, const Command& c, bool forward) {
     for (auto it = inserted.rbegin(); it != inserted.rend(); ++it) erase(**it);
     for (const ItemEdit* e : changed) replace(*e->after, *e->before);
     for (const ItemEdit* e : removed) insert(*e, *e->before);
-    if (c.addedRootStep) src.root.steps.pop_back();
+    if (c.addedRootStep) src.def(c.stepDef)->steps.pop_back();
     for (auto it = c.defs.rbegin(); it != c.defs.rend(); ++it)
       std::erase_if(src.submodels, [&](const auto& sub) { return sub.first == it->name; });
   }
+  renameFocus(s, c, forward);
+}
+
+/// A rename takes the focus path with it, both ways.
+void renameFocus(Session::Impl& s, const Command& c, bool forward) {
+  if (c.renamedFrom.empty()) return;
+  const std::string& from = forward ? c.renamedFrom : c.renamedTo;
+  const std::string& to = forward ? c.renamedTo : c.renamedFrom;
+  for (std::string& name : s.focus)
+    if (name == from) name = to;
 }
 
 bool structural(const Command& c) {
@@ -274,7 +286,7 @@ Changed inPlace(Session::Impl& s, const std::vector<ItemId>& ids) {
 
 Changed finish(Session::Impl& s, const Command& c) {
   Changed out;
-  if (structural(c)) {
+  if (trimFocus(s) || structural(c)) {
     reflatten(s);
     out.structure = true;
   } else {
@@ -387,8 +399,55 @@ void number(std::string& out, double v) {
 
 }  // namespace
 
+std::string focusedDef(const Session::Impl& s) { return s.focus.empty() ? "" : s.focus.back(); }
+
+namespace {
+/// Does def `outer` use `inner` directly?
+bool usesDirectly(const bm::doc::Source& src, const std::string& outer, const std::string& inner) {
+  const Def* d = src.def(outer);
+  if (!d) return false;
+  for (const auto& step : d->steps)
+    for (const Item& i : step.items)
+      if (i.submodel && i.name == inner) return true;
+  return false;
+}
+
+/// The longest start of `path` in which each def is used by the one before (the root first).
+std::vector<std::string> leading(const bm::doc::Source& src, const std::vector<std::string>& path) {
+  std::vector<std::string> out;
+  std::string outer;
+  for (const std::string& name : path) {
+    if (name.empty() || !src.def(name) || !usesDirectly(src, outer, name)) break;
+    out.push_back(name);
+    outer = name;
+  }
+  return out;
+}
+}  // namespace
+
+bool trimFocus(Session::Impl& s) {
+  std::vector<std::string> kept = leading(s.source, s.focus);
+  if (kept == s.focus) return false;
+  s.focus = std::move(kept);
+  return true;
+}
+
+Changed focusCommand(Session::Impl& s, const std::vector<std::string>& path) {
+  std::vector<std::string> kept = leading(s.source, path);
+  if (kept == s.focus) return unchanged(s);
+  s.focus = std::move(kept);
+  reflatten(s);
+  s.previousRefs.clear();  // nothing carries over: every piece is another one now
+  s.selection.clear(), s.hidden.clear();
+  s.selectionStamp++, s.hiddenStamp++;
+  Changed out;
+  out.structure = true;
+  out.version = ++s.version;
+  return out;
+}
+
 void reflatten(Session::Impl& s) {
-  bm::doc::Flat flat = bm::doc::flatten(s.source, *s.library, *s.full);
+  bm::doc::Flat flat = bm::doc::flatten(s.source, *s.library, *s.full, focusedDef(s));
   if (s.model) *s.model = std::move(flat.model);
   else s.model = std::make_unique<bm::Model>(std::move(flat.model));
   s.previousRefs = std::move(s.refs);
@@ -487,13 +546,15 @@ std::string copyText(const Session::Impl& s, const std::vector<uint32_t>& pieces
   return out;
 }
 
-Changed pasteCommand(Session::Impl& s, const std::string& text, bm::Vec3 offset) {
+Changed pasteCommand(Session::Impl& s, const std::string& def, const std::string& text, bm::Vec3 offset) {
   const bm::ldraw::File file = bm::ldraw::parse(text, "clipboard.ldr");
+  const Def& into = *s.source.def(def);
   Command c;
   c.kind = Edit::Paste;
-  if (s.source.root.steps.empty()) c.addedRootStep = true;
-  const size_t step = c.addedRootStep ? 0 : s.source.root.steps.size() - 1;
-  size_t index = c.addedRootStep ? 0 : s.source.root.steps[step].items.size();
+  c.stepDef = def;
+  if (into.steps.empty()) c.addedRootStep = true;
+  const size_t step = c.addedRootStep ? 0 : into.steps.size() - 1;
+  size_t index = c.addedRootStep ? 0 : into.steps[step].items.size();
   for (const bm::ldraw::Command& cmd : file.cmds) {
     if (cmd.type != bm::ldraw::Cmd::Ref) continue;
     Item item;
@@ -502,7 +563,7 @@ Changed pasteCommand(Session::Impl& s, const std::string& text, bm::Vec3 offset)
     item.colorText = std::to_string(cmd.color);
     item.color = planColor(s, cmd.color);
     item.at.exact = Xform{bm::Mat3{}, offset} * cmd.xf;
-    c.items.push_back(edit("", step, index++, std::nullopt, item));
+    c.items.push_back(edit(def, step, index++, std::nullopt, item));
   }
   if (c.items.empty()) return unchanged(s);
   c.name = named("Paste", c.items.size());
@@ -862,10 +923,12 @@ namespace {
 
 /// Whole-def edits gathered for one command: working copies, then added and removed defs.
 struct Draft {
+  explicit Draft(Session::Impl& session) : s(session) {}
   Session::Impl& s;
   std::vector<std::string> order;
   std::map<std::string, Def> copies;
   std::vector<DefChange> later;  ///< additions and removals, after the content changes
+  std::string renamedFrom, renamedTo;
 
   Def& edit(const std::string& name) {
     if (!copies.count(name)) {
@@ -882,6 +945,7 @@ struct Draft {
     c.name = std::move(name);
     for (const std::string& n : order) c.wholeDefs.push_back(DefChange{n, positionOf(s.source, n), *s.source.def(n), copies.at(n)});
     for (DefChange& d : later) c.wholeDefs.push_back(std::move(d));
+    c.renamedFrom = renamedFrom, c.renamedTo = renamedTo;
     return push(s, std::move(c));
   }
 };
@@ -985,7 +1049,7 @@ std::string freeName(const Session::Impl& s, const std::string& preferred) {
 
 Changed newSubmodelCommand(Session::Impl& s, const std::string& name) {
   if (std::string why = nameProblem(s, name); !why.empty()) return refusal(s, why);
-  Draft d{s, {}, {}, {}};
+  Draft d{s};
   Def def;
   def.steps.emplace_back();
   d.add(name, std::move(def), s.source.submodels.size());
@@ -998,7 +1062,7 @@ Changed makeSubmodelCommand(Session::Impl& s, const std::string& def, const std:
   const auto chosen = itemsOf(s, def, pieces, true, &partial);
   if (chosen.empty() && partial) return refusal(s, kPartial);
   if (chosen.size() < 2) return refusal(s, "Choose at least two pieces.");
-  Draft d{s, {}, {}, {}};
+  Draft d{s};
   Def& here = d.edit(def);
   // The anchor: the lowest corner of their boxes, down to the stud and plate grid.
   Box box;
@@ -1049,7 +1113,7 @@ Changed extractCommand(Session::Impl& s, const std::string& def, uint32_t piece)
     }
   if (level + 1 >= chain.size()) return refusal(s, "This piece is not inside a submodel.");
   const Loc loc = where.at(chain[level]);
-  Draft d{s, {}, {}, {}};
+  Draft d{s};
   Def& here = d.edit(def);
   const Item use = here.steps[loc.step].items[loc.index];
   const Xform frame = s.local.at(use.id);
@@ -1087,7 +1151,7 @@ Changed moveToModelCommand(Session::Impl& s, const std::string& def, const std::
   const std::set<std::pair<size_t, size_t>> chosenSet(chosen.begin(), chosen.end());
   for (const auto& at : referencing(source, moving))
     if (!chosenSet.count(at)) return refusal(s, source.steps[at.first].items[at.second].name + " depends on a piece being moved.");
-  Draft d{s, {}, {}, {}};
+  Draft d{s};
   pin(d, {def, target});
   Def& here = d.edit(def);
   const Xform into = frame->inverse();
@@ -1115,7 +1179,7 @@ Changed renameSubmodelCommand(Session::Impl& s, const std::string& from, const s
   if (from.empty() || !s.source.def(from)) return unchanged(s);
   if (from == to) return unchanged(s);
   if (std::string why = nameProblem(s, to); !why.empty()) return refusal(s, why);
-  Draft d{s, {}, {}, {}};
+  Draft d{s};
   auto rename = [&](const std::string& defName, const Def& def) {
     for (size_t si = 0; si < def.steps.size(); si++)
       for (size_t ii = 0; ii < def.steps[si].items.size(); ii++)
@@ -1126,6 +1190,7 @@ Changed renameSubmodelCommand(Session::Impl& s, const std::string& from, const s
   const size_t position = positionOf(s.source, from);
   d.remove(from);
   d.add(to, *s.source.def(from), position);
+  d.renamedFrom = from, d.renamedTo = to;
   return d.commit(Edit::RenameSubmodel, "Rename " + from);
 }
 
@@ -1133,7 +1198,7 @@ Changed deleteSubmodelCommand(Session::Impl& s, const std::string& name) {
   if (name.empty() || !s.source.def(name)) return unchanged(s);
   if (const size_t n = usesOf(s.source, name); n > 0)
     return refusal(s, name + " is used " + (n == 1 ? std::string("once") : std::to_string(n) + " times") + ". Remove its uses first.");
-  Draft d{s, {}, {}, {}};
+  Draft d{s};
   d.remove(name);
   return d.commit(Edit::DeleteSubmodel, "Delete " + name);
 }

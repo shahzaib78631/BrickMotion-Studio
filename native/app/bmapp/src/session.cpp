@@ -236,29 +236,32 @@ Changed Session::recolor(const std::vector<uint32_t>& pieces, int code) { BM_EDI
 Changed Session::remove(const std::vector<uint32_t>& pieces) { BM_EDIT(removeCommand(*impl_, pieces)); }
 Changed Session::duplicate(const std::vector<uint32_t>& pieces, Vec3 offset) { BM_EDIT_SELECTING(duplicateCommand(*impl_, pieces, engine(offset)), true); }
 std::string Session::copy(const std::vector<uint32_t>& pieces) const { return impl_->model ? copyText(*impl_, pieces) : ""; }
-Changed Session::paste(const std::string& text, Vec3 offset) { BM_EDIT_SELECTING(pasteCommand(*impl_, text, engine(offset)), true); }
+Changed Session::paste(const std::string& text, Vec3 offset) { BM_EDIT_SELECTING(pasteCommand(*impl_, focusedDef(*impl_), text, engine(offset)), true); }
 Changed Session::replacePart(const std::vector<uint32_t>& pieces, const std::string& part) { BM_EDIT(replaceCommand(*impl_, pieces, part)); }
 Changed Session::makeUnique(uint32_t piece) { BM_EDIT(makeUniqueCommand(*impl_, piece)); }
-size_t Session::stepCount() const { return stepCountOf(*impl_, ""); }
-StepFields Session::stepFields(size_t at) const { return stepFieldsOf(*impl_, "", at); }
-Changed Session::insertStep(size_t at) { BM_EDIT(insertStepCommand(*impl_, "", at)); }
-Changed Session::deleteStep(size_t at) { BM_EDIT(deleteStepCommand(*impl_, "", at)); }
-Changed Session::moveStep(size_t from, size_t to) { BM_EDIT(moveStepCommand(*impl_, "", from, to)); }
-Changed Session::splitStep(size_t at, const std::vector<uint32_t>& pieces) { BM_EDIT(splitStepCommand(*impl_, "", at, pieces)); }
-Changed Session::mergeSteps(size_t first) { BM_EDIT(mergeStepsCommand(*impl_, "", first)); }
+size_t Session::stepCount() const { return stepCountOf(*impl_, focusedDef(*impl_)); }
+StepFields Session::stepFields(size_t at) const { return stepFieldsOf(*impl_, focusedDef(*impl_), at); }
+Changed Session::insertStep(size_t at) { BM_EDIT(insertStepCommand(*impl_, focusedDef(*impl_), at)); }
+Changed Session::deleteStep(size_t at) { BM_EDIT(deleteStepCommand(*impl_, focusedDef(*impl_), at)); }
+Changed Session::moveStep(size_t from, size_t to) { BM_EDIT(moveStepCommand(*impl_, focusedDef(*impl_), from, to)); }
+Changed Session::splitStep(size_t at, const std::vector<uint32_t>& pieces) { BM_EDIT(splitStepCommand(*impl_, focusedDef(*impl_), at, pieces)); }
+Changed Session::mergeSteps(size_t first) { BM_EDIT(mergeStepsCommand(*impl_, focusedDef(*impl_), first)); }
 Changed Session::setStepFields(size_t at, const StepFields& fields, bool continuing) {
-  BM_EDIT(setStepFieldsCommand(*impl_, "", at, fields, continuing));
+  BM_EDIT(setStepFieldsCommand(*impl_, focusedDef(*impl_), at, fields, continuing));
 }
-Changed Session::moveToStep(const std::vector<uint32_t>& pieces, size_t step) { BM_EDIT(moveToStepCommand(*impl_, "", pieces, step)); }
-Changed Session::reorderInStep(size_t step, size_t from, size_t to) { BM_EDIT(reorderInStepCommand(*impl_, "", step, from, to)); }
+Changed Session::moveToStep(const std::vector<uint32_t>& pieces, size_t step) { BM_EDIT(moveToStepCommand(*impl_, focusedDef(*impl_), pieces, step)); }
+Changed Session::reorderInStep(size_t step, size_t from, size_t to) { BM_EDIT(reorderInStepCommand(*impl_, focusedDef(*impl_), step, from, to)); }
+Changed Session::focus(const StringList& path) { BM_EDIT(focusCommand(*impl_, path)); }
+StringList Session::focusPath() const { return impl_->focus; }
+std::string Session::focused() const { return focusedDef(*impl_); }
 std::string Session::freeSubmodelName(const std::string& preferred) const { return freeName(*impl_, preferred); }
 Changed Session::newSubmodel(const std::string& name) { BM_EDIT(newSubmodelCommand(*impl_, name)); }
 Changed Session::makeSubmodel(const std::vector<uint32_t>& pieces, const std::string& name) {
-  BM_EDIT_SELECTING(makeSubmodelCommand(*impl_, "", pieces, name), true);
+  BM_EDIT_SELECTING(makeSubmodelCommand(*impl_, focusedDef(*impl_), pieces, name), true);
 }
-Changed Session::extract(uint32_t piece) { BM_EDIT_SELECTING(extractCommand(*impl_, "", piece), true); }
+Changed Session::extract(uint32_t piece) { BM_EDIT_SELECTING(extractCommand(*impl_, focusedDef(*impl_), piece), true); }
 Changed Session::moveToModel(const std::vector<uint32_t>& pieces, const std::string& submodel) {
-  BM_EDIT_SELECTING(moveToModelCommand(*impl_, "", pieces, submodel), true);
+  BM_EDIT_SELECTING(moveToModelCommand(*impl_, focusedDef(*impl_), pieces, submodel), true);
 }
 Changed Session::renameSubmodel(const std::string& from, const std::string& to) { BM_EDIT(renameSubmodelCommand(*impl_, from, to)); }
 Changed Session::deleteSubmodel(const std::string& name) { BM_EDIT(deleteSubmodelCommand(*impl_, name)); }
@@ -317,6 +320,7 @@ Snapshot Session::snapshot() const {
   out.undoName = undoName(), out.redoName = redoName();
   out.dirty = dirty();
   out.hidden = s.hidden.size();
+  out.focus = focusedDef(s);
   if (s.model && !s.selection.empty()) {
     // A submodel is shared when more than one use reaches it: count the uses by their chains.
     std::map<std::string, std::set<std::vector<bm::doc::ItemId>>> uses;

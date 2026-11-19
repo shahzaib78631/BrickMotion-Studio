@@ -40,6 +40,8 @@ struct Session::Impl {
   std::unordered_map<bm::doc::ItemId, std::vector<uint32_t>> piecesOf;  ///< the pieces under each item
   std::unordered_map<std::string, uint32_t> useCount;      ///< pieces under each use, by its chain
   History history;
+  /// The submodel being edited on its own: def names from below the root down; empty = the root.
+  std::vector<std::string> focus;
   uint64_t version = 0;
 
   // View state.

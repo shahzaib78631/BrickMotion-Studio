@@ -74,6 +74,16 @@ class Session {
   Changed replacePart(const std::vector<uint32_t>& pieces, const std::string& part);
   /// Forks the submodel use holding `piece` into "<name> 2" (the next free number).
   Changed makeUnique(uint32_t piece);
+  // Focus: one submodel opened to be edited on its own. Every command then acts in it, and the
+  // pieces are its pieces. View state: not undone, not saved; the selection is cleared.
+
+  /// Def names from below the root down to the one to edit; {} is the whole model. A path that
+  /// stops leading somewhere is cut there.
+  Changed focus(const StringList& path);
+  StringList focusPath() const;
+  /// The submodel being edited, or "".
+  std::string focused() const;
+
   // Steps, of the model being edited. Steps are counted from 0 here; people see them from 1.
 
   size_t stepCount() const;

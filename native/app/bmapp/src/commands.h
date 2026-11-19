@@ -44,7 +44,9 @@ struct Command {
   std::string name;
   std::vector<ItemEdit> items;
   std::vector<DefEdit> defs;
-  bool addedRootStep = false;
+  bool addedRootStep = false;  ///< a step added to the end of `stepDef` for a paste
+  std::string stepDef;         ///< the def a paste went into ("" the root)
+  std::string renamedFrom, renamedTo;  ///< a rename, which the focus path follows
   std::vector<DefChange> wholeDefs;  ///< applied after the item edits, in order
   size_t stepIndex = 0;               ///< a step-fields edit: which step, so typing can grow it
   // An open drag: continuing moves and turns of the same pieces grow it.
@@ -69,7 +71,7 @@ Changed recolorCommand(Session::Impl& s, const std::vector<uint32_t>& pieces, in
 Changed removeCommand(Session::Impl& s, const std::vector<uint32_t>& pieces);
 Changed duplicateCommand(Session::Impl& s, const std::vector<uint32_t>& pieces, bm::Vec3 offset);
 std::string copyText(const Session::Impl& s, const std::vector<uint32_t>& pieces);
-Changed pasteCommand(Session::Impl& s, const std::string& text, bm::Vec3 offset);
+Changed pasteCommand(Session::Impl& s, const std::string& def, const std::string& text, bm::Vec3 offset);
 Changed replaceCommand(Session::Impl& s, const std::vector<uint32_t>& pieces, const std::string& part);
 Changed makeUniqueCommand(Session::Impl& s, uint32_t piece);
 // Steps of one def ("" the root).
@@ -92,6 +94,13 @@ Changed extractCommand(Session::Impl& s, const std::string& def, uint32_t piece)
 Changed moveToModelCommand(Session::Impl& s, const std::string& def, const std::vector<uint32_t>& pieces, const std::string& target);
 Changed renameSubmodelCommand(Session::Impl& s, const std::string& from, const std::string& to);
 Changed deleteSubmodelCommand(Session::Impl& s, const std::string& name);
+
+/// The def being edited: the last of the focus path, or "" for the root.
+std::string focusedDef(const Session::Impl& s);
+/// Cuts the focus path to defs that still lead somewhere; true when it changed.
+bool trimFocus(Session::Impl& s);
+/// Sets the focus path, cut to its longest part that still leads somewhere; reflattens.
+Changed focusCommand(Session::Impl& s, const std::vector<std::string>& path);
 
 /// Nothing changed.
 Changed unchanged(const Session::Impl& s);

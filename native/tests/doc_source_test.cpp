@@ -158,3 +158,25 @@ TEST_CASE("flatten matches fromPlan", "[doc][source]") {
     for (size_t i = 0; i < flat.refs.size(); i++) CHECK(flat.refs[i].chain.size() == flat.model.pieces()[i].path.size() + 1);
   }
 }
+
+TEST_CASE("flatten from a named def", "[doc][source]") {
+  const std::string text = R"(0 FILE main.ldr
+1 16 0 0 0 1 0 0 0 1 0 0 0 1 wheel.ldr
+1 16 100 0 0 1 0 0 0 1 0 0 0 1 wheel.ldr
+1 4 0 -24 0 1 0 0 0 1 0 0 0 1 3001.dat
+0 FILE wheel.ldr
+1 4 10 0 0 1 0 0 0 1 0 0 0 1 3001.dat
+1 1 10 -24 0 1 0 0 0 1 0 0 0 1 3003.dat
+)";
+  const fs::path p = fs::temp_directory_path() / "bm_flatten_def.mpd";
+  std::ofstream(p) << text;
+  const doc::Source source = doc::fromFile(p);
+  const ldraw::Library library = fixtureLib();
+  ldraw::PartCache cache(library, fs::temp_directory_path() / "bm_doc_source_cache");
+  CHECK(doc::flatten(source, library, cache).model.pieces().size() == 5);
+  const doc::Flat wheel = doc::flatten(source, library, cache, "wheel.ldr");
+  REQUIRE(wheel.model.pieces().size() == 2);
+  CHECK(wheel.model.pieces()[0].world.t.x == 10);
+  CHECK(wheel.refs[0].chain.size() == 1);
+  CHECK(doc::flatten(source, library, cache, "").model.pieces().size() == 5);
+}

@@ -90,6 +90,7 @@ struct Snapshot {
   std::string undoName, redoName;
   bool dirty = false;
   size_t hidden = 0;
+  std::string focus;  ///< the submodel being edited on its own; "" for the whole model
 };
 
 }  // namespace bmapp
