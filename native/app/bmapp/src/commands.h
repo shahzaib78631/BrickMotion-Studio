@@ -102,6 +102,9 @@ bool trimFocus(Session::Impl& s);
 /// Sets the focus path, cut to its longest part that still leads somewhere; reflattens.
 Changed focusCommand(Session::Impl& s, const std::vector<std::string>& path);
 
+/// "Light_Bluish_Grey" as people read it: "Light Bluish Grey".
+std::string colorDisplayName(std::string name);
+
 /// Nothing changed.
 Changed unchanged(const Session::Impl& s);
 /// Refused, with the reason.

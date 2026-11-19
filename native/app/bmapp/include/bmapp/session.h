@@ -157,6 +157,22 @@ class Session {
   /// then the closest descriptions. Moved and obsolete parts (~) are left out. The first call reads
   /// the library's part list (once per library, for every session).
   std::vector<PartMatch> searchParts(const std::string& query, size_t limit) const;
+  // What the panes list. Each is made again only after a structural change (or a focus change).
+
+  /// Goes up with every edit that adds, removes or regroups items, and with focus changes; not
+  /// with moves, turns or recolours.
+  uint64_t structureVersion() const;
+  std::vector<OutlineRow> outline() const;
+  /// The steps of the model being edited.
+  std::vector<StepRow> steps() const;
+  std::vector<ItemRow> stepItems(size_t step) const;
+  /// The pieces under an outline row, in the model being edited (none when it is outside it).
+  std::vector<uint32_t> piecesOfRow(const std::string& outlineId) const;
+  std::vector<uint32_t> piecesOfStep(size_t step) const;
+  /// Selects every piece, not hidden, like one already selected in this way.
+  void selectSimilar(Similar kind);
+  /// The library's colours, by group then code, without 16 and 24 (main and edge colour).
+  std::vector<ColorInfo> colors() const;
   /// Cheap: made once per version and selection change.
   Snapshot snapshot() const;
 

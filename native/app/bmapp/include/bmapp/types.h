@@ -81,6 +81,53 @@ struct PieceInfo {
   Vec3 position;             ///< where it is in the model, LDU
 };
 
+/// A row of the models outline: the whole model, each use of a submodel under the model that
+/// uses it, then the submodels used nowhere. Flat, in depth-first file order.
+struct OutlineRow {
+  std::string id;    ///< "root"; the use items' ids from the root joined by "/"; "unused/<name>"
+  std::string def;   ///< the submodel it shows; "" for the whole model
+  std::string name;  ///< what to call it
+  int depth = 0;
+  int parent = -1;   ///< the row above it in the tree, or -1
+  size_t pieces = 0;  ///< parts under it, at any depth
+  size_t uses = 0;    ///< how many times its submodel is used in the file
+  bool shared = false;  ///< used more than once: editing it changes every use
+  bool unused = false;
+  uint64_t useItem = 0;  ///< the use's item, 0 for the root and unused rows
+};
+
+/// A step of the model being edited.
+struct StepRow {
+  size_t index = 0;
+  std::string title, notes;
+  double pauseAfter = 0;
+  bool pinOrder = false;
+  bool automatic = false;  ///< made by splitting a step-less file, not by a person
+  size_t items = 0;        ///< its parts and submodel uses
+  size_t pieces = 0;       ///< the parts they make
+};
+
+/// An item of a step: a part, or a use of a submodel.
+struct ItemRow {
+  uint64_t item = 0;
+  std::string name, description, colorName;
+  int color = 16;
+  bool submodel = false;
+  size_t step = 0, index = 0;
+  std::vector<uint32_t> pieces;  ///< the pieces it makes in the model being edited
+};
+
+enum class Similar { Part, Color, PartAndColor, Step };
+
+/// A colour of the library's table.
+struct ColorInfo {
+  int code = 0;
+  std::string name;
+  uint32_t rgb = 0;  ///< 0xRRGGBB
+  float alpha = 1;
+  int group = 0;     ///< 0 solid, 1 transparent, 2 metallic (chrome, pearl, metal), 3 other
+};
+
 /// What the panes show of a session, made again only when the document or the selection changes.
 struct Snapshot {
   uint64_t version = 0;  ///< the session's version (edits, undo and redo; not selection or hiding)

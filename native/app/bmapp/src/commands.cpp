@@ -624,6 +624,11 @@ Changed makeUniqueCommand(Session::Impl& s, uint32_t piece) {
 
 // ---- steps -----------------------------------------------------------------------------------
 
+std::string colorDisplayName(std::string name) {
+  std::replace(name.begin(), name.end(), '_', ' ');
+  return name;
+}
+
 Changed unchanged(const Session::Impl& s) {
   Changed out;
   out.version = s.version;

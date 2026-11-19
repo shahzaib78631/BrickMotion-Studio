@@ -193,6 +193,7 @@ Changed edited(Session::Impl& s, uint64_t before, Changed c, bool selectNew = fa
   s.changes.push_back(c);
   while (s.changes.size() > Session::Impl::kChangesKept) s.changes.pop_front();
   if (c.structure) {
+    s.structureVersion++;
     std::map<std::vector<bm::doc::ItemId>, uint32_t> now;
     if (!s.selection.empty() || !s.hidden.empty())
       for (uint32_t p = 0; p < s.refs.size(); p++) now.emplace(s.refs[p].chain, p);
@@ -338,7 +339,7 @@ Snapshot Session::snapshot() const {
       info.part = piece.part;
       if (const bm::ldraw::File* f = s.library->find(piece.part)) info.description = f->description;
       info.color = piece.color;
-      if (const auto c = colors.find(piece.color); c != colors.end()) info.colorName = c->second.name;
+      if (const auto c = colors.find(piece.color); c != colors.end()) info.colorName = colorDisplayName(c->second.name);
       info.step = piece.step;
       for (const std::string& name : piece.path) info.submodelPath += (info.submodelPath.empty() ? "" : "/") + name;
       info.inSharedSubmodel = !piece.path.empty() && uses[piece.path.back()].size() > 1;

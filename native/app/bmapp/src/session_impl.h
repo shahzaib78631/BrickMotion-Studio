@@ -50,6 +50,10 @@ struct Session::Impl {
   /// The latest edits, oldest first, so a viewport catches up with the ones it has not drawn.
   std::deque<Changed> changes;
   static constexpr size_t kChangesKept = 64;
+  uint64_t structureVersion = 0;
+  mutable std::optional<std::vector<OutlineRow>> outline;
+  mutable std::optional<std::vector<StepRow>> steps;
+  mutable uint64_t outlineStamp = 0, stepsStamp = 0;
   mutable std::optional<Snapshot> snapshot;
   mutable uint64_t snapshotVersion = 0, snapshotSelection = 0, snapshotHidden = 0;
 };
