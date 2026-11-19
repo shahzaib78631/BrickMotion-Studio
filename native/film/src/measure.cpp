@@ -8,7 +8,6 @@ namespace bm::film {
 
 namespace {
 
-Vec3 middle(const Box& b) { return (b.min + b.max) * 0.5; }
 
 bool inside(Vec3 p, const Box& b) { return p.x > b.min.x && p.x < b.max.x && p.y > b.min.y && p.y < b.max.y && p.z > b.min.z && p.z < b.max.z; }
 
@@ -42,7 +41,7 @@ Report measure(const Track& track, const std::vector<Shot>& shots, const Beats& 
     }
     if (framed) {
       const Frame& cam = fr[static_cast<size_t>(std::clamp(land, 0, last))];
-      points.push_back(middle(seat));
+      points = seatPoints(seat);
       const auto& own = plan::piecesOf(fl, plan);
       for (size_t k = 0; !shown && k < points.size(); k++) {
         const Vec3 end = points[k] + (cam.eye - points[k]) * 0.03;  // stop short of its own surface
@@ -62,10 +61,9 @@ Report measure(const Track& track, const std::vector<Shot>& shots, const Beats& 
       }
       if (!shown) r.hidden.push_back(static_cast<int>(fi));
     }
-    if (shown)
-      r.landingsInFrame++;
-    else
-      r.missed.push_back(static_cast<int>(fi));
+    if (framed) r.landingsInFrame++;
+    if (shown) r.landingsSeen++;
+    if (!framed) r.missed.push_back(static_cast<int>(fi));
   }
 
   // The eye: never inside what is built, never under the floor.

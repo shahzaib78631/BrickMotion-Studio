@@ -68,16 +68,12 @@ struct Director {
   /// The angle (absolute azimuth) a scene is filmed from: the most of its seats in view, toward
   /// its side, not far from the angle before.
   double chooseAzimuth(const Scene& sc, double before) const {
-    std::vector<std::pair<Vec3, int>> points;  // seat point, and the flight it is of
-    for (int f : sc.flights) {
-      const Box s = flyingBox(t, plan, world, f, t.flights[static_cast<size_t>(f)].startFrame + t.flights[static_cast<size_t>(f)].frames);
-      points.push_back({middle(s), f});
-      for (Vec3 c : corners(s)) points.push_back({c, f});
-    }
-    if (points.size() > static_cast<size_t>(kVisibilityPoints)) {
-      std::vector<std::pair<Vec3, int>> kept;
-      for (int i = 0; i < kVisibilityPoints; i++) kept.push_back(points[points.size() * static_cast<size_t>(i) / static_cast<size_t>(kVisibilityPoints)]);
-      points.swap(kept);
+    // The seats looked for, at most kVisibilityPoints of them, evenly through the scene.
+    std::vector<int> seats = sc.flights;
+    if (seats.size() > static_cast<size_t>(kVisibilityPoints)) {
+      std::vector<int> kept;
+      for (int i = 0; i < kVisibilityPoints; i++) kept.push_back(seats[seats.size() * static_cast<size_t>(i) / static_cast<size_t>(kVisibilityPoints)]);
+      seats.swap(kept);
     }
     const double side = sc.count ? sideOf(sc.sum * (1.0 / sc.count)) : NAN, el = elevationAt(sc.land);
     const Box& built = beats.builtBox[static_cast<size_t>(std::clamp(sc.land, 0, beats.frames))];
@@ -89,25 +85,33 @@ struct Director {
       Rig rig{middle(subject), az, el, 0};
       rig.distance = fitDistance(corners(subject), rig.target, az, el, style.lensMm, FrameShape{}, kFill[0]);
       const Vec3 eye = eyeOf(rig);
+      // A seat is seen when some point of it is not behind what has landed by its landing.
       int seen = 0;
-      for (const auto& [p, f] : points) {
-        const Vec3 end = p + (eye - p) * 0.03;  // stop short of its own surface
-        Box span;
-        span.grow(eye), span.grow(end);
-        near.clear();
-        world.near(span, nullptr, near);
-        const auto& own = plan::piecesOf(t.flights[static_cast<size_t>(f)], plan);
-        bool hidden = false;
-        for (uint32_t q : near) {
-          if (landed[q] > t.flights[static_cast<size_t>(f)].startFrame + t.flights[static_cast<size_t>(f)].frames || std::find(own.begin(), own.end(), q) != own.end()) continue;
-          if (blocks(world, q, eye, end)) {
-            hidden = true;
+      for (int f : seats) {
+        const plan::Flight& fl = t.flights[static_cast<size_t>(f)];
+        const int land = fl.startFrame + fl.frames;
+        const auto& own = plan::piecesOf(fl, plan);
+        bool shown = false;
+        for (Vec3 p : seatPoints(flyingBox(t, plan, world, f, land))) {
+          const Vec3 end = p + (eye - p) * 0.03;  // stop short of its own surface
+          Box span;
+          span.grow(eye), span.grow(end);
+          near.clear();
+          world.near(span, nullptr, near);
+          bool hidden = false;
+          for (uint32_t q : near)
+            if (landed[q] <= land && std::find(own.begin(), own.end(), q) == own.end() && blocks(world, q, eye, end)) {
+              hidden = true;
+              break;
+            }
+          if (!hidden) {
+            shown = true;
             break;
           }
         }
-        seen += hidden ? 0 : 1;
+        seen += shown ? 1 : 0;
       }
-      double score = points.empty() ? 0 : double(seen) / double(points.size());
+      double score = seats.empty() ? 0 : double(seen) / double(seats.size());
       if (!std::isnan(side)) score += kSidePull * std::cos(az - side);
       score -= kStayPull * (1 - std::cos(az - before));
       if (score > bestScore + 1e-12) bestScore = score, best = az;

@@ -50,7 +50,7 @@ out = sys.argv[1]
 rows = [l.rstrip("\n").split("\t") for l in open(os.path.join(out, "runs.tsv")) if l.strip()]
 rows.sort(key=lambda r: (r[0] != "owner", r[1], r[2]))
 table = []
-print("%-6s %-58s %-5s %9s %6s %8s %6s %7s %5s %7s" % ("set", "model", "shape", "landings", "inside", "jerk", "cuts", "short", "rules", "ms"))
+print("%-6s %-58s %-5s %9s %9s %6s %8s %6s %7s %5s %7s %8s" % ("set", "model", "shape", "in frame", "seen", "inside", "jerk", "cuts", "short", "rules", "ms", "plan ms"))
 for set_, id_, aspect, code, name in rows:
     path = os.path.join(out, name + ".json")
     if code != "0" or not os.path.exists(path):
@@ -58,10 +58,12 @@ for set_, id_, aspect, code, name in rows:
         table.append({"set": set_, "id": id_, "aspect": aspect, "failed": int(code)})
         continue
     r = json.load(open(path))["report"]
-    print("%-6s %-58s %-5s %4d/%-4d %6d %8.1f %6.1f %7.2f %5d %7.0f" % (set_, id_[-58:], aspect, r["landingsInFrame"], r["landings"], r["insideFrames"], r["maxJerk"], r["cutsPerMinute"], r["shortestShot"], len(r["rules"]), r["ms"]))
-    table.append(dict(set=set_, id=id_, aspect=aspect, **{k: r[k] for k in ("landings", "landingsInFrame", "insideFrames", "maxJerk", "maxTargetJump", "cutsPerMinute", "shortestShot", "ms")}, rules=len(r["rules"])))
+    print("%-6s %-58s %-5s %4d/%-4d %4d/%-4d %6d %8.1f %6.1f %7.2f %5d %7.0f %8.0f" % (set_, id_[-58:], aspect, r["landingsInFrame"], r["landings"], r["landingsSeen"], r["landings"], r["insideFrames"], r["maxJerk"], r["cutsPerMinute"], r["shortestShot"], len(r["rules"]), r["ms"], r["planMs"]))
+    table.append(dict(set=set_, id=id_, aspect=aspect, **{k: r[k] for k in ("landings", "landingsInFrame", "landingsSeen", "insideFrames", "maxJerk", "maxTargetJump", "cutsPerMinute", "shortestShot", "ms", "planMs")}, rules=len(r["rules"])))
 json.dump(table, open(os.path.join(out, "table.json"), "w"), indent=1)
 for s in ("owner", "smoke"):
+    t = [x for x in table if x["set"] == s and "failed" not in x]
+    if t: print("%s: seen as they land %d/%d" % (s, sum(x["landingsSeen"] for x in t), sum(x["landings"] for x in t)))
     t = [x for x in table if x["set"] == s and "failed" not in x]
     if not t: continue
     land = sum(x["landingsInFrame"] for x in t), sum(x["landings"] for x in t)

@@ -10,11 +10,12 @@ namespace bm::film {
 /// How well a track films its build: what it showed, what it missed, and how it moved.
 struct Report {
   int landings = 0;         ///< top-level flights
-  /// Of them, the seat in the safe frame from its hover to its landing, and some of it not
-  /// behind what is built when it lands.
+  /// Of them, the seat in the safe frame from its hover to its landing (the spec's gate).
   int landingsInFrame = 0;
-  std::vector<int> missed;  ///< the flights that were not
-  std::vector<int> hidden;  ///< of those, the ones in frame but behind what is built
+  /// Of those, the ones some of whose seat is not behind what is built when it lands.
+  int landingsSeen = 0;
+  std::vector<int> missed;  ///< the flights not in frame
+  std::vector<int> hidden;  ///< the flights in frame but behind what is built
   int insideFrames = 0;     ///< frames whose eye is inside a landed piece or under the floor
   double maxJerk = 0;       ///< largest angular jerk within a shot, radians per second cubed
   double maxTargetJump = 0; ///< largest frame-to-frame target move within a shot, LDU

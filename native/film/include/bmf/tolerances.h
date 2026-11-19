@@ -50,7 +50,7 @@ inline constexpr double kMinSceneSeconds = 4.0;
 /// Steps whose pieces land within this angle round the model, seen from above, are one scene.
 inline constexpr double kSceneSpread = 1.5708;
 inline constexpr int kCoverageAzimuths = 16;  ///< angles round the model tried for a scene
-inline constexpr int kVisibilityPoints = 24;  ///< seat points per scene looked at from each
+inline constexpr int kVisibilityPoints = 24;  ///< seats per scene looked for from each
 /// A scene's angle: the share of its seat points in view, plus kSidePull for facing the side
 /// its pieces land on, less kStayPull for turning away from the angle before.
 inline constexpr double kSidePull = 0.3;

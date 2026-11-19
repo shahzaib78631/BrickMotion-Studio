@@ -37,6 +37,9 @@ Box flyingBox(const plan::Timeline& timeline, const plan::Plan& plan, const coll
 
 /// A box's eight corners.
 std::vector<Vec3> corners(const Box& box);
+/// Where a seat is looked for: its middle, its corners and the middle of each face (a seat sunk
+/// in a recess shows its top).
+std::vector<Vec3> seatPoints(const Box& seat);
 /// Whether the segment from `a` to `b` passes through `box`.
 bool crosses(Vec3 a, Vec3 b, const Box& box);
 /// Whether model piece `piece` stands in the way of the sight line from `a` to `b`: its true

@@ -45,11 +45,12 @@ TEST_CASE("a seat no angle sees is reported, not hidden", "[measure]") {
   REQUIRE(flight >= 0);
   const Report r = filmAndMeasure(s, 16.0 / 9);
   CHECK(r.landings == static_cast<int>(std::count_if(s.t.flights.begin(), s.t.flights.end(), [](const plan::Flight& f) { return f.parent < 0; })));
-  CHECK(std::find(r.missed.begin(), r.missed.end(), flight) != r.missed.end());
-  CHECK(r.landingsInFrame == r.landings - static_cast<int>(r.missed.size()));
-  CHECK(r.missed.size() <= 2);  // the deep one, and at most one more: the rest are in plain view
-  // It was in the frame, behind what was built: hidden, which no angle can mend.
+  // In the frame (the spec's gate), behind what was built: hidden, which no angle can mend.
+  CHECK(std::find(r.missed.begin(), r.missed.end(), flight) == r.missed.end());
   CHECK(std::find(r.hidden.begin(), r.hidden.end(), flight) != r.hidden.end());
+  CHECK(r.landingsInFrame == r.landings - static_cast<int>(r.missed.size()));
+  CHECK(r.landingsSeen == r.landingsInFrame - static_cast<int>(r.hidden.size()));
+  CHECK(r.hidden.size() <= 2);  // the deep one, and at most one more: the rest are in plain view
 }
 
 TEST_CASE("a landing the camera looks away from is off frame, not hidden", "[measure]") {
@@ -61,6 +62,7 @@ TEST_CASE("a landing the camera looks away from is off frame, not hidden", "[mea
   for (Frame& f : track.frames) f.target = f.target + Vec3{5000, 0, 0}, f.eye = f.eye + Vec3{5000, 0, 0};
   const Report r = measure(track, shots, beats, s.t, s.p, *s.world);
   CHECK(r.landingsInFrame == 0);
+  CHECK(r.landingsSeen == 0);
   CHECK(r.missed.size() == 4);
   CHECK(r.hidden.empty());
 }
@@ -71,6 +73,7 @@ TEST_CASE("a clean build measures clean", "[measure]") {
   const Report r = filmAndMeasure(s, 16.0 / 9);
   CHECK(r.landings == 8);
   CHECK(r.landingsInFrame == r.landings);
+  CHECK(r.landingsSeen == r.landings);
   CHECK(r.missed.empty());
   CHECK(r.insideFrames == 0);
   CHECK(r.rules.empty());
@@ -106,7 +109,11 @@ TEST_CASE("what lands as the camera moves to a unit stays in frame", "[measure]"
   s.finish();
   const Beats beats = beatsOf(s.t, s.p, *s.model, *s.world);
   const std::vector<Shot> shots = direct(beats, s.t, s.p, *s.world, referenceStyle(), kFps);
-  const Track track = shoot(shots, beats, s.t, s.p, *s.world, FrameShape{}, kFps);
+  for (double aspect : {16.0 / 9, 9.0 / 16}) {
+  FrameShape shape;
+  shape.aspect = aspect;
+  const Track track = shoot(shots, beats, s.t, s.p, *s.world, shape, kFps);
+  INFO("aspect " << aspect);
   // The case is only a case if a brick of the first step lands in the unit's shot.
   bool overlap = false;
   for (const plan::Flight& f : s.t.flights) {
@@ -118,4 +125,5 @@ TEST_CASE("what lands as the camera moves to a unit stays in frame", "[measure]"
   REQUIRE(overlap);
   const Report r = measure(track, shots, beats, s.t, s.p, *s.world);
   CHECK(r.landingsInFrame == r.landings);
+  }
 }

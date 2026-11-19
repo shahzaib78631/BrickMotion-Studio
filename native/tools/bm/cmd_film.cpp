@@ -85,13 +85,15 @@ int cmdFilm(const Args& args) {
       std::printf("  %6.2f–%-6.2f  %-6s  %-10s  %4.0f/%-3.0f  %-10s %5.1f  %s\n", s["start"].get<double>(), s["end"].get<double>(), s["size"].get<std::string>().c_str(), subject.c_str(), s["azimuth"].get<double>(),
                   s["elevation"].get<double>(), s["move"].get<std::string>().c_str(), s["amount"].get<double>(), s["enter"].get<std::string>().c_str());
     }
-    std::printf("landings in frame %d of %d\n", report.landingsInFrame, report.landings);
-    for (size_t k = 0; k < report.missed.size() && k < 20; k++) {
-      const plan::Flight& f = timeline.flights[static_cast<size_t>(report.missed[k])];
+    std::printf("landings in frame %d of %d; seen as they land %d (%zu hidden behind what is built)\n", report.landingsInFrame, report.landings, report.landingsSeen, report.hidden.size());
+    std::vector<int> misses = report.missed;
+    misses.insert(misses.end(), report.hidden.begin(), report.hidden.end());
+    for (size_t k = 0; k < misses.size() && k < 20; k++) {
+      const plan::Flight& f = timeline.flights[static_cast<size_t>(misses[k])];
       const auto& own = plan::piecesOf(f, plan);
       if (own.empty()) continue;
       const Piece& p = model.pieces()[own.front()];
-      const bool hidden = std::find(report.hidden.begin(), report.hidden.end(), report.missed[k]) != report.hidden.end();
+      const bool hidden = k >= report.missed.size();
       std::printf("  missed: %s %s%s at %.1f s, %s\n", p.part.c_str(), p.id.c_str(), own.size() > 1 ? (" (+" + std::to_string(own.size() - 1) + ")").c_str() : "", (f.startFrame + f.frames) / fps,
                   hidden ? "hidden behind what is built" : "out of the safe frame");
     }
@@ -105,7 +107,7 @@ int cmdFilm(const Args& args) {
       nlohmann::json j;
       j["shots"] = list;
       nlohmann::json& r = j["report"];
-      r["landings"] = report.landings, r["landingsInFrame"] = report.landingsInFrame, r["missed"] = report.missed, r["hidden"] = report.hidden;
+      r["landings"] = report.landings, r["landingsInFrame"] = report.landingsInFrame, r["landingsSeen"] = report.landingsSeen, r["missed"] = report.missed, r["hidden"] = report.hidden;
       r["jerkFrame"] = report.jerkFrame, r["jumpFrame"] = report.jumpFrame, r["planMs"] = report.planMs;
       r["insideFrames"] = report.insideFrames, r["maxJerk"] = report.maxJerk, r["maxTargetJump"] = report.maxTargetJump;
       r["cutsPerMinute"] = report.cutsPerMinute, r["shortestShot"] = report.shortestShot, r["ms"] = report.ms;

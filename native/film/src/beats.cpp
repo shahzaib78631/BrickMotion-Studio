@@ -172,4 +172,12 @@ bool blocks(const collide::World& world, uint32_t piece, Vec3 a, Vec3 b) {
   return false;
 }
 
+std::vector<Vec3> seatPoints(const Box& seat) {
+  const Vec3 c = (seat.min + seat.max) * 0.5, h = (seat.max - seat.min) * 0.5;
+  std::vector<Vec3> out{c};
+  for (Vec3 k : corners(seat)) out.push_back(k);
+  for (Vec3 d : {Vec3{h.x, 0, 0}, Vec3{0, h.y, 0}, Vec3{0, 0, h.z}}) out.push_back(c + d), out.push_back(c - d);
+  return out;
+}
+
 }  // namespace bm::film
