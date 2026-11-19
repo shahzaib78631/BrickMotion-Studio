@@ -99,10 +99,8 @@ struct Director {
         const auto& own = plan::piecesOf(t.flights[static_cast<size_t>(f)], plan);
         bool hidden = false;
         for (uint32_t q : near) {
-          if (landed[q] > sc.land || std::find(own.begin(), own.end(), q) != own.end()) continue;
-          Box b = world.box(q);
-          b.min = b.min + Vec3{kOcclusionInset, kOcclusionInset, kOcclusionInset}, b.max = b.max - Vec3{kOcclusionInset, kOcclusionInset, kOcclusionInset};
-          if (!b.empty() && crosses(eye, end, b)) {
+          if (landed[q] > t.flights[static_cast<size_t>(f)].startFrame + t.flights[static_cast<size_t>(f)].frames || std::find(own.begin(), own.end(), q) != own.end()) continue;
+          if (blocks(world, q, eye, end)) {
             hidden = true;
             break;
           }

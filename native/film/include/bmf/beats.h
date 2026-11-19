@@ -39,5 +39,8 @@ Box flyingBox(const plan::Timeline& timeline, const plan::Plan& plan, const coll
 std::vector<Vec3> corners(const Box& box);
 /// Whether the segment from `a` to `b` passes through `box`.
 bool crosses(Vec3 a, Vec3 b, const Box& box);
+/// Whether model piece `piece` stands in the way of the sight line from `a` to `b`: its true
+/// surface, not its box, so a slope or a stud's corner does not hide what is behind it.
+bool blocks(const collide::World& world, uint32_t piece, Vec3 a, Vec3 b);
 
 }  // namespace bm::film

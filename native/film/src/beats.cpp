@@ -130,4 +130,46 @@ bool crosses(Vec3 a, Vec3 b, const Box& box) {
   return true;
 }
 
+bool blocks(const collide::World& world, uint32_t piece, Vec3 a, Vec3 b) {
+  if (!crosses(a, b, world.box(piece))) return false;
+  const collide::Shape& shape = world.shape(piece);
+  if (shape.nodes.empty()) return false;
+  const Xform back = world.pose(piece).inverse();
+  const Vec3 o = back.r * a + back.t, d = (back.r * b + back.t) - o;
+  auto inNode = [&](const collide::Node& n) {
+    Box box;
+    box.min = {n.min[0], n.min[1], n.min[2]}, box.max = {n.max[0], n.max[1], n.max[2]};
+    return crosses(o, o + d, box);
+  };
+  auto at = [&](uint32_t i) {
+    const collide::Vec3f& v = shape.outer[shape.triangles[i]];
+    return Vec3{v.x, v.y, v.z};
+  };
+  std::vector<uint32_t> stack{0};
+  while (!stack.empty()) {
+    const collide::Node& n = shape.nodes[stack.back()];
+    stack.pop_back();
+    if (!inNode(n)) continue;
+    if (n.count == 0) {
+      stack.push_back(n.left), stack.push_back(n.left + 1);
+      continue;
+    }
+    for (uint32_t k = n.left; k < n.left + n.count; k++) {  // Moller-Trumbore, t in [0, 1]
+      const Vec3 p0 = at(3 * k), e1 = at(3 * k + 1) - p0, e2 = at(3 * k + 2) - p0, h = cross(d, e2);
+      const double det = dot(e1, h);
+      if (std::abs(det) < 1e-12) continue;
+      const double inv = 1 / det;
+      const Vec3 sv = o - p0;
+      const double u = dot(sv, h) * inv;
+      if (u < 0 || u > 1) continue;
+      const Vec3 q = cross(sv, e1);
+      const double v = dot(d, q) * inv;
+      if (v < 0 || u + v > 1) continue;
+      const double t = dot(e2, q) * inv;
+      if (t >= 0 && t <= 1) return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace bm::film

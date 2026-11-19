@@ -53,9 +53,7 @@ Report measure(const Track& track, const std::vector<Shot>& shots, const Beats& 
         bool hidden = false;
         for (uint32_t q : near) {
           if (landed[q] > land || std::find(own.begin(), own.end(), q) != own.end()) continue;
-          Box b = world.box(q);
-          b.min = b.min + Vec3{kOcclusionInset, kOcclusionInset, kOcclusionInset}, b.max = b.max - Vec3{kOcclusionInset, kOcclusionInset, kOcclusionInset};
-          if (!b.empty() && crosses(cam.eye, end, b)) {
+          if (blocks(world, q, cam.eye, end)) {
             hidden = true;
             break;
           }

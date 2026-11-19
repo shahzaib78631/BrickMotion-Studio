@@ -96,3 +96,15 @@ TEST_CASE("the build ends in a Reveal beat", "[beats]") {
   REQUIRE(b.list.back().start == lastLanding);
   REQUIRE(b.list.back().end == b.frames);
 }
+
+TEST_CASE("a sight line is blocked by a piece's surface, not its box", "[beats]") {
+  Scene s;
+  s.add(0, 0, 0);  // a 1x1 brick: its top at y 0, one stud above it to y -4
+  s.finish();
+  // Through the box at stud height, beside the stud: clear.
+  CHECK_FALSE(blocks(*s.world, 0, {-30, -2, -9}, {30, -2, -9}));
+  // Through the brick's body: blocked.
+  CHECK(blocks(*s.world, 0, {-30, 10, 0}, {30, 10, 0}));
+  // Stopping short of it: clear.
+  CHECK_FALSE(blocks(*s.world, 0, {-30, 10, 0}, {-15, 10, 0}));
+}
