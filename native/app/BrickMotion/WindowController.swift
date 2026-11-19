@@ -51,7 +51,7 @@ final class WindowController: NSWindowController, NSToolbarDelegate {
     viewport.viewportView.onTool = { [weak self] tool in self?.toolGroup?.selectedIndex = tool.rawValue }
     viewport.viewportView.onPlanState = { [weak self] state in self?.showPlanning(state == .Planning) }
     let content = NSSplitViewItem(viewController: viewport)
-    let inspector = NSSplitViewItem(inspectorWithViewController: NSHostingController(rootView: InspectorPlaceholder()))
+    let inspector = NSSplitViewItem(inspectorWithViewController: NSHostingController(rootView: Inspector(model: model)))
     inspector.minimumThickness = 260
     inspector.maximumThickness = 420
     split.splitViewItems = [sidebar, content, inspector]
@@ -131,14 +131,3 @@ final class WindowController: NSWindowController, NSToolbarDelegate {
   }
 }
 
-/// The inspector until its pane lands (Task 8 of milestone 3a).
-private struct InspectorPlaceholder: View {
-  var body: some View {
-    Form {
-      Section("Inspector") {
-        Text("Select a piece to see it here.").foregroundStyle(.secondary)
-      }
-    }
-    .formStyle(.grouped)
-  }
-}

@@ -38,6 +38,9 @@ enum SidebarTab: String, CaseIterable { case models, steps, parts }
   var sidebarTab = SidebarTab.models
   /// The step selected in the Steps pane, and the one its editor is open on.
   var selectedStep: Int?
+  /// The inspector's tab; it follows the selection (one piece: Part, several: Selection) unless
+  /// Submodel was chosen.
+  var inspectorTab = InspectorTab.selection
   var editingStep: Int?
   /// The focused model's name, then the path above it: what the breadcrumb shows.
   var focusPath: [String] {
@@ -73,7 +76,10 @@ enum SidebarTab: String, CaseIterable { case models, steps, parts }
   /// After any change: a new snapshot, and the tree and steps when the structure moved.
   func refresh() {
     let session = document.session
+    let before = snapshot.selection.count
     snapshot = session.snapshot()
+    let after = snapshot.selection.count
+    if inspectorTab != .submodel && (before == 1) != (after == 1) { inspectorTab = after == 1 ? .part : .selection }
     if session.structureVersion() != stamp {
       stamp = session.structureVersion()
       rows = Array(session.outline())

@@ -122,6 +122,33 @@ import BMApp
   document.undoManager?.undo()
   turn()
 
+  // 10. A swatch recolours the selection as one named step and goes first in Recent.
+  let suite = "selftest-panes"
+  let defaults = UserDefaults(suiteName: suite)!
+  defer { defaults.removePersistentDomain(forName: suite) }
+  view.select(Array(loose.prefix(2)), .Replace)
+  let swatches = ColorSwatchesModel(model: model, defaults: defaults)
+  swatches.choose(4)
+  turn()
+  if String(document.session.undoName()) != "Recolour 2 Pieces" { return fail("a swatch gave undo \(document.session.undoName())") }
+  if swatches.recent.first != 4 { return fail("recent colours are \(swatches.recent)") }
+  document.undoManager?.undo()
+  turn()
+
+  // 11. X + 20 in the Part tab moves the piece 20 LDU, as one undo step.
+  view.select([loose[0]], .Replace)
+  let part = PartInspectorModel(model: model)
+  guard let x0 = part.position?.x else { return fail("the Part tab has no position for one piece") }
+  let depth = document.session.undoDepth()
+  part.set(axis: 0, to: x0 + 20)
+  turn()
+  guard let x1 = model.snapshot.selected.first?.position.x, abs(x1 - (x0 + 20)) < 1e-6 else {
+    return fail("X + 20 left the piece at \(String(describing: model.snapshot.selected.first?.position.x)), from \(x0)")
+  }
+  if document.session.undoDepth() != depth + 1 { return fail("X + 20 made \(document.session.undoDepth() - depth) undo steps") }
+  document.undoManager?.undo()
+  turn()
+
   print("selftest-panes: ok")
   return 0
 }

@@ -17,9 +17,10 @@ struct SnapshotRequest {
   var focus: [String] = []
   var expandAll = false
   var editStep: Int? = nil
+  var inspector: InspectorTab? = nil
 
   /// Reads `--snapshot out.png --open file [--size WxH] [--appearance light|dark] [--play-to s] [--report json] [--select n...] [--tool move|rotate]
-  /// [--sidebar models|steps] [--focus Name[/Name]] [--expand all] [--edit-step N]`.
+  /// [--sidebar models|steps] [--focus Name[/Name]] [--expand all] [--edit-step N] [--inspector selection|part|submodel]`.
   static func parse(_ args: [String]) -> SnapshotRequest? {
     guard let i = args.firstIndex(of: "--snapshot"), i + 1 < args.count else { return nil }
     var r = SnapshotRequest()
@@ -41,6 +42,7 @@ struct SnapshotRequest {
     if let f = value("--focus") { r.focus = f.split(separator: "/").map(String.init) }
     r.expandAll = value("--expand") == "all"
     if let k = value("--edit-step") { r.editStep = Int(k) }
+    if let i = value("--inspector") { r.inspector = InspectorTab(rawValue: i) }
     if let t = value("--tool") { r.tool = t == "move" ? .move : t == "rotate" ? .rotate : .select }
     if let j = args.firstIndex(of: "--select") {
       r.select = args[(j + 1)...].prefix { UInt32($0) != nil }.compactMap { UInt32($0) }
@@ -90,6 +92,10 @@ enum Snapshot {
       }
       document.postChange()
       viewport.fitAll()
+    }
+    if let tab = request.inspector {
+      controller.model.refresh()
+      controller.model.inspectorTab = tab
     }
     if let k = request.editStep {
       controller.model.sidebarTab = .steps
