@@ -121,6 +121,9 @@ namespace {
 /// so an LDraw import's 16 parts are given the colour their pieces show when all agree.
 bm::doc::Source forProject(const Session::Impl& s) {
   bm::doc::Source out = s.source;
+  // The web requires the plan's name; an import has none of its own: it takes the file's.
+  if (!out.extra.is_object()) out.extra = {{"format", "brickmotion-plan"}, {"version", 1}};
+  if (!out.extra.contains("name")) out.extra["name"] = s.file.stem().string();
   if (out.origin != bm::doc::Origin::LDraw || !s.model) return out;
   auto bake = [&](bm::doc::Def& def) {
     for (bm::doc::Step& step : def.steps)

@@ -125,3 +125,11 @@ TEST_CASE("a viewport follows its session into a reopened document", "[bmapp][sa
   CHECK(seen == std::set<uint32_t>{0});
   CHECK(v.planState() == bmapp::PlanState::Idle);
 }
+
+TEST_CASE("a saved import's plan is named, as the web requires", "[bmapp][save]") {
+  bmapp::Session s;
+  REQUIRE(s.open((fs::path(BM_REPO) / "samples" / "helicopter" / "helicopter.mpd").string()).ok);
+  const auto json = nlohmann::ordered_json::parse(s.projectBytes());
+  CHECK(json["plan"]["name"] == "helicopter");
+  CHECK(json["format"] == "brickmotion-project");
+}
