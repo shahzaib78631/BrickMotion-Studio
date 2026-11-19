@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <exception>
 #include <set>
+#include "bm/doc/source.h"
 #include "bm/io.h"
+#include "commands.h"
 #include "bm/version.h"
 #include "engine.h"
 #include "session_impl.h"
@@ -60,7 +62,8 @@ OpenResult Session::open(const std::string& path) {
     bm::ldraw::FlattenOptions low;
     low.lowResPrimitives = true;
     fresh->low = std::make_unique<bm::ldraw::PartCache>(*fresh->library, bm::ldraw::PartCache::defaultDirectory().parent_path() / "parts-low", low);
-    fresh->model = std::make_unique<bm::Model>(bm::io::load(fresh->file, *fresh->library, fresh->full.get()));
+    fresh->source = bm::doc::fromFile(fresh->file);
+    reflatten(*fresh);
   } catch (const std::exception& e) {
     result.error = e.what();
     return result;
@@ -90,6 +93,41 @@ Summary Session::summarize(const std::vector<uint32_t>& pieces) const {
   s.parts.assign(parts.begin(), parts.end());
   return s;
 }
+
+namespace {
+bm::Vec3 engine(Vec3 v) { return {v.x, v.y, v.z}; }
+}  // namespace
+
+Changed Session::move(const std::vector<uint32_t>& pieces, Vec3 delta, bool continuing) {
+  return impl_->model ? moveCommand(*impl_, pieces, engine(delta), continuing) : Changed{};
+}
+Changed Session::rotate(const std::vector<uint32_t>& pieces, Vec3 axis, double degrees, Vec3 pivot, bool continuing) {
+  return impl_->model ? rotateCommand(*impl_, pieces, engine(axis), degrees, engine(pivot), continuing) : Changed{};
+}
+Changed Session::recolor(const std::vector<uint32_t>& pieces, int code) { return impl_->model ? recolorCommand(*impl_, pieces, code) : Changed{}; }
+Changed Session::remove(const std::vector<uint32_t>& pieces) { return impl_->model ? removeCommand(*impl_, pieces) : Changed{}; }
+Changed Session::duplicate(const std::vector<uint32_t>& pieces, Vec3 offset) {
+  return impl_->model ? duplicateCommand(*impl_, pieces, engine(offset)) : Changed{};
+}
+std::string Session::copy(const std::vector<uint32_t>& pieces) const { return impl_->model ? copyText(*impl_, pieces) : ""; }
+Changed Session::paste(const std::string& text, Vec3 offset) { return impl_->model ? pasteCommand(*impl_, text, engine(offset)) : Changed{}; }
+Changed Session::replacePart(const std::vector<uint32_t>& pieces, const std::string& part) {
+  return impl_->model ? replaceCommand(*impl_, pieces, part) : Changed{};
+}
+Changed Session::makeUnique(uint32_t piece) { return impl_->model ? makeUniqueCommand(*impl_, piece) : Changed{}; }
+void Session::endGesture() {
+  History& h = impl_->history;
+  if (h.cursor > 0) h.done[h.cursor - 1].open = false;
+}
+bool Session::canUndo() const { return impl_->history.cursor > 0; }
+bool Session::canRedo() const { return impl_->history.cursor < impl_->history.done.size(); }
+std::string Session::undoName() const { return canUndo() ? impl_->history.done[impl_->history.cursor - 1].name : ""; }
+std::string Session::redoName() const { return canRedo() ? impl_->history.done[impl_->history.cursor].name : ""; }
+Changed Session::undo() { return undoCommand(*impl_); }
+Changed Session::redo() { return redoCommand(*impl_); }
+bool Session::dirty() const { return impl_->history.saved != static_cast<long>(impl_->history.cursor); }
+void Session::markSaved() { impl_->history.saved = static_cast<long>(impl_->history.cursor); }
+uint64_t Session::version() const { return impl_->version; }
 
 }  // namespace bmapp
 

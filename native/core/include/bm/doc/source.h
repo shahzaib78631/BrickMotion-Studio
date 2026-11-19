@@ -80,6 +80,10 @@ Source fromLDraw(const std::vector<ldraw::File>& files);
 /// Any format bm::io reads; a .brickmotion project gives its plan. Throws io::Error.
 Source fromFile(const std::filesystem::path& path);
 
+/// An item's colour code: its own code, or its name looked up in the library's colour table
+/// (kPlanDefaultColor when the name is not there).
+int colorCode(const Item& item, const ldraw::Library& library);
+
 /// The grid rule: x and z in studs, y in plates, the minimum corner of the turned footprint,
 /// bottom of the piece. `body` is the piece's box in its own space.
 Xform placeOnGrid(const Placement& at, const Box& body);
@@ -92,6 +96,8 @@ struct PieceRef {
 struct Flat {
   Model model;
   std::vector<PieceRef> refs;
+  std::unordered_map<ItemId, Xform> local;  ///< each placed item's placement in its own def
+  std::unordered_map<ItemId, Box> body;     ///< each placed item's box in its own space (grid placement reads it)
 };
 Flat flatten(const Source& source, const ldraw::Library& library, ldraw::PartCache& cache);
 

@@ -49,6 +49,10 @@ class Model {
   void setPlacement(uint32_t piece, const Xform& world) {
     if (piece < data_.pieces.size()) data_.pieces[piece].world = world;
   }
+  /// Recolours one piece (an edit in the app, applied in place).
+  void setColor(uint32_t piece, int color) {
+    if (piece < data_.pieces.size()) data_.pieces[piece].color = color;
+  }
   /// The submodels used, in the order they are first used.
   const std::vector<std::string>& submodels() const { return data_.submodels; }
   /// Number of build steps: one more than the highest piece step; 0 for an empty model.

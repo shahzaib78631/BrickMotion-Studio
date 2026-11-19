@@ -166,7 +166,8 @@ struct Flattener {
   std::unordered_map<std::string, int> colorNames;
   std::unordered_map<std::string, Box> bodies;
   std::unordered_map<std::string, const Def*> defs;
-  std::unordered_map<ItemId, Xform>* locals = nullptr;  ///< placements() records every item's here
+  std::unordered_map<ItemId, Xform>* locals = nullptr;  ///< every placed item's local, when asked for
+  std::unordered_map<ItemId, Box>* boxes = nullptr;     ///< and its body
 
   bool ldrawOrigin() const { return source.origin == Origin::LDraw; }
 
@@ -176,6 +177,15 @@ struct Flattener {
       for (const auto& [number, def] : lib.colors()) colorNames.emplace(colorKey(def.name), number);
     if (const auto it = colorNames.find(colorKey(item.colorText)); it != colorNames.end()) return it->second;
     addOnce(out.report.unknownColors, item.colorText);
+    return kPlanDefaultColor;
+  }
+
+  /// One lookup, for colorCode(): the same table and the same fallback as flattening.
+  static int lookup(const Item& item, const ldraw::Library& lib) {
+    if (item.color != kColorByName) return item.color;
+    const std::string key = colorKey(item.colorText);
+    for (const auto& [number, def] : lib.colors())
+      if (colorKey(def.name) == key) return number;
     return kPlanDefaultColor;
   }
 
@@ -230,6 +240,7 @@ struct Flattener {
         }
         n.local = item.at.grid ? placeOnGrid(item.at, n.body) : item.at.exact;
         if (locals) (*locals)[item.id] = n.local;
+        if (boxes) (*boxes)[item.id] = n.body;
         nodes.push_back(std::move(n));
       }
     }
@@ -283,6 +294,8 @@ Source fromLDrawFiles(std::vector<ldraw::File> files, std::vector<ldraw::File> e
 }
 
 }  // namespace
+
+int colorCode(const Item& item, const ldraw::Library& library) { return Flattener::lookup(item, library); }
 
 Xform placeOnGrid(const Placement& at, const Box& body) {
   const int rot = ((at.rot % 360) + 360) % 360;
@@ -399,7 +412,9 @@ Flat flatten(const Source& source, const ldraw::Library& library, ldraw::PartCac
     if (std::none_of(data.inlineParts.begin(), data.inlineParts.end(), [&](const ldraw::File& g) { return g.name == f.name; }))
       if (const ldraw::File* found = data.library.find(f.name)) data.inlineParts.push_back(*found);
   std::vector<PieceRef> refs;
-  Flattener f{source, data.library, cache, data, refs, {}, {}, {}, nullptr};
+  std::unordered_map<ItemId, Xform> locals;
+  std::unordered_map<ItemId, Box> boxes;
+  Flattener f{source, data.library, cache, data, refs, {}, {}, {}, &locals, &boxes};
   for (const auto& [name, d] : source.submodels) f.defs.emplace(name, &d);
   if (source.origin == Origin::LDraw && !source.rootName.empty()) f.defs.emplace(source.rootName, &source.root);
   std::vector<std::string> stack, path;
@@ -408,14 +423,14 @@ Flat flatten(const Source& source, const ldraw::Library& library, ldraw::PartCac
   std::vector<int> steps;
   std::vector<ItemId> chain;
   f.collect(nodes, Xform::identity(), 16, "", 0, true, path, steps, chain);
-  return Flat{Model(std::move(data)), std::move(refs)};
+  return Flat{Model(std::move(data)), std::move(refs), std::move(locals), std::move(boxes)};
 }
 
 std::unordered_map<ItemId, Xform> placements(const Source& source, const ldraw::Library& library, ldraw::PartCache& cache) {
   Model::Data data{{}, {}, {}, source.inlineParts.empty() ? library : library.withInline(source.inlineParts), {}};
   std::vector<PieceRef> refs;
   std::unordered_map<ItemId, Xform> locals;
-  Flattener f{source, data.library, cache, data, refs, {}, {}, {}, &locals};
+  Flattener f{source, data.library, cache, data, refs, {}, {}, {}, &locals, nullptr};
   for (const auto& [name, d] : source.submodels) f.defs.emplace(name, &d);
   if (source.origin == Origin::LDraw && !source.rootName.empty()) f.defs.emplace(source.rootName, &source.root);
   std::vector<std::string> stack;

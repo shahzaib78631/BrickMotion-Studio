@@ -33,18 +33,6 @@ std::string nowIso() {
   return buf;
 }
 
-/// Colour names compare without case, with '_' for spaces and "gray" for "grey".
-std::string colorKey(std::string_view name) {
-  std::string out;
-  for (char c : name) {
-    if (c == ' ' || c == '-') c = '_';
-    if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
-    out += c;
-  }
-  for (size_t at = out.find("grey"); at != std::string::npos; at = out.find("grey", at)) out.replace(at, 4, "gray");
-  return out;
-}
-
 }  // namespace
 
 Project readProjectFile(std::string_view text) {
@@ -63,14 +51,7 @@ std::string writeProject(const Project& base, const Source& source, bool planCha
 std::string writeMpd(const Source& source, const ldraw::Library& library) {
   ldraw::PartCache cache(library, ldraw::PartCache::defaultDirectory());
   const std::unordered_map<ItemId, Xform> locals = placements(source, library, cache);
-  std::unordered_map<std::string, int> colorNames;
-  for (const auto& [code, def] : library.colors()) colorNames.emplace(colorKey(def.name), code);
-  auto colorOf = [&](const Item& item) {
-    if (item.submodel && source.origin == Origin::Plan) return 16;
-    if (item.color != kColorByName) return item.color;
-    const auto it = colorNames.find(colorKey(item.colorText));
-    return it == colorNames.end() ? kPlanDefaultColor : it->second;
-  };
+  auto colorOf = [&](const Item& item) { return item.submodel && source.origin == Origin::Plan ? 16 : colorCode(item, library); };
 
   std::string out;
   auto def = [&](const std::string& name, const Def& d) {

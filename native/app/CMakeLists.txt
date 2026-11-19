@@ -17,6 +17,8 @@ file(GLOB BMAPP_TESTS CONFIGURE_DEPENDS bmapp/tests/*_test.cpp bmapp/tests/*_tes
 add_executable(bmapp_tests ${BMAPP_TESTS})
 target_compile_options(bmapp_tests PRIVATE $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
 target_link_libraries(bmapp_tests PRIVATE bmapp bm_warnings Catch2::Catch2WithMain)
+# The tests look inside a session (its document and flat model) through bmapp's private headers.
+target_include_directories(bmapp_tests PRIVATE bmapp/src)
 target_compile_definitions(bmapp_tests PRIVATE BM_FIXTURES="${CMAKE_SOURCE_DIR}/tests/fixtures" BM_REPO="${CMAKE_SOURCE_DIR}/..")
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(Catch)

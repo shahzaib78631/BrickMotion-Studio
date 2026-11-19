@@ -89,6 +89,9 @@ class Viewport {
   PlanState planState() const;
   /// Why planning failed, fit to show; empty otherwise.
   std::string planError() const;
+  /// The session's version the current plan was made from; 0 when there is none. An edit drops
+  /// the plan (and stops a planning run), so playing again plans the edited model.
+  uint64_t plannedVersion() const;
 
   struct Impl;
 

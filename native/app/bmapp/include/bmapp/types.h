@@ -23,6 +23,9 @@ enum class PlanState { Idle, Planning, Ready, Failed };
 enum class SelectMode { Replace, Add, Toggle };
 enum class Arrow { Left, Right, Up, Down };
 
+/// The undoable edits.
+enum class Edit { Move, Rotate, Recolor, Delete, Duplicate, Paste, ReplacePart, MakeUnique };
+
 using PieceList = std::vector<uint32_t>;
 using StringList = std::vector<std::string>;
 
@@ -37,6 +40,15 @@ struct OpenResult {
 struct Summary {
   size_t count = 0;                ///< distinct known pieces
   std::vector<std::string> parts;  ///< their distinct part files, sorted
+};
+
+/// What a command changed. When `structure` is false only placements and colours changed and the
+/// piece count is the same: `moved` and `recolored` then list every affected piece (all uses).
+struct Changed {
+  bool structure = false;
+  std::vector<uint32_t> moved;
+  std::vector<uint32_t> recolored;
+  uint64_t version = 0;  ///< the session's version after it
 };
 
 }  // namespace bmapp

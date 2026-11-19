@@ -24,6 +24,7 @@ constexpr double kPi = 3.14159265358979323846;
 /// One planning run. It plans its own copy of the model, so edits made meanwhile cannot reach
 /// it; the viewport takes its result only while that result still belongs to what is shown.
 struct PlanJob {
+  uint64_t version = 0;  ///< the session's version whose model is planned
   bm::CancelToken cancel;
   std::mutex mutex;
   bool done = false;
@@ -48,6 +49,8 @@ struct Viewport::Impl {
 
   std::shared_ptr<PlanJob> job;
   std::optional<bmtools::Planned> planned;  ///< taken from the job on the main thread
+  uint64_t plannedVersion = 0;               ///< the session's version it was planned from
+  uint64_t seen = 0;                         ///< the session's version last drawn
   std::string planError;
   bool playing = false, wantPlay = false, userMoved = false;
   double frame = -1;  ///< -1 until planned: the model is shown finished
@@ -62,9 +65,30 @@ struct Viewport::Impl {
     if (playing) userMoved = true;
   }
 
+  /// The document was edited: a plan of the old model, finished or not, is dropped.
+  void follow() {
+    const uint64_t now = session->version();
+    if (now == seen) return;
+    seen = now;
+    if (job) {
+      job->cancel.cancel();  // the planning block holds its own reference
+      job.reset();
+    }
+    if (planned) {
+      planned.reset();
+      renderer->setRest();
+    }
+    frame = -1;
+    playing = wantPlay = false;
+    planError.clear();
+    dirty = true;
+  }
+
   void startPlanning() {
+    follow();
     if (job || planned || !model()) return;
     auto j = std::make_shared<PlanJob>();
+    j->version = session->version();
     job = j;
     auto copy = std::make_shared<bm::Model>(*model());
     Session::Impl& s = session->impl();
@@ -97,8 +121,13 @@ struct Viewport::Impl {
       job.reset();
       return;
     }
+    if (job->version != session->version()) {  // planned from a model since edited
+      job.reset();
+      return;
+    }
     if (job->planned) {
       planned = std::move(job->planned);
+      plannedVersion = job->version;
       frame = planned->timeline.frames;  // the finished model, which is what is shown
     } else {
       planError = job->error.empty() ? "Planning stopped." : job->error;
@@ -156,6 +185,7 @@ void* Viewport::metalDevice() { return bmr::gpuAvailable() ? bmr::gpuDevice() : 
 Viewport::Viewport(Session& session) : impl_(std::make_unique<Impl>()) {
   Impl& v = *impl_;
   v.session = &session;
+  v.seen = session.version();
   Session::Impl& s = session.impl();
   if (!s.model || !bmr::gpuAvailable()) return;
   v.renderer = bmr::Renderer::create(*s.model, *s.full, *s.low);
@@ -190,6 +220,7 @@ void Viewport::resize(int pixelsWide, int pixelsHigh, double backingScale) {
 bool Viewport::draw(void* metalDrawable) {
   Impl& v = *impl_;
   if (!v.ok) return false;
+  v.follow();
   v.collectPlan();
   if (v.playing && v.planned) v.advance();
   const bmr::FrameStats s = v.renderer->draw(v.orbit.camera(v.aspect(), v.renderer->scene().bounds), v.options, metalDrawable);
@@ -275,6 +306,7 @@ CameraState Viewport::camera() const {
 void Viewport::play(bool on) {
   Impl& v = *impl_;
   if (!v.ok) return;
+  v.follow();
   v.wantPlay = on;
   if (!on) {
     v.playing = false;
@@ -299,13 +331,17 @@ void Viewport::seek(double seconds) {
 
 PlanState Viewport::planState() const {
   const Impl& v = *impl_;
-  if (v.planned) return PlanState::Ready;
-  if (v.job) return PlanState::Planning;
+  const uint64_t now = v.session->version();
+  if (v.planned && v.plannedVersion == now) return PlanState::Ready;
+  if (v.job && v.job->version == now) return PlanState::Planning;
+  if (v.planned || v.job) return PlanState::Idle;  // of a model since edited
   if (!v.planError.empty()) return PlanState::Failed;
   return PlanState::Idle;
 }
 
 std::string Viewport::planError() const { return impl_->planError; }
+
+uint64_t Viewport::plannedVersion() const { return impl_->planned ? impl_->plannedVersion : 0; }
 
 }  // namespace bmapp
 
