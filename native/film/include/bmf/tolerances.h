@@ -20,3 +20,14 @@ inline constexpr double kLeadShare = 0.12;
 inline constexpr double kMinDistance = 10;
 
 }  // namespace bm::film
+
+namespace bm::film {
+
+/// How much a flight matters to the camera, 0..1: the sum of these, as they apply.
+inline constexpr double kImportanceSize = 0.5;        ///< times the unit's share of the model's volume
+inline constexpr double kImportanceUnit = 0.3;        ///< it brings a unit built on its own spot
+inline constexpr double kImportanceFirst = 0.15;      ///< the first of its step
+inline constexpr double kImportanceSilhouette = 0.4;  ///< it makes the model taller or wider...
+inline constexpr double kSilhouetteGrow = 0.08;       ///< ...by more than this share of it
+
+}  // namespace bm::film
