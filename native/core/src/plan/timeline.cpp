@@ -295,7 +295,7 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
       f.move = top, f.parent = parent, f.depth = level, f.pieces = m.unit.pieces, f.flag = m.flag, f.insertion = m.insertion, f.seatTravel = m.seatTravel;
     }
     const Box box = boxOf(m.unit.pieces);
-    const bool flies = m.flag == Flag::None && !m.path.empty() && !box.empty();
+    const bool flies = flown(m.flag) && !m.path.empty() && !box.empty();
     if (flies && m.sub >= 0 && static_cast<size_t>(m.sub) < p.subs.size() && level < 8) {
       // Its own spot, right of everything so far, its own bands round it.
       const Plan& sub = p.subs[static_cast<size_t>(m.sub)];
@@ -536,7 +536,7 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
     for (size_t i = 0; i < count; i++) {
       const Node& nd = nodes[i];
       const Move& m = nd.plan->moves[nd.mi];
-      if (m.flag != Flag::None || m.path.empty() || boxOf(m.unit.pieces).empty()) continue;
+      if (!flown(m.flag) || m.path.empty() || boxOf(m.unit.pieces).empty()) continue;
       flyingUnits++;
       if (nd.own >= 0) continue;
       const std::vector<int> key = stepsOf(pieces[m.unit.pieces.front()]);
@@ -565,7 +565,7 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
       for (int from : c.shownFrom)
         if (static_cast<size_t>(from) == i) tempDirty = true;
     if (tempDirty) rebuildTemp(i);
-    const bool flies = m.flag == Flag::None && !m.path.empty() && !boxOf(unit).empty();
+    const bool flies = flown(m.flag) && !m.path.empty() && !boxOf(unit).empty();
     if (flies) {
       bool turnsInPath = false;
       for (const Xform& x : m.path) turnsInPath = turnsInPath || !isIdentity(x.r);
@@ -592,6 +592,7 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
         if (len > 1e-9) seatFrom = P[0] + d * (std::min(len, std::max(f.seatTravel, 4.0) + 8) / len);
       }
       const Vec3 dOut = np >= 2 ? normalized(P[np - 1] - P[np - 2]) : Vec3{0, -1, 0};
+      f.exitsBelow = dOut.y > 1e-6;
       const bool vertical = dot(dOut, Vec3{0, -1, 0}) > 1 - 1e-6;  // straight up: come down onto it anywhere
       // Where it joins the plan's way: on a way out straight up, as low as what stands round it
       // lets it; otherwise the way's far end, or further out along it, where nothing stands above.
@@ -654,7 +655,7 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
           for (double g = 0; g <= e + 1e-9 && clear; g += 8) clear = columnClear(P[np - 1] + dOut * std::min(g, e));
           if (clear) J = j, extended = true, found = true;
         }
-        if (!found) f.fallback = true;
+        if (!found) f.fallback = true, f.fallbackAt = 1;
       }
       // The way across: from above the floor spot to above the join, just over what stands.
       const double ax = S.x, az = S.z, bx = J.x, bz = J.z;
@@ -804,7 +805,7 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
           Flight trial;  // in the model: the pivot where its seat stands there
           trial.route = route, trial.routeAt = routeAt, trial.routeTurn = routeTurn, trial.turnFrom = r0, trial.pivot = carry.apply(pivot);
           if (clearAcross(trial, sJoin)) break;
-          if (mode == 2) f.fallback = true;
+          if (mode == 2 && !f.fallback) f.fallback = true, f.fallbackAt = 2;
         }
       }
       if (!turnsInPath && route.size() >= 2) {

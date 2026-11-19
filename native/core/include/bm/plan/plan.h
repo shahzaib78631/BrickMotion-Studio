@@ -29,6 +29,9 @@ enum class Flag : uint8_t {
   Budget,            ///< planning was cancelled or ran out of time before this move was settled
 };
 const char* name(Flag flag);
+/// Whether a move with this flag is flown when it has a path: a piece joined to nothing still has
+/// a way in, found against the finished model; only a move with no way at all is not flown.
+inline bool flown(Flag flag) { return flag == Flag::None || flag == Flag::Unjoined; }
 const char* name(UnitSource source);
 
 /// One unit, tried along the directions its connectors allow.

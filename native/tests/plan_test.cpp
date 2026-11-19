@@ -321,6 +321,12 @@ TEST_CASE("empty, one piece, separate assemblies, and a piece joined to nothing"
   const Certificate cert = s.certify(p);
   REQUIRE(cert.certified == 5);
   REQUIRE((cert.flagged == 1 && cert.unjoined == 1 && cert.floating == 0));
+  // Joined to nothing, it still has a way in and flies it: it does not appear in place.
+  REQUIRE(!p.moves.back().path.empty());
+  const Timeline t = buildTimeline(*s.model, s.parts, p);
+  REQUIRE(t.flights.back().frames > 0);
+  REQUIRE(poseAt(t.flights.back(), t.flights.back().startFrame + t.flights.back().frames).t == Vec3{});
+  REQUIRE(certifyPlay(*s.model, s.graph, s.parts, s.shapes, p, t).strictCrossings == 0);
 }
 
 TEST_CASE("a piece that cannot be shown going in is flagged, and the rest is still planned", "[plan][focus]") {

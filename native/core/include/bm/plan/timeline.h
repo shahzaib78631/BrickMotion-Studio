@@ -85,6 +85,8 @@ struct Flight {
   double liftAt = 0;      ///< frames from startFrame when it has lifted clear of the floor
   double seatFrames = 0;  ///< how long the last leg, into the seat, takes
   bool fallback = false;  ///< no way through the air was found clear: it flies above everything
+  int fallbackAt = 0;     ///< why: 1 no join with clear air above it, 2 no clear way across
+  bool exitsBelow = false;  ///< the plan's way out ends going down: it goes in from below
 };
 
 struct CameraKey {

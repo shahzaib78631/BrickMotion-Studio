@@ -112,6 +112,8 @@ Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Libr
               const plan::Flight& f = played.flights[c.flight];
               (c.at < f.startFrame + f.liftAt ? row.transitFloor : f.fallback ? row.transitFallback : row.transitMissed)++;  // on the floor; no way found; the builder's check let it by
             }
+            for (const plan::Flight& f : played.flights)
+              if (f.fallback) (f.fallbackAt == 1 ? row.fallbackNoJoin : row.fallbackAcross)++, row.fallbackBelow += f.exitsBelow ? 1 : 0;
             row.playedUpward = play.upward, row.playedInversions = play.inversions;
             for (const plan::Move& m : built.moves)
               if (m.unit.pieces.size() > 1 && m.source != plan::UnitSource::Authored) {
@@ -207,6 +209,7 @@ nlohmann::json toJson(const Row& row) {
     j["playedStrict"] = row.playedStrict;
     j["playedStrictLegs"] = {row.playedStrictTransit, row.playedStrictPath, row.playedStrictSeat};
     j["transitKinds"] = {row.transitFloor, row.transitFallback, row.transitMissed};
+    j["fallbacks"] = {row.fallbackNoJoin, row.fallbackAcross, row.fallbackBelow};  // flagged flights: no join, no way across; of them going in from below
     j["playedUnder"] = row.playedUnder;
     j["playedUpward"] = row.playedUpward;
     j["playedInversions"] = row.playedInversions;

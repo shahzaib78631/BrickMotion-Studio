@@ -64,7 +64,7 @@ void strictCheck(PlayCheck& out, const Model& model, const connect::Graph& graph
   for (size_t fi = 0; fi < flights.size(); fi++) {
     const Flight& f = flights[fi];
     const std::vector<uint32_t>& unit = piecesOf(f, plan);
-    if (f.frames > 0 && f.flag == Flag::None && !unit.empty() && !f.waypoints.empty()) {
+    if (f.frames > 0 && flown(f.flag) && !unit.empty() && !f.waypoints.empty()) {
       for (uint32_t p : unit) moving[p] = carriedBy(p, fi);
       // What carries it (the unit it helps build, on its spot), fixed while it flies.
       Xform carry;
@@ -175,7 +175,7 @@ PlayCheck certifyPlay(const Model& model, const connect::Graph& graph, ldraw::Pa
   std::vector<std::vector<int>> lowest, highest;
   for (size_t fi = 0; fi < flights.size(); fi++) {
     const Flight& f = flights[fi];
-    if (f.flag == Flag::None && f.frames > 0 && dot(f.insertion, down) < -0.5) out.upward++;
+    if (flown(f.flag) && f.frames > 0 && dot(f.insertion, down) < -0.5) out.upward++;
     if (hasChild[fi]) continue;
     std::vector<int> lo, hi;
     for (uint32_t p : piecesOf(f, plan)) {
@@ -210,7 +210,7 @@ PlayCheck certifyPlay(const Model& model, const connect::Graph& graph, ldraw::Pa
     World::Present& placed = placedIn[context];
     if (placed.empty()) placed.assign(n, 0);
     const double floor = context == 0 ? modelFloor : floorOf(piecesOf(flights[context - 1], plan));
-    if (f.frames > 0 && f.flag == Flag::None && !unit.empty()) {
+    if (f.frames > 0 && flown(f.flag) && !unit.empty()) {
       out.flights++;
       const std::vector<Vec3> points = playedPath(f, 2.0);
       // The seat leg: its mates with placed pieces may cross where they mate.
