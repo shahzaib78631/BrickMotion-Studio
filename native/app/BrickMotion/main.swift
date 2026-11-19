@@ -67,6 +67,9 @@ if args.count >= 3 && args[1] == "--open" {
 if args.count >= 3 && args[1] == "--selftest-bridge" {
   exit(selftestBridge(args[2]))
 }
+if args.count >= 3 && args[1] == "--selftest-panes" {
+  exit(MainActor.assumeIsolated { selftestPanes(args[2]) })
+}
 if args.count >= 3 && args[1] == "--selftest-edit" {
   exit(MainActor.assumeIsolated { selftestEdit(args[2]) })
 }

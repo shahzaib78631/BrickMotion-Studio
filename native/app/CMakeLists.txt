@@ -45,6 +45,7 @@ target_link_libraries(BrickMotion PRIVATE bmapp
 add_test(NAME brickmotion_selftest_bridge
   COMMAND $<TARGET_FILE:BrickMotion> --selftest-bridge ${CMAKE_SOURCE_DIR}/../samples/helicopter/helicopter.mpd)
 add_test(NAME brickmotion_selftest_edit COMMAND $<TARGET_FILE:BrickMotion> --selftest-edit ${CMAKE_SOURCE_DIR}/../samples/helicopter/helicopter.mpd)
+add_test(NAME brickmotion_selftest_panes COMMAND $<TARGET_FILE:BrickMotion> --selftest-panes ${CMAKE_SOURCE_DIR}/../samples/helicopter/helicopter.mpd)
 add_test(NAME brickmotion_import_check COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/import_check.sh $<TARGET_FILE:BrickMotion>)
 add_test(NAME brickmotion_check_plist COMMAND $<TARGET_FILE:BrickMotion> --check-plist)
 add_test(NAME brickmotion_snapshot

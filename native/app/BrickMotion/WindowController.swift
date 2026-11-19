@@ -62,6 +62,18 @@ final class WindowController: NSWindowController, NSToolbarDelegate {
     if on { progress.startAnimation(nil) } else { progress.stopAnimation(nil) }
   }
 
+  // MARK: Editing when a pane has the keyboard
+
+  /// Cut, copy, paste, delete and select all reach the viewport when no text field takes them,
+  /// whichever pane has the keyboard.
+  override func supplementalTarget(forAction action: Selector, sender: Any?) -> Any? {
+    let viewport = viewportController.viewportView
+    let forwarded: [Selector] = [#selector(NSText.cut(_:)), #selector(NSText.copy(_:)), #selector(NSText.paste(_:)),
+                                 #selector(NSText.delete(_:)), #selector(NSText.selectAll(_:))]
+    if forwarded.contains(action) && viewport.responds(to: action) { return viewport }
+    return super.supplementalTarget(forAction: action, sender: sender)
+  }
+
   // MARK: Toolbar
 
   @objc private func chooseTool(_ sender: NSToolbarItemGroup) {
