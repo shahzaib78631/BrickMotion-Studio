@@ -22,6 +22,9 @@ struct ShotOptions {
   bool lightsFollow = false;    ///< --lights-follow; --lights-fixed (the default) sets it false
   bool backgroundSet = false;
   float background[3] = {1, 1, 1};  ///< linear
+  /// --correct: pieces drawn a little off what holds them are set in place before anything is
+  /// drawn or planned (bm::plan::Options::correctPlacements), as bm plan --correct does.
+  bool correct = false;
 };
 
 /// Reads the option at args[i] (and its value, moving `i` past it). 1: it was one of these; 0:

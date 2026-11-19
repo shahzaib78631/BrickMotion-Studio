@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstring>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -32,7 +33,7 @@ constexpr int kOk = 0, kFailure = 1, kUsage = 2;
 int usage() {
   std::fprintf(stderr,
                "usage: bmshot <model file> --out <png> [--size WxH] [--frame N] [--azimuth a --elevation e | --eye x,y,z --target x,y,z] [--fov deg] [--no-edges] [--no-shadows] [--no-ao] [--no-floor]\n"
-               "              [--no-cull] [--lights-fixed|--lights-follow] [--raytraced-glass] [--background r,g,b] [--detail 0|1|2] [--select piece,piece,...] [--stats] [--repeat CxR] [--save-model <ldr>]\n"
+               "              [--no-cull] [--lights-fixed|--lights-follow] [--raytraced-glass] [--background r,g,b] [--detail 0|1|2] [--select piece,piece,...] [--stats] [--repeat CxR] [--save-model <ldr>] [--correct]\n"
                "       bmshot <model file> --bench <frames> [--frame N] [--repeat CxR] [--size WxH] [--detail 0|1|2] [--maps-whole] [--no-...]\n");
   return kUsage;
 }
@@ -154,7 +155,15 @@ int main(int argc, char** argv) {
     lowOptions.lowResPrimitives = true;
     ldraw::PartCache low(library, ldraw::PartCache::defaultDirectory().parent_path() / "parts-low", lowOptions);
     const Model loaded = io::load(input, library, &full);
-    const Model model = columns * rows > 1 ? bmr::repeated(loaded, full, columns, rows, 80) : loaded;
+    Model model = columns * rows > 1 ? bmr::repeated(loaded, full, columns, rows, 80) : loaded;
+    // Planned before anything is drawn when it changes what is drawn (--correct), or a frame is asked for.
+    std::optional<bmtools::Planned> planned;
+    if (frame >= 0 || shot.correct) {
+      bm::plan::Options planOptions;
+      planOptions.correctPlacements = shot.correct;
+      planned = bmtools::planModel(model, library, full, ldraw, planOptions, bm::plan::styleOf(input));
+      bmtools::reportCorrections("bmshot", model, planned->corrections);
+    }
     if (!saveModel.empty()) {
       // The scene drawn, as one flattened LDraw file (bmview can open the benchmark's scene).
       std::FILE* f = std::fopen(saveModel.c_str(), "wb");
@@ -181,8 +190,7 @@ int main(int argc, char** argv) {
     plan::Plan plan;
     plan::Timeline timeline;
     if (frame >= 0) {
-      bmtools::Planned planned = bmtools::planModel(model, library, full, ldraw, {}, bm::plan::styleOf(input));
-      plan = std::move(planned.plan), timeline = std::move(planned.timeline);
+      plan = std::move(planned->plan), timeline = std::move(planned->timeline);
       renderer->setFrame(plan, timeline, frame);
       bmtools::shotCamera(shot, renderer->scene().bounds, &timeline, orbit);
       std::fprintf(stderr, "bmshot: frame %d of %d\n", frame, timeline.frames);

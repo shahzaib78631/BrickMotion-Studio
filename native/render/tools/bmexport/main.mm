@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -35,7 +36,7 @@ constexpr const char* kRigs[] = {"build-fl"};
 int usage() {
   std::fprintf(stderr,
                "usage: bmexport still <model file> --out <png> [--frame N] [--samples S] [--seed K] [--rig build-fl] [--no-denoise] [--denoise-device cpu|metal]\n"
-               "                [--size WxH] [--azimuth a --elevation e | --eye x,y,z --target x,y,z] [--fov deg] [--lights-fixed|--lights-follow] [--background r,g,b] [--repeat CxR]\n"
+               "                [--size WxH] [--azimuth a --elevation e | --eye x,y,z --target x,y,z] [--fov deg] [--lights-fixed|--lights-follow] [--background r,g,b] [--repeat CxR] [--correct]\n"
                "       bmexport sound <model file> --out <wav> [--size WxH] [sound options]   the build's snaps, 48 kHz stereo (--size: the film's shape, for panning)\n"
                "       bmexport sound-gallery <dir> [sound options]          the listening cases, one WAV each\n"
                "         sound options: --style physics|web   physics (default): the parts' own sound; web: the web app's snap\n"
@@ -114,16 +115,23 @@ int still(const std::vector<std::string_view>& args) {
     lowOptions.lowResPrimitives = true;
     ldraw::PartCache low(library, ldraw::PartCache::defaultDirectory().parent_path() / "parts-low", lowOptions);
     const Model loaded = io::load(input, library, &full);
-    const Model model = shot.columns * shot.rows > 1 ? bmr::repeated(loaded, full, shot.columns, shot.rows, 80) : loaded;
+    Model model = shot.columns * shot.rows > 1 ? bmr::repeated(loaded, full, shot.columns, shot.rows, 80) : loaded;
+    // Planned before the scene is built when it changes what is drawn (--correct), or a frame is asked for.
+    std::optional<bmtools::Planned> planned;
+    if (shot.frame >= 0 || shot.correct) {
+      bm::plan::Options planOptions;
+      planOptions.correctPlacements = shot.correct;
+      planned = bmtools::planModel(model, library, full, ldraw, planOptions, bm::plan::styleOf(input));
+      bmtools::reportCorrections("bmexport", model, planned->corrections);
+    }
     bmr::Scene scene = bmr::buildScene(model, full);
     bmr::MeshLibrary meshes(model, full, low);
     bmr::OrbitCamera orbit;
     if (!bmtools::shotCamera(shot, scene.bounds, nullptr, orbit)) return usage();
     if (shot.frame >= 0) {
-      const bmtools::Planned planned = bmtools::planModel(model, library, full, ldraw, {}, bm::plan::styleOf(input));
-      bmr::applyFrame(scene, model, planned.plan, planned.timeline, shot.frame);
-      bmtools::shotCamera(shot, scene.bounds, &planned.timeline, orbit);
-      std::fprintf(stderr, "bmexport: frame %d of %d\n", shot.frame, planned.timeline.frames);
+      bmr::applyFrame(scene, model, planned->plan, planned->timeline, shot.frame);
+      bmtools::shotCamera(shot, scene.bounds, &planned->timeline, orbit);
+      std::fprintf(stderr, "bmexport: frame %d of %d\n", shot.frame, planned->timeline.frames);
     }
     const auto start = std::chrono::steady_clock::now();
     path->prepare(scene, meshes);
@@ -214,8 +222,11 @@ int sound(const std::vector<std::string_view>& args) {
   try {
     const ldraw::Library library(ldraw);
     ldraw::PartCache full(library, ldraw::PartCache::defaultDirectory());
-    const Model model = io::load(input, library, &full);
-    const bmtools::Planned planned = bmtools::planModel(model, library, full, ldraw, {}, bm::plan::styleOf(input));
+    Model model = io::load(input, library, &full);
+    bm::plan::Options planOptions;
+    planOptions.correctPlacements = shot.correct;
+    const bmtools::Planned planned = bmtools::planModel(model, library, full, ldraw, planOptions, bm::plan::styleOf(input));
+    bmtools::reportCorrections("bmexport", model, planned.corrections);
     const bmr::Scene scene = bmr::buildScene(model, full);
     std::vector<Box> boxes(model.pieces().size());
     for (size_t p = 0; p < boxes.size() && p < scene.where.size(); p++) {

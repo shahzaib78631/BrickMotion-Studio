@@ -1,5 +1,6 @@
 #include "engine.h"
 
+#include <cstdio>
 #include <cstdlib>
 #include "bm/collide/world.h"
 #include "bm/connect/graph.h"
@@ -22,7 +23,13 @@ std::string ldrawDir() {
   return "";
 }
 
-Planned planModel(const Model& model, const ldraw::Library& library, ldraw::PartCache& full, const fs::path& ldraw, const plan::Options& options, const plan::Style& style) {
+void reportCorrections(const char* tool, const Model& model, const std::vector<connect::Correction>& corrections) {
+  for (const connect::Correction& c : corrections)
+    std::fprintf(stderr, "%s: %s %s is %.1f LDU off its line on %s %s, %+.0f along, %.1f deg: %s\n", tool, model.pieces()[c.piece].part.c_str(), model.pieces()[c.piece].id.c_str(), c.offset,
+                 model.pieces()[c.onto].part.c_str(), model.pieces()[c.onto].id.c_str(), c.along, c.angle, c.applied ? "set in place" : c.note.empty() ? "--correct sets it in place" : c.note.c_str());
+}
+
+Planned planModel(Model& model, const ldraw::Library& library, ldraw::PartCache& full, const fs::path& ldraw, const plan::Options& options, const plan::Style& style) {
   const fs::path repo = ldraw.parent_path().parent_path();
   const char* shadowEnv = std::getenv("BM_SHADOW_DIR");
   const connect::ShadowLibrary shadow(shadowEnv ? fs::path(shadowEnv) : repo / "vendor" / "LDCadShadowLibrary");
@@ -33,8 +40,7 @@ Planned planModel(const Model& model, const ldraw::Library& library, ldraw::Part
   cli::loadEngineData(repo, db, gears);
   collide::ShapeCache shapes;
   Planned out;
-  out.graph = connect::buildGraph(model, db, &gears);
-  out.plan = plan::planInferred(model, out.graph, db, full, shapes, options);
+  out.plan = plan::planModel(model, out.graph, db, &gears, full, shapes, options, nullptr, &out.corrections);
   out.timeline = plan::buildTimeline(model, full, out.plan, style);
   return out;
 }

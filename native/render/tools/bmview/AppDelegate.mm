@@ -1,5 +1,7 @@
 #import "AppDelegate.h"
 
+#include <cmath>
+#include <algorithm>
 #include <exception>
 #include <memory>
 #include <string>
@@ -37,16 +39,16 @@ std::string describe(const bm::LoadReport& r) {
 
 @implementation AppDelegate {
   NSString* _path;
-  BOOL _play, _raytracedGlass;
+  BOOL _play, _raytracedGlass, _correct;
   std::unique_ptr<bmview::Session> _session;
   NSWindow* _window;
   ViewportView* _view;
   dispatch_group_t _planning;
 }
 
-- (instancetype)initWithFile:(NSString*)path play:(BOOL)play raytracedGlass:(BOOL)raytracedGlass {
+- (instancetype)initWithFile:(NSString*)path play:(BOOL)play raytracedGlass:(BOOL)raytracedGlass correct:(BOOL)correct {
   self = [super init];
-  if (self) _path = path, _play = play, _raytracedGlass = raytracedGlass, _planning = dispatch_group_create();
+  if (self) _path = path, _play = play, _raytracedGlass = raytracedGlass, _correct = correct, _planning = dispatch_group_create();
   return self;
 }
 
@@ -90,14 +92,20 @@ std::string describe(const bm::LoadReport& r) {
   // The plan is made while the model is already on screen.
   bmview::Session* session = _session.get();
   __weak AppDelegate* weakSelf = self;
-  const BOOL play = _play;
+  const BOOL play = _play, correct = _correct;
   dispatch_group_async(_planning, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
     std::optional<bmtools::Planned> planned;
+    // --correct: planned on a copy, which takes the place of the model shown once planned when
+    // any piece was set in place, so what is drawn is what was planned (bm plan --correct).
+    std::shared_ptr<bm::Model> corrected;
     std::string error;
     try {
       bm::plan::Options options;
       options.cancel = &session->cancel;
-      planned = bmtools::planModel(*session->model, *session->library, *session->full, session->ldraw, options, bm::plan::styleOf(session->file));
+      options.correctPlacements = correct;
+      if (correct) corrected = std::make_shared<bm::Model>(*session->model);
+      planned = bmtools::planModel(correct ? *corrected : *session->model, *session->library, *session->full, session->ldraw, options, bm::plan::styleOf(session->file));
+      if (correct) bmtools::reportCorrections("bmview", *corrected, planned->corrections);
     } catch (const std::exception& e) {
       error = e.what();
     }
@@ -109,6 +117,20 @@ std::string describe(const bm::LoadReport& r) {
         me->_window.subtitle = [NSString stringWithFormat:@"could not plan: %s", error.c_str()];
         me->_window.title = me->_path.lastPathComponent;
         return;
+      }
+      const bool moved = corrected && std::any_of(planned->corrections.begin(), planned->corrections.end(), [](const bm::connect::Correction& c) { return c.applied; });
+      if (moved) {
+        auto model = std::make_unique<bm::Model>(std::move(*corrected));
+        auto renderer = bmr::Renderer::create(*model, *session->full, *session->low);
+        if (renderer) {
+          const double scale = me->_window.backingScaleFactor;
+          renderer->resize(static_cast<int>(std::lround(me->_view.bounds.size.width * scale)), static_cast<int>(std::lround(me->_view.bounds.size.height * scale)));
+          session->renderer = std::move(renderer);  // the old renderer goes while the model it drew still exists
+          session->model = std::move(model);
+        } else {
+          me->_window.subtitle = @"could not draw the corrected model";  // its plan is not shown on the model as drawn
+          return;
+        }
       }
       session->planned = std::move(planned);
       [me setTitle:NO];

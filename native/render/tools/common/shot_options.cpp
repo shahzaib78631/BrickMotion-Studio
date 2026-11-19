@@ -27,6 +27,7 @@ int parseShotOption(ShotOptions& o, const std::vector<std::string_view>& args, s
   else if (a == "--azimuth") o.azimuth = std::atof(value().c_str());
   else if (a == "--elevation") o.elevation = std::atof(value().c_str());
   else if (a == "--lights-fixed") o.lightsFollow = false;
+  else if (a == "--correct") o.correct = true;
   else if (a == "--lights-follow") o.lightsFollow = true;
   else if (a == "--background") {
     unsigned r = 0, g = 0, b = 0;

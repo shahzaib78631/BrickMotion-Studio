@@ -18,9 +18,17 @@ struct Planned {
   bm::plan::Plan plan;
   bm::plan::Timeline timeline;
   bm::connect::Graph graph;  ///< the joints the plan was made from
+  /// Pieces drawn a little off what holds them, each applied or why not (connect::Correction).
+  std::vector<bm::connect::Correction> corrections;
 };
 /// Planned as `bm plan` plans it, with the engine data beside the LDraw library's repository.
-Planned planModel(const bm::Model& model, const bm::ldraw::Library& library, bm::ldraw::PartCache& full, const std::filesystem::path& ldraw,
+/// With options.correctPlacements, `model` is changed: its pieces drawn a little off what holds
+/// them are set in place (those the plan keeps there). Plan before building what is drawn, so
+/// what is drawn is what was planned and certified.
+/// Tells stderr which pieces were drawn a little off what holds them, and what became of each.
+void reportCorrections(const char* tool, const bm::Model& model, const std::vector<bm::connect::Correction>& corrections);
+
+Planned planModel(bm::Model& model, const bm::ldraw::Library& library, bm::ldraw::PartCache& full, const std::filesystem::path& ldraw,
                   const bm::plan::Options& options = {}, const bm::plan::Style& style = {});
 
 }  // namespace bmtools
