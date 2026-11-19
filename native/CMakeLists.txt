@@ -48,3 +48,9 @@ add_subdirectory(tests)
 add_subdirectory(sound)
 add_subdirectory(film)
 add_subdirectory(render)
+
+# The native editor needs Swift; it builds in its own tree (-DBM_APP=ON) so it never breaks this one.
+option(BM_APP "Build BrickMotion.app (needs Swift)" OFF)
+if(BM_APP)
+  add_subdirectory(app)
+endif()
