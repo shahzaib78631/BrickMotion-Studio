@@ -12,6 +12,8 @@ namespace bm::plan {
 enum class Ease : uint8_t { Smooth, Gentle, Soft, Linear };
 double eased(Ease ease, double u);
 bool parse(const std::string& name, Ease& out);
+enum class FlightShape : uint8_t { Web, Arc };
+bool parse(const std::string& name, FlightShape& out);  ///< "web" or "arc"
 
 struct Style {
   double fps = 30;
@@ -31,6 +33,9 @@ struct Style {
   staging::Match floorMatch = staging::Match::Fill;
   double floorAspect = 1;
   Ease ease = Ease::Smooth;
+  /// The flight's shape. Web: the web app's (up, rest, across, rest, down). Arc: up and across
+  /// as one rounded sweep, at rest only at the top of the drop, then the web's drop into the seat.
+  FlightShape shape = FlightShape::Web;
   /// The way through the air: never closer than `clearance` above anything in the way (a brick),
   /// never faster than `speed`, and into the seat no faster than `seatSpeed` (LDU a second).
   double clearance = 24, speed = 10000, seatSpeed = 400;
@@ -81,6 +86,9 @@ struct Flight {
     double start = 0, frames = 0, from = 0, to = 0;
   };
   std::vector<Phase> phases;
+  /// The leg it turns on, by that leg's own clock (none before it, all of it after); -1: by
+  /// distance, as `routeTurn` says.
+  int turnPhase = -1;
   Ease ease = Ease::Smooth;
   double liftAt = 0;      ///< frames from startFrame when it has lifted clear of the floor
   double seatFrames = 0;  ///< how long the last leg, into the seat, takes

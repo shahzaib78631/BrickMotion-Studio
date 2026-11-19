@@ -30,6 +30,12 @@ bool parse(const std::string& n, Ease& out) {
   return false;
 }
 
+bool parse(const std::string& n, FlightShape& out) {
+  if (n == "web") return out = FlightShape::Web, true;
+  if (n == "arc") return out = FlightShape::Arc, true;
+  return false;
+}
+
 Style styleOf(const std::filesystem::path& project) {
   Style style;
   std::ifstream in(project);
@@ -180,15 +186,38 @@ struct Grid {
   }
 };
 
-/// A flown flight's motion at a distance along its route.
-Xform routeMotion(const Flight& f, double s) {
+/// Where a flown flight is `t` frames after it starts: the distance along its route, the leg
+/// it is on, and how far through that leg it is, eased.
+struct Clock {
+  double s = 0, e = 1;
+  size_t phase = 0;
+};
+Clock clockAt(const Flight& f, double t) {
+  Clock c;
+  c.s = f.routeAt.back(), c.phase = f.phases.size() - 1;
+  for (size_t k = 0; k < f.phases.size(); k++) {
+    const Flight::Phase& ph = f.phases[k];
+    if (t <= ph.start + ph.frames) {
+      c.phase = k;
+      c.e = eased(f.ease, ph.frames > 0 ? std::clamp((t - ph.start) / ph.frames, 0.0, 1.0) : 1);
+      c.s = ph.from + (ph.to - ph.from) * c.e;
+      break;
+    }
+  }
+  return c;
+}
+
+/// A flown flight's motion at a distance along its route; `turn` >= 0: that much of its turn
+/// done (else as `routeTurn` says there).
+Xform routeMotion(const Flight& f, double s, double turn = -1) {
   const size_t k = std::min<size_t>(f.route.size() - 2, static_cast<size_t>(std::max<std::ptrdiff_t>(0, std::upper_bound(f.routeAt.begin(), f.routeAt.end(), s) - f.routeAt.begin() - 1)));
   const double span = f.routeAt[k + 1] - f.routeAt[k], w = span > 0 ? std::clamp((s - f.routeAt[k]) / span, 0.0, 1.0) : 1;
   const Vec3 c = f.route[k] + (f.route[k + 1] - f.route[k]) * w;
   Xform x;
   if (!isIdentity(f.turnFrom)) {
     double u;
-    if (f.routeTurn.size() == f.route.size()) u = f.routeTurn[k] + (f.routeTurn[k + 1] - f.routeTurn[k]) * w;
+    if (turn >= 0) u = turn;
+    else if (f.routeTurn.size() == f.route.size()) u = f.routeTurn[k] + (f.routeTurn[k + 1] - f.routeTurn[k]) * w;
     else u = eased(Ease::Smooth, f.turnEnd > f.turnStart ? (s - f.turnStart) / (f.turnEnd - f.turnStart) : (s >= f.turnEnd ? 1 : 0));
     x.r = u >= 1 ? Mat3{} : u <= 0 ? f.turnFrom : matOf(towardsNone(quatOf(f.turnFrom), u));
   }
@@ -664,99 +693,63 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
       const int N = std::clamp(static_cast<int>(std::ceil(X / 8)), 1, 240);
       const double dx = X / N;
       auto at3 = [&](double x, double h) { return Vec3{ax + dir.x * x, -h, az + dir.z * x}; };
-      // The unit's turn, by how far across it is: none over the floor spot, all of it before it
-      // comes down. Each sample of the way is sized by the unit as turned there.
-      const double r = std::clamp(X / 4, 0.0, 16.0);
-      double xa = 2 * r, xb = X - 2 * r;
-      if (xb - xa < X * 0.25) xa = X * 0.25, xb = X * 0.75;
+      // As the web's flight (src/anim/timeline.ts flightPose): straight up off the floor, level
+      // across, turning on the way by the crossing's own clock, and straight down onto the plan's
+      // way. Each sample of the way across is sized by the unit over the share of its turn done
+      // round it (all of it, where it turns in place).
       const Quat q0 = quatOf(r0);
-      auto turnAt = [&](double x) { return turning ? eased(Ease::Smooth, xb > xa ? (x - xa) / (xb - xa) : (x >= xb ? 1 : 0)) : 1.0; };
+      auto turnAt = [&](double x) { return turning ? (X > 1e-9 ? std::clamp(x / X, 0.0, 1.0) : 1.0) : 1.0; };
       std::vector<double> reach(static_cast<size_t>(N) + 1), drop(static_cast<size_t>(N) + 1);  // how far out, and down, the unit reaches from its pivot
       for (int k = 0; k <= N; k++) {
-        const double u = turnAt(k * dx);
-        const Mat3 R = u >= 1 ? Mat3{} : matOf(towardsNone(q0, u));
+        const double ua = turning ? (X > 1e-9 ? turnAt((k - 1) * dx) : 0.0) : 1.0, ub = turnAt((k + 1) * dx);
         double out = 0, dn = 0;
-        for (int c = 0; c < 8; c++) {
-          const Vec3 corner = R * (Vec3{c & 1 ? seatBox.max.x : seatBox.min.x, c & 2 ? seatBox.max.y : seatBox.min.y, c & 4 ? seatBox.max.z : seatBox.min.z} - pivot);
-          out = std::max(out, std::hypot(corner.x, corner.z)), dn = std::max(dn, corner.y);
+        for (int j = 0; j <= (turning ? 8 : 0); j++) {
+          const double u = turning ? ua + (ub - ua) * j / 8 : 1.0;
+          const Mat3 R = u >= 1 ? Mat3{} : matOf(towardsNone(q0, u));
+          for (int c = 0; c < 8; c++) {
+            const Vec3 corner = R * (Vec3{c & 1 ? seatBox.max.x : seatBox.min.x, c & 2 ? seatBox.max.y : seatBox.min.y, c & 4 ? seatBox.max.z : seatBox.min.z} - pivot);
+            out = std::max(out, std::hypot(corner.x, corner.z)), dn = std::max(dn, corner.y);
+          }
         }
         reach[static_cast<size_t>(k)] = out, drop[static_cast<size_t>(k)] = dn;
       }
-      auto buildRoute = [&](int mode, std::vector<Vec3>& route, std::vector<double>& turn, double& sLift, double& sJoin) {
-        // mode 0: just over what stands; 1: level, at the highest of that; 2: above everything
-        std::vector<double> need(static_cast<size_t>(N) + 1), env;
-        double deepest = 0;
+      const double deepest = *std::max_element(drop.begin(), drop.end());
+      auto buildRoute = [&](int mode, bool arc, std::vector<Vec3>& route, std::vector<double>& turn, double& sLift, double& sCruise, double& sJoin) {
+        // The height across, as the web's skyY: a brick over its own top where it waits and
+        // where it lands, and over (mode 0) what stands below the way across, or (mode 1)
+        // everything.
+        double level = std::max(up(S), up(P[0])) + below + style.clearance + deepest;
         for (int k = 0; k <= N; k++) {
           const size_t a = static_cast<size_t>(std::max(0, k - 1)), b = static_cast<size_t>(std::min(N, k + 1));
           const double out = std::max({reach[a], reach[static_cast<size_t>(k)], reach[b]}), dn = std::max({drop[a], drop[static_cast<size_t>(k)], drop[b]});
-          deepest = std::max(deepest, dn);
-          need[static_cast<size_t>(k)] = standing(ax + dir.x * k * dx, az + dir.z * k * dx, out) + style.clearance + dn;
+          level = std::max(level, standing(ax + dir.x * k * dx, az + dir.z * k * dx, out) + style.clearance + dn);
         }
-        env = need;
-        for (int k = 1; k <= N; k++) env[static_cast<size_t>(k)] = std::max(env[static_cast<size_t>(k)], env[static_cast<size_t>(k) - 1] - dx);  // climbs and dips no steeper than 45 degrees
-        for (int k = N - 1; k >= 0; k--) env[static_cast<size_t>(k)] = std::max(env[static_cast<size_t>(k)], env[static_cast<size_t>(k) + 1] - dx);
-        // Smoothed, never under: a mean of maxima over the same span.
-        const int half = std::max(1, static_cast<int>(std::ceil(12 / std::max(dx, 1e-9))));
-        std::vector<double> peak(env.size()), cruise(env.size());
-        for (int k = 0; k <= N; k++) {
-          double h = -std::numeric_limits<double>::infinity();
-          for (int j = std::max(0, k - half); j <= std::min(N, k + half); j++) h = std::max(h, env[static_cast<size_t>(j)]);
-          peak[static_cast<size_t>(k)] = h;
-        }
-        for (int k = 0; k <= N; k++) {
-          double sum = 0;
-          int cnt = 0;
-          for (int j = std::max(0, k - half); j <= std::min(N, k + half); j++) sum += peak[static_cast<size_t>(j)], cnt++;
-          cruise[static_cast<size_t>(k)] = sum / cnt + dx / 4 + 1;  // room for the rounded corners between samples
-        }
-        if (mode == 1) std::fill(cruise.begin(), cruise.end(), *std::max_element(cruise.begin(), cruise.end()));
-        if (mode == 2) std::fill(cruise.begin(), cruise.end(), std::max({built.highest(), temp.highest(), groundUp}) + style.clearance + deepest);
-        // Level at both ends, a corner's radius higher, so rounding the corners keeps above.
-        double c0 = -std::numeric_limits<double>::infinity(), cX = c0;
-        for (int k = 0; k <= N; k++) {
-          if (k * dx <= 2 * r) c0 = std::max(c0, cruise[static_cast<size_t>(k)]);
-          if (X - k * dx <= 2 * r) cX = std::max(cX, cruise[static_cast<size_t>(k)]);
-        }
-        c0 = std::max(c0 + r, up(S) + r);
-        cX = std::max(cX + r, up(J) + r);
-        for (int k = 0; k <= N; k++) {
-          const double x = k * dx;
-          double& c = cruise[static_cast<size_t>(k)];
-          c = std::max({c, c0 - std::max(0.0, x - 2 * r), cX - std::max(0.0, (X - x) - 2 * r)});
-        }
-        // The corners: up, along, down.
-        std::vector<std::pair<double, double>> q;  // (x, height)
-        q.push_back({0, up(S)});
-        for (int k = 0; k <= N; k++) q.push_back({k * dx, cruise[static_cast<size_t>(k)]});
-        q.push_back({X, up(J)});
+        if (mode == 1) level = std::max(level, std::max({built.highest(), temp.highest(), groundUp}) + style.clearance + deepest);
+        level = std::max(level, up(J));
         route.clear(), turn.clear();
-        sLift = 0;
-        route.push_back(at3(q[0].first, q[0].second)), turn.push_back(turnAt(0));
+        route.push_back(S), turn.push_back(turning ? 0.0 : 1.0);
         double s = 0;
         auto addS = [&](Vec3 v, double u) {
           if (length(v - route.back()) <= 1e-6) return;
           s += length(v - route.back());
           route.push_back(v), turn.push_back(u);
         };
-        for (size_t k = 1; k + 1 < q.size(); k++) {
-          const double ix = q[k].first - q[k - 1].first, ih = q[k].second - q[k - 1].second, ox = q[k + 1].first - q[k].first, oh = q[k + 1].second - q[k].second;
-          const double li = std::hypot(ix, ih), lo = std::hypot(ox, oh);
-          const double cosTurn = li > 1e-9 && lo > 1e-9 ? (ix * ox + ih * oh) / (li * lo) : 1;
-          const bool end = k == 1 || k + 2 == q.size();
-          const double cut = cosTurn > 0.99999 ? 0 : std::min({end ? r : dx / 2, 0.5 * li, 0.5 * lo});
-          if (k == 1) sLift = s + length(at3(q[k].first - (li > 0 ? ix / li * cut : 0), q[k].second - (li > 0 ? ih / li * cut : 0)) - route.back());
-          if (cut < 1e-6) {
-            addS(at3(q[k].first, q[k].second), turnAt(q[k].first));
-            continue;
-          }
-          const double fx = q[k].first - ix / li * cut, fh = q[k].second - ih / li * cut, tx = q[k].first + ox / lo * cut, th = q[k].second + oh / lo * cut;
-          const int pts = std::max(2, static_cast<int>(std::ceil(cut)));  // about a point an LDU
-          for (int j = 0; j <= pts; j++) {
+        // Arc: the corner from up to across rounded (a quadratic, about a point an LDU), so the
+        // sweep up and over never stops; it may cut under `level`, which the check sees.
+        const double rc = arc ? std::min({style.corner, 0.5 * (level - up(S)), 0.5 * X}) : 0.0;
+        if (rc > 1e-6) {
+          addS(at3(0, level - rc), turning ? 0.0 : 1.0);
+          const int pts = std::max(2, static_cast<int>(std::ceil(rc)));
+          for (int j = 1; j <= pts; j++) {
             const double u = static_cast<double>(j) / pts;
-            const double x = fx * (1 - u) * (1 - u) + q[k].first * 2 * u * (1 - u) + tx * u * u, h = fh * (1 - u) * (1 - u) + q[k].second * 2 * u * (1 - u) + th * u * u;
-            addS(at3(x, h), turnAt(x));
+            addS(at3(rc * u * u, (level - rc) * (1 - u) * (1 - u) + level * (2 * u * (1 - u) + u * u)), turning ? 0.0 : 1.0);
           }
+        } else {
+          addS(at3(0, level), turning ? 0.0 : 1.0);
         }
+        sLift = s;
+        addS(at3(X, level), 1);
+        sCruise = s;
         addS(J, 1);
         sJoin = s;
         // Then the plan's own way, from the join.
@@ -769,89 +762,98 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
       };
       // Checks the way across exactly, as it will be played: each piece against what stands then.
       std::vector<uint32_t> near;
-      auto clearAcross = [&](const Flight& trial, double sJoin) {
+      auto clearAt = [&](const Flight& trial, double s, double u) {
+        const Xform motion = routeMotion(trial, s, u);
+        for (uint32_t p : unit) {
+          if (local[p].empty()) continue;
+          const Xform pose = motion * carry * pieces[p].world;
+          const Box b = local[p].transformed(pose);
+          near.clear();
+          world.near(b, &builtPresent, near);
+          for (uint32_t q : near)
+            if (collide::overlap(world.shape(p), pose, world.shape(q), world.pose(q))) return false;
+          for (const Obstacle& o : tempList) {
+            if (std::find(unit.begin(), unit.end(), o.piece) != unit.end()) continue;
+            if (o.box.min.x > b.max.x || b.min.x > o.box.max.x || o.box.min.y > b.max.y || b.min.y > o.box.max.y || o.box.min.z > b.max.z || b.min.z > o.box.max.z) continue;
+            if (collide::overlap(world.shape(p), pose, world.shape(o.piece), o.pose)) return false;
+          }
+        }
+        return true;
+      };
+      auto clearAcross = [&](const Flight& trial, double sLift, double sCruise, double sJoin) {
         const double step = collide::kSweepStep;  // as finely as the strict check looks
         double turned = 0;  // how far a corner of the unit sweeps in turning, at most
         if (turning) turned = r3 * 2 * std::acos(std::clamp(std::abs(q0.w), 0.0, 1.0));
+        auto turnOf = [&](double s) { return !turning ? 1.0 : s <= sLift ? 0.0 : s >= sCruise ? 1.0 : (s - sLift) / (sCruise - sLift); };
         const int samples = std::max(2, static_cast<int>(std::ceil((sJoin + turned) / step)));
-        for (int k = 0; k <= samples; k++) {
-          const Xform motion = routeMotion(trial, sJoin * k / samples);
-          for (uint32_t p : unit) {
-            if (local[p].empty()) continue;
-            const Xform pose = motion * carry * pieces[p].world;
-            const Box b = local[p].transformed(pose);
-            near.clear();
-            world.near(b, &builtPresent, near);
-            for (uint32_t q : near)
-              if (collide::overlap(world.shape(p), pose, world.shape(q), world.pose(q))) return false;
-            for (const Obstacle& o : tempList) {
-              if (std::find(unit.begin(), unit.end(), o.piece) != unit.end()) continue;
-              if (o.box.min.x > b.max.x || b.min.x > o.box.max.x || o.box.min.y > b.max.y || b.min.y > o.box.max.y || o.box.min.z > b.max.z || b.min.z > o.box.max.z) continue;
-              if (collide::overlap(world.shape(p), pose, world.shape(o.piece), o.pose)) return false;
-            }
-          }
+        for (int k = 0; k <= samples; k++)
+          if (!clearAt(trial, sJoin * k / samples, turnOf(sJoin * k / samples))) return false;
+        if (turning && sCruise - sLift <= 1e-6) {  // it turns where it stands, up there
+          const int turns = std::max(2, static_cast<int>(std::ceil(turned / step)));
+          for (int k = 0; k <= turns; k++)
+            if (!clearAt(trial, sLift, static_cast<double>(k) / turns)) return false;
         }
         return true;
       };
       std::vector<Vec3> route;
       std::vector<double> routeAt, routeTurn;
-      double sLift = 0, sJoin = 0;
+      double sLift = 0, sCruise = 0, sJoin = 0;
+      bool arc = false;
       if (!turnsInPath) {
-        for (int mode = 0; mode < 3; mode++) {
-          buildRoute(mode, route, routeTurn, sLift, sJoin);
+        // Arc where it is clear and long enough across to sweep, else the web's shape; low, then above everything.
+        std::vector<std::pair<int, bool>> tries;
+        for (int mode = 0; mode < 2; mode++) {
+          if (style.shape == FlightShape::Arc && X > 4) tries.push_back({mode, true});
+          tries.push_back({mode, false});
+        }
+        for (size_t ti = 0; ti < tries.size(); ti++) {
+          const int mode = tries[ti].first;
+          arc = tries[ti].second;
+          buildRoute(mode, arc, route, routeTurn, sLift, sCruise, sJoin);
           routeAt.assign(1, 0);
           for (size_t k = 1; k < route.size(); k++) routeAt.push_back(routeAt.back() + length(route[k] - route[k - 1]));
           if (route.size() < 2) break;
           Flight trial;  // in the model: the pivot where its seat stands there
           trial.route = route, trial.routeAt = routeAt, trial.routeTurn = routeTurn, trial.turnFrom = r0, trial.pivot = carry.apply(pivot);
-          if (clearAcross(trial, sJoin)) break;
-          if (mode == 2 && !f.fallback) f.fallback = true, f.fallbackAt = 2;
+          if (clearAcross(trial, sLift, sCruise, sJoin)) break;
+          if (ti + 1 == tries.size() && !f.fallback) f.fallback = true, f.fallbackAt = 2;
         }
       }
       if (!turnsInPath && route.size() >= 2) {
+        // The web's clock: up by 0.24, across by 0.76, and down into the seat by 1, each leg
+        // eased from rest to rest. Down is one leg for as long as the way keeps straight down;
+        // where it then goes in another way (from the side), across ends at 0.56, down at 0.8,
+        // and the push in along the plan's way takes the last 0.2, split at its corners.
+        size_t kd = 0;
+        while (kd + 1 < route.size() && routeAt[kd] < sCruise - 1e-9) kd++;
+        while (kd + 1 < route.size() && dot(normalized(route[kd + 1] - route[kd]), down) > std::cos(3 * M_PI / 180)) kd++;
+        const double sDown = std::max(sCruise, routeAt[kd]);
+        std::vector<double> stops;  // where the push in turns a corner, and its end
+        for (size_t k = kd + 1; k + 1 < route.size(); k++) {
+          const Vec3 a = normalized(route[k] - route[k - 1]), b = normalized(route[k + 1] - route[k]);
+          if (dot(a, b) < std::cos(3 * M_PI / 180)) stops.push_back(routeAt[k]);
+        }
+        const bool push = routeAt.back() > sDown + 1e-6;
+        if (push) stops.push_back(routeAt.back());
+        const double across = push ? 0.56 : 0.76;
+        if (arc) f.phases = {{0, across, 0, sCruise}};  // up and over as one sweep, from rest to rest
+        else f.phases = {{0, 0.24, 0, sLift}, {0.24, push ? 0.32 : 0.52, sLift, sCruise}};
+        f.phases.push_back({across, 0.24, sCruise, push ? sDown : routeAt.back()});
+        double from = sDown, t = 0.8;
+        for (double to : stops) {
+          const double share = 0.2 * (to - from) / (routeAt.back() - sDown);
+          f.phases.push_back({t, share, from, to});
+          t += share, from = to;
+        }
+        f.frames = std::max(1, static_cast<int>(std::ceil(flightSeconds * std::max(0.01, style.time) * fps - 1e-9)));
+        for (Flight::Phase& ph : f.phases) ph.start *= f.frames, ph.frames *= f.frames;
+        f.turnPhase = turning && !arc ? 1 : -1;  // an arc turns by distance, as routeTurn says (as checked)
         // Into the unit's frame: motions are from its seat there.
         const Xform back = carry.inverse();
         for (Vec3& v : route) v = back.apply(v);
         f.route = route, f.routeAt = routeAt, f.routeTurn = routeTurn, f.pivot = pivot, f.turnFrom = r0;
         f.ease = style.ease;
-        // Legs: rest to rest at every corner of the plan's way that turns, and before the seat.
-        std::vector<double> stops;
-        for (size_t k = 1; k + 1 < route.size(); k++) {
-          if (routeAt[k] < sJoin - 1e-9) continue;
-          const Vec3 a = normalized(route[k] - route[k - 1]), b = normalized(route[k + 1] - route[k]);
-          if (dot(a, b) < std::cos(3 * M_PI / 180)) stops.push_back(routeAt[k]);
-        }
-        for (size_t k = 0; k < route.size(); k++)
-          if (length(route[k] - back.apply(seatFrom)) < 1e-6 && routeAt[k] > 0 && routeAt[k] < routeAt.back()) stops.push_back(routeAt[k]);
-        stops.push_back(routeAt.back());
-        std::sort(stops.begin(), stops.end());
-        stops.erase(std::unique(stops.begin(), stops.end(), [](double a, double b) { return std::abs(a - b) < 1e-6; }), stops.end());
-        // As long as the web's flight, unless that would be faster than `speed`; the seat leg a
-        // fifth of it at least, and no faster than `seatSpeed`.
-        double from = 0, least = 0;
-        std::vector<double> seconds;
-        for (size_t k = 0; k < stops.size(); k++) {
-          const double len = stops[k] - from;
-          const bool last = k + 1 == stops.size();
-          seconds.push_back(last ? std::max(0.06, 1.875 * len / std::max(1.0, style.seatSpeed)) : std::max(0.04, 1.875 * len / std::max(1.0, style.speed)));
-          least += seconds.back();
-          f.phases.push_back({0, 0, from, stops[k]});
-          from = stops[k];
-        }
-        const double total = std::max(flightSeconds, least);
-        double seat = std::max(seconds.back(), 0.2 * total);
-        if (seconds.size() == 1) seat = total;
-        const double rest = least - seconds.back(), room = total - seat;
-        for (size_t k = 0; k + 1 < seconds.size(); k++) seconds[k] = rest > 0 ? seconds[k] * room / rest : room / (seconds.size() - 1);
-        seconds.back() = seat;
-        const double sum = std::accumulate(seconds.begin(), seconds.end(), 0.0);
-        const double framesExact = sum * std::max(0.01, style.time) * fps;
-        f.frames = std::max(1, static_cast<int>(std::ceil(framesExact - 1e-9)));
-        const double scale = f.frames / sum;
-        double t = 0;
-        for (size_t k = 0; k < f.phases.size(); k++) f.phases[k].start = t, f.phases[k].frames = seconds[k] * scale, t += f.phases[k].frames;
-        f.seatFrames = f.phases.back().frames;
-        // When it has lifted (where the way up ends), and when it joins the plan's way.
+        // When it has lifted, when it joins the plan's way, and when it is the last stretch from its seat.
         auto frameAt = [&](double sAt) {
           for (const Flight::Phase& ph : f.phases) {
             if (sAt > ph.to + 1e-9) continue;
@@ -864,13 +866,16 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
           }
           return static_cast<double>(f.frames);
         };
-        f.liftAt = frameAt(sLift);
+        f.liftAt = arc ? frameAt(sLift) : f.phases.front().frames;
         f.pathAt = frameAt(sJoin);
-        f.seatAt = f.frames - f.seatFrames;
+        f.seatAt = std::max(f.pathAt, frameAt(std::max(sJoin, routeAt.back() - (std::max(f.seatTravel, 4.0) + 8))));
+        f.seatFrames = f.frames - f.seatAt;
         f.waypoints = {f.staging, Xform{}};
         f.at = {0, 1};
       } else {
-        // A plan's way that turns: its legs as they are, eased one by one, above everything.
+        // A plan's way that turns: up, across above everything (turning to the way's first pose
+        // on the way, as the web's slerp), down onto the way and along its legs, on the web's
+        // clock (up 0.24, across to 0.76, or to 0.56 and down by 0.8 with the legs in the last 0.2).
         const Box ub = boxOf(unit);
         auto raised = [&](Vec3 t) {
           Vec3 r = t;
@@ -880,11 +885,21 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
         const Vec3 open = m.path.back().t;
         f.staging.r = Mat3{};
         f.waypoints = {f.staging, Xform{}, Xform{}};
-        f.waypoints[1].t = raised(f.staging.t), f.waypoints[2].t = raised(open);
+        f.waypoints[1].t = raised(f.staging.t), f.waypoints[2].t = raised(open), f.waypoints[2].r = m.path.back().r;
         for (size_t k = m.path.size(); k-- > 0;) f.waypoints.push_back(m.path[k]);
-        f.at.clear();
-        for (size_t k = 0; k < f.waypoints.size(); k++) f.at.push_back(static_cast<double>(k) / (f.waypoints.size() - 1));
-        f.frames = std::max(1, static_cast<int>(std::lround(flightSeconds * std::max(0.01, style.time) * fps)));
+        const size_t n = f.waypoints.size();
+        if (n <= 4) {
+          f.at = {0, 0.24, 0.76, 1};
+        } else {
+          f.at = {0, 0.24, 0.56, 0.8};
+          double total = 0;
+          for (size_t k = 3; k + 1 < n; k++) total += length(f.waypoints[k + 1].t - f.waypoints[k].t);
+          for (size_t k = 3; k + 1 < n; k++)
+            f.at.push_back(f.at.back() + 0.2 * (total > 1e-9 ? length(f.waypoints[k + 1].t - f.waypoints[k].t) / total : 1.0 / static_cast<double>(n - 4)));
+          f.at.back() = 1;
+        }
+        f.ease = style.ease;
+        f.frames = std::max(1, static_cast<int>(std::ceil(flightSeconds * std::max(0.01, style.time) * fps - 1e-9)));
         f.pathAt = f.at[2] * f.frames, f.seatAt = f.at[f.at.size() - 2] * f.frames, f.seatFrames = f.frames - f.seatAt;
         f.liftAt = f.at[1] * f.frames;
       }
@@ -1021,14 +1036,10 @@ Xform poseAt(const Flight& f, double frame) {
   if (!f.route.empty() && f.route.size() >= 2 && !f.phases.empty()) {
     if (f.frames <= 0 || frame >= f.startFrame + f.frames) return {};
     if (frame <= f.startFrame) return f.staging;
-    const double t = frame - f.startFrame;
-    double s = f.routeAt.back();
-    for (const Flight::Phase& ph : f.phases)
-      if (t <= ph.start + ph.frames) {
-        s = ph.from + (ph.to - ph.from) * eased(f.ease, ph.frames > 0 ? (t - ph.start) / ph.frames : 1);
-        break;
-      }
-    return routeMotion(f, s);
+    const Clock c = clockAt(f, frame - f.startFrame);
+    if (f.turnPhase < 0) return routeMotion(f, c.s);
+    const size_t tp = static_cast<size_t>(f.turnPhase);
+    return routeMotion(f, c.s, c.phase < tp ? 0.0 : c.phase > tp ? 1.0 : c.e);  // it turns as it crosses, as the web's slerp
   }
   if (f.waypoints.empty()) return {};
   if (f.frames <= 0 || frame >= f.startFrame + f.frames) return f.waypoints.back();
@@ -1047,10 +1058,12 @@ Xform poseAt(const Flight& f, double frame) {
   for (size_t k = 0; k + 1 < f.waypoints.size() && k + 1 < f.at.size(); k++) {
     if (u > f.at[k + 1]) continue;
     const double spanU = f.at[k + 1] - f.at[k];
-    double v = spanU > 0 ? (u - f.at[k]) / spanU : 1;
-    v = v * v * (3 - 2 * v);  // ease in and out of every leg
+    const double v = eased(f.ease, spanU > 0 ? (u - f.at[k]) / spanU : 1);  // each leg from rest to rest, as the web's
     Xform x = f.waypoints[k + 1];
     x.t = f.waypoints[k].t + (f.waypoints[k + 1].t - f.waypoints[k].t) * v;
+    // and turning on the way from one leg's pose to the next (the short way), not at its start
+    const Mat3 rel = f.waypoints[k].r * transposed(f.waypoints[k + 1].r);
+    if (v < 1 && !isIdentity(rel)) x.r = matOf(towardsNone(quatOf(rel), v)) * f.waypoints[k + 1].r;
     return x;
   }
   return f.waypoints.back();

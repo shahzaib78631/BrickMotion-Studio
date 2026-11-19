@@ -103,7 +103,7 @@ std::vector<std::pair<uint32_t, uint32_t>> applyRest(Scene& scene, const bm::Mod
   return changed;
 }
 
-std::vector<std::pair<uint32_t, uint32_t>> applyFrame(Scene& scene, const bm::Model& model, const bm::plan::Plan& plan, const bm::plan::Timeline& timeline, int frame) {
+std::vector<std::pair<uint32_t, uint32_t>> applyFrame(Scene& scene, const bm::Model& model, const bm::plan::Plan& plan, const bm::plan::Timeline& timeline, double frame) {
   const auto& pieces = model.pieces();
   const size_t n = std::min(pieces.size(), scene.where.size());
   // Where each piece is: at rest unless a flight says otherwise.

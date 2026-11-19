@@ -121,7 +121,7 @@ int still(const std::vector<std::string_view>& args) {
     if (shot.frame >= 0 || shot.correct) {
       bm::plan::Options planOptions;
       planOptions.correctPlacements = shot.correct;
-      planned = bmtools::planModel(model, library, full, ldraw, planOptions, bm::plan::styleOf(input));
+      planned = bmtools::planModel(model, library, full, ldraw, planOptions, bmtools::styleWith(input, shot));
       bmtools::reportCorrections("bmexport", model, planned->corrections);
     }
     bmr::Scene scene = bmr::buildScene(model, full);
@@ -225,7 +225,7 @@ int sound(const std::vector<std::string_view>& args) {
     Model model = io::load(input, library, &full);
     bm::plan::Options planOptions;
     planOptions.correctPlacements = shot.correct;
-    const bmtools::Planned planned = bmtools::planModel(model, library, full, ldraw, planOptions, bm::plan::styleOf(input));
+    const bmtools::Planned planned = bmtools::planModel(model, library, full, ldraw, planOptions, bmtools::styleWith(input, shot));
     bmtools::reportCorrections("bmexport", model, planned.corrections);
     const bmr::Scene scene = bmr::buildScene(model, full);
     std::vector<Box> boxes(model.pieces().size());

@@ -69,7 +69,7 @@ class Renderer {
 
   /// Poses the pieces as the timeline has them at `frame` (clamped to the timeline); only the
   /// instances that change are sent to the GPU. The plan and timeline are read, not kept.
-  void setFrame(const bm::plan::Plan& plan, const bm::plan::Timeline& timeline, int frame);
+  void setFrame(const bm::plan::Plan& plan, const bm::plan::Timeline& timeline, double frame);
   /// Every piece back where the model has it, shown.
   void setRest();
   /// The piece under pixel (x, y) of the last frame drawn (row 0 at the top), or UINT32_MAX for

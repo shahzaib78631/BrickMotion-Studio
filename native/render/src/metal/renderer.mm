@@ -128,7 +128,7 @@ bm::Box Renderer::selectionBounds() const {
   return b;
 }
 
-void Renderer::setFrame(const bm::plan::Plan& plan, const bm::plan::Timeline& timeline, int frame) {
+void Renderer::setFrame(const bm::plan::Plan& plan, const bm::plan::Timeline& timeline, double frame) {
   const auto changed = applyFrame(impl_->scene, *impl_->model, plan, timeline, frame);
   if (changed.empty()) return;
   impl_->upload(changed);

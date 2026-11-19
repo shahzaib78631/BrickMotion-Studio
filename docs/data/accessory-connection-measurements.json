@@ -1,0 +1,5513 @@
+{
+  "format": "brickmotion-accessory-connection-candidates",
+  "version": 1,
+  "fullCoverage": false,
+  "units": "LDU",
+  "millimetresPerLdu": 0.4,
+  "attribution": [
+    {
+      "path": "p/1-4chrd.dat",
+      "headers": [
+        "0 Author: Max Martin Richter [MMR1988]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "p/1-4con7.dat",
+      "headers": [
+        "0 Author: Franklin W. Cain [fwcain]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "p/1-4cyli.dat",
+      "headers": [
+        "0 Author: James Jessiman",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "p/1-4cylo.dat",
+      "headers": [
+        "0 Author: Max Martin Richter [MMR1988]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "p/1-4edge.dat",
+      "headers": [
+        "0 Author: James Jessiman",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "p/1-8cylh.dat",
+      "headers": [
+        "0 Author: Philippe Hurbain [Philo]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "p/1-8edgh.dat",
+      "headers": [
+        "0 Author: Philippe Hurbain [Philo]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "p/3-16cylh.dat",
+      "headers": [
+        "0 Author: Philippe Hurbain [Philo]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "p/3-16edgh.dat",
+      "headers": [
+        "0 Author: Philippe Hurbain [Philo]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "p/4-4cylc.dat",
+      "headers": [
+        "0 Author: Alex Taylor [anathema]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "p/4-4cyli.dat",
+      "headers": [
+        "0 Author: James Jessiman",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "p/4-4cylo.dat",
+      "headers": [
+        "0 Author: Mark Kennedy [mkennedy]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "p/4-4disc.dat",
+      "headers": [
+        "0 Author: James Jessiman",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "p/4-4edge.dat",
+      "headers": [
+        "0 Author: James Jessiman",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "p/4-4ring3.dat",
+      "headers": [
+        "0 Author: James Jessiman",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "p/5-16chrd.dat",
+      "headers": [
+        "0 Author: Niels Karsdorp [nielsk]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "p/5-16cyli.dat",
+      "headers": [
+        "0 Author: Philippe Hurbain [Philo]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "p/5-16cylo.dat",
+      "headers": [
+        "0 Author: Max Martin Richter [MMR1988]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "p/5-16edge.dat",
+      "headers": [
+        "0 Author: Philippe Hurbain [Philo]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "p/box2-11.dat",
+      "headers": [
+        "0 Author: Steffen [Steffen]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "p/box2-5.dat",
+      "headers": [
+        "0 Author: Steffen [Steffen]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "p/box5-4a.dat",
+      "headers": [
+        "0 Author: Willy Tschager [Holly-Wood]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "p/rect.dat",
+      "headers": [
+        "0 Author: James Jessiman",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "p/rect1.dat",
+      "headers": [
+        "0 Author: Chris Dee [cwdee]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "p/rect2p.dat",
+      "headers": [
+        "0 Author: Donald Sutter [technog]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "p/rect3.dat",
+      "headers": [
+        "0 Author: Mark Kennedy [mkennedy]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "p/stud4.dat",
+      "headers": [
+        "0 Author: James Jessiman",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "p/t04o6250.dat",
+      "headers": [
+        "0 Author: Paul Easter [pneaster]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "parts/19141.dat",
+      "headers": [
+        "0 Author: Gerald Lasser [GeraldLasser]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "parts/21459.dat",
+      "headers": [
+        "0 Author: Massimo Maso [Sirio]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "parts/30173a.dat",
+      "headers": [
+        "0 Author: Franklin W. Cain [fwcain]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "parts/30173b.dat",
+      "headers": [
+        "0 Author: Philippe Hurbain [Philo]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "parts/30177.dat",
+      "headers": [
+        "0 Author: Mark Chittenden [mdublade]",
+        "0 !LICENSE Licensed under CC BY 2.0 and CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "parts/s/21459s01.dat",
+      "headers": [
+        "0 Author: Massimo Maso [Sirio]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "parts/s/21459s02.dat",
+      "headers": [
+        "0 Author: Gerald Lasser [GeraldLasser]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "parts/s/30173s01.dat",
+      "headers": [
+        "0 Author: Franklin W. Cain [fwcain]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "parts/s/93247s01.dat",
+      "headers": [
+        "0 Author: Christian Neumann [Wesley]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "parts/s/93247s02.dat",
+      "headers": [
+        "0 Author: Christian Neumann [Wesley]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    },
+    {
+      "path": "parts/s/93247s03.dat",
+      "headers": [
+        "0 Author: Christian Neumann [Wesley]",
+        "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      ]
+    }
+  ],
+  "blade": {
+    "sourcePart": "s/30173s01.dat",
+    "status": "CAD-profile-measured",
+    "units": "LDU",
+    "millimetresPerLdu": 0.4,
+    "variants": [
+      "30173a",
+      "30173b",
+      "21459"
+    ],
+    "bounds": {
+      "min": [
+        -1.875,
+        -98,
+        -4
+      ],
+      "max": [
+        1.875,
+        -18,
+        12.375
+      ]
+    },
+    "axialSpanLdu": 80,
+    "insertionAxisLocalCandidate": [
+      0,
+      -1,
+      0
+    ],
+    "sources": {
+      "parts/s/30173s01.dat": "180e1daf17a3a744db833a4b392770ee261218713960b6c949bf263a4d6d824c",
+      "p/5-16cylo.dat": "3468b4f9bf29026d7266da964f4298eea5d4bfa30f09d80e11abfb39cc9df797",
+      "p/5-16cyli.dat": "3a46e175cd13f2343645b5ba1be54f1f2fdf446cf28392383d511d85eaa7665a",
+      "p/5-16edge.dat": "17a9ae47e68e98286d27fc7be4a48e1110d1cae0d3abff658f3378a552857fc3",
+      "p/5-16chrd.dat": "53926ed51a8b6757ef36240cd7520ac1f8db16e4650e3618a09d8146f89ddd98"
+    },
+    "sections": [
+      {
+        "y": -18.5,
+        "boundsXZ": {
+          "min": [
+            -1.8738846256803783,
+            -3.9711758918453577
+          ],
+          "max": [
+            1.8738846256803783,
+            4.026986983961236
+          ]
+        }
+      },
+      {
+        "y": -19.5,
+        "boundsXZ": {
+          "min": [
+            -1.871653877041135,
+            -3.9135276755360735
+          ],
+          "max": [
+            1.871653877041135,
+            4.080960951883707
+          ]
+        }
+      },
+      {
+        "y": -20.5,
+        "boundsXZ": {
+          "min": [
+            -1.8694231284018916,
+            -3.8558794592267893
+          ],
+          "max": [
+            1.8694231284018916,
+            4.134934919806179
+          ]
+        }
+      },
+      {
+        "y": -21.5,
+        "boundsXZ": {
+          "min": [
+            -1.8671923797626484,
+            -3.798231242917505
+          ],
+          "max": [
+            1.8671923797626484,
+            4.188908887728651
+          ]
+        }
+      },
+      {
+        "y": -22.5,
+        "boundsXZ": {
+          "min": [
+            -1.864961631123405,
+            -3.7405830266082205
+          ],
+          "max": [
+            1.864961631123405,
+            4.242882855651122
+          ]
+        }
+      },
+      {
+        "y": -23.5,
+        "boundsXZ": {
+          "min": [
+            -1.8627308824841617,
+            -3.6829348102989363
+          ],
+          "max": [
+            1.8627308824841617,
+            4.296856823573594
+          ]
+        }
+      },
+      {
+        "y": -24.5,
+        "boundsXZ": {
+          "min": [
+            -1.8605001338449183,
+            -3.625286593989652
+          ],
+          "max": [
+            1.8605001338449183,
+            4.350830791496065
+          ]
+        }
+      },
+      {
+        "y": -25.5,
+        "boundsXZ": {
+          "min": [
+            -1.858269385205675,
+            -3.5676383776803675
+          ],
+          "max": [
+            1.858269385205675,
+            4.404804759418537
+          ]
+        }
+      },
+      {
+        "y": -26.5,
+        "boundsXZ": {
+          "min": [
+            -1.8560386365664316,
+            -3.5099901613710833
+          ],
+          "max": [
+            1.8560386365664316,
+            4.458778727341009
+          ]
+        }
+      },
+      {
+        "y": -27.5,
+        "boundsXZ": {
+          "min": [
+            -1.8538078879271884,
+            -3.452341945061799
+          ],
+          "max": [
+            1.8538078879271884,
+            4.51275269526348
+          ]
+        }
+      },
+      {
+        "y": -28.5,
+        "boundsXZ": {
+          "min": [
+            -1.851577139287945,
+            -3.3946937287525145
+          ],
+          "max": [
+            1.851577139287945,
+            4.566726663185952
+          ]
+        }
+      },
+      {
+        "y": -29.5,
+        "boundsXZ": {
+          "min": [
+            -1.8493463906487018,
+            -3.3370455124432303
+          ],
+          "max": [
+            1.8493463906487018,
+            4.6207006311084236
+          ]
+        }
+      },
+      {
+        "y": -30.5,
+        "boundsXZ": {
+          "min": [
+            -1.8471156420094583,
+            -3.279397296133946
+          ],
+          "max": [
+            1.8471156420094583,
+            4.6746745990308955
+          ]
+        }
+      },
+      {
+        "y": -31.5,
+        "boundsXZ": {
+          "min": [
+            -1.844884893370215,
+            -3.2217490798246615
+          ],
+          "max": [
+            1.844884893370215,
+            4.7286485669533675
+          ]
+        }
+      },
+      {
+        "y": -32.5,
+        "boundsXZ": {
+          "min": [
+            -1.8426541447309717,
+            -3.1641008635153773
+          ],
+          "max": [
+            1.8426541447309717,
+            4.782622534875839
+          ]
+        }
+      },
+      {
+        "y": -33.5,
+        "boundsXZ": {
+          "min": [
+            -1.8404233960917284,
+            -3.106452647206093
+          ],
+          "max": [
+            1.8404233960917284,
+            4.836596502798311
+          ]
+        }
+      },
+      {
+        "y": -34.5,
+        "boundsXZ": {
+          "min": [
+            -1.838192647452485,
+            -3.0488044308968085
+          ],
+          "max": [
+            1.838192647452485,
+            4.890570470720783
+          ]
+        }
+      },
+      {
+        "y": -35.5,
+        "boundsXZ": {
+          "min": [
+            -1.8359618988132418,
+            -2.9911562145875243
+          ],
+          "max": [
+            1.8359618988132418,
+            4.944544438643254
+          ]
+        }
+      },
+      {
+        "y": -36.5,
+        "boundsXZ": {
+          "min": [
+            -1.8337311501739983,
+            -2.93350799827824
+          ],
+          "max": [
+            1.8337311501739983,
+            4.998518406565726
+          ]
+        }
+      },
+      {
+        "y": -37.5,
+        "boundsXZ": {
+          "min": [
+            -1.8315004015347551,
+            -2.8758597819689555
+          ],
+          "max": [
+            1.8315004015347551,
+            5.052492374488198
+          ]
+        }
+      },
+      {
+        "y": -38.5,
+        "boundsXZ": {
+          "min": [
+            -1.8292696528955117,
+            -2.8182115656596713
+          ],
+          "max": [
+            1.8292696528955117,
+            5.106466342410669
+          ]
+        }
+      },
+      {
+        "y": -39.5,
+        "boundsXZ": {
+          "min": [
+            -1.8270389042562685,
+            -2.760563349350387
+          ],
+          "max": [
+            1.8270389042562685,
+            5.160440310333141
+          ]
+        }
+      },
+      {
+        "y": -40.5,
+        "boundsXZ": {
+          "min": [
+            -1.824737393674974,
+            -2.7029151330411025
+          ],
+          "max": [
+            1.824737393674974,
+            5.240639283647033
+          ]
+        }
+      },
+      {
+        "y": -41.5,
+        "boundsXZ": {
+          "min": [
+            -1.8216838317560669,
+            -2.6165705149846152
+          ],
+          "max": [
+            1.8216838317560669,
+            5.334025643200734
+          ]
+        }
+      },
+      {
+        "y": -42.5,
+        "boundsXZ": {
+          "min": [
+            -1.8186302698371597,
+            -2.519751671119771
+          ],
+          "max": [
+            1.8186302698371597,
+            5.427412002754435
+          ]
+        }
+      },
+      {
+        "y": -43.5,
+        "boundsXZ": {
+          "min": [
+            -1.8155767079182525,
+            -2.4229328272549266
+          ],
+          "max": [
+            1.8155767079182525,
+            5.520798362308137
+          ]
+        }
+      },
+      {
+        "y": -44.5,
+        "boundsXZ": {
+          "min": [
+            -1.8125231459993454,
+            -2.3261139833900826
+          ],
+          "max": [
+            1.8125231459993454,
+            5.614184721861839
+          ]
+        }
+      },
+      {
+        "y": -45.5,
+        "boundsXZ": {
+          "min": [
+            -1.809469584080438,
+            -2.229295139525238
+          ],
+          "max": [
+            1.809469584080438,
+            5.707571081415541
+          ]
+        }
+      },
+      {
+        "y": -46.5,
+        "boundsXZ": {
+          "min": [
+            -1.8064160221615309,
+            -2.132476295660394
+          ],
+          "max": [
+            1.8064160221615309,
+            5.800957440969242
+          ]
+        }
+      },
+      {
+        "y": -47.5,
+        "boundsXZ": {
+          "min": [
+            -1.8033624602426237,
+            -2.03565745179555
+          ],
+          "max": [
+            1.8033624602426237,
+            5.894343800522943
+          ]
+        }
+      },
+      {
+        "y": -48.5,
+        "boundsXZ": {
+          "min": [
+            -1.8003088983237165,
+            -1.9388386079307054
+          ],
+          "max": [
+            1.8003088983237165,
+            5.987730160076644
+          ]
+        }
+      },
+      {
+        "y": -49.5,
+        "boundsXZ": {
+          "min": [
+            -1.7972553364048094,
+            -1.8420197640658613
+          ],
+          "max": [
+            1.7972553364048094,
+            6.0811165196303465
+          ]
+        }
+      },
+      {
+        "y": -50.5,
+        "boundsXZ": {
+          "min": [
+            -1.7942017744859022,
+            -1.7452009202010168
+          ],
+          "max": [
+            1.7942017744859022,
+            6.174502879184048
+          ]
+        }
+      },
+      {
+        "y": -51.5,
+        "boundsXZ": {
+          "min": [
+            -1.791148212566995,
+            -1.6483820763361727
+          ],
+          "max": [
+            1.791148212566995,
+            6.26788923873775
+          ]
+        }
+      },
+      {
+        "y": -52.5,
+        "boundsXZ": {
+          "min": [
+            -1.788094650648088,
+            -1.5515632324713284
+          ],
+          "max": [
+            1.788094650648088,
+            6.361275598291451
+          ]
+        }
+      },
+      {
+        "y": -53.5,
+        "boundsXZ": {
+          "min": [
+            -1.7850410887291808,
+            -1.4547443886064841
+          ],
+          "max": [
+            1.7850410887291808,
+            6.454661957845152
+          ]
+        }
+      },
+      {
+        "y": -54.5,
+        "boundsXZ": {
+          "min": [
+            -1.7819875268102736,
+            -1.3579255447416398
+          ],
+          "max": [
+            1.7819875268102736,
+            6.548048317398854
+          ]
+        }
+      },
+      {
+        "y": -55.5,
+        "boundsXZ": {
+          "min": [
+            -1.7789339648913665,
+            -1.2611067008767958
+          ],
+          "max": [
+            1.7789339648913665,
+            6.641434676952556
+          ]
+        }
+      },
+      {
+        "y": -56.5,
+        "boundsXZ": {
+          "min": [
+            -1.7758804029724593,
+            -1.1642878570119513
+          ],
+          "max": [
+            1.7758804029724593,
+            6.734821036506257
+          ]
+        }
+      },
+      {
+        "y": -57.5,
+        "boundsXZ": {
+          "min": [
+            -1.7728268410535521,
+            -1.0674690131471072
+          ],
+          "max": [
+            1.7728268410535521,
+            6.828207396059959
+          ]
+        }
+      },
+      {
+        "y": -58.5,
+        "boundsXZ": {
+          "min": [
+            -1.769773279134645,
+            -0.9706501692822629
+          ],
+          "max": [
+            1.769773279134645,
+            6.92159375561366
+          ]
+        }
+      },
+      {
+        "y": -59.5,
+        "boundsXZ": {
+          "min": [
+            -1.7667197172157378,
+            -0.8738313254174186
+          ],
+          "max": [
+            1.7667197172157378,
+            7.014980115167361
+          ]
+        }
+      },
+      {
+        "y": -60.5,
+        "boundsXZ": {
+          "min": [
+            -1.7636661552968307,
+            -0.7770124815525743
+          ],
+          "max": [
+            1.7636661552968307,
+            7.129724898046386
+          ]
+        }
+      },
+      {
+        "y": -61.5,
+        "boundsXZ": {
+          "min": [
+            -1.760114839625845,
+            -0.68019363768773
+          ],
+          "max": [
+            1.760114839625845,
+            7.257284734920605
+          ]
+        }
+      },
+      {
+        "y": -62.5,
+        "boundsXZ": {
+          "min": [
+            -1.7562559812305127,
+            -0.5496898779787718
+          ],
+          "max": [
+            1.7562559812305127,
+            7.384844571794823
+          ]
+        }
+      },
+      {
+        "y": -63.5,
+        "boundsXZ": {
+          "min": [
+            -1.7523971228351805,
+            -0.4191186134284426
+          ],
+          "max": [
+            1.7523971228351805,
+            7.512404408669042
+          ]
+        }
+      },
+      {
+        "y": -64.5,
+        "boundsXZ": {
+          "min": [
+            -1.7485382644398482,
+            -0.2885473488781134
+          ],
+          "max": [
+            1.7485382644398482,
+            7.63996424554326
+          ]
+        }
+      },
+      {
+        "y": -65.5,
+        "boundsXZ": {
+          "min": [
+            -1.7446794060445157,
+            -0.1579760843277842
+          ],
+          "max": [
+            1.7446794060445157,
+            7.767524082417479
+          ]
+        }
+      },
+      {
+        "y": -66.5,
+        "boundsXZ": {
+          "min": [
+            -1.7408205476491834,
+            -0.027404819777455014
+          ],
+          "max": [
+            1.7408205476491834,
+            7.895083919291697
+          ]
+        }
+      },
+      {
+        "y": -67.5,
+        "boundsXZ": {
+          "min": [
+            -1.736961689253851,
+            0.10316644477287418
+          ],
+          "max": [
+            1.736961689253851,
+            8.022643756165916
+          ]
+        }
+      },
+      {
+        "y": -68.5,
+        "boundsXZ": {
+          "min": [
+            -1.7331028308585188,
+            0.23373770932320348
+          ],
+          "max": [
+            1.7331028308585188,
+            8.150203593040134
+          ]
+        }
+      },
+      {
+        "y": -69.5,
+        "boundsXZ": {
+          "min": [
+            -1.7292439724631865,
+            0.36430897387353267
+          ],
+          "max": [
+            1.7292439724631865,
+            8.277763429914351
+          ]
+        }
+      },
+      {
+        "y": -70.5,
+        "boundsXZ": {
+          "min": [
+            -1.7253851140678542,
+            0.49488023842386186
+          ],
+          "max": [
+            1.7253851140678542,
+            8.405323266788571
+          ]
+        }
+      },
+      {
+        "y": -71.5,
+        "boundsXZ": {
+          "min": [
+            -1.7215262556725217,
+            0.625451502974191
+          ],
+          "max": [
+            1.7215262556725217,
+            8.532883103662789
+          ]
+        }
+      },
+      {
+        "y": -72.5,
+        "boundsXZ": {
+          "min": [
+            -1.7176673972771894,
+            0.7560227675245204
+          ],
+          "max": [
+            1.7176673972771894,
+            8.660442940537008
+          ]
+        }
+      },
+      {
+        "y": -73.5,
+        "boundsXZ": {
+          "min": [
+            -1.7138085388818571,
+            0.8865940320748494
+          ],
+          "max": [
+            1.7138085388818571,
+            8.788002777411226
+          ]
+        }
+      },
+      {
+        "y": -74.5,
+        "boundsXZ": {
+          "min": [
+            -1.7099496804865248,
+            1.0171652966251787
+          ],
+          "max": [
+            1.7099496804865248,
+            8.915562614285445
+          ]
+        }
+      },
+      {
+        "y": -75.5,
+        "boundsXZ": {
+          "min": [
+            -1.7060908220911926,
+            1.147736561175508
+          ],
+          "max": [
+            1.7060908220911926,
+            9.043122451159663
+          ]
+        }
+      },
+      {
+        "y": -76.5,
+        "boundsXZ": {
+          "min": [
+            -1.7022319636958603,
+            1.2783078257258373
+          ],
+          "max": [
+            1.7022319636958603,
+            9.191805842165367
+          ]
+        }
+      },
+      {
+        "y": -77.5,
+        "boundsXZ": {
+          "min": [
+            -1.6981929156808284,
+            1.4088790902761663
+          ],
+          "max": [
+            1.6981929156808284,
+            9.34907949832709
+          ]
+        }
+      },
+      {
+        "y": -78.5,
+        "boundsXZ": {
+          "min": [
+            -1.6939066625518637,
+            1.555426275514651
+          ],
+          "max": [
+            1.6939066625518637,
+            9.50635315448881
+          ]
+        }
+      },
+      {
+        "y": -79.5,
+        "boundsXZ": {
+          "min": [
+            -1.6896204094228988,
+            1.7116081856054668
+          ],
+          "max": [
+            1.6896204094228988,
+            9.66362681065053
+          ]
+        }
+      },
+      {
+        "y": -80.5,
+        "boundsXZ": {
+          "min": [
+            -1.6853341562939341,
+            1.8677900956962825
+          ],
+          "max": [
+            1.6853341562939341,
+            9.820900466812253
+          ]
+        }
+      },
+      {
+        "y": -81.5,
+        "boundsXZ": {
+          "min": [
+            -1.6810479031649692,
+            2.023972005787098
+          ],
+          "max": [
+            1.6810479031649692,
+            9.978174122973975
+          ]
+        }
+      },
+      {
+        "y": -82.5,
+        "boundsXZ": {
+          "min": [
+            -1.6767616500360045,
+            2.1801539158779137
+          ],
+          "max": [
+            1.6767616500360045,
+            10.135447779135696
+          ]
+        }
+      },
+      {
+        "y": -83.5,
+        "boundsXZ": {
+          "min": [
+            -1.6724753969070396,
+            2.3363358259687295
+          ],
+          "max": [
+            1.6724753969070396,
+            10.292721435297416
+          ]
+        }
+      },
+      {
+        "y": -84.5,
+        "boundsXZ": {
+          "min": [
+            -1.668189143778075,
+            2.492517736059545
+          ],
+          "max": [
+            1.668189143778075,
+            10.449995091459138
+          ]
+        }
+      },
+      {
+        "y": -85.5,
+        "boundsXZ": {
+          "min": [
+            -1.6639028906491102,
+            2.6486996461503605
+          ],
+          "max": [
+            1.6639028906491102,
+            10.60726874762086
+          ]
+        }
+      },
+      {
+        "y": -86.5,
+        "boundsXZ": {
+          "min": [
+            -1.6596166375201453,
+            2.804881556241176
+          ],
+          "max": [
+            1.6596166375201453,
+            10.764542403782581
+          ]
+        }
+      },
+      {
+        "y": -87.5,
+        "boundsXZ": {
+          "min": [
+            -1.6553303843911806,
+            2.961063466331992
+          ],
+          "max": [
+            1.6553303843911806,
+            10.921816059944303
+          ]
+        }
+      },
+      {
+        "y": -88.5,
+        "boundsXZ": {
+          "min": [
+            -1.6510441312622157,
+            3.117245376422807
+          ],
+          "max": [
+            1.6510441312622157,
+            11.079089716106024
+          ]
+        }
+      },
+      {
+        "y": -89.5,
+        "boundsXZ": {
+          "min": [
+            -1.646757878133251,
+            3.363135739160388
+          ],
+          "max": [
+            1.646757878133251,
+            11.236363372267746
+          ]
+        }
+      },
+      {
+        "y": -90.5,
+        "boundsXZ": {
+          "min": [
+            -1.6424716250042863,
+            4.117374000229615
+          ],
+          "max": [
+            1.6424716250042863,
+            11.393637028429467
+          ]
+        }
+      },
+      {
+        "y": -91.5,
+        "boundsXZ": {
+          "min": [
+            -1.6381853718753214,
+            4.871612261298843
+          ],
+          "max": [
+            1.6381853718753214,
+            11.564843590661061
+          ]
+        }
+      },
+      {
+        "y": -92.5,
+        "boundsXZ": {
+          "min": [
+            -1.6338991187463567,
+            5.62585052236807
+          ],
+          "max": [
+            1.6338991187463567,
+            11.741022139726272
+          ]
+        }
+      },
+      {
+        "y": -93.5,
+        "boundsXZ": {
+          "min": [
+            -1.6296128656173918,
+            6.380088783437297
+          ],
+          "max": [
+            1.6296128656173918,
+            11.917200688791484
+          ]
+        }
+      },
+      {
+        "y": -94.5,
+        "boundsXZ": {
+          "min": [
+            -1.6253266124884271,
+            7.1343270445065246
+          ],
+          "max": [
+            1.6253266124884271,
+            12.093379237856695
+          ]
+        }
+      },
+      {
+        "y": -95.5,
+        "boundsXZ": {
+          "min": [
+            -1.625,
+            7.888548457508731
+          ],
+          "max": [
+            1.625,
+            12.275574862816827
+          ]
+        }
+      },
+      {
+        "y": -96.5,
+        "boundsXZ": {
+          "min": [
+            -1.625,
+            8.642768480791617
+          ],
+          "max": [
+            1.625,
+            12.275574862816827
+          ]
+        }
+      },
+      {
+        "y": -97.5,
+        "boundsXZ": {
+          "min": [
+            -1.625,
+            9.552777777777775
+          ],
+          "max": [
+            1.625,
+            11.660816605166046
+          ]
+        }
+      }
+    ]
+  },
+  "slotSections": [
+    {
+      "host": "19141",
+      "sourceLine": 8,
+      "coordinateSystem": "documented sword local frame",
+      "mirrored": false,
+      "status": "CAD-wall-sections-measured-not-certified-cavity",
+      "walls": [
+        {
+          "y": -18.5,
+          "probeOrigin": [
+            0,
+            -18.5,
+            0.027905546057939157
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 4.496598268676287,
+            "negativeZ": 4.2547146504393
+          }
+        },
+        {
+          "y": -19.5,
+          "probeOrigin": [
+            0,
+            -19.5,
+            0.0837166381738168
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 4.458239727590794,
+            "negativeZ": 4.293073071389227
+          }
+        },
+        {
+          "y": -20.5,
+          "probeOrigin": [
+            0,
+            -20.5,
+            0.1395277302896949
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 4.419881182859402,
+            "negativeZ": 4.331431494643437
+          }
+        },
+        {
+          "y": -21.5,
+          "probeOrigin": [
+            0,
+            -21.5,
+            0.195338822405573
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 4.3815226381280095,
+            "negativeZ": 4.369789917897647
+          }
+        },
+        {
+          "y": -22.5,
+          "probeOrigin": [
+            0,
+            -22.5,
+            0.25114991452145086
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": 4.343164103723625,
+            "negativeZ": 4.408148348994018
+          }
+        },
+        {
+          "y": -23.5,
+          "probeOrigin": [
+            0,
+            -23.5,
+            0.30696100663732895
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": 2.100000381469727,
+            "negativeX": null,
+            "positiveZ": 4.304805630943188,
+            "negativeZ": 4.446506837122291
+          }
+        },
+        {
+          "y": -24.5,
+          "probeOrigin": [
+            0,
+            -24.5,
+            0.3627720987532066
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": 2.1000003814697266,
+            "negativeX": null,
+            "positiveZ": 4.266447161806052,
+            "negativeZ": 4.484865313617078
+          }
+        },
+        {
+          "y": -25.5,
+          "probeOrigin": [
+            0,
+            -25.5,
+            0.4185831908690849
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": 2.1000003814697266,
+            "negativeX": null,
+            "positiveZ": 4.228088730912119,
+            "negativeZ": 4.523223817211362
+          }
+        },
+        {
+          "y": -26.5,
+          "probeOrigin": [
+            0,
+            -26.5,
+            0.474394282984963
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": 4.189730329246355,
+            "negativeZ": 4.561582359145004
+          }
+        },
+        {
+          "y": -27.5,
+          "probeOrigin": [
+            0,
+            -27.5,
+            0.5302053751008406
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 4.151371912761462,
+            "negativeZ": 4.599940895625074
+          }
+        },
+        {
+          "y": -28.5,
+          "probeOrigin": [
+            0,
+            -28.5,
+            0.586016467216719
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 4.113013494784521,
+            "negativeZ": 4.638299430343462
+          }
+        },
+        {
+          "y": -29.5,
+          "probeOrigin": [
+            0,
+            -29.5,
+            0.6418275593325966
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 4.074655025895464,
+            "negativeZ": 4.676657901873844
+          }
+        },
+        {
+          "y": -30.5,
+          "probeOrigin": [
+            0,
+            -30.5,
+            0.6976386514484747
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 4.036296531554509,
+            "negativeZ": 4.7150163727677015
+          }
+        },
+        {
+          "y": -31.5,
+          "probeOrigin": [
+            0,
+            -31.5,
+            0.753449743564353
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 6,
+            "positiveZ": 3.9979380372135562,
+            "negativeZ": 4.753374843661558
+          }
+        },
+        {
+          "y": -32.5,
+          "probeOrigin": [
+            0,
+            -32.5,
+            0.8092608356802307
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 6,
+            "positiveZ": 3.9595795428726026,
+            "negativeZ": 4.791733314555414
+          }
+        },
+        {
+          "y": -33.5,
+          "probeOrigin": [
+            0,
+            -33.5,
+            0.8650719277961088
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 6,
+            "positiveZ": 3.921221048531649,
+            "negativeZ": 4.830091785449271
+          }
+        },
+        {
+          "y": -34.5,
+          "probeOrigin": [
+            0,
+            -34.5,
+            0.9208830199119871
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 6,
+            "positiveZ": 3.882862554190695,
+            "negativeZ": 4.868450256343129
+          }
+        },
+        {
+          "y": -35.5,
+          "probeOrigin": [
+            0,
+            -35.5,
+            0.9766941120278647
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 6.000000000000001,
+            "positiveZ": 3.8445040598497418,
+            "negativeZ": 4.906808727236985
+          }
+        },
+        {
+          "y": -36.5,
+          "probeOrigin": [
+            0,
+            -36.5,
+            1.0325052041437428
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 6,
+            "positiveZ": 3.8061455726673894,
+            "negativeZ": 4.945167189909652
+          }
+        },
+        {
+          "y": -37.5,
+          "probeOrigin": [
+            0,
+            -37.5,
+            1.0883162962596211
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 6,
+            "positiveZ": 3.767787085831679,
+            "negativeZ": 4.98352565054147
+          }
+        },
+        {
+          "y": -38.5,
+          "probeOrigin": [
+            0,
+            -38.5,
+            1.1441273883754988
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 6,
+            "positiveZ": 3.7294285989959697,
+            "negativeZ": 5.021884111173285
+          }
+        },
+        {
+          "y": -39.5,
+          "probeOrigin": [
+            0,
+            -39.5,
+            1.1999384804913769
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 3.6910701121602596,
+            "negativeZ": 5.060242571805102
+          }
+        },
+        {
+          "y": -40.5,
+          "probeOrigin": [
+            0,
+            -40.5,
+            1.2688620753029651
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 3.63959912262884,
+            "negativeZ": 5.111713535132629
+          }
+        },
+        {
+          "y": -41.5,
+          "probeOrigin": [
+            0,
+            -41.5,
+            1.3587275641080594
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 3.567186246430041,
+            "negativeZ": 5.184126456360006
+          }
+        },
+        {
+          "y": -42.5,
+          "probeOrigin": [
+            0,
+            -42.5,
+            1.453830165817332
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 3.4895363098451977,
+            "negativeZ": 5.261776414780961
+          }
+        },
+        {
+          "y": -43.5,
+          "probeOrigin": [
+            0,
+            -43.5,
+            1.5489327675266054
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": 3.411886374740364,
+            "negativeZ": 5.339426351112732
+          }
+        },
+        {
+          "y": -44.5,
+          "probeOrigin": [
+            0,
+            -44.5,
+            1.644035369235878
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": 2.1000003814697266,
+            "negativeX": null,
+            "positiveZ": 3.334236463481205,
+            "negativeZ": 5.417076327830638
+          }
+        },
+        {
+          "y": -45.5,
+          "probeOrigin": [
+            0,
+            -45.5,
+            1.7391379709451513
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": 2.1000003814697266,
+            "negativeX": null,
+            "positiveZ": 3.2565865258640203,
+            "negativeZ": 5.494726321130407
+          }
+        },
+        {
+          "y": -46.5,
+          "probeOrigin": [
+            0,
+            -46.5,
+            1.834240572654424
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": 2.1000003814697266,
+            "negativeX": null,
+            "positiveZ": 3.178936547133489,
+            "negativeZ": 5.572376352558283
+          }
+        },
+        {
+          "y": -47.5,
+          "probeOrigin": [
+            0,
+            -47.5,
+            1.9293431743636966
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": 3.101286562692844,
+            "negativeZ": 5.650026383986161
+          }
+        },
+        {
+          "y": -48.5,
+          "probeOrigin": [
+            0,
+            -48.5,
+            2.0244457760729695
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 3.023636519210715,
+            "negativeZ": 5.727676276274575
+          }
+        },
+        {
+          "y": -49.5,
+          "probeOrigin": [
+            0,
+            -49.5,
+            2.119548377782243
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 2.945986480739859,
+            "negativeZ": 5.805326201195159
+          }
+        },
+        {
+          "y": -50.5,
+          "probeOrigin": [
+            0,
+            -50.5,
+            2.2146509794915152
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 2.868336442269004,
+            "negativeZ": 5.882976126115742
+          }
+        },
+        {
+          "y": -51.5,
+          "probeOrigin": [
+            0,
+            -51.5,
+            2.3097535812007886
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 2.790686407815673,
+            "negativeZ": 5.960626088192828
+          }
+        },
+        {
+          "y": -52.5,
+          "probeOrigin": [
+            0,
+            -52.5,
+            2.4048561829100614
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -53.5,
+          "probeOrigin": [
+            0,
+            -53.5,
+            2.4999587846193343
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -54.5,
+          "probeOrigin": [
+            0,
+            -54.5,
+            2.595061386328607
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -55.5,
+          "probeOrigin": [
+            0,
+            -55.5,
+            2.69016398803788
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -56.5,
+          "probeOrigin": [
+            0,
+            -56.5,
+            2.785266589747153
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -57.5,
+          "probeOrigin": [
+            0,
+            -57.5,
+            2.880369191456426
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -58.5,
+          "probeOrigin": [
+            0,
+            -58.5,
+            2.9754717931656987
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -59.5,
+          "probeOrigin": [
+            0,
+            -59.5,
+            3.0705743948749715
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -60.5,
+          "probeOrigin": [
+            0,
+            -60.5,
+            3.176356208246906
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -61.5,
+          "probeOrigin": [
+            0,
+            -61.5,
+            3.288545548616437
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -62.5,
+          "probeOrigin": [
+            0,
+            -62.5,
+            3.4175773469080255
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -63.5,
+          "probeOrigin": [
+            0,
+            -63.5,
+            3.5466428976202997
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -64.5,
+          "probeOrigin": [
+            0,
+            -64.5,
+            3.6757084483325735
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -65.5,
+          "probeOrigin": [
+            0,
+            -65.5,
+            3.8047739990448473
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -66.5,
+          "probeOrigin": [
+            0,
+            -66.5,
+            3.9338395497571206
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -67.5,
+          "probeOrigin": [
+            0,
+            -67.5,
+            4.062905100469395
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -68.5,
+          "probeOrigin": [
+            0,
+            -68.5,
+            4.191970651181669
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -69.5,
+          "probeOrigin": [
+            0,
+            -69.5,
+            4.321036201893942
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -70.5,
+          "probeOrigin": [
+            0,
+            -70.5,
+            4.4501017526062165
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -71.5,
+          "probeOrigin": [
+            0,
+            -71.5,
+            4.579167303318489
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -72.5,
+          "probeOrigin": [
+            0,
+            -72.5,
+            4.708232854030764
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -73.5,
+          "probeOrigin": [
+            0,
+            -73.5,
+            4.837298404743038
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -74.5,
+          "probeOrigin": [
+            0,
+            -74.5,
+            4.966363955455312
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -75.5,
+          "probeOrigin": [
+            0,
+            -75.5,
+            5.095429506167585
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -76.5,
+          "probeOrigin": [
+            0,
+            -76.5,
+            5.2350568339456025
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -77.5,
+          "probeOrigin": [
+            0,
+            -77.5,
+            5.378979294301628
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -78.5,
+          "probeOrigin": [
+            0,
+            -78.5,
+            5.530889715001731
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -79.5,
+          "probeOrigin": [
+            0,
+            -79.5,
+            5.687617498127999
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -80.5,
+          "probeOrigin": [
+            0,
+            -80.5,
+            5.8443452812542676
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -81.5,
+          "probeOrigin": [
+            0,
+            -81.5,
+            6.001073064380536
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -82.5,
+          "probeOrigin": [
+            0,
+            -82.5,
+            6.157800847506804
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -83.5,
+          "probeOrigin": [
+            0,
+            -83.5,
+            6.314528630633073
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -84.5,
+          "probeOrigin": [
+            0,
+            -84.5,
+            6.471256413759342
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -85.5,
+          "probeOrigin": [
+            0,
+            -85.5,
+            6.627984196885611
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -86.5,
+          "probeOrigin": [
+            0,
+            -86.5,
+            6.7847119800118785
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -87.5,
+          "probeOrigin": [
+            0,
+            -87.5,
+            6.941439763138147
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -88.5,
+          "probeOrigin": [
+            0,
+            -88.5,
+            7.098167546264415
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -89.5,
+          "probeOrigin": [
+            0,
+            -89.5,
+            7.299749555714067
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -90.5,
+          "probeOrigin": [
+            0,
+            -90.5,
+            7.755505514329541
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -91.5,
+          "probeOrigin": [
+            0,
+            -91.5,
+            8.218227925979953
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -92.5,
+          "probeOrigin": [
+            0,
+            -92.5,
+            8.683436331047172
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -93.5,
+          "probeOrigin": [
+            0,
+            -93.5,
+            9.14864473611439
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -94.5,
+          "probeOrigin": [
+            0,
+            -94.5,
+            9.61385314118161
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -95.5,
+          "probeOrigin": [
+            0,
+            -95.5,
+            10.082061660162779
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -96.5,
+          "probeOrigin": [
+            0,
+            -96.5,
+            10.45917167180422
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -97.5,
+          "probeOrigin": [
+            0,
+            -97.5,
+            10.60679719147191
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        }
+      ],
+      "hostSources": {
+        "parts/19141.dat": "83d1610cc160148ee04dd94f501f7fc846d7499c9bed033fa29c35c5139ef09a",
+        "p/4-4cylc.dat": "0183cffc7f56a2f3e5e3511f0d07ac484d3039c2d41bee802a94344ec95ec8bd",
+        "p/4-4edge.dat": "54a52196e421fd1717d291ff52ea57553b1fb238907c1678cc1f1a84c698b1da",
+        "p/4-4disc.dat": "a00b5547776f61a7389d303616987c76b3c4de86ad8ec32f22857e1bd5e5e40f",
+        "p/4-4cyli.dat": "4a742c2765b6ebf98245baaf8a160a4ff587fc93d36c8ee2b9074712a2f968c4",
+        "p/rect.dat": "ffeb2dd3d9b83c38841f18f1f74800fbba9e90c5fb6badfff2a795f08a96cb71",
+        "p/box2-5.dat": "8f297b754f87da1dbe19eec8704a5ce03a23b794ccd7cd015508e3758a206174",
+        "p/rect2p.dat": "faac2b36241a9de0c0108471e59c45734df6c79813332d9cacf97f6391886acc",
+        "p/1-4cylo.dat": "792a01362608c3f385dd7f01a1bd7d19cf9ed8a40f793266345cc86d1d98f3af",
+        "p/1-4edge.dat": "9ce2de7e67bbac575d52cfdc771b9d00856efc9b88002d97db8e665e50f4d467",
+        "p/1-4cyli.dat": "5a7168952a5a3570327873b9a5802fa7b3be40967ab78c03b6a2bfd4419a1f10",
+        "p/1-4chrd.dat": "ccba3a97b5cc358754e476b78b4ce61cce5f404cd15e37471b73df3e81784aec",
+        "p/box2-11.dat": "7f29fb8601b419207b5c855af8fad8abb55a967ec73f3d8be841d370c360b97c"
+      }
+    },
+    {
+      "host": "19141",
+      "sourceLine": 9,
+      "coordinateSystem": "documented sword local frame",
+      "mirrored": true,
+      "status": "CAD-wall-sections-measured-not-certified-cavity",
+      "walls": [
+        {
+          "y": -18.5,
+          "probeOrigin": [
+            0,
+            -18.5,
+            0.027905546057939157
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 4.49659829623386,
+            "negativeZ": 4.25471466070817
+          }
+        },
+        {
+          "y": -19.5,
+          "probeOrigin": [
+            0,
+            -19.5,
+            0.0837166381738168
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 4.458239829526752,
+            "negativeZ": 4.293073127415278
+          }
+        },
+        {
+          "y": -20.5,
+          "probeOrigin": [
+            0,
+            -20.5,
+            0.1395277302896949
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 4.419881362119396,
+            "negativeZ": 4.331431594216722
+          }
+        },
+        {
+          "y": -21.5,
+          "probeOrigin": [
+            0,
+            -21.5,
+            0.195338822405573
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 4.3815228914439714,
+            "negativeZ": 4.369790064892147
+          }
+        },
+        {
+          "y": -22.5,
+          "probeOrigin": [
+            0,
+            -22.5,
+            0.25114991452145086
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 4.343164420768545,
+            "negativeZ": 4.408148535567573
+          }
+        },
+        {
+          "y": -23.5,
+          "probeOrigin": [
+            0,
+            -23.5,
+            0.30696100663732895
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 4.304805950093119,
+            "negativeZ": 4.446507006243
+          }
+        },
+        {
+          "y": -24.5,
+          "probeOrigin": [
+            0,
+            -24.5,
+            0.3627720987532066
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 4.266447479417694,
+            "negativeZ": 4.484865476918424
+          }
+        },
+        {
+          "y": -25.5,
+          "probeOrigin": [
+            0,
+            -25.5,
+            0.4185831908690849
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": 2,
+            "negativeX": null,
+            "positiveZ": 4.228089000221041,
+            "negativeZ": 4.523223942060522
+          }
+        },
+        {
+          "y": -26.5,
+          "probeOrigin": [
+            0,
+            -26.5,
+            0.474394282984963
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": 2,
+            "negativeX": null,
+            "positiveZ": 4.18973051168838,
+            "negativeZ": 4.561582395684037
+          }
+        },
+        {
+          "y": -27.5,
+          "probeOrigin": [
+            0,
+            -27.5,
+            0.5302053751008406
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": 2,
+            "negativeX": null,
+            "positiveZ": 4.151372023155717,
+            "negativeZ": 4.599940849307553
+          }
+        },
+        {
+          "y": -28.5,
+          "probeOrigin": [
+            0,
+            -28.5,
+            0.586016467216719
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": 2,
+            "negativeX": null,
+            "positiveZ": 4.113013493661576,
+            "negativeZ": 4.638299317973978
+          }
+        },
+        {
+          "y": -29.5,
+          "probeOrigin": [
+            0,
+            -29.5,
+            0.6418275593325966
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": 2,
+            "negativeX": null,
+            "positiveZ": 4.074654954875406,
+            "negativeZ": 4.676657800254366
+          }
+        },
+        {
+          "y": -30.5,
+          "probeOrigin": [
+            0,
+            -30.5,
+            0.6976386514484747
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": 2,
+            "negativeX": 2,
+            "positiveZ": 4.036296416779452,
+            "negativeZ": 4.715016282534759
+          }
+        },
+        {
+          "y": -31.5,
+          "probeOrigin": [
+            0,
+            -31.5,
+            0.753449743564353
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 3.9979379224384983,
+            "negativeZ": 4.753374754990352
+          }
+        },
+        {
+          "y": -32.5,
+          "probeOrigin": [
+            0,
+            -32.5,
+            0.8092608356802307
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 3.9595794280975447,
+            "negativeZ": 4.791733225884208
+          }
+        },
+        {
+          "y": -33.5,
+          "probeOrigin": [
+            0,
+            -33.5,
+            0.8650719277961088
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 3.92122093375659,
+            "negativeZ": 4.830091696778065
+          }
+        },
+        {
+          "y": -34.5,
+          "probeOrigin": [
+            0,
+            -34.5,
+            0.9208830199119871
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 3.882862439415637,
+            "negativeZ": 4.868450167671922
+          }
+        },
+        {
+          "y": -35.5,
+          "probeOrigin": [
+            0,
+            -35.5,
+            0.9766941120278647
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 3.8445039804229744,
+            "negativeZ": 4.906808647874293
+          }
+        },
+        {
+          "y": -36.5,
+          "probeOrigin": [
+            0,
+            -36.5,
+            1.0325052041437428
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 3.8061455412097778,
+            "negativeZ": 4.945167137822682
+          }
+        },
+        {
+          "y": -37.5,
+          "probeOrigin": [
+            0,
+            -37.5,
+            1.0883162962596211
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 3.767787101996581,
+            "negativeZ": 4.983525627771072
+          }
+        },
+        {
+          "y": -38.5,
+          "probeOrigin": [
+            0,
+            -38.5,
+            1.1441273883754988
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 3.729428662783385,
+            "negativeZ": 5.021884117719461
+          }
+        },
+        {
+          "y": -39.5,
+          "probeOrigin": [
+            0,
+            -39.5,
+            1.1999384804913769
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": 2,
+            "negativeX": 2,
+            "positiveZ": 3.6910702235701898,
+            "negativeZ": 5.060242607667851
+          }
+        },
+        {
+          "y": -40.5,
+          "probeOrigin": [
+            0,
+            -40.5,
+            1.2688620753029651
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": 2,
+            "negativeX": null,
+            "positiveZ": 3.6395991822702465,
+            "negativeZ": 5.111713558917309
+          }
+        },
+        {
+          "y": -41.5,
+          "probeOrigin": [
+            0,
+            -41.5,
+            1.3587275641080594
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": 2,
+            "negativeX": null,
+            "positiveZ": 3.567186240849637,
+            "negativeZ": 5.184126393106551
+          }
+        },
+        {
+          "y": -42.5,
+          "probeOrigin": [
+            0,
+            -42.5,
+            1.453830165817332
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": 2,
+            "negativeX": null,
+            "positiveZ": 3.4895361954156554,
+            "negativeZ": 5.26177634300617
+          }
+        },
+        {
+          "y": -43.5,
+          "probeOrigin": [
+            0,
+            -43.5,
+            1.5489327675266054
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": 2,
+            "negativeX": null,
+            "positiveZ": 3.4118862035418696,
+            "negativeZ": 5.339426312168332
+          }
+        },
+        {
+          "y": -44.5,
+          "probeOrigin": [
+            0,
+            -44.5,
+            1.644035369235878
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": 2,
+            "negativeX": null,
+            "positiveZ": 3.3342362116680846,
+            "negativeZ": 5.417076281330492
+          }
+        },
+        {
+          "y": -45.5,
+          "probeOrigin": [
+            0,
+            -45.5,
+            1.7391379709451513
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 3.2565862265019305,
+            "negativeZ": 5.49472625335756
+          }
+        },
+        {
+          "y": -46.5,
+          "probeOrigin": [
+            0,
+            -46.5,
+            1.834240572654424
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 3.1789362485943435,
+            "negativeZ": 5.572376231265147
+          }
+        },
+        {
+          "y": -47.5,
+          "probeOrigin": [
+            0,
+            -47.5,
+            1.9293431743636966
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 3.101286270686756,
+            "negativeZ": 5.650026209172735
+          }
+        },
+        {
+          "y": -48.5,
+          "probeOrigin": [
+            0,
+            -48.5,
+            2.0244457760729695
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 3.023636292779168,
+            "negativeZ": 5.727676187080323
+          }
+        },
+        {
+          "y": -49.5,
+          "probeOrigin": [
+            0,
+            -49.5,
+            2.119548377782243
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 2.94598631487158,
+            "negativeZ": 5.80532616498791
+          }
+        },
+        {
+          "y": -50.5,
+          "probeOrigin": [
+            0,
+            -50.5,
+            2.2146509794915152
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 2.868336346098604,
+            "negativeZ": 5.8829761355467145
+          }
+        },
+        {
+          "y": -51.5,
+          "probeOrigin": [
+            0,
+            -51.5,
+            2.3097535812007886
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 2,
+            "positiveZ": 2.7906863798870125,
+            "negativeZ": 5.960626101758305
+          }
+        },
+        {
+          "y": -52.5,
+          "probeOrigin": [
+            0,
+            -52.5,
+            2.4048561829100614
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -53.5,
+          "probeOrigin": [
+            0,
+            -53.5,
+            2.4999587846193343
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -54.5,
+          "probeOrigin": [
+            0,
+            -54.5,
+            2.595061386328607
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -55.5,
+          "probeOrigin": [
+            0,
+            -55.5,
+            2.69016398803788
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -56.5,
+          "probeOrigin": [
+            0,
+            -56.5,
+            2.785266589747153
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -57.5,
+          "probeOrigin": [
+            0,
+            -57.5,
+            2.880369191456426
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -58.5,
+          "probeOrigin": [
+            0,
+            -58.5,
+            2.9754717931656987
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -59.5,
+          "probeOrigin": [
+            0,
+            -59.5,
+            3.0705743948749715
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -60.5,
+          "probeOrigin": [
+            0,
+            -60.5,
+            3.176356208246906
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -61.5,
+          "probeOrigin": [
+            0,
+            -61.5,
+            3.288545548616437
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -62.5,
+          "probeOrigin": [
+            0,
+            -62.5,
+            3.4175773469080255
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -63.5,
+          "probeOrigin": [
+            0,
+            -63.5,
+            3.5466428976202997
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -64.5,
+          "probeOrigin": [
+            0,
+            -64.5,
+            3.6757084483325735
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -65.5,
+          "probeOrigin": [
+            0,
+            -65.5,
+            3.8047739990448473
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -66.5,
+          "probeOrigin": [
+            0,
+            -66.5,
+            3.9338395497571206
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -67.5,
+          "probeOrigin": [
+            0,
+            -67.5,
+            4.062905100469395
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -68.5,
+          "probeOrigin": [
+            0,
+            -68.5,
+            4.191970651181669
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -69.5,
+          "probeOrigin": [
+            0,
+            -69.5,
+            4.321036201893942
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -70.5,
+          "probeOrigin": [
+            0,
+            -70.5,
+            4.4501017526062165
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -71.5,
+          "probeOrigin": [
+            0,
+            -71.5,
+            4.579167303318489
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -72.5,
+          "probeOrigin": [
+            0,
+            -72.5,
+            4.708232854030764
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -73.5,
+          "probeOrigin": [
+            0,
+            -73.5,
+            4.837298404743038
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -74.5,
+          "probeOrigin": [
+            0,
+            -74.5,
+            4.966363955455312
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -75.5,
+          "probeOrigin": [
+            0,
+            -75.5,
+            5.095429506167585
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -76.5,
+          "probeOrigin": [
+            0,
+            -76.5,
+            5.2350568339456025
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -77.5,
+          "probeOrigin": [
+            0,
+            -77.5,
+            5.378979294301628
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -78.5,
+          "probeOrigin": [
+            0,
+            -78.5,
+            5.530889715001731
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -79.5,
+          "probeOrigin": [
+            0,
+            -79.5,
+            5.687617498127999
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -80.5,
+          "probeOrigin": [
+            0,
+            -80.5,
+            5.8443452812542676
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -81.5,
+          "probeOrigin": [
+            0,
+            -81.5,
+            6.001073064380536
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -82.5,
+          "probeOrigin": [
+            0,
+            -82.5,
+            6.157800847506804
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -83.5,
+          "probeOrigin": [
+            0,
+            -83.5,
+            6.314528630633073
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -84.5,
+          "probeOrigin": [
+            0,
+            -84.5,
+            6.471256413759342
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -85.5,
+          "probeOrigin": [
+            0,
+            -85.5,
+            6.627984196885611
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -86.5,
+          "probeOrigin": [
+            0,
+            -86.5,
+            6.7847119800118785
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -87.5,
+          "probeOrigin": [
+            0,
+            -87.5,
+            6.941439763138147
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -88.5,
+          "probeOrigin": [
+            0,
+            -88.5,
+            7.098167546264415
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -89.5,
+          "probeOrigin": [
+            0,
+            -89.5,
+            7.299749555714067
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -90.5,
+          "probeOrigin": [
+            0,
+            -90.5,
+            7.755505514329541
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -91.5,
+          "probeOrigin": [
+            0,
+            -91.5,
+            8.218227925979953
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -92.5,
+          "probeOrigin": [
+            0,
+            -92.5,
+            8.683436331047172
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -93.5,
+          "probeOrigin": [
+            0,
+            -93.5,
+            9.14864473611439
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -94.5,
+          "probeOrigin": [
+            0,
+            -94.5,
+            9.61385314118161
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -95.5,
+          "probeOrigin": [
+            0,
+            -95.5,
+            10.082061660162779
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -96.5,
+          "probeOrigin": [
+            0,
+            -96.5,
+            10.45917167180422
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -97.5,
+          "probeOrigin": [
+            0,
+            -97.5,
+            10.60679719147191
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        }
+      ],
+      "hostSources": {
+        "parts/19141.dat": "83d1610cc160148ee04dd94f501f7fc846d7499c9bed033fa29c35c5139ef09a",
+        "p/4-4cylc.dat": "0183cffc7f56a2f3e5e3511f0d07ac484d3039c2d41bee802a94344ec95ec8bd",
+        "p/4-4edge.dat": "54a52196e421fd1717d291ff52ea57553b1fb238907c1678cc1f1a84c698b1da",
+        "p/4-4disc.dat": "a00b5547776f61a7389d303616987c76b3c4de86ad8ec32f22857e1bd5e5e40f",
+        "p/4-4cyli.dat": "4a742c2765b6ebf98245baaf8a160a4ff587fc93d36c8ee2b9074712a2f968c4",
+        "p/rect.dat": "ffeb2dd3d9b83c38841f18f1f74800fbba9e90c5fb6badfff2a795f08a96cb71",
+        "p/box2-5.dat": "8f297b754f87da1dbe19eec8704a5ce03a23b794ccd7cd015508e3758a206174",
+        "p/rect2p.dat": "faac2b36241a9de0c0108471e59c45734df6c79813332d9cacf97f6391886acc",
+        "p/1-4cylo.dat": "792a01362608c3f385dd7f01a1bd7d19cf9ed8a40f793266345cc86d1d98f3af",
+        "p/1-4edge.dat": "9ce2de7e67bbac575d52cfdc771b9d00856efc9b88002d97db8e665e50f4d467",
+        "p/1-4cyli.dat": "5a7168952a5a3570327873b9a5802fa7b3be40967ab78c03b6a2bfd4419a1f10",
+        "p/1-4chrd.dat": "ccba3a97b5cc358754e476b78b4ce61cce5f404cd15e37471b73df3e81784aec",
+        "p/box2-11.dat": "7f29fb8601b419207b5c855af8fad8abb55a967ec73f3d8be841d370c360b97c"
+      }
+    },
+    {
+      "host": "30177",
+      "sourceLine": 8,
+      "coordinateSystem": "documented sword local frame",
+      "mirrored": false,
+      "status": "CAD-wall-sections-measured-not-certified-cavity",
+      "walls": [
+        {
+          "y": -18.5,
+          "probeOrigin": [
+            0,
+            -18.5,
+            0.027905546057939157
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 16.901496312285328,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -19.5,
+          "probeOrigin": [
+            0,
+            -19.5,
+            0.0837166381738168
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 16.59268366932368,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -20.5,
+          "probeOrigin": [
+            0,
+            -20.5,
+            0.1395277302896949
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 15.659922430018492,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -21.5,
+          "probeOrigin": [
+            0,
+            -21.5,
+            0.195338822405573
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 15.119144791861784,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -22.5,
+          "probeOrigin": [
+            0,
+            -22.5,
+            0.25114991452145086
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 14.695990573632981,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -23.5,
+          "probeOrigin": [
+            0,
+            -23.5,
+            0.30696100663732895
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 14.288192044644656,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -24.5,
+          "probeOrigin": [
+            0,
+            -24.5,
+            0.3627720987532066
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 13.925929574975507,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -25.5,
+          "probeOrigin": [
+            0,
+            -25.5,
+            0.4185831908690849
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 12.879957885941407,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -26.5,
+          "probeOrigin": [
+            0,
+            -26.5,
+            0.474394282984963
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 10.49410943290898,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -27.5,
+          "probeOrigin": [
+            0,
+            -27.5,
+            0.5302053751008406
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 9.141020854146284,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -28.5,
+          "probeOrigin": [
+            0,
+            -28.5,
+            0.586016467216719
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 8.023641178526889,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -29.5,
+          "probeOrigin": [
+            0,
+            -29.5,
+            0.6418275593325966
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 6.93453822565757,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -30.5,
+          "probeOrigin": [
+            0,
+            -30.5,
+            0.6976386514484747
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 4.675460855357269,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -31.5,
+          "probeOrigin": [
+            0,
+            -31.5,
+            0.753449743564353
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 3.8270060824570713,
+            "positiveZ": 3.564422125981869,
+            "negativeZ": 4.788735291438737
+          }
+        },
+        {
+          "y": -32.5,
+          "probeOrigin": [
+            0,
+            -32.5,
+            0.8092608356802307
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 3.858243151332206,
+            "positiveZ": 3.5319691667777064,
+            "negativeZ": 4.8070647784466605
+          }
+        },
+        {
+          "y": -33.5,
+          "probeOrigin": [
+            0,
+            -33.5,
+            0.8650719277961088
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 3.8900735841006258,
+            "positiveZ": 3.499516207573545,
+            "negativeZ": 4.825394265454585
+          }
+        },
+        {
+          "y": -34.5,
+          "probeOrigin": [
+            0,
+            -34.5,
+            0.9208830199119871
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 3.9300506572719045,
+            "positiveZ": 3.467063248369383,
+            "negativeZ": 4.8722969753167815
+          }
+        },
+        {
+          "y": -35.5,
+          "probeOrigin": [
+            0,
+            -35.5,
+            0.9766941120278647
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 3.9700277304431824,
+            "positiveZ": 3.434610289165221,
+            "negativeZ": 4.935476368535476
+          }
+        },
+        {
+          "y": -36.5,
+          "probeOrigin": [
+            0,
+            -36.5,
+            1.0325052041437428
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 4.010004803614461,
+            "positiveZ": 3.402157329961058,
+            "negativeZ": 4.998655761754172
+          }
+        },
+        {
+          "y": -37.5,
+          "probeOrigin": [
+            0,
+            -37.5,
+            1.0883162962596211
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 4.04998187678574,
+            "positiveZ": 3.3735614230633084,
+            "negativeZ": 5.0618351549728695
+          }
+        },
+        {
+          "y": -38.5,
+          "probeOrigin": [
+            0,
+            -38.5,
+            1.1441273883754988
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 4.089958949957019,
+            "positiveZ": 3.3455089783961816,
+            "negativeZ": 5.125014548191564
+          }
+        },
+        {
+          "y": -39.5,
+          "probeOrigin": [
+            0,
+            -39.5,
+            1.1999384804913769
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 6.614788718720597,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -40.5,
+          "probeOrigin": [
+            0,
+            -40.5,
+            1.2688620753029651
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 7.465130664758308,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -41.5,
+          "probeOrigin": [
+            0,
+            -41.5,
+            1.3587275641080594
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 8.31540407045793,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -42.5,
+          "probeOrigin": [
+            0,
+            -42.5,
+            1.453830165817332
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 9.159931573268398,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -43.5,
+          "probeOrigin": [
+            0,
+            -43.5,
+            1.5489327675266054
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 9.876711770821736,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -44.5,
+          "probeOrigin": [
+            0,
+            -44.5,
+            1.644035369235878
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 10.512614155068029,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -45.5,
+          "probeOrigin": [
+            0,
+            -45.5,
+            1.7391379709451513
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 11.450529451122273,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -46.5,
+          "probeOrigin": [
+            0,
+            -46.5,
+            1.834240572654424
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": 13.147903656855782,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -47.5,
+          "probeOrigin": [
+            0,
+            -47.5,
+            1.9293431743636966
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -48.5,
+          "probeOrigin": [
+            0,
+            -48.5,
+            2.0244457760729695
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -49.5,
+          "probeOrigin": [
+            0,
+            -49.5,
+            2.119548377782243
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -50.5,
+          "probeOrigin": [
+            0,
+            -50.5,
+            2.2146509794915152
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -51.5,
+          "probeOrigin": [
+            0,
+            -51.5,
+            2.3097535812007886
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -52.5,
+          "probeOrigin": [
+            0,
+            -52.5,
+            2.4048561829100614
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -53.5,
+          "probeOrigin": [
+            0,
+            -53.5,
+            2.4999587846193343
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -54.5,
+          "probeOrigin": [
+            0,
+            -54.5,
+            2.595061386328607
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -55.5,
+          "probeOrigin": [
+            0,
+            -55.5,
+            2.69016398803788
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -56.5,
+          "probeOrigin": [
+            0,
+            -56.5,
+            2.785266589747153
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -57.5,
+          "probeOrigin": [
+            0,
+            -57.5,
+            2.880369191456426
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -58.5,
+          "probeOrigin": [
+            0,
+            -58.5,
+            2.9754717931656987
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -59.5,
+          "probeOrigin": [
+            0,
+            -59.5,
+            3.0705743948749715
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -60.5,
+          "probeOrigin": [
+            0,
+            -60.5,
+            3.176356208246906
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -61.5,
+          "probeOrigin": [
+            0,
+            -61.5,
+            3.288545548616437
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -62.5,
+          "probeOrigin": [
+            0,
+            -62.5,
+            3.4175773469080255
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -63.5,
+          "probeOrigin": [
+            0,
+            -63.5,
+            3.5466428976202997
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -64.5,
+          "probeOrigin": [
+            0,
+            -64.5,
+            3.6757084483325735
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -65.5,
+          "probeOrigin": [
+            0,
+            -65.5,
+            3.8047739990448473
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -66.5,
+          "probeOrigin": [
+            0,
+            -66.5,
+            3.9338395497571206
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -67.5,
+          "probeOrigin": [
+            0,
+            -67.5,
+            4.062905100469395
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -68.5,
+          "probeOrigin": [
+            0,
+            -68.5,
+            4.191970651181669
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -69.5,
+          "probeOrigin": [
+            0,
+            -69.5,
+            4.321036201893942
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -70.5,
+          "probeOrigin": [
+            0,
+            -70.5,
+            4.4501017526062165
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -71.5,
+          "probeOrigin": [
+            0,
+            -71.5,
+            4.579167303318489
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -72.5,
+          "probeOrigin": [
+            0,
+            -72.5,
+            4.708232854030764
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -73.5,
+          "probeOrigin": [
+            0,
+            -73.5,
+            4.837298404743038
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -74.5,
+          "probeOrigin": [
+            0,
+            -74.5,
+            4.966363955455312
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -75.5,
+          "probeOrigin": [
+            0,
+            -75.5,
+            5.095429506167585
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -76.5,
+          "probeOrigin": [
+            0,
+            -76.5,
+            5.2350568339456025
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -77.5,
+          "probeOrigin": [
+            0,
+            -77.5,
+            5.378979294301628
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -78.5,
+          "probeOrigin": [
+            0,
+            -78.5,
+            5.530889715001731
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -79.5,
+          "probeOrigin": [
+            0,
+            -79.5,
+            5.687617498127999
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -80.5,
+          "probeOrigin": [
+            0,
+            -80.5,
+            5.8443452812542676
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -81.5,
+          "probeOrigin": [
+            0,
+            -81.5,
+            6.001073064380536
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -82.5,
+          "probeOrigin": [
+            0,
+            -82.5,
+            6.157800847506804
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -83.5,
+          "probeOrigin": [
+            0,
+            -83.5,
+            6.314528630633073
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -84.5,
+          "probeOrigin": [
+            0,
+            -84.5,
+            6.471256413759342
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -85.5,
+          "probeOrigin": [
+            0,
+            -85.5,
+            6.627984196885611
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -86.5,
+          "probeOrigin": [
+            0,
+            -86.5,
+            6.7847119800118785
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -87.5,
+          "probeOrigin": [
+            0,
+            -87.5,
+            6.941439763138147
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -88.5,
+          "probeOrigin": [
+            0,
+            -88.5,
+            7.098167546264415
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -89.5,
+          "probeOrigin": [
+            0,
+            -89.5,
+            7.299749555714067
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -90.5,
+          "probeOrigin": [
+            0,
+            -90.5,
+            7.755505514329541
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -91.5,
+          "probeOrigin": [
+            0,
+            -91.5,
+            8.218227925979953
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -92.5,
+          "probeOrigin": [
+            0,
+            -92.5,
+            8.683436331047172
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -93.5,
+          "probeOrigin": [
+            0,
+            -93.5,
+            9.14864473611439
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -94.5,
+          "probeOrigin": [
+            0,
+            -94.5,
+            9.61385314118161
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -95.5,
+          "probeOrigin": [
+            0,
+            -95.5,
+            10.082061660162779
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -96.5,
+          "probeOrigin": [
+            0,
+            -96.5,
+            10.45917167180422
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        },
+        {
+          "y": -97.5,
+          "probeOrigin": [
+            0,
+            -97.5,
+            10.60679719147191
+          ],
+          "nearestWallDistanceLdu": {
+            "positiveX": null,
+            "negativeX": null,
+            "positiveZ": null,
+            "negativeZ": null
+          }
+        }
+      ],
+      "hostSources": {
+        "parts/30177.dat": "e881cadec102b2a48b1b47827a9455b65eb4381ddd71278e42653d29a2974384",
+        "p/stud4.dat": "871cdcab26e7f5113488a24c453d6fabda75b275b06de592e0bfaad4292c12a3",
+        "p/4-4edge.dat": "54a52196e421fd1717d291ff52ea57553b1fb238907c1678cc1f1a84c698b1da",
+        "p/4-4cyli.dat": "4a742c2765b6ebf98245baaf8a160a4ff587fc93d36c8ee2b9074712a2f968c4",
+        "p/4-4ring3.dat": "1f2835ac308154edc2d6f479d8e742a55be981f6167b20bfa100c195bc0731dd",
+        "p/4-4disc.dat": "a00b5547776f61a7389d303616987c76b3c4de86ad8ec32f22857e1bd5e5e40f",
+        "p/t04o6250.dat": "c09d0c876e3b54907f2640576924316922d686fec53bb64cf7379efa0d8e9485"
+      }
+    }
+  ],
+  "fits": [
+    {
+      "host": "19141",
+      "insert": "30173a",
+      "sourceLine": 8,
+      "status": "sampled-surface-intersection-needs-review",
+      "evidence": "documented-placement",
+      "seatedPose": {
+        "pos": [
+          -0.174,
+          -9,
+          35.1
+        ],
+        "m": [
+          0,
+          -0.01745,
+          -0.99985,
+          -1,
+          0,
+          0,
+          0,
+          0.99985,
+          -0.01745
+        ]
+      },
+      "withdrawalAxisCandidate": [
+        -0.01744996051950899,
+        0,
+        0.9998477378470523
+      ],
+      "insertionAxisCandidate": [
+        0.01744996051950899,
+        0,
+        -0.9998477378470523
+      ],
+      "seatedSurfaceIntersection": true,
+      "intersectingSampleCount": 39,
+      "hostSources": {
+        "parts/19141.dat": "83d1610cc160148ee04dd94f501f7fc846d7499c9bed033fa29c35c5139ef09a",
+        "p/4-4cylc.dat": "0183cffc7f56a2f3e5e3511f0d07ac484d3039c2d41bee802a94344ec95ec8bd",
+        "p/4-4edge.dat": "54a52196e421fd1717d291ff52ea57553b1fb238907c1678cc1f1a84c698b1da",
+        "p/4-4disc.dat": "a00b5547776f61a7389d303616987c76b3c4de86ad8ec32f22857e1bd5e5e40f",
+        "p/4-4cyli.dat": "4a742c2765b6ebf98245baaf8a160a4ff587fc93d36c8ee2b9074712a2f968c4",
+        "p/rect.dat": "ffeb2dd3d9b83c38841f18f1f74800fbba9e90c5fb6badfff2a795f08a96cb71",
+        "p/box2-5.dat": "8f297b754f87da1dbe19eec8704a5ce03a23b794ccd7cd015508e3758a206174",
+        "p/rect2p.dat": "faac2b36241a9de0c0108471e59c45734df6c79813332d9cacf97f6391886acc",
+        "p/1-4cylo.dat": "792a01362608c3f385dd7f01a1bd7d19cf9ed8a40f793266345cc86d1d98f3af",
+        "p/1-4edge.dat": "9ce2de7e67bbac575d52cfdc771b9d00856efc9b88002d97db8e665e50f4d467",
+        "p/1-4cyli.dat": "5a7168952a5a3570327873b9a5802fa7b3be40967ab78c03b6a2bfd4419a1f10",
+        "p/1-4chrd.dat": "ccba3a97b5cc358754e476b78b4ce61cce5f404cd15e37471b73df3e81784aec",
+        "p/box2-11.dat": "7f29fb8601b419207b5c855af8fad8abb55a967ec73f3d8be841d370c360b97c"
+      },
+      "insertSources": {
+        "parts/30173a.dat": "35387a28859440d2e2271aa65902da929ba56f60c8b942fa35e7c970631c0858",
+        "parts/s/93247s01.dat": "7bf80f78665c0fcaf266cae6ae0c2c25d1c745603a7b8ded1f4da8324d16402d",
+        "parts/s/93247s02.dat": "ae025cd9c62f21f5c57312a35efc21421835796fc43a3a1fd1483bd47b0d1f2b",
+        "parts/s/93247s03.dat": "4c914c8f8f291bee07822b0170b6764b07cd0a2971289c2a7cf302d4f409a99a",
+        "p/4-4disc.dat": "a00b5547776f61a7389d303616987c76b3c4de86ad8ec32f22857e1bd5e5e40f",
+        "p/4-4edge.dat": "54a52196e421fd1717d291ff52ea57553b1fb238907c1678cc1f1a84c698b1da",
+        "p/4-4cyli.dat": "4a742c2765b6ebf98245baaf8a160a4ff587fc93d36c8ee2b9074712a2f968c4",
+        "p/rect2p.dat": "faac2b36241a9de0c0108471e59c45734df6c79813332d9cacf97f6391886acc",
+        "p/rect.dat": "ffeb2dd3d9b83c38841f18f1f74800fbba9e90c5fb6badfff2a795f08a96cb71",
+        "p/rect3.dat": "07ac46908b6668d993b6de0fb001a34cd996542106b80ebc7de63317d8dde865",
+        "p/rect1.dat": "48fdcd3181587b4bdc89d356a5aee21268688f3f2fcdd4d6f5c1a3d49b1a1ceb",
+        "parts/s/30173s01.dat": "180e1daf17a3a744db833a4b392770ee261218713960b6c949bf263a4d6d824c",
+        "p/5-16cylo.dat": "3468b4f9bf29026d7266da964f4298eea5d4bfa30f09d80e11abfb39cc9df797",
+        "p/5-16cyli.dat": "3a46e175cd13f2343645b5ba1be54f1f2fdf446cf28392383d511d85eaa7665a",
+        "p/5-16edge.dat": "17a9ae47e68e98286d27fc7be4a48e1110d1cae0d3abff658f3378a552857fc3",
+        "p/5-16chrd.dat": "53926ed51a8b6757ef36240cd7520ac1f8db16e4650e3618a09d8146f89ddd98"
+      },
+      "sweepStepLdu": 2,
+      "sweepEndLdu": 120,
+      "surfaceIntersectionAtWithdrawalsLdu": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16,
+        18,
+        20,
+        22,
+        24,
+        26,
+        28,
+        30,
+        32,
+        34,
+        36,
+        38,
+        40,
+        42,
+        44,
+        46,
+        48,
+        50,
+        52,
+        54,
+        56,
+        58,
+        60,
+        62,
+        64,
+        66,
+        68,
+        70,
+        72,
+        74,
+        76
+      ]
+    },
+    {
+      "host": "19141",
+      "insert": "30173b",
+      "sourceLine": 8,
+      "status": "sampled-surface-intersection-needs-review",
+      "evidence": "shared-blade-placement-candidate",
+      "seatedPose": {
+        "pos": [
+          -0.174,
+          -9,
+          35.1
+        ],
+        "m": [
+          0,
+          -0.01745,
+          -0.99985,
+          -1,
+          0,
+          0,
+          0,
+          0.99985,
+          -0.01745
+        ]
+      },
+      "withdrawalAxisCandidate": [
+        -0.01744996051950899,
+        0,
+        0.9998477378470523
+      ],
+      "insertionAxisCandidate": [
+        0.01744996051950899,
+        0,
+        -0.9998477378470523
+      ],
+      "seatedSurfaceIntersection": true,
+      "intersectingSampleCount": 39,
+      "hostSources": {
+        "parts/19141.dat": "83d1610cc160148ee04dd94f501f7fc846d7499c9bed033fa29c35c5139ef09a",
+        "p/4-4cylc.dat": "0183cffc7f56a2f3e5e3511f0d07ac484d3039c2d41bee802a94344ec95ec8bd",
+        "p/4-4edge.dat": "54a52196e421fd1717d291ff52ea57553b1fb238907c1678cc1f1a84c698b1da",
+        "p/4-4disc.dat": "a00b5547776f61a7389d303616987c76b3c4de86ad8ec32f22857e1bd5e5e40f",
+        "p/4-4cyli.dat": "4a742c2765b6ebf98245baaf8a160a4ff587fc93d36c8ee2b9074712a2f968c4",
+        "p/rect.dat": "ffeb2dd3d9b83c38841f18f1f74800fbba9e90c5fb6badfff2a795f08a96cb71",
+        "p/box2-5.dat": "8f297b754f87da1dbe19eec8704a5ce03a23b794ccd7cd015508e3758a206174",
+        "p/rect2p.dat": "faac2b36241a9de0c0108471e59c45734df6c79813332d9cacf97f6391886acc",
+        "p/1-4cylo.dat": "792a01362608c3f385dd7f01a1bd7d19cf9ed8a40f793266345cc86d1d98f3af",
+        "p/1-4edge.dat": "9ce2de7e67bbac575d52cfdc771b9d00856efc9b88002d97db8e665e50f4d467",
+        "p/1-4cyli.dat": "5a7168952a5a3570327873b9a5802fa7b3be40967ab78c03b6a2bfd4419a1f10",
+        "p/1-4chrd.dat": "ccba3a97b5cc358754e476b78b4ce61cce5f404cd15e37471b73df3e81784aec",
+        "p/box2-11.dat": "7f29fb8601b419207b5c855af8fad8abb55a967ec73f3d8be841d370c360b97c"
+      },
+      "insertSources": {
+        "parts/30173b.dat": "ed2fb80fd708a6174b4900143a47ff34ba535a00bebb7b903b8e9382f42cdcc5",
+        "parts/s/93247s01.dat": "7bf80f78665c0fcaf266cae6ae0c2c25d1c745603a7b8ded1f4da8324d16402d",
+        "parts/s/93247s02.dat": "ae025cd9c62f21f5c57312a35efc21421835796fc43a3a1fd1483bd47b0d1f2b",
+        "parts/s/93247s03.dat": "4c914c8f8f291bee07822b0170b6764b07cd0a2971289c2a7cf302d4f409a99a",
+        "p/4-4disc.dat": "a00b5547776f61a7389d303616987c76b3c4de86ad8ec32f22857e1bd5e5e40f",
+        "p/4-4edge.dat": "54a52196e421fd1717d291ff52ea57553b1fb238907c1678cc1f1a84c698b1da",
+        "p/4-4cyli.dat": "4a742c2765b6ebf98245baaf8a160a4ff587fc93d36c8ee2b9074712a2f968c4",
+        "parts/s/30173s01.dat": "180e1daf17a3a744db833a4b392770ee261218713960b6c949bf263a4d6d824c",
+        "p/5-16cylo.dat": "3468b4f9bf29026d7266da964f4298eea5d4bfa30f09d80e11abfb39cc9df797",
+        "p/5-16cyli.dat": "3a46e175cd13f2343645b5ba1be54f1f2fdf446cf28392383d511d85eaa7665a",
+        "p/5-16edge.dat": "17a9ae47e68e98286d27fc7be4a48e1110d1cae0d3abff658f3378a552857fc3",
+        "p/5-16chrd.dat": "53926ed51a8b6757ef36240cd7520ac1f8db16e4650e3618a09d8146f89ddd98",
+        "p/box5-4a.dat": "70d5f7f2d0720b84a06100b12b449b8ad37d66a02fc4650b31d556d7b1d0fe41",
+        "p/1-4cylo.dat": "792a01362608c3f385dd7f01a1bd7d19cf9ed8a40f793266345cc86d1d98f3af",
+        "p/1-4edge.dat": "9ce2de7e67bbac575d52cfdc771b9d00856efc9b88002d97db8e665e50f4d467",
+        "p/1-4cyli.dat": "5a7168952a5a3570327873b9a5802fa7b3be40967ab78c03b6a2bfd4419a1f10"
+      },
+      "sweepStepLdu": 2,
+      "sweepEndLdu": 120,
+      "surfaceIntersectionAtWithdrawalsLdu": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16,
+        18,
+        20,
+        22,
+        24,
+        26,
+        28,
+        30,
+        32,
+        34,
+        36,
+        38,
+        40,
+        42,
+        44,
+        46,
+        48,
+        50,
+        52,
+        54,
+        56,
+        58,
+        60,
+        62,
+        64,
+        66,
+        68,
+        70,
+        72,
+        74,
+        76
+      ]
+    },
+    {
+      "host": "19141",
+      "insert": "21459",
+      "sourceLine": 8,
+      "status": "sampled-surface-intersection-needs-review",
+      "evidence": "shared-blade-placement-candidate",
+      "seatedPose": {
+        "pos": [
+          -0.174,
+          -9,
+          35.1
+        ],
+        "m": [
+          0,
+          -0.01745,
+          -0.99985,
+          -1,
+          0,
+          0,
+          0,
+          0.99985,
+          -0.01745
+        ]
+      },
+      "withdrawalAxisCandidate": [
+        -0.01744996051950899,
+        0,
+        0.9998477378470523
+      ],
+      "insertionAxisCandidate": [
+        0.01744996051950899,
+        0,
+        -0.9998477378470523
+      ],
+      "seatedSurfaceIntersection": true,
+      "intersectingSampleCount": 39,
+      "hostSources": {
+        "parts/19141.dat": "83d1610cc160148ee04dd94f501f7fc846d7499c9bed033fa29c35c5139ef09a",
+        "p/4-4cylc.dat": "0183cffc7f56a2f3e5e3511f0d07ac484d3039c2d41bee802a94344ec95ec8bd",
+        "p/4-4edge.dat": "54a52196e421fd1717d291ff52ea57553b1fb238907c1678cc1f1a84c698b1da",
+        "p/4-4disc.dat": "a00b5547776f61a7389d303616987c76b3c4de86ad8ec32f22857e1bd5e5e40f",
+        "p/4-4cyli.dat": "4a742c2765b6ebf98245baaf8a160a4ff587fc93d36c8ee2b9074712a2f968c4",
+        "p/rect.dat": "ffeb2dd3d9b83c38841f18f1f74800fbba9e90c5fb6badfff2a795f08a96cb71",
+        "p/box2-5.dat": "8f297b754f87da1dbe19eec8704a5ce03a23b794ccd7cd015508e3758a206174",
+        "p/rect2p.dat": "faac2b36241a9de0c0108471e59c45734df6c79813332d9cacf97f6391886acc",
+        "p/1-4cylo.dat": "792a01362608c3f385dd7f01a1bd7d19cf9ed8a40f793266345cc86d1d98f3af",
+        "p/1-4edge.dat": "9ce2de7e67bbac575d52cfdc771b9d00856efc9b88002d97db8e665e50f4d467",
+        "p/1-4cyli.dat": "5a7168952a5a3570327873b9a5802fa7b3be40967ab78c03b6a2bfd4419a1f10",
+        "p/1-4chrd.dat": "ccba3a97b5cc358754e476b78b4ce61cce5f404cd15e37471b73df3e81784aec",
+        "p/box2-11.dat": "7f29fb8601b419207b5c855af8fad8abb55a967ec73f3d8be841d370c360b97c"
+      },
+      "insertSources": {
+        "parts/21459.dat": "59249dcff4eced0a72544cc2a84090a79187e812e8ebcaf4dbbfed08ee71014e",
+        "parts/s/30173s01.dat": "180e1daf17a3a744db833a4b392770ee261218713960b6c949bf263a4d6d824c",
+        "p/5-16cylo.dat": "3468b4f9bf29026d7266da964f4298eea5d4bfa30f09d80e11abfb39cc9df797",
+        "p/5-16cyli.dat": "3a46e175cd13f2343645b5ba1be54f1f2fdf446cf28392383d511d85eaa7665a",
+        "p/5-16edge.dat": "17a9ae47e68e98286d27fc7be4a48e1110d1cae0d3abff658f3378a552857fc3",
+        "p/5-16chrd.dat": "53926ed51a8b6757ef36240cd7520ac1f8db16e4650e3618a09d8146f89ddd98",
+        "parts/s/21459s02.dat": "16bd5d92a1b466a3874b3ddb5bda643e44e2866dd669aa0546a3319c542da937",
+        "parts/s/21459s01.dat": "430cac599c621e1a1e2ec9b75594591921007df77945bf383f2f19d91efcd195",
+        "p/3-16cylh.dat": "091f4691421634110cb2476d9f7dcef15317290ada9d5c8dbbcf2cf01795ab10",
+        "p/1-8cylh.dat": "42c350ae3a9da47455e2b8b404d07820d92f914cafd1f970933d55db71588fff",
+        "p/3-16edgh.dat": "b47ab327883f7cbce189125ef6a6360dfcb4a59e725724b5e41dfe3045d1ac5f",
+        "p/1-8edgh.dat": "cd702471231efb1f3134bdbe3913099ae8d4a3aa433acc161da7db9f51d8875b",
+        "parts/s/93247s01.dat": "7bf80f78665c0fcaf266cae6ae0c2c25d1c745603a7b8ded1f4da8324d16402d",
+        "parts/s/93247s02.dat": "ae025cd9c62f21f5c57312a35efc21421835796fc43a3a1fd1483bd47b0d1f2b",
+        "p/4-4disc.dat": "a00b5547776f61a7389d303616987c76b3c4de86ad8ec32f22857e1bd5e5e40f",
+        "p/4-4cylo.dat": "d6ca97ee2e75918b3309a5c88aafcd2455b3a316f7cef8963517c19f1d86b38f",
+        "p/4-4edge.dat": "54a52196e421fd1717d291ff52ea57553b1fb238907c1678cc1f1a84c698b1da",
+        "p/4-4cyli.dat": "4a742c2765b6ebf98245baaf8a160a4ff587fc93d36c8ee2b9074712a2f968c4",
+        "p/1-4con7.dat": "bc528d486a6535e6df4fd85fed64a1b4f49f86c195a304a3318c50f7d900d26a",
+        "p/1-4edge.dat": "9ce2de7e67bbac575d52cfdc771b9d00856efc9b88002d97db8e665e50f4d467",
+        "p/box5-4a.dat": "70d5f7f2d0720b84a06100b12b449b8ad37d66a02fc4650b31d556d7b1d0fe41",
+        "p/1-4cylo.dat": "792a01362608c3f385dd7f01a1bd7d19cf9ed8a40f793266345cc86d1d98f3af",
+        "p/1-4cyli.dat": "5a7168952a5a3570327873b9a5802fa7b3be40967ab78c03b6a2bfd4419a1f10"
+      },
+      "sweepStepLdu": 2,
+      "sweepEndLdu": 120,
+      "surfaceIntersectionAtWithdrawalsLdu": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16,
+        18,
+        20,
+        22,
+        24,
+        26,
+        28,
+        30,
+        32,
+        34,
+        36,
+        38,
+        40,
+        42,
+        44,
+        46,
+        48,
+        50,
+        52,
+        54,
+        56,
+        58,
+        60,
+        62,
+        64,
+        66,
+        68,
+        70,
+        72,
+        74,
+        76
+      ]
+    },
+    {
+      "host": "19141",
+      "sourceLine": 9,
+      "status": "mirrored-reference-needs-review"
+    },
+    {
+      "host": "30177",
+      "insert": "30173a",
+      "sourceLine": 8,
+      "status": "sampled-surface-intersection-needs-review",
+      "evidence": "documented-placement",
+      "seatedPose": {
+        "pos": [
+          22.21,
+          -1.46,
+          26.21
+        ],
+        "m": [
+          -0.106,
+          0.633,
+          0.766,
+          -0.135,
+          -0.773,
+          0.62,
+          0.985,
+          -0.038,
+          0.167
+        ]
+      },
+      "withdrawalAxisCandidate": [
+        0.6331070041263102,
+        -0.77313067012581,
+        -0.03800642362843568
+      ],
+      "insertionAxisCandidate": [
+        -0.6331070041263102,
+        0.77313067012581,
+        0.03800642362843568
+      ],
+      "seatedSurfaceIntersection": true,
+      "intersectingSampleCount": 33,
+      "hostSources": {
+        "parts/30177.dat": "e881cadec102b2a48b1b47827a9455b65eb4381ddd71278e42653d29a2974384",
+        "p/stud4.dat": "871cdcab26e7f5113488a24c453d6fabda75b275b06de592e0bfaad4292c12a3",
+        "p/4-4edge.dat": "54a52196e421fd1717d291ff52ea57553b1fb238907c1678cc1f1a84c698b1da",
+        "p/4-4cyli.dat": "4a742c2765b6ebf98245baaf8a160a4ff587fc93d36c8ee2b9074712a2f968c4",
+        "p/4-4ring3.dat": "1f2835ac308154edc2d6f479d8e742a55be981f6167b20bfa100c195bc0731dd",
+        "p/4-4disc.dat": "a00b5547776f61a7389d303616987c76b3c4de86ad8ec32f22857e1bd5e5e40f",
+        "p/t04o6250.dat": "c09d0c876e3b54907f2640576924316922d686fec53bb64cf7379efa0d8e9485"
+      },
+      "insertSources": {
+        "parts/30173a.dat": "35387a28859440d2e2271aa65902da929ba56f60c8b942fa35e7c970631c0858",
+        "parts/s/93247s01.dat": "7bf80f78665c0fcaf266cae6ae0c2c25d1c745603a7b8ded1f4da8324d16402d",
+        "parts/s/93247s02.dat": "ae025cd9c62f21f5c57312a35efc21421835796fc43a3a1fd1483bd47b0d1f2b",
+        "parts/s/93247s03.dat": "4c914c8f8f291bee07822b0170b6764b07cd0a2971289c2a7cf302d4f409a99a",
+        "p/4-4disc.dat": "a00b5547776f61a7389d303616987c76b3c4de86ad8ec32f22857e1bd5e5e40f",
+        "p/4-4edge.dat": "54a52196e421fd1717d291ff52ea57553b1fb238907c1678cc1f1a84c698b1da",
+        "p/4-4cyli.dat": "4a742c2765b6ebf98245baaf8a160a4ff587fc93d36c8ee2b9074712a2f968c4",
+        "p/rect2p.dat": "faac2b36241a9de0c0108471e59c45734df6c79813332d9cacf97f6391886acc",
+        "p/rect.dat": "ffeb2dd3d9b83c38841f18f1f74800fbba9e90c5fb6badfff2a795f08a96cb71",
+        "p/rect3.dat": "07ac46908b6668d993b6de0fb001a34cd996542106b80ebc7de63317d8dde865",
+        "p/rect1.dat": "48fdcd3181587b4bdc89d356a5aee21268688f3f2fcdd4d6f5c1a3d49b1a1ceb",
+        "parts/s/30173s01.dat": "180e1daf17a3a744db833a4b392770ee261218713960b6c949bf263a4d6d824c",
+        "p/5-16cylo.dat": "3468b4f9bf29026d7266da964f4298eea5d4bfa30f09d80e11abfb39cc9df797",
+        "p/5-16cyli.dat": "3a46e175cd13f2343645b5ba1be54f1f2fdf446cf28392383d511d85eaa7665a",
+        "p/5-16edge.dat": "17a9ae47e68e98286d27fc7be4a48e1110d1cae0d3abff658f3378a552857fc3",
+        "p/5-16chrd.dat": "53926ed51a8b6757ef36240cd7520ac1f8db16e4650e3618a09d8146f89ddd98"
+      },
+      "sweepStepLdu": 2,
+      "sweepEndLdu": 120,
+      "surfaceIntersectionAtWithdrawalsLdu": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16,
+        18,
+        20,
+        22,
+        24,
+        26,
+        28,
+        30,
+        32,
+        34,
+        36,
+        38,
+        40,
+        42,
+        44,
+        46,
+        48,
+        50,
+        52,
+        54,
+        56,
+        58,
+        60,
+        62,
+        64
+      ]
+    },
+    {
+      "host": "30177",
+      "insert": "30173b",
+      "sourceLine": 8,
+      "status": "sampled-surface-intersection-needs-review",
+      "evidence": "shared-blade-placement-candidate",
+      "seatedPose": {
+        "pos": [
+          22.21,
+          -1.46,
+          26.21
+        ],
+        "m": [
+          -0.106,
+          0.633,
+          0.766,
+          -0.135,
+          -0.773,
+          0.62,
+          0.985,
+          -0.038,
+          0.167
+        ]
+      },
+      "withdrawalAxisCandidate": [
+        0.6331070041263102,
+        -0.77313067012581,
+        -0.03800642362843568
+      ],
+      "insertionAxisCandidate": [
+        -0.6331070041263102,
+        0.77313067012581,
+        0.03800642362843568
+      ],
+      "seatedSurfaceIntersection": true,
+      "intersectingSampleCount": 33,
+      "hostSources": {
+        "parts/30177.dat": "e881cadec102b2a48b1b47827a9455b65eb4381ddd71278e42653d29a2974384",
+        "p/stud4.dat": "871cdcab26e7f5113488a24c453d6fabda75b275b06de592e0bfaad4292c12a3",
+        "p/4-4edge.dat": "54a52196e421fd1717d291ff52ea57553b1fb238907c1678cc1f1a84c698b1da",
+        "p/4-4cyli.dat": "4a742c2765b6ebf98245baaf8a160a4ff587fc93d36c8ee2b9074712a2f968c4",
+        "p/4-4ring3.dat": "1f2835ac308154edc2d6f479d8e742a55be981f6167b20bfa100c195bc0731dd",
+        "p/4-4disc.dat": "a00b5547776f61a7389d303616987c76b3c4de86ad8ec32f22857e1bd5e5e40f",
+        "p/t04o6250.dat": "c09d0c876e3b54907f2640576924316922d686fec53bb64cf7379efa0d8e9485"
+      },
+      "insertSources": {
+        "parts/30173b.dat": "ed2fb80fd708a6174b4900143a47ff34ba535a00bebb7b903b8e9382f42cdcc5",
+        "parts/s/93247s01.dat": "7bf80f78665c0fcaf266cae6ae0c2c25d1c745603a7b8ded1f4da8324d16402d",
+        "parts/s/93247s02.dat": "ae025cd9c62f21f5c57312a35efc21421835796fc43a3a1fd1483bd47b0d1f2b",
+        "parts/s/93247s03.dat": "4c914c8f8f291bee07822b0170b6764b07cd0a2971289c2a7cf302d4f409a99a",
+        "p/4-4disc.dat": "a00b5547776f61a7389d303616987c76b3c4de86ad8ec32f22857e1bd5e5e40f",
+        "p/4-4edge.dat": "54a52196e421fd1717d291ff52ea57553b1fb238907c1678cc1f1a84c698b1da",
+        "p/4-4cyli.dat": "4a742c2765b6ebf98245baaf8a160a4ff587fc93d36c8ee2b9074712a2f968c4",
+        "parts/s/30173s01.dat": "180e1daf17a3a744db833a4b392770ee261218713960b6c949bf263a4d6d824c",
+        "p/5-16cylo.dat": "3468b4f9bf29026d7266da964f4298eea5d4bfa30f09d80e11abfb39cc9df797",
+        "p/5-16cyli.dat": "3a46e175cd13f2343645b5ba1be54f1f2fdf446cf28392383d511d85eaa7665a",
+        "p/5-16edge.dat": "17a9ae47e68e98286d27fc7be4a48e1110d1cae0d3abff658f3378a552857fc3",
+        "p/5-16chrd.dat": "53926ed51a8b6757ef36240cd7520ac1f8db16e4650e3618a09d8146f89ddd98",
+        "p/box5-4a.dat": "70d5f7f2d0720b84a06100b12b449b8ad37d66a02fc4650b31d556d7b1d0fe41",
+        "p/1-4cylo.dat": "792a01362608c3f385dd7f01a1bd7d19cf9ed8a40f793266345cc86d1d98f3af",
+        "p/1-4edge.dat": "9ce2de7e67bbac575d52cfdc771b9d00856efc9b88002d97db8e665e50f4d467",
+        "p/1-4cyli.dat": "5a7168952a5a3570327873b9a5802fa7b3be40967ab78c03b6a2bfd4419a1f10"
+      },
+      "sweepStepLdu": 2,
+      "sweepEndLdu": 120,
+      "surfaceIntersectionAtWithdrawalsLdu": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16,
+        18,
+        20,
+        22,
+        24,
+        26,
+        28,
+        30,
+        32,
+        34,
+        36,
+        38,
+        40,
+        42,
+        44,
+        46,
+        48,
+        50,
+        52,
+        54,
+        56,
+        58,
+        60,
+        62,
+        64
+      ]
+    },
+    {
+      "host": "30177",
+      "insert": "21459",
+      "sourceLine": 8,
+      "status": "sampled-surface-intersection-needs-review",
+      "evidence": "shared-blade-placement-candidate",
+      "seatedPose": {
+        "pos": [
+          22.21,
+          -1.46,
+          26.21
+        ],
+        "m": [
+          -0.106,
+          0.633,
+          0.766,
+          -0.135,
+          -0.773,
+          0.62,
+          0.985,
+          -0.038,
+          0.167
+        ]
+      },
+      "withdrawalAxisCandidate": [
+        0.6331070041263102,
+        -0.77313067012581,
+        -0.03800642362843568
+      ],
+      "insertionAxisCandidate": [
+        -0.6331070041263102,
+        0.77313067012581,
+        0.03800642362843568
+      ],
+      "seatedSurfaceIntersection": true,
+      "intersectingSampleCount": 33,
+      "hostSources": {
+        "parts/30177.dat": "e881cadec102b2a48b1b47827a9455b65eb4381ddd71278e42653d29a2974384",
+        "p/stud4.dat": "871cdcab26e7f5113488a24c453d6fabda75b275b06de592e0bfaad4292c12a3",
+        "p/4-4edge.dat": "54a52196e421fd1717d291ff52ea57553b1fb238907c1678cc1f1a84c698b1da",
+        "p/4-4cyli.dat": "4a742c2765b6ebf98245baaf8a160a4ff587fc93d36c8ee2b9074712a2f968c4",
+        "p/4-4ring3.dat": "1f2835ac308154edc2d6f479d8e742a55be981f6167b20bfa100c195bc0731dd",
+        "p/4-4disc.dat": "a00b5547776f61a7389d303616987c76b3c4de86ad8ec32f22857e1bd5e5e40f",
+        "p/t04o6250.dat": "c09d0c876e3b54907f2640576924316922d686fec53bb64cf7379efa0d8e9485"
+      },
+      "insertSources": {
+        "parts/21459.dat": "59249dcff4eced0a72544cc2a84090a79187e812e8ebcaf4dbbfed08ee71014e",
+        "parts/s/30173s01.dat": "180e1daf17a3a744db833a4b392770ee261218713960b6c949bf263a4d6d824c",
+        "p/5-16cylo.dat": "3468b4f9bf29026d7266da964f4298eea5d4bfa30f09d80e11abfb39cc9df797",
+        "p/5-16cyli.dat": "3a46e175cd13f2343645b5ba1be54f1f2fdf446cf28392383d511d85eaa7665a",
+        "p/5-16edge.dat": "17a9ae47e68e98286d27fc7be4a48e1110d1cae0d3abff658f3378a552857fc3",
+        "p/5-16chrd.dat": "53926ed51a8b6757ef36240cd7520ac1f8db16e4650e3618a09d8146f89ddd98",
+        "parts/s/21459s02.dat": "16bd5d92a1b466a3874b3ddb5bda643e44e2866dd669aa0546a3319c542da937",
+        "parts/s/21459s01.dat": "430cac599c621e1a1e2ec9b75594591921007df77945bf383f2f19d91efcd195",
+        "p/3-16cylh.dat": "091f4691421634110cb2476d9f7dcef15317290ada9d5c8dbbcf2cf01795ab10",
+        "p/1-8cylh.dat": "42c350ae3a9da47455e2b8b404d07820d92f914cafd1f970933d55db71588fff",
+        "p/3-16edgh.dat": "b47ab327883f7cbce189125ef6a6360dfcb4a59e725724b5e41dfe3045d1ac5f",
+        "p/1-8edgh.dat": "cd702471231efb1f3134bdbe3913099ae8d4a3aa433acc161da7db9f51d8875b",
+        "parts/s/93247s01.dat": "7bf80f78665c0fcaf266cae6ae0c2c25d1c745603a7b8ded1f4da8324d16402d",
+        "parts/s/93247s02.dat": "ae025cd9c62f21f5c57312a35efc21421835796fc43a3a1fd1483bd47b0d1f2b",
+        "p/4-4disc.dat": "a00b5547776f61a7389d303616987c76b3c4de86ad8ec32f22857e1bd5e5e40f",
+        "p/4-4cylo.dat": "d6ca97ee2e75918b3309a5c88aafcd2455b3a316f7cef8963517c19f1d86b38f",
+        "p/4-4edge.dat": "54a52196e421fd1717d291ff52ea57553b1fb238907c1678cc1f1a84c698b1da",
+        "p/4-4cyli.dat": "4a742c2765b6ebf98245baaf8a160a4ff587fc93d36c8ee2b9074712a2f968c4",
+        "p/1-4con7.dat": "bc528d486a6535e6df4fd85fed64a1b4f49f86c195a304a3318c50f7d900d26a",
+        "p/1-4edge.dat": "9ce2de7e67bbac575d52cfdc771b9d00856efc9b88002d97db8e665e50f4d467",
+        "p/box5-4a.dat": "70d5f7f2d0720b84a06100b12b449b8ad37d66a02fc4650b31d556d7b1d0fe41",
+        "p/1-4cylo.dat": "792a01362608c3f385dd7f01a1bd7d19cf9ed8a40f793266345cc86d1d98f3af",
+        "p/1-4cyli.dat": "5a7168952a5a3570327873b9a5802fa7b3be40967ab78c03b6a2bfd4419a1f10"
+      },
+      "sweepStepLdu": 2,
+      "sweepEndLdu": 120,
+      "surfaceIntersectionAtWithdrawalsLdu": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16,
+        18,
+        20,
+        22,
+        24,
+        26,
+        28,
+        30,
+        32,
+        34,
+        36,
+        38,
+        40,
+        42,
+        44,
+        46,
+        48,
+        50,
+        52,
+        54,
+        56,
+        58,
+        60,
+        62,
+        64
+      ]
+    }
+  ],
+  "additionalDocumentedPoses": [
+    {
+      "host": "95348",
+      "part": "2530.dat",
+      "pos": [
+        26,
+        34.5,
+        -22.9
+      ],
+      "m": [
+        -1,
+        0,
+        0,
+        0,
+        -0.431,
+        -0.903,
+        0,
+        -0.903,
+        0.431
+      ],
+      "mirrored": false,
+      "context": "Cutlass position:",
+      "line": 8,
+      "source": {
+        "path": "parts/95348.dat",
+        "sha256": "5c7b793eb4238f66be158a9f1316aea16593258147d6f95d5d6dbfdfedcb04ad",
+        "license": "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      },
+      "status": "documented-placement-unvalidated"
+    }
+  ],
+  "unresolvedKatanaPoseAnnotations": [
+    {
+      "host": "98132",
+      "line": 7,
+      "text": "0 !HELP Place first katana at: 30.86 -21.284 16 0 .6428 -.766 0 -.766 -.6428 -1 0 0",
+      "source": {
+        "path": "parts/98132.dat",
+        "sha256": "6910fce84457730c3b22919e18d2e24b9132d1784bfeac60eb032094d8a85b07",
+        "license": "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      }
+    },
+    {
+      "host": "98132",
+      "line": 8,
+      "text": "0 !HELP Place second katana at: -30.86 -21.284 20.25 0 -.6428 .766 0 -.766 -.6428 1 0 0",
+      "source": {
+        "path": "parts/98132.dat",
+        "sha256": "6910fce84457730c3b22919e18d2e24b9132d1784bfeac60eb032094d8a85b07",
+        "license": "0 !LICENSE Licensed under CC BY 4.0 : see CAreadme.txt"
+      }
+    }
+  ],
+  "limitations": [
+    "Source poses are examples, not physical fit certificates",
+    "Blade length is not scabbard insertion depth",
+    "Straight axial motion is a candidate; curved blade paths may differ",
+    "2 LDU discrete surface-intersection samples can miss intermediate collisions and solid containment",
+    "Float32 triangle contact may report contact as intersection; no tolerance or friction is inferred",
+    "Slot mouth, usable depth, retaining force and physical fit remain unvalidated",
+    "Wall rays describe distances from section-envelope centers; they do not prove those centers are in a connected cavity"
+  ]
+}

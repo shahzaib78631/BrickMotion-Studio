@@ -33,7 +33,7 @@ constexpr int kOk = 0, kFailure = 1, kUsage = 2;
 int usage() {
   std::fprintf(stderr,
                "usage: bmshot <model file> --out <png> [--size WxH] [--frame N] [--azimuth a --elevation e | --eye x,y,z --target x,y,z] [--fov deg] [--no-edges] [--no-shadows] [--no-ao] [--no-floor]\n"
-               "              [--no-cull] [--lights-fixed|--lights-follow] [--raytraced-glass] [--background r,g,b] [--detail 0|1|2] [--select piece,piece,...] [--stats] [--repeat CxR] [--save-model <ldr>] [--correct]\n"
+               "              [--no-cull] [--lights-fixed|--lights-follow] [--raytraced-glass] [--background r,g,b] [--detail 0|1|2] [--select piece,piece,...] [--stats] [--repeat CxR] [--save-model <ldr>] [--correct] [--flight web|arc]\n"
                "       bmshot <model file> --bench <frames> [--frame N] [--repeat CxR] [--size WxH] [--detail 0|1|2] [--maps-whole] [--no-...]\n");
   return kUsage;
 }
@@ -161,7 +161,7 @@ int main(int argc, char** argv) {
     if (frame >= 0 || shot.correct) {
       bm::plan::Options planOptions;
       planOptions.correctPlacements = shot.correct;
-      planned = bmtools::planModel(model, library, full, ldraw, planOptions, bm::plan::styleOf(input));
+      planned = bmtools::planModel(model, library, full, ldraw, planOptions, bmtools::styleWith(input, shot));
       bmtools::reportCorrections("bmshot", model, planned->corrections);
     }
     if (!saveModel.empty()) {

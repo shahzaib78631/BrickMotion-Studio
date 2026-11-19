@@ -5,16 +5,24 @@ import { flattenPart } from '../../src/ldraw/flatten';
 import { normalizeName, parseLDraw, type LDrawFile } from '../../src/ldraw/parse';
 import { measurePartFunctions } from '../../src/anim/motion/parts/partFunctions';
 import { connectorPrimitives } from './connector-primitives';
+import type { ShadowLookup } from '../../src/ldraw/shadow';
+import { referencePorts } from './reference-ports';
+import { measurementPaths } from './measurement-paths';
+import { geometrySignature } from './geometry-signature';
+import { referenceFrames } from './reference-frames';
+import { referenceConnectors } from './reference-connectors';
 
-/** Geometry-only measurement. Deliberately bypasses PartLibrary, connector tables,
- * shadow metadata, saved metrics and material tables. No application data is written.
+/** Deliberately bypasses PartLibrary, imported fallback tables, saved metrics and
+ * material tables. Optional independent shadow metadata is separately reported.
+ * No application data is written.
  * Results describe the supplied CAD files, not manufacturing tolerances or fit. */
-export function measureIndependentPart(directory: string, part: string) {
+export function measureIndependentPart(directory: string, part: string, shadow?: ShadowLookup, mechanical = true) {
   const root = realpathSync(directory);
   const id = normalizeName(part).replace(/\.dat$/, '');
   const files = new Map<string, LDrawFile | null>();
   const sources = new Map<string, string>();
   const issues = new Set<string>();
+  const resolutions: Record<string, string> = {};
   const inside = (path: string) => {
     const rel = relative(root, path);
     return rel !== '..' && !rel.startsWith('../') && !isAbsolute(rel);
@@ -22,12 +30,13 @@ export function measureIndependentPart(directory: string, part: string) {
   const getFile = (name: string): LDrawFile | null => {
     const key = normalizeName(name);
     if (files.has(key)) return files.get(key)!;
-    for (const prefix of ['parts/', 'p/', 'models/', '']) {
-      const path = resolve(root, prefix + key);
+    for (const candidate of measurementPaths(key)) {
+      const path = resolve(root, candidate);
       if (!inside(path) || !statSync(path, { throwIfNoEntry: false })?.isFile()) continue;
       const real = realpathSync(path);
       if (!inside(real)) continue;
       const bytes = readFileSync(real);
+      resolutions[key] = relative(root, real);
       sources.set(relative(root, real), createHash('sha256').update(bytes).digest('hex'));
       const file = parseLDraw(bytes.toString('utf8'), key);
       files.set(key, file);
@@ -56,23 +65,32 @@ export function measureIndependentPart(directory: string, part: string) {
   const provenance = () => Object.fromEntries([...sources].sort(([a], [b]) => a.localeCompare(b)));
   if (!file || issues.size) return {
     id, status: file ? 'incomplete' as const : 'missing' as const,
-    issues: [...issues].sort(), sources: provenance(), measurements: null,
+    issues: [...issues].sort(), sources: provenance(), resolutions, measurements: null,
   };
   const flat = flattenPart(id, file, getFile, name => issues.add(`Missing file: ${name}`));
-  const functions = measurePartFunctions(flat);
+  const functions = mechanical ? measurePartFunctions(flat) : null;
   const primitives = connectorPrimitives(file, getFile);
+  const frames = shadow ? referenceFrames(file, getFile, shadow) : undefined;
+  for (const issue of frames?.issues ?? []) issues.add(issue);
+  const connectors = frames ? referenceConnectors(frames.definitions) : [];
   if (!flat.fullBox) issues.add('No measurable geometry');
   const measurements = {
     description: flat.description,
     fullBoundsLdu: flat.fullBox,
     bodyBoundsLdu: flat.bodyBox,
+    geometrySignature: geometrySignature(flat),
     // Primitive recognition gives transformed stud bases, tips and radii.
     studs: primitives.studs,
     connectorSurfaces: primitives.cylinders,
+    sphericalSurfaces: primitives.spheres,
     rejectedPrimitiveFrames: primitives.rejected,
     connectorCoverage: 'unreviewed' as const,
+    referenceConnectors: connectors,
+    referenceEntrances: referencePorts(connectors),
+    referenceFrames: frames,
     // These are geometric candidates; an empty list is not proof of absence.
     candidates: functions,
+    mechanicsMeasured: mechanical,
   };
   if (!JSON.stringify(measurements, (_key, value) => {
     if (typeof value === 'number' && !Number.isFinite(value)) issues.add('Non-finite measurement');
@@ -80,7 +98,7 @@ export function measureIndependentPart(directory: string, part: string) {
   })) issues.add('Unserializable measurement');
   return {
     id, status: issues.size ? 'incomplete' as const : 'measured' as const,
-    issues: [...issues].sort(), sources: provenance(),
+    issues: [...issues].sort(), sources: provenance(), resolutions,
     measurements: issues.size ? null : measurements,
   };
 }

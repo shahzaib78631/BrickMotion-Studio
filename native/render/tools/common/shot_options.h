@@ -2,6 +2,7 @@
 // What bmshot and bmexport share: the picture's size, the frame, the camera, the rig's heading,
 // the background and repeating the model for benchmarks.
 #include <cmath>
+#include <filesystem>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -25,7 +26,16 @@ struct ShotOptions {
   /// --correct: pieces drawn a little off what holds them are set in place before anything is
   /// drawn or planned (bm::plan::Options::correctPlacements), as bm plan --correct does.
   bool correct = false;
+  /// --flight web|arc: the flight's shape (bm::plan::Style::shape).
+  bm::plan::FlightShape flight = bm::plan::FlightShape::Web;
 };
+
+/// The project's style (bm::plan::styleOf) with the shot's --flight.
+inline bm::plan::Style styleWith(const std::filesystem::path& project, const ShotOptions& o) {
+  bm::plan::Style style = bm::plan::styleOf(project);
+  style.shape = o.flight;
+  return style;
+}
 
 /// Reads the option at args[i] (and its value, moving `i` past it). 1: it was one of these; 0:
 /// it is not, `i` unchanged; -1: it was, with a bad value.

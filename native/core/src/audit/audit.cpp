@@ -15,7 +15,7 @@
 
 namespace bm::audit {
 
-Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Library& library, ldraw::PartCache& cache, connect::ConnectorDb* connectors, collide::ShapeCache* shapes, const kin::GearDb* gears, double planBudget, bool kinematics, bool correct) {
+Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Library& library, ldraw::PartCache& cache, connect::ConnectorDb* connectors, collide::ShapeCache* shapes, const kin::GearDb* gears, double planBudget, bool kinematics, bool correct, plan::FlightShape shape) {
   Row row;
   row.id = std::move(id);
   const auto started = std::chrono::steady_clock::now();
@@ -115,7 +115,9 @@ Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Libr
           row.offAxis = cert.offAxis;
           row.planOk = cert.ok();
           {
-            const plan::Timeline played = plan::buildTimeline(pm, cache, built);
+            plan::Style style;
+            style.shape = shape;
+            const plan::Timeline played = plan::buildTimeline(pm, cache, built, style);
             const plan::PlayCheck play = plan::certifyPlay(pm, pg, cache, *shapes, built, played);
             row.playedCrossings = play.crossings, row.playedStrict = play.strictCrossings, row.playedUnder = play.underFloor;
             for (const plan::PlayCheck::Strict& c : play.strict)

@@ -49,3 +49,16 @@ it('rejects a hierarchy deeper than the geometry flattener supports', () => {
   expect(result.issues).toContain('Depth limit: 33.dat');
   expect(result.measurements).toBeNull();
 });
+
+it('records a high-resolution substitution and prefers the standard primitive when present', () => {
+  const dir = library({ 'part.dat': '0 Part\n1 16 0 0 0 1 0 0 0 1 0 0 0 1 1-12cyli.dat\n' });
+  mkdirSync(join(dir, 'p', '48'), { recursive: true });
+  const triangle = '0 Surface\n3 16 0 0 0 1 0 0 0 1 0\n';
+  writeFileSync(join(dir, 'p', '48', '1-12cyli.dat'), triangle);
+  const fallback = measureIndependentPart(dir, 'part');
+  expect(fallback.status).toBe('measured');
+  expect(fallback.resolutions['1-12cyli.dat']).toBe('p/48/1-12cyli.dat');
+  expect(fallback.sources['p/48/1-12cyli.dat']).toMatch(/^[0-9a-f]{64}$/);
+  writeFileSync(join(dir, 'p', '1-12cyli.dat'), triangle);
+  expect(measureIndependentPart(dir, 'part').resolutions['1-12cyli.dat']).toBe('p/1-12cyli.dat');
+});

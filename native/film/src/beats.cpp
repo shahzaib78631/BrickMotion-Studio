@@ -63,7 +63,7 @@ Beats beatsOf(const plan::Timeline& t, const plan::Plan& plan, const Model& mode
       const auto& pieces = plan::piecesOf(f, plan);
       const std::vector<int> s = pieces.empty() ? std::vector<int>{} : plan::stepsOf(model.pieces()[pieces.front()]);
       if (!open || s != steps) {
-        stepBeats.push_back({BeatKind::Step, f.startFrame, landing(f), -1, 0, {}, s});
+        stepBeats.push_back({BeatKind::Step, f.startFrame, landing(f), -1, 0, {}, {}, s});
         open = &stepBeats.back();
         steps = s;
         firstOfStep[static_cast<size_t>(i)] = 1;
@@ -88,9 +88,9 @@ Beats beatsOf(const plan::Timeline& t, const plan::Plan& plan, const Model& mode
       from = std::min(from, c.startFrame), to = std::max(to, landing(c));
       spot.merge(flyingBox(t, plan, world, k, landing(c)));
     }
-    if (from < to) out.list.push_back({BeatKind::UnitBuild, from, to, i, 0, spot, {}});
+    if (from < to) out.list.push_back({BeatKind::UnitBuild, from, to, i, 0, spot, {}, {}});
     if (f.frames <= 0) continue;
-    Beat b{BeatKind::Flight, f.startFrame, landing(f), i, 0, flyingBox(t, plan, world, i, landing(f)), {}};
+    Beat b{BeatKind::Flight, f.startFrame, landing(f), i, 0, flyingBox(t, plan, world, i, landing(f)), flyingBox(t, plan, world, i, f.startFrame), {}};
     double importance = kImportanceSize * volume(seated(plan, world, f)) / modelVolume;
     if (from < to) importance += kImportanceUnit;
     if (firstOfStep[static_cast<size_t>(i)]) importance += kImportanceFirst;
@@ -101,12 +101,12 @@ Beats beatsOf(const plan::Timeline& t, const plan::Plan& plan, const Model& mode
       const double grewTall = before.empty() ? 0 : (after.max.y - after.min.y) - (before.max.y - before.min.y);
       const double grewWide = before.empty() ? 0 : std::max((after.max.x - after.min.x) - (before.max.x - before.min.x), (after.max.z - after.min.z) - (before.max.z - before.min.z));
       if (grewTall > kSilhouetteGrow * tall || grewWide > kSilhouetteGrow * wide) importance += kImportanceSilhouette;
-      out.list.push_back({BeatKind::Growth, at, at, i, 0, after, {}});
+      out.list.push_back({BeatKind::Growth, at, at, i, 0, after, {}, {}});
     }
     b.importance = std::clamp(importance, 0.0, 1.0);
     out.list.push_back(b);
   }
-  out.list.push_back({BeatKind::Reveal, lastLanding, t.frames, -1, 1, out.model, {}});
+  out.list.push_back({BeatKind::Reveal, lastLanding, t.frames, -1, 1, out.model, {}, {}});
   std::stable_sort(out.list.begin(), out.list.end(), [](const Beat& a, const Beat& b) {
     return std::make_tuple(a.start, static_cast<int>(a.kind), a.flight) < std::make_tuple(b.start, static_cast<int>(b.kind), b.flight);
   });

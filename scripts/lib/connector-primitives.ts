@@ -4,6 +4,8 @@ import { normalizeName, type LDrawFile, type Vec3 } from '../../src/ldraw/parse'
 export type PrimitiveSurface = {
   primitive: string; path: string[]; start: Vec3; end: Vec3;
   axis: Vec3; side: Vec3; radius: number; length: number;
+  arcFraction: number;
+  radialZ: Vec3;
   surface: 'inner' | 'outer';
 };
 
@@ -11,6 +13,7 @@ export type PrimitiveSurface = {
  * surface observations, not certified sockets: ends may be obstructed. */
 export function connectorPrimitives(root: LDrawFile, lookup: (name: string) => LDrawFile | null) {
   const cylinders: PrimitiveSurface[] = [];
+  const spheres: { centre: Vec3; radius: number; surface: 'inner' | 'outer'; path: string[] }[] = [];
   const studs: { base: Vec3; tip: Vec3; radius: number; path: string[] }[] = [];
   const rejected: { path: string[]; reason: string }[] = [];
   const walk = (file: LDrawFile, world: Matrix4, inverted: boolean, path: string[], depth: number) => {
@@ -27,9 +30,12 @@ export function connectorPrimitives(root: LDrawFile, lookup: (name: string) => L
       const inside = inverted !== cmd.invert;
       const child = lookup(name);
       if (!child) continue;
-      const cylinder = /^(?:4-4|16-16|48-48)cyli\.dat$/.test(plain);
+      const arc = /^(\d+)-(\d+)cyli\.dat$/.exec(plain);
+      const arcFraction = arc ? Number(arc[1]) / Number(arc[2]) : 0;
+      const cylinder = !!arc && arcFraction > 0 && arcFraction <= 1;
+      const sphere = plain === '8-8sphe.dat';
       const stud = /^(?:stud|stud2|stud2a)\.dat$/.test(plain);
-      if (cylinder || stud) {
+      if (cylinder || stud || sphere) {
         const e = transform.elements;
         const x = new Vector3(e[0], e[1], e[2]);
         const y = new Vector3(e[4], e[5], e[6]);
@@ -42,10 +48,14 @@ export function connectorPrimitives(root: LDrawFile, lookup: (name: string) => L
         if (!orthogonal) rejected.push({ path: next, reason: 'Non-circular, degenerate or sheared frame' });
         else {
           const origin = new Vector3().applyMatrix4(transform);
+          if (sphere) {
+            if (Math.abs(rx - ry) > 1e-6 * Math.max(rx, ry)) rejected.push({ path: next, reason: 'Ellipsoidal sphere frame' });
+            else spheres.push({ centre: origin.toArray(), radius: rx, surface: inside ? 'inner' : 'outer', path: next });
+          }
           if (cylinder) cylinders.push({ primitive: name, path: next,
             start: origin.toArray(), end: origin.clone().add(y).toArray(),
             axis: y.clone().normalize().toArray(), side: x.normalize().toArray(),
-            radius: rx, length: ry, surface: inside ? 'inner' : 'outer' });
+            radius: rx, length: ry, arcFraction, radialZ: z.normalize().toArray(), surface: inside ? 'inner' : 'outer' });
           if (stud && !inside) studs.push({ base: origin.toArray(),
             tip: new Vector3(0, -4, 0).applyMatrix4(transform).toArray(), radius: 6 * rx, path: next });
         }
@@ -58,5 +68,5 @@ export function connectorPrimitives(root: LDrawFile, lookup: (name: string) => L
   const uniqueStuds = studs.filter((s, i) => studs.findIndex(t =>
     Math.hypot(...s.base.map((v, k) => v - t.base[k])) < 1e-6 &&
     Math.hypot(...s.tip.map((v, k) => v - t.tip[k])) < 1e-6 && Math.abs(s.radius - t.radius) < 1e-6) === i);
-  return { studs: uniqueStuds, cylinders, rejected };
+  return { studs: uniqueStuds, cylinders, spheres, rejected };
 }

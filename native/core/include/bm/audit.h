@@ -9,6 +9,7 @@
 #include "bm/connect/graph.h"
 #include "bm/ldraw/library.h"
 #include "bm/ldraw/part_cache.h"
+#include "bm/plan/timeline.h"
 
 namespace bm::audit {
 
@@ -85,7 +86,7 @@ struct Row {
 /// `kinematics` false leaves the mechanism columns out. `correct` sets pieces placed a little
 /// off what holds them in place before planning (plan::Options::correctPlacements).
 Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Library& library, ldraw::PartCache& cache, connect::ConnectorDb* connectors = nullptr, collide::ShapeCache* shapes = nullptr, const kin::GearDb* gears = nullptr,
-            double planBudget = 0, bool kinematics = true, bool correct = false);
+            double planBudget = 0, bool kinematics = true, bool correct = false, plan::FlightShape shape = plan::FlightShape::Web);
 
 nlohmann::json toJson(const Row& row);
 

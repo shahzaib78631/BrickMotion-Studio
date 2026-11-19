@@ -132,6 +132,11 @@ TEST_CASE("a frame's poses depend only on the frame", "[scene][playback]") {
   REQUIRE(length(where(s, 0) - plan::poseAt(t.flights[0], 7).t) < 1e-3);  // where the timeline says, on the last leg
   REQUIRE(where(s, 0).y < -1);
   REQUIRE(std::abs(where(s, 0).x) < 1e-3);
+  // Display refreshes between timeline frames must advance the pose too.
+  const Vec3 wholeFrame = where(s, 0);
+  REQUIRE_FALSE(applyFrame(s, m, plan, t, 7.5).empty());
+  REQUIRE(length(where(s, 0) - wholeFrame) > 1e-3);
+  REQUIRE(length(where(s, 0) - plan::poseAt(t.flights[0], 7.5).t) < 1e-3);
   // Rest again, by name.
   REQUIRE_FALSE(applyRest(s, m).empty());
   REQUIRE(sameMatrices(s, rest, 0));

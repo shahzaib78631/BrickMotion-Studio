@@ -31,10 +31,10 @@ constexpr double kReadoutSeconds = 0.25;
   int _width, _height;  // pixels
 
   // Playback. _frame is -1 until there is a plan (the model is shown finished).
-  int _frame;
+  double _frame;
   bool _playing, _userMoved;
   double _playStartTime;
-  int _playStartFrame;
+  double _playStartFrame;
 
   // The mouse.
   NSPoint _pressedAt, _lastAt;
@@ -168,20 +168,35 @@ constexpr double kReadoutSeconds = 0.25;
 - (void)advance {
   const bmtools::Planned& p = *_session->planned;
   const double fps = bm::plan::Style{}.fps;
-  const int f = std::min(p.timeline.frames, _playStartFrame + static_cast<int>((CACurrentMediaTime() - _playStartTime) * fps));
+  const double f = std::min(static_cast<double>(p.timeline.frames), _playStartFrame + (CACurrentMediaTime() - _playStartTime) * fps);
   [self showFrame:f];
   if (f >= p.timeline.frames) _playing = false;
 }
 
-- (void)showFrame:(int)f {
+- (void)showFrame:(double)f {
   if (!_session->planned) return;
   const bmtools::Planned& p = *_session->planned;
-  f = std::clamp(f, 0, p.timeline.frames);
+  f = std::clamp(f, 0.0, static_cast<double>(p.timeline.frames));
   if (f == _frame) return;
   _frame = f;
   _session->renderer->setFrame(p.plan, p.timeline, f);
   if (_playing && !_userMoved && !p.timeline.camera.empty()) _orbit = bmr::OrbitCamera::along(p.timeline, f);
   [self changed];
+}
+
+/// W: the other flight shape (web, arc), laid out again from the same plan; no replanning.
+- (void)switchFlight {
+  if (!_session->planned) return;
+  _session->flight = _session->flight == bm::plan::FlightShape::Web ? bm::plan::FlightShape::Arc : bm::plan::FlightShape::Web;
+  bm::plan::Style style = bm::plan::styleOf(_session->file);
+  style.shape = _session->flight;
+  bmtools::Planned& p = *_session->planned;
+  p.timeline = bm::plan::buildTimeline(*_session->model, *_session->full, p.plan, style);
+  std::fprintf(stderr, "bmview: flights %s\n", _session->flight == bm::plan::FlightShape::Arc ? "arc" : "web");
+  self.window.subtitle = _session->flight == bm::plan::FlightShape::Arc ? @"flights: arc" : @"flights: web";
+  const double at = std::min(_frame, static_cast<double>(p.timeline.frames));
+  _frame = -2;  // drawn again at the same moment
+  [self showFrame:at];
 }
 
 - (void)planReady:(BOOL)play {
@@ -213,7 +228,7 @@ constexpr double kReadoutSeconds = 0.25;
   if (_readout.hidden) return;
   const bmr::Scene& scene = _session->renderer->scene();
   const size_t total = scene.where.size();
-  NSString* frame = _session->planned ? [NSString stringWithFormat:@"frame %d / %d", _frame, _session->planned->timeline.frames] : @"planning…";
+  NSString* frame = _session->planned ? [NSString stringWithFormat:@"frame %d / %d", static_cast<int>(_frame), _session->planned->timeline.frames] : @"planning…";
   const double cpu = _framesSummed ? _cpuSum / _framesSummed : _lastStats.cpuMs;
   const double gpu = _framesSummed ? _gpuSum / _framesSummed : _session->renderer->lastGpuMs();
   _readout.stringValue = [NSString stringWithFormat:@"%@ · cpu %.1f ms · gpu %.1f ms · %u/%zu pieces · F %u L %u B %u", frame, cpu, gpu, _lastStats.instances, total,
@@ -327,6 +342,7 @@ constexpr double kReadoutSeconds = 0.25;
     case 'a': case 'A': _options.ambientOcclusion = !_options.ambientOcclusion; break;
     case 'g': case 'G': _options.refractiveGlass = !_options.refractiveGlass; break;
     case 'i': case 'I': _readout.hidden = !_readout.hidden; [self showReadout]; return;
+    case 'w': case 'W': [self switchFlight]; return;
     default: [super keyDown:event]; return;
   }
   [self changed];

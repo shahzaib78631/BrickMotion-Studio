@@ -31,3 +31,38 @@ inline constexpr double kImportanceSilhouette = 0.4;  ///< it makes the model ta
 inline constexpr double kSilhouetteGrow = 0.08;       ///< ...by more than this share of it
 
 }  // namespace bm::film
+
+namespace bm::film {
+
+// Editing. Common practice for edited film: a shot a viewer can take in, cuts no faster than
+// they can follow, and no cut to nearly the same picture.
+inline constexpr double kMinShotSeconds = 1.5;
+inline constexpr double kCutWindowSeconds = 20;  ///< cuts are counted over any window this long...
+inline constexpr int kCutsPerWindow = 5;         ///< ...and are at most this many: one in 4 s
+inline constexpr double kJumpCutRadians = 0.5236;  ///< 30 degrees: a cut turns at least this much, or changes size
+
+// The director.
+inline constexpr double kAnticipateSeconds = 0.6;  ///< a move to the next scene is done this long before its first piece leaves
+inline constexpr double kBlendSeconds = 1.0;       ///< how long a move from one scene's angle to the next takes
+/// A scene (one camera angle) lasts at least this long; at most kCutsPerWindow of them in a
+/// window, as cuts.
+inline constexpr double kMinSceneSeconds = 4.0;
+/// Steps whose pieces land within this angle round the model, seen from above, are one scene.
+inline constexpr double kSceneSpread = 1.5708;
+inline constexpr int kCoverageAzimuths = 16;  ///< angles round the model tried for a scene
+inline constexpr int kVisibilityPoints = 24;  ///< seat points per scene looked at from each
+/// A scene's angle: the share of its seat points in view, plus kSidePull for facing the side
+/// its pieces land on, less kStayPull for turning away from the angle before.
+inline constexpr double kSidePull = 0.3;
+inline constexpr double kStayPull = 0.1;
+/// Seats this close to the model's middle (a share of its radius), seen from above, are on no side.
+inline constexpr double kNoSide = 0.1;
+/// A neighbour's box is shrunk by this much before it is said to hide a seat point: touching
+/// pieces do not hide each other's corners.
+inline constexpr double kOcclusionInset = 1.0;
+inline constexpr double kInsertSeconds = 1.6;   ///< a close shot of a landing: this long, ending...
+inline constexpr double kInsertAfter = 0.3;     ///< ...this long after it lands
+inline constexpr double kInsertTurn = 0.6109;   ///< 35 degrees from the main angle, so it is no jump cut
+inline constexpr double kRevealArc = 0.6;       ///< the finish arcs this far round onto the front
+
+}  // namespace bm::film

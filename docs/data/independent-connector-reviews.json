@@ -1,0 +1,30 @@
+{
+  "format": "brickmotion-connector-reviews",
+  "version": 1,
+  "reviews": [
+    {
+      "id": "6637b",
+      "status": "reviewed-intentionally-empty-file",
+      "reviewDate": "2026-11-18",
+      "method": "CAD source audit: header explicitly declares obsolete; sole subfile is empty.dat; complete closure has no geometry.",
+      "sources": {
+        "parts/6637b.dat": "2e0fa250cc18533389d759de4fda480752166fcc8245d4e85583b9b1501a6625",
+        "p/empty.dat": "192c9b9ee2e425cfbc9e9b12ff61ee0f05ae1cb0c12dc37d5590adb6abb65128"
+      },
+      "connectorCount": 0,
+      "scope": "The frozen file representation only; no claim about a real-world replacement part."
+    },
+    {
+      "id": "6637c",
+      "status": "reviewed-intentionally-empty-file",
+      "reviewDate": "2026-11-18",
+      "method": "CAD source audit: header explicitly declares obsolete; sole subfile is empty.dat; complete closure has no geometry.",
+      "sources": {
+        "parts/6637c.dat": "f292b671417411e0c2b9ef7d9a2b7dcb027c012d30380d659e4a531c8b154c79",
+        "p/empty.dat": "192c9b9ee2e425cfbc9e9b12ff61ee0f05ae1cb0c12dc37d5590adb6abb65128"
+      },
+      "connectorCount": 0,
+      "scope": "The frozen file representation only; no claim about a real-world replacement part."
+    }
+  ]
+}

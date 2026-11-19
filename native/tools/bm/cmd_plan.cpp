@@ -28,8 +28,10 @@ int cmdPlan(const Args& args) {
   const std::string threads = option(args, "--threads", "0", bad);
   const std::string truthPath = option(args, "--truth", "", bad);
   const std::string timelinePath = option(args, "--timeline", "", bad);
+  plan::FlightShape shape = plan::FlightShape::Web;
+  if (!plan::parse(option(args, "--flight", "web", bad), shape)) bad = true;
   if (bad || args.empty() || args[0].rfind("--", 0) == 0) {
-    std::fprintf(stderr, "usage: bm plan <file> [--truth <insertion-truth.json>] [--explain <part>] [--out <plan.json>] [--json] [--budget <seconds>] [--threads N] [--no-certify] [--no-studio] [--correct]\n");
+    std::fprintf(stderr, "usage: bm plan <file> [--truth <insertion-truth.json>] [--explain <part>] [--out <plan.json>] [--json] [--budget <seconds>] [--threads N] [--no-certify] [--no-studio] [--correct] [--flight web|arc]\n");
     return kUsage;
   }
   const std::string ldraw = defaultLDrawDir();
@@ -94,7 +96,9 @@ int cmdPlan(const Args& args) {
       certificate = plan::certify(model, graph, cache, shapes, plan);
       std::printf("certified     %d of %d moves (%.0f ms; flights checked along their length)\n  floating    %d\n  crossings   %d\n  off axis    %d\n  flagged     %d (of them unjoined in the file: %d)\n", certificate.certified, certificate.total,
                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count(), certificate.floating, certificate.crossings, certificate.offAxis, certificate.flagged, certificate.unjoined);
-      const plan::Timeline played = plan::buildTimeline(model, cache, plan, plan::styleOf(fs::path(std::string(args[0]))));
+      plan::Style style = plan::styleOf(fs::path(std::string(args[0])));
+      style.shape = shape;
+      const plan::Timeline played = plan::buildTimeline(model, cache, plan, style);
       const plan::PlayCheck play = plan::certifyPlay(model, graph, cache, shapes, plan, played);
       if (!timelinePath.empty()) {  // each flight as played: when, and how high its pieces go
         nlohmann::json j = plan::toJson(played);

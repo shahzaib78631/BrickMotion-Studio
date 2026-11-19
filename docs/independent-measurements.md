@@ -78,6 +78,166 @@ friction and deformation. Removal remains deferred until that gate is met.
 
 ## Working geometry prototype
 
+### Whole-library coverage work (current)
+
+The user has authorized independent reference datasets in addition to our own
+measurements. The reference source was fetched independently from
+`https://github.com/RolandMelkert/LDCadShadowLibrary` at commit
+`9b1131fb1991f8c0bfc072325e4e12f6271aba35`; its attribution is retained in the
+measurement manifest. The reference lookup bypasses the application's local
+shadow patches, so the source hash describes exactly the metadata used.
+
+Current frozen inventory: **35,575 parts**. The full export contains **430,077
+reference connector records on 24,858 parts**, with **160,307 explicitly open
+female entrances**. All records have matching full-frame definitions; the
+structural audit found no count mismatches, non-unit axes or invalid dimensions.
+Full matrices preserve keyed roll, mirroring and scale. These checks do not prove
+physical mating validity or complete coverage of each part.
+
+All **10,717 parts without reference connectors** have been scanned geometrically:
+5,342 have stud/cylinder/sphere candidates, 5,369 have no detected connector
+features, four have incomplete geometry, and two have reviewed obsolete empty
+representations. Absence of detected features
+is not a reviewed no-connectors assertion. **Validated coverage remains unclaimed.**
+
+The measurement interpreter (`independent-shadow-v2`) propagates included clear
+rules, supplies clip defaults, preserves mirror/scale modifiers, and applies
+inheritance restrictions before placement. It exposes both explicit A/B socket
+cap directions. Finger sequences without an explicit center flag are centered,
+consistent with the native parser and the 3937/3938 hinge geometry; this default
+is not unambiguously specified by the reference documentation. The 2780 pin now
+has two reference interfaces rather than duplicate primitive half-pins. Both
+3937/3938 hinge profiles run from `[-20,10,0]` to `[20,10,0]`.
+
+The rebuild records 5,977 scale-policy exclusions, 1,149 mirror-policy exclusions,
+8,947 nonorthogonal-frame exclusions and 9 axial-only-policy exclusions across
+part instances. These are retained for review, not silently counted as absent
+physical connectors. Rounded or distorted CAD frames may require a measured
+error bound before accepting their inherited connector information. Interpretation
+follows the [source metadata specification](https://www.melkert.net/LDCad/tech/meta)
+where specified; existing app interpretation remains unchanged.
+
+Measurement-only resolution now records high-resolution primitive substitutions
+and the exact-basename formed-sticker subfile lookup. This reduced missing-file
+inventory cases from 54 to 3: `4603014b`, `60616ad01`, and `bl_26603`. The first
+two reference `s/4603014bs01.dat`, which is also listed as missing by the
+[upstream part record](https://library.ldraw.org/parts/46828). The custom tile's
+missing subfile is not silently replaced with a differently framed tile mesh.
+
+Reproducible commands (all output remains separate from application data):
+
+```sh
+npx tsx scripts/connector-coverage.ts
+npx tsx scripts/measure-reference-library.ts public/ldraw .cache/measurements/independent-shadow.json
+npx tsx scripts/queue-unreferenced-parts.ts
+npx tsx scripts/measure-independent.ts --part-list .cache/measurements/unreferenced-ids.json --connectors-only --jsonl --out .cache/measurements/unreferenced-geometry.jsonl
+npx tsx scripts/audit-connector-coverage.ts
+npx tsx scripts/validate-independent-mates.ts
+```
+
+The current work queues are in `.cache/measurements/coverage-audit.json`.
+The reference export is `.cache/measurements/reference-library.jsonl`, accompanied
+by its source/license/hash manifest. Geometry-only measurements are streamed to
+JSONL to avoid retaining the entire library in memory. `--connectors-only`
+explicitly marks mechanical-feature measurement as skipped, rather than returning
+empty gear/actuator lists as if they had been measured.
+
+The next work is to validate and classify the geometry-only candidates, review
+the no-evidence queue, address empty/missing inputs, and establish mating tests.
+No runtime data or integrations have been removed or replaced.
+
+### Accessory insertions: katana and shaped holders
+
+`npx tsx scripts/measure-accessory-insertions.ts` produces independent accessory
+measurement data without changing the application's connector tables. The compact
+snapshot is `docs/data/accessory-connection-measurements.json`.
+
+The shared blade subfile used at the identity frame by 30173a, 30173b and 21459
+has an 80 LDU (32 mm) axial span and bounds `[-1.875,-98,-4]` to
+`[1.875,-18,12.375]`. Eighty transverse sections retain the changing blade
+envelope rather than substituting a cylinder. Guard and grip differences remain
+separate: shared blade geometry does not prove whole-part compatibility.
+
+Three host section sets cover both documented 19141 sword poses and the 30177
+pose. Each includes actual host section segments and distances to walls in four
+transverse directions from the blade-envelope center. These measurements do not
+yet establish a connected cavity, mouth plane or usable insertion depth. The
+second 19141 pose is a reflection; its CAD sections are measured, but it is
+excluded from rigid insertion tests.
+
+Six whole-part candidate placements (three sword variants, two proper host poses)
+were tested for triangle-surface intersections at 61 withdrawal offsets, every
+2 LDU from 0 to 120 LDU. All six report intersections at their seated position
+and along part of the straight path. Therefore none is certified as a valid
+insertion. Contact, source-pose rounding, outdated geometry and an unsuitable
+straight path need separate investigation; do not suppress these results or
+turn the sweep distance into an insertion-depth claim.
+
+The same run extracts 1,837 exact documented placement examples across the part
+library, including 36 reflections. These include assembly examples as well as
+accessories, and are not 1,837 validated connectors. Nonliteral HELP annotations
+remain in an explicit review queue. In particular, 98132's two katana poses omit
+an exact sword ID; 95348 explicitly documents a 2530 cutlass, not a katana.
+
+Detailed artifacts are `.cache/measurements/accessory-insertions.json` and
+`.cache/measurements/independent-placement-references.json`. Source hashes,
+authorship/license headers, units, pose provenance and validation limitations
+are retained in the compact snapshot. Existing runtime placement helpers already
+use a small curated set of HELP poses; this measurement work extends evidence
+collection without changing those helpers or claiming new physical compatibility.
+
+### Exported-profile mating regressions
+
+`scripts/validate-independent-mates.ts` selects the actual exported 2780/3700
+pin/hole and 3937/3938 finger-hinge profiles, including full-frame roll, and runs
+them through the existing native mating solver in an isolated executable. All
+**eight fixtures pass in both operand orders**: both pin-hole entrances accept
+the seated pin; the collar inside the bore and an off-axis pin are rejected;
+complementary hinge fingers rotate without sliding; two bases, separated fingers,
+and crossed axes are rejected. The report stores reference attribution, source-row
+hashes, generated fixture hash and solver-source hashes in
+`.cache/measurements/mating-regressions.json`.
+
+This checks interpreter-to-solver consistency for four actual parts. It does not
+check mesh collisions, insertion sweeps, physical tolerances, other connector
+families or the web engine, and does not promote any part to complete coverage.
+
+### Geometry-equivalent reference transfer
+
+`scripts/index-independent-geometry.ts` indexes the complete inventory using
+strict oriented triangle multisets. The signature ignores only colour, triangle
+record order and cyclic vertex order. It retains every coordinate without
+rounding, winding, sidedness and duplicate surfaces. Translation, reflection,
+different holes and merely matching bounds do not pass. This conservative
+method can miss equivalent meshes with different tessellation; it must not
+silently replace strict identity with a looser match.
+
+`scripts/find-independent-equivalents.ts` looks for unreferenced parts with the
+same signature as a reference-covered part. It compares complete resolved
+connector definitions, including mating groups, profiles and keyed roll, across
+all donors. Conflicting donors are queued for review instead of selecting one.
+Even a conflict-free match remains a reference-transfer candidate, not proof
+that the donor's connector set is complete or that physical materials match.
+
+The completed strict index contains 35,566 usable signatures and 9 unresolved
+entries. It found 18 conflict-free reference-transfer candidates and 2 matches
+with conflicting donor definitions. Candidate connectors, full frames and
+provenance are exported to `.cache/measurements/equivalent-connectors.json`;
+the detailed donor report is `equivalent-references.json`. The conflicting
+targets are `11459p02` and `bl_11251pb01`; neither receives an automatic donor.
+`60616ad01`, `6637a` and `6637d` have reference metadata but incomplete/empty
+geometry, so they cannot supply a geometry-verified transfer. In particular,
+6637a/d are obsolete empty files with stale reference connectors, confirming why
+metadata presence alone cannot count as complete validated coverage.
+
+Two entries, `6637b` and `6637c`, have been reviewed as intentionally empty
+obsolete files. Their headers explicitly say obsolete and their only subfile is
+`empty.dat`. The review in `docs/data/independent-connector-reviews.json` is tied
+to the exact complete source closure. A changed hash, missing dependency,
+truncated hierarchy or nonempty geometry invalidates that review. They remain
+in the inventory. This reduces the unresolved empty/incomplete geometry queue
+from six to four without inventing connectors or excluding supported entries.
+
 Run from the repository root:
 
 ```sh

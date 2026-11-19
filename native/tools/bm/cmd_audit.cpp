@@ -21,10 +21,12 @@ int cmdAudit(const Args& args) {
   const std::string cacheDir = option(args, "--cache", ldraw::PartCache::defaultDirectory().string(), bad);
   const double planBudget = std::atof(option(args, "--plan", "0", bad).c_str());
   const std::string only = option(args, "--only", "", bad);
+  plan::FlightShape shape = plan::FlightShape::Web;
+  if (!plan::parse(option(args, "--flight", "web", bad), shape)) bad = true;
   char* end = nullptr;
   const long threads = std::strtol(threadsText.c_str(), &end, 10);
   if (bad || manifestPath.empty() || (tier != "smoke" && tier != "full") || *end || threads < 0 || threads > 1024) {
-    std::fprintf(stderr, "usage: bm audit --manifest <manifest.json> [--tier smoke|full] [--out <dir>] [--threads N] [--cache <dir>] [--plan <seconds per model>] [--only <id prefix>] [--no-kinematics] [--no-collision] [--correct]\n");
+    std::fprintf(stderr, "usage: bm audit --manifest <manifest.json> [--tier smoke|full] [--out <dir>] [--threads N] [--cache <dir>] [--plan <seconds per model>] [--only <id prefix>] [--no-kinematics] [--no-collision] [--correct] [--flight web|arc]\n");
     return kUsage;
   }
 
@@ -84,7 +86,7 @@ int cmdAudit(const Args& args) {
   JobPool pool(static_cast<unsigned>(threads));
   size_t printed = 0;
   pool.parallelFor(
-      entries.size(), [&](size_t i) { rows[i] = audit::loadRow(entries[i].file, entries[i].id, library, cache, &connectors, flag(args, "--no-collision") ? nullptr : &shapes, &gears, planBudget, !flag(args, "--no-kinematics"), flag(args, "--correct")); }, nullptr,
+      entries.size(), [&](size_t i) { rows[i] = audit::loadRow(entries[i].file, entries[i].id, library, cache, &connectors, flag(args, "--no-collision") ? nullptr : &shapes, &gears, planBudget, !flag(args, "--no-kinematics"), flag(args, "--correct"), shape); }, nullptr,
       [&](size_t done, size_t total) {
         if (done != printed) {
           printed = done;

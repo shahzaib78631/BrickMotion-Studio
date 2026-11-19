@@ -19,6 +19,7 @@ struct Beat {
   int flight = -1;         ///< the flight it is about (Flight, UnitBuild: the unit's own flight)
   double importance = 0;   ///< 0..1
   Box seat;                ///< where it ends up: the flight's pieces at rest, or what the step adds
+  Box from;                ///< Flight: where its pieces are when it starts (its staging)
   std::vector<int> steps;  ///< Step: the step, level by level (plan::stepsOf)
 };
 

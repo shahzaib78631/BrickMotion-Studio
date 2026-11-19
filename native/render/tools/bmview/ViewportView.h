@@ -26,6 +26,7 @@ struct Session {
   std::optional<bmtools::Planned> planned;  ///< set on the main thread once planning is done
   bm::CancelToken cancel;                   ///< stops planning when the window goes
   bool raytracedGlass = false;              ///< --raytraced-glass: start with ray-traced glass (G toggles it)
+  bm::plan::FlightShape flight = bm::plan::FlightShape::Web;  ///< --flight web|arc (W switches it)
 };
 
 }  // namespace bmview

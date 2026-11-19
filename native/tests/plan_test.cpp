@@ -851,33 +851,82 @@ TEST_CASE("within a step, pieces go in from above", "[plan][steps]") {
   REQUIRE(k.inversions == 0);
 }
 
-TEST_CASE("a flight does not stop at its corners before it lands", "[plan][timeline]") {
+TEST_CASE("a flight moves as the web's: up, across, and one drop into the seat", "[plan][timeline]") {
   Scene s;
   const uint32_t a = s.add(0, 0, 0), b = s.add(0, -24, 0), c = s.add(0, -48, 0);
   s.stud(a, b), s.stud(b, c);
   const Plan p = s.plan();
   Style style;
-  style.fps = 30, style.piecesPerSecond = 0.25;  // 120 frames a flight
+  style.fps = 30, style.piecesPerSecond = 0.25;
   const Timeline t = buildTimeline(*s.model, s.parts, p, style);
+  // src/anim/timeline.ts flightPose, straight down (no side entry): minimum jerk on each leg.
+  auto mj = [](double u) { u = std::clamp(u, 0.0, 1.0); return u * u * u * (10 + u * (-15 + 6 * u)); };
   for (const Flight& f : t.flights) {
     REQUIRE(f.frames == 27);  // the web's longest: 0.9 s
-    // Lift, across, down, and along the plan's way to the seat leg: one ease, no stop between.
-    const Flight::Phase& ph = f.phases.front();
-    std::vector<double> steps;
-    for (int k = 0; k < 200; k++) {
-      const double u = 0.15 + 0.7 * k / 200.0, du = 0.7 / 200.0;
-      const double a0 = f.startFrame + ph.start + ph.frames * u, a1 = a0 + ph.frames * du;
-      steps.push_back(length(poseAt(f, a1).t - poseAt(f, a0).t));
+    REQUIRE(f.phases.size() == 3);
+    REQUIRE_THAT(f.phases[0].frames / f.frames, WithinAbs(0.24, 1e-12));
+    REQUIRE_THAT(f.phases[2].start / f.frames, WithinAbs(0.76, 1e-12));
+    REQUIRE_THAT(f.liftAt / f.frames, WithinAbs(0.24, 1e-12));
+    // Straight up, level across, straight down: the corners as the web's.
+    const Vec3 p0 = poseAt(f, f.startFrame).t, p1{};
+    const double sky = poseAt(f, f.startFrame + f.phases[1].start).t.y;
+    REQUIRE(sky < std::min(p0.y, p1.y) - 24);
+    for (int k = 0; k <= 270; k++) {
+      const double u = k / 270.0;
+      Vec3 w;
+      if (u < 0.24) w = {p0.x, p0.y + (sky - p0.y) * mj(u / 0.24), p0.z};
+      else if (u < 0.76) { const double e = mj((u - 0.24) / 0.52); w = {p0.x + (p1.x - p0.x) * e, sky, p0.z + (p1.z - p0.z) * e}; }
+      else w = {p1.x, sky + (p1.y - sky) * mj((u - 0.76) / 0.24), p1.z};
+      const Vec3 n = poseAt(f, f.startFrame + u * f.frames).t;
+      INFO("move " << f.move << " u " << u);
+      REQUIRE_THAT(length(n - w), WithinAbs(0, 1e-6));
     }
-    REQUIRE(steps.size() > 20);
-    std::vector<double> sorted = steps;
-    std::sort(sorted.begin(), sorted.end());
-    const double median = sorted[sorted.size() / 2];
-    INFO("move " << f.move << " slowest " << sorted.front() << " median " << median);
-    REQUIRE(sorted.front() >= 0.25 * median);
     REQUIRE(length(poseAt(f, f.startFrame + f.frames).t) == 0);
   }
   REQUIRE(certifyPlay(*s.model, s.graph, s.parts, s.shapes, p, t).crossings == 0);
+}
+
+TEST_CASE("an arc flight sweeps up and over without stopping, then drops as the web's", "[plan][timeline]") {
+  Scene s;
+  const uint32_t a = s.add(0, 0, 0), b = s.add(0, -24, 0), c = s.add(0, -48, 0);
+  s.stud(a, b), s.stud(b, c);
+  const Plan p = s.plan();
+  Style style;
+  style.fps = 30, style.piecesPerSecond = 0.25;
+  style.shape = FlightShape::Arc;
+  const Timeline t = buildTimeline(*s.model, s.parts, p, style);
+  auto mj = [](double u) { u = std::clamp(u, 0.0, 1.0); return u * u * u * (10 + u * (-15 + 6 * u)); };
+  for (const Flight& f : t.flights) {
+    REQUIRE(f.frames == 27);
+    REQUIRE(f.phases.size() == 2);
+    REQUIRE_THAT(f.phases[0].frames / f.frames, WithinAbs(0.76, 1e-12));
+    // Up and over: one ease, no rest in its middle (speed never drops near zero between 15% and 85%).
+    const Flight::Phase& sweep = f.phases.front();
+    std::vector<double> steps;
+    for (int k = 0; k < 200; k++) {
+      const double a0 = f.startFrame + sweep.frames * (0.15 + 0.7 * k / 200.0), a1 = a0 + sweep.frames * 0.7 / 200.0;
+      steps.push_back(length(poseAt(f, a1).t - poseAt(f, a0).t));
+    }
+    std::vector<double> sorted = steps;
+    std::sort(sorted.begin(), sorted.end());
+    REQUIRE(sorted.front() >= 0.25 * sorted[sorted.size() / 2]);
+    // The corner from up to across is rounded: never straight up and level at once.
+    const Vec3 p0 = poseAt(f, f.startFrame).t;
+    const double sky = poseAt(f, f.startFrame + 0.76 * f.frames).t.y;
+    bool rounded = false;
+    for (int k = 1; k < 200; k++) {
+      const Vec3 v = poseAt(f, f.startFrame + sweep.frames * k / 200.0).t;
+      if (std::abs(v.x - p0.x) + std::abs(v.z - p0.z) > 1e-6 && v.y > sky + 1e-6) rounded = true;  // across before it is all the way up
+    }
+    REQUIRE(rounded);
+    // The drop is the web's, exactly.
+    for (int k = 0; k <= 60; k++) {
+      const double u = 0.76 + 0.24 * k / 60.0;
+      const Vec3 n = poseAt(f, f.startFrame + u * f.frames).t;
+      REQUIRE_THAT(length(n - Vec3{0, sky * (1 - mj((u - 0.76) / 0.24)), 0}), WithinAbs(0, 1e-6));
+    }
+  }
+  REQUIRE(certifyPlay(*s.model, s.graph, s.parts, s.shapes, p, t).strictCrossings == 0);
 }
 
 TEST_CASE("a submodel's own steps lead inside it", "[plan][steps]") {

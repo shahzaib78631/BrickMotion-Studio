@@ -25,3 +25,17 @@ it('recognizes an open side stud and refuses elliptical cylinders', () => {
   expect(result.cylinders).toHaveLength(0);
   expect(result.rejected).toHaveLength(1);
 });
+
+it('keeps partial cylinders distinct from complete bores and records mirrored angular frames', () => {
+  const root = parseLDraw('0 Test\n1 16 0 0 0 -4 0 0 0 8 0 0 0 4 2-4cyli.dat', 'test.dat');
+  const result = connectorPrimitives(root, () => primitive);
+  expect(result.cylinders[0]).toMatchObject({ arcFraction: 0.5, radius: 4, length: 8, side: [-1, 0, 0], radialZ: [0, 0, 1] });
+});
+
+it('measures ball surfaces and rejects ellipsoids instead of giving them a spherical fit', () => {
+  const root = parseLDraw('0 Test\n1 16 1 2 3 8 0 0 0 8 0 0 0 8 8-8sphe.dat\n1 16 0 0 0 8 0 0 0 9 0 0 0 8 8-8sphe.dat', 'test.dat');
+  const result = connectorPrimitives(root, () => primitive);
+  expect(result.spheres).toHaveLength(1);
+  expect(result.spheres[0]).toMatchObject({ centre: [1, 2, 3], radius: 8, surface: 'outer' });
+  expect(result.rejected[0].reason).toBe('Ellipsoidal sphere frame');
+});
