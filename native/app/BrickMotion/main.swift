@@ -45,6 +45,12 @@ if args.count >= 2 && args[1] == "--version" {
   print("BrickMotion \(String(bmapp.Session.engineVersion()))")
   exit(0)
 }
+if args.count >= 3 && args[1] == "--bench-open" {
+  exit(MainActor.assumeIsolated { benchOpen(args[2]) })
+}
+if args.count >= 3 && args[1] == "--bench-edit" {
+  exit(MainActor.assumeIsolated { benchEdit(args[2]) })
+}
 if args.contains("--save-to") {
   exit(MainActor.assumeIsolated { headlessSave(args) })
 }

@@ -712,3 +712,73 @@ Measured with `film/tests/corpus_film.sh` (`bm film --correct`, 16:9 and 9:16):
 - Deterministic: 1 and 8 threads give identical shot lists and measures.
 - Smoothness, first runs (the gate from here on): largest angular jerk 207 rad/s³ (owner), 298
   (smoke); the largest target steps are blends between scenes.
+
+## Phase 8 results (2026-11-19): the Mac app, milestones 1–2
+
+`native/app/` builds `BrickMotion.app` (SwiftUI and AppKit over the C++ bridge `bmapp`) in its own tree:
+`cmake -S native -B native/build-app -G Ninja -DBM_APP=ON && cmake --build native/build-app`.
+
+### What it does
+
+- **Documents.**
+  - A `.brickmotion` opens as a document; every other model file opens as an untitled project, and the source is never written.
+  - Save, Save As, Duplicate, Revert, autosave in place and Browse All Versions.
+  - File ▸ Export LDraw… (⇧⌘E) writes an MPD with submodels and steps.
+  - Saved projects open in the web app, checked with the web's own reader and its UI. An edited plan drops the web's cached `timelines`, so the web plans again.
+- **Editing.** Every edit is a command on the editable document (`bm::doc::Source`), with named, unlimited undo; a drag is one step. The commands:
+  - move, rotate, recolour, delete, duplicate, clone;
+  - cut, copy and paste as LDraw text on the system pasteboard;
+  - Replace Part… (a search over the library's 35k parts);
+  - Make Unique for a shared submodel.
+- **Selection and view state.**
+  - Selection: click, ⇧-click, marquee (⌥ for touching), and double-click for a submodel's whole use.
+  - Hide, Hide Others and Show All. Hidden pieces stay hidden through playback.
+  - Selection and hiding follow pieces through edits.
+- **Keys.**
+  - ←→↑↓ move one stud, relative to the camera.
+  - ⇧↑↓, E/Q and Page Up/Down move one plate; with ⌥, one brick.
+  - R / ⇧R rotate 90°.
+  - C clones, H / ⇧H / ⌥H hide, show all and hide others, and A / Esc select all and none.
+  - F fits all, ⌘F frames the selection, and 1/3/7 (⌃ for the opposite side) are the view presets.
+- **Gizmos.**
+  - Select, Move and Rotate tools, in the toolbar or on V and M.
+  - Move has axis and plane handles, and Rotate has axis rings and a screen ring.
+  - Snaps are 20 LDU across, 8 up and 15°; ⌥ moves freely and ⇧ turns freely. L switches between world and local axes.
+  - A readout by the pointer shows the drag in studs, plates or degrees.
+- **Not yet:**
+  - the colour swatches (recolour has no UI until M3);
+  - the inspector and browser panels;
+  - dragging a piece itself, the context menu and orthographic view.
+
+### Measurements (M1 Pro; `native/app/tests/bench_app.sh`; viewport 1920×1700, a 1440×900 window at 2×)
+
+| Gate | Design | Helicopter (305 pieces) | 10030-1 ×4 (12,148) |
+|---|---|---|---|
+| Open to first frame (warm part cache, from process start) | ≤ 500 ms | **508 ms — missed by 8 ms** | 1,952 ms |
+| Move, command to frame finished on the GPU, p95 | ≤ 8.33 ms | **11.2 ms — missed** | **39.5 ms — missed** |
+| Recolour, command to frame finished, p95 | ≤ 8.33 ms | **13.2 ms — missed** | **45.9 ms — missed** |
+| The command alone (session edit and renderer update), p95 | — | 0.06 ms | 1.4 ms |
+
+- **Why the edit gates are missed.**
+  - The edit path costs 0.06 ms on the helicopter and 1.4 ms on 12k pieces. It is in place: no reflatten and no scene rebuild.
+  - The frame does not fit, before any edit:
+    - The helicopter's steady frame at this size is 9.3 ms p95 of GPU time (`bmshot --bench 300 --size 1920x1700`; 1.68M triangles).
+    - 10030-1 ×4 at 1920×1200 is 32.1 ms (39.8M triangles).
+  - So the gates wait on the renderer's frame cost. They are not Phase 8's to meet, and the next renderer pass owns them.
+  - The bench also measures to "finished on the GPU" (`waitUntilCompleted`), not to "presented". Presenting adds up to one refresh.
+- **Edit benchmark check.** Task 8's in-place renderer updates left the gate frame unchanged: 10030-1 at 1920×1200 is 32.1/32.0 ms before and 32.1/32.4 ms after (p95 GPU, two runs each).
+  - The 39.8M triangles measured here, against the 9.35M written above, predate this phase.
+- **The web, same machine, same helicopter** (the dev server in the app's browser pane, the file fed to its Open input):
+  - The parts list shows "305 parts" 260–506 ms after the file is chosen.
+  - The first frame after it comes 2.3–4.4 s after the file is chosen. The pane was hidden, which slows the browser's frame callbacks, so that is an upper bound.
+  - The web's figure does not include page load. The native figure includes process launch.
+
+### Tests
+
+- `bmapp_tests`: 48 cases, covering commands, selection, the marquee, keys, gizmo maths, save and reopen, and the viewport following edits and reopens.
+- `ctest` in `native/build-app`: 507 tests pass.
+- Self-tests registered with ctest:
+  - `--selftest-bridge`;
+  - `--selftest-edit`: five edits through the real undo manager, all undone to a clean document, a gizmo drag as one step, then save and Revert on a live document;
+  - `import_check.sh`: the source file's hash is unchanged after a save, and the saved piece moved 20 LDU;
+  - `--snapshot`.

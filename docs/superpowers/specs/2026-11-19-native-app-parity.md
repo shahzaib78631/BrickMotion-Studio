@@ -33,13 +33,13 @@ that opens the AI panel, and the Checks panel that has no rail button.
 
 | Feature | Web | Phase | Engine | Exceeds web by |
 |---|---|---|---|---|
-| New / open / import model or project (.brickmotion, .json, .ldr, .mpd, .dat, .io; Rebrickable .csv and .pbg in phase 9) | Toolbar.tsx:198-330 | 8 | P (reads all but .csv/.pbg) | NSDocument: Open Recent, Finder double-click, drag onto Dock, Quick Look thumbnails |
-| Save project (.brickmotion), download plan (.json), LDraw (.mpd) | Toolbar.tsx:304-377 | 8 | N (plan JSON only) | real files, ⌘S, Save As, Duplicate, Revert, Versions browser |
-| Autosave status | Toolbar.tsx:324 | 8 | N | system autosave + versions; no "saves on this device" limit |
+| New / open / import model or project (.brickmotion, .json, .ldr, .mpd, .dat, .io; Rebrickable .csv and .pbg in phase 9) | Toolbar.tsx:198-330 | 8 | P (reads all but .csv/.pbg) | NSDocument: Open Recent, Finder double-click, drag onto Dock, Quick Look thumbnails. **partial (M2): projects open as documents and every import as an untitled project; Quick Look thumbnails and .csv/.pbg are later** |
+| Save project (.brickmotion), download plan (.json), LDraw (.mpd) | Toolbar.tsx:304-377 | 8 | N (plan JSON only) | real files, ⌘S, Save As, Duplicate, Revert, Versions browser. **partial (M2): Save, Save As, Duplicate, Revert and Export LDraw… done, and the web opens what is saved; a plan-only .json download is not added** |
+| Autosave status | Toolbar.tsx:324 | 8 | N | system autosave + versions; no "saves on this device" limit. **done (M2): autosave in place with Versions** |
 | Projects dialog (list/open/delete) | ProjectsDialog.tsx | 8 | — | Finder + Recents + a start window with thumbnails |
 | Templates (save, apply, use-for-imports, download, import) | TemplatesDialog.tsx | 9 | N | |
 | Rename project inline | Toolbar.tsx:322 | 8 | — | title-bar rename (document proxy) |
-| History menu: undo/redo, rebuild steps and animation, regenerate steps only / animation only | Toolbar.tsx:341-354 | 8 | N | unlimited undo coalesced per gesture; Edit menu names the action |
+| History menu: undo/redo, rebuild steps and animation, regenerate steps only / animation only | Toolbar.tsx:341-354 | 8 | N | unlimited undo coalesced per gesture; Edit menu names the action. **partial (M2): named, unlimited undo and redo, one step per gesture; rebuild/regenerate commands come with timelines (M4)** |
 | Command palette ⌘K (go to panels, import, fit, lay out, regenerate, theme) | Toolbar.tsx:268-398 | 8 | — | covers every menu command, fuzzy, shows shortcuts |
 | Parts library update prompt | PartsUpdatePrompt.tsx | 9 | N | |
 | About | AboutDialog.tsx | 8 | — | |
@@ -64,23 +64,23 @@ that opens the AI panel, and the Checks panel that has no rail button.
 | Parts: Frequent / Common / Recent, search, category | PartsPanel.tsx | 8 | P (library) | rendered thumbnails from the Metal renderer, instant search |
 | Placement-hint and mirrored-pose options | PartsPanel.tsx | 8 | N | |
 | Click to add, drag into viewport to snap, drag onto timeline Parts lane | PartsPanel.tsx | 8 | N (no snap-on-drag) | connector-graph snapping |
-| Replace part | Inspector.tsx:308 | 8 | N | |
+| Replace part | Inspector.tsx:308 | 8 | N | **done (M2): Object ▸ Replace Part… searches the library by number and description** |
 | Colour swatches (groups, search, recent), colour for new parts | ColorSwatches.tsx | 8 | P (colour table) | |
 
 ## 4. Viewport
 
 | Feature | Web | Phase | Engine | Exceeds web by |
 |---|---|---|---|---|
-| View presets (front/back/right/left/top/bottom, flat-lay, centre on floor, persp/ortho), numpad keys | ViewMenu.tsx, viewControls.ts | 8 | P (orbit camera) | 120 Hz at 12k pieces (gate already met), trackpad gestures |
+| View presets (front/back/right/left/top/bottom, flat-lay, centre on floor, persp/ortho), numpad keys | ViewMenu.tsx, viewControls.ts | 8 | P (orbit camera) | 120 Hz at 12k pieces (gate already met), trackpad gestures. **partial (M2): front/right/top on 1/3/7, with ⌃ the opposite side; orthographic, flat-lay and centre-on-floor are later** |
 | Viewport renderer select (current / studio path / hybrid / ThreeRT) | ViewportChrome.tsx | 8 | P | superseded by one raster viewport + optional path-traced preview |
 | Split: lay out every part on the floor | ViewportChrome.tsx | 8 | P (staging) | |
-| Tools: select, move, move gizmo, rotate gizmo, scale, joints on/off, world/local, aim the way in, collision | ViewportChrome.tsx:109-165 | 8 | N | |
-| Orbit 45°, projection, fit, grid + spacing, wireframe, clay, fullscreen | ViewportChrome.tsx:126-151 | 8 | P | native full screen |
+| Tools: select, move, move gizmo, rotate gizmo, scale, joints on/off, world/local, aim the way in, collision | ViewportChrome.tsx:109-165 | 8 | N | **partial (M2): Select, Move and Rotate tools with gizmos (stud/plate/15° snaps, world or local axes); scale, joints, aim and collision are later** |
+| Orbit 45°, projection, fit, grid + spacing, wireframe, clay, fullscreen | ViewportChrome.tsx:126-151 | 8 | P | native full screen. **partial (M2): fit all (F) and frame selection (⌘F); the rest later** |
 | Floating selection bar (submodule, extract, group, fit together, rigid, duplicate, rotate, delete, lay out, hide) | ViewportChrome.tsx:166-190 | 8 | N | |
 | Frame all, zoom −/%/+ | ViewportChrome.tsx:197 | 8 | P | |
 | Nav gizmo, view label, hidden-pieces chip, laid-out chip | NavGizmo.tsx, Viewport.tsx | 8 | N | |
 | Joint card: hinge/ball angle, turn, select rigid group, detach | Viewport.tsx:2241 | 8 | P (bm/kin) | joints from the native connection graph |
-| Mouse: click/shift-click, marquee, drag move, orbit/pan/zoom, context menu, double-click submodel | Viewport.tsx | 8 | P (pick) | trackpad pinch/rotate/two-finger pan |
+| Mouse: click/shift-click, marquee, drag move, orbit/pan/zoom, context menu, double-click submodel | Viewport.tsx | 8 | P (pick) | trackpad pinch/rotate/two-finger pan. **partial (M2): click, ⇧-click, marquee (⌥ touching), double-click a submodel use, orbit/pan/zoom; dragging a piece itself and the context menu are M3** |
 | Piece context menu (what fits, turn waiting piece, frame, fit together, open submodel, show/lay out step, organize, move to step, rotate, raise/lower plate, clipboard, clone, use colour, hide, select ▸ same part/colour/touching/connected/step/all, delete) | PieceMenu.tsx | 8 | N | "connected" from real joints |
 | Empty-space menu | PieceMenu.tsx:135 | 8 | — | |
 | Flight path editing (double-click adds point, select points) | flightPathOverlay.ts | 9 | N | |
@@ -89,9 +89,9 @@ that opens the AI panel, and the Checks panel that has no rail button.
 
 | Feature | Web | Phase | Engine | Exceeds web by |
 |---|---|---|---|---|
-| Move by arrows (camera-relative), raise/lower plate or brick, rotate 90° | keymap.ts | 8 | N | |
-| Duplicate, copy, cut, paste, clone and place | keymap.ts | 8 | N | system pasteboard (LDraw text) |
-| Delete, hide, isolate, show all, select all/none | keymap.ts | 8 | N | |
+| Move by arrows (camera-relative), raise/lower plate or brick, rotate 90° | keymap.ts | 8 | N | **done (M2)** |
+| Duplicate, copy, cut, paste, clone and place | keymap.ts | 8 | N | system pasteboard (LDraw text). **partial (M2): duplicate, copy, cut, paste (LDraw text on the system pasteboard) and clone done; the placing mode is M3** |
+| Delete, hide, isolate, show all, select all/none | keymap.ts | 8 | N | **done (M2)** |
 | Placing mode: Tab cycles grip, R turns, Esc cancels | Viewport.tsx:1553 | 8 | N | |
 | Collision-refused edits shown red and explained | ChecksPanel.tsx:47 | 8 | P (collide) | |
 | Inspector Selection: make submodule, extract, move to model, fit, group, duplicate, delete, ways to fit, marks/tags, transform fields, flies-in-from editor, part info, model overview | Inspector.tsx:174-298 | 8 | N | |

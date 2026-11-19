@@ -1,5 +1,7 @@
 # Native Phase 8, Milestones 1–2: app skeleton and editing core — Implementation Plan
 
+> **Status (2026-11-19):** all 13 tasks executed inline on `codex/m1-incremental-evaluation` (8ec6379..HEAD); the rulings are in the ledger and the results, with the gates missed, in `native/README.md` "Phase 8 results". Recolour is in the engine, undo and benches but has no swatch UI until the colour panel (M3).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A Mac app, `BrickMotion.app`, that opens any model the engine reads as a document, shows it in the Metal viewport, and lets the owner select, move, rotate, recolour, duplicate, delete, copy and paste pieces with unlimited undo, then save a `.brickmotion` file the web app opens.
