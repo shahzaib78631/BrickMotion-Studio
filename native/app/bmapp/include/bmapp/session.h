@@ -28,7 +28,8 @@ class Session {
   Session(const Session&) = delete;
   Session& operator=(const Session&) = delete;
 
-  /// BM_LDRAW_DIR, else public/ldraw in the working directory or one above it; "" if none.
+  /// BM_LDRAW_DIR, else public/ldraw in the working directory or one above it, else (a developer
+  /// build) the repository's public/ldraw; "" if none.
   static std::string ldrawDirectory();
   /// The engine's version, "major.minor.patch".
   static std::string engineVersion();

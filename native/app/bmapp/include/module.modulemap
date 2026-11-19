@@ -3,6 +3,7 @@ module BMApp {
   header "bmapp/types.h"
   header "bmapp/session.h"
   header "bmapp/viewport.h"
+  header "bmapp/doctypes.h"
   requires cplusplus
   export *
 }

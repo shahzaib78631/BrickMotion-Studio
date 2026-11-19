@@ -1,4 +1,5 @@
 // BrickMotion: the native editor. A few flags run without a window, for checks.
+import AppKit
 import BMApp
 import Foundation
 
@@ -57,5 +58,38 @@ if args.count >= 3 && args[1] == "--open" {
 if args.count >= 3 && args[1] == "--selftest-bridge" {
   exit(selftestBridge(args[2]))
 }
-print("usage: BrickMotion --version | --open <file> | --selftest-bridge <file>")
-exit(2)
+/// The bundle's document types and type declarations must list exactly bmapp::documentTypes().
+func checkPlist() -> Int32 {
+  let info = Bundle.main.infoDictionary ?? [:]
+  let docTypes = (info["CFBundleDocumentTypes"] as? [[String: Any]]) ?? []
+  let listed = docTypes.flatMap { ($0["LSItemContentTypes"] as? [String]) ?? [] }
+  let declared = (((info["UTExportedTypeDeclarations"] as? [[String: Any]]) ?? []) + ((info["UTImportedTypeDeclarations"] as? [[String: Any]]) ?? []))
+  var extensionOf: [String: String] = [:]
+  for d in declared {
+    let tags = d["UTTypeTagSpecification"] as? [String: Any]
+    extensionOf[d["UTTypeIdentifier"] as? String ?? ""] = (tags?["public.filename-extension"] as? [String])?.first
+  }
+  let roles = docTypes.map { $0["CFBundleTypeRole"] as? String ?? "" }
+  var ok = true
+  let expected = bmapp.documentTypes()
+  if listed.count != expected.size() { print("plist: \(listed.count) document types, expected \(expected.size())"); ok = false }
+  for (i, t) in expected.enumerated() {
+    let uti = String(t.uti), ext = String(t.extension)
+    if i < listed.count && listed[i] != uti { print("plist: type \(i) is \(listed[i]), expected \(uti)"); ok = false }
+    if extensionOf[uti] != ext { print("plist: \(uti) has extension \(extensionOf[uti] ?? "none"), expected \(ext)"); ok = false }
+    if i < roles.count && roles[i] != (t.project ? "Editor" : "Viewer") { print("plist: \(uti) has role \(roles[i])"); ok = false }
+  }
+  print(ok ? "plist: ok" : "plist: mismatch")
+  return ok ? 0 : 1
+}
+if args.count >= 2 && args[1] == "--check-plist" {
+  exit(checkPlist())
+}
+
+// The app. The document controller must exist before anything asks for the shared one. Model
+// files named on the command line are opened by AppKit itself.
+_ = DocumentController()
+let delegate = AppDelegate()
+NSApplication.shared.delegate = delegate
+NSApplication.shared.setActivationPolicy(.regular)
+NSApplication.shared.run()

@@ -8,6 +8,8 @@ file(GLOB BMAPP_SOURCES CONFIGURE_DEPENDS bmapp/src/*.cpp bmapp/src/*.mm)
 add_library(bmapp STATIC ${BMAPP_SOURCES})
 target_include_directories(bmapp PUBLIC bmapp/include PRIVATE bmapp/src)
 target_compile_options(bmapp PRIVATE $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
+# A developer build finds the repository's LDraw library even when Finder starts it (no env).
+target_compile_definitions(bmapp PRIVATE BM_DEFAULT_LDRAW="${CMAKE_SOURCE_DIR}/../public/ldraw")
 target_link_libraries(bmapp PUBLIC bmcore bmrender bmfilm bmtools_common PRIVATE bm_warnings
   "-framework Metal" "-framework QuartzCore" "-framework Foundation")
 
@@ -24,6 +26,9 @@ catch_discover_tests(bmapp_tests)
 file(GLOB BRICKMOTION_SWIFT CONFIGURE_DEPENDS BrickMotion/*.swift)
 add_executable(BrickMotion MACOSX_BUNDLE ${BRICKMOTION_SWIFT})
 set_target_properties(BrickMotion PROPERTIES
+  MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/BrickMotion/Info.plist.in
+  MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION}
+  MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
   OSX_DEPLOYMENT_TARGET 26.0
   Swift_LANGUAGE_VERSION 6)
 target_compile_options(BrickMotion PRIVATE
@@ -37,3 +42,4 @@ target_link_libraries(BrickMotion PRIVATE bmapp
 # The bridge must hold the shapes the app relies on (Task 1 of the phase 8 plan).
 add_test(NAME brickmotion_selftest_bridge
   COMMAND $<TARGET_FILE:BrickMotion> --selftest-bridge ${CMAKE_SOURCE_DIR}/../samples/helicopter/helicopter.mpd)
+add_test(NAME brickmotion_check_plist COMMAND $<TARGET_FILE:BrickMotion> --check-plist)

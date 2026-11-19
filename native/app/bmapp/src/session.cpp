@@ -35,7 +35,14 @@ Session* Session::create() { return new Session(); }
 
 Session::~Session() = default;
 
-std::string Session::ldrawDirectory() { return bmtools::ldrawDir(); }
+std::string Session::ldrawDirectory() {
+  std::string dir = bmtools::ldrawDir();
+#ifdef BM_DEFAULT_LDRAW
+  std::error_code ec;
+  if (dir.empty() && std::filesystem::exists(std::filesystem::path(BM_DEFAULT_LDRAW) / "LDConfig.ldr", ec)) dir = BM_DEFAULT_LDRAW;
+#endif
+  return dir;
+}
 std::string Session::engineVersion() { return bm::version(); }
 
 OpenResult Session::open(const std::string& path) {
