@@ -166,6 +166,7 @@ struct Flattener {
   std::unordered_map<std::string, int> colorNames;
   std::unordered_map<std::string, Box> bodies;
   std::unordered_map<std::string, const Def*> defs;
+  std::unordered_map<ItemId, Xform>* locals = nullptr;  ///< placements() records every item's here
 
   bool ldrawOrigin() const { return source.origin == Origin::LDraw; }
 
@@ -228,6 +229,7 @@ struct Flattener {
           }
         }
         n.local = item.at.grid ? placeOnGrid(item.at, n.body) : item.at.exact;
+        if (locals) (*locals)[item.id] = n.local;
         nodes.push_back(std::move(n));
       }
     }
@@ -397,7 +399,7 @@ Flat flatten(const Source& source, const ldraw::Library& library, ldraw::PartCac
     if (std::none_of(data.inlineParts.begin(), data.inlineParts.end(), [&](const ldraw::File& g) { return g.name == f.name; }))
       if (const ldraw::File* found = data.library.find(f.name)) data.inlineParts.push_back(*found);
   std::vector<PieceRef> refs;
-  Flattener f{source, data.library, cache, data, refs, {}, {}, {}};
+  Flattener f{source, data.library, cache, data, refs, {}, {}, {}, nullptr};
   for (const auto& [name, d] : source.submodels) f.defs.emplace(name, &d);
   if (source.origin == Origin::LDraw && !source.rootName.empty()) f.defs.emplace(source.rootName, &source.root);
   std::vector<std::string> stack, path;
@@ -407,6 +409,23 @@ Flat flatten(const Source& source, const ldraw::Library& library, ldraw::PartCac
   std::vector<ItemId> chain;
   f.collect(nodes, Xform::identity(), 16, "", 0, true, path, steps, chain);
   return Flat{Model(std::move(data)), std::move(refs)};
+}
+
+std::unordered_map<ItemId, Xform> placements(const Source& source, const ldraw::Library& library, ldraw::PartCache& cache) {
+  Model::Data data{{}, {}, {}, source.inlineParts.empty() ? library : library.withInline(source.inlineParts), {}};
+  std::vector<PieceRef> refs;
+  std::unordered_map<ItemId, Xform> locals;
+  Flattener f{source, data.library, cache, data, refs, {}, {}, {}, &locals};
+  for (const auto& [name, d] : source.submodels) f.defs.emplace(name, &d);
+  if (source.origin == Origin::LDraw && !source.rootName.empty()) f.defs.emplace(source.rootName, &source.root);
+  std::vector<std::string> stack;
+  if (source.origin == Origin::LDraw) stack.push_back(source.rootName);
+  f.def("", source.root, stack);
+  for (const auto& [name, d] : source.submodels) {  // defs the root does not reach are written too
+    std::vector<std::string> own{name};
+    f.def(name, d, own);
+  }
+  return locals;
 }
 
 }  // namespace bm::doc

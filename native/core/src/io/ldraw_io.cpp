@@ -148,6 +148,12 @@ Model modelFromLDraw(std::string_view text, const std::string& fileName, const l
   return Model(std::move(data));
 }
 
+std::string partFileText(const ldraw::File& file) {
+  std::string out;
+  partFile(out, file);
+  return out;
+}
+
 std::string toLDraw(const Model& model) {
   std::string out = "0 FILE main.ldr\n0 Model\n";
   int step = 0;

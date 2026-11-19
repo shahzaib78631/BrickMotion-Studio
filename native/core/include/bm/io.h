@@ -28,6 +28,8 @@ Model load(const std::filesystem::path& path, const ldraw::Library& library, ldr
 /// The model as LDraw text, flattened: one line per piece with its final placement,
 /// `0 STEP` between steps, and the model's own inline part files after it.
 std::string toLDraw(const Model& model);
+/// One part file as LDraw text, from its `0 FILE` line to its last command.
+std::string partFileText(const ldraw::File& file);
 
 /// A plan file, kept verbatim (key order included) so fields this version does not know
 /// survive a read and write.

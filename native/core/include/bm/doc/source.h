@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 #include <nlohmann/json.hpp>
@@ -93,5 +94,9 @@ struct Flat {
   std::vector<PieceRef> refs;
 };
 Flat flatten(const Source& source, const ldraw::Library& library, ldraw::PartCache& cache);
+
+/// Each item's placement in its own def, as flatten puts it (grid placements need part sizes).
+/// Items flatten leaves out (a missing submodel, a loop) are not in it.
+std::unordered_map<ItemId, Xform> placements(const Source& source, const ldraw::Library& library, ldraw::PartCache& cache);
 
 }  // namespace bm::doc
