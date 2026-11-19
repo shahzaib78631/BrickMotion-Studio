@@ -304,6 +304,15 @@ void Session::hide(const std::vector<uint32_t>& pieces) {
   s.hidden = std::move(out);
   s.hiddenStamp++;
 }
+void Session::show(const std::vector<uint32_t>& pieces) {
+  Impl& s = *impl_;
+  const std::vector<uint32_t> given = known(pieces, pieceCount());
+  std::vector<uint32_t> out;
+  std::set_difference(s.hidden.begin(), s.hidden.end(), given.begin(), given.end(), std::back_inserter(out));
+  if (out == s.hidden) return;
+  s.hidden = std::move(out);
+  s.hiddenStamp++;
+}
 void Session::showAll() {
   if (impl_->hidden.empty()) return;
   impl_->hidden.clear();

@@ -189,3 +189,18 @@ TEST_CASE("rows are fast on 10030 x4 and a move keeps the structure stamp", "[bm
   s.move({0}, {20, 0, 0}, false);
   CHECK(s.structureVersion() == stamp);
 }
+
+TEST_CASE("show brings back only the pieces given", "[bmapp][rows]") {
+  bmapp::Session s;
+  REQUIRE(s.open(fixture().string()).ok);
+  const std::vector<uint32_t> first = s.piecesOfStep(0), second = s.piecesOfStep(1);
+  s.hide(first);
+  s.hide(second);
+  const uint64_t stamp = s.structureVersion();
+  s.show(first);
+  CHECK(s.hidden() == second);
+  CHECK(s.snapshot().hidden == second.size());
+  CHECK(s.structureVersion() == stamp);
+  s.show(first);  // already shown: nothing changes
+  CHECK(s.hidden() == second);
+}

@@ -9,6 +9,8 @@ final class WindowController: NSWindowController, NSToolbarDelegate {
   private var toolGroup: NSToolbarItemGroup?
   private let split = NSSplitViewController()
   private let progress = NSProgressIndicator()
+  /// What the panes show of the document.
+  private(set) var model: DocumentModel!
 
   convenience init(document: Document) {
     let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1440, height: 900),
@@ -35,12 +37,17 @@ final class WindowController: NSWindowController, NSToolbarDelegate {
 
 
   private func buildSplit(_ document: Document) {
-    let sidebar = NSSplitViewItem(sidebarWithViewController: NSHostingController(
-      rootView: SidebarPlaceholder(title: String(document.session.title()), pieces: Int(document.session.pieceCount()))))
+    let model = DocumentModel(document: document)
+    self.model = model
+    let sidebar = NSSplitViewItem(sidebarWithViewController: NSHostingController(rootView: Sidebar(model: model)))
     sidebar.minimumThickness = 220
     sidebar.maximumThickness = 420
     let viewport = ViewportController(session: document.session)
     viewport.viewportView.document = document
+    model.viewport = viewport.viewportView
+    let crumb = NSHostingView(rootView: Breadcrumb(model: model))
+    crumb.sizingOptions = [.intrinsicContentSize]
+    viewport.viewportView.addOverlay(crumb)
     viewport.viewportView.onTool = { [weak self] tool in self?.toolGroup?.selectedIndex = tool.rawValue }
     viewport.viewportView.onPlanState = { [weak self] state in self?.showPlanning(state == .Planning) }
     let content = NSSplitViewItem(viewController: viewport)
@@ -121,5 +128,17 @@ final class WindowController: NSWindowController, NSToolbarDelegate {
     group.label = "Mode"
     group.toolTip = "Build edits the model; Animate plans and plays its build"
     return group
+  }
+}
+
+/// The inspector until its pane lands (Task 8 of milestone 3a).
+private struct InspectorPlaceholder: View {
+  var body: some View {
+    Form {
+      Section("Inspector") {
+        Text("Select a piece to see it here.").foregroundStyle(.secondary)
+      }
+    }
+    .formStyle(.grouped)
   }
 }

@@ -1,5 +1,6 @@
 // The Metal viewport: a CAMetalLayer drawn by bmapp.Viewport only when something changed.
-// Click selects (Shift toggles, double-click takes a submodel's whole use), a drag on empty space
+// Click selects (Shift toggles, double-click takes a submodel's whole use, and a double click on
+// a use already selected opens its submodel), a drag on empty space
 // marquees (Option: touching), right-drag or two-finger scroll orbits, Shift pans, pinch zooms,
 // rotate turns; Space plays. The editing keys are in EditCommands.swift.
 import AppKit
@@ -18,6 +19,8 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
   }
   @objc private func documentChanged(_ note: Notification) { changed() }
   private var pressPoint: NSPoint?
+  /// The selection as a click began: a double click on a use already selected opens it.
+  private var selectionAtPress: [UInt32] = []
   private var marqueeLayer: CAShapeLayer?
 
   // MARK: Tools
@@ -253,6 +256,7 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
     window?.makeFirstResponder(self)
     if tool != .select && beginGizmoDrag(event) { return }
     pressPoint = point(event)
+    if event.clickCount == 1, document != nil { selectionAtPress = Array(session.selection()) }
   }
 
   override func mouseDragged(with event: NSEvent) {
@@ -306,7 +310,15 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
       return
     }
     if event.clickCount == 2 {
-      session.select(session.usePieces(piece), shift ? .Add : .Replace)
+      let use = Array(session.usePieces(piece))
+      // The use was already the selection: open its submodel to edit it alone.
+      if !shift && use.count > 1 && use.sorted() == selectionAtPress,
+         let open = Registry.command("object.openSubmodel") {
+        let context = CommandContext(document: document, viewport: self, clickedPiece: piece)
+        session.select(Self.list(use), .Replace)
+        if open.enabled(context) { return open.run(context) }
+      }
+      session.select(Self.list(use), shift ? .Add : .Replace)
     } else {
       session.select(Self.list([piece]), shift ? .Toggle : .Replace)
     }
@@ -314,6 +326,16 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
   }
 
   override func rightMouseDown(with event: NSEvent) { lastPoint = point(event) }
+
+  /// Pins a SwiftUI overlay (the breadcrumb) to the top left, below the toolbar.
+  func addOverlay(_ overlay: NSView) {
+    overlay.translatesAutoresizingMaskIntoConstraints = false
+    addSubview(overlay)
+    NSLayoutConstraint.activate([
+      overlay.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor, constant: 12),
+      overlay.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor, constant: 10),
+    ])
+  }
 
   override func rightMouseDragged(with event: NSEvent) {
     let p = point(event)

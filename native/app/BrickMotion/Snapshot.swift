@@ -13,8 +13,12 @@ struct SnapshotRequest {
   var report: String? = nil
   var select: [UInt32] = []
   var tool = ViewportView.Tool.select
+  var sidebar: SidebarTab? = nil
+  var focus: [String] = []
+  var expandAll = false
 
-  /// Reads `--snapshot out.png --open file [--size WxH] [--appearance light|dark] [--play-to s] [--report json] [--select n...] [--tool move|rotate]`.
+  /// Reads `--snapshot out.png --open file [--size WxH] [--appearance light|dark] [--play-to s] [--report json] [--select n...] [--tool move|rotate]
+  /// [--sidebar models|steps] [--focus Name[/Name]] [--expand all]`.
   static func parse(_ args: [String]) -> SnapshotRequest? {
     guard let i = args.firstIndex(of: "--snapshot"), i + 1 < args.count else { return nil }
     var r = SnapshotRequest()
@@ -32,6 +36,9 @@ struct SnapshotRequest {
     if let a = value("--appearance") { r.appearance = a == "dark" ? .darkAqua : .aqua }
     if let t = value("--play-to") { r.playTo = Double(t) }
     r.report = value("--report")
+    if let s = value("--sidebar") { r.sidebar = SidebarTab(rawValue: s) }
+    if let f = value("--focus") { r.focus = f.split(separator: "/").map(String.init) }
+    r.expandAll = value("--expand") == "all"
     if let t = value("--tool") { r.tool = t == "move" ? .move : t == "rotate" ? .rotate : .select }
     if let j = args.firstIndex(of: "--select") {
       r.select = args[(j + 1)...].prefix { UInt32($0) != nil }.compactMap { UInt32($0) }
@@ -69,6 +76,19 @@ enum Snapshot {
       document.session.select(pieces, .Replace)
     }
     viewportView.tool = request.tool
+    if let tab = request.sidebar { controller.model.sidebarTab = tab }
+    if request.expandAll { controller.model.expandAll() }
+    if !request.focus.isEmpty {
+      var path = bmapp.StringList()
+      for name in request.focus { path.push_back(std.string(name)) }
+      let changed = document.session.focus(path)
+      if !changed.refused.empty() {
+        FileHandle.standardError.write("snapshot: \(String(changed.refused))\n".data(using: .utf8)!)
+        return 1
+      }
+      document.postChange()
+      viewport.fitAll()
+    }
 
     if let t = request.playTo {
       viewport.play(true)

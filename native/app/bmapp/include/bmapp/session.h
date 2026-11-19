@@ -147,6 +147,8 @@ class Session {
   std::vector<uint32_t> selection() const;
   /// Hidden pieces are neither drawn nor picked, whatever the build's playback shows.
   void hide(const std::vector<uint32_t>& pieces);
+  /// Shows these pieces again; the rest stay as they are.
+  void show(const std::vector<uint32_t>& pieces);
   void showAll();
   std::vector<uint32_t> hidden() const;
   /// The piece's own axes in the model, each made unit (the gizmo's local axes); identity for none.
