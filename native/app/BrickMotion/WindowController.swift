@@ -47,6 +47,10 @@ final class WindowController: NSWindowController, NSToolbarDelegate {
     split.splitViewItems = [sidebar, content, inspector]
   }
 
+  /// The panes' views, for --snapshot's report.
+  var sidebarView: NSView? { split.splitViewItems.first?.viewController.view }
+  var inspectorView: NSView? { split.splitViewItems.last?.viewController.view }
+
   /// The centre pane.
   var viewportController: ViewportController { split.splitViewItems[1].viewController as! ViewportController }
 

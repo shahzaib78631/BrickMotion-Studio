@@ -86,6 +86,14 @@ if args.count >= 2 && args[1] == "--check-plist" {
   exit(checkPlist())
 }
 
+if args.contains("--snapshot") {
+  guard let request = SnapshotRequest.parse(args) else {
+    print("usage: BrickMotion --snapshot out.png --open <file> [--size WxH] [--appearance light|dark] [--play-to s] [--report out.json]")
+    exit(2)
+  }
+  exit(MainActor.assumeIsolated { Snapshot.run(request) })
+}
+
 // The app. The document controller must exist before anything asks for the shared one. Model
 // files named on the command line are opened by AppKit itself.
 _ = DocumentController()
