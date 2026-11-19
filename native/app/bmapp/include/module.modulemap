@@ -5,6 +5,7 @@ module BMApp {
   header "bmapp/viewport.h"
   header "bmapp/doctypes.h"
   header "bmapp/keys.h"
+  header "bmapp/gizmo.h"
   requires cplusplus
   export *
 }

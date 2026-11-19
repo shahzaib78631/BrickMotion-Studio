@@ -12,8 +12,9 @@ struct SnapshotRequest {
   var playTo: Double? = nil
   var report: String? = nil
   var select: [UInt32] = []
+  var tool = ViewportView.Tool.select
 
-  /// Reads `--snapshot out.png --open file [--size WxH] [--appearance light|dark] [--play-to s] [--report json] [--select n...]`.
+  /// Reads `--snapshot out.png --open file [--size WxH] [--appearance light|dark] [--play-to s] [--report json] [--select n...] [--tool move|rotate]`.
   static func parse(_ args: [String]) -> SnapshotRequest? {
     guard let i = args.firstIndex(of: "--snapshot"), i + 1 < args.count else { return nil }
     var r = SnapshotRequest()
@@ -31,6 +32,7 @@ struct SnapshotRequest {
     if let a = value("--appearance") { r.appearance = a == "dark" ? .darkAqua : .aqua }
     if let t = value("--play-to") { r.playTo = Double(t) }
     r.report = value("--report")
+    if let t = value("--tool") { r.tool = t == "move" ? .move : t == "rotate" ? .rotate : .select }
     if let j = args.firstIndex(of: "--select") {
       r.select = args[(j + 1)...].prefix { UInt32($0) != nil }.compactMap { UInt32($0) }
     }
@@ -66,6 +68,7 @@ enum Snapshot {
       for p in request.select { pieces.push_back(p) }
       document.session.select(pieces, .Replace)
     }
+    viewportView.tool = request.tool
 
     if let t = request.playTo {
       viewport.play(true)
@@ -169,6 +172,7 @@ enum Snapshot {
       quiet = viewport.needsDraw() ? 0 : quiet + 1
     }
     viewportView.changed()
+    viewportView.updateGizmo()
     RunLoop.main.run(until: Date().addingTimeInterval(0.2))
     // .optionIncludingWindow, .boundsIgnoreFraming | .bestResolution
     let image = windowImage(.null, 1 << 3, UInt32(window.windowNumber), (1 << 0) | (1 << 3))?.takeRetainedValue()

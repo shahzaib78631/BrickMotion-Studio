@@ -184,6 +184,9 @@ extension ViewportView: NSMenuItemValidation {
       if option { hideOtherPieces(nil) } else if shift { showAllPieces(nil) } else { hidePieces(nil) }
     case "a": option ? selectNone(nil) : selectAll(nil)
     case "f": fitAll(nil)
+    case "v": tool = .select
+    case "m": tool = .move
+    case "l": localAxes.toggle()
     case "1": viewport.view(control ? .Back : .Front)
     case "3": viewport.view(control ? .Left : .Right)
     case "7": viewport.view(control ? .Bottom : .Top)

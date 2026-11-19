@@ -50,6 +50,35 @@ import BMApp
   undo.redo()
   turn()
   if !document.isDocumentEdited || undo.redoMenuItemTitle != "Redo Rotate Piece" { return fail("redo: \(undo.redoMenuItemTitle)") }
-  print("selftest-edit: ok (\(steps) steps undone, \(count) pieces)")
+  // A gizmo drag along X, over several moves of the mouse, is one undo step.
+  guard let window = controller.window else { return fail("no window") }
+  window.setContentSize(NSSize(width: 1200, height: 800))
+  window.layoutIfNeeded()
+  _ = view.viewport.draw(nil)
+  view.select([0], .Replace)
+  view.tool = .move
+  view.updateGizmo()
+  guard let shape = view.gizmo, shape.lines.size() == 3 else { return fail("no move gizmo") }
+  let x = shape.lines[0]
+  func event(_ type: NSEvent.EventType, _ t: Double) -> NSEvent {
+    let p = NSPoint(x: x.a.x + (x.b.x - x.a.x) * t, y: view.bounds.height - (x.a.y + (x.b.y - x.a.y) * t))
+    return NSEvent.mouseEvent(with: type, location: view.convert(p, to: nil), modifierFlags: [], timestamp: 0,
+                              windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+  }
+  let before = document.session.undoDepth(), was = document.session.snapshot().selected[0].position
+  view.mouseDown(with: event(.leftMouseDown, 1))
+  for t in [1.5, 2.5, 3.5, 4.0] {
+    view.mouseDragged(with: event(.leftMouseDragged, t))
+    turn()
+  }
+  view.mouseUp(with: event(.leftMouseUp, 4.0))
+  turn()
+  let now = document.session.snapshot().selected[0].position
+  if document.session.undoDepth() != before + 1 { return fail("a gizmo drag made \(document.session.undoDepth() - before) undo steps") }
+  if now.x == was.x || now.y != was.y || now.z != was.z || (now.x - was.x).truncatingRemainder(dividingBy: 20) != 0 {
+    return fail("the X handle moved (\(was.x),\(was.y),\(was.z)) to (\(now.x),\(now.y),\(now.z))")
+  }
+  if undo.undoMenuItemTitle != "Undo Move Piece" { return fail("the drag's undo is \(undo.undoMenuItemTitle)") }
+  print("selftest-edit: ok (\(steps) steps undone, \(count) pieces, gizmo drag one step)")
   return 0
 }

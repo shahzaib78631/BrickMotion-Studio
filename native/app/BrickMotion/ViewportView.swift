@@ -19,6 +19,37 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
   @objc private func documentChanged(_ note: Notification) { changed() }
   private var pressPoint: NSPoint?
   private var marqueeLayer: CAShapeLayer?
+
+  // MARK: Tools
+
+  enum Tool: Int { case select, move, rotate }
+  /// The pointer's tool; the toolbar shows it (V and M choose it too).
+  var tool = Tool.select {
+    didSet {
+      if tool != oldValue { onTool?(tool) }
+      updateGizmo()
+    }
+  }
+  var onTool: ((Tool) -> Void)?
+  /// L: the gizmo follows the first selected piece's own axes instead of the world's.
+  var localAxes = false {
+    didSet { updateGizmo() }
+  }
+  private let gizmoLayer = GizmoLayer()
+  private let readout = DragReadout()
+  private(set) var gizmo: bmapp.GizmoShape?
+  private var hovered = bmapp.Handle.None
+  /// A gizmo drag: what it started from, and how far it has gone so far.
+  private struct GizmoDrag {
+    var handle: bmapp.Handle
+    var start: (Double, Double)
+    var origin: bmapp.Vec3
+    var axes: bmapp.Mat3
+    var pieces: bmapp.PieceList
+    var moved = bmapp.Vec3()
+    var turned = 0.0
+  }
+  private var gizmoDrag: GizmoDrag?
   /// Called on the main thread when planning starts or ends, for the toolbar's progress.
   var onPlanState: ((bmapp.PlanState) -> Void)?
   private var link: CAMetalDisplayLink?
@@ -32,6 +63,8 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
     layerContentsRedrawPolicy = .never
     setAccessibilityRole(.group)
     setAccessibilityLabel("Model viewport")
+    addSubview(readout)
+    addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseMoved, .activeInKeyWindow, .inVisibleRect], owner: self))
   }
 
   @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not from a nib") }
@@ -60,6 +93,7 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
     }
     updateSize()
     updateBackground()
+    if gizmoLayer.superlayer == nil { layer?.addSublayer(gizmoLayer) }
     if link == nil {
       let l = CAMetalDisplayLink(metalLayer: metalLayer)
       l.delegate = self
@@ -89,6 +123,7 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
 
   private func updateSize() {
     metalLayer.contentsScale = scale
+    gizmoLayer.frame = bounds
     let w = Int32((bounds.width * scale).rounded()), h = Int32((bounds.height * scale).rounded())
     if w > 0 && h > 0 { metalLayer.drawableSize = CGSize(width: Int(w), height: Int(h)) }
     viewport.resize(w, h, scale)
@@ -111,6 +146,7 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
 
   func metalDisplayLink(_ link: CAMetalDisplayLink, needsUpdate update: CAMetalDisplayLink.Update) {
     MainActor.assumeIsolated {
+      defer { updateGizmo() }
       guard viewport.needsDraw() else {
         link.isPaused = true  // an idle window draws nothing
         return
@@ -129,21 +165,104 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
 
   private func point(_ event: NSEvent) -> NSPoint { convert(event.locationInWindow, from: nil) }
 
+  /// The gizmo for the current tool, camera and selection, drawn again.
+  func updateGizmo() {
+    guard let document, tool != .select, !document.session.selection().isEmpty, bounds.width > 0 else {
+      gizmo = nil
+      gizmoLayer.show(nil, hovered: .None, scale: scale, appearance: effectiveAppearance)
+      return
+    }
+    let origin = gizmoDrag?.origin ?? viewport.selectionCenter()
+    let axes = gizmoDrag?.axes ?? currentAxes()
+    let shape = bmapp.gizmoShape(viewport.camera(), viewSize, origin, axes, tool == .move ? .Move : .Rotate)
+    gizmo = shape
+    gizmoLayer.show(shape, hovered: gizmoDrag?.handle ?? hovered, scale: scale, appearance: effectiveAppearance)
+  }
+
+  private var viewSize: bmapp.Vec2 { bmapp.Vec2(x: bounds.width, y: bounds.height) }
+
+  private func currentAxes() -> bmapp.Mat3 {
+    guard localAxes, let first = document?.session.selection().first else { return bmapp.Mat3() }
+    return document!.session.axesOf(first)
+  }
+
+  override func mouseMoved(with event: NSEvent) {
+    guard let gizmo else { return }
+    let (x, y) = fromTop(point(event))
+    let h = bmapp.hitGizmo(gizmo, bmapp.Vec2(x: x, y: y), 6)
+    if h != hovered {
+      hovered = h
+      updateGizmo()
+    }
+  }
+
+  /// Starts a gizmo drag when the press is on a handle.
+  private func beginGizmoDrag(_ event: NSEvent) -> Bool {
+    guard let gizmo, let document else { return false }
+    let (x, y) = fromTop(point(event))
+    let h = bmapp.hitGizmo(gizmo, bmapp.Vec2(x: x, y: y), 6)
+    guard h != .None else { return false }
+    document.session.endGesture()
+    gizmoDrag = GizmoDrag(handle: h, start: (x, y), origin: viewport.selectionCenter(), axes: currentAxes(), pieces: document.session.selection())
+    return true
+  }
+
+  private func continueGizmoDrag(_ event: NSEvent) {
+    guard var drag = gizmoDrag, let document else { return }
+    let p = point(event)
+    let (x, y) = fromTop(p)
+    let a = bmapp.Vec2(x: drag.start.0, y: drag.start.1), b = bmapp.Vec2(x: x, y: y)
+    let camera = viewport.camera()
+    let pieces = drag.pieces
+    if tool == .move {
+      let free = event.modifierFlags.contains(.option)
+      let snap = free ? bmapp.Vec3() : bmapp.Vec3(x: bmapp.kStud, y: bmapp.kPlate, z: bmapp.kStud)
+      let total = bmapp.dragMove(camera, viewSize, drag.origin, drag.axes, drag.handle, a, b, snap)
+      let step = bmapp.Vec3(x: total.x - drag.moved.x, y: total.y - drag.moved.y, z: total.z - drag.moved.z)
+      if step.x != 0 || step.y != 0 || step.z != 0 {
+        document.perform { document.session.move(pieces, step, true) }
+        drag.moved = total
+      }
+      readout.show(DragReadout.move(total), near: p, in: self)
+    } else {
+      let degrees = bmapp.dragRotate(camera, viewSize, drag.origin, drag.axes, drag.handle, a, b, event.modifierFlags.contains(.shift))
+      let step = degrees - drag.turned
+      if step != 0 {
+        let axis = bmapp.handleAxis(camera, drag.axes, drag.handle)
+        let pivot = drag.origin
+        document.perform { document.session.rotate(pieces, axis, step, pivot, true) }
+        drag.turned = degrees
+      }
+      readout.show(DragReadout.angle(degrees), near: p, in: self)
+    }
+    gizmoDrag = drag
+    changed()
+  }
+
+  private func endGizmoDrag() {
+    gizmoDrag = nil
+    document?.session.endGesture()
+    readout.isHidden = true
+    updateGizmo()
+  }
+
   /// Points from the top left, as the viewport takes them.
   private func fromTop(_ p: NSPoint) -> (Double, Double) { (p.x, bounds.height - p.y) }
 
   override func mouseDown(with event: NSEvent) {
     window?.makeFirstResponder(self)
+    if tool != .select && beginGizmoDrag(event) { return }
     pressPoint = point(event)
   }
 
   override func mouseDragged(with event: NSEvent) {
+    if gizmoDrag != nil { return continueGizmoDrag(event) }
     guard let start = pressPoint else { return }
     let p = point(event)
     if marqueeLayer == nil {
       guard hypot(p.x - start.x, p.y - start.y) > 3 else { return }
       let (x, y) = fromTop(start)
-      guard viewport.pick(x, y) == UInt32.max else {  // a drag that starts on a piece is the gizmos' (Task 11)
+      guard viewport.pick(x, y) == UInt32.max else {  // a drag that starts on a piece moves nothing: the gizmo's handles do
         pressPoint = nil
         return
       }
@@ -165,6 +284,7 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
   }
 
   override func mouseUp(with event: NSEvent) {
+    if gizmoDrag != nil { return endGizmoDrag() }
     defer {
       marqueeLayer?.removeFromSuperlayer()
       marqueeLayer = nil

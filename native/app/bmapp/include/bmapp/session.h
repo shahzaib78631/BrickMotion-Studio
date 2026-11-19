@@ -92,6 +92,8 @@ class Session {
   void hide(const std::vector<uint32_t>& pieces);
   void showAll();
   std::vector<uint32_t> hidden() const;
+  /// The piece's own axes in the model, each made unit (the gizmo's local axes); identity for none.
+  Mat3 axesOf(uint32_t piece) const;
   /// The pieces of the root model's use that holds `piece` (just `piece` when it is in the root).
   std::vector<uint32_t> usePieces(uint32_t piece) const;
   /// Library parts whose name and description hold every word of `query`: an exact name first,

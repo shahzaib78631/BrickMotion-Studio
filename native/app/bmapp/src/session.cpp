@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <exception>
 #include <fstream>
 #include <mutex>
@@ -265,6 +266,18 @@ bool Session::dirty() const { return impl_->history.saved != static_cast<long>(i
 void Session::markSaved() { impl_->history.saved = static_cast<long>(impl_->history.cursor); }
 uint64_t Session::version() const { return impl_->version; }
 size_t Session::undoDepth() const { return impl_->history.cursor; }
+
+Mat3 Session::axesOf(uint32_t piece) const {
+  Mat3 out;
+  if (!impl_->model || piece >= impl_->model->pieces().size()) return out;
+  const bm::Mat3& r = impl_->model->pieces()[piece].world.r;
+  for (int c = 0; c < 3; c++) {
+    const double len = std::sqrt(r.m[c] * r.m[c] + r.m[3 + c] * r.m[3 + c] + r.m[6 + c] * r.m[6 + c]);
+    if (!(len > 1e-12)) return Mat3{};
+    for (int row = 0; row < 3; row++) out.m[row * 3 + c] = r.m[row * 3 + c] / len;
+  }
+  return out;
+}
 
 std::vector<uint32_t> Session::usePieces(uint32_t piece) const {
   const Impl& s = *impl_;

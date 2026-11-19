@@ -5,6 +5,8 @@ import SwiftUI
 final class WindowController: NSWindowController, NSToolbarDelegate {
   private static let modeItem = NSToolbarItem.Identifier("mode")
   private static let planningItem = NSToolbarItem.Identifier("planning")
+  private static let toolItem = NSToolbarItem.Identifier("tool")
+  private var toolGroup: NSToolbarItemGroup?
   private let split = NSSplitViewController()
   private let progress = NSProgressIndicator()
 
@@ -40,6 +42,7 @@ final class WindowController: NSWindowController, NSToolbarDelegate {
     sidebar.maximumThickness = 420
     let viewport = ViewportController(session: document.session)
     viewport.viewportView.document = document
+    viewport.viewportView.onTool = { [weak self] tool in self?.toolGroup?.selectedIndex = tool.rawValue }
     viewport.viewportView.onPlanState = { [weak self] state in self?.showPlanning(state == .Planning) }
     let content = NSSplitViewItem(viewController: viewport)
     let inspector = NSSplitViewItem(inspectorWithViewController: NSHostingController(rootView: InspectorPlaceholder()))
@@ -62,8 +65,12 @@ final class WindowController: NSWindowController, NSToolbarDelegate {
 
   // MARK: Toolbar
 
+  @objc private func chooseTool(_ sender: NSToolbarItemGroup) {
+    viewportController.viewportView.tool = ViewportView.Tool(rawValue: sender.selectedIndex) ?? .select
+  }
+
   func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-    [.toggleSidebar, .sidebarTrackingSeparator, .flexibleSpace, Self.modeItem, .flexibleSpace, Self.planningItem, .inspectorTrackingSeparator, .toggleInspector]
+    [.toggleSidebar, .sidebarTrackingSeparator, Self.toolItem, .flexibleSpace, Self.modeItem, .flexibleSpace, Self.planningItem, .inspectorTrackingSeparator, .toggleInspector]
   }
 
   func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -83,6 +90,18 @@ final class WindowController: NSWindowController, NSToolbarDelegate {
       item.view = progress
       item.label = "Planning"
       return item
+    }
+    if id == Self.toolItem {
+      let images = ["cursorarrow", "arrow.up.and.down.and.arrow.left.and.right", "arrow.trianglehead.2.clockwise.rotate.90"].map {
+        NSImage(systemSymbolName: $0, accessibilityDescription: nil)!
+      }
+      let group = NSToolbarItemGroup(itemIdentifier: id, images: images, selectionMode: .selectOne,
+                                     labels: ["Select", "Move", "Rotate"], target: self, action: #selector(chooseTool(_:)))
+      group.selectedIndex = viewportController.viewportView.tool.rawValue
+      group.label = "Tool"
+      group.toolTip = "Select (V), Move (M) or Rotate; L switches world and local axes"
+      toolGroup = group
+      return group
     }
     guard id == Self.modeItem else { return nil }
     let group = NSToolbarItemGroup(itemIdentifier: id, titles: ["Build", "Animate"], selectionMode: .selectOne,

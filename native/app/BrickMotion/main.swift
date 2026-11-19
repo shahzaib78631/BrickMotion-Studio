@@ -91,7 +91,7 @@ if args.count >= 2 && args[1] == "--check-plist" {
 
 if args.contains("--snapshot") {
   guard let request = SnapshotRequest.parse(args) else {
-    print("usage: BrickMotion --snapshot out.png --open <file> [--size WxH] [--appearance light|dark] [--play-to s] [--report out.json] [--select n...]")
+    print("usage: BrickMotion --snapshot out.png --open <file> [--size WxH] [--appearance light|dark] [--play-to s] [--report out.json] [--select n...] [--tool move|rotate]")
     exit(2)
   }
   exit(MainActor.assumeIsolated { Snapshot.run(request) })
