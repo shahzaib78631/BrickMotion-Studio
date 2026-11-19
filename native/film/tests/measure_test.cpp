@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <algorithm>
+#include <cstdio>
 #include "bmf/body.h"
 #include "bmf/director.h"
 #include "bmf/measure.h"
@@ -47,6 +48,21 @@ TEST_CASE("a seat no angle sees is reported, not hidden", "[measure]") {
   CHECK(std::find(r.missed.begin(), r.missed.end(), flight) != r.missed.end());
   CHECK(r.landingsInFrame == r.landings - static_cast<int>(r.missed.size()));
   CHECK(r.missed.size() <= 2);  // the deep one, and at most one more: the rest are in plain view
+  // It was in the frame, behind what was built: hidden, which no angle can mend.
+  CHECK(std::find(r.hidden.begin(), r.hidden.end(), flight) != r.hidden.end());
+}
+
+TEST_CASE("a landing the camera looks away from is off frame, not hidden", "[measure]") {
+  Scene s;
+  filmtest::tower(s, 4);
+  const Beats beats = beatsOf(s.t, s.p, *s.model, *s.world);
+  const std::vector<Shot> shots = direct(beats, s.t, s.p, *s.world, referenceStyle(), kFps);
+  Track track = shoot(shots, beats, s.t, s.p, *s.world, FrameShape{}, kFps);
+  for (Frame& f : track.frames) f.target = f.target + Vec3{5000, 0, 0}, f.eye = f.eye + Vec3{5000, 0, 0};
+  const Report r = measure(track, shots, beats, s.t, s.p, *s.world);
+  CHECK(r.landingsInFrame == 0);
+  CHECK(r.missed.size() == 4);
+  CHECK(r.hidden.empty());
 }
 
 TEST_CASE("a clean build measures clean", "[measure]") {
@@ -61,4 +77,45 @@ TEST_CASE("a clean build measures clean", "[measure]") {
   CHECK(r.maxTargetJump >= 0);
   CHECK(r.shortestShot >= kMinShotSeconds - 1e-9);
   CHECK(r.cutsPerMinute >= 0);
+  // Where the worst moves are, so a reader can find them.
+  CHECK(r.jerkFrame >= 3);
+  CHECK(r.jumpFrame >= 1);
+}
+
+TEST_CASE("what lands as the camera moves to a unit stays in frame", "[measure]") {
+  // Bricks land on one 2x4; then a unit is built on its spot on another, well away. The move to
+  // the unit starts before its first piece leaves, while the last bricks are still landing.
+  Scene s;
+  const uint32_t near = s.add(0, 0, 0, "3001.dat"), far = s.add(300, 0, 0, "3001.dat");
+  s.step();
+  uint32_t below = near;
+  for (int i = 1; i <= 4; i++) {
+    const uint32_t b = s.add(30, -24.0 * i, 0);
+    s.stud(below, b);
+    below = b;
+  }
+  s.step();
+  uint32_t lower = s.addIn(270, -24, 0);
+  s.stud(far, lower);
+  for (int i = 2; i <= 4; i++) {
+    s.subStep();
+    const uint32_t b = s.addIn(270, -24.0 * i, 0);
+    s.stud(lower, b);
+    lower = b;
+  }
+  s.finish();
+  const Beats beats = beatsOf(s.t, s.p, *s.model, *s.world);
+  const std::vector<Shot> shots = direct(beats, s.t, s.p, *s.world, referenceStyle(), kFps);
+  const Track track = shoot(shots, beats, s.t, s.p, *s.world, FrameShape{}, kFps);
+  // The case is only a case if a brick of the first step lands in the unit's shot.
+  bool overlap = false;
+  for (const plan::Flight& f : s.t.flights) {
+    const uint32_t piece = plan::piecesOf(f, s.p).front();
+    if (f.parent >= 0 || s.model->pieces()[piece].step != 1 || s.at[piece].x != 30) continue;
+    const Shot& at = shots[static_cast<size_t>(track.frames[static_cast<size_t>(f.startFrame + f.frames)].shot)];
+    overlap = overlap || at.subject.kind == SubjectKind::Unit;
+  }
+  REQUIRE(overlap);
+  const Report r = measure(track, shots, beats, s.t, s.p, *s.world);
+  CHECK(r.landingsInFrame == r.landings);
 }

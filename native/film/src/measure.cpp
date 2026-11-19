@@ -28,21 +28,23 @@ Report measure(const Track& track, const std::vector<Shot>& shots, const Beats& 
     const plan::Flight& fl = t.flights[fi];
     if (fl.parent >= 0) continue;
     r.landings++;
-    const int land = fl.startFrame + fl.frames;
-    bool shown = false;
-    if (!fr.empty()) {
-      const Frame& cam = fr[static_cast<size_t>(std::clamp(land, 0, static_cast<int>(fr.size()) - 1))];
-      const Rig rig = rigOf(cam, track.shape.sensorMm);
-      const Box seat = flyingBox(t, plan, world, static_cast<int>(fi), land);
-      std::vector<Vec3> points = corners(seat);
-      bool framed = true;
+    const int land = fl.startFrame + fl.frames, last = static_cast<int>(fr.size()) - 1;
+    bool framed = !fr.empty(), shown = false;
+    const Box seat = flyingBox(t, plan, world, static_cast<int>(fi), land);
+    std::vector<Vec3> points = corners(seat);
+    // In the safe frame from the hover to the landing, as the spec measures it.
+    for (int f = std::clamp(fl.startFrame + static_cast<int>(fl.seatAt), 0, std::max(0, last)); framed && f <= std::min(land, last); f++) {
+      const Rig rig = rigOf(fr[static_cast<size_t>(f)], track.shape.sensorMm);
       for (Vec3 p : points) {
         const Vec3 q = project(rig, track.shape, p);
-        framed = framed && q.z > 0 && std::abs(q.x) <= 1 + 1e-6 && std::abs(q.y) <= 1 + 1e-6;
+        framed = framed && q.z > 0 && std::abs(q.x) <= track.shape.safe + 1e-6 && std::abs(q.y) <= track.shape.safe + 1e-6;
       }
+    }
+    if (framed) {
+      const Frame& cam = fr[static_cast<size_t>(std::clamp(land, 0, last))];
       points.push_back(middle(seat));
       const auto& own = plan::piecesOf(fl, plan);
-      for (size_t k = 0; framed && !shown && k < points.size(); k++) {
+      for (size_t k = 0; !shown && k < points.size(); k++) {
         const Vec3 end = points[k] + (cam.eye - points[k]) * 0.03;  // stop short of its own surface
         Box span;
         span.grow(cam.eye), span.grow(end);
@@ -60,6 +62,7 @@ Report measure(const Track& track, const std::vector<Shot>& shots, const Beats& 
         }
         shown = !hidden;
       }
+      if (!shown) r.hidden.push_back(static_cast<int>(fi));
     }
     if (shown)
       r.landingsInFrame++;
@@ -84,11 +87,13 @@ Report measure(const Track& track, const std::vector<Shot>& shots, const Beats& 
   const double fps = track.fps;
   for (size_t f = 1; f < fr.size(); f++) {
     if (fr[f].cut) continue;
-    r.maxTargetJump = std::max(r.maxTargetJump, length(fr[f].target - fr[f - 1].target));
+    const double jump = length(fr[f].target - fr[f - 1].target);
+    if (jump > r.maxTargetJump) r.maxTargetJump = jump, r.jumpFrame = static_cast<int>(f);
     if (f < 3 || fr[f - 1].cut || fr[f - 2].cut) continue;
     const Vec3 j = fr[f].eye - fr[f - 1].eye * 3 + fr[f - 2].eye * 3 - fr[f - 3].eye;
     const double d = std::max(1.0, length(fr[f - 1].eye - fr[f - 1].target));
-    r.maxJerk = std::max(r.maxJerk, length(j) / d * fps * fps * fps);
+    const double jerk = length(j) / d * fps * fps * fps;
+    if (jerk > r.maxJerk) r.maxJerk = jerk, r.jerkFrame = static_cast<int>(f);
   }
 
   const double seconds = fr.size() > 1 ? (fr.size() - 1) / fps : 0;

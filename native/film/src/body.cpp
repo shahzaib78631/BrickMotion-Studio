@@ -41,6 +41,8 @@ struct Body {
   std::vector<int> landed;
   std::vector<const Beat*> flights, units;  ///< top-level flight beats; unit builds by flight
   double floorY = 0;
+  int half = 1;  ///< frames: the smoothing window's half-width
+  int ramp = 1;  ///< frames a seat on its way takes to grow into the subject
 
   Body(const std::vector<Shot>& s, const Beats& b, const plan::Timeline& t_, const plan::Plan& p, const collide::World& w, const FrameShape& sh, double f, double fr)
       : shots(s), beats(b), t(t_), plan(p), world(w), shape(sh), fps(f), front(fr) {
@@ -54,6 +56,8 @@ struct Body {
       if (x.kind == BeatKind::UnitBuild) units[static_cast<size_t>(x.flight)] = &x;
     }
     floorY = beats.model.empty() ? 0 : beats.model.max.y;
+    half = std::max(1, static_cast<int>(std::lround(kSmoothSeconds * fps / 2)));
+    ramp = std::max(1, static_cast<int>(std::lround(kAnticipateSeconds * fps)));
   }
 
   /// What the shot keeps in frame at `frame`.
@@ -63,19 +67,22 @@ struct Body {
       case SubjectKind::Model: b = beats.model; break;
       case SubjectKind::BuiltSoFar:
         b = beats.builtBox[static_cast<size_t>(frame)];
-        // What is on its way in lands in frame; its seat grows into the subject as it flies, so
-        // the frame opens steadily instead of jumping when the flight starts.
-        for (const Beat* x : flights)
-          if (x->start <= frame && frame <= x->end) {
-            if (b.empty()) {
-              b = x->seat;
-              continue;
-            }
-            Box both = b;
-            both.merge(x->seat);
-            const double w = ease(static_cast<double>(frame - x->start) / std::max(1, x->end - x->start));
-            b.min = b.min + (both.min - b.min) * w, b.max = b.max + (both.max - b.max) * w;
+        // What is on its way in lands in frame. Its seat grows into the subject before it
+        // leaves (the camera anticipates), done two smoothing half-widths before launch so the
+        // smoothed frame holds it whole by the hover; growing it, not adding it, keeps the
+        // frame from jumping.
+        for (const Beat* x : flights) {
+          const int done = x->start - 2 * half, from = done - ramp;
+          if (frame < from || frame > x->end) continue;
+          if (b.empty()) {
+            b = x->seat;
+            continue;
           }
+          Box both = b;
+          both.merge(x->seat);
+          const double w = ease(static_cast<double>(frame - from) / std::max(1, ramp));
+          b.min = b.min + (both.min - b.min) * w, b.max = b.max + (both.max - b.max) * w;
+        }
         if (b.empty())
           for (const Beat* x : flights)
             if (b.empty()) b = x->seat;
@@ -83,6 +90,17 @@ struct Body {
       case SubjectKind::Unit:
         if (s.subject.flight >= 0 && units[static_cast<size_t>(s.subject.flight)]) b = units[static_cast<size_t>(s.subject.flight)]->seat;
         if (s.subject.flight >= 0 && frame >= t.flights[static_cast<size_t>(s.subject.flight)].startFrame) b.merge(flyingBox(t, plan, world, s.subject.flight, frame));
+        // What else lands in the shot (the scene before still finishing as the camera moves
+        // here) stays in frame: grown in before it leaves, let go after it settles.
+        for (const Beat* x : flights) {
+          if (x->flight == s.subject.flight) continue;
+          const int from = x->start - 2 * half - ramp;
+          if (frame < from || frame > x->end + ramp || b.empty()) continue;
+          const double w = ease(static_cast<double>(frame - from) / ramp) * (frame > x->end ? 1 - ease(static_cast<double>(frame - x->end) / ramp) : 1);
+          Box both = b;
+          both.merge(x->seat);
+          b.min = b.min + (both.min - b.min) * w, b.max = b.max + (both.max - b.max) * w;
+        }
         break;
       case SubjectKind::Piece:
         if (s.subject.flight >= 0) {
@@ -176,7 +194,6 @@ struct Body {
     }
     // Smoothed between cuts: a centred average, twice, the edge frame standing in past each end of a
     // segment, so the ends are smoothed as fully as the middle.
-    const int half = std::max(1, static_cast<int>(std::lround(kSmoothSeconds * fps / 2)));
     for (int pass = 0; pass < 2; pass++) {
       int from = 0;
       for (int f = 1; f <= n; f++) {

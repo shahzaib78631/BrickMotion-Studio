@@ -75,7 +75,7 @@ int cmdFilm(const Args& args) {
     const film::Track track = film::shoot(shots, beats, timeline, plan, world, shape, fps);
     const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
     film::Report report = film::measure(track, shots, beats, timeline, plan, world);
-    report.ms = ms;
+    report.ms = ms, report.planMs = plan.planMs;
 
     const nlohmann::json list = film::toJson(shots);
     std::printf("shots         %zu for %.1f s at %s, %.0f fps\n", shots.size(), beats.frames / fps, aspectText.c_str(), fps);
@@ -91,10 +91,13 @@ int cmdFilm(const Args& args) {
       const auto& own = plan::piecesOf(f, plan);
       if (own.empty()) continue;
       const Piece& p = model.pieces()[own.front()];
-      std::printf("  missed: %s %s%s at %.1f s\n", p.part.c_str(), p.id.c_str(), own.size() > 1 ? (" (+" + std::to_string(own.size() - 1) + ")").c_str() : "", (f.startFrame + f.frames) / fps);
+      const bool hidden = std::find(report.hidden.begin(), report.hidden.end(), report.missed[k]) != report.hidden.end();
+      std::printf("  missed: %s %s%s at %.1f s, %s\n", p.part.c_str(), p.id.c_str(), own.size() > 1 ? (" (+" + std::to_string(own.size() - 1) + ")").c_str() : "", (f.startFrame + f.frames) / fps,
+                  hidden ? "hidden behind what is built" : "out of the safe frame");
     }
-    std::printf("inside        %d\njerk          %.2f rad/s³ (largest, within a shot); target step %.1f LDU\ncuts/min      %.1f\nshortest      %.2f s\ncamera        %.0f ms (director and body)\n", report.insideFrames, report.maxJerk, report.maxTargetJump,
-                report.cutsPerMinute, report.shortestShot, report.ms);
+    auto shotAt = [&](int f) { return f >= 0 && static_cast<size_t>(f) < track.frames.size() ? track.frames[static_cast<size_t>(f)].shot : -1; };
+    std::printf("inside        %d\njerk          %.2f rad/s³ at %.2f s (shot %d); target step %.1f LDU at %.2f s (shot %d)\ncuts/min      %.1f\nshortest      %.2f s\ncamera        %.0f ms (director and body); plan %.0f ms\n", report.insideFrames, report.maxJerk,
+                report.jerkFrame / fps, shotAt(report.jerkFrame), report.maxTargetJump, report.jumpFrame / fps, shotAt(report.jumpFrame), report.cutsPerMinute, report.shortestShot, report.ms, report.planMs);
     std::printf("rules         %zu broken\n", report.rules.size());
     for (const film::RuleMiss& m : report.rules) std::printf("  %s: shot %s at %.2f s: %s\n", m.rule.c_str(), m.shot.c_str(), m.at, m.detail.c_str());
 
@@ -102,7 +105,8 @@ int cmdFilm(const Args& args) {
       nlohmann::json j;
       j["shots"] = list;
       nlohmann::json& r = j["report"];
-      r["landings"] = report.landings, r["landingsInFrame"] = report.landingsInFrame, r["missed"] = report.missed;
+      r["landings"] = report.landings, r["landingsInFrame"] = report.landingsInFrame, r["missed"] = report.missed, r["hidden"] = report.hidden;
+      r["jerkFrame"] = report.jerkFrame, r["jumpFrame"] = report.jumpFrame, r["planMs"] = report.planMs;
       r["insideFrames"] = report.insideFrames, r["maxJerk"] = report.maxJerk, r["maxTargetJump"] = report.maxTargetJump;
       r["cutsPerMinute"] = report.cutsPerMinute, r["shortestShot"] = report.shortestShot, r["ms"] = report.ms;
       r["rules"] = nlohmann::json::array();

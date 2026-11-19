@@ -10,14 +10,19 @@ namespace bm::film {
 /// How well a track films its build: what it showed, what it missed, and how it moved.
 struct Report {
   int landings = 0;         ///< top-level flights
-  int landingsInFrame = 0;  ///< of them, in frame and not hidden at the frame they land
+  /// Of them, the seat in the safe frame from its hover to its landing, and some of it not
+  /// behind what is built when it lands.
+  int landingsInFrame = 0;
   std::vector<int> missed;  ///< the flights that were not
+  std::vector<int> hidden;  ///< of those, the ones in frame but behind what is built
   int insideFrames = 0;     ///< frames whose eye is inside a landed piece or under the floor
   double maxJerk = 0;       ///< largest angular jerk within a shot, radians per second cubed
   double maxTargetJump = 0; ///< largest frame-to-frame target move within a shot, LDU
+  int jerkFrame = -1, jumpFrame = -1;  ///< where those are
   double cutsPerMinute = 0, shortestShot = 0;
   std::vector<RuleMiss> rules;  ///< the editing rules the shot list breaks
   double ms = 0;                ///< the director plus the body, filled by the caller
+  double planMs = 0;            ///< the plan it films, filled by the caller
 };
 
 Report measure(const Track& track, const std::vector<Shot>& shots, const Beats& beats, const plan::Timeline& t, const plan::Plan& plan, const collide::World& world);
