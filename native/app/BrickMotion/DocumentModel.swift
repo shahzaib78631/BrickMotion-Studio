@@ -36,6 +36,9 @@ enum SidebarTab: String, CaseIterable { case models, steps, parts }
   /// The row being renamed in place.
   var renaming: String?
   var sidebarTab = SidebarTab.models
+  /// The step selected in the Steps pane, and the one its editor is open on.
+  var selectedStep: Int?
+  var editingStep: Int?
   /// The focused model's name, then the path above it: what the breadcrumb shows.
   var focusPath: [String] {
     _ = snapshot.version  // read so a focus change redraws the breadcrumb
@@ -48,6 +51,7 @@ enum SidebarTab: String, CaseIterable { case models, steps, parts }
   @ObservationIgnored private var tree: [OutlineNode] = []
   @ObservationIgnored private var stamp: UInt64 = .max
   @ObservationIgnored private var rowPieces: [UInt32] = []
+  @ObservationIgnored private var stepPieces: [UInt32] = []
   @ObservationIgnored private var observer: NSObjectProtocol?
 
   init(document: Document) {
@@ -80,6 +84,8 @@ enum SidebarTab: String, CaseIterable { case models, steps, parts }
     }
     // The tree's selection lasts while the pieces it chose are the selection.
     if !selectedRows.isEmpty && Array(snapshot.selection) != rowPieces { selectedRows = [] }
+    if let k = selectedStep, k >= steps.count || Array(snapshot.selection) != stepPieces { selectedStep = nil }
+    if let k = editingStep, k >= steps.count { editingStep = nil }
   }
 
   private static func build(_ rows: [bmapp.OutlineRow]) -> [OutlineNode] {
@@ -219,6 +225,22 @@ enum SidebarTab: String, CaseIterable { case models, steps, parts }
     let pieces = document.session.piecesOfStep(step)
     if hide { document.session.hide(pieces) } else { document.session.show(pieces) }
     viewport?.viewStateChanged() ?? document.postChange()
+  }
+
+  /// Selects a step's pieces and marks it selected in the Steps pane.
+  func select(step k: Int?) {
+    guard let k else { return selectedStep = nil }
+    select(pieces: Array(document.session.piecesOfStep(k)))
+    stepPieces = Array(document.session.selection())
+    selectedStep = k
+  }
+
+  /// A drag in the Steps pane: List's offsets (the row's place before the move) to the session's.
+  func moveSteps(from source: IndexSet, to destination: Int) {
+    guard let from = source.first else { return }
+    let to = destination > from ? destination - 1 : destination
+    guard to != from else { return }
+    context.perform { $0.moveStep(from, to) }
   }
 
   func select(pieces: [UInt32]) {

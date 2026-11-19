@@ -16,9 +16,10 @@ struct SnapshotRequest {
   var sidebar: SidebarTab? = nil
   var focus: [String] = []
   var expandAll = false
+  var editStep: Int? = nil
 
   /// Reads `--snapshot out.png --open file [--size WxH] [--appearance light|dark] [--play-to s] [--report json] [--select n...] [--tool move|rotate]
-  /// [--sidebar models|steps] [--focus Name[/Name]] [--expand all]`.
+  /// [--sidebar models|steps] [--focus Name[/Name]] [--expand all] [--edit-step N]`.
   static func parse(_ args: [String]) -> SnapshotRequest? {
     guard let i = args.firstIndex(of: "--snapshot"), i + 1 < args.count else { return nil }
     var r = SnapshotRequest()
@@ -39,6 +40,7 @@ struct SnapshotRequest {
     if let s = value("--sidebar") { r.sidebar = SidebarTab(rawValue: s) }
     if let f = value("--focus") { r.focus = f.split(separator: "/").map(String.init) }
     r.expandAll = value("--expand") == "all"
+    if let k = value("--edit-step") { r.editStep = Int(k) }
     if let t = value("--tool") { r.tool = t == "move" ? .move : t == "rotate" ? .rotate : .select }
     if let j = args.firstIndex(of: "--select") {
       r.select = args[(j + 1)...].prefix { UInt32($0) != nil }.compactMap { UInt32($0) }
@@ -88,6 +90,10 @@ enum Snapshot {
       }
       document.postChange()
       viewport.fitAll()
+    }
+    if let k = request.editStep {
+      controller.model.sidebarTab = .steps
+      controller.model.editingStep = k
     }
 
     if let t = request.playTo {
@@ -196,12 +202,29 @@ enum Snapshot {
     RunLoop.main.run(until: Date().addingTimeInterval(0.2))
     // .optionIncludingWindow, .boundsIgnoreFraming | .bestResolution
     let image = windowImage(.null, 1 << 3, UInt32(window.windowNumber), (1 << 0) | (1 << 3))?.takeRetainedValue()
+    // Popovers are windows of their own: each is captured and drawn where it sits over the window.
+    var extras: [(CGImage, NSRect)] = []
+    for other in NSApp.windows where other !== window && other.isVisible && other.frame.intersects(window.frame) {
+      if let cg = windowImage(.null, 1 << 3, UInt32(other.windowNumber), (1 << 0) | (1 << 3))?.takeRetainedValue() {
+        extras.append((cg, other.frame))
+      }
+    }
+    let frame = window.frame
     window.orderOut(nil)
     guard let cg = image, cg.width > 0 else { return nil }
     // Only a real picture counts: a capture the system refused comes back blank.
     let rep = NSBitmapImageRep(cgImage: cg)
     rep.size = size
-    return isBlank(rep) ? nil : rep
+    if isBlank(rep) { return nil }
+    if !extras.isEmpty, let context = NSGraphicsContext(bitmapImageRep: rep) {
+      NSGraphicsContext.saveGraphicsState()
+      NSGraphicsContext.current = context
+      for (image, at) in extras {
+        context.cgContext.draw(image, in: CGRect(x: at.minX - frame.minX, y: at.minY - frame.minY, width: at.width, height: at.height))
+      }
+      NSGraphicsContext.restoreGraphicsState()
+    }
+    return rep
   }
 
   private static func isBlank(_ rep: NSBitmapImageRep) -> Bool {

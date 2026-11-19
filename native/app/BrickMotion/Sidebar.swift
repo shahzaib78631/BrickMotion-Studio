@@ -19,23 +19,10 @@ struct Sidebar: View {
       Divider()
       switch model.sidebarTab {
       case .models: ModelsPane(model: model)
-      case .steps: StepsList(model: model)
+      case .steps: StepsPane(model: model)
       case .parts:
         ContentUnavailableView("Parts", systemImage: "square.grid.2x2", description: Text("Parts arrive in the next milestone."))
       }
     }
-  }
-}
-
-/// The steps of the model being edited, until the Steps pane lands.
-private struct StepsList: View {
-  let model: DocumentModel
-  var body: some View {
-    List(model.steps, id: \.index) { step in
-      let title = String(step.title)
-      Label(title.isEmpty ? "Step \(step.index + 1)" : "\(step.index + 1). \(title)", systemImage: "square.stack.3d.up")
-        .badge(Int(step.pieces))
-    }
-    .listStyle(.sidebar)
   }
 }

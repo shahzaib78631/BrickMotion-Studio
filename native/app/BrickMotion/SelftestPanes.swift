@@ -99,6 +99,29 @@ import BMApp
   document.undoManager?.undo()
   turn()
 
+  // 8. Typing a title in the step editor is one undo step, closed when the editor closes.
+  let oldTitle = String(document.session.stepFields(0).title)
+  let editor = StepEditorModel(model: model, step: 0)
+  for t in ["A", "Ab", "Abc"] {
+    editor.title = t
+    editor.commit()
+  }
+  editor.close()
+  turn()
+  if String(document.session.undoName()) != "Edit Step" { return fail("typing gave undo \(document.session.undoName())") }
+  if String(document.session.stepFields(0).title) != "Abc" { return fail("the title is \(document.session.stepFields(0).title)") }
+  document.undoManager?.undo()
+  turn()
+  if String(document.session.stepFields(0).title) != oldTitle { return fail("one undo left the title \(document.session.stepFields(0).title)") }
+
+  // 9. Dragging step 1 below step 2 in the list moves it, as one named step.
+  if model.steps.count < 2 { return fail("the model has fewer than two steps") }
+  model.moveSteps(from: IndexSet([0]), to: 2)
+  turn()
+  if String(document.session.undoName()) != "Move Step" { return fail("dragging a step gave undo \(document.session.undoName())") }
+  document.undoManager?.undo()
+  turn()
+
   print("selftest-panes: ok")
   return 0
 }
