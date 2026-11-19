@@ -66,3 +66,15 @@ inline constexpr double kInsertTurn = 0.6109;   ///< 35 degrees from the main an
 inline constexpr double kRevealArc = 0.6;       ///< the finish arcs this far round onto the front
 
 }  // namespace bm::film
+
+namespace bm::film {
+
+// The camera body.
+inline constexpr double kEyeClearance = 8;   ///< the eye keeps this far from anything built, and above the floor
+inline constexpr double kSmoothSeconds = 0.5;  ///< the window rig values are averaged over (twice, centred: no lag)
+inline constexpr double kAvoidStep = 0.05;   ///< radians: how far the eye swings at a time to get clear
+inline constexpr int kAvoidSteps = 32;       ///< how many such swings it tries each way
+inline constexpr double kFocusAperture = 0;  ///< no depth of field yet: stored for the path tracer
+inline constexpr double kShutter = 0.5;      ///< a 180-degree shutter, stored for the path tracer
+
+}  // namespace bm::film
