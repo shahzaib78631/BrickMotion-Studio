@@ -31,28 +31,11 @@ std::unique_ptr<Renderer> Renderer::create(const bm::Model& model, bm::ldraw::Pa
       std::fprintf(stderr, "bmrender: %s\n", error.c_str());  // a shader that does not compile is a bug, and says so
       return nullptr;
     }
+    impl.full = &full;
     impl.meshes = std::make_unique<MeshLibrary>(model, full, low);
     impl.scene = buildScene(model, full);
     impl.inFlight = dispatch_semaphore_create(3);
-    for (const Group& g : impl.scene.groups) {
-      if (g.placeholder) {
-        impl.parts.push_back(PartShape{bm::kPlaceholderBox, 0});
-        continue;
-      }
-      const auto full = impl.meshes->get(g.part, Detail::Full), low = impl.meshes->get(g.part, Detail::Low);
-      const bool under = full->hasUnderside() || low->hasUnderside();
-      impl.parts.push_back(PartShape{full->bounds, low->lowError, under ? static_cast<double>(full->hasUnderside() ? full->bottom : low->bottom) : -1e300});
-    }
-    for (const Group& g : impl.scene.groups) {
-      const size_t bytes = std::max<size_t>(1, g.instances.size()) * sizeof(Instance);
-      std::array<id<MTLBuffer>, 3> copies;
-      for (auto& buffer : copies) {
-        buffer = [device->device newBufferWithLength:bytes options:MTLResourceStorageModeShared];
-        if (!g.instances.empty()) std::memcpy(buffer.contents, g.instances.data(), g.instances.size() * sizeof(Instance));
-      }
-      impl.instanceBuffers.push_back(copies);
-      impl.changedAt.emplace_back(g.instances.size(), 0);
-    }
+    impl.makeGroups(0);
     impl.liveBounds = impl.scene.bounds;
     // A depth map of one pixel, bound where the shadow map goes until there is one.
     MTLTextureDescriptor* d = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float width:1 height:1 mipmapped:NO];
@@ -105,13 +88,53 @@ void Renderer::Impl::flush(int slot) {
   pending[slot].clear();
 }
 
+void Renderer::Impl::makeGroups(uint64_t madeAt) {
+  parts.clear();
+  instanceBuffers.clear();
+  changedAt.clear();
+  for (auto& queue : pending) queue.clear();
+  for (const Group& g : scene.groups) {
+    if (g.placeholder) {
+      parts.push_back(PartShape{bm::kPlaceholderBox, 0});
+    } else {
+      const auto whole = meshes->get(g.part, Detail::Full), low = meshes->get(g.part, Detail::Low);
+      const bool under = whole->hasUnderside() || low->hasUnderside();
+      parts.push_back(PartShape{whole->bounds, low->lowError, under ? static_cast<double>(whole->hasUnderside() ? whole->bottom : low->bottom) : -1e300});
+    }
+    const size_t bytes = std::max<size_t>(1, g.instances.size()) * sizeof(Instance);
+    std::array<id<MTLBuffer>, 3> copies;
+    for (auto& buffer : copies) {
+      buffer = [device->device newBufferWithLength:bytes options:MTLResourceStorageModeShared];
+      if (!g.instances.empty()) std::memcpy(buffer.contents, g.instances.data(), g.instances.size() * sizeof(Instance));
+    }
+    instanceBuffers.push_back(copies);
+    changedAt.emplace_back(g.instances.size(), madeAt);
+  }
+}
+
+void Renderer::Impl::groupsChanged() {
+  @autoreleasepool {
+    // Every instance counts as changed by the next frame, so the shadow and height maps are
+    // drawn again; a map drawn over frames is begun again, its shares being of the old groups.
+    lastChange = frame + 1;
+    makeGroups(lastChange);
+    shadow.building = heights.building = false;
+    shadow.back.detail = heights.back.detail = -1;
+    lastSeen.clear();
+    lastList.clear();
+    idsReady = false;
+    glassRevision = UINT64_MAX;
+  }
+  updateLiveBounds();
+}
+
 void Renderer::Impl::updateLiveBounds() {
   bm::Box b;
   for (size_t g = 0; g < scene.groups.size(); g++) {
     const bm::Box& part = parts[g].bounds;
     if (part.empty()) continue;
     for (const Instance& in : scene.groups[g].instances)
-      if (!(in.flags & kHidden)) b.merge(placedBox(in, part, scene.origin));
+      if (!(in.flags & kNotShown)) b.merge(placedBox(in, part, scene.origin));
   }
   liveBounds = b.empty() ? scene.bounds : b;
 }
@@ -123,7 +146,7 @@ bm::Box Renderer::selectionBounds() const {
     const bm::Box& part = impl.parts[g].bounds;
     if (part.empty()) continue;
     for (const Instance& in : impl.scene.groups[g].instances)
-      if ((in.flags & kSelected) && !(in.flags & kHidden)) b.merge(placedBox(in, part, impl.scene.origin));
+      if ((in.flags & kSelected) && !(in.flags & kNotShown)) b.merge(placedBox(in, part, impl.scene.origin));
   }
   return b;
 }
@@ -137,6 +160,46 @@ void Renderer::setFrame(const bm::plan::Plan& plan, const bm::plan::Timeline& ti
 
 void Renderer::setRest() {
   const auto changed = applyRest(impl_->scene, *impl_->model);
+  if (changed.empty()) return;
+  impl_->upload(changed);
+  impl_->updateLiveBounds();
+}
+
+void Renderer::modelChanged(const bm::Model& model, const std::vector<uint32_t>* moved) {
+  Impl& impl = *impl_;
+  if (moved && model.pieces().size() == impl.scene.where.size()) {
+    impl.model = &model;
+    const auto changed = applyMoved(impl.scene, model, *moved);
+    if (changed.empty()) return;
+    impl.upload(changed);
+    impl.updateLiveBounds();
+    return;
+  }
+  // What the person chose to see is kept, by piece index.
+  std::vector<uint32_t> selected, hidden;
+  for (uint32_t p = 0; p < impl.scene.where.size(); p++) {
+    const auto [g, i] = impl.scene.where[p];
+    if (g == UINT32_MAX) continue;
+    const uint32_t flags = impl.scene.groups[g].instances[i].flags;
+    if (flags & kSelected) selected.push_back(p);
+    if (flags & kUserHidden) hidden.push_back(p);
+  }
+  impl.model = &model;
+  impl.meshes->rebind(model);
+  impl.scene = buildScene(model, *impl.full);
+  applySelection(impl.scene, selected);
+  applyUserHidden(impl.scene, hidden);
+  impl.groupsChanged();
+}
+
+void Renderer::recolored(const std::vector<uint32_t>& pieces) {
+  if (pieces.empty()) return;
+  applyRecolored(impl_->scene, *impl_->model, pieces);
+  impl_->groupsChanged();
+}
+
+void Renderer::setHidden(const std::vector<uint32_t>& pieces) {
+  const auto changed = applyUserHidden(impl_->scene, pieces);
   if (changed.empty()) return;
   impl_->upload(changed);
   impl_->updateLiveBounds();

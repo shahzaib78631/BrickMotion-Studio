@@ -35,7 +35,7 @@ std::vector<Visible> cull(const Scene& scene, const std::vector<PartShape>& part
     const bm::Vec3 centre = none ? bm::Vec3{} : (part.min + part.max) * 0.5, half = none ? bm::Vec3{} : (part.max - part.min) * 0.5;
     for (uint32_t i = 0; i < group.instances.size(); i++) {
       const Instance& in = group.instances[i];
-      if (in.flags & kHidden) continue;
+      if (in.flags & kNotShown) continue;
       const float* m = in.model;
       // The box under the matrix: its centre carried, its half-size by the matrix's absolute values.
       const bm::Vec3 c{m[0] * centre.x + m[1] * centre.y + m[2] * centre.z + m[3], m[4] * centre.x + m[5] * centre.y + m[6] * centre.z + m[7],

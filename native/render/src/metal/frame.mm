@@ -93,7 +93,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
       if (group.material.transparent() && !glass) continue;
       shown.clear();
       for (uint32_t i = 0; i < group.instances.size(); i++)
-        if (!(group.instances[i].flags & kHidden) && keep(g, i)) shown.push_back(i);
+        if (!(group.instances[i].flags & kNotShown) && keep(g, i)) shown.push_back(i);
       add(into, g, static_cast<Detail>(casterDetail), shown);
     }
   };
@@ -156,7 +156,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
         const Group& group = scene.groups[g];
         if (group.material.transparent() && !glass) continue;
         uint64_t count = 0;
-        for (const Instance& in : group.instances) count += (in.flags & kHidden) ? 0 : 1;
+        for (const Instance& in : group.instances) count += (in.flags & kNotShown) ? 0 : 1;
         if (count) triangles[g] = count * (mesh(group, static_cast<Detail>(casterDetail)).indexCount / 3);
         total += triangles[g];
       }

@@ -112,6 +112,7 @@ Pipelines makePipelines(Device& device, std::string& error);
 struct Renderer::Impl {
   Device* device = nullptr;
   const bm::Model* model = nullptr;
+  bm::ldraw::PartCache* full = nullptr;
   std::unique_ptr<MeshLibrary> meshes;
   Scene scene;
   Pipelines pipelines;
@@ -123,6 +124,11 @@ struct Renderer::Impl {
   std::vector<std::pair<uint32_t, uint32_t>> pending[3];
   bm::Box liveBounds;  // world space: where the shown pieces are now (the shadow is fitted to it)
   void updateLiveBounds();
+  /// The groups changed (a recolour, a rebuild): every per-group array follows the scene again,
+  /// and what was kept of the last frames (maps, picking, glass) is drawn again.
+  void groupsChanged();
+  /// Parts, instance buffers and change frames for every group, from the scene.
+  void makeGroups(uint64_t madeAt);
   std::vector<PartShape> parts;  // per group: its part's bounds at full detail, and its low-detail error
   std::map<std::pair<std::string, int>, GpuMesh> gpuMeshes;  // (part, detail); a placeholder's part is ""
   const GpuMesh& mesh(const Group& group, Detail detail);

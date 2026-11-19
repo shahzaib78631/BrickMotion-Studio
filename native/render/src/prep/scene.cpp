@@ -70,7 +70,7 @@ Scene buildScene(const bm::Model& model, bm::ldraw::PartCache& parts, size_t* sk
     const Material material = placeholder ? placeholderMaterial() : materialFor(colorFor(model.library(), p.color));
     const Key key{material.transparent(), p.part, p.color};
     Group& g = groups[key];
-    if (g.instances.empty()) g.part = p.part, g.color = p.color, g.material = material, g.placeholder = placeholder;
+    if (g.instances.empty()) g.part = p.part, g.color = p.color, g.material = material, g.placeholder = placeholder, g.partBox = found->second.first;
     Instance in{};
     in.piece = i;
     in.flags = bm::determinant(p.world.r) < 0 ? kMirrored : 0;
@@ -97,7 +97,7 @@ std::vector<std::pair<uint32_t, uint32_t>> applyRest(Scene& scene, const bm::Mod
   const auto& pieces = model.pieces();
   for (uint32_t i = 0; i < pieces.size() && i < scene.where.size(); i++) {
     if (scene.where[i].first == UINT32_MAX) continue;
-    const uint32_t keep = scene.groups[scene.where[i].first].instances[scene.where[i].second].flags & (kMirrored | kSelected);
+    const uint32_t keep = scene.groups[scene.where[i].first].instances[scene.where[i].second].flags & (kMirrored | kSelected | kUserHidden);
     set(scene, scene.where[i], pieces[i].world, keep, changed);
   }
   return changed;
@@ -131,26 +131,98 @@ std::vector<std::pair<uint32_t, uint32_t>> applyFrame(Scene& scene, const bm::Mo
   std::vector<std::pair<uint32_t, uint32_t>> changed;
   for (uint32_t i = 0; i < n; i++) {
     if (scene.where[i].first == UINT32_MAX) continue;
-    const uint32_t keep = scene.groups[scene.where[i].first].instances[scene.where[i].second].flags & (kMirrored | kSelected);
+    const uint32_t keep = scene.groups[scene.where[i].first].instances[scene.where[i].second].flags & (kMirrored | kSelected | kUserHidden);
     set(scene, scene.where[i], pose[i], keep | (hidden[i] ? kHidden : 0), changed);
   }
   return changed;
 }
 
-std::vector<std::pair<uint32_t, uint32_t>> applySelection(Scene& scene, const std::vector<uint32_t>& selected) {
+namespace {
+/// Exactly these pieces have `bit`; returns what changed.
+std::vector<std::pair<uint32_t, uint32_t>> markExactly(Scene& scene, const std::vector<uint32_t>& pieces, uint32_t bit) {
   std::vector<uint8_t> on(scene.where.size(), 0);
-  for (uint32_t p : selected)
+  for (uint32_t p : pieces)
     if (p < on.size()) on[p] = 1;
   std::vector<std::pair<uint32_t, uint32_t>> changed;
   for (uint32_t i = 0; i < scene.where.size(); i++) {
     if (scene.where[i].first == UINT32_MAX) continue;
     Instance& in = scene.groups[scene.where[i].first].instances[scene.where[i].second];
-    const uint32_t flags = on[i] ? (in.flags | kSelected) : (in.flags & ~kSelected);
+    const uint32_t flags = on[i] ? (in.flags | bit) : (in.flags & ~bit);
     if (flags == in.flags) continue;
     in.flags = flags;
     changed.push_back(scene.where[i]);
   }
   return changed;
+}
+}  // namespace
+
+std::vector<std::pair<uint32_t, uint32_t>> applySelection(Scene& scene, const std::vector<uint32_t>& selected) { return markExactly(scene, selected, kSelected); }
+
+std::vector<std::pair<uint32_t, uint32_t>> applyUserHidden(Scene& scene, const std::vector<uint32_t>& pieces) { return markExactly(scene, pieces, kUserHidden); }
+
+std::vector<std::pair<uint32_t, uint32_t>> applyMoved(Scene& scene, const bm::Model& model, const std::vector<uint32_t>& pieces) {
+  std::vector<std::pair<uint32_t, uint32_t>> changed;
+  const auto& all = model.pieces();
+  for (uint32_t p : pieces) {
+    if (p >= all.size() || p >= scene.where.size() || scene.where[p].first == UINT32_MAX) continue;
+    const Xform& world = all[p].world;
+    if (!usable(world)) continue;  // a placement that cannot be drawn: the instance stays where it was
+    const auto [g, i] = scene.where[p];
+    Group& group = scene.groups[g];
+    const uint32_t flags = (group.instances[i].flags & ~kMirrored) | (bm::determinant(world.r) < 0 ? kMirrored : 0);
+    set(scene, scene.where[p], world, flags, changed);
+    group.restBoxes[i] = group.partBox.transformed(world);
+    scene.bounds.merge(group.restBoxes[i]);
+  }
+  return changed;
+}
+
+void applyRecolored(Scene& scene, const bm::Model& model, const std::vector<uint32_t>& pieces) {
+  const auto& all = model.pieces();
+  for (uint32_t p : pieces) {
+    if (p >= all.size() || p >= scene.where.size() || scene.where[p].first == UINT32_MAX) continue;
+    const auto [from, at] = scene.where[p];
+    const int color = all[p].color;
+    if (scene.groups[from].color == color) continue;
+    const bool placeholder = scene.groups[from].placeholder;
+    const std::string part = scene.groups[from].part;
+    const bm::Box partBox = scene.groups[from].partBox;
+    const Material material = placeholder ? placeholderMaterial() : materialFor(colorFor(model.library(), color));
+    // Its new group, made at the end of its run when there is none.
+    uint32_t to = UINT32_MAX;
+    for (uint32_t g = 0; g < scene.groups.size(); g++)
+      if (scene.groups[g].part == part && scene.groups[g].color == color && scene.groups[g].placeholder == placeholder) to = g;
+    if (to == UINT32_MAX) {
+      uint32_t end = static_cast<uint32_t>(scene.groups.size());
+      if (!material.transparent()) {
+        end = 0;
+        while (end < scene.groups.size() && !scene.groups[end].material.transparent()) end++;
+      }
+      Group g;
+      g.part = part, g.color = color, g.material = material, g.placeholder = placeholder, g.partBox = partBox;
+      scene.groups.insert(scene.groups.begin() + end, std::move(g));
+      for (auto& w : scene.where)
+        if (w.first != UINT32_MAX && w.first >= end) w.first++;
+      to = end;
+    }
+    const uint32_t source = scene.where[p].first;  // may have shifted
+    Group& old = scene.groups[source];
+    Instance moved = old.instances[at];
+    const bm::Box box = old.restBoxes[at];
+    // Out of its old group: the last instance takes its place.
+    const uint32_t last = static_cast<uint32_t>(old.instances.size() - 1);
+    if (at != last) {
+      old.instances[at] = old.instances[last];
+      old.restBoxes[at] = old.restBoxes[last];
+      scene.where[old.instances[at].piece] = {source, at};
+    }
+    old.instances.pop_back();
+    old.restBoxes.pop_back();
+    Group& target = scene.groups[to];
+    scene.where[p] = {to, static_cast<uint32_t>(target.instances.size())};
+    target.instances.push_back(moved);
+    target.restBoxes.push_back(box);
+  }
 }
 
 }  // namespace bmr

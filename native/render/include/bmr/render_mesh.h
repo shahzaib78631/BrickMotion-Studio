@@ -70,6 +70,9 @@ class MeshLibrary {
   /// Shadow is the Low mesh, or one without studs when that has fewer triangles.
   /// A part with no geometry gives an empty mesh at every level.
   std::shared_ptr<const RenderMesh> get(const std::string& part, Detail detail);
+  /// Reads `model` from now on (it must outlive this); meshes already made are kept, except
+  /// those of the model's own inline parts, which an edit may have changed.
+  void rebind(const bm::Model& model);
 
  private:
   struct State;

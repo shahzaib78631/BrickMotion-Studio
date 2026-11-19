@@ -38,7 +38,7 @@ GlassScene buildGlassScene(const Scene& scene, MeshLibrary& meshes) {
     if (group.placeholder) continue;
     const auto mesh = meshes.get(group.part, Detail::Full);
     for (const Instance& in : group.instances) {
-      if (in.flags & kHidden) continue;
+      if (in.flags & kNotShown) continue;
       const float* m = in.model;
       const Vec3 c0{m[0], m[4], m[8]}, c1{m[1], m[5], m[9]}, c2{m[2], m[6], m[10]};
       const double det = dot(c0, cross(c1, c2));

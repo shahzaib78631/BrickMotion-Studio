@@ -14,7 +14,7 @@ PathInstances pathInstances(const Scene& scene) {
     auto [at, added] = index.try_emplace(name, static_cast<uint32_t>(out.parts.size()));
     if (added) out.parts.push_back(name);
     for (const Instance& in : group.instances) {
-      if (in.flags & kHidden) continue;
+      if (in.flags & kNotShown) continue;
       PathInstance p{};
       std::copy(std::begin(in.model), std::end(in.model), std::begin(p.model));
       p.mesh = at->second;

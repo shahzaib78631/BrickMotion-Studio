@@ -72,6 +72,17 @@ class Renderer {
   void setFrame(const bm::plan::Plan& plan, const bm::plan::Timeline& timeline, double frame);
   /// Every piece back where the model has it, shown.
   void setRest();
+  /// The model changed. With `moved` and the same piece count, only those instances are
+  /// re-placed (no scene rebuild); otherwise the scene is rebuilt, meshes already loaded are
+  /// reused, and what is selected and hidden is kept (by piece index). `model` replaces the one
+  /// given to create() and must outlive the renderer. Pieces are shown at rest after it.
+  void modelChanged(const bm::Model& model, const std::vector<uint32_t>* moved = nullptr);
+  /// These pieces' colours changed in the model: each moves to its new (part, colour) group,
+  /// without rebuilding the scene.
+  void recolored(const std::vector<uint32_t>& pieces);
+  /// Exactly these pieces are hidden while editing (view state, apart from the timeline's own
+  /// hiding of pieces before their turn). Unknown pieces are ignored.
+  void setHidden(const std::vector<uint32_t>& pieces);
   /// The piece under pixel (x, y) of the last frame drawn (row 0 at the top), or UINT32_MAX for
   /// none, outside the picture, or before any frame. The first call after a frame draws the
   /// pieces' numbers once; later calls read them.

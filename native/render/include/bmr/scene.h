@@ -16,6 +16,9 @@ namespace bmr {
 inline constexpr uint32_t kMirrored = 1;  ///< its placement turns it inside out (determinant < 0)
 inline constexpr uint32_t kSelected = 2;
 inline constexpr uint32_t kHidden = 4;    ///< not in the build yet: a piece that does not fly, before its turn
+inline constexpr uint32_t kUserHidden = 8;  ///< hidden by the person editing (view state, not the timeline's)
+/// Either way not drawn.
+inline constexpr uint32_t kNotShown = kHidden | kUserHidden;
 
 /// One piece as drawn. The layout is what the GPU reads.
 struct Instance {
@@ -30,6 +33,7 @@ struct Group {
   int color = 16;            ///< LDraw colour code
   Material material;
   bool placeholder = false;  ///< the part has no geometry: drawn as bm::kPlaceholderBox
+  bm::Box partBox;           ///< the part's box in its own space (the placeholder's when it has none)
   std::vector<Instance> instances;
   std::vector<bm::Box> restBoxes;  ///< per instance, world space, where the model has it
 };
@@ -55,6 +59,18 @@ std::vector<std::pair<uint32_t, uint32_t>> applyFrame(Scene& scene, const bm::Mo
 
 /// Every instance back where the model has it, nothing hidden. Returns what changed.
 std::vector<std::pair<uint32_t, uint32_t>> applyRest(Scene& scene, const bm::Model& model);
+
+/// These pieces' placements changed in the model (the same pieces, the same count): each one's
+/// instance and rest box are set again where the model has it now; nothing else changes. The
+/// scene's bounds grow to hold them; its origin stays. Returns what changed.
+std::vector<std::pair<uint32_t, uint32_t>> applyMoved(Scene& scene, const bm::Model& model, const std::vector<uint32_t>& pieces);
+
+/// Moves each piece's instance to the group of its part and new colour, making the group at the
+/// end of its opaque or transparent run if it does not exist (order inside a run is not kept).
+void applyRecolored(Scene& scene, const bm::Model& model, const std::vector<uint32_t>& pieces);
+
+/// Marks exactly these pieces hidden by the person editing. Returns what changed.
+std::vector<std::pair<uint32_t, uint32_t>> applyUserHidden(Scene& scene, const std::vector<uint32_t>& pieces);
 
 /// Marks exactly these pieces selected. Returns what changed. Unknown pieces are ignored.
 std::vector<std::pair<uint32_t, uint32_t>> applySelection(Scene& scene, const std::vector<uint32_t>& pieces);
