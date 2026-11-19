@@ -38,6 +38,8 @@ struct Scene {
   int launch = 0, land = 0;  ///< frames: its first flight leaves, its last lands
   std::vector<int> flights;  ///< what it shows landing (a unit's: the flights inside it)
   Box seats;
+  Vec3 sum;        ///< the seats' middles added up, and how many: where on the model it lands
+  int count = 0;
   int unit = -1;  ///< a unit built on its spot: the unit's own flight
 };
 
@@ -50,7 +52,7 @@ struct Director {
   double fps, front;
   std::vector<int> landed;  ///< frame each piece is at rest in its seat (INT32_MAX: never)
   Vec3 centre;
-  double radius = 1, height = 1;
+  double radius = 1, height = 1;  ///< height: what it has reached by the cut to the front, where the descent ends
 
   Director(const Beats& b, const plan::Timeline& t_, const plan::Plan& p, const collide::World& w, const DirectorStyle& s, double f, double fr)
       : beats(b), t(t_), plan(p), world(w), style(s), fps(f), front(fr) {
@@ -65,9 +67,9 @@ struct Director {
     }
   }
 
-  /// The way round the model (azimuth, absolute) that faces what lands in `seats`; NaN: no side.
-  double sideOf(const Box& seats) const {
-    const Vec3 c = middle(seats);
+  /// The way round the model (azimuth, absolute) that faces what lands around `c` (the middle of
+  /// a scene's seats, on average); NaN: no side.
+  double sideOf(Vec3 c) const {
     const double x = c.x - centre.x, z = c.z - centre.z;
     if (std::hypot(x, z) < kNoSide * radius) return NAN;
     return std::atan2(-x, -z);  // the eye at -sin(a), -cos(a) is on that side
@@ -94,7 +96,7 @@ struct Director {
       for (int i = 0; i < kVisibilityPoints; i++) kept.push_back(points[points.size() * static_cast<size_t>(i) / static_cast<size_t>(kVisibilityPoints)]);
       points.swap(kept);
     }
-    const double side = sideOf(sc.seats), el = elevationAt(sc.land);
+    const double side = sc.count ? sideOf(sc.sum * (1.0 / sc.count)) : NAN, el = elevationAt(sc.land);
     const Box& built = beats.builtBox[static_cast<size_t>(std::clamp(sc.land, 0, beats.frames))];
     const Box subject = built.empty() ? sc.seats : built;
     double best = before, bestScore = -1e300;
@@ -155,7 +157,8 @@ struct Director {
           if (t.flights[k].parent == it.flight) {
             sc.flights.push_back(static_cast<int>(k));
             sc.launch = std::min(sc.launch, t.flights[k].startFrame), sc.land = std::max(sc.land, t.flights[k].startFrame + t.flights[k].frames);
-            sc.seats.merge(flyingBox(t, plan, world, static_cast<int>(k), t.flights[k].startFrame + t.flights[k].frames));
+            const Box spot = flyingBox(t, plan, world, static_cast<int>(k), t.flights[k].startFrame + t.flights[k].frames);
+            sc.seats.merge(spot), sc.sum = sc.sum + middle(spot), sc.count++;
           }
         out.push_back(sc);
         continue;
@@ -164,7 +167,7 @@ struct Director {
       bool join = !out.empty() && out.back().unit < 0;
       if (join) {
         const Scene& cur = out.back();
-        const double a = sideOf(cur.seats), b = sideOf(seat);
+        const double a = cur.count ? sideOf(cur.sum * (1.0 / cur.count)) : NAN, b = sideOf(middle(seat));
         const bool sameSide = std::isnan(a) || std::isnan(b) || std::abs(wrap(a - b)) <= kSceneSpread;
         join = sameSide || (cur.land - cur.launch) / fps < kMinSceneSeconds;
       }
@@ -175,6 +178,7 @@ struct Director {
       Scene& sc = out.back();
       sc.flights.push_back(it.flight);
       sc.seats.merge(seat);
+      sc.sum = sc.sum + middle(seat), sc.count++;
       sc.land = std::max(sc.land, f.startFrame + f.frames);
     }
     // A last scene too short to stand alone goes with the one before.
@@ -183,6 +187,7 @@ struct Director {
       out.pop_back();
       for (int f : last.flights) out.back().flights.push_back(f);
       out.back().seats.merge(last.seats);
+      out.back().sum = out.back().sum + last.sum, out.back().count += last.count;
       out.back().land = std::max(out.back().land, last.land);
     }
     return out;
@@ -245,6 +250,9 @@ struct Director {
       finish.start = std::max(finish.start, shots.back().start + kMinShotSeconds);
     }
     finish.end = length;
+    // The descent ends where the cut to the front comes: as tall as the model is by then.
+    const Box& atCut = beats.builtBox[static_cast<size_t>(std::clamp(static_cast<int>(std::lround(finish.start * fps)), 0, beats.frames))];
+    if (!atCut.empty()) height = std::max(1.0, atCut.max.y - atCut.min.y);
     for (size_t i = 0; i < shots.size(); i++) shots[i].end = i + 1 < shots.size() ? shots[i + 1].start : finish.start;
     shots.push_back(finish);
     for (Shot& s : shots) craneOf(s);

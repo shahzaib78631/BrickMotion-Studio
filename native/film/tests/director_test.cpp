@@ -136,14 +136,3 @@ TEST_CASE("the same build directs the same shots", "[director]") {
   REQUIRE(toJson(direct(b, s.t, s.p, *s.world, referenceStyle(), kFps)).dump() == toJson(direct(b, s.t, s.p, *s.world, referenceStyle(), kFps)).dump());
 }
 
-TEST_CASE("debug print", "[.dbg]") {
-  for (int which = 0; which < 2; which++) {
-    Scene s;
-    if (which == 0) twoSides(s, 10); else filmtest::tower(s, 10);
-    const Beats b = beatsOf(s.t, s.p, *s.model, *s.world);
-    std::printf("frames %d (%.2f s)\n", s.t.frames, s.t.frames / kFps);
-    for (const plan::Flight& f : s.t.flights) std::printf("  flight piece %u step %d %.2f..%.2f\n", plan::piecesOf(f, s.p).front(), s.model->pieces()[plan::piecesOf(f, s.p).front()].step, f.startFrame / kFps, (f.startFrame + f.frames) / kFps);
-    for (const Shot& x : direct(b, s.t, s.p, *s.world, referenceStyle(), kFps))
-      std::printf("  %.2f-%.2f subj %d size %d az %.0f el %.0f->%.0f enter %d\n", x.start, x.end, int(x.subject.kind), int(x.size), x.azimuth * 180 / M_PI, startAngles(x).second * 180 / M_PI, endAngles(x).second * 180 / M_PI, int(x.enter));
-  }
-}
