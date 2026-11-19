@@ -70,7 +70,7 @@ void matchesFlatten(const bmapp::Session& s) {
 }  // namespace
 
 TEST_CASE("every command undoes exactly", "[bmapp][commands]") {
-  for (int edit = 0; edit <= static_cast<int>(bmapp::Edit::MakeUnique); edit++) {
+  for (int edit = 0; edit <= static_cast<int>(bmapp::Edit::ReorderInStep); edit++) {
     INFO("edit " << edit);
     bmapp::Session s;
     open(s, tower());
@@ -85,6 +85,14 @@ TEST_CASE("every command undoes exactly", "[bmapp][commands]") {
       case bmapp::Edit::Paste: s.paste(s.copy({0, 1}), {200, 0, 0}); break;
       case bmapp::Edit::ReplacePart: s.replacePart({0}, "3003.dat"); break;
       case bmapp::Edit::MakeUnique: s.makeUnique(inSub); break;
+      case bmapp::Edit::AddStep: s.insertStep(1); break;
+      case bmapp::Edit::DeleteStep: s.deleteStep(1); break;
+      case bmapp::Edit::MoveStep: s.moveStep(0, 1); break;
+      case bmapp::Edit::SplitStep: s.splitStep(0, {0}); break;
+      case bmapp::Edit::MergeSteps: s.mergeSteps(0); break;
+      case bmapp::Edit::StepFields: s.setStepFields(0, {"Base", "Notes", 1.5, true}, false); break;
+      case bmapp::Edit::MoveToStep: s.moveToStep({0}, 1); break;
+      case bmapp::Edit::ReorderInStep: s.reorderInStep(0, 0, 1); break;
     }
     const std::string after = planText(s);
     REQUIRE(after != before);

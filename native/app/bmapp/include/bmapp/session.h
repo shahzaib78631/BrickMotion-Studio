@@ -74,6 +74,25 @@ class Session {
   Changed replacePart(const std::vector<uint32_t>& pieces, const std::string& part);
   /// Forks the submodel use holding `piece` into "<name> 2" (the next free number).
   Changed makeUnique(uint32_t piece);
+  // Steps, of the model being edited. Steps are counted from 0 here; people see them from 1.
+
+  size_t stepCount() const;
+  StepFields stepFields(size_t at) const;
+  /// An empty step before `at` (`at` == stepCount() adds one at the end).
+  Changed insertStep(size_t at);
+  /// Its pieces join the step before (the next one when it is the first); notes are joined.
+  Changed deleteStep(size_t at);
+  Changed moveStep(size_t from, size_t to);
+  /// The items of step `at` that hold these pieces go to a new step after it, in their order.
+  Changed splitStep(size_t at, const std::vector<uint32_t>& pieces);
+  /// Step `first + 1` joins step `first`.
+  Changed mergeSteps(size_t first);
+  /// `continuing`: part of one editing session (typing), which undoes as one step.
+  Changed setStepFields(size_t at, const StepFields& fields, bool continuing);
+  /// To the end of `step` (stepCount() makes a new last step). A piece inside a submodel moves
+  /// only with its whole use.
+  Changed moveToStep(const std::vector<uint32_t>& pieces, size_t step);
+  Changed reorderInStep(size_t step, size_t from, size_t to);
   /// Ends a drag: the next continuing move or turn starts a new undo step.
   void endGesture();
   bool canUndo() const;

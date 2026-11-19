@@ -186,6 +186,13 @@ bool before(const ItemEdit& a, const ItemEdit& b) {
   return std::tie(a.def, a.step, a.index) < std::tie(b.def, b.step, b.index);
 }
 
+/// Makes `from` (the def as it is) into `to`.
+void swapDef(bm::doc::Source& src, const std::string& name, size_t position, const std::optional<Def>& from, const std::optional<Def>& to) {
+  if (from && to) *src.def(name) = *to;
+  else if (to) src.submodels.insert(src.submodels.begin() + static_cast<long>(std::min(position, src.submodels.size())), {name, *to});
+  else if (from) std::erase_if(src.submodels, [&](const auto& sub) { return sub.first == name; });
+}
+
 void apply(Session::Impl& s, const Command& c, bool forward) {
   bm::doc::Source& src = s.source;
   std::vector<const ItemEdit*> removed, changed, inserted;
@@ -211,7 +218,9 @@ void apply(Session::Impl& s, const Command& c, bool forward) {
     for (auto it = removed.rbegin(); it != removed.rend(); ++it) erase(**it);
     for (const ItemEdit* e : changed) replace(*e->before, *e->after);
     for (const ItemEdit* e : inserted) insert(*e, *e->after);
+    for (const DefChange& d : c.wholeDefs) swapDef(src, d.name, d.position, d.before, d.after);
   } else {
+    for (auto it = c.wholeDefs.rbegin(); it != c.wholeDefs.rend(); ++it) swapDef(src, it->name, it->position, it->after, it->before);
     for (auto it = inserted.rbegin(); it != inserted.rend(); ++it) erase(**it);
     for (const ItemEdit* e : changed) replace(*e->after, *e->before);
     for (const ItemEdit* e : removed) insert(*e, *e->before);
@@ -223,7 +232,7 @@ void apply(Session::Impl& s, const Command& c, bool forward) {
 
 bool structural(const Command& c) {
   if (c.kind != Edit::Move && c.kind != Edit::Rotate && c.kind != Edit::Recolor) return true;
-  if (!c.defs.empty() || c.addedRootStep) return true;
+  if (!c.defs.empty() || c.addedRootStep || !c.wholeDefs.empty()) return true;
   return std::any_of(c.items.begin(), c.items.end(), [](const ItemEdit& e) { return !e.before || !e.after; });
 }
 
@@ -340,7 +349,7 @@ Changed regrow(Session::Impl& s, Command& c, const Xform& world) {
 Changed transformCommand(Session::Impl& s, Edit kind, const char* verb, const std::vector<uint32_t>& pieces, const Xform& world,
                          bool continuing, Vec3 total, Vec3 axis, double degrees, Vec3 pivot) {
   const std::vector<Target> targets = resolve(s, pieces, false);
-  if (targets.empty()) return Changed{false, {}, {}, s.version};
+  if (targets.empty()) return unchanged(s);
   Command c;
   c.kind = kind;
   c.name = named(verb, distinct(s, pieces).size());
@@ -415,7 +424,7 @@ Changed rotateCommand(Session::Impl& s, const std::vector<uint32_t>& pieces, bm:
 
 Changed recolorCommand(Session::Impl& s, const std::vector<uint32_t>& pieces, int code) {
   const std::vector<Target> targets = resolve(s, pieces, true);
-  if (targets.empty()) return Changed{false, {}, {}, s.version};
+  if (targets.empty()) return unchanged(s);
   Command c;
   c.kind = Edit::Recolor;
   c.name = named("Recolour", distinct(s, pieces).size());
@@ -431,7 +440,7 @@ Changed recolorCommand(Session::Impl& s, const std::vector<uint32_t>& pieces, in
 
 Changed removeCommand(Session::Impl& s, const std::vector<uint32_t>& pieces) {
   const std::vector<Target> targets = resolve(s, pieces, false);
-  if (targets.empty()) return Changed{false, {}, {}, s.version};
+  if (targets.empty()) return unchanged(s);
   Command c;
   c.kind = Edit::Delete;
   c.name = named("Delete", distinct(s, pieces).size());
@@ -444,7 +453,7 @@ Changed removeCommand(Session::Impl& s, const std::vector<uint32_t>& pieces) {
 
 Changed duplicateCommand(Session::Impl& s, const std::vector<uint32_t>& pieces, bm::Vec3 offset) {
   const std::vector<Target> targets = resolve(s, pieces, false);
-  if (targets.empty()) return Changed{false, {}, {}, s.version};
+  if (targets.empty()) return unchanged(s);
   Command c;
   c.kind = Edit::Duplicate;
   c.name = named("Duplicate", distinct(s, pieces).size());
@@ -494,17 +503,17 @@ Changed pasteCommand(Session::Impl& s, const std::string& text, bm::Vec3 offset)
     item.at.exact = Xform{bm::Mat3{}, offset} * cmd.xf;
     c.items.push_back(edit("", step, index++, std::nullopt, item));
   }
-  if (c.items.empty()) return Changed{false, {}, {}, s.version};
+  if (c.items.empty()) return unchanged(s);
   c.name = named("Paste", c.items.size());
   return push(s, std::move(c));
 }
 
 Changed replaceCommand(Session::Impl& s, const std::vector<uint32_t>& pieces, const std::string& part) {
   std::string name = bm::ldraw::normalizeName(part);
-  if (name.empty()) return Changed{false, {}, {}, s.version};
+  if (name.empty()) return unchanged(s);
   if (name.find('.') == std::string::npos) name += ".dat";
   const std::vector<Target> targets = resolve(s, pieces, true);
-  if (targets.empty()) return Changed{false, {}, {}, s.version};
+  if (targets.empty()) return unchanged(s);
   Command c;
   c.kind = Edit::ReplacePart;
   const size_t count = distinct(s, pieces).size();
@@ -522,7 +531,7 @@ Changed replaceCommand(Session::Impl& s, const std::vector<uint32_t>& pieces, co
 }
 
 Changed makeUniqueCommand(Session::Impl& s, uint32_t piece) {
-  if (piece >= s.refs.size() || s.refs[piece].chain.size() < 2) return Changed{false, {}, {}, s.version};
+  if (piece >= s.refs.size() || s.refs[piece].chain.size() < 2) return unchanged(s);
   const auto& chain = s.refs[piece].chain;
   const ItemId useId = chain[chain.size() - 2];
   const Loc loc = locate(s.source).at(useId);
@@ -550,9 +559,304 @@ Changed makeUniqueCommand(Session::Impl& s, uint32_t piece) {
   return push(s, std::move(c));
 }
 
+
+// ---- steps -----------------------------------------------------------------------------------
+
+Changed unchanged(const Session::Impl& s) {
+  Changed out;
+  out.version = s.version;
+  return out;
+}
+
+Changed refusal(const Session::Impl& s, std::string reason) {
+  Changed out = unchanged(s);
+  out.refused = std::move(reason);
+  return out;
+}
+
+namespace {
+
+using Json = nlohmann::ordered_json;
+
+/// The position of a submodel among the submodels (0 for the root).
+size_t positionOf(const bm::doc::Source& src, const std::string& def) {
+  for (size_t i = 0; i < src.submodels.size(); i++)
+    if (src.submodels[i].first == def) return i;
+  return 0;
+}
+
+/// Pushes a command that makes `def` into `after`.
+Changed swapCommand(Session::Impl& s, Edit kind, std::string name, const std::string& def, Def after) {
+  Command c;
+  c.kind = kind;
+  c.name = std::move(name);
+  c.wholeDefs.push_back(DefChange{def, positionOf(s.source, def), *s.source.def(def), std::move(after)});
+  return push(s, std::move(c));
+}
+
+/// A step's object with no editorial fields: what a new step starts from.
+bm::doc::Step emptyStep() { return bm::doc::Step{}; }
+
+std::string text(const Json& extra, const char* key) {
+  return extra.is_object() && extra.contains(key) && extra[key].is_string() ? extra[key].get<std::string>() : "";
+}
+
+void setText(Json& extra, const char* key, const std::string& value) {
+  if (!extra.is_object()) extra = Json::object();
+  if (value.empty()) extra.erase(key);
+  else extra[key] = value;
+}
+
+/// Trimmed and cut to at most `limit` bytes, never inside a UTF-8 character.
+std::string tidy(const std::string& in, size_t limit) {
+  const size_t first = in.find_first_not_of(" \t\r\n");
+  if (first == std::string::npos) return "";
+  std::string out = in.substr(first, in.find_last_not_of(" \t\r\n") - first + 1);
+  if (out.size() > limit) {
+    size_t cut = limit;
+    while (cut > 0 && (static_cast<unsigned char>(out[cut]) & 0xC0) == 0x80) cut--;
+    out.resize(cut);
+  }
+  return out;
+}
+
+StepFields normalize(const StepFields& in) {
+  StepFields out = in;
+  out.title = tidy(in.title, 80);
+  out.notes = tidy(in.notes, 1000);
+  const double pause = std::isfinite(in.pauseAfter) ? std::clamp(in.pauseAfter, 0.0, 10.0) : 0.0;
+  out.pauseAfter = std::round(pause * 10) / 10;
+  return out;
+}
+
+void writeFields(bm::doc::Step& step, const StepFields& f) {
+  setText(step.extra, "title", f.title);
+  setText(step.extra, "notes", f.notes);
+  if (f.pauseAfter > 0) step.extra["pauseAfter"] = f.pauseAfter;
+  else step.extra.erase("pauseAfter");
+  if (f.pinOrder) step.extra["pinOrder"] = true;
+  else step.extra.erase("pinOrder");
+  // A pinned step's pieces carry the web's per-piece force flag (assembly.root).
+  for (Item& item : step.items) {
+    if (!item.extra.is_object()) item.extra = Json::object();
+    if (f.pinOrder) {
+      item.extra["assembly"]["root"] = true;
+    } else if (item.extra.contains("assembly") && item.extra["assembly"].is_object()) {
+      item.extra["assembly"].erase("root");
+      if (item.extra["assembly"].empty()) item.extra.erase("assembly");
+    }
+  }
+}
+
+StepFields readFields(const bm::doc::Step& step) {
+  StepFields f;
+  f.title = text(step.extra, "title");
+  f.notes = text(step.extra, "notes");
+  if (step.extra.is_object() && step.extra.contains("pauseAfter") && step.extra["pauseAfter"].is_number())
+    f.pauseAfter = step.extra["pauseAfter"].get<double>();
+  f.pinOrder = step.extra.is_object() && step.extra.value("pinOrder", false);
+  return f;
+}
+
+/// Only steps' and items' fields can differ between `a` and `after` here: are they the same?
+bool sameFields(const Def& a, const Def& b) {
+  for (size_t i = 0; i < a.steps.size(); i++) {
+    if (a.steps[i].extra != b.steps[i].extra) return false;
+    for (size_t k = 0; k < a.steps[i].items.size(); k++)
+      if (a.steps[i].items[k].extra != b.steps[i].items[k].extra) return false;
+  }
+  return true;
+}
+
+std::string joined(const std::string& a, const std::string& b) {
+  if (a.empty()) return b;
+  if (b.empty()) return a;
+  return a + "\n" + b;
+}
+
+/// The items of `def` that hold `pieces`, as (step, index), sorted. `whole`: a use counts only
+/// when every piece under it is chosen; `refused` is set when one is chosen only in part.
+std::vector<std::pair<size_t, size_t>> itemsOf(const Session::Impl& s, const std::string& def, const std::vector<uint32_t>& pieces,
+                                               bool whole, bool* partial = nullptr) {
+  const auto where = locate(s.source);
+  std::map<ItemId, size_t> chosen;  // item -> pieces chosen under it
+  std::map<ItemId, size_t> under;   // item -> pieces under it through the same chain prefix
+  for (uint32_t p : distinct(s, pieces)) {
+    const auto& chain = s.refs[p].chain;
+    for (size_t k = 0; k < chain.size(); k++) {
+      const auto found = where.find(chain[k]);
+      if (found == where.end() || found->second.def != def) continue;
+      chosen[chain[k]]++;
+      if (k + 1 < chain.size()) under[chain[k]] = s.useCount.at(chainKey(chain, k));
+      else under[chain[k]] = 1;
+      break;
+    }
+  }
+  std::vector<std::pair<size_t, size_t>> out;
+  for (const auto& [id, count] : chosen) {
+    if (whole && count < under[id]) {
+      if (partial) *partial = true;
+      continue;
+    }
+    const Loc& loc = where.at(id);
+    out.emplace_back(loc.step, loc.index);
+  }
+  std::sort(out.begin(), out.end());
+  return out;
+}
+
+}  // namespace
+
+size_t stepCountOf(const Session::Impl& s, const std::string& def) {
+  const Def* d = s.source.def(def);
+  return d ? d->steps.size() : 0;
+}
+
+StepFields stepFieldsOf(const Session::Impl& s, const std::string& def, size_t at) {
+  const Def* d = s.source.def(def);
+  return d && at < d->steps.size() ? readFields(d->steps[at]) : StepFields{};
+}
+
+Changed insertStepCommand(Session::Impl& s, const std::string& def, size_t at) {
+  const Def* d = s.source.def(def);
+  if (!d || at > d->steps.size()) return unchanged(s);
+  Def after = *d;
+  after.steps.insert(after.steps.begin() + static_cast<long>(at), emptyStep());
+  return swapCommand(s, Edit::AddStep, "Insert Step", def, std::move(after));
+}
+
+Changed deleteStepCommand(Session::Impl& s, const std::string& def, size_t at) {
+  const Def* d = s.source.def(def);
+  if (!d || at >= d->steps.size()) return unchanged(s);
+  if (d->steps.size() == 1 && !d->steps[0].items.empty()) return refusal(s, "A model needs at least one step.");
+  Def after = *d;
+  bm::doc::Step gone = std::move(after.steps[at]);
+  after.steps.erase(after.steps.begin() + static_cast<long>(at));
+  if (!gone.items.empty() && !after.steps.empty()) {
+    bm::doc::Step& keep = after.steps[at == 0 ? 0 : at - 1];
+    StepFields f = readFields(keep);
+    const StepFields g = readFields(gone);
+    if (at == 0) {
+      keep.items.insert(keep.items.begin(), gone.items.begin(), gone.items.end());
+      f.notes = joined(g.notes, f.notes);
+    } else {
+      keep.items.insert(keep.items.end(), gone.items.begin(), gone.items.end());
+      f.notes = joined(f.notes, g.notes);
+      f.pauseAfter = g.pauseAfter;  // the pause between them goes with the step
+    }
+    setText(keep.extra, "notes", f.notes);
+    if (f.pauseAfter > 0) keep.extra["pauseAfter"] = f.pauseAfter;
+    else if (keep.extra.is_object()) keep.extra.erase("pauseAfter");
+  }
+  return swapCommand(s, Edit::DeleteStep, "Delete Step", def, std::move(after));
+}
+
+Changed moveStepCommand(Session::Impl& s, const std::string& def, size_t from, size_t to) {
+  const Def* d = s.source.def(def);
+  if (!d || from >= d->steps.size() || to >= d->steps.size() || from == to) return unchanged(s);
+  Def after = *d;
+  bm::doc::Step moving = std::move(after.steps[from]);
+  after.steps.erase(after.steps.begin() + static_cast<long>(from));
+  after.steps.insert(after.steps.begin() + static_cast<long>(to), std::move(moving));
+  return swapCommand(s, Edit::MoveStep, "Move Step", def, std::move(after));
+}
+
+Changed splitStepCommand(Session::Impl& s, const std::string& def, size_t at, const std::vector<uint32_t>& pieces) {
+  const Def* d = s.source.def(def);
+  if (!d || at >= d->steps.size()) return unchanged(s);
+  std::set<size_t> chosen;
+  for (const auto& [step, index] : itemsOf(s, def, pieces, false))
+    if (step == at) chosen.insert(index);
+  if (chosen.empty()) return refusal(s, "Choose some of the step's pieces to split off.");
+  if (chosen.size() == d->steps[at].items.size()) return refusal(s, "Choose some of the step's pieces, not all of them.");
+  Def after = *d;
+  bm::doc::Step rest, split;
+  rest.extra = after.steps[at].extra;
+  for (size_t i = 0; i < after.steps[at].items.size(); i++) (chosen.count(i) ? split : rest).items.push_back(after.steps[at].items[i]);
+  after.steps[at] = std::move(rest);
+  after.steps.insert(after.steps.begin() + static_cast<long>(at + 1), std::move(split));
+  return swapCommand(s, Edit::SplitStep, "Split Step", def, std::move(after));
+}
+
+Changed mergeStepsCommand(Session::Impl& s, const std::string& def, size_t first) {
+  const Def* d = s.source.def(def);
+  if (!d || first + 1 >= d->steps.size()) return unchanged(s);
+  Def after = *d;
+  bm::doc::Step& keep = after.steps[first];
+  const bm::doc::Step next = after.steps[first + 1];
+  StepFields f = readFields(keep);
+  const StepFields g = readFields(next);
+  keep.items.insert(keep.items.end(), next.items.begin(), next.items.end());
+  if (f.title.empty()) setText(keep.extra, "title", g.title);
+  setText(keep.extra, "notes", joined(f.notes, g.notes));
+  if (g.pauseAfter > 0) keep.extra["pauseAfter"] = g.pauseAfter;
+  else if (keep.extra.is_object()) keep.extra.erase("pauseAfter");
+  after.steps.erase(after.steps.begin() + static_cast<long>(first + 1));
+  return swapCommand(s, Edit::MergeSteps, "Merge Steps", def, std::move(after));
+}
+
+Changed setStepFieldsCommand(Session::Impl& s, const std::string& def, size_t at, const StepFields& fields, bool continuing) {
+  const Def* d = s.source.def(def);
+  if (!d || at >= d->steps.size()) return unchanged(s);
+  Def after = *d;
+  writeFields(after.steps[at], normalize(fields));
+  History& h = s.history;
+  if (continuing && h.cursor > 0 && h.cursor == h.done.size()) {
+    Command& c = h.done.back();
+    if (c.open && c.kind == Edit::StepFields && c.stepIndex == at && c.wholeDefs.size() == 1 && c.wholeDefs[0].name == def) {
+      *s.source.def(def) = after;
+      c.wholeDefs[0].after = std::move(after);
+      return finish(s, c);
+    }
+  }
+  if (sameFields(*d, after)) return unchanged(s);
+  Command c;
+  c.kind = Edit::StepFields;
+  c.name = "Edit Step";
+  c.open = continuing;
+  c.stepIndex = at;
+  c.wholeDefs.push_back(DefChange{def, positionOf(s.source, def), *d, std::move(after)});
+  return push(s, std::move(c));
+}
+
+Changed moveToStepCommand(Session::Impl& s, const std::string& def, const std::vector<uint32_t>& pieces, size_t step) {
+  const Def* d = s.source.def(def);
+  if (!d || step > d->steps.size()) return unchanged(s);
+  bool partial = false;
+  const auto chosen = itemsOf(s, def, pieces, true, &partial);
+  if (chosen.empty()) {
+    if (partial) return refusal(s, "Pieces inside a submodel move with it. Open the submodel to change its steps.");
+    return unchanged(s);
+  }
+  Def after = *d;
+  std::vector<Item> moving;
+  for (auto it = chosen.rbegin(); it != chosen.rend(); ++it) {
+    auto& items = after.steps[it->first].items;
+    moving.insert(moving.begin(), items[it->second]);
+    items.erase(items.begin() + static_cast<long>(it->second));
+  }
+  if (step == after.steps.size()) after.steps.push_back(emptyStep());
+  auto& target = after.steps[step].items;
+  target.insert(target.end(), moving.begin(), moving.end());
+  return swapCommand(s, Edit::MoveToStep, named("Move", moving.size()) + " to Step " + std::to_string(step + 1), def, std::move(after));
+}
+
+Changed reorderInStepCommand(Session::Impl& s, const std::string& def, size_t step, size_t from, size_t to) {
+  const Def* d = s.source.def(def);
+  if (!d || step >= d->steps.size()) return unchanged(s);
+  const auto& items = d->steps[step].items;
+  if (from >= items.size() || to >= items.size() || from == to) return unchanged(s);
+  Def after = *d;
+  auto& list = after.steps[step].items;
+  Item moving = std::move(list[from]);
+  list.erase(list.begin() + static_cast<long>(from));
+  list.insert(list.begin() + static_cast<long>(to), std::move(moving));
+  return swapCommand(s, Edit::ReorderInStep, "Reorder Step", def, std::move(after));
+}
+
 Changed undoCommand(Session::Impl& s) {
   History& h = s.history;
-  if (h.cursor == 0) return Changed{false, {}, {}, s.version};
+  if (h.cursor == 0) return unchanged(s);
   Command& c = h.done[--h.cursor];
   c.open = false;
   apply(s, c, false);
@@ -561,7 +865,7 @@ Changed undoCommand(Session::Impl& s) {
 
 Changed redoCommand(Session::Impl& s) {
   History& h = s.history;
-  if (h.cursor == h.done.size()) return Changed{false, {}, {}, s.version};
+  if (h.cursor == h.done.size()) return unchanged(s);
   Command& c = h.done[h.cursor++];
   apply(s, c, true);
   return finish(s, c);

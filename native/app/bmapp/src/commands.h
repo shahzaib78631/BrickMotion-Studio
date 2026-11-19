@@ -31,12 +31,22 @@ struct DefEdit {
   bm::doc::Def def;
 };
 
+/// A def swapped whole, for edits of its steps. Both: its content replaced. Only `after`: added
+/// to the submodels at `position`. Only `before`: removed. "" is the root (position unused).
+struct DefChange {
+  std::string name;
+  size_t position = 0;
+  std::optional<bm::doc::Def> before, after;
+};
+
 struct Command {
   Edit kind = Edit::Move;
   std::string name;
   std::vector<ItemEdit> items;
   std::vector<DefEdit> defs;
   bool addedRootStep = false;
+  std::vector<DefChange> wholeDefs;  ///< applied after the item edits, in order
+  size_t stepIndex = 0;               ///< a step-fields edit: which step, so typing can grow it
   // An open drag: continuing moves and turns of the same pieces grow it.
   bool open = false;
   std::vector<uint32_t> pieces;
@@ -62,6 +72,23 @@ std::string copyText(const Session::Impl& s, const std::vector<uint32_t>& pieces
 Changed pasteCommand(Session::Impl& s, const std::string& text, bm::Vec3 offset);
 Changed replaceCommand(Session::Impl& s, const std::vector<uint32_t>& pieces, const std::string& part);
 Changed makeUniqueCommand(Session::Impl& s, uint32_t piece);
+// Steps of one def ("" the root).
+size_t stepCountOf(const Session::Impl& s, const std::string& def);
+StepFields stepFieldsOf(const Session::Impl& s, const std::string& def, size_t at);
+Changed insertStepCommand(Session::Impl& s, const std::string& def, size_t at);
+Changed deleteStepCommand(Session::Impl& s, const std::string& def, size_t at);
+Changed moveStepCommand(Session::Impl& s, const std::string& def, size_t from, size_t to);
+Changed splitStepCommand(Session::Impl& s, const std::string& def, size_t at, const std::vector<uint32_t>& pieces);
+Changed mergeStepsCommand(Session::Impl& s, const std::string& def, size_t first);
+Changed setStepFieldsCommand(Session::Impl& s, const std::string& def, size_t at, const StepFields& fields, bool continuing);
+Changed moveToStepCommand(Session::Impl& s, const std::string& def, const std::vector<uint32_t>& pieces, size_t step);
+Changed reorderInStepCommand(Session::Impl& s, const std::string& def, size_t step, size_t from, size_t to);
+
+/// Nothing changed.
+Changed unchanged(const Session::Impl& s);
+/// Refused, with the reason.
+Changed refusal(const Session::Impl& s, std::string reason);
+
 Changed undoCommand(Session::Impl& s);
 Changed redoCommand(Session::Impl& s);
 

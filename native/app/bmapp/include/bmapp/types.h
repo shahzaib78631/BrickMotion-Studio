@@ -24,7 +24,17 @@ enum class SelectMode { Replace, Add, Toggle };
 enum class Arrow { Left, Right, Up, Down };
 
 /// The undoable edits.
-enum class Edit { Move, Rotate, Recolor, Delete, Duplicate, Paste, ReplacePart, MakeUnique };
+enum class Edit {
+  Move, Rotate, Recolor, Delete, Duplicate, Paste, ReplacePart, MakeUnique,
+  AddStep, DeleteStep, MoveStep, SplitStep, MergeSteps, StepFields, MoveToStep, ReorderInStep,
+};
+
+/// A step's editorial fields, as a person edits them.
+struct StepFields {
+  std::string title, notes;  ///< title at most 80 characters, notes 1000, both trimmed
+  double pauseAfter = 0;     ///< seconds held after the step, 0–10, one decimal
+  bool pinOrder = false;     ///< its pieces keep their order and stop waiting on what they rest on
+};
 
 using PieceList = std::vector<uint32_t>;
 using StringList = std::vector<std::string>;
@@ -49,6 +59,9 @@ struct Changed {
   std::vector<uint32_t> moved;
   std::vector<uint32_t> recolored;
   uint64_t version = 0;  ///< the session's version after it
+  /// Not empty when the command was refused: nothing changed, no undo step was made, and this is
+  /// why, fit to show a person.
+  std::string refused;
 };
 
 /// A part file in the library, as Replace Part lists it.

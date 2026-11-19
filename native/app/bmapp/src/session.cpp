@@ -239,6 +239,18 @@ std::string Session::copy(const std::vector<uint32_t>& pieces) const { return im
 Changed Session::paste(const std::string& text, Vec3 offset) { BM_EDIT_SELECTING(pasteCommand(*impl_, text, engine(offset)), true); }
 Changed Session::replacePart(const std::vector<uint32_t>& pieces, const std::string& part) { BM_EDIT(replaceCommand(*impl_, pieces, part)); }
 Changed Session::makeUnique(uint32_t piece) { BM_EDIT(makeUniqueCommand(*impl_, piece)); }
+size_t Session::stepCount() const { return stepCountOf(*impl_, ""); }
+StepFields Session::stepFields(size_t at) const { return stepFieldsOf(*impl_, "", at); }
+Changed Session::insertStep(size_t at) { BM_EDIT(insertStepCommand(*impl_, "", at)); }
+Changed Session::deleteStep(size_t at) { BM_EDIT(deleteStepCommand(*impl_, "", at)); }
+Changed Session::moveStep(size_t from, size_t to) { BM_EDIT(moveStepCommand(*impl_, "", from, to)); }
+Changed Session::splitStep(size_t at, const std::vector<uint32_t>& pieces) { BM_EDIT(splitStepCommand(*impl_, "", at, pieces)); }
+Changed Session::mergeSteps(size_t first) { BM_EDIT(mergeStepsCommand(*impl_, "", first)); }
+Changed Session::setStepFields(size_t at, const StepFields& fields, bool continuing) {
+  BM_EDIT(setStepFieldsCommand(*impl_, "", at, fields, continuing));
+}
+Changed Session::moveToStep(const std::vector<uint32_t>& pieces, size_t step) { BM_EDIT(moveToStepCommand(*impl_, "", pieces, step)); }
+Changed Session::reorderInStep(size_t step, size_t from, size_t to) { BM_EDIT(reorderInStepCommand(*impl_, "", step, from, to)); }
 Changed Session::undo() { BM_EDIT(undoCommand(*impl_)); }
 Changed Session::redo() { BM_EDIT(redoCommand(*impl_)); }
 #undef BM_EDIT
