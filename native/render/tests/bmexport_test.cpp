@@ -106,3 +106,11 @@ TEST_CASE("the snap track's style is a switch: physics, or the web app's", "[bme
   REQUIRE(run(args + "'" + web.string() + "' --style swish").code != 0);
   REQUIRE(run(args + "'" + web.string() + "' --web-preset sunset").code != 0);
 }
+
+TEST_CASE("a still takes no --strip: contact sheets are bmshot's", "[bmexport]") {
+  if (!canTrace()) SKIP("no compute ray tracing or BM_LDRAW_DIR");
+  const Run r = run("still '" + model().string() + "' --size 32x32 --strip 4 --no-denoise --out '" + (scratch() / "strip.png").string() + "'");
+  INFO(r.output);
+  REQUIRE(r.code == 2);
+  REQUIRE(r.output.find("usage") != std::string::npos);
+}

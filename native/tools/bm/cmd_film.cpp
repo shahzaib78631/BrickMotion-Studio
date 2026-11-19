@@ -64,7 +64,7 @@ int cmdFilm(const Args& args) {
     options.pool = &pool;
     options.correctPlacements = flag(args, "--correct");
     const plan::Plan plan = plan::planModel(model, graph, db, &gears, cache, shapes, options, &inferred, &corrections);
-    const plan::Timeline timeline = plan::buildTimeline(model, cache, plan, plan::styleOf(file), {0, 1, 0}, &db, &graph);
+    const plan::Timeline timeline = plan::buildTimeline(model, cache, plan, plan::styleOf(file));
     const collide::World world(model, cache, shapes);
 
     const auto started = std::chrono::steady_clock::now();

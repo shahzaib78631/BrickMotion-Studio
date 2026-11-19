@@ -83,6 +83,7 @@ int still(const std::vector<std::string_view>& args) {
     } else return usage();
   }
   if (shot.out.empty()) return usage();
+  if (shot.strip > 0) return usage();  // contact sheets are bmshot's
   bool known = false;
   for (const char* r : kRigs) known = known || rig == r;
   if (!known) {
