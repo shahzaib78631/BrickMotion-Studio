@@ -149,6 +149,45 @@ import BMApp
   document.undoManager?.undo()
   turn()
 
+  // 12. The palette ranks by fuzzy match over what can run now.
+  view.select(Array(loose), .Replace)
+  let items = paletteItems(context)
+  if paletteMatches("msub", in: items).first?.title != "Make Submodel from Selection…" {
+    return fail("\"msub\" ranks \(paletteMatches("msub", in: items).prefix(3).map(\.title)) first")
+  }
+  if paletteMatches("dup", in: items).first?.title != "Duplicate" {
+    return fail("\"dup\" ranks \(paletteMatches("dup", in: items).prefix(3).map(\.title)) first")
+  }
+
+  // 13. A palette row shows the shortcut its menu item has.
+  var menuItems: [String: NSMenuItem] = [:]
+  func gather(_ menu: NSMenu) {
+    for item in menu.items {
+      if let sub = item.submenu { gather(sub) }
+      if let id = item.representedObject as? String { menuItems[id] = item }
+    }
+  }
+  gather(NSApp.mainMenu!)
+  for item in items {
+    guard let id = item.command, let c = Registry.command(id) else { continue }
+    if item.shortcut != c.shortcut { return fail("\(id) shows \(item.shortcut) in the palette, \(c.shortcut) in the registry") }
+    guard let m = menuItems[id] else { continue }
+    if m.keyEquivalent != c.key || m.keyEquivalentModifierMask != c.modifiers { return fail("\(id)'s menu item has another shortcut") }
+  }
+
+  // 14. Every item of the piece menu and the empty-space menu runs a registry command.
+  func strays(_ menu: NSMenu) -> [String] {
+    menu.items.flatMap { item -> [String] in
+      if let sub = item.submenu { return strays(sub) }
+      return item.isSeparatorItem || Registry.owns(item) ? [] : [item.title]
+    }
+  }
+  let pieceMenu = PieceMenu.make(piece: loose[0], context: CommandContext(document: document, viewport: view, clickedPiece: loose[0]))
+  if pieceMenu.items.count < 8 { return fail("the piece menu has only \(pieceMenu.items.count) items") }
+  if !strays(pieceMenu).isEmpty { return fail("piece menu items outside the registry: \(strays(pieceMenu))") }
+  let emptyMenu = PieceMenu.make(piece: nil, context: CommandContext(document: document, viewport: view, clickedPiece: nil))
+  if !strays(emptyMenu).isEmpty { return fail("empty-space menu items outside the registry: \(strays(emptyMenu))") }
+
   print("selftest-panes: ok")
   return 0
 }

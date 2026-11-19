@@ -21,6 +21,8 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
   private var pressPoint: NSPoint?
   /// The selection as a click began: a double click on a use already selected opens it.
   private var selectionAtPress: [UInt32] = []
+  /// A right-button press that has not dragged yet: its release opens the context menu.
+  private var rightDragged = false
   private var marqueeLayer: CAShapeLayer?
 
   // MARK: Tools
@@ -254,6 +256,7 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
 
   override func mouseDown(with event: NSEvent) {
     window?.makeFirstResponder(self)
+    if event.modifierFlags.contains(.control) { return showMenu(event) }
     if tool != .select && beginGizmoDrag(event) { return }
     pressPoint = point(event)
     if event.clickCount == 1, document != nil { selectionAtPress = Array(session.selection()) }
@@ -325,7 +328,30 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
     viewStateChanged()
   }
 
-  override func rightMouseDown(with event: NSEvent) { lastPoint = point(event) }
+  override func rightMouseDown(with event: NSEvent) {
+    lastPoint = point(event)
+    rightDragged = false
+  }
+
+  override func rightMouseUp(with event: NSEvent) {
+    if !rightDragged { showMenu(event) }
+  }
+
+  /// The piece menu for a piece under the pointer (selected first when it is not already), or the
+  /// empty-space menu.
+  override func menu(for event: NSEvent) -> NSMenu? {
+    guard document != nil else { return nil }
+    let (x, y) = fromTop(point(event))
+    let hit = viewport.pick(x, y)
+    let piece: UInt32? = hit == UInt32.max ? nil : hit
+    if let piece, !session.selection().contains(piece) { select([piece], .Replace) }
+    return PieceMenu.make(piece: piece, context: CommandContext(document: document, viewport: self, clickedPiece: piece))
+  }
+
+  private func showMenu(_ event: NSEvent) {
+    window?.makeFirstResponder(self)
+    if let menu = menu(for: event) { NSMenu.popUpContextMenu(menu, with: event, for: self) }
+  }
 
   /// Pins a SwiftUI overlay (the breadcrumb) to the top left, below the toolbar.
   func addOverlay(_ overlay: NSView) {
@@ -338,6 +364,7 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
   }
 
   override func rightMouseDragged(with event: NSEvent) {
+    rightDragged = true
     let p = point(event)
     let dx = p.x - lastPoint.x, dy = -(p.y - lastPoint.y)  // down positive
     if event.modifierFlags.contains(.shift) { viewport.pan(dx, dy) } else { viewport.orbit(dx, dy) }

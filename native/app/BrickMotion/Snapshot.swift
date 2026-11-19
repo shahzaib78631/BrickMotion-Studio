@@ -18,9 +18,11 @@ struct SnapshotRequest {
   var expandAll = false
   var editStep: Int? = nil
   var inspector: InspectorTab? = nil
+  var palette: String? = nil
 
   /// Reads `--snapshot out.png --open file [--size WxH] [--appearance light|dark] [--play-to s] [--report json] [--select n...] [--tool move|rotate]
-  /// [--sidebar models|steps] [--focus Name[/Name]] [--expand all] [--edit-step N] [--inspector selection|part|submodel]`.
+  /// [--sidebar models|steps] [--focus Name[/Name]] [--expand all] [--edit-step N] [--inspector selection|part|submodel]
+  /// [--palette "query"]`.
   static func parse(_ args: [String]) -> SnapshotRequest? {
     guard let i = args.firstIndex(of: "--snapshot"), i + 1 < args.count else { return nil }
     var r = SnapshotRequest()
@@ -43,6 +45,7 @@ struct SnapshotRequest {
     r.expandAll = value("--expand") == "all"
     if let k = value("--edit-step") { r.editStep = Int(k) }
     if let i = value("--inspector") { r.inspector = InspectorTab(rawValue: i) }
+    r.palette = value("--palette")
     if let t = value("--tool") { r.tool = t == "move" ? .move : t == "rotate" ? .rotate : .select }
     if let j = args.firstIndex(of: "--select") {
       r.select = args[(j + 1)...].prefix { UInt32($0) != nil }.compactMap { UInt32($0) }
@@ -97,6 +100,7 @@ enum Snapshot {
       controller.model.refresh()
       controller.model.inspectorTab = tab
     }
+    if let q = request.palette { CommandPalette.show(over: window, query: q) }
     if let k = request.editStep {
       controller.model.sidebarTab = .steps
       controller.model.editingStep = k

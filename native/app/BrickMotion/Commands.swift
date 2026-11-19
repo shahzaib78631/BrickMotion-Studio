@@ -13,6 +13,8 @@ enum MenuPlace { case file, edit, select, object, step, view, none }
   var document: Document?
   var viewport: ViewportView?
   var clickedPiece: UInt32?
+  /// What a submenu item adds to its command: a step index, a colour code.
+  var argument: Int?
   /// Asks for a line of text (a name, a step number); calls `done` only when given one.
   var prompt: @MainActor (_ title: String, _ initial: String, _ done: @escaping (String) -> Void) -> Void
   /// Picks one of `options`; calls `done` with its index.
@@ -33,10 +35,13 @@ enum MenuPlace { case file, edit, select, object, step, view, none }
   }
 
   /// The frontmost document window's.
-  static func current(clickedPiece: UInt32? = nil) -> CommandContext {
+  static func current(clickedPiece: UInt32? = nil, argument: Int? = nil) -> CommandContext {
     let controller = (NSApp.mainWindow ?? NSApp.keyWindow)?.windowController as? WindowController
-    return CommandContext(document: controller?.document as? Document, viewport: controller?.viewportController.viewportView,
-                          clickedPiece: clickedPiece)
+      ?? NSApp.orderedWindows.lazy.compactMap { $0.windowController as? WindowController }.first
+    var c = CommandContext(document: controller?.document as? Document, viewport: controller?.viewportController.viewportView,
+                           clickedPiece: clickedPiece)
+    c.argument = argument
+    return c
   }
 
   var session: bmapp.Session? { document?.session }
@@ -284,6 +289,27 @@ private let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
               f.pinOrder.toggle()
               c.perform { $0.setStepFields(k, f, false) }
             }),
+    makeCommand("step.moveToIndex", "Move to Step", menu: .none, group: 0,
+            enabled: { c in c.hasSelection && c.argument.map { $0 >= 0 && $0 <= Int(c.session?.stepCount() ?? 0) } ?? false },
+            run: { c in
+              guard let k = c.argument else { return }
+              let pieces = c.selection
+              c.perform { $0.moveToStep(ViewportView.list(pieces), k) }
+            }),
+    makeCommand("color.recolor", "Recolour", symbol: "paintpalette", menu: .none, group: 0,
+            enabled: { $0.hasSelection && $0.argument != nil },
+            run: { c in
+              guard let code = c.argument else { return }
+              let pieces = c.selection
+              c.perform { $0.recolor(ViewportView.list(pieces), Int32(code)) }
+              RecentColors.add(Int32(code))
+            }),
+    makeCommand("color.useThis", "Use This Colour", symbol: "eyedropper", menu: .none, group: 0,
+            enabled: { c in c.clickedPiece != nil },
+            run: { c in
+              guard let p = c.clickedPiece, let info = c.session?.snapshot().selected.first(where: { $0.piece == p }) else { return }
+              RecentColors.add(info.color)
+            }),
     makeCommand("step.delete", "Delete Step", symbol: "trash", menu: .step, group: 3,
             enabled: { $0.step != nil }, run: { c in if let k = c.step { c.perform { $0.deleteStep(k) } } }),
 
@@ -296,6 +322,12 @@ private let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
     viewportCommand("view.frameSelection", "Frame Selection", symbol: "viewfinder", key: "f", menu: .view, group: 1, #selector(ViewportView.frameSelection(_:))),
     preset("view.front", "Front", .Front), preset("view.back", "Back", .Back), preset("view.left", "Left", .Left),
     preset("view.right", "Right", .Right), preset("view.top", "Top", .Top), preset("view.bottom", "Bottom", .Bottom),
+    makeCommand("view.palette", "Command Palette…", symbol: "command", key: "k", menu: .view, group: 3,
+            enabled: { $0.document != nil },
+            run: { c in
+              guard let window = c.window else { return }
+              CommandPalette.show(over: window)
+            }),
     makeCommand("view.fullScreen", "Enter Full Screen", key: "f", modifiers: [.command, .control], menu: .view, group: 3,
             selector: #selector(NSWindow.toggleFullScreen(_:))),
   ]
@@ -389,7 +421,7 @@ private let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
       guard let c = command(id), c.enabled(context) else { continue }
       let item = NSMenuItem(title: c.titleFor?(context) ?? c.title, action: #selector(CommandRunner.runContext(_:)), keyEquivalent: "")
       item.target = CommandRunner.shared
-      item.representedObject = ContextCall(id: id, piece: context.clickedPiece)
+      item.representedObject = ContextCall(id: id, piece: context.clickedPiece, argument: context.argument)
       item.state = c.checked?(context) == true ? .on : .off
       menu.addItem(item)
     }
@@ -407,9 +439,20 @@ private let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
 final class ContextCall: NSObject {
   let id: String
   let piece: UInt32?
-  init(id: String, piece: UInt32?) {
+  let argument: Int?
+  init(id: String, piece: UInt32?, argument: Int? = nil) {
     self.id = id
     self.piece = piece
+    self.argument = argument
+  }
+}
+
+/// The last eight colours used, newest first, kept in the user's defaults.
+@MainActor enum RecentColors {
+  static var defaults = UserDefaults.standard
+  static var all: [Int32] { (defaults.array(forKey: ColorSwatchesModel.recentKey) as? [Int] ?? []).map(Int32.init) }
+  static func add(_ code: Int32) {
+    defaults.set(([code] + all.filter { $0 != code }).prefix(8).map(Int.init), forKey: ColorSwatchesModel.recentKey)
   }
 }
 
@@ -430,12 +473,13 @@ final class ContextCall: NSObject {
       NSApp.sendAction(selector, to: nil, from: sender)
       return
     }
-    c.run(.current(clickedPiece: call.piece))
+    c.run(.current(clickedPiece: call.piece, argument: call.argument))
   }
 
   func validateMenuItem(_ item: NSMenuItem) -> Bool {
-    guard let id = (item.representedObject as? String) ?? (item.representedObject as? ContextCall)?.id, let c = Registry.command(id) else { return false }
-    let context = CommandContext.current()
+    let call = item.representedObject as? ContextCall
+    guard let id = (item.representedObject as? String) ?? call?.id, let c = Registry.command(id) else { return false }
+    let context = CommandContext.current(clickedPiece: call?.piece, argument: call?.argument)
     if let t = c.titleFor { item.title = t(context) }
     if let k = c.checked { item.state = k(context) ? .on : .off }
     return c.enabled(context)
