@@ -28,6 +28,10 @@ struct ShotOptions {
   bool correct = false;
   /// --flight web|arc: the flight's shape (bm::plan::Style::shape).
   bm::plan::FlightShape flight = bm::plan::FlightShape::Web;
+  /// --strip N: N frames of the build, evenly from the first to the last, as one contact sheet.
+  int strip = 0;
+  /// A frame of the build with no camera of the caller's: the director's camera films it.
+  bool directorFilms() const { return (frame >= 0 || strip > 0) && !explicitCamera && std::isnan(azimuth) && std::isnan(elevation); }
 };
 
 /// The project's style (bm::plan::styleOf) with the shot's --flight.

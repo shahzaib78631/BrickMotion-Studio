@@ -32,7 +32,7 @@ constexpr int kOk = 0, kFailure = 1, kUsage = 2;
 
 int usage() {
   std::fprintf(stderr,
-               "usage: bmshot <model file> --out <png> [--size WxH] [--frame N] [--azimuth a --elevation e | --eye x,y,z --target x,y,z] [--fov deg] [--no-edges] [--no-shadows] [--no-ao] [--no-floor]\n"
+               "usage: bmshot <model file> --out <png> [--size WxH] [--frame N | --strip N] [--azimuth a --elevation e | --eye x,y,z --target x,y,z] [--fov deg] [--no-edges] [--no-shadows] [--no-ao] [--no-floor]\n"
                "              [--no-cull] [--lights-fixed|--lights-follow] [--raytraced-glass] [--background r,g,b] [--detail 0|1|2] [--select piece,piece,...] [--stats] [--repeat CxR] [--save-model <ldr>] [--correct] [--flight web|arc]\n"
                "       bmshot <model file> --bench <frames> [--frame N] [--repeat CxR] [--size WxH] [--detail 0|1|2] [--maps-whole] [--no-...]\n");
   return kUsage;
@@ -158,10 +158,10 @@ int main(int argc, char** argv) {
     Model model = columns * rows > 1 ? bmr::repeated(loaded, full, columns, rows, 80) : loaded;
     // Planned before anything is drawn when it changes what is drawn (--correct), or a frame is asked for.
     std::optional<bmtools::Planned> planned;
-    if (frame >= 0 || shot.correct) {
+    if (frame >= 0 || shot.correct || shot.strip > 0) {
       bm::plan::Options planOptions;
       planOptions.correctPlacements = shot.correct;
-      planned = bmtools::planModel(model, library, full, ldraw, planOptions, bmtools::styleWith(input, shot));
+      planned = bmtools::planModel(model, library, full, ldraw, planOptions, bmtools::styleWith(input, shot), double(width) / height);
       bmtools::reportCorrections("bmshot", model, planned->corrections);
     }
     if (!saveModel.empty()) {
@@ -187,6 +187,36 @@ int main(int argc, char** argv) {
     const double aspect = double(width) / height;
     bmr::OrbitCamera orbit;
     if (!bmtools::shotCamera(shot, renderer->scene().bounds, nullptr, orbit)) return usage();
+    // At a frame of the build with no camera given, the director's camera.
+    auto cameraAt = [&](int f) {
+      bmr::Camera c = shot.directorFilms() ? bmtools::toCamera(film::cameraAt(planned->track, f), aspect, renderer->scene().bounds) : orbit.camera(aspect, renderer->scene().bounds);
+      if (std::isfinite(shot.fovDegrees)) c.fovY = shot.fovDegrees * M_PI / 180;
+      return c;
+    };
+    if (shot.strip > 0) {
+      // A contact sheet: N frames from the first to the last, in reading order.
+      const plan::Timeline& played = planned->timeline;
+      const int n = shot.strip, across = static_cast<int>(std::ceil(std::sqrt(double(n)))), down = (n + across - 1) / across;
+      bmr::Image sheet;
+      sheet.width = across * width, sheet.height = down * height;
+      sheet.rgba.assign(static_cast<size_t>(sheet.width) * static_cast<size_t>(sheet.height) * 4, 255);
+      for (int k = 0; k < n; k++) {
+        const int f = n == 1 ? 0 : static_cast<int>(std::lround(double(k) * played.frames / (n - 1)));
+        renderer->setFrame(planned->plan, played, f);
+        if (!shot.directorFilms()) bmtools::shotCamera(shot, renderer->scene().bounds, nullptr, orbit);
+        renderer->draw(cameraAt(f), options);
+        const bmr::Image cell = renderer->readback();
+        for (int y = 0; y < cell.height && y < height; y++)
+          std::copy_n(cell.rgba.begin() + static_cast<long>(y) * cell.width * 4, std::min(cell.width, width) * 4,
+                      sheet.rgba.begin() + ((static_cast<long>(k / across) * height + y) * sheet.width + static_cast<long>(k % across) * width) * 4);
+      }
+      std::fprintf(stderr, "bmshot: %d frames of %d\n", n, played.frames);
+      if (!bmr::writePng(sheet, out)) {
+        std::fprintf(stderr, "bmshot: cannot write %s\n", out.c_str());
+        return kFailure;
+      }
+      return kOk;
+    }
     plan::Plan plan;
     plan::Timeline timeline;
     if (frame >= 0) {
@@ -196,7 +226,7 @@ int main(int argc, char** argv) {
       std::fprintf(stderr, "bmshot: frame %d of %d\n", frame, timeline.frames);
       if (benchFrames > 0) return bench(*renderer, model, benchFrames, width, height, options, &plan, &timeline, frame);
     }
-    const bmr::FrameStats s = renderer->draw(orbit.camera(aspect, renderer->scene().bounds), options);
+    const bmr::FrameStats s = renderer->draw(cameraAt(frame), options);
     if (!bmr::writePng(renderer->readback(), out)) {
       std::fprintf(stderr, "bmshot: cannot write %s\n", out.c_str());
       return kFailure;

@@ -107,6 +107,7 @@ std::string describe(const bm::LoadReport& r) {
       if (correct) corrected = std::make_shared<bm::Model>(*session->model);
       planned = bmtools::planModel(correct ? *corrected : *session->model, *session->library, *session->full, session->ldraw, options, [&] { bm::plan::Style style = bm::plan::styleOf(session->file); style.shape = session->flight; return style; }());
       if (correct) bmtools::reportCorrections("bmview", *corrected, planned->corrections);
+      bmtools::keysFromTrack(planned->track, planned->timeline);  // the build plays the director's camera
     } catch (const std::exception& e) {
       error = e.what();
     }

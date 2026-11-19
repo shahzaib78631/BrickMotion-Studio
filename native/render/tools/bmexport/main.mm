@@ -121,7 +121,7 @@ int still(const std::vector<std::string_view>& args) {
     if (shot.frame >= 0 || shot.correct) {
       bm::plan::Options planOptions;
       planOptions.correctPlacements = shot.correct;
-      planned = bmtools::planModel(model, library, full, ldraw, planOptions, bmtools::styleWith(input, shot));
+      planned = bmtools::planModel(model, library, full, ldraw, planOptions, bmtools::styleWith(input, shot), double(shot.width) / shot.height);
       bmtools::reportCorrections("bmexport", model, planned->corrections);
     }
     bmr::Scene scene = bmr::buildScene(model, full);
@@ -141,7 +141,11 @@ int still(const std::vector<std::string_view>& args) {
     options.seed = seed;
     options.lightsFollowCamera = shot.lightsFollow;
     if (shot.backgroundSet) std::copy(std::begin(shot.background), std::end(shot.background), std::begin(options.background));
-    bmr::PathImage image = tracer->render(*path, orbit.camera(double(shot.width) / shot.height, scene.bounds), options);
+    // At a frame of the build with no camera given, the director's camera.
+    const double aspect = double(shot.width) / shot.height;
+    bmr::Camera camera = shot.directorFilms() ? bmtools::toCamera(film::cameraAt(planned->track, shot.frame), aspect, scene.bounds) : orbit.camera(aspect, scene.bounds);
+    if (shot.directorFilms() && std::isfinite(shot.fovDegrees)) camera.fovY = shot.fovDegrees * M_PI / 180;
+    bmr::PathImage image = tracer->render(*path, camera, options);
     const double traceMs = msSince(start);
     const auto denoiseStart = std::chrono::steady_clock::now();
     if (denoising && !bmr::denoise(image, device, &error)) {
@@ -225,7 +229,7 @@ int sound(const std::vector<std::string_view>& args) {
     Model model = io::load(input, library, &full);
     bm::plan::Options planOptions;
     planOptions.correctPlacements = shot.correct;
-    const bmtools::Planned planned = bmtools::planModel(model, library, full, ldraw, planOptions, bmtools::styleWith(input, shot));
+    const bmtools::Planned planned = bmtools::planModel(model, library, full, ldraw, planOptions, bmtools::styleWith(input, shot), double(shot.width) / shot.height);
     bmtools::reportCorrections("bmexport", model, planned.corrections);
     const bmr::Scene scene = bmr::buildScene(model, full);
     std::vector<Box> boxes(model.pieces().size());
@@ -235,8 +239,8 @@ int sound(const std::vector<std::string_view>& args) {
     }
     const double aspect = double(shot.width) / shot.height;
     auto screenX = [&](int frame, Vec3 point) {
-      const bmr::OrbitCamera orbit = planned.timeline.camera.empty() ? bmr::OrbitCamera::framing(scene.bounds, 0.6, aspect) : bmr::OrbitCamera::along(planned.timeline, frame);
-      const bmr::Camera c = orbit.camera(aspect, scene.bounds);
+      // Heard as the director's camera films it.
+      const bmr::Camera c = planned.track.frames.empty() ? bmr::OrbitCamera::framing(scene.bounds, 0.6, aspect).camera(aspect, scene.bounds) : bmtools::toCamera(film::cameraAt(planned.track, frame), aspect, scene.bounds);
       const Vec3 forward = normalized(c.target - c.eye), right = normalized(cross(forward, c.up));
       const double depth = dot(point - c.eye, forward);
       return depth > 1e-6 ? dot(point - c.eye, right) / (depth * std::tan(c.fovY / 2) * aspect) : 0.0;

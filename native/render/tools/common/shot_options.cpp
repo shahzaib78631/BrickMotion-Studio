@@ -40,6 +40,9 @@ int parseShotOption(ShotOptions& o, const std::vector<std::string_view>& args, s
   } else if (a == "--repeat") {
     const std::string v = value();
     if (std::sscanf(v.c_str(), "%dx%d", &o.columns, &o.rows) != 2 || o.columns < 1 || o.rows < 1) result = -1;
+  } else if (a == "--strip") {
+    o.strip = std::atoi(value().c_str());
+    if (o.strip < 1) result = -1;
   } else if (a == "--frame") {
     o.frame = std::atoi(value().c_str());
     if (o.frame < 0) result = -1;
