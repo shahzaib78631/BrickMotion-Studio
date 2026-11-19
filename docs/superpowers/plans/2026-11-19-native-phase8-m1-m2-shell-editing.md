@@ -30,7 +30,7 @@
 - **Hiding** is view state. It is not a command, not undoable and not saved.
 - **Engine rules.** No ported web logic, and no web bugs reproduced (spec "Anti-goals").
 - **C++ style.** Our own C++ builds with `-Wall -Wextra -Werror` (link `bm_warnings`).
-- **Tests.** `ctest --test-dir native/build` passes after every task, with `BM_LDRAW_DIR=$PWD/public/ldraw` set from the repo root.
+- **Tests.** `ctest --test-dir native/build` (engine) and `ctest --test-dir native/build-app` (engine + app, `-DBM_APP=ON`) both pass after every task, with `BM_LDRAW_DIR=$PWD/public/ldraw` set from the repo root. Engine-only tasks (5, 6, 8) are run in both.
 - **What Swift sees.** Swift includes **only** `bmapp/*.h`. Those headers use plain structs, enums, `std::string`, `std::vector`, integer ids and `void*` for Apple objects. They use no templates of our own, no `std::function`, and no `bm::`/`bmr::` headers.
 
 ## Review Focus
@@ -75,7 +75,7 @@ native/app/BrickMotion/*.swift           App, Document, WindowController, Viewpo
 ### Task 1: Build Swift with C++ interop under CMake, and add a bmapp session that opens a file
 
 **Files:**
-- Modify: `native/CMakeLists.txt` (add `add_subdirectory(app)` after `render`)
+- Modify: `native/CMakeLists.txt`: add `option(BM_APP "Build BrickMotion.app (needs Swift)" OFF)` and, after `render`, `if(BM_APP) add_subdirectory(app) endif()`. The app is built in its own tree, `cmake -S native -B native/build-app -G Ninja -DBM_APP=ON`, so a broken Swift target never breaks `native/build`, which other sessions use.
 - Create:
   - `native/app/CMakeLists.txt`
   - `native/app/bmapp/include/bmapp/types.h`, `session.h`, `module.modulemap`
@@ -127,9 +127,14 @@ class Session {
   - **`main.swift`:**
     - `import BMApp`;
     - with `--version` it prints `BrickMotion <bm version>` and exits 0;
-    - with `--open <path>` it prints `pieces <n>`, using `bmapp.Session`, and exits 0.
-    - These two flags exist to prove the bridge from the command line.
-- [ ] **Step 4:** Run the build and tests. Expected: `bmapp` tests PASS. Then run `native/build/app/BrickMotion.app/Contents/MacOS/BrickMotion --open public/…/helicopter.ldr`, which prints `pieces 305`.
+    - with `--open <path>` it prints `pieces <n>`, using `bmapp.Session`, and exits 0;
+    - with `--selftest-bridge <path>` it proves the shape the app will use, and exits 0 only if all of it works:
+      - a Swift `final class` holds a `bmapp.Session` for its whole life;
+      - `bmapp.Viewport(session)` is made against that same session (its address must not change);
+      - a `std.vector<UInt32>` goes in, and a struct of vectors and strings comes back.
+    - `ctest` runs `--selftest-bridge` (add it with `add_test`).
+  - **Fallback**, if Swift cannot hold a non-movable C++ type in a class: make `Session` and `Viewport` C++ reference types (`SWIFT_SHARED_REFERENCE` with retain and release functions over an intrusive count). If that also fails, use an Objective-C++ facade over the same headers. Write the choice in the commit message.
+- [ ] **Step 4:** Run the build and tests in `native/build-app`. Expected: `bmapp` tests and `--selftest-bridge` PASS. Then run `native/build/app/BrickMotion.app/Contents/MacOS/BrickMotion --open public/…/helicopter.ldr`, which prints `pieces 305`.
 - [ ] **Step 5: Commit.** Message: `feat(app): BrickMotion.app builds Swift over bmapp; a session opens any model`.
 
 If Swift's C++ interop rejects a header, the fix is in `bmapp` headers (simpler types). Never in engine headers.
@@ -216,6 +221,8 @@ class Viewport {
 }
 ```
 
+- **Planning never reads the live model.** A plan job takes its own copy (`std::shared_ptr<const bm::Model>`) and the session version it was made from. Its result is used only if that version is still current. Any command cancels a running job (`bm::CancelToken`), stops playback and puts the renderer back at rest. The next Space plans again. Milestone 4 makes this incremental.
+
 - [ ] **Step 1: Write the failing tests** (headless Metal, as `bmrender_tests` already runs):
   - `fitAll frames the model`: after `fitAll()`, `resize(800, 600, 1)` and `draw(nullptr)`, the readback's non-background pixel box touches neither edge and spans more than 50% of the width or height.
   - `orbit then view preset Front is exact`: `view(Front)` gives yaw 0 and pitch 0, whatever came before.
@@ -254,7 +261,7 @@ class Viewport {
   - the sidebar rect is not one flat colour.
 - [ ] **Step 2:** Run it through ctest. Expected: FAIL.
 - [ ] **Step 3:** Implement as the interface says. With `--snapshot` the app never shows a window on screen (`orderOut`, offscreen window) and never activates.
-- [ ] **Step 4:** Run the check. Expected: PASS. Send the PNG to the owner (`SendUserFile`) as the Milestone 1 picture.
+- [ ] **Step 4:** Run the check. Expected: PASS. Once, compare the snapshot by eye with a capture of the same window shown on screen (`screencapture -l <window id>`), toolbar and glass materials included. Write any difference in the commit message. Then send the PNG to the owner (`SendUserFile`) as the Milestone 1 picture.
 - [ ] **Step 5: Commit.** Message: `feat(app): --snapshot renders the window for checks and reviews`.
 
 ---
@@ -339,14 +346,19 @@ Flat flatten(const Source& source, const ldraw::Library& library, ldraw::PartCac
 namespace bm::doc {
 struct Project { nlohmann::ordered_json json; };          // whole project; "plan" replaced on write
 Project readProjectFile(std::string_view text);           // throws io::Error as readProject does
-std::string writeProject(const Project& base, const Source& source);  // base = {} for a new project: {"format":"brickmotion-project","version":1,"plan":...}
+std::string writeProject(const Project& base, const Source& source, bool planChanged);  // base = {} for a new project: {"format":"brickmotion-project","version":1,"plan":...}
+// planChanged: the web's "timelines" are a cache of planned animation keyed to the plan's pieces
+// (src/io/projectFile.ts; the web plans again when one is missing). An edited plan drops the
+// "timelines" key, so the web never plays stale motion; "settings" and every other key are kept.
+// "savedAt" is set to the time of writing (ISO 8601, UTC).
 std::string writeMpd(const Source& source, const ldraw::Library& library);  // 0 FILE per def (root first), 0 STEP between steps, inline parts last; colours as codes
 }
 ```
 
 - [ ] **Step 1: Write the failing tests.**
-  - `project round trip keeps every other field` (Review Focus 3): for each fixture `.brickmotion`, `writeProject(p, fromPlan(plan of p))` parses to JSON equal to the input.
-  - `edited project changes only the edited item`: after changing one item's colour, a JSON diff shows exactly one changed value.
+  - `project round trip keeps every other field` (Review Focus 3): for each fixture `.brickmotion`, `writeProject(p, fromPlan(plan of p), false)` parses to JSON equal to the input apart from `savedAt`.
+  - `edited project changes only the edited item`: after changing one item's colour, a JSON diff of `plan` shows exactly one changed value; `settings` is equal; `timelines` is gone.
+  - `delete drops the stale animation`: after deleting a piece, the written project has no `timelines`, and the web check in Task 12 opens and plays it.
   - `mpd keeps submodels and steps`: for a fixture MPD, `io::load(writeMpd(fromLDraw(f)))` equals `io::load(f)` in pieces, steps (`Piece::steps`) and submodel names, with placements within 1e-6. `writeMpd` writes 6 decimals.
   - `new project is version 1`: `writeProject({}, s)` passes `io::readProject`.
 - [ ] **Step 2:** Run. Expected: FAIL.
@@ -396,6 +408,11 @@ class Session {  // additions
   - **Pieces inside submodels.** A piece reached through a submodel is changed in the submodel def. Its new local placement is `inverse(parentWorld) * newWorld`, taken through the use it was picked in. Every use of that submodel then changes.
   - **`Changed`.** After a command the session re-flattens. `structure` is false when only placements or colours changed and the piece count is the same; then `moved`/`recolored` list every flat piece affected, across all uses.
   - **Grid placements.** A grid item that is moved by whole studs and plates and turned by 90° about y stays grid. Otherwise it becomes `exact`.
+  - **Which items a selection edits.** Before any command, the selection is resolved to items:
+    - When every piece of one submodel use is selected, the command edits **the use** (its item in the parent def), not the submodel. Deleting a whole wheel assembly deletes that use only.
+    - Otherwise each selected piece edits its own item in the deepest def. An item reached through two selected uses is edited once.
+    - For move and rotate, the world delta is the same for every selected piece. Each item's local change is that delta taken through its own use, mirrored or turned uses included.
+  - **In place.** A command that only moves or recolours pieces (`structure == false`) updates `doc::Flat` in place with `Model::setPlacement` and a new `Model::setColor(uint32_t, int)` (add it to `model.h` beside `setPlacement`). Only structural commands re-flatten.
 
 - [ ] **Step 1: Write the failing tests.**
   - `every command undoes exactly`: for each `Edit`, apply it to a fixture, then `undo()`. `toPlan` JSON must be equal to the original; then `redo()`, and it must be equal to after-apply.
@@ -404,6 +421,11 @@ class Session {  // additions
   - `grid stays grid on whole-stud moves`: moving 20 LDU in x keeps `at.grid`; moving 10 LDU makes it exact.
   - `dirty follows the saved mark through undo`.
   - `make unique forks one use`: after `makeUnique`, moving a piece in that use moves only it.
+  - `deleting a whole use deletes the use, not the submodel`: in a model with a submodel used four times, select all pieces of one use and remove them. The submodel keeps its pieces, the model has three uses, and the piece count falls by one use.
+  - `an item reached twice is edited once`: select one piece in each of two uses of the same submodel and recolour it. The def item changes once, and one undo restores it.
+  - `select all and move gives one world delta`: in a model with a mirrored and a turned use, select all and move by (20, 0, 0). Every piece's world position changes by exactly (20, 0, 0), to 1e-9.
+  - `in-place edits equal a full flatten`: after a move and a recolour, the in-place `Flat` equals `flatten(source)` exactly.
+  - `an edit during planning cancels it`: start a plan, `move`, then wait for the job. `planState()` is not `Ready` for the old version, and asking to play again plans the edited model (pieces at the moved place).
 - [ ] **Step 2:** Run. Expected: FAIL.
 - [ ] **Step 3:** Implement. A `Command` stores the before and after of each `Item` it touches, plus inserted and removed item positions. Undo restores them, and no command is replayed from scratch.
 - [ ] **Step 4:** Run. Expected: PASS.
@@ -425,13 +447,19 @@ class Session {  // additions
 /// (no scene rebuild); otherwise the scene is rebuilt and meshes already loaded are reused.
 /// `model` replaces the one given to create() and must outlive the renderer.
 void modelChanged(const bm::Model& model, const std::vector<uint32_t>* moved = nullptr);
+void recolored(const std::vector<uint32_t>& pieces);   // pieces whose colour changed: moved into their new (part, colour) group without a rebuild
+void setHidden(const std::vector<uint32_t>& pieces);   // view-state hiding; kept apart from the timeline's kHidden (see Task 9)
 // bmr (scene.h)
 std::vector<std::pair<uint32_t, uint32_t>> applyMoved(Scene& scene, const bm::Model& model, const std::vector<uint32_t>& pieces);
+/// Moves each piece's instance to the group of its part and new colour, making the group at the
+/// end of its opaque or transparent run if it does not exist (order inside a run is not kept).
+void applyRecolored(Scene& scene, const bm::Model& model, const std::vector<uint32_t>& pieces);
 ```
 
 - [ ] **Step 1: Write the failing tests.**
   - `move updates only that instance` (Review Focus 4): `applyMoved` returns exactly one pair for one piece and leaves `scene.groups` sizes unchanged.
-  - `recolour rebuilds into the right group`: after `modelChanged` with no `moved`, the piece's `where` points to a group with the new colour.
+  - `recolour moves the instance, no rebuild`: after `applyRecolored`, the piece's `where` points to a group with the new colour, every other piece's `where` is unchanged, and `draw(nullptr)` matches a freshly built scene's picture exactly.
+  - `recolour to glass moves it to the transparent run`.
   - `delete then draw`: after a piece is removed, `modelChanged` and `draw(nullptr)` succeed and `scene().where.size()` equals the new piece count.
   - `selection survives a rebuild`.
 - [ ] **Step 2:** Run `ctest -R bmrender`. Expected: FAIL.
@@ -443,6 +471,8 @@ std::vector<std::pair<uint32_t, uint32_t>> applyMoved(Scene& scene, const bm::Mo
 - [ ] **Step 5: Commit.** Message: `feat(render): the renderer follows edits without rebuilding for a move`.
 
 ### Task 9: Selection, picking, marquee and snapshots
+
+Hiding is view state, kept in the session and sent with `Renderer::setHidden` (Task 8). It is a separate flag from the timeline's `kHidden`, so playback and `applyRest` never show a piece the user hid. Name it `kUserHidden = 8` in `scene.h`, and have every draw and pick path skip either flag.
 
 **Files:**
 - Modify: `bmapp/session.h`, `session.cpp`, `viewport.h`, `viewport.mm`.
@@ -476,12 +506,13 @@ class Viewport { // additions
   - `marquee wholly inside`: with a fixed camera on a 2×2 grid of bricks, a rect around one brick returns exactly that piece.
   - `touching returns neighbours too`.
   - `hidden pieces are neither drawn nor picked`.
+  - `user-hidden pieces stay hidden through playback and rest`.
   - `selection is remapped after delete`: delete piece 0 with piece 3 selected, and the selection becomes `{2}`. Pieces deleted are dropped.
   - `snapshot version changes on every command and not on a redraw`.
 - [ ] **Step 2:** Run. Expected: FAIL.
 - [ ] **Step 3:** Implement.
   - Marquee: project each visible piece's world box corners with the viewport camera's matrices (`bmr::viewMatrix`, `projectionMatrix`).
-  - Hiding uses the renderer's `kHidden` flag through a new `Renderer::setHidden(const std::vector<uint32_t>&)`, added beside `select` with the same pattern.
+  - Hiding uses `kUserHidden` through `Renderer::setHidden` (Task 8).
 - [ ] **Step 4:** Run. Expected: PASS.
 - [ ] **Step 5: Commit.** Message: `feat(app): selection, marquee, hiding and snapshots`.
 
@@ -610,9 +641,11 @@ class Session { // additions
   - **File menu:** Export LDraw… writes `mpdBytes()` through an `NSSavePanel` with type `.mpd`.
   - **Versions:** `autosavesInPlace` and `preservesVersions` are both true, so Browse All Versions works.
   - **After a save:** `markSaved()`.
+  - **Revert, Versions and reloads** call `read(from:ofType:)` on a live document. That resets everything: a new `Session`, an empty command log, `undoManager.removeAllActions()`, an empty selection, a new `Viewport` and renderer, and any planning job cancelled.
 
 - [ ] **Step 1: Write the failing tests.**
   - `save then reopen is the same document` (`save_test.cpp`): open a fixture, edit, take `projectBytes()`, `openBytes` it into a new session; `toPlan` must be equal.
+  - `reopening resets the log`: after edits, `openBytes` into the same session gives `canUndo() == false`, an empty selection and `dirty() == false`.
   - `import opens untitled, source untouched` (Review Focus 5, `import_check.sh`):
     - hash a fixture `.ldr`;
     - run `BrickMotion --open <it> --edit-move 0 20 0 0 --save-to <tmp>.brickmotion`, test-only flags that drive the same code path as ⌘S on an untitled document;
@@ -620,7 +653,7 @@ class Session { // additions
 - [ ] **Step 2:** Run. Expected: FAIL.
 - [ ] **Step 3:** Implement. The `--edit-move` and `--save-to` flags live next to `--snapshot` in `main.swift`, and run headless.
 - [ ] **Step 4:** Run the tests. Then check by hand:
-  - open a web-made `.brickmotion`, edit and save, then open it in the web app (`npm run dev`), which shows the edit;
+  - open a web-made `.brickmotion`, edit (one move and one delete) and save, then open it in the web app (`npm run dev`), which shows both edits and plans the animation again;
   - Browse All Versions lists the saves.
 - [ ] **Step 5: Commit.** Message: `feat(app): save projects the web opens, export MPD, autosave and versions`.
 
@@ -657,4 +690,8 @@ class Session { // additions
   - Milestone 3: palette, browser, inspector, Settings, welcome window, part drag-in with snapping, step and submodel structure editing.
   - Milestone 4: timelines and re-plan speed.
   - Milestone 5: polish.
-- **Refines a design call:** the design said an off-grid piece needs "one additive field". The plan file already has `ldu` + `matrix` and the web reads them, so no new field is added.
+- **Refines design calls** (the design doc is amended to match):
+  - The design said an off-grid piece needs "one additive field". The plan file already has `ldu` + `matrix` and the web reads them, so no new field is added.
+  - The build is CMake + Ninja, Swift included, in its own tree `native/build-app`. There is no Xcode project; `cmake -G Xcode` can make one when wanted.
+  - The window shell is AppKit (`NSDocument`, `NSSplitViewController` with sidebar and inspector items) with SwiftUI inside the panes. SwiftUI's `DocumentGroup` cannot host the Metal viewport and the split items this precisely.
+  - An edited project drops the web's cached `timelines`; the web plans again on open.

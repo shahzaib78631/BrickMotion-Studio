@@ -1,6 +1,6 @@
 # Native Phase 8: the app shell — design
 
-Date: 2026-11-19 · Status: draft; decisions after the builder check settled by the owner
+Date: 2026-11-19 · Status: approved by the owner 2026-11-19; plan `docs/superpowers/plans/2026-11-19-native-phase8-m1-m2-shell-editing.md`
 
 ## Intent
 
@@ -249,9 +249,15 @@ My calls, marked for the owner to check:
 - The owner chose a text-only design round, so approving this document is the interface sign-off
   the rewrite spec asks for.
 
+## Settled while planning (2026-11-19)
+
+- **Off-grid pieces need no new field.** The plan file already stores exact placements as `ldu` + `matrix`, and the web reads them (`src/io/ldrawImport.ts`).
+- **An edited project drops the web's cached animation.** In a `.brickmotion`, `timelines` is a cache of planned animation that the web plans again when it is missing (`src/io/projectFile.ts`). An edited save drops it; an unedited save keeps it. `settings` and unknown keys are always kept.
+- **Build.** CMake + Ninja builds the Swift app too, in its own tree (`native/build-app`, `-DBM_APP=ON`), so it never breaks the engine build other sessions use.
+- **Window shell.** AppKit `NSDocument` + `NSSplitViewController` (sidebar and inspector items) hosts SwiftUI panes and the AppKit Metal viewport.
+
 ## Left to the builder
 
 - Exact bmapp API shape, command list granularity, and snapshot diffing.
-- Whether the Xcode project is generated (e.g. by a script) or checked in.
 - The incremental re-plan's unit of reuse, provided full re-plans still match exactly.
 - Thumbnail cache location and size.
