@@ -356,7 +356,7 @@ const char* name(Found found) {
   switch (found) {
     case Found::Connectors: return "connectors";
     case Found::Relaxed: return "relaxed";
-    case Found::Contact: return "contact";
+    case Found::Documented: return "documented";
   }
   return "?";
 }

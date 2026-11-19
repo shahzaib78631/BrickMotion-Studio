@@ -66,7 +66,7 @@ struct Row {
   int planFlagged = 0;        ///< moves the planner could not show (unjoined ones included)
   int unjoinedMoves = 0;      ///< of those, pieces joined to nothing in the file
   int corrections = 0, correctionsApplied = 0;  ///< pieces placed a little off what holds them; of them, set in place
-  int inferredRelaxed = 0, inferredDropped = 0;  ///< pieces given a joint by connect::inferJoints; of those, taken out again (plan::planInferred)
+  int inferredDocumented = 0, inferredRelaxed = 0, inferredDropped = 0;  ///< pieces given a joint by connect::inferJoints: in documented seats, set in place; taken out again (plan::planInferred)
   int buildFloating = 0;      ///< unflagged moves that land joined to nothing built (must be 0)
   int buildCrossings = 0;     ///< unflagged moves whose flight passes through a placed piece (must be 0)
   int offAxis = 0;            ///< unflagged moves whose last leg is not along their connectors (must be 0)

@@ -85,7 +85,8 @@ int cmdPlan(const Args& args) {
         std::printf("  %-12s %-20s %.1f LDU off the line, %+.0f along, %.1f deg, on %s %s%s%s\n", model.pieces()[c.piece].part.c_str(), model.pieces()[c.piece].id.c_str(), c.offset, c.along, c.angle,
                     model.pieces()[c.onto].part.c_str(), model.pieces()[c.onto].id.c_str(), c.note.empty() ? "" : ": ", c.note.c_str());
     }
-    if (inferred.relaxed) std::printf("inferred      %u joints set in place (pieces the connectors join to nothing), %u taken out again: they left their piece stuck\n", inferred.relaxed, inferred.dropped);
+    if (inferred.relaxed + inferred.documented)
+      std::printf("inferred      %u joints in a seat their holder's file documents, %u set in place (pieces the connectors join to nothing); %u taken out again: they left their piece stuck\n", inferred.documented, inferred.relaxed, inferred.dropped);
     plan::Certificate certificate;
     const bool certifyIt = !flag(args, "--no-certify");
     if (certifyIt) {

@@ -98,7 +98,7 @@ Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Libr
           const plan::Plan built = plan::planModel(pm, pg, *connectors, gears, cache, *shapes, options, &inferred, &corrections);
           row.corrections = static_cast<int>(corrections.size());
           for (const connect::Correction& c : corrections) row.correctionsApplied += c.applied ? 1 : 0;
-          row.inferredRelaxed = static_cast<int>(inferred.relaxed);
+          row.inferredRelaxed = static_cast<int>(inferred.relaxed), row.inferredDocumented = static_cast<int>(inferred.documented);
           row.inferredDropped = static_cast<int>(inferred.dropped);
           const auto certifyStart = std::chrono::steady_clock::now();
           const plan::Certificate cert = plan::certify(pm, pg, cache, *shapes, built);
@@ -215,7 +215,7 @@ nlohmann::json toJson(const Row& row) {
     j["certifiedMoves"] = row.certifiedMoves;
     j["planFlagged"] = row.planFlagged;
     j["unjoinedMoves"] = row.unjoinedMoves;
-    j["inferred"] = {row.inferredRelaxed, row.inferredDropped};
+    j["inferred"] = {row.inferredDocumented, row.inferredRelaxed, row.inferredDropped};  // in documented seats; set in place; taken out again
     j["corrections"] = {row.corrections, row.correctionsApplied};  // pieces a little off what holds them; of them, set in place  // pieces joined once set in place; of them, taken out again
     j["buildFloating"] = row.buildFloating;
     j["buildCrossings"] = row.buildCrossings;

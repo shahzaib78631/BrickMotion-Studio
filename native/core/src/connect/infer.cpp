@@ -6,6 +6,9 @@
 #include <limits>
 #include <map>
 #include <optional>
+#include <sstream>
+#include <unordered_map>
+#include "bm/ldraw/library.h"
 #include "bm/collide/tolerances.h"
 #include "bm/connect/tolerances.h"
 
@@ -45,6 +48,68 @@ Mat3 between(Vec3 from, Vec3 to) {
   const double s = length(c), d = dot(from, to);
   if (s < 1e-12) return d > 0 ? Mat3{} : rotation(anyPerpendicular(from), kPi);
   return rotation(c, std::atan2(s, d));
+}
+
+/// Tier 0: how far a piece may be from a documented seat and still be in it.
+constexpr double kSeatOffset = 2.0;
+const double kSeatCos = std::cos(5 * kPi / 180);
+
+/// A part placed in another part's file by a `0 !HELP 1 ...` line: where it goes, in the
+/// holding part's own space.
+struct Seat {
+  Xform at;
+  std::string part;
+};
+
+/// The file a part name stands for, following "~Moved to" stubs.
+const ldraw::File* resolved(const ldraw::Library& lib, std::string name) {
+  for (int hop = 0; hop < 4; hop++) {
+    const ldraw::File* f = lib.find(name);
+    if (!f) return nullptr;
+    if (f->description.rfind("~Moved to", 0) != 0) return f;
+    const ldraw::Command* ref = nullptr;
+    for (const ldraw::Command& c : f->cmds)
+      if (c.type == ldraw::Cmd::Ref) ref = &c;
+    if (!ref) return f;
+    name = ref->file;
+  }
+  return nullptr;
+}
+
+std::vector<Seat> seatsIn(const ldraw::File& host) {
+  std::vector<Seat> out;
+  for (const std::string& line : host.help) {
+    std::istringstream in(line);
+    int type = 0, color = 0;
+    double v[12];
+    std::string part;
+    if (!(in >> type) || type != 1 || !(in >> color)) continue;
+    bool ok = true;
+    for (double& x : v) ok = ok && static_cast<bool>(in >> x);
+    if (!ok || !(in >> part)) continue;
+    Seat s;
+    s.at.t = {v[0], v[1], v[2]};
+    for (int i = 0; i < 9; i++) s.at.r.m[i] = v[3 + i];
+    s.part = ldraw::normalizeName(part);
+    out.push_back(s);
+  }
+  return out;
+}
+
+/// How `actual`'s own space sits in `documented`'s, when a piece of `actual` can stand in for
+/// the documented part: the same part, or both built on the same subpart ("s/...") whose
+/// placement in each then lines them up. None otherwise.
+std::optional<Xform> standsIn(const ldraw::Library& lib, const std::string& documented, const std::string& actual) {
+  const ldraw::File* d = resolved(lib, documented);
+  const ldraw::File* a = resolved(lib, actual);
+  if (!d || !a) return std::nullopt;
+  if (d == a) return Xform{};
+  for (const ldraw::Command& cd : d->cmds) {
+    if (cd.type != ldraw::Cmd::Ref || cd.file.rfind("s/", 0) != 0) continue;
+    for (const ldraw::Command& ca : a->cmds)
+      if (ca.type == ldraw::Cmd::Ref && ca.file == cd.file) return cd.xf * ca.xf.inverse();
+  }
+  return std::nullopt;
 }
 
 Box grown(const Box& b, double by) {
@@ -96,9 +161,81 @@ Inferred inferJoints(Graph& g, const Model& model, ConnectorDb& db, const collid
     added.push_back(a);
   };
 
-  // Tier 1: a connector a little off another's line, set exactly onto it, mates.
   std::vector<uint8_t> done(n, 0);
   std::vector<uint32_t> near;
+
+  // Tier 0: a seat the holding part's own file documents.
+  std::unordered_map<std::string, std::vector<Seat>> seatsOf;
+  auto seats = [&](const std::string& part) -> const std::vector<Seat>& {
+    auto it = seatsOf.find(part);
+    if (it == seatsOf.end()) {
+      const ldraw::File* f = resolved(model.library(), part);
+      it = seatsOf.emplace(part, f ? seatsIn(*f) : std::vector<Seat>{}).first;
+    }
+    return it->second;
+  };
+  for (const auto& [u, only] : loose) {
+    if (only != UINT32_MAX) continue;
+    const Box local = world.shape(u).bounds;
+    if (local.empty()) continue;
+    near.clear();
+    world.near(grown(world.box(u), kReach), nullptr, near);
+    for (uint32_t q : near) {
+      if (q == u || g.isSegment[q] || done[u]) continue;
+      for (const Seat& seat : seats(pieces[q].part)) {
+        const std::optional<Xform> align = standsIn(model.library(), seat.part, pieces[u].part);
+        if (!align) continue;
+        const Xform expected = pieces[q].world * seat.at * *align;
+        const Mat3 diff = inverse(expected.r) * pieces[u].world.r;
+        const double cosTurn = (diff.m[0] + diff.m[4] + diff.m[8] - 1) / 2;
+        const double off = length(expected.t - pieces[u].world.t);
+        if (off > kSeatOffset || cosTurn < kSeatCos) continue;
+        // Out along its own longest axis, away from the holder: a blade out of its scabbard.
+        const Vec3 size = local.max - local.min;
+        const int k = size.x >= size.y && size.x >= size.z ? 0 : size.y >= size.z ? 1 : 2;
+        const Vec3 e = k == 0 ? Vec3{1, 0, 0} : k == 1 ? Vec3{0, 1, 0} : Vec3{0, 0, 1};
+        const Xform& at = pieces[u].world;
+        const Vec3 centre = (local.min + local.max) * 0.5, half = size * 0.5;
+        const double along = k == 0 ? half.x : k == 1 ? half.y : half.z;
+        const double across = k == 0 ? std::hypot(half.y, half.z) : k == 1 ? std::hypot(half.x, half.z) : std::hypot(half.x, half.y);
+        // Out along its long axis toward its own origin. LDraw places a minifig accessory's
+        // origin where it is held (a sword's grip), its blade running away from it, and the
+        // seats document such accessories; how it fits in the holder cannot say, as a holder's
+        // slot is often drawn tighter than the blade and crosses it all the way along.
+        const double centreAlong = k == 0 ? centre.x : k == 1 ? centre.y : centre.z;
+        if (std::abs(centreAlong) < 0.25 * along) continue;  // its origin near its middle: no end to pull it by
+        const Vec3 axis = normalized(at.r * (centreAlong < 0 ? e : -e));
+        // Held until it is clear of the holder's box along that way.
+        auto spread = [&](const Box& b) {
+          double lo = std::numeric_limits<double>::infinity(), hi = -lo;
+          for (int c = 0; c < 8; c++) {
+            const double p = dot(axis, Vec3{c & 1 ? b.max.x : b.min.x, c & 2 ? b.max.y : b.min.y, c & 4 ? b.max.z : b.min.z});
+            lo = std::min(lo, p), hi = std::max(hi, p);
+          }
+          return std::pair{lo, hi};
+        };
+        const double travel = std::max(0.0, spread(world.box(q)).second - spread(world.box(u)).first);
+        // Its zone: the piece's own length, as wide as it is across.
+        MateZone zone{at.apply(centre - e * along), at.apply(centre + e * along), across + collide::kZonePad};
+        Release r;
+        r.kind = ReleaseKind::Along, r.axis = axis, r.travel = travel;
+        Joint joint;
+        joint.kind = JointKind::Fixed;
+        keep(u, q, Found::Documented, joint, true, travel, zone, r);
+        if (off > 0.1 || cosTurn < std::cos(0.25 * kPi / 180)) {
+          Correction c;
+          c.piece = u, c.onto = q, c.from = at, c.to = expected, c.offset = off;
+          c.angle = std::acos(std::clamp(cosTurn, -1.0, 1.0)) * 180 / kPi;
+          out.corrections.push_back(c);
+        }
+        done[u] = 1;
+        out.documented++;
+        break;
+      }
+    }
+  }
+
+  // Tier 1: a connector a little off another's line, set exactly onto it, mates.
   for (const auto& [u, only] : loose) {
     if (done[u]) continue;
     const bool settling = only != UINT32_MAX;

@@ -19,7 +19,9 @@ struct MateZone {
 
 /// How a joint was found: from the parts' connectors, or inferred for a piece they joined to
 /// nothing (see infer.h).
-enum class Found : uint8_t { Connectors, Relaxed, Contact };
+/// Where a joint comes from: the connector data; a connector pair once the piece is set exactly
+/// onto its line (inferJoints); a seat the holding part's own file documents (inferJoints).
+enum class Found : uint8_t { Connectors, Relaxed, Documented };
 const char* name(Found found);
 
 /// The joint between two pieces (indices into Model::pieces(), a < b).

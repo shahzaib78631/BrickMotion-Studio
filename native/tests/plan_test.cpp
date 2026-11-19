@@ -1002,3 +1002,44 @@ TEST_CASE("a tube drawn a little off its bar is listed, and set onto it only whe
   // And set in place, nothing is left to correct.
   CHECK(correctPlacements(model, db, parts, shapes, false).empty());
 }
+
+TEST_CASE("a katana in a seat its scabbard's file documents slides out by its grip", "[plan][correct][data]") {
+  // 19141 documents two katana seats (0 !HELP 1 ... 30173.dat). A 21459, built on the same
+  // blade, in the first of them: no connector holds it; the seat does, and it leaves along its
+  // own +y, toward its grip, which is the seat's +y in the scabbard: (-.01745, 0, .99985).
+  const char* dir = std::getenv("BM_LDRAW_DIR");
+  const char* shadowDir = std::getenv("BM_SHADOW_DIR");
+  if (!dir || !shadowDir) SKIP("BM_LDRAW_DIR / BM_SHADOW_DIR not set");
+  const ldraw::Library lib(dir);
+  const connect::ShadowLibrary shadow(shadowDir);
+  connect::ConnectorDb db(lib, shadow);
+  ldraw::PartCache parts(lib, ldraw::PartCache::defaultDirectory());
+  collide::ShapeCache shapes;
+  const fs::path file = fs::temp_directory_path() / ("bm_plan_katana_" + std::to_string(::getpid()) + ".ldr");
+  {
+    std::ofstream out(file);
+    out << "1 0 0 0 0 1 0 0 0 1 0 0 0 1 19141.dat\n";
+    out << "1 0 -.174 -9 35.1 0 -.01745 -.99985 -1 0 0 0 .99985 -.01745 21459.dat\n";
+  }
+  Model model = io::load(file, lib, &parts);
+  fs::remove(file);
+  connect::Graph graph = connect::buildGraph(model, db);
+  REQUIRE(graph.connections.empty());
+  connect::Inferred inferred;
+  const Plan p = planInferred(model, graph, db, parts, shapes, {}, &inferred);
+  REQUIRE(inferred.documented == 1);
+  REQUIRE(inferred.corrections.empty());  // exactly in its seat
+  REQUIRE(graph.connections.size() == 1);
+  CHECK(graph.connections[0].found == connect::Found::Documented);
+  // Stored as the way b (the katana) leaves a (the scabbard).
+  const connect::Release& r = graph.releases[graph.connections[0].firstZone];
+  CHECK(r.kind == connect::ReleaseKind::Along);
+  CHECK(dot(r.axis, Vec3{-0.01745, 0, 0.99985}) > 0.999);
+  // It goes in tip first along the seat, and flies.
+  const Move& m = p.moves.back();
+  REQUIRE(m.unit.pieces == std::vector<uint32_t>{1});
+  CHECK(m.flag == Flag::None);
+  CHECK(!m.path.empty());
+  CHECK(dot(m.insertion, Vec3{0.01745, 0, -0.99985}) > 0.999);
+  CHECK(certify(model, graph, parts, shapes, p).ok());
+}

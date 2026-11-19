@@ -45,7 +45,7 @@ int cmdJoints(const Args& args) {
       collide::ShapeCache shapes;
       const collide::World world(model, cache, shapes);
       const connect::Inferred inferred = connect::inferJoints(g, model, db, world);
-      std::printf("inferred      %u set in place\n", inferred.relaxed);
+      std::printf("inferred      %u in documented seats, %u set in place\n", inferred.documented, inferred.relaxed);
       for (const connect::Connection& c : g.connections)
         if (c.found != connect::Found::Connectors) {
           const connect::Release& r = g.releases[c.firstZone];

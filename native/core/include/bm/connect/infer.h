@@ -28,11 +28,18 @@ struct Correction {
 };
 
 struct Inferred {
+  uint32_t documented = 0;  ///< pieces joined in a seat the holding part's file documents
   uint32_t relaxed = 0;  ///< pieces joined by a connector pair once set exactly in place
   uint32_t dropped = 0;  ///< joints taken out again: the plan left their piece stuck (plan::planInferred)
   std::vector<Correction> corrections;  ///< one per piece joined here: where it belongs
 };
 
+/// First, a seat the holding part's own file documents: a `0 !HELP 1 <colour> <placement>
+/// <part>` line places the part that goes there (19141, a scabbard, places two katanas). A piece
+/// of that part, or of one built on the same subpart at the same place (the katana family
+/// shares its blade), within kSeatOffset and kSeatTurn of the seat is in it (Found::Documented):
+/// fixed, released along its own longest axis away from the holder, its zone the length of it,
+/// for the two of them only. Then:
 /// A connector of the piece within 12 degrees and 4 LDU of another piece's line, and up to 6 LDU
 /// along it, mates once the piece is set exactly onto that line (Found::Relaxed); the joint is that
 /// mate's, its zone that mate's grown by how far off the piece was. Re-groups the graph when

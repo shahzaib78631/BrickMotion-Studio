@@ -914,7 +914,7 @@ Plan planInferred(const Model& model, connect::Graph& graph, connect::ConnectorD
     got = connect::inferJoints(graph, model, connectors, world);
   }
   Plan out = plan(model, graph, parts, shapes, options);
-  if (got.relaxed > 0 && out.complete) {
+  if (got.relaxed + got.documented > 0 && out.complete) {
     std::vector<uint8_t> stuck(model.pieces().size(), 0);
     std::function<void(const Plan&)> mark = [&](const Plan& p) {
       for (const Move& m : p.moves)
