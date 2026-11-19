@@ -17,8 +17,14 @@ struct MateZone {
   double radius = 0;
 };
 
+/// How a joint was found: from the parts' connectors, or inferred for a piece they joined to
+/// nothing (see infer.h).
+enum class Found : uint8_t { Connectors, Relaxed, Contact };
+const char* name(Found found);
+
 /// The joint between two pieces (indices into Model::pieces(), a < b).
 struct Connection {
+  Found found = Found::Connectors;
   uint32_t a = 0, b = 0;
   Joint joint;
   uint16_t mates = 0;  ///< connector pairs it is made of
@@ -66,6 +72,11 @@ struct Graph {
 /// Pieces at an identical pose with the same part (duplicates) are not paired with each other.
 /// With `gears`, also finds the gear meshes.
 Graph buildGraph(const Model& model, ConnectorDb& connectors, const kin::GearDb* gears = nullptr);
+
+/// Sorts and de-duplicates `connections` and recomputes everything derived from them: groups,
+/// bodies, `attached` and the largest group. buildGraph ends with it; call it after adding
+/// connections. `isSegment` must be filled.
+void regroup(Graph& graph);
 
 /// For a piece that joined nothing: its closest connector pairs with other pieces and why
 /// each did not mate.

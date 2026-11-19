@@ -5,6 +5,7 @@
 #include <vector>
 #include "bm/collide/world.h"
 #include "bm/connect/graph.h"
+#include "bm/connect/infer.h"
 #include "bm/jobs.h"
 #include "bm/ldraw/part_cache.h"
 #include "bm/model.h"
@@ -85,6 +86,10 @@ struct Options {
   double budgetSeconds = 0;    ///< 0: none
   Vec3 down{0, 1, 0};          ///< LDraw's y points down
   const Constraints* authored = nullptr;
+  /// Set the pieces the file places a little off what holds them exactly in place before
+  /// planning (correctPlacements). Read by what loads the model and plans it (the engine, the
+  /// audit, bm plan), not by plan() itself, which plans the model it is given.
+  bool correctPlacements = false;
 };
 
 /// Read-only things every planner step needs, built once per model.
@@ -132,6 +137,32 @@ Unit growUnit(const Context& ctx, uint32_t piece, const collide::World::Present*
 
 /// Plans the whole model. Never throws for a model that loaded; what it cannot do is flagged.
 Plan plan(const Model& model, const connect::Graph& graph, ldraw::PartCache& parts, collide::ShapeCache& shapes, const Options& options = {});
+
+/// The pieces the file places a little off what holds them (a tube 1 LDU off its bar, a clip a
+/// few degrees off), each with where it belongs: set exactly onto that connector's line, it
+/// mates (connect::inferJoints). With `apply`, each is moved there in `model`, unless that would
+/// make it cross a piece it does not cross where the file has it (other than what holds it): a
+/// guess never makes the model worse. Corrected, a piece is joined by its connectors like any
+/// other, and nothing about its plan or its check is let off for it. Call before buildGraph.
+std::vector<connect::Correction> correctPlacements(Model& model, connect::ConnectorDb& connectors, ldraw::PartCache& parts, collide::ShapeCache& shapes, bool apply);
+
+/// Plans a model as loaded: with options.correctPlacements, its pieces set in place first
+/// (correctPlacements); then the joints the connectors do not give inferred (planInferred). A
+/// correction is a guess too, and is kept only where the plan leaves its piece and every piece
+/// joined to it built (flown, or placed with a way in): one that leaves any of them unbuilt is
+/// set back, with what follows from it, and the model planned again. `graph` is filled with the
+/// joints the plan used; `corrections` with every one found, applied or why not.
+Plan planModel(Model& model, connect::Graph& graph, connect::ConnectorDb& connectors, const kin::GearDb* gears, ldraw::PartCache& parts,
+               collide::ShapeCache& shapes, const Options& options = {}, connect::Inferred* inferred = nullptr,
+               std::vector<connect::Correction>* corrections = nullptr);
+
+/// Plans the model with the joints the connector data does not give added to `graph` first
+/// (connect::inferJoints). An inferred joint is a guess, and must never leave more unplayed than
+/// leaving its piece loose would: one whose piece the plan leaves stuck (blocked, or no way out
+/// at all, as when a piece it holds cannot leave) is taken out again and the model planned once
+/// more. `graph` is left as the plan used it; `inferred`, if given, says what was added and dropped.
+Plan planInferred(const Model& model, connect::Graph& graph, connect::ConnectorDb& connectors, ldraw::PartCache& parts, collide::ShapeCache& shapes,
+                  const Options& options = {}, connect::Inferred* inferred = nullptr);
 
 /// Whether a mate's zone goes along with a piece leaving along `direction`: a stud grazes its
 /// tube and a bar its clip all the way out, but what clips on across a pin or bar meets it only

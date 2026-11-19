@@ -1,4 +1,5 @@
 #include "bm/audit.h"
+#include "bm/connect/infer.h"
 #include "bm/kin/mobility.h"
 #include "bm/plan/certify.h"
 #include "bm/plan/plan.h"
@@ -14,7 +15,7 @@
 
 namespace bm::audit {
 
-Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Library& library, ldraw::PartCache& cache, connect::ConnectorDb* connectors, collide::ShapeCache* shapes, const kin::GearDb* gears, double planBudget, bool kinematics) {
+Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Library& library, ldraw::PartCache& cache, connect::ConnectorDb* connectors, collide::ShapeCache* shapes, const kin::GearDb* gears, double planBudget, bool kinematics, bool correct) {
   Row row;
   row.id = std::move(id);
   const auto started = std::chrono::steady_clock::now();
@@ -86,9 +87,21 @@ Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Libr
         if (planBudget > 0) {
           plan::Options options;
           options.budgetSeconds = planBudget;
-          const plan::Plan built = plan::plan(model, g, cache, *shapes, options);
+          options.correctPlacements = correct;
+          // The build is planned as bm plan plans it: pieces set in place first when asked, and
+          // joints inferred for pieces the connectors join to nothing. The graph's own numbers
+          // above are the connectors' alone, on the model as the file has it.
+          Model pm = model;
+          connect::Graph pg;
+          connect::Inferred inferred;
+          std::vector<connect::Correction> corrections;
+          const plan::Plan built = plan::planModel(pm, pg, *connectors, gears, cache, *shapes, options, &inferred, &corrections);
+          row.corrections = static_cast<int>(corrections.size());
+          for (const connect::Correction& c : corrections) row.correctionsApplied += c.applied ? 1 : 0;
+          row.inferredRelaxed = static_cast<int>(inferred.relaxed);
+          row.inferredDropped = static_cast<int>(inferred.dropped);
           const auto certifyStart = std::chrono::steady_clock::now();
-          const plan::Certificate cert = plan::certify(model, g, cache, *shapes, built);
+          const plan::Certificate cert = plan::certify(pm, pg, cache, *shapes, built);
           row.planned = true;
           row.planComplete = built.complete;
           row.planMs = built.planMs;
@@ -102,8 +115,8 @@ Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Libr
           row.offAxis = cert.offAxis;
           row.planOk = cert.ok();
           {
-            const plan::Timeline played = plan::buildTimeline(model, cache, built);
-            const plan::PlayCheck play = plan::certifyPlay(model, g, cache, *shapes, built, played);
+            const plan::Timeline played = plan::buildTimeline(pm, cache, built);
+            const plan::PlayCheck play = plan::certifyPlay(pm, pg, cache, *shapes, built, played);
             row.playedCrossings = play.crossings, row.playedStrict = play.strictCrossings, row.playedUnder = play.underFloor;
             for (const plan::PlayCheck::Strict& c : play.strict)
             {
@@ -202,6 +215,8 @@ nlohmann::json toJson(const Row& row) {
     j["certifiedMoves"] = row.certifiedMoves;
     j["planFlagged"] = row.planFlagged;
     j["unjoinedMoves"] = row.unjoinedMoves;
+    j["inferred"] = {row.inferredRelaxed, row.inferredDropped};
+    j["corrections"] = {row.corrections, row.correctionsApplied};  // pieces a little off what holds them; of them, set in place  // pieces joined once set in place; of them, taken out again
     j["buildFloating"] = row.buildFloating;
     j["buildCrossings"] = row.buildCrossings;
     j["offAxis"] = row.offAxis;

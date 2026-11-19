@@ -65,6 +65,8 @@ struct Row {
   int certifiedMoves = 0;
   int planFlagged = 0;        ///< moves the planner could not show (unjoined ones included)
   int unjoinedMoves = 0;      ///< of those, pieces joined to nothing in the file
+  int corrections = 0, correctionsApplied = 0;  ///< pieces placed a little off what holds them; of them, set in place
+  int inferredRelaxed = 0, inferredDropped = 0;  ///< pieces given a joint by connect::inferJoints; of those, taken out again (plan::planInferred)
   int buildFloating = 0;      ///< unflagged moves that land joined to nothing built (must be 0)
   int buildCrossings = 0;     ///< unflagged moves whose flight passes through a placed piece (must be 0)
   int offAxis = 0;            ///< unflagged moves whose last leg is not along their connectors (must be 0)
@@ -80,9 +82,10 @@ struct Row {
 
 /// Loads one model and every distinct part it uses. Never throws: a failure is a row.
 /// `planBudget` (seconds) plans and certifies the build when it is positive and shapes are given;
-/// `kinematics` false leaves the mechanism columns out.
+/// `kinematics` false leaves the mechanism columns out. `correct` sets pieces placed a little
+/// off what holds them in place before planning (plan::Options::correctPlacements).
 Row loadRow(const std::filesystem::path& file, std::string id, const ldraw::Library& library, ldraw::PartCache& cache, connect::ConnectorDb* connectors = nullptr, collide::ShapeCache* shapes = nullptr, const kin::GearDb* gears = nullptr,
-            double planBudget = 0, bool kinematics = true);
+            double planBudget = 0, bool kinematics = true, bool correct = false);
 
 nlohmann::json toJson(const Row& row);
 

@@ -45,6 +45,10 @@ class Model {
   explicit Model(Data data);
 
   const std::vector<Piece>& pieces() const { return data_.pieces; }
+  /// Moves one piece (plan::correctPlacements: a piece set exactly onto what holds it).
+  void setPlacement(uint32_t piece, const Xform& world) {
+    if (piece < data_.pieces.size()) data_.pieces[piece].world = world;
+  }
   /// The submodels used, in the order they are first used.
   const std::vector<std::string>& submodels() const { return data_.submodels; }
   /// Number of build steps: one more than the highest piece step; 0 for an empty model.

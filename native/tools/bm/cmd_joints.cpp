@@ -6,6 +6,8 @@
 #include <sstream>
 #include <map>
 #include "bm/connect/graph.h"
+#include "bm/connect/infer.h"
+#include "bm/collide/world.h"
 #include "bm/io.h"
 #include "bm/connect/studio.h"
 #include "commands.h"
@@ -38,7 +40,18 @@ int cmdJoints(const Args& args) {
     loadEngineData(fs::path(ldraw).parent_path().parent_path(), db, gears);
     ldraw::PartCache cache(library, ldraw::PartCache::defaultDirectory());
     const Model model = io::load(fs::path(std::string(args[0])), library, &cache);
-    const connect::Graph g = connect::buildGraph(model, db, &gears);
+    connect::Graph g = connect::buildGraph(model, db, &gears);
+    if (flag(args, "--infer")) {
+      collide::ShapeCache shapes;
+      const collide::World world(model, cache, shapes);
+      const connect::Inferred inferred = connect::inferJoints(g, model, db, world);
+      std::printf("inferred      %u set in place\n", inferred.relaxed);
+      for (const connect::Connection& c : g.connections)
+        if (c.found != connect::Found::Connectors) {
+          const connect::Release& r = g.releases[c.firstZone];
+          std::printf("  %-8s %-14s on %-14s release %s %.3f %.3f %.3f travel %.1f\n", connect::name(c.found), model.pieces()[c.a].part.c_str(), model.pieces()[c.b].part.c_str(), r.kind == connect::ReleaseKind::Either ? "either" : r.kind == connect::ReleaseKind::Along ? "along" : r.kind == connect::ReleaseKind::Across ? "across" : "any", r.axis.x, r.axis.y, r.axis.z, r.travel);
+        }
+    }
     int kinds[connect::kJointKinds] = {};
     for (const connect::Connection& c : g.connections) kinds[static_cast<int>(c.joint.kind)]++;
     const double n = std::max<size_t>(1, model.pieces().size());

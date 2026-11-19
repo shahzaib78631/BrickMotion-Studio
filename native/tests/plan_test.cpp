@@ -960,3 +960,45 @@ TEST_CASE("pieces that cross where the model has them are let off only there", "
   REQUIRE(world.clearTravel({0}, {0, -1, 0}, 30, &present) < 4);  // up, out through the base's dome
   REQUIRE(world.clearTravel({0}, {1, 0, 0}, 30, &present) >= 30);  // out of the base's open underside
 }
+
+TEST_CASE("a tube drawn a little off its bar is listed, and set onto it only when asked", "[plan][correct][data]") {
+  // Deadpool's gun: a bar tube with handle (23443) on a round plate's bar (32828), drawn 1.4 LDU
+  // off the bar's line and 4 along it. Its connectors join it to nothing as drawn.
+  const char* dir = std::getenv("BM_LDRAW_DIR");
+  const char* shadowDir = std::getenv("BM_SHADOW_DIR");
+  if (!dir || !shadowDir) SKIP("BM_LDRAW_DIR / BM_SHADOW_DIR not set");
+  const ldraw::Library lib(dir);
+  const connect::ShadowLibrary shadow(shadowDir);
+  connect::ConnectorDb db(lib, shadow);
+  ldraw::PartCache parts(lib, ldraw::PartCache::defaultDirectory());
+  collide::ShapeCache shapes;
+  const fs::path file = fs::temp_directory_path() / ("bm_plan_tube_" + std::to_string(::getpid()) + ".ldr");
+  {
+    std::ofstream out(file);
+    out << "1 0 -34.17373 -9.12841 -3 0 -0.96593 0.25882 0 0.25882 0.96593 -1 0 0 23443.dat\n";
+    out << "1 0 10.00004 -22.00001 -6 -0.96593 0 0.25882 0.25882 0 0.96593 0 1 0 32828.dat\n";
+  }
+  Model model = io::load(file, lib, &parts);
+  fs::remove(file);
+  REQUIRE(connect::buildGraph(model, db).connections.empty());
+
+  // Listed without being moved.
+  const Xform drawn = model.pieces()[0].world;
+  const std::vector<connect::Correction> listed = correctPlacements(model, db, parts, shapes, false);
+  REQUIRE(listed.size() == 1);
+  CHECK((listed[0].piece == 0 && listed[0].onto == 1 && !listed[0].applied));
+  CHECK(listed[0].offset > 1.0);
+  CHECK(listed[0].offset < 2.0);
+  REQUIRE(model.pieces()[0].world.t == drawn.t);
+
+  // Asked, it is set there, and its own connectors join it: nothing about it is inferred.
+  const std::vector<connect::Correction> applied = correctPlacements(model, db, parts, shapes, true);
+  REQUIRE(applied.size() == 1);
+  REQUIRE(applied[0].applied);
+  CHECK(length(model.pieces()[0].world.t - listed[0].to.t) < 1e-9);
+  const connect::Graph graph = connect::buildGraph(model, db);
+  REQUIRE(graph.connections.size() == 1);
+  CHECK(graph.connections[0].found == connect::Found::Connectors);
+  // And set in place, nothing is left to correct.
+  CHECK(correctPlacements(model, db, parts, shapes, false).empty());
+}

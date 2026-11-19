@@ -7,6 +7,7 @@
 #include <limits>
 #include <functional>
 #include <map>
+#include "bm/connect/infer.h"
 #include "bm/connect/graph.h"
 #include "bm/connect/studio.h"
 #include "bm/io.h"
@@ -28,7 +29,7 @@ int cmdPlan(const Args& args) {
   const std::string truthPath = option(args, "--truth", "", bad);
   const std::string timelinePath = option(args, "--timeline", "", bad);
   if (bad || args.empty() || args[0].rfind("--", 0) == 0) {
-    std::fprintf(stderr, "usage: bm plan <file> [--truth <insertion-truth.json>] [--explain <part>] [--out <plan.json>] [--json] [--budget <seconds>] [--threads N] [--no-certify] [--no-studio]\n");
+    std::fprintf(stderr, "usage: bm plan <file> [--truth <insertion-truth.json>] [--explain <part>] [--out <plan.json>] [--json] [--budget <seconds>] [--threads N] [--no-certify] [--no-studio] [--correct]\n");
     return kUsage;
   }
   const std::string ldraw = defaultLDrawDir();
@@ -48,13 +49,18 @@ int cmdPlan(const Args& args) {
     loadEngineData(repo, db, gears);
     ldraw::PartCache cache(library, ldraw::PartCache::defaultDirectory());
     collide::ShapeCache shapes;
-    const Model model = io::load(fs::path(std::string(args[0])), library, &cache);
-    const connect::Graph graph = connect::buildGraph(model, db, &gears);
+    Model model = io::load(fs::path(std::string(args[0])), library, &cache);
+    // Pieces placed a little off what holds them: always listed; with --correct, set in place first.
+    const bool correct = flag(args, "--correct");
+    std::vector<connect::Correction> corrections;
+    connect::Graph graph;
+    connect::Inferred inferred;
     JobPool pool(static_cast<unsigned>(std::max(0, std::atoi(threads.c_str()))));
     plan::Options options;
     options.pool = &pool;
     options.budgetSeconds = std::atof(budget.c_str());
-    const plan::Plan plan = plan::plan(model, graph, cache, shapes, options);
+    options.correctPlacements = correct;
+    const plan::Plan plan = plan::planModel(model, graph, db, &gears, cache, shapes, options, &inferred, &corrections);
 
     std::map<std::string, int> flags;
     int subMoves = 0, units = 0;
@@ -70,6 +76,16 @@ int cmdPlan(const Args& args) {
     std::printf("pieces        %zu\ngroups        %u\nmoves         %zu (and %d inside %d units built first)\nplan          %.0f ms, %zu extractions%s\n", model.pieces().size(), graph.groups, plan.moves.size(), subMoves, units, plan.planMs, plan.extractions,
                 plan.complete ? "" : "; NOT COMPLETE");
     for (const auto& [name, n] : flags) std::printf("  %-18s%d\n", name.c_str(), n);
+    // Printed whether or not the plan is certified: what the author should be told of the file.
+    if (!corrections.empty()) {
+      const size_t applied = static_cast<size_t>(std::count_if(corrections.begin(), corrections.end(), [](const connect::Correction& c) { return c.applied; }));
+      std::printf("off its seat  %zu pieces the file places a little off what holds them; %s\n", corrections.size(),
+                  correct ? (std::to_string(applied) + " set in place before planning").c_str() : "--correct sets them in place before planning");
+      for (const connect::Correction& c : corrections)
+        std::printf("  %-12s %-20s %.1f LDU off the line, %+.0f along, %.1f deg, on %s %s%s%s\n", model.pieces()[c.piece].part.c_str(), model.pieces()[c.piece].id.c_str(), c.offset, c.along, c.angle,
+                    model.pieces()[c.onto].part.c_str(), model.pieces()[c.onto].id.c_str(), c.note.empty() ? "" : ": ", c.note.c_str());
+    }
+    if (inferred.relaxed) std::printf("inferred      %u joints set in place (pieces the connectors join to nothing), %u taken out again: they left their piece stuck\n", inferred.relaxed, inferred.dropped);
     plan::Certificate certificate;
     const bool certifyIt = !flag(args, "--no-certify");
     if (certifyIt) {
@@ -183,7 +199,8 @@ int cmdPlan(const Args& args) {
       }
     }
     if (flag(args, "--json") || !outPath.empty()) {
-      const nlohmann::json j = plan::toJson(plan, certifyIt ? &certificate : nullptr, model);
+      nlohmann::json j = plan::toJson(plan, certifyIt ? &certificate : nullptr, model);
+      j["corrections"] = plan::toJson(corrections, model);
       if (!outPath.empty()) {
         std::ofstream out(outPath);
         out << j.dump(1) << "\n";

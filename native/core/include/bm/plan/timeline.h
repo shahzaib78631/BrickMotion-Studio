@@ -136,5 +136,8 @@ std::vector<Vec3> playedPath(const Flight& flight, double spacing);
 /// certificate is given, whether it is certified.
 nlohmann::json toJson(const Plan& plan, const Certificate* certificate, const Model& model);
 nlohmann::json toJson(const Timeline& timeline);
+/// The corrections as JSON: per piece its id, part, what holds it, the offset and turn, the
+/// placement in the file and where it belongs (row-major rotation, then translation), applied or why not.
+nlohmann::json toJson(const std::vector<connect::Correction>& corrections, const Model& model);
 
 }  // namespace bm::plan

@@ -237,8 +237,6 @@ Graph buildGraph(const Model& model, ConnectorDb& db, const kin::GearDb* gears) 
     }
   }
 
-  UnionFind groups(n), bodies(n);
-  std::vector<uint8_t> attached(n, 0);
   g.connections.reserve(pairs.size());
   for (auto& [key, pair] : pairs) {
     Connection c;
@@ -272,9 +270,6 @@ Graph buildGraph(const Model& model, ConnectorDb& db, const kin::GearDb* gears) 
     c.zoneCount = static_cast<uint32_t>(pair.zones.size());
     g.zones.insert(g.zones.end(), pair.zones.begin(), pair.zones.end());
     g.releases.insert(g.releases.end(), pair.releases.begin(), pair.releases.end());
-    groups.join(c.a, c.b);
-    if (c.joint.kind == JointKind::Fixed) bodies.join(c.a, c.b);
-    attached[c.a] = attached[c.b] = 1;
     g.connections.push_back(c);
   }
   // Flexible elements. A bent hose or cable is stored as a run of short segment pieces, one
@@ -288,8 +283,6 @@ Graph buildGraph(const Model& model, ConnectorDb& db, const kin::GearDb* gears) 
     c.joint.kind = JointKind::Flexible;
     c.joint.point = pieces[b].world.t;
     c.joint.axis = {0, -1, 0};
-    groups.join(a, b);
-    attached[a] = attached[b] = 1;
     g.connections.push_back(c);
   };
   auto near = [&](uint32_t a, uint32_t b, double reach) { return length(pieces[a].world.t - pieces[b].world.t) <= reach; };
@@ -326,27 +319,7 @@ Graph buildGraph(const Model& model, ConnectorDb& db, const kin::GearDb* gears) 
     i = last + 1;
   }
 
-  // A real joint sorts before a flexible attachment of the same pair, so it is the one kept.
-  std::sort(g.connections.begin(), g.connections.end(), [](const Connection& x, const Connection& y) {
-    if (x.a != y.a) return x.a < y.a;
-    if (x.b != y.b) return x.b < y.b;
-    return (x.joint.kind == JointKind::Flexible) < (y.joint.kind == JointKind::Flexible);
-  });
-
-  // An element's end can reach the same part by both routes, or reach a part it is already
-  // pinned to (a shock absorber's rod is such a "~" part); keep one connection per pair.
-  g.connections.erase(std::unique(g.connections.begin(), g.connections.end(), [](const Connection& x, const Connection& y) { return x.a == y.a && x.b == y.b; }), g.connections.end());
-
-  g.groups = groups.label(g.group);
-  g.bodies = bodies.label(g.body);
-  std::vector<uint32_t> sizes(g.groups, 0);
-  for (uint32_t id : g.group) sizes[id]++;
-  for (uint32_t s : sizes) g.largestGroup = std::max(g.largestGroup, s);
-  std::vector<uint32_t> partSizes(g.groups, 0);
-  for (uint32_t i = 0; i < n; i++)
-    if (!g.isSegment[i]) partSizes[g.group[i]]++;
-  for (uint32_t s : partSizes) g.largestGroupParts = std::max(g.largestGroupParts, s);
-  g.attached = static_cast<uint32_t>(std::count(attached.begin(), attached.end(), 1));
+  regroup(g);
   if (gears) {
     g.meshes = kin::findMeshes(model, *gears);
     g.meshZones.reserve(g.meshes.size());
@@ -377,6 +350,47 @@ Graph buildGraph(const Model& model, ConnectorDb& db, const kin::GearDb* gears) 
     }
   }
   return g;
+}
+
+const char* name(Found found) {
+  switch (found) {
+    case Found::Connectors: return "connectors";
+    case Found::Relaxed: return "relaxed";
+    case Found::Contact: return "contact";
+  }
+  return "?";
+}
+
+void regroup(Graph& g) {
+  const uint32_t n = static_cast<uint32_t>(g.isSegment.size());
+  // A real joint sorts before a flexible attachment of the same pair, so it is the one kept.
+  std::sort(g.connections.begin(), g.connections.end(), [](const Connection& x, const Connection& y) {
+    if (x.a != y.a) return x.a < y.a;
+    if (x.b != y.b) return x.b < y.b;
+    return (x.joint.kind == JointKind::Flexible) < (y.joint.kind == JointKind::Flexible);
+  });
+  // An element's end can reach the same part by both routes, or reach a part it is already
+  // pinned to (a shock absorber's rod is such a "~" part); keep one connection per pair.
+  g.connections.erase(std::unique(g.connections.begin(), g.connections.end(), [](const Connection& x, const Connection& y) { return x.a == y.a && x.b == y.b; }), g.connections.end());
+  UnionFind groups(n), bodies(n);
+  std::vector<uint8_t> attached(n, 0);
+  for (const Connection& c : g.connections) {
+    groups.join(c.a, c.b);
+    if (c.joint.kind == JointKind::Fixed) bodies.join(c.a, c.b);
+    attached[c.a] = attached[c.b] = 1;
+  }
+  g.groups = groups.label(g.group);
+  g.bodies = bodies.label(g.body);
+  std::vector<uint32_t> sizes(g.groups, 0);
+  for (uint32_t id : g.group) sizes[id]++;
+  g.largestGroup = 0;
+  for (uint32_t s : sizes) g.largestGroup = std::max(g.largestGroup, s);
+  std::vector<uint32_t> partSizes(g.groups, 0);
+  for (uint32_t i = 0; i < n; i++)
+    if (!g.isSegment[i]) partSizes[g.group[i]]++;
+  g.largestGroupParts = 0;
+  for (uint32_t s : partSizes) g.largestGroupParts = std::max(g.largestGroupParts, s);
+  g.attached = static_cast<uint32_t>(std::count(attached.begin(), attached.end(), 1));
 }
 
 std::vector<NearMiss> nearMisses(const Model& model, ConnectorDb& db, uint32_t piece, double within, size_t limit) {

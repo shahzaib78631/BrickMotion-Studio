@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include "bm/collide/world.h"
 #include "bm/connect/graph.h"
+#include "bm/connect/infer.h"
 #include "bm/connect/studio.h"
 #include "commands.h"
 
@@ -33,7 +34,7 @@ Planned planModel(const Model& model, const ldraw::Library& library, ldraw::Part
   collide::ShapeCache shapes;
   Planned out;
   out.graph = connect::buildGraph(model, db, &gears);
-  out.plan = plan::plan(model, out.graph, full, shapes, options);
+  out.plan = plan::planInferred(model, out.graph, db, full, shapes, options);
   out.timeline = plan::buildTimeline(model, full, out.plan, style);
   return out;
 }

@@ -4,6 +4,7 @@
 #include <limits>
 #include <chrono>
 #include <cmath>
+#include <functional>
 #include <map>
 #include <numeric>
 #include <optional>
@@ -902,6 +903,36 @@ Plan plan(const Model& model, const connect::Graph& graph, ldraw::PartCache& par
   out.complete = !seq.stopped;
   out.extractions = seq.extractions;
   out.planMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
+  return out;
+}
+
+Plan planInferred(const Model& model, connect::Graph& graph, connect::ConnectorDb& connectors, ldraw::PartCache& parts, collide::ShapeCache& shapes,
+                  const Options& options, connect::Inferred* inferred) {
+  connect::Inferred got;
+  {
+    const World world(model, parts, shapes);
+    got = connect::inferJoints(graph, model, connectors, world);
+  }
+  Plan out = plan(model, graph, parts, shapes, options);
+  if (got.relaxed > 0 && out.complete) {
+    std::vector<uint8_t> stuck(model.pieces().size(), 0);
+    std::function<void(const Plan&)> mark = [&](const Plan& p) {
+      for (const Move& m : p.moves)
+        if (m.flag == Flag::Blocked || m.flag == Flag::NoDirection)
+          for (uint32_t q : m.unit.pieces)
+            if (q < stuck.size()) stuck[q] = 1;
+      for (const Plan& s : p.subs) mark(s);
+    };
+    mark(out);
+    const size_t before = graph.connections.size();
+    std::erase_if(graph.connections, [&](const Connection& c) { return c.found != connect::Found::Connectors && (stuck[c.a] || stuck[c.b]); });
+    got.dropped = static_cast<uint32_t>(before - graph.connections.size());
+    if (got.dropped > 0) {
+      connect::regroup(graph);
+      out = plan(model, graph, parts, shapes, options);
+    }
+  }
+  if (inferred) *inferred = got;
   return out;
 }
 
