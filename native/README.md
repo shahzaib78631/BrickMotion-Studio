@@ -680,3 +680,35 @@ See `M1_OPTIMIZATION_NOTES.md` for the user-supplied five-model complexity summa
 inline geometry caching, optimized world probe preparation, sequencer blocker-dependency
 index, isolated verification, and an M1 profiling script in `tools/perf/m1_profile.sh`.
 These are measured isolated optimizations, not yet full macOS planning speed claims.
+
+## Camera director (2026-11-19): phase 1, the engine
+
+`bmfilm` (`film/`) films a build: what happens in it (`beatsOf`), a director's shot list
+(`direct`, the Reference style: wide shots that turn to the side being built and crane down as
+it grows, units built on their spot in medium, a front arc reveal to finish), and a camera body
+that films any shot list for any frame shape (`shoot`: lens fit, composition, eye clear of the
+model, smoothed between cuts). `bm film <file> [--aspect W:H] [--out shots.json]` prints the shot
+list and its measures; bmshot and bmexport film `--frame N` with it, bmshot `--strip N` makes a
+contact sheet, and bmview plays it. Saved web camera tracks are phase 2.
+
+Measured with `film/tests/corpus_film.sh` (`bm film --correct`, 16:9 and 9:16):
+
+| | owner's 19 projects (38 runs) | corpus smoke tier (142 runs) |
+|---|---|---|
+| landings in frame (seat in the safe frame, hover to rest) | 4482 / 4486 (99.9%) | 62674 / 62756 (99.9%) |
+| seen as they land (not behind what is built) | 4143 / 4486 (92.4%) | 58283 / 62756 (92.9%) |
+| eye inside the model or under the floor | 0 frames | 0 frames |
+| editing-rule misses | 0 | 0 |
+| camera time (director + body), p50 / max | 9 ms / 25 ms | 13 ms / 4.3 s |
+
+- The 4 owner landings out of frame are all 9:16, in the 1 s blend into a medium unit shot
+  (BlackAdam 21.1 s, Batgirl 1.6 s, Mandalorian 16.3 s, Elsa 28.1 s).
+- Seats not seen: each scene is filmed from one angle, the one that sees most of its seats; the
+  rest land behind what is built from there. Showing them needs a second angle (inserts), which
+  adds cuts: left to the owner's review.
+- Speed: on OMR, camera time is 4.7% of plan time at the p50 model (10002-1: 28 ms against
+  1146 ms), 25% at worst; the largest owner project takes 23 ms. The slowest model is a
+  3177-landing MOC (4.3 s), where the angle search looks at every seat from 16 sides.
+- Deterministic: 1 and 8 threads give identical shot lists and measures.
+- Smoothness, first runs (the gate from here on): largest angular jerk 207 rad/s³ (owner), 298
+  (smoke); the largest target steps are blends between scenes.
