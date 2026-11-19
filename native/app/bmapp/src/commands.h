@@ -84,6 +84,15 @@ Changed setStepFieldsCommand(Session::Impl& s, const std::string& def, size_t at
 Changed moveToStepCommand(Session::Impl& s, const std::string& def, const std::vector<uint32_t>& pieces, size_t step);
 Changed reorderInStepCommand(Session::Impl& s, const std::string& def, size_t step, size_t from, size_t to);
 
+// Submodels, inside def `def` (the model being edited).
+std::string freeName(const Session::Impl& s, const std::string& preferred);
+Changed newSubmodelCommand(Session::Impl& s, const std::string& name);
+Changed makeSubmodelCommand(Session::Impl& s, const std::string& def, const std::vector<uint32_t>& pieces, const std::string& name);
+Changed extractCommand(Session::Impl& s, const std::string& def, uint32_t piece);
+Changed moveToModelCommand(Session::Impl& s, const std::string& def, const std::vector<uint32_t>& pieces, const std::string& target);
+Changed renameSubmodelCommand(Session::Impl& s, const std::string& from, const std::string& to);
+Changed deleteSubmodelCommand(Session::Impl& s, const std::string& name);
+
 /// Nothing changed.
 Changed unchanged(const Session::Impl& s);
 /// Refused, with the reason.

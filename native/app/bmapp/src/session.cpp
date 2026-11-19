@@ -251,6 +251,17 @@ Changed Session::setStepFields(size_t at, const StepFields& fields, bool continu
 }
 Changed Session::moveToStep(const std::vector<uint32_t>& pieces, size_t step) { BM_EDIT(moveToStepCommand(*impl_, "", pieces, step)); }
 Changed Session::reorderInStep(size_t step, size_t from, size_t to) { BM_EDIT(reorderInStepCommand(*impl_, "", step, from, to)); }
+std::string Session::freeSubmodelName(const std::string& preferred) const { return freeName(*impl_, preferred); }
+Changed Session::newSubmodel(const std::string& name) { BM_EDIT(newSubmodelCommand(*impl_, name)); }
+Changed Session::makeSubmodel(const std::vector<uint32_t>& pieces, const std::string& name) {
+  BM_EDIT_SELECTING(makeSubmodelCommand(*impl_, "", pieces, name), true);
+}
+Changed Session::extract(uint32_t piece) { BM_EDIT_SELECTING(extractCommand(*impl_, "", piece), true); }
+Changed Session::moveToModel(const std::vector<uint32_t>& pieces, const std::string& submodel) {
+  BM_EDIT_SELECTING(moveToModelCommand(*impl_, "", pieces, submodel), true);
+}
+Changed Session::renameSubmodel(const std::string& from, const std::string& to) { BM_EDIT(renameSubmodelCommand(*impl_, from, to)); }
+Changed Session::deleteSubmodel(const std::string& name) { BM_EDIT(deleteSubmodelCommand(*impl_, name)); }
 Changed Session::undo() { BM_EDIT(undoCommand(*impl_)); }
 Changed Session::redo() { BM_EDIT(redoCommand(*impl_)); }
 #undef BM_EDIT

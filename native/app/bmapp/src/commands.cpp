@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include "session_impl.h"
+#include "structure.h"
 
 namespace bmapp {
 
@@ -852,6 +853,289 @@ Changed reorderInStepCommand(Session::Impl& s, const std::string& def, size_t st
   list.erase(list.begin() + static_cast<long>(from));
   list.insert(list.begin() + static_cast<long>(to), std::move(moving));
   return swapCommand(s, Edit::ReorderInStep, "Reorder Step", def, std::move(after));
+}
+
+
+// ---- submodels -------------------------------------------------------------------------------
+
+namespace {
+
+/// Whole-def edits gathered for one command: working copies, then added and removed defs.
+struct Draft {
+  Session::Impl& s;
+  std::vector<std::string> order;
+  std::map<std::string, Def> copies;
+  std::vector<DefChange> later;  ///< additions and removals, after the content changes
+
+  Def& edit(const std::string& name) {
+    if (!copies.count(name)) {
+      order.push_back(name);
+      copies.emplace(name, *s.source.def(name));
+    }
+    return copies.at(name);
+  }
+  void add(const std::string& name, Def def, size_t position) { later.push_back(DefChange{name, position, std::nullopt, std::move(def)}); }
+  void remove(const std::string& name) { later.push_back(DefChange{name, positionOf(s.source, name), *s.source.def(name), std::nullopt}); }
+  Changed commit(Edit kind, std::string name) {
+    Command c;
+    c.kind = kind;
+    c.name = std::move(name);
+    for (const std::string& n : order) c.wholeDefs.push_back(DefChange{n, positionOf(s.source, n), *s.source.def(n), copies.at(n)});
+    for (DefChange& d : later) c.wholeDefs.push_back(std::move(d));
+    return push(s, std::move(c));
+  }
+};
+
+/// Every def that holds `name`, at any depth, and `name` itself.
+std::set<std::string> holders(const bm::doc::Source& src, const std::string& name) {
+  std::set<std::string> out{name};
+  for (bool grew = true; grew;) {
+    grew = false;
+    auto look = [&](const std::string& defName, const Def& def) {
+      if (out.count(defName)) return;
+      for (const auto& step : def.steps)
+        for (const Item& i : step.items)
+          if (i.submodel && out.count(i.name)) {
+            out.insert(defName);
+            grew = true;
+            return;
+          }
+    };
+    look("", src.root);
+    for (const auto& [n, d] : src.submodels) look(n, d);
+  }
+  return out;
+}
+
+/// Does def `outer` hold `inner` (or is it `inner`)?
+bool holds(const bm::doc::Source& src, const std::string& outer, const std::string& inner) { return holders(src, inner).count(outer) > 0; }
+
+/// Grid-placed uses of these defs, or of defs holding them, made exact where they are: the grid
+/// rule places a use by its submodel's box, which the edit is about to change.
+void pin(Draft& d, const std::set<std::string>& defs) {
+  std::set<std::string> affected;
+  for (const std::string& name : defs)
+    if (!name.empty())
+      for (const std::string& h : holders(d.s.source, name)) affected.insert(h);
+  affected.erase("");
+  auto look = [&](const std::string& defName, const Def& def) {
+    for (size_t si = 0; si < def.steps.size(); si++)
+      for (size_t ii = 0; ii < def.steps[si].items.size(); ii++) {
+        const Item& i = def.steps[si].items[ii];
+        if (!i.submodel || !i.at.grid || !affected.count(i.name) || !d.s.local.count(i.id)) continue;
+        Item& mine = d.edit(defName).steps[si].items[ii];
+        mine.at.grid = false;
+        mine.at.exact = d.s.local.at(i.id);
+      }
+  };
+  look("", d.s.source.root);
+  for (const auto& [n, def] : d.s.source.submodels) look(n, def);
+}
+
+std::string nameProblem(const Session::Impl& s, const std::string& name) {
+  if (name.empty()) return "A submodel needs a name.";
+  if (name.size() >= 4 && name.compare(name.size() - 4, 4, ".dat") == 0) return "A submodel's name can't end in .dat.";
+  if (s.source.def(name)) return "There is already a submodel named " + name + ".";
+  return "";
+}
+
+/// A plan id for a new item in `def`: `stem`, else stem-2, -3, ...
+std::string freshPlanId(const Def& def, const std::string& stem) {
+  const std::set<std::string> taken = planIds(def);
+  if (!taken.count(stem)) return stem;
+  for (int n = 2;; n++)
+    if (std::string id = stem + "-" + std::to_string(n); !taken.count(id)) return id;
+}
+
+size_t usesOf(const bm::doc::Source& src, const std::string& name) {
+  size_t n = 0;
+  auto count = [&](const Def& def) {
+    for (const auto& step : def.steps)
+      for (const Item& i : step.items) n += i.submodel && i.name == name;
+  };
+  count(src.root);
+  for (const auto& [k, d] : src.submodels) count(d);
+  return n;
+}
+
+/// Where def `target`'s frame is, in `def`'s, through its first use there; none when unused.
+std::optional<Xform> frameOf(const Session::Impl& s, const std::string& def, const std::string& target, int depth = 0) {
+  const Def* d = s.source.def(def);
+  if (!d || depth > 64) return std::nullopt;
+  for (const auto& step : d->steps)
+    for (const Item& i : step.items) {
+      if (!i.submodel || !s.local.count(i.id)) continue;
+      const Xform here = s.local.at(i.id);
+      if (i.name == target) return here;
+      if (const auto inner = frameOf(s, i.name, target, depth + 1)) return here * *inner;
+    }
+  return std::nullopt;
+}
+
+constexpr const char* kPartial = "Pieces inside a submodel move with it. Open the submodel to change its steps.";
+
+}  // namespace
+
+std::string freeName(const Session::Impl& s, const std::string& preferred) {
+  const std::string stem = preferred.empty() ? "Submodel" : preferred;
+  if (!s.source.def(stem)) return stem;
+  for (int n = 2;; n++)
+    if (std::string name = stem + " " + std::to_string(n); !s.source.def(name)) return name;
+}
+
+Changed newSubmodelCommand(Session::Impl& s, const std::string& name) {
+  if (std::string why = nameProblem(s, name); !why.empty()) return refusal(s, why);
+  Draft d{s, {}, {}, {}};
+  Def def;
+  def.steps.emplace_back();
+  d.add(name, std::move(def), s.source.submodels.size());
+  return d.commit(Edit::NewSubmodel, "New Submodel");
+}
+
+Changed makeSubmodelCommand(Session::Impl& s, const std::string& def, const std::vector<uint32_t>& pieces, const std::string& name) {
+  if (std::string why = nameProblem(s, name); !why.empty()) return refusal(s, why);
+  bool partial = false;
+  const auto chosen = itemsOf(s, def, pieces, true, &partial);
+  if (chosen.empty() && partial) return refusal(s, kPartial);
+  if (chosen.size() < 2) return refusal(s, "Choose at least two pieces.");
+  Draft d{s, {}, {}, {}};
+  Def& here = d.edit(def);
+  // The anchor: the lowest corner of their boxes, down to the stud and plate grid.
+  Box box;
+  for (const auto& [si, ii] : chosen) {
+    const Item& item = here.steps[si].items[ii];
+    if (s.local.count(item.id)) box.merge((s.body.count(item.id) ? s.body.at(item.id) : Box{}).transformed(s.local.at(item.id)));
+  }
+  bm::Vec3 anchor;
+  if (!box.empty()) anchor = {std::floor(box.min.x / kStud) * kStud, std::floor(box.min.y / kPlate) * kPlate, std::floor(box.min.z / kStud) * kStud};
+  const Xform use{bm::Mat3{}, anchor}, into = use.inverse();
+  Def made;
+  size_t lastStep = SIZE_MAX;
+  for (const auto& [si, ii] : chosen) {
+    if (si != lastStep) made.steps.emplace_back(), lastStep = si;
+    const Item& item = here.steps[si].items[ii];
+    const Xform local = s.local.count(item.id) ? s.local.at(item.id) : item.at.exact;
+    made.steps.back().items.push_back(placed(item, into * local, s.body.count(item.id) ? s.body.at(item.id) : Box{}));
+  }
+  const auto [firstStep, firstIndex] = chosen.front();
+  for (auto it = chosen.rbegin(); it != chosen.rend(); ++it) {
+    auto& items = here.steps[it->first].items;
+    items.erase(items.begin() + static_cast<long>(it->second));
+  }
+  Item u;
+  u.id = s.source.newId();
+  u.submodel = true;
+  u.name = name;
+  u.at.exact = use;
+  u.extra = nlohmann::ordered_json::object();
+  u.extra["id"] = freshPlanId(here, name);
+  auto& target = here.steps[firstStep].items;
+  target.insert(target.begin() + static_cast<long>(std::min(firstIndex, target.size())), std::move(u));
+  keepRefsInside(here);
+  keepRefsInside(made);
+  d.add(name, std::move(made), s.source.submodels.size());
+  return d.commit(Edit::MakeSubmodel, "Make Submodel");
+}
+
+Changed extractCommand(Session::Impl& s, const std::string& def, uint32_t piece) {
+  if (piece >= s.refs.size()) return unchanged(s);
+  const auto where = locate(s.source);
+  const auto& chain = s.refs[piece].chain;
+  size_t level = chain.size();
+  for (size_t k = 0; k < chain.size(); k++)
+    if (const auto f = where.find(chain[k]); f != where.end() && f->second.def == def) {
+      level = k;
+      break;
+    }
+  if (level + 1 >= chain.size()) return refusal(s, "This piece is not inside a submodel.");
+  const Loc loc = where.at(chain[level]);
+  Draft d{s, {}, {}, {}};
+  Def& here = d.edit(def);
+  const Item use = here.steps[loc.step].items[loc.index];
+  const Xform frame = s.local.at(use.id);
+  std::vector<Item> copies;
+  for (const auto& step : s.source.def(use.name)->steps)
+    for (const Item& item : step.items) {
+      const Xform local = s.local.count(item.id) ? s.local.at(item.id) : item.at.exact;
+      Item copy = placed(item, frame * local, s.body.count(item.id) ? s.body.at(item.id) : Box{});
+      copy.id = s.source.newId();
+      copies.push_back(std::move(copy));
+    }
+  auto& items = here.steps[loc.step].items;
+  items.erase(items.begin() + static_cast<long>(loc.index));
+  repairIds(copies, planIds(here));
+  items.insert(items.begin() + static_cast<long>(loc.index), copies.begin(), copies.end());
+  keepRefsInside(here);
+  return d.commit(Edit::Extract, "Extract " + use.name);
+}
+
+Changed moveToModelCommand(Session::Impl& s, const std::string& def, const std::vector<uint32_t>& pieces, const std::string& target) {
+  if (target == def) return unchanged(s);
+  if (target.empty() || !s.source.def(target)) return refusal(s, "There is no submodel named " + target + ".");
+  const std::optional<Xform> frame = frameOf(s, def, target);
+  if (!frame) return refusal(s, target + " is not used in this model.");
+  bool partial = false;
+  const auto chosen = itemsOf(s, def, pieces, true, &partial);
+  if (chosen.empty()) return partial ? refusal(s, kPartial) : unchanged(s);
+  const Def& source = *s.source.def(def);
+  std::set<std::string> moving;
+  for (const auto& [si, ii] : chosen) {
+    const Item& item = source.steps[si].items[ii];
+    if (item.submodel && holds(s.source, item.name, target)) return refusal(s, "A submodel can't hold itself.");
+    if (item.extra.is_object() && item.extra.contains("id") && item.extra["id"].is_string()) moving.insert(item.extra["id"].get<std::string>());
+  }
+  const std::set<std::pair<size_t, size_t>> chosenSet(chosen.begin(), chosen.end());
+  for (const auto& at : referencing(source, moving))
+    if (!chosenSet.count(at)) return refusal(s, source.steps[at.first].items[at.second].name + " depends on a piece being moved.");
+  Draft d{s, {}, {}, {}};
+  pin(d, {def, target});
+  Def& here = d.edit(def);
+  const Xform into = frame->inverse();
+  std::vector<Item> items;
+  for (const auto& [si, ii] : chosen) {
+    const Item& item = here.steps[si].items[ii];
+    const Xform local = s.local.count(item.id) ? s.local.at(item.id) : item.at.exact;
+    items.push_back(placed(item, into * local, s.body.count(item.id) ? s.body.at(item.id) : Box{}));
+  }
+  for (auto it = chosen.rbegin(); it != chosen.rend(); ++it) {
+    auto& list = here.steps[it->first].items;
+    list.erase(list.begin() + static_cast<long>(it->second));
+  }
+  Def& there = d.edit(target);
+  if (there.steps.empty()) there.steps.emplace_back();
+  repairIds(items, planIds(there));
+  auto& last = there.steps.back().items;
+  last.insert(last.end(), items.begin(), items.end());
+  keepRefsInside(here);
+  keepRefsInside(there);
+  return d.commit(Edit::MoveToModel, named("Move", items.size()) + " to " + target);
+}
+
+Changed renameSubmodelCommand(Session::Impl& s, const std::string& from, const std::string& to) {
+  if (from.empty() || !s.source.def(from)) return unchanged(s);
+  if (from == to) return unchanged(s);
+  if (std::string why = nameProblem(s, to); !why.empty()) return refusal(s, why);
+  Draft d{s, {}, {}, {}};
+  auto rename = [&](const std::string& defName, const Def& def) {
+    for (size_t si = 0; si < def.steps.size(); si++)
+      for (size_t ii = 0; ii < def.steps[si].items.size(); ii++)
+        if (def.steps[si].items[ii].submodel && def.steps[si].items[ii].name == from) d.edit(defName).steps[si].items[ii].name = to;
+  };
+  rename("", s.source.root);
+  for (const auto& [n, def] : s.source.submodels) rename(n, def);
+  const size_t position = positionOf(s.source, from);
+  d.remove(from);
+  d.add(to, *s.source.def(from), position);
+  return d.commit(Edit::RenameSubmodel, "Rename " + from);
+}
+
+Changed deleteSubmodelCommand(Session::Impl& s, const std::string& name) {
+  if (name.empty() || !s.source.def(name)) return unchanged(s);
+  if (const size_t n = usesOf(s.source, name); n > 0)
+    return refusal(s, name + " is used " + (n == 1 ? std::string("once") : std::to_string(n) + " times") + ". Remove its uses first.");
+  Draft d{s, {}, {}, {}};
+  d.remove(name);
+  return d.commit(Edit::DeleteSubmodel, "Delete " + name);
 }
 
 Changed undoCommand(Session::Impl& s) {

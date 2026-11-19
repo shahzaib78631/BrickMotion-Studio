@@ -27,6 +27,7 @@ enum class Arrow { Left, Right, Up, Down };
 enum class Edit {
   Move, Rotate, Recolor, Delete, Duplicate, Paste, ReplacePart, MakeUnique,
   AddStep, DeleteStep, MoveStep, SplitStep, MergeSteps, StepFields, MoveToStep, ReorderInStep,
+  NewSubmodel, MakeSubmodel, Extract, MoveToModel, RenameSubmodel, DeleteSubmodel,
 };
 
 /// A step's editorial fields, as a person edits them.

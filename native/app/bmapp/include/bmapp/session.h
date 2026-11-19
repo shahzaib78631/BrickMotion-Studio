@@ -93,6 +93,23 @@ class Session {
   /// only with its whole use.
   Changed moveToStep(const std::vector<uint32_t>& pieces, size_t step);
   Changed reorderInStep(size_t step, size_t from, size_t to);
+  // Submodels. Pieces moved between models keep where they are in the world.
+
+  /// `preferred`, else "<preferred> 2", 3, ...: the first name no submodel has.
+  std::string freeSubmodelName(const std::string& preferred) const;
+  /// An empty submodel with one empty step, used nowhere yet.
+  Changed newSubmodel(const std::string& name);
+  /// The items holding these pieces (a whole use counts as its use) become a new submodel, one
+  /// step per step they were in; one use of it takes their place. They stay selected.
+  Changed makeSubmodel(const std::vector<uint32_t>& pieces, const std::string& name);
+  /// The use holding `piece` is replaced by copies of its submodel's items, in its place.
+  Changed extract(uint32_t piece);
+  /// To the last step of `submodel`, through its first use in this model.
+  Changed moveToModel(const std::vector<uint32_t>& pieces, const std::string& submodel);
+  /// Every use follows.
+  Changed renameSubmodel(const std::string& from, const std::string& to);
+  /// Only one that is not used.
+  Changed deleteSubmodel(const std::string& submodel);
   /// Ends a drag: the next continuing move or turn starts a new undo step.
   void endGesture();
   bool canUndo() const;

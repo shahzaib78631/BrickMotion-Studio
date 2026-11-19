@@ -70,10 +70,11 @@ void matchesFlatten(const bmapp::Session& s) {
 }  // namespace
 
 TEST_CASE("every command undoes exactly", "[bmapp][commands]") {
-  for (int edit = 0; edit <= static_cast<int>(bmapp::Edit::ReorderInStep); edit++) {
+  for (int edit = 0; edit <= static_cast<int>(bmapp::Edit::DeleteSubmodel); edit++) {
     INFO("edit " << edit);
     bmapp::Session s;
     open(s, tower());
+    if (static_cast<bmapp::Edit>(edit) == bmapp::Edit::DeleteSubmodel) s.newSubmodel("Spare");  // one that is not used
     const std::string before = planText(s);
     const uint32_t inSub = firstInSubmodel(s);
     switch (static_cast<bmapp::Edit>(edit)) {
@@ -93,6 +94,12 @@ TEST_CASE("every command undoes exactly", "[bmapp][commands]") {
       case bmapp::Edit::StepFields: s.setStepFields(0, {"Base", "Notes", 1.5, true}, false); break;
       case bmapp::Edit::MoveToStep: s.moveToStep({0}, 1); break;
       case bmapp::Edit::ReorderInStep: s.reorderInStep(0, 0, 1); break;
+      case bmapp::Edit::NewSubmodel: s.newSubmodel("Spare"); break;
+      case bmapp::Edit::MakeSubmodel: s.makeSubmodel({0, 1}, "Made"); break;
+      case bmapp::Edit::Extract: s.extract(inSub); break;
+      case bmapp::Edit::MoveToModel: s.moveToModel({0}, "cap"); break;
+      case bmapp::Edit::RenameSubmodel: s.renameSubmodel("cap", "lid"); break;
+      case bmapp::Edit::DeleteSubmodel: s.deleteSubmodel("Spare"); break;
     }
     const std::string after = planText(s);
     REQUIRE(after != before);
