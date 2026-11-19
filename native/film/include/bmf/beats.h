@@ -37,5 +37,7 @@ Box flyingBox(const plan::Timeline& timeline, const plan::Plan& plan, const coll
 
 /// A box's eight corners.
 std::vector<Vec3> corners(const Box& box);
+/// Whether the segment from `a` to `b` passes through `box`.
+bool crosses(Vec3 a, Vec3 b, const Box& box);
 
 }  // namespace bm::film

@@ -16,23 +16,6 @@ namespace {
 Vec3 middle(const Box& b) { return (b.min + b.max) * 0.5; }
 double wrap(double a) { return std::remainder(a, 2 * M_PI); }
 
-/// Whether the segment from `a` to `b` passes through `box`.
-bool crosses(Vec3 a, Vec3 b, const Box& box) {
-  double lo = 0, hi = 1;
-  const double pa[3] = {a.x, a.y, a.z}, pd[3] = {b.x - a.x, b.y - a.y, b.z - a.z}, mn[3] = {box.min.x, box.min.y, box.min.z}, mx[3] = {box.max.x, box.max.y, box.max.z};
-  for (int k = 0; k < 3; k++) {
-    if (std::abs(pd[k]) < 1e-12) {
-      if (pa[k] < mn[k] || pa[k] > mx[k]) return false;
-      continue;
-    }
-    double t0 = (mn[k] - pa[k]) / pd[k], t1 = (mx[k] - pa[k]) / pd[k];
-    if (t0 > t1) std::swap(t0, t1);
-    lo = std::max(lo, t0), hi = std::min(hi, t1);
-    if (lo > hi) return false;
-  }
-  return true;
-}
-
 /// One camera angle: a run of flights that land on one side, or a unit built on its spot.
 struct Scene {
   int launch = 0, land = 0;  ///< frames: its first flight leaves, its last lands
@@ -195,6 +178,10 @@ struct Director {
 
   /// Sets a main shot's elevation and crane from how tall the model is at its start and end.
   void craneOf(Shot& s) const {
+    if (s.subject.kind == SubjectKind::Unit) {  // from the height of its moment, held: it grows apart from the model
+      s.elevation = elevationAt(s.start * fps);
+      return;
+    }
     if (s.subject.kind != SubjectKind::BuiltSoFar) return;
     s.elevation = elevationAt(s.start * fps);
     s.move = {MoveKind::Crane, elevationAt(s.end * fps) - s.elevation};

@@ -136,3 +136,34 @@ TEST_CASE("the same build directs the same shots", "[director]") {
   REQUIRE(toJson(direct(b, s.t, s.p, *s.world, referenceStyle(), kFps)).dump() == toJson(direct(b, s.t, s.p, *s.world, referenceStyle(), kFps)).dump());
 }
 
+
+TEST_CASE("a unit built on its spot is filmed from above, like the rest", "[director]") {
+  Scene s;
+  uint32_t below = s.add(0, 0, 0, "3001.dat");
+  for (int i = 1; i <= 4; i++) {
+    const uint32_t b = s.add(30, -24.0 * i, 0);
+    s.stud(below, b);
+    below = b;
+  }
+  s.step();
+  uint32_t lower = s.addIn(-30, -24, 0);
+  s.stud(0, lower);
+  for (int i = 2; i <= 3; i++) {
+    s.subStep();
+    const uint32_t b = s.addIn(-30, -24.0 * i, 0);
+    s.stud(lower, b);
+    lower = b;
+  }
+  s.finish();
+  const DirectorStyle style = referenceStyle();
+  const std::vector<Shot> shots = direct(beatsOf(s.t, s.p, *s.model, *s.world), s.t, s.p, *s.world, style, kFps);
+  int units = 0;
+  for (const Shot& x : shots)
+    if (x.subject.kind == SubjectKind::Unit) {
+      units++;
+      INFO("unit shot at " << x.start);
+      CHECK(x.elevation >= style.elEnd - 1e-9);
+      CHECK(x.elevation <= style.elStart + 1e-9);
+    }
+  CHECK(units == 1);
+}

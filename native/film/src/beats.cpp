@@ -1,5 +1,6 @@
 #include "bmf/beats.h"
 #include <algorithm>
+#include <cmath>
 #include <tuple>
 
 namespace bm::film {
@@ -111,6 +112,22 @@ Beats beatsOf(const plan::Timeline& t, const plan::Plan& plan, const Model& mode
     return std::make_tuple(a.start, static_cast<int>(a.kind), a.flight) < std::make_tuple(b.start, static_cast<int>(b.kind), b.flight);
   });
   return out;
+}
+
+bool crosses(Vec3 a, Vec3 b, const Box& box) {
+  double lo = 0, hi = 1;
+  const double pa[3] = {a.x, a.y, a.z}, pd[3] = {b.x - a.x, b.y - a.y, b.z - a.z}, mn[3] = {box.min.x, box.min.y, box.min.z}, mx[3] = {box.max.x, box.max.y, box.max.z};
+  for (int k = 0; k < 3; k++) {
+    if (std::abs(pd[k]) < 1e-12) {
+      if (pa[k] < mn[k] || pa[k] > mx[k]) return false;
+      continue;
+    }
+    double t0 = (mn[k] - pa[k]) / pd[k], t1 = (mx[k] - pa[k]) / pd[k];
+    if (t0 > t1) std::swap(t0, t1);
+    lo = std::max(lo, t0), hi = std::min(hi, t1);
+    if (lo > hi) return false;
+  }
+  return true;
 }
 
 }  // namespace bm::film
