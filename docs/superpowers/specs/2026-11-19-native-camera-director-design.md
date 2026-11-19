@@ -1,6 +1,6 @@
 # Native camera director — design
 
-Date: 2026-11-19 · Status: draft for the owner's approval
+Date: 2026-11-19 · Status: approved by the owner (saved tracks win by default)
 
 ## Intent
 
@@ -371,13 +371,12 @@ Measurements are taken per model on the 19 owner projects and the corpus smoke t
 - The default lens is 50 mm on a 36 mm sensor. The Reference style sets its own, and the owner's
   track overrides it.
 
-## Questions for the owner
+## Owner's decisions
 
-- **Should native film your saved camera tracks by default?** 10 of the 19 projects have one
-  (Deadpool has 10 keys), and every key is marked as yours (`origin: user`), with `exportCamera`
-  set to `track`. If native follows the web's rule, those 10 videos are filmed by your tracks, and
-  the new director only fills the rest. If you would rather see the director by default, your
-  tracks would be used only when asked (`--camera track`).
+- **Saved camera tracks film the video by default** (owner, 2026-11-19). The 10 projects that
+  have one are filmed by it, following the web's rule. The director films everything else and
+  every project without a track. `--camera director` shows the director's version of a project
+  that has a track.
 
 ## Left to the builder
 
