@@ -103,8 +103,9 @@ extension ViewportView: NSMenuItemValidation {
 
   @objc func replacePart(_ sender: Any?) {
     guard hasSelection, let window else { return NSSound.beep() }
-    ReplacePartSheet.present(on: window, session: session) { [weak self] part in
-      self?.editSelection { self!.session.replacePart($0, std.string(part)) }
+    ReplacePartSheet.present(on: window) { [weak self] part in
+      guard let self else { return }
+      editSelection { session.replacePart($0, std.string(part)) }
     }
   }
 
@@ -180,6 +181,7 @@ extension ViewportView: NSMenuItemValidation {
     case "q": nudge(down)
     case "r": turn(clockwise: !shift)
     case "c": clonePieces(nil)
+    case "k": collisionChecks.toggle()
     case "h":
       if option { hideOtherPieces(nil) } else if shift { showAllPieces(nil) } else { hidePieces(nil) }
     case "a": option ? selectNone(nil) : selectAll(nil)

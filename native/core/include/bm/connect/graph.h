@@ -17,6 +17,9 @@ struct MateZone {
   double radius = 0;
 };
 
+/// Collision allowance for connectors already confirmed to mate in this pose.
+MateZone mateZone(const Connector& a, const Connector& b);
+
 /// How a joint was found: from the parts' connectors, or inferred for a piece they joined to
 /// nothing (see infer.h).
 /// Where a joint comes from: the connector data; a connector pair once the piece is set exactly

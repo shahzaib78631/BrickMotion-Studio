@@ -41,13 +41,18 @@ struct Hit {
 ///   than one skin). For pieces that have nothing to do with each other.
 /// - Joined: the two inner surfaces cross each other (more than two skins). Pieces joined to
 ///   each other fit closely around the joint: hair over a head, a hinge's barrel in its cup.
-enum class Depth { Skin, Joined };
+/// - Outer: the two true surfaces cross each other (more than kTouch). Used to keep open-air
+///   transit clear by a full skin so discrete kSweepStep samples never step over a graze.
+enum class Depth { Skin, Joined, Outer };
 
 /// Whether shape `a` placed by `xa` and shape `b` placed by `xb` interpenetrate: the inner
 /// surface of either crosses the true surface of the other, somewhere outside every zone.
 /// Touching, and overlap of less than kSkin, is not interpenetration. Never throws; shapes
 /// with no triangles and transforms that are not finite or not invertible never overlap.
 bool overlap(const Shape& a, const Xform& xa, const Shape& b, const Xform& xb, const std::vector<Zone>& zones = {}, Hit* hit = nullptr, Depth depth = Depth::Skin);
+
+/// True when the two actual mesh surfaces touch, cross, or lie within `distance` LDU.
+bool touching(const Shape& a, const Xform& xa, const Shape& b, const Xform& xb, double distance = kTouch);
 
 /// `a` is carried from `xa` along unit vector `direction` (model space, no turning) by up to
 /// `distance`. Returns where overlap(a, there, b, xb, zones) first holds, to within

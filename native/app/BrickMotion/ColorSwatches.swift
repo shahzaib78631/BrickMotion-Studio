@@ -6,25 +6,32 @@ import Observation
 import SwiftUI
 
 @MainActor @Observable final class ColorSwatchesModel {
+  enum Target { case selection, placement }
   @ObservationIgnored let model: DocumentModel
+  @ObservationIgnored private let target: Target
   @ObservationIgnored private let defaults: UserDefaults
   static let recentKey = "recentColors"
   private(set) var recent: [Int32]
   var query = ""
   @ObservationIgnored let all: [bmapp.ColorInfo]
 
-  init(model: DocumentModel, defaults: UserDefaults = .standard) {
+  init(model: DocumentModel, defaults: UserDefaults = .standard, target: Target = .selection) {
     self.model = model
     self.defaults = defaults
+    self.target = target
     all = Array(model.document.session.colors())
     recent = (defaults.array(forKey: Self.recentKey) as? [Int] ?? []).map(Int32.init)
   }
 
-  /// Recolours the selection and puts the colour first in Recent.
+  /// Applies the colour and puts it first in Recent.
   func choose(_ code: Int32) {
-    let pieces = Array(model.snapshot.selection)
-    guard !pieces.isEmpty else { return NSSound.beep() }
-    model.context.perform { $0.recolor(ViewportView.list(pieces), code) }
+    if target == .placement {
+      model.partColour = code
+    } else {
+      let pieces = Array(model.snapshot.selection)
+      guard !pieces.isEmpty else { return NSSound.beep() }
+      guard model.context.perform({ $0.recolor(ViewportView.list(pieces), code) }) else { return }
+    }
     recent = Array(([code] + recent.filter { $0 != code }).prefix(8))
     defaults.set(recent.map(Int.init), forKey: Self.recentKey)
   }
@@ -44,6 +51,7 @@ import SwiftUI
 
   /// The colour every selected piece shares, if they share one.
   var current: Int32? {
+    if target == .placement { return model.partColour }
     let colors = Set(model.snapshot.selected.map { $0.color })
     return colors.count == 1 ? colors.first : nil
   }

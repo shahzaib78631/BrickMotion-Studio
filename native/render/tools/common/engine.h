@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <string>
 #include "bm/connect/graph.h"
+#include "bm/connect/studio.h"
 #include "bm/ldraw/part_cache.h"
 #include "bm/model.h"
 #include "bm/plan/plan.h"
@@ -16,6 +17,16 @@ namespace bmtools {
 
 /// BM_LDRAW_DIR, else public/ldraw in the working directory or one above it; "" if none.
 std::string ldrawDir();
+
+/// The sources shared by the live editor and the planner, all with the same lifetime.
+struct ConnectorSources {
+  bm::connect::ShadowLibrary shadow;
+  bm::connect::StudioLibrary studio;
+  bm::connect::ConnectorDb connectors;
+  bm::kin::GearDb gears;
+
+  ConnectorSources(const bm::ldraw::Library& library, const std::filesystem::path& ldraw);
+};
 
 struct Planned {
   bm::plan::Plan plan;

@@ -59,6 +59,15 @@ Mat4 projectionMatrix(const Camera& camera) {
   const double fov = std::min(3.0, std::max(0.01, std::isfinite(camera.fovY) ? camera.fovY : 0.6));
   const double aspect = camera.aspect > 1e-6 && std::isfinite(camera.aspect) ? camera.aspect : 1;
   const double n = std::max(1e-3, camera.near), f = std::max(n * 1.001, camera.far);
+  if (camera.orthoHalfHeight > 0) {
+    Mat4 out{};
+    out.m[0] = static_cast<float>(1 / (camera.orthoHalfHeight * aspect));
+    out.m[5] = static_cast<float>(1 / camera.orthoHalfHeight);
+    out.m[10] = static_cast<float>(1 / (f - n));
+    out.m[14] = static_cast<float>(f / (f - n));
+    out.m[15] = 1;
+    return out;
+  }
   const double t = 1 / std::tan(fov / 2);
   Mat4 out{};
   out.m[0] = static_cast<float>(t / aspect);
@@ -68,6 +77,16 @@ Mat4 projectionMatrix(const Camera& camera) {
   out.m[14] = static_cast<float>(n * f / (f - n));
   out.m[11] = -1;
   return out;
+}
+
+ScreenRay screenRay(const Camera& camera, double x, double y) {
+  const Vec3 f = normalized(camera.target - camera.eye);
+  const Vec3 r = normalized(cross(f, camera.up));
+  const Vec3 u = cross(r, f);
+  const bool parallel = camera.orthoHalfHeight > 0;
+  const double h = parallel ? camera.orthoHalfHeight : std::tan(camera.fovY / 2);
+  const Vec3 off = r * (x * h * camera.aspect) + u * (y * h);
+  return parallel ? ScreenRay{camera.eye + off, f} : ScreenRay{camera.eye, normalized(f + off)};
 }
 
 Frustum frustumOf(const Camera& camera, Vec3 origin) {

@@ -7,7 +7,7 @@
 import AppKit
 import BMApp
 
-enum MenuPlace { case file, edit, select, object, step, view, none }
+enum MenuPlace { case app, file, edit, select, object, step, view, window, none }
 
 @MainActor struct CommandContext {
   var document: Document?
@@ -45,6 +45,7 @@ enum MenuPlace { case file, edit, select, object, step, view, none }
   }
 
   var session: bmapp.Session? { document?.session }
+  var model: DocumentModel? { (viewport?.window?.windowController as? WindowController)?.model }
   var selection: [UInt32] { session.map { Array($0.selection()) } ?? [] }
   var hasSelection: Bool { !(session?.selection().isEmpty ?? true) }
 
@@ -174,11 +175,28 @@ enum MenuPlace { case file, edit, select, object, step, view, none }
 private let up = String(UnicodeScalar(NSUpArrowFunctionKey)!)
 private let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
 
+@MainActor private func relatedSelection(_ id: String, _ title: String, _ symbol: String, _ sense: AssemblyReview.Selection) -> AppCommand {
+  makeCommand(id, title, symbol: symbol, menu: .select, group: 1, enabled: { $0.hasSelection },
+              run: { c in
+                if let model = c.model { model.assemblyReview.select(sense, model: model) }
+              })
+}
+
 @MainActor enum Registry {
   static let all: [AppCommand] = [
+    makeCommand("app.about", "About BrickMotion", menu: .app, group: 0, run: { _ in AboutPanel.show() }),
+    makeCommand("app.settings", "Settings…", symbol: "gearshape", key: ",", menu: .app, group: 1,
+                run: { _ in SettingsWindow.shared.showWindow(nil) }),
+    makeCommand("window.welcome", "Show Welcome Window", symbol: "macwindow", menu: .window, group: 0,
+                run: { _ in (NSApp.delegate as? AppDelegate)?.showWelcome() }),
     // File
     makeCommand("file.new", "New", key: "n", menu: .file, group: 0, selector: #selector(NSDocumentController.newDocument(_:))),
     makeCommand("file.open", "Open…", symbol: "folder", key: "o", menu: .file, group: 0, selector: #selector(NSDocumentController.openDocument(_:))),
+    makeCommand("file.importInto", "Import into Model…", symbol: "square.and.arrow.down", menu: .file, group: 0,
+                enabled: { $0.document != nil }, run: { c in
+                  guard let controller = c.viewport?.window?.windowController as? WindowController else { return }
+                  ModelImportSheet.show(in: controller.model, into: String(controller.model.document.session.focused()))
+                }),
     makeCommand("file.close", "Close", key: "w", menu: .file, group: 1, selector: #selector(NSWindow.performClose(_:))),
     makeCommand("file.save", "Save…", key: "s", menu: .file, group: 1, selector: #selector(NSDocument.save(_:))),
     makeCommand("file.duplicate", "Duplicate", key: "s", modifiers: [.command, .shift], menu: .file, group: 1, selector: #selector(NSDocument.duplicate(_:))),
@@ -187,6 +205,10 @@ private let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
     makeCommand("file.versions", "Browse All Versions…", menu: .file, group: 1, selector: #selector(NSDocument.browseVersions(_:))),
     makeCommand("file.exportLDraw", "Export LDraw…", symbol: "square.and.arrow.up", key: "e", modifiers: [.command, .shift], menu: .file, group: 2,
             selector: #selector(Document.exportLDraw(_:))),
+    makeCommand("file.exportPlan", "Export Plan…", symbol: "doc.text", menu: .file, group: 2,
+                selector: #selector(Document.exportPlan(_:))),
+    makeCommand("file.exportStill", "Export Still…", symbol: "photo", menu: .file, group: 2,
+                enabled: { ($0.session?.pieceCount() ?? 0) > 0 }, run: { StillExport.show($0) }),
 
     // Edit
     makeCommand("edit.undo", "Undo", symbol: "arrow.uturn.backward", key: "z", menu: .edit, group: 0, selector: Selector(("undo:"))),
@@ -207,6 +229,18 @@ private let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
     similar("select.sameColor", "Same Colour", .Color),
     similar("select.samePartColor", "Same Part and Colour", .PartAndColor),
     similar("select.sameStep", "Same Step", .Step),
+    relatedSelection("select.connected", "Connected Parts", "link", .connected),
+    relatedSelection("select.touching", "Touching Parts", "square.on.circle", .touching),
+    relatedSelection("select.rigid", "Rigid Body", "square.stack.3d.up", .rigid),
+    makeCommand("select.group", "Same Group", symbol: "tag", menu: .select, group: 0,
+                enabled: { c in
+                  guard let session = c.session, c.hasSelection else { return false }
+                  return session.groupsOf(session.selection()).size() == 1
+                }, run: { c in
+                  guard let session = c.session, let group = session.groupsOf(session.selection()).first else { return }
+                  session.selectGroup(group)
+                  c.viewport?.viewStateChanged()
+                }),
 
     // Object
     viewportCommand("object.rotateCW", "Rotate 90° Clockwise", symbol: "rotate.right", menu: .object, group: 0, #selector(ViewportView.rotatePieces(_:))),
@@ -221,6 +255,39 @@ private let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
                 c.perform { $0.newSubmodel(std.string(name)) }
               }
             }),
+    makeCommand("object.group", "Set Group…", symbol: "tag", key: "g", menu: .object, group: 2,
+                enabled: { $0.hasSelection }, run: { c in
+                  guard let session = c.session else { return }
+                  let pieces = session.selection()
+                  let names = Array(session.groupNames()).map { String($0) }
+                  let existing = session.groupsOf(pieces)
+                  let number = (1...(names.count + 1)).first(where: { !names.contains("Group \($0)") }) ?? 1
+                  let initial = existing.size() == 1 ? String(existing[0]) : "Group \(number)"
+                  let revision = session.version()
+                  c.prompt("Set Group", initial) { name in
+                    guard session.version() == revision else { return }
+                    c.perform { $0.setGroup(pieces, std.string(name)) }
+                  }
+                }),
+    makeCommand("object.ungroup", "Remove from Group", symbol: "tag.slash", menu: .object, group: 2,
+                enabled: { c in
+                  guard let session = c.session, c.hasSelection else { return false }
+                  return !session.groupsOf(session.selection()).isEmpty
+                }, run: { c in c.perform { $0.setGroup($0.selection(), std.string()) } }),
+    makeCommand("object.fitTogether", "Fit Together", symbol: "point.topleft.down.to.point.bottomright.curvepath",
+                menu: .object, group: 2, enabled: { $0.selection.count == 2 && !($0.model?.assemblyReview.fitting ?? true) },
+                run: { c in if let model = c.model { model.assemblyReview.fit(model: model, choose: false) } }),
+    makeCommand("object.compatibleParts", "Find Compatible Parts…", symbol: "link.badge.plus", menu: .object, group: 2,
+                enabled: { $0.selection.count == 1 }, run: { c in
+                  if let model = c.model, let piece = c.clickedPiece ?? c.selection.first {
+                    CompatiblePartsSheet.show(model: model, piece: piece)
+                  }
+                }),
+    makeCommand("object.arrivalDirection", "Set Insertion Direction…", symbol: "location", menu: .object, group: 2,
+                enabled: { $0.hasSelection }, run: { c in if let model = c.model { ArrivalDirection.choose(model) } }),
+    makeCommand("object.waysToFit", "Ways to Fit…", symbol: "point.3.connected.trianglepath.dotted",
+                menu: .object, group: 2, enabled: { $0.selection.count == 2 && !($0.model?.assemblyReview.fitting ?? true) },
+                run: { c in if let model = c.model { model.assemblyReview.fit(model: model, choose: true) } }),
     makeCommand("object.makeSubmodel", "Make Submodel from Selection…", symbol: "shippingbox", key: "g", modifiers: [.command, .option], menu: .object, group: 2,
             enabled: { $0.selection.count >= 2 },
             run: { c in
@@ -258,8 +325,22 @@ private let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
             }),
     viewportCommand("object.makeUnique", "Make Unique", menu: .object, group: 4, #selector(ViewportView.makeUnique(_:))),
     viewportCommand("object.replacePart", "Replace Part…", symbol: "arrow.triangle.2.circlepath", menu: .object, group: 4, #selector(ViewportView.replacePart(_:))),
+    makeCommand("object.waitingCW", "Turn Waiting Part Right", symbol: "rotate.right", menu: .object, group: 5,
+                enabled: { waitingPart($0) != nil }, run: { turnWaitingPart($0, degrees: 90) }),
+    makeCommand("object.waitingCCW", "Turn Waiting Part Left", symbol: "rotate.left", menu: .object, group: 5,
+                enabled: { waitingPart($0) != nil }, run: { turnWaitingPart($0, degrees: -90) }),
+    makeCommand("object.waitingFacingSeat", "Match Arrival Orientation", symbol: "scope", menu: .object, group: 5,
+                enabled: { c in waitingPart(c).map { c.viewport?.viewport.waitingTurnToMatch($0) != 0 } ?? false },
+                run: { c in
+                  guard let piece = waitingPart(c), let degrees = c.viewport?.viewport.waitingTurnToMatch(piece) else { return }
+                  turnWaitingPart(c, degrees: degrees)
+                }),
 
     // Step
+    makeCommand("step.showAssembled", "Show Assembled Step", symbol: "cube", menu: .step, group: 0,
+                enabled: { $0.step != nil }, run: { previewStep($0, mode: .Assembled) }),
+    makeCommand("step.layOut", "Lay Out Step", symbol: "square.grid.2x2", menu: .step, group: 0,
+                enabled: { $0.step != nil }, run: { previewStep($0, mode: .LaidOut) }),
     makeCommand("step.insertBefore", "Insert Step Before", symbol: "text.insert", menu: .step, group: 0,
             enabled: { $0.step != nil }, run: { c in if let k = c.step { c.perform { $0.insertStep(k) } } }),
     makeCommand("step.insertAfter", "Insert Step After", menu: .step, group: 0,
@@ -308,6 +389,7 @@ private let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
             enabled: { c in c.clickedPiece != nil },
             run: { c in
               guard let p = c.clickedPiece, let info = c.session?.snapshot().selected.first(where: { $0.piece == p }) else { return }
+              (c.viewport?.window?.windowController as? WindowController)?.model.partColour = info.color
               RecentColors.add(info.color)
             }),
     makeCommand("step.delete", "Delete Step", symbol: "trash", menu: .step, group: 3,
@@ -316,12 +398,45 @@ private let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
     // View
     makeCommand("view.sidebar", "Show Sidebar", key: "s", modifiers: [.command, .control], menu: .view, group: 0,
             selector: #selector(NSSplitViewController.toggleSidebar(_:))),
+    makeCommand("view.joints", "Joint Markers", symbol: "link", menu: .view, group: 0,
+                checked: { $0.model?.showJoints ?? false }, enabled: { $0.document != nil },
+                run: { $0.model?.showJoints.toggle() }),
+    makeCommand("view.placementCollision", "Check Placement Collisions", symbol: "cube",
+                menu: .view, group: 0, checked: { $0.viewport?.collisionChecks ?? false },
+                enabled: { $0.viewport != nil }, run: { $0.viewport?.collisionChecks.toggle() }),
     makeCommand("view.inspector", "Show Inspector", key: "i", modifiers: [.command, .option], menu: .view, group: 0,
             selector: #selector(NSSplitViewController.toggleInspector(_:))),
     viewportCommand("view.fitAll", "Fit All", symbol: "arrow.up.left.and.arrow.down.right", menu: .view, group: 1, #selector(ViewportView.fitAll(_:))),
+    makeCommand("view.pathPreview", "Path-Traced Preview…", symbol: "camera.aperture", menu: .view, group: 2,
+                enabled: { ($0.session?.pieceCount() ?? 0) > 0 }, run: { StillExport.preview($0) }),
     viewportCommand("view.frameSelection", "Frame Selection", symbol: "viewfinder", key: "f", menu: .view, group: 1, #selector(ViewportView.frameSelection(_:))),
+    makeCommand("view.orthographic", "Orthographic Projection", symbol: "square.on.square", menu: .view, group: 1,
+                checked: { $0.viewport?.presentation.orthographic ?? false }, enabled: { $0.viewport != nil },
+                run: { $0.viewport?.presentation.orthographic.toggle() }),
+    makeCommand("view.layOut", "Lay Out Parts", symbol: "square.grid.3x3", menu: .view, group: 1,
+                enabled: { ($0.session?.pieceCount() ?? 0) > 0 }, run: { $0.viewport?.presentation.flatLay() }),
+    makeCommand("view.centerFloor", "Centre on Floor", symbol: "square.split.bottomrightquarter", menu: .view, group: 1,
+                enabled: { $0.viewport != nil }, run: { $0.viewport?.presentation.center() }),
+    makeCommand("view.scaleTool", "Scale Tool", symbol: "arrow.up.left.and.arrow.down.right", menu: .view, group: 1,
+                checked: { $0.viewport?.tool == .scale }, enabled: { $0.viewport != nil },
+                run: { $0.viewport?.tool = .scale }),
     preset("view.front", "Front", .Front), preset("view.back", "Back", .Back), preset("view.left", "Left", .Left),
     preset("view.right", "Right", .Right), preset("view.top", "Top", .Top), preset("view.bottom", "Bottom", .Bottom),
+    viewportCommand("view.playBuild", "Play or Pause Preview", symbol: "playpause", menu: .view, group: 2, #selector(ViewportView.togglePlay(_:))),
+    makeCommand("view.animate", "Animate Workspace", symbol: "timeline.selection", menu: .view, group: 2,
+                checked: { $0.model?.animation.visible ?? false }, enabled: { $0.model != nil },
+                run: { c in
+                  if let controller = c.window?.windowController as? WindowController {
+                    controller.setAnimateMode(!controller.isAnimating)
+                  }
+                }),
+    makeCommand("step.regenerateAnimation", "Regenerate Build Animation", symbol: "arrow.clockwise", menu: .step, group: 3,
+                enabled: { ($0.session?.pieceCount() ?? 0) > 0 }, run: { c in
+                  (c.window?.windowController as? WindowController)?.setAnimateMode(true, plan: false)
+                  c.model?.animation.regenerate()
+                }),
+    makeCommand("step.regenerateSteps", "Regenerate Build Steps", symbol: "list.number", menu: .step, group: 3,
+                enabled: { ($0.session?.pieceCount() ?? 0) > 0 }, run: { c in c.model?.animation.regenerateSteps() }),
     makeCommand("view.palette", "Command Palette…", symbol: "command", key: "k", menu: .view, group: 3,
             enabled: { $0.document != nil },
             run: { c in
@@ -353,6 +468,25 @@ private let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
   static func command(_ id: String) -> AppCommand? { byId[id] }
 
   /// The submodels the selection could move into: every one but those it is in.
+  private static func waitingPart(_ context: CommandContext) -> UInt32? {
+    guard let piece = context.clickedPiece ?? (context.selection.count == 1 ? context.selection.first : nil),
+          context.viewport?.viewport.canTurnWaitingPart(piece) == true else { return nil }
+    return piece
+  }
+
+  private static func turnWaitingPart(_ context: CommandContext, degrees: Double) {
+    guard degrees != 0, let piece = waitingPart(context),
+          context.perform({ $0.turnWaitingPart(piece, degrees) }) else { return }
+    context.model?.animation.plan()
+  }
+
+  private static func previewStep(_ context: CommandContext, mode: bmapp.AssemblyPreview) {
+    guard let step = context.step, let controller = context.viewport?.window?.windowController as? WindowController else { return }
+    controller.setAnimateMode(true, plan: false)
+    controller.model.animation.tab = .build
+    controller.model.animation.arrange(step: step, mode: mode)
+  }
+
   static func modelNames(_ c: CommandContext) -> [String] {
     guard let s = c.session else { return [] }
     let here = String(s.focused())

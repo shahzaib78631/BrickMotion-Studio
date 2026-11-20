@@ -12,6 +12,7 @@ struct Camera {
   double fovY = 0.6;           ///< radians, top to bottom (about 34 degrees: a 70 mm lens on full frame)
   double near = 1, far = 1e5;  ///< LDU
   double aspect = 1;           ///< width over height
+  double orthoHalfHeight = 0;  ///< positive for a parallel projection
 };
 
 /// Column-major, as Metal shaders read a float4x4: m[column * 4 + row].
@@ -28,6 +29,9 @@ Mat4 viewMatrix(const Camera& camera, bm::Vec3 origin);
 /// View space to Metal clip space with depth reversed: `near` maps to depth 1 and `far` to 0,
 /// which keeps precision far from the eye in large scenes.
 Mat4 projectionMatrix(const Camera& camera);
+struct ScreenRay { bm::Vec3 from, dir; };
+/// Leaves the camera at normalized screen coordinates (from -1 to 1, y up).
+ScreenRay screenRay(const Camera& camera, double x, double y);
 
 /// Six planes with inward normals, in world space less the origin given to frustumOf.
 struct Frustum {

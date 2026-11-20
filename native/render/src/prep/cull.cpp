@@ -50,7 +50,8 @@ std::vector<Visible> cull(const Scene& scene, const std::vector<PartShape>& part
       bool edges = true;
       if (!none) {
         const double radius = length(h), distance = length(c - eye);
-        const double perLdu = pixelsPerLdu(distance - radius, camera.fovY, viewportHeight);
+        const double perLdu = camera.orthoHalfHeight > 0 ? viewportHeight / (2 * camera.orthoHalfHeight) :
+            pixelsPerLdu(distance - radius, camera.fovY, viewportHeight);
         edges = kStudLdu * perLdu >= kEdgeStudPixels;
         if (forced) detail = forceDetail;
         else if (group.material.transparent() || lowError * perLdu >= kLowErrorPixels) detail = 0;

@@ -1,4 +1,4 @@
-import { createReadStream, readFileSync, writeFileSync } from 'node:fs';
+import { createReadStream, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { resolve } from 'node:path';
 import { matchesEmptyEntryReview, type EmptyEntryReview } from './lib/empty-entry-review';
@@ -51,6 +51,39 @@ for await (const line of createInterface({ input: createReadStream(resolve(direc
   else noEvidence.push(row.id);
 }
 for (const id of expected) if (!referenceParts.has(id) && !geometryParts.has(id)) errors.push({ part: id, issue: 'Unreferenced part not measured' });
+function optionalEvidence<T>(filename: string): T | null {
+  const path = resolve(directory, filename);
+  if (!statSync(path, { throwIfNoEntry: false })?.isFile()) return null;
+  const data = JSON.parse(readFileSync(path, 'utf8'));
+  if (data.inventoryHash !== inventory.inventoryHash) throw new Error(`Stale independent evidence: ${filename}`);
+  return data;
+}
+const assembly = optionalEvidence<{
+  documented: { host: string; resolvedInsert: string; evidence: string; mirrored: boolean }[];
+  modelCandidates: { host: string; insert: string; kind: string }[];
+}>('assembly-use-cases.json');
+const catalog = optionalEvidence<{
+  source: { sha256: string };
+  supplementalQueue: { id: string }[];
+}>('assembly-reference-label-comparison.json');
+const matched = optionalEvidence<{
+  labelsSha256: string;
+  parts: { id: string; status: string }[];
+}>('assembly-reference-label-geometry.json');
+if (matched && matched.labelsSha256 !== catalog?.source.sha256) throw new Error('Geometry match has no corresponding catalogue comparison');
+const mechanical = optionalEvidence<{
+  records: { id: string }[];
+}>('mechanical-reference-candidates.json');
+const documented = assembly?.documented.filter(p => !p.mirrored && p.evidence === 'part-author-placement');
+const modelPairs = assembly?.modelCandidates.filter(p => p.kind !== 'nearby-surfaces');
+const measureQueue = (ids: string[] | undefined) => ids ? [...new Set(ids)].filter(id => expected.has(id)).sort() : null;
+const supplementalQueues = {
+  documentedAssemblyParts: measureQueue(documented?.flatMap(p => [p.host, p.resolvedInsert])),
+  targetedModelObservationParts: measureQueue(modelPairs?.flatMap(p => [p.host, p.insert])),
+  catalogLabelsOnPartsWithoutShadow: measureQueue(catalog?.supplementalQueue.map(p => p.id)),
+  catalogLabelsInMatchingGeometryAndFrame: measureQueue(matched?.parts.filter(p => p.status === 'same-geometry-and-frame').map(p => p.id)),
+  mechanicalReferenceParts: measureQueue(mechanical?.records.map(p => p.id)),
+};
 const report = {
   inventoryHash: inventory.inventoryHash,
   fullCoverage: false,
@@ -59,6 +92,11 @@ const report = {
     incompleteGeometry: incomplete.length, reviewedEmptyEntries: reviewedEmpty.length, structuralErrors: errors.length, validatedParts: 0 },
   warning: 'Structural validity and detected geometry do not establish complete connector coverage or physical mating validity.',
   errors, reviewedEmpty, inheritanceExclusions, referenceIssues,
+  supplementalEvidence: {
+    counts: Object.fromEntries(Object.entries(supplementalQueues).map(([name, ids]) => [name, ids?.length ?? null])),
+    queues: supplementalQueues,
+    limitation: 'Each queue contains candidates for independent review. Part counts may overlap.',
+  },
   queues: { geometryCandidates, noEvidence, incomplete },
 };
 writeFileSync(resolve(directory, 'coverage-audit.json'), JSON.stringify(report, null, 2) + '\n');

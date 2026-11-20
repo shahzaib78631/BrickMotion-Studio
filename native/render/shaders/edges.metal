@@ -17,7 +17,8 @@ vertex EdgeOut edgeVertex(uint vid [[vertex_id]], uint iid [[instance_id]], cons
   out.position.z *= 1.0 + nearer;  // depth is reversed: larger is nearer
   // How many pixels an LDU looks at the near side of the piece's sphere (as bmr::cull reckons it).
   float distance = length(placePoint(inst, draw.sphere.xyz) - frame.eye.xyz);
-  float perLdu = frame.viewport.y / (2.0 * max(distance - draw.sphere.w, 1.0) * frame.lens.x);
+  float halfHeight = frame.lens.w > 0.0 ? frame.lens.w : max(distance - draw.sphere.w, 1.0) * frame.lens.x;
+  float perLdu = frame.viewport.y / (2.0 * halfHeight);
   out.fade = smoothstep(frame.lens.y, frame.lens.z, perLdu);
   return out;
 }

@@ -338,6 +338,14 @@ Source fromPlan(const io::PlanDoc& plan) {
 io::PlanDoc toPlan(const Source& source) {
   Json j = source.extra.is_object() ? source.extra : Json{{"format", "brickmotion-plan"}, {"version", 1}};
   j["steps"] = writeSteps(source.root);
+  if (!source.inlineParts.empty()) {
+    if (!j.contains("parts") || !j["parts"].is_object()) j["parts"] = Json::object();
+    for (const auto& file : source.inlineParts) {
+      if (j["parts"].contains(file.name)) continue;
+      const auto mpd = io::partFileText(file);
+      j["parts"][file.name] = mpd.substr(mpd.find('\n') + 1);
+    }
+  }
   if (!source.submodels.empty() || j.contains("submodels")) {
     Json subs = Json::object();
     for (const auto& [name, def] : source.submodels) {

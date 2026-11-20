@@ -33,6 +33,7 @@ struct FrameUniforms {
   simd_float4x4 heightProj;  // world to the height map (xy, as shadowProj)
   simd_float4 floorLook;     // x: nearest, y: furthest a floor point looks (LDU); z: 1 when the floor's light is worked out; w: the power the sky's share is raised to
   simd_float4 glass;         // x: kGlassAbsorption, y: kFloorThroughGlass, z: kGlassIor
+  simd_float4 grid;          // x: spacing, y/z: model origin modulo spacing
 };
 
 // How much of each light (index) the floor sees through each of 48 azimuths (each the middle

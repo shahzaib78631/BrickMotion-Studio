@@ -61,12 +61,28 @@ bool atLeast(double value, double slope, double floor, double& lo, double& hi) {
 /// halving from there finds where it first does. The search looks only between the ends, a
 /// little inside them, so the ends are looked at too: a crossing the stretch starts in may be
 /// over, and one that begins at its very end not yet begun, at every travel it looks at.
+void crossingOnLine(const Vec3 v[3], const double d[3], Vec3& p0, Vec3& p1) {
+  Vec3 pts[4];
+  int n = 0;
+  for (int i = 0; i < 3 && n < 4; i++) {
+    const int j = (i + 1) % 3;
+    if (d[i] == 0) pts[n++] = v[i];
+    else if ((d[i] > 0) != (d[j] > 0) && d[j] != 0) pts[n++] = v[i] + (v[j] - v[i]) * (d[i] / (d[i] - d[j]));
+  }
+  p0 = pts[0];
+  p1 = n > 1 ? pts[1] : pts[0];
+}
+
 double firstCross(const Vec3 ta[3], const Vec3 tb[3], Vec3 velocity, double lo, double hi) {
   constexpr double never = std::numeric_limits<double>::infinity();
   const Vec3 na = cross(ta[1] - ta[0], ta[2] - ta[0]), nb = cross(tb[1] - tb[0], tb[2] - tb[0]);
   const double la = length(na), lb = length(nb);
   if (!(la > 1e-12) || !(lb > 1e-12) || !(lo <= hi)) return never;
   const Vec3 ua = na * (1 / la), ub = nb * (1 / lb);
+  const Vec3 line = cross(ua, ub);
+  const double ll = length(line);
+  if (!(ll > 1e-9)) return never;
+  const Vec3 dir = line * (1 / ll);
   double maxA = -never, minA = never, maxB = -never, minB = never;
   for (int i = 0; i < 3; i++) {
     const double da = dot(ub, ta[i] - tb[0]), db = dot(ua, tb[i] - ta[0]);
@@ -75,9 +91,27 @@ double firstCross(const Vec3 ta[3], const Vec3 tb[3], Vec3 velocity, double lo, 
   // As tb travels, ta's corners fall back from tb's plane at this rate, and tb's rise from ta's.
   const double fall = dot(ub, velocity), rise = dot(ua, velocity);
   if (!atLeast(maxA, -fall, kTouch, lo, hi) || !atLeast(-minA, fall, kTouch, lo, hi) || !atLeast(maxB, rise, kTouch, lo, hi) || !atLeast(-minB, -rise, kTouch, lo, hi)) return never;
+  constexpr double none = -std::numeric_limits<double>::infinity();
   auto overlapAt = [&](double t) {
     const Vec3 moved[3] = {tb[0] + velocity * t, tb[1] + velocity * t, tb[2] + velocity * t};
-    return crossLength(ta, moved);
+    double da[3], db[3];
+    bool posA = false, negA = false, posB = false, negB = false;
+    for (int i = 0; i < 3; i++) {
+      da[i] = dot(ub, ta[i] - moved[0]);
+      posA = posA || da[i] >= kTouch;
+      negA = negA || da[i] <= -kTouch;
+      db[i] = dot(ua, moved[i] - ta[0]);
+      posB = posB || db[i] >= kTouch;
+      negB = negB || db[i] <= -kTouch;
+    }
+    if (!(posA && negA && posB && negB)) return none;
+    Vec3 a0, a1, b0, b1;
+    crossingOnLine(ta, da, a0, a1);
+    crossingOnLine(moved, db, b0, b1);
+    double ta0 = dot(dir, a0), ta1 = dot(dir, a1), tb0 = dot(dir, b0), tb1 = dot(dir, b1);
+    if (ta0 > ta1) std::swap(ta0, ta1);
+    if (tb0 > tb1) std::swap(tb0, tb1);
+    return std::min(ta1, tb1) - std::max(ta0, tb0);
   };
   if (overlapAt(lo) > kTouch) return lo;
   double found = never;
@@ -158,16 +192,34 @@ struct Walk {
 
   bool leaves(const Node& na, const Node& nb) const {
     Vec3f carried[kMaxLeaf][3];
+    bool skipB[kMaxLeaf] = {false, false, false, false};
     const uint32_t nbCount = std::min<uint32_t>(nb.count, kMaxLeaf);
-    for (uint32_t j = 0; j < nbCount; j++)
-      for (uint32_t c = 0; c < 3; c++) carried[j][c] = carry(corner(b, nb.left + j, c, innerOfB));
+    for (uint32_t j = 0; j < nbCount; j++) {
+      const Vec3f& b0 = corner(b, nb.left + j, 0, innerOfB);
+      const Vec3f& b1 = corner(b, nb.left + j, 1, innerOfB);
+      if (innerOfB && b0.x == b1.x && b0.y == b1.y && b0.z == b1.z) {
+        skipB[j] = true;
+        continue;
+      }
+      carried[j][0] = carry(b0);
+      carried[j][1] = carry(b1);
+      carried[j][2] = carry(corner(b, nb.left + j, 2, innerOfB));
+    }
     for (uint32_t i = na.left; i < na.left + na.count; i++) {
       const Vec3f ta[3] = {corner(a, i, 0, innerOfA), corner(a, i, 1, innerOfA), corner(a, i, 2, innerOfA)};
+      if (innerOfA && ta[0].x == ta[1].x && ta[0].y == ta[1].y && ta[0].z == ta[1].z) continue;
       for (uint32_t j = nb.left; j < nb.left + nb.count; j++) {
         Vec3f own[3];
         const Vec3f* tb = carried[j - nb.left];
-        if (j - nb.left >= kMaxLeaf) {
-          for (uint32_t c = 0; c < 3; c++) own[c] = carry(corner(b, j, c, innerOfB));
+        if (j - nb.left < kMaxLeaf) {
+          if (skipB[j - nb.left]) continue;
+        } else {
+          const Vec3f& b0 = corner(b, j, 0, innerOfB);
+          const Vec3f& b1 = corner(b, j, 1, innerOfB);
+          if (innerOfB && b0.x == b1.x && b0.y == b1.y && b0.z == b1.z) continue;
+          own[0] = carry(b0);
+          own[1] = carry(b1);
+          own[2] = carry(corner(b, j, 2, innerOfB));
           tb = own;
         }
         Vec3f where;
@@ -224,8 +276,10 @@ struct Walk {
 
   void leafSpans(const Node& na, const Node& nb) const {
     for (uint32_t j = nb.left; j < nb.left + nb.count; j++) {
-      const Vec3f tb[3] = {carry(corner(b, j, 0, innerOfB)), carry(corner(b, j, 1, innerOfB)), carry(corner(b, j, 2, innerOfB))};
-      if (innerOfB && tb[0].x == tb[1].x && tb[0].y == tb[1].y && tb[0].z == tb[1].z) continue;  // no area
+      const Vec3f& b0 = corner(b, j, 0, innerOfB);
+      const Vec3f& b1 = corner(b, j, 1, innerOfB);
+      if (innerOfB && b0.x == b1.x && b0.y == b1.y && b0.z == b1.z) continue;  // no area
+      const Vec3f tb[3] = {carry(b0), carry(b1), carry(corner(b, j, 2, innerOfB))};
       for (uint32_t i = na.left; i < na.left + na.count; i++) {
         const Vec3f ta[3] = {corner(a, i, 0, innerOfA), corner(a, i, 1, innerOfA), corner(a, i, 2, innerOfA)};
         if (innerOfA && ta[0].x == ta[1].x && ta[0].y == ta[1].y && ta[0].z == ta[1].z) continue;
@@ -236,11 +290,12 @@ struct Walk {
   }
 
   bool run() const {
-    // An explicit stack: part trees are shallow, but recursion depth should not depend on data.
-    std::vector<std::pair<uint32_t, uint32_t>> stack{{0, 0}};
-    while (!stack.empty()) {
-      const auto [ia, ib] = stack.back();
-      stack.pop_back();
+    // An explicit stack: part trees are shallow, so a fixed stack avoids heap allocation.
+    std::pair<uint32_t, uint32_t> stack[256];
+    size_t sp = 0;
+    stack[sp++] = {0, 0};
+    while (sp > 0) {
+      const auto [ia, ib] = stack[--sp];
       const Node& na = a.nodes[ia];
       const Node& nb = b.nodes[ib];
       if (!boxes(na, nb)) continue;
@@ -248,11 +303,15 @@ struct Walk {
         if (spans) leafSpans(na, nb);
         else if (leaves(na, nb)) return true;
       } else if (na.count || (!nb.count && (nb.max[0] - nb.min[0]) + (nb.max[1] - nb.min[1]) + (nb.max[2] - nb.min[2]) > (na.max[0] - na.min[0]) + (na.max[1] - na.min[1]) + (na.max[2] - na.min[2]))) {
-        stack.emplace_back(ia, nb.left);
-        stack.emplace_back(ia, nb.left + 1);
+        if (sp + 2 <= 256) {
+          stack[sp++] = {ia, nb.left};
+          stack[sp++] = {ia, nb.left + 1};
+        }
       } else {
-        stack.emplace_back(na.left, ib);
-        stack.emplace_back(na.left + 1, ib);
+        if (sp + 2 <= 256) {
+          stack[sp++] = {na.left, ib};
+          stack[sp++] = {na.left + 1, ib};
+        }
       }
     }
     return false;
@@ -361,10 +420,11 @@ double throughSurface(const Shape& b, const Xform& xb, Vec3 from, Vec3 to, Vec3*
   if (!(length(d) > 1e-9)) return 2;
   const double od[3] = {o.x, o.y, o.z}, dd[3] = {d.x, d.y, d.z};
   double best = 2;
-  std::vector<uint32_t> stack{0};
-  while (!stack.empty()) {
-    const Node& n = b.nodes[stack.back()];
-    stack.pop_back();
+  uint32_t stack[128];
+  size_t sp = 0;
+  stack[sp++] = 0;
+  while (sp > 0) {
+    const Node& n = b.nodes[stack[--sp]];
     // Where along the way the line is inside the node's box.
     double enter = 0, leave = std::min(1.0, best);
     for (int i = 0; i < 3 && enter <= leave; i++) {
@@ -378,8 +438,10 @@ double throughSurface(const Shape& b, const Xform& xb, Vec3 from, Vec3 to, Vec3*
     }
     if (enter > leave) continue;
     if (!n.count) {
-      stack.push_back(n.left);
-      stack.push_back(n.left + 1);
+      if (sp + 2 <= 128) {
+        stack[sp++] = n.left;
+        stack[sp++] = n.left + 1;
+      }
       continue;
     }
     for (uint32_t t = n.left; t < n.left + n.count; t++) {
@@ -407,6 +469,7 @@ bool overlap(const Shape& a, const Xform& xa, const Shape& b, const Xform& xb, c
   const Xform rel = xa.inverse() * xb;
   if (!finite(rel)) return false;
   if (depth == Depth::Joined) return Walk(a, b, true, true, rel, xa, zones, hit).run();
+  if (depth == Depth::Outer) return Walk(a, b, false, false, rel, xa, zones, hit).run();
   return Walk(a, b, true, false, rel, xa, zones, hit).run() || Walk(a, b, false, true, rel, xa, zones, hit).run();
 }
 

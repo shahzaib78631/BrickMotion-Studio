@@ -1,4 +1,6 @@
 #include "commands.h"
+#include "animation_keys.h"
+#include "move_preview.h"
 
 #include <algorithm>
 #include <charconv>
@@ -42,6 +44,7 @@ std::unordered_map<ItemId, Loc> locate(const bm::doc::Source& source) {
 }
 
 Item& at(bm::doc::Source& source, const Loc& loc) { return source.def(loc.def)->steps[loc.step].items[loc.index]; }
+const Item& at(const bm::doc::Source& source, const Loc& loc) { return source.def(loc.def)->steps[loc.step].items[loc.index]; }
 
 std::string chainKey(const std::vector<ItemId>& chain, size_t through) {
   std::string key;
@@ -174,6 +177,17 @@ int planColor(const Session::Impl& s, int code) {
   return s.source.origin == bm::doc::Origin::Plan && code == 16 ? bm::doc::kPlanDefaultColor : code;
 }
 
+bool validPose(const Xform& pose) {
+  const double det = bm::determinant(pose.r);
+  return std::isfinite(det) && std::abs(det) >= 1e-9 && std::isfinite(pose.t.x) && std::isfinite(pose.t.y) && std::isfinite(pose.t.z);
+}
+
+PieceList anchorFirst(const PieceList& pieces, uint32_t anchor) {
+  PieceList ordered{anchor};
+  for (uint32_t p : pieces) if (p != anchor) ordered.push_back(p);
+  return ordered;
+}
+
 // ---- applying ------------------------------------------------------------------------------
 
 ItemEdit edit(const std::string& def, size_t step, size_t index, std::optional<Item> was, std::optional<Item> now) {
@@ -216,6 +230,7 @@ void apply(Session::Impl& s, const Command& c, bool forward) {
     at(src, where.at(from.id)) = to;
   };
   if (forward) {
+    src.inlineParts.insert(src.inlineParts.end(), c.importedParts.begin(), c.importedParts.end());
     for (const DefEdit& d : c.defs) src.submodels.insert(src.submodels.begin() + static_cast<long>(d.position), {d.name, d.def});
     if (c.addedRootStep) src.def(c.stepDef)->steps.emplace_back();
     for (auto it = removed.rbegin(); it != removed.rend(); ++it) erase(**it);
@@ -223,6 +238,7 @@ void apply(Session::Impl& s, const Command& c, bool forward) {
     for (const ItemEdit* e : inserted) insert(*e, *e->after);
     for (const DefChange& d : c.wholeDefs) swapDef(src, d.name, d.position, d.before, d.after);
   } else {
+    src.inlineParts.resize(src.inlineParts.size() - c.importedParts.size());
     for (auto it = c.wholeDefs.rbegin(); it != c.wholeDefs.rend(); ++it) swapDef(src, it->name, it->position, it->after, it->before);
     for (auto it = inserted.rbegin(); it != inserted.rend(); ++it) erase(**it);
     for (const ItemEdit* e : changed) replace(*e->after, *e->before);
@@ -230,6 +246,16 @@ void apply(Session::Impl& s, const Command& c, bool forward) {
     if (c.addedRootStep) src.def(c.stepDef)->steps.pop_back();
     for (auto it = c.defs.rbegin(); it != c.defs.rend(); ++it)
       std::erase_if(src.submodels, [&](const auto& sub) { return sub.first == it->name; });
+  }
+  if (c.planField) {
+    const auto& field = *c.planField;
+    const auto& value = forward ? field.after : field.before;
+    if (value.is_null()) {
+      if (src.extra.is_object()) src.extra.erase(field.key);
+    } else {
+      if (!src.extra.is_object()) src.extra = nlohmann::ordered_json::object();
+      src.extra[field.key] = value;
+    }
   }
   renameFocus(s, c, forward);
 }
@@ -244,7 +270,7 @@ void renameFocus(Session::Impl& s, const Command& c, bool forward) {
 }
 
 bool structural(const Command& c) {
-  if (c.kind != Edit::Move && c.kind != Edit::Rotate && c.kind != Edit::Recolor) return true;
+  if (c.kind != Edit::Move && c.kind != Edit::Rotate && c.kind != Edit::Scale && c.kind != Edit::Recolor) return true;
   if (!c.defs.empty() || c.addedRootStep || !c.wholeDefs.empty()) return true;
   return std::any_of(c.items.begin(), c.items.end(), [](const ItemEdit& e) { return !e.before || !e.after; });
 }
@@ -286,13 +312,37 @@ Changed inPlace(Session::Impl& s, const std::vector<ItemId>& ids) {
 
 Changed finish(Session::Impl& s, const Command& c) {
   Changed out;
-  if (trimFocus(s) || structural(c)) {
+  if (c.kind == Edit::Motion || c.kind == Edit::Keyframes) {
+    // Timing and the layer of hand keys leave the editable model and its paths as they are.
+    out.keyframesOnly = c.kind == Edit::Keyframes;
+  } else if (c.kind == Edit::InsertionDirection) {
+    ++s.planInputs;
+  } else if (c.kind == Edit::SetGroup || c.kind == Edit::StepFields) {
+    ++s.structureVersion;
+    if (c.kind == Edit::StepFields && !c.wholeDefs.empty()) {
+      const auto& change = c.wholeDefs.front();
+      const auto pin = [&](const auto& def) {
+        const auto& fields = def->steps[c.stepIndex].extra;
+        return fields.is_object() && fields.contains("pinOrder") && fields["pinOrder"].is_boolean() && fields["pinOrder"].template get<bool>();
+      };
+      if (pin(change.before) != pin(change.after)) ++s.planInputs;
+    }
+  } else if (trimFocus(s) || structural(c)) {
     reflatten(s);
     out.structure = true;
+    if (c.kind == Edit::Delete && s.previousRefs.size() > s.refs.size()) {
+      size_t next = 0;
+      for (size_t old = 0; old < s.previousRefs.size(); ++old) {
+        if (next < s.refs.size() && s.previousRefs[old].chain == s.refs[next].chain) ++next;
+        else out.removed.push_back(static_cast<uint32_t>(old));
+      }
+      if (next != s.refs.size()) out.removed.clear();
+    }
   } else {
     std::vector<ItemId> ids;
     for (const ItemEdit& e : c.items) ids.push_back(e.after ? e.after->id : e.before->id);
     out = inPlace(s, ids);
+    if (!out.moved.empty()) ++s.planInputs;
   }
   out.version = ++s.version;
   return out;
@@ -325,14 +375,23 @@ void pinUses(const Session::Impl& s, const std::set<std::string>& defs, Command&
           if (i.submodel && affected.count(i.name) && affected.insert(name).second) grew = true;
     }
   }
+  std::optional<std::unordered_map<ItemId, Xform>> outsideFocus;
   auto pin = [&](const std::string& defName, const Def& def) {
     for (size_t si = 0; si < def.steps.size(); si++)
       for (size_t ii = 0; ii < def.steps[si].items.size(); ii++) {
         const Item& i = def.steps[si].items[ii];
-        if (!i.submodel || !i.at.grid || !affected.count(i.name) || !s.local.count(i.id)) continue;
+        if (!i.submodel || !i.at.grid || !affected.count(i.name)) continue;
+        const Xform* local = nullptr;
+        if (const auto found = s.local.find(i.id); found != s.local.end()) {
+          local = &found->second;
+        } else {
+          if (!outsideFocus) outsideFocus = bm::doc::placements(s.source, *s.library, *s.full);
+          if (const auto found = outsideFocus->find(i.id); found != outsideFocus->end()) local = &found->second;
+        }
+        if (!local) continue;
         Item after = i;
         after.at.grid = false;
-        after.at.exact = s.local.at(i.id);
+        after.at.exact = *local;
         c.items.push_back(edit(defName, si, ii, i, after));
       }
   };
@@ -454,6 +513,7 @@ void reflatten(Session::Impl& s) {
   s.refs = std::move(flat.refs);
   s.local = std::move(flat.local);
   s.body = std::move(flat.body);
+  ++s.planInputs;
   s.piecesOf.clear();
   s.useCount.clear();
   for (uint32_t p = 0; p < s.refs.size(); p++) {
@@ -568,6 +628,115 @@ Changed pasteCommand(Session::Impl& s, const std::string& def, const std::string
   if (c.items.empty()) return unchanged(s);
   c.name = named("Paste", c.items.size());
   return push(s, std::move(c));
+}
+
+Changed placePartCommand(Session::Impl& s, const std::string& def, const std::string& part,
+                         int color, const Xform& pose, int step) {
+  const std::string name = bm::ldraw::normalizeName(part);
+  if (!name.ends_with(".dat") || !s.library->find(name)) return refusal(s, "This part is missing from the library.");
+  if (s.model->library().isInline(name)) return refusal(s, "This model already defines a custom part with that name.");
+  if (!validPose(pose)) return refusal(s, "This part has an invalid placement.");
+
+  const auto& steps = s.source.def(def)->steps;
+  if (step >= 0 && static_cast<size_t>(step) >= steps.size()) return refusal(s, "That build step no longer exists.");
+  const size_t into = steps.empty() ? 0 : step < 0 ? steps.size() - 1 : static_cast<size_t>(step);
+  Command c;
+  c.kind = Edit::PlacePart;
+  c.name = "Place Part";
+  c.stepDef = def;
+  c.addedRootStep = steps.empty();
+  pinUses(s, {def}, c);
+
+  Item item;
+  item.id = s.source.newId();
+  item.name = name;
+  item.color = planColor(s, color);
+  item.colorText = std::to_string(item.color);
+  item.at.exact = pose;
+  c.items.push_back(edit(def, into, steps.empty() ? 0 : steps[into].items.size(), std::nullopt, std::move(item)));
+  return push(s, std::move(c));
+}
+
+std::vector<MovingPiece> piecesAfterMove(const Session::Impl& s, const PieceList& pieces, uint32_t anchor) {
+  if (anchor >= s.refs.size()) return {};
+  const auto targets = resolve(s, anchorFirst(pieces, anchor), false);
+  std::vector<MovingPiece> out;
+  for (const Target& target : targets) {
+    const auto occurrences = s.piecesOf.find(target.id);
+    if (occurrences == s.piecesOf.end()) continue;
+    const Xform fromRepresentative = target.parent.inverse();
+    for (uint32_t p : occurrences->second) {
+      Xform parent;
+      for (ItemId item : s.refs[p].chain) {
+        if (item == target.id) break;
+        parent = parent * s.local.at(item);
+      }
+      out.push_back({p, parent * fromRepresentative});
+    }
+  }
+  std::sort(out.begin(), out.end(), [](const MovingPiece& a, const MovingPiece& b) { return a.piece < b.piece; });
+  return out;
+}
+
+Changed placeMovedCommand(Session::Impl& s, const PieceList& pieces, uint32_t anchor, const Xform& pose) {
+  if (anchor >= s.refs.size() || !validPose(pose)) return refusal(s, "This selection has an invalid placement.");
+  const Xform& previous = s.model->pieces()[anchor].world;
+  const Xform delta = pose * previous.inverse();
+  const bm::Mat3 unit;
+  if (bm::length(delta.t) < 1e-6 &&
+      std::equal(std::begin(delta.r.m), std::end(delta.r.m), std::begin(unit.m),
+                 [](double a, double b) { return std::abs(a - b) < 1e-7; })) return unchanged(s);
+  return transformCommand(s, Edit::Move, "Move", anchorFirst(pieces, anchor), delta, false, {}, {}, 0, {});
+}
+
+std::string groupOf(const Item& item) {
+  if (!item.extra.is_object()) return {};
+  const auto assembly = item.extra.find("assembly");
+  if (assembly == item.extra.end() || !assembly->is_object()) return {};
+  const auto group = assembly->find("group");
+  return group != assembly->end() && group->is_string() ? group->get<std::string>() : std::string{};
+}
+
+StringList groupsOfItems(const Session::Impl& s, const PieceList& pieces) {
+  std::set<std::string> names;
+  const std::string def = focusedDef(s);
+  for (const auto& target : resolve(s, pieces, false)) {
+    if (target.loc.def != def) continue;
+    auto name = groupOf(at(s.source, target.loc));
+    if (!name.empty()) names.insert(std::move(name));
+  }
+  return {names.begin(), names.end()};
+}
+
+Changed setGroupCommand(Session::Impl& s, const PieceList& pieces, const std::string& requested) {
+  const auto first = requested.find_first_not_of(" \t\r\n");
+  const auto last = requested.find_last_not_of(" \t\r\n");
+  const std::string name = first == std::string::npos ? "" : requested.substr(first, last - first + 1);
+  if (name.size() > 160) return refusal(s, "Use a shorter group name.");
+  const auto targets = resolve(s, pieces, false);
+  if (targets.empty()) return unchanged(s);
+  Command c;
+  c.kind = Edit::SetGroup;
+  c.name = name.empty() ? "Remove from Group" : "Set Group";
+  const std::string def = focusedDef(s);
+  for (const auto& target : targets) {
+    if (target.loc.def != def) return refusal(s, "Open the submodel to group the pieces inside it.");
+    const Item& old = at(s.source, target.loc);
+    if (groupOf(old) == name) continue;
+    Item item = old;
+    if (name.empty()) {
+      auto& assembly = item.extra["assembly"];
+      assembly.erase("group");
+      if (assembly.empty()) item.extra.erase("assembly");
+    } else {
+      if (!item.extra.is_object()) item.extra = nlohmann::ordered_json::object();
+      auto& assembly = item.extra["assembly"];
+      if (!assembly.is_object()) assembly = nlohmann::ordered_json::object();
+      assembly["group"] = name;
+    }
+    c.items.push_back(edit(target.loc.def, target.loc.step, target.loc.index, old, std::move(item)));
+  }
+  return c.items.empty() ? unchanged(s) : push(s, std::move(c));
 }
 
 Changed replaceCommand(Session::Impl& s, const std::vector<uint32_t>& pieces, const std::string& part) {
@@ -886,6 +1055,362 @@ Changed setStepFieldsCommand(Session::Impl& s, const std::string& def, size_t at
   return push(s, std::move(c));
 }
 
+namespace {
+
+constexpr std::array<const char*, 4> motionEasing{"smooth", "gentle", "soft", "linear"};
+
+const Json& fieldObject(const Json& parent, const char* key) {
+  static const Json empty = Json::object();
+  const auto it = parent.is_object() ? parent.find(key) : parent.end();
+  return it != parent.end() && it->is_object() ? *it : empty;
+}
+
+void setFieldObject(Json& parent, const char* key, const Json& value) {
+  if (value.empty()) {
+    if (parent.is_object()) parent.erase(key);
+  } else {
+    if (!parent.is_object()) parent = Json::object();
+    parent[key] = value;
+  }
+}
+
+MotionFields readMotion(const Json& object) {
+  MotionFields f;
+  const auto number = [&](const char* key) {
+    const auto it = object.find(key);
+    return it != object.end() && it->is_number() ? it->get<double>() : -1;
+  };
+  f.time = number("time");
+  f.landing = number("landing");
+  f.hover = number("hover");
+  if (const auto it = object.find("ease"); it != object.end() && it->is_string()) {
+    for (size_t i = 0; i < motionEasing.size(); ++i) if (*it == motionEasing[i]) f.ease = static_cast<int>(i);
+  }
+  return f;
+}
+
+Json writeMotion(Json object, const MotionFields& f) {
+  const auto put = [&](const char* key, double value, double low, double high) {
+    if (!std::isfinite(value) || value < 0) object.erase(key);
+    else object[key] = std::round(100 * std::clamp(value, low, high)) / 100;
+  };
+  put("time", f.time, 0.25, 4);
+  put("landing", f.landing, 0.1, 0.7);
+  put("hover", f.hover, 0, 0.4);
+  if (f.ease >= 0 && static_cast<size_t>(f.ease) < motionEasing.size()) object["ease"] = motionEasing[f.ease];
+  else object.erase("ease");
+  return object;
+}
+
+}  // namespace
+
+MotionFields motionFieldsOf(const Session::Impl& s, MotionScope scope, size_t step, const PieceList& pieces) {
+  if (scope == MotionScope::Project) return readMotion(fieldObject(s.source.extra, "motion"));
+  if (scope == MotionScope::Step) {
+    const auto* def = s.source.def(focusedDef(s));
+    if (def && step < def->steps.size()) return readMotion(fieldObject(def->steps[step].extra, "motion"));
+  } else {
+    const auto targets = resolve(s, pieces, true);
+    if (!targets.empty()) return readMotion(fieldObject(fieldObject(at(s.source, targets.front().loc).extra, "assembly"), "motion"));
+  }
+  return {};
+}
+
+Changed setMotionFieldsCommand(Session::Impl& s, MotionScope scope, size_t step, const PieceList& pieces, const MotionFields& fields) {
+  Command c;
+  c.kind = Edit::Motion;
+  c.name = "Edit Build Motion";
+  if (scope == MotionScope::Project) {
+    const auto& before = fieldObject(s.source.extra, "motion");
+    const auto after = writeMotion(before, fields);
+    if (before == after) return unchanged(s);
+    c.planField = Command::PlanField{"motion", before.empty() ? Json{} : before, after.empty() ? Json{} : after};
+  } else if (scope == MotionScope::Step) {
+    const std::string name = focusedDef(s);
+    const auto* def = s.source.def(name);
+    if (!def || step >= def->steps.size()) return unchanged(s);
+    Def newDef = *def;
+    auto& stepData = newDef.steps[step].extra;
+    const auto changed = writeMotion(fieldObject(stepData, "motion"), fields);
+    if (fieldObject(stepData, "motion") == changed) return unchanged(s);
+    setFieldObject(stepData, "motion", changed);
+    c.wholeDefs.push_back({name, positionOf(s.source, name), *def, std::move(newDef)});
+  } else {
+    for (const auto& target : resolve(s, pieces, true)) {
+      const auto& old = at(s.source, target.loc);
+      Item item = old;
+      Json assembly = fieldObject(item.extra, "assembly");
+      setFieldObject(assembly, "motion", writeMotion(fieldObject(assembly, "motion"), fields));
+      setFieldObject(item.extra, "assembly", assembly);
+      if (item.extra != old.extra)
+        c.items.push_back(edit(target.loc.def, target.loc.step, target.loc.index, old, std::move(item)));
+    }
+    if (c.items.empty()) return unchanged(s);
+  }
+  return push(s, std::move(c));
+}
+
+Changed turnWaitingPartCommand(Session::Impl& s, uint32_t piece, double degrees) {
+  if (!std::isfinite(degrees) || piece >= s.refs.size()) return unchanged(s);
+  const auto targets = resolve(s, {piece}, true);
+  if (targets.empty() || s.refs[piece].chain.size() != 1) return unchanged(s);
+  const auto& target = targets.front().loc;
+  const auto& before = at(s.source, target);
+  Json assembly = fieldObject(before.extra, "assembly");
+  const auto saved = assembly.find("floorTurn");
+  const double existing = saved != assembly.end() && saved->is_number() ? saved->get<double>() : 0;
+  const double turn = std::remainder(std::remainder(degrees, 360) + std::remainder(existing, 360), 360);
+  if (std::abs(turn) < 1e-6) assembly.erase("floorTurn");
+  else assembly["floorTurn"] = turn < 0 ? turn + 360 : turn;
+  Item after = before;
+  setFieldObject(after.extra, "assembly", assembly);
+  if (after.extra == before.extra) return unchanged(s);
+  Command command;
+  command.kind = Edit::Motion;
+  command.name = "Turn Waiting Part";
+  command.items.push_back(edit(target.def, target.step, target.index, before, std::move(after)));
+  return push(s, std::move(command));
+}
+
+bm::Vec3 insertionDirectionOf(const Session::Impl& s, uint32_t piece) {
+  const auto targets = resolve(s, {piece}, true);
+  if (targets.empty()) return {};
+  const auto& t = targets.front();
+  const auto& assembly = fieldObject(at(s.source, t.loc).extra, "assembly");
+  const auto direction = assembly.find("insertionAxis");
+  if (direction == assembly.end() || !direction->is_array() || direction->size() != 3 ||
+      !std::all_of(direction->begin(), direction->end(), [](const auto& v) { return v.is_number(); })) return {};
+  const bm::Vec3 local{(*direction)[0].get<double>(), (*direction)[1].get<double>(), (*direction)[2].get<double>()};
+  return bm::normalized(t.parent.r * local);
+}
+
+Changed setInsertionDirectionCommand(Session::Impl& s, const PieceList& pieces, bm::Vec3 direction) {
+  const double magnitude = bm::length(direction);
+  if (!std::isfinite(magnitude)) return refusal(s, "Choose a finite direction.");
+  Command c;
+  c.kind = Edit::InsertionDirection;
+  c.name = magnitude > 1e-8 ? "Set Insertion Direction" : "Reset Insertion Direction";
+  for (const auto& target : resolve(s, pieces, true)) {
+    const auto& before = at(s.source, target.loc);
+    Item item = before;
+    Json assembly = fieldObject(item.extra, "assembly");
+    const bm::Vec3 local = bm::normalized(target.parent.inverse().r * direction);
+    if (magnitude > 1e-8) assembly["insertionAxis"] = Json::array({local.x, local.y, local.z});
+    else assembly.erase("insertionAxis");
+    setFieldObject(item.extra, "assembly", assembly);
+    if (item.extra != before.extra)
+      c.items.push_back(edit(target.loc.def, target.loc.step, target.loc.index, before, std::move(item)));
+  }
+  return c.items.empty() ? unchanged(s) : push(s, std::move(c));
+}
+
+Changed scaleCommand(Session::Impl& s, const PieceList& pieces, bm::Vec3 factor, bm::Mat3 axes, bm::Vec3 pivot, bool continuing) {
+  if (!std::isfinite(factor.x) || !std::isfinite(factor.y) || !std::isfinite(factor.z) ||
+      std::min({factor.x, factor.y, factor.z}) <= 0 || std::abs(bm::determinant(axes)) < 1e-8)
+    return refusal(s, "Choose positive scale factors.");
+  const auto multiply = [](bm::Vec3 a, bm::Vec3 b) {
+    return bm::Vec3{std::clamp(a.x * b.x, 0.05, 20.0), std::clamp(a.y * b.y, 0.05, 20.0), std::clamp(a.z * b.z, 0.05, 20.0)};
+  };
+  const auto change = [&](bm::Vec3 factors) {
+    const bm::Mat3 basis{{factors.x, 0, 0, 0, factors.y, 0, 0, 0, factors.z}};
+    const bm::Mat3 matrix = axes * basis * bm::inverse(axes);
+    return bm::Xform{matrix, pivot - matrix * pivot};
+  };
+  if (continuing) {
+    if (Command* c = openGesture(s, Edit::Scale, pieces)) {
+      c->total = multiply(c->total, factor);
+      return regrow(s, *c, change(c->total));
+    }
+  }
+  factor = multiply({1, 1, 1}, factor);
+  if (factor == bm::Vec3{1, 1, 1}) return unchanged(s);
+  return transformCommand(s, Edit::Scale, "Scale", pieces, change(factor), continuing, factor, {}, 0, pivot);
+}
+
+namespace {
+
+Command animationEdit(const Session::Impl& s, std::string name, Json next) {
+  Command c;
+  c.kind = Edit::Keyframes;
+  c.name = std::move(name);
+  const auto& prior = animationObject(s);
+  c.planField = Command::PlanField{"animation", prior.empty() ? Json{} : prior, std::move(next)};
+  return c;
+}
+
+Json editableAnimation(const Session::Impl& s) {
+  Json next = animationObject(s);
+  const auto scene = readKeyScene(s);
+  next["fps"] = scene.fps;
+  next["startFrame"] = scene.first;
+  next["endFrame"] = scene.last;
+  if (!next.contains("tracks") || !next["tracks"].is_array()) next["tracks"] = Json::array();
+  return next;
+}
+
+}  // namespace
+
+Changed setKeySceneCommand(Session::Impl& s, const KeyScene& scene) {
+  if (scene.fps < 1 || scene.fps > 120 || scene.first < 0 || scene.last > 20000 || scene.first >= scene.last)
+    return refusal(s, "Choose a frame rate from 1 to 120 and an increasing frame range.");
+  const auto before = readKeyScene(s);
+  Json next = editableAnimation(s);
+  for (auto& track : next["tracks"]) {
+    if (!track.is_object() || !track.contains("channels") || !track["channels"].is_object()) continue;
+    for (auto& lane : track["channels"]) {
+      if (!lane.is_array()) continue;
+      Json retimed = Json::array();
+      for (auto key : lane) {
+        if (!key.is_object() || !key.contains("frame") || !key["frame"].is_number_integer()) continue;
+        const int original = key["frame"].get<int>();
+        const int frame = scene.fps == before.fps ? original :
+            before.first + static_cast<int>(std::lround((original - before.first) * (static_cast<double>(scene.fps) / before.fps)));
+        if (frame < scene.first || frame > scene.last) return refusal(s, "The range must include every existing key.");
+        key["frame"] = frame;
+        if (!retimed.empty() && retimed.back()["frame"] == frame) retimed.back() = std::move(key);
+        else retimed.push_back(std::move(key));
+      }
+      lane = std::move(retimed);
+    }
+  }
+  next["fps"] = scene.fps;
+  next["startFrame"] = scene.first;
+  next["endFrame"] = scene.last;
+  auto& layers = next["buildLayers"];
+  if (!layers.is_object()) layers = Json::object();
+  const std::string model = focusedDef(s);
+  for (auto& layer : layers) {
+    if (!layer.is_object() || !layer.contains("startFrame") || !layer["startFrame"].is_number_integer()) continue;
+    const int old = layer["startFrame"].get<int>();
+    const int converted = before.first + static_cast<int>(std::lround((old - before.first) * (static_cast<double>(scene.fps) / before.fps)));
+    layer["startFrame"] = std::clamp(converted, scene.first, scene.last);
+  }
+  if (scene.buildLinked) {
+    const double speed = std::isfinite(scene.buildSpeed) ? std::clamp(scene.buildSpeed, 0.1, 4.0) : 1;
+    layers[model] = {{"startFrame", std::clamp(scene.buildStart, scene.first, scene.last)}, {"speed", speed}};
+  } else {
+    layers.erase(model);
+  }
+  if (layers.empty()) next.erase("buildLayers");
+  if (next == animationObject(s)) return unchanged(s);
+  return push(s, animationEdit(s, "Edit Animation Scene", std::move(next)));
+}
+
+Changed setKeysCommand(Session::Impl& s, uint32_t piece, const KeyList& keys, bool continuing, bool remove, bool baked) {
+  if (!s.model || piece >= s.refs.size() || keys.empty()) return unchanged(s);
+  const auto& chain = s.refs[piece].chain;
+  if (chain.empty()) return unchanged(s);
+  if (baked && chain.size() != 1) return refusal(s, "Open the submodel to bake an individual flight.");
+  const auto where = locate(s.source);
+  const Loc& location = where.at(chain.front());
+  const auto& old = at(s.source, location);
+  if (location.def != focusedDef(s)) return unchanged(s);
+  Item ready = old;
+  std::string target = text(old.extra, "id");
+  if (target.empty()) {
+    if (remove) return unchanged(s);
+    target = s.model->pieces()[piece].id;
+    if (old.submodel) target = target.substr(0, target.find('/'));
+    setText(ready.extra, "id", target);
+  }
+  Json next = editableAnimation(s);
+  auto& tracks = next["tracks"];
+  auto track = std::find_if(tracks.begin(), tracks.end(), [&](const auto& row) {
+    return text(row, "model") == location.def && text(row, "target") == target;
+  });
+  if (track == tracks.end()) {
+    if (remove) return unchanged(s);
+    if (tracks.size() >= 2000) return refusal(s, "The project already has 2,000 animated objects.");
+    tracks.push_back({{"kind", "object"}, {"model", location.def}, {"target", target}, {"channels", Json::object()}});
+    track = std::prev(tracks.end());
+  }
+  if (baked) (*track)["source"] = "baked-flight";
+  auto& channels = (*track)["channels"];
+  if (!channels.is_object()) channels = Json::object();
+  const auto scene = readKeyScene(s);
+  for (const auto& key : keys) {
+    const auto channel = static_cast<size_t>(key.channel);
+    size_t curve = static_cast<size_t>(key.interpolation);
+    if (channel >= kKeyChannels.size() || curve >= kKeyInterpolation.size() || !std::isfinite(key.value) ||
+        key.frame < scene.first || key.frame > scene.last) continue;
+    if (key.channel == KeyChannel::Visibility) curve = static_cast<size_t>(KeyInterpolation::Hold);
+    auto& lane = channels[kKeyChannels[channel]];
+    if (!lane.is_array()) lane = Json::array();
+    const auto existing = std::lower_bound(lane.begin(), lane.end(), key.frame, [](const auto& item, int frame) {
+      return item.is_object() && item.value("frame", -1) < frame;
+    });
+    const bool same = existing != lane.end() && existing->is_object() && existing->value("frame", -1) == key.frame;
+    if (remove && same) lane.erase(existing);
+    if (!remove) {
+      if (!same && lane.size() >= 5000) return refusal(s, "This property already has 5,000 keys.");
+      const double value = key.channel == KeyChannel::Visibility ? (key.value >= 0.5 ? 1 : 0) :
+          key.channel >= KeyChannel::ScaleX ? std::clamp(key.value, 0.001, 100.0) : std::clamp(key.value, -1e6, 1e6);
+      const Json row = {{"frame", key.frame}, {"value", value}, {"interpolation", kKeyInterpolation[curve]}};
+      if (same) *existing = row;
+      else lane.insert(existing, row);
+    }
+    if (lane.empty()) channels.erase(kKeyChannels[channel]);
+  }
+  if (channels.empty()) tracks.erase(track);
+  if (next == animationObject(s)) return unchanged(s);
+  const int frame = keys.front().frame;
+  if (continuing && s.history.cursor > 0 && s.history.cursor == s.history.done.size()) {
+    auto& c = s.history.done[s.history.cursor - 1];
+    if (c.kind == Edit::Keyframes && c.open && c.planField && c.pieces == PieceList{piece} &&
+        c.stepIndex == static_cast<size_t>(frame)) {
+      c.planField->after = std::move(next);
+      s.source.extra["animation"] = c.planField->after;
+      return finish(s, c);
+    }
+  }
+  auto c = animationEdit(s, baked ? "Bake Build Motion" : remove ? "Delete Keyframes" : "Set Keyframes", std::move(next));
+  c.pieces = {piece};
+  c.open = continuing;
+  c.stepIndex = static_cast<size_t>(frame);
+  if (old.extra != ready.extra) c.items.push_back(edit(location.def, location.step, location.index, old, std::move(ready)));
+  return push(s, std::move(c));
+}
+
+Changed moveKeyCommand(Session::Impl& s, uint32_t piece, KeyChannel channel, int from, int to) {
+  const auto index = static_cast<size_t>(channel);
+  if (piece >= s.refs.size() || s.refs[piece].chain.empty() || index >= kKeyChannels.size() || from == to) return unchanged(s);
+  const auto range = readKeyScene(s);
+  if (to < range.first || to > range.last) return refusal(s, "The key must stay within the scene range.");
+  const auto locations = locate(s.source);
+  const auto& location = locations.at(s.refs[piece].chain.front());
+  const std::string id = text(at(s.source, location).extra, "id");
+  if (id.empty()) return unchanged(s);
+  Json next = editableAnimation(s);
+  for (auto& track : next["tracks"]) {
+    if (text(track, "target") != id || text(track, "model") != location.def ||
+        !track.contains("channels") || !track["channels"].is_object()) continue;
+    const auto channel = track["channels"].find(kKeyChannels[index]);
+    if (channel == track["channels"].end() || !channel->is_array()) return unchanged(s);
+    const auto source = std::find_if(channel->begin(), channel->end(), [&](const auto& row) {
+      return row.is_object() && row.value("frame", -1) == from;
+    });
+    if (source == channel->end()) return unchanged(s);
+    auto moved = *source;
+    moved["frame"] = to;
+    Json lane = Json::array();
+    bool inserted = false;
+    for (const auto& key : *channel) {
+      if (!(key.is_object() && key.contains("frame") && key["frame"].is_number_integer())) continue;
+      const int when = key["frame"].get<int>();
+      if (when == from || when == to) continue;
+      if (!inserted && when > to) {
+        lane.push_back(moved);
+        inserted = true;
+      }
+      lane.push_back(key);
+    }
+    if (!inserted) lane.push_back(std::move(moved));
+    *channel = std::move(lane);
+    return push(s, animationEdit(s, "Move Keyframe", std::move(next)));
+  }
+  return unchanged(s);
+}
+
 Changed moveToStepCommand(Session::Impl& s, const std::string& def, const std::vector<uint32_t>& pieces, size_t step) {
   const Def* d = s.source.def(def);
   if (!d || step > d->steps.size()) return unchanged(s);
@@ -908,19 +1433,75 @@ Changed moveToStepCommand(Session::Impl& s, const std::string& def, const std::v
   return swapCommand(s, Edit::MoveToStep, named("Move", moving.size()) + " to Step " + std::to_string(step + 1), def, std::move(after));
 }
 
-Changed reorderInStepCommand(Session::Impl& s, const std::string& def, size_t step, size_t from, size_t to) {
+Changed reorderInStepCommand(Session::Impl& s, const std::string& def, size_t step, size_t from, size_t to, bool pin) {
   const Def* d = s.source.def(def);
   if (!d || step >= d->steps.size()) return unchanged(s);
   const auto& items = d->steps[step].items;
-  if (from >= items.size() || to >= items.size() || from == to) return unchanged(s);
+  if (from >= items.size() || to >= items.size() || (from == to && !pin)) return unchanged(s);
   Def after = *d;
   auto& list = after.steps[step].items;
   Item moving = std::move(list[from]);
   list.erase(list.begin() + static_cast<long>(from));
   list.insert(list.begin() + static_cast<long>(to), std::move(moving));
-  return swapCommand(s, Edit::ReorderInStep, "Reorder Step", def, std::move(after));
+  if (pin) {
+    auto fields = readFields(after.steps[step]);
+    fields.pinOrder = true;
+    writeFields(after.steps[step], fields);
+  }
+  return swapCommand(s, Edit::ReorderInStep, pin ? "Set Arrival Order" : "Reorder Step", def, std::move(after));
 }
 
+Changed regenerateStepsCommand(Session::Impl& s, const PieceList& buildOrder) {
+  const std::string scope = focusedDef(s);
+  const Def* def = s.source.def(scope);
+  if (!def || buildOrder.empty()) return unchanged(s);
+  std::unordered_map<ItemId, size_t> order;
+  for (size_t i = 0; i < buildOrder.size(); ++i)
+    if (buildOrder[i] < s.refs.size() && !s.refs[buildOrder[i]].chain.empty())
+      order.try_emplace(s.refs[buildOrder[i]].chain.front(), i);
+
+  Def next = *def;
+  next.steps.clear();
+  std::vector<Item> draft;
+  const auto emit = [&] {
+    if (draft.empty()) return;
+    const size_t absent = buildOrder.size();
+    const auto rank = [&](const Item& item) {
+      const auto found = order.find(item.id);
+      return found == order.end() ? absent : found->second;
+    };
+    std::stable_sort(draft.begin(), draft.end(), [&](const Item& a, const Item& b) { return rank(a) < rank(b); });
+    constexpr size_t itemsPerStep = 12;
+    for (size_t i = 0; i < draft.size(); i += itemsPerStep) {
+      bm::doc::Step step;
+      step.extra = {{"auto", true}};
+      const auto begin = draft.begin() + static_cast<std::ptrdiff_t>(i);
+      const auto end = begin + static_cast<std::ptrdiff_t>(std::min(itemsPerStep, draft.size() - i));
+      step.items.assign(std::make_move_iterator(begin), std::make_move_iterator(end));
+      next.steps.push_back(std::move(step));
+    }
+    draft.clear();
+  };
+  for (const auto& step : def->steps) {
+    Json authored = step.extra;
+    if (authored.is_object()) authored.erase("auto");
+    if (!authored.empty()) {
+      emit();
+      next.steps.push_back(step);  // preserve a named, timed, noted or pinned section as authored
+    } else {
+      draft.insert(draft.end(), step.items.begin(), step.items.end());
+    }
+  }
+  emit();
+  if (next.steps.empty()) next.steps.emplace_back();
+  const auto same = [](const bm::doc::Step& a, const bm::doc::Step& b) {
+    return a.extra == b.extra && a.items.size() == b.items.size() &&
+           std::equal(a.items.begin(), a.items.end(), b.items.begin(), [](const Item& x, const Item& y) { return x.id == y.id; });
+  };
+  if (def->steps.size() == next.steps.size() && std::equal(def->steps.begin(), def->steps.end(), next.steps.begin(), same))
+    return unchanged(s);
+  return swapCommand(s, Edit::ReorderInStep, "Regenerate Build Steps", scope, std::move(next));
+}
 
 // ---- submodels -------------------------------------------------------------------------------
 
@@ -1050,6 +1631,103 @@ std::string freeName(const Session::Impl& s, const std::string& preferred) {
   if (!s.source.def(stem)) return stem;
   for (int n = 2;; n++)
     if (std::string name = stem + " " + std::to_string(n); !s.source.def(name)) return name;
+}
+
+Changed importModelCommand(Session::Impl& s, const std::string& into, const bm::doc::Source& incoming,
+                           const std::string& name) {
+  const Def* target = s.source.def(into);
+  if (!target) return refusal(s, "The destination model no longer exists.");
+  if (incoming.root.steps.empty()) return refusal(s, "There are no build steps in this file.");
+  Command command;
+  command.kind = Edit::ImportModel;
+  command.name = "Import Model";
+  pinUses(s, {into}, command);
+  auto normalized = bm::ldraw::normalizeName;
+  std::set<std::string> usedNames{normalized(s.source.rootName)};
+  std::set<std::string> usedParts, usedIds;
+  auto reserve = [&](const Def& def) {
+    for (const auto& step : def.steps) {
+      for (const Item& item : step.items) {
+        if (!item.submodel) usedParts.insert(normalized(item.name));
+        if (item.extra.contains("id") && item.extra["id"].is_string())
+          usedIds.insert(item.extra["id"].get<std::string>());
+      }
+    }
+  };
+  reserve(s.source.root);
+  for (const auto& [n, def] : s.source.submodels) {
+    usedNames.insert(normalized(n));
+    reserve(def);
+  }
+  for (const auto& part : s.source.inlineParts) {
+    usedParts.insert(part.name);
+    for (const auto& line : part.cmds) if (line.type == bm::ldraw::Cmd::Ref) usedParts.insert(line.file);
+  }
+  auto reserveName = [&](std::string base) {
+    if (base.empty()) base = "Imported Model";
+    if (normalized(base).ends_with(".dat")) base += ".ldr";
+    if (usedNames.insert(normalized(base)).second) return base;
+    for (int i = 2;; ++i) {
+      const std::string candidate = base + " " + std::to_string(i);
+      if (usedNames.insert(normalized(candidate)).second) return candidate;
+    }
+  };
+  const std::string rootName = reserveName(name);
+  std::map<std::string, std::string> models, parts;
+  if (!incoming.rootName.empty()) models[incoming.rootName] = rootName;
+  for (const auto& [old, _] : incoming.submodels) models[old] = reserveName(old);
+  for (const auto& file : incoming.inlineParts) {
+    if (parts.contains(file.name)) continue;
+    std::string mapped = file.name;
+    for (int n = 1; usedParts.contains(mapped) || s.library->resolve(mapped); ++n)
+      mapped = "bm-import-" + std::to_string(n) + "-" + std::filesystem::path(file.name).filename().string();
+    usedParts.insert(mapped);
+    parts.emplace(file.name, mapped);
+    command.importedParts.push_back(file);
+  }
+  for (auto& file : command.importedParts) {
+    file.name = parts.at(file.name);
+    for (auto& line : file.cmds)
+      if (line.type == bm::ldraw::Cmd::Ref)
+        if (const auto found = parts.find(line.file); found != parts.end()) line.file = found->second;
+  }
+
+  auto freshId = [&](Item& item) {
+    item.id = s.source.newId();
+    std::string id = "bm-import-" + std::to_string(item.id);
+    while (!usedIds.insert(id).second) id += "-1";
+    if (!item.extra.is_object()) item.extra = nlohmann::ordered_json::object();
+    item.extra["id"] = id;
+  };
+  auto clone = [&](Def def) {
+    for (auto& step : def.steps) {
+      for (Item& item : step.items) {
+        freshId(item);
+        if (item.submodel) {
+          auto found = models.find(item.name);
+          if (found == models.end()) found = models.emplace(item.name, reserveName(item.name)).first;
+          item.name = found->second;
+        } else if (auto found = parts.find(item.name); found != parts.end()) {
+          item.name = found->second;
+        }
+      }
+    }
+    return def;
+  };
+  size_t position = s.source.submodels.size();
+  command.defs.push_back({rootName, position++, clone(incoming.root)});
+  for (const auto& [old, def] : incoming.submodels) command.defs.push_back({models.at(old), position++, clone(def)});
+  Item instance;
+  instance.submodel = true;
+  instance.name = rootName;
+  freshId(instance);
+  Def changed = *target;
+  auto step = emptyStep();
+  step.extra["title"] = "Add " + rootName;
+  step.items.push_back(std::move(instance));
+  changed.steps.push_back(std::move(step));
+  command.wholeDefs.push_back({into, positionOf(s.source, into), *target, std::move(changed)});
+  return push(s, std::move(command));
 }
 
 Changed newSubmodelCommand(Session::Impl& s, const std::string& name) {

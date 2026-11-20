@@ -40,12 +40,34 @@ target_compile_options(BrickMotion PRIVATE
 target_include_directories(BrickMotion PRIVATE bmapp/include)
 target_link_libraries(BrickMotion PRIVATE bmapp
   "-framework AppKit" "-framework Metal" "-framework QuartzCore" "-framework SwiftUI")
+add_executable(BrickMotionThumbnails MACOSX_BUNDLE ThumbnailExtension/ThumbnailProvider.swift)
+set_target_properties(BrickMotionThumbnails PROPERTIES
+  BUNDLE_EXTENSION appex
+  MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/ThumbnailExtension/Info.plist.in
+  MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION}
+  MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
+  OSX_DEPLOYMENT_TARGET 26.0
+  Swift_LANGUAGE_VERSION 6)
+target_compile_options(BrickMotionThumbnails PRIVATE -parse-as-library "SHELL:-target arm64-apple-macosx26.0")
+target_link_options(BrickMotionThumbnails PRIVATE "LINKER:-e,_NSExtensionMain")
+target_link_libraries(BrickMotionThumbnails PRIVATE "-framework QuickLookThumbnailing" "-framework ImageIO" "-framework Foundation")
+add_custom_command(TARGET BrickMotionThumbnails POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E rm -f "$<TARGET_FILE:BrickMotionThumbnails>.d"
+  COMMAND /usr/bin/codesign --force --sign - --entitlements "${CMAKE_CURRENT_SOURCE_DIR}/ThumbnailExtension/Entitlements.plist" "$<TARGET_BUNDLE_DIR:BrickMotionThumbnails>")
+
+add_dependencies(BrickMotion bmexport BrickMotionThumbnails)
+add_custom_command(TARGET BrickMotion POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_CONTENT_DIR:BrickMotion>/Helpers"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:bmexport>" "$<TARGET_BUNDLE_CONTENT_DIR:BrickMotion>/Helpers/bmexport"
+  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_CONTENT_DIR:BrickMotion>/PlugIns"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory "$<TARGET_BUNDLE_DIR:BrickMotionThumbnails>" "$<TARGET_BUNDLE_CONTENT_DIR:BrickMotion>/PlugIns/BrickMotionThumbnails.appex")
 
 # The bridge must hold the shapes the app relies on (Task 1 of the phase 8 plan).
 add_test(NAME brickmotion_selftest_bridge
   COMMAND $<TARGET_FILE:BrickMotion> --selftest-bridge ${CMAKE_SOURCE_DIR}/../samples/helicopter/helicopter.mpd)
 add_test(NAME brickmotion_selftest_edit COMMAND $<TARGET_FILE:BrickMotion> --selftest-edit ${CMAKE_SOURCE_DIR}/../samples/helicopter/helicopter.mpd)
 add_test(NAME brickmotion_selftest_panes COMMAND $<TARGET_FILE:BrickMotion> --selftest-panes ${CMAKE_SOURCE_DIR}/../samples/helicopter/helicopter.mpd)
+add_test(NAME brickmotion_selftest_placement COMMAND $<TARGET_FILE:BrickMotion> --selftest-placement)
 add_test(NAME brickmotion_import_check COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/import_check.sh $<TARGET_FILE:BrickMotion>)
 add_test(NAME brickmotion_check_plist COMMAND $<TARGET_FILE:BrickMotion> --check-plist)
 add_test(NAME brickmotion_snapshot

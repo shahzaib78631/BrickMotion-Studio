@@ -9,13 +9,18 @@ import BMApp
     guard piece != nil else { return empty(context) }
     let menu = Registry.contextMenu(["view.frameSelection", "object.openSubmodel", nil], context: context)
     add(steps(context), to: menu)
+    add(submenu("Preview Step", ["step.showAssembled", "step.layOut"], context), to: menu)
+    add(submenu("Waiting Orientation", ["object.waitingCW", "object.waitingCCW", "object.waitingFacingSeat"], context), to: menu)
     append(["object.rotateCW", "object.raise", "object.lower", nil, "edit.cut", "edit.copy", "edit.paste", "edit.duplicate", nil], to: menu, context)
     add(colors(context), to: menu)
     menu.addItem(.separator())
     append(["edit.hide", "edit.hideOthers"], to: menu, context)
-    add(submenu("Select", ["select.samePart", "select.sameColor", "select.samePartColor", "select.sameStep", nil, "edit.selectAll"], context), to: menu)
+    add(submenu("Select", ["select.samePart", "select.sameColor", "select.samePartColor", "select.sameStep", "select.group",
+                           nil, "select.connected", "select.touching", "select.rigid", nil, "edit.selectAll"], context), to: menu)
     menu.addItem(.separator())
-    append(["object.makeSubmodel", "object.extract", "object.makeUnique", nil, "edit.delete"], to: menu, context)
+    append(["object.compatibleParts", "object.fitTogether", "object.waysToFit", "object.arrivalDirection", nil,
+            "object.group", "object.ungroup", nil, "object.makeSubmodel", "object.extract",
+            "object.makeUnique", nil, "edit.delete"], to: menu, context)
     tidy(menu)
     return menu
   }

@@ -2,6 +2,8 @@
 // From a plan to an animation: where each unit waits, how it flies in, when, and a camera.
 #include <filesystem>
 #include <nlohmann/json.hpp>
+#include "bm/connect/connectors.h"
+#include "bm/connect/graph.h"
 #include "bm/plan/certify.h"
 #include "bm/plan/plan.h"
 #include "bm/plan/staging.h"
@@ -12,10 +14,21 @@ namespace bm::plan {
 enum class Ease : uint8_t { Smooth, Gentle, Soft, Linear };
 double eased(Ease ease, double u);
 bool parse(const std::string& name, Ease& out);
-enum class FlightShape : uint8_t { Web, Arc };
-bool parse(const std::string& name, FlightShape& out);  ///< "web" or "arc"
+/// How a unit gets to its seat. Auto: carried straight there, turning on the way, and only lifted
+/// over what stands when that way is not clear. Web: the web app's lift, level across, then down.
+/// Arc: up and across as one rounded sweep.
+enum class FlightShape : uint8_t { Auto, Web, Arc };
+bool parse(const std::string& name, FlightShape& out);  ///< "auto", "web" or "arc"
+
+/// Which planner lays the timeline out. Native: bm's own, which follows the plan's own way in
+/// (the default). Legacy: the web app's Standard planner, ported as it is (src/anim/timeline.ts
+/// planTimeline) — it derives its own units and order, and picks each way in from connector and
+/// slot evidence.
+enum class Planner : uint8_t { Native, Legacy };
+bool parse(const std::string& name, Planner& out);  ///< "native" or "legacy"
 
 struct Style {
+  Planner planner = Planner::Native;
   double fps = 30;
   double piecesPerSecond = 2;  ///< how fast the build goes: a flight lasts at least 0.85 of a piece's slot, 0.35 s to 0.9 s, as the web's one by one
   double time = 1;             ///< multiplies every flight's length (2 = twice as slow)
@@ -33,9 +46,8 @@ struct Style {
   staging::Match floorMatch = staging::Match::Fill;
   double floorAspect = 1;
   Ease ease = Ease::Smooth;
-  /// The flight's shape. Web: the web app's (up, rest, across, rest, down). Arc: up and across
-  /// as one rounded sweep, at rest only at the top of the drop, then the web's drop into the seat.
-  FlightShape shape = FlightShape::Web;
+  /// The flight's shape, as above.
+  FlightShape shape = FlightShape::Auto;
   /// The way through the air: never closer than `clearance` above anything in the way (a brick),
   /// never faster than `speed`, and into the seat no faster than `seatSpeed` (LDU a second).
   double clearance = 24, speed = 10000, seatSpeed = 400;
@@ -95,6 +107,23 @@ struct Flight {
   bool fallback = false;  ///< no way through the air was found clear: it flies above everything
   int fallbackAt = 0;     ///< why: 1 no join with clear air above it, 2 no clear way across
   bool exitsBelow = false;  ///< the plan's way out ends going down: it goes in from below
+  bool direct = false;      ///< carried straight to its way in, turning on the way, without lifting
+
+  /// The Legacy planner's flight, exactly as the web's Standard planner plays it
+  /// (src/anim/timeline.ts flightPose): it leaves `staging`, lifts to `skyY`, crosses to `to`
+  /// turned by `entry`, and lowers, or pushes sideways, into the seat. `poseAt` reproduces that
+  /// piecewise shape; the route/phases above are unused when this is set.
+  struct Legacy {
+    Xform from, to, rel;   ///< from/to in the unit's frame; rel: a member's offset within its unit
+    bool hasRel = false;
+    double skyY = 0, hold = 0;
+    Vec3 entry;            ///< the seat minus where the push in starts (the way in, negated)
+    bool stationary = false;
+    bool hasStyle = false; ///< the web styles the landing (motionStyle.landingWarp); else its shape clock
+    double landing = 0.25, hover = 0.1;
+  };
+  bool hasLegacy = false;
+  Legacy legacy;
 };
 
 struct CameraKey {
@@ -117,7 +146,11 @@ struct Timeline {
 /// anything else, or anything it does not say.
 Style styleOf(const std::filesystem::path& project);
 
-Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& plan, const Style& style = {}, Vec3 down = {0, 1, 0});
+/// `connectors` and `graph` are the LDCad connector data the Legacy planner needs (the web reads
+/// the same data off its Assembly). Given them, `style.planner == Planner::Legacy` builds the web's
+/// own animation; without them, the Legacy planner falls back to the native one.
+Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& plan, const Style& style = {}, Vec3 down = {0, 1, 0},
+                       connect::ConnectorDb* connectors = nullptr, connect::Graph* graph = nullptr);
 
 /// The unit's motion from its seat at a frame: staging before its flight, the seat after it.
 Xform poseAt(const Flight& flight, int frame);

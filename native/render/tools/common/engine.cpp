@@ -30,19 +30,25 @@ void reportCorrections(const char* tool, const Model& model, const std::vector<c
                  model.pieces()[c.onto].part.c_str(), model.pieces()[c.onto].id.c_str(), c.along, c.angle, c.applied ? "set in place" : c.note.empty() ? "--correct sets it in place" : c.note.c_str());
 }
 
-Planned planModel(Model& model, const ldraw::Library& library, ldraw::PartCache& full, const fs::path& ldraw, const plan::Options& options, const plan::Style& style, double aspect) {
-  const fs::path repo = ldraw.parent_path().parent_path();
-  const char* shadowEnv = std::getenv("BM_SHADOW_DIR");
-  const connect::ShadowLibrary shadow(shadowEnv ? fs::path(shadowEnv) : repo / "vendor" / "LDCadShadowLibrary");
-  connect::ConnectorDb db(library, shadow);
-  const connect::StudioLibrary studio(connect::StudioLibrary::defaultDirectory());
-  db.setStudio(&studio);
-  kin::GearDb gears;
-  cli::loadEngineData(repo, db, gears);
+ConnectorSources::ConnectorSources(const ldraw::Library& library, const fs::path& ldraw)
+  : shadow([](const fs::path& repo) {
+      if (const char* path = std::getenv("BM_SHADOW_DIR")) return fs::path(path);
+      return repo / "vendor" / "LDCadShadowLibrary";
+    }(ldraw.parent_path().parent_path())),
+    studio(connect::StudioLibrary::defaultDirectory()), connectors(library, shadow) {
+  connectors.setStudio(&studio);
+  cli::loadEngineData(ldraw.parent_path().parent_path(), connectors, gears);
+}
+
+Planned planModel(Model& model, const ldraw::Library& library, ldraw::PartCache& full, const fs::path& ldraw,
+                  const plan::Options& options, const plan::Style& style, double aspect) {
+  ConnectorSources sources(library, ldraw);
+  auto& db = sources.connectors;
+  auto& gears = sources.gears;
   collide::ShapeCache shapes;
   Planned out;
   out.plan = plan::planModel(model, out.graph, db, &gears, full, shapes, options, nullptr, &out.corrections);
-  out.timeline = plan::buildTimeline(model, full, out.plan, style);
+  out.timeline = plan::buildTimeline(model, full, out.plan, style, {0, 1, 0}, &db, &out.graph);
   const collide::World world(model, full, shapes);
   const film::Beats beats = film::beatsOf(out.timeline, out.plan, model, world);
   out.shots = film::direct(beats, out.timeline, out.plan, world, film::referenceStyle(), style.fps);

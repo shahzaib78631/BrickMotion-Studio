@@ -70,7 +70,7 @@ void matchesFlatten(const bmapp::Session& s) {
 }  // namespace
 
 TEST_CASE("every command undoes exactly", "[bmapp][commands]") {
-  for (int edit = 0; edit <= static_cast<int>(bmapp::Edit::DeleteSubmodel); edit++) {
+  for (int edit = 0; edit <= static_cast<int>(bmapp::Edit::Keyframes); edit++) {
     INFO("edit " << edit);
     bmapp::Session s;
     open(s, tower());
@@ -100,6 +100,17 @@ TEST_CASE("every command undoes exactly", "[bmapp][commands]") {
       case bmapp::Edit::MoveToModel: s.moveToModel({0}, "cap"); break;
       case bmapp::Edit::RenameSubmodel: s.renameSubmodel("cap", "lid"); break;
       case bmapp::Edit::DeleteSubmodel: s.deleteSubmodel("Spare"); break;
+      case bmapp::Edit::PlacePart: s.placePart("3024.dat", 4, {{}, {120, -80, 80}}, -1, s.generation(), s.version()); break;
+      case bmapp::Edit::SetGroup: s.setGroup({0}, "Shell"); break;
+      case bmapp::Edit::ImportModel: {
+        const std::unique_ptr<bmapp::ModelImport> model(bmapp::ModelImport::read(wheels().string()));
+        s.importModel(model.get(), "", s.generation());
+        break;
+      }
+      case bmapp::Edit::Motion: s.setMotionFields(bmapp::MotionScope::Project, 0, {}, {1.4, 0.45, 0.2, 1}); break;
+      case bmapp::Edit::InsertionDirection: s.setInsertionDirection({0}, {1, 0, 0}); break;
+      case bmapp::Edit::Scale: s.scale({0}, {1.2, 1, 1}, {}, {}, false); break;
+      case bmapp::Edit::Keyframes: s.setKeys(0, {{bmapp::KeyChannel::PositionX, 5, 1}}, false); break;
     }
     const std::string after = planText(s);
     REQUIRE(after != before);

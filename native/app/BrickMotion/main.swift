@@ -51,6 +51,12 @@ if args.count >= 3 && args[1] == "--bench-open" {
 if args.count >= 3 && args[1] == "--bench-edit" {
   exit(MainActor.assumeIsolated { benchEdit(args[2]) })
 }
+if args.count >= 3 && args[1] == "--bench-timeline" {
+  exit(MainActor.assumeIsolated { benchTimeline(args[2]) })
+}
+if args.count >= 3 && args[1] == "--bench-orbit" {
+  exit(MainActor.assumeIsolated { benchOrbit(args[2]) })
+}
 if args.contains("--save-to") {
   exit(MainActor.assumeIsolated { headlessSave(args) })
 }
@@ -72,6 +78,9 @@ if args.count >= 3 && args[1] == "--selftest-panes" {
 }
 if args.count >= 3 && args[1] == "--selftest-edit" {
   exit(MainActor.assumeIsolated { selftestEdit(args[2]) })
+}
+if args.count >= 2 && args[1] == "--selftest-placement" {
+  exit(MainActor.assumeIsolated { selftestPlacement() })
 }
 /// The bundle's document types and type declarations must list exactly bmapp::documentTypes().
 func checkPlist() -> Int32 {
@@ -103,7 +112,7 @@ if args.count >= 2 && args[1] == "--check-plist" {
 
 if args.contains("--snapshot") {
   guard let request = SnapshotRequest.parse(args) else {
-    print("usage: BrickMotion --snapshot out.png --open <file> [--size WxH] [--appearance light|dark] [--play-to s] [--report out.json] [--select n...] [--tool move|rotate]")
+    print("usage: BrickMotion --snapshot out.png (--open <file> | --new) [--size WxH] [--appearance light|dark] [--animate build|timeline|motion] [--play-to s] [--orthographic] [--grid LDU] [--report out.json] [--select n...] [--tool move|rotate|scale] [--placement part [--placement-at x,y]]")
     exit(2)
   }
   exit(MainActor.assumeIsolated { Snapshot.run(request) })

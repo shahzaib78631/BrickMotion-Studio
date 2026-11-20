@@ -7,6 +7,7 @@
 #include <atomic>
 #include "bmapp/bridging.h"
 #include "bmapp/types.h"
+#include "bmapp/model_import.h"
 
 namespace bmapp {
 
@@ -36,14 +37,20 @@ class Session {
   /// Any format bm::io reads. On failure the session is left as it was. Opening (open or
   /// openBytes) starts afresh: no undo, nothing selected or hidden, a new generation.
   OpenResult open(const std::string& path);
+  /// An untitled project with one empty build step and the usual LDraw library.
+  OpenResult newBlank();
   /// A .brickmotion project's bytes; `path` names it (title, errors, the planner's style).
   OpenResult openBytes(const std::string& bytes, const std::string& path);
+  /// Installs a successfully opened session whose loading worker has finished.
+  void adoptLoadedSession(const Session* loaded);
   /// Different for every document opened, in any session.
   uint64_t generation() const;
   /// The document as a .brickmotion project the web app opens: the opened project with its plan
   /// replaced (its planned "timelines" dropped once the plan has changed). An LDraw import's
   /// colour-16 parts take the colour they show, wherever all their uses agree.
   std::string projectBytes() const;
+  std::string projectBytesWithPreview(const std::string& pngBase64) const;
+  std::string planBytes() const;
   /// The document as an LDraw MPD.
   std::string mpdBytes() const;
   size_t pieceCount() const;
@@ -53,6 +60,9 @@ class Session {
   bool imported() const;
   /// The distinct known pieces of `pieces` and their parts.
   Summary summarize(const std::vector<uint32_t>& pieces) const;
+  /// The part and description under the pointer, independent of the inspector's selection limit.
+  PartMatch partAt(uint32_t piece) const;
+  bool isLocalPiece(uint32_t piece) const;
   // Editing. Pieces are indexes into the current model. Every edit is a command on the document
   // (never on the model directly), undone exactly. A piece inside a submodel is edited in the
   // submodel, so every use of it changes; a selection that holds every piece of one use edits
@@ -71,6 +81,18 @@ class Session {
   std::string copy(const std::vector<uint32_t>& pieces) const;
   /// Into the root model's last step, offset in the world.
   Changed paste(const std::string& ldrawText, Vec3 offsetLdu);
+  /// Insert a validated pose into the focused definition. A negative step uses its last step.
+  Changed placePart(const std::string& part, int color, const PartPose& pose, int step,
+                    uint64_t generation, uint64_t version);
+  /// Commits a drag of existing pieces at the validated pose of the piece that was picked up.
+  Changed placeMoved(const PieceList& pieces, uint32_t anchor, const PartPose& pose,
+                     uint64_t generation, uint64_t version);
+  /// Assigns a named group to selected items in the active definition. Empty removes the mark.
+  Changed setGroup(const PieceList& pieces, const std::string& group);
+  StringList groupNames() const;
+  StringList groupsOf(const PieceList& pieces) const;
+  void selectGroup(const std::string& group);
+  Changed importModel(const ModelImport* file, const std::string& into, uint64_t generation);
   Changed replacePart(const std::vector<uint32_t>& pieces, const std::string& part);
   /// Forks the submodel use holding `piece` into "<name> 2" (the next free number).
   Changed makeUnique(uint32_t piece);
@@ -99,10 +121,28 @@ class Session {
   Changed mergeSteps(size_t first);
   /// `continuing`: part of one editing session (typing), which undoes as one step.
   Changed setStepFields(size_t at, const StepFields& fields, bool continuing);
+  MotionFields motionFields(MotionScope scope, size_t step, const PieceList& pieces) const;
+  Changed setMotionFields(MotionScope scope, size_t step, const PieceList& pieces, const MotionFields& fields);
+  Changed turnWaitingPart(uint32_t piece, double degrees);
+  Changed setInsertionDirection(const PieceList& pieces, Vec3 direction);
+  Vec3 insertionDirection(uint32_t piece) const;
+  Changed scale(const PieceList& pieces, Vec3 factor, Mat3 axes, Vec3 pivot, bool continuing);
+  KeyScene keyScene() const;
+  std::vector<KeyTrack> keyTracks() const;
+  double keyValue(uint32_t piece, KeyChannel channel, double frame) const;
+  Changed setKeyScene(const KeyScene& scene);
+  /// Inserts or replaces keys for a part in the active model. Repeated updates can form one drag.
+  Changed setKeys(uint32_t piece, const KeyList& keys, bool continuing);
+  /// Removes the keys' channel and frame pairs. Useful for moving or deleting several keys.
+  Changed removeKeys(uint32_t piece, const KeyList& keys);
+  Changed moveKey(uint32_t piece, KeyChannel channel, int from, int to);
+  Changed setBakedKeys(uint32_t piece, const KeyList& keys);
   /// To the end of `step` (stepCount() makes a new last step). A piece inside a submodel moves
   /// only with its whole use.
   Changed moveToStep(const std::vector<uint32_t>& pieces, size_t step);
   Changed reorderInStep(size_t step, size_t from, size_t to);
+  Changed reorderArrival(size_t step, size_t from, size_t to);
+  Changed regenerateSteps(const PieceList& buildOrder);
   // Submodels. Pieces moved between models keep where they are in the world.
 
   /// `preferred`, else "<preferred> 2", 3, ...: the first name no submodel has.
@@ -167,6 +207,7 @@ class Session {
   std::vector<OutlineRow> outline() const;
   /// The steps of the model being edited.
   std::vector<StepRow> steps() const;
+  std::vector<StepRow> stepsOfSubmodel(const std::string& definition) const;
   std::vector<ItemRow> stepItems(size_t step) const;
   /// The pieces under an outline row, in the model being edited (none when it is outside it).
   std::vector<uint32_t> piecesOfRow(const std::string& outlineId) const;

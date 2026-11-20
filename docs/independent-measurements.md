@@ -186,6 +186,76 @@ are retained in the compact snapshot. Existing runtime placement helpers already
 use a small curated set of HELP poses; this measurement work extends evidence
 collection without changing those helpers or claiming new physical compatibility.
 
+### Assembly evidence beyond the shadow library
+
+`scripts/measure-assembly-use-cases.ts` scans the [LDraw Official Model Repository](https://library.ldraw.org/omr)
+cache and checks the CAD placements listed in `docs/data/assembly-use-case-targets.json`.
+Run it against the corpus using its download manifest, then compare the result with the
+[BrickNet catalogue](https://github.com/kulits/BrickNet/blob/master/DATA.md).
+
+```sh
+npx tsx scripts/measure-assembly-use-cases.ts /path/to/omr/models
+python3 scripts/compare-assembly-reference-labels.py
+```
+
+The scan read 1,836 model files. It found 4,861 candidate relative poses across
+1,332 part pairs, with 11,448 model observations. Each observation preserves the
+source URL, model hash, instance paths, and unrounded relative pose. A separate
+queue identifies 439 parts from priority families, including 160 with zero shadow
+records. The web matcher found no mate using the independent shadow records at
+22 of the selected CAD placements and at 3,550 model candidate poses. The nearest
+surface filter admits incidental neighbors and ordinary snaps, so those model
+poses require review before they count as missing connections.
+It also misses some distant origins, embedded variants, and nonrigid placements.
+The full report and queue are in `.cache/measurements/assembly-use-cases.json`.
+
+The compact snapshot, `docs/data/assembly-use-case-measurements.json`, includes
+27 inspected CAD placements and the 17 model poses for specifically named pairs.
+It includes drawer slides, cupboard doors, pet flaps, tyre seats, accessory bars,
+scabbards and stretcher mounts. The `8011` holder and both `98132` shoulder armour
+slots have seated katana candidates with no triangle-surface intersection at the
+tested pose. Straight probes still intersect the holder. The `98132` CAD notes
+state the poses and leave the mould unspecified, so the three tested variants
+are recorded as hypotheses. [LEGO's Jay ZX leaflet, page 1](https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6012765.pdf#page=1)
+shows the armour and a separate katana and supplies visual co-listing evidence.
+
+The BrickNet cross-check found 3,389 labels across 987 exact-ID frozen parts
+with zero shadow connectors. Comparing the catalogue's CAD snapshot to the
+frozen library established identical oriented geometry and coordinate frames
+for 927 parts, with 3,126 labels. The other 60 need revision review, including
+29 with identical bounds and different surface signatures. The matched rows
+are exported to `.cache/measurements/assembly-geometry-matched-labels.json`.
+The cross-check also found complementary label
+groups with coincident origins for seven CAD placements, including `2656/2657`
+cupboard doors, `79730/4533` pet flaps and the `23799` tyre on three rims.
+The tyre examples also include measured rim outer radii and tyre inner radii
+in planes 1 LDU apart. The radial extrema give the size of each envelope.
+Orientation, local clearance, material compliance and physical travel require
+further evidence.
+
+`scripts/verify-reference-label-geometry.ts` compares the supplemental queue
+against the [BrickNet CAD snapshot](https://keeper.mpdl.mpg.de/seafhttp/f/9b4a3c04e88940d1a718/?op=view).
+Pass the extracted `ldraw` directory and original archive to record its hash.
+The comparison requires identical oriented triangles in the same coordinates.
+The coverage audit lists the matched records, documented placements, targeted
+model observations and mechanical references in its supplemental evidence queues.
+
+`scripts/index-mechanical-reference.ts` indexes the pinned
+[Kinebrick authored corrections](https://github.com/erik-larsen/kinebrick/blob/82176b455d82b9d59ecba68cb54ad2121b72e457/data/corrections.ldr).
+It found 209 rules and measurements on 133 frozen parts. The local
+`.cache/measurements/mechanical-reference-candidates.json` retains the source
+hash, licence attribution and parameters for cylinder profiles, gears, racks,
+shift positions, shock travel and shaped grooves. The authored `3145` tipper end
+grooves have additional assembly evidence from the
+[8848 OMR model](https://library.ldraw.org/media/omr_models/1499/8848-1.mpd).
+Four observed `3145/3029` poses include two-direction CAD surface probes.
+The general mesh detector agrees with 32 of 36 reference gear entries on tooth
+count and pitch radius within 0.5 LDU. Separate radial sections show four repeats
+on `32072` and 56 repeats on each of `2855` and `48168`, which verifies the
+repeat count for three entries the general detector misses. Those three pitch
+radii remain reference values. The `27938` worm's mesh estimate is 0.57 LDU above
+the reference pitch radius and stays in the review queue.
+
 ### Exported-profile mating regressions
 
 `scripts/validate-independent-mates.ts` selects the actual exported 2780/3700

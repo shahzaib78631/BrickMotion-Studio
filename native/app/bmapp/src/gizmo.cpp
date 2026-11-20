@@ -21,22 +21,19 @@ bmr::Camera cameraOf(const CameraState& state, Vec2 view) {
   bmr::OrbitCamera o;
   o.azimuth = state.yaw, o.elevation = state.pitch, o.distance = state.distance;
   o.target = eng(state.target);
-  return o.camera(view.y > 0 ? view.x / view.y : 1, bm::Box{});
+  o.fovY = state.verticalFOV;
+  auto camera = o.camera(view.y > 0 ? view.x / view.y : 1, bm::Box{});
+  if (state.orthographic) camera.orthoHalfHeight = state.distance * std::tan(camera.fovY / 2);
+  return camera;
 }
 
 bm::Vec3 column(const Mat3& m, int i) { return {m.m[i], m.m[3 + i], m.m[6 + i]}; }
 
 /// The eye's ray through a point of the view: from the eye, unit direction.
-struct Ray {
-  bm::Vec3 from, dir;
-};
+using Ray = bmr::ScreenRay;
 Ray rayAt(const bmr::Camera& c, Vec2 view, Vec2 p) {
-  const bm::Vec3 f = bm::normalized(c.target - c.eye);
-  const bm::Vec3 r = bm::normalized(cross(f, c.up));
-  const bm::Vec3 u = cross(r, f);
-  const double h = std::tan(c.fovY / 2), w = h * c.aspect;
   const double nx = 2 * p.x / view.x - 1, ny = 1 - 2 * p.y / view.y;
-  return {c.eye, bm::normalized(f + r * (nx * w) + u * (ny * h))};
+  return bmr::screenRay(c, nx, ny);
 }
 
 /// Where a ray meets the plane through `o` with normal `n`; false when it runs along it or away.
@@ -53,6 +50,7 @@ double snapTo(double v, double step) { return step > 0 ? std::round(v / step) * 
 
 /// World length that shows as kGizmoPoints at `origin`.
 double armLength(const bmr::Camera& c, Vec2 view, bm::Vec3 origin) {
+  if (c.orthoHalfHeight > 0) return kGizmoPoints * 2 * c.orthoHalfHeight / std::max(1.0, view.y);
   const double away = std::max(1e-6, dot(origin - c.eye, bm::normalized(c.target - c.eye)));
   return kGizmoPoints * 2 * away * std::tan(c.fovY / 2) / std::max(1.0, view.y);
 }

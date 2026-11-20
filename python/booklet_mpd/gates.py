@@ -205,8 +205,11 @@ def camera_and_selection(set_number: str, select: bool = True) -> dict:
     lib = load_library(str(ROOT / "public/ldraw"))
     collider = Collider(lib, use_oracle=True)
     rows = []
-    for case in cases(set_number):
+    all_cases = list(cases(set_number))
+    for ci, case in enumerate(all_cases):
         base = case.visible if case.visible else []
+        prev_c = all_cases[ci - 1] if ci > 0 and all_cases[ci - 1].file == case.file else None
+        next_c = all_cases[ci + 1] if ci + 1 < len(all_cases) and all_cases[ci + 1].file == case.file else None
         row = {"step": case.step_number, "parts": len(case.added), "base": len(base)}
         if case.rgb is None or not base:
             row["skip"] = "no picture" if case.rgb is None else "no base (frame free)"
@@ -230,7 +233,10 @@ def camera_and_selection(set_number: str, select: bool = True) -> dict:
                 t1 = time.time()
                 r = solve(lib, base, [(p, c) for p, c, _m in case.added], case.rgb, case.pts_per_px,
                           collider=collider, subbuilds=case.subbuilds,
-                          camera=(oracle.view, oracle.orientation_index, -1e9))
+                          camera=(oracle.view, oracle.orientation_index, -1e9),
+                          prev_rgb=prev_c.rgb if prev_c is not None else None,
+                          next_rgb=next_c.rgb if next_c is not None else None,
+                          next_pts=next_c.pts_per_px if next_c is not None else None)
                 placed = canonical(lib, r.placed, case.added)
                 flags = exact_flags(lib, placed, case.added, atol=0.1) if placed else []
                 row.update(exact=int(sum(flags)), all_exact=bool(len(flags) == len(case.added) and all(flags)),

@@ -96,7 +96,7 @@ struct Checker {
           const double len = length(step);
           if (!(len > 0)) continue;
           uint32_t hit = UINT32_MAX;
-          const double got = world.clearTravel(m.unit.pieces, step * (1 / len), len, &placed, leg == 1 ? zones : std::vector<collide::Zone>{}, &hit, m.path[leg]);
+          const double got = world.clearTravel(m.unit.pieces, step * (1 / len), len, &placed, leg == 1 ? zones : std::vector<collide::Zone>{}, &hit, m.path[leg], 0.05, len - kTravelTol);
           if (got < len - kTravelTol) check.clear = false, check.crossed = hit;
         }
         if (!check.joined) out.floating++;

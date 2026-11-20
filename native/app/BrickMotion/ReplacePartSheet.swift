@@ -1,62 +1,65 @@
 // Replace Part…: a sheet that searches the LDraw library by number or description.
 import AppKit
-import BMApp
 import SwiftUI
 
 struct ReplacePartView: View {
-  let session: bmapp.Session
   let done: (String?) -> Void
   @State private var query = ""
-  @State private var matches: [Match] = []
+  @State private var matches: [LibraryPart] = []
+  @State private var completedQuery = ""
   @State private var chosen: String?
 
-  struct Match: Identifiable, Hashable {
-    let name: String, description: String
-    var id: String { name }
-  }
+  private var ready: Bool { completedQuery == query }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       Text("Replace Part").font(.headline)
       TextField("Search by number or description", text: $query)
         .textFieldStyle(.roundedBorder)
-        .onSubmit { if let chosen { done(chosen) } }
-      List(matches, selection: $chosen) { m in
+        .onSubmit { if ready, let chosen { done(chosen) } }
+      List(ready ? matches : [], selection: $chosen) { part in
         HStack {
-          Text(m.name).monospacedDigit().frame(width: 110, alignment: .leading)
-          Text(m.description).foregroundStyle(.secondary).lineLimit(1)
+          Text(part.number).monospacedDigit().frame(width: 110, alignment: .leading)
+          Text(part.name).foregroundStyle(.secondary).lineLimit(1)
         }
-        .tag(m.name)
+        .tag(part.id)
       }
       .frame(minHeight: 260)
       .overlay {
-        if matches.isEmpty && !query.isEmpty { Text("No parts match").foregroundStyle(.secondary) }
+        if !ready {
+          ProgressView().controlSize(.small).accessibilityLabel("Searching parts")
+        } else if matches.isEmpty && !query.isEmpty {
+          Text("No parts match").foregroundStyle(.secondary)
+        }
       }
       HStack {
         Spacer()
         Button("Cancel", role: .cancel) { done(nil) }.keyboardShortcut(.cancelAction)
-        Button("Replace") { done(chosen) }.keyboardShortcut(.defaultAction).disabled(chosen == nil)
+        Button("Replace") { done(chosen) }.keyboardShortcut(.defaultAction).disabled(!ready || chosen == nil)
       }
     }
     .padding(20)
     .frame(width: 520)
-    .onChange(of: query) { _, q in search(q) }
+    .task(id: query) { await search(query) }
   }
 
-  private func search(_ q: String) {
-    var out: [Match] = []
-    for m in session.searchParts(std.string(q), 200) {
-      out.append(Match(name: String(m.name), description: String(m.description)))
+  private func search(_ requested: String) async {
+    var found: [LibraryPart] = []
+    if !requested.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      let library = await PartsCatalog.shared.library()
+      found = await PartsCatalog.shared.search(in: library.directory, query: requested, category: nil, limit: 200)
     }
-    matches = out
-    chosen = out.first?.name
+    guard !Task.isCancelled, requested == query else { return }
+    matches = found
+    chosen = found.first?.id
+    completedQuery = requested
   }
 }
 
 enum ReplacePartSheet {
-  @MainActor static func present(on window: NSWindow, session: bmapp.Session, choose: @escaping (String) -> Void) {
+  @MainActor static func present(on window: NSWindow, choose: @escaping (String) -> Void) {
     var sheet: NSWindow?
-    let view = ReplacePartView(session: session) { part in
+    let view = ReplacePartView { part in
       if let sheet { window.endSheet(sheet) }
       if let part { choose(part) }
     }

@@ -29,6 +29,7 @@ enum SidebarTab: String, CaseIterable { case models, steps, parts }
   private(set) var steps: [bmapp.StepRow] = []
   /// Filters the tree by name; a match keeps its ancestors.
   var outlineQuery = "" { didSet { if outlineQuery != oldValue { filter() } } }
+  var importing = false
   /// Rows shown open; "root" starts open.
   var expanded: Set<String> = ["root"]
   /// The rows selected in the tree (their pieces are the selection while it lasts).
@@ -36,6 +37,23 @@ enum SidebarTab: String, CaseIterable { case models, steps, parts }
   /// The row being renamed in place.
   var renaming: String?
   var sidebarTab = SidebarTab.models
+  var modelPartsExpanded = true
+  var partsQuery = "" { didSet { if partsQuery != oldValue { resetPartsResults() } } }
+  var partsCategory: String? { didSet { if partsCategory != oldValue { resetPartsResults() } } }
+  var browsedPart: LibraryPart?
+  var partsScrollTarget: String?
+  var partsPages = 1
+  enum PartsCollection: String, CaseIterable { case frequent = "Frequent", common = "Common", recent = "Recent" }
+  var partsCollection = PartsCollection.common {
+    didSet { if partsCollection != oldValue { resetPartsResults() } }
+  }
+  var partColour: Int32 = 71 { didSet { viewport?.placement.chooseColour(partColour) } }
+  var partTurns = 0
+  var partMirrored = false
+  var partReferenceHints = false
+  let assemblyReview = AssemblyReview()
+  let animation = AnimationWorkspace()
+  var showJoints = false { didSet { assemblyReview.update(self); viewport?.updateEditorOverlays() } }
   /// The step selected in the Steps pane, and the one its editor is open on.
   var selectedStep: Int?
   /// The inspector's tab; it follows the selection (one piece: Part, several: Selection) unless
@@ -72,6 +90,21 @@ enum SidebarTab: String, CaseIterable { case models, steps, parts }
 
   var context: CommandContext { CommandContext(document: document, viewport: viewport, clickedPiece: nil) }
 
+  private func resetPartsResults() {
+    partsScrollTarget = nil
+    partsPages = 1
+  }
+
+  func dragItem(_ part: LibraryPart) -> PartDragItem {
+    PartDragItem(part: part, colour: partColour, turns: partTurns, mirrored: partMirrored, reference: partReferenceHints)
+  }
+
+  func beginPlacement(_ part: LibraryPart) {
+    browsedPart = part
+    viewport?.placement.begin(part, colour: partColour, turns: partTurns, mirrored: partMirrored,
+                              step: selectedStep, reference: partReferenceHints)
+  }
+
   /// After any change: a new snapshot, and the tree and steps when the structure moved.
   func refresh() {
     let session = document.session
@@ -82,7 +115,9 @@ enum SidebarTab: String, CaseIterable { case models, steps, parts }
     let before = snapshot.selection.count
     snapshot = session.snapshot()
     let after = snapshot.selection.count
-    if inspectorTab != .submodel && (before == 1) != (after == 1) { inspectorTab = after == 1 ? .part : .selection }
+    if inspectorTab != .submodel && inspectorTab != .camera && (before == 1) != (after == 1) {
+      inspectorTab = after == 1 ? .part : .selection
+    }
     if session.structureVersion() != stamp {
       stamp = session.structureVersion()
       rows = Array(session.outline())
@@ -95,6 +130,7 @@ enum SidebarTab: String, CaseIterable { case models, steps, parts }
     if !selectedRows.isEmpty && Array(snapshot.selection) != rowPieces { selectedRows = [] }
     if let k = selectedStep, k >= steps.count || Array(snapshot.selection) != stepPieces { selectedStep = nil }
     if let k = editingStep, k >= steps.count { editingStep = nil }
+    assemblyReview.update(self)
   }
 
   private static func build(_ rows: [bmapp.OutlineRow]) -> [OutlineNode] {

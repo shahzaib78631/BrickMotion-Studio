@@ -125,6 +125,18 @@ MateZone meshZone(const kin::GearMesh& m) {
 
 }  // namespace
 
+MateZone mateZone(const Connector& x, const Connector& y) {
+  auto elastic = [](const Connector& c) {
+    return (!c.profile.empty() && c.profile[0].shape == 'T') || c.group.rfind("studio-wheel-", 0) == 0;
+  };
+  if (elastic(x) || elastic(y)) return {x.start, x.start, collide::kElasticZone};
+  if (x.kind == SnapKind::Generic || y.kind == SnapKind::Generic)
+    return {x.start, y.start, std::max({x.radius, y.radius, collide::kGenericZone}) + collide::kZonePad};
+  // Along the shorter connector (the clip, not the whole bar), slightly wider than both.
+  const Connector& shorter = x.length <= y.length ? x : y;
+  return {shorter.start, shorter.start + shorter.axis * shorter.length, std::max(x.radius, y.radius) + collide::kZonePad};
+}
+
 Graph buildGraph(const Model& model, ConnectorDb& db, const kin::GearDb* gears) {
   const std::vector<Piece>& pieces = model.pieces();
   const uint32_t n = static_cast<uint32_t>(pieces.size());
@@ -203,15 +215,6 @@ Graph buildGraph(const Model& model, ConnectorDb& db, const kin::GearDb* gears) 
     bool cv = false;       ///< one of its mates is a constant-velocity joint
     Vec3 cvPoint, shaftLo, shaftHi;  ///< its centre, and the shafts of the lower and higher piece
   };
-  // The volume a mate occupies: along the shorter of the two connectors (the clip, not the
-  // whole bar it holds), a little wider than the wider of them.
-  auto zoneOf = [](const Connector& x, const Connector& y) {
-    auto elastic = [](const Connector& c) { return (!c.profile.empty() && c.profile[0].shape == 'T') || c.group.rfind("studio-wheel-", 0) == 0; };
-    if (elastic(x) || elastic(y)) return MateZone{x.start, x.start, collide::kElasticZone};
-    if (x.kind == SnapKind::Generic || y.kind == SnapKind::Generic) return MateZone{x.start, y.start, std::max({x.radius, y.radius, collide::kGenericZone}) + collide::kZonePad};
-    const Connector& s = x.length <= y.length ? x : y;
-    return MateZone{s.start, s.start + s.axis * s.length, std::max(x.radius, y.radius) + collide::kZonePad};
-  };
   std::unordered_map<uint64_t, Pair> pairs;
   for (uint64_t key : candidates) {
     const Placed& a = placed[key >> 32];
@@ -224,7 +227,7 @@ Graph buildGraph(const Model& model, ConnectorDb& db, const kin::GearDb* gears) 
     // Seats are kept as moves of the higher-numbered piece.
     if ((m->freedom.seatsMoveFirst ? a.piece : b.piece) != hi)
       for (double& seat : pair.freedoms.back().seats) seat = -seat;
-    pair.zones.push_back(zoneOf(a.connector, b.connector));
+    pair.zones.push_back(mateZone(a.connector, b.connector));
     pair.grip += m->grip;
     Release release = m->release;
     if ((release.maleIsFirst ? a.piece : b.piece) != hi) release.axis = -release.axis;  // kept as how `hi` leaves `lo`

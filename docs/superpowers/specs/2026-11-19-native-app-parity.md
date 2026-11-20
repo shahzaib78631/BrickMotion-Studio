@@ -33,16 +33,16 @@ that opens the AI panel, and the Checks panel that has no rail button.
 
 | Feature | Web | Phase | Engine | Exceeds web by |
 |---|---|---|---|---|
-| New / open / import model or project (.brickmotion, .json, .ldr, .mpd, .dat, .io; Rebrickable .csv and .pbg in phase 9) | Toolbar.tsx:198-330 | 8 | P (reads all but .csv/.pbg) | NSDocument: Open Recent, Finder double-click, drag onto Dock, Quick Look thumbnails. **partial (M2): projects open as documents and every import as an untitled project; Quick Look thumbnails and .csv/.pbg are later** |
-| Save project (.brickmotion), download plan (.json), LDraw (.mpd) | Toolbar.tsx:304-377 | 8 | N (plan JSON only) | real files, ⌘S, Save As, Duplicate, Revert, Versions browser. **partial (M2): Save, Save As, Duplicate, Revert and Export LDraw… done, and the web opens what is saved; a plan-only .json download is not added** |
+| New / open / import model or project (.brickmotion, .json, .ldr, .mpd, .dat, .io; Rebrickable .csv and .pbg in phase 9) | Toolbar.tsx:198-330 | 8 | P (reads all but .csv/.pbg) | Native Open and Open Recent, project documents, and untitled documents for imports. Saved previews are available to Finder through the Quick Look extension. |
+| Save project (.brickmotion), download plan (.json), LDraw (.mpd) | Toolbar.tsx:304-377 | 8 | N (plan JSON only) | Save, Save As, Duplicate, Revert and Versions. Export Plan and Export LDraw use native save panels and atomic writes. |
 | Autosave status | Toolbar.tsx:324 | 8 | N | system autosave + versions; no "saves on this device" limit. **done (M2): autosave in place with Versions** |
-| Projects dialog (list/open/delete) | ProjectsDialog.tsx | 8 | — | Finder + Recents + a start window with thumbnails |
+| Projects dialog (list/open/delete) | ProjectsDialog.tsx | 8 | — | Welcome uses system recents with rendered previews, keyboard opening and Reveal in Finder. File management uses Finder. |
 | Templates (save, apply, use-for-imports, download, import) | TemplatesDialog.tsx | 9 | N | |
 | Rename project inline | Toolbar.tsx:322 | 8 | — | title-bar rename (document proxy) |
-| History menu: undo/redo, rebuild steps and animation, regenerate steps only / animation only | Toolbar.tsx:341-354 | 8 | N | unlimited undo coalesced per gesture; Edit menu names the action. **partial (M2): named, unlimited undo and redo, one step per gesture; rebuild/regenerate commands come with timelines (M4)** |
+| History menu: undo/redo, rebuild steps and animation, regenerate steps only / animation only | Toolbar.tsx:341-354 | 8 | N | Named undo and redo coalesce gestures. Regenerate Build Steps preserves authored step sections. Regenerate Build Animation keeps the hand keys. |
 | Command palette ⌘K (go to panels, import, fit, lay out, regenerate, theme) | Toolbar.tsx:268-398 | 8 | — | covers every menu command, fuzzy, shows shortcuts. **done (M3a): ⌘K glass palette over every enabled menu command, Open <submodel>, Go to Step n; fuzzy, shortcuts shown, recent first** |
 | Parts library update prompt | PartsUpdatePrompt.tsx | 9 | N | |
-| About | AboutDialog.tsx | 8 | — | |
+| About | AboutDialog.tsx | 8 | — | Native About displays the application and engine versions. |
 
 ## 2. Model tree and browser
 
@@ -50,8 +50,8 @@ that opens the AI panel, and the Checks panel that has no rail button.
 |---|---|---|---|---|
 | New model / submodule / from selection | ModelsPanel.tsx:203-219 | 8 | N | **done (M3a): New Submodel…, Make Submodel from Selection (⌥⌘G), Extract, Move to Model, rename and delete, all one undo step each** |
 | Search models | ModelsPanel.tsx:221 | 8 | — | **done (M3a): the Models pane filter keeps matches and their ancestors** |
-| Tree rows: open, show and fit, tags, counts | ModelsPanel.tsx:232-262 | 8 | P (submodel paths per piece) | outline view with type-select, keyboard nav, drag to reparent. **partial (M3a): open (double click/Return), show and fit, select, counts, shared/unused marks, drag onto a row to move into it; tags are M3b** |
-| Row menu: play its build, lay out parts, view parts, export MP4/project/LDraw, import into, open another | ModelsPanel.tsx:165-191 | 8/9 | P | **partial (M3a): Open, Show and Fit, Select Pieces, Rename, New/Make Submodel, Delete; play, lay out and export are M4/phase 9** |
+| Tree rows: open, show and fit, tags, counts | ModelsPanel.tsx:232-262 | 8 | P (submodel paths per piece) | Native outline with keyboard navigation, drag to reparent, counts, shared/unused marks and group tags. |
+| Row menu: play its build, lay out parts, view parts, export MP4/project/LDraw, import into, open another | ModelsPanel.tsx:165-191 | 8/9 | P | Open, Play Build, Lay Out Parts, Show and Fit, View Parts and Import Into. Submodel export is assigned to Phase 9. |
 | View parts dialog: steps tree, per-step show/hide, select, extract, move to step | PartsDialog.tsx | 8 | N | inline in the browser, not a dialog. **done (M3a): inline “Parts in …” under the tree: steps with show/hide, select, extract, move to step** |
 | Assembly Corrector (Python engine) | ModelsPanel.tsx:266-292 | — | superseded? | native `--correct` already; confirm with owner |
 | Batch export selected / all submodules | ModelsPanel.tsx:294-305 | 9 | P (bmexport) | |
@@ -61,27 +61,27 @@ that opens the AI panel, and the Checks panel that has no rail button.
 
 | Feature | Web | Phase | Engine | Exceeds web by |
 |---|---|---|---|---|
-| Parts: Frequent / Common / Recent, search, category | PartsPanel.tsx | 8 | P (library) | rendered thumbnails from the Metal renderer, instant search |
-| Placement-hint and mirrored-pose options | PartsPanel.tsx | 8 | N | |
-| Click to add, drag into viewport to snap, drag onto timeline Parts lane | PartsPanel.tsx | 8 | N (no snap-on-drag) | connector-graph snapping |
+| Parts: Frequent / Common / Recent, search, category | PartsPanel.tsx | 8 | P (library) | Metal previews, exact-ID ranking, category filtering and local history of committed placements. |
+| Placement-hint and mirrored-pose options | PartsPanel.tsx | 8 | N | Optional documented placements, mirrored orientation, quarter turns and grip cycling. |
+| Click to add, drag into viewport to snap, drag onto timeline Parts lane | PartsPanel.tsx | 8 | N (no snap-on-drag) | The library and timeline drop use one guarded placement preview with free connector snapping and an explicit commit. |
 | Replace part | Inspector.tsx:308 | 8 | N | **done (M2): Object ▸ Replace Part… searches the library by number and description** |
-| Colour swatches (groups, search, recent), colour for new parts | ColorSwatches.tsx | 8 | P (colour table) | **partial (M3a): Solid/Transparent/Metallic groups, search by name or code, last 8 recent; the colour for new parts is M3b** |
+| Colour swatches (groups, search, recent), colour for new parts | ColorSwatches.tsx | 8 | P (colour table) | Common swatches, categories, code search and recent colours are shared by new parts and selection recolouring. |
 
 ## 4. Viewport
 
 | Feature | Web | Phase | Engine | Exceeds web by |
 |---|---|---|---|---|
-| View presets (front/back/right/left/top/bottom, flat-lay, centre on floor, persp/ortho), numpad keys | ViewMenu.tsx, viewControls.ts | 8 | P (orbit camera) | 120 Hz at 12k pieces (gate already met), trackpad gestures. **partial (M2): front/right/top on 1/3/7, with ⌃ the opposite side; orthographic, flat-lay and centre-on-floor are later** |
-| Viewport renderer select (current / studio path / hybrid / ThreeRT) | ViewportChrome.tsx | 8 | P | superseded by one raster viewport + optional path-traced preview |
-| Split: lay out every part on the floor | ViewportChrome.tsx | 8 | P (staging) | |
-| Tools: select, move, move gizmo, rotate gizmo, scale, joints on/off, world/local, aim the way in, collision | ViewportChrome.tsx:109-165 | 8 | N | **partial (M2): Select, Move and Rotate tools with gizmos (stud/plate/15° snaps, world or local axes); scale, joints, aim and collision are later** |
-| Orbit 45°, projection, fit, grid + spacing, wireframe, clay, fullscreen | ViewportChrome.tsx:126-151 | 8 | P | native full screen. **partial (M2): fit all (F) and frame selection (⌘F); the rest later** |
-| Floating selection bar (submodule, extract, group, fit together, rigid, duplicate, rotate, delete, lay out, hide) | ViewportChrome.tsx:166-190 | 8 | N | |
-| Frame all, zoom −/%/+ | ViewportChrome.tsx:197 | 8 | P | |
-| Nav gizmo, view label, hidden-pieces chip, laid-out chip | NavGizmo.tsx, Viewport.tsx | 8 | N | |
-| Joint card: hinge/ball angle, turn, select rigid group, detach | Viewport.tsx:2241 | 8 | P (bm/kin) | joints from the native connection graph |
-| Mouse: click/shift-click, marquee, drag move, orbit/pan/zoom, context menu, double-click submodel | Viewport.tsx | 8 | P (pick) | trackpad pinch/rotate/two-finger pan. **partial (M2): click, ⇧-click, marquee (⌥ touching), double-click a submodel use, orbit/pan/zoom; dragging a piece itself and the context menu are M3**. **partial (M3a): the context menu is in; a double click on a use already selected opens it. Dragging a piece itself is M3b** |
-| Piece context menu (what fits, turn waiting piece, frame, fit together, open submodel, show/lay out step, organize, move to step, rotate, raise/lower plate, clipboard, clone, use colour, hide, select ▸ same part/colour/touching/connected/step/all, delete) | PieceMenu.tsx | 8 | N | "connected" from real joints. **partial (M3a): frame, open submodel, move to step, rotate, raise/lower, clipboard, recent colours, use this colour, hide, Select ▸, make/extract submodel, make unique, delete; what fits, fit together and lay out are M3b/M4** |
+| View presets (front/back/right/left/top/bottom, flat-lay, centre on floor, persp/ortho), numpad keys | ViewMenu.tsx, viewControls.ts | 8 | P (orbit camera) | Native orthographic and perspective views, saved editor camera, six axis presets, flat-lay and floor centring. See the sign-off plan for the measured orbit gate. |
+| Viewport renderer select (current / studio path / hybrid / ThreeRT) | ViewportChrome.tsx | 8 | P | Native Metal editing viewport and path-traced still export. A separate in-editor path-traced preview is pending if retained in this phase. |
+| Split: lay out every part on the floor | ViewportChrome.tsx | 8 | P (staging) | The floor layout is a reversible view state and has a one-click return to the assembly. |
+| Tools: select, move, move gizmo, rotate gizmo, scale, joints on/off, world/local, aim the way in, collision | ViewportChrome.tsx:109-165 | 8 | N | Axis and plane controls for move, rotate and scale, local and world axes, real joint markers, insertion-direction controls and a collision-checked placement mode. |
+| Orbit 45°, projection, fit, grid + spacing, wireframe, clay, fullscreen | ViewportChrome.tsx:126-151 | 8 | P | Native full screen, adjustable grid and Metal render modes, available from View and the palette. |
+| Floating selection bar (submodule, extract, group, fit together, rigid, duplicate, rotate, delete, lay out, hide) | ViewportChrome.tsx:166-190 | 8 | N | Context-sensitive commands share their actions and validation with the menu bar and palette. |
+| Frame all, zoom −/%/+ | ViewportChrome.tsx:197 | 8 | P | Percentage reflects the fitted view, with accessible frame and zoom controls. |
+| Nav gizmo, view label, hidden-pieces chip, laid-out chip | NavGizmo.tsx, Viewport.tsx | 8 | N | Live axes, projection label and reversible hidden/laid-out chips. |
+| Joint card: hinge/ball angle, turn, select rigid group, detach | Viewport.tsx:2241 | 8 | P (bm/kin) | Native joint data, clearance checks and a single undo step for a successful turn or release. |
+| Mouse: click/shift-click, marquee, drag move, orbit/pan/zoom, context menu, double-click submodel | Viewport.tsx | 8 | P (pick) | Trackpad pinch, rotate and two-finger pan. Direct dragging and catalog placement show the same snap and collision status. |
+| Piece context menu (what fits, turn waiting piece, frame, fit together, open submodel, show/lay out step, organize, move to step, rotate, raise/lower plate, clipboard, clone, use colour, hide, select ▸ same part/colour/touching/connected/step/all, delete) | PieceMenu.tsx | 8 | N | Ranked compatible parts and fit previews, assembled and laid-out step actions, geometric touching and graph-based selection. Waiting orientation is available on eligible individual flights and keeps the installed pose. |
 | Empty-space menu | PieceMenu.tsx:135 | 8 | — | **done (M3a): paste, select all, show all, fit all, view presets ▸, New Submodel…** |
 | Flight path editing (double-click adds point, select points) | flightPathOverlay.ts | 9 | N | |
 
@@ -90,38 +90,38 @@ that opens the AI panel, and the Checks panel that has no rail button.
 | Feature | Web | Phase | Engine | Exceeds web by |
 |---|---|---|---|---|
 | Move by arrows (camera-relative), raise/lower plate or brick, rotate 90° | keymap.ts | 8 | N | **done (M2)** |
-| Duplicate, copy, cut, paste, clone and place | keymap.ts | 8 | N | system pasteboard (LDraw text). **partial (M2): duplicate, copy, cut, paste (LDraw text on the system pasteboard) and clone done; the placing mode is M3** |
+| Duplicate, copy, cut, paste, clone and place | keymap.ts | 8 | N | LDraw system clipboard and a shared placement preview for catalog parts and moves. |
 | Delete, hide, isolate, show all, select all/none | keymap.ts | 8 | N | **done (M2)** |
-| Placing mode: Tab cycles grip, R turns, Esc cancels | Viewport.tsx:1553 | 8 | N | |
-| Collision-refused edits shown red and explained | ChecksPanel.tsx:47 | 8 | P (collide) | |
-| Inspector Selection: make submodule, extract, move to model, fit, group, duplicate, delete, ways to fit, marks/tags, transform fields, flies-in-from editor, part info, model overview | Inspector.tsx:174-298 | 8 | N | **partial (M3a): parts with counts, colour, step, make submodel, move to model, extract, duplicate, delete, model overview; group, tags, ways to fit, flies-in-from are M3b/M4** |
-| Inspector Part: replace, refused-edit reason, checks, connections, colour, step | Inspector.tsx:300-339 | 8 | P | **partial (M3a): part, colour, step, submodel path with Open, Make Unique, Replace, X/Y/Z fields and 90° turns; checks and connections are M3b** |
+| Placing mode: Tab cycles grip, R turns, Esc cancels | Viewport.tsx:1553 | 8 | N | Native placement HUD, Return to commit and temporary Option override. |
+| Collision-refused edits shown red and explained | ChecksPanel.tsx:47 | 8 | P (collide) | Red Metal preview with a reason in the placement HUD and inspector. |
+| Inspector Selection: make submodule, extract, move to model, fit, group, duplicate, delete, ways to fit, marks/tags, transform fields, flies-in-from editor, part info, model overview | Inspector.tsx:174-298 | 8 | N | Selection and part-specific inspectors expose group tags, fit alternatives, insertion direction and editable geometry alongside the selection summary. |
+| Inspector Part: replace, refused-edit reason, checks, connections, colour, step | Inspector.tsx:300-339 | 8 | P | Part replacement with rendered previews, native connection details and collision status. |
 | New submodel dialog | NewSubmodelDialog.tsx | 8 | N | **done (M3a): a name sheet with a free name offered** |
 
 ## 6. Steps and build order
 
 | Feature | Web | Phase | Engine | Exceeds web by |
 |---|---|---|---|---|
-| Step list: show all, auto-split banner, drag reorder, play, edit, expand submodels | StepsPanel.tsx | 8 | P (steps read) | **partial (M3a): list with counts, pause/pin badges and “auto”, drag reorder, select, edit; play and expand submodels are M4** |
+| Step list: show all, auto-split banner, drag reorder, play, edit, expand submodels | StepsPanel.tsx | 8 | P (steps read) | Reveal all, split long steps in planned order, drag to reorder, play or stage, and browse a submodel’s steps directly from its parent step. |
 | Step editor: title, notes, pause, piece order, split, gather, merge | StepsPanel.tsx:44-125 | 8 | N | **done (M3a): popover with title, notes, pause (0–10 s), piece order by drag, split and merge; typing is one undo step** |
 | Step menu: select, pin order, gather, insert, move, delete | StepsPanel.tsx:317-352 | 8 | N | **done (M3a): select, insert before/after, split, merge, gather selection, pin order, edit, delete** |
-| Step callout: prev/next/all, parts, stop here / play step / play to end, separated/laid out/exploded/assembled | StepCallout.tsx | 8 | P | |
+| Step callout: prev/next/all, parts, stop here / play step / play to end, separated/laid out/exploded/assembled | StepCallout.tsx | 8 | P | Native viewport callout shares the build playhead and stage previews. |
 
 ## 7. Timelines
 
 | Feature | Web | Phase | Engine | Exceeds web by |
 |---|---|---|---|---|
-| Build / Timeline / Motion modes | App.tsx:345 | 8 | P | |
-| Planner status chips, out-of-date, progress, auto-plan | BuildTimeline.tsx:317 | 8 | P (whole re-plan) | incremental re-plan; plan of OMR median well under 1 s |
-| Transport, zoom, fit | BuildTimeline.tsx:383 | 8 | Y (timeline) | |
-| Step blocks + step-clip menu, pause handles, submodel lanes | BuildTimeline.tsx, timelineMenus.ts | 8 | P | |
-| Parts lane: drag arrival, force order, pin, drop parts, clip menu | PartsLane.tsx | 8 | N | |
-| Pause lane | PauseLane.tsx | 8 | N | |
+| Build / Timeline / Motion modes | App.tsx:345 | 8 | P | Native resizable Animate workspace with a common transport. |
+| Planner status chips, out-of-date, progress, auto-plan | BuildTimeline.tsx:317 | 8 | P (whole re-plan) | Cancelled jobs cannot replace a newer plan. Timing updates reuse all paths, and eligible single-leaf moves recheck affected paths. Geometry replan timing is still under evaluation. |
+| Transport, zoom, fit | BuildTimeline.tsx:383 | 8 | Y (timeline) | Frame-based seeking, playback speed, looping, zoom and Fit. |
+| Step blocks + step-clip menu, pause handles, submodel lanes | BuildTimeline.tsx, timelineMenus.ts | 8 | P | Chronological runs let recurring steps stay readable when the plan interleaves them. |
+| Parts lane: drag arrival, force order, pin, drop parts, clip menu | PartsLane.tsx | 8 | N | Arrival drag sets and pins the order in one undo step. Parts can be revealed and placed into the active step. |
+| Pause lane | PauseLane.tsx | 8 | N | Pause length is edited against the playhead and saved with the step. |
 | Camera lanes (keys, moves, auto-direct presets, key from view) | CameraTrackRow.tsx | 9 | P (bmfilm) | under the camera-director editing design |
-| Intro / Build / Hero clips | BuildTimeline.tsx:606 | 8 | P | |
-| Planner error panel with diagnostics | BuildTimeline.tsx:486 | 8 | P | flagged moves listed with `--explain` reasons |
-| Motion popover (presets, flight time, landing, hover, easing; project/step/part) | MotionEditor.tsx | 8 | P (Style) | |
-| Dope sheet (insert key, auto key, nav, loop, frame, object list, properties, interpolation, scene range, check motion, build-motion layer link/bake) | KeyframeTimeline.tsx | 8 | N | |
+| Intro / Build / Hero clips | BuildTimeline.tsx:606 | 8 | P | Native playback maintains the three sequence regions and their exact times. |
+| Planner error panel with diagnostics | BuildTimeline.tsx:486 | 8 | P | Each flagged row identifies a part and reason, and jumps to the relevant time in the viewport. |
+| Motion popover (presets, flight time, landing, hover, easing; project/step/part) | MotionEditor.tsx | 8 | P (Style) | Shows inherited values and preserves the resolved path while changing its timing. |
+| Dope sheet (insert key, auto key, nav, loop, frame, object list, properties, interpolation, scene range, check motion, build-motion layer link/bake) | KeyframeTimeline.tsx | 8 | N | Native object and property lanes, explicit bake, and sampled motion checking. Hand keys use the shared project schema and survive replanning. |
 | Camera inspector (target, position, lens, moves, easing, shake, blur, presets) | CameraInspector.tsx | 9 | P (bmfilm) | camera-director editing design |
 
 ## 8. Panels (spec phase 9)

@@ -28,10 +28,12 @@ int cmdPlan(const Args& args) {
   const std::string threads = option(args, "--threads", "0", bad);
   const std::string truthPath = option(args, "--truth", "", bad);
   const std::string timelinePath = option(args, "--timeline", "", bad);
-  plan::FlightShape shape = plan::FlightShape::Web;
-  if (!plan::parse(option(args, "--flight", "web", bad), shape)) bad = true;
+  plan::FlightShape shape = plan::FlightShape::Auto;
+  if (!plan::parse(option(args, "--flight", "auto", bad), shape)) bad = true;
+  plan::Planner planner = plan::Planner::Native;
+  if (!plan::parse(option(args, "--planner", "native", bad), planner)) bad = true;
   if (bad || args.empty() || args[0].rfind("--", 0) == 0) {
-    std::fprintf(stderr, "usage: bm plan <file> [--truth <insertion-truth.json>] [--explain <part>] [--out <plan.json>] [--json] [--budget <seconds>] [--threads N] [--no-certify] [--no-studio] [--correct] [--flight web|arc]\n");
+    std::fprintf(stderr, "usage: bm plan <file> [--truth <insertion-truth.json>] [--explain <part>] [--out <plan.json>] [--json] [--budget <seconds>] [--threads N] [--no-certify] [--no-studio] [--correct] [--flight auto|web|arc] [--planner native|legacy]\n");
     return kUsage;
   }
   const std::string ldraw = defaultLDrawDir();
@@ -98,8 +100,8 @@ int cmdPlan(const Args& args) {
                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count(), certificate.floating, certificate.crossings, certificate.offAxis, certificate.flagged, certificate.unjoined);
       plan::Style style = plan::styleOf(fs::path(std::string(args[0])));
       style.shape = shape;
-      const plan::Timeline played = plan::buildTimeline(model, cache, plan, style);
-      const plan::PlayCheck play = plan::certifyPlay(model, graph, cache, shapes, plan, played);
+      style.planner = planner;
+      const plan::Timeline played = plan::buildTimeline(model, cache, plan, style, {0, 1, 0}, &db, &graph);
       if (!timelinePath.empty()) {  // each flight as played: when, and how high its pieces go
         nlohmann::json j = plan::toJson(played);
         const std::vector<int> owner = plan::owners(played, plan, model.pieces().size());
@@ -116,12 +118,18 @@ int cmdPlan(const Args& args) {
               highest = std::min(highest, b.max.y);
               if (frame == f.startFrame) floorBottom = std::max(floorBottom, b.max.y);
             }
-          o["appearFrame"] = f.appearFrame, o["liftAt"] = f.liftAt, o["fallback"] = f.fallback, o["depth"] = f.depth;
+          o["appearFrame"] = f.appearFrame, o["liftAt"] = f.liftAt, o["fallback"] = f.fallback, o["depth"] = f.depth, o["direct"] = f.direct;
           o["highestBottom"] = highest, o["floorBottom"] = floorBottom;
         }
         std::ofstream out(timelinePath);
         out << j.dump(1) << "\n";
       }
+      // The play check reads the plan's moves, which the Legacy planner does not use, so it is the
+      // native planner's alone.
+      if (planner == plan::Planner::Legacy) {
+        std::printf("played        %zu flights (the web's planner; its play check is the native one's)\n", played.flights.size());
+      } else {
+      const plan::PlayCheck play = plan::certifyPlay(model, graph, cache, shapes, plan, played);
       std::printf("played        %d flights: crossings %d, under floor %d\n  upward      %d\n  inversions  %d\n  strict      %d (every frame shown, turns included, nothing let off but a piece's own mates at its seat)\n", play.flights, play.crossings, play.underFloor, play.upward, play.inversions, play.strictCrossings);
       for (uint32_t fi : play.crossed) {
         const plan::Flight& f = played.flights[fi];
@@ -144,6 +152,7 @@ int cmdPlan(const Args& args) {
         const Piece& b = model.pieces()[c.other];
         static const char* legs[] = {"transit", "path", "seat"};
         std::printf("    frame %.2f %s: %s %s through %s %s%s\n", c.at, legs[static_cast<int>(c.leg)], a.part.c_str(), a.id.c_str(), b.part.c_str(), b.id.c_str(), played.flights[c.flight].depth > 0 ? " (in a unit's own build)" : "");
+      }
       }
     }
     // The first moves that are not certified, with why.

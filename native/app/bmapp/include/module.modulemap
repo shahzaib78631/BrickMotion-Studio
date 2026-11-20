@@ -6,6 +6,11 @@ module BMApp {
   header "bmapp/doctypes.h"
   header "bmapp/keys.h"
   header "bmapp/gizmo.h"
+  header "bmapp/part_catalog.h"
+  header "bmapp/part_preview.h"
+  header "bmapp/model_import.h"
+  header "bmapp/assembly_inspection.h"
+  header "bmapp/motion_audit.h"
   requires cplusplus
   export *
 }

@@ -43,6 +43,7 @@ struct Session::Impl {
   /// The submodel being edited on its own: def names from below the root down; empty = the root.
   std::vector<std::string> focus;
   uint64_t version = 0;
+  uint64_t planInputs = 0;  ///< changes only when geometry or assembly constraints move
 
   // View state.
   std::vector<uint32_t> selection, hidden;  ///< sorted, no repeats

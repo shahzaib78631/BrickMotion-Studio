@@ -96,6 +96,7 @@ std::vector<OutlineRow> Session::outline() const {
         r.id = prefix.empty() ? std::to_string(i.id) : prefix + "/" + std::to_string(i.id);
         r.def = i.name;
         r.name = i.name;
+        r.group = groupOf(i);
         r.depth = depth;
         r.parent = parent;
         r.pieces = count.of(i.name);
@@ -133,23 +134,32 @@ std::vector<OutlineRow> Session::outline() const {
 std::vector<StepRow> Session::steps() const {
   const Impl& s = *impl_;
   if (s.steps && s.stepsStamp == structureVersion()) return *s.steps;
+  auto rows = stepsOfSubmodel(focusedDef(s));
+  s.steps = rows;
+  s.stepsStamp = structureVersion();
+  return rows;
+}
+
+std::vector<StepRow> Session::stepsOfSubmodel(const std::string& definition) const {
+  const Impl& s = *impl_;
   std::vector<StepRow> rows;
-  const Def* d = s.source.def(focusedDef(s));
+  const Def* d = s.source.def(definition);
   Counter count{s.source, {}, {}};
   if (d)
     for (size_t k = 0; k < d->steps.size(); k++) {
-      const StepFields f = stepFieldsOf(s, focusedDef(s), k);
+      const StepFields f = stepFieldsOf(s, definition, k);
       StepRow r;
       r.index = k;
       r.title = f.title, r.notes = f.notes, r.pauseAfter = f.pauseAfter, r.pinOrder = f.pinOrder;
       const auto& extra = d->steps[k].extra;
       r.automatic = extra.is_object() && extra.value("auto", false);
       r.items = d->steps[k].items.size();
-      for (const Item& i : d->steps[k].items) r.pieces += count.of(i);
+      for (const Item& i : d->steps[k].items) {
+        r.pieces += count.of(i);
+        r.submodels += i.submodel;
+      }
       rows.push_back(std::move(r));
     }
-  s.steps = rows;
-  s.stepsStamp = structureVersion();
   return rows;
 }
 
@@ -164,6 +174,7 @@ std::vector<ItemRow> Session::stepItems(size_t step) const {
     ItemRow r;
     r.item = i.id;
     r.name = i.name;
+    r.group = groupOf(i);
     r.submodel = i.submodel;
     r.step = step, r.index = k;
     if (i.submodel) {

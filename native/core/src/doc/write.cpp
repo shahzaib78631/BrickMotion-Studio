@@ -41,7 +41,8 @@ Project readProjectFile(std::string_view text) {
 }
 
 std::string writeProject(const Project& base, const Source& source, bool planChanged) {
-  Json j = base.json.is_object() ? base.json : Json{{"format", "brickmotion-project"}, {"version", 1}, {"savedAt", ""}};
+  Json j = {{"format", "brickmotion-project"}, {"version", 1}, {"savedAt", ""}};
+  if (base.json.is_object()) j.update(base.json);
   j["savedAt"] = nowIso();
   j["plan"] = toPlan(source).json;
   if (planChanged) j.erase("timelines");

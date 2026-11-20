@@ -62,14 +62,16 @@ Box boxOf(const Context& ctx, const Unit& unit) {
 }
 
 /// How far a box must go along `d` to be `margin` outside `bounds` through some face.
-double exitDistance(const Box& box, const Box& bounds, Vec3 d, double margin) {
+/// With `down` given, the face pointing along `down` (underneath `bounds`, toward the floor)
+/// does not count as open air.
+double exitDistance(const Box& box, const Box& bounds, Vec3 d, double margin, Vec3 down = {}) {
   double best = std::numeric_limits<double>::infinity();
   const double lo[3] = {box.min.x, box.min.y, box.min.z}, hi[3] = {box.max.x, box.max.y, box.max.z};
   const double blo[3] = {bounds.min.x, bounds.min.y, bounds.min.z}, bhi[3] = {bounds.max.x, bounds.max.y, bounds.max.z};
-  const double dir[3] = {d.x, d.y, d.z};
+  const double dir[3] = {d.x, d.y, d.z}, dn[3] = {down.x, down.y, down.z};
   for (int i = 0; i < 3; i++) {
-    if (dir[i] > 1e-6) best = std::min(best, (bhi[i] + margin - lo[i]) / dir[i]);
-    if (dir[i] < -1e-6) best = std::min(best, (hi[i] - (blo[i] - margin)) / -dir[i]);
+    if (dir[i] > 1e-6 && dn[i] <= 0.5) best = std::min(best, (bhi[i] + margin - lo[i]) / dir[i]);
+    if (dir[i] < -1e-6 && dn[i] >= -0.5) best = std::min(best, (hi[i] - (blo[i] - margin)) / -dir[i]);
   }
   return std::max(0.0, best);
 }
@@ -190,7 +192,8 @@ Extraction extract(const Context& ctx, const Unit& unit, const World::Present* p
     std::vector<collide::Zone> corridor;
     for (const Held& h : held) {
       const double stride = std::max(1.0, h.zone.radius);
-      for (double s = 0; s <= seat + stride; s += stride) corridor.push_back({h.zone.a + d * s, h.zone.b + d * s, h.zone.radius, h.piece, h.other});
+      const double carried = carriesZone(h.release, d) ? seat + stride : 0;
+      for (double s = 0; s <= carried; s += stride) corridor.push_back({h.zone.a + d * s, h.zone.b + d * s, h.zone.radius, h.piece, h.other});
     }
     uint32_t blocker = UINT32_MAX;
     const double got = ctx.world.clearTravel(unit.pieces, d, seat, present, corridor, &blocker, {}, 0.05, seat - kTravelTol);
@@ -210,7 +213,7 @@ Extraction extract(const Context& ctx, const Unit& unit, const World::Present* p
     Box at = box;
     at.min = at.min + d * drawn, at.max = at.max + d * drawn;
     auto leg = [&](const Xform& from, const Box& fromBox, Vec3 way, uint32_t* who) -> double {  // how far it gets, and how far it needs
-      const double need = exitDistance(fromBox, bounds, way, kExitMargin);
+      const double need = exitDistance(fromBox, bounds, way, kExitMargin, ctx.down);
       if (!std::isfinite(need)) return -1;
       if (need <= 0) return 0;
       if (belowFloor(from.t + way * need)) return -1;

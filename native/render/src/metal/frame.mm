@@ -42,7 +42,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
       for (int d = 0; d < 2; d++) add(outlined, g, static_cast<Detail>(d), inView[g].edges[d]);
     stats.culled += inView[g].culled;
   }
-  const bool glassInView = std::any_of(seen.begin(), seen.end(), [&](const Batch& batch) {
+  const bool glassInView = !options.clay && std::any_of(seen.begin(), seen.end(), [&](const Batch& batch) {
     const Group& g = scene.groups[batch.group];
     return g.material.transparent() && !g.placeholder;
   });
@@ -223,7 +223,13 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   const double floorY = (b.empty() ? 0.0 : b.max.y - scene.origin.y) + kFloorLift;
   fu.floorPlane = simd_make_float4(static_cast<float>(floorY), static_cast<float>(kFloorExtent * diagonal), static_cast<float>(options.shadows ? keyShown.texel : key.texel), kShadowBias);
   fu.floorCentre = simd_make_float4(static_cast<float>(middle.x - scene.origin.x), static_cast<float>(middle.z - scene.origin.z), kFloorShadow, kOitDepthScale);
-  fu.lens = simd_make_float4(static_cast<float>(std::tan(camera.fovY / 2)), static_cast<float>(kEdgeStudPixels / kStudLdu), static_cast<float>(kEdgeStudFullPixels / kStudLdu), 0);
+  fu.lens = simd_make_float4(static_cast<float>(std::tan(camera.fovY / 2)), static_cast<float>(kEdgeStudPixels / kStudLdu), static_cast<float>(kEdgeStudFullPixels / kStudLdu),
+                             static_cast<float>(camera.orthoHalfHeight));
+  if (options.gridSpacing > 0) {
+    fu.grid = simd_make_float4(static_cast<float>(options.gridSpacing),
+      static_cast<float>(std::fmod(scene.origin.x, options.gridSpacing * 5)),
+      static_cast<float>(std::fmod(scene.origin.z, options.gridSpacing * 5)), 0);
+  }
   const simd_float3 accent = simd_make_float3(linearFromSrgb(kSelectionRgb[0]), linearFromSrgb(kSelectionRgb[1]), linearFromSrgb(kSelectionRgb[2]));
   fu.selection = simd_make_float4(accent.x, accent.y, accent.z, selected.empty() ? 0.0f : kSelectionWidth);
   fu.heightProj = simdFrom(floorLit ? heightShown.matrix : above.matrix);
@@ -278,6 +284,11 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     du[i].base = simd_make_float4(m.base[0], m.base[1], m.base[2], m.alpha);
     du[i].surface = simd_make_float4(m.roughness, m.metalness, m.clearcoat, group.placeholder ? 1 : 0);
     du[i].edge = simd_make_float4(m.edge[0], m.edge[1], m.edge[2], m.transparent() && !group.placeholder ? kGlassEdgeOpacity : kEdgeOpacity);
+    if (options.clay && !group.placeholder) {
+      du[i].base = simd_make_float4(0.56f, 0.58f, 0.6f, 1);
+      du[i].surface = simd_make_float4(0.57f, 0, 0.1f, 0);
+      du[i].edge = simd_make_float4(0.18f, 0.19f, 0.2f, kEdgeOpacity);
+    }
     du[i].flip = simd_make_float4(batch.mirrored ? -1 : 1, batch.detail == Detail::Box ? 2 : 1, 0, 0);
     const bm::Box& part = parts[batch.group].bounds;
     const bm::Vec3 c = part.empty() ? bm::Vec3{} : (part.min + part.max) * 0.5;
@@ -391,8 +402,12 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
       for (size_t i = 0; i < seen.size(); i++) {
         const Batch& batch = seen[i];
         const Group& group = scene.groups[batch.group];
-        if ((!group.material.transparent() ? Kind::Opaque : group.placeholder ? Kind::Placeholder : Kind::Glass) != kind) continue;
-        const GpuMesh& gpu = mesh(group, batch.detail);
+        const Kind material = group.placeholder ? Kind::Placeholder :
+            !group.material.transparent() || options.clay ? Kind::Opaque : Kind::Glass;
+        if (material != kind) continue;
+        const Detail detail = options.interactive && batch.detail == Detail::Low && kind == Kind::Opaque &&
+            !options.wireframe ? Detail::Shadow : batch.detail;
+        const GpuMesh& gpu = mesh(group, detail);
         if (!gpu.indexCount) continue;
         // Triangles are counter-clockwise seen from outside; a mirrored instance shows them the other way round.
         [enc setFrontFacingWinding:batch.mirrored ? MTLWindingClockwise : MTLWindingCounterClockwise];
@@ -413,7 +428,9 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     [enc setCullMode:MTLCullModeBack];
     [enc setRenderPipelineState:pipelines.brick];
     [enc setDepthStencilState:pipelines.depthWrite];
+    if (options.wireframe) [enc setTriangleFillMode:MTLTriangleFillModeLines];
     bricks(Kind::Opaque);
+    if (options.wireframe) [enc setTriangleFillMode:MTLTriangleFillModeFill];
 
     if (options.floor) {
       [enc setCullMode:MTLCullModeNone];
@@ -428,7 +445,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     // the panes lose the darker, well-defined contours visible in EyeSight.
     // Each outlined batch is still drawn exactly once (no extra mesh work).
     auto drawOutlines = [&](bool glass) {
-      if (!options.edges) return;
+      if (!options.edges || options.wireframe) return;
       [enc setCullMode:MTLCullModeNone];
       [enc setRenderPipelineState:pipelines.edges];
       [enc setDepthStencilState:pipelines.depthRead];
@@ -437,7 +454,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
       for (size_t k = 0; k < outlined.size(); k++) {
         const Batch& batch = outlined[k];
         const Group& group = scene.groups[batch.group];
-        if ((group.material.transparent() && !group.placeholder) != glass) continue;
+        if ((group.material.transparent() && !group.placeholder && !options.clay) != glass) continue;
         const size_t i = seen.size() + k;
         const GpuMesh& gpu = mesh(group, batch.detail);
         if (!gpu.edgeVertices) continue;
@@ -476,6 +493,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     [enc setDepthStencilState:pipelines.depthRead];
     [enc setRenderPipelineState:pipelines.transparent];
     bricks(Kind::Placeholder);
+    if (options.wireframe) [enc setTriangleFillMode:MTLTriangleFillModeFill];
     drawOutlines(true);
     [enc endEncoding];
   }
@@ -519,10 +537,11 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     MTLSamplePosition samples[kSamples];
     [device->device getDefaultSamplePositions:samples count:kSamples];
     u.samplePosition = simd_make_float4(samples[0].x, samples[0].y, 0, 0);
-    const float tanY = static_cast<float>(std::tan(camera.fovY / 2));
+    const float tanY = static_cast<float>(camera.orthoHalfHeight > 0 ? camera.orthoHalfHeight : std::tan(camera.fovY / 2));
     u.lens = simd_make_float4(tanY, tanY * static_cast<float>(camera.aspect), static_cast<float>(camera.near), static_cast<float>(camera.far));
     u.shape = simd_make_float4(kAoRadius, kAoBias, kAoStrength, static_cast<float>(width));
-    u.size = simd_make_float4(static_cast<float>(height), static_cast<float>(aoRaw.width), static_cast<float>(aoRaw.height), 0);
+    u.size = simd_make_float4(static_cast<float>(height), static_cast<float>(aoRaw.width), static_cast<float>(aoRaw.height),
+                             camera.orthoHalfHeight > 0 ? 1 : 0);
     for (int pass = 0; pass < 2; pass++) {
       MTLRenderPassDescriptor* d = [MTLRenderPassDescriptor new];
       d.colorAttachments[0].texture = pass == 0 ? aoRaw : aoSoft;

@@ -27,6 +27,7 @@ struct FrameUniforms {
   float4x4 heightProj;    // world to the height map (floor_light.metal)
   float4 floorLook;       // x, y: nearest and furthest a floor point looks (LDU); z: 1 when the floor's light is worked out; w: the power the sky's share is raised to
   float4 glass;           // x: glass's absorption, y: the floor's level seen through glass, z: glass's IOR (tolerances.h kGlass*)
+  float4 grid;            // x: spacing, y/z: model origin modulo spacing
 };
 
 // One per draw. Must match DrawUniforms in src/metal/impl.h.

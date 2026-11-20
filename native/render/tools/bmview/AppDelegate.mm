@@ -39,16 +39,18 @@ std::string describe(const bm::LoadReport& r) {
 
 @implementation AppDelegate {
   NSString* _path;
-  BOOL _play, _raytracedGlass, _correct, _arc;
+  BOOL _play, _raytracedGlass, _correct;
+  bm::plan::FlightShape _flight;
+  bm::plan::Planner _planner;
   std::unique_ptr<bmview::Session> _session;
   NSWindow* _window;
   ViewportView* _view;
   dispatch_group_t _planning;
 }
 
-- (instancetype)initWithFile:(NSString*)path play:(BOOL)play raytracedGlass:(BOOL)raytracedGlass correct:(BOOL)correct arc:(BOOL)arc {
+- (instancetype)initWithFile:(NSString*)path play:(BOOL)play raytracedGlass:(BOOL)raytracedGlass correct:(BOOL)correct flight:(bm::plan::FlightShape)flight planner:(bm::plan::Planner)planner {
   self = [super init];
-  if (self) _path = path, _play = play, _raytracedGlass = raytracedGlass, _correct = correct, _arc = arc, _planning = dispatch_group_create();
+  if (self) _path = path, _play = play, _raytracedGlass = raytracedGlass, _correct = correct, _flight = flight, _planner = planner, _planning = dispatch_group_create();
   return self;
 }
 
@@ -58,7 +60,8 @@ std::string describe(const bm::LoadReport& r) {
   auto s = std::make_unique<bmview::Session>();
   s->file = std::filesystem::path(_path.UTF8String);
   s->raytracedGlass = _raytracedGlass;
-  s->flight = _arc ? bm::plan::FlightShape::Arc : bm::plan::FlightShape::Web;
+  s->flight = _flight;
+  s->planner = _planner;
   s->ldraw = bmtools::ldrawDir();
   if (s->ldraw.empty()) fail(@"No LDraw library was found.", "Set BM_LDRAW_DIR to the folder that holds LDConfig.ldr.");
   try {
@@ -105,7 +108,7 @@ std::string describe(const bm::LoadReport& r) {
       options.cancel = &session->cancel;
       options.correctPlacements = correct;
       if (correct) corrected = std::make_shared<bm::Model>(*session->model);
-      planned = bmtools::planModel(correct ? *corrected : *session->model, *session->library, *session->full, session->ldraw, options, [&] { bm::plan::Style style = bm::plan::styleOf(session->file); style.shape = session->flight; return style; }());
+      planned = bmtools::planModel(correct ? *corrected : *session->model, *session->library, *session->full, session->ldraw, options, [&] { bm::plan::Style style = bm::plan::styleOf(session->file); style.shape = session->flight, style.planner = session->planner; return style; }());
       if (correct) bmtools::reportCorrections("bmview", *corrected, planned->corrections);
       bmtools::keysFromTrack(planned->track, planned->timeline);  // the build plays the director's camera
     } catch (const std::exception& e) {

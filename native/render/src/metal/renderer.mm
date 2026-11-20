@@ -139,6 +139,8 @@ void Renderer::Impl::updateLiveBounds() {
   liveBounds = b.empty() ? scene.bounds : b;
 }
 
+const bm::Box& Renderer::visibleBounds() const { return impl_->liveBounds; }
+
 bm::Box Renderer::selectionBounds() const {
   const Impl& impl = *impl_;
   bm::Box b;
@@ -196,6 +198,35 @@ void Renderer::recolored(const std::vector<uint32_t>& pieces) {
   if (pieces.empty()) return;
   applyRecolored(impl_->scene, *impl_->model, pieces);
   impl_->groupsChanged();
+}
+
+void Renderer::modelDeleted(const bm::Model& model, const std::vector<uint32_t>& removed) {
+  Impl& impl = *impl_;
+  if (removed.empty() || model.pieces().size() + removed.size() != impl.scene.where.size()) {
+    modelChanged(model);
+    return;
+  }
+  impl.model = &model;
+  impl.scene.where.assign(model.pieces().size(), {UINT32_MAX, UINT32_MAX});
+  impl.scene.bounds = {};
+  for (uint32_t gi = 0; gi < impl.scene.groups.size(); ++gi) {
+    auto& group = impl.scene.groups[gi];
+    uint32_t write = 0;
+    for (uint32_t read = 0; read < group.instances.size(); ++read) {
+      auto instance = group.instances[read];
+      const auto prior = std::lower_bound(removed.begin(), removed.end(), instance.piece);
+      if (prior != removed.end() && *prior == instance.piece) continue;
+      instance.piece -= static_cast<uint32_t>(prior - removed.begin());
+      group.instances[write] = instance;
+      group.restBoxes[write] = group.restBoxes[read];
+      impl.scene.where[instance.piece] = {gi, write};
+      impl.scene.bounds.merge(group.restBoxes[write]);
+      ++write;
+    }
+    group.instances.resize(write);
+    group.restBoxes.resize(write);
+  }
+  impl.groupsChanged();
 }
 
 void Renderer::setHidden(const std::vector<uint32_t>& pieces) {

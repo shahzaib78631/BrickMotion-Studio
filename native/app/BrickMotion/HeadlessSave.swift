@@ -27,6 +27,10 @@ import BMApp
     return 1
   }
   document.fileType = DocumentController.projectType
+  let destination = URL(fileURLWithPath: out)
+  let inPlace = url.standardizedFileURL == destination.standardizedFileURL &&
+                bmapp.isProjectExtension(std.string(url.pathExtension))
+  if inPlace { document.fileURL = url }
   if let m = value("--edit-move", 4), let piece = UInt32(m[0]), let dx = Double(m[1]), let dy = Double(m[2]), let dz = Double(m[3]) {
     var pieces = bmapp.PieceList()
     pieces.push_back(piece)
@@ -39,7 +43,7 @@ import BMApp
     }
   }
   var finished = false, failure: (any Error)?
-  document.save(to: URL(fileURLWithPath: out), ofType: DocumentController.projectType, for: .saveAsOperation) { error in
+  document.save(to: destination, ofType: DocumentController.projectType, for: inPlace ? .saveOperation : .saveAsOperation) { error in
     failure = error
     finished = true
   }

@@ -1,4 +1,6 @@
 #include "bmapp/session.h"
+#include "animation_keys.h"
+#include "bmapp/part_catalog.h"
 
 #include <algorithm>
 #include <cctype>
@@ -8,7 +10,6 @@
 #include <sstream>
 #include <stdexcept>
 #include <fstream>
-#include <mutex>
 #include <iterator>
 #include <map>
 #include <set>
@@ -18,6 +19,7 @@
 #include "bm/version.h"
 #include "engine.h"
 #include "session_impl.h"
+#include "model_import_impl.h"
 
 namespace bmapp {
 
@@ -107,11 +109,21 @@ OpenResult Session::open(const std::string& path) {
   });
 }
 
+OpenResult Session::newBlank() {
+  return openWith(impl_, "Untitled.brickmotion", [](Impl& s) {
+    s.source.root.steps.emplace_back();
+  });
+}
+
 OpenResult Session::openBytes(const std::string& bytes, const std::string& path) {
   return openWith(impl_, path, [&](Impl& s) {
     s.base = bm::doc::readProjectFile(bytes);
     s.source = bm::doc::fromPlan(bm::io::readProject(bytes));
   });
+}
+
+void Session::adoptLoadedSession(const Session* loaded) {
+  if (loaded && loaded->impl_->generation) impl_ = loaded->impl_;
 }
 
 uint64_t Session::generation() const { return impl_->generation; }
@@ -122,7 +134,9 @@ namespace {
 bm::doc::Source forProject(const Session::Impl& s) {
   bm::doc::Source out = s.source;
   // The web requires the plan's name; an import has none of its own: it takes the file's.
-  if (!out.extra.is_object()) out.extra = {{"format", "brickmotion-plan"}, {"version", 1}};
+  if (!out.extra.is_object()) out.extra = nlohmann::ordered_json::object();
+  if (!out.extra.contains("format")) out.extra["format"] = "brickmotion-plan";
+  if (!out.extra.contains("version")) out.extra["version"] = 1;
   if (!out.extra.contains("name")) out.extra["name"] = s.file.stem().string();
   if (out.origin != bm::doc::Origin::LDraw || !s.model) return out;
   auto bake = [&](bm::doc::Def& def) {
@@ -148,6 +162,15 @@ std::string Session::projectBytes() const {
   const Impl& s = *impl_;
   return bm::doc::writeProject(s.base ? *s.base : bm::doc::Project{}, forProject(s), s.timelinesStale || dirty());
 }
+std::string Session::projectBytesWithPreview(const std::string& pngBase64) const {
+  const Impl& s = *impl_;
+  auto base = s.base ? *s.base : bm::doc::Project{};
+  if (!base.json.is_object()) base.json = nlohmann::ordered_json::object();
+  if (!pngBase64.empty()) base.json["brickmotionPreview"] = {{"version", 1}, {"png", pngBase64}};
+  else if (dirty()) base.json.erase("brickmotionPreview");
+  return bm::doc::writeProject(base, forProject(s), s.timelinesStale || dirty());
+}
+std::string Session::planBytes() const { return bm::doc::toPlan(forProject(*impl_)).json.dump(2) + "\n"; }
 
 std::string Session::mpdBytes() const { return impl_->library ? bm::doc::writeMpd(impl_->source, *impl_->library) : ""; }
 
@@ -156,6 +179,16 @@ size_t Session::pieceCount() const { return impl_->model ? impl_->model->pieces(
 std::string Session::title() const { return impl_->file.stem().string(); }
 
 bool Session::imported() const { return impl_->imported; }
+
+PartMatch Session::partAt(uint32_t piece) const {
+  if (!impl_->model || piece >= impl_->model->pieces().size()) return {};
+  const auto& part = impl_->model->pieces()[piece].part;
+  const auto* file = impl_->model->library().find(part);
+  return {part, file && !file->description.empty() ? file->description : part, {}};
+}
+bool Session::isLocalPiece(uint32_t piece) const {
+  return piece < impl_->refs.size() && impl_->refs[piece].chain.size() == 1;
+}
 
 Summary Session::summarize(const std::vector<uint32_t>& pieces) const {
   Summary s;
@@ -172,6 +205,12 @@ Summary Session::summarize(const std::vector<uint32_t>& pieces) const {
 
 namespace {
 bm::Vec3 engine(Vec3 v) { return {v.x, v.y, v.z}; }
+bm::Xform engine(const PartPose& pose) {
+  bm::Xform out;
+  out.t = engine(pose.position);
+  std::copy_n(pose.rotation.m, 9, out.r.m);
+  return out;
+}
 }  // namespace
 
 namespace {
@@ -194,19 +233,33 @@ Changed edited(Session::Impl& s, uint64_t before, Changed c, bool selectNew = fa
   while (s.changes.size() > Session::Impl::kChangesKept) s.changes.pop_front();
   if (c.structure) {
     s.structureVersion++;
-    std::map<std::vector<bm::doc::ItemId>, uint32_t> now;
-    if (!s.selection.empty() || !s.hidden.empty())
-      for (uint32_t p = 0; p < s.refs.size(); p++) now.emplace(s.refs[p].chain, p);
-    if (selectNew) {
-      std::set<std::vector<bm::doc::ItemId>> old;
-      for (const bm::doc::PieceRef& r : s.previousRefs) old.insert(r.chain);
-      s.selection.clear();
-      for (uint32_t p = 0; p < s.refs.size(); p++)
-        if (!old.count(s.refs[p].chain)) s.selection.push_back(p);
+    if (!c.removed.empty()) {
+      const auto compact = [&](PieceList& list) {
+        size_t kept = 0;
+        for (uint32_t old : list) {
+          const auto prior = std::lower_bound(c.removed.begin(), c.removed.end(), old);
+          if (prior == c.removed.end() || *prior != old)
+            list[kept++] = old - static_cast<uint32_t>(prior - c.removed.begin());
+        }
+        list.resize(kept);
+      };
+      compact(s.selection);
+      compact(s.hidden);
     } else {
-      s.selection = carried(s.selection, s.previousRefs, now);
+      std::map<std::vector<bm::doc::ItemId>, uint32_t> now;
+      if (!s.selection.empty() || !s.hidden.empty())
+        for (uint32_t p = 0; p < s.refs.size(); p++) now.emplace(s.refs[p].chain, p);
+      if (selectNew) {
+        std::set<std::vector<bm::doc::ItemId>> old;
+        for (const bm::doc::PieceRef& r : s.previousRefs) old.insert(r.chain);
+        s.selection.clear();
+        for (uint32_t p = 0; p < s.refs.size(); p++)
+          if (!old.count(s.refs[p].chain)) s.selection.push_back(p);
+      } else {
+        s.selection = carried(s.selection, s.previousRefs, now);
+      }
+      s.hidden = carried(s.hidden, s.previousRefs, now);
     }
-    s.hidden = carried(s.hidden, s.previousRefs, now);
     s.previousRefs.clear();
     s.selectionStamp++, s.hiddenStamp++;
   }
@@ -238,6 +291,51 @@ Changed Session::remove(const std::vector<uint32_t>& pieces) { BM_EDIT(removeCom
 Changed Session::duplicate(const std::vector<uint32_t>& pieces, Vec3 offset) { BM_EDIT_SELECTING(duplicateCommand(*impl_, pieces, engine(offset)), true); }
 std::string Session::copy(const std::vector<uint32_t>& pieces) const { return impl_->model ? copyText(*impl_, pieces) : ""; }
 Changed Session::paste(const std::string& text, Vec3 offset) { BM_EDIT_SELECTING(pasteCommand(*impl_, focusedDef(*impl_), text, engine(offset)), true); }
+Changed Session::placePart(const std::string& part, int color, const PartPose& pose, int step,
+                           uint64_t generation, uint64_t version) {
+  if (!impl_->model || impl_->generation != generation || impl_->version != version)
+    return refusal(*impl_, "The model changed. Preview the placement again.");
+  BM_EDIT_SELECTING(placePartCommand(*impl_, focusedDef(*impl_), part, color, engine(pose), step), true);
+}
+Changed Session::placeMoved(const PieceList& pieces, uint32_t anchor, const PartPose& pose,
+                            uint64_t generation, uint64_t version) {
+  if (!impl_->model || impl_->generation != generation || impl_->version != version)
+    return refusal(*impl_, "The model changed. Preview the move again.");
+  BM_EDIT(placeMovedCommand(*impl_, pieces, anchor, engine(pose)));
+}
+Changed Session::setGroup(const PieceList& pieces, const std::string& group) {
+  BM_EDIT(setGroupCommand(*impl_, pieces, group));
+}
+Changed Session::importModel(const ModelImport* file, const std::string& into, uint64_t generation) {
+  if (impl_->generation != generation) return refusal(*impl_, "The document changed before the import finished.");
+  if (!file || !file->impl_->source) return refusal(*impl_, file ? file->error() : "The file could not be read.");
+  BM_EDIT(importModelCommand(*impl_, into, *file->impl_->source, file->impl_->name));
+}
+StringList Session::groupNames() const {
+  std::set<std::string> groups;
+  const auto* def = impl_->source.def(focusedDef(*impl_));
+  if (def)
+    for (const auto& step : def->steps)
+      for (const auto& item : step.items)
+        if (auto group = groupOf(item); !group.empty()) groups.insert(std::move(group));
+  return {groups.begin(), groups.end()};
+}
+StringList Session::groupsOf(const PieceList& pieces) const { return groupsOfItems(*impl_, pieces); }
+void Session::selectGroup(const std::string& group) {
+  if (group.empty()) return;
+  PieceList selected;
+  if (const auto* def = impl_->source.def(focusedDef(*impl_))) {
+    for (const auto& step : def->steps) {
+      for (const auto& item : step.items) {
+        if (groupOf(item) != group) continue;
+        if (const auto it = impl_->piecesOf.find(item.id); it != impl_->piecesOf.end())
+          for (uint32_t p : it->second)
+            if (!std::binary_search(impl_->hidden.begin(), impl_->hidden.end(), p)) selected.push_back(p);
+      }
+    }
+  }
+  select(selected, SelectMode::Replace);
+}
 Changed Session::replacePart(const std::vector<uint32_t>& pieces, const std::string& part) { BM_EDIT(replaceCommand(*impl_, pieces, part)); }
 Changed Session::makeUnique(uint32_t piece) { BM_EDIT(makeUniqueCommand(*impl_, piece)); }
 size_t Session::stepCount() const { return stepCountOf(*impl_, focusedDef(*impl_)); }
@@ -250,8 +348,52 @@ Changed Session::mergeSteps(size_t first) { BM_EDIT(mergeStepsCommand(*impl_, fo
 Changed Session::setStepFields(size_t at, const StepFields& fields, bool continuing) {
   BM_EDIT(setStepFieldsCommand(*impl_, focusedDef(*impl_), at, fields, continuing));
 }
+MotionFields Session::motionFields(MotionScope scope, size_t step, const PieceList& pieces) const {
+  return motionFieldsOf(*impl_, scope, step, pieces);
+}
+Changed Session::setMotionFields(MotionScope scope, size_t step, const PieceList& pieces, const MotionFields& fields) {
+  BM_EDIT(setMotionFieldsCommand(*impl_, scope, step, pieces, fields));
+}
+Changed Session::turnWaitingPart(uint32_t piece, double degrees) {
+  BM_EDIT(turnWaitingPartCommand(*impl_, piece, degrees));
+}
+Changed Session::setInsertionDirection(const PieceList& pieces, Vec3 direction) {
+  BM_EDIT(setInsertionDirectionCommand(*impl_, pieces, engine(direction)));
+}
+Vec3 Session::insertionDirection(uint32_t piece) const {
+  const auto d = insertionDirectionOf(*impl_, piece);
+  return {d.x, d.y, d.z};
+}
+Changed Session::scale(const PieceList& pieces, Vec3 factor, Mat3 axes, Vec3 pivot, bool continuing) {
+  bm::Mat3 basis;
+  std::copy_n(axes.m, 9, basis.m);
+  BM_EDIT(scaleCommand(*impl_, pieces, engine(factor), basis, engine(pivot), continuing));
+}
+KeyScene Session::keyScene() const { return readKeyScene(*impl_); }
+std::vector<KeyTrack> Session::keyTracks() const { return readKeyTracks(*impl_); }
+double Session::keyValue(uint32_t piece, KeyChannel channel, double frame) const {
+  const auto tracks = readKeyTracks(*impl_);
+  const auto track = std::find_if(tracks.begin(), tracks.end(), [&](const auto& row) { return row.object == piece; });
+  if (track != tracks.end()) return sampleKeys(*track, channel, frame);
+  return channel >= KeyChannel::ScaleX ? 1 : 0;
+}
+Changed Session::setKeyScene(const KeyScene& scene) { BM_EDIT(setKeySceneCommand(*impl_, scene)); }
+Changed Session::setKeys(uint32_t piece, const KeyList& keys, bool continuing) {
+  BM_EDIT(setKeysCommand(*impl_, piece, keys, continuing, false));
+}
+Changed Session::removeKeys(uint32_t piece, const KeyList& keys) {
+  BM_EDIT(setKeysCommand(*impl_, piece, keys, false, true));
+}
+Changed Session::moveKey(uint32_t piece, KeyChannel channel, int from, int to) {
+  BM_EDIT(moveKeyCommand(*impl_, piece, channel, from, to));
+}
+Changed Session::setBakedKeys(uint32_t piece, const KeyList& keys) {
+  BM_EDIT(setKeysCommand(*impl_, piece, keys, false, false, true));
+}
 Changed Session::moveToStep(const std::vector<uint32_t>& pieces, size_t step) { BM_EDIT(moveToStepCommand(*impl_, focusedDef(*impl_), pieces, step)); }
 Changed Session::reorderInStep(size_t step, size_t from, size_t to) { BM_EDIT(reorderInStepCommand(*impl_, focusedDef(*impl_), step, from, to)); }
+Changed Session::reorderArrival(size_t step, size_t from, size_t to) { BM_EDIT(reorderInStepCommand(*impl_, focusedDef(*impl_), step, from, to, true)); }
+Changed Session::regenerateSteps(const PieceList& buildOrder) { BM_EDIT(regenerateStepsCommand(*impl_, buildOrder)); }
 Changed Session::focus(const StringList& path) { BM_EDIT(focusCommand(*impl_, path)); }
 StringList Session::focusPath() const { return impl_->focus; }
 std::string Session::focused() const { return focusedDef(*impl_); }
@@ -346,7 +488,9 @@ Snapshot Session::snapshot() const {
       PieceInfo info;
       info.piece = p;
       info.part = piece.part;
-      if (const bm::ldraw::File* f = s.library->find(piece.part)) info.description = f->description;
+      const auto& partLibrary = s.model->library();
+      info.inlinePart = partLibrary.isInline(piece.part);
+      if (const bm::ldraw::File* f = partLibrary.find(piece.part)) info.description = f->description;
       info.color = piece.color;
       if (const auto c = colors.find(piece.color); c != colors.end()) info.colorName = colorDisplayName(c->second.name);
       info.step = piece.step;
@@ -399,89 +543,9 @@ std::vector<uint32_t> Session::usePieces(uint32_t piece) const {
   return out;
 }
 
-namespace {
-std::string folded(std::string_view text) {
-  std::string out;
-  for (char c : text) {
-    const char l = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    if (std::isspace(static_cast<unsigned char>(l))) {
-      if (!out.empty() && out.back() != ' ') out += ' ';
-    } else {
-      out += l;
-    }
-  }
-  if (!out.empty() && out.back() == ' ') out.pop_back();
-  return out;
-}
-
-struct CatalogEntry {
-  std::string name, description, haystack;  ///< haystack: the name and description, folded
-};
-
-/// Every part in <ldraw>/parts with its first line, read once per library directory.
-std::shared_ptr<const std::vector<CatalogEntry>> catalog(const std::string& ldraw) {
-  static std::mutex mutex;
-  static std::map<std::string, std::shared_ptr<const std::vector<CatalogEntry>>> made;
-  std::lock_guard lock(mutex);
-  if (const auto it = made.find(ldraw); it != made.end()) return it->second;
-  auto list = std::make_shared<std::vector<CatalogEntry>>();
-  std::error_code ec;
-  for (const auto& e : std::filesystem::directory_iterator(std::filesystem::path(ldraw) / "parts", ec)) {
-    std::string name = e.path().filename().string();
-    std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    if (name.size() < 5 || name.compare(name.size() - 4, 4, ".dat") != 0) continue;
-    std::ifstream f(e.path());
-    std::string line;
-    std::getline(f, line);
-    size_t at = line.find_first_not_of(" \t");
-    if (at == std::string::npos || line[at] != '0') continue;
-    at = line.find_first_not_of(" \t", at + 1);
-    std::string description = at == std::string::npos ? "" : line.substr(at);
-    while (!description.empty() && (description.back() == '\r' || description.back() == ' ')) description.pop_back();
-    if (description.empty() || description[0] == '~') continue;
-    list->push_back({name, description, folded(name + " " + description)});
-  }
-  std::sort(list->begin(), list->end(), [](const CatalogEntry& a, const CatalogEntry& b) { return a.name < b.name; });
-  made[ldraw] = list;
-  return list;
-}
-}  // namespace
-
 std::vector<PartMatch> Session::searchParts(const std::string& query, size_t limit) const {
-  const std::string q = folded(query);
-  if (q.empty() || impl_->ldraw.empty()) return {};
-  std::vector<std::string> words;
-  for (size_t at = 0; at < q.size();) {
-    const size_t end = std::min(q.find(' ', at), q.size());
-    words.push_back(q.substr(at, end - at));
-    at = end + 1;
-  }
-  const auto list = catalog(impl_->ldraw);
-  struct Hit {
-    int rank;
-    const CatalogEntry* entry;
-  };
-  std::vector<Hit> hits;
-  for (const CatalogEntry& e : *list) {
-    bool all = true;
-    for (const std::string& w : words)
-      if (e.haystack.find(w) == std::string::npos) {
-        all = false;
-        break;
-      }
-    if (!all) continue;
-    const std::string stem = e.name.substr(0, e.name.size() - 4), d = folded(e.description);
-    const int rank = e.name == q || stem == q ? 0 : d == q ? 1 : d.rfind(q, 0) == 0 ? 2 : stem.rfind(q, 0) == 0 ? 3 : 4;
-    hits.push_back({rank, &e});
-  }
-  std::sort(hits.begin(), hits.end(), [](const Hit& a, const Hit& b) {
-    if (a.rank != b.rank) return a.rank < b.rank;
-    if (a.entry->description.size() != b.entry->description.size()) return a.entry->description.size() < b.entry->description.size();
-    return a.entry->name < b.entry->name;
-  });
-  std::vector<PartMatch> out;
-  for (size_t i = 0; i < hits.size() && i < limit; i++) out.push_back({hits[i].entry->name, hits[i].entry->description});
-  return out;
+  if (query.find_first_not_of(" \t\r\n\f\v") == std::string::npos) return {};
+  return libraryParts(impl_->ldraw, query, "", limit);
 }
 
 }  // namespace bmapp

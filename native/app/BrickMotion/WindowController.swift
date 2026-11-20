@@ -4,11 +4,15 @@ import SwiftUI
 
 final class WindowController: NSWindowController, NSToolbarDelegate {
   private static let modeItem = NSToolbarItem.Identifier("mode")
-  private static let planningItem = NSToolbarItem.Identifier("planning")
   private static let toolItem = NSToolbarItem.Identifier("tool")
+  private static let paletteItem = NSToolbarItem.Identifier("palette")
+  private static let navigatorDivider = NSToolbarItem.Identifier("navigatorDivider")
+  private static let inspectorDivider = NSToolbarItem.Identifier("inspectorDivider")
   private var toolGroup: NSToolbarItemGroup?
+  private var modeGroup: NSToolbarItemGroup?
   private let split = NSSplitViewController()
-  private let progress = NSProgressIndicator()
+  private let workspaceSplit = NSSplitViewController()
+  private var timelineItem: NSSplitViewItem!
   /// What the panes show of the document.
   private(set) var model: DocumentModel!
 
@@ -21,7 +25,7 @@ final class WindowController: NSWindowController, NSToolbarDelegate {
     window.contentMinSize = NSSize(width: 900, height: 600)
     self.init(window: window)
     buildSplit(document)
-    window.contentViewController = split
+    window.contentViewController = workspaceSplit
     // Autosave keeps untitled imports too, so every window comes back after a relaunch.
     window.isRestorable = true
     // Setting the content controller sizes the window to the panes' minimum; start larger.
@@ -38,6 +42,7 @@ final class WindowController: NSWindowController, NSToolbarDelegate {
 
   private func buildSplit(_ document: Document) {
     let model = DocumentModel(document: document)
+    if document.session.pieceCount() == 0 { model.sidebarTab = .parts }
     self.model = model
     let sidebar = NSSplitViewItem(sidebarWithViewController: NSHostingController(rootView: Sidebar(model: model)))
     sidebar.minimumThickness = 220
@@ -45,28 +50,80 @@ final class WindowController: NSWindowController, NSToolbarDelegate {
     let viewport = ViewportController(session: document.session)
     viewport.viewportView.document = document
     model.viewport = viewport.viewportView
+    model.animation.viewport = viewport.viewportView
+    viewport.viewportView.animation = model.animation
+    viewport.viewportView.installEditorOverlays(model: model)
     let crumb = NSHostingView(rootView: Breadcrumb(model: model))
     crumb.sizingOptions = [.intrinsicContentSize]
     viewport.viewportView.addOverlay(crumb)
+    let callout = NSHostingView(rootView: StepCallout(model: model, workspace: model.animation))
+    callout.sizingOptions = [.intrinsicContentSize]
+    viewport.viewportView.addOverlay(callout, leading: false, top: false)
+    let chrome = NSHostingView(rootView: ViewportChrome(camera: viewport.viewportView.presentation, model: model))
+    chrome.sizingOptions = [.intrinsicContentSize]
+    viewport.viewportView.addOverlay(chrome, leading: false)
+    let status = NSHostingView(rootView: ViewportStatus(model: model))
+    status.sizingOptions = [.intrinsicContentSize]
+    viewport.viewportView.addOverlay(status, top: false)
     viewport.viewportView.onTool = { [weak self] tool in self?.toolGroup?.selectedIndex = tool.rawValue }
-    viewport.viewportView.onPlanState = { [weak self] state in self?.showPlanning(state == .Planning) }
     let content = NSSplitViewItem(viewController: viewport)
     let inspector = NSSplitViewItem(inspectorWithViewController: NSHostingController(rootView: Inspector(model: model)))
     inspector.minimumThickness = 260
     inspector.maximumThickness = 420
     split.splitViewItems = [sidebar, content, inspector]
+    workspaceSplit.splitView.isVertical = false
+    let editor = NSSplitViewItem(viewController: split)
+    editor.minimumThickness = 310
+    editor.holdingPriority = .defaultLow
+    let timeline = NSHostingController(rootView: AnimationTimeline(model: model, workspace: model.animation))
+    timeline.sizingOptions = []
+    timelineItem = NSSplitViewItem(viewController: timeline)
+    timelineItem.minimumThickness = 168
+    timelineItem.maximumThickness = 410
+    timelineItem.automaticMaximumThickness = 236
+    timelineItem.preferredThicknessFraction = 0.26
+    timelineItem.canCollapse = true
+    timelineItem.isCollapsed = true
+    workspaceSplit.splitViewItems = [editor, timelineItem]
   }
 
   /// The panes' views, for --snapshot's report.
   var sidebarView: NSView? { split.splitViewItems.first?.viewController.view }
   var inspectorView: NSView? { split.splitViewItems.last?.viewController.view }
+  var timelineView: NSView? { timelineItem.isCollapsed ? nil : timelineItem.viewController.view }
 
   /// The centre pane.
   var viewportController: ViewportController { split.splitViewItems[1].viewController as! ViewportController }
 
-  private func showPlanning(_ on: Bool) {
-    progress.isHidden = !on
-    if on { progress.startAnimation(nil) } else { progress.stopAnimation(nil) }
+  var isAnimating: Bool { !timelineItem.isCollapsed }
+
+  func setAnimateMode(_ animate: Bool, plan: Bool = true) {
+    guard animate != isAnimating else { return }
+    let previousHeight = timelineItem.viewController.view.bounds.height
+    modeGroup?.selectedIndex = animate ? 1 : 0
+    model.animation.visible = animate
+    timelineItem.isCollapsed = !animate
+    if animate {
+      Task { @MainActor [weak self] in
+        guard let self, self.isAnimating else { return }
+        let view = self.workspaceSplit.splitView
+        view.layoutSubtreeIfNeeded()
+        let saved = UserDefaults.standard.double(forKey: "BrickMotionTimelineHeight")
+        let proposed = saved > 0 ? saved : 225
+        let size = min(CGFloat(proposed), max(self.timelineItem.minimumThickness, view.bounds.height - 310))
+        view.setPosition(view.isFlipped ? view.bounds.height - size : size, ofDividerAt: 0)
+      }
+      model.animation.viewport?.viewport.useKeyframes(model.animation.tab == .timeline)
+      viewportController.viewportView.placement.cancel()
+      if plan, EditorPreferences.shared.autoPlan { model.animation.plan() }
+    } else {
+      if previousHeight >= timelineItem.minimumThickness {
+        UserDefaults.standard.set(Double(previousHeight), forKey: "BrickMotionTimelineHeight")
+      }
+      model.animation.viewport?.viewport.useKeyframes(false)
+      model.animation.rest()
+      if model.inspectorTab == .camera { model.inspectorTab = model.snapshot.selection.count == 1 ? .part : .selection }
+    }
   }
 
   // MARK: Editing when a pane has the keyboard
@@ -87,8 +144,14 @@ final class WindowController: NSWindowController, NSToolbarDelegate {
     viewportController.viewportView.tool = ViewportView.Tool(rawValue: sender.selectedIndex) ?? .select
   }
 
+  @objc private func chooseMode(_ sender: NSToolbarItemGroup) { setAnimateMode(sender.selectedIndex == 1) }
+  @objc private func openPalette(_ sender: Any?) {
+    if let window { CommandPalette.show(over: window) }
+  }
+
   func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-    [.toggleSidebar, .sidebarTrackingSeparator, Self.toolItem, .flexibleSpace, Self.modeItem, .flexibleSpace, Self.planningItem, .inspectorTrackingSeparator, .toggleInspector]
+    [.toggleSidebar, Self.navigatorDivider, Self.toolItem, .flexibleSpace, Self.modeItem, .flexibleSpace,
+     Self.paletteItem, Self.inspectorDivider, .toggleInspector]
   }
 
   func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -97,36 +160,39 @@ final class WindowController: NSWindowController, NSToolbarDelegate {
 
   func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier id: NSToolbarItem.Identifier,
                willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
-    if id == Self.planningItem {
-      progress.style = .spinning
-      progress.controlSize = .small
-      progress.isDisplayedWhenStopped = false
-      progress.isHidden = true
-      progress.toolTip = "Planning the build"
-      progress.setAccessibilityLabel("Planning the build")
+    if id == Self.navigatorDivider || id == Self.inspectorDivider {
+      return NSTrackingSeparatorToolbarItem(identifier: id, splitView: split.splitView, dividerIndex: id == Self.navigatorDivider ? 0 : 1)
+    }
+    if id == Self.paletteItem {
       let item = NSToolbarItem(itemIdentifier: id)
-      item.view = progress
-      item.label = "Planning"
+      item.label = "Command Palette"
+      item.toolTip = "Command Palette (⌘K)"
+      item.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: "Command Palette")
+      item.target = self
+      item.action = #selector(openPalette(_:))
+      item.visibilityPriority = .low
       return item
     }
     if id == Self.toolItem {
-      let images = ["cursorarrow", "arrow.up.and.down.and.arrow.left.and.right", "arrow.trianglehead.2.clockwise.rotate.90"].map {
-        NSImage(systemSymbolName: $0, accessibilityDescription: nil)!
+      let images = ["cursorarrow", "arrow.up.and.down.and.arrow.left.and.right", "arrow.trianglehead.2.clockwise.rotate.90", "arrow.up.left.and.down.right.magnifyingglass"].map {
+        NSImage(systemSymbolName: $0, accessibilityDescription: nil)
+          ?? NSImage(systemSymbolName: "arrow.up.left.and.arrow.down.right", accessibilityDescription: nil)!
       }
       let group = NSToolbarItemGroup(itemIdentifier: id, images: images, selectionMode: .selectOne,
-                                     labels: ["Select", "Move", "Rotate"], target: self, action: #selector(chooseTool(_:)))
+                                     labels: ["Select", "Move", "Rotate", "Scale"], target: self, action: #selector(chooseTool(_:)))
       group.selectedIndex = viewportController.viewportView.tool.rawValue
       group.label = "Tool"
-      group.toolTip = "Select (V), Move (M) or Rotate; L switches world and local axes"
+      group.toolTip = "Select (V), Move (M), Rotate or Scale. L switches world and local axes."
       toolGroup = group
       return group
     }
     guard id == Self.modeItem else { return nil }
     let group = NSToolbarItemGroup(itemIdentifier: id, titles: ["Build", "Animate"], selectionMode: .selectOne,
-                                   labels: ["Build", "Animate"], target: nil, action: nil)
+                                   labels: ["Build", "Animate"], target: self, action: #selector(chooseMode(_:)))
     group.selectedIndex = 0
     group.label = "Mode"
     group.toolTip = "Build edits the model; Animate plans and plays its build"
+    modeGroup = group
     return group
   }
 }

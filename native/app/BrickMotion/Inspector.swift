@@ -5,7 +5,7 @@ import BMApp
 import Observation
 import SwiftUI
 
-enum InspectorTab: String, CaseIterable { case selection, part, submodel }
+enum InspectorTab: String, CaseIterable { case selection, part, submodel, camera }
 
 /// The Part tab's state: the one selected piece, and its placement as fields.
 @MainActor @Observable final class PartInspectorModel {
@@ -36,19 +36,68 @@ struct Inspector: View {
         Text("Selection").tag(InspectorTab.selection)
         Text("Part").tag(InspectorTab.part)
         Text("Submodel").tag(InspectorTab.submodel)
+        if model.animation.visible { Text("Camera").tag(InspectorTab.camera) }
       }
       .pickerStyle(.segmented)
       .labelsHidden()
       .padding(.horizontal, 12)
       .padding(.vertical, 8)
       Divider()
+      if let placement = model.viewport?.placement, placement.active,
+         placement.state == .Blocked || placement.state == .Unavailable {
+        Label {
+          Text(placement.reason).font(.caption).frame(maxWidth: .infinity, alignment: .leading)
+        } icon: {
+          Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity)
+        .background(.primary.opacity(0.05))
+        Divider()
+      }
       switch model.inspectorTab {
       case .selection: SelectionTab(model: model)
       case .part: PartTab(model: model, part: PartInspectorModel(model: model))
       case .submodel: SubmodelTab(model: model)
+      case .camera: CameraMonitor(model: model, workspace: model.animation)
       }
     }
   }
+}
+
+private struct CameraMonitor: View {
+  let model: DocumentModel
+  @Bindable var workspace: AnimationWorkspace
+
+  var body: some View {
+    if let camera = model.viewport?.presentation {
+      Form {
+        Section("Preview") {
+          Toggle("Director Camera", isOn: $workspace.director)
+          LabeledContent("Projection", value: camera.orthographic ? "Orthographic" : "Perspective")
+          LabeledContent("View", value: camera.name)
+        }
+        Section("Lens") {
+          LabeledContent("Vertical Angle", value: angle(camera.fieldOfView))
+          LabeledContent("Distance", value: number(camera.distance) + " LDU")
+        }
+        Section("Orientation") {
+          LabeledContent("Azimuth", value: angle(camera.yaw * 180 / .pi))
+          LabeledContent("Elevation", value: angle(camera.pitch * 180 / .pi))
+        }
+        Section("Target · LDU") {
+          LabeledContent("X", value: number(camera.target.x))
+          LabeledContent("Y", value: number(camera.target.y))
+          LabeledContent("Z", value: number(camera.target.z))
+        }
+      }
+      .formStyle(.grouped)
+      .monospacedDigit()
+    }
+  }
+
+  private func number(_ value: Double) -> String { value.formatted(.number.precision(.fractionLength(0...1))) }
+  private func angle(_ value: Double) -> String { number(value) + "°" }
 }
 
 // MARK: Shared rows
@@ -132,9 +181,16 @@ private struct SelectionTab: View {
         Section {
           ColorRow(model: model)
           StepPicker(model: model)
+          GroupRow(model: model)
         }
         Section {
           Button("Make Submodel…") { run("object.makeSubmodel", model) }.disabled(!enabled("object.makeSubmodel", model))
+          if snap.selection.count == 2 {
+            Button("Ways to Fit…") { run("object.waysToFit", model) }.disabled(!enabled("object.waysToFit", model))
+              .overlay(alignment: .trailing) {
+                if model.assemblyReview.fitting { ProgressView().controlSize(.mini).accessibilityLabel("Finding fits") }
+              }
+          }
           Menu("Move to Model") {
             ForEach(Registry.modelNames(model.context), id: \.self) { name in
               Button(displayName(name)) {
@@ -196,15 +252,12 @@ private struct PartTab: View {
 
   var body: some View {
     if let info = part.info {
-      let rgb = model.colors[info.color]?.rgb ?? 0x888888
       Form {
         Section {
           HStack(spacing: 12) {
-            Image(systemName: "cube.fill")
-              .font(.system(size: 30))
-              .foregroundStyle(Color(red: Double(rgb >> 16 & 0xff) / 255, green: Double(rgb >> 8 & 0xff) / 255, blue: Double(rgb & 0xff) / 255))
-              .frame(width: 48, height: 48)
-              .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 10))
+            PartPreviewImage(part: info.inlinePart ? nil : String(info.part), color: info.color)
+              .frame(width: 54, height: 54)
+              .clipShape(.rect(cornerRadius: 9))
             VStack(alignment: .leading, spacing: 2) {
               Text(displayName(String(info.description.empty() ? info.part : info.description))).font(.headline).lineLimit(2)
               Text(String(info.part)).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
@@ -212,6 +265,7 @@ private struct PartTab: View {
           }
           ColorRow(model: model)
           StepPicker(model: model)
+          GroupRow(model: model)
         }
         let path = String(info.submodelPath).split(separator: "/").map(String.init)
         if !path.isEmpty {
@@ -244,6 +298,11 @@ private struct PartTab: View {
                 .help("Turn 90° clockwise")
             }
           }
+        }
+        PartConnections(model: model, piece: info.piece)
+        Section("Build") {
+          ArrivalDirectionRow(model: model, piece: info.piece)
+          Button("Find Compatible Parts…") { CompatiblePartsSheet.show(model: model, piece: info.piece) }
         }
         Section {
           Button("Replace Part…") { model.viewport?.replacePart(nil) }

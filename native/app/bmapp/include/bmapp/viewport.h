@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include "bmapp/bridging.h"
+#include "bmapp/motion_audit.h"
 #include "bmapp/session.h"
 #include "bmapp/types.h"
 
@@ -22,13 +23,74 @@ namespace bmapp {
 struct CameraState {
   double yaw = 0, pitch = 0, distance = 0;
   Vec3 target;
-  bool orthographic = false;  ///< not drawn yet: the renderer has perspective only
+  bool orthographic = false;
+  double verticalFOV = 0.6;  ///< radians
 };
 
 /// A drawn picture, top row first, 8-bit sRGB RGBA.
 struct Picture {
   int width = 0, height = 0;
   std::vector<uint8_t> rgba;
+};
+
+enum class PlacementState { Inactive, Preparing, Free, Snapped, Reference, Blocked, Unavailable };
+enum class AssemblyPreview { Assembled, Separated, LaidOut, Exploded };
+enum class ViewStyle { Shaded, Clay, Wireframe };
+
+struct PlacementInput {
+  std::string part;
+  int color = 71;
+  int grip = -1;  ///< Automatically choose a grip until the user cycles it.
+  int turns = 0;  ///< Clockwise quarter turns from the part's initial orientation.
+  bool mirrored = false;
+  bool snap = true;
+  bool reference = false;
+  bool collision = true;
+  uint32_t anchor = UINT32_MAX;  ///< For an existing selection, the piece the pointer picked up.
+  Vec2 grab;
+  PieceList selection;
+};
+
+struct PlacementPreview {
+  PlacementState state = PlacementState::Inactive;
+  PartPose pose;
+  Vec3 contact;
+  uint32_t grip = 0, gripCount = 0;
+  uint64_t generation = 0, version = 0, request = 0;
+  std::string reason;
+};
+
+struct ViewportPreferences {
+  bool edges = true;
+  bool floor = true;
+  bool shadows = true;
+  bool ambientOcclusion = true;
+  bool autoPlan = true;
+};
+
+struct BuildFlightRow {
+  uint32_t piece = UINT32_MAX;
+  int step = 0, depth = 0;
+  double start = 0, end = 0;
+  std::string name, flag, blocker;
+  bool independent = false;
+};
+
+struct BuildTimeline {
+  uint64_t version = 0;
+  double duration = 0, framesPerSecond = 30;
+  double buildStart = 0, buildEnd = 0;
+  double planningMilliseconds = 0;
+  size_t reusedMoves = 0;
+  std::vector<BuildFlightRow> flights;
+  std::vector<std::string> notes;
+};
+
+struct PlaybackState {
+  double seconds = 0, duration = 0;
+  bool playing = false, waitingToPlay = false, atRest = true, stale = false;
+  PlanState plan = PlanState::Idle;
+  uint64_t version = 0;
 };
 
 class Viewport {
@@ -59,6 +121,7 @@ class Viewport {
   Picture readback();
   /// Behind the model, as sRGB 0..1 (the view follows light and dark mode).
   void setBackground(double r, double g, double b);
+  void setPreferences(const ViewportPreferences& preferences);
   /// True when something has changed since the last frame drawn.
   bool needsDraw() const;
 
@@ -78,9 +141,34 @@ class Viewport {
   /// Looks from that side, straight on, with everything in view.
   void view(ViewPreset preset);
   CameraState camera() const;
+  void setOrthographic(bool enabled);
+  void centerOnFloor();
+  void setViewStyle(ViewStyle style);
+  void setGridSpacing(double ldu);
+  double zoomPercent() const;
 
   /// Space: plans the build the first time (in the background), then plays or pauses it.
   void play(bool on);
+  void requestPlan();
+  void regeneratePlan();
+  /// Selects a time range (seconds) and plays it. An end of zero means through to the end.
+  void playRange(double start, double end);
+  void setPlaybackRate(double rate);
+  void setPlaybackLoop(bool loop);
+  void setDirectorPreview(bool directed);
+  void useKeyframes(bool enabled);
+  KeyList bakeFlight(uint32_t piece);
+  MotionAudit* auditMotion(uint32_t piece) SWIFT_RETURNS_RETAINED;
+  /// Temporarily previews a build step or the full inventory (-1) without editing it.
+  void arrange(int step, AssemblyPreview mode);
+  PlaybackState playbackState() const;
+  /// The plan's presentation rows. Only read after observing a new ready version.
+  BuildTimeline buildTimeline() const;
+  PieceList buildOrder() const;
+  bool canTurnWaitingPart(uint32_t piece) const;
+  double waitingTurnToMatch(uint32_t piece) const;
+  /// Pauses playback and shows every piece at its edited position.
+  void showRest();
   bool playing() const;
   /// Where playback is, and how long the build is, in seconds (0 until planned).
   double seconds() const;
@@ -108,6 +196,13 @@ class Viewport {
   /// The middle of the selection's box as shown, the pivot R turns about; the view's target when
   /// nothing shown is selected.
   Vec3 selectionCenter();
+
+  /// Preview a library part at this point in the viewport. The worker coalesces pointer moves.
+  /// The returned request identifies the pose a click or Return may commit.
+  uint64_t previewPart(const PlacementInput& input, Vec2 point);
+  PlacementPreview placementPreview() const;
+  void previewFit(uint32_t piece, const PartPose& pose);
+  void clearPlacementPreview();
 
   struct Impl;
 

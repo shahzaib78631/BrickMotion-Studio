@@ -23,6 +23,14 @@ PY
 # The saved project opens with every piece.
 [ "$("$app" --open "$work/out.brickmotion")" = "pieces 3" ] || { echo "import_check: the saved project does not open"; exit 1; }
 
+# Saving an existing file uses AppKit's version-preserving write path.
+"$app" --open "$work/out.brickmotion" --edit-move 0 20 0 0 --save-to "$work/out.brickmotion"
+python3 - "$work/out.brickmotion" "$first" <<'PY'
+import json, sys
+project = json.load(open(sys.argv[1]))
+assert project["plan"]["steps"][0]["pieces"][0]["ldu"][0] == float(sys.argv[2]) + 40
+PY
+
 # Structure edits round-trip: a submodel made and renamed, a step inserted with a title and a
 # pause, a piece moved to it. The saved plan holds them, its ids are unique, and the web app's
 # own reader opens it with every piece.

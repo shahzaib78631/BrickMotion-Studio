@@ -858,6 +858,7 @@ TEST_CASE("a flight moves as the web's: up, across, and one drop into the seat",
   const Plan p = s.plan();
   Style style;
   style.fps = 30, style.piecesPerSecond = 0.25;
+  style.shape = FlightShape::Web;
   const Timeline t = buildTimeline(*s.model, s.parts, p, style);
   // src/anim/timeline.ts flightPose, straight down (no side entry): minimum jerk on each leg.
   auto mj = [](double u) { u = std::clamp(u, 0.0, 1.0); return u * u * u * (10 + u * (-15 + 6 * u)); };
@@ -883,6 +884,28 @@ TEST_CASE("a flight moves as the web's: up, across, and one drop into the seat",
     }
     REQUIRE(length(poseAt(f, f.startFrame + f.frames).t) == 0);
   }
+  REQUIRE(certifyPlay(*s.model, s.graph, s.parts, s.shapes, p, t).crossings == 0);
+}
+
+TEST_CASE("a clear flight is carried straight to its way in, turning on the way", "[plan][timeline]") {
+  Scene s;
+  const uint32_t a = s.add(0, 0, 0), b = s.add(0, -24, 0), c = s.add(0, -48, 0);
+  s.stud(a, b), s.stud(b, c);
+  const Plan p = s.plan();
+  Style style;
+  style.fps = 30, style.piecesPerSecond = 0.25;
+  const Timeline t = buildTimeline(*s.model, s.parts, p, style);
+  int flown = 0;
+  for (const Flight& f : t.flights) {
+    if (f.frames == 0) continue;
+    flown++;
+    REQUIRE(f.direct);           // nothing stands in the way: no lift over anything
+    REQUIRE(f.phases.size() <= 2);
+    // Carried across as it goes: it is not floating straight up above where it lay.
+    const Vec3 at0 = poseAt(f, f.startFrame).t, at = poseAt(f, f.startFrame + 0.25 * f.frames).t;
+    REQUIRE(length(Vec3{at.x - at0.x, 0, at.z - at0.z}) > 1);
+  }
+  REQUIRE(flown > 0);
   REQUIRE(certifyPlay(*s.model, s.graph, s.parts, s.shapes, p, t).crossings == 0);
 }
 

@@ -7,6 +7,7 @@
 // it like any other. Only pieces with no connection at all are looked at, so a model whose
 // every piece is joined comes out exactly as buildGraph made it.
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -14,6 +15,14 @@
 #include "bm/connect/graph.h"
 
 namespace bm::connect {
+
+/// An optional position documented by a part author's LDraw !HELP line, relative to the host.
+struct PlacementExample {
+  Xform at;
+  std::string part;
+};
+std::vector<PlacementExample> placementExamples(const ldraw::Library& library, const std::string& host);
+std::optional<Xform> alignExample(const ldraw::Library& library, const std::string& documented, const std::string& actual);
 
 /// A piece the file places a little off what holds it, and where it belongs: set exactly onto
 /// that connector's line it mates. Recorded whether or not it is applied (plan::correctPlacements).

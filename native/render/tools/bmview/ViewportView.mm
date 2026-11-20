@@ -184,16 +184,23 @@ constexpr double kReadoutSeconds = 0.25;
   [self changed];
 }
 
-/// W: the other flight shape (web, arc), laid out again from the same plan; no replanning.
+/// W: the next flight shape (carried there, web, arc), laid out again from the same plan; no replanning.
 - (void)switchFlight {
   if (!_session->planned) return;
-  _session->flight = _session->flight == bm::plan::FlightShape::Web ? bm::plan::FlightShape::Arc : bm::plan::FlightShape::Web;
+  if (_session->planner == bm::plan::Planner::Legacy) {  // the web's planner has one flight shape
+    std::fprintf(stderr, "bmview: --planner legacy has a single flight shape\n");
+    return;
+  }
+  _session->flight = _session->flight == bm::plan::FlightShape::Auto ? bm::plan::FlightShape::Web
+    : _session->flight == bm::plan::FlightShape::Web ? bm::plan::FlightShape::Arc : bm::plan::FlightShape::Auto;
   bm::plan::Style style = bm::plan::styleOf(_session->file);
   style.shape = _session->flight;
+  style.planner = _session->planner;
   bmtools::Planned& p = *_session->planned;
   p.timeline = bm::plan::buildTimeline(*_session->model, *_session->full, p.plan, style);
-  std::fprintf(stderr, "bmview: flights %s\n", _session->flight == bm::plan::FlightShape::Arc ? "arc" : "web");
-  self.window.subtitle = _session->flight == bm::plan::FlightShape::Arc ? @"flights: arc" : @"flights: web";
+  const char* name = _session->flight == bm::plan::FlightShape::Arc ? "arc" : _session->flight == bm::plan::FlightShape::Web ? "web" : "auto";
+  std::fprintf(stderr, "bmview: flights %s\n", name);
+  self.window.subtitle = [NSString stringWithFormat:@"flights: %s", name];
   const double at = std::min(_frame, static_cast<double>(p.timeline.frames));
   _frame = -2;  // drawn again at the same moment
   [self showFrame:at];

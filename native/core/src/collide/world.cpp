@@ -1,4 +1,5 @@
 #include "bm/collide/world.h"
+#include "bm/jobs.h"
 
 #include <mutex>
 #include <unordered_map>
@@ -7,7 +8,6 @@
 #include <array>
 #include <cmath>
 #include <numeric>
-#include <unordered_map>
 
 namespace bm::collide {
 namespace {
@@ -46,13 +46,28 @@ bool boxesMeet(const Box& a, const Box& b) {
 
 /// One shape per distinct part of the model (a model's own inline parts are built here).
 std::vector<std::shared_ptr<const Shape>> shapesOf(const Model& model, ldraw::PartCache& parts, ShapeCache& shapes) {
+  const auto& pieces = model.pieces();
+  std::vector<std::string> distinct;
+  distinct.reserve(pieces.size());
+  for (const Piece& p : pieces) distinct.push_back(p.part);
+  std::sort(distinct.begin(), distinct.end());
+  distinct.erase(std::unique(distinct.begin(), distinct.end()), distinct.end());
+
+  std::vector<std::shared_ptr<const ldraw::Mesh>> meshes(distinct.size());
+  for (size_t i = 0; i < distinct.size(); i++) meshes[i] = model.mesh(distinct[i], parts);
+
+  std::vector<std::shared_ptr<const Shape>> built(distinct.size());
+  if (distinct.size() > 1) {
+    JobPool::shared().parallelFor(distinct.size(), [&](size_t i) { built[i] = shapes.get(meshes[i]); });
+  } else if (distinct.size() == 1) {
+    built[0] = shapes.get(meshes[0]);
+  }
+
   std::vector<std::shared_ptr<const Shape>> out;
-  out.reserve(model.pieces().size());
-  std::unordered_map<std::string, std::shared_ptr<const Shape>> byPart;
-  for (const Piece& p : model.pieces()) {
-    auto it = byPart.find(p.part);
-    if (it == byPart.end()) it = byPart.emplace(p.part, shapes.get(model.mesh(p.part, parts))).first;
-    out.push_back(it->second);
+  out.reserve(pieces.size());
+  for (const Piece& p : pieces) {
+    const auto it = std::lower_bound(distinct.begin(), distinct.end(), p.part);
+    out.push_back(built[static_cast<size_t>(it - distinct.begin())]);
   }
   return out;
 }
@@ -152,6 +167,13 @@ Report findOverlaps(const Model& model, const connect::Graph& graph, ldraw::Part
 }
 
 struct World::State {
+  static constexpr size_t kChunkSize = 16;
+  static constexpr size_t kShards = 64;
+  struct MemoShard {
+    std::mutex lock;
+    std::unordered_map<Key, double, KeyHash> memo;
+    std::unordered_map<Key, std::optional<std::vector<Zone>>, KeyHash> spots;
+  };
   std::vector<std::shared_ptr<const Shape>> shapes;
   std::vector<Xform> poses;
   std::vector<Box> boxes;
@@ -159,10 +181,10 @@ struct World::State {
   std::vector<const std::vector<Vec3>*> probes;  // points of each piece's inner surface, in its own space
   std::unordered_map<const Shape*, std::vector<Vec3>> probesOf;
   std::vector<uint32_t> byMinX;  // pieces with geometry, sorted by their box's min x
+  std::vector<Box> chunkBoxes;   // bounding box of each kChunkSize slice of byMinX
   double widest = 0;             // the largest box extent along x, to bound the scan
-  mutable std::mutex memoLock;
-  mutable std::unordered_map<Key, double, KeyHash> memo;  // pairTravel and restCrossing answers
-  mutable std::unordered_map<Key, std::optional<std::vector<Zone>>, KeyHash> spots;  // restSpots answers
+  mutable std::array<MemoShard, kShards> shards;
+  MemoShard& shardFor(const Key& k) const { return shards[static_cast<size_t>((k.b >> 58) & (kShards - 1))]; }
 };
 
 World::World(const Model& model, ldraw::PartCache& parts, ShapeCache& shapeCache) : state_(std::make_unique<State>()) {
@@ -240,6 +262,15 @@ World::World(const Model& model, ldraw::PartCache& parts, ShapeCache& shapeCache
     state_->widest = std::max(state_->widest, state_->boxes[i].max.x - state_->boxes[i].min.x);
   }
   std::sort(state_->byMinX.begin(), state_->byMinX.end(), [&](uint32_t a, uint32_t b) { return state_->boxes[a].min.x < state_->boxes[b].min.x; });
+  const size_t numChunks = (state_->byMinX.size() + State::kChunkSize - 1) / State::kChunkSize;
+  state_->chunkBoxes.resize(numChunks);
+  for (size_t c = 0; c < numChunks; c++) {
+    Box cb;
+    const size_t start = c * State::kChunkSize;
+    const size_t end = std::min(state_->byMinX.size(), start + State::kChunkSize);
+    for (size_t k = start; k < end; k++) cb.merge(state_->boxes[state_->byMinX[k]]);
+    state_->chunkBoxes[c] = cb;
+  }
 }
 
 World::~World() = default;
@@ -253,11 +284,22 @@ void World::near(const Box& box, const Present* present, std::vector<uint32_t>& 
   out.clear();
   if (box.empty() || !std::isfinite(box.min.x) || !std::isfinite(box.max.x)) return;
   const State& s = *state_;
+  if (s.byMinX.empty()) return;
   auto first = std::lower_bound(s.byMinX.begin(), s.byMinX.end(), box.min.x - s.widest, [&](uint32_t i, double x) { return s.boxes[i].min.x < x; });
-  for (auto it = first; it != s.byMinX.end() && s.boxes[*it].min.x <= box.max.x; ++it) {
-    const uint32_t i = *it;
-    if (present && (i >= present->size() || !(*present)[i])) continue;
-    if (boxesMeet(box, s.boxes[i])) out.push_back(i);
+  const size_t firstIdx = static_cast<size_t>(first - s.byMinX.begin());
+  const size_t firstChunk = firstIdx / State::kChunkSize;
+  for (size_t c = firstChunk; c < s.chunkBoxes.size(); c++) {
+    const Box& cb = s.chunkBoxes[c];
+    if (cb.min.x > box.max.x) break;
+    if (!boxesMeet(box, cb)) continue;
+    const size_t start = std::max(firstIdx, c * State::kChunkSize);
+    const size_t end = std::min(s.byMinX.size(), (c + 1) * State::kChunkSize);
+    for (size_t k = start; k < end; k++) {
+      const uint32_t i = s.byMinX[k];
+      if (s.boxes[i].min.x > box.max.x) break;
+      if (present && (i >= present->size() || !(*present)[i])) continue;
+      if (boxesMeet(box, s.boxes[i])) out.push_back(i);
+    }
   }
   std::sort(out.begin(), out.end());
 }
@@ -290,7 +332,6 @@ std::vector<Zone> zonesNear(const std::vector<Zone>& zones, uint32_t p, uint32_t
 /// in a hole, a brick on a brick), so answers are remembered.
 double World::pairTravel(uint32_t p, const Xform& from, const Box& fromBox, uint32_t q, Vec3 direction, double distance, const std::vector<Zone>& allZones, double tolerance) const {
   const State& s = *state_;
-  const std::vector<Zone> zones = zonesNear(allZones, p, q, s.boxes[q]);
   // When the two can cross at all: while the inner surface of one is within the box of the other.
   const Vec3 offset = from.t - s.poses[p].t;  // this leg starts with the piece moved by this much
   auto window = [&](Box moving, const Box& still, double& enter, double& leave) {
@@ -327,6 +368,7 @@ double World::pairTravel(uint32_t p, const Xform& from, const Box& fromBox, uint
   }
   if (!any) return distance;
 
+  const std::vector<Zone> zones = zonesNear(allZones, p, q, s.boxes[q]);
   const Xform toObstacle = inverseOf(s.poses[q]);
   const Xform rel = toObstacle * from;
   Key key;
@@ -334,10 +376,11 @@ double World::pairTravel(uint32_t p, const Xform& from, const Box& fromBox, uint
   for (double v : rel.r.m) key.add(v, 1e-4);
   key.add(rel.t, 1e-3).add(toObstacle.r * direction, 1e-4).add(distance, 1e-2).add(tolerance, 1e-3);
   for (const Zone& z : zones) key.add(toObstacle.apply(z.a), 1e-2).add(toObstacle.apply(z.b), 1e-2).add(z.radius, 1e-2);
+  State::MemoShard& shard = s.shardFor(key);
   {
-    std::lock_guard<std::mutex> lock(s.memoLock);
-    const auto it = s.memo.find(key);
-    if (it != s.memo.end()) return it->second;
+    std::lock_guard<std::mutex> lock(shard.lock);
+    const auto it = shard.memo.find(key);
+    if (it != shard.memo.end()) return it->second;
   }
   // Where the two first cross, however briefly (firstCrossing), while they can cross at all; it
   // stops `tolerance` short of there. A stretch of the way is looked at in one go, so that two
@@ -354,8 +397,8 @@ double World::pairTravel(uint32_t p, const Xform& from, const Box& fromBox, uint
     result = std::max(0.0, begin + first - tolerance);
     break;
   }
-  std::lock_guard<std::mutex> lock(s.memoLock);
-  s.memo.emplace(key, result);
+  std::lock_guard<std::mutex> lock(shard.lock);
+  shard.memo.emplace(key, result);
   return result;
 }
 
@@ -389,7 +432,12 @@ double World::clearTravel(const std::vector<uint32_t>& unit, Vec3 direction, dou
       return enter;
     };
     std::vector<std::pair<double, uint32_t>> ordered;
-    for (uint32_t q : found) ordered.emplace_back(reach(q), q);
+    ordered.reserve(found.size());
+    for (uint32_t q : found) {
+      if (std::binary_search(unit.begin(), unit.end(), q)) continue;
+      const double enter = reach(q);
+      if (enter <= best) ordered.emplace_back(enter, q);
+    }
     std::sort(ordered.begin(), ordered.end());
     // First, cheaply: a point a skin inside the piece that passes through another's surface
     // means the piece is stopped by then. Asked only whether it gets as far as `enough`, that
@@ -408,7 +456,7 @@ double World::clearTravel(const std::vector<uint32_t>& unit, Vec3 direction, dou
         uint32_t by = UINT32_MAX;
         for (const auto& [enter, q] : ordered) {
           if (enter > nearest * reachTo) break;
-          if (!boxesMeet(way, s.boxes[q]) || std::binary_search(unit.begin(), unit.end(), q)) continue;
+          if (!boxesMeet(way, s.boxes[q])) continue;
           Vec3 where;
           const double share = throughSurface(*s.shapes[q], s.poses[q], a, b, &where);
           if (share > 1 || (by != UINT32_MAX && share >= nearest)) continue;
@@ -435,7 +483,6 @@ double World::clearTravel(const std::vector<uint32_t>& unit, Vec3 direction, dou
     }
     for (const auto& [enter, q] : ordered) {
       if (enter > best) break;
-      if (std::binary_search(unit.begin(), unit.end(), q)) continue;
       // What already crosses it where the model has it is not this move's doing: there, and only there.
       std::optional<std::vector<Zone>> rest = std::vector<Zone>{};
       if (boxesMeet(s.boxes[p], s.boxes[q])) rest = restSpots(p, q, zones);
@@ -465,10 +512,11 @@ std::optional<std::vector<Zone>> World::restSpots(uint32_t p, uint32_t q, const 
   for (double v : rel.r.m) key.add(v, 1e-4);
   key.add(rel.t, 1e-3);
   for (const Zone& z : zones) key.add(toObstacle.apply(z.a), 1e-2).add(toObstacle.apply(z.b), 1e-2).add(z.radius, 1e-2);
+  State::MemoShard& shard = s.shardFor(key);
   {
-    std::lock_guard<std::mutex> lock(s.memoLock);
-    const auto it = s.spots.find(key);
-    if (it != s.spots.end()) return it->second;
+    std::lock_guard<std::mutex> lock(shard.lock);
+    const auto it = shard.spots.find(key);
+    if (it != shard.spots.end()) return it->second;
   }
   std::optional<std::vector<Zone>> found = std::vector<Zone>{};
   for (int i = 0;; i++) {
@@ -482,8 +530,8 @@ std::optional<std::vector<Zone>> World::restSpots(uint32_t p, uint32_t q, const 
     found->push_back(spot);
     zones.push_back(spot);
   }
-  std::lock_guard<std::mutex> lock(s.memoLock);
-  s.spots.emplace(key, found);
+  std::lock_guard<std::mutex> lock(shard.lock);
+  shard.spots.emplace(key, found);
   return found;
 }
 
@@ -498,14 +546,15 @@ bool World::restCrossing(uint32_t p, uint32_t q, const std::vector<Zone>& allZon
   for (double v : rel.r.m) key.add(v, 1e-4);
   key.add(rel.t, 1e-3);
   for (const Zone& z : zones) key.add(toObstacle.apply(z.a), 1e-2).add(toObstacle.apply(z.b), 1e-2).add(z.radius, 1e-2);
+  State::MemoShard& shard = s.shardFor(key);
   {
-    std::lock_guard<std::mutex> lock(s.memoLock);
-    const auto it = s.memo.find(key);
-    if (it != s.memo.end()) return it->second > 0;
+    std::lock_guard<std::mutex> lock(shard.lock);
+    const auto it = shard.memo.find(key);
+    if (it != shard.memo.end()) return it->second > 0;
   }
   const bool crossing = overlap(*s.shapes[p], s.poses[p], *s.shapes[q], s.poses[q], zones);
-  std::lock_guard<std::mutex> lock(s.memoLock);
-  s.memo.emplace(key, crossing ? 1.0 : 0.0);
+  std::lock_guard<std::mutex> lock(shard.lock);
+  shard.memo.emplace(key, crossing ? 1.0 : 0.0);
   return crossing;
 }
 
@@ -514,21 +563,32 @@ std::optional<uint32_t> World::hits(const Shape& shape, const Xform& xf, const s
   const Box box = shape.bounds.transformed(xf);
   if (box.empty() || !std::isfinite(box.min.x) || !std::isfinite(box.max.x)) return std::nullopt;
   const State& s = *state_;
+  if (s.byMinX.empty()) return std::nullopt;
   // Pieces whose box can reach this one start no further left than box.min.x - widest.
   auto first = std::lower_bound(s.byMinX.begin(), s.byMinX.end(), box.min.x - s.widest, [&](uint32_t i, double x) { return s.boxes[i].min.x < x; });
+  const size_t firstIdx = static_cast<size_t>(first - s.byMinX.begin());
+  const size_t firstChunk = firstIdx / State::kChunkSize;
   std::optional<uint32_t> best;
   const bool named = std::any_of(zones.begin(), zones.end(), [](const Zone& z) { return z.first != kAnyPiece; });
   std::vector<Zone> mine;
-  for (auto it = first; it != s.byMinX.end() && s.boxes[*it].min.x <= box.max.x; ++it) {
-    const uint32_t i = *it;
-    if (best && i > *best) continue;  // report the lowest piece index, whatever the scan order
-    if (!boxesMeet(box, s.boxes[i]) || std::find(ignore.begin(), ignore.end(), i) != ignore.end()) continue;
-    if (named) {  // the shape is none of the model's pieces
-      mine.clear();
-      for (const Zone& z : zones)
-        if (lets(z, kAnyPiece, i)) mine.push_back(z);
+  for (size_t c = firstChunk; c < s.chunkBoxes.size(); c++) {
+    const Box& cb = s.chunkBoxes[c];
+    if (cb.min.x > box.max.x) break;
+    if (!boxesMeet(box, cb)) continue;
+    const size_t start = std::max(firstIdx, c * State::kChunkSize);
+    const size_t end = std::min(s.byMinX.size(), (c + 1) * State::kChunkSize);
+    for (size_t k = start; k < end; k++) {
+      const uint32_t i = s.byMinX[k];
+      if (s.boxes[i].min.x > box.max.x) break;
+      if (best && i > *best) continue;  // report the lowest piece index, whatever the scan order
+      if (!boxesMeet(box, s.boxes[i]) || std::find(ignore.begin(), ignore.end(), i) != ignore.end()) continue;
+      if (named) {  // the shape is none of the model's pieces
+        mine.clear();
+        for (const Zone& z : zones)
+          if (lets(z, kAnyPiece, i)) mine.push_back(z);
+      }
+      if (overlap(shape, xf, *s.shapes[i], s.poses[i], named ? mine : zones)) best = i;
     }
-    if (overlap(shape, xf, *s.shapes[i], s.poses[i], named ? mine : zones)) best = i;
   }
   return best;
 }

@@ -49,8 +49,11 @@ def teacher_set(set_number: str, force: bool = False) -> dict:
     t0 = time.time()
     from .step import SectionCamera, solve_start
     section = SectionCamera()
-    for case in cases(set_number):
+    all_cases = list(cases(set_number))
+    for ci, case in enumerate(all_cases):
         base = case.visible if case.visible else case.context
+        prev_c = all_cases[ci - 1] if ci > 0 and all_cases[ci - 1].file == case.file else None
+        next_c = all_cases[ci + 1] if ci + 1 < len(all_cases) and all_cases[ci + 1].file == case.file else None
         frame_free = not base
         row = {"step": case.step_number, "index": case.booklet_step, "parts": len(case.added), "base": len(base),
                "frame_free": frame_free}
@@ -64,7 +67,10 @@ def teacher_set(set_number: str, force: bool = False) -> dict:
             alone = False
             if case.visible or not base:
                 result = solve(lib, base, new, case.rgb, case.pts_per_px, collider=collider,
-                               subbuilds=case.subbuilds, camera=section.prior(key) if base else None)
+                               subbuilds=case.subbuilds, camera=section.prior(key) if base else None,
+                               prev_rgb=prev_c.rgb if prev_c is not None else None,
+                               next_rgb=next_c.rgb if next_c is not None else None,
+                               next_pts=next_c.pts_per_px if next_c is not None else None)
             else:      # a sub-model starts: drawn on the model so far, or alone (scored up to a rigid move)
                 result, alone = solve_start(lib, base, new, case.rgb, case.pts_per_px, collider=collider,
                                             subbuilds=case.subbuilds)

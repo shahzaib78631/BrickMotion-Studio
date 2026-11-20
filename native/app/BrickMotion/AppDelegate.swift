@@ -1,9 +1,36 @@
 // The application: its menu bar, and opening files from Finder and the Dock.
 import AppKit
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+@MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
+  private var showedWelcome = false
+
   func applicationWillFinishLaunching(_ notification: Notification) {
     NSApp.mainMenu = MainMenu.make()
+    EditorPreferences.shared.applyAppearance()
+    NotificationCenter.default.addObserver(self, selector: #selector(windowBecameMain(_:)),
+                                           name: NSWindow.didBecomeMainNotification, object: nil)
+  }
+
+  func applicationDidFinishLaunching(_ notification: Notification) {
+    if NSDocumentController.shared.documents.isEmpty { showWelcome() }
+  }
+
+  func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+    guard !flag, NSDocumentController.shared.documents.isEmpty else { return true }
+    showWelcome()
+    return false
+  }
+
+  func showWelcome() {
+    showedWelcome = true
+    WelcomeWindow.shared.showWindow(nil)
+  }
+
+  @objc private func windowBecameMain(_ note: Notification) {
+    if showedWelcome, let window = note.object as? NSWindow, window.windowController is WindowController {
+      WelcomeWindow.shared.dismiss()
+      showedWelcome = false
+    }
   }
 
   func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { false }
@@ -13,15 +40,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 @MainActor enum MainMenu {
   /// Items AppKit owns outright, outside the registry.
-  static let systemItems: Set<String> = ["About BrickMotion", "Services", "Hide BrickMotion", "Hide Others", "Show All", "Quit BrickMotion",
+  static let systemItems: Set<String> = ["Services", "Hide BrickMotion", "Hide Others", "Show All", "Quit BrickMotion",
                                          "Clear Menu", "Minimize", "Zoom"]
 
   static func make() -> NSMenu {
     let main = NSMenu()
     let appName = "BrickMotion"
 
-    let app = NSMenu(title: appName)
-    app.addItem(withTitle: "About \(appName)", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+    let app = Registry.menu(.app, title: appName)
     app.addItem(.separator())
     let services = NSMenu(title: "Services")
     app.addItem(withTitle: "Services", action: nil, keyEquivalent: "").submenu = services
@@ -56,6 +82,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let window = NSMenu(title: "Window")
     window.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
     window.addItem(withTitle: "Zoom", action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
+    if let welcome = Registry.command("window.welcome") {
+      window.addItem(.separator())
+      window.addItem(Registry.item(welcome))
+    }
     main.addItem(withTitle: "Window", action: nil, keyEquivalent: "").submenu = window
     NSApp.windowsMenu = window
 

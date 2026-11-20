@@ -15,7 +15,10 @@ struct AoUniforms {
 };
 
 // View-space depth (positive, LDU) from reversed depth.
-float viewDepth(float d, float4 lens) { return lens.z * lens.w / (lens.z + d * (lens.w - lens.z)); }
+float viewDepth(float d, constant AoUniforms& u) {
+  float4 lens = u.lens;
+  return u.size.w > 0.5 ? mix(lens.w, lens.z, d) : lens.z * lens.w / (lens.z + d * (lens.w - lens.z));
+}
 
 // The view-space point under a full-size pixel, or w = 0 where there is nothing.
 float4 viewPoint(depth2d<float> depth, int2 p, constant AoUniforms& u) {
@@ -23,9 +26,10 @@ float4 viewPoint(depth2d<float> depth, int2 p, constant AoUniforms& u) {
   p = clamp(p, int2(0), size - 1);
   float d = depth.read(uint2(p));
   if (d <= 0.0) return float4(0);
-  float z = viewDepth(d, u.lens);
+  float z = viewDepth(d, u);
   float2 ndc = float2((float(p.x) + u.samplePosition.x) / size.x * 2.0 - 1.0, 1.0 - (float(p.y) + u.samplePosition.y) / size.y * 2.0);
-  return float4(ndc.x * z * u.lens.y, ndc.y * z * u.lens.x, -z, 1.0);
+  float scale = u.size.w > 0.5 ? 1.0 : z;
+  return float4(ndc.x * scale * u.lens.y, ndc.y * scale * u.lens.x, -z, 1.0);
 }
 
 fragment float4 aoFragment(ScreenOut in [[stage_in]], constant AoUniforms& u [[buffer(0)]], constant FrameUniforms& frame [[buffer(1)]], constant FloorBins& bins [[buffer(2)]],
@@ -61,7 +65,8 @@ fragment float4 aoFragment(ScreenOut in [[stage_in]], constant AoUniforms& u [[b
   }
   if (frame.switches.y < 0.5) return float4(1, lit, 0, 1);
   float radius = u.shape.x;
-  float reach = min(radius / (-p.z * u.lens.x) * u.size.x * 0.5, 160.0);  // pixels
+  float scale = u.size.w > 0.5 ? 1.0 : -p.z;
+  float reach = min(radius / (scale * u.lens.x) * u.size.x * 0.5, 160.0);  // pixels
   if (reach < 1.0) return float4(1, lit, 0, 1);
   // A fixed 4 x 4 pattern turns the directions and offsets the steps from pixel to pixel; the blur removes it.
   const float pattern[16] = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
@@ -100,7 +105,7 @@ fragment float4 aoBlurFragment(ScreenOut in [[stage_in]], constant AoUniforms& u
   int2 fullSize = int2(u.shape.w, u.size.x);
   float centre = depth.read(uint2(clamp(cell * 2, int2(0), fullSize - 1)));
   if (centre <= 0.0) return float4(1, 1, 0, 0);
-  float z = viewDepth(centre, u.lens);
+  float z = viewDepth(centre, u);
   float4 source = ao.read(uint2(cell));
   bool onFloor = source.b > 0.5;
   float2 sum = 0;
@@ -111,7 +116,7 @@ fragment float4 aoBlurFragment(ScreenOut in [[stage_in]], constant AoUniforms& u
       float d = depth.read(uint2(clamp(q * 2, int2(0), fullSize - 1)));
       float4 sample = ao.read(uint2(q));
       bool same = sample.a > 0.5 && (sample.b > 0.5) == onFloor;
-      float w = d > 0.0 && same ? exp(-abs(viewDepth(d, u.lens) - z) / (0.02 * z)) : 0.0;
+      float w = d > 0.0 && same ? exp(-abs(viewDepth(d, u) - z) / (0.02 * z)) : 0.0;
       sum += ao.read(uint2(q)).rg * w;
       weight += w;
     }

@@ -38,12 +38,83 @@ def stud_candidates(part: str, base: list, cat=None) -> list[dict]:
     return out
 
 
+def flush_candidates(lib, part: str, base: list, max_base: int = 8) -> list[dict]:
+    """Grid-aligned side-by-side flush poses for early steps where plates/bricks sit adjacent on the
+    same level before later steps tie them together (e.g. step 1 pairs, 41605 step 3)."""
+    if not base or len(base) > max_base:
+        return []
+    from .render import mesh, world_triangles
+    t_local = mesh(lib, part).reshape(-1, 3)
+    if not len(t_local):
+        return []
+    # Only generate flush poses for brick/plate-like parts aligned to the stud lattice
+    out: list[dict] = []
+    rots = []
+    for deg in (0, 90):
+        a = np.radians(deg)
+        c, s = round(float(np.cos(a))), round(float(np.sin(a)))
+        R = np.array([[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]])
+        v = t_local @ R.T
+        lo, hi = v.min(0), v.max(0)
+        sx, sz = hi[0] - lo[0], hi[2] - lo[2]
+        if sx < 15.0 or sz < 15.0:
+            continue
+        rots.append((R, lo, hi))
+    if not rots:
+        return []
+    for hi_idx, (hp, _hc, hm) in enumerate(base):
+        hm = np.asarray(hm, float)
+        if not np.allclose(hm[:3, 1], [0.0, 1.0, 0.0], atol=1e-2):
+            continue
+        hv = world_triangles(lib, hp, hm).reshape(-1, 3)
+        if not len(hv):
+            continue
+        hlo, hhi = hv.min(0), hv.max(0)
+        # Snap host bounds to nearest 10 LDU horizontally (stud half-pitch)
+        hx0, hx1 = round(hlo[0] / 10.0) * 10.0, round(hhi[0] / 10.0) * 10.0
+        hz0, hz1 = round(hlo[2] / 10.0) * 10.0, round(hhi[2] / 10.0) * 10.0
+        hy_bot = round(hhi[1] / 2.0) * 2.0
+        for R, lo, hi in rots:
+            px0, px1 = round(lo[0] / 10.0) * 10.0, round(hi[0] / 10.0) * 10.0
+            pz0, pz1 = round(lo[2] / 10.0) * 10.0, round(hi[2] / 10.0) * 10.0
+            py_bot = round(hi[1] / 2.0) * 2.0
+            ty = hy_bot - py_bot
+            pw, pd = px1 - px0, pz1 - pz0
+            # Flush along +X and -X edges
+            for tx in (hx1 - px0, hx0 - px1):
+                z_start = hz0 - pd + 20.0 - pz0
+                z_end = hz1 - 20.0 - pz0
+                for tz in np.arange(z_start, z_end + 0.1, 20.0):
+                    m = np.eye(4)
+                    m[:3, :3] = R
+                    m[:3, 3] = [tx, ty, float(tz)]
+                    out.append({"matrix": m, "host": hi_idx, "kind": "flush", "axis": np.array([0.0, -1.0, 0.0])})
+            # Flush along +Z and -Z edges
+            for tz in (hz1 - pz0, hz0 - pz1):
+                x_start = hx0 - pw + 20.0 - px0
+                x_end = hx1 - 20.0 - px0
+                for tx in np.arange(x_start, x_end + 0.1, 20.0):
+                    m = np.eye(4)
+                    m[:3, :3] = R
+                    m[:3, 3] = [float(tx), ty, tz]
+                    out.append({"matrix": m, "host": hi_idx, "kind": "flush", "axis": np.array([0.0, -1.0, 0.0])})
+    return out
+
+
 def candidates(lib, part: str, base: list, cat=None) -> list[dict]:
-    """All connection candidates (studs/clips, then Technic) without duplicates."""
+    """All connection candidates (native C++ Shadow+Studio+BrickNet engine + BrickNet studs/joints) without duplicates."""
+    from . import native_bridge
+    from .joints import joint_candidates
     from .technic import technic_candidates
 
     out = stud_candidates(part, base, cat)
-    out += technic_candidates(lib, part, base)
+    out += joint_candidates(part, base, cat)
+    eng = native_bridge.engine()
+    if eng is not None:
+        out += eng.candidates(part, base)
+    else:
+        out += technic_candidates(lib, part, base)
+    out += flush_candidates(lib, part, base)
     return dedupe_poses(out)
 
 

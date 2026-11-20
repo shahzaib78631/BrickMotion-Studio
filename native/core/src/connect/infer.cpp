@@ -54,13 +54,6 @@ Mat3 between(Vec3 from, Vec3 to) {
 constexpr double kSeatOffset = 2.0;
 const double kSeatCos = std::cos(5 * kPi / 180);
 
-/// A part placed in another part's file by a `0 !HELP 1 ...` line: where it goes, in the
-/// holding part's own space.
-struct Seat {
-  Xform at;
-  std::string part;
-};
-
 /// The file a part name stands for, following "~Moved to" stubs.
 const ldraw::File* resolved(const ldraw::Library& lib, std::string name) {
   for (int hop = 0; hop < 4; hop++) {
@@ -76,8 +69,8 @@ const ldraw::File* resolved(const ldraw::Library& lib, std::string name) {
   return nullptr;
 }
 
-std::vector<Seat> seatsIn(const ldraw::File& host) {
-  std::vector<Seat> out;
+std::vector<PlacementExample> seatsIn(const ldraw::File& host) {
+  std::vector<PlacementExample> out;
   for (const std::string& line : host.help) {
     std::istringstream in(line);
     int type = 0, color = 0;
@@ -87,7 +80,7 @@ std::vector<Seat> seatsIn(const ldraw::File& host) {
     bool ok = true;
     for (double& x : v) ok = ok && static_cast<bool>(in >> x);
     if (!ok || !(in >> part)) continue;
-    Seat s;
+    PlacementExample s;
     s.at.t = {v[0], v[1], v[2]};
     for (int i = 0; i < 9; i++) s.at.r.m[i] = v[3 + i];
     s.part = ldraw::normalizeName(part);
@@ -133,6 +126,15 @@ struct Added {
 
 }  // namespace
 
+std::vector<PlacementExample> placementExamples(const ldraw::Library& library, const std::string& host) {
+  const auto* file = resolved(library, host);
+  return file ? seatsIn(*file) : std::vector<PlacementExample>{};
+}
+
+std::optional<Xform> alignExample(const ldraw::Library& library, const std::string& documented, const std::string& actual) {
+  return standsIn(library, documented, actual);
+}
+
 Inferred inferJoints(Graph& g, const Model& model, ConnectorDb& db, const collide::World& world, const std::vector<std::pair<uint32_t, uint32_t>>& settle) {
   Inferred out;
   const std::vector<Piece>& pieces = model.pieces();
@@ -165,12 +167,11 @@ Inferred inferJoints(Graph& g, const Model& model, ConnectorDb& db, const collid
   std::vector<uint32_t> near;
 
   // Tier 0: a seat the holding part's own file documents.
-  std::unordered_map<std::string, std::vector<Seat>> seatsOf;
-  auto seats = [&](const std::string& part) -> const std::vector<Seat>& {
+  std::unordered_map<std::string, std::vector<PlacementExample>> seatsOf;
+  auto seats = [&](const std::string& part) -> const std::vector<PlacementExample>& {
     auto it = seatsOf.find(part);
     if (it == seatsOf.end()) {
-      const ldraw::File* f = resolved(model.library(), part);
-      it = seatsOf.emplace(part, f ? seatsIn(*f) : std::vector<Seat>{}).first;
+      it = seatsOf.emplace(part, placementExamples(model.library(), part)).first;
     }
     return it->second;
   };
@@ -182,8 +183,8 @@ Inferred inferJoints(Graph& g, const Model& model, ConnectorDb& db, const collid
     world.near(grown(world.box(u), kReach), nullptr, near);
     for (uint32_t q : near) {
       if (q == u || g.isSegment[q] || done[u]) continue;
-      for (const Seat& seat : seats(pieces[q].part)) {
-        const std::optional<Xform> align = standsIn(model.library(), seat.part, pieces[u].part);
+      for (const PlacementExample& seat : seats(pieces[q].part)) {
+        const std::optional<Xform> align = alignExample(model.library(), seat.part, pieces[u].part);
         if (!align) continue;
         const Xform expected = pieces[q].world * seat.at * *align;
         const Mat3 diff = inverse(expected.r) * pieces[u].world.r;

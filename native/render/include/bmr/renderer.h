@@ -22,6 +22,9 @@ struct FrameOptions {
   bool refractiveGlass = false;
   bool cull = true;      ///< leave out what is not in view
   bool lightsFollowCamera = false;  ///< the light rig stays fixed to the model, as EyeSight's BUILD_FL does, or turns with the camera's heading
+  bool clay = false, wireframe = false;
+  bool interactive = false;  ///< omit fine stud geometry in distant opaque parts during a gesture.
+  double gridSpacing = 0;  ///< LDU; zero shows a plain floor.
   int forceDetail = -1;  ///< -1: by size on screen; 0, 1, 2: that level of detail for everything (tests, benchmark)
   /// 0: a stale shadow or height map is drawn again whole before the frame. Otherwise it is
   /// drawn again over frames, about this many triangles of it a frame, the last one complete
@@ -77,6 +80,8 @@ class Renderer {
   /// reused, and what is selected and hidden is kept (by piece index). `model` replaces the one
   /// given to create() and must outlive the renderer. Pieces are shown at rest after it.
   void modelChanged(const bm::Model& model, const std::vector<uint32_t>* moved = nullptr);
+  /// Drops old indices in a deletion that leaves the other instances in place.
+  void modelDeleted(const bm::Model& model, const std::vector<uint32_t>& removed);
   /// These pieces' colours changed in the model: each moves to its new (part, colour) group,
   /// without rebuilding the scene.
   void recolored(const std::vector<uint32_t>& pieces);
@@ -93,6 +98,7 @@ class Renderer {
   /// World space: the selected pieces where they are shown now (as the last setFrame or
   /// setRest put them), hidden ones left out. Empty when none is shown.
   bm::Box selectionBounds() const;
+  const bm::Box& visibleBounds() const;
 
  private:
   Renderer();

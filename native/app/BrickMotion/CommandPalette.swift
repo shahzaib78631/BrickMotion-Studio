@@ -20,7 +20,7 @@ struct PaletteItem: Identifiable {
 /// submodel to open, each step to go to.
 @MainActor func paletteItems(_ context: CommandContext) -> [PaletteItem] {
   var out: [PaletteItem] = []
-  let menuNames: [MenuPlace: String] = [.file: "File", .edit: "Edit", .select: "Select", .object: "Object", .step: "Step", .view: "View"]
+  let menuNames: [MenuPlace: String] = [.app: "BrickMotion", .file: "File", .edit: "Edit", .select: "Select", .object: "Object", .step: "Step", .view: "View", .window: "Window"]
   // The document's own commands (File) after the model's, so a tie goes to editing the model.
   let ordered = Registry.all.filter { $0.menu != .file } + Registry.all.filter { $0.menu == .file }
   for c in ordered where c.menu != .none && c.id != "view.palette" && c.enabled(context) {

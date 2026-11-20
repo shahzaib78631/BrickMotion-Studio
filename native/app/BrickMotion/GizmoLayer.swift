@@ -23,7 +23,7 @@ final class GizmoLayer: CALayer {
   }
 
   /// Draws `shape`, or nothing; `appearance` resolves the system colours.
-  func show(_ shape: bmapp.GizmoShape?, hovered: bmapp.Handle, scale: CGFloat, appearance: NSAppearance) {
+  func show(_ shape: bmapp.GizmoShape?, hovered: bmapp.Handle, scale: CGFloat, appearance: NSAppearance, squareTips: Bool = false) {
     CATransaction.begin()
     CATransaction.setDisableActions(true)
     defer { CATransaction.commit() }
@@ -54,8 +54,9 @@ final class GizmoLayer: CALayer {
         let hot = line.h == hovered
         let color = hot ? NSColor.controlAccentColor : Self.color(line.h)
         addSublayer(shapeLayer(path, color: color, width: hot ? 4 : 2.5, scale: scale))
-        // A round end to grab.
-        let tip = CGPath(ellipseIn: CGRect(x: line.b.x - 5, y: line.b.y - 5, width: 10, height: 10), transform: nil)
+        let rect = CGRect(x: line.b.x - 5, y: line.b.y - 5, width: 10, height: 10)
+        let tip = squareTips ? CGPath(roundedRect: rect, cornerWidth: 2, cornerHeight: 2, transform: nil)
+          : CGPath(ellipseIn: rect, transform: nil)
         let end = shapeLayer(tip, color: color, width: 0, scale: scale)
         end.fillColor = color.cgColor
         addSublayer(end)

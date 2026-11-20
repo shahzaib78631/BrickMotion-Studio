@@ -26,8 +26,10 @@ struct ShotOptions {
   /// --correct: pieces drawn a little off what holds them are set in place before anything is
   /// drawn or planned (bm::plan::Options::correctPlacements), as bm plan --correct does.
   bool correct = false;
-  /// --flight web|arc: the flight's shape (bm::plan::Style::shape).
-  bm::plan::FlightShape flight = bm::plan::FlightShape::Web;
+  /// --flight auto|web|arc: the flight's shape (bm::plan::Style::shape).
+  bm::plan::FlightShape flight = bm::plan::FlightShape::Auto;
+  /// --planner native|legacy: bm's own planner (the default) or the web app's Standard one.
+  bm::plan::Planner planner = bm::plan::Planner::Native;
   /// --strip N: N frames of the build, evenly from the first to the last, as one contact sheet.
   int strip = 0;
   /// A frame of the build with no camera of the caller's: the director's camera films it.
@@ -38,6 +40,7 @@ struct ShotOptions {
 inline bm::plan::Style styleWith(const std::filesystem::path& project, const ShotOptions& o) {
   bm::plan::Style style = bm::plan::styleOf(project);
   style.shape = o.flight;
+  style.planner = o.planner;
   return style;
 }
 

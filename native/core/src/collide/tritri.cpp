@@ -25,27 +25,38 @@ void crossing(const Vec3 v[3], const double d[3], Vec3& p0, Vec3& p1) {
 
 double crossLength(const Vec3 a[3], const Vec3 b[3], Vec3* where) {
   constexpr double none = -std::numeric_limits<double>::infinity();
-  const Vec3 na = cross(a[1] - a[0], a[2] - a[0]), nb = cross(b[1] - b[0], b[2] - b[0]);
-  const double la = length(na), lb = length(nb);
-  if (!(la > 1e-12) || !(lb > 1e-12)) return none;  // no area (or not finite)
-  const Vec3 ua = na * (1 / la), ub = nb * (1 / lb);
+  const Vec3 nb = cross(b[1] - b[0], b[2] - b[0]);
+  const double lb = length(nb);
+  if (!(lb > 1e-12)) return none;  // no area (or not finite)
+  const Vec3 ub = nb * (1 / lb);
 
   // Each triangle must pass through the other's plane by more than kTouch on each side: a
   // corner nearer the plane than that counts as on it. Where it crosses is still where the plane
   // cuts its sides. Taking that corner as an end of the crossing instead would put the end off
   // the line where the planes meet, by up to most of a side that runs close to the plane, and
   // make two edges that merely touch look as if they cross.
-  double da[3], db[3];
-  bool posA = false, negA = false, posB = false, negB = false;
+  double da[3];
+  bool posA = false, negA = false;
   for (int i = 0; i < 3; i++) {
     da[i] = dot(ub, a[i] - b[0]);
     posA = posA || da[i] >= kTouch;
     negA = negA || da[i] <= -kTouch;
+  }
+  if (!(posA && negA)) return none;
+
+  const Vec3 na = cross(a[1] - a[0], a[2] - a[0]);
+  const double la = length(na);
+  if (!(la > 1e-12)) return none;
+  const Vec3 ua = na * (1 / la);
+
+  double db[3];
+  bool posB = false, negB = false;
+  for (int i = 0; i < 3; i++) {
     db[i] = dot(ua, b[i] - a[0]);
     posB = posB || db[i] >= kTouch;
     negB = negB || db[i] <= -kTouch;
   }
-  if (!(posA && negA && posB && negB)) return none;
+  if (!(posB && negB)) return none;
 
   // Both cross the line where the planes meet; they cross each other if those stretches overlap.
   const Vec3 line = cross(ua, ub);

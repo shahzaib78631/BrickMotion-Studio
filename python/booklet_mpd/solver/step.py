@@ -14,11 +14,13 @@ import numpy as np
 
 from ..viewfit import BOOKLET_SCALE, ORIENTATIONS
 from .edges import NEAR_INK, ink_distance
+from .exact_place import _drawn_entries, exact_polish, solve_step_exact
 from .candidates import candidates
 from .picture import Picture
 from .place import DELTAS, Scene, State, _boxes_overlap, distinct, polish, score_candidates, solve_step
+from .scorer import EDGE_PREC_WEIGHT, ModelScorer
 from .subbuild import FACING, SUBBUILDS, place_units, solve_unit, unit_parts
-from .register import Aligner, rank_views, register, search
+from .register import Aligner, Registration, rank_views, refine_view, register, search
 from .render import View
 
 
@@ -49,6 +51,7 @@ RERANK = int(os.environ.get("BOOKLET_SOLVER_RERANK", "3"))  # beam states re-sco
 # beam lost a better-scoring layout in 63 of 101 wrong parts with a good camera; a wider beam got 8 of them)
 POLISH = os.environ.get("BOOKLET_SOLVER_POLISH", "0") != "0"   # off: gate 4b 372/578 vs 370, 13 steps up 12 down, +24% time
 POLISH_K = int(os.environ.get("BOOKLET_SOLVER_POLISH_K", "32"))   # alternatives tried per part
+EXACT_PLACE = os.environ.get("BOOKLET_SOLVER_EXACT", "1") != "0"  # ModelScorer + exact discrete/continuous optimizer
 ROUNDS = 1                # placement / completed re-registration alternations per hypothesis
 # booklet pages sit within a few percent of the scale prior; the registered base alone cannot tell scale
 # from the parts about to be added (they hide part of the silhouette), so the prior is held tightly
@@ -96,7 +99,8 @@ class SectionCamera:
         same = [x for x in members if np.allclose(x[0].orientation, v.orientation)]
         view = v.replace(yaw=float(np.median([x[0].yaw for x in same])),
                          pitch=float(np.median([x[0].pitch for x in same])),
-                         scale=float(np.median([x[0].scale for x in same])))
+                         scale=float(np.median([x[0].scale for x in same])),
+                         roll=float(np.median([x[0].roll for x in same])))
         return view, same[-1][1], float(np.median([x[2] for x in same]))
 
 
@@ -135,9 +139,50 @@ def first_part_pose() -> np.ndarray:
     return np.eye(4)
 
 
+def _next_step_seat_score(lib, model0: list, seated_placed: list, reg_view: View,
+                          next_pic: Picture, codes: list[int], next_view: View | None = None) -> tuple[float, View]:
+    """Score a candidate's SEATED poses against the NEXT step's picture (where exploded/arrow units
+    are shown attached). Evaluates precision of `seated_placed`'s own visible pixels on `next_pic`
+    (does not penalise extra foreground added by step N+1)."""
+    from .edges import DEPTH_TOL
+    from .render import render
+    from .scorer import _edge_depth_map, _label_edges
+    if next_view is None:
+        # Align base model to next_pic by offset (+-2 deg) starting from this step's camera
+        next_classes = next_pic.classes(codes)
+        next_ink = ink_distance(next_pic.rgb) <= NEAR_INK
+        nreg = register(lib, model0, next_pic, codes, reg_view.orientation, reg_view.yaw, reg_view.pitch,
+                        reg_view.scale, scale_range=(1.0,),
+                        angle_steps=((2.0, 0.0), (-2.0, 0.0), (0.0, 2.0), (0.0, -2.0)),
+                        classes=next_classes, on_ink=next_ink, roll=reg_view.roll)
+        next_view = nreg.view
+    ns = ModelScorer(lib, model0, next_pic, next_view, codes)
+    if not seated_placed:
+        return 0.0, next_view
+    d_add, l_add = render(lib, seated_placed, next_view, ns.shape)
+    nearer = d_add < ns.base_depth
+    depth = np.where(nearer, d_add, ns.base_depth)
+    label = np.where(nearer, l_add + ns.n_base, ns.base_label)
+    new_vis = label >= ns.n_base
+    if not new_vis.any():
+        return -1e6, next_view
+    add_cidx = np.array([ns.code_idx.get(c, -1) for _p, c, _m in seated_placed], dtype=np.int32)
+    ys, xs = np.nonzero(new_vis)
+    cidx = add_cidx[label[ys, xs] - ns.n_base]
+    ok = cidx >= 0
+    col_val = float(ns.col_planes[cidx[ok], ys[ok], xs[ok]].sum()) if ok.any() else 0.0
+    add_ed = _edge_depth_map(lib, seated_placed, next_view, depth)
+    new_bound = _label_edges(np.where(new_vis, label, -1))
+    e_new = np.isfinite(add_ed) | new_bound
+    edge_val = EDGE_PREC_WEIGHT * float(ns.edge_prec_map[e_new].sum()) if e_new.any() else 0.0
+    return col_val + edge_val, next_view
+
+
 def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_per_px: float | None,
           collider=None, beam: int = 6, extra_codes=(), orientations: list[int] | None = None,
-          subbuilds: list[dict] | None = None, exploded: bool = False, camera=None) -> StepResult:
+          subbuilds: list[dict] | None = None, exploded: bool = False, camera=None,
+          prev_rgb: np.ndarray | None = None, next_rgb: np.ndarray | None = None,
+          next_pts: float | None = None) -> StepResult:
     """`base`: model so far [(id, colour, 4x4)] in the frame the step is built in; `parts`: new parts
     [(id, colour)]. When `base` is empty the largest new part is put at the origin (the frame is free).
     `orientations`: restrict the camera search to these cube orientations (a known, fixed camera).
@@ -177,7 +222,16 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
     def free_hypotheses():
         regs = search(lib, model0, picture, codes, orientations, scale, classes=classes, on_ink=ink_dist <= NEAR_INK,
                       refine=HYPOTHESES, diverse=True, separation=VIEW_SEPARATION,
-                      scale_range=SCALE_RANGE if pts_per_px else np.linspace(0.9, 1.1, 7))
+                      scale_range=SCALE_RANGE if pts_per_px else np.linspace(0.9, 1.1, 7), subpixel=True)
+        # If the booklet page is zoomed in/out relative to BOOKLET_SCALE (e.g. final step or detail),
+        # the tight scale prior fails to fit: retry around the foreground-extent scale.
+        if not regs or regs[0].score < 1.0:
+            ext_scale = _scale_from_extent(lib, model0, views[0][1], views[0][2], views[0][3], picture)
+            if ext_scale > 0.05 and abs(ext_scale - scale) > 0.08 * scale:
+                regs_ext = search(lib, model0, picture, codes, orientations, ext_scale, classes=classes,
+                                  on_ink=ink_dist <= NEAR_INK, refine=HYPOTHESES, diverse=True,
+                                  separation=VIEW_SEPARATION, scale_range=np.linspace(0.85, 1.15, 7), subpixel=True)
+                regs = regs + regs_ext
         # diverse camera hypotheses: the best registration per cube orientation, best first
         out, seen = [], set()
         for reg in sorted(regs, key=lambda r: -(r.score + (UPRIGHT_BONUS if r.orientation_index in UPRIGHT else 0.0))):
@@ -190,14 +244,20 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
     held = None
     if camera is not None and CAMERA_HOLD:
         cview, coi, expect = camera
-        held = register(lib, model0, picture, codes, cview.orientation, cview.yaw, cview.pitch, cview.scale,
-                        scale_range=(1.0,), angle_steps=((3.0, 0.0), (-3.0, 0.0), (0.0, 3.0), (0.0, -3.0)),
-                        classes=classes, on_ink=ink_dist <= NEAR_INK)
-        held.orientation_index = coi
+        if expect <= -1e8:
+            # Fixed oracle camera (e.g. Gate 4b): keep exact view without drifting it
+            held = Registration(cview, 0.0, classes.shape, coi)
+        else:
+            held = register(lib, model0, picture, codes, cview.orientation, cview.yaw, cview.pitch, cview.scale,
+                            scale_range=(1.0,), angle_steps=((3.0, 0.0), (-3.0, 0.0), (0.0, 3.0), (0.0, -3.0)),
+                            classes=classes, on_ink=ink_dist <= NEAR_INK, subpixel=True, roll=cview.roll)
+            held.orientation_index = coi
     pre_iou = float(views[0][0])
     if not parts and not units:
         reg = held if held is not None else free_hypotheses()[0]
-        return StepResult(seeded, [None] * len(seeded), reg.view, reg.score, pre_iou, completed=reg.score)
+        refined = refine_view(lib, model0, picture, reg.view, scale_tol=0.06, outer=3)
+        return StepResult(seeded, [None] * len(seeded), refined, reg.score, pre_iou, completed=reg.score,
+                          orientation_index=reg.orientation_index)
 
     def candidate_fn(part, model):
         return candidates(lib, part, model)
@@ -215,6 +275,7 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
             scene = Scene.build(lib, model, reg.view, classes, codes, ink_dist)
             scene.picture = picture
             return scene
+        scorer = ModelScorer(lib, model0, picture, reg.view, codes, prev_rgb=prev_rgb) if EXACT_PLACE else None
         solved, rest, facing = [], list(parts), {}
         for spec in units:
             key = (tuple(np.round(reg.view.orientation, 3).ravel()), round(reg.view.yaw), round(reg.view.pitch))
@@ -247,51 +308,95 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
         else:
             cands = candidate_fn
         if not solved:
-            return solve_step(lib, scene_for, model0, rest, cands, collides=collides, beam=beam, deltas=deltas, pushes=pushes)
-        set_model = collider.set_model if collider is not None else None
-        ustates = place_units(lib, scene_for, model0, solved, cands, collides=collides, set_model=set_model,
-                              deltas=deltas)
-        if not ustates:
-            if set_model is not None:
-                set_model(model0)
-            loose = rest + [x for u, n in solved for x in [(q, c) for q, c, _m in u["parts"]] * n]
-            return solve_step(lib, scene_for, model0, loose, cands, collides=collides, beam=beam, deltas=deltas, pushes=pushes)
-        sizes = [len(unit["parts"]) for unit, n in solved for _ in range(n)]
-        unit_groups, at = [], 0
-        for size in sizes:                  # each unit copy's parts sit together, in copy order
-            unit_groups.append(list(range(at, at + size)))
-            at += size
-        out = []
-        for ust in ustates[:UNIT_BEAM]:
-            if not rest:
-                out.append(State(ust.placed, ust.scores, ust.total, ust.done, unit_groups))
-                continue
-            if set_model is not None:
-                set_model(model0 + ust.placed)
-            for st in solve_step(lib, scene_for, model0 + ust.placed, rest, cands, collides=collides,
-                                 beam=beam, deltas=deltas, pushes=pushes):
-                n0 = len(ust.placed)
-                out.append(State(ust.placed + st.placed, ust.scores + st.scores, ust.total + st.total,
-                                 groups=unit_groups + [[n0 + k] for k in range(len(st.placed))]))
-        if set_model is not None:
-            set_model(model0)
-        out.sort(key=lambda st: -st.total)
-        return out[:beam]
+            if EXACT_PLACE and scorer is not None:
+                states = solve_step_exact(lib, scene_for, scorer, model0, rest, cands, collider=collider,
+                                          beam=max(beam, 10), deltas=deltas, pushes=pushes)
+            else:
+                states = solve_step(lib, scene_for, model0, rest, cands, collides=collides, beam=beam, deltas=deltas, pushes=pushes)
+        else:
+            set_model = collider.set_model if collider is not None else None
+            ustates = place_units(lib, scene_for, model0, solved, cands, collides=collides, set_model=set_model,
+                                  deltas=deltas)
+            if not ustates:
+                if set_model is not None:
+                    set_model(model0)
+                loose = rest + [x for u, n in solved for x in [(q, c) for q, c, _m in u["parts"]] * n]
+                if EXACT_PLACE and scorer is not None:
+                    states = solve_step_exact(lib, scene_for, scorer, model0, loose, cands, collider=collider,
+                                              beam=max(beam, 10), deltas=deltas, pushes=pushes)
+                else:
+                    states = solve_step(lib, scene_for, model0, loose, cands, collides=collides, beam=beam, deltas=deltas, pushes=pushes)
+            else:
+                sizes = [len(unit["parts"]) for unit, n in solved for _ in range(n)]
+                unit_groups, at = [], 0
+                for size in sizes:                  # each unit copy's parts sit together, in copy order
+                    unit_groups.append(list(range(at, at + size)))
+                    at += size
+                out = []
+                for ust in ustates[:max(UNIT_BEAM, 4 if (next_rgb is not None and deltas != (0.0,)) else UNIT_BEAM)]:
+                    if not rest:
+                        st_combined = State(ust.placed, ust.scores, ust.total, ust.done, unit_groups)
+                        if EXACT_PLACE and scorer is not None:
+                            st_combined.total = scorer.score(_drawn_entries(st_combined.placed, st_combined.scores))
+                        out.append(st_combined)
+                        continue
+                    if set_model is not None:
+                        set_model(model0 + ust.placed)
+                    if EXACT_PLACE and scorer is not None:
+                        sub_scorer = ModelScorer(lib, model0 + ust.placed, picture, reg.view, codes, prev_rgb=prev_rgb)
+                        rstates = solve_step_exact(lib, scene_for, sub_scorer, model0 + ust.placed, rest, cands,
+                                                   collider=collider, beam=max(beam, 8), deltas=deltas, pushes=pushes)
+                    else:
+                        rstates = solve_step(lib, scene_for, model0 + ust.placed, rest, cands, collides=collides,
+                                             beam=beam, deltas=deltas, pushes=pushes)
+                    for st in rstates:
+                        n0 = len(ust.placed)
+                        comb_placed = ust.placed + st.placed
+                        comb_scores = ust.scores + st.scores
+                        comb_total = scorer.score(_drawn_entries(comb_placed, comb_scores)) if (EXACT_PLACE and scorer is not None) else (ust.total + st.total)
+                        out.append(State(comb_placed, comb_scores, comb_total,
+                                         groups=unit_groups + [[n0 + k] for k in range(len(st.placed))]))
+                if set_model is not None:
+                    set_model(model0)
+                if EXACT_PLACE and scorer is not None and deltas == (0.0,):
+                    out.sort(key=lambda st: -st.total)
+                    polished = [exact_polish(lib, scorer, model0, st, cands, collider=collider) for st in out[:min(3, len(out))]]
+                    out = polished + out[3:]
+                out.sort(key=lambda st: -st.total)
+                states = out[:max(beam, 8)]
+        # Next-step verification for steps drawn exploded/apart with arrows or sub-build units
+        if next_rgb is not None and (deltas != (0.0,) or solved) and len(states) >= 2 and model0:
+            next_px = BOOKLET_SCALE / next_pts if next_pts else None
+            next_pic = Picture.from_rgb(next_rgb, next_pts, next_px)
+            nview = None
+            rescored = []
+            for st in states[:6]:
+                nv_score, nview = _next_step_seat_score(lib, model0, st.placed, reg.view, next_pic, codes, next_view=nview)
+                rescored.append((nv_score, st))
+            if rescored and max(s for s, _ in rescored) > -1e5:
+                rescored.sort(key=lambda x: -x[0])
+                states = [st for _, st in rescored] + states[6:]
+        return states
 
     def completed(reg, state, scales=(0.98, 1.0, 1.02)):
         """Re-register the completed hypothesis (parts drawn where the picture shows them)."""
         from .place import drawn_pose
         drawn = [(p, c, drawn_pose(sc) if sc is not None else m) for (p, c, m), sc in zip(state.placed, state.scores)]
         out = register(lib, model0 + drawn, picture, codes, reg.view.orientation, reg.view.yaw, reg.view.pitch,
-                       reg.view.scale, scale_range=scales, classes=classes, on_ink=on_ink)
+                       reg.view.scale, scale_range=scales, classes=classes, on_ink=on_ink, roll=reg.view.roll)
         out.orientation_index = reg.orientation_index
         return out
 
-    def evaluate(reg, scales=(0.98, 1.0, 1.02)):
+    def evaluate(reg, scales=(0.98, 1.0, 1.02), fixed_camera: bool = False):
         """(completed score, completed registration, states) under one camera hypothesis, or None."""
         states = place_under(reg)
         if not states or not states[0].placed:
             return None
+        if fixed_camera and EXACT_PLACE:
+            # Oracle / locked camera: do NOT re-register or shift offset; states are already ranked by ModelScorer!
+            norm = max(1.0, float((picture.foreground & ~picture.arrows).sum()))
+            sc_norm = float(states[0].total) / norm
+            return sc_norm, Registration(reg.view, sc_norm, classes.shape, reg.orientation_index), states
         reg2 = completed(reg, states[0], scales)
         # the picture shows the model AFTER the step: registering the model before it lets the new
         # parts' silhouette pull the camera off. Alternate placement and completed re-registration.
@@ -306,13 +411,25 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
             if reg3.score < reg2.score - 1e-9:
                 break
             reg, reg2, states = reg2, reg3, states2
-        # the beam ranks states by summed per-part gains; the completed model is the better judge
-        # (two same-colour parts swapped: each gain alike, the whole picture not)
+        if EXACT_PLACE:
+            # Rank all top candidate states under reg2.view using our unbiased fixed-camera ModelScorer!
+            scorer2 = ModelScorer(lib, model0, picture, reg2.view, codes, prev_rgb=prev_rgb)
+            scored_states = []
+            for st in states[:max(RERANK, 6)]:
+                drawn = _drawn_entries(st.placed, st.scores)
+                scored_states.append((scorer2.score(drawn), st))
+            scored_states.sort(key=lambda x: -x[0])
+            states = [st for _, st in scored_states] + states[max(RERANK, 6):]
+            norm = max(1.0, float(scorer2.fg.sum() + scorer2.ink_fg.sum()))
+            # Combine ModelScorer (normalised to ~[-2, 2]) for cross-hypothesis selection
+            final_score = float(scored_states[0][0]) / norm + 1.0
+            reg2 = Registration(reg2.view, final_score, reg2.shape, reg2.orientation_index)
+            return final_score, reg2, states
+        # Legacy Aligner re-rank path (when BOOKLET_SOLVER_EXACT=0)
         for k in range(1, min(RERANK, len(states))):
             alt = completed(reg, states[k], scales)
             if alt.score > reg2.score + 1e-9:
                 reg2, states = alt, [states[k]] + states[:k] + states[k + 1:]
-        # drawn in place (no arrows / explosion): placed poses are drawn poses; a sub-build unit copy moves whole
         if POLISH and deltas == (0.0,):
             better = polish_state(reg2.view, states[0])
             if better is not states[0]:
@@ -370,9 +487,10 @@ def solve(lib, base: list, parts: list[tuple[str, int]], rgb: np.ndarray, pts_pe
     results = []
     search_free = True
     if held is not None:
-        r = evaluate(held, scales=(1.0,))
+        is_fixed = camera is not None and camera[2] <= -1e8
+        r = evaluate(held, scales=(1.0,), fixed_camera=is_fixed)
         if r is not None:
-            search_free = r[0] < expect - HOLD_DROP
+            search_free = (not is_fixed) and (r[0] < expect - HOLD_DROP)
             # doubted (the model may have been turned): search afresh, but the held camera still wins
             # unless a free one beats it clearly
             results.append((r[0] + (HOLD_DROP if search_free else 0.0), r[1], r[2]))

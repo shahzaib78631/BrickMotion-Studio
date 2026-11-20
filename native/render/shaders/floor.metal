@@ -30,5 +30,18 @@ fragment FloorColor floorFragment(FloorOut in [[stage_in]], constant FrameUnifor
   FloorColor out;
   out.color = float4(0);
   out.shares = float4(0, 1, 0, 1);
+  if (frame.grid.x > 0.0) {
+    float2 q = (in.world.xz + frame.grid.yz) / frame.grid.x;
+    float2 width = max(fwidth(q), float2(0.0001));
+    float2 fraction = abs(fract(q - 0.5) - 0.5);
+    float2 major = abs(fract(q / 5.0 - 0.5) - 0.5) * 5.0;
+    float minorLine = 1.0 - min(min(fraction.x / width.x, fraction.y / width.y), 1.0);
+    float majorLine = 1.0 - min(min(major.x / width.x, major.y / width.y), 1.0);
+    float a = max(0.09 * minorLine * (1.0 - smoothstep(0.2, 0.8, max(width.x, width.y))),
+                  0.17 * majorLine * (1.0 - smoothstep(0.5, 1.4, max(width.x, width.y))));
+    a *= floorFade(in.world, frame);
+    float value = dot(frame.background.rgb, float3(0.2126, 0.7152, 0.0722)) > 0.35 ? 0.04 : 0.7;
+    out.color = float4(float3(value * a), a);
+  }
   return out;
 }

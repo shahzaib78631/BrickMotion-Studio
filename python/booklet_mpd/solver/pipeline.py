@@ -72,20 +72,28 @@ def run(lib, pdf: Path, extract_data: dict, folder: Path, index: dict, collider=
     model: list = []
     section = SectionCamera()       # one camera per booklet section, not re-estimated every step
     steps = extract_data["steps"][:max_steps] if max_steps else extract_data["steps"]
+    # Pre-read step pictures so each step can use prev_rgb and next_rgb from the same booklet
+    step_pics = []
+    for step in steps:
+        if step.get("pictureBox"):
+            page = doc[step["page"] - 1]
+            rect = pymupdf.Rect(step["pictureBox"])
+            step_pics.append((*main_model_image_info(page, rect), subbuild_images(page, rect)))
+        else:
+            step_pics.append((None, None, []))
     for si, step in enumerate(steps):
         read = steps_parts[si]
         row = {"index": si, "number": step["number"], "page": step["page"], "read": len(read.parts),
                "unresolved": read.unresolved, "repeat": step.get("repeat", 1), "substeps": len(step.get("substeps", []))}
         placed, confs = [], []
         if read.parts:
-            rgb = pts = None
-            subs = []
-            if step.get("pictureBox"):
-                rgb, pts = main_model_image_info(doc[step["page"] - 1], pymupdf.Rect(step["pictureBox"]))
-                subs = subbuild_images(doc[step["page"] - 1], pymupdf.Rect(step["pictureBox"]))
+            rgb, pts, subs = step_pics[si]
+            prev_rgb = step_pics[si - 1][0] if si > 0 else None
+            next_rgb, next_pts = (step_pics[si + 1][0], step_pics[si + 1][1]) if si + 1 < len(step_pics) else (None, None)
             try:
                 result = solve(lib, model, list(read.parts), rgb, pts, collider=collider, subbuilds=subs,
-                               camera=section.prior(None) if model else None)
+                               camera=section.prior(None) if model else None,
+                               prev_rgb=prev_rgb, next_rgb=next_rgb, next_pts=next_pts)
                 section.add(None, result, len(model))
                 status = result.status
             except Exception as error:   # one bad step must not stop the booklet

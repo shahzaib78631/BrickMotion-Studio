@@ -683,8 +683,17 @@ struct Sequencer {
           if (aa != ab) return aa;
           return a.first.pieces.size() < b.first.pieces.size();
         });
+        std::vector<const std::vector<uint32_t>*> tried;
         for (auto& [u, source] : allTries) {
           if (outOfTime()) break;
+          bool seen = false;
+          for (const auto* prev : tried)
+            if (*prev == u.pieces) {
+              seen = true;
+              break;
+            }
+          if (seen) continue;
+          tried.push_back(&u.pieces);
           if (together(u, source)) {
             took = true;
             break;
@@ -832,12 +841,11 @@ Unit growUnit(const Context& ctx, uint32_t piece, const World::Present* present,
   return leaves ? unit : Unit{};
 }
 
-Plan plan(const Model& model, const connect::Graph& graph, ldraw::PartCache& parts, collide::ShapeCache& shapes, const Options& options) {
+Plan planInternal(const Model& model, const connect::Graph& graph, const World& world, const Options& options) {
   const auto started = std::chrono::steady_clock::now();
   Plan out;
   const uint32_t n = static_cast<uint32_t>(model.pieces().size());
   if (n == 0) return out;
-  const World world(model, parts, shapes);
   Context ctx(model, graph, world, options.down);
   const Units units = findUnits(model, graph);
   Sequencer seq{ctx, units, options, options.pool ? *options.pool : JobPool::shared(), started, 0, false};
@@ -906,14 +914,19 @@ Plan plan(const Model& model, const connect::Graph& graph, ldraw::PartCache& par
   return out;
 }
 
+Plan plan(const Model& model, const connect::Graph& graph, ldraw::PartCache& parts, collide::ShapeCache& shapes, const Options& options) {
+  const auto started = std::chrono::steady_clock::now();
+  const World world(model, parts, shapes);
+  Plan out = planInternal(model, graph, world, options);
+  out.planMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
+  return out;
+}
+
 Plan planInferred(const Model& model, connect::Graph& graph, connect::ConnectorDb& connectors, ldraw::PartCache& parts, collide::ShapeCache& shapes,
                   const Options& options, connect::Inferred* inferred) {
-  connect::Inferred got;
-  {
-    const World world(model, parts, shapes);
-    got = connect::inferJoints(graph, model, connectors, world);
-  }
-  Plan out = plan(model, graph, parts, shapes, options);
+  const World world(model, parts, shapes);
+  connect::Inferred got = connect::inferJoints(graph, model, connectors, world);
+  Plan out = planInternal(model, graph, world, options);
   if (got.relaxed + got.documented > 0 && out.complete) {
     std::vector<uint8_t> stuck(model.pieces().size(), 0);
     std::function<void(const Plan&)> mark = [&](const Plan& p) {
@@ -929,7 +942,7 @@ Plan planInferred(const Model& model, connect::Graph& graph, connect::ConnectorD
     got.dropped = static_cast<uint32_t>(before - graph.connections.size());
     if (got.dropped > 0) {
       connect::regroup(graph);
-      out = plan(model, graph, parts, shapes, options);
+      out = planInternal(model, graph, world, options);
     }
   }
   if (inferred) *inferred = got;

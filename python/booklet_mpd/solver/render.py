@@ -41,10 +41,17 @@ class View:
     pitch: float = 35.0
     scale: float = 1.0
     offset: tuple[float, float] = (0.0, 0.0)
+    roll: float = 0.0
 
     @property
     def matrix(self) -> np.ndarray:
-        return rotation(self.yaw, self.pitch) @ np.asarray(self.orientation, float)
+        R = rotation(self.yaw, self.pitch) @ np.asarray(self.orientation, float)
+        if self.roll:
+            t = np.radians(self.roll)
+            c, s = float(np.cos(t)), float(np.sin(t))
+            Rz = np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
+            R = Rz @ R
+        return R
 
     def project(self, points: np.ndarray) -> np.ndarray:
         """(N, 3) world points -> (N, 3) of (u, v, depth)."""
@@ -61,7 +68,14 @@ class View:
         return np.array([self.scale * q[0], self.scale * q[1], q[2]])
 
     def replace(self, **changes) -> "View":
-        values = {"orientation": self.orientation, "yaw": self.yaw, "pitch": self.pitch, "scale": self.scale, "offset": self.offset}
+        values = {
+            "orientation": self.orientation,
+            "yaw": self.yaw,
+            "pitch": self.pitch,
+            "scale": self.scale,
+            "offset": self.offset,
+            "roll": self.roll,
+        }
         values.update(changes)
         return View(**values)
 

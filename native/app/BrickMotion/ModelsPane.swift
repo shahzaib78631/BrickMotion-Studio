@@ -7,11 +7,13 @@ import SwiftUI
 
 struct ModelsPane: View {
   @Bindable var model: DocumentModel
-  @State private var partsOpen = true
 
   var body: some View {
     VStack(spacing: 0) {
-      FilterField(text: $model.outlineQuery)
+      HStack {
+        FilterField(text: $model.outlineQuery)
+        if model.importing { ProgressView().controlSize(.small).accessibilityLabel("Importing model") }
+      }
         .padding(.horizontal, 10)
         .padding(.bottom, 6)
       List(selection: Binding(get: { model.selectedRows }, set: { model.select(rows: $0) })) {
@@ -29,7 +31,7 @@ struct ModelsPane: View {
         }
       }
       Divider()
-      DisclosureGroup(isExpanded: $partsOpen) {
+      DisclosureGroup(isExpanded: $model.modelPartsExpanded) {
         PartsByStep(model: model)
           .frame(minHeight: 120, maxHeight: 280)
       } label: {
@@ -106,6 +108,13 @@ private struct RowLabel: View {
         if row.unused {
           Text("Unused").font(.caption).foregroundStyle(.secondary)
         }
+        if !row.group.empty() {
+          Label(String(row.group), systemImage: "tag")
+            .labelStyle(.iconOnly)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .help(String(row.group))
+        }
       }
     } icon: {
       Image(systemName: node.id == "root" ? "cube.fill" : row.unused ? "cube.transparent" : "cube")
@@ -122,15 +131,14 @@ private struct DragAndDrop: ViewModifier {
   let model: DocumentModel
   func body(content: Content) -> some View {
     if node.id == "root" || node.row.unused {
-      content.dropDestination(for: String.self) { ids, _ in drop(ids) }
+      content.dropDestination(for: String.self, isEnabled: !node.row.def.empty()) { ids, _ in drop(ids) }
     } else {
       content.draggable(node.id).dropDestination(for: String.self) { ids, _ in drop(ids) }
     }
   }
-  private func drop(_ ids: [String]) -> Bool {
-    guard let id = ids.first, !node.row.def.empty() else { return false }
+  private func drop(_ ids: [String]) {
+    guard let id = ids.first, !node.row.def.empty() else { return }
     model.move(rowId: id, onto: node)
-    return true
   }
 }
 
@@ -162,6 +170,25 @@ private struct RowMenu: View {
     if let one {
       Button("Open") { model.open(row: one) }
       Button("Show and Fit") { model.showAndFit(row: one) }
+      Button("View Parts") {
+        model.open(row: one)
+        model.modelPartsExpanded = true
+      }
+      Button("Play Build") {
+        model.open(row: one)
+        if let viewport = model.viewport {
+          (viewport.window?.windowController as? WindowController)?.setAnimateMode(true, plan: false)
+          model.animation.tab = .build
+          viewport.viewport.playRange(0, 0)
+          viewport.changed()
+        }
+      }
+      Button("Lay Out Parts") {
+        model.open(row: one)
+        model.viewport?.presentation.flatLay()
+      }
+      Button("Import into Model…") { ModelImportSheet.show(in: model, into: String(one.row.def)) }
+        .disabled(model.importing)
     }
     Button("Select Pieces") { model.select(rows: ids) }.disabled(rows.isEmpty)
     Divider()
@@ -246,6 +273,12 @@ private struct ItemLine: View {
         }
       }
       Spacer(minLength: 0)
+      if !item.group.empty() {
+        Label(String(item.group), systemImage: "tag")
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+      }
     }
     .font(.callout)
     .contentShape(.rect)

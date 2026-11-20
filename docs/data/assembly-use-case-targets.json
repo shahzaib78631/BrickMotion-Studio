@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "ldrawHelpPairs": [
+    { "host": "19141", "insert": "30173", "kind": "scabbard", "withdrawalAxisInInsert": [0, 1, 0], "sourceUrl": "https://library.ldraw.org/parts/1388" },
+    { "host": "30177", "insert": "30173a", "kind": "scabbard", "withdrawalAxisInInsert": [0, 1, 0] },
+    { "host": "8011", "insert": "30173a", "kind": "scabbard", "withdrawalAxisInInsert": [0, 1, 0], "sourceUrl": "https://library.ldraw.org/parts/52978" },
+    { "host": "95348", "insert": "2530", "kind": "scabbard", "withdrawalAxisInInsert": [0, 1, 0], "sourceUrl": "https://library.ldraw.org/parts/14086" },
+    { "host": "98132", "insert": "30173a", "kind": "scabbard", "withdrawalAxisInInsert": [0, 1, 0], "unnamedKatanaHint": true, "sourceUrl": "https://library.ldraw.org/parts/34196" },
+    { "host": "98132", "insert": "30173b", "kind": "scabbard", "withdrawalAxisInInsert": [0, 1, 0], "unnamedKatanaHint": true, "sourceUrl": "https://library.ldraw.org/parts/34196" },
+    { "host": "98132", "insert": "21459", "kind": "scabbard", "withdrawalAxisInInsert": [0, 1, 0], "unnamedKatanaHint": true, "sourceUrl": "https://library.ldraw.org/parts/34196" },
+    { "host": "11103", "insert": "30374", "kind": "accessory-bar", "withdrawalAxisInInsert": [0, -1, 0], "inlineHelp": true },
+    { "host": "2656", "insert": "4536", "kind": "drawer", "withdrawalAxisInInsert": [0, 0, -1] },
+    { "host": "6462", "insert": "6471", "kind": "drawer", "withdrawalAxisInInsert": [0, 0, 1] },
+    { "host": "2656", "insert": "2657", "kind": "door" },
+    { "host": "79730", "insert": "4533", "kind": "pet-flap" },
+    { "host": "37383", "insert": "23799", "kind": "tyre-seat" },
+    { "host": "37383p01", "insert": "23799", "kind": "tyre-seat" },
+    { "host": "68577", "insert": "23799", "kind": "tyre-seat" }
+  ],
+  "modelPairs": [
+    { "host": "2516", "insert": "6117", "kind": "tool-holder" },
+    { "host": "2516", "insert": "3941", "kind": "tool-holder" },
+    { "host": "2656", "insert": "4536", "kind": "drawer" },
+    { "host": "6462", "insert": "6471", "kind": "drawer" },
+    { "host": "79730", "insert": "4533", "kind": "pet-flap" },
+    { "host": "37383", "insert": "23799", "kind": "tyre-seat" },
+    { "host": "68577", "insert": "23799", "kind": "tyre-seat" },
+    { "host": "4715", "insert": "4714", "kind": "stretcher-wheels" },
+    { "host": "30191c01", "insert": "93140", "kind": "stretcher-holder" },
+    { "host": "93140", "insert": "30191-f3", "kind": "stretcher-holder" },
+    { "host": "93140", "insert": "30191k01", "kind": "stretcher-holder-section" },
+    { "host": "3145", "insert": "3029", "kind": "plate-edge-groove", "withdrawalAxisInInsert": [1, 0, 0] },
+    { "host": "95348", "insert": "2530", "kind": "scabbard" },
+    { "host": "98132", "insert": "30173a", "kind": "scabbard" },
+    { "host": "19141", "insert": "21459", "kind": "scabbard" },
+    { "host": "88290", "insert": "30173a", "kind": "scabbard" }
+  ],
+  "discoverAroundHosts": ["2516", "2656", "6462", "79730", "4715", "93140", "30191c01", "19141", "30177", "8011", "95348", "98132", "88290"],
+  "instructionEvidence": [
+    {
+      "set": "9553",
+      "page": 1,
+      "url": "https://www.lego.com/cdn/product-assets/product.bi.core.pdf/6012765.pdf#page=1",
+      "pdfSha256": "296ab91c59c040a71e3492be4b863ca085f7e76fb2bc116fb529f7b1189e6b37",
+      "relatedHost": "98132",
+      "evidence": "visual-co-listing",
+      "observation": "The parts illustration shows shoulder armour worn between the head and torso and a separate katana. The illustration does not identify the sword mould or depict its insertion."
+    }
+  ]
+}

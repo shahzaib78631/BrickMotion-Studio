@@ -7,6 +7,7 @@ import BMApp
 struct SnapshotRequest {
   var output = ""
   var model = ""
+  var blank = false
   var size = NSSize(width: 1440, height: 900)
   var appearance: NSAppearance.Name? = nil
   var playTo: Double? = nil
@@ -14,14 +15,20 @@ struct SnapshotRequest {
   var select: [UInt32] = []
   var tool = ViewportView.Tool.select
   var sidebar: SidebarTab? = nil
+  var partsQuery: String? = nil
+  var placement: String? = nil
+  var placementAt = NSPoint(x: 0.5, y: 0.5)
   var focus: [String] = []
   var expandAll = false
   var editStep: Int? = nil
   var inspector: InspectorTab? = nil
   var palette: String? = nil
+  var animation: TimelineTab?
+  var orthographic = false
+  var grid: Double?
 
   /// Reads `--snapshot out.png --open file [--size WxH] [--appearance light|dark] [--play-to s] [--report json] [--select n...] [--tool move|rotate]
-  /// [--sidebar models|steps] [--focus Name[/Name]] [--expand all] [--edit-step N] [--inspector selection|part|submodel]
+  /// [--sidebar models|steps|parts] [--parts-query "query"] [--focus Name[/Name]] [--expand all] [--edit-step N] [--inspector selection|part|submodel]
   /// [--palette "query"]`.
   static func parse(_ args: [String]) -> SnapshotRequest? {
     guard let i = args.firstIndex(of: "--snapshot"), i + 1 < args.count else { return nil }
@@ -31,8 +38,9 @@ struct SnapshotRequest {
       guard let j = args.firstIndex(of: flag), j + 1 < args.count else { return nil }
       return args[j + 1]
     }
-    guard let model = value("--open") else { return nil }
-    r.model = model
+    if let model = value("--open") { r.model = model }
+    else if args.contains("--new") { r.blank = true }
+    else { return nil }
     if let s = value("--size") {
       let parts = s.split(separator: "x").compactMap { Double($0) }
       if parts.count == 2 { r.size = NSSize(width: parts[0], height: parts[1]) }
@@ -41,12 +49,21 @@ struct SnapshotRequest {
     if let t = value("--play-to") { r.playTo = Double(t) }
     r.report = value("--report")
     if let s = value("--sidebar") { r.sidebar = SidebarTab(rawValue: s) }
+    r.partsQuery = value("--parts-query")
+    r.placement = value("--placement")
+    if let raw = value("--placement-at") {
+      let xy = raw.split(separator: ",").compactMap { Double($0) }
+      if xy.count == 2, xy.allSatisfy({ (0...1).contains($0) }) { r.placementAt = NSPoint(x: xy[0], y: xy[1]) }
+    }
     if let f = value("--focus") { r.focus = f.split(separator: "/").map(String.init) }
     r.expandAll = value("--expand") == "all"
     if let k = value("--edit-step") { r.editStep = Int(k) }
     if let i = value("--inspector") { r.inspector = InspectorTab(rawValue: i) }
     r.palette = value("--palette")
-    if let t = value("--tool") { r.tool = t == "move" ? .move : t == "rotate" ? .rotate : .select }
+    if let tab = value("--animate") { r.animation = TimelineTab.allCases.first { $0.rawValue.lowercased() == tab.lowercased() } }
+    r.orthographic = args.contains("--orthographic")
+    if let grid = value("--grid") { r.grid = Double(grid) }
+    if let t = value("--tool") { r.tool = t == "move" ? .move : t == "rotate" ? .rotate : t == "scale" ? .scale : .select }
     if let j = args.firstIndex(of: "--select") {
       r.select = args[(j + 1)...].prefix { UInt32($0) != nil }.compactMap { UInt32($0) }
     }
@@ -64,7 +81,8 @@ enum Snapshot {
     if let a = request.appearance { app.appearance = NSAppearance(named: a) }
     let document = Document()
     do {
-      try document.load(URL(fileURLWithPath: request.model))
+      if request.blank { try document.prepareBlank() }
+      else { try document.load(URL(fileURLWithPath: request.model)) }
     } catch {
       FileHandle.standardError.write("snapshot: \(error.localizedDescription)\n".data(using: .utf8)!)
       return 1
@@ -76,6 +94,13 @@ enum Snapshot {
     window.layoutIfNeeded()
     let viewportView = controller.viewportController.viewportView
     let viewport = viewportView.viewport
+    if request.orthographic { viewportView.presentation.orthographic = true }
+    if let grid = request.grid { viewportView.presentation.grid = grid }
+    if let tab = request.animation {
+      controller.setAnimateMode(true, plan: false)
+      controller.model.animation.tab = tab
+      window.layoutIfNeeded()
+    }
 
     if !request.select.isEmpty {
       var pieces = bmapp.PieceList()
@@ -84,6 +109,10 @@ enum Snapshot {
     }
     viewportView.tool = request.tool
     if let tab = request.sidebar { controller.model.sidebarTab = tab }
+    if let query = request.partsQuery {
+      controller.model.sidebarTab = .parts
+      controller.model.partsQuery = query
+    }
     if request.expandAll { controller.model.expandAll() }
     if !request.focus.isEmpty {
       var path = bmapp.StringList()
@@ -108,17 +137,29 @@ enum Snapshot {
       controller.model.sidebarTab = .steps
       controller.model.editingStep = k
     }
+    if controller.model.sidebarTab == .parts {
+      prepareParts(query: controller.model.partsQuery, dark: window.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua)
+    }
+    if let part = request.placement {
+      let id = part.hasSuffix(".dat") ? part : part + ".dat"
+      guard let match = bmapp.libraryParts(bmapp.Session.ldrawDirectory(), std.string(id), std.string(), 1)
+        .map(LibraryPart.init).first(where: { $0.id == id }) else { return 1 }
+      let p = NSPoint(x: viewportView.bounds.width * request.placementAt.x,
+                      y: viewportView.bounds.height * (1 - request.placementAt.y))
+      viewportView.placement.begin(match, colour: 4, turns: 0, mirrored: false, step: nil, at: p)
+    }
 
-    if let t = request.playTo {
-      viewport.play(true)
+    if (request.playTo != nil || request.animation != nil) && document.session.pieceCount() > 0 {
+      viewport.requestPlan()
       let deadline = Date().addingTimeInterval(300)
-      while viewport.planState() == .Planning || viewport.planState() == .Idle, Date() < deadline {
+      while viewport.planState() == .Planning, Date() < deadline {
         _ = viewport.draw(nil)
         RunLoop.main.run(until: Date().addingTimeInterval(0.05))
       }
-      viewport.play(false)
-      viewport.seek(t)
+      if let time = request.playTo { viewport.seek(time) }
+      controller.model.animation.update()
     }
+    viewportView.presentation.update()
 
     // Best: the window server's own picture of the window, glass and SwiftUI included. The window
     // is ordered in far off every screen, so nothing shows; the app captures only its own window.
@@ -152,7 +193,7 @@ enum Snapshot {
       }
     }
     NSGraphicsContext.restoreGraphicsState()
-    var parts = [controller.sidebarView, controller.inspectorView].compactMap { $0 }
+    var parts = [controller.sidebarView, controller.inspectorView, controller.timelineView].compactMap { $0 }
     if let titlebar = window.standardWindowButton(.closeButton)?.superview?.superview { parts.append(titlebar) }
     for part in parts { composite(part, into: rep, frameView: frameView) }
 
@@ -176,6 +217,24 @@ enum Snapshot {
     NSGraphicsContext.restoreGraphicsState()
 
     return finish(rep, request: request, frameView: frameView, controller: controller)
+  }
+
+  /// Give the snapshot the same loaded parts a person sees after the preview requests finish.
+  @MainActor private static func prepareParts(query: String, dark: Bool) {
+    var ready = false
+    let load = Task {
+      let library = await PartsCatalog.shared.library()
+      _ = await PartsCatalog.shared.categories(in: library.directory)
+      let parts = query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? library.common :
+        await PartsCatalog.shared.search(in: library.directory, query: query, category: nil, limit: 12)
+      for part in parts where !Task.isCancelled {
+        _ = await PartPreviewCache.shared.image(for: .init(part: part.id, color: 71, dark: dark))
+      }
+      ready = true
+    }
+    let deadline = Date().addingTimeInterval(20)
+    while !ready, Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
+    load.cancel()
   }
 
   @MainActor private static func finish(_ rep: NSBitmapImageRep, request: SnapshotRequest, frameView: NSView,

@@ -12,14 +12,13 @@ std::vector<connect::Correction> correctPlacements(Model& model, connect::Connec
   std::vector<uint8_t> settled(model.pieces().size(), 0), applied(model.pieces().size(), 0);
   // What a corrected piece holds was placed against where the file has it: it may be a little
   // off too (a pistol turned 4 degrees in its clip). Each such piece is set onto it as well.
-  auto find = [&]() {
+  auto find = [&](const collide::World& world) {
     connect::Graph graph = connect::buildGraph(model, connectors, nullptr);
     std::vector<std::pair<uint32_t, uint32_t>> settle;
     for (const connect::Connection& c : graph.connections) {
       if (applied[c.a] && !settled[c.b]) settle.push_back({c.b, c.a});
       if (applied[c.b] && !settled[c.a]) settle.push_back({c.a, c.b});
     }
-    const collide::World world(model, parts, shapes);
     std::vector<connect::Correction> got = connect::inferJoints(graph, model, connectors, world, settle).corrections;
     // Two pieces joined to nothing else, each off the other: one of them moves, the smaller
     // (the accessory onto its holder, not the holder onto it); the larger stays where it is.
@@ -47,19 +46,18 @@ std::vector<connect::Correction> correctPlacements(Model& model, connect::Connec
   // set in place once what holds it is, against where that now is.
   std::vector<connect::Correction> all;
   for (int round = 0; round < 4; round++) {
-    std::vector<connect::Correction> found = find();
+    const collide::World world(model, parts, shapes);
+    std::vector<connect::Correction> found = find(world);
     std::vector<uint8_t> moving(model.pieces().size(), 0);
     for (const connect::Correction& c : found) moving[c.piece] = 1;
     bool any = false;
-    const collide::World world(model, parts, shapes);
     const std::vector<Piece>& pieces = model.pieces();
-    auto shapeOf = [&](uint32_t p) { return shapes.get(model.mesh(pieces[p].part, parts)); };
     std::vector<uint32_t> near;
     for (connect::Correction& c : found) {
       if (settled[c.piece]) continue;
       if (moving[c.onto]) continue;  // next round
       settled[c.piece] = 1;
-      const auto mine = shapeOf(c.piece);
+      const collide::Shape& mine = world.shape(c.piece);
       // What it might touch, where the file has it or where it belongs.
       Box reach = world.box(c.piece);
       for (const Vec3& corner : {reach.min, reach.max}) reach.grow(c.to.apply(c.from.inverse().apply(corner)));
@@ -68,8 +66,8 @@ std::vector<connect::Correction> correctPlacements(Model& model, connect::Connec
       world.near(reach, nullptr, near);
       for (uint32_t q : near) {
         if (q == c.piece || q == c.onto) continue;
-        const auto other = shapeOf(q);
-        if (collide::overlap(*mine, c.to, *other, pieces[q].world) && !collide::overlap(*mine, c.from, *other, pieces[q].world)) {
+        const collide::Shape& other = world.shape(q);
+        if (collide::overlap(mine, c.to, other, pieces[q].world) && !collide::overlap(mine, c.from, other, pieces[q].world)) {
           c.note = "in place it would cross " + pieces[q].part + " " + pieces[q].id;
           break;
         }

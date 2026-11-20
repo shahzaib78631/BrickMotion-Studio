@@ -77,11 +77,13 @@ fragment float4 compositeFragment(ScreenOut in [[stage_in]], constant FrameUnifo
   // Occlusion (r) and the key light's shadow (g), worked out at half size and smoothed.
   // On the floor, r is instead the share of its light that reaches it.
   bool worked = frame.switches.x > 0.5 || frame.switches.y > 0.5;
-  float4 share = ambient.read(at);
-  float2 seen = worked ? upsample(occlusion, depth, false, at) : float2(1.0);
-  float floorAo = worked && share.g > 1e-4 ? upsampleFloor(occlusion, at) : 1.0;
-  float ao = seen.r, keyLit = seen.g;
-  c.rgb *= saturate(1.0 - share.r * (1.0 - pow(ao, frame.rig.z)) - share.b * (1.0 - keyLit));
+  float4 share = worked || frame.switches.w < 0.5 || frame.switches.w > 1.5 ? ambient.read(at) : float4(0.0);
+  float floorAo = 1.0;
+  if (worked) {
+    float2 seen = upsample(occlusion, depth, false, at);
+    floorAo = share.g > 1e-4 ? upsampleFloor(occlusion, at) : 1.0;
+    c.rgb *= saturate(1.0 - share.r * (1.0 - pow(seen.r, frame.rig.z)) - share.b * (1.0 - seen.g));
+  }
   // MSAA resolves coverage, surface light, and floor coverage separately.
   // Reconstruct the covered surface and uncovered floor independently; applying
   // the floor shadow to the whole pixel instead brightens the uncovered part at
