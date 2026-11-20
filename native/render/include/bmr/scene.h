@@ -55,7 +55,14 @@ Scene buildScene(const bm::Model& model, bm::ldraw::PartCache& parts, size_t* sk
 /// placement; pieces of no flight stay at rest. A unit that does not fly (a flagged move) is
 /// hidden until its turn comes. The result depends only on (timeline, frame), whatever frame
 /// was applied before. Returns the (group, instance) pairs that changed, for partial uploads.
-std::vector<std::pair<uint32_t, uint32_t>> applyFrame(Scene& scene, const bm::Model& model, const bm::plan::Plan& plan, const bm::plan::Timeline& timeline, double frame);
+struct PiecePose {
+  uint32_t piece;
+  bm::Xform world;
+  bool hidden = false;
+};
+std::vector<std::pair<uint32_t, uint32_t>> applyFrame(Scene& scene, const bm::Model& model, const bm::plan::Plan& plan,
+                                                     const bm::plan::Timeline& timeline, double frame,
+                                                     const std::vector<PiecePose>& keyed = {});
 
 /// Every instance back where the model has it, nothing hidden. Returns what changed.
 std::vector<std::pair<uint32_t, uint32_t>> applyRest(Scene& scene, const bm::Model& model);

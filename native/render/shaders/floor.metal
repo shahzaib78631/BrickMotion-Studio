@@ -9,7 +9,7 @@ struct FloorOut {
 
 vertex FloorOut floorVertex(uint id [[vertex_id]], constant FrameUniforms& frame [[buffer(1)]]) {
   const float2 corners[6] = {float2(-1, -1), float2(1, -1), float2(1, 1), float2(-1, -1), float2(1, 1), float2(-1, 1)};
-  float2 c = corners[id] * frame.floorPlane.y;
+  float2 c = corners[id] * (frame.floorPlane.y * 0.36);
   FloorOut out;
   out.world = float3(frame.floorCentre.x + c.x, frame.floorPlane.x, frame.floorCentre.y + c.y);
   out.position = frame.viewProj * float4(out.world, 1.0);
@@ -25,8 +25,6 @@ struct FloorColor {
 // floor's light that reaches it past the model (floor_light.metal, worked out in the half-size
 // pass, fading out toward the floor's rim there).
 fragment FloorColor floorFragment(FloorOut in [[stage_in]], constant FrameUniforms& frame [[buffer(1)]]) {
-  // LDraw is +Y down. The shadow catcher must not occlude the model from below.
-  if (frame.eye.y >= frame.floorPlane.x) discard_fragment();
   FloorColor out;
   out.color = float4(0);
   out.shares = float4(0, 1, 0, 1);

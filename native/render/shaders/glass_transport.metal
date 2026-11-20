@@ -25,8 +25,7 @@ GlassHit glassHit(float3 origin, float3 direction, const device GlassNode* nodes
   auto found = query.intersect(r, acceleration);
   if (found.type == intersection_type::none) return hit;
   hit = GlassHit{found.distance, found.triangle_barycentric_coord, found.primitive_id};
-  float2 uv = hit.uv;
-  if (triangles[hit.triangle].surface.w < 0.5 && min(min(uv.x, uv.y), 1.0 - uv.x - uv.y) > 0.001) return hit;
+  if (triangles[hit.triangle].surface.w < 0.5) return hit;
   minimum = max(0.002, hit.distance - 0.001);
   hit.distance += 0.001;
 #endif
@@ -97,11 +96,11 @@ fragment OpaqueOut glassTransportFragment(BrickOut in [[stage_in]], constant Fra
 #endif
 ) {
   float3 direction = normalize(in.world - frame.eye.xyz);
-  GlassRay pending[16];
+  GlassRay pending[12];
   int size = 1;
   pending[0] = GlassRay{in.world - direction * 0.02, direction, float3(1), float3(0), 0, false};
   float3 result = 0;
-  for (int work = 0; work < 40 && size > 0; ++work) {
+  for (int work = 0; work < 18 && size > 0; ++work) {
     GlassRay ray = pending[--size];
     if (max(max(ray.weight.r, ray.weight.g), ray.weight.b) < 0.01) continue;
     GlassHit hit = glassHit(ray.origin, ray.direction, nodes, triangles, nodeCount GLASS_ACCEL_ARGUMENT);
@@ -129,10 +128,25 @@ fragment OpaqueOut glassTransportFragment(BrickOut in [[stage_in]], constant Fra
       facing = geometricFacing;
     if (t.base.a < 0.5) {
       Lit light = shade(t.base.rgb, t.surface.x, t.surface.y, t.surface.z, facing, -ray.direction, point, frame, true, uint2(in.position.xy), shadowMap, shadowSampler);
-      result += ray.weight * light.color;
+      float3 litColor = light.color;
+      if (!ray.reflected) {
+        // An opaque surface sitting directly underneath a glass piece (e.g. a brick topped by a
+        // transparent brick) receives light that had to enter through that glass overhead, not
+        // unoccluded open-sky lighting.
+        GlassHit cover = glassHit(point + geometricFacing * 0.02, float3(0.0, -1.0, 0.0), nodes, triangles, nodeCount GLASS_ACCEL_ARGUMENT);
+        if (cover.triangle != 0xffffffffu) {
+          GlassTriangle ct = triangles[cover.triangle];
+          if (ct.base.a >= 0.5) {
+            litColor *= exp(-frame.glass.x * saturate(1.0 - ct.base.rgb) * 0.65) * 0.62;
+          } else {
+            litColor *= 0.55;
+          }
+        }
+      }
+      result += ray.weight * litColor;
       continue;
     }
-    if (ray.depth >= 12) continue; // trapped paths contribute no unearned white light
+    if (ray.depth >= 10) continue; // trapped paths contribute no unearned white light
     float eta = entering ? 1.0 / frame.glass.z : frame.glass.z;
     GlassInterface boundary = glassInterface(ray.direction, facing, eta);
     float3 reflected = normalize(reflect(ray.direction, facing));
@@ -147,12 +161,22 @@ fragment OpaqueOut glassTransportFragment(BrickOut in [[stage_in]], constant Fra
       reflected = normalize(reflect(ray.direction, facing));
     }
     float3 reflectionWeight = ray.weight * boundary.fresnel;
-    if (size < 15 && max(max(reflectionWeight.r, reflectionWeight.g), reflectionWeight.b) >= 0.01)
-      pending[size++] = GlassRay{point + reflected * 0.01, reflected, reflectionWeight, ray.absorption, ray.depth + 1, true};
-    if (boundary.transmits && size < 16) {
-      // Beer-Lambert extinction per LDU, measured over each actual wall segment.
-      float3 absorption = entering ? frame.glass.x * saturate(1.0 - t.base.rgb) / 6.0 : float3(0);
-      pending[size++] = GlassRay{point + boundary.transmitted * 0.01, boundary.transmitted, ray.weight * (1.0 - boundary.fresnel), absorption, ray.depth + 1, ray.reflected};
+    if (!boundary.transmits) {
+      if (size < 12 && max(max(reflectionWeight.r, reflectionWeight.g), reflectionWeight.b) >= 0.01)
+        pending[size++] = GlassRay{point + reflected * 0.01, reflected, reflectionWeight, ray.absorption, ray.depth + 1, true};
+    } else {
+      if (max(max(reflectionWeight.r, reflectionWeight.g), reflectionWeight.b) >= 0.01) {
+        if (ray.depth < 2 && size < 11) {
+          pending[size++] = GlassRay{point + reflected * 0.01, reflected, reflectionWeight, ray.absorption, ray.depth + 1, true};
+        } else {
+          result += reflectionWeight * glassEnvironment(reflected, frame);
+        }
+      }
+      if (size < 12) {
+        // Beer-Lambert extinction per LDU, measured over each actual wall segment.
+        float3 absorption = entering ? frame.glass.x * saturate(1.0 - t.base.rgb) / 4.5 : float3(0);
+        pending[size++] = GlassRay{point + boundary.transmitted * 0.01, boundary.transmitted, ray.weight * (1.0 - boundary.fresnel), absorption, ray.depth + 1, ray.reflected};
+      }
     }
   }
   OpaqueOut out;

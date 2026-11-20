@@ -48,6 +48,7 @@ struct PathScene::Impl {
   id<MTLBuffer> instanceTable = nil;  ///< PtInstanceGpu, in step with `traced`
   id<MTLBuffer> materialTable = nil;  ///< PtMaterialGpu, one a Scene group
   id<MTLBuffer> meshTable = nil;      ///< PtMeshGpu, one a structure
+  std::vector<__unsafe_unretained id<MTLResource>> resources;  ///< all part structures/buffers for one useResources call
 
   /// Builds the structures of these parts, compacted, and waits.
   void buildParts(const std::vector<std::string>& parts, MeshLibrary& meshes);

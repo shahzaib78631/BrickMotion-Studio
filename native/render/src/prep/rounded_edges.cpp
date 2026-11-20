@@ -57,12 +57,18 @@ void roundRenderEdges(RenderMesh& mesh, double width) {
   }
   std::vector<Vertex> vertices;
   std::vector<uint32_t> indices;
+  vertices.reserve(mesh.vertices.size() * 2);
+  indices.reserve(mesh.indices.size() * 2);
+  std::vector<uint32_t> shared(mesh.vertices.size(), UINT32_MAX);
   uint32_t top = 0;
-  auto emit = [&](Vertex a, Vertex b, Vertex c) {
-    if (length(cross(position(b) - position(a), position(c) - position(a))) < 1e-4) return;
-    const auto first = static_cast<uint32_t>(vertices.size());
-    vertices.insert(vertices.end(), {a, b, c});
-    indices.insert(indices.end(), {first, first + 1, first + 2});
+  auto addVertex = [&](const Vertex& v) {
+    const auto id = static_cast<uint32_t>(vertices.size());
+    vertices.push_back(v);
+    return id;
+  };
+  auto emitIndexed = [&](uint32_t ia, uint32_t ib, uint32_t ic) {
+    if (length(cross(position(vertices[ib]) - position(vertices[ia]), position(vertices[ic]) - position(vertices[ia]))) < 1e-4) return;
+    indices.insert(indices.end(), {ia, ib, ic});
   };
   for (size_t t = 0; t < count; ++t) {
     if (t * 3 == mesh.topIndices) top = static_cast<uint32_t>(indices.size());
@@ -89,13 +95,25 @@ void roundRenderEdges(RenderMesh& mesh, double width) {
         if (valid && dot(cross(position(inner[1]) - position(inner[0]), position(inner[2]) - position(inner[0])), faces[t]) > 1e-8) { rounded = true; break; }
       }
     }
-    if (!rounded) { emit(outer[0], outer[1], outer[2]); continue; }
-    emit(inner[0], inner[1], inner[2]);
+    if (!rounded) {
+      uint32_t tri[3];
+      for (int c = 0; c < 3; ++c) {
+        const uint32_t orig = mesh.indices[t * 3 + static_cast<size_t>(c)];
+        if (shared[orig] == UINT32_MAX) shared[orig] = addVertex(mesh.vertices[orig]);
+        tri[c] = shared[orig];
+      }
+      emitIndexed(tri[0], tri[1], tri[2]);
+      continue;
+    }
+    const uint32_t inIdx[3] = {addVertex(inner[0]), addVertex(inner[1]), addVertex(inner[2])};
+    emitIndexed(inIdx[0], inIdx[1], inIdx[2]);
     for (int c = 0; c < 3; ++c) {
       const int next = (c + 1) % 3;
       Vertex a = outer[c], b = outer[next];
       if (bends[t][c].sharp) { setNormal(a, bends[t][c].start); setNormal(b, bends[t][c].end); }
-      emit(a, b, inner[next]); emit(a, inner[next], inner[c]);
+      const uint32_t ia = addVertex(a), ib = addVertex(b);
+      emitIndexed(ia, ib, inIdx[next]);
+      emitIndexed(ia, inIdx[next], inIdx[c]);
     }
   }
   if (mesh.topIndices == mesh.indices.size()) top = static_cast<uint32_t>(indices.size());

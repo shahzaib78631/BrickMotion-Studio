@@ -2,7 +2,9 @@
 
 #include <cstdio>
 #include <cmath>
+#include <unordered_set>
 
+#include "bm/jobs.h"
 #include "bmr/device.h"
 #include "bmr/tolerances.h"
 
@@ -93,6 +95,23 @@ void Renderer::Impl::makeGroups(uint64_t madeAt) {
   instanceBuffers.clear();
   changedAt.clear();
   for (auto& queue : pending) queue.clear();
+  // Build unique part meshes in parallel across cores before creating GPU buffers.
+  std::vector<std::string> uniqueParts;
+  {
+    std::unordered_set<std::string> seen;
+    seen.reserve(scene.groups.size());
+    for (const Group& g : scene.groups)
+      if (!g.placeholder && seen.insert(g.part).second) uniqueParts.push_back(g.part);
+  }
+  if (uniqueParts.size() > 1) {
+    bm::JobPool::shared().parallelFor(uniqueParts.size(), [&](size_t i) {
+      (void)meshes->get(uniqueParts[i], Detail::Full);
+      (void)meshes->get(uniqueParts[i], Detail::Low);
+    });
+  }
+  parts.reserve(scene.groups.size());
+  instanceBuffers.reserve(scene.groups.size());
+  changedAt.reserve(scene.groups.size());
   for (const Group& g : scene.groups) {
     if (g.placeholder) {
       parts.push_back(PartShape{bm::kPlaceholderBox, 0});
@@ -112,12 +131,16 @@ void Renderer::Impl::makeGroups(uint64_t madeAt) {
   }
 }
 
-void Renderer::Impl::groupsChanged() {
+void Renderer::Impl::groupsChanged(bool mapsChanged) {
   @autoreleasepool {
-    // Every instance counts as changed by the next frame, so the shadow and height maps are
-    // drawn again; a map drawn over frames is begun again, its shares being of the old groups.
-    lastChange = frame + 1;
-    makeGroups(lastChange);
+    if (mapsChanged) {
+      // Every instance counts as changed by the next frame, so the shadow and height maps are
+      // drawn again; a map drawn over frames is begun again, its shares being of the old groups.
+      lastChange = frame + 1;
+      makeGroups(lastChange);
+    } else {
+      makeGroups(0);
+    }
     shadow.building = heights.building = false;
     shadow.back.detail = heights.back.detail = -1;
     lastSeen.clear();
@@ -125,7 +148,7 @@ void Renderer::Impl::groupsChanged() {
     idsReady = false;
     glassRevision = UINT64_MAX;
   }
-  updateLiveBounds();
+  if (mapsChanged) updateLiveBounds();
 }
 
 void Renderer::Impl::updateLiveBounds() {
@@ -151,8 +174,9 @@ bm::Box Renderer::selectionBounds() const {
   return b;
 }
 
-void Renderer::setFrame(const bm::plan::Plan& plan, const bm::plan::Timeline& timeline, double frame) {
-  const auto changed = applyFrame(impl_->scene, *impl_->model, plan, timeline, frame);
+void Renderer::setFrame(const bm::plan::Plan& plan, const bm::plan::Timeline& timeline, double frame,
+                        const std::vector<PiecePose>& keyed) {
+  const auto changed = applyFrame(impl_->scene, *impl_->model, plan, timeline, frame, keyed);
   if (changed.empty()) return;
   impl_->upload(changed);
   impl_->updateLiveBounds();
@@ -194,8 +218,24 @@ void Renderer::modelChanged(const bm::Model& model, const std::vector<uint32_t>*
 
 void Renderer::recolored(const std::vector<uint32_t>& pieces) {
   if (pieces.empty()) return;
-  applyRecolored(impl_->scene, *impl_->model, pieces);
-  impl_->groupsChanged();
+  Impl& impl = *impl_;
+  std::vector<uint8_t> wasTransparent;
+  wasTransparent.reserve(pieces.size());
+  for (uint32_t p : pieces) {
+    const auto [g, i] = p < impl.scene.where.size() ? impl.scene.where[p] : std::pair{UINT32_MAX, UINT32_MAX};
+    (void)i;
+    wasTransparent.push_back(g < impl.scene.groups.size() && impl.scene.groups[g].material.transparent() ? 1 : 0);
+  }
+  applyRecolored(impl.scene, *impl.model, pieces);
+  bool transparencyChanged = false;
+  for (size_t k = 0; k < pieces.size() && !transparencyChanged; k++) {
+    const uint32_t p = pieces[k];
+    const auto [g, i] = p < impl.scene.where.size() ? impl.scene.where[p] : std::pair{UINT32_MAX, UINT32_MAX};
+    (void)i;
+    const uint8_t isTrans = g < impl.scene.groups.size() && impl.scene.groups[g].material.transparent() ? 1 : 0;
+    if (isTrans != wasTransparent[k]) transparencyChanged = true;
+  }
+  impl.groupsChanged(transparencyChanged);
 }
 
 void Renderer::setHidden(const std::vector<uint32_t>& pieces) {
@@ -293,9 +333,10 @@ void Renderer::Impl::makeTargets() {
   revealMs = make(kRevealFormat, kSamples, MTLTextureUsageRenderTarget, tile);
   ambientMs = make(kAmbientFormat, kSamples, MTLTextureUsageRenderTarget, tile);
   const MTLTextureUsage readable = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+  const MTLTextureUsage revealUsage = device->device.supportsRaytracing ? (readable | MTLTextureUsageShaderWrite) : readable;
   color = make(kColorFormat, 1, readable, MTLStorageModePrivate);
   accum = make(kAccumFormat, 1, readable, MTLStorageModePrivate);
-  reveal = make(kRevealFormat, 1, readable, MTLStorageModePrivate);
+  reveal = make(kRevealFormat, 1, revealUsage, MTLStorageModePrivate);
   mask = make(MTLPixelFormatR8Unorm, 1, readable, MTLStorageModePrivate);
   ambient = make(kAmbientFormat, 1, readable, MTLStorageModePrivate);
   depth = make(MTLPixelFormatDepth32Float, 1, readable, MTLStorageModePrivate);

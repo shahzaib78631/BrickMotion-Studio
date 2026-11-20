@@ -26,8 +26,8 @@ MTLVertexDescriptor* brickVertices() {
   return d;
 }
 
-/// How a pipeline writes into the main pass's three targets.
-enum class Writes { Depth, Opaque, Floor, Over, Glass, Transparent, Single, Least };
+/// How a pipeline writes into the main pass's targets.
+enum class Writes { Depth, Opaque, Floor, Over, Glass, GlassMask, GlassEdges, Transparent, Single, Least };
 
 id<MTLRenderPipelineState> make(Device& device, NSString* vertex, NSString* fragment, Writes writes, MTLPixelFormat single, MTLPixelFormat depth, int samples, MTLVertexDescriptor* vertices,
                                 std::string& error) {
@@ -60,6 +60,16 @@ id<MTLRenderPipelineState> make(Device& device, NSString* vertex, NSString* frag
       c.blendingEnabled = YES;
       c.sourceRGBBlendFactor = c.sourceAlphaBlendFactor = MTLBlendFactorOne;
       c.destinationRGBBlendFactor = c.destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+    } else if (writes == Writes::GlassMask) {
+      c.writeMask = MTLColorWriteMaskNone;
+      rev.writeMask = MTLColorWriteMaskAll;
+      amb.writeMask = MTLColorWriteMaskGreen;
+    } else if (writes == Writes::GlassEdges) {
+      c.writeMask = MTLColorWriteMaskNone;
+      sum.writeMask = MTLColorWriteMaskAll;
+      sum.blendingEnabled = YES;
+      sum.sourceRGBBlendFactor = sum.sourceAlphaBlendFactor = MTLBlendFactorOne;
+      sum.destinationRGBBlendFactor = sum.destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
     } else if (writes == Writes::Glass || writes == Writes::Transparent) {
       c.writeMask = MTLColorWriteMaskNone;
       sum.writeMask = rev.writeMask = MTLColorWriteMaskAll;
@@ -95,6 +105,13 @@ Pipelines makePipelines(Device& device, std::string& error) {
   p.glassPreview = make(device, @"brickVertex", @"glassFragment", Writes::Glass, none, depth32, kSamples, brickVertices(), error);
   p.glassDepth = make(device, @"brickVertex", nil, Writes::Depth, none, depth32, kSamples, brickVertices(), error);
   p.glass = make(device, @"brickVertex", @"glassTransportFragment", Writes::Opaque, none, depth32, kSamples, brickVertices(), error);
+  p.glassMask = make(device, @"brickVertex", @"glassMaskFragment", Writes::GlassMask, none, depth32, kSamples, brickVertices(), error);
+  p.glassEdges = make(device, @"edgeVertex", @"glassEdgeFragment", Writes::GlassEdges, none, depth32, kSamples, nil, error);
+  if (device.device.supportsRaytracing) {
+    id<MTLFunction> fn = [device.library newFunctionWithName:@"glassTraceCompute"];
+    NSError* err = nil;
+    p.glassCompute = fn ? [device.device newComputePipelineStateWithFunction:fn error:&err] : nil;
+  }
   p.transparent = make(device, @"brickVertex", @"transparentFragment", Writes::Transparent, none, depth32, kSamples, brickVertices(), error);
   p.floor = make(device, @"floorVertex", @"floorFragment", Writes::Floor, none, depth32, kSamples, nil, error);
   p.ao = make(device, @"screenVertex", @"aoFragment", Writes::Single, MTLPixelFormatRGBA8Unorm, none, 1, nil, error);
@@ -119,7 +136,7 @@ Pipelines makePipelines(Device& device, std::string& error) {
   sh.compareFunction = MTLCompareFunctionLessEqual;  // the shadow map is an ordinary depth map: nearer the light is less
   sh.sAddressMode = sh.tAddressMode = MTLSamplerAddressModeClampToEdge;
   p.shadowSampler = [device.device newSamplerStateWithDescriptor:sh];
-  p.ok = p.height && p.ao && p.aoBlur && p.mask && p.ids && p.brick && p.glassDepth && p.glassPreview && p.glass && p.transparent && p.floor && p.edges && p.shadow && p.composite && p.depthWrite && p.shadowDepth && p.smooth && p.shadowSampler;
+  p.ok = p.height && p.ao && p.aoBlur && p.mask && p.ids && p.brick && p.glassDepth && p.glassPreview && p.glass && p.glassMask && p.glassEdges && p.transparent && p.floor && p.edges && p.shadow && p.composite && p.depthWrite && p.shadowDepth && p.smooth && p.shadowSampler;
   return p;
 }
 

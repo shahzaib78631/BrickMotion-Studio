@@ -35,13 +35,6 @@ fragment float4 aoFragment(ScreenOut in [[stage_in]], constant AoUniforms& u [[b
   int2 at = cell * 2;
   float4 p = viewPoint(depth, at, u);
   if (p.w == 0) return float4(1, 1, 0, 0);
-  // The surface's normal from its neighbours, each side taking the nearer in depth so a silhouette does not bend it.
-  float4 l = viewPoint(depth, at - int2(1, 0), u), r = viewPoint(depth, at + int2(1, 0), u);
-  float4 t = viewPoint(depth, at - int2(0, 1), u), b = viewPoint(depth, at + int2(0, 1), u);
-  float3 dx = (r.w > 0 && (l.w == 0 || abs(r.z - p.z) < abs(l.z - p.z))) ? r.xyz - p.xyz : p.xyz - l.xyz;
-  float3 dy = (b.w > 0 && (t.w == 0 || abs(b.z - p.z) < abs(t.z - p.z))) ? p.xyz - b.xyz : t.xyz - p.xyz;
-  float3 n = normalize(cross(dx, dy));
-  if (dot(n, -p.xyz) < 0) n = -n;
   float3 world = u.eye.xyz + u.right.xyz * p.x + u.up.xyz * p.y - u.forward.xyz * p.z;
   // The floor: its whole light, from the height map over the model (floor_light.metal), in r.
   // A floor pixel is one the floor drew (shares.a) whose point is on the floor's plane, not a
@@ -54,6 +47,13 @@ fragment float4 aoFragment(ScreenOut in [[stage_in]], constant AoUniforms& u [[b
     if (frame.floorLook.z < 0.5 || fade <= 0.0) return float4(1, 1, 1, 1);
     return float4(mix(1.0, floorLight(world, frame, bins, heights, uint2(cell), frame.switches.y > 0.5, frame.switches.x > 0.5), fade), 1, 1, 1);
   }
+  // The surface's normal from its neighbours, each side taking the nearer in depth so a silhouette does not bend it.
+  float4 l = viewPoint(depth, at - int2(1, 0), u), r = viewPoint(depth, at + int2(1, 0), u);
+  float4 t = viewPoint(depth, at - int2(0, 1), u), b = viewPoint(depth, at + int2(0, 1), u);
+  float3 dx = (r.w > 0 && (l.w == 0 || abs(r.z - p.z) < abs(l.z - p.z))) ? r.xyz - p.xyz : p.xyz - l.xyz;
+  float3 dy = (b.w > 0 && (t.w == 0 || abs(b.z - p.z) < abs(t.z - p.z))) ? p.xyz - b.xyz : t.xyz - p.xyz;
+  float3 n = normalize(cross(dx, dy));
+  if (dot(n, -p.xyz) < 0) n = -n;
   float lit = 1.0;
   if (frame.switches.x > 0.5) {
     float3 worldNormal = normalize(u.right.xyz * n.x + u.up.xyz * n.y - u.forward.xyz * n.z);
@@ -72,7 +72,8 @@ fragment float4 aoFragment(ScreenOut in [[stage_in]], constant AoUniforms& u [[b
     float2 dir = float2(cos(angle), sin(angle));
     float most = 0;
     for (int s = 0; s < 4; s++) {
-      float2 step = dir * reach * (float(s) + fract(jitter * 7.0 + 0.5)) / 4.0;
+      float t = (float(s) + fract(jitter * 7.0 + 0.5)) / 4.0;
+      float2 step = dir * reach * (0.35 * t + 0.65 * t * t);
       float4 q = viewPoint(depth, at + int2(round(step)), u);
       if (q.w == 0) continue;
       // The floor hides nothing: EyeSight's ground is a shadow catcher, so a brick's face sees
@@ -103,6 +104,13 @@ fragment float4 aoBlurFragment(ScreenOut in [[stage_in]], constant AoUniforms& u
   float z = viewDepth(centre, u.lens);
   float4 source = ao.read(uint2(cell));
   bool onFloor = source.b > 0.5;
+  float dL = depth.read(uint2(clamp((cell - int2(1, 0)) * 2, int2(0), fullSize - 1)));
+  float dR = depth.read(uint2(clamp((cell + int2(1, 0)) * 2, int2(0), fullSize - 1)));
+  float dU = depth.read(uint2(clamp((cell - int2(0, 1)) * 2, int2(0), fullSize - 1)));
+  float dD = depth.read(uint2(clamp((cell + int2(0, 1)) * 2, int2(0), fullSize - 1)));
+  float zL = dL > 0.0 ? viewDepth(dL, u.lens) - z : 1e9, zR = dR > 0.0 ? viewDepth(dR, u.lens) - z : 1e9;
+  float zU = dU > 0.0 ? viewDepth(dU, u.lens) - z : 1e9, zD = dD > 0.0 ? viewDepth(dD, u.lens) - z : 1e9;
+  float2 slope = float2(abs(zR) < abs(zL) ? zR : -zL, abs(zD) < abs(zU) ? zD : -zU);
   float2 sum = 0;
   float weight = 0;
   for (int y = -2; y < 2; y++)
@@ -111,8 +119,9 @@ fragment float4 aoBlurFragment(ScreenOut in [[stage_in]], constant AoUniforms& u
       float d = depth.read(uint2(clamp(q * 2, int2(0), fullSize - 1)));
       float4 sample = ao.read(uint2(q));
       bool same = sample.a > 0.5 && (sample.b > 0.5) == onFloor;
-      float w = d > 0.0 && same ? exp(-abs(viewDepth(d, u.lens) - z) / (0.02 * z)) : 0.0;
-      sum += ao.read(uint2(q)).rg * w;
+      float expected = z + dot(slope, float2(x, y));
+      float w = d > 0.0 && same ? (onFloor ? 1.0 : exp(-abs(viewDepth(d, u.lens) - expected) / (0.025 * z))) : 0.0;
+      sum += sample.rg * w;
       weight += w;
     }
   return float4(weight > 0 ? sum / weight : source.rg, source.ba);

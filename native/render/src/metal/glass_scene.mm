@@ -1,8 +1,18 @@
 #import "metal/impl.h"
+#import "metal/path_impl.h"
 #include "bmr/glass_scene.h"
 
 namespace bmr {
 void Renderer::Impl::prepareGlass() {
+  if (device->device.supportsRaytracing && pipelines.glassCompute) {
+    if (glassRevision == lastChange && rtScene && rtScene->impl().instances) return;
+    if (!rtScene) rtScene = PathScene::create(nullptr);
+    if (rtScene) {
+      rtScene->prepare(scene, *meshes);
+      glassRevision = lastChange;
+      return;
+    }
+  }
   if (glassRevision == lastChange && glassNodes) return;
   const auto data = buildGlassScene(scene, *meshes);
   glassNodeCount = static_cast<uint32_t>(data.nodes.size());

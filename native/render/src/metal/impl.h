@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 #include "bmr/cull.h"
+#include "bmr/path_scene.h"
 #include "bmr/render_mesh.h"
 #include "bmr/renderer.h"
 #include "metal/device.h"
@@ -101,7 +102,8 @@ struct CasterMap {
 };
 
 struct Pipelines {
-  id<MTLRenderPipelineState> height = nil, brick = nil, glass = nil, glassDepth = nil, glassPreview = nil, transparent = nil, floor = nil, edges = nil, shadow = nil, composite = nil, mask = nil, ids = nil, ao = nil, aoBlur = nil;
+  id<MTLRenderPipelineState> height = nil, brick = nil, glass = nil, glassDepth = nil, glassPreview = nil, glassMask = nil, glassEdges = nil, transparent = nil, floor = nil, edges = nil, shadow = nil, composite = nil, mask = nil, ids = nil, ao = nil, aoBlur = nil;
+  id<MTLComputePipelineState> glassCompute = nil;
   id<MTLDepthStencilState> depthWrite = nil, depthRead = nil, depthNone = nil, shadowDepth = nil;
   id<MTLSamplerState> smooth = nil, shadowSampler = nil;
   bool ok = false;
@@ -116,6 +118,13 @@ struct Renderer::Impl {
   std::unique_ptr<MeshLibrary> meshes;
   Scene scene;
   Pipelines pipelines;
+  struct PlacementPreview {
+    Group group;
+    bm::Xform pose;
+    bool refused;
+  };
+  std::vector<PlacementPreview> preview;
+  void drawPreview(id<MTLRenderCommandEncoder> encoder, const PlacementPreview& placing, FrameStats& stats);
 
   // Per group: its instances on the GPU, three copies used in turn as frames are, so that a
   // change is never written into a copy the GPU may still be reading. A change is queued for
@@ -125,8 +134,8 @@ struct Renderer::Impl {
   bm::Box liveBounds;  // world space: where the shown pieces are now (the shadow is fitted to it)
   void updateLiveBounds();
   /// The groups changed (a recolour, a rebuild): every per-group array follows the scene again,
-  /// and what was kept of the last frames (maps, picking, glass) is drawn again.
-  void groupsChanged();
+  /// and what was kept of the last frames (picking, glass; maps when `mapsChanged`) is drawn again.
+  void groupsChanged(bool mapsChanged = true);
   /// Parts, instance buffers and change frames for every group, from the scene.
   void makeGroups(uint64_t madeAt);
   std::vector<PartShape> parts;  // per group: its part's bounds at full detail, and its low-detail error
@@ -171,6 +180,7 @@ struct Renderer::Impl {
   id<MTLBuffer> glassNodes = nil, glassTriangles = nil;
   uint32_t glassNodeCount = 0;
   uint64_t glassRevision = UINT64_MAX;
+  std::unique_ptr<PathScene> rtScene;
   void prepareGlass();
 
   FrameBuffer frameUniforms, drawUniforms, visible, floorBins;

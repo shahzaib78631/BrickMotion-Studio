@@ -1,5 +1,6 @@
 // One frame: which instances, at which detail, in which order, into which targets.
 #import "metal/impl.h"
+#import "metal/path_impl.h"
 
 #include <chrono>
 #include <cmath>
@@ -46,12 +47,20 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     const Group& g = scene.groups[batch.group];
     return g.material.transparent() && !g.placeholder;
   });
+  const bool placeholderInView = std::any_of(seen.begin(), seen.end(), [&](const Batch& batch) {
+    return scene.groups[batch.group].placeholder;
+  });
   if (glassInView && options.refractiveGlass) prepareGlass();
+  const bool rtGlassInView = glassInView && options.refractiveGlass && !placeholderInView && preview.empty() && rtScene && rtScene->impl().instances && pipelines.glassCompute;
+  const bool fallbackGlassInView = glassInView && options.refractiveGlass && !rtGlassInView && glassNodes && glassTriangles;
+  const bool oitInView = !preview.empty() || placeholderInView || (glassInView && !rtGlassInView && !fallbackGlassInView);
+  const bool keepOitTargets = oitInView || rtGlassInView;
 
   // What casts, into the key light's depth map and the height map over the model: every opaque
-  // piece shown, in view or not (one out of view can shadow one in it), at low detail without
-  // studs unless a detail is forced (a shadow does not show a stud's sides).
-  const int casterDetail = forced ? options.forceDetail : static_cast<int>(Detail::Shadow);
+  // piece shown, in view or not (one out of view can shadow one in it). Models up to ~1000 pieces
+  // keep 8-sided studs in the shadow map so studs cast true shadows on brick tops; larger scenes
+  // use stud-free Detail::Shadow to stay well within the 60-120 fps budget.
+  const int casterDetail = forced ? options.forceDetail : static_cast<int>(scene.where.size() <= 1000 ? Detail::Low : Detail::Shadow);
   LightRig rig = studioLights(camera, options.lightsFollowCamera && !getenv("BM_LIGHTS_FIXED"));  // DEBUG HOOK: BM_LIGHTS_FIXED
   if (const char* turn = getenv("BM_RIG_TURN")) {  // DEBUG HOOK: the rig turned about the vertical (degrees)
     const double t = atof(turn) * M_PI / 180, c = std::cos(t), sn = std::sin(t);
@@ -219,7 +228,8 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   fu.rig = simd_make_float4(hookWorld, kRigSinSquared, getenv("BM_AO_POWER") ? static_cast<float>(atof(getenv("BM_AO_POWER"))) : kAoBrickPower, 0);  // DEBUG HOOK
   fu.background = simd_make_float4(options.background[0], options.background[1], options.background[2], 1);
   fu.viewport = simd_make_float4(static_cast<float>(width), static_cast<float>(height), 1.0f / static_cast<float>(width), 1.0f / static_cast<float>(height));
-  fu.switches = simd_make_float4(options.shadows ? 1 : 0, options.ambientOcclusion ? 1 : 0, getenv("BM_DEBUG_VIEW") ? static_cast<float>(atof(getenv("BM_DEBUG_VIEW"))) : 0, 0);  // DEBUG HOOK
+  const float glassMode = rtGlassInView ? 2.0f : oitInView ? 0.0f : 1.0f;
+  fu.switches = simd_make_float4(options.shadows ? 1 : 0, options.ambientOcclusion ? 1 : 0, getenv("BM_DEBUG_VIEW") ? static_cast<float>(atof(getenv("BM_DEBUG_VIEW"))) : 0, glassMode);  // DEBUG HOOK
   const double floorY = (b.empty() ? 0.0 : b.max.y - scene.origin.y) + kFloorLift;
   fu.floorPlane = simd_make_float4(static_cast<float>(floorY), static_cast<float>(kFloorExtent * diagonal), static_cast<float>(options.shadows ? keyShown.texel : key.texel), kShadowBias);
   fu.floorCentre = simd_make_float4(static_cast<float>(middle.x - scene.origin.x), static_cast<float>(middle.z - scene.origin.z), kFloorShadow, kOitDepthScale);
@@ -253,6 +263,16 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
           }
         bins.weight[i][d][b] = static_cast<float>(inside) / 16.0f;
       }
+    for (int turn = 0; turn < 4; turn++) {
+      float total = 0.0f;
+      for (int d = 0; d < 12; d++)
+        for (int b = 0; b < 16; b++) total += bins.weight[i][d * 4 + turn][b];
+      if (total > 0.0f) {
+        const float inv = 1.0f / total;
+        for (int d = 0; d < 12; d++)
+          for (int b = 0; b < 16; b++) bins.weight[i][d * 4 + turn][b] *= inv;
+      }
+    }
     // A level floor's light from it: E diskLight(cos) / pi, as brick.metal's diskLight has it.
     const double c = std::max(-1.0, std::min(1.0, -t.y)), sinSq = kRigSinSquared;
     double disk = std::max(c, 0.0);
@@ -362,11 +382,12 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     MTLRenderPassDescriptor* pass = [MTLRenderPassDescriptor new];
     id<MTLTexture> ms[4] = {colorMs, accumMs, revealMs, ambientMs}, resolved[4] = {color, accum, reveal, ambient};
     for (int i = 0; i < 4; i++) {
+      const bool skipOit = (i == 1 || i == 2) && !keepOitTargets;
       pass.colorAttachments[i].texture = ms[i];
-      pass.colorAttachments[i].resolveTexture = resolved[i];
-      pass.colorAttachments[i].loadAction = MTLLoadActionClear;
+      pass.colorAttachments[i].resolveTexture = skipOit ? nil : resolved[i];
+      pass.colorAttachments[i].loadAction = skipOit ? MTLLoadActionDontCare : MTLLoadActionClear;
       pass.colorAttachments[i].clearColor = MTLClearColorMake(0, 0, 0, 0);  // nothing drawn: no coverage, no optical depth, no ambient share
-      pass.colorAttachments[i].storeAction = MTLStoreActionMultisampleResolve;
+      pass.colorAttachments[i].storeAction = skipOit ? MTLStoreActionDontCare : MTLStoreActionMultisampleResolve;
     }
     pass.depthAttachment.texture = depthMs;
     pass.depthAttachment.loadAction = MTLLoadActionClear;
@@ -415,7 +436,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     [enc setDepthStencilState:pipelines.depthWrite];
     bricks(Kind::Opaque);
 
-    if (options.floor) {
+    if (options.floor && eye.y < floorY) {
       [enc setCullMode:MTLCullModeNone];
       [enc setRenderPipelineState:pipelines.floor];
       [enc setDepthStencilState:pipelines.depthWrite];  // in the depth buffer, so ambient occlusion sees it
@@ -430,7 +451,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     auto drawOutlines = [&](bool glass) {
       if (!options.edges) return;
       [enc setCullMode:MTLCullModeNone];
-      [enc setRenderPipelineState:pipelines.edges];
+      [enc setRenderPipelineState:(glass && rtGlassInView) ? pipelines.glassEdges : pipelines.edges];
       [enc setDepthStencilState:pipelines.depthRead];
       const float nearer = kEdgeNearer;
       [enc setVertexBytes:&nearer length:sizeof nearer atIndex:5];
@@ -454,7 +475,11 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
 
     [enc setCullMode:MTLCullModeBack];
     [enc setDepthStencilState:pipelines.depthRead];
-    if (glassInView && options.refractiveGlass && glassNodes && glassTriangles) {
+    if (rtGlassInView) {
+      [enc setDepthStencilState:pipelines.depthWrite];
+      [enc setRenderPipelineState:pipelines.glassMask];
+      bricks(Kind::Glass);
+    } else if (fallbackGlassInView) {
       [enc setDepthStencilState:pipelines.depthWrite];
       // Resolve the nearest glass surface before running the expensive transport shader.
       [enc setRenderPipelineState:pipelines.glassDepth];
@@ -477,6 +502,40 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     [enc setRenderPipelineState:pipelines.transparent];
     bricks(Kind::Placeholder);
     drawOutlines(true);
+    for (const PlacementPreview& ghost : preview) drawPreview(enc, ghost, stats);
+    [enc endEncoding];
+  }
+
+  // Instanced compute ray tracing for glass pixels only (4x MSAA coverage in reveal.a).
+  if (rtGlassInView) {
+    struct GlassRtUniforms {
+      simd_float4 eye, right, up, forward;
+      simd_uint4 size;
+    } rt{};
+    const bm::Vec3 f = normalized(camera.target - camera.eye);
+    bm::Vec3 r = cross(f, camera.up);
+    if (!(bm::length(r) > 1e-9)) r = cross(f, std::abs(f.x) < 0.9 ? bm::Vec3{1, 0, 0} : bm::Vec3{0, 0, 1});
+    r = normalized(r);
+    const bm::Vec3 up = cross(r, f);
+    rt.eye = simd_make_float4(static_cast<float>(eye.x), static_cast<float>(eye.y), static_cast<float>(eye.z), static_cast<float>(std::tan(camera.fovY / 2)));
+    rt.right = simd_make_float4(static_cast<float>(r.x), static_cast<float>(r.y), static_cast<float>(r.z), static_cast<float>(camera.aspect));
+    rt.up = simd_make_float4(static_cast<float>(up.x), static_cast<float>(up.y), static_cast<float>(up.z), 0);
+    rt.forward = simd_make_float4(static_cast<float>(f.x), static_cast<float>(f.y), static_cast<float>(f.z), 0);
+    rt.size = simd_make_uint4(static_cast<uint32_t>(width), static_cast<uint32_t>(height), 0, 0);
+    PathScene::Impl& ps = rtScene->impl();
+    id<MTLComputeCommandEncoder> enc = [commands computeCommandEncoder];
+    [enc setComputePipelineState:pipelines.glassCompute];
+    [enc setBuffer:frameBuffer offset:0 atIndex:0];
+    [enc setBytes:&rt length:sizeof rt atIndex:1];
+    [enc setAccelerationStructure:ps.instances atBufferIndex:2];
+    if (!ps.resources.empty()) [enc useResources:ps.resources.data() count:ps.resources.size() usage:MTLResourceUsageRead];
+    [enc setBuffer:ps.instanceTable offset:0 atIndex:3];
+    [enc setBuffer:ps.meshTable offset:0 atIndex:4];
+    [enc setBuffer:ps.materialTable offset:0 atIndex:5];
+    [enc setTexture:reveal atIndex:0];
+    [enc setTexture:shadowTexture atIndex:1];
+    [enc setSamplerState:pipelines.shadowSampler atIndex:0];
+    [enc dispatchThreads:MTLSizeMake(static_cast<NSUInteger>(width), static_cast<NSUInteger>(height), 1) threadsPerThreadgroup:MTLSizeMake(8, 8, 1)];
     [enc endEncoding];
   }
 

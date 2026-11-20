@@ -338,3 +338,158 @@ kernel void pathTrace(constant PtUniforms& u [[buffer(0)]], metal::raytracing::i
   albedoSum[pixel] = alb;
   normalSum[pixel] = nor;
 }
+
+// Fast live refractive glass: 4x MSAA mask/depth/outlines in the main pass, followed by 1x
+// instanced ray tracing in compute (supported on Apple Silicon M1+ via PathScene's BLAS/TLAS).
+struct GlassMaskOut {
+  float4 reveal [[color(2)]];
+  float4 shares [[color(3)]];
+};
+
+fragment GlassMaskOut glassMaskFragment() {
+  GlassMaskOut out;
+  out.reveal = float4(0.0, 0.0, 0.0, 1.0);
+  out.shares = float4(0.0);
+  return out;
+}
+
+struct GlassEdgeOut {
+  float4 accum [[color(1)]];
+};
+
+fragment GlassEdgeOut glassEdgeFragment(EdgeOut in [[stage_in]], constant DrawUniforms& draw [[buffer(2)]]) {
+  float a = draw.edge.a * in.fade;
+  GlassEdgeOut out;
+  out.accum = float4(draw.edge.rgb * a, a);
+  return out;
+}
+
+struct GlassRtUniforms {
+  float4 eye;      // xyz, w: tan(fovY / 2)
+  float4 right;    // xyz, w: aspect
+  float4 up;
+  float4 forward;
+  uint4 size;      // width, height, 0, 0
+};
+
+inline PtHit glassRtTrace(float3 origin, float3 dir, metal::raytracing::instance_acceleration_structure scene,
+                          device const PtInstance* instances, device const PtMesh* meshes) {
+  PtHit out;
+  out.hit = false;
+  metal::raytracing::intersector<metal::raytracing::triangle_data, metal::raytracing::instancing> isect;
+  isect.assume_geometry_type(metal::raytracing::geometry_type::triangle);
+  isect.force_opacity(metal::raytracing::forced_opacity::opaque);
+  metal::raytracing::ray r(origin, dir, 0.002f, INFINITY);
+  auto res = isect.intersect(r, scene, 0xFFu);
+  if (res.type != metal::raytracing::intersection_type::triangle) return out;
+  const device PtInstance& in = instances[res.instance_id];
+  const device PtMesh& mesh = meshes[in.structure];
+  const uint i0 = mesh.indices[res.primitive_id * 3], i1 = mesh.indices[res.primitive_id * 3 + 1], i2 = mesh.indices[res.primitive_id * 3 + 2];
+  const device PtVertex& a = mesh.vertices[i0];
+  const device PtVertex& b = mesh.vertices[i1];
+  const device PtVertex& c = mesh.vertices[i2];
+  const float2 uv = res.triangle_barycentric_coord;
+  float3 n = float3(a.n) * (1.0f - uv.x - uv.y) + float3(b.n) * uv.x + float3(c.n) * uv.y;
+  float3 g = cross(float3(b.p) - float3(a.p), float3(c.p) - float3(a.p));
+  float3 ns = in.ncol[0].xyz * n.x + in.ncol[1].xyz * n.y + in.ncol[2].xyz * n.z;
+  float3 ng = in.ncol[0].xyz * g.x + in.ncol[1].xyz * g.y + in.ncol[2].xyz * g.z;
+  out.hit = true;
+  out.t = res.distance;
+  out.ng = length(ng) > 0.0f ? normalize(ng) : -dir;
+  out.ns = length(ns) > 0.0f ? normalize(ns) : out.ng;
+  out.material = in.material;
+  out.color = a.color;
+  return out;
+}
+
+kernel void glassTraceCompute(constant FrameUniforms& frame [[buffer(0)]], constant GlassRtUniforms& rt [[buffer(1)]],
+                              metal::raytracing::instance_acceleration_structure scene [[buffer(2)]],
+                              device const PtInstance* instances [[buffer(3)]], device const PtMesh* meshes [[buffer(4)]],
+                              device const PtMaterial* materials [[buffer(5)]],
+                              texture2d<float, access::read_write> reveal [[texture(0)]],
+                              depth2d<float> shadowMap [[texture(1)]],
+                              sampler shadowSampler [[sampler(0)]],
+                              uint2 gid [[thread_position_in_grid]]) {
+  if (gid.x >= rt.size.x || gid.y >= rt.size.y) return;
+  float cov = reveal.read(gid).a;
+  if (cov <= 1e-4f) return;
+  const float sx = (float(gid.x) + 0.5f) / float(rt.size.x) * 2.0f - 1.0f;
+  const float sy = 1.0f - (float(gid.y) + 0.5f) / float(rt.size.y) * 2.0f;
+  float3 direction = normalize(rt.forward.xyz + rt.right.xyz * (sx * rt.eye.w * rt.right.w) + rt.up.xyz * (sy * rt.eye.w));
+  GlassRay pending[12];
+  int size = 1;
+  pending[0] = GlassRay{rt.eye.xyz, direction, float3(1.0f), float3(0.0f), 0u, false};
+  float3 result = float3(0.0f);
+  for (int work = 0; work < 18 && size > 0; ++work) {
+    GlassRay ray = pending[--size];
+    if (max(max(ray.weight.r, ray.weight.g), ray.weight.b) < 0.01f) continue;
+    PtHit hit = glassRtTrace(ray.origin, ray.direction, scene, instances, meshes);
+    float floorDistance = frame.glass.w > 0.5f && ray.direction.y > 1e-5f ? (frame.floorPlane.x - ray.origin.y) / ray.direction.y : -1.0f;
+    if (floorDistance > 0.0f && (!hit.hit || floorDistance < hit.t)) {
+      if (work == 0) { reveal.write(float4(0.0f), gid); return; }
+      result += ray.weight * (ray.reflected ? float3(frame.rig.x) : frame.background.rgb * frame.glass.y);
+      continue;
+    }
+    if (!hit.hit) {
+      if (work == 0) { reveal.write(float4(0.0f), gid); return; }
+      result += ray.weight * (ray.reflected ? glassEnvironment(ray.direction, frame) : frame.background.rgb * frame.glass.y);
+      continue;
+    }
+    ray.weight *= exp(-ray.absorption * hit.t);
+    PtMaterial mat = materials[hit.material];
+    float3 base = hit.color != 0u ? ptLinear(hit.color) : mat.base.rgb;
+    float3 point = ray.origin + ray.direction * hit.t;
+    bool entering = dot(ray.direction, hit.ng) < 0.0f;
+    float3 geometricFacing = entering ? hit.ng : -hit.ng;
+    float3 facing = entering ? hit.ns : -hit.ns;
+    if (dot(facing, -ray.direction) < 0.01f || dot(facing, geometricFacing) < 0.25f)
+      facing = geometricFacing;
+    if (mat.surface.w < 0.5f) {
+      if (work == 0) { reveal.write(float4(0.0f), gid); return; }
+      Lit light = shade(base, mat.surface.x, mat.surface.y, mat.surface.z, facing, -ray.direction, point, frame, true, gid, shadowMap, shadowSampler);
+      float3 litColor = light.color;
+      if (!ray.reflected) {
+        PtHit cover = glassRtTrace(point + geometricFacing * 0.02f, float3(0.0f, -1.0f, 0.0f), scene, instances, meshes);
+        if (cover.hit) {
+          PtMaterial cm = materials[cover.material];
+          if (cm.surface.w >= 0.5f && cm.surface.w < 1.5f) {
+            float3 cbase = cover.color != 0u ? ptLinear(cover.color) : cm.base.rgb;
+            litColor *= exp(-frame.glass.x * saturate(1.0f - cbase) * 0.65f) * 0.62f;
+          } else {
+            litColor *= 0.55f;
+          }
+        }
+      }
+      result += ray.weight * litColor;
+      continue;
+    }
+    if (ray.depth >= 10u) continue;
+    float eta = entering ? 1.0f / frame.glass.z : frame.glass.z;
+    GlassInterface boundary = glassInterface(ray.direction, facing, eta);
+    float3 reflected = normalize(reflect(ray.direction, facing));
+    if ((boundary.transmits && dot(boundary.transmitted, geometricFacing) >= -1e-4f) ||
+        dot(reflected, geometricFacing) <= 1e-4f) {
+      facing = geometricFacing;
+      boundary = glassInterface(ray.direction, facing, eta);
+      reflected = normalize(reflect(ray.direction, facing));
+    }
+    float3 reflectionWeight = ray.weight * boundary.fresnel;
+    if (!boundary.transmits) {
+      if (size < 12 && max(max(reflectionWeight.r, reflectionWeight.g), reflectionWeight.b) >= 0.01f)
+        pending[size++] = GlassRay{point + reflected * 0.01f, reflected, reflectionWeight, ray.absorption, ray.depth + 1u, true};
+    } else {
+      if (max(max(reflectionWeight.r, reflectionWeight.g), reflectionWeight.b) >= 0.01f) {
+        if (ray.depth < 2u && size < 11) {
+          pending[size++] = GlassRay{point + reflected * 0.01f, reflected, reflectionWeight, ray.absorption, ray.depth + 1u, true};
+        } else {
+          result += reflectionWeight * glassEnvironment(reflected, frame);
+        }
+      }
+      if (size < 12) {
+        float3 absorption = entering ? frame.glass.x * saturate(1.0f - base) / 4.5f : float3(0.0f);
+        pending[size++] = GlassRay{point + boundary.transmitted * 0.01f, boundary.transmitted, ray.weight * (1.0f - boundary.fresnel), absorption, ray.depth + 1u, ray.reflected};
+      }
+    }
+  }
+  reveal.write(float4(result, cov), gid);
+}

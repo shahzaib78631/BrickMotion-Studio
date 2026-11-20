@@ -127,6 +127,11 @@ fragment OpaqueOut brickFragment(BrickOut in [[stage_in]], constant FrameUniform
                                   sampler shadowSampler [[sampler(1)]]) {
   float3 base = in.fixedColor.a > 0.5 && draw.surface.w < 0.5 ? in.fixedColor.rgb : draw.base.rgb;
   float3 n = normalize(in.normal), v = normalize(frame.eye.xyz - in.world);
+  float3 ng = cross(dfdy(in.world), dfdx(in.world));
+  float ng2 = dot(ng, ng);
+  ng = ng2 > 1e-16 ? ng * rsqrt(ng2) : n;
+  if (dot(ng, n) < 0.0) ng = -ng;
+  if (dot(n, ng) < 0.96) n = normalize(mix(ng, n, 0.15));
   Lit lit = shade(base, draw.surface.x, draw.surface.y, draw.surface.z, n, v, in.world, frame, false, uint2(in.position.xy), shadowMap, shadowSampler);
   OpaqueOut out;
   out.color = float4(lit.color, 1.0);  // rgb times coverage, coverage

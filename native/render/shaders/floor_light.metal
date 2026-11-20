@@ -45,6 +45,7 @@ float floorLight(float3 world, constant FrameUniforms& frame, constant FloorBins
   // hides from the underside seen at the stretch's far end to the top seen at its near end.
   float ratio = pow(far / near, 1.0 / float(steps)), spread = sqrt(ratio);
   uint masks[12];
+  uint anyMask = 0;
   for (int d = 0; d < 12; d++) {
     float a = (float(d) + float(turn) / 4.0) * (6.2831853 / 12.0);
     float2 dir = float2(cos(a), sin(a));
@@ -59,38 +60,40 @@ float floorLight(float3 world, constant FrameUniforms& frame, constant FloorBins
       if (top < 0.5) continue;  // nothing stands here
       float inner = r / spread, outer = r * spread;
       float s0 = low * low / (low * low + outer * outer), s1 = top * top / (top * top + inner * inner);
-      // The bins whose middles lie between.
-      int b0 = int(ceil(s0 * 16.0 - 0.5)), b1 = min(int(floor(s1 * 16.0 - 0.5)), 15);
+      // The bins whose middles lie between, dithered across the 4x4 Bayer tile so low elevations
+      // below the first bin's centre still cast their true fractional shadow.
+      float binJitter = (float(tile) + 0.5) / 16.0;
+      int b0 = max(int(ceil(s0 * 16.0 - binJitter)), 0), b1 = min(int(floor(s1 * 16.0 - binJitter)), 15);
       if (b1 >= b0) mask |= ((1u << uint(b1 - b0 + 1)) - 1u) << uint(b0);
     }
     masks[d] = mask;
+    anyMask |= mask;
   }
+  if (anyMask == 0u) return 1.0;
   // The four lights' shadow, as a share of their light on a bare floor; then the sky's share.
+  // FloorBins::weight is normalized per (light, turn) on the CPU so its total over 12x16 bins is 1.
+  float4 hidden = float4(0.0);
+  float clear = 192.0;
+  for (int d = 0; d < 12; d++) {
+    uint m = masks[d];
+    if (m == 0u) continue;
+    clear -= float(popcount(m));
+    int row = d * 4 + int(turn);
+    while (m != 0u) {
+      uint b = ctz(m);
+      hidden += float4(bins.weight[0][row][b], bins.weight[1][row][b], bins.weight[2][row][b], bins.weight[3][row][b]);
+      m &= m - 1u;
+    }
+  }
   float light = 0, whole = 0;
   for (int i = 0; i < 4; i++) {
     float lit = bins.lit[i];
     if (lit <= 0) continue;
     whole += lit;
-    if ((i == 0 && !key) || (i > 0 && !sky)) {
-      light += lit;
-      continue;
-    }
-    float seen = 0, all = 0;
-    for (int d = 0; d < 12; d++) {
-      int row = d * 4 + int(turn);
-      for (int b = 0; b < 16; b++) {
-        float w = bins.weight[i][row][b];
-        all += w;
-        if (!(masks[d] & (1u << uint(b)))) seen += w;
-      }
-    }
-    light += all > 0 ? lit * seen / all : lit;
+    if ((i == 0 && !key) || (i > 0 && !sky)) light += lit;
+    else light += lit * saturate(1.0 - hidden[i]);
   }
   float out = whole > 0 ? light / whole : 1.0;
-  if (sky) {
-    float clear = 0;
-    for (int d = 0; d < 12; d++) clear += float(16 - popcount(masks[d]));
-    out *= pow(clear / 192.0, frame.floorLook.w);
-  }
+  if (sky) out *= pow(clear / 192.0, frame.floorLook.w);
   return out;
 }

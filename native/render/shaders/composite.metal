@@ -92,22 +92,31 @@ fragment float4 compositeFragment(ScreenOut in [[stage_in]], constant FrameUnifo
   float floorCoverage = min(saturate(share.g), 1.0 - coverage);
   float freeCoverage = max(1.0 - coverage - floorCoverage, 0.0);
   float3 behind = solid + frame.background.rgb * (freeCoverage + floorCoverage * floorAo);
-  // The transparent layers: they let through exp(-depth) of what is behind (rgb what they
-  // absorb, a what they cover), and cover it with their weighted mean colour.
-  float4 sum = accum.read(at);
-  float4 depthOf = reveal.read(at);
-  // The floor or the background seen through glass: at the floor's own level there, unshadowed
-  // (tolerances.h kFloorThroughGlass). The floor there is floor (share.a) that glass has cleared
-  // share.g on; the background, what is neither floor nor opaque where something transparent is
-  // in front: at least one glass wall face on (the least a wall covers), roughly, as
-  // placeholders count too.
-  float f0 = (frame.glass.z - 1.0) / (frame.glass.z + 1.0);
-  f0 *= f0;
-  float glassIn = saturate(depthOf.a / -log(1.0 - 2.0 * f0 / (1.0 + f0)));
-  float through = saturate(share.a - share.g) + saturate(1.0 - c.a - share.a) * glassIn;
-  behind -= frame.background.rgb * through * (1.0 - frame.glass.y);
-  float3 mean = sum.a > 1e-6 ? sum.rgb / sum.a : float3(0);
-  float3 out = behind * exp(-depthOf.rgb - depthOf.a) + mean * (1.0 - exp(-depthOf.a));
+  float3 out = behind;
+  if (frame.switches.w > 1.5) {
+    // Compute-raytraced glass: reveal holds (traced rgb, 4x MSAA coverage), accum holds glass outlines.
+    float4 glass = reveal.read(at);
+    if (glass.a > 1e-4) out = mix(out, saturate(glass.rgb), saturate(glass.a));
+    float4 edge = accum.read(at);
+    out = edge.rgb + out * (1.0 - edge.a);
+  } else if (frame.switches.w < 0.5) {
+    // The transparent layers: they let through exp(-depth) of what is behind (rgb what they
+    // absorb, a what they cover), and cover it with their weighted mean colour.
+    float4 sum = accum.read(at);
+    float4 depthOf = reveal.read(at);
+    // The floor or the background seen through glass: at the floor's own level there, unshadowed
+    // (tolerances.h kFloorThroughGlass). The floor there is floor (share.a) that glass has cleared
+    // share.g on; the background, what is neither floor nor opaque where something transparent is
+    // in front: at least one glass wall face on (the least a wall covers), roughly, as
+    // placeholders count too.
+    float f0 = (frame.glass.z - 1.0) / (frame.glass.z + 1.0);
+    f0 *= f0;
+    float glassIn = saturate(depthOf.a / -log(1.0 - 2.0 * f0 / (1.0 + f0)));
+    float through = saturate(share.a - share.g) + saturate(1.0 - c.a - share.a) * glassIn;
+    behind -= frame.background.rgb * through * (1.0 - frame.glass.y);
+    float3 mean = sum.a > 1e-6 ? sum.rgb / sum.a : float3(0);
+    out = behind * exp(-depthOf.rgb - depthOf.a) + mean * (1.0 - exp(-depthOf.a));
+  }
   // The selection's outline: just outside where the selected pieces are, within its width.
   int width = int(frame.selection.w);
   if (width > 0 && mask.read(at).r < 0.5) {

@@ -90,6 +90,13 @@ void PathScene::Impl::buildParts(const std::vector<std::string>& parts, MeshLibr
   [encoder endEncoding];
   [commands commit];
   [commands waitUntilCompleted];
+  resources.clear();
+  resources.reserve(structures.size() * 3);
+  for (const PartStructure& p : structures) {
+    resources.push_back(p.structure);
+    resources.push_back(p.vertices);
+    resources.push_back(p.indices);
+  }
   stats.partStructuresBuilt += static_cast<uint32_t>(fresh.size());
 }
 

@@ -125,17 +125,12 @@ struct MeshLibrary::State {
   const bm::Model* model;
   bm::ldraw::PartCache& full;
   bm::ldraw::PartCache& low;
-  std::unique_ptr<bm::ldraw::PartCache> rounded; // high-resolution display primitives, independent of planning
   std::unique_ptr<bm::ldraw::PartCache> bare;  // as `low`, without studs: for Detail::Shadow
   std::mutex mutex;
   std::map<std::pair<std::string, int>, std::shared_ptr<const RenderMesh>> made;
 };
 
-MeshLibrary::MeshLibrary(const bm::Model& model, bm::ldraw::PartCache& full, bm::ldraw::PartCache& low) : state_(new State{&model, full, low, nullptr, nullptr, {}, {}}) {
-  auto display = full.options();
-  display.hiResPrimitives = true;
-  display.lowResPrimitives = false;
-  state_->rounded = std::make_unique<bm::ldraw::PartCache>(full.library(), full.directory(), display);
+MeshLibrary::MeshLibrary(const bm::Model& model, bm::ldraw::PartCache& full, bm::ldraw::PartCache& low) : state_(new State{&model, full, low, nullptr, {}, {}}) {
   bm::ldraw::FlattenOptions bare = low.options();
   bare.noStuds = true;
   state_->bare = std::make_unique<bm::ldraw::PartCache>(low.library(), low.directory(), bare);
@@ -160,10 +155,8 @@ std::shared_ptr<const RenderMesh> MeshLibrary::get(const std::string& part, Deta
   // Built outside the lock: two threads may build the same mesh once each, and the first is kept.
   std::shared_ptr<const RenderMesh> mesh;
   if (detail == Detail::Full) {
-    RenderMesh rounded = buildRenderMesh(*s.model->mesh(part, *s.rounded), s.model->library().colors());
-    roundRenderEdges(rounded, kRoundedEdgeWidth);
-    softenStudRoots(rounded, kStudRootWidth);
-    mesh = std::make_shared<const RenderMesh>(std::move(rounded));
+    RenderMesh fullMesh = buildRenderMesh(*s.model->mesh(part, s.full), s.model->library().colors());
+    mesh = std::make_shared<const RenderMesh>(std::move(fullMesh));
   } else {
     const std::shared_ptr<const RenderMesh> whole = get(part, Detail::Full);
     if (detail == Detail::Box) {
@@ -177,10 +170,11 @@ std::shared_ptr<const RenderMesh> MeshLibrary::get(const std::string& part, Deta
     } else {
       mesh = whole;
       if (!whole->empty() && !s.model->library().isInline(part)) {
-        RenderMesh coarse = buildRenderMesh(*s.low.get(part), s.model->library().colors());
-        roundRenderEdges(coarse, kRoundedEdgeWidth);
-        softenStudRoots(coarse, kStudRootWidth);
-        if (!coarse.empty() && coarse.indices.size() < whole->indices.size()) mesh = std::make_shared<const RenderMesh>(std::move(coarse));
+        const auto lowFlat = s.low.get(part), fullFlat = s.full.get(part);
+        if (lowFlat && fullFlat && lowFlat->triangles.size() < fullFlat->triangles.size()) {
+          RenderMesh coarse = buildRenderMesh(*lowFlat, s.model->library().colors());
+          if (!coarse.empty() && coarse.indices.size() < whole->indices.size()) mesh = std::make_shared<const RenderMesh>(std::move(coarse));
+        }
       }
     }
   }

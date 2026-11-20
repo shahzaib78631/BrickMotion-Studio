@@ -15,11 +15,10 @@ namespace bmr {
 
 struct FrameOptions {
   bool edges = true, shadows = true, ambientOcclusion = true, floor = true;
-  /// Glass ray-traced through every wall, cavity and neighbour (glass_transport.metal). Off
-  /// unless asked for (bmview and bmshot --raytraced-glass): it costs many times the frame, and
-  /// its scene is built again over all the model's triangles whenever a piece moves. Off, glass
-  /// is the fast preview.
-  bool refractiveGlass = false;
+  /// Glass ray-traced through every wall, cavity and neighbour (glass_transport.metal).
+  /// On by default: uses hardware/Metal ray queries for path-traced refraction, internal
+  /// reflection and wall absorption; off falls back to the fast OIT preview.
+  bool refractiveGlass = true;
   bool cull = true;      ///< leave out what is not in view
   bool lightsFollowCamera = false;  ///< the light rig stays fixed to the model, as EyeSight's BUILD_FL does, or turns with the camera's heading
   int forceDetail = -1;  ///< -1: by size on screen; 0, 1, 2: that level of detail for everything (tests, benchmark)
@@ -42,6 +41,12 @@ struct FrameStats {
   bool submitted = false;            ///< the frame went to the GPU: false with nothing to draw into (no size, or a drawable that has not caught up with a resize)
   bool mapWhole = false;             ///< a shadow or height map was drawn whole before this frame (not over frames)
   bool settling = false;             ///< a map is being drawn over frames (FrameOptions::mapTrianglesPerFrame): draw again, even with nothing changed
+};
+
+struct PlacementGhost {
+  std::string part;
+  int color;
+  bm::Xform pose;
 };
 
 class Renderer {
@@ -69,7 +74,8 @@ class Renderer {
 
   /// Poses the pieces as the timeline has them at `frame` (clamped to the timeline); only the
   /// instances that change are sent to the GPU. The plan and timeline are read, not kept.
-  void setFrame(const bm::plan::Plan& plan, const bm::plan::Timeline& timeline, double frame);
+  void setFrame(const bm::plan::Plan& plan, const bm::plan::Timeline& timeline, double frame,
+                const std::vector<PiecePose>& keyed = {});
   /// Every piece back where the model has it, shown.
   void setRest();
   /// The model changed. With `moved` and the same piece count, only those instances are
@@ -90,6 +96,10 @@ class Renderer {
   /// Exactly these pieces are selected (outlined in the accent colour, even where hidden
   /// behind others). Unknown pieces are ignored.
   void select(const std::vector<uint32_t>& pieces);
+  /// Transient parts with depth-tested translucency or a refused-pose outline. Drawn outside
+  /// the scene, so they cannot affect picking, framing, shadows, or the model.
+  void setPlacementPreview(const std::vector<PlacementGhost>& ghosts, bool refused);
+  void clearPlacementPreview();
   /// World space: the selected pieces where they are shown now (as the last setFrame or
   /// setRest put them), hidden ones left out. Empty when none is shown.
   bm::Box selectionBounds() const;

@@ -62,30 +62,60 @@ GlassScene buildGlassScene(const Scene& scene, MeshLibrary& meshes) {
       }
     }
   }
-  // Mark coincident planes belonging to multiple pieces. Metal may choose either
-  // primitive at an exact tie; those hits use the deterministic narrow CPU-BVH traversal.
-  std::map<std::array<int64_t, 4>, std::map<float, bm::Box>> planes;
+  // Mark coincident planes belonging to multiple pieces using a flat sorted key list.
+  // Metal may choose either primitive at an exact tie; those hits use the narrow CPU-BVH traversal.
+  struct PlaneEntry {
+    std::array<int64_t, 4> key;
+    uint32_t piece;
+    uint32_t tri;
+    bm::Box bounds;
+  };
+  std::vector<PlaneEntry> entries;
+  entries.reserve(out.triangles.size());
   auto plane = [](const GlassTriangle& t) {
     Vec3 n = normalized(cross(point(t.p[1]) - point(t.p[0]), point(t.p[2]) - point(t.p[0])));
     if (n.x < -1e-5 || (std::abs(n.x) < 1e-5 && n.y < -1e-5) || (std::abs(n.x) < 1e-5 && std::abs(n.y) < 1e-5 && n.z < 0)) n = n * -1;
     return std::array<int64_t, 4>{std::llround(n.x * 10000), std::llround(n.y * 10000), std::llround(n.z * 10000), std::llround(dot(n, point(t.p[0])) * 1000)};
   };
-  for (const auto& t : out.triangles) {
-    auto& bounds = planes[plane(t)][t.n[0][3]];
-    for (const auto& p : t.p) bounds.grow(point(p));
+  for (uint32_t idx = 0; idx < out.triangles.size(); ++idx) {
+    const auto& t = out.triangles[idx];
+    bm::Box b;
+    for (const auto& p : t.p) b.grow(point(p));
+    entries.push_back({plane(t), static_cast<uint32_t>(t.n[0][3]), idx, b});
   }
-  for (auto& t : out.triangles) {
-    bm::Box bounds;
-    for (const auto& p : t.p) bounds.grow(point(p));
-    for (const auto& [piece, other] : planes.at(plane(t))) {
-      if (piece == t.n[0][3]) continue;
-      const double x = std::min(bounds.max.x, other.max.x) - std::max(bounds.min.x, other.min.x);
-      const double y = std::min(bounds.max.y, other.max.y) - std::max(bounds.min.y, other.min.y);
-      const double z = std::min(bounds.max.z, other.max.z) - std::max(bounds.min.z, other.min.z);
-      if (x >= -0.001 && y >= -0.001 && z >= -0.001 && int(x > 0.001) + int(y > 0.001) + int(z > 0.001) >= 2) {
-        t.surface[3] = 1; break;
+  std::sort(entries.begin(), entries.end(), [](const PlaneEntry& a, const PlaneEntry& b) {
+    if (a.key != b.key) return a.key < b.key;
+    return a.piece < b.piece;
+  });
+  for (size_t i = 0; i < entries.size();) {
+    size_t j = i + 1;
+    while (j < entries.size() && entries[j].key == entries[i].key) ++j;
+    // Fast skip when all triangles on this plane belong to a single piece.
+    if (entries[i].piece != entries[j - 1].piece) {
+      // Merge per-piece bounds on this plane.
+      std::vector<std::pair<uint32_t, bm::Box>> byPiece;
+      for (size_t k = i; k < j;) {
+        bm::Box merged = entries[k].bounds;
+        const uint32_t piece = entries[k].piece;
+        ++k;
+        while (k < j && entries[k].piece == piece) { merged.merge(entries[k].bounds); ++k; }
+        byPiece.push_back({piece, merged});
+      }
+      for (size_t k = i; k < j; ++k) {
+        const bm::Box& bounds = entries[k].bounds;
+        for (const auto& [piece, other] : byPiece) {
+          if (piece == entries[k].piece) continue;
+          const double x = std::min(bounds.max.x, other.max.x) - std::max(bounds.min.x, other.min.x);
+          const double y = std::min(bounds.max.y, other.max.y) - std::max(bounds.min.y, other.min.y);
+          const double z = std::min(bounds.max.z, other.max.z) - std::max(bounds.min.z, other.min.z);
+          if (x >= -0.001 && y >= -0.001 && z >= -0.001 && int(x > 0.001) + int(y > 0.001) + int(z > 0.001) >= 2) {
+            out.triangles[entries[k].tri].surface[3] = 1;
+            break;
+          }
+        }
       }
     }
+    i = j;
   }
   // Canonical input makes coincident intersections independent of instance listing order.
   std::sort(out.triangles.begin(), out.triangles.end(), [](const GlassTriangle& a, const GlassTriangle& b) {
