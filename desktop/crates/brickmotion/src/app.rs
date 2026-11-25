@@ -110,6 +110,8 @@ pub struct BrickMotionApp {
     pub menubar: Option<crate::menubar::MenuBar>,
     /// The last autosave failure shown, so a repeating one warns once.
     autosave_error: Option<String>,
+    /// The command-line file, opened on the first frame (see `start_startup`).
+    startup: Option<PathBuf>,
 }
 
 impl BrickMotionApp {
@@ -159,10 +161,10 @@ impl BrickMotionApp {
             autosaver: Autosaver::default(),
             menubar: None,
             autosave_error: None,
+            startup: None,
         };
-        if let Some(p) = path {
-            app.open(p);
-        }
+        // Opened once the first frame knows the view's size, so the worker can draw it warm.
+        app.startup = path.map(|p| std::path::absolute(&p).unwrap_or(p));
         app
     }
 
@@ -234,8 +236,8 @@ impl BrickMotionApp {
 
     /// Takes a loaded document as the current one.
     fn adopt(&mut self, path: PathBuf, doc: bm::Document, info: bm::OpenInfo) {
-        // The old document (and its renderer) goes; the widget sets the new one up.
-        self.doc = doc;
+        // The old document (and its renderer) goes, off this thread; the widget sets the new one up.
+        crate::loader::retire(std::mem::replace(&mut self.doc, doc));
         self.viewport.reset();
         self.has_document = true;
         self.replace_ok = None;
@@ -313,7 +315,20 @@ impl BrickMotionApp {
 
     /// The file being opened, if any.
     pub fn opening(&self) -> Option<&Path> {
-        self.loader.loading()
+        self.loader.loading().or(self.startup.as_deref())
+    }
+
+    /// Starts the command-line open, once the view's size is known (or right away when asked).
+    fn start_startup(&mut self) {
+        if let Some(p) = self.startup.take() {
+            self.loader.start_warm(p, self.viewport.warm());
+        }
+    }
+
+    /// Whether the latest open knew the view's size.
+    #[doc(hidden)]
+    pub fn opened_warm(&self) -> bool {
+        self.loader.started_warm()
     }
 
     /// The panes' view of the document, made again only when the document, its version or the
@@ -412,7 +427,7 @@ impl BrickMotionApp {
         let mut s = bm::Session::new();
         match s.new_blank() {
             Ok(_) => {
-                self.doc = bm::Document::new(s);
+                crate::loader::retire(std::mem::replace(&mut self.doc, bm::Document::new(s)));
                 self.viewport.reset();
                 self.has_document = true;
                 self.state = DocState::default();
@@ -499,6 +514,7 @@ impl BrickMotionApp {
     /// Blocks until the pending open (if any) has finished and been taken.
     #[doc(hidden)]
     pub fn wait_loaded(&mut self) {
+        self.start_startup();
         while self.loader.loading().is_some() {
             self.poll_loader();
             std::thread::sleep(Duration::from_millis(5));
@@ -556,6 +572,7 @@ impl eframe::App for BrickMotionApp {
             chrome::timeline::show(ui, self);
         }
         chrome::central(ui, self);
+        self.start_startup();
         crate::palette::show(ui, self);
         chrome::confirm::show(ui, self);
         self.run_requested();

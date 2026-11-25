@@ -5,7 +5,7 @@ pub mod chrome;
 pub mod commands;
 pub mod document;
 mod icons;
-mod loader;
+pub mod loader;
 pub mod menubar;
 mod notices;
 pub mod palette;

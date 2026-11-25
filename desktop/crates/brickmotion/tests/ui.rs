@@ -219,3 +219,17 @@ fn properties_say_saved_after_save() {
     assert!(h.query_by_label("Edited").is_none(), "still says Edited after saving");
     assert!(h.query_by_label("Saved").is_some());
 }
+
+#[test]
+fn command_line_open_waits_for_the_view_size() {
+    let mut h = Harness::builder()
+        .with_size([1440.0, 900.0])
+        .build_eframe(|cc| BrickMotionApp::new_for_test_cc(cc, Some(HELI.into())));
+    let t0 = std::time::Instant::now();
+    while h.state().piece_count() == 0 {
+        assert!(t0.elapsed() < std::time::Duration::from_secs(60), "never opened");
+        h.step();
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(h.state().opened_warm(), "the first open did not know the view size");
+}

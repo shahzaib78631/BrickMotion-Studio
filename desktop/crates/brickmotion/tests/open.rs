@@ -2,7 +2,7 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use brickmotion::{BrickMotionApp, Loader, Notice, snapshot};
+use brickmotion::{BrickMotionApp, Loader, Notice, open_model, snapshot};
 
 const HELI: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../samples/helicopter/helicopter.mpd");
 
@@ -106,4 +106,59 @@ fn warm_start_arrives_drawn_at_the_view_size() {
     let mut f = bm::Frame::default();
     d.viewport().expect("metal").read_frame(&mut f);
     assert_eq!((f.width, f.height), (320, 240));
+}
+
+fn open_message(p: &Path) -> String {
+    open_model(p).err().expect("an error").message
+}
+
+#[test]
+fn missing_file_says_so() {
+    assert_eq!(open_message(Path::new("/no/such/file.mpd")), "There is no file here any more.");
+}
+
+#[test]
+fn folder_says_so() {
+    let dir = std::env::temp_dir().join(format!("bm-open-dir-{}.mpd", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    assert_eq!(open_message(&dir), "This is a folder, not a model file.");
+}
+
+#[test]
+fn unreadable_file_says_so() {
+    use std::os::unix::fs::PermissionsExt;
+    let p = temp_file("locked.mpd", b"1 4 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n");
+    std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let m = open_message(&p);
+    std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o644)).unwrap();
+    assert!(m.starts_with("BrickMotion can't read this file"), "{m}");
+}
+
+#[test]
+fn cancelled_load_builds_nothing() {
+    use std::sync::atomic::AtomicBool;
+    let cancel = AtomicBool::new(true);
+    let t0 = Instant::now();
+    assert!(brickmotion::loader::build(Path::new(HELI), None, &cancel).is_none());
+    assert!(t0.elapsed() < Duration::from_millis(500), "a cancelled load still opened the model");
+}
+
+#[test]
+fn newer_request_cancels_older() {
+    let mut l = Loader::default();
+    l.start(HELI.into());
+    let first = l.cancel_flag();
+    l.start(HELI.into());
+    assert!(first.load(std::sync::atomic::Ordering::Relaxed));
+    assert!(!l.cancel_flag().load(std::sync::atomic::Ordering::Relaxed));
+    wait(&mut l).unwrap();
+}
+
+#[test]
+fn old_document_is_dropped_off_the_ui_thread() {
+    let mut s = bm::Session::new();
+    s.open(Path::new(HELI)).unwrap();
+    let h = brickmotion::loader::retire(bm::Document::new(s)).expect("a retire thread");
+    assert_eq!(h.thread().name(), Some("bm-retire"));
+    h.join().unwrap();
 }
