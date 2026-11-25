@@ -409,23 +409,36 @@ pub fn show_editor(ui: &mut Ui, app: &mut BrickMotionApp) {
                 ui.horizontal(|ui| {
                     ui.label(RichText::new("Pause after").color(t.text2));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let dv = ui.add(
-                            DragValue::new(&mut ed.fields.pause_after)
-                                .range(0.0..=10.0)
-                                .speed(0.1)
-                                .fixed_decimals(1)
-                                .suffix(" s"),
-                        );
-                        if dv.changed() {
-                            ed.fields.pause_after = (ed.fields.pause_after * 10.0).round() / 10.0;
-                            changed = true;
-                        }
+                        egui::Frame::NONE
+                            .fill(t.bg1)
+                            .stroke(Stroke::new(1.0, t.border))
+                            .corner_radius(5)
+                            .inner_margin(Margin::symmetric(6, 2))
+                            .show(ui, |ui| {
+                                let dv = ui.add(
+                                    DragValue::new(&mut ed.fields.pause_after)
+                                        .range(0.0..=10.0)
+                                        .speed(0.1)
+                                        .fixed_decimals(1)
+                                        .suffix(" s"),
+                                );
+                                if dv.changed() {
+                                    ed.fields.pause_after = (ed.fields.pause_after * 10.0).round() / 10.0;
+                                    changed = true;
+                                }
+                            });
                     });
                 });
 
-                if ui.checkbox(&mut ed.fields.pin_order, "Pin build order").changed() {
-                    changed = true;
-                }
+                ui.scope(|ui| {
+                    let w = &mut ui.visuals_mut().widgets;
+                    w.inactive.bg_fill = t.bg1;
+                    w.inactive.bg_stroke = Stroke::new(1.0, t.border2);
+                    w.hovered.bg_stroke = Stroke::new(1.0, t.accent);
+                    if ui.checkbox(&mut ed.fields.pin_order, "Pin build order").changed() {
+                        changed = true;
+                    }
+                });
 
                 ui.horizontal(|ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

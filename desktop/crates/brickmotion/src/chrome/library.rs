@@ -132,7 +132,12 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
             .collect();
         let common: Vec<PartMatch> = app.library.common().to_vec();
 
-        egui::ScrollArea::vertical().id_salt("library-sections").max_height(MAX_H).auto_shrink([false, true]).show(ui, |ui| {
+        egui::ScrollArea::vertical()
+            .id_salt("library-sections")
+            .min_scrolled_height(300.0)
+            .max_height(MAX_H)
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = 6.0;
             for (heading, items) in [("Recent", recent.as_slice()), ("Frequent", frequent.as_slice()), ("Common", common.as_slice())] {
                 if items.is_empty() {
@@ -160,6 +165,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
             let row_count = results.len().div_ceil(COLS);
             egui::ScrollArea::vertical()
                 .id_salt("library-grid")
+                .min_scrolled_height(300.0)
                 .max_height(MAX_H)
                 .auto_shrink([false, true])
                 .show_rows(ui, TILE_H + GAP, row_count, |ui, range| {

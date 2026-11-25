@@ -85,6 +85,66 @@ fn screenshots() {
     h.event(egui::Event::Text("sel".into()));
     h.run_steps(4);
     h.render().unwrap().save(format!("{docs}/m2-palette.png")).unwrap();
+
+    // Milestone 3 screenshots: Move gizmo, Library with rendered previews, snapped placement + HUD, Steps + editor.
+    let mut h = heli_harness();
+    h.state_mut().doc.session().select(&[0], bm::SelectMode::Replace);
+    assert!(brickmotion::run(h.state_mut(), "model.move"));
+    h.run_steps(6);
+    h.render().unwrap().save(format!("{docs}/m3-gizmo.png")).unwrap();
+
+    let mut h = heli_harness();
+    h.state_mut().browser_tab = 3;
+    let t0 = std::time::Instant::now();
+    // Give the preview worker a moment so common-part tiles show crisp rendered bricks.
+    while t0.elapsed() < std::time::Duration::from_secs(3) {
+        h.step();
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    h.run_steps(4);
+    h.render().unwrap().save(format!("{docs}/m3-library.png")).unwrap();
+
+    if bm::metal_available() {
+        let mut h = heli_harness();
+        let centre = h.state().viewport_rect().unwrap().center();
+        let brick = bm::library::PartMatch {
+            name: "3001.dat".into(),
+            description: "Brick 2 x 4".into(),
+            category: "Brick".into(),
+        };
+        h.state_mut().edit.colour = 4;
+        h.state_mut().begin_placement(brick);
+        h.event(egui::Event::PointerMoved(centre));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while std::time::Instant::now() < deadline {
+            h.step();
+            if let Some(p) = &h.state().edit.placement
+                && !matches!(
+                    p.state,
+                    bm::placement::PlacementState::Inactive | bm::placement::PlacementState::Preparing
+                )
+            {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        h.run_steps(4);
+        h.render().unwrap().save(format!("{docs}/m3-placing.png")).unwrap();
+    }
+
+    let car = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../samples/8880-1.mpd");
+    let mut h = Harness::builder().with_size([1440.0, 900.0]).build_eframe(move |cc| {
+        let mut app = BrickMotionApp::new_for_test_cc(cc, Some(car.into()));
+        app.wait_loaded();
+        app
+    });
+    h.run_steps(4);
+    h.state_mut().browser_tab = 1;
+    h.state_mut().edit.step = Some(0);
+    h.run_steps(2);
+    assert!(brickmotion::run(h.state_mut(), "step.edit"));
+    h.run_steps(4);
+    h.render().unwrap().save(format!("{docs}/m3-steps.png")).unwrap();
 }
 
 const HELI: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../samples/helicopter/helicopter.mpd");

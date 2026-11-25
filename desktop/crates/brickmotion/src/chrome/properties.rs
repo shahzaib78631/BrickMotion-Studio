@@ -102,7 +102,11 @@ fn piece(ui: &mut Ui, app: &mut BrickMotionApp, p: &bm::PieceInfo, run: &mut Opt
         ui.horizontal(|ui| {
             ui.label(RichText::new(&p.part).color(t.text3));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.small_button("Replace…").clicked() {
+                let btn = egui::Button::new(RichText::new("Replace…").size(11.5).color(t.text1))
+                    .fill(t.bg1)
+                    .stroke(Stroke::new(1.0, t.border))
+                    .min_size(vec2(0.0, 22.0));
+                if ui.add(btn).clicked() {
                     *run = Some("model.replace");
                 }
             });
