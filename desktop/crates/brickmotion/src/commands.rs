@@ -14,6 +14,14 @@ pub enum When {
     Pieces,
     /// Something is selected.
     Selection,
+    /// A step is chosen in the Steps tab.
+    Step,
+    /// A step is chosen and at least one piece is selected.
+    StepSelection,
+    /// A step with a following step is chosen (can merge with next or move down).
+    StepHasNext,
+    /// A step after the first is chosen (can move up).
+    StepHasPrev,
     CanUndo,
     CanRedo,
     /// Not built yet: shown dimmed with " — coming soon".
@@ -61,6 +69,8 @@ pub struct Ctx {
     pub local_axes: bool,
     pub collision: bool,
     pub tool: crate::edit::Tool,
+    pub step: Option<usize>,
+    pub steps: usize,
 }
 
 /// A key with its modifiers.
@@ -139,6 +149,10 @@ pub fn enabled(c: &Command, ctx: &Ctx) -> bool {
         When::Document => ctx.has_document,
         When::Pieces => ctx.pieces > 0,
         When::Selection => ctx.selected > 0,
+        When::Step => ctx.has_document && ctx.step.is_some_and(|i| i < ctx.steps),
+        When::StepSelection => ctx.has_document && ctx.step.is_some_and(|i| i < ctx.steps) && ctx.selected > 0,
+        When::StepHasNext => ctx.has_document && ctx.step.is_some_and(|i| i + 1 < ctx.steps),
+        When::StepHasPrev => ctx.has_document && ctx.step.is_some_and(|i| i > 0 && i < ctx.steps),
         When::CanUndo => ctx.can_undo,
         When::CanRedo => ctx.can_redo,
         When::Soon => false,
@@ -154,6 +168,12 @@ pub fn why_disabled(c: &Command, ctx: &Ctx) -> Option<&'static str> {
         When::Document => "Needs a document",
         When::Pieces => "Needs a model with pieces",
         When::Selection => "Needs a selection",
+        When::Step => "Choose a step first",
+        When::StepSelection => {
+            if ctx.step.is_none_or(|i| i >= ctx.steps) { "Choose a step first" } else { "Needs a selection" }
+        }
+        When::StepHasNext => "Needs a following step",
+        When::StepHasPrev => "Already the first step",
         When::CanUndo => "Nothing to undo",
         When::CanRedo => "Nothing to redo",
         _ => "Coming soon",
@@ -209,7 +229,7 @@ static REGISTRY: &[Command] = &[
     Command { id: "model.duplicate", title: "Duplicate", icon: Icon::Copy, keys: Some("⌘D"), tip: "Copy the selection and offset the copy by one stud.", workspace: Workspace::Build, tab: "Model", group: "Modify", when: When::Selection, menu: Menu::Edit },
     Command { id: "model.submodel", title: "Submodel", icon: Icon::Group, keys: Some("⌥⌘G"), tip: "Turn the selection into a submodel used once. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Arrange", when: When::Soon, menu: Menu::None },
     Command { id: "model.extract", title: "Extract", icon: Icon::Extract, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Arrange", when: When::Soon, menu: Menu::None },
-    Command { id: "model.to_step", title: "To Step", icon: Icon::Step, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Arrange", when: When::Soon, menu: Menu::None },
+    Command { id: "model.to_step", title: "To Step", icon: Icon::Step, keys: None, tip: "Gather the selected pieces into the chosen build step.", workspace: Workspace::Build, tab: "Model", group: "Arrange", when: When::StepSelection, menu: Menu::None },
     Command { id: "model.seat_loose", title: "Seat Loose", icon: Icon::Seat, keys: None, tip: "Find pieces that are not connected and seat them. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Fit", when: When::Soon, menu: Menu::None },
     Command { id: "model.what_fits", title: "What Fits", icon: Icon::Search, keys: None, tip: "List parts builders usually put at this connection. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Fit", when: When::Soon, menu: Menu::None },
     Command { id: "model.look", title: "Look", icon: Icon::Eye, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Configure", when: When::Soon, menu: Menu::None },
@@ -263,4 +283,12 @@ static REGISTRY: &[Command] = &[
     Command { id: "edit.paste", title: "Paste", icon: Icon::Plus, keys: Some("⌘V"), tip: "Paste pieces from the clipboard.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Document, menu: Menu::Edit },
     Command { id: "view.local_axes", title: "Local Axes", icon: Icon::Target, keys: Some("L"), tip: "Switch the gizmo between local and world axes.", workspace: Workspace::Build, tab: "", group: "View", when: When::Document, menu: Menu::None },
     Command { id: "edit.collision", title: "Collision Checks", icon: Icon::Magnet, keys: Some("K"), tip: "Turn collision checks on or off while placing parts.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Document, menu: Menu::None },
+    Command { id: "step.edit", title: "Edit Step…", icon: Icon::Step, keys: None, tip: "Edit the chosen step's title, notes, pause and build order.", workspace: Workspace::Build, tab: "", group: "Steps", when: When::Step, menu: Menu::None },
+    Command { id: "step.insert_before", title: "Insert Step Before", icon: Icon::Plus, keys: None, tip: "Insert an empty build step before the chosen step.", workspace: Workspace::Build, tab: "", group: "Steps", when: When::Step, menu: Menu::None },
+    Command { id: "step.insert_after", title: "Insert Step After", icon: Icon::Plus, keys: None, tip: "Insert an empty build step after the chosen step.", workspace: Workspace::Build, tab: "", group: "Steps", when: When::Step, menu: Menu::None },
+    Command { id: "step.split", title: "Split at Selection", icon: Icon::Razor, keys: None, tip: "Split the selected pieces of this step into a new step after it.", workspace: Workspace::Build, tab: "", group: "Steps", when: When::StepSelection, menu: Menu::None },
+    Command { id: "step.merge", title: "Merge with Next", icon: Icon::Group, keys: None, tip: "Merge the next build step into the chosen step.", workspace: Workspace::Build, tab: "", group: "Steps", when: When::StepHasNext, menu: Menu::None },
+    Command { id: "step.move_up", title: "Move Step Up", icon: Icon::Up, keys: None, tip: "Move the chosen step earlier in the build order.", workspace: Workspace::Build, tab: "", group: "Steps", when: When::StepHasPrev, menu: Menu::None },
+    Command { id: "step.move_down", title: "Move Step Down", icon: Icon::Down, keys: None, tip: "Move the chosen step later in the build order.", workspace: Workspace::Build, tab: "", group: "Steps", when: When::StepHasNext, menu: Menu::None },
+    Command { id: "step.delete", title: "Delete Step", icon: Icon::Close, keys: None, tip: "Delete the chosen step, moving its pieces to a neighbour.", workspace: Workspace::Build, tab: "", group: "Steps", when: When::Step, menu: Menu::None },
 ];

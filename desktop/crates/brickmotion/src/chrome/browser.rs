@@ -33,7 +33,9 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
                             let b = egui::Button::new(RichText::new(*tab).color(if on { t.text1 } else { t.text3 }))
                                 .fill(if on { t.bg3 } else { egui::Color32::TRANSPARENT })
                                 .min_size(vec2(0.0, 24.0));
-                            if ui.add(b).clicked() {
+                            let resp = ui.add(b);
+                            resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Tab, true, on, *tab));
+                            if resp.clicked() {
                                 app.browser_tab = k;
                             }
                         }
@@ -78,6 +80,10 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
                         super::tree::show(ui, app);
                     } else if app.browser_tab == 0 {
                         root_row(ui, app, &title, count);
+                    } else if app.browser_tab == 1 && app.has_document {
+                        super::steps::show(ui, app);
+                    } else if app.browser_tab == 2 && app.has_document {
+                        super::parts::show(ui, app);
                     } else if app.browser_tab == 3 {
                         super::library::show(ui, app);
                     } else {

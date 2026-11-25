@@ -128,6 +128,10 @@ pub struct BrickMotionApp {
     pub previews: crate::previews::Previews,
     /// The Browser's Library tab cache and category state.
     pub library: chrome::library::LibraryState,
+    /// The Browser's Steps tab cache and step editor popover.
+    pub steps: chrome::steps::StepsState,
+    /// The Browser's Parts tab summary cache.
+    pub parts: chrome::parts::PartsState,
     /// Focus the Browser's filter field next frame (e.g. after pressing P).
     pub(crate) focus_filter: bool,
     /// In-memory clipboard used when dialogs are off (headless tests).
@@ -191,6 +195,8 @@ impl BrickMotionApp {
             swatches: chrome::swatches::Swatches::default(),
             previews: crate::previews::Previews::default(),
             library: chrome::library::LibraryState::default(),
+            steps: chrome::steps::StepsState::default(),
+            parts: chrome::parts::PartsState::default(),
             focus_filter: false,
             clipboard: String::new(),
         };
@@ -439,6 +445,8 @@ impl BrickMotionApp {
             local_axes: self.edit.local_axes,
             collision: self.edit.collision,
             tool: self.edit.tool,
+            step: self.edit.step,
+            steps: if self.has_document { s.steps().len() } else { 0 },
         }
     }
 
@@ -516,6 +524,74 @@ impl BrickMotionApp {
             "edit.paste" => crate::edit::paste(self),
             "view.local_axes" => self.edit.local_axes = !self.edit.local_axes,
             "edit.collision" => self.edit.collision = !self.edit.collision,
+            "step.edit" => {
+                if let Some(i) = self.edit.step {
+                    self.steps.open_editor(i, self.doc.session());
+                }
+            }
+            "step.insert_before" => {
+                if let Some(i) = self.edit.step {
+                    let c = s.insert_step(i);
+                    self.edited(c);
+                }
+            }
+            "step.insert_after" => {
+                if let Some(i) = self.edit.step {
+                    let c = s.insert_step(i + 1);
+                    if c.refused.is_none() {
+                        self.edit.step = Some(i + 1);
+                    }
+                    self.edited(c);
+                }
+            }
+            "step.split" => {
+                if let Some(i) = self.edit.step {
+                    let sel = s.selection();
+                    let c = s.split_step(i, &sel);
+                    self.edited(c);
+                }
+            }
+            "step.merge" => {
+                if let Some(i) = self.edit.step {
+                    let c = s.merge_steps(i);
+                    self.edited(c);
+                }
+            }
+            "model.to_step" => {
+                if let Some(i) = self.edit.step {
+                    let sel = s.selection();
+                    let c = s.move_to_step(&sel, i);
+                    self.edited(c);
+                }
+            }
+            "step.move_up" => {
+                if let Some(i) = self.edit.step.filter(|&i| i > 0) {
+                    let c = s.move_step(i, i - 1);
+                    if c.refused.is_none() {
+                        self.edit.step = Some(i - 1);
+                    }
+                    self.edited(c);
+                }
+            }
+            "step.move_down" => {
+                if let Some(i) = self.edit.step {
+                    let c = s.move_step(i, i + 1);
+                    if c.refused.is_none() {
+                        self.edit.step = Some(i + 1);
+                    }
+                    self.edited(c);
+                }
+            }
+            "step.delete" => {
+                if let Some(i) = self.edit.step {
+                    let c = s.delete_step(i);
+                    if c.refused.is_none() {
+                        let count = self.doc.session().steps().len();
+                        self.edit.step = (count > 0).then(|| i.min(count - 1));
+                    }
+                    self.edited(c);
+                }
+            }
             _ => return false,
         }
         true
@@ -821,6 +897,7 @@ impl eframe::App for BrickMotionApp {
         self.start_startup();
         crate::palette::show(ui, self);
         chrome::swatches::show(ui, self);
+        chrome::steps::show_editor(ui, self);
         chrome::confirm::show(ui, self);
         self.run_requested();
         self.poll_placement(ui.ctx());
