@@ -1,0 +1,9 @@
+[package]
+name = "bm"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+build = "build.rs"
+
+[dependencies]
+bm-sys = { path = "../bm-sys" }
