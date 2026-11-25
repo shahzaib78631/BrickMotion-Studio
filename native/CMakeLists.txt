@@ -54,3 +54,9 @@ option(BM_APP "Build BrickMotion.app (needs Swift)" OFF)
 if(BM_APP)
   add_subdirectory(app)
 endif()
+
+# The Rust desktop app links bmapp through the bmffi shim; no Swift needed (cmake -DBM_APP_LIB=ON).
+option(BM_APP_LIB "bmapp without Swift, for the Rust app" OFF)
+if(BM_APP_LIB AND NOT BM_APP)
+  add_subdirectory(app/bmapp)
+endif()
