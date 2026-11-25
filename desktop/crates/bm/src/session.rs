@@ -3,6 +3,7 @@ use std::path::Path;
 
 use bm_sys as sys;
 
+use crate::steps::{ItemRow, StepFields, StepRow};
 use crate::{Changed, ColorInfo, Mat3, OpenError, OutlineRow, PieceInfo, Pose, Snapshot, Vec3, borrowed, take_string};
 
 /// What opening a file reported besides success.
@@ -355,6 +356,119 @@ impl Session {
             .collect();
         unsafe { sys::bm_colors_free(h) };
         out
+    }
+
+    pub fn steps(&self) -> Vec<StepRow> {
+        let h = unsafe { sys::bm_session_steps(self.raw) };
+        if h.is_null() {
+            return Vec::new();
+        }
+        let n = unsafe { sys::bm_steps_len(h) };
+        let out = (0..n)
+            .map(|i| {
+                let r = unsafe { sys::bm_steps_at(h, i) };
+                StepRow {
+                    index: r.index,
+                    title: borrowed(r.title),
+                    notes: borrowed(r.notes),
+                    pause_after: r.pause_after,
+                    pin_order: r.pin_order,
+                    automatic: r.automatic,
+                    items: r.items,
+                    pieces: r.pieces,
+                    submodels: r.submodels,
+                }
+            })
+            .collect();
+        unsafe { sys::bm_steps_free(h) };
+        out
+    }
+
+    pub fn step_items(&self, step: usize) -> Vec<ItemRow> {
+        let h = unsafe { sys::bm_session_step_items(self.raw, step) };
+        if h.is_null() {
+            return Vec::new();
+        }
+        let n = unsafe { sys::bm_items_len(h) };
+        let out = (0..n)
+            .map(|i| {
+                let r = unsafe { sys::bm_items_at(h, i) };
+                let pn = unsafe { sys::bm_item_pieces(h, i, std::ptr::null_mut(), 0) };
+                let mut pieces = vec![0u32; pn];
+                let total = unsafe { sys::bm_item_pieces(h, i, pieces.as_mut_ptr(), pieces.len()) };
+                pieces.truncate(total.min(pn));
+                ItemRow {
+                    item: r.item,
+                    name: borrowed(r.name),
+                    description: borrowed(r.description),
+                    color_name: borrowed(r.color_name),
+                    group: borrowed(r.group),
+                    color: r.color,
+                    submodel: r.submodel,
+                    step: r.step,
+                    index: r.index,
+                    pieces,
+                }
+            })
+            .collect();
+        unsafe { sys::bm_items_free(h) };
+        out
+    }
+
+    pub fn pieces_of_step(&self, step: usize) -> Vec<u32> {
+        let n = unsafe { sys::bm_session_pieces_of_step(self.raw, step, std::ptr::null_mut(), 0) };
+        let mut out = vec![0u32; n];
+        let total = unsafe { sys::bm_session_pieces_of_step(self.raw, step, out.as_mut_ptr(), out.len()) };
+        out.truncate(total.min(n));
+        out
+    }
+
+    pub fn insert_step(&self, at: usize) -> Changed {
+        take_change(unsafe { sys::bm_session_insert_step(self.raw, at) })
+    }
+
+    pub fn delete_step(&self, at: usize) -> Changed {
+        take_change(unsafe { sys::bm_session_delete_step(self.raw, at) })
+    }
+
+    pub fn move_step(&self, from: usize, to: usize) -> Changed {
+        take_change(unsafe { sys::bm_session_move_step(self.raw, from, to) })
+    }
+
+    pub fn split_step(&self, at: usize, pieces: &[u32]) -> Changed {
+        take_change(unsafe { sys::bm_session_split_step(self.raw, at, pieces.as_ptr(), pieces.len()) })
+    }
+
+    pub fn merge_steps(&self, first: usize) -> Changed {
+        take_change(unsafe { sys::bm_session_merge_steps(self.raw, first) })
+    }
+
+    pub fn set_step_fields(&self, at: usize, fields: &StepFields, continuing: bool) -> Changed {
+        let Ok(title) = CString::new(fields.title.as_str()) else {
+            return Changed { structure: false, version: self.version(), refused: Some("invalid title".into()) };
+        };
+        let Ok(notes) = CString::new(fields.notes.as_str()) else {
+            return Changed { structure: false, version: self.version(), refused: Some("invalid notes".into()) };
+        };
+        take_change(unsafe {
+            sys::bm_session_set_step_fields(
+                self.raw,
+                at,
+                title.as_ptr(),
+                notes.as_ptr(),
+                fields.pause_after,
+                fields.pin_order,
+                continuing,
+            )
+        })
+    }
+
+    pub fn move_to_step(&self, pieces: &[u32], step: usize) -> Changed {
+        take_change(unsafe { sys::bm_session_move_to_step(self.raw, pieces.as_ptr(), pieces.len(), step) })
+    }
+
+    pub fn reorder_in_step(&self, step: usize, from: usize, to: usize) -> Changed {
+        take_change(unsafe { sys::bm_session_reorder_in_step(self.raw, step, from, to) })
     }
 }
 

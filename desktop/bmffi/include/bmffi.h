@@ -258,6 +258,48 @@ BMFFI_API BmChange bm_session_place_part(BmSession* s, const char* part, int32_t
                                          BmVec3 position, int32_t step, int32_t before, uint64_t generation,
                                          uint64_t version);
 
+// ---- Steps ----
+typedef struct BmSteps BmSteps;
+typedef struct {
+  size_t index;
+  const char *title, *notes;
+  double pause_after;
+  bool pin_order, automatic;
+  size_t items, pieces, submodels;
+} BmStepRow;
+
+typedef struct BmItems BmItems;
+typedef struct {
+  uint64_t item;
+  const char *name, *description, *color_name, *group;
+  int32_t color;
+  bool submodel;
+  size_t step, index, pieces;
+} BmItemRow;
+
+BMFFI_API BmSteps* bm_session_steps(const BmSession* s);
+BMFFI_API size_t bm_steps_len(const BmSteps* st);
+BMFFI_API BmStepRow bm_steps_at(const BmSteps* st, size_t i);
+BMFFI_API void bm_steps_free(BmSteps* st);
+
+BMFFI_API BmItems* bm_session_step_items(const BmSession* s, size_t step);
+BMFFI_API size_t bm_items_len(const BmItems* it);
+BMFFI_API BmItemRow bm_items_at(const BmItems* it, size_t i);
+BMFFI_API size_t bm_item_pieces(const BmItems* it, size_t i, uint32_t* out, size_t cap);
+BMFFI_API void bm_items_free(BmItems* it);
+
+BMFFI_API size_t bm_session_pieces_of_step(const BmSession* s, size_t step, uint32_t* out, size_t cap);
+
+BMFFI_API BmChange bm_session_insert_step(BmSession* s, size_t at);
+BMFFI_API BmChange bm_session_delete_step(BmSession* s, size_t at);
+BMFFI_API BmChange bm_session_move_step(BmSession* s, size_t from, size_t to);
+BMFFI_API BmChange bm_session_split_step(BmSession* s, size_t at, const uint32_t* pieces, size_t n);
+BMFFI_API BmChange bm_session_merge_steps(BmSession* s, size_t first);
+BMFFI_API BmChange bm_session_set_step_fields(BmSession* s, size_t at, const char* title, const char* notes,
+                                              double pause_after, bool pin_order, bool continuing);
+BMFFI_API BmChange bm_session_move_to_step(BmSession* s, const uint32_t* pieces, size_t n, size_t step);
+BMFFI_API BmChange bm_session_reorder_in_step(BmSession* s, size_t step, size_t from, size_t to);
+
 #ifdef __cplusplus
 }
 #endif

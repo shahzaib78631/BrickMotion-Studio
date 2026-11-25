@@ -235,6 +235,45 @@ pub struct BmPlacementPreview {
     pub reason: BmString,
 }
 
+#[repr(C)]
+pub struct BmSteps {
+    _private: [u8; 0],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct BmStepRow {
+    pub index: usize,
+    pub title: *const c_char,
+    pub notes: *const c_char,
+    pub pause_after: f64,
+    pub pin_order: bool,
+    pub automatic: bool,
+    pub items: usize,
+    pub pieces: usize,
+    pub submodels: usize,
+}
+
+#[repr(C)]
+pub struct BmItems {
+    _private: [u8; 0],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct BmItemRow {
+    pub item: u64,
+    pub name: *const c_char,
+    pub description: *const c_char,
+    pub color_name: *const c_char,
+    pub group: *const c_char,
+    pub color: i32,
+    pub submodel: bool,
+    pub step: usize,
+    pub index: usize,
+    pub pieces: usize,
+}
+
 unsafe extern "C" {
     pub fn bm_string_free(s: BmString);
     pub fn bm_ldraw_directory() -> BmString;
@@ -352,6 +391,25 @@ unsafe extern "C" {
     pub fn bm_viewport_clear_placement_preview(v: *mut BmViewport);
     pub fn bm_viewport_show_rest(v: *mut BmViewport);
     pub fn bm_session_place_part(s: *mut BmSession, part: *const c_char, color: i32, rotation: BmMat3, position: BmVec3, step: i32, before: i32, generation: u64, version: u64) -> BmChange;
+
+    pub fn bm_session_steps(s: *const BmSession) -> *mut BmSteps;
+    pub fn bm_steps_len(st: *const BmSteps) -> usize;
+    pub fn bm_steps_at(st: *const BmSteps, i: usize) -> BmStepRow;
+    pub fn bm_steps_free(st: *mut BmSteps);
+    pub fn bm_session_step_items(s: *const BmSession, step: usize) -> *mut BmItems;
+    pub fn bm_items_len(it: *const BmItems) -> usize;
+    pub fn bm_items_at(it: *const BmItems, i: usize) -> BmItemRow;
+    pub fn bm_item_pieces(it: *const BmItems, i: usize, out: *mut u32, cap: usize) -> usize;
+    pub fn bm_items_free(it: *mut BmItems);
+    pub fn bm_session_pieces_of_step(s: *const BmSession, step: usize, out: *mut u32, cap: usize) -> usize;
+    pub fn bm_session_insert_step(s: *mut BmSession, at: usize) -> BmChange;
+    pub fn bm_session_delete_step(s: *mut BmSession, at: usize) -> BmChange;
+    pub fn bm_session_move_step(s: *mut BmSession, from: usize, to: usize) -> BmChange;
+    pub fn bm_session_split_step(s: *mut BmSession, at: usize, pieces: *const u32, n: usize) -> BmChange;
+    pub fn bm_session_merge_steps(s: *mut BmSession, first: usize) -> BmChange;
+    pub fn bm_session_set_step_fields(s: *mut BmSession, at: usize, title: *const c_char, notes: *const c_char, pause_after: f64, pin_order: bool, continuing: bool) -> BmChange;
+    pub fn bm_session_move_to_step(s: *mut BmSession, pieces: *const u32, n: usize, step: usize) -> BmChange;
+    pub fn bm_session_reorder_in_step(s: *mut BmSession, step: usize, from: usize, to: usize) -> BmChange;
 }
 
 /// Every function declared above, for the header agreement test.
@@ -384,4 +442,9 @@ pub const DECLARED: &[&str] = &[
     "bm_picture_info", "bm_picture_rgba", "bm_picture_free",
     "bm_placement_preview_free", "bm_viewport_preview_part", "bm_viewport_placement_preview",
     "bm_viewport_clear_placement_preview", "bm_viewport_show_rest", "bm_session_place_part",
+    "bm_session_steps", "bm_steps_len", "bm_steps_at", "bm_steps_free",
+    "bm_session_step_items", "bm_items_len", "bm_items_at", "bm_item_pieces", "bm_items_free",
+    "bm_session_pieces_of_step", "bm_session_insert_step", "bm_session_delete_step",
+    "bm_session_move_step", "bm_session_split_step", "bm_session_merge_steps",
+    "bm_session_set_step_fields", "bm_session_move_to_step", "bm_session_reorder_in_step",
 ];

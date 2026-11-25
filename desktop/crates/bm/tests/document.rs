@@ -98,5 +98,7 @@ fn struct_sizes_match() {
     assert_eq!(size(c"BmPartMatch"), size_of::<bm_sys::BmPartMatch>());
     assert_eq!(size(c"BmPlacementInput"), size_of::<bm_sys::BmPlacementInput>());
     assert_eq!(size(c"BmPlacementPreview"), size_of::<bm_sys::BmPlacementPreview>());
+    assert_eq!(size(c"BmStepRow"), size_of::<bm_sys::BmStepRow>());
+    assert_eq!(size(c"BmItemRow"), size_of::<bm_sys::BmItemRow>());
     assert_eq!(size(c"nope"), 0);
 }

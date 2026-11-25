@@ -6,6 +6,7 @@ pub mod library;
 mod outline;
 pub mod placement;
 mod session;
+pub mod steps;
 mod viewport;
 
 use std::path::PathBuf;
