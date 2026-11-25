@@ -3,7 +3,9 @@ use std::ffi::CString;
 use bm_sys as sys;
 
 use crate::placement::{PlacementInput, PlacementPreview};
-use crate::{Camera, Vec2, Vec3};
+use crate::playback::{AssemblyPreview, PlaybackState, ViewportPreferences};
+use crate::timeline::BuildTimeline;
+use crate::{Camera, Vec2, Vec3, take_string};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ViewPreset {
@@ -164,6 +166,67 @@ impl Viewport {
 
     pub fn show_rest(&mut self) {
         unsafe { sys::bm_viewport_show_rest(self.raw) }
+    }
+
+    pub fn play(&mut self, on: bool) {
+        unsafe { sys::bm_viewport_play(self.raw, on) }
+    }
+
+    pub fn play_range(&mut self, start: f64, end: f64) {
+        unsafe { sys::bm_viewport_play_range(self.raw, start, end) }
+    }
+
+    pub fn seek(&mut self, seconds: f64) {
+        unsafe { sys::bm_viewport_seek(self.raw, seconds) }
+    }
+
+    pub fn set_playback_rate(&mut self, rate: f64) {
+        unsafe { sys::bm_viewport_set_playback_rate(self.raw, rate) }
+    }
+
+    pub fn set_playback_loop(&mut self, loop_: bool) {
+        unsafe { sys::bm_viewport_set_playback_loop(self.raw, loop_) }
+    }
+
+    pub fn request_plan(&mut self) {
+        unsafe { sys::bm_viewport_request_plan(self.raw) }
+    }
+
+    pub fn regenerate_plan(&mut self, standard_preview: bool) {
+        unsafe { sys::bm_viewport_regenerate_plan(self.raw, standard_preview) }
+    }
+
+    pub fn playback_state(&self) -> PlaybackState {
+        PlaybackState::from_raw(unsafe { sys::bm_viewport_playback_state(self.raw) })
+    }
+
+    pub fn plan_error(&self) -> String {
+        take_string(unsafe { sys::bm_viewport_plan_error(self.raw) })
+    }
+
+    pub fn planned_version(&self) -> u64 {
+        unsafe { sys::bm_viewport_planned_version(self.raw) }
+    }
+
+    pub fn set_preferences(&mut self, prefs: ViewportPreferences) {
+        unsafe { sys::bm_viewport_set_preferences(self.raw, prefs.to_raw()) }
+    }
+
+    pub fn arrange(&mut self, step: Option<usize>, mode: AssemblyPreview) {
+        let s = step.map_or(-1, |i| i32::try_from(i).unwrap_or(i32::MAX));
+        unsafe { sys::bm_viewport_arrange(self.raw, s, mode.to_raw()) }
+    }
+
+    pub fn build_order(&mut self) -> Vec<u32> {
+        let n = unsafe { sys::bm_viewport_build_order(self.raw, std::ptr::null_mut(), 0) };
+        let mut out = vec![0u32; n];
+        let total = unsafe { sys::bm_viewport_build_order(self.raw, out.as_mut_ptr(), out.len()) };
+        out.truncate(total.min(n));
+        out
+    }
+
+    pub fn build_timeline(&self) -> Option<BuildTimeline> {
+        BuildTimeline::from_raw(unsafe { sys::bm_viewport_build_timeline(self.raw) })
     }
 }
 

@@ -5,8 +5,10 @@ pub mod gizmo;
 pub mod library;
 mod outline;
 pub mod placement;
+pub mod playback;
 mod session;
 pub mod steps;
+pub mod timeline;
 mod viewport;
 
 use std::path::PathBuf;

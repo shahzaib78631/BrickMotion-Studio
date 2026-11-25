@@ -470,6 +470,48 @@ impl Session {
     pub fn reorder_in_step(&self, step: usize, from: usize, to: usize) -> Changed {
         take_change(unsafe { sys::bm_session_reorder_in_step(self.raw, step, from, to) })
     }
+
+    pub fn move_arrival(&self, pieces: &[u32], step: usize, before: usize, force: bool) -> Changed {
+        take_change(unsafe {
+            sys::bm_session_move_arrival(self.raw, pieces.as_ptr(), pieces.len(), step, before, force)
+        })
+    }
+
+    pub fn reorder_arrival(&self, step: usize, from: usize, to: usize) -> Changed {
+        take_change(unsafe { sys::bm_session_reorder_arrival(self.raw, step, from, to) })
+    }
+
+    pub fn set_arrival_pinned(&self, pieces: &[u32], pinned: bool) -> Changed {
+        take_change(unsafe {
+            sys::bm_session_set_arrival_pinned(self.raw, pieces.as_ptr(), pieces.len(), pinned)
+        })
+    }
+
+    pub fn arrival_pins(&self) -> Vec<u32> {
+        let n = unsafe { sys::bm_session_arrival_pins(self.raw, std::ptr::null_mut(), 0) };
+        let mut out = vec![0u32; n];
+        let total = unsafe { sys::bm_session_arrival_pins(self.raw, out.as_mut_ptr(), out.len()) };
+        out.truncate(total.min(n));
+        out
+    }
+
+    pub fn set_sequence_duration(&self, segment: crate::playback::Segment, seconds: f64) -> Changed {
+        take_change(unsafe { sys::bm_session_set_sequence_duration(self.raw, segment.to_raw(), seconds) })
+    }
+
+    pub fn regenerate_steps(&self, order: &[u32]) -> Changed {
+        take_change(unsafe { sys::bm_session_regenerate_steps(self.raw, order.as_ptr(), order.len()) })
+    }
+
+    pub fn move_to_new_step(&self, pieces: &[u32], index: usize) -> Changed {
+        take_change(unsafe {
+            sys::bm_session_move_to_new_step(self.raw, pieces.as_ptr(), pieces.len(), index)
+        })
+    }
+
+    pub fn undo_depth(&self) -> usize {
+        unsafe { sys::bm_session_undo_depth(self.raw) }
+    }
 }
 
 impl Drop for Session {

@@ -100,5 +100,13 @@ fn struct_sizes_match() {
     assert_eq!(size(c"BmPlacementPreview"), size_of::<bm_sys::BmPlacementPreview>());
     assert_eq!(size(c"BmStepRow"), size_of::<bm_sys::BmStepRow>());
     assert_eq!(size(c"BmItemRow"), size_of::<bm_sys::BmItemRow>());
+    assert_eq!(size(c"BmPlaybackState"), size_of::<bm_sys::BmPlaybackState>());
+    assert_eq!(size(c"BmViewportPreferences"), size_of::<bm_sys::BmViewportPreferences>());
+    assert_eq!(size(c"BmTimelineInfo"), size_of::<bm_sys::BmTimelineInfo>());
+    assert_eq!(size(c"BmFlightRow"), size_of::<bm_sys::BmFlightRow>());
+    assert_eq!(size(c"BmLaneRun"), size_of::<bm_sys::BmLaneRun>());
+    assert_eq!(size(c"BmLaneStep"), size_of::<bm_sys::BmLaneStep>());
+    assert_eq!(size(c"BmLaneSubmodel"), size_of::<bm_sys::BmLaneSubmodel>());
+    assert_eq!(size(c"BmTimelineView"), size_of::<bm_sys::BmTimelineView>());
     assert_eq!(size(c"nope"), 0);
 }

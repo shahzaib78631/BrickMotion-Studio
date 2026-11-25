@@ -274,6 +274,137 @@ pub struct BmItemRow {
     pub pieces: usize,
 }
 
+pub type BmPlanState = u32;
+pub const BM_PLAN_IDLE: BmPlanState = 0;
+pub const BM_PLAN_PLANNING: BmPlanState = 1;
+pub const BM_PLAN_READY: BmPlanState = 2;
+pub const BM_PLAN_FAILED: BmPlanState = 3;
+
+pub type BmPlanStage = u32;
+pub const BM_STAGE_WAITING: BmPlanStage = 0;
+pub const BM_STAGE_SOLVING: BmPlanStage = 1;
+pub const BM_STAGE_CHECKING_FLIGHTS: BmPlanStage = 2;
+pub const BM_STAGE_PREPARING: BmPlanStage = 3;
+pub const BM_STAGE_STANDARD_PREVIEW: BmPlanStage = 4;
+
+pub type BmAssemblyPreview = u32;
+pub const BM_PREVIEW_ASSEMBLED: BmAssemblyPreview = 0;
+pub const BM_PREVIEW_SEPARATED: BmAssemblyPreview = 1;
+pub const BM_PREVIEW_LAID_OUT: BmAssemblyPreview = 2;
+pub const BM_PREVIEW_EXPLODED: BmAssemblyPreview = 3;
+
+pub type BmSegment = u32;
+pub const BM_SEGMENT_INTRO: BmSegment = 0;
+pub const BM_SEGMENT_BUILD: BmSegment = 1;
+pub const BM_SEGMENT_HERO: BmSegment = 2;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct BmPlaybackState {
+    pub seconds: f64,
+    pub duration: f64,
+    pub playing: bool,
+    pub waiting_to_play: bool,
+    pub at_rest: bool,
+    pub stale: bool,
+    pub plan: BmPlanState,
+    pub version: u64,
+    pub stage: BmPlanStage,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct BmViewportPreferences {
+    pub edges: bool,
+    pub floor: bool,
+    pub shadows: bool,
+    pub ambient_occlusion: bool,
+    pub auto_plan: bool,
+    pub scene_backdrop: bool,
+}
+
+#[repr(C)]
+pub struct BmTimeline {
+    _private: [u8; 0],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct BmTimelineInfo {
+    pub version: u64,
+    pub duration: f64,
+    pub fps: f64,
+    pub build_start: f64,
+    pub build_end: f64,
+    pub planning_ms: f64,
+    pub standard_preview: bool,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct BmFlightRow {
+    pub piece: u32,
+    pub step: i32,
+    pub depth: i32,
+    pub color: i32,
+    pub start: f64,
+    pub end: f64,
+    pub name: *const c_char,
+    pub flag: *const c_char,
+    pub blocker: *const c_char,
+    pub independent: bool,
+}
+
+#[repr(C)]
+pub struct BmLanes {
+    _private: [u8; 0],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct BmLaneRun {
+    pub id: usize,
+    pub step: i32,
+    pub start: f64,
+    pub end: f64,
+    pub next: f64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct BmLaneStep {
+    pub step: i32,
+    pub start: f64,
+    pub end: f64,
+    pub pause_end: f64,
+    pub flights: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct BmLaneSubmodel {
+    pub scheduled: bool,
+    pub flight: i32,
+    pub item: u64,
+    pub depth: i32,
+    pub start: f64,
+    pub end: f64,
+    pub attach: f64,
+    pub has_attach: bool,
+    pub name: *const c_char,
+    pub pieces: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BmTimelineView {
+    pub zoom: f64,
+    pub offset: f64,
+    pub viewport_width: f64,
+    pub lead_inset: f64,
+    pub trail_inset: f64,
+}
+
 unsafe extern "C" {
     pub fn bm_string_free(s: BmString);
     pub fn bm_ldraw_directory() -> BmString;
@@ -410,6 +541,62 @@ unsafe extern "C" {
     pub fn bm_session_set_step_fields(s: *mut BmSession, at: usize, title: *const c_char, notes: *const c_char, pause_after: f64, pin_order: bool, continuing: bool) -> BmChange;
     pub fn bm_session_move_to_step(s: *mut BmSession, pieces: *const u32, n: usize, step: usize) -> BmChange;
     pub fn bm_session_reorder_in_step(s: *mut BmSession, step: usize, from: usize, to: usize) -> BmChange;
+
+    pub fn bm_viewport_play(v: *mut BmViewport, on: bool);
+    pub fn bm_viewport_play_range(v: *mut BmViewport, start: f64, end: f64);
+    pub fn bm_viewport_seek(v: *mut BmViewport, seconds: f64);
+    pub fn bm_viewport_set_playback_rate(v: *mut BmViewport, rate: f64);
+    pub fn bm_viewport_set_playback_loop(v: *mut BmViewport, loop_: bool);
+    pub fn bm_viewport_request_plan(v: *mut BmViewport);
+    pub fn bm_viewport_regenerate_plan(v: *mut BmViewport, standard_preview: bool);
+    pub fn bm_viewport_playback_state(v: *const BmViewport) -> BmPlaybackState;
+    pub fn bm_viewport_plan_error(v: *const BmViewport) -> BmString;
+    pub fn bm_viewport_planned_version(v: *const BmViewport) -> u64;
+    pub fn bm_viewport_set_preferences(v: *mut BmViewport, p: BmViewportPreferences);
+    pub fn bm_viewport_arrange(v: *mut BmViewport, step: i32, mode: BmAssemblyPreview);
+    pub fn bm_viewport_build_order(v: *mut BmViewport, out: *mut u32, cap: usize) -> usize;
+
+    pub fn bm_viewport_build_timeline(v: *const BmViewport) -> *mut BmTimeline;
+    pub fn bm_timeline_info(t: *const BmTimeline) -> BmTimelineInfo;
+    pub fn bm_timeline_flights_len(t: *const BmTimeline) -> usize;
+    pub fn bm_timeline_flight_at(t: *const BmTimeline, i: usize) -> BmFlightRow;
+    pub fn bm_timeline_notes_len(t: *const BmTimeline) -> usize;
+    pub fn bm_timeline_note_at(t: *const BmTimeline, i: usize) -> *const c_char;
+    pub fn bm_timeline_free(t: *mut BmTimeline);
+
+    pub fn bm_lanes_new(t: *const BmTimeline, s: *const BmSession) -> *mut BmLanes;
+    pub fn bm_lanes_runs_len(l: *const BmLanes) -> usize;
+    pub fn bm_lanes_run_at(l: *const BmLanes, i: usize) -> BmLaneRun;
+    pub fn bm_lanes_steps_len(l: *const BmLanes) -> usize;
+    pub fn bm_lanes_step_at(l: *const BmLanes, i: usize) -> BmLaneStep;
+    pub fn bm_lanes_step_flights(l: *const BmLanes, i: usize, out: *mut usize, cap: usize) -> usize;
+    pub fn bm_lanes_submodels_len(l: *const BmLanes) -> usize;
+    pub fn bm_lanes_submodel_at(l: *const BmLanes, i: usize) -> BmLaneSubmodel;
+    pub fn bm_lanes_submodel_pieces(l: *const BmLanes, i: usize, out: *mut u32, cap: usize) -> usize;
+    pub fn bm_lanes_diagnostics(l: *const BmLanes, out: *mut usize, cap: usize) -> usize;
+    pub fn bm_lanes_run_index_at(l: *const BmLanes, seconds: f64) -> i64;
+    pub fn bm_lanes_travel(l: *const BmLanes, time: f64, duration: f64, forward: bool) -> f64;
+    pub fn bm_lanes_arrival_target(l: *const BmLanes, t: *const BmTimeline, s: *const BmSession, time: f64, excluding: *const u32, n: usize, step: *mut i32, before: *mut usize, at: *mut f64) -> bool;
+    pub fn bm_lanes_free(l: *mut BmLanes);
+
+    pub fn bm_pack_lane(x: *const f64, width: *const f64, n: usize, rows_out: *mut u32) -> usize;
+
+    pub fn bm_timeline_view_magnify(view: *mut BmTimelineView, factor: f64, screen_x: f64) -> bool;
+    pub fn bm_timeline_view_zoom_by(view: *mut BmTimelineView, factor: f64, playhead: f64, duration: f64) -> bool;
+    pub fn bm_timeline_view_fit(view: *mut BmTimelineView) -> bool;
+    pub fn bm_timeline_view_reveal(view: *mut BmTimelineView, time: f64, duration: f64, centred: bool) -> bool;
+    pub fn bm_timeline_view_pan_at_edge(view: *mut BmTimelineView, screen_x: f64) -> bool;
+    pub fn bm_timeline_view_time_at(view: BmTimelineView, screen_x: f64, duration: f64) -> f64;
+    pub fn bm_tick_interval(duration: f64, width: f64) -> f64;
+
+    pub fn bm_session_move_arrival(s: *mut BmSession, pieces: *const u32, n: usize, step: usize, before: usize, force: bool) -> BmChange;
+    pub fn bm_session_reorder_arrival(s: *mut BmSession, step: usize, from: usize, to: usize) -> BmChange;
+    pub fn bm_session_set_arrival_pinned(s: *mut BmSession, pieces: *const u32, n: usize, pinned: bool) -> BmChange;
+    pub fn bm_session_arrival_pins(s: *const BmSession, out: *mut u32, cap: usize) -> usize;
+    pub fn bm_session_set_sequence_duration(s: *mut BmSession, segment: BmSegment, seconds: f64) -> BmChange;
+    pub fn bm_session_regenerate_steps(s: *mut BmSession, order: *const u32, n: usize) -> BmChange;
+    pub fn bm_session_move_to_new_step(s: *mut BmSession, pieces: *const u32, n: usize, index: usize) -> BmChange;
+    pub fn bm_session_undo_depth(s: *const BmSession) -> usize;
 }
 
 /// Every function declared above, for the header agreement test.
@@ -447,4 +634,20 @@ pub const DECLARED: &[&str] = &[
     "bm_session_pieces_of_step", "bm_session_insert_step", "bm_session_delete_step",
     "bm_session_move_step", "bm_session_split_step", "bm_session_merge_steps",
     "bm_session_set_step_fields", "bm_session_move_to_step", "bm_session_reorder_in_step",
+    "bm_viewport_play", "bm_viewport_play_range", "bm_viewport_seek", "bm_viewport_set_playback_rate",
+    "bm_viewport_set_playback_loop", "bm_viewport_request_plan", "bm_viewport_regenerate_plan",
+    "bm_viewport_playback_state", "bm_viewport_plan_error", "bm_viewport_planned_version",
+    "bm_viewport_set_preferences", "bm_viewport_arrange", "bm_viewport_build_order",
+    "bm_viewport_build_timeline", "bm_timeline_info", "bm_timeline_flights_len",
+    "bm_timeline_flight_at", "bm_timeline_notes_len", "bm_timeline_note_at", "bm_timeline_free",
+    "bm_lanes_new", "bm_lanes_runs_len", "bm_lanes_run_at", "bm_lanes_steps_len",
+    "bm_lanes_step_at", "bm_lanes_step_flights", "bm_lanes_submodels_len", "bm_lanes_submodel_at",
+    "bm_lanes_submodel_pieces", "bm_lanes_diagnostics", "bm_lanes_run_index_at", "bm_lanes_travel",
+    "bm_lanes_arrival_target", "bm_lanes_free", "bm_pack_lane",
+    "bm_timeline_view_magnify", "bm_timeline_view_zoom_by", "bm_timeline_view_fit",
+    "bm_timeline_view_reveal", "bm_timeline_view_pan_at_edge", "bm_timeline_view_time_at",
+    "bm_tick_interval",
+    "bm_session_move_arrival", "bm_session_reorder_arrival", "bm_session_set_arrival_pinned",
+    "bm_session_arrival_pins", "bm_session_set_sequence_duration", "bm_session_regenerate_steps",
+    "bm_session_move_to_new_step", "bm_session_undo_depth",
 ];

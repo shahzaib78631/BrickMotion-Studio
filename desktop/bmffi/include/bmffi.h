@@ -300,6 +300,138 @@ BMFFI_API BmChange bm_session_set_step_fields(BmSession* s, size_t at, const cha
 BMFFI_API BmChange bm_session_move_to_step(BmSession* s, const uint32_t* pieces, size_t n, size_t step);
 BMFFI_API BmChange bm_session_reorder_in_step(BmSession* s, size_t step, size_t from, size_t to);
 
+// ---- Playback, plan and timeline ----
+typedef enum { BM_PLAN_IDLE, BM_PLAN_PLANNING, BM_PLAN_READY, BM_PLAN_FAILED } BmPlanState;
+typedef enum {
+  BM_STAGE_WAITING,
+  BM_STAGE_SOLVING,
+  BM_STAGE_CHECKING_FLIGHTS,
+  BM_STAGE_PREPARING,
+  BM_STAGE_STANDARD_PREVIEW
+} BmPlanStage;
+typedef enum { BM_PREVIEW_ASSEMBLED, BM_PREVIEW_SEPARATED, BM_PREVIEW_LAID_OUT, BM_PREVIEW_EXPLODED } BmAssemblyPreview;
+typedef enum { BM_SEGMENT_INTRO, BM_SEGMENT_BUILD, BM_SEGMENT_HERO } BmSegment;
+
+typedef struct {
+  double seconds, duration;
+  bool playing, waiting_to_play, at_rest, stale;
+  BmPlanState plan;
+  uint64_t version;
+  BmPlanStage stage;
+} BmPlaybackState;
+
+typedef struct {
+  bool edges, floor, shadows, ambient_occlusion, auto_plan, scene_backdrop;
+} BmViewportPreferences;
+
+BMFFI_API void bm_viewport_play(BmViewport* v, bool on);
+BMFFI_API void bm_viewport_play_range(BmViewport* v, double start, double end);
+BMFFI_API void bm_viewport_seek(BmViewport* v, double seconds);
+BMFFI_API void bm_viewport_set_playback_rate(BmViewport* v, double rate);
+BMFFI_API void bm_viewport_set_playback_loop(BmViewport* v, bool loop);
+BMFFI_API void bm_viewport_request_plan(BmViewport* v);
+BMFFI_API void bm_viewport_regenerate_plan(BmViewport* v, bool standard_preview);
+BMFFI_API BmPlaybackState bm_viewport_playback_state(const BmViewport* v);
+BMFFI_API BmString bm_viewport_plan_error(const BmViewport* v);
+BMFFI_API uint64_t bm_viewport_planned_version(const BmViewport* v);
+BMFFI_API void bm_viewport_set_preferences(BmViewport* v, BmViewportPreferences p);
+/// `step` < 0: the whole model at rest (full inventory).
+BMFFI_API void bm_viewport_arrange(BmViewport* v, int32_t step, BmAssemblyPreview mode);
+/// Two-call: returns the total, writes min(total, cap).
+BMFFI_API size_t bm_viewport_build_order(BmViewport* v, uint32_t* out, size_t cap);
+
+/// An owned snapshot of the planned build; its strings live until bm_timeline_free.
+typedef struct BmTimeline BmTimeline;
+typedef struct {
+  uint64_t version;
+  double duration, fps, build_start, build_end, planning_ms;
+  bool standard_preview;
+} BmTimelineInfo;
+typedef struct {
+  uint32_t piece;
+  int32_t step, depth, color;
+  double start, end;
+  const char *name, *flag, *blocker;
+  bool independent;
+} BmFlightRow;
+
+BMFFI_API BmTimeline* bm_viewport_build_timeline(const BmViewport* v);
+BMFFI_API BmTimelineInfo bm_timeline_info(const BmTimeline* t);
+BMFFI_API size_t bm_timeline_flights_len(const BmTimeline* t);
+BMFFI_API BmFlightRow bm_timeline_flight_at(const BmTimeline* t, size_t i);
+BMFFI_API size_t bm_timeline_notes_len(const BmTimeline* t);
+BMFFI_API const char* bm_timeline_note_at(const BmTimeline* t, size_t i);
+BMFFI_API void bm_timeline_free(BmTimeline* t);
+
+/// The Build timeline's lanes over a timeline (bmapp/build_lanes.h).
+typedef struct BmLanes BmLanes;
+typedef struct {
+  size_t id;
+  int32_t step;
+  double start, end, next;
+} BmLaneRun;
+typedef struct {
+  int32_t step;
+  double start, end, pause_end;
+  size_t flights;
+} BmLaneStep;
+typedef struct {
+  bool scheduled;
+  int32_t flight;
+  uint64_t item;
+  int32_t depth;
+  double start, end, attach;
+  bool has_attach;
+  const char* name;  ///< the last element of its path
+  size_t pieces;
+} BmLaneSubmodel;
+
+/// `s` may be NULL (submodel uses are then not resolved).
+BMFFI_API BmLanes* bm_lanes_new(const BmTimeline* t, const BmSession* s);
+BMFFI_API size_t bm_lanes_runs_len(const BmLanes* l);
+BMFFI_API BmLaneRun bm_lanes_run_at(const BmLanes* l, size_t i);
+BMFFI_API size_t bm_lanes_steps_len(const BmLanes* l);
+BMFFI_API BmLaneStep bm_lanes_step_at(const BmLanes* l, size_t i);
+BMFFI_API size_t bm_lanes_step_flights(const BmLanes* l, size_t i, size_t* out, size_t cap);
+BMFFI_API size_t bm_lanes_submodels_len(const BmLanes* l);
+BMFFI_API BmLaneSubmodel bm_lanes_submodel_at(const BmLanes* l, size_t i);
+BMFFI_API size_t bm_lanes_submodel_pieces(const BmLanes* l, size_t i, uint32_t* out, size_t cap);
+BMFFI_API size_t bm_lanes_diagnostics(const BmLanes* l, size_t* out, size_t cap);
+/// -1 with no runs.
+BMFFI_API int64_t bm_lanes_run_index_at(const BmLanes* l, double seconds);
+BMFFI_API double bm_lanes_travel(const BmLanes* l, double time, double duration, bool forward);
+BMFFI_API bool bm_lanes_arrival_target(const BmLanes* l, const BmTimeline* t, const BmSession* s, double time,
+                                       const uint32_t* excluding, size_t n, int32_t* step, size_t* before,
+                                       double* at);
+BMFFI_API void bm_lanes_free(BmLanes* l);
+
+/// Packs spans sorted by x into rows; writes each span's row, returns the row count.
+BMFFI_API size_t bm_pack_lane(const double* x, const double* width, size_t n, uint32_t* rows_out);
+
+/// Zoom and scroll of a timeline track area (bmapp/timeline_view.h). Mutators return true on a change.
+typedef struct {
+  double zoom, offset, viewport_width, lead_inset, trail_inset;
+} BmTimelineView;
+BMFFI_API bool bm_timeline_view_magnify(BmTimelineView* view, double factor, double screen_x);
+BMFFI_API bool bm_timeline_view_zoom_by(BmTimelineView* view, double factor, double playhead, double duration);
+BMFFI_API bool bm_timeline_view_fit(BmTimelineView* view);
+BMFFI_API bool bm_timeline_view_reveal(BmTimelineView* view, double time, double duration, bool centred);
+BMFFI_API bool bm_timeline_view_pan_at_edge(BmTimelineView* view, double screen_x);
+BMFFI_API double bm_timeline_view_time_at(BmTimelineView view, double screen_x, double duration);
+BMFFI_API double bm_tick_interval(double duration, double width);
+
+// ---- Arrivals, sequence and step order ----
+BMFFI_API BmChange bm_session_move_arrival(BmSession* s, const uint32_t* pieces, size_t n, size_t step, size_t before,
+                                           bool force);
+BMFFI_API BmChange bm_session_reorder_arrival(BmSession* s, size_t step, size_t from, size_t to);
+BMFFI_API BmChange bm_session_set_arrival_pinned(BmSession* s, const uint32_t* pieces, size_t n, bool pinned);
+BMFFI_API size_t bm_session_arrival_pins(const BmSession* s, uint32_t* out, size_t cap);
+BMFFI_API BmChange bm_session_set_sequence_duration(BmSession* s, BmSegment segment, double seconds);
+BMFFI_API BmChange bm_session_regenerate_steps(BmSession* s, const uint32_t* order, size_t n);
+BMFFI_API BmChange bm_session_move_to_new_step(BmSession* s, const uint32_t* pieces, size_t n, size_t index);
+/// How many edits undo can take back.
+BMFFI_API size_t bm_session_undo_depth(const BmSession* s);
+
 #ifdef __cplusplus
 }
 #endif
