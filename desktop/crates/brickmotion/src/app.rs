@@ -1131,7 +1131,6 @@ impl eframe::App for BrickMotionApp {
         self.text_focus = ui.ctx().egui_wants_keyboard_input();
         crate::shortcuts::handle(self, ui.ctx());
         chrome::titlebar::show(ui, self);
-        chrome::ribbon::show(ui, self);
         if self.workspace == Workspace::Animate {
             chrome::timeline::show(ui, self);
         }

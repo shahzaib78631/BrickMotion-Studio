@@ -131,14 +131,16 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
     let t = app.theme;
 
     Panel::bottom("timeline")
-        .exact_size(app.timeline.height)
+        .exact_size(app.timeline.height + 14.0)
         .resizable(false)
         .show_separator_line(false)
-        .frame(Frame::NONE.fill(t.bg1))
+        .frame(Frame::NONE.fill(t.bg0).inner_margin(egui::Margin { left: 8, right: 8, top: 6, bottom: 8 }))
         .show(ui, |ui| {
+            // A floating card, like the ribbon (m5-rulings.md).
             let full = ui.max_rect();
             let line = Stroke::new(1.0, t.border);
-            ui.painter().hline(full.x_range(), full.top() + 0.5, line);
+            let card = super::float_frame(&t);
+            ui.painter().rect(full, card.corner_radius, t.bg1, card.stroke, egui::StrokeKind::Outside);
 
             // Top-edge vertical resize grip.
             let grip = Rect::from_min_size(full.min, vec2(full.width(), 5.0));

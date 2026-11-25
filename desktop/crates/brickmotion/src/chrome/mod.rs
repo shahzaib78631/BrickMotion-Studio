@@ -30,7 +30,7 @@ use crate::commands::Command;
 use crate::icons::{self, Icon};
 use crate::theme::{SMALL, Theme};
 
-/// The area between the ribbon and the timeline: viewport plus floating panels.
+/// The area between the title bar and the timeline: viewport, ribbon and floating panels.
 pub fn central(ui: &mut Ui, app: &mut BrickMotionApp) {
     let t = app.theme;
     egui::CentralPanel::no_frame().show(ui, |ui| {
@@ -39,9 +39,12 @@ pub fn central(ui: &mut Ui, app: &mut BrickMotionApp) {
         let playing = app.transport.state.playing;
         let planning = app.transport.busy() || app.transport.state.waiting_to_play;
         app.viewport.show(ui, &mut app.doc, &mut app.edit, &t, app.prefs.auto_plan, playing, planning);
-        browser::show(ui, app, rect);
-        properties::show(ui, app, rect);
-        navigator::show(ui, app, rect);
+        // The ribbon floats over the top of the view; the other panels start below it.
+        ribbon::show(ui, app, rect);
+        let below = egui::Rect::from_min_max(egui::pos2(rect.left(), rect.top() + ribbon::SPACE), rect.max);
+        browser::show(ui, app, below);
+        properties::show(ui, app, below);
+        navigator::show(ui, app, below);
         callout::show(ui, app, rect);
         viewbar::show(ui, app, rect);
         notices::show(ui, app, rect);

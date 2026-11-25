@@ -1,38 +1,62 @@
-//! The ribbon: Workspace button, underlined tabs, labelled tool groups, and on the right
-//! Search commands over the Build | Animate switch.
+//! The ribbon, drawn over the viewport as two floating cards (m5-rulings.md): the Workspace
+//! card, and one ribbon card with the tabs and Search commands on top and the tool groups and
+//! the Build | Animate switch below.
 use egui::{
-    Align2, Color32, CornerRadius, FontId, Frame, Panel, Pos2, Rect, RichText, Sense, Stroke, StrokeKind, Ui, UiBuilder, Vec2,
+    Align2, Color32, CornerRadius, FontId, Pos2, Rect, RichText, Sense, Stroke, StrokeKind, Ui, UiBuilder, Vec2,
     WidgetInfo, pos2, vec2,
 };
 
-use super::{caption, hover_card, text};
+use super::{caption, float_frame, hover_card, text};
 use crate::commands::{Command, enabled, registry, tabs};
 use crate::icons::{self, Icon};
 use crate::{BrickMotionApp, Theme, Workspace};
 
-const HEIGHT: f32 = 104.0;
+/// Height of both cards.
+const CARD_H: f32 = 112.0;
+/// Gap above the cards, between them, and to the window's sides.
+const TOP: f32 = 6.0;
+const SIDE: f32 = 8.0;
+const GAP: f32 = 6.0;
 const WS_W: f32 = 96.0;
-const RIGHT_W: f32 = 250.0;
+const TABS_H: f32 = 36.0;
+const RIGHT_W: f32 = 240.0;
+/// Space the ribbon takes from the top of the viewport; floating panels start below it.
+pub const SPACE: f32 = TOP + CARD_H;
+const TAB_ON: Color32 = Color32::from_rgb(0x2b, 0x4c, 0x80);
+const TAB_ON_TEXT: Color32 = Color32::from_rgb(0xd6, 0xe4, 0xff);
 
-pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
+/// Draws the ribbon over the top of `area` (the viewport).
+pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
     let t = app.theme;
-    Panel::top("ribbon")
-        .exact_size(HEIGHT)
-        .resizable(false)
-        .show_separator_line(false)
-        .frame(Frame::NONE.fill(t.bg2))
-        .show(ui, |ui| {
-            let full = ui.max_rect();
-            let line = Stroke::new(1.0, t.border);
-            ui.painter().hline(full.x_range(), full.bottom() - 0.5, line);
-            let ws = Rect::from_min_size(full.min, vec2(WS_W, full.height()));
-            let right = Rect::from_min_max(pos2(full.right() - RIGHT_W, full.top()), full.max);
-            let main = Rect::from_min_max(pos2(ws.right() + 1.0, full.top()), pos2(right.left() - 1.0, full.bottom()));
-            ui.painter().vline(ws.right() + 0.5, full.y_range(), line);
-            ui.painter().vline(right.left() - 0.5, full.y_range(), line);
+    let ws = Rect::from_min_size(area.min + vec2(SIDE, TOP), vec2(WS_W, CARD_H));
+    let card = Rect::from_min_max(pos2(ws.right() + GAP, ws.top()), pos2(area.right() - SIDE, ws.bottom()));
+    egui::Area::new(egui::Id::unique("ribbon"))
+        .fixed_pos(ws.min)
+        .order(egui::Order::Middle)
+        .constrain(false)
+        .show(ui.ctx(), |ui| {
+            ui.set_min_size(vec2(card.right() - ws.left(), CARD_H));
+            for r in [ws, card] {
+                // Absorbs clicks and drags so they never reach the viewport underneath.
+                let _ = ui.interact(r, ui.scope_id().with(("ribbon-card", r.left() as i32)), Sense::click_and_drag());
+                let frame = float_frame(&t);
+                ui.painter().add(frame.shadow.as_shape(r, frame.corner_radius));
+                ui.painter().rect(r, frame.corner_radius, frame.fill, frame.stroke, StrokeKind::Inside);
+            }
             workspace_button(ui, app, ws);
-            ui.scope_builder(UiBuilder::new().max_rect(main), |ui| main_area(ui, app));
-            ui.scope_builder(UiBuilder::new().max_rect(right), |ui| right_column(ui, app, right));
+            let tabs_r = Rect::from_min_size(card.min, vec2(card.width(), TABS_H));
+            ui.painter().hline(card.x_range().shrink(1.0), tabs_r.bottom() - 0.5, Stroke::new(1.0, t.border));
+            let search = Rect::from_min_max(pos2(card.right() - 10.0 - RIGHT_W, tabs_r.top() + 5.0), pos2(card.right() - 10.0, tabs_r.bottom() - 5.0));
+            ui.scope_builder(UiBuilder::new().max_rect(Rect::from_min_max(tabs_r.min, pos2(search.left() - 8.0, tabs_r.bottom()))), |ui| {
+                tab_row(ui, app)
+            });
+            search_box(ui, app, search);
+            let tools = Rect::from_min_max(pos2(card.left(), tabs_r.bottom()), card.max);
+            let switch = Rect::from_center_size(pos2(card.right() - 10.0 - RIGHT_W / 2.0, tools.center().y), vec2(RIGHT_W, 38.0));
+            ui.scope_builder(UiBuilder::new().max_rect(Rect::from_min_max(tools.min, pos2(switch.left() - 8.0, tools.bottom()))), |ui| {
+                tool_groups(ui, app)
+            });
+            workspace_switch(ui, app, switch);
         });
 }
 
@@ -42,8 +66,10 @@ fn workspace_button(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect) {
     let resp = ui.interact(r, ui.scope_id().with("workspace"), Sense::click());
     resp.widget_info(|| WidgetInfo::labeled(egui::Role::Button, true, "Workspace"));
     if resp.hovered() {
-        ui.painter().rect_filled(r, 0.0, t.bg3);
+        ui.painter().rect_filled(r.shrink(1.0), 9.0, t.bg3);
     }
+    let line = Rect::from_min_size(pos2(r.left() + 10.0, r.top()), vec2(r.width() - 20.0, 3.0));
+    ui.painter().rect_filled(line, CornerRadius { nw: 0, ne: 0, sw: 3, se: 3 }, t.accent);
     let c = r.center();
     let i = if app.workspace == Workspace::Build { Icon::Brick } else { Icon::Fly };
     icons::paint(ui, i, Rect::from_center_size(c - vec2(0.0, 20.0), Vec2::splat(20.0)), 20.0, t.playhead);
@@ -56,30 +82,35 @@ fn workspace_button(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect) {
     }
 }
 
-fn main_area(ui: &mut Ui, app: &mut BrickMotionApp) {
+/// The workspace tabs; the chosen one is a solid blue pill.
+fn tab_row(ui: &mut Ui, app: &mut BrickMotionApp) {
     let t = app.theme;
-    ui.add_space(4.0);
-    // Tabs, underlined in the accent when on.
-    ui.horizontal(|ui| {
-        ui.set_height(26.0);
+    ui.horizontal_centered(|ui| {
         ui.add_space(8.0);
-        ui.spacing_mut().item_spacing.x = 6.0;
+        ui.spacing_mut().item_spacing.x = 2.0;
         for &tab in tabs(app.workspace) {
             let on = app.ribbon_tab == tab;
-            let label = RichText::new(tab).color(if on { t.text1 } else { t.text2 });
+            let label = RichText::new(tab).color(if on { TAB_ON_TEXT } else { t.text2 });
             let w = ui.painter().layout_no_wrap(tab.to_owned(), FontId::proportional(12.5), t.text1).size().x;
-            let resp = ui.add(egui::Button::new(label).frame(false).min_size(vec2(w + 22.0, 24.0)));
+            let resp = ui.add(
+                egui::Button::new(label)
+                    .fill(if on { TAB_ON } else { Color32::TRANSPARENT })
+                    .stroke(Stroke::NONE)
+                    .corner_radius(6)
+                    .min_size(vec2(w + 26.0, 26.0)),
+            );
             let resp = resp.on_hover_cursor(egui::CursorIcon::PointingHand);
-            if on {
-                let r = resp.rect;
-                ui.painter().hline(r.x_range(), r.bottom() + 1.0, Stroke::new(2.0, t.accent));
-            }
             if resp.clicked() {
                 app.ribbon_tab = tab;
             }
         }
     });
-    ui.add_space(4.0);
+}
+
+/// The tool groups of the chosen tab, each with its caption under it.
+fn tool_groups(ui: &mut Ui, app: &mut BrickMotionApp) {
+    let t = app.theme;
+    ui.add_space(5.0);
     let ctx = app.ctx();
     let cmds: Vec<&Command> = registry().iter().filter(|c| c.workspace == app.workspace && c.tab == app.ribbon_tab).collect();
     if cmds.is_empty() {
@@ -140,7 +171,7 @@ fn tool(ui: &mut Ui, t: &Theme, c: &Command, on: bool, active: bool) -> egui::Re
     let (rect, resp) = ui.allocate_exact_size(vec2(w, 46.0), Sense::click());
     resp.widget_info(|| WidgetInfo::selected(egui::Role::Button, on, active, c.title));
     if active {
-        ui.painter().rect_filled(rect, t.radius, t.accent_bg());
+        ui.painter().rect(rect, t.radius, t.accent_bg(), Stroke::new(1.0, t.accent.gamma_multiply(0.55)), StrokeKind::Inside);
     } else if resp.hovered() {
         ui.painter().rect_filled(rect, t.radius, t.bg3);
     }
@@ -158,12 +189,9 @@ fn tool(ui: &mut Ui, t: &Theme, c: &Command, on: bool, active: bool) -> egui::Re
     resp
 }
 
-/// Search commands, and under it the Build | Animate switch.
-fn right_column(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect) {
+/// Search commands: opens the palette.
+fn search_box(ui: &mut Ui, app: &mut BrickMotionApp, sr: Rect) {
     let t = app.theme;
-    let inner = r.shrink2(vec2(12.0, 0.0));
-    // Search commands: opens the palette.
-    let sr = Rect::from_min_size(pos2(inner.left(), r.top() + 8.0), vec2(inner.width(), 28.0));
     let resp = ui.interact(sr, ui.scope_id().with("search"), Sense::click());
     resp.widget_info(|| WidgetInfo::labeled(egui::Role::Button, true, "Search commands"));
     let p = ui.painter();
@@ -175,9 +203,11 @@ fn right_column(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect) {
     if resp.on_hover_text("Find any command by name").clicked() {
         app.requested.push("view.palette");
     }
+}
 
-    // The switch.
-    let wr = Rect::from_min_max(pos2(inner.left(), r.bottom() - 10.0 - 38.0), pos2(inner.right(), r.bottom() - 10.0));
+/// The Build | Animate switch.
+fn workspace_switch(ui: &mut Ui, app: &mut BrickMotionApp, wr: Rect) {
+    let t = app.theme;
     ui.painter().rect(wr, 8.0, t.bg1, Stroke::new(1.0, t.border), StrokeKind::Inside);
     let half = (wr.width() - 9.0) / 2.0;
     for (k, w) in [Workspace::Build, Workspace::Animate].into_iter().enumerate() {
