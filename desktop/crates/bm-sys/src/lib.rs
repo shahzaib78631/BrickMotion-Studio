@@ -167,6 +167,34 @@ pub struct BmGizmo {
     _private: [u8; 0],
 }
 
+#[repr(C)]
+pub struct BmParts {
+    _private: [u8; 0],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct BmPartMatch {
+    pub name: *const c_char,
+    pub description: *const c_char,
+    pub category: *const c_char,
+}
+
+#[repr(C)]
+pub struct BmStrings {
+    _private: [u8; 0],
+}
+
+#[repr(C)]
+pub struct BmPartPreview {
+    _private: [u8; 0],
+}
+
+#[repr(C)]
+pub struct BmPicture {
+    _private: [u8; 0],
+}
+
 unsafe extern "C" {
     pub fn bm_string_free(s: BmString);
     pub fn bm_ldraw_directory() -> BmString;
@@ -261,6 +289,22 @@ unsafe extern "C" {
     pub fn bm_drag_move(camera: BmCamera, view: BmVec2, origin: BmVec3, axes: BmMat3, handle: BmHandle, a: BmVec2, b: BmVec2, snap: BmVec3) -> BmVec3;
     pub fn bm_drag_rotate(camera: BmCamera, view: BmVec2, origin: BmVec3, axes: BmMat3, handle: BmHandle, a: BmVec2, b: BmVec2, free: bool) -> f64;
     pub fn bm_project_point(camera: BmCamera, view: BmVec2, p: BmVec3, out: *mut BmVec2) -> bool;
+
+    pub fn bm_library_parts(query: *const c_char, category: *const c_char, limit: usize) -> *mut BmParts;
+    pub fn bm_common_parts() -> *mut BmParts;
+    pub fn bm_parts_len(p: *const BmParts) -> usize;
+    pub fn bm_parts_at(p: *const BmParts, i: usize) -> BmPartMatch;
+    pub fn bm_parts_free(p: *mut BmParts);
+    pub fn bm_part_categories() -> *mut BmStrings;
+    pub fn bm_strings_len(s: *const BmStrings) -> usize;
+    pub fn bm_strings_at(s: *const BmStrings, i: usize) -> *const c_char;
+    pub fn bm_strings_free(s: *mut BmStrings);
+    pub fn bm_part_preview_new() -> *mut BmPartPreview;
+    pub fn bm_part_preview_free(p: *mut BmPartPreview);
+    pub fn bm_part_preview_render(p: *mut BmPartPreview, part: *const c_char, color: i32, dark: bool) -> *mut BmPicture;
+    pub fn bm_picture_info(p: *const BmPicture, w: *mut i32, h: *mut i32);
+    pub fn bm_picture_rgba(p: *const BmPicture) -> *const u8;
+    pub fn bm_picture_free(p: *mut BmPicture);
 }
 
 /// Every function declared above, for the header agreement test.
@@ -287,4 +331,8 @@ pub const DECLARED: &[&str] = &[
     "bm_gizmo_shape", "bm_gizmo_free", "bm_gizmo_line_len", "bm_gizmo_line", "bm_gizmo_ring_len",
     "bm_gizmo_ring_handle", "bm_gizmo_ring", "bm_gizmo_hit", "bm_handle_axis", "bm_drag_move",
     "bm_drag_rotate", "bm_project_point",
+    "bm_library_parts", "bm_common_parts", "bm_parts_len", "bm_parts_at", "bm_parts_free",
+    "bm_part_categories", "bm_strings_len", "bm_strings_at", "bm_strings_free",
+    "bm_part_preview_new", "bm_part_preview_free", "bm_part_preview_render",
+    "bm_picture_info", "bm_picture_rgba", "bm_picture_free",
 ];

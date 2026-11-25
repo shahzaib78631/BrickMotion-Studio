@@ -12,6 +12,7 @@ pub mod loader;
 pub mod menubar;
 mod notices;
 pub mod palette;
+pub mod previews;
 mod shortcuts;
 mod snapshot;
 pub mod support;

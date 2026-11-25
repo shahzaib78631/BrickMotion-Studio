@@ -124,6 +124,8 @@ pub struct BrickMotionApp {
     pub history: crate::history::History,
     /// Colour swatches popover state.
     pub swatches: chrome::swatches::Swatches,
+    /// Off-thread part preview renderer and texture cache.
+    pub previews: crate::previews::Previews,
     /// In-memory clipboard used when dialogs are off (headless tests).
     pub(crate) clipboard: String,
 }
@@ -183,6 +185,7 @@ impl BrickMotionApp {
             edit: crate::edit::EditState::default(),
             history,
             swatches: chrome::swatches::Swatches::default(),
+            previews: crate::previews::Previews::default(),
             clipboard: String::new(),
         };
         // Opened once the first frame knows the view's size, so the worker can draw it warm.
@@ -722,6 +725,7 @@ fn test_support() -> Support {
 
 impl eframe::App for BrickMotionApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.previews.frame_begin(ui.ctx());
         self.poll_loader();
         if self.loader.loading().is_some() {
             ui.ctx().request_repaint_after(Duration::from_millis(50));
@@ -741,6 +745,7 @@ impl eframe::App for BrickMotionApp {
         chrome::swatches::show(ui, self);
         chrome::confirm::show(ui, self);
         self.run_requested();
+        self.previews.frame_end();
         self.autosave(std::time::Instant::now());
         if self.autosaving.is_some() {
             ui.ctx().request_repaint_after(Duration::from_millis(50)); // to take its result

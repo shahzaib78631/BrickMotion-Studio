@@ -194,6 +194,31 @@ BMFFI_API double bm_drag_rotate(BmCamera camera, BmVec2 view, BmVec3 origin, BmM
                                 BmVec2 b, bool free);
 BMFFI_API bool bm_project_point(BmCamera camera, BmVec2 view, BmVec3 p, BmVec2* out);
 
+// ---- Library & part previews ----
+typedef struct BmParts BmParts;
+typedef struct { const char *name, *description, *category; } BmPartMatch;
+typedef struct BmStrings BmStrings;
+typedef struct BmPartPreview BmPartPreview;
+typedef struct BmPicture BmPicture;
+
+BMFFI_API BmParts* bm_library_parts(const char* query, const char* category, size_t limit);
+BMFFI_API BmParts* bm_common_parts(void);
+BMFFI_API size_t bm_parts_len(const BmParts* p);
+BMFFI_API BmPartMatch bm_parts_at(const BmParts* p, size_t i);
+BMFFI_API void bm_parts_free(BmParts* p);
+
+BMFFI_API BmStrings* bm_part_categories(void);
+BMFFI_API size_t bm_strings_len(const BmStrings* s);
+BMFFI_API const char* bm_strings_at(const BmStrings* s, size_t i);
+BMFFI_API void bm_strings_free(BmStrings* s);
+
+BMFFI_API BmPartPreview* bm_part_preview_new(void);
+BMFFI_API void bm_part_preview_free(BmPartPreview* p);
+BMFFI_API BmPicture* bm_part_preview_render(BmPartPreview* p, const char* part, int32_t color, bool dark);
+BMFFI_API void bm_picture_info(const BmPicture* p, int* w, int* h);
+BMFFI_API const uint8_t* bm_picture_rgba(const BmPicture* p);
+BMFFI_API void bm_picture_free(BmPicture* p);
+
 #ifdef __cplusplus
 }
 #endif
