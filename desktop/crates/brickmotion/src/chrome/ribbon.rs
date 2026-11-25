@@ -6,7 +6,7 @@ use egui::{
 };
 
 use super::{caption, hover_card, text};
-use crate::commands::{Command, registry, tabs};
+use crate::commands::{Command, enabled, registry, tabs};
 use crate::icons::{self, Icon};
 use crate::{BrickMotionApp, Theme, Workspace};
 
@@ -80,6 +80,7 @@ fn main_area(ui: &mut Ui, app: &mut BrickMotionApp) {
         }
     });
     ui.add_space(4.0);
+    let ctx = app.ctx();
     let cmds: Vec<&Command> = registry().iter().filter(|c| c.workspace == app.workspace && c.tab == app.ribbon_tab).collect();
     if cmds.is_empty() {
         ui.add_space(20.0);
@@ -106,9 +107,10 @@ fn main_area(ui: &mut Ui, app: &mut BrickMotionApp) {
                 let row = ui.horizontal(|ui| {
                     ui.add_space(6.0);
                     for c in &list {
-                        let resp = tool(ui, &t, c);
+                        let on = enabled(c, &ctx);
+                        let resp = tool(ui, &t, c, on);
                         let resp = hover_card(resp, &t, c);
-                        if resp.clicked() && c.enabled {
+                        if resp.clicked() && on {
                             app.requested.push(c.id);
                         }
                     }
@@ -129,16 +131,16 @@ fn main_area(ui: &mut Ui, app: &mut BrickMotionApp) {
 }
 
 /// One ribbon tool: a 22-px icon over its name.
-fn tool(ui: &mut Ui, t: &Theme, c: &Command) -> egui::Response {
-    let color = if c.enabled { t.text1 } else { t.text2 };
+fn tool(ui: &mut Ui, t: &Theme, c: &Command, on: bool) -> egui::Response {
+    let color = if on { t.text1 } else { t.text2 };
     let galley = ui.painter().layout_no_wrap(c.title.to_owned(), FontId::proportional(11.5), color);
     let w = (galley.size().x + 10.0).max(56.0);
     let (rect, resp) = ui.allocate_exact_size(vec2(w, 46.0), Sense::click());
-    resp.widget_info(|| WidgetInfo::labeled(egui::Role::Button, c.enabled, c.title));
+    resp.widget_info(|| WidgetInfo::labeled(egui::Role::Button, on, c.title));
     if resp.hovered() {
         ui.painter().rect_filled(rect, t.radius, t.bg3);
     }
-    let icon_tint = if c.enabled { Color32::from_rgb(0xc9, 0xce, 0xd6) } else { t.text3 };
+    let icon_tint = if on { Color32::from_rgb(0xc9, 0xce, 0xd6) } else { t.text3 };
     let ir = Rect::from_center_size(pos2(rect.center().x, rect.top() + 6.0 + 11.0), Vec2::splat(22.0));
     icons::paint(ui, c.icon, ir, 22.0, icon_tint);
     let tp = Pos2::new(rect.center().x - galley.size().x / 2.0, ir.bottom() + 4.0);

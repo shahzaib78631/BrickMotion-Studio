@@ -1,23 +1,175 @@
-//! Every command the ribbon and Search commands show. Generated from final-locked.html's
-//! ribbon and hover-card copy; the ribbon reads only this table.
-use crate::{Icon, Workspace};
+//! Every command, the state each needs, and the one dispatcher the ribbon, palette, shortcuts and
+//! menu bar all call. The ribbon rows come from final-locked.html's ribbon and hover-card copy.
+use egui::{Key, Modifiers};
+
+use crate::{BrickMotionApp, Icon, Workspace};
+
+/// When a command can run.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum When {
+    Always,
+    /// A document is open (a new one counts).
+    Document,
+    /// The document has pieces.
+    Pieces,
+    /// Something is selected.
+    Selection,
+    CanUndo,
+    CanRedo,
+    /// Not built yet: shown dimmed with " — coming soon".
+    Soon,
+}
+
+/// The native menu a command sits in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Menu {
+    App,
+    File,
+    Edit,
+    View,
+    None,
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct Command {
     pub id: &'static str,
     pub title: &'static str,
     pub icon: Icon,
-    pub shortcut: Option<&'static str>,
+    /// Written as the menus show it: "⇧⌘Z", "F", "⌫", "Esc". Always parses.
+    pub keys: Option<&'static str>,
     pub tip: &'static str,
     pub workspace: Workspace,
     /// "" for commands that are not on the ribbon.
     pub tab: &'static str,
     pub group: &'static str,
-    pub enabled: bool,
+    pub when: When,
+    pub menu: Menu,
+}
+
+/// The state commands are enabled from, built once per frame.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Ctx {
+    pub has_document: bool,
+    pub pieces: usize,
+    pub selected: usize,
+    pub can_undo: bool,
+    pub can_redo: bool,
+    pub undo_name: String,
+    pub redo_name: String,
+    /// A text field has keyboard focus: single keys belong to it.
+    pub text_focus: bool,
+}
+
+/// A key with its modifiers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Shortcut {
+    pub key: Key,
+    pub mods: Modifiers,
+}
+
+impl Shortcut {
+    /// "⇧⌘Z", "⌥⌘G", "⌘K", "F", "⌫", "Esc".
+    pub fn parse(s: &str) -> Option<Shortcut> {
+        let mut mods = Modifiers::NONE;
+        let mut rest = s;
+        loop {
+            let mut chars = rest.chars();
+            match chars.next() {
+                Some('⇧') => mods.shift = true,
+                // `command` alone: egui matches it to ⌘ on a Mac (and Ctrl elsewhere).
+                Some('⌘') => mods.command = true,
+                Some('⌥') => mods.alt = true,
+                Some('⌃') => mods.ctrl = true,
+                _ => break,
+            }
+            rest = chars.as_str();
+        }
+        let key = match rest {
+            "⌫" => Key::Backspace,
+            "Esc" => Key::Escape,
+            "" => return None,
+            k => Key::from_name(k)?,
+        };
+        Some(Shortcut { key, mods })
+    }
+
+    /// The shortcut as menus show it.
+    pub fn label(&self) -> String {
+        let mut out = String::new();
+        if self.mods.ctrl {
+            out.push('⌃');
+        }
+        if self.mods.alt {
+            out.push('⌥');
+        }
+        if self.mods.shift {
+            out.push('⇧');
+        }
+        if self.mods.command {
+            out.push('⌘');
+        }
+        out.push_str(match self.key {
+            Key::Backspace => "⌫",
+            Key::Escape => "Esc",
+            k => k.name(),
+        });
+        out
+    }
+
+    /// How many modifiers it holds; more specific shortcuts are matched first.
+    pub fn specificity(&self) -> usize {
+        [self.mods.shift, self.mods.command, self.mods.alt, self.mods.ctrl].iter().filter(|b| **b).count()
+    }
+}
+
+pub fn enabled(c: &Command, ctx: &Ctx) -> bool {
+    match c.when {
+        When::Always => true,
+        When::Document => ctx.has_document,
+        When::Pieces => ctx.pieces > 0,
+        When::Selection => ctx.selected > 0,
+        When::CanUndo => ctx.can_undo,
+        When::CanRedo => ctx.can_redo,
+        When::Soon => false,
+    }
+}
+
+/// Why a command is disabled, for the palette; None when it is enabled.
+pub fn why_disabled(c: &Command, ctx: &Ctx) -> Option<&'static str> {
+    if enabled(c, ctx) {
+        return None;
+    }
+    Some(match c.when {
+        When::Document => "Needs a document",
+        When::Pieces => "Needs a model with pieces",
+        When::Selection => "Needs a selection",
+        When::CanUndo => "Nothing to undo",
+        When::CanRedo => "Nothing to redo",
+        _ => "Coming soon",
+    })
+}
+
+/// The command's title now: "Undo Delete" names the edit undo would take back.
+pub fn title(c: &Command, ctx: &Ctx) -> String {
+    let named = |base: &str, name: &str| if name.is_empty() { base.to_owned() } else { format!("{base} {name}") };
+    match c.id {
+        "edit.undo" => named("Undo", &ctx.undo_name),
+        "edit.redo" => named("Redo", &ctx.redo_name),
+        _ => c.title.to_owned(),
+    }
+}
+
+/// The only way a command runs. False for an unknown or disabled id.
+pub fn run(app: &mut BrickMotionApp, id: &str) -> bool {
+    let Some(c) = find(id) else { return false };
+    if !enabled(c, &app.ctx()) {
+        return false;
+    }
+    app.execute(c.id)
 }
 
 pub fn registry() -> &'static [Command] {
-    &REGISTRY
+    REGISTRY
 }
 
 pub fn find(id: &str) -> Option<&'static Command> {
@@ -32,40 +184,52 @@ pub fn tabs(w: Workspace) -> &'static [&'static str] {
     }
 }
 
-static REGISTRY: [Command; 35] = [
-    Command { id: "model.add_part", title: "Add Part", icon: Icon::Plus, shortcut: Some("P"), tip: "Pick a part from the library and place it on the studs under the pointer. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Insert", enabled: false },
-    Command { id: "model.import", title: "Import", icon: Icon::Import, shortcut: Some("⌘O"), tip: "Open an LDraw or BrickMotion model.", workspace: Workspace::Build, tab: "Model", group: "Insert", enabled: true },
-    Command { id: "model.inventory", title: "Inventory", icon: Icon::Inventory, shortcut: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Insert", enabled: false },
-    Command { id: "model.move", title: "Move", icon: Icon::Move, shortcut: Some("M"), tip: "Drag the selection along the arrows; it snaps to studs and holes. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Modify", enabled: false },
-    Command { id: "model.rotate", title: "Rotate", icon: Icon::Rotate, shortcut: Some("R"), tip: "Turn the selection in 90° steps around its connection. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Modify", enabled: false },
-    Command { id: "model.recolour", title: "Recolour", icon: Icon::Paint, shortcut: Some("C"), tip: "Apply a colour to every selected piece. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Modify", enabled: false },
-    Command { id: "model.replace", title: "Replace", icon: Icon::Replace, shortcut: None, tip: "Swap the part, keeping position and colour. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Modify", enabled: false },
-    Command { id: "model.duplicate", title: "Duplicate", icon: Icon::Copy, shortcut: Some("⌘D"), tip: "Copy the selection and place the copy. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Modify", enabled: false },
-    Command { id: "model.submodel", title: "Submodel", icon: Icon::Group, shortcut: Some("⌥⌘G"), tip: "Turn the selection into a submodel used once. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Arrange", enabled: false },
-    Command { id: "model.extract", title: "Extract", icon: Icon::Extract, shortcut: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Arrange", enabled: false },
-    Command { id: "model.to_step", title: "To Step", icon: Icon::Step, shortcut: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Arrange", enabled: false },
-    Command { id: "model.seat_loose", title: "Seat Loose", icon: Icon::Seat, shortcut: None, tip: "Find pieces that are not connected and seat them. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Fit", enabled: false },
-    Command { id: "model.what_fits", title: "What Fits", icon: Icon::Search, shortcut: Some("F"), tip: "List parts builders usually put at this connection. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Fit", enabled: false },
-    Command { id: "model.look", title: "Look", icon: Icon::Eye, shortcut: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Configure", enabled: false },
-    Command { id: "model.build_settings", title: "Build Settings", icon: Icon::Sliders, shortcut: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Configure", enabled: false },
-    Command { id: "video.plan_build", title: "Plan Build", icon: Icon::Plan, shortcut: None, tip: "Work out the build order and flights for the video. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Plan", enabled: false },
-    Command { id: "video.regenerate", title: "Regenerate", icon: Icon::Regen, shortcut: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Plan", enabled: false },
-    Command { id: "video.order", title: "Order", icon: Icon::Step, shortcut: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Plan", enabled: false },
-    Command { id: "video.staging", title: "Staging", icon: Icon::Stage, shortcut: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Staging", enabled: false },
-    Command { id: "video.straighten", title: "Straighten", icon: Icon::Rotate, shortcut: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Staging", enabled: false },
-    Command { id: "video.flights", title: "Flights", icon: Icon::Fly, shortcut: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Staging", enabled: false },
-    Command { id: "video.add_key", title: "Add Key", icon: Icon::Keys, shortcut: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Keys", enabled: false },
-    Command { id: "video.bake_flight", title: "Bake Flight", icon: Icon::Fly, shortcut: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Keys", enabled: false },
-    Command { id: "video.group", title: "Group", icon: Icon::Group, shortcut: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Keys", enabled: false },
-    Command { id: "video.camera_key", title: "Camera Key", icon: Icon::Cam, shortcut: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Camera", enabled: false },
-    Command { id: "video.auto_direct", title: "Auto-direct", icon: Icon::Wand, shortcut: None, tip: "Place camera keys that follow the build. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Camera", enabled: false },
-    Command { id: "video.follow", title: "Follow", icon: Icon::Target, shortcut: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Camera", enabled: false },
-    Command { id: "video.snap_sound", title: "Snap Sound", icon: Icon::Wave, shortcut: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Audio", enabled: false },
-    Command { id: "video.mix", title: "Mix", icon: Icon::Sliders, shortcut: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Audio", enabled: false },
-    Command { id: "output.export_movie", title: "Export Movie", icon: Icon::Vid, shortcut: Some("⇧⌘E"), tip: "Render the build video with the current look. — coming soon", workspace: Workspace::Animate, tab: "Output", group: "Output", enabled: false },
-    Command { id: "output.export_still", title: "Export Still", icon: Icon::Cam, shortcut: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Output", group: "Output", enabled: false },
-    Command { id: "output.render_queue", title: "Render Queue", icon: Icon::Queue, shortcut: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Output", group: "Output", enabled: false },
-    Command { id: "file.open", title: "Open…", icon: Icon::File, shortcut: Some("⌘O"), tip: "Open an LDraw model (.ldr, .mpd, .dat).", workspace: Workspace::Build, tab: "", group: "File", enabled: true },
-    Command { id: "view.fit", title: "Fit All", icon: Icon::Fit, shortcut: Some("F"), tip: "Frame the whole model.", workspace: Workspace::Build, tab: "", group: "View", enabled: true },
-    Command { id: "view.home", title: "Home View", icon: Icon::Home, shortcut: Some("H"), tip: "Return to the starting view.", workspace: Workspace::Build, tab: "", group: "View", enabled: true },
+static REGISTRY: &[Command] = &[
+    Command { id: "model.add_part", title: "Add Part", icon: Icon::Plus, keys: Some("P"), tip: "Pick a part from the library and place it on the studs under the pointer. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Insert", when: When::Soon, menu: Menu::None },
+    Command { id: "model.import", title: "Import", icon: Icon::Import, keys: None, tip: "Open an LDraw or BrickMotion model.", workspace: Workspace::Build, tab: "Model", group: "Insert", when: When::Always, menu: Menu::None },
+    Command { id: "model.inventory", title: "Inventory", icon: Icon::Inventory, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Insert", when: When::Soon, menu: Menu::None },
+    Command { id: "model.move", title: "Move", icon: Icon::Move, keys: Some("M"), tip: "Drag the selection along the arrows; it snaps to studs and holes. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Modify", when: When::Soon, menu: Menu::None },
+    Command { id: "model.rotate", title: "Rotate", icon: Icon::Rotate, keys: Some("R"), tip: "Turn the selection in 90° steps around its connection. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Modify", when: When::Soon, menu: Menu::None },
+    Command { id: "model.recolour", title: "Recolour", icon: Icon::Paint, keys: Some("C"), tip: "Apply a colour to every selected piece. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Modify", when: When::Soon, menu: Menu::None },
+    Command { id: "model.replace", title: "Replace", icon: Icon::Replace, keys: None, tip: "Swap the part, keeping position and colour. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Modify", when: When::Soon, menu: Menu::None },
+    Command { id: "model.duplicate", title: "Duplicate", icon: Icon::Copy, keys: Some("⌘D"), tip: "Copy the selection and place the copy. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Modify", when: When::Soon, menu: Menu::None },
+    Command { id: "model.submodel", title: "Submodel", icon: Icon::Group, keys: Some("⌥⌘G"), tip: "Turn the selection into a submodel used once. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Arrange", when: When::Soon, menu: Menu::None },
+    Command { id: "model.extract", title: "Extract", icon: Icon::Extract, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Arrange", when: When::Soon, menu: Menu::None },
+    Command { id: "model.to_step", title: "To Step", icon: Icon::Step, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Arrange", when: When::Soon, menu: Menu::None },
+    Command { id: "model.seat_loose", title: "Seat Loose", icon: Icon::Seat, keys: None, tip: "Find pieces that are not connected and seat them. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Fit", when: When::Soon, menu: Menu::None },
+    Command { id: "model.what_fits", title: "What Fits", icon: Icon::Search, keys: None, tip: "List parts builders usually put at this connection. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Fit", when: When::Soon, menu: Menu::None },
+    Command { id: "model.look", title: "Look", icon: Icon::Eye, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Configure", when: When::Soon, menu: Menu::None },
+    Command { id: "model.build_settings", title: "Build Settings", icon: Icon::Sliders, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Configure", when: When::Soon, menu: Menu::None },
+    Command { id: "video.plan_build", title: "Plan Build", icon: Icon::Plan, keys: None, tip: "Work out the build order and flights for the video. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Plan", when: When::Soon, menu: Menu::None },
+    Command { id: "video.regenerate", title: "Regenerate", icon: Icon::Regen, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Plan", when: When::Soon, menu: Menu::None },
+    Command { id: "video.order", title: "Order", icon: Icon::Step, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Plan", when: When::Soon, menu: Menu::None },
+    Command { id: "video.staging", title: "Staging", icon: Icon::Stage, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Staging", when: When::Soon, menu: Menu::None },
+    Command { id: "video.straighten", title: "Straighten", icon: Icon::Rotate, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Staging", when: When::Soon, menu: Menu::None },
+    Command { id: "video.flights", title: "Flights", icon: Icon::Fly, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Staging", when: When::Soon, menu: Menu::None },
+    Command { id: "video.add_key", title: "Add Key", icon: Icon::Keys, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Keys", when: When::Soon, menu: Menu::None },
+    Command { id: "video.bake_flight", title: "Bake Flight", icon: Icon::Fly, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Keys", when: When::Soon, menu: Menu::None },
+    Command { id: "video.group", title: "Group", icon: Icon::Group, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Keys", when: When::Soon, menu: Menu::None },
+    Command { id: "video.camera_key", title: "Camera Key", icon: Icon::Cam, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Camera", when: When::Soon, menu: Menu::None },
+    Command { id: "video.auto_direct", title: "Auto-direct", icon: Icon::Wand, keys: None, tip: "Place camera keys that follow the build. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Camera", when: When::Soon, menu: Menu::None },
+    Command { id: "video.follow", title: "Follow", icon: Icon::Target, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Camera", when: When::Soon, menu: Menu::None },
+    Command { id: "video.snap_sound", title: "Snap Sound", icon: Icon::Wave, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Audio", when: When::Soon, menu: Menu::None },
+    Command { id: "video.mix", title: "Mix", icon: Icon::Sliders, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Audio", when: When::Soon, menu: Menu::None },
+    Command { id: "output.export_movie", title: "Export Movie", icon: Icon::Vid, keys: Some("⇧⌘E"), tip: "Render the build video with the current look. — coming soon", workspace: Workspace::Animate, tab: "Output", group: "Output", when: When::Soon, menu: Menu::None },
+    Command { id: "output.export_still", title: "Export Still", icon: Icon::Cam, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Output", group: "Output", when: When::Soon, menu: Menu::None },
+    Command { id: "output.render_queue", title: "Render Queue", icon: Icon::Queue, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Output", group: "Output", when: When::Soon, menu: Menu::None },
+    Command { id: "file.open", title: "Open…", icon: Icon::File, keys: Some("⌘O"), tip: "Open a BrickMotion project or an LDraw model.", workspace: Workspace::Build, tab: "", group: "File", when: When::Always, menu: Menu::File },
+    Command { id: "view.fit", title: "Fit All", icon: Icon::Fit, keys: Some("F"), tip: "Frame the whole model.", workspace: Workspace::Build, tab: "", group: "View", when: When::Always, menu: Menu::View },
+    Command { id: "view.home", title: "Home View", icon: Icon::Home, keys: Some("H"), tip: "Return to the starting view.", workspace: Workspace::Build, tab: "", group: "View", when: When::Always, menu: Menu::View },
+    Command { id: "file.new", title: "New", icon: Icon::Plus, keys: Some("⌘N"), tip: "Start an empty project.", workspace: Workspace::Build, tab: "", group: "File", when: When::Always, menu: Menu::File },
+    Command { id: "file.save", title: "Save", icon: Icon::Down, keys: Some("⌘S"), tip: "Save the project as a .brickmotion file.", workspace: Workspace::Build, tab: "", group: "File", when: When::Document, menu: Menu::File },
+    Command { id: "file.save_as", title: "Save As…", icon: Icon::Down, keys: Some("⇧⌘S"), tip: "Save the project under a new name.", workspace: Workspace::Build, tab: "", group: "File", when: When::Document, menu: Menu::File },
+    Command { id: "edit.undo", title: "Undo", icon: Icon::Undo, keys: Some("⌘Z"), tip: "Undo the last edit.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::CanUndo, menu: Menu::Edit },
+    Command { id: "edit.redo", title: "Redo", icon: Icon::Redo, keys: Some("⇧⌘Z"), tip: "Redo the edit you undid.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::CanRedo, menu: Menu::Edit },
+    Command { id: "edit.delete", title: "Delete", icon: Icon::Close, keys: Some("⌫"), tip: "Delete the selected pieces.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Selection, menu: Menu::Edit },
+    Command { id: "edit.select_all", title: "Select All", icon: Icon::Cursor, keys: Some("⌘A"), tip: "Select every piece that is not hidden.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Pieces, menu: Menu::Edit },
+    Command { id: "edit.select_none", title: "Select None", icon: Icon::Cursor, keys: Some("Esc"), tip: "Clear the selection.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Selection, menu: Menu::Edit },
+    Command { id: "edit.hide", title: "Hide Selection", icon: Icon::EyeOff, keys: None, tip: "Hide the selected pieces until Show All.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Selection, menu: Menu::Edit },
+    Command { id: "edit.show_all", title: "Show All", icon: Icon::Eye, keys: None, tip: "Show every hidden piece.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Pieces, menu: Menu::Edit },
+    Command { id: "view.frame_selection", title: "Frame Selection", icon: Icon::LookAt, keys: Some("⌘F"), tip: "Frame the selected pieces.", workspace: Workspace::Build, tab: "", group: "View", when: When::Selection, menu: Menu::View },
+    Command { id: "view.palette", title: "Command Palette…", icon: Icon::Search, keys: Some("⌘K"), tip: "Find any command by name.", workspace: Workspace::Build, tab: "", group: "View", when: When::Always, menu: Menu::View },
 ];

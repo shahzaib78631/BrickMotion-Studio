@@ -49,7 +49,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
                             ui.set_height(26.0);
                             ui.horizontal_centered(|ui| {
                                 icons::icon(ui, Icon::Search, 16.0, t.text3);
-                                ui.add(
+                                let field = ui.add(
                                     egui::TextEdit::singleline(&mut app.filter)
                                         .hint_text(RichText::new("Filter models and parts").color(t.text3))
                                         .frame(egui::Frame::NONE)
@@ -57,6 +57,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
                                         .align(egui::Align2::LEFT_CENTER)
                                         .desired_width(f32::INFINITY),
                                 );
+                                field.widget_info(|| egui::WidgetInfo::labeled(egui::Role::TextInput, true, "Filter models and parts"));
                             });
                         });
                 });

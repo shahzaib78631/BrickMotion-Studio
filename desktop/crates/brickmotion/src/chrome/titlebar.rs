@@ -1,8 +1,9 @@
 //! The 38-px title bar beside the traffic lights: brand, File, undo, document tab, status.
 use egui::{Align, Color32, CornerRadius, Frame, Layout, Panel, RichText, Sense, Stroke, Ui, Vec2, ViewportCommand};
 
-use super::icon_button;
+use super::{icon_button, icon_button_tip};
 use crate::BrickMotionApp;
+use crate::commands::{enabled, find, title};
 use crate::icons::{self, Icon};
 
 pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
@@ -36,8 +37,15 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
                         ui.close();
                     }
                 });
-                icon_button(ui, &t, Icon::Undo, "Undo", false, false, 28.0);
-                icon_button(ui, &t, Icon::Redo, "Redo", false, false, 28.0);
+                let ctx = app.ctx();
+                for (icon, id) in [(Icon::Undo, "edit.undo"), (Icon::Redo, "edit.redo")] {
+                    let c = find(id).expect("registered");
+                    let (name, on) = (title(c, &ctx), enabled(c, &ctx));
+                    let tip = if on { name.clone() } else { format!("{} — nothing to {}", c.title, c.title.to_lowercase()) };
+                    if icon_button_tip(ui, &t, icon, c.title, &tip, on, false, 28.0).clicked() {
+                        app.requested.push(c.id);
+                    }
+                }
                 document_tab(ui, &t, &app.title(), bar);
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     ui.spacing_mut().item_spacing.x = 4.0;

@@ -38,7 +38,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
             painter.circle_filled(p(x, y), if resp.hovered() { 8.0 } else { 7.0 } * s, c);
             painter.text(p(x, y), Align2::CENTER_CENTER, l, FontId::proportional(9.0 * s), Color32::WHITE);
             if resp.on_hover_text(name).clicked() {
-                app.viewport.queued.push(ViewOp::Preset(preset));
+                app.viewport.queue(ViewOp::Preset(preset));
             }
         }
     });

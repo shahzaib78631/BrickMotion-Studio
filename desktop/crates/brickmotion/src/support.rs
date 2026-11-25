@@ -191,13 +191,11 @@ mod tests {
 
         let ro = d.join("ro");
         std::fs::create_dir_all(&ro).unwrap();
-        let mut perm = std::fs::metadata(&ro).unwrap().permissions();
-        perm.set_readonly(true);
-        std::fs::set_permissions(&ro, perm.clone()).unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&ro, std::fs::Permissions::from_mode(0o555)).unwrap();
         assert!(write_atomic(&ro.join("x.brickmotion"), b"data").is_err());
         let left: Vec<_> = std::fs::read_dir(&ro).unwrap().collect();
-        perm.set_readonly(false);
-        std::fs::set_permissions(&ro, perm).unwrap();
+        std::fs::set_permissions(&ro, std::fs::Permissions::from_mode(0o755)).unwrap();
         assert!(left.is_empty(), "left {left:?}");
     }
 }

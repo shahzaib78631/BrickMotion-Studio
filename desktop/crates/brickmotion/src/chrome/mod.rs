@@ -43,6 +43,14 @@ pub fn float_frame(t: &Theme) -> Frame {
 
 /// A square icon button. Disabled buttons stay visible, dimmed, and keep their hover text.
 pub fn icon_button(ui: &mut Ui, t: &Theme, i: Icon, label: &str, enabled: bool, on: bool, size: f32) -> Response {
+    let tip = if enabled { label.to_owned() } else { format!("{label} — coming soon") };
+    icon_button_tip(ui, t, i, label, &tip, enabled, on, size)
+}
+
+/// An icon button with its own hover text, for buttons that are disabled for a reason other
+/// than not being built yet.
+#[allow(clippy::too_many_arguments)]
+pub fn icon_button_tip(ui: &mut Ui, t: &Theme, i: Icon, label: &str, tip: &str, enabled: bool, on: bool, size: f32) -> Response {
     let (rect, resp) = ui.allocate_exact_size(Vec2::splat(size), if enabled { Sense::click() } else { Sense::hover() });
     resp.widget_info(|| WidgetInfo::selected(egui::Role::Button, enabled, on, label));
     let hovered = enabled && resp.hovered();
@@ -61,7 +69,7 @@ pub fn icon_button(ui: &mut Ui, t: &Theme, i: Icon, label: &str, enabled: bool, 
         t.text2
     };
     icons::paint(ui, i, rect, 16.0, tint);
-    let resp = resp.on_hover_text(if enabled { label.to_owned() } else { format!("{label} — coming soon") });
+    let resp = resp.on_hover_text(tip);
     if enabled { resp } else { resp.on_hover_cursor(egui::CursorIcon::Default) }
 }
 
@@ -71,7 +79,7 @@ pub fn hover_card(resp: Response, t: &Theme, c: &Command) -> Response {
         ui.set_max_width(260.0);
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new(c.title).strong().color(t.text1));
-            if let Some(k) = c.shortcut {
+            if let Some(k) = c.keys {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| kbd(ui, t, k));
             }
         });

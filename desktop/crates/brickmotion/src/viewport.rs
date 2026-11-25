@@ -8,6 +8,8 @@ pub enum ViewOp {
     Pan(f64, f64),
     ZoomToward(f64, f64, f64),
     Fit,
+    /// Frame the selected pieces.
+    FrameSelection,
     Preset(bm::ViewPreset),
     Pick(f64, f64, bm::SelectMode),
 }
@@ -90,6 +92,8 @@ pub struct ViewportWidget {
     pub mode: DragMode,
     /// Ops asked for by the chrome (Fit, presets), applied next frame.
     pub queued: Vec<ViewOp>,
+    /// How many ops were ever queued through [`ViewportWidget::queue`] (tests read it).
+    pub queued_total: usize,
     /// Background, sRGB 0..1.
     pub background: [f64; 3],
     texture: Option<TextureHandle>,
@@ -105,6 +109,12 @@ impl ViewportWidget {
     pub fn new(background: Color32) -> Self {
         let c = |v: u8| v as f64 / 255.0;
         ViewportWidget { background: [c(background.r()), c(background.g()), c(background.b())], ..Default::default() }
+    }
+
+    /// Asks for an op on the next frame.
+    pub fn queue(&mut self, op: ViewOp) {
+        self.queued.push(op);
+        self.queued_total += 1;
     }
 
     /// Forget the view's setup: the next frame sets up whatever document it is given.
@@ -185,6 +195,7 @@ impl ViewportWidget {
                 ViewOp::Pan(dx, dy) => vp.pan(dx, dy),
                 ViewOp::ZoomToward(f, x, y) => vp.zoom_toward(f, x, y),
                 ViewOp::Fit => vp.fit_all(),
+                ViewOp::FrameSelection => vp.frame_selection(),
                 ViewOp::Preset(p) => vp.view(p),
                 ViewOp::Pick(x, y, mode) => picks.push((vp.pick(x, y), mode)),
             }

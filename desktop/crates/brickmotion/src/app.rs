@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::chrome;
-use crate::commands::tabs;
+use crate::commands::{Ctx, run, tabs};
 use crate::loader::{Loader, OPEN_EXTENSIONS};
 use crate::notices::Notice;
 use crate::theme::{Theme, apply};
@@ -30,6 +30,14 @@ impl Workspace {
     }
 }
 
+/// A file dialog a test asked for instead of opening a panel (see `dialogs_off`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DialogRequest {
+    /// "open" or "save_as".
+    pub kind: &'static str,
+    pub suggested: Option<String>,
+}
+
 pub struct BrickMotionApp {
     pub workspace: Workspace,
     pub ribbon_tab: &'static str,
@@ -45,6 +53,16 @@ pub struct BrickMotionApp {
     pub curves: bool,
     /// Command ids the chrome asked for this frame; run after the frame is laid out.
     pub requested: Vec<&'static str>,
+    /// A document was opened or made (an empty launch has none).
+    pub has_document: bool,
+    /// A text field had keyboard focus last frame.
+    pub text_focus: bool,
+    /// The command palette is showing.
+    pub palette_open: bool,
+    /// Tests: file dialogs are recorded here instead of shown.
+    pub dialog_requests: Vec<DialogRequest>,
+    dialogs: bool,
+    seen_version: u64,
 }
 
 impl BrickMotionApp {
@@ -68,6 +86,12 @@ impl BrickMotionApp {
             filter: String::new(),
             curves: false,
             requested: Vec::new(),
+            has_document: false,
+            text_focus: false,
+            palette_open: false,
+            dialog_requests: Vec::new(),
+            dialogs: true,
+            seen_version: 0,
         };
         if let Some(p) = path {
             app.open(p);
@@ -102,7 +126,94 @@ impl BrickMotionApp {
         self.loader.loading()
     }
 
+    /// What commands are enabled from, now.
+    pub fn ctx(&self) -> Ctx {
+        let s = self.doc.session();
+        Ctx {
+            has_document: self.has_document,
+            pieces: s.piece_count(),
+            selected: s.selection().len(),
+            can_undo: s.can_undo(),
+            can_redo: s.can_redo(),
+            undo_name: s.undo_name(),
+            redo_name: s.redo_name(),
+            text_focus: self.text_focus,
+        }
+    }
+
+    /// Does what command `id` does; `commands::run` has already checked it is enabled.
+    pub(crate) fn execute(&mut self, id: &str) -> bool {
+        let s = self.doc.session_mut();
+        match id {
+            "file.open" | "model.import" => self.open_dialog(),
+            "file.new" => self.new_document(),
+            "file.save" | "file.save_as" => self.save_as(),
+            "edit.undo" => {
+                let c = s.undo();
+                self.edited(c);
+            }
+            "edit.redo" => {
+                let c = s.redo();
+                self.edited(c);
+            }
+            "edit.delete" => {
+                let sel = s.selection();
+                let c = s.remove(&sel);
+                self.edited(c);
+            }
+            "edit.select_all" => s.select_all(),
+            "edit.select_none" => s.select_none(),
+            "edit.hide" => {
+                let sel = s.selection();
+                s.hide(&sel);
+                s.select_none();
+            }
+            "edit.show_all" => s.show_all(),
+            "view.fit" | "view.home" => self.viewport.queue(ViewOp::Fit),
+            "view.frame_selection" => self.viewport.queue(ViewOp::FrameSelection),
+            "view.palette" => self.palette_open = true,
+            _ => return false,
+        }
+        true
+    }
+
+    /// After an edit: a refusal becomes a notice.
+    fn edited(&mut self, c: bm::Changed) {
+        if let Some(why) = c.refused {
+            self.notices.push(Notice::Warning { title: "Couldn't edit".into(), detail: why });
+        }
+    }
+
+    /// An untitled, empty project.
+    pub fn new_document(&mut self) {
+        let mut s = bm::Session::new();
+        match s.new_blank() {
+            Ok(_) => {
+                self.doc = bm::Document::new(s);
+                self.viewport.reset();
+                self.has_document = true;
+            }
+            Err(e) => self.notices.push(Notice::open_failed(&e)),
+        }
+    }
+
+    fn save_as(&mut self) {
+        if !self.dialogs {
+            self.dialog_requests.push(DialogRequest { kind: "save_as", suggested: None });
+        }
+    }
+
+    /// Tests: file dialogs are recorded in `dialog_requests` instead of shown.
+    #[doc(hidden)]
+    pub fn dialogs_off(&mut self) {
+        self.dialogs = false;
+    }
+
     fn open_dialog(&mut self) {
+        if !self.dialogs {
+            self.dialog_requests.push(DialogRequest { kind: "open", suggested: None });
+            return;
+        }
         let picked = rfd::FileDialog::new().add_filter("BrickMotion and LDraw models", &OPEN_EXTENSIONS).pick_file();
         if let Some(p) = picked {
             self.open(p);
@@ -116,6 +227,7 @@ impl BrickMotionApp {
                 // The old document (and its renderer) goes; the widget sets the new one up.
                 self.doc = doc;
                 self.viewport.reset();
+                self.has_document = true;
                 self.notices.extend(Notice::from_warnings(&info.warnings));
             }
             Some(Err(e)) => self.notices.push(Notice::open_failed(&e)),
@@ -125,11 +237,7 @@ impl BrickMotionApp {
 
     fn run_requested(&mut self) {
         for id in std::mem::take(&mut self.requested) {
-            match id {
-                "file.open" | "model.import" => self.open_dialog(),
-                "view.fit" | "view.home" => self.viewport.queued.push(ViewOp::Fit),
-                _ => {}
-            }
+            run(self, id);
         }
     }
 
@@ -164,10 +272,8 @@ impl eframe::App for BrickMotionApp {
         if self.loader.loading().is_some() {
             ui.ctx().request_repaint_after(Duration::from_millis(50));
         }
-        let open = egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::O);
-        if ui.input_mut(|i| i.consume_shortcut(&open)) {
-            self.requested.push("file.open");
-        }
+        self.text_focus = ui.ctx().egui_wants_keyboard_input();
+        crate::shortcuts::handle(self, ui.ctx());
         chrome::titlebar::show(ui, self);
         chrome::ribbon::show(ui, self);
         if self.workspace == Workspace::Animate {
@@ -175,5 +281,10 @@ impl eframe::App for BrickMotionApp {
         }
         chrome::central(ui, self);
         self.run_requested();
+        if self.doc.session().version() != self.seen_version {
+            // An edit, undo or redo: the engine's viewport catches up by itself, it only needs a frame.
+            self.seen_version = self.doc.session().version();
+            ui.ctx().request_repaint();
+        }
     }
 }

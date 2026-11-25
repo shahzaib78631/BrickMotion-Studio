@@ -43,7 +43,9 @@ fn ribbon_comes_from_registry() {
 
 #[test]
 fn disabled_commands_say_so() {
-    assert!(registry().iter().filter(|c| !c.enabled).all(|c| c.tip.ends_with(" — coming soon")));
+    use brickmotion::commands::When;
+    assert!(registry().iter().filter(|c| c.when == When::Soon).all(|c| c.tip.ends_with(" — coming soon")));
+    assert!(registry().iter().filter(|c| c.when != When::Soon).all(|c| !c.tip.ends_with(" — coming soon")));
 }
 
 #[test]
