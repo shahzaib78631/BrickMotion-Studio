@@ -7,6 +7,7 @@ pub mod properties;
 pub mod ribbon;
 pub mod timeline;
 pub mod titlebar;
+pub mod tree;
 pub mod viewbar;
 
 use egui::{

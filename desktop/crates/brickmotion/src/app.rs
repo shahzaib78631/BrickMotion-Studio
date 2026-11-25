@@ -78,6 +78,8 @@ pub struct BrickMotionApp {
     pub has_document: bool,
     /// A text field had keyboard focus last frame.
     pub text_focus: bool,
+    /// The Browser's model tree.
+    pub tree: chrome::tree::Tree,
     /// The command palette.
     pub palette: crate::palette::Palette,
     /// Tests: file dialogs are recorded here instead of shown.
@@ -134,6 +136,7 @@ impl BrickMotionApp {
             has_document: false,
             text_focus: false,
             palette: Default::default(),
+            tree: Default::default(),
             dialog_requests: Vec::new(),
             dialogs: true,
             seen_version: 0,

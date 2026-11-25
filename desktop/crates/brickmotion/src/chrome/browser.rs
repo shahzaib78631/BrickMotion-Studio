@@ -70,6 +70,8 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
                             ui.add(egui::Spinner::new().size(14.0).color(t.text2));
                             ui.label(RichText::new(format!("Opening {name}…")).color(t.text2));
                         });
+                    } else if app.browser_tab == 0 && app.has_document {
+                        super::tree::show(ui, app);
                     } else if app.browser_tab == 0 {
                         root_row(ui, app, &title, count);
                     } else {
