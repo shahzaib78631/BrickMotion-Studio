@@ -374,14 +374,7 @@ struct BuildTracks: View {
   }
 
   private func arrivalTarget(excluding pieces: [UInt32], at x: CGFloat, scale: TimelineScale) -> TimelineArrivalTarget? {
-    let time = scale.time(x)
-    guard let run = workspace.run(at: time), model.steps.indices.contains(run.step) else { return nil }
-    let items = model.browserItems(of: run.step)
-    let flights = workspace.clips.first(where: { $0.id == run.step })?.flights ?? []
-    return TimelineArrivalTarget.inRun(run, at: time, scale: scale, flights: flights,
-                                       excluding: Set(pieces), itemCount: items.count) { piece in
-      items.firstIndex { $0.pieces.contains(piece) }
-    }
+    workspace.arrivalTarget(at: scale.time(x), excluding: pieces, scale: scale)
   }
 
   private func pauses(_ scale: TimelineScale) -> some View {

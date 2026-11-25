@@ -66,6 +66,8 @@ enum TimelineTab: String, CaseIterable { case build = "Build", timeline = "Keyfr
   private(set) var runs: [Run] = []
   private(set) var flights: [Flight] = []
   private(set) var submodelClips: [SubmodelClip] = []
+  @ObservationIgnored private var lanes = bmapp.BuildLanes()
+  @ObservationIgnored private var timeline = bmapp.BuildTimeline()
   private(set) var diagnostics: [Flight] = []
   private(set) var notes: [String] = []
   private(set) var failure = ""
@@ -107,14 +109,9 @@ enum TimelineTab: String, CaseIterable { case build = "Build", timeline = "Keyfr
   }
 
   func run(at seconds: Double) -> Run? {
-    guard !runs.isEmpty else { return nil }
-    var lower = 0, upper = runs.count
-    while lower < upper {
-      let middle = lower + (upper - lower) / 2
-      if runs[middle].start <= seconds { lower = middle + 1 }
-      else { upper = middle }
-    }
-    return runs[max(0, lower - 1)]
+    var index = 0
+    guard bmapp.runAt(lanes, seconds, &index), runs.indices.contains(index) else { return nil }
+    return runs[index]
   }
 
   private var showsStaleBuild: Bool { tab != .timeline && state.stale && buildDuration > 0 }
@@ -188,29 +185,18 @@ enum TimelineTab: String, CaseIterable { case build = "Build", timeline = "Keyfr
       Flight(id: $0.piece, step: Int($0.step), depth: Int($0.depth), colour: $0.color, start: $0.start, end: $0.end,
              part: String($0.name), flag: String($0.flag), blocker: String($0.blocker), pinned: pins.contains($0.piece))
     }
-    diagnostics = flights.filter { !$0.flag.isEmpty }
-    submodelClips = resolvedSubmodels(Array(timeline.submodels), session: view.document?.session)
-    var seams: [(step: Int, start: Double, end: Double)] = []
-    for flight in flights {
-      if let last = seams.indices.last,
-         seams[last].step == flight.step || flight.start < seams[last].end {
-        seams[last].end = max(seams[last].end, flight.end)
-      } else {
-        seams.append((flight.step, flight.start, flight.end))
-      }
+    self.timeline = timeline
+    lanes = bmapp.buildLanes(timeline, view.document?.session)
+    diagnostics = lanes.diagnostics.map { flights[Int($0)] }
+    submodelClips = lanes.submodels.map {
+      SubmodelClip(id: $0.scheduled ? .scheduled(Int($0.flight)) : .use($0.item), depth: Int($0.depth),
+                   start: $0.start, attach: $0.attach < 0 ? nil : $0.attach, end: $0.end,
+                   path: $0.path.map { String($0) }, pieces: Array($0.pieces))
     }
-    runs = seams.enumerated().map { index, seam in
-      let next = seams.indices.contains(index + 1) ? seams[index + 1].start : timeline.buildEnd
-      return Run(id: index, step: seam.step, start: seam.start, end: seam.end, next: max(seam.end, next))
-    }
-    let bounds = Dictionary(grouping: flights, by: \.step).compactMap { step, items -> StepClip? in
-      guard let start = items.first?.start, let end = items.map(\.end).max() else { return nil }
-      return StepClip(id: step, start: start, end: end, pauseEnd: end, flights: items)
-    }.sorted { $0.start < $1.start }
-    clips = bounds.enumerated().map { index, step in
-      let next = bounds.indices.contains(index + 1) ? bounds[index + 1].start : timeline.duration
-      return StepClip(id: step.id, start: step.start, end: step.end,
-                      pauseEnd: max(step.end, next), flights: step.flights)
+    runs = lanes.runs.map { Run(id: Int($0.id), step: Int($0.step), start: $0.start, end: $0.end, next: $0.next) }
+    clips = lanes.steps.map { step in
+      StepClip(id: Int(step.step), start: step.start, end: step.end, pauseEnd: step.pauseEnd,
+               flights: step.flights.map { flights[Int($0)] })
     }
     updatePlayheadRun()
     if let expected = stagingPreviewAt {
@@ -230,27 +216,6 @@ enum TimelineTab: String, CaseIterable { case build = "Build", timeline = "Keyfr
   private func updatePlayheadRun() {
     let next = run(at: time)?.id
     if playheadRun != next { playheadRun = next }
-  }
-
-  private func resolvedSubmodels(_ planned: [bmapp.BuildSubmodelRow], session: bmapp.Session?) -> [SubmodelClip] {
-    var clips = planned.map {
-      SubmodelClip(id: .scheduled(Int($0.flight)), depth: Int($0.depth), start: $0.start, attach: $0.attach,
-                   end: $0.end, path: $0.path.map { String($0) }, pieces: Array($0.pieces))
-    }
-    guard let session else { return clips }
-    let scheduled = Set(clips.filter { $0.depth == 0 }.flatMap(\.pieces))
-    let byPiece = Dictionary(flights.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-    for step in 0..<Int(session.stepCount()) {
-      for item in session.stepItems(step) where item.submodel {
-        let ids = Array(item.pieces)
-        guard !ids.isEmpty, !ids.allSatisfy(scheduled.contains) else { continue }
-        let children = ids.compactMap { byPiece[$0] }
-        guard let start = children.map(\.start).min(), let end = children.map(\.end).max() else { continue }
-        clips.append(SubmodelClip(id: .use(item.item), depth: 0, start: start, attach: nil,
-                                  end: end, path: [String(item.name)], pieces: ids))
-      }
-    }
-    return clips
   }
 
   func plan() {
@@ -436,9 +401,7 @@ enum TimelineTab: String, CaseIterable { case build = "Build", timeline = "Keyfr
   }
 
   func travel(forward: Bool) {
-    let candidates = runs.map(\.start)
-    seek(forward ? candidates.first { $0 > time + 0.02 } ?? duration :
-      candidates.last { $0 < time - 0.02 } ?? 0)
+    seek(bmapp.travel(lanes, time, duration, forward))
   }
 
   func select(step: Int) {
@@ -452,18 +415,15 @@ enum TimelineTab: String, CaseIterable { case build = "Build", timeline = "Keyfr
   }
 
   func nearestFlight(at seconds: Double, depth: Bool) -> Flight? {
-    var low = 0, high = flights.count
-    while low < high {
-      let middle = (low + high) / 2
-      if flights[middle].start < seconds { low = middle + 1 } else { high = middle }
-    }
-    return flights.dropFirst(max(0, low - 8)).prefix(16)
-      .filter { ($0.depth > 0) == depth }
-      .min {
-        let a = max($0.start - seconds, seconds - $0.end, 0)
-        let b = max($1.start - seconds, seconds - $1.end, 0)
-        return a == b ? abs($0.start - seconds) < abs($1.start - seconds) : a < b
-      }
+    let index = Int(bmapp.nearestFlight(timeline, seconds, depth))
+    return flights.indices.contains(index) ? flights[index] : nil
+  }
+
+  /// Where parts dropped on the Parts lane at `time` go (the moved `excluding` left out).
+  func arrivalTarget(at time: Double, excluding: [UInt32], scale: TimelineScale) -> TimelineArrivalTarget? {
+    let target = bmapp.arrivalTarget(lanes, timeline, viewport?.document?.session, time, ViewportView.list(excluding))
+    guard target.ok else { return nil }
+    return TimelineArrivalTarget(step: Int(target.step), before: Int(target.before), x: scale.x(target.time))
   }
 
   func play(step: Int, throughEnd: Bool = false) {
@@ -493,6 +453,8 @@ enum TimelineTab: String, CaseIterable { case build = "Build", timeline = "Keyfr
     clockSeconds = 0
     flights = []
     submodelClips = []
+    lanes = bmapp.BuildLanes()
+    timeline = bmapp.BuildTimeline()
     focusedStep = nil
     diagnostics = []
     notes = []

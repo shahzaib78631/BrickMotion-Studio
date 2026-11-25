@@ -1,4 +1,5 @@
 import AppKit
+import BMApp
 import SwiftUI
 
 private let timelineCoordinates = "TimelineViewport"
@@ -10,102 +11,73 @@ struct TimelineScale {
   func x(_ time: Double) -> CGFloat { width * time / max(duration, 0.001) }
   func time(_ x: CGFloat) -> Double { duration * min(1, max(0, x / max(1, width))) }
 
-  var interval: Double {
-    let minimum = duration * 76 / max(1, width)
-    let power = pow(10, floor(log10(max(0.01, minimum))))
-    return [power, 2 * power, 5 * power, 10 * power].first { $0 >= minimum } ?? 10 * power
-  }
+  var interval: Double { bmapp.tickInterval(duration, Double(width)) }
 }
 
+/// The scroll plumbing of a timeline track area; the zoom and offset maths are bmapp's TimelineView.
 @MainActor @Observable final class TimelineNavigation {
   static let inset: CGFloat = 12
-  static let maximumZoom = 64.0
+  static let maximumZoom = bmapp.TimelineView.maximumZoom()
   let trailingInset: CGFloat
-  private(set) var zoom = 1.0
-  private(set) var viewportWidth: CGFloat = 1
-  private(set) var offset: CGFloat = 0
+  private var view: bmapp.TimelineView
   private(set) var scrollRequest = 0
   var scrubbing = false
   var followsPlayhead = true
   private var awaitingZoom = false
 
-  init(trailingInset: CGFloat = TimelineNavigation.inset) { self.trailingInset = trailingInset }
+  init(trailingInset: CGFloat = TimelineNavigation.inset) {
+    self.trailingInset = trailingInset
+    var view = bmapp.TimelineView()
+    view.leadInset = Double(Self.inset)
+    view.trailInset = Double(trailingInset)
+    self.view = view
+  }
 
-  var logicalWidth: CGFloat { max(1, viewportWidth - Self.inset - trailingInset) * zoom }
-  var contentWidth: CGFloat { logicalWidth + Self.inset + trailingInset }
-  var maximumOffset: CGFloat { max(0, contentWidth - viewportWidth) }
-  var visibleStart: Double { max(0, Double(offset - Self.inset) / logicalWidth) }
-  var visibleEnd: Double { min(1, Double(offset + viewportWidth - Self.inset) / logicalWidth) }
+  var zoom: Double { view.zoom }
+  var viewportWidth: CGFloat { CGFloat(view.viewportWidth) }
+  var offset: CGFloat { CGFloat(view.offset) }
+  var logicalWidth: CGFloat { CGFloat(view.logicalWidth()) }
+  var contentWidth: CGFloat { CGFloat(view.contentWidth()) }
+  var maximumOffset: CGFloat { CGFloat(view.maximumOffset()) }
+  var visibleStart: Double { view.visibleStart() }
+  var visibleEnd: Double { view.visibleEnd() }
 
   func measure(viewport: CGFloat, content: CGFloat, offset actual: CGFloat) {
-    if abs(viewportWidth - viewport) > 0.5 { viewportWidth = max(1, viewport) }
+    if abs(viewportWidth - viewport) > 0.5 { view.viewportWidth = Double(max(1, viewport)) }
     if awaitingZoom {
       guard abs(contentWidth - content) < 2 else { return }
       awaitingZoom = false
       scrollRequest &+= 1
     } else if abs(offset - actual) > 0.25 {
-      offset = clamp(actual)
+      view.offset = Double(min(maximumOffset, max(0, actual)))
     }
   }
 
   func magnify(_ factor: Double, around screenX: CGFloat) {
-    guard factor.isFinite, factor > 0 else { return }
-    let target = min(Self.maximumZoom, max(1, zoom * factor))
-    guard abs(target - zoom) > 0.0001 else { return }
-    let anchor = min(1, max(0, (screenX + offset - Self.inset) / logicalWidth))
-    zoom = target
-    offset = clamp(anchor * logicalWidth + Self.inset - screenX)
-    awaitingZoom = true
+    if view.magnify(factor, Double(screenX)) { awaitingZoom = true }
   }
 
   func zoomBy(_ factor: Double, playhead: Double, duration: Double) {
-    let at = TimelineScale(width: logicalWidth, duration: duration).x(playhead) + Self.inset - offset
-    magnify(factor, around: (0...viewportWidth).contains(at) ? at : viewportWidth / 2)
+    if view.zoomBy(factor, playhead, duration) { awaitingZoom = true }
   }
 
   func fit() {
-    if zoom > 1 {
-      zoom = 1
-      offset = 0
-      awaitingZoom = true
-    } else {
-      scroll(to: 0)
-    }
+    let zoomed = zoom > 1
+    guard view.fit() else { return }
+    if zoomed { awaitingZoom = true } else { scrollRequest &+= 1 }
   }
 
   func reveal(_ time: Double, duration: Double, centred: Bool = false, playing: Bool = false) {
     guard !scrubbing, !playing || followsPlayhead else { return }
-    let x = TimelineScale(width: logicalWidth, duration: duration).x(time) + Self.inset
-    let margin = min(72, viewportWidth * 0.16)
-    let screenX = x - offset
-    if centred { scroll(to: x - viewportWidth * 0.5) }
-    else if screenX > viewportWidth - margin { scroll(to: x - viewportWidth * 0.72) }
-    else if screenX < margin { scroll(to: x - viewportWidth * 0.28) }
+    if view.reveal(time, duration, centred) { scrollRequest &+= 1 }
   }
 
-  func time(at screenX: CGFloat, duration: Double) -> Double {
-    TimelineScale(width: logicalWidth, duration: duration).time(clampScreen(screenX) + offset - Self.inset)
-  }
+  func time(at screenX: CGFloat, duration: Double) -> Double { view.timeAt(Double(screenX), duration) }
 
   func panAtEdge(_ x: CGFloat) -> Bool {
-    let edge = min(52, viewportWidth / 4)
-    let velocity: CGFloat
-    if x < edge { velocity = -min(28, max(2, (edge - x) / 2)) }
-    else if x > viewportWidth - edge { velocity = min(28, max(2, (x - viewportWidth + edge) / 2)) }
-    else { return false }
-    let previous = offset
-    scroll(to: offset + velocity)
-    return abs(previous - offset) > 0.1
-  }
-
-  private func clampScreen(_ x: CGFloat) -> CGFloat { min(viewportWidth, max(0, x)) }
-  private func clamp(_ x: CGFloat) -> CGFloat { min(maximumOffset, max(0, x)) }
-
-  private func scroll(to requested: CGFloat) {
-    let next = clamp(requested)
-    guard abs(next - offset) > 0.25 else { return }
-    offset = next
+    guard view.panAtEdge(Double(x)) else { return false }
     scrollRequest &+= 1
+    return true
   }
 }
 

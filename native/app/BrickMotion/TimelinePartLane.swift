@@ -1,4 +1,5 @@
 import AppKit
+import BMApp
 import CoreText
 import SwiftUI
 
@@ -77,10 +78,13 @@ import SwiftUI
     if needsSort {
       geometry.sort { $0.x == $1.x ? $0.timeX < $1.timeX : $0.x < $1.x }
     }
-    var slots = RowEnds()
-    for entry in geometry {
-      let row = slots.place(at: entry.x + 0.0001, until: entry.x + entry.width + 1)
-      if row == rows.count { rows.append([]) }
+    var spans = bmapp.LaneSpanList()
+    spans.reserve(geometry.count)
+    for entry in geometry { spans.push_back(bmapp.LaneSpan(x: Double(entry.x), width: Double(entry.width))) }
+    let packing = bmapp.packLane(spans)
+    rows = Array(repeating: [], count: Int(packing.count))
+    for (index, entry) in geometry.enumerated() {
+      let row = Int(packing.rows[index])
       let rect = CGRect(x: entry.x, y: Self.inset + CGFloat(row) * Self.rowHeight, width: entry.width, height: Self.clipHeight)
       rows[row].append(Clip(flight: entry.flight, label: entry.label, rect: rect, timeX: entry.timeX, durationWidth: entry.duration))
     }
@@ -93,43 +97,6 @@ import SwiftUI
     let label = Label(code, font: font)
     labels.setObject(label, forKey: key)
     return label
-  }
-
-  /// Leaves hold each row's end. Parents hold the earliest end below them, so
-  /// finding the first available row stays logarithmic even at Fit on dense builds.
-  private struct RowEnds {
-    private var ends: [CGFloat] = [.infinity, .infinity]
-    private var capacity = 1
-    private var count = 0
-
-    mutating func place(at x: CGFloat, until end: CGFloat) -> Int {
-      var leaf = 1
-      if ends[1] <= x {
-        while leaf < capacity {
-          leaf *= 2
-          if ends[leaf] > x { leaf += 1 }
-        }
-      } else {
-        if count == capacity { grow() }
-        leaf = capacity + count
-        count += 1
-      }
-      let row = leaf - capacity
-      ends[leaf] = end
-      while leaf > 1 {
-        leaf /= 2
-        ends[leaf] = min(ends[leaf * 2], ends[leaf * 2 + 1])
-      }
-      return row
-    }
-
-    private mutating func grow() {
-      let previous = ends
-      capacity *= 2
-      ends = Array(repeating: .infinity, count: capacity * 2)
-      for row in 0..<count { ends[capacity + row] = previous[count + row] }
-      for node in (1..<capacity).reversed() { ends[node] = min(ends[node * 2], ends[node * 2 + 1]) }
-    }
   }
 
   func forEachVisible(in rect: CGRect, _ visit: (Clip) -> Void) {

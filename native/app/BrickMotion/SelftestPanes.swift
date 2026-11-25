@@ -236,12 +236,7 @@ import BMApp
                              start: part.0, end: min(60, part.0 + 0.5), part: part.1, flag: "", blocker: "")
   }
   let lane = PartLaneLayout(flights, scale: scale)
-  let firstRun = AnimationWorkspace.Run(id: 0, step: 0, start: 1, end: 2.2, next: 3)
-  let arrival = TimelineArrivalTarget.inRun(firstRun, at: 1.8, scale: scale, flights: flights,
-                                            excluding: [], itemCount: flights.count) { Int($0) }
-  guard arrival.before == 2, arrival.x == scale.x(firstRun.end) else {
-    return fail("an arrival drop jumped into a later occurrence of the step")
-  }
+  // The arrival-drop target is bmapp's; build_lanes_test.cpp covers it.
   guard lane.rows.count == 2, let first = lane.rows.first?.first,
         lane.rows[0].map(\.code) == ["3001", "6141", "4276b", "3022"], lane.rows[1].map(\.code) == ["3024"],
         first.x == scale.x(flights[0].start), first.rect.height == 17, PartLaneLayout.font.pointSize == 10,

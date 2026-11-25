@@ -15,6 +15,8 @@ module BMApp {
   header "bmapp/assembly_inspection.h"
   header "bmapp/motion_audit.h"
   header "bmapp/flight_bake.h"
+  header "bmapp/build_lanes.h"
+  header "bmapp/timeline_view.h"
   requires cplusplus
   export *
 }
