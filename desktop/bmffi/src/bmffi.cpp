@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <exception>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -96,16 +97,19 @@ BmOpenResult bm_session_open(BmSession* s, const char* utf8_path) {
     return out;
   }
   try {
-    bmapp::OpenResult r = s->s->open(utf8_path);
-    std::string warnings = r.warnings;
-    // Without a parts library every part is missing; say why instead of an empty view.
-    if (bmapp::Session::ldrawDirectory().empty()) {
-      if (!warnings.empty()) warnings += "\n";
-      warnings += "The LDraw parts library was not found (set BM_LDRAW_DIR or put it in public/ldraw).";
+    // A library folder without LDConfig.ldr would open every part as missing; refuse and name it.
+    std::string ldraw = bmapp::Session::ldrawDirectory();
+    std::error_code ec;
+    if (!ldraw.empty() && !std::filesystem::exists(std::filesystem::path(ldraw) / "LDConfig.ldr", ec)) {
+      const char* from = std::getenv("BM_LDRAW_DIR") ? "set by BM_LDRAW_DIR" : "the built-in location";
+      out.error = make("No LDraw parts library at " + ldraw + " (" + from +
+                       "). Point BM_LDRAW_DIR at the folder that holds LDConfig.ldr.");
+      return out;
     }
+    bmapp::OpenResult r = s->s->open(utf8_path);
     out.ok = r.ok;
     out.error = make(r.error);
-    out.warnings = make(warnings);
+    out.warnings = make(r.warnings);
   } catch (const std::exception& e) {
     out.error = make(e.what());
   } catch (...) {

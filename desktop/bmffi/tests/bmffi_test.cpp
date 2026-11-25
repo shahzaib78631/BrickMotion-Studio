@@ -1,6 +1,7 @@
 // The C interface the Rust app relies on, against the real engine.
 #include <catch2/catch_test_macros.hpp>
 #include <cstdlib>
+#include <string>
 #include <thread>
 #include <vector>
 #include "bmffi.h"
@@ -48,7 +49,11 @@ TEST_CASE("open_without_ldraw_reports") {
   setenv("BM_LDRAW_DIR", "/nonexistent-ldraw", 1);
   BmSession* s = bm_session_new();
   BmOpenResult r = bm_session_open(s, kHeli);
-  CHECK((!r.ok || r.warnings.len > 0));
+  CHECK_FALSE(r.ok);
+  REQUIRE(r.error.ptr);
+  CHECK(std::string(r.error.ptr) ==
+        "No LDraw parts library at /nonexistent-ldraw (set by BM_LDRAW_DIR). Point BM_LDRAW_DIR at the folder that holds LDConfig.ldr.");
+  CHECK(bm_session_piece_count(s) == 0);
   bm_open_result_free(r);
   bm_session_free(s);
   unsetenv("BM_LDRAW_DIR");

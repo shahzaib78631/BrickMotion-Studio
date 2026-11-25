@@ -90,13 +90,12 @@ fn unsupported_file_is_refused_and_keeps_document() {
 }
 
 #[test]
-fn model_without_pieces_warns() {
+fn model_without_pieces_is_refused() {
     let empty = temp_file("empty.ldr", b"0 Nothing here\n");
     let mut l = Loader::default();
     l.start(empty);
-    let (d, info) = wait(&mut l).unwrap();
-    assert_eq!(d.session().piece_count(), 0);
-    assert!(info.warnings.iter().any(|w| w == "No pieces were found in this file."), "{:?}", info.warnings);
+    let err = wait(&mut l).err().expect("a file with no pieces is an error");
+    assert_eq!(err.message, "No pieces were found in this file.");
 }
 
 #[test]

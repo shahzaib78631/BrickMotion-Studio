@@ -28,9 +28,9 @@ pub fn open_model(path: &Path) -> Result<(bm::Session, bm::OpenInfo), bm::OpenEr
         });
     }
     let mut s = bm::Session::new();
-    let mut info = s.open(path)?;
+    let info = s.open(path)?;
     if s.piece_count() == 0 {
-        info.warnings.push("No pieces were found in this file.".into());
+        return Err(bm::OpenError { path: path.to_path_buf(), message: "No pieces were found in this file.".into() });
     }
     Ok((s, info))
 }
