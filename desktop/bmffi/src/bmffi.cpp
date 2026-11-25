@@ -220,5 +220,120 @@ void bm_viewport_set_orthographic(BmViewport* v, bool on) {
 uint32_t bm_viewport_pick(BmViewport* v, double x, double y) {
   return v ? guard<uint32_t>(BM_NO_PIECE, [&] { return v->v->pick(x, y); }) : BM_NO_PIECE;
 }
+void bm_viewport_frame_selection(BmViewport* v) {
+  if (v) guardVoid([&] { v->v->frameSelection(); });
+}
+
+// ---- Documents ----
+
+void bm_change_free(BmChange c) { bm_string_free(c.refused); }
+
+BmOpenResult bm_session_new_blank(BmSession* s) {
+  BmOpenResult out{false, {nullptr, 0}, {nullptr, 0}};
+  if (!s) {
+    out.error = make("no session");
+    return out;
+  }
+  try {
+    bmapp::OpenResult r = s->s->newBlank();
+    out.ok = r.ok;
+    out.error = make(r.error);
+    out.warnings = make(r.warnings);
+  } catch (const std::exception& e) {
+    out.error = make(e.what());
+  } catch (...) {
+    out.error = make("the engine failed while making a new project");
+  }
+  return out;
+}
+
+BmString bm_session_project_bytes(const BmSession* s) {
+  if (!s) return BmString{nullptr, 0};
+  return guard(BmString{nullptr, 0}, [&] { return make(s->s->projectBytes()); });
+}
+
+bool bm_session_imported(const BmSession* s) { return s && guard(false, [&] { return s->s->imported(); }); }
+bool bm_session_dirty(const BmSession* s) { return s && guard(false, [&] { return s->s->dirty(); }); }
+void bm_session_mark_saved(BmSession* s) {
+  if (s) guardVoid([&] { s->s->markSaved(); });
+}
+uint64_t bm_session_version(const BmSession* s) {
+  return s ? guard<uint64_t>(0, [&] { return s->s->version(); }) : 0;
+}
+uint64_t bm_session_structure_version(const BmSession* s) {
+  return s ? guard<uint64_t>(0, [&] { return s->s->structureVersion(); }) : 0;
+}
+
+bool bm_session_can_undo(const BmSession* s) { return s && guard(false, [&] { return s->s->canUndo(); }); }
+bool bm_session_can_redo(const BmSession* s) { return s && guard(false, [&] { return s->s->canRedo(); }); }
+BmString bm_session_undo_name(const BmSession* s) {
+  if (!s) return BmString{nullptr, 0};
+  return guard(BmString{nullptr, 0}, [&] { return make(s->s->undoName()); });
+}
+BmString bm_session_redo_name(const BmSession* s) {
+  if (!s) return BmString{nullptr, 0};
+  return guard(BmString{nullptr, 0}, [&] { return make(s->s->redoName()); });
+}
+
+}  // extern "C"
+
+namespace {
+template <typename F>
+BmChange change(BmSession* s, F&& f) {
+  BmChange out{false, 0, {nullptr, 0}};
+  if (!s) {
+    out.refused = make("no document");
+    return out;
+  }
+  try {
+    bmapp::Changed c = f();
+    out.structure = c.structure;
+    out.version = c.version;
+    out.refused = make(c.refused);
+  } catch (const std::exception& e) {
+    out.refused = make(e.what());
+  } catch (...) {
+    out.refused = make("the engine failed during the edit");
+  }
+  return out;
+}
+
+std::vector<uint32_t> list(const uint32_t* pieces, size_t n) {
+  return std::vector<uint32_t>(pieces, pieces + (pieces ? n : 0));
+}
+}  // namespace
+
+extern "C" {
+
+BmChange bm_session_undo(BmSession* s) {
+  return change(s, [&] { return s->s->undo(); });
+}
+BmChange bm_session_redo(BmSession* s) {
+  return change(s, [&] { return s->s->redo(); });
+}
+BmChange bm_session_remove(BmSession* s, const uint32_t* pieces, size_t n) {
+  return change(s, [&] { return s->s->remove(list(pieces, n)); });
+}
+
+void bm_session_select_all(BmSession* s) {
+  if (s) guardVoid([&] { s->s->selectAll(); });
+}
+void bm_session_select_none(BmSession* s) {
+  if (s) guardVoid([&] { s->s->selectNone(); });
+}
+void bm_session_hide(BmSession* s, const uint32_t* pieces, size_t n) {
+  if (s) guardVoid([&] { s->s->hide(list(pieces, n)); });
+}
+void bm_session_show_all(BmSession* s) {
+  if (s) guardVoid([&] { s->s->showAll(); });
+}
+size_t bm_session_pieces_of_row(const BmSession* s, const char* id, uint32_t* out, size_t cap) {
+  if (!s || !id) return 0;
+  return guard<size_t>(0, [&] {
+    std::vector<uint32_t> p = s->s->piecesOfRow(id);
+    for (size_t i = 0; i < p.size() && i < cap && out; ++i) out[i] = p[i];
+    return p.size();
+  });
+}
 
 }  // extern "C"

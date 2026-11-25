@@ -60,6 +60,83 @@ BMFFI_API void bm_viewport_set_background(BmViewport* v, double r, double g, dou
 BMFFI_API void bm_viewport_set_orthographic(BmViewport* v, bool on);
 /// BM_NO_PIECE on empty space.
 BMFFI_API uint32_t bm_viewport_pick(BmViewport* v, double x_pt, double y_pt);
+BMFFI_API void bm_viewport_frame_selection(BmViewport* v);
+
+// ---- Documents ----
+/// What an edit, undo or redo changed. `refused` is empty unless nothing changed, and then says why.
+typedef struct { bool structure; uint64_t version; BmString refused; } BmChange;
+BMFFI_API void bm_change_free(BmChange c);
+
+/// An untitled project with one empty step. Starts afresh like an open.
+BMFFI_API BmOpenResult bm_session_new_blank(BmSession* s);
+/// The document as .brickmotion project bytes.
+BMFFI_API BmString bm_session_project_bytes(const BmSession* s);
+/// True unless the file was a .brickmotion project.
+BMFFI_API bool bm_session_imported(const BmSession* s);
+BMFFI_API bool bm_session_dirty(const BmSession* s);
+BMFFI_API void bm_session_mark_saved(BmSession* s);
+/// Goes up with every change, undo and redo included.
+BMFFI_API uint64_t bm_session_version(const BmSession* s);
+/// Goes up with edits that add, remove or regroup items.
+BMFFI_API uint64_t bm_session_structure_version(const BmSession* s);
+
+BMFFI_API bool bm_session_can_undo(const BmSession* s);
+BMFFI_API bool bm_session_can_redo(const BmSession* s);
+BMFFI_API BmString bm_session_undo_name(const BmSession* s);
+BMFFI_API BmString bm_session_redo_name(const BmSession* s);
+BMFFI_API BmChange bm_session_undo(BmSession* s);
+BMFFI_API BmChange bm_session_redo(BmSession* s);
+/// One undo step.
+BMFFI_API BmChange bm_session_remove(BmSession* s, const uint32_t* pieces, size_t n);
+
+BMFFI_API void bm_session_select_all(BmSession* s);
+BMFFI_API void bm_session_select_none(BmSession* s);
+BMFFI_API void bm_session_hide(BmSession* s, const uint32_t* pieces, size_t n);
+BMFFI_API void bm_session_show_all(BmSession* s);
+/// Returns the total; writes min(total, cap) pieces into `out`.
+BMFFI_API size_t bm_session_pieces_of_row(const BmSession* s, const char* outline_id, uint32_t* out,
+                                          size_t cap);
+
+// ---- Lists ----
+// A list handle owns its strings; the `const char*` in a row stay valid until the handle is freed.
+typedef struct BmOutline BmOutline;
+typedef struct BmSnapshot BmSnapshot;
+typedef struct BmColors BmColors;
+typedef struct {
+  const char *id, *def, *name, *group;
+  int32_t depth, parent;
+  size_t pieces, uses;
+  bool shared, unused;
+} BmOutlineRow;
+typedef struct { uint64_t version; size_t pieces, selected, hidden; bool dirty; } BmSnapshotInfo;
+typedef struct {
+  uint32_t piece;
+  const char *part, *description, *color_name, *submodel_path;
+  int32_t color, step;
+  bool in_shared_submodel;
+} BmPieceInfo;
+typedef struct { int32_t code; const char* name; uint32_t rgb; float alpha; int32_t group; } BmColor;
+
+BMFFI_API BmOutline* bm_session_outline(const BmSession* s);
+BMFFI_API size_t bm_outline_len(const BmOutline* o);
+/// A zeroed row (empty strings) when `i` is out of range.
+BMFFI_API BmOutlineRow bm_outline_row(const BmOutline* o, size_t i);
+BMFFI_API void bm_outline_free(BmOutline* o);
+
+BMFFI_API BmSnapshot* bm_session_snapshot(const BmSession* s);
+/// `selected` is the whole selection; the described pieces are its first 200.
+BMFFI_API BmSnapshotInfo bm_snapshot_info(const BmSnapshot* s);
+BMFFI_API size_t bm_snapshot_piece_len(const BmSnapshot* s);
+BMFFI_API BmPieceInfo bm_snapshot_piece(const BmSnapshot* s, size_t i);
+BMFFI_API void bm_snapshot_free(BmSnapshot* s);
+
+BMFFI_API BmColors* bm_colors(const BmSession* s);
+BMFFI_API size_t bm_colors_len(const BmColors* c);
+BMFFI_API BmColor bm_colors_at(const BmColors* c, size_t i);
+BMFFI_API void bm_colors_free(BmColors* c);
+
+/// sizeof the named struct, so the Rust mirrors can check their layout; 0 for an unknown name.
+BMFFI_API size_t bm_struct_size(const char* name);
 
 #ifdef __cplusplus
 }
