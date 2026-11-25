@@ -177,3 +177,18 @@ fn palette_disabled_row_says_why() {
     h.run_steps(2);
     assert!(!h.state().palette.open);
 }
+
+#[test]
+fn menu_key_changes_only_with_what_the_menu_shows() {
+    let mut app = heli_app();
+    let k0 = app.menu_key();
+    assert_eq!(app.menu_key(), k0, "an idle frame needs no menu update");
+    app.doc.session().select(&[0], bm::SelectMode::Replace);
+    let k1 = app.menu_key();
+    assert_ne!(k1, k0, "selection");
+    assert!(run(&mut app, "edit.delete"));
+    let k2 = app.menu_key();
+    assert_ne!(k2, k1, "an edit");
+    app.recents.add(std::path::PathBuf::from("/tmp/other.mpd"));
+    assert_ne!(app.menu_key(), k2, "recents");
+}

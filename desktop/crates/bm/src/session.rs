@@ -72,6 +72,11 @@ impl Session {
         unsafe { sys::bm_session_select(self.raw, pieces.as_ptr(), pieces.len(), m) }
     }
 
+    /// How many pieces are selected, without copying the list.
+    pub fn selection_len(&self) -> usize {
+        unsafe { sys::bm_session_selection(self.raw, std::ptr::null_mut(), 0) }
+    }
+
     pub fn selection(&self) -> Vec<u32> {
         let n = unsafe { sys::bm_session_selection(self.raw, std::ptr::null_mut(), 0) };
         let mut out = vec![0u32; n];

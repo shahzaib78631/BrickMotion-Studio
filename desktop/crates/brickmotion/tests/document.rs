@@ -177,6 +177,7 @@ fn app_autosaves_backups_and_warns_once() {
     let t0 = std::time::Instant::now();
     app.autosave(t0);
     app.autosave(t0 + std::time::Duration::from_secs(1));
+    app.wait_autosaved();
     let dir = app.support.backups().join("helicopter");
     assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
     assert!(app.session().dirty(), "an imported document stays edited");
@@ -187,6 +188,7 @@ fn app_autosaves_backups_and_warns_once() {
     for i in 2..5u64 {
         delete_first(&mut app);
         app.autosave(t0 + std::time::Duration::from_secs(i));
+        app.wait_autosaved();
     }
     let warnings = app.notices().iter().filter(|n| n.title() == "Couldn't autosave").count();
     assert_eq!(warnings, 1);
@@ -233,4 +235,99 @@ fn commands_wait_while_asking() {
     assert!(!run(&mut app, "edit.select_none"));
     assert_eq!(app.piece_count(), n);
     assert_eq!(app.doc.session().selection().len(), 1);
+}
+
+fn close_window(h: &mut Harness<'_, BrickMotionApp>) {
+    h.input_mut().viewports.entry(egui::ViewportId::ROOT).or_default().events.push(egui::ViewportEvent::Close);
+}
+
+fn dirty_harness() -> Harness<'static, BrickMotionApp> {
+    let mut h = Harness::builder().with_size([1440.0, 900.0]).build_eframe(|cc| {
+        let mut app = BrickMotionApp::new_for_test_cc(cc, Some(HELI.into()));
+        app.wait_loaded();
+        app.dialogs_off();
+        app
+    });
+    h.run_steps(2);
+    delete_first(h.state_mut());
+    h.run_steps(2);
+    h
+}
+
+#[test]
+fn closing_while_asking_about_an_open_quits_after_the_answer() {
+    let mut h = dirty_harness();
+    h.state_mut().open(HELI.into());
+    assert!(matches!(h.state().confirm, Some(brickmotion::Pending::Open(_))));
+    close_window(&mut h);
+    h.run_steps(2);
+    assert!(h.state().confirm.is_some(), "still asking");
+    h.state_mut().answer_confirm(Answer::DontSave);
+    assert!(h.state().quitting(), "the close was remembered");
+}
+
+#[test]
+fn cancel_forgets_the_close() {
+    let mut h = dirty_harness();
+    h.state_mut().open(HELI.into());
+    close_window(&mut h);
+    h.run_steps(2);
+    h.state_mut().answer_confirm(Answer::Cancel);
+    assert!(!h.state().quitting());
+    // A later Open answered with Don't Save does not quit.
+    h.state_mut().open(HELI.into());
+    h.state_mut().answer_confirm(Answer::DontSave);
+    assert!(!h.state().quitting());
+}
+
+#[test]
+fn agreement_to_replace_belongs_to_one_document() {
+    let mut a = bm::Session::new();
+    a.new_blank().unwrap();
+    let mut b = bm::Session::new();
+    b.new_blank().unwrap();
+    assert_eq!(a.version(), b.version(), "same version, different documents");
+    let ok = brickmotion::ReplaceOk::of(&a);
+    assert!(ok.covers(&a));
+    assert!(!ok.covers(&b));
+}
+
+#[test]
+fn app_autosave_writes_off_the_ui_thread_and_keeps_newer_edits() {
+    let d = tmp("bg-autosave");
+    let project = d.join("p.brickmotion");
+    let mut app = opened(Path::new(HELI));
+    app.save_as_path(project.clone());
+    app.prefs.autosave_seconds = 0;
+    delete_first(&mut app);
+    let t0 = std::time::Instant::now();
+    app.autosave(t0);
+    app.autosave(t0 + std::time::Duration::from_secs(1));
+    delete_first(&mut app); // edited while the autosave writes
+    app.wait_autosaved();
+    assert!(app.session().dirty(), "the second edit is not saved yet");
+    let n = app.piece_count();
+    let mut back = bm::Session::new();
+    back.open(&project).unwrap();
+    assert_eq!(back.piece_count(), n + 1, "the file has the first edit only");
+}
+
+#[test]
+fn save_during_an_autosave_keeps_the_newest() {
+    let d = tmp("save-race");
+    let project = d.join("p.brickmotion");
+    let mut app = opened(Path::new(HELI));
+    app.save_as_path(project.clone());
+    app.prefs.autosave_seconds = 0;
+    delete_first(&mut app);
+    let t0 = std::time::Instant::now();
+    app.autosave(t0);
+    app.autosave(t0 + std::time::Duration::from_secs(1)); // writes the first edit
+    delete_first(&mut app);
+    app.save(); // must not be overwritten by the older autosave
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    let mut back = bm::Session::new();
+    back.open(&project).unwrap();
+    assert_eq!(back.piece_count(), app.piece_count());
+    assert!(!app.session().dirty());
 }

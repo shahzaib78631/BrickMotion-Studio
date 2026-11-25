@@ -100,16 +100,22 @@ pub struct BrickMotionApp {
     pub recents: Recents,
     /// Waiting for an answer to "Save changes?".
     pub confirm: Option<Pending>,
-    /// The person agreed to replace the document at this version; a load arriving while it is
+    /// The person agreed to replace this document as it stood; a load arriving while it is
     /// unchanged takes its place without asking again.
-    replace_ok: Option<u64>,
+    replace_ok: Option<ReplaceOk>,
     /// Quit was confirmed: the next frame closes the window.
     quitting: bool,
+    /// The window was closed while "Save changes?" was up for something else: quit once answered.
+    quit_after: bool,
     autosaver: Autosaver,
     /// The native menu bar, once installed (never in tests).
     pub menubar: Option<crate::menubar::MenuBar>,
+    /// What the menu bar was last updated for.
+    menu_shown: Option<MenuKey>,
     /// The last autosave failure shown, so a repeating one warns once.
     autosave_error: Option<String>,
+    /// The autosave writing on its own thread, if one is.
+    autosaving: Option<std::sync::mpsc::Receiver<crate::autosave::AutosaveDone>>,
     /// The command-line file, opened on the first frame (see `start_startup`).
     startup: Option<PathBuf>,
 }
@@ -158,9 +164,12 @@ impl BrickMotionApp {
             confirm: None,
             replace_ok: None,
             quitting: false,
+            quit_after: false,
+            menu_shown: None,
             autosaver: Autosaver::default(),
             menubar: None,
             autosave_error: None,
+            autosaving: None,
             startup: None,
         };
         // Opened once the first frame knows the view's size, so the worker can draw it warm.
@@ -215,10 +224,12 @@ impl BrickMotionApp {
     /// The person's answer to "Save changes?".
     pub fn answer_confirm(&mut self, a: Answer) {
         let Some(next) = self.confirm.take() else { return };
+        // The window was closed while this was asked: once the edits are dealt with, quit.
+        let next = if std::mem::take(&mut self.quit_after) && a != Answer::Cancel { Pending::Quit } else { next };
         match a {
             Answer::Cancel => {}
             Answer::DontSave => {
-                self.replace_ok = Some(self.doc.session().version());
+                self.replace_ok = Some(ReplaceOk::of(self.doc.session()));
                 self.perform(next);
             }
             Answer::Save => {
@@ -227,7 +238,7 @@ impl BrickMotionApp {
                     // The save failed or was cancelled: keep asking.
                     self.confirm = Some(next);
                 } else {
-                    self.replace_ok = Some(self.doc.session().version());
+                    self.replace_ok = Some(ReplaceOk::of(self.doc.session()));
                     self.perform(next);
                 }
             }
@@ -270,6 +281,8 @@ impl BrickMotionApp {
     }
 
     fn write(&mut self, path: PathBuf) {
+        // An autosave still writing older bytes must land first, not over this save.
+        self.wait_autosaved();
         match save_to(self.doc.session(), &path) {
             Ok(()) => {
                 self.state = DocState { path: Some(path.clone()), imported: false };
@@ -287,14 +300,45 @@ impl BrickMotionApp {
         if !self.has_document {
             return;
         }
-        let r = self.autosaver.tick(now, chrono::Local::now(), self.doc.session(), &self.state, &self.prefs, &self.support);
-        match r {
-            Some(Ok(_)) => self.autosave_error = None,
-            Some(Err(e)) if self.autosave_error.as_ref() != Some(&e) => {
+        if let Some(rx) = &self.autosaving {
+            match rx.try_recv() {
+                Ok(done) => self.autosaved(done),
+                Err(std::sync::mpsc::TryRecvError::Empty) => return, // one at a time
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => self.autosaving = None,
+            }
+        }
+        let Some(job) = self.autosaver.tick(now, chrono::Local::now(), self.doc.session(), &self.state, &self.prefs, &self.support) else {
+            return;
+        };
+        let (tx, rx) = std::sync::mpsc::channel();
+        let spawned = std::thread::Builder::new().name("bm-autosave".into()).spawn(move || {
+            let _ = tx.send(job.run());
+        });
+        match spawned {
+            Ok(_) => self.autosaving = Some(rx),
+            Err(e) => self.autosaved(crate::autosave::AutosaveDone::failed(format!("could not start writing: {e}"))),
+        }
+    }
+
+    /// Takes a finished autosave: marks the document saved if it still matches, warns once on failure.
+    fn autosaved(&mut self, done: crate::autosave::AutosaveDone) {
+        self.autosaving = None;
+        done.finish(self.doc.session());
+        match done.result {
+            Ok(_) => self.autosave_error = None,
+            Err(e) if self.autosave_error.as_ref() != Some(&e) => {
                 crate::notices::push(&mut self.notices, Notice::Warning { title: "Couldn't autosave".into(), detail: e.clone() });
                 self.autosave_error = Some(e);
             }
-            _ => {}
+            Err(_) => {}
+        }
+    }
+
+    /// Blocks until the autosave in flight (if any) has finished and been taken.
+    #[doc(hidden)]
+    pub fn wait_autosaved(&mut self) {
+        if let Some(done) = self.autosaving.take().and_then(|rx| rx.recv().ok()) {
+            self.autosaved(done);
         }
     }
 
@@ -362,12 +406,26 @@ impl BrickMotionApp {
         Ctx {
             has_document: self.has_document,
             pieces: s.piece_count(),
-            selected: s.selection().len(),
+            selected: s.selection_len(),
             can_undo: s.can_undo(),
             can_redo: s.can_redo(),
             undo_name: s.undo_name(),
             redo_name: s.redo_name(),
             text_focus: self.text_focus,
+        }
+    }
+
+    /// Everything the menu bar's titles, enabled states and Open Recent depend on.
+    #[doc(hidden)]
+    pub fn menu_key(&self) -> MenuKey {
+        let s = self.doc.session();
+        MenuKey {
+            generation: s.generation(),
+            version: s.version(),
+            selected: s.selection_len(),
+            text_focus: self.text_focus,
+            has_document: self.has_document,
+            recents: self.recents.0.clone(),
         }
     }
 
@@ -482,7 +540,7 @@ impl BrickMotionApp {
         match self.loader.poll() {
             Some(Ok((doc, info))) => {
                 let path = path.expect("a finished load had a path");
-                let agreed = self.replace_ok == Some(self.doc.session().version());
+                let agreed = self.replace_ok.is_some_and(|ok| ok.covers(self.doc.session()));
                 if self.dirty() && !agreed {
                     // Edited while it loaded: ask before the edits go.
                     self.confirm = Some(Pending::Adopt(Box::new((path, doc, info))));
@@ -528,6 +586,12 @@ impl BrickMotionApp {
         self.doc.session()
     }
 
+    /// Whether the app is closing.
+    #[doc(hidden)]
+    pub fn quitting(&self) -> bool {
+        self.quitting
+    }
+
     #[doc(hidden)]
     pub fn notices(&self) -> &[Notice] {
         &self.notices
@@ -538,15 +602,48 @@ impl BrickMotionApp {
     /// Closing the window with unsaved changes asks first.
     fn guard_close(&mut self, ctx: &egui::Context) {
         if self.quitting {
+            self.wait_autosaved(); // its backup is the newest copy of an edited document
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             return;
         }
         if ctx.input(|i| i.viewport().close_requested()) && self.dirty() {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-            if self.confirm.is_none() {
-                self.confirm = Some(Pending::Quit);
+            match self.confirm {
+                None => self.confirm = Some(Pending::Quit),
+                Some(Pending::Quit) => {}
+                // Already asking about something else: the same answer then quits.
+                Some(_) => self.quit_after = true,
             }
         }
+    }
+}
+
+/// See [`BrickMotionApp::menu_key`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MenuKey {
+    generation: u64,
+    version: u64,
+    selected: usize,
+    text_focus: bool,
+    has_document: bool,
+    recents: Vec<PathBuf>,
+}
+
+/// Which document, at which version, the person agreed to replace.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ReplaceOk {
+    generation: u64,
+    version: u64,
+}
+
+impl ReplaceOk {
+    pub fn of(s: &bm::Session) -> ReplaceOk {
+        ReplaceOk { generation: s.generation(), version: s.version() }
+    }
+
+    /// True while `s` is that same document, unchanged.
+    pub fn covers(&self, s: &bm::Session) -> bool {
+        *self == ReplaceOk::of(s)
     }
 }
 
@@ -579,13 +676,21 @@ impl eframe::App for BrickMotionApp {
         chrome::confirm::show(ui, self);
         self.run_requested();
         self.autosave(std::time::Instant::now());
+        if self.autosaving.is_some() {
+            ui.ctx().request_repaint_after(Duration::from_millis(50)); // to take its result
+        }
         if self.quitting {
             ui.ctx().request_repaint();
         }
         if self.menubar.is_some() {
-            let (ctx, recents) = (self.ctx(), self.recents.clone());
-            if let Some(m) = self.menubar.as_mut() {
-                m.sync(&ctx, &recents);
+            // Titles and enabled states follow only these; most frames change none of them.
+            let key = self.menu_key();
+            if self.menu_shown.as_ref() != Some(&key) {
+                let ctx = self.ctx();
+                if let Some(m) = self.menubar.as_mut() {
+                    m.sync(&ctx, &self.recents);
+                }
+                self.menu_shown = Some(key);
             }
         }
         if self.dirty() {

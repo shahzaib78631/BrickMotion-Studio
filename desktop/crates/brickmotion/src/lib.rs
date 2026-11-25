@@ -15,7 +15,7 @@ pub mod support;
 mod theme;
 pub mod viewport;
 
-pub use app::{Answer, BrickMotionApp, DialogRequest, Pending, Workspace};
+pub use app::{Answer, BrickMotionApp, DialogRequest, Pending, ReplaceOk, Workspace};
 pub use document::{DocState, save_to};
 pub use loader::{Loaded, Loader, OPEN_EXTENSIONS, Warm, open_model};
 pub use notices::Notice;
