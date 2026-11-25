@@ -27,6 +27,9 @@ pub struct Transport {
     generation: Option<u64>,
     pins_version: Option<u64>,
     pending_change: Option<bm::Changed>,
+    /// Test seam: forces a Failed plan state with this error message.
+    #[doc(hidden)]
+    pub forced_failure: Option<String>,
 }
 
 impl Default for Transport {
@@ -50,6 +53,7 @@ impl Default for Transport {
             generation: None,
             pins_version: None,
             pending_change: None,
+            forced_failure: None,
         }
     }
 }
@@ -69,6 +73,13 @@ impl Transport {
         }
 
         let next = vp.playback_state();
+        if let Some(msg) = &self.forced_failure {
+            let was = self.state.plan == PlanState::Failed && self.failure == *msg;
+            self.state = next;
+            self.state.plan = PlanState::Failed;
+            self.failure = msg.clone();
+            return !was;
+        }
         if next.plan == PlanState::Ready {
             self.last_build_time = if next.at_rest { next.duration } else { next.seconds };
         }

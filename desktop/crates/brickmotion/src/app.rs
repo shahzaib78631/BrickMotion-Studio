@@ -144,6 +144,8 @@ pub struct BrickMotionApp {
     pub clipboard_fails: bool,
     /// Build playback transport, planner status, and cached timeline/lanes.
     pub transport: crate::transport::Transport,
+    /// Build timeline zoom, scroll, track disclosure and drag state.
+    pub timeline: chrome::timeline::TimelineState,
 }
 
 impl BrickMotionApp {
@@ -210,6 +212,7 @@ impl BrickMotionApp {
             clipboard: String::new(),
             clipboard_fails: false,
             transport: crate::transport::Transport::default(),
+            timeline: chrome::timeline::TimelineState::default(),
         };
         // Opened once the first frame knows the view's size, so the worker can draw it warm.
         app.startup = path.map(|p| std::path::absolute(&p).unwrap_or(p));
@@ -305,6 +308,9 @@ impl BrickMotionApp {
         self.edit.placement = None;
         self.edit.step = None;
         self.transport.reset();
+        self.timeline.drag = None;
+        self.timeline.scrubbing = false;
+        self.timeline.view.fit();
         // The old document (and its renderer) goes, off this thread; the widget sets the new one up.
         crate::loader::retire(std::mem::replace(&mut self.doc, doc));
         self.viewport.reset();
@@ -763,6 +769,9 @@ impl BrickMotionApp {
         self.edit.placement = None;
         self.edit.step = None;
         self.transport.reset();
+        self.timeline.drag = None;
+        self.timeline.scrubbing = false;
+        self.timeline.view.fit();
         let mut s = bm::Session::new();
         match s.new_blank() {
             Ok(_) => {
