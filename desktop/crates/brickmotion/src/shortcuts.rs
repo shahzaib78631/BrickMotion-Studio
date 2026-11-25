@@ -15,7 +15,7 @@ fn ordered() -> Vec<(Shortcut, &'static str)> {
 /// text field. A matched key is consumed, so widgets do not also act on it. With the menu bar
 /// installed, ⌘ keys belong to it (AppKit gives them to the menu first), so they run once.
 pub fn handle(app: &mut BrickMotionApp, ctx: &egui::Context) {
-    let typing = app.text_focus || app.palette.open || app.swatches.open.is_some() || app.steps.editor.is_some();
+    let typing = app.text_focus || app.palette.open || app.swatches.open.is_some() || app.steps.editor.is_some() || app.replace.open;
 
     // While placing a part, Tab, ⇧Tab, R, Return and Esc belong to the placement before the registry.
     if !typing && app.edit.placement.is_some() {

@@ -31,7 +31,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
                     ui.spacing_mut().item_spacing.y = 4.0;
                     match snap.selected {
                         0 => project(ui, app, &snap, &mut run),
-                        1 if !snap.described.is_empty() => piece(ui, app, &snap.described[0]),
+                        1 if !snap.described.is_empty() => piece(ui, app, &snap.described[0], &mut run),
                         _ => many(ui, app, &snap),
                     }
                 });
@@ -93,13 +93,20 @@ fn project(ui: &mut Ui, app: &mut BrickMotionApp, snap: &bm::Snapshot, run: &mut
     });
 }
 
-fn piece(ui: &mut Ui, app: &mut BrickMotionApp, p: &bm::PieceInfo) {
+fn piece(ui: &mut Ui, app: &mut BrickMotionApp, p: &bm::PieceInfo, run: &mut Option<&'static str>) {
     let t = app.theme;
     let colors = app.colors();
     let swatch = colors.iter().find(|c| c.code == p.color).map(|c| Color32::from_rgb(c.rgb[0], c.rgb[1], c.rgb[2]));
     section(ui, "Piece", |ui| {
         ui.label(RichText::new(&p.description).strong().color(t.text1));
-        ui.label(RichText::new(&p.part).color(t.text3));
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(&p.part).color(t.text3));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.small_button("Replace…").clicked() {
+                    *run = Some("model.replace");
+                }
+            });
+        });
         ui.add_space(4.0);
         if colour_button_row(ui, &t, swatch, &p.color_name) {
             app.swatches.open(super::swatches::Target::Selection);

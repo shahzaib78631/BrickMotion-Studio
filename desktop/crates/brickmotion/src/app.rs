@@ -132,6 +132,8 @@ pub struct BrickMotionApp {
     pub steps: chrome::steps::StepsState,
     /// The Browser's Parts tab summary cache.
     pub parts: chrome::parts::PartsState,
+    /// Replace Part modal sheet.
+    pub replace: chrome::replace::ReplaceSheet,
     /// Focus the Browser's filter field next frame (e.g. after pressing P).
     pub(crate) focus_filter: bool,
     /// In-memory clipboard used when dialogs are off (headless tests).
@@ -197,6 +199,7 @@ impl BrickMotionApp {
             library: chrome::library::LibraryState::default(),
             steps: chrome::steps::StepsState::default(),
             parts: chrome::parts::PartsState::default(),
+            replace: chrome::replace::ReplaceSheet::default(),
             focus_filter: false,
             clipboard: String::new(),
         };
@@ -511,6 +514,7 @@ impl BrickMotionApp {
             "model.rotate" => crate::edit::turn(self, true),
             "model.rotate_back" => crate::edit::turn(self, false),
             "model.recolour" => self.swatches.open(chrome::swatches::Target::Selection),
+            "model.replace" => self.replace.show_sheet(),
             "edit.clone" => crate::edit::clone(self),
             "model.duplicate" => crate::edit::duplicate(self),
             "edit.raise" => crate::edit::raise(self, self.edit.alt_held),
@@ -898,6 +902,7 @@ impl eframe::App for BrickMotionApp {
         crate::palette::show(ui, self);
         chrome::swatches::show(ui, self);
         chrome::steps::show_editor(ui, self);
+        chrome::replace::show(ui, self);
         chrome::confirm::show(ui, self);
         self.run_requested();
         self.poll_placement(ui.ctx());

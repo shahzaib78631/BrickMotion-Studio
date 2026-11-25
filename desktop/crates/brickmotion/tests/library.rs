@@ -116,3 +116,53 @@ fn typing_in_library_search_does_not_edit() {
     assert_eq!(h.state().session().version(), v);
     assert_eq!(h.state().edit.tool, Tool::Select);
 }
+
+#[test]
+fn replace_swaps_the_part_and_keeps_colour() {
+    let mut h = heli_harness();
+    h.state_mut().doc.session().select(&[0], bm::SelectMode::Replace);
+    let orig = h.state().session().snapshot().described[0].clone();
+    let target = if orig.part == "3001.dat" { "3003" } else { "3001" };
+    let target_dat = format!("{target}.dat");
+
+    assert!(run(h.state_mut(), "model.replace"));
+    h.run_steps(2);
+    assert!(h.state().replace.open);
+    h.get_by_label("Replace part search").type_text(target);
+    h.run_steps(2);
+    h.get_by_label(target).click();
+    h.run_steps(1);
+    // Click the modal's primary Replace button (ribbon also has a "Replace" button, so pick the last).
+    let replace_buttons: Vec<_> = h.query_all_by_label("Replace").collect();
+    replace_buttons.last().expect("Replace button").click();
+    h.run_steps(2);
+
+    assert!(!h.state().replace.open);
+    let after = h.state().session().snapshot().described[0].clone();
+    assert_eq!(after.part, target_dat);
+    assert_eq!(after.color, orig.color);
+    assert!(run(h.state_mut(), "edit.undo"));
+    assert_eq!(h.state().session().snapshot().described[0].part, orig.part);
+}
+
+#[test]
+fn replace_needs_a_selection() {
+    let mut h = heli_harness();
+    assert!(!run(h.state_mut(), "model.replace"));
+    assert!(!h.state().replace.open);
+}
+
+#[test]
+fn cancel_changes_nothing() {
+    let mut h = heli_harness();
+    h.state_mut().doc.session().select(&[0], bm::SelectMode::Replace);
+    let v = h.state().session().version();
+    assert!(run(h.state_mut(), "model.replace"));
+    h.run_steps(2);
+    h.get_by_label("Replace part search").type_text("3001");
+    h.run_steps(2);
+    h.get_by_label("Cancel").click();
+    h.run_steps(2);
+    assert!(!h.state().replace.open);
+    assert_eq!(h.state().session().version(), v);
+}

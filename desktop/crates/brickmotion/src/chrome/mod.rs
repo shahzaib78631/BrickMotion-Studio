@@ -6,6 +6,7 @@ pub mod navigator;
 pub mod notices;
 pub mod parts;
 pub mod properties;
+pub mod replace;
 pub mod ribbon;
 pub mod steps;
 pub mod swatches;
