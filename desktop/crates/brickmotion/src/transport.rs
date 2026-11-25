@@ -6,6 +6,22 @@ use std::rc::Rc;
 use bm::playback::{AssemblyPreview, PlanStage, PlanState, PlaybackState};
 use bm::timeline::{BuildLanes, BuildTimeline, FlightRow};
 
+/// Whether a request made at session version `expected` runs on a plan of version `planned`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Due {
+    Now,
+    Later,
+    Dropped,
+}
+
+pub(crate) fn due(expected: u64, planned: u64) -> Due {
+    match planned.cmp(&expected) {
+        std::cmp::Ordering::Equal => Due::Now,
+        std::cmp::Ordering::Less => Due::Later,
+        std::cmp::Ordering::Greater => Due::Dropped,
+    }
+}
+
 /// Playback and planner state for the open document.
 pub struct Transport {
     pub state: PlaybackState,
@@ -122,22 +138,36 @@ impl Transport {
             self.pins_version = Some(cur_ver);
             changed = true;
 
-            if let Some(expected) = self.staging_preview_at.take()
-                && tl_version == expected
-            {
-                self.seek(vp, 0.0);
+            // Each request waits for the plan of the version it was made at: an older plan that
+            // finishes first keeps it, a newer one drops it.
+            if let Some(expected) = self.staging_preview_at {
+                let d = due(expected, tl_version);
+                if d != Due::Later {
+                    self.staging_preview_at = None;
+                }
+                if d == Due::Now {
+                    self.seek(vp, 0.0);
+                }
             }
-            if let Some((step, through_end, expected)) = self.pending_step.take()
-                && tl_version == expected
-            {
-                self.play_step_ready(vp, step, through_end);
+            if let Some((step, through_end, expected)) = self.pending_step {
+                let d = due(expected, tl_version);
+                if d != Due::Later {
+                    self.pending_step = None;
+                }
+                if d == Due::Now {
+                    self.play_step_ready(vp, step, through_end);
+                }
             }
-            if let Some(expected) = self.rebuild_steps_at.take()
-                && cur_ver == expected
-            {
-                let order = vp.build_order();
-                if !order.is_empty() {
-                    self.pending_change = Some(session.regenerate_steps(&order));
+            if let Some(expected) = self.rebuild_steps_at {
+                let d = if cur_ver == expected { due(expected, tl_version) } else { Due::Dropped };
+                if d != Due::Later {
+                    self.rebuild_steps_at = None;
+                }
+                if d == Due::Now {
+                    let order = vp.build_order();
+                    if !order.is_empty() {
+                        self.pending_change = Some(session.regenerate_steps(&order));
+                    }
                 }
             }
         }
@@ -388,5 +418,20 @@ impl Transport {
         self.staging_preview_at = None;
         self.pins_version = None;
         self.pending_change = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Due, due};
+
+    #[test]
+    fn a_request_waits_for_its_own_plan() {
+        // The plan for the requested version runs it.
+        assert_eq!(due(7, 7), Due::Now);
+        // An older plan finishing first must not drop the request.
+        assert_eq!(due(7, 6), Due::Later);
+        // A newer plan supersedes it.
+        assert_eq!(due(7, 8), Due::Dropped);
     }
 }

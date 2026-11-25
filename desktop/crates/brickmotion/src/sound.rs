@@ -315,6 +315,10 @@ fn example_index(ex: SnapExample) -> usize {
 pub struct SnapSound<S: Sink = RodioSink> {
     pub sink: S,
     track_key: Option<(u64, u64, u64)>,
+    /// How many times the snap track has been rendered (each one is a full WAV render).
+    pub track_writes: usize,
+    /// Whether the write for `track_key` produced a track (the sink may still hold an older one).
+    track_written: bool,
     warned_audio: bool,
     pub last_example: Option<SnapExample>,
     pub waveforms: [Option<Vec<f32>>; 3],
@@ -332,6 +336,8 @@ impl<S: Sink> SnapSound<S> {
         Self {
             sink,
             track_key: None,
+            track_writes: 0,
+            track_written: false,
             warned_audio: false,
             last_example: None,
             waveforms: [None, None, None],
@@ -379,22 +385,28 @@ impl<S: Sink> SnapSound<S> {
                 return None;
             };
             let tmp = temp_wav_path("track");
+            self.track_writes += 1;
             let res = vp.write_snap_track(&tmp, recordings);
             let bytes = if res.is_ok() { std::fs::read(&tmp).ok() } else { None };
             let _ = std::fs::remove_file(&tmp);
+            // Rendering the track is a full WAV render: one try per document, plan and mix, even
+            // when it fails, never one a frame.
+            self.track_key = Some(key);
+            self.track_written = bytes.is_some();
             let Some(bytes) = bytes else {
                 self.sink.pause();
                 return None;
             };
-            match self.sink.load(bytes) {
-                Ok(_) => self.track_key = Some(key),
-                Err(e) => {
-                    self.sink.pause();
-                    return self.audio_notice(e);
-                }
+            if let Err(e) = self.sink.load(bytes) {
+                self.sink.pause();
+                return self.audio_notice(e);
             }
         }
 
+        if !self.track_written {
+            self.sink.pause();
+            return None;
+        }
         self.sink.set_speed(transport.rate);
         let dur = self.sink.duration();
         let target = transport.time().clamp(0.0, dur.max(0.0));
@@ -464,5 +476,6 @@ impl<S: Sink> SnapSound<S> {
     pub fn reset(&mut self) {
         self.sink.pause();
         self.track_key = None;
+        self.track_written = false;
     }
 }

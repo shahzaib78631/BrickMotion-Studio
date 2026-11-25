@@ -38,11 +38,19 @@ pub struct Clip {
     pub width: f32,
     pub row: u32,
     pub seat_x: f32,
-    pub label: String,
-    pub part_name: String,
 }
 
 impl Clip {
+    /// The part's file name, from the timeline the clip was laid out from.
+    pub fn part_name<'a>(&self, timeline: &'a BuildTimeline) -> &'a str {
+        timeline.flights.get(self.flight).map_or("", |f| f.name.as_str())
+    }
+
+    /// The name shown on the clip (no `.dat`).
+    pub fn label<'a>(&self, timeline: &'a BuildTimeline) -> &'a str {
+        short_name(self.part_name(timeline))
+    }
+
     pub fn rect_in(&self, lane: Rect, lead_inset: f64, offset: f64) -> Rect {
         let sx = lane.left() + (self.x as f64 + lead_inset - offset) as f32;
         let sy = lane.top() + LANE_INSET + self.row as f32 * ROW_PITCH;
@@ -64,6 +72,10 @@ pub struct PartsLane {
     pub last_layout_time: Duration,
     pub last_show_time: Duration,
     pub last_visited: usize,
+    /// The widest clip, so culling never drops a long clip that starts left of the view.
+    max_clip_width: f32,
+    /// The dot whose context menu is open: it stays interactive while the pointer is in the menu.
+    menu_piece: Option<u32>,
 }
 
 impl PartsLane {
@@ -72,6 +84,8 @@ impl PartsLane {
         self.clips.clear();
         self.rows = 0;
         self.zoomed_in = false;
+        self.max_clip_width = 0.0;
+        self.menu_piece = None;
         self.last_visited = 0;
     }
 
@@ -105,11 +119,10 @@ impl PartsLane {
             0.0
         };
         let zoomed_in = avg_dur * px_per_sec >= MIN_CLIP_W as f64;
-        self.zoomed_in = zoomed_in;
 
         let mut clips: Vec<Clip> = Vec::with_capacity(timeline.flights.len());
         for (idx, f) in timeline.flights.iter().enumerate() {
-            let label = short_name(&f.name).to_owned();
+            let label = short_name(&f.name);
             let start_x = (f.start * px_per_sec) as f32;
             let seat_x = (f.end * px_per_sec) as f32;
             let dur_w = ((f.end - f.start).max(0.0) * px_per_sec) as f32;
@@ -129,27 +142,33 @@ impl PartsLane {
                 width,
                 row: 0,
                 seat_x,
-                label,
-                part_name: f.name.clone(),
             });
         }
 
-        if zoomed_in {
+        let rows = if zoomed_in {
             clips.sort_by(|a, b| a.x.total_cmp(&b.x).then_with(|| a.flight.cmp(&b.flight)));
             let spans: Vec<(f64, f64)> = clips.iter().map(|c| (c.x as f64, c.width as f64)).collect();
             let (rows, count) = pack_lane(&spans);
             for (c, r) in clips.iter_mut().zip(rows) {
                 c.row = r;
             }
-            self.rows = count as u32;
+            count as u32
         } else {
             clips.sort_by(|a, b| a.seat_x.total_cmp(&b.seat_x).then_with(|| a.flight.cmp(&b.flight)));
-            self.rows = 1;
-        }
+            1
+        };
 
-        self.clips = clips;
+        self.set_clips(clips, zoomed_in, rows);
         self.layout_for = Some(key);
         self.last_layout_time = t0.elapsed();
+    }
+
+    /// Takes a laid-out clip list: sorted by `x` when zoomed in, by `seat_x` otherwise.
+    pub fn set_clips(&mut self, clips: Vec<Clip>, zoomed_in: bool, rows: u32) {
+        self.max_clip_width = clips.iter().fold(0.0, |m, c| m.max(c.width));
+        self.clips = clips;
+        self.zoomed_in = zoomed_in;
+        self.rows = rows;
     }
 
     pub fn height(&self) -> f32 {
@@ -168,8 +187,8 @@ impl PartsLane {
         let vis_left = (view.offset - view.lead_inset) as f32;
         let vis_right = (view.offset + view.viewport_width - view.lead_inset) as f32;
         if self.zoomed_in {
-            // Clips can be up to MAX_CLIP_W (or longer if a flight is wide); scan back by longest possible clip.
-            let margin = MAX_CLIP_W.max(view.viewport_width as f32 * 0.25);
+            // Sorted by x: a clip left of the view can still reach into it by up to the widest clip.
+            let margin = self.max_clip_width.max(MAX_CLIP_W);
             let start = self.clips.partition_point(|c| c.x + margin < vis_left);
             let end = self.clips.partition_point(|c| c.x <= vis_right + 8.0);
             start..end
@@ -264,7 +283,8 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
             let is_sel = sel_set.contains(&clip.piece);
             let is_pin = pins.contains(&clip.piece);
             let is_hov = resp.hovered() && !dragging_arrival;
-            resp.widget_info(|| WidgetInfo::selected(egui::Role::Button, true, is_sel, &clip.label));
+            let label = clip.label(&timeline);
+            resp.widget_info(|| WidgetInfo::selected(egui::Role::Button, true, is_sel, label));
 
             // v3 soft clip: white 6.5% fill, no border; hover white 11%; selected accent 20% + 1-px accent edge.
             let fill = if is_sel {
@@ -302,7 +322,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
                 ui.painter().with_clip_rect(text_clip).text(
                     pos2(text_left, rect.center().y),
                     Align2::LEFT_CENTER,
-                    &clip.label,
+                    label,
                     FontId::proportional(11.0),
                     if is_sel || is_hov { t.text1 } else { t.text2 },
                 );
@@ -326,7 +346,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
                 clicked = Some((clip_idx, clip.piece, clip.end, mods));
             }
 
-            part_context_menu(ui, app, &resp, clip, &sel_vec, is_pin, &mut menu_action);
+            let _ = part_context_menu(app, &resp, clip, label, &sel_vec, is_pin, &mut menu_action);
         }
     } else {
         // Zoomed-out mode: 8-px coloured dots at seat time with 1-px white 28% ring.
@@ -382,8 +402,11 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
             }
         }
 
-        // Interactive hit target on the nearest dot under the pointer (or fallback lane click).
-        let interact_idx = hit_candidate.map(|(_, idx, _)| idx);
+        // Interactive hit target: the dot whose menu is open, else the nearest dot under the pointer.
+        let lane = &app.timeline.parts_lane;
+        let menu_idx = lane.menu_piece.and_then(|p| vis.clone().find(|&i| lane.clips[i].piece == p));
+        let interact_idx = menu_idx.or(hit_candidate.map(|(_, idx, _)| idx));
+        let mut menu_open_for = None;
         if let Some(clip_idx) = interact_idx {
             let clip = &app.timeline.parts_lane.clips[clip_idx];
             let center = clip.dot_center_in(r, view.lead_inset, view.offset);
@@ -393,7 +416,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
                 .on_hover_cursor(CursorIcon::PointingHand);
             let is_sel = sel_set.contains(&clip.piece);
             let is_pin = pins.contains(&clip.piece);
-            if !dragging_arrival {
+            if !dragging_arrival && menu_idx.is_none() {
                 hovered_clip = Some((clip_idx, dot_rect));
             }
             if resp.drag_started()
@@ -410,8 +433,11 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
             } else if resp.clicked() {
                 clicked = Some((clip_idx, clip.piece, clip.end, mods));
             }
-            part_context_menu(ui, app, &resp, clip, &sel_vec, is_pin, &mut menu_action);
+            if part_context_menu(app, &resp, clip, clip.label(&timeline), &sel_vec, is_pin, &mut menu_action) {
+                menu_open_for = Some(clip.piece);
+            }
         }
+        app.timeline.parts_lane.menu_piece = menu_open_for;
     }
 
     // Apply started arrival drag.
@@ -478,14 +504,14 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
                                 4.5,
                                 Stroke::new(0.5, Color32::from_rgba_unmultiplied(255, 255, 255, 100)),
                             );
-                            ui.label(RichText::new(&clip.label).strong().size(12.5).color(t.text1));
+                            ui.label(RichText::new(clip.label(&timeline)).strong().size(12.5).color(t.text1));
                         });
                         egui::Grid::new("part-hc-grid")
                             .num_columns(2)
                             .spacing(vec2(10.0, 2.0))
                             .show(ui, |ui| {
                                 ui.label(RichText::new("Part").size(11.0).color(t.text3));
-                                ui.label(RichText::new(&clip.part_name).size(11.0).color(t.text2));
+                                ui.label(RichText::new(clip.part_name(&timeline)).size(11.0).color(t.text2));
                                 ui.end_row();
                                 ui.label(RichText::new("Step").size(11.0).color(t.text3));
                                 ui.label(
@@ -629,23 +655,24 @@ enum PartMenuAction {
 }
 
 fn part_context_menu(
-    _ui: &Ui,
     app: &BrickMotionApp,
     resp: &egui::Response,
     clip: &Clip,
+    label: &str,
     sel: &[u32],
     clip_pinned: bool,
     out: &mut Option<PartMenuAction>,
-) {
-    let ids: Vec<u32> = if sel.contains(&clip.piece) && !sel.is_empty() {
-        sel.to_vec()
-    } else {
-        vec![clip.piece]
-    };
-    let single = ids.len() == 1;
+) -> bool {
     let step_idx = usize::try_from(clip.step).ok();
 
+    // Built only while the menu is open: this runs for every visible clip each frame.
     resp.context_menu(|ui| {
+        let ids: Vec<u32> = if sel.contains(&clip.piece) {
+            sel.to_vec()
+        } else {
+            vec![clip.piece]
+        };
+        let single = ids.len() == 1;
         let session = app.doc.session();
         let items = step_idx.map(|s| session.step_items(s)).unwrap_or_default();
         let item_index = items
@@ -656,7 +683,7 @@ fn part_context_menu(
         let step_count = app.steps.len();
 
         let header = if single {
-            clip.label.clone()
+            label.to_owned()
         } else {
             format!("{} Parts", ids.len())
         };
@@ -784,7 +811,8 @@ fn part_context_menu(
             *out = Some(PartMenuAction::Delete { pieces: ids });
             ui.close();
         }
-    });
+    })
+    .is_some()
 }
 
 fn apply_part_menu(app: &mut BrickMotionApp, action: PartMenuAction) {

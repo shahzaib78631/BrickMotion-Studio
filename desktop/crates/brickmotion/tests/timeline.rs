@@ -331,6 +331,32 @@ fn lane_clips_match_flights() {
 }
 
 #[test]
+fn visible_range_keeps_long_clips_that_start_off_screen() {
+    use brickmotion::chrome::parts_lane::{Clip, PartsLane};
+    let clip = |flight: usize, x: f32, width: f32| Clip {
+        flight,
+        piece: flight as u32,
+        step: 0,
+        color: 16,
+        start: 0.0,
+        end: 1.0,
+        x,
+        width,
+        row: flight as u32,
+        seat_x: x + width,
+    };
+    // A 4000-px clip from x = 0, then short clips far to the right (sorted by x).
+    let mut lane = PartsLane::default();
+    lane.set_clips(vec![clip(0, 0.0, 4000.0), clip(1, 3000.0, 60.0), clip(2, 5000.0, 60.0)], true, 3);
+    let view = bm::timeline::TimelineView { zoom: 64.0, offset: 3012.0, viewport_width: 800.0, ..Default::default() };
+    // Visible content is [3000, 3800]: clip 0 (0..4000) and clip 1 overlap it, clip 2 does not.
+    let vis = lane.visible_range(&view);
+    assert!(vis.contains(&0), "the long clip under the view was culled: {vis:?}");
+    assert!(vis.contains(&1));
+    assert!(!vis.contains(&2));
+}
+
+#[test]
 fn clip_click_selects_and_seeks() {
     if !bm::metal_available() {
         return;
@@ -695,4 +721,42 @@ fn big_model_parts_lane() {
     assert!(fit_slowest < Duration::from_millis(16), "fit frame {fit_slowest:?} >= 16 ms");
     assert!(z64_slowest < Duration::from_millis(16), "z64 frame {z64_slowest:?} >= 16 ms");
     assert!(z64_visited < total / 10, "z64 visited {z64_visited} out of {total}");
+}
+
+#[test]
+fn dot_menu_stays_open_when_the_pointer_leaves_the_dot() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = animate_harness();
+    assert!(!h.state().timeline.parts_lane.zoomed_in, "fit zoom shows dots");
+    let parts_r = h.state().timeline.last_parts_rect.expect("parts rect");
+    let view = h.state().timeline.view;
+    let vis = h.state().timeline.parts_lane.visible_range(&view);
+    let clip = h.state().timeline.parts_lane.clips[vis]
+        .iter()
+        .find(|c| {
+            let p = c.dot_center_in(parts_r, view.lead_inset, view.offset);
+            p.x > parts_r.left() + 20.0 && p.x < parts_r.right() - 20.0
+        })
+        .expect("a dot inside the lane")
+        .clone();
+    let center = clip.dot_center_in(parts_r, view.lead_inset, view.offset);
+    h.event(egui::Event::PointerMoved(center));
+    h.step();
+    for pressed in [true, false] {
+        h.event(egui::Event::PointerButton {
+            pos: center,
+            button: egui::PointerButton::Secondary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        });
+        h.step();
+    }
+    h.run_steps(2);
+    assert!(h.query_by_label("Frame in View").is_some(), "menu opened");
+    // Move toward the menu, away from the dot (and out of the 7-px hit range).
+    h.event(egui::Event::PointerMoved(egui::pos2(center.x + 40.0, center.y - 40.0)));
+    h.run_steps(3);
+    assert!(h.query_by_label("Frame in View").is_some(), "menu closed when the pointer left the dot");
 }

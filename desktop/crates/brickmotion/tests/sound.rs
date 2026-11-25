@@ -165,6 +165,7 @@ fn no_audio_device_is_one_notice() {
     }
     assert_eq!(notices.len(), 1, "expected exactly one audio warning notice");
     assert!(matches!(notices[0], Notice::Warning { .. }));
+    assert_eq!(sound.track_writes, 1, "a track the sink refused is not rewritten every frame");
 }
 
 #[test]
@@ -272,4 +273,47 @@ fn write_snap_track_time() {
     eprintln!("write_snap_track_time (10294-1): res={res:?}, elapsed={elapsed:?}, wav_bytes={size}");
     assert!(res.is_ok(), "write_snap_track failed: {res:?}");
     assert!(size > 44, "empty snap track WAV");
+}
+
+#[test]
+fn failed_track_write_never_plays_the_previous_track() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = heli_harness();
+    let rec = snap_recordings();
+    let mut mix = h.state().session().snap_mix();
+    mix.enabled = true;
+    h.state_mut().doc.session().set_snap_mix(&mix);
+    assert!(run(h.state_mut(), "video.plan_build"));
+    plan_ready(&mut h, Duration::from_secs(60));
+    assert!(run(h.state_mut(), "transport.start"));
+    assert!(run(h.state_mut(), "transport.play"));
+    h.run_steps(2);
+
+    let mut sound = SnapSound::new(FakeSink::default());
+    {
+        let app = h.state_mut();
+        let (session, vp) = app.doc.parts();
+        let _ = sound.follow(session, vp, &app.transport, true, true, &rec);
+    }
+    assert_eq!(sound.sink.loads, 1);
+    assert!(sound.sink.playing);
+
+    // A new plan whose track cannot be written (the recordings path has a NUL byte).
+    mix.volume *= 0.5;
+    h.state_mut().doc.session().set_snap_mix(&mix);
+    assert!(run(h.state_mut(), "video.plan_build"));
+    plan_ready(&mut h, Duration::from_secs(60));
+    assert!(run(h.state_mut(), "transport.start"));
+    assert!(run(h.state_mut(), "transport.play"));
+    h.run_steps(2);
+    let bad = std::path::PathBuf::from("bad\0recordings");
+    for _ in 0..2 {
+        let app = h.state_mut();
+        let (session, vp) = app.doc.parts();
+        let _ = sound.follow(session, vp, &app.transport, true, true, &bad);
+        assert!(!sound.sink.playing, "the previous plan's track must not play");
+    }
+    assert_eq!(sound.track_writes, 2, "one write per plan, not one a frame");
 }
