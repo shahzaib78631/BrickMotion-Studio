@@ -20,6 +20,8 @@ fn main() {
     let lib = build.join("bmffi");
     println!("cargo:rustc-link-search=native={}", lib.display());
     println!("cargo:rustc-link-lib=dylib=bmffi");
+    // For bm-sys's own test binary; dependents add the same rpath from DEP_BMFFI_LIBDIR.
+    println!("cargo:rustc-link-arg=-Wl,-rpath,{}", lib.display());
     println!("cargo:libdir={}", lib.display()); // DEP_BMFFI_LIBDIR for the app crate
     for dir in ["desktop/bmffi", "native/app/bmapp/src", "native/app/bmapp/include"] {
         println!("cargo:rerun-if-changed={}", repo.join(dir).display());

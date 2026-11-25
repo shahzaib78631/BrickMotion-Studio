@@ -26,7 +26,9 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
                 icons::icon(ui, Icon::Brick, 16.0, t.playhead);
                 ui.label(RichText::new("BrickMotion").strong().color(t.text1));
                 ui.add_space(6.0);
-                icon_button(ui, &t, Icon::Home, "Home", false, false, 28.0);
+                if icon_button(ui, &t, Icon::Home, "Open…", true, false, 28.0).clicked() {
+                    app.requested.push("file.open");
+                }
                 ui.menu_button(RichText::new("File").color(t.text2), |ui| {
                     let open = egui::Button::new("Open…").shortcut_text("⌘O");
                     if ui.add(open).clicked() {

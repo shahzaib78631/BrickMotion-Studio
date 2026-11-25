@@ -68,3 +68,28 @@ fn header_and_rust_decls_agree() {
         assert!(bm_sys::DECLARED.contains(&name), "missing {name}");
     }
 }
+
+#[test]
+fn document_built_on_worker_draws_on_this_thread() {
+    // The renderer is built where the Document is made; the window then owns it.
+    let mut doc = std::thread::spawn(|| {
+        let mut s = bm::Session::new();
+        s.open(Path::new(HELI)).unwrap();
+        bm::Document::new(s)
+    })
+    .join()
+    .unwrap();
+    let v = doc.viewport().expect("metal");
+    v.resize(320, 240, 1.0);
+    v.fit_all();
+    for _ in 0..30 {
+        if !v.draw() {
+            break;
+        }
+    }
+    let mut f = bm::Frame::default();
+    v.read_frame(&mut f);
+    assert_eq!((f.width, f.height), (320, 240));
+    assert!(v.pick(160.0, 120.0).is_some());
+    drop(doc);
+}

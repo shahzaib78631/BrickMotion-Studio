@@ -95,6 +95,8 @@ pub struct ViewportWidget {
     texture: Option<TextureHandle>,
     frame: bm::Frame,
     last_size: Option<(u32, u32, f64)>,
+    /// The view's size last frame, with or without a viewport to draw into.
+    view_size: Option<(u32, u32, f64)>,
     /// The document generation the viewport was set up for; a new document needs setting up again.
     generation: Option<u64>,
 }
@@ -105,16 +107,36 @@ impl ViewportWidget {
         ViewportWidget { background: [c(background.r()), c(background.g()), c(background.b())], ..Default::default() }
     }
 
+    /// Forget the view's setup: the next frame sets up whatever document it is given.
+    pub fn reset(&mut self) {
+        self.generation = None;
+        self.last_size = None;
+    }
+
+    /// The size and background the next document should be drawn at, once known.
+    pub fn warm(&self) -> Option<crate::loader::Warm> {
+        self.view_size.map(|size| crate::loader::Warm { size, background: self.background })
+    }
+
     pub fn show(&mut self, ui: &mut Ui, doc: &mut bm::Document) {
         let rect = ui.max_rect();
         let resp = ui.interact(rect, ui.scope_id().with("viewport"), Sense::click_and_drag());
         let Some(size) = target_size(rect, ui.ctx().pixels_per_point()) else {
             return;
         };
+        self.view_size = Some(size);
         let generation = doc.session().generation();
         let fresh = self.generation != Some(generation);
+        let empty = doc.session().piece_count() == 0;
         let Some(vp) = doc.viewport() else {
-            ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "This Mac has no Metal device, so the model cannot be shown.", egui::FontId::proportional(13.0), Color32::GRAY);
+            // The engine makes no viewport for an empty document; with pieces, it means no GPU.
+            let text = if empty { "Open a model to begin" } else { "This Mac has no Metal device, so the model cannot be shown." };
+            let hint = egui::Label::new(egui::RichText::new(text).size(13.0).color(Color32::from_gray(0x8a)));
+            ui.put(Rect::from_center_size(rect.center(), egui::vec2(rect.width(), 24.0)), hint);
+            if empty {
+                let k = egui::RichText::new("⌘O").size(11.0).color(Color32::from_gray(0x6c));
+                ui.put(Rect::from_center_size(rect.center() + egui::vec2(0.0, 22.0), egui::vec2(60.0, 18.0)), egui::Label::new(k));
+            }
             return;
         };
         let mut changed = false;

@@ -34,7 +34,7 @@ pub fn tabs(w: Workspace) -> &'static [&'static str] {
 
 static REGISTRY: [Command; 35] = [
     Command { id: "model.add_part", title: "Add Part", icon: Icon::Plus, shortcut: Some("P"), tip: "Pick a part from the library and place it on the studs under the pointer. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Insert", enabled: false },
-    Command { id: "model.import", title: "Import", icon: Icon::Import, shortcut: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Insert", enabled: false },
+    Command { id: "model.import", title: "Import", icon: Icon::Import, shortcut: Some("⌘O"), tip: "Open an LDraw or BrickMotion model.", workspace: Workspace::Build, tab: "Model", group: "Insert", enabled: true },
     Command { id: "model.inventory", title: "Inventory", icon: Icon::Inventory, shortcut: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Insert", enabled: false },
     Command { id: "model.move", title: "Move", icon: Icon::Move, shortcut: Some("M"), tip: "Drag the selection along the arrows; it snaps to studs and holes. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Modify", enabled: false },
     Command { id: "model.rotate", title: "Rotate", icon: Icon::Rotate, shortcut: Some("R"), tip: "Turn the selection in 90° steps around its connection. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Modify", enabled: false },

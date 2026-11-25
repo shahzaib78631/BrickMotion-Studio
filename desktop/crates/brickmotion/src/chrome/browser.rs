@@ -61,7 +61,15 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
                         });
                 });
                 Frame::NONE.inner_margin(Margin::same(6)).show(ui, |ui| {
-                    if app.browser_tab == 0 {
+                    if let Some(p) = app.opening() {
+                        let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                        ui.horizontal(|ui| {
+                            ui.set_height(28.0);
+                            ui.add_space(8.0);
+                            ui.add(egui::Spinner::new().size(14.0).color(t.text2));
+                            ui.label(RichText::new(format!("Opening {name}…")).color(t.text2));
+                        });
+                    } else if app.browser_tab == 0 {
                         root_row(ui, app, &title, count);
                     } else {
                         ui.add_space(6.0);

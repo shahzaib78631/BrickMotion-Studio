@@ -87,8 +87,14 @@ fn viewport_shows_model_and_picks() {
     let mut h = Harness::builder()
         .with_size([1440.0, 900.0])
         .build_eframe(|cc| BrickMotionApp::new(cc, Some(HELI.into())));
+    // The model opens on a worker; the window keeps drawing meanwhile.
+    let t0 = std::time::Instant::now();
+    while h.state().piece_count() < 100 {
+        assert!(t0.elapsed() < std::time::Duration::from_secs(60), "the model never arrived");
+        h.step();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
     h.run_steps(6);
-    assert!(h.state().piece_count() > 100);
     // Middle of the viewport (below the 38-px title bar and 104-px ribbon): a piece.
     let centre = egui::pos2(720.0, 142.0 + (900.0 - 142.0) / 2.0);
     h.event(egui::Event::PointerMoved(centre));
@@ -113,4 +119,35 @@ fn viewport_shows_model_and_picks() {
         let docs = concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs");
         h.render().unwrap().save(format!("{docs}/m1-viewport.png")).unwrap();
     }
+}
+
+/// With BM_BIG_MODEL=<path>: the window keeps drawing, with the Browser spinner, while it opens.
+#[test]
+fn large_model_keeps_window_responsive() {
+    let Some(big) = std::env::var_os("BM_BIG_MODEL") else { return };
+    let mut h = Harness::builder().with_size([1440.0, 900.0]).build_eframe(|cc| BrickMotionApp::new(cc, None));
+    h.run();
+    let name = std::path::Path::new(&big).file_name().unwrap().to_string_lossy().into_owned();
+    h.state_mut().open(big.into());
+    let t0 = std::time::Instant::now();
+    let (mut frames, mut slowest, mut saw_spinner) = (0, std::time::Duration::ZERO, false);
+    while h.state().opening().is_some() {
+        assert!(t0.elapsed() < std::time::Duration::from_secs(120), "never finished");
+        let f0 = std::time::Instant::now();
+        h.step();
+        slowest = slowest.max(f0.elapsed());
+        frames += 1;
+        saw_spinner |= h.query_by_label(&format!("Opening {name}…")).is_some();
+    }
+    h.run_steps(2);
+    eprintln!("{name}: {} pieces in {:?}, {frames} frames meanwhile, slowest {slowest:?}", h.state().piece_count(), t0.elapsed());
+    assert!(saw_spinner, "no spinner while opening");
+    assert!(frames > 3 && slowest < std::time::Duration::from_millis(100), "UI stalled: slowest frame {slowest:?}");
+}
+
+#[test]
+fn empty_launch_invites_open() {
+    let h = harness();
+    assert!(h.query_by_label("Open a model to begin").is_some());
+    assert!(h.query_by_label_contains("Metal").is_none());
 }

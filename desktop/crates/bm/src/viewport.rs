@@ -24,6 +24,11 @@ pub struct Viewport {
     raw: *mut sys::BmViewport,
 }
 
+// The engine's viewport has no thread affinity (it renders offscreen with Metal, whose objects may
+// be made on any thread). It may be built on one thread and handed to another, which then uses it
+// alone; it is never shared, so it is Send and not Sync.
+unsafe impl Send for Viewport {}
+
 impl Viewport {
     pub(crate) fn new(session: *mut sys::BmSession) -> Option<Viewport> {
         let raw = unsafe { sys::bm_viewport_new(session) };
