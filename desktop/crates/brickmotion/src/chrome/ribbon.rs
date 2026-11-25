@@ -141,10 +141,14 @@ fn tool_groups(ui: &mut Ui, app: &mut BrickMotionApp) {
                         let on = enabled(c, &ctx);
                         let active = (c.id == "model.move" && ctx.tool == crate::Tool::Move)
                             || (c.id == "model.rotate_tool" && ctx.tool == crate::Tool::Rotate);
+                        let active = active || (c.id == "video.follow" && app.director);
                         let resp = tool(ui, &t, c, on, active);
                         let resp = hover_card(resp, &t, c);
                         if resp.clicked() && on {
                             app.requested.push(c.id);
+                        }
+                        if c.id == "video.auto_direct" {
+                            director_popup(app, &resp);
                         }
                     }
                     ui.add_space(6.0);
@@ -231,4 +235,23 @@ fn workspace_switch(ui: &mut Ui, app: &mut BrickMotionApp, wr: Rect) {
             app.set_workspace(w);
         }
     }
+}
+
+/// Auto-Direct's styles, under the ribbon button (Swift's toolbar menu).
+fn director_popup(app: &mut BrickMotionApp, resp: &egui::Response) {
+    let clock = super::camera_lane::camera_clock(app.transport.clock());
+    let mut open = app.director_popup;
+    let enabled = super::camera_lane::can_auto_direct(app, clock);
+    egui::Popup::from_response(resp)
+        .open_bool(&mut open)
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .gap(4.0)
+        .show(|ui| {
+            if enabled {
+                super::camera_lane::director_menu(ui, app, clock);
+            } else {
+                ui.label(caption(super::camera_lane::auto_direct_reason(app, clock), &app.theme));
+            }
+        });
+    app.director_popup = open && app.director_popup;
 }

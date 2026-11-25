@@ -40,6 +40,14 @@ pub enum Track {
 #[derive(Clone, Debug)]
 pub enum TimelineDrag {
     Scrub,
+    /// A camera key dragged along its lane; it moves once, on release.
+    CameraKey {
+        clock: bm::camera::CameraClock,
+        id: String,
+        start_x: f32,
+        original: f64,
+        seconds: f64,
+    },
     Hold {
         run: usize,
         step: usize,
@@ -71,6 +79,7 @@ pub struct TimelineState {
     focused_hold: Option<(usize, usize)>,
     pub last_lanes_rect: Option<Rect>,
     pub last_ruler_rect: Option<Rect>,
+    pub last_camera_rect: Option<Rect>,
     pub last_parts_rect: Option<Rect>,
     pub last_frame_time: Duration,
     pub parts_lane: super::parts_lane::PartsLane,
@@ -91,6 +100,7 @@ impl Default for TimelineState {
             focused_hold: None,
             last_lanes_rect: None,
             last_ruler_rect: None,
+            last_camera_rect: None,
             last_parts_rect: None,
             last_frame_time: Duration::ZERO,
             parts_lane: super::parts_lane::PartsLane::default(),
@@ -517,17 +527,9 @@ fn timeline_body(ui: &mut Ui, app: &mut BrickMotionApp, heads: Rect, lanes: Rect
                 ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
 
                 // 1. Camera (collapsed)
-                split_row(
-                    ui,
-                    heads.width(),
-                    lanes.width(),
-                    TRACK_H,
-                    row_sep,
-                    |ui, hr| {
-                        track_head(ui, &t, hr, Icon::Cam, "Camera", false, false, None);
-                    },
-                    |ui, lr| empty_lane(ui, &t, lr, "No keys yet"),
-                );
+                let (hr, lr) = split_rects(ui, heads.width(), lanes.width(), TRACK_H, row_sep);
+                camera_head(ui, app, hr, bm::camera::CameraClock::Build);
+                super::camera_lane::show(ui, app, lr, dur, Clock::Build);
 
                 // 2. Build header row
                 let has_diag = app.transport.standard_preview()
@@ -694,23 +696,16 @@ fn timeline_body(ui: &mut Ui, app: &mut BrickMotionApp, heads: Rect, lanes: Rect
 /// The Keyframes clock: Camera and Keys only; the Build track and Snaps are hidden (m5-rulings.md).
 fn keyframes_body(ui: &mut Ui, app: &mut BrickMotionApp, body: Rect, head_w: f32, lane_w: f32, sep: Stroke) {
     let t = app.theme;
+    let dur = app.transport.duration();
     ui.scope_builder(UiBuilder::new().max_rect(body), |ui| {
         egui::ScrollArea::vertical()
             .id_salt("tl-keys-scroll")
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
-                split_row(
-                    ui,
-                    head_w,
-                    lane_w,
-                    TRACK_H,
-                    sep,
-                    |ui, hr| {
-                        track_head(ui, &t, hr, Icon::Cam, "Camera", false, false, None);
-                    },
-                    |ui, lr| empty_lane(ui, &t, lr, "No camera keys yet"),
-                );
+                let (hr, lr) = split_rects(ui, head_w, lane_w, TRACK_H, sep);
+                camera_head(ui, app, hr, bm::camera::CameraClock::Timeline);
+                super::camera_lane::show(ui, app, lr, dur, Clock::Keyframes);
                 split_row(
                     ui,
                     head_w,
@@ -724,6 +719,34 @@ fn keyframes_body(ui: &mut Ui, app: &mut BrickMotionApp, body: Rect, head_w: f32
                 );
             });
     });
+}
+
+/// The Camera head: its key count, and the lane's menu on right-click.
+fn camera_head(ui: &mut Ui, app: &mut BrickMotionApp, hr: Rect, clock: bm::camera::CameraClock) {
+    let t = app.theme;
+    let n = app.doc.session().camera_keys(clock).len();
+    track_head(ui, &t, hr, Icon::Cam, "Camera", false, false, None);
+    if n > 0 {
+        ui.painter().text(
+            pos2(hr.right() - 12.0, hr.center().y),
+            Align2::RIGHT_CENTER,
+            if n == 1 { "1 key".to_owned() } else { format!("{n} keys") },
+            FontId::proportional(11.0),
+            t.text3,
+        );
+    }
+    ui.interact(hr, ui.scope_id().with(("cam-head", clock)), Sense::click())
+        .context_menu(|ui| super::camera_lane::lane_menu(ui, app, clock));
+}
+
+/// A track row's head and lane rects, for rows whose head and lane both need the app.
+fn split_rects(ui: &mut Ui, head_w: f32, lane_w: f32, height: f32, sep: Stroke) -> (Rect, Rect) {
+    let (row, _) = ui.allocate_exact_size(vec2(head_w + lane_w, height), Sense::hover());
+    let hr = Rect::from_min_size(row.min, vec2(head_w, height));
+    let lr = Rect::from_min_size(pos2(row.left() + head_w, row.top()), vec2(lane_w, height));
+    ui.painter().hline(row.x_range(), row.bottom() - 0.5, sep);
+    ui.painter().vline(hr.right() - 0.5, row.y_range(), Stroke::new(1.0, Color32::from_rgb(0x2c, 0x2f, 0x36)));
+    (hr, lr)
 }
 
 fn split_row(
@@ -975,7 +998,12 @@ fn handle_navigation_and_drags(
     if esc
         && matches!(
             app.timeline.drag,
-            Some(TimelineDrag::Hold { .. } | TimelineDrag::Trim { .. } | TimelineDrag::Arrival { .. })
+            Some(
+                TimelineDrag::Hold { .. }
+                    | TimelineDrag::Trim { .. }
+                    | TimelineDrag::Arrival { .. }
+                    | TimelineDrag::CameraKey { .. }
+            )
         )
     {
         app.timeline.drag = None;
@@ -1013,6 +1041,13 @@ fn handle_navigation_and_drags(
                         let seconds = ((raw * 10.0).round() / 10.0).clamp(lo, hi);
                         app.timeline.drag = Some(TimelineDrag::Trim { segment, start_x, original, seconds });
                     }
+                    TimelineDrag::CameraKey { clock, id, start_x, original, .. } => {
+                        let lw = app.timeline.view.logical_width().max(1.0);
+                        let fps = super::camera_lane::clock_info(app, clock).fps.max(1.0);
+                        let raw = original + (pos.x - start_x) as f64 / lw * dur;
+                        let seconds = ((raw.clamp(0.0, dur)) * fps).round() / fps;
+                        app.timeline.drag = Some(TimelineDrag::CameraKey { clock, id, start_x, original, seconds });
+                    }
                     TimelineDrag::Arrival { .. } => {}
                 }
             }
@@ -1022,6 +1057,9 @@ fn handle_navigation_and_drags(
             app.timeline.scrubbing = false;
             match drag {
                 TimelineDrag::Scrub | TimelineDrag::Arrival { .. } => {}
+                TimelineDrag::CameraKey { clock, id, original, seconds, .. } => {
+                    super::camera_lane::commit_drag(app, clock, &id, original, seconds);
+                }
                 TimelineDrag::Hold { step, original, seconds, .. } => {
                     if (seconds - original).abs() >= 0.05 {
                         commit_hold(app, step, seconds);

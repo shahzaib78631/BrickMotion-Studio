@@ -144,6 +144,13 @@ pub struct BrickMotionApp {
     pub clipboard_fails: bool,
     /// Build playback transport, planner status, and cached timeline/lanes.
     pub transport: crate::transport::Transport,
+    /// The camera key or move shown in the Camera panel, with its clock.
+    pub camera_selection: Option<(bm::camera::CameraClock, crate::chrome::camera_lane::CameraPick)>,
+    /// Follow Camera: the viewport plays the Camera track.
+    pub director: bool,
+    /// Whether the Auto-Direct menu under the ribbon button is open.
+    pub director_popup: bool,
+    pub(crate) camera_synced: Option<(u64, u64)>,
     /// Build timeline zoom, scroll, track disclosure and drag state.
     pub timeline: chrome::timeline::TimelineState,
     /// Active page in the right-hand Properties panel.
@@ -222,6 +229,10 @@ impl BrickMotionApp {
             clipboard: String::new(),
             clipboard_fails: false,
             transport: crate::transport::Transport::default(),
+            camera_selection: None,
+            director: false,
+            director_popup: false,
+            camera_synced: None,
             timeline: chrome::timeline::TimelineState::default(),
             properties_page: chrome::properties::Page::Inspector,
             build_settings: chrome::build_settings::BuildSettingsState::default(),
@@ -689,6 +700,18 @@ impl BrickMotionApp {
                     self.transport.state = vp.playback_state();
                 }
             }
+            "video.camera_key" => {
+                self.ribbon_tab = "Camera";
+                chrome::camera_lane::add_key_from_view(self);
+            }
+            "video.auto_direct" => {
+                self.ribbon_tab = "Camera";
+                self.director_popup = !self.director_popup;
+            }
+            "video.follow" => {
+                let on = !self.director;
+                chrome::camera_lane::set_director(self, on);
+            }
             "transport.play" => {
                 self.cancel_placement();
                 if let Some(vp) = self.doc.viewport() {
@@ -1130,6 +1153,9 @@ impl eframe::App for BrickMotionApp {
         }
         self.text_focus = ui.ctx().egui_wants_keyboard_input();
         crate::shortcuts::handle(self, ui.ctx());
+        if self.has_document {
+            chrome::camera_lane::sync(self);
+        }
         chrome::titlebar::show(ui, self);
         if self.workspace == Workspace::Animate {
             chrome::timeline::show(ui, self);
