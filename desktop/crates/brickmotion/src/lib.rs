@@ -18,6 +18,7 @@ mod shortcuts;
 mod snapshot;
 pub mod support;
 mod theme;
+pub mod transport;
 pub mod viewport;
 
 pub use app::{Answer, BrickMotionApp, DialogRequest, Pending, ReplaceOk, Workspace};

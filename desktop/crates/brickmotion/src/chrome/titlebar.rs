@@ -46,8 +46,8 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
                     ui.spacing_mut().item_spacing.x = 4.0;
                     icon_button(ui, &t, Icon::Help, "Help", false, false, 28.0);
                     icon_button(ui, &t, Icon::Gear, "Preferences", false, false, 28.0);
-                    let n = app.piece_count();
-                    ui.label(RichText::new(format!("{n} {}", if n == 1 { "piece" } else { "pieces" })).color(t.text3));
+                    ui.add_space(4.0);
+                    plan_status(ui, app);
                 });
             });
         });
@@ -108,4 +108,74 @@ fn file_menu(ui: &mut Ui, app: &mut BrickMotionApp) {
     ui.separator();
     item(ui, app, "file.save");
     item(ui, app, "file.save_as");
+}
+
+/// Plan status right of the title bar (before ⚙ and ?), per `m4-rulings.md`.
+fn plan_status(ui: &mut Ui, app: &mut BrickMotionApp) {
+    let t = app.theme;
+    let n = app.piece_count();
+    let pieces = format!("{n} {}", if n == 1 { "piece" } else { "pieces" });
+    if app.transport.busy() {
+        // Right-to-left: progress line sits to the right of the stage label.
+        let (track, _) = ui.allocate_exact_size(Vec2::new(72.0, 14.0), Sense::hover());
+        let bar = egui::Rect::from_center_size(track.center(), Vec2::new(72.0, 2.0));
+        ui.painter().rect_filled(bar, 1.0, t.bg3);
+        let phase = (ui.input(|i| i.time) * 0.9).fract() as f32;
+        let seg_w = 26.0;
+        let x0 = (bar.left() - seg_w + phase * (bar.width() + seg_w)).max(bar.left());
+        let x1 = (bar.left() - seg_w + phase * (bar.width() + seg_w) + seg_w).min(bar.right());
+        if x1 > x0 {
+            ui.painter().rect_filled(
+                egui::Rect::from_min_max(egui::pos2(x0, bar.top()), egui::pos2(x1, bar.bottom())),
+                1.0,
+                t.accent,
+            );
+        }
+        ui.add_space(6.0);
+        ui.label(RichText::new(app.transport.stage_label()).size(12.0).color(t.text2));
+        return;
+    }
+    match app.transport.state.plan {
+        bm::playback::PlanState::Failed => {
+            let resp = ui
+                .add(egui::Button::new(RichText::new("Plan failed").size(12.0).color(t.text2)).frame(false))
+                .on_hover_text(if app.transport.failure.is_empty() {
+                    "Switch to Animate to see why planning failed"
+                } else {
+                    app.transport.failure.as_str()
+                });
+            if resp.clicked() {
+                app.set_workspace(crate::Workspace::Animate);
+            }
+        }
+        bm::playback::PlanState::Ready if app.transport.state.stale => {
+            let resp = ui
+                .add(egui::Button::new(RichText::new("Out of date").size(12.0).color(t.text3)).frame(false))
+                .on_hover_text("Model edited since the last plan — click to replan");
+            if resp.clicked() {
+                app.requested.push("video.plan_build");
+            }
+        }
+        bm::playback::PlanState::Ready => {
+            let label = format!("Planned · {pieces}");
+            let resp = ui
+                .add(egui::Button::new(RichText::new(label).size(12.0).color(t.text3)).frame(false))
+                .on_hover_text("Click to refresh the build plan");
+            if resp.clicked() {
+                app.requested.push("video.plan_build");
+            }
+        }
+        _ => {
+            if app.has_document && n > 0 {
+                let resp = ui
+                    .add(egui::Button::new(RichText::new(pieces).size(12.0).color(t.text3)).frame(false))
+                    .on_hover_text("Click to plan the build");
+                if resp.clicked() {
+                    app.requested.push("video.plan_build");
+                }
+            } else {
+                ui.label(RichText::new(pieces).size(12.0).color(t.text3));
+            }
+        }
+    }
 }

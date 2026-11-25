@@ -114,6 +114,7 @@ pub struct ViewportWidget {
     pub(crate) gizmo: Option<GizmoShape>,
     hovered: Handle,
     drag: Option<GizmoDrag>,
+    last_auto_plan: Option<bool>,
 }
 
 impl ViewportWidget {
@@ -135,6 +136,7 @@ impl ViewportWidget {
         self.gizmo = None;
         self.hovered = Handle::None;
         self.drag = None;
+        self.last_auto_plan = None;
     }
 
     /// The size and background the next document should be drawn at, once known.
@@ -142,7 +144,17 @@ impl ViewportWidget {
         self.view_size.map(|size| crate::loader::Warm { size, background: self.background })
     }
 
-    pub fn show(&mut self, ui: &mut Ui, doc: &mut bm::Document, edit: &mut EditState, theme: &Theme) {
+    #[allow(clippy::too_many_arguments)]
+    pub fn show(
+        &mut self,
+        ui: &mut Ui,
+        doc: &mut bm::Document,
+        edit: &mut EditState,
+        theme: &Theme,
+        auto_plan: bool,
+        playing: bool,
+        planning: bool,
+    ) {
         let rect = ui.max_rect();
         self.last_rect = Some(rect);
         let resp = ui.interact(rect, ui.scope_id().with("viewport"), Sense::click_and_drag());
@@ -171,6 +183,11 @@ impl ViewportWidget {
             if fresh {
                 vp.set_background(self.background);
                 self.last_size = None;
+                self.last_auto_plan = None;
+            }
+            if self.last_auto_plan != Some(auto_plan) {
+                vp.set_preferences(bm::playback::ViewportPreferences { auto_plan, ..Default::default() });
+                self.last_auto_plan = Some(auto_plan);
             }
             if self.last_size != Some(size) {
                 vp.resize(size.0, size.1, size.2);
@@ -199,7 +216,7 @@ impl ViewportWidget {
             }
         };
         let sel = doc.session().selection();
-        let show_gizmo = gizmo_kind.is_some() && !sel.is_empty();
+        let show_gizmo = !playing && gizmo_kind.is_some() && !sel.is_empty();
 
         // Build the gizmo shape before input so a press on frame 1 hits immediately.
         if show_gizmo {
@@ -357,7 +374,7 @@ impl ViewportWidget {
         }
 
         let Some(vp) = doc.viewport() else { return };
-        if changed || vp.needs_draw() || self.texture.is_none() {
+        if changed || playing || planning || vp.needs_draw() || self.texture.is_none() {
             if vp.draw() {
                 ui.ctx().request_repaint();
             }
@@ -377,7 +394,7 @@ impl ViewportWidget {
 
         // Refresh and paint the gizmo after any camera/selection change this frame.
         let sel_now = doc.session().selection();
-        if let Some(kind) = gizmo_kind.filter(|_| !sel_now.is_empty()) {
+        if let Some(kind) = gizmo_kind.filter(|_| !playing && !sel_now.is_empty()) {
             let axes = match &self.drag {
                 Some(d) => d.axes,
                 None => gizmo::axes(doc.session(), edit),

@@ -29,7 +29,8 @@ icons! {
     Wave => "wave", Fly => "fly", Plan => "plan", Regen => "regen", Stage => "stage",
     Wand => "wand", Vid => "vid", Queue => "queue", Target => "target", More => "more",
     Cursor => "cursor", Razor => "razor", Magnet => "magnet", Marker => "marker", Prev => "prev",
-    Next => "next", Play => "playf", File => "file",
+    Next => "next", Play => "playf", Pause => "pause", Loop => "loop", Pin => "pin", Back => "back",
+    ChevUpDown => "chev_ud", File => "file",
 }
 
 /// The SVG with its strokes in white, so `tint` gives the final colour.

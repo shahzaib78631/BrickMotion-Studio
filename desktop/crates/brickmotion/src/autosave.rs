@@ -222,7 +222,7 @@ mod tests {
     fn titled_project_saved_in_place_and_backed_up() {
         let d = tmp("titled");
         let support = Support::at(d.join("support"));
-        let prefs = Prefs { autosave_seconds: 0, backups_kept: 10 };
+        let prefs = Prefs { autosave_seconds: 0, backups_kept: 10, ..Prefs::default() };
         let (s, state) = project(&d, "p");
         let n = s.piece_count();
         let mut a = Autosaver::default();
@@ -240,7 +240,7 @@ mod tests {
     fn untitled_gets_backup_only_and_stays_dirty() {
         let d = tmp("untitled");
         let support = Support::at(d.join("support"));
-        let prefs = Prefs { autosave_seconds: 0, backups_kept: 10 };
+        let prefs = Prefs { autosave_seconds: 0, backups_kept: 10, ..Prefs::default() };
         let s = open(Path::new(HELI));
         let state = DocState::default();
         let mut a = Autosaver::default();
@@ -256,7 +256,7 @@ mod tests {
     fn imported_source_untouched() {
         let d = tmp("imported");
         let support = Support::at(d.join("support"));
-        let prefs = Prefs { autosave_seconds: 0, backups_kept: 10 };
+        let prefs = Prefs { autosave_seconds: 0, backups_kept: 10, ..Prefs::default() };
         let src = d.join("heli.mpd");
         std::fs::copy(HELI, &src).unwrap();
         let before = std::fs::read(&src).unwrap();
@@ -276,7 +276,7 @@ mod tests {
     fn prunes_to_kept() {
         let d = tmp("prune");
         let support = Support::at(d.join("support"));
-        let prefs = Prefs { autosave_seconds: 0, backups_kept: 3 };
+        let prefs = Prefs { autosave_seconds: 0, backups_kept: 3, ..Prefs::default() };
         let s = open(Path::new(HELI));
         let state = DocState::default();
         let mut a = Autosaver::default();
@@ -297,7 +297,7 @@ mod tests {
     fn same_version_not_saved_twice() {
         let d = tmp("same");
         let support = Support::at(d.join("support"));
-        let prefs = Prefs { autosave_seconds: 0, backups_kept: 10 };
+        let prefs = Prefs { autosave_seconds: 0, backups_kept: 10, ..Prefs::default() };
         let s = open(Path::new(HELI));
         let state = DocState::default();
         let mut a = Autosaver::default();
@@ -313,7 +313,7 @@ mod tests {
     fn edited_while_writing_stays_edited() {
         let d = tmp("racing");
         let support = Support::at(d.join("support"));
-        let prefs = Prefs { autosave_seconds: 0, backups_kept: 10 };
+        let prefs = Prefs { autosave_seconds: 0, backups_kept: 10, ..Prefs::default() };
         let (s, state) = project(&d, "p");
         let mut a = Autosaver::default();
         let t0 = Instant::now();

@@ -32,16 +32,29 @@ impl Support {
     }
 }
 
+fn default_true() -> bool {
+    true
+}
+
 /// The settings kept in `preferences.toml`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Prefs {
     pub autosave_seconds: u64,
     pub backups_kept: usize,
+    #[serde(default = "default_true")]
+    pub auto_plan: bool,
+    #[serde(default = "default_true")]
+    pub play_snap_sounds: bool,
 }
 
 impl Default for Prefs {
     fn default() -> Self {
-        Prefs { autosave_seconds: 30, backups_kept: 10 }
+        Prefs {
+            autosave_seconds: 30,
+            backups_kept: 10,
+            auto_plan: true,
+            play_snap_sounds: true,
+        }
     }
 }
 
@@ -140,13 +153,16 @@ mod tests {
         assert_eq!(Prefs::load(&s), Prefs::default());
         std::fs::write(s.dir.join("preferences.toml"), "autosave_seconds = 'x'").unwrap();
         assert_eq!(Prefs::load(&s), Prefs::default());
-        assert_eq!(Prefs::default(), Prefs { autosave_seconds: 30, backups_kept: 10 });
+        assert_eq!(
+            Prefs::default(),
+            Prefs { autosave_seconds: 30, backups_kept: 10, auto_plan: true, play_snap_sounds: true }
+        );
     }
 
     #[test]
     fn prefs_round_trip() {
         let s = Support::at(tmp("prefs-rt"));
-        let p = Prefs { autosave_seconds: 5, backups_kept: 3 };
+        let p = Prefs { autosave_seconds: 5, backups_kept: 3, auto_plan: false, play_snap_sounds: false };
         p.save(&s).unwrap();
         assert_eq!(Prefs::load(&s), p);
     }

@@ -24,6 +24,8 @@ pub enum When {
     StepHasPrev,
     CanUndo,
     CanRedo,
+    /// Document open and Animate workspace active.
+    Animate,
     /// Not built yet: shown dimmed with " — coming soon".
     Soon,
 }
@@ -71,6 +73,8 @@ pub struct Ctx {
     pub tool: crate::edit::Tool,
     pub step: Option<usize>,
     pub steps: usize,
+    pub workspace: Workspace,
+    pub playing: bool,
 }
 
 /// A key with its modifiers.
@@ -155,6 +159,7 @@ pub fn enabled(c: &Command, ctx: &Ctx) -> bool {
         When::StepHasPrev => ctx.has_document && ctx.step.is_some_and(|i| i > 0 && i < ctx.steps),
         When::CanUndo => ctx.can_undo,
         When::CanRedo => ctx.can_redo,
+        When::Animate => ctx.has_document && ctx.workspace == Workspace::Animate,
         When::Soon => false,
     }
 }
@@ -176,6 +181,7 @@ pub fn why_disabled(c: &Command, ctx: &Ctx) -> Option<&'static str> {
         When::StepHasPrev => "Already the first step",
         When::CanUndo => "Nothing to undo",
         When::CanRedo => "Nothing to redo",
+        When::Animate => "Switch to Animate first",
         _ => "Coming soon",
     })
 }
@@ -188,6 +194,7 @@ pub fn title(c: &Command, ctx: &Ctx) -> String {
         "edit.redo" => named("Redo", &ctx.redo_name),
         "view.local_axes" => if ctx.local_axes { "Local Axes" } else { "World Axes" }.to_owned(),
         "edit.collision" => if ctx.collision { "Collision Checks On" } else { "Collision Checks Off" }.to_owned(),
+        "transport.play" => if ctx.playing { "Pause" } else { "Play" }.to_owned(),
         _ => c.title.to_owned(),
     }
 }
@@ -234,9 +241,9 @@ static REGISTRY: &[Command] = &[
     Command { id: "model.what_fits", title: "What Fits", icon: Icon::Search, keys: None, tip: "List parts builders usually put at this connection. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Fit", when: When::Soon, menu: Menu::None },
     Command { id: "model.look", title: "Look", icon: Icon::Eye, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Configure", when: When::Soon, menu: Menu::None },
     Command { id: "model.build_settings", title: "Build Settings", icon: Icon::Sliders, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Configure", when: When::Soon, menu: Menu::None },
-    Command { id: "video.plan_build", title: "Plan Build", icon: Icon::Plan, keys: None, tip: "Work out the build order and flights for the video. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Plan", when: When::Soon, menu: Menu::None },
-    Command { id: "video.regenerate", title: "Regenerate", icon: Icon::Regen, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Plan", when: When::Soon, menu: Menu::None },
-    Command { id: "video.order", title: "Order", icon: Icon::Step, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Plan", when: When::Soon, menu: Menu::None },
+    Command { id: "video.plan_build", title: "Plan Build", icon: Icon::Plan, keys: None, tip: "Work out the build order and flights for the video.", workspace: Workspace::Animate, tab: "Build Video", group: "Plan", when: When::Pieces, menu: Menu::None },
+    Command { id: "video.regenerate", title: "Rebuild", icon: Icon::Regen, keys: None, tip: "Discard the current plan and plan the build again.", workspace: Workspace::Animate, tab: "Build Video", group: "Plan", when: When::Pieces, menu: Menu::None },
+    Command { id: "video.order", title: "Regenerate Build Steps", icon: Icon::Step, keys: None, tip: "Reorder the model's steps to follow the planned build order.", workspace: Workspace::Animate, tab: "Build Video", group: "Plan", when: When::Pieces, menu: Menu::None },
     Command { id: "video.staging", title: "Staging", icon: Icon::Stage, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Staging", when: When::Soon, menu: Menu::None },
     Command { id: "video.straighten", title: "Straighten", icon: Icon::Rotate, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Staging", when: When::Soon, menu: Menu::None },
     Command { id: "video.flights", title: "Flights", icon: Icon::Fly, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Build Video", group: "Staging", when: When::Soon, menu: Menu::None },
@@ -291,4 +298,10 @@ static REGISTRY: &[Command] = &[
     Command { id: "step.move_up", title: "Move Step Up", icon: Icon::Up, keys: None, tip: "Move the chosen step earlier in the build order.", workspace: Workspace::Build, tab: "", group: "Steps", when: When::StepHasPrev, menu: Menu::None },
     Command { id: "step.move_down", title: "Move Step Down", icon: Icon::Down, keys: None, tip: "Move the chosen step later in the build order.", workspace: Workspace::Build, tab: "", group: "Steps", when: When::StepHasNext, menu: Menu::None },
     Command { id: "step.delete", title: "Delete Step", icon: Icon::Close, keys: None, tip: "Delete the chosen step, moving its pieces to a neighbour.", workspace: Workspace::Build, tab: "", group: "Steps", when: When::Step, menu: Menu::None },
+    Command { id: "video.standard_preview", title: "Try Standard Preview", icon: Icon::Plan, keys: None, tip: "Plan quickly in authored step order without checking flight paths.", workspace: Workspace::Animate, tab: "", group: "Plan", when: When::Pieces, menu: Menu::None },
+    Command { id: "transport.play", title: "Play", icon: Icon::Play, keys: Some("Space"), tip: "Play or pause the planned build.", workspace: Workspace::Animate, tab: "", group: "Playback", when: When::Document, menu: Menu::None },
+    Command { id: "transport.start", title: "Jump to Start", icon: Icon::Prev, keys: Some("Home"), tip: "Seek to the start of the build.", workspace: Workspace::Animate, tab: "", group: "Playback", when: When::Document, menu: Menu::None },
+    Command { id: "transport.end", title: "Jump to End", icon: Icon::Next, keys: Some("End"), tip: "Seek to the end of the build.", workspace: Workspace::Animate, tab: "", group: "Playback", when: When::Document, menu: Menu::None },
+    Command { id: "transport.prev_step", title: "Previous Step", icon: Icon::Prev, keys: Some("⇧←"), tip: "Jump to the previous build step on the timeline.", workspace: Workspace::Animate, tab: "", group: "Playback", when: When::Animate, menu: Menu::None },
+    Command { id: "transport.next_step", title: "Next Step", icon: Icon::Next, keys: Some("⇧→"), tip: "Jump to the next build step on the timeline.", workspace: Workspace::Animate, tab: "", group: "Playback", when: When::Animate, menu: Menu::None },
 ];

@@ -30,7 +30,9 @@ pub fn central(ui: &mut Ui, app: &mut BrickMotionApp) {
     egui::CentralPanel::no_frame().show(ui, |ui| {
         let rect = ui.max_rect();
         ui.painter().rect_filled(rect, 0.0, t.bg1);
-        app.viewport.show(ui, &mut app.doc, &mut app.edit, &t);
+        let playing = app.transport.state.playing;
+        let planning = app.transport.busy() || app.transport.state.waiting_to_play;
+        app.viewport.show(ui, &mut app.doc, &mut app.edit, &t, app.prefs.auto_plan, playing, planning);
         browser::show(ui, app, rect);
         properties::show(ui, app, rect);
         navigator::show(ui, app, rect);

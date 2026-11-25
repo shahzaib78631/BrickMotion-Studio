@@ -11,8 +11,9 @@ use crate::notices::Notice;
 use crate::theme::{Theme, apply};
 use crate::viewport::{ViewOp, ViewportWidget};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Workspace {
+    #[default]
     Build,
     Animate,
 }
@@ -141,6 +142,8 @@ pub struct BrickMotionApp {
     /// Test seam: the in-memory clipboard refuses writes, as a failing pasteboard would.
     #[doc(hidden)]
     pub clipboard_fails: bool,
+    /// Build playback transport, planner status, and cached timeline/lanes.
+    pub transport: crate::transport::Transport,
 }
 
 impl BrickMotionApp {
@@ -206,6 +209,7 @@ impl BrickMotionApp {
             focus_filter: false,
             clipboard: String::new(),
             clipboard_fails: false,
+            transport: crate::transport::Transport::default(),
         };
         // Opened once the first frame knows the view's size, so the worker can draw it warm.
         app.startup = path.map(|p| std::path::absolute(&p).unwrap_or(p));
@@ -216,6 +220,22 @@ impl BrickMotionApp {
         if self.workspace != w {
             self.workspace = w;
             self.ribbon_tab = tabs(w)[0];
+            if w == Workspace::Animate
+                && self.has_document
+                && self.prefs.auto_plan
+                && self.piece_count() > 0
+                && self.transport.state.plan == bm::playback::PlanState::Idle
+                && let Some(vp) = self.doc.viewport()
+            {
+                self.transport.plan(vp);
+            }
+        }
+    }
+
+    pub fn apply_viewport_prefs(&mut self) {
+        let auto_plan = self.prefs.auto_plan;
+        if let Some(vp) = self.doc.viewport() {
+            vp.set_preferences(bm::playback::ViewportPreferences { auto_plan, ..Default::default() });
         }
     }
 
@@ -284,9 +304,11 @@ impl BrickMotionApp {
     fn adopt(&mut self, path: PathBuf, doc: bm::Document, info: bm::OpenInfo) {
         self.edit.placement = None;
         self.edit.step = None;
+        self.transport.reset();
         // The old document (and its renderer) goes, off this thread; the widget sets the new one up.
         crate::loader::retire(std::mem::replace(&mut self.doc, doc));
         self.viewport.reset();
+        self.apply_viewport_prefs();
         self.has_document = true;
         self.replace_ok = None;
         self.state = DocState { imported: self.doc.session().imported(), path: Some(path.clone()) };
@@ -454,6 +476,8 @@ impl BrickMotionApp {
             tool: self.edit.tool,
             step: self.edit.step,
             steps: if self.has_document { s.steps().len() } else { 0 },
+            workspace: self.workspace,
+            playing: self.transport.state.playing || self.transport.state.waiting_to_play,
         }
     }
 
@@ -602,6 +626,57 @@ impl BrickMotionApp {
                     self.edited(c);
                 }
             }
+            "transport.play" => {
+                self.cancel_placement();
+                if let Some(vp) = self.doc.viewport() {
+                    self.transport.toggle(vp);
+                }
+            }
+            "transport.start" => {
+                if let Some(vp) = self.doc.viewport() {
+                    self.transport.seek(vp, 0.0);
+                }
+            }
+            "transport.end" => {
+                let dur = self.transport.duration();
+                if let Some(vp) = self.doc.viewport() {
+                    self.transport.seek(vp, dur);
+                }
+            }
+            "transport.prev_step" => {
+                if let Some(vp) = self.doc.viewport() {
+                    self.transport.travel(vp, false);
+                }
+            }
+            "transport.next_step" => {
+                if let Some(vp) = self.doc.viewport() {
+                    self.transport.travel(vp, true);
+                }
+            }
+            "video.plan_build" => {
+                if let Some(vp) = self.doc.viewport() {
+                    self.transport.plan(vp);
+                }
+            }
+            "video.regenerate" => {
+                if let Some(vp) = self.doc.viewport() {
+                    self.transport.regenerate(vp, false);
+                }
+            }
+            "video.standard_preview" => {
+                if let Some(vp) = self.doc.viewport() {
+                    self.transport.regenerate(vp, true);
+                }
+            }
+            "video.order" => {
+                let changed = {
+                    let (session, vp) = self.doc.parts();
+                    vp.and_then(|vp| self.transport.regenerate_steps(session, vp))
+                };
+                if let Some(c) = changed {
+                    self.edited(c);
+                }
+            }
             _ => return false,
         }
         true
@@ -687,11 +762,13 @@ impl BrickMotionApp {
     fn new_document_now(&mut self) {
         self.edit.placement = None;
         self.edit.step = None;
+        self.transport.reset();
         let mut s = bm::Session::new();
         match s.new_blank() {
             Ok(_) => {
                 crate::loader::retire(std::mem::replace(&mut self.doc, bm::Document::new(s)));
                 self.viewport.reset();
+                self.apply_viewport_prefs();
                 self.has_document = true;
                 self.state = DocState::default();
             }
@@ -888,6 +965,18 @@ impl eframe::App for BrickMotionApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.previews.frame_begin(ui.ctx());
         self.poll_loader();
+        if self.has_document {
+            let changed = {
+                let (session, vp) = self.doc.parts();
+                vp.is_some_and(|vp| self.transport.update(session, vp))
+            };
+            if let Some(c) = self.transport.take_changed() {
+                self.edited(c);
+            }
+            if changed {
+                ui.ctx().request_repaint();
+            }
+        }
         if self.loader.loading().is_some() {
             ui.ctx().request_repaint_after(Duration::from_millis(50));
         }
@@ -934,6 +1023,11 @@ impl eframe::App for BrickMotionApp {
                 }
                 self.menu_shown = Some(key);
             }
+        }
+        if self.transport.state.playing || self.transport.state.waiting_to_play || self.transport.busy() {
+            ui.ctx().request_repaint();
+        } else if self.has_document {
+            ui.ctx().request_repaint_after(Duration::from_millis(250));
         }
         if self.dirty() {
             // An idle window still autosaves.
