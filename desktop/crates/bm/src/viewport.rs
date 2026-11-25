@@ -91,6 +91,11 @@ impl Viewport {
         unsafe { sys::bm_viewport_fit_all(self.raw) }
     }
 
+    /// Frames the selected pieces (the whole model when nothing is selected).
+    pub fn frame_selection(&mut self) {
+        unsafe { sys::bm_viewport_frame_selection(self.raw) }
+    }
+
     pub fn view(&mut self, p: ViewPreset) {
         let raw = match p {
             ViewPreset::Front => sys::BM_VIEW_FRONT,

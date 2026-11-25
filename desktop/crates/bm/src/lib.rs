@@ -1,5 +1,6 @@
 //! Safe wrappers over the BrickMotion engine (bmffi).
 mod error;
+mod outline;
 mod session;
 mod viewport;
 
@@ -8,6 +9,7 @@ use std::path::PathBuf;
 use bm_sys as sys;
 
 pub use error::OpenError;
+pub use outline::{Changed, ColorInfo, OutlineRow, PieceInfo, Snapshot};
 pub use session::{OpenInfo, SelectMode, Session};
 pub use viewport::{Frame, ViewPreset, Viewport};
 
@@ -20,6 +22,14 @@ pub(crate) fn take_string(s: sys::BmString) -> String {
     let out = String::from_utf8_lossy(bytes).into_owned();
     unsafe { sys::bm_string_free(s) };
     out
+}
+
+/// Copies a borrowed C string (owned by a list handle).
+pub(crate) fn borrowed(p: *const std::ffi::c_char) -> String {
+    if p.is_null() {
+        return String::new();
+    }
+    unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned()
 }
 
 /// Where the LDraw parts library was found, if anywhere.

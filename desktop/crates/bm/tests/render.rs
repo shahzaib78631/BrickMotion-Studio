@@ -63,7 +63,7 @@ fn header_and_rust_decls_agree() {
         .filter_map(|t| t.split('(').next()?.split_whitespace().last())
         .map(|n| n.trim_start_matches('*'))
         .collect();
-    assert_eq!(names.len(), 28);
+    assert_eq!(names.len(), 63);
     for name in names {
         assert!(bm_sys::DECLARED.contains(&name), "missing {name}");
     }

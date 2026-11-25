@@ -1,0 +1,95 @@
+// Documents through the safe wrappers: blank projects, undo, remove, lists.
+use std::path::Path;
+
+const HELI: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../samples/helicopter/helicopter.mpd");
+
+fn heli() -> bm::Session {
+    let mut s = bm::Session::new();
+    s.open(Path::new(HELI)).unwrap();
+    s
+}
+
+#[test]
+fn blank_round_trip() {
+    let mut s = bm::Session::new();
+    s.new_blank().unwrap();
+    assert!(!s.dirty());
+    assert!(!s.imported());
+    let dir = std::env::temp_dir().join(format!("bm-doc-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("blank.brickmotion");
+    std::fs::write(&path, s.project_bytes()).unwrap();
+    let mut t = bm::Session::new();
+    assert!(t.open(&path).is_ok());
+    std::fs::remove_dir_all(dir).ok();
+}
+
+#[test]
+fn remove_undo_redo() {
+    let mut s = heli();
+    let n = s.piece_count();
+    let c = s.remove(&[0]);
+    assert_eq!(c.refused, None);
+    assert!(c.structure);
+    assert_eq!(s.piece_count(), n - 1);
+    assert!(s.dirty());
+    assert!(s.can_undo());
+    assert!(!s.undo_name().is_empty());
+    s.undo();
+    assert_eq!(s.piece_count(), n);
+    assert!(s.can_redo());
+    assert!(!s.redo_name().is_empty());
+    s.redo();
+    assert_eq!(s.piece_count(), n - 1);
+    s.mark_saved();
+    assert!(!s.dirty());
+}
+
+#[test]
+fn outline_root_row() {
+    let s = heli();
+    let rows = s.outline();
+    assert_eq!(rows[0].id, "root");
+    assert_eq!(rows[0].parent, None);
+    assert_eq!(rows[0].depth, 0);
+    assert_eq!(s.pieces_of_row("root").len(), s.piece_count());
+}
+
+#[test]
+fn snapshot_describes_selection() {
+    let mut s = heli();
+    s.select(&[0, 1], bm::SelectMode::Replace);
+    let snap = s.snapshot();
+    assert_eq!(snap.selected, 2);
+    assert_eq!(snap.described.len(), 2);
+    assert!(!snap.described[0].part.is_empty());
+    s.select_all();
+    assert_eq!(s.selection().len(), s.piece_count());
+    s.hide(&[0, 1]);
+    assert_eq!(s.snapshot().hidden, 2);
+    s.show_all();
+    s.select_none();
+    assert!(s.selection().is_empty());
+}
+
+#[test]
+fn colors_listed() {
+    let s = heli();
+    let c = s.colors();
+    assert!(c.len() > 10);
+    assert!(!c[0].name.is_empty());
+}
+
+#[test]
+fn struct_sizes_match() {
+    use std::mem::size_of;
+    let size = |n: &std::ffi::CStr| unsafe { bm_sys::bm_struct_size(n.as_ptr()) };
+    assert_eq!(size(c"BmOutlineRow"), size_of::<bm_sys::BmOutlineRow>());
+    assert_eq!(size(c"BmPieceInfo"), size_of::<bm_sys::BmPieceInfo>());
+    assert_eq!(size(c"BmSnapshotInfo"), size_of::<bm_sys::BmSnapshotInfo>());
+    assert_eq!(size(c"BmColor"), size_of::<bm_sys::BmColor>());
+    assert_eq!(size(c"BmChange"), size_of::<bm_sys::BmChange>());
+    assert_eq!(size(c"BmOpenResult"), size_of::<bm_sys::BmOpenResult>());
+    assert_eq!(size(c"BmString"), size_of::<bm_sys::BmString>());
+    assert_eq!(size(c"nope"), 0);
+}
