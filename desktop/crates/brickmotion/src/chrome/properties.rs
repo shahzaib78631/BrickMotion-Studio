@@ -1,5 +1,5 @@
 //! The floating Properties panel, right of the viewport.
-use egui::{Area, Frame, Id, Margin, Order, Rect, RichText, Ui, vec2};
+use egui::{Area, Frame, Id, Margin, Order, Rect, RichText, Ui};
 
 use super::{float_frame, icon_button, panel_header};
 use crate::BrickMotionApp;
@@ -11,6 +11,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
     let t = app.theme;
     let title = app.title();
     let n = app.piece_count();
+    let selected = app.doc.session().selection().len();
     Area::new(Id::unique("properties"))
         .order(Order::Middle)
         .fixed_pos(egui::pos2(area.right() - 10.0 - WIDTH, area.top() + 122.0))
@@ -27,9 +28,13 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
                     ui.label(RichText::new(&title).strong().color(t.text1));
                     ui.label(RichText::new(format!("{n} {}", if n == 1 { "piece" } else { "pieces" })).color(t.text3));
                     ui.add_space(8.0);
-                    ui.label(RichText::new("Nothing selected").color(t.text2));
+                    let status = match selected {
+                        0 => "Nothing selected".to_owned(),
+                        1 => "1 piece selected".to_owned(),
+                        k => format!("{k} pieces selected"),
+                    };
+                    ui.label(RichText::new(status).color(t.text2));
                 });
             });
         });
-    let _ = vec2;
 }

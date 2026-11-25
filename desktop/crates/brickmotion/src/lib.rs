@@ -4,6 +4,7 @@ pub mod chrome;
 mod commands;
 mod icons;
 mod theme;
+pub mod viewport;
 
 pub use app::{BrickMotionApp, Workspace};
 pub use commands::{Command, find, registry, tabs};

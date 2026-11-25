@@ -4,6 +4,7 @@ use egui::{Align2, Area, Color32, FontId, Id, Order, Rect, Sense, Stroke, Ui, po
 use super::icon_button;
 use crate::BrickMotionApp;
 use crate::icons::Icon;
+use crate::viewport::ViewOp;
 
 const SIZE: f32 = 96.0;
 
@@ -14,7 +15,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
         let (r, _) = ui.allocate_exact_size(vec2(SIZE, SIZE), Sense::hover());
         let s = SIZE / 64.0;
         let p = |x: f32, y: f32| r.min + vec2(x * s, y * s);
-        let painter = ui.painter();
+        let painter = ui.painter().clone();
         painter.circle(p(32.0, 32.0), 30.0 * s, Color32::from_white_alpha(8), Stroke::new(1.0, t.border));
         // Back axes first, dim, then the front axes with labelled ends.
         for (x, y, c) in [(32.0, 50.0, 0x2c4a85), (16.0, 25.0, 0x7a3434), (48.0, 25.0, 0x2a6b47)] {
@@ -22,11 +23,23 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
             painter.line_segment([p(32.0, 32.0), p(x, y)], Stroke::new(2.0, c));
             painter.circle(p(x, y + if y > 32.0 { 1.0 } else { -1.0 }), 3.5 * s, Color32::from_rgb(0x1b, 0x1d, 0x21), Stroke::new(1.5, c));
         }
-        for (x, y, c, l) in [(32.0, 11.0, 0x5b8cff, "Y"), (51.0, 41.0, 0xff6b6b, "X"), (13.0, 41.0, 0x4fd18b, "Z")] {
+        let axes = [
+            (32.0, 11.0, 0x5b8cff, "Y", "Top View", bm::ViewPreset::Top),
+            (51.0, 41.0, 0xff6b6b, "X", "Right View", bm::ViewPreset::Right),
+            (13.0, 41.0, 0x4fd18b, "Z", "Front View", bm::ViewPreset::Front),
+        ];
+        for (x, y, c, l, name, preset) in axes {
             let c = Color32::from_hex(&format!("#{c:06x}")).unwrap();
+            let disc = Rect::from_center_size(p(x, y), vec2(16.0 * s, 16.0 * s));
+            let resp = ui.interact(disc, ui.scope_id().with(name), Sense::click());
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, name));
+            let painter = ui.painter();
             painter.line_segment([p(32.0, 32.0), p(x, y)], Stroke::new(2.0, c));
-            painter.circle_filled(p(x, y), 7.0 * s, c);
+            painter.circle_filled(p(x, y), if resp.hovered() { 8.0 } else { 7.0 } * s, c);
             painter.text(p(x, y), Align2::CENTER_CENTER, l, FontId::proportional(9.0 * s), Color32::WHITE);
+            if resp.on_hover_text(name).clicked() {
+                app.viewport.queued.push(ViewOp::Preset(preset));
+            }
         }
     });
     Area::new(Id::unique("navigator-home"))

@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use crate::chrome;
 use crate::commands::tabs;
 use crate::theme::{Theme, apply};
+use crate::viewport::{ViewOp, ViewportWidget};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Workspace {
@@ -31,6 +32,7 @@ pub struct BrickMotionApp {
     pub ribbon_tab: &'static str,
     pub theme: Theme,
     pub doc: bm::Document,
+    pub viewport: ViewportWidget,
     /// Models, Steps, Parts or Library.
     pub browser_tab: usize,
     pub filter: String,
@@ -46,17 +48,27 @@ impl BrickMotionApp {
         egui_extras::install_image_loaders(&cc.egui_ctx);
         let theme = Theme::DARK;
         apply(&cc.egui_ctx, &theme);
-        BrickMotionApp {
+        let mut app = BrickMotionApp {
             workspace: Workspace::Build,
             ribbon_tab: tabs(Workspace::Build)[0],
             theme,
             doc: bm::Document::new(bm::Session::new()),
+            viewport: ViewportWidget::new(theme.bg1),
             browser_tab: 0,
             filter: String::new(),
             curves: false,
             requested: Vec::new(),
             pending_open: path,
+        };
+        // Opened here for now; the loader moves this off the UI thread.
+        if let Some(p) = app.pending_open.take() {
+            let mut s = bm::Session::new();
+            match s.open(&p) {
+                Ok(_) => app.doc.replace(s),
+                Err(e) => eprintln!("{e}"),
+            }
         }
+        app
     }
 
     pub fn set_workspace(&mut self, w: Workspace) {
@@ -77,8 +89,13 @@ impl BrickMotionApp {
     }
 
     fn run_requested(&mut self) {
-        // view.fit and view.home get their handlers with the viewport, file.open with the loader.
-        self.requested.clear();
+        for id in std::mem::take(&mut self.requested) {
+            match id {
+                "view.fit" | "view.home" => self.viewport.queued.push(ViewOp::Fit),
+                // file.open gets its handler with the loader.
+                _ => {}
+            }
+        }
     }
 }
 
