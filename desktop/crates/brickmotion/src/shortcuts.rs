@@ -12,11 +12,13 @@ fn ordered() -> Vec<(Shortcut, &'static str)> {
 }
 
 /// Runs the commands whose keys were pressed this frame. A key without ⌘ belongs to a focused
-/// text field. A matched key is consumed, so widgets do not also act on it.
+/// text field. A matched key is consumed, so widgets do not also act on it. With the menu bar
+/// installed, ⌘ keys belong to it (AppKit gives them to the menu first), so they run once.
 pub fn handle(app: &mut BrickMotionApp, ctx: &egui::Context) {
     let typing = app.text_focus || app.palette.open;
+    let menu = app.menubar.is_some();
     for (s, id) in ordered() {
-        if typing && !s.mods.command {
+        if (typing && !s.mods.command) || (menu && s.mods.command) {
             continue;
         }
         if ctx.input_mut(|i| i.consume_key(s.mods, s.key)) {

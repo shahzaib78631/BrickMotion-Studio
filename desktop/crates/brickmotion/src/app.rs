@@ -97,6 +97,8 @@ pub struct BrickMotionApp {
     /// Quit was confirmed: the next frame closes the window.
     quitting: bool,
     autosaver: Autosaver,
+    /// The native menu bar, once installed (never in tests).
+    pub menubar: Option<crate::menubar::MenuBar>,
     /// The last autosave failure shown, so a repeating one warns once.
     autosave_error: Option<String>,
 }
@@ -143,6 +145,7 @@ impl BrickMotionApp {
             replace_ok: None,
             quitting: false,
             autosaver: Autosaver::default(),
+            menubar: None,
             autosave_error: None,
         };
         if let Some(p) = path {
@@ -319,6 +322,7 @@ impl BrickMotionApp {
         match id {
             "file.open" | "model.import" => self.open_dialog(),
             "file.new" => self.new_document(),
+            "app.quit" => self.request(Pending::Quit),
             "file.save" => self.save(),
             "file.save_as" => self.save_as(),
             "edit.undo" => {
@@ -389,6 +393,11 @@ impl BrickMotionApp {
         if let Some(p) = dialog.save_file() {
             self.save_as_path(p);
         }
+    }
+
+    /// Puts the menu bar up. The window's app only: tests must not change the process's menus.
+    pub fn install_menu(&mut self, ctx: &egui::Context) {
+        self.menubar = Some(crate::menubar::MenuBar::install(ctx));
     }
 
     /// Tests: file dialogs are recorded in `dialog_requests` instead of shown.
@@ -496,6 +505,7 @@ impl eframe::App for BrickMotionApp {
             ui.ctx().request_repaint_after(Duration::from_millis(50));
         }
         self.guard_close(ui.ctx());
+        crate::menubar::poll(self);
         self.text_focus = ui.ctx().egui_wants_keyboard_input();
         crate::shortcuts::handle(self, ui.ctx());
         chrome::titlebar::show(ui, self);
@@ -508,6 +518,15 @@ impl eframe::App for BrickMotionApp {
         chrome::confirm::show(ui, self);
         self.run_requested();
         self.autosave(std::time::Instant::now());
+        if self.quitting {
+            ui.ctx().request_repaint();
+        }
+        if self.menubar.is_some() {
+            let (ctx, recents) = (self.ctx(), self.recents.clone());
+            if let Some(m) = self.menubar.as_mut() {
+                m.sync(&ctx, &recents);
+            }
+        }
         if self.dirty() {
             // An idle window still autosaves.
             ui.ctx().request_repaint_after(Duration::from_secs(self.prefs.autosave_seconds.max(1)));

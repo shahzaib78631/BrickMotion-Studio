@@ -56,7 +56,11 @@ fn main() -> ExitCode {
                     .with_title_shown(false),
                 ..Default::default()
             };
-            let r = eframe::run_native("BrickMotion", options, Box::new(|cc| Ok(Box::new(brickmotion::BrickMotionApp::new(cc, path)))));
+            let r = eframe::run_native("BrickMotion", options, Box::new(|cc| {
+                let mut app = brickmotion::BrickMotionApp::new(cc, path);
+                app.install_menu(&cc.egui_ctx);
+                Ok(Box::new(app))
+            }));
             match r {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(e) => {
