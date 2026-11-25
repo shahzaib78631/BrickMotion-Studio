@@ -90,6 +90,13 @@ RENDER_YAW, RENDER_PITCH = 45.0, 30.0   # parts-list-style view of a rendered ca
 RENDERED_CONFIDENT = 0.65    # renders never match a callout as closely as LEGO's own art (0.85 -> no scale learnt)
 CALLOUT_PX_PER_LDU = 2.29    # LEGO draws callouts at one scale: 2.25-2.31 px/LDU at the 300-dpi crops on 7 booklets
 PARTSNET_WEIGHT = float(os.environ.get("PARTSNET_W", "0.5"))   # learned matcher's share (P5)
+
+
+def _partsnet_weight() -> float:
+    if "PARTSNET_W" in os.environ:
+        return float(os.environ["PARTSNET_W"])
+    f = REBRICKABLE.parent / "partsnet-weight.txt"
+    return float(f.read_text().strip()) if f.exists() else PARTSNET_WEIGHT
 SIZE_WEIGHT = 0.25        # weight of the absolute-size term once the callout / parts-list scale is known
 SIZE_SHARPNESS = 5.0      # 1x5 vs 1x6 plate: ~15% longer -> term drops to ~0.5
 
@@ -236,12 +243,16 @@ OVER_PENALTY = 0.3        # per piece beyond an element's printed count
 
 
 def assign(descs: dict, totals: dict, inv_desc: list, counts: list[int], ratio: float | None = None,
-           learned: dict | None = None, template: tuple | None = None) -> dict:
+           learned: dict | None = None, template: tuple | None = None,
+           valid_crop: list[bool] | None = None) -> dict:
     """Callout picture group -> (element index, similarity, margin to the runner-up element).
     Maximise total similarity subject to each group taking one element, with soft count terms:
     an element's printed count should be consumed (callout totals summed), not exceeded.
     `template`: (callout picture per group, parts-list picture per element) for `template_score`, which
-    re-scores each group's TEMPLATE_TOP best elements (the others lose its share)."""
+    re-scores each group's TEMPLATE_TOP best elements (the others lose its share).
+    `valid_crop`: per inventory entry, whether it has a healthy native PDF parts-list crop (False for
+    repaired clipped crops or Rebrickable-supplemented rendered entries, which must not be penalised
+    by zero PartsNet/template scores)."""
     from scipy.optimize import Bounds, LinearConstraint, milp
 
     keys = [k for k, d in descs.items() if d is not None]
@@ -250,22 +261,39 @@ def assign(descs: dict, totals: dict, inv_desc: list, counts: list[int], ratio: 
         return {}
     sim = np.array([[max(similarity(descs[k], d, ratio) for d in (inv_desc[j] if isinstance(inv_desc[j], list) else [inv_desc[j]]))
                      for j in elems] for k in keys])
+    vc_arr = np.array([bool(valid_crop[j]) for j in elems]) if valid_crop is not None else np.ones(len(elems), dtype=bool)
     if learned:                         # P5: the learned cosine per group over all inventory entries
-        cos = np.array([[learned[k][j] if k in learned else 0.0 for j in elems] for k in keys])
-        has = np.array([k in learned for k in keys])[:, None]
-        sim = np.where(has, (1 - PARTSNET_WEIGHT) * sim + PARTSNET_WEIGHT * cos, sim)
+        w_pn = _partsnet_weight()
+        if w_pn > 0.0:
+            cos = np.array([[learned[k][j] if k in learned else 0.0 for j in elems] for k in keys])
+            has = np.array([k in learned for k in keys])[:, None] & (cos > -1.5)
+            sim = np.where(has, (1.0 - w_pn) * sim + w_pn * cos, sim)
     if template:                        # overlay of the scaled parts-list picture on the callout, top candidates
         call_of, listed = template
         for g, k in enumerate(keys):
             if call_of.get(k) is None:
                 continue
             top = np.argsort(-sim[g])[:TEMPLATE_TOP]
-            scores = [template_score(call_of[k], listed[elems[e]], ratio) for e in top]
+            # Only award greyscale template credit to colour-compatible candidates (prevents e.g. a yellow
+            # 4x4 plate from winning greyscale correlation over a clipped dark-grey 4x4 plate!)
+            scores = []
+            for e in top:
+                if not vc_arr[e] or listed[elems[e]] is None:
+                    scores.append(0.0)
+                    continue
+                inv_d = inv_desc[elems[e]]
+                inv_ds = inv_d if isinstance(inv_d, list) else [inv_d]
+                min_cd = min(float(np.linalg.norm(_lab(descs[k].colour) - _lab(d.colour))) for d in inv_ds)
+                sc_t = template_score(call_of[k], listed[elems[e]], ratio) if min_cd < 32.0 else 0.0
+                scores.append(sc_t)
             if max(scores) < TEMPLATE_MIN:      # nothing lies over it: a big part drawn smaller in the callout
                 continue
-            sim[g] *= 1 - TEMPLATE_WEIGHT                       # the rest count as no overlay at all
+            sim[g, vc_arr] *= 1 - TEMPLATE_WEIGHT               # non-crop entries keep their full descriptor similarity
             for e, score in zip(top, scores):
-                sim[g, e] += TEMPLATE_WEIGHT * score
+                if vc_arr[e]:
+                    sim[g, e] += TEMPLATE_WEIGHT * score
+    if valid_crop is not None and not vc_arr.all():
+        sim[:, ~vc_arr] -= 0.02         # tiny tie-breaker preferring healthy native PDF art on exact ties
     G, E = sim.shape
     n = G * E + 2 * E                   # x_ge, unused_e, over_e
     c = np.zeros(n)
@@ -299,6 +327,59 @@ def assign(descs: dict, totals: dict, inv_desc: list, counts: list[int], ratio: 
         e = int(x[g].argmax())
         others = np.delete(sim[g], e)
         out[k] = (elems[e], float(sim[g, e]), float(sim[g, e] - (others.max() if len(others) else 0.0)))
+    return out
+
+
+def render_part_rgb(lib, part: str, colour: int, matrix: np.ndarray | None = None) -> np.ndarray | None:
+    """NPR booklet-style 112x112 RGB render of an LDraw part (flat colour + internal/silhouette
+    depth-edge outlines, using light-grey seams on dark parts just like LEGO instructions)."""
+    from .picture import colour_rgb
+    from .render import View, bounds, mesh, render
+    if not len(mesh(lib, part)):
+        return None
+    parts = [(part, colour, np.eye(4) if matrix is None else matrix)]
+    view = View(np.eye(3), RENDER_YAW, RENDER_PITCH, 1.0, (0.0, 0.0))
+    lo, hi = bounds(lib, parts, view)
+    k = 96.0 / float(max(hi[0] - lo[0], hi[1] - lo[1], 1.0))
+    view = view.replace(scale=k)
+    lo, hi = bounds(lib, parts, view)
+    view = view.replace(offset=(8 - lo[0], 8 - lo[1]))
+    depth, label = render(lib, parts, view, (112, 112))
+    mask = (label >= 0)
+    if not mask.any():
+        return None
+    rgb_c = np.array(colour_rgb(colour), dtype=np.float32)
+    img = np.full((112, 112, 3), 255, np.uint8)
+    # Subtle depth shading (front faces slightly brighter, recessed faces darker) + crisp seams
+    d_fg = depth[mask]
+    d_lo, d_hi = float(d_fg.min()), float(d_fg.max())
+    shade = np.ones((112, 112), np.float32)
+    if d_hi > d_lo + 1e-3:
+        shade[mask] = 1.06 - 0.18 * ((depth[mask] - d_lo) / (d_hi - d_lo))
+    shaded = np.clip(rgb_c[None, None, :] * shade[:, :, None], 0, 255).astype(np.uint8)
+    img[mask] = shaded[mask]
+    # Depth discontinuity edges (studs, holes, bevels) + silhouette contour
+    d_fill = np.where(mask, depth, d_hi + 20.0).astype(np.float32)
+    gx = np.abs(np.diff(d_fill, axis=1, prepend=d_fill[:, :1]))
+    gy = np.abs(np.diff(d_fill, axis=0, prepend=d_fill[:1, :]))
+    edge_in = mask & ((gx > 2.2) | (gy > 2.2))
+    is_dark = float(rgb_c.max()) < 65.0
+    img[edge_in] = (145, 145, 145) if is_dark else (30, 30, 30)
+    contours, _ = cv2.findContours(mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    cv2.drawContours(img, contours, -1, (120, 120, 120) if is_dark else (20, 20, 20), 1)
+    return img
+
+
+def rendered_part_images(lib, part: str, colour: int) -> list[np.ndarray]:
+    """The 4 upright NPR renders of an LDraw part for PartsNet fallback matching."""
+    out = []
+    for turn in range(4):
+        a = np.radians(90 * turn)
+        m = np.eye(4)
+        m[:3, :3] = [[np.cos(a), 0, np.sin(a)], [0, 1, 0], [-np.sin(a), 0, np.cos(a)]]
+        img = render_part_rgb(lib, part, colour, m)
+        if img is not None:
+            out.append(img)
     return out
 
 
@@ -348,20 +429,34 @@ _SET = re.compile(r"\b(\d{4,6})\b")
 
 
 def set_number_from_pdf(doc) -> str | None:
-    """The set number printed on the booklet: the 4-6 digit number repeated most on the first and
-    last pages (cover, back cover)."""
+    """The set number printed on the booklet: prefer LEGO's official '<set>-<booklet>.pdf' filename
+    first (never hijacked by back-cover advertisements for other sets!), then cover-page numbers in the
+    Rebrickable cache, then back-cover numbers, then the most-repeated 4-6 digit number."""
     from collections import Counter
-    pages = [doc[i] for i in sorted({0, 1, len(doc) - 2, len(doc) - 1}) if 0 <= i < len(doc)]
-    counts = Counter(m for p in pages for m in _SET.findall(p.get_text()) if not m.startswith(("19", "20")) or len(m) != 4)
-    if counts:
-        return counts.most_common(1)[0][0]
     named = re.match(r"(\d{4,6})-\d+\.pdf$", Path(doc.name or "").name)     # LEGO's '<set>-<booklet>.pdf'
-    return named.group(1) if named else None
+    if named:
+        return named.group(1)
+    cover = [doc[i] for i in sorted({0, 1}) if 0 <= i < len(doc)]
+    back = [doc[i] for i in sorted({len(doc) - 2, len(doc) - 1}) if 0 <= i < len(doc) and i not in (0, 1)]
+    c_cover = Counter(m for p in cover for m in _SET.findall(p.get_text()) if not m.startswith(("19", "20")) or len(m) != 4)
+    for m, _c in c_cover.most_common():
+        if (REBRICKABLE / f"{m}-1.json").exists():
+            return m
+    c_all = c_cover + Counter(m for p in back for m in _SET.findall(p.get_text()) if not m.startswith(("19", "20")) or len(m) != 4)
+    for m, _c in c_all.most_common():
+        if (REBRICKABLE / f"{m}-1.json").exists():
+            return m
+    if c_cover:
+        return c_cover.most_common(1)[0][0]
+    if c_all:
+        return c_all.most_common(1)[0][0]
+    return None
 
 
-def fallback_inventory(lib, set_number: str, client, index: dict) -> list[dict]:
+def fallback_inventory(lib, set_number: str, client, index: dict, exclude: set[tuple[str, int]] | None = None) -> list[dict]:
     """Parts list from the set's Rebrickable inventory (read-only, cached) when the booklet prints
-    none: [{'element', 'count', 'desc'}], pictures rendered from the LDraw parts."""
+    none — or only the missing `(ldraw_part, colour)` entries when supplementing a partial printed parts
+    list (`exclude` = already-present `(part, colour)` pairs): [{'element', 'count', 'desc'}]."""
     try:
         rows = client.set_parts(f"{set_number}-1") if client is not None else None
     except Exception:
@@ -376,8 +471,11 @@ def fallback_inventory(lib, set_number: str, client, index: dict) -> list[dict]:
         element = str(r.get("element") or f"{r.get('part')}:{r.get('color')}")
         index.setdefault(element, {k: r.get(k) for k in ("ldrawPart", "ldrawAll", "color", "part")})
         part, _notes = ldraw_part(lib, index[element])
+        if exclude is not None and (part is None or (part, int(r["color"])) in exclude):
+            continue
         out.append({"element": element, "count": int(r.get("quantity", 0)),
-                    "desc": rendered_descriptors(lib, part, int(r["color"])) if part else None})
+                    "desc": rendered_descriptors(lib, part, int(r["color"])) if part else None,
+                    "renders": rendered_part_images(lib, part, int(r["color"])) if part else None})
     return out
 
 
@@ -407,29 +505,50 @@ def step_callouts(step: dict) -> list[tuple[int, dict]]:
 
 
 def _learned(pictures: dict, inventory: list, folder: Path) -> dict | None:
-    """P5: cosine of the learned embedding between each callout picture and every parts-list picture."""
+    """P5: cosine of the learned embedding between each callout picture and every inventory entry
+    (using the printed parts-list crop when present, or the max cosine over its 4 NPR LDraw renders
+    when using Rebrickable fallback / supplemented entries!). Entries without any visual return -2.0."""
     from . import partsnet
     net = partsnet.loaded(os.environ.get("PARTSNET", str(partsnet.WEIGHTS)))
     if net is None or not pictures:
         return None
-    inv = [_read(folder, e.get("crop")) for e in inventory]
-    blank = np.full((8, 8, 3), 255, np.uint8)
-    zi = partsnet.embed(net, [p if p is not None else blank for p in inv])
+    inv_imgs: list[np.ndarray] = []
+    entry_slices: list[tuple[int, int]] = []
+    for e in inventory:
+        crop = _read(folder, e.get("crop"))
+        if crop is not None:
+            s = len(inv_imgs)
+            inv_imgs.append(crop)
+            entry_slices.append((s, s + 1))
+        elif e.get("renders"):
+            s = len(inv_imgs)
+            inv_imgs.extend(e["renders"])
+            entry_slices.append((s, len(inv_imgs)))
+        else:
+            entry_slices.append((-1, -1))
+    if not inv_imgs:
+        return None
+    zi = partsnet.embed(net, inv_imgs)
     keys = list(pictures)
     zc = partsnet.embed(net, [pictures[k] for k in keys])
-    cos = zc @ zi.T
-    cos[:, [p is None for p in inv]] = 0.0
-    return {k: cos[i] for i, k in enumerate(keys)}
+    raw_cos = zc @ zi.T
+    out_cos = np.full((len(keys), len(inventory)), -2.0, dtype=np.float32)
+    for j, (s, t) in enumerate(entry_slices):
+        if s >= 0:
+            out_cos[:, j] = raw_cos[:, s:t].max(axis=1)
+    return {k: out_cos[i] for i, k in enumerate(keys)}
 
 
 def read_parts(lib, extract: dict, folder: Path, index: dict, client=None, fallback: list[dict] | None = None) -> tuple[list[StepParts], dict]:
-    """Per extracted step, the parts it adds. Returns (steps, report). `fallback`: parts list to use
-    when the booklet prints none (`fallback_inventory`)."""
+    """Per extracted step, the parts it adds. Returns (steps, report). `fallback`: full Rebrickable parts
+    list when the booklet prints none, OR missing elements to supplement a partial printed parts list."""
     inventory = [e for e in extract.get("inventory", []) if e.get("element")]
-    inv_desc = [describe(_read(folder, e.get("crop"))) for e in inventory]
+    inv_crops = [_read(folder, e.get("crop")) for e in inventory]
+    inv_desc = [describe(img) for img in inv_crops]
     used_fallback = False
     if not inventory and fallback:
         inventory = [e for e in fallback if e.get("desc") is not None]
+        inv_crops = [None] * len(inventory)
         inv_desc = [e["desc"] for e in inventory]
         used_fallback = True
     records = [resolve_element(e["element"], index, client) for e in inventory]
@@ -440,6 +559,25 @@ def read_parts(lib, extract: dict, folder: Path, index: dict, client=None, fallb
         else:
             part, notes = ldraw_part(lib, rec)
             resolved.append(((part, int(rec["color"])) if part else None, notes))
+    valid_crop = [(img is not None and d is not None) for img, d in zip(inv_crops, inv_desc)]
+    # Detect & repair clipped PDF parts-list crops (e.g. a 4x4 plate cropped at the bottom of a column
+    # to half its real diagonal while another colour of the same LDraw part has a healthy crop!)
+    if not used_fallback:
+        by_part: dict[str, list[int]] = defaultdict(list)
+        for j, (res_j, d) in enumerate(zip(resolved, inv_desc)):
+            if res_j[0] is not None and d is not None and not isinstance(d, list) and d.size > 0:
+                by_part[res_j[0][0]].append(j)
+        for _part_id, idxs in by_part.items():
+            if len(idxs) < 2:
+                continue
+            best_j = max(idxs, key=lambda j: inv_desc[j].size)
+            max_sz = inv_desc[best_j].size
+            sib = inv_desc[best_j]
+            for j in idxs:
+                if inv_desc[j].size < 0.72 * max_sz:
+                    inv_desc[j] = Descriptor(sib.mask, inv_desc[j].colour, sib.aspect, sib.size, sib.lines)
+                    inv_crops[j] = None
+                    valid_crop[j] = False
     # group identical callout pictures (same crop content) across steps
     groups: dict[str, list[tuple[int, int]]] = defaultdict(list)
     descs: dict[str, Descriptor | None] = {}
@@ -458,11 +596,44 @@ def read_parts(lib, extract: dict, folder: Path, index: dict, client=None, fallb
     ratio = size_ratio(descs, inv_desc, RENDERED_CONFIDENT if used_fallback else 0.85)   # parts-list scale, or callout px per LDU
     if ratio is None and used_fallback:
         ratio = CALLOUT_PX_PER_LDU
+    # Supplement a partial PDF parts list with any missing Rebrickable elements (e.g. clipped off bottom of page)
+    supplemented = 0
+    if not used_fallback and fallback:
+        have_pc = {r[0] for r in resolved if r[0] is not None}
+        inv_px_per_ldu = (CALLOUT_PX_PER_LDU / ratio) if ratio else (CALLOUT_PX_PER_LDU / 1.33)
+        for fe in fallback:
+            if fe.get("desc") is None:
+                continue
+            rec = resolve_element(fe["element"], index, client)
+            if rec is None:
+                continue
+            part, notes = ldraw_part(lib, rec)
+            if part is None or (part, int(rec["color"])) in have_pc:
+                continue
+            have_pc.add((part, int(rec["color"])))
+            scaled = [Descriptor(d.mask, d.colour, d.aspect, d.size * inv_px_per_ldu, d.lines)
+                      for d in (fe["desc"] if isinstance(fe["desc"], list) else [fe["desc"]])]
+            inventory.append(fe)
+            inv_crops.append(None)
+            inv_desc.append(scaled)
+            resolved.append(((part, int(rec["color"])), notes))
+            valid_crop.append(False)
+            supplemented += 1
     overlay = None
     if not used_fallback and ratio and TEMPLATE_WEIGHT > 0:     # LEGO's own parts-list art, at a known scale
-        overlay = (pictures, [_read(folder, e.get("crop")) for e in inventory])
+        overlay = (pictures, inv_crops)
+    # Build learned visual embeddings for both native printed crops AND Rebrickable rendered entries!
+    learned_inv = []
+    for e, vc in zip(inventory, valid_crop):
+        if not used_fallback and vc:
+            learned_inv.append({"crop": e.get("crop")})
+        elif e.get("renders"):
+            learned_inv.append({"renders": e["renders"]})
+        else:
+            learned_inv.append({})
+    learned = _learned(pictures, learned_inv, folder)
     assigned = assign(descs, totals, inv_desc, [int(e.get("count", 0) or 0) for e in inventory], ratio,
-                      learned=None if used_fallback else _learned(pictures, inventory, folder), template=overlay)
+                      learned=learned, template=overlay, valid_crop=None if used_fallback else valid_crop)
     steps_out = []
     unresolved_total = 0
     for si, step in enumerate(extract["steps"]):
@@ -486,5 +657,5 @@ def read_parts(lib, extract: dict, folder: Path, index: dict, client=None, fallb
     report = {"inventory_entries": len(inventory), "inventory_resolved": sum(1 for r, _ in resolved if r),
               "callout_pictures": len(groups), "callout_pieces": sum(int(c.get("count", 1) or 1) for s in extract["steps"] for c in s.get("callout", [])),
               "unresolved_pieces": unresolved_total, "has_inventory": bool(inventory) and not used_fallback,
-              "rebrickable_inventory": used_fallback, "size_ratio": ratio}
+              "rebrickable_inventory": used_fallback, "supplemented": supplemented, "size_ratio": ratio}
     return steps_out, report

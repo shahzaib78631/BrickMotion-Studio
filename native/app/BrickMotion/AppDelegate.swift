@@ -15,6 +15,10 @@ import AppKit
     if NSDocumentController.shared.documents.isEmpty { showWelcome() }
   }
 
+  func applicationWillTerminate(_ notification: Notification) {
+    RenderQueue.shared.stopForQuit()
+  }
+
   func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
     guard !flag, NSDocumentController.shared.documents.isEmpty else { return true }
     showWelcome()
@@ -86,6 +90,7 @@ import AppKit
       window.addItem(.separator())
       window.addItem(Registry.item(welcome))
     }
+    if let queue = Registry.command("window.renderQueue") { window.addItem(Registry.item(queue)) }
     main.addItem(withTitle: "Window", action: nil, keyEquivalent: "").submenu = window
     NSApp.windowsMenu = window
 

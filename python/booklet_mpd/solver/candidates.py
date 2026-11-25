@@ -80,24 +80,24 @@ def flush_candidates(lib, part: str, base: list, max_base: int = 8) -> list[dict
             py_bot = round(hi[1] / 2.0) * 2.0
             ty = hy_bot - py_bot
             pw, pd = px1 - px0, pz1 - pz0
-            # Flush along +X and -X edges
-            for tx in (hx1 - px0, hx0 - px1):
+            # Flush along +X and -X edges (separation axis points outward along the flush normal!)
+            for tx, ax_x in ((hx1 - px0, 1.0), (hx0 - px1, -1.0)):
                 z_start = hz0 - pd + 20.0 - pz0
                 z_end = hz1 - 20.0 - pz0
                 for tz in np.arange(z_start, z_end + 0.1, 20.0):
                     m = np.eye(4)
                     m[:3, :3] = R
                     m[:3, 3] = [tx, ty, float(tz)]
-                    out.append({"matrix": m, "host": hi_idx, "kind": "flush", "axis": np.array([0.0, -1.0, 0.0])})
+                    out.append({"matrix": m, "host": hi_idx, "kind": "flush", "axis": np.array([ax_x, 0.0, 0.0])})
             # Flush along +Z and -Z edges
-            for tz in (hz1 - pz0, hz0 - pz1):
+            for tz, ax_z in ((hz1 - pz0, 1.0), (hz0 - pz1, -1.0)):
                 x_start = hx0 - pw + 20.0 - px0
                 x_end = hx1 - 20.0 - px0
                 for tx in np.arange(x_start, x_end + 0.1, 20.0):
                     m = np.eye(4)
                     m[:3, :3] = R
                     m[:3, 3] = [float(tx), ty, tz]
-                    out.append({"matrix": m, "host": hi_idx, "kind": "flush", "axis": np.array([0.0, -1.0, 0.0])})
+                    out.append({"matrix": m, "host": hi_idx, "kind": "flush", "axis": np.array([0.0, 0.0, ax_z])})
     return out
 
 
@@ -123,6 +123,21 @@ def has_connectors(lib, part: str, cat=None) -> bool:
 
     cat = cat or catalog()
     return bool(cat.connectors(part)) or bool(cylinder_snaps(lib, part))
+
+
+def clean_matrix(m: np.ndarray) -> np.ndarray:
+    """Snap floating-point noise (e.g. -4.9e-16 from chained rotations/inverses) on orthogonal axes and grid coords."""
+    out = np.array(m, dtype=float, copy=True)
+    r = out[:3, :3]
+    r[np.abs(r) < 1e-7] = 0.0
+    near1 = np.abs(np.abs(r) - 1.0) < 1e-7
+    r[near1] = np.sign(r[near1])
+    t = out[:3, 3]
+    t[np.abs(t) < 1e-7] = 0.0
+    near_int = np.abs(t - np.round(t)) < 1e-5
+    t[near_int] = np.round(t[near_int])
+    out[3, :] = (0.0, 0.0, 0.0, 1.0)
+    return out
 
 
 def same_pose(a: np.ndarray, b: np.ndarray) -> bool:

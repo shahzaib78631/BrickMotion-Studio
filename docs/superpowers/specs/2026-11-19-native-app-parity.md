@@ -33,7 +33,7 @@ that opens the AI panel, and the Checks panel that has no rail button.
 
 | Feature | Web | Phase | Engine | Exceeds web by |
 |---|---|---|---|---|
-| New / open / import model or project (.brickmotion, .json, .ldr, .mpd, .dat, .io; Rebrickable .csv and .pbg in phase 9) | Toolbar.tsx:198-330 | 8 | P (reads all but .csv/.pbg) | Native Open and Open Recent, project documents, and untitled documents for imports. Saved previews are available to Finder through the Quick Look extension. |
+| New / open / import model or project (.brickmotion, .json, .ldr, .mpd, .dat, .io; Rebrickable .csv and .pbg in phase 9) | Toolbar.tsx:198-330 | 8/9 | Y | Native Open and Open Recent, project documents, and untitled documents for model imports. Import Parts Inventory adds Rebrickable CSV or Studio PBG into the edited model, reports skipped rows, and undoes as a single edit. Finder previews use Quick Look. |
 | Save project (.brickmotion), download plan (.json), LDraw (.mpd) | Toolbar.tsx:304-377 | 8 | N (plan JSON only) | Save, Save As, Duplicate, Revert and Versions. Export Plan and Export LDraw use native save panels and atomic writes. |
 | Autosave status | Toolbar.tsx:324 | 8 | N | system autosave + versions; no "saves on this device" limit. **done (M2): autosave in place with Versions** |
 | Projects dialog (list/open/delete) | ProjectsDialog.tsx | 8 | — | Welcome uses system recents with rendered previews, keyboard opening and Reveal in Finder. File management uses Finder. |
@@ -51,10 +51,10 @@ that opens the AI panel, and the Checks panel that has no rail button.
 | New model / submodule / from selection | ModelsPanel.tsx:203-219 | 8 | N | **done (M3a): New Submodel…, Make Submodel from Selection (⌥⌘G), Extract, Move to Model, rename and delete, all one undo step each** |
 | Search models | ModelsPanel.tsx:221 | 8 | — | **done (M3a): the Models pane filter keeps matches and their ancestors** |
 | Tree rows: open, show and fit, tags, counts | ModelsPanel.tsx:232-262 | 8 | P (submodel paths per piece) | Native outline with keyboard navigation, drag to reparent, counts, shared/unused marks and group tags. |
-| Row menu: play its build, lay out parts, view parts, export MP4/project/LDraw, import into, open another | ModelsPanel.tsx:165-191 | 8/9 | P | Open, Play Build, Lay Out Parts, Show and Fit, View Parts and Import Into. Submodel export is assigned to Phase 9. |
-| View parts dialog: steps tree, per-step show/hide, select, extract, move to step | PartsDialog.tsx | 8 | N | inline in the browser, not a dialog. **done (M3a): inline “Parts in …” under the tree: steps with show/hide, select, extract, move to step** |
-| Assembly Corrector (Python engine) | ModelsPanel.tsx:266-292 | — | superseded? | native `--correct` already; confirm with owner |
-| Batch export selected / all submodules | ModelsPanel.tsx:294-305 | 9 | P (bmexport) | |
+| Row menu: play its build, lay out parts, view parts, export MP4/project/LDraw, import into, open another | ModelsPanel.tsx:165-191 | 8/9 | Y | Open, Play Build, Lay Out Parts, Show and Fit, View Parts, Import Into, and exports for video, standalone project and LDraw. The standalone project retains scoped authored animation. |
+| View parts dialog: steps tree, per-step show/hide, select, extract, move to step | PartsDialog.tsx | 8 | N | The Models sidebar has one scrolling browser with independent step disclosures, visible viewport visibility and submodel actions, part-and-colour groups with individual instances, and undoable extraction and moves. |
+| Assembly Corrector (Python engine) | ModelsPanel.tsx:266-292 | — | superseded? | native `--correct`; Step → Seat Loose Pieces (phase 9) lists and seats them as one undo step |
+| Batch export selected / all submodules | ModelsPanel.tsx:294-305 | 9 | Y | Selected Models rows and File → Export All Submodel Videos use a shared settings sheet and destination folder. The queue renders one movie per selected definition and reserves distinct names. |
 | Breadcrumb back to main model | App.tsx:306 | 8 | — | **done (M3a): glass breadcrumb over the viewport; ⌘↑ goes back a level** |
 
 ## 3. Parts and colours
@@ -72,7 +72,7 @@ that opens the AI panel, and the Checks panel that has no rail button.
 | Feature | Web | Phase | Engine | Exceeds web by |
 |---|---|---|---|---|
 | View presets (front/back/right/left/top/bottom, flat-lay, centre on floor, persp/ortho), numpad keys | ViewMenu.tsx, viewControls.ts | 8 | P (orbit camera) | Native orthographic and perspective views, saved editor camera, six axis presets, flat-lay and floor centring. See the sign-off plan for the measured orbit gate. |
-| Viewport renderer select (current / studio path / hybrid / ThreeRT) | ViewportChrome.tsx | 8 | P | Native Metal editing viewport and path-traced still export. A separate in-editor path-traced preview is pending if retained in this phase. |
+| Viewport renderer select (current / studio path / hybrid / ThreeRT) | ViewportChrome.tsx | 8 | P | Native Metal editing viewport and still export. The owner deferred the in-editor path-traced preview. |
 | Split: lay out every part on the floor | ViewportChrome.tsx | 8 | P (staging) | The floor layout is a reversible view state and has a one-click return to the assembly. |
 | Tools: select, move, move gizmo, rotate gizmo, scale, joints on/off, world/local, aim the way in, collision | ViewportChrome.tsx:109-165 | 8 | N | Axis and plane controls for move, rotate and scale, local and world axes, real joint markers, insertion-direction controls and a collision-checked placement mode. |
 | Orbit 45°, projection, fit, grid + spacing, wireframe, clay, fullscreen | ViewportChrome.tsx:126-151 | 8 | P | Native full screen, adjustable grid and Metal render modes, available from View and the palette. |
@@ -113,11 +113,11 @@ that opens the AI panel, and the Checks panel that has no rail button.
 |---|---|---|---|---|
 | Build / Timeline / Motion modes | App.tsx:345 | 8 | P | Native resizable Animate workspace with a common transport. |
 | Planner status chips, out-of-date, progress, auto-plan | BuildTimeline.tsx:317 | 8 | P (whole re-plan) | Cancelled jobs cannot replace a newer plan. Timing updates reuse all paths, and eligible single-leaf moves recheck affected paths. Geometry replan timing is still under evaluation. |
-| Transport, zoom, fit | BuildTimeline.tsx:383 | 8 | Y (timeline) | Frame-based seeking, playback speed, looping, zoom and Fit. |
-| Step blocks + step-clip menu, pause handles, submodel lanes | BuildTimeline.tsx, timelineMenus.ts | 8 | P | Chronological runs let recurring steps stay readable when the plan interleaves them. |
-| Parts lane: drag arrival, force order, pin, drop parts, clip menu | PartsLane.tsx | 8 | N | Arrival drag sets and pins the order in one undo step. Parts can be revealed and placed into the active step. |
+| Transport, zoom, fit | BuildTimeline.tsx:383 | 8 | Y (timeline) | Frame-based seeking, playhead following, edge scrubbing, pointer-anchored magnification, playback speed, looping and Fit. |
+| Step blocks + step-clip menu, pause handles, submodel lanes | BuildTimeline.tsx, timelineMenus.ts | 8 | P | Chronological step runs with selection, playback, split, join, order, insertion and step motion in the native context menu. |
+| Parts lane: drag arrival, force order, pin, drop parts, clip menu | PartsLane.tsx | 8 | N | Real colour and LDraw ID on stacked clips. The clip reveals the inspector, moves or splits arrivals, and edits motion. Arrival drag sets and pins the order in one undo step. |
 | Pause lane | PauseLane.tsx | 8 | N | Pause length is edited against the playhead and saved with the step. |
-| Camera lanes (keys, moves, auto-direct presets, key from view) | CameraTrackRow.tsx | 9 | P (bmfilm) | under the camera-director editing design |
+| Camera lanes (keys, moves, auto-direct presets, key from view) | CameraTrackRow.tsx | 9 | P | Build Camera lane: add from view, drag, update, Look At, 19 move presets, delete, clear; web-compatible `cameraTracks` with undo; plays in viewport and Build export. Auto-direct and the Keyframes clock remain open. |
 | Intro / Build / Hero clips | BuildTimeline.tsx:606 | 8 | P | Native playback maintains the three sequence regions and their exact times. |
 | Planner error panel with diagnostics | BuildTimeline.tsx:486 | 8 | P | Each flagged row identifies a part and reason, and jumps to the relevant time in the viewport. |
 | Motion popover (presets, flight time, landing, hover, easing; project/step/part) | MotionEditor.tsx | 8 | P (Style) | Shows inherited values and preserves the resolved path while changing its timing. |
@@ -128,27 +128,27 @@ that opens the AI panel, and the Checks panel that has no rail button.
 
 | Area | Web | Engine | Notes |
 |---|---|---|---|
-| Render/video: length, arrival mode, hero orbit, timing presets, camera options, look & sound, logo, output format/fps | VideoPanel.tsx | P (bmexport) | |
-| Planner picker (V2/V3/V4/artifact), budgets, support mode | VideoPanel.tsx:264-447 | — | superseded by the native planner; confirm |
+| Render/video: length, arrival mode, hero orbit, timing presets, camera options, look & sound, logo, output format/fps | VideoPanel.tsx | P (bmexport) | Export Video offers four frame shapes, three sizes, quality, 24–60 fps, automatic, viewport or saved cameras, and a logo in any corner at the web's size, inset and 90% opacity. The logo is app-wide like the web's and is copied when chosen, so queued jobs keep the image they were submitted with. Arrival mode, hero orbit and timing presets remain open. |
+| Planner picker (V2/V3/V4/artifact), budgets, support mode | VideoPanel.tsx:264-447 | — | superseded by the native planner; confirm. Step → Build Settings (phase 9) saves Native/Standard planner, order, flight shape, grown-unit splitting and pacing per project. |
 | Video renderer (live / studio path / path traced, samples) | VideoPanel.tsx:470 | P (phase 7 tasks 1–4) | |
-| Staging: 9 layouts, grouping, sides, turn, put back, build order force | StagingPanel.tsx | Y (staging.cpp port) | |
+| Staging: 9 layouts, grouping, sides, turn, put back, build order force | StagingPanel.tsx | Y (staging.cpp port) | Build Staging saves the nine layouts, grouping, sides, order and aspect with an undoable preview. Staging turn and Straighten Waiting Parts done 2026-11-22. Captured camera projection, moved waiting pieces and global order controls remain open. |
 | Assembly spots outliner, transforms, markers | AssemblyPanel.tsx | P | |
-| Materials: scene, floor, environment, colour source, finish, texture, studs, detail, edges, glow, glass, lens blur, AO, floor kind | MaterialsPanel.tsx | P | HDRI photo rigs are a phase 7 non-goal |
-| Scene tools: lights, reference images, photo rigs, camera view, render region, guides, exposure | SceneTools.tsx | N | |
-| Export dialog with per-job progress | ExportDialog.tsx | P | AVFoundation/VideoToolbox, background export |
-| Capture: stills, clipboard, covers, transparent, path-traced final, COLLADA, turntable, record viewport | CapturePanel.tsx | P | |
-| Sound: snap on/off, try it, presets, click/body/space | SoundPanel.tsx | Y (physics + web styles) | physics style is the default |
+| Materials: scene, floor, environment, colour source, finish, texture, studs, detail, edges, glow, glass, lens blur, AO, floor kind | MaterialsPanel.tsx | P | HDRI photo rigs are a phase 7 non-goal. View → Look (phase 9): the 34 scenes as backdrop colours, floor on/off, edge lines, AO on/off, shadows, ray-traced glass, six shadings and lights-follow-camera, saved with the web's keys where it has them. Finish, texture, glow, lens blur, edge colour, AO strength, floor kinds and gradient backdrops need renderer work in native/render and remain open. |
+| Scene tools: lights, reference images, photo rigs, camera view, render region, guides, exposure | SceneTools.tsx | P | The Camera inspector can capture, recall, rename, replace and remove named camera views. Build and Keyframes movie export can use the saved lens and pose. Scene lights, reference images, region, guides and exposure remain open. |
+| Export dialog with per-job progress | ExportDialog.tsx | Y | Build, authored Keyframes and Turntable MP4 use the native destination sheet, frame progress, cancellation and Finder reveal. Build offers optional snap audio. The Render Queue runs single or batch exports in the background and retains their history. |
+| Capture: stills, clipboard, covers, transparent, path-traced final, COLLADA, turntable, record viewport | CapturePanel.tsx | P | Export Still path-traces a PNG in any of the four frame shapes (vertical, portrait and square serve as covers), at two sizes and three sample counts, from the viewport angle or automatic framing, optionally with the video logo, through the Render Queue. Turntable movies come from Export Video. Edit copies a PNG of the current Metal view. View → Record Viewport saves an H.264 movie of the view (2026-11-22). Transparent stills (path-tracer alpha) and COLLADA remain open. |
+| Sound: snap on/off, try it, presets, click/body/space | SoundPanel.tsx | P | Snap Sound saves the mix and default for Build export, offers physical, recorded and synthesised voices with the web's presets, and auditions three sample arrivals. Live transport sound plays the same track with the Build (2026-11-22). |
 | Mechanism lab: drive, gears, steering, sweeps, spatial workbench, transmission workshop, classifications, explorer | MechanismLabPanel.tsx | P (bm/kin) | |
-| Checks: refused edit, overlap/floating/weak/unknown/loop/spot with reasons | ChecksPanel.tsx | Y (collide, stable, joints) | |
-| Settings: appearance, accent, surfaces, Claude key + model, selection bar, wireframe, auto-plan | SettingsPanel.tsx | — | macOS Settings window; system accent; key in Keychain |
+| Checks: refused edit, overlap/floating/weak/unknown/loop/spot with reasons | ChecksPanel.tsx | Y (collide, stable, joints) | Model Checks opens geometry and connection findings in the viewport and shows the last refusal. Assembly spot diagnostics remain open. |
+| Settings: appearance, accent, surfaces, Claude key + model, selection bar, wireframe, auto-plan | SettingsPanel.tsx | — | macOS Settings window; system accent; key in Keychain (the Claude key and model move to the AI phase) |
 
 ## 9. Extras (spec phase 10)
 
 | Area | Web | Notes |
 |---|---|---|
-| Suggest: next pieces, open connections, techniques, calculators, viewport ghosts | SuggestPanel.tsx | |
-| Generate: building/castle, from prompt, remix, Claude variant | GeneratePanel.tsx | |
-| AI: generate, fix, paste, prompt | AiPanel.tsx | |
+| Suggest: next pieces, open connections, techniques, calculators, viewport ghosts | SuggestPanel.tsx | Partial (Phase 10 slice 1, 2026-11-22): Find Compatible Parts lists "What Builders Put Here" from the BrickNet habits (bundled `Resources/Suggest/habits.json`): one row per part at the surveyed pose, mated to the target and clear of overlaps, colour by the web rule, explained by its model count; Add Part places it as one undo step. Open connections, ghosts, mirror/repeat, techniques and calculators remain. |
+| Generate: building/castle, from prompt, remix, Claude variant | GeneratePanel.tsx | Phase 10: building/castle, brickify, remix. From prompt and Claude variant: AI phase |
+| AI: generate, fix, paste, prompt | AiPanel.tsx | AI phase (separate, after Phase 10; owner 2026-11-22) |
 | Bricksafe finder | BricksafePanel.tsx | needs the web dev server; superseded? |
 | Instructions/booklet | none in web UI | not in web UI; native could add it |
 

@@ -44,5 +44,8 @@ double pixelsPerLdu(double distance, double fovY, int viewportHeight);
 /// is the same on any number of threads.
 std::vector<Visible> cull(const Scene& scene, const std::vector<PartShape>& parts, const Camera& camera, int viewportHeight, int forceDetail = -1, bool frustum = true,
                           bm::JobPool* pool = nullptr);
+void cullInto(std::vector<Visible>& result, const Scene& scene, const std::vector<PartShape>& parts,
+              const Camera& camera, int viewportHeight, int forceDetail, bool frustum, bool edges,
+              bm::JobPool* pool = nullptr);
 
 }  // namespace bmr

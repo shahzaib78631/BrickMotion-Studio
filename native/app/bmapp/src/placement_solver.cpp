@@ -1,6 +1,8 @@
 #include "placement_solver.h"
 
 #include <array>
+#include <chrono>
+#include <limits>
 #include <cmath>
 #include <tuple>
 #include <unordered_map>
@@ -15,6 +17,19 @@ using bm::connect::Connector, bm::connect::Gender, bm::connect::SnapKind;
 constexpr double kReleaseFactor = 1.4;
 constexpr double kConnectorPadding = 6;
 constexpr size_t kCollisionCandidates = 8;
+// Aimed placement (the viewport), as the web editor's placement engine (src/plan/aim.ts).
+constexpr double kPickRadius = 24;      ///< LDU across the ray a connector may be and still count
+constexpr double kOccludeSlack = 6;     ///< LDU behind the hit surface a stud or socket may sit
+constexpr double kBuriedSlack = 14;     ///< hinge fingers and clips: their axis is inside the part
+constexpr double kJointSlack = 16;      ///< ball centres and hinge pivots lie deeper still
+constexpr double kWallSlack = 5;        ///< a pointer this far below a stud's base is on the wall
+constexpr double kHysteresis = 4;       ///< LDU nearer (at its depth) a new seat must be to take over
+constexpr size_t kAimedTargets = 6;
+constexpr double kHeldWeight = 0.35;    ///< how much the held point's nearness to the ray counts
+constexpr size_t kAimedCandidates = 96;
+constexpr size_t kAlwaysTried = 16;     ///< seats tested whatever the time, so the answer is steady
+constexpr auto kTryBudget = std::chrono::milliseconds(12);
+constexpr double kDepthCost = 0.0004;   ///< per LDU a seat sits from the connector's mouth: flush first
 
 Box expanded(Box box, double padding) {
   const Vec3 d{padding, padding, padding};
@@ -69,6 +84,36 @@ std::optional<double> boxEntry(const Box& b, Vec3 from, Vec3 d) {
     if (entry > exit) return std::nullopt;
   }
   return entry;
+}
+
+double rayDepth(const bmapp::PlacementAim& aim, Vec3 p) { return bm::dot(p - aim.from, aim.dir); }
+double rayGap(const bmapp::PlacementAim& aim, Vec3 p) {
+  const double depth = rayDepth(aim, p);
+  return bm::length(p - aim.from - aim.dir * depth);
+}
+/// How far from the pointer a point looks: distance across the ray over its depth.
+double rayAngle(const bmapp::PlacementAim& aim, Vec3 p) {
+  const double depth = rayDepth(aim, p);
+  return depth > 1e-6 ? rayGap(aim, p) / depth : std::numeric_limits<double>::infinity();
+}
+/// The point of segment [a, a + axis * length] nearest the ray, as a parameter along it.
+double nearestOnSegment(const bmapp::PlacementAim& aim, Vec3 a, Vec3 axis, double length) {
+  const Vec3 w = a - aim.from;
+  const double b = bm::dot(axis, aim.dir), d = bm::dot(axis, w), e = bm::dot(aim.dir, w);
+  const double denominator = 1 - b * b;
+  const double t = denominator > 1e-9 ? (b * e - d) / denominator : 0;
+  return std::clamp(t, 0.0, length);
+}
+/// A stud, socket or short ring: a part goes on from its open face only.
+bool shortCylinder(const Connector& c) { return c.kind == SnapKind::Cyl && c.length <= 8; }
+double slackOf(const Connector& c) {
+  switch (c.kind) {
+    case SnapKind::Cyl: return kOccludeSlack + c.radius;
+    case SnapKind::Clip:
+    case SnapKind::Finger: return kBuriedSlack;
+    case SnapKind::Generic: return kJointSlack;
+  }
+  return kOccludeSlack;
 }
 
 /// A long, open connection (such as a bar carrying two clips) can have several occupants
@@ -211,7 +256,59 @@ struct PlacementSolver::Impl {
     return result;
   }
 
+  /// Every way the moving part seats on `site` that mates it and leaves its other occupants
+  /// alone, best first in `results` (at most `limit`). `accept` filters seat points before the
+  /// mate is checked; `scoreOf` ranks a pose (lower first).
+  template <class Accept, class Score>
+  void seatsOn(const PlacementRequest& request, const std::vector<Connector>& local, const std::vector<Connector>& oriented,
+               const Xform& orientation, ConnectorSite site, bool retained, Accept accept, Score scoreOf,
+               std::vector<Candidate>& results, size_t limit) {
+    const Connector& target = connectors(site.piece)[site.connector];
+    for (uint32_t grip = 0; grip < oriented.size(); ++grip) {
+      if (request.grip && grip != *request.grip) continue;
+      const auto& incoming = oriented[grip];
+      if (!compatible(incoming, target)) continue;
+      const Mat3 toSourceFrame = bm::inverse(basis(incoming.axis, incoming.side));
+      for (double sign : {1.0, -1.0}) {
+        const Vec3 axis = target.axis * sign;
+        Vec3 preferred = bm::normalized(incoming.side - axis * bm::dot(axis, incoming.side));
+        if (bm::length(preferred) < 0.5) preferred = target.side;
+        const Vec3 cross = bm::cross(axis, target.side);
+        const std::array sides{preferred, target.side, cross, -target.side, -cross};
+        const double end = sign * incoming.length;
+        const std::array offsets{0.0, target.length - end, (target.length - end) * 0.5, target.length, -end};
+        for (const Vec3 side : sides) {
+          const Mat3 turn = basis(axis, side) * toSourceFrame;
+          const Mat3 rotation = turn * orientation.r;
+          const double angleCost = std::max(0.0, 3 - turn.m[0] - turn.m[4] - turn.m[8]);
+          for (double offset : offsets) {
+            const Vec3 point = target.start + target.axis * offset;
+            if (!accept(point)) continue;
+            const Xform pose{rotation, point - rotation * local[grip].start};
+            const double score = scoreOf(pose, point, incoming, angleCost, offset);
+            if (!std::isfinite(score)) continue;
+            const Candidate candidate{{pose, point, grip, site}, score, retained};
+            if (results.size() == limit && !ranksBefore(candidate, results.back())) continue;
+            if (std::any_of(results.begin(), results.end(), [&](const Candidate& existing) {
+              return poseDifference(existing.placement.pose, pose) < 1e-5 && !ranksBefore(candidate, existing);
+            })) continue;
+            const auto posed = bm::connect::transformed(local[grip], pose);
+            if (!bm::connect::mate(posed, target)) continue;
+            const auto& occupied = occupants(site);
+            if (std::any_of(occupied.begin(), occupied.end(), [&](ConnectorSite c) {
+              return !contains(request.moving, c.piece) && sharesSeat(target, posed, connectors(c.piece)[c.connector]);
+            })) continue;
+            std::erase_if(results, [&](const Candidate& existing) { return poseDifference(existing.placement.pose, pose) < 1e-5; });
+            results.insert(std::upper_bound(results.begin(), results.end(), candidate, ranksBefore), candidate);
+            if (results.size() > limit) results.pop_back();
+          }
+        }
+      }
+    }
+  }
+
   std::vector<Candidate> candidates(const PlacementRequest& request, const std::vector<Connector>& local) {
+    if (request.aim) return aimedCandidates(request, *request.aim, local);
     std::vector<Candidate> results;
     std::vector<uint32_t> nearby;
     world.near(expanded({request.point, request.point}, request.reach * kReleaseFactor + kConnectorPadding), nullptr, nearby);
@@ -231,48 +328,97 @@ struct PlacementSolver::Impl {
         const double reach = request.reach * (retained ? kReleaseFactor : 1);
         const double near = std::clamp(bm::dot(request.point - target.start, target.axis), 0.0, target.length);
         if (bm::length(target.start + target.axis * near - request.point) > reach) continue;
-        for (uint32_t grip = 0; grip < oriented.size(); ++grip) {
-          if (request.grip && grip != *request.grip) continue;
-          const auto& incoming = oriented[grip];
-          if (!compatible(incoming, target)) continue;
-          const Mat3 toSourceFrame = bm::inverse(basis(incoming.axis, incoming.side));
-          for (double sign : {1.0, -1.0}) {
-            const Vec3 axis = target.axis * sign;
-            Vec3 preferred = bm::normalized(incoming.side - axis * bm::dot(axis, incoming.side));
-            if (bm::length(preferred) < 0.5) preferred = target.side;
-            const Vec3 cross = bm::cross(axis, target.side);
-            const std::array sides{preferred, target.side, cross, -target.side, -cross};
-            const double end = sign * incoming.length;
-            const std::array offsets{0.0, target.length - end, (target.length - end) * 0.5, target.length, -end};
-            for (const Vec3 side : sides) {
-              const Mat3 turn = basis(axis, side) * toSourceFrame;
-              const Mat3 rotation = turn * orientation.r;
-              const double angleCost = std::max(0.0, 3 - turn.m[0] - turn.m[4] - turn.m[8]);
-              for (double offset : offsets) {
-                const Vec3 point = target.start + target.axis * offset;
-                const double distance = bm::length(point - request.point);
-                if (distance > reach) continue;
-                const double score = distance + bm::length(incoming.start) * 0.12 + angleCost * 3 + std::abs(offset) * 0.07;
-                const Xform pose{rotation, point - rotation * local[grip].start};
-                const Candidate candidate{{pose, point, grip, site}, score, retained};
-                if (results.size() == kCollisionCandidates && !ranksBefore(candidate, results.back())) continue;
-                if (std::any_of(results.begin(), results.end(), [&](const Candidate& existing) {
-                  return poseDifference(existing.placement.pose, pose) < 1e-5 && !ranksBefore(candidate, existing);
-                })) continue;
-                const auto posed = bm::connect::transformed(local[grip], pose);
-                if (!bm::connect::mate(posed, target)) continue;
-                const auto& occupied = occupants(site);
-                if (std::any_of(occupied.begin(), occupied.end(), [&](ConnectorSite c) {
-                  return !contains(request.moving, c.piece) && sharesSeat(target, posed, connectors(c.piece)[c.connector]);
-                })) continue;
-                std::erase_if(results, [&](const Candidate& existing) { return poseDifference(existing.placement.pose, pose) < 1e-5; });
-                results.insert(std::upper_bound(results.begin(), results.end(), candidate, ranksBefore), candidate);
-                if (results.size() > kCollisionCandidates) results.pop_back();
-              }
-            }
-          }
-        }
+        seatsOn(request, local, oriented, orientation, site, retained,
+                [&](Vec3 point) { return bm::length(point - request.point) <= reach; },
+                [&](const Xform&, Vec3 point, const Connector& incoming, double angleCost, double offset) {
+                  return bm::length(point - request.point) + bm::length(incoming.start) * 0.12 + angleCost * 3 + std::abs(offset) * 0.07;
+                },
+                results, kCollisionCandidates);
       }
+    }
+    return results;
+  }
+
+  /// The viewport's placement: the free connectors the ray points at (near it, facing the
+  /// camera, not hidden behind what it hits), seated so the held point lands nearest the ray.
+  std::vector<Candidate> aimedCandidates(const PlacementRequest& request, const PlacementAim& aim,
+                                         const std::vector<Connector>& local) {
+    std::vector<Candidate> results;
+    if (!finite(aim.from) || !finite(aim.dir) || std::abs(bm::length(aim.dir) - 1) > 1e-6) return results;
+    const double hitDepth = aim.hitDepth.value_or(std::numeric_limits<double>::infinity());
+    const std::optional<Vec3> hit = aim.hitDepth ? std::optional(aim.from + aim.dir * *aim.hitDepth) : std::nullopt;
+    // Every piece near the visible stretch of the ray.
+    const double far = std::isfinite(hitDepth) ? hitDepth + kJointSlack : 4000;
+    Box along;
+    along.grow(aim.from);
+    along.grow(aim.from + aim.dir * far);
+    std::vector<uint32_t> nearby;
+    world.near(expanded(along, kPickRadius + kConnectorPadding), nullptr, nearby);
+
+    struct Aimed { ConnectorSite site; double angle; };
+    std::vector<Aimed> aimed;
+    for (uint32_t piece : nearby) {
+      if (contains(request.moving, piece) || contains(request.hidden, piece)) continue;
+      if (request.onlyTarget && *request.onlyTarget != piece) continue;
+      const auto& targets = connectors(piece);
+      for (uint32_t i = 0; i < targets.size(); ++i) {
+        const Connector& t = targets[i];
+        const Vec3 near = t.start + t.axis * nearestOnSegment(aim, t.start, t.axis, t.length);
+        // Seen if any of it is in front of what the ray hits: a stud's own top hides its base.
+        const double shallowest = std::min({rayDepth(aim, near), rayDepth(aim, t.start), rayDepth(aim, t.start + t.axis * t.length)});
+        if (rayDepth(aim, near) <= 0 || shallowest > hitDepth + slackOf(t) || rayGap(aim, near) > kPickRadius) continue;
+        if (t.kind == SnapKind::Cyl && t.gender == Gender::Female && t.openStart != t.openEnd) {
+          // A socket open at one end is entered there: its mouth must face the camera and be seen.
+          const Vec3 mouth = t.openStart ? t.start : t.start + t.axis * t.length;
+          const Vec3 outward = t.openStart ? -t.axis : t.axis;
+          if (bm::dot(outward, -aim.dir) <= -0.05 || rayDepth(aim, mouth) > hitDepth + slackOf(t)) continue;
+        }
+        if (shortCylinder(t)) {
+          // A stud is entered from its tip side, a socket from its open face.
+          const Vec3 outward = t.gender == Gender::Male ? t.axis : -t.axis;
+          if (bm::dot(outward, -aim.dir) <= -0.05) continue;
+          // Pointing at the wall below a piece's top studs means beside it, not on top.
+          // A ray passing through the stud itself (down a hollow stud's hole) is on the stud.
+          if (hit && t.gender == Gender::Male && bm::dot(*hit - t.start, t.axis) < -kWallSlack && rayGap(aim, near) > t.radius) continue;
+        }
+        aimed.push_back({{piece, i}, rayAngle(aim, near)});
+      }
+    }
+    std::sort(aimed.begin(), aimed.end(), [](const Aimed& a, const Aimed& b) {
+      return std::tie(a.angle, a.site.piece, a.site.connector) < std::tie(b.angle, b.site.piece, b.site.connector);
+    });
+    if (aimed.size() > kAimedTargets) {
+      // A retained site stays in the running while it is still near the ray.
+      const auto keep = std::find_if(aimed.begin() + kAimedTargets, aimed.end(), [&](const Aimed& a) { return request.retainedSite == a.site; });
+      if (keep != aimed.end()) std::iter_swap(aimed.begin() + kAimedTargets - 1, keep);
+      aimed.resize(kAimedTargets);
+    }
+
+    const Xform orientation{request.freePose.r, {}};
+    std::vector<Connector> oriented;
+    oriented.reserve(local.size());
+    for (const auto& c : local) oriented.push_back(bm::connect::transformed(c, orientation));
+    for (const Aimed& entry : aimed) {
+      const Connector& target = connectors(entry.site.piece)[entry.site.connector];
+      const bool retained = request.retainedSite == entry.site;
+      const bool through = target.kind == SnapKind::Cyl && target.gender == Gender::Female && target.openStart && target.openEnd;
+      seatsOn(request, local, oriented, orientation, entry.site, false, [](Vec3) { return true; },
+              [&](const Xform& pose, Vec3, const Connector&, double angleCost, double offset) {
+                const Vec3 held = pose.apply(aim.held);
+                // A part goes through a hole from the side the camera sees.
+                if (through) {
+                  const bool fromStart = bm::dot(held - target.start, target.axis) < target.length * 0.5;
+                  const Vec3 mouth = fromStart ? -target.axis : target.axis;
+                  if (bm::dot(mouth, -aim.dir) < -0.2) return std::numeric_limits<double>::infinity();
+                }
+                const double depth = std::max(rayDepth(aim, held), 1.0);
+                // The connector pointed at decides first; where the hand holds the part decides
+                // how it sits there. Least turning breaks near-ties, and the seat in hand keeps
+                // its place unless another is clearly nearer.
+                return entry.angle + rayAngle(aim, held) * kHeldWeight + angleCost * 0.002 + std::abs(offset) * kDepthCost -
+                       (retained ? kHysteresis / depth : 0);
+              },
+              results, kAimedCandidates);
     }
     return results;
   }
@@ -332,8 +478,14 @@ std::optional<Placement> PlacementSolver::solve(const PlacementRequest& request)
   const auto local = impl_->database.get(request.part, &impl_->model.library());
 
   std::optional<PlacementBlocked> blockedSnap;
-  if (request.snap && !local->empty() && request.reach > 0) {
+  if (request.snap && !local->empty() && (request.reach > 0 || request.aim)) {
+    // Nearest first. With an aim, keep looking past blocked seats for a while: in a crowded
+    // spot the nearest seats collide and a clean one is a little further down the list.
+    const auto started = std::chrono::steady_clock::now();
+    size_t tried = 0;
     for (const Candidate& candidate : impl_->candidates(request, *local)) {
+      if (request.aim && blockedSnap && tried >= kAlwaysTried && std::chrono::steady_clock::now() - started > kTryBudget) break;
+      ++tried;
       const auto blocker = impl_->overlapsAt(request, *shape, *local, candidate.placement.pose);
       if (!blocker) return candidate.placement;
       if (!blockedSnap) blockedSnap = PlacementBlocked{candidate.placement.pose, *blocker};
@@ -350,6 +502,17 @@ std::optional<Placement> PlacementSolver::solve(const PlacementRequest& request)
   }
   if (blockedSnap) return *blockedSnap;
   if (const auto blocker = impl_->overlapsAt(request, *shape, *local, request.freePose)) {
+    // Aimed at a piece's wall, the part held there sits inside it: bring it back along the
+    // ray until it stands clear, touching the face the pointer is on.
+    if (request.aim && request.aim->hitDepth) {
+      const Box box = shape->bounds.transformed(request.freePose);
+      const double span = bm::length(box.max - box.min) + 2;
+      for (double back = 1; back <= span; back += 1) {
+        Xform pose = request.freePose;
+        pose.t = pose.t - request.aim->dir * back;
+        if (!impl_->overlapsAt(request, *shape, *local, pose)) return PlacedFreely{pose};
+      }
+    }
     return PlacementBlocked{request.freePose, *blocker};
   }
   return PlacedFreely{request.freePose};
@@ -373,6 +536,24 @@ std::optional<PlacedOnConnector> PlacementSolver::fitNew(std::string_view part, 
     }
   }
   return std::nullopt;
+}
+
+std::optional<uint32_t> PlacementSolver::seatAt(std::string_view part, const Xform& pose, uint32_t target) {
+  if (target >= impl_->world.size() || impl_->model.library().isInline(part)) return std::nullopt;
+  const auto local = impl_->database.get(part, &impl_->model.library());
+  const auto& targets = impl_->connectors(target);
+  if (local->empty() || targets.empty()) return std::nullopt;
+  uint32_t links = 0;
+  for (const Connector& c : *local) {
+    const auto posed = bm::connect::transformed(c, pose);
+    for (const auto& site : targets)
+      if (compatible(posed, site) && bm::connect::mate(posed, site)) ++links;
+  }
+  if (links == 0) return std::nullopt;
+  const auto shape = impl_->shapes.get(impl_->model.mesh(std::string(part), impl_->parts));
+  if (!shape || shape->nodes.empty()) return std::nullopt;
+  if (impl_->blocker(part, *shape, *local, pose, {})) return std::nullopt;
+  return links;
 }
 
 std::vector<PlacedOnConnector> PlacementSolver::fits(uint32_t moving, uint32_t target) {

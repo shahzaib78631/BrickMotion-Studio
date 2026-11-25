@@ -29,6 +29,16 @@ struct PlacementBlocked {
 struct PlacedFromExample { bm::Xform pose; };
 using Placement = std::variant<PlacedFreely, PlacedOnConnector, PlacedFromExample, PlacementBlocked>;
 
+/// Where the pointer aims, for the viewport's placement: the camera ray, how deep it first
+/// meets a shown piece, and the point of the moving part the hand holds (in the part's own
+/// frame). With an aim, connectors are chosen by how near the ray they are, not by distance
+/// from `point`, and the held point's nearness to the ray ranks the seats.
+struct PlacementAim {
+  bm::Vec3 from, dir;  ///< `dir` is unit length
+  std::optional<double> hitDepth;
+  bm::Vec3 held;
+};
+
 /// The ray reaches `point` (from the surface under the pointer or the construction plane).
 /// The free pose follows that point. Within reach, a compatible free connector can take over.
 struct PlacementRequest {
@@ -46,6 +56,8 @@ struct PlacementRequest {
   bool useReference = false;
   bool checkCollision = true;
   std::optional<uint32_t> onlyTarget = {};
+  /// Set by the viewport; other callers seat near `point` within `reach`.
+  std::optional<PlacementAim> aim = {};
 };
 
 /// The focused model at one revision. Query the existing spatial index for local connectors and
@@ -70,6 +82,9 @@ class PlacementSolver {
   std::optional<Placement> solve(const PlacementRequest& request);
   std::vector<PlacedOnConnector> fits(uint32_t moving, uint32_t target);
   std::optional<PlacedOnConnector> fitNew(std::string_view part, uint32_t target);
+  /// How many of `target`'s connectors the part mates at exactly this pose: none when it mates
+  /// nothing there, overlaps a piece, or duplicates one already at that pose.
+  std::optional<uint32_t> seatAt(std::string_view part, const bm::Xform& pose, uint32_t target);
 
  private:
   struct Impl;

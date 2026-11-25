@@ -20,12 +20,21 @@ struct SnapshotRequest {
   var placementAt = NSPoint(x: 0.5, y: 0.5)
   var focus: [String] = []
   var expandAll = false
+  var collapseModelParts = false
+  var expandPartSteps = false
   var editStep: Int? = nil
   var inspector: InspectorTab? = nil
   var palette: String? = nil
+  /// A registered command to run before the capture, e.g. one that opens a sheet.
+  var command: String? = nil
   var animation: TimelineTab?
+  var timelineHeight: CGFloat?
+  var timelineZoom: Double?
   var orthographic = false
   var grid: Double?
+  /// After planning: Auto-direct the clock shown in a style, and show a camera key or move ("key:N", "move:N").
+  var autoDirect: String?
+  var camera: String?
 
   /// Reads `--snapshot out.png --open file [--size WxH] [--appearance light|dark] [--play-to s] [--report json] [--select n...] [--tool move|rotate]
   /// [--sidebar models|steps|parts] [--parts-query "query"] [--focus Name[/Name]] [--expand all] [--edit-step N] [--inspector selection|part|submodel]
@@ -57,12 +66,21 @@ struct SnapshotRequest {
     }
     if let f = value("--focus") { r.focus = f.split(separator: "/").map(String.init) }
     r.expandAll = value("--expand") == "all"
+    r.collapseModelParts = value("--model-parts") == "collapsed"
+    r.expandPartSteps = value("--model-parts") == "expanded"
     if let k = value("--edit-step") { r.editStep = Int(k) }
     if let i = value("--inspector") { r.inspector = InspectorTab(rawValue: i) }
     r.palette = value("--palette")
-    if let tab = value("--animate") { r.animation = TimelineTab.allCases.first { $0.rawValue.lowercased() == tab.lowercased() } }
+    r.command = value("--command")
+    if let tab = value("--animate")?.lowercased() {
+      r.animation = tab == "timeline" ? .timeline : TimelineTab.allCases.first { $0.rawValue.lowercased() == tab }
+    }
+    if let height = value("--timeline-height").flatMap(Double.init), height.isFinite, height > 0 { r.timelineHeight = height }
+    if let zoom = value("--timeline-zoom").flatMap(Double.init), zoom.isFinite, zoom > 1 { r.timelineZoom = zoom }
     r.orthographic = args.contains("--orthographic")
     if let grid = value("--grid") { r.grid = Double(grid) }
+    r.autoDirect = value("--auto-direct")
+    r.camera = value("--camera")
     if let t = value("--tool") { r.tool = t == "move" ? .move : t == "rotate" ? .rotate : t == "scale" ? .scale : .select }
     if let j = args.firstIndex(of: "--select") {
       r.select = args[(j + 1)...].prefix { UInt32($0) != nil }.compactMap { UInt32($0) }
@@ -106,6 +124,7 @@ enum Snapshot {
       var pieces = bmapp.PieceList()
       for p in request.select { pieces.push_back(p) }
       document.session.select(pieces, .Replace)
+      controller.model.refresh()
     }
     viewportView.tool = request.tool
     if let tab = request.sidebar { controller.model.sidebarTab = tab }
@@ -125,6 +144,8 @@ enum Snapshot {
       document.postChange()
       viewport.fitAll()
     }
+    if request.collapseModelParts { controller.model.modelPartsExpanded = false }
+    if request.expandPartSteps { controller.model.setPartsStepsExpanded(true) }
     if let tab = request.inspector {
       controller.model.refresh()
       controller.model.inspectorTab = tab
@@ -159,7 +180,46 @@ enum Snapshot {
       if let time = request.playTo { viewport.seek(time) }
       controller.model.animation.update()
     }
+    let clock: bmapp.CameraClock = controller.model.animation.tab == .timeline ? .Timeline : .Build
+    if let style = request.autoDirect {
+      let changed = document.session.autoDirectCamera(clock, viewport.cameraDirectorInput(), std.string(style), 50)
+      guard changed.refused.empty() else {
+        FileHandle.standardError.write("snapshot: \(String(changed.refused))\n".data(using: .utf8)!)
+        return 1
+      }
+      document.postChange()
+      controller.model.refresh()
+    }
+    if let pick = request.camera {
+      let parts = pick.split(separator: ":")
+      let keys = controller.model.cameraKeys(clock)
+      guard parts.count == 2, let n = Int(parts[1]), keys.indices.contains(n) else { return 1 }
+      let id = String(keys[n].id)
+      controller.model.showCamera(CameraSelection(clock: clock, item: parts[0] == "move" ? .move(id) : .key(id)))
+    }
+    if let height = request.timelineHeight {
+      RunLoop.main.run(until: Date().addingTimeInterval(0.025))
+      controller.resizeTimeline(to: height)
+      window.layoutIfNeeded()
+    }
+    if let zoom = request.timelineZoom {
+      RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+      let workspace = controller.model.animation
+      let duration = workspace.tab == .build ? workspace.buildDuration : workspace.duration
+      let navigation = workspace.navigation
+      navigation.zoomBy(zoom, playhead: workspace.time, duration: duration)
+      navigation.reveal(workspace.time, duration: duration, centred: true)
+      RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+    }
     viewportView.presentation.update()
+    if let id = request.command {
+      guard let command = Registry.command(id) else {
+        FileHandle.standardError.write("snapshot: no command \(id)\n".data(using: .utf8)!)
+        return 1
+      }
+      command.run(controller.model.context)
+      for _ in 0..<6 { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
+    }
 
     // Best: the window server's own picture of the window, glass and SwiftUI included. The window
     // is ordered in far off every screen, so nothing shows; the app captures only its own window.
@@ -208,7 +268,7 @@ enum Snapshot {
     }
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.current = context
-    if let cg = cgImage(picture) {
+    if let cg = picture.cgImage {
       // AppKit's frame view is flipped or not; the rect is in its own coordinates.
       let flipped = frameView.isFlipped
       let y = flipped ? frameView.bounds.height - vRect.maxY : vRect.minY
@@ -340,16 +400,5 @@ enum Snapshot {
     if let data = try? JSONSerialization.data(withJSONObject: rects, options: [.sortedKeys]) {
       try? data.write(to: URL(fileURLWithPath: path))
     }
-  }
-
-  private static func cgImage(_ p: bmapp.Picture) -> CGImage? {
-    let w = Int(p.width), h = Int(p.height)
-    guard w > 0, h > 0, p.rgba.size() == w * h * 4 else { return nil }
-    var bytes = [UInt8](repeating: 0, count: w * h * 4)
-    for i in 0..<bytes.count { bytes[i] = p.rgba[i] }
-    guard let provider = CGDataProvider(data: Data(bytes) as CFData) else { return nil }
-    return CGImage(width: w, height: h, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: w * 4,
-                   space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue),
-                   provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)
   }
 }

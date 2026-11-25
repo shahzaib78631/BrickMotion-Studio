@@ -3,14 +3,18 @@ module BMApp {
   header "bmapp/types.h"
   header "bmapp/session.h"
   header "bmapp/viewport.h"
+  header "bmapp/movie_export.h"
+  header "bmapp/snap_mix.h"
   header "bmapp/doctypes.h"
   header "bmapp/keys.h"
   header "bmapp/gizmo.h"
   header "bmapp/part_catalog.h"
   header "bmapp/part_preview.h"
   header "bmapp/model_import.h"
+  header "bmapp/inventory_import.h"
   header "bmapp/assembly_inspection.h"
   header "bmapp/motion_audit.h"
+  header "bmapp/flight_bake.h"
   requires cplusplus
   export *
 }

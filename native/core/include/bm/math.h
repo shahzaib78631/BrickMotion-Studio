@@ -94,8 +94,20 @@ struct Box {
   }
   /// The box around this box's eight corners after `xf`. An empty box stays empty.
   Box transformed(const Xform& xf) const {
+    if (empty()) return {};
+    // Each output axis is monotone in each input coordinate. Its extrema come from
+    // the corners selected by that row's signs, even for mirror, scale or shear.
+    const auto extreme = [](const double* row, Vec3 positive, Vec3 negative, double translation) {
+      return row[0] * (row[0] < 0 ? negative.x : positive.x) +
+             row[1] * (row[1] < 0 ? negative.y : positive.y) +
+             row[2] * (row[2] < 0 ? negative.z : positive.z) + translation;
+    };
+    const double* row = xf.r.m;
+    const Box bounds{{extreme(row, min, max, xf.t.x), extreme(row + 3, min, max, xf.t.y), extreme(row + 6, min, max, xf.t.z)},
+                     {extreme(row, max, min, xf.t.x), extreme(row + 3, max, min, xf.t.y), extreme(row + 6, max, min, xf.t.z)}};
+    if (std::isfinite(bounds.min.x) && std::isfinite(bounds.min.y) && std::isfinite(bounds.min.z) &&
+        std::isfinite(bounds.max.x) && std::isfinite(bounds.max.y) && std::isfinite(bounds.max.z)) return bounds;
     Box out;
-    if (empty()) return out;
     for (int i = 0; i < 8; i++) out.grow(xf.apply({i & 1 ? max.x : min.x, i & 2 ? max.y : min.y, i & 4 ? max.z : min.z}));
     return out;
   }

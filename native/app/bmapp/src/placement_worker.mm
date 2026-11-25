@@ -98,8 +98,18 @@ PlacementWorker::Result solve(PreparedModel& engine, const PlacementWorker::Requ
   const double reach = std::clamp(28 * halfHeight / view.y, 7.0, 20.0);
   const auto grip = input.grip < 0 ? std::nullopt : std::optional(static_cast<uint32_t>(input.grip));
   const std::span<const MovingPiece> moved = move ? std::span(move->pieces) : std::span<const MovingPiece>{};
+  // The hand holds a new part by its underside centre, a moved one where the pointer took it.
+  PlacementAim aim{ray.from, bm::normalized(ray.dir), std::nullopt, {}};
+  if (surface) aim.hitDepth = bm::dot(surface->point - ray.from, aim.dir);
+  if (move) {
+    const auto& original = revision->model.pieces()[input.anchor].world;
+    aim.held = original.inverse().apply(original.t - grabOffset);
+  } else {
+    const auto& local = mesh->bounds;
+    aim.held = {(local.min.x + local.max.x) * 0.5, local.max.y, (local.min.z + local.max.z) * 0.5};
+  }
   const auto placement = engine.solver->solve({input.part, pose, at, reach, grip, retained, moving, input.snap,
-                                              hidden, moved, input.anchor, input.reference, input.collision});
+                                              hidden, moved, input.anchor, input.reference, input.collision, {}, aim});
   if (!placement) {
     preview.reason = "Move the pointer onto the model or the floor.";
     return result;

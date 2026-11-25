@@ -3,6 +3,7 @@
 #include <map>
 #include <numbers>
 #include <set>
+#include <simd/simd.h>
 #include "session_impl.h"
 
 namespace bmapp {
@@ -25,7 +26,9 @@ KeyList decodeKeys(const Json& channelMap, const KeyScene& scene) {
   for (size_t channel = 0; channel < kKeyChannels.size(); ++channel) {
     const auto lane = channelMap.find(kKeyChannels[channel]);
     if (lane == channelMap.end() || !lane->is_array()) continue;
-    std::map<int, Keyframe> merged;
+    KeyList decoded;
+    decoded.reserve(lane->size());
+    bool ordered = true;
     for (const auto& entry : *lane) {
       const int frame = integer(entry, "frame", -1, scene.first, scene.last);
       if (frame < 0 || !entry.contains("value") || !entry["value"].is_number()) continue;
@@ -35,9 +38,18 @@ KeyList decodeKeys(const Json& channelMap, const KeyScene& scene) {
       const auto it = std::find(kKeyInterpolation.begin(), kKeyInterpolation.end(), ease);
       const auto interpolation = it == kKeyInterpolation.end() ? KeyInterpolation::Smooth :
           static_cast<KeyInterpolation>(it - kKeyInterpolation.begin());
-      merged[frame] = {static_cast<KeyChannel>(channel), frame, value, interpolation};
+      ordered = ordered && (decoded.empty() || frame > decoded.back().frame);
+      decoded.push_back({static_cast<KeyChannel>(channel), frame, value, interpolation});
     }
-    for (const auto& [frame, key] : merged) result.push_back(key);
+    if (ordered) {
+      result.insert(result.end(), decoded.begin(), decoded.end());
+    } else {
+      // Older projects can contain unsorted or duplicate frames. Keep the last value at each
+      // frame, matching the order in which the document authored it.
+      std::stable_sort(decoded.begin(), decoded.end(), [](const auto& a, const auto& b) { return a.frame < b.frame; });
+      for (size_t i = 0; i < decoded.size(); ++i)
+        if (i + 1 == decoded.size() || decoded[i].frame != decoded[i + 1].frame) result.push_back(decoded[i]);
+    }
   }
   return result;
 }
@@ -80,6 +92,29 @@ KeyScene readKeyScene(const Session::Impl& session) {
   return scene;
 }
 
+AnimationItemIds animationItemIds(const bm::doc::Source& source) {
+  AnimationItemIds out;
+  const auto add = [&](const bm::doc::Def& def) {
+    for (const auto& step : def.steps)
+      for (const auto& item : step.items)
+        if (auto id = text(item.extra, "id"); !id.empty()) out.emplace(item.id, std::move(id));
+  };
+  add(source.root);
+  for (const auto& [name, def] : source.submodels) add(def);
+  return out;
+}
+
+std::string qualifiedKeyTarget(const AnimationItemIds& ids, const std::vector<bm::doc::ItemId>& chain) {
+  std::string target;
+  for (const auto item : chain) {
+    const auto id = ids.find(item);
+    if (id == ids.end()) return {};
+    if (!target.empty()) target += "/";
+    target += id->second;
+  }
+  return target;
+}
+
 std::vector<KeyTrack> readKeyTracks(const Session::Impl& current) {
   std::vector<KeyTrack> result;
   if (!current.model) return result;
@@ -92,6 +127,9 @@ std::vector<KeyTrack> readKeyTracks(const Session::Impl& current) {
     for (const auto& item : step.items)
       if (auto id = text(item.extra, "id"); !id.empty()) named.emplace(std::move(id), item.id);
   std::unordered_map<std::string, uint32_t> flat;
+  const auto ids = animationItemIds(current.source);
+  for (uint32_t p = 0; p < current.model->pieces().size(); ++p)
+    if (auto id = qualifiedKeyTarget(ids, current.refs[p].chain); !id.empty()) flat.emplace(std::move(id), p);
   for (uint32_t p = 0; p < current.model->pieces().size(); ++p) flat.emplace(current.model->pieces()[p].id, p);
   const auto scene = readKeyScene(current);
   for (const auto& track : animation["tracks"]) {
@@ -116,6 +154,36 @@ std::vector<KeyTrack> readKeyTracks(const Session::Impl& current) {
     result.push_back({p, std::move(name), false, decodeKeys(track["channels"], scene), selected->second});
   }
   return result;
+}
+
+std::optional<KeyTrack> readKeyTrack(const Session::Impl& current, uint32_t piece, bool submodel) {
+  if (!current.model || piece >= current.refs.size() || current.refs[piece].chain.empty()) return std::nullopt;
+  const auto& animation = animationObject(current);
+  const auto tracks = animation.find("tracks");
+  if (tracks == animation.end() || !tracks->is_array()) return std::nullopt;
+  const auto scope = focusedDef(current);
+  const auto& chain = current.refs[piece].chain;
+  const auto ids = animationItemIds(current.source);
+  if (submodel && chain.size() == 1) return std::nullopt;
+  const auto qualified = submodel ? std::string{} : qualifiedKeyTarget(ids, chain);
+  const auto local = ids.find(chain.front());
+  const auto& part = current.model->pieces()[piece];
+  const Json* group = nullptr;
+  for (const auto& row : *tracks) {
+    if (text(row, "kind") != "object" || text(row, "model") != scope || !row.contains("channels")) continue;
+    const auto target = text(row, "target");
+    if (text(row, "source") == "baked-flight") {
+      if (!submodel && (target == part.id || (!qualified.empty() && target == qualified)))
+        return KeyTrack{piece, part.part, true, decodeKeys(row["channels"], readKeyScene(current)), {piece}};
+    } else if (!group && local != ids.end() && target == local->second) {
+      group = &row;
+    }
+  }
+  if (!group) return std::nullopt;
+  const auto members = current.piecesOf.find(chain.front());
+  if (members == current.piecesOf.end() || members->second.empty() || members->second.front() != piece) return std::nullopt;
+  const auto& name = chain.size() > 1 && !part.path.empty() ? part.path.front() : part.part;
+  return KeyTrack{piece, name, false, decodeKeys((*group)["channels"], readKeyScene(current)), members->second};
 }
 
 double sampleKeys(const KeyTrack& track, KeyChannel channel, double frame) {
@@ -182,7 +250,9 @@ std::vector<bmr::PiecePose> keyPoses(const KeyScene& scene, const std::vector<Ke
         }
         box.merge(partBox(geometry, piece).transformed(it->second.world));
       }
-      const bm::Vec3 pivot = box.empty() ? bm::Vec3{} : (box.min + box.max) * 0.5;
+      const auto pivot = box.empty()
+          ? (baked && track.object < model.pieces().size() ? model.pieces()[track.object].world.t : bm::Vec3{})
+          : (box.min + box.max) * 0.5;
       const auto delta = offset(track, sceneFrame, pivot);
       const bool invisible = sampleKeys(track, KeyChannel::Visibility, sceneFrame) < 0.5;
       for (uint32_t piece : track.members) {
@@ -200,14 +270,22 @@ std::vector<bmr::PiecePose> keyPoses(const KeyScene& scene, const std::vector<Ke
   return out;
 }
 
+bm::Vec3 keyPivot(const bmr::Scene& geometry, uint32_t piece, const bm::Xform& rest) {
+  const auto box = partBox(geometry, piece).transformed(rest);
+  return box.empty() ? rest.t : (box.min + box.max) * 0.5;
+}
+
 KeyList bakeFlightKeys(uint32_t piece, const KeyScene& scene, const bmr::Scene& geometry,
                        const bm::Model& model, const bm::plan::Timeline& timeline,
                        const std::vector<int>& owner, double buildFPS) {
-  if (piece >= owner.size() || owner[piece] < 0 || piece >= model.pieces().size() || buildFPS <= 0) return {};
-  const auto& rest = model.pieces()[piece].world;
-  const auto box = partBox(geometry, piece).transformed(rest);
-  const bm::Vec3 pivot = box.empty() ? rest.t : (box.min + box.max) * 0.5;
-  const size_t leaf = static_cast<size_t>(owner[piece]);
+  if (piece >= owner.size() || owner[piece] < 0 || piece >= model.pieces().size()) return {};
+  return bakeFlightKeys(static_cast<size_t>(owner[piece]), keyPivot(geometry, piece, model.pieces()[piece].world),
+                        scene, timeline, buildFPS);
+}
+
+KeyList bakeFlightKeys(size_t leaf, bm::Vec3 pivot, const KeyScene& scene,
+                       const bm::plan::Timeline& timeline, double buildFPS) {
+  if (leaf >= timeline.flights.size() || buildFPS <= 0) return {};
   const double rate = scene.fps / (buildFPS * scene.buildSpeed);
   const auto toFrame = [&](int build) { return scene.buildStart + static_cast<int>(std::ceil(build * rate - 1e-8)); };
   std::set<int> sample{scene.first, scene.last};
@@ -256,6 +334,73 @@ KeyList bakeFlightKeys(uint32_t piece, const KeyScene& scene, const bmr::Scene& 
       out.push_back({static_cast<KeyChannel>(i), at, values[i], i == 9 ? KeyInterpolation::Hold : KeyInterpolation::Linear});
   }
   return out;
+}
+
+FlightPath flightPathFromKeys(const KeyTrack& track, const bmr::Scene& geometry, const bm::Model& model) {
+  FlightPath path;
+  if (!track.baked || track.members.size() != 1 || track.object >= model.pieces().size()) return path;
+  std::set<int> moving, positioned;
+  for (const auto& key : track.keys) {
+    if (key.channel >= KeyChannel::ScaleX) continue;
+    moving.insert(key.frame);
+    if (key.channel <= KeyChannel::PositionZ) positioned.insert(key.frame);
+  }
+  if (moving.size() < 2) return path;
+  const auto& seat = model.pieces()[track.object].world;
+  const auto box = partBox(geometry, track.object).transformed(seat);
+  const bm::Vec3 pivot = box.empty() ? seat.t : (box.min + box.max) * 0.5;
+  // offset() keeps the pivot where its translation puts it, whatever it turns
+  const auto at = [&](int frame) {
+    const auto o = offset(track, frame, pivot);
+    const bm::Vec3 p = o.apply(pivot);
+    return FlightPathPoint{frame, {p.x, p.y, p.z}};
+  };
+  path.piece = track.object;
+  const int first = *moving.begin(), last = *moving.rbegin();
+  path.line.reserve(static_cast<size_t>(last - first + 1));
+  for (int frame = first; frame <= last; ++frame) path.line.push_back(at(frame));
+  for (int frame : positioned) path.keys.push_back(at(frame));
+  return path;
+}
+
+FlightPoseList flightRouteFromKeys(const KeyTrack& track, const bmr::Scene& geometry, const bm::Model& model) {
+  if (!track.baked || track.members.size() != 1 || track.object >= model.pieces().size()) return {};
+  const uint32_t piece = track.object;
+  std::set<int> frames;
+  for (const auto& key : track.keys)
+    if (key.channel < KeyChannel::ScaleX && sampleKeys(track, KeyChannel::Visibility, key.frame) >= 0.5)
+      frames.insert(key.frame);
+  if (frames.size() < 2) return {};
+  const int first = *frames.begin(), last = *frames.rbegin();
+  const auto& seat = model.pieces()[piece].world;
+  const auto back = seat.inverse();
+  const auto box = partBox(geometry, piece).transformed(seat);
+  const bm::Vec3 pivot = box.empty() ? seat.t : (box.min + box.max) * 0.5;
+  const int count = std::clamp(1 + (last - first) * 4, 2, 128);
+  FlightPoseList route;
+  route.reserve(count);
+  bool moves = false;
+  for (int i = 0; i < count; ++i) {
+    const double frame = std::lerp(static_cast<double>(first), static_cast<double>(last), i / static_cast<double>(count - 1));
+    for (auto channel : {KeyChannel::ScaleX, KeyChannel::ScaleY, KeyChannel::ScaleZ})
+      if (std::abs(sampleKeys(track, channel, frame) - 1) > 1e-6) return {};
+    const auto local = back * offset(track, frame, pivot) * seat;
+    const double* m = local.r.m;
+    const simd_double3x3 rotation{{simd_make_double3(m[0], m[3], m[6]), simd_make_double3(m[1], m[4], m[7]),
+                                    simd_make_double3(m[2], m[5], m[8])}};
+    auto q = simd_normalize(simd_quaternion(rotation)).vector;
+    if (!route.empty()) {
+      const auto& previous = route.back();
+      const double dot = previous.qx * q[0] + previous.qy * q[1] + previous.qz * q[2] + previous.qw * q[3];
+      if (dot < 0) q = -q;
+      moves = moves || std::abs(dot) < 1 - 1e-8 ||
+              bm::length(local.t - bm::Vec3{previous.position.x, previous.position.y, previous.position.z}) > 1e-6;
+    }
+    route.push_back({{local.t.x, local.t.y, local.t.z}, q[0], q[1], q[2], q[3]});
+  }
+  if (!moves) return {};
+  route.back() = {};
+  return route;
 }
 
 }  // namespace bmapp

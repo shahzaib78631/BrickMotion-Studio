@@ -9,12 +9,15 @@
 #include <mutex>
 #include <set>
 #include <sstream>
+#include <unordered_map>
+#include <nlohmann/json.hpp>
 
 namespace bmapp {
 namespace {
 
 std::string compact(std::string_view text, bool lowercase = false) {
   std::string out;
+  out.reserve(text.size());
   for (unsigned char c : text) {
     if (std::isspace(c)) {
       if (!out.empty() && out.back() != ' ') out += ' ';
@@ -31,6 +34,15 @@ struct CatalogEntry {
   std::string descriptionFolded;
   std::string searchable;
 };
+
+struct CatalogData {
+  std::vector<CatalogEntry> entries;
+  StringList categories;
+  std::unordered_map<std::string_view, size_t> byName;
+};
+
+constexpr const char* kCommonParts[] = {"3001.dat", "3003.dat", "3004.dat", "3005.dat", "3020.dat", "3022.dat",
+                                        "3023b.dat", "3024.dat", "3068b.dat", "6141.dat", "3700.dat", "2780.dat"};
 
 PartMatch readPart(const std::filesystem::path& path, std::string name) {
   std::ifstream file(path);
@@ -61,31 +73,104 @@ PartMatch readPart(const std::filesystem::path& path, std::string name) {
   return {std::move(name), std::move(description), std::move(category)};
 }
 
-std::shared_ptr<const std::vector<CatalogEntry>> catalog(const std::string& ldraw) {
+StringList computeTopCategories(const CatalogData& catalog) {
+  std::set<std::string> essential;
+  for (const auto name : kCommonParts)
+    if (const auto it = catalog.byName.find(name); it != catalog.byName.end())
+      essential.insert(catalog.entries[it->second].part.category);
+  std::map<std::string, size_t> counts;
+  for (const CatalogEntry& entry : catalog.entries) {
+    if (entry.part.category.empty() || entry.part.category == "FILE") continue;
+    counts[entry.part.category]++;
+  }
+  std::vector<std::pair<std::string, size_t>> ranked(counts.begin(), counts.end());
+  constexpr size_t kMaxCategories = 60;
+  const size_t keep = std::min(ranked.size(), kMaxCategories);
+  std::partial_sort(ranked.begin(), ranked.begin() + keep, ranked.end(), [&](const auto& a, const auto& b) {
+    const bool first = essential.contains(a.first), second = essential.contains(b.first);
+    if (first != second) return first;
+    return a.second != b.second ? a.second > b.second : a.first < b.first;
+  });
+  StringList out;
+  out.reserve(keep);
+  for (size_t i = 0; i < keep; i++) out.push_back(std::move(ranked[i].first));
+  std::sort(out.begin(), out.end());
+  return out;
+}
+
+bool loadFromWebCatalogJson(const std::string& ldraw, std::vector<CatalogEntry>& entries) {
+  const auto path = std::filesystem::path(ldraw).parent_path() / "data" / "catalog.json";
+  std::ifstream file(path);
+  if (!file) return false;
+  try {
+    const auto json = nlohmann::json::parse(file);
+    if (!json.is_array() || json.empty()) return false;
+    entries.reserve(json.size());
+    for (const auto& item : json) {
+      if (!item.is_object()) continue;
+      const auto idIt = item.find("id");
+      const auto nameIt = item.find("name");
+      const auto catIt = item.find("category");
+      if (idIt == item.end() || nameIt == item.end() || catIt == item.end()) continue;
+      if (!idIt->is_string() || !nameIt->is_string() || !catIt->is_string()) continue;
+      std::string id = idIt->get<std::string>();
+      if (id.empty()) continue;
+      std::transform(id.begin(), id.end(), id.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+      if (!id.ends_with(".dat")) id += ".dat";
+      std::string description = compact(nameIt->get<std::string>());
+      if (description.empty()) continue;
+      std::string category = catIt->get<std::string>();
+      std::string folded = compact(description, true);
+      std::string searchable = id + " " + folded;
+      entries.push_back({{std::move(id), std::move(description), std::move(category)}, std::move(folded), std::move(searchable)});
+    }
+    return !entries.empty();
+  } catch (...) {
+    entries.clear();
+    return false;
+  }
+}
+
+std::shared_ptr<const CatalogData> catalog(const std::string& ldraw) {
   static std::mutex mutex;
-  static std::map<std::string, std::shared_ptr<const std::vector<CatalogEntry>>> catalogs;
-  auto entries = std::make_shared<std::vector<CatalogEntry>>();
-  if (ldraw.empty()) return entries;
+  static std::map<std::string, std::shared_ptr<const CatalogData>> catalogs;
+  auto data = std::make_shared<CatalogData>();
+  if (ldraw.empty()) return data;
   {
     std::lock_guard lock(mutex);
     if (const auto it = catalogs.find(ldraw); it != catalogs.end()) return it->second;
   }
-  std::error_code ec;
-  const auto directory = std::filesystem::path(ldraw) / "parts";
-  for (auto it = std::filesystem::directory_iterator(directory, ec); !ec && it != std::filesystem::directory_iterator{}; it.increment(ec)) {
-    std::string name = it->path().filename().string();
-    std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    if (name.size() <= 4 || !name.ends_with(".dat")) continue;
-    auto part = readPart(it->path(), std::move(name));
-    if (part.name.empty()) continue;
-    const std::string folded = compact(part.description, true);
-    std::string searchable = part.name + " " + folded;
-    entries->push_back({std::move(part), folded, std::move(searchable)});
+  // Fast path: load the prebuilt web catalog JSON (single file read, ~15 ms) instead of opening
+  // 30,000+ individual .dat files on disk.
+  if (!loadFromWebCatalogJson(ldraw, data->entries)) {
+    std::error_code ec;
+    const auto directory = std::filesystem::path(ldraw) / "parts";
+    for (auto it = std::filesystem::directory_iterator(directory, ec); !ec && it != std::filesystem::directory_iterator{}; it.increment(ec)) {
+      std::string name = it->path().filename().string();
+      std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+      if (name.size() <= 4 || !name.ends_with(".dat")) continue;
+      auto part = readPart(it->path(), std::move(name));
+      if (part.name.empty()) continue;
+      const std::string folded = compact(part.description, true);
+      std::string searchable = part.name + " " + folded;
+      data->entries.push_back({std::move(part), folded, std::move(searchable)});
+    }
+    if (ec) return data;
   }
-  if (ec) return entries;
-  std::sort(entries->begin(), entries->end(), [](const auto& a, const auto& b) { return a.part.name < b.part.name; });
+  std::sort(data->entries.begin(), data->entries.end(), [](const auto& a, const auto& b) { return a.part.name < b.part.name; });
+  data->byName.reserve(data->entries.size());
+  for (size_t i = 0; i < data->entries.size(); i++) data->byName.emplace(data->entries[i].part.name, i);
+  data->categories = computeTopCategories(*data);
   std::lock_guard lock(mutex);
-  return catalogs.try_emplace(ldraw, entries).first->second;
+  return catalogs.try_emplace(ldraw, data).first->second;
+}
+
+PartMatch resolveDecoratedIfNeeded(const std::string& ldraw, PartMatch part) {
+  if (part.category == "FILE" || part.description.starts_with("FILE ")) {
+    auto resolved = readPart(std::filesystem::path(ldraw) / "parts" / part.name, part.name);
+    if (!resolved.name.empty()) return resolved;
+  }
+  return part;
 }
 
 }  // namespace
@@ -97,13 +182,13 @@ std::vector<PartMatch> libraryParts(const std::string& ldraw, const std::string&
   std::vector<std::string> words;
   std::istringstream tokens(q);
   for (std::string word; tokens >> word;) words.push_back(word);
-  const auto entries = catalog(ldraw);
+  const auto data = catalog(ldraw);
   struct Hit {
     int rank;
     const CatalogEntry* entry;
   };
   std::vector<Hit> hits;
-  for (const CatalogEntry& entry : *entries) {
+  for (const CatalogEntry& entry : data->entries) {
     if (!category.empty() && category != entry.part.category) continue;
     if (!std::all_of(words.begin(), words.end(), [&](const auto& word) { return entry.searchable.find(word) != std::string::npos; })) continue;
     const std::string_view stem(entry.part.name.data(), entry.part.name.size() - 4);
@@ -123,25 +208,21 @@ std::vector<PartMatch> libraryParts(const std::string& ldraw, const std::string&
   });
   std::vector<PartMatch> out;
   out.reserve(count);
-  for (size_t i = 0; i < count; i++) out.push_back(hits[i].entry->part);
+  for (size_t i = 0; i < count; i++) out.push_back(resolveDecoratedIfNeeded(ldraw, hits[i].entry->part));
   return out;
 }
 
 StringList partCategories(const std::string& ldraw) {
-  const auto entries = catalog(ldraw);
-  std::set<std::string> names;
-  for (const CatalogEntry& entry : *entries) names.insert(entry.part.category);
-  return {names.begin(), names.end()};
+  return catalog(ldraw)->categories;
 }
 
 std::vector<PartMatch> commonParts(const std::string& ldraw) {
   std::vector<PartMatch> out;
   if (ldraw.empty()) return out;
-  const auto directory = std::filesystem::path(ldraw) / "parts";
-  for (const char* name : {"3001.dat", "3003.dat", "3004.dat", "3005.dat", "3020.dat", "3022.dat",
-                           "3023b.dat", "3024.dat", "3068b.dat", "6141.dat", "3700.dat", "2780.dat"}) {
-    auto part = readPart(directory / name, name);
-    if (!part.name.empty()) out.push_back(std::move(part));
+  const auto data = catalog(ldraw);
+  for (const char* name : kCommonParts) {
+    if (const auto it = data->byName.find(name); it != data->byName.end())
+      out.push_back(data->entries[it->second].part);
   }
   return out;
 }

@@ -70,12 +70,20 @@ void matchesFlatten(const bmapp::Session& s) {
 }  // namespace
 
 TEST_CASE("every command undoes exactly", "[bmapp][commands]") {
-  for (int edit = 0; edit <= static_cast<int>(bmapp::Edit::Keyframes); edit++) {
+  for (int edit = 0; edit <= static_cast<int>(bmapp::Edit::WaitingSpot); edit++) {
     INFO("edit " << edit);
     bmapp::Session s;
     open(s, tower());
     if (static_cast<bmapp::Edit>(edit) == bmapp::Edit::DeleteSubmodel) s.newSubmodel("Spare");  // one that is not used
-    const std::string before = planText(s);
+    const auto text = [&] {
+      const auto kind = static_cast<bmapp::Edit>(edit);
+      if (kind != bmapp::Edit::Staging && kind != bmapp::Edit::SnapSound && kind != bmapp::Edit::Look &&
+          kind != bmapp::Edit::BuildSettings && kind != bmapp::Edit::CameraTrack && kind != bmapp::Edit::WaitingSpot) return planText(s);
+      auto project = nlohmann::ordered_json::parse(s.projectBytes());
+      project.erase("savedAt");
+      return project.dump();
+    };
+    const std::string before = text();
     const uint32_t inSub = firstInSubmodel(s);
     switch (static_cast<bmapp::Edit>(edit)) {
       case bmapp::Edit::Move: s.move({0, inSub}, {30, -8, 20}, false); break;
@@ -111,16 +119,38 @@ TEST_CASE("every command undoes exactly", "[bmapp][commands]") {
       case bmapp::Edit::InsertionDirection: s.setInsertionDirection({0}, {1, 0, 0}); break;
       case bmapp::Edit::Scale: s.scale({0}, {1.2, 1, 1}, {}, {}, false); break;
       case bmapp::Edit::Keyframes: s.setKeys(0, {{bmapp::KeyChannel::PositionX, 5, 1}}, false); break;
+      case bmapp::Edit::Staging: s.setStagingSettings({"gallery", "part", "front", "nearest", 1}); break;
+      case bmapp::Edit::SceneCamera: s.saveSceneCamera({"camera", "Wide", {0, -80, -240}, {}}); break;
+      case bmapp::Edit::SnapSound: s.setSnapMix(bmapp::snapMixPreset("product")); break;
+      case bmapp::Edit::Look: {
+        auto look = s.renderLook();
+        look.scene = "night", look.shading = bmapp::Shading::Studio, look.edges = false;
+        s.setRenderLook(look);
+        break;
+      }
+      case bmapp::Edit::WaitingSpot: s.shiftWaitingPart(inSub, {40, 0, -20}); break;
+      case bmapp::Edit::CameraTrack: {
+        bmapp::SceneCamera view;
+        view.position = {0, -80, -240};
+        s.addCameraKey(bmapp::CameraClock::Build, 1, view, 30, 10);
+        break;
+      }
+      case bmapp::Edit::BuildSettings: {
+        auto build = s.buildSettings();
+        build.order = bmapp::BuildOrder::BottomUp, build.piecesPerSecond = 4;
+        s.setBuildSettings(build);
+        break;
+      }
     }
-    const std::string after = planText(s);
+    const std::string after = text();
     REQUIRE(after != before);
     REQUIRE(s.canUndo());
     s.undo();
-    CHECK(planText(s) == before);
+    CHECK(text() == before);
     matchesFlatten(s);
     REQUIRE(s.canRedo());
     s.redo();
-    CHECK(planText(s) == after);
+    CHECK(text() == after);
     matchesFlatten(s);
   }
 }
@@ -316,4 +346,76 @@ TEST_CASE("an edit during planning cancels it", "[bmapp][commands][viewport]") {
   }
   REQUIRE(view.planState() == bmapp::PlanState::Ready);
   CHECK(view.plannedVersion() == s.version());
+}
+
+TEST_CASE("scene cameras round trip in project world coordinates and keep other scene settings", "[bmapp][commands]") {
+  bmapp::Session s;
+  open(s, tower());
+  const auto original = nlohmann::ordered_json::parse(s.projectBytes());
+  auto project = original;
+  project["plan"]["sceneSetup"] = {
+      {"lights", nlohmann::ordered_json::array({{{"id", "fill"}, {"kind", "light"}}})},
+      {"exposure", 1.5}, {"region", {{"x", 0.25}}}};
+  REQUIRE(s.openBytes(project.dump(), "fixture.brickmotion").ok);
+  bmapp::SceneCamera shot;
+  shot.id = "wide";
+  shot.name = "Wide Shot";
+  shot.position = {120, -80, -200};
+  shot.target = {-20, -24, 0};
+  shot.fieldOfView = 48;
+  shot.orthographic = true;
+  const auto inputs = s.impl().planInputs;
+  REQUIRE(s.saveSceneCamera(shot).refused.empty());
+  REQUIRE(s.sceneCameras().cameras.size() == 1);
+  CHECK(s.sceneCameras().activeId == shot.id);
+  CHECK(s.impl().planInputs == inputs);
+  const auto stored = nlohmann::ordered_json::parse(s.projectBytes())["plan"]["sceneSetup"];
+  CHECK(stored["cameras"][0]["position"] == nlohmann::ordered_json::array({6, 4, 10}));
+  CHECK(stored["lights"] == project["plan"]["sceneSetup"]["lights"]);
+  CHECK(stored["region"] == project["plan"]["sceneSetup"]["region"]);
+  CHECK(stored["exposure"] == 1.5);
+  bmapp::Session reopened;
+  REQUIRE(reopened.openBytes(s.projectBytes(), "fixture.brickmotion").ok);
+  REQUIRE(reopened.sceneCameras().cameras.size() == 1);
+  const auto recalled = reopened.sceneCameras().cameras.front();
+  CHECK(recalled.position.y == -80);
+  CHECK(recalled.target.y == -24);
+  CHECK(recalled.fieldOfView == 48);
+  CHECK(recalled.orthographic);
+  s.activateSceneCamera("");
+  CHECK_FALSE(s.sceneCameras().useForVideo);
+  s.removeSceneCamera("wide");
+  CHECK(s.sceneCameras().cameras.empty());
+  CHECK(s.sceneCameras().activeId.empty());
+  s.undo();
+  CHECK(s.sceneCameras().cameras.size() == 1);
+  s.undo();
+  CHECK(s.sceneCameras().useForVideo);
+  s.undo();
+  CHECK(nlohmann::ordered_json::parse(s.projectBytes())["plan"]["sceneSetup"] == project["plan"]["sceneSetup"]);
+}
+
+TEST_CASE("recalling a camera restores its pose and projection", "[bmapp][viewport]") {
+  bmapp::Session s;
+  open(s, tower());
+  bmapp::Viewport view(s);
+  if (!view.ok()) SKIP("no Metal device");
+  view.resize(320, 240, 1);
+  view.view(bmapp::ViewPreset::Right);
+  view.zoom(1.25);
+  view.setOrthographic(true);
+  const auto before = view.camera();
+  auto saved = view.captureSceneCamera();
+  saved.id = "detail";
+  saved.name = "Detail";
+  REQUIRE(s.saveSceneCamera(saved).refused.empty());
+  view.view(bmapp::ViewPreset::Back);
+  view.setOrthographic(false);
+  REQUIRE(view.recallSceneCamera(saved.id));
+  const auto after = view.camera();
+  CHECK(std::abs(after.yaw - before.yaw) < 1e-9);
+  CHECK(std::abs(after.pitch - before.pitch) < 1e-9);
+  CHECK(std::abs(after.distance - before.distance) < 1e-9);
+  CHECK(std::abs(after.verticalFOV - before.verticalFOV) < 1e-9);
+  CHECK(after.orthographic);
 }

@@ -17,13 +17,12 @@ struct EditorSettingsView: View {
       Tab("Viewport", systemImage: "cube") {
         Form {
           Section {
-            Toggle("Part edges", isOn: $preferences.edges)
-            Toggle("Floor", isOn: $preferences.floor)
             Toggle("Floating selection actions", isOn: $preferences.selectionBar)
           }
           Section {
-            Toggle("Shadows", isOn: $preferences.shadows)
-            Toggle("Ambient occlusion", isOn: $preferences.ambientOcclusion)
+            Toggle("Show the project’s scene backdrop", isOn: $preferences.sceneBackdrop)
+          } footer: {
+            Text("Shading, edges, shadows and the floor belong to each project: choose them in View → Look. Exports always use the project’s scene.")
           }
         }
         .formStyle(.grouped)
@@ -35,10 +34,15 @@ struct EditorSettingsView: View {
           } footer: {
             Text("Planning runs in the background once you’ve previewed a build.")
           }
+          Section {
+            Toggle("Play snap sounds with the build", isOn: $preferences.playSnapSounds)
+          } footer: {
+            Text("Uses the project’s mix from Step → Snap Sound, when it is switched on there.")
+          }
         }
         .formStyle(.grouped)
       }
     }
-    .frame(width: 490, height: 290)
+    .frame(width: 490, height: 340)
   }
 }

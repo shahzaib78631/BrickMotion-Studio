@@ -28,6 +28,10 @@ def patch(rgb: np.ndarray) -> np.ndarray:
     if bg.max() >= DARK_PAGE:
         fg |= rgb.max(-1) < INK
     fg = fill_holes(cv2.morphologyEx(fg.astype(np.uint8), cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8)).astype(bool))
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(fg.astype(np.uint8), connectivity=8)
+    if count > 1:
+        big = [i for i in range(1, count) if stats[i][4] >= 0.08 * stats[1:, 4].max()]
+        fg = np.isin(labels, big)
     out = np.full((PATCH, PATCH, 3), 255, np.uint8)
     if not fg.any():
         return out

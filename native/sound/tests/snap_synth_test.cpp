@@ -188,3 +188,30 @@ TEST_CASE("the loudest sample is the peak asked for", "[sound][synth]") {
   }
   REQUIRE(std::fabs(top - 0.89) < 1e-6);
 }
+
+TEST_CASE("a 1x1 is heard: the click of being stopped short, when nothing it meets rings in hearing", "[sound][synth]") {
+  // A 1x1 brick onto a lone 1x1 brick: every plate and beam mode of both is above 20 kHz.
+  SnapEvent small = brick(30);
+  small.unit = box(20, 24, 20, -24), small.touching = box(20, 24, 20), small.mates = 1;
+  small.built = small.touching;
+  small.builtPieces = 0;
+  REQUIRE(ringHz(small.unit).empty());
+  size_t lead = 0;
+  const std::vector<float> x = synthesise(small, 30, SoundOptions{}, lead);
+  // A click as long as the Hertz contact, broadband: energy across the kHz, nothing after it.
+  const double contact = hertzSeconds(shellMass(small.unit), kPressSpeed);
+  INFO("contact " << contact * 1e6 << " us, peak " << peakOf(x));
+  REQUIRE(contact > 50e-6);
+  REQUIRE(contact < 1e-3);
+  REQUIRE(peakOf(x, lead, lead + static_cast<size_t>(std::ceil(contact * 48000)) + 2) > 0);
+  CHECK(peakOf(x, lead + static_cast<size_t>(std::ceil(contact * 48000)) + 2) == 0);
+  CHECK(peakOf(x, 0, lead) == 0);
+  const double low = magnitude(x, lead, x.size(), 1000, 48000), high = magnitude(x, lead, x.size(), 4000, 48000);
+  CHECK(low > 0);
+  CHECK(high > low);  // da/dt: rising with frequency below 1 / contact
+  // Smaller and lighter, it is quieter than a 2x4 landing, yet clearly there (within 40 dB).
+  const std::vector<float> b = synthesise(brick(30), 30, SoundOptions{}, lead);
+  INFO("2x4 peak " << peakOf(b));
+  CHECK(peakOf(x) < peakOf(b));
+  CHECK(peakOf(x) > 0.01 * peakOf(b));
+}

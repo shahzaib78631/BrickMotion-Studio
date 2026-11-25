@@ -1,6 +1,8 @@
 #pragma once
 // From a plan to an animation: where each unit waits, how it flies in, when, and a camera.
 #include <filesystem>
+#include <functional>
+#include <memory>
 #include <nlohmann/json.hpp>
 #include "bm/connect/connectors.h"
 #include "bm/connect/graph.h"
@@ -108,6 +110,14 @@ struct Flight {
   int fallbackAt = 0;     ///< why: 1 no join with clear air above it, 2 no clear way across
   bool exitsBelow = false;  ///< the plan's way out ends going down: it goes in from below
   bool direct = false;      ///< carried straight to its way in, turning on the way, without lifting
+  /// The staging area turned about the model (the web's stagingTurns): degrees about the
+  /// vertical through `swingAbout`. It waits swung, and the swing eases out by the start of the
+  /// leg into the seat, so it lands as planned. Applied after planning; poseAt plays it.
+  double swing = 0;
+  Vec3 swingAbout;
+  /// Its waiting spot dragged across the floor (the web's floorShift), LDU, after the swing. It
+  /// eases out as the swing does, so the piece still lands as planned. Applied after planning.
+  Vec3 shift;
 
   /// The Legacy planner's flight, exactly as the web's Standard planner plays it
   /// (src/anim/timeline.ts flightPose): it leaves `staging`, lifts to `skyY`, crosses to `to`
@@ -146,11 +156,30 @@ struct Timeline {
 /// anything else, or anything it does not say.
 Style styleOf(const std::filesystem::path& project);
 
+class FlightCheckCache {
+ public:
+  FlightCheckCache();
+  ~FlightCheckCache();
+  FlightCheckCache(const FlightCheckCache&) = delete;
+  FlightCheckCache& operator=(const FlightCheckCache&) = delete;
+
+  /// Reuse a checked set of samples with exactly the same geometry and obstacle poses.
+  /// A cache belongs to one serialized planning workspace and its shape cache.
+  bool validate(std::vector<uint64_t> input, const std::function<bool()>& check, const CancelToken* cancel = nullptr);
+  size_t hits() const;
+
+ private:
+  struct State;
+  std::unique_ptr<State> state_;
+};
+
 /// `connectors` and `graph` are the LDCad connector data the Legacy planner needs (the web reads
 /// the same data off its Assembly). Given them, `style.planner == Planner::Legacy` builds the web's
 /// own animation; without them, the Legacy planner falls back to the native one.
 Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& plan, const Style& style = {}, Vec3 down = {0, 1, 0},
-                       connect::ConnectorDb* connectors = nullptr, connect::Graph* graph = nullptr);
+                       connect::ConnectorDb* connectors = nullptr, connect::Graph* graph = nullptr,
+                       collide::ShapeCache* sharedShapes = nullptr, const CancelToken* cancel = nullptr,
+                       FlightCheckCache* previousChecks = nullptr, collide::TravelCache* sharedTravel = nullptr);
 
 /// The unit's motion from its seat at a frame: staging before its flight, the seat after it.
 Xform poseAt(const Flight& flight, int frame);

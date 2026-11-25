@@ -39,7 +39,8 @@ std::string describe(const bm::LoadReport& r) {
 
 @implementation AppDelegate {
   NSString* _path;
-  BOOL _play, _raytracedGlass, _correct;
+  BOOL _play, _raytracedGlass, _correct, _cleanGrown;
+  bm::plan::Order _order;
   bm::plan::FlightShape _flight;
   bm::plan::Planner _planner;
   std::unique_ptr<bmview::Session> _session;
@@ -48,9 +49,9 @@ std::string describe(const bm::LoadReport& r) {
   dispatch_group_t _planning;
 }
 
-- (instancetype)initWithFile:(NSString*)path play:(BOOL)play raytracedGlass:(BOOL)raytracedGlass correct:(BOOL)correct flight:(bm::plan::FlightShape)flight planner:(bm::plan::Planner)planner {
+- (instancetype)initWithFile:(NSString*)path play:(BOOL)play raytracedGlass:(BOOL)raytracedGlass correct:(BOOL)correct cleanGrown:(BOOL)cleanGrown order:(bm::plan::Order)order flight:(bm::plan::FlightShape)flight planner:(bm::plan::Planner)planner {
   self = [super init];
-  if (self) _path = path, _play = play, _raytracedGlass = raytracedGlass, _correct = correct, _flight = flight, _planner = planner, _planning = dispatch_group_create();
+  if (self) _path = path, _play = play, _raytracedGlass = raytracedGlass, _correct = correct, _cleanGrown = cleanGrown, _order = order, _flight = flight, _planner = planner, _planning = dispatch_group_create();
   return self;
 }
 
@@ -96,7 +97,8 @@ std::string describe(const bm::LoadReport& r) {
   // The plan is made while the model is already on screen.
   bmview::Session* session = _session.get();
   __weak AppDelegate* weakSelf = self;
-  const BOOL play = _play, correct = _correct;
+  const BOOL play = _play, correct = _correct, cleanGrown = _cleanGrown;
+  const bm::plan::Order order = _order;
   dispatch_group_async(_planning, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
     std::optional<bmtools::Planned> planned;
     // --correct: planned on a copy, which takes the place of the model shown once planned when
@@ -107,6 +109,8 @@ std::string describe(const bm::LoadReport& r) {
       bm::plan::Options options;
       options.cancel = &session->cancel;
       options.correctPlacements = correct;
+      options.cleanGrownUnits = cleanGrown;
+      options.order = order;
       if (correct) corrected = std::make_shared<bm::Model>(*session->model);
       planned = bmtools::planModel(correct ? *corrected : *session->model, *session->library, *session->full, session->ldraw, options, [&] { bm::plan::Style style = bm::plan::styleOf(session->file); style.shape = session->flight, style.planner = session->planner; return style; }());
       if (correct) bmtools::reportCorrections("bmview", *corrected, planned->corrections);

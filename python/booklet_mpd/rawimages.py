@@ -119,15 +119,50 @@ def subbuild_images(page, box: pymupdf.Rect | None = None) -> list[dict]:
         numbers = [(int(s["text"].strip()), pymupdf.Rect(s["bbox"])) for s in spans
                    if s["text"].strip().isdigit() and SUBSTEP[0] <= s["size"] <= SUBSTEP[1] and own(pymupdf.Rect(s["bbox"]))
                    and not any(abs(pymupdf.Rect(s["bbox"]).x0 - c.x0) < 2 and abs(pymupdf.Rect(s["bbox"]).y0 - c.y0) < 2 for c in count_boxes)]
+        stages = []
         if numbers:
+            # Pair every unique mini-step number (1, 2, ..., K) 1-to-1 with its nearest substantial image
+            # right-of / below the number (preserving progressive build stages inside multi-step panels!)
+            by_n: dict[int, pymupdf.Rect] = {}
+            for n_val, n_rect in numbers:
+                by_n.setdefault(n_val, n_rect)
+            big_all = max(r.get_area() for r, _i in inside)
+            subst = [(idx_i, r, i) for idx_i, (r, i) in enumerate(inside) if r.get_area() >= 0.12 * big_all]
+            # Greedy 1-to-1 minimum-distance pairing of (step_num, substantial_image)
+            pairs_cand = []
+            for n_val, nr in by_n.items():
+                for idx_i, r, i in subst:
+                    if r.x1 >= nr.x0 - 2 and r.y1 >= nr.y0 - 2 and r.x0 >= nr.x0 - 12:
+                        d2 = (r.x0 - nr.x0) ** 2 + (r.y0 - nr.y0) ** 2
+                        pairs_cand.append((d2, n_val, idx_i, r, i))
+            pairs_cand.sort(key=lambda x: x[0])
+            used_n, used_i = set(), set()
+            matched_stages: dict[int, dict] = {}
+            for _d2, n_val, idx_i, _r, img_info in pairs_cand:
+                if n_val in used_n or idx_i in used_i:
+                    continue
+                used_n.add(n_val)
+                used_i.add(idx_i)
+                matched_stages[n_val] = img_info
+            for n_val in sorted(matched_stages):
+                st_img = matched_stages[n_val]
+                st_rgb = _rgb_image(page, st_img["xref"])
+                stages.append({
+                    "step": n_val,
+                    "rgb": st_rgb,
+                    "pts_per_px": (st_img["bbox"][2] - st_img["bbox"][0]) / st_rgb.shape[1],
+                })
             # each mini-step's picture lies right of / below its number: the last number's nearest large picture
             last_n, last_r = max(numbers, key=lambda x: x[0])
-            def after(r):
-                return r.x1 >= last_r.x0 - 2 and r.y1 >= last_r.y0 - 2
-            pool = [(r, i) for r, i in inside if after(r)] or inside
-            big = max(r.get_area() for r, _i in pool)
-            pool = [(r, i) for r, i in pool if r.get_area() >= 0.25 * big]
-            best = min(pool, key=lambda x: (x[0].x0 - last_r.x0) ** 2 + (x[0].y0 - last_r.y0) ** 2)[1]
+            if last_n in matched_stages:
+                best = matched_stages[last_n]
+            else:
+                def after(r):
+                    return r.x1 >= last_r.x0 - 2 and r.y1 >= last_r.y0 - 2
+                pool = [(r, i) for r, i in inside if after(r)] or inside
+                big = max(r.get_area() for r, _i in pool)
+                pool = [(r, i) for r, i in pool if r.get_area() >= 0.25 * big]
+                best = min(pool, key=lambda x: (x[0].x0 - last_r.x0) ** 2 + (x[0].y0 - last_r.y0) ** 2)[1]
         else:
             best = max(inside, key=lambda x: x[0].get_area())[1]
         count = 1
@@ -138,5 +173,6 @@ def subbuild_images(page, box: pymupdf.Rect | None = None) -> list[dict]:
             count = int(s0["text"].strip()[:-1])
         rgb = _rgb_image(page, best["xref"])
         out.append({"rgb": rgb, "pts_per_px": (best["bbox"][2] - best["bbox"][0]) / rgb.shape[1], "count": count,
-                    "panel": [round(v, 2) for v in panel], "substeps": len({n for n, _r in numbers})})
+                    "panel": [round(v, 2) for v in panel], "substeps": len({n for n, _r in numbers}),
+                    "stages": stages})
     return out

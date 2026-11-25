@@ -15,6 +15,6 @@ struct IncrementalPlan {
 std::optional<IncrementalPlan> replanMove(const bm::Model& before, const bm::Model& after,
     uint32_t piece, const bmtools::Planned& previous, bm::ldraw::PartCache& parts,
     bmtools::ConnectorSources& sources, bm::collide::ShapeCache& shapes,
-    const bm::plan::Style& style, const bm::plan::Options& options);
+    const bm::plan::Style& style, const bm::plan::Options& options, bm::plan::FlightCheckCache& checks);
 
 }  // namespace bmapp

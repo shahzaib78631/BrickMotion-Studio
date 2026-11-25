@@ -1,8 +1,12 @@
 // One frame: which instances, at which detail, in which order, into which targets.
 #import "metal/impl.h"
+#import "metal/path_impl.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <sstream>
+#include <string>
 #include "bmr/cull.h"
 #include "bmr/material.h"
 #include "bmr/tolerances.h"
@@ -14,13 +18,19 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   id<MTLTexture> target = drawable ? drawable.texture : final;
   if (!target || width < 1 || height < 1 || !colorMs) return stats;
   if (drawable && (static_cast<int>(target.width) != width || static_cast<int>(target.height) != height)) return stats;  // the layer has not caught up with a resize
+  if (options.pathTraced && camera.orthoHalfHeight <= 0) {
+    const FrameStats pt = drawPathTraced(camera, options, drawable);
+    if (pt.submitted) return pt;
+  }
 
   // Which instances, at which detail: what the eye sees (opaque groups first, as the scene
   // orders them, then transparent ones), and what the maps are drawn from (below).
   const bool forced = options.forceDetail >= 0 && options.forceDetail <= 2;
-  const std::vector<Visible> inView = cull(scene, parts, camera, height, options.forceDetail, options.cull);
-  std::vector<uint32_t> list;
-  std::vector<Batch> seen;
+  cullInto(inView, scene, parts, camera, height, options.forceDetail, options.cull, options.edges);
+  auto& list = nextList;
+  auto& seen = nextSeen;
+  list.clear();
+  seen.clear();
   auto add = [&](std::vector<Batch>& into, uint32_t g, Detail d, const std::vector<uint32_t>& instances, bool top = false) {
     const Group& group = scene.groups[g];
     for (int mirrored = 0; mirrored < 2; mirrored++) {
@@ -46,7 +56,11 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     const Group& g = scene.groups[batch.group];
     return g.material.transparent() && !g.placeholder;
   });
-  if (glassInView && options.refractiveGlass) prepareGlass();
+  const bool needsBlend = glassInView || !preview.empty() || std::any_of(seen.begin(), seen.end(), [&](const Batch& batch) {
+    return scene.groups[batch.group].placeholder;
+  });
+  const bool refract = glassInView && options.refractiveGlass && camera.orthoHalfHeight <= 0;
+  if (refract) prepareGlass();
 
   // What casts, into the key light's depth map and the height map over the model: every opaque
   // piece shown, in view or not (one out of view can shadow one in it), at low detail without
@@ -72,8 +86,52 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   const bm::Vec3 toward = rig.toward[0], down{0, -1, 0};
   // The half-size pass (occlusion, the key's shadow, the floor's light) runs with either on;
   // the height map, for the floor's light, is kept only while the floor is drawn too.
+  const bool useHybridRt = !options.studioLook && options.hybridRt && camera.orthoHalfHeight <= 0 && pipelines.hybridRtGlass && pipelines.hybridRtGiRefl && pipelines.hybridRtTemporal;
+  const bool useStudioGlass = options.studioLook && !refract && glassInView && camera.orthoHalfHeight <= 0 && pipelines.hybridRtGlass;
+  const bool useNeural = (options.neuralShader || (getenv("BM_NEURAL") && std::atoi(getenv("BM_NEURAL")) != 0)) &&
+                         pipelines.neuralFeatures && pipelines.neuralInfer;
+  // Depth of field: the finished picture is blurred by its depth (shaders/lens.metal).
+  const float lensMaxPx = static_cast<float>(std::max(0.0, std::isfinite(options.lensBlur) ? options.lensBlur : 0.0) * height);
+  const bool lensOn = pipelines.lens && lensMaxPx >= 0.5f && std::isfinite(options.focusDistance) && options.focusDistance > 0;
+  if (lensOn && (!lensSource || static_cast<int>(lensSource.width) != width || static_cast<int>(lensSource.height) != height)) {
+    MTLTextureDescriptor* d = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm_sRGB width:width height:height mipmapped:NO];
+    d.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+    d.storageMode = MTLStorageModePrivate;
+    lensSource = [device->device newTextureWithDescriptor:d];
+  }
+  const bool wantMatchedPlastic = (options.studioLook || options.plasticMatch || options.worldGi) && !options.clay;
+  const bool wantWorldGi = (options.studioLook || options.worldGi) && wantMatchedPlastic && !options.screenSpaceGi && !useHybridRt;
+  const bool worldGiActive = wantWorldGi && prepareWorldGi(rig, hookWorld, options.interactive, drawable == nil);
+  stats.worldGiReady = worldGiActive;
+  stats.worldGiBaking = wantWorldGi && worldGiPending;
+  const bool wantNeuralRt = useNeural && camera.orthoHalfHeight <= 0 &&
+                            (options.studioLook || (getenv("BM_NEURAL_RT") && std::atoi(getenv("BM_NEURAL_RT")) != 0));
+  if (useHybridRt || useStudioGlass || wantNeuralRt) {
+    if (!ptInitTried) {
+      ptInitTried = true;
+      std::string err;
+      ptScene = PathScene::create(&err);
+    }
+    if (ptScene && ptSceneRevision != lastChange) {
+      ptScene->prepare(scene, *meshes);
+      ptSceneRevision = lastChange;
+      hybridHasHistory = false;
+    }
+  }
+  const bool hybridActive = useHybridRt && ptScene != nullptr;
+  const bool studioGlassActive = useStudioGlass && ptScene != nullptr;
+  if ((refract || hybridActive || studioGlassActive || options.screenSpaceGi) && !glassResolved) makeGlassTargets();
+  // DEBUG HOOK: BM_HYBRID_SKIP=<csv of glass,glassmask,glasscompute,gi,temporal,ao> ablates hybrid passes for profiling.
+  std::vector<std::string> hybridSkipList;
+  if (const char* skipped = getenv("BM_HYBRID_SKIP")) {
+    std::stringstream ss(skipped);
+    std::string tok;
+    while (std::getline(ss, tok, ',')) hybridSkipList.push_back(tok);
+  }
+  auto skipStage = [&](const std::string& name) { return std::find(hybridSkipList.begin(), hybridSkipList.end(), name) != hybridSkipList.end(); };
   const bool screenPass = options.shadows || options.ambientOcclusion;
   const bool floorLit = screenPass && options.floor;
+  const bool surfaceShare = screenPass || needsBlend || options.screenSpaceGi || hybridActive || options.studioLook || useNeural;
   // The floor is fitted to the model at rest; a map, when it is begun, to where the pieces are
   // then and to the model at rest, where every flight ends.
   const bm::Box& b = scene.bounds;
@@ -135,6 +193,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     auto whole = [&] {
       map.building = false;
       map.front.matrix = fit.matrix, map.front.texel = fit.texel, map.front.toward = dir, map.front.detail = casterDetail, map.front.cutoff = now + 1;
+      map.front.bounds = fitted;
       w = MapWork{};
       w.whole = w.clear = true;
       casting(w.share, 0, groups, glass, [](uint32_t, uint32_t) { return true; });
@@ -150,6 +209,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
       // Begun now, with what has not moved since the frame before (what is moving now is
       // drawn over it until the next); in shares of about equal triangles, whole groups each.
       map.back.matrix = fit.matrix, map.back.texel = fit.texel, map.back.toward = dir, map.back.detail = casterDetail, map.back.cutoff = now;
+      map.back.bounds = fitted;
       std::vector<uint64_t> triangles(groups, 0);
       uint64_t total = 0;
       for (uint32_t g = 0; g < groups; g++) {
@@ -161,6 +221,9 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
         total += triangles[g];
       }
       const uint64_t shares = std::max<uint64_t>(1, (total + options.mapTrianglesPerFrame - 1) / options.mapTrianglesPerFrame);
+      // A small map fits in one pass. Drawing into back and copying it before drawing
+      // this frame's movers would cost two passes and a texture copy for the same map.
+      if (shares == 1) return whole();
       map.ends.clear();
       uint64_t sum = 0;
       for (uint32_t g = 0; g < groups && map.ends.size() + 1 < shares; g++) {
@@ -209,45 +272,88 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   flush(slot);
   id<MTLDevice> dev = device->device;
 
+  if (useNeural) {
+    const char* extWeights = getenv("BM_NEURAL_WEIGHTS");
+    const std::string extPath = extWeights ? extWeights : "";
+    if (!neuralWeightsBuffer || extPath != neuralWeightsPath) {
+      neuralWeightsPath = extPath;
+      neuralWeightsCpu = defaultNeuralWeights();
+      if (!extPath.empty()) loadNeuralWeightsFromFile(extPath.c_str(), neuralWeightsCpu);
+      if (!neuralWeightsBuffer) {
+        neuralWeightsBuffer = [dev newBufferWithLength:sizeof(NeuralWeights) options:MTLResourceStorageModeShared];
+      }
+      std::memcpy(neuralWeightsBuffer.contents, &neuralWeightsCpu, sizeof(NeuralWeights));
+    }
+  }
+
   FrameUniforms fu{};
   fu.viewProj = simdFrom(multiply(projectionMatrix(camera), viewMatrix(camera, scene.origin)));
   fu.shadowProj = simdFrom(options.shadows ? keyShown.matrix : key.matrix);
   const bm::Vec3 eye = camera.eye - scene.origin;
-  fu.eye = simd_make_float4(static_cast<float>(eye.x), static_cast<float>(eye.y), static_cast<float>(eye.z), 1);
+  fu.eye = simd_make_float4(static_cast<float>(eye.x), static_cast<float>(eye.y), static_cast<float>(eye.z), useNeural ? 1.0f : 0.0f);
+  fu.neuralGlass0 = neuralWeightsCpu.glassParams[0];
+  fu.neuralGlass1 = neuralWeightsCpu.glassParams[1];
+  fu.plastic = simd_make_float4(wantMatchedPlastic ? 1.0f : 0.0f, 0.85f, 0.0f, worldGiActive ? 1.0f : 0.0f);
   for (int i = 0; i < 4; i++)
     fu.lights[i] = simd_make_float4(static_cast<float>(rig.toward[i].x), static_cast<float>(rig.toward[i].y), static_cast<float>(rig.toward[i].z), rig.strength[i]);
-  fu.rig = simd_make_float4(hookWorld, kRigSinSquared, getenv("BM_AO_POWER") ? static_cast<float>(atof(getenv("BM_AO_POWER"))) : kAoBrickPower, 0);  // DEBUG HOOK
+  fu.rig = simd_make_float4(hookWorld, kRigSinSquared, getenv("BM_AO_POWER") ? static_cast<float>(atof(getenv("BM_AO_POWER"))) : kAoBrickPower,
+                            (options.screenSpaceGi || hybridActive) ? 1.0f : 0.0f);  // DEBUG HOOK
   fu.background = simd_make_float4(options.background[0], options.background[1], options.background[2], 1);
   fu.viewport = simd_make_float4(static_cast<float>(width), static_cast<float>(height), 1.0f / static_cast<float>(width), 1.0f / static_cast<float>(height));
-  fu.switches = simd_make_float4(options.shadows ? 1 : 0, options.ambientOcclusion ? 1 : 0, getenv("BM_DEBUG_VIEW") ? static_cast<float>(atof(getenv("BM_DEBUG_VIEW"))) : 0, 0);  // DEBUG HOOK
+  fu.switches = simd_make_float4(options.shadows ? 1 : 0, options.ambientOcclusion ? 1 : 0,
+                               getenv("BM_DEBUG_VIEW") ? static_cast<float>(atof(getenv("BM_DEBUG_VIEW"))) : 0,
+                               needsBlend ? 1 : 0);  // DEBUG HOOK: BM_DEBUG_VIEW
   const double floorY = (b.empty() ? 0.0 : b.max.y - scene.origin.y) + kFloorLift;
   fu.floorPlane = simd_make_float4(static_cast<float>(floorY), static_cast<float>(kFloorExtent * diagonal), static_cast<float>(options.shadows ? keyShown.texel : key.texel), kShadowBias);
   fu.floorCentre = simd_make_float4(static_cast<float>(middle.x - scene.origin.x), static_cast<float>(middle.z - scene.origin.z), kFloorShadow, kOitDepthScale);
   fu.lens = simd_make_float4(static_cast<float>(std::tan(camera.fovY / 2)), static_cast<float>(kEdgeStudPixels / kStudLdu), static_cast<float>(kEdgeStudFullPixels / kStudLdu),
                              static_cast<float>(camera.orthoHalfHeight));
+  fu.grid.w = options.studioLook ? 1.0f : 0.0f;
   if (options.gridSpacing > 0) {
     fu.grid = simd_make_float4(static_cast<float>(options.gridSpacing),
       static_cast<float>(std::fmod(scene.origin.x, options.gridSpacing * 5)),
-      static_cast<float>(std::fmod(scene.origin.z, options.gridSpacing * 5)), 0);
+      static_cast<float>(std::fmod(scene.origin.z, options.gridSpacing * 5)), options.studioLook ? 1.0f : 0.0f);
   }
   const simd_float3 accent = simd_make_float3(linearFromSrgb(kSelectionRgb[0]), linearFromSrgb(kSelectionRgb[1]), linearFromSrgb(kSelectionRgb[2]));
   fu.selection = simd_make_float4(accent.x, accent.y, accent.z, selected.empty() ? 0.0f : kSelectionWidth);
   fu.heightProj = simdFrom(floorLit ? heightShown.matrix : above.matrix);
   fu.glass = simd_make_float4(kGlassAbsorption, kFloorThroughGlass, kGlassIor, options.floor && eye.y < floorY ? 1 : 0);
   fu.floorLook = simd_make_float4(static_cast<float>(std::max(1.0, floorLit ? heightShown.texel : above.texel)), static_cast<float>(kFloorLookShare * kFloorExtent * diagonal), floorLit && !liveBounds.empty() ? 1.0f : 0.0f, kFloorSkyPower);
+  if (floorLit && !liveBounds.empty()) {
+    bm::Box casterBounds = heightShown.bounds;
+    casterBounds.merge(liveBounds);
+    // The shown map may contain pieces from an older frame. Include those, the
+    // current movers and the reach of nearest-texel sampling at the footprint edge.
+    const double margin = 2 * heightShown.texel;
+    fu.floorCasters = simd_make_float4(static_cast<float>(casterBounds.min.x - scene.origin.x - margin),
+                                      static_cast<float>(casterBounds.min.z - scene.origin.z - margin),
+                                      static_cast<float>(casterBounds.max.x - scene.origin.x + margin),
+                                      static_cast<float>(casterBounds.max.z - scene.origin.z + margin));
+  }
   // How much of each light's disk each of the floor's 12 directions and 16 elevation bins
   // holds (floor_light.metal), with each bin's light on a level floor (even in sin^2 elevation):
   // worked out again only when the lights have turned.
   id<MTLBuffer> binsBuffer = floorBins.get(dev, frame, sizeof(FloorBins));
   bool sameRig = floorTable != nullptr;
   for (int i = 0; i < 4 && sameRig; i++) sameRig = length(rig.toward[i] - floorTableToward[i]) <= 1e-12;
-  if (floorLit && !floorTable) floorTable = std::make_unique<FloorBins>();
+  if (floorLit && !floorTable) {
+    floorTable = std::make_unique<FloorBins>();
+    for (int row = 0; row < 48; ++row) {
+      const float angle = (static_cast<float>(row) / 4) * (6.2831853f / 12);
+      const float x = std::cos(angle), z = std::sin(angle);
+      const auto reciprocal = [](float v) { return std::copysign(1.0f / std::max(std::abs(v), 1e-8f), v); };
+      floorTable->rays[row] = simd_make_float4(x, z, reciprocal(x), reciprocal(z));
+    }
+  }
   for (int i = 0; i < 4 && floorLit && !sameRig; i++) {
     FloorBins& bins = *floorTable;
     floorTableToward[i] = rig.toward[i];
     const bm::Vec3 t = normalized(rig.toward[i]);
     const double cosRadius = std::sqrt(1.0 - kRigSinSquared);
-    for (int d = 0; d < 48; d++)
+    for (auto& total : bins.total[i]) total = 0;
+    for (int d = 0; d < 48; d++) {
+      auto& weights = bins.weights[i][d];
+      for (auto& plane : weights) plane = 0;
       for (int b = 0; b < 16; b++) {
         int inside = 0;
         for (int u = 0; u < 4; u++)
@@ -257,8 +363,11 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
             const bm::Vec3 dir{across * std::cos(azimuth), -up, across * std::sin(azimuth)};
             if (dot(dir, t) > cosRadius) inside++;
           }
-        bins.weight[i][d][b] = static_cast<float>(inside) / 16.0f;
+        for (int bit = 0; bit < 5; ++bit)
+          weights[bit] |= static_cast<uint16_t>(((inside >> bit) & 1) << b);
+        bins.total[i][d & 3] += static_cast<uint32_t>(inside);
       }
+    }
     // A level floor's light from it: E diskLight(cos) / pi, as brick.metal's diskLight has it.
     const double c = std::max(-1.0, std::min(1.0, -t.y)), sinSq = kRigSinSquared;
     double disk = std::max(c, 0.0);
@@ -365,7 +474,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
   };
   id<MTLTexture> shadowMap = drawMap(shadow, shadowWork, options.shadows, true, MTLPixelFormatDepth32Float, kShadowMapSize);
   id<MTLTexture> heightMap = drawMap(heights, heightWork, floorLit, false, MTLPixelFormatRG16Float, kHeightMapSize);
-  stats.settling = overFrames && ((options.shadows && (shadow.building || stale(shadow, toward))) || (floorLit && (heights.building || stale(heights, down))));
+  stats.settling = (overFrames && ((options.shadows && (shadow.building || stale(shadow, toward))) || (floorLit && (heights.building || stale(heights, down))))) || (wantWorldGi && worldGiPending);
   id<MTLTexture> shadowTexture = options.shadows && shadowMap ? shadowMap : placeholderShadow;
 
   // The model, multisampled, resolved into `color`, `accum` and `reveal`.
@@ -373,17 +482,18 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     MTLRenderPassDescriptor* pass = [MTLRenderPassDescriptor new];
     id<MTLTexture> ms[4] = {colorMs, accumMs, revealMs, ambientMs}, resolved[4] = {color, accum, reveal, ambient};
     for (int i = 0; i < 4; i++) {
+      const bool store = i == 0 || (i == 3 ? surfaceShare : needsBlend);
       pass.colorAttachments[i].texture = ms[i];
-      pass.colorAttachments[i].resolveTexture = resolved[i];
-      pass.colorAttachments[i].loadAction = MTLLoadActionClear;
+      pass.colorAttachments[i].resolveTexture = store ? resolved[i] : nil;
+      pass.colorAttachments[i].loadAction = store ? MTLLoadActionClear : MTLLoadActionDontCare;
       pass.colorAttachments[i].clearColor = MTLClearColorMake(0, 0, 0, 0);  // nothing drawn: no coverage, no optical depth, no ambient share
-      pass.colorAttachments[i].storeAction = MTLStoreActionMultisampleResolve;
+      pass.colorAttachments[i].storeAction = store ? MTLStoreActionMultisampleResolve : MTLStoreActionDontCare;
     }
     pass.depthAttachment.texture = depthMs;
     pass.depthAttachment.loadAction = MTLLoadActionClear;
     pass.depthAttachment.clearDepth = 0;  // reversed depth: 0 is the far plane
     // One sample of depth kept, for ambient occlusion and the key light's shadow.
-    const bool keepDepth = options.ambientOcclusion || options.shadows;
+    const bool keepDepth = options.ambientOcclusion || options.shadows || useNeural || lensOn;  // and for the lens blur
     pass.depthAttachment.storeAction = keepDepth ? MTLStoreActionMultisampleResolve : MTLStoreActionDontCare;
     pass.depthAttachment.resolveTexture = keepDepth ? depth : nil;
     pass.depthAttachment.depthResolveFilter = MTLMultisampleDepthResolveFilterSample0;
@@ -395,6 +505,13 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     [enc setVertexBuffer:visibleBuffer offset:0 atIndex:4];
     [enc setFragmentTexture:shadowTexture atIndex:0];
     [enc setFragmentSamplerState:pipelines.shadowSampler atIndex:1];
+    WorldGiUniforms giUniforms = worldGiUniforms;
+    giUniforms.shapeGain.w = (worldGiActive && options.worldGiOcclusion) ? 1.0f : 0.0f;
+    [enc setFragmentBytes:&giUniforms length:sizeof giUniforms atIndex:8];
+    for (int i = 0; i < 6; i++)
+      [enc setFragmentTexture:(worldGiActive && worldGiTextures[i]) ? worldGiTextures[i] : worldGiFallback atIndex:2 + i];
+    [enc setFragmentTexture:(worldGiActive && worldGiStudioTexture) ? worldGiStudioTexture : worldGiFallback atIndex:8];
+    [enc setFragmentSamplerState:pipelines.smooth atIndex:2];
 
     // Opaque pieces, glass (transparent ones), and placeholders (missing parts, translucent).
     enum class Kind { Opaque, Glass, Placeholder };
@@ -432,7 +549,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     bricks(Kind::Opaque);
     if (options.wireframe) [enc setTriangleFillMode:MTLTriangleFillModeFill];
 
-    if (options.floor) {
+    if ((options.floor && surfaceShare) || options.gridSpacing > 0) {
       [enc setCullMode:MTLCullModeNone];
       [enc setRenderPipelineState:pipelines.floor];
       [enc setDepthStencilState:pipelines.depthWrite];  // in the depth buffer, so ambient occlusion sees it
@@ -445,7 +562,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     // the panes lose the darker, well-defined contours visible in EyeSight.
     // Each outlined batch is still drawn exactly once (no extra mesh work).
     auto drawOutlines = [&](bool glass) {
-      if (!options.edges || options.wireframe) return;
+      if (!options.edges || options.wireframe || options.studioLook) return;
       [enc setCullMode:MTLCullModeNone];
       [enc setRenderPipelineState:pipelines.edges];
       [enc setDepthStencilState:pipelines.depthRead];
@@ -469,9 +586,10 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     };
     drawOutlines(false);
 
+    const bool useRmidt = (options.screenSpaceGi || hybridActive || studioGlassActive) && !refract && glassInView;
     [enc setCullMode:MTLCullModeBack];
     [enc setDepthStencilState:pipelines.depthRead];
-    if (glassInView && options.refractiveGlass && glassNodes && glassTriangles) {
+    if (refract && glassNodes && glassTriangles) {
       [enc setDepthStencilState:pipelines.depthWrite];
       // Resolve the nearest glass surface before running the expensive transport shader.
       [enc setRenderPipelineState:pipelines.glassDepth];
@@ -486,7 +604,7 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
       [enc setFragmentBytes:&glassNodeCount length:sizeof glassNodeCount atIndex:5];
       [enc setRenderPipelineState:pipelines.glass];
       bricks(Kind::Glass);
-    } else if (glassInView) {
+    } else if (glassInView && !useRmidt) {
       [enc setRenderPipelineState:pipelines.glassPreview];
       bricks(Kind::Glass);
     }
@@ -494,7 +612,8 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     [enc setRenderPipelineState:pipelines.transparent];
     bricks(Kind::Placeholder);
     if (options.wireframe) [enc setTriangleFillMode:MTLTriangleFillModeFill];
-    drawOutlines(true);
+    if (!useRmidt) drawOutlines(true);
+    for (const auto& ghost : preview) drawPreview(enc, ghost, stats);
     [enc endEncoding];
   }
 
@@ -523,10 +642,10 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     [enc endEncoding];
   }
 
-  // Ambient occlusion at half size, then blurred.
-  if (screenPass) {
+  // Ambient occlusion and optional screen-space GI/SSR, Hybrid HW-RT, or Metal Neural Shader at half size.
+  if (screenPass || options.screenSpaceGi || hybridActive || options.studioLook || useNeural) {
     struct AoUniforms {
-      simd_float4 lens, shape, size, samplePosition, eye, right, up, forward;
+      simd_float4 lens, shape, size, samplePosition, eye, right, up, forward, grid;
     } u;
     {
       // The camera's axes in world space, as viewMatrix makes them.
@@ -542,40 +661,518 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     u.shape = simd_make_float4(kAoRadius, kAoBias, kAoStrength, static_cast<float>(width));
     u.size = simd_make_float4(static_cast<float>(height), static_cast<float>(aoRaw.width), static_cast<float>(aoRaw.height),
                              camera.orthoHalfHeight > 0 ? 1 : 0);
-    for (int pass = 0; pass < 2; pass++) {
-      MTLRenderPassDescriptor* d = [MTLRenderPassDescriptor new];
-      d.colorAttachments[0].texture = pass == 0 ? aoRaw : aoSoft;
-      d.colorAttachments[0].loadAction = MTLLoadActionDontCare;
-      d.colorAttachments[0].storeAction = MTLStoreActionStore;
-      id<MTLRenderCommandEncoder> enc = [commands renderCommandEncoderWithDescriptor:d];
-      [enc setRenderPipelineState:pass == 0 ? pipelines.ao : pipelines.aoBlur];
-      [enc setFragmentBytes:&u length:sizeof u atIndex:0];
-      if (pass == 0) {
-        [enc setFragmentBuffer:frameBuffer offset:0 atIndex:1];
-        [enc setFragmentTexture:depth atIndex:0];
-        [enc setFragmentTexture:shadowTexture atIndex:1];
-        [enc setFragmentSamplerState:pipelines.shadowSampler atIndex:1];
-        [enc setFragmentTexture:heightMap atIndex:2];
-        [enc setFragmentTexture:ambient atIndex:3];
-        [enc setFragmentBuffer:binsBuffer offset:0 atIndex:2];
-      } else {
-        [enc setFragmentTexture:aoRaw atIndex:0];
-        [enc setFragmentTexture:depth atIndex:1];
-        [enc setFragmentTexture:ambient atIndex:2];
+    u.grid = simd_make_float4(static_cast<float>(screenDiv), 0, 0, 0);  // the half/quarter grid's stride over the full one
+    if (screenPass && !skipStage("ao")) {
+      for (int pass = 0; pass < 2; pass++) {
+        MTLRenderPassDescriptor* d = [MTLRenderPassDescriptor new];
+        d.colorAttachments[0].texture = pass == 0 ? aoRaw : aoSoft;
+        d.colorAttachments[0].loadAction = MTLLoadActionDontCare;
+        d.colorAttachments[0].storeAction = MTLStoreActionStore;
+        id<MTLRenderCommandEncoder> enc = [commands renderCommandEncoderWithDescriptor:d];
+        [enc setRenderPipelineState:pass == 0 ? pipelines.ao : pipelines.aoBlur];
+        [enc setFragmentBytes:&u length:sizeof u atIndex:0];
+        if (pass == 0) {
+          [enc setFragmentBuffer:frameBuffer offset:0 atIndex:1];
+          [enc setFragmentTexture:depth atIndex:0];
+          [enc setFragmentTexture:shadowTexture atIndex:1];
+          [enc setFragmentSamplerState:pipelines.shadowSampler atIndex:1];
+          [enc setFragmentTexture:heightMap atIndex:2];
+          [enc setFragmentTexture:ambient atIndex:3];
+          [enc setFragmentBuffer:binsBuffer offset:0 atIndex:2];
+        } else {
+          [enc setFragmentTexture:aoRaw atIndex:0];
+          [enc setFragmentTexture:depth atIndex:1];
+          [enc setFragmentTexture:ambient atIndex:2];
+        }
+        [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
+        [enc endEncoding];
       }
-      [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
-      [enc endEncoding];
+    }
+    // Studio ABS Look: glass-only instanced Metal RT (zero GI noise, zero SVGF ghosting).
+    if (options.studioLook) {
+      if (studioGlassActive && ptScene->impl().instances) {
+        PathScene::Impl& ps = ptScene->impl();
+        struct PtUniformsGpu {
+          simd_float4 eye, right, up, forward;
+          simd_float4 lights[4];
+          simd_float4 rig, background, floorPlane, glass;
+          simd_uint4 size, seed;
+        } ptu{};
+        ptu.eye = simd_make_float4(u.eye.x, u.eye.y, u.eye.z, static_cast<float>(std::tan(camera.fovY / 2)));
+        ptu.right = simd_make_float4(u.right.x, u.right.y, u.right.z, static_cast<float>(width) / height);
+        ptu.up = simd_make_float4(u.up.x, u.up.y, u.up.z, 0.0f);
+        ptu.forward = simd_make_float4(u.forward.x, u.forward.y, u.forward.z, 0.0f);
+        for (int i = 0; i < 4; i++)
+          ptu.lights[i] = simd_make_float4(static_cast<float>(rig.toward[i].x), static_cast<float>(rig.toward[i].y), static_cast<float>(rig.toward[i].z), rig.strength[i] * (i == 0 ? 1.15f : kPathFillShare * 0.7f));
+        // rig.w = 2.0 signals Studio Look deeper interior ambient inside glass.
+        ptu.rig = simd_make_float4(kWorldStrength, kRigSinSquared, std::sqrt(1.0f - kRigSinSquared), 2.0f);
+        ptu.background = simd_make_float4(options.background[0], options.background[1], options.background[2], 1.0f);
+        ptu.floorPlane = simd_make_float4(ps.floorY, options.floor ? 1.0f : 0.0f, kFloorKeyShare, 0.0f);
+        ptu.glass = simd_make_float4(kGlassIor, kGlassAbsorption, kGlassAbsorption / kPathGlassWall, kFloorThroughGlass);
+        ptu.size = simd_make_uint4(static_cast<uint32_t>(width), static_cast<uint32_t>(height), 1u, 0u);
+        ptu.seed = simd_make_uint4(0u, 14u, 1u, kPathMaxBounces);
+
+        MTLRenderPassDescriptor* d = [MTLRenderPassDescriptor new];
+        d.colorAttachments[0].texture = glassFront;
+        d.colorAttachments[0].loadAction = MTLLoadActionClear;
+        d.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+        d.colorAttachments[0].storeAction = MTLStoreActionStore;
+        d.colorAttachments[1].texture = glassMat;
+        d.colorAttachments[1].loadAction = MTLLoadActionClear;
+        d.colorAttachments[1].clearColor = MTLClearColorMake(0, 0, 0, 0);
+        d.colorAttachments[1].storeAction = MTLStoreActionDontCare;
+        d.depthAttachment.texture = glassDepthTex;
+        d.depthAttachment.loadAction = MTLLoadActionClear;
+        d.depthAttachment.clearDepth = 0.0;
+        d.depthAttachment.storeAction = MTLStoreActionDontCare;
+        id<MTLRenderCommandEncoder> enc = [commands renderCommandEncoderWithDescriptor:d];
+        [enc setRenderPipelineState:pipelines.rmidtFront];
+        [enc setDepthStencilState:pipelines.depthWrite];
+        [enc setCullMode:MTLCullModeBack];
+        [enc setVertexBuffer:frameBuffer offset:0 atIndex:1];
+        [enc setVertexBuffer:drawBuffer offset:0 atIndex:2];
+        [enc setVertexBuffer:visibleBuffer offset:0 atIndex:4];
+        [enc setFragmentBuffer:frameBuffer offset:0 atIndex:1];
+        [enc setFragmentBuffer:drawBuffer offset:0 atIndex:2];
+        [enc setFragmentTexture:depth atIndex:0];
+        for (size_t i = 0; i < seen.size(); i++) {
+          const Batch& batch = seen[i];
+          const Group& group = scene.groups[batch.group];
+          if (!(group.material.transparent() && !group.placeholder && !options.clay)) continue;
+          const GpuMesh& gpu = mesh(group, batch.detail);
+          if (!gpu.indexCount) continue;
+          [enc setFrontFacingWinding:batch.mirrored ? MTLWindingClockwise : MTLWindingCounterClockwise];
+          [enc setVertexBuffer:gpu.vertices offset:0 atIndex:0];
+          [enc setVertexBuffer:instanceBuffers[batch.group][slot] offset:0 atIndex:3];
+          [enc setVertexBufferOffset:i * sizeof(DrawUniforms) atIndex:2];
+          [enc setFragmentBufferOffset:i * sizeof(DrawUniforms) atIndex:2];
+          [enc setVertexBufferOffset:batch.first * sizeof(uint32_t) atIndex:4];
+          [enc drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:gpu.indexCount indexType:MTLIndexTypeUInt32 indexBuffer:gpu.indices indexBufferOffset:0 instanceCount:batch.count];
+          stats.drawCalls++;
+        }
+        [enc endEncoding];
+
+        id<MTLComputeCommandEncoder> ce = [commands computeCommandEncoder];
+        [ce setComputePipelineState:pipelines.hybridRtGlass];
+        [ce setBytes:&ptu length:sizeof(ptu) atIndex:0];
+        [ce setAccelerationStructure:ps.instances atBufferIndex:1];
+        for (const PartStructure& p : ps.structures) {
+          [ce useResource:p.structure usage:MTLResourceUsageRead];
+          [ce useResource:p.vertices usage:MTLResourceUsageRead];
+          [ce useResource:p.indices usage:MTLResourceUsageRead];
+        }
+        [ce setBuffer:ps.instanceTable offset:0 atIndex:2];
+        [ce setBuffer:ps.meshTable offset:0 atIndex:3];
+        [ce setBuffer:ps.materialTable offset:0 atIndex:4];
+        [ce setTexture:glassFront atIndex:0];
+        [ce setTexture:glassResolved atIndex:1];
+        [ce dispatchThreads:MTLSizeMake(static_cast<NSUInteger>(width), static_cast<NSUInteger>(height), 1) threadsPerThreadgroup:MTLSizeMake(8, 8, 1)];
+        [ce endEncoding];
+      } else if (glassResolved) {
+        MTLRenderPassDescriptor* d = [MTLRenderPassDescriptor new];
+        d.colorAttachments[0].texture = glassResolved;
+        d.colorAttachments[0].loadAction = MTLLoadActionClear;
+        d.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+        d.colorAttachments[0].storeAction = MTLStoreActionStore;
+        id<MTLRenderCommandEncoder> enc = [commands renderCommandEncoderWithDescriptor:d];
+        [enc endEncoding];
+      }
+    } else if (hybridActive) {
+      PathScene::Impl& ps = ptScene->impl();
+      struct PtUniformsGpu {
+        simd_float4 eye, right, up, forward;
+        simd_float4 lights[4];
+        simd_float4 rig, background, floorPlane, glass;
+        simd_uint4 size, seed;
+      } ptu{};
+      ptu.eye = simd_make_float4(u.eye.x, u.eye.y, u.eye.z, static_cast<float>(std::tan(camera.fovY / 2)));
+      ptu.right = simd_make_float4(u.right.x, u.right.y, u.right.z, static_cast<float>(width) / height);
+      ptu.up = simd_make_float4(u.up.x, u.up.y, u.up.z, 0.0f);
+      ptu.forward = simd_make_float4(u.forward.x, u.forward.y, u.forward.z, 0.0f);
+      for (int i = 0; i < 4; i++)
+        ptu.lights[i] = simd_make_float4(static_cast<float>(rig.toward[i].x), static_cast<float>(rig.toward[i].y), static_cast<float>(rig.toward[i].z), rig.strength[i] * (i == 0 ? 1.0f : kPathFillShare));
+      ptu.rig = simd_make_float4(kWorldStrength, kRigSinSquared, std::sqrt(1.0f - kRigSinSquared), 1.0f);
+      ptu.background = simd_make_float4(options.background[0], options.background[1], options.background[2], 1.0f);
+      ptu.floorPlane = simd_make_float4(ps.floorY, options.floor ? 1.0f : 0.0f, kFloorKeyShare, 0.0f);
+      ptu.glass = simd_make_float4(kGlassIor, kGlassAbsorption, kGlassAbsorption / kPathGlassWall, kFloorThroughGlass);
+      // DEBUG HOOK: BM_GLASS_SS (1|2), BM_GLASS_WORK (work-loop cap) tune the glass RT kernel.
+      // One supersample and a 16-step work loop keep the live glass within 60 FPS: the depth of
+      // transport the cap drops is past every path a single transparent brick holds.
+      const uint32_t glassSS = getenv("BM_GLASS_SS") ? static_cast<uint32_t>(std::max(1, std::atoi(getenv("BM_GLASS_SS")))) : 1u;
+      const uint32_t glassWork = getenv("BM_GLASS_WORK") ? static_cast<uint32_t>(std::max(0, std::atoi(getenv("BM_GLASS_WORK")))) : 16u;
+      ptu.size = simd_make_uint4(static_cast<uint32_t>(width), static_cast<uint32_t>(height), glassSS, hybridFrameIdx);
+      ptu.seed = simd_make_uint4(hybridFrameIdx, glassWork, ps.instances ? 1u : 0u, kPathMaxBounces);
+
+      struct HybridRtUniformsGpu {
+        simd_float4x4 prevViewProj;
+        uint32_t frameIndex;
+        uint32_t hasHistory;
+        uint32_t fullWidth;
+        uint32_t fullHeight;
+      } hru{};
+      hru.prevViewProj = hybridPrevViewProj;
+      hru.frameIndex = hybridFrameIdx;
+      hru.hasHistory = hybridHasHistory ? 1u : 0u;
+      hru.fullWidth = static_cast<uint32_t>(width);
+      hru.fullHeight = static_cast<uint32_t>(height);
+
+      // Stage 2: Glass pixel mask (nearest front face only) + Instanced HW-RT Glass Resolve.
+      if (!skipStage("glass") && !refract && glassInView && ps.instances) {
+        if (!skipStage("glassmask")) {
+          MTLRenderPassDescriptor* d = [MTLRenderPassDescriptor new];
+          d.colorAttachments[0].texture = glassFront;
+          d.colorAttachments[0].loadAction = MTLLoadActionClear;
+          d.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+          d.colorAttachments[0].storeAction = MTLStoreActionStore;
+          d.colorAttachments[1].texture = glassMat;
+          d.colorAttachments[1].loadAction = MTLLoadActionClear;
+          d.colorAttachments[1].clearColor = MTLClearColorMake(0, 0, 0, 0);
+          d.colorAttachments[1].storeAction = MTLStoreActionDontCare;
+          d.depthAttachment.texture = glassDepthTex;
+          d.depthAttachment.loadAction = MTLLoadActionClear;
+          d.depthAttachment.clearDepth = 0.0;
+          d.depthAttachment.storeAction = MTLStoreActionDontCare;
+          id<MTLRenderCommandEncoder> enc = [commands renderCommandEncoderWithDescriptor:d];
+          [enc setRenderPipelineState:pipelines.rmidtFront];
+          [enc setDepthStencilState:pipelines.depthWrite];
+          [enc setCullMode:MTLCullModeBack];
+          [enc setVertexBuffer:frameBuffer offset:0 atIndex:1];
+          [enc setVertexBuffer:drawBuffer offset:0 atIndex:2];
+          [enc setVertexBuffer:visibleBuffer offset:0 atIndex:4];
+          [enc setFragmentBuffer:frameBuffer offset:0 atIndex:1];
+          [enc setFragmentBuffer:drawBuffer offset:0 atIndex:2];
+          [enc setFragmentTexture:depth atIndex:0];
+          for (size_t i = 0; i < seen.size(); i++) {
+            const Batch& batch = seen[i];
+            const Group& group = scene.groups[batch.group];
+            if (!(group.material.transparent() && !group.placeholder && !options.clay)) continue;
+            const GpuMesh& gpu = mesh(group, batch.detail);
+            if (!gpu.indexCount) continue;
+            [enc setFrontFacingWinding:batch.mirrored ? MTLWindingClockwise : MTLWindingCounterClockwise];
+            [enc setVertexBuffer:gpu.vertices offset:0 atIndex:0];
+            [enc setVertexBuffer:instanceBuffers[batch.group][slot] offset:0 atIndex:3];
+            [enc setVertexBufferOffset:i * sizeof(DrawUniforms) atIndex:2];
+            [enc setFragmentBufferOffset:i * sizeof(DrawUniforms) atIndex:2];
+            [enc setVertexBufferOffset:batch.first * sizeof(uint32_t) atIndex:4];
+            [enc drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:gpu.indexCount indexType:MTLIndexTypeUInt32 indexBuffer:gpu.indices indexBufferOffset:0 instanceCount:batch.count];
+            stats.drawCalls++;
+          }
+          [enc endEncoding];
+        }
+
+        if (!skipStage("glasscompute")) {
+          id<MTLComputeCommandEncoder> ce = [commands computeCommandEncoder];
+          [ce setComputePipelineState:pipelines.hybridRtGlass];
+          [ce setBytes:&ptu length:sizeof(ptu) atIndex:0];
+          [ce setAccelerationStructure:ps.instances atBufferIndex:1];
+          for (const PartStructure& p : ps.structures) {
+            [ce useResource:p.structure usage:MTLResourceUsageRead];
+            [ce useResource:p.vertices usage:MTLResourceUsageRead];
+            [ce useResource:p.indices usage:MTLResourceUsageRead];
+          }
+          [ce setBuffer:ps.instanceTable offset:0 atIndex:2];
+          [ce setBuffer:ps.meshTable offset:0 atIndex:3];
+          [ce setBuffer:ps.materialTable offset:0 atIndex:4];
+          [ce setTexture:glassFront atIndex:0];
+          [ce setTexture:glassResolved atIndex:1];
+          [ce dispatchThreads:MTLSizeMake(static_cast<NSUInteger>(width), static_cast<NSUInteger>(height), 1) threadsPerThreadgroup:MTLSizeMake(8, 8, 1)];
+          [ce endEncoding];
+        }
+      } else {
+        MTLRenderPassDescriptor* d = [MTLRenderPassDescriptor new];
+        d.colorAttachments[0].texture = glassResolved;
+        d.colorAttachments[0].loadAction = MTLLoadActionClear;
+        d.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+        d.colorAttachments[0].storeAction = MTLStoreActionStore;
+        id<MTLRenderCommandEncoder> enc = [commands renderCommandEncoderWithDescriptor:d];
+        [enc endEncoding];
+      }
+
+      // Stage 3: Half-res 1-spp Instanced HW-RT Glossy Reflections + Colored GI.
+      const NSUInteger halfW = giRaw.width, halfH = giRaw.height;
+      if (!skipStage("gi")) {
+        id<MTLComputeCommandEncoder> ce = [commands computeCommandEncoder];
+        [ce setComputePipelineState:pipelines.hybridRtGiRefl];
+        [ce setBytes:&ptu length:sizeof(ptu) atIndex:0];
+        [ce setBytes:&u length:sizeof(u) atIndex:1];
+        [ce setBytes:&hru length:sizeof(hru) atIndex:2];
+        if (ps.instances) {
+          [ce setAccelerationStructure:ps.instances atBufferIndex:3];
+          for (const PartStructure& p : ps.structures) {
+            [ce useResource:p.structure usage:MTLResourceUsageRead];
+            [ce useResource:p.vertices usage:MTLResourceUsageRead];
+            [ce useResource:p.indices usage:MTLResourceUsageRead];
+          }
+          [ce setBuffer:ps.instanceTable offset:0 atIndex:4];
+          [ce setBuffer:ps.meshTable offset:0 atIndex:5];
+        }
+        [ce setBuffer:ps.materialTable offset:0 atIndex:6];
+        [ce setTexture:depth atIndex:0];
+        [ce setTexture:ambient atIndex:1];
+        [ce setTexture:giRaw atIndex:2];
+        [ce setTexture:ssrRaw atIndex:3];
+        [ce dispatchThreads:MTLSizeMake(halfW, halfH, 1) threadsPerThreadgroup:MTLSizeMake(8, 8, 1)];
+        [ce endEncoding];
+      }
+
+      // Stage 4: GPU Temporal Reprojection + Edge-Preserving Bilateral Filter.
+      const int curH = static_cast<int>(hybridFrameIdx & 1u), prevH = curH ^ 1;
+      if (!skipStage("temporal")) {
+      {
+        id<MTLComputeCommandEncoder> ce = [commands computeCommandEncoder];
+        [ce setComputePipelineState:pipelines.hybridRtTemporal];
+        [ce setBytes:&u length:sizeof(u) atIndex:0];
+        [ce setBytes:&hru length:sizeof(hru) atIndex:1];
+        [ce setTexture:depth atIndex:0];
+        [ce setTexture:ambient atIndex:1];
+        [ce setTexture:giRaw atIndex:2];
+        [ce setTexture:ssrRaw atIndex:3];
+        [ce setTexture:giHist[prevH] atIndex:4];
+        [ce setTexture:ssrHist[prevH] atIndex:5];
+        [ce setTexture:rtDepthHist[prevH] atIndex:6];
+        [ce setTexture:giHist[curH] atIndex:7];
+        [ce setTexture:ssrHist[curH] atIndex:8];
+        [ce setTexture:rtDepthHist[curH] atIndex:9];
+        [ce dispatchThreads:MTLSizeMake(halfW, halfH, 1) threadsPerThreadgroup:MTLSizeMake(8, 8, 1)];
+        [ce endEncoding];
+      }
+      {
+        MTLRenderPassDescriptor* d = [MTLRenderPassDescriptor new];
+        d.colorAttachments[0].texture = giSoft;
+        d.colorAttachments[0].loadAction = MTLLoadActionDontCare;
+        d.colorAttachments[0].storeAction = MTLStoreActionStore;
+        d.colorAttachments[1].texture = ssrSoft;
+        d.colorAttachments[1].loadAction = MTLLoadActionDontCare;
+        d.colorAttachments[1].storeAction = MTLStoreActionStore;
+        id<MTLRenderCommandEncoder> enc = [commands renderCommandEncoderWithDescriptor:d];
+        [enc setRenderPipelineState:pipelines.ssptBlur];
+        [enc setFragmentBytes:&u length:sizeof u atIndex:0];
+        [enc setFragmentTexture:giHist[curH] atIndex:0];
+        [enc setFragmentTexture:ssrHist[curH] atIndex:1];
+        [enc setFragmentTexture:depth atIndex:2];
+        [enc setFragmentTexture:ambient atIndex:3];
+        [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
+        [enc endEncoding];
+      }
+      }
+      const bool sameProj = std::memcmp(&hybridPrevViewProj, &fu.viewProj, sizeof(fu.viewProj)) == 0;
+      hybridStillFrames = (hybridHasHistory && sameProj) ? (hybridStillFrames + 1u) : 1u;
+      if (hybridStillFrames < 12u) stats.settling = true;
+      hybridPrevViewProj = fu.viewProj;
+      hybridHasHistory = true;
+      hybridFrameIdx++;
+    } else if (options.screenSpaceGi) {
+      const bool useRmidt = !refract && glassInView;
+      if (useRmidt) {
+        auto drawGlassBatches = [&](id<MTLRenderCommandEncoder> enc) {
+          [enc setVertexBuffer:frameBuffer offset:0 atIndex:1];
+          [enc setVertexBuffer:drawBuffer offset:0 atIndex:2];
+          [enc setVertexBuffer:visibleBuffer offset:0 atIndex:4];
+          [enc setFragmentBuffer:frameBuffer offset:0 atIndex:1];
+          [enc setFragmentBuffer:drawBuffer offset:0 atIndex:2];
+          [enc setFragmentTexture:depth atIndex:0];
+          for (size_t i = 0; i < seen.size(); i++) {
+            const Batch& batch = seen[i];
+            const Group& group = scene.groups[batch.group];
+            if (!(group.material.transparent() && !group.placeholder && !options.clay)) continue;
+            const GpuMesh& gpu = mesh(group, batch.detail);
+            if (!gpu.indexCount) continue;
+            [enc setFrontFacingWinding:batch.mirrored ? MTLWindingClockwise : MTLWindingCounterClockwise];
+            [enc setVertexBuffer:gpu.vertices offset:0 atIndex:0];
+            [enc setVertexBuffer:instanceBuffers[batch.group][slot] offset:0 atIndex:3];
+            [enc setVertexBufferOffset:i * sizeof(DrawUniforms) atIndex:2];
+            [enc setFragmentBufferOffset:i * sizeof(DrawUniforms) atIndex:2];
+            [enc setVertexBufferOffset:batch.first * sizeof(uint32_t) atIndex:4];
+            [enc drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:gpu.indexCount indexType:MTLIndexTypeUInt32 indexBuffer:gpu.indices indexBufferOffset:0 instanceCount:batch.count];
+            stats.drawCalls++;
+          }
+        };
+        // Pass 1: Nearest front glass face (normal + distance + base color)
+        {
+          MTLRenderPassDescriptor* d = [MTLRenderPassDescriptor new];
+          d.colorAttachments[0].texture = glassFront;
+          d.colorAttachments[0].loadAction = MTLLoadActionClear;
+          d.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+          d.colorAttachments[0].storeAction = MTLStoreActionStore;
+          d.colorAttachments[1].texture = glassMat;
+          d.colorAttachments[1].loadAction = MTLLoadActionClear;
+          d.colorAttachments[1].clearColor = MTLClearColorMake(0, 0, 0, 0);
+          d.colorAttachments[1].storeAction = MTLStoreActionStore;
+          d.depthAttachment.texture = glassDepthTex;
+          d.depthAttachment.loadAction = MTLLoadActionClear;
+          d.depthAttachment.clearDepth = 0.0;
+          d.depthAttachment.storeAction = MTLStoreActionDontCare;
+          id<MTLRenderCommandEncoder> enc = [commands renderCommandEncoderWithDescriptor:d];
+          [enc setRenderPipelineState:pipelines.rmidtFront];
+          [enc setDepthStencilState:pipelines.depthWrite];
+          [enc setCullMode:MTLCullModeBack];
+          drawGlassBatches(enc);
+          [enc endEncoding];
+        }
+        // Pass 2: Nearest back glass face (inner wall exit -> exact wall thickness)
+        {
+          MTLRenderPassDescriptor* d = [MTLRenderPassDescriptor new];
+          d.colorAttachments[0].texture = glassBackNear;
+          d.colorAttachments[0].loadAction = MTLLoadActionClear;
+          d.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+          d.colorAttachments[0].storeAction = MTLStoreActionStore;
+          d.depthAttachment.texture = glassDepthTex;
+          d.depthAttachment.loadAction = MTLLoadActionClear;
+          d.depthAttachment.clearDepth = 0.0;
+          d.depthAttachment.storeAction = MTLStoreActionDontCare;
+          id<MTLRenderCommandEncoder> enc = [commands renderCommandEncoderWithDescriptor:d];
+          [enc setRenderPipelineState:pipelines.rmidtBack];
+          [enc setDepthStencilState:pipelines.depthWrite];
+          [enc setCullMode:MTLCullModeFront];
+          drawGlassBatches(enc);
+          [enc endEncoding];
+        }
+        // Pass 3: Farthest back glass face (hollow cavity far wall)
+        {
+          MTLRenderPassDescriptor* d = [MTLRenderPassDescriptor new];
+          d.colorAttachments[0].texture = glassBackFar;
+          d.colorAttachments[0].loadAction = MTLLoadActionClear;
+          d.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+          d.colorAttachments[0].storeAction = MTLStoreActionStore;
+          d.depthAttachment.texture = glassDepthTex;
+          d.depthAttachment.loadAction = MTLLoadActionClear;
+          d.depthAttachment.clearDepth = 1.0;
+          d.depthAttachment.storeAction = MTLStoreActionDontCare;
+          id<MTLRenderCommandEncoder> enc = [commands renderCommandEncoderWithDescriptor:d];
+          [enc setRenderPipelineState:pipelines.rmidtBack];
+          [enc setDepthStencilState:pipelines.depthWriteLess];
+          [enc setCullMode:MTLCullModeFront];
+          drawGlassBatches(enc);
+          [enc endEncoding];
+        }
+        // Pass 4: Analytic multi-interface dielectric transport resolve
+        {
+          MTLRenderPassDescriptor* d = [MTLRenderPassDescriptor new];
+          d.colorAttachments[0].texture = glassResolved;
+          d.colorAttachments[0].loadAction = MTLLoadActionDontCare;
+          d.colorAttachments[0].storeAction = MTLStoreActionStore;
+          id<MTLRenderCommandEncoder> enc = [commands renderCommandEncoderWithDescriptor:d];
+          [enc setRenderPipelineState:pipelines.rmidtResolve];
+          [enc setFragmentBytes:&u length:sizeof u atIndex:0];
+          [enc setFragmentBuffer:frameBuffer offset:0 atIndex:1];
+          [enc setFragmentTexture:glassFront atIndex:0];
+          [enc setFragmentTexture:glassMat atIndex:1];
+          [enc setFragmentTexture:glassBackNear atIndex:2];
+          [enc setFragmentTexture:glassBackFar atIndex:3];
+          [enc setFragmentTexture:depth atIndex:4];
+          [enc setFragmentTexture:color atIndex:5];
+          [enc setFragmentTexture:ambient atIndex:6];
+          [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
+          [enc endEncoding];
+        }
+      } else {
+        MTLRenderPassDescriptor* d = [MTLRenderPassDescriptor new];
+        d.colorAttachments[0].texture = glassResolved;
+        d.colorAttachments[0].loadAction = MTLLoadActionClear;
+        d.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+        d.colorAttachments[0].storeAction = MTLStoreActionStore;
+        d.colorAttachments[1].texture = glassFront;
+        d.colorAttachments[1].loadAction = MTLLoadActionClear;
+        d.colorAttachments[1].clearColor = MTLClearColorMake(0, 0, 0, 0);
+        d.colorAttachments[1].storeAction = MTLStoreActionStore;
+        id<MTLRenderCommandEncoder> enc = [commands renderCommandEncoderWithDescriptor:d];
+        [enc endEncoding];
+      }
+
+      for (int pass = 0; pass < 2; pass++) {
+        MTLRenderPassDescriptor* d = [MTLRenderPassDescriptor new];
+        d.colorAttachments[0].texture = pass == 0 ? giRaw : giSoft;
+        d.colorAttachments[0].loadAction = MTLLoadActionDontCare;
+        d.colorAttachments[0].storeAction = MTLStoreActionStore;
+        d.colorAttachments[1].texture = pass == 0 ? ssrRaw : ssrSoft;
+        d.colorAttachments[1].loadAction = MTLLoadActionDontCare;
+        d.colorAttachments[1].storeAction = MTLStoreActionStore;
+        id<MTLRenderCommandEncoder> enc = [commands renderCommandEncoderWithDescriptor:d];
+        [enc setRenderPipelineState:pass == 0 ? pipelines.sspt : pipelines.ssptBlur];
+        [enc setFragmentBytes:&u length:sizeof u atIndex:0];
+        if (pass == 0) {
+          [enc setFragmentBuffer:frameBuffer offset:0 atIndex:1];
+          [enc setFragmentTexture:depth atIndex:0];
+          [enc setFragmentTexture:color atIndex:1];
+          [enc setFragmentTexture:accum atIndex:2];
+          [enc setFragmentTexture:reveal atIndex:3];
+          [enc setFragmentTexture:ambient atIndex:4];
+          [enc setFragmentTexture:glassResolved atIndex:5];
+          [enc setFragmentTexture:glassFront atIndex:6];
+        } else {
+          [enc setFragmentTexture:giRaw atIndex:0];
+          [enc setFragmentTexture:ssrRaw atIndex:1];
+          [enc setFragmentTexture:depth atIndex:2];
+          [enc setFragmentTexture:ambient atIndex:3];
+        }
+        [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
+        [enc endEncoding];
+      }
+    }
+    if (useNeural && !skipStage("neural")) {
+      const bool neuralRtActive = wantNeuralRt && ptScene && ptScene->impl().instances != nil;
+      u.grid.y = neuralRtActive ? 1.0f : 0.0f;
+      const NSUInteger halfW = aoRaw.width, halfH = aoRaw.height;
+      const MTLSize tgSize = MTLSizeMake(8, 8, 1);
+      const MTLSize tgCount = MTLSizeMake((halfW + 7) / 8, (halfH + 7) / 8, 1);
+      id<MTLComputeCommandEncoder> ce = [commands computeCommandEncoder];
+      // Pass 1: 3D Multi-Ring Horizon, Bent-Normal, Curvature, HW-RT Reflection/Shadow & Multi-Bounce Gather.
+      [ce setComputePipelineState:pipelines.neuralFeatures];
+      [ce setBytes:&u length:sizeof(u) atIndex:0];
+      [ce setBuffer:frameBuffer offset:0 atIndex:1];
+      if (neuralRtActive) {
+        PathScene::Impl& ps = ptScene->impl();
+        [ce setAccelerationStructure:ps.instances atBufferIndex:2];
+        for (const PartStructure& p : ps.structures) {
+          [ce useResource:p.structure usage:MTLResourceUsageRead];
+          [ce useResource:p.vertices usage:MTLResourceUsageRead];
+          [ce useResource:p.indices usage:MTLResourceUsageRead];
+        }
+        [ce setBuffer:ps.instanceTable offset:0 atIndex:3];
+        [ce setBuffer:ps.meshTable offset:0 atIndex:4];
+        [ce setBuffer:ps.materialTable offset:0 atIndex:5];
+      }
+      [ce setTexture:depth atIndex:0];
+      [ce setTexture:color atIndex:1];
+      [ce setTexture:ambient atIndex:2];
+      [ce setTexture:aoSoft atIndex:3];
+      [ce setTexture:accum atIndex:4];
+      [ce setTexture:reveal atIndex:5];
+      [ce setTexture:giRaw atIndex:6];
+      [ce setTexture:ssrRaw atIndex:7];
+      [ce setTexture:rtDepthHist[0] atIndex:8];
+      [ce dispatchThreadgroups:tgCount threadsPerThreadgroup:tgSize];
+      // Pass 2: 10x10 Threadgroup-SRAM Spatial Graph Conv + Fused 4-Layer FP16 Residual MLP.
+      [ce setComputePipelineState:pipelines.neuralInfer];
+      [ce setBytes:&u length:sizeof(u) atIndex:0];
+      [ce setBuffer:frameBuffer offset:0 atIndex:1];
+      [ce setBuffer:neuralWeightsBuffer offset:0 atIndex:2];
+      [ce setTexture:depth atIndex:0];
+      [ce setTexture:color atIndex:1];
+      [ce setTexture:ambient atIndex:2];
+      [ce setTexture:aoSoft atIndex:3];
+      [ce setTexture:giRaw atIndex:4];
+      [ce setTexture:ssrRaw atIndex:5];
+      [ce setTexture:giSoft atIndex:6];
+      [ce setTexture:ssrSoft atIndex:7];
+      [ce setTexture:rtDepthHist[0] atIndex:8];
+      [ce setTexture:giHist[0] atIndex:9];
+      [ce dispatchThreadgroups:tgCount threadsPerThreadgroup:tgSize];
+      [ce endEncoding];
     }
   }
 
   // Background, transparency, ambient occlusion, selection outline, tone curve, sRGB.
   {
     MTLRenderPassDescriptor* pass = [MTLRenderPassDescriptor new];
-    pass.colorAttachments[0].texture = target;
+    pass.colorAttachments[0].texture = lensOn && lensSource ? lensSource : target;
     pass.colorAttachments[0].loadAction = MTLLoadActionDontCare;
     pass.colorAttachments[0].storeAction = MTLStoreActionStore;
     id<MTLRenderCommandEncoder> enc = [commands renderCommandEncoderWithDescriptor:pass];
     [enc setRenderPipelineState:pipelines.composite];
+    // Lighting textures round up to whole cells, so their dimensions do not recover the stride.
+    const int32_t lightingStride = screenDiv;
+    [enc setFragmentBytes:&lightingStride length:sizeof lightingStride atIndex:0];
     [enc setFragmentBuffer:frameBuffer offset:0 atIndex:1];
     [enc setFragmentTexture:color atIndex:0];
     [enc setFragmentTexture:accum atIndex:1];
@@ -584,6 +1181,37 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
     [enc setFragmentTexture:ambient atIndex:4];
     [enc setFragmentTexture:aoSoft atIndex:5];
     [enc setFragmentTexture:depth atIndex:6];
+    [enc setFragmentTexture:giSoft atIndex:7];
+    [enc setFragmentTexture:ssrSoft atIndex:8];
+    [enc setFragmentTexture:glassResolved ? glassResolved : color atIndex:9];
+    [enc setFragmentTexture:giHist[0] atIndex:10];
+    [enc setFragmentSamplerState:pipelines.smooth atIndex:0];
+    [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
+    [enc endEncoding];
+  }
+
+  if (lensOn && lensSource) {
+    // Must match LensUniforms in shaders/lens.metal.
+    struct LensUniforms {
+      float texel[2], focus, maxR, radScale, depthA, depthB, ortho, depthNear, depthFar;
+    } lu{};
+    const Mat4 projection = projectionMatrix(camera);
+    lu.texel[0] = 1.0f / width, lu.texel[1] = 1.0f / height;
+    lu.focus = static_cast<float>(options.focusDistance);
+    lu.maxR = lensMaxPx;
+    lu.radScale = std::max(0.5f, lensMaxPx / 24);  // keeps the sample count near 12 per pixel of blur radius
+    lu.depthA = projection.m[10], lu.depthB = projection.m[14];
+    lu.ortho = camera.orthoHalfHeight > 0 ? 1.0f : 0.0f;
+    lu.depthNear = static_cast<float>(std::max(1e-3, camera.near)), lu.depthFar = static_cast<float>(std::max(std::max(1e-3, camera.near) * 1.001, camera.far));
+    MTLRenderPassDescriptor* pass = [MTLRenderPassDescriptor new];
+    pass.colorAttachments[0].texture = target;
+    pass.colorAttachments[0].loadAction = MTLLoadActionDontCare;
+    pass.colorAttachments[0].storeAction = MTLStoreActionStore;
+    id<MTLRenderCommandEncoder> enc = [commands renderCommandEncoderWithDescriptor:pass];
+    [enc setRenderPipelineState:pipelines.lens];
+    [enc setFragmentBytes:&lu length:sizeof lu atIndex:0];
+    [enc setFragmentTexture:lensSource atIndex:0];
+    [enc setFragmentTexture:depth atIndex:1];
     [enc setFragmentSamplerState:pipelines.smooth atIndex:0];
     [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
     [enc endEncoding];
@@ -591,8 +1219,8 @@ FrameStats Renderer::Impl::draw(const Camera& camera, const FrameOptions& option
 
   // Kept for picking.
   drewFrame = true, idsReady = false, lastSlot = slot, lastCamera = camera;
-  lastList.assign(list.begin(), list.end());
-  lastSeen = seen;
+  lastList.swap(list);
+  lastSeen.swap(seen);
 
   dispatch_semaphore_t done = inFlight;
   std::atomic<double>* gpu = &gpuMs;

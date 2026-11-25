@@ -32,8 +32,10 @@ int cmdPlan(const Args& args) {
   if (!plan::parse(option(args, "--flight", "auto", bad), shape)) bad = true;
   plan::Planner planner = plan::Planner::Native;
   if (!plan::parse(option(args, "--planner", "native", bad), planner)) bad = true;
+  plan::Order order = plan::Order::Reverse;
+  if (!plan::parse(option(args, "--order", "reverse", bad), order)) bad = true;
   if (bad || args.empty() || args[0].rfind("--", 0) == 0) {
-    std::fprintf(stderr, "usage: bm plan <file> [--truth <insertion-truth.json>] [--explain <part>] [--out <plan.json>] [--json] [--budget <seconds>] [--threads N] [--no-certify] [--no-studio] [--correct] [--flight auto|web|arc] [--planner native|legacy]\n");
+    std::fprintf(stderr, "usage: bm plan <file> [--truth <insertion-truth.json>] [--explain <part>] [--out <plan.json>] [--json] [--budget <seconds>] [--threads N] [--no-certify] [--no-studio] [--correct] [--clean-grown|--no-clean-grown] [--order reverse|forward] [--flight auto|web|arc] [--planner native|legacy]\n");
     return kUsage;
   }
   const std::string ldraw = defaultLDrawDir();
@@ -64,6 +66,8 @@ int cmdPlan(const Args& args) {
     options.pool = &pool;
     options.budgetSeconds = std::atof(budget.c_str());
     options.correctPlacements = correct;
+    options.cleanGrownUnits = flag(args, "--clean-grown") && !flag(args, "--no-clean-grown");
+    options.order = order;
     const plan::Plan plan = plan::planModel(model, graph, db, &gears, cache, shapes, options, &inferred, &corrections);
 
     std::map<std::string, int> flags;

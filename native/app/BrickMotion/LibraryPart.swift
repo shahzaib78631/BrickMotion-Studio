@@ -11,5 +11,11 @@ struct LibraryPart: Codable, Identifiable, Sendable {
     category = String(part.category)
   }
 
+  init(id: String, name: String, category: String = "") {
+    self.id = id
+    self.name = name
+    self.category = category
+  }
+
   var number: String { String(id.dropLast(4)) }
 }

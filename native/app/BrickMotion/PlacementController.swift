@@ -21,6 +21,7 @@ import Observation
   @ObservationIgnored private var generation: UInt64 = 0
   @ObservationIgnored private var version: UInt64 = 0
   @ObservationIgnored private var step: Int32 = -1
+  @ObservationIgnored private var beforeItem: Int32 = -1
   @ObservationIgnored private var autoGrip = 0
 
   init(view: ViewportView) { self.view = view }
@@ -29,6 +30,7 @@ import Observation
   var canPlace: Bool { state == .Free || state == .Snapped || state == .Reference }
 
   func begin(_ part: LibraryPart, colour: Int32, turns: Int, mirrored: Bool, step: Int?,
+             beforeItem: Int? = nil,
              reference: Bool = false, at initialPoint: NSPoint? = nil, anchor: UInt32 = .max, grabbedAt: NSPoint = .zero,
              selection: [UInt32] = [], option: Bool = false) {
     guard let document = view.document, view.bounds.width > 0, view.bounds.height > 0 else { return }
@@ -51,6 +53,7 @@ import Observation
     generation = document.session.generation()
     version = document.session.version()
     self.step = step.flatMap(Int32.init(exactly:)) ?? -1
+    self.beforeItem = beforeItem.flatMap(Int32.init(exactly:)) ?? -1
     state = .Preparing
     let mouse = view.window.map { view.convert($0.mouseLocationOutsideOfEventStream, from: nil) }
     at = initialPoint ?? mouse.flatMap { view.bounds.contains($0) ? $0 : nil } ??
@@ -144,7 +147,8 @@ import Observation
       if moving {
         return document.session.placeMoved(selection, anchor, preview.pose, preview.generation, preview.version)
       }
-      return document.session.placePart(std.string(part.id), colour, preview.pose, step, preview.generation, preview.version)
+      return document.session.placePartBefore(std.string(part.id), colour, preview.pose, step, beforeItem,
+                                               preview.generation, preview.version)
     }
     if result.refused.empty() {
       if !moving { history.record(part) }

@@ -94,10 +94,35 @@ import BMApp
   }
   if document.session.snapshot().selected[0].position.x == beforeMove.x { return fail("drag left the piece where it was") }
 
+  // Pointing at a stud of the placed brick, by a real mouse move, seats the new brick on it.
+  view.select([0], .Replace)
+  _ = view.viewport.draw(nil)
+  let placed = document.session.snapshot().selected[0].position
+  let size = bmapp.Vec2(x: view.bounds.width, y: view.bounds.height)
+  view.placement.begin(part, colour: 4, turns: 0, mirrored: false, step: 0, at: NSPoint(x: 8, y: 8))
+  guard let away = waitForPreview(after: 0) else { return fail("no preview away from the brick") }
+  var studs = 0, seated = 0
+  for dx in [-30.0, -10, 10, 30] {
+    for dz in [-10.0, 10] {
+      let stud = bmapp.projectPoint(view.viewport.camera(), size, bmapp.Vec3(x: placed.x + dx, y: placed.y, z: placed.z + dz))
+      let target = NSPoint(x: stud.x, y: view.bounds.height - stud.y)
+      guard view.bounds.insetBy(dx: 2, dy: 2).contains(target),
+            let move = NSEvent.mouseEvent(with: .mouseMoved, location: view.convert(target, to: nil), modifierFlags: [],
+                                          timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                                          context: nil, eventNumber: 0, clickCount: 0, pressure: 0) else { continue }
+      studs += 1
+      view.mouseMoved(with: move)
+      if let preview = waitForPreview(after: away.request), preview.state == .Snapped,
+         abs(preview.pose.position.y - (placed.y - 24)) < 0.01 { seated += 1 }
+    }
+  }
+  if studs < 4 || seated != studs { return fail("pointing at studs seated \(seated) of \(studs)") }
+  key(53, "\u{1b}")
+
   view.placement.begin(part, colour: 4, turns: 0, mirrored: false, step: 0, at: at)
   document.perform { document.session.insertStep(0) }
   if view.placement.active { return fail("a document edit left a stale gesture active") }
 
-  print("selftest-placement: ok (preview, keyboard, history, named undo and redo, revision change)")
+  print("selftest-placement: ok (preview, keyboard, history, named undo and redo, stud aiming, revision change)")
   return 0
 }

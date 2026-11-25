@@ -18,15 +18,31 @@ double pixelsPerLdu(double distance, double fovY, int viewportHeight) {
 }
 
 std::vector<Visible> cull(const Scene& scene, const std::vector<PartShape>& parts, const Camera& camera, int viewportHeight, int forceDetail, bool frustum, bm::JobPool* pool) {
-  std::vector<Visible> out(scene.groups.size());
+  std::vector<Visible> out;
+  cullInto(out, scene, parts, camera, viewportHeight, forceDetail, frustum, true, pool);
+  return out;
+}
+
+void cullInto(std::vector<Visible>& out, const Scene& scene, const std::vector<PartShape>& parts,
+              const Camera& camera, int viewportHeight, int forceDetail, bool frustum, bool showEdges,
+              bm::JobPool* pool) {
+  out.resize(scene.groups.size());
   const Frustum planes = frustumOf(camera, scene.origin);
   const bool inViewOnly = frustum;
   const bm::Vec3 eye = camera.eye - scene.origin;
   const bool forced = forceDetail >= 0 && forceDetail <= 2;
+  const double lens = std::tan(camera.fovY / 2);
+  const bool orthographic = camera.orthoHalfHeight > 0;
+  const double orthoScale = orthographic ? viewportHeight / (2 * camera.orthoHalfHeight) : 0;
   // A group at a time: each writes only its own Visible, in instance order.
   (pool ? *pool : bm::JobPool::shared()).parallelFor(scene.groups.size(), [&](size_t g) {
     const Group& group = scene.groups[g];
     Visible& v = out[g];
+    v.culled = 0;
+    for (auto& list : v.byDetail) list.clear();
+    for (auto& list : v.edges) list.clear();
+    for (auto& list : v.above) list.clear();
+    for (auto& list : v.below) list.clear();
     const bm::Box part = g < parts.size() ? parts[g].bounds : bm::Box{};
     const double lowError = g < parts.size() ? parts[g].lowError : 0.0;
     // A transparent piece's underside shows through its walls: it is always drawn whole.
@@ -50,18 +66,26 @@ std::vector<Visible> cull(const Scene& scene, const std::vector<PartShape>& part
       bool edges = true;
       if (!none) {
         const double radius = length(h), distance = length(c - eye);
-        const double perLdu = camera.orthoHalfHeight > 0 ? viewportHeight / (2 * camera.orthoHalfHeight) :
-            pixelsPerLdu(distance - radius, camera.fovY, viewportHeight);
+        const double perLdu = orthographic ? orthoScale : viewportHeight < 1 ? 0 :
+            viewportHeight / (2 * std::max(distance - radius, kNearest) * lens);
         edges = kStudLdu * perLdu >= kEdgeStudPixels;
         if (forced) detail = forceDetail;
         else if (group.material.transparent() || lowError * perLdu >= kLowErrorPixels) detail = 0;
-        else detail = projectedPixels(radius, distance, camera.fovY, viewportHeight) >= kLowPixels ? 1 : 2;
+        else {
+          const double pixels = viewportHeight < 1 || !(radius > 0) ? 0 :
+              distance > radius ? radius / (distance * lens) * viewportHeight : viewportHeight;
+          detail = pixels >= kLowPixels ? 1 : 2;
+        }
       } else if (forced) {
         detail = forceDetail;
       }
       v.byDetail[detail].push_back(i);
-      if (edges && detail < 2) v.edges[detail].push_back(i);
+      if (showEdges && edges && detail < 2) v.edges[detail].push_back(i);
       if (detail < 2) {
+        if (!inViewOnly || bottom == -1e300) {
+          v.below[detail].push_back(i);
+          continue;
+        }
         // The eye's height in the part's own space: by the inverse matrix's second row (the
         // cross product of the third and first columns, over the determinant). An eye less
         // than kUndersideSlack above the bottom still gets the underside.
@@ -69,11 +93,10 @@ std::vector<Visible> cull(const Scene& scene, const std::vector<PartShape>& part
         const double det = dot(c0, cross(c1, c2));
         const bm::Vec3 offset = eye - bm::Vec3{m[3], m[7], m[11]};
         const double y = std::abs(det) > 1e-12 ? dot(cross(c2, c0), offset) / det : 1e300;
-        (inViewOnly && y < bottom - kUndersideSlack ? v.above : v.below)[detail].push_back(i);
+        (y < bottom - kUndersideSlack ? v.above : v.below)[detail].push_back(i);
       }
     }
   });
-  return out;
 }
 
 }  // namespace bmr

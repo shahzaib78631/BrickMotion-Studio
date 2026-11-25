@@ -379,6 +379,21 @@ TEST_CASE("the same plan on one thread and on eight; cancelled plans say so", "[
   REQUIRE(s.certify(partial).certified == 0);
 }
 
+TEST_CASE("flight checks reuse blocked routes and discard cancelled work", "[plan][timeline]") {
+  FlightCheckCache cache;
+  CHECK_FALSE(cache.validate({1}, [] { return false; }));
+  CHECK_FALSE(cache.validate({1}, [] { return true; }));
+  CHECK(cache.hits() == 1);
+
+  CancelToken cancelled;
+  CHECK_FALSE(cache.validate({2}, [&] {
+    cancelled.cancel();
+    return false;
+  }, &cancelled));
+  CHECK(cache.validate({2}, [] { return true; }));
+  CHECK(cache.hits() == 1);
+}
+
 TEST_CASE("the timeline stages units on the floor and flies each to its seat", "[plan][timeline]") {
   Scene s;
   const uint32_t a = s.add(0, 0, 0), b = s.add(0, -24, 0), c = s.add(0, -48, 0);

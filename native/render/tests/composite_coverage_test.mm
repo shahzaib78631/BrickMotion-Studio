@@ -18,7 +18,7 @@ float srgb(float linear) {
 
 } // namespace
 
-TEST_CASE("shadowed floor at an MSAA silhouette keeps independent brick and floor coverage", "[gpu][composite]") {
+TEST_CASE("shadowed floor at an odd-width MSAA silhouette keeps independent brick and floor coverage", "[gpu][composite]") {
   if (!bmr::gpuAvailable()) SKIP("no Metal GPU");
   @autoreleasepool {
     bmr::Device* dev = bmr::sharedDevice();
@@ -27,38 +27,44 @@ TEST_CASE("shadowed floor at an MSAA silhouette keeps independent brick and floo
     INFO(error);
     REQUIRE(pipelines.ok);
 
-    auto texture = [&](MTLPixelFormat format, MTLTextureUsage usage, MTLStorageMode storage) {
-      MTLTextureDescriptor* desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:format width:1 height:1 mipmapped:NO];
+    constexpr NSUInteger width = 5;
+    constexpr int32_t lightingStride = 2;
+    auto texture = [&](MTLPixelFormat format, MTLTextureUsage usage, MTLStorageMode storage, NSUInteger columns) {
+      MTLTextureDescriptor* desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:format width:columns height:1 mipmapped:NO];
       desc.usage = usage;
       desc.storageMode = storage;
       return [dev->device newTextureWithDescriptor:desc];
     };
     const MTLTextureUsage read = MTLTextureUsageShaderRead;
-    id<MTLTexture> color = texture(bmr::kColorFormat, read, MTLStorageModeShared);
-    id<MTLTexture> ambient = texture(bmr::kAmbientFormat, read, MTLStorageModeShared);
-    id<MTLTexture> accum = texture(bmr::kAccumFormat, read, MTLStorageModeShared);
-    id<MTLTexture> reveal = texture(bmr::kRevealFormat, read, MTLStorageModeShared);
-    id<MTLTexture> mask = texture(MTLPixelFormatR8Unorm, read, MTLStorageModeShared);
-    id<MTLTexture> ao = texture(MTLPixelFormatRGBA8Unorm, read, MTLStorageModeShared);
-    id<MTLTexture> depth = texture(MTLPixelFormatDepth32Float, MTLTextureUsageShaderRead | MTLTextureUsageRenderTarget, MTLStorageModePrivate);
-    id<MTLTexture> final = texture(MTLPixelFormatBGRA8Unorm_sRGB, MTLTextureUsageRenderTarget, MTLStorageModeShared);
+    id<MTLTexture> color = texture(bmr::kColorFormat, read, MTLStorageModeShared, width);
+    id<MTLTexture> ambient = texture(bmr::kAmbientFormat, read, MTLStorageModeShared, width);
+    id<MTLTexture> accum = texture(bmr::kAccumFormat, read, MTLStorageModeShared, width);
+    id<MTLTexture> reveal = texture(bmr::kRevealFormat, read, MTLStorageModeShared, width);
+    id<MTLTexture> mask = texture(MTLPixelFormatR8Unorm, read, MTLStorageModeShared, width);
+    id<MTLTexture> ao = texture(MTLPixelFormatRGBA8Unorm, read, MTLStorageModeShared, 3);
+    id<MTLTexture> depth = texture(MTLPixelFormatDepth32Float, MTLTextureUsageShaderRead | MTLTextureUsageRenderTarget, MTLStorageModePrivate, width);
+    id<MTLTexture> final = texture(MTLPixelFormatBGRA8Unorm_sRGB, MTLTextureUsageRenderTarget, MTLStorageModeShared, width);
     REQUIRE(color); REQUIRE(ambient); REQUIRE(accum); REQUIRE(reveal);
     REQUIRE(mask); REQUIRE(ao); REQUIRE(depth); REQUIRE(final);
 
-    const MTLRegion pixel = MTLRegionMake2D(0, 0, 1, 1);
     // Simulate four MSAA samples: two red brick (0.5 linear red each), two
     // unlit floor. The resolved brick colour is .25 red, .5 coverage.
     const uint16_t redAndCoverage[4] = {0x3400, 0, 0, 0x3800};
     const uint16_t floorCoverage[4] = {0, 0x3800, 0, 0x3800};
     const float noTransparency[4] = {0, 0, 0, 0};
     const uint8_t noMask = 0;
-    const uint8_t floorLight[4] = {64, 255, 255, 255};  // ~25% light; a valid floor sample
-    [color replaceRegion:pixel mipmapLevel:0 withBytes:redAndCoverage bytesPerRow:sizeof redAndCoverage];
-    [ambient replaceRegion:pixel mipmapLevel:0 withBytes:floorCoverage bytesPerRow:sizeof floorCoverage];
-    [accum replaceRegion:pixel mipmapLevel:0 withBytes:noTransparency bytesPerRow:sizeof noTransparency];
-    [reveal replaceRegion:pixel mipmapLevel:0 withBytes:noTransparency bytesPerRow:sizeof noTransparency];
-    [mask replaceRegion:pixel mipmapLevel:0 withBytes:&noMask bytesPerRow:1];
-    [ao replaceRegion:pixel mipmapLevel:0 withBytes:floorLight bytesPerRow:sizeof floorLight];
+    for (NSUInteger x = 0; x < width; ++x) {
+      const MTLRegion pixel = MTLRegionMake2D(x, 0, 1, 1);
+      [color replaceRegion:pixel mipmapLevel:0 withBytes:redAndCoverage bytesPerRow:sizeof redAndCoverage];
+      [ambient replaceRegion:pixel mipmapLevel:0 withBytes:floorCoverage bytesPerRow:sizeof floorCoverage];
+      [accum replaceRegion:pixel mipmapLevel:0 withBytes:noTransparency bytesPerRow:sizeof noTransparency];
+      [reveal replaceRegion:pixel mipmapLevel:0 withBytes:noTransparency bytesPerRow:sizeof noTransparency];
+      [mask replaceRegion:pixel mipmapLevel:0 withBytes:&noMask bytesPerRow:1];
+    }
+    // A five-pixel viewport uses three half-resolution cells. Pixel 2 falls between the
+    // shadowed cells. Dividing the texture widths would instead read the bright third cell.
+    const uint8_t floorLight[3][4] = {{64, 255, 255, 255}, {64, 255, 255, 255}, {255, 255, 255, 255}};
+    [ao replaceRegion:MTLRegionMake2D(0, 0, 3, 1) mipmapLevel:0 withBytes:floorLight bytesPerRow:sizeof floorLight];
 
     bmr::FrameUniforms uniform{};
     uniform.background = simd_make_float4(1, 1, 1, 1);
@@ -79,6 +85,7 @@ TEST_CASE("shadowed floor at an MSAA silhouette keeps independent brick and floo
     pass.colorAttachments[0].storeAction = MTLStoreActionStore;
     id<MTLRenderCommandEncoder> enc = [commands renderCommandEncoderWithDescriptor:pass];
     [enc setRenderPipelineState:pipelines.composite];
+    [enc setFragmentBytes:&lightingStride length:sizeof lightingStride atIndex:0];
     [enc setFragmentBytes:&uniform length:sizeof uniform atIndex:1];
     [enc setFragmentTexture:color atIndex:0];
     [enc setFragmentTexture:accum atIndex:1];
@@ -95,7 +102,7 @@ TEST_CASE("shadowed floor at an MSAA silhouette keeps independent brick and floo
     REQUIRE(commands.status == MTLCommandBufferStatusCompleted);
 
     uint8_t bgra[4]{};
-    [final getBytes:bgra bytesPerRow:4 fromRegion:pixel mipmapLevel:0];
+    [final getBytes:bgra bytesPerRow:4 fromRegion:MTLRegionMake2D(2, 0, 1, 1) mipmapLevel:0];
     // .25 of the pixel is the resolved red surface; .5 is floor at 25%
     // illumination. The floor shadow must not alter the brick contribution.
     const float light = 64.0f / 255.0f;

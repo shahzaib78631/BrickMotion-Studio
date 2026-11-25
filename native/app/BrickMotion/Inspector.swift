@@ -5,7 +5,11 @@ import BMApp
 import Observation
 import SwiftUI
 
-enum InspectorTab: String, CaseIterable { case selection, part, submodel, camera }
+enum InspectorTab: String, CaseIterable { case selection, part, submodel, camera, look }
+
+extension bmapp.SceneCamera {
+  var identifier: String { String(id) }
+}
 
 /// The Part tab's state: the one selected piece, and its placement as fields.
 @MainActor @Observable final class PartInspectorModel {
@@ -36,7 +40,8 @@ struct Inspector: View {
         Text("Selection").tag(InspectorTab.selection)
         Text("Part").tag(InspectorTab.part)
         Text("Submodel").tag(InspectorTab.submodel)
-        if model.animation.visible { Text("Camera").tag(InspectorTab.camera) }
+        Text("Camera").tag(InspectorTab.camera)
+        Text("Look").tag(InspectorTab.look)
       }
       .pickerStyle(.segmented)
       .labelsHidden()
@@ -60,6 +65,7 @@ struct Inspector: View {
       case .part: PartTab(model: model, part: PartInspectorModel(model: model))
       case .submodel: SubmodelTab(model: model)
       case .camera: CameraMonitor(model: model, workspace: model.animation)
+      case .look: LookPanel(model: model)
       }
     }
   }
@@ -72,8 +78,12 @@ private struct CameraMonitor: View {
   var body: some View {
     if let camera = model.viewport?.presentation {
       Form {
-        Section("Preview") {
-          Toggle("Director Camera", isOn: $workspace.director)
+        if let selection = model.cameraSelection {
+          CameraSelectionInspector(model: model, workspace: workspace, selection: selection)
+        }
+        if model.focusPath.isEmpty { savedCameras }
+        Section("Viewport") {
+          if workspace.visible { Toggle("Director Camera", isOn: $workspace.director) }
           LabeledContent("Projection", value: camera.orthographic ? "Orthographic" : "Perspective")
           LabeledContent("View", value: camera.name)
         }
@@ -96,7 +106,78 @@ private struct CameraMonitor: View {
     }
   }
 
-  private func number(_ value: Double) -> String { value.formatted(.number.precision(.fractionLength(0...1))) }
+  private var savedCameras: some View {
+    let scene = model.document.session.sceneCameras()
+    let cameras = Array(scene.cameras)
+    return Section("Saved Cameras") {
+      ForEach(cameras, id: \.identifier) { camera in
+        HStack(spacing: 8) {
+          Button {
+            guard let viewport = model.viewport, viewport.viewport.recallSceneCamera(camera.id) else { return }
+            workspace.director = false
+            viewport.changed()
+          } label: {
+            VStack(alignment: .leading, spacing: 3) {
+              Text(String(camera.name)).lineLimit(1)
+              Text(scene.useForVideo && scene.activeId == camera.id ? "Default for Video" : angle(camera.fieldOfView))
+                .font(.caption).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+          }
+          .buttonStyle(.plain)
+          .help("Recall \(String(camera.name))")
+          .accessibilityLabel("Recall \(String(camera.name))")
+          .accessibilityValue(scene.useForVideo && scene.activeId == camera.id ? "Default for Video" : angle(camera.fieldOfView))
+          Menu {
+            Button("Rename…") {
+              CommandContext.askInSheet("Rename Camera", String(camera.name)) { name in
+                var renamed = camera
+                renamed.name = std.string(name)
+                model.context.perform { $0.saveSceneCamera(renamed) }
+              }
+            }
+            Button("Update from View") {
+              guard let viewport = model.viewport else { return }
+              var updated = viewport.viewport.captureSceneCamera()
+              updated.id = camera.id
+              updated.name = camera.name
+              model.context.perform { $0.saveSceneCamera(updated) }
+            }
+            if scene.useForVideo && scene.activeId == camera.id {
+              Button("Use Automatic Camera for Video") { model.context.perform { $0.activateSceneCamera(std.string()) } }
+            } else {
+              Button("Make Default for Video") { model.context.perform { $0.activateSceneCamera(camera.id) } }
+            }
+            Divider()
+            Button("Remove Camera", role: .destructive) { model.context.perform { $0.removeSceneCamera(camera.id) } }
+          } label: {
+            Image(systemName: "ellipsis.circle")
+              .imageScale(.large)
+          }
+          .menuStyle(.borderlessButton)
+          .fixedSize()
+          .menuIndicator(.hidden)
+          .accessibilityLabel("\(String(camera.name)) actions")
+        }
+      }
+      Button {
+        guard let viewport = model.viewport else { return }
+        var saved = viewport.viewport.captureSceneCamera()
+        let names = Set(cameras.map { String($0.name) })
+        let next = (1...(cameras.count + 1)).first { !names.contains("Camera \($0)") } ?? cameras.count + 1
+        saved.id = std.string(UUID().uuidString)
+        saved.name = std.string("Camera \(next)")
+        model.context.perform { $0.saveSceneCamera(saved) }
+      } label: {
+        Label("Save Current View", systemImage: "camera")
+      }
+    }
+  }
+
+  private func number(_ value: Double) -> String {
+    (abs(value) < 0.05 ? 0 : value).formatted(.number.precision(.fractionLength(0...1)))
+  }
   private func angle(_ value: Double) -> String { number(value) + "°" }
 }
 

@@ -71,6 +71,34 @@ TEST_CASE("split and merge", "[bmapp][structure]") {
   CHECK_FALSE(s.splitStep(0, {pieces(s, "a")[0], pieces(s, "b")[0]}).refused.empty());  // all of them
 }
 
+TEST_CASE("timeline split and new-step moves preserve order and undo atomically", "[bmapp][structure]") {
+  Fixture f;
+  bmapp::Session& s = f.s;
+  auto f0 = s.stepFields(0);
+  f0.pauseAfter = 1.6;
+  s.setStepFields(0, f0, false);
+  const auto original = plan(s).dump();
+  const auto depth = s.undoDepth();
+
+  REQUIRE(s.splitStepAt(0, 1).refused.empty());
+  CHECK(s.undoDepth() == depth + 1);
+  CHECK(s.stepFields(0).pauseAfter == 0);
+  CHECK(s.stepFields(1).pauseAfter == 1.6);
+  CHECK(ids(plan(s)["steps"][1]) == std::vector<std::string>{"b"});
+  s.undo();
+  CHECK(plan(s).dump() == original);
+
+  auto moving = pieces(s, "b");
+  const auto c = pieces(s, "c");
+  moving.insert(moving.end(), c.begin(), c.end());
+  REQUIRE(s.moveToNewStep(moving, 1).refused.empty());
+  CHECK(s.undoDepth() == depth + 1);
+  CHECK(s.stepCount() == 3);
+  CHECK(ids(plan(s)["steps"][1]) == std::vector<std::string>{"b", "c"});
+  s.undo();
+  CHECK(plan(s).dump() == original);
+}
+
 TEST_CASE("step fields coalesce while continuing", "[bmapp][structure]") {
   Fixture f;
   bmapp::Session& s = f.s;
@@ -109,6 +137,53 @@ TEST_CASE("step fields coalesce while continuing", "[bmapp][structure]") {
   const uint64_t v = s.version();
   s.setStepFields(0, s.stepFields(0), false);  // no change: no undo step
   CHECK(s.version() == v);
+}
+
+TEST_CASE("arrival pins survive hold edits and a picked group moves in one undo", "[bmapp][structure]") {
+  Fixture f;
+  auto& s = f.s;
+  const auto original = plan(s).dump();
+  const auto a = pieces(s, "a");
+  const auto c = pieces(s, "c");
+  REQUIRE_FALSE(a.empty());
+  REQUIRE_FALSE(c.empty());
+  REQUIRE(s.setArrivalPinned(a, true).refused.empty());
+  CHECK(s.arrivalPins() == a);
+  auto fields = s.stepFields(0);
+  fields.pauseAfter = 0.8;
+  REQUIRE(s.setStepFields(0, fields, false).refused.empty());
+  CHECK(s.arrivalPins() == a);
+  s.undo();
+  s.undo();
+  CHECK(plan(s).dump() == original);
+
+  auto group = a;
+  group.insert(group.end(), c.begin(), c.end());
+  const size_t depth = s.undoDepth();
+  REQUIRE(s.moveArrival(group, 0, 1, true).refused.empty());
+  CHECK(s.undoDepth() == depth + 1);
+  CHECK(ids(plan(s)["steps"][0]) == std::vector<std::string>{"a", "c", "b"});
+  CHECK(s.arrivalPins().size() == group.size());
+  s.undo();
+  CHECK(plan(s).dump() == original);
+}
+
+TEST_CASE("placing a catalogue part at a timeline insertion is one undo", "[bmapp][structure]") {
+  Fixture fixture;
+  auto& s = fixture.s;
+  const auto original = plan(s).dump();
+  const auto depth = s.undoDepth();
+  const auto revision = s.version();
+  const bmapp::PartPose pose{{}, {160, -24, 0}};
+  REQUIRE(s.placePartBefore("3005.dat", 14, pose, 0, 1, s.generation(), revision).refused.empty());
+  const auto items = s.stepItems(0);
+  REQUIRE(items.size() == 3);
+  CHECK(items[1].name == "3005.dat");
+  CHECK(items[1].color == 14);
+  CHECK(s.selection() == items[1].pieces);
+  CHECK(s.undoDepth() == depth + 1);
+  s.undo();
+  CHECK(plan(s).dump() == original);
 }
 
 TEST_CASE("pin order marks the items", "[bmapp][structure]") {

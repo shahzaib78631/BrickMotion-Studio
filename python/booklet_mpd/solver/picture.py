@@ -40,39 +40,60 @@ def colour_rgb(code: int) -> tuple[int, int, int]:
     return ldraw_colours().get(code, (128, 128, 128))
 
 
-def arrow_mask(rgb: np.ndarray) -> np.ndarray:
-    """Thin red strokes (assembly arrows): red minus its opening, as in stepimage, then only strokes that
-    are long and touch the page background. On small pictures the opening also leaves stud tops and
-    the rims of red bricks; calling those arrows erased red parts' colour evidence and switched on
-    floating placement for almost every step (BOOKLET_SOLVER_ARROWS=0 restores the plain rule)."""
-    h, w = rgb.shape[:2]
-    p = rgb.astype(float)
-    r, g, b = p[..., 0], p[..., 1], p[..., 2]
-    red = ((r > 150) & (g < 90) & (b < 110) & (r - g > 90)).astype(np.uint8)
-    size = max(5, int(0.035 * min(h, w)) | 1)
-    blobs = cv2.morphologyEx(red, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size)))
-    thin = red & ~blobs
-    if STRICT_ARROWS:
-        # arrows are drawn over the page; part rims are fenced off from it by the black outline
-        page = np.linalg.norm(p - _background(rgb), axis=-1) < 12
-        on_page = cv2.dilate(page.astype(np.uint8), np.ones((3, 3), np.uint8)).astype(bool)
-        count, labels, stats, _ = cv2.connectedComponentsWithStats(thin, connectivity=8)
+def _extract_arrows_for_mask(mask: np.ndarray, rgb: np.ndarray, p: np.ndarray, size: int, length: int) -> np.ndarray:
+    """Extract thin assembly-arrow strokes + arrowheads from a single colour mask (red or green)."""
+    if not mask.any():
+        return np.zeros(mask.shape, dtype=np.uint8)
+    blobs = cv2.morphologyEx(mask, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size)))
+    thin = mask & ~blobs
+    if STRICT_ARROWS and thin.any():
+        # Arrows are drawn directly on the page WITHOUT a black outline; bricks are ALWAYS enclosed
+        # by a 1-2 px dark outline! Use dark-outline-blocked geodesic dilation to bridge 1-2 px
+        # anti-aliasing halos around thin shafts, AND reject any stroke heavily bordered by black outlines.
+        page = np.linalg.norm(p - _background(rgb), axis=-1) < 16
+        dark_wall = rgb.max(-1) < 95
+        dark_outline = rgb.max(-1) < 60
+        k3 = np.ones((3, 3), np.uint8)
+        dark_adj = cv2.dilate(dark_outline.astype(np.uint8), k3).astype(bool)
+        p1 = cv2.dilate(page.astype(np.uint8), k3).astype(bool) & ~dark_wall
+        p2 = cv2.dilate(p1.astype(np.uint8), k3).astype(bool) & ~dark_wall
+        on_page = cv2.dilate(p2.astype(np.uint8), k3).astype(bool) & ~dark_wall
+        thin_conn = cv2.morphologyEx(thin, cv2.MORPH_CLOSE, k3)
+        count, labels, stats, _ = cv2.connectedComponentsWithStats(thin_conn, connectivity=8)
         keep = np.zeros(count, bool)
-        length = max(8, int(0.06 * min(h, w)))
         for i in range(1, count):
             if max(stats[i][2], stats[i][3]) >= length:
-                keep[i] = on_page[labels == i].mean() >= 0.25
-        thin = keep[labels].astype(np.uint8)
-        # every arrow ends in a head, too thick for the opening to remove: a red blob touching a kept stroke
-        # that is small next to it is that head (a red part the tip points at is much bigger)
+                comp = labels == i
+                if on_page[comp].mean() >= 0.25 and dark_adj[comp].mean() < 0.45:
+                    keep[i] = True
+        thin = (keep[labels] & (thin_conn > 0)).astype(np.uint8)
+        # Every arrow ends in a head, too thick for the opening to remove: a blob touching a kept stroke
+        # that is small next to it is that head (a brick the tip points at is much bigger)
         if thin.any():
-            touch = cv2.dilate(thin, np.ones((3, 3), np.uint8)).astype(bool)
+            touch = cv2.dilate(thin, np.ones((5, 5), np.uint8)).astype(bool)
             area = {i: stats[i][4] for i in range(1, count) if keep[i]}
             bcount, blabels, bstats, _ = cv2.connectedComponentsWithStats(blobs, connectivity=8)
             for j in np.unique(blabels[touch & (blabels > 0)]):
-                strokes = np.unique(labels[cv2.dilate((blabels == j).astype(np.uint8), np.ones((3, 3), np.uint8)).astype(bool) & keep[labels]])
-                if bstats[j][4] <= 0.8 * sum(area.get(k, 0) for k in strokes if k):
+                strokes = np.unique(labels[cv2.dilate((blabels == j).astype(np.uint8), np.ones((5, 5), np.uint8)).astype(bool) & keep[labels]])
+                if bstats[j][4] <= 1.2 * sum(area.get(k, 0) for k in strokes if k):
                     thin |= (blabels == j).astype(np.uint8)
+    return thin
+
+
+def arrow_mask(rgb: np.ndarray) -> np.ndarray:
+    """Thin red and green strokes (LEGO assembly arrows): colour mask minus its morphological opening,
+    then only strokes that are long and touch the page background (bridging anti-aliasing halos).
+    Detects both standard LEGO red arrows and green arrows while rejecting brick faces and rims."""
+    h, w = rgb.shape[:2]
+    p = rgb.astype(float)
+    r, g, b = p[..., 0], p[..., 1], p[..., 2]
+    red = ((r > 145) & (g < 95) & (b < 110) & (r - g > 80)).astype(np.uint8)
+    # LEGO also draws vivid medium-green assembly arrows (~RGB 50, 163, 86) on many booklets
+    green = ((g > 125) & (r < 95) & (b < 120) & (g - r > 65) & (g - b > 35)).astype(np.uint8)
+    # Fixed 5-px ellipse removes brick faces/plates (which are >=5 px thick) while preserving thin arrow shafts
+    size = 5
+    length = max(7, int(0.05 * min(h, w)))
+    thin = _extract_arrows_for_mask(red, rgb, p, size, length) | _extract_arrows_for_mask(green, rgb, p, size, length)
     return cv2.dilate(thin, np.ones((3, 3), np.uint8)).astype(bool)
 
 
@@ -163,6 +184,13 @@ class Picture:
         out = np.where(best == len(codes), BACKGROUND, best)
         out[d.min(-1) > tol] = UNKNOWN
         out[self.arrows] = UNKNOWN
-        out[self.rgb.max(-1) < INK] = UNKNOWN       # outlines and stud shading are near-black ink
+        dark = self.rgb.max(-1) < INK
+        has_dark = any(max(colour_rgb(c)) < 65 for c in codes)
+        if has_dark and dark.any():
+            # Preserve solid black/dark brick interiors while keeping thin dark outlines UNKNOWN
+            solid_dark = cv2.erode(dark.astype(np.uint8), np.ones((3, 3), np.uint8)) > 0
+            out[dark & ~solid_dark] = UNKNOWN
+        else:
+            out[dark] = UNKNOWN                      # outlines and stud shading are near-black ink
         out[~self.foreground & (out != BACKGROUND)] = BACKGROUND
         return out

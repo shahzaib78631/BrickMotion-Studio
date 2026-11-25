@@ -1,6 +1,8 @@
 #include "animation_authoring.h"
 
 #include <map>
+#include <optional>
+#include "commands.h"
 #include "session_impl.h"
 
 namespace bmapp {
@@ -21,6 +23,17 @@ double bounded(const Json& json, const char* key, double fallback, double low, d
     if (std::isfinite(value)) return std::clamp(value, low, high);
   }
   return fallback;
+}
+
+/// assembly.floorShift: [x, z] studs in the web's world (studs, +Y up), as LDU; nothing when
+/// absent, zero or malformed.
+std::optional<bm::Vec3> floorShiftOf(const Json& assembly) {
+  const auto it = assembly.find("floorShift");
+  if (it == assembly.end() || !it->is_array() || it->size() != 2 || !(*it)[0].is_number() || !(*it)[1].is_number())
+    return std::nullopt;
+  const double x = (*it)[0].get<double>(), z = (*it)[1].get<double>();
+  if (!std::isfinite(x) || !std::isfinite(z) || (x == 0 && z == 0) || std::abs(x) > 1e5 || std::abs(z) > 1e5) return std::nullopt;
+  return bm::Vec3{x * 20, 0, -z * 20};
 }
 
 void applyMotion(AnimationAuthoring::Motion& motion, const Json& json) {
@@ -57,20 +70,30 @@ AnimationAuthoring animationAuthoring(const Session& session) {
   AnimationAuthoring out;
   if (current.base) {
     const auto& video = object(object(current.base->json, "settings"), "video");
-    const auto text = [&](const char* key) {
-      return video.contains(key) && video[key].is_string() ? video[key].get<std::string>() : std::string{};
-    };
-    bm::plan::staging::parse(text("floorStyle"), out.style.floorStyle);
-    bm::plan::staging::parse(text("floorSort"), out.style.floorSort);
-    bm::plan::staging::parse(text("floorSides"), out.style.floorSides);
-    bm::plan::staging::parse(text("floorMatch"), out.style.floorMatch);
-    out.style.floorAspect = bounded(video, "floorAspect", out.style.floorAspect, 0.25, 4);
+    const auto staging = session.stagingSettings();
+    bm::plan::staging::parse(staging.layout, out.style.floorStyle);
+    bm::plan::staging::parse(staging.group, out.style.floorSort);
+    bm::plan::staging::parse(staging.sides, out.style.floorSides);
+    bm::plan::staging::parse(staging.match, out.style.floorMatch);
+    out.style.floorAspect = staging.aspect;
     out.style.targetSeconds = bounded(video, "targetSeconds", 0, 0, 60 * 60);
     out.style.introSeconds = bounded(video, "introSeconds", -1, 0, 120);
     out.style.outroSeconds = bounded(video, "outroSeconds", -1, 0, 120);
     out.style.buildSeconds = bounded(video, "buildSeconds", -1, 0, 60 * 60);
     out.style.heroOrbit = video.contains("heroOrbit") && video["heroOrbit"].is_boolean() && video["heroOrbit"].get<bool>();
   }
+  const BuildSettings build = buildSettingsOf(current);
+  out.order = build.order == BuildOrder::BottomUp ? bm::plan::Order::Forward : bm::plan::Order::Reverse;
+  out.cleanGrownUnits = build.cleanGrownUnits;
+  out.stagingTurn = stagingTurnOf(current);
+  if (build.standardPlanner) out.style.planner = bm::plan::Planner::Legacy;
+  out.style.shape = build.flight == FlightShape::Web ? bm::plan::FlightShape::Web
+                  : build.flight == FlightShape::Arc ? bm::plan::FlightShape::Arc : bm::plan::FlightShape::Auto;
+  out.style.piecesPerSecond = build.piecesPerSecond;
+  out.style.gap = build.gap;
+  out.style.stepPause = build.stepPause;
+  out.style.clearance = build.clearance;
+  out.style.corner = build.corner;
   if (!current.model) return out;
   const auto& model = *current.model;
   const auto* visible = source.def(focusedDef(current));
@@ -112,9 +135,11 @@ AnimationAuthoring animationAuthoring(const Session& session) {
       applyMotion(motion, object(assembly, "motion"));
       if (!item.submodel) {
         Json hints = assembly;
+        hints.erase("floorShift");  // where it waits is laid on after planning: a drag never replans
         transformAxis(hints, parent);
         const double floorTurn = bounded(assembly, "floorTurn", 0, -360, 360);
         if (std::abs(floorTurn) > 1e-6) out.waitingTurns.emplace_back(static_cast<uint32_t>(i), floorTurn);
+        if (const auto shift = floorShiftOf(assembly)) out.waitingShifts.emplace_back(static_cast<uint32_t>(i), *shift);
         auto qualify = [&](Json& idValue) {
           if (!idValue.is_string()) return;
           const auto id = qualified.find({path, idValue.get<std::string>()});
@@ -279,6 +304,34 @@ double waitFacingSeat(const bm::plan::Flight& flight) {
   return best;
 }
 
+void swingStaging(const bm::Model& model, bm::plan::Timeline& timeline, double degrees) {
+  if (!std::isfinite(degrees) || std::abs(degrees) < 1e-6 || model.pieces().empty()) return;
+  double minX = INFINITY, minZ = INFINITY, maxX = -INFINITY, maxZ = -INFINITY;
+  for (const auto& piece : model.pieces()) {
+    minX = std::min(minX, piece.world.t.x), maxX = std::max(maxX, piece.world.t.x);
+    minZ = std::min(minZ, piece.world.t.z), maxZ = std::max(maxZ, piece.world.t.z);
+  }
+  const bm::Vec3 middle{(minX + maxX) / 2, 0, (minZ + maxZ) / 2};
+  for (auto& flight : timeline.flights) {
+    if (flight.parent >= 0 || flight.frames <= 0) continue;  // a unit's own build is carried by its flight
+    flight.swing = degrees;
+    flight.swingAbout = middle;
+  }
+}
+
+void shiftWaitingParts(const bm::plan::Plan& plan, bm::plan::Timeline& timeline,
+                       const std::vector<std::pair<uint32_t, bm::Vec3>>& shifts, size_t pieceCount) {
+  for (auto& flight : timeline.flights) flight.shift = {};
+  if (shifts.empty()) return;
+  const auto owners = bm::plan::owners(timeline, plan, pieceCount);
+  for (const auto& [piece, shift] : shifts) {
+    const int owner = piece < owners.size() ? owners[piece] : -1;
+    if (owner < 0) continue;
+    auto& flight = timeline.flights[static_cast<size_t>(owner)];
+    if (bm::plan::piecesOf(flight, plan).size() == 1) flight.shift = shift;
+  }
+}
+
 void orientWaitingParts(const bm::Model& model, const bm::plan::Plan& plan, bm::plan::Timeline& timeline,
                         const AnimationAuthoring& authored, bm::ldraw::PartCache& parts, bm::collide::ShapeCache& shapes,
                         std::vector<std::string>& notes, const bm::CancelToken& cancel) {
@@ -358,6 +411,25 @@ void retimeAnimation(const bm::Model& model, const bm::plan::Plan& plan, bm::pla
     timeline.flights[i].appearFrame = std::min(timeline.flights[i].startFrame, remap(appearances[i]));
   for (auto& key : timeline.camera) key.frame = remap(key.frame);
   timeline.frames = previousEnd + std::max(0, timeline.frames - previousSourceEnd) + delay;
+  if (authored.style.buildSeconds <= 0 || timeline.frames <= 0) return;
+
+  // Retiming the Build clip never replans its routes. Limit compression so each
+  // moving flight still has at least one frame and stays in the planned order.
+  double minimumScale = 0;
+  for (const auto& flight : timeline.flights)
+    if (flight.frames > 0) minimumScale = std::max(minimumScale, 1.0 / flight.frames);
+  const double requested = authored.style.buildSeconds * authored.style.fps / timeline.frames;
+  const double scale = std::max(minimumScale, requested);
+  const auto scaled = [&](int frame) { return static_cast<int>(std::lround(frame * scale)); };
+  for (auto& flight : timeline.flights) {
+    const int first = scaled(flight.startFrame);
+    const int frames = scaled(flight.startFrame + flight.frames) - first;
+    flight.startFrame = first;
+    flight.appearFrame = scaled(flight.appearFrame);
+    retimeFlight(flight, frames, {1.0, -1.0, -1.0, flight.ease});
+  }
+  for (auto& key : timeline.camera) key.frame = scaled(key.frame);
+  timeline.frames = scaled(timeline.frames);
 }
 
 }  // namespace bmapp

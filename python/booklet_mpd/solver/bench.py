@@ -52,8 +52,8 @@ def teacher_set(set_number: str, force: bool = False) -> dict:
     all_cases = list(cases(set_number))
     for ci, case in enumerate(all_cases):
         base = case.visible if case.visible else case.context
-        prev_c = all_cases[ci - 1] if ci > 0 and all_cases[ci - 1].file == case.file else None
-        next_c = all_cases[ci + 1] if ci + 1 < len(all_cases) and all_cases[ci + 1].file == case.file else None
+        prev_c = all_cases[ci - 1] if ci > 0 and all_cases[ci - 1].file == case.file and all_cases[ci - 1].step_number == case.step_number - 1 else None
+        next_c = all_cases[ci + 1] if ci + 1 < len(all_cases) and all_cases[ci + 1].file == case.file and all_cases[ci + 1].step_number == case.step_number + 1 else None
         frame_free = not base
         row = {"step": case.step_number, "index": case.booklet_step, "parts": len(case.added), "base": len(base),
                "frame_free": frame_free}
@@ -69,6 +69,7 @@ def teacher_set(set_number: str, force: bool = False) -> dict:
                 result = solve(lib, base, new, case.rgb, case.pts_per_px, collider=collider,
                                subbuilds=case.subbuilds, camera=section.prior(key) if base else None,
                                prev_rgb=prev_c.rgb if prev_c is not None else None,
+                               prev_pts=prev_c.pts_per_px if prev_c is not None else None,
                                next_rgb=next_c.rgb if next_c is not None else None,
                                next_pts=next_c.pts_per_px if next_c is not None else None)
             else:      # a sub-model starts: drawn on the model so far, or alone (scored up to a rigid move)
@@ -300,6 +301,8 @@ MEPNET_PUBLISHED = {   # MEPNet (Wang et al., ECCV 2022) Table 1: component pose
 def _load(mode: str) -> dict[str, dict]:
     out = {}
     for path in sorted((OUT / mode).rglob("*.json")):
+        if path.name.startswith("._"):
+            continue
         r = json.loads(path.read_text())
         out[r["set"]] = r
     return out

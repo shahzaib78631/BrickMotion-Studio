@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include "bmapp/bridging.h"
+#include "bmapp/movie_export.h"
 #include "bmapp/motion_audit.h"
 #include "bmapp/session.h"
 #include "bmapp/types.h"
@@ -31,6 +32,7 @@ struct CameraState {
 struct Picture {
   int width = 0, height = 0;
   std::vector<uint8_t> rgba;
+  bool copyRGBA(uint8_t* destination, size_t count) const;
 };
 
 enum class PlacementState { Inactive, Preparing, Free, Snapped, Reference, Blocked, Unavailable };
@@ -60,20 +62,30 @@ struct PlacementPreview {
   std::string reason;
 };
 
+/// What the editor's view may leave out of the project's look (RenderLook), and how it plans.
+/// Exports draw the look as saved.
 struct ViewportPreferences {
   bool edges = true;
   bool floor = true;
   bool shadows = true;
   bool ambientOcclusion = true;
   bool autoPlan = true;
+  bool sceneBackdrop = true;  ///< false: the editor's own backdrop, even with a scene chosen
 };
 
 struct BuildFlightRow {
   uint32_t piece = UINT32_MAX;
-  int step = 0, depth = 0;
+  int step = 0, depth = 0, color = 16;
   double start = 0, end = 0;
   std::string name, flag, blocker;
   bool independent = false;
+};
+
+struct BuildSubmodelRow {
+  int flight = -1, depth = 0;
+  double start = 0, attach = 0, end = 0;
+  StringList path;
+  PieceList pieces;
 };
 
 struct BuildTimeline {
@@ -82,15 +94,22 @@ struct BuildTimeline {
   double buildStart = 0, buildEnd = 0;
   double planningMilliseconds = 0;
   size_t reusedMoves = 0;
+  size_t reusedFlightChecks = 0;
+  bool reusedSnapshot = false;
+  bool standardPreview = false;
   std::vector<BuildFlightRow> flights;
+  std::vector<BuildSubmodelRow> submodels;
   std::vector<std::string> notes;
 };
+
+enum class PlanStage { Waiting, Solving, CheckingFlights, Preparing, StandardPreview };
 
 struct PlaybackState {
   double seconds = 0, duration = 0;
   bool playing = false, waitingToPlay = false, atRest = true, stale = false;
   PlanState plan = PlanState::Idle;
   uint64_t version = 0;
+  PlanStage stage = PlanStage::Waiting;
 };
 
 class Viewport {
@@ -119,6 +138,16 @@ class Viewport {
   bool draw(void* metalDrawable);
   /// The last frame drawn with no drawable.
   Picture readback();
+  /// A fresh picture of the current view. The visible window still receives its next frame.
+  Picture capture();
+  /// Renders and encodes on a private headless viewport. Blocks the export helper process.
+  /// Returns an error suitable for display, or an empty string after completing the movie.
+  std::string exportMovie(const MovieSettings& settings, const std::string& destination);
+  /// The snap track of the planned Build with the project's mix, as the Build video exports it,
+  /// on the editor's Build clock (second 0 is the timeline's start), panned for the current view.
+  /// Empty when written; otherwise why not, fit to show a person.
+  std::string writeSnapTrack(const std::string& file, const std::string& recordings);
+
   /// Behind the model, as sRGB 0..1 (the view follows light and dark mode).
   void setBackground(double r, double g, double b);
   void setPreferences(const ViewportPreferences& preferences);
@@ -141,6 +170,17 @@ class Viewport {
   /// Looks from that side, straight on, with everything in view.
   void view(ViewPreset preset);
   CameraState camera() const;
+  SceneCamera captureSceneCamera() const;
+  /// True when the Camera track of the clock shown (the Build's, or the Keyframes timeline's on
+  /// the Keyframes tab) has keys and a scene to follow: with Follow Camera on it films that video
+  /// (viewport and export) in place of the director.
+  bool followsCameraTrack();
+  /// That track's view at `seconds` of its video (LDraw units); the current view if the track
+  /// has no keys or nothing is planned.
+  SceneCamera cameraTrackView(double seconds);
+  /// The planned Build, for Session::autoDirectCamera; not ok until it is planned.
+  CameraDirectorInput cameraDirectorInput();
+  bool recallSceneCamera(const std::string& id);
   void setOrthographic(bool enabled);
   void centerOnFloor();
   void setViewStyle(ViewStyle style);
@@ -150,7 +190,7 @@ class Viewport {
   /// Space: plans the build the first time (in the background), then plays or pauses it.
   void play(bool on);
   void requestPlan();
-  void regeneratePlan();
+  void regeneratePlan(bool standardPreview = false);
   /// Selects a time range (seconds) and plays it. An end of zero means through to the end.
   void playRange(double start, double end);
   void setPlaybackRate(double rate);
@@ -158,6 +198,15 @@ class Viewport {
   void setDirectorPreview(bool directed);
   void useKeyframes(bool enabled);
   KeyList bakeFlight(uint32_t piece);
+  KeyList bakeFlightInScene(uint32_t piece, const KeyScene& scene);
+  FlightBake* captureFlightBake(const PieceList& pieces, bool detach) SWIFT_RETURNS_RETAINED;
+  FlightPoseList editedFlightRoute(uint32_t piece);
+  /// The path a piece's flight, open as keys on the Keyframes timeline, flies (empty otherwise).
+  FlightPath flightPath(uint32_t piece);
+  /// How far a point at `through` (LDU) moves when dragged from (x0, y0) to (x1, y1) (points, top
+  /// left) in the plane facing the camera through it: a path point's drag. Zero when the pointer
+  /// leaves that plane.
+  Vec3 dragFacingView(Vec3 through, double x0, double y0, double x1, double y1) const;
   MotionAudit* auditMotion(uint32_t piece) SWIFT_RETURNS_RETAINED;
   /// Temporarily previews a build step or the full inventory (-1) without editing it.
   void arrange(int step, AssemblyPreview mode);
@@ -167,6 +216,15 @@ class Viewport {
   PieceList buildOrder() const;
   bool canTurnWaitingPart(uint32_t piece) const;
   double waitingTurnToMatch(uint32_t piece) const;
+  /// Whether `piece` waits on the floor alone at the frame shown, so it can be dragged there.
+  bool canMoveWaitingPart(uint32_t piece) const;
+  /// Dragging a waiting piece across the floor (the web's staging drag): it follows the pointer
+  /// (points, top left) in the level plane it waits in, shown live; nothing is saved. `end`
+  /// gives the drag (LDU, level) for Session::shiftWaitingPart, and puts the piece back; with
+  /// nothing begun, or a pointer off the plane, the drag is zero.
+  bool beginWaitingDrag(uint32_t piece, double x, double y);
+  Vec3 dragWaitingPart(double x, double y);
+  Vec3 endWaitingDrag();
   /// Pauses playback and shows every piece at its edited position.
   void showRest();
   bool playing() const;
@@ -207,6 +265,7 @@ class Viewport {
   struct Impl;
 
  private:
+  bool drawFrame(void* metalDrawable, bool& submitted);
   friend void ::bmappRetainViewport(Viewport*);
   friend void ::bmappReleaseViewport(Viewport*);
   std::atomic<int> refs_{1};

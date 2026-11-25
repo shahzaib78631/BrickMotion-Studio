@@ -13,7 +13,11 @@ import SwiftUI
   private(set) var fieldOfView = 34.4
   private(set) var target = bmapp.Vec3()
   var orthographic = false {
-    didSet { view?.viewport.setOrthographic(orthographic); view?.changed() }
+    didSet {
+      guard let view, view.viewport.camera().orthographic != orthographic else { return }
+      view.viewport.setOrthographic(orthographic)
+      view.changed()
+    }
   }
   var style: bmapp.ViewStyle = .Shaded {
     didSet { view?.viewport.setViewStyle(style); view?.changed() }
@@ -25,6 +29,7 @@ import SwiftUI
   func update() {
     guard let view else { return }
     let camera = view.viewport.camera()
+    if orthographic != camera.orthographic { orthographic = camera.orthographic }
     let percent = Int(min(100000, max(1, view.viewport.zoomPercent())).rounded())
     if percent != zoom { zoom = percent }
     if abs(camera.yaw - yaw) > 0.005 { yaw = camera.yaw }
@@ -73,15 +78,23 @@ import SwiftUI
 struct ViewportChrome: View {
   @Bindable var camera: ViewportPresentation
   let model: DocumentModel
+  @State private var showsLook = false
 
   var body: some View {
     ViewThatFits(in: .horizontal) {
       HStack(spacing: 5) {
+        recording
         options
+        Divider().frame(height: 15)
+        lookButton
         Divider().frame(height: 15)
         zoom
       }
-      options
+      HStack(spacing: 5) {
+        recording
+        options
+        lookButton
+      }
     }
     .padding(.horizontal, 7)
     .padding(.vertical, 4)
@@ -90,6 +103,32 @@ struct ViewportChrome: View {
     .fixedSize(horizontal: true, vertical: true)
     .accessibilityElement(children: .contain)
     .accessibilityLabel("Viewport navigation")
+  }
+
+  /// While View → Record Viewport runs: how long, and a button that stops it.
+  @ViewBuilder private var recording: some View {
+    if model.recorder.recording {
+      Button {
+        model.recorder.stop(in: model.viewport?.window,
+                            name: (model.document.displayName as NSString).deletingPathExtension)
+      } label: {
+        HStack(spacing: 5) {
+          Image(systemName: "stop.fill").font(.system(size: 8, weight: .bold))
+            .foregroundStyle(.white)
+            .frame(width: 15, height: 15)
+            .background(Color.red, in: .circle)
+          Text(Duration.seconds(model.recorder.seconds).formatted(.time(pattern: .minuteSecond)))
+            .font(.caption.monospacedDigit().weight(.medium))
+        }
+        .padding(.trailing, 3)
+        .contentShape(.rect)
+      }
+      .buttonStyle(.plain)
+      .help("Stop Recording Viewport")
+      .accessibilityLabel("Stop recording")
+      .accessibilityValue(Duration.seconds(model.recorder.seconds).formatted(.time(pattern: .minuteSecond)))
+      Divider().frame(height: 15)
+    }
   }
 
   private var options: some View {
@@ -113,8 +152,6 @@ struct ViewportChrome: View {
         Text("Clay").tag(bmapp.ViewStyle.Clay)
         Text("Wireframe").tag(bmapp.ViewStyle.Wireframe)
       }
-      Button("Path-Traced Preview…") { StillExport.preview(model.context) }
-        .disabled(model.snapshot.pieces == 0)
       Picker("Grid Spacing", selection: $camera.grid) {
         Text("Off").tag(0.0)
         Text("1 Stud").tag(20.0)
@@ -142,6 +179,20 @@ struct ViewportChrome: View {
     .fixedSize()
     .accessibilityLabel("View Options")
     .accessibilityValue(camera.name)
+  }
+
+  private var lookButton: some View {
+    Button {
+      showsLook.toggle()
+    } label: {
+      Image(systemName: "paintpalette").font(.system(size: 12, weight: .medium)).frame(width: 24, height: 24)
+    }
+    .buttonStyle(.borderless)
+    .help("Look: scene, shading and details")
+    .accessibilityLabel("Look")
+    .popover(isPresented: $showsLook, arrowEdge: .bottom) {
+      LookPanel(model: model, compact: true).frame(width: 312, height: 560)
+    }
   }
 
   private var zoom: some View {

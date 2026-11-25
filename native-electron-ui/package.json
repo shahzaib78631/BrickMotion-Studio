@@ -1,0 +1,26 @@
+{
+  "name": "brickmotion-native-electron-ui",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Complete Electron desktop interface for BrickMotion Studio powered by the native C++/Metal engine with full web UI parity",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "build:addon": "bash addon/build-addon.sh",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "build:renderer": "vite build",
+    "build": "npm run build:addon && npm run build:electron && npm run build:renderer",
+    "dev:renderer": "vite",
+    "dev:electron": "npm run build:electron && BM_ELECTRON_DEV_URL=http://localhost:5174 electron .",
+    "dev": "concurrently -k -n renderer,electron -c cyan,magenta \"npm run dev:renderer\" \"wait-on http://localhost:5174 && npm run dev:electron\"",
+    "start": "npm run build:electron && electron .",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.electron.json --noEmit"
+  },
+  "dependencies": {
+    "electron": "^35.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "concurrently": "^9.1.2",
+    "wait-on": "^8.0.3"
+  }
+}

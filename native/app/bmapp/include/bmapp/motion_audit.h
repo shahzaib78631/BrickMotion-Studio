@@ -11,10 +11,16 @@ void bmappReleaseMotionAudit(bmapp::MotionAudit*);
 
 namespace bmapp {
 
-struct MotionAuditResult {
+struct MotionContact {
   uint32_t a = UINT32_MAX, b = UINT32_MAX;
-  int collisionFrame = -1, testedFrames = 0, stride = 1;
-  std::string part, blocker, error;
+  int firstFrame = -1, lastFrame = -1;
+  std::string part, blocker;
+};
+
+struct MotionAuditResult {
+  int testedFrames = 0, stride = 1, intervals = 0;
+  std::vector<MotionContact> contacts;
+  std::string error;
 };
 
 /// A snapshot of the live animation at the time the user asked to check it.

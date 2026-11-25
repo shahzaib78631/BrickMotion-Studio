@@ -11,6 +11,19 @@ import numpy as np
 
 
 def _background(rgb: np.ndarray) -> np.ndarray:
+    # Tightly cropped dark parts/sub-builds (e.g. black cones on cream panels) can have >50% dark
+    # pixels while all 4 corners are pure page/panel paper. Prefer agreeing light corners first!
+    if rgb.shape[0] >= 4 and rgb.shape[1] >= 4:
+        corners = rgb[[0, 0, -1, -1], [0, -1, 0, -1]].astype(float)
+        best_grp = []
+        for i in range(4):
+            grp = [corners[j] for j in range(4) if float(np.linalg.norm(corners[j] - corners[i])) <= 24.0]
+            if len(grp) > len(best_grp):
+                best_grp = grp
+        if len(best_grp) >= 3:
+            med = np.median(best_grp, axis=0)
+            if float(med.mean()) >= 150.0:
+                return med
     quantised = (rgb // 8).reshape(-1, 3)
     values, counts = np.unique(quantised, axis=0, return_counts=True)
     return values[counts.argmax()].astype(float) * 8 + 4
@@ -33,16 +46,21 @@ def fill_holes(mask: np.ndarray) -> np.ndarray:
 def _foreground(rgb: np.ndarray, tolerance: float = 30.0, min_fraction: float = 0.0015) -> np.ndarray:
     h, w = rgb.shape[:2]
     pixels = rgb.astype(float)
-    candidate = np.linalg.norm(pixels - _background(rgb), axis=-1) > tolerance
+    bg = _background(rgb)
+    candidate = np.linalg.norm(pixels - bg, axis=-1) > tolerance
 
     r, g, b = pixels[..., 0], pixels[..., 1], pixels[..., 2]
-    cream = (r > 225) & (g > 215) & (b > 170) & (b < 236) & (r - b > 15)
-    count, _labels, stats = _components(cream)
-    for i in range(1, count):
-        x, y, bw, bh, area = stats[i]
-        if area >= 0.01 * h * w:
-            candidate[y:y + bh, x:x + bw] = False
-    candidate &= ~cream
+    # Suppress pale-yellow/cream sub-step panels on main pages, but NOT when the image itself is
+    # a cream-background sub-build panel (otherwise the background box wipes the entire image!).
+    bg_is_cream = (bg[0] > 225) and (bg[1] > 215) and (170 < bg[2] < 236) and (bg[0] - bg[2] > 15)
+    if not bg_is_cream:
+        cream = (r > 225) & (g > 215) & (b > 170) & (b < 236) & (r - b > 15)
+        count, _labels, stats = _components(cream)
+        for i in range(1, count):
+            x, y, bw, bh, area = stats[i]
+            if area >= 0.01 * h * w:
+                candidate[y:y + bh, x:x + bw] = False
+        candidate &= ~cream
 
     # Arrows are thin red strokes; red parts are large blobs. Remove only what a kernel scaled
     # to the picture cannot fit inside.

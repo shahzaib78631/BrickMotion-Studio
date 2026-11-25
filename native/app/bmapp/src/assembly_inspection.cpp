@@ -1,11 +1,15 @@
 #include "bmapp/assembly_inspection.h"
 
+#include <cmath>
 #include <numbers>
 #include <set>
+#include <unordered_map>
 #include "bm/collide/world.h"
 #include "bm/kin/system.h"
 #include "bm/plan/plan.h"
+#include "bm/stable/stability.h"
 #include "engine.h"
+#include "habits.h"
 #include "placement_solver.h"
 #include "session_impl.h"
 
@@ -120,6 +124,31 @@ PieceList AssemblyInspection::body(uint32_t piece) {
   return out;
 }
 
+LoosePieces AssemblyInspection::loosePieces() {
+  LoosePieces out;
+  try {
+    (void)impl_->joints();
+    bm::Model copy = impl_->model;
+    // Applied to a copy: a correction is applied only where it crosses nothing new.
+    const auto corrections = bm::plan::correctPlacements(copy, impl_->sources->connectors, *impl_->backing->full,
+                                                         impl_->shapes, true);
+    for (const auto& c : corrections) {
+      if (c.piece >= impl_->model.pieces().size() || !impl_->visible(c.piece)) continue;
+      LoosePiece row;
+      row.piece = c.piece, row.onto = c.onto;
+      std::copy_n(c.to.r.m, 9, row.pose.rotation.m);
+      row.pose.position = vertex(c.to.t);
+      row.offset = c.offset, row.angle = c.angle;
+      row.safe = c.applied;
+      row.note = c.note;
+      out.pieces.push_back(std::move(row));
+    }
+  } catch (const std::exception& e) {
+    out.error = e.what();
+  }
+  return out;
+}
+
 std::vector<FitPose> AssemblyInspection::fits(uint32_t moving, uint32_t target) {
   std::vector<FitPose> out;
   if (moving >= impl_->model.pieces().size()) return out;
@@ -153,6 +182,74 @@ std::vector<FittingPart> AssemblyInspection::fittingParts(uint32_t target, const
   }
   return out;
 }
+std::vector<HabitFit> AssemblyInspection::habitFits(uint32_t target, size_t limit) {
+  std::vector<HabitFit> out;
+  const auto& pieces = impl_->model.pieces();
+  if (target >= pieces.size() || !impl_->visible(target) || limit == 0) return out;
+  const auto table = loadHabits(defaultHabitsFile());
+  if (!table) return out;
+  const bm::Piece& anchor = pieces[target];
+  const auto* habits = table->of(anchor.part);
+  if (!habits) return out;
+  // The model's most common colour other than the anchor's, for parts builders colour apart.
+  std::unordered_map<int, size_t> counts;
+  for (const auto& piece : pieces)
+    if (piece.color != anchor.color) ++counts[piece.color];
+  int other = anchor.color;
+  size_t most = 0;
+  for (const auto& [color, count] : counts)
+    if (count > most || (count == most && color < other)) most = count, other = color;
+  // Rank by how many models do it; mated connectors only break ties. Best pose per part.
+  const auto better = [](const HabitFit& a, const HabitFit& b) {
+    return a.models != b.models ? a.models > b.models : a.links > b.links;
+  };
+  std::vector<HabitFit> ranked;
+  std::unordered_map<std::string, size_t> best;
+  PlacementSolver* solver = nullptr;
+  try {
+    solver = &impl_->solver();
+  } catch (const std::exception&) {
+    return out;
+  }
+  for (const Habit& habit : *habits) {
+    std::string part = table->parts[habit.part];
+    if (!part.ends_with(".dat")) part += ".dat";
+    const auto earlier = best.find(part);
+    if (earlier != best.end() && ranked[earlier->second].models > habit.models) continue;
+    const bm::Xform pose = anchor.world * habit.relative;
+    std::optional<uint32_t> links;
+    try {
+      links = solver->seatAt(part, pose, target);
+    } catch (const std::exception&) {
+      continue;  // a part the library cannot read; the others still count
+    }
+    if (!links) continue;
+    HabitFit fit;
+    fit.name = part;
+    const auto* file = impl_->model.library().find(part);
+    fit.description = file && !file->description.empty() ? file->description : part;
+    fit.color = habit.sameColour >= 50 ? anchor.color : other;
+    std::copy_n(pose.r.m, 9, fit.pose.rotation.m);
+    fit.pose.position = vertex(pose.t);
+    fit.models = habit.models;
+    fit.total = table->models;
+    fit.links = *links;
+    fit.joint = habit.joint;
+    if (earlier == best.end()) {
+      best[part] = ranked.size();
+      ranked.push_back(std::move(fit));
+    } else if (better(fit, ranked[earlier->second])) {
+      ranked[earlier->second] = std::move(fit);
+    }
+  }
+  std::stable_sort(ranked.begin(), ranked.end(), better);
+  for (auto& fit : ranked) {
+    if (out.size() >= limit) break;
+    out.push_back(std::move(fit));
+  }
+  return out;
+}
+
 JointEdit AssemblyInspection::changeJoint(uint32_t fixed, uint32_t moving, double degrees, bool collision) {
   try {
     const auto& pieces = impl_->model.pieces();
@@ -242,6 +339,66 @@ JointEdit AssemblyInspection::changeJoint(uint32_t fixed, uint32_t moving, doubl
   } catch (const std::exception& e) {
     return refused(e.what());
   }
+}
+
+ModelChecks AssemblyInspection::checkModel() {
+  ModelChecks out;
+  try {
+    auto graph = impl_->joints();
+    const auto& model = impl_->model;
+    const auto& pieces = model.pieces();
+    auto& parts = *impl_->backing->full;
+    bm::connect::inferJoints(graph, model, impl_->sources->connectors, impl_->geometry());
+    const auto label = [&](uint32_t piece) {
+      return "Part " + std::to_string(piece + 1) + " · " + pieces[piece].part;
+    };
+    for (const auto& overlap : bm::collide::findOverlaps(model, graph, parts, impl_->shapes).overlaps) {
+      out.findings.push_back({ModelCheckKind::Overlap, label(overlap.a) + " and " + label(overlap.b),
+          overlap.duplicate ? "These pieces occupy the same placement." : "The part surfaces cross outside their mating connectors.",
+          {overlap.a, overlap.b}});
+    }
+
+    const auto stability = bm::stable::check(model, graph, parts);
+    for (const auto& group : stability.groups) {
+      if (group.onFloor || group.pieces.empty()) continue;
+      const auto title = group.pieces.size() == 1 ? label(group.pieces.front()) : std::to_string(group.pieces.size()) + " connected parts";
+      out.findings.push_back({ModelCheckKind::Unsupported, title, "This group has no connected support down to the model's floor.", group.pieces});
+    }
+    for (const auto index : stability.tipping) {
+      const auto& group = stability.groups[index];
+      out.findings.push_back({ModelCheckKind::Tipping, label(group.pieces.front()),
+          "The group's centre of mass falls outside its footprint on the floor.", group.pieces});
+    }
+
+    std::vector<size_t> connections(pieces.size());
+    for (const auto& edge : graph.connections) {
+      ++connections[edge.a];
+      ++connections[edge.b];
+    }
+    for (const auto& edge : graph.connections) {
+      if (edge.mates != 1 || edge.found != bm::connect::Found::Connectors || edge.joint.kind != bm::connect::JointKind::Fixed ||
+          (connections[edge.a] != 1 && connections[edge.b] != 1)) continue;
+      out.findings.push_back({ModelCheckKind::SingleConnector, label(edge.a) + " and " + label(edge.b),
+          "One mated connector secures this attachment. Review it if it needs to carry a load.", {edge.a, edge.b}});
+    }
+
+    const auto& load = model.report();
+    std::unordered_map<std::string, PieceList> missingPieces;
+    for (const auto& name : load.missing) missingPieces.try_emplace(name);
+    for (uint32_t piece = 0; piece < pieces.size(); ++piece)
+      if (const auto found = missingPieces.find(pieces[piece].part); found != missingPieces.end()) found->second.push_back(piece);
+    for (const auto& name : load.missing) {
+      out.findings.push_back({ModelCheckKind::MissingDefinition, name,
+          "The model refers to a part or submodel that could not be loaded.", std::move(missingPieces.at(name))});
+    }
+    for (const auto& colour : load.unknownColors)
+      out.findings.push_back({ModelCheckKind::UnknownColour, colour, "This colour is drawn with the fallback palette entry.", {}});
+    for (const auto& cycle : load.cycles)
+      out.findings.push_back({ModelCheckKind::SubmodelLoop, cycle, "This chain refers back to a model it already contains.", {}});
+  } catch (const std::exception& error) {
+    return {{}, error.what()};
+  }
+  return out;
 }
 
 AssemblyReport AssemblyInspection::inspect(const PieceList& selection, bool showAllJoints, bool checkGeometry) {

@@ -8,6 +8,62 @@
 
 using namespace structure;
 
+TEST_CASE("standalone submodel files keep descendants and remap the model's animation", "[bmapp][submodel]") {
+  bmapp::Session s;
+  REQUIRE(s.openBytes(R"json({
+    "format":"brickmotion-project","version":1,
+    "brickmotionPreview":{"version":1,"png":"obsolete"},"timelines":{},
+    "settings":{"video":{"introSeconds":3}},
+    "plan":{"format":"brickmotion-plan","version":1,"name":"Assembly",
+      "steps":[{"pieces":[{"id":"outer","submodel":"Outer","x":5,"y":0,"z":0,"rot":0}]}],
+      "submodels":{
+        "Outer":{"steps":[{"title":"First","pieces":[{"id":"inner","submodel":"Inner","x":0,"y":0,"z":0,"rot":0}]}]},
+        "Inner":{"steps":[{"pieces":[{"id":"plate","part":"3022.dat","color":14,"x":0,"y":0,"z":0,"rot":0}]}]},
+        "Spare":{"steps":[{"pieces":[{"part":"3001.dat","color":1,"x":0,"y":0,"z":0,"rot":0}]}]}},
+      "pauses":{"Outer":[{"id":"hold","at":1,"len":0.5}],"":[{"id":"unrelated","at":2,"len":1}]},
+      "stagingTurns":{"Outer":45,"Spare":90},
+      "animation":{"fps":24,"startFrame":1,"endFrame":25,"tracks":[
+        {"kind":"object","model":"Outer","target":"inner","channels":{"location.x":[{"frame":1,"value":0.5,"interpolation":"linear"}]}},
+        {"kind":"object","model":"Inner","target":"plate","channels":{"location.z":[{"frame":1,"value":0.25,"interpolation":"linear"}]}},
+        {"kind":"object","model":"","target":"outer","channels":{"location.x":[{"frame":1,"value":4,"interpolation":"linear"}]}}],
+        "buildLayers":{"":{"startFrame":3,"speed":1},"Outer":{"startFrame":7,"speed":2},"Spare":{"startFrame":9,"speed":1}}},
+      "sceneSetup":{"cameras":[{"kind":"camera","id":"c1","name":"Wide","position":[9,9,9],"target":[0,0,0],"fov":42,"near":0.05,"far":5000}],
+        "activeCameraId":"c1","useCameraForVideo":true,"lights":[],
+        "useLightsForVideo":true,"includeStudioLights":true,"region":null,"cropToRegion":false,"exposure":1}}
+    })json", "fixture.brickmotion").ok);
+  const auto before = s.planBytes();
+  const auto project = s.submodelProjectBytes("Outer");
+  const auto envelope = nlohmann::ordered_json::parse(project);
+  CHECK_FALSE(envelope.contains("brickmotionPreview"));
+  CHECK_FALSE(envelope.contains("timelines"));
+  CHECK(envelope["settings"]["video"]["introSeconds"] == 3);
+  const auto& scoped = envelope["plan"];
+  CHECK(scoped["name"] == "Outer");
+  CHECK(scoped["steps"][0]["title"] == "First");
+  REQUIRE(scoped["submodels"].size() == 1);
+  CHECK(scoped["submodels"].contains("Inner"));
+  CHECK(scoped["pauses"][""][0]["id"] == "hold");
+  CHECK(scoped["stagingTurns"][""] == 45);
+  REQUIRE(scoped["animation"]["tracks"].size() == 2);
+  CHECK(scoped["animation"]["tracks"][0]["model"] == "");
+  CHECK(scoped["animation"]["tracks"][1]["model"] == "Inner");
+  REQUIRE(scoped["animation"]["buildLayers"].size() == 1);
+  CHECK(scoped["animation"]["buildLayers"][""]["startFrame"] == 7);
+  CHECK(scoped["sceneSetup"]["cameras"] == nlohmann::ordered_json::array());
+  CHECK(scoped["sceneSetup"]["activeCameraId"].is_null());
+  bmapp::Session isolated;
+  REQUIRE(isolated.openBytes(project, "Outer.brickmotion").ok);
+  CHECK(isolated.pieceCount() == 1);
+  CHECK(isolated.keyTracks().size() == 1);
+  const auto mpd = s.submodelMpdBytes("Outer");
+  CHECK(mpd.starts_with("0 FILE Outer.ldr\n"));
+  CHECK(mpd.find("0 FILE Inner\n") != std::string::npos);
+  CHECK(mpd.find("Spare") == std::string::npos);
+  CHECK(s.submodelProjectBytes("Unknown").empty());
+  CHECK(s.planBytes() == before);
+  CHECK_FALSE(s.canUndo());
+}
+
 namespace {
 fs::path helicopter() { return fs::path(BM_REPO) / "samples" / "helicopter" / "helicopter.mpd"; }
 

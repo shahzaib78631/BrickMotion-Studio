@@ -2,6 +2,7 @@
 // The build plan: an order and a flight for every piece, found by taking the model apart.
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 #include "bm/collide/world.h"
 #include "bm/connect/graph.h"
@@ -80,6 +81,11 @@ struct Constraints {
   std::vector<std::vector<Xform>> flight;
 };
 
+/// How the sequencer orders a connected group: taking the finished model apart in reverse
+/// (default), or building forward step-by-step and bottom-up with local repair.
+enum class Order : uint8_t { Reverse, Forward };
+bool parse(std::string_view text, Order& out);
+
 struct Options {
   const CancelToken* cancel = nullptr;
   JobPool* pool = nullptr;     ///< null: JobPool::shared()
@@ -90,6 +96,11 @@ struct Options {
   /// planning (correctPlacements). Read by what loads the model and plans it (the engine, the
   /// audit, bm plan), not by plan() itself, which plans the model it is given.
   bool correctPlacements = false;
+  /// Reject grown multi-piece units whose own sub-plan still leaves any piece flagged (e.g. a
+  /// rest-state overlap that growing a unit cannot resolve).
+  bool cleanGrownUnits = false;
+  Order order = Order::Reverse;
+  collide::TravelCache* travelCache = nullptr;  ///< optional repeat probes across preview revisions
 };
 
 /// Read-only things every planner step needs, built once per model.

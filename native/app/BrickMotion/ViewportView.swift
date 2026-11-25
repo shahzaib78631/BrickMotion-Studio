@@ -23,6 +23,20 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
     changed()
   }
   private var pressPoint: NSPoint?
+  /// A waiting piece being dragged across the floor in the Build preview (saved on mouse-up).
+  private var waitingDrag: UInt32?
+  /// A flight path point being dragged: where it was (studs, the keys' own units, and LDU) and
+  /// where the press began.
+  private struct PathDrag {
+    let piece: UInt32
+    let frame: Int32
+    let origin: bmapp.Vec3
+    let through: bmapp.Vec3
+    let start: (x: Double, y: Double)
+  }
+  private var pathDrag: PathDrag?
+  /// The path point last clicked: Delete removes it.
+  private var focusedPathPoint: (piece: UInt32, frame: Int32)?
   /// The selection as a click began: a double click on a use already selected opens it.
   private var selectionAtPress: [UInt32] = []
   /// A right-button press that has not dragged yet: its release opens the context menu.
@@ -62,12 +76,14 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
   }
   private struct KeyDrag {
     let piece: UInt32
+    let submodel: Bool
     let frame: Int32
     let origin: bmapp.Vec3
   }
   private var gizmoDrag: GizmoDrag?
   /// Called on the main thread when planning starts or ends, for the toolbar's progress.
   weak var animation: AnimationWorkspace?
+  var presentedFrame: (@Sendable (CFTimeInterval) -> Void)?
   let presentation = ViewportPresentation()
   private var link: CAMetalDisplayLink?
   private var lastPoint = NSPoint.zero
@@ -212,10 +228,17 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
         link.isPaused = true  // an idle window draws nothing
         return
       }
+      if let presentedFrame {
+        update.drawable.addPresentedHandler { drawable in presentedFrame(drawable.presentedTime) }
+      }
       let more = viewport.draw(Unmanaged.passUnretained(update.drawable).toOpaque())
-      let preview = viewport.placementPreview()
-      placement.receive(preview)
-      updatePlacementGrip(placement.active ? preview : bmapp.PlacementPreview())
+      if placement.active {
+        let preview = viewport.placementPreview()
+        placement.receive(preview)
+        updatePlacementGrip(placement.active ? preview : bmapp.PlacementPreview())
+      } else if !placementGrip.isHidden {
+        updatePlacementGrip(bmapp.PlacementPreview())
+      }
       animation?.update()
       presentation.update()
       if !more && !viewport.needsDraw() { link.isPaused = true }
@@ -272,8 +295,13 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
     let pieces = document.session.selection()
     var drag = GizmoDrag(handle: h, start: (x, y), origin: viewport.selectionCenter(), axes: currentAxes(), pieces: pieces)
     if let animation, animation.isKeyEditing {
-      guard animation.autoKey, let piece = pieces.first,
-            (pieces.count == 1 && session.isLocalPiece(piece) || Array(session.usePieces(piece)) == Array(pieces)) else {
+      guard animation.autoKey, let piece = pieces.first else {
+        NSSound.beep()
+        return true
+      }
+      let local = session.isLocalPiece(piece)
+      let submodel = !local && (animation.keySubmodel == piece || pieces.count > 1 || !session.hasEditableFlightKeys(piece))
+      guard submodel ? Array(session.usePieces(piece)) == Array(pieces) : pieces.count == 1 else {
         NSSound.beep()
         return true
       }
@@ -285,8 +313,9 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
       case .scale: [.ScaleX, .ScaleY, .ScaleZ]
       default: [.RotationX, .RotationY, .RotationZ]
       }
-      let values = channels.map { session.keyValue(piece, $0, Double(frame)) }
-      drag.key = KeyDrag(piece: piece, frame: frame, origin: bmapp.Vec3(x: values[0], y: values[1], z: values[2]))
+      let values = channels.map { session.keyValue(piece, $0, Double(frame), submodel) }
+      drag.key = KeyDrag(piece: piece, submodel: submodel, frame: frame,
+                         origin: bmapp.Vec3(x: values[0], y: values[1], z: values[2]))
     }
     gizmoDrag = drag
     return true
@@ -372,7 +401,7 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
     for (channel, value) in zip(channels, values) {
       keys.push_back(bmapp.Keyframe(channel: channel, frame: drag.frame, value: value, interpolation: .Smooth))
     }
-    document.perform { document.session.setKeys(drag.piece, keys, true) }
+    document.perform { document.session.setKeys(drag.piece, keys, true, drag.submodel) }
   }
 
   private func endGizmoDrag() {
@@ -390,6 +419,8 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
     if placement.active { return }
     if event.modifierFlags.contains(.control) { return showMenu(event) }
     if editorOverlays?.selectJoint(at: point(event)) == true { return }
+    if beginPathEdit(event) { return }
+    focusedPathPoint = nil
     if tool != .select && beginGizmoDrag(event) { return }
     pressPoint = point(event)
     if event.clickCount == 1, document != nil { selectionAtPress = Array(session.selection()) }
@@ -401,12 +432,39 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
       return
     }
     if gizmoDrag != nil { return continueGizmoDrag(event) }
+    if let drag = pathDrag, let document {
+      let (x, y) = fromTop(point(event))
+      let d = viewport.dragFacingView(drag.through, drag.start.x, drag.start.y, x, y)
+      // LDU to the keys' studs (y and z flip: the web's axes)
+      let location = bmapp.Vec3(x: drag.origin.x + d.x / 20, y: drag.origin.y - d.y / 20, z: drag.origin.z - d.z / 20)
+      document.perform { document.session.setFlightPathPoint(drag.piece, drag.frame, location, true) }
+      changed()
+      return
+    }
+    if waitingDrag != nil {
+      let (x, y) = fromTop(point(event))
+      _ = viewport.dragWaitingPart(x, y)
+      changed()
+      return
+    }
     guard let start = pressPoint else { return }
     let p = point(event)
     if marqueeLayer == nil {
       guard hypot(p.x - start.x, p.y - start.y) > 3 else { return }
       let (x, y) = fromTop(start)
       let anchor = viewport.pick(x, y)
+      // In the Build preview a piece still waiting on the floor is dragged to a new waiting spot
+      // (the web's staging drag): it still lands as planned, and nothing is replanned.
+      if anchor != UInt32.max, viewport.canMoveWaitingPart(anchor), viewport.beginWaitingDrag(anchor, x, y) {
+        pressPoint = nil
+        waitingDrag = anchor
+        if Array(session.selection()) != [anchor] { select([anchor], .Replace) }
+        NSCursor.closedHand.push()
+        let (px, py) = fromTop(p)
+        _ = viewport.dragWaitingPart(px, py)
+        changed()
+        return
+      }
       if anchor != UInt32.max {
         if animation?.isKeyEditing == true { return }
         let pieces = selectionAtPress.contains(anchor) ? selectionAtPress : [anchor]
@@ -446,6 +504,13 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
       return
     }
     if gizmoDrag != nil { return endGizmoDrag() }
+    if pathDrag != nil {
+      pathDrag = nil
+      document?.session.endGesture()
+      NSCursor.pop()
+      return changed()
+    }
+    if let piece = waitingDrag { return endWaitingDrag(piece, keep: true) }
     defer {
       marqueeLayer?.removeFromSuperlayer()
       marqueeLayer = nil
@@ -482,6 +547,57 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
     viewStateChanged()
   }
 
+  /// A press on the selected part's flight path (key editing): on a point it seeks there and starts
+  /// the point's drag; on the line it is taken by the path, and a double-click adds a point there.
+  private func beginPathEdit(_ event: NSEvent) -> Bool {
+    guard let overlays = editorOverlays, let animation, animation.isKeyEditing, let document else { return false }
+    let p = point(event)
+    let scene = session.keyScene()
+    if let hit = overlays.flightPathPoint(at: p) {
+      document.session.endGesture()
+      animation.seekScene(Double(hit.frame - scene.first) / Double(scene.fps))
+      focusedPathPoint = (hit.piece, hit.frame)
+      let origin = bmapp.Vec3(x: session.keyValue(hit.piece, .PositionX, Double(hit.frame)),
+                              y: session.keyValue(hit.piece, .PositionY, Double(hit.frame)),
+                              z: session.keyValue(hit.piece, .PositionZ, Double(hit.frame)))
+      let (x, y) = fromTop(p)
+      pathDrag = PathDrag(piece: hit.piece, frame: hit.frame, origin: origin, through: hit.at, start: (x, y))
+      NSCursor.closedHand.push()
+      changed()
+      return true
+    }
+    guard let (piece, frame) = overlays.flightPathFrame(at: p) else { return false }
+    // a click on the line belongs to the path (the selection stays); a double-click adds a point
+    guard event.clickCount == 2 else { return true }
+    let added = document.perform { document.session.addFlightPathPoint(piece, frame) }
+    if !added.refused.empty() { NSSound.beep(); return true }
+    animation.seekScene(Double(frame - scene.first) / Double(scene.fps))
+    focusedPathPoint = (piece, frame)
+    changed()
+    return true
+  }
+
+  /// Deletes a path point (never the first or the last).
+  private func deletePathPoint(_ piece: UInt32, _ frame: Int32) {
+    guard let document else { return }
+    let deleted = document.perform { document.session.deleteFlightPathPoint(piece, frame) }
+    if !deleted.refused.empty() { NSSound.beep() }
+    focusedPathPoint = nil
+    changed()
+  }
+
+  /// Ends a waiting piece's drag: kept, it is one undo step ("Move Waiting Part").
+  private func endWaitingDrag(_ piece: UInt32, keep: Bool) {
+    waitingDrag = nil
+    NSCursor.pop()
+    let delta = viewport.endWaitingDrag()
+    if keep, hypot(delta.x, delta.z) > 0.01, let document {
+      let changed = document.perform { document.session.shiftWaitingPart(piece, delta) }
+      if !changed.refused.empty() { NSSound.beep() }
+    }
+    changed()
+  }
+
   override func rightMouseDown(with event: NSEvent) {
     lastPoint = point(event)
     rightDragged = false
@@ -497,11 +613,44 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
   /// empty-space menu.
   override func menu(for event: NSEvent) -> NSMenu? {
     guard document != nil, !placement.active else { return nil }
+    if let menu = pathMenu(for: event) { return menu }
     let (x, y) = fromTop(point(event))
     let hit = viewport.pick(x, y)
     let piece: UInt32? = hit == UInt32.max ? nil : hit
     if let piece, !session.selection().contains(piece) { select([piece], .Replace) }
     return PieceMenu.make(piece: piece, context: CommandContext(document: document, viewport: self, clickedPiece: piece))
+  }
+
+  /// The menu for the selected part's flight path, when the click is on a point or on the line.
+  private func pathMenu(for event: NSEvent) -> NSMenu? {
+    guard let overlays = editorOverlays, animation?.isKeyEditing == true else { return nil }
+    let p = point(event)
+    let menu = NSMenu()
+    if let hit = overlays.flightPathPoint(at: p) {
+      let item = menu.addItem(withTitle: "Delete Path Point", action: #selector(deletePathPointItem(_:)), keyEquivalent: "")
+      item.representedObject = [hit.piece, UInt32(bitPattern: hit.frame)]
+      item.target = self
+      return menu
+    }
+    if let (piece, frame) = overlays.flightPathFrame(at: p) {
+      let item = menu.addItem(withTitle: "Add Path Point", action: #selector(addPathPointItem(_:)), keyEquivalent: "")
+      item.representedObject = [piece, UInt32(bitPattern: frame)]
+      item.target = self
+      return menu
+    }
+    return nil
+  }
+
+  @objc private func deletePathPointItem(_ item: NSMenuItem) {
+    guard let pair = item.representedObject as? [UInt32], pair.count == 2 else { return }
+    deletePathPoint(pair[0], Int32(bitPattern: pair[1]))
+  }
+
+  @objc private func addPathPointItem(_ item: NSMenuItem) {
+    guard let pair = item.representedObject as? [UInt32], pair.count == 2, let document else { return }
+    let added = document.perform { document.session.addFlightPathPoint(pair[0], Int32(bitPattern: pair[1])) }
+    if !added.refused.empty() { NSSound.beep() }
+    changed()
   }
 
   private func showMenu(_ event: NSEvent) {
@@ -578,6 +727,12 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
   // MARK: Keys
 
   override func keyDown(with event: NSEvent) {
+    if let piece = waitingDrag, event.keyCode == 53 { return endWaitingDrag(piece, keep: false) }  // Esc: put it back
+    if let focus = focusedPathPoint, animation?.isKeyEditing == true, [51, 117].contains(event.keyCode),
+       event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
+       Array(session.selection()) == [focus.piece] {
+      return deletePathPoint(focus.piece, focus.frame)
+    }
     if placement.active && event.modifierFlags.intersection([.command, .control]).isEmpty {
       let distance = event.modifierFlags.contains(.shift) ? 32.0 : 12.0
       switch event.keyCode {

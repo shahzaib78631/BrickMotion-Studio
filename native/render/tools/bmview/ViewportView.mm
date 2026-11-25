@@ -55,6 +55,13 @@ constexpr double kReadoutSeconds = 0.25;
   // The shadow and height maps are drawn again over frames while the view turns or pieces move.
   _options.mapTrianglesPerFrame = bmr::kMapTrianglesPerFrame;
   _options.refractiveGlass = session->raytracedGlass;
+  _options.screenSpaceGi = false;
+  _options.hybridRt = false;
+  _options.studioLook = true;
+  _options.neuralShader = true;
+  _options.pathTraced = false;
+  _options.pathMaxSamples = 64;
+  _options.pathSamplesPerFrame = 2;
   self.wantsLayer = YES;
   self.layerContentsRedrawPolicy = NSViewLayerContentsRedrawNever;
 
@@ -152,12 +159,15 @@ constexpr double kReadoutSeconds = 0.25;
   }
   bmr::Renderer& r = *_session->renderer;
   bmr::FrameOptions options = _options;
-  // Ray-traced glass, when asked for, once the view has been still for a moment.
-  options.refractiveGlass = _options.refractiveGlass && !_playing && CACurrentMediaTime() - _lastMotion >= 0.15;
+  // Once the view has been still for a moment, switch seamlessly to progressive path tracing
+  // (exact offline bmexport quality) or ray-traced glass.
+  const bool still = !_playing && CACurrentMediaTime() - _lastMotion >= 0.08;
+  options.refractiveGlass = _options.refractiveGlass && still;
+  options.pathTraced = _options.pathTraced && still;
   const bmr::FrameStats s = r.draw(_orbit.camera(self.aspect, r.scene().bounds), options, (__bridge void*)update.drawable);
   // A frame not sent (the drawable had not caught up with a resize) is drawn on the next
-  // refresh, as is one whose maps are still being drawn over frames.
-  _dirty = _playing || (_options.refractiveGlass && !options.refractiveGlass) || s.settling || (!s.submitted && _width > 0 && _height > 0);
+  // refresh, as is one whose maps or progressive path-traced samples are still converging.
+  _dirty = _playing || (_options.refractiveGlass && !options.refractiveGlass) || (_options.pathTraced && !options.pathTraced) || s.settling || (!s.submitted && _width > 0 && _height > 0);
   if (s.submitted) {
     _lastStats = s;
     _cpuSum += s.cpuMs, _gpuSum += r.lastGpuMs(), _framesSummed++;
@@ -238,8 +248,15 @@ constexpr double kReadoutSeconds = 0.25;
   NSString* frame = _session->planned ? [NSString stringWithFormat:@"frame %d / %d", static_cast<int>(_frame), _session->planned->timeline.frames] : @"planning…";
   const double cpu = _framesSummed ? _cpuSum / _framesSummed : _lastStats.cpuMs;
   const double gpu = _framesSummed ? _gpuSum / _framesSummed : _session->renderer->lastGpuMs();
-  _readout.stringValue = [NSString stringWithFormat:@"%@ · cpu %.1f ms · gpu %.1f ms · %u/%zu pieces · F %u L %u B %u", frame, cpu, gpu, _lastStats.instances, total,
-                                                    _lastStats.byDetail[0], _lastStats.byDetail[1], _lastStats.byDetail[2]];
+  NSString* mode = _options.neuralShader
+      ? @" · NEURAL"
+      : (_options.studioLook
+             ? (_lastStats.worldGiReady
+                    ? (_options.worldGiOcclusion ? @" · STUDIO + World GI + Vis" : @" · STUDIO + World GI")
+                    : (_lastStats.worldGiBaking ? @" · STUDIO (World GI baking…)" : @" · STUDIO"))
+             : @"");
+  _readout.stringValue = [NSString stringWithFormat:@"%@ · cpu %.1f ms · gpu %.1f ms · %u/%zu pieces · F %u L %u B %u%@", frame, cpu, gpu, _lastStats.instances, total,
+                                                    _lastStats.byDetail[0], _lastStats.byDetail[1], _lastStats.byDetail[2], mode];
   _cpuSum = _gpuSum = 0, _framesSummed = 0;
 }
 
@@ -348,6 +365,15 @@ constexpr double kReadoutSeconds = 0.25;
     case 's': case 'S': _options.shadows = !_options.shadows; break;
     case 'a': case 'A': _options.ambientOcclusion = !_options.ambientOcclusion; break;
     case 'g': case 'G': _options.refractiveGlass = !_options.refractiveGlass; break;
+    case 'r': case 'R': _options.screenSpaceGi = !_options.screenSpaceGi; break;
+    case 'p': case 'P': _options.pathTraced = !_options.pathTraced; break;
+    case 'h': case 'H': _options.hybridRt = !_options.hybridRt;
+      if (_options.hybridRt) _options.studioLook = false; break;
+    case 'k': case 'K': _options.studioLook = !_options.studioLook;
+      if (_options.studioLook) _options.hybridRt = _options.screenSpaceGi = _options.pathTraced = _options.neuralShader = false; break;
+    case 'n': case 'N': _options.neuralShader = !_options.neuralShader;
+      if (_options.neuralShader) _options.studioLook = _options.hybridRt = _options.screenSpaceGi = _options.pathTraced = false; break;
+    case 'v': case 'V': _options.worldGiOcclusion = !_options.worldGiOcclusion; break;
     case 'i': case 'I': _readout.hidden = !_readout.hidden; [self showReadout]; return;
     case 'w': case 'W': [self switchFlight]; return;
     default: [super keyDown:event]; return;

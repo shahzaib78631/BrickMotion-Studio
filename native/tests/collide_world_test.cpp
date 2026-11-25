@@ -257,6 +257,43 @@ TEST_CASE("a unit stops the tolerance short of where a point a skin inside it me
   REQUIRE(w.clearTravel({0}, {-1, 0, 0}, 5, nullptr, {}, nullptr, there) == 5);
 }
 
+TEST_CASE("repeated overlapping joints keep their own rest exemptions", "[collide][world][travel]") {
+  Rig r;
+  const Model m = r.model(piece("3005.dat", 0, 0, 0) + piece("3005.dat", 0, -23, 0) +
+                          piece("3005.dat", 0, 0, 200) + piece("3005.dat", 0, -23, 200));
+  const World world(m, r.parts, r.shapes);
+  REQUIRE(findOverlaps(m, connect::buildGraph(m, r.db), r.parts, r.shapes).overlaps.size() == 2);
+  const double first = world.clearTravel({0}, {1, 0, 0}, 30, nullptr, {}, nullptr, {}, 0.05, 29.9);
+  const double second = world.clearTravel({2}, {1, 0, 0}, 30, nullptr, {}, nullptr, {}, 0.05, 29.9);
+  CHECK(first > 0);
+  CHECK(std::abs(first - second) < 1e-6);
+
+  TravelCache cache;
+  const World initial(m, r.parts, r.shapes, &cache);
+  REQUIRE(initial.clearTravel({0}, {1, 0, 0}, 30, nullptr, {}, nullptr, {}, 0.05, 29.9) == first);
+  const Model reordered = r.model(piece("3005.dat", 0, 0, 200) + piece("3005.dat", 0, -23, 200) +
+                                  piece("3005.dat", 0, 0, 0) + piece("3005.dat", 0, -23, 0));
+  const World next(reordered, r.parts, r.shapes, &cache);
+  uint32_t blocker = UINT32_MAX;
+  CHECK(next.clearTravel({2}, {1, 0, 0}, 30, nullptr, {}, &blocker, {}, 0.05, 29.9) == first);
+  CHECK(blocker == 3);
+}
+
+TEST_CASE("shared travel checks distinguish exact geometry between revisions", "[collide][world][travel]") {
+  Rig r;
+  Model model = r.model(piece("c1x1.dat", 0, 0, 0) + piece("c1x1.dat", 30, 0, 0));
+  TravelCache reused;
+  const double first = World(model, r.parts, r.shapes, &reused).clearTravel({0}, {1, 0, 0}, 90, nullptr);
+  CHECK(World(model, r.parts, r.shapes, &reused).clearTravel({0}, {1, 0, 0}, 90, nullptr) == first);
+
+  auto placement = model.pieces()[1].world;
+  placement.t.x += 5;
+  model.setPlacement(1, placement);
+  const double withCache = World(model, r.parts, r.shapes, &reused).clearTravel({0}, {1, 0, 0}, 90, nullptr);
+  CHECK(withCache > first + 4.9);
+  CHECK(World(model, r.parts, r.shapes).clearTravel({0}, {1, 0, 0}, 90, nullptr) == withCache);
+}
+
 TEST_CASE("a point inside the unit is stopped by the nearest surface it meets, whichever piece is looked at first", "[collide][world][travel][data]") {
   const char* dir = std::getenv("BM_LDRAW_DIR");
   if (!dir) SKIP("BM_LDRAW_DIR is not set");

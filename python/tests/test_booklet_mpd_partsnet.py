@@ -33,3 +33,18 @@ def test_learned_similarity_breaks_hand_made_ties():
     learned = {"g": np.array([0.1, 0.9])}
     out = assign({"g": d}, {"g": 1}, [d, d], [1, 1], learned=learned)
     assert out["g"][0] == 1
+
+
+def test_layout_comparator_v2_shapes_and_blend():
+    from booklet_mpd.solver.comparator import LAYOUT_CHANNELS, LAYOUT_PATCH, LayoutComparator, layout_net
+    net = layout_net().eval()
+    x = torch.rand(4, LAYOUT_CHANNELS, LAYOUT_PATCH, LAYOUT_PATCH)
+    with torch.no_grad():
+        y = net(x)
+    assert y.shape == (4, 1)
+    # Conservative blend: breaks close ties without overriding a decisive +2000 geometric lead
+    comp = LayoutComparator.__new__(LayoutComparator)
+    close = comp.blend(np.array([100.0, 95.0]), np.array([-2.0, 2.0]), w=0.8)
+    assert close[1] > close[0]
+    decisive = comp.blend(np.array([2500.0, 100.0]), np.array([-1.0, 1.0]), w=0.8)
+    assert decisive[0] > decisive[1]

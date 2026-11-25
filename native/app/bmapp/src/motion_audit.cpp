@@ -22,7 +22,6 @@ MotionAuditResult MotionAudit::check() {
     const Impl& clip = *impl_;
     const auto& pieces = clip.model.pieces();
     if (clip.target >= pieces.size()) return out;
-    out.part = pieces[clip.target].part;
     const size_t n = pieces.size();
     const int stride = std::max(1, (clip.scene.last - clip.scene.first + 599) / 600);
     out.stride = stride;
@@ -36,6 +35,7 @@ MotionAuditResult MotionAudit::check() {
     bmtools::ConnectorSources connectors(*clip.backing->library, clip.backing->ldraw);
     std::vector<bm::Box> bounds(n);
     std::vector<std::shared_ptr<const bm::collide::Shape>> shape(n);
+    std::vector<std::shared_ptr<const std::vector<bm::connect::Connector>>> devices(n);
     for (size_t i = 0; i < n && i < clip.geometry.where.size(); ++i) {
       const auto group = clip.geometry.where[i].first;
       if (group < clip.geometry.groups.size()) bounds[i] = clip.geometry.groups[group].partBox;
@@ -44,12 +44,22 @@ MotionAuditResult MotionAudit::check() {
       if (!shape[i]) shape[i] = shapes.get(clip.model.mesh(pieces[i].part, *clip.backing->full));
       return shape[i];
     };
+    const auto deviceOf = [&](uint32_t i) -> const auto& {
+      if (!devices[i]) devices[i] = connectors.connectors.get(pieces[i].part, &clip.model.library());
+      return *devices[i];
+    };
     if (bounds[clip.target].empty()) {
       out.error = "This part has no collision geometry.";
       return out;
     }
     std::vector<bm::Xform> poses(n);
     std::vector<bool> hidden(n);
+    struct LastContact {
+      int sample = -1;
+      size_t row = SIZE_MAX;
+    };
+    std::vector<LastContact> last(n);
+    constexpr size_t visibleLimit = 200;
     for (int frame : frames) {
       const double t = std::clamp((frame - clip.scene.buildStart) * clip.scene.buildSpeed * clip.fps / clip.scene.fps,
                                   0.0, static_cast<double>(clip.timeline.frames));
@@ -75,12 +85,10 @@ MotionAuditResult MotionAudit::check() {
       const auto aBox = bounds[a].transformed(poses[a]);
       for (uint32_t b = 0; b < n; ++b) {
         if (b == a || hidden[b] || bounds[b].empty() || !meets(aBox, bounds[b].transformed(poses[b]))) continue;
-        const auto deviceA = connectors.connectors.get(pieces[a].part, &clip.model.library());
-        const auto deviceB = connectors.connectors.get(pieces[b].part, &clip.model.library());
         std::vector<bm::collide::Zone> zones;
-        for (const auto& localA : *deviceA) {
+        for (const auto& localA : deviceOf(a)) {
           const auto posedA = bm::connect::transformed(localA, poses[a]);
-          for (const auto& localB : *deviceB) {
+          for (const auto& localB : deviceOf(b)) {
             const auto posedB = bm::connect::transformed(localB, poses[b]);
             if (!bm::connect::mate(posedA, posedB)) continue;
             const auto zone = bm::connect::mateZone(posedA, posedB);
@@ -89,11 +97,18 @@ MotionAuditResult MotionAudit::check() {
         }
         const auto depth = zones.empty() ? bm::collide::Depth::Skin : bm::collide::Depth::Joined;
         if (!bm::collide::overlap(*shapeOf(a), poses[a], *shapeOf(b), poses[b], zones, nullptr, depth)) continue;
-        out.a = a;
-        out.b = b;
-        out.collisionFrame = frame;
-        out.blocker = pieces[b].part;
-        return out;
+        auto& previous = last[b];
+        if (previous.sample + 1 != out.testedFrames) {
+          ++out.intervals;
+          previous.row = SIZE_MAX;
+          if (out.contacts.size() < visibleLimit) {
+            previous.row = out.contacts.size();
+            out.contacts.push_back({a, b, frame, frame, pieces[a].part, pieces[b].part});
+          }
+        } else if (previous.row < out.contacts.size()) {
+          out.contacts[previous.row].lastFrame = frame;
+        }
+        previous.sample = out.testedFrames;
       }
     }
   } catch (const std::exception& e) {

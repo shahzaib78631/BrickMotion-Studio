@@ -17,26 +17,27 @@ import Observation
       applyAppearance()
     }
   }
-  var edges: Bool { didSet { save(edges, key: "viewportEdges") } }
-  var floor: Bool { didSet { save(floor, key: "viewportFloor") } }
-  var shadows: Bool { didSet { save(shadows, key: "viewportShadows") } }
-  var ambientOcclusion: Bool { didSet { save(ambientOcclusion, key: "viewportAmbientOcclusion") } }
+  /// The project's scene backdrop in the editor; off keeps the editor's own (exports keep the scene).
+  var sceneBackdrop: Bool { didSet { save(sceneBackdrop, key: "viewportSceneBackdrop") } }
   var autoPlan: Bool { didSet { save(autoPlan, key: "autoPlanBuild") } }
   var selectionBar: Bool { didSet { save(selectionBar, key: "viewportSelectionBar") } }
+  /// The project's snap sounds while the Build plays in the editor.
+  var playSnapSounds: Bool { didSet { save(playSnapSounds, key: "playSnapSounds") } }
 
   init(defaults: UserDefaults = .standard) {
     self.defaults = defaults
     appearance = defaults.string(forKey: "editorAppearance").flatMap(Appearance.init(rawValue:)) ?? .system
-    edges = defaults.object(forKey: "viewportEdges") as? Bool ?? true
-    floor = defaults.object(forKey: "viewportFloor") as? Bool ?? true
-    shadows = defaults.object(forKey: "viewportShadows") as? Bool ?? true
-    ambientOcclusion = defaults.object(forKey: "viewportAmbientOcclusion") as? Bool ?? true
+    sceneBackdrop = defaults.object(forKey: "viewportSceneBackdrop") as? Bool ?? true
     autoPlan = defaults.object(forKey: "autoPlanBuild") as? Bool ?? true
     selectionBar = defaults.object(forKey: "viewportSelectionBar") as? Bool ?? true
+    playSnapSounds = defaults.object(forKey: "playSnapSounds") as? Bool ?? true
   }
 
   var viewport: bmapp.ViewportPreferences {
-    .init(edges: edges, floor: floor, shadows: shadows, ambientOcclusion: ambientOcclusion, autoPlan: autoPlan)
+    var preferences = bmapp.ViewportPreferences()
+    preferences.autoPlan = autoPlan
+    preferences.sceneBackdrop = sceneBackdrop
+    return preferences
   }
 
   func applyAppearance() {

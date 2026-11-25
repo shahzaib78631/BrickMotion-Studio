@@ -114,3 +114,19 @@ TEST_CASE("a still takes no --strip: contact sheets are bmshot's", "[bmexport]")
   REQUIRE(r.code == 2);
   REQUIRE(r.output.find("usage") != std::string::npos);
 }
+
+TEST_CASE("build video reports progress and commits a movie without overwriting an existing file", "[bmexport][video]") {
+  if (!bmr::gpuAvailable() || !std::getenv("BM_LDRAW_DIR")) SKIP("no Metal device or BM_LDRAW_DIR");
+  const fs::path output = scratch() / "build.mp4";
+  const std::string args = "build-video '" + model().string() + "' --size 320x180 --fps 24 --out '" + output.string() + "'";
+  const Run render = run(args);
+  INFO(render.output);
+  REQUIRE(render.code == 0);
+  REQUIRE(render.output.find("frame 1 ") != std::string::npos);
+  const auto movie = bytes(output);
+  REQUIRE(movie.size() > 1000);
+  REQUIRE(movie.substr(4, 4) == "ftyp");
+  REQUIRE(run(args).code == 1);
+  REQUIRE(bytes(output) == movie);
+  REQUIRE(run("build-video '" + model().string() + "' --size 321x180 --out '" + (scratch() / "odd.mp4").string() + "'").code == 2);
+}

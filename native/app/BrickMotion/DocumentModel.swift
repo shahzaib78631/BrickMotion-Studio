@@ -27,6 +27,12 @@ enum SidebarTab: String, CaseIterable { case models, steps, parts }
   private(set) var snapshot: bmapp.Snapshot
   private(set) var outline: [OutlineNode] = []
   private(set) var steps: [bmapp.StepRow] = []
+  /// The focused model's Camera track keys, by time: the Build's and the Keyframes timeline's.
+  private(set) var buildCameraKeys: [bmapp.CameraTrackKey] = []
+  private(set) var timelineCameraKeys: [bmapp.CameraTrackKey] = []
+  /// The camera key or move the Camera inspector shows.
+  var cameraSelection: CameraSelection?
+  func cameraKeys(_ clock: bmapp.CameraClock) -> [bmapp.CameraTrackKey] { clock == .Build ? buildCameraKeys : timelineCameraKeys }
   /// Filters the tree by name; a match keeps its ancestors.
   var outlineQuery = "" { didSet { if outlineQuery != oldValue { filter() } } }
   var importing = false
@@ -38,6 +44,8 @@ enum SidebarTab: String, CaseIterable { case models, steps, parts }
   var renaming: String?
   var sidebarTab = SidebarTab.models
   var modelPartsExpanded = true
+  private var expandedPartsSteps: [String: Set<Int>] = [:]
+  private(set) var partsSelection: Set<UInt32> = []
   var partsQuery = "" { didSet { if partsQuery != oldValue { resetPartsResults() } } }
   var partsCategory: String? { didSet { if partsCategory != oldValue { resetPartsResults() } } }
   var browsedPart: LibraryPart?
@@ -51,8 +59,10 @@ enum SidebarTab: String, CaseIterable { case models, steps, parts }
   var partTurns = 0
   var partMirrored = false
   var partReferenceHints = false
+  var refusedEdit: String?
   let assemblyReview = AssemblyReview()
   let animation = AnimationWorkspace()
+  let recorder = ViewportRecorder()
   var showJoints = false { didSet { assemblyReview.update(self); viewport?.updateEditorOverlays() } }
   /// The step selected in the Steps pane, and the one its editor is open on.
   var selectedStep: Int?
@@ -73,6 +83,9 @@ enum SidebarTab: String, CaseIterable { case models, steps, parts }
   @ObservationIgnored private var stamp: UInt64 = .max
   @ObservationIgnored private var rowPieces: [UInt32] = []
   @ObservationIgnored private var stepPieces: [UInt32] = []
+  @ObservationIgnored private var browserItemsByStep: [Int: [bmapp.ItemRow]] = [:]
+  @ObservationIgnored private var browserItemsVersion: UInt64?
+  @ObservationIgnored private var browserItemsStructure: UInt64?
   @ObservationIgnored private var observer: NSObjectProtocol?
 
   init(document: Document) {
@@ -114,8 +127,21 @@ enum SidebarTab: String, CaseIterable { case models, steps, parts }
     }
     let before = snapshot.selection.count
     snapshot = session.snapshot()
+    let buildKeys = Array(session.cameraKeys(.Build)), timelineKeys = Array(session.cameraKeys(.Timeline))
+    if !buildKeys.elementsEqual(buildCameraKeys, by: Self.sameKey) { buildCameraKeys = buildKeys }
+    if !timelineKeys.elementsEqual(timelineCameraKeys, by: Self.sameKey) { timelineCameraKeys = timelineKeys }
+    // the key or move shown is gone (deleted, undone, another model focused)
+    if let shown = cameraSelection {
+      let keys = cameraKeys(shown.clock)
+      let id = shown.keyId ?? shown.moveFrom ?? ""
+      if !keys.contains(where: { String($0.id) == id }) || (shown.moveFrom != nil && String(keys.last?.id ?? "") == id) {
+        cameraSelection = nil
+      }
+    }
     let after = snapshot.selection.count
-    if inspectorTab != .submodel && inspectorTab != .camera && (before == 1) != (after == 1) {
+    let selection = Set(snapshot.selection)
+    if partsSelection != selection { partsSelection = selection }
+    if inspectorTab != .submodel && inspectorTab != .camera && inspectorTab != .look && (before == 1) != (after == 1) {
       inspectorTab = after == 1 ? .part : .selection
     }
     if session.structureVersion() != stamp {
@@ -131,6 +157,21 @@ enum SidebarTab: String, CaseIterable { case models, steps, parts }
     if let k = selectedStep, k >= steps.count || Array(snapshot.selection) != stepPieces { selectedStep = nil }
     if let k = editingStep, k >= steps.count { editingStep = nil }
     assemblyReview.update(self)
+  }
+
+  /// Shows a camera key or move in the Camera inspector.
+  func showCamera(_ selection: CameraSelection) {
+    cameraSelection = selection
+    inspectorTab = .camera
+  }
+
+  /// Every field the lane and the inspector show, so a change to any of them redraws them.
+  private static func sameKey(_ a: bmapp.CameraTrackKey, _ b: bmapp.CameraTrackKey) -> Bool {
+    String(a.id) == String(b.id) && a.seconds == b.seconds && String(a.target) == String(b.target) &&
+      String(a.preset) == String(b.preset) && a.user == b.user && a.azimuth == b.azimuth && a.elevation == b.elevation &&
+      a.lensMm == b.lensMm && a.fitted == b.fitted && a.margin == b.margin && a.distance == b.distance && a.roll == b.roll &&
+      a.focusTarget == b.focusTarget && a.focus == b.focus && a.blur == b.blur &&
+      a.point.x == b.point.x && a.point.y == b.point.y && a.point.z == b.point.z
   }
 
   private static func build(_ rows: [bmapp.OutlineRow]) -> [OutlineNode] {
@@ -195,14 +236,29 @@ enum SidebarTab: String, CaseIterable { case models, steps, parts }
 
   /// The submodel names from the root down to `row`: the focus that edits it alone.
   func path(to row: OutlineNode) -> [String] {
+    path(from: rows.firstIndex { String($0.id) == row.id })
+  }
+
+  private func path(from index: Int?) -> [String] {
     var out: [String] = []
-    var i = rows.firstIndex { String($0.id) == row.id }
+    var i = index
     while let k = i {
       let def = String(rows[k].def)
       if !def.isEmpty { out.insert(def, at: 0) }
       i = rows[k].parent >= 0 ? Int(rows[k].parent) : nil
     }
     return out
+  }
+
+  /// A shared definition only needs one video, even if several of its uses are selected.
+  func submodelVideoTargets(for ids: Set<String>? = nil) -> [ModelVideoTarget] {
+    var definitions: Set<String> = []
+    return rows.enumerated().compactMap { index, row in
+      let definition = String(row.def)
+      guard !definition.isEmpty, row.pieces > 0, ids?.contains(String(row.id)) != false,
+            definitions.insert(definition).inserted else { return nil }
+      return ModelVideoTarget(title: displayName(String(row.name)), path: path(from: index))
+    }
   }
 
   /// Edits the row's submodel alone (the root row: the whole model).
@@ -251,6 +307,54 @@ enum SidebarTab: String, CaseIterable { case models, steps, parts }
   // MARK: Steps
 
   func items(of step: Int) -> [bmapp.ItemRow] { Array(document.session.stepItems(step)) }
+
+  func browserItems(of step: Int) -> [bmapp.ItemRow] {
+    let version = snapshot.version
+    let structure = document.session.structureVersion()
+    if browserItemsVersion != version || browserItemsStructure != structure {
+      browserItemsVersion = version
+      browserItemsStructure = structure
+      browserItemsByStep.removeAll()
+    }
+    if let rows = browserItemsByStep[step] { return rows }
+    let rows = items(of: step)
+    browserItemsByStep[step] = rows
+    return rows
+  }
+
+  private var partsScope: String { String(snapshot.focus) }
+
+  func partsStepIsExpanded(_ step: Int) -> Bool {
+    expandedPartsSteps[partsScope, default: [0]].contains(step)
+  }
+
+  func togglePartsStep(_ step: Int) {
+    let scope = partsScope
+    if partsStepIsExpanded(step) { expandedPartsSteps[scope, default: [0]].remove(step) }
+    else { expandedPartsSteps[scope, default: [0]].insert(step) }
+  }
+
+  func setPartsStepsExpanded(_ expanded: Bool) {
+    expandedPartsSteps[partsScope] = expanded ? Set(steps.indices) : []
+  }
+
+  var partsDestinations: [String] {
+    let scope = partsScope
+    var seen = Set<String>()
+    var inside = Set<Int>()
+    return rows.enumerated().compactMap { index, row in
+      let name = String(row.def)
+      let descendant = scope.isEmpty || inside.contains(Int(row.parent))
+      if descendant || name == scope { inside.insert(index) }
+      guard descendant, !name.isEmpty, !row.unused, name != scope, seen.insert(name).inserted else { return nil }
+      return name
+    }
+  }
+
+  @discardableResult func extractParts(of item: bmapp.ItemRow) -> Bool {
+    guard item.submodel, let piece = item.pieces.first else { return false }
+    return context.perform { $0.extract(piece) }
+  }
 
   /// The library's colours by code, read once.
   @ObservationIgnored private(set) var colors: [Int32: bmapp.ColorInfo] = [:]

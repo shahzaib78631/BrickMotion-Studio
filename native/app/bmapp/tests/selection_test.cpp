@@ -2,6 +2,7 @@
 #include <filesystem>
 #include <fstream>
 #include <set>
+#include "bmapp/keys.h"
 #include "bmapp/session.h"
 #include "bmapp/viewport.h"
 
@@ -168,4 +169,45 @@ TEST_CASE("the viewport draws what an edit left", "[bmapp][selection]") {
   rig.view->draw(nullptr);
   const std::vector<Rect> after = shown(*rig.view, Rig::W, Rig::H);
   CHECK((after[2].x0 != at[2].x0 || after[2].y0 != at[2].y0));
+}
+
+TEST_CASE("an idle viewport requests a frame for edits, undo and redo", "[bmapp][viewport]") {
+  Rig rig;
+  if (!rig.view->ok()) SKIP("no Metal device");
+  auto& view = *rig.view;
+  bmapp::ViewportPreferences preferences;
+  preferences.floor = preferences.shadows = preferences.ambientOcclusion = false;
+  view.setPreferences(preferences);
+  view.view(bmapp::ViewPreset::Front);
+  rig.session.select({0}, bmapp::SelectMode::Replace);
+  view.draw(nullptr);
+  REQUIRE_FALSE(view.needsDraw());
+  const auto original = view.readback().rgba;
+  REQUIRE_FALSE(original.empty());
+
+  rig.session.move({0}, {0, -bmapp::kPlate, 0}, false);  // the E shortcut's one-plate nudge
+  REQUIRE(view.needsDraw());
+  view.draw(nullptr);
+  REQUIRE_FALSE(view.needsDraw());
+  const auto moved = view.readback().rgba;
+  REQUIRE(moved != original);
+
+  rig.session.undo();
+  REQUIRE(view.needsDraw());
+  view.draw(nullptr);
+  REQUIRE_FALSE(view.needsDraw());
+  CHECK(view.readback().rgba == original);
+
+  rig.session.redo();
+  REQUIRE(view.needsDraw());
+  view.draw(nullptr);
+  REQUIRE_FALSE(view.needsDraw());
+  CHECK(view.readback().rgba == moved);
+
+  rig.session.hide({0});
+  REQUIRE(view.needsDraw());
+  view.draw(nullptr);
+  REQUIRE_FALSE(view.needsDraw());
+  rig.session.selectNone();
+  CHECK(view.needsDraw());
 }

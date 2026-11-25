@@ -28,10 +28,11 @@ from .edges import DEPTH_TOL, NEAR_INK, part_edges, sample_segments, visible_poi
 from .picture import BACKGROUND, UNKNOWN
 from .render import View, mesh, rasterize, render, world_triangles
 
-DELTAS = (0.0, 16.0, 32.0, 48.0, 64.0, 80.0, 96.0, 120.0, 150.0)
+DELTAS = (0.0, 16.0, 32.0, 40.0, 48.0, 64.0, 80.0, 96.0, 120.0, 150.0)
+FILL_DELTAS = (0.0, 8.0, 16.0, 24.0, 32.0, 40.0, 48.0, 56.0, 64.0, 72.0)   # exact 1..9 plate stack heights
 FILL = os.environ.get("BOOKLET_SOLVER_FILL", "1") != "0"   # floating parts over a gap the step fills (_filled_stacks)
-FILL_DEPTH = 3
-FILL_BUDGET = 40     # _fills calls per floating pose
+FILL_DEPTH = 4
+FILL_BUDGET = 80     # _fills calls per floating pose
 MISMATCH = os.environ.get("BOOKLET_SOLVER_MISMATCH", "0") != "0"   # penalise covering another colour
 PUSH_STEPS = (0.75, 1.0, 1.25, 1.5, 2.0, 2.5)   # displacement along an arrow, in arrow lengths
 FLOAT_PENALTY = 0.02     # per LDU of displacement, in pixels: prefer seated when equal
@@ -260,13 +261,37 @@ class State:
     groups: list | None = None                        # indices into placed that move together (unit copies)
 
 
+_LOCAL_AABB: dict = {}
+
+
+def _world_aabb(lib, part: str, matrix) -> tuple[np.ndarray, np.ndarray] | None:
+    key = (id(lib), part)
+    box = _LOCAL_AABB.get(key)
+    if box is None:
+        verts = mesh(lib, part).reshape(-1, 3)
+        if not len(verts):
+            _LOCAL_AABB[key] = ()
+            return None
+        lo, hi = verts.min(0), verts.max(0)
+        box = (0.5 * (lo + hi), 0.5 * (hi - lo))
+        _LOCAL_AABB[key] = box
+    if not box:
+        return None
+    c_loc, h_loc = box
+    m = np.asarray(matrix, float)
+    R = m[:3, :3]
+    c = R @ c_loc + m[:3, 3]
+    h = np.abs(R) @ h_loc
+    return c - h, c + h
+
+
 def _boxes_overlap(lib, a, b, shrink: float = 2.0) -> bool:
-    pa = world_triangles(lib, a[0], a[2]).reshape(-1, 3)
-    pb = world_triangles(lib, b[0], b[2]).reshape(-1, 3)
-    if not len(pa) or not len(pb):
+    ba = _world_aabb(lib, a[0], a[2])
+    bb = _world_aabb(lib, b[0], b[2])
+    if ba is None or bb is None:
         return False
-    lo = np.maximum(pa.min(0), pb.min(0)) + shrink
-    hi = np.minimum(pa.max(0), pb.max(0)) - shrink
+    lo = np.maximum(ba[0], bb[0]) + shrink
+    hi = np.minimum(ba[1], bb[1]) - shrink
     return bool(np.all(hi > lo))
 
 
@@ -413,18 +438,23 @@ def _evidence_order(lib, scene, base: list, parts: list, candidate_fn, deltas) -
 
 
 def _fills(lib, model: list, seat: dict | None, target: np.ndarray, top: int, pool: list[int], parts, candidate_fn,
-           line: tuple, budget: list, depth: int = FILL_DEPTH, base_cands: dict | None = None) -> list | None:
+           line: tuple, budget: list, depth: int = FILL_DEPTH, base_cands: dict | None = None,
+           prev_h: float = -1e9, collides=None) -> list | None:
     """Parts from `pool` stacked from `seat` (a pose on the model) up to where part `top` sits at `target`:
     the first goes on the model at the seat, each next on the one below, and `top` on the last. Returns
     the stack [(index, entry)] or None. `seat` is the top part's candidate: the stack starts on its stud.
-    Only parts between the seat and the target along the approach axis, under the target, are tried
+    Only parts moving strictly monotonically along `axis` from the seat toward `target` are tried
     (`line` = (seat origin, axis, height)); `budget` bounds the calls."""
     if depth <= 0 or budget[0] <= 0:
         return None
     budget[0] -= 1
     origin, axis, height = line
+    ax_dim = int(np.argmax(np.abs(axis)))
+    lateral = np.ones(3, bool)
+    lateral[ax_dim] = False
     seen = set()
     tp, _tc = parts[top]
+    t_shape, _t_lo = _shape(lib, tp, np.asarray(target, float)[:3, :3])
     for k in pool:
         part, colour = parts[k]
         if (part, colour) in seen:
@@ -432,10 +462,33 @@ def _fills(lib, model: list, seat: dict | None, target: np.ndarray, top: int, po
         seen.add((part, colour))
         if seat is not None:
             listed = base_cands[part] if base_cands is not None and part in base_cands else candidate_fn(part, model)
-            opts = [c["matrix"] for c in listed
-                    if c.get("host") == seat.get("host") and c.get("host_conn") == seat.get("host_conn")]
+            opts = []
+            for c in listed:
+                if c.get("kind") in ("clip", "hinge", "technic"):
+                    continue
+                cm = np.asarray(c["matrix"], float)
+                dh = float(np.dot(cm[:3, 3] - origin, axis))
+                if dh < -0.6 or dh > height - 3.5:
+                    continue
+                lat = float(np.max(np.abs(cm[:3, 3][lateral] - target[:3, 3][lateral])))
+                if lat <= 11.0:
+                    opts.append((lat, abs(dh), cm))
+            opts.sort(key=lambda x: (x[0], x[1]))
+            opts = [x[2] for x in opts[:12]]
         else:
-            opts = [c["matrix"] for c in candidate_fn(part, model[-1:]) if c.get("host") == 0]
+            opts = []
+            for c in candidate_fn(part, model[-1:]):
+                if c.get("host") != 0 or c.get("kind") in ("clip", "hinge", "technic"):
+                    continue
+                cm = np.asarray(c["matrix"], float)
+                dh = float(np.dot(cm[:3, 3] - origin, axis))
+                if dh < prev_h + 3.5 or dh > height - 3.5:
+                    continue
+                lat = float(np.max(np.abs(cm[:3, 3][lateral] - target[:3, 3][lateral])))
+                if lat <= 11.0:
+                    opts.append((lat, dh, cm))
+            opts.sort(key=lambda x: (x[0], x[1]))
+            opts = [x[2] for x in opts[:12]]
         done = set()
         for m in opts:
             key = tuple(np.round(np.asarray(m)[:3, :4], 2).ravel())
@@ -443,29 +496,28 @@ def _fills(lib, model: list, seat: dict | None, target: np.ndarray, top: int, po
                 continue
             done.add(key)
             h = float(np.dot(np.asarray(m)[:3, 3] - origin, axis))
-            if h < -0.6 or h > height + 0.6:
-                continue
             entry = (part, colour, m)
-            pts = world_triangles(lib, part, m).reshape(-1, 3)
-            lateral = np.ones(3, bool)
-            lateral[int(np.argmax(np.abs(axis)))] = False
-            if len(pts) and not np.all((pts.min(0) - 1 <= target[:3, 3]) [lateral] & (target[:3, 3] <= pts.max(0) + 1)[lateral]):
+            box = _world_aabb(lib, part, m)
+            if box is not None and not np.all((box[0] - 1 <= target[:3, 3])[lateral] & (target[:3, 3] <= box[1] + 1)[lateral]):
                 continue
             if any(_boxes_overlap(lib, entry, other) for other in model[-1:]):
                 continue
-            # does the top part go on this one, exactly where it is drawn?
-            if any(_same_spot(c["matrix"], target) and np.allclose(c["matrix"][:3, :3], target[:3, :3], atol=1e-3)
+            if collides is not None and collides(part, m, model):
+                continue
+            # does the top part go on this one, geometrically identical to where it is drawn?
+            if any(_same_spot(c["matrix"], target) and _shape(lib, tp, np.asarray(c["matrix"], float)[:3, :3])[0] == t_shape
                    for c in candidate_fn(tp, [entry]) if c.get("host") == 0):
                 return [(k, entry)]
             rest = [j for j in pool if j != k]
-            if rest:
-                up = _fills(lib, model + [entry], None, target, top, rest, parts, candidate_fn, line, budget, depth - 1)
+            if rest and h < height - 7.0:
+                up = _fills(lib, model + [entry], None, target, top, rest, parts, candidate_fn, line, budget, depth - 1, prev_h=h, collides=collides)
                 if up:
                     return [(k, entry)] + up
     return None
 
 
-def _filled_stacks(lib, scene, base, parts, candidate_fn, collides, order, per_part: int = 3) -> list[State]:
+def _filled_stacks(lib, scene, base, parts, candidate_fn, collides, order, per_part: int = 3,
+                   score_fn=None, max_depth: int = FILL_DEPTH, max_budget: int = FILL_BUDGET) -> list[State]:
     """Start states for a step whose picture shows a part floating over a gap the step's other parts
     fill: a 1 x 1 brick and a round plate sunk in a hole, the plate that shows sitting on them. Each
     part's best floating poses (scored with displacement even when the picture has no arrows) are
@@ -476,12 +528,14 @@ def _filled_stacks(lib, scene, base, parts, candidate_fn, collides, order, per_p
     memo: dict = {}
     raw_fn = candidate_fn
 
-    def candidate_fn(part, model):       # noqa: F811 - the same, remembered for one-part hosts
+    from .candidates import stud_candidates
+
+    def candidate_fn(part, model):       # noqa: F811 - stud-only for 1-part stack hosts (never bar/clip/hinge!)
         if len(model) != 1:
             return raw_fn(part, model)
         key = (part, model[0][0], tuple(np.round(np.asarray(model[0][2])[:3, :4], 2).ravel()))
         if key not in memo:
-            memo[key] = raw_fn(part, model)
+            memo[key] = stud_candidates(part, model)
         return memo[key]
 
     tried = set()
@@ -491,23 +545,31 @@ def _filled_stacks(lib, scene, base, parts, candidate_fn, collides, order, per_p
             continue
         tried.add((part, colour))
         cands = listed[part]
-        scored = score_candidates(lib, scene, part, colour, cands, deltas=DELTAS)
+        if score_fn is not None:
+            scored = score_fn(part, colour, cands, FILL_DELTAS)
+        else:
+            scored = score_candidates(lib, scene, part, colour, cands, deltas=FILL_DELTAS)
         # only where the picture shows the part better floating than anywhere it can sit
         seated_best = max((sc.seated for sc in scored), default=0.0)
         floating = [sc for sc in scored if sc.delta > 0 and sc.move is None and sc.score > max(0.0, seated_best)]
         floating.sort(key=lambda sc: -sc.score)
         for sc in floating[:per_part]:
             seat = sc.candidate
+            if seat.get("kind") in ("clip", "hinge", "technic"):
+                continue
             target = drawn_pose(sc)
             pool = [k for k in order if k != top]
             axis = approach_axis(seat) * sc.axis_sign
             origin = np.asarray(seat["matrix"], float)[:3, 3]
             line = (origin, axis, float(np.dot(target[:3, 3] - origin, axis)))
-            stack = _fills(lib, base, seat, target, top, pool, parts, candidate_fn, line, [FILL_BUDGET], base_cands=listed)
+            stack = _fills(lib, base, seat, target, top, pool, parts, candidate_fn, line, [max_budget],
+                           depth=max_depth, base_cands=listed, collides=collides)
             if not stack:
                 continue
             entries = [e for _k, e in stack] + [(part, colour, target)]
-            if collides is not None and any(collides(p, m, base) for p, _c, m in entries):
+            if any(_boxes_overlap(lib, entries[a], entries[b]) for a in range(len(entries)) for b in range(a + 1, len(entries))):
+                continue
+            if collides is not None and any(collides(entries[b][0], entries[b][2], base + entries[:b]) for b in range(len(entries))):
                 continue
             seated = Scored(sc.score + FLOAT_PENALTY * sc.delta, 0.0, 1.0, {**sc.candidate, "matrix": target},
                             sc.colour, sc.edge, sc.score, sc.changed)

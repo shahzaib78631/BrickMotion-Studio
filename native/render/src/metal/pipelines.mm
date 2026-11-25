@@ -27,7 +27,7 @@ MTLVertexDescriptor* brickVertices() {
 }
 
 /// How a pipeline writes into the main pass's three targets.
-enum class Writes { Depth, Opaque, Floor, Over, Glass, Transparent, Single, Least };
+enum class Writes { Depth, Opaque, Floor, Over, Glass, Transparent, Single, Dual, Least };
 
 id<MTLRenderPipelineState> make(Device& device, NSString* vertex, NSString* fragment, Writes writes, MTLPixelFormat single, MTLPixelFormat depth, int samples, MTLVertexDescriptor* vertices,
                                 std::string& error) {
@@ -38,8 +38,9 @@ id<MTLRenderPipelineState> make(Device& device, NSString* vertex, NSString* frag
   d.depthAttachmentPixelFormat = depth;
   d.rasterSampleCount = static_cast<NSUInteger>(samples);
   d.vertexDescriptor = vertices;
-  if (writes == Writes::Single || writes == Writes::Least) {
+  if (writes == Writes::Single || writes == Writes::Dual || writes == Writes::Least) {
     d.colorAttachments[0].pixelFormat = single;
+    if (writes == Writes::Dual) d.colorAttachments[1].pixelFormat = single;
     if (writes == Writes::Least) {  // each channel keeps the least written to it
       MTLRenderPipelineColorAttachmentDescriptor* c = d.colorAttachments[0];
       c.blendingEnabled = YES;
@@ -99,15 +100,36 @@ Pipelines makePipelines(Device& device, std::string& error) {
   p.floor = make(device, @"floorVertex", @"floorFragment", Writes::Floor, none, depth32, kSamples, nil, error);
   p.ao = make(device, @"screenVertex", @"aoFragment", Writes::Single, MTLPixelFormatRGBA8Unorm, none, 1, nil, error);
   p.aoBlur = make(device, @"screenVertex", @"aoBlurFragment", Writes::Single, MTLPixelFormatRGBA8Unorm, none, 1, nil, error);
+  p.sspt = make(device, @"screenVertex", @"ssptFragment", Writes::Dual, MTLPixelFormatRGBA16Float, none, 1, nil, error);
+  p.ssptBlur = make(device, @"screenVertex", @"ssptBlurFragment", Writes::Dual, MTLPixelFormatRGBA16Float, none, 1, nil, error);
+  p.rmidtFront = make(device, @"brickVertex", @"rmidtFrontFragment", Writes::Dual, MTLPixelFormatRGBA16Float, depth32, 1, brickVertices(), error);
+  p.rmidtBack = make(device, @"brickVertex", @"rmidtBackFragment", Writes::Single, MTLPixelFormatRGBA16Float, depth32, 1, brickVertices(), error);
+  p.rmidtResolve = make(device, @"screenVertex", @"rmidtResolveFragment", Writes::Single, MTLPixelFormatRGBA16Float, none, 1, nil, error);
+  p.pathResolve = make(device, @"screenVertex", @"pathResolveFragment", Writes::Single, MTLPixelFormatBGRA8Unorm_sRGB, none, 1, nil, error);
+  auto makeCompute = [&](NSString* name) -> id<MTLComputePipelineState> {
+    if (id<MTLFunction> fn = [device.library newFunctionWithName:name]) {
+      NSError* ce = nil;
+      return [device.device newComputePipelineStateWithFunction:fn error:&ce];
+    }
+    return nil;
+  };
+  p.pathTrace = makeCompute(@"pathTrace");
+  p.hybridRtGlass = makeCompute(@"hybridRtGlass");
+  p.hybridRtGiRefl = makeCompute(@"hybridRtGiRefl");
+  p.hybridRtTemporal = makeCompute(@"hybridRtTemporal");
+  p.neuralFeatures = makeCompute(@"neuralFeatureKernel");
+  p.neuralInfer = makeCompute(@"neuralInferKernel");
   p.edges = make(device, @"edgeVertex", @"edgeFragment", Writes::Over, none, depth32, kSamples, nil, error);
   p.height = make(device, @"heightVertex", @"heightFragment", Writes::Least, MTLPixelFormatRG16Float, none, 1, brickVertices(), error);
   p.shadow = make(device, @"shadowVertex", nil, Writes::Single, none, depth32, 1, brickVertices(), error);
   p.composite = make(device, @"screenVertex", @"compositeFragment", Writes::Single, MTLPixelFormatBGRA8Unorm_sRGB, none, 1, nil, error);
+  p.lens = make(device, @"screenVertex", @"lensFragment", Writes::Single, MTLPixelFormatBGRA8Unorm_sRGB, none, 1, nil, error);
   p.mask = make(device, @"brickVertex", @"maskFragment", Writes::Single, MTLPixelFormatR8Unorm, none, 1, brickVertices(), error);
   p.ids = make(device, @"brickVertex", @"idFragment", Writes::Single, MTLPixelFormatR32Uint, depth32, 1, brickVertices(), error);
   p.shadowDepth = depth(device, MTLCompareFunctionLessEqual, true);  // the shadow map is not reversed: nearer the light is less
   // Depth is reversed (common.metal): nearer is greater.
   p.depthWrite = depth(device, MTLCompareFunctionGreaterEqual, true);
+  p.depthWriteLess = depth(device, MTLCompareFunctionLessEqual, true);
   p.depthRead = depth(device, MTLCompareFunctionGreaterEqual, false);
   p.depthNone = depth(device, MTLCompareFunctionAlways, false);
   MTLSamplerDescriptor* s = [MTLSamplerDescriptor new];

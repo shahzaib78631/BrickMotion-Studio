@@ -137,15 +137,22 @@ class Aligner:
         depth, template = rasterize(proj.reshape(-1, 3, 3), self._tri_cols, (h, w))
         edge = None
         if edges:
-            from .edges import sample_segments, visible_points
+            from . import native_bridge
+            from .edges import DEPTH_TOL, sample_segments, visible_points
             segs = self._get_edge_segs()
-            edge = np.zeros((h, w), np.float32)
             if len(segs):
                 local = scaled.replace(offset=(scaled.offset[0] + shift_x, scaled.offset[1] + shift_y))
-                pts = sample_segments(local.project(segs.reshape(-1, 3)).reshape(-1, 2, 3))
-                vis = visible_points(pts, depth)
-                if len(vis):
-                    edge[vis[:, 0], vis[:, 1]] = 1.0
+                proj_segs = local.project(segs.reshape(-1, 3)).reshape(-1, 2, 3)
+                fast = native_bridge.rasterize_edges(proj_segs, depth, DEPTH_TOL, spacing=0.7, want_mask=True, want_depth=False)
+                if fast is not None:
+                    edge = fast[0].astype(np.float32)
+                else:
+                    edge = np.zeros((h, w), np.float32)
+                    vis = visible_points(sample_segments(proj_segs), depth)
+                    if len(vis):
+                        edge[vis[:, 0], vis[:, 1]] = 1.0
+            else:
+                edge = np.zeros((h, w), np.float32)
         return template, (float(lo[0] - PAD), float(lo[1] - PAD)), edge
 
     def planes(self, margin: int):
@@ -237,30 +244,138 @@ def _visible_edge_world_points(lib, parts, view: View, shape: tuple[int, int], m
     return np.concatenate(pts_list, axis=0) if pts_list else np.zeros((0, 3))
 
 
+def _outline_mask(rgb: np.ndarray, arrows: np.ndarray | None = None,
+                  red_outline: np.ndarray | None = None) -> np.ndarray:
+    """Thin part outlines: dark outlines (with solid black brick interiors eroded away so black
+    bricks contribute only their true perimeter!) plus thin light-on-dark outlines on dark bricks."""
+    from .edges import ink as dark_ink
+    from .scorer import light_ink
+    dk = dark_ink(rgb)
+    # Remove interior of solid dark/black brick faces (keep thin strokes + 1-px outer boundary of dark faces)
+    dk_u8 = dk.astype(np.uint8)
+    solid_inner = cv2.erode(dk_u8, np.ones((3, 3), np.uint8)) > 0
+    dk_thin = dk & ~solid_inner
+    im = dk_thin | light_ink(rgb)
+    if arrows is not None and arrows.any():
+        arr_dil = cv2.dilate(arrows.astype(np.uint8), np.ones((3, 3), np.uint8)).astype(bool)
+        im = im & ~arr_dil
+    if red_outline is not None and red_outline.any():
+        im = im & ~red_outline
+    return im
+
+
+def _steger_features(rgb: np.ndarray, arrows: np.ndarray | None = None,
+                     red_outline: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """Sub-pixel centre lines of dark outlines and light-on-dark outlines with unit normals,
+    in pixel-index coordinates matching `View.project` / `render`."""
+    g = cv2.cvtColor(np.ascontiguousarray(rgb[..., :3]), cv2.COLOR_RGB2GRAY).astype(np.float32)
+    sigma = 1.0
+    s = cv2.GaussianBlur(g, (0, 0), sigma)
+    gx = (np.roll(s, -1, 1) - np.roll(s, 1, 1)) * 0.5
+    gy = (np.roll(s, -1, 0) - np.roll(s, 1, 0)) * 0.5
+    gxx = np.roll(s, -1, 1) - 2.0 * s + np.roll(s, 1, 1)
+    gyy = np.roll(s, -1, 0) - 2.0 * s + np.roll(s, 1, 0)
+    gxy = (np.roll(np.roll(s, -1, 0), -1, 1) - np.roll(np.roll(s, -1, 0), 1, 1)
+           - np.roll(np.roll(s, 1, 0), -1, 1) + np.roll(np.roll(s, 1, 0), 1, 1)) * 0.25
+    half = (gxx - gyy) * 0.5
+    root = np.sqrt(half * half + gxy * gxy)
+    l1 = (gxx + gyy) * 0.5 + root
+    l2 = (gxx + gyy) * 0.5 - root
+    lam = np.where(np.abs(l1) >= np.abs(l2), l1, l2)
+    nx, ny = gxy, lam - gxx
+    flat = (np.abs(nx) + np.abs(ny)) < 1e-12
+    nx = np.where(flat, lam - gyy, nx)
+    ny = np.where(flat, gxy, ny)
+    flat = (np.abs(nx) + np.abs(ny)) < 1e-12
+    nx = np.where(flat, 1.0, nx)
+    ny = np.where(flat, 0.0, ny)
+    norm = np.hypot(nx, ny)
+    nx, ny = nx / norm, ny / norm
+    t = np.zeros_like(lam)
+    valid_lam = np.abs(lam) > 4.0
+    t[valid_lam] = -(gx[valid_lam] * nx[valid_lam] + gy[valid_lam] * ny[valid_lam]) / lam[valid_lam]
+    ok = valid_lam & (np.abs(t * nx) <= 0.55) & (np.abs(t * ny) <= 0.55)
+    ok[:2] = ok[-2:] = False
+    ok[:, :2] = ok[:, -2:] = False
+    ys, xs = np.nonzero(ok)
+    if not len(xs):
+        return np.zeros((0, 2)), np.zeros((0, 2))
+    tt = t[ys, xs]
+    px = xs.astype(np.float64) + tt * nx[ys, xs]
+    py = ys.astype(np.float64) + tt * ny[ys, xs]
+    kind = lam[ys, xs] > 0.0  # True = dark line, False = light line
+    around = cv2.GaussianBlur(g, (0, 0), 3.5)[ys, xs]
+    keep = kind | (around < 95.0)
+    exclude = None
+    if arrows is not None and arrows.any():
+        exclude = cv2.dilate(arrows.astype(np.uint8), np.ones((3, 3), np.uint8)).astype(bool)
+    if red_outline is not None and red_outline.any():
+        exclude = red_outline if exclude is None else (exclude | red_outline)
+    if exclude is not None:
+        keep = keep & ~exclude[ys, xs]
+    yk, xk = ys[keep], xs[keep]
+    rp = np.stack([px[keep], py[keep]], axis=1)
+    rn = np.stack([nx[yk, xk], ny[yk, xk]], axis=1)
+    return rp, rn
+
+
+def view_fit_metrics(lib, parts, picture: Picture, view: View) -> tuple[float, float, float]:
+    """(silhouette_iou, mean_edge_dist_px, p90_edge_dist_px) of `parts` rendered under `view`
+    against `picture`'s foreground and thin dark+light outlines."""
+    from .scorer import red_outline_mask
+    if not parts:
+        return 0.0, float("inf"), float("inf")
+    shape = picture.rgb.shape[:2]
+    _d, label = render(lib, parts, view, shape)
+    mask = label >= 0
+    fg = picture.foreground & ~picture.arrows
+    iou = float(np.count_nonzero(mask & fg) / max(1, np.count_nonzero(mask | fg)))
+    e = np.zeros(label.shape, bool)
+    e[:, 1:] |= label[:, 1:] != label[:, :-1]
+    e[1:, :] |= label[1:, :] != label[:-1, :]
+    e2 = np.zeros(label.shape, bool)
+    e2[:, 1:] |= mask[:, 1:] != mask[:, :-1]
+    e2[1:, :] |= mask[1:, :] != mask[:-1, :]
+    edge = (e & mask) | e2
+    if not edge.any():
+        return iou, float("inf"), float("inf")
+    red_out = red_outline_mask(picture.rgb, picture.arrows)
+    im = _outline_mask(picture.rgb, picture.arrows, red_out)
+    if not im.any():
+        return iou, float("inf"), float("inf")
+    dist_map = cv2.distanceTransform((~im).astype(np.uint8), cv2.DIST_L2, cv2.DIST_MASK_PRECISE)
+    d = dist_map[edge]
+    return iou, float(np.minimum(d, 4.0).mean()), float(np.percentile(d, 90))
+
+
 def refine_view(lib, parts, picture: Picture, view: View, scale_tol: float = 0.06,
                 max_angle: float = 8.0, max_roll: float = 3.0, max_shift: float = 12.0,
                 outer: int = 2) -> View:
-    """Continuous sub-pixel camera refinement via ICP of visible 3D edges/silhouettes onto picture ink.
-
-    Optimises (yaw, pitch, roll, scale, ox, oy) with scipy soft-L1 least squares so visible LDraw edges
-    and part boundaries snap onto the booklet's ink strokes to sub-pixel accuracy. Keeps the start view
-    if refinement fails to reduce mean clipped ink distance."""
+    """Continuous sub-pixel camera refinement via staged ICP of visible 3D edges and part
+    silhouettes onto thin dark+light outlines (with solid black interiors eroded so black bricks
+    align on their true edges, not their interior). Uses a single consistent distance-to-outlines
+    objective for both optimisation and iterate acceptance, plus a final sub-pixel boundary snap."""
     from scipy.optimize import least_squares
     from scipy.spatial import cKDTree
-    from .edges import ink as ink_mask_fn
+    from .scorer import red_outline_mask
 
     if not parts:
         return view
     shape = picture.rgb.shape[:2]
-    im = ink_mask_fn(picture.rgb)
-    iys, ixs = np.nonzero(im)
-    if len(ixs) < 30:
+    red_out = red_outline_mask(picture.rgb, picture.arrows)
+    im = _outline_mask(picture.rgb, picture.arrows, red_out)
+    if int(im.sum()) < 30:
+        from .edges import ink as ink_mask_fn
+        im = ink_mask_fn(picture.rgb)
+    if int(im.sum()) < 30:
         return view
+
+    iys, ixs = np.nonzero(im)
     ink_pts = np.stack([ixs.astype(float), iys.astype(float)], axis=1)
     tree = cKDTree(ink_pts)
     dist_map = cv2.distanceTransform((~im).astype(np.uint8), cv2.DIST_L2, cv2.DIST_MASK_PRECISE)
 
-    def mean_dist(v: View, X: np.ndarray, clip: float = 4.0) -> float:
+    def eval_dist(v: View, X: np.ndarray, clip: float = 3.5) -> float:
         if not len(X):
             return float("inf")
         uv = v.project(X)[:, :2]
@@ -276,26 +391,34 @@ def refine_view(lib, parts, picture: Picture, view: View, scale_tol: float = 0.0
     if len(X0) < 25:
         return view
     best_view = cur
-    best_score = mean_dist(cur, X0)
+    best_score = eval_dist(cur, X0)
 
-    lo = np.array([
+    lo_all = np.array([
         view.yaw - max_angle, view.pitch - max_angle, view.roll - max_roll,
         view.scale * max(0.5, 1.0 - scale_tol),
         view.offset[0] - max_shift, view.offset[1] - max_shift,
     ])
-    hi = np.array([
+    hi_all = np.array([
         view.yaw + max_angle, view.pitch + max_angle, view.roll + max_roll,
         view.scale * (1.0 + scale_tol),
         view.offset[0] + max_shift, view.offset[1] + max_shift,
     ])
     orient = np.asarray(view.orientation, float)
-    radii = (6.0, 3.5, 2.5, 2.0)
+    # Staged schedule: translation -> rotation+translation -> all 6 DoFs -> tight polish
+    stages = (
+        ((4, 5), 6.0),
+        ((0, 1, 2, 4, 5), 3.8),
+        ((0, 1, 2, 3, 4, 5), 2.5),
+        ((0, 1, 2, 3, 4, 5), 1.8),
+    )
 
     for _outer in range(outer):
         X = X0 if _outer == 0 else _visible_edge_world_points(lib, parts, cur, shape)
         if len(X) < 25:
             break
-        for radius in radii:
+        for free_idx, radius in stages:
+            if _outer > 0 and radius > 5.0:
+                continue
             uv0 = cur.project(X)[:, :2]
             d, j = tree.query(uv0, distance_upper_bound=radius)
             ok = np.isfinite(d)
@@ -303,26 +426,65 @@ def refine_view(lib, parts, picture: Picture, view: View, scale_tol: float = 0.0
                 continue
             Xm = X[ok]
             target = ink_pts[j[ok]]
-            x0 = np.array([cur.yaw, cur.pitch, cur.roll, cur.scale, cur.offset[0], cur.offset[1]])
-            x0 = np.clip(x0, lo + 1e-7, hi - 1e-7)
 
-            def res(p):
-                v = View(orient, float(p[0]), float(p[1]), float(p[3]), (float(p[4]), float(p[5])), float(p[2]))
-                return (v.project(Xm)[:, :2] - target).ravel()
+            full_p = np.array([cur.yaw, cur.pitch, cur.roll, cur.scale, cur.offset[0], cur.offset[1]])
+            full_p = np.clip(full_p, lo_all + 1e-7, hi_all - 1e-7)
+            idx_arr = list(free_idx)
+            x0 = full_p[idx_arr]
+            lo = lo_all[idx_arr]
+            hi = hi_all[idx_arr]
+            scales_all = np.array([1.0, 1.0, 1.0, max(0.01 * view.scale, 1e-4), 1.0, 1.0])
+            x_sc = scales_all[idx_arr]
+
+            def make_view(q):
+                p = full_p.copy()
+                p[idx_arr] = q
+                return View(orient, float(p[0]), float(p[1]), float(p[3]), (float(p[4]), float(p[5])), float(p[2]))
+
+            def res(q):
+                return (make_view(q).project(Xm)[:, :2] - target).ravel()
 
             sol = least_squares(
-                res, x0, loss="soft_l1", f_scale=1.0, bounds=(lo, hi),
-                x_scale=[1.0, 1.0, 1.0, max(0.01 * view.scale, 1e-4), 1.0, 1.0],
-                max_nfev=35,
+                res, x0, loss="soft_l1", f_scale=0.9, bounds=(lo, hi),
+                x_scale=x_sc, max_nfev=35,
             )
-            p = sol.x
-            cand = View(orient, float(p[0]), float(p[1]), float(p[3]), (float(p[4]), float(p[5])), float(p[2]))
-            sc = mean_dist(cand, X)
-            if sc < mean_dist(cur, X) + 0.05:
+            cand = make_view(sol.x)
+            sc = eval_dist(cand, X)
+            if sc < eval_dist(cur, X) + 0.04:
                 cur = cand
                 if sc < best_score - 1e-4:
                     best_score = sc
                     best_view = cand
+
+    # Final sub-pixel translation micro-snap on rendered part-boundary edges (eliminates +-0.5 px rasterisation bias)
+    from .edges import ink as dark_ink
+    dk = dark_ink(picture.rgb) & ~picture.arrows
+    if dk.any():
+        dk_dist = cv2.distanceTransform((~dk).astype(np.uint8), cv2.DIST_L2, cv2.DIST_MASK_PRECISE)
+        base_ox, base_oy = best_view.offset
+        best_snap = None
+        for dy in (-0.5, 0.0, 0.5):
+            for dx in (-0.5, 0.0, 0.5):
+                cand = best_view.replace(offset=(base_ox + dx, base_oy + dy))
+                _d, lab = render(lib, parts, cand, shape)
+                m = lab >= 0
+                e = np.zeros(shape, bool)
+                e[:, 1:] |= lab[:, 1:] != lab[:, :-1]
+                e[1:, :] |= lab[1:, :] != lab[:-1, :]
+                e2 = np.zeros(shape, bool)
+                e2[:, 1:] |= m[:, 1:] != m[:, :-1]
+                e2[1:, :] |= m[1:, :] != m[:-1, :]
+                ed = (e & m) | e2
+                if not ed.any():
+                    continue
+                # Combined distance to thin outlines + dark ink (so neither coloured nor black bricks shift)
+                d_out = np.minimum(dist_map[ed], 3.5)
+                d_dk = np.minimum(dk_dist[ed], 3.5)
+                val = 0.5 * float(d_out.mean()) + 0.5 * float(d_dk.mean()) + 0.15 * float(np.percentile(d_dk, 90))
+                if best_snap is None or val < best_snap[0] - 1e-4:
+                    best_snap = (val, cand)
+        if best_snap is not None:
+            best_view = best_snap[1]
     return best_view
 
 
@@ -346,8 +508,13 @@ def register(lib, parts, picture: Picture, codes: list[int], orientation, yaw: f
             if value > best[0]:
                 best = (value, view)
     centre = best[1]
+    sc_lo = scale * float(min(scale_range)) if len(scale_range) > 1 else centre.scale * 0.98
+    sc_hi = scale * float(max(scale_range)) if len(scale_range) > 1 else centre.scale * 1.02
     for f in (0.98, 1.02):
-        value, view = aligner.evaluate(centre.replace(scale=centre.scale * f))
+        cand_sc = float(np.clip(centre.scale * f, sc_lo, sc_hi))
+        if abs(cand_sc - centre.scale) < 1e-6:
+            continue
+        value, view = aligner.evaluate(centre.replace(scale=cand_sc))
         if value > best[0]:
             best = (value, view)
     if subpixel and on_ink is not None and len(parts):
@@ -360,8 +527,8 @@ def register(lib, parts, picture: Picture, codes: list[int], orientation, yaw: f
     return Registration(best[1], float(best[0]), classes.shape)
 
 
-COARSE_YAWS = (5, 20, 35, 50, 65, 80)
-COARSE_PITCHES = (20, 30, 40, 50, 60)
+COARSE_YAWS = (5, 20, 35, 55, 70, 82)
+COARSE_PITCHES = (20, 35, 50, 62)
 
 
 def search(lib, parts, picture: Picture, codes: list[int], orientations: list[int], scale: float,
@@ -375,24 +542,33 @@ def search(lib, parts, picture: Picture, codes: list[int], orientations: list[in
     classes = picture.classes(codes) if classes is None else classes
     coarse = Aligner(lib, parts, classes, codes, factor=0.5, on_ink=on_ink)
     found = []
+    pitches = (35, 50) if len(parts) <= 4 else COARSE_PITCHES
     for oi in orientations:
         for yaw in COARSE_YAWS:
-            for pitch in COARSE_PITCHES:
+            for pitch in pitches:
                 value, _view = coarse.evaluate(View(ORIENTATIONS[oi], yaw, pitch, scale, (0.0, 0.0)), use_edges=False)
                 found.append((value, oi, yaw, pitch))
     found.sort(key=lambda r: -r[0])
-    # Re-score the top coarse candidates per orientation with edges when available
+    # Re-score the top coarse candidates per orientation (plus standard LEGO studio angles 35/55 x 35)
+    # with edges so shallow low-pitch views cannot crowd out the true studio camera peak!
     if on_ink is not None:
-        shortlist, per_oi = [], {}
+        shortlist, per_oi, seen_ep = [], {}, set()
         for _v, oi, yaw, pitch in found:
             c = per_oi.get(oi, 0)
             if c >= 4:
                 continue
             per_oi[oi] = c + 1
+            seen_ep.add((oi, yaw, pitch))
             val, _view = coarse.evaluate(View(ORIENTATIONS[oi], yaw, pitch, scale, (0.0, 0.0)), use_edges=True)
             shortlist.append((val, oi, yaw, pitch))
             if len(shortlist) >= max(24, refine * 6):
                 break
+        for oi in orientations:
+            for sy in (35, 55):
+                if (oi, sy, 35) not in seen_ep:
+                    seen_ep.add((oi, sy, 35))
+                    val, _view = coarse.evaluate(View(ORIENTATIONS[oi], sy, 35, scale, (0.0, 0.0)), use_edges=True)
+                    shortlist.append((val, oi, sy, 35))
         found = sorted(shortlist, key=lambda r: -r[0])
     out, seen = [], set()
     for value, oi, yaw, pitch in found:
@@ -416,10 +592,13 @@ def search(lib, parts, picture: Picture, codes: list[int], orientations: list[in
     out.sort(key=lambda r: -r.score)
     if subpixel and on_ink is not None and len(parts):
         span = max(0.05, float(max(scale_range) - min(scale_range)) / 2.0 + 0.03) if len(scale_range) > 1 else 0.04
-        for idx in range(min(2, len(out))):
+        for idx in range(len(out)):
             reg = out[idx]
+            iou0, _md0, _p0 = view_fit_metrics(lib, parts, picture, reg.view)
             refined = refine_view(lib, parts, picture, reg.view, scale_tol=span, outer=2)
-            out[idx] = Registration(refined, reg.score, reg.shape, reg.orientation_index)
+            iou1, _md1, _p1 = view_fit_metrics(lib, parts, picture, refined)
+            if iou1 >= iou0 - 0.08 and (len(parts) > 4 or refined.pitch >= 22.0):
+                out[idx] = Registration(refined, reg.score, reg.shape, reg.orientation_index)
     return out
 
 

@@ -50,10 +50,17 @@ add_executable(bmshot tools/bmshot/main.mm tools/common/shot_options.cpp)
 target_compile_options(bmshot PRIVATE $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
 target_link_libraries(bmshot PRIVATE bmrender bmtools_common bm_warnings)
 
-# bmexport: path-traced stills, frames, the snap track and the film.
-add_executable(bmexport tools/bmexport/main.mm tools/common/shot_options.cpp)
+# AVFoundation encoding shared by the standalone tools and the editor's headless worker.
+add_library(bmmovie STATIC tools/bmexport/movie_encoder.mm)
+target_compile_options(bmmovie PRIVATE $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
+target_include_directories(bmmovie PUBLIC tools/bmexport PRIVATE include)
+target_link_libraries(bmmovie PRIVATE bm_warnings
+  "-framework AVFoundation" "-framework CoreMedia" "-framework CoreVideo" "-framework Accelerate")
+
+# bmexport: stills, the snap track and a generated build film.
+add_executable(bmexport tools/bmexport/main.mm tools/bmexport/build_video.cpp tools/common/shot_options.cpp)
 target_compile_options(bmexport PRIVATE $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
-target_link_libraries(bmexport PRIVATE bmrender bmtools_common bmsound bm_warnings)
+target_link_libraries(bmexport PRIVATE bmrender bmtools_common bmsound bmmovie bm_warnings)
 target_compile_definitions(bmexport PRIVATE BM_WEB_SNAPS="${CMAKE_SOURCE_DIR}/../public/sounds/snaps")
 
 # bmview: a window on the viewport.

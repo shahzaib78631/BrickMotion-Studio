@@ -15,10 +15,12 @@ struct CompatibleParts: View {
   let source: AssemblyInspectionWorker.Source
   let worker: AssemblyInspectionWorker
   let onPlace: (Match) -> Void
+  let onSuggest: (AssemblyInspectionWorker.Suggestion) -> Void
   let onClose: () -> Void
   @State private var query = ""
   @State private var loading = true
   @State private var results: [Match] = []
+  @State private var suggestions: [AssemblyInspectionWorker.Suggestion]?
   @State private var selection: String?
   @FocusState private var searching: Bool
 
@@ -33,21 +35,23 @@ struct CompatibleParts: View {
       ZStack {
         if loading {
           ProgressView("Checking free connections…").controlSize(.small)
-        } else if results.isEmpty {
+        } else if results.isEmpty && shownSuggestions.isEmpty {
           ContentUnavailableView("No Matching Parts", systemImage: "link",
             description: Text(query.isEmpty ? "Search the library for other parts." : "Try a different name or part number."))
         } else {
-          List(results, selection: $selection) { result in
-            HStack(spacing: 8) {
-              PartPreviewImage(part: result.id, color: 71)
-                .frame(width: 36, height: 36).clipShape(.rect(cornerRadius: 6))
-              VStack(alignment: .leading, spacing: 2) {
-                Text(result.part.name).font(.callout).lineLimit(1)
-                Text(result.part.number).font(.caption).foregroundStyle(.secondary)
+          List(selection: $selection) {
+            if !shownSuggestions.isEmpty {
+              Section("What Builders Put Here") {
+                ForEach(shownSuggestions) { item in
+                  row(item.part, colour: item.colour, detail: item.why).tag(item.id)
+                }
               }
             }
-            .tag(result.id)
-            .accessibilityElement(children: .combine)
+            Section(shownSuggestions.isEmpty ? "" : "Fits a Free Connection") {
+              ForEach(results) { result in
+                row(result.part, colour: 71, detail: result.part.number).tag(result.id)
+              }
+            }
           }
           .listStyle(.inset)
         }
@@ -56,8 +60,9 @@ struct CompatibleParts: View {
       HStack {
         Spacer()
         Button("Close", action: onClose).keyboardShortcut(.cancelAction)
-        Button("Preview Placement") {
-          if let match = results.first(where: { $0.id == selection }) { onPlace(match) }
+        Button(selectedSuggestion == nil ? "Preview Placement" : "Add Part") {
+          if let suggestion = selectedSuggestion { onSuggest(suggestion) }
+          else if let match = results.first(where: { $0.id == selection }) { onPlace(match) }
         }
         .keyboardShortcut(.defaultAction)
         .disabled(selection == nil || loading)
@@ -69,12 +74,35 @@ struct CompatibleParts: View {
     .onAppear { searching = true }
   }
 
+  /// Builders' suggestions show only before a search narrows the list.
+  private var shownSuggestions: [AssemblyInspectionWorker.Suggestion] { query.isEmpty ? suggestions ?? [] : [] }
+  private var selectedSuggestion: AssemblyInspectionWorker.Suggestion? {
+    shownSuggestions.first { $0.id == selection }
+  }
+
+  private func row(_ part: LibraryPart, colour: Int32, detail: String) -> some View {
+    HStack(spacing: 8) {
+      PartPreviewImage(part: part.id, color: colour)
+        .frame(width: 36, height: 36).clipShape(.rect(cornerRadius: 6))
+      VStack(alignment: .leading, spacing: 2) {
+        Text(part.name).font(.callout).lineLimit(1)
+        Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+      }
+    }
+    .accessibilityElement(children: .combine)
+  }
+
   private func load(_ rawQuery: String) async {
     loading = true
     selection = nil
     let query = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
     if !query.isEmpty { try? await Task.sleep(for: .milliseconds(140)) }
     guard !Task.isCancelled else { return }
+    if suggestions == nil {
+      let found = await worker.suggestions(source, piece: piece)
+      guard !Task.isCancelled else { return }
+      suggestions = found
+    }
     let library = await PartsCatalog.shared.library()
     let found: [LibraryPart]
     if query.isEmpty { found = library.common }
@@ -82,7 +110,7 @@ struct CompatibleParts: View {
     let matches = await worker.fitting(source, piece: piece, candidates: found)
     guard !Task.isCancelled else { return }
     results = matches
-    selection = matches.first?.id
+    selection = shownSuggestions.first?.id ?? matches.first?.id
     loading = false
   }
 }
@@ -111,6 +139,18 @@ struct CompatibleParts: View {
       viewport.placement.begin(match.part, colour: model.partColour, turns: model.partTurns, mirrored: model.partMirrored,
                                step: model.selectedStep, reference: model.partReferenceHints,
                                at: point.x.isFinite && point.y.isFinite && viewport.bounds.contains(point) ? point : nil)
+    } onSuggest: { [weak sheet, weak model] suggestion in
+      if let sheet { window.endSheet(sheet) }
+      guard let model, session.version() == version, session.generation() == generation else {
+        NSSound.beep()
+        return
+      }
+      model.animation.rest()
+      let step = model.selectedStep.flatMap(Int32.init(exactly:)) ?? -1
+      if model.context.perform({ $0.placePart(std.string(suggestion.part.id), suggestion.colour, suggestion.pose, step,
+                                               generation, version) }) {
+        model.browsedPart = suggestion.part
+      }
     } onClose: { [weak sheet] in
       if let sheet { window.endSheet(sheet) }
     }

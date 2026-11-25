@@ -8,6 +8,7 @@ struct PartsPane: View {
   @State private var displayedFilter: Filter?
   @State private var showColours = false
   @FocusState private var searchFocused: Bool
+  @Environment(\.colorScheme) private var colorScheme
 
   private let pageSize = 96
 
@@ -50,6 +51,11 @@ struct PartsPane: View {
       let names = await PartsCatalog.shared.categories(in: catalog.directory)
       guard !Task.isCancelled else { return }
       categories = names
+      let dark = colorScheme == .dark
+      let commonIds = catalog.common.map(\.id)
+      Task.detached(priority: .utility) {
+        await PartPreviewCache.shared.prewarm(parts: commonIds, color: 71, dark: dark)
+      }
     }
     .task(id: searchRequest) {
       guard let catalog = library, let request = searchRequest else { return }

@@ -1,4 +1,4 @@
-// bmexport: path-traced, denoised pictures of a model (and, later, its film and snap track).
+// bmexport: stills, build video and snap sound.
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -19,6 +19,7 @@
 #include "bms/snap_events.h"
 #include "bms/snap_synth.h"
 #include "bms/wav.h"
+#include "build_video.h"
 #include "engine.h"
 #include "shot_options.h"
 
@@ -37,6 +38,7 @@ int usage() {
   std::fprintf(stderr,
                "usage: bmexport still <model file> --out <png> [--frame N] [--samples S] [--seed K] [--rig build-fl] [--no-denoise] [--denoise-device cpu|metal]\n"
                "                [--size WxH] [--azimuth a --elevation e | --eye x,y,z --target x,y,z] [--fov deg] [--lights-fixed|--lights-follow] [--background r,g,b] [--repeat CxR] [--correct]\n"
+               "       bmexport build-video <project> --out <mp4> [--size WxH] [--fps 24|25|30|50|60] [--model name]\n"
                "       bmexport sound <model file> --out <wav> [--size WxH] [sound options]   the build's snaps, 48 kHz stereo (--size: the film's shape, for panning)\n"
                "       bmexport sound-gallery <dir> [sound options]          the listening cases, one WAV each\n"
                "         sound options: --style physics|web   physics (default): the parts' own sound; web: the web app's snap\n"
@@ -332,6 +334,7 @@ int soundGallery(const std::vector<std::string_view>& args) {
 int main(int argc, char** argv) {
   const std::vector<std::string_view> args(argv + 1, argv + argc);
   if (args.empty()) return usage();
+  if (args[0] == "build-video") return bmtools::buildVideo(args);
   if (args[0] == "still") return still(args);
   if (args[0] == "sound") return sound(args);
   if (args[0] == "sound-gallery") return soundGallery(args);

@@ -1,5 +1,6 @@
 // --selftest-panes <file>: checks the command registry, the panes' view models and the palette
 // through a document's real window, as a person would reach them. Prints the first failure.
+import AVFoundation
 import AppKit
 import BMApp
 
@@ -199,6 +200,223 @@ import BMApp
   if !strays(pieceMenu).isEmpty { return fail("piece menu items outside the registry: \(strays(pieceMenu))") }
   let emptyMenu = PieceMenu.make(piece: nil, context: CommandContext(document: document, viewport: view, clickedPiece: nil))
   if !strays(emptyMenu).isEmpty { return fail("empty-space menu items outside the registry: \(strays(emptyMenu))") }
+
+  // The same AppKit resize path as the timeline grip, at the editor's minimum window size.
+  guard let window = controller.window else { return fail("no document window for the timeline") }
+  window.setContentSize(NSSize(width: 900, height: 600))
+  controller.setAnimateMode(true, plan: false)
+  turn()
+  controller.resizeTimeline(to: 192)
+  turn()
+  let compactHeight = controller.timelineHeight
+  controller.resizeTimeline(to: 286)
+  turn()
+  let tallHeight = controller.timelineHeight
+  if tallHeight < compactHeight + 60 || abs(compactHeight - 192) > 2 {
+    return fail("timeline resize left heights \(compactHeight) and \(tallHeight)")
+  }
+
+  let navigation = TimelineNavigation()
+  navigation.measure(viewport: 600, content: 600, offset: 0)
+  let anchor = navigation.time(at: 220, duration: 100)
+  navigation.magnify(3, around: 220)
+  navigation.measure(viewport: 600, content: navigation.contentWidth, offset: 0)
+  if abs(navigation.time(at: 220, duration: 100) - anchor) > 0.01 { return fail("zoom moved the time under the pointer") }
+  navigation.reveal(85, duration: 100)
+  if !(navigation.visibleStart...navigation.visibleEnd).contains(0.85) { return fail("a distant seek left the playhead offscreen") }
+  let beforePan = navigation.offset
+  if !navigation.panAtEdge(595) || navigation.offset <= beforePan { return fail("dragging across the right edge did not scroll") }
+  navigation.fit()
+  if navigation.zoom != 1 || navigation.offset != 0 { return fail("Fit did not restore the full timeline") }
+
+  let scale = TimelineScale(width: 420, duration: 60)
+  let flights = [(1.0, "3001.dat"), (1.4, "3024.dat"), (28.0, "6141.dat"), (40.0, "4276b.dat"),
+                 (59.8, "3022.dat")].enumerated().map { index, part in
+    AnimationWorkspace.Flight(id: UInt32(index), step: 0, depth: 0, colour: 4,
+                             start: part.0, end: min(60, part.0 + 0.5), part: part.1, flag: "", blocker: "")
+  }
+  let lane = PartLaneLayout(flights, scale: scale)
+  let firstRun = AnimationWorkspace.Run(id: 0, step: 0, start: 1, end: 2.2, next: 3)
+  let arrival = TimelineArrivalTarget.inRun(firstRun, at: 1.8, scale: scale, flights: flights,
+                                            excluding: [], itemCount: flights.count) { Int($0) }
+  guard arrival.before == 2, arrival.x == scale.x(firstRun.end) else {
+    return fail("an arrival drop jumped into a later occurrence of the step")
+  }
+  guard lane.rows.count == 2, let first = lane.rows.first?.first,
+        lane.rows[0].map(\.code) == ["3001", "6141", "4276b", "3022"], lane.rows[1].map(\.code) == ["3024"],
+        first.x == scale.x(flights[0].start), first.rect.height == 17, PartLaneLayout.font.pointSize == 10,
+        first.rect.width - 22 >= (first.code as NSString).size(withAttributes: [.font: PartLaneLayout.font]).width,
+        lane.clip(at: CGPoint(x: first.rect.midX, y: first.rect.midY))?.id == first.id else {
+    return fail("the Parts lane did not keep labelled clips at their times without overlaps")
+  }
+  var visible = [UInt32]()
+  lane.forEachVisible(in: first.rect) { visible.append($0.id) }
+  guard visible == [first.id],
+        lane.clip(at: CGPoint(x: first.rect.midX, y: first.rect.maxY + 1)) == nil else {
+    return fail("the Parts lane hit test included an out-of-bounds clip")
+  }
+  let zoomed = PartLaneLayout(Array(flights.dropLast()), scale: TimelineScale(width: 12_600, duration: 60))
+  guard zoomed.rows.count == 2, zoomed.rows[0].dropFirst().map(\.code) == ["6141", "4276b"],
+        let last = lane.rows[0].last, last.rect.maxX <= scale.width, last.x < last.timeX,
+        last.timeX == scale.x(flights.last!.start) else {
+    return fail("the Parts lane left a gap after the last tick or lost the final clip's true time")
+  }
+  let fit = TimelineNavigation(trailingInset: 6)
+  fit.measure(viewport: 500, content: 500, offset: 0)
+  if fit.maximumOffset != 0 || fit.logicalWidth != 482 {
+    return fail("Fit reserved extra space after the last tick")
+  }
+
+  // Use a real piece so the on-demand menu can resolve its actual step and item.
+  guard let id = loose.first, let step = model.steps.first(where: { row in
+    document.session.stepItems(Int(row.index)).contains { $0.pieces.contains(id) }
+  }) else { return fail("no local piece to test the timeline menu") }
+  let match = document.session.partAt(id)
+  let flight = AnimationWorkspace.Flight(id: id, step: Int(step.index), depth: 0, colour: 4,
+                                         start: 1, end: 2, part: String(match.name), flag: "", blocker: "")
+  var framed = false
+  var edited = false
+  let menu = TimelinePartMenu.make(flight: flight, model: model, reveal: { framed = true }, editMotion: { edited = true })
+  guard let frame = menu.items.firstIndex(where: { $0.title == "Frame in View" }),
+        let motion = menu.items.firstIndex(where: { $0.title == "Motion for This Part…" }),
+        menu.item(withTitle: "Move to a New Step")?.submenu?.items.count == 5,
+        menu.item(withTitle: "Delete Part") != nil else { return fail("missing timeline part actions") }
+  menu.performActionForItem(at: frame)
+  menu.performActionForItem(at: motion)
+  guard framed, edited else { return fail("the timeline part menu did not dispatch its commands") }
+
+  guard model.partsStepIsExpanded(0), !model.partsStepIsExpanded(1) else {
+    return fail("the model parts browser did not open with just the first step expanded")
+  }
+  model.togglePartsStep(1)
+  model.togglePartsStep(0)
+  model.open(row: use)
+  turn()
+  if !model.partsStepIsExpanded(0) { return fail("a new submodel inherited the root's collapsed first step") }
+  model.back()
+  turn()
+  if model.partsStepIsExpanded(0) || !model.partsStepIsExpanded(1) {
+    return fail("returning to the root lost its step disclosure state")
+  }
+  model.setPartsStepsExpanded(false)
+  if model.steps.indices.contains(where: model.partsStepIsExpanded) {
+    return fail("Collapse All did not collapse every step")
+  }
+  model.setPartsStepsExpanded(true)
+  if !model.steps.indices.allSatisfy(model.partsStepIsExpanded) {
+    return fail("Expand All did not expand every step")
+  }
+  guard let submodel = model.steps.indices.lazy.compactMap({ index in
+    model.items(of: index).first { $0.submodel && !$0.pieces.isEmpty }
+  }).first else { return fail("no submodel row to extract") }
+  let oldPartCount = model.snapshot.pieces
+  let extractedCount = submodel.pieces.count
+  let undoDepth = document.session.undoDepth()
+  guard model.extractParts(of: submodel), document.session.undoDepth() == undoDepth + 1,
+        model.snapshot.pieces == oldPartCount, model.partsSelection.count == extractedCount,
+        !model.items(of: Int(submodel.step)).contains(where: { $0.item == submodel.item }) else {
+    return fail("the Parts browser did not extract the clicked submodel use in one undo step")
+  }
+  document.undoManager?.undo()
+  turn()
+  if !model.items(of: Int(submodel.step)).contains(where: { $0.item == submodel.item }) {
+    return fail("undo did not restore the extracted use")
+  }
+
+  let animation = model.animation
+  animation.plan()
+  let planDeadline = Date().addingTimeInterval(20)
+  while !animation.ready, Date() < planDeadline {
+    _ = view.viewport.draw(nil)
+    animation.update()
+    turn()
+  }
+  guard animation.ready, animation.duration > 1 else { return fail("the helicopter timeline did not plan") }
+  animation.seek(animation.duration * 0.4)
+  let playhead = animation.time
+  guard let activeRun = animation.playheadRun, animation.run(at: playhead)?.id == activeRun else {
+    return fail("the playhead did not select its visible step run")
+  }
+  let length = animation.duration
+  guard context.perform({ $0.move(ViewportView.list([id]), bmapp.Vec3(x: 2, y: 0, z: 0), false) }) else {
+    return fail("the test part could not move before replanning")
+  }
+  _ = view.viewport.draw(nil)
+  animation.update()
+  guard animation.state.stale, animation.time == playhead, animation.duration == length, animation.playheadRun == activeRun else {
+    return fail("the timeline jumped during replanning")
+  }
+  document.undoManager?.undo()
+
+  guard let panels = window.contentViewController as? NSSplitViewController,
+        let timeline = panels.splitViewItems.last?.viewController.view else {
+    return fail("no timeline view for keyboard routing")
+  }
+  animation.tab = .timeline
+  let focusProbe = NSTextView(frame: NSRect(x: 0, y: 0, width: 24, height: 20))
+  timeline.addSubview(focusProbe)
+  let delete = #selector(NSText.delete(_:))
+  guard window.makeFirstResponder(focusProbe), controller.supplementalTarget(forAction: delete, sender: nil) == nil else {
+    return fail("Delete escaped from the keyframe timeline to the model")
+  }
+  focusProbe.removeFromSuperview()
+  guard window.makeFirstResponder(view),
+        controller.supplementalTarget(forAction: delete, sender: nil) as? ViewportView === view else {
+    return fail("Delete did not route to the focused viewport")
+  }
+
+  var staging = document.session.stagingSettings()
+  staging.layout = std.string("gallery")
+  guard context.perform({ $0.setStagingSettings(staging) }) else { return fail("the staging layout could not change") }
+  animation.previewStaging()
+  let stagingDeadline = Date().addingTimeInterval(20)
+  while view.viewport.plannedVersion() != document.session.version(), Date() < stagingDeadline {
+    _ = view.viewport.draw(nil)
+    animation.update()
+    turn()
+  }
+  guard animation.ready, animation.tab == .build, !animation.state.atRest, animation.time == 0 else {
+    return fail("applying staging did not show the start of the new Build")
+  }
+
+  let captureBoard = NSPasteboard.withUniqueName()
+  defer { captureBoard.releaseGlobally() }
+  view.viewport.resize(480, 320, 1)
+  guard StillExport.copyViewport(view, to: captureBoard),
+        let png = captureBoard.data(forType: .png), let bitmap = NSBitmapImageRep(data: png),
+        bitmap.pixelsWide == 480, bitmap.pixelsHigh == 320, view.viewport.needsDraw() else {
+    return fail("the viewport PNG did not preserve dimensions or the pending onscreen redraw")
+  }
+
+  // View → Record Viewport: about a second of the view, 30 frames a second, at its pixel size.
+  let movie = FileManager.default.temporaryDirectory.appendingPathComponent("selftest-viewport-\(UUID().uuidString).mp4")
+  defer { try? FileManager.default.removeItem(at: movie) }
+  let recorder = model.recorder
+  var finished: Bool?
+  recorder.testDestination = movie
+  recorder.saved = { finished = $0 }
+  guard recorder.start(view), recorder.recording else { return fail("viewport recording did not start") }
+  let recordingStarted = Date()
+  while Date().timeIntervalSince(recordingStarted) < 1.0 { turn() }
+  recorder.stop(in: nil, name: "Selftest")
+  let stopDeadline = Date().addingTimeInterval(10)
+  while finished == nil && Date() < stopDeadline { turn() }
+  guard finished == true, !recorder.recording, recorder.frames >= 15 else {
+    return fail("the viewport recording was not written (\(recorder.frames) frames)")
+  }
+  let recorded = AVURLAsset(url: movie)
+  var recordedSize = CGSize.zero, recordedSeconds = 0.0, loaded = false
+  Task {
+    let track = try? await recorded.loadTracks(withMediaType: .video).first
+    recordedSize = (try? await track?.load(.naturalSize)) ?? .zero
+    recordedSeconds = (try? await recorded.load(.duration))?.seconds ?? 0
+    loaded = true
+  }
+  let loadDeadline = Date().addingTimeInterval(10)
+  while !loaded && Date() < loadDeadline { turn() }
+  guard recordedSize == CGSize(width: 480, height: 320), recordedSeconds > 0.8, recordedSeconds < 1.5 else {
+    return fail("the viewport recording is \(recordedSize) for \(recordedSeconds) s, not 480 x 320 for about a second")
+  }
 
   print("selftest-panes: ok")
   return 0

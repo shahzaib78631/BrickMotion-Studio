@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cmath>
 #include <numeric>
 
@@ -166,6 +167,68 @@ Report findOverlaps(const Model& model, const connect::Graph& graph, ldraw::Part
   return report;
 }
 
+struct TravelCache::State {
+  using Input = std::vector<uint64_t>;
+  using Spots = std::optional<std::vector<Zone>>;
+  struct Hash {
+    static uint64_t bits(const Input& input) {
+      uint64_t hash = 0xcbf29ce484222325ull;
+      for (auto word : input) hash = (hash ^ word) * 0x100000001b3ull;
+      return hash;
+    }
+    size_t operator()(const Input& input) const { return static_cast<size_t>(bits(input)); }
+  };
+  template <typename Answer>
+  struct Shard {
+    std::mutex mutex;
+    std::unordered_map<Input, Answer, Hash> answers;
+    size_t words = 0;
+
+    std::optional<Answer> lookup(const Input& input) {
+      const std::lock_guard lock(mutex);
+      const auto found = answers.find(input);
+      if (found == answers.end()) return std::nullopt;
+      return std::optional<Answer>{std::in_place, found->second};
+    }
+
+    void remember(Input input, const Answer& value, size_t maxWords, size_t valueWords = 0) {
+      const auto size = input.size() + valueWords;
+      if (size > maxWords) return;
+      const std::lock_guard lock(mutex);
+      if (words + size > maxWords) {
+        answers.clear();
+        words = 0;
+      }
+      if (answers.emplace(std::move(input), value).second) words += size;
+    }
+  };
+  std::array<Shard<double>, 64> sweeps;
+  std::array<Shard<Spots>, 64> rest;
+
+  static size_t shardIndex(const Input& input) { return Hash::bits(input) >> 58; }
+
+  static Input geometry(const Shape& a, const Xform& xa, const Shape& b, const Xform& xb,
+                        const std::vector<Zone>& zones, size_t extra = 0) {
+    Input input;
+    input.reserve(26 + 7 * zones.size() + extra);
+    const auto append = [&](double value) { input.push_back(std::bit_cast<uint64_t>(value)); };
+    const auto point = [&](Vec3 p) { append(p.x), append(p.y), append(p.z); };
+    for (const auto* pose : {&xa, &xb}) {
+      for (double coefficient : pose->r.m) append(coefficient);
+      point(pose->t);
+    }
+    input.push_back(reinterpret_cast<uintptr_t>(&a));
+    input.push_back(reinterpret_cast<uintptr_t>(&b));
+    for (const auto& zone : zones) {
+      point(zone.a), point(zone.b), append(zone.radius);
+    }
+    return input;
+  }
+};
+
+TravelCache::TravelCache() : state_(std::make_unique<State>()) {}
+TravelCache::~TravelCache() = default;
+
 struct World::State {
   static constexpr size_t kChunkSize = 16;
   static constexpr size_t kShards = 64;
@@ -178,85 +241,28 @@ struct World::State {
   std::vector<Xform> poses;
   std::vector<Box> boxes;
   std::vector<Box> innerBoxes;   // of each piece's inner surface, in the model
-  std::vector<const std::vector<Vec3>*> probes;  // points of each piece's inner surface, in its own space
-  std::unordered_map<const Shape*, std::vector<Vec3>> probesOf;
   std::vector<uint32_t> byMinX;  // pieces with geometry, sorted by their box's min x
   std::vector<Box> chunkBoxes;   // bounding box of each kChunkSize slice of byMinX
   double widest = 0;             // the largest box extent along x, to bound the scan
   mutable std::array<MemoShard, kShards> shards;
+  TravelCache* travel = nullptr;
   MemoShard& shardFor(const Key& k) const { return shards[static_cast<size_t>((k.b >> 58) & (kShards - 1))]; }
 };
 
-World::World(const Model& model, ldraw::PartCache& parts, ShapeCache& shapeCache) : state_(std::make_unique<State>()) {
+World::World(const Model& model, ldraw::PartCache& parts, ShapeCache& shapeCache, TravelCache* travel)
+    : state_(std::make_unique<State>()) {
+  state_->travel = travel;
   state_->shapes = shapesOf(model, parts, shapeCache);
   const uint32_t n = static_cast<uint32_t>(model.pieces().size());
   state_->boxes.resize(n);
   state_->innerBoxes.resize(n);
-  std::unordered_map<const Shape*, Box> innerLocal;
-  state_->probes.assign(n, nullptr);
+  state_->poses.reserve(n);
   for (uint32_t i = 0; i < n; i++) {
     state_->poses.push_back(model.pieces()[i].world);
-    if (state_->shapes[i]->nodes.empty()) continue;
-    {
-      // Probes: the points of the inner surface furthest out each way (along the axes and the
-      // diagonals). Each is inside the piece by a skin, so wherever one of them passes through
-      // another piece's surface the two are certainly in each other.
-      auto found = state_->probesOf.find(state_->shapes[i].get());
-      if (found == state_->probesOf.end()) {
-        const Shape& shape = *state_->shapes[i];
-        // Gather the same 6 axial and 8 diagonal extrema in one triangle pass.
-        // For large custom parts this avoids scanning the entire inner mesh 14 times.
-        std::array<std::array<int, 3>, 14> dirs{};
-        size_t dirCount = 0;
-        for (int dx = -1; dx <= 1; dx++)
-          for (int dy = -1; dy <= 1; dy++)
-            for (int dz = -1; dz <= 1; dz++) {
-              if (!dx && !dy && !dz) continue;
-              if (std::abs(dx) + std::abs(dy) + std::abs(dz) == 2) continue;
-              dirs[dirCount++] = {dx, dy, dz};
-            }
-        std::array<double, 14> best;
-        best.fill(-1e300);
-        std::array<Vec3, 14> extrema{};
-        std::array<uint8_t, 14> valid{};
-        for (size_t t = 0; t + 2 < shape.inner.size(); t += 3) {
-          const Vec3f &a = shape.inner[t], &b = shape.inner[t + 1];
-          if (a.x == b.x && a.y == b.y && a.z == b.z) continue;
-          for (size_t c = 0; c < 3; c++) {
-            const Vec3f& v = shape.inner[t + c];
-            for (size_t d = 0; d < dirCount; d++) {
-              const auto& dir = dirs[d];
-              const double reach = dir[0] * v.x + dir[1] * v.y + dir[2] * v.z;
-              if (reach > best[d]) {
-                best[d] = reach;
-                extrema[d] = {v.x, v.y, v.z};
-                valid[d] = 1;
-              }
-            }
-          }
-        }
-        std::vector<Vec3> points;
-        for (size_t d = 0; d < dirCount; d++) {
-          if (!valid[d]) continue;
-          const Vec3 at = extrema[d];
-          if (std::find_if(points.begin(), points.end(), [&](const Vec3& have) { return length(have - at) < 1e-6; }) == points.end()) points.push_back(at);
-        }
-        found = state_->probesOf.emplace(state_->shapes[i].get(), std::move(points)).first;
-      }
-      state_->probes[i] = &found->second;
-    }
-    state_->boxes[i] = state_->shapes[i]->bounds.transformed(state_->poses[i]);
-    {
-      // The inner surface's own box: two pieces can only cross where the inner surface of one
-      // reaches the true surface of the other.
-      auto found = innerLocal.find(state_->shapes[i].get());
-      if (found == innerLocal.end()) {
-        Box b;
-        for (const Vec3f& p : state_->shapes[i]->inner) b.grow({p.x, p.y, p.z});
-        found = innerLocal.emplace(state_->shapes[i].get(), b).first;
-      }
-      state_->innerBoxes[i] = found->second.transformed(state_->poses[i]);
-    }
+    const auto& shape = *state_->shapes[i];
+    if (shape.nodes.empty()) continue;
+    state_->boxes[i] = shape.bounds.transformed(state_->poses[i]);
+    state_->innerBoxes[i] = shape.innerBounds.transformed(state_->poses[i]);
     if (state_->boxes[i].empty() || !std::isfinite(state_->boxes[i].min.x) || !std::isfinite(state_->boxes[i].max.x)) continue;
     state_->byMinX.push_back(i);
     state_->widest = std::max(state_->widest, state_->boxes[i].max.x - state_->boxes[i].min.x);
@@ -387,6 +393,20 @@ double World::pairTravel(uint32_t p, const Xform& from, const Box& fromBox, uint
   // pieces passing without touching cost one look; the stretches grow as the way stays clear,
   // so that a hit near the start costs little too.
   const double lo = std::max(0.0, enter - kSweepStep), hi = std::min(distance, leave + kSweepStep);
+  TravelCache::State::Input exact;
+  TravelCache::State::Shard<double>* shared = nullptr;
+  if (s.travel && lo < hi) {
+    exact = TravelCache::State::geometry(*s.shapes[p], from, *s.shapes[q], s.poses[q], zones, 7);
+    const auto scalar = [&](double value) { exact.push_back(std::bit_cast<uint64_t>(value)); };
+    scalar(direction.x), scalar(direction.y), scalar(direction.z);
+    scalar(lo), scalar(hi), scalar(distance), scalar(tolerance);
+    shared = &s.travel->state_->sweeps[TravelCache::State::shardIndex(exact)];
+    if (const auto found = shared->lookup(exact)) {
+      const std::lock_guard worldLock(shard.lock);
+      shard.memo.emplace(key, *found);
+      return *found;
+    }
+  }
   double result = distance;
   for (double begin = lo, stretch = 8 * kSweepStep; begin < hi; begin += stretch, stretch *= 4) {
     const double length = std::min(stretch, hi - begin);
@@ -397,6 +417,7 @@ double World::pairTravel(uint32_t p, const Xform& from, const Box& fromBox, uint
     result = std::max(0.0, begin + first - tolerance);
     break;
   }
+  if (shared) shared->remember(std::move(exact), result, 32'768);
   std::lock_guard<std::mutex> lock(shard.lock);
   shard.memo.emplace(key, result);
   return result;
@@ -442,44 +463,42 @@ double World::clearTravel(const std::vector<uint32_t>& unit, Vec3 direction, dou
     // First, cheaply: a point a skin inside the piece that passes through another's surface
     // means the piece is stopped by then. Asked only whether it gets as far as `enough`, that
     // settles it; otherwise it bounds how far the sweeps below need to look.
-    if (s.probes[p]) {
-      for (const Vec3& local : *s.probes[p]) {
-        const double reachTo = enough > 0 ? enough : best;
-        const Vec3 a = from.apply(local), b = a + direction * reachTo;
-        Box way;
-        way.grow(a), way.grow(b);
-        // The nearest surface it passes through stops it. Pieces come in the order their boxes
-        // are met, which is not the order their surfaces are: one whose box is met first may be
-        // passed into later than another. Only a piece whose box is met before the nearest so
-        // far can be nearer still.
-        double nearest = 1;  // as a share of reachTo
-        uint32_t by = UINT32_MAX;
-        for (const auto& [enter, q] : ordered) {
-          if (enter > nearest * reachTo) break;
-          if (!boxesMeet(way, s.boxes[q])) continue;
-          Vec3 where;
-          const double share = throughSurface(*s.shapes[q], s.poses[q], a, b, &where);
-          if (share > 1 || (by != UINT32_MAX && share >= nearest)) continue;
-          bool exempt = false;
-          for (const Zone& z : zones) exempt = exempt || (lets(z, p, q) && inside(z, where));
-          if (!exempt && boxesMeet(s.boxes[p], s.boxes[q])) {
-            const std::optional<std::vector<Zone>> rest = restSpots(p, q, zones);
-            exempt = !rest;
-            if (rest)
-              for (const Zone& z : *rest) exempt = exempt || inside(z, where);
-          }
-          if (exempt) continue;
-          nearest = share, by = q;
-          if (enough > 0) break;  // asked only whether it gets that far: any surface settles it
+    for (const Vec3& local : s.shapes[p]->innerProbes) {
+      const double reachTo = enough > 0 ? enough : best;
+      const Vec3 a = from.apply(local), b = a + direction * reachTo;
+      Box way;
+      way.grow(a), way.grow(b);
+      // The nearest surface it passes through stops it. Pieces come in the order their boxes
+      // are met, which is not the order their surfaces are: one whose box is met first may be
+      // passed into later than another. Only a piece whose box is met before the nearest so
+      // far can be nearer still.
+      double nearest = 1;  // as a share of reachTo
+      uint32_t by = UINT32_MAX;
+      for (const auto& [enter, q] : ordered) {
+        if (enter > nearest * reachTo) break;
+        if (!boxesMeet(way, s.boxes[q])) continue;
+        Vec3 where;
+        const double share = throughSurface(*s.shapes[q], s.poses[q], a, b, &where);
+        if (share > 1 || (by != UINT32_MAX && share >= nearest)) continue;
+        bool exempt = false;
+        for (const Zone& z : zones) exempt = exempt || (lets(z, p, q) && inside(z, where));
+        if (!exempt && boxesMeet(s.boxes[p], s.boxes[q])) {
+          const std::optional<std::vector<Zone>> rest = restSpots(p, q, zones);
+          exempt = !rest;
+          if (rest)
+            for (const Zone& z : *rest) exempt = exempt || inside(z, where);
         }
-        if (by == UINT32_MAX) continue;
-        // Short of it by the tolerance, as for a crossing: stopped right on the surface, the
-        // next leg would start where rounding decides which side of it the point is.
-        const double stop = std::max(0.0, nearest * reachTo - tolerance);
-        if (blocker) *blocker = by;
-        if (enough > 0) return stop;
-        best = std::min(best, stop);
+        if (exempt) continue;
+        nearest = share, by = q;
+        if (enough > 0) break;  // asked only whether it gets that far: any surface settles it
       }
+      if (by == UINT32_MAX) continue;
+      // Short of it by the tolerance, as for a crossing: stopped right on the surface, the
+      // next leg would start where rounding decides which side of it the point is.
+      const double stop = std::max(0.0, nearest * reachTo - tolerance);
+      if (blocker) *blocker = by;
+      if (enough > 0) return stop;
+      best = std::min(best, stop);
     }
     for (const auto& [enter, q] : ordered) {
       if (enter > best) break;
@@ -506,17 +525,29 @@ std::optional<std::vector<Zone>> World::restSpots(uint32_t p, uint32_t q, const 
   const State& s = *state_;
   std::vector<Zone> zones = zonesNear(allZones, p, q, s.boxes[q]);
   const Xform toObstacle = inverseOf(s.poses[q]);
-  const Xform rel = toObstacle * s.poses[p];
   Key key;
-  key.add(3).add(reinterpret_cast<uintptr_t>(s.shapes[p].get())).add(reinterpret_cast<uintptr_t>(s.shapes[q].get()));
-  for (double v : rel.r.m) key.add(v, 1e-4);
-  key.add(rel.t, 1e-3);
+  // Rest spots contain absolute points and piece IDs. Two repeated joints can share a relative
+  // pose, but the spots that excuse one pair cannot be used for the other.
+  key.add(3).add(p).add(q);
   for (const Zone& z : zones) key.add(toObstacle.apply(z.a), 1e-2).add(toObstacle.apply(z.b), 1e-2).add(z.radius, 1e-2);
   State::MemoShard& shard = s.shardFor(key);
   {
     std::lock_guard<std::mutex> lock(shard.lock);
     const auto it = shard.spots.find(key);
     if (it != shard.spots.end()) return it->second;
+  }
+  TravelCache::State::Input exact;
+  TravelCache::State::Shard<TravelCache::State::Spots>* shared = nullptr;
+  if (s.travel) {
+    exact = TravelCache::State::geometry(*s.shapes[p], s.poses[p], *s.shapes[q], s.poses[q], zones);
+    shared = &s.travel->state_->rest[TravelCache::State::shardIndex(exact)];
+    if (auto cached = shared->lookup(exact)) {
+      auto& spots = *cached;
+      if (spots) for (auto& spot : *spots) spot.first = p, spot.second = q;
+      const std::lock_guard lock(shard.lock);
+      shard.spots.emplace(key, spots);
+      return spots;
+    }
   }
   std::optional<std::vector<Zone>> found = std::vector<Zone>{};
   for (int i = 0;; i++) {
@@ -530,6 +561,7 @@ std::optional<std::vector<Zone>> World::restSpots(uint32_t p, uint32_t q, const 
     found->push_back(spot);
     zones.push_back(spot);
   }
+  if (shared) shared->remember(std::move(exact), found, 8192, found ? found->size() * sizeof(Zone) / sizeof(uint64_t) : 0);
   std::lock_guard<std::mutex> lock(shard.lock);
   shard.spots.emplace(key, found);
   return found;

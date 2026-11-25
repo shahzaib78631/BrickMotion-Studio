@@ -31,6 +31,25 @@ actor AssemblyInspectionWorker {
                   withoutConnectors: Array(report.withoutConnectors), error: String(report.error))
   }
 
+  func checkModel(_ source: Source) -> ModelChecksResult {
+    let checks = source.native.checkModel()
+    return ModelChecksResult(findings: checks.findings.enumerated().compactMap { index, row in
+      guard let kind = ModelChecksResult.Kind(native: row.kind) else { return nil }
+      return ModelChecksResult.Finding(id: index, kind: kind, title: String(row.title), detail: String(row.detail), pieces: Array(row.pieces))
+    }, error: String(checks.error))
+  }
+
+  struct Loose: @unchecked Sendable {
+    let pieces: [bmapp.LoosePiece]
+    let error: String
+  }
+
+  func loosePieces(_ source: Source) -> Loose {
+    guard !Task.isCancelled else { return Loose(pieces: [], error: "") }
+    let found = source.native.loosePieces()
+    return Loose(pieces: Array(found.pieces), error: String(found.error))
+  }
+
   func body(_ source: Source, piece: UInt32) -> [UInt32] {
     guard !Task.isCancelled else { return [] }
     return Array(source.native.body(piece))
@@ -57,5 +76,28 @@ actor AssemblyInspectionWorker {
     let response = source.native.changeJoint(fixed, moving, degrees, collision)
     return JointChange(pieces: Array(response.pieces), pivot: response.pivot,
                        pose: response.pose, error: String(response.error))
+  }
+}
+
+extension AssemblyInspectionWorker {
+  /// A part builders attach to the target, at their pose.
+  struct Suggestion: Identifiable, @unchecked Sendable {
+    let part: LibraryPart
+    let colour: Int32
+    let pose: bmapp.PartPose
+    let models, total: Int
+    let joint: String
+    var id: String { "habit:" + part.id }
+    var why: String {
+      "In \(models.formatted()) of \(total.formatted()) BrickNet models" + (joint.isEmpty || joint == "stud" ? "" : " · \(joint)")
+    }
+  }
+
+  func suggestions(_ source: Source, piece: UInt32, limit: Int = 8) -> [Suggestion] {
+    guard !Task.isCancelled else { return [] }
+    return source.native.habitFits(piece, limit).map { fit in
+      Suggestion(part: LibraryPart(id: String(fit.name), name: displayName(String(fit.description))), colour: Int32(fit.color),
+                 pose: fit.pose, models: Int(fit.models), total: Int(fit.total), joint: String(fit.joint))
+    }
   }
 }

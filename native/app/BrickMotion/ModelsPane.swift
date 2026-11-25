@@ -7,42 +7,143 @@ import SwiftUI
 
 struct ModelsPane: View {
   @Bindable var model: DocumentModel
+  @FocusState private var focusedRow: String?
 
   var body: some View {
     VStack(spacing: 0) {
       HStack {
         FilterField(text: $model.outlineQuery)
-        if model.importing { ProgressView().controlSize(.small).accessibilityLabel("Importing model") }
+        if model.importing { ProgressView().controlSize(.small).accessibilityLabel("Importing") }
       }
         .padding(.horizontal, 10)
         .padding(.bottom, 6)
-      List(selection: Binding(get: { model.selectedRows }, set: { model.select(rows: $0) })) {
-        ForEach(model.outline) { OutlineNodeView(node: $0, model: model) }
-      }
-      .listStyle(.sidebar)
-      .contextMenu(forSelectionType: String.self) { ids in
-        RowMenu(ids: ids, model: model)
-      } primaryAction: { ids in
-        if let id = ids.first, let row = model.row(id) { model.open(row: row) }
-      }
-      .overlay {
-        if model.outline.isEmpty && !model.outlineQuery.isEmpty {
-          ContentUnavailableView.search(text: model.outlineQuery)
+      ScrollView {
+        LazyVStack(alignment: .leading, spacing: 2) {
+          ForEach(visibleOutline) { row in outlineRow(row) }
+          if model.outline.isEmpty && !model.outlineQuery.isEmpty {
+            Text("No matching models")
+              .font(.callout)
+              .foregroundStyle(.secondary)
+              .padding(6)
+          }
+          ModelPartsBrowser(model: model)
         }
+        .padding(.horizontal, 10)
+        .padding(.bottom, 8)
       }
-      Divider()
-      DisclosureGroup(isExpanded: $model.modelPartsExpanded) {
-        PartsByStep(model: model)
-          .frame(minHeight: 120, maxHeight: 280)
-      } label: {
-        Text("Parts in \(displayName(model.snapshot.focus.empty() ? String(model.document.session.title()) : String(model.snapshot.focus)))")
-          .font(.subheadline.weight(.semibold))
-          .foregroundStyle(.secondary)
+      if model.modelPartsExpanded && !model.partsSelection.isEmpty {
+        Divider()
+        HStack {
+          Text("\(model.partsSelection.count) selected")
+            .font(.caption.monospacedDigit())
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+          Spacer(minLength: 4)
+          Button("Clear") { model.select(pieces: []) }
+            .buttonStyle(.borderless)
+            .help("Clear part selection")
+          Menu("Actions") {
+            ModelPartsActions(model: model, pieces: Array(model.snapshot.selection))
+          }
+          .menuStyle(.borderlessButton)
+          .fixedSize()
+          .accessibilityLabel("Selected Parts Actions")
+        }
+        .font(.caption)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(.bar)
       }
-      .padding(.horizontal, 10)
-      .padding(.vertical, 6)
     }
   }
+  private struct VisibleRow: Identifiable {
+    let node: OutlineNode
+    let depth: Int
+    var id: String { node.id }
+  }
+
+  private var visibleOutline: [VisibleRow] {
+    func visit(_ nodes: [OutlineNode], depth: Int) -> [VisibleRow] {
+      nodes.flatMap { node in
+        let row = VisibleRow(node: node, depth: depth)
+        guard isExpanded(node), let children = node.children else { return [row] }
+        return [row] + visit(children, depth: depth + 1)
+      }
+    }
+    return visit(model.outline, depth: 0)
+  }
+
+  private func isExpanded(_ node: OutlineNode) -> Bool {
+    model.expanded.contains(node.id) || !model.outlineQuery.isEmpty
+  }
+
+  private func outlineRow(_ row: VisibleRow) -> some View {
+    let node = row.node
+    let selected = model.selectedRows.contains(node.id)
+    return HStack(spacing: 4) {
+      if node.children != nil {
+        Button {
+          if !model.expanded.insert(node.id).inserted { model.expanded.remove(node.id) }
+        } label: {
+          Image(systemName: isExpanded(node) ? "chevron.down" : "chevron.right")
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .frame(width: 15, height: 24)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(isExpanded(node) ? "Collapse" : "Expand") \(displayName(String(node.row.name)))")
+      } else {
+        Color.clear.frame(width: 15, height: 1).accessibilityHidden(true)
+      }
+      if model.renaming == node.id {
+        RowLabel(node: node, model: model)
+      } else {
+        Button {
+          focusedRow = node.id
+          let modifiers = NSApp.currentEvent?.modifierFlags ?? []
+          model.select(row: node, extend: modifiers.contains(.command) || modifiers.contains(.shift))
+        } label: {
+          RowLabel(node: node, model: model)
+            .frame(maxWidth: .infinity, minHeight: 26, alignment: .leading)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .focused($focusedRow, equals: node.id)
+        .simultaneousGesture(TapGesture(count: 2).onEnded { model.open(row: node) })
+        .onKeyPress(.return) { model.open(row: node); return .handled }
+        .onKeyPress(.upArrow) { moveFocus(from: node.id, by: -1) }
+        .onKeyPress(.downArrow) { moveFocus(from: node.id, by: 1) }
+        .onKeyPress(.leftArrow) {
+          guard model.expanded.remove(node.id) != nil else { return .ignored }
+          return .handled
+        }
+        .onKeyPress(.rightArrow) {
+          guard node.children != nil else { return .ignored }
+          model.expanded.insert(node.id)
+          return .handled
+        }
+        .accessibilityAddTraits(selected ? .isSelected : [])
+      }
+    }
+    .padding(.leading, CGFloat(row.depth) * 12 + 3)
+    .padding(.trailing, 7)
+    .background(selected ? Color.accentColor.opacity(0.18) : .clear, in: .rect(cornerRadius: 6))
+    .contextMenu {
+      RowMenu(ids: selected ? model.selectedRows : [node.id], model: model)
+    }
+  }
+
+  private func moveFocus(from id: String, by offset: Int) -> KeyPress.Result {
+    let visible = visibleOutline
+    guard let index = visible.firstIndex(where: { $0.id == id }),
+          visible.indices.contains(index + offset) else { return .ignored }
+    let next = visible[index + offset].node
+    focusedRow = next.id
+    model.select(row: next, extend: false)
+    return .handled
+  }
+
 }
 
 /// A search field that filters the tree by name.
@@ -63,26 +164,6 @@ private struct FilterField: View {
     .padding(.horizontal, 8)
     .padding(.vertical, 5)
     .background(.quaternary.opacity(0.6), in: .rect(cornerRadius: 7))
-  }
-}
-
-/// One row and, open, the rows below it.
-private struct OutlineNodeView: View {
-  let node: OutlineNode
-  let model: DocumentModel
-
-  var body: some View {
-    if let children = node.children {
-      DisclosureGroup(isExpanded: Binding(
-        get: { model.expanded.contains(node.id) || !model.outlineQuery.isEmpty },
-        set: { open in if open { model.expanded.insert(node.id) } else { model.expanded.remove(node.id) } })) {
-        ForEach(children) { OutlineNodeView(node: $0, model: model) }
-      } label: {
-        RowLabel(node: node, model: model)
-      }
-    } else {
-      RowLabel(node: node, model: model)
-    }
   }
 }
 
@@ -115,11 +196,12 @@ private struct RowLabel: View {
             .foregroundStyle(.secondary)
             .help(String(row.group))
         }
+        Spacer(minLength: 0)
+        Text(row.pieces.formatted()).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
       }
     } icon: {
       Image(systemName: node.id == "root" ? "cube.fill" : row.unused ? "cube.transparent" : "cube")
     }
-    .badge(Int(row.pieces))
     .modifier(DragAndDrop(node: node, model: model))
     .accessibilityLabel("\(displayName(String(row.name))), \(row.pieces) parts\(row.shared ? ", shared" : "")\(row.unused ? ", unused" : "")")
   }
@@ -167,6 +249,7 @@ private struct RowMenu: View {
   var body: some View {
     let rows = ids.compactMap { model.row($0) }
     let one = rows.count == 1 ? rows.first : nil
+    let targets = model.submodelVideoTargets(for: ids)
     if let one {
       Button("Open") { model.open(row: one) }
       Button("Show and Fit") { model.showAndFit(row: one) }
@@ -190,6 +273,18 @@ private struct RowMenu: View {
       Button("Import into Model…") { ModelImportSheet.show(in: model, into: String(one.row.def)) }
         .disabled(model.importing)
     }
+    if let one, !targets.isEmpty {
+      let name = String(one.row.def)
+      Menu("Export") {
+        Button("Video…") { VideoExportSheet.show(model.context, targets: targets) }
+        Button("Standalone Project…") { SubmodelFileExport.show(model.context, name: name, format: .project) }
+        Button("LDraw MPD…") { SubmodelFileExport.show(model.context, name: name, format: .ldraw) }
+      }
+    } else if !targets.isEmpty {
+      Button(targets.count == 1 ? "Export Submodel Video…" : "Export Selected Submodel Videos…") {
+        VideoExportSheet.show(model.context, targets: targets)
+      }
+    }
     Button("Select Pieces") { model.select(rows: ids) }.disabled(rows.isEmpty)
     Divider()
     Button("Rename…") { model.renaming = one?.id }.disabled(one.map { $0.row.def.empty() } ?? true)
@@ -199,103 +294,5 @@ private struct RowMenu: View {
     Divider()
     Button("Delete", role: .destructive) { if let one { model.delete(row: one) } }
       .disabled(!(one?.row.unused ?? false))
-  }
-}
-
-/// The steps of the model being edited, each with its items. A stack, not a List: a second table
-/// sized by its disclosure makes AppKit lay it out from inside its own delegate.
-private struct PartsByStep: View {
-  let model: DocumentModel
-
-  var body: some View {
-    ScrollView {
-      LazyVStack(alignment: .leading, spacing: 2) {
-        ForEach(model.steps, id: \.index) { step in
-          StepHeader(step: step, model: model)
-            .padding(.top, step.index == 0 ? 2 : 8)
-          ForEach(model.items(of: Int(step.index)), id: \.item) { item in
-            ItemLine(item: item, model: model)
-              .padding(.leading, 6)
-          }
-        }
-      }
-      .padding(.vertical, 4)
-    }
-  }
-}
-
-private struct StepHeader: View {
-  let step: bmapp.StepRow
-  let model: DocumentModel
-
-  var body: some View {
-    let k = Int(step.index), hidden = model.isHidden(step: k), title = String(step.title)
-    HStack {
-      Text(title.isEmpty ? "Step \(k + 1)" : "\(k + 1). \(title)")
-        .font(.caption.weight(.semibold))
-        .foregroundStyle(.secondary)
-      Spacer()
-      Button { model.setHidden(step: k, !hidden) } label: {
-        Image(systemName: hidden ? "eye.slash" : "eye")
-      }
-      .buttonStyle(.plain)
-      .foregroundStyle(hidden ? .tertiary : .secondary)
-      .help(hidden ? "Show this step's pieces" : "Hide this step's pieces")
-      .accessibilityLabel(hidden ? "Show step \(k + 1)" : "Hide step \(k + 1)")
-    }
-    .contextMenu {
-      Button("Select") { model.select(pieces: Array(model.document.session.piecesOfStep(k))) }
-    }
-  }
-}
-
-private struct ItemLine: View {
-  let item: bmapp.ItemRow
-  let model: DocumentModel
-
-  var body: some View {
-    let pieces = Array(item.pieces)
-    HStack(spacing: 6) {
-      if item.submodel {
-        Image(systemName: "cube").font(.caption).foregroundStyle(.secondary)
-      } else {
-        let rgb = model.colors[item.color]?.rgb ?? 0x888888
-        RoundedRectangle(cornerRadius: 3)
-          .fill(Color(red: Double(rgb >> 16 & 0xff) / 255, green: Double(rgb >> 8 & 0xff) / 255, blue: Double(rgb & 0xff) / 255))
-          .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(.separator))
-          .frame(width: 12, height: 12)
-      }
-      VStack(alignment: .leading, spacing: 0) {
-        Text(displayName(String(item.submodel || item.description.empty() ? item.name : item.description)))
-          .lineLimit(1)
-        if !item.submodel {
-          Text("\(String(item.name)) · \(String(item.colorName))").font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-        }
-      }
-      Spacer(minLength: 0)
-      if !item.group.empty() {
-        Label(String(item.group), systemImage: "tag")
-          .font(.caption2)
-          .foregroundStyle(.secondary)
-          .lineLimit(1)
-      }
-    }
-    .font(.callout)
-    .contentShape(.rect)
-    .onTapGesture { model.select(pieces: pieces) }
-    .contextMenu {
-      Button("Select") { model.select(pieces: pieces) }.disabled(pieces.isEmpty)
-      Button("Extract") { if let p = pieces.first { model.context.perform { $0.extract(p) } } }
-        .disabled(!item.submodel || pieces.isEmpty)
-      Menu("Move to Step") {
-        ForEach(model.steps, id: \.index) { step in
-          Button("Step \(step.index + 1)") {
-            model.context.perform { $0.moveToStep(ViewportView.list(pieces), Int(step.index)) }
-          }
-          .disabled(Int(step.index) == Int(item.step))
-        }
-      }
-      .disabled(pieces.isEmpty)
-    }
   }
 }

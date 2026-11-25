@@ -101,3 +101,30 @@ def test_solve_fills_a_hole_under_the_part_that_shows(lib):
     result = solve(lib, base, [(p, c) for p, c, _m in new], img, None)
     got = result.placed[-len(new):]
     assert all(exact_flags(lib, got, new)), [(p, np.round(m[:3, 3])) for p, _c, m in got]
+
+
+def test_collider_rejects_same_stud_round_tiles(lib):
+    from booklet_mpd.solver.collide import Collider
+    col = Collider(lib, use_oracle=True)
+    try:
+        m1 = placed(0, 0, 0)
+        r90 = np.array([[0, 0, 1], [0, 1, 0], [-1, 0, 0]], float)
+        m2 = placed(0, 0, 0, r90)
+        m_adj = placed(20, 0, 0)
+        col.set_model([])
+        assert col.hits_extra("98138pz0", m2, [("98138pz0", 0, m1)])
+        assert col.layout_check([("98138pz0", 0, m1), ("98138pz0", 0, m2)])[0]
+        assert not col.hits_extra("98138pz0", m_adj, [("98138pz0", 0, m1)])
+    finally:
+        col.close()
+
+
+def test_combined_ink_strips_solid_black_interior_keeps_light_seam():
+    from booklet_mpd.solver.scorer import combined_ink
+    img = np.full((60, 60, 3), 235, dtype=np.uint8)
+    img[10:50, 10:50] = (32, 32, 32)       # solid black brick face
+    img[30, 12:48] = (145, 145, 145)       # thin light-on-dark seam line across it
+    mask = combined_ink(img)
+    interior = mask[14:46, 14:46]
+    assert mask[30, 30], "light-on-dark seam on black brick must register as ink"
+    assert interior.mean() < 0.25, f"solid black interior should not flood ink ({interior.mean():.2f})"

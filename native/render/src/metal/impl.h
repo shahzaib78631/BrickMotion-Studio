@@ -5,14 +5,18 @@
 #include <array>
 #include <atomic>
 #include <cmath>
+#include <future>
 #include <map>
 #include <simd/simd.h>
 #include <string>
 #include <vector>
 #include "bmr/cull.h"
+#include "bmr/path_scene.h"
 #include "bmr/render_mesh.h"
 #include "bmr/renderer.h"
+#include "bmr/world_gi.h"
 #include "metal/device.h"
+#include "metal/neural_weights.h"
 
 namespace bmr {
 
@@ -34,14 +38,26 @@ struct FrameUniforms {
   simd_float4 floorLook;     // x: nearest, y: furthest a floor point looks (LDU); z: 1 when the floor's light is worked out; w: the power the sky's share is raised to
   simd_float4 glass;         // x: kGlassAbsorption, y: kFloorThroughGlass, z: kGlassIor
   simd_float4 grid;          // x: spacing, y/z: model origin modulo spacing
+  simd_float4 floorCasters;  // min x/z, max x/z of the geometry in the height map
+  simd_float4 neuralGlass0;  // neural dielectric glass & floor transport params 0
+  simd_float4 neuralGlass1;  // neural dielectric glass & micro-geometry params 1
+  simd_float4 plastic;       // x: matched plastic BRDF, y: fill share (0.85), z: mask mode, w: world GI active
 };
+
+struct WorldGiUniforms {
+  simd_float4 originStep;
+  simd_float4 shapeGain;
+};
+static_assert(sizeof(WorldGiUniforms) == 32);
 
 // How much of each light (index) the floor sees through each of 48 azimuths (each the middle
 // of a 30-degree sector, as the floor's 12 directions, turned by quarters, are) and 16
 // elevation bins (floor_light.metal); must match FloorBins there.
 struct FloorBins {
-  float weight[4][48][16];
+  uint16_t weights[4][48][5];  // bit planes for the five bits in each bin's weight (0 to 16)
+  uint32_t total[4][4];  // each light's weight over the 12 sectors for each sampling rotation
   simd_float4 lit;  // each light's light on a bare white floor (E diskLight / pi)
+  simd_float4 rays[48];  // floor direction in x/z and the reciprocals for clipping
 };
 
 // Must match DrawUniforms in shaders/common.metal.
@@ -89,6 +105,7 @@ struct CasterMap {
   struct Side {
     id<MTLTexture> texture = nil;
     Mat4 matrix;          // world (less the scene's origin) to the map
+    bm::Box bounds;       // the casters when this map was started, in model space
     double texel = 1;     // LDU per texel
     bm::Vec3 toward;      // toward the light it is seen from
     int detail = -1;      // the detail its casters are drawn at; -1: not drawn
@@ -102,8 +119,9 @@ struct CasterMap {
 };
 
 struct Pipelines {
-  id<MTLRenderPipelineState> height = nil, brick = nil, glass = nil, glassDepth = nil, glassPreview = nil, transparent = nil, floor = nil, edges = nil, shadow = nil, composite = nil, mask = nil, ids = nil, ao = nil, aoBlur = nil;
-  id<MTLDepthStencilState> depthWrite = nil, depthRead = nil, depthNone = nil, shadowDepth = nil;
+  id<MTLRenderPipelineState> height = nil, brick = nil, glass = nil, glassDepth = nil, glassPreview = nil, transparent = nil, floor = nil, edges = nil, shadow = nil, composite = nil, mask = nil, ids = nil, ao = nil, aoBlur = nil, sspt = nil, ssptBlur = nil, rmidtFront = nil, rmidtBack = nil, rmidtResolve = nil, pathResolve = nil, lens = nil;
+  id<MTLComputePipelineState> pathTrace = nil, hybridRtGlass = nil, hybridRtGiRefl = nil, hybridRtTemporal = nil, neuralFeatures = nil, neuralInfer = nil;
+  id<MTLDepthStencilState> depthWrite = nil, depthWriteLess = nil, depthRead = nil, depthNone = nil, shadowDepth = nil;
   id<MTLSamplerState> smooth = nil, shadowSampler = nil;
   bool ok = false;
 };
@@ -118,6 +136,14 @@ struct Renderer::Impl {
   Scene scene;
   Pipelines pipelines;
 
+  struct PlacementPreview {
+    Group group;
+    bm::Xform pose;
+    bool refused = false;
+  };
+  std::vector<PlacementPreview> preview;
+  void drawPreview(id<MTLRenderCommandEncoder> encoder, const PlacementPreview& placing, FrameStats& stats);
+
   // Per group: its instances on the GPU, three copies used in turn as frames are, so that a
   // change is never written into a copy the GPU may still be reading. A change is queued for
   // each copy and written into it when its turn comes.
@@ -127,7 +153,7 @@ struct Renderer::Impl {
   void updateLiveBounds();
   /// The groups changed (a recolour, a rebuild): every per-group array follows the scene again,
   /// and what was kept of the last frames (maps, picking, glass) is drawn again.
-  void groupsChanged();
+  void groupsChanged(bool castersChanged = true);
   /// Parts, instance buffers and change frames for every group, from the scene.
   void makeGroups(uint64_t madeAt);
   std::vector<PartShape> parts;  // per group: its part's bounds at full detail, and its low-detail error
@@ -140,8 +166,18 @@ struct Renderer::Impl {
   int width = 0, height = 0;
   id<MTLTexture> colorMs = nil, depthMs = nil, accumMs = nil, revealMs = nil, ambientMs = nil, color = nil, accum = nil, reveal = nil, ambient = nil, depth = nil, final = nil,
                 placeholderShadow = nil;
+  id<MTLTexture> lensSource = nil;  // the finished picture before the lens blur; made when first needed
   id<MTLTexture> aoRaw = nil, aoSoft = nil;  // ambient occlusion, half size
+  id<MTLTexture> giRaw = nil, giSoft = nil, ssrRaw = nil, ssrSoft = nil;  // screen-space GI + glossy SSR, half size
+  int screenDiv = 2;  // ambient occlusion / GI / SSR grid divisor (2: half, 4: quarter)
+  id<MTLTexture> giHist[2] = {nil, nil}, ssrHist[2] = {nil, nil}, rtDepthHist[2] = {nil, nil};  // hybrid RT temporal history, half size
+  simd_float4x4 hybridPrevViewProj = matrix_identity_float4x4;
+  bool hybridHasHistory = false;
+  uint32_t hybridFrameIdx = 0;
+  uint32_t hybridStillFrames = 0;
+  id<MTLTexture> glassFront = nil, glassMat = nil, glassBackNear = nil, glassBackFar = nil, glassDepthTex = nil, glassResolved = nil;  // RMIDT glass, full size
   void makeTargets();
+  void makeGlassTargets();
   // The key light's depth map, and the height map over the model (from above: r -(highest
   // top), g lowest underside, above the floor).
   CasterMap shadow, heights;
@@ -165,6 +201,9 @@ struct Renderer::Impl {
   Camera lastCamera;
   std::vector<uint32_t> lastList;
   std::vector<Batch> lastSeen;
+  std::vector<Visible> inView;
+  std::vector<uint32_t> nextList;
+  std::vector<Batch> nextSeen;
   id<MTLBuffer> pickList = nil;
   void drawIds();
 
@@ -174,7 +213,39 @@ struct Renderer::Impl {
   uint64_t glassRevision = UINT64_MAX;
   void prepareGlass();
 
+  // World-space 6-axis diffuse GI + studio-light & sky visibility cache (async CPU bake).
+  id<MTLTexture> worldGiTextures[6] = {nil, nil, nil, nil, nil, nil};
+  id<MTLTexture> worldGiStudioTexture = nil;
+  WorldGiUniforms worldGiUniforms{};
+  uint64_t worldGiEpoch = 1, worldGiBuiltEpoch = 0;
+  bool worldGiBuilt = false;
+  std::array<float, 17> worldGiLightKey{};
+  std::future<WorldGiVolume> worldGiJob;
+  bool worldGiPending = false;
+  uint64_t worldGiPendingEpoch = 0, worldGiFailedEpoch = 0;
+  std::array<float, 17> worldGiPendingKey{};
+  id<MTLTexture> worldGiFallback = nil;
+  bool uploadWorldGi(const WorldGiVolume& result, uint64_t epoch, const std::array<float, 17>& key);
+  bool prepareWorldGi(const LightRig& rig, float worldStrength, bool interactive, bool synchronous);
+
+  // Persistent progressive hardware-RT path-tracing state (exact bmexport quality live in viewport).
+  std::unique_ptr<PathScene> ptScene;
+  bool ptInitTried = false;
+  uint64_t ptSceneRevision = UINT64_MAX;
+  id<MTLBuffer> ptAccum = nil, ptCatcher = nil, ptSky = nil, ptAlbedo = nil, ptNormal = nil;
+  id<MTLTexture> ptDenoised = nil;
+  int ptW = 0, ptH = 0;
+  uint32_t ptSamples = 0;
+  bool ptHasDenoised = false;
+  Camera ptCamera;
+  bool ptFloor = true, ptLightsFollow = false;
+  float ptBg[3] = {1, 1, 1};
+  FrameStats drawPathTraced(const Camera& camera, const FrameOptions& options, id<CAMetalDrawable> drawable);
+
   FrameBuffer frameUniforms, drawUniforms, visible, floorBins;
+  id<MTLBuffer> neuralWeightsBuffer = nil;
+  NeuralWeights neuralWeightsCpu = defaultNeuralWeights();
+  std::string neuralWeightsPath;
   // The floor's table of light per direction and elevation, for the lights it was made for.
   std::unique_ptr<FloorBins> floorTable;
   bm::Vec3 floorTableToward[4];

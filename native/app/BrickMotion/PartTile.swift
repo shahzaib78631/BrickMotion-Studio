@@ -12,7 +12,9 @@ struct PartTile: View {
   var body: some View {
     Button(action: choose) {
       VStack(alignment: .leading, spacing: 0) {
-        PartPreviewImage(part: part.id, color: colour)
+        // Catalog thumbnails use canonical neutral gray (71) so each part is captured once and
+        // switching the active placement color never triggers a re-render of the entire browser.
+        PartPreviewImage(part: part.id, color: 71)
         VStack(alignment: .leading, spacing: 1) {
           Text(part.name)
             .font(.caption.weight(.medium))

@@ -8,10 +8,17 @@
 #include <map>
 #include <numeric>
 #include <optional>
+#include <set>
 #include "bm/plan/tolerances.h"
 #include "blocker_index.h"
 
 namespace bm::plan {
+
+bool parse(std::string_view text, Order& out) {
+  if (text == "reverse") return out = Order::Reverse, true;
+  if (text == "forward") return out = Order::Forward, true;
+  return false;
+}
 
 std::vector<int> stepsOf(const Piece& piece) {
   if (!piece.steps.empty()) return piece.steps;
@@ -169,6 +176,14 @@ struct Sequencer {
   std::chrono::steady_clock::time_point started;
   size_t extractions = 0;
   bool stopped = false;
+
+  static bool hasFlaggedMove(const Plan& plan) {
+    for (const Move& m : plan.moves)
+      if (!flown(m.flag)) return true;
+    for (const Plan& sub : plan.subs)
+      if (hasFlaggedMove(sub)) return true;
+    return false;
+  }
 
   bool outOfTime() {
     if (stopped) return true;
@@ -414,7 +429,10 @@ struct Sequencer {
     };
     // Pieces that go in together, tried as one; false if they cannot leave now.
     std::vector<int> frontier;
+    std::set<std::vector<uint32_t>> rejectedGrown;
+    std::map<std::vector<uint32_t>, Plan> validatedSubs;
     auto together = [&](const Unit& u, UnitSource source) {
+      if (options.cleanGrownUnits && source == UnitSource::Grown && rejectedGrown.count(u.pieces)) return false;
       const auto known = togetherBefore.find(u.pieces);
       if (known != togetherBefore.end() && !known->second.found.ok && stillHolds(u, known->second)) return false;
       if (!free(u) || !joined(u)) return false;
@@ -425,6 +443,15 @@ struct Sequencer {
       }
       const Extraction e = tried.found;
       if (!e.ok) return false;
+      if (options.cleanGrownUnits && source == UnitSource::Grown && depth < 4) {
+        Plan sub;
+        takeApart(u.pieces, sub, depth + 1);
+        if (hasFlaggedMove(sub)) {
+          rejectedGrown.insert(u.pieces);
+          return false;
+        }
+        validatedSubs[u.pieces] = std::move(sub);
+      }
       take(u, source, e, Flag::None);
       return true;
     };
@@ -725,12 +752,333 @@ struct Sequencer {
       if (m.unit.pieces.size() > 1 && depth < 4) {
         m.sub = static_cast<int>(out.subs.size());
         out.subs.emplace_back();
-        Plan sub;
-        takeApart(m.unit.pieces, sub, depth + 1);
-        out.subs[static_cast<size_t>(m.sub)] = std::move(sub);
+        const auto cached = validatedSubs.find(m.unit.pieces);
+        if (cached != validatedSubs.end()) {
+          out.subs[static_cast<size_t>(m.sub)] = std::move(cached->second);
+        } else {
+          Plan sub;
+          takeApart(m.unit.pieces, sub, depth + 1);
+          out.subs[static_cast<size_t>(m.sub)] = std::move(sub);
+        }
       }
       out.moves.push_back(std::move(m));
     }
+  }
+
+  /// Builds `set` forward in step order and bottom-up, with local splice / minimal 2-piece
+  /// subassembly repair when a piece is blocked by one already placed.
+  void buildForward(const std::vector<uint32_t>& set, Plan& out, const World::Present* built = nullptr) {
+    const size_t n = ctx.model.pieces().size();
+    World::Present placed = built ? *built : World::Present(n, 0);
+    std::vector<uint8_t> remaining(n, 0);
+    Box bounds;
+    for (uint32_t p = 0; p < n; p++)
+      if (placed[p]) bounds.merge(ctx.world.box(p));
+    for (uint32_t p : set) {
+      remaining[p] = 1;
+      bounds.merge(ctx.world.box(p));
+    }
+    auto bottomOf = [&](uint32_t p) {
+      const Box& b = ctx.world.box(p);
+      if (b.empty()) return -std::numeric_limits<double>::infinity();
+      double hi = -std::numeric_limits<double>::infinity();
+      for (int c = 0; c < 8; c++)
+        hi = std::max(hi, dot(ctx.down, Vec3{c & 1 ? b.max.x : b.min.x, c & 2 ? b.max.y : b.min.y, c & 4 ? b.max.z : b.min.z}));
+      return hi;
+    };
+    double lowest = -std::numeric_limits<double>::infinity();
+    for (uint32_t p : set) lowest = std::max(lowest, bottomOf(p));
+    constexpr double kOnTable = 0.5;  // LDU
+    std::vector<uint8_t> onTable(n, 0);
+    for (uint32_t p : set)
+      if (bottomOf(p) >= lowest - kOnTable) onTable[p] = 1;
+    std::vector<std::vector<int>> stepKey(n);
+    for (uint32_t p : set) stepKey[p] = stepsOf(ctx.model.pieces()[p]);
+    std::vector<std::vector<uint32_t>> mustPrecede(n);
+    if (options.authored) {
+      for (const auto& [first, second] : options.authored->after)
+        if (first < n && second < n) mustPrecede[second].push_back(first);
+      for (const std::vector<uint32_t>& order : options.authored->pinned)
+        for (size_t i = 0; i + 1 < order.size(); i++)
+          if (order[i] < n && order[i + 1] < n) mustPrecede[order[i + 1]].push_back(order[i]);
+    }
+    auto earlierSteps = [](const std::vector<int>& a, const std::vector<int>& b) { return laterSteps(b, a); };
+    auto connectedToPlaced = [&](uint32_t p, const World::Present& state) {
+      for (uint32_t ci : ctx.connectionsOf[p]) {
+        const Connection& c = ctx.graph.connections[ci];
+        const uint32_t other = c.a == p ? c.b : c.a;
+        if (state[other]) return true;
+      }
+      return false;
+    };
+    auto supported = [&](uint32_t p, const World::Present& state) {
+      return onTable[p] || connectedToPlaced(p, state);
+    };
+    auto constraintsMet = [&](uint32_t p, const World::Present& state) {
+      for (uint32_t first : mustPrecede[p])
+        if (!state[first]) return false;
+      return true;
+    };
+    auto makeMove = [](Unit unit, UnitSource source, const Extraction& e, Flag flag) {
+      Move m;
+      m.unit = std::move(unit);
+      m.source = source;
+      m.insertion = -e.direction;
+      m.seatTravel = e.seatTravel;
+      m.path = flag == Flag::None ? e.path : std::vector<Xform>{};
+      m.flag = flag;
+      m.blocker = e.blocker;
+      return m;
+    };
+    auto connectedTo = [&](uint32_t p, const Unit& u) {
+      for (uint32_t ci : ctx.connectionsOf[p]) {
+        const Connection& c = ctx.graph.connections[ci];
+        const uint32_t other = c.a == p ? c.b : c.a;
+        if (std::binary_search(u.pieces.begin(), u.pieces.end(), other)) return true;
+      }
+      return false;
+    };
+    auto sweptBox = [&](const Move& m) {
+      Box s;
+      for (uint32_t q : m.unit.pieces) {
+        const Box& b = ctx.world.box(q);
+        if (b.empty()) continue;
+        if (m.path.empty()) s.merge(b);
+        else
+          for (const Xform& x : m.path) s.merge(b.transformed(x));
+      }
+      return s;
+    };
+    auto boxesOverlap = [](const Box& a, const Box& b, double pad) {
+      if (a.empty() || b.empty()) return false;
+      return a.min.x - pad <= b.max.x && a.max.x + pad >= b.min.x &&
+             a.min.y - pad <= b.max.y && a.max.y + pad >= b.min.y &&
+             a.min.z - pad <= b.max.z && a.max.z + pad >= b.min.z;
+    };
+
+    std::vector<Move> builtMoves;
+    builtMoves.reserve(set.size());
+    const Piece* last = nullptr;
+    size_t left = set.size();
+
+    auto forwardRank = [&](uint32_t a, uint32_t b) {
+      if (stepKey[a] != stepKey[b]) return earlierSteps(stepKey[a], stepKey[b]);
+      // Prefer attaching to already-placed pieces over starting disconnected floor islands.
+      const bool ca = connectedToPlaced(a, placed), cb = connectedToPlaced(b, placed);
+      if (ca != cb) return ca;
+      const Piece &pa = ctx.model.pieces()[a], &pb = ctx.model.pieces()[b];
+      if (last) {
+        const bool ra = pa.path == last->path, rb = pb.path == last->path;
+        if (ra != rb) return ra;
+      }
+      // Bottom-up: larger bottomOf means lower resting base (closer to the floor).
+      const double la = bottomOf(a), lb = bottomOf(b);
+      if (std::abs(la - lb) > 1.0) return la > lb;
+      return a < b;
+    };
+
+    // Re-verifies builtMoves[from..] when `extraPiece` is added to the state at `state`.
+    auto verifySuffix = [&](size_t from, World::Present state, uint32_t extraPiece, std::vector<std::pair<size_t, Extraction>>& updates) -> bool {
+      const Box boxP = ctx.world.box(extraPiece);
+      for (size_t k = from; k < builtMoves.size(); k++) {
+        const Move& m = builtMoves[k];
+        if (m.flag == Flag::None) {
+          const bool touches = connectedTo(extraPiece, m.unit) || boxesOverlap(sweptBox(m), boxP, 1.0);
+          if (touches) {
+            World::Present withM = state;
+            for (uint32_t q : m.unit.pieces) withM[q] = 1;
+            const Vec3 only = m.unit.pieces.size() == 1 ? authoredAxis(m.unit.pieces[0]) : Vec3{};
+            Extraction ek = extract(ctx, m.unit, &withM, bounds, only, true);
+            extractions++;
+            if (!ek.ok) return false;
+            updates.emplace_back(k, std::move(ek));
+          }
+        }
+        for (uint32_t q : m.unit.pieces) state[q] = 1;
+      }
+      return true;
+    };
+
+    while (left > 0) {
+      if (outOfTime()) {
+        std::vector<uint32_t> rest;
+        for (uint32_t p : set)
+          if (remaining[p]) rest.push_back(p);
+        std::sort(rest.begin(), rest.end(), forwardRank);
+        for (uint32_t p : rest) {
+          Move m;
+          m.unit = unitOf({p});
+          m.flag = Flag::Budget;
+          m.insertion = ctx.down;
+          builtMoves.push_back(std::move(m));
+          remaining[p] = 0;
+          placed[p] = 1;
+          left--;
+        }
+        break;
+      }
+      // Earliest step with remaining pieces.
+      std::vector<int> frontier;
+      bool any = false;
+      for (uint32_t p : set)
+        if (remaining[p] && (!any || earlierSteps(stepKey[p], frontier))) frontier = stepKey[p], any = true;
+
+      std::vector<uint32_t> candidates;
+      for (uint32_t p : set)
+        if (remaining[p] && stepKey[p] == frontier && supported(p, placed) && constraintsMet(p, placed)) candidates.push_back(p);
+      if (candidates.empty())
+        for (uint32_t p : set)
+          if (remaining[p] && supported(p, placed) && constraintsMet(p, placed)) candidates.push_back(p);
+      if (candidates.empty())
+        for (uint32_t p : set)
+          if (remaining[p] && stepKey[p] == frontier) candidates.push_back(p);
+      std::sort(candidates.begin(), candidates.end(), forwardRank);
+
+      // Pass 1: straight insertion for any ready candidate in this frontier (first valid wins).
+      bool placedOne = false;
+      std::vector<Extraction> failed(candidates.size());
+      for (size_t i = 0; i < candidates.size(); i++) {
+        const uint32_t p = candidates[i];
+        World::Present withP = placed;
+        withP[p] = 1;
+        Extraction e = extract(ctx, unitOf({p}), &withP, bounds, authoredAxis(p), false);
+        extractions++;
+        if (e.ok) {
+          builtMoves.push_back(makeMove(unitOf({p}), UnitSource::Piece, e, Flag::None));
+          placed[p] = 1;
+          remaining[p] = 0;
+          left--;
+          last = &ctx.model.pieces()[p];
+          placedOne = true;
+          break;
+        }
+        failed[i] = std::move(e);
+      }
+      if (placedOne) continue;
+
+      // Pass 2: one-turn insertion for any NoExit candidate.
+      for (size_t i = 0; i < candidates.size(); i++) {
+        if (failed[i].why != Flag::NoExit) continue;
+        const uint32_t p = candidates[i];
+        World::Present withP = placed;
+        withP[p] = 1;
+        Extraction e = extract(ctx, unitOf({p}), &withP, bounds, authoredAxis(p), true);
+        extractions++;
+        if (e.ok) {
+          builtMoves.push_back(makeMove(unitOf({p}), UnitSource::Piece, e, Flag::None));
+          placed[p] = 1;
+          remaining[p] = 0;
+          left--;
+          last = &ctx.model.pieces()[p];
+          placedOne = true;
+          break;
+        }
+        failed[i] = std::move(e);
+      }
+      if (placedOne) continue;
+
+      // Pass 3: local repair for the first stuck candidate `p`:
+      // (a) splice `p` right before a blocking move (latest blocker first, so earlier mates still support `p`), or
+      // (b) pair `{b, p}` into a minimal 2-piece subassembly at `b`'s position.
+      const uint32_t p = candidates.front();
+      const Extraction& epFail = failed.front();
+      std::vector<uint32_t> blockers = epFail.stoppedBy;
+      if (epFail.blocker != UINT32_MAX) blockers.push_back(epFail.blocker);
+      if (epFail.why == Flag::NoDirection)
+        for (uint32_t ci : ctx.connectionsOf[p]) {
+          const Connection& c = ctx.graph.connections[ci];
+          const uint32_t other = c.a == p ? c.b : c.a;
+          if (placed[other]) blockers.push_back(other);
+        }
+      std::vector<size_t> blockerIdxs;
+      for (size_t k = builtMoves.size(); k-- > 0;)
+        for (uint32_t q : builtMoves[k].unit.pieces)
+          if (std::find(blockers.begin(), blockers.end(), q) != blockers.end()) {
+            blockerIdxs.push_back(k);
+            break;
+          }
+
+      bool repaired = false;
+      // 3a: Try splicing `p` right before each blocking move (latest first).
+      for (size_t idx : blockerIdxs) {
+        World::Present beforeB = built ? *built : World::Present(n, 0);
+        for (size_t k = 0; k < idx; k++)
+          for (uint32_t q : builtMoves[k].unit.pieces) beforeB[q] = 1;
+        if (!supported(p, beforeB) || !constraintsMet(p, beforeB)) continue;
+        World::Present withP = beforeB;
+        withP[p] = 1;
+        Extraction ep = extract(ctx, unitOf({p}), &withP, bounds, authoredAxis(p), true);
+        extractions++;
+        if (!ep.ok) continue;
+        std::vector<std::pair<size_t, Extraction>> updates;
+        if (!verifySuffix(idx, withP, p, updates)) continue;
+        for (auto& [k, ek] : updates) {
+          Move& m = builtMoves[k];
+          m.insertion = -ek.direction;
+          m.seatTravel = ek.seatTravel;
+          m.path = std::move(ek.path);
+        }
+        builtMoves.insert(builtMoves.begin() + static_cast<std::ptrdiff_t>(idx), makeMove(unitOf({p}), UnitSource::Piece, ep, Flag::None));
+        placed[p] = 1;
+        remaining[p] = 0;
+        left--;
+        last = &ctx.model.pieces()[p];
+        repaired = true;
+        break;
+      }
+      if (repaired) continue;
+
+      // 3b: Minimal 2-piece subassembly `{b, p}` at a blocking move (latest first).
+      for (size_t idx : blockerIdxs) {
+        const Move& mb = builtMoves[idx];
+        if (mb.unit.pieces.size() != 1 || mb.flag != Flag::None || !connectedTo(p, mb.unit)) continue;
+        World::Present beforeB = built ? *built : World::Present(n, 0);
+        for (size_t k = 0; k < idx; k++)
+          for (uint32_t q : builtMoves[k].unit.pieces) beforeB[q] = 1;
+        if (!constraintsMet(p, beforeB)) continue;
+        const uint32_t b = mb.unit.pieces[0];
+        Unit pair = unitOf({b, p});
+        World::Present withPair = beforeB;
+        withPair[b] = 1;
+        withPair[p] = 1;
+        Extraction eu = extract(ctx, pair, &withPair, bounds, {}, true);
+        extractions++;
+        if (!eu.ok) continue;
+        Plan sub;
+        takeApart(pair.pieces, sub, 1);
+        if (hasFlaggedMove(sub)) continue;
+        std::vector<std::pair<size_t, Extraction>> updates;
+        if (!verifySuffix(idx + 1, withPair, p, updates)) continue;
+        for (auto& [k, ek] : updates) {
+          Move& m = builtMoves[k];
+          m.insertion = -ek.direction;
+          m.seatTravel = ek.seatTravel;
+          m.path = std::move(ek.path);
+        }
+        Move paired = makeMove(std::move(pair), UnitSource::Grown, eu, Flag::None);
+        paired.sub = static_cast<int>(out.subs.size());
+        out.subs.push_back(std::move(sub));
+        builtMoves[idx] = std::move(paired);
+        placed[p] = 1;
+        remaining[p] = 0;
+        left--;
+        last = &ctx.model.pieces()[p];
+        repaired = true;
+        break;
+      }
+      if (repaired) continue;
+
+      // Pass 4: unresolvable overlap/deadlock — flag `p` in place in its own step so earlier steps
+      // are never disturbed.
+      const Flag why = epFail.why == Flag::None ? Flag::Blocked : epFail.why;
+      builtMoves.push_back(makeMove(unitOf({p}), UnitSource::Piece, epFail, why));
+      placed[p] = 1;
+      remaining[p] = 0;
+      left--;
+      last = &ctx.model.pieces()[p];
+    }
+
+    for (Move& m : builtMoves) out.moves.push_back(std::move(m));
   }
 };
 
@@ -862,7 +1210,8 @@ Plan planInternal(const Model& model, const connect::Graph& graph, const World& 
   std::sort(order.begin(), order.end(), [](const auto& a, const auto& b) { return a.size() != b.size() ? a.size() > b.size() : a.front() < b.front(); });
   World::Present built(n, 0);
   for (const std::vector<uint32_t>& set : order) {
-    seq.takeApart(set, out, 0, &built);
+    if (options.order == Order::Forward) seq.buildForward(set, out, &built);
+    else seq.takeApart(set, out, 0, &built);
     for (uint32_t p : set) built[p] = 1;
   }
 
@@ -916,7 +1265,7 @@ Plan planInternal(const Model& model, const connect::Graph& graph, const World& 
 
 Plan plan(const Model& model, const connect::Graph& graph, ldraw::PartCache& parts, collide::ShapeCache& shapes, const Options& options) {
   const auto started = std::chrono::steady_clock::now();
-  const World world(model, parts, shapes);
+  const World world(model, parts, shapes, options.travelCache);
   Plan out = planInternal(model, graph, world, options);
   out.planMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
   return out;
@@ -924,7 +1273,7 @@ Plan plan(const Model& model, const connect::Graph& graph, ldraw::PartCache& par
 
 Plan planInferred(const Model& model, connect::Graph& graph, connect::ConnectorDb& connectors, ldraw::PartCache& parts, collide::ShapeCache& shapes,
                   const Options& options, connect::Inferred* inferred) {
-  const World world(model, parts, shapes);
+  const World world(model, parts, shapes, options.travelCache);
   connect::Inferred got = connect::inferJoints(graph, model, connectors, world);
   Plan out = planInternal(model, graph, world, options);
   if (got.relaxed + got.documented > 0 && out.complete) {

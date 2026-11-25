@@ -3,6 +3,9 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#if defined(__ARM_NEON)
+#include <arm_neon.h>
+#endif
 
 namespace bm::collide {
 namespace {
@@ -149,6 +152,11 @@ struct Walk {
   const std::vector<Zone>& zones;
   Hit* hit;
   float r[9], absR[9], t[3];
+#if defined(__ARM_NEON)
+  float32x4_t rotationColumns[3], absoluteColumns[3];
+  const Node* carriedNode = nullptr;
+  float32x4_t carriedLower, carriedUpper;
+#endif
   float sweepHalf[3] = {0, 0, 0}, sweepReach[3] = {0, 0, 0};  // half of b's travel in a's space, and its size
   float velocity[3] = {0, 0, 0}, travel = 0;                    // b's velocity in a's space per unit of travel, and how far
   std::vector<Span>* spans = nullptr;  // set: collect when triangles can meet instead of testing a pose
@@ -159,6 +167,12 @@ struct Walk {
       r[i] = static_cast<float>(rel.r.m[i]);
       absR[i] = std::abs(r[i]) + 1e-6f;  // a little wider, so rounding never hides a box
     }
+#if defined(__ARM_NEON)
+    for (int i = 0; i < 3; ++i) {
+      rotationColumns[i] = {r[i], r[3 + i], r[6 + i], 0};
+      absoluteColumns[i] = {absR[i], absR[3 + i], absR[6 + i], 0};
+    }
+#endif
     t[0] = static_cast<float>(rel.t.x);
     t[1] = static_cast<float>(rel.t.y);
     t[2] = static_cast<float>(rel.t.z);
@@ -169,12 +183,29 @@ struct Walk {
 
   /// Whether a's node box and b's node box (carried into a's space as a box) overlap, each box
   /// being that of the surface in play. With a sweep, b's box is stretched along it.
-  bool boxes(const Node& na, const Node& nb) const {
+  bool boxes(const Node& na, const Node& nb) {
     const float* amin = innerOfA ? na.imin : na.min;
     const float* amax = innerOfA ? na.imax : na.max;
     const float* bmin = innerOfB ? nb.imin : nb.min;
     const float* bmax = innerOfB ? nb.imax : nb.max;
     if (bmin[0] > bmax[0] || amin[0] > amax[0]) return false;  // nothing of that surface under the node
+#if defined(__ARM_NEON)
+    // While descending A, its children still test the same carried box of B.
+    if (carriedNode != &nb) {
+      float32x4_t centre{t[0] + sweepHalf[0], t[1] + sweepHalf[1], t[2] + sweepHalf[2], 0};
+      float32x4_t extent{sweepReach[0], sweepReach[1], sweepReach[2], 0};
+      for (int k = 0; k < 3; ++k) {
+        centre = vaddq_f32(centre, vmulq_n_f32(rotationColumns[k], (bmin[k] + bmax[k]) * 0.5f));
+        extent = vaddq_f32(extent, vmulq_n_f32(absoluteColumns[k], (bmax[k] - bmin[k]) * 0.5f));
+      }
+      carriedLower = vsubq_f32(centre, extent);
+      carriedUpper = vaddq_f32(centre, extent);
+      carriedNode = &nb;
+    }
+    const float32x4_t lower{amin[0], amin[1], amin[2], 0}, upper{amax[0], amax[1], amax[2], 0};
+    const auto apart = vorrq_u32(vcgtq_f32(carriedLower, upper), vcltq_f32(carriedUpper, lower));
+    return vmaxvq_u32(apart) == 0;
+#else
     for (int i = 0; i < 3; i++) {
       float centre = t[i] + sweepHalf[i], extent = sweepReach[i];
       for (int k = 0; k < 3; k++) {
@@ -184,6 +215,7 @@ struct Walk {
       if (centre - extent > amax[i] || centre + extent < amin[i]) return false;
     }
     return true;
+#endif
   }
 
   Vec3f carry(const Vec3f& p) const {
@@ -191,7 +223,19 @@ struct Walk {
   }
 
   bool leaves(const Node& na, const Node& nb) const {
+    struct Bounds {
+      Vec3f min, max;
+    };
+    const auto bounds = [](const Vec3f* triangle) {
+      const auto& a = triangle[0];
+      const auto& b = triangle[1];
+      const auto& c = triangle[2];
+      return Bounds{
+          {std::min({a.x, b.x, c.x}), std::min({a.y, b.y, c.y}), std::min({a.z, b.z, c.z})},
+          {std::max({a.x, b.x, c.x}), std::max({a.y, b.y, c.y}), std::max({a.z, b.z, c.z})}};
+    };
     Vec3f carried[kMaxLeaf][3];
+    Bounds carriedBounds[kMaxLeaf];
     bool skipB[kMaxLeaf] = {false, false, false, false};
     const uint32_t nbCount = std::min<uint32_t>(nb.count, kMaxLeaf);
     for (uint32_t j = 0; j < nbCount; j++) {
@@ -204,15 +248,20 @@ struct Walk {
       carried[j][0] = carry(b0);
       carried[j][1] = carry(b1);
       carried[j][2] = carry(corner(b, nb.left + j, 2, innerOfB));
+      carriedBounds[j] = bounds(carried[j]);
     }
     for (uint32_t i = na.left; i < na.left + na.count; i++) {
       const Vec3f ta[3] = {corner(a, i, 0, innerOfA), corner(a, i, 1, innerOfA), corner(a, i, 2, innerOfA)};
       if (innerOfA && ta[0].x == ta[1].x && ta[0].y == ta[1].y && ta[0].z == ta[1].z) continue;
+      const auto aBox = bounds(ta);
       for (uint32_t j = nb.left; j < nb.left + nb.count; j++) {
         Vec3f own[3];
-        const Vec3f* tb = carried[j - nb.left];
+        const Vec3f* tb;
+        Bounds bBox;
         if (j - nb.left < kMaxLeaf) {
           if (skipB[j - nb.left]) continue;
+          tb = carried[j - nb.left];
+          bBox = carriedBounds[j - nb.left];
         } else {
           const Vec3f& b0 = corner(b, j, 0, innerOfB);
           const Vec3f& b1 = corner(b, j, 1, innerOfB);
@@ -221,6 +270,14 @@ struct Walk {
           own[1] = carry(b1);
           own[2] = carry(corner(b, j, 2, innerOfB));
           tb = own;
+          bBox = bounds(tb);
+        }
+        if (aBox.max.x < bBox.min.x || bBox.max.x < aBox.min.x ||
+            aBox.max.y < bBox.min.y || bBox.max.y < aBox.min.y ||
+            aBox.max.z < bBox.min.z || bBox.max.z < aBox.min.z) continue;
+        if (zones.empty() && !hit) {
+          if (trianglesCross(ta, tb)) return true;
+          continue;
         }
         Vec3f where;
         if (!trianglesCross(ta, tb, &where)) continue;
@@ -289,7 +346,10 @@ struct Walk {
     }
   }
 
-  bool run() const {
+  bool run() {
+#if defined(__ARM_NEON)
+    carriedNode = nullptr;
+#endif
     // An explicit stack: part trees are shallow, so a fixed stack avoids heap allocation.
     std::pair<uint32_t, uint32_t> stack[256];
     size_t sp = 0;

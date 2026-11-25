@@ -542,3 +542,38 @@ TEST_CASE("the shadow catcher does not hide glass or replace brick AO from below
     REQUIRE(compare(a.image, b.image).worstBlock < 0.5);
   }
 }
+
+TEST_CASE("neural shader executes deterministically across odd viewport sizes and refines brick, floor, and glass transport", "[gpu][frame][neural]") {
+  NEED_GPU();
+  const std::string model = piece("3005.dat", 0, 0, 0, 4) + piece("3001.dat", 30, 0, 0, 14) + piece("3005.dat", 0, -24, 0, 36);
+  FrameOptions base;
+  FrameOptions neural = base;
+  neural.neuralShader = true;
+
+  // Non-multiple-of-16 dimensions exercise partial threadgroup boundaries in neuralInferKernel.
+  const Image n1 = shot(model, neural, 251, 189);
+  const Image n2 = shot(model, neural, 251, 189);
+  const Image b1 = shot(model, base, 251, 189);
+  REQUIRE(n1.width == 251);
+  REQUIRE(n1.height == 189);
+
+  // Deterministic across repeated draws.
+  const Difference repeat = compare(n1, n2);
+  REQUIRE(repeat.sameSize);
+  REQUIRE(repeat.meanAbs == 0.0);
+
+  // Actively refines shading compared to baseline while keeping top sky corners pure white
+  // and outer floor corners consistent with baseline.
+  const Difference delta = compare(n1, b1);
+  REQUIRE(delta.sameSize);
+  REQUIRE(delta.meanAbs > 0.02);
+  REQUIRE(delta.meanAbs < 12.0);
+  for (auto [x, y] : {std::pair{2, 2}, {248, 2}}) {
+    REQUIRE(n1.at(x, y)[0] > 250);
+    REQUIRE(n1.at(x, y)[1] > 250);
+    REQUIRE(n1.at(x, y)[2] > 250);
+  }
+  for (auto [x, y] : {std::pair{2, 186}, {248, 186}}) {
+    REQUIRE(std::abs(int(n1.at(x, y)[0]) - int(b1.at(x, y)[0])) <= 5);
+  }
+}

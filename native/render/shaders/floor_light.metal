@@ -44,14 +44,35 @@ float floorLight(float3 world, constant FrameUniforms& frame, constant FloorBins
   // Each step stands for the stretch out to halfway to its neighbours: what stands there
   // hides from the underside seen at the stretch's far end to the top seen at its near end.
   float ratio = pow(far / near, 1.0 / float(steps)), spread = sqrt(ratio);
+  float first = near * pow(ratio, jitter);
+  float2 origin = (frame.heightProj * float4(world, 1.0)).xy;
+  float2 minimum = frame.floorCasters.xy - world.xz;
+  float2 maximum = frame.floorCasters.zw - world.xz;
+  // The nearest point in the caster footprint is farther than any ray step.
+  float2 offset = max(max(minimum, -maximum), 0.0);
+  float reach = max(near, far);
+  if (dot(offset, offset) > reach * reach * 1.0001) return 1.0;
   uint masks[12];
+  uint blockedBins = 0;
   for (int d = 0; d < 12; d++) {
-    float a = (float(d) + float(turn) / 4.0) * (6.2831853 / 12.0);
-    float2 dir = float2(cos(a), sin(a));
+    float4 ray = bins.rays[d * 4 + int(turn)];
+    float2 p0 = minimum * ray.zw, p1 = maximum * ray.zw;
+    float2 enters = min(p0, p1), leaves = max(p0, p1);
+    float enter = max(enters.x, enters.y), leave = min(leaves.x, leaves.y);
     uint mask = 0;
-    for (int k = 0; k < steps; k++) {
-      float r = near * pow(ratio, float(k) + jitter);
-      float4 c = frame.heightProj * float4(world.x + dir.x * r, world.y, world.z + dir.y * r, 1.0);
+    if (leave < enter || (ratio >= 1.0 && (leave < first || enter > far))) {
+      masks[d] = mask;
+      continue;
+    }
+    float2 direction = (frame.heightProj * float4(ray.x, 0.0, ray.y, 0.0)).xy;
+    float r = first;
+    for (int k = 0; k < steps; k++, r *= ratio) {
+      if (r > leave) {
+        if (ratio >= 1.0) break;
+        continue;
+      }
+      if (r < enter) continue;
+      float2 c = origin + direction * r;
       float2 uv = float2(c.x * 0.5 + 0.5, 0.5 - c.y * 0.5);
       if (any(uv < 0.0) || any(uv > 1.0)) continue;
       float2 h = heights.sample(nearest, uv).rg;
@@ -62,9 +83,12 @@ float floorLight(float3 world, constant FrameUniforms& frame, constant FloorBins
       // The bins whose middles lie between.
       int b0 = int(ceil(s0 * 16.0 - 0.5)), b1 = min(int(floor(s1 * 16.0 - 0.5)), 15);
       if (b1 >= b0) mask |= ((1u << uint(b1 - b0 + 1)) - 1u) << uint(b0);
+      if (mask == 0xffffu) break;
     }
     masks[d] = mask;
+    blockedBins += popcount(mask);
   }
+  if (blockedBins == 0) return 1.0;
   // The four lights' shadow, as a share of their light on a bare floor; then the sky's share.
   float light = 0, whole = 0;
   for (int i = 0; i < 4; i++) {
@@ -75,22 +99,21 @@ float floorLight(float3 world, constant FrameUniforms& frame, constant FloorBins
       light += lit;
       continue;
     }
-    float seen = 0, all = 0;
+    uint blocked = 0;
+    uint all = bins.total[i][turn];
     for (int d = 0; d < 12; d++) {
+      uint mask = masks[d];
+      if (mask == 0) continue;
       int row = d * 4 + int(turn);
-      for (int b = 0; b < 16; b++) {
-        float w = bins.weight[i][row][b];
-        all += w;
-        if (!(masks[d] & (1u << uint(b)))) seen += w;
-      }
+      // A bin's weight is an exact count of covered light samples (0 to 16).
+      // Sum each weight bit across all blocked bins in five parallel counts.
+      #pragma unroll
+      for (int bit = 0; bit < 5; ++bit)
+        blocked += popcount(mask & uint(bins.weights[i][row][bit])) << bit;
     }
-    light += all > 0 ? lit * seen / all : lit;
+    light += all > 0 ? lit * float(all - blocked) / float(all) : lit;
   }
   float out = whole > 0 ? light / whole : 1.0;
-  if (sky) {
-    float clear = 0;
-    for (int d = 0; d < 12; d++) clear += float(16 - popcount(masks[d]));
-    out *= pow(clear / 192.0, frame.floorLook.w);
-  }
+  if (sky) out *= pow(float(192u - blockedBins) / 192.0, frame.floorLook.w);
   return out;
 }

@@ -147,8 +147,23 @@ std::vector<double> impact(double impulse, double seconds, double rate) {
   return f;
 }
 
+/// The force's own click (tolerances.h kAddedMass): the unit, its acceleration force / mass
+/// changing within the contact, pushes the air of its volume aside as a compact dipole.
+void click(std::vector<double>& out, size_t at, const std::vector<double>& force, const bm::Box& unit, double rate) {
+  const double mass = shellMass(unit);
+  if (unit.empty() || !(mass > 0)) return;
+  const double volume = (unit.max.x - unit.min.x) * (unit.max.y - unit.min.y) * (unit.max.z - unit.min.z) * std::pow(kMetresPerLdu, 3);
+  const double toPressure = kAirDensity * (1 + kAddedMass) * volume / (4 * M_PI * kMicDistance * kSoundSpeed);
+  double before = 0;
+  for (size_t j = 0; j <= force.size() && at + j < out.size(); j++) {
+    const double a = j < force.size() ? force[j] / mass : 0.0;
+    out[at + j] += toPressure * (a - before) * rate;  // da/dt, a sample at a time
+    before = a;
+  }
+}
+
 /// What one force does: it rings the unit, the part it acts on (the reaction) and, through the
-/// clutch, the model.
+/// clutch, the model, and the unit clicks.
 /// A body's modes: its face as a plate and the whole as a beam.
 std::vector<Mode> bodyModes(const Plate& face, const bm::Box& box, bool held, double rate) {
   const double top = std::min(kTopHz, 0.45 * rate);
@@ -161,6 +176,7 @@ void strike(std::vector<double>& out, size_t at, const std::vector<double>& forc
   ring(out, at, force, bodyModes(faceOf(e.unit), e.unit, false, rate), where, 1.0, rate);
   ring(out, at, force, bodyModes(faceOf(e.touching, true), e.touching, true, rate), where, -1.0, rate);
   if (e.builtPieces > 0) ring(out, at, force, bodyModes(assemblyOf(e.built), bm::Box{}, true, rate), Where{false, 0.5, 0.5}, -kJointTransmission, rate);
+  click(out, at, force, e.unit, rate);
 }
 
 /// A Schroeder room for one channel; it keeps its state from sample to sample.

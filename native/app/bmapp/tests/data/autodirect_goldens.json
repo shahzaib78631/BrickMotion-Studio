@@ -1,0 +1,6297 @@
+{
+ "cases": [
+  {
+   "name": "short",
+   "units": [
+    {
+     "start": 1,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       0,
+       -24,
+       -20
+      ],
+      "max": [
+       40,
+       0,
+       20
+      ]
+     }
+    },
+    {
+     "start": 1.55,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       20,
+       -24,
+       -20
+      ],
+      "max": [
+       60,
+       0,
+       20
+      ]
+     }
+    },
+    {
+     "start": 2.1,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       40,
+       -24,
+       -20
+      ],
+      "max": [
+       80,
+       0,
+       20
+      ]
+     }
+    },
+    {
+     "start": 2.6500000000000004,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -40,
+       -24,
+       -20
+      ],
+      "max": [
+       0,
+       0,
+       20
+      ]
+     }
+    },
+    {
+     "start": 3.2,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -60,
+       -24,
+       -20
+      ],
+      "max": [
+       -20,
+       0,
+       20
+      ]
+     }
+    },
+    {
+     "start": 3.75,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -80,
+       -24,
+       -20
+      ],
+      "max": [
+       -40,
+       0,
+       20
+      ]
+     }
+    },
+    {
+     "start": 4.300000000000001,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       0,
+       -48,
+       -20
+      ],
+      "max": [
+       40,
+       -24,
+       20
+      ]
+     }
+    },
+    {
+     "start": 4.8500000000000005,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       20,
+       -48,
+       -20
+      ],
+      "max": [
+       60,
+       -24,
+       20
+      ]
+     }
+    },
+    {
+     "start": 5.4,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       40,
+       -48,
+       -20
+      ],
+      "max": [
+       80,
+       -24,
+       20
+      ]
+     }
+    },
+    {
+     "start": 5.95,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -40,
+       -48,
+       -20
+      ],
+      "max": [
+       0,
+       -24,
+       20
+      ]
+     }
+    },
+    {
+     "start": 6.5,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -60,
+       -48,
+       -20
+      ],
+      "max": [
+       -20,
+       -24,
+       20
+      ]
+     }
+    },
+    {
+     "start": 7.050000000000001,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -80,
+       -48,
+       -20
+      ],
+      "max": [
+       -40,
+       -24,
+       20
+      ]
+     }
+    },
+    {
+     "start": 7.6000000000000005,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       0,
+       -72,
+       -20
+      ],
+      "max": [
+       40,
+       -48,
+       20
+      ]
+     }
+    },
+    {
+     "start": 8.15,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       20,
+       -72,
+       -20
+      ],
+      "max": [
+       60,
+       -48,
+       20
+      ]
+     }
+    },
+    {
+     "start": 8.700000000000001,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       40,
+       -72,
+       -20
+      ],
+      "max": [
+       80,
+       -48,
+       20
+      ]
+     }
+    },
+    {
+     "start": 9.25,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -40,
+       -72,
+       -20
+      ],
+      "max": [
+       0,
+       -48,
+       20
+      ]
+     }
+    },
+    {
+     "start": 9.8,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -10,
+       -200,
+       -10
+      ],
+      "max": [
+       10,
+       -48,
+       10
+      ]
+     }
+    },
+    {
+     "start": 10.350000000000001,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -80,
+       -72,
+       -20
+      ],
+      "max": [
+       -40,
+       -48,
+       20
+      ]
+     }
+    },
+    {
+     "start": 10.9,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       0,
+       -96,
+       -20
+      ],
+      "max": [
+       40,
+       -72,
+       20
+      ]
+     }
+    },
+    {
+     "start": 11.450000000000001,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       20,
+       -96,
+       -20
+      ],
+      "max": [
+       60,
+       -72,
+       20
+      ]
+     }
+    },
+    {
+     "start": 12,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       40,
+       -96,
+       -20
+      ],
+      "max": [
+       80,
+       -72,
+       20
+      ]
+     }
+    },
+    {
+     "start": 12.55,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -40,
+       -96,
+       -20
+      ],
+      "max": [
+       0,
+       -72,
+       20
+      ]
+     }
+    },
+    {
+     "start": 13.100000000000001,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -60,
+       -96,
+       -20
+      ],
+      "max": [
+       -20,
+       -72,
+       20
+      ]
+     }
+    },
+    {
+     "start": 13.65,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -80,
+       -96,
+       -20
+      ],
+      "max": [
+       -40,
+       -72,
+       20
+      ]
+     }
+    }
+   ],
+   "modelBox": {
+    "min": [
+     -80,
+     -200,
+     -20
+    ],
+    "max": [
+     80,
+     0,
+     20
+    ]
+   },
+   "intro": 1,
+   "buildEnd": 14.15,
+   "duration": 17.15,
+   "tracks": {
+    "reference": {
+     "keys": [
+      {
+       "id": "auto-0",
+       "t": 0,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 35,
+       "elevation": 60,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-1",
+       "t": 1,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": -5,
+       "elevation": 54.6,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-2",
+       "t": 5.1,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 65,
+       "elevation": 49.2,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-3",
+       "t": 8.700000000000001,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": -5,
+       "elevation": 43.8,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-4",
+       "t": 9.700000000000001,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": -5,
+       "elevation": 15,
+       "distance": {
+        "fit": true,
+        "margin": 1.45
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-5",
+       "t": 11.520000000000001,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 0,
+       "elevation": 10,
+       "distance": {
+        "fit": true,
+        "margin": 1.2
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-6",
+       "t": 17.15,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 0,
+       "elevation": 10,
+       "distance": {
+        "fit": true,
+        "margin": 1.05
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      }
+     ],
+     "transitions": [
+      {
+       "from": "auto-0",
+       "to": "auto-1",
+       "preset": "swoop",
+       "settings": {
+        "curve": {
+         "kind": "snap",
+         "strength": 0.8
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0.15,
+        "motionBlur": 0.8,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false,
+        "turnLast": 0.5
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-1",
+       "to": "auto-2",
+       "preset": "swoop",
+       "settings": {
+        "curve": {
+         "kind": "snap",
+         "strength": 0.8
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0.15,
+        "motionBlur": 0.8,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false,
+        "turnLast": 0.5
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-2",
+       "to": "auto-3",
+       "preset": "swoop",
+       "settings": {
+        "curve": {
+         "kind": "snap",
+         "strength": 0.8
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0.15,
+        "motionBlur": 0.8,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false,
+        "turnLast": 0.5
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-3",
+       "to": "auto-4",
+       "preset": "pull-back",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.6
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-4",
+       "to": "auto-5",
+       "preset": "cut",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.5
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": true,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-5",
+       "to": "auto-6",
+       "preset": "push-in",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.6
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      }
+     ],
+     "shutter": 0.5,
+     "style": "reference"
+    },
+    "showcase": {
+     "keys": [
+      {
+       "id": "auto-0",
+       "t": 0,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 35,
+       "elevation": 52,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-1",
+       "t": 6.9175,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 20,
+       "elevation": 43.84,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-2",
+       "t": 8.322666666666667,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 86.66666666666667,
+       "elevation": 39.76,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-3",
+       "t": 9.700000000000001,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 153.33333333333334,
+       "elevation": 18,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-4",
+       "t": 11.133,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 220,
+       "elevation": 18,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-5",
+       "t": 11.783,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 0,
+       "elevation": 8,
+       "distance": {
+        "fit": true,
+        "margin": 1.2
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-6",
+       "t": 17.15,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 0,
+       "elevation": 8,
+       "distance": {
+        "fit": true,
+        "margin": 1.05
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      }
+     ],
+     "transitions": [
+      {
+       "from": "auto-0",
+       "to": "auto-1",
+       "preset": "glide",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.5
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-1",
+       "to": "auto-2",
+       "preset": "orbit",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.4
+        },
+        "path": "arc",
+        "orbit": "cw",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": true
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-2",
+       "to": "auto-3",
+       "preset": "pull-back",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.6
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-3",
+       "to": "auto-4",
+       "preset": "orbit",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.4
+        },
+        "path": "arc",
+        "orbit": "cw",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": true
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-4",
+       "to": "auto-5",
+       "preset": "cut",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.5
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": true,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-5",
+       "to": "auto-6",
+       "preset": "push-in",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.6
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      }
+     ],
+     "shutter": 0.5,
+     "style": "showcase"
+    },
+    "turntable": {
+     "keys": [
+      {
+       "id": "auto-0",
+       "t": 0,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": -35,
+       "elevation": 38,
+       "distance": {
+        "fit": true,
+        "margin": 1.1
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-1",
+       "t": 1,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": -35,
+       "elevation": 35.36,
+       "distance": {
+        "fit": true,
+        "margin": 1.1
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-2",
+       "t": 4.125,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": -16.444420004756175,
+       "elevation": 32.72,
+       "distance": {
+        "fit": true,
+        "margin": 1.1
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-3",
+       "t": 7.25,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 29.614282468583212,
+       "elevation": 30.08,
+       "distance": {
+        "fit": true,
+        "margin": 1.1
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-4",
+       "t": 10.375,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 99.0580173827403,
+       "elevation": 16,
+       "distance": {
+        "fit": true,
+        "margin": 1.1
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-5",
+       "t": 13.5,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 190,
+       "elevation": 16,
+       "distance": {
+        "fit": true,
+        "margin": 1.1
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-6",
+       "t": 14.200000000000001,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 0,
+       "elevation": 16,
+       "distance": {
+        "fit": true,
+        "margin": 1.1
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-7",
+       "t": 17.15,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 0,
+       "elevation": 16,
+       "distance": {
+        "fit": true,
+        "margin": 1.06
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      }
+     ],
+     "transitions": [
+      {
+       "from": "auto-0",
+       "to": "auto-1",
+       "preset": "orbit",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.4
+        },
+        "path": "arc",
+        "orbit": "cw",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": true
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-1",
+       "to": "auto-2",
+       "preset": "orbit",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.4
+        },
+        "path": "arc",
+        "orbit": "cw",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": true
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-2",
+       "to": "auto-3",
+       "preset": "orbit",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.4
+        },
+        "path": "arc",
+        "orbit": "cw",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": true
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-3",
+       "to": "auto-4",
+       "preset": "orbit",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.4
+        },
+        "path": "arc",
+        "orbit": "cw",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": true
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-4",
+       "to": "auto-5",
+       "preset": "orbit",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.4
+        },
+        "path": "arc",
+        "orbit": "cw",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": true
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-5",
+       "to": "auto-6",
+       "preset": "swoop",
+       "settings": {
+        "curve": {
+         "kind": "snap",
+         "strength": 0.8
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0.15,
+        "motionBlur": 0.8,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-6",
+       "to": "auto-7",
+       "preset": "hold",
+       "settings": {
+        "curve": {
+         "kind": "holdThenMove",
+         "strength": 1
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      }
+     ],
+     "shutter": 0.5,
+     "style": "turntable"
+    },
+    "calm": {
+     "keys": [
+      {
+       "id": "auto-0",
+       "t": 0,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 35,
+       "elevation": 50,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 85,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-1",
+       "t": 8.700000000000001,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 35,
+       "elevation": 39.92,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 85,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-2",
+       "t": 9.700000000000001,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 35,
+       "elevation": 22,
+       "distance": {
+        "fit": true,
+        "margin": 1.45
+       },
+       "roll": 0,
+       "lensMm": 85,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-3",
+       "t": 13.25,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 35,
+       "elevation": 22,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 85,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-4",
+       "t": 14.35,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 0,
+       "elevation": 22,
+       "distance": {
+        "fit": true,
+        "margin": 1.12
+       },
+       "roll": 0,
+       "lensMm": 85,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-5",
+       "t": 17.15,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 0,
+       "elevation": 22,
+       "distance": {
+        "fit": true,
+        "margin": 1.02
+       },
+       "roll": 0,
+       "lensMm": 85,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      }
+     ],
+     "transitions": [
+      {
+       "from": "auto-0",
+       "to": "auto-1",
+       "preset": "glide",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.5
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-1",
+       "to": "auto-2",
+       "preset": "pull-back",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.6
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-2",
+       "to": "auto-3",
+       "preset": "glide",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.5
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-3",
+       "to": "auto-4",
+       "preset": "arc-reveal",
+       "settings": {
+        "curve": {
+         "kind": "easeOut",
+         "strength": 0.7
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0.05,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-4",
+       "to": "auto-5",
+       "preset": "push-in",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.6
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      }
+     ],
+     "shutter": 0.5,
+     "style": "calm"
+    },
+    "energetic": {
+     "keys": [
+      {
+       "id": "auto-0",
+       "t": 0,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 35,
+       "elevation": 62,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-1",
+       "t": 1,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 120,
+       "elevation": 56,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-2",
+       "t": 3.25,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": -5,
+       "elevation": 56,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-3",
+       "t": 5.5,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 65,
+       "elevation": 50,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-4",
+       "t": 7.75,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 120,
+       "elevation": 44,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-5",
+       "t": 8.700000000000001,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 120,
+       "elevation": 44,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-6",
+       "t": 9.700000000000001,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": -5,
+       "elevation": 12,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-7",
+       "t": 12.25,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 65,
+       "elevation": 12,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-8",
+       "t": 13.25,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 65,
+       "elevation": 12,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-9",
+       "t": 14.35,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 0,
+       "elevation": 12,
+       "distance": {
+        "fit": true,
+        "margin": 1.12
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-10",
+       "t": 17.15,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 0,
+       "elevation": 12,
+       "distance": {
+        "fit": true,
+        "margin": 1.02
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      }
+     ],
+     "transitions": [
+      {
+       "from": "auto-0",
+       "to": "auto-1",
+       "preset": "whip-pan",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 1
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 1,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false,
+        "turnLast": 0.35
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-1",
+       "to": "auto-2",
+       "preset": "whip-pan",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 1
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 1,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false,
+        "turnLast": 0.35
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-2",
+       "to": "auto-3",
+       "preset": "whip-pan",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 1
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 1,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false,
+        "turnLast": 0.35
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-3",
+       "to": "auto-4",
+       "preset": "swoop",
+       "settings": {
+        "curve": {
+         "kind": "snap",
+         "strength": 0.8
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0.15,
+        "motionBlur": 0.8,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false,
+        "turnLast": 0.5
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-4",
+       "to": "auto-5",
+       "preset": "glide",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.5
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-5",
+       "to": "auto-6",
+       "preset": "whip-pan",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 1
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 1,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false,
+        "turnLast": 0.35
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-6",
+       "to": "auto-7",
+       "preset": "whip-pan",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 1
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 1,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false,
+        "turnLast": 0.35
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-7",
+       "to": "auto-8",
+       "preset": "glide",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.5
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-8",
+       "to": "auto-9",
+       "preset": "arc-reveal",
+       "settings": {
+        "curve": {
+         "kind": "easeOut",
+         "strength": 0.7
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0.05,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-9",
+       "to": "auto-10",
+       "preset": "push-in",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.6
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      }
+     ],
+     "shutter": 0.7,
+     "style": "energetic"
+    },
+    "overhead": {
+     "keys": [
+      {
+       "id": "auto-0",
+       "t": 0,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 35,
+       "elevation": 78,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-1",
+       "t": 8.700000000000001,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 35,
+       "elevation": 75.12,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-2",
+       "t": 9.700000000000001,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 35,
+       "elevation": 70,
+       "distance": {
+        "fit": true,
+        "margin": 1.45
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-3",
+       "t": 13.25,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 35,
+       "elevation": 70,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-4",
+       "t": 14.35,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 0,
+       "elevation": 70,
+       "distance": {
+        "fit": true,
+        "margin": 1.12
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-5",
+       "t": 17.15,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 0,
+       "elevation": 70,
+       "distance": {
+        "fit": true,
+        "margin": 1.02
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      }
+     ],
+     "transitions": [
+      {
+       "from": "auto-0",
+       "to": "auto-1",
+       "preset": "glide",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.5
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-1",
+       "to": "auto-2",
+       "preset": "pull-back",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.6
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-2",
+       "to": "auto-3",
+       "preset": "glide",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.5
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-3",
+       "to": "auto-4",
+       "preset": "arc-reveal",
+       "settings": {
+        "curve": {
+         "kind": "easeOut",
+         "strength": 0.7
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0.05,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-4",
+       "to": "auto-5",
+       "preset": "push-in",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.6
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      }
+     ],
+     "shutter": 0.5,
+     "style": "overhead"
+    }
+   }
+  },
+  {
+   "name": "long",
+   "units": [
+    {
+     "start": 1,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       0,
+       -24,
+       -20
+      ],
+      "max": [
+       40,
+       0,
+       20
+      ]
+     }
+    },
+    {
+     "start": 1.55,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       20,
+       -24,
+       -20
+      ],
+      "max": [
+       60,
+       0,
+       20
+      ]
+     }
+    },
+    {
+     "start": 2.1,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       40,
+       -24,
+       -20
+      ],
+      "max": [
+       80,
+       0,
+       20
+      ]
+     }
+    },
+    {
+     "start": 2.6500000000000004,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -40,
+       -24,
+       -20
+      ],
+      "max": [
+       0,
+       0,
+       20
+      ]
+     }
+    },
+    {
+     "start": 3.2,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -60,
+       -24,
+       -20
+      ],
+      "max": [
+       -20,
+       0,
+       20
+      ]
+     }
+    },
+    {
+     "start": 3.75,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -80,
+       -24,
+       -20
+      ],
+      "max": [
+       -40,
+       0,
+       20
+      ]
+     }
+    },
+    {
+     "start": 4.300000000000001,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       0,
+       -48,
+       -20
+      ],
+      "max": [
+       40,
+       -24,
+       20
+      ]
+     }
+    },
+    {
+     "start": 4.8500000000000005,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       20,
+       -48,
+       -20
+      ],
+      "max": [
+       60,
+       -24,
+       20
+      ]
+     }
+    },
+    {
+     "start": 5.4,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       40,
+       -48,
+       -20
+      ],
+      "max": [
+       80,
+       -24,
+       20
+      ]
+     }
+    },
+    {
+     "start": 5.95,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -40,
+       -48,
+       -20
+      ],
+      "max": [
+       0,
+       -24,
+       20
+      ]
+     }
+    },
+    {
+     "start": 6.5,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -60,
+       -48,
+       -20
+      ],
+      "max": [
+       -20,
+       -24,
+       20
+      ]
+     }
+    },
+    {
+     "start": 7.050000000000001,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -80,
+       -48,
+       -20
+      ],
+      "max": [
+       -40,
+       -24,
+       20
+      ]
+     }
+    },
+    {
+     "start": 7.6000000000000005,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       0,
+       -72,
+       -20
+      ],
+      "max": [
+       40,
+       -48,
+       20
+      ]
+     }
+    },
+    {
+     "start": 8.15,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       20,
+       -72,
+       -20
+      ],
+      "max": [
+       60,
+       -48,
+       20
+      ]
+     }
+    },
+    {
+     "start": 8.700000000000001,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       40,
+       -72,
+       -20
+      ],
+      "max": [
+       80,
+       -48,
+       20
+      ]
+     }
+    },
+    {
+     "start": 9.25,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -40,
+       -72,
+       -20
+      ],
+      "max": [
+       0,
+       -48,
+       20
+      ]
+     }
+    },
+    {
+     "start": 9.8,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -60,
+       -72,
+       -20
+      ],
+      "max": [
+       -20,
+       -48,
+       20
+      ]
+     }
+    },
+    {
+     "start": 10.350000000000001,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -80,
+       -72,
+       -20
+      ],
+      "max": [
+       -40,
+       -48,
+       20
+      ]
+     }
+    },
+    {
+     "start": 10.9,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       0,
+       -96,
+       -20
+      ],
+      "max": [
+       40,
+       -72,
+       20
+      ]
+     }
+    },
+    {
+     "start": 11.450000000000001,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       20,
+       -96,
+       -20
+      ],
+      "max": [
+       60,
+       -72,
+       20
+      ]
+     }
+    },
+    {
+     "start": 12,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       40,
+       -96,
+       -20
+      ],
+      "max": [
+       80,
+       -72,
+       20
+      ]
+     }
+    },
+    {
+     "start": 12.55,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -40,
+       -96,
+       -20
+      ],
+      "max": [
+       0,
+       -72,
+       20
+      ]
+     }
+    },
+    {
+     "start": 13.100000000000001,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -60,
+       -96,
+       -20
+      ],
+      "max": [
+       -20,
+       -72,
+       20
+      ]
+     }
+    },
+    {
+     "start": 13.65,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -80,
+       -96,
+       -20
+      ],
+      "max": [
+       -40,
+       -72,
+       20
+      ]
+     }
+    },
+    {
+     "start": 14.200000000000001,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       0,
+       -120,
+       -20
+      ],
+      "max": [
+       40,
+       -96,
+       20
+      ]
+     }
+    },
+    {
+     "start": 14.750000000000002,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       20,
+       -120,
+       -20
+      ],
+      "max": [
+       60,
+       -96,
+       20
+      ]
+     }
+    },
+    {
+     "start": 15.3,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       40,
+       -120,
+       -20
+      ],
+      "max": [
+       80,
+       -96,
+       20
+      ]
+     }
+    },
+    {
+     "start": 15.850000000000001,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -40,
+       -120,
+       -20
+      ],
+      "max": [
+       0,
+       -96,
+       20
+      ]
+     }
+    },
+    {
+     "start": 16.400000000000002,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -60,
+       -120,
+       -20
+      ],
+      "max": [
+       -20,
+       -96,
+       20
+      ]
+     }
+    },
+    {
+     "start": 16.950000000000003,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -80,
+       -120,
+       -20
+      ],
+      "max": [
+       -40,
+       -96,
+       20
+      ]
+     }
+    },
+    {
+     "start": 17.5,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       0,
+       -144,
+       -20
+      ],
+      "max": [
+       40,
+       -120,
+       20
+      ]
+     }
+    },
+    {
+     "start": 18.05,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       20,
+       -144,
+       -20
+      ],
+      "max": [
+       60,
+       -120,
+       20
+      ]
+     }
+    },
+    {
+     "start": 18.6,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       40,
+       -144,
+       -20
+      ],
+      "max": [
+       80,
+       -120,
+       20
+      ]
+     }
+    },
+    {
+     "start": 19.150000000000002,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -40,
+       -144,
+       -20
+      ],
+      "max": [
+       0,
+       -120,
+       20
+      ]
+     }
+    },
+    {
+     "start": 19.700000000000003,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -60,
+       -144,
+       -20
+      ],
+      "max": [
+       -20,
+       -120,
+       20
+      ]
+     }
+    },
+    {
+     "start": 20.25,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -80,
+       -144,
+       -20
+      ],
+      "max": [
+       -40,
+       -120,
+       20
+      ]
+     }
+    },
+    {
+     "start": 20.8,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       0,
+       -168,
+       -20
+      ],
+      "max": [
+       40,
+       -144,
+       20
+      ]
+     }
+    },
+    {
+     "start": 21.35,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       20,
+       -168,
+       -20
+      ],
+      "max": [
+       60,
+       -144,
+       20
+      ]
+     }
+    },
+    {
+     "start": 21.900000000000002,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       40,
+       -168,
+       -20
+      ],
+      "max": [
+       80,
+       -144,
+       20
+      ]
+     }
+    },
+    {
+     "start": 22.450000000000003,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -40,
+       -168,
+       -20
+      ],
+      "max": [
+       0,
+       -144,
+       20
+      ]
+     }
+    },
+    {
+     "start": 23,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -60,
+       -168,
+       -20
+      ],
+      "max": [
+       -20,
+       -144,
+       20
+      ]
+     }
+    },
+    {
+     "start": 23.55,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -80,
+       -168,
+       -20
+      ],
+      "max": [
+       -40,
+       -144,
+       20
+      ]
+     }
+    },
+    {
+     "start": 24.1,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       0,
+       -192,
+       -20
+      ],
+      "max": [
+       40,
+       -168,
+       20
+      ]
+     }
+    },
+    {
+     "start": 24.650000000000002,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       20,
+       -192,
+       -20
+      ],
+      "max": [
+       60,
+       -168,
+       20
+      ]
+     }
+    },
+    {
+     "start": 25.200000000000003,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       40,
+       -192,
+       -20
+      ],
+      "max": [
+       80,
+       -168,
+       20
+      ]
+     }
+    },
+    {
+     "start": 25.750000000000004,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -40,
+       -192,
+       -20
+      ],
+      "max": [
+       0,
+       -168,
+       20
+      ]
+     }
+    },
+    {
+     "start": 26.3,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -60,
+       -192,
+       -20
+      ],
+      "max": [
+       -20,
+       -168,
+       20
+      ]
+     }
+    },
+    {
+     "start": 26.85,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -80,
+       -192,
+       -20
+      ],
+      "max": [
+       -40,
+       -168,
+       20
+      ]
+     }
+    },
+    {
+     "start": 27.400000000000002,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       0,
+       -216,
+       -20
+      ],
+      "max": [
+       40,
+       -192,
+       20
+      ]
+     }
+    },
+    {
+     "start": 27.950000000000003,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -10,
+       -200,
+       -10
+      ],
+      "max": [
+       10,
+       -192,
+       10
+      ]
+     }
+    },
+    {
+     "start": 28.500000000000004,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       40,
+       -216,
+       -20
+      ],
+      "max": [
+       80,
+       -192,
+       20
+      ]
+     }
+    },
+    {
+     "start": 29.05,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -40,
+       -216,
+       -20
+      ],
+      "max": [
+       0,
+       -192,
+       20
+      ]
+     }
+    },
+    {
+     "start": 29.6,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -60,
+       -216,
+       -20
+      ],
+      "max": [
+       -20,
+       -192,
+       20
+      ]
+     }
+    },
+    {
+     "start": 30.150000000000002,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -80,
+       -216,
+       -20
+      ],
+      "max": [
+       -40,
+       -192,
+       20
+      ]
+     }
+    },
+    {
+     "start": 30.700000000000003,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       0,
+       -240,
+       -20
+      ],
+      "max": [
+       40,
+       -216,
+       20
+      ]
+     }
+    },
+    {
+     "start": 31.250000000000004,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       20,
+       -240,
+       -20
+      ],
+      "max": [
+       60,
+       -216,
+       20
+      ]
+     }
+    },
+    {
+     "start": 31.800000000000004,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       40,
+       -240,
+       -20
+      ],
+      "max": [
+       80,
+       -216,
+       20
+      ]
+     }
+    },
+    {
+     "start": 32.35,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -40,
+       -240,
+       -20
+      ],
+      "max": [
+       0,
+       -216,
+       20
+      ]
+     }
+    },
+    {
+     "start": 32.900000000000006,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -60,
+       -240,
+       -20
+      ],
+      "max": [
+       -20,
+       -216,
+       20
+      ]
+     }
+    },
+    {
+     "start": 33.45,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -80,
+       -240,
+       -20
+      ],
+      "max": [
+       -40,
+       -216,
+       20
+      ]
+     }
+    },
+    {
+     "start": 34,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       0,
+       -264,
+       -20
+      ],
+      "max": [
+       40,
+       -240,
+       20
+      ]
+     }
+    },
+    {
+     "start": 34.550000000000004,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       20,
+       -264,
+       -20
+      ],
+      "max": [
+       60,
+       -240,
+       20
+      ]
+     }
+    },
+    {
+     "start": 35.1,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       40,
+       -264,
+       -20
+      ],
+      "max": [
+       80,
+       -240,
+       20
+      ]
+     }
+    },
+    {
+     "start": 35.650000000000006,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -40,
+       -264,
+       -20
+      ],
+      "max": [
+       0,
+       -240,
+       20
+      ]
+     }
+    },
+    {
+     "start": 36.2,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -60,
+       -264,
+       -20
+      ],
+      "max": [
+       -20,
+       -240,
+       20
+      ]
+     }
+    },
+    {
+     "start": 36.75,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -80,
+       -264,
+       -20
+      ],
+      "max": [
+       -40,
+       -240,
+       20
+      ]
+     }
+    },
+    {
+     "start": 37.300000000000004,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       0,
+       -288,
+       -20
+      ],
+      "max": [
+       40,
+       -264,
+       20
+      ]
+     }
+    },
+    {
+     "start": 37.85,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       20,
+       -288,
+       -20
+      ],
+      "max": [
+       60,
+       -264,
+       20
+      ]
+     }
+    },
+    {
+     "start": 38.400000000000006,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       40,
+       -288,
+       -20
+      ],
+      "max": [
+       80,
+       -264,
+       20
+      ]
+     }
+    },
+    {
+     "start": 38.95,
+     "dur": 0.5,
+     "land": {
+      "min": [
+       -40,
+       -288,
+       -20
+      ],
+      "max": [
+       0,
+       -264,
+       20
+      ]
+     }
+    }
+   ],
+   "modelBox": {
+    "min": [
+     -80,
+     -288,
+     -20
+    ],
+    "max": [
+     80,
+     0,
+     20
+    ]
+   },
+   "intro": 1,
+   "buildEnd": 39.45,
+   "duration": 42.45,
+   "tracks": {
+    "reference": {
+     "keys": [
+      {
+       "id": "auto-0",
+       "t": 0,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 35,
+       "elevation": 60,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-1",
+       "t": 1,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": -5,
+       "elevation": 56.25,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-2",
+       "t": 5.1,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 65,
+       "elevation": 52.5,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-3",
+       "t": 9.2,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": -5,
+       "elevation": 48.75,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-4",
+       "t": 13.299999999999999,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 65,
+       "elevation": 45,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-5",
+       "t": 17.4,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": -5,
+       "elevation": 37.5,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-6",
+       "t": 21.5,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 65,
+       "elevation": 33.75,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-7",
+       "t": 25.6,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": -5,
+       "elevation": 30,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-8",
+       "t": 29.700000000000003,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": -60,
+       "elevation": 26.25,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-9",
+       "t": 31.760000000000005,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 0,
+       "elevation": 10,
+       "distance": {
+        "fit": true,
+        "margin": 1.2
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-10",
+       "t": 42.45,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 0,
+       "elevation": 10,
+       "distance": {
+        "fit": true,
+        "margin": 1.05
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      }
+     ],
+     "transitions": [
+      {
+       "from": "auto-0",
+       "to": "auto-1",
+       "preset": "swoop",
+       "settings": {
+        "curve": {
+         "kind": "snap",
+         "strength": 0.8
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0.15,
+        "motionBlur": 0.8,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false,
+        "turnLast": 0.5
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-1",
+       "to": "auto-2",
+       "preset": "swoop",
+       "settings": {
+        "curve": {
+         "kind": "snap",
+         "strength": 0.8
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0.15,
+        "motionBlur": 0.8,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false,
+        "turnLast": 0.5
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-2",
+       "to": "auto-3",
+       "preset": "swoop",
+       "settings": {
+        "curve": {
+         "kind": "snap",
+         "strength": 0.8
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0.15,
+        "motionBlur": 0.8,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false,
+        "turnLast": 0.5
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-3",
+       "to": "auto-4",
+       "preset": "swoop",
+       "settings": {
+        "curve": {
+         "kind": "snap",
+         "strength": 0.8
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0.15,
+        "motionBlur": 0.8,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false,
+        "turnLast": 0.5
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-4",
+       "to": "auto-5",
+       "preset": "swoop",
+       "settings": {
+        "curve": {
+         "kind": "snap",
+         "strength": 0.8
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0.15,
+        "motionBlur": 0.8,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false,
+        "turnLast": 0.5
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-5",
+       "to": "auto-6",
+       "preset": "swoop",
+       "settings": {
+        "curve": {
+         "kind": "snap",
+         "strength": 0.8
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0.15,
+        "motionBlur": 0.8,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false,
+        "turnLast": 0.5
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-6",
+       "to": "auto-7",
+       "preset": "swoop",
+       "settings": {
+        "curve": {
+         "kind": "snap",
+         "strength": 0.8
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0.15,
+        "motionBlur": 0.8,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false,
+        "turnLast": 0.5
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-7",
+       "to": "auto-8",
+       "preset": "swoop",
+       "settings": {
+        "curve": {
+         "kind": "snap",
+         "strength": 0.8
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0.15,
+        "motionBlur": 0.8,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false,
+        "turnLast": 0.5
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-8",
+       "to": "auto-9",
+       "preset": "cut",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.5
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": true,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-9",
+       "to": "auto-10",
+       "preset": "push-in",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.6
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      }
+     ],
+     "shutter": 0.5,
+     "style": "reference"
+    },
+    "showcase": {
+     "keys": [
+      {
+       "id": "auto-0",
+       "t": 0,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 35,
+       "elevation": 52,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-1",
+       "t": 18.302500000000002,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 20,
+       "elevation": 35,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-2",
+       "t": 22.828,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 86.66666666666667,
+       "elevation": 32.166666666666664,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-3",
+       "t": 27.353499999999997,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 153.33333333333334,
+       "elevation": 26.5,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-4",
+       "t": 31.878999999999994,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 220,
+       "elevation": 23.666666666666668,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-5",
+       "t": 32.528999999999996,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 0,
+       "elevation": 8,
+       "distance": {
+        "fit": true,
+        "margin": 1.2
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-6",
+       "t": 42.45,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 0,
+       "elevation": 8,
+       "distance": {
+        "fit": true,
+        "margin": 1.05
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      }
+     ],
+     "transitions": [
+      {
+       "from": "auto-0",
+       "to": "auto-1",
+       "preset": "glide",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.5
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-1",
+       "to": "auto-2",
+       "preset": "orbit",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.4
+        },
+        "path": "arc",
+        "orbit": "cw",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": true
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-2",
+       "to": "auto-3",
+       "preset": "orbit",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.4
+        },
+        "path": "arc",
+        "orbit": "cw",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": true
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-3",
+       "to": "auto-4",
+       "preset": "orbit",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.4
+        },
+        "path": "arc",
+        "orbit": "cw",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": true
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-4",
+       "to": "auto-5",
+       "preset": "cut",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.5
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": true,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-5",
+       "to": "auto-6",
+       "preset": "push-in",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.6
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      }
+     ],
+     "shutter": 0.5,
+     "style": "showcase"
+    },
+    "turntable": {
+     "keys": [
+      {
+       "id": "auto-0",
+       "t": 0,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": -35,
+       "elevation": 38,
+       "distance": {
+        "fit": true,
+        "margin": 1.1
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-1",
+       "t": 1,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": -35,
+       "elevation": 36.166666666666664,
+       "distance": {
+        "fit": true,
+        "margin": 1.1
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-2",
+       "t": 5.7250000000000005,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 83.125,
+       "elevation": 34.333333333333336,
+       "distance": {
+        "fit": true,
+        "margin": 1.1
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-3",
+       "t": 10.450000000000001,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 201.25,
+       "elevation": 30.666666666666668,
+       "distance": {
+        "fit": true,
+        "margin": 1.1
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-4",
+       "t": 15.175,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 319.375,
+       "elevation": 28.833333333333336,
+       "distance": {
+        "fit": true,
+        "margin": 1.1
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-5",
+       "t": 19.900000000000002,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 437.5,
+       "elevation": 27,
+       "distance": {
+        "fit": true,
+        "margin": 1.1
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-6",
+       "t": 24.625000000000004,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 555.625,
+       "elevation": 23.333333333333336,
+       "distance": {
+        "fit": true,
+        "margin": 1.1
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-7",
+       "t": 29.35,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 673.75,
+       "elevation": 21.5,
+       "distance": {
+        "fit": true,
+        "margin": 1.1
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-8",
+       "t": 34.075,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 791.875,
+       "elevation": 17.833333333333336,
+       "distance": {
+        "fit": true,
+        "margin": 1.1
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-9",
+       "t": 38.800000000000004,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 910,
+       "elevation": 16,
+       "distance": {
+        "fit": true,
+        "margin": 1.1
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-10",
+       "t": 39.5,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 0,
+       "elevation": 16,
+       "distance": {
+        "fit": true,
+        "margin": 1.1
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-11",
+       "t": 42.45,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 0,
+       "elevation": 16,
+       "distance": {
+        "fit": true,
+        "margin": 1.06
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      }
+     ],
+     "transitions": [
+      {
+       "from": "auto-0",
+       "to": "auto-1",
+       "preset": "orbit",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.4
+        },
+        "path": "arc",
+        "orbit": "cw",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": true
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-1",
+       "to": "auto-2",
+       "preset": "orbit",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.4
+        },
+        "path": "arc",
+        "orbit": "cw",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": true
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-2",
+       "to": "auto-3",
+       "preset": "orbit",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.4
+        },
+        "path": "arc",
+        "orbit": "cw",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": true
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-3",
+       "to": "auto-4",
+       "preset": "orbit",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.4
+        },
+        "path": "arc",
+        "orbit": "cw",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": true
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-4",
+       "to": "auto-5",
+       "preset": "orbit",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.4
+        },
+        "path": "arc",
+        "orbit": "cw",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": true
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-5",
+       "to": "auto-6",
+       "preset": "orbit",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.4
+        },
+        "path": "arc",
+        "orbit": "cw",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": true
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-6",
+       "to": "auto-7",
+       "preset": "orbit",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.4
+        },
+        "path": "arc",
+        "orbit": "cw",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": true
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-7",
+       "to": "auto-8",
+       "preset": "orbit",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.4
+        },
+        "path": "arc",
+        "orbit": "cw",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": true
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-8",
+       "to": "auto-9",
+       "preset": "orbit",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.4
+        },
+        "path": "arc",
+        "orbit": "cw",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": true
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-9",
+       "to": "auto-10",
+       "preset": "swoop",
+       "settings": {
+        "curve": {
+         "kind": "snap",
+         "strength": 0.8
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0.15,
+        "motionBlur": 0.8,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-10",
+       "to": "auto-11",
+       "preset": "hold",
+       "settings": {
+        "curve": {
+         "kind": "holdThenMove",
+         "strength": 1
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      }
+     ],
+     "shutter": 0.5,
+     "style": "turntable"
+    },
+    "calm": {
+     "keys": [
+      {
+       "id": "auto-0",
+       "t": 0,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 35,
+       "elevation": 50,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 85,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-1",
+       "t": 38.550000000000004,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 35,
+       "elevation": 22,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 85,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-2",
+       "t": 39.650000000000006,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 0,
+       "elevation": 22,
+       "distance": {
+        "fit": true,
+        "margin": 1.12
+       },
+       "roll": 0,
+       "lensMm": 85,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-3",
+       "t": 42.45,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 0,
+       "elevation": 22,
+       "distance": {
+        "fit": true,
+        "margin": 1.02
+       },
+       "roll": 0,
+       "lensMm": 85,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      }
+     ],
+     "transitions": [
+      {
+       "from": "auto-0",
+       "to": "auto-1",
+       "preset": "glide",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.5
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-1",
+       "to": "auto-2",
+       "preset": "arc-reveal",
+       "settings": {
+        "curve": {
+         "kind": "easeOut",
+         "strength": 0.7
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0.05,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-2",
+       "to": "auto-3",
+       "preset": "push-in",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.6
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      }
+     ],
+     "shutter": 0.5,
+     "style": "calm"
+    },
+    "energetic": {
+     "keys": [
+      {
+       "id": "auto-0",
+       "t": 0,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 35,
+       "elevation": 62,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-1",
+       "t": 1,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": -5,
+       "elevation": 57.833333333333336,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-2",
+       "t": 4.845000000000001,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 65,
+       "elevation": 53.66666666666667,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-3",
+       "t": 8.690000000000001,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": -5,
+       "elevation": 49.5,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-4",
+       "t": 12.535000000000002,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 65,
+       "elevation": 45.333333333333336,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-5",
+       "t": 16.380000000000003,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": -5,
+       "elevation": 41.16666666666667,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-6",
+       "t": 20.225,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 65,
+       "elevation": 37,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-7",
+       "t": 24.07,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": -5,
+       "elevation": 28.66666666666667,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-8",
+       "t": 27.915,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 65,
+       "elevation": 24.5,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-9",
+       "t": 31.759999999999998,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": -5,
+       "elevation": 20.333333333333336,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-10",
+       "t": 35.605,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 65,
+       "elevation": 16.16666666666667,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-11",
+       "t": 38.550000000000004,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 65,
+       "elevation": 12,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-12",
+       "t": 39.650000000000006,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 0,
+       "elevation": 12,
+       "distance": {
+        "fit": true,
+        "margin": 1.12
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-13",
+       "t": 42.45,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 0,
+       "elevation": 12,
+       "distance": {
+        "fit": true,
+        "margin": 1.02
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      }
+     ],
+     "transitions": [
+      {
+       "from": "auto-0",
+       "to": "auto-1",
+       "preset": "swoop",
+       "settings": {
+        "curve": {
+         "kind": "snap",
+         "strength": 0.8
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0.15,
+        "motionBlur": 0.8,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false,
+        "turnLast": 0.5
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-1",
+       "to": "auto-2",
+       "preset": "whip-pan",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 1
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 1,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false,
+        "turnLast": 0.35
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-2",
+       "to": "auto-3",
+       "preset": "whip-pan",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 1
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 1,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false,
+        "turnLast": 0.35
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-3",
+       "to": "auto-4",
+       "preset": "whip-pan",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 1
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 1,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false,
+        "turnLast": 0.35
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-4",
+       "to": "auto-5",
+       "preset": "whip-pan",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 1
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 1,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false,
+        "turnLast": 0.35
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-5",
+       "to": "auto-6",
+       "preset": "whip-pan",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 1
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 1,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false,
+        "turnLast": 0.35
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-6",
+       "to": "auto-7",
+       "preset": "whip-pan",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 1
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 1,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false,
+        "turnLast": 0.35
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-7",
+       "to": "auto-8",
+       "preset": "whip-pan",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 1
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 1,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false,
+        "turnLast": 0.35
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-8",
+       "to": "auto-9",
+       "preset": "whip-pan",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 1
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 1,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false,
+        "turnLast": 0.35
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-9",
+       "to": "auto-10",
+       "preset": "whip-pan",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 1
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 1,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false,
+        "turnLast": 0.35
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-10",
+       "to": "auto-11",
+       "preset": "glide",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.5
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-11",
+       "to": "auto-12",
+       "preset": "arc-reveal",
+       "settings": {
+        "curve": {
+         "kind": "easeOut",
+         "strength": 0.7
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0.05,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-12",
+       "to": "auto-13",
+       "preset": "push-in",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.6
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      }
+     ],
+     "shutter": 0.7,
+     "style": "energetic"
+    },
+    "overhead": {
+     "keys": [
+      {
+       "id": "auto-0",
+       "t": 0,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 35,
+       "elevation": 78,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-1",
+       "t": 38.550000000000004,
+       "target": {
+        "kind": "build"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 35,
+       "elevation": 70,
+       "distance": {
+        "fit": true,
+        "margin": 1.15
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-2",
+       "t": 39.650000000000006,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 0,
+       "elevation": 70,
+       "distance": {
+        "fit": true,
+        "margin": 1.12
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      },
+      {
+       "id": "auto-3",
+       "t": 42.45,
+       "target": {
+        "kind": "model"
+       },
+       "offset": [
+        0,
+        0,
+        0
+       ],
+       "azimuth": 0,
+       "elevation": 70,
+       "distance": {
+        "fit": true,
+        "margin": 1.02
+       },
+       "roll": 0,
+       "lensMm": 50,
+       "focus": "target",
+       "blur": 0,
+       "origin": "auto"
+      }
+     ],
+     "transitions": [
+      {
+       "from": "auto-0",
+       "to": "auto-1",
+       "preset": "glide",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.5
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-1",
+       "to": "auto-2",
+       "preset": "arc-reveal",
+       "settings": {
+        "curve": {
+         "kind": "easeOut",
+         "strength": 0.7
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0.05,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      },
+      {
+       "from": "auto-2",
+       "to": "auto-3",
+       "preset": "push-in",
+       "settings": {
+        "curve": {
+         "kind": "easeInOut",
+         "strength": 0.6
+        },
+        "path": "arc",
+        "orbit": "shortest",
+        "extraTurns": 0,
+        "overshoot": 0,
+        "motionBlur": 0.5,
+        "shake": {
+         "amount": 0,
+         "frequency": 0.6
+        },
+        "cut": false,
+        "flowThrough": false
+       },
+       "origin": "auto"
+      }
+     ],
+     "shutter": 0.5,
+     "style": "overhead"
+    }
+   }
+  }
+ ],
+ "merge": {
+  "existing": {
+   "keys": [
+    {
+     "id": "mine",
+     "t": 5,
+     "target": {
+      "kind": "model"
+     },
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "azimuth": 90,
+     "elevation": 30,
+     "distance": {
+      "fit": true,
+      "margin": 1.3
+     },
+     "roll": 0,
+     "lensMm": 35,
+     "focus": "target",
+     "blur": 0,
+     "origin": "user"
+    },
+    {
+     "id": "auto-1",
+     "t": 2,
+     "target": {
+      "kind": "build"
+     },
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "azimuth": 10,
+     "elevation": 40,
+     "distance": {
+      "fit": true,
+      "margin": 1.15
+     },
+     "roll": 0,
+     "lensMm": 50,
+     "focus": "target",
+     "blur": 0,
+     "origin": "user"
+    }
+   ],
+   "transitions": [
+    {
+     "from": "auto-1",
+     "to": "mine",
+     "preset": "orbit",
+     "settings": {
+      "curve": {
+       "kind": "snap",
+       "strength": 0.8
+      },
+      "path": "arc",
+      "orbit": "shortest",
+      "extraTurns": 0,
+      "overshoot": 0.15,
+      "motionBlur": 0.8,
+      "shake": {
+       "amount": 0,
+       "frequency": 0.6
+      },
+      "cut": false,
+      "flowThrough": false,
+      "turnLast": 0.5
+     },
+     "origin": "user"
+    }
+   ],
+   "shutter": 0.25
+  },
+  "merged": {
+   "keys": [
+    {
+     "id": "auto-0",
+     "t": 0,
+     "target": {
+      "kind": "build"
+     },
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "azimuth": 35,
+     "elevation": 60,
+     "distance": {
+      "fit": true,
+      "margin": 1.15
+     },
+     "roll": 0,
+     "lensMm": 50,
+     "focus": "target",
+     "blur": 0,
+     "origin": "auto"
+    },
+    {
+     "id": "auto-1-2",
+     "t": 1,
+     "target": {
+      "kind": "build"
+     },
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "azimuth": -5,
+     "elevation": 54.6,
+     "distance": {
+      "fit": true,
+      "margin": 1.15
+     },
+     "roll": 0,
+     "lensMm": 50,
+     "focus": "target",
+     "blur": 0,
+     "origin": "auto"
+    },
+    {
+     "id": "auto-1",
+     "t": 2,
+     "target": {
+      "kind": "build"
+     },
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "azimuth": 10,
+     "elevation": 40,
+     "distance": {
+      "fit": true,
+      "margin": 1.15
+     },
+     "roll": 0,
+     "lensMm": 50,
+     "focus": "target",
+     "blur": 0,
+     "origin": "user"
+    },
+    {
+     "id": "mine",
+     "t": 5,
+     "target": {
+      "kind": "model"
+     },
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "azimuth": 90,
+     "elevation": 30,
+     "distance": {
+      "fit": true,
+      "margin": 1.3
+     },
+     "roll": 0,
+     "lensMm": 35,
+     "focus": "target",
+     "blur": 0,
+     "origin": "user"
+    },
+    {
+     "id": "auto-3",
+     "t": 8.700000000000001,
+     "target": {
+      "kind": "build"
+     },
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "azimuth": -5,
+     "elevation": 43.8,
+     "distance": {
+      "fit": true,
+      "margin": 1.15
+     },
+     "roll": 0,
+     "lensMm": 50,
+     "focus": "target",
+     "blur": 0,
+     "origin": "auto"
+    },
+    {
+     "id": "auto-4",
+     "t": 9.700000000000001,
+     "target": {
+      "kind": "build"
+     },
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "azimuth": -5,
+     "elevation": 15,
+     "distance": {
+      "fit": true,
+      "margin": 1.45
+     },
+     "roll": 0,
+     "lensMm": 50,
+     "focus": "target",
+     "blur": 0,
+     "origin": "auto"
+    },
+    {
+     "id": "auto-5",
+     "t": 11.520000000000001,
+     "target": {
+      "kind": "model"
+     },
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "azimuth": 0,
+     "elevation": 10,
+     "distance": {
+      "fit": true,
+      "margin": 1.2
+     },
+     "roll": 0,
+     "lensMm": 50,
+     "focus": "target",
+     "blur": 0,
+     "origin": "auto"
+    },
+    {
+     "id": "auto-6",
+     "t": 17.15,
+     "target": {
+      "kind": "model"
+     },
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "azimuth": 0,
+     "elevation": 10,
+     "distance": {
+      "fit": true,
+      "margin": 1.05
+     },
+     "roll": 0,
+     "lensMm": 50,
+     "focus": "target",
+     "blur": 0,
+     "origin": "auto"
+    }
+   ],
+   "transitions": [
+    {
+     "from": "auto-0",
+     "to": "auto-1-2",
+     "preset": "swoop",
+     "settings": {
+      "curve": {
+       "kind": "snap",
+       "strength": 0.8
+      },
+      "path": "arc",
+      "orbit": "shortest",
+      "extraTurns": 0,
+      "overshoot": 0.15,
+      "motionBlur": 0.8,
+      "shake": {
+       "amount": 0,
+       "frequency": 0.6
+      },
+      "cut": false,
+      "flowThrough": false,
+      "turnLast": 0.5
+     },
+     "origin": "auto"
+    },
+    {
+     "from": "auto-1-2",
+     "to": "auto-1",
+     "preset": "swoop",
+     "settings": {
+      "curve": {
+       "kind": "snap",
+       "strength": 0.8
+      },
+      "path": "arc",
+      "orbit": "shortest",
+      "extraTurns": 0,
+      "overshoot": 0.15,
+      "motionBlur": 0.8,
+      "shake": {
+       "amount": 0,
+       "frequency": 0.6
+      },
+      "cut": false,
+      "flowThrough": false,
+      "turnLast": 0.5
+     },
+     "origin": "auto"
+    },
+    {
+     "from": "auto-1",
+     "to": "mine",
+     "preset": "orbit",
+     "settings": {
+      "curve": {
+       "kind": "snap",
+       "strength": 0.8
+      },
+      "path": "arc",
+      "orbit": "shortest",
+      "extraTurns": 0,
+      "overshoot": 0.15,
+      "motionBlur": 0.8,
+      "shake": {
+       "amount": 0,
+       "frequency": 0.6
+      },
+      "cut": false,
+      "flowThrough": false,
+      "turnLast": 0.5
+     },
+     "origin": "user"
+    },
+    {
+     "from": "mine",
+     "to": "auto-3",
+     "preset": "swoop",
+     "settings": {
+      "curve": {
+       "kind": "snap",
+       "strength": 0.8
+      },
+      "path": "arc",
+      "orbit": "shortest",
+      "extraTurns": 0,
+      "overshoot": 0.15,
+      "motionBlur": 0.8,
+      "shake": {
+       "amount": 0,
+       "frequency": 0.6
+      },
+      "cut": false,
+      "flowThrough": false,
+      "turnLast": 0.5
+     },
+     "origin": "auto"
+    },
+    {
+     "from": "auto-3",
+     "to": "auto-4",
+     "preset": "pull-back",
+     "settings": {
+      "curve": {
+       "kind": "easeInOut",
+       "strength": 0.6
+      },
+      "path": "arc",
+      "orbit": "shortest",
+      "extraTurns": 0,
+      "overshoot": 0,
+      "motionBlur": 0.5,
+      "shake": {
+       "amount": 0,
+       "frequency": 0.6
+      },
+      "cut": false,
+      "flowThrough": false
+     },
+     "origin": "auto"
+    },
+    {
+     "from": "auto-4",
+     "to": "auto-5",
+     "preset": "cut",
+     "settings": {
+      "curve": {
+       "kind": "easeInOut",
+       "strength": 0.5
+      },
+      "path": "arc",
+      "orbit": "shortest",
+      "extraTurns": 0,
+      "overshoot": 0,
+      "motionBlur": 0,
+      "shake": {
+       "amount": 0,
+       "frequency": 0.6
+      },
+      "cut": true,
+      "flowThrough": false
+     },
+     "origin": "auto"
+    },
+    {
+     "from": "auto-5",
+     "to": "auto-6",
+     "preset": "push-in",
+     "settings": {
+      "curve": {
+       "kind": "easeInOut",
+       "strength": 0.6
+      },
+      "path": "arc",
+      "orbit": "shortest",
+      "extraTurns": 0,
+      "overshoot": 0,
+      "motionBlur": 0.5,
+      "shake": {
+       "amount": 0,
+       "frequency": 0.6
+      },
+      "cut": false,
+      "flowThrough": false
+     },
+     "origin": "auto"
+    }
+   ],
+   "shutter": 0.25,
+   "style": "reference"
+  }
+ }
+}

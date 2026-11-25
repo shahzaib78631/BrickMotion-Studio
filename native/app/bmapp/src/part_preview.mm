@@ -8,7 +8,7 @@ namespace bmapp {
 namespace {
 
 constexpr int kSize = 224;
-constexpr int kPartsPerRenderer = 32;
+constexpr int kPartsPerRenderer = 256;
 constexpr int kProjectWidth = 256;
 constexpr int kProjectHeight = 160;
 
@@ -36,9 +36,11 @@ struct PartPreview::Impl {
   int requests = 0;
 
   explicit Impl(const std::string& ldraw)
-    : library(ldraw), images(bm::ldraw::PartCache::defaultDirectory().parent_path() / "part-previews-v2" /
-                            std::to_string(std::hash<std::string>{}(ldraw))),
-      projects(images.parent_path().parent_path() / "project-previews-v1" / images.filename()) {}
+    : library(ldraw), images(bm::ldraw::PartCache::defaultDirectory().parent_path() / "part-previews-v3" /
+                            (std::to_string(std::hash<std::string>{}(ldraw)) + "-" +
+                             std::to_string(library.stamp("LDConfig.ldr")))),
+      projects(images.parent_path().parent_path() / "project-previews-v1" /
+               std::to_string(std::hash<std::string>{}(ldraw))) {}
 
   void reset() {
     renderer.reset();
@@ -69,14 +71,16 @@ Picture PartPreview::render(const std::string& part, int color, bool dark) {
     // Catalogue entries are top-level names. Keep the cache path inside its library folder.
     if (part.empty() || std::filesystem::path(part).filename() != part || !part.ends_with(".dat")) return {};
     auto& state = *impl_;
+    // Disk-first fast path: return the captured PNG immediately without loading .dat geometry or
+    // touching Metal.
+    const auto path = state.images / (part + "-" + std::to_string(color) + (dark ? "-dark.png" : "-light.png"));
+    auto saved = bmr::readPng(path);
+    if (saved.width == kSize && saved.height == kSize && !saved.empty()) return picture(std::move(saved));
+
     if (!state.parts || state.requests >= kPartsPerRenderer) state.reset();
     ++state.requests;
     const auto mesh = state.parts->get(part);
     if (mesh->triangles.empty()) return {};
-    const auto path = state.images / (part + "-" + std::to_string(mesh->sourceHash) + "-" +
-      std::to_string(state.library.stamp("LDConfig.ldr")) + "-" + std::to_string(color) + (dark ? "-dark.png" : "-light.png"));
-    auto saved = bmr::readPng(path);
-    if (saved.width == kSize && saved.height == kSize && !saved.empty()) return picture(std::move(saved));
 
     bm::Model::Data data{{}, {}, {}, state.library, {}};
     data.pieces.push_back({.id = "preview", .part = part, .color = color, .world = {}, .step = 0, .path = {}, .steps = {}});
@@ -96,7 +100,10 @@ Picture PartPreview::render(const std::string& part, int color, bool dark) {
     if (!state.renderer->draw(orbit.camera(1, bounds), previewOptions(dark)).submitted) return {};
     auto image = state.renderer->readback();
     if (image.empty()) return {};
-    cacheImage(image, path);
+    auto copy = image;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+      cacheImage(copy, path);
+    });
     return picture(std::move(image));
   }
 }

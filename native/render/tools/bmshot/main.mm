@@ -114,6 +114,15 @@ int main(int argc, char** argv) {
     else if (a == "--no-floor") options.floor = false;
     else if (a == "--no-cull") options.cull = false;
     else if (a == "--raytraced-glass") options.refractiveGlass = true;
+    else if (a == "--ssgi") options.screenSpaceGi = true;
+    else if (a == "--hybrid-rt") options.hybridRt = true;
+    else if (a == "--studio") options.studioLook = true;
+    else if (a == "--neural") options.neuralShader = true;
+    else if (a == "--pt") {
+      options.pathTraced = true;
+      options.pathMaxSamples = std::max(1, std::atoi(value().c_str()));
+      options.pathSamplesPerFrame = options.pathMaxSamples;
+    }
     else if (a == "--maps-whole") options.mapTrianglesPerFrame = UINT64_MAX;  // bench only: every stale map drawn whole
     else if (a == "--detail") {
       detail = std::atoi(value().c_str());

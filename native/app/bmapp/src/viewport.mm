@@ -4,13 +4,18 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstring>
 #include <deque>
 #include <dispatch/dispatch.h>
 #include <exception>
+#include <map>
 #include <mutex>
+#include <numeric>
 #include <optional>
+#include <stdexcept>
 #include "animation_authoring.h"
 #include "animation_keys.h"
+#include "camera_track.h"
 #include "bm/jobs.h"
 #include "bm/plan/timeline.h"
 #include "bmf/director.h"
@@ -18,24 +23,44 @@
 #include "bmr/device.h"
 #include "bmr/renderer.h"
 #include "bmr/tolerances.h"
+#include "bms/snap_events.h"
+#include "bms/wav.h"
 #include "engine.h"
+#include "flight_bake_impl.h"
 #include "incremental_plan.h"
+#include "movie_logo.h"
 #include "motion_audit_impl.h"
+#include "movie_encoder.h"
 #include "placement_worker.h"
 #include "preview_arrangement.h"
+#include "commands.h"
 #include "session_impl.h"
+#include "snap_mix_impl.h"
 
 namespace bmapp {
 
 namespace {
 constexpr double kPi = 3.14159265358979323846;
 
+bmr::OrbitCamera orbitFor(const SceneCamera& camera) {
+  bmr::OrbitCamera orbit;
+  orbit.target = {camera.target.x, camera.target.y, camera.target.z};
+  const auto delta = bm::Vec3{camera.position.x, camera.position.y, camera.position.z} - orbit.target;
+  orbit.distance = bm::length(delta);
+  orbit.azimuth = std::atan2(-delta.x, -delta.z);
+  orbit.elevation = std::atan2(-delta.y, std::hypot(delta.x, delta.z));
+  orbit.fovY = camera.fieldOfView * kPi / 180;
+  return orbit;
+}
+
 /// One planning run. It plans its own copy of the model, so edits made meanwhile cannot reach
 /// it; the viewport takes its result only while that result still belongs to what is shown.
 struct PlanJob {
   uint64_t version = 0;  ///< the session's version whose model is planned
   uint64_t inputs = 0;
+  uint64_t topology = 0;
   bm::CancelToken cancel;
+  std::atomic<PlanStage> stage{PlanStage::Waiting};
   std::mutex mutex;
   bool done = false;
   std::shared_ptr<const bmtools::Planned> planned;
@@ -54,14 +79,34 @@ struct DirectorJob {
 };
 
 struct PlanWorkspace {
+  struct Snapshot {
+    uint64_t topology;
+    std::shared_ptr<const bm::Model> model;
+    std::shared_ptr<const bmtools::Planned> result;
+  };
   std::optional<bmtools::ConnectorSources> connectors;
   bm::collide::ShapeCache shapes;
+  bm::collide::TravelCache travels;
+  bm::plan::FlightCheckCache flightChecks;
+  std::deque<Snapshot> solves;
 };
 
+bool sameAssemblyPose(const bm::Model& a, const bm::Model& b) {
+  if (a.pieces().size() != b.pieces().size()) return false;
+  return std::equal(a.pieces().begin(), a.pieces().end(), b.pieces().begin(), [](const auto& old, const auto& current) {
+    return old.id == current.id && old.part == current.part && old.color == current.color &&
+        old.step == current.step && old.steps == current.steps && old.path == current.path &&
+        old.world.t == current.world.t &&
+        std::equal(std::begin(old.world.r.m), std::end(old.world.r.m), std::begin(current.world.r.m));
+  });
+}
+
 std::pair<double, double> addSequenceClips(bm::plan::Timeline& timeline, const bm::plan::Style& style) {
-  const auto frames = [&](double seconds) { return static_cast<int>(std::lround(style.fps * std::clamp(seconds, 0.0, 120.0))); };
-  const int intro = frames(style.introSeconds >= 0 ? style.introSeconds : 1);
-  const int hero = frames(style.outroSeconds >= 0 ? style.outroSeconds : style.heroOrbit ? 3 : 1.5);
+  // The web's clock (pacing.ts choosePacing), which the planner paces the build for too: an intro
+  // of 1 s and an outro of 3 s with the hero orbit, else 0.5 s, each held within 0.2–120 s.
+  const auto frames = [&](double seconds) { return static_cast<int>(std::lround(style.fps * std::clamp(seconds, 0.2, 120.0))); };
+  const int intro = frames(style.introSeconds >= 0 ? style.introSeconds : 1.0);
+  const int hero = frames(style.outroSeconds >= 0 ? style.outroSeconds : style.heroOrbit ? 3.0 : 0.5);
   if (timeline.flights.empty()) return {};
   for (auto& flight : timeline.flights) {
     flight.startFrame += intro;
@@ -111,6 +156,7 @@ BuildTimeline describe(const bm::Model& model, const bm::plan::Plan& plan, const
     row.piece = piece;
     row.step = item.step;
     row.depth = flight.depth;
+    row.color = item.color;
     row.start = flight.startFrame / fps;
     row.end = (flight.startFrame + flight.frames) / fps;
     row.name = item.part;
@@ -126,6 +172,25 @@ BuildTimeline describe(const bm::Model& model, const bm::plan::Plan& plan, const
   }
   std::stable_sort(out.flights.begin(), out.flights.end(),
                    [](const BuildFlightRow& a, const BuildFlightRow& b) { return a.start < b.start; });
+  std::vector<int> firstChild(timeline.flights.size(), INT_MAX);
+  for (const auto& flight : timeline.flights) {
+    int parent = flight.parent;
+    while (parent >= 0) {
+      firstChild[parent] = std::min(firstChild[parent], flight.startFrame);
+      parent = timeline.flights[parent].parent;
+    }
+  }
+  for (size_t index = 0; index < timeline.flights.size(); ++index) {
+    const auto& flight = timeline.flights[index];
+    if (firstChild[index] >= flight.startFrame) continue;
+    const auto& pieces = bm::plan::piecesOf(flight, plan);
+    if (pieces.empty()) continue;
+    const auto& path = model.pieces()[pieces.front()].path;
+    if (path.size() <= static_cast<size_t>(flight.depth)) continue;
+    out.submodels.push_back({static_cast<int>(index), flight.depth, firstChild[index] / fps, flight.startFrame / fps,
+                            (flight.startFrame + flight.frames) / fps,
+                            {path.begin(), path.begin() + flight.depth + 1}, pieces});
+  }
   return out;
 }
 
@@ -144,6 +209,12 @@ struct Viewport::Impl {
   bmr::OrbitCamera orbit;
   std::optional<bmr::OrbitCamera> editorOrbit;
   bmr::FrameOptions options;
+  /// The project's look, what the editor lets the viewport leave out, and the editor's own
+  /// backdrop (a project without a scene). `options` is made from them (applyLook).
+  RenderLook look;
+  ViewportPreferences preferences;
+  float editorBackground[3] = {1, 1, 1};
+  uint64_t lookSeen = UINT64_MAX;
   int width = 0, height = 0;
   double scale = 2;
   bool dirty = true;
@@ -157,6 +228,18 @@ struct Viewport::Impl {
   std::shared_ptr<DirectorJob> directorJob;
   std::optional<bm::plan::Timeline> directedCamera;
   std::vector<double> directedLenses;
+  /// The project's Camera track and what its keys look at, for the plan, timeline, track and
+  /// view shape they were read for. When it has keys it films the Build in place of the director.
+  struct TrackState {
+    const void* plan = nullptr;
+    uint64_t version = 0, timeline = 0;
+    double aspect = 0;
+    bool keyframes = false;
+    nlohmann::ordered_json track;
+    std::optional<camtrack::Context> context;
+  } trackState;
+  uint64_t timelineRevision = 0;  ///< counts every authoredTimeline a plan brings
+  bool trackOff = false;          ///< an export filming with another camera
   std::shared_ptr<const bmtools::Planned> planned;  ///< taken from the job on the main thread
   bm::plan::Timeline authoredTimeline;
   std::shared_ptr<const bmtools::Planned> previous;
@@ -169,7 +252,7 @@ struct Viewport::Impl {
   uint64_t seenSelection = 0, seenHidden = 0;  ///< the session's view state last sent to the renderer
   std::string planError;
   bool playing = false, wantPlay = false, userMoved = false;
-  bool autoPlan = false, previewRequested = false, refreshPlan = false, stalePlan = false;
+  bool autoPlan = false, previewRequested = false, refreshPlan = false, stalePlan = false, standardPreview = false;
   bool director = false, loop = false;
   bool keyframes = false, arranged = false;
   KeyScene keyScene;
@@ -195,7 +278,54 @@ struct Viewport::Impl {
   bmr::Camera camera(const bm::Box& bounds) const {
     auto out = orbit.camera(aspect(), bounds);
     if (orthographic) out.orthoHalfHeight = orbit.distance * std::tan(orbit.fovY * 0.5);
+    if (const auto* shot = onTrackShot()) out.up = camtrack::upLdu(*shot);
     return out;
+  }
+  /// A waiting piece being dragged on the floor: its flight, the shift it had, where the drag
+  /// took hold (LDU) in the level plane through it, and how far it has gone.
+  struct WaitingDrag {
+    size_t flight = 0;
+    bm::Vec3 base, from, delta;
+  };
+  std::optional<WaitingDrag> waitingDrag;
+  /// Where the pointer (points, top left) meets the level plane at `level` (LDU, y down), if it does.
+  std::optional<bm::Vec3> onLevel(double x, double y, double level) const {
+    if (!renderer || width <= 0 || height <= 0) return std::nullopt;
+    const bmr::Camera view = camera(renderer->scene().bounds);
+    const bmr::ScreenRay ray = bmr::screenRay(view, 2 * x * scale / width - 1, 1 - 2 * y * scale / height);
+    if (std::abs(ray.dir.y) < 1e-9) return std::nullopt;
+    const double t = (level - ray.from.y) / ray.dir.y;
+    if (!(t > 0) || !std::isfinite(t)) return std::nullopt;
+    return ray.from + ray.dir * t;
+  }
+  /// Shows the frame again as it stands (after a timeline edit laid on in place).
+  void reshow() {
+    const double at = frame;
+    frame = -1;
+    if (at >= 0) showFrame(at);
+  }
+
+  /// The Camera track's last shot, while the camera still stands where it put it: its roll and
+  /// lens apply only then (an orbit or a director's frame since leaves them behind).
+  struct TrackLens {
+    bmr::OrbitCamera orbit;
+    camtrack::Shot shot;
+  };
+  std::optional<TrackLens> trackLens;
+  const camtrack::Shot* onTrackShot() const {
+    if (!trackLens || orthographic) return nullptr;
+    const auto& a = trackLens->orbit;
+    const bool same = a.target.x == orbit.target.x && a.target.y == orbit.target.y && a.target.z == orbit.target.z &&
+                      a.distance == orbit.distance && a.azimuth == orbit.azimuth && a.elevation == orbit.elevation && a.fovY == orbit.fovY;
+    return same ? &trackLens->shot : nullptr;
+  }
+  /// `base` with the track shot's depth of field, seen through `camera` (context.ts shotLens).
+  bmr::FrameOptions withLens(bmr::FrameOptions base, const bmr::Camera& camera) const {
+    const auto* shot = onTrackShot();
+    if (!shot || shot->blur <= 0 || !renderer || renderer->scene().bounds.empty()) return base;
+    base.lensBlur = camtrack::lensBlurShare(*shot);
+    base.focusDistance = camtrack::focusDistance(camera.eye, camera.target, renderer->scene().bounds, shot->focus, camera.near);
+    return base;
   }
   double fps() const { return presentation.framesPerSecond; }
   double endFrame() const {
@@ -306,11 +436,13 @@ struct Viewport::Impl {
     directedCamera.reset();
     directedLenses.clear();
     authoredTimeline = {};
+    ++timelineRevision;
     owners.clear();
     if (keyframes) readKeys();
     plannedVersion = 0;
     presentation = {};
     renderer.reset();  // before the state it was made from goes
+    lookSeen = UINT64_MAX;
     pinned = session->shared();
     generation = pinned->generation;
     ok = false;
@@ -324,9 +456,33 @@ struct Viewport::Impl {
     editorOrbit.reset();
     arranged = false;
     playing = wantPlay = false;
-    previewRequested = refreshPlan = stalePlan = false;
+    previewRequested = refreshPlan = stalePlan = standardPreview = false;
     restoreTime.reset();
     planError.clear();
+    dirty = true;
+  }
+
+  void applyLook() {
+    look = renderLookOf(session->impl());
+    lookSeen = session->version();
+    options.edges = look.edges && preferences.edges;
+    options.floor = look.floor && preferences.floor;
+    options.shadows = look.shadows && preferences.shadows;
+    options.ambientOcclusion = look.ambientOcclusion && preferences.ambientOcclusion;
+    options.refractiveGlass = look.raytracedGlass;
+    options.studioLook = look.shading == Shading::Studio;
+    options.neuralShader = look.shading == Shading::Neural;
+    options.hybridRt = look.shading == Shading::HybridRT;
+    options.screenSpaceGi = look.shading == Shading::ScreenSpaceGI;
+    options.pathTraced = look.shading == Shading::PathTraced;
+    options.pathMaxSamples = look.pathSamples;
+    options.worldGiOcclusion = look.worldGiOcclusion;
+    options.lightsFollowCamera = look.lightsFollowCamera;
+    const ScenePreset* scene = preferences.sceneBackdrop ? scenePreset(look.scene) : nullptr;
+    for (int i = 0; i < 3; ++i) {
+      const double srgb = scene ? (&scene->background.x)[i] : -1;
+      options.background[i] = scene ? static_cast<float>(toLinear(srgb)) : editorBackground[i];
+    }
     dirty = true;
   }
 
@@ -334,19 +490,34 @@ struct Viewport::Impl {
     if (session->impl().generation != generation) reopen();
     if (!renderer) return;
     const uint64_t now = session->version();
+    if (now != lookSeen) applyLook();
     if (now != seen) {
       const auto& log = session->impl().changes;
-      const bool handKeys = !log.empty() && log.front().version <= seen + 1 && log.back().version == now &&
-          std::all_of(log.begin(), log.end(), [&](const Changed& change) { return change.version <= seen || change.keyframesOnly; });
-      if (handKeys && (planned || !job)) {
+      const bool presentationOnly = !log.empty() && log.front().version <= seen + 1 && log.back().version == now &&
+          std::all_of(log.begin(), log.end(), [&](const Changed& change) {
+            return change.version <= seen || change.keyframesOnly || change.sceneOnly;
+          });
+      if (presentationOnly && (planned || !job)) {
+        const bool handKeys = std::any_of(log.begin(), log.end(), [&](const Changed& change) {
+          return change.version > seen && change.keyframesOnly;
+        });
+        const bool trackEdited = std::any_of(log.begin(), log.end(), [&](const Changed& change) {
+          return change.version > seen && change.cameraTrack;
+        });
+        const bool spotsMoved = std::any_of(log.begin(), log.end(), [&](const Changed& change) {
+          return change.version > seen && change.waitingSpot;
+        });
         seen = now;
         if (planned) plannedVersion = presentation.version = now;
-        if (keyframes) {
-          readKeys();
-          const double at = frame;
-          frame = -1;
-          if (at >= 0) showFrame(at);
+        if (handKeys && keyframes) readKeys();
+        // a dragged waiting spot is laid on the plan as it stands (a drag never replans)
+        if (spotsMoved && planned) {
+          shiftWaitingParts(planned->plan, authoredTimeline, animationAuthoring(*session).waitingShifts, model()->pieces().size());
+          ++timelineRevision;
         }
+        // shown again: hand keys and dragged spots move pieces; an edited Camera track aims the
+        // camera anew (its roll and lens with it) where the director is following it
+        if ((handKeys && keyframes) || (spotsMoved && planned) || (trackEdited && director && !userMoved)) reshow();
         syncView();
         return;
       }
@@ -435,7 +606,7 @@ struct Viewport::Impl {
     return s.planInputs == previousInputs + placements ? only : UINT32_MAX;
   }
 
-  void startPlanning() {
+  void startPlanning(bool synchronous = false) {
     follow();
     if (job || planned || !model() || model()->pieces().empty()) return;
     planError.clear();
@@ -446,6 +617,7 @@ struct Viewport::Impl {
     j->model = copy;
     Session::Impl& s = session->impl();
     j->inputs = s.planInputs;
+    j->topology = s.planTopology;
     const auto authored = std::make_shared<const AnimationAuthoring>(animationAuthoring(*session));
     const std::shared_ptr<const bmtools::Planned> cached = previousInputs == j->inputs ? previous : nullptr;
     const uint32_t moved = cached ? UINT32_MAX : singleMoved(s);
@@ -455,8 +627,10 @@ struct Viewport::Impl {
     bm::ldraw::PartCache* full = s.full.get();
     const std::filesystem::path ldraw = s.ldraw;
     const auto workspace = planWorkspace;
+    // The project's planner, or the editor's Standard Preview when the native plan failed.
+    const bool useStandard = standardPreview || animationAuthoring(*session).style.planner == bm::plan::Planner::Legacy;
     std::shared_ptr<Session::Impl> keep = session->shared();  // the library and caches it reads
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+    void (^makePlan)() = ^{
       (void)keep;
       auto planned = cached;
       bm::plan::Timeline timeline;
@@ -464,14 +638,38 @@ struct Viewport::Impl {
       std::string error;
       try {
         const auto start = std::chrono::steady_clock::now();
+        const auto priorFlightChecks = workspace->flightChecks.hits();
         bm::plan::Options options;
         options.cancel = &j->cancel;
+        options.travelCache = &workspace->travels;
         options.authored = &authored->constraints;
-        const auto& style = authored->style;
+        options.order = authored->order;
+        options.cleanGrownUnits = authored->cleanGrownUnits;
+        auto style = authored->style;
+        if (useStandard) style.planner = bm::plan::Planner::Legacy;
+        j->stage.store(useStandard ? PlanStage::StandardPreview : PlanStage::Solving, std::memory_order_relaxed);
+        // Pointer nudges and undo frequently return to a recently validated pose. Keep a
+        // few exact matches, scoped to one definition and one set of assembly constraints.
+        auto& recent = workspace->solves;
+        std::erase_if(recent, [&](const auto& snapshot) { return snapshot.topology != j->topology; });
+        bool reusedSnapshot = false;
+        if (!planned) {
+          const auto found = std::find_if(recent.begin(), recent.end(), [&](const auto& snapshot) {
+            return sameAssemblyPose(*snapshot.model, *copy);
+          });
+          if (found != recent.end()) {
+            planned = found->result;
+            recent.erase(found);
+            reusedSnapshot = true;
+          }
+        }
         size_t reused = planned ? planned->plan.moves.size() : 0;
         if (!planned && !workspace->connectors) workspace->connectors.emplace(*library, ldraw);
-        if (rewind && earlier) {
-          if (auto local = replanMove(*earlier, *copy, moved, *rewind, *full, *workspace->connectors, workspace->shapes, style, options)) {
+        // The local repair re-runs the take-apart sequencer around one piece; other settings plan whole.
+        const bool repairable = options.order == bm::plan::Order::Reverse && !options.cleanGrownUnits;
+        if (!useStandard && !planned && rewind && earlier && repairable) {
+          if (auto local = replanMove(*earlier, *copy, moved, *rewind, *full, *workspace->connectors,
+                                      workspace->shapes, style, options, workspace->flightChecks)) {
             reused = local->reused;
             planned = std::make_shared<bmtools::Planned>(std::move(local->planned));
           }
@@ -479,23 +677,46 @@ struct Viewport::Impl {
         if (!planned && !j->cancel.cancelled()) {
           auto result = std::make_shared<bmtools::Planned>();
           auto& sources = *workspace->connectors;
-          result->plan = bm::plan::planModel(*copy, result->graph, sources.connectors, &sources.gears, *full, workspace->shapes, options);
-          if (!j->cancel.cancelled())
-            result->timeline = bm::plan::buildTimeline(*copy, *full, result->plan, style, options.down);
+          if (useStandard) {
+            result->graph = bm::connect::buildGraph(*copy, sources.connectors, &sources.gears);
+          } else {
+            result->plan = bm::plan::planModel(*copy, result->graph, sources.connectors, &sources.gears, *full, workspace->shapes, options);
+            j->stage.store(PlanStage::CheckingFlights, std::memory_order_relaxed);
+          }
+          if (!j->cancel.cancelled()) {
+            auto* connectors = useStandard ? &sources.connectors : nullptr;
+            result->timeline = bm::plan::buildTimeline(*copy, *full, result->plan, style, options.down,
+                                                       connectors, &result->graph, &workspace->shapes, &j->cancel,
+                                                       &workspace->flightChecks, options.travelCache);
+          }
           planned = std::move(result);
         }
         if (!j->cancel.cancelled()) {
+          if (!planned || planned->timeline.flights.empty()) throw std::runtime_error("No playable flights were generated for this model.");
+          j->stage.store(PlanStage::Preparing, std::memory_order_relaxed);
+          if (planned->plan.complete && copy->pieces().size() <= 2000 &&
+              std::none_of(recent.begin(), recent.end(), [&](const auto& snapshot) { return snapshot.result == planned; })) {
+            recent.push_front({j->topology, copy, planned});
+            if (recent.size() > 3) recent.pop_back();
+          }
           timeline = planned->timeline;
           retimeAnimation(*copy, planned->plan, timeline, *authored);
           std::vector<std::string> waitingNotes;
           orientWaitingParts(*copy, planned->plan, timeline, *authored, *full, workspace->shapes, waitingNotes, j->cancel);
+          swingStaging(*copy, timeline, authored->stagingTurn);
+          shiftWaitingParts(planned->plan, timeline, authored->waitingShifts, copy->pieces().size());
           const auto build = addSequenceClips(timeline, style);
           presentation = describe(*copy, planned->plan, timeline, style.fps, j->version, build);
           presentation.notes.insert(presentation.notes.end(), waitingNotes.begin(), waitingNotes.end());
           presentation.planningMilliseconds = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
           presentation.reusedMoves = reused;
+          presentation.reusedFlightChecks = workspace->flightChecks.hits() - priorFlightChecks;
+          presentation.reusedSnapshot = reusedSnapshot;
+          presentation.standardPreview = useStandard;
+          if (useStandard) presentation.notes.emplace_back("Standard Preview follows authored step order. Its flights require manual collision review.");
         }
       } catch (const std::exception& e) {
+        planned.reset();
         error = e.what();
       }
       std::lock_guard lock(j->mutex);
@@ -504,11 +725,13 @@ struct Viewport::Impl {
       j->presentation = std::move(presentation);
       j->error = error;
       j->done = true;
-    });
+    };
+    if (synchronous) makePlan();
+    else dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), makePlan);
   }
 
   /// On the main thread, before a frame: takes a finished plan.
-  void collectPlan() {
+  void collectPlan(bool synchronousDirector = false) {
     if (!job) return;
     const auto inFlight = job;
     std::lock_guard lock(inFlight->mutex);
@@ -524,6 +747,7 @@ struct Viewport::Impl {
     if (job->planned) {
       planned = std::move(job->planned);
       authoredTimeline = std::move(job->authoredTimeline);
+      ++timelineRevision;
       owners = bm::plan::owners(authoredTimeline, planned->plan, model()->pieces().size());
       previous = planned;
       previousModel = job->model;
@@ -534,7 +758,7 @@ struct Viewport::Impl {
       stalePlan = false;
       frame = -1;
       if (!wantPlay && restoreTime) showFrame(*restoreTime * fps());
-      requestDirector();
+      requestDirector(synchronousDirector);
     } else {
       planError = job->error.empty() ? "Planning stopped." : job->error;
       wantPlay = false;
@@ -545,7 +769,7 @@ struct Viewport::Impl {
     dirty = true;
   }
 
-  void requestDirector() {
+  void requestDirector(bool synchronous = false) {
     if (!director || !planned || directorJob || directedCamera || !previousModel) return;
     auto work = std::make_shared<DirectorJob>();
     work->version = previousVersion;
@@ -555,7 +779,7 @@ struct Viewport::Impl {
     const auto backing = pinned;
     const auto timeline = std::make_shared<const bm::plan::Timeline>(authoredTimeline);
     const double projection = aspect(), rate = fps();
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+    void (^makeTrack)() = ^{
       std::vector<bm::plan::CameraKey> camera;
       std::vector<double> lenses;
       try {
@@ -578,7 +802,9 @@ struct Viewport::Impl {
       work->camera = std::move(camera);
       work->lenses = std::move(lenses);
       work->done = true;
-    });
+    };
+    if (synchronous) makeTrack();
+    else dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), makeTrack);
   }
 
   void collectDirector() {
@@ -597,7 +823,130 @@ struct Viewport::Impl {
     }
   }
 
+  /// Each piece's box at rest (LDU), by piece.
+  std::vector<bm::Box> restBoxes() const {
+    const auto& scene = renderer->scene();
+    std::vector<bm::Box> boxes(model()->pieces().size());
+    for (size_t piece = 0; piece < boxes.size() && piece < scene.where.size(); ++piece) {
+      const auto [group, index] = scene.where[piece];
+      if (group < scene.groups.size() && index < scene.groups[group].restBoxes.size())
+        boxes[piece] = scene.groups[group].restBoxes[index];
+    }
+    return boxes;
+  }
+
+  /// Every flight's landing on the Build clock, grouped into the main model (first) and each unit
+  /// built on its own spot (holding the flights with it as parent; a unit flying in lands on its
+  /// parent's group), and the model at rest. LDU; empty until planned.
+  struct Landings {
+    std::vector<std::vector<camtrack::Landing>> groups;
+    bm::Box model;
+  };
+  Landings buildLandings() const {
+    Landings out;
+    if (!planned || !renderer || !model()) return out;
+    const auto boxes = restBoxes();
+    const auto& flights = authoredTimeline.flights;
+    std::map<int, size_t> groupOf{{-1, 0}};
+    out.groups.resize(1);
+    for (const auto& flight : flights)
+      if (flight.parent >= 0 && groupOf.emplace(flight.parent, out.groups.size()).second) out.groups.emplace_back();
+    const double rate = fps();
+    for (size_t i = 0; i < flights.size(); ++i) {
+      const auto& flight = flights[i];
+      bm::Box rest;
+      for (uint32_t p : bm::plan::piecesOf(flight, planned->plan))
+        if (p < boxes.size()) rest.merge(boxes[p]);
+      if (rest.empty()) continue;
+      if (flight.parent < 0) out.model.merge(rest);
+      const int end = flight.startFrame + flight.frames;
+      // where it lands: on its seat, or on its unit's spot while that still waits on the floor
+      const bm::Box landed = rest.transformed(bm::plan::motionAt(authoredTimeline, i, static_cast<double>(end)));
+      out.groups[groupOf[flight.parent]].push_back({flight.startFrame / rate, end / rate, landed});
+    }
+    return out;
+  }
+
+  /// What the Camera track's keys look at (camtrack::buildContext): the main model and each unit
+  /// built on its own spot, with where and when every flight lands. On the Keyframes clock, a
+  /// linked Build is followed on its own clock (its start frame and speed), as the web's
+  /// timelineCameraContext; without one every key frames the model.
+  camtrack::Context trackContext() const {
+    camtrack::Context context;
+    context.aspect = aspect();
+    if (!renderer || !model()) return context;
+    const bool build = planned && (!keyframes || keyScene.buildLinked);
+    if (build) {
+      auto landings = buildLandings();
+      std::vector<camtrack::Assembly> groups;
+      for (auto& lands : landings.groups) {
+        auto& group = groups.emplace_back();
+        for (auto& land : lands) group.lands.push_back({land.start, land.end, camtrack::toWeb(land.box)});
+      }
+      context = camtrack::buildContext(std::move(groups), camtrack::toWeb(landings.model), aspect());
+    }
+    if (!keyframes) return context;
+    if (!build) {
+      const bm::Box bounds = camtrack::toWeb(renderer->scene().bounds);
+      context.model = bounds;
+      context.build = [bounds](double) { return bounds; };
+      context.piece = [](double) { return std::optional<bm::Box>{}; };
+      return context;
+    }
+    const double first = keyScene.first, rate = std::max(1, keyScene.fps), start = keyScene.buildStart, speed = keyScene.buildSpeed;
+    const auto toBuild = [=](double seconds) { return std::max(0.0, (first + seconds * rate - start) / rate * speed); };
+    context.build = [inner = context.build, toBuild](double t) { return inner(toBuild(t)); };
+    context.piece = [inner = context.piece, toBuild](double t) { return inner(toBuild(t)); };
+    return context;
+  }
+
+  /// Reads the Camera track again when the session, plan, timeline, tab or view shape changed.
+  void refreshTrack() {
+    const void* plan = planned ? planned.get() : nullptr;
+    auto& t = trackState;
+    const uint64_t version = session->version();
+    if (plan == t.plan && version == t.version && timelineRevision == t.timeline && aspect() == t.aspect &&
+        keyframes == t.keyframes)
+      return;
+    const bool scene = keyframes || plan;
+    auto track = scene ? cameraTrackOf(session->impl(), keyframes ? CameraClock::Timeline : CameraClock::Build)
+                       : nlohmann::ordered_json{};
+    // the keyframe scene (its build link) is part of the session: a new version may change it
+    const bool sameScene = plan == t.plan && timelineRevision == t.timeline && aspect() == t.aspect &&
+                           keyframes == t.keyframes && (!keyframes || version == t.version);
+    t.plan = plan, t.version = version, t.timeline = timelineRevision, t.aspect = aspect(), t.keyframes = keyframes;
+    if (sameScene && track == t.track) return;
+    t.track = std::move(track);
+    t.context.reset();
+    if (scene && renderer && model() && !camtrack::keysOf(t.track).empty()) t.context = trackContext();
+  }
+
+  /// The Camera track of the clock shown is in charge.
+  bool followsTrack() {
+    if (trackOff) return false;
+    refreshTrack();
+    return trackState.context.has_value();
+  }
+
+  /// Points the camera as the track's shot at `seconds` of its video; false without a shot.
+  bool trackShotAt(double seconds) {
+    if (!followsTrack()) return false;
+    // sampled at the exact time, so a hard cut stays a cut between frames
+    const auto shot = camtrack::sample(trackState.track, std::max(0.0, seconds), *trackState.context);
+    if (!shot) return false;
+    const bm::Vec3 eye = camtrack::toLdu(shot->eye), target = camtrack::toLdu(shot->target), d = eye - target;
+    orbit.target = target;
+    orbit.distance = bm::length(d);
+    orbit.azimuth = std::atan2(-d.x, -d.z);  // OrbitCamera::eye: azimuth 0 is the front, the eye on the -z side
+    orbit.elevation = std::atan2(-d.y, std::hypot(d.x, d.z));
+    orbit.fovY = shot->fovDegrees * kPi / 180;
+    trackLens = TrackLens{orbit, *shot};
+    return true;
+  }
+
+  /// The Build's camera at a frame of the Build: its Camera track, else the director's.
   void cameraAt(double buildFrame) {
+    if (!keyframes && trackShotAt(buildFrame / fps())) return;
     const auto& cameraTrack = directedCamera && !directedCamera->camera.empty() ? *directedCamera : authoredTimeline;
     if (cameraTrack.camera.empty()) return;
     orbit = bmr::OrbitCamera::along(cameraTrack, buildFrame);
@@ -633,7 +982,10 @@ struct Viewport::Impl {
       orbit = bmr::OrbitCamera::fitted(renderer->visibleBounds(), orbit.fovY, aspect(), orbit.azimuth, orbit.elevation);
       fittedDistance = orbit.distance;
     }
-    if (director && !userMoved && (!keyframes || keyScene.buildLinked)) cameraAt(buildFrame);
+    if (director && !userMoved) {
+      // the Keyframes timeline's own track, on its clock; else the Build's camera
+      if (!(keyframes && trackShotAt(f / fps())) && (!keyframes || keyScene.buildLinked)) cameraAt(buildFrame);
+    }
     dirty = true;
   }
 
@@ -710,6 +1062,11 @@ void Viewport::resize(int pixelsWide, int pixelsHigh, double backingScale) {
 }
 
 bool Viewport::draw(void* metalDrawable) {
+  bool submitted = false;
+  return drawFrame(metalDrawable, submitted);
+}
+
+bool Viewport::drawFrame(void* metalDrawable, bool& submitted) {
   Impl& v = *impl_;
   if (v.session->impl().generation != v.generation) v.reopen();
   if (!v.ok) return false;
@@ -723,7 +1080,8 @@ bool Viewport::draw(void* metalDrawable) {
   v.collectPlacement();
   if (v.playing && v.canShowTime()) v.advance();
   if (metalDrawable && !v.dirty && (v.placementPending || v.job || v.directorJob)) return true;
-  const bool interactive = v.model()->pieces().size() >= 1500 && CACurrentMediaTime() < v.interactionEnds;
+  const bool gesture = CACurrentMediaTime() < v.interactionEnds;
+  const bool interactive = v.model()->pieces().size() >= 1500 && gesture;
   bmr::FrameOptions paint = v.options;
   paint.interactive = interactive;
   if (interactive && v.model()->pieces().size() >= 8000) {
@@ -731,8 +1089,15 @@ bool Viewport::draw(void* metalDrawable) {
     paint.shadows = paint.ambientOcclusion = false;
     paint.refractiveGlass = false;
   }
-  const bmr::FrameStats s = v.renderer->draw(v.camera(v.renderer->visibleBounds()), paint, metalDrawable);
-  v.dirty = interactive || v.playing || s.settling || (!s.submitted && v.width > 0 && v.height > 0);
+  // As bmview: glass transport and path tracing are drawn once the view is still.
+  const bool still = !gesture && !v.playing && v.placement.state == PlacementState::Inactive;
+  const bool held = (paint.refractiveGlass || paint.pathTraced) && !still;
+  if (held) paint.refractiveGlass = paint.pathTraced = false;
+  const bmr::Camera view = v.camera(v.renderer->visibleBounds());
+  const bmr::FrameStats s = v.renderer->draw(view, v.withLens(paint, view), metalDrawable);
+  submitted = s.submitted;
+  const bool converging = paint.pathTraced && s.pathSamples < static_cast<uint32_t>(paint.pathMaxSamples);
+  v.dirty = interactive || (held && gesture) || converging || v.playing || s.settling || (!s.submitted && v.width > 0 && v.height > 0);
   return v.dirty || v.placementPending || v.job || v.directorJob;
 }
 
@@ -746,24 +1111,196 @@ Picture Viewport::readback() {
   return p;
 }
 
-void Viewport::setBackground(double r, double g, double b) {
-  float* bg = impl_->options.background;
-  bg[0] = static_cast<float>(toLinear(r)), bg[1] = static_cast<float>(toLinear(g)), bg[2] = static_cast<float>(toLinear(b));
+bool Picture::copyRGBA(uint8_t* destination, size_t count) const {
+  if (!destination || count == 0 || count != rgba.size()) return false;
+  std::memcpy(destination, rgba.data(), count);
+  return true;
+}
+
+Picture Viewport::capture() {
+  bool submitted = false;
+  drawFrame(nullptr, submitted);
+  if (!submitted) return {};
   impl_->dirty = true;
+  return readback();
+}
+
+std::string Viewport::exportMovie(const MovieSettings& settings, const std::string& destination) {
+  Impl& v = *impl_;
+  if (!ok() || !v.model() || v.model()->pieces().empty()) return "This model has no renderable parts.";
+  if (destination.empty() || settings.width < 2 || settings.height < 2 || settings.width > 3840 ||
+      settings.height > 3840 || settings.width % 2 != 0 || settings.height % 2 != 0 ||
+      settings.fps < 1 || settings.fps > 120) return "The video size or frame rate is invalid.";
+  if (!std::isfinite(settings.yaw) || !std::isfinite(settings.pitch) || !std::isfinite(settings.fieldOfView) ||
+      settings.fieldOfView <= 0 || settings.fieldOfView >= kPi) return "The video camera is invalid.";
+  if (settings.bitRate != 0 && (settings.bitRate < 100'000 || settings.bitRate > 240'000'000))
+    return "The video bitrate is invalid.";
+
+  @autoreleasepool {
+    try {
+      const bool turntable = settings.source == MovieSource::Turntable;
+      const bool usingKeys = settings.source == MovieSource::Keyframes;
+      std::optional<SceneCamera> savedCamera;
+      if (!settings.sceneCameraId.empty()) {
+        if (turntable || !v.session->focusPath().empty()) return "A saved camera frames the entire project.";
+        const auto cameras = v.session->sceneCameras();
+        const auto saved = std::find_if(cameras.cameras.begin(), cameras.cameras.end(),
+                                       [&](const auto& item) { return item.id == settings.sceneCameraId; });
+        if (saved == cameras.cameras.end()) return "The selected scene camera is missing.";
+        savedCamera = *saved;
+      }
+      resize(settings.width, settings.height, 1);
+      v.applyLook();  // the project's look as saved, whichever source is exported
+      v.options.mapTrianglesPerFrame = 0;  // complete the lighting for every frame sent to the encoder
+      v.orthographic = settings.viewportAngle && settings.orthographic;
+      v.standardPreview = settings.standardPreview;
+      v.director = !turntable && !settings.viewportAngle && !savedCamera;
+      v.trackOff = !settings.cameraTrack;
+      struct TrackOn {
+        Impl& v;
+        ~TrackOn() { v.trackOff = false; }
+      } restoreTrack{v};
+      useKeyframes(usingKeys);
+      if (!turntable && (!usingKeys || v.keyScene.buildLinked)) {
+        v.startPlanning(true);
+        v.collectPlan(true);
+        v.collectDirector();
+        if (!v.planned) return v.planError.empty() ? "The build could not be planned for export." : v.planError;
+      }
+
+      if (savedCamera) {
+        v.orbit = orbitFor(*savedCamera);
+        v.orthographic = savedCamera->orthographic;
+      } else if (settings.viewportAngle) {
+        v.orbit.fovY = settings.fieldOfView;
+        v.fit(settings.yaw, settings.pitch);
+      }
+      const double duration = turntable ? settings.turntableSeconds : length();
+      if (!std::isfinite(duration) || duration <= 0 || duration * settings.fps >= INT_MAX - 2)
+        return "The selected animation has an invalid duration.";
+      // Keyframes use an inclusive range. The turntable omits the duplicate final view.
+      const double samples = duration * settings.fps;
+      const int frames = std::max(1, static_cast<int>(std::ceil(std::nextafter(samples, 0.0))) + (usingKeys ? 1 : 0));
+      const auto turntableStart = [&] {
+        auto orbit = bmr::OrbitCamera::framing(v.renderer->scene().bounds, v.orbit.fovY, v.aspect());
+        orbit.azimuth = v.orbit.azimuth;
+        orbit.elevation = v.orbit.elevation;
+        return orbit;
+      }();
+      if (!turntable && !v.director && !savedCamera) {
+        auto bounds = v.renderer->scene().bounds;
+        v.showFrame(0);
+        bounds.merge(v.renderer->visibleBounds());
+        v.orbit = bmr::OrbitCamera::fitted(bounds, v.orbit.fovY, v.aspect(), v.orbit.azimuth, v.orbit.elevation);
+      }
+      if (!settings.snapWave.empty()) {
+        if (settings.source != MovieSource::Build || settings.standardPreview || v.session->buildSettings().standardPlanner)
+          return "Snap audio requires a native Build video.";
+        const auto& scene = v.renderer->scene();
+        const auto boxes = v.restBoxes();
+        const auto fixed = v.orbit;
+        const auto screenX = [&](int frame, bm::Vec3 point) {
+          if (v.director) v.cameraAt(frame);
+          const auto camera = v.camera(scene.bounds);
+          const auto projection = bmr::multiply(bmr::projectionMatrix(camera), bmr::viewMatrix(camera, {}));
+          float clip[4];
+          bmr::transform(projection, point, clip);
+          return clip[3] > 1e-6f ? static_cast<double>(clip[0]) / clip[3] : 0.0;
+        };
+        auto snaps = bms::snapEvents(*v.model(), v.planned->graph, v.planned->plan, v.authoredTimeline, boxes, screenX);
+        v.orbit = fixed;
+        bms::Mixer mixer(std::move(snaps), v.authoredTimeline.frames, v.fps(),
+                         snapOptions(v.session->snapMix(), settings.snapRecordings));
+        if (!bms::writeWav(mixer, settings.snapWave)) return "The snap audio could not be written.";
+      }
+      std::optional<MovieLogo> logo;
+      if (!settings.logo.empty()) {
+        std::string failure;
+        logo = loadMovieLogo(settings.logo, settings.width, settings.height, settings.logoCorner, failure);
+        if (!logo) return failure;
+      }
+      bmtools::encodeMovie(destination, settings.width, settings.height, settings.fps, frames, [&](int index) {
+        if (turntable) {
+          v.orbit = turntableStart;
+          v.orbit.azimuth += 2 * kPi * index / frames;
+        } else {
+          v.showFrame(std::min(duration, static_cast<double>(index) / settings.fps) * v.fps());
+        }
+        auto camera = v.camera(v.renderer->visibleBounds());
+        if (savedCamera) {
+          camera.near = savedCamera->nearClip;
+          camera.far = savedCamera->farClip;
+        }
+        const bmr::FrameOptions frameOptions = v.withLens(v.options, camera);
+        auto drawn = v.renderer->draw(camera, frameOptions);
+        if (!drawn.submitted) throw std::runtime_error("Metal could not draw a video frame.");
+        if (v.options.pathTraced && drawn.pathSamples == 0)
+          throw std::runtime_error("Path tracing is not available on this Mac. Choose another shading in View → Look.");
+        // Path traced: the same frame again until it has its samples (stops if it stops gaining).
+        for (uint32_t before = 0; v.options.pathTraced && drawn.pathSamples > before &&
+                                  drawn.pathSamples < static_cast<uint32_t>(v.options.pathMaxSamples);) {
+          before = drawn.pathSamples;
+          drawn = v.renderer->draw(camera, frameOptions);
+        }
+        auto picture = v.renderer->readback();
+        if (logo) composite(picture, *logo);
+        return picture;
+      }, settings.bitRate);
+    } catch (const std::exception& error) {
+      return error.what();
+    }
+  }
+  return {};
+}
+
+std::string Viewport::writeSnapTrack(const std::string& file, const std::string& recordings) {
+  auto& v = *impl_;
+  v.follow();
+  if (!v.renderer || !v.planned || planState() != PlanState::Ready) return "The build has not been planned.";
+  if (v.presentation.standardPreview || v.planned->plan.moves.empty()) return "Snap sounds need the native planner.";
+  try {
+    const auto& scene = v.renderer->scene();
+    const auto boxes = v.restBoxes();
+    // Panned for the view as it is now: the editor's camera does not follow the director here.
+    const auto camera = v.camera(scene.bounds);
+    const auto projection = bmr::multiply(bmr::projectionMatrix(camera), bmr::viewMatrix(camera, {}));
+    const auto screenX = [&](int, bm::Vec3 point) {
+      float clip[4];
+      bmr::transform(projection, point, clip);
+      return clip[3] > 1e-6f ? static_cast<double>(clip[0]) / clip[3] : 0.0;
+    };
+    auto snaps = bms::snapEvents(*v.model(), v.planned->graph, v.planned->plan, v.authoredTimeline, boxes, screenX);
+    bms::Mixer mixer(std::move(snaps), v.authoredTimeline.frames, v.fps(), snapOptions(v.session->snapMix(), recordings));
+    if (!bms::writeWav(mixer, file)) return "The snap sounds could not be written.";
+  } catch (const std::exception& error) {
+    return error.what();
+  }
+  return {};
+}
+
+void Viewport::setBackground(double r, double g, double b) {
+  float* bg = impl_->editorBackground;
+  bg[0] = static_cast<float>(toLinear(r)), bg[1] = static_cast<float>(toLinear(g)), bg[2] = static_cast<float>(toLinear(b));
+  impl_->applyLook();
 }
 
 void Viewport::setPreferences(const ViewportPreferences& p) {
   Impl& v = *impl_;
-  v.options.edges = p.edges;
-  v.options.floor = p.floor;
-  v.options.shadows = p.shadows;
-  v.options.ambientOcclusion = p.ambientOcclusion;
+  v.preferences = p;
+  v.applyLook();
   v.autoPlan = p.autoPlan;
   if (!v.autoPlan) v.refreshPlan = false;
   v.dirty = true;
 }
 
-bool Viewport::needsDraw() const { return impl_->dirty || impl_->job || impl_->directorJob || impl_->placementPending; }
+bool Viewport::needsDraw() const {
+  const Impl& view = *impl_;
+  const Session::Impl& session = view.session->impl();
+  // Swift checks before draw(), so follow() may not have seen the document notification's edit yet.
+  if (view.generation != session.generation) return true;
+  return view.ok && (view.dirty || view.job || view.directorJob || view.placementPending ||
+      view.seen != session.version || view.seenSelection != session.selectionStamp || view.seenHidden != session.hiddenStamp);
+}
 
 uint64_t Viewport::previewPart(const PlacementInput& input, Vec2 point) {
   Impl& v = *impl_;
@@ -875,6 +1412,64 @@ CameraState Viewport::camera() const {
   return c;
 }
 
+SceneCamera Viewport::captureSceneCamera() const {
+  const auto& v = *impl_;
+  const auto camera = v.camera(v.renderer ? v.renderer->visibleBounds() : bm::Box{});
+  SceneCamera saved;
+  saved.position = {camera.eye.x, camera.eye.y, camera.eye.z};
+  saved.target = {camera.target.x, camera.target.y, camera.target.z};
+  saved.fieldOfView = camera.fovY * 180 / kPi;
+  saved.orthographic = v.orthographic;
+  return saved;
+}
+
+bool Viewport::followsCameraTrack() {
+  impl_->follow();
+  return impl_->followsTrack();
+}
+
+SceneCamera Viewport::cameraTrackView(double seconds) {
+  auto& v = *impl_;
+  v.follow();
+  if (!v.renderer || !v.followsTrack() || !std::isfinite(seconds)) return captureSceneCamera();
+  const auto keep = v.orbit;
+  v.trackShotAt(std::clamp(seconds, 0.0, v.endFrame() / v.fps()));
+  const auto view = captureSceneCamera();
+  v.orbit = keep;
+  return view;
+}
+
+CameraDirectorInput Viewport::cameraDirectorInput() {
+  auto& v = *impl_;
+  v.follow();
+  CameraDirectorInput input;
+  if (!v.renderer || !v.planned || planState() != PlanState::Ready) return input;
+  const auto timeline = buildTimeline();
+  const auto landings = v.buildLandings();
+  if (landings.model.empty()) return input;
+  for (const auto& group : landings.groups)
+    for (const auto& land : group)
+      input.lands.push_back({land.start, land.end, {land.box.min.x, land.box.min.y, land.box.min.z}, {land.box.max.x, land.box.max.y, land.box.max.z}});
+  input.modelMin = {landings.model.min.x, landings.model.min.y, landings.model.min.z};
+  input.modelMax = {landings.model.max.x, landings.model.max.y, landings.model.max.z};
+  input.intro = timeline.buildStart, input.buildEnd = timeline.buildEnd, input.duration = timeline.duration;
+  input.ok = true;
+  return input;
+}
+
+bool Viewport::recallSceneCamera(const std::string& id) {
+  auto& v = *impl_;
+  if (!v.session->focusPath().empty()) return false;
+  const auto cameras = v.session->sceneCameras();
+  const auto saved = std::find_if(cameras.cameras.begin(), cameras.cameras.end(),
+                                 [&](const auto& item) { return item.id == id; });
+  if (saved == cameras.cameras.end()) return false;
+  v.orbit = orbitFor(*saved);
+  v.orthographic = saved->orthographic;
+  v.moved();
+  return true;
+}
+
 void Viewport::setOrthographic(bool enabled) {
   impl_->orthographic = enabled;
   impl_->moved();
@@ -932,11 +1527,13 @@ void Viewport::requestPlan() {
   v.dirty = true;
 }
 
-void Viewport::regeneratePlan() {
+void Viewport::regeneratePlan(bool standardPreview) {
   auto& v = *impl_;
   if (!v.ok) return;
   v.follow();
   if (v.job) v.job->cancel.cancel();
+  v.planWorkspace = std::make_shared<PlanWorkspace>();
+  v.standardPreview = standardPreview;
   v.previous.reset();
   v.previousModel.reset();
   v.directorJob.reset();
@@ -1011,6 +1608,85 @@ KeyList Viewport::bakeFlight(uint32_t piece) {
   return bakeFlightKeys(piece, v.keyScene, v.renderer->scene(), *v.model(), v.authoredTimeline, v.owners, v.fps());
 }
 
+KeyList Viewport::bakeFlightInScene(uint32_t piece, const KeyScene& scene) {
+  auto& v = *impl_;
+  v.follow();
+  if (!v.renderer || planState() != PlanState::Ready || !v.session->isLocalPiece(piece) ||
+      !scene.buildLinked || scene.fps <= 0 || scene.last < scene.first || scene.last > 20000 ||
+      !std::isfinite(scene.buildSpeed) || scene.buildSpeed <= 0) return {};
+  return bakeFlightKeys(piece, scene, v.renderer->scene(), *v.model(), v.authoredTimeline, v.owners, v.fps());
+}
+
+FlightPoseList Viewport::editedFlightRoute(uint32_t piece) {
+  auto& v = *impl_;
+  v.follow();
+  if (!v.renderer || !v.session->isLocalPiece(piece)) return {};
+  const auto tracks = readKeyTracks(v.session->impl());
+  const auto track = std::find_if(tracks.begin(), tracks.end(), [&](const auto& row) {
+    return row.object == piece && row.baked && row.members.size() == 1;
+  });
+  return track == tracks.end() ? FlightPoseList{} : flightRouteFromKeys(*track, v.renderer->scene(), *v.model());
+}
+
+FlightPath Viewport::flightPath(uint32_t piece) {
+  auto& v = *impl_;
+  v.follow();
+  if (!v.renderer || !v.model() || !v.session->isLocalPiece(piece)) return {};
+  const auto tracks = readKeyTracks(v.session->impl());
+  const auto track = std::find_if(tracks.begin(), tracks.end(), [&](const auto& row) {
+    return row.object == piece && row.baked && row.members.size() == 1;
+  });
+  return track == tracks.end() ? FlightPath{} : flightPathFromKeys(*track, v.renderer->scene(), *v.model());
+}
+
+Vec3 Viewport::dragFacingView(Vec3 through, double x0, double y0, double x1, double y1) const {
+  const auto& v = *impl_;
+  if (!v.renderer || v.width <= 0 || v.height <= 0) return {};
+  const bmr::Camera view = v.camera(v.renderer->scene().bounds);
+  const bm::Vec3 point{through.x, through.y, through.z}, normal = bm::normalized(view.target - view.eye);
+  const auto hit = [&](double x, double y) -> std::optional<bm::Vec3> {
+    const auto ray = bmr::screenRay(view, 2 * x * v.scale / v.width - 1, 1 - 2 * y * v.scale / v.height);
+    const double along = bm::dot(ray.dir, normal);
+    if (std::abs(along) < 1e-9) return std::nullopt;
+    const double t = bm::dot(point - ray.from, normal) / along;
+    if (!std::isfinite(t)) return std::nullopt;
+    return ray.from + ray.dir * t;
+  };
+  const auto a = hit(x0, y0), b = hit(x1, y1);
+  if (!a || !b) return {};
+  const bm::Vec3 d = *b - *a;
+  return {d.x, d.y, d.z};
+}
+
+FlightBake* Viewport::captureFlightBake(const PieceList& selected, bool detach) {
+  auto& v = *impl_;
+  v.follow();
+  if (!v.renderer || !v.model() || planState() != PlanState::Ready || v.model()->pieces().empty()) return nullptr;
+  PieceList pieces = selected;
+  if (detach) {
+    pieces.resize(v.model()->pieces().size());
+    std::iota(pieces.begin(), pieces.end(), 0);
+  } else {
+    std::sort(pieces.begin(), pieces.end());
+    pieces.erase(std::unique(pieces.begin(), pieces.end()), pieces.end());
+    if (pieces.empty() || pieces.back() >= v.model()->pieces().size()) return nullptr;
+  }
+  auto bake = std::make_unique<FlightBake::Impl>();
+  bake->detach = detach;
+  bake->scene = v.session->keyScene();
+  bake->buildFPS = v.fps();
+  if (pieces.size() <= 2000) {
+    bake->timeline = v.authoredTimeline;
+    for (const auto piece : pieces) {
+      const auto& modelPiece = v.model()->pieces()[piece];
+      const auto pivot = keyPivot(v.renderer->scene(), piece, modelPiece.world);
+      bake->targets.push_back({{}, {}, pivot, v.owners[piece]});
+    }
+  }
+  prepareBakeEdit(*bake, v.session->impl(), pieces);
+  return new FlightBake(std::move(bake));
+}
+
 MotionAudit* Viewport::auditMotion(uint32_t piece) {
   auto& v = *impl_;
   v.follow();
@@ -1040,8 +1716,9 @@ void Viewport::arrange(int step, AssemblyPreview mode) {
 PlaybackState Viewport::playbackState() const {
   const auto& v = *impl_;
   const auto state = planState();
+  const auto stage = v.job ? v.job->stage.load(std::memory_order_relaxed) : PlanStage::Waiting;
   return {seconds(), length(), v.playing, v.wantPlay && !v.playing, v.frame < 0,
-          v.stalePlan || (v.planned && state != PlanState::Ready), state, plannedVersion()};
+          v.stalePlan || (v.planned && state != PlanState::Ready), state, plannedVersion(), stage};
 }
 
 BuildTimeline Viewport::buildTimeline() const {
@@ -1063,6 +1740,51 @@ bool Viewport::canTurnWaitingPart(uint32_t piece) const {
   const auto& flight = v.authoredTimeline.flights[static_cast<size_t>(v.owners[piece])];
   return v.frame >= flight.appearFrame && v.frame < flight.startFrame &&
       bm::plan::piecesOf(flight, v.planned->plan).size() == 1 && canTurnOnFloor(flight);
+}
+
+bool Viewport::canMoveWaitingPart(uint32_t piece) const {
+  const auto& v = *impl_;
+  if (!v.planned || v.keyframes || v.playing || v.plannedVersion != v.session->version() ||
+      piece >= v.owners.size() || v.owners[piece] < 0) return false;
+  const auto& flight = v.authoredTimeline.flights[static_cast<size_t>(v.owners[piece])];
+  return v.frame >= flight.appearFrame && v.frame < flight.startFrame && bm::plan::piecesOf(flight, v.planned->plan).size() == 1;
+}
+
+bool Viewport::beginWaitingDrag(uint32_t piece, double x, double y) {
+  auto& v = *impl_;
+  v.follow();
+  v.waitingDrag.reset();
+  if (!canMoveWaitingPart(piece)) return false;
+  const size_t index = static_cast<size_t>(v.owners[piece]);
+  const auto& flight = v.authoredTimeline.flights[index];
+  const auto hold = v.onLevel(x, y, bm::plan::poseAt(flight, v.frame).t.y);
+  if (!hold) return false;
+  v.waitingDrag = Impl::WaitingDrag{index, flight.shift, *hold, {}};
+  return true;
+}
+
+Vec3 Viewport::dragWaitingPart(double x, double y) {
+  auto& v = *impl_;
+  if (!v.waitingDrag || v.waitingDrag->flight >= v.authoredTimeline.flights.size()) return {};
+  auto& drag = *v.waitingDrag;
+  if (const auto at = v.onLevel(x, y, drag.from.y)) {
+    drag.delta = {at->x - drag.from.x, 0, at->z - drag.from.z};
+    v.authoredTimeline.flights[drag.flight].shift = drag.base + drag.delta;
+    v.reshow();
+  }
+  return {drag.delta.x, drag.delta.y, drag.delta.z};
+}
+
+Vec3 Viewport::endWaitingDrag() {
+  auto& v = *impl_;
+  if (!v.waitingDrag) return {};
+  const auto drag = *v.waitingDrag;
+  v.waitingDrag.reset();
+  if (drag.flight < v.authoredTimeline.flights.size()) {
+    v.authoredTimeline.flights[drag.flight].shift = drag.base;  // the saved drag lays it on again
+    v.reshow();
+  }
+  return {drag.delta.x, drag.delta.y, drag.delta.z};
 }
 
 double Viewport::waitingTurnToMatch(uint32_t piece) const {

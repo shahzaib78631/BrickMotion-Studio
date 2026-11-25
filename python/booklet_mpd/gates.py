@@ -208,8 +208,8 @@ def camera_and_selection(set_number: str, select: bool = True) -> dict:
     all_cases = list(cases(set_number))
     for ci, case in enumerate(all_cases):
         base = case.visible if case.visible else []
-        prev_c = all_cases[ci - 1] if ci > 0 and all_cases[ci - 1].file == case.file else None
-        next_c = all_cases[ci + 1] if ci + 1 < len(all_cases) and all_cases[ci + 1].file == case.file else None
+        prev_c = all_cases[ci - 1] if ci > 0 and all_cases[ci - 1].file == case.file and all_cases[ci - 1].step_number == case.step_number - 1 else None
+        next_c = all_cases[ci + 1] if ci + 1 < len(all_cases) and all_cases[ci + 1].file == case.file and all_cases[ci + 1].step_number == case.step_number + 1 else None
         row = {"step": case.step_number, "parts": len(case.added), "base": len(base)}
         if case.rgb is None or not base:
             row["skip"] = "no picture" if case.rgb is None else "no base (frame free)"
@@ -235,6 +235,7 @@ def camera_and_selection(set_number: str, select: bool = True) -> dict:
                           collider=collider, subbuilds=case.subbuilds,
                           camera=(oracle.view, oracle.orientation_index, -1e9),
                           prev_rgb=prev_c.rgb if prev_c is not None else None,
+                          prev_pts=prev_c.pts_per_px if prev_c is not None else None,
                           next_rgb=next_c.rgb if next_c is not None else None,
                           next_pts=next_c.pts_per_px if next_c is not None else None)
                 placed = canonical(lib, r.placed, case.added)
@@ -295,41 +296,48 @@ def score_oracle(set_number: str, scorer=None) -> dict:
     from .solver.collide import Collider
     from .solver.dataset import cases
     from .solver.edges import NEAR_INK, ink_distance
+    from .solver.exact_place import score_candidates_calibrated
     from .solver.picture import Picture
-    from .solver.place import Scene, distinct, score_candidates
-    from .solver.register import Aligner
+    from .solver.place import distinct
+    from .solver.scorer import ModelScorer
     from .solver.step import MIN_ARROW_PIXELS, solve
     from .viewfit import BOOKLET_SCALE
     lib = load_library(str(ROOT / "public/ldraw"))
     collider = Collider(lib, use_oracle=True)
     rows = []
-    for case in cases(set_number):
+    all_cases = list(cases(set_number))
+    for ci, case in enumerate(all_cases):
         base = case.visible if case.visible else []
+        prev_c = all_cases[ci - 1] if ci > 0 and all_cases[ci - 1].file == case.file else None
         row = {"step": case.step_number, "parts": len(case.added)}
         if case.rgb is None or not base or not case.added:
             continue
         try:
             full = base + list(case.added)
-            oracle = solve(lib, full, [], case.rgb, case.pts_per_px, collider=collider)
             pic = Picture.from_rgb(case.rgb, case.pts_per_px, BOOKLET_SCALE / case.pts_per_px if case.pts_per_px else None)
             if int(pic.arrows.sum()) >= MIN_ARROW_PIXELS or case.subbuilds:
                 continue                                    # drawn apart: the true layout is not what is drawn
+            oracle = solve(lib, full, [], case.rgb, case.pts_per_px, collider=collider)
             codes = sorted({c for _p, c, _m in full})
             classes = pic.classes(codes)
             ink = ink_distance(pic.rgb)
             on_ink = ink <= NEAR_INK
             view = oracle.view
+            ms = ModelScorer(lib, list(base), pic, view, codes,
+                             prev_rgb=prev_c.rgb if prev_c is not None else None,
+                             prev_pts=prev_c.pts_per_px if prev_c is not None else None)
             if scorer is None:
-                score = lambda model: float(Aligner(lib, model, classes, codes, on_ink=on_ink).evaluate(view)[0])
+                score = lambda model: float(ms.score(model[len(base):]))
             else:
                 score = lambda model: float(scorer(lib, model, classes, codes, on_ink, view))
+            collider.set_model(list(base))
             alternatives = {}
             for i, (part, colour, _m) in enumerate(case.added):
-                others = base + [x for k, x in enumerate(case.added) if k != i]
-                scene = Scene.build(lib, others, view, classes, codes, ink)
-                scene.picture = pic
+                extra_o = [x for k, x in enumerate(case.added) if k != i]
+                others = list(base) + extra_o
                 cands = distinct(lib, part, candidates(lib, part, others))
-                scored = sorted(score_candidates(lib, scene, part, colour, cands, deltas=(0.0,)) if cands else [],
+                cands = [q for q in cands if not collider.hits_extra(part, q["matrix"], extra_o)]
+                scored = sorted(score_candidates_calibrated(lib, ms, extra_o, part, colour, cands, deltas=(0.0,)) if cands else [],
                                 key=lambda sc: -sc.score)
                 alternatives[i] = [np.asarray(sc.candidate["matrix"], float) for sc in scored[:SCORE_K]]
             row.update(one_move_check(score, base, list(case.added), alternatives))
@@ -359,14 +367,34 @@ def main(argv=None):
     if "4a" in want:
         from assembly_model.ldraw import load_library
         out["4a"] = gate_coverage(load_library(str(ROOT / "public/ldraw")), a.sets)
+    if "4s" in want:
+        from concurrent.futures import ProcessPoolExecutor
+        with ProcessPoolExecutor(max_workers=min(6, len(a.sets))) as ex:
+            res = list(ex.map(score_oracle, a.sets))
+        rows_4s = [r for s in res for r in s["rows"] if "error" not in r and "truth_best" in r]
+        p_tot = sum(r["parts"] for r in rows_4s)
+        p_ok = sum(sum(b == 0 for b in r["beaten"]) for r in rows_4s)
+        out["4s"] = {
+            "summary": {
+                "steps": len(rows_4s),
+                "steps_truth_best": sum(r["truth_best"] for r in rows_4s),
+                "step_share": sum(r["truth_best"] for r in rows_4s) / max(1, len(rows_4s)),
+                "parts": p_tot,
+                "parts_truth_best": p_ok,
+                "part_share": p_ok / max(1, p_tot),
+            },
+            "sets": res,
+        }
     OUT.mkdir(parents=True, exist_ok=True)
     path = OUT / f"gates-{'-'.join(want)}.json"
     path.write_text(json.dumps(out, indent=1, default=float))
-    short = {k: v for k, v in out.items() if k not in ("4a", "3+4b")}
+    short = {k: v for k, v in out.items() if k not in ("4a", "3+4b", "4s")}
     if "4a" in out:
         short["4a"] = {k: out["4a"][k] for k in ("sets", "primary", "any")}
     if "3+4b" in out:
         short["3+4b"] = out["3+4b"]["summary"]
+    if "4s" in out:
+        short["4s"] = out["4s"]["summary"]
     print(json.dumps(short, indent=1, default=float))
     print("saved", path)
 

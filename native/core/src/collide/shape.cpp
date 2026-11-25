@@ -1,6 +1,7 @@
 #include "bm/collide/shape.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <mutex>
 #include <numeric>
@@ -86,6 +87,45 @@ struct Builder {
 };
 
 uint64_t edgeKey(uint32_t a, uint32_t b) { return (static_cast<uint64_t>(std::min(a, b)) << 32) | std::max(a, b); }
+
+void buildInnerMetrics(Shape& shape) {
+  std::array<std::array<int, 3>, 14> directions{};
+  size_t count = 0;
+  for (int x = -1; x <= 1; ++x)
+    for (int y = -1; y <= 1; ++y)
+      for (int z = -1; z <= 1; ++z) {
+        const int axes = std::abs(x) + std::abs(y) + std::abs(z);
+        if (axes == 1 || axes == 3) directions[count++] = {x, y, z};
+      }
+  std::array<double, 14> best;
+  best.fill(-1e300);
+  std::array<Vec3, 14> extrema{};
+  for (size_t t = 0; t + 2 < shape.inner.size(); t += 3) {
+    const auto& a = shape.inner[t];
+    const auto& b = shape.inner[t + 1];
+    const bool usable = a.x != b.x || a.y != b.y || a.z != b.z;
+    for (size_t corner = 0; corner < 3; ++corner) {
+      const auto& v = shape.inner[t + corner];
+      shape.innerBounds.grow({v.x, v.y, v.z});
+      if (!usable) continue;
+      for (size_t d = 0; d < count; ++d) {
+        const auto& dir = directions[d];
+        const double reach = dir[0] * v.x + dir[1] * v.y + dir[2] * v.z;
+        if (reach > best[d]) {
+          best[d] = reach;
+          extrema[d] = {v.x, v.y, v.z};
+        }
+      }
+    }
+  }
+  for (size_t d = 0; d < count; ++d) {
+    if (best[d] == -1e300) continue;
+    const Vec3 point = extrema[d];
+    if (std::none_of(shape.innerProbes.begin(), shape.innerProbes.end(), [&](Vec3 have) {
+          return length(have - point) < 1e-6;
+        })) shape.innerProbes.push_back(point);
+  }
+}
 
 }  // namespace
 
@@ -216,6 +256,7 @@ Shape buildShape(const ldraw::Mesh& mesh) {
   shape.nodes.reserve(count);
   shape.nodes.emplace_back();
   b.build(0, 0, count);
+  buildInnerMetrics(shape);
   return shape;
 }
 

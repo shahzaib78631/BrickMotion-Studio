@@ -44,6 +44,13 @@ TEST_CASE("a box turned a quarter keeps its corners", "[math]") {
   REQUIRE_THAT(t.min.z, WithinAbs(-40, 1e-12));
   REQUIRE_THAT(t.max.z, WithinAbs(0, 1e-12));
   REQUIRE(Box{}.transformed(turnY90({1, 1, 1})).empty());
+
+  const Xform affine{Mat3{{-0.8, 0.3, 0.2, 0.7, -1.2, 0.1, -0.4, 0.6, 1.3}}, {-80, 30, 20}};
+  Box reference;
+  for (int i = 0; i < 8; ++i)
+    reference.grow(affine.apply({i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z}));
+  CHECK(b.transformed(affine).min == reference.min);
+  CHECK(b.transformed(affine).max == reference.max);
 }
 
 TEST_CASE("determinant sees a mirror", "[math]") {

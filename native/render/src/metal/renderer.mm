@@ -1,6 +1,8 @@
 #import "metal/impl.h"
 
+#include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <cmath>
 
 #include "bmr/device.h"
@@ -42,6 +44,21 @@ std::unique_ptr<Renderer> Renderer::create(const bm::Model& model, bm::ldraw::Pa
     d.usage = MTLTextureUsageShaderRead | MTLTextureUsageRenderTarget;
     d.storageMode = MTLStorageModePrivate;
     impl.placeholderShadow = [device->device newTextureWithDescriptor:d];
+    // Always bind valid 3D textures to the plastic fragment shader.
+    MTLTextureDescriptor* gi = [MTLTextureDescriptor new];
+    gi.textureType = MTLTextureType3D;
+    gi.pixelFormat = MTLPixelFormatRGBA16Float;
+    gi.width = 1;
+    gi.height = 1;
+    gi.depth = 1;
+    gi.mipmapLevelCount = 1;
+    gi.storageMode = MTLStorageModeShared;
+    gi.usage = MTLTextureUsageShaderRead;
+    impl.worldGiFallback = [device->device newTextureWithDescriptor:gi];
+    if (!impl.worldGiFallback) return nullptr;
+    const uint16_t black[4] = {0, 0, 0, 0};
+    [impl.worldGiFallback replaceRegion:MTLRegionMake3D(0, 0, 0, 1, 1, 1)
+                            mipmapLevel:0 slice:0 withBytes:black bytesPerRow:8 bytesPerImage:8];
     return r;
   }
 }
@@ -73,6 +90,7 @@ void Renderer::Impl::upload(const std::vector<std::pair<uint32_t, uint32_t>>& ch
   if (moved) {
     // First shown by the next frame drawn.
     lastChange = frame + 1;
+    ++worldGiEpoch;
     for (const auto& [g, i] : changed)
       if (g < changedAt.size() && i < changedAt[g].size()) changedAt[g][i] = lastChange;
   }
@@ -112,11 +130,12 @@ void Renderer::Impl::makeGroups(uint64_t madeAt) {
   }
 }
 
-void Renderer::Impl::groupsChanged() {
+void Renderer::Impl::groupsChanged(bool castersChanged) {
   @autoreleasepool {
-    // Every instance counts as changed by the next frame, so the shadow and height maps are
-    // drawn again; a map drawn over frames is begun again, its shares being of the old groups.
-    lastChange = frame + 1;
+    // Ready caster maps depend on geometry, not the colors of its opaque pieces. Restart any
+    // partial map because its remaining batches reference the earlier groups.
+    if (castersChanged) lastChange = frame + 1;
+    ++worldGiEpoch;
     makeGroups(lastChange);
     shadow.building = heights.building = false;
     shadow.back.detail = heights.back.detail = -1;
@@ -125,7 +144,7 @@ void Renderer::Impl::groupsChanged() {
     idsReady = false;
     glassRevision = UINT64_MAX;
   }
-  updateLiveBounds();
+  if (castersChanged) updateLiveBounds();
 }
 
 void Renderer::Impl::updateLiveBounds() {
@@ -153,8 +172,9 @@ bm::Box Renderer::selectionBounds() const {
   return b;
 }
 
-void Renderer::setFrame(const bm::plan::Plan& plan, const bm::plan::Timeline& timeline, double frame) {
-  const auto changed = applyFrame(impl_->scene, *impl_->model, plan, timeline, frame);
+void Renderer::setFrame(const bm::plan::Plan& plan, const bm::plan::Timeline& timeline, double frame,
+                        const std::vector<PiecePose>& keyed) {
+  const auto changed = applyFrame(impl_->scene, *impl_->model, plan, timeline, frame, keyed);
   if (changed.empty()) return;
   impl_->upload(changed);
   impl_->updateLiveBounds();
@@ -196,8 +216,8 @@ void Renderer::modelChanged(const bm::Model& model, const std::vector<uint32_t>*
 
 void Renderer::recolored(const std::vector<uint32_t>& pieces) {
   if (pieces.empty()) return;
-  applyRecolored(impl_->scene, *impl_->model, pieces);
-  impl_->groupsChanged();
+  const auto result = applyRecolored(impl_->scene, *impl_->model, pieces);
+  if (result != RecolorResult::Unchanged) impl_->groupsChanged(result == RecolorResult::Transparency);
 }
 
 void Renderer::modelDeleted(const bm::Model& model, const std::vector<uint32_t>& removed) {
@@ -305,7 +325,9 @@ void Renderer::Impl::drawIds() {
 }
 
 void Renderer::Impl::makeTargets() {
-  colorMs = depthMs = accumMs = revealMs = ambientMs = color = accum = reveal = ambient = depth = final = mask = aoRaw = aoSoft = nil;
+  colorMs = depthMs = accumMs = revealMs = ambientMs = color = accum = reveal = ambient = depth = final = mask = aoRaw = aoSoft = giRaw = giSoft = ssrRaw = ssrSoft = glassFront = glassMat = glassBackNear = glassBackFar = glassDepthTex = glassResolved = nil;
+  giHist[0] = giHist[1] = ssrHist[0] = ssrHist[1] = rtDepthHist[0] = rtDepthHist[1] = nil;
+  hybridHasHistory = false;
   if (width < 1 || height < 1) return;
   auto make = [&](MTLPixelFormat format, int samples, MTLTextureUsage usage, MTLStorageMode storage) {
     MTLTextureDescriptor* d = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:format width:static_cast<NSUInteger>(width) height:static_cast<NSUInteger>(height) mipmapped:NO];
@@ -324,6 +346,7 @@ void Renderer::Impl::makeTargets() {
   revealMs = make(kRevealFormat, kSamples, MTLTextureUsageRenderTarget, tile);
   ambientMs = make(kAmbientFormat, kSamples, MTLTextureUsageRenderTarget, tile);
   const MTLTextureUsage readable = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+  const MTLTextureUsage rw = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite;
   color = make(kColorFormat, 1, readable, MTLStorageModePrivate);
   accum = make(kAccumFormat, 1, readable, MTLStorageModePrivate);
   reveal = make(kRevealFormat, 1, readable, MTLStorageModePrivate);
@@ -331,13 +354,40 @@ void Renderer::Impl::makeTargets() {
   ambient = make(kAmbientFormat, 1, readable, MTLStorageModePrivate);
   depth = make(MTLPixelFormatDepth32Float, 1, readable, MTLStorageModePrivate);
   {
+    // The ambient-occlusion / GI / SSR grid: half size by default, quarter with BM_HYBRID_DIV=4.
+    if (const char* d = getenv("BM_HYBRID_DIV")) screenDiv = std::max(1, std::min(8, std::atoi(d)));
     const int fullW = width, fullH = height;
-    width = (fullW + 1) / 2, height = (fullH + 1) / 2;  // make() reads the size
+    width = (fullW + screenDiv - 1) / screenDiv, height = (fullH + screenDiv - 1) / screenDiv;  // make() reads the size
     aoRaw = make(MTLPixelFormatRGBA8Unorm, 1, readable, MTLStorageModePrivate);
     aoSoft = make(MTLPixelFormatRGBA8Unorm, 1, readable, MTLStorageModePrivate);
+    giRaw = make(MTLPixelFormatRGBA16Float, 1, rw, MTLStorageModePrivate);
+    giSoft = make(MTLPixelFormatRGBA16Float, 1, rw, MTLStorageModePrivate);
+    ssrRaw = make(MTLPixelFormatRGBA16Float, 1, rw, MTLStorageModePrivate);
+    ssrSoft = make(MTLPixelFormatRGBA16Float, 1, rw, MTLStorageModePrivate);
+    for (int i = 0; i < 2; i++) {
+      giHist[i] = make(MTLPixelFormatRGBA16Float, 1, rw, MTLStorageModePrivate);
+      ssrHist[i] = make(MTLPixelFormatRGBA16Float, 1, rw, MTLStorageModePrivate);
+      rtDepthHist[i] = make(MTLPixelFormatRGBA16Float, 1, rw, MTLStorageModePrivate);
+    }
     width = fullW, height = fullH;
   }
   final = make(MTLPixelFormatBGRA8Unorm_sRGB, 1, MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead, MTLStorageModeShared);
+}
+
+void Renderer::Impl::makeGlassTargets() {
+  auto make = [&](MTLPixelFormat format, MTLTextureUsage usage) {
+    MTLTextureDescriptor* descriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:format width:width height:height mipmapped:NO];
+    descriptor.usage = usage;
+    descriptor.storageMode = MTLStorageModePrivate;
+    return [device->device newTextureWithDescriptor:descriptor];
+  };
+  constexpr MTLTextureUsage readable = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+  glassFront = make(MTLPixelFormatRGBA16Float, readable);
+  glassMat = make(MTLPixelFormatRGBA16Float, readable);
+  glassBackNear = make(MTLPixelFormatRGBA16Float, readable);
+  glassBackFar = make(MTLPixelFormatRGBA16Float, readable);
+  glassDepthTex = make(MTLPixelFormatDepth32Float, MTLTextureUsageRenderTarget);
+  glassResolved = make(MTLPixelFormatRGBA16Float, readable | MTLTextureUsageShaderWrite);
 }
 
 void Renderer::resize(int width, int height) {

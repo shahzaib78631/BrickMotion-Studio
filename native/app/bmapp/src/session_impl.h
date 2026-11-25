@@ -44,6 +44,7 @@ struct Session::Impl {
   std::vector<std::string> focus;
   uint64_t version = 0;
   uint64_t planInputs = 0;  ///< changes only when geometry or assembly constraints move
+  uint64_t planTopology = 0;  ///< changes when a placement-only revision cannot recover the previous solve
 
   // View state.
   std::vector<uint32_t> selection, hidden;  ///< sorted, no repeats

@@ -150,15 +150,17 @@ struct MotionEditor: View {
   let step: Int
   let pieces: [UInt32]
   let title: String
+  let close: (() -> Void)?
   @State private var fields: bmapp.MotionFields
   @Environment(\.dismiss) private var dismiss
 
-  init(model: DocumentModel, scope: bmapp.MotionScope, step: Int, pieces: [UInt32], title: String) {
+  init(model: DocumentModel, scope: bmapp.MotionScope, step: Int, pieces: [UInt32], title: String, close: (() -> Void)? = nil) {
     self.model = model
     self.scope = scope
     self.step = step
     self.pieces = pieces
     self.title = title
+    self.close = close
     _fields = State(initialValue: model.document.session.motionFields(scope, step, ViewportView.list(pieces)))
   }
 
@@ -196,16 +198,20 @@ struct MotionEditor: View {
       Divider()
       HStack {
         Spacer()
-        Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+        Button("Cancel", action: finish).keyboardShortcut(.cancelAction)
         Button("Apply") {
           let applied = model.context.perform { $0.setMotionFields(scope, step, ViewportView.list(pieces), fields) }
-          if applied { dismiss() }
+          if applied { finish() }
         }
         .keyboardShortcut(.defaultAction)
       }
     }
     .padding(14)
     .frame(width: 325)
+  }
+
+  private func finish() {
+    if let close { close() } else { dismiss() }
   }
 
   private func valueRow(_ name: String, value: Binding<Double>, inherited: Double, range: ClosedRange<Double>,

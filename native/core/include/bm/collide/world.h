@@ -29,11 +29,26 @@ struct Report {
 /// - An exact duplicate is reported with `duplicate` set, without a surface test.
 Report findOverlaps(const Model& model, const connect::Graph& graph, ldraw::PartCache& parts, ShapeCache& shapes);
 
+/// Bounded, thread-safe reuse for identical pair sweeps and rest contacts across successive worlds.
+/// Keep it with the same shape cache, which owns the immutable geometry identities.
+class TravelCache {
+ public:
+  TravelCache();
+  ~TravelCache();
+  TravelCache(const TravelCache&) = delete;
+  TravelCache& operator=(const TravelCache&) = delete;
+
+ private:
+  friend class World;
+  struct State;
+  std::unique_ptr<State> state_;
+};
+
 /// A model's pieces, ready to be asked about one more shape. Read-only once built, so it
 /// can be queried from many threads.
 class World {
  public:
-  World(const Model& model, ldraw::PartCache& parts, ShapeCache& shapes);
+  World(const Model& model, ldraw::PartCache& parts, ShapeCache& shapes, TravelCache* travel = nullptr);
   ~World();
   World(const World&) = delete;
   World& operator=(const World&) = delete;

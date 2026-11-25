@@ -42,20 +42,24 @@ class View:
     scale: float = 1.0
     offset: tuple[float, float] = (0.0, 0.0)
     roll: float = 0.0
+    _matrix: np.ndarray = field(init=False, repr=False, compare=False)
 
-    @property
-    def matrix(self) -> np.ndarray:
+    def __post_init__(self):
         R = rotation(self.yaw, self.pitch) @ np.asarray(self.orientation, float)
         if self.roll:
             t = np.radians(self.roll)
             c, s = float(np.cos(t)), float(np.sin(t))
             Rz = np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
             R = Rz @ R
-        return R
+        object.__setattr__(self, "_matrix", np.ascontiguousarray(R, dtype=np.float64))
+
+    @property
+    def matrix(self) -> np.ndarray:
+        return self._matrix
 
     def project(self, points: np.ndarray) -> np.ndarray:
         """(N, 3) world points -> (N, 3) of (u, v, depth)."""
-        q = np.asarray(points, float) @ self.matrix.T
+        q = np.asarray(points, float) @ self._matrix.T
         out = np.empty_like(q)
         out[:, 0] = self.scale * q[:, 0] + self.offset[0]
         out[:, 1] = self.scale * q[:, 1] + self.offset[1]
@@ -64,7 +68,7 @@ class View:
 
     def shift(self, translation: np.ndarray) -> np.ndarray:
         """(du, dv, ddepth) caused by translating a part by `translation` (LDU)."""
-        q = self.matrix @ np.asarray(translation, float)
+        q = self._matrix @ np.asarray(translation, float)
         return np.array([self.scale * q[0], self.scale * q[1], q[2]])
 
     def replace(self, **changes) -> "View":
@@ -84,10 +88,14 @@ def rasterize(tris: np.ndarray, labels: np.ndarray, shape: tuple[int, int], chun
     """Z-buffer (T, 3, 3) screen-space triangles (u, v, depth) into (depth, label) images.
     Pixel (row i, column j) samples the point u=j, v=i. Empty pixels: depth inf, label -1."""
     h, w = shape
+    if not len(tris):
+        return np.full((h, w), np.inf), np.full((h, w), -1, np.int64)
+    from . import native_bridge
+    fast = native_bridge.rasterize_tris(tris, labels, shape)
+    if fast is not None:
+        return fast
     depth = np.full(h * w, np.inf)
     label = np.full(h * w, -1, np.int64)
-    if not len(tris):
-        return depth.reshape(h, w), label.reshape(h, w)
     u, v, d = tris[:, :, 0], tris[:, :, 1], tris[:, :, 2]
     area = (u[:, 1] - u[:, 0]) * (v[:, 2] - v[:, 0]) - (u[:, 2] - u[:, 0]) * (v[:, 1] - v[:, 0])
     x0 = np.clip(np.ceil(u.min(1)), 0, w).astype(np.int64)

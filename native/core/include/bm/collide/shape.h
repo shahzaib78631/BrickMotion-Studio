@@ -43,6 +43,8 @@ struct Shape {
   std::vector<Vec3f> inner;
   std::vector<Node> nodes;          ///< nodes[0] is the root; one box per surface; empty if no triangles
   Box bounds;                       ///< of the outer surface; empty if there are no triangles
+  Box innerBounds;
+  std::vector<Vec3> innerProbes;      ///< axial and diagonal extremes of the inner surface
 };
 
 /// Builds a part's shape. Two pieces interpenetrate when the inner surface of one crosses

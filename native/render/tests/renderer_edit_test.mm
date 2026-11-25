@@ -100,6 +100,23 @@ TEST_CASE("a recoloured picture is the freshly built one", "[gpu][render][edit]"
   CHECK(std::memcmp(edited.rgba.data(), want.rgba.data(), want.rgba.size()) == 0);
 }
 
+TEST_CASE("opaque recolour keeps a ready shadow map until transparency changes", "[gpu][render][edit]") {
+  NEED_GPU();
+  bmtest::GpuRig rig(three());
+  REQUIRE(rig.renderer);
+  auto options = bmtest::plainOptions();
+  options.shadows = true;
+  REQUIRE(rig.renderer->draw(rig.camera, options).shadowDrawn);
+  rig.model.setColor(1, 14);
+  rig.renderer->recolored({1});
+  const auto opaque = rig.renderer->draw(rig.camera, options);
+  CHECK(opaque.submitted);
+  CHECK_FALSE(opaque.shadowDrawn);
+  rig.model.setColor(1, 36);
+  rig.renderer->recolored({1});
+  CHECK(rig.renderer->draw(rig.camera, options).shadowDrawn);
+}
+
 TEST_CASE("a moved picture is the freshly built one", "[gpu][render][edit]") {
   NEED_GPU();
   bmtest::GpuRig rig(three());

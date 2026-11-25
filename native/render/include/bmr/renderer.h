@@ -20,6 +20,25 @@ struct FrameOptions {
   /// its scene is built again over all the model's triangles whenever a piece moves. Off, glass
   /// is the fast preview.
   bool refractiveGlass = false;
+  /// Screen-space colored indirect bounce (SSGI), glossy clearcoat reflections (SSR), and micro-contact shadows.
+  bool screenSpaceGi = false;
+  /// 60 FPS Hybrid Raster + Instanced Metal Hardware-RT (glass + half-res GI/reflections) + GPU Temporal SVGF.
+  bool hybridRt = false;
+  /// High-contrast Studio ABS plastic look: lineless beveled bricks, matched ABS plastic BRDF,
+  /// world-space 6-axis diffuse GI + studio visibility, full-res micro-AO stud collars, and
+  /// noise-free glass-only instanced RT (150+ FPS, no path tracing).
+  bool studioLook = false;
+  bool worldGi = false;
+  bool worldGiOcclusion = true;  ///< allow A/B of baked studio visibility without rebaking
+  bool plasticMatch = false;
+  /// Real-time physically-decoupled Metal Neural Shader: 3D multi-ring horizon/bent-normal feature
+  /// pyramid + threadgroup-SRAM spatial graph convolution + fused FP16 residual MLP with FiLM
+  /// light-rig conditioning and full-res joint-bilateral BRDF demodulation (60+ FPS on M1).
+  bool neuralShader = false;
+  /// Live progressive hardware-RT path tracing (exact bmexport quality, converging over frames with Metal OIDN).
+  bool pathTraced = false;
+  int pathMaxSamples = 64;
+  int pathSamplesPerFrame = 2;
   bool cull = true;      ///< leave out what is not in view
   bool lightsFollowCamera = false;  ///< the light rig stays fixed to the model, as EyeSight's BUILD_FL does, or turns with the camera's heading
   bool clay = false, wireframe = false;
@@ -32,6 +51,10 @@ struct FrameOptions {
   /// tolerances.h kMapTrianglesPerFrame). FrameStats::settling says when to draw again.
   uint64_t mapTrianglesPerFrame = 0;
   float background[3] = {1, 1, 1};  ///< linear
+  /// Depth of field (a Camera track's focus and blur, the web's depthOfField.ts): the largest
+  /// blur radius as a share of the frame's height (0 is off; the web's strongest is 18 / 1080),
+  /// and the distance in focus, LDU from the eye along the view. Not applied when path traced.
+  double lensBlur = 0, focusDistance = 0;
 };
 
 struct FrameStats {
@@ -45,6 +68,15 @@ struct FrameStats {
   bool submitted = false;            ///< the frame went to the GPU: false with nothing to draw into (no size, or a drawable that has not caught up with a resize)
   bool mapWhole = false;             ///< a shadow or height map was drawn whole before this frame (not over frames)
   bool settling = false;             ///< a map is being drawn over frames (FrameOptions::mapTrianglesPerFrame): draw again, even with nothing changed
+  uint32_t pathSamples = 0;          ///< accumulated path-traced samples when FrameOptions::pathTraced is active
+  bool worldGiReady = false;         ///< a populated world-space diffuse light cache is being sampled
+  bool worldGiBaking = false;        ///< the CPU cache job is still running
+};
+
+struct PlacementGhost {
+  std::string part;
+  int color;
+  bm::Xform pose;
 };
 
 class Renderer {
@@ -72,7 +104,8 @@ class Renderer {
 
   /// Poses the pieces as the timeline has them at `frame` (clamped to the timeline); only the
   /// instances that change are sent to the GPU. The plan and timeline are read, not kept.
-  void setFrame(const bm::plan::Plan& plan, const bm::plan::Timeline& timeline, double frame);
+  void setFrame(const bm::plan::Plan& plan, const bm::plan::Timeline& timeline, double frame,
+                const std::vector<PiecePose>& keyed = {});
   /// Every piece back where the model has it, shown.
   void setRest();
   /// The model changed. With `moved` and the same piece count, only those instances are
@@ -95,6 +128,9 @@ class Renderer {
   /// Exactly these pieces are selected (outlined in the accent colour, even where hidden
   /// behind others). Unknown pieces are ignored.
   void select(const std::vector<uint32_t>& pieces);
+  /// Transient placement geometry is excluded from picking, framing and shadow maps.
+  void setPlacementPreview(const std::vector<PlacementGhost>& ghosts, bool refused);
+  void clearPlacementPreview();
   /// World space: the selected pieces where they are shown now (as the last setFrame or
   /// setRest put them), hidden ones left out. Empty when none is shown.
   bm::Box selectionBounds() const;

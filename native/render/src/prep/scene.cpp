@@ -103,7 +103,9 @@ std::vector<std::pair<uint32_t, uint32_t>> applyRest(Scene& scene, const bm::Mod
   return changed;
 }
 
-std::vector<std::pair<uint32_t, uint32_t>> applyFrame(Scene& scene, const bm::Model& model, const bm::plan::Plan& plan, const bm::plan::Timeline& timeline, double frame) {
+std::vector<std::pair<uint32_t, uint32_t>> applyFrame(Scene& scene, const bm::Model& model, const bm::plan::Plan& plan,
+                                                     const bm::plan::Timeline& timeline, double frame,
+                                                     const std::vector<PiecePose>& keyed) {
   const auto& pieces = model.pieces();
   const size_t n = std::min(pieces.size(), scene.where.size());
   // Where each piece is: at rest unless a flight says otherwise.
@@ -127,6 +129,11 @@ std::vector<std::pair<uint32_t, uint32_t>> applyFrame(Scene& scene, const bm::Mo
     if (!known[fi]) motion[fi] = bm::plan::motionAt(timeline, fi, frame), known[fi] = 1;
     if (!bm::plan::shownAt(flight, frame)) hidden[i] = 1;
     pose[i] = motion[fi] * pieces[i].world;
+  }
+  for (const auto& override : keyed) {
+    if (override.piece >= n || !usable(override.world)) continue;
+    pose[override.piece] = override.world;
+    hidden[override.piece] = override.hidden;
   }
   std::vector<std::pair<uint32_t, uint32_t>> changed;
   for (uint32_t i = 0; i < n; i++) {
@@ -177,8 +184,9 @@ std::vector<std::pair<uint32_t, uint32_t>> applyMoved(Scene& scene, const bm::Mo
   return changed;
 }
 
-void applyRecolored(Scene& scene, const bm::Model& model, const std::vector<uint32_t>& pieces) {
+RecolorResult applyRecolored(Scene& scene, const bm::Model& model, const std::vector<uint32_t>& pieces) {
   const auto& all = model.pieces();
+  auto result = RecolorResult::Unchanged;
   for (uint32_t p : pieces) {
     if (p >= all.size() || p >= scene.where.size() || scene.where[p].first == UINT32_MAX) continue;
     const auto [from, at] = scene.where[p];
@@ -188,6 +196,8 @@ void applyRecolored(Scene& scene, const bm::Model& model, const std::vector<uint
     const std::string part = scene.groups[from].part;
     const bm::Box partBox = scene.groups[from].partBox;
     const Material material = placeholder ? placeholderMaterial() : materialFor(colorFor(model.library(), color));
+    if (scene.groups[from].material.transparent() || material.transparent()) result = RecolorResult::Transparency;
+    else if (result == RecolorResult::Unchanged) result = RecolorResult::OpaqueColors;
     // Its new group, made at the end of its run when there is none.
     uint32_t to = UINT32_MAX;
     for (uint32_t g = 0; g < scene.groups.size(); g++)
@@ -223,6 +233,7 @@ void applyRecolored(Scene& scene, const bm::Model& model, const std::vector<uint
     target.instances.push_back(moved);
     target.restBoxes.push_back(box);
   }
+  return result;
 }
 
 }  // namespace bmr

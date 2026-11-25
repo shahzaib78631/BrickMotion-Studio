@@ -8,6 +8,7 @@ final class WindowController: NSWindowController, NSToolbarDelegate {
   private static let paletteItem = NSToolbarItem.Identifier("palette")
   private static let navigatorDivider = NSToolbarItem.Identifier("navigatorDivider")
   private static let inspectorDivider = NSToolbarItem.Identifier("inspectorDivider")
+  private static let defaultTimelineHeight: CGFloat = 268
   private var toolGroup: NSToolbarItemGroup?
   private var modeGroup: NSToolbarItemGroup?
   private let split = NSSplitViewController()
@@ -73,14 +74,17 @@ final class WindowController: NSWindowController, NSToolbarDelegate {
     split.splitViewItems = [sidebar, content, inspector]
     workspaceSplit.splitView.isVertical = false
     let editor = NSSplitViewItem(viewController: split)
-    editor.minimumThickness = 310
+    editor.minimumThickness = 230
     editor.holdingPriority = .defaultLow
-    let timeline = NSHostingController(rootView: AnimationTimeline(model: model, workspace: model.animation))
+    let timeline = NSHostingController(rootView: AnimationTimeline(
+      model: model, workspace: model.animation,
+      height: { [weak self] in self?.timelineHeight ?? Self.defaultTimelineHeight },
+      resize: { [weak self] in self?.resizeTimeline(to: $0) },
+      saveHeight: { [weak self] in self?.saveTimelineHeight() },
+      resetHeight: { [weak self] in self?.resizeTimeline(to: Self.defaultTimelineHeight); self?.saveTimelineHeight() }))
     timeline.sizingOptions = []
     timelineItem = NSSplitViewItem(viewController: timeline)
     timelineItem.minimumThickness = 168
-    timelineItem.maximumThickness = 410
-    timelineItem.automaticMaximumThickness = 236
     timelineItem.preferredThicknessFraction = 0.26
     timelineItem.canCollapse = true
     timelineItem.isCollapsed = true
@@ -90,6 +94,12 @@ final class WindowController: NSWindowController, NSToolbarDelegate {
   /// The panes' views, for --snapshot's report.
   var sidebarView: NSView? { split.splitViewItems.first?.viewController.view }
   var inspectorView: NSView? { split.splitViewItems.last?.viewController.view }
+
+  /// Opens the inspector, if it is collapsed, on `tab`.
+  func showInspector(tab: InspectorTab) {
+    model.inspectorTab = tab
+    if let item = split.splitViewItems.last, item.isCollapsed { item.animator().isCollapsed = false }
+  }
   var timelineView: NSView? { timelineItem.isCollapsed ? nil : timelineItem.viewController.view }
 
   /// The centre pane.
@@ -97,29 +107,44 @@ final class WindowController: NSWindowController, NSToolbarDelegate {
 
   var isAnimating: Bool { !timelineItem.isCollapsed }
 
+  var timelineHeight: CGFloat { timelineItem.viewController.view.frame.height }
+  private var timelineResizeRequest = 0
+
+  func resizeTimeline(to proposed: CGFloat) {
+    guard isAnimating else { return }
+    timelineResizeRequest &+= 1
+    let view = workspaceSplit.splitView
+    view.layoutSubtreeIfNeeded()
+    let top = workspaceSplit.splitViewItems[0].minimumThickness
+    let available = view.bounds.height - view.dividerThickness
+    let limit = max(timelineItem.minimumThickness, available - top)
+    let height = min(limit, max(timelineItem.minimumThickness, proposed))
+    view.setPosition(view.isFlipped ? available - height : height, ofDividerAt: 0)
+  }
+
+  private func saveTimelineHeight() {
+    if timelineHeight >= timelineItem.minimumThickness {
+      UserDefaults.standard.set(Double(timelineHeight), forKey: "BrickMotionTimelineHeight")
+    }
+  }
+
   func setAnimateMode(_ animate: Bool, plan: Bool = true) {
     guard animate != isAnimating else { return }
-    let previousHeight = timelineItem.viewController.view.bounds.height
+    if !animate { saveTimelineHeight() }
     modeGroup?.selectedIndex = animate ? 1 : 0
     model.animation.visible = animate
     timelineItem.isCollapsed = !animate
     if animate {
+      let request = timelineResizeRequest
       Task { @MainActor [weak self] in
-        guard let self, self.isAnimating else { return }
-        let view = self.workspaceSplit.splitView
-        view.layoutSubtreeIfNeeded()
+        guard let self, self.isAnimating, self.timelineResizeRequest == request else { return }
         let saved = UserDefaults.standard.double(forKey: "BrickMotionTimelineHeight")
-        let proposed = saved > 0 ? saved : 225
-        let size = min(CGFloat(proposed), max(self.timelineItem.minimumThickness, view.bounds.height - 310))
-        view.setPosition(view.isFlipped ? view.bounds.height - size : size, ofDividerAt: 0)
+        self.resizeTimeline(to: saved > 0 ? CGFloat(saved) : Self.defaultTimelineHeight)
       }
       model.animation.viewport?.viewport.useKeyframes(model.animation.tab == .timeline)
       viewportController.viewportView.placement.cancel()
       if plan, EditorPreferences.shared.autoPlan { model.animation.plan() }
     } else {
-      if previousHeight >= timelineItem.minimumThickness {
-        UserDefaults.standard.set(Double(previousHeight), forKey: "BrickMotionTimelineHeight")
-      }
       model.animation.viewport?.viewport.useKeyframes(false)
       model.animation.rest()
       if model.inspectorTab == .camera { model.inspectorTab = model.snapshot.selection.count == 1 ? .part : .selection }
@@ -128,13 +153,18 @@ final class WindowController: NSWindowController, NSToolbarDelegate {
 
   // MARK: Editing when a pane has the keyboard
 
-  /// Cut, copy, paste, delete and select all reach the viewport when no text field takes them,
-  /// whichever pane has the keyboard.
+  /// Forward ordinary editing commands from panes that share the model selection.
   override func supplementalTarget(forAction action: Selector, sender: Any?) -> Any? {
     let viewport = viewportController.viewportView
     let forwarded: [Selector] = [#selector(NSText.cut(_:)), #selector(NSText.copy(_:)), #selector(NSText.paste(_:)),
                                  #selector(NSText.delete(_:)), #selector(NSText.selectAll(_:))]
-    if forwarded.contains(action) && viewport.responds(to: action) { return viewport }
+    if forwarded.contains(action) && viewport.responds(to: action) {
+      if model.animation.isKeyEditing, let responder = window?.firstResponder as? NSView,
+         let timeline = timelineItem?.viewController.view, responder === timeline || responder.isDescendant(of: timeline) {
+        return nil
+      }
+      return viewport
+    }
     return super.supplementalTarget(forAction: action, sender: sender)
   }
 

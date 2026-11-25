@@ -9,9 +9,10 @@
 struct AoUniforms {
   float4 lens;   // tan of half the angle of view up and across, near, far
   float4 shape;  // radius (LDU), bias (cosine), strength, full-size width
-  float4 size;   // full-size height, half width, half height, unused
+  float4 size;   // full-size height, grid width, grid height, unused (ortho depth when > 0.5)
   float4 samplePosition; // location of the resolved MSAA depth sample within its pixel
   float4 eye, right, up, forward;  // the camera in world space (xyz), to carry view-space points there
+  float4 grid;   // x: the grid's stride over the full-size pixels (2: half, 4: quarter)
 };
 
 // View-space depth (positive, LDU) from reversed depth.
@@ -36,16 +37,9 @@ fragment float4 aoFragment(ScreenOut in [[stage_in]], constant AoUniforms& u [[b
                            depth2d<float> depth [[texture(0)]], depth2d<float> shadowMap [[texture(1)]], texture2d<float> heights [[texture(2)]], texture2d<float> shares [[texture(3)]],
                            sampler shadowSampler [[sampler(1)]]) {
   int2 cell = int2(in.position.xy);
-  int2 at = cell * 2;
+  int2 at = cell * int(u.grid.x);
   float4 p = viewPoint(depth, at, u);
   if (p.w == 0) return float4(1, 1, 0, 0);
-  // The surface's normal from its neighbours, each side taking the nearer in depth so a silhouette does not bend it.
-  float4 l = viewPoint(depth, at - int2(1, 0), u), r = viewPoint(depth, at + int2(1, 0), u);
-  float4 t = viewPoint(depth, at - int2(0, 1), u), b = viewPoint(depth, at + int2(0, 1), u);
-  float3 dx = (r.w > 0 && (l.w == 0 || abs(r.z - p.z) < abs(l.z - p.z))) ? r.xyz - p.xyz : p.xyz - l.xyz;
-  float3 dy = (b.w > 0 && (t.w == 0 || abs(b.z - p.z) < abs(t.z - p.z))) ? p.xyz - b.xyz : t.xyz - p.xyz;
-  float3 n = normalize(cross(dx, dy));
-  if (dot(n, -p.xyz) < 0) n = -n;
   float3 world = u.eye.xyz + u.right.xyz * p.x + u.up.xyz * p.y - u.forward.xyz * p.z;
   // The floor: its whole light, from the height map over the model (floor_light.metal), in r.
   // A floor pixel is one the floor drew (shares.a) whose point is on the floor's plane, not a
@@ -58,6 +52,13 @@ fragment float4 aoFragment(ScreenOut in [[stage_in]], constant AoUniforms& u [[b
     if (frame.floorLook.z < 0.5 || fade <= 0.0) return float4(1, 1, 1, 1);
     return float4(mix(1.0, floorLight(world, frame, bins, heights, uint2(cell), frame.switches.y > 0.5, frame.switches.x > 0.5), fade), 1, 1, 1);
   }
+  // Only the model needs a surface normal. Use closer neighbours on each side of a silhouette.
+  float4 l = viewPoint(depth, at - int2(1, 0), u), r = viewPoint(depth, at + int2(1, 0), u);
+  float4 t = viewPoint(depth, at - int2(0, 1), u), b = viewPoint(depth, at + int2(0, 1), u);
+  float3 dx = (r.w > 0 && (l.w == 0 || abs(r.z - p.z) < abs(l.z - p.z))) ? r.xyz - p.xyz : p.xyz - l.xyz;
+  float3 dy = (b.w > 0 && (t.w == 0 || abs(b.z - p.z) < abs(t.z - p.z))) ? p.xyz - b.xyz : t.xyz - p.xyz;
+  float3 n = normalize(cross(dx, dy));
+  if (dot(n, -p.xyz) < 0) n = -n;
   float lit = 1.0;
   if (frame.switches.x > 0.5) {
     float3 worldNormal = normalize(u.right.xyz * n.x + u.up.xyz * n.y - u.forward.xyz * n.z);
@@ -103,21 +104,32 @@ fragment float4 aoBlurFragment(ScreenOut in [[stage_in]], constant AoUniforms& u
   int2 cell = int2(in.position.xy);
   int2 halfSize = int2(u.size.y, u.size.z);
   int2 fullSize = int2(u.shape.w, u.size.x);
-  float centre = depth.read(uint2(clamp(cell * 2, int2(0), fullSize - 1)));
+  float centre = depth.read(uint2(clamp(cell * int(u.grid.x), int2(0), fullSize - 1)));
   if (centre <= 0.0) return float4(1, 1, 0, 0);
-  float z = viewDepth(centre, u);
   float4 source = ao.read(uint2(cell));
   bool onFloor = source.b > 0.5;
+  // Floor samples all have green = 1. If their red channel is fully lit,
+  // bilateral weighting cannot change the result. Check the four 2-by-2
+  // blocks of the blur footprint without fetching their depths.
+  if (onFloor && source.r == 1.0) {
+    constexpr sampler edge(address::clamp_to_edge, filter::linear);
+    float2 scale = 1.0 / float2(halfSize);
+    if (all(ao.gather(edge, float2(cell + int2(-1, -1)) * scale) == 1.0) &&
+        all(ao.gather(edge, float2(cell + int2( 1, -1)) * scale) == 1.0) &&
+        all(ao.gather(edge, float2(cell + int2(-1,  1)) * scale) == 1.0) &&
+        all(ao.gather(edge, float2(cell + int2( 1,  1)) * scale) == 1.0)) return source;
+  }
+  float z = viewDepth(centre, u);
   float2 sum = 0;
   float weight = 0;
   for (int y = -2; y < 2; y++)
     for (int x = -2; x < 2; x++) {
       int2 q = clamp(cell + int2(x, y), int2(0), halfSize - 1);
-      float d = depth.read(uint2(clamp(q * 2, int2(0), fullSize - 1)));
+      float d = depth.read(uint2(clamp(q * int(u.grid.x), int2(0), fullSize - 1)));
       float4 sample = ao.read(uint2(q));
       bool same = sample.a > 0.5 && (sample.b > 0.5) == onFloor;
       float w = d > 0.0 && same ? exp(-abs(viewDepth(d, u) - z) / (0.02 * z)) : 0.0;
-      sum += ao.read(uint2(q)).rg * w;
+      sum += sample.rg * w;
       weight += w;
     }
   return float4(weight > 0 ? sum / weight : source.rg, source.ba);

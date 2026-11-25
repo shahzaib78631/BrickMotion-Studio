@@ -24,6 +24,7 @@ final class GizmoLayer: CALayer {
 
   /// Draws `shape`, or nothing; `appearance` resolves the system colours.
   func show(_ shape: bmapp.GizmoShape?, hovered: bmapp.Handle, scale: CGFloat, appearance: NSAppearance, squareTips: Bool = false) {
+    if shape == nil && sublayers?.isEmpty != false { return }
     CATransaction.begin()
     CATransaction.setDisableActions(true)
     defer { CATransaction.commit() }

@@ -41,6 +41,8 @@ add_dependencies(BrickMotion bmexport BrickMotionThumbnails)
 add_custom_command(TARGET BrickMotion POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_CONTENT_DIR:BrickMotion>/Helpers"
   COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:bmexport>" "$<TARGET_BUNDLE_CONTENT_DIR:BrickMotion>/Helpers/bmexport"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/../public/sounds/snaps" "$<TARGET_BUNDLE_CONTENT_DIR:BrickMotion>/Resources/SnapSounds"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/../public/data/suggest/habits.json" "$<TARGET_BUNDLE_CONTENT_DIR:BrickMotion>/Resources/Suggest/habits.json"
   COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_CONTENT_DIR:BrickMotion>/PlugIns"
   COMMAND ${CMAKE_COMMAND} -E copy_directory "$<TARGET_BUNDLE_DIR:BrickMotionThumbnails>" "$<TARGET_BUNDLE_CONTENT_DIR:BrickMotion>/PlugIns/BrickMotionThumbnails.appex")
 
@@ -49,9 +51,13 @@ add_test(NAME brickmotion_selftest_bridge
   COMMAND $<TARGET_FILE:BrickMotion> --selftest-bridge ${CMAKE_SOURCE_DIR}/../samples/helicopter/helicopter.mpd)
 add_test(NAME brickmotion_selftest_edit COMMAND $<TARGET_FILE:BrickMotion> --selftest-edit ${CMAKE_SOURCE_DIR}/../samples/helicopter/helicopter.mpd)
 add_test(NAME brickmotion_selftest_panes COMMAND $<TARGET_FILE:BrickMotion> --selftest-panes ${CMAKE_SOURCE_DIR}/../samples/helicopter/helicopter.mpd)
+add_test(NAME brickmotion_selftest_motion COMMAND $<TARGET_FILE:BrickMotion> --selftest-motion ${CMAKE_SOURCE_DIR}/../samples/helicopter/helicopter.mpd)
 add_test(NAME brickmotion_selftest_placement COMMAND $<TARGET_FILE:BrickMotion> --selftest-placement)
 add_test(NAME brickmotion_import_check COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/import_check.sh $<TARGET_FILE:BrickMotion>)
 add_test(NAME brickmotion_check_plist COMMAND $<TARGET_FILE:BrickMotion> --check-plist)
 add_test(NAME brickmotion_snapshot
   COMMAND swift ${CMAKE_CURRENT_SOURCE_DIR}/tests/snapshot_check.swift $<TARGET_FILE:BrickMotion>
           ${CMAKE_SOURCE_DIR}/../samples/helicopter/helicopter.mpd ${CMAKE_CURRENT_BINARY_DIR})
+add_test(NAME brickmotion_movie_export
+  COMMAND swift ${CMAKE_CURRENT_SOURCE_DIR}/tests/movie_export_check.swift $<TARGET_FILE:BrickMotion>)
+add_test(NAME brickmotion_selftest_render_queue COMMAND $<TARGET_FILE:BrickMotion> --selftest-render-queue)

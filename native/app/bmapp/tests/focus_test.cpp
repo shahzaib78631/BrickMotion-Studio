@@ -61,3 +61,18 @@ TEST_CASE("commands act on the focused model", "[bmapp][focus]") {
   s.focus({});
   CHECK(s.pieceCount() == 9);  // both uses show the pasted piece
 }
+
+TEST_CASE("an unused definition can be opened and edited on its own", "[bmapp][focus]") {
+  bmapp::Session s;
+  REQUIRE(s.open(fixture().string()).ok);
+  const auto assemblyCount = s.pieceCount();
+  REQUIRE(s.newSubmodel("Spare").refused.empty());
+  s.focus({"Spare"});
+  CHECK(s.focusPath() == bmapp::StringList{"Spare"});
+  REQUIRE(s.pieceCount() == 0);
+  REQUIRE(s.paste("1 4 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n", {}).structure);
+  CHECK(s.pieceCount() == 1);
+  s.focus({});
+  CHECK(s.pieceCount() == assemblyCount);
+  REQUIRE(plan(s)["submodels"]["Spare"]["steps"][0]["pieces"].size() == 1);
+}

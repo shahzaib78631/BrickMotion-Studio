@@ -1,6 +1,7 @@
 #include "bm/plan/timeline.h"
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <fstream>
 #include <functional>
@@ -11,6 +12,43 @@
 #include "bm/plan/tolerances.h"
 
 namespace bm::plan {
+
+struct FlightCheckCache::State {
+  struct Hash {
+    size_t operator()(const std::vector<uint64_t>& values) const {
+      uint64_t hash = 0xcbf29ce484222325ull;
+      for (auto value : values) hash = (hash ^ value) * 0x100000001b3ull;
+      return static_cast<size_t>(hash);
+    }
+  };
+  std::unordered_map<std::vector<uint64_t>, bool, Hash> checked;
+  size_t words = 0, reused = 0;
+};
+
+FlightCheckCache::FlightCheckCache() : state_(std::make_unique<State>()) {}
+FlightCheckCache::~FlightCheckCache() = default;
+size_t FlightCheckCache::hits() const { return state_->reused; }
+
+bool FlightCheckCache::validate(std::vector<uint64_t> input, const std::function<bool()>& check, const CancelToken* cancel) {
+  if (cancel && cancel->cancelled()) return false;
+  auto& state = *state_;
+  if (const auto found = state.checked.find(input); found != state.checked.end()) {
+    ++state.reused;
+    return found->second;
+  }
+  const bool clear = check();
+  if (cancel && cancel->cancelled()) return false;
+  constexpr size_t maxWords = 2'000'000;
+  if (input.size() <= maxWords && state.words + input.size() > maxWords) {
+    state.checked.clear();
+    state.words = 0;
+  }
+  if (input.size() <= maxWords) {
+    state.words += input.size();
+    state.checked.emplace(std::move(input), clear);
+  }
+  return clear;
+}
 
 double eased(Ease e, double u) {
   u = std::clamp(u, 0.0, 1.0);
@@ -263,7 +301,9 @@ struct Node {
 }  // namespace
 
 Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& plan, const Style& style, Vec3 down,
-                       connect::ConnectorDb* connectors, connect::Graph* graph) {
+                       connect::ConnectorDb* connectors, connect::Graph* graph, collide::ShapeCache* sharedShapes,
+                       const CancelToken* cancel, FlightCheckCache* previousChecks, collide::TravelCache* sharedTravel) {
+  if (cancel && cancel->cancelled()) return {};
   // The web's own planner, ported as it is. It needs the connector data to choose each way in;
   // without it there is nothing to reproduce, so the native planner answers instead.
   if (style.planner == Planner::Legacy && connectors && graph) return legacy::buildLegacyTimeline(model, parts, *connectors, *graph, plan, style, down);
@@ -532,8 +572,8 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
   }
 
   // --- 3. each flight's way through the air, in play order, round what stands then ---
-  collide::ShapeCache shapes;
-  const collide::World world(model, parts, shapes);
+  collide::ShapeCache localShapes;
+  const collide::World world(model, parts, sharedShapes ? *sharedShapes : localShapes, sharedShapes ? sharedTravel : nullptr);
   scene.min = scene.min - Vec3{400, 400, 400}, scene.max = scene.max + Vec3{400, 400, 400};
   Grid built, temp;  // into the model, and everything else (the floor, units on their spots)
   built.shape(scene), temp.shape(scene);
@@ -597,6 +637,7 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
   }
   // Each flight's timing in seconds first, then laid out in frames.
   for (size_t i = 0; i < count; i++) {
+    if (cancel && cancel->cancelled()) return {};
     Node& nd = nodes[i];
     Flight& f = nd.f;
     const Move& m = nd.plan->moves[nd.mi];
@@ -797,73 +838,35 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
         uint32_t piece;
         Xform pose;
       };
+      struct ProbeObstacle {
+        const NearObstacle* obstacle;
+        double first, last;
+      };
       std::vector<NearObstacle> nearBuilt, nearTemp;
-      auto clearAt = [&](const Flight& trial, double s, double u, bool checkBuilt, collide::Depth depth) {
-        if (nearBuilt.empty() && nearTemp.empty()) return true;
-        // Quick sphere-box reject around the pivot position at s before transforming every piece.
-        const size_t k = std::min<size_t>(trial.route.size() - 2,
-          static_cast<size_t>(std::max<std::ptrdiff_t>(0, std::upper_bound(trial.routeAt.begin(), trial.routeAt.end(), s) - trial.routeAt.begin() - 1)));
-        const double span = trial.routeAt[k + 1] - trial.routeAt[k], w = span > 0 ? std::clamp((s - trial.routeAt[k]) / span, 0.0, 1.0) : 1;
-        const Vec3 c = trial.route[k] + (trial.route[k + 1] - trial.route[k]) * w;
-        const Box sphere{c - Vec3{unitRadius, unitRadius, unitRadius}, c + Vec3{unitRadius, unitRadius, unitRadius}};
-        bool anyBuilt = false, anyTemp = false;
-        if (checkBuilt)
-          for (const NearObstacle& o : nearBuilt) {
-            if (o.box.min.x > sphere.max.x) break;
-            if (sphere.min.x <= o.box.max.x && o.box.min.y <= sphere.max.y && sphere.min.y <= o.box.max.y && o.box.min.z <= sphere.max.z && sphere.min.z <= o.box.max.z) {
-              anyBuilt = true;
-              break;
-            }
-          }
-        for (const NearObstacle& o : nearTemp) {
-          if (o.box.min.x > sphere.max.x) break;
-          if (sphere.min.x <= o.box.max.x && o.box.min.y <= sphere.max.y && sphere.min.y <= o.box.max.y && o.box.min.z <= sphere.max.z && sphere.min.z <= o.box.max.z) {
-            anyTemp = true;
-            break;
-          }
-        }
-        if (!anyBuilt && !anyTemp) return true;
-        const Xform motion = routeMotion(trial, s, u);
+      auto clearAt = [&](Vec3 c, double u, double s, const std::vector<ProbeObstacle>& obstacles, collide::Depth depth) {
+        const Mat3 rotation = !turning || u >= 1 ? Mat3{} : u <= 0 ? r0 : matOf(towardsNone(q0, u));
+        const Xform motion{rotation, c - rotation * seatPivot};
+        const Xform placement = motion * carry;
+        const auto reaches = [&](const ProbeObstacle& candidate, const Box& bounds) {
+          if (s < candidate.first || s > candidate.last) return false;
+          const Box& other = candidate.obstacle->box;
+          return other.min.x <= bounds.max.x && bounds.min.x <= other.max.x &&
+                 other.min.y <= bounds.max.y && bounds.min.y <= other.max.y &&
+                 other.min.z <= bounds.max.z && bounds.min.z <= other.max.z;
+        };
         if (unit.size() > 1) {
-          const Box ub = seatBox.transformed(motion * carry);
-          if (anyBuilt) {
-            anyBuilt = false;
-            for (const NearObstacle& o : nearBuilt) {
-              if (o.box.min.x > ub.max.x) break;
-              if (ub.min.x <= o.box.max.x && o.box.min.y <= ub.max.y && ub.min.y <= o.box.max.y && o.box.min.z <= ub.max.z && ub.min.z <= o.box.max.z) {
-                anyBuilt = true;
-                break;
-              }
-            }
-          }
-          if (anyTemp) {
-            anyTemp = false;
-            for (const NearObstacle& o : nearTemp) {
-              if (o.box.min.x > ub.max.x) break;
-              if (ub.min.x <= o.box.max.x && o.box.min.y <= ub.max.y && ub.min.y <= o.box.max.y && o.box.min.z <= ub.max.z && ub.min.z <= o.box.max.z) {
-                anyTemp = true;
-                break;
-              }
-            }
-          }
-          if (!anyBuilt && !anyTemp) return true;
+          const Box bounds = seatBox.transformed(placement);
+          if (std::none_of(obstacles.begin(), obstacles.end(), [&](const auto& candidate) { return reaches(candidate, bounds); })) return true;
         }
         for (uint32_t p : unit) {
           if (local[p].empty()) continue;
-          const Xform pose = motion * carry * pieces[p].world;
+          const Xform pose = placement * pieces[p].world;
           const Box b = local[p].transformed(pose);
-          if (anyBuilt)
-            for (const NearObstacle& o : nearBuilt) {
-              if (o.box.min.x > b.max.x) break;
-              if (b.min.x > o.box.max.x || o.box.min.y > b.max.y || b.min.y > o.box.max.y || o.box.min.z > b.max.z || b.min.z > o.box.max.z) continue;
-              if (collide::overlap(world.shape(p), pose, world.shape(o.piece), o.pose, {}, nullptr, depth)) return false;
-            }
-          if (anyTemp)
-            for (const NearObstacle& o : nearTemp) {
-              if (o.box.min.x > b.max.x) break;
-              if (b.min.x > o.box.max.x || o.box.min.y > b.max.y || b.min.y > o.box.max.y || o.box.min.z > b.max.z || b.min.z > o.box.max.z) continue;
-              if (collide::overlap(world.shape(p), pose, world.shape(o.piece), o.pose, {}, nullptr, depth)) return false;
-            }
+          for (const ProbeObstacle& candidate : obstacles) {
+            if (!reaches(candidate, b)) continue;
+            const NearObstacle& o = *candidate.obstacle;
+            if (collide::overlap(world.shape(p), pose, world.shape(o.piece), o.pose, {}, nullptr, depth)) return false;
+          }
         }
         return true;
       };
@@ -887,21 +890,49 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
         break;
       }
       std::vector<uint32_t> rawNearBuilt;
+      std::vector<Box> probeCorridor;
       auto clearAcross = [&](const Flight& trial, double sLift, double sCruise, double sJoin, double sEntry, double sSeat) {
+        if (cancel && cancel->cancelled()) return false;
         const double sCheck = std::max(sEntry, tempInPlanCorridor ? sSeat : sEntry);
         Box swept;
-        for (size_t k = 0; k < trial.route.size(); k++) {
-          const Vec3& v = trial.route[k];
-          swept.grow(v - Vec3{unitRadius, unitRadius, unitRadius});
-          swept.grow(v + Vec3{unitRadius, unitRadius, unitRadius});
-          if (k < trial.routeAt.size() && trial.routeAt[k] >= sCheck - 1e-6) break;
+        probeCorridor.clear();
+        const Vec3 radius{unitRadius, unitRadius, unitRadius};
+        const auto settled = [&](size_t seg) {
+          if (!turning) return true;
+          if (!direct && sCruise - sLift <= 1e-6 && trial.routeAt[seg] <= sLift && trial.routeAt[seg + 1] >= sLift) return false;
+          return trial.routeTurn.size() == trial.route.size() && trial.routeTurn[seg] >= 1 && trial.routeTurn[seg + 1] >= 1;
+        };
+        // Use each segment's own envelope when collecting nearby obstacles. Include
+        // the entire turning radius at the stop where the unit can turn in place.
+        for (size_t k = 0; k + 1 < trial.route.size() && trial.routeAt[k] <= sCheck + 1e-6; ++k) {
+          Box segment;
+          const auto from = trial.route[k], to = trial.route[k + 1];
+          const double span = trial.routeAt[k + 1] - trial.routeAt[k];
+          const double portion = span > 0 ? std::min(1.0, (sCheck + 1e-6 - trial.routeAt[k]) / span) : 1.0;
+          const bool fixed = settled(k);
+          const Vec3 lower = fixed ? unitMinOff : -radius;
+          const Vec3 upper = fixed ? unitMaxOff : radius;
+          for (const Vec3 v : {from, from + (to - from) * portion}) {
+            segment.grow(v + lower);
+            segment.grow(v + upper);
+          }
+          probeCorridor.push_back(segment);
+          swept.merge(segment);
         }
+        const auto meetsCorridor = [&](const Box& bounds) {
+          return std::any_of(probeCorridor.begin(), probeCorridor.end(), [&](const Box& segment) {
+            return bounds.min.x <= segment.max.x && segment.min.x <= bounds.max.x &&
+                   bounds.min.y <= segment.max.y && segment.min.y <= bounds.max.y &&
+                   bounds.min.z <= segment.max.z && segment.min.z <= bounds.max.z;
+          });
+        };
         rawNearBuilt.clear();
         world.near(swept, &builtPresent, rawNearBuilt);
         nearBuilt.clear();
         for (uint32_t q : rawNearBuilt) {
           if (std::binary_search(unit.begin(), unit.end(), q)) continue;
-          nearBuilt.push_back({world.box(q), q, world.pose(q)});
+          const auto& bounds = world.box(q);
+          if (meetsCorridor(bounds)) nearBuilt.push_back({bounds, q, world.pose(q)});
         }
         std::sort(nearBuilt.begin(), nearBuilt.end(), [](const NearObstacle& a, const NearObstacle& b) { return a.box.min.x < b.box.min.x; });
         nearTemp.clear();
@@ -909,97 +940,160 @@ Timeline buildTimeline(const Model& model, ldraw::PartCache& parts, const Plan& 
           if (std::binary_search(unit.begin(), unit.end(), o.piece)) continue;
           if (!onSpot[o.piece] && staticNode[o.piece] >= 0 && landed[static_cast<size_t>(staticNode[o.piece])]) continue;
           if (o.box.min.x > swept.max.x || swept.min.x > o.box.max.x || o.box.min.y > swept.max.y || swept.min.y > o.box.max.y || o.box.min.z > swept.max.z || swept.min.z > o.box.max.z) continue;
-          nearTemp.push_back({o.box, o.piece, o.pose});
+          if (meetsCorridor(o.box)) nearTemp.push_back({o.box, o.piece, o.pose});
         }
         std::sort(nearTemp.begin(), nearTemp.end(), [](const NearObstacle& a, const NearObstacle& b) { return a.box.min.x < b.box.min.x; });
+        if (nearBuilt.empty() && nearTemp.empty()) return true;
         const double step = collide::kSweepStep;  // as finely as the strict check looks
         double turned = 0;  // how far a corner of the unit sweeps in turning, at most
         if (turning) turned = r3 * 2 * std::acos(std::clamp(std::abs(q0.w), 0.0, 1.0));
-        // How much of its turn the route has done at a distance, exactly as it is played
-        // (routeMotion): a phase maps eased time straight onto distance, so by-distance is right.
-        auto turnOf = [&](double s) {
-          if (!turning || trial.routeTurn.size() != trial.route.size() || trial.route.size() < 2) return 1.0;
-          const size_t k = std::min<size_t>(trial.route.size() - 2,
-            static_cast<size_t>(std::max<std::ptrdiff_t>(0, std::upper_bound(trial.routeAt.begin(), trial.routeAt.end(), s) - trial.routeAt.begin() - 1)));
-          const double span = trial.routeAt[k + 1] - trial.routeAt[k], w = span > 0 ? std::clamp((s - trial.routeAt[k]) / span, 0.0, 1.0) : 1;
-          return trial.routeTurn[k] + (trial.routeTurn[k + 1] - trial.routeTurn[k]) * w;
+        // Bound the portion of each segment where the moving unit could reach an
+        // obstacle. Flat translations use the unit bounds. A turning unit uses a
+        // pivot-centred sphere enclosing every orientation. Keep the original
+        // probe positions and narrow-phase tests inside the resulting intervals.
+        struct ProbeRange {
+          double first = std::numeric_limits<double>::infinity();
+          double last = -std::numeric_limits<double>::infinity();
+          std::vector<ProbeObstacle> obstacles;
+
+          bool contains(double s) const { return first <= s && s <= last; }
         };
-        // A non-turning straight segment has constant orientation (r = I when u >= 1, r = r0 when u <= 0)
-        // and translates linearly. When its segment AABB does not intersect any obstacle box in
-        // nearBuilt or nearTemp, every sample on that segment is guaranteed clear without per-sample work.
-        std::vector<uint8_t> segmentHasObstacle(trial.route.size() >= 2 ? trial.route.size() - 1 : 0, 1);
-        for (size_t seg = 0; seg + 1 < trial.route.size(); seg++) {
-          if (trial.routeAt[seg] > sCheck + 1e-6) {
-            segmentHasObstacle[seg] = 0;
-            continue;
-          }
-          const double u0 = turnOf(trial.routeAt[seg]), u1 = turnOf(trial.routeAt[seg + 1]);
-          if (turning && !((u0 <= 1e-9 && u1 <= 1e-9) || (u0 >= 1 - 1e-9 && u1 >= 1 - 1e-9))) continue;
-          Box segBox;
-          if (!turning || (u0 >= 1 - 1e-9 && u1 >= 1 - 1e-9)) {
-            segBox = {
-              {std::min(trial.route[seg].x, trial.route[seg + 1].x) + unitMinOff.x, std::min(trial.route[seg].y, trial.route[seg + 1].y) + unitMinOff.y, std::min(trial.route[seg].z, trial.route[seg + 1].z) + unitMinOff.z},
-              {std::max(trial.route[seg].x, trial.route[seg + 1].x) + unitMaxOff.x, std::max(trial.route[seg].y, trial.route[seg + 1].y) + unitMaxOff.y, std::max(trial.route[seg].z, trial.route[seg + 1].z) + unitMaxOff.z}
-            };
-          } else {
-            segBox = {
-              {std::min(trial.route[seg].x, trial.route[seg + 1].x) - unitRadius, std::min(trial.route[seg].y, trial.route[seg + 1].y) - unitRadius, std::min(trial.route[seg].z, trial.route[seg + 1].z) - unitRadius},
-              {std::max(trial.route[seg].x, trial.route[seg + 1].x) + unitRadius, std::max(trial.route[seg].y, trial.route[seg + 1].y) + unitRadius, std::max(trial.route[seg].z, trial.route[seg + 1].z) + unitRadius}
-            };
-          }
-          bool hitBox = false;
-          if (trial.routeAt[seg] <= sEntry + 1e-6)
-            for (const NearObstacle& o : nearBuilt) {
-              if (o.box.min.x > segBox.max.x) break;
-              if (segBox.min.x <= o.box.max.x && o.box.min.y <= segBox.max.y && segBox.min.y <= o.box.max.y && o.box.min.z <= segBox.max.z && segBox.min.z <= o.box.max.z) {
-                hitBox = true;
-                break;
-              }
+        std::vector<ProbeRange> probeRanges(trial.route.size() - 1);
+        for (size_t seg = 0; seg < probeCorridor.size(); ++seg) {
+          const double start = trial.routeAt[seg], finish = trial.routeAt[seg + 1];
+          const auto from = trial.route[seg], to = trial.route[seg + 1];
+          const Vec3 delta = to - from;
+          const bool fixed = settled(seg);
+          const Vec3 lower = fixed ? unitMinOff : -radius;
+          const Vec3 upper = fixed ? unitMaxOff : radius;
+          const Box& bounds = probeCorridor[seg];
+          auto& range = probeRanges[seg];
+          const auto include = [&](const std::vector<NearObstacle>& obstacles, double limit) {
+            if (start > limit) return;
+            for (const NearObstacle& o : obstacles) {
+              if (o.box.min.x > bounds.max.x) break;
+              if (o.box.max.x < bounds.min.x || o.box.max.y < bounds.min.y || o.box.min.y > bounds.max.y ||
+                  o.box.max.z < bounds.min.z || o.box.min.z > bounds.max.z) continue;
+              double first = 0, last = 1;
+              const auto clip = [&](double enter, double leave, double travel) {
+                if (std::abs(travel) < 1e-12) return enter <= 1e-9 && leave >= -1e-9;
+                const double a = enter / travel, b = leave / travel;
+                first = std::max(first, std::min(a, b) - 1e-9);
+                last = std::min(last, std::max(a, b) + 1e-9);
+                return first <= last;
+              };
+              const Vec3 enter = o.box.min - from - upper, leave = o.box.max - from - lower;
+              if (!clip(enter.x, leave.x, delta.x) || !clip(enter.y, leave.y, delta.y) || !clip(enter.z, leave.z, delta.z)) continue;
+              const double fromDistance = start + (finish - start) * first - 1e-9;
+              const double toDistance = std::min(limit, start + (finish - start) * last + 1e-9);
+              if (fromDistance > toDistance) continue;
+              range.first = std::min(range.first, fromDistance);
+              range.last = std::max(range.last, toDistance);
+              range.obstacles.push_back({&o, fromDistance, toDistance});
             }
-          if (!hitBox)
-            for (const NearObstacle& o : nearTemp) {
-              if (o.box.min.x > segBox.max.x) break;
-              if (segBox.min.x <= o.box.max.x && o.box.min.y <= segBox.max.y && segBox.min.y <= o.box.max.y && o.box.min.z <= segBox.max.z && segBox.min.z <= o.box.max.z) {
-                hitBox = true;
-                break;
-              }
-            }
-          if (!hitBox) segmentHasObstacle[seg] = 0;
+          };
+          include(nearBuilt, sEntry + 1e-6);
+          include(nearTemp, sCheck + 1e-6);
         }
         auto segOf = [&](double s) {
           return std::min<size_t>(trial.route.size() - 2,
             static_cast<size_t>(std::max<std::ptrdiff_t>(0, std::upper_bound(trial.routeAt.begin(), trial.routeAt.end(), s) - trial.routeAt.begin() - 1)));
         };
+        const auto fractionOf = [&](size_t seg, double s) {
+          const double span = trial.routeAt[seg + 1] - trial.routeAt[seg];
+          return span > 0 ? std::clamp((s - trial.routeAt[seg]) / span, 0.0, 1.0) : 1;
+        };
+        const auto pointAt = [&](size_t seg, double fraction) {
+          return trial.route[seg] + (trial.route[seg + 1] - trial.route[seg]) * fraction;
+        };
+        const bool interpolateTurn = turning && trial.routeTurn.size() == trial.route.size();
         const int samples = std::max(2, static_cast<int>(std::ceil((sCheck + turned) / step)));
-        // Sample endpoints and middle first, then coarse stride 16, then remaining samples, so
-        // blocked routes fail in a handful of probes instead of hundreds.
-        for (int k : {0, samples, samples / 2}) {
+        const auto probe = [&](int k, double s, size_t seg) {
+          const auto depth = (k > 0 && s < sJoin - 1e-6) ? collide::Depth::Outer : collide::Depth::Skin;
+          // The animation maps the turn and the position along each segment to the
+          // same fraction of distance travelled.
+          const double fraction = fractionOf(seg, s);
+          const double turn = interpolateTurn ? trial.routeTurn[seg] + (trial.routeTurn[seg + 1] - trial.routeTurn[seg]) * fraction : 1;
+          return clearAt(pointAt(seg, fraction), turn, s, probeRanges[seg].obstacles, depth);
+        };
+        std::vector<int> early;
+        early.reserve(std::min(256, 3 + samples / 16));
+        const auto potentialProbe = [&](int k) {
           const double s = sCheck * k / samples;
-          if (!segmentHasObstacle[segOf(s)]) continue;
-          const bool checkBuilt = s <= sEntry + 1e-6;
-          const collide::Depth depth = (k > 0 && s < sJoin - 1e-6) ? collide::Depth::Outer : collide::Depth::Skin;
-          if (!clearAt(trial, s, turnOf(s), checkBuilt, depth)) return false;
-        }
-        for (int k = 16; k < samples; k += 16) {
-          if (k == samples / 2) continue;
-          const double s = sCheck * k / samples;
-          if (!segmentHasObstacle[segOf(s)]) continue;
-          const bool checkBuilt = s <= sEntry + 1e-6;
-          const collide::Depth depth = (k > 0 && s < sJoin - 1e-6) ? collide::Depth::Outer : collide::Depth::Skin;
-          if (!clearAt(trial, s, turnOf(s), checkBuilt, depth)) return false;
-        }
-        for (int k = 1; k < samples; k++) {
-          if (k == samples / 2 || (k & 15) == 0) continue;
-          const double s = sCheck * k / samples;
-          if (!segmentHasObstacle[segOf(s)]) continue;
-          const bool checkBuilt = s <= sEntry + 1e-6;
-          const collide::Depth depth = (k > 0 && s < sJoin - 1e-6) ? collide::Depth::Outer : collide::Depth::Skin;
-          if (!clearAt(trial, s, turnOf(s), checkBuilt, depth)) return false;
+          return probeRanges[segOf(s)].contains(s);
+        };
+        for (int k : {0, samples, samples / 2})
+          if (potentialProbe(k)) early.push_back(k);
+        const auto edges = early.size();
+        for (int k = 16; k < samples; k += 16)
+          if (k != samples / 2 && potentialProbe(k)) early.push_back(k);
+        const auto coarseProbes = early.size() - edges;
+        const bool cacheable = coarseProbes >= 8 && nearBuilt.size() + nearTemp.size() >= 6;
+        const auto checkRemaining = [&](int begin, int end) {
+          for (int k = begin; k < end; ++k) {
+            if (k == samples / 2 || (k & 15) == 0) continue;
+            const double s = sCheck * k / samples;
+            const size_t seg = segOf(s);
+            if (probeRanges[seg].contains(s) && !probe(k, s, seg)) return false;
+          }
+          return true;
+        };
+        const auto check = [&] {
+          // Endpoints and coarse probes reject blocked routes before distributing the denser pass.
+          for (int k : early) {
+            const double s = sCheck * k / samples;
+            if (!probe(k, s, segOf(s))) return false;
+          }
+          if (coarseProbes < 6) return checkRemaining(1, samples);
+          constexpr int chunkSize = 32;
+          std::atomic<bool> clear{true};
+          JobPool::shared().parallelFor((samples + chunkSize - 2) / chunkSize, [&](size_t chunk) {
+            if (!clear.load(std::memory_order_relaxed)) return;
+            const int begin = static_cast<int>(chunk) * chunkSize + 1;
+            if (!checkRemaining(begin, std::min(samples, begin + chunkSize))) clear.store(false, std::memory_order_relaxed);
+          }, cancel);
+          return clear.load(std::memory_order_relaxed) && !(cancel && cancel->cancelled());
+        };
+        if (cacheable && previousChecks && sharedShapes) {
+          std::vector<uint64_t> input;
+          input.reserve(52 + 8 * trial.route.size() + 20 * unit.size() + 19 * (nearBuilt.size() + nearTemp.size()));
+          const auto scalar = [&](double value) { input.push_back(std::bit_cast<uint64_t>(value)); };
+          const auto point = [&](Vec3 p) { scalar(p.x), scalar(p.y), scalar(p.z); };
+          const auto matrix = [&](Mat3 r) { for (double i : r.m) scalar(i); };
+          const auto transform = [&](const Xform& pose) { matrix(pose.r), point(pose.t); };
+          const auto box = [&](const Box& bounds) { point(bounds.min), point(bounds.max); };
+          input.push_back(samples);
+          input.push_back(turning);
+          scalar(sCheck), scalar(sEntry), scalar(sJoin), scalar(unitRadius);
+          point(trial.pivot), matrix(trial.turnFrom), transform(carry), box(seatBox);
+          input.push_back(trial.route.size());
+          for (const auto& p : trial.route) point(p);
+          for (const auto sample : trial.routeAt) scalar(sample);
+          input.push_back(trial.routeTurn.size());
+          for (const auto turn : trial.routeTurn) scalar(turn);
+          for (const auto& range : probeRanges) scalar(range.first), scalar(range.last);
+          input.push_back(unit.size());
+          for (const auto p : unit) {
+            input.push_back(reinterpret_cast<uintptr_t>(&world.shape(p)));
+            box(local[p]), transform(pieces[p].world);
+          }
+          for (const auto* obstacles : {&nearBuilt, &nearTemp}) {
+            input.push_back(obstacles->size());
+            for (const auto& o : *obstacles) {
+              input.push_back(reinterpret_cast<uintptr_t>(&world.shape(o.piece)));
+              box(o.box), transform(o.pose);
+            }
+          }
+          if (!previousChecks->validate(std::move(input), check, cancel)) return false;
+        } else if (!check()) {
+          return false;
         }
         if (!direct && turning && sCruise - sLift <= 1e-6) {  // it turns where it stands, up there
           const int turns = std::max(2, static_cast<int>(std::ceil(turned / step)));
+          const size_t seg = segOf(sLift);
+          const Vec3 point = pointAt(seg, fractionOf(seg, sLift));
           for (int k = 0; k <= turns; k++)
-            if (!clearAt(trial, sLift, static_cast<double>(k) / turns, true, collide::Depth::Outer)) return false;
+            if (!clearAt(point, static_cast<double>(k) / turns, sLift, probeRanges[seg].obstacles, collide::Depth::Outer)) return false;
         }
         // Only once the discrete sample check passes, verify any non-turning direct transit (or
         // extended leg into the plan's far end) continuously with clearTravel so playedPath in
@@ -1423,7 +1517,32 @@ Xform legacyFlightPose(const Flight& f, double u) {
 Xform poseAt(const Flight& f, int frame) { return poseAt(f, static_cast<double>(frame)); }
 
 
+namespace {
+Xform flightPose(const Flight& f, double frame);
+}  // namespace
+
 Xform poseAt(const Flight& f, double frame) {
+  Xform x = flightPose(f, frame);
+  const bool swung = std::abs(f.swing) >= 1e-9, shifted = f.shift.x != 0 || f.shift.y != 0 || f.shift.z != 0;
+  if ((!swung && !shifted) || f.frames <= 0 || frame >= f.startFrame + f.frames) return x;
+  double keep = 1;
+  if (frame > f.startFrame) {
+    const double end = f.seatAt > 0 ? f.seatAt : 0.8 * f.frames;
+    const double u = std::clamp((frame - f.startFrame) / std::max(1e-6, end), 0.0, 1.0);
+    keep = 1 - u * u * (3 - 2 * u);
+  }
+  if (keep <= 0) return x;
+  if (swung) {
+    const double angle = f.swing * keep * std::acos(-1.0) / 180, c = std::cos(angle), s = std::sin(angle);
+    const Mat3 r{{c, 0, s, 0, 1, 0, -s, 0, c}};
+    x = Xform{r, f.swingAbout - r * f.swingAbout} * x;
+  }
+  if (shifted) x.t = x.t + f.shift * keep;  // a translation after the swing: the web's applyFloorShifts
+  return x;
+}
+
+namespace {
+Xform flightPose(const Flight& f, double frame) {
   if (f.hasLegacy) {
     const Xform& seed = frame <= f.startFrame ? f.legacy.from : f.legacy.to;
     if (f.frames <= 0 || frame <= f.startFrame || frame >= f.startFrame + f.frames) {
@@ -1468,6 +1587,7 @@ Xform poseAt(const Flight& f, double frame) {
   }
   return f.waypoints.back();
 }
+}  // namespace
 
 std::vector<Vec3> playedPath(const Flight& f, double spacing) {
   (void)spacing;  // the rounded corners are already flown as points about an LDU apart, as poseAt plays them

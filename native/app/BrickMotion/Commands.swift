@@ -62,7 +62,9 @@ enum MenuPlace { case app, file, edit, select, object, step, view, window, none 
     guard let document else { return false }
     let changed = document.perform { edit(document.session) }
     if !changed.refused.empty() {
-      refuse(String(changed.refused))
+      let reason = String(changed.refused)
+      model?.refusedEdit = reason
+      refuse(reason)
       return false
     }
     viewport?.viewStateChanged()
@@ -189,6 +191,8 @@ private let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
                 run: { _ in SettingsWindow.shared.showWindow(nil) }),
     makeCommand("window.welcome", "Show Welcome Window", symbol: "macwindow", menu: .window, group: 0,
                 run: { _ in (NSApp.delegate as? AppDelegate)?.showWelcome() }),
+    makeCommand("window.renderQueue", "Render Queue", symbol: "film.stack", menu: .window, group: 0,
+                run: { _ in RenderQueueWindow.shared.showWindow(nil) }),
     // File
     makeCommand("file.new", "New", key: "n", menu: .file, group: 0, selector: #selector(NSDocumentController.newDocument(_:))),
     makeCommand("file.open", "Open…", symbol: "folder", key: "o", menu: .file, group: 0, selector: #selector(NSDocumentController.openDocument(_:))),
@@ -196,6 +200,10 @@ private let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
                 enabled: { $0.document != nil }, run: { c in
                   guard let controller = c.viewport?.window?.windowController as? WindowController else { return }
                   ModelImportSheet.show(in: controller.model, into: String(controller.model.document.session.focused()))
+                }),
+    makeCommand("file.importInventory", "Import Parts Inventory…", symbol: "shippingbox", menu: .file, group: 0,
+                enabled: { $0.model?.importing == false }, run: { context in
+                  if let model = context.model { InventoryImportSheet.show(in: model) }
                 }),
     makeCommand("file.close", "Close", key: "w", menu: .file, group: 1, selector: #selector(NSWindow.performClose(_:))),
     makeCommand("file.save", "Save…", key: "s", menu: .file, group: 1, selector: #selector(NSDocument.save(_:))),
@@ -208,13 +216,24 @@ private let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
     makeCommand("file.exportPlan", "Export Plan…", symbol: "doc.text", menu: .file, group: 2,
                 selector: #selector(Document.exportPlan(_:))),
     makeCommand("file.exportStill", "Export Still…", symbol: "photo", menu: .file, group: 2,
-                enabled: { ($0.session?.pieceCount() ?? 0) > 0 }, run: { StillExport.show($0) }),
+                enabled: { ($0.session?.pieceCount() ?? 0) > 0 }, run: { StillExportSheet.show($0) }),
+    makeCommand("file.exportBuildVideo", "Export Video…", symbol: "film", menu: .file, group: 2,
+                enabled: { ($0.session?.pieceCount() ?? 0) > 0 }, run: { VideoExportSheet.show($0) }),
+    makeCommand("file.exportSubmodels", "Export All Submodel Videos…", symbol: "film.stack", menu: .file, group: 2,
+                enabled: { $0.model?.submodelVideoTargets().isEmpty == false }, run: { context in
+                  if let targets = context.model?.submodelVideoTargets(), !targets.isEmpty {
+                    VideoExportSheet.show(context, targets: targets)
+                  }
+                }),
 
     // Edit
     makeCommand("edit.undo", "Undo", symbol: "arrow.uturn.backward", key: "z", menu: .edit, group: 0, selector: Selector(("undo:"))),
     makeCommand("edit.redo", "Redo", symbol: "arrow.uturn.forward", key: "z", modifiers: [.command, .shift], menu: .edit, group: 0, selector: Selector(("redo:"))),
     makeCommand("edit.cut", "Cut", symbol: "scissors", key: "x", menu: .edit, group: 1, selector: #selector(NSText.cut(_:))),
     makeCommand("edit.copy", "Copy", symbol: "doc.on.doc", key: "c", menu: .edit, group: 1, selector: #selector(NSText.copy(_:))),
+    makeCommand("edit.copyViewport", "Copy Viewport Image", symbol: "photo.on.rectangle", menu: .edit, group: 1,
+                enabled: { $0.viewport != nil && ($0.session?.pieceCount() ?? 0) > 0 },
+                run: { if let view = $0.viewport { StillExport.copyViewport(view) } }),
     makeCommand("edit.paste", "Paste", symbol: "doc.on.clipboard", key: "v", menu: .edit, group: 1, selector: #selector(NSText.paste(_:))),
     viewportCommand("edit.duplicate", "Duplicate", symbol: "plus.square.on.square", key: "d", menu: .edit, group: 1, #selector(ViewportView.duplicatePieces(_:))),
     makeCommand("edit.delete", "Delete", symbol: "trash", menu: .edit, group: 1, selector: #selector(NSText.delete(_:))),
@@ -407,8 +426,6 @@ private let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
     makeCommand("view.inspector", "Show Inspector", key: "i", modifiers: [.command, .option], menu: .view, group: 0,
             selector: #selector(NSSplitViewController.toggleInspector(_:))),
     viewportCommand("view.fitAll", "Fit All", symbol: "arrow.up.left.and.arrow.down.right", menu: .view, group: 1, #selector(ViewportView.fitAll(_:))),
-    makeCommand("view.pathPreview", "Path-Traced Preview…", symbol: "camera.aperture", menu: .view, group: 2,
-                enabled: { ($0.session?.pieceCount() ?? 0) > 0 }, run: { StillExport.preview($0) }),
     viewportCommand("view.frameSelection", "Frame Selection", symbol: "viewfinder", key: "f", menu: .view, group: 1, #selector(ViewportView.frameSelection(_:))),
     makeCommand("view.orthographic", "Orthographic Projection", symbol: "square.on.square", menu: .view, group: 1,
                 checked: { $0.viewport?.presentation.orthographic ?? false }, enabled: { $0.viewport != nil },
@@ -430,6 +447,14 @@ private let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
                     controller.setAnimateMode(!controller.isAnimating)
                   }
                 }),
+    makeCommand("step.modelChecks", "Model Checks…", symbol: "checkmark.shield", menu: .step, group: 3,
+                enabled: { $0.model != nil }, run: { ModelChecksSheet.show($0) }),
+    makeCommand("step.loosePieces", "Seat Loose Pieces…", symbol: "scope", menu: .step, group: 3,
+                enabled: { ($0.session?.pieceCount() ?? 0) > 1 }, run: { LoosePiecesSheet.show($0) }),
+    makeCommand("step.stagingSettings", "Build Staging…", symbol: "square.grid.3x3", menu: .step, group: 3,
+                enabled: { ($0.session?.pieceCount() ?? 0) > 0 }, run: { StagingSheet.show($0) }),
+    makeCommand("step.snapSound", "Snap Sound…", symbol: "waveform", menu: .step, group: 3,
+                enabled: { $0.document != nil }, run: { SoundSettingsSheet.show($0) }),
     makeCommand("step.regenerateAnimation", "Regenerate Build Animation", symbol: "arrow.clockwise", menu: .step, group: 3,
                 enabled: { ($0.session?.pieceCount() ?? 0) > 0 }, run: { c in
                   (c.window?.windowController as? WindowController)?.setAnimateMode(true, plan: false)
@@ -437,6 +462,32 @@ private let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
                 }),
     makeCommand("step.regenerateSteps", "Regenerate Build Steps", symbol: "list.number", menu: .step, group: 3,
                 enabled: { ($0.session?.pieceCount() ?? 0) > 0 }, run: { c in c.model?.animation.regenerateSteps() }),
+    makeCommand("view.record", "Record Viewport", symbol: "record.circle", key: "r", modifiers: [.command, .shift, .option],
+                menu: .view, group: 4,
+                titleFor: { $0.model?.recorder.recording == true ? "Stop Recording Viewport" : "Record Viewport" },
+                enabled: { $0.viewport != nil && ($0.session?.pieceCount() ?? 0) > 0 },
+                run: { c in
+                  guard let model = c.model, let view = c.viewport else { return }
+                  if model.recorder.recording {
+                    model.recorder.stop(in: c.window, name: (model.document.displayName as NSString).deletingPathExtension)
+                  } else {
+                    model.recorder.start(view)
+                  }
+                }),
+    makeCommand("view.look", "Look…", symbol: "paintpalette", menu: .view, group: 4,
+                enabled: { $0.model != nil }, run: { c in
+                  guard let controller = c.window?.windowController as? WindowController else { return }
+                  controller.showInspector(tab: .look)
+                }),
+    look("view.shading.standard", .Standard), look("view.shading.studio", .Studio), look("view.shading.neural", .Neural),
+    look("view.shading.hybrid", .HybridRT), look("view.shading.ssgi", .ScreenSpaceGI), look("view.shading.path", .PathTraced),
+    lookToggle("view.edgeLines", "Edge Lines", symbol: "square.dashed", \.edges),
+    lookToggle("view.shadows", "Shadows", symbol: "shadow", \.shadows),
+    lookToggle("view.ambientOcclusion", "Ambient Occlusion", symbol: "circle.lefthalf.filled", \.ambientOcclusion),
+    lookToggle("view.floor", "Floor", symbol: "square.bottomthird.inset.filled", \.floor),
+    lookToggle("view.raytracedGlass", "Ray-Traced Glass", symbol: "drop", \.raytracedGlass),
+    makeCommand("step.buildSettings", "Build Settings…", symbol: "slider.horizontal.3", menu: .step, group: 3,
+                enabled: { ($0.session?.pieceCount() ?? 0) > 0 }, run: { BuildSettingsSheet.show($0) }),
     makeCommand("view.palette", "Command Palette…", symbol: "command", key: "k", menu: .view, group: 3,
             enabled: { $0.document != nil },
             run: { c in
@@ -453,6 +504,28 @@ private let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
               c.session?.selectSimilar(kind)
               c.viewport?.viewStateChanged()
             })
+  }
+
+  /// One of the project's shadings, checked while it is the one in use.
+  private static func look(_ id: String, _ shading: bmapp.Shading) -> AppCommand {
+    makeCommand(id, "\(shading.title) Shading", symbol: shading.symbol, menu: .view, group: 4,
+                checked: { $0.session?.renderLook().shading == shading }, enabled: { $0.document != nil },
+                run: { c in
+                  guard var look = c.session?.renderLook(), look.shading != shading else { return }
+                  look.shading = shading
+                  c.perform { $0.setRenderLook(look) }
+                })
+  }
+
+  private static func lookToggle(_ id: String, _ title: String, symbol: String,
+                                 _ path: WritableKeyPath<bmapp.RenderLook, Bool>) -> AppCommand {
+    makeCommand(id, title, symbol: symbol, menu: .view, group: 4,
+                checked: { $0.session?.renderLook()[keyPath: path] ?? false }, enabled: { $0.document != nil },
+                run: { c in
+                  guard var look = c.session?.renderLook() else { return }
+                  look[keyPath: path].toggle()
+                  c.perform { $0.setRenderLook(look) }
+                })
   }
 
   private static func preset(_ id: String, _ title: String, _ p: bmapp.ViewPreset) -> AppCommand {

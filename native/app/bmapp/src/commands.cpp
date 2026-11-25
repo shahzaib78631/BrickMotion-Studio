@@ -1,8 +1,13 @@
 #include "commands.h"
+#include "bm/plan/staging.h"
 #include "animation_keys.h"
+#include "flight_bake_impl.h"
+#include "inventory_import_impl.h"
+#include "snap_mix_impl.h"
 #include "move_preview.h"
 
 #include <algorithm>
+#include <array>
 #include <charconv>
 #include <cmath>
 #include <cstring>
@@ -247,15 +252,23 @@ void apply(Session::Impl& s, const Command& c, bool forward) {
     for (auto it = c.defs.rbegin(); it != c.defs.rend(); ++it)
       std::erase_if(src.submodels, [&](const auto& sub) { return sub.first == it->name; });
   }
-  if (c.planField) {
-    const auto& field = *c.planField;
+  const auto setField = [&](const Command::PlanField& field) {
     const auto& value = forward ? field.after : field.before;
+    if (field.project && !s.base) s.base.emplace();
+    auto& metadata = field.project ? s.base->json : src.extra;
     if (value.is_null()) {
-      if (src.extra.is_object()) src.extra.erase(field.key);
+      if (metadata.is_object()) metadata.erase(field.key);
     } else {
-      if (!src.extra.is_object()) src.extra = nlohmann::ordered_json::object();
-      src.extra[field.key] = value;
+      if (!metadata.is_object()) metadata = nlohmann::ordered_json::object();
+      metadata[field.key] = value;
     }
+  };
+  if (forward) {
+    if (c.planField) setField(*c.planField);
+    for (const auto& field : c.morePlanFields) setField(field);
+  } else {
+    for (auto it = c.morePlanFields.rbegin(); it != c.morePlanFields.rend(); ++it) setField(*it);
+    if (c.planField) setField(*c.planField);
   }
   renameFocus(s, c, forward);
 }
@@ -312,11 +325,17 @@ Changed inPlace(Session::Impl& s, const std::vector<ItemId>& ids) {
 
 Changed finish(Session::Impl& s, const Command& c) {
   Changed out;
-  if (c.kind == Edit::Motion || c.kind == Edit::Keyframes) {
-    // Timing and the layer of hand keys leave the editable model and its paths as they are.
+  if (c.kind == Edit::Motion || c.kind == Edit::Keyframes || c.kind == Edit::SceneCamera || c.kind == Edit::SnapSound ||
+      c.kind == Edit::Look || c.kind == Edit::CameraTrack || c.kind == Edit::WaitingSpot) {
+    // These edits leave the editable model and its paths as they are.
     out.keyframesOnly = c.kind == Edit::Keyframes;
-  } else if (c.kind == Edit::InsertionDirection) {
+    out.sceneOnly = c.kind == Edit::SceneCamera || c.kind == Edit::SnapSound || c.kind == Edit::Look ||
+        c.kind == Edit::CameraTrack || c.kind == Edit::WaitingSpot;
+    out.cameraTrack = c.kind == Edit::CameraTrack;
+    out.waitingSpot = c.kind == Edit::WaitingSpot;
+  } else if (c.kind == Edit::InsertionDirection || c.kind == Edit::Staging || c.kind == Edit::BuildSettings) {
     ++s.planInputs;
+    ++s.planTopology;
   } else if (c.kind == Edit::SetGroup || c.kind == Edit::StepFields) {
     ++s.structureVersion;
     if (c.kind == Edit::StepFields && !c.wholeDefs.empty()) {
@@ -325,7 +344,10 @@ Changed finish(Session::Impl& s, const Command& c) {
         const auto& fields = def->steps[c.stepIndex].extra;
         return fields.is_object() && fields.contains("pinOrder") && fields["pinOrder"].is_boolean() && fields["pinOrder"].template get<bool>();
       };
-      if (pin(change.before) != pin(change.after)) ++s.planInputs;
+      if (pin(change.before) != pin(change.after)) {
+        ++s.planInputs;
+        ++s.planTopology;
+      }
     }
   } else if (trimFocus(s) || structural(c)) {
     reflatten(s);
@@ -471,12 +493,17 @@ bool usesDirectly(const bm::doc::Source& src, const std::string& outer, const st
   return false;
 }
 
-/// The longest start of `path` in which each def is used by the one before (the root first).
+/// The longest valid start of a focus path. An unused definition can also be opened from the root.
 std::vector<std::string> leading(const bm::doc::Source& src, const std::vector<std::string>& path) {
   std::vector<std::string> out;
   std::string outer;
   for (const std::string& name : path) {
-    if (name.empty() || !src.def(name) || !usesDirectly(src, outer, name)) break;
+    if (name.empty() || !src.def(name)) break;
+    if (!usesDirectly(src, outer, name)) {
+      const bool unused = outer.empty() && std::none_of(src.submodels.begin(), src.submodels.end(),
+          [&](const auto& def) { return usesDirectly(src, def.first, name); });
+      if (!unused) break;
+    }
     out.push_back(name);
     outer = name;
   }
@@ -514,6 +541,7 @@ void reflatten(Session::Impl& s) {
   s.local = std::move(flat.local);
   s.body = std::move(flat.body);
   ++s.planInputs;
+  ++s.planTopology;
   s.piecesOf.clear();
   s.useCount.clear();
   for (uint32_t p = 0; p < s.refs.size(); p++) {
@@ -631,7 +659,7 @@ Changed pasteCommand(Session::Impl& s, const std::string& def, const std::string
 }
 
 Changed placePartCommand(Session::Impl& s, const std::string& def, const std::string& part,
-                         int color, const Xform& pose, int step) {
+                         int color, const Xform& pose, int step, int before) {
   const std::string name = bm::ldraw::normalizeName(part);
   if (!name.ends_with(".dat") || !s.library->find(name)) return refusal(s, "This part is missing from the library.");
   if (s.model->library().isInline(name)) return refusal(s, "This model already defines a custom part with that name.");
@@ -640,6 +668,8 @@ Changed placePartCommand(Session::Impl& s, const std::string& def, const std::st
   const auto& steps = s.source.def(def)->steps;
   if (step >= 0 && static_cast<size_t>(step) >= steps.size()) return refusal(s, "That build step no longer exists.");
   const size_t into = steps.empty() ? 0 : step < 0 ? steps.size() - 1 : static_cast<size_t>(step);
+  const size_t count = steps.empty() ? 0 : steps[into].items.size();
+  if (before >= 0 && static_cast<size_t>(before) > count) return refusal(s, "That arrival position no longer exists.");
   Command c;
   c.kind = Edit::PlacePart;
   c.name = "Place Part";
@@ -653,8 +683,35 @@ Changed placePartCommand(Session::Impl& s, const std::string& def, const std::st
   item.color = planColor(s, color);
   item.colorText = std::to_string(item.color);
   item.at.exact = pose;
-  c.items.push_back(edit(def, into, steps.empty() ? 0 : steps[into].items.size(), std::nullopt, std::move(item)));
+  c.items.push_back(edit(def, into, before < 0 ? count : static_cast<size_t>(before), std::nullopt, std::move(item)));
   return push(s, std::move(c));
+}
+
+Changed importInventoryCommand(Session::Impl& s, const std::string& def, int step,
+                               const std::vector<InventoryPart>& parts) {
+  if (parts.empty()) return unchanged(s);
+  const auto& steps = s.source.def(def)->steps;
+  if (step >= 0 && static_cast<size_t>(step) >= steps.size())
+    return refusal(s, "That build step no longer exists.");
+  const size_t into = steps.empty() ? 0 : step < 0 ? steps.size() - 1 : static_cast<size_t>(step);
+  size_t index = steps.empty() ? 0 : steps[into].items.size();
+  Command command;
+  command.kind = Edit::Paste;
+  command.name = named("Import", parts.size());
+  command.stepDef = def;
+  command.addedRootStep = steps.empty();
+  command.items.reserve(parts.size());
+  pinUses(s, {def}, command);
+  for (const auto& part : parts) {
+    Item item;
+    item.id = s.source.newId();
+    item.name = part.name;
+    item.color = planColor(s, part.color);
+    item.colorText = std::to_string(item.color);
+    item.at.exact = Xform{bm::Mat3{}, part.position};
+    command.items.push_back(edit(def, into, index++, std::nullopt, std::move(item)));
+  }
+  return push(s, std::move(command));
 }
 
 std::vector<MovingPiece> piecesAfterMove(const Session::Impl& s, const PieceList& pieces, uint32_t anchor) {
@@ -687,6 +744,38 @@ Changed placeMovedCommand(Session::Impl& s, const PieceList& pieces, uint32_t an
       std::equal(std::begin(delta.r.m), std::end(delta.r.m), std::begin(unit.m),
                  [](double a, double b) { return std::abs(a - b) < 1e-7; })) return unchanged(s);
   return transformCommand(s, Edit::Move, "Move", anchorFirst(pieces, anchor), delta, false, {}, {}, 0, {});
+}
+
+Changed seatPiecesCommand(Session::Impl& s, const std::vector<std::pair<uint32_t, Xform>>& poses) {
+  std::vector<std::pair<Target, Xform>> work;
+  std::set<ItemId> seen;
+  PieceList pieces;
+  for (const auto& [piece, pose] : poses) {
+    if (piece >= s.refs.size() || !validPose(pose)) return refusal(s, "A piece has an invalid placement.");
+    const auto targets = resolve(s, {piece}, true);
+    if (targets.size() != 1 || !seen.insert(targets.front().id).second) continue;
+    work.emplace_back(targets.front(), pose * s.model->pieces()[piece].world.inverse());
+    pieces.push_back(piece);
+  }
+  if (work.empty()) return unchanged(s);
+  Command c;
+  c.kind = Edit::Move;
+  c.name = work.size() == 1 ? "Seat Loose Piece" : "Seat " + std::to_string(work.size()) + " Loose Pieces";
+  c.pieces = pieces;
+  std::set<std::string> defs;
+  for (const auto& [target, delta] : work) defs.insert(target.loc.def);
+  pinUses(s, defs, c);
+  for (const auto& [target, delta] : work) {
+    const Item& item = at(s.source, target.loc);
+    ItemEdit e = edit(target.loc.def, target.loc.step, target.loc.index, item, std::nullopt);
+    e.target = true;
+    e.parent = target.parent;
+    e.beforeLocal = s.local.at(target.id);
+    e.body = s.body.count(target.id) ? s.body.at(target.id) : Box{};
+    e.after = placed(item, through(target.parent, delta, e.beforeLocal), e.body);
+    c.items.push_back(std::move(e));
+  }
+  return push(s, std::move(c));
 }
 
 std::string groupOf(const Item& item) {
@@ -865,23 +954,36 @@ StepFields normalize(const StepFields& in) {
   return out;
 }
 
+bool arrivalPinned(const Item& item) {
+  const auto assembly = item.extra.find("assembly");
+  if (assembly == item.extra.end() || !assembly->is_object()) return false;
+  const auto root = assembly->find("root");
+  return root != assembly->end() && root->is_boolean() && root->get<bool>();
+}
+
+void setArrivalPin(Item& item, bool pinned) {
+  if (pinned) {
+    if (!item.extra.is_object()) item.extra = Json::object();
+    auto& assembly = item.extra["assembly"];
+    if (!assembly.is_object()) assembly = Json::object();
+    assembly["root"] = true;
+  } else if (auto assembly = item.extra.find("assembly"); assembly != item.extra.end() && assembly->is_object()) {
+    assembly->erase("root");
+    if (assembly->empty()) item.extra.erase(assembly);
+  }
+}
+
 void writeFields(bm::doc::Step& step, const StepFields& f) {
+  const auto pin = step.extra.find("pinOrder");
+  const bool wasPinned = pin != step.extra.end() && pin->is_boolean() && pin->get<bool>();
   setText(step.extra, "title", f.title);
   setText(step.extra, "notes", f.notes);
   if (f.pauseAfter > 0) step.extra["pauseAfter"] = f.pauseAfter;
   else step.extra.erase("pauseAfter");
   if (f.pinOrder) step.extra["pinOrder"] = true;
   else step.extra.erase("pinOrder");
-  // A pinned step's pieces carry the web's per-piece force flag (assembly.root).
-  for (Item& item : step.items) {
-    if (!item.extra.is_object()) item.extra = Json::object();
-    if (f.pinOrder) {
-      item.extra["assembly"]["root"] = true;
-    } else if (item.extra.contains("assembly") && item.extra["assembly"].is_object()) {
-      item.extra["assembly"].erase("root");
-      if (item.extra["assembly"].empty()) item.extra.erase("assembly");
-    }
-  }
+  if (wasPinned != f.pinOrder)
+    for (Item& item : step.items) setArrivalPin(item, f.pinOrder);
 }
 
 StepFields readFields(const bm::doc::Step& step) {
@@ -997,6 +1099,21 @@ Changed moveStepCommand(Session::Impl& s, const std::string& def, size_t from, s
   return swapCommand(s, Edit::MoveStep, "Move Step", def, std::move(after));
 }
 
+static Changed splitStepItems(Session::Impl& s, const std::string& def, const Def& source, size_t at, const std::set<size_t>& chosen) {
+  Def after = source;
+  bm::doc::Step rest, split;
+  rest.extra = after.steps[at].extra;
+  if (rest.extra.is_object()) {
+    for (const auto* field : {"pauseAfter", "motion", "pinOrder"})
+      if (rest.extra.contains(field)) split.extra[field] = rest.extra[field];
+    rest.extra.erase("pauseAfter");
+  }
+  for (size_t i = 0; i < after.steps[at].items.size(); i++) (chosen.count(i) ? split : rest).items.push_back(after.steps[at].items[i]);
+  after.steps[at] = std::move(rest);
+  after.steps.insert(after.steps.begin() + static_cast<long>(at + 1), std::move(split));
+  return swapCommand(s, Edit::SplitStep, "Split Step", def, std::move(after));
+}
+
 Changed splitStepCommand(Session::Impl& s, const std::string& def, size_t at, const std::vector<uint32_t>& pieces) {
   const Def* d = s.source.def(def);
   if (!d || at >= d->steps.size()) return unchanged(s);
@@ -1005,13 +1122,15 @@ Changed splitStepCommand(Session::Impl& s, const std::string& def, size_t at, co
     if (step == at) chosen.insert(index);
   if (chosen.empty()) return refusal(s, "Choose some of the step's pieces to split off.");
   if (chosen.size() == d->steps[at].items.size()) return refusal(s, "Choose some of the step's pieces, not all of them.");
-  Def after = *d;
-  bm::doc::Step rest, split;
-  rest.extra = after.steps[at].extra;
-  for (size_t i = 0; i < after.steps[at].items.size(); i++) (chosen.count(i) ? split : rest).items.push_back(after.steps[at].items[i]);
-  after.steps[at] = std::move(rest);
-  after.steps.insert(after.steps.begin() + static_cast<long>(at + 1), std::move(split));
-  return swapCommand(s, Edit::SplitStep, "Split Step", def, std::move(after));
+  return splitStepItems(s, def, *d, at, chosen);
+}
+
+Changed splitStepAtCommand(Session::Impl& s, const std::string& def, size_t step, size_t firstItem) {
+  const Def* d = s.source.def(def);
+  if (!d || step >= d->steps.size() || firstItem == 0 || firstItem >= d->steps[step].items.size()) return unchanged(s);
+  std::set<size_t> suffix;
+  for (size_t i = firstItem; i < d->steps[step].items.size(); ++i) suffix.insert(i);
+  return splitStepItems(s, def, *d, step, suffix);
 }
 
 Changed mergeStepsCommand(Session::Impl& s, const std::string& def, size_t first) {
@@ -1150,6 +1269,695 @@ Changed setMotionFieldsCommand(Session::Impl& s, MotionScope scope, size_t step,
   return push(s, std::move(c));
 }
 
+Changed setSequenceDurationCommand(Session::Impl& s, SequenceSegment segment, double seconds) {
+  if (!std::isfinite(seconds)) return unchanged(s);
+  const char* key = nullptr;
+  std::string_view label;
+  switch (segment) {
+    case SequenceSegment::Intro: key = "introSeconds"; label = "Intro"; break;
+    case SequenceSegment::Build: key = "buildSeconds"; label = "Build"; break;
+    case SequenceSegment::Hero: key = "outroSeconds"; label = "Hero"; break;
+  }
+  if (!key) return unchanged(s);
+  const double min = segment == SequenceSegment::Build ? 1.0 : 0.2;
+  const double max = segment == SequenceSegment::Build ? 1800.0 : 120.0;
+  const double duration = std::round(std::clamp(seconds, min, max) * 10) / 10;
+  const Json settings = s.base ? fieldObject(s.base->json, "settings") : Json::object();
+  Json updated = settings, video = fieldObject(settings, "video");
+  if (video.contains(key) && video[key] == duration) return unchanged(s);
+  video[key] = duration;
+  setFieldObject(updated, "video", video);
+  Command command;
+  command.kind = Edit::Motion;
+  command.name = "Resize " + std::string(label);
+  command.planField = Command::PlanField{"settings", settings.empty() ? Json{} : settings, updated, true};
+  return push(s, std::move(command));
+}
+
+StagingSettings stagingSettingsOf(const Session::Impl& s) {
+  StagingSettings out;
+  if (!s.base) return out;
+  const auto& video = fieldObject(fieldObject(s.base->json, "settings"), "video");
+  const auto read = [&](const char* key, std::string& output, auto parsed) {
+    const auto value = video.find(key);
+    if (value != video.end() && value->is_string()) {
+      const auto text = value->get<std::string>();
+      if (bm::plan::staging::parse(text, parsed)) output = text;
+    }
+  };
+  using namespace bm::plan::staging;
+  read("floorStyle", out.layout, Style::Packed);
+  read("floorSort", out.group, Sort::Step);
+  read("floorSides", out.sides, Sides::FrontBack);
+  read("floorMatch", out.match, Match::Fill);
+  // As the web: the frame shape follows the project's video format until one is chosen.
+  static const std::pair<const char*, double> formats[] = {{"9:16", 9.0 / 16}, {"4:5", 4.0 / 5}, {"1:1", 1}, {"16:9", 16.0 / 9}};
+  out.aspect = 9.0 / 16;
+  if (const auto format = video.find("format"); format != video.end() && format->is_string())
+    for (const auto& [name, aspect] : formats)
+      if (*format == name) out.aspect = aspect;
+  if (const auto value = video.find("floorAspect"); value != video.end() && value->is_number()) {
+    const double aspect = value->get<double>();
+    if (std::isfinite(aspect) && aspect >= 0.25 && aspect <= 4) out.aspect = aspect;
+  }
+  return out;
+}
+
+namespace {
+
+/// The settings field Build Staging writes, or nothing when `settings` are as saved; false when
+/// they are not valid.
+bool stagingSettingsField(const Session::Impl& s, const StagingSettings& settings, std::optional<Command::PlanField>& field) {
+  using namespace bm::plan::staging;
+  Style layout;
+  Sort group;
+  Sides sides;
+  Match match;
+  if (!parse(settings.layout, layout) || !parse(settings.group, group) || !parse(settings.sides, sides) ||
+      !parse(settings.match, match) || !std::isfinite(settings.aspect) || settings.aspect < 0.25 || settings.aspect > 4)
+    return false;
+  const auto existing = stagingSettingsOf(s);
+  if (settings.layout == existing.layout && settings.group == existing.group && settings.sides == existing.sides &&
+      settings.match == existing.match && (settings.aspect == existing.aspect || settings.layout != "camera-frame"))
+    return true;
+  const Json before = s.base ? fieldObject(s.base->json, "settings") : Json::object();
+  Json after = before, video = fieldObject(before, "video");
+  video["floorStyle"] = settings.layout;
+  video["floorSort"] = settings.group;
+  video["floorSides"] = settings.sides;
+  video["floorMatch"] = settings.match;
+  // Only the camera frame has a shape; other layouts leave the project's format in charge.
+  if (settings.layout == "camera-frame") video["floorAspect"] = settings.aspect;
+  else video.erase("floorAspect");
+  setFieldObject(after, "video", video);
+  field = Command::PlanField{"settings", before.empty() ? Json{} : before, std::move(after), true};
+  return true;
+}
+
+/// The stagingTurns field for a turn (wrapped as the web's setStagingTurn), or nothing when it
+/// is the turn saved; false for a turn that is not a number.
+bool stagingTurnField(const Session::Impl& s, double degrees, std::optional<Command::PlanField>& field, double& turn);
+
+}  // namespace
+
+Changed setStagingSettingsCommand(Session::Impl& s, const StagingSettings& settings) {
+  std::optional<Command::PlanField> field;
+  if (!stagingSettingsField(s, settings, field)) return refusal(s, "Choose a valid staging layout and frame shape.");
+  if (!field) return unchanged(s);
+  Command command;
+  command.kind = Edit::Staging;
+  command.name = "Change Staging";
+  command.planField = std::move(field);
+  return push(s, std::move(command));
+}
+
+double stagingTurnOf(const Session::Impl& s) {
+  const auto turns = s.source.extra.find("stagingTurns");
+  if (turns == s.source.extra.end() || !turns->is_object()) return 0;
+  const auto turn = turns->find(focusedDef(s));
+  if (turn == turns->end() || !turn->is_number()) return 0;
+  const double value = turn->get<double>();
+  return std::isfinite(value) ? std::clamp(value, -180.0, 180.0) : 0;
+}
+
+namespace {
+
+bool stagingTurnField(const Session::Impl& s, double degrees, std::optional<Command::PlanField>& field, double& turn) {
+  if (!std::isfinite(degrees)) return false;
+  // As the web's setStagingTurn: wrapped to (-180, 180], a tenth of a degree.
+  turn = std::round((std::fmod(std::fmod(degrees, 360) + 540, 360) - 180) * 10) / 10;
+  if (turn == -180) turn = 180;
+  if (turn == 0) turn = 0;  // never -0
+  if (turn == stagingTurnOf(s)) return true;
+  const auto found = s.source.extra.find("stagingTurns");
+  const Json before = found != s.source.extra.end() ? *found : Json{};
+  Json after = before.is_object() ? before : Json::object();
+  if (turn != 0) after[focusedDef(s)] = turn;
+  else after.erase(focusedDef(s));
+  field = Command::PlanField{"stagingTurns", before, after.empty() ? Json{} : std::move(after)};
+  return true;
+}
+
+}  // namespace
+
+Changed setStagingTurnCommand(Session::Impl& s, double degrees) {
+  std::optional<Command::PlanField> field;
+  double turn = 0;
+  if (!stagingTurnField(s, degrees, field, turn)) return refusal(s, "Choose a finite turn.");
+  if (!field) return unchanged(s);
+  Command command;
+  command.kind = Edit::Staging;
+  command.name = turn != 0 ? "Turn Staging Area" : "Reset Staging Turn";
+  command.planField = std::move(field);
+  return push(s, std::move(command));
+}
+
+namespace {
+const char* clockKey(CameraClock clock) { return clock == CameraClock::Timeline ? "timeline" : "build"; }
+
+/// cameraTracks with the focused model's track for `clock` set to `track`; the rest as it was.
+Json withCameraTrack(const Session::Impl& s, CameraClock clock, Json track) {
+  const auto found = s.source.extra.find("cameraTracks");
+  Json after = found != s.source.extra.end() && found->is_object() ? *found : Json::object();
+  Json& model = after[focusedDef(s)];
+  if (!model.is_object()) model = Json::object();
+  model[clockKey(clock)] = std::move(track);
+  return after;
+}
+}  // namespace
+
+Json cameraTrackOf(const Session::Impl& s, CameraClock clock) {
+  const auto tracks = s.source.extra.find("cameraTracks");
+  if (tracks == s.source.extra.end() || !tracks->is_object()) return {};
+  const auto model = tracks->find(focusedDef(s));
+  if (model == tracks->end() || !model->is_object()) return {};
+  const auto track = model->find(clockKey(clock));
+  return track != model->end() && track->is_object() ? *track : Json{};
+}
+
+Changed setCameraTrackCommand(Session::Impl& s, CameraClock clock, Json track, std::string name, bool continuing,
+                              const std::string& group) {
+  if (track == cameraTrackOf(s, clock)) return unchanged(s);
+  const auto found = s.source.extra.find("cameraTracks");
+  const Json before = found != s.source.extra.end() ? *found : Json{};
+  // the whole map is written back, so other models and the other clock are kept as they are
+  Json after = withCameraTrack(s, clock, std::move(track));
+  const std::string tag = std::string(clockKey(clock)) + "/" + group;
+  if (continuing && s.history.cursor > 0 && s.history.cursor == s.history.done.size()) {
+    auto& c = s.history.done[s.history.cursor - 1];
+    if (c.kind == Edit::CameraTrack && c.open && c.planField && c.planField->key == "cameraTracks" && c.name == name &&
+        c.morePlanFields.empty() && c.group == tag) {
+      c.planField->after = after;
+      s.source.extra["cameraTracks"] = std::move(after);
+      return finish(s, c);
+    }
+  }
+  Command command;
+  command.kind = Edit::CameraTrack;
+  command.name = std::move(name);
+  command.planField = Command::PlanField{"cameraTracks", before, std::move(after)};
+  // a field edit stays open, so the rest of a drag (continuing) grows it; any other edit closes it
+  command.open = !group.empty();
+  command.group = tag;
+  return push(s, std::move(command));
+}
+
+Changed autoDirectCommand(Session::Impl& s, CameraClock clock, Json track) {
+  const auto found = s.source.extra.find("cameraTracks");
+  const Json before = found != s.source.extra.end() ? *found : Json{};
+  Json after = withCameraTrack(s, clock, std::move(track));
+  const Json settingsBefore = s.base ? fieldObject(s.base->json, "settings") : Json::object();
+  Json settingsAfter = settingsBefore;
+  settingsAfter["exportCamera"] = "track";  // the video uses the track just written
+  if (after == before && settingsAfter == settingsBefore) return unchanged(s);
+  Command command;
+  command.kind = Edit::CameraTrack;
+  command.name = "Auto-Direct Camera";
+  command.planField = Command::PlanField{"cameraTracks", before, std::move(after)};
+  if (settingsAfter != settingsBefore)
+    command.morePlanFields.push_back({"settings", settingsBefore.empty() ? Json{} : settingsBefore, std::move(settingsAfter), true});
+  return push(s, std::move(command));
+}
+
+namespace {
+
+/// Calls `found(def, step, index, item)` for each item, in every model of the file, that waits
+/// turned (floorTurn) or dragged (floorShift) on the floor: where the web keeps them, on the item,
+/// so a submodel's piece is put back in every copy.
+template <typename Found>
+void eachMovedWaitingPart(const Session::Impl& s, Found found) {
+  const auto scan = [&](const std::string& name, const Def& def) {
+    for (size_t step = 0; step < def.steps.size(); ++step)
+      for (size_t index = 0; index < def.steps[step].items.size(); ++index) {
+        const auto& item = def.steps[step].items[index];
+        const auto& assembly = fieldObject(item.extra, "assembly");
+        const auto turn = assembly.find("floorTurn");
+        const bool turned = turn != assembly.end() && turn->is_number() && std::abs(std::remainder(turn->get<double>(), 360)) > 1e-6;
+        if (turned || assembly.contains("floorShift")) found(name, step, index, item);
+      }
+  };
+  scan("", s.source.root);
+  for (const auto& [name, def] : s.source.submodels) scan(name, def);
+}
+
+}  // namespace
+
+size_t movedWaitingPartsOf(const Session::Impl& s) {
+  size_t count = 0;
+  eachMovedWaitingPart(s, [&](const std::string&, size_t, size_t, const Item&) { ++count; });
+  return count;
+}
+
+namespace {
+
+std::vector<ItemEdit> putBackEdits(const Session::Impl& s) {
+  std::vector<ItemEdit> edits;
+  eachMovedWaitingPart(s, [&](const std::string& def, size_t step, size_t index, const Item& before) {
+    Item after = before;
+    Json assembly = fieldObject(after.extra, "assembly");
+    assembly.erase("floorTurn");
+    assembly.erase("floorShift");
+    setFieldObject(after.extra, "assembly", assembly);
+    edits.push_back(edit(def, step, index, before, std::move(after)));
+  });
+  return edits;
+}
+
+const char* putBackName(size_t parts) { return parts == 1 ? "Put Back Waiting Part" : "Put Back Waiting Parts"; }
+
+}  // namespace
+
+Changed putBackWaitingPartsCommand(Session::Impl& s) {
+  Command command;
+  command.kind = Edit::Motion;  // a turn replans (orientWaitingParts checks the turned pose is clear)
+  command.items = putBackEdits(s);
+  if (command.items.empty()) return unchanged(s);
+  command.name = putBackName(command.items.size());
+  return push(s, std::move(command));
+}
+
+Changed applyStagingCommand(Session::Impl& s, const StagingSettings& settings, double degrees, bool straighten) {
+  std::optional<Command::PlanField> layout, turnField;
+  double turn = 0;
+  if (!stagingSettingsField(s, settings, layout)) return refusal(s, "Choose a valid staging layout and frame shape.");
+  if (!stagingTurnField(s, degrees, turnField, turn)) return refusal(s, "Choose a finite turn.");
+  Command command;
+  command.kind = Edit::Staging;  // replans, as each part would
+  if (straighten) command.items = putBackEdits(s);
+  const int parts = (layout ? 1 : 0) + (turnField ? 1 : 0) + (command.items.empty() ? 0 : 1);
+  if (parts == 0) return unchanged(s);
+  if (parts > 1 || layout) command.name = "Change Staging";
+  else if (turnField) command.name = turn != 0 ? "Turn Staging Area" : "Reset Staging Turn";
+  else command.name = putBackName(command.items.size());
+  if (layout) command.planField = std::move(layout);
+  if (turnField) {
+    if (command.planField) command.morePlanFields.push_back(std::move(*turnField));
+    else command.planField = std::move(turnField);
+  }
+  return push(s, std::move(command));
+}
+
+namespace {
+
+double sceneNumber(const Json& object, const char* key, double fallback) {
+  const auto value = object.find(key);
+  return value != object.end() && value->is_number() ? value->get<double>() : fallback;
+}
+
+std::string sceneString(const Json& object, const char* key) {
+  const auto value = object.find(key);
+  return value != object.end() && value->is_string() ? value->get<std::string>() : std::string{};
+}
+
+bool sceneFlag(const Json& object, const char* key, bool fallback) {
+  const auto value = object.find(key);
+  return value != object.end() && value->is_boolean() ? value->get<bool>() : fallback;
+}
+
+Json scenePoint(bmapp::Vec3 v) { return Json::array({v.x / kStud, -v.y / kStud, -v.z / kStud}); }
+
+bmapp::Vec3 scenePoint(const Json& object, const char* key) {
+  const auto value = object.find(key);
+  if (value != object.end() && value->is_array() && value->size() == 3 &&
+      std::all_of(value->begin(), value->end(), [](const Json& n) { return n.is_number(); })) {
+    return {(*value)[0].get<double>() * kStud, (*value)[1].get<double>() * -kStud,
+            (*value)[2].get<double>() * -kStud};
+  }
+  return {NAN, NAN, NAN};
+}
+
+bool validScenePose(const SceneCamera& camera) {
+  const auto validPoint = [](bmapp::Vec3 v) {
+    return std::abs(v.x) <= 1e9 && std::abs(v.y) <= 1e9 && std::abs(v.z) <= 1e9;
+  };
+  return validPoint(camera.position) && validPoint(camera.target) &&
+      std::hypot(camera.position.x - camera.target.x, camera.position.y - camera.target.y,
+                 camera.position.z - camera.target.z) >= 1e-3 &&
+      camera.fieldOfView >= 8 && camera.fieldOfView <= 130 && std::isfinite(camera.farClip) &&
+      camera.nearClip >= 1e-3 && camera.farClip > camera.nearClip;
+}
+
+Changed updateSceneSetup(Session::Impl& s, const char* label, const Json& before, Json after) {
+  if (before == after) return unchanged(s);
+  Command command;
+  command.kind = Edit::SceneCamera;
+  command.name = label;
+  command.planField = Command::PlanField{"sceneSetup", before.empty() ? Json{} : before, std::move(after)};
+  return push(s, std::move(command));
+}
+
+}  // namespace
+
+SceneCameras sceneCamerasOf(const Session::Impl& s) {
+  SceneCameras out;
+  const auto& setup = fieldObject(s.source.extra, "sceneSetup");
+  out.activeId = sceneString(setup, "activeCameraId");
+  out.useForVideo = sceneFlag(setup, "useCameraForVideo", true);
+  const auto cameras = setup.find("cameras");
+  if (cameras == setup.end() || !cameras->is_array()) return out;
+  for (const auto& item : *cameras) {
+    if (!item.is_object()) continue;
+    SceneCamera camera;
+    camera.id = sceneString(item, "id");
+    camera.name = sceneString(item, "name");
+    camera.position = scenePoint(item, "position");
+    camera.target = scenePoint(item, "target");
+    camera.fieldOfView = sceneNumber(item, "fov", 42);
+    camera.nearClip = sceneNumber(item, "near", 0.05) * kStud;
+    camera.farClip = sceneNumber(item, "far", 5000) * kStud;
+    camera.orthographic = sceneFlag(item, "orthographic", false);
+    if (!camera.id.empty() && validScenePose(camera)) out.cameras.push_back(std::move(camera));
+  }
+  return out;
+}
+
+Changed saveSceneCameraCommand(Session::Impl& s, const SceneCamera& camera) {
+  if (camera.id.empty() || camera.name.empty() || !validScenePose(camera))
+    return refusal(s, "The camera needs a name and a valid position, target and lens.");
+  const auto& before = fieldObject(s.source.extra, "sceneSetup");
+  auto after = before;
+  auto& cameras = after["cameras"];
+  if (!cameras.is_array()) cameras = Json::array();
+  auto saved = std::find_if(cameras.begin(), cameras.end(), [&](const auto& item) {
+    return item.is_object() && sceneString(item, "id") == camera.id;
+  });
+  const bool adding = saved == cameras.end();
+  Json item = adding ? Json::object() : *saved;
+  item["kind"] = "camera";
+  item["id"] = camera.id;
+  item["name"] = camera.name;
+  item["position"] = scenePoint(camera.position);
+  item["target"] = scenePoint(camera.target);
+  item["fov"] = camera.fieldOfView;
+  item["near"] = camera.nearClip / kStud;
+  item["far"] = camera.farClip / kStud;
+  if (camera.orthographic) item["orthographic"] = true;
+  else item.erase("orthographic");
+  if (adding) cameras.push_back(std::move(item));
+  else *saved = std::move(item);
+  if (adding && sceneString(after, "activeCameraId").empty()) {
+    after["activeCameraId"] = camera.id;
+    after["useCameraForVideo"] = true;
+  }
+  // SceneSetup objects written by the web editor always carry these fields.
+  if (!after.contains("lights")) after["lights"] = Json::array();
+  if (!after.contains("useCameraForVideo")) after["useCameraForVideo"] = true;
+  if (!after.contains("useLightsForVideo")) after["useLightsForVideo"] = true;
+  if (!after.contains("includeStudioLights")) after["includeStudioLights"] = true;
+  if (!after.contains("region")) after["region"] = nullptr;
+  if (!after.contains("cropToRegion")) after["cropToRegion"] = false;
+  if (!after.contains("exposure")) after["exposure"] = 1;
+  return updateSceneSetup(s, adding ? "Save Camera" : "Update Camera", before, std::move(after));
+}
+
+Changed removeSceneCameraCommand(Session::Impl& s, const std::string& id) {
+  const auto& before = fieldObject(s.source.extra, "sceneSetup");
+  auto after = before;
+  auto cameras = after.find("cameras");
+  if (cameras == after.end() || !cameras->is_array()) return unchanged(s);
+  const auto found = std::find_if(cameras->begin(), cameras->end(), [&](const auto& item) {
+    return item.is_object() && sceneString(item, "id") == id;
+  });
+  if (found == cameras->end()) return unchanged(s);
+  cameras->erase(found);
+  if (sceneString(after, "activeCameraId") == id) after["activeCameraId"] = nullptr;
+  return updateSceneSetup(s, "Remove Camera", before, std::move(after));
+}
+
+Changed activateSceneCameraCommand(Session::Impl& s, const std::string& id) {
+  const auto& before = fieldObject(s.source.extra, "sceneSetup");
+  auto after = before;
+  if (id.empty()) {
+    after["useCameraForVideo"] = false;
+  } else {
+    const auto saved = sceneCamerasOf(s);
+    if (std::none_of(saved.cameras.begin(), saved.cameras.end(), [&](const auto& item) { return item.id == id; }))
+      return unchanged(s);
+    after["activeCameraId"] = id;
+    after["useCameraForVideo"] = true;
+  }
+  return updateSceneSetup(s, "Change Default Video Camera", before, std::move(after));
+}
+
+std::string exportCameraOf(const Session::Impl& s) {
+  // the web's default, and what it falls back to for anything it does not know
+  const Json settings = s.base ? fieldObject(s.base->json, "settings") : Json::object();
+  const auto found = settings.find("exportCamera");
+  if (found == settings.end() || !found->is_string()) return "track";
+  const auto value = found->get<std::string>();
+  return value == "automatic" || value == "buildView" ? value : "track";
+}
+
+Changed setExportCameraCommand(Session::Impl& s, const std::string& camera) {
+  if (camera != "automatic" && camera != "buildView" && camera != "track") return refusal(s, "Choose a video camera.");
+  if (camera == exportCameraOf(s)) return unchanged(s);
+  const Json before = s.base ? fieldObject(s.base->json, "settings") : Json::object();
+  Json after = before;
+  after["exportCamera"] = camera;
+  Command command;
+  command.kind = Edit::CameraTrack;
+  command.name = camera == "track" ? "Film Videos with the Camera Track" : camera == "buildView" ? "Film Videos from the Viewport Angle"
+                                                                         : "Film Videos with the Automatic Camera";
+  command.planField = Command::PlanField{"settings", before.empty() ? Json{} : before, std::move(after), true};
+  return push(s, std::move(command));
+}
+
+SnapMix snapMixOf(const Session::Impl& s) {
+  return s.base ? readSnapMix(fieldObject(fieldObject(s.base->json, "settings"), "video")) : SnapMix{};
+}
+
+Changed setSnapMixCommand(Session::Impl& s, const SnapMix& mix) {
+  if (!validSnapMix(mix)) return refusal(s, "The snap mix has a setting outside its valid range.");
+  if (mix == snapMixOf(s)) return unchanged(s);
+  const Json before = s.base ? fieldObject(s.base->json, "settings") : Json::object();
+  Json after = before, video = fieldObject(before, "video");
+  writeSnapMix(video, mix);
+  setFieldObject(after, "video", video);
+  Command command;
+  command.kind = Edit::SnapSound;
+  command.name = "Change Snap Sound";
+  command.planField = Command::PlanField{"settings", before.empty() ? Json{} : before, std::move(after), true};
+  return push(s, std::move(command));
+}
+
+
+// ---- Look and build settings ----
+
+namespace {
+
+const ScenePresets kScenes = [] {
+  const auto c = [](int r, int g, int b) { return bmapp::Vec3{r / 255.0, g / 255.0, b / 255.0}; };
+  struct Row { const char *id, *label, *hint; SceneCollection collection; int rgb[3]; bool floor; };
+  static const Row rows[] = {
+  {"photo-grey", "Reference grey", "Mid-grey tabletop, angled softbox and short contact shadows", SceneCollection::Photo, {159, 161, 164}, true},
+  {"slate-blue", "Slate blue", "Blue paper backdrop with cool fill and sculpted shadows", SceneCollection::Photo, {78, 95, 128}, true},
+  {"porcelain", "Porcelain", "Light neutral sweep with high-key diffused illumination", SceneCollection::Photo, {220, 220, 218}, true},
+  {"sage", "Sage paper", "Muted olive backdrop with clean daylight and soft edge light", SceneCollection::Photo, {168, 175, 153}, true},
+  {"sandstone", "Warm catalog", "Beige tabletop with a warm key and subtle cool bounce", SceneCollection::Photo, {209, 194, 172}, true},
+  {"catalog-cream", "Catalog cream", "BrickLink-style warm cream backdrop, glossy plastic and soft short shadows", SceneCollection::Photo, {240, 226, 180}, true},
+  {"graphite", "Graphite", "Dark matte editorial set with bright rim separation", SceneCollection::Photo, {47, 53, 62}, true},
+  {"eyesight", "BrickLink studio", "EyeSight default set: teal studio backdrop and the BrickLink Studio three-light rig", SceneCollection::Photo, {146, 192, 206}, true},
+  {"bricklink-white", "BrickLink product", "EyeSight product shot: a uniform white world with a high key and a low side light, fitted to EyeSight renders", SceneCollection::Photo, {255, 255, 255}, true},
+  {"eyesight-reference", "EyeSight lighting", "Fitted four-softbox ABS lighting; plain studs match the reference geometry", SceneCollection::Photo, {255, 255, 255}, true},
+  {"lavender", "Lavender", "Saturated lilac sweep with tinted overhead shadows", SceneCollection::Render, {151, 130, 231}, true},
+  {"render-grey", "Render grey", "Cool light grey seamless with soft overhead light", SceneCollection::Render, {177, 179, 184}, true},
+  {"steel-grey", "Steel grey", "Mid cool grey seamless, a touch darker and crisper", SceneCollection::Render, {160, 162, 168}, true},
+  {"powder-blue", "Powder blue", "Soft sky-blue sweep for bright, airy shots", SceneCollection::Render, {158, 196, 238}, true},
+  {"mint", "Mint", "Fresh pastel green seamless", SceneCollection::Render, {160, 219, 196}, true},
+  {"peach", "Peach", "Warm pastel orange with soft warm bounce", SceneCollection::Render, {245, 190, 164}, true},
+  {"blush", "Blush pink", "Pastel pink sweep for playful sets", SceneCollection::Render, {241, 175, 198}, true},
+  {"butter", "Butter yellow", "Pale warm yellow seamless", SceneCollection::Render, {243, 223, 149}, true},
+  {"cobalt", "Cobalt", "Bold saturated blue backdrop for strong contrast", SceneCollection::Render, {57, 98, 220}, true},
+  {"catalog-pink", "Pop pink", "Vivid pink collectible backdrop with neutral softbox light", SceneCollection::Render, {255, 74, 169}, true},
+  {"catalog-cyan", "Catalog cyan", "Bright cyan-blue collectible backdrop with a soft grounded shadow", SceneCollection::Render, {0, 135, 184}, true},
+  {"catalog-ocean", "Ocean blue", "Deep blue backdrop with a brighter blue floor for character portraits", SceneCollection::Render, {0, 106, 164}, true},
+  {"catalog-amber", "Amber glow", "Golden floor rising into burnt orange for warm character portraits", SceneCollection::Render, {220, 137, 0}, true},
+  {"catalog-olive", "Olive gold", "Muted antique-gold backdrop with soft neutral light", SceneCollection::Render, {156, 138, 59}, true},
+  {"catalog-ember", "Ember orange", "Fiery orange floor and deep red backdrop for bold character renders", SceneCollection::Render, {225, 58, 0}, true},
+  {"soft", "Soft studio", "Neutral grey, soft contact shadows", SceneCollection::Classic, {183, 182, 191}, true},
+  {"classic", "Bright studio", "Plain light backdrop, lit floor", SceneCollection::Classic, {237, 237, 239}, true},
+  {"white", "White seamless", "Product-shot white with a glossy floor", SceneCollection::Classic, {245, 245, 247}, true},
+  {"dark", "Dark spotlight", "Charcoal backdrop with a pool of light", SceneCollection::Classic, {42, 43, 48}, true},
+  {"black", "Black stage", "Pure black, no floor: bright bricks floating in the dark, as in the KenBrick videos", SceneCollection::Classic, {0, 0, 0}, false},
+  {"warm", "Warm paper", "Soft beige, gentle warm light", SceneCollection::Classic, {234, 225, 209}, true},
+  {"sky", "Sky blue", "Fresh light-blue gradient", SceneCollection::Classic, {201, 220, 240}, true},
+  {"night", "Midnight", "Deep navy with a cool spotlight", SceneCollection::Classic, {17, 21, 36}, true},
+  {"chroma", "Green screen", "Flat chroma green for compositing, no floor", SceneCollection::Classic, {0, 177, 64}, false},
+  };
+  ScenePresets out;
+  for (const Row& row : rows) {
+    ScenePreset scene;
+    scene.id = row.id, scene.label = row.label, scene.hint = row.hint, scene.collection = row.collection;
+    scene.background = c(row.rgb[0], row.rgb[1], row.rgb[2]);
+    scene.floor = row.floor;
+    out.push_back(std::move(scene));
+  }
+  return out;
+}();
+
+template <class E, size_t N>
+using Names = std::array<std::pair<E, const char*>, N>;
+constexpr Names<Shading, 6> kShadingNames{{{Shading::Standard, "standard"}, {Shading::Studio, "studio"},
+    {Shading::Neural, "neural"}, {Shading::HybridRT, "hybrid-rt"}, {Shading::ScreenSpaceGI, "ssgi"},
+    {Shading::PathTraced, "path-traced"}}};
+constexpr Names<BuildOrder, 2> kOrderNames{{{BuildOrder::TakeApart, "take-apart"}, {BuildOrder::BottomUp, "bottom-up"}}};
+constexpr Names<FlightShape, 3> kFlightNames{{{FlightShape::Automatic, "auto"}, {FlightShape::Web, "web"}, {FlightShape::Arc, "arc"}}};
+
+template <class E, size_t N>
+void readName(const Json& object, const char* key, const Names<E, N>& names, E& out) {
+  const auto it = object.find(key);
+  if (it == object.end() || !it->is_string()) return;
+  for (const auto& [value, name] : names)
+    if (*it == name) out = value;
+}
+
+template <class E, size_t N>
+const char* nameOf(const Names<E, N>& names, E value) {
+  for (const auto& [v, name] : names)
+    if (v == value) return name;
+  return names[0].second;
+}
+
+void readNumber(const Json& object, const char* key, double low, double high, double& out) {
+  const auto it = object.find(key);
+  if (it != object.end() && it->is_number() && std::isfinite(it->get<double>()))
+    out = std::clamp(it->get<double>(), low, high);
+}
+
+bool within(double value, double low, double high) { return std::isfinite(value) && value >= low && value <= high; }
+
+const Json& settingsOf(const Session::Impl& s) {
+  static const Json empty = Json::object();
+  return s.base ? fieldObject(s.base->json, "settings") : empty;
+}
+
+Changed updateSettings(Session::Impl& s, Edit kind, const char* name, const Json& before, Json after) {
+  if (after == before) return unchanged(s);
+  Command command;
+  command.kind = kind;
+  command.name = name;
+  command.planField = Command::PlanField{"settings", before.empty() ? Json{} : before, std::move(after), true};
+  return push(s, std::move(command));
+}
+
+}  // namespace
+
+const ScenePresets& scenePresets() { return kScenes; }
+
+const ScenePreset* scenePreset(const std::string& id) {
+  const auto found = std::find_if(kScenes.begin(), kScenes.end(), [&](const auto& scene) { return scene.id == id; });
+  return found == kScenes.end() ? nullptr : &*found;
+}
+
+RenderLook renderLookOf(const Session::Impl& s) {
+  RenderLook look;
+  const Json& settings = settingsOf(s);
+  const Json& video = fieldObject(settings, "video");
+  const Json& materials = fieldObject(video, "materials");
+  const Json& native = fieldObject(fieldObject(settings, "native"), "look");
+  if (const auto it = video.find("studioLook"); it != video.end() && it->is_string() && scenePreset(it->get<std::string>()))
+    look.scene = it->get<std::string>();
+  if (const auto it = video.find("edgeLines"); it != video.end() && it->is_boolean()) look.edges = it->get<bool>();
+  const Json& ao = fieldObject(materials, "ao");
+  if (const auto it = ao.find("enabled"); it != ao.end() && it->is_boolean()) look.ambientOcclusion = it->get<bool>();
+  // The web's floor kind: "none" has no floor, "auto" is the scene's own.
+  const auto floor = materials.find("floor");
+  const bool automatic = floor == materials.end() || !floor->is_string() || *floor == "auto";
+  if (automatic) look.floor = look.scene.empty() || scenePreset(look.scene)->floor;
+  else look.floor = *floor != "none";
+  double samples = look.pathSamples;
+  readNumber(video, "pathSamples", 8, 1024, samples);
+  look.pathSamples = static_cast<int>(std::lround(samples));
+  readName(native, "shading", kShadingNames, look.shading);
+  const auto flag = [&](const char* key, bool& out) {
+    if (const auto it = native.find(key); it != native.end() && it->is_boolean()) out = it->get<bool>();
+  };
+  flag("shadows", look.shadows);
+  flag("raytracedGlass", look.raytracedGlass);
+  flag("worldGiOcclusion", look.worldGiOcclusion);
+  flag("lightsFollowCamera", look.lightsFollowCamera);
+  return look;
+}
+
+Changed setRenderLookCommand(Session::Impl& s, const RenderLook& look) {
+  if (!look.scene.empty() && !scenePreset(look.scene)) return refusal(s, "Choose one of the listed scenes.");
+  if (look.pathSamples < 8 || look.pathSamples > 1024) return refusal(s, "Path tracing takes 8 to 1024 samples.");
+  const RenderLook current = renderLookOf(s);
+  const Json& before = settingsOf(s);
+  Json after = before, video = fieldObject(before, "video"), native = fieldObject(before, "native");
+  Json materials = fieldObject(video, "materials"), own = fieldObject(native, "look");
+  // Only what changed is written, so a web project keeps every key it had.
+  if (look.scene != current.scene) {
+    if (look.scene.empty()) video.erase("studioLook");
+    else video["studioLook"] = look.scene;
+  }
+  if (look.edges != current.edges) video["edgeLines"] = look.edges;
+  if (look.ambientOcclusion != current.ambientOcclusion) {
+    Json ao = fieldObject(materials, "ao");
+    ao["enabled"] = look.ambientOcclusion;
+    if (!ao.contains("strength")) ao["strength"] = nullptr;
+    if (!ao.contains("radius")) ao["radius"] = nullptr;
+    materials["ao"] = ao;
+  }
+  // A changed scene may bring its own floor; the floor is written only when it was asked for.
+  const bool sceneFloor = look.scene.empty() || scenePreset(look.scene)->floor;
+  const bool floorAsked = look.floor != current.floor || (look.scene != current.scene && look.floor != sceneFloor);
+  if (floorAsked) materials["floor"] = look.floor == sceneFloor ? "auto" : look.floor ? "shadow" : "none";
+  if (look.pathSamples != current.pathSamples) video["pathSamples"] = look.pathSamples;
+  if (look.shading != current.shading) own["shading"] = nameOf(kShadingNames, look.shading);
+  const auto flag = [&](const char* key, bool wanted, bool had) { if (wanted != had) own[key] = wanted; };
+  flag("shadows", look.shadows, current.shadows);
+  flag("raytracedGlass", look.raytracedGlass, current.raytracedGlass);
+  flag("worldGiOcclusion", look.worldGiOcclusion, current.worldGiOcclusion);
+  flag("lightsFollowCamera", look.lightsFollowCamera, current.lightsFollowCamera);
+  setFieldObject(video, "materials", materials);
+  setFieldObject(native, "look", own);
+  setFieldObject(after, "video", video);
+  setFieldObject(after, "native", native);
+  return updateSettings(s, Edit::Look, "Change Look", before, std::move(after));
+}
+
+BuildSettings buildSettingsOf(const Session::Impl& s) {
+  BuildSettings b;
+  const Json& build = fieldObject(fieldObject(settingsOf(s), "native"), "build");
+  if (const auto it = build.find("planner"); it != build.end() && *it == "standard") b.standardPlanner = true;
+  readName(build, "order", kOrderNames, b.order);
+  readName(build, "flight", kFlightNames, b.flight);
+  if (const auto it = build.find("cleanGrownUnits"); it != build.end() && it->is_boolean()) b.cleanGrownUnits = it->get<bool>();
+  readNumber(build, "piecesPerSecond", 0.25, 12, b.piecesPerSecond);
+  readNumber(build, "gap", 0, 2, b.gap);
+  readNumber(build, "stepPause", 0, 5, b.stepPause);
+  readNumber(build, "clearance", 4, 200, b.clearance);
+  readNumber(build, "corner", 0, 80, b.corner);
+  readNumber(fieldObject(settingsOf(s), "video"), "targetSeconds", 0, 3600, b.videoSeconds);
+  return b;
+}
+
+Changed setBuildSettingsCommand(Session::Impl& s, const BuildSettings& b) {
+  if (!within(b.piecesPerSecond, 0.25, 12) || !within(b.gap, 0, 2) || !within(b.stepPause, 0, 5) ||
+      !within(b.clearance, 4, 200) || !within(b.corner, 0, 80))
+    return refusal(s, "A build setting is outside its valid range.");
+  const Json& before = settingsOf(s);
+  Json after = before, native = fieldObject(before, "native");
+  // Defaults are left out: a project that never changed them has no `build` object.
+  const BuildSettings d;
+  Json build = Json::object();
+  if (b.standardPlanner) build["planner"] = "standard";
+  if (b.order != d.order) build["order"] = nameOf(kOrderNames, b.order);
+  if (b.flight != d.flight) build["flight"] = nameOf(kFlightNames, b.flight);
+  if (b.cleanGrownUnits) build["cleanGrownUnits"] = true;
+  const auto number = [&](const char* key, double value, double standard) {
+    if (value != standard) build[key] = std::round(value * 1000) / 1000;
+  };
+  number("piecesPerSecond", b.piecesPerSecond, d.piecesPerSecond);
+  number("gap", b.gap, d.gap);
+  number("stepPause", b.stepPause, d.stepPause);
+  number("clearance", b.clearance, d.clearance);
+  number("corner", b.corner, d.corner);
+  setFieldObject(native, "build", build);
+  setFieldObject(after, "native", native);
+  return updateSettings(s, Edit::BuildSettings, "Change Build Settings", before, std::move(after));
+}
 Changed turnWaitingPartCommand(Session::Impl& s, uint32_t piece, double degrees) {
   if (!std::isfinite(degrees) || piece >= s.refs.size()) return unchanged(s);
   const auto targets = resolve(s, {piece}, true);
@@ -1170,6 +1978,51 @@ Changed turnWaitingPartCommand(Session::Impl& s, uint32_t piece, double degrees)
   command.name = "Turn Waiting Part";
   command.items.push_back(edit(target.def, target.step, target.index, before, std::move(after)));
   return push(s, std::move(command));
+}
+
+namespace {
+
+/// assembly.floorShift, [x, z] studs in the web's world; zero when absent or malformed.
+std::array<double, 2> floorShiftField(const Json& assembly) {
+  const auto it = assembly.find("floorShift");
+  if (it == assembly.end() || !it->is_array() || it->size() != 2 || !(*it)[0].is_number() || !(*it)[1].is_number()) return {0, 0};
+  const double x = (*it)[0].get<double>(), z = (*it)[1].get<double>();
+  return std::isfinite(x) && std::isfinite(z) ? std::array<double, 2>{x, z} : std::array<double, 2>{0, 0};
+}
+
+}  // namespace
+
+Changed shiftWaitingPartCommand(Session::Impl& s, uint32_t piece, bm::Vec3 delta) {
+  if (!std::isfinite(delta.x) || !std::isfinite(delta.z) || piece >= s.refs.size()) return unchanged(s);
+  const auto targets = resolve(s, {piece}, true);
+  if (targets.empty()) return unchanged(s);
+  const auto& target = targets.front().loc;
+  const auto& before = at(s.source, target);
+  if (before.submodel) return unchanged(s);
+  Json assembly = fieldObject(before.extra, "assembly");
+  // as the web's shiftOnFloor: added to the drag before, in studs of the web's x and z (LDU -z)
+  const auto old = floorShiftField(assembly);
+  const auto round = [](double v) { return std::round(v * 1000) / 1000; };
+  const double x = round(old[0] + delta.x / 20), z = round(old[1] - delta.z / 20);
+  if (std::abs(x) > 1e5 || std::abs(z) > 1e5) return refusal(s, "That is too far from the model to wait.");
+  if (x == 0 && z == 0) assembly.erase("floorShift");
+  else assembly["floorShift"] = Json::array({x, z});
+  Item after = before;
+  setFieldObject(after.extra, "assembly", assembly);
+  if (after.extra == before.extra) return unchanged(s);
+  Command command;
+  command.kind = Edit::WaitingSpot;
+  command.name = "Move Waiting Part";
+  command.items.push_back(edit(target.def, target.step, target.index, before, std::move(after)));
+  return push(s, std::move(command));
+}
+
+bm::Vec3 waitingShiftOf(const Session::Impl& s, uint32_t piece) {
+  if (piece >= s.refs.size()) return {};
+  const auto targets = resolve(s, {piece}, true);
+  if (targets.empty()) return {};
+  const auto shift = floorShiftField(fieldObject(at(s.source, targets.front().loc).extra, "assembly"));
+  return {shift[0] * 20, 0, -shift[1] * 20};
 }
 
 bm::Vec3 insertionDirectionOf(const Session::Impl& s, uint32_t piece) {
@@ -1248,7 +2101,75 @@ Json editableAnimation(const Session::Impl& s) {
   return next;
 }
 
+std::string keyTarget(const Session::Impl& s, uint32_t piece, const Loc& location, const Json& tracks, bool submodel = false) {
+  if (!submodel && s.refs[piece].chain.size() > 1) {
+    const auto leaf = qualifiedKeyTarget(animationItemIds(s.source), s.refs[piece].chain);
+    const auto& original = s.model->pieces()[piece].id;
+    for (const auto& track : tracks) {
+      if (text(track, "model") != location.def || text(track, "source") != "baked-flight") continue;
+      auto target = text(track, "target");
+      if (target == leaf || target == original) return target;
+    }
+  }
+  return text(at(s.source, location).extra, "id");
+}
+
 }  // namespace
+
+void prepareBakeEdit(FlightBake::Impl& bake, const Session::Impl& s, const PieceList& pieces) {
+  bake.generation = s.generation;
+  bake.version = s.version;
+  bake.scope = focusedDef(s);
+  if (pieces.size() > 2000) {
+    bake.result = FlightBakeResult{0, 0, "This bake would exceed the 2,000-track project limit."};
+    return;
+  }
+  bake.command = animationEdit(s, bake.detach ? "Bake All and Detach Build" : "Bake Selected Flights", editableAnimation(s));
+  const auto locations = locate(s.source);
+  auto ids = animationItemIds(s.source);
+  std::unordered_set<std::string> taken;
+  for (const auto& [item, id] : ids) taken.insert(id);
+  std::unordered_set<std::string> targets;
+  for (size_t i = 0; i < pieces.size(); ++i) {
+    const auto& chain = s.refs[pieces[i]].chain;
+    for (const ItemId item : chain) {
+      if (ids.contains(item)) continue;
+      std::string id = "flight-" + std::to_string(item);
+      while (!taken.insert(id).second) id += "-new";
+      ids.emplace(item, id);
+      const auto& location = locations.at(item);
+      const auto& prior = at(s.source, location);
+      Item after = prior;
+      setText(after.extra, "id", id);
+      bake.command.items.push_back(edit(location.def, location.step, location.index, prior, std::move(after)));
+    }
+    auto target = qualifiedKeyTarget(ids, chain);
+    if (target.empty() || !targets.insert(target).second) {
+      bake.result = FlightBakeResult{0, 0, "Two pieces share an animation ID. Give each piece a unique ID before baking."};
+      return;
+    }
+    auto& captured = bake.targets[i];
+    captured.id = std::move(target);
+    if (auto prior = s.model->pieces()[pieces[i]].id; prior != captured.id) captured.previousId = std::move(prior);
+  }
+  for (const auto& target : bake.targets)
+    if (!target.previousId.empty()) targets.insert(target.previousId);
+  const auto& tracks = bake.command.planField->after["tracks"];
+  bake.replace = std::any_of(tracks.begin(), tracks.end(), [&](const Json& track) {
+    return text(track, "kind") == "object" && text(track, "model") == bake.scope &&
+           targets.contains(text(track, "target"));
+  });
+}
+
+Changed applyBakeEdit(Session::Impl& s, FlightBake::Impl& bake) {
+  const std::lock_guard lock(bake.mutex);
+  if (s.generation != bake.generation || s.version != bake.version)
+    return refusal(s, "The model or animation changed during the bake. Run the bake again.");
+  if (!bake.result || !bake.result->error.empty() || !bake.command.planField) return unchanged(s);
+  Command command = std::move(bake.command);
+  bake.command.planField.reset();
+  return push(s, std::move(command));
+}
 
 Changed setKeySceneCommand(Session::Impl& s, const KeyScene& scene) {
   if (scene.fps < 1 || scene.fps > 120 || scene.first < 0 || scene.last > 20000 || scene.first >= scene.last)
@@ -1296,7 +2217,8 @@ Changed setKeySceneCommand(Session::Impl& s, const KeyScene& scene) {
   return push(s, animationEdit(s, "Edit Animation Scene", std::move(next)));
 }
 
-Changed setKeysCommand(Session::Impl& s, uint32_t piece, const KeyList& keys, bool continuing, bool remove, bool baked) {
+Changed setKeysCommand(Session::Impl& s, uint32_t piece, const KeyList& keys, bool continuing, bool remove,
+                       bool baked, const KeyScene* openedFlight, bool submodel, const char* name) {
   if (!s.model || piece >= s.refs.size() || keys.empty()) return unchanged(s);
   const auto& chain = s.refs[piece].chain;
   if (chain.empty()) return unchanged(s);
@@ -1306,14 +2228,28 @@ Changed setKeysCommand(Session::Impl& s, uint32_t piece, const KeyList& keys, bo
   const auto& old = at(s.source, location);
   if (location.def != focusedDef(s)) return unchanged(s);
   Item ready = old;
-  std::string target = text(old.extra, "id");
+  Json next = editableAnimation(s);
+  if (submodel && !old.submodel) return unchanged(s);
+  std::string target = keyTarget(s, piece, location, next["tracks"], submodel);
   if (target.empty()) {
     if (remove) return unchanged(s);
     target = s.model->pieces()[piece].id;
     if (old.submodel) target = target.substr(0, target.find('/'));
     setText(ready.extra, "id", target);
   }
-  Json next = editableAnimation(s);
+  auto scene = readKeyScene(s);
+  if (openedFlight) {
+    const auto& requested = *openedFlight;
+    if (requested.fps != scene.fps || requested.first != scene.first || requested.last < scene.last ||
+        requested.last > 20000 || requested.buildStart < scene.first || requested.buildStart > requested.last ||
+        !requested.buildLinked || !std::isfinite(requested.buildSpeed) || requested.buildSpeed < 0.1 || requested.buildSpeed > 4)
+      return refusal(s, "The editable flight is outside the animation scene.");
+    scene = requested;
+    next["endFrame"] = scene.last;
+    auto& layers = next["buildLayers"];
+    if (!layers.is_object()) layers = Json::object();
+    layers[location.def] = {{"startFrame", scene.buildStart}, {"speed", scene.buildSpeed}};
+  }
   auto& tracks = next["tracks"];
   auto track = std::find_if(tracks.begin(), tracks.end(), [&](const auto& row) {
     return text(row, "model") == location.def && text(row, "target") == target;
@@ -1327,7 +2263,6 @@ Changed setKeysCommand(Session::Impl& s, uint32_t piece, const KeyList& keys, bo
   if (baked) (*track)["source"] = "baked-flight";
   auto& channels = (*track)["channels"];
   if (!channels.is_object()) channels = Json::object();
-  const auto scene = readKeyScene(s);
   for (const auto& key : keys) {
     const auto channel = static_cast<size_t>(key.channel);
     size_t curve = static_cast<size_t>(key.interpolation);
@@ -1363,12 +2298,151 @@ Changed setKeysCommand(Session::Impl& s, uint32_t piece, const KeyList& keys, bo
       return finish(s, c);
     }
   }
-  auto c = animationEdit(s, baked ? "Bake Build Motion" : remove ? "Delete Keyframes" : "Set Keyframes", std::move(next));
+  auto c = animationEdit(s, name ? name : baked ? "Bake Build Motion" : remove ? "Delete Keyframes" : "Set Keyframes", std::move(next));
   c.pieces = {piece};
   c.open = continuing;
   c.stepIndex = static_cast<size_t>(frame);
   if (old.extra != ready.extra) c.items.push_back(edit(location.def, location.step, location.index, old, std::move(ready)));
   return push(s, std::move(c));
+}
+
+namespace {
+
+constexpr KeyChannel kLocation[3] = {KeyChannel::PositionX, KeyChannel::PositionY, KeyChannel::PositionZ};
+
+/// A piece's flight open as keys (a baked track of its own), or nothing.
+std::optional<KeyTrack> openFlightTrack(const Session::Impl& s, uint32_t piece) {
+  auto track = readKeyTrack(s, piece);
+  if (!track || !track->baked || track->members.size() != 1) return std::nullopt;
+  return track;
+}
+
+/// The frames that hold a location key, first to last.
+std::vector<int> locationFrames(const KeyTrack& track) {
+  std::set<int> frames;
+  for (const auto& key : track.keys)
+    if (key.channel <= KeyChannel::PositionZ) frames.insert(key.frame);
+  return {frames.begin(), frames.end()};
+}
+
+/// flightPath.ts fullPathKeys: every location channel keyed at each of its path points and at
+/// `extra`, each at the value it has there, so moving or adding a point leaves the rest of the
+/// path as it was. A key takes the curve of the key before it on its channel (linear first).
+KeyList fullPathKeys(const KeyTrack& track, const std::vector<int>& extra) {
+  std::vector<int> frames = locationFrames(track);
+  frames.insert(frames.end(), extra.begin(), extra.end());
+  std::sort(frames.begin(), frames.end());
+  frames.erase(std::unique(frames.begin(), frames.end()), frames.end());
+  KeyList out;
+  for (const KeyChannel channel : kLocation) {
+    std::vector<const Keyframe*> lane;
+    for (const auto& key : track.keys)
+      if (key.channel == channel) lane.push_back(&key);
+    std::sort(lane.begin(), lane.end(), [](const Keyframe* a, const Keyframe* b) { return a->frame < b->frame; });
+    for (const int frame : frames) {
+      const auto at = std::lower_bound(lane.begin(), lane.end(), frame, [](const Keyframe* k, int f) { return k->frame < f; });
+      if (at != lane.end() && (*at)->frame == frame) continue;
+      const KeyInterpolation curve = at == lane.begin() ? KeyInterpolation::Linear : (*std::prev(at))->interpolation;
+      out.push_back({channel, frame, sampleKeys(track, channel, frame), curve});
+    }
+  }
+  return out;
+}
+
+}  // namespace
+
+Changed addFlightPathPointCommand(Session::Impl& s, uint32_t piece, int frame) {
+  const auto track = openFlightTrack(s, piece);
+  if (!track) return refusal(s, "Open the part's flight as keys to edit its path.");
+  const auto frames = locationFrames(*track);
+  if (frames.size() < 2 || frame <= frames.front() || frame >= frames.back()) return refusal(s, "Add a path point between the first and the last.");
+  if (std::binary_search(frames.begin(), frames.end(), frame)) return unchanged(s);
+  return setKeysCommand(s, piece, fullPathKeys(*track, {frame}), false, false, false, nullptr, false, "Add Path Point");
+}
+
+Changed setFlightPathPointCommand(Session::Impl& s, uint32_t piece, int frame, bm::Vec3 location, bool continuing) {
+  if (!std::isfinite(location.x) || !std::isfinite(location.y) || !std::isfinite(location.z)) return unchanged(s);
+  const auto track = openFlightTrack(s, piece);
+  if (!track) return refusal(s, "Open the part's flight as keys to edit its path.");
+  KeyList keys = fullPathKeys(*track, {frame});
+  std::erase_if(keys, [&](const Keyframe& key) { return key.frame == frame; });
+  const double values[3] = {location.x, location.y, location.z};
+  for (int i = 0; i < 3; ++i) {
+    const auto& lane = track->keys;
+    const auto same = std::find_if(lane.begin(), lane.end(), [&](const Keyframe& k) { return k.channel == kLocation[i] && k.frame == frame; });
+    const auto before = std::find_if(lane.rbegin(), lane.rend(), [&](const Keyframe& k) { return k.channel == kLocation[i] && k.frame < frame; });
+    const KeyInterpolation curve = same != lane.end() ? same->interpolation : before != lane.rend() ? before->interpolation : KeyInterpolation::Linear;
+    keys.push_back({kLocation[i], frame, std::round(values[i] * 1000) / 1000, curve});
+  }
+  // the drag's own step: keyed by the moved point's frame, so it is that frame's keys first
+  std::stable_partition(keys.begin(), keys.end(), [&](const Keyframe& key) { return key.frame == frame; });
+  return setKeysCommand(s, piece, keys, continuing, false, false, nullptr, false, "Move Path Point");
+}
+
+Changed deleteFlightPathPointCommand(Session::Impl& s, uint32_t piece, int frame) {
+  const auto track = openFlightTrack(s, piece);
+  if (!track) return refusal(s, "Open the part's flight as keys to edit its path.");
+  const auto frames = locationFrames(*track);
+  if (!std::binary_search(frames.begin(), frames.end(), frame)) return unchanged(s);
+  if (frames.size() <= 2 || frame == frames.front() || frame == frames.back())
+    return refusal(s, "The first and last path points hold the start and the seat.");
+  KeyList keys;
+  for (const KeyChannel channel : kLocation) keys.push_back({channel, frame, 0, KeyInterpolation::Linear});
+  return setKeysCommand(s, piece, keys, false, true, false, nullptr, false, "Delete Path Point");
+}
+
+Changed updateFlightCommand(Session::Impl& s, uint32_t piece, const FlightPoseList* route) {
+  if (piece >= s.refs.size() || s.refs[piece].chain.empty()) return unchanged(s);
+  const auto& chain = s.refs[piece].chain;
+  const bool nested = chain.size() > 1;
+  if (nested && route) return refusal(s, "Open the containing submodel to save an edited route for its definition.");
+  const auto locations = locate(s.source);
+  const Loc& location = locations.at(chain.front());
+  if (location.def != focusedDef(s)) return unchanged(s);
+  const Item& before = at(s.source, location);
+  Item after = before;
+  Json assembly = nested ? Json::object() : fieldObject(before.extra, "assembly");
+  bool custom = assembly.erase("flight") > 0;
+  if (route) {
+    if (route->size() < 2 || route->size() > 256) return refusal(s, "The selected flight has no editable motion.");
+    Json poses = Json::array();
+    for (const auto& pose : *route) {
+      const double length = std::hypot(std::hypot(pose.qx, pose.qy), std::hypot(pose.qz, pose.qw));
+      if (!std::isfinite(length) || length < 1e-9 || !std::isfinite(pose.position.x) ||
+          !std::isfinite(pose.position.y) || !std::isfinite(pose.position.z))
+        return refusal(s, "The flight contains an invalid pose.");
+      poses.push_back({pose.position.x, pose.position.y, pose.position.z,
+                       pose.qx / length, pose.qy / length, pose.qz / length, pose.qw / length});
+    }
+    poses.back() = {0, 0, 0, 0, 0, 0, 1};
+    assembly["flight"] = std::move(poses);
+    custom = true;
+  }
+  if (custom) setFieldObject(after.extra, "assembly", assembly);
+
+  const auto id = nested ? qualifiedKeyTarget(animationItemIds(s.source), chain) : text(before.extra, "id");
+  const std::string legacyId = nested ? s.model->pieces()[piece].id : "";
+  Json next = editableAnimation(s);
+  auto& tracks = next["tracks"];
+  const auto track = std::find_if(tracks.begin(), tracks.end(), [&](const auto& row) {
+    if (text(row, "model") != location.def || text(row, "kind") != "object" || text(row, "source") != "baked-flight") return false;
+    const auto target = text(row, "target");
+    return (!id.empty() && target == id) || (!legacyId.empty() && target == legacyId);
+  });
+  if (track == tracks.end() && !custom) return unchanged(s);
+  if (track != tracks.end()) tracks.erase(track);
+  const auto scene = readKeyScene(s);
+  if (!scene.buildLinked) {
+    auto& layers = next["buildLayers"];
+    if (!layers.is_object()) layers = Json::object();
+    layers[location.def] = {{"startFrame", scene.first}, {"speed", 1.0}};
+  }
+  auto command = animationEdit(s, route ? "Use Flight in Build" : "Return Flight to Planner", std::move(next));
+  if (custom) {
+    command.kind = Edit::InsertionDirection;
+    command.items.push_back(edit(location.def, location.step, location.index, before, std::move(after)));
+  }
+  return push(s, std::move(command));
 }
 
 Changed moveKeyCommand(Session::Impl& s, uint32_t piece, KeyChannel channel, int from, int to) {
@@ -1378,9 +2452,9 @@ Changed moveKeyCommand(Session::Impl& s, uint32_t piece, KeyChannel channel, int
   if (to < range.first || to > range.last) return refusal(s, "The key must stay within the scene range.");
   const auto locations = locate(s.source);
   const auto& location = locations.at(s.refs[piece].chain.front());
-  const std::string id = text(at(s.source, location).extra, "id");
-  if (id.empty()) return unchanged(s);
   Json next = editableAnimation(s);
+  const std::string id = keyTarget(s, piece, location, next["tracks"]);
+  if (id.empty()) return unchanged(s);
   for (auto& track : next["tracks"]) {
     if (text(track, "target") != id || text(track, "model") != location.def ||
         !track.contains("channels") || !track["channels"].is_object()) continue;
@@ -1411,7 +2485,128 @@ Changed moveKeyCommand(Session::Impl& s, uint32_t piece, KeyChannel channel, int
   return unchanged(s);
 }
 
-Changed moveToStepCommand(Session::Impl& s, const std::string& def, const std::vector<uint32_t>& pieces, size_t step) {
+Changed moveKeysCommand(Session::Impl& s, uint32_t piece, const KeyList& keys, int offset, bool submodel) {
+  if (piece >= s.refs.size() || s.refs[piece].chain.empty() || keys.empty() || offset == 0) return unchanged(s);
+  const auto range = readKeyScene(s);
+  std::map<size_t, std::set<int>> selected;
+  for (const auto& key : keys) {
+    const auto channel = static_cast<size_t>(key.channel);
+    const int64_t destination = static_cast<int64_t>(key.frame) + offset;
+    if (channel >= kKeyChannels.size() || destination < range.first || destination > range.last)
+      return refusal(s, "The selected keys must stay within the scene range.");
+    selected[channel].insert(key.frame);
+  }
+  const auto locations = locate(s.source);
+  const auto& location = locations.at(s.refs[piece].chain.front());
+  if (submodel && !at(s.source, location).submodel) return unchanged(s);
+  Json next = editableAnimation(s);
+  const std::string id = keyTarget(s, piece, location, next["tracks"], submodel);
+  if (id.empty()) return unchanged(s);
+  for (auto& track : next["tracks"]) {
+    if (text(track, "target") != id || text(track, "model") != location.def ||
+        !track.contains("channels") || !track["channels"].is_object()) continue;
+    auto& channels = track["channels"];
+    for (const auto& [channel, frames] : selected) {
+      auto lane = channels.find(kKeyChannels[channel]);
+      if (lane == channels.end() || !lane->is_array()) return unchanged(s);
+      std::map<int, Json> moved;
+      std::map<int, Json> remaining;
+      for (const auto& key : *lane) {
+        if (!key.is_object() || !key.contains("frame") || !key["frame"].is_number_integer()) continue;
+        const int frame = key["frame"].get<int>();
+        if (frames.contains(frame)) {
+          auto relocated = key;
+          relocated["frame"] = frame + offset;
+          moved[frame + offset] = std::move(relocated);
+        } else {
+          remaining[frame] = key;
+        }
+      }
+      if (moved.size() != frames.size()) return unchanged(s);
+      for (auto& [frame, key] : moved) remaining[frame] = std::move(key);
+      Json replacement = Json::array();
+      for (auto& [frame, key] : remaining) replacement.push_back(std::move(key));
+      *lane = std::move(replacement);
+    }
+    return push(s, animationEdit(s, "Move Keyframes", std::move(next)));
+  }
+  return unchanged(s);
+}
+
+Changed editKeyRowsCommand(Session::Impl& s, const KeyRowPicks& picks, bool remove, int offset) {
+  if (picks.empty() || (!remove && offset == 0)) return unchanged(s);
+  const auto range = readKeyScene(s);
+  const auto locations = locate(s.source);
+  const auto model = focusedDef(s);
+  Json next = editableAnimation(s);
+  auto& tracks = next["tracks"];
+  std::map<std::pair<uint32_t, bool>, std::set<int>> byObject;
+  for (const auto& pick : picks) {
+    if (pick.piece >= s.refs.size() || s.refs[pick.piece].chain.empty()) return unchanged(s);
+    const int64_t destination = static_cast<int64_t>(pick.frame) + offset;
+    if (pick.frame < range.first || pick.frame > range.last || destination < range.first || destination > range.last)
+      return refusal(s, "The selected keys must stay within the scene range.");
+    byObject[{pick.piece, pick.submodel}].insert(pick.frame);
+  }
+  std::unordered_map<std::string, std::set<int>> byTrack;
+  for (const auto& [object, frames] : byObject) {
+    const auto [piece, submodel] = object;
+    const auto& location = locations.at(s.refs[piece].chain.front());
+    if (submodel && !at(s.source, location).submodel) return unchanged(s);
+    const std::string id = keyTarget(s, piece, location, tracks, submodel);
+    if (id.empty() || location.def != model) return unchanged(s);
+    byTrack[id].insert(frames.begin(), frames.end());
+  }
+  bool changed = false;
+  for (auto& track : tracks) {
+    if (text(track, "kind") != "object" || text(track, "model") != model) continue;
+    const auto found = byTrack.find(text(track, "target"));
+    if (found == byTrack.end() || !track.contains("channels") || !track["channels"].is_object()) continue;
+    const auto& frames = found->second;
+    std::set<int> existing;
+    auto& channels = track["channels"];
+    for (const auto* channel : kKeyChannels) {
+      const auto lane = channels.find(channel);
+      if (lane == channels.end() || !lane->is_array()) continue;
+      std::map<int, Json> remaining;
+      std::vector<std::pair<int, Json>> moved;
+      bool touched = false;
+      for (const auto& row : *lane) {
+        if (!row.is_object() || !row.contains("frame") || !row["frame"].is_number_integer()) continue;
+        const int frame = row["frame"].get<int>();
+        if (!frames.contains(frame)) {
+          remaining[frame] = row;
+          continue;
+        }
+        touched = true;
+        existing.insert(frame);
+        if (!remove) {
+          auto newRow = row;
+          newRow["frame"] = frame + offset;
+          moved.emplace_back(frame + offset, std::move(newRow));
+        }
+      }
+      if (!touched) continue;
+      for (auto& [frame, row] : moved) remaining[frame] = std::move(row);
+      if (remaining.empty()) {
+        channels.erase(lane);
+      } else {
+        Json replacement = Json::array();
+        for (auto& [frame, row] : remaining) replacement.push_back(std::move(row));
+        *lane = std::move(replacement);
+      }
+    }
+    if (frames != existing) return refusal(s, "Some selected keys have changed. Select them again to edit.");
+    byTrack.erase(found);
+    if (channels.empty()) track = nullptr;
+    changed = true;
+  }
+  if (!changed || !byTrack.empty()) return unchanged(s);
+  tracks.erase(std::remove(tracks.begin(), tracks.end(), nullptr), tracks.end());
+  return push(s, animationEdit(s, remove ? "Delete Object Keys" : "Move Object Keys", std::move(next)));
+}
+
+Changed moveToStepCommand(Session::Impl& s, const std::string& def, const std::vector<uint32_t>& pieces, size_t step, bool insert) {
   const Def* d = s.source.def(def);
   if (!d || step > d->steps.size()) return unchanged(s);
   bool partial = false;
@@ -1422,15 +2617,18 @@ Changed moveToStepCommand(Session::Impl& s, const std::string& def, const std::v
   }
   Def after = *d;
   std::vector<Item> moving;
+  moving.reserve(chosen.size());
   for (auto it = chosen.rbegin(); it != chosen.rend(); ++it) {
     auto& items = after.steps[it->first].items;
-    moving.insert(moving.begin(), items[it->second]);
+    moving.push_back(std::move(items[it->second]));
     items.erase(items.begin() + static_cast<long>(it->second));
   }
-  if (step == after.steps.size()) after.steps.push_back(emptyStep());
+  std::reverse(moving.begin(), moving.end());
+  if (insert || step == after.steps.size()) after.steps.insert(after.steps.begin() + static_cast<long>(step), emptyStep());
   auto& target = after.steps[step].items;
-  target.insert(target.end(), moving.begin(), moving.end());
-  return swapCommand(s, Edit::MoveToStep, named("Move", moving.size()) + " to Step " + std::to_string(step + 1), def, std::move(after));
+  target.insert(target.end(), std::make_move_iterator(moving.begin()), std::make_move_iterator(moving.end()));
+  const std::string destination = insert ? " to New Step" : " to Step " + std::to_string(step + 1);
+  return swapCommand(s, Edit::MoveToStep, named("Move", moving.size()) + destination, def, std::move(after));
 }
 
 Changed reorderInStepCommand(Session::Impl& s, const std::string& def, size_t step, size_t from, size_t to, bool pin) {
@@ -1449,6 +2647,70 @@ Changed reorderInStepCommand(Session::Impl& s, const std::string& def, size_t st
     writeFields(after.steps[step], fields);
   }
   return swapCommand(s, Edit::ReorderInStep, pin ? "Set Arrival Order" : "Reorder Step", def, std::move(after));
+}
+
+Changed setArrivalPinnedCommand(Session::Impl& s, const PieceList& pieces, bool pinned) {
+  const std::string def = focusedDef(s);
+  const Def* d = s.source.def(def);
+  if (!d) return unchanged(s);
+  bool partial = false;
+  const auto chosen = itemsOf(s, def, pieces, true, &partial);
+  if (partial) return refusal(s, "Open the submodel to pin one of its parts.");
+  if (std::none_of(chosen.begin(), chosen.end(), [&](const auto& location) {
+        return arrivalPinned(d->steps[location.first].items[location.second]) != pinned;
+      })) return unchanged(s);
+  Def after = *d;
+  for (const auto& [step, index] : chosen) setArrivalPin(after.steps[step].items[index], pinned);
+  return swapCommand(s, Edit::ReorderInStep, pinned ? "Pin Arrival" : "Release Arrival", def, std::move(after));
+}
+
+PieceList Session::arrivalPins() const {
+  const auto& s = *impl_;
+  PieceList out;
+  const Def* def = s.source.def(focusedDef(s));
+  if (!def) return out;
+  for (const auto& step : def->steps)
+    for (const auto& item : step.items) {
+      if (!arrivalPinned(item)) continue;
+      const auto found = s.piecesOf.find(item.id);
+      if (found == s.piecesOf.end()) continue;
+      for (uint32_t p : found->second)
+        if (!s.refs[p].chain.empty() && s.refs[p].chain.front() == item.id) out.push_back(p);
+    }
+  return out;
+}
+
+Changed moveArrivalCommand(Session::Impl& s, const PieceList& pieces, size_t step, size_t before, bool force) {
+  const std::string def = focusedDef(s);
+  const Def* d = s.source.def(def);
+  if (!d || step >= d->steps.size() || before > d->steps[step].items.size()) return unchanged(s);
+  bool partial = false;
+  const auto chosen = itemsOf(s, def, pieces, true, &partial);
+  if (partial) return refusal(s, "Open the submodel to move one of its parts.");
+  if (chosen.empty()) return unchanged(s);
+  Def after = *d;
+  std::vector<Item> moving;
+  moving.reserve(chosen.size());
+  size_t removedBefore = 0;
+  for (auto it = chosen.rbegin(); it != chosen.rend(); ++it) {
+    auto& source = after.steps[it->first].items;
+    moving.push_back(std::move(source[it->second]));
+    source.erase(source.begin() + static_cast<long>(it->second));
+    if (it->first == step && it->second < before) ++removedBefore;
+  }
+  std::reverse(moving.begin(), moving.end());
+  if (force)
+    for (Item& item : moving) setArrivalPin(item, true);
+  auto& target = after.steps[step].items;
+  target.insert(target.begin() + static_cast<long>(before - removedBefore),
+                std::make_move_iterator(moving.begin()), std::make_move_iterator(moving.end()));
+  if (chosen.front().first == step && chosen.back().first == step) {
+    const auto& original = d->steps[step].items;
+    if (std::equal(target.begin(), target.end(), original.begin(), [](const Item& a, const Item& b) {
+          return a.id == b.id && arrivalPinned(a) == arrivalPinned(b);
+        })) return unchanged(s);
+  }
+  return swapCommand(s, Edit::ReorderInStep, force ? "Move and Pin Arrival" : "Move Arrival", def, std::move(after));
 }
 
 Changed regenerateStepsCommand(Session::Impl& s, const PieceList& buildOrder) {

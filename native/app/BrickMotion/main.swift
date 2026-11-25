@@ -41,6 +41,15 @@ func selftestBridge(_ path: String) -> Int32 {
 }
 
 let args = CommandLine.arguments
+// The engine reads the BrickNet habits from the bundle; a developer build falls back to the repository copy.
+if getenv("BM_HABITS") == nil,
+   let habits = Bundle.main.resourceURL?.appendingPathComponent("Suggest/habits.json"),
+   FileManager.default.fileExists(atPath: habits.path) {
+  setenv("BM_HABITS", habits.path, 0)
+}
+if args.count >= 2 && args[1] == "--render-editor-movie" {
+  EditorMovieCommand.start(Array(args.dropFirst(2)))
+}
 if args.count >= 2 && args[1] == "--version" {
   print("BrickMotion \(String(bmapp.Session.engineVersion()))")
   exit(0)
@@ -54,8 +63,14 @@ if args.count >= 3 && args[1] == "--bench-edit" {
 if args.count >= 3 && args[1] == "--bench-timeline" {
   exit(MainActor.assumeIsolated { benchTimeline(args[2]) })
 }
+if args.count >= 3 && args[1] == "--bench-playback" {
+  exit(MainActor.assumeIsolated { benchPlayback(args[2]) })
+}
 if args.count >= 3 && args[1] == "--bench-orbit" {
   exit(MainActor.assumeIsolated { benchOrbit(args[2]) })
+}
+if args.count >= 2 && args[1] == "--bench-part-lane" {
+  exit(MainActor.assumeIsolated { benchPartLane() })
 }
 if args.contains("--save-to") {
   exit(MainActor.assumeIsolated { headlessSave(args) })
@@ -79,8 +94,14 @@ if args.count >= 3 && args[1] == "--selftest-panes" {
 if args.count >= 3 && args[1] == "--selftest-edit" {
   exit(MainActor.assumeIsolated { selftestEdit(args[2]) })
 }
+if args.count >= 3 && args[1] == "--selftest-motion" {
+  exit(MainActor.assumeIsolated { selftestMotion(args[2]) })
+}
 if args.count >= 2 && args[1] == "--selftest-placement" {
   exit(MainActor.assumeIsolated { selftestPlacement() })
+}
+if args.count >= 2 && args[1] == "--selftest-render-queue" {
+  exit(MainActor.assumeIsolated { selftestRenderQueue() })
 }
 /// The bundle's document types and type declarations must list exactly bmapp::documentTypes().
 func checkPlist() -> Int32 {

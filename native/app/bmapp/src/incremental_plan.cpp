@@ -3,6 +3,7 @@
 #include <array>
 #include <chrono>
 #include <cstring>
+#include <limits>
 #include <tuple>
 #include "bm/plan/tolerances.h"
 
@@ -58,13 +59,13 @@ bool unchangedApartFrom(const bm::Model& a, const bm::Model& b, uint32_t changed
 std::optional<IncrementalPlan> replanMove(const bm::Model& before, const bm::Model& after, uint32_t piece,
     const bmtools::Planned& previous, bm::ldraw::PartCache& parts, bmtools::ConnectorSources& sources,
     bm::collide::ShapeCache& shapes,
-    const bm::plan::Style& style, const bm::plan::Options& options) {
+    const bm::plan::Style& style, const bm::plan::Options& options, bm::plan::FlightCheckCache& checks) {
   if (!previous.plan.complete || !unchangedApartFrom(before, after, piece)) return std::nullopt;
   const auto target = std::find_if(previous.plan.moves.begin(), previous.plan.moves.end(),
       [&](const auto& move) { return std::find(move.unit.pieces.begin(), move.unit.pieces.end(), piece) != move.unit.pieces.end(); });
   if (target == previous.plan.moves.end() || target->unit.pieces.size() != 1 || target->authoredFlight) return std::nullopt;
   const auto started = std::chrono::steady_clock::now();
-  const bm::collide::World world(after, parts, shapes);
+  const bm::collide::World world(after, parts, shapes, options.travelCache);
   auto graph = bm::connect::buildGraph(after, sources.connectors, &sources.gears);
   bm::connect::inferJoints(graph, after, sources.connectors, world);
   // A former full solve may have dropped an inferred mate between two untouched parts. Keep
@@ -78,7 +79,7 @@ std::optional<IncrementalPlan> replanMove(const bm::Model& before, const bm::Mod
   });
   bm::connect::regroup(graph);
   if (edgesAwayFrom(graph, piece) != edgesAwayFrom(previous.graph, piece)) return std::nullopt;
-  const bm::plan::Context context(after, graph, world);
+  const bm::plan::Context context(after, graph, world, options.down);
   std::vector<bool> neighbors(after.pieces().size());
   const std::array<const std::vector<bm::connect::Connection>*, 2> both{&graph.connections, &previous.graph.connections};
   for (const auto* connections : both) {
@@ -90,15 +91,45 @@ std::optional<IncrementalPlan> replanMove(const bm::Model& before, const bm::Mod
   // Both the old and the new occupied volume can change whether a nearby move is possible.
   Box changed = world.box(piece);
   const auto oldShape = before.mesh(before.pieces()[piece].part, parts);
-  changed.merge(oldShape->bounds.transformed(before.pieces()[piece].world));
+  if (oldShape) changed.merge(oldShape->bounds.transformed(before.pieces()[piece].world));
   Box bounds;
   for (uint32_t i = 0; i < world.size(); ++i) bounds.merge(world.box(i));
   bm::collide::World::Present present(after.pieces().size(), 0);
 
+  // The sequencer inserts a piece only where it rests on the table or joins a placed piece.
+  // Where the table is follows the lowest piece: if the edit moves it, every rest changes.
+  constexpr double kOnTable = 0.5;  // LDU, as the sequencer
+  const auto bottomOf = [&](const Box& b) {
+    if (b.empty()) return -std::numeric_limits<double>::infinity();
+    double low = -std::numeric_limits<double>::infinity();
+    for (int c = 0; c < 8; c++)
+      low = std::max(low, bm::dot(options.down, bm::Vec3{c & 1 ? b.max.x : b.min.x, c & 2 ? b.max.y : b.min.y,
+                                                         c & 4 ? b.max.z : b.min.z}));
+    return low;
+  };
+  double tableBefore = -std::numeric_limits<double>::infinity(), table = tableBefore;
+  for (uint32_t i = 0; i < world.size(); ++i) {
+    const double bottom = bottomOf(world.box(i));
+    table = std::max(table, bottom);
+    tableBefore = std::max(tableBefore, i == piece && oldShape
+        ? bottomOf(oldShape->bounds.transformed(before.pieces()[piece].world)) : bottom);
+  }
+  if (std::abs(table - tableBefore) > 1e-9) return std::nullopt;
+  const auto supported = [&](const std::vector<uint32_t>& unit) {
+    for (uint32_t p : unit) {
+      if (bottomOf(world.box(p)) >= table - kOnTable) return true;
+      for (uint32_t ci : context.connectionsOf[p]) {
+        const auto& edge = context.graph.connections[ci];
+        const uint32_t other = edge.a == p ? edge.b : edge.a;
+        if (present[other] && std::find(unit.begin(), unit.end(), other) == unit.end()) return true;
+      }
+    }
+    return false;
+  };
+
   IncrementalPlan out;
   out.planned.plan = previous.plan;
   out.planned.plan.extractions = 0;
-  bool sameRoutes = true;
   for (auto& move : out.planned.plan.moves) {
     if (options.cancel && options.cancel->cancelled()) return std::nullopt;
     const auto& unit = move.unit.pieces;
@@ -107,23 +138,18 @@ std::optional<IncrementalPlan> replanMove(const bm::Model& before, const bm::Mod
     const bool clashes = present[piece] && crossesChangedBox(move, world, changed);
     if (moved || adjacent || clashes || move.blocker == piece) {
       if (move.authoredFlight) return std::nullopt;
+      if (!supported(unit)) return std::nullopt;  // the order itself must change: a full solve
       bm::Vec3 axis;
       if (options.authored && unit.size() == 1 && unit.front() < options.authored->insertionAxis.size())
         axis = options.authored->insertionAxis[unit.front()];
-      const auto clear = bm::plan::extract(context, move.unit, &present, bounds, axis, false);
+      auto clear = bm::plan::extract(context, move.unit, &present, bounds, axis, true);
       ++out.planned.plan.extractions;
       if (!clear.ok) return std::nullopt;
-      sameRoutes = sameRoutes && move.path.size() == clear.path.size() &&
-        std::equal(move.path.begin(), move.path.end(), clear.path.begin(), [](const auto& a, const auto& b) {
-          return bm::length(a.t - b.t) <= 1e-7 && std::equal(std::begin(a.r.m), std::end(a.r.m), std::begin(b.r.m),
-            [](double x, double y) { return std::abs(x - y) <= 1e-9; });
-        });
-      move.path = clear.path;
+      move.path = std::move(clear.path);
       move.insertion = -clear.direction;
       move.seatTravel = clear.seatTravel;
       move.blocker = UINT32_MAX;
-      move.flag = Flag::None;
-      if (moved && context.connectionsOf[piece].empty()) move.flag = Flag::Unjoined;
+      move.flag = moved && context.connectionsOf[piece].empty() ? Flag::Unjoined : Flag::None;
     } else {
       ++out.reused;
     }
@@ -131,12 +157,9 @@ std::optional<IncrementalPlan> replanMove(const bm::Model& before, const bm::Mod
   }
   if (out.reused == 0) return std::nullopt;
   out.planned.plan.planMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
-  // A byte-for-byte equivalent seat path still needs new staging distances for a new pose.
-  // Keep the already checked flights if the pose is the same (e.g. undoing an in-flight edit).
-  if (sameRoutes && std::memcmp(&before.pieces()[piece].world, &after.pieces()[piece].world, sizeof(bm::Xform)) == 0)
-    out.planned.timeline = previous.timeline;
-  else
-    out.planned.timeline = bm::plan::buildTimeline(after, parts, out.planned.plan, style, options.down);
+  out.planned.timeline = bm::plan::buildTimeline(after, parts, out.planned.plan, style, options.down,
+                                                nullptr, nullptr, &shapes, options.cancel, &checks, options.travelCache);
+  if (options.cancel && options.cancel->cancelled()) return std::nullopt;
   out.planned.graph = std::move(graph);
   return out;
 }

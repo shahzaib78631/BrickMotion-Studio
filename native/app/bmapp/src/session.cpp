@@ -1,5 +1,7 @@
 #include "bmapp/session.h"
 #include "animation_keys.h"
+#include "flight_bake_impl.h"
+#include "inventory_import_impl.h"
 #include "bmapp/part_catalog.h"
 
 #include <algorithm>
@@ -16,6 +18,7 @@
 #include "bm/doc/source.h"
 #include "bm/io.h"
 #include "commands.h"
+#include "camera_track.h"
 #include "bm/version.h"
 #include "engine.h"
 #include "session_impl.h"
@@ -156,6 +159,70 @@ bm::doc::Source forProject(const Session::Impl& s) {
   for (auto& [name, def] : out.submodels) bake(def);
   return out;
 }
+
+bm::doc::Source standalone(bm::doc::Source source, const std::string& model) {
+  using Json = nlohmann::ordered_json;
+  const auto* definition = source.def(model);
+  source.root = *definition;
+  source.rootName = model.ends_with(".ldr") ? model : model + ".ldr";
+  std::set<std::string> children;
+  auto visit = [&](auto& self, const bm::doc::Def& def) -> void {
+    for (const auto& step : def.steps)
+      for (const auto& item : step.items)
+        if (item.submodel && item.name != model && children.insert(item.name).second)
+          if (const auto* sub = source.def(item.name)) self(self, *sub);
+  };
+  visit(visit, source.root);
+  std::erase_if(source.submodels, [&](const auto& sub) { return !children.contains(sub.first); });
+  if (!source.extra.is_object()) source.extra = {{"format", "brickmotion-plan"}, {"version", 1}};
+  source.extra["name"] = model;
+  for (const char* key : {"assemblySpot", "loosePiecesFollow", "showModelAtSpot", "workBaySpots", "assemblyPlan"})
+    source.extra.erase(key);
+  for (const char* key : {"pauses", "stagingTurns", "cameraTracks"}) {
+    const auto original = source.extra.find(key);
+    if (original == source.extra.end() || !original->is_object()) continue;
+    Json scoped = Json::object();
+    for (const auto& [name, value] : original->items()) {
+      if (name == model) scoped[""] = value;
+      else if (children.contains(name)) scoped[name] = value;
+    }
+    if (scoped.empty()) source.extra.erase(key);
+    else *original = std::move(scoped);
+  }
+  const auto animation = source.extra.find("animation");
+  if (animation != source.extra.end() && animation->is_object()) {
+    const auto tracks = animation->find("tracks");
+    if (tracks != animation->end() && tracks->is_array()) {
+      Json scoped = Json::array();
+      for (auto track : *tracks) {
+        if (!track.is_object() || !track.contains("model") || !track["model"].is_string()) continue;
+        const auto name = track["model"].get<std::string>();
+        if (name == model) track["model"] = "";
+        else if (!children.contains(name)) continue;
+        scoped.push_back(std::move(track));
+      }
+      *tracks = std::move(scoped);
+    }
+    // Build layers are keyed by definition, like the tracks: the submodel becomes the root.
+    const auto layers = animation->find("buildLayers");
+    if (layers != animation->end() && layers->is_object()) {
+      Json scoped = Json::object();
+      for (const auto& [name, value] : layers->items()) {
+        if (name == model) scoped[""] = value;
+        else if (children.contains(name)) scoped[name] = value;
+      }
+      if (scoped.empty()) animation->erase("buildLayers");
+      else *layers = std::move(scoped);
+    }
+  }
+  // Saved cameras frame the whole assembly in its world; the submodel stands at its own origin.
+  const auto scene = source.extra.find("sceneSetup");
+  if (scene != source.extra.end() && scene->is_object()) {
+    (*scene)["cameras"] = Json::array();  // the web's schema requires the list
+    (*scene)["activeCameraId"] = nullptr;
+  }
+  return source;
+}
 }  // namespace
 
 std::string Session::projectBytes() const {
@@ -174,6 +241,20 @@ std::string Session::planBytes() const { return bm::doc::toPlan(forProject(*impl
 
 std::string Session::mpdBytes() const { return impl_->library ? bm::doc::writeMpd(impl_->source, *impl_->library) : ""; }
 
+std::string Session::submodelMpdBytes(const std::string& model) const {
+  if (model.empty()) return mpdBytes();
+  if (!impl_->library || !impl_->source.def(model)) return {};
+  return bm::doc::writeMpd(standalone(impl_->source, model), *impl_->library);
+}
+
+std::string Session::submodelProjectBytes(const std::string& model) const {
+  if (model.empty()) return projectBytes();
+  if (!impl_->source.def(model)) return {};
+  auto base = impl_->base ? *impl_->base : bm::doc::Project{};
+  if (base.json.is_object()) base.json.erase("brickmotionPreview");
+  return bm::doc::writeProject(base, standalone(forProject(*impl_), model), true);
+}
+
 size_t Session::pieceCount() const { return impl_->model ? impl_->model->pieces().size() : 0; }
 
 std::string Session::title() const { return impl_->file.stem().string(); }
@@ -185,6 +266,10 @@ PartMatch Session::partAt(uint32_t piece) const {
   const auto& part = impl_->model->pieces()[piece].part;
   const auto* file = impl_->model->library().find(part);
   return {part, file && !file->description.empty() ? file->description : part, {}};
+}
+int Session::partColor(uint32_t piece) const {
+  if (!impl_->model || piece >= impl_->model->pieces().size()) return 16;
+  return impl_->model->pieces()[piece].color;
 }
 bool Session::isLocalPiece(uint32_t piece) const {
   return piece < impl_->refs.size() && impl_->refs[piece].chain.size() == 1;
@@ -293,15 +378,26 @@ std::string Session::copy(const std::vector<uint32_t>& pieces) const { return im
 Changed Session::paste(const std::string& text, Vec3 offset) { BM_EDIT_SELECTING(pasteCommand(*impl_, focusedDef(*impl_), text, engine(offset)), true); }
 Changed Session::placePart(const std::string& part, int color, const PartPose& pose, int step,
                            uint64_t generation, uint64_t version) {
+  return placePartBefore(part, color, pose, step, -1, generation, version);
+}
+Changed Session::placePartBefore(const std::string& part, int color, const PartPose& pose, int step,
+                                 int index, uint64_t generation, uint64_t version) {
   if (!impl_->model || impl_->generation != generation || impl_->version != version)
     return refusal(*impl_, "The model changed. Preview the placement again.");
-  BM_EDIT_SELECTING(placePartCommand(*impl_, focusedDef(*impl_), part, color, engine(pose), step), true);
+  BM_EDIT_SELECTING(placePartCommand(*impl_, focusedDef(*impl_), part, color, engine(pose), step, index), true);
 }
 Changed Session::placeMoved(const PieceList& pieces, uint32_t anchor, const PartPose& pose,
                             uint64_t generation, uint64_t version) {
   if (!impl_->model || impl_->generation != generation || impl_->version != version)
     return refusal(*impl_, "The model changed. Preview the move again.");
   BM_EDIT(placeMovedCommand(*impl_, pieces, anchor, engine(pose)));
+}
+Changed Session::seatPieces(const PieceMoves& moves, uint64_t generation, uint64_t version) {
+  if (!impl_->model || impl_->generation != generation || impl_->version != version)
+    return refusal(*impl_, "The model changed while it was checked. Check it again.");
+  std::vector<std::pair<uint32_t, bm::Xform>> poses;
+  for (const auto& move : moves) poses.emplace_back(move.piece, engine(move.pose));
+  BM_EDIT(seatPiecesCommand(*impl_, poses));
 }
 Changed Session::setGroup(const PieceList& pieces, const std::string& group) {
   BM_EDIT(setGroupCommand(*impl_, pieces, group));
@@ -310,6 +406,16 @@ Changed Session::importModel(const ModelImport* file, const std::string& into, u
   if (impl_->generation != generation) return refusal(*impl_, "The document changed before the import finished.");
   if (!file || !file->impl_->source) return refusal(*impl_, file ? file->error() : "The file could not be read.");
   BM_EDIT(importModelCommand(*impl_, into, *file->impl_->source, file->impl_->name));
+}
+
+Changed Session::importInventory(const InventoryImport* inventory) {
+  if (!inventory || !inventory->impl_->prepared) return refusal(*impl_, "The parts inventory has not been read.");
+  const auto& draft = *inventory->impl_;
+  if (!draft.report.error.empty()) return refusal(*impl_, draft.report.error);
+  if (draft.parts.empty()) return refusal(*impl_, "The file contains no available parts to import.");
+  if (impl_->generation != draft.generation || impl_->version != draft.version || impl_->focus != draft.focus)
+    return refusal(*impl_, "The model changed while the parts were being arranged. Import the inventory again.");
+  BM_EDIT_SELECTING(importInventoryCommand(*impl_, focusedDef(*impl_), draft.step, draft.parts), true);
 }
 StringList Session::groupNames() const {
   std::set<std::string> groups;
@@ -344,6 +450,7 @@ Changed Session::insertStep(size_t at) { BM_EDIT(insertStepCommand(*impl_, focus
 Changed Session::deleteStep(size_t at) { BM_EDIT(deleteStepCommand(*impl_, focusedDef(*impl_), at)); }
 Changed Session::moveStep(size_t from, size_t to) { BM_EDIT(moveStepCommand(*impl_, focusedDef(*impl_), from, to)); }
 Changed Session::splitStep(size_t at, const std::vector<uint32_t>& pieces) { BM_EDIT(splitStepCommand(*impl_, focusedDef(*impl_), at, pieces)); }
+Changed Session::splitStepAt(size_t step, size_t firstItem) { BM_EDIT(splitStepAtCommand(*impl_, focusedDef(*impl_), step, firstItem)); }
 Changed Session::mergeSteps(size_t first) { BM_EDIT(mergeStepsCommand(*impl_, focusedDef(*impl_), first)); }
 Changed Session::setStepFields(size_t at, const StepFields& fields, bool continuing) {
   BM_EDIT(setStepFieldsCommand(*impl_, focusedDef(*impl_), at, fields, continuing));
@@ -354,8 +461,189 @@ MotionFields Session::motionFields(MotionScope scope, size_t step, const PieceLi
 Changed Session::setMotionFields(MotionScope scope, size_t step, const PieceList& pieces, const MotionFields& fields) {
   BM_EDIT(setMotionFieldsCommand(*impl_, scope, step, pieces, fields));
 }
+Changed Session::setSequenceDuration(SequenceSegment segment, double seconds) {
+  BM_EDIT(setSequenceDurationCommand(*impl_, segment, seconds));
+}
+StagingSettings Session::stagingSettings() const { return stagingSettingsOf(*impl_); }
+Changed Session::setStagingSettings(const StagingSettings& settings) {
+  BM_EDIT(setStagingSettingsCommand(*impl_, settings));
+}
+double Session::stagingTurn() const { return stagingTurnOf(*impl_); }
+Changed Session::setStagingTurn(double degrees) { BM_EDIT(setStagingTurnCommand(*impl_, degrees)); }
+size_t Session::movedWaitingParts() const { return movedWaitingPartsOf(*impl_); }
+Changed Session::putBackWaitingParts() { BM_EDIT(putBackWaitingPartsCommand(*impl_)); }
+Changed Session::applyStaging(const StagingSettings& settings, double turn, bool straighten) {
+  BM_EDIT(applyStagingCommand(*impl_, settings, turn, straighten));
+}
+std::vector<CameraTrackKey> Session::cameraKeys(CameraClock clock) const {
+  return camtrack::keysOf(cameraTrackOf(*impl_, clock));
+}
+std::vector<CameraMove> Session::cameraMoves(CameraClock clock) const { return camtrack::movesOf(cameraTrackOf(*impl_, clock)); }
+std::string Session::cameraDirectorStyle(CameraClock clock) const {
+  const auto track = cameraTrackOf(*impl_, clock);
+  const auto style = track.is_object() ? track.find("style") : track.end();
+  return track.is_object() && style != track.end() && style->is_string() ? style->get<std::string>() : std::string{};
+}
+std::vector<CameraPreset> Session::cameraPresets() { return camtrack::presets(); }
+
+namespace {
+bool validView(const SceneCamera& view) {
+  const auto finite = [](Vec3 v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); };
+  return finite(view.position) && finite(view.target) && std::isfinite(view.fieldOfView) && view.fieldOfView > 0.5 &&
+      view.fieldOfView < 179 &&
+      std::hypot(view.position.x - view.target.x, view.position.y - view.target.y, view.position.z - view.target.z) > 1e-6;
+}
+camtrack::Json viewKey(const SceneCamera& view, double seconds) {
+  return camtrack::keyFromView(camtrack::toWeb(bm::Vec3{view.position.x, view.position.y, view.position.z}),
+                               camtrack::toWeb(bm::Vec3{view.target.x, view.target.y, view.target.z}), view.fieldOfView, seconds);
+}
+bool hasKey(const Session::Impl& s, CameraClock clock, const std::string& id) {
+  const auto keys = camtrack::keysOf(cameraTrackOf(s, clock));
+  return std::any_of(keys.begin(), keys.end(), [&](const auto& k) { return k.id == id; });
+}
+bool hasMove(const Session::Impl& s, CameraClock clock, const std::string& from) {
+  const auto moves = camtrack::movesOf(cameraTrackOf(s, clock));
+  return std::any_of(moves.begin(), moves.end(), [&](const auto& m) { return m.from == from; });
+}
+}  // namespace
+
+Changed Session::addCameraKey(CameraClock clock, double seconds, const SceneCamera& view, double fps, double duration) {
+  if (!std::isfinite(seconds) || !std::isfinite(fps) || !std::isfinite(duration) || duration < 0 || !validView(view)) {
+    BM_EDIT(refusal(*impl_, "The view could not be keyed."));
+  }
+  BM_EDIT(setCameraTrackCommand(*impl_, clock, camtrack::addKey(cameraTrackOf(*impl_, clock), viewKey(view, seconds), fps, duration),
+                                "Add Camera Key"));
+}
+Changed Session::setCameraKeyView(CameraClock clock, const std::string& id, const SceneCamera& view) {
+  if (!hasKey(*impl_, clock, id) || !validView(view)) {
+    BM_EDIT(refusal(*impl_, "The camera key could not be updated."));
+  }
+  BM_EDIT(setCameraTrackCommand(*impl_, clock, camtrack::setKeyView(cameraTrackOf(*impl_, clock), id, viewKey(view, 0)),
+                                "Update Camera Key"));
+}
+Changed Session::moveCameraKey(CameraClock clock, const std::string& id, double seconds, double fps, double duration) {
+  if (!hasKey(*impl_, clock, id) || !std::isfinite(seconds) || !std::isfinite(fps) || !std::isfinite(duration)) {
+    BM_EDIT(refusal(*impl_, "The camera key could not be moved."));
+  }
+  BM_EDIT(setCameraTrackCommand(*impl_, clock, camtrack::moveKey(cameraTrackOf(*impl_, clock), id, seconds, fps, duration),
+                                "Move Camera Key"));
+}
+Changed Session::removeCameraKey(CameraClock clock, const std::string& id) {
+  if (!hasKey(*impl_, clock, id)) {
+    BM_EDIT(unchanged(*impl_));
+  }
+  BM_EDIT(setCameraTrackCommand(*impl_, clock, camtrack::removeKey(cameraTrackOf(*impl_, clock), id), "Delete Camera Key"));
+}
+Changed Session::setCameraKeyTarget(CameraClock clock, const std::string& id, const std::string& target) {
+  if (!hasKey(*impl_, clock, id)) {
+    BM_EDIT(unchanged(*impl_));
+  }
+  const char* name = target == "build" ? "Follow the Build" : target == "piece" ? "Follow the Landing Piece" : "Frame the Model";
+  BM_EDIT(setCameraTrackCommand(*impl_, clock, camtrack::setKeyTarget(cameraTrackOf(*impl_, clock), id, target), name));
+}
+Changed Session::setCameraKey(CameraClock clock, const CameraTrackKey& key, bool continuing) {
+  if (!hasKey(*impl_, clock, key.id)) {
+    BM_EDIT(unchanged(*impl_));
+  }
+  BM_EDIT(setCameraTrackCommand(*impl_, clock, camtrack::setKeyFields(cameraTrackOf(*impl_, clock), key), "Change Camera Key",
+                                continuing, "key/" + key.id));
+}
+Changed Session::setCameraMove(CameraClock clock, const CameraMove& move, bool continuing) {
+  if (!hasMove(*impl_, clock, move.from)) {
+    BM_EDIT(unchanged(*impl_));
+  }
+  BM_EDIT(setCameraTrackCommand(*impl_, clock, camtrack::setMoveFields(cameraTrackOf(*impl_, clock), move), "Change Camera Move",
+                                continuing, "move/" + move.from));
+}
+Changed Session::chooseCameraPreset(CameraClock clock, const std::string& fromId, const std::string& presetId, double distance) {
+  if (!hasKey(*impl_, clock, fromId)) {
+    BM_EDIT(unchanged(*impl_));
+  }
+  std::string label = "Glide";
+  for (const auto& p : camtrack::presets())
+    if (p.id == presetId) label = p.label;
+  BM_EDIT(setCameraTrackCommand(*impl_, clock,
+                                camtrack::choosePreset(cameraTrackOf(*impl_, clock), fromId, presetId,
+                                                       std::isfinite(distance) ? std::max(0.0, distance) / 20 : 10),
+                                "Camera Move: " + label));
+}
+std::string Session::exportCamera() const { return exportCameraOf(*impl_); }
+Changed Session::setExportCamera(const std::string& camera) { BM_EDIT(setExportCameraCommand(*impl_, camera)); }
+
+Changed Session::clearCameraTrack(CameraClock clock) {
+  const auto track = cameraTrackOf(*impl_, clock);
+  if (camtrack::keysOf(track).empty()) {
+    BM_EDIT(unchanged(*impl_));
+  }
+  auto empty = track;
+  empty["keys"] = camtrack::Json::array();
+  empty["transitions"] = camtrack::Json::array();
+  BM_EDIT(setCameraTrackCommand(*impl_, clock, std::move(empty), "Clear Camera Track"));
+}
+
+Changed Session::autoDirectCamera(CameraClock clock, const CameraDirectorInput& input, const std::string& style, double lensMm) {
+  const auto finite = [](double v) { return std::isfinite(v); };
+  if (!input.ok || !finite(input.duration) || input.duration <= 0 || !finite(input.buildEnd) || !finite(input.intro)) {
+    BM_EDIT(refusal(*impl_, "Plan the build first: Auto-direct follows where its pieces land."));
+  }
+  const KeyScene scene = keyScene();
+  if (clock == CameraClock::Timeline && !scene.buildLinked) {
+    BM_EDIT(refusal(*impl_, "Link the Build to the timeline first: Auto-direct follows where its pieces land."));
+  }
+  camtrack::DirectorBuild build;
+  const auto box = [](Vec3 a, Vec3 b) {
+    bm::Box out;
+    out.grow({a.x, a.y, a.z});
+    out.grow({b.x, b.y, b.z});
+    return camtrack::toWeb(out);
+  };
+  for (const auto& l : input.lands)
+    if (finite(l.start) && finite(l.end)) build.lands.push_back({l.start, l.end, box(l.min, l.max)});
+  build.model = box(input.modelMin, input.modelMax);
+  build.intro = input.intro, build.buildEnd = input.buildEnd, build.duration = input.duration;
+  camtrack::DirectorOptions options;
+  options.style = style;
+  options.lensMm = finite(lensMm) ? std::clamp(lensMm, 8.0, 400.0) : 50;
+  auto track = camtrack::autoDirect(build, options);
+  double duration = input.duration;
+  if (clock == CameraClock::Timeline) {
+    // the keys move onto the timeline's clock: the Build starts at its start frame, at its speed
+    const double fps = std::max(1, scene.fps);
+    duration = (scene.last - scene.first + 1) / fps;
+    const double offset = (scene.buildStart - scene.first) / fps;
+    const double speed = scene.buildSpeed > 1e-6 ? scene.buildSpeed : 1;
+    camtrack::Json keys = camtrack::Json::array();
+    for (auto key : track["keys"]) {
+      key["t"] = std::clamp(offset + key["t"].get<double>() / speed, 0.0, duration);
+      // keys squeezed onto the same time (past the end) keep only the first
+      if (!keys.empty() && key["t"].get<double>() - keys.back()["t"].get<double>() <= 1e-6) continue;
+      keys.push_back(std::move(key));
+    }
+    track["keys"] = std::move(keys);
+  }
+  BM_EDIT(autoDirectCommand(*impl_, clock, camtrack::mergeAuto(cameraTrackOf(*impl_, clock), track, duration)));
+}
+
+SceneCameras Session::sceneCameras() const { return sceneCamerasOf(*impl_); }
+Changed Session::saveSceneCamera(const SceneCamera& camera) { BM_EDIT(saveSceneCameraCommand(*impl_, camera)); }
+Changed Session::removeSceneCamera(const std::string& id) { BM_EDIT(removeSceneCameraCommand(*impl_, id)); }
+Changed Session::activateSceneCamera(const std::string& id) { BM_EDIT(activateSceneCameraCommand(*impl_, id)); }
+RenderLook Session::renderLook() const { return renderLookOf(*impl_); }
+Changed Session::setRenderLook(const RenderLook& look) { BM_EDIT(setRenderLookCommand(*impl_, look)); }
+ScenePresets Session::scenes() { return scenePresets(); }
+BuildSettings Session::buildSettings() const { return buildSettingsOf(*impl_); }
+Changed Session::setBuildSettings(const BuildSettings& settings) { BM_EDIT(setBuildSettingsCommand(*impl_, settings)); }
+SnapMix Session::snapMix() const { return snapMixOf(*impl_); }
+Changed Session::setSnapMix(const SnapMix& mix) { BM_EDIT(setSnapMixCommand(*impl_, mix)); }
 Changed Session::turnWaitingPart(uint32_t piece, double degrees) {
   BM_EDIT(turnWaitingPartCommand(*impl_, piece, degrees));
+}
+Changed Session::shiftWaitingPart(uint32_t piece, Vec3 delta) {
+  BM_EDIT(shiftWaitingPartCommand(*impl_, piece, engine(delta)));
+}
+Vec3 Session::waitingShift(uint32_t piece) const {
+  const auto d = waitingShiftOf(*impl_, piece);
+  return {d.x, d.y, d.z};
 }
 Changed Session::setInsertionDirection(const PieceList& pieces, Vec3 direction) {
   BM_EDIT(setInsertionDirectionCommand(*impl_, pieces, engine(direction)));
@@ -371,26 +659,74 @@ Changed Session::scale(const PieceList& pieces, Vec3 factor, Mat3 axes, Vec3 piv
 }
 KeyScene Session::keyScene() const { return readKeyScene(*impl_); }
 std::vector<KeyTrack> Session::keyTracks() const { return readKeyTracks(*impl_); }
+bool Session::hasEditableFlightKeys(uint32_t piece) const {
+  const auto track = readKeyTrack(*impl_, piece);
+  return track && !track->keys.empty() && (track->baked || isLocalPiece(piece));
+}
 double Session::keyValue(uint32_t piece, KeyChannel channel, double frame) const {
-  const auto tracks = readKeyTracks(*impl_);
-  const auto track = std::find_if(tracks.begin(), tracks.end(), [&](const auto& row) { return row.object == piece; });
-  if (track != tracks.end()) return sampleKeys(*track, channel, frame);
+  return keyValue(piece, channel, frame, false);
+}
+double Session::keyValue(uint32_t piece, KeyChannel channel, double frame, bool submodel) const {
+  if (const auto track = readKeyTrack(*impl_, piece, submodel)) return sampleKeys(*track, channel, frame);
   return channel >= KeyChannel::ScaleX ? 1 : 0;
 }
 Changed Session::setKeyScene(const KeyScene& scene) { BM_EDIT(setKeySceneCommand(*impl_, scene)); }
 Changed Session::setKeys(uint32_t piece, const KeyList& keys, bool continuing) {
-  BM_EDIT(setKeysCommand(*impl_, piece, keys, continuing, false));
+  return setKeys(piece, keys, continuing, false);
+}
+Changed Session::setKeys(uint32_t piece, const KeyList& keys, bool continuing, bool submodel) {
+  BM_EDIT(setKeysCommand(*impl_, piece, keys, continuing, false, false, nullptr, submodel));
 }
 Changed Session::removeKeys(uint32_t piece, const KeyList& keys) {
-  BM_EDIT(setKeysCommand(*impl_, piece, keys, false, true));
+  return removeKeys(piece, keys, false);
+}
+Changed Session::removeKeys(uint32_t piece, const KeyList& keys, bool submodel) {
+  BM_EDIT(setKeysCommand(*impl_, piece, keys, false, true, false, nullptr, submodel));
 }
 Changed Session::moveKey(uint32_t piece, KeyChannel channel, int from, int to) {
   BM_EDIT(moveKeyCommand(*impl_, piece, channel, from, to));
 }
+Changed Session::moveKeys(uint32_t piece, const KeyList& keys, int offset) {
+  return moveKeys(piece, keys, offset, false);
+}
+Changed Session::moveKeys(uint32_t piece, const KeyList& keys, int offset, bool submodel) {
+  BM_EDIT(moveKeysCommand(*impl_, piece, keys, offset, submodel));
+}
+Changed Session::moveKeyRows(const KeyRowPicks& keys, int offset) {
+  BM_EDIT(editKeyRowsCommand(*impl_, keys, false, offset));
+}
+Changed Session::removeKeyRows(const KeyRowPicks& keys) {
+  BM_EDIT(editKeyRowsCommand(*impl_, keys, true, 0));
+}
 Changed Session::setBakedKeys(uint32_t piece, const KeyList& keys) {
   BM_EDIT(setKeysCommand(*impl_, piece, keys, false, false, true));
 }
+Changed Session::addFlightPathPoint(uint32_t piece, int32_t frame) { BM_EDIT(addFlightPathPointCommand(*impl_, piece, frame)); }
+Changed Session::setFlightPathPoint(uint32_t piece, int32_t frame, Vec3 location, bool continuing) {
+  BM_EDIT(setFlightPathPointCommand(*impl_, piece, frame, engine(location), continuing));
+}
+Changed Session::deleteFlightPathPoint(uint32_t piece, int32_t frame) { BM_EDIT(deleteFlightPathPointCommand(*impl_, piece, frame)); }
+Changed Session::applyFlightBake(FlightBake* bake) {
+  if (!bake) return {};
+  BM_EDIT(applyBakeEdit(*impl_, *bake->impl_));
+}
+Changed Session::editBuildFlight(uint32_t piece, const KeyList& keys, const KeyScene& scene) {
+  BM_EDIT(setKeysCommand(*impl_, piece, keys, false, false, true, &scene));
+}
+Changed Session::returnFlightToPlanner(uint32_t piece) {
+  BM_EDIT(updateFlightCommand(*impl_, piece));
+}
+Changed Session::useFlightInBuild(uint32_t piece, const FlightPoseList& route) {
+  BM_EDIT(updateFlightCommand(*impl_, piece, &route));
+}
 Changed Session::moveToStep(const std::vector<uint32_t>& pieces, size_t step) { BM_EDIT(moveToStepCommand(*impl_, focusedDef(*impl_), pieces, step)); }
+Changed Session::moveToNewStep(const PieceList& pieces, size_t index) { BM_EDIT(moveToStepCommand(*impl_, focusedDef(*impl_), pieces, index, true)); }
+Changed Session::moveArrival(const PieceList& pieces, size_t step, size_t destination, bool force) {
+  BM_EDIT(moveArrivalCommand(*impl_, pieces, step, destination, force));
+}
+Changed Session::setArrivalPinned(const PieceList& pieces, bool pinned) {
+  BM_EDIT(setArrivalPinnedCommand(*impl_, pieces, pinned));
+}
 Changed Session::reorderInStep(size_t step, size_t from, size_t to) { BM_EDIT(reorderInStepCommand(*impl_, focusedDef(*impl_), step, from, to)); }
 Changed Session::reorderArrival(size_t step, size_t from, size_t to) { BM_EDIT(reorderInStepCommand(*impl_, focusedDef(*impl_), step, from, to, true)); }
 Changed Session::regenerateSteps(const PieceList& buildOrder) { BM_EDIT(regenerateStepsCommand(*impl_, buildOrder)); }

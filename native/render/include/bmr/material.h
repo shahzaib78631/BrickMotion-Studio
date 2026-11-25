@@ -8,6 +8,7 @@ struct Material {
   float base[3] = {0.5f, 0.5f, 0.5f};  ///< linear, 0..1
   float alpha = 1;                     ///< 1 is opaque
   float roughness = 0.38f, metalness = 0, clearcoat = 0.35f;
+  float emission = 0;                  ///< linear self-emission multiplier
   float edge[3] = {0.05f, 0.05f, 0.05f};  ///< linear: the colour of the part's outline lines
   bool transparent() const { return alpha < 1; }
   bool operator==(const Material&) const = default;

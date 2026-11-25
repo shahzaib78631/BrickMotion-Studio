@@ -17,7 +17,7 @@ struct FrameUniforms {
   float4 eye;             // xyz: the eye, world
   float4 background;      // rgb, linear
   float4 viewport;        // width, height, 1/width, 1/height, pixels
-  float4 switches;        // x: shadows on, y: ambient occlusion on; z, w: unused
+  float4 switches;        // x: shadows, y: ambient occlusion, z: debug, w: transparency
   float4 floorPlane;      // x: the floor's y (world), y: how far it reaches from its centre, z: shadow texel size (LDU), w: shadow bias in texels
   float4 floorCentre;     // x, y: the floor's centre (world x and z), z: how much full shadow darkens it, w: kOitDepthScale
   float4 lens;            // x: tan of half the vertical angle of view; y, z: pixels per LDU where outlines are gone and fully shown
@@ -28,6 +28,25 @@ struct FrameUniforms {
   float4 floorLook;       // x, y: nearest and furthest a floor point looks (LDU); z: 1 when the floor's light is worked out; w: the power the sky's share is raised to
   float4 glass;           // x: glass's absorption, y: the floor's level seen through glass, z: glass's IOR (tolerances.h kGlass*)
   float4 grid;            // x: spacing, y/z: model origin modulo spacing
+  float4 floorCasters;    // min x/z, max x/z of the geometry in the height map
+  float4 neuralGlass0;    // neural dielectric glass & floor transport params 0
+  float4 neuralGlass1;    // neural dielectric glass & micro-geometry params 1
+  float4 plastic;         // x: matched plastic BRDF, y: fill share (0.85), z: mask mode, w: world GI active
+};
+
+// Trained weights for the Metal Neural Shader (must match bmr::NeuralWeights in src/metal/neural_weights.h).
+struct NeuralWeights {
+  float4 w1[24][4];       // Layer 1 encoder: 16 in (4x float4) -> 24 hidden
+  float4 b1[6];           // Layer 1 bias (24 floats)
+  float4 w2[24][8];       // Layer 2 spatial-graph residual block: 32 in (24 self + 8 threadgroup 3x3 bilateral latent) -> 24 hidden
+  float4 b2[6];           // Layer 2 bias (24 floats)
+  float4 filmGamma[24];   // FiLM light-view angle scale conditioning: 4 cond -> 24 hidden
+  float4 filmBeta[24];    // FiLM light-view angle shift conditioning: 4 cond -> 24 hidden
+  float4 w3[16][10];      // Layer 3 decoder with input skip: 40 in (24 h2 + 16 x) -> 16 hidden
+  float4 b3[4];           // Layer 3 bias (16 floats)
+  float4 w4[8][4];        // Layer 4 radiometric head: 16 in -> 8 physical transport channels (2x float4)
+  float4 b4[2];           // Layer 4 bias (8 floats)
+  float4 glassParams[4];  // Learned multi-wall dielectric glass, micro-geometry & floor transport coefficients
 };
 
 // One per draw. Must match DrawUniforms in src/metal/impl.h.
@@ -61,8 +80,10 @@ float3 linearFromSrgb(float3 c) { return mix(c / 12.92, pow((c + 0.055) / 1.055,
 float keyShadow(float3 world, float3 n, constant FrameUniforms& frame, depth2d<float> shadowMap, sampler shadowSampler, float turn);
 // What share of each light reaches the floor through each direction and elevation bin.
 struct FloorBins {
-  float weight[4][48][16];
+  ushort weights[4][48][5];
+  uint total[4][4];
   float4 lit;
+  float4 rays[48];
 };
 // The share of a white floor's light that reaches the floor at `world` (floor_light.metal).
 float floorLight(float3 world, constant FrameUniforms& frame, constant FloorBins& bins, texture2d<float> heights, uint2 cell, bool sky, bool key);

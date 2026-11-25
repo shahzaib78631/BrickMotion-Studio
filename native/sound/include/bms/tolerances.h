@@ -54,6 +54,13 @@ inline constexpr double kSlipRate = 3000;       // per s, est.
 inline constexpr double kSlipShare = 0.3;
 inline constexpr double kSlideMaxSeconds = 0.05;
 
+// The impact's own click (acceleration noise: a body stopped short pushes the air aside as a
+// compact dipole; Richards, Westcott & Jeyapalan, J. Sound Vib. 62, 1979):
+// p = rho0 (1 + kAddedMass) V (da/dt) / (4 pi r c), heard on its axis. Every force on the part
+// makes it, a landing most; it is all a 1x1 is heard by where what it lands on also rings above
+// hearing. The part landed on is held by the model, far heavier: its own click is left out.
+inline constexpr double kAddedMass = 0.5;  // a sphere's entrained air; est. for a brick
+
 // Listening: air, a microphone kMicDistance away.
 inline constexpr double kAirDensity = 1.2;      // kg/m^3
 inline constexpr double kSoundSpeed = 343;      // m/s
