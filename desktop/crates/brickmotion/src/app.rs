@@ -118,6 +118,10 @@ pub struct BrickMotionApp {
     autosaving: Option<std::sync::mpsc::Receiver<crate::autosave::AutosaveDone>>,
     /// The command-line file, opened on the first frame (see `start_startup`).
     startup: Option<PathBuf>,
+    /// Editing state: active tool, axes, collision, colour and chosen step.
+    pub edit: crate::edit::EditState,
+    /// In-memory clipboard used when dialogs are off (headless tests).
+    pub(crate) clipboard: String,
 }
 
 impl BrickMotionApp {
@@ -171,6 +175,8 @@ impl BrickMotionApp {
             autosave_error: None,
             autosaving: None,
             startup: None,
+            edit: crate::edit::EditState::default(),
+            clipboard: String::new(),
         };
         // Opened once the first frame knows the view's size, so the worker can draw it warm.
         app.startup = path.map(|p| std::path::absolute(&p).unwrap_or(p));
@@ -412,6 +418,9 @@ impl BrickMotionApp {
             undo_name: s.undo_name(),
             redo_name: s.redo_name(),
             text_focus: self.text_focus,
+            local_axes: self.edit.local_axes,
+            collision: self.edit.collision,
+            tool: self.edit.tool,
         }
     }
 
@@ -466,16 +475,38 @@ impl BrickMotionApp {
             "view.fit" | "view.home" => self.viewport.queue(ViewOp::Fit),
             "view.frame_selection" => self.viewport.queue(ViewOp::FrameSelection),
             "view.palette" => self.palette.show_palette(),
+            "tool.select" => self.edit.tool = crate::edit::Tool::Select,
+            "model.move" => self.edit.tool = crate::edit::Tool::Move,
+            "model.rotate_tool" => self.edit.tool = crate::edit::Tool::Rotate,
+            "model.rotate" => crate::edit::turn(self, true),
+            "model.rotate_back" => crate::edit::turn(self, false),
+            "edit.clone" => crate::edit::clone(self),
+            "model.duplicate" => crate::edit::duplicate(self),
+            "edit.raise" => crate::edit::raise(self, self.edit.alt_held),
+            "edit.lower" => crate::edit::lower(self, self.edit.alt_held),
+            "edit.nudge_left" => crate::edit::nudge_along(self, bm::Arrow::Left),
+            "edit.nudge_right" => crate::edit::nudge_along(self, bm::Arrow::Right),
+            "edit.nudge_up" => crate::edit::nudge_along(self, bm::Arrow::Up),
+            "edit.nudge_down" => crate::edit::nudge_along(self, bm::Arrow::Down),
+            "edit.copy" => crate::edit::copy(self),
+            "edit.cut" => crate::edit::cut(self),
+            "edit.paste" => crate::edit::paste(self),
+            "view.local_axes" => self.edit.local_axes = !self.edit.local_axes,
+            "edit.collision" => self.edit.collision = !self.edit.collision,
             _ => return false,
         }
         true
     }
 
     /// After an edit: a refusal becomes a notice.
-    fn edited(&mut self, c: bm::Changed) {
+    pub(crate) fn edited(&mut self, c: bm::Changed) {
         if let Some(why) = c.refused {
             crate::notices::push(&mut self.notices, Notice::Warning { title: "Couldn't edit".into(), detail: why });
         }
+    }
+
+    pub(crate) fn dialogs_enabled(&self) -> bool {
+        self.dialogs
     }
 
     /// An untitled, empty project, after asking to save an edited one.

@@ -108,7 +108,9 @@ fn main_area(ui: &mut Ui, app: &mut BrickMotionApp) {
                     ui.add_space(6.0);
                     for c in &list {
                         let on = enabled(c, &ctx);
-                        let resp = tool(ui, &t, c, on);
+                        let active = (c.id == "model.move" && ctx.tool == crate::Tool::Move)
+                            || (c.id == "model.rotate_tool" && ctx.tool == crate::Tool::Rotate);
+                        let resp = tool(ui, &t, c, on, active);
                         let resp = hover_card(resp, &t, c);
                         if resp.clicked() && on {
                             app.requested.push(c.id);
@@ -131,16 +133,24 @@ fn main_area(ui: &mut Ui, app: &mut BrickMotionApp) {
 }
 
 /// One ribbon tool: a 22-px icon over its name.
-fn tool(ui: &mut Ui, t: &Theme, c: &Command, on: bool) -> egui::Response {
-    let color = if on { t.text1 } else { t.text2 };
+fn tool(ui: &mut Ui, t: &Theme, c: &Command, on: bool, active: bool) -> egui::Response {
+    let color = if active { t.accent } else if on { t.text1 } else { t.text2 };
     let galley = ui.painter().layout_no_wrap(c.title.to_owned(), FontId::proportional(11.5), color);
     let w = (galley.size().x + 10.0).max(56.0);
     let (rect, resp) = ui.allocate_exact_size(vec2(w, 46.0), Sense::click());
-    resp.widget_info(|| WidgetInfo::labeled(egui::Role::Button, on, c.title));
-    if resp.hovered() {
+    resp.widget_info(|| WidgetInfo::selected(egui::Role::Button, on, active, c.title));
+    if active {
+        ui.painter().rect_filled(rect, t.radius, t.accent_bg());
+    } else if resp.hovered() {
         ui.painter().rect_filled(rect, t.radius, t.bg3);
     }
-    let icon_tint = if on { Color32::from_rgb(0xc9, 0xce, 0xd6) } else { t.text3 };
+    let icon_tint = if active {
+        t.accent
+    } else if on {
+        Color32::from_rgb(0xc9, 0xce, 0xd6)
+    } else {
+        t.text3
+    };
     let ir = Rect::from_center_size(pos2(rect.center().x, rect.top() + 6.0 + 11.0), Vec2::splat(22.0));
     icons::paint(ui, c.icon, ir, 22.0, icon_tint);
     let tp = Pos2::new(rect.center().x - galley.size().x / 2.0, ir.bottom() + 4.0);

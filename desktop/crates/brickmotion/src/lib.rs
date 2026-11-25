@@ -4,6 +4,7 @@ pub mod autosave;
 pub mod chrome;
 pub mod commands;
 pub mod document;
+pub mod edit;
 mod icons;
 pub mod loader;
 pub mod menubar;
@@ -17,6 +18,7 @@ pub mod viewport;
 
 pub use app::{Answer, BrickMotionApp, DialogRequest, Pending, ReplaceOk, Workspace};
 pub use document::{DocState, save_to};
+pub use edit::{EditState, Tool};
 pub use loader::{Loaded, Loader, OPEN_EXTENSIONS, Warm, open_model};
 pub use notices::Notice;
 pub use snapshot::snapshot;

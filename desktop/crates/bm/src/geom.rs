@@ -46,10 +46,6 @@ impl Vec3 {
         Self { x: self.x * s, y: self.y * s, z: self.z * s }
     }
 
-    pub fn sub(self, other: Self) -> Self {
-        Self { x: self.x - other.x, y: self.y - other.y, z: self.z - other.z }
-    }
-
     pub fn is_zero(self) -> bool {
         self.x == 0.0 && self.y == 0.0 && self.z == 0.0
     }
@@ -60,6 +56,13 @@ impl Vec3 {
 
     pub(crate) fn from_raw(v: sys::BmVec3) -> Self {
         Self { x: v.x, y: v.y, z: v.z }
+    }
+}
+
+impl std::ops::Sub for Vec3 {
+    type Output = Self;
+    fn sub(self, other: Self) -> Self {
+        Self { x: self.x - other.x, y: self.y - other.y, z: self.z - other.z }
     }
 }
 
@@ -118,7 +121,7 @@ impl Default for Camera {
 }
 
 impl Camera {
-    pub(crate) fn to_raw(&self) -> sys::BmCamera {
+    pub(crate) fn to_raw(self) -> sys::BmCamera {
         sys::BmCamera {
             yaw: self.yaw,
             pitch: self.pitch,

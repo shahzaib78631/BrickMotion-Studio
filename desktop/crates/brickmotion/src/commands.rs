@@ -58,6 +58,9 @@ pub struct Ctx {
     pub redo_name: String,
     /// A text field has keyboard focus: single keys belong to it.
     pub text_focus: bool,
+    pub local_axes: bool,
+    pub collision: bool,
+    pub tool: crate::edit::Tool,
 }
 
 /// A key with its modifiers.
@@ -87,6 +90,10 @@ impl Shortcut {
         let key = match rest {
             "⌫" => Key::Backspace,
             "Esc" => Key::Escape,
+            "←" => Key::ArrowLeft,
+            "→" => Key::ArrowRight,
+            "↑" => Key::ArrowUp,
+            "↓" => Key::ArrowDown,
             "" => return None,
             k => Key::from_name(k)?,
         };
@@ -111,6 +118,10 @@ impl Shortcut {
         out.push_str(match self.key {
             Key::Backspace => "⌫",
             Key::Escape => "Esc",
+            Key::ArrowLeft => "←",
+            Key::ArrowRight => "→",
+            Key::ArrowUp => "↑",
+            Key::ArrowDown => "↓",
             k => k.name(),
         });
         out
@@ -155,6 +166,8 @@ pub fn title(c: &Command, ctx: &Ctx) -> String {
     match c.id {
         "edit.undo" => named("Undo", &ctx.undo_name),
         "edit.redo" => named("Redo", &ctx.redo_name),
+        "view.local_axes" => if ctx.local_axes { "Local Axes" } else { "World Axes" }.to_owned(),
+        "edit.collision" => if ctx.collision { "Collision Checks On" } else { "Collision Checks Off" }.to_owned(),
         _ => c.title.to_owned(),
     }
 }
@@ -189,11 +202,11 @@ static REGISTRY: &[Command] = &[
     Command { id: "model.add_part", title: "Add Part", icon: Icon::Plus, keys: Some("P"), tip: "Pick a part from the library and place it on the studs under the pointer. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Insert", when: When::Soon, menu: Menu::None },
     Command { id: "model.import", title: "Import", icon: Icon::Import, keys: None, tip: "Open an LDraw or BrickMotion model.", workspace: Workspace::Build, tab: "Model", group: "Insert", when: When::Always, menu: Menu::None },
     Command { id: "model.inventory", title: "Inventory", icon: Icon::Inventory, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Insert", when: When::Soon, menu: Menu::None },
-    Command { id: "model.move", title: "Move", icon: Icon::Move, keys: Some("M"), tip: "Drag the selection along the arrows; it snaps to studs and holes. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Modify", when: When::Soon, menu: Menu::None },
-    Command { id: "model.rotate", title: "Rotate", icon: Icon::Rotate, keys: Some("R"), tip: "Turn the selection in 90° steps around its connection. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Modify", when: When::Soon, menu: Menu::None },
-    Command { id: "model.recolour", title: "Recolour", icon: Icon::Paint, keys: Some("C"), tip: "Apply a colour to every selected piece. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Modify", when: When::Soon, menu: Menu::None },
+    Command { id: "model.move", title: "Move", icon: Icon::Move, keys: Some("M"), tip: "Drag the selection along the arrows; it snaps to studs and holes.", workspace: Workspace::Build, tab: "Model", group: "Modify", when: When::Document, menu: Menu::None },
+    Command { id: "model.rotate", title: "Turn", icon: Icon::Rotate, keys: Some("R"), tip: "Turn the selection 90° clockwise around its centre.", workspace: Workspace::Build, tab: "Model", group: "Modify", when: When::Selection, menu: Menu::Edit },
+    Command { id: "model.recolour", title: "Recolour", icon: Icon::Paint, keys: None, tip: "Apply a colour to every selected piece. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Modify", when: When::Soon, menu: Menu::None },
     Command { id: "model.replace", title: "Replace", icon: Icon::Replace, keys: None, tip: "Swap the part, keeping position and colour. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Modify", when: When::Soon, menu: Menu::None },
-    Command { id: "model.duplicate", title: "Duplicate", icon: Icon::Copy, keys: Some("⌘D"), tip: "Copy the selection and place the copy. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Modify", when: When::Soon, menu: Menu::None },
+    Command { id: "model.duplicate", title: "Duplicate", icon: Icon::Copy, keys: Some("⌘D"), tip: "Copy the selection and offset the copy by one stud.", workspace: Workspace::Build, tab: "Model", group: "Modify", when: When::Selection, menu: Menu::Edit },
     Command { id: "model.submodel", title: "Submodel", icon: Icon::Group, keys: Some("⌥⌘G"), tip: "Turn the selection into a submodel used once. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Arrange", when: When::Soon, menu: Menu::None },
     Command { id: "model.extract", title: "Extract", icon: Icon::Extract, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Arrange", when: When::Soon, menu: Menu::None },
     Command { id: "model.to_step", title: "To Step", icon: Icon::Step, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Arrange", when: When::Soon, menu: Menu::None },
@@ -235,4 +248,19 @@ static REGISTRY: &[Command] = &[
     Command { id: "edit.show_all", title: "Show All", icon: Icon::Eye, keys: None, tip: "Show every hidden piece.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Pieces, menu: Menu::Edit },
     Command { id: "view.frame_selection", title: "Frame Selection", icon: Icon::LookAt, keys: Some("⌘F"), tip: "Frame the selected pieces.", workspace: Workspace::Build, tab: "", group: "View", when: When::Selection, menu: Menu::View },
     Command { id: "view.palette", title: "Command Palette…", icon: Icon::Search, keys: Some("⌘K"), tip: "Find any command by name.", workspace: Workspace::Build, tab: "", group: "View", when: When::Always, menu: Menu::View },
+    Command { id: "tool.select", title: "Select Tool", icon: Icon::Cursor, keys: Some("V"), tip: "Pick pieces in the viewport.", workspace: Workspace::Build, tab: "", group: "Tools", when: When::Document, menu: Menu::None },
+    Command { id: "model.rotate_tool", title: "Rotate Tool", icon: Icon::Rotate, keys: None, tip: "Turn the selection interactively with the rotate rings.", workspace: Workspace::Build, tab: "", group: "Tools", when: When::Document, menu: Menu::None },
+    Command { id: "model.rotate_back", title: "Turn Back", icon: Icon::Rotate, keys: Some("⇧R"), tip: "Turn the selection 90° anticlockwise around its centre.", workspace: Workspace::Build, tab: "", group: "Modify", when: When::Selection, menu: Menu::None },
+    Command { id: "edit.clone", title: "Clone", icon: Icon::Copy, keys: Some("C"), tip: "Duplicate the selection in place.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Selection, menu: Menu::Edit },
+    Command { id: "edit.raise", title: "Raise", icon: Icon::Up, keys: Some("E"), tip: "Raise the selection by one plate (hold ⌥ for one brick).", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Selection, menu: Menu::None },
+    Command { id: "edit.lower", title: "Lower", icon: Icon::Down, keys: Some("Q"), tip: "Lower the selection by one plate (hold ⌥ for one brick).", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Selection, menu: Menu::None },
+    Command { id: "edit.nudge_left", title: "Nudge Left", icon: Icon::Move, keys: Some("←"), tip: "Move the selection one stud left along the view.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Selection, menu: Menu::None },
+    Command { id: "edit.nudge_right", title: "Nudge Right", icon: Icon::Move, keys: Some("→"), tip: "Move the selection one stud right along the view.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Selection, menu: Menu::None },
+    Command { id: "edit.nudge_up", title: "Nudge Forward", icon: Icon::Move, keys: Some("↑"), tip: "Move the selection one stud away from the view.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Selection, menu: Menu::None },
+    Command { id: "edit.nudge_down", title: "Nudge Back", icon: Icon::Move, keys: Some("↓"), tip: "Move the selection one stud toward the view.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Selection, menu: Menu::None },
+    Command { id: "edit.copy", title: "Copy", icon: Icon::Copy, keys: Some("⌘C"), tip: "Copy the selected pieces to the clipboard.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Selection, menu: Menu::Edit },
+    Command { id: "edit.cut", title: "Cut", icon: Icon::Razor, keys: Some("⌘X"), tip: "Copy the selected pieces to the clipboard and delete them.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Selection, menu: Menu::Edit },
+    Command { id: "edit.paste", title: "Paste", icon: Icon::Plus, keys: Some("⌘V"), tip: "Paste pieces from the clipboard.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Document, menu: Menu::Edit },
+    Command { id: "view.local_axes", title: "Local Axes", icon: Icon::Target, keys: Some("L"), tip: "Switch the gizmo between local and world axes.", workspace: Workspace::Build, tab: "", group: "View", when: When::Document, menu: Menu::None },
+    Command { id: "edit.collision", title: "Collision Checks", icon: Icon::Magnet, keys: Some("K"), tip: "Turn collision checks on or off while placing parts.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Document, menu: Menu::None },
 ];

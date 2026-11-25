@@ -21,8 +21,16 @@ pub fn handle(app: &mut BrickMotionApp, ctx: &egui::Context) {
         if (typing && !s.mods.command) || (menu && s.mods.command) {
             continue;
         }
+        let alt = ctx.input(|i| {
+            i.modifiers.alt
+                || i.events.iter().any(|e| {
+                    matches!(e, egui::Event::Key { key, pressed: true, modifiers, .. } if *key == s.key && modifiers.alt)
+                })
+        });
         if ctx.input_mut(|i| i.consume_key(s.mods, s.key)) {
+            app.edit.alt_held = alt;
             run(app, id);
+            app.edit.alt_held = false;
         }
     }
     // S opens the palette too (⌘K is its listed shortcut).

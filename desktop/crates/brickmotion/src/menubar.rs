@@ -66,7 +66,15 @@ pub fn menu_model() -> Vec<MenuSection> {
                 C("edit.undo"),
                 C("edit.redo"),
                 Sep,
+                C("edit.cut"),
+                C("edit.copy"),
+                C("edit.paste"),
                 C("edit.delete"),
+                Sep,
+                C("model.duplicate"),
+                C("edit.clone"),
+                C("model.rotate"),
+                Sep,
                 C("edit.select_all"),
                 C("edit.select_none"),
                 C("edit.hide"),
@@ -118,7 +126,10 @@ pub fn accelerator(keys: &str) -> Option<Accelerator> {
 /// Whether a menu item is enabled. While a text field has focus, ⌘A and ⌘Z belong to it, so
 /// those items are off and AppKit passes the keys on to the window.
 pub fn menu_enabled(c: &Command, ctx: &Ctx) -> bool {
-    let text_keys = matches!(c.id, "edit.select_all" | "edit.undo" | "edit.redo");
+    let text_keys = matches!(
+        c.id,
+        "edit.select_all" | "edit.undo" | "edit.redo" | "edit.copy" | "edit.cut" | "edit.paste"
+    );
     enabled(c, ctx) && !(ctx.text_focus && text_keys)
 }
 
@@ -284,7 +295,15 @@ mod tests {
                 MenuEntry::Command("edit.undo"),
                 MenuEntry::Command("edit.redo"),
                 MenuEntry::Separator,
+                MenuEntry::Command("edit.cut"),
+                MenuEntry::Command("edit.copy"),
+                MenuEntry::Command("edit.paste"),
                 MenuEntry::Command("edit.delete"),
+                MenuEntry::Separator,
+                MenuEntry::Command("model.duplicate"),
+                MenuEntry::Command("edit.clone"),
+                MenuEntry::Command("model.rotate"),
+                MenuEntry::Separator,
                 MenuEntry::Command("edit.select_all"),
                 MenuEntry::Command("edit.select_none"),
                 MenuEntry::Command("edit.hide"),
