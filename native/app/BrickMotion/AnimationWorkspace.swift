@@ -322,8 +322,7 @@ enum TimelineTab: String, CaseIterable { case build = "Build", timeline = "Keyfr
     let scene = model.document.session.keyScene()
     model.select(pieces: [flight.id])
     tab = .timeline
-    let start = Double(scene.buildStart - scene.first) / Double(scene.fps) + flight.start / scene.buildSpeed
-    seekScene(min(start, Double(scene.last - scene.first) / Double(scene.fps)))
+    seekScene(bmapp.flightKeysStart(scene, flight.start))
   }
 
   func arrange(step: Int, mode: bmapp.AssemblyPreview) {

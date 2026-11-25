@@ -110,8 +110,8 @@ private struct FlightTiming: View {
   let fields: bmapp.MotionFields
 
   var body: some View {
-    let hover = min(fields.hover, max(0, 0.95 - fields.landing))
-    let travel = 1 - fields.landing - hover
+    let phases = bmapp.flightPhases(fields)
+    let hover = phases.hover, travel = phases.travel
     VStack(alignment: .leading, spacing: 7) {
       GeometryReader { geometry in
         HStack(spacing: 0) {
@@ -234,19 +234,7 @@ struct MotionEditor: View {
   }
 
   static func effective(model: DocumentModel, scope: bmapp.MotionScope, step: Int, fields: bmapp.MotionFields) -> bmapp.MotionFields {
-    let session = model.document.session
-    let project = session.motionFields(.Project, 0, .init())
-    let stepFields = session.motionFields(.Step, step, .init())
-    let defaults = bmapp.MotionFields(time: 1, landing: 0.25, hover: 0, ease: 0)
-    let ordered = switch scope {
-    case .Project: [fields, defaults]
-    case .Step: [fields, project, defaults]
-    default: [fields, stepFields, project, defaults]
-    }
-    return bmapp.MotionFields(time: ordered.first { $0.time >= 0 }?.time ?? 1,
-                              landing: ordered.first { $0.landing >= 0 }?.landing ?? 0.25,
-                              hover: ordered.first { $0.hover >= 0 }?.hover ?? 0,
-                              ease: ordered.first { $0.ease >= 0 }?.ease ?? 0)
+    bmapp.effectiveMotion(model.document.session, scope, step, fields)
   }
 
   static func easeName(_ value: Int32) -> String {

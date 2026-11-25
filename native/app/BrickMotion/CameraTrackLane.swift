@@ -23,10 +23,9 @@ struct CameraClockInfo {
       return CameraClockInfo(clock: clock, fps: workspace.fps, duration: workspace.buildDuration, now: workspace.time,
                              ready: workspace.ready, seek: { workspace.seek($0) })
     }
-    let scene = model.document.session.keyScene()
-    let fps = Double(max(1, scene.fps))
-    return CameraClockInfo(clock: clock, fps: fps, duration: Double(scene.last - scene.first + 1) / fps, now: workspace.time,
-                           ready: true, seek: { workspace.seekScene($0) })
+    let info = bmapp.cameraClockInfo(clock, model.document.session, workspace.fps, workspace.buildDuration, workspace.ready)
+    return CameraClockInfo(clock: clock, fps: info.fps, duration: info.duration, now: workspace.time,
+                           ready: info.ready, seek: { workspace.seekScene($0) })
   }
 }
 
@@ -296,15 +295,10 @@ struct CameraKeyMenu: View {
   }
 
   static func aim(model: DocumentModel, clock: bmapp.CameraClock, key: bmapp.CameraTrackKey, at target: CameraAim) {
-    guard target != CameraAim(rawValue: String(key.target)) else { return }
-    if target == .point {
-      // fixed where it looks now: the view the key gives at its own time
-      guard let view = model.viewport?.viewport.cameraTrackView(key.seconds) else { return }
-      model.context.perform { $0.setCameraKeyView(clock, key.id, view) }
-    } else {
-      model.context.perform { $0.setCameraKeyTarget(clock, key.id, std.string(target.rawValue)) }
-    }
+    guard let viewport = model.viewport?.viewport else { return }
+    model.context.perform { bmapp.aimCameraKey($0, viewport, clock, key, std.string(target.rawValue)) }
   }
+
 }
 
 /// Auto-direct's styles: each writes a track from the planned Build, keeping keys made by hand.
@@ -327,8 +321,7 @@ struct CameraDirectorMenu: View {
 
   private func direct(_ style: CameraDirectorStyle) {
     guard let viewport = model.viewport?.viewport else { return }
-    let input = viewport.cameraDirectorInput()
-    if model.context.perform({ $0.autoDirectCamera(clock, input, std.string(style.rawValue), 50) }) {
+    if model.context.perform({ bmapp.autoDirect($0, viewport, clock, std.string(style.rawValue)) }) {
       model.cameraSelection = nil
       workspace.director = true
     }
@@ -356,23 +349,26 @@ struct CameraLaneMenu: View {
   /// Auto-direct reads where the Build's pieces land: it needs the planned Build (linked to the
   /// timeline, for the timeline's track).
   static func canAutoDirect(model: DocumentModel, workspace: AnimationWorkspace, clock: bmapp.CameraClock) -> Bool {
-    workspace.ready && (clock == .Build || model.document.session.keyScene().buildLinked)
+    bmapp.canAutoDirect(clock, model.document.session, workspace.ready)
   }
 
   /// A key that films the viewport's view at the playhead (the key already there takes the view);
   /// Follow Camera turns on so the track plays.
   static func addKey(model: DocumentModel, workspace: AnimationWorkspace, clock: bmapp.CameraClock) {
-    guard let view = model.viewport?.viewport.captureSceneCamera() else { return }
+    guard let viewport = model.viewport?.viewport else { return }
     let info = CameraClockInfo.of(clock, model: model, workspace: workspace)
-    let halfFrame = 0.5 / max(1, info.fps)
-    if let key = model.cameraKeys(clock).first(where: { abs($0.seconds - info.now) < halfFrame }) {
-      model.context.perform { $0.setCameraKeyView(clock, key.id, view) }
-      model.showCamera(CameraSelection(clock: clock, item: .key(String(key.id))))
-    } else if model.context.perform({ $0.addCameraKey(clock, info.now, view, info.fps, info.duration) }) {
-      workspace.director = true
-      if let key = model.cameraKeys(clock).min(by: { abs($0.seconds - info.now) < abs($1.seconds - info.now) }) {
-        model.showCamera(CameraSelection(clock: clock, item: .key(String(key.id))))
-      }
+    var native = bmapp.CameraClockInfo()
+    native.clock = clock
+    native.fps = info.fps
+    native.duration = info.duration
+    native.ready = info.ready
+    var result = bmapp.CameraKeyResult()
+    model.context.perform { session in
+      result = bmapp.addCameraKeyFromView(session, viewport, clock, info.now, native)
+      return result.changed
     }
+    guard result.changed.refused.empty(), !result.id.empty() else { return }
+    if result.added { workspace.director = true }
+    model.showCamera(CameraSelection(clock: clock, item: .key(String(result.id))))
   }
 }

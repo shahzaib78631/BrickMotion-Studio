@@ -295,16 +295,12 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
     let pieces = document.session.selection()
     var drag = GizmoDrag(handle: h, start: (x, y), origin: viewport.selectionCenter(), axes: currentAxes(), pieces: pieces)
     if let animation, animation.isKeyEditing {
-      guard animation.autoKey, let piece = pieces.first else {
+      let target = bmapp.autoKeyTarget(session, pieces, animation.autoKey, animation.keySubmodel.map { Int64($0) } ?? -1)
+      guard target.ok else {
         NSSound.beep()
         return true
       }
-      let local = session.isLocalPiece(piece)
-      let submodel = !local && (animation.keySubmodel == piece || pieces.count > 1 || !session.hasEditableFlightKeys(piece))
-      guard submodel ? Array(session.usePieces(piece)) == Array(pieces) : pieces.count == 1 else {
-        NSSound.beep()
-        return true
-      }
+      let piece = target.piece, submodel = target.submodel
       let scene = session.keyScene()
       animation.seekScene(animation.time)
       let frame = scene.first + Int32((animation.time * Double(scene.fps)).rounded())
@@ -335,8 +331,7 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
       let step = bmapp.Vec3(x: total.x - drag.moved.x, y: total.y - drag.moved.y, z: total.z - drag.moved.z)
       if step.x != 0 || step.y != 0 || step.z != 0 {
         if let key = drag.key {
-          write(drag: key, channels: [.PositionX, .PositionY, .PositionZ],
-                offset: bmapp.Vec3(x: total.x / 20, y: -total.y / 20, z: -total.z / 20), document: document)
+          write(drag: key, tool: .Move, change: total, document: document)
         } else {
           document.perform { document.session.move(pieces, step, true) }
         }
@@ -359,9 +354,7 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
       let delta = bmapp.Vec3(x: f.x / drag.scale.x, y: f.y / drag.scale.y, z: f.z / drag.scale.z)
       if f.x != drag.scale.x || f.y != drag.scale.y || f.z != drag.scale.z {
         if let key = drag.key {
-          write(drag: key, channels: [.ScaleX, .ScaleY, .ScaleZ],
-                offset: bmapp.Vec3(x: key.origin.x * (f.x - 1), y: key.origin.y * (f.y - 1), z: key.origin.z * (f.z - 1)),
-                document: document)
+          write(drag: key, tool: .Scale, change: f, document: document)
         } else {
           let axes = drag.axes, pivot = drag.origin
           document.perform { document.session.scale(pieces, delta, axes, pivot, true) }
@@ -376,8 +369,8 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
         let axis = bmapp.handleAxis(camera, drag.axes, drag.handle)
         let pivot = drag.origin
         if let key = drag.key {
-          write(drag: key, channels: [.RotationX, .RotationY, .RotationZ],
-                offset: bmapp.Vec3(x: axis.x * degrees, y: -axis.y * degrees, z: -axis.z * degrees), document: document)
+          write(drag: key, tool: .Rotate, change: bmapp.Vec3(x: axis.x * degrees, y: axis.y * degrees, z: axis.z * degrees),
+                document: document)
         } else {
           document.perform { document.session.rotate(pieces, axis, step, pivot, true) }
         }
@@ -395,14 +388,11 @@ final class ViewportView: NSView, @preconcurrency CAMetalDisplayLinkDelegate {
                z: [.Z, .XZ, .YZ].contains(handle) ? value : 1)
   }
 
-  private func write(drag: KeyDrag, channels: [bmapp.KeyChannel], offset: bmapp.Vec3, document: Document) {
-    let values = [drag.origin.x + offset.x, drag.origin.y + offset.y, drag.origin.z + offset.z]
-    var keys = bmapp.KeyList()
-    for (channel, value) in zip(channels, values) {
-      keys.push_back(bmapp.Keyframe(channel: channel, frame: drag.frame, value: value, interpolation: .Smooth))
-    }
+  private func write(drag: KeyDrag, tool: bmapp.GizmoTool, change: bmapp.Vec3, document: Document) {
+    let keys = bmapp.autoKeyValues(tool, drag.origin, change, drag.frame)
     document.perform { document.session.setKeys(drag.piece, keys, true, drag.submodel) }
   }
+
 
   private func endGizmoDrag() {
     gizmoDrag = nil

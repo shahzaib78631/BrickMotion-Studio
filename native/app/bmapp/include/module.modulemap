@@ -17,6 +17,9 @@ module BMApp {
   header "bmapp/flight_bake.h"
   header "bmapp/build_lanes.h"
   header "bmapp/timeline_view.h"
+  header "bmapp/key_tracks.h"
+  header "bmapp/camera_lane.h"
+  header "bmapp/motion_fields.h"
   requires cplusplus
   export *
 }

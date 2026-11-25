@@ -569,36 +569,20 @@ struct KeyframeTracks: View {
   }
 
   private func refresh() {
-    let tracks = session.keyTracks().map {
-      let members = Array($0.members)
-      let id = Object.ID(piece: $0.object, submodel: !$0.baked && !session.isLocalPiece($0.object))
-      let keys = Array($0.keys)
-      var counts: [Int32: Int] = [:]
-      for key in keys { counts[key.frame, default: 0] += 1 }
-      let markers = counts.keys.sorted().map { Object.Marker(frame: $0, channels: counts[$0, default: 0]) }
-      var object = describeObject(id, name: String($0.name), members: members)
-      object.keys = keys
-      object.baked = $0.baked
-      object.markers = markers
+    let listed = bmapp.keyObjects(session)
+    var known = Set<Object.ID>()
+    objects = listed.map {
+      let id = Object.ID(piece: $0.piece, submodel: $0.submodel)
+      known.insert(id)
+      var object = describeObject(id, name: String($0.name), members: Array($0.members))
+      if $0.keyed {
+        object.keys = Array($0.keys)
+        object.baked = $0.baked
+        object.markers = $0.markers.map { Object.Marker(frame: Int32($0.frame), channels: Int($0.channels)) }
+      }
       return object
     }
-    var known = Dictionary(tracks.map { ($0.id, $0) }, uniquingKeysWith: { a, b in a.baked ? a : b })
-    let keys = Set(known.keys)
-    for i in model.steps.indices {
-      for item in session.stepItems(i) {
-        guard let part = item.pieces.first else { continue }
-        let id = Object.ID(piece: part, submodel: item.submodel)
-        guard known[id] == nil else { continue }
-        let name = item.submodel ? item.name : item.description
-        known[id] = describeObject(id, name: String(name), members: Array(item.pieces))
-      }
-    }
-    objects = known.values.sorted { a, b in
-      if keys.contains(a.id) != keys.contains(b.id) { return keys.contains(a.id) }
-      if a.id.piece != b.id.piece { return a.id.piece < b.id.piece }
-      return a.id.submodel && !b.id.submodel
-    }
-    active.formIntersection(known.keys)
+    active.formIntersection(known)
     syncObjects(Array(model.snapshot.selection))
   }
 
@@ -624,8 +608,10 @@ struct KeyframeTracks: View {
   }
 
   private func adjacent(after: Bool) {
-    let frames = activeObjects.flatMap { $0.markers.map { Int($0.frame) } }
-    if let destination = after ? frames.filter({ $0 > frame }).min() : frames.filter({ $0 < frame }).max() { seek(destination) }
+    var frames = bmapp.FrameList()
+    for object in activeObjects { for marker in object.markers { frames.push_back(Int32(marker.frame)) } }
+    var destination: Int32 = 0
+    if bmapp.adjacentKeyFrame(frames, Int32(frame), after, &destination) { seek(Int(destination)) }
   }
 
   private func edit(_ picked: KeyProperty, frame: Int) {
@@ -702,7 +688,7 @@ struct KeyframeTracks: View {
 
   private func retime(_ keys: [bmapp.Keyframe], offset: Int, anchor: bmapp.Keyframe) {
     guard let target, let first = keys.map(\.frame).min(), let last = keys.map(\.frame).max() else { return }
-    let offset = min(Int(scene.last - last), max(Int(scene.first - first), offset))
+    let offset = Int(bmapp.clampOffset(bmapp.keyOffsetLimits(scene, first, last), Int32(offset)))
     guard offset != 0 else { return }
     if model.context.perform({ $0.moveKeys(target.piece, keyList(keys), Int32(offset), target.submodel) }) {
       selectedKeys = Set(keys.map { key in
@@ -726,12 +712,7 @@ struct KeyframeTracks: View {
   private func interpolation(_ value: Int) -> bmapp.KeyInterpolation { [.Smooth, .Linear, .Hold][value] }
 
   private func link(_ enabled: Bool) {
-    var next = scene
-    next.buildLinked = enabled
-    if enabled {
-      let length = workspace.buildDuration / next.buildSpeed * Double(next.fps)
-      next.last = max(next.last, next.buildStart + Int32(ceil(length)))
-    }
+    let next = bmapp.linkedKeyScene(scene, enabled, workspace.buildDuration)
     model.context.perform { $0.setKeyScene(next) }
   }
 

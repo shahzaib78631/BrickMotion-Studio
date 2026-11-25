@@ -222,12 +222,16 @@ struct KeyframeGroupTracks<Ruler: View, Header: View>: View {
   private func offsets(for picks: Set<Pick>) -> ClosedRange<Int32> {
     guard let earliest = picks.min(by: { $0.frame < $1.frame }), let latest = picks.max(by: { $0.frame < $1.frame })
     else { return 0...0 }
-    return (first - earliest.frame)...(last - latest.frame)
+    var scene = bmapp.KeyScene()
+    scene.first = first
+    scene.last = last
+    let limits = bmapp.keyOffsetLimits(scene, earliest.frame, latest.frame)
+    return limits.lower...limits.upper
   }
 
   private func move(_ picks: Set<Pick>, offset: Int32, from anchor: Int32) {
     let limits = offsets(for: picks)
-    let delta = min(limits.upperBound, max(limits.lowerBound, offset))
+    let delta = bmapp.clampOffset(bmapp.OffsetLimits(lower: limits.lowerBound, upper: limits.upperBound), offset)
     guard delta != 0, model.context.perform({ $0.moveKeyRows(nativePicks(picks), delta) }) else { return }
     selection = Set(picks.map { Pick(object: $0.object, frame: $0.frame + delta) })
     seek(anchor + delta)
