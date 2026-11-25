@@ -19,7 +19,7 @@ fn heli_harness() -> Harness<'static, BrickMotionApp> {
     let mut h = Harness::builder()
         .with_size([1440.0, 900.0])
         .build_eframe(|cc| {
-            let mut app = BrickMotionApp::new(cc, Some(HELI.into()));
+            let mut app = BrickMotionApp::new_for_test_cc(cc, Some(HELI.into()));
             app.wait_loaded();
             app.dialogs_off();
             app

@@ -90,7 +90,7 @@ fn unsupported_file_is_refused_and_keeps_document() {
 }
 
 #[test]
-fn model_without_pieces_is_refused() {
+fn ldraw_without_pieces_is_refused() {
     let empty = temp_file("empty.ldr", b"0 Nothing here\n");
     let mut l = Loader::default();
     l.start(empty);

@@ -30,13 +30,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
                 if icon_button(ui, &t, Icon::Home, "Open…", true, false, 28.0).clicked() {
                     app.requested.push("file.open");
                 }
-                ui.menu_button(RichText::new("File").color(t.text2), |ui| {
-                    let open = egui::Button::new("Open…").shortcut_text("⌘O");
-                    if ui.add(open).clicked() {
-                        app.requested.push("file.open");
-                        ui.close();
-                    }
-                });
+                ui.menu_button(RichText::new("File").color(t.text2), |ui| file_menu(ui, app));
                 let ctx = app.ctx();
                 for (icon, id) in [(Icon::Undo, "edit.undo"), (Icon::Redo, "edit.redo")] {
                     let c = find(id).expect("registered");
@@ -46,7 +40,8 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
                         app.requested.push(c.id);
                     }
                 }
-                document_tab(ui, &t, &app.title(), bar);
+                let edited = app.has_document && app.doc.session().dirty();
+                document_tab(ui, &t, &app.title(), edited, bar);
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     ui.spacing_mut().item_spacing.x = 4.0;
                     icon_button(ui, &t, Icon::Help, "Help", false, false, 28.0);
@@ -59,13 +54,58 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
 }
 
 /// The open document as a tab that joins the ribbon below it.
-fn document_tab(ui: &mut Ui, t: &crate::Theme, title: &str, bar: egui::Rect) {
+fn document_tab(ui: &mut Ui, t: &crate::Theme, title: &str, edited: bool, bar: egui::Rect) {
     let galley = ui.painter().layout_no_wrap(title.to_owned(), egui::FontId::proportional(12.5), t.text1);
-    let (slot, resp) = ui.allocate_exact_size(Vec2::new(galley.size().x + 24.0, 30.0), Sense::hover());
+    let dot = if edited { 14.0 } else { 0.0 };
+    let (slot, resp) = ui.allocate_exact_size(Vec2::new(galley.size().x + 24.0 + dot, 30.0), Sense::hover());
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, title));
+    if edited {
+        resp.on_hover_text("Edited");
+    }
     let r = egui::Rect::from_min_max(egui::pos2(slot.left(), bar.top() + 8.0), egui::pos2(slot.right(), bar.bottom() + 1.0));
     let p = ui.painter();
     p.rect(r, CornerRadius { nw: 7, ne: 7, sw: 0, se: 0 }, t.bg2, Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
     p.hline(r.x_range().shrink(1.0), bar.bottom() - 0.5, Stroke::new(1.5, t.bg2));
+    let x = r.left() + 12.0 + galley.size().x;
     p.galley(egui::pos2(r.left() + 12.0, r.center().y - galley.size().y / 2.0), galley, Color32::WHITE);
+    if edited {
+        p.circle_filled(egui::pos2(x + 9.0, r.center().y), 3.0, t.text2);
+    }
+}
+
+/// New, Open, Open Recent, Save and Save As, each with its shortcut and state.
+fn file_menu(ui: &mut Ui, app: &mut BrickMotionApp) {
+    let ctx = app.ctx();
+    let item = |ui: &mut Ui, app: &mut BrickMotionApp, id: &'static str| {
+        let c = find(id).expect("registered");
+        let b = egui::Button::new(title(c, &ctx)).shortcut_text(c.keys.unwrap_or(""));
+        if ui.add_enabled(enabled(c, &ctx), b).clicked() {
+            app.requested.push(c.id);
+            ui.close();
+        }
+    };
+    item(ui, app, "file.new");
+    item(ui, app, "file.open");
+    let recent: Vec<std::path::PathBuf> = app.recents.existing().into_iter().map(|p| p.to_path_buf()).collect();
+    ui.menu_button("Open Recent", |ui| {
+        if recent.is_empty() {
+            ui.add_enabled(false, egui::Button::new("No recent files"));
+        }
+        for p in &recent {
+            let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            if ui.button(name).on_hover_text(p.display().to_string()).clicked() {
+                app.open(p.clone());
+                ui.close();
+            }
+        }
+        ui.separator();
+        if ui.add_enabled(!app.recents.0.is_empty(), egui::Button::new("Clear Menu")).clicked() {
+            app.recents.clear();
+            let _ = app.recents.save(&app.support);
+            ui.close();
+        }
+    });
+    ui.separator();
+    item(ui, app, "file.save");
+    item(ui, app, "file.save_as");
 }

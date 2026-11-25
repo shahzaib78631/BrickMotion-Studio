@@ -1,5 +1,6 @@
 //! The window around the viewport: title bar, ribbon, floating panels and the timeline.
 pub mod browser;
+pub mod confirm;
 pub mod navigator;
 pub mod notices;
 pub mod properties;

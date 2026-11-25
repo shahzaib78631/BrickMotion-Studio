@@ -5,7 +5,7 @@ use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 
 fn harness() -> Harness<'static, BrickMotionApp> {
-    let mut h = Harness::builder().with_size([1440.0, 900.0]).build_eframe(|cc| BrickMotionApp::new(cc, None));
+    let mut h = Harness::builder().with_size([1440.0, 900.0]).build_eframe(|cc| BrickMotionApp::new_for_test_cc(cc, None));
     h.run();
     h
 }
@@ -88,7 +88,7 @@ fn press(h: &mut Harness<'static, BrickMotionApp>, at: egui::Pos2, modifiers: eg
 fn viewport_shows_model_and_picks() {
     let mut h = Harness::builder()
         .with_size([1440.0, 900.0])
-        .build_eframe(|cc| BrickMotionApp::new(cc, Some(HELI.into())));
+        .build_eframe(|cc| BrickMotionApp::new_for_test_cc(cc, Some(HELI.into())));
     // The model opens on a worker; the window keeps drawing meanwhile.
     let t0 = std::time::Instant::now();
     while h.state().piece_count() < 100 {
@@ -127,7 +127,7 @@ fn viewport_shows_model_and_picks() {
 #[test]
 fn large_model_keeps_window_responsive() {
     let Some(big) = std::env::var_os("BM_BIG_MODEL") else { return };
-    let mut h = Harness::builder().with_size([1440.0, 900.0]).build_eframe(|cc| BrickMotionApp::new(cc, None));
+    let mut h = Harness::builder().with_size([1440.0, 900.0]).build_eframe(|cc| BrickMotionApp::new_for_test_cc(cc, None));
     h.run();
     let name = std::path::Path::new(&big).file_name().unwrap().to_string_lossy().into_owned();
     h.state_mut().open(big.into());

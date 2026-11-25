@@ -18,7 +18,8 @@ pub struct Warm {
 /// File types BrickMotion opens; the engine would read anything as LDraw and find no pieces.
 pub const OPEN_EXTENSIONS: [&str; 6] = ["brickmotion", "json", "ldr", "mpd", "dat", "io"];
 
-/// Opens a model into a fresh session: refuses other file types, and warns when it has no pieces.
+/// Opens a model into a fresh session: refuses other file types, and an LDraw file with no
+/// pieces (the engine reads anything as LDraw). An empty .brickmotion project is fine.
 pub fn open_model(path: &Path) -> Result<(bm::Session, bm::OpenInfo), bm::OpenError> {
     let ext = path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase);
     if !ext.as_deref().is_some_and(|e| OPEN_EXTENSIONS.contains(&e)) {
@@ -29,7 +30,7 @@ pub fn open_model(path: &Path) -> Result<(bm::Session, bm::OpenInfo), bm::OpenEr
     }
     let mut s = bm::Session::new();
     let info = s.open(path)?;
-    if s.piece_count() == 0 {
+    if s.piece_count() == 0 && ext.as_deref() != Some("brickmotion") {
         return Err(bm::OpenError { path: path.to_path_buf(), message: "No pieces were found in this file.".into() });
     }
     Ok((s, info))

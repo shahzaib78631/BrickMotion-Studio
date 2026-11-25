@@ -2,6 +2,7 @@
 mod app;
 pub mod chrome;
 pub mod commands;
+pub mod document;
 mod icons;
 mod loader;
 mod notices;
@@ -11,7 +12,8 @@ pub mod support;
 mod theme;
 pub mod viewport;
 
-pub use app::{BrickMotionApp, DialogRequest, Workspace};
+pub use app::{Answer, BrickMotionApp, DialogRequest, Pending, Workspace};
+pub use document::{DocState, save_to};
 pub use loader::{Loaded, Loader, OPEN_EXTENSIONS, Warm, open_model};
 pub use notices::Notice;
 pub use snapshot::snapshot;

@@ -3,6 +3,8 @@ use std::time::Duration;
 
 use crate::chrome;
 use crate::commands::{Ctx, run, tabs};
+use crate::document::{DocState, PROJECT_EXTENSION, save_to, with_project_extension};
+use crate::support::{Prefs, Recents, Support};
 use crate::loader::{Loader, OPEN_EXTENSIONS};
 use crate::notices::Notice;
 use crate::theme::{Theme, apply};
@@ -38,6 +40,24 @@ pub struct DialogRequest {
     pub suggested: Option<String>,
 }
 
+/// Something that would close or replace the current document, held while the person is asked
+/// whether to save it.
+pub enum Pending {
+    Open(PathBuf),
+    New,
+    Quit,
+    /// A load that finished after the document was edited.
+    Adopt(Box<(PathBuf, bm::Document, bm::OpenInfo)>),
+}
+
+/// The answer to "Save changes?".
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Answer {
+    Save,
+    DontSave,
+    Cancel,
+}
+
 pub struct BrickMotionApp {
     pub workspace: Workspace,
     pub ribbon_tab: &'static str,
@@ -63,17 +83,36 @@ pub struct BrickMotionApp {
     pub dialog_requests: Vec<DialogRequest>,
     dialogs: bool,
     seen_version: u64,
+    /// The file behind the document.
+    pub state: DocState,
+    pub support: Support,
+    pub prefs: Prefs,
+    pub recents: Recents,
+    /// Waiting for an answer to "Save changes?".
+    pub confirm: Option<Pending>,
+    /// The person agreed to replace the document at this version; a load arriving while it is
+    /// unchanged takes its place without asking again.
+    replace_ok: Option<u64>,
+    /// Quit was confirmed: the next frame closes the window.
+    quitting: bool,
 }
 
 impl BrickMotionApp {
     pub fn new(cc: &eframe::CreationContext, path: Option<PathBuf>) -> Self {
-        egui_extras::install_image_loaders(&cc.egui_ctx);
-        apply(&cc.egui_ctx, &Theme::DARK);
-        Self::with_path(path)
+        Self::new_with_support(cc, path, Support::user())
     }
 
-    fn with_path(path: Option<PathBuf>) -> Self {
+    /// As `new`, with the support folder given (tests use a temp folder).
+    pub fn new_with_support(cc: &eframe::CreationContext, path: Option<PathBuf>, support: Support) -> Self {
+        egui_extras::install_image_loaders(&cc.egui_ctx);
+        apply(&cc.egui_ctx, &Theme::DARK);
+        Self::with_path(path, support)
+    }
+
+    fn with_path(path: Option<PathBuf>, support: Support) -> Self {
         let theme = Theme::DARK;
+        let prefs = Prefs::load(&support);
+        let recents = Recents::load(&support);
         let mut app = BrickMotionApp {
             workspace: Workspace::Build,
             ribbon_tab: tabs(Workspace::Build)[0],
@@ -92,6 +131,13 @@ impl BrickMotionApp {
             dialog_requests: Vec::new(),
             dialogs: true,
             seen_version: 0,
+            state: DocState::default(),
+            support,
+            prefs,
+            recents,
+            confirm: None,
+            replace_ok: None,
+            quitting: false,
         };
         if let Some(p) = path {
             app.open(p);
@@ -106,19 +152,123 @@ impl BrickMotionApp {
         }
     }
 
-    /// The document's title, or "Untitled" before one is open.
+    /// The saved project's name, else the opened file's, else "Untitled".
     pub fn title(&self) -> String {
+        if let Some(p) = self.state.save_path() {
+            return p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+        }
+        if self.state.path.is_none() {
+            return "Untitled".into();
+        }
         let t = self.doc.session().title();
         if t.is_empty() { "Untitled".into() } else { t }
+    }
+
+    fn dirty(&self) -> bool {
+        self.has_document && self.doc.session().dirty()
+    }
+
+    /// Does `next` now, or first asks to save an edited document.
+    pub fn request(&mut self, next: Pending) {
+        if self.dirty() {
+            self.confirm = Some(next);
+        } else {
+            self.perform(next);
+        }
+    }
+
+    fn perform(&mut self, next: Pending) {
+        match next {
+            Pending::Open(p) => self.loader.start_warm(p, self.viewport.warm()),
+            Pending::New => self.new_document_now(),
+            Pending::Quit => self.quitting = true,
+            Pending::Adopt(loaded) => {
+                let (path, doc, info) = *loaded;
+                self.adopt(path, doc, info);
+            }
+        }
+    }
+
+    /// The person's answer to "Save changes?".
+    pub fn answer_confirm(&mut self, a: Answer) {
+        let Some(next) = self.confirm.take() else { return };
+        match a {
+            Answer::Cancel => {}
+            Answer::DontSave => {
+                self.replace_ok = Some(self.doc.session().version());
+                self.perform(next);
+            }
+            Answer::Save => {
+                self.save();
+                if self.doc.session().dirty() {
+                    // The save failed or was cancelled: keep asking.
+                    self.confirm = Some(next);
+                } else {
+                    self.replace_ok = Some(self.doc.session().version());
+                    self.perform(next);
+                }
+            }
+        }
+    }
+
+    /// Takes a loaded document as the current one.
+    fn adopt(&mut self, path: PathBuf, doc: bm::Document, info: bm::OpenInfo) {
+        // The old document (and its renderer) goes; the widget sets the new one up.
+        self.doc = doc;
+        self.viewport.reset();
+        self.has_document = true;
+        self.replace_ok = None;
+        self.state = DocState { imported: self.doc.session().imported(), path: Some(path.clone()) };
+        self.notices.extend(Notice::from_warnings(&info.warnings));
+        self.remember(path);
+    }
+
+    /// Puts a file at the top of Open Recent.
+    fn remember(&mut self, path: PathBuf) {
+        self.recents.add(path);
+        let _ = self.recents.save(&self.support);
+    }
+
+    /// Saves in place, or asks where when the document has no project file yet.
+    pub fn save(&mut self) {
+        let Some(path) = self.state.save_path().map(Path::to_path_buf) else {
+            self.save_as();
+            return;
+        };
+        self.write(path);
+    }
+
+    /// Saves to `path` (given the project extension) and makes it the document's file.
+    pub fn save_as_path(&mut self, path: PathBuf) {
+        self.write(with_project_extension(path));
+    }
+
+    fn write(&mut self, path: PathBuf) {
+        match save_to(self.doc.session_mut(), &path) {
+            Ok(()) => {
+                self.state = DocState { path: Some(path.clone()), imported: false };
+                self.remember(path);
+            }
+            Err(e) => {
+                let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                self.notices.push(Notice::Error { title: format!("Couldn't save {name}"), detail: e });
+            }
+        }
+    }
+
+    /// The name Save As suggests.
+    fn suggested_name(&self) -> String {
+        format!("{}.{PROJECT_EXTENSION}", self.title())
     }
 
     pub fn piece_count(&self) -> usize {
         self.doc.session().piece_count()
     }
 
-    /// Starts opening `path` in the background; the current document stays until it succeeds.
+    /// Starts opening `path` in the background, after asking to save an edited document; the
+    /// current document stays until the new one arrives.
     pub fn open(&mut self, path: PathBuf) {
-        self.loader.start_warm(path, self.viewport.warm());
+        self.request(Pending::Open(path));
     }
 
     /// The file being opened, if any.
@@ -147,7 +297,8 @@ impl BrickMotionApp {
         match id {
             "file.open" | "model.import" => self.open_dialog(),
             "file.new" => self.new_document(),
-            "file.save" | "file.save_as" => self.save_as(),
+            "file.save" => self.save(),
+            "file.save_as" => self.save_as(),
             "edit.undo" => {
                 let c = s.undo();
                 self.edited(c);
@@ -184,22 +335,37 @@ impl BrickMotionApp {
         }
     }
 
-    /// An untitled, empty project.
+    /// An untitled, empty project, after asking to save an edited one.
     pub fn new_document(&mut self) {
+        self.request(Pending::New);
+    }
+
+    fn new_document_now(&mut self) {
         let mut s = bm::Session::new();
         match s.new_blank() {
             Ok(_) => {
                 self.doc = bm::Document::new(s);
                 self.viewport.reset();
                 self.has_document = true;
+                self.state = DocState::default();
             }
             Err(e) => self.notices.push(Notice::open_failed(&e)),
         }
     }
 
-    fn save_as(&mut self) {
+    /// Asks where to save, suggesting `<title>.brickmotion` beside the document's file.
+    pub fn save_as(&mut self) {
+        let suggested = self.suggested_name();
         if !self.dialogs {
-            self.dialog_requests.push(DialogRequest { kind: "save_as", suggested: None });
+            self.dialog_requests.push(DialogRequest { kind: "save_as", suggested: Some(suggested) });
+            return;
+        }
+        let mut dialog = rfd::FileDialog::new().add_filter("BrickMotion project", &[PROJECT_EXTENSION]).set_file_name(&suggested);
+        if let Some(dir) = self.state.path.as_deref().and_then(Path::parent) {
+            dialog = dialog.set_directory(dir);
+        }
+        if let Some(p) = dialog.save_file() {
+            self.save_as_path(p);
         }
     }
 
@@ -222,13 +388,17 @@ impl BrickMotionApp {
 
     /// Takes a finished load: the new document on success, a notice either way it needs one.
     fn poll_loader(&mut self) {
+        let path = self.loader.loading().map(Path::to_path_buf);
         match self.loader.poll() {
             Some(Ok((doc, info))) => {
-                // The old document (and its renderer) goes; the widget sets the new one up.
-                self.doc = doc;
-                self.viewport.reset();
-                self.has_document = true;
-                self.notices.extend(Notice::from_warnings(&info.warnings));
+                let path = path.expect("a finished load had a path");
+                let agreed = self.replace_ok == Some(self.doc.session().version());
+                if self.dirty() && !agreed {
+                    // Edited while it loaded: ask before the edits go.
+                    self.confirm = Some(Pending::Adopt(Box::new((path, doc, info))));
+                } else {
+                    self.adopt(path, doc, info);
+                }
             }
             Some(Err(e)) => self.notices.push(Notice::open_failed(&e)),
             None => {}
@@ -241,9 +411,16 @@ impl BrickMotionApp {
         }
     }
 
+    /// As `new`, with its own temp support folder: tests never touch the person's preferences.
+    #[doc(hidden)]
+    pub fn new_for_test_cc(cc: &eframe::CreationContext, path: Option<PathBuf>) -> Self {
+        Self::new_with_support(cc, path, test_support())
+    }
+
+    /// A window-less app with its own temp support folder.
     #[doc(hidden)]
     pub fn new_for_test(path: Option<PathBuf>) -> Self {
-        Self::with_path(path)
+        Self::with_path(path, test_support())
     }
 
     /// Blocks until the pending open (if any) has finished and been taken.
@@ -266,12 +443,37 @@ impl BrickMotionApp {
     }
 }
 
+impl BrickMotionApp {
+    /// Closing the window with unsaved changes asks first.
+    fn guard_close(&mut self, ctx: &egui::Context) {
+        if self.quitting {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            return;
+        }
+        if ctx.input(|i| i.viewport().close_requested()) && self.dirty() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            if self.confirm.is_none() {
+                self.confirm = Some(Pending::Quit);
+            }
+        }
+    }
+}
+
+/// A fresh support folder under the temp folder, one per test app.
+fn test_support() -> Support {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static N: AtomicUsize = AtomicUsize::new(0);
+    let n = N.fetch_add(1, Ordering::Relaxed);
+    Support::at(std::env::temp_dir().join(format!("bm-test-support-{}-{n}", std::process::id())))
+}
+
 impl eframe::App for BrickMotionApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.poll_loader();
         if self.loader.loading().is_some() {
             ui.ctx().request_repaint_after(Duration::from_millis(50));
         }
+        self.guard_close(ui.ctx());
         self.text_focus = ui.ctx().egui_wants_keyboard_input();
         crate::shortcuts::handle(self, ui.ctx());
         chrome::titlebar::show(ui, self);
@@ -280,6 +482,7 @@ impl eframe::App for BrickMotionApp {
             chrome::timeline::show(ui, self);
         }
         chrome::central(ui, self);
+        chrome::confirm::show(ui, self);
         self.run_requested();
         if self.doc.session().version() != self.seen_version {
             // An edit, undo or redo: the engine's viewport catches up by itself, it only needs a frame.
