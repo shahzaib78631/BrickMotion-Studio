@@ -22,8 +22,24 @@ pub(crate) fn due(expected: u64, planned: u64) -> Due {
     }
 }
 
+/// Which clock the timeline and the viewport follow.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Clock {
+    /// The planned build: steps, flights and pauses.
+    #[default]
+    Build,
+    /// The key scene: frames from `first` to `last` at the scene's frame rate.
+    Keyframes,
+}
+
 /// Playback and planner state for the open document.
 pub struct Transport {
+    clock: Clock,
+    /// The session's key scene, read again whenever the session version changes.
+    pub key_scene: bm::keys::KeyScene,
+    key_scene_version: Option<u64>,
+    /// The Keyframes playhead, put back when a finished plan drops the viewport to rest.
+    scene_time: f64,
     pub state: PlaybackState,
     /// The session version the cached `timeline` and `lanes` were built from.
     pub version: Option<u64>,
@@ -51,6 +67,10 @@ pub struct Transport {
 impl Default for Transport {
     fn default() -> Self {
         Self {
+            clock: Clock::Build,
+            key_scene: bm::keys::KeyScene::default(),
+            key_scene_version: None,
+            scene_time: 0.0,
             state: PlaybackState::default(),
             version: None,
             timeline: None,
@@ -82,6 +102,7 @@ impl Transport {
         let doc_gen = session.generation();
         if self.generation != Some(doc_gen) {
             self.reset();
+            vp.use_keyframes(false);
             self.generation = Some(doc_gen);
             vp.set_playback_rate(self.rate);
             vp.set_playback_loop(self.looping);
@@ -96,7 +117,7 @@ impl Transport {
             self.failure = msg.clone();
             return !was;
         }
-        if next.plan == PlanState::Ready {
+        if self.clock == Clock::Build && next.plan == PlanState::Ready {
             self.last_build_time = if next.at_rest { next.duration } else { next.seconds };
         }
         let status_changed = next.plan != self.state.plan
@@ -107,12 +128,22 @@ impl Transport {
             || next.stale != self.state.stale
             || (next.duration - self.state.duration).abs() > 1e-6
             || next.stage != self.state.stage;
-        let fps = self.fps().max(1.0);
+        let fps = self.clock_fps().max(1.0);
         let time_changed = (next.seconds * fps).floor() != (self.state.seconds * fps).floor();
         if status_changed || time_changed {
             changed = true;
         }
         self.state = next;
+        if self.clock == Clock::Keyframes {
+            if !next.at_rest {
+                self.scene_time = next.seconds;
+            } else if self.scene_shows_time() {
+                // A plan landing resets the viewport's frame; the Keyframes playhead stays put.
+                vp.seek(self.scene_time);
+                self.state = vp.playback_state();
+                changed = true;
+            }
+        }
 
         let error = if next.plan == PlanState::Failed { vp.plan_error() } else { String::new() };
         if self.failure != error {
@@ -121,6 +152,14 @@ impl Transport {
         }
 
         let cur_ver = session.version();
+        if self.key_scene_version != Some(cur_ver) {
+            let scene = session.key_scene();
+            if scene != self.key_scene {
+                self.key_scene = scene;
+                changed = true;
+            }
+            self.key_scene_version = Some(cur_ver);
+        }
         if self.pins_version != Some(cur_ver) {
             self.pins = session.arrival_pins().into_iter().collect();
             self.pins_version = Some(cur_ver);
@@ -180,13 +219,72 @@ impl Transport {
         self.pending_change.take()
     }
 
+    pub fn clock(&self) -> Clock {
+        self.clock
+    }
+
+    /// Switches clocks: playback stops and the playhead goes to the new clock's start.
+    pub fn set_clock(&mut self, vp: &mut bm::Viewport, clock: Clock) {
+        if self.clock == clock {
+            return;
+        }
+        self.clock = clock;
+        self.staging_preview_at = None;
+        self.pending_step = None;
+        self.focused_step = None;
+        self.step_preview = None;
+        vp.use_keyframes(clock == Clock::Keyframes);
+        self.scene_time = 0.0;
+        self.state = vp.playback_state();
+        self.update_playhead_run();
+    }
+
+    /// Seconds of the key scene: `(last − first) / fps`.
+    pub fn scene_length(scene: &bm::keys::KeyScene) -> f64 {
+        if scene.fps <= 0 { 0.0 } else { f64::from(scene.last - scene.first) / f64::from(scene.fps) }
+    }
+
+    /// The scene frame under the playhead: `first + round(time × fps)`.
+    pub fn key_frame(&self, scene: &bm::keys::KeyScene) -> i32 {
+        scene.first + (self.time() * f64::from(scene.fps)).round() as i32
+    }
+
+    /// Whether the Keyframes clock can show time: a scene that follows the build needs a plan.
+    fn scene_shows_time(&self) -> bool {
+        !self.key_scene.build_linked || self.ready()
+    }
+
+    /// Seeks the Keyframes clock to a scene time, snapped to the scene's frames.
+    pub fn seek_scene(&mut self, vp: &mut bm::Viewport, seconds: f64) {
+        if !self.scene_shows_time() {
+            return;
+        }
+        let fps = f64::from(self.key_scene.fps.max(1));
+        let t = (seconds.clamp(0.0, self.duration().max(0.0)) * fps).round() / fps;
+        vp.seek(t);
+        self.state = vp.playback_state();
+        self.scene_time = self.state.seconds;
+    }
+
+    /// Frames per second of the clock in use.
+    pub fn clock_fps(&self) -> f64 {
+        match self.clock {
+            Clock::Build => self.fps(),
+            Clock::Keyframes => f64::from(self.key_scene.fps.max(1)),
+        }
+    }
+
     fn update_playhead_run(&mut self) {
+        if self.clock == Clock::Keyframes {
+            self.playhead_run = None;
+            return;
+        }
         let t = self.time();
         self.playhead_run = self.lanes.as_ref().and_then(|l| l.run_index_at(t));
     }
 
     pub fn stale_shown(&self) -> bool {
-        self.state.stale && self.build_duration() > 0.0
+        self.clock == Clock::Build && self.state.stale && self.build_duration() > 0.0
     }
 
     pub fn build_duration(&self) -> f64 {
@@ -218,10 +316,16 @@ impl Transport {
     }
 
     pub fn duration(&self) -> f64 {
+        if self.clock == Clock::Keyframes {
+            return if self.scene_shows_time() { self.state.duration } else { 0.0 };
+        }
         if self.stale_shown() { self.build_duration() } else { self.state.duration }
     }
 
     pub fn time(&self) -> f64 {
+        if self.clock == Clock::Keyframes {
+            return if self.scene_shows_time() && !self.state.at_rest { self.state.seconds } else { 0.0 };
+        }
         if self.stale_shown() {
             self.last_build_time
         } else if self.state.at_rest {
@@ -277,6 +381,10 @@ impl Transport {
     }
 
     pub fn seek(&mut self, vp: &mut bm::Viewport, seconds: f64) {
+        if self.clock == Clock::Keyframes {
+            self.seek_scene(vp, seconds);
+            return;
+        }
         if !self.ready() {
             return;
         }
@@ -403,6 +511,10 @@ impl Transport {
     }
 
     pub fn reset(&mut self) {
+        self.clock = Clock::Build;
+        self.key_scene = bm::keys::KeyScene::default();
+        self.key_scene_version = None;
+        self.scene_time = 0.0;
         self.state = PlaybackState::default();
         self.version = None;
         self.timeline = None;

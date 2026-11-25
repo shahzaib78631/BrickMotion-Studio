@@ -13,6 +13,7 @@ use egui::{
 
 use super::{float_frame, icon_button, icon_button_tip};
 use crate::BrickMotionApp;
+use crate::transport::Clock;
 use crate::commands::{enabled, find};
 use crate::icons::{self, Icon};
 use crate::theme::Theme;
@@ -172,11 +173,12 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
 fn header_row(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect) {
     let t = app.theme;
     let has_pieces = app.piece_count() > 0;
-    let ready = app.transport.ready();
-    let can_nav = ready || app.transport.stale_shown();
+    let keyframes = app.transport.clock() == Clock::Keyframes;
+    let ready = app.transport.ready() && !keyframes;
     let dur = app.transport.duration();
+    let can_nav = if keyframes { dur > 0.0 } else { ready || app.transport.stale_shown() };
     let cur = app.transport.time();
-    let fps = app.transport.fps();
+    let fps = app.transport.clock_fps();
 
     // Left: disabled M8 editing tools.
     let left_r = Rect::from_min_size(r.min + vec2(10.0, 6.0), vec2(HEAD_W - 14.0, 28.0));
@@ -190,8 +192,17 @@ fn header_row(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect) {
         });
     });
 
-    // Centre: timecode, Start / Play-Pause / End, duration.
+    // Centre: clock switch, timecode, Start / Play-Pause / End, duration.
     let c = r.center();
+    if has_pieces {
+        let switch_r = Rect::from_min_size(pos2(c.x - 330.0, c.y - 13.0), vec2(152.0, 26.0));
+        if let Some(clock) = clock_switch(ui, &t, switch_r, app.transport.clock()) {
+            app.cancel_placement();
+            if let Some(vp) = app.doc.viewport() {
+                app.transport.set_clock(vp, clock);
+            }
+        }
+    }
     let mono = FontId::monospace(13.0);
     ui.painter().text(
         pos2(c.x - 68.0, c.y),
@@ -353,6 +364,39 @@ fn header_row(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect) {
     );
 }
 
+/// The Build | Keyframes clock switch (m5-rulings.md): returns the clock picked this frame.
+fn clock_switch(ui: &mut Ui, t: &Theme, r: Rect, clock: Clock) -> Option<Clock> {
+    let p = ui.painter();
+    p.rect_filled(r, 7.0, Color32::from_white_alpha(18));
+    let inner = r.shrink(2.0);
+    let options = [(Clock::Build, "Build", 58.0), (Clock::Keyframes, "Keyframes", inner.width() - 58.0)];
+    let mut x = inner.left();
+    let mut picked = None;
+    for (value, label, w) in options {
+        let seg = Rect::from_min_size(pos2(x, inner.top()), vec2(w, inner.height()));
+        x += w;
+        let resp = ui.interact(seg, ui.scope_id().with(("tl-clock", label)), Sense::click());
+        let on = clock == value;
+        resp.widget_info(|| WidgetInfo::selected(egui::Role::RadioButton, true, on, format!("{label} clock")));
+        if on {
+            ui.painter().rect_filled(seg, 5.5, Color32::from_white_alpha(44));
+        } else if resp.hovered() {
+            ui.painter().rect_filled(seg, 5.5, Color32::from_white_alpha(12));
+        }
+        ui.painter().text(
+            seg.center(),
+            Align2::CENTER_CENTER,
+            label,
+            FontId::proportional(11.5),
+            if on { t.text1 } else { t.text2 },
+        );
+        if resp.clicked() && !on {
+            picked = Some(value);
+        }
+    }
+    picked
+}
+
 fn timeline_overflow_menu(ui: &mut Ui, app: &mut BrickMotionApp) {
     let ctx = app.ctx();
     for (id, label) in [
@@ -431,13 +475,22 @@ fn timeline_body(ui: &mut Ui, app: &mut BrickMotionApp, heads: Rect, lanes: Rect
 
     // Handle ruler zoom/pan, scrub, follow playhead, and global drag release (Review Focus 5).
     let dur = app.transport.duration();
-    let can_nav = (app.transport.ready() || app.transport.stale_shown()) && dur > 0.0;
+    let keyframes = app.transport.clock() == Clock::Keyframes;
+    let can_nav = (keyframes || app.transport.ready() || app.transport.stale_shown()) && dur > 0.0;
     handle_navigation_and_drags(ui, app, lanes, lane_ruler, dur, can_nav);
     paint_ruler(ui, app, lane_ruler, dur, can_nav);
 
     // Below the ruler: Failed state replaces lanes with the single error row (m4-rulings.md).
     let tracks_body = Rect::from_min_max(pos2(heads.left(), head_ruler.bottom()), lanes.max);
     let tracks_lanes = Rect::from_min_max(pos2(lanes.left(), lane_ruler.bottom()), lanes.max);
+
+    if keyframes {
+        keyframes_body(ui, app, tracks_body, heads.width(), lanes.width(), row_sep);
+        if dur > 0.0 {
+            paint_playhead(ui, app, lanes, dur);
+        }
+        return;
+    }
 
     if app.transport.state.plan == PlanState::Failed {
         draw_collapsed_heads(ui, app, Rect::from_min_max(pos2(heads.left(), head_ruler.bottom()), heads.max), row_sep);
@@ -636,6 +689,41 @@ fn timeline_body(ui: &mut Ui, app: &mut BrickMotionApp, heads: Rect, lanes: Rect
     }
 }
 
+/// The Keyframes clock: Camera and Keys only; the Build track and Snaps are hidden (m5-rulings.md).
+fn keyframes_body(ui: &mut Ui, app: &mut BrickMotionApp, body: Rect, head_w: f32, lane_w: f32, sep: Stroke) {
+    let t = app.theme;
+    ui.scope_builder(UiBuilder::new().max_rect(body), |ui| {
+        egui::ScrollArea::vertical()
+            .id_salt("tl-keys-scroll")
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+                split_row(
+                    ui,
+                    head_w,
+                    lane_w,
+                    TRACK_H,
+                    sep,
+                    |ui, hr| {
+                        track_head(ui, &t, hr, Icon::Cam, "Camera", false, false, None);
+                    },
+                    |ui, lr| empty_lane(ui, &t, lr, "No camera keys yet"),
+                );
+                split_row(
+                    ui,
+                    head_w,
+                    lane_w,
+                    TRACK_H,
+                    sep,
+                    |ui, hr| {
+                        track_head(ui, &t, hr, Icon::Keys, "Keys", false, false, None);
+                    },
+                    |ui, lr| empty_lane(ui, &t, lr, "No keys yet"),
+                );
+            });
+    });
+}
+
 fn split_row(
     ui: &mut Ui,
     head_w: f32,
@@ -684,6 +772,8 @@ fn track_head(
     let y = r.center().y;
     let mut toggled = false;
     let mut badge_clicked = false;
+    ui.interact(r, ui.scope_id().with(("tl-head", name)), Sense::hover())
+        .widget_info(|| WidgetInfo::labeled(egui::Role::Label, true, format!("{name} track")));
     let chev_r = Rect::from_center_size(pos2(r.left() + 16.0, y), vec2(16.0, 16.0));
     if expandable {
         let resp = ui.interact(chev_r, ui.scope_id().with(("tl-chev", name)), Sense::click());
@@ -982,7 +1072,13 @@ fn paint_ruler(ui: &Ui, app: &BrickMotionApp, r: Rect, dur: f64, can_nav: bool) 
     }
     let view = app.timeline.view;
     let lw = view.logical_width();
-    let major = tick_interval(dur, lw).max(0.01);
+    let keys = (app.transport.clock() == Clock::Keyframes).then_some(app.transport.key_scene);
+    let mut major = tick_interval(dur, lw).max(0.01);
+    if let Some(scene) = keys {
+        // Whole frames, five minor ticks to a labelled one.
+        let frame = 1.0 / f64::from(scene.fps.max(1));
+        major = ((major / (5.0 * frame)).ceil() * 5.0 * frame).max(5.0 * frame);
+    }
     let minor = major / 5.0;
 
     let v0 = (view.visible_start() * dur - major).max(0.0);
@@ -1010,7 +1106,10 @@ fn paint_ruler(ui: &Ui, app: &BrickMotionApp, r: Rect, dur: f64, can_nav: bool) 
             p.text(
                 pos2(sx + 4.0, r.top() + 5.0),
                 Align2::LEFT_TOP,
-                format_ruler(time),
+                match keys {
+                    Some(scene) => (scene.first + (time * f64::from(scene.fps)).round() as i32).to_string(),
+                    None => format_ruler(time),
+                },
                 FontId::monospace(10.5),
                 t.text3,
             );

@@ -695,6 +695,22 @@ impl BrickMotionApp {
                     self.transport.toggle(vp);
                 }
             }
+            "transport.start" | "transport.end" if self.transport.clock() == crate::transport::Clock::Keyframes => {}
+            "transport.prev_step" | "transport.next_step"
+                if self.transport.clock() == crate::transport::Clock::Keyframes =>
+            {
+                // On the Keyframes clock ⇧← / ⇧→ go to the previous or next key.
+                let scene = self.transport.key_scene;
+                let now = self.transport.key_frame(&scene);
+                let objects = self.doc.session().key_objects();
+                let after = id == "transport.next_step";
+                if let Some(frame) = bm::keys::adjacent_key_frame(&objects, now, after)
+                    && let Some(vp) = self.doc.viewport()
+                {
+                    let seconds = f64::from(frame - scene.first) / f64::from(scene.fps.max(1));
+                    self.transport.seek_scene(vp, seconds);
+                }
+            }
             "transport.start" => {
                 if let Some(vp) = self.doc.viewport() {
                     self.transport.seek(vp, 0.0);
