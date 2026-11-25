@@ -6,6 +6,7 @@ mod icons;
 mod loader;
 mod notices;
 mod snapshot;
+pub mod support;
 mod theme;
 pub mod viewport;
 

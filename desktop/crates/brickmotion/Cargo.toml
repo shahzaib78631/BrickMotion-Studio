@@ -13,6 +13,8 @@ egui = "0.37"
 egui_extras = { version = "0.37", features = ["svg"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
 rfd = "0.15"
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
 
 [dev-dependencies]
 egui_kittest = { version = "0.37", features = ["eframe", "wgpu", "snapshot"] }
