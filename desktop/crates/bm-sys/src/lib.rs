@@ -475,6 +475,68 @@ pub struct BmSnapMix {
     pub together: i32,
 }
 
+// ---- Keyframes (keys.cpp) ----
+#[repr(C)]
+pub struct BmKeyObjects {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct BmFlightPath {
+    _private: [u8; 0],
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct BmKeyframe {
+    pub channel: i32,
+    pub frame: i32,
+    pub value: f64,
+    pub interpolation: i32,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct BmKeyScene {
+    pub fps: i32,
+    pub first: i32,
+    pub last: i32,
+    pub build_linked: bool,
+    pub build_start: i32,
+    pub build_speed: f64,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct BmKeyRowPick {
+    pub piece: u32,
+    pub frame: i32,
+    pub submodel: bool,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct BmFlightPathPoint {
+    pub frame: i32,
+    pub at: BmVec3,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct BmFlightPose {
+    pub position: BmVec3,
+    pub qx: f64,
+    pub qy: f64,
+    pub qz: f64,
+    pub qw: f64,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct BmKeyObjectRow {
+    pub piece: u32,
+    pub submodel: bool,
+    pub name: *const c_char,
+    pub baked: bool,
+    pub keyed: bool,
+    pub keys: usize,
+    pub members: usize,
+    pub markers: usize,
+}
+
 unsafe extern "C" {
     pub fn bm_string_free(s: BmString);
     pub fn bm_ldraw_directory() -> BmString;
@@ -691,6 +753,42 @@ unsafe extern "C" {
     pub fn bm_snap_mix_preset(name: *const c_char) -> BmSnapMix;
     pub fn bm_write_snap_preview(mix: BmSnapMix, example: BmSnapExample, recordings: *const c_char, file: *const c_char) -> bool;
     pub fn bm_viewport_write_snap_track(v: *mut BmViewport, file: *const c_char, recordings: *const c_char) -> BmString;
+    // Keyframes
+    pub fn bm_session_key_scene(s: *const BmSession) -> BmKeyScene;
+    pub fn bm_session_set_key_scene(s: *mut BmSession, scene: BmKeyScene) -> BmChange;
+    pub fn bm_session_key_objects(s: *const BmSession) -> *mut BmKeyObjects;
+    pub fn bm_key_objects_len(o: *const BmKeyObjects) -> usize;
+    pub fn bm_key_objects_at(o: *const BmKeyObjects, i: usize) -> BmKeyObjectRow;
+    pub fn bm_key_objects_keys(o: *const BmKeyObjects, i: usize, out: *mut BmKeyframe, cap: usize) -> usize;
+    pub fn bm_key_objects_members(o: *const BmKeyObjects, i: usize, out: *mut u32, cap: usize) -> usize;
+    pub fn bm_key_objects_markers(o: *const BmKeyObjects, i: usize, frames: *mut i32, channels: *mut usize, cap: usize) -> usize;
+    pub fn bm_key_objects_free(o: *mut BmKeyObjects);
+    pub fn bm_key_adjacent_frame(frames: *const i32, n: usize, frame: i32, after: bool, out: *mut i32) -> bool;
+    pub fn bm_session_key_value(s: *const BmSession, piece: u32, channel: i32, frame: f64, submodel: bool) -> f64;
+    pub fn bm_session_set_keys(s: *mut BmSession, piece: u32, keys: *const BmKeyframe, n: usize, continuing: bool, submodel: bool) -> BmChange;
+    pub fn bm_session_remove_keys(s: *mut BmSession, piece: u32, keys: *const BmKeyframe, n: usize, submodel: bool) -> BmChange;
+    pub fn bm_session_move_keys(s: *mut BmSession, piece: u32, keys: *const BmKeyframe, n: usize, offset: i32, submodel: bool) -> BmChange;
+    pub fn bm_session_move_key_rows(s: *mut BmSession, picks: *const BmKeyRowPick, n: usize, offset: i32) -> BmChange;
+    pub fn bm_session_remove_key_rows(s: *mut BmSession, picks: *const BmKeyRowPick, n: usize) -> BmChange;
+    pub fn bm_session_set_baked_keys(s: *mut BmSession, piece: u32, keys: *const BmKeyframe, n: usize) -> BmChange;
+    pub fn bm_session_has_editable_flight_keys(s: *const BmSession, piece: u32) -> bool;
+    pub fn bm_session_add_flight_path_point(s: *mut BmSession, piece: u32, frame: i32) -> BmChange;
+    pub fn bm_session_set_flight_path_point(s: *mut BmSession, piece: u32, frame: i32, at: BmVec3, continuing: bool) -> BmChange;
+    pub fn bm_session_delete_flight_path_point(s: *mut BmSession, piece: u32, frame: i32) -> BmChange;
+    pub fn bm_session_return_flight_to_planner(s: *mut BmSession, piece: u32) -> BmChange;
+    pub fn bm_session_use_flight_in_build(s: *mut BmSession, piece: u32, route: *const BmFlightPose, n: usize) -> BmChange;
+    pub fn bm_viewport_use_keyframes(v: *mut BmViewport, enabled: bool);
+    pub fn bm_viewport_flight_path(v: *mut BmViewport, piece: u32) -> *mut BmFlightPath;
+    pub fn bm_flight_path_line(p: *const BmFlightPath, out: *mut BmFlightPathPoint, cap: usize) -> usize;
+    pub fn bm_flight_path_keys(p: *const BmFlightPath, out: *mut BmFlightPathPoint, cap: usize) -> usize;
+    pub fn bm_flight_path_free(p: *mut BmFlightPath);
+    pub fn bm_viewport_drag_facing_view(v: *const BmViewport, through: BmVec3, x0: f64, y0: f64, x1: f64, y1: f64) -> BmVec3;
+    pub fn bm_viewport_edited_flight_route(v: *mut BmViewport, piece: u32, out: *mut BmFlightPose, cap: usize) -> usize;
+    pub fn bm_key_offset_limits(scene: BmKeyScene, earliest: i32, latest: i32, lower: *mut i32, upper: *mut i32);
+    pub fn bm_linked_key_scene(scene: BmKeyScene, enabled: bool, build_duration: f64) -> BmKeyScene;
+    pub fn bm_flight_keys_start(scene: BmKeyScene, flight_start: f64) -> f64;
+    pub fn bm_auto_key_values(tool: i32, origin: BmVec3, change: BmVec3, frame: i32, out: *mut BmKeyframe, cap: usize) -> usize;
+    pub fn bm_auto_key_target(s: *const BmSession, selection: *const u32, n: usize, auto_key: bool, key_submodel: i64, piece: *mut u32, submodel: *mut bool) -> bool;
 }
 
 /// Every function declared above, for the header agreement test.
@@ -755,4 +853,14 @@ pub const DECLARED: &[&str] = &[
     "bm_session_shift_waiting_part", "bm_session_waiting_shift",
     "bm_session_snap_mix", "bm_session_set_snap_mix",
     "bm_snap_mix_preset", "bm_write_snap_preview", "bm_viewport_write_snap_track",
+    "bm_session_key_scene", "bm_session_set_key_scene", "bm_session_key_objects", "bm_key_objects_len",
+    "bm_key_objects_at", "bm_key_objects_keys", "bm_key_objects_members", "bm_key_objects_markers",
+    "bm_key_objects_free", "bm_key_adjacent_frame", "bm_session_key_value", "bm_session_set_keys",
+    "bm_session_remove_keys", "bm_session_move_keys", "bm_session_move_key_rows", "bm_session_remove_key_rows",
+    "bm_session_set_baked_keys", "bm_session_has_editable_flight_keys", "bm_session_add_flight_path_point",
+    "bm_session_set_flight_path_point", "bm_session_delete_flight_path_point",
+    "bm_session_return_flight_to_planner", "bm_session_use_flight_in_build", "bm_viewport_use_keyframes",
+    "bm_viewport_flight_path", "bm_flight_path_line", "bm_flight_path_keys", "bm_flight_path_free",
+    "bm_viewport_drag_facing_view", "bm_viewport_edited_flight_route", "bm_key_offset_limits",
+    "bm_linked_key_scene", "bm_flight_keys_start", "bm_auto_key_values", "bm_auto_key_target",
 ];

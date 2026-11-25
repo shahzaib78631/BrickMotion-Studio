@@ -2,6 +2,7 @@
 mod error;
 pub mod geom;
 pub mod gizmo;
+pub mod keys;
 pub mod library;
 mod outline;
 pub mod placement;

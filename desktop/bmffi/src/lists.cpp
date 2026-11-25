@@ -94,6 +94,9 @@ size_t bm_struct_size(const char* name) {
       {"BmLaneSubmodel", sizeof(BmLaneSubmodel)}, {"BmTimelineView", sizeof(BmTimelineView)},
       {"BmBuildSettings", sizeof(BmBuildSettings)}, {"BmStagingSettings", sizeof(BmStagingSettings)},
       {"BmSnapMix", sizeof(BmSnapMix)},
+      {"BmKeyframe", sizeof(BmKeyframe)}, {"BmKeyScene", sizeof(BmKeyScene)},
+      {"BmKeyRowPick", sizeof(BmKeyRowPick)}, {"BmFlightPathPoint", sizeof(BmFlightPathPoint)},
+      {"BmFlightPose", sizeof(BmFlightPose)}, {"BmKeyObjectRow", sizeof(BmKeyObjectRow)},
   };
   for (const Entry& e : kSizes)
     if (std::strcmp(e.name, name) == 0) return e.size;

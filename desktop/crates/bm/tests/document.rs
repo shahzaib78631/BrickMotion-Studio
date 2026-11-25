@@ -111,5 +111,11 @@ fn struct_sizes_match() {
     assert_eq!(size(c"BmBuildSettings"), size_of::<bm_sys::BmBuildSettings>());
     assert_eq!(size(c"BmStagingSettings"), size_of::<bm_sys::BmStagingSettings>());
     assert_eq!(size(c"BmSnapMix"), size_of::<bm_sys::BmSnapMix>());
+    assert_eq!(size(c"BmKeyframe"), size_of::<bm_sys::BmKeyframe>());
+    assert_eq!(size(c"BmKeyScene"), size_of::<bm_sys::BmKeyScene>());
+    assert_eq!(size(c"BmKeyRowPick"), size_of::<bm_sys::BmKeyRowPick>());
+    assert_eq!(size(c"BmFlightPathPoint"), size_of::<bm_sys::BmFlightPathPoint>());
+    assert_eq!(size(c"BmFlightPose"), size_of::<bm_sys::BmFlightPose>());
+    assert_eq!(size(c"BmKeyObjectRow"), size_of::<bm_sys::BmKeyObjectRow>());
     assert_eq!(size(c"nope"), 0);
 }

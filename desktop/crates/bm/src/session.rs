@@ -87,7 +87,7 @@ impl Session {
     }
 }
 
-fn take_change(c: sys::BmChange) -> Changed {
+pub(crate) fn take_change(c: sys::BmChange) -> Changed {
     let refused = take_string(c.refused);
     Changed { structure: c.structure, version: c.version, refused: (!refused.is_empty()).then_some(refused) }
 }

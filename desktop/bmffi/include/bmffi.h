@@ -491,6 +491,104 @@ BMFFI_API bool bm_write_snap_preview(BmSnapMix mix, BmSnapExample example, const
 /// Empty string on success; otherwise a human-readable error.
 BMFFI_API BmString bm_viewport_write_snap_track(BmViewport* v, const char* file, const char* recordings);
 
+// ---- Keyframes (keys.cpp) ----
+/// Channels in bmapp order: position x/y/z, rotation x/y/z, scale x/y/z, visibility.
+typedef enum {
+  BM_KEY_POSITION_X, BM_KEY_POSITION_Y, BM_KEY_POSITION_Z, BM_KEY_ROTATION_X, BM_KEY_ROTATION_Y,
+  BM_KEY_ROTATION_Z, BM_KEY_SCALE_X, BM_KEY_SCALE_Y, BM_KEY_SCALE_Z, BM_KEY_VISIBILITY
+} BmKeyChannel;
+typedef enum { BM_INTERP_SMOOTH, BM_INTERP_LINEAR, BM_INTERP_HOLD } BmKeyInterpolation;
+typedef enum { BM_GIZMO_TOOL_MOVE, BM_GIZMO_TOOL_ROTATE, BM_GIZMO_TOOL_SCALE } BmGizmoTool;
+/// `channel` is a BmKeyChannel, `interpolation` a BmKeyInterpolation.
+typedef struct {
+  int32_t channel;
+  int32_t frame;
+  double value;
+  int32_t interpolation;
+} BmKeyframe;
+typedef struct {
+  int32_t fps, first, last;
+  bool build_linked;
+  int32_t build_start;
+  double build_speed;
+} BmKeyScene;
+typedef struct {
+  uint32_t piece;
+  int32_t frame;
+  bool submodel;
+} BmKeyRowPick;
+typedef struct {
+  int32_t frame;
+  BmVec3 at;
+} BmFlightPathPoint;
+/// A flight pose: position plus rotation quaternion.
+typedef struct {
+  BmVec3 position;
+  double qx, qy, qz, qw;
+} BmFlightPose;
+/// `name` lives until bm_key_objects_free.
+typedef struct {
+  uint32_t piece;
+  bool submodel;
+  const char* name;
+  bool baked, keyed;
+  size_t keys, members, markers;
+} BmKeyObjectRow;
+
+typedef struct BmKeyObjects BmKeyObjects;
+typedef struct BmFlightPath BmFlightPath;
+
+BMFFI_API BmKeyScene bm_session_key_scene(const BmSession* s);
+BMFFI_API BmChange bm_session_set_key_scene(BmSession* s, BmKeyScene scene);
+BMFFI_API BmKeyObjects* bm_session_key_objects(const BmSession* s);
+BMFFI_API size_t bm_key_objects_len(const BmKeyObjects* o);
+BMFFI_API BmKeyObjectRow bm_key_objects_at(const BmKeyObjects* o, size_t i);
+/// Two-call arrays: each returns the full count and copies at most `cap`.
+BMFFI_API size_t bm_key_objects_keys(const BmKeyObjects* o, size_t i, BmKeyframe* out, size_t cap);
+BMFFI_API size_t bm_key_objects_members(const BmKeyObjects* o, size_t i, uint32_t* out, size_t cap);
+BMFFI_API size_t bm_key_objects_markers(const BmKeyObjects* o, size_t i, int32_t* frames, size_t* channels, size_t cap);
+BMFFI_API void bm_key_objects_free(BmKeyObjects* o);
+/// The nearest marker frame strictly after (or before) `frame` among `frames`.
+BMFFI_API bool bm_key_adjacent_frame(const int32_t* frames, size_t n, int32_t frame, bool after, int32_t* out);
+
+BMFFI_API double bm_session_key_value(const BmSession* s, uint32_t piece, int32_t channel, double frame, bool submodel);
+BMFFI_API BmChange bm_session_set_keys(BmSession* s, uint32_t piece, const BmKeyframe* keys, size_t n, bool continuing,
+                                       bool submodel);
+BMFFI_API BmChange bm_session_remove_keys(BmSession* s, uint32_t piece, const BmKeyframe* keys, size_t n, bool submodel);
+BMFFI_API BmChange bm_session_move_keys(BmSession* s, uint32_t piece, const BmKeyframe* keys, size_t n, int32_t offset,
+                                        bool submodel);
+BMFFI_API BmChange bm_session_move_key_rows(BmSession* s, const BmKeyRowPick* picks, size_t n, int32_t offset);
+BMFFI_API BmChange bm_session_remove_key_rows(BmSession* s, const BmKeyRowPick* picks, size_t n);
+BMFFI_API BmChange bm_session_set_baked_keys(BmSession* s, uint32_t piece, const BmKeyframe* keys, size_t n);
+BMFFI_API bool bm_session_has_editable_flight_keys(const BmSession* s, uint32_t piece);
+BMFFI_API BmChange bm_session_add_flight_path_point(BmSession* s, uint32_t piece, int32_t frame);
+BMFFI_API BmChange bm_session_set_flight_path_point(BmSession* s, uint32_t piece, int32_t frame, BmVec3 at,
+                                                    bool continuing);
+BMFFI_API BmChange bm_session_delete_flight_path_point(BmSession* s, uint32_t piece, int32_t frame);
+BMFFI_API BmChange bm_session_return_flight_to_planner(BmSession* s, uint32_t piece);
+BMFFI_API BmChange bm_session_use_flight_in_build(BmSession* s, uint32_t piece, const BmFlightPose* route, size_t n);
+
+/// The viewport plays the key scene (true) or the planned Build (false).
+BMFFI_API void bm_viewport_use_keyframes(BmViewport* v, bool enabled);
+/// NULL when the piece has no baked one-piece flight path.
+BMFFI_API BmFlightPath* bm_viewport_flight_path(BmViewport* v, uint32_t piece);
+BMFFI_API size_t bm_flight_path_line(const BmFlightPath* p, BmFlightPathPoint* out, size_t cap);
+BMFFI_API size_t bm_flight_path_keys(const BmFlightPath* p, BmFlightPathPoint* out, size_t cap);
+BMFFI_API void bm_flight_path_free(BmFlightPath* p);
+BMFFI_API BmVec3 bm_viewport_drag_facing_view(const BmViewport* v, BmVec3 through, double x0, double y0, double x1,
+                                              double y1);
+BMFFI_API size_t bm_viewport_edited_flight_route(BmViewport* v, uint32_t piece, BmFlightPose* out, size_t cap);
+
+BMFFI_API void bm_key_offset_limits(BmKeyScene scene, int32_t earliest, int32_t latest, int32_t* lower, int32_t* upper);
+BMFFI_API BmKeyScene bm_linked_key_scene(BmKeyScene scene, bool enabled, double build_duration);
+BMFFI_API double bm_flight_keys_start(BmKeyScene scene, double flight_start);
+/// Writes three keys (fewer if `cap` < 3); returns 3.
+BMFFI_API size_t bm_auto_key_values(int32_t tool, BmVec3 origin, BmVec3 change, int32_t frame, BmKeyframe* out,
+                                    size_t cap);
+/// `key_submodel` < 0: none. False when Auto Key cannot key this selection.
+BMFFI_API bool bm_auto_key_target(const BmSession* s, const uint32_t* selection, size_t n, bool auto_key,
+                                  int64_t key_submodel, uint32_t* piece, bool* submodel);
+
 #ifdef __cplusplus
 }
 #endif

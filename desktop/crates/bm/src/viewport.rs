@@ -28,7 +28,7 @@ pub struct Frame {
 /// The engine's view of a session. Only reachable through `Document`, which keeps the session
 /// alive for as long as the viewport.
 pub struct Viewport {
-    raw: *mut sys::BmViewport,
+    pub(crate) raw: *mut sys::BmViewport,
 }
 
 // The engine's viewport has no thread affinity (it renders offscreen with Metal, whose objects may
