@@ -126,6 +126,10 @@ pub struct BrickMotionApp {
     pub swatches: chrome::swatches::Swatches,
     /// Off-thread part preview renderer and texture cache.
     pub previews: crate::previews::Previews,
+    /// The Browser's Library tab cache and category state.
+    pub library: chrome::library::LibraryState,
+    /// Focus the Browser's filter field next frame (e.g. after pressing P).
+    pub(crate) focus_filter: bool,
     /// In-memory clipboard used when dialogs are off (headless tests).
     pub(crate) clipboard: String,
 }
@@ -186,6 +190,8 @@ impl BrickMotionApp {
             history,
             swatches: chrome::swatches::Swatches::default(),
             previews: crate::previews::Previews::default(),
+            library: chrome::library::LibraryState::default(),
+            focus_filter: false,
             clipboard: String::new(),
         };
         // Opened once the first frame knows the view's size, so the worker can draw it warm.
@@ -486,6 +492,10 @@ impl BrickMotionApp {
             "view.frame_selection" => self.viewport.queue(ViewOp::FrameSelection),
             "view.palette" => self.palette.show_palette(),
             "tool.select" => self.edit.tool = crate::edit::Tool::Select,
+            "model.add_part" => {
+                self.browser_tab = 3;
+                self.focus_filter = true;
+            }
             "model.move" => self.edit.tool = crate::edit::Tool::Move,
             "model.rotate_tool" => self.edit.tool = crate::edit::Tool::Rotate,
             "model.rotate" => crate::edit::turn(self, true),
@@ -519,6 +529,9 @@ impl BrickMotionApp {
     pub(crate) fn dialogs_enabled(&self) -> bool {
         self.dialogs
     }
+
+    /// Starts placing a library part in the viewport (stub until Task 9 wires placement).
+    pub fn begin_placement(&mut self, _part: bm::library::PartMatch) {}
 
     /// An untitled, empty project, after asking to save an edited one.
     pub fn new_document(&mut self) {

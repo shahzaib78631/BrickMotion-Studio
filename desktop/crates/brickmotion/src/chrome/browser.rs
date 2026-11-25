@@ -58,6 +58,10 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
                                         .desired_width(f32::INFINITY),
                                 );
                                 field.widget_info(|| egui::WidgetInfo::labeled(egui::Role::TextInput, true, "Filter models and parts"));
+                                if app.focus_filter {
+                                    field.request_focus();
+                                    app.focus_filter = false;
+                                }
                             });
                         });
                 });
@@ -74,6 +78,8 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
                         super::tree::show(ui, app);
                     } else if app.browser_tab == 0 {
                         root_row(ui, app, &title, count);
+                    } else if app.browser_tab == 3 {
+                        super::library::show(ui, app);
                     } else {
                         ui.add_space(6.0);
                         ui.horizontal(|ui| {

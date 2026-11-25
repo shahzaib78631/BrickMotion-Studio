@@ -199,7 +199,7 @@ pub fn tabs(w: Workspace) -> &'static [&'static str] {
 }
 
 static REGISTRY: &[Command] = &[
-    Command { id: "model.add_part", title: "Add Part", icon: Icon::Plus, keys: Some("P"), tip: "Pick a part from the library and place it on the studs under the pointer. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Insert", when: When::Soon, menu: Menu::None },
+    Command { id: "model.add_part", title: "Add Part", icon: Icon::Plus, keys: Some("P"), tip: "Pick a part from the library and place it on the studs under the pointer.", workspace: Workspace::Build, tab: "Model", group: "Insert", when: When::Document, menu: Menu::None },
     Command { id: "model.import", title: "Import", icon: Icon::Import, keys: None, tip: "Open an LDraw or BrickMotion model.", workspace: Workspace::Build, tab: "Model", group: "Insert", when: When::Always, menu: Menu::None },
     Command { id: "model.inventory", title: "Inventory", icon: Icon::Inventory, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Insert", when: When::Soon, menu: Menu::None },
     Command { id: "model.move", title: "Move", icon: Icon::Move, keys: Some("M"), tip: "Drag the selection along the arrows; it snaps to studs and holes.", workspace: Workspace::Build, tab: "Model", group: "Modify", when: When::Document, menu: Menu::None },

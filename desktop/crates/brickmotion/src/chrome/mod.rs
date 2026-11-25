@@ -1,6 +1,7 @@
 //! The window around the viewport: title bar, ribbon, floating panels and the timeline.
 pub mod browser;
 pub mod confirm;
+pub mod library;
 pub mod navigator;
 pub mod notices;
 pub mod properties;
@@ -137,9 +138,9 @@ mod card_tests {
 
     #[test]
     fn soon_commands_show_no_keys() {
-        let add = crate::find("model.add_part").unwrap();
-        assert_eq!(add.keys, Some("P"));
-        assert_eq!(card_keys(add), None);
+        let sub = crate::find("model.submodel").unwrap();
+        assert_eq!(sub.keys, Some("⌥⌘G"));
+        assert_eq!(card_keys(sub), None);
         assert_eq!(card_keys(crate::find("file.open").unwrap()), Some("⌘O"));
     }
 }
