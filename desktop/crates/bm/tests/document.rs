@@ -122,5 +122,9 @@ fn struct_sizes_match() {
     assert_eq!(size(c"BmCameraMove"), size_of::<bm_sys::BmCameraMove>());
     assert_eq!(size(c"BmCameraPreset"), size_of::<bm_sys::BmCameraPreset>());
     assert_eq!(size(c"BmCameraClockInfo"), size_of::<bm_sys::BmCameraClockInfo>());
+    assert_eq!(size(c"BmMotionFields"), size_of::<bm_sys::BmMotionFields>());
+    assert_eq!(size(c"BmFlightBakeResult"), size_of::<bm_sys::BmFlightBakeResult>());
+    assert_eq!(size(c"BmMotionContact"), size_of::<bm_sys::BmMotionContact>());
+    assert_eq!(size(c"BmJointRow"), size_of::<bm_sys::BmJointRow>());
     assert_eq!(size(c"nope"), 0);
 }

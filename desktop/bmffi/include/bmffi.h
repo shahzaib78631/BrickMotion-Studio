@@ -701,6 +701,92 @@ BMFFI_API BmChange bm_add_camera_key_from_view(BmSession* s, BmViewport* v, int3
 BMFFI_API BmChange bm_aim_camera_key(BmSession* s, BmViewport* v, int32_t clock, BmCameraKey key, const char* target);
 BMFFI_API BmChange bm_auto_direct(BmSession* s, BmViewport* v, int32_t clock, const char* style);
 
+// ---- Motion, flight bake, motion check and joints (motion.cpp) ----
+typedef enum { BM_MOTION_PROJECT, BM_MOTION_STEP, BM_MOTION_PARTS } BmMotionScope;
+/// Negative fields are inherited. `ease`: -1 inherited, then smooth, gentle, soft, linear.
+typedef struct {
+  double time, landing, hover;
+  int32_t ease;
+} BmMotionFields;
+typedef struct {
+  int32_t flights, keys;
+  BmString error;
+} BmFlightBakeResult;
+/// `part` and `blocker` live until bm_motion_report_free.
+typedef struct {
+  uint32_t a, b;
+  int32_t first_frame, last_frame;
+  const char* part;
+  const char* blocker;
+} BmMotionContact;
+typedef enum { BM_JOINT_FIXED, BM_JOINT_HINGE, BM_JOINT_SLIDER, BM_JOINT_CYLINDRICAL, BM_JOINT_BALL, BM_JOINT_FLEXIBLE } BmJointType;
+/// `type` is a BmJointType.
+typedef struct {
+  uint32_t a, b;
+  int32_t type;
+  BmVec3 point, axis, release;
+  double angle, clearance;
+  size_t mate_count;
+} BmJointRow;
+
+typedef struct BmFlightBake BmFlightBake;
+typedef struct BmMotionAudit BmMotionAudit;
+typedef struct BmMotionReport BmMotionReport;
+typedef struct BmInspection BmInspection;
+typedef struct BmJoints BmJoints;
+typedef struct BmJointEdit BmJointEdit;
+
+BMFFI_API BmMotionFields bm_session_motion_fields(const BmSession* s, int32_t scope, size_t step, const uint32_t* pieces,
+                                                  size_t n);
+BMFFI_API BmChange bm_session_set_motion_fields(BmSession* s, int32_t scope, size_t step, const uint32_t* pieces,
+                                                size_t n, BmMotionFields fields);
+BMFFI_API BmMotionFields bm_effective_motion(const BmSession* s, int32_t scope, size_t step, BmMotionFields fields);
+BMFFI_API void bm_flight_phases(BmMotionFields effective, double* travel, double* hover, double* landing);
+
+/// NULL when nothing is planned to bake. A bake handle may move to one worker thread.
+BMFFI_API BmFlightBake* bm_viewport_capture_flight_bake(BmViewport* v, const uint32_t* pieces, size_t n, bool detach);
+BMFFI_API bool bm_flight_bake_replaces_keys(const BmFlightBake* b);
+/// Slow; run it off the UI thread. The error string is owned by the caller.
+BMFFI_API BmFlightBakeResult bm_flight_bake_prepare(BmFlightBake* b);
+BMFFI_API BmChange bm_session_apply_flight_bake(BmSession* s, BmFlightBake* b);
+BMFFI_API void bm_flight_bake_free(BmFlightBake* b);
+
+/// NULL when the piece has nothing to check. An audit handle may move to one worker thread.
+BMFFI_API BmMotionAudit* bm_viewport_audit_motion(BmViewport* v, uint32_t piece);
+/// Slow; run it off the UI thread.
+BMFFI_API BmMotionReport* bm_motion_audit_check(BmMotionAudit* a);
+BMFFI_API void bm_motion_audit_free(BmMotionAudit* a);
+BMFFI_API void bm_motion_report_counts(const BmMotionReport* r, int32_t* tested_frames, int32_t* stride,
+                                       int32_t* intervals);
+BMFFI_API const char* bm_motion_report_error(const BmMotionReport* r);
+BMFFI_API size_t bm_motion_report_contacts_len(const BmMotionReport* r);
+BMFFI_API BmMotionContact bm_motion_report_contact_at(const BmMotionReport* r, size_t i);
+BMFFI_API void bm_motion_report_free(BmMotionReport* r);
+
+/// A snapshot of the model for joint work; may move to one worker thread.
+BMFFI_API BmInspection* bm_inspection_capture(const BmSession* s);
+BMFFI_API BmJoints* bm_inspection_joints(BmInspection* i, const uint32_t* selection, size_t n, bool show_all,
+                                         bool check_geometry);
+BMFFI_API size_t bm_joints_len(const BmJoints* j);
+BMFFI_API BmJointRow bm_joints_at(const BmJoints* j, size_t i);
+BMFFI_API const char* bm_joints_error(const BmJoints* j);
+BMFFI_API void bm_joints_free(BmJoints* j);
+BMFFI_API size_t bm_inspection_body(BmInspection* i, uint32_t piece, uint32_t* out, size_t cap);
+BMFFI_API BmJointEdit* bm_inspection_change_joint(BmInspection* i, uint32_t fixed, uint32_t moving, double degrees,
+                                                  bool collision);
+BMFFI_API size_t bm_joint_edit_pieces(const BmJointEdit* e, uint32_t* out, size_t cap);
+BMFFI_API uint32_t bm_joint_edit_pivot(const BmJointEdit* e);
+BMFFI_API void bm_joint_edit_pose(const BmJointEdit* e, BmMat3* rotation, BmVec3* position);
+BMFFI_API const char* bm_joint_edit_error(const BmJointEdit* e);
+BMFFI_API void bm_joint_edit_free(BmJointEdit* e);
+BMFFI_API void bm_inspection_free(BmInspection* i);
+
+/// Commits moved pieces at `anchor`'s pose; refused unless generation and version still match.
+BMFFI_API BmChange bm_session_place_moved(BmSession* s, const uint32_t* pieces, size_t n, uint32_t anchor,
+                                          BmMat3 rotation, BmVec3 position, uint64_t generation, uint64_t version);
+BMFFI_API BmVec3 bm_session_insertion_direction(const BmSession* s, uint32_t piece);
+BMFFI_API BmChange bm_session_set_insertion_direction(BmSession* s, const uint32_t* pieces, size_t n, BmVec3 direction);
+
 #ifdef __cplusplus
 }
 #endif

@@ -5,6 +5,7 @@ pub mod camera;
 pub mod gizmo;
 pub mod keys;
 pub mod library;
+pub mod motion;
 mod outline;
 pub mod placement;
 pub mod playback;

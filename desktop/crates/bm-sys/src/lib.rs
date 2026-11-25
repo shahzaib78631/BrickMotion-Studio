@@ -625,6 +625,69 @@ pub struct BmCameraClockInfo {
     pub ready: bool,
 }
 
+// ---- Motion, bake, audit and joints (motion.cpp) ----
+#[repr(C)]
+pub struct BmFlightBake {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct BmMotionAudit {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct BmMotionReport {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct BmInspection {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct BmJoints {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct BmJointEdit {
+    _private: [u8; 0],
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BmMotionFields {
+    pub time: f64,
+    pub landing: f64,
+    pub hover: f64,
+    pub ease: i32,
+}
+#[repr(C)]
+pub struct BmFlightBakeResult {
+    pub flights: i32,
+    pub keys: i32,
+    pub error: BmString,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct BmMotionContact {
+    pub a: u32,
+    pub b: u32,
+    pub first_frame: i32,
+    pub last_frame: i32,
+    pub part: *const c_char,
+    pub blocker: *const c_char,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct BmJointRow {
+    pub a: u32,
+    pub b: u32,
+    pub kind: i32,
+    pub point: BmVec3,
+    pub axis: BmVec3,
+    pub release: BmVec3,
+    pub angle: f64,
+    pub clearance: f64,
+    pub mate_count: usize,
+}
+
 unsafe extern "C" {
     pub fn bm_string_free(s: BmString);
     pub fn bm_ldraw_directory() -> BmString;
@@ -923,6 +986,41 @@ unsafe extern "C" {
     pub fn bm_add_camera_key_from_view(s: *mut BmSession, v: *mut BmViewport, clock: i32, now: f64, info: BmCameraClockInfo, id: *mut BmString, added: *mut bool) -> BmChange;
     pub fn bm_aim_camera_key(s: *mut BmSession, v: *mut BmViewport, clock: i32, key: BmCameraKey, target: *const c_char) -> BmChange;
     pub fn bm_auto_direct(s: *mut BmSession, v: *mut BmViewport, clock: i32, style: *const c_char) -> BmChange;
+    // Motion, bake, audit and joints
+    pub fn bm_session_motion_fields(s: *const BmSession, scope: i32, step: usize, pieces: *const u32, n: usize) -> BmMotionFields;
+    pub fn bm_session_set_motion_fields(s: *mut BmSession, scope: i32, step: usize, pieces: *const u32, n: usize, fields: BmMotionFields) -> BmChange;
+    pub fn bm_effective_motion(s: *const BmSession, scope: i32, step: usize, fields: BmMotionFields) -> BmMotionFields;
+    pub fn bm_flight_phases(effective: BmMotionFields, travel: *mut f64, hover: *mut f64, landing: *mut f64);
+    pub fn bm_viewport_capture_flight_bake(v: *mut BmViewport, pieces: *const u32, n: usize, detach: bool) -> *mut BmFlightBake;
+    pub fn bm_flight_bake_replaces_keys(b: *const BmFlightBake) -> bool;
+    pub fn bm_flight_bake_prepare(b: *mut BmFlightBake) -> BmFlightBakeResult;
+    pub fn bm_session_apply_flight_bake(s: *mut BmSession, b: *mut BmFlightBake) -> BmChange;
+    pub fn bm_flight_bake_free(b: *mut BmFlightBake);
+    pub fn bm_viewport_audit_motion(v: *mut BmViewport, piece: u32) -> *mut BmMotionAudit;
+    pub fn bm_motion_audit_check(a: *mut BmMotionAudit) -> *mut BmMotionReport;
+    pub fn bm_motion_audit_free(a: *mut BmMotionAudit);
+    pub fn bm_motion_report_counts(r: *const BmMotionReport, tested_frames: *mut i32, stride: *mut i32, intervals: *mut i32);
+    pub fn bm_motion_report_error(r: *const BmMotionReport) -> *const c_char;
+    pub fn bm_motion_report_contacts_len(r: *const BmMotionReport) -> usize;
+    pub fn bm_motion_report_contact_at(r: *const BmMotionReport, i: usize) -> BmMotionContact;
+    pub fn bm_motion_report_free(r: *mut BmMotionReport);
+    pub fn bm_inspection_capture(s: *const BmSession) -> *mut BmInspection;
+    pub fn bm_inspection_joints(i: *mut BmInspection, selection: *const u32, n: usize, show_all: bool, check_geometry: bool) -> *mut BmJoints;
+    pub fn bm_joints_len(j: *const BmJoints) -> usize;
+    pub fn bm_joints_at(j: *const BmJoints, i: usize) -> BmJointRow;
+    pub fn bm_joints_error(j: *const BmJoints) -> *const c_char;
+    pub fn bm_joints_free(j: *mut BmJoints);
+    pub fn bm_inspection_body(i: *mut BmInspection, piece: u32, out: *mut u32, cap: usize) -> usize;
+    pub fn bm_inspection_change_joint(i: *mut BmInspection, fixed: u32, moving: u32, degrees: f64, collision: bool) -> *mut BmJointEdit;
+    pub fn bm_joint_edit_pieces(e: *const BmJointEdit, out: *mut u32, cap: usize) -> usize;
+    pub fn bm_joint_edit_pivot(e: *const BmJointEdit) -> u32;
+    pub fn bm_joint_edit_pose(e: *const BmJointEdit, rotation: *mut BmMat3, position: *mut BmVec3);
+    pub fn bm_joint_edit_error(e: *const BmJointEdit) -> *const c_char;
+    pub fn bm_joint_edit_free(e: *mut BmJointEdit);
+    pub fn bm_inspection_free(i: *mut BmInspection);
+    pub fn bm_session_place_moved(s: *mut BmSession, pieces: *const u32, n: usize, anchor: u32, rotation: BmMat3, position: BmVec3, generation: u64, version: u64) -> BmChange;
+    pub fn bm_session_insertion_direction(s: *const BmSession, piece: u32) -> BmVec3;
+    pub fn bm_session_set_insertion_direction(s: *mut BmSession, pieces: *const u32, n: usize, direction: BmVec3) -> BmChange;
 }
 
 /// Every function declared above, for the header agreement test.
@@ -1010,4 +1108,13 @@ pub const DECLARED: &[&str] = &[
     "bm_viewport_camera_track_view", "bm_scene_camera_free", "bm_viewport_recall_scene_camera",
     "bm_viewport_follows_camera_track", "bm_viewport_set_director_preview", "bm_camera_clock_info",
     "bm_can_auto_direct", "bm_add_camera_key_from_view", "bm_aim_camera_key", "bm_auto_direct",
+    "bm_session_motion_fields", "bm_session_set_motion_fields", "bm_effective_motion", "bm_flight_phases",
+    "bm_viewport_capture_flight_bake", "bm_flight_bake_replaces_keys", "bm_flight_bake_prepare",
+    "bm_session_apply_flight_bake", "bm_flight_bake_free", "bm_viewport_audit_motion", "bm_motion_audit_check",
+    "bm_motion_audit_free", "bm_motion_report_counts", "bm_motion_report_error", "bm_motion_report_contacts_len",
+    "bm_motion_report_contact_at", "bm_motion_report_free", "bm_inspection_capture", "bm_inspection_joints",
+    "bm_joints_len", "bm_joints_at", "bm_joints_error", "bm_joints_free", "bm_inspection_body",
+    "bm_inspection_change_joint", "bm_joint_edit_pieces", "bm_joint_edit_pivot", "bm_joint_edit_pose",
+    "bm_joint_edit_error", "bm_joint_edit_free", "bm_inspection_free", "bm_session_place_moved",
+    "bm_session_insertion_direction", "bm_session_set_insertion_direction",
 ];

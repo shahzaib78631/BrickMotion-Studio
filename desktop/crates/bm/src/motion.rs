@@ -1,0 +1,372 @@
+//! Build motion fields, flight bake, motion check, joints and insertion direction.
+//!
+//! [`FlightBake`], [`MotionAudit`] and [`Inspection`] are captured on the UI thread and may move to
+//! one worker thread for their slow call; they are `Send`, never `Sync`.
+
+use bm_sys as sys;
+
+use crate::session::take_change;
+use crate::{Changed, Mat3, Pose, Session, Vec3, Viewport, borrowed, take_string};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum MotionScope {
+    Project,
+    Step,
+    Parts,
+}
+
+/// Flight timing; negative fields are inherited. `ease`: smooth, gentle, soft, linear.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MotionFields {
+    pub time: f64,
+    pub landing: f64,
+    pub hover: f64,
+    pub ease: i32,
+}
+
+impl Default for MotionFields {
+    fn default() -> Self {
+        MotionFields { time: -1.0, landing: -1.0, hover: -1.0, ease: -1 }
+    }
+}
+
+impl MotionFields {
+    fn to_raw(self) -> sys::BmMotionFields {
+        sys::BmMotionFields { time: self.time, landing: self.landing, hover: self.hover, ease: self.ease }
+    }
+
+    fn from_raw(f: sys::BmMotionFields) -> MotionFields {
+        MotionFields { time: f.time, landing: f.landing, hover: f.hover, ease: f.ease }
+    }
+
+    /// The Swift app's easing names.
+    pub fn ease_name(ease: i32) -> &'static str {
+        match ease {
+            1 => "Gentle",
+            2 => "Soft",
+            3 => "Linear",
+            _ => "Smooth",
+        }
+    }
+}
+
+/// Shares of a flight: travel, hover, landing.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FlightPhases {
+    pub travel: f64,
+    pub hover: f64,
+    pub landing: f64,
+}
+
+fn pieces_ptr(pieces: &[u32]) -> *const u32 {
+    if pieces.is_empty() { std::ptr::null() } else { pieces.as_ptr() }
+}
+
+impl Session {
+    pub fn motion_fields(&self, scope: MotionScope, step: usize, pieces: &[u32]) -> MotionFields {
+        MotionFields::from_raw(unsafe { sys::bm_session_motion_fields(self.raw, scope as i32, step, pieces_ptr(pieces), pieces.len()) })
+    }
+
+    pub fn set_motion_fields(&self, scope: MotionScope, step: usize, pieces: &[u32], fields: MotionFields) -> Changed {
+        take_change(unsafe {
+            sys::bm_session_set_motion_fields(self.raw, scope as i32, step, pieces_ptr(pieces), pieces.len(), fields.to_raw())
+        })
+    }
+
+    pub fn apply_flight_bake(&self, bake: &mut FlightBake) -> Changed {
+        take_change(unsafe { sys::bm_session_apply_flight_bake(self.raw, bake.raw) })
+    }
+
+    /// Commits moved pieces at `anchor`'s pose; refused unless generation and version still match.
+    pub fn place_moved(&self, pieces: &[u32], anchor: u32, pose: Pose, generation: u64, version: u64) -> Changed {
+        take_change(unsafe {
+            sys::bm_session_place_moved(
+                self.raw,
+                pieces_ptr(pieces),
+                pieces.len(),
+                anchor,
+                pose.rotation.to_raw(),
+                pose.position.to_raw(),
+                generation,
+                version,
+            )
+        })
+    }
+
+    /// The way a piece arrives; zero when the planner chooses.
+    pub fn insertion_direction(&self, piece: u32) -> Vec3 {
+        Vec3::from_raw(unsafe { sys::bm_session_insertion_direction(self.raw, piece) })
+    }
+
+    pub fn set_insertion_direction(&self, pieces: &[u32], direction: Vec3) -> Changed {
+        take_change(unsafe { sys::bm_session_set_insertion_direction(self.raw, pieces_ptr(pieces), pieces.len(), direction.to_raw()) })
+    }
+}
+
+/// `fields` with every unset field taken from the enclosing scope, then the defaults.
+pub fn effective_motion(session: &Session, scope: MotionScope, step: usize, fields: MotionFields) -> MotionFields {
+    MotionFields::from_raw(unsafe { sys::bm_effective_motion(session.raw, scope as i32, step, fields.to_raw()) })
+}
+
+pub fn flight_phases(effective: MotionFields) -> FlightPhases {
+    let (mut travel, mut hover, mut landing) = (0.0, 0.0, 0.0);
+    unsafe { sys::bm_flight_phases(effective.to_raw(), &mut travel, &mut hover, &mut landing) };
+    FlightPhases { travel, hover, landing }
+}
+
+/// Planned flights captured for baking into keys.
+pub struct FlightBake {
+    raw: *mut sys::BmFlightBake,
+}
+
+// Captured on the UI thread, prepared on one worker, applied back on the UI thread: never shared.
+unsafe impl Send for FlightBake {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BakeResult {
+    pub flights: i32,
+    pub keys: i32,
+    pub error: Option<String>,
+}
+
+impl FlightBake {
+    /// Baking replaces keys the pieces already have (ask first).
+    pub fn replaces_keys(&self) -> bool {
+        unsafe { sys::bm_flight_bake_replaces_keys(self.raw) }
+    }
+
+    /// Slow: run it on a worker thread.
+    pub fn prepare(&mut self) -> BakeResult {
+        let r = unsafe { sys::bm_flight_bake_prepare(self.raw) };
+        let error = take_string(r.error);
+        BakeResult { flights: r.flights, keys: r.keys, error: (!error.is_empty()).then_some(error) }
+    }
+}
+
+impl Drop for FlightBake {
+    fn drop(&mut self) {
+        unsafe { sys::bm_flight_bake_free(self.raw) }
+    }
+}
+
+/// A piece's keyed motion captured for a collision check.
+pub struct MotionAudit {
+    raw: *mut sys::BmMotionAudit,
+}
+
+unsafe impl Send for MotionAudit {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MotionContact {
+    pub a: u32,
+    pub b: u32,
+    pub first_frame: i32,
+    pub last_frame: i32,
+    pub part: String,
+    pub blocker: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MotionReport {
+    pub tested_frames: i32,
+    pub stride: i32,
+    pub intervals: i32,
+    pub contacts: Vec<MotionContact>,
+    pub error: Option<String>,
+}
+
+impl MotionAudit {
+    /// Slow: run it on a worker thread.
+    pub fn check(&mut self) -> MotionReport {
+        let h = unsafe { sys::bm_motion_audit_check(self.raw) };
+        if h.is_null() {
+            return MotionReport { tested_frames: 0, stride: 1, intervals: 0, contacts: Vec::new(), error: Some("The check failed.".into()) };
+        }
+        let (mut tested_frames, mut stride, mut intervals) = (0, 1, 0);
+        unsafe { sys::bm_motion_report_counts(h, &mut tested_frames, &mut stride, &mut intervals) };
+        let error = borrowed(unsafe { sys::bm_motion_report_error(h) });
+        let n = unsafe { sys::bm_motion_report_contacts_len(h) };
+        let contacts = (0..n)
+            .map(|i| {
+                let c = unsafe { sys::bm_motion_report_contact_at(h, i) };
+                MotionContact {
+                    a: c.a,
+                    b: c.b,
+                    first_frame: c.first_frame,
+                    last_frame: c.last_frame,
+                    part: borrowed(c.part),
+                    blocker: borrowed(c.blocker),
+                }
+            })
+            .collect();
+        unsafe { sys::bm_motion_report_free(h) };
+        MotionReport { tested_frames, stride, intervals, contacts, error: (!error.is_empty()).then_some(error) }
+    }
+}
+
+impl Drop for MotionAudit {
+    fn drop(&mut self) {
+        unsafe { sys::bm_motion_audit_free(self.raw) }
+    }
+}
+
+impl Viewport {
+    /// None when nothing is planned to bake.
+    pub fn capture_flight_bake(&mut self, pieces: &[u32], detach: bool) -> Option<FlightBake> {
+        let raw = unsafe { sys::bm_viewport_capture_flight_bake(self.raw, pieces_ptr(pieces), pieces.len(), detach) };
+        (!raw.is_null()).then_some(FlightBake { raw })
+    }
+
+    /// None when the piece has nothing to check.
+    pub fn audit_motion(&mut self, piece: u32) -> Option<MotionAudit> {
+        let raw = unsafe { sys::bm_viewport_audit_motion(self.raw, piece) };
+        (!raw.is_null()).then_some(MotionAudit { raw })
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum JointType {
+    Fixed,
+    Hinge,
+    Slider,
+    Cylindrical,
+    Ball,
+    Flexible,
+}
+
+impl JointType {
+    fn from_raw(v: i32) -> JointType {
+        match v {
+            1 => JointType::Hinge,
+            2 => JointType::Slider,
+            3 => JointType::Cylindrical,
+            4 => JointType::Ball,
+            5 => JointType::Flexible,
+            _ => JointType::Fixed,
+        }
+    }
+
+    /// The Swift app's names.
+    pub fn title(self) -> &'static str {
+        match self {
+            JointType::Fixed => "Fixed",
+            JointType::Hinge => "Hinge",
+            JointType::Slider => "Slider",
+            JointType::Cylindrical => "Turn and Slide",
+            JointType::Ball => "Ball Joint",
+            JointType::Flexible => "Flexible",
+        }
+    }
+
+    /// Hinge, turn-and-slide and ball joints turn.
+    pub fn turns(self) -> bool {
+        matches!(self, JointType::Hinge | JointType::Cylindrical | JointType::Ball)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct JointRow {
+    pub a: u32,
+    pub b: u32,
+    pub kind: JointType,
+    pub point: Vec3,
+    pub axis: Vec3,
+    pub release: Vec3,
+    pub angle: f64,
+    pub clearance: f64,
+    pub mate_count: usize,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct JointReport {
+    pub joints: Vec<JointRow>,
+    pub error: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct JointEdit {
+    pub pieces: Vec<u32>,
+    pub pivot: u32,
+    pub pose: Pose,
+    pub error: Option<String>,
+}
+
+/// A snapshot of the model for joint work.
+pub struct Inspection {
+    raw: *mut sys::BmInspection,
+}
+
+unsafe impl Send for Inspection {}
+
+impl Inspection {
+    pub fn capture(session: &Session) -> Option<Inspection> {
+        let raw = unsafe { sys::bm_inspection_capture(session.raw) };
+        (!raw.is_null()).then_some(Inspection { raw })
+    }
+
+    pub fn joints(&mut self, selection: &[u32], show_all: bool, check_geometry: bool) -> JointReport {
+        let h = unsafe { sys::bm_inspection_joints(self.raw, pieces_ptr(selection), selection.len(), show_all, check_geometry) };
+        if h.is_null() {
+            return JointReport { joints: Vec::new(), error: Some("The joints could not be read.".into()) };
+        }
+        let n = unsafe { sys::bm_joints_len(h) };
+        let joints = (0..n)
+            .map(|i| {
+                let r = unsafe { sys::bm_joints_at(h, i) };
+                JointRow {
+                    a: r.a,
+                    b: r.b,
+                    kind: JointType::from_raw(r.kind),
+                    point: Vec3::from_raw(r.point),
+                    axis: Vec3::from_raw(r.axis),
+                    release: Vec3::from_raw(r.release),
+                    angle: r.angle,
+                    clearance: r.clearance,
+                    mate_count: r.mate_count,
+                }
+            })
+            .collect();
+        let error = borrowed(unsafe { sys::bm_joints_error(h) });
+        unsafe { sys::bm_joints_free(h) };
+        JointReport { joints, error: (!error.is_empty()).then_some(error) }
+    }
+
+    /// The pieces rigidly joined to `piece`.
+    pub fn body(&mut self, piece: u32) -> Vec<u32> {
+        let n = unsafe { sys::bm_inspection_body(self.raw, piece, std::ptr::null_mut(), 0) };
+        let mut out = vec![0u32; n];
+        let got = unsafe { sys::bm_inspection_body(self.raw, piece, out.as_mut_ptr(), out.len()) };
+        out.truncate(got.min(n));
+        out
+    }
+
+    /// Turns `moving` about its joint with `fixed` by `degrees` (0 detaches). Slow: a worker's job.
+    pub fn change_joint(&mut self, fixed: u32, moving: u32, degrees: f64, collision: bool) -> JointEdit {
+        let h = unsafe { sys::bm_inspection_change_joint(self.raw, fixed, moving, degrees, collision) };
+        if h.is_null() {
+            return JointEdit { pieces: Vec::new(), pivot: u32::MAX, pose: Pose::default(), error: Some("The joint could not change.".into()) };
+        }
+        let n = unsafe { sys::bm_joint_edit_pieces(h, std::ptr::null_mut(), 0) };
+        let mut pieces = vec![0u32; n];
+        let got = unsafe { sys::bm_joint_edit_pieces(h, pieces.as_mut_ptr(), pieces.len()) };
+        pieces.truncate(got.min(n));
+        let mut rotation = sys::BmMat3 { m: [0.0; 9] };
+        let mut position = sys::BmVec3::default();
+        unsafe { sys::bm_joint_edit_pose(h, &mut rotation, &mut position) };
+        let error = borrowed(unsafe { sys::bm_joint_edit_error(h) });
+        let pivot = unsafe { sys::bm_joint_edit_pivot(h) };
+        unsafe { sys::bm_joint_edit_free(h) };
+        JointEdit {
+            pieces,
+            pivot,
+            pose: Pose { rotation: Mat3::from_raw(rotation), position: Vec3::from_raw(position) },
+            error: (!error.is_empty()).then_some(error),
+        }
+    }
+}
+
+impl Drop for Inspection {
+    fn drop(&mut self) {
+        unsafe { sys::bm_inspection_free(self.raw) }
+    }
+}
