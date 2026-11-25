@@ -189,3 +189,15 @@ fn typing_in_swatch_search_does_not_edit() {
     assert_eq!(h.state().session().version(), v);
     assert_eq!(h.state().edit.tool, Tool::Select);
 }
+
+#[test]
+fn cut_keeps_pieces_when_copy_fails() {
+    let mut app = heli_app();
+    app.clipboard_fails = true;
+    let n = app.piece_count();
+    app.doc.session().select(&[0], bm::SelectMode::Replace);
+    let notices_before = app.notices().len();
+    assert!(run(&mut app, "edit.cut"));
+    assert_eq!(app.piece_count(), n, "pieces removed although the copy failed");
+    assert_eq!(app.notices().len(), notices_before + 1);
+}

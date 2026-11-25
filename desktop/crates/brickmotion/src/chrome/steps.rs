@@ -62,12 +62,18 @@ impl StepsState {
         let ver = s.version();
         if self.built_for != Some(skey) {
             let new_doc = self.built_for.map(|k| k.0) != Some(skey.0);
+            let old_len = self.rows.len();
             self.rows = s.steps();
             self.items.clear();
             self.pieces.clear();
             if new_doc {
                 self.open.clear();
                 self.editor = None;
+            } else if self.rows.len() != old_len && self.editor.take().is_some() {
+                // A step was added or removed under the editor: its index may now name another
+                // step, so it closes without writing. (A title write also bumps the structure
+                // version, so only the count is compared.)
+                s.end_gesture();
             }
             self.built_for = Some(skey);
             self.seen_version = ver;
@@ -80,6 +86,11 @@ impl StepsState {
 
     pub fn len(&self) -> usize {
         self.rows.len()
+    }
+
+    /// The chosen step, kept inside the current list (None when there are no steps).
+    pub fn clamp(&self, step: Option<usize>) -> Option<usize> {
+        step.and_then(|i| (!self.rows.is_empty()).then(|| i.min(self.rows.len() - 1)))
     }
 
     pub fn is_empty(&self) -> bool {

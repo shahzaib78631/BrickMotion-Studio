@@ -238,6 +238,7 @@ impl ViewportWidget {
             gizmo_consumed_primary = true;
             if let Some(vp) = doc.viewport() {
                 placement.set_colour(vp, edit.colour);
+                placement.set_collision(vp, edit.collision);
                 if let Some(pos) = hover_pos.filter(|p| rect.contains(*p)) {
                     placement.pointer(vp, to_bm(pos), modifiers.alt);
                 }

@@ -37,3 +37,15 @@ Captured via `BM_SCREENSHOTS=1 cargo test -p brickmotion --test ui screenshots` 
 ## Checks outside the test suite
 
 - Interactive by-hand pass in the windowed app (live mouse drag on gizmo, placing three parts, ⌘Z undo, recolouring from Properties, editing a step title, gathering into step 1, saving and reopening with `HOME=<scratchpad>/home`) is ready for the owner to try in `desktop/target/release/brickmotion` or `cargo run --release` — automated harness tests cover every one of those flows headlessly.
+
+## By hand (open)
+
+Not yet done in the windowed app (M3 Task 13 Step 3, carried into M4 Task 1 Step 5): place three parts, gizmo drag + one ⌘Z, R turn, recolour from Properties, edit a step title, gather into step 1, save and reopen with `HOME=<scratchpad>/home`; also ⌥E / ⌥Q on a real keyboard and ⌘C / ⌘V inside a text field (the Task 2 menu ruling). For the owner to try.
+
+## Review fixes (M4 Task 1)
+
+- The chosen step is clamped to the step list every frame (it pointed past the last step after undoing an insert, so placing was refused).
+- A placement ignores pointer moves, turns, grip and colour changes after the click until the commit lands, and follows the K collision toggle live (as `PlacementController.swift`).
+- The step editor closes without writing when the number of steps changes under it.
+- Cut removes pieces only once their copy is on the clipboard.
+- Dropped: a gizmo-refusal fix. `moveCommand`/`rotateCommand` never refuse, so the readout cannot drift.

@@ -138,6 +138,9 @@ pub struct BrickMotionApp {
     pub(crate) focus_filter: bool,
     /// In-memory clipboard used when dialogs are off (headless tests).
     pub(crate) clipboard: String,
+    /// Test seam: the in-memory clipboard refuses writes, as a failing pasteboard would.
+    #[doc(hidden)]
+    pub clipboard_fails: bool,
 }
 
 impl BrickMotionApp {
@@ -202,6 +205,7 @@ impl BrickMotionApp {
             replace: chrome::replace::ReplaceSheet::default(),
             focus_filter: false,
             clipboard: String::new(),
+            clipboard_fails: false,
         };
         // Opened once the first frame knows the view's size, so the worker can draw it warm.
         app.startup = path.map(|p| std::path::absolute(&p).unwrap_or(p));
@@ -523,7 +527,9 @@ impl BrickMotionApp {
             "edit.nudge_right" => crate::edit::nudge_along(self, bm::Arrow::Right),
             "edit.nudge_up" => crate::edit::nudge_along(self, bm::Arrow::Up),
             "edit.nudge_down" => crate::edit::nudge_along(self, bm::Arrow::Down),
-            "edit.copy" => crate::edit::copy(self),
+            "edit.copy" => {
+                crate::edit::copy(self);
+            }
             "edit.cut" => crate::edit::cut(self),
             "edit.paste" => crate::edit::paste(self),
             "view.local_axes" => self.edit.local_axes = !self.edit.local_axes,
@@ -889,6 +895,10 @@ impl eframe::App for BrickMotionApp {
         crate::menubar::poll(self);
         if self.edit.placement.as_ref().is_some_and(|p| p.stale(self.doc.session())) {
             self.cancel_placement();
+        }
+        if self.has_document {
+            self.steps.sync(self.doc.session());
+            self.edit.step = self.steps.clamp(self.edit.step);
         }
         self.text_focus = ui.ctx().egui_wants_keyboard_input();
         crate::shortcuts::handle(self, ui.ctx());

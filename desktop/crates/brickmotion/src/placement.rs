@@ -60,6 +60,10 @@ impl Placement {
     }
 
     pub fn pointer(&mut self, vp: &mut Viewport, at: Vec2, free: bool) {
+        // After a click the clicked pose is the one placed (Swift: `awaitingCommit`).
+        if self.awaiting {
+            return;
+        }
         let snap = !free;
         if (at.x - self.at.x).abs() <= 0.25 && (at.y - self.at.y).abs() <= 0.25 && self.input.snap == snap {
             return;
@@ -70,12 +74,15 @@ impl Placement {
     }
 
     pub fn turn(&mut self, vp: &mut Viewport) {
+        if self.awaiting {
+            return;
+        }
         self.input.turns = (self.input.turns + 1) % 4;
         self.request = vp.preview_part(&self.input, self.at);
     }
 
     pub fn cycle_grip(&mut self, vp: &mut Viewport, back: bool) {
-        if self.grip_count <= 1 {
+        if self.grip_count <= 1 || self.awaiting {
             return;
         }
         let base = if self.input.grip < 0 { self.auto_grip } else { self.input.grip as u32 };
@@ -89,8 +96,16 @@ impl Placement {
     }
 
     pub fn set_colour(&mut self, vp: &mut Viewport, colour: i32) {
-        if self.input.color != colour {
+        if !self.awaiting && self.input.color != colour {
             self.input.color = colour;
+            self.request = vp.preview_part(&self.input, self.at);
+        }
+    }
+
+    /// Follows the K toggle while placing.
+    pub fn set_collision(&mut self, vp: &mut Viewport, on: bool) {
+        if !self.awaiting && self.input.collision != on {
+            self.input.collision = on;
             self.request = vp.preview_part(&self.input, self.at);
         }
     }
@@ -164,6 +179,16 @@ impl Placement {
     #[doc(hidden)]
     pub fn turns(&self) -> i32 {
         self.input.turns
+    }
+
+    #[doc(hidden)]
+    pub fn request(&self) -> u64 {
+        self.request
+    }
+
+    #[doc(hidden)]
+    pub fn collision(&self) -> bool {
+        self.input.collision
     }
 
     #[doc(hidden)]

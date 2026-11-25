@@ -176,3 +176,37 @@ fn new_part_uses_the_chosen_colour() {
     assert!(!snap.described.is_empty(), "newly placed piece is selected");
     assert_eq!(snap.described[0].color, 4);
 }
+
+#[test]
+fn placement_ignores_moves_after_click() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = heli_harness();
+    let centre = h.state().viewport_rect().unwrap().center();
+    h.state_mut().begin_placement(brick_3001());
+    wait_settle(&mut h, centre);
+    let request = h.state().edit.placement.as_ref().unwrap().request();
+    h.state_mut().edit.placement.as_mut().unwrap().accept();
+    // The pointer moves on before the commit lands: the clicked pose must stay the one placed.
+    h.event(Event::PointerMoved(centre + egui::vec2(160.0, 90.0)));
+    h.step();
+    if let Some(p) = &h.state().edit.placement {
+        assert_eq!(p.request(), request, "a move after the click asked for a new pose");
+    }
+}
+
+#[test]
+fn collision_toggle_updates_live_placement() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = heli_harness();
+    let centre = h.state().viewport_rect().unwrap().center();
+    h.state_mut().begin_placement(brick_3001());
+    wait_settle(&mut h, centre);
+    assert!(h.state().edit.placement.as_ref().unwrap().collision());
+    assert!(run(h.state_mut(), "edit.collision"));
+    h.step();
+    assert!(!h.state().edit.placement.as_ref().unwrap().collision());
+}

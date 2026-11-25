@@ -84,28 +84,37 @@ pub fn duplicate(app: &mut BrickMotionApp) {
     selection_edit(app, |s, sel| s.duplicate(sel, bm::Vec3::new(bm::STUD, 0.0, 0.0)));
 }
 
-pub fn copy(app: &mut BrickMotionApp) {
+/// Copies the selection's LDraw text; false when nothing was copied.
+pub fn copy(app: &mut BrickMotionApp) -> bool {
     let sel = app.doc.session().selection();
     let text = app.doc.session().copy(&sel);
     if text.is_empty() {
-        return;
+        return false;
     }
-    if !app.dialogs_enabled() {
-        app.clipboard = text;
-        return;
-    }
-    match arboard::Clipboard::new().and_then(|mut cb| cb.set_text(text)) {
-        Ok(()) => {}
-        Err(e) => crate::notices::push(
-            &mut app.notices,
-            Notice::Warning { title: "Couldn't copy".into(), detail: e.to_string() },
-        ),
+    let written = if !app.dialogs_enabled() {
+        if app.clipboard_fails {
+            Err("The clipboard could not be written.".to_owned())
+        } else {
+            app.clipboard = text;
+            Ok(())
+        }
+    } else {
+        arboard::Clipboard::new().and_then(|mut cb| cb.set_text(text)).map_err(|e| e.to_string())
+    };
+    match written {
+        Ok(()) => true,
+        Err(detail) => {
+            crate::notices::push(&mut app.notices, Notice::Warning { title: "Couldn't copy".into(), detail });
+            false
+        }
     }
 }
 
+/// Removes the selection only once its copy is on the clipboard.
 pub fn cut(app: &mut BrickMotionApp) {
-    copy(app);
-    selection_edit(app, |s, sel| s.remove(sel));
+    if copy(app) {
+        selection_edit(app, |s, sel| s.remove(sel));
+    }
 }
 
 pub fn paste(app: &mut BrickMotionApp) {

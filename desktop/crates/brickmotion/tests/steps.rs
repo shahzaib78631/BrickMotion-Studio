@@ -201,3 +201,34 @@ fn big_model_steps_and_parts_layout() {
     assert!(slowest_steps < Duration::from_millis(16), "steps layout too slow: {slowest_steps:?}");
     assert!(slowest_parts < Duration::from_millis(16), "parts layout too slow: {slowest_parts:?}");
 }
+
+#[test]
+fn chosen_step_survives_undo_of_its_insert() {
+    let mut h = harness_for(CAR);
+    let n = h.state().session().steps().len();
+    h.state_mut().edit.step = Some(n - 1);
+    assert!(run(h.state_mut(), "step.insert_after"));
+    assert_eq!(h.state().edit.step, Some(n));
+    assert!(run(h.state_mut(), "edit.undo"));
+    h.run_steps(2);
+    let chosen = h.state().edit.step;
+    let count = h.state().session().steps().len();
+    assert!(chosen.is_none_or(|i| i < count), "edit.step = {chosen:?} but only {count} steps");
+}
+
+#[test]
+fn step_editor_closes_when_its_step_goes() {
+    let mut h = harness_for(CAR);
+    let n = h.state().session().steps().len();
+    h.state_mut().edit.step = Some(n - 1);
+    assert!(run(h.state_mut(), "step.edit"));
+    h.run_steps(2);
+    assert!(h.state().steps.editor.is_some());
+    // Delete the edited step from the menu path while its editor is open.
+    assert!(run(h.state_mut(), "step.delete"));
+    h.run_steps(2);
+    assert!(h.state().steps.editor.is_none(), "editor still open on a deleted step");
+    assert_eq!(h.state().session().steps().len(), n - 1);
+    assert!(run(h.state_mut(), "edit.undo"));
+    assert_eq!(h.state().session().steps().len(), n);
+}
