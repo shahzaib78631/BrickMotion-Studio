@@ -108,5 +108,8 @@ fn struct_sizes_match() {
     assert_eq!(size(c"BmLaneStep"), size_of::<bm_sys::BmLaneStep>());
     assert_eq!(size(c"BmLaneSubmodel"), size_of::<bm_sys::BmLaneSubmodel>());
     assert_eq!(size(c"BmTimelineView"), size_of::<bm_sys::BmTimelineView>());
+    assert_eq!(size(c"BmBuildSettings"), size_of::<bm_sys::BmBuildSettings>());
+    assert_eq!(size(c"BmStagingSettings"), size_of::<bm_sys::BmStagingSettings>());
+    assert_eq!(size(c"BmSnapMix"), size_of::<bm_sys::BmSnapMix>());
     assert_eq!(size(c"nope"), 0);
 }

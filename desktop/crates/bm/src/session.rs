@@ -512,6 +512,74 @@ impl Session {
     pub fn undo_depth(&self) -> usize {
         unsafe { sys::bm_session_undo_depth(self.raw) }
     }
+
+    pub fn build_settings(&self) -> crate::settings::BuildSettings {
+        crate::settings::BuildSettings::from_raw(unsafe { sys::bm_session_build_settings(self.raw) })
+    }
+
+    pub fn set_build_settings(&self, settings: &crate::settings::BuildSettings) -> Changed {
+        take_change(unsafe { sys::bm_session_set_build_settings(self.raw, settings.to_raw()) })
+    }
+
+    pub fn staging_settings(&self) -> crate::settings::StagingSettings {
+        crate::settings::StagingSettings::from_raw(unsafe { sys::bm_session_staging_settings(self.raw) })
+    }
+
+    pub fn set_staging_settings(&self, settings: &crate::settings::StagingSettings) -> Changed {
+        settings
+            .with_raw(|raw| take_change(unsafe { sys::bm_session_set_staging_settings(self.raw, raw) }))
+            .unwrap_or_else(|| Changed {
+                structure: false,
+                version: self.version(),
+                refused: Some("invalid staging settings".into()),
+            })
+    }
+
+    pub fn staging_turn(&self) -> f64 {
+        unsafe { sys::bm_session_staging_turn(self.raw) }
+    }
+
+    pub fn set_staging_turn(&self, degrees: f64) -> Changed {
+        take_change(unsafe { sys::bm_session_set_staging_turn(self.raw, degrees) })
+    }
+
+    pub fn moved_waiting_parts(&self) -> usize {
+        unsafe { sys::bm_session_moved_waiting_parts(self.raw) }
+    }
+
+    pub fn put_back_waiting_parts(&self) -> Changed {
+        take_change(unsafe { sys::bm_session_put_back_waiting_parts(self.raw) })
+    }
+
+    pub fn apply_staging(&self, settings: &crate::settings::StagingSettings, turn: f64, straighten: bool) -> Changed {
+        settings
+            .with_raw(|raw| take_change(unsafe { sys::bm_session_apply_staging(self.raw, raw, turn, straighten) }))
+            .unwrap_or_else(|| Changed {
+                structure: false,
+                version: self.version(),
+                refused: Some("invalid staging settings".into()),
+            })
+    }
+
+    pub fn turn_waiting_part(&self, piece: u32, degrees: f64) -> Changed {
+        take_change(unsafe { sys::bm_session_turn_waiting_part(self.raw, piece, degrees) })
+    }
+
+    pub fn shift_waiting_part(&self, piece: u32, delta: Vec3) -> Changed {
+        take_change(unsafe { sys::bm_session_shift_waiting_part(self.raw, piece, delta.to_raw()) })
+    }
+
+    pub fn waiting_shift(&self, piece: u32) -> Vec3 {
+        Vec3::from_raw(unsafe { sys::bm_session_waiting_shift(self.raw, piece) })
+    }
+
+    pub fn snap_mix(&self) -> crate::settings::SnapMix {
+        crate::settings::SnapMix::from_raw(unsafe { sys::bm_session_snap_mix(self.raw) })
+    }
+
+    pub fn set_snap_mix(&self, mix: &crate::settings::SnapMix) -> Changed {
+        take_change(unsafe { sys::bm_session_set_snap_mix(self.raw, mix.to_raw()) })
+    }
 }
 
 impl Drop for Session {

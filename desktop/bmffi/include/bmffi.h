@@ -432,6 +432,65 @@ BMFFI_API BmChange bm_session_move_to_new_step(BmSession* s, const uint32_t* pie
 /// How many edits undo can take back.
 BMFFI_API size_t bm_session_undo_depth(const BmSession* s);
 
+// ---- Build, staging, waiting parts and snap sound settings ----
+typedef enum { BM_ORDER_TAKE_APART, BM_ORDER_BOTTOM_UP } BmBuildOrder;
+typedef enum { BM_FLIGHT_AUTOMATIC, BM_FLIGHT_WEB, BM_FLIGHT_ARC } BmFlightShape;
+
+typedef struct {
+  bool standard_planner;
+  BmBuildOrder order;
+  BmFlightShape flight;
+  bool clean_grown_units;
+  double pieces_per_second, gap, step_pause, clearance, corner, video_seconds;
+} BmBuildSettings;
+
+BMFFI_API BmBuildSettings bm_session_build_settings(const BmSession* s);
+BMFFI_API BmChange bm_session_set_build_settings(BmSession* s, BmBuildSettings settings);
+
+/// Returned strings point into thread-local storage valid until the next staging read; copy at once.
+typedef struct {
+  const char *layout, *group, *sides, *match;
+  double aspect;
+} BmStagingSettings;
+
+BMFFI_API BmStagingSettings bm_session_staging_settings(const BmSession* s);
+BMFFI_API BmChange bm_session_set_staging_settings(BmSession* s, BmStagingSettings settings);
+BMFFI_API double bm_session_staging_turn(const BmSession* s);
+BMFFI_API BmChange bm_session_set_staging_turn(BmSession* s, double degrees);
+BMFFI_API size_t bm_session_moved_waiting_parts(const BmSession* s);
+BMFFI_API BmChange bm_session_put_back_waiting_parts(BmSession* s);
+BMFFI_API BmChange bm_session_apply_staging(BmSession* s, BmStagingSettings settings, double turn, bool straighten);
+BMFFI_API BmChange bm_session_turn_waiting_part(BmSession* s, uint32_t piece, double degrees);
+BMFFI_API bool bm_viewport_can_turn_waiting_part(const BmViewport* v, uint32_t piece);
+BMFFI_API double bm_viewport_waiting_turn_to_match(const BmViewport* v, uint32_t piece);
+BMFFI_API bool bm_viewport_can_move_waiting_part(const BmViewport* v, uint32_t piece);
+BMFFI_API bool bm_viewport_begin_waiting_drag(BmViewport* v, uint32_t piece, double x, double y);
+BMFFI_API BmVec3 bm_viewport_drag_waiting_part(BmViewport* v, double x, double y);
+BMFFI_API BmVec3 bm_viewport_end_waiting_drag(BmViewport* v);
+BMFFI_API BmChange bm_session_shift_waiting_part(BmSession* s, uint32_t piece, BmVec3 delta);
+BMFFI_API BmVec3 bm_session_waiting_shift(const BmSession* s, uint32_t piece);
+
+typedef enum { BM_SNAP_PHYSICAL, BM_SNAP_RECORDED, BM_SNAP_SYNTHESISED } BmSnapSource;
+typedef enum { BM_SNAP_ALL, BM_SNAP_FREESOUND, BM_SNAP_OPENGAMEART } BmSnapLibrary;
+typedef enum { BM_SNAP_PLATE, BM_SNAP_BRICK, BM_SNAP_PIN } BmSnapExample;
+
+typedef struct {
+  bool enabled;
+  BmSnapSource source;
+  BmSnapLibrary library;
+  double volume, room, stereo, click, brightness, thump, thump_pitch, thump_length, pitch, variation;
+  bool size_pitch, size_match;
+  int32_t together;
+} BmSnapMix;
+
+BMFFI_API BmSnapMix bm_session_snap_mix(const BmSession* s);
+BMFFI_API BmChange bm_session_set_snap_mix(BmSession* s, BmSnapMix mix);
+BMFFI_API BmSnapMix bm_snap_mix_preset(const char* name);
+/// Free function: safe to call on a worker thread.
+BMFFI_API bool bm_write_snap_preview(BmSnapMix mix, BmSnapExample example, const char* recordings, const char* file);
+/// Empty string on success; otherwise a human-readable error.
+BMFFI_API BmString bm_viewport_write_snap_track(BmViewport* v, const char* file, const char* recordings);
+
 #ifdef __cplusplus
 }
 #endif

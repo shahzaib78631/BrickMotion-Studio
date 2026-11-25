@@ -92,6 +92,8 @@ size_t bm_struct_size(const char* name) {
       {"BmTimelineInfo", sizeof(BmTimelineInfo)}, {"BmFlightRow", sizeof(BmFlightRow)},
       {"BmLaneRun", sizeof(BmLaneRun)}, {"BmLaneStep", sizeof(BmLaneStep)},
       {"BmLaneSubmodel", sizeof(BmLaneSubmodel)}, {"BmTimelineView", sizeof(BmTimelineView)},
+      {"BmBuildSettings", sizeof(BmBuildSettings)}, {"BmStagingSettings", sizeof(BmStagingSettings)},
+      {"BmSnapMix", sizeof(BmSnapMix)},
   };
   for (const Entry& e : kSizes)
     if (std::strcmp(e.name, name) == 0) return e.size;

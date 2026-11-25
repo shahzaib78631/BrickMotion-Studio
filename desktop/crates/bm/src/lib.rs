@@ -7,6 +7,7 @@ mod outline;
 pub mod placement;
 pub mod playback;
 mod session;
+pub mod settings;
 pub mod steps;
 pub mod timeline;
 mod viewport;

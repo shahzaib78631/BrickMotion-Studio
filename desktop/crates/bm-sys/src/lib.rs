@@ -405,6 +405,76 @@ pub struct BmTimelineView {
     pub trail_inset: f64,
 }
 
+pub type BmBuildOrder = u32;
+pub const BM_ORDER_TAKE_APART: BmBuildOrder = 0;
+pub const BM_ORDER_BOTTOM_UP: BmBuildOrder = 1;
+
+pub type BmFlightShape = u32;
+pub const BM_FLIGHT_AUTOMATIC: BmFlightShape = 0;
+pub const BM_FLIGHT_WEB: BmFlightShape = 1;
+pub const BM_FLIGHT_ARC: BmFlightShape = 2;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BmBuildSettings {
+    pub standard_planner: bool,
+    pub order: BmBuildOrder,
+    pub flight: BmFlightShape,
+    pub clean_grown_units: bool,
+    pub pieces_per_second: f64,
+    pub gap: f64,
+    pub step_pause: f64,
+    pub clearance: f64,
+    pub corner: f64,
+    pub video_seconds: f64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct BmStagingSettings {
+    pub layout: *const c_char,
+    pub group: *const c_char,
+    pub sides: *const c_char,
+    pub match_: *const c_char,
+    pub aspect: f64,
+}
+
+pub type BmSnapSource = u32;
+pub const BM_SNAP_PHYSICAL: BmSnapSource = 0;
+pub const BM_SNAP_RECORDED: BmSnapSource = 1;
+pub const BM_SNAP_SYNTHESISED: BmSnapSource = 2;
+
+pub type BmSnapLibrary = u32;
+pub const BM_SNAP_ALL: BmSnapLibrary = 0;
+pub const BM_SNAP_FREESOUND: BmSnapLibrary = 1;
+pub const BM_SNAP_OPENGAMEART: BmSnapLibrary = 2;
+
+pub type BmSnapExample = u32;
+pub const BM_SNAP_PLATE: BmSnapExample = 0;
+pub const BM_SNAP_BRICK: BmSnapExample = 1;
+pub const BM_SNAP_PIN: BmSnapExample = 2;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BmSnapMix {
+    pub enabled: bool,
+    pub source: BmSnapSource,
+    pub library: BmSnapLibrary,
+    pub volume: f64,
+    pub room: f64,
+    pub stereo: f64,
+    pub click: f64,
+    pub brightness: f64,
+    pub thump: f64,
+    pub thump_pitch: f64,
+    pub thump_length: f64,
+    pub pitch: f64,
+    pub variation: f64,
+    pub size_pitch: bool,
+    pub size_match: bool,
+    pub together: i32,
+}
+
 unsafe extern "C" {
     pub fn bm_string_free(s: BmString);
     pub fn bm_ldraw_directory() -> BmString;
@@ -597,6 +667,30 @@ unsafe extern "C" {
     pub fn bm_session_regenerate_steps(s: *mut BmSession, order: *const u32, n: usize) -> BmChange;
     pub fn bm_session_move_to_new_step(s: *mut BmSession, pieces: *const u32, n: usize, index: usize) -> BmChange;
     pub fn bm_session_undo_depth(s: *const BmSession) -> usize;
+
+    pub fn bm_session_build_settings(s: *const BmSession) -> BmBuildSettings;
+    pub fn bm_session_set_build_settings(s: *mut BmSession, settings: BmBuildSettings) -> BmChange;
+    pub fn bm_session_staging_settings(s: *const BmSession) -> BmStagingSettings;
+    pub fn bm_session_set_staging_settings(s: *mut BmSession, settings: BmStagingSettings) -> BmChange;
+    pub fn bm_session_staging_turn(s: *const BmSession) -> f64;
+    pub fn bm_session_set_staging_turn(s: *mut BmSession, degrees: f64) -> BmChange;
+    pub fn bm_session_moved_waiting_parts(s: *const BmSession) -> usize;
+    pub fn bm_session_put_back_waiting_parts(s: *mut BmSession) -> BmChange;
+    pub fn bm_session_apply_staging(s: *mut BmSession, settings: BmStagingSettings, turn: f64, straighten: bool) -> BmChange;
+    pub fn bm_session_turn_waiting_part(s: *mut BmSession, piece: u32, degrees: f64) -> BmChange;
+    pub fn bm_viewport_can_turn_waiting_part(v: *const BmViewport, piece: u32) -> bool;
+    pub fn bm_viewport_waiting_turn_to_match(v: *const BmViewport, piece: u32) -> f64;
+    pub fn bm_viewport_can_move_waiting_part(v: *const BmViewport, piece: u32) -> bool;
+    pub fn bm_viewport_begin_waiting_drag(v: *mut BmViewport, piece: u32, x: f64, y: f64) -> bool;
+    pub fn bm_viewport_drag_waiting_part(v: *mut BmViewport, x: f64, y: f64) -> BmVec3;
+    pub fn bm_viewport_end_waiting_drag(v: *mut BmViewport) -> BmVec3;
+    pub fn bm_session_shift_waiting_part(s: *mut BmSession, piece: u32, delta: BmVec3) -> BmChange;
+    pub fn bm_session_waiting_shift(s: *const BmSession, piece: u32) -> BmVec3;
+    pub fn bm_session_snap_mix(s: *const BmSession) -> BmSnapMix;
+    pub fn bm_session_set_snap_mix(s: *mut BmSession, mix: BmSnapMix) -> BmChange;
+    pub fn bm_snap_mix_preset(name: *const c_char) -> BmSnapMix;
+    pub fn bm_write_snap_preview(mix: BmSnapMix, example: BmSnapExample, recordings: *const c_char, file: *const c_char) -> bool;
+    pub fn bm_viewport_write_snap_track(v: *mut BmViewport, file: *const c_char, recordings: *const c_char) -> BmString;
 }
 
 /// Every function declared above, for the header agreement test.
@@ -650,4 +744,15 @@ pub const DECLARED: &[&str] = &[
     "bm_session_move_arrival", "bm_session_reorder_arrival", "bm_session_set_arrival_pinned",
     "bm_session_arrival_pins", "bm_session_set_sequence_duration", "bm_session_regenerate_steps",
     "bm_session_move_to_new_step", "bm_session_undo_depth",
+    "bm_session_build_settings", "bm_session_set_build_settings",
+    "bm_session_staging_settings", "bm_session_set_staging_settings",
+    "bm_session_staging_turn", "bm_session_set_staging_turn",
+    "bm_session_moved_waiting_parts", "bm_session_put_back_waiting_parts",
+    "bm_session_apply_staging", "bm_session_turn_waiting_part",
+    "bm_viewport_can_turn_waiting_part", "bm_viewport_waiting_turn_to_match",
+    "bm_viewport_can_move_waiting_part", "bm_viewport_begin_waiting_drag",
+    "bm_viewport_drag_waiting_part", "bm_viewport_end_waiting_drag",
+    "bm_session_shift_waiting_part", "bm_session_waiting_shift",
+    "bm_session_snap_mix", "bm_session_set_snap_mix",
+    "bm_snap_mix_preset", "bm_write_snap_preview", "bm_viewport_write_snap_track",
 ];

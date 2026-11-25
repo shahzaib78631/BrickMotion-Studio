@@ -228,6 +228,38 @@ impl Viewport {
     pub fn build_timeline(&self) -> Option<BuildTimeline> {
         BuildTimeline::from_raw(unsafe { sys::bm_viewport_build_timeline(self.raw) })
     }
+
+    pub fn can_turn_waiting_part(&self, piece: u32) -> bool {
+        unsafe { sys::bm_viewport_can_turn_waiting_part(self.raw, piece) }
+    }
+
+    pub fn waiting_turn_to_match(&self, piece: u32) -> f64 {
+        unsafe { sys::bm_viewport_waiting_turn_to_match(self.raw, piece) }
+    }
+
+    pub fn can_move_waiting_part(&self, piece: u32) -> bool {
+        unsafe { sys::bm_viewport_can_move_waiting_part(self.raw, piece) }
+    }
+
+    pub fn begin_waiting_drag(&mut self, piece: u32, x: f64, y: f64) -> bool {
+        unsafe { sys::bm_viewport_begin_waiting_drag(self.raw, piece, x, y) }
+    }
+
+    pub fn drag_waiting_part(&mut self, x: f64, y: f64) -> Vec3 {
+        Vec3::from_raw(unsafe { sys::bm_viewport_drag_waiting_part(self.raw, x, y) })
+    }
+
+    pub fn end_waiting_drag(&mut self) -> Vec3 {
+        Vec3::from_raw(unsafe { sys::bm_viewport_end_waiting_drag(self.raw) })
+    }
+
+    pub fn write_snap_track(&mut self, file: &std::path::Path, recordings: &std::path::Path) -> Result<(), String> {
+        let dst = CString::new(file.to_string_lossy().as_bytes()).map_err(|_| "invalid file path".to_owned())?;
+        let rec = CString::new(recordings.to_string_lossy().as_bytes())
+            .map_err(|_| "invalid recordings path".to_owned())?;
+        let err = take_string(unsafe { sys::bm_viewport_write_snap_track(self.raw, dst.as_ptr(), rec.as_ptr()) });
+        if err.is_empty() { Ok(()) } else { Err(err) }
+    }
 }
 
 impl Drop for Viewport {
