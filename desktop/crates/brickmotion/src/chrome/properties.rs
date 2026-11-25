@@ -82,7 +82,9 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
                     let body_max_h = (max_h - 40.0).max(160.0);
                     match page {
                         Page::Inspector => {}
-                        Page::BuildSettings | Page::Staging | Page::SnapSound => {
+                        Page::BuildSettings => super::build_settings::show(ui, app, body_max_h),
+                        Page::Staging => super::staging::show(ui, app, body_max_h),
+                        Page::SnapSound => {
                             egui::ScrollArea::vertical()
                                 .id_salt(("properties-page", page))
                                 .max_height(body_max_h)

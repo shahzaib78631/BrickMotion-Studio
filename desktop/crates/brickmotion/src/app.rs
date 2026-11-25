@@ -148,6 +148,10 @@ pub struct BrickMotionApp {
     pub timeline: chrome::timeline::TimelineState,
     /// Active page in the right-hand Properties panel.
     pub properties_page: chrome::properties::Page,
+    /// Draft state for the Build Settings page.
+    pub build_settings: chrome::build_settings::BuildSettingsState,
+    /// Draft state for the Build Staging page.
+    pub staging: chrome::staging::StagingState,
 }
 
 impl BrickMotionApp {
@@ -216,6 +220,8 @@ impl BrickMotionApp {
             transport: crate::transport::Transport::default(),
             timeline: chrome::timeline::TimelineState::default(),
             properties_page: chrome::properties::Page::Inspector,
+            build_settings: chrome::build_settings::BuildSettingsState::default(),
+            staging: chrome::staging::StagingState::default(),
         };
         // Opened once the first frame knows the view's size, so the worker can draw it warm.
         app.startup = path.map(|p| std::path::absolute(&p).unwrap_or(p));
@@ -316,6 +322,8 @@ impl BrickMotionApp {
         self.timeline.view.fit();
         self.timeline.parts_lane.clear();
         self.properties_page = chrome::properties::Page::Inspector;
+        self.build_settings.reset();
+        self.staging.reset();
         // The old document (and its renderer) goes, off this thread; the widget sets the new one up.
         crate::loader::retire(std::mem::replace(&mut self.doc, doc));
         self.viewport.reset();
@@ -724,6 +732,21 @@ impl BrickMotionApp {
                     self.edited(c);
                 }
             }
+            "model.build_settings" => {
+                self.properties_page = chrome::properties::Page::BuildSettings;
+            }
+            "video.flights" => {
+                self.properties_page = chrome::properties::Page::BuildSettings;
+                self.build_settings.scroll_to_flights = true;
+            }
+            "video.staging" => {
+                self.properties_page = chrome::properties::Page::Staging;
+            }
+            "video.straighten" => {
+                let c = s.put_back_waiting_parts();
+                self.edited(c);
+                self.staging.straighten = false;
+            }
             _ => return false,
         }
         true
@@ -820,6 +843,8 @@ impl BrickMotionApp {
         self.timeline.view.fit();
         self.timeline.parts_lane.clear();
         self.properties_page = chrome::properties::Page::Inspector;
+        self.build_settings.reset();
+        self.staging.reset();
         let mut s = bm::Session::new();
         match s.new_blank() {
             Ok(_) => {

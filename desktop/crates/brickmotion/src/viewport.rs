@@ -114,6 +114,8 @@ pub struct ViewportWidget {
     pub(crate) gizmo: Option<GizmoShape>,
     hovered: Handle,
     drag: Option<GizmoDrag>,
+    waiting_drag: Option<u32>,
+    waiting_menu_piece: Option<u32>,
     last_auto_plan: Option<bool>,
     last_plan_poll: Option<std::time::Instant>,
 }
@@ -137,6 +139,8 @@ impl ViewportWidget {
         self.gizmo = None;
         self.hovered = Handle::None;
         self.drag = None;
+        self.waiting_drag = None;
+        self.waiting_menu_piece = None;
         self.last_auto_plan = None;
     }
 
@@ -319,6 +323,84 @@ impl ViewportWidget {
                     gizmo_consumed_primary = true;
                 }
             }
+        }
+
+        if playing || placing {
+            if self.waiting_drag.take().is_some()
+                && let Some(vp) = doc.viewport()
+            {
+                let _ = vp.end_waiting_drag();
+            }
+            self.waiting_menu_piece = None;
+        }
+
+        // Handle waiting-part floor drag when paused mid-build (and not dragging a gizmo).
+        if !gizmo_consumed_primary && !placing && !playing {
+            if let Some(piece) = self.waiting_drag {
+                gizmo_consumed_primary = true;
+                if primary_down {
+                    if let Some(pos) = latest_pos
+                        && let Some(vp) = doc.viewport()
+                    {
+                        let pt = to_bm(pos);
+                        vp.drag_waiting_part(pt.x, pt.y);
+                        changed = true;
+                    }
+                } else {
+                    self.waiting_drag = None;
+                    let delta = doc.viewport().map_or(bm::Vec3::ZERO, |vp| vp.end_waiting_drag());
+                    if delta.x.abs() > 1e-6 || delta.y.abs() > 1e-6 || delta.z.abs() > 1e-6 {
+                        doc.session().shift_waiting_part(piece, delta);
+                        changed = true;
+                    }
+                }
+            } else if primary_pressed
+                && let Some(pos) = latest_pos.filter(|p| rect.contains(*p))
+                && (resp.hovered() || resp.is_pointer_button_down_on())
+                && let Some(vp) = doc.viewport()
+            {
+                let pt = to_bm(pos);
+                if let Some(piece) = vp.pick(pt.x, pt.y)
+                    && vp.can_move_waiting_part(piece)
+                {
+                    vp.begin_waiting_drag(piece, pt.x, pt.y);
+                    self.waiting_drag = Some(piece);
+                    gizmo_consumed_primary = true;
+                    changed = true;
+                }
+            }
+        }
+
+        // Context menu for turning a waiting part on the floor.
+        if resp.secondary_clicked() && !playing && !placing {
+            self.waiting_menu_piece = resp.interact_pointer_pos().and_then(|pos| {
+                let pt = to_bm(pos);
+                let vp = doc.viewport()?;
+                vp.pick(pt.x, pt.y).filter(|&p| vp.can_turn_waiting_part(p))
+            });
+        }
+        let mut waiting_turn: Option<(u32, f64)> = None;
+        if let Some(piece) = self.waiting_menu_piece {
+            let match_deg = doc.viewport().map_or(0.0, |vp| vp.waiting_turn_to_match(piece));
+            resp.context_menu(|ui| {
+                if ui.button("Turn Waiting Part 90°").clicked() {
+                    waiting_turn = Some((piece, 90.0));
+                    ui.close();
+                }
+                if ui.button("Turn Waiting Part −90°").clicked() {
+                    waiting_turn = Some((piece, -90.0));
+                    ui.close();
+                }
+                if ui.add_enabled(match_deg.abs() > 1e-3, egui::Button::new("Turn to Match")).clicked() {
+                    waiting_turn = Some((piece, match_deg));
+                    ui.close();
+                }
+            });
+        }
+        if let Some((piece, deg)) = waiting_turn {
+            doc.session().turn_waiting_part(piece, deg);
+            self.waiting_menu_piece = None;
+            changed = true;
         }
 
         // Read the response first: its methods lock the context, so they cannot run inside ui.input.
