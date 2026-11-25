@@ -191,3 +191,46 @@ fn app_autosaves_backups_and_warns_once() {
     let warnings = app.notices().iter().filter(|n| n.title() == "Couldn't autosave").count();
     assert_eq!(warnings, 1);
 }
+
+#[test]
+fn relative_open_is_remembered_absolute() {
+    // Tests run in the crate folder; this is HELI written relative to it.
+    let rel = PathBuf::from("../../../samples/helicopter/helicopter.mpd");
+    assert!(rel.exists());
+    let mut app = BrickMotionApp::new_for_test(None);
+    app.open(rel);
+    app.wait_loaded();
+    assert!(app.state.path.as_ref().is_some_and(|p| p.is_absolute()), "{:?}", app.state.path);
+    assert!(app.recents.0[0].is_absolute(), "{:?}", app.recents.0);
+}
+
+#[test]
+fn load_finishing_after_an_edit_asks() {
+    let d = tmp("adopt");
+    let other = d.join("other.mpd");
+    std::fs::copy(HELI, &other).unwrap();
+    let mut app = opened(Path::new(HELI));
+    app.open(other);
+    // Edited while the other file loads.
+    delete_first(&mut app);
+    let n = app.piece_count();
+    app.wait_loaded();
+    assert!(matches!(app.confirm, Some(brickmotion::Pending::Adopt(_))));
+    assert_eq!(app.piece_count(), n, "the edited document stays until the answer");
+    app.answer_confirm(Answer::DontSave);
+    assert_eq!(app.title(), "other");
+}
+
+#[test]
+fn commands_wait_while_asking() {
+    let mut app = opened(Path::new(HELI));
+    delete_first(&mut app);
+    let n = app.piece_count();
+    assert!(run(&mut app, "file.new"));
+    assert!(app.confirm.is_some());
+    app.doc.session_mut().select(&[0], bm::SelectMode::Replace);
+    assert!(!run(&mut app, "edit.delete"), "nothing runs behind Save changes?");
+    assert!(!run(&mut app, "edit.select_none"));
+    assert_eq!(app.piece_count(), n);
+    assert_eq!(app.doc.session().selection().len(), 1);
+}

@@ -261,6 +261,7 @@ impl BrickMotionApp {
 
     /// Saves to `path` (given the project extension) and makes it the document's file.
     pub fn save_as_path(&mut self, path: PathBuf) {
+        let path = std::path::absolute(&path).unwrap_or(path);
         self.write(with_project_extension(path));
     }
 
@@ -305,6 +306,8 @@ impl BrickMotionApp {
     /// Starts opening `path` in the background, after asking to save an edited document; the
     /// current document stays until the new one arrives.
     pub fn open(&mut self, path: PathBuf) {
+        // Recents and Save As keep the path, so it must not depend on the working folder.
+        let path = std::path::absolute(&path).unwrap_or(path);
         self.request(Pending::Open(path));
     }
 

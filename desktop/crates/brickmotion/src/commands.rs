@@ -162,7 +162,8 @@ pub fn title(c: &Command, ctx: &Ctx) -> String {
 /// The only way a command runs. False for an unknown or disabled id.
 pub fn run(app: &mut BrickMotionApp, id: &str) -> bool {
     let Some(c) = find(id) else { return false };
-    if !enabled(c, &app.ctx()) {
+    // Nothing runs behind "Save changes?".
+    if app.confirm.is_some() || !enabled(c, &app.ctx()) {
         return false;
     }
     app.execute(c.id)

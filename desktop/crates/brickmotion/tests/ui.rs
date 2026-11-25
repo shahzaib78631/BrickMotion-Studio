@@ -205,3 +205,17 @@ fn properties_show_many() {
     assert!(h.query_all_by_label_contains(" × ").count() >= 2, "the parts list");
     assert!(h.query_by_label("Showing the first 200").is_some());
 }
+
+#[test]
+fn properties_say_saved_after_save() {
+    let mut h = heli_harness();
+    h.state_mut().doc.session_mut().select(&[0], bm::SelectMode::Replace);
+    assert!(brickmotion::run(h.state_mut(), "edit.delete"));
+    h.run_steps(2);
+    assert!(h.query_by_label("Edited").is_some());
+    let out = std::env::temp_dir().join(format!("bm-ui-saved-{}.brickmotion", std::process::id()));
+    h.state_mut().save_as_path(out);
+    h.run_steps(2);
+    assert!(h.query_by_label("Edited").is_none(), "still says Edited after saving");
+    assert!(h.query_by_label("Saved").is_some());
+}

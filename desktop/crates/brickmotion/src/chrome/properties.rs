@@ -66,7 +66,8 @@ fn project(ui: &mut Ui, app: &mut BrickMotionApp, snap: &bm::Snapshot, run: &mut
     let imported = app.state.imported.then(|| app.state.path.as_ref().and_then(|p| p.file_name())).flatten().map(|n| n.to_string_lossy().into_owned());
     app.tree.sync(app.doc.session());
     let submodels = app.tree.submodels();
-    let edited = app.has_document && snap.dirty;
+    // Read live: saving changes neither the version nor the selection the snapshot is cached on.
+    let edited = app.has_document && app.doc.session().dirty();
     section(ui, "Project", |ui| {
         row(ui, &t, "Title", &title);
         row(ui, &t, "File", &file);
