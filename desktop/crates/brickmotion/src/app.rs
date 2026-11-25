@@ -78,8 +78,8 @@ pub struct BrickMotionApp {
     pub has_document: bool,
     /// A text field had keyboard focus last frame.
     pub text_focus: bool,
-    /// The command palette is showing.
-    pub palette_open: bool,
+    /// The command palette.
+    pub palette: crate::palette::Palette,
     /// Tests: file dialogs are recorded here instead of shown.
     pub dialog_requests: Vec<DialogRequest>,
     dialogs: bool,
@@ -131,7 +131,7 @@ impl BrickMotionApp {
             requested: Vec::new(),
             has_document: false,
             text_focus: false,
-            palette_open: false,
+            palette: Default::default(),
             dialog_requests: Vec::new(),
             dialogs: true,
             seen_version: 0,
@@ -344,7 +344,7 @@ impl BrickMotionApp {
             "edit.show_all" => s.show_all(),
             "view.fit" | "view.home" => self.viewport.queue(ViewOp::Fit),
             "view.frame_selection" => self.viewport.queue(ViewOp::FrameSelection),
-            "view.palette" => self.palette_open = true,
+            "view.palette" => self.palette.show_palette(),
             _ => return false,
         }
         true
@@ -504,6 +504,7 @@ impl eframe::App for BrickMotionApp {
             chrome::timeline::show(ui, self);
         }
         chrome::central(ui, self);
+        crate::palette::show(ui, self);
         chrome::confirm::show(ui, self);
         self.run_requested();
         self.autosave(std::time::Instant::now());

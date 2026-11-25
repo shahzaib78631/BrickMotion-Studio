@@ -122,3 +122,58 @@ fn cmd_z_undoes() {
     h.run_steps(2);
     assert_eq!(h.state().piece_count(), n - 1, "⇧⌘Z redoes, not undoes");
 }
+
+// ---- Palette ----
+
+use brickmotion::commands::Ctx;
+use brickmotion::palette::rank;
+
+#[test]
+fn palette_rank_prefers_prefix() {
+    assert_eq!(rank("und", &Ctx::default())[0].id, "edit.undo");
+    assert_eq!(rank("SAVE", &Ctx::default())[0].id, "file.save");
+}
+
+#[test]
+fn palette_rank_subsequence() {
+    assert!(rank("svas", &Ctx::default()).iter().any(|c| c.id == "file.save_as"));
+    assert!(rank("zzzq", &Ctx::default()).is_empty());
+}
+
+#[test]
+fn palette_empty_query_lists_all() {
+    let all = rank("", &Ctx::default());
+    assert_eq!(all.len(), registry().len());
+    // Commands not built yet come after the rest.
+    let first_soon = all.iter().position(|c| c.when == When::Soon).unwrap();
+    assert!(all[first_soon..].iter().all(|c| c.when == When::Soon));
+}
+
+#[test]
+fn palette_enter_runs() {
+    let mut h = heli_harness();
+    key(&mut h, egui::Key::K, egui::Modifiers::COMMAND);
+    h.run_steps(2);
+    assert!(h.state().palette.open);
+    h.event(egui::Event::Text("select all".into()));
+    h.run_steps(2);
+    key(&mut h, egui::Key::Enter, egui::Modifiers::NONE);
+    h.run_steps(3);
+    assert!(!h.state().palette.open);
+    assert_eq!(h.state().session().selection().len(), h.state().piece_count());
+}
+
+#[test]
+fn palette_disabled_row_says_why() {
+    let mut h = Harness::builder().with_size([1440.0, 900.0]).build_eframe(|cc| BrickMotionApp::new_for_test_cc(cc, None));
+    h.run();
+    h.get_by_label("Search commands").click();
+    h.run_steps(2);
+    assert!(h.state().palette.open);
+    h.event(egui::Event::Text("delete".into()));
+    h.run_steps(2);
+    assert!(h.query_all_by_label("Needs a selection").next().is_some());
+    key(&mut h, egui::Key::Escape, egui::Modifiers::NONE);
+    h.run_steps(2);
+    assert!(!h.state().palette.open);
+}

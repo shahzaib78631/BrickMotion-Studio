@@ -7,6 +7,7 @@ pub mod document;
 mod icons;
 mod loader;
 mod notices;
+pub mod palette;
 mod shortcuts;
 mod snapshot;
 pub mod support;

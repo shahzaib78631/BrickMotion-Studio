@@ -152,17 +152,19 @@ fn tool(ui: &mut Ui, t: &Theme, c: &Command, on: bool) -> egui::Response {
 fn right_column(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect) {
     let t = app.theme;
     let inner = r.shrink2(vec2(12.0, 0.0));
-    // Search commands (the palette itself comes later).
+    // Search commands: opens the palette.
     let sr = Rect::from_min_size(pos2(inner.left(), r.top() + 8.0), vec2(inner.width(), 28.0));
     let resp = ui.interact(sr, ui.scope_id().with("search"), Sense::click());
-    resp.widget_info(|| WidgetInfo::labeled(egui::Role::TextInput, true, "Search commands"));
+    resp.widget_info(|| WidgetInfo::labeled(egui::Role::Button, true, "Search commands"));
     let p = ui.painter();
     p.rect(sr, t.radius, t.bg1, Stroke::new(1.0, if resp.hovered() { t.border2 } else { t.border }), StrokeKind::Inside);
     icons::paint(ui, Icon::Search, Rect::from_center_size(pos2(sr.left() + 18.0, sr.center().y), Vec2::splat(16.0)), 16.0, t.text3);
     text(ui, pos2(sr.left() + 34.0, sr.center().y), Align2::LEFT_CENTER, "Search commands", 12.5, t.text3);
     let k = text(ui, pos2(sr.right() - 10.0, sr.center().y), Align2::RIGHT_CENTER, "⌘K", 11.0, t.text3);
     ui.painter().rect_stroke(k.expand2(vec2(4.0, 1.0)), 4.0, Stroke::new(1.0, t.border2), StrokeKind::Inside);
-    resp.on_hover_text("Find any command by name — coming soon");
+    if resp.on_hover_text("Find any command by name").clicked() {
+        app.requested.push("view.palette");
+    }
 
     // The switch.
     let wr = Rect::from_min_max(pos2(inner.left(), r.bottom() - 10.0 - 38.0), pos2(inner.right(), r.bottom() - 10.0));

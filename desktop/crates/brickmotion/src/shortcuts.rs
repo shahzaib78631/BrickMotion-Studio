@@ -14,7 +14,7 @@ fn ordered() -> Vec<(Shortcut, &'static str)> {
 /// Runs the commands whose keys were pressed this frame. A key without ⌘ belongs to a focused
 /// text field. A matched key is consumed, so widgets do not also act on it.
 pub fn handle(app: &mut BrickMotionApp, ctx: &egui::Context) {
-    let typing = app.text_focus;
+    let typing = app.text_focus || app.palette.open;
     for (s, id) in ordered() {
         if typing && !s.mods.command {
             continue;
@@ -22,5 +22,9 @@ pub fn handle(app: &mut BrickMotionApp, ctx: &egui::Context) {
         if ctx.input_mut(|i| i.consume_key(s.mods, s.key)) {
             run(app, id);
         }
+    }
+    // S opens the palette too (⌘K is its listed shortcut).
+    if !typing && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::S)) {
+        run(app, "view.palette");
     }
 }
