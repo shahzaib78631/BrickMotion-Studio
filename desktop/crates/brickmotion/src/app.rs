@@ -269,6 +269,8 @@ impl BrickMotionApp {
 
     /// Takes a loaded document as the current one.
     fn adopt(&mut self, path: PathBuf, doc: bm::Document, info: bm::OpenInfo) {
+        self.edit.placement = None;
+        self.edit.step = None;
         // The old document (and its renderer) goes, off this thread; the widget sets the new one up.
         crate::loader::retire(std::mem::replace(&mut self.doc, doc));
         self.viewport.reset();
@@ -530,8 +532,66 @@ impl BrickMotionApp {
         self.dialogs
     }
 
-    /// Starts placing a library part in the viewport (stub until Task 9 wires placement).
-    pub fn begin_placement(&mut self, _part: bm::library::PartMatch) {}
+    /// Starts placing a library part in the viewport with a live snapping preview.
+    pub fn begin_placement(&mut self, part: bm::library::PartMatch) {
+        if !self.has_document {
+            return;
+        }
+        let at = self
+            .viewport
+            .last_rect
+            .map(|r| bm::Vec2::new((r.width() * 0.5) as f64, (r.height() * 0.5) as f64))
+            .unwrap_or_else(|| bm::Vec2::new(320.0, 240.0));
+        let colour = self.edit.colour;
+        let collision = self.edit.collision;
+        let step = self.edit.step;
+        let p = {
+            let (session, vp) = self.doc.parts();
+            let Some(vp) = vp else { return };
+            crate::placement::Placement::begin(part, colour, collision, step, session, vp, at)
+        };
+        self.edit.placement = Some(p);
+    }
+
+    /// Cancels any live placement and clears its viewport preview.
+    pub fn cancel_placement(&mut self) {
+        if self.edit.placement.take().is_some()
+            && let Some(vp) = self.doc.viewport()
+        {
+            vp.clear_placement_preview();
+        }
+    }
+
+    fn poll_placement(&mut self, ctx: &egui::Context) {
+        if self.edit.placement.as_ref().is_some_and(|p| p.stale(self.doc.session())) {
+            self.cancel_placement();
+            return;
+        }
+        let outcome = {
+            let Some(p) = self.edit.placement.as_mut() else { return };
+            let (session, vp) = self.doc.parts();
+            let Some(vp) = vp else { return };
+            p.poll(vp, session)
+        };
+        match outcome {
+            Some(crate::placement::Placed::Done) => {
+                if let Some(p) = self.edit.placement.take() {
+                    self.history.record_part(&p.part.name, &p.part.description, &p.part.category);
+                    let _ = self.history.save(&self.support);
+                }
+                if let Some(vp) = self.doc.viewport() {
+                    vp.clear_placement_preview();
+                }
+                ctx.request_repaint();
+            }
+            Some(crate::placement::Placed::Refused(why)) => {
+                crate::notices::push(&mut self.notices, Notice::Warning { title: "Couldn't place part".into(), detail: why });
+            }
+            None => {
+                ctx.request_repaint_after(Duration::from_millis(30));
+            }
+        }
+    }
 
     /// An untitled, empty project, after asking to save an edited one.
     pub fn new_document(&mut self) {
@@ -539,6 +599,8 @@ impl BrickMotionApp {
     }
 
     fn new_document_now(&mut self) {
+        self.edit.placement = None;
+        self.edit.step = None;
         let mut s = bm::Session::new();
         match s.new_blank() {
             Ok(_) => {
@@ -745,6 +807,9 @@ impl eframe::App for BrickMotionApp {
         }
         self.guard_close(ui.ctx());
         crate::menubar::poll(self);
+        if self.edit.placement.as_ref().is_some_and(|p| p.stale(self.doc.session())) {
+            self.cancel_placement();
+        }
         self.text_focus = ui.ctx().egui_wants_keyboard_input();
         crate::shortcuts::handle(self, ui.ctx());
         chrome::titlebar::show(ui, self);
@@ -758,6 +823,7 @@ impl eframe::App for BrickMotionApp {
         chrome::swatches::show(ui, self);
         chrome::confirm::show(ui, self);
         self.run_requested();
+        self.poll_placement(ui.ctx());
         self.previews.frame_end();
         self.autosave(std::time::Instant::now());
         if self.autosaving.is_some() {

@@ -60,26 +60,61 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
                     });
                 });
         });
-    let selected = app.doc.session().selection().len();
-    if selected > 0 {
-        Area::new(Id::unique("selection-chip"))
+    if let Some(p) = &app.edit.placement {
+        let short = super::library::short_name(&p.part.name);
+        let status = p.status_text();
+        let status_color = match p.state {
+            bm::placement::PlacementState::Snapped => t.accent,
+            bm::placement::PlacementState::Blocked | bm::placement::PlacementState::Unavailable => {
+                egui::Color32::from_rgb(0xe5, 0x48, 0x4d)
+            }
+            _ => t.text1,
+        };
+        Area::new(Id::unique("placement-hud"))
             .order(Order::Middle)
             .anchor(Align2::LEFT_BOTTOM, vec2(12.0, -14.0))
             .constrain_to(area)
             .show(ui.ctx(), |ui| {
                 Frame::NONE
                     .fill(t.float_fill())
-                    .stroke(Stroke::new(1.0, t.border))
+                    .stroke(Stroke::new(1.0, t.border2))
                     .corner_radius(8)
                     .inner_margin(Margin::symmetric(10, 5))
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
-                            let word = if selected == 1 { "piece" } else { "pieces" };
-                            ui.label(RichText::new(format!("{selected} {word}")).strong().size(11.5).color(t.text1));
-                            ui.label(RichText::new("selected").size(11.5).color(t.text2));
+                            ui.spacing_mut().item_spacing.x = 8.0;
+                            ui.label(RichText::new(short).strong().size(11.5).color(t.text1));
+                            ui.label(RichText::new(status).strong().size(11.5).color(status_color));
+                            ui.label(
+                                RichText::new("Click to place · R turn · Tab grip · Esc cancel")
+                                    .size(11.0)
+                                    .color(t.text3),
+                            );
                         });
                     });
             });
+    } else {
+        let selected = app.doc.session().selection().len();
+        if selected > 0 {
+            Area::new(Id::unique("selection-chip"))
+                .order(Order::Middle)
+                .anchor(Align2::LEFT_BOTTOM, vec2(12.0, -14.0))
+                .constrain_to(area)
+                .show(ui.ctx(), |ui| {
+                    Frame::NONE
+                        .fill(t.float_fill())
+                        .stroke(Stroke::new(1.0, t.border))
+                        .corner_radius(8)
+                        .inner_margin(Margin::symmetric(10, 5))
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                let word = if selected == 1 { "piece" } else { "pieces" };
+                                ui.label(RichText::new(format!("{selected} {word}")).strong().size(11.5).color(t.text1));
+                                ui.label(RichText::new("selected").size(11.5).color(t.text2));
+                            });
+                        });
+                });
+        }
     }
 }
 

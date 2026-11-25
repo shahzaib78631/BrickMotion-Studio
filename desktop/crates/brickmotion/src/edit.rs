@@ -21,6 +21,8 @@ pub struct EditState {
     pub colour: i32,
     /// Step chosen in the Steps tab (new parts go here, or into the last step when None).
     pub step: Option<usize>,
+    /// Live library part placement following the pointer, when active.
+    pub placement: Option<crate::placement::Placement>,
     /// True while an ⌥-modified shortcut (e.g. ⌥E / ⌥Q) is being dispatched.
     pub(crate) alt_held: bool,
 }
@@ -33,6 +35,7 @@ impl Default for EditState {
             collision: true,
             colour: 71,
             step: None,
+            placement: None,
             alt_held: false,
         }
     }

@@ -16,6 +16,39 @@ fn ordered() -> Vec<(Shortcut, &'static str)> {
 /// installed, ⌘ keys belong to it (AppKit gives them to the menu first), so they run once.
 pub fn handle(app: &mut BrickMotionApp, ctx: &egui::Context) {
     let typing = app.text_focus || app.palette.open || app.swatches.open.is_some();
+
+    // While placing a part, Tab, ⇧Tab, R, Return and Esc belong to the placement before the registry.
+    if !typing && app.edit.placement.is_some() {
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+            app.cancel_placement();
+            return;
+        }
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter)) {
+            if let Some(p) = app.edit.placement.as_mut() {
+                p.accept();
+            }
+            return;
+        }
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::R)) {
+            if let (Some(p), Some(vp)) = (app.edit.placement.as_mut(), app.doc.viewport()) {
+                p.turn(vp);
+            }
+            return;
+        }
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, egui::Key::Tab)) {
+            if let (Some(p), Some(vp)) = (app.edit.placement.as_mut(), app.doc.viewport()) {
+                p.cycle_grip(vp, true);
+            }
+            return;
+        }
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Tab)) {
+            if let (Some(p), Some(vp)) = (app.edit.placement.as_mut(), app.doc.viewport()) {
+                p.cycle_grip(vp, false);
+            }
+            return;
+        }
+    }
+
     let menu = app.menubar.is_some();
     for (s, id) in ordered() {
         if (typing && !s.mods.command) || (menu && s.mods.command) {

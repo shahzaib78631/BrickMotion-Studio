@@ -188,10 +188,15 @@ impl ViewportWidget {
         let to_bm = |p: Pos2| bm::Vec2::new((p.x - rect.left()) as f64, (p.y - rect.top()) as f64);
         let view_pt = bm::Vec2::new(rect.width() as f64, rect.height() as f64);
 
-        let gizmo_kind = match edit.tool {
-            Tool::Move => Some(GizmoKind::Move),
-            Tool::Rotate => Some(GizmoKind::Rotate),
-            Tool::Select => None,
+        let placing = edit.placement.is_some();
+        let gizmo_kind = if placing {
+            None
+        } else {
+            match edit.tool {
+                Tool::Move => Some(GizmoKind::Move),
+                Tool::Rotate => Some(GizmoKind::Rotate),
+                Tool::Select => None,
+            }
         };
         let sel = doc.session().selection();
         let show_gizmo = gizmo_kind.is_some() && !sel.is_empty();
@@ -227,9 +232,20 @@ impl ViewportWidget {
             )
         });
 
-        // Handle active gizmo drag or start a new one on a handle press.
+        // Handle live placement pointer moves and primary click to place.
         let mut gizmo_consumed_primary = false;
-        if let Some(kind) = gizmo_kind {
+        if let Some(placement) = edit.placement.as_mut() {
+            gizmo_consumed_primary = true;
+            if let Some(vp) = doc.viewport() {
+                placement.set_colour(vp, edit.colour);
+                if let Some(pos) = hover_pos.filter(|p| rect.contains(*p)) {
+                    placement.pointer(vp, to_bm(pos), modifiers.alt);
+                }
+            }
+            if resp.clicked_by(egui::PointerButton::Primary) {
+                placement.accept();
+            }
+        } else if let Some(kind) = gizmo_kind {
             if self.drag.is_some() {
                 gizmo_consumed_primary = true;
                 if primary_down {

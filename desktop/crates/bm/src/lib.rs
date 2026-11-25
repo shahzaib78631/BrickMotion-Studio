@@ -80,4 +80,8 @@ impl Document {
     pub fn viewport(&mut self) -> Option<&mut Viewport> {
         self.viewport.as_mut()
     }
+
+    pub fn parts(&mut self) -> (&Session, Option<&mut Viewport>) {
+        (&self.session, self.viewport.as_mut())
+    }
 }
