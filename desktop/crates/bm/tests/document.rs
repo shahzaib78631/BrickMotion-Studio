@@ -26,7 +26,7 @@ fn blank_round_trip() {
 
 #[test]
 fn remove_undo_redo() {
-    let mut s = heli();
+    let s = heli();
     let n = s.piece_count();
     let c = s.remove(&[0]);
     assert_eq!(c.refused, None);
@@ -57,7 +57,7 @@ fn outline_root_row() {
 
 #[test]
 fn snapshot_describes_selection() {
-    let mut s = heli();
+    let s = heli();
     s.select(&[0, 1], bm::SelectMode::Replace);
     let snap = s.snapshot();
     assert_eq!(snap.selected, 2);

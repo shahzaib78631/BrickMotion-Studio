@@ -119,7 +119,6 @@ unsafe extern "C" {
     pub fn bm_session_free(s: *mut BmSession);
     pub fn bm_session_open(s: *mut BmSession, utf8_path: *const c_char) -> BmOpenResult;
     pub fn bm_open_result_free(r: BmOpenResult);
-    pub fn bm_session_adopt(into: *mut BmSession, loaded: *const BmSession);
     pub fn bm_session_title(s: *const BmSession) -> BmString;
     pub fn bm_session_piece_count(s: *const BmSession) -> usize;
     pub fn bm_session_generation(s: *const BmSession) -> u64;
@@ -127,6 +126,7 @@ unsafe extern "C" {
     pub fn bm_session_selection(s: *const BmSession, out: *mut u32, cap: usize) -> usize;
 
     pub fn bm_viewport_new(s: *mut BmSession) -> *mut BmViewport;
+    pub fn bm_metal_available() -> bool;
     pub fn bm_viewport_free(v: *mut BmViewport);
     pub fn bm_viewport_ok(v: *const BmViewport) -> bool;
     pub fn bm_viewport_resize(v: *mut BmViewport, px_w: i32, px_h: i32, scale: f64);
@@ -183,10 +183,10 @@ unsafe extern "C" {
 /// Every function declared above, for the header agreement test.
 pub const DECLARED: &[&str] = &[
     "bm_string_free", "bm_ldraw_directory", "bm_engine_version",
-    "bm_session_new", "bm_session_free", "bm_session_open", "bm_open_result_free", "bm_session_adopt",
+    "bm_session_new", "bm_session_free", "bm_session_open", "bm_open_result_free",
     "bm_session_title", "bm_session_piece_count", "bm_session_generation", "bm_session_select",
     "bm_session_selection",
-    "bm_viewport_new", "bm_viewport_free", "bm_viewport_ok", "bm_viewport_resize", "bm_viewport_draw",
+    "bm_viewport_new", "bm_metal_available", "bm_viewport_free", "bm_viewport_ok", "bm_viewport_resize", "bm_viewport_draw",
     "bm_viewport_needs_draw", "bm_viewport_readback", "bm_viewport_orbit", "bm_viewport_pan",
     "bm_viewport_zoom_toward", "bm_viewport_fit_all", "bm_viewport_view", "bm_viewport_set_background",
     "bm_viewport_set_orthographic", "bm_viewport_pick", "bm_viewport_frame_selection",

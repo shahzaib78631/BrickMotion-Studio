@@ -19,7 +19,7 @@ fn session(p: &str) -> bm::Session {
 
 #[test]
 fn tree_rebuilds_only_on_structure_change() {
-    let mut s = session(HELI);
+    let s = session(HELI);
     let mut tree = Tree::default();
     tree.sync(&s);
     tree.sync(&s);
@@ -85,7 +85,7 @@ fn big_model_tree_frame_time() {
     // Open every row so the list is as long as it gets.
     h.state_mut().tree.open_all();
     // Everything selected: each row checks its pieces against the selection every frame.
-    h.state_mut().doc.session_mut().select_all();
+    h.state_mut().doc.session().select_all();
     h.run_steps(2);
     let rows = h.state().tree.len();
     assert!(rows > 0, "the model did not open: {:?}", h.state().notices());

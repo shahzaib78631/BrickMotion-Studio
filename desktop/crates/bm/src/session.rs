@@ -20,11 +20,15 @@ pub enum SelectMode {
 }
 
 /// One document in the engine. Owned by one thread at a time.
+///
+/// Edits take `&self`: a Session is not `Sync`, so only its owning thread can reach it, and a
+/// [`Document`](crate::Document) can hand out `&Session` without letting anyone swap the session
+/// out from under its viewport.
 pub struct Session {
     pub(crate) raw: *mut sys::BmSession,
 }
 
-// One owner moves it between threads (a worker opens, the UI adopts); it is never shared.
+// One owner moves it between threads (a worker opens it, the UI draws it); it is never shared.
 unsafe impl Send for Session {}
 
 impl Default for Session {
@@ -47,11 +51,6 @@ impl Session {
         open_info(r, fail)
     }
 
-    /// Takes the document `loaded` opened (usually on a worker thread).
-    pub fn adopt(&mut self, loaded: &Session) {
-        unsafe { sys::bm_session_adopt(self.raw, loaded.raw) }
-    }
-
     pub fn title(&self) -> String {
         take_string(unsafe { sys::bm_session_title(self.raw) })
     }
@@ -64,7 +63,7 @@ impl Session {
         unsafe { sys::bm_session_generation(self.raw) }
     }
 
-    pub fn select(&mut self, pieces: &[u32], mode: SelectMode) {
+    pub fn select(&self, pieces: &[u32], mode: SelectMode) {
         let m = match mode {
             SelectMode::Replace => sys::BM_SELECT_REPLACE,
             SelectMode::Add => sys::BM_SELECT_ADD,
@@ -125,7 +124,7 @@ impl Session {
         unsafe { sys::bm_session_dirty(self.raw) }
     }
 
-    pub fn mark_saved(&mut self) {
+    pub fn mark_saved(&self) {
         unsafe { sys::bm_session_mark_saved(self.raw) }
     }
 
@@ -153,33 +152,33 @@ impl Session {
         take_string(unsafe { sys::bm_session_redo_name(self.raw) })
     }
 
-    pub fn undo(&mut self) -> Changed {
+    pub fn undo(&self) -> Changed {
         take_change(unsafe { sys::bm_session_undo(self.raw) })
     }
 
-    pub fn redo(&mut self) -> Changed {
+    pub fn redo(&self) -> Changed {
         take_change(unsafe { sys::bm_session_redo(self.raw) })
     }
 
     /// Deletes pieces as one undo step.
-    pub fn remove(&mut self, pieces: &[u32]) -> Changed {
+    pub fn remove(&self, pieces: &[u32]) -> Changed {
         take_change(unsafe { sys::bm_session_remove(self.raw, pieces.as_ptr(), pieces.len()) })
     }
 
     /// Every piece not hidden.
-    pub fn select_all(&mut self) {
+    pub fn select_all(&self) {
         unsafe { sys::bm_session_select_all(self.raw) }
     }
 
-    pub fn select_none(&mut self) {
+    pub fn select_none(&self) {
         unsafe { sys::bm_session_select_none(self.raw) }
     }
 
-    pub fn hide(&mut self, pieces: &[u32]) {
+    pub fn hide(&self, pieces: &[u32]) {
         unsafe { sys::bm_session_hide(self.raw, pieces.as_ptr(), pieces.len()) }
     }
 
-    pub fn show_all(&mut self) {
+    pub fn show_all(&self) {
         unsafe { sys::bm_session_show_all(self.raw) }
     }
 

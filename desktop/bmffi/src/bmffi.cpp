@@ -12,12 +12,7 @@
 #include "bmapp/session.h"
 #include "bmapp/viewport.h"
 
-struct BmSession {
-  bmapp::Session* s;
-};
-struct BmViewport {
-  bmapp::Viewport* v;
-};
+#include "internal.h"
 
 namespace {
 
@@ -123,11 +118,6 @@ void bm_open_result_free(BmOpenResult r) {
   bm_string_free(r.warnings);
 }
 
-void bm_session_adopt(BmSession* into, const BmSession* loaded) {
-  if (!into || !loaded) return;
-  guardVoid([&] { into->s->adoptLoadedSession(loaded->s); });
-}
-
 BmString bm_session_title(const BmSession* s) {
   if (!s) return BmString{nullptr, 0};
   return guard(BmString{nullptr, 0}, [&] { return make(s->s->title()); });
@@ -156,6 +146,10 @@ size_t bm_session_selection(const BmSession* s, uint32_t* out, size_t cap) {
     for (size_t i = 0; i < sel.size() && i < cap && out; ++i) out[i] = sel[i];
     return sel.size();
   });
+}
+
+bool bm_metal_available(void) {
+  return guard(false, [] { return bmapp::Viewport::metalDevice() != nullptr; });
 }
 
 BmViewport* bm_viewport_new(BmSession* s) {

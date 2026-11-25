@@ -58,7 +58,7 @@ fn every_enabled_command_runs() {
         // Each command starts from the helicopter with one piece selected.
         let mut fresh = heli_app();
         fresh.dialogs_off();
-        fresh.doc.session_mut().select(&[0], bm::SelectMode::Replace);
+        fresh.doc.session().select(&[0], bm::SelectMode::Replace);
         let ctx = fresh.ctx();
         if enabled(c, &ctx) {
             assert!(run(&mut fresh, c.id), "{} did not run", c.id);
@@ -71,7 +71,7 @@ fn every_enabled_command_runs() {
 fn undo_title_names_the_edit() {
     let mut app = heli_app();
     let n = app.piece_count();
-    app.doc.session_mut().select(&[0], bm::SelectMode::Replace);
+    app.doc.session().select(&[0], bm::SelectMode::Replace);
     assert!(run(&mut app, "edit.delete"));
     assert_eq!(app.piece_count(), n - 1);
     let undo = find("edit.undo").unwrap();
@@ -110,7 +110,7 @@ fn single_key_shortcut_ignored_while_typing() {
 fn cmd_z_undoes() {
     let mut h = heli_harness();
     let n = h.state().piece_count();
-    h.state_mut().doc.session_mut().select(&[0], bm::SelectMode::Replace);
+    h.state_mut().doc.session().select(&[0], bm::SelectMode::Replace);
     h.run_steps(1);
     key(&mut h, egui::Key::Backspace, egui::Modifiers::NONE);
     h.run_steps(2);

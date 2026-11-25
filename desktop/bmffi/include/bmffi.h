@@ -30,8 +30,6 @@ BMFFI_API void bm_session_free(BmSession* s);
 /// Safe on any thread for a session no other thread uses.
 BMFFI_API BmOpenResult bm_session_open(BmSession* s, const char* utf8_path);
 BMFFI_API void bm_open_result_free(BmOpenResult r);
-/// UI thread: takes the document `loaded` opened (on a worker) into `into`.
-BMFFI_API void bm_session_adopt(BmSession* into, const BmSession* loaded);
 BMFFI_API BmString bm_session_title(const BmSession* s);
 BMFFI_API size_t bm_session_piece_count(const BmSession* s);
 BMFFI_API uint64_t bm_session_generation(const BmSession* s);
@@ -41,6 +39,8 @@ BMFFI_API size_t bm_session_selection(const BmSession* s, uint32_t* out, size_t 
 
 /// NULL when this Mac has no Metal device.
 BMFFI_API BmViewport* bm_viewport_new(BmSession* s);
+/// True when this Mac has a Metal device to draw with.
+BMFFI_API bool bm_metal_available(void);
 BMFFI_API void bm_viewport_free(BmViewport* v);
 BMFFI_API bool bm_viewport_ok(const BmViewport* v);
 /// Ignored when either side is zero or negative.

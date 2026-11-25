@@ -70,14 +70,11 @@ TEST_CASE("zero size resize is ignored") {
   bm_session_free(s);
 }
 
-TEST_CASE("adopt moves a worker-loaded document") {
-  BmSession* ui = bm_session_new();
-  BmSession* w = bm_session_new();
-  std::thread([&] { bm_open_result_free(bm_session_open(w, kHeli)); }).join();
-  uint64_t g0 = bm_session_generation(ui);
-  bm_session_adopt(ui, w);
-  CHECK(bm_session_piece_count(ui) == bm_session_piece_count(w));
-  CHECK(bm_session_generation(ui) != g0);
-  bm_session_free(w);
-  bm_session_free(ui);
+TEST_CASE("metal is available exactly when a viewport can be made") {
+  BmSession* s = bm_session_new();
+  bm_open_result_free(bm_session_open(s, kHeli));
+  BmViewport* v = bm_viewport_new(s);
+  CHECK(bm_metal_available() == (v != nullptr));
+  bm_viewport_free(v);
+  bm_session_free(s);
 }

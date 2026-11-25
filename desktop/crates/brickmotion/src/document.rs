@@ -39,7 +39,7 @@ pub fn with_project_extension(path: PathBuf) -> PathBuf {
 }
 
 /// Writes the project atomically, then marks it saved. Err is "<file name>: <why>".
-pub fn save_to(session: &mut bm::Session, path: &Path) -> Result<(), String> {
+pub fn save_to(session: &bm::Session, path: &Path) -> Result<(), String> {
     let bytes = session.project_bytes();
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| path.display().to_string());
     if bytes.is_empty() {

@@ -15,7 +15,8 @@ pub fn snapshot(path: &Path, out: &Path, size: (u32, u32)) -> Result<(), String>
         return Err(format!("{}: no pieces were found in this file", path.display()));
     }
     let mut doc = bm::Document::new(s);
-    let vp = doc.viewport().ok_or("this Mac has no Metal device, so nothing can be drawn")?;
+    let no_view = if bm::metal_available() { "the 3D view could not start" } else { "this Mac has no Metal device, so nothing can be drawn" };
+    let vp = doc.viewport().ok_or(no_view)?;
     let bg = Theme::DARK.bg1;
     vp.set_background([bg.r(), bg.g(), bg.b()].map(|c| c as f64 / 255.0));
     vp.resize(size.0, size.1, 1.0);

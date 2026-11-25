@@ -33,17 +33,6 @@ fn open_error_names_file() {
 }
 
 #[test]
-fn replace_swaps_document_and_viewport() {
-    let mut doc = bm::Document::new(bm::Session::new());
-    let mut s = bm::Session::new();
-    s.open(Path::new(HELI)).unwrap();
-    let n = s.piece_count();
-    doc.replace(s);
-    assert_eq!(doc.session().piece_count(), n);
-    assert!(doc.viewport().is_some());
-}
-
-#[test]
 fn selection_round_trips() {
     let mut s = bm::Session::new();
     s.open(Path::new(HELI)).unwrap();
@@ -53,19 +42,33 @@ fn selection_round_trips() {
     assert_eq!(s.selection(), vec![3]);
 }
 
+/// (name, number of parameters) for each `start`-prefixed declaration in `text`, read up to `end`.
+fn signatures(text: &str, start: &str, end: char) -> Vec<(String, usize)> {
+    text.split(start)
+        .skip(1)
+        .filter_map(|decl| {
+            let decl = &decl[..decl.find(end)?];
+            let open = decl.find('(')?;
+            let name = decl[..open].split_whitespace().last()?.trim_start_matches('*').to_string();
+            let params = decl[open + 1..decl.rfind(')')?].trim();
+            let n = if params.is_empty() || params == "void" { 0 } else { params.split(',').count() };
+            Some((name, n))
+        })
+        .collect()
+}
+
 #[test]
 fn header_and_rust_decls_agree() {
-    // Every BMFFI_API name in bmffi.h is declared in bm-sys.
-    let h = include_str!("../../../bmffi/include/bmffi.h");
-    let names: Vec<&str> = h
-        .lines()
-        .filter_map(|l| l.strip_prefix("BMFFI_API "))
-        .filter_map(|t| t.split('(').next()?.split_whitespace().last())
-        .map(|n| n.trim_start_matches('*'))
-        .collect();
-    assert_eq!(names.len(), 63);
-    for name in names {
-        assert!(bm_sys::DECLARED.contains(&name), "missing {name}");
+    // Every BMFFI_API function in bmffi.h is declared in bm-sys, with as many parameters.
+    let sample = "\nBMFFI_API void f(int* a,\n  int b);\nBMFFI_API BmString g(void);";
+    assert_eq!(signatures(sample, "\nBMFFI_API ", ';'), vec![("f".into(), 2), ("g".into(), 0)]);
+    let header = signatures(include_str!("../../../bmffi/include/bmffi.h"), "\nBMFFI_API ", ';');
+    let rust = signatures(include_str!("../../bm-sys/src/lib.rs"), "\n    pub fn ", ';');
+    assert_eq!(header.len(), 63);
+    for (name, n) in &header {
+        assert!(bm_sys::DECLARED.contains(&name.as_str()), "missing {name}");
+        let r = rust.iter().find(|(r, _)| r == name).unwrap_or_else(|| panic!("no Rust fn {name}"));
+        assert_eq!(r.1, *n, "{name}: header has {n} parameters, bm-sys {}", r.1);
     }
 }
 
@@ -92,4 +95,11 @@ fn document_built_on_worker_draws_on_this_thread() {
     assert_eq!((f.width, f.height), (320, 240));
     assert!(v.pick(160.0, 120.0).is_some());
     drop(doc);
+}
+
+#[test]
+fn metal_is_available_when_a_viewport_can_be_made() {
+    let mut s = bm::Session::new();
+    s.open(Path::new(HELI)).unwrap();
+    assert_eq!(bm::metal_available(), bm::Document::new(s).viewport().is_some());
 }

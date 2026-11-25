@@ -23,7 +23,7 @@ fn opened(path: &Path) -> BrickMotionApp {
 }
 
 fn delete_first(app: &mut BrickMotionApp) {
-    app.doc.session_mut().select(&[0], bm::SelectMode::Replace);
+    app.doc.session().select(&[0], bm::SelectMode::Replace);
     assert!(run(app, "edit.delete"));
 }
 
@@ -228,7 +228,7 @@ fn commands_wait_while_asking() {
     let n = app.piece_count();
     assert!(run(&mut app, "file.new"));
     assert!(app.confirm.is_some());
-    app.doc.session_mut().select(&[0], bm::SelectMode::Replace);
+    app.doc.session().select(&[0], bm::SelectMode::Replace);
     assert!(!run(&mut app, "edit.delete"), "nothing runs behind Save changes?");
     assert!(!run(&mut app, "edit.select_none"));
     assert_eq!(app.piece_count(), n);

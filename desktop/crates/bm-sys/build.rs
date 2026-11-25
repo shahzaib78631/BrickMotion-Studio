@@ -23,7 +23,18 @@ fn main() {
     // For bm-sys's own test binary; dependents add the same rpath from DEP_BMFFI_LIBDIR.
     println!("cargo:rustc-link-arg=-Wl,-rpath,{}", lib.display());
     println!("cargo:libdir={}", lib.display()); // DEP_BMFFI_LIBDIR for the app crate
-    for dir in ["desktop/bmffi", "native/app/bmapp/src", "native/app/bmapp/include"] {
+    // Everything libbmffi is built from: the engine libraries, bmapp, and the CMake files that join them.
+    let inputs = [
+        "desktop/bmffi",
+        "native/CMakeLists.txt",
+        "native/core",
+        "native/render",
+        "native/film",
+        "native/sound",
+        "native/app/CMakeLists.txt",
+        "native/app/bmapp",
+    ];
+    for dir in inputs {
         println!("cargo:rerun-if-changed={}", repo.join(dir).display());
     }
 }

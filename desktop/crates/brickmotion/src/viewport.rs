@@ -139,8 +139,7 @@ impl ViewportWidget {
         let fresh = self.generation != Some(generation);
         let empty = doc.session().piece_count() == 0;
         let Some(vp) = doc.viewport() else {
-            // The engine makes no viewport for an empty document; with pieces, it means no GPU.
-            let text = if empty { "Open a model to begin" } else { "This Mac has no Metal device, so the model cannot be shown." };
+            let text = no_view_text(empty, bm::metal_available());
             let hint = egui::Label::new(egui::RichText::new(text).size(13.0).color(Color32::from_gray(0x8a)));
             ui.put(Rect::from_center_size(rect.center(), egui::vec2(rect.width(), 24.0)), hint);
             if empty {
@@ -202,9 +201,9 @@ impl ViewportWidget {
         }
         for (hit, mode) in picks {
             match hit {
-                Some(p) => doc.session_mut().select(&[p], mode),
+                Some(p) => doc.session().select(&[p], mode),
                 // A plain click on empty space clears the selection.
-                None if mode == bm::SelectMode::Replace => doc.session_mut().select(&[], mode),
+                None if mode == bm::SelectMode::Replace => doc.session().select(&[], mode),
                 None => {}
             }
         }
@@ -294,5 +293,30 @@ mod tests {
     fn resize_tracks_pixels_per_point() {
         assert_eq!(target_size(Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0)), 2.0), Some((800, 600, 2.0)));
         assert_eq!(target_size(Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0)), 1.0), Some((400, 300, 1.0)));
+    }
+}
+
+/// What the viewport says when the document has no viewport.
+/// The engine makes none for an empty document; with pieces, either there is no GPU or it failed.
+fn no_view_text(empty: bool, metal: bool) -> &'static str {
+    if empty {
+        "Open a model to begin"
+    } else if !metal {
+        "This Mac has no Metal device, so the model cannot be shown."
+    } else {
+        "The 3D view could not start, so the model cannot be shown."
+    }
+}
+
+#[cfg(test)]
+mod no_view_tests {
+    use super::no_view_text;
+
+    #[test]
+    fn says_no_metal_only_when_metal_is_missing() {
+        assert_eq!(no_view_text(true, true), "Open a model to begin");
+        assert!(no_view_text(false, false).contains("no Metal"));
+        let t = no_view_text(false, true);
+        assert!(!t.contains("Metal") && t.contains("could not start"), "{t}");
     }
 }

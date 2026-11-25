@@ -38,15 +38,22 @@ pub fn ldraw_directory() -> Option<PathBuf> {
     (!d.is_empty()).then(|| PathBuf::from(d))
 }
 
+/// True when this Mac has a Metal device, so viewports can be made.
+pub fn metal_available() -> bool {
+    unsafe { sys::bm_metal_available() }
+}
+
 pub fn engine_version() -> String {
     take_string(unsafe { sys::bm_engine_version() })
 }
 
 /// One open document: its session and the viewport that draws it.
 ///
-/// The engine's viewport points at its session, so the session lives in a `Box` (its address never
-/// moves) and the viewport is always dropped first. A Document may be built on a worker thread
-/// (building the viewport is the slow part of opening) and moved to the thread that draws it.
+/// The engine's viewport keeps its own reference to the engine session it draws, so the two must
+/// stay paired: a Document hands out only `&Session` (edits take `&self`), so nothing can swap the
+/// session for another while the viewport still draws the old one on this thread. The viewport is
+/// dropped first. A Document may be built on a worker thread (building the viewport is the slow
+/// part of opening) and moved, whole, to the thread that draws it.
 pub struct Document {
     // Field order matters: `viewport` drops before `session`.
     viewport: Option<Viewport>,
@@ -65,19 +72,7 @@ impl Document {
         &self.session
     }
 
-    pub fn session_mut(&mut self) -> &mut Session {
-        &mut self.session
-    }
-
     pub fn viewport(&mut self) -> Option<&mut Viewport> {
         self.viewport.as_mut()
-    }
-
-    /// Takes the document `loaded` holds, with a fresh viewport.
-    pub fn replace(&mut self, loaded: Session) {
-        self.viewport = None;
-        self.session.adopt(&loaded);
-        drop(loaded);
-        self.viewport = Viewport::new(self.session.raw);
     }
 }

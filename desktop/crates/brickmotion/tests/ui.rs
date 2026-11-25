@@ -77,7 +77,7 @@ fn screenshots() {
     h.render().unwrap().save(format!("{docs}/m1-animate.png")).unwrap();
 
     let mut h = heli_harness();
-    h.state_mut().doc.session_mut().select(&[0], bm::SelectMode::Replace);
+    h.state_mut().doc.session().select(&[0], bm::SelectMode::Replace);
     h.run_steps(6);
     h.render().unwrap().save(format!("{docs}/m2-document.png")).unwrap();
     h.state_mut().palette.show_palette();
@@ -186,7 +186,7 @@ fn properties_show_project_when_nothing_selected() {
 #[test]
 fn properties_show_one_piece() {
     let mut h = heli_harness();
-    h.state_mut().doc.session_mut().select(&[0], bm::SelectMode::Replace);
+    h.state_mut().doc.session().select(&[0], bm::SelectMode::Replace);
     h.run_steps(2);
     let info = h.state().session().snapshot().described[0].clone();
     assert!(h.query_by_label("Piece").is_some());
@@ -198,7 +198,7 @@ fn properties_show_one_piece() {
 #[test]
 fn properties_show_many() {
     let mut h = heli_harness();
-    h.state_mut().doc.session_mut().select_all();
+    h.state_mut().doc.session().select_all();
     h.run_steps(2);
     let n = h.state().piece_count();
     assert!(h.query_all_by_label(&format!("{n} pieces")).count() >= 3, "title bar, chip and Properties");
@@ -209,7 +209,7 @@ fn properties_show_many() {
 #[test]
 fn properties_say_saved_after_save() {
     let mut h = heli_harness();
-    h.state_mut().doc.session_mut().select(&[0], bm::SelectMode::Replace);
+    h.state_mut().doc.session().select(&[0], bm::SelectMode::Replace);
     assert!(brickmotion::run(h.state_mut(), "edit.delete"));
     h.run_steps(2);
     assert!(h.query_by_label("Edited").is_some());

@@ -4,10 +4,8 @@
 
 #include "bmffi.h"
 #include "bmapp/session.h"
+#include "internal.h"
 
-struct BmSession {
-  bmapp::Session* s;
-};
 struct BmOutline {
   std::vector<bmapp::OutlineRow> rows;
 };

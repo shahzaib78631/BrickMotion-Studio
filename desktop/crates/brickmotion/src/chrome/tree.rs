@@ -196,7 +196,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
         }
     } else if let Some((i, m)) = clicked {
         let pieces = app.tree.pieces_of(app.doc.session(), i).to_vec();
-        app.doc.session_mut().select(&pieces, mode(m));
+        app.doc.session().select(&pieces, mode(m));
     }
     app.tree.last_show = t0.elapsed();
 }

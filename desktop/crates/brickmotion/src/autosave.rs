@@ -26,7 +26,7 @@ impl Autosaver {
         &mut self,
         now: Instant,
         wall: DateTime<Local>,
-        doc: &mut bm::Session,
+        doc: &bm::Session,
         state: &DocState,
         prefs: &Prefs,
         support: &Support,
@@ -53,7 +53,7 @@ impl Autosaver {
         Some(self.save(wall, doc, state, prefs, support))
     }
 
-    fn save(&self, wall: DateTime<Local>, doc: &mut bm::Session, state: &DocState, prefs: &Prefs, support: &Support) -> Result<PathBuf, String> {
+    fn save(&self, wall: DateTime<Local>, doc: &bm::Session, state: &DocState, prefs: &Prefs, support: &Support) -> Result<PathBuf, String> {
         let stem = state.path.as_deref().and_then(Path::file_stem).map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "Untitled".into());
         let dir = support.backups().join(&stem);
         std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
@@ -112,7 +112,7 @@ mod tests {
         s
     }
 
-    fn edit(s: &mut bm::Session) {
+    fn edit(s: &bm::Session) {
         assert_eq!(s.remove(&[0]).refused, None);
     }
 
@@ -126,9 +126,9 @@ mod tests {
 
     /// A project saved at `dir/name.brickmotion`, opened.
     fn project(dir: &Path, name: &str) -> (bm::Session, DocState) {
-        let mut s = open(Path::new(HELI));
+        let s = open(Path::new(HELI));
         let path = dir.join(format!("{name}.brickmotion"));
-        crate::document::save_to(&mut s, &path).unwrap();
+        crate::document::save_to(&s, &path).unwrap();
         (open(&path), DocState { path: Some(path), imported: false })
     }
 
@@ -137,14 +137,14 @@ mod tests {
         let d = tmp("interval");
         let support = Support::at(d.join("support"));
         let prefs = Prefs::default();
-        let (mut s, state) = project(&d, "p");
+        let (s, state) = project(&d, "p");
         let mut a = Autosaver::default();
         let t0 = Instant::now();
-        assert!(a.tick(t0, wall(0), &mut s, &state, &prefs, &support).is_none(), "clean");
-        edit(&mut s);
-        assert!(a.tick(t0, wall(0), &mut s, &state, &prefs, &support).is_none());
-        assert!(a.tick(t0 + Duration::from_secs(29), wall(29), &mut s, &state, &prefs, &support).is_none());
-        assert!(a.tick(t0 + Duration::from_secs(30), wall(30), &mut s, &state, &prefs, &support).is_some());
+        assert!(a.tick(t0, wall(0), &s, &state, &prefs, &support).is_none(), "clean");
+        edit(&s);
+        assert!(a.tick(t0, wall(0), &s, &state, &prefs, &support).is_none());
+        assert!(a.tick(t0 + Duration::from_secs(29), wall(29), &s, &state, &prefs, &support).is_none());
+        assert!(a.tick(t0 + Duration::from_secs(30), wall(30), &s, &state, &prefs, &support).is_some());
     }
 
     #[test]
@@ -152,13 +152,13 @@ mod tests {
         let d = tmp("titled");
         let support = Support::at(d.join("support"));
         let prefs = Prefs { autosave_seconds: 0, backups_kept: 10 };
-        let (mut s, state) = project(&d, "p");
+        let (s, state) = project(&d, "p");
         let n = s.piece_count();
         let mut a = Autosaver::default();
         let t0 = Instant::now();
-        edit(&mut s);
-        a.tick(t0, wall(0), &mut s, &state, &prefs, &support);
-        let r = a.tick(t0 + Duration::from_secs(1), wall(1), &mut s, &state, &prefs, &support).expect("autosaved").unwrap();
+        edit(&s);
+        a.tick(t0, wall(0), &s, &state, &prefs, &support);
+        let r = a.tick(t0 + Duration::from_secs(1), wall(1), &s, &state, &prefs, &support).expect("autosaved").unwrap();
         assert!(!s.dirty());
         assert_eq!(r, support.backups().join("p").join("2026-11-25 10.00.01.brickmotion"));
         assert_eq!(backups(&support, "p").len(), 1);
@@ -170,13 +170,13 @@ mod tests {
         let d = tmp("untitled");
         let support = Support::at(d.join("support"));
         let prefs = Prefs { autosave_seconds: 0, backups_kept: 10 };
-        let mut s = open(Path::new(HELI));
+        let s = open(Path::new(HELI));
         let state = DocState::default();
         let mut a = Autosaver::default();
         let t0 = Instant::now();
-        edit(&mut s);
-        a.tick(t0, wall(0), &mut s, &state, &prefs, &support);
-        a.tick(t0 + Duration::from_secs(1), wall(1), &mut s, &state, &prefs, &support).unwrap().unwrap();
+        edit(&s);
+        a.tick(t0, wall(0), &s, &state, &prefs, &support);
+        a.tick(t0 + Duration::from_secs(1), wall(1), &s, &state, &prefs, &support).unwrap().unwrap();
         assert!(s.dirty());
         assert_eq!(backups(&support, "Untitled").len(), 1);
     }
@@ -189,13 +189,13 @@ mod tests {
         let src = d.join("heli.mpd");
         std::fs::copy(HELI, &src).unwrap();
         let before = std::fs::read(&src).unwrap();
-        let mut s = open(&src);
+        let s = open(&src);
         let state = DocState { path: Some(src.clone()), imported: true };
         let mut a = Autosaver::default();
         let t0 = Instant::now();
-        edit(&mut s);
-        a.tick(t0, wall(0), &mut s, &state, &prefs, &support);
-        a.tick(t0 + Duration::from_secs(1), wall(1), &mut s, &state, &prefs, &support).unwrap().unwrap();
+        edit(&s);
+        a.tick(t0, wall(0), &s, &state, &prefs, &support);
+        a.tick(t0 + Duration::from_secs(1), wall(1), &s, &state, &prefs, &support).unwrap().unwrap();
         assert_eq!(std::fs::read(&src).unwrap(), before);
         assert!(s.dirty());
         assert_eq!(backups(&support, "heli").len(), 1);
@@ -206,14 +206,14 @@ mod tests {
         let d = tmp("prune");
         let support = Support::at(d.join("support"));
         let prefs = Prefs { autosave_seconds: 0, backups_kept: 3 };
-        let mut s = open(Path::new(HELI));
+        let s = open(Path::new(HELI));
         let state = DocState::default();
         let mut a = Autosaver::default();
         let t0 = Instant::now();
         for i in 0..5u32 {
-            edit(&mut s);
-            a.tick(t0 + Duration::from_secs(2 * i as u64), wall(2 * i), &mut s, &state, &prefs, &support);
-            a.tick(t0 + Duration::from_secs(2 * i as u64 + 1), wall(2 * i + 1), &mut s, &state, &prefs, &support);
+            edit(&s);
+            a.tick(t0 + Duration::from_secs(2 * i as u64), wall(2 * i), &s, &state, &prefs, &support);
+            a.tick(t0 + Duration::from_secs(2 * i as u64 + 1), wall(2 * i + 1), &s, &state, &prefs, &support);
         }
         assert_eq!(
             backups(&support, "Untitled"),
@@ -227,14 +227,14 @@ mod tests {
         let d = tmp("same");
         let support = Support::at(d.join("support"));
         let prefs = Prefs { autosave_seconds: 0, backups_kept: 10 };
-        let mut s = open(Path::new(HELI));
+        let s = open(Path::new(HELI));
         let state = DocState::default();
         let mut a = Autosaver::default();
         let t0 = Instant::now();
-        edit(&mut s);
-        a.tick(t0, wall(0), &mut s, &state, &prefs, &support);
-        assert!(a.tick(t0 + Duration::from_secs(1), wall(1), &mut s, &state, &prefs, &support).is_some());
-        assert!(a.tick(t0 + Duration::from_secs(5), wall(5), &mut s, &state, &prefs, &support).is_none());
+        edit(&s);
+        a.tick(t0, wall(0), &s, &state, &prefs, &support);
+        assert!(a.tick(t0 + Duration::from_secs(1), wall(1), &s, &state, &prefs, &support).is_some());
+        assert!(a.tick(t0 + Duration::from_secs(5), wall(5), &s, &state, &prefs, &support).is_none());
         assert_eq!(backups(&support, "Untitled").len(), 1);
     }
 }

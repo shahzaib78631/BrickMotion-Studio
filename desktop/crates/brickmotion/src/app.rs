@@ -266,7 +266,7 @@ impl BrickMotionApp {
     }
 
     fn write(&mut self, path: PathBuf) {
-        match save_to(self.doc.session_mut(), &path) {
+        match save_to(self.doc.session(), &path) {
             Ok(()) => {
                 self.state = DocState { path: Some(path.clone()), imported: false };
                 self.remember(path);
@@ -283,7 +283,7 @@ impl BrickMotionApp {
         if !self.has_document {
             return;
         }
-        let r = self.autosaver.tick(now, chrono::Local::now(), self.doc.session_mut(), &self.state, &self.prefs, &self.support);
+        let r = self.autosaver.tick(now, chrono::Local::now(), self.doc.session(), &self.state, &self.prefs, &self.support);
         match r {
             Some(Ok(_)) => self.autosave_error = None,
             Some(Err(e)) if self.autosave_error.as_ref() != Some(&e) => {
@@ -356,7 +356,7 @@ impl BrickMotionApp {
 
     /// Does what command `id` does; `commands::run` has already checked it is enabled.
     pub(crate) fn execute(&mut self, id: &str) -> bool {
-        let s = self.doc.session_mut();
+        let s = self.doc.session();
         match id {
             "file.open" | "model.import" => self.open_dialog(),
             "file.new" => self.new_document(),
