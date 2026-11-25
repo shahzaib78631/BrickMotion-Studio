@@ -16,6 +16,7 @@ pub mod timeline;
 pub mod titlebar;
 pub mod tree;
 pub mod viewbar;
+pub mod widgets;
 
 use egui::{
     Align2, Color32, CornerRadius, FontId, Frame, Margin, Rect, Response, Sense, Shadow, Stroke, Ui, Vec2, WidgetInfo,

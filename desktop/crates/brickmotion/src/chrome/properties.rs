@@ -4,42 +4,126 @@ use std::collections::BTreeMap;
 
 use egui::{Area, CollapsingHeader, Color32, Frame, Id, Margin, Order, Rect, RichText, Sense, Stroke, Ui, vec2};
 
-use super::{float_frame, icon_button, panel_header};
+use super::{float_frame, icon_button, icon_button_tip, panel_header};
 use crate::BrickMotionApp;
 use crate::icons::Icon;
 
-const WIDTH: f32 = 292.0;
+const INSPECTOR_WIDTH: f32 = 292.0;
+pub const SETTINGS_WIDTH: f32 = 344.0;
 /// Distinct parts listed for a many-piece selection.
 const PART_ROWS: usize = 8;
 
+/// Which page the right-hand Properties panel is currently showing.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Page {
+    #[default]
+    Inspector,
+    BuildSettings,
+    Staging,
+    SnapSound,
+}
+
+impl Page {
+    pub fn is_settings(self) -> bool {
+        self != Page::Inspector
+    }
+
+    pub fn title(self) -> &'static str {
+        match self {
+            Page::Inspector => "Properties",
+            Page::BuildSettings => "Build Settings",
+            Page::Staging => "Build Staging",
+            Page::SnapSound => "Snap Sound",
+        }
+    }
+}
+
 pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
     let t = app.theme;
-    let snap = app.snapshot();
+    let page = app.properties_page;
+    let width = if page.is_settings() { SETTINGS_WIDTH } else { INSPECTOR_WIDTH };
+    let top = if page.is_settings() { area.top() + 10.0 } else { area.top() + 122.0 };
+    let max_h = (area.bottom() - top - 12.0).max(200.0);
+
     let mut run: Option<&'static str> = None;
+    let mut go_back = false;
+
     Area::new(Id::unique("properties"))
         .order(Order::Middle)
-        .fixed_pos(egui::pos2(area.right() - 10.0 - WIDTH, area.top() + 122.0))
+        .fixed_pos(egui::pos2(area.right() - 10.0 - width, top))
         .constrain_to(area)
         .show(ui.ctx(), |ui| {
-            float_frame(&t).show(ui, |ui| {
-                ui.set_width(WIDTH);
+            let mut frame = float_frame(&t);
+            if page.is_settings() {
+                frame = frame.fill(Color32::from_rgba_unmultiplied(0x1c, 0x1d, 0x21, 251));
+            }
+            frame.show(ui, |ui| {
+                ui.set_width(width);
+                ui.set_max_height(max_h);
                 ui.spacing_mut().item_spacing.y = 0.0;
-                panel_header(ui, &t, "Properties", |ui| {
-                    icon_button(ui, &t, Icon::Close, "Hide Properties", false, false, 24.0);
-                });
-                Frame::NONE.inner_margin(Margin::symmetric(14, 10)).show(ui, |ui| {
-                    ui.spacing_mut().item_spacing.y = 4.0;
-                    match snap.selected {
-                        0 => project(ui, app, &snap, &mut run),
-                        1 if !snap.described.is_empty() => piece(ui, app, &snap.described[0], &mut run),
-                        _ => many(ui, app, &snap),
+
+                if page == Page::Inspector {
+                    let snap = app.snapshot();
+                    panel_header(ui, &t, "Properties", |ui| {
+                        icon_button(ui, &t, Icon::Close, "Hide Properties", false, false, 24.0);
+                    });
+                    Frame::NONE.inner_margin(Margin::symmetric(14, 10)).show(ui, |ui| {
+                        ui.spacing_mut().item_spacing.y = 4.0;
+                        match snap.selected {
+                            0 => project(ui, app, &snap, &mut run),
+                            1 if !snap.described.is_empty() => piece(ui, app, &snap.described[0], &mut run),
+                            _ => many(ui, app, &snap),
+                        }
+                    });
+                } else {
+                    if page_header(ui, &t, page.title()) {
+                        go_back = true;
                     }
-                });
+                    let body_max_h = (max_h - 40.0).max(160.0);
+                    match page {
+                        Page::Inspector => {}
+                        Page::BuildSettings | Page::Staging | Page::SnapSound => {
+                            egui::ScrollArea::vertical()
+                                .id_salt(("properties-page", page))
+                                .max_height(body_max_h)
+                                .auto_shrink([false, true])
+                                .show(ui, |ui| {
+                                    ui.add_space(12.0);
+                                    ui.label(RichText::new(page.title()).color(t.text2));
+                                });
+                        }
+                    }
+                }
             });
         });
+
+    if go_back {
+        app.properties_page = Page::Inspector;
+    }
     if let Some(id) = run {
         app.requested.push(id);
     }
+}
+
+fn page_header(ui: &mut Ui, t: &crate::Theme, title: &str) -> bool {
+    let mut back = false;
+    Frame::NONE
+        .inner_margin(Margin { left: 8, right: 10, top: 0, bottom: 0 })
+        .show(ui, |ui| {
+            ui.set_height(40.0);
+            ui.horizontal_centered(|ui| {
+                if icon_button_tip(ui, t, Icon::Back, "Back to Properties", "Back to Properties", true, false, 26.0)
+                    .clicked()
+                {
+                    back = true;
+                }
+                ui.add_space(2.0);
+                ui.label(RichText::new(title).size(13.0).strong().color(t.text1));
+            });
+        });
+    let r = ui.min_rect();
+    ui.painter().hline(r.x_range(), ui.cursor().top(), Stroke::new(0.5, Color32::from_white_alpha(18)));
+    back
 }
 
 fn section(ui: &mut Ui, title: &str, body: impl FnOnce(&mut Ui)) {

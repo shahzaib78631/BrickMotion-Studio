@@ -10,7 +10,12 @@ const SIZE: f32 = 96.0;
 
 pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
     let t = app.theme;
-    let origin = pos2(area.right() - 14.0 - SIZE, area.top() + 10.0);
+    let right_margin = if app.properties_page.is_settings() {
+        super::properties::SETTINGS_WIDTH + 24.0
+    } else {
+        14.0
+    };
+    let origin = pos2(area.right() - right_margin - SIZE, area.top() + 10.0);
     Area::new(Id::unique("navigator")).order(Order::Middle).fixed_pos(origin).show(ui.ctx(), |ui| {
         let (r, _) = ui.allocate_exact_size(vec2(SIZE, SIZE), Sense::hover());
         let s = SIZE / 64.0;

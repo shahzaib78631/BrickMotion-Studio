@@ -146,6 +146,8 @@ pub struct BrickMotionApp {
     pub transport: crate::transport::Transport,
     /// Build timeline zoom, scroll, track disclosure and drag state.
     pub timeline: chrome::timeline::TimelineState,
+    /// Active page in the right-hand Properties panel.
+    pub properties_page: chrome::properties::Page,
 }
 
 impl BrickMotionApp {
@@ -213,6 +215,7 @@ impl BrickMotionApp {
             clipboard_fails: false,
             transport: crate::transport::Transport::default(),
             timeline: chrome::timeline::TimelineState::default(),
+            properties_page: chrome::properties::Page::Inspector,
         };
         // Opened once the first frame knows the view's size, so the worker can draw it warm.
         app.startup = path.map(|p| std::path::absolute(&p).unwrap_or(p));
@@ -312,6 +315,7 @@ impl BrickMotionApp {
         self.timeline.scrubbing = false;
         self.timeline.view.fit();
         self.timeline.parts_lane.clear();
+        self.properties_page = chrome::properties::Page::Inspector;
         // The old document (and its renderer) goes, off this thread; the widget sets the new one up.
         crate::loader::retire(std::mem::replace(&mut self.doc, doc));
         self.viewport.reset();
@@ -815,6 +819,7 @@ impl BrickMotionApp {
         self.timeline.scrubbing = false;
         self.timeline.view.fit();
         self.timeline.parts_lane.clear();
+        self.properties_page = chrome::properties::Page::Inspector;
         let mut s = bm::Session::new();
         match s.new_blank() {
             Ok(_) => {
