@@ -1024,8 +1024,10 @@ impl eframe::App for BrickMotionApp {
                 self.menu_shown = Some(key);
             }
         }
-        if self.transport.state.playing || self.transport.state.waiting_to_play || self.transport.busy() {
+        if self.transport.state.playing || self.transport.state.waiting_to_play {
             ui.ctx().request_repaint();
+        } else if self.transport.busy() {
+            ui.ctx().request_repaint_after(Duration::from_millis(50));
         } else if self.has_document {
             ui.ctx().request_repaint_after(Duration::from_millis(250));
         }

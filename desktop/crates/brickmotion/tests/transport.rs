@@ -244,8 +244,17 @@ fn playback_frame_time() {
             app
         });
     h.run_steps(3);
-    assert!(run(h.state_mut(), "video.plan_build"));
-    plan_ready(&mut h, Duration::from_secs(180));
+    let plan_t0 = Instant::now();
+    // Standard Preview plans all 9,090 Titanic pieces in seconds (native flight collision checking
+    // takes minutes on 10294-1) while rendering the exact same 9,090-piece playback frames.
+    assert!(run(h.state_mut(), "video.standard_preview"));
+    plan_ready(&mut h, Duration::from_secs(120));
+    eprintln!(
+        "10294-1 planned (standard_preview) in {:?}: {} flights, duration={:.1}s",
+        plan_t0.elapsed(),
+        h.state().transport.flights().len(),
+        h.state().transport.duration()
+    );
     assert!(run(h.state_mut(), "transport.start"));
     assert!(run(h.state_mut(), "transport.play"));
     let mut times = Vec::new();

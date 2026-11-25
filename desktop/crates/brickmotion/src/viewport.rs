@@ -115,6 +115,7 @@ pub struct ViewportWidget {
     hovered: Handle,
     drag: Option<GizmoDrag>,
     last_auto_plan: Option<bool>,
+    last_plan_poll: Option<std::time::Instant>,
 }
 
 impl ViewportWidget {
@@ -374,16 +375,29 @@ impl ViewportWidget {
         }
 
         let Some(vp) = doc.viewport() else { return };
-        if changed || playing || planning || vp.needs_draw() || self.texture.is_none() {
-            if vp.draw() {
+        let only_planning_poll = planning && !playing && !changed && self.texture.is_some();
+        let poll_due = !only_planning_poll
+            || self.last_plan_poll.is_none_or(|t| t.elapsed() >= std::time::Duration::from_millis(120));
+        if poll_due && (changed || playing || planning || vp.needs_draw() || self.texture.is_none()) {
+            let want_more = vp.draw();
+            if only_planning_poll {
+                self.last_plan_poll = Some(std::time::Instant::now());
+            } else {
+                self.last_plan_poll = None;
+            }
+            if want_more && !only_planning_poll {
                 ui.ctx().request_repaint();
             }
-            vp.read_frame(&mut self.frame);
-            if self.frame.width > 0 && self.frame.height > 0 {
-                let image = ColorImage::from_rgba_unmultiplied([self.frame.width as usize, self.frame.height as usize], &self.frame.rgba);
-                match &mut self.texture {
-                    Some(t) => t.set(image, TextureOptions::LINEAR),
-                    None => self.texture = Some(ui.ctx().load_texture("viewport", image, TextureOptions::LINEAR)),
+            // Skip 20 MB readback + upload while still planning an unchanged frame.
+            let still_planning = only_planning_poll && vp.playback_state().plan == bm::playback::PlanState::Planning;
+            if !still_planning {
+                vp.read_frame(&mut self.frame);
+                if self.frame.width > 0 && self.frame.height > 0 {
+                    let image = ColorImage::from_rgba_unmultiplied([self.frame.width as usize, self.frame.height as usize], &self.frame.rgba);
+                    match &mut self.texture {
+                        Some(t) => t.set(image, TextureOptions::LINEAR),
+                        None => self.texture = Some(ui.ctx().load_texture("viewport", image, TextureOptions::LINEAR)),
+                    }
                 }
             }
         }
