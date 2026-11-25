@@ -4,6 +4,7 @@ pub mod geom;
 pub mod gizmo;
 pub mod library;
 mod outline;
+pub mod placement;
 mod session;
 mod viewport;
 

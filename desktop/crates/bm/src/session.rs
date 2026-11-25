@@ -3,7 +3,7 @@ use std::path::Path;
 
 use bm_sys as sys;
 
-use crate::{Changed, ColorInfo, Mat3, OpenError, OutlineRow, PieceInfo, Snapshot, Vec3, borrowed, take_string};
+use crate::{Changed, ColorInfo, Mat3, OpenError, OutlineRow, PieceInfo, Pose, Snapshot, Vec3, borrowed, take_string};
 
 /// What opening a file reported besides success.
 #[derive(Debug, Clone, Default)]
@@ -214,6 +214,37 @@ impl Session {
             return Changed { structure: false, version: self.version(), refused: Some("clipboard text contains a NUL byte".into()) };
         };
         take_change(unsafe { sys::bm_session_paste(self.raw, c.as_ptr(), offset.to_raw()) })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn place_part(
+        &self,
+        part: &str,
+        color: i32,
+        pose: &Pose,
+        step: Option<usize>,
+        before: Option<usize>,
+        generation: u64,
+        version: u64,
+    ) -> Changed {
+        let Ok(c) = CString::new(part) else {
+            return Changed { structure: false, version: self.version(), refused: Some("invalid part name".into()) };
+        };
+        let step_i = step.and_then(|s| i32::try_from(s).ok()).unwrap_or(-1);
+        let before_i = before.and_then(|b| i32::try_from(b).ok()).unwrap_or(-1);
+        take_change(unsafe {
+            sys::bm_session_place_part(
+                self.raw,
+                c.as_ptr(),
+                color,
+                pose.rotation.to_raw(),
+                pose.position.to_raw(),
+                step_i,
+                before_i,
+                generation,
+                version,
+            )
+        })
     }
 
     /// Every piece not hidden.

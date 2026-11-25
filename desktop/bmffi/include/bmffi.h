@@ -219,6 +219,45 @@ BMFFI_API void bm_picture_info(const BmPicture* p, int* w, int* h);
 BMFFI_API const uint8_t* bm_picture_rgba(const BmPicture* p);
 BMFFI_API void bm_picture_free(BmPicture* p);
 
+// ---- Placement ----
+typedef enum {
+  BM_PLACE_INACTIVE,
+  BM_PLACE_PREPARING,
+  BM_PLACE_FREE,
+  BM_PLACE_SNAPPED,
+  BM_PLACE_REFERENCE,
+  BM_PLACE_BLOCKED,
+  BM_PLACE_UNAVAILABLE
+} BmPlacementState;
+
+typedef struct {
+  const char* part;
+  int32_t color, grip, turns;
+  bool mirrored, snap, reference, collision;
+  uint32_t anchor;
+  BmVec2 grab;
+  const uint32_t* selection;
+  size_t selection_len;
+} BmPlacementInput;
+
+typedef struct {
+  BmPlacementState state;
+  BmMat3 rotation;
+  BmVec3 position, contact;
+  uint32_t grip, grip_count;
+  uint64_t generation, version, request;
+  BmString reason;
+} BmPlacementPreview;
+
+BMFFI_API void bm_placement_preview_free(BmPlacementPreview p);
+BMFFI_API uint64_t bm_viewport_preview_part(BmViewport* v, const BmPlacementInput* input, BmVec2 point);
+BMFFI_API BmPlacementPreview bm_viewport_placement_preview(const BmViewport* v);
+BMFFI_API void bm_viewport_clear_placement_preview(BmViewport* v);
+BMFFI_API void bm_viewport_show_rest(BmViewport* v);
+BMFFI_API BmChange bm_session_place_part(BmSession* s, const char* part, int32_t color, BmMat3 rotation,
+                                         BmVec3 position, int32_t step, int32_t before, uint64_t generation,
+                                         uint64_t version);
+
 #ifdef __cplusplus
 }
 #endif

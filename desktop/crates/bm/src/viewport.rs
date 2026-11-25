@@ -1,6 +1,9 @@
+use std::ffi::CString;
+
 use bm_sys as sys;
 
-use crate::{Camera, Vec3};
+use crate::placement::{PlacementInput, PlacementPreview};
+use crate::{Camera, Vec2, Vec3};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ViewPreset {
@@ -130,6 +133,37 @@ impl Viewport {
 
     pub fn selection_center(&mut self) -> Vec3 {
         Vec3::from_raw(unsafe { sys::bm_viewport_selection_center(self.raw) })
+    }
+
+    pub fn preview_part(&mut self, input: &PlacementInput, at: Vec2) -> u64 {
+        let Ok(part) = CString::new(input.part.as_str()) else { return 0 };
+        let raw = sys::BmPlacementInput {
+            part: part.as_ptr(),
+            color: input.color,
+            grip: input.grip,
+            turns: input.turns,
+            mirrored: input.mirrored,
+            snap: input.snap,
+            reference: input.reference,
+            collision: input.collision,
+            anchor: input.anchor.unwrap_or(sys::BM_NO_PIECE),
+            grab: input.grab.to_raw(),
+            selection: input.selection.as_ptr(),
+            selection_len: input.selection.len(),
+        };
+        unsafe { sys::bm_viewport_preview_part(self.raw, &raw, at.to_raw()) }
+    }
+
+    pub fn placement_preview(&self) -> PlacementPreview {
+        PlacementPreview::from_raw(unsafe { sys::bm_viewport_placement_preview(self.raw) })
+    }
+
+    pub fn clear_placement_preview(&mut self) {
+        unsafe { sys::bm_viewport_clear_placement_preview(self.raw) }
+    }
+
+    pub fn show_rest(&mut self) {
+        unsafe { sys::bm_viewport_show_rest(self.raw) }
     }
 }
 

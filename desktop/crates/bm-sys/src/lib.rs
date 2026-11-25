@@ -195,6 +195,46 @@ pub struct BmPicture {
     _private: [u8; 0],
 }
 
+pub type BmPlacementState = u32;
+pub const BM_PLACE_INACTIVE: BmPlacementState = 0;
+pub const BM_PLACE_PREPARING: BmPlacementState = 1;
+pub const BM_PLACE_FREE: BmPlacementState = 2;
+pub const BM_PLACE_SNAPPED: BmPlacementState = 3;
+pub const BM_PLACE_REFERENCE: BmPlacementState = 4;
+pub const BM_PLACE_BLOCKED: BmPlacementState = 5;
+pub const BM_PLACE_UNAVAILABLE: BmPlacementState = 6;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct BmPlacementInput {
+    pub part: *const c_char,
+    pub color: i32,
+    pub grip: i32,
+    pub turns: i32,
+    pub mirrored: bool,
+    pub snap: bool,
+    pub reference: bool,
+    pub collision: bool,
+    pub anchor: u32,
+    pub grab: BmVec2,
+    pub selection: *const u32,
+    pub selection_len: usize,
+}
+
+#[repr(C)]
+pub struct BmPlacementPreview {
+    pub state: BmPlacementState,
+    pub rotation: BmMat3,
+    pub position: BmVec3,
+    pub contact: BmVec3,
+    pub grip: u32,
+    pub grip_count: u32,
+    pub generation: u64,
+    pub version: u64,
+    pub request: u64,
+    pub reason: BmString,
+}
+
 unsafe extern "C" {
     pub fn bm_string_free(s: BmString);
     pub fn bm_ldraw_directory() -> BmString;
@@ -305,6 +345,13 @@ unsafe extern "C" {
     pub fn bm_picture_info(p: *const BmPicture, w: *mut i32, h: *mut i32);
     pub fn bm_picture_rgba(p: *const BmPicture) -> *const u8;
     pub fn bm_picture_free(p: *mut BmPicture);
+
+    pub fn bm_placement_preview_free(p: BmPlacementPreview);
+    pub fn bm_viewport_preview_part(v: *mut BmViewport, input: *const BmPlacementInput, point: BmVec2) -> u64;
+    pub fn bm_viewport_placement_preview(v: *const BmViewport) -> BmPlacementPreview;
+    pub fn bm_viewport_clear_placement_preview(v: *mut BmViewport);
+    pub fn bm_viewport_show_rest(v: *mut BmViewport);
+    pub fn bm_session_place_part(s: *mut BmSession, part: *const c_char, color: i32, rotation: BmMat3, position: BmVec3, step: i32, before: i32, generation: u64, version: u64) -> BmChange;
 }
 
 /// Every function declared above, for the header agreement test.
@@ -335,4 +382,6 @@ pub const DECLARED: &[&str] = &[
     "bm_part_categories", "bm_strings_len", "bm_strings_at", "bm_strings_free",
     "bm_part_preview_new", "bm_part_preview_free", "bm_part_preview_render",
     "bm_picture_info", "bm_picture_rgba", "bm_picture_free",
+    "bm_placement_preview_free", "bm_viewport_preview_part", "bm_viewport_placement_preview",
+    "bm_viewport_clear_placement_preview", "bm_viewport_show_rest", "bm_session_place_part",
 ];
