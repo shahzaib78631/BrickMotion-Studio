@@ -5,6 +5,7 @@ pub mod library;
 pub mod navigator;
 pub mod notices;
 pub mod parts;
+pub mod parts_lane;
 pub mod properties;
 pub mod replace;
 pub mod ribbon;

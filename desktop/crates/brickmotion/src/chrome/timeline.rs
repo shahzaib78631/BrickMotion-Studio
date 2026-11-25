@@ -52,6 +52,11 @@ pub enum TimelineDrag {
         original: f64,
         seconds: f64,
     },
+    Arrival {
+        pieces: Vec<u32>,
+        start_x: f32,
+        target: Option<bm::timeline::ArrivalTarget>,
+    },
 }
 
 pub struct TimelineState {
@@ -67,6 +72,7 @@ pub struct TimelineState {
     pub last_ruler_rect: Option<Rect>,
     pub last_parts_rect: Option<Rect>,
     pub last_frame_time: Duration,
+    pub parts_lane: super::parts_lane::PartsLane,
 }
 
 impl Default for TimelineState {
@@ -86,6 +92,7 @@ impl Default for TimelineState {
             last_ruler_rect: None,
             last_parts_rect: None,
             last_frame_time: Duration::ZERO,
+            parts_lane: super::parts_lane::PartsLane::default(),
         }
     }
 }
@@ -379,7 +386,7 @@ struct RowLayout {
 }
 
 impl RowLayout {
-    fn from_app(app: &BrickMotionApp) -> Self {
+    fn from_app(app: &mut BrickMotionApp) -> Self {
         let build_open = app.timeline.open.contains(&Track::Build) && app.transport.lanes.is_some();
         let mut depths: Vec<i32> = app
             .transport
@@ -392,13 +399,19 @@ impl RowLayout {
                 ds
             })
             .unwrap_or_default();
+        let parts_h = if build_open && let Some(tl) = app.transport.timeline.clone() {
+            app.timeline.parts_lane.ensure_layout(&tl, &app.timeline.view, &app.transport.pins);
+            app.timeline.parts_lane.height()
+        } else {
+            PARTS_PLACEHOLDER_H
+        };
         if !build_open {
             depths.clear();
         }
         Self {
             build_open,
             submodel_depths: depths,
-            parts_h: PARTS_PLACEHOLDER_H,
+            parts_h,
         }
     }
 }
@@ -567,7 +580,7 @@ fn timeline_body(ui: &mut Ui, app: &mut BrickMotionApp, heads: Rect, lanes: Rect
                         );
                     }
 
-                    // 2e. Parts (populated in Task 7)
+                    // 2e. Parts lane
                     split_row(
                         ui,
                         heads.width(),
@@ -578,6 +591,7 @@ fn timeline_body(ui: &mut Ui, app: &mut BrickMotionApp, heads: Rect, lanes: Rect
                         |ui, lr| {
                             ui.painter().rect_filled(lr, 0.0, sub_bg);
                             app.timeline.last_parts_rect = Some(lr);
+                            super::parts_lane::show(ui, app, lr, dur);
                         },
                     );
                 }
@@ -865,13 +879,20 @@ fn handle_navigation_and_drags(
         }
     }
 
-    // Escape cancels Hold / Trim drag without committing.
-    if esc && matches!(app.timeline.drag, Some(TimelineDrag::Hold { .. } | TimelineDrag::Trim { .. })) {
+    // Escape cancels Hold / Trim / Arrival drag without committing.
+    if esc
+        && matches!(
+            app.timeline.drag,
+            Some(TimelineDrag::Hold { .. } | TimelineDrag::Trim { .. } | TimelineDrag::Arrival { .. })
+        )
+    {
         app.timeline.drag = None;
     }
 
     // Active drag continuation & global release (even outside the window — Review Focus 5).
-    if let Some(drag) = app.timeline.drag.clone() {
+    if matches!(app.timeline.drag, Some(TimelineDrag::Arrival { .. })) {
+        super::parts_lane::tick_arrival_drag(ui, app, lanes, dur, primary_down, latest_pos, mods.alt);
+    } else if let Some(drag) = app.timeline.drag.clone() {
         if primary_down {
             if let Some(pos) = latest_pos {
                 let local_x = (pos.x - lanes.left()) as f64;
@@ -900,6 +921,7 @@ fn handle_navigation_and_drags(
                         let seconds = ((raw * 10.0).round() / 10.0).clamp(lo, hi);
                         app.timeline.drag = Some(TimelineDrag::Trim { segment, start_x, original, seconds });
                     }
+                    TimelineDrag::Arrival { .. } => {}
                 }
             }
         } else {
@@ -907,7 +929,7 @@ fn handle_navigation_and_drags(
             app.timeline.drag = None;
             app.timeline.scrubbing = false;
             match drag {
-                TimelineDrag::Scrub => {}
+                TimelineDrag::Scrub | TimelineDrag::Arrival { .. } => {}
                 TimelineDrag::Hold { step, original, seconds, .. } => {
                     if (seconds - original).abs() >= 0.05 {
                         commit_hold(app, step, seconds);

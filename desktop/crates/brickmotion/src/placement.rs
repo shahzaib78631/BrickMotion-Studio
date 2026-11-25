@@ -18,6 +18,7 @@ pub struct Placement {
     generation: u64,
     version: u64,
     step: Option<usize>,
+    before: Option<usize>,
     awaiting: bool,
     pub state: PlacementState,
     pub reason: String,
@@ -31,6 +32,20 @@ impl Placement {
         colour: i32,
         collision: bool,
         step: Option<usize>,
+        session: &Session,
+        vp: &mut Viewport,
+        at: Vec2,
+    ) -> Placement {
+        Self::begin_at(part, colour, collision, step, None, session, vp, at)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn begin_at(
+        part: PartMatch,
+        colour: i32,
+        collision: bool,
+        step: Option<usize>,
+        before: Option<usize>,
         session: &Session,
         vp: &mut Viewport,
         at: Vec2,
@@ -51,6 +66,7 @@ impl Placement {
             generation: session.generation(),
             version: session.version(),
             step,
+            before,
             awaiting: false,
             state: PlacementState::Preparing,
             reason: String::new(),
@@ -139,7 +155,7 @@ impl Placement {
                     self.input.color,
                     &preview.pose,
                     self.step,
-                    None,
+                    self.before,
                     preview.generation,
                     preview.version,
                 );
@@ -218,6 +234,7 @@ mod tests {
             generation: s.generation(),
             version: s.version(),
             step: None,
+            before: None,
             awaiting: false,
             state: PlacementState::Preparing,
             reason: String::new(),

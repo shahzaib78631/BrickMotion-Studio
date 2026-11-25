@@ -17,6 +17,10 @@ const COLS: usize = 4;
 const MAX_H: f32 = 380.0;
 const SEARCH_LIMIT: usize = 200;
 
+/// Drag-and-drop payload when dragging a part tile from the Library onto the Parts lane.
+#[derive(Clone, Debug)]
+pub struct LibraryDrag(pub PartMatch);
+
 #[derive(Default)]
 pub struct LibraryState {
     pub category: String,
@@ -200,12 +204,33 @@ fn tile_row(ui: &mut Ui, app: &mut BrickMotionApp, items: &[PartMatch], colour: 
     picked
 }
 
-/// One 64-pt square part tile with its short name underneath and a description hover card.
+/// One 64-pt square part tile with its short name underneath, hover card, and DnD payload.
 pub fn part_tile(ui: &mut Ui, app: &mut BrickMotionApp, part: &PartMatch, colour: i32) -> bool {
     let t = app.theme;
     let short = short_name(&part.name);
-    let (rect, resp) = ui.allocate_exact_size(vec2(TILE_W, TILE_H), Sense::click());
+    let (rect, resp) = ui.allocate_exact_size(vec2(TILE_W, TILE_H), Sense::click_and_drag());
     resp.widget_info(|| WidgetInfo::labeled(egui::Role::Button, true, short));
+    if resp.drag_started() {
+        egui::DragAndDrop::set_payload(ui.ctx(), LibraryDrag(part.clone()));
+    }
+    if resp.dragged()
+        && let Some(pos) = ui.input(|i| i.pointer.latest_pos())
+    {
+        egui::Area::new(egui::Id::unique("lib-drag-pill"))
+            .order(egui::Order::Tooltip)
+            .interactable(false)
+            .fixed_pos(pos + vec2(12.0, 12.0))
+            .show(ui.ctx(), |ui| {
+                Frame::NONE
+                    .fill(t.bg2)
+                    .stroke(Stroke::new(1.0, t.accent))
+                    .corner_radius(6)
+                    .inner_margin(Margin::symmetric(8, 4))
+                    .show(ui, |ui| {
+                        ui.label(RichText::new(short).size(11.5).color(t.text1));
+                    });
+            });
+    }
 
     let img_rect = Rect::from_min_size(rect.min, vec2(TILE_W, TILE_W));
     let bg = if resp.hovered() { t.bg3 } else { t.bg1 };

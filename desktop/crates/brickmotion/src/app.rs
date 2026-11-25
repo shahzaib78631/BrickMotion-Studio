@@ -311,6 +311,7 @@ impl BrickMotionApp {
         self.timeline.drag = None;
         self.timeline.scrubbing = false;
         self.timeline.view.fit();
+        self.timeline.parts_lane.clear();
         // The old document (and its renderer) goes, off this thread; the widget sets the new one up.
         crate::loader::retire(std::mem::replace(&mut self.doc, doc));
         self.viewport.reset();
@@ -701,6 +702,12 @@ impl BrickMotionApp {
 
     /// Starts placing a library part in the viewport with a live snapping preview.
     pub fn begin_placement(&mut self, part: bm::library::PartMatch) {
+        let step = self.edit.step;
+        self.begin_placement_at(part, step, None);
+    }
+
+    /// Starts placing a library part targeting a specific `(step, before)` arrival slot.
+    pub fn begin_placement_at(&mut self, part: bm::library::PartMatch, step: Option<usize>, before: Option<usize>) {
         if !self.has_document {
             return;
         }
@@ -711,11 +718,10 @@ impl BrickMotionApp {
             .unwrap_or_else(|| bm::Vec2::new(320.0, 240.0));
         let colour = self.edit.colour;
         let collision = self.edit.collision;
-        let step = self.edit.step;
         let p = {
             let (session, vp) = self.doc.parts();
             let Some(vp) = vp else { return };
-            crate::placement::Placement::begin(part, colour, collision, step, session, vp, at)
+            crate::placement::Placement::begin_at(part, colour, collision, step, before, session, vp, at)
         };
         self.edit.placement = Some(p);
     }
@@ -772,6 +778,7 @@ impl BrickMotionApp {
         self.timeline.drag = None;
         self.timeline.scrubbing = false;
         self.timeline.view.fit();
+        self.timeline.parts_lane.clear();
         let mut s = bm::Session::new();
         match s.new_blank() {
             Ok(_) => {

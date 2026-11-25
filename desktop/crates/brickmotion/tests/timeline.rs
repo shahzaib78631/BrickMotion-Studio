@@ -296,3 +296,403 @@ fn big_model_timeline_frame() {
     eprintln!("big_model_timeline_frame (10294-1): slowest timeline frame = {slowest:?}");
     assert!(slowest < Duration::from_millis(16), "timeline frame {slowest:?} >= 16 ms");
 }
+
+// ---- Task 7: Parts lane tests ----
+
+fn zoom_in_parts(h: &mut Harness<'static, BrickMotionApp>) {
+    let dur = h.state().transport.duration();
+    h.state_mut().timeline.view.zoom_by(32.0, 2.0, dur);
+    h.state_mut().timeline.view.reveal(2.0, dur, true);
+    h.run_steps(3);
+    assert!(h.state().timeline.parts_lane.zoomed_in, "expected zoomed-in clips");
+}
+
+#[test]
+fn lane_clips_match_flights() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = animate_harness();
+    zoom_in_parts(&mut h);
+    let flights_len = h.state().transport.flights().len();
+    let lane = &h.state().timeline.parts_lane;
+    assert_eq!(lane.clips.len(), flights_len);
+    // No two clips in the same row may overlap.
+    let mut by_row: std::collections::HashMap<u32, Vec<(f32, f32)>> = std::collections::HashMap::new();
+    for c in &lane.clips {
+        by_row.entry(c.row).or_default().push((c.x, c.x + c.width));
+    }
+    for (row, mut spans) in by_row {
+        spans.sort_by(|a, b| a.0.total_cmp(&b.0));
+        for w in spans.windows(2) {
+            assert!(w[0].1 <= w[1].0 + 1e-3, "row {row} overlaps: {:?} vs {:?}", w[0], w[1]);
+        }
+    }
+}
+
+#[test]
+fn clip_click_selects_and_seeks() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = animate_harness();
+    zoom_in_parts(&mut h);
+    let parts_r = h.state().timeline.last_parts_rect.expect("parts rect");
+    let view = h.state().timeline.view;
+    let vis = h.state().timeline.parts_lane.visible_range(&view);
+    let clip = h.state().timeline.parts_lane.clips[vis.start + 1].clone();
+    let center = clip.rect_in(parts_r, view.lead_inset, view.offset).center();
+    h.event(egui::Event::PointerMoved(center));
+    h.step();
+    h.event(egui::Event::PointerButton {
+        pos: center,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.step();
+    h.event(egui::Event::PointerButton {
+        pos: center,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run_steps(2);
+    assert_eq!(h.state().session().selection(), vec![clip.piece]);
+    let frame = 1.0 / h.state().transport.fps().max(1.0);
+    assert!((h.state().transport.time() - clip.end).abs() <= frame + 0.05);
+}
+
+#[test]
+fn arrival_drag_moves_the_piece_once() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = animate_harness();
+    let dur = h.state().transport.duration();
+    // Zoom so steps 0 and 1 are both visible as clips.
+    let step1_start = h.state().transport.lanes.as_ref().unwrap().runs[1].start;
+    h.state_mut().timeline.view.zoom_by(18.0, step1_start, dur);
+    h.state_mut().timeline.view.reveal(step1_start, dur, true);
+    h.run_steps(3);
+    assert!(h.state().timeline.parts_lane.zoomed_in);
+
+    let parts_r = h.state().timeline.last_parts_rect.expect("parts rect");
+    let view = h.state().timeline.view;
+    // Find a visible clip in step 1 and drag it into step 0's time range.
+    let clip = h
+        .state()
+        .timeline
+        .parts_lane
+        .clips
+        .iter()
+        .find(|c| {
+            c.step == 1 && {
+                let cr = c.rect_in(parts_r, view.lead_inset, view.offset);
+                cr.left() >= parts_r.left() + 4.0 && cr.right() <= parts_r.right() - 4.0
+            }
+        })
+        .expect("visible step 1 clip")
+        .clone();
+    let from = clip.rect_in(parts_r, view.lead_inset, view.offset).center();
+    let target_t = (step1_start - 1.5).max(1.0);
+    let to_x = (parts_r.left() + view.screen_x(target_t, dur) as f32).clamp(parts_r.left() + 8.0, parts_r.right() - 8.0);
+    let to = egui::pos2(to_x, parts_r.center().y);
+
+    let depth_before = h.state().session().undo_depth();
+    drag(&mut h, from, to, 6);
+    assert_eq!(h.state().session().undo_depth(), depth_before + 1, "arrival drag must be one undo step");
+}
+
+#[test]
+fn arrival_drag_released_outside_commits_nothing() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = animate_harness();
+    zoom_in_parts(&mut h);
+    let parts_r = h.state().timeline.last_parts_rect.expect("parts rect");
+    let view = h.state().timeline.view;
+    let vis = h.state().timeline.parts_lane.visible_range(&view);
+    let clip = h.state().timeline.parts_lane.clips[vis.start + 1].clone();
+    let from = clip.rect_in(parts_r, view.lead_inset, view.offset).center();
+    let outside = egui::pos2(-50.0, -50.0);
+    let depth_before = h.state().session().undo_depth();
+    drag(&mut h, from, outside, 5);
+    assert_eq!(h.state().session().undo_depth(), depth_before, "releasing outside must commit nothing");
+    assert!(h.state().timeline.drag.is_none());
+}
+
+#[test]
+fn alt_drag_forces_order() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = animate_harness();
+    let dur = h.state().transport.duration();
+    let step1_start = h.state().transport.lanes.as_ref().unwrap().runs[1].start;
+    h.state_mut().timeline.view.zoom_by(18.0, step1_start, dur);
+    h.state_mut().timeline.view.reveal(step1_start, dur, true);
+    h.run_steps(3);
+    assert!(h.state().timeline.parts_lane.zoomed_in);
+
+    let parts_r = h.state().timeline.last_parts_rect.expect("parts rect");
+    let view = h.state().timeline.view;
+    let local_step1: std::collections::HashSet<u32> = h
+        .state()
+        .session()
+        .step_items(1)
+        .into_iter()
+        .filter(|it| !it.submodel)
+        .flat_map(|it| it.pieces)
+        .collect();
+    let clip = h
+        .state()
+        .timeline
+        .parts_lane
+        .clips
+        .iter()
+        .find(|c| {
+            c.step == 1
+                && local_step1.contains(&c.piece)
+                && {
+                    let cr = c.rect_in(parts_r, view.lead_inset, view.offset);
+                    cr.left() >= parts_r.left() + 4.0 && cr.right() <= parts_r.right() - 4.0
+                }
+        })
+        .expect("visible local step 1 clip")
+        .clone();
+    let from = clip.rect_in(parts_r, view.lead_inset, view.offset).center();
+    let target_t = (step1_start - 1.5).max(1.0);
+    let to_x = (parts_r.left() + view.screen_x(target_t, dur) as f32).clamp(parts_r.left() + 8.0, parts_r.right() - 8.0);
+    let to = egui::pos2(to_x, parts_r.center().y);
+    let alt = egui::Modifiers::ALT;
+
+    h.event(egui::Event::PointerMoved(from));
+    h.step();
+    h.event(egui::Event::PointerButton {
+        pos: from,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: alt,
+    });
+    h.step();
+    for i in 1..=6 {
+        let f = i as f32 / 6.0;
+        let p = egui::pos2(from.x + (to.x - from.x) * f, from.y + (to.y - from.y) * f);
+        h.event(egui::Event::PointerMoved(p));
+        h.step();
+    }
+    h.event(egui::Event::PointerButton {
+        pos: to,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: alt,
+    });
+    h.run_steps(2);
+    assert_eq!(h.state().session().undo_name(), "Move and Pin Arrival");
+    assert!(!h.state().session().arrival_pins().is_empty());
+}
+
+#[test]
+fn pin_from_menu_round_trips() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = animate_harness();
+    let dur = h.state().transport.duration();
+    let step1_start = h.state().transport.lanes.as_ref().unwrap().runs[1].start;
+    h.state_mut().timeline.view.zoom_by(32.0, step1_start, dur);
+    h.state_mut().timeline.view.reveal(step1_start, dur, true);
+    h.run_steps(3);
+    assert!(h.state().timeline.parts_lane.zoomed_in);
+
+    let parts_r = h.state().timeline.last_parts_rect.expect("parts rect");
+    let view = h.state().timeline.view;
+    let vis = h.state().timeline.parts_lane.visible_range(&view);
+    let local_step1: std::collections::HashSet<u32> = h
+        .state()
+        .session()
+        .step_items(1)
+        .into_iter()
+        .filter(|it| !it.submodel)
+        .flat_map(|it| it.pieces)
+        .collect();
+    let clip = h.state().timeline.parts_lane.clips[vis]
+        .iter()
+        .find(|c| {
+            c.step == 1
+                && local_step1.contains(&c.piece)
+                && {
+                    let cr = c.rect_in(parts_r, view.lead_inset, view.offset);
+                    cr.left() >= parts_r.left() + 4.0 && cr.right() <= parts_r.right() - 4.0
+                }
+        })
+        .expect("visible local step 1 clip")
+        .clone();
+    let center = clip.rect_in(parts_r, view.lead_inset, view.offset).center();
+    assert!(!h.state().session().arrival_pins().contains(&clip.piece));
+
+    // Right-click the clip and choose "Pin This Arrival".
+    h.event(egui::Event::PointerMoved(center));
+    h.step();
+    h.event(egui::Event::PointerButton {
+        pos: center,
+        button: egui::PointerButton::Secondary,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.step();
+    h.event(egui::Event::PointerButton {
+        pos: center,
+        button: egui::PointerButton::Secondary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run_steps(2);
+    h.get_by_label("Pin This Arrival").click();
+    h.run_steps(2);
+    assert!(h.state().session().arrival_pins().contains(&clip.piece));
+
+    // Right-click again and choose "Release Arrival Pins".
+    h.event(egui::Event::PointerMoved(center));
+    h.step();
+    h.event(egui::Event::PointerButton {
+        pos: center,
+        button: egui::PointerButton::Secondary,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.step();
+    h.event(egui::Event::PointerButton {
+        pos: center,
+        button: egui::PointerButton::Secondary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run_steps(2);
+    h.get_by_label("Release Arrival Pins").click();
+    h.run_steps(2);
+    assert!(!h.state().session().arrival_pins().contains(&clip.piece));
+}
+
+#[test]
+fn library_drop_inserts_before_target() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = animate_harness();
+    zoom_in_parts(&mut h);
+    h.state_mut().browser_tab = 3; // Library tab
+    h.run_steps(3);
+
+    let tile_center = h.get_by_label("3001").rect().center();
+    let parts_r = h.state().timeline.last_parts_rect.expect("parts rect");
+    let view = h.state().timeline.view;
+    let vis = h.state().timeline.parts_lane.visible_range(&view);
+    let target_clip = h.state().timeline.parts_lane.clips[vis.start + 1].clone();
+    let drop_at = target_clip.rect_in(parts_r, view.lead_inset, view.offset).left_center();
+
+    // Compute what arrival_target predicts for `drop_at`.
+    let dur = h.state().transport.duration();
+    let time = view.time_at((drop_at.x - parts_r.left()) as f64, dur);
+    let expected = h
+        .state()
+        .transport
+        .lanes
+        .as_ref()
+        .unwrap()
+        .arrival_target(
+            h.state().transport.timeline.as_ref().unwrap(),
+            Some(h.state().session()),
+            time,
+            &[],
+        )
+        .expect("arrival target");
+
+    // Drag the 3001 tile from Library onto the Parts lane and release.
+    drag(&mut h, tile_center, drop_at, 6);
+    assert!(h.state().edit.placement.is_some(), "drop onto Parts lane must start placement");
+
+    // Move pointer into viewport center, wait for placeable preview, click to commit.
+    let vp_center = h.state().viewport_rect().unwrap().center();
+    h.event(egui::Event::PointerMoved(vp_center));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline {
+        h.step();
+        if let Some(p) = &h.state().edit.placement
+            && p.state.is_placeable()
+        {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    h.event(egui::Event::PointerButton {
+        pos: vp_center,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.step();
+    h.event(egui::Event::PointerButton {
+        pos: vp_center,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < deadline && h.state().edit.placement.is_some() {
+        h.step();
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(h.state().edit.placement.is_none(), "placement should have committed");
+    let items = h.state().session().step_items(expected.step as usize);
+    assert_eq!(items[expected.before].name, "3001.dat");
+}
+
+#[test]
+#[ignore]
+fn big_model_parts_lane() {
+    let Some(big) = std::env::var_os("BM_BIG_MODEL") else { return };
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = Harness::builder()
+        .with_size([1440.0, 900.0])
+        .build_eframe(move |cc| {
+            let mut app = BrickMotionApp::new_for_test_cc(cc, Some(big.into()));
+            app.wait_loaded();
+            app.dialogs_off();
+            app.set_workspace(Workspace::Animate);
+            app
+        });
+    assert!(run(h.state_mut(), "video.standard_preview"));
+    plan_ready(&mut h, Duration::from_secs(120));
+    h.step();
+    let fit_layout = h.state().timeline.parts_lane.last_layout_time;
+    let mut fit_slowest = Duration::ZERO;
+    for _ in 0..8 {
+        h.step();
+        fit_slowest = fit_slowest.max(h.state().timeline.parts_lane.last_show_time);
+    }
+
+    let dur = h.state().transport.duration();
+    h.state_mut().timeline.view.zoom_by(64.0, dur * 0.5, dur);
+    h.step();
+    let z64_layout = h.state().timeline.parts_lane.last_layout_time;
+    let z64_visited = h.state().timeline.parts_lane.last_visited;
+    let total = h.state().timeline.parts_lane.clips.len();
+    let mut z64_slowest = Duration::ZERO;
+    for _ in 0..8 {
+        h.step();
+        z64_slowest = z64_slowest.max(h.state().timeline.parts_lane.last_show_time);
+    }
+    eprintln!(
+        "big_model_parts_lane (10294-1, {total} flights): fit_layout={fit_layout:?}, fit_show={fit_slowest:?}, z64_layout={z64_layout:?}, z64_show={z64_slowest:?}, z64_visited={z64_visited}"
+    );
+    assert!(fit_layout < Duration::from_millis(50), "fit layout {fit_layout:?} >= 50 ms");
+    assert!(z64_layout < Duration::from_millis(50), "z64 layout {z64_layout:?} >= 50 ms");
+    assert!(fit_slowest < Duration::from_millis(16), "fit frame {fit_slowest:?} >= 16 ms");
+    assert!(z64_slowest < Duration::from_millis(16), "z64 frame {z64_slowest:?} >= 16 ms");
+    assert!(z64_visited < total / 10, "z64 visited {z64_visited} out of {total}");
+}
