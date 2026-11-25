@@ -481,7 +481,7 @@ impl BrickMotionApp {
             local_axes: self.edit.local_axes,
             collision: self.edit.collision,
             tool: self.edit.tool,
-            step: self.edit.step,
+            step: self.edit.step.or(self.transport.focused_step),
             steps: if self.has_document { s.steps().len() } else { 0 },
             workspace: self.workspace,
             playing: self.transport.state.playing || self.transport.state.waiting_to_play,
@@ -631,6 +631,42 @@ impl BrickMotionApp {
                         self.edit.step = (count > 0).then(|| i.min(count - 1));
                     }
                     self.edited(c);
+                }
+            }
+            "step.play" | "step.play_to_end" => {
+                self.cancel_placement();
+                let through_end = id == "step.play_to_end";
+                if let Some(step) = self.transport.focused_step.or(self.edit.step) {
+                    let (session, vp) = self.doc.parts();
+                    if let Some(vp) = vp {
+                        self.transport.play_step(vp, session, step, through_end);
+                    }
+                }
+            }
+            "step.appearance_assembled"
+            | "step.appearance_separated"
+            | "step.appearance_laid_out"
+            | "step.appearance_exploded" => {
+                let mode = match id {
+                    "step.appearance_assembled" => bm::playback::AssemblyPreview::Assembled,
+                    "step.appearance_separated" => bm::playback::AssemblyPreview::Separated,
+                    "step.appearance_laid_out" => bm::playback::AssemblyPreview::LaidOut,
+                    _ => bm::playback::AssemblyPreview::Exploded,
+                };
+                if let Some(step) = self.transport.focused_step.or(self.edit.step) {
+                    if let Some(vp) = self.doc.viewport() {
+                        self.transport.arrange(vp, Some(step), mode);
+                    } else {
+                        self.transport.focused_step = Some(step);
+                        self.transport.step_preview = Some(mode);
+                    }
+                }
+            }
+            "step.show_all" => {
+                self.transport.step_preview = None;
+                if let Some(vp) = self.doc.viewport() {
+                    vp.show_rest();
+                    self.transport.state = vp.playback_state();
                 }
             }
             "transport.play" => {

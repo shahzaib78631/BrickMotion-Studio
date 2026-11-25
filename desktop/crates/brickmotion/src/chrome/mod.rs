@@ -1,5 +1,6 @@
 //! The window around the viewport: title bar, ribbon, floating panels and the timeline.
 pub mod browser;
+pub mod callout;
 pub mod confirm;
 pub mod library;
 pub mod navigator;
@@ -37,6 +38,7 @@ pub fn central(ui: &mut Ui, app: &mut BrickMotionApp) {
         browser::show(ui, app, rect);
         properties::show(ui, app, rect);
         navigator::show(ui, app, rect);
+        callout::show(ui, app, rect);
         viewbar::show(ui, app, rect);
         notices::show(ui, app, rect);
     });

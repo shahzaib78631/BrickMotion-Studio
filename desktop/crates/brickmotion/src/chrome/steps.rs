@@ -256,6 +256,38 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
                         let mut ctx_for_step = app.ctx();
                         ctx_for_step.step = Some(i);
                         resp.context_menu(|ui| {
+                            let play_entries: &[(&str, &str)] = &[
+                                ("step.play", "Play Step"),
+                                ("step.play_to_end", "Play to End"),
+                            ];
+                            for &(cmd_id, label) in play_entries {
+                                let on = find(cmd_id).is_some_and(|c| enabled(c, &ctx_for_step));
+                                if ui.add_enabled(on, egui::Button::new(label)).clicked() {
+                                    menu_cmd = Some((i, cmd_id));
+                                    ui.close();
+                                }
+                            }
+                            ui.menu_button("Step Appearance", |ui| {
+                                let modes: &[(&str, &str)] = &[
+                                    ("step.appearance_assembled", "Assembled through This Step"),
+                                    ("step.appearance_separated", "Separated from Earlier Steps"),
+                                    ("step.appearance_laid_out", "Lay Out These Parts"),
+                                    ("step.appearance_exploded", "Explode This Step"),
+                                ];
+                                for &(cmd_id, label) in modes {
+                                    let on = find(cmd_id).is_some_and(|c| enabled(c, &ctx_for_step));
+                                    if ui.add_enabled(on, egui::Button::new(label)).clicked() {
+                                        menu_cmd = Some((i, cmd_id));
+                                        ui.close();
+                                    }
+                                }
+                                ui.separator();
+                                if ui.button("Show All Steps").clicked() {
+                                    menu_cmd = Some((i, "step.show_all"));
+                                    ui.close();
+                                }
+                            });
+                            ui.separator();
                             let entries: &[(&str, &str)] = &[
                                 ("step.edit", "Edit Step…"),
                                 ("step.insert_before", "Insert Step Before"),
@@ -340,15 +372,18 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
         }
     } else if let Some(i) = double_clicked_step {
         app.edit.step = Some(i);
+        app.transport.focused_step = Some(i);
         app.steps.open_editor(i, app.doc.session());
     } else if let Some((i, m)) = clicked_step {
         app.edit.step = Some(i);
+        app.transport.focused_step = Some(i);
         let pieces = app.steps.pieces_of(app.doc.session(), i).to_vec();
         app.doc.session().select(&pieces, select_mode(m));
     } else if let Some((pieces, m)) = clicked_item {
         app.doc.session().select(&pieces, select_mode(m));
     } else if let Some((i, cmd_id)) = menu_cmd {
         app.edit.step = Some(i);
+        app.transport.focused_step = Some(i);
         app.requested.push(cmd_id);
     }
 

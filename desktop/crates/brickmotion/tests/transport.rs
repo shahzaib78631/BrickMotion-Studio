@@ -2,7 +2,9 @@
 use std::time::{Duration, Instant};
 
 use brickmotion::{BrickMotionApp, Workspace, run};
+use egui::accesskit::Role;
 use egui_kittest::Harness;
+use egui_kittest::kittest::Queryable;
 
 const HELI: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../samples/helicopter/helicopter.mpd");
 const CAR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../samples/8880-1.mpd");
@@ -225,6 +227,110 @@ fn auto_plan_pref_is_sent() {
     assert!(run(h.state_mut(), "video.plan_build"));
     plan_ready(&mut h, Duration::from_secs(60));
     assert!(h.state().transport.ready());
+}
+
+#[test]
+fn choosing_a_step_shows_the_callout() {
+    let mut h = heli_harness();
+    assert!(h.query_by_label("Play Step").is_none(), "callout hidden before choosing a step");
+    h.state_mut().browser_tab = 1; // Steps tab
+    h.run_steps(2);
+    h.get_by_role_and_label(Role::TreeItem, "Step 1").click();
+    h.run_steps(2);
+    assert_eq!(h.state().transport.focused_step, Some(0));
+    assert!(h.query_by_label("Play Step").is_some());
+    assert!(h.query_by_label("Play to End").is_some());
+    assert!(h.query_by_label("Step Appearance").is_some());
+    assert!(h.query_by_label("Show All").is_some());
+}
+
+#[test]
+fn next_step_arranges_the_next() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = heli_harness();
+    h.state_mut().browser_tab = 1;
+    h.run_steps(2);
+    h.get_by_role_and_label(Role::TreeItem, "Step 1").click();
+    h.run_steps(3);
+    assert_eq!(h.state().transport.focused_step, Some(0));
+    let before = h.render().unwrap();
+
+    h.get_by_role_and_label(Role::Button, "Next Step").click();
+    h.run_steps(4);
+    assert_eq!(h.state().transport.focused_step, Some(1));
+    assert_eq!(h.state().edit.step, Some(1));
+    assert_eq!(h.state().transport.step_preview, Some(bm::playback::AssemblyPreview::Assembled));
+    let after = h.render().unwrap();
+    assert_ne!(before.as_raw(), after.as_raw(), "arranging next step changed nothing in viewport");
+}
+
+#[test]
+fn play_step_plans_then_plays_that_step() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = heli_harness();
+    assert!(!h.state().transport.ready());
+    h.state_mut().browser_tab = 1;
+    h.run_steps(2);
+    h.get_by_role_and_label(Role::TreeItem, "Step 2").click();
+    h.run_steps(2);
+    assert_eq!(h.state().transport.focused_step, Some(1));
+
+    h.get_by_role_and_label(Role::Button, "Play Step").click();
+    h.run_steps(2);
+    plan_ready(&mut h, Duration::from_secs(60));
+    h.run_steps(2);
+    let step2 = h
+        .state()
+        .transport
+        .lanes
+        .as_ref()
+        .unwrap()
+        .steps
+        .iter()
+        .find(|s| s.step == 1)
+        .cloned()
+        .expect("step 2 lane clip");
+    let t = h.state().transport.time();
+    assert!(
+        t + 0.05 >= step2.start && t <= step2.end + 0.5,
+        "playhead {t} not inside step 2 [{}, {}]",
+        step2.start,
+        step2.end
+    );
+    assert!(
+        h.state().transport.state.playing || !h.state().transport.state.at_rest,
+        "Play Step must start playing step 2"
+    );
+}
+
+#[test]
+fn close_returns_to_rest() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = heli_harness();
+    h.state_mut().browser_tab = 1;
+    h.run_steps(2);
+    h.get_by_role_and_label(Role::TreeItem, "Step 1").click();
+    h.run_steps(2);
+    let before = h.render().unwrap();
+    assert!(run(h.state_mut(), "step.appearance_exploded"));
+    h.run_steps(4);
+    let exploded = h.render().unwrap();
+    assert_ne!(before.as_raw(), exploded.as_raw(), "exploding step 1 changed nothing");
+
+    h.get_by_role_and_label(Role::Button, "Close Step Callout").click();
+    h.run_steps(4);
+    assert_eq!(h.state().transport.focused_step, None);
+    assert_eq!(h.state().transport.step_preview, None);
+    assert!(h.state().transport.state.at_rest, "closing callout returns to rest");
+    assert!(h.query_by_label("Play Step").is_none());
+    let restored = h.render().unwrap();
+    assert_ne!(exploded.as_raw(), restored.as_raw(), "closing callout did not return viewport to rest");
 }
 
 #[test]
