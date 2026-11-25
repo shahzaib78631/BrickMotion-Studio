@@ -140,3 +140,79 @@ TEST_CASE("edit struct sizes") {
   CHECK(bm_struct_size("BmMat3") == sizeof(BmMat3));
   CHECK(bm_struct_size("BmCamera") == sizeof(BmCamera));
 }
+
+static BmCamera testCam() {
+  return BmCamera{0.6, 0.45, 400.0, BmVec3{0, 0, 0}, false, 0.6};
+}
+
+static BmMat3 identityMat() {
+  return BmMat3{{1, 0, 0, 0, 1, 0, 0, 0, 1}};
+}
+
+TEST_CASE("move gizmo has three axes and three planes") {
+  BmGizmo* g = bm_gizmo_shape(testCam(), BmVec2{800, 600}, BmVec3{0, 0, 0}, identityMat(), BM_GIZMO_MOVE);
+  REQUIRE(g != nullptr);
+  CHECK(bm_gizmo_line_len(g) == 3);
+  CHECK(bm_gizmo_ring_len(g) == 3);
+  bool xy = false, yz = false, xz = false;
+  for (size_t i = 0; i < bm_gizmo_ring_len(g); ++i) {
+    BmHandle h = bm_gizmo_ring_handle(g, i);
+    xy |= (h == BM_HANDLE_XY);
+    yz |= (h == BM_HANDLE_YZ);
+    xz |= (h == BM_HANDLE_XZ);
+    CHECK(bm_gizmo_ring(g, i, nullptr, 0) >= 3);
+  }
+  CHECK(xy);
+  CHECK(yz);
+  CHECK(xz);
+  bm_gizmo_free(g);
+}
+
+TEST_CASE("rotate gizmo rings") {
+  BmGizmo* g = bm_gizmo_shape(testCam(), BmVec2{800, 600}, BmVec3{0, 0, 0}, identityMat(), BM_GIZMO_ROTATE);
+  REQUIRE(g != nullptr);
+  CHECK(bm_gizmo_ring_len(g) >= 3);
+  bool hasView = false;
+  for (size_t i = 0; i < bm_gizmo_ring_len(g); ++i) {
+    if (bm_gizmo_ring_handle(g, i) == BM_HANDLE_VIEW) hasView = true;
+  }
+  CHECK(hasView);
+  bm_gizmo_free(g);
+}
+
+TEST_CASE("hit at an axis tip") {
+  BmGizmo* g = bm_gizmo_shape(testCam(), BmVec2{800, 600}, BmVec3{0, 0, 0}, identityMat(), BM_GIZMO_MOVE);
+  REQUIRE(g != nullptr);
+  BmVec2 a{}, b{};
+  BmHandle h = BM_HANDLE_NONE;
+  bm_gizmo_line(g, 0, &a, &b, &h);
+  REQUIRE(h != BM_HANDLE_NONE);
+  CHECK(bm_gizmo_hit(g, b, 6.0) == h);
+  CHECK(bm_gizmo_hit(g, BmVec2{-1000, -1000}, 6.0) == BM_HANDLE_NONE);
+  bm_gizmo_free(g);
+}
+
+TEST_CASE("drag along x snaps to studs") {
+  BmCamera cam = testCam();
+  BmVec2 view{800, 600};
+  BmVec3 origin{0, 0, 0};
+  BmMat3 ax = identityMat();
+  BmGizmo* g = bm_gizmo_shape(cam, view, origin, ax, BM_GIZMO_MOVE);
+  REQUIRE(g != nullptr);
+  BmVec2 a{}, b{};
+  BmHandle h = BM_HANDLE_NONE;
+  for (size_t i = 0; i < bm_gizmo_line_len(g); ++i) {
+    bm_gizmo_line(g, i, &a, &b, &h);
+    if (h == BM_HANDLE_X) break;
+  }
+  REQUIRE(h == BM_HANDLE_X);
+  BmVec3 delta = bm_drag_move(cam, view, origin, ax, BM_HANDLE_X, a, b, BmVec3{20, 8, 20});
+  CHECK(std::abs(delta.x) >= 20.0);
+  CHECK(std::abs(std::fmod(delta.x, 20.0)) < 1e-6);
+  CHECK(std::abs(delta.y) < 1e-6);
+  CHECK(std::abs(delta.z) < 1e-6);
+  BmVec2 proj{};
+  CHECK(bm_project_point(cam, view, origin, &proj));
+  CHECK(std::isfinite(proj.x));
+  bm_gizmo_free(g);
+}

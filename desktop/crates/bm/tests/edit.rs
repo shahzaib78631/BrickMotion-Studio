@@ -62,3 +62,32 @@ fn arrow_axis_lies_on_the_floor() {
     assert_eq!(up.y, 0.0);
     assert!((up.x.hypot(up.z) - 1.0).abs() < 1e-9);
 }
+
+#[test]
+fn gizmo_hit_matches_line_handle() {
+    use bm::gizmo::{GizmoKind, GizmoShape, Handle};
+    let cam = bm::Camera { yaw: 0.6, pitch: 0.45, distance: 400.0, target: Vec3::ZERO, orthographic: false, vertical_fov: 0.6 };
+    let view = bm::Vec2::new(800.0, 600.0);
+    let shape = GizmoShape::new(&cam, view, Vec3::ZERO, bm::Mat3::IDENTITY, GizmoKind::Move);
+    assert_eq!(shape.lines.len(), 3);
+    assert_eq!(shape.rings.len(), 3);
+    let (_, tip, h) = shape.lines[0];
+    assert_ne!(h, Handle::None);
+    assert_eq!(shape.hit(tip, 6.0), h);
+    assert_eq!(shape.hit(bm::Vec2::new(-1000.0, -1000.0), 6.0), Handle::None);
+}
+
+#[test]
+fn rotate_drag_snaps_to_15_degrees() {
+    use bm::gizmo::{GizmoKind, GizmoShape, Handle, drag_rotate};
+    let cam = bm::Camera { yaw: 0.6, pitch: 0.45, distance: 400.0, target: Vec3::ZERO, orthographic: false, vertical_fov: 0.6 };
+    let view = bm::Vec2::new(800.0, 600.0);
+    let shape = GizmoShape::new(&cam, view, Vec3::ZERO, bm::Mat3::IDENTITY, GizmoKind::Rotate);
+    let (pts, _) = shape.rings.iter().find(|(_, h)| *h == Handle::Y).expect("Y ring");
+    assert!(pts.len() >= 8);
+    let a = pts[0];
+    let b = pts[pts.len() / 4];
+    let deg = drag_rotate(&cam, view, Vec3::ZERO, bm::Mat3::IDENTITY, Handle::Y, a, b, false);
+    assert!(deg.abs() >= 15.0, "expected quarter-turn drag >= 15 deg, got {deg}");
+    assert!((deg % 15.0).abs() < 1e-6, "expected multiple of 15, got {deg}");
+}

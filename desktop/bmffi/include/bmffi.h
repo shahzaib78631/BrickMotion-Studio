@@ -165,6 +165,35 @@ BMFFI_API BmCamera bm_viewport_camera(const BmViewport* v);
 BMFFI_API BmVec3 bm_viewport_selection_center(BmViewport* v);
 BMFFI_API BmVec3 bm_arrow_axis(BmCamera camera, BmArrow arrow);
 
+// ---- Gizmo ----
+typedef enum { BM_GIZMO_MOVE = 1, BM_GIZMO_ROTATE = 2 } BmGizmoKind;
+typedef enum {
+  BM_HANDLE_NONE,
+  BM_HANDLE_X,
+  BM_HANDLE_Y,
+  BM_HANDLE_Z,
+  BM_HANDLE_XY,
+  BM_HANDLE_YZ,
+  BM_HANDLE_XZ,
+  BM_HANDLE_VIEW
+} BmHandle;
+typedef struct BmGizmo BmGizmo;
+
+BMFFI_API BmGizmo* bm_gizmo_shape(BmCamera camera, BmVec2 view_points, BmVec3 origin, BmMat3 axes, BmGizmoKind kind);
+BMFFI_API void bm_gizmo_free(BmGizmo* g);
+BMFFI_API size_t bm_gizmo_line_len(const BmGizmo* g);
+BMFFI_API void bm_gizmo_line(const BmGizmo* g, size_t i, BmVec2* a, BmVec2* b, BmHandle* h);
+BMFFI_API size_t bm_gizmo_ring_len(const BmGizmo* g);
+BMFFI_API BmHandle bm_gizmo_ring_handle(const BmGizmo* g, size_t i);
+BMFFI_API size_t bm_gizmo_ring(const BmGizmo* g, size_t i, BmVec2* out, size_t cap);
+BMFFI_API BmHandle bm_gizmo_hit(const BmGizmo* g, BmVec2 point, double tolerance);
+BMFFI_API BmVec3 bm_handle_axis(BmCamera camera, BmMat3 axes, BmHandle handle);
+BMFFI_API BmVec3 bm_drag_move(BmCamera camera, BmVec2 view, BmVec3 origin, BmMat3 axes, BmHandle handle, BmVec2 a,
+                              BmVec2 b, BmVec3 snap);
+BMFFI_API double bm_drag_rotate(BmCamera camera, BmVec2 view, BmVec3 origin, BmMat3 axes, BmHandle handle, BmVec2 a,
+                                BmVec2 b, bool free);
+BMFFI_API bool bm_project_point(BmCamera camera, BmVec2 view, BmVec3 p, BmVec2* out);
+
 #ifdef __cplusplus
 }
 #endif

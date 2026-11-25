@@ -17,12 +17,10 @@ impl Vec2 {
         Self { x, y }
     }
 
-    #[allow(dead_code)]
     pub(crate) fn to_raw(self) -> sys::BmVec2 {
         sys::BmVec2 { x: self.x, y: self.y }
     }
 
-    #[allow(dead_code)]
     pub(crate) fn from_raw(v: sys::BmVec2) -> Self {
         Self { x: v.x, y: v.y }
     }
@@ -75,7 +73,6 @@ pub struct Mat3 {
 impl Mat3 {
     pub const IDENTITY: Self = Self { m: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0] };
 
-    #[allow(dead_code)]
     pub(crate) fn to_raw(self) -> sys::BmMat3 {
         sys::BmMat3 { m: self.m }
     }

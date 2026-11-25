@@ -148,6 +148,25 @@ pub const BM_ARROW_RIGHT: BmArrow = 1;
 pub const BM_ARROW_UP: BmArrow = 2;
 pub const BM_ARROW_DOWN: BmArrow = 3;
 
+pub type BmGizmoKind = u32;
+pub const BM_GIZMO_MOVE: BmGizmoKind = 1;
+pub const BM_GIZMO_ROTATE: BmGizmoKind = 2;
+
+pub type BmHandle = u32;
+pub const BM_HANDLE_NONE: BmHandle = 0;
+pub const BM_HANDLE_X: BmHandle = 1;
+pub const BM_HANDLE_Y: BmHandle = 2;
+pub const BM_HANDLE_Z: BmHandle = 3;
+pub const BM_HANDLE_XY: BmHandle = 4;
+pub const BM_HANDLE_YZ: BmHandle = 5;
+pub const BM_HANDLE_XZ: BmHandle = 6;
+pub const BM_HANDLE_VIEW: BmHandle = 7;
+
+#[repr(C)]
+pub struct BmGizmo {
+    _private: [u8; 0],
+}
+
 unsafe extern "C" {
     pub fn bm_string_free(s: BmString);
     pub fn bm_ldraw_directory() -> BmString;
@@ -229,6 +248,19 @@ unsafe extern "C" {
     pub fn bm_viewport_camera(v: *const BmViewport) -> BmCamera;
     pub fn bm_viewport_selection_center(v: *mut BmViewport) -> BmVec3;
     pub fn bm_arrow_axis(camera: BmCamera, arrow: BmArrow) -> BmVec3;
+
+    pub fn bm_gizmo_shape(camera: BmCamera, view_points: BmVec2, origin: BmVec3, axes: BmMat3, kind: BmGizmoKind) -> *mut BmGizmo;
+    pub fn bm_gizmo_free(g: *mut BmGizmo);
+    pub fn bm_gizmo_line_len(g: *const BmGizmo) -> usize;
+    pub fn bm_gizmo_line(g: *const BmGizmo, i: usize, a: *mut BmVec2, b: *mut BmVec2, h: *mut BmHandle);
+    pub fn bm_gizmo_ring_len(g: *const BmGizmo) -> usize;
+    pub fn bm_gizmo_ring_handle(g: *const BmGizmo, i: usize) -> BmHandle;
+    pub fn bm_gizmo_ring(g: *const BmGizmo, i: usize, out: *mut BmVec2, cap: usize) -> usize;
+    pub fn bm_gizmo_hit(g: *const BmGizmo, point: BmVec2, tolerance: f64) -> BmHandle;
+    pub fn bm_handle_axis(camera: BmCamera, axes: BmMat3, handle: BmHandle) -> BmVec3;
+    pub fn bm_drag_move(camera: BmCamera, view: BmVec2, origin: BmVec3, axes: BmMat3, handle: BmHandle, a: BmVec2, b: BmVec2, snap: BmVec3) -> BmVec3;
+    pub fn bm_drag_rotate(camera: BmCamera, view: BmVec2, origin: BmVec3, axes: BmMat3, handle: BmHandle, a: BmVec2, b: BmVec2, free: bool) -> f64;
+    pub fn bm_project_point(camera: BmCamera, view: BmVec2, p: BmVec3, out: *mut BmVec2) -> bool;
 }
 
 /// Every function declared above, for the header agreement test.
@@ -252,4 +284,7 @@ pub const DECLARED: &[&str] = &[
     "bm_session_move", "bm_session_rotate", "bm_session_recolor", "bm_session_duplicate",
     "bm_session_replace_part", "bm_session_end_gesture", "bm_session_axes_of", "bm_session_copy",
     "bm_session_paste", "bm_viewport_camera", "bm_viewport_selection_center", "bm_arrow_axis",
+    "bm_gizmo_shape", "bm_gizmo_free", "bm_gizmo_line_len", "bm_gizmo_line", "bm_gizmo_ring_len",
+    "bm_gizmo_ring_handle", "bm_gizmo_ring", "bm_gizmo_hit", "bm_handle_axis", "bm_drag_move",
+    "bm_drag_rotate", "bm_project_point",
 ];
