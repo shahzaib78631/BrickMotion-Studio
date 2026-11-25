@@ -110,6 +110,44 @@ pub struct BmColor {
     pub group: i32,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Default, Debug, PartialEq)]
+pub struct BmVec2 {
+    pub x: f64,
+    pub y: f64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default, Debug, PartialEq)]
+pub struct BmVec3 {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BmMat3 {
+    pub m: [f64; 9],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BmCamera {
+    pub yaw: f64,
+    pub pitch: f64,
+    pub distance: f64,
+    pub target: BmVec3,
+    pub orthographic: bool,
+    pub vertical_fov: f64,
+}
+
+pub type BmArrow = u32;
+pub const BM_ARROW_LEFT: BmArrow = 0;
+pub const BM_ARROW_RIGHT: BmArrow = 1;
+pub const BM_ARROW_UP: BmArrow = 2;
+pub const BM_ARROW_DOWN: BmArrow = 3;
+
 unsafe extern "C" {
     pub fn bm_string_free(s: BmString);
     pub fn bm_ldraw_directory() -> BmString;
@@ -178,6 +216,19 @@ unsafe extern "C" {
     pub fn bm_colors_at(c: *const BmColors, i: usize) -> BmColor;
     pub fn bm_colors_free(c: *mut BmColors);
     pub fn bm_struct_size(name: *const c_char) -> usize;
+
+    pub fn bm_session_move(s: *mut BmSession, pieces: *const u32, n: usize, delta: BmVec3, continuing: bool) -> BmChange;
+    pub fn bm_session_rotate(s: *mut BmSession, pieces: *const u32, n: usize, axis: BmVec3, degrees: f64, pivot: BmVec3, continuing: bool) -> BmChange;
+    pub fn bm_session_recolor(s: *mut BmSession, pieces: *const u32, n: usize, code: i32) -> BmChange;
+    pub fn bm_session_duplicate(s: *mut BmSession, pieces: *const u32, n: usize, offset: BmVec3) -> BmChange;
+    pub fn bm_session_replace_part(s: *mut BmSession, pieces: *const u32, n: usize, part: *const c_char) -> BmChange;
+    pub fn bm_session_end_gesture(s: *mut BmSession);
+    pub fn bm_session_axes_of(s: *const BmSession, piece: u32) -> BmMat3;
+    pub fn bm_session_copy(s: *const BmSession, pieces: *const u32, n: usize) -> BmString;
+    pub fn bm_session_paste(s: *mut BmSession, ldraw_text: *const c_char, offset: BmVec3) -> BmChange;
+    pub fn bm_viewport_camera(v: *const BmViewport) -> BmCamera;
+    pub fn bm_viewport_selection_center(v: *mut BmViewport) -> BmVec3;
+    pub fn bm_arrow_axis(camera: BmCamera, arrow: BmArrow) -> BmVec3;
 }
 
 /// Every function declared above, for the header agreement test.
@@ -198,4 +249,7 @@ pub const DECLARED: &[&str] = &[
     "bm_session_outline", "bm_outline_len", "bm_outline_row", "bm_outline_free", "bm_session_snapshot",
     "bm_snapshot_info", "bm_snapshot_piece_len", "bm_snapshot_piece", "bm_snapshot_free", "bm_colors",
     "bm_colors_len", "bm_colors_at", "bm_colors_free", "bm_struct_size",
+    "bm_session_move", "bm_session_rotate", "bm_session_recolor", "bm_session_duplicate",
+    "bm_session_replace_part", "bm_session_end_gesture", "bm_session_axes_of", "bm_session_copy",
+    "bm_session_paste", "bm_viewport_camera", "bm_viewport_selection_center", "bm_arrow_axis",
 ];

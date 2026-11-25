@@ -3,7 +3,7 @@ use std::path::Path;
 
 use bm_sys as sys;
 
-use crate::{Changed, ColorInfo, OpenError, OutlineRow, PieceInfo, Snapshot, borrowed, take_string};
+use crate::{Changed, ColorInfo, Mat3, OpenError, OutlineRow, PieceInfo, Snapshot, Vec3, borrowed, take_string};
 
 /// What opening a file reported besides success.
 #[derive(Debug, Clone, Default)]
@@ -168,6 +168,52 @@ impl Session {
     /// Deletes pieces as one undo step.
     pub fn remove(&self, pieces: &[u32]) -> Changed {
         take_change(unsafe { sys::bm_session_remove(self.raw, pieces.as_ptr(), pieces.len()) })
+    }
+
+    /// Moves pieces by a world LDU offset (`move` is a keyword).
+    pub fn translate(&self, pieces: &[u32], delta: Vec3, continuing: bool) -> Changed {
+        take_change(unsafe { sys::bm_session_move(self.raw, pieces.as_ptr(), pieces.len(), delta.to_raw(), continuing) })
+    }
+
+    /// Turns pieces about a world axis through a world pivot, in degrees.
+    pub fn rotate(&self, pieces: &[u32], axis: Vec3, degrees: f64, pivot: Vec3, continuing: bool) -> Changed {
+        take_change(unsafe {
+            sys::bm_session_rotate(self.raw, pieces.as_ptr(), pieces.len(), axis.to_raw(), degrees, pivot.to_raw(), continuing)
+        })
+    }
+
+    pub fn recolor(&self, pieces: &[u32], code: i32) -> Changed {
+        take_change(unsafe { sys::bm_session_recolor(self.raw, pieces.as_ptr(), pieces.len(), code) })
+    }
+
+    pub fn duplicate(&self, pieces: &[u32], offset: Vec3) -> Changed {
+        take_change(unsafe { sys::bm_session_duplicate(self.raw, pieces.as_ptr(), pieces.len(), offset.to_raw()) })
+    }
+
+    pub fn replace_part(&self, pieces: &[u32], part: &str) -> Changed {
+        let Ok(c) = CString::new(part) else {
+            return Changed { structure: false, version: self.version(), refused: Some("invalid part name".into()) };
+        };
+        take_change(unsafe { sys::bm_session_replace_part(self.raw, pieces.as_ptr(), pieces.len(), c.as_ptr()) })
+    }
+
+    pub fn end_gesture(&self) {
+        unsafe { sys::bm_session_end_gesture(self.raw) }
+    }
+
+    pub fn axes_of(&self, piece: u32) -> Mat3 {
+        Mat3::from_raw(unsafe { sys::bm_session_axes_of(self.raw, piece) })
+    }
+
+    pub fn copy(&self, pieces: &[u32]) -> String {
+        take_string(unsafe { sys::bm_session_copy(self.raw, pieces.as_ptr(), pieces.len()) })
+    }
+
+    pub fn paste(&self, text: &str, offset: Vec3) -> Changed {
+        let Ok(c) = CString::new(text) else {
+            return Changed { structure: false, version: self.version(), refused: Some("clipboard text contains a NUL byte".into()) };
+        };
+        take_change(unsafe { sys::bm_session_paste(self.raw, c.as_ptr(), offset.to_raw()) })
     }
 
     /// Every piece not hidden.

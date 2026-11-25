@@ -138,6 +138,33 @@ BMFFI_API void bm_colors_free(BmColors* c);
 /// sizeof the named struct, so the Rust mirrors can check their layout; 0 for an unknown name.
 BMFFI_API size_t bm_struct_size(const char* name);
 
+// ---- Edits & camera ----
+typedef struct { double x, y; } BmVec2;
+typedef struct { double x, y, z; } BmVec3;
+/// Row-major 3x3, as bmapp::Mat3.
+typedef struct { double m[9]; } BmMat3;
+typedef struct {
+  double yaw, pitch, distance;
+  BmVec3 target;
+  bool orthographic;
+  double vertical_fov;
+} BmCamera;
+typedef enum { BM_ARROW_LEFT, BM_ARROW_RIGHT, BM_ARROW_UP, BM_ARROW_DOWN } BmArrow;
+
+BMFFI_API BmChange bm_session_move(BmSession* s, const uint32_t* pieces, size_t n, BmVec3 delta, bool continuing);
+BMFFI_API BmChange bm_session_rotate(BmSession* s, const uint32_t* pieces, size_t n, BmVec3 axis, double degrees,
+                                     BmVec3 pivot, bool continuing);
+BMFFI_API BmChange bm_session_recolor(BmSession* s, const uint32_t* pieces, size_t n, int32_t code);
+BMFFI_API BmChange bm_session_duplicate(BmSession* s, const uint32_t* pieces, size_t n, BmVec3 offset);
+BMFFI_API BmChange bm_session_replace_part(BmSession* s, const uint32_t* pieces, size_t n, const char* part);
+BMFFI_API void bm_session_end_gesture(BmSession* s);
+BMFFI_API BmMat3 bm_session_axes_of(const BmSession* s, uint32_t piece);
+BMFFI_API BmString bm_session_copy(const BmSession* s, const uint32_t* pieces, size_t n);
+BMFFI_API BmChange bm_session_paste(BmSession* s, const char* ldraw_text, BmVec3 offset);
+BMFFI_API BmCamera bm_viewport_camera(const BmViewport* v);
+BMFFI_API BmVec3 bm_viewport_selection_center(BmViewport* v);
+BMFFI_API BmVec3 bm_arrow_axis(BmCamera camera, BmArrow arrow);
+
 #ifdef __cplusplus
 }
 #endif

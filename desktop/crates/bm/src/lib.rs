@@ -1,5 +1,6 @@
 //! Safe wrappers over the BrickMotion engine (bmffi).
 mod error;
+pub mod geom;
 mod outline;
 mod session;
 mod viewport;
@@ -9,6 +10,7 @@ use std::path::PathBuf;
 use bm_sys as sys;
 
 pub use error::OpenError;
+pub use geom::{Arrow, BRICK, Camera, Mat3, PLATE, Pose, STUD, Vec2, Vec3, arrow_axis};
 pub use outline::{Changed, ColorInfo, OutlineRow, PieceInfo, Snapshot};
 pub use session::{OpenInfo, SelectMode, Session};
 pub use viewport::{Frame, ViewPreset, Viewport};

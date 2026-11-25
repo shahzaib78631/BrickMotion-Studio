@@ -16,31 +16,11 @@
 
 namespace {
 
-BmString make(const std::string& text) {
-  BmString out{nullptr, text.size()};
-  out.ptr = static_cast<char*>(std::malloc(text.size() + 1));
-  if (!out.ptr) return BmString{nullptr, 0};
-  std::memcpy(out.ptr, text.data(), text.size());
-  out.ptr[text.size()] = '\0';
-  return out;
-}
-
-template <typename R, typename F>
-R guard(R neutral, F&& f) {
-  try {
-    return f();
-  } catch (...) {
-    return neutral;
-  }
-}
-
-template <typename F>
-void guardVoid(F&& f) {
-  try {
-    f();
-  } catch (...) {
-  }
-}
+using bmffi::change;
+using bmffi::guard;
+using bmffi::guardVoid;
+using bmffi::list;
+using bmffi::make;
 
 bmapp::ViewPreset preset(BmViewPreset p) {
   switch (p) {
@@ -270,32 +250,6 @@ BmString bm_session_redo_name(const BmSession* s) {
 }
 
 }  // extern "C"
-
-namespace {
-template <typename F>
-BmChange change(BmSession* s, F&& f) {
-  BmChange out{false, 0, {nullptr, 0}};
-  if (!s) {
-    out.refused = make("no document");
-    return out;
-  }
-  try {
-    bmapp::Changed c = f();
-    out.structure = c.structure;
-    out.version = c.version;
-    out.refused = make(c.refused);
-  } catch (const std::exception& e) {
-    out.refused = make(e.what());
-  } catch (...) {
-    out.refused = make("the engine failed during the edit");
-  }
-  return out;
-}
-
-std::vector<uint32_t> list(const uint32_t* pieces, size_t n) {
-  return std::vector<uint32_t>(pieces, pieces + (pieces ? n : 0));
-}
-}  // namespace
 
 extern "C" {
 

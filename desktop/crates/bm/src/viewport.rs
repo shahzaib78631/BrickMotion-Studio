@@ -1,5 +1,7 @@
 use bm_sys as sys;
 
+use crate::{Camera, Vec3};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ViewPreset {
     Front,
@@ -120,6 +122,14 @@ impl Viewport {
     pub fn pick(&mut self, x: f64, y: f64) -> Option<u32> {
         let p = unsafe { sys::bm_viewport_pick(self.raw, x, y) };
         (p != sys::BM_NO_PIECE).then_some(p)
+    }
+
+    pub fn camera(&self) -> Camera {
+        Camera::from_raw(unsafe { sys::bm_viewport_camera(self.raw) })
+    }
+
+    pub fn selection_center(&mut self) -> Vec3 {
+        Vec3::from_raw(unsafe { sys::bm_viewport_selection_center(self.raw) })
     }
 }
 

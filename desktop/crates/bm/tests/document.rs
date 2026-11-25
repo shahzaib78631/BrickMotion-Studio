@@ -91,5 +91,9 @@ fn struct_sizes_match() {
     assert_eq!(size(c"BmChange"), size_of::<bm_sys::BmChange>());
     assert_eq!(size(c"BmOpenResult"), size_of::<bm_sys::BmOpenResult>());
     assert_eq!(size(c"BmString"), size_of::<bm_sys::BmString>());
+    assert_eq!(size(c"BmVec2"), size_of::<bm_sys::BmVec2>());
+    assert_eq!(size(c"BmVec3"), size_of::<bm_sys::BmVec3>());
+    assert_eq!(size(c"BmMat3"), size_of::<bm_sys::BmMat3>());
+    assert_eq!(size(c"BmCamera"), size_of::<bm_sys::BmCamera>());
     assert_eq!(size(c"nope"), 0);
 }

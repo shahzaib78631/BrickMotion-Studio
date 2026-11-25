@@ -83,7 +83,9 @@ size_t bm_struct_size(const char* name) {
       {"BmOutlineRow", sizeof(BmOutlineRow)}, {"BmPieceInfo", sizeof(BmPieceInfo)},
       {"BmSnapshotInfo", sizeof(BmSnapshotInfo)}, {"BmColor", sizeof(BmColor)},
       {"BmChange", sizeof(BmChange)}, {"BmOpenResult", sizeof(BmOpenResult)},
-      {"BmString", sizeof(BmString)},
+      {"BmString", sizeof(BmString)}, {"BmVec2", sizeof(BmVec2)},
+      {"BmVec3", sizeof(BmVec3)}, {"BmMat3", sizeof(BmMat3)},
+      {"BmCamera", sizeof(BmCamera)},
   };
   for (const Entry& e : kSizes)
     if (std::strcmp(e.name, name) == 0) return e.size;
