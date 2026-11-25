@@ -589,6 +589,118 @@ BMFFI_API size_t bm_auto_key_values(int32_t tool, BmVec3 origin, BmVec3 change, 
 BMFFI_API bool bm_auto_key_target(const BmSession* s, const uint32_t* selection, size_t n, bool auto_key,
                                   int64_t key_submodel, uint32_t* piece, bool* submodel);
 
+// ---- Camera track, Auto-direct and scene cameras (camera.cpp) ----
+typedef enum { BM_CLOCK_BUILD, BM_CLOCK_TIMELINE } BmCameraClock;
+/// Strings: read from a list handle, they live until it is freed; passed in, they are copied.
+typedef struct {
+  const char* id;
+  const char* name;
+  BmVec3 position, target;
+  double field_of_view, near_clip, far_clip;
+  bool orthographic;
+} BmSceneCamera;
+typedef struct {
+  const char* id;
+  double seconds;
+  const char* target;  ///< "model", "build", "piece" or "point"
+  const char* preset;
+  double azimuth, elevation, lens_mm;
+  bool fitted, user;
+  double margin, distance, roll;
+  bool focus_target;
+  double focus, blur;
+  BmVec3 point, eye;
+} BmCameraKey;
+typedef struct {
+  const char* from;
+  const char* to;
+  const char* preset;
+  bool user, cut, flow_through;
+  const char* curve;
+  double strength;
+  bool straight;
+  const char* orbit;
+  int32_t extra_turns;
+  double overshoot, motion_blur, shake, shake_frequency, turn_last;
+} BmCameraMove;
+typedef struct {
+  const char* id;
+  const char* label;
+  const char* hint;
+} BmCameraPreset;
+/// `clock` is a BmCameraClock.
+typedef struct {
+  int32_t clock;
+  double fps, duration;
+  bool ready;
+} BmCameraClockInfo;
+
+typedef struct BmCameraKeys BmCameraKeys;
+typedef struct BmCameraMoves BmCameraMoves;
+typedef struct BmCameraPresets BmCameraPresets;
+typedef struct BmSceneCameras BmSceneCameras;
+
+BMFFI_API BmCameraKeys* bm_session_camera_keys(const BmSession* s, int32_t clock);
+BMFFI_API size_t bm_camera_keys_len(const BmCameraKeys* k);
+BMFFI_API BmCameraKey bm_camera_keys_at(const BmCameraKeys* k, size_t i);
+/// The key within half a frame of `now`, or -1.
+BMFFI_API int64_t bm_camera_key_at(const BmCameraKeys* k, double now, double fps);
+BMFFI_API void bm_camera_keys_free(BmCameraKeys* k);
+BMFFI_API BmCameraMoves* bm_session_camera_moves(const BmSession* s, int32_t clock);
+BMFFI_API size_t bm_camera_moves_len(const BmCameraMoves* m);
+BMFFI_API BmCameraMove bm_camera_moves_at(const BmCameraMoves* m, size_t i);
+BMFFI_API void bm_camera_moves_free(BmCameraMoves* m);
+BMFFI_API BmCameraPresets* bm_camera_presets(void);
+BMFFI_API size_t bm_camera_presets_len(const BmCameraPresets* p);
+BMFFI_API BmCameraPreset bm_camera_presets_at(const BmCameraPresets* p, size_t i);
+BMFFI_API void bm_camera_presets_free(BmCameraPresets* p);
+
+BMFFI_API BmString bm_session_camera_director_style(const BmSession* s, int32_t clock);
+BMFFI_API BmChange bm_session_add_camera_key(BmSession* s, int32_t clock, double seconds, BmSceneCamera view, double fps,
+                                             double duration);
+BMFFI_API BmChange bm_session_set_camera_key_view(BmSession* s, int32_t clock, const char* id, BmSceneCamera view);
+BMFFI_API BmChange bm_session_move_camera_key(BmSession* s, int32_t clock, const char* id, double seconds, double fps,
+                                              double duration);
+BMFFI_API BmChange bm_session_remove_camera_key(BmSession* s, int32_t clock, const char* id);
+BMFFI_API BmChange bm_session_set_camera_key_target(BmSession* s, int32_t clock, const char* id, const char* target);
+BMFFI_API BmChange bm_session_set_camera_key(BmSession* s, int32_t clock, BmCameraKey key, bool continuing);
+BMFFI_API BmChange bm_session_set_camera_move(BmSession* s, int32_t clock, BmCameraMove move, bool continuing);
+BMFFI_API BmChange bm_session_choose_camera_preset(BmSession* s, int32_t clock, const char* from, const char* preset,
+                                                   double distance);
+BMFFI_API BmChange bm_session_clear_camera_track(BmSession* s, int32_t clock);
+/// "track", "automatic" or "buildView".
+BMFFI_API BmString bm_session_export_camera(const BmSession* s);
+BMFFI_API BmChange bm_session_set_export_camera(BmSession* s, const char* camera);
+
+BMFFI_API BmSceneCameras* bm_session_scene_cameras(const BmSession* s);
+BMFFI_API size_t bm_scene_cameras_len(const BmSceneCameras* c);
+BMFFI_API BmSceneCamera bm_scene_cameras_at(const BmSceneCameras* c, size_t i);
+BMFFI_API const char* bm_scene_cameras_active_id(const BmSceneCameras* c);
+BMFFI_API bool bm_scene_cameras_use_for_video(const BmSceneCameras* c);
+BMFFI_API void bm_scene_cameras_free(BmSceneCameras* c);
+BMFFI_API BmChange bm_session_save_scene_camera(BmSession* s, BmSceneCamera camera);
+BMFFI_API BmChange bm_session_remove_scene_camera(BmSession* s, const char* id);
+/// "" uses the automatic camera for video.
+BMFFI_API BmChange bm_session_activate_scene_camera(BmSession* s, const char* id);
+
+/// The view as a scene camera; its strings are owned by the caller: free with bm_scene_camera_free.
+BMFFI_API BmSceneCamera bm_viewport_capture_scene_camera(const BmViewport* v);
+BMFFI_API BmSceneCamera bm_viewport_camera_track_view(BmViewport* v, double seconds);
+BMFFI_API void bm_scene_camera_free(BmSceneCamera camera);
+BMFFI_API bool bm_viewport_recall_scene_camera(BmViewport* v, const char* id);
+BMFFI_API bool bm_viewport_follows_camera_track(BmViewport* v);
+BMFFI_API void bm_viewport_set_director_preview(BmViewport* v, bool directed);
+
+BMFFI_API BmCameraClockInfo bm_camera_clock_info(int32_t clock, const BmSession* s, double build_fps,
+                                                 double build_duration, bool build_ready);
+BMFFI_API bool bm_can_auto_direct(int32_t clock, const BmSession* s, bool build_ready);
+/// A key filming the viewport's view at `now`; the key already there takes the view. `id` gets
+/// the key to select (caller frees), `added` whether a key was made.
+BMFFI_API BmChange bm_add_camera_key_from_view(BmSession* s, BmViewport* v, int32_t clock, double now,
+                                               BmCameraClockInfo info, BmString* id, bool* added);
+BMFFI_API BmChange bm_aim_camera_key(BmSession* s, BmViewport* v, int32_t clock, BmCameraKey key, const char* target);
+BMFFI_API BmChange bm_auto_direct(BmSession* s, BmViewport* v, int32_t clock, const char* style);
+
 #ifdef __cplusplus
 }
 #endif

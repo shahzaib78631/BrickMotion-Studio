@@ -537,6 +537,94 @@ pub struct BmKeyObjectRow {
     pub markers: usize,
 }
 
+// ---- Camera (camera.cpp) ----
+#[repr(C)]
+pub struct BmCameraKeys {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct BmCameraMoves {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct BmCameraPresets {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct BmSceneCameras {
+    _private: [u8; 0],
+}
+pub const BM_CLOCK_BUILD: i32 = 0;
+pub const BM_CLOCK_TIMELINE: i32 = 1;
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct BmSceneCamera {
+    pub id: *const c_char,
+    pub name: *const c_char,
+    pub position: BmVec3,
+    pub target: BmVec3,
+    pub field_of_view: f64,
+    pub near_clip: f64,
+    pub far_clip: f64,
+    pub orthographic: bool,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct BmCameraKey {
+    pub id: *const c_char,
+    pub seconds: f64,
+    pub target: *const c_char,
+    pub preset: *const c_char,
+    pub azimuth: f64,
+    pub elevation: f64,
+    pub lens_mm: f64,
+    pub fitted: bool,
+    pub user: bool,
+    pub margin: f64,
+    pub distance: f64,
+    pub roll: f64,
+    pub focus_target: bool,
+    pub focus: f64,
+    pub blur: f64,
+    pub point: BmVec3,
+    pub eye: BmVec3,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct BmCameraMove {
+    pub from: *const c_char,
+    pub to: *const c_char,
+    pub preset: *const c_char,
+    pub user: bool,
+    pub cut: bool,
+    pub flow_through: bool,
+    pub curve: *const c_char,
+    pub strength: f64,
+    pub straight: bool,
+    pub orbit: *const c_char,
+    pub extra_turns: i32,
+    pub overshoot: f64,
+    pub motion_blur: f64,
+    pub shake: f64,
+    pub shake_frequency: f64,
+    pub turn_last: f64,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct BmCameraPreset {
+    pub id: *const c_char,
+    pub label: *const c_char,
+    pub hint: *const c_char,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct BmCameraClockInfo {
+    pub clock: i32,
+    pub fps: f64,
+    pub duration: f64,
+    pub ready: bool,
+}
+
 unsafe extern "C" {
     pub fn bm_string_free(s: BmString);
     pub fn bm_ldraw_directory() -> BmString;
@@ -789,6 +877,52 @@ unsafe extern "C" {
     pub fn bm_flight_keys_start(scene: BmKeyScene, flight_start: f64) -> f64;
     pub fn bm_auto_key_values(tool: i32, origin: BmVec3, change: BmVec3, frame: i32, out: *mut BmKeyframe, cap: usize) -> usize;
     pub fn bm_auto_key_target(s: *const BmSession, selection: *const u32, n: usize, auto_key: bool, key_submodel: i64, piece: *mut u32, submodel: *mut bool) -> bool;
+    // Camera
+    pub fn bm_session_camera_keys(s: *const BmSession, clock: i32) -> *mut BmCameraKeys;
+    pub fn bm_camera_keys_len(k: *const BmCameraKeys) -> usize;
+    pub fn bm_camera_keys_at(k: *const BmCameraKeys, i: usize) -> BmCameraKey;
+    pub fn bm_camera_key_at(k: *const BmCameraKeys, now: f64, fps: f64) -> i64;
+    pub fn bm_camera_keys_free(k: *mut BmCameraKeys);
+    pub fn bm_session_camera_moves(s: *const BmSession, clock: i32) -> *mut BmCameraMoves;
+    pub fn bm_camera_moves_len(m: *const BmCameraMoves) -> usize;
+    pub fn bm_camera_moves_at(m: *const BmCameraMoves, i: usize) -> BmCameraMove;
+    pub fn bm_camera_moves_free(m: *mut BmCameraMoves);
+    pub fn bm_camera_presets() -> *mut BmCameraPresets;
+    pub fn bm_camera_presets_len(p: *const BmCameraPresets) -> usize;
+    pub fn bm_camera_presets_at(p: *const BmCameraPresets, i: usize) -> BmCameraPreset;
+    pub fn bm_camera_presets_free(p: *mut BmCameraPresets);
+    pub fn bm_session_camera_director_style(s: *const BmSession, clock: i32) -> BmString;
+    pub fn bm_session_add_camera_key(s: *mut BmSession, clock: i32, seconds: f64, view: BmSceneCamera, fps: f64, duration: f64) -> BmChange;
+    pub fn bm_session_set_camera_key_view(s: *mut BmSession, clock: i32, id: *const c_char, view: BmSceneCamera) -> BmChange;
+    pub fn bm_session_move_camera_key(s: *mut BmSession, clock: i32, id: *const c_char, seconds: f64, fps: f64, duration: f64) -> BmChange;
+    pub fn bm_session_remove_camera_key(s: *mut BmSession, clock: i32, id: *const c_char) -> BmChange;
+    pub fn bm_session_set_camera_key_target(s: *mut BmSession, clock: i32, id: *const c_char, target: *const c_char) -> BmChange;
+    pub fn bm_session_set_camera_key(s: *mut BmSession, clock: i32, key: BmCameraKey, continuing: bool) -> BmChange;
+    pub fn bm_session_set_camera_move(s: *mut BmSession, clock: i32, m: BmCameraMove, continuing: bool) -> BmChange;
+    pub fn bm_session_choose_camera_preset(s: *mut BmSession, clock: i32, from: *const c_char, preset: *const c_char, distance: f64) -> BmChange;
+    pub fn bm_session_clear_camera_track(s: *mut BmSession, clock: i32) -> BmChange;
+    pub fn bm_session_export_camera(s: *const BmSession) -> BmString;
+    pub fn bm_session_set_export_camera(s: *mut BmSession, camera: *const c_char) -> BmChange;
+    pub fn bm_session_scene_cameras(s: *const BmSession) -> *mut BmSceneCameras;
+    pub fn bm_scene_cameras_len(c: *const BmSceneCameras) -> usize;
+    pub fn bm_scene_cameras_at(c: *const BmSceneCameras, i: usize) -> BmSceneCamera;
+    pub fn bm_scene_cameras_active_id(c: *const BmSceneCameras) -> *const c_char;
+    pub fn bm_scene_cameras_use_for_video(c: *const BmSceneCameras) -> bool;
+    pub fn bm_scene_cameras_free(c: *mut BmSceneCameras);
+    pub fn bm_session_save_scene_camera(s: *mut BmSession, camera: BmSceneCamera) -> BmChange;
+    pub fn bm_session_remove_scene_camera(s: *mut BmSession, id: *const c_char) -> BmChange;
+    pub fn bm_session_activate_scene_camera(s: *mut BmSession, id: *const c_char) -> BmChange;
+    pub fn bm_viewport_capture_scene_camera(v: *const BmViewport) -> BmSceneCamera;
+    pub fn bm_viewport_camera_track_view(v: *mut BmViewport, seconds: f64) -> BmSceneCamera;
+    pub fn bm_scene_camera_free(camera: BmSceneCamera);
+    pub fn bm_viewport_recall_scene_camera(v: *mut BmViewport, id: *const c_char) -> bool;
+    pub fn bm_viewport_follows_camera_track(v: *mut BmViewport) -> bool;
+    pub fn bm_viewport_set_director_preview(v: *mut BmViewport, directed: bool);
+    pub fn bm_camera_clock_info(clock: i32, s: *const BmSession, build_fps: f64, build_duration: f64, build_ready: bool) -> BmCameraClockInfo;
+    pub fn bm_can_auto_direct(clock: i32, s: *const BmSession, build_ready: bool) -> bool;
+    pub fn bm_add_camera_key_from_view(s: *mut BmSession, v: *mut BmViewport, clock: i32, now: f64, info: BmCameraClockInfo, id: *mut BmString, added: *mut bool) -> BmChange;
+    pub fn bm_aim_camera_key(s: *mut BmSession, v: *mut BmViewport, clock: i32, key: BmCameraKey, target: *const c_char) -> BmChange;
+    pub fn bm_auto_direct(s: *mut BmSession, v: *mut BmViewport, clock: i32, style: *const c_char) -> BmChange;
 }
 
 /// Every function declared above, for the header agreement test.
@@ -863,4 +997,17 @@ pub const DECLARED: &[&str] = &[
     "bm_viewport_flight_path", "bm_flight_path_line", "bm_flight_path_keys", "bm_flight_path_free",
     "bm_viewport_drag_facing_view", "bm_viewport_edited_flight_route", "bm_key_offset_limits",
     "bm_linked_key_scene", "bm_flight_keys_start", "bm_auto_key_values", "bm_auto_key_target",
+    "bm_session_camera_keys", "bm_camera_keys_len", "bm_camera_keys_at", "bm_camera_key_at", "bm_camera_keys_free",
+    "bm_session_camera_moves", "bm_camera_moves_len", "bm_camera_moves_at", "bm_camera_moves_free",
+    "bm_camera_presets", "bm_camera_presets_len", "bm_camera_presets_at", "bm_camera_presets_free",
+    "bm_session_camera_director_style", "bm_session_add_camera_key", "bm_session_set_camera_key_view",
+    "bm_session_move_camera_key", "bm_session_remove_camera_key", "bm_session_set_camera_key_target",
+    "bm_session_set_camera_key", "bm_session_set_camera_move", "bm_session_choose_camera_preset",
+    "bm_session_clear_camera_track", "bm_session_export_camera", "bm_session_set_export_camera",
+    "bm_session_scene_cameras", "bm_scene_cameras_len", "bm_scene_cameras_at", "bm_scene_cameras_active_id",
+    "bm_scene_cameras_use_for_video", "bm_scene_cameras_free", "bm_session_save_scene_camera",
+    "bm_session_remove_scene_camera", "bm_session_activate_scene_camera", "bm_viewport_capture_scene_camera",
+    "bm_viewport_camera_track_view", "bm_scene_camera_free", "bm_viewport_recall_scene_camera",
+    "bm_viewport_follows_camera_track", "bm_viewport_set_director_preview", "bm_camera_clock_info",
+    "bm_can_auto_direct", "bm_add_camera_key_from_view", "bm_aim_camera_key", "bm_auto_direct",
 ];

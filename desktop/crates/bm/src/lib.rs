@@ -1,6 +1,7 @@
 //! Safe wrappers over the BrickMotion engine (bmffi).
 mod error;
 pub mod geom;
+pub mod camera;
 pub mod gizmo;
 pub mod keys;
 pub mod library;
