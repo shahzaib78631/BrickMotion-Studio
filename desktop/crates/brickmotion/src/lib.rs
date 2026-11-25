@@ -16,6 +16,7 @@ pub mod placement;
 pub mod previews;
 mod shortcuts;
 mod snapshot;
+pub mod sound;
 pub mod support;
 mod theme;
 pub mod transport;

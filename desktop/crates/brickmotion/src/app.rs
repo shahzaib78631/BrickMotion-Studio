@@ -152,6 +152,10 @@ pub struct BrickMotionApp {
     pub build_settings: chrome::build_settings::BuildSettingsState,
     /// Draft state for the Build Staging page.
     pub staging: chrome::staging::StagingState,
+    /// Draft state for the Snap Sound page.
+    pub sound_page: chrome::sound::SoundPageState,
+    /// Live transport snap-sound playback and sample preview player.
+    pub sound: crate::sound::SnapSound,
 }
 
 impl BrickMotionApp {
@@ -222,6 +226,8 @@ impl BrickMotionApp {
             properties_page: chrome::properties::Page::Inspector,
             build_settings: chrome::build_settings::BuildSettingsState::default(),
             staging: chrome::staging::StagingState::default(),
+            sound_page: chrome::sound::SoundPageState::default(),
+            sound: crate::sound::SnapSound::default(),
         };
         // Opened once the first frame knows the view's size, so the worker can draw it warm.
         app.startup = path.map(|p| std::path::absolute(&p).unwrap_or(p));
@@ -324,6 +330,8 @@ impl BrickMotionApp {
         self.properties_page = chrome::properties::Page::Inspector;
         self.build_settings.reset();
         self.staging.reset();
+        self.sound_page.reset();
+        self.sound.reset();
         // The old document (and its renderer) goes, off this thread; the widget sets the new one up.
         crate::loader::retire(std::mem::replace(&mut self.doc, doc));
         self.viewport.reset();
@@ -747,6 +755,9 @@ impl BrickMotionApp {
                 self.edited(c);
                 self.staging.straighten = false;
             }
+            "video.snap_sound" | "video.mix" => {
+                self.properties_page = chrome::properties::Page::SnapSound;
+            }
             _ => return false,
         }
         true
@@ -757,6 +768,13 @@ impl BrickMotionApp {
         if let Some(why) = c.refused {
             crate::notices::push(&mut self.notices, Notice::Warning { title: "Couldn't edit".into(), detail: why });
         }
+    }
+
+    /// Renders and plays one snap sample preview on a worker thread (no plan needed).
+    pub fn play_snap_sample(&mut self, example: bm::settings::SnapExample) {
+        let mix = self.doc.session().snap_mix();
+        let recordings = crate::support::snap_recordings();
+        self.sound.request_sample(mix, example, recordings);
     }
 
     pub(crate) fn dialogs_enabled(&self) -> bool {
@@ -845,6 +863,8 @@ impl BrickMotionApp {
         self.properties_page = chrome::properties::Page::Inspector;
         self.build_settings.reset();
         self.staging.reset();
+        self.sound_page.reset();
+        self.sound.reset();
         let mut s = bm::Session::new();
         match s.new_blank() {
             Ok(_) => {
@@ -1055,9 +1075,30 @@ impl eframe::App for BrickMotionApp {
             if let Some(c) = self.transport.take_changed() {
                 self.edited(c);
             }
+            let audio_notice = {
+                let recordings = crate::support::snap_recordings();
+                let (session, vp) = self.doc.parts();
+                self.sound.follow(
+                    session,
+                    vp,
+                    &self.transport,
+                    self.prefs.play_snap_sounds,
+                    !self.curves,
+                    &recordings,
+                )
+            };
+            if let Some(n) = audio_notice {
+                crate::notices::push(&mut self.notices, n);
+            }
             if changed {
                 ui.ctx().request_repaint();
             }
+        }
+        if let Some(n) = self.sound.poll_preview() {
+            crate::notices::push(&mut self.notices, n);
+        }
+        if self.sound.preview_pending() {
+            ui.ctx().request_repaint_after(Duration::from_millis(30));
         }
         if self.loader.loading().is_some() {
             ui.ctx().request_repaint_after(Duration::from_millis(50));

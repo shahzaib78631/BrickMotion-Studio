@@ -12,6 +12,9 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Frameworks" "$app/Contents/Resourc
 cp target/release/brickmotion "$app/Contents/MacOS/brickmotion"
 cp "$lib/libbmffi.dylib" "$app/Contents/Frameworks/libbmffi.dylib"
 cp scripts/Info.plist "$app/Contents/Info.plist"
+if [ -d "../public/sounds/snaps" ]; then
+    cp -R "../public/sounds/snaps" "$app/Contents/Resources/SnapSounds"
+fi
 
 bin="$app/Contents/MacOS/brickmotion"
 # Load libbmffi from the bundle, never from the build tree.

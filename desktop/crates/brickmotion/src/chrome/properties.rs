@@ -84,16 +84,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
                         Page::Inspector => {}
                         Page::BuildSettings => super::build_settings::show(ui, app, body_max_h),
                         Page::Staging => super::staging::show(ui, app, body_max_h),
-                        Page::SnapSound => {
-                            egui::ScrollArea::vertical()
-                                .id_salt(("properties-page", page))
-                                .max_height(body_max_h)
-                                .auto_shrink([false, true])
-                                .show(ui, |ui| {
-                                    ui.add_space(12.0);
-                                    ui.label(RichText::new(page.title()).color(t.text2));
-                                });
-                        }
+                        Page::SnapSound => super::sound::show(ui, app, body_max_h),
                     }
                 }
             });

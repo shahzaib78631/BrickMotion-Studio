@@ -32,6 +32,38 @@ impl Support {
     }
 }
 
+/// Locates the folder of recorded brick-snap WAVs:
+/// `BM_SNAP_SOUNDS_DIR`, then `BrickMotion.app/Contents/Resources/SnapSounds`,
+/// then `public/sounds/snaps` in the repo.
+pub fn snap_recordings() -> PathBuf {
+    if let Some(env) = std::env::var_os("BM_SNAP_SOUNDS_DIR").filter(|s| !s.is_empty()) {
+        return PathBuf::from(env);
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(mac_os) = exe.parent() {
+            let bundled = mac_os.join("../Resources/SnapSounds");
+            if bundled.is_dir() {
+                return bundled;
+            }
+        }
+        for anc in exe.ancestors() {
+            let candidate = anc.join("public/sounds/snaps");
+            if candidate.is_dir() {
+                return candidate;
+            }
+        }
+    }
+    if let Ok(cwd) = std::env::current_dir() {
+        for anc in cwd.ancestors() {
+            let candidate = anc.join("public/sounds/snaps");
+            if candidate.is_dir() {
+                return candidate;
+            }
+        }
+    }
+    PathBuf::from("public/sounds/snaps")
+}
+
 fn default_true() -> bool {
     true
 }

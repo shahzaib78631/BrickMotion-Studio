@@ -11,6 +11,7 @@ pub mod parts_lane;
 pub mod properties;
 pub mod replace;
 pub mod ribbon;
+pub mod sound;
 pub mod staging;
 pub mod steps;
 pub mod swatches;
