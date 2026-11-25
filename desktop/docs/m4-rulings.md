@@ -94,3 +94,32 @@ The interaction rules are unchanged: click, ⌘/⇧-click, double-click, arrival
   - Pinned: a pin glyph at the right.
 - **Chosen step:** an accent 7 % band behind the lane across the chosen step. Step names appear only in the Steps lane.
 - **Hover card:** part name with a colour dot; Part, Step "i of n" and Flies "a – b"; then "Drag to retime · ⌥ drag to pin · Double-click to frame".
+
+## Milestone 4 implementation rulings & checks (2026-11-25)
+
+### Empirical rulings
+- **Build Settings summary note (Task 11):** Verified in `tests/settings.rs::pacing_slider_drag_is_one_undo_and_one_plan` that changing a pacing slider enters `CheckingFlights` (`saw_checking_flights=true`). Per the ruling above, the summary card note reads `"Changes below re-time the build."` (without `"no replanning"`).
+- **Snap track generation (Task 12):** `write_snap_track_time` in release mode on `samples/8880-1.mpd` (1,410 pieces, native planner) took **2.854 s** (140.6 MB WAV), exceeding the 100 ms main-thread budget. **Ruling: needs engine change (viewport-free snap track)** so snap track rendering can run on a worker thread without holding `bmapp::Viewport`.
+- **Playback texture upload (Task 5):** `playback_frame_time` at 2880×1800 on `10294-1.mpd` (9,720 flights) achieved median **13.70 ms** / p95 **18.94 ms** (< 33 ms budget). No shared-texture detour was needed for Milestone 4.
+
+### Verification summary
+- C++ `bmffi_tests`: **61/61 test cases passed (1,279 assertions)**.
+- `libbmffi.dylib` ABI surface: **199** `BMFFI_API` functions; `nm -gU native/build-rust/bmffi/libbmffi.dylib | grep -vc ' _bm_'` = **0**.
+- Swift/app `ctest --test-dir native/build-app`: **634 tests, 0 failed**.
+- Core engine `ctest --test-dir native/build`: **462 tests, 0 failed**.
+- Rust `cargo test --workspace`: **all tests passed** (0 failures across `bm`, `bm-sys`, `brickmotion` unit & integration suites).
+- Rust `cargo clippy --workspace --all-targets -- -D warnings`: **0 warnings**.
+
+### Release performance benchmarks
+- `playback_frame_time` (`10294-1.mpd`, 2880×1800, Standard Preview 9,720 flights): **205 frames in 3 s, median 13.70 ms, p95 18.94 ms** (budget < 33 ms — PASS).
+- `big_model_timeline_frame` (`10294-1.mpd`, Fit & 64× zoom): **slowest timeline frame 452.75 µs** (budget < 16 ms — PASS).
+- `big_model_parts_lane` (`10294-1.mpd`, 9,720 flights): **Fit layout 369 µs / show 80.3 µs; 64× layout 607.1 µs / show 8.17 µs / 157 clips visited** (budgets < 50 ms / < 16 ms — PASS).
+- `write_snap_track_time` (`8880-1.mpd`, 1,410 pieces, native planner): **2.854 s** (140.6 MB WAV; > 100 ms budget — recorded as engine change ruling above).
+
+### Visual inspection (`desktop/docs/m4-*.png`)
+- `m4-timeline.png`: Planned helicopter mid-build with orange playhead at `01:15:10`, highlighted `Step 9`, Pause hold pill, and zoomed-in 2-row packed Parts clips with colour dots and labels; crisp alignment, no overlap.
+- `m4-planning.png`: `8880-1.mpd` (1,410 pieces) actively planning with `"Solving Build Order…"` + 72-px accent progress bar in the title bar and centered planning indicator in the timeline.
+- `m4-build-settings.png`: Assembled helicopter with 344-px Build Settings page showing `2:47` summary card, live rhythm bar, macOS inset Pace group, `How it's planned · Replans` order cards, pinned footer, and Navigator shifted clear to the left.
+- `m4-staging.png`: Animate workspace at `00:00:00` showing waiting parts laid out on the floor alongside the 344-px Build Staging page with 3×3 block-diagram layout grid, Waiting Parts group, and Revert/Apply footer.
+- `m4-sound.png`: Animate workspace with full-fit timeline (zoomed-out coloured Parts dots) and 344-px Snap Sound page showing blue switch ON, rendered PCM waveform on the accented `Brick` Hear It tile, 6 Character preset tiles, and disabled export switch footer.
+- `m4-callout.png`: Build workspace with Steps tab and Step 4 Exploded in the viewport; floating Step Callout sits bottom-left directly above the `16 pieces selected` chip with Previous/Next, Play Step, Play to End, `Exploded ▾`, Show All, and Close.

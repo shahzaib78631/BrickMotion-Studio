@@ -145,6 +145,113 @@ fn screenshots() {
     assert!(brickmotion::run(h.state_mut(), "step.edit"));
     h.run_steps(4);
     h.render().unwrap().save(format!("{docs}/m3-steps.png")).unwrap();
+
+    // Milestone 4 screenshots: Timeline + Parts lane, Planning state, Build Settings,
+    // Build Staging, Snap Sound, and Step Callout.
+    if bm::metal_available() {
+        let wait_plan = |h: &mut Harness<'static, BrickMotionApp>| {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+            loop {
+                h.step();
+                let ver = h.state().session().version();
+                let tr = &h.state().transport;
+                if tr.ready() && tr.version == Some(ver) && !tr.state.stale {
+                    break;
+                }
+                assert!(std::time::Instant::now() < deadline, "plan timed out in screenshots");
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+
+        // 1. m4-timeline.png: Animate workspace, helicopter planned, playhead mid-build, Parts lane zoomed in.
+        let mut h = heli_harness();
+        h.state_mut().set_workspace(Workspace::Animate);
+        wait_plan(&mut h);
+        let mid = h.state().transport.build_start()
+            + (h.state().transport.build_end() - h.state().transport.build_start()) * 0.45;
+        {
+            let app = h.state_mut();
+            if let Some(vp) = app.doc.viewport() {
+                app.transport.seek(vp, mid);
+            }
+            app.timeline.view.zoom = 18.0;
+        }
+        // Step once so TimelineView knows viewport_width, then center on playhead so orange line & Parts clips show.
+        h.run_steps(2);
+        {
+            let app = h.state_mut();
+            let dur = app.transport.duration();
+            app.timeline.view.reveal(mid, dur, true);
+        }
+        h.run_steps(6);
+        h.render().unwrap().save(format!("{docs}/m4-timeline.png")).unwrap();
+
+        // 2. m4-staging.png: Animate workspace at t=0 (waiting parts on floor) with Build Staging page.
+        assert!(brickmotion::run(h.state_mut(), "transport.start"));
+        h.state_mut().timeline.view.fit();
+        assert!(brickmotion::run(h.state_mut(), "video.staging"));
+        h.run_steps(6);
+        h.render().unwrap().save(format!("{docs}/m4-staging.png")).unwrap();
+
+        // 3. m4-sound.png: Animate workspace with Snap Sound page enabled and Brick sample waveform rendered.
+        {
+            let mut mix = h.state().session().snap_mix();
+            mix.enabled = true;
+            h.state_mut().doc.session().set_snap_mix(&mix);
+        }
+        assert!(brickmotion::run(h.state_mut(), "video.snap_sound"));
+        h.run_steps(2);
+        h.state_mut().play_snap_sample(bm::settings::SnapExample::Brick);
+        let t0 = std::time::Instant::now();
+        while h.state().sound.waveform(bm::settings::SnapExample::Brick).is_none()
+            && t0.elapsed() < std::time::Duration::from_secs(10)
+        {
+            h.step();
+            std::thread::sleep(std::time::Duration::from_millis(15));
+        }
+        h.run_steps(6);
+        h.render().unwrap().save(format!("{docs}/m4-sound.png")).unwrap();
+
+        // 4. m4-build-settings.png: Build workspace, assembled planned helicopter, Build Settings page open.
+        {
+            let app = h.state_mut();
+            if let Some(vp) = app.doc.viewport() {
+                app.transport.rest(vp);
+            }
+        }
+        h.state_mut().set_workspace(Workspace::Build);
+        assert!(brickmotion::run(h.state_mut(), "model.build_settings"));
+        h.run_steps(6);
+        h.render().unwrap().save(format!("{docs}/m4-build-settings.png")).unwrap();
+
+        // 5. m4-callout.png: Build workspace, Steps tab, Step 4 Exploded with floating callout.
+        let mut h = heli_harness();
+        h.state_mut().browser_tab = 1;
+        h.state_mut().edit.step = Some(3);
+        h.state_mut().transport.focused_step = Some(3);
+        h.run_steps(2);
+        let step_pieces = h.state().session().pieces_of_step(3);
+        h.state_mut().doc.session().select(&step_pieces, bm::SelectMode::Replace);
+        assert!(brickmotion::run(h.state_mut(), "step.appearance_exploded"));
+        h.run_steps(6);
+        h.render().unwrap().save(format!("{docs}/m4-callout.png")).unwrap();
+
+        // 6. m4-planning.png: Animate workspace on 8880-1.mpd actively planning (titlebar status + greyed timeline).
+        let mut h = Harness::builder().with_size([1440.0, 900.0]).build_eframe(move |cc| {
+            let mut app = BrickMotionApp::new_for_test_cc(cc, Some(car.into()));
+            app.wait_loaded();
+            app
+        });
+        h.run_steps(3);
+        h.state_mut().set_workspace(Workspace::Animate);
+        let t0 = std::time::Instant::now();
+        while !h.state().transport.busy() && t0.elapsed() < std::time::Duration::from_secs(3) {
+            h.step();
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        h.run_steps(3);
+        h.render().unwrap().save(format!("{docs}/m4-planning.png")).unwrap();
+    }
 }
 
 const HELI: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../samples/helicopter/helicopter.mpd");
