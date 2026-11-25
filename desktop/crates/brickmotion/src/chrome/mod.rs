@@ -2,8 +2,10 @@
 pub mod browser;
 pub mod build_settings;
 pub mod camera_lane;
+pub mod camera_panel;
 pub mod callout;
 pub mod confirm;
+pub mod float_panel;
 pub mod library;
 pub mod navigator;
 pub mod notices;
@@ -44,7 +46,14 @@ pub fn central(ui: &mut Ui, app: &mut BrickMotionApp) {
         ribbon::show(ui, app, rect);
         let below = egui::Rect::from_min_max(egui::pos2(rect.left(), rect.top() + ribbon::SPACE), rect.max);
         browser::show(ui, app, below);
-        properties::show(ui, app, below);
+        // Floating editors take the top right; Properties steps aside while one is open.
+        let mut next_top = below.top() + 2.0;
+        let editing = app.camera_selection.is_some() || app.panels.camera;
+        if editing {
+            camera_panel::show(ui, app, below, &mut next_top);
+        } else {
+            properties::show(ui, app, below);
+        }
         navigator::show(ui, app, below);
         callout::show(ui, app, rect);
         viewbar::show(ui, app, rect);

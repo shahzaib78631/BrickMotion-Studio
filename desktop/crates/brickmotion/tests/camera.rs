@@ -187,3 +187,158 @@ fn timeline_clock_has_its_own_track() {
     assert_eq!(keys(&h, CameraClock::Timeline).len(), 1);
     assert!(keys(&h, CameraClock::Build).is_empty());
 }
+
+/// The panels scroll inside when taller than the view: bring the control in, then click it.
+fn click_in_panel(h: &mut Harness<'static, BrickMotionApp>, label: &str) {
+    h.get_by_label(label).scroll_to_me();
+    // The scroll eases in, and a scroll area ignores clicks while it moves.
+    h.run_steps(40);
+    let at = h.get_by_label(label).rect().center();
+    h.event(egui::Event::PointerMoved(at));
+    h.step();
+    press(h, at, egui::PointerButton::Primary, true);
+    press(h, at, egui::PointerButton::Primary, false);
+    h.run_steps(2);
+}
+
+fn drag_across(h: &mut Harness<'static, BrickMotionApp>, from: Pos2, to: Pos2, frames: usize) {
+    h.event(egui::Event::PointerMoved(from));
+    h.step();
+    press(h, from, egui::PointerButton::Primary, true);
+    for i in 1..=frames {
+        let p = from + (to - from) * (i as f32 / frames as f32);
+        h.event(egui::Event::PointerMoved(p));
+        h.step();
+    }
+    press(h, to, egui::PointerButton::Primary, false);
+    h.run_steps(2);
+}
+
+#[test]
+fn camera_slider_drag_is_one_undo_step() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = planned();
+    seek(&mut h, 2.0);
+    run(h.state_mut(), "video.camera_key");
+    h.run_steps(3);
+    let before = keys(&h, CameraClock::Build)[0].clone();
+    let depth = h.state().session().undo_depth();
+    let lens = h.get_by_role_and_label(egui::accesskit::Role::Slider, "Lens").rect();
+    drag_across(&mut h, pos2(lens.left() + 20.0, lens.center().y), pos2(lens.right() - 30.0, lens.center().y), 10);
+    let after = keys(&h, CameraClock::Build)[0].clone();
+    assert!(after.lens_mm > before.lens_mm + 20.0, "lens {} → {}", before.lens_mm, after.lens_mm);
+    assert_eq!(h.state().session().undo_depth(), depth + 1, "the whole drag is one undo step");
+    run(h.state_mut(), "edit.undo");
+    h.run_steps(2);
+    assert!((keys(&h, CameraClock::Build)[0].lens_mm - before.lens_mm).abs() < 1e-9);
+}
+
+#[test]
+fn move_curve_popup_commits() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = planned();
+    for at in [1.0, 5.0] {
+        seek(&mut h, at);
+        run(h.state_mut(), "video.camera_key");
+        h.run_steps(3);
+    }
+    let from = keys(&h, CameraClock::Build)[0].id.clone();
+    h.state_mut().camera_selection = Some((CameraClock::Build, CameraPick::Move(from)));
+    h.run_steps(3);
+    click_in_panel(&mut h, "Easing");
+    h.get_by_label("Even Speed").click();
+    h.run_steps(3);
+    assert_eq!(h.state().session().camera_moves(CameraClock::Build)[0].curve, "linear");
+}
+
+#[test]
+fn escape_closes_the_camera_key_panel() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = planned();
+    seek(&mut h, 2.0);
+    run(h.state_mut(), "video.camera_key");
+    h.run_steps(3);
+    assert!(h.query_by_label("Camera Key panel").is_some(), "selecting a key opens its panel");
+    h.key_press(egui::Key::Escape);
+    h.run_steps(2);
+    assert_eq!(h.state().camera_selection, None);
+    assert!(h.query_by_label("Camera Key panel").is_none());
+}
+
+#[test]
+fn scene_camera_save_and_recall() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = planned();
+    assert!(run(h.state_mut(), "video.scene_cameras"));
+    h.run_steps(3);
+    click_in_panel(&mut h, "Save View as Camera");
+    h.run_steps(3);
+    let cams = h.state().session().scene_cameras();
+    assert_eq!(cams.cameras.len(), 1);
+    assert_eq!(cams.cameras[0].name, "Camera 1");
+    let id = cams.cameras[0].id.clone();
+    let saved = h.state_mut().doc.viewport().unwrap().capture_scene_camera();
+
+    let row = h.get_by_label("Camera 1").rect();
+    right_click(&mut h, row.center());
+    h.get_by_label("Rename…").click();
+    h.run_steps(2);
+    h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Camera name").type_text("Hero");
+    h.run_steps(1);
+    h.key_press(egui::Key::Enter);
+    h.run_steps(3);
+    assert_eq!(h.state().session().scene_cameras().cameras[0].name, "Hero");
+
+    h.state_mut().doc.viewport().unwrap().orbit(120.0, 40.0);
+    h.run_steps(2);
+    assert_ne!(h.state_mut().doc.viewport().unwrap().capture_scene_camera().position, saved.position);
+    click_in_panel(&mut h, "Look Through Hero");
+    h.run_steps(3);
+    let now = h.state_mut().doc.viewport().unwrap().capture_scene_camera();
+    assert!((now.position.x - saved.position.x).abs() < 1e-3 && (now.position.z - saved.position.z).abs() < 1e-3);
+    assert!(!h.state().director, "recalling a camera stops Follow Camera");
+
+    h.get_by_label("Hero").scroll_to_me();
+    h.run_steps(40);
+    let row = h.get_by_label("Hero").rect();
+    right_click(&mut h, row.center());
+    // The first saved camera is already the video's: hand video back to the automatic camera.
+    h.get_by_label("Use Automatic Camera for Video").click();
+    h.run_steps(3);
+    let cams = h.state().session().scene_cameras();
+    assert!(!(cams.use_for_video && cams.active_id == id), "automatic camera for video");
+    let row = h.get_by_label("Hero").rect();
+    right_click(&mut h, row.center());
+    h.get_by_label("Make Default for Video").click();
+    h.run_steps(3);
+    let cams = h.state().session().scene_cameras();
+    assert_eq!(cams.active_id, id);
+    assert!(cams.use_for_video);
+}
+
+#[test]
+fn export_camera_popup() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = planned();
+    run(h.state_mut(), "video.scene_cameras");
+    h.run_steps(3);
+    click_in_panel(&mut h, "Camera Track");
+    h.run_steps(2);
+    assert_eq!(h.state().session().export_camera(), "track");
+    click_in_panel(&mut h, "Viewport");
+    h.run_steps(2);
+    assert_eq!(h.state().session().export_camera(), "buildView");
+    click_in_panel(&mut h, "Scene Camera");
+    h.run_steps(2);
+    assert_eq!(h.state().session().export_camera(), "automatic");
+}

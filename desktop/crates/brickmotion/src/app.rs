@@ -150,6 +150,9 @@ pub struct BrickMotionApp {
     pub director: bool,
     /// Whether the Auto-Direct menu under the ribbon button is open.
     pub director_popup: bool,
+    /// The floating editors' places and the Camera panel.
+    pub panels: chrome::float_panel::Panels,
+    pub camera_panel: chrome::camera_panel::CameraPanelState,
     pub(crate) camera_synced: Option<(u64, u64)>,
     /// Build timeline zoom, scroll, track disclosure and drag state.
     pub timeline: chrome::timeline::TimelineState,
@@ -232,6 +235,8 @@ impl BrickMotionApp {
             camera_selection: None,
             director: false,
             director_popup: false,
+            panels: Default::default(),
+            camera_panel: Default::default(),
             camera_synced: None,
             timeline: chrome::timeline::TimelineState::default(),
             properties_page: chrome::properties::Page::Inspector,
@@ -343,6 +348,7 @@ impl BrickMotionApp {
         self.staging.reset();
         self.sound_page.reset();
         self.sound.reset();
+        self.camera_panel.reset();
         // The old document (and its renderer) goes, off this thread; the widget sets the new one up.
         crate::loader::retire(std::mem::replace(&mut self.doc, doc));
         self.viewport.reset();
@@ -708,6 +714,10 @@ impl BrickMotionApp {
                 self.ribbon_tab = "Camera";
                 self.director_popup = !self.director_popup;
             }
+            "video.scene_cameras" | "video.export_camera" => {
+                self.ribbon_tab = "Camera";
+                self.panels.camera = !self.panels.camera;
+            }
             "video.follow" => {
                 let on = !self.director;
                 chrome::camera_lane::set_director(self, on);
@@ -904,6 +914,7 @@ impl BrickMotionApp {
         self.staging.reset();
         self.sound_page.reset();
         self.sound.reset();
+        self.camera_panel.reset();
         let mut s = bm::Session::new();
         match s.new_blank() {
             Ok(_) => {
@@ -1152,6 +1163,7 @@ impl eframe::App for BrickMotionApp {
             self.edit.step = self.steps.clamp(self.edit.step);
         }
         self.text_focus = ui.ctx().egui_wants_keyboard_input();
+        chrome::camera_panel::escape(self, ui.ctx());
         crate::shortcuts::handle(self, ui.ctx());
         if self.has_document {
             chrome::camera_lane::sync(self);

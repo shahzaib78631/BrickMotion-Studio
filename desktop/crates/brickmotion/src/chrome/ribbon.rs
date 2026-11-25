@@ -141,7 +141,9 @@ fn tool_groups(ui: &mut Ui, app: &mut BrickMotionApp) {
                         let on = enabled(c, &ctx);
                         let active = (c.id == "model.move" && ctx.tool == crate::Tool::Move)
                             || (c.id == "model.rotate_tool" && ctx.tool == crate::Tool::Rotate);
-                        let active = active || (c.id == "video.follow" && app.director);
+                        let active = active
+                            || (c.id == "video.follow" && app.director)
+                            || (matches!(c.id, "video.scene_cameras" | "video.export_camera") && app.panels.camera);
                         let resp = tool(ui, &t, c, on, active);
                         let resp = hover_card(resp, &t, c);
                         if resp.clicked() && on {

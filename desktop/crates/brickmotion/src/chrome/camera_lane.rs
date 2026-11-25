@@ -134,7 +134,8 @@ pub fn sync(app: &mut BrickMotionApp) {
     }
 }
 
-fn seek(app: &mut BrickMotionApp, seconds: f64) {
+/// Moves the playhead to `seconds` on the clock the timeline shows.
+pub fn seek(app: &mut BrickMotionApp, seconds: f64) {
     if let Some(vp) = app.doc.viewport() {
         app.transport.seek(vp, seconds);
     }
@@ -310,33 +311,48 @@ fn key_menu(ui: &mut Ui, app: &mut BrickMotionApp, clock: CameraClock, key: &Cam
         ui.close();
     }
     if ui.button("Update Key from View").on_hover_text("This key films the viewport's view as it is now").clicked() {
-        if let Some(vp) = app.doc.viewport() {
-            let view = vp.capture_scene_camera();
-            let c = app.doc.session().set_camera_key_view(clock, &key.id, &view);
-            app.edited(c);
-        }
+        update_key_from_view(app, clock, &key.id);
         ui.close();
     }
     ui.menu_button("Look At", |ui| {
         for (id, label) in AIMS {
             if ui.radio(key.target == id, label).clicked() {
-                if let (session, Some(vp)) = app.doc.parts() {
-                    let c = bm::camera::aim_camera_key(session, vp, clock, key, id);
-                    app.edited(c);
-                }
+                aim_key(app, clock, key, id);
                 ui.close();
             }
         }
     });
     ui.separator();
     if ui.button("Delete Key").clicked() {
-        let c = app.doc.session().remove_camera_key(clock, &key.id);
-        if c.refused.is_none() && app.camera_selection.as_ref().is_some_and(|(k, p)| *k == clock && p.id() == key.id) {
-            app.camera_selection = None;
-        }
-        app.edited(c);
+        delete_key(app, clock, &key.id);
         ui.close();
     }
+}
+
+/// The key films the viewport's view as it is now.
+pub fn update_key_from_view(app: &mut BrickMotionApp, clock: CameraClock, id: &str) {
+    if let Some(vp) = app.doc.viewport() {
+        let view = vp.capture_scene_camera();
+        let c = app.doc.session().set_camera_key_view(clock, id, &view);
+        app.edited(c);
+    }
+}
+
+/// Look At: what the key looks at.
+pub fn aim_key(app: &mut BrickMotionApp, clock: CameraClock, key: &CameraKey, target: &str) {
+    if let (session, Some(vp)) = app.doc.parts() {
+        let c = bm::camera::aim_camera_key(session, vp, clock, key, target);
+        app.edited(c);
+    }
+}
+
+/// Removes a key; a selection on it goes with it.
+pub fn delete_key(app: &mut BrickMotionApp, clock: CameraClock, id: &str) {
+    let c = app.doc.session().remove_camera_key(clock, id);
+    if c.refused.is_none() && app.camera_selection.as_ref().is_some_and(|(k, p)| *k == clock && p.id() == id) {
+        app.camera_selection = None;
+    }
+    app.edited(c);
 }
 
 /// The move's menu: the nineteen presets; a slide moves about as far as the camera is now.
