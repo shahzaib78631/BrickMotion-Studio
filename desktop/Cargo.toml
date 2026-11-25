@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/bm-sys", "crates/bm"]
+members = ["crates/bm-sys", "crates/bm", "crates/brickmotion"]
 
 [workspace.package]
 edition = "2024"

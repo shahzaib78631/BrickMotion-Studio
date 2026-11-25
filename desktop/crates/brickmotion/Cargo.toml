@@ -1,0 +1,17 @@
+[package]
+name = "brickmotion"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+build = "build.rs"
+
+[dependencies]
+bm = { path = "../bm" }
+bm-sys = { path = "../bm-sys" }
+eframe = { version = "0.37", default-features = false, features = ["wgpu", "accesskit", "default_fonts"] }
+egui = "0.37"
+egui_extras = { version = "0.37", features = ["svg"] }
+
+[dev-dependencies]
+egui_kittest = { version = "0.37", features = ["eframe", "wgpu", "snapshot"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
