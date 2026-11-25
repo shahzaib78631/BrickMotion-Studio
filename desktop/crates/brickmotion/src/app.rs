@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use crate::autosave::Autosaver;
 use crate::chrome;
 use crate::commands::{Ctx, run, tabs};
 use crate::document::{DocState, PROJECT_EXTENSION, save_to, with_project_extension};
@@ -95,6 +96,9 @@ pub struct BrickMotionApp {
     replace_ok: Option<u64>,
     /// Quit was confirmed: the next frame closes the window.
     quitting: bool,
+    autosaver: Autosaver,
+    /// The last autosave failure shown, so a repeating one warns once.
+    autosave_error: Option<String>,
 }
 
 impl BrickMotionApp {
@@ -138,6 +142,8 @@ impl BrickMotionApp {
             confirm: None,
             replace_ok: None,
             quitting: false,
+            autosaver: Autosaver::default(),
+            autosave_error: None,
         };
         if let Some(p) = path {
             app.open(p);
@@ -253,6 +259,22 @@ impl BrickMotionApp {
                 let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
                 self.notices.push(Notice::Error { title: format!("Couldn't save {name}"), detail: e });
             }
+        }
+    }
+
+    /// Autosaves when due (see `autosave`). A failure is a warning, once per distinct message.
+    pub fn autosave(&mut self, now: std::time::Instant) {
+        if !self.has_document {
+            return;
+        }
+        let r = self.autosaver.tick(now, chrono::Local::now(), self.doc.session_mut(), &self.state, &self.prefs, &self.support);
+        match r {
+            Some(Ok(_)) => self.autosave_error = None,
+            Some(Err(e)) if self.autosave_error.as_ref() != Some(&e) => {
+                self.notices.push(Notice::Warning { title: "Couldn't autosave".into(), detail: e.clone() });
+                self.autosave_error = Some(e);
+            }
+            _ => {}
         }
     }
 
@@ -484,6 +506,11 @@ impl eframe::App for BrickMotionApp {
         chrome::central(ui, self);
         chrome::confirm::show(ui, self);
         self.run_requested();
+        self.autosave(std::time::Instant::now());
+        if self.dirty() {
+            // An idle window still autosaves.
+            ui.ctx().request_repaint_after(Duration::from_secs(self.prefs.autosave_seconds.max(1)));
+        }
         if self.doc.session().version() != self.seen_version {
             // An edit, undo or redo: the engine's viewport catches up by itself, it only needs a frame.
             self.seen_version = self.doc.session().version();

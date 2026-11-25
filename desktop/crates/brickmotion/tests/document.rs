@@ -168,3 +168,26 @@ fn quit_with_changes_asks() {
     assert!(h.state().confirm.is_none());
     assert!(h.state().session().dirty());
 }
+
+#[test]
+fn app_autosaves_backups_and_warns_once() {
+    let mut app = opened(Path::new(HELI));
+    app.prefs.autosave_seconds = 0;
+    delete_first(&mut app);
+    let t0 = std::time::Instant::now();
+    app.autosave(t0);
+    app.autosave(t0 + std::time::Duration::from_secs(1));
+    let dir = app.support.backups().join("helicopter");
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+    assert!(app.session().dirty(), "an imported document stays edited");
+
+    // A backup folder that cannot be written warns once, however often it fails.
+    std::fs::remove_dir_all(&dir).unwrap();
+    std::fs::write(&dir, b"not a folder").unwrap();
+    for i in 2..5u64 {
+        delete_first(&mut app);
+        app.autosave(t0 + std::time::Duration::from_secs(i));
+    }
+    let warnings = app.notices().iter().filter(|n| n.title() == "Couldn't autosave").count();
+    assert_eq!(warnings, 1);
+}

@@ -1,5 +1,6 @@
 //! BrickMotion desktop: a Rust/egui shell over the C++ engine.
 mod app;
+pub mod autosave;
 pub mod chrome;
 pub mod commands;
 pub mod document;
