@@ -76,12 +76,17 @@ pub fn icon_button_tip(ui: &mut Ui, t: &Theme, i: Icon, label: &str, tip: &str, 
 }
 
 /// The hover card of a ribbon tool: title, shortcut and what it does.
+/// The shortcut to advertise for `c`: none for a command that is not built yet, whose key does nothing.
+pub fn card_keys(c: &Command) -> Option<&'static str> {
+    if c.when == crate::When::Soon { None } else { c.keys }
+}
+
 pub fn hover_card(resp: Response, t: &Theme, c: &Command) -> Response {
     resp.on_hover_ui(|ui| {
         ui.set_max_width(260.0);
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new(c.title).strong().color(t.text1));
-            if let Some(k) = c.keys {
+            if let Some(k) = card_keys(c) {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| kbd(ui, t, k));
             }
         });
@@ -123,4 +128,17 @@ pub fn panel_header(ui: &mut Ui, t: &Theme, title: &str, actions: impl FnOnce(&m
     });
     let r = ui.min_rect();
     ui.painter().hline(r.x_range(), ui.cursor().top(), Stroke::new(1.0, t.border));
+}
+
+#[cfg(test)]
+mod card_tests {
+    use super::card_keys;
+
+    #[test]
+    fn soon_commands_show_no_keys() {
+        let add = crate::find("model.add_part").unwrap();
+        assert_eq!(add.keys, Some("P"));
+        assert_eq!(card_keys(add), None);
+        assert_eq!(card_keys(crate::find("file.open").unwrap()), Some("⌘O"));
+    }
 }

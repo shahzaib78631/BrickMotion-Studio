@@ -242,7 +242,9 @@ impl BrickMotionApp {
         self.has_document = true;
         self.replace_ok = None;
         self.state = DocState { imported: self.doc.session().imported(), path: Some(path.clone()) };
-        self.notices.extend(Notice::from_warnings(&info.warnings));
+        if let Some(n) = Notice::from_warnings(&info.warnings) {
+            crate::notices::push(&mut self.notices, n);
+        }
         self.remember(path);
     }
 
@@ -275,7 +277,7 @@ impl BrickMotionApp {
             }
             Err(e) => {
                 let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                self.notices.push(Notice::Error { title: format!("Couldn't save {name}"), detail: e });
+                crate::notices::push(&mut self.notices, Notice::Error { title: format!("Couldn't save {name}"), detail: e });
             }
         }
     }
@@ -289,7 +291,7 @@ impl BrickMotionApp {
         match r {
             Some(Ok(_)) => self.autosave_error = None,
             Some(Err(e)) if self.autosave_error.as_ref() != Some(&e) => {
-                self.notices.push(Notice::Warning { title: "Couldn't autosave".into(), detail: e.clone() });
+                crate::notices::push(&mut self.notices, Notice::Warning { title: "Couldn't autosave".into(), detail: e.clone() });
                 self.autosave_error = Some(e);
             }
             _ => {}
@@ -414,7 +416,7 @@ impl BrickMotionApp {
     /// After an edit: a refusal becomes a notice.
     fn edited(&mut self, c: bm::Changed) {
         if let Some(why) = c.refused {
-            self.notices.push(Notice::Warning { title: "Couldn't edit".into(), detail: why });
+            crate::notices::push(&mut self.notices, Notice::Warning { title: "Couldn't edit".into(), detail: why });
         }
     }
 
@@ -432,7 +434,7 @@ impl BrickMotionApp {
                 self.has_document = true;
                 self.state = DocState::default();
             }
-            Err(e) => self.notices.push(Notice::open_failed(&e)),
+            Err(e) => crate::notices::push(&mut self.notices, Notice::open_failed(&e)),
         }
     }
 
@@ -488,7 +490,7 @@ impl BrickMotionApp {
                     self.adopt(path, doc, info);
                 }
             }
-            Some(Err(e)) => self.notices.push(Notice::open_failed(&e)),
+            Some(Err(e)) => crate::notices::push(&mut self.notices, Notice::open_failed(&e)),
             None => {}
         }
     }

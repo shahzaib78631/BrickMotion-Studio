@@ -169,7 +169,7 @@ fn row(ui: &mut Ui, t: &crate::Theme, c: &Command, ctx: &Ctx, current: bool) -> 
     icons::paint(ui, c.icon, egui::Rect::from_center_size(egui::pos2(rect.left() + 18.0, y), vec2(16.0, 16.0)), 16.0, if on { t.text2 } else { t.text3 });
     ui.painter().text(egui::pos2(rect.left() + 36.0, y), Align2::LEFT_CENTER, title(c, ctx), egui::FontId::proportional(12.5), main);
     let mut right = rect.right() - 10.0;
-    if let Some(k) = c.keys.and_then(Shortcut::parse) {
+    if let Some(k) = crate::chrome::card_keys(c).and_then(Shortcut::parse) {
         let r = ui.painter().text(egui::pos2(right, y), Align2::RIGHT_CENTER, k.label(), egui::FontId::proportional(11.0), t.text3);
         right = r.left() - 12.0;
     }

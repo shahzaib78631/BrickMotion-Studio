@@ -27,7 +27,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
                 icons::icon(ui, Icon::Brick, 16.0, t.playhead);
                 ui.label(RichText::new("BrickMotion").strong().color(t.text1));
                 ui.add_space(6.0);
-                if icon_button(ui, &t, Icon::Home, "Open…", true, false, 28.0).clicked() {
+                if icon_button(ui, &t, Icon::File, "Open…", true, false, 28.0).clicked() {
                     app.requested.push("file.open");
                 }
                 ui.menu_button(RichText::new("File").color(t.text2), |ui| file_menu(ui, app));
