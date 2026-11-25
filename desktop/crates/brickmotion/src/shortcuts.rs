@@ -15,7 +15,7 @@ fn ordered() -> Vec<(Shortcut, &'static str)> {
 /// text field. A matched key is consumed, so widgets do not also act on it. With the menu bar
 /// installed, ⌘ keys belong to it (AppKit gives them to the menu first), so they run once.
 pub fn handle(app: &mut BrickMotionApp, ctx: &egui::Context) {
-    let typing = app.text_focus || app.palette.open;
+    let typing = app.text_focus || app.palette.open || app.swatches.open.is_some();
     let menu = app.menubar.is_some();
     for (s, id) in ordered() {
         if (typing && !s.mods.command) || (menu && s.mods.command) {

@@ -5,6 +5,7 @@ pub mod navigator;
 pub mod notices;
 pub mod properties;
 pub mod ribbon;
+pub mod swatches;
 pub mod timeline;
 pub mod titlebar;
 pub mod tree;

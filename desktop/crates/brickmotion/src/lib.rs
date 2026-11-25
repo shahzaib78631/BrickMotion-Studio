@@ -6,6 +6,7 @@ pub mod commands;
 pub mod document;
 pub mod edit;
 pub mod gizmo;
+pub mod history;
 mod icons;
 pub mod loader;
 pub mod menubar;

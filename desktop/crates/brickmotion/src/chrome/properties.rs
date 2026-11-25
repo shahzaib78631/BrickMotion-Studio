@@ -32,7 +32,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
                     match snap.selected {
                         0 => project(ui, app, &snap, &mut run),
                         1 if !snap.described.is_empty() => piece(ui, app, &snap.described[0]),
-                        _ => many(ui, &t, &snap),
+                        _ => many(ui, app, &snap),
                     }
                 });
             });
@@ -101,14 +101,9 @@ fn piece(ui: &mut Ui, app: &mut BrickMotionApp, p: &bm::PieceInfo) {
         ui.label(RichText::new(&p.description).strong().color(t.text1));
         ui.label(RichText::new(&p.part).color(t.text3));
         ui.add_space(4.0);
-        ui.horizontal(|ui| {
-            ui.label(RichText::new("Colour").color(t.text3));
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(RichText::new(&p.color_name).color(t.text1));
-                let (r, _) = ui.allocate_exact_size(vec2(14.0, 14.0), Sense::hover());
-                ui.painter().rect(r, 3.0, swatch.unwrap_or(t.bg3), Stroke::new(1.0, t.border2), egui::StrokeKind::Inside);
-            });
-        });
+        if colour_button_row(ui, &t, swatch, &p.color_name) {
+            app.swatches.open(super::swatches::Target::Selection);
+        }
         row(ui, &t, "Step", &(p.step + 1).to_string());
         let place = if p.submodel_path.is_empty() { "Main model".to_owned() } else { p.submodel_path.replace('/', " › ") };
         row(ui, &t, "In", &place);
@@ -119,7 +114,39 @@ fn piece(ui: &mut Ui, app: &mut BrickMotionApp, p: &bm::PieceInfo) {
     });
 }
 
-fn many(ui: &mut Ui, t: &crate::Theme, snap: &bm::Snapshot) {
+fn colour_button_row(ui: &mut Ui, t: &crate::Theme, swatch: Option<Color32>, name: &str) -> bool {
+    let mut clicked = false;
+    ui.horizontal(|ui| {
+        ui.label(RichText::new("Colour").color(t.text3));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let text_galley = ui.painter().layout_no_wrap(name.to_owned(), egui::FontId::proportional(12.5), t.text1);
+            let w = text_galley.size().x + 14.0 + 6.0 + 10.0;
+            let (r, resp) = ui.allocate_exact_size(vec2(w, 22.0), Sense::click());
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, name));
+            if resp.hovered() {
+                ui.painter().rect_filled(r, 4.0, t.bg3);
+            }
+            let sw = Rect::from_center_size(egui::pos2(r.left() + 12.0, r.center().y), vec2(14.0, 14.0));
+            ui.painter().rect(sw, 3.0, swatch.unwrap_or(t.bg3), Stroke::new(1.0, t.border2), egui::StrokeKind::Inside);
+            ui.painter().galley(egui::pos2(sw.right() + 6.0, r.center().y - text_galley.size().y / 2.0), text_galley, t.text1);
+            if resp.on_hover_text("Change colour").clicked() {
+                clicked = true;
+            }
+        });
+    });
+    clicked
+}
+
+fn many(ui: &mut Ui, app: &mut BrickMotionApp, snap: &bm::Snapshot) {
+    let t = app.theme;
+    let colors = app.colors();
+    let first_code = snap.described.first().map(|p| p.color);
+    let same_color = first_code.filter(|&code| snap.described.iter().all(|p| p.color == code));
+    let swatch = same_color.and_then(|code| colors.iter().find(|c| c.code == code)).map(|c| Color32::from_rgb(c.rgb[0], c.rgb[1], c.rgb[2]));
+    let color_label = same_color
+        .and_then(|_| snap.described.first().map(|p| p.color_name.as_str()))
+        .unwrap_or("Mixed");
+
     let mut parts: BTreeMap<&str, usize> = BTreeMap::new();
     for p in &snap.described {
         *parts.entry(p.description.as_str()).or_default() += 1;
@@ -127,6 +154,10 @@ fn many(ui: &mut Ui, t: &crate::Theme, snap: &bm::Snapshot) {
     let mut parts: Vec<(&str, usize)> = parts.into_iter().collect();
     parts.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
     section(ui, &format!("{} pieces", snap.selected), |ui| {
+        if colour_button_row(ui, &t, swatch, color_label) {
+            app.swatches.open(super::swatches::Target::Selection);
+        }
+        ui.add_space(2.0);
         for (desc, n) in parts.iter().take(PART_ROWS) {
             ui.add(egui::Label::new(RichText::new(format!("{n} × {desc}")).color(t.text1)).truncate());
         }

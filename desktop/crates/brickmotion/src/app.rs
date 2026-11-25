@@ -120,6 +120,10 @@ pub struct BrickMotionApp {
     startup: Option<PathBuf>,
     /// Editing state: active tool, axes, collision, colour and chosen step.
     pub edit: crate::edit::EditState,
+    /// Recent/frequent parts and recent colours in history.toml.
+    pub history: crate::history::History,
+    /// Colour swatches popover state.
+    pub swatches: chrome::swatches::Swatches,
     /// In-memory clipboard used when dialogs are off (headless tests).
     pub(crate) clipboard: String,
 }
@@ -140,6 +144,7 @@ impl BrickMotionApp {
         let theme = Theme::DARK;
         let prefs = Prefs::load(&support);
         let recents = Recents::load(&support);
+        let history = crate::history::History::load(&support);
         let mut app = BrickMotionApp {
             workspace: Workspace::Build,
             ribbon_tab: tabs(Workspace::Build)[0],
@@ -176,6 +181,8 @@ impl BrickMotionApp {
             autosaving: None,
             startup: None,
             edit: crate::edit::EditState::default(),
+            history,
+            swatches: chrome::swatches::Swatches::default(),
             clipboard: String::new(),
         };
         // Opened once the first frame knows the view's size, so the worker can draw it warm.
@@ -480,6 +487,7 @@ impl BrickMotionApp {
             "model.rotate_tool" => self.edit.tool = crate::edit::Tool::Rotate,
             "model.rotate" => crate::edit::turn(self, true),
             "model.rotate_back" => crate::edit::turn(self, false),
+            "model.recolour" => self.swatches.open(chrome::swatches::Target::Selection),
             "edit.clone" => crate::edit::clone(self),
             "model.duplicate" => crate::edit::duplicate(self),
             "edit.raise" => crate::edit::raise(self, self.edit.alt_held),
@@ -730,6 +738,7 @@ impl eframe::App for BrickMotionApp {
         chrome::central(ui, self);
         self.start_startup();
         crate::palette::show(ui, self);
+        chrome::swatches::show(ui, self);
         chrome::confirm::show(ui, self);
         self.run_requested();
         self.autosave(std::time::Instant::now());

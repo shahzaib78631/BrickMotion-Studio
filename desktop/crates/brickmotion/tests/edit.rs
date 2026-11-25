@@ -134,3 +134,58 @@ fn typing_does_not_edit() {
     assert_eq!(h.state().edit.tool, Tool::Select);
     assert_eq!(h.state().filter, "pmceqrvlk");
 }
+
+#[test]
+fn recolour_selection_from_swatches() {
+    let mut h = heli_harness();
+    h.state_mut().doc.session().select(&[0], bm::SelectMode::Replace);
+    let orig = h.state().session().snapshot().described[0].color;
+    let target_label = if orig == 4 { "Blue (1)" } else { "Red (4)" };
+    let target_code = if orig == 4 { 1 } else { 4 };
+    assert!(run(h.state_mut(), "model.recolour"));
+    h.run_steps(2);
+    h.get_by_label(target_label).click();
+    h.run_steps(2);
+    assert_eq!(h.state().session().snapshot().described[0].color, target_code);
+    assert_eq!(h.state().history.colours.first().copied(), Some(target_code));
+    assert!(h.state().swatches.open.is_none());
+    assert!(run(h.state_mut(), "edit.undo"));
+    assert_eq!(h.state().session().snapshot().described[0].color, orig);
+}
+
+#[test]
+fn swatch_search_by_code() {
+    let mut h = heli_harness();
+    h.state_mut().doc.session().select(&[0], bm::SelectMode::Replace);
+    assert!(run(h.state_mut(), "model.recolour"));
+    h.run_steps(2);
+    h.get_by_label("Search colours").type_text("4");
+    h.run_steps(2);
+    assert!(h.query_by_label("Red (4)").is_some());
+    assert!(h.query_by_label("Blue (1)").is_none());
+}
+
+#[test]
+fn new_part_colour_set_from_swatches() {
+    let mut h = heli_harness();
+    let v = h.state().session().version();
+    h.state_mut().swatches.open(brickmotion::chrome::swatches::Target::NewParts);
+    h.run_steps(2);
+    h.get_by_label("Red (4)").click();
+    h.run_steps(2);
+    assert_eq!(h.state().edit.colour, 4);
+    assert_eq!(h.state().session().version(), v);
+}
+
+#[test]
+fn typing_in_swatch_search_does_not_edit() {
+    let mut h = heli_harness();
+    h.state_mut().doc.session().select(&[0], bm::SelectMode::Replace);
+    let v = h.state().session().version();
+    assert!(run(h.state_mut(), "model.recolour"));
+    h.run_steps(2);
+    h.get_by_label("Search colours").type_text("pmceqrvlk");
+    h.run_steps(2);
+    assert_eq!(h.state().session().version(), v);
+    assert_eq!(h.state().edit.tool, Tool::Select);
+}

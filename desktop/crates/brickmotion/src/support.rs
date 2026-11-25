@@ -27,7 +27,7 @@ impl Support {
         self.dir.join("Backups")
     }
 
-    fn file(&self, name: &str) -> PathBuf {
+    pub fn file(&self, name: &str) -> PathBuf {
         self.dir.join(name)
     }
 }
