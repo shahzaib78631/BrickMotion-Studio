@@ -627,6 +627,32 @@ impl BrickMotionApp {
     pub fn notices(&self) -> &[Notice] {
         &self.notices
     }
+
+    #[doc(hidden)]
+    pub fn gizmo_lines(&self) -> usize {
+        self.viewport.gizmo.as_ref().map(|g| g.lines.len()).unwrap_or(0)
+    }
+
+    #[doc(hidden)]
+    pub fn gizmo_line(&self, i: usize) -> Option<(bm::Vec2, bm::Vec2, bm::gizmo::Handle)> {
+        self.viewport.gizmo.as_ref()?.lines.get(i).copied()
+    }
+
+    #[doc(hidden)]
+    pub fn gizmo_ring(&self, handle: bm::gizmo::Handle) -> Option<Vec<bm::Vec2>> {
+        self.viewport
+            .gizmo
+            .as_ref()?
+            .rings
+            .iter()
+            .find(|(_, h)| *h == handle)
+            .map(|(pts, _)| pts.clone())
+    }
+
+    #[doc(hidden)]
+    pub fn viewport_rect(&self) -> Option<egui::Rect> {
+        self.viewport.last_rect
+    }
 }
 
 impl BrickMotionApp {

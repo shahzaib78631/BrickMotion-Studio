@@ -5,6 +5,7 @@ pub mod chrome;
 pub mod commands;
 pub mod document;
 pub mod edit;
+pub mod gizmo;
 mod icons;
 pub mod loader;
 pub mod menubar;

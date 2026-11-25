@@ -21,6 +21,18 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
                 .show(ui, |ui| {
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = 2.0;
+                        let doc_on = app.has_document;
+                        for (i, label, tool, cmd) in [
+                            (Icon::Cursor, "Select Tool", crate::Tool::Select, "tool.select"),
+                            (Icon::Move, "Move Tool", crate::Tool::Move, "model.move"),
+                            (Icon::Rotate, "Rotate Tool", crate::Tool::Rotate, "model.rotate_tool"),
+                        ] {
+                            let tip = if doc_on { label } else { "Open a model to edit" };
+                            if super::icon_button_tip(ui, &t, i, label, tip, doc_on, app.edit.tool == tool, 28.0).clicked() {
+                                app.requested.push(cmd);
+                            }
+                        }
+                        sep(ui, &t);
                         for (i, label, mode) in [(Icon::Orbit, "Orbit", DragMode::Orbit), (Icon::Pan, "Pan", DragMode::Pan), (Icon::Search, "Zoom", DragMode::Zoom)] {
                             if icon_button(ui, &t, i, label, true, app.viewport.mode == mode, 28.0).clicked() {
                                 app.viewport.mode = mode;

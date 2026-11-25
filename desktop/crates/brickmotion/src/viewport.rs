@@ -1,5 +1,10 @@
 //! The engine's picture in the central area, and the mapping from pointer gestures to view ops.
+use bm::gizmo::{GizmoKind, GizmoShape, Handle};
 use egui::{Color32, ColorImage, Modifiers, Pos2, Rect, Sense, TextureHandle, TextureOptions, Ui, Vec2, pos2};
+
+use crate::edit::{EditState, Tool};
+use crate::gizmo::{self, GizmoDrag};
+use crate::theme::Theme;
 
 /// One thing to do to the view.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -103,6 +108,12 @@ pub struct ViewportWidget {
     view_size: Option<(u32, u32, f64)>,
     /// The document generation the viewport was set up for; a new document needs setting up again.
     generation: Option<u64>,
+    /// The last viewport rectangle in egui points.
+    pub(crate) last_rect: Option<Rect>,
+    /// The active move/rotate gizmo drawn over the viewport, when visible.
+    pub(crate) gizmo: Option<GizmoShape>,
+    hovered: Handle,
+    drag: Option<GizmoDrag>,
 }
 
 impl ViewportWidget {
@@ -121,6 +132,9 @@ impl ViewportWidget {
     pub fn reset(&mut self) {
         self.generation = None;
         self.last_size = None;
+        self.gizmo = None;
+        self.hovered = Handle::None;
+        self.drag = None;
     }
 
     /// The size and background the next document should be drawn at, once known.
@@ -128,8 +142,9 @@ impl ViewportWidget {
         self.view_size.map(|size| crate::loader::Warm { size, background: self.background })
     }
 
-    pub fn show(&mut self, ui: &mut Ui, doc: &mut bm::Document) {
+    pub fn show(&mut self, ui: &mut Ui, doc: &mut bm::Document, edit: &mut EditState, theme: &Theme) {
         let rect = ui.max_rect();
+        self.last_rect = Some(rect);
         let resp = ui.interact(rect, ui.scope_id().with("viewport"), Sense::click_and_drag());
         let Some(size) = target_size(rect, ui.ctx().pixels_per_point()) else {
             return;
@@ -138,7 +153,9 @@ impl ViewportWidget {
         let generation = doc.session().generation();
         let fresh = self.generation != Some(generation);
         let empty = doc.session().piece_count() == 0;
-        let Some(vp) = doc.viewport() else {
+        if doc.viewport().is_none() {
+            self.gizmo = None;
+            self.drag = None;
             let text = no_view_text(empty, bm::metal_available());
             let hint = egui::Label::new(egui::RichText::new(text).size(13.0).color(Color32::from_gray(0x8a)));
             ui.put(Rect::from_center_size(rect.center(), egui::vec2(rect.width(), 24.0)), hint);
@@ -147,31 +164,142 @@ impl ViewportWidget {
                 ui.put(Rect::from_center_size(rect.center() + egui::vec2(0.0, 22.0), egui::vec2(60.0, 18.0)), egui::Label::new(k));
             }
             return;
-        };
+        }
         let mut changed = false;
-        if fresh {
-            vp.set_background(self.background);
-            self.last_size = None;
+        {
+            let vp = doc.viewport().unwrap();
+            if fresh {
+                vp.set_background(self.background);
+                self.last_size = None;
+            }
+            if self.last_size != Some(size) {
+                vp.resize(size.0, size.1, size.2);
+                self.last_size = Some(size);
+                changed = true;
+            }
+            if fresh {
+                vp.fit_all();
+                self.generation = Some(generation);
+                changed = true;
+            }
         }
-        if self.last_size != Some(size) {
-            vp.resize(size.0, size.1, size.2);
-            self.last_size = Some(size);
-            changed = true;
+
+        let local = |p: Pos2| pos2(p.x - rect.left(), p.y - rect.top());
+        let to_bm = |p: Pos2| bm::Vec2::new((p.x - rect.left()) as f64, (p.y - rect.top()) as f64);
+        let view_pt = bm::Vec2::new(rect.width() as f64, rect.height() as f64);
+
+        let gizmo_kind = match edit.tool {
+            Tool::Move => Some(GizmoKind::Move),
+            Tool::Rotate => Some(GizmoKind::Rotate),
+            Tool::Select => None,
+        };
+        let sel = doc.session().selection();
+        let show_gizmo = gizmo_kind.is_some() && !sel.is_empty();
+
+        // Build the gizmo shape before input so a press on frame 1 hits immediately.
+        if show_gizmo {
+            let kind = gizmo_kind.unwrap();
+            let (cam, origin, axes) = if let Some(d) = &self.drag {
+                (doc.viewport().unwrap().camera(), d.origin, d.axes)
+            } else {
+                let ax = gizmo::axes(doc.session(), edit);
+                let vp = doc.viewport().unwrap();
+                (vp.camera(), vp.selection_center(), ax)
+            };
+            self.gizmo = Some(GizmoShape::new(&cam, view_pt, origin, axes, kind));
+        } else {
+            if self.drag.take().is_some() {
+                doc.session().end_gesture();
+            }
+            self.gizmo = None;
+            self.hovered = Handle::None;
         }
-        if fresh {
-            vp.fit_all();
-            self.generation = Some(generation);
-            changed = true;
+
+        // Read pointer state once outside borrow conflicts.
+        let hovered = resp.hovered() || resp.dragged();
+        let (primary_pressed, primary_down, latest_pos, hover_pos, modifiers) = ui.input(|i| {
+            (
+                i.pointer.primary_pressed(),
+                i.pointer.primary_down(),
+                i.pointer.latest_pos(),
+                i.pointer.hover_pos(),
+                i.modifiers,
+            )
+        });
+
+        // Handle active gizmo drag or start a new one on a handle press.
+        let mut gizmo_consumed_primary = false;
+        if let Some(kind) = gizmo_kind {
+            if self.drag.is_some() {
+                gizmo_consumed_primary = true;
+                if primary_down {
+                    if let Some(pos) = latest_pos {
+                        let cam = doc.viewport().unwrap().camera();
+                        let curr = to_bm(pos);
+                        if let Some(d) = self.drag.as_mut() {
+                            match kind {
+                                GizmoKind::Move => {
+                                    let snap = if modifiers.alt {
+                                        bm::Vec3::ZERO
+                                    } else {
+                                        bm::Vec3::new(bm::STUD, bm::PLATE, bm::STUD)
+                                    };
+                                    let total = bm::gizmo::drag_move(
+                                        &cam, view_pt, d.origin, d.axes, d.handle, d.start, curr, snap,
+                                    );
+                                    if let Some(delta) = d.step_move(total) {
+                                        doc.session().translate(&d.pieces, delta, true);
+                                        changed = true;
+                                    }
+                                }
+                                GizmoKind::Rotate => {
+                                    let deg = bm::gizmo::drag_rotate(
+                                        &cam, view_pt, d.origin, d.axes, d.handle, d.start, curr, modifiers.shift,
+                                    );
+                                    if let Some(step) = d.step_rotate(deg) {
+                                        let axis = bm::gizmo::handle_axis(&cam, d.axes, d.handle);
+                                        doc.session().rotate(&d.pieces, axis, step, d.origin, true);
+                                        changed = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    self.drag = None;
+                    doc.session().end_gesture();
+                }
+            } else if primary_pressed
+                && let Some(pos) = latest_pos.filter(|p| rect.contains(*p))
+                && (resp.hovered() || resp.is_pointer_button_down_on())
+                && let Some(shape) = &self.gizmo
+            {
+                let pt = to_bm(pos);
+                let hit = shape.hit(pt, 8.0);
+                if hit != Handle::None {
+                    let axes = gizmo::axes(doc.session(), edit);
+                    let origin = doc.viewport().unwrap().selection_center();
+                    doc.session().end_gesture();
+                    self.drag = Some(GizmoDrag::new(hit, pt, origin, axes, sel.clone()));
+                    gizmo_consumed_primary = true;
+                }
+            }
         }
 
         // Read the response first: its methods lock the context, so they cannot run inside ui.input.
-        let hovered = resp.hovered() || resp.dragged();
-        let local = |p: Pos2| pos2(p.x - rect.left(), p.y - rect.top());
-        let primary_drag = if resp.dragged_by(egui::PointerButton::Primary) { resp.drag_delta() } else { Vec2::ZERO };
+        let primary_drag = if !gizmo_consumed_primary && resp.dragged_by(egui::PointerButton::Primary) {
+            resp.drag_delta()
+        } else {
+            Vec2::ZERO
+        };
         let other_drag = resp.dragged_by(egui::PointerButton::Secondary) || resp.dragged_by(egui::PointerButton::Middle);
         let secondary_or_middle_drag = if other_drag { resp.drag_delta() } else { Vec2::ZERO };
-        let click_at = if resp.clicked() { resp.interact_pointer_pos().map(local) } else { None };
-        let double_click = resp.double_clicked();
+        let click_at = if !gizmo_consumed_primary && resp.clicked() {
+            resp.interact_pointer_pos().map(local)
+        } else {
+            None
+        };
+        let double_click = !gizmo_consumed_primary && resp.double_clicked();
         let gesture = ui.input(|i| Gesture {
             primary_drag,
             secondary_or_middle_drag,
@@ -179,24 +307,27 @@ impl ViewportWidget {
             pinch: if hovered { i.zoom_delta() - 1.0 } else { 0.0 },
             click: click_at.map(|p| (p, i.modifiers)),
             double_click,
-            origin: i.pointer.hover_pos().map(local).unwrap_or(rect.size().to_pos2() / 2.0),
-            modifiers: i.modifiers,
+            origin: hover_pos.map(local).unwrap_or(rect.size().to_pos2() / 2.0),
+            modifiers,
             mode: self.mode,
         });
         let mut ops = std::mem::take(&mut self.queued);
         ops.extend(ops_for(&gesture));
 
         let mut picks = Vec::new();
-        for op in ops {
-            changed = true;
-            match op {
-                ViewOp::Orbit(dx, dy) => vp.orbit(dx, dy),
-                ViewOp::Pan(dx, dy) => vp.pan(dx, dy),
-                ViewOp::ZoomToward(f, x, y) => vp.zoom_toward(f, x, y),
-                ViewOp::Fit => vp.fit_all(),
-                ViewOp::FrameSelection => vp.frame_selection(),
-                ViewOp::Preset(p) => vp.view(p),
-                ViewOp::Pick(x, y, mode) => picks.push((vp.pick(x, y), mode)),
+        {
+            let vp = doc.viewport().unwrap();
+            for op in ops {
+                changed = true;
+                match op {
+                    ViewOp::Orbit(dx, dy) => vp.orbit(dx, dy),
+                    ViewOp::Pan(dx, dy) => vp.pan(dx, dy),
+                    ViewOp::ZoomToward(f, x, y) => vp.zoom_toward(f, x, y),
+                    ViewOp::Fit => vp.fit_all(),
+                    ViewOp::FrameSelection => vp.frame_selection(),
+                    ViewOp::Preset(p) => vp.view(p),
+                    ViewOp::Pick(x, y, mode) => picks.push((vp.pick(x, y), mode)),
+                }
             }
         }
         for (hit, mode) in picks {
@@ -225,6 +356,38 @@ impl ViewportWidget {
         if let Some(t) = &self.texture {
             let uv = Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0));
             ui.painter().image(t.id(), rect, uv, Color32::WHITE);
+        }
+
+        // Refresh and paint the gizmo after any camera/selection change this frame.
+        let sel_now = doc.session().selection();
+        if let Some(kind) = gizmo_kind.filter(|_| !sel_now.is_empty()) {
+            let axes = match &self.drag {
+                Some(d) => d.axes,
+                None => gizmo::axes(doc.session(), edit),
+            };
+            let origin = match &self.drag {
+                Some(d) => d.origin,
+                None => doc.viewport().unwrap().selection_center(),
+            };
+            let cam = doc.viewport().unwrap().camera();
+            let shape = GizmoShape::new(&cam, view_pt, origin, axes, kind);
+            self.hovered = hover_pos
+                .filter(|p| rect.contains(*p))
+                .map(|p| shape.hit(to_bm(p), 8.0))
+                .unwrap_or(Handle::None);
+            let active = self.drag.as_ref().map(|d| d.handle).unwrap_or(Handle::None);
+            gizmo::paint(ui.painter(), rect, &shape, active, self.hovered);
+            if let (Some(d), Some(ptr)) = (&self.drag, latest_pos) {
+                let label = match kind {
+                    GizmoKind::Move => gizmo::format_move(d.moved()),
+                    GizmoKind::Rotate => gizmo::format_rotate(d.turned()),
+                };
+                gizmo::paint_readout(ui.painter(), theme, ptr, &label);
+            }
+            self.gizmo = Some(shape);
+        } else {
+            self.gizmo = None;
+            self.hovered = Handle::None;
         }
     }
 }

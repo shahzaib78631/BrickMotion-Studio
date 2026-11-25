@@ -25,7 +25,7 @@ pub fn central(ui: &mut Ui, app: &mut BrickMotionApp) {
     egui::CentralPanel::no_frame().show(ui, |ui| {
         let rect = ui.max_rect();
         ui.painter().rect_filled(rect, 0.0, t.bg1);
-        app.viewport.show(ui, &mut app.doc);
+        app.viewport.show(ui, &mut app.doc, &mut app.edit, &t);
         browser::show(ui, app, rect);
         properties::show(ui, app, rect);
         navigator::show(ui, app, rect);
