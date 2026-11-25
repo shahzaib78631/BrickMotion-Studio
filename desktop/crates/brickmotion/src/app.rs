@@ -33,6 +33,9 @@ impl Workspace {
     }
 }
 
+/// What a cached snapshot was made for: (generation, version, selection).
+type SnapKey = (u64, u64, Vec<u32>);
+
 /// A file dialog a test asked for instead of opening a panel (see `dialogs_off`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DialogRequest {
@@ -78,6 +81,10 @@ pub struct BrickMotionApp {
     pub has_document: bool,
     /// A text field had keyboard focus last frame.
     pub text_focus: bool,
+    /// What Properties shows, and the (generation, version, selection) it was made for.
+    snap: Option<(SnapKey, std::rc::Rc<bm::Snapshot>)>,
+    /// The library's colours, read once.
+    colors: Option<std::rc::Rc<Vec<bm::ColorInfo>>>,
     /// The Browser's model tree.
     pub tree: chrome::tree::Tree,
     /// The command palette.
@@ -137,6 +144,8 @@ impl BrickMotionApp {
             text_focus: false,
             palette: Default::default(),
             tree: Default::default(),
+            snap: None,
+            colors: None,
             dialog_requests: Vec::new(),
             dialogs: true,
             seen_version: 0,
@@ -304,6 +313,29 @@ impl BrickMotionApp {
         self.loader.loading()
     }
 
+    /// The panes' view of the document, made again only when the document, its version or the
+    /// selection changes.
+    pub fn snapshot(&mut self) -> std::rc::Rc<bm::Snapshot> {
+        let s = self.doc.session();
+        let key = (s.generation(), s.version(), s.selection());
+        match &self.snap {
+            Some((k, snap)) if *k == key => snap.clone(),
+            _ => {
+                let snap = std::rc::Rc::new(s.snapshot());
+                self.snap = Some((key, snap.clone()));
+                snap
+            }
+        }
+    }
+
+    /// The library's colours.
+    pub fn colors(&mut self) -> std::rc::Rc<Vec<bm::ColorInfo>> {
+        if self.colors.as_ref().is_none_or(|c| c.is_empty()) {
+            self.colors = Some(std::rc::Rc::new(self.doc.session().colors()));
+        }
+        self.colors.clone().unwrap_or_default()
+    }
+
     /// What commands are enabled from, now.
     pub fn ctx(&self) -> Ctx {
         let s = self.doc.session();
@@ -347,8 +379,12 @@ impl BrickMotionApp {
                 let sel = s.selection();
                 s.hide(&sel);
                 s.select_none();
+                self.snap = None;
             }
-            "edit.show_all" => s.show_all(),
+            "edit.show_all" => {
+                s.show_all();
+                self.snap = None;
+            }
             "view.fit" | "view.home" => self.viewport.queue(ViewOp::Fit),
             "view.frame_selection" => self.viewport.queue(ViewOp::FrameSelection),
             "view.palette" => self.palette.show_palette(),

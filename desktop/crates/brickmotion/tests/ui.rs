@@ -60,7 +60,8 @@ fn ribbon_tabs_switch_content() {
     assert!(h.query_by_label("Plan Build").is_none());
 }
 
-/// Writes desktop/docs/m1-build.png and m1-animate.png when BM_SCREENSHOTS is set.
+/// Writes desktop/docs/m1-build.png and m1-animate.png, and the milestone 2 pictures (model
+/// tree, Properties for one piece, the palette), when BM_SCREENSHOTS is set.
 #[test]
 fn screenshots() {
     if std::env::var_os("BM_SCREENSHOTS").is_none() {
@@ -74,6 +75,16 @@ fn screenshots() {
     h.run();
     h.run_steps(4);
     h.render().unwrap().save(format!("{docs}/m1-animate.png")).unwrap();
+
+    let mut h = heli_harness();
+    h.state_mut().doc.session_mut().select(&[0], bm::SelectMode::Replace);
+    h.run_steps(6);
+    h.render().unwrap().save(format!("{docs}/m2-document.png")).unwrap();
+    h.state_mut().palette.show_palette();
+    h.run_steps(2);
+    h.event(egui::Event::Text("sel".into()));
+    h.run_steps(4);
+    h.render().unwrap().save(format!("{docs}/m2-palette.png")).unwrap();
 }
 
 const HELI: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../samples/helicopter/helicopter.mpd");
@@ -152,4 +163,45 @@ fn empty_launch_invites_open() {
     let h = harness();
     assert!(h.query_by_label("Open a model to begin").is_some());
     assert!(h.query_by_label_contains("Metal").is_none());
+}
+
+fn heli_harness() -> Harness<'static, BrickMotionApp> {
+    let mut h = Harness::builder().with_size([1440.0, 900.0]).build_eframe(|cc| {
+        let mut app = BrickMotionApp::new_for_test_cc(cc, Some(HELI.into()));
+        app.wait_loaded();
+        app
+    });
+    h.run_steps(3);
+    h
+}
+
+#[test]
+fn properties_show_project_when_nothing_selected() {
+    let h = heli_harness();
+    assert!(h.query_by_label("Project").is_some());
+    assert!(h.query_by_label("Not saved").is_some());
+    assert!(h.query_by_label("Edited").is_none());
+}
+
+#[test]
+fn properties_show_one_piece() {
+    let mut h = heli_harness();
+    h.state_mut().doc.session_mut().select(&[0], bm::SelectMode::Replace);
+    h.run_steps(2);
+    let info = h.state().session().snapshot().described[0].clone();
+    assert!(h.query_by_label("Piece").is_some());
+    assert!(h.query_by_label(&info.description).is_some(), "{}", info.description);
+    assert!(h.query_by_label(&info.part).is_some(), "{}", info.part);
+    assert!(h.query_by_label(&info.color_name).is_some(), "{}", info.color_name);
+}
+
+#[test]
+fn properties_show_many() {
+    let mut h = heli_harness();
+    h.state_mut().doc.session_mut().select_all();
+    h.run_steps(2);
+    let n = h.state().piece_count();
+    assert!(h.query_all_by_label(&format!("{n} pieces")).count() >= 3, "title bar, chip and Properties");
+    assert!(h.query_all_by_label_contains(" × ").count() >= 2, "the parts list");
+    assert!(h.query_by_label("Showing the first 200").is_some());
 }

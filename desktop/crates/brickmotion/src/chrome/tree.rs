@@ -64,6 +64,11 @@ impl Tree {
         self.rebuilds += 1;
     }
 
+    /// The distinct submodels the outline shows.
+    pub fn submodels(&self) -> usize {
+        self.rows.iter().filter(|r| !r.def.is_empty()).map(|r| r.def.as_str()).collect::<HashSet<_>>().len()
+    }
+
     pub fn len(&self) -> usize {
         self.rows.len()
     }
