@@ -37,9 +37,8 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
     let step_title = app.steps.row(step).map(|r| r.title.clone()).unwrap_or_default();
 
     let t = app.theme;
-    let bottom_pad = (ui.ctx().content_rect().bottom() - area.bottom()).max(0.0);
     let has_bottom_chip = app.edit.placement.is_some() || app.doc.session().selection_len() > 0;
-    let offset_y = -bottom_pad + if has_bottom_chip { -52.0 } else { -14.0 };
+    let offset_y = if has_bottom_chip { -52.0 } else { -14.0 };
 
     let mut action: Option<CalloutAction> = None;
 

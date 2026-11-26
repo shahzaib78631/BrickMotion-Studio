@@ -17,7 +17,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
     let mut toggle_auto_plan = false;
     Area::new(Id::unique("viewbar"))
         .order(Order::Middle)
-        .anchor(Align2::CENTER_BOTTOM, vec2(0.0, -(ui.ctx().content_rect().bottom() - area.bottom()).max(0.0) - 12.0))
+        .anchor(Align2::CENTER_BOTTOM, vec2(0.0, -12.0))
         .constrain_to(area)
         .show(ui.ctx(), |ui| {
             Frame::NONE
@@ -158,7 +158,6 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
         let _ = app.prefs.save(&app.support);
         app.apply_viewport_prefs();
     }
-    let bottom_pad = (ui.ctx().content_rect().bottom() - area.bottom()).max(0.0);
     if let Some(p) = &app.edit.placement {
         let short = super::library::short_name(&p.part.name);
         let status = p.status_text();
@@ -176,7 +175,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
         };
         Area::new(Id::unique("placement-hud"))
             .order(Order::Middle)
-            .anchor(Align2::LEFT_BOTTOM, vec2(12.0, -bottom_pad - 14.0))
+            .anchor(Align2::LEFT_BOTTOM, vec2(12.0, -14.0))
             .constrain_to(area)
             .show(ui.ctx(), |ui| {
                 Frame::NONE
@@ -196,7 +195,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
     } else if selected > 0 {
         Area::new(Id::unique("selection-chip"))
             .order(Order::Middle)
-            .anchor(Align2::LEFT_BOTTOM, vec2(12.0, -bottom_pad - 14.0))
+            .anchor(Align2::LEFT_BOTTOM, vec2(12.0, -14.0))
             .constrain_to(area)
             .show(ui.ctx(), |ui| {
                 Frame::NONE
@@ -242,11 +241,10 @@ fn popover_button(ui: &mut Ui, t: &crate::Theme, label: Option<&str>, i: Icon, n
 fn recording_chip(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
     let Some(seconds) = app.recording.active.as_ref().map(|r| r.seconds) else { return };
     let t = app.theme;
-    let bottom_pad = (ui.ctx().content_rect().bottom() - area.bottom()).max(0.0);
     let mut stop = false;
     Area::new(Id::unique("recording-chip"))
         .order(Order::Middle)
-        .anchor(Align2::LEFT_BOTTOM, vec2(12.0, -bottom_pad - 12.0))
+        .anchor(Align2::LEFT_BOTTOM, vec2(12.0, -12.0))
         .constrain_to(area)
         .show(ui.ctx(), |ui| {
             Frame::NONE

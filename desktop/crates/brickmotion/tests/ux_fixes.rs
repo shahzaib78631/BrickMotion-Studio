@@ -338,3 +338,22 @@ fn animate_waiting_piece_click_selects_instead_of_swallowing() {
     }
     assert!(picked, "expected to find at least one visible piece on the floor at t=0");
 }
+
+/// In Animate the view bar sits just above the timeline card and the selection chip stays clear
+/// of the Browser panel.
+#[test]
+fn animate_view_bar_and_chip_sit_above_the_timeline() {
+    let mut h = build_heli();
+    h.state_mut().doc.session().select(&[0], bm::SelectMode::Replace);
+    h.state_mut().set_workspace(Workspace::Animate);
+    h.run_steps(6);
+    let bar = h.get_by_label("Fit All").rect();
+    let snaps = h.get_by_label("Snaps").rect();
+    let models = h.get_by_label("Models").rect();
+    let chip = h.get_by_label_contains("selected").rect();
+    eprintln!("bar {bar:?} snaps {snaps:?} models {models:?} chip {chip:?}");
+    let timeline_top = snaps.top() - 120.0;
+    assert!(bar.bottom() > timeline_top - 80.0, "view bar floats too high: {bar:?}");
+    assert!(bar.bottom() < snaps.top(), "view bar overlaps the timeline: {bar:?}");
+    assert!(!chip.intersects(models), "selection chip covers the Browser tabs: {chip:?}");
+}
