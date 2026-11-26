@@ -176,6 +176,8 @@ pub struct BrickMotionApp {
     pub still: chrome::export_still::StillPanel,
     /// View › Record Viewport.
     pub recording: crate::recording::RecordingState,
+    /// (generation, version) → how many submodels can be filmed; read by `ctx` every frame.
+    submodel_count: std::cell::Cell<Option<((u64, u64), usize)>>,
     /// `input.time` of the last frame (commands run between frames use it).
     now: f64,
     /// The file Show in Finder revealed while dialogs are off (tests read it).
@@ -281,6 +283,7 @@ impl BrickMotionApp {
             movie: Default::default(),
             still: Default::default(),
             recording: Default::default(),
+            submodel_count: Default::default(),
             now: 0.0,
             revealed: None,
             camera_synced: None,
@@ -582,6 +585,23 @@ impl BrickMotionApp {
             playing: self.transport.state.playing || self.transport.state.waiting_to_play,
             joints: self.joints.show,
             recording: self.recording(),
+            submodels: self.submodel_count(),
+        }
+    }
+
+    fn submodel_count(&self) -> usize {
+        if !self.has_document {
+            return 0;
+        }
+        let s = self.doc.session();
+        let key = (s.generation(), s.version());
+        match self.submodel_count.get() {
+            Some((k, n)) if k == key => n,
+            _ => {
+                let n = bm::export::submodel_video_targets(s, None).len();
+                self.submodel_count.set(Some((key, n)));
+                n
+            }
         }
     }
 

@@ -26,6 +26,8 @@ pub enum When {
     CanRedo,
     /// Document open and Animate workspace active.
     Animate,
+    /// The model has a submodel to film on its own.
+    Submodels,
     /// Not built yet: shown dimmed with " — coming soon".
     Soon,
 }
@@ -80,6 +82,8 @@ pub struct Ctx {
     pub joints: bool,
     /// View › Record Viewport is recording.
     pub recording: bool,
+    /// Submodels that can be filmed on their own.
+    pub submodels: usize,
 }
 
 /// A key with its modifiers.
@@ -165,6 +169,7 @@ pub fn enabled(c: &Command, ctx: &Ctx) -> bool {
         When::CanUndo => ctx.can_undo,
         When::CanRedo => ctx.can_redo,
         When::Animate => ctx.has_document && ctx.workspace == Workspace::Animate,
+        When::Submodels => ctx.has_document && ctx.submodels > 0,
         When::Soon => false,
     }
 }
@@ -187,6 +192,7 @@ pub fn why_disabled(c: &Command, ctx: &Ctx) -> Option<&'static str> {
         When::CanUndo => "Nothing to undo",
         When::CanRedo => "Nothing to redo",
         When::Animate => "Switch to Animate first",
+        When::Submodels => "Needs a model with submodels",
         _ => "Coming soon",
     })
 }
@@ -274,7 +280,7 @@ static REGISTRY: &[Command] = &[
     Command { id: "file.export_ldraw", title: "Export LDraw…", icon: Icon::Up, keys: Some("⇧⌘E"), tip: "Export the model as an LDraw MPD, with its submodels and steps.", workspace: Workspace::Build, tab: "", group: "File", when: When::Document, menu: Menu::File },
     Command { id: "file.export_movie", title: "Export Movie…", icon: Icon::Vid, keys: None, tip: "Render a video of the build, the keyframes or a turntable with the current look.", workspace: Workspace::Build, tab: "", group: "File", when: When::Pieces, menu: Menu::File },
     Command { id: "file.export_still", title: "Export Still…", icon: Icon::Cam, keys: None, tip: "Path trace a picture of the model in a video frame shape.", workspace: Workspace::Build, tab: "", group: "File", when: When::Pieces, menu: Menu::File },
-    Command { id: "file.export_submodels", title: "Export All Submodel Videos…", icon: Icon::Vid, keys: None, tip: "Export a video of every submodel into one folder.", workspace: Workspace::Build, tab: "", group: "File", when: When::Pieces, menu: Menu::File },
+    Command { id: "file.export_submodels", title: "Export All Submodel Videos…", icon: Icon::Vid, keys: None, tip: "Export a video of every submodel into one folder.", workspace: Workspace::Build, tab: "", group: "File", when: When::Submodels, menu: Menu::File },
     Command { id: "file.export_plan", title: "Export Plan…", icon: Icon::File, keys: None, tip: "Export the build plan as JSON.", workspace: Workspace::Build, tab: "", group: "File", when: When::Document, menu: Menu::File },
     Command { id: "edit.copy_viewport", title: "Copy Viewport Image", icon: Icon::Copy, keys: None, tip: "Copy what the viewport shows as an image.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Document, menu: Menu::Edit },
     Command { id: "file.open", title: "Open…", icon: Icon::File, keys: Some("⌘O"), tip: "Open a BrickMotion project or an LDraw model.", workspace: Workspace::Build, tab: "", group: "File", when: When::Always, menu: Menu::File },

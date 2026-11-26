@@ -121,6 +121,31 @@ impl Tree {
     }
 }
 
+/// The submodel rows whose pieces are all selected, outermost only (a selected row's own
+/// submodels are in its video already).
+fn selected_submodel_rows(app: &mut BrickMotionApp, selection: &HashSet<u32>) -> Vec<String> {
+    let mut ids = Vec::new();
+    let mut inside: Option<u32> = None;
+    for i in 0..app.tree.rows.len() {
+        let depth = app.tree.rows[i].depth;
+        if inside.is_some_and(|d| depth > d) {
+            continue;
+        }
+        inside = None;
+        let row = &app.tree.rows[i];
+        if row.def.is_empty() || row.pieces == 0 || row.unused {
+            continue;
+        }
+        let id = row.id.clone();
+        let pieces = app.tree.pieces_of(app.doc.session(), i);
+        if !pieces.is_empty() && pieces.iter().all(|p| selection.contains(p)) {
+            ids.push(id);
+            inside = Some(depth);
+        }
+    }
+    ids
+}
+
 pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
     let t0 = Instant::now();
     let t = app.theme;
@@ -218,7 +243,10 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
         app.doc.session().select(&pieces, mode(m));
     }
     if let Some(id) = video {
-        let targets = bm::export::submodel_video_targets(app.doc.session(), Some(&[id]));
+        let selected = selected_submodel_rows(app, &selection);
+        // Swift: the selected rows when the clicked row is one of them, else just that row.
+        let ids = if selected.contains(&id) { selected } else { vec![id] };
+        let targets = bm::export::submodel_video_targets(app.doc.session(), Some(&ids));
         if !targets.is_empty() {
             super::export_movie::open(app, targets);
         }

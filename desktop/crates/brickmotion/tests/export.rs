@@ -649,3 +649,61 @@ fn queue_panel_without_document() {
     h.run_steps(3);
     assert!(h.query_by_label("Render Queue panel").is_some());
 }
+
+fn app_with(model: &Path) -> Harness<'static, BrickMotionApp> {
+    let model = model.to_path_buf();
+    let mut h = Harness::builder().with_size([1440.0, 900.0]).build_eframe(move |cc| {
+        let mut app = BrickMotionApp::new_for_test_cc(cc, Some(model.clone()));
+        app.wait_loaded();
+        app.dialogs_off();
+        app.prefs.auto_plan = false;
+        app
+    });
+    h.run_steps(3);
+    h
+}
+
+/// Swift disables Export All Submodel Videos when there is no submodel to film.
+#[test]
+fn export_submodels_needs_a_submodel() {
+    let dir = temp("no-submodels");
+    let model = dir.join("flat.ldr");
+    std::fs::write(&model, "0 Flat\n1 4 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n1 1 0 -24 0 1 0 0 0 1 0 0 0 1 3001.dat\n").unwrap();
+    let mut h = app_with(&model);
+    assert!(!run(h.state_mut(), "file.export_submodels"), "disabled with no submodels");
+    h.run_steps(2);
+    assert!(!h.state().movie.open);
+}
+
+/// The row menu films every selected submodel row when the clicked row is one of them (Swift).
+#[test]
+fn row_menu_exports_selected_submodels() {
+    let dir = temp("two-submodels");
+    let model = dir.join("pair.mpd");
+    std::fs::write(
+        &model,
+        "0 FILE main.ldr\n1 16 0 0 0 1 0 0 0 1 0 0 0 1 wing.ldr\n1 16 100 0 0 1 0 0 0 1 0 0 0 1 tail.ldr\n\
+         0 FILE wing.ldr\n1 4 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n\
+         0 FILE tail.ldr\n1 1 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n",
+    )
+    .unwrap();
+    let mut h = app_with(&model);
+    h.get_by_label("wing.ldr").click();
+    h.run_steps(2);
+    let tail = h.get_by_label("tail.ldr").rect().center();
+    let cmd = egui::Modifiers::COMMAND;
+    h.get_by_label("tail.ldr").click_modifiers(cmd);
+    h.run_steps(3);
+    h.event(egui::Event::PointerMoved(tail));
+    h.step();
+    assert_eq!(h.state().session().selection_len(), 2, "both rows selected");
+    h.event(egui::Event::PointerButton { pos: tail, button: egui::PointerButton::Secondary, pressed: true, modifiers: egui::Modifiers::NONE });
+    h.step();
+    h.event(egui::Event::PointerButton { pos: tail, button: egui::PointerButton::Secondary, pressed: false, modifiers: egui::Modifiers::NONE });
+    h.run_steps(3);
+    h.get_by_label("Export Video…").click();
+    h.run_steps(3);
+    let mut titles: Vec<String> = h.state().movie.targets.iter().map(|t| t.title.clone()).collect();
+    titles.sort();
+    assert_eq!(titles, ["tail", "wing"]);
+}
