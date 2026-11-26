@@ -164,6 +164,11 @@ TEST_CASE("safe_file_stem_cases", "[export]") {
   CHECK(bmapp::safeFileStem("  Rotor\tblade \n") == "Rotor blade");
   CHECK(bmapp::safeFileStem(std::string(70, 'x')) == std::string(60, 'x'));
   CHECK(bmapp::safeFileStem(std::string(59, 'x') + " y") == std::string(59, 'x'));  // the cut is trimmed again
+  // Swift's controlCharacters is Cc and Cf; its trim set is all Unicode white space.
+  CHECK(bmapp::safeFileStem("Wing\xE2\x80\x8BL") == "Wing L");     // U+200B zero width space
+  CHECK(bmapp::safeFileStem("a\xE2\x80\xAE" "b") == "a b");          // U+202E right-to-left override
+  CHECK(bmapp::safeFileStem("\xEF\xBB\xBFx") == "x");               // U+FEFF
+  CHECK(bmapp::safeFileStem("\xE3\x80\x80x\xE2\x80\x83") == "x");  // U+3000, U+2003
   std::string wide;
   for (int i = 0; i < 70; ++i) wide += "\xE2\x82\xAC";  // €, three bytes
   CHECK(bmapp::safeFileStem(wide).size() == 180);       // 60 code points

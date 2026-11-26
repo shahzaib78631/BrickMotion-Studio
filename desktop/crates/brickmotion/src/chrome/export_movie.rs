@@ -151,6 +151,13 @@ fn fix_camera(app: &mut BrickMotionApp) {
 
 /// The panel's settings as the engine takes them; the camera is resolved against what this
 /// video allows.
+/// The movie helper's options: the engine's arguments and where the recorded snap samples are.
+fn helper_options(c: &MovieChoice) -> Vec<String> {
+    let mut options = movie_arguments(c);
+    options.extend(["--recordings".to_owned(), crate::support::snap_recordings().display().to_string()]);
+    options
+}
+
 pub fn choice(app: &BrickMotionApp, path: &[String]) -> MovieChoice {
     let m = &app.movie;
     let (camera, scene_camera_id) = match &m.camera {
@@ -225,7 +232,7 @@ impl BrickMotionApp {
                 .iter()
                 .map(|t| BatchMovie {
                     name: format!("{} – {}", t.title, self.movie.source.title()),
-                    options: movie_arguments(&choice(self, &t.path)),
+                    options: helper_options(&choice(self, &t.path)),
                     summary: summary.clone(),
                 })
                 .collect();
@@ -251,7 +258,7 @@ impl BrickMotionApp {
             }
         }
         let model = self.movie.targets.first().map(|t| t.path.clone()).unwrap_or_default();
-        let options = movie_arguments(&choice(self, &model));
+        let options = helper_options(&choice(self, &model));
         match self.queue.enqueue(project, Operation::Movie, options, &library(), path, summary, None) {
             Ok(id) => self.movie.job = Some(id),
             Err(e) => self.movie.error = Some(e),

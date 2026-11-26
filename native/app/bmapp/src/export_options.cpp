@@ -5,7 +5,9 @@
 #include <algorithm>
 #include <charconv>
 #include <cmath>
+#include <cstdint>
 #include <set>
+#include <utility>
 #include "bmapp/session.h"
 
 namespace bmapp {
@@ -54,14 +56,41 @@ size_t codePointLength(const std::string& s, size_t i) {
   return std::min(n, s.size() - i);
 }
 
-bool isTrimmed(const std::string& s, size_t i, size_t length, bool dots) {
-  if (length == 1) {
-    const char c = s[i];
-    return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f' || (dots && c == '.');
+/// The code point of the `length` bytes at `i` (a stray byte reads as itself).
+uint32_t codePoint(const std::string& s, size_t i, size_t length) {
+  const auto b = [&](size_t k) { return static_cast<uint32_t>(static_cast<unsigned char>(s[i + k])); };
+  switch (length) {
+    case 2: return ((b(0) & 0x1F) << 6) | (b(1) & 0x3F);
+    case 3: return ((b(0) & 0x0F) << 12) | ((b(1) & 0x3F) << 6) | (b(2) & 0x3F);
+    case 4: return ((b(0) & 0x07) << 18) | ((b(1) & 0x3F) << 12) | ((b(2) & 0x3F) << 6) | (b(3) & 0x3F);
+    default: return b(0);
   }
-  // U+0085, U+00A0, U+2028, U+2029: Unicode white space Swift trims too.
-  const std::string cp = s.substr(i, length);
-  return cp == "\xC2\x85" || cp == "\xC2\xA0" || cp == "\xE2\x80\xA8" || cp == "\xE2\x80\xA9";
+}
+
+/// Unicode White_Space: Swift's `.whitespacesAndNewlines`.
+bool isWhiteSpace(uint32_t c) {
+  return (c >= 0x09 && c <= 0x0D) || c == 0x20 || c == 0x85 || c == 0xA0 || c == 0x1680 ||
+         (c >= 0x2000 && c <= 0x200A) || c == 0x2028 || c == 0x2029 || c == 0x202F || c == 0x205F || c == 0x3000;
+}
+
+/// Swift's `.controlCharacters`: general categories Cc and Cf.
+bool isControl(uint32_t c) {
+  if (c < 0x20 || (c >= 0x7F && c <= 0x9F)) return true;  // Cc
+  static constexpr std::pair<uint32_t, uint32_t> format[] = {
+      {0x00AD, 0x00AD}, {0x0600, 0x0605}, {0x061C, 0x061C}, {0x06DD, 0x06DD}, {0x070F, 0x070F},
+      {0x0890, 0x0891}, {0x08E2, 0x08E2}, {0x180E, 0x180E}, {0x200B, 0x200F}, {0x202A, 0x202E},
+      {0x2060, 0x2064}, {0x2066, 0x206F}, {0xFEFF, 0xFEFF}, {0xFFF9, 0xFFFB}, {0x110BD, 0x110BD},
+      {0x110CD, 0x110CD}, {0x13430, 0x1343F}, {0x1BCA0, 0x1BCA3}, {0x1D173, 0x1D17A}, {0xE0001, 0xE0001},
+      {0xE0020, 0xE007F},
+  };
+  for (const auto& [lo, hi] : format)
+    if (c >= lo && c <= hi) return true;
+  return false;
+}
+
+bool isTrimmed(const std::string& s, size_t i, size_t length, bool dots) {
+  const uint32_t c = codePoint(s, i, length);
+  return isWhiteSpace(c) || (dots && c == '.');
 }
 
 std::string trim(const std::string& s, bool dots) {
@@ -272,9 +301,8 @@ std::string safeFileStem(const std::string& name) {
   std::string safe;
   for (size_t i = 0; i < name.size();) {
     const size_t n = codePointLength(name, i);
-    const auto c = static_cast<unsigned char>(name[i]);
-    const bool control = n == 1 ? (c < 0x20 || c == 0x7F || c == '/' || c == ':' || c == '\\')
-                                : (n == 2 && c == 0xC2 && static_cast<unsigned char>(name[i + 1]) < 0xA0);
+    const uint32_t c = codePoint(name, i, n);
+    const bool control = isControl(c) || c == '/' || c == ':' || c == '\\';
     safe += control ? std::string(" ") : name.substr(i, n);
     i += n;
   }

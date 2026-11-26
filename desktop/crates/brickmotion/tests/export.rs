@@ -168,7 +168,10 @@ fn export_movie_queues_build_job() {
     h.run_steps(2);
     settle_queue(&mut h);
     let lines: Vec<String> = std::fs::read_to_string(&dest).unwrap().lines().map(str::to_owned).collect();
-    assert_eq!(lines, movie_arguments(&choice));
+    // Recorded snap samples come from the support folder; the engine has no default for it.
+    let mut expected = movie_arguments(&choice);
+    expected.extend(["--recordings".to_owned(), brickmotion::support::snap_recordings().display().to_string()]);
+    assert_eq!(lines, expected);
     assert_eq!(h.state().queue.jobs()[0].summary, movie_summary(&choice));
     assert!(h.query_by_label("Video Exported").is_some(), "the panel follows its job");
 }
@@ -605,4 +608,43 @@ fn floating_panels_clear_axis_navigator() {
         let rect = h.get_by_label(panel).rect();
         assert!(rect.top() >= navigator_bottom, "{panel} top {} overlaps the navigator (bottom {navigator_bottom})", rect.top());
     }
+}
+
+/// The queue moves on while the window is hidden: eframe then calls only `App::logic`, never `ui`.
+#[test]
+fn queue_advances_without_drawing() {
+    let mut h = app();
+    let dir = temp("movie-hidden");
+    script_queue(&mut h, &dir, "printf x > \"$4\"");
+    assert!(run(h.state_mut(), "file.export_submodels"));
+    h.run_steps(3);
+    h.state_mut().movie.source = MovieSource::Build;
+    h.state_mut().movie.targets = vec![
+        VideoTarget { title: "One".into(), path: vec![SUB.into()] },
+        VideoTarget { title: "Two".into(), path: vec![SUB.into()] },
+    ];
+    h.state_mut().finish_movie(dir.clone());
+    let ctx = h.ctx.clone();
+    let start = std::time::Instant::now();
+    while !h.state().queue.jobs().iter().all(|j| j.status == brickmotion::render_queue::JobStatus::Complete) {
+        assert!(start.elapsed() < std::time::Duration::from_secs(30), "{:?}", h.state().queue.jobs());
+        h.state_mut().tick_background(&ctx);
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert_eq!(h.state().queue.jobs().len(), 2);
+}
+
+/// The queue outlives documents: with none open, Window › Render Queue still shows it.
+#[test]
+fn queue_panel_without_document() {
+    let mut h = Harness::builder().with_size([1440.0, 900.0]).build_eframe(|cc| {
+        let mut app = BrickMotionApp::new_for_test_cc(cc, None);
+        app.dialogs_off();
+        app
+    });
+    h.run_steps(3);
+    assert!(!h.state().has_document);
+    assert!(run(h.state_mut(), "output.render_queue"));
+    h.run_steps(3);
+    assert!(h.query_by_label("Render Queue panel").is_some());
 }

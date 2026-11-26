@@ -1178,6 +1178,14 @@ impl BrickMotionApp {
             .map(|(pts, _)| pts.clone())
     }
 
+    /// Work that must go on whether or not the window is drawn: the Render Queue's progress and
+    /// its next job.
+    pub fn tick_background(&mut self, ctx: &egui::Context) {
+        if self.queue.poll() {
+            ctx.request_repaint_after(Duration::from_millis(100));
+        }
+    }
+
     #[doc(hidden)]
     pub fn viewport_rect(&self) -> Option<egui::Rect> {
         self.viewport.last_rect
@@ -1242,6 +1250,11 @@ fn test_support() -> Support {
 }
 
 impl eframe::App for BrickMotionApp {
+    /// Runs before every `ui`, and alone while the window is minimized or covered.
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.tick_background(ctx);
+    }
+
     fn on_exit(&mut self) {
         self.queue.stop_for_quit();
         self.discard_recording();
@@ -1285,9 +1298,6 @@ impl eframe::App for BrickMotionApp {
         }
         if self.loader.loading().is_some() {
             ui.ctx().request_repaint_after(Duration::from_millis(50));
-        }
-        if self.queue.poll() {
-            ui.ctx().request_repaint_after(Duration::from_millis(100));
         }
         self.guard_close(ui.ctx());
         crate::menubar::poll(self);

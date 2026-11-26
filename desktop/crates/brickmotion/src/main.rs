@@ -33,7 +33,12 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     // The Render Queue's movie helper: film the project and exit before any window opens.
     if args.first().is_some_and(|a| a == "--render-editor-movie") {
-        let code = bm::export::run_editor_movie(&args[1..]);
+        // Like Swift's EditorMovieCommand: the engine has no default folder for the snap recordings.
+        let mut movie = args[1..].to_vec();
+        if !movie.iter().any(|a| a == "--recordings") {
+            movie.extend(["--recordings".to_owned(), brickmotion::support::snap_recordings().display().to_string()]);
+        }
+        let code = bm::export::run_editor_movie(&movie);
         return ExitCode::from(u8::try_from(code).unwrap_or(1));
     }
     match parse(&args) {
