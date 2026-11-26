@@ -51,7 +51,13 @@ pub struct MoviePanel {
     prefers_track: bool,
     standard_preview: bool,
     /// The logo preview, decoded once per file.
-    logo_texture: Option<(PathBuf, egui::TextureHandle)>,
+    /// The preview of the logo file it was made from; None when that file would not decode.
+    logo_texture: Option<(PathBuf, Option<egui::TextureHandle>)>,
+    /// How many times a logo file was decoded for the preview (tests read it).
+    #[doc(hidden)]
+    pub logo_reads: u32,
+    /// A logo being converted on its own thread.
+    logo_job: Option<std::sync::mpsc::Receiver<Result<PathBuf, String>>>,
 }
 
 impl Default for MoviePanel {
@@ -77,6 +83,8 @@ impl Default for MoviePanel {
             prefers_track: false,
             standard_preview: false,
             logo_texture: None,
+            logo_reads: 0,
+            logo_job: None,
         }
     }
 }
@@ -266,6 +274,44 @@ impl BrickMotionApp {
     }
 
     /// Copies a logo image for every video from now on.
+    /// Converts `source` into the logo on its own thread; `poll_logo` takes the result.
+    pub fn start_logo(&mut self, source: PathBuf) {
+        let dir = crate::logo::folder(&self.support);
+        let (tx, rx) = std::sync::mpsc::channel();
+        let ctx = self.ctx_handle();
+        std::thread::spawn(move || {
+            let _ = tx.send(crate::logo::convert(&dir, &source));
+            if let Some(ctx) = ctx {
+                ctx.request_repaint();
+            }
+        });
+        self.movie.logo_job = Some(rx);
+    }
+
+    pub fn logo_pending(&self) -> bool {
+        self.movie.logo_job.is_some()
+    }
+
+    /// Takes a finished conversion: the new logo, or why it could not be used.
+    pub(crate) fn poll_logo(&mut self) {
+        let Some(rx) = &self.movie.logo_job else { return };
+        let result = match rx.try_recv() {
+            Ok(r) => r,
+            Err(std::sync::mpsc::TryRecvError::Empty) => return,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => Err(crate::logo::UNREADABLE.to_owned()),
+        };
+        self.movie.logo_job = None;
+        match result {
+            Ok(copy) => {
+                crate::logo::apply(&mut self.prefs, &copy);
+                let _ = self.prefs.save(&self.support);
+            }
+            Err(detail) => {
+                crate::notices::push(&mut self.notices, Notice::Error { title: "Couldn't use the logo".into(), detail });
+            }
+        }
+    }
+
     pub fn choose_logo(&mut self, source: &Path) -> Result<PathBuf, String> {
         let copy = crate::logo::choose(&self.support, &mut self.prefs, source)?;
         let _ = self.prefs.save(&self.support);
@@ -568,14 +614,13 @@ fn logo_row(ui: &mut Ui, app: &mut BrickMotionApp, t: &Theme) {
         let shown = options[i];
         ui.horizontal(|ui| {
             ui.add_space(8.0);
-            if app.movie.logo_texture.as_ref().is_none_or(|(p, _)| p != file)
-                && let Some(img) = image::open(file).ok().map(|i| i.to_rgba8())
-            {
-                let size = [img.width() as usize, img.height() as usize];
-                let pixels = egui::ColorImage::from_rgba_unmultiplied(size, img.as_raw());
-                app.movie.logo_texture = Some((file.clone(), ui.ctx().load_texture("video-logo", pixels, egui::TextureOptions::LINEAR)));
+            if app.movie.logo_texture.as_ref().is_none_or(|(p, _)| p != file) {
+                // Once per logo file, a failure included.
+                app.movie.logo_reads += 1;
+                let tex = crate::logo::thumbnail(file).map(|pixels| ui.ctx().load_texture("video-logo", pixels, egui::TextureOptions::LINEAR));
+                app.movie.logo_texture = Some((file.clone(), tex));
             }
-            if let Some((_, tex)) = &app.movie.logo_texture {
+            if let Some((_, Some(tex))) = &app.movie.logo_texture {
                 let tint = if app.prefs.video_logo_enabled { Color32::WHITE } else { Color32::from_white_alpha(100) };
                 ui.add(egui::Image::new(tex).max_size(vec2(34.0, 20.0)).tint(tint));
             }
@@ -604,10 +649,8 @@ fn logo_row(ui: &mut Ui, app: &mut BrickMotionApp, t: &Theme) {
             .set_title("The logo appears in a corner of every exported video.")
             .add_filter("Image", &crate::logo::EXTENSIONS)
             .pick_file();
-        if let Some(src) = picked
-            && let Err(detail) = app.choose_logo(&src)
-        {
-            crate::notices::push(&mut app.notices, Notice::Error { title: "Couldn't use the logo".into(), detail });
+        if let Some(src) = picked {
+            app.start_logo(src);
         }
     } else if choose {
         app.dialog_requests.push(DialogRequest { kind: "logo", suggested: None });

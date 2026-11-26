@@ -707,3 +707,52 @@ fn row_menu_exports_selected_submodels() {
     titles.sort();
     assert_eq!(titles, ["tail", "wing"]);
 }
+
+/// A logo copy that will not decode is tried once, not on every frame the panel is drawn.
+#[test]
+fn unreadable_logo_is_read_once() {
+    let mut h = app();
+    let dir = temp("logo-unreadable");
+    let src = dir.join("mark.png");
+    image::RgbaImage::from_pixel(4, 4, image::Rgba([255, 0, 0, 255])).save(&src).unwrap();
+    let copy = h.state_mut().choose_logo(&src).unwrap();
+    std::fs::write(&copy, "no longer an image").unwrap();
+    assert!(run(h.state_mut(), "output.export_movie"));
+    h.run_steps(10);
+    assert_eq!(h.state().movie.logo_reads, 1);
+}
+
+/// Choosing a logo converts it off the UI thread; the panel picks the result up when it is ready.
+#[test]
+fn logo_converts_in_background() {
+    let mut h = app();
+    let dir = temp("logo-background");
+    let src = dir.join("mark.png");
+    image::RgbaImage::from_pixel(4, 4, image::Rgba([0, 0, 255, 255])).save(&src).unwrap();
+    h.state_mut().start_logo(src.clone());
+    assert!(h.state().logo_pending(), "the conversion runs on its own thread");
+    assert!(h.state().prefs.video_logo_file.is_empty(), "nothing changes until it is done");
+    let start = std::time::Instant::now();
+    while h.state().logo_pending() {
+        assert!(start.elapsed() < std::time::Duration::from_secs(20));
+        h.run_steps(1);
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let copy = brickmotion::logo::current(&h.state().support, &h.state().prefs).expect("the logo is set");
+    assert!(copy.exists());
+    assert!(h.state().prefs.video_logo_enabled);
+    std::fs::write(dir.join("bad.png"), "not an image").unwrap();
+    h.state_mut().start_logo(dir.join("bad.png"));
+    while h.state().logo_pending() {
+        h.run_steps(1);
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert_eq!(brickmotion::logo::current(&h.state().support, &h.state().prefs), Some(copy), "a failed choice keeps the logo");
+    match h.state().notices().last() {
+        Some(brickmotion::Notice::Error { title, detail }) => {
+            assert_eq!(title, "Couldn't use the logo");
+            assert_eq!(detail, "The image could not be read. Choose a PNG, JPEG, HEIC or TIFF file.");
+        }
+        other => panic!("expected the logo's error notice, got {other:?}"),
+    }
+}

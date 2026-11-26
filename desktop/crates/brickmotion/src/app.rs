@@ -178,6 +178,8 @@ pub struct BrickMotionApp {
     pub recording: crate::recording::RecordingState,
     /// (generation, version) → how many submodels can be filmed; read by `ctx` every frame.
     submodel_count: std::cell::Cell<Option<((u64, u64), usize)>>,
+    /// The window's context, for threads that wake it (kept by `tick_background`).
+    window: Option<egui::Context>,
     /// `input.time` of the last frame (commands run between frames use it).
     now: f64,
     /// The file Show in Finder revealed while dialogs are off (tests read it).
@@ -284,6 +286,7 @@ impl BrickMotionApp {
             still: Default::default(),
             recording: Default::default(),
             submodel_count: Default::default(),
+            window: None,
             now: 0.0,
             revealed: None,
             camera_synced: None,
@@ -1201,12 +1204,21 @@ impl BrickMotionApp {
     /// Work that must go on whether or not the window is drawn: the Render Queue's progress and
     /// its next job. The queue's waker brings the next call when there is news.
     pub fn tick_background(&mut self, ctx: &egui::Context) {
+        if self.window.is_none() {
+            self.window = Some(ctx.clone());
+        }
         if !self.queue.has_waker() {
             // The render thread wakes the window with its news; nothing polls while it works.
             let ctx = ctx.clone();
             self.queue.set_waker(std::sync::Arc::new(move || ctx.request_repaint()));
         }
         self.queue.poll();
+        self.poll_logo();
+    }
+
+    /// The window's context once the app has run a frame (None in window-less tests).
+    pub(crate) fn ctx_handle(&self) -> Option<egui::Context> {
+        self.window.clone()
     }
 
     #[doc(hidden)]
