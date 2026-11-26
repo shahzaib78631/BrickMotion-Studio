@@ -317,7 +317,9 @@ fn row_menu_exports_submodel_video() {
     h.step();
     h.event(egui::Event::PointerButton { pos: row.center(), button: egui::PointerButton::Secondary, pressed: false, modifiers: egui::Modifiers::NONE });
     h.run_steps(3);
-    h.get_by_label("Export Submodel Video…").click();
+    let items: Vec<String> = h.query_all_by_role(egui::accesskit::Role::Button).filter_map(|n| { use egui_kittest::kittest::NodeT; n.accesskit_node().label() }).filter(|l| l.starts_with("Export ")).collect();
+    assert_eq!(items, ["Export Video…", "Export Project…", "Export LDraw…"], "the approved row menu");
+    h.get_by_label("Export Video…").click();
     h.run_steps(3);
     let m = &h.state().movie;
     assert!(m.open);
@@ -479,8 +481,11 @@ fn record_title_toggles() {
     let mut h = app();
     h.run_steps(5);
     assert_eq!(record_title(&h), "Record Viewport");
-    assert!(run(h.state_mut(), "view.record"));
-    h.run_steps(2);
+    h.state_mut().set_workspace(brickmotion::Workspace::Animate);
+    h.state_mut().ribbon_tab = "Output";
+    h.run_steps(3);
+    h.get_by_label("Record Viewport").click();
+    h.run_steps(4);
     assert_eq!(record_title(&h), "Stop Recording Viewport");
     assert!(h.query_by_label("Stop recording").is_some(), "the recording chip");
     h.get_by_label("Stop recording").click();
@@ -513,4 +518,71 @@ fn record_fits_frames_after_resize() {
     let dest = temp("record-resize").join("take.mp4");
     h.state_mut().finish_recording(dest.clone());
     assert!(bm::recorder::frame_count(&dest).is_some_and(|n| n >= 10));
+}
+
+/// The milestone's screenshots: `M6_SHOTS=<folder> cargo test --test export m6_screenshots -- --ignored`.
+#[test]
+#[ignore = "writes screenshots for review"]
+fn m6_screenshots() {
+    let out = PathBuf::from(std::env::var("M6_SHOTS").unwrap_or("/tmp".into()));
+    let shot = |h: &mut Harness<'static, BrickMotionApp>, name: &str| {
+        h.run_steps(10);
+        h.render().expect("render").save(out.join(name)).unwrap();
+    };
+    let mut h = app();
+    assert!(run(h.state_mut(), "view.look"));
+    shot(&mut h, "m6-look.png");
+
+    let mut h = app();
+    assert!(run(h.state_mut(), "output.export_movie"));
+    shot(&mut h, "m6-export-movie.png");
+
+    let mut h = app();
+    assert!(run(h.state_mut(), "output.export_still"));
+    shot(&mut h, "m6-export-still.png");
+
+    let mut h = app();
+    let dir = temp("shots");
+    script_queue(&mut h, &dir, "case \"$6\" in *Fail*) echo 'The scene could not be read.'; exit 1;; *Slow*) echo 'frame 37 120'; sleep 30;; esac\nprintf x > \"$4\"");
+    for name in ["Helicopter – Build.mp4", "Cover – Square.png", "Fail – Turntable.mp4"] {
+        let options = vec!["--name".into(), name.into()];
+        h.state_mut().queue.enqueue(vec![], Operation::Movie, options, Path::new("/lib"), dir.join(name), "1920 × 1080 · 30 fps · Standard".into(), None).unwrap();
+    }
+    settle_queue(&mut h);
+    for name in ["Slow – Keyframes.mp4", "Waiting – Build.mp4"] {
+        let options = vec!["--name".into(), name.into()];
+        h.state_mut().queue.enqueue(vec![], Operation::Movie, options, Path::new("/lib"), dir.join(name), "1080 × 1920 · 30 fps · High".into(), None).unwrap();
+    }
+    for _ in 0..50 {
+        h.state_mut().queue.poll();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(run(h.state_mut(), "output.render_queue"));
+    shot(&mut h, "m6-queue.png");
+    h.state_mut().queue.stop_for_quit();
+
+    if bm::metal_available() {
+        let mut h = app();
+        h.run_steps(5);
+        step_at(&mut h, 50.0);
+        assert!(run(h.state_mut(), "view.record"));
+        for i in 1..=40 {
+            step_at(&mut h, 50.0 + f64::from(i) / 10.0);
+        }
+        shot(&mut h, "m6-recording.png");
+        h.state_mut().discard_recording();
+    }
+}
+
+#[test]
+fn file_menu_opens_export_panels() {
+    let mut h = app();
+    assert!(run(h.state_mut(), "file.export_movie"));
+    h.run_steps(3);
+    assert!(h.state().movie.open && h.state().movie.targets.is_empty());
+    assert!(run(h.state_mut(), "file.export_movie"), "the menu item never closes the panel");
+    assert!(h.state().movie.open);
+    assert!(run(h.state_mut(), "file.export_still"));
+    assert!(run(h.state_mut(), "file.export_still"));
+    assert!(h.state().still.open, "the menu item never closes the panel");
 }

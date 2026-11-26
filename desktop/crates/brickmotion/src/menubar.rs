@@ -59,7 +59,7 @@ pub fn menu_model() -> Vec<MenuSection> {
                 C("app.quit"),
             ],
         },
-        MenuSection { title: "File", items: vec![C("file.new"), C("file.open"), Recent, Sep, C("file.save"), C("file.save_as"), Sep, C("file.export_ldraw"), C("file.export_plan"), C("file.export_submodels")] },
+        MenuSection { title: "File", items: vec![C("file.new"), C("file.open"), Recent, Sep, C("file.save"), C("file.save_as"), Sep, C("file.export_movie"), C("file.export_still"), C("file.export_submodels"), C("file.export_ldraw"), C("file.export_plan")] },
         MenuSection {
             title: "Edit",
             items: vec![
@@ -326,9 +326,11 @@ mod tests {
                 MenuEntry::Command("file.save"),
                 MenuEntry::Command("file.save_as"),
                 MenuEntry::Separator,
+                MenuEntry::Command("file.export_movie"),
+                MenuEntry::Command("file.export_still"),
+                MenuEntry::Command("file.export_submodels"),
                 MenuEntry::Command("file.export_ldraw"),
                 MenuEntry::Command("file.export_plan"),
-                MenuEntry::Command("file.export_submodels"),
             ]
         );
     }

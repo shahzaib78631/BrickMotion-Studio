@@ -789,6 +789,12 @@ impl BrickMotionApp {
             "model.look" | "view.look" => chrome::look_panel::toggle(self),
             "output.render_queue" => chrome::queue_panel::toggle(self),
             "output.export_still" => chrome::export_still::toggle(self),
+            "file.export_movie" => chrome::export_movie::open(self, Vec::new()),
+            "file.export_still" => {
+                if !self.still.open {
+                    chrome::export_still::toggle(self);
+                }
+            }
             "view.record" => self.toggle_recording(self.now),
             "output.export_movie" => {
                 if self.movie.open && self.movie.targets.is_empty() {

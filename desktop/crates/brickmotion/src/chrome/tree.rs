@@ -192,16 +192,16 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
             let def = row.def.clone();
             if !def.is_empty() && row.pieces > 0 {
                 resp.context_menu(|ui| {
+                    if ui.button("Export Video…").clicked() {
+                        video = Some(row.id.clone());
+                        ui.close();
+                    }
                     if ui.button("Export Project…").clicked() {
                         exported = Some((crate::FileExport::SubmodelProject, def.clone()));
                         ui.close();
                     }
                     if ui.button("Export LDraw…").clicked() {
                         exported = Some((crate::FileExport::SubmodelLdraw, def.clone()));
-                        ui.close();
-                    }
-                    if ui.button("Export Submodel Video…").clicked() {
-                        video = Some(row.id.clone());
                         ui.close();
                     }
                 });

@@ -40,12 +40,13 @@ pub fn status_text(s: &JobStatus) -> String {
     }
 }
 
-/// "n rendering · n waiting · n finished".
+/// Swift's count of the exports still to finish.
 pub fn subtitle(jobs: &[Job]) -> String {
-    let rendering = jobs.iter().filter(|j| matches!(j.status, JobStatus::Rendering { .. } | JobStatus::Cancelling)).count();
-    let waiting = jobs.iter().filter(|j| j.status == JobStatus::Queued).count();
-    let finished = jobs.iter().filter(|j| j.status.finished()).count();
-    format!("{rendering} rendering · {waiting} waiting · {finished} finished")
+    match jobs.iter().filter(|j| !j.status.finished()).count() {
+        0 => "No exports in progress".into(),
+        1 => "1 export in progress".into(),
+        n => format!("{n} exports in progress"),
+    }
 }
 
 pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: egui::Rect, next_top: &mut f32) {
