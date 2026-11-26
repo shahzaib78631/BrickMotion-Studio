@@ -92,6 +92,34 @@ pub fn target_size(rect: Rect, pixels_per_point: f32) -> Option<(u32, u32, f64)>
 }
 
 /// Shows the document's viewport and drives it from the pointer.
+/// What an Auto Key drag needs from the chrome.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AutoKey {
+    pub frame: i32,
+    /// The chosen submodel, when the chosen object is one.
+    pub key_submodel: Option<u32>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct AutoDrag {
+    piece: u32,
+    submodel: bool,
+    origin: bm::Vec3,
+    frame: i32,
+}
+
+fn beep() {
+    #[cfg(target_os = "macos")]
+    {
+        #[link(name = "AppKit", kind = "framework")]
+        unsafe extern "C" {
+            fn NSBeep();
+        }
+        // SAFETY: NSBeep takes no arguments and only plays the alert sound.
+        unsafe { NSBeep() };
+    }
+}
+
 #[derive(Default)]
 pub struct ViewportWidget {
     pub mode: DragMode,
@@ -114,6 +142,13 @@ pub struct ViewportWidget {
     pub(crate) gizmo: Option<GizmoShape>,
     hovered: Handle,
     drag: Option<GizmoDrag>,
+    /// Set by the chrome each frame: on the Keyframes clock with Auto Key on, a gizmo drag keys
+    /// the chosen object at this frame instead of moving pieces.
+    pub auto_key: Option<AutoKey>,
+    /// The Auto Key drag in progress: what it keys and from which values.
+    auto_drag: Option<AutoDrag>,
+    /// The last total change an Auto Key drag keyed (tests read it).
+    pub(crate) last_auto_change: Option<bm::Vec3>,
     waiting_drag: Option<u32>,
     waiting_menu_piece: Option<u32>,
     last_auto_plan: Option<bool>,
@@ -139,6 +174,7 @@ impl ViewportWidget {
         self.gizmo = None;
         self.hovered = Handle::None;
         self.drag = None;
+        self.auto_drag = None;
         self.waiting_drag = None;
         self.waiting_menu_piece = None;
         self.last_auto_plan = None;
@@ -236,6 +272,7 @@ impl ViewportWidget {
             self.gizmo = Some(GizmoShape::new(&cam, view_pt, origin, axes, kind));
         } else {
             if self.drag.take().is_some() {
+                self.auto_drag = None;
                 doc.session().end_gesture();
             }
             self.gizmo = None;
@@ -287,7 +324,13 @@ impl ViewportWidget {
                                         &cam, view_pt, d.origin, d.axes, d.handle, d.start, curr, snap,
                                     );
                                     if let Some(delta) = d.step_move(total) {
-                                        doc.session().translate(&d.pieces, delta, true);
+                                        if let Some(a) = self.auto_drag {
+                                            let keys = bm::keys::auto_key_values(bm::keys::GizmoTool::Move, a.origin, total, a.frame);
+                                            doc.session().set_keys(a.piece, &keys, true, a.submodel);
+                                            self.last_auto_change = Some(total);
+                                        } else {
+                                            doc.session().translate(&d.pieces, delta, true);
+                                        }
                                         changed = true;
                                     }
                                 }
@@ -297,7 +340,14 @@ impl ViewportWidget {
                                     );
                                     if let Some(step) = d.step_rotate(deg) {
                                         let axis = bm::gizmo::handle_axis(&cam, d.axes, d.handle);
-                                        doc.session().rotate(&d.pieces, axis, step, d.origin, true);
+                                        if let Some(a) = self.auto_drag {
+                                            let total = bm::Vec3::new(axis.x * deg, axis.y * deg, axis.z * deg);
+                                            let keys = bm::keys::auto_key_values(bm::keys::GizmoTool::Rotate, a.origin, total, a.frame);
+                                            doc.session().set_keys(a.piece, &keys, true, a.submodel);
+                                            self.last_auto_change = Some(total);
+                                        } else {
+                                            doc.session().rotate(&d.pieces, axis, step, d.origin, true);
+                                        }
                                         changed = true;
                                     }
                                 }
@@ -306,6 +356,7 @@ impl ViewportWidget {
                     }
                 } else {
                     self.drag = None;
+                    self.auto_drag = None;
                     doc.session().end_gesture();
                 }
             } else if primary_pressed
@@ -316,11 +367,27 @@ impl ViewportWidget {
                 let pt = to_bm(pos);
                 let hit = shape.hit(pt, 8.0);
                 if hit != Handle::None {
-                    let axes = gizmo::axes(doc.session(), edit);
-                    let origin = doc.viewport().unwrap().selection_center();
-                    doc.session().end_gesture();
-                    self.drag = Some(GizmoDrag::new(hit, pt, origin, axes, sel.clone()));
                     gizmo_consumed_primary = true;
+                    // Auto Key: key the chosen object instead; a selection it cannot key does nothing.
+                    let auto = match self.auto_key {
+                        Some(ak) => bm::keys::auto_key_target(doc.session(), &sel, true, ak.key_submodel)
+                            .map(|(piece, submodel)| Some((piece, submodel, ak.frame))),
+                        None => Some(None),
+                    };
+                    if let Some(auto) = auto {
+                        let axes = gizmo::axes(doc.session(), edit);
+                        let origin = doc.viewport().unwrap().selection_center();
+                        doc.session().end_gesture();
+                        self.auto_drag = auto.map(|(piece, submodel, frame)| {
+                            use bm::keys::KeyChannel as C;
+                            let chans = if kind == GizmoKind::Move { [C::PositionX, C::PositionY, C::PositionZ] } else { [C::RotationX, C::RotationY, C::RotationZ] };
+                            let v = |c| doc.session().key_value(piece, c, f64::from(frame), submodel);
+                            AutoDrag { piece, submodel, origin: bm::Vec3::new(v(chans[0]), v(chans[1]), v(chans[2])), frame }
+                        });
+                        self.drag = Some(GizmoDrag::new(hit, pt, origin, axes, sel.clone()));
+                    } else {
+                        beep();
+                    }
                 }
             }
         }

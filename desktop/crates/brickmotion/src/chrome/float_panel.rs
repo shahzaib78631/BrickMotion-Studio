@@ -19,6 +19,7 @@ const GAP: f32 = 8.0;
 pub enum PanelKind {
     CameraKey,
     Camera,
+    Keys,
 }
 
 impl PanelKind {
@@ -26,6 +27,7 @@ impl PanelKind {
         match self {
             PanelKind::CameraKey => "Camera Key",
             PanelKind::Camera => "Camera",
+            PanelKind::Keys => "Keys",
         }
     }
 }
@@ -59,15 +61,20 @@ pub struct Outcome {
 
 /// Draws one floating panel. `next_top` is where an unmoved panel goes; it advances below this one
 /// so open panels stack down the right edge.
-#[allow(clippy::too_many_arguments)]
+/// A panel's header: icon, title (the kind's name when empty) and grey subtitle.
+pub struct Head<'a> {
+    pub icon: Icon,
+    pub title: &'a str,
+    pub subtitle: &'a str,
+}
+
 pub fn show(
     ui: &mut Ui,
     app: &mut BrickMotionApp,
     area: Rect,
     next_top: &mut f32,
     kind: PanelKind,
-    icon: Icon,
-    subtitle: &str,
+    head: Head<'_>,
     body: impl FnOnce(&mut Ui, &mut BrickMotionApp),
 ) -> Outcome {
     let t = app.theme;
@@ -90,7 +97,7 @@ pub fn show(
                 ui.spacing_mut().item_spacing.y = 0.0;
                 let resp = ui.interact(ui.max_rect(), Id::unique(("float_panel_body", kind)), Sense::hover());
                 resp.widget_info(|| WidgetInfo::labeled(egui::Role::Group, true, format!("{} panel", kind.title())));
-                header(ui, &t, kind, icon, subtitle, place.folded, &mut moved, &mut fold, &mut out.close);
+                header(ui, &t, kind, &head, place.folded, &mut moved, &mut fold, &mut out.close);
                 if !place.folded {
                     egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
                         Frame::NONE.inner_margin(Margin { left: 0, right: 0, top: 2, bottom: 10 }).show(ui, |ui| {
@@ -120,8 +127,7 @@ fn header(
     ui: &mut Ui,
     t: &Theme,
     kind: PanelKind,
-    icon: Icon,
-    subtitle: &str,
+    head: &Head<'_>,
     folded: bool,
     moved: &mut Vec2,
     fold: &mut bool,
@@ -140,10 +146,11 @@ fn header(
     }
     let y = rect.center().y;
     icons::paint(ui, Icon::Grip, Rect::from_center_size(pos2(rect.left() + 16.0, y), Vec2::splat(14.0)), 14.0, t.text3);
-    icons::paint(ui, icon, Rect::from_center_size(pos2(rect.left() + 36.0, y), Vec2::splat(15.0)), 15.0, t.text2);
-    let title = ui.painter().text(pos2(rect.left() + 50.0, y), Align2::LEFT_CENTER, kind.title(), FontId::proportional(13.0), t.text1);
-    if !subtitle.is_empty() {
-        ui.painter().text(pos2(title.right() + 8.0, y), Align2::LEFT_CENTER, subtitle, FontId::proportional(11.5), t.text3);
+    icons::paint(ui, head.icon, Rect::from_center_size(pos2(rect.left() + 36.0, y), Vec2::splat(15.0)), 15.0, t.text2);
+    let name = if head.title.is_empty() { kind.title() } else { head.title };
+    let title = ui.painter().text(pos2(rect.left() + 50.0, y), Align2::LEFT_CENTER, name, FontId::proportional(13.0), t.text1);
+    if !head.subtitle.is_empty() {
+        ui.painter().text(pos2(title.right() + 8.0, y), Align2::LEFT_CENTER, head.subtitle, FontId::proportional(11.5), t.text3);
     }
     let mut buttons = ui.new_child(egui::UiBuilder::new().max_rect(Rect::from_min_max(pos2(rect.right() - 60.0, rect.top()), rect.max)).layout(egui::Layout::right_to_left(egui::Align::Center)));
     buttons.spacing_mut().item_spacing.x = 2.0;

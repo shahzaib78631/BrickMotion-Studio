@@ -48,6 +48,18 @@ pub enum TimelineDrag {
         original: f64,
         seconds: f64,
     },
+    /// Picked keys of the chosen object, retimed once on release.
+    Keys {
+        picks: Vec<(bm::keys::KeyChannel, i32)>,
+        start_x: f32,
+        offset: i32,
+    },
+    /// Picked frames on Keys rows, moved once on release.
+    KeyRows {
+        picks: Vec<(u32, bool, i32)>,
+        start_x: f32,
+        offset: i32,
+    },
     Hold {
         run: usize,
         step: usize,
@@ -89,6 +101,7 @@ impl Default for TimelineState {
     fn default() -> Self {
         let mut open = HashSet::new();
         open.insert(Track::Build);
+        open.insert(Track::Keys);
         Self {
             view: TimelineView::default(),
             open,
@@ -663,7 +676,7 @@ fn timeline_body(ui: &mut Ui, app: &mut BrickMotionApp, heads: Rect, lanes: Rect
                     |ui, hr| {
                         track_head(ui, &t, hr, Icon::Keys, "Keys", false, false, None);
                     },
-                    |ui, lr| empty_lane(ui, &t, lr, "No keys yet"),
+                    |ui, lr| empty_lane(ui, &t, lr, "Keys play on the Keyframes clock"),
                 );
 
                 // 4. Snaps (seat ticks only)
@@ -695,7 +708,6 @@ fn timeline_body(ui: &mut Ui, app: &mut BrickMotionApp, heads: Rect, lanes: Rect
 
 /// The Keyframes clock: Camera and Keys only; the Build track and Snaps are hidden (m5-rulings.md).
 fn keyframes_body(ui: &mut Ui, app: &mut BrickMotionApp, body: Rect, head_w: f32, lane_w: f32, sep: Stroke) {
-    let t = app.theme;
     let dur = app.transport.duration();
     ui.scope_builder(UiBuilder::new().max_rect(body), |ui| {
         egui::ScrollArea::vertical()
@@ -706,19 +718,41 @@ fn keyframes_body(ui: &mut Ui, app: &mut BrickMotionApp, body: Rect, head_w: f32
                 let (hr, lr) = split_rects(ui, head_w, lane_w, TRACK_H, sep);
                 camera_head(ui, app, hr, bm::camera::CameraClock::Timeline);
                 super::camera_lane::show(ui, app, lr, dur, Clock::Keyframes);
-                split_row(
-                    ui,
-                    head_w,
-                    lane_w,
-                    TRACK_H,
-                    sep,
-                    |ui, hr| {
-                        track_head(ui, &t, hr, Icon::Keys, "Keys", false, false, None);
-                    },
-                    |ui, lr| empty_lane(ui, &t, lr, "No keys yet"),
-                );
+                keys_rows(ui, app, head_w, lane_w, sep);
             });
     });
+}
+
+/// The Keys track on the Keyframes clock: its head, one row per listed object, and the chosen
+/// object's channel lanes.
+fn keys_rows(ui: &mut Ui, app: &mut BrickMotionApp, head_w: f32, lane_w: f32, sep: Stroke) {
+    let t = app.theme;
+    let open = app.timeline.open.contains(&Track::Keys);
+    let (hr, lr) = split_rects(ui, head_w, lane_w, TRACK_H, sep);
+    let (toggled, _) = track_head(ui, &t, hr, Icon::Keys, "Keys", true, open, None);
+    let note = super::keys_track::count_note(app);
+    if !note.is_empty() {
+        ui.painter().text(pos2(hr.right() - 12.0, hr.center().y), Align2::RIGHT_CENTER, note, FontId::proportional(11.0), t.text3);
+    }
+    if toggled && !app.timeline.open.remove(&Track::Keys) {
+        app.timeline.open.insert(Track::Keys);
+    }
+    let rows: Vec<bm::keys::KeyObject> = app.keys.rows().into_iter().cloned().collect();
+    if rows.is_empty() {
+        super::keys_track::empty_hint(ui, app, lr);
+    }
+    if !open {
+        return;
+    }
+    let target = app.keys.target();
+    for o in &rows {
+        let (hr, lr) = split_rects(ui, head_w, lane_w, super::keys_track::ROW_H, sep);
+        super::keys_track::row(ui, app, hr, lr, o);
+        if target == Some((o.piece, o.submodel)) {
+            let (hr, lr) = split_rects(ui, head_w, lane_w, super::dope_sheet::height(), sep);
+            super::dope_sheet::show(ui, app, hr, lr, o);
+        }
+    }
 }
 
 /// The Camera head: its key count, and the lane's menu on right-click.
@@ -1003,6 +1037,8 @@ fn handle_navigation_and_drags(
                     | TimelineDrag::Trim { .. }
                     | TimelineDrag::Arrival { .. }
                     | TimelineDrag::CameraKey { .. }
+                    | TimelineDrag::Keys { .. }
+                    | TimelineDrag::KeyRows { .. }
             )
         )
     {
@@ -1048,6 +1084,18 @@ fn handle_navigation_and_drags(
                         let seconds = ((raw.clamp(0.0, dur)) * fps).round() / fps;
                         app.timeline.drag = Some(TimelineDrag::CameraKey { clock, id, start_x, original, seconds });
                     }
+                    TimelineDrag::Keys { picks, start_x, .. } => {
+                        let fpp = super::keys_track::FrameScale::new(app, lanes).frames_per_px(&app.timeline.view);
+                        let raw = ((pos.x - start_x) as f64 * fpp).round() as i32;
+                        let offset = bm::keys::clamp_offset(super::dope_sheet::limits(app, &picks), raw);
+                        app.timeline.drag = Some(TimelineDrag::Keys { picks, start_x, offset });
+                    }
+                    TimelineDrag::KeyRows { picks, start_x, .. } => {
+                        let fpp = super::keys_track::FrameScale::new(app, lanes).frames_per_px(&app.timeline.view);
+                        let raw = ((pos.x - start_x) as f64 * fpp).round() as i32;
+                        let offset = bm::keys::clamp_offset(super::keys_track::row_limits(app, &picks), raw);
+                        app.timeline.drag = Some(TimelineDrag::KeyRows { picks, start_x, offset });
+                    }
                     TimelineDrag::Arrival { .. } => {}
                 }
             }
@@ -1060,6 +1108,8 @@ fn handle_navigation_and_drags(
                 TimelineDrag::CameraKey { clock, id, original, seconds, .. } => {
                     super::camera_lane::commit_drag(app, clock, &id, original, seconds);
                 }
+                TimelineDrag::Keys { picks, offset, .. } => super::dope_sheet::commit(app, &picks, offset),
+                TimelineDrag::KeyRows { picks, offset, .. } => super::keys_track::commit_rows(app, &picks, offset),
                 TimelineDrag::Hold { step, original, seconds, .. } => {
                     if (seconds - original).abs() >= 0.05 {
                         commit_hold(app, step, seconds);

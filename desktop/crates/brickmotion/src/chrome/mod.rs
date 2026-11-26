@@ -5,7 +5,10 @@ pub mod camera_lane;
 pub mod camera_panel;
 pub mod callout;
 pub mod confirm;
+pub mod dope_sheet;
 pub mod float_panel;
+pub mod keys_panel;
+pub mod keys_track;
 pub mod library;
 pub mod navigator;
 pub mod notices;
@@ -41,6 +44,12 @@ pub fn central(ui: &mut Ui, app: &mut BrickMotionApp) {
         ui.painter().rect_filled(rect, 0.0, t.bg1);
         let playing = app.transport.state.playing;
         let planning = app.transport.busy() || app.transport.state.waiting_to_play;
+        app.viewport.auto_key = (app.keys.auto_key && app.transport.clock() == crate::transport::Clock::Keyframes).then(|| {
+            crate::viewport::AutoKey {
+                frame: app.transport.key_frame(&app.transport.key_scene),
+                key_submodel: app.keys.target().filter(|id| id.1).map(|id| id.0),
+            }
+        });
         app.viewport.show(ui, &mut app.doc, &mut app.edit, &t, app.prefs.auto_plan, playing, planning);
         // The ribbon floats over the top of the view; the other panels start below it.
         ribbon::show(ui, app, rect);
@@ -48,8 +57,9 @@ pub fn central(ui: &mut Ui, app: &mut BrickMotionApp) {
         browser::show(ui, app, below);
         // Floating editors take the top right; Properties steps aside while one is open.
         let mut next_top = below.top() + 2.0;
-        let editing = app.camera_selection.is_some() || app.panels.camera;
+        let editing = app.camera_selection.is_some() || app.panels.camera || keys_panel::is_open(app);
         if editing {
+            keys_panel::show(ui, app, below, &mut next_top);
             camera_panel::show(ui, app, below, &mut next_top);
         } else {
             properties::show(ui, app, below);

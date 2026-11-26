@@ -1,0 +1,215 @@
+//! The chosen object's channel lanes (`KeyframeTracks.swift`'s dope sheet). Key shape shows
+//! interpolation: rotated square = Smooth, square = Linear, small upright square = Hold; a picked
+//! key has an accent ring (m5-rulings.md). Click or ⌘-click picks, a box on empty lane picks, a
+//! drag retimes the picks (previewed, committed once on release), ⌫ deletes, and the right-click
+//! menu sets interpolation or deletes.
+use std::collections::HashSet;
+
+use bm::keys::{Interpolation, KeyChannel, KeyObject, Keyframe};
+use egui::{Align2, Color32, FontId, Rect, Sense, Shape, Stroke, Ui, WidgetInfo, pos2, vec2};
+
+use super::keys_track::{FrameScale, ObjectId, seek_frame};
+use super::timeline::TimelineDrag;
+use crate::BrickMotionApp;
+
+pub const LANE_H: f32 = 22.0;
+const KEY: Color32 = Color32::from_rgb(0xc9, 0xcd, 0xd4);
+const PICKED: Color32 = Color32::from_rgb(0xff, 0x9f, 0x43);
+
+/// Height of the sheet for one object.
+pub fn height() -> f32 {
+    LANE_H * KeyChannel::ALL.len() as f32
+}
+
+/// Draws the channel heads in `heads` and the lanes in `lanes`, both `height()` tall.
+pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, heads: Rect, lanes: Rect, object: &KeyObject) {
+    let t = app.theme;
+    let id = (object.piece, object.submodel);
+    let scale = FrameScale::new(app, lanes);
+    let view = app.timeline.view;
+    let preview = match &app.timeline.drag {
+        Some(TimelineDrag::Keys { picks, offset, .. }) => Some((picks.iter().copied().collect::<HashSet<_>>(), *offset)),
+        _ => None,
+    };
+    let at = |k: &Keyframe| -> f64 {
+        match &preview {
+            Some((p, off)) if p.contains(&(k.channel, k.frame)) => f64::from(k.frame + off),
+            _ => f64::from(k.frame),
+        }
+    };
+
+    // The box select sits under the keys: a press on empty lane starts it.
+    let area = ui.interact(lanes, ui.scope_id().with(("dope-box", id)), Sense::click_and_drag());
+    if area.drag_started() {
+        app.keys.box_from = ui.input(|i| i.pointer.press_origin());
+    }
+    if let (Some(from), Some(now)) = (app.keys.box_from, ui.input(|i| i.pointer.latest_pos())) {
+        let r = Rect::from_two_pos(from, now);
+        ui.painter().rect_filled(r, 2.0, Color32::from_rgba_unmultiplied(0x4f, 0x8c, 0xff, 30));
+        ui.painter().rect_stroke(r, 2.0, Stroke::new(1.0, t.accent), egui::StrokeKind::Inside);
+        if area.drag_stopped() || !ui.input(|i| i.pointer.primary_down()) {
+            let bounds = r.expand(4.0);
+            let mut hit = HashSet::new();
+            for (i, ch) in KeyChannel::ALL.iter().enumerate() {
+                let y = lanes.top() + (i as f32 + 0.5) * LANE_H;
+                for k in object.keys.iter().filter(|k| k.channel == *ch) {
+                    if bounds.contains(pos2(scale.x(&view, f64::from(k.frame)), y)) {
+                        hit.insert((k.channel, k.frame));
+                    }
+                }
+            }
+            if ui.input(|i| i.modifiers.command || i.modifiers.shift) {
+                app.keys.picks.extend(hit);
+            } else {
+                app.keys.picks = hit;
+            }
+            app.keys.box_from = None;
+        }
+    } else if area.clicked() {
+        app.keys.picks.clear();
+    }
+
+    let lo = lanes.left() - 18.0;
+    let hi = lanes.right() + 18.0;
+    for (i, ch) in KeyChannel::ALL.iter().enumerate() {
+        let hr = Rect::from_min_size(pos2(heads.left(), heads.top() + i as f32 * LANE_H), vec2(heads.width(), LANE_H));
+        let lr = Rect::from_min_size(pos2(lanes.left(), hr.top()), vec2(lanes.width(), LANE_H));
+        if i % 2 == 0 {
+            ui.painter().rect_filled(lr, 0.0, Color32::from_white_alpha(4));
+        }
+        let head = ui.interact(hr, ui.scope_id().with(("dope-head", id, i)), Sense::click());
+        let current = app.keys.property == *ch;
+        head.widget_info(|| WidgetInfo::selected(egui::Role::Button, true, current, format!("{} channel", ch.title())));
+        if head.clicked() {
+            app.keys.property = *ch;
+        }
+        let fg = if current { t.text1 } else { t.text3 };
+        ui.painter().text(pos2(hr.left() + 46.0, hr.center().y), Align2::LEFT_CENTER, ch.title(), FontId::proportional(11.5), fg);
+
+        for k in object.keys.iter().filter(|k| k.channel == *ch) {
+            let dragged = preview.as_ref().is_some_and(|(p, _)| p.contains(&(k.channel, k.frame)));
+            let x = scale.x(&view, at(k));
+            if !dragged && (x < lo || x > hi) {
+                continue;
+            }
+            let pick = (k.channel, k.frame);
+            let picked = app.keys.picks.contains(&pick);
+            let c = pos2(x, lr.center().y);
+            let resp = ui.interact(Rect::from_center_size(c, vec2(12.0, LANE_H)), ui.scope_id().with(("dope-key", id, i, k.frame)), Sense::click_and_drag());
+            resp.widget_info(|| WidgetInfo::selected(egui::Role::Button, true, picked, format!("{} key at frame {}", ch.title(), k.frame)));
+            paint_key(ui, c, k.interpolation, if picked { PICKED } else { KEY });
+            if picked {
+                ui.painter().circle_stroke(c, 7.0, Stroke::new(1.2, t.accent));
+            }
+            if resp.clicked() {
+                app.keys.property = *ch;
+                if ui.input(|i| i.modifiers.command || i.modifiers.shift) {
+                    if !app.keys.picks.remove(&pick) {
+                        app.keys.picks.insert(pick);
+                    }
+                } else {
+                    app.keys.picks = HashSet::from([pick]);
+                }
+                seek_frame(app, k.frame);
+            }
+            if resp.drag_started() {
+                if !picked {
+                    app.keys.picks = HashSet::from([pick]);
+                }
+                let start_x = ui.input(|i| i.pointer.press_origin()).map_or(x, |p| p.x);
+                let picks: Vec<_> = app.keys.picks.iter().copied().collect();
+                app.timeline.drag = Some(TimelineDrag::Keys { picks, start_x, offset: 0 });
+            }
+            resp.context_menu(|ui| key_menu(ui, app, id, pick));
+        }
+    }
+}
+
+fn paint_key(ui: &Ui, c: egui::Pos2, interpolation: Interpolation, fill: Color32) {
+    let p = ui.painter();
+    match interpolation {
+        Interpolation::Smooth => {
+            let r = 5.0;
+            p.add(Shape::convex_polygon(vec![pos2(c.x, c.y - r), pos2(c.x + r, c.y), pos2(c.x, c.y + r), pos2(c.x - r, c.y)], fill, Stroke::NONE));
+        }
+        Interpolation::Linear => {
+            p.rect_filled(Rect::from_center_size(c, vec2(8.0, 8.0)), 1.0, fill);
+        }
+        Interpolation::Hold => {
+            p.rect_filled(Rect::from_center_size(c, vec2(5.5, 5.5)), 0.5, fill);
+        }
+    }
+}
+
+fn key_menu(ui: &mut Ui, app: &mut BrickMotionApp, id: ObjectId, pick: (KeyChannel, i32)) {
+    let picks: Vec<(KeyChannel, i32)> =
+        if app.keys.picks.contains(&pick) { app.keys.picks.iter().copied().collect() } else { vec![pick] };
+    for it in Interpolation::ALL {
+        if ui.button(it.title()).clicked() {
+            set_interpolation(app, id, &picks, it);
+            ui.close();
+        }
+    }
+    ui.separator();
+    if ui.button(if picks.len() == 1 { "Delete Key" } else { "Delete Keys" }).clicked() {
+        remove(app, id, &picks);
+        ui.close();
+    }
+}
+
+fn keys_of(app: &BrickMotionApp, id: ObjectId, picks: &[(KeyChannel, i32)]) -> Vec<Keyframe> {
+    app.keys.object(id).map_or_else(Vec::new, |o| o.keys.iter().filter(|k| picks.contains(&(k.channel, k.frame))).copied().collect())
+}
+
+pub fn set_interpolation(app: &mut BrickMotionApp, id: ObjectId, picks: &[(KeyChannel, i32)], it: Interpolation) {
+    let keys: Vec<Keyframe> = keys_of(app, id, picks).into_iter().map(|k| Keyframe { interpolation: it, ..k }).collect();
+    if keys.is_empty() {
+        return;
+    }
+    let c = app.doc.session().set_keys(id.0, &keys, false, id.1);
+    app.edited(c);
+}
+
+fn remove(app: &mut BrickMotionApp, id: ObjectId, picks: &[(KeyChannel, i32)]) {
+    let keys = keys_of(app, id, picks);
+    let c = app.doc.session().remove_keys(id.0, &keys, id.1);
+    if c.refused.is_none() {
+        for p in picks {
+            app.keys.picks.remove(p);
+        }
+    }
+    app.edited(c);
+}
+
+/// ⌫ on picked keys.
+pub fn delete_picks(app: &mut BrickMotionApp) {
+    let Some(id) = app.keys.target() else { return };
+    let picks: Vec<_> = app.keys.picks.iter().copied().collect();
+    remove(app, id, &picks);
+}
+
+/// How far picked keys may move and stay in the scene.
+pub fn limits(app: &BrickMotionApp, picks: &[(KeyChannel, i32)]) -> (i32, i32) {
+    let (Some(lo), Some(hi)) = (picks.iter().map(|p| p.1).min(), picks.iter().map(|p| p.1).max()) else { return (0, 0) };
+    bm::keys::key_offset_limits(app.transport.key_scene, lo, hi)
+}
+
+/// Retimes the picks by `offset` frames (clamped to the scene) in one `move_keys` call; the picks
+/// follow the keys.
+pub fn commit(app: &mut BrickMotionApp, picks: &[(KeyChannel, i32)], offset: i32) {
+    let Some(id) = app.keys.target() else { return };
+    let offset = bm::keys::clamp_offset(limits(app, picks), offset);
+    if offset == 0 {
+        return;
+    }
+    let keys = keys_of(app, id, picks);
+    let c = app.doc.session().move_keys(id.0, &keys, offset, id.1);
+    let ok = c.refused.is_none();
+    app.edited(c);
+    if ok {
+        app.keys.picks = picks.iter().map(|&(ch, f)| (ch, f + offset)).collect();
+        if let Some(anchor) = picks.iter().map(|p| p.1).min() {
+            seek_frame(app, anchor + offset);
+        }
+    }
+}

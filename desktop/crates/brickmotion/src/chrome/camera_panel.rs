@@ -9,7 +9,7 @@ use bm::camera::{CameraClock, CameraKey, CameraMove, SceneCamera};
 use egui::{Align2, Color32, FontId, Frame, Margin, Rect, RichText, Sense, Stroke, Ui, WidgetInfo, pos2, vec2};
 
 use super::camera_lane::{self, AIMS, CameraPick, STYLES};
-use super::float_panel::{self, PanelKind, group_heading, link};
+use super::float_panel::{self, Head, PanelKind, group_heading, link};
 use super::widgets::{self, SliderEvent, hairline, inset_group, parse_number, popup_row, segmented, slider_row, switch_row};
 use crate::BrickMotionApp;
 use crate::icons::Icon;
@@ -45,7 +45,7 @@ impl CameraPanelState {
 pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect, next_top: &mut f32) {
     if let Some((clock, pick)) = app.camera_selection.clone() {
         let subtitle = subtitle(app, clock, &pick);
-        let out = float_panel::show(ui, app, area, next_top, PanelKind::CameraKey, Icon::Cam, &subtitle, |ui, app| match &pick {
+        let out = float_panel::show(ui, app, area, next_top, PanelKind::CameraKey, Head { icon: Icon::Cam, title: "", subtitle: &subtitle }, |ui, app| match &pick {
             CameraPick::Key(id) => key_body(ui, app, clock, id),
             CameraPick::Move(from) => move_body(ui, app, clock, from),
         });
@@ -54,7 +54,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect, next_top: &mut f3
         }
     }
     if app.panels.camera {
-        let out = float_panel::show(ui, app, area, next_top, PanelKind::Camera, Icon::Vid, "", camera_body);
+        let out = float_panel::show(ui, app, area, next_top, PanelKind::Camera, Head { icon: Icon::Vid, title: "", subtitle: "" }, camera_body);
         if out.close {
             app.panels.camera = false;
         }

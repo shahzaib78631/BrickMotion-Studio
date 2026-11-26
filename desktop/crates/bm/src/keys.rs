@@ -6,8 +6,9 @@ use crate::session::take_change;
 use crate::{Changed, Session, Vec3, Viewport, borrowed};
 
 /// A key's channel, in the engine's order.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum KeyChannel {
+    #[default]
     PositionX,
     PositionY,
     PositionZ,

@@ -153,6 +153,8 @@ pub struct BrickMotionApp {
     /// The floating editors' places and the Camera panel.
     pub panels: chrome::float_panel::Panels,
     pub camera_panel: chrome::camera_panel::CameraPanelState,
+    /// The Keys track's objects and picks, Auto Key and Group.
+    pub keys: chrome::keys_track::KeysView,
     pub(crate) camera_synced: Option<(u64, u64)>,
     /// Build timeline zoom, scroll, track disclosure and drag state.
     pub timeline: chrome::timeline::TimelineState,
@@ -237,6 +239,7 @@ impl BrickMotionApp {
             director_popup: false,
             panels: Default::default(),
             camera_panel: Default::default(),
+            keys: Default::default(),
             camera_synced: None,
             timeline: chrome::timeline::TimelineState::default(),
             properties_page: chrome::properties::Page::Inspector,
@@ -714,6 +717,14 @@ impl BrickMotionApp {
                 self.ribbon_tab = "Camera";
                 self.director_popup = !self.director_popup;
             }
+            "video.add_key" => {
+                self.ribbon_tab = "Keyframes";
+                chrome::keys_panel::insert_key(self);
+            }
+            "video.group" => {
+                self.keys.group_rows = !self.keys.group_rows;
+                self.keys.row_picks.clear();
+            }
             "video.scene_cameras" | "video.export_camera" => {
                 self.ribbon_tab = "Camera";
                 self.panels.camera = !self.panels.camera;
@@ -735,7 +746,8 @@ impl BrickMotionApp {
                 // On the Keyframes clock ⇧← / ⇧→ go to the previous or next key.
                 let scene = self.transport.key_scene;
                 let now = self.transport.key_frame(&scene);
-                let objects = self.doc.session().key_objects();
+                // The chosen objects' keys, or every object's when none is chosen.
+                let objects = self.keys.frames_for_travel();
                 let after = id == "transport.next_step";
                 if let Some(frame) = bm::keys::adjacent_key_frame(&objects, now, after)
                     && let Some(vp) = self.doc.viewport()
@@ -1030,6 +1042,11 @@ impl BrickMotionApp {
     }
 
     #[doc(hidden)]
+    pub fn last_auto_key_change(&self) -> Option<bm::Vec3> {
+        self.viewport.last_auto_change
+    }
+
+    #[doc(hidden)]
     pub fn gizmo_lines(&self) -> usize {
         self.viewport.gizmo.as_ref().map(|g| g.lines.len()).unwrap_or(0)
     }
@@ -1163,6 +1180,10 @@ impl eframe::App for BrickMotionApp {
             self.edit.step = self.steps.clamp(self.edit.step);
         }
         self.text_focus = ui.ctx().egui_wants_keyboard_input();
+        if self.has_document {
+            self.keys.sync(self.doc.session());
+            chrome::keys_track::delete_key(self, ui.ctx());
+        }
         chrome::camera_panel::escape(self, ui.ctx());
         crate::shortcuts::handle(self, ui.ctx());
         if self.has_document {
