@@ -50,6 +50,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect, next_top: &mut f3
             CameraPick::Move(from) => move_body(ui, app, clock, from),
         });
         if out.close {
+            app.doc.session().end_gesture();
             app.camera_selection = None;
         }
     }
@@ -57,6 +58,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect, next_top: &mut f3
         let out = float_panel::show(ui, app, area, next_top, PanelKind::Camera, Head { icon: Icon::Vid, title: "", subtitle: "" }, camera_body);
         if out.close {
             app.panels.camera = false;
+            app.panels.camera_focus = None;
         }
     }
 }
@@ -66,8 +68,10 @@ pub fn escape(app: &mut BrickMotionApp, ctx: &egui::Context) {
     if app.camera_selection.is_some()
         && app.camera_panel.renaming.is_none()
         && !app.text_focus
+        && !widgets::slider_active(ctx)
         && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
     {
+        app.doc.session().end_gesture();
         app.camera_selection = None;
     }
 }
@@ -183,11 +187,9 @@ fn key_body(ui: &mut Ui, app: &mut BrickMotionApp, clock: CameraClock, id: &str)
         if let Some(l) = live(ui, &t, "azimuth", "Angle Around", key.azimuth, -360.0..=360.0, 1.0, degrees) {
             set_key(app, clock, &CameraKey { azimuth: l.value, ..key.clone() }, l);
         }
-        hairline(ui);
         if let Some(l) = live(ui, &t, "elevation", "Height", key.elevation, -85.0..=89.0, 1.0, degrees) {
             set_key(app, clock, &CameraKey { elevation: l.value, ..key.clone() }, l);
         }
-        hairline(ui);
         if let Some(l) = live(ui, &t, "roll", "Dutch Roll", key.roll, -45.0..=45.0, 1.0, degrees) {
             set_key(app, clock, &CameraKey { roll: l.value, ..key.clone() }, l);
         }

@@ -14,7 +14,11 @@ pub const HINT: &str = "Drag a point to reshape · double-click the line to add 
 
 /// The one selected piece whose flight path shows, if any.
 fn piece(app: &BrickMotionApp) -> Option<u32> {
-    if !app.has_document || app.transport.clock() != Clock::Keyframes || app.transport.state.playing {
+    if !app.has_document
+        || app.edit.placement.is_some()
+        || app.transport.clock() != Clock::Keyframes
+        || app.transport.state.playing
+    {
         return None;
     }
     match app.doc.session().selection().as_slice() {
@@ -227,12 +231,13 @@ pub fn show(ui: &Ui, app: &mut BrickMotionApp) {
 
     let playhead = app.transport.key_frame(&app.doc.session().key_scene());
     let bounds = rect.expand(8.0);
+    let mut playhead_pos: Option<Pos2> = None;
     for k in &path.keys {
         let Some(p) = project(k.at).filter(|p| bounds.contains(*p)) else { continue };
         app.flights.dots.push((k.frame, p));
         let picked = app.flights.picked == Some((piece, k.frame));
         if k.frame == playhead {
-            painter.circle(p, 5.5, t.playhead, Stroke::new(1.5, Color32::WHITE));
+            playhead_pos = Some(p);
         } else {
             painter.circle(p, 4.0, Color32::WHITE, Stroke::new(1.5, t.accent));
         }
@@ -240,11 +245,34 @@ pub fn show(ui: &Ui, app: &mut BrickMotionApp) {
             painter.circle_stroke(p, 8.0, Stroke::new(1.2, t.accent));
         }
     }
+    // Show the playhead dot even between key frames by sampling the flight line.
+    if playhead_pos.is_none() {
+        playhead_pos = path
+            .line
+            .iter()
+            .find(|s| s.frame == playhead)
+            .and_then(|s| project(s.at))
+            .or_else(|| {
+                let w = path.line.windows(2).find(|w| w[0].frame <= playhead && playhead <= w[1].frame)?;
+                let span = (w[1].frame - w[0].frame).max(1) as f64;
+                let frac = (playhead - w[0].frame) as f64 / span;
+                let at = bm::Vec3::new(
+                    w[0].at.x + (w[1].at.x - w[0].at.x) * frac,
+                    w[0].at.y + (w[1].at.y - w[0].at.y) * frac,
+                    w[0].at.z + (w[1].at.z - w[0].at.z) * frac,
+                );
+                project(at)
+            })
+            .filter(|p| bounds.contains(*p));
+    }
+    if let Some(p) = playhead_pos {
+        painter.circle(p, 5.5, t.playhead, Stroke::new(1.5, Color32::WHITE));
+    }
 
     // The hint sits low in the view, above the floating view bar.
     let at = pos2(rect.center().x, rect.bottom() - 66.0);
     let galley = painter.layout_no_wrap(HINT.to_owned(), FontId::proportional(11.5), t.text2);
-    let bg = Rect::from_center_size(at, galley.size() + vec2(20.0, 10.0));
-    painter.rect_filled(bg, 8.0, t.float_fill());
+    let bg = Rect::from_center_size(at, galley.size() + vec2(22.0, 12.0));
+    painter.rect(bg, 8.0, t.float_fill(), Stroke::new(1.0, t.border2), egui::StrokeKind::Inside);
     painter.text(at, Align2::CENTER_CENTER, HINT, FontId::proportional(11.5), t.text2);
 }

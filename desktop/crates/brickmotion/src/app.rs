@@ -770,8 +770,17 @@ impl BrickMotionApp {
             }
             "object.arrival_direction" => chrome::joints::direction_from_view(self),
             "video.scene_cameras" | "video.export_camera" => {
+                use chrome::float_panel::{CameraFocus, PanelKind};
                 self.ribbon_tab = "Camera";
-                self.panels.camera = !self.panels.camera;
+                let focus = if id == "video.export_camera" { CameraFocus::Export } else { CameraFocus::Scene };
+                if self.panels.camera && self.panels.camera_focus == Some(focus) {
+                    self.panels.camera = false;
+                    self.panels.camera_focus = None;
+                } else {
+                    self.panels.camera = true;
+                    self.panels.camera_focus = Some(focus);
+                    self.panels.unfold(PanelKind::Camera);
+                }
             }
             "video.follow" => {
                 let on = !self.director;

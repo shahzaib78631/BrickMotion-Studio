@@ -498,3 +498,36 @@ fn big_model_keys_track() {
     eprintln!("worst Keys frame {worst:?}");
     assert!(worst < Duration::from_millis(16), "frame {worst:?}");
 }
+
+#[test]
+fn add_first_remaining_property_from_popup() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = keyed(&[]);
+    seek_scene(&mut h, 0.5);
+    choose(&mut h, 32);
+    // Open the Property ("Add…") popup and click the very first remaining property (Rotation X).
+    let prop = h.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Property");
+    prop.scroll_to_me();
+    h.run_steps(20);
+    let at = h.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Property").rect().center();
+    click_at(&mut h, at, egui::Modifiers::NONE);
+    h.get_by_label("Rotation X").click();
+    h.run_steps(3);
+    let k = object_keys(&h, 32);
+    assert!(k.iter().any(|k| k.channel == KeyChannel::RotationX), "Rotation X key added: {k:?}");
+}
+
+#[test]
+fn timeline_header_has_auto_key_and_curves_on_keyframes() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = keyed(&[]);
+    assert!(!h.state().keys.auto_key);
+    assert!(h.query_by_role_and_label(egui::accesskit::Role::Button, "Curves").is_some());
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Auto Key").click();
+    h.run_steps(2);
+    assert!(h.state().keys.auto_key, "Auto Key toggled from timeline header");
+}

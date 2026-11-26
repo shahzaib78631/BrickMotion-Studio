@@ -4,7 +4,7 @@
 //! it (type, what it does, −15° / angle / +15°, Select Rigid Body, Detach) and the Joint panel at
 //! the top right. Inspections and joint changes run on the `bm-anim` worker; a change lands only on
 //! the document it was made from, through `place_moved`.
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use bm::motion::{Inspection, JointEdit, JointReport, JointRow, JointType};
 use egui::{Align2, Color32, FontId, Pos2, Rect, Sense, Shape, Stroke, Ui, WidgetInfo, pos2, vec2};
@@ -54,6 +54,8 @@ pub struct JointsView {
     /// The selection whose card was closed: picking it does not open the card again.
     dismissed: Option<Vec<u32>>,
     marker_press: bool,
+    /// Cached piece -> display name map for `(generation, version)`.
+    names_cache: Option<(DocKey, HashMap<u32, String>)>,
 }
 
 impl JointsView {
@@ -128,10 +130,21 @@ pub fn sync(app: &mut BrickMotionApp, ctx: &egui::Context) {
     let key = j.key(s);
     match j.inspect.poll(&key) {
         Some(Ok(r)) => {
+            let err = r.error;
             j.report = Some(r.joints);
             j.for_key = Some(key.clone());
             j.started = None;
             reconcile(app, &selection);
+            if let Some(e) = err {
+                if app.joints.open.is_some() {
+                    app.joints.error = Some(e);
+                } else {
+                    crate::notices::push(
+                        &mut app.notices,
+                        crate::notices::Notice::Warning { title: "Couldn't inspect joints".into(), detail: e },
+                    );
+                }
+            }
         }
         Some(Err(Stale)) => app.joints.started = None,
         None => {}
@@ -299,9 +312,19 @@ pub fn handle_pointer(ui: &Ui, app: &mut BrickMotionApp) -> bool {
         }
         return true;
     }
+    if app.edit.placement.is_some() || app.transport.state.playing {
+        return false;
+    }
     let (Some(rect), Some(p)) = (app.viewport.last_rect, pos) else { return false };
     if !pressed || !app.joints.show || !rect.contains(p) || ui.ctx().layer_id_at(p) != Some(ui.layer_id()) {
         return false;
+    }
+    // Never steal a press on an active move/rotate gizmo handle.
+    if let Some(gizmo) = &app.viewport.gizmo {
+        let pt = bm::Vec2::new(f64::from(p.x - rect.left()), f64::from(p.y - rect.top()));
+        if gizmo.hit(pt, 8.0) != bm::gizmo::Handle::None {
+            return false;
+        }
     }
     let hit = app
         .joints
@@ -327,20 +350,42 @@ fn description(kind: JointType) -> &'static str {
     }
 }
 
-/// The part's description; a part inside a submodel goes by the submodel's name (bm names
-/// only a step's own items).
-fn part_name(s: &bm::Session, piece: u32) -> String {
-    let tidy = |d: &str| d.split_whitespace().collect::<Vec<_>>().join(" ");
-    let items: Vec<bm::steps::ItemRow> = (0..s.steps().len()).flat_map(|st| s.step_items(st)).filter(|i| i.pieces.contains(&piece)).collect();
-    if let Some(i) = items.iter().find(|i| !i.submodel) {
-        return tidy(&i.description);
+/// Builds and caches a piece -> display name table once per document version so joint overlays and
+/// panels don't scan every step across FFI each frame.
+fn part_name(app: &mut BrickMotionApp, piece: u32) -> String {
+    let s = app.doc.session();
+    let key = (s.generation(), s.version());
+    if app.joints.names_cache.as_ref().is_none_or(|(k, _)| *k != key) {
+        let tidy = |d: &str| d.split_whitespace().collect::<Vec<_>>().join(" ");
+        let mut map = HashMap::new();
+        for st in 0..s.steps().len() {
+            for item in s.step_items(st) {
+                let label = if !item.submodel && !item.description.is_empty() {
+                    tidy(&item.description)
+                } else {
+                    tidy(item.name.trim_end_matches(".ldr").trim_end_matches(".dat"))
+                };
+                for p in item.pieces {
+                    // Prefer a direct (non-submodel) description over a submodel wrapper name.
+                    if !item.submodel || !map.contains_key(&p) {
+                        map.insert(p, label.clone());
+                    }
+                }
+            }
+        }
+        app.joints.names_cache = Some((key, map));
     }
-    items.first().map_or_else(|| format!("Part {}", piece + 1), |i| tidy(i.name.trim_end_matches(".ldr").trim_end_matches(".dat")))
+    app.joints
+        .names_cache
+        .as_ref()
+        .and_then(|(_, m)| m.get(&piece).cloned())
+        .unwrap_or_else(|| format!("Part {}", piece + 1))
 }
 
 /// "A ↔ B", or one name when both parts go by the same one.
-fn pair_name(s: &bm::Session, a: u32, b: u32) -> String {
-    let (a, b) = (part_name(s, a), part_name(s, b));
+fn pair_name(app: &mut BrickMotionApp, a: u32, b: u32) -> String {
+    let a = part_name(app, a);
+    let b = part_name(app, b);
     if a == b { a } else { format!("{a} ↔ {b}") }
 }
 
@@ -363,17 +408,58 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
     };
     let t = app.theme;
     let painter = ui.painter_at(rect);
+    let open_key = app.joints.open;
+    let hover = ui.input(|i| i.pointer.hover_pos()).filter(|p| rect.contains(*p) && ui.ctx().layer_id_at(*p) == Some(ui.layer_id()));
+    let mut hovered_joint: Option<(JointRow, Pos2)> = None;
     if app.joints.show
-        && let Some(rows) = &app.joints.report
+        && let Some(rows) = app.joints.report.clone()
     {
+        // Calm, de-cluttered joint dots: deduplicate overlapping markers within 7 px so dense
+        // models stay readable; dim passive dots while a joint is open so the active axis pops.
+        let mut drawn: Vec<Pos2> = Vec::new();
+        let dimmed = open_key.is_some();
+        let dot_r = if dimmed { 2.8 } else { 3.4 };
+        let fill = if dimmed {
+            Color32::from_rgba_unmultiplied(t.accent.r(), t.accent.g(), t.accent.b(), 110)
+        } else {
+            Color32::from_rgba_unmultiplied(t.accent.r(), t.accent.g(), t.accent.b(), 215)
+        };
+        let ring = if dimmed { Color32::from_white_alpha(90) } else { Color32::from_white_alpha(200) };
         for j in rows.iter().filter(|j| j.kind != JointType::Fixed) {
+            if open_key.is_some_and(|k| same(j, k)) {
+                continue;
+            }
             let Some(p) = project(j.point).filter(|p| rect.contains(*p)) else { continue };
-            painter.circle(p, 4.0, t.accent, Stroke::new(1.0, Color32::WHITE));
             app.joints.markers.push(((j.a, j.b), p));
+            if drawn.iter().any(|q| q.distance_sq(p) < 49.0) {
+                continue;
+            }
+            drawn.push(p);
+            let is_hov = hover.is_some_and(|h| h.distance(p) <= MARKER_HIT);
+            if is_hov {
+                hovered_joint = Some((*j, p));
+                painter.circle(p, 5.0, t.accent, Stroke::new(1.5, Color32::WHITE));
+            } else {
+                painter.circle(p, dot_r, fill, Stroke::new(1.0, ring));
+            }
         }
+    }
+    if let Some((hj, hp)) = hovered_joint {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        let tip = format!("{} · {}", hj.kind.title(), pair_name(app, hj.a, hj.b));
+        let g = painter.layout_no_wrap(tip.clone(), FontId::proportional(11.0), t.text1);
+        let chip = Rect::from_min_size(
+            pos2((hp.x + 10.0).min(rect.right() - g.size().x - 20.0), (hp.y - 26.0).max(rect.top() + super::ribbon::SPACE + 6.0)),
+            g.size() + vec2(14.0, 8.0),
+        );
+        painter.rect(chip, 6.0, t.float_fill(), Stroke::new(1.0, t.border2), egui::StrokeKind::Inside);
+        painter.galley(chip.min + vec2(7.0, 4.0), g, t.text1);
     }
     let Some(row) = app.joints.row() else { return };
     let Some(pivot) = project(row.point) else { return };
+    if app.joints.show {
+        app.joints.markers.push(((row.a, row.b), pivot));
+    }
 
     // Axis, ring and pivot.
     let len = (row.axis.x * row.axis.x + row.axis.y * row.axis.y + row.axis.z * row.axis.z).sqrt();
@@ -413,9 +499,10 @@ fn cross(a: bm::Vec3, b: bm::Vec3) -> bm::Vec3 {
 /// The small card beside the pivot.
 fn card(ui: &mut Ui, app: &mut BrickMotionApp, t: &Theme, rect: Rect, pivot: Pos2, row: JointRow) {
     const W: f32 = 236.0;
-    let names = pair_name(app.doc.session(), row.a, row.b);
+    let names = pair_name(app, row.a, row.b);
+    let min_y = rect.top() + super::ribbon::SPACE + 8.0;
     let x = (pivot.x + 14.0).min(rect.right() - W - 8.0).max(rect.left() + 8.0);
-    let y = (pivot.y - 60.0).clamp(rect.top() + 8.0, (rect.bottom() - 150.0).max(rect.top() + 8.0));
+    let y = (pivot.y - 60.0).clamp(min_y, (rect.bottom() - 150.0).max(min_y));
     let mut act: Option<f64> = None;
     let (mut body, mut shut) = (false, false);
     let changing = app.joints.changing;
@@ -495,8 +582,7 @@ fn card(ui: &mut Ui, app: &mut BrickMotionApp, t: &Theme, rect: Rect, pivot: Pos
 /// The Joint panel at the top right while a joint is open.
 pub fn panel(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect, next_top: &mut f32) {
     let Some(row) = app.joints.row() else { return };
-    let s = app.doc.session();
-    let subtitle = pair_name(s, row.a, row.b);
+    let subtitle = pair_name(app, row.a, row.b);
     let out = float_panel::show(ui, app, area, next_top, PanelKind::Joint, Head { icon: Icon::Rotate, title: "", subtitle: &subtitle }, |ui, app| {
         let t = app.theme;
         group_heading(ui, &t, "Joint", "");
@@ -513,9 +599,12 @@ pub fn panel(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect, next_top: &mut f
                 }
                 let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::hover());
                 ui.painter().text(pos2(r.left() + 12.0, r.center().y), Align2::LEFT_CENTER, *label, FontId::proportional(12.5), t.text1);
-                ui.painter().text(pos2(r.right() - 12.0, r.center().y), Align2::RIGHT_CENTER, value, FontId::proportional(12.0), t.text2);
+                ui.painter().text(pos2(r.right() - 12.0, r.center().y), Align2::RIGHT_CENTER, value, FontId::monospace(11.5), t.text2);
             }
         });
+        if let Some(e) = app.joints.error.clone() {
+            super::widgets::footnote(ui, &t, &e);
+        }
         group_heading(ui, &t, "Show", "");
         inset_group(ui, |ui| {
             let mut all = app.joints.show;

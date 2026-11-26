@@ -39,6 +39,8 @@ pub struct Baked {
 pub struct PendingBake {
     bake: FlightBake,
     pub detach: bool,
+    /// The document the bake was captured from (checked before applying).
+    key: DocKey,
 }
 
 #[derive(Clone, Debug)]
@@ -82,6 +84,8 @@ pub struct Flights {
     pub(crate) drag: Option<PathDrag>,
     /// A press on the line is held (the viewport does not see it).
     pub(crate) line_press: bool,
+    /// Cached local piece set for `(generation, version)` so UI panels don't scan steps every frame.
+    local_cache: Option<(DocKey, std::collections::HashSet<u32>)>,
 }
 
 impl Flights {
@@ -130,15 +134,16 @@ pub fn bake(app: &mut BrickMotionApp, detach: bool) {
         return;
     }
     let pieces = chosen_pieces(app);
+    let key = doc_key(app);
     let Some(vp) = app.doc.viewport() else { return };
     let Some(bake) = vp.capture_flight_bake(&pieces, detach) else {
         refuse(app, "Generate a Build plan before baking flights.");
         return;
     };
     if bake.replaces_keys() {
-        app.flights.confirm = Some(PendingBake { bake, detach });
+        app.flights.confirm = Some(PendingBake { bake, detach, key });
     } else {
-        run_bake(app, bake, detach, None);
+        run_bake(app, bake, detach, None, key);
     }
 }
 
@@ -147,13 +152,16 @@ pub fn answer_confirm(app: &mut BrickMotionApp, replace: bool) {
     if let Some(p) = app.flights.confirm.take()
         && replace
     {
-        run_bake(app, p.bake, p.detach, None);
+        if p.key != doc_key(app) {
+            app.flights.note = Some("The animation changed while flights were being baked. Bake again to use it.".into());
+            return;
+        }
+        run_bake(app, p.bake, p.detach, None, p.key);
     }
 }
 
-fn run_bake(app: &mut BrickMotionApp, mut bake: FlightBake, detach: bool, then: Option<Then>) {
+fn run_bake(app: &mut BrickMotionApp, mut bake: FlightBake, detach: bool, then: Option<Then>, key: DocKey) {
     app.flights.note = None;
-    let key = doc_key(app);
     app.bake.start(key, move || {
         let result = bake.prepare();
         Baked { bake, result, detach, then }
@@ -169,6 +177,7 @@ pub fn edit_flight(app: &mut BrickMotionApp, piece: u32, start: f64) {
     if app.bake.busy() {
         return;
     }
+    let key = doc_key(app);
     let Some(vp) = app.doc.viewport() else { return };
     let Some(bake) = vp.capture_flight_bake(&[piece], false) else {
         refuse(app, "This part has no playable flight to open as keys.");
@@ -178,7 +187,7 @@ pub fn edit_flight(app: &mut BrickMotionApp, piece: u32, start: f64) {
         refuse(app, "This flight already has keys. Open Keyframes to review them before rebaking.");
         return;
     }
-    run_bake(app, bake, false, Some(Then::OpenKeys { piece, start }));
+    run_bake(app, bake, false, Some(Then::OpenKeys { piece, start }), key);
 }
 
 fn open_keys(app: &mut BrickMotionApp, piece: u32, start: f64) {
@@ -213,9 +222,20 @@ pub fn return_to_planner(app: &mut BrickMotionApp, piece: u32) {
     app.edited(c);
 }
 
-/// A piece of the open model itself (not inside a submodel).
-pub fn is_local(session: &bm::Session, piece: u32) -> bool {
-    (0..session.steps().len()).any(|s| session.step_items(s).iter().any(|i| !i.submodel && i.pieces.contains(&piece)))
+/// A piece of the open model itself (not inside a submodel), cached per document version.
+pub fn is_local(app: &mut BrickMotionApp, piece: u32) -> bool {
+    let key = doc_key(app);
+    let stale = app.flights.local_cache.as_ref().is_none_or(|(k, _)| *k != key);
+    if stale {
+        let s = app.doc.session();
+        let set: std::collections::HashSet<u32> = (0..s.steps().len())
+            .flat_map(|st| s.step_items(st))
+            .filter(|i| !i.submodel)
+            .flat_map(|i| i.pieces)
+            .collect();
+        app.flights.local_cache = Some((key, set));
+    }
+    app.flights.local_cache.as_ref().is_some_and(|(_, set)| set.contains(&piece))
 }
 
 /// Check Motion on the selected piece's keyed motion.

@@ -36,9 +36,16 @@ impl PanelKind {
     }
 }
 
+/// Which ribbon command opened the Camera panel, so only one button highlights active.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CameraFocus {
+    Scene,
+    Export,
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 struct Place {
-    /// Where the user dragged it, from the default corner; None until moved.
+    /// Where the user dragged it, relative to the top-right anchor of the viewport area; None until moved.
     offset: Option<Vec2>,
     folded: bool,
 }
@@ -49,6 +56,8 @@ pub struct Panels {
     places: HashMap<PanelKind, Place>,
     /// The Camera panel (scene cameras, export camera, camera track) is open.
     pub camera: bool,
+    /// Which Camera ribbon button opened the panel.
+    pub camera_focus: Option<CameraFocus>,
 }
 
 impl Panels {
@@ -90,8 +99,11 @@ pub fn show(
 ) -> Outcome {
     let t = app.theme;
     let place = app.panels.places.get(&kind).copied().unwrap_or_default();
-    let corner = pos2(area.right() - GAP - WIDTH, *next_top);
-    let pos = corner + place.offset.unwrap_or(Vec2::ZERO);
+    let anchor = pos2(area.right() - GAP - WIDTH, area.top() + 2.0);
+    let pos = match place.offset {
+        Some(off) => anchor + off,
+        None => pos2(area.right() - GAP - WIDTH, *next_top),
+    };
     let max_h = (area.bottom() - pos.y - 12.0).max(HEADER_H + 40.0);
     let mut out = Outcome::default();
     let mut fold = false;
@@ -122,7 +134,8 @@ pub fn show(
 
     let p = app.panels.places.entry(kind).or_default();
     if moved != Vec2::ZERO {
-        p.offset = Some(p.offset.unwrap_or(Vec2::ZERO) + moved);
+        let base = p.offset.unwrap_or_else(|| pos - anchor);
+        p.offset = Some(base + moved);
     }
     if fold {
         p.folded = !p.folded;
@@ -159,9 +172,11 @@ fn header(
     icons::paint(ui, Icon::Grip, Rect::from_center_size(pos2(rect.left() + 16.0, y), Vec2::splat(14.0)), 14.0, t.text3);
     icons::paint(ui, head.icon, Rect::from_center_size(pos2(rect.left() + 36.0, y), Vec2::splat(15.0)), 15.0, t.text2);
     let name = if head.title.is_empty() { kind.title() } else { head.title };
-    let title = ui.painter().text(pos2(rect.left() + 50.0, y), Align2::LEFT_CENTER, name, FontId::proportional(13.0), t.text1);
-    if !head.subtitle.is_empty() {
-        ui.painter().text(pos2(title.right() + 8.0, y), Align2::LEFT_CENTER, head.subtitle, FontId::proportional(11.5), t.text3);
+    let text_clip = Rect::from_min_max(pos2(rect.left() + 48.0, rect.top()), pos2(rect.right() - 62.0, rect.bottom()));
+    let tp = ui.painter().with_clip_rect(text_clip);
+    let title = tp.text(pos2(rect.left() + 50.0, y), Align2::LEFT_CENTER, name, FontId::proportional(13.0), t.text1);
+    if !head.subtitle.is_empty() && title.right() + 12.0 < text_clip.right() {
+        tp.text(pos2(title.right() + 8.0, y), Align2::LEFT_CENTER, head.subtitle, FontId::proportional(11.5), t.text3);
     }
     let mut buttons = ui.new_child(egui::UiBuilder::new().max_rect(Rect::from_min_max(pos2(rect.right() - 60.0, rect.top()), rect.max)).layout(egui::Layout::right_to_left(egui::Align::Center)));
     buttons.spacing_mut().item_spacing.x = 2.0;
@@ -170,7 +185,8 @@ fn header(
         *close = true;
     }
     let fold_label = if folded { format!("Unfold {}", kind.title()) } else { format!("Fold {}", kind.title()) };
-    if icon_button(&mut buttons, t, Icon::Down, &fold_label, true, false, 24.0).clicked() {
+    let fold_icon = if folded { Icon::Chevron } else { Icon::Down };
+    if icon_button(&mut buttons, t, fold_icon, &fold_label, true, false, 24.0).clicked() {
         *fold = true;
     }
     if !folded {

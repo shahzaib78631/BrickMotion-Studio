@@ -675,3 +675,23 @@ fn contact_click_keeps_the_keys_panel() {
     assert_eq!(sel, vec![PIECE, 33], "both parts shown");
     assert!(h.query_by_label("Keys panel").is_some(), "the checked object's panel stays open");
 }
+
+#[test]
+fn stale_bake_confirm_is_dropped() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = planned();
+    bake(&mut h, PIECE);
+    assert!(run(h.state_mut(), "video.bake_flight"));
+    h.run_steps(2);
+    assert!(h.state().flights.confirm.is_some(), "confirm modal open");
+    // Document changes while confirm dialog is up.
+    edit_something(&mut h);
+    let depth = h.state().session().undo_depth();
+    h.get_by_label("Replace Keys").click();
+    h.run_steps(2);
+    wait_idle(&mut h);
+    assert_eq!(h.state().session().undo_depth(), depth, "stale bake must not apply");
+    assert!(h.state().flights.note.as_deref().is_some_and(|n| n.contains("changed")));
+}

@@ -195,8 +195,8 @@ fn body(ui: &mut Ui, app: &mut BrickMotionApp, target: &MotionTarget) {
             if reset {
                 commit(app, target, with(own, -1.0));
             }
-            hairline(ui);
         }
+        hairline(ui);
         let names: Vec<String> = std::iter::once(format!("Inherit · {}", MotionFields::ease_name(inherited.ease)))
             .chain((0..4).map(|e| MotionFields::ease_name(e).to_owned()))
             .collect();

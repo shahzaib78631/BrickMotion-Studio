@@ -154,8 +154,9 @@ fn add_channel(ui: &mut Ui, app: &mut BrickMotionApp, t: &Theme, id: ObjectId, o
     }
     let mut labels: Vec<&str> = vec!["Add a property…"];
     labels.extend(rest.iter().map(|c| c.title()));
-    let mut at = 0;
-    if widgets::popup_row(ui, t, "key_add_channel", "Property", "Add…", &labels[1..], &mut at, true) {
+    // usize::MAX so nothing starts checked and picking index 0 (the first remaining property) works.
+    let mut at = usize::MAX;
+    if widgets::popup_row(ui, t, "key_add_channel", "Property", "Add…", &labels[1..], &mut at, true) && at < rest.len() {
         let ch = rest[at];
         let value = app.doc.session().key_value(id.0, ch, f64::from(frame), id.1);
         let c = app.doc.session().set_keys(id.0, &[Keyframe::new(ch, frame, value)], false, id.1);
@@ -228,6 +229,7 @@ fn flights_group(ui: &mut Ui, app: &mut BrickMotionApp, t: &Theme, object: &KeyO
         1 => "replaces 1 key".into(),
         n => format!("replaces {n} keys"),
     };
+    let can_bake = app.transport.ready();
     group_heading(ui, t, "Flights", &note);
     inset_group(ui, |ui| {
         if app.bake.busy() {
@@ -235,17 +237,26 @@ fn flights_group(ui: &mut Ui, app: &mut BrickMotionApp, t: &Theme, object: &KeyO
                 ui.label(RichText::new("Baking flights…").size(12.5).color(t.text3));
             });
         } else {
-            if links(ui, t, &["Bake Flights to Keys"]).is_some() {
-                crate::flights::bake(app, false);
-            }
+            let color = if can_bake { t.accent } else { t.text3 };
+            link_row(ui, |ui| {
+                let r = link(ui, t, "Bake Flights to Keys", color);
+                let r = if can_bake { r } else { r.on_hover_text("Plan the build before baking flights.").on_hover_cursor(egui::CursorIcon::Default) };
+                if can_bake && r.clicked() {
+                    crate::flights::bake(app, false);
+                }
+            });
             hairline(ui);
-            if links(ui, t, &["Bake All and Detach Build"]).is_some() {
-                crate::flights::bake(app, true);
-            }
+            link_row(ui, |ui| {
+                let r = link(ui, t, "Bake All and Detach Build", color);
+                let r = if can_bake { r } else { r.on_hover_text("Plan the build before baking flights.").on_hover_cursor(egui::CursorIcon::Default) };
+                if can_bake && r.clicked() {
+                    crate::flights::bake(app, true);
+                }
+            });
         }
         if object.baked && !object.submodel {
             hairline(ui);
-            let local = crate::flights::is_local(app.doc.session(), object.piece);
+            let local = crate::flights::is_local(app, object.piece);
             let labels: &[&str] = if local { &["Use in Build", "Return to Planner"] } else { &["Return to Planner"] };
             match links(ui, t, labels).map(|i| labels[i]) {
                 Some("Use in Build") => crate::flights::use_edited_flight(app, object.piece),
@@ -314,7 +325,7 @@ fn number_field(ui: &mut Ui, salt: impl std::hash::Hash + std::fmt::Debug, label
     let mut text = if focused { ui.data(|d| d.get_temp::<String>(draft_id)).unwrap_or_else(|| shown.to_owned()) } else { shown.to_owned() };
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect));
     let resp = child.add(
-        egui::TextEdit::singleline(&mut text).id(id).desired_width(rect.width()).align(egui::Align2::RIGHT_CENTER).font(FontId::proportional(12.0)),
+        egui::TextEdit::singleline(&mut text).id(id).desired_width(rect.width()).align(egui::Align2::RIGHT_CENTER).font(FontId::monospace(11.5)),
     );
     resp.widget_info(|| WidgetInfo::labeled(egui::Role::TextInput, true, label));
     if resp.gained_focus()
@@ -324,8 +335,20 @@ fn number_field(ui: &mut Ui, salt: impl std::hash::Hash + std::fmt::Debug, label
         st.cursor.set_char_range(Some(all));
         st.store(ui.ctx(), id);
     }
-    let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
-    if resp.has_focus() {
+    // Read focus first: has_focus locks memory, which must not happen inside input_mut.
+    let focused = resp.has_focus() || resp.lost_focus();
+    let (enter, esc) = ui.input_mut(|i| {
+        if focused {
+            (i.key_pressed(egui::Key::Enter), i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
+        } else {
+            (false, false)
+        }
+    });
+    if esc {
+        ui.data_mut(|d| d.remove::<String>(draft_id));
+        resp.surrender_focus();
+        None
+    } else if resp.has_focus() {
         ui.data_mut(|d| d.insert_temp(draft_id, text.clone()));
         None
     } else if resp.lost_focus() {

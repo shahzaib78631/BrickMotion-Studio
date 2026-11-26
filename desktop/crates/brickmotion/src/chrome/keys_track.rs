@@ -220,10 +220,13 @@ pub fn row(ui: &mut Ui, app: &mut BrickMotionApp, hr: Rect, lr: Rect, object: &K
     let head = ui.interact(hr, ui.scope_id().with(("key-obj", id)), Sense::click());
     head.widget_info(|| WidgetInfo::selected(egui::Role::Button, true, chosen, format!("{} object", object.name)));
     if chosen {
-        ui.painter().rect_filled(hr, 0.0, t.accent_bg());
+        ui.painter().rect_filled(hr.shrink2(vec2(6.0, 2.0)), 6.0, t.accent_bg());
     } else if head.hovered() {
-        ui.painter().rect_filled(hr, 0.0, Color32::from_white_alpha(8));
+        ui.painter().rect_filled(hr.shrink2(vec2(6.0, 2.0)), 6.0, Color32::from_white_alpha(10));
     }
+    // 3-px accent/object bar on the left (m6-controls.html).
+    let bar_color = if object.baked { t.accent } else if chosen { t.text1 } else { t.text3 };
+    ui.painter().rect_filled(Rect::from_center_size(pos2(hr.left() + 24.0, hr.center().y), vec2(3.0, 14.0)), 1.5, bar_color);
     let name = ui.painter().layout_no_wrap(object.name.clone(), FontId::proportional(12.0), if chosen { t.text1 } else { t.text2 });
     let clip = Rect::from_min_max(pos2(hr.left() + 34.0, hr.top()), pos2(hr.right() - 8.0, hr.bottom()));
     ui.painter().with_clip_rect(clip).galley(pos2(clip.left(), hr.center().y - name.size().y / 2.0), name, t.text2);
@@ -247,7 +250,21 @@ pub fn row(ui: &mut Ui, app: &mut BrickMotionApp, hr: Rect, lr: Rect, object: &K
     let y = lr.center().y;
     if let (Some(a), Some(b)) = (object.markers.first(), object.markers.last()) {
         let (xa, xb) = (scale.x(&view, f64::from(shift(a.frame))), scale.x(&view, f64::from(shift(b.frame))));
-        ui.painter().line_segment([pos2(xa.min(xb), y), pos2(xa.max(xb), y)], Stroke::new(2.0, Color32::from_rgba_unmultiplied(0x4f, 0x8c, 0xff, 70)));
+        let (x0, x1) = (xa.min(xb), xa.max(xb));
+        if x1 > x0 + 2.0 {
+            let band = Rect::from_min_max(pos2(x0, lr.top() + 3.0), pos2(x1, lr.bottom() - 3.0));
+            ui.painter_at(lr).rect_filled(band, 6.0, Color32::from_rgba_unmultiplied(0x4f, 0x8c, 0xff, 26));
+            if object.baked && band.width() > 90.0 {
+                ui.painter_at(band.shrink2(vec2(8.0, 0.0))).text(
+                    pos2(band.left() + 10.0, y),
+                    Align2::LEFT_CENTER,
+                    "Flight · baked",
+                    FontId::proportional(10.5),
+                    t.text3,
+                );
+            }
+        }
+        ui.painter_at(lr).line_segment([pos2(x0, y), pos2(x1, y)], Stroke::new(1.5, Color32::from_rgba_unmultiplied(0x4f, 0x8c, 0xff, 90)));
     }
     let lo = lr.left() - 18.0;
     let hi = lr.right() + 18.0;

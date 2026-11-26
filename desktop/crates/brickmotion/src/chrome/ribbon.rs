@@ -109,8 +109,9 @@ fn tab_row(ui: &mut Ui, app: &mut BrickMotionApp) {
 
 /// The tool groups of the chosen tab, each with its caption under it.
 fn tool_groups(ui: &mut Ui, app: &mut BrickMotionApp) {
+    use super::float_panel::CameraFocus;
     let t = app.theme;
-    ui.add_space(5.0);
+    ui.add_space(4.0);
     let ctx = app.ctx();
     let cmds: Vec<&Command> = registry().iter().filter(|c| c.workspace == app.workspace && c.tab == app.ribbon_tab).collect();
     if cmds.is_empty() {
@@ -136,15 +137,18 @@ fn tool_groups(ui: &mut Ui, app: &mut BrickMotionApp) {
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
                 let row = ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 3.0;
                     ui.add_space(6.0);
                     for c in &list {
                         let on = enabled(c, &ctx);
                         let active = (c.id == "model.move" && ctx.tool == crate::Tool::Move)
-                            || (c.id == "model.rotate_tool" && ctx.tool == crate::Tool::Rotate);
-                        let active = active
+                            || (c.id == "model.rotate_tool" && ctx.tool == crate::Tool::Rotate)
                             || (c.id == "video.follow" && app.director)
-                            || (matches!(c.id, "video.scene_cameras" | "video.export_camera") && app.panels.camera)
+                            || (c.id == "video.auto_direct" && app.director_popup)
+                            || (c.id == "video.scene_cameras" && app.panels.camera && app.panels.camera_focus != Some(CameraFocus::Export))
+                            || (c.id == "video.export_camera" && app.panels.camera && app.panels.camera_focus == Some(CameraFocus::Export))
                             || (c.id == "motion.build" && app.motion.target.is_some())
+                            || (c.id == "view.joints" && app.joints.show)
                             || (c.id == "video.group" && app.keys.group_rows);
                         let resp = tool(ui, &t, c, on, active);
                         let resp = hover_card(resp, &t, c);
@@ -158,29 +162,29 @@ fn tool_groups(ui: &mut Ui, app: &mut BrickMotionApp) {
                     ui.add_space(6.0);
                 });
                 let w = row.response.rect.width();
-                ui.allocate_ui_with_layout(vec2(w, 18.0), egui::Layout::top_down(egui::Align::Center), |ui| {
-                    ui.add_space(2.0);
+                ui.allocate_ui_with_layout(vec2(w, 20.0), egui::Layout::top_down(egui::Align::Center), |ui| {
+                    ui.add_space(4.0);
                     ui.label(caption(group, &t));
                 });
             });
             if i + 1 < n {
-                let (r, _) = ui.allocate_exact_size(vec2(1.0, 62.0), Sense::hover());
+                let (r, _) = ui.allocate_exact_size(vec2(1.0, 64.0), Sense::hover());
                 ui.painter().vline(r.center().x, r.y_range().shrink(4.0), Stroke::new(1.0, t.border));
             }
         }
     });
 }
 
-/// One ribbon tool: a 22-px icon over its name.
+/// One ribbon tool: a 20-px icon over its name, with clean padding inside its highlight pill.
 fn tool(ui: &mut Ui, t: &Theme, c: &Command, on: bool, active: bool) -> egui::Response {
-    let color = if active { t.accent } else if on { t.text1 } else { t.text2 };
+    let color = if active { t.accent } else if on { t.text1 } else { t.text3 };
     let galley = ui.painter().layout_no_wrap(c.title.to_owned(), FontId::proportional(11.5), color);
-    let w = (galley.size().x + 10.0).max(56.0);
+    let w = (galley.size().x + 14.0).max(58.0);
     let (rect, resp) = ui.allocate_exact_size(vec2(w, 46.0), Sense::click());
     resp.widget_info(|| WidgetInfo::selected(egui::Role::Button, on, active, c.title));
     if active {
         ui.painter().rect(rect, t.radius, t.accent_bg(), Stroke::new(1.0, t.accent.gamma_multiply(0.55)), StrokeKind::Inside);
-    } else if resp.hovered() {
+    } else if on && resp.hovered() {
         ui.painter().rect_filled(rect, t.radius, t.bg3);
     }
     let icon_tint = if active {
@@ -190,11 +194,11 @@ fn tool(ui: &mut Ui, t: &Theme, c: &Command, on: bool, active: bool) -> egui::Re
     } else {
         t.text3
     };
-    let ir = Rect::from_center_size(pos2(rect.center().x, rect.top() + 6.0 + 11.0), Vec2::splat(22.0));
-    icons::paint(ui, c.icon, ir, 22.0, icon_tint);
+    let ir = Rect::from_center_size(pos2(rect.center().x, rect.top() + 15.0), Vec2::splat(20.0));
+    icons::paint(ui, c.icon, ir, 20.0, icon_tint);
     let tp = Pos2::new(rect.center().x - galley.size().x / 2.0, ir.bottom() + 4.0);
     ui.painter().galley(tp, galley, color);
-    resp
+    if on { resp.on_hover_cursor(egui::CursorIcon::PointingHand) } else { resp }
 }
 
 /// Search commands: opens the palette.

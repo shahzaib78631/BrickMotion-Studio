@@ -52,8 +52,9 @@ impl Theme {
 pub const TEXT: f32 = 12.5;
 pub const SMALL: f32 = 10.5;
 
-/// The Mac's own faces: SF Pro for text, SF Mono for timecodes, Apple Symbols for ⌘ ⇧ ⌥.
-/// Missing files (another OS, a stripped system) fall back to egui's bundled fonts.
+/// The Mac's own faces: SF Pro for text, Menlo Regular for crisp timecodes and numbers
+/// (SFNSMono.ttf is a variable font whose default outline renders ultra-thin in ab_glyph),
+/// and Apple Symbols for ⌘ ⇧ ⌥ ⌫. Missing files fall back to egui's bundled fonts.
 fn fonts() -> FontDefinitions {
     fn system(file: &str) -> Option<&'static [u8]> {
         type Cache = std::sync::Mutex<std::collections::HashMap<String, Option<&'static [u8]>>>;
@@ -73,6 +74,7 @@ fn fonts() -> FontDefinitions {
     };
     add("sf", "SFNS.ttf", FontFamily::Proportional, true);
     add("sf-mono", "SFNSMono.ttf", FontFamily::Monospace, true);
+    add("menlo", "Menlo.ttc", FontFamily::Monospace, true);
     add("symbols", "Apple Symbols.ttf", FontFamily::Proportional, false);
     add("symbols-mono", "Apple Symbols.ttf", FontFamily::Monospace, false);
     defs

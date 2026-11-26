@@ -209,6 +209,24 @@ impl SubClamped for f32 {
     }
 }
 
+fn contrast_ink(c: Color32) -> Color32 {
+    let luma = 0.299 * f32::from(c.r()) + 0.587 * f32::from(c.g()) + 0.114 * f32::from(c.b());
+    if luma > 138.0 {
+        Color32::from_rgba_unmultiplied(18, 20, 24, 224)
+    } else {
+        Color32::from_rgb(0xf2, 0xf3, 0xf5)
+    }
+}
+
+/// Calms very bright or very dark brick colours slightly so they read cleanly on the dark timeline.
+fn clip_tint(c: Color32, hovered: bool, selected: bool) -> Color32 {
+    if selected || hovered {
+        return c;
+    }
+    let mix = |v: u8, bg: u8| (f32::from(v) * 0.86 + f32::from(bg) * 0.14).round() as u8;
+    Color32::from_rgb(mix(c.r(), 0x1a), mix(c.g(), 0x1b), mix(c.b(), 0x1f))
+}
+
 /// Draws the Parts lane and handles clicks, double-clicks, arrival drags, context menu, and Library drops.
 pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
     let t0 = Instant::now();
@@ -286,37 +304,34 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
             let label = clip.label(&timeline);
             resp.widget_info(|| WidgetInfo::selected(egui::Role::Button, true, is_sel, label));
 
-            // v3 soft clip: white 6.5% fill, no border; hover white 11%; selected accent 20% + 1-px accent edge.
-            let fill = if is_sel {
-                Color32::from_rgba_unmultiplied(0x4f, 0x8c, 0xff, 51)
-            } else if is_hov {
-                Color32::from_rgba_unmultiplied(255, 255, 255, 28)
-            } else {
-                Color32::from_rgba_unmultiplied(255, 255, 255, 17)
-            };
-            clip_p.rect_filled(rect, CornerRadius::same(5), fill);
+            // Rounded pill in the part's own brick colour (m6-controls.html / m5-rulings.md).
+            let raw_brick = color_of(clip.color);
+            let fill = clip_tint(raw_brick, is_hov, is_sel);
+            let ink = contrast_ink(fill);
+            let r_clip = CornerRadius::same(7);
+            clip_p.rect_filled(rect, r_clip, fill);
             if is_sel {
-                clip_p.rect_stroke(rect, CornerRadius::same(5), Stroke::new(1.0, t.accent), StrokeKind::Inside);
+                clip_p.rect_stroke(rect, r_clip, Stroke::new(1.5, Color32::WHITE), StrokeKind::Inside);
+                clip_p.rect_stroke(rect.expand(1.5), CornerRadius::same(8), Stroke::new(1.5, t.accent), StrokeKind::Outside);
+            } else if is_hov {
+                clip_p.rect_stroke(rect, r_clip, Stroke::new(1.0, Color32::from_white_alpha(140)), StrokeKind::Inside);
+            } else {
+                clip_p.rect_stroke(rect, r_clip, Stroke::new(0.5, Color32::from_black_alpha(60)), StrokeKind::Inside);
             }
-
-            // 7-px colour dot with 0.5-px white 30% ring.
-            let dot_c = pos2(rect.left() + 10.5, rect.center().y);
-            clip_p.circle_filled(dot_c, 3.5, color_of(clip.color));
-            clip_p.circle_stroke(dot_c, 3.5, Stroke::new(0.5, Color32::from_rgba_unmultiplied(255, 255, 255, 76)));
 
             // Optional pin glyph on right.
             let text_right = if is_pin && rect.width() > 30.0 {
-                let pr = Rect::from_center_size(pos2(rect.right() - 9.0, rect.center().y), vec2(11.0, 11.0));
+                let pr = Rect::from_center_size(pos2(rect.right() - 10.0, rect.center().y), vec2(11.0, 11.0));
                 if pr.left() >= r.left() && pr.right() <= r.right() {
-                    icons::paint(ui, Icon::Pin, pr, 10.0, t.text1);
+                    icons::paint(ui, Icon::Pin, pr, 10.0, ink);
                 }
-                rect.right() - 16.0
+                rect.right() - 18.0
             } else {
-                rect.right() - 6.0
+                rect.right() - 7.0
             };
 
-            // 11-pt proportional part name.
-            let text_left = rect.left() + 18.0;
+            // 11-pt proportional part name with auto-contrast ink over the brick colour.
+            let text_left = rect.left() + 8.0;
             let text_clip = Rect::from_min_max(pos2(text_left, rect.top()), pos2(text_right, rect.bottom())).intersect(r);
             if text_clip.width() > 4.0 {
                 ui.painter().with_clip_rect(text_clip).text(
@@ -324,7 +339,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
                     Align2::LEFT_CENTER,
                     label,
                     FontId::proportional(11.0),
-                    if is_sel || is_hov { t.text1 } else { t.text2 },
+                    ink,
                 );
             }
 
@@ -349,13 +364,14 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
             let _ = part_context_menu(app, &resp, clip, label, &sel_vec, is_pin, &mut menu_action);
         }
     } else {
-        // Zoomed-out mode: 8-px coloured dots at seat time with 1-px white 28% ring.
+        // Zoomed-out mode: sleek rounded brick-colour mini-pills (m6-controls.html).
         // Deduplicate non-selected/non-pinned pixels on massive models (9,720 Titanic flights)
-        // while keeping selected, pinned, and hovered dots crisp and always interactive.
+        // while keeping selected, pinned, and hovered pills crisp and always interactive.
         let mut last_plain_px = i32::MIN;
         let mut top_dots: Vec<usize> = Vec::new();
         let mut hit_candidate: Option<(f32, usize, Pos2)> = None;
         let ptr_in_lane = hover_pos.filter(|p| r.contains(*p));
+        let px_per_sec = (view.logical_width() / dur.max(0.001)) as f32;
 
         for clip_idx in vis.clone() {
             let clip = &app.timeline.parts_lane.clips[clip_idx];
@@ -377,28 +393,32 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
                 top_dots.push(clip_idx);
                 continue;
             }
-            let px = center.x.round() as i32;
+            let px = (center.x / 3.0).round() as i32;
             if px == last_plain_px {
                 continue;
             }
             last_plain_px = px;
-            clip_p.circle_filled(center, 4.0, color_of(clip.color));
-            clip_p.circle_stroke(center, 4.0, Stroke::new(1.0, Color32::from_rgba_unmultiplied(255, 255, 255, 72)));
+            let pill_w = (((clip.end - clip.start).max(0.0) as f32) * px_per_sec).clamp(5.0, 22.0);
+            let pill = Rect::from_center_size(center, vec2(pill_w, 14.0));
+            clip_p.rect_filled(pill, CornerRadius::same(4), clip_tint(color_of(clip.color), false, false));
+            clip_p.rect_stroke(pill, CornerRadius::same(4), Stroke::new(0.8, Color32::from_rgba_unmultiplied(23, 24, 27, 190)), StrokeKind::Inside);
         }
 
-        // Paint pinned & selected dots on top with their outer rings.
+        // Paint pinned & selected pills on top with crisp rings.
         for clip_idx in top_dots {
             let clip = &app.timeline.parts_lane.clips[clip_idx];
             let center = clip.dot_center_in(r, view.lead_inset, view.offset);
             let is_sel = sel_set.contains(&clip.piece);
             let is_pin = pins.contains(&clip.piece);
-            clip_p.circle_filled(center, 4.0, color_of(clip.color));
+            let pill_w = (((clip.end - clip.start).max(0.0) as f32) * px_per_sec).clamp(8.0, 24.0);
+            let pill = Rect::from_center_size(center, vec2(pill_w, 16.0));
+            clip_p.rect_filled(pill, CornerRadius::same(5), color_of(clip.color));
             if is_sel {
-                clip_p.circle_stroke(center, 5.2, Stroke::new(1.5, t.bg1));
-                clip_p.circle_stroke(center, 6.8, Stroke::new(2.0, t.accent));
+                clip_p.rect_stroke(pill, CornerRadius::same(5), Stroke::new(1.2, t.bg1), StrokeKind::Inside);
+                clip_p.rect_stroke(pill.expand(1.5), CornerRadius::same(6), Stroke::new(2.0, t.accent), StrokeKind::Outside);
             } else if is_pin {
-                clip_p.circle_stroke(center, 5.0, Stroke::new(1.2, t.bg1));
-                clip_p.circle_stroke(center, 6.2, Stroke::new(1.2, Color32::from_rgba_unmultiplied(232, 234, 237, 220)));
+                clip_p.rect_stroke(pill, CornerRadius::same(5), Stroke::new(1.2, t.bg1), StrokeKind::Inside);
+                clip_p.rect_stroke(pill.expand(1.2), CornerRadius::same(6), Stroke::new(1.2, Color32::from_rgba_unmultiplied(232, 234, 237, 220)), StrokeKind::Outside);
             }
         }
 

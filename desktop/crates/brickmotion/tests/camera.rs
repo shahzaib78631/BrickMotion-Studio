@@ -358,3 +358,84 @@ fn camera_panel_switch_row_stays_compact() {
     let follow = lowest("Follow Camera");
     assert!(follow.top() - style.bottom() < 30.0, "Follow Camera sits {} px below the row above", follow.top() - style.bottom());
 }
+
+/// The slider is one rounded row: label and value sit inside the bar you drag.
+#[test]
+fn slider_is_one_pill_with_the_value_inside() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = planned();
+    seek(&mut h, 2.0);
+    run(h.state_mut(), "video.camera_key");
+    h.run_steps(3);
+    let lens = h.get_by_role_and_label(egui::accesskit::Role::Slider, "Lens").rect();
+    let value = h.get_by_label("Lens value").rect();
+    assert!((32.0..=44.0).contains(&lens.height()), "pill height {}", lens.height());
+    assert!(lens.contains_rect(value), "value {value:?} inside the pill {lens:?}");
+}
+
+/// Double-clicking the value opens it for typing and leaves the value where it was.
+#[test]
+fn double_click_value_types_without_moving() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = planned();
+    seek(&mut h, 2.0);
+    run(h.state_mut(), "video.camera_key");
+    h.run_steps(3);
+    let before = keys(&h, CameraClock::Build)[0].lens_mm;
+    let depth = h.state().session().undo_depth();
+    let at = h.get_by_label("Lens value").rect().center();
+    h.event(egui::Event::PointerMoved(at));
+    h.step();
+    let mut t = h.ctx.input(|i| i.time);
+    for _ in 0..2 {
+        for pressed in [true, false] {
+            t += 0.02;
+            h.input_mut().time = Some(t);
+            press(&mut h, at, egui::PointerButton::Primary, pressed);
+        }
+    }
+    h.run_steps(2);
+    assert!(h.query_by_role_and_label(egui::accesskit::Role::TextInput, "Lens value").is_some(), "typing opened");
+    assert_eq!(h.state().session().undo_depth(), depth);
+    assert!((keys(&h, CameraClock::Build)[0].lens_mm - before).abs() < 1e-9);
+}
+
+/// Pressing Esc mid-drag on a Camera Key slider reverts the value and keeps the panel open.
+#[test]
+fn escape_mid_slider_drag_reverts_without_closing_panel() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = planned();
+    seek(&mut h, 2.0);
+    run(h.state_mut(), "video.camera_key");
+    h.run_steps(3);
+    let before = keys(&h, CameraClock::Build)[0].lens_mm;
+    let lens = h.get_by_role_and_label(egui::accesskit::Role::Slider, "Lens").rect();
+    let start = pos2(lens.left() + 20.0, lens.center().y);
+    let far = pos2(lens.right() - 25.0, lens.center().y);
+
+    h.event(egui::Event::PointerMoved(start));
+    h.step();
+    press(&mut h, start, egui::PointerButton::Primary, true);
+    h.event(egui::Event::PointerMoved(far));
+    h.step();
+    assert!((keys(&h, CameraClock::Build)[0].lens_mm - before).abs() > 10.0, "live drag moved lens");
+
+    // Esc mid-drag reverts lens and leaves the Camera Key panel open.
+    h.key_press(egui::Key::Escape);
+    h.run_steps(2);
+    press(&mut h, far, egui::PointerButton::Primary, false);
+    h.run_steps(2);
+    assert!(h.state().camera_selection.is_some(), "panel stays open on slider Esc");
+    assert!((keys(&h, CameraClock::Build)[0].lens_mm - before).abs() < 1e-6, "lens reverted");
+
+    // A second Esc closes the Camera Key panel.
+    h.key_press(egui::Key::Escape);
+    h.run_steps(2);
+    assert_eq!(h.state().camera_selection, None);
+}

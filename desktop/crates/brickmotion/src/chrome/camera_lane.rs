@@ -9,8 +9,6 @@ use crate::BrickMotionApp;
 use crate::transport::Clock;
 
 const KEY: Color32 = Color32::from_rgb(0xe3, 0xc3, 0x6b);
-const MOVE_FILL: Color32 = Color32::from_rgba_premultiplied(27, 23, 13, 31);
-const MOVE_TEXT: Color32 = Color32::from_rgb(0xd9, 0xc6, 0x8e);
 
 /// What the Camera panel shows: a key, or the move leaving a key.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -188,23 +186,23 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64, clock: Clo
         if b - a <= 4.0 || b < r.left() || a > r.right() {
             continue;
         }
-        let clip = Rect::from_min_max(pos2(a, r.top() + 8.0), pos2(b, r.bottom() - 8.0));
+        let clip = Rect::from_min_max(pos2(a, r.top() + 5.0), pos2(b, r.bottom() - 5.0));
         let selected = app.camera_selection == Some((cam, CameraPick::Move(from.id.clone())));
         let label = preset_label(&from.preset);
         painter.rect(
             clip,
-            4.0,
-            if selected { Color32::from_rgba_unmultiplied(0xe3, 0xc3, 0x6b, 70) } else { MOVE_FILL },
-            if selected { Stroke::new(1.0, KEY) } else { Stroke::NONE },
+            6.0,
+            if selected { Color32::from_rgba_unmultiplied(0xe3, 0xc3, 0x6b, 62) } else { t.bg3 },
+            if selected { Stroke::new(1.0, KEY) } else { Stroke::new(0.5, t.border2) },
             StrokeKind::Inside,
         );
-        if clip.width() > 70.0 {
+        if clip.width() > 64.0 {
             painter.with_clip_rect(clip.shrink2(vec2(6.0, 0.0))).text(
-                pos2(clip.left() + 7.0, clip.center().y),
+                pos2(clip.left() + 8.0, clip.center().y),
                 Align2::LEFT_CENTER,
                 &label,
-                FontId::proportional(10.5),
-                MOVE_TEXT,
+                FontId::proportional(11.0),
+                if selected { t.text1 } else { t.text2 },
             );
         }
         let resp = ui.interact(clip, ui.scope_id().with(("cam-move", cam, &from.id)), Sense::click());

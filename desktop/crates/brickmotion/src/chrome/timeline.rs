@@ -294,8 +294,8 @@ fn header_row(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect) {
         t.text3,
     );
 
-    // Right: rate menu, Loop, Fit, zoom - / slider / +, overflow ⋯ menu.
-    let right_r = Rect::from_min_max(pos2(c.x + 150.0, r.top() + 4.0), pos2(r.right() - 8.0, r.bottom() - 4.0));
+    // Right: Auto Key & Curves (on Keyframes clock), rate menu, Loop, Fit, zoom - / slider / +, overflow ⋯ menu.
+    let right_r = Rect::from_min_max(pos2(c.x + 140.0, r.top() + 4.0), pos2(r.right() - 8.0, r.bottom() - 4.0));
     ui.scope_builder(
         UiBuilder::new()
             .max_rect(right_r)
@@ -385,6 +385,53 @@ fn header_row(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect) {
                     }
                 }
             });
+
+            if keyframes {
+                ui.add_space(4.0);
+                // Curves (disabled, m5-rulings.md)
+                let curves_btn = ui
+                    .add_enabled(
+                        false,
+                        egui::Button::new(RichText::new("Curves").size(11.5).color(t.text3))
+                            .fill(Color32::from_white_alpha(8))
+                            .stroke(Stroke::new(0.5, t.border))
+                            .corner_radius(6)
+                            .min_size(vec2(52.0, 24.0)),
+                    )
+                    .on_disabled_hover_text("The curve editor comes in a later milestone");
+                curves_btn.widget_info(|| WidgetInfo::labeled(egui::Role::Button, false, "Curves"));
+
+                // Auto Key red record toggle (m5-rulings.md)
+                let on = app.keys.auto_key;
+                let red = Color32::from_rgb(0xe5, 0x48, 0x4d);
+                let (ak_r, ak_resp) = ui.allocate_exact_size(vec2(78.0, 24.0), Sense::click());
+                ak_resp.widget_info(|| WidgetInfo::selected(egui::Role::Button, true, on, "Auto Key"));
+                let fill = if on {
+                    Color32::from_rgba_unmultiplied(0xe5, 0x48, 0x4d, 44)
+                } else if ak_resp.hovered() {
+                    t.bg3
+                } else {
+                    Color32::from_white_alpha(12)
+                };
+                let stroke = Stroke::new(1.0, if on { red } else { t.border });
+                ui.painter().rect(ak_r, CornerRadius::same(6), fill, stroke, StrokeKind::Inside);
+                let dot_c = pos2(ak_r.left() + 13.0, ak_r.center().y);
+                ui.painter().circle_filled(dot_c, 4.0, if on { red } else { red.gamma_multiply(0.55) });
+                ui.painter().text(
+                    pos2(ak_r.left() + 23.0, ak_r.center().y),
+                    Align2::LEFT_CENTER,
+                    "Auto Key",
+                    FontId::proportional(11.5),
+                    if on { t.text1 } else { t.text2 },
+                );
+                if ak_resp
+                    .on_hover_cursor(CursorIcon::PointingHand)
+                    .on_hover_text("Record Move and Rotate gizmo drags as keys at the playhead")
+                    .clicked()
+                {
+                    app.keys.auto_key = !on;
+                }
+            }
         },
     );
 }
@@ -511,7 +558,18 @@ fn timeline_body(ui: &mut Ui, app: &mut BrickMotionApp, heads: Rect, lanes: Rect
 
     if keyframes {
         keyframes_body(ui, app, tracks_body, heads.width(), lanes.width(), row_sep);
+        // Shade frames outside the key scene (m5-rulings.md).
         if dur > 0.0 {
+            let x0 = lanes.left() + app.timeline.view.screen_x(0.0, dur) as f32;
+            let x1 = lanes.left() + app.timeline.view.screen_x(dur, dur) as f32;
+            let shade = Color32::from_black_alpha(64);
+            let sp = ui.painter_at(tracks_lanes);
+            if x0 > tracks_lanes.left() {
+                sp.rect_filled(Rect::from_min_max(tracks_lanes.min, pos2(x0.min(tracks_lanes.right()), tracks_lanes.bottom())), 0.0, shade);
+            }
+            if x1 < tracks_lanes.right() {
+                sp.rect_filled(Rect::from_min_max(pos2(x1.max(tracks_lanes.left()), tracks_lanes.top()), tracks_lanes.max), 0.0, shade);
+            }
             paint_playhead(ui, app, lanes, dur);
         }
         return;
@@ -1207,6 +1265,19 @@ fn paint_ruler(ui: &Ui, app: &BrickMotionApp, r: Rect, dur: f64, can_nav: bool) 
     }
 }
 
+fn format_flag_time(app: &BrickMotionApp, cur: f64) -> String {
+    if app.transport.clock() == Clock::Keyframes {
+        format!("f {}", app.transport.key_frame(&app.transport.key_scene))
+    } else {
+        let clamped = cur.max(0.0);
+        let tenths = (clamped * 10.0).round() as u64;
+        let mins = tenths / 600;
+        let secs = (tenths / 10) % 60;
+        let frac = tenths % 10;
+        format!("{mins}:{secs:02}.{frac}")
+    }
+}
+
 fn paint_playhead(ui: &Ui, app: &BrickMotionApp, lanes: Rect, dur: f64) {
     let t = app.theme;
     let cur = app.transport.time();
@@ -1215,9 +1286,30 @@ fn paint_playhead(ui: &Ui, app: &BrickMotionApp, lanes: Rect, dur: f64) {
         return;
     }
     let p = ui.painter_at(lanes);
-    p.vline(sx, lanes.y_range(), Stroke::new(1.5, t.playhead));
-    let cap = Rect::from_min_size(pos2(sx - 5.5, lanes.top()), vec2(11.0, 11.0));
-    p.rect_filled(cap, CornerRadius { nw: 2, ne: 2, sw: 6, se: 6 }, t.playhead);
+    // Vertical playhead hairline from under the flag down through all tracks.
+    p.vline(sx, (lanes.top() + 18.0)..=lanes.bottom(), Stroke::new(1.5, t.playhead));
+
+    // Orange time flag pill in the ruler (m6-controls.html).
+    let label = format_flag_time(app, cur);
+    let ink = Color32::from_rgb(0x1a, 0x11, 0x00);
+    let g = p.layout_no_wrap(label, FontId::monospace(10.5), ink);
+    let flag_w = (g.size().x + 12.0).max(34.0);
+    let flag_h = 17.0;
+    let flag_x = (sx - flag_w * 0.5).clamp(lanes.left() + 2.0, (lanes.right() - flag_w - 2.0).max(lanes.left() + 2.0));
+    let flag = Rect::from_min_size(pos2(flag_x, lanes.top() + 2.0), vec2(flag_w, flag_h));
+    p.rect_filled(flag, CornerRadius::same(5), t.playhead);
+    // Downward pointer connecting the flag to the playhead line.
+    let tip_x = sx.clamp(flag.left() + 6.0, flag.right() - 6.0);
+    p.add(egui::Shape::convex_polygon(
+        vec![
+            pos2(tip_x - 4.5, flag.bottom() - 0.5),
+            pos2(tip_x + 4.5, flag.bottom() - 0.5),
+            pos2(tip_x, flag.bottom() + 4.5),
+        ],
+        t.playhead,
+        Stroke::NONE,
+    ));
+    p.galley(pos2(flag.center().x - g.size().x * 0.5, flag.center().y - g.size().y * 0.5), g, ink);
 }
 
 fn sequence_lane(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
@@ -1361,12 +1453,12 @@ fn steps_lane(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
         let fill = if selected {
             t.accent_bg()
         } else if resp.hovered() {
-            Color32::from_rgb(0x2d, 0x31, 0x38)
+            Color32::from_white_alpha(26)
         } else {
-            t.bg3
+            Color32::from_white_alpha(15)
         };
-        let stroke = Stroke::new(1.0, if selected { t.accent } else { t.border2 });
-        clip_p.rect(rect, CornerRadius::same(5), fill, stroke, StrokeKind::Inside);
+        let stroke = Stroke::new(1.0, if selected { t.accent } else { Color32::from_white_alpha(14) });
+        clip_p.rect(rect, CornerRadius::same(6), fill, stroke, StrokeKind::Inside);
 
         if w >= 22.0 {
             let title = app.steps.row(step).map(|s| s.title.as_str()).unwrap_or("");

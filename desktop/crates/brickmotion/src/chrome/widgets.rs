@@ -277,6 +277,8 @@ struct SliderState {
     editing: bool,
     draft: String,
     focus_requested: bool,
+    /// Esc cancelled a drag while the button is still held: ignore the pointer until release.
+    cancelled: bool,
 }
 
 fn snap_clamp(v: f64, range: std::ops::RangeInclusive<f64>, step: f64) -> f64 {
@@ -286,8 +288,8 @@ fn snap_clamp(v: f64, range: std::ops::RangeInclusive<f64>, step: f64) -> f64 {
     snapped.clamp(lo, hi)
 }
 
-/// Inset-form slider row: label left, value right (double-click to type), full-width 4 px track
-/// with 15 px knob below. Commits ONCE on release, Return, or focus loss; Esc reverts.
+/// Fill-pill slider row: label inside left, value right (double-click to type), fill up to value
+/// ending in a thin vertical bar. Commits ONCE on release, Return, or focus loss; Esc reverts.
 #[allow(clippy::too_many_arguments)]
 pub fn slider_row(
     ui: &mut Ui,
@@ -304,6 +306,15 @@ pub fn slider_row(
     slider_row_with(ui, t, id, label, value, range, step, format_val, parse_val, enabled, &SliderLook::default()).0
 }
 
+const SLIDER_ACTIVE_KEY: &str = "bm_slider_active_frame";
+
+/// True when any fill-pill slider was dragging or inline-editing on this or the previous frame.
+pub fn slider_active(ctx: &egui::Context) -> bool {
+    let now = ctx.cumulative_frame_nr();
+    ctx.data(|d| d.get_temp::<u64>(egui::Id::unique(SLIDER_ACTIVE_KEY)))
+        .is_some_and(|f| now.saturating_sub(f) <= 1)
+}
+
 /// How a slider row reads when its value comes from somewhere else.
 #[derive(Default)]
 pub struct SliderLook {
@@ -314,6 +325,9 @@ pub struct SliderLook {
 }
 
 /// [`slider_row`] with a look; also returns whether the reset button was clicked.
+/// The slider bar's height.
+const PILL_H: f32 = 36.0;
+
 #[allow(clippy::too_many_arguments)]
 pub fn slider_row_with(
     ui: &mut Ui,
@@ -338,163 +352,193 @@ pub fn slider_row_with(
         st.editing = false;
     }
 
-    Frame::NONE
-        .inner_margin(Margin { left: 12, right: 12, top: 9, bottom: 10 })
-        .show(ui, |ui| {
-            ui.spacing_mut().item_spacing.y = 7.0;
-            // Top line: label left, value (or inline text edit) right.
-            ui.horizontal(|ui| {
-                let fg = if enabled { t.text1 } else { t.text3 };
-                ui.label(RichText::new(label).size(12.5).color(fg));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if st.editing {
-                        let edit = ui.add(
-                            egui::TextEdit::singleline(&mut st.draft)
-                                .desired_width(68.0)
-                                .font(FontId::proportional(12.0)),
-                        );
-                        edit.widget_info(|| WidgetInfo::labeled(egui::Role::TextInput, true, format!("{label} value")));
-                        if st.focus_requested {
-                            edit.request_focus();
-                            st.focus_requested = false;
-                        }
-                        if ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) {
-                            *value = st.start_value;
-                            st.editing = false;
-                        } else if ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Enter)) || edit.lost_focus() {
-                            st.editing = false;
-                            if let Some(parsed) = parse_val(&st.draft) {
-                                let snapped = snap_clamp(parsed, range.clone(), step);
-                                *value = snapped;
-                                event = SliderEvent::Committed(snapped);
-                            } else {
-                                *value = st.start_value;
-                            }
-                        }
-                    } else {
-                        let text = format_val(*value);
-                        let vfg = if enabled && !look.inherited { t.text2 } else { t.text3 };
-                        let g = ui.painter().layout_no_wrap(text.clone(), FontId::proportional(12.0), vfg);
-                        let (r, resp) = ui.allocate_exact_size(
-                            vec2(g.size().x + 8.0, 18.0),
-                            if enabled { Sense::click() } else { Sense::hover() },
-                        );
-                        resp.widget_info(|| {
-                            let mut info = WidgetInfo::labeled(egui::Role::Button, enabled, format!("{label} value"));
-                            info.current_text_value = Some(text.clone());
-                            info
-                        });
-                        if enabled && resp.hovered() {
-                            ui.painter().rect_filled(r, 4.0, Color32::from_white_alpha(14));
-                        }
-                        ui.painter().galley(pos2(r.right() - 4.0 - g.size().x, r.center().y - g.size().y / 2.0), g, vfg);
-                        if let Some(reset) = &look.reset {
-                            let (rr, rresp) = ui.allocate_exact_size(vec2(18.0, 18.0), if enabled { Sense::click() } else { Sense::hover() });
-                            rresp.widget_info(|| WidgetInfo::labeled(egui::Role::Button, enabled, reset.as_str()));
-                            if enabled && rresp.hovered() {
-                                ui.painter().rect_filled(rr, 4.0, Color32::from_white_alpha(14));
-                            }
-                            icons::paint(ui, Icon::Undo, rr.shrink(3.0), 12.0, t.text3);
-                            if enabled && rresp.on_hover_text(reset.as_str()).clicked() {
-                                reset_clicked = true;
-                            }
-                        }
-                        if enabled && resp.double_clicked() {
-                            st.editing = true;
-                            st.start_value = *value;
-                            st.draft = text;
-                            st.focus_requested = true;
-                        }
-                    }
-                });
-            });
+    // One rounded bar (m6 controls, owner-approved): the label inside on the left, the value on
+    // the right, a lighter fill up to the value ending in a thin white bar. Drag anywhere on it;
+    // double-click the value to type. The fill is accent while dragging and grey when inherited.
+    Frame::NONE.inner_margin(Margin { left: 8, right: 8, top: 4, bottom: 4 }).show(ui, |ui| {
+        let (rect, resp) = ui.allocate_exact_size(
+            vec2(ui.available_width(), PILL_H),
+            if enabled { Sense::click_and_drag() } else { Sense::hover() },
+        );
+        resp.widget_info(|| WidgetInfo::slider(enabled, *value, label));
+        let span = (*range.end() - *range.start()).max(1e-9);
+        let pos_to_val = |x: f32| -> f64 {
+            let frac = ((x - rect.left()) / rect.width().max(1.0)).clamp(0.0, 1.0) as f64;
+            snap_clamp(*range.start() + frac * span, range.clone(), step)
+        };
 
-            // Bottom line: 4 px track with accent fill and 15 px white knob.
-            let (rect, resp) = ui.allocate_exact_size(
-                vec2(ui.available_width(), 18.0),
-                if enabled { Sense::click_and_drag() } else { Sense::hover() },
+        // The value (and its reset) on the right, over the bar: clicks there are the value's.
+        let text = format_val(*value);
+        let vfg = if enabled && !look.inherited { t.text1 } else { t.text3 };
+        let g = ui.painter().layout_no_wrap(text.clone(), FontId::proportional(12.5), vfg);
+        let reset_w = if look.reset.is_some() { 22.0 } else { 0.0 };
+        let value_rect = Rect::from_min_max(
+            pos2(rect.right() - 10.0 - reset_w - g.size().x - 8.0, rect.top() + 7.0),
+            pos2(rect.right() - 10.0 - reset_w, rect.bottom() - 7.0),
+        );
+        let reset_rect = Rect::from_center_size(pos2(rect.right() - 10.0 - 9.0, rect.center().y), vec2(18.0, 18.0));
+        let pointer = ui.input(|i| i.pointer.interact_pos());
+        let on_value = pointer.is_some_and(|p| value_rect.contains(p) || (reset_w > 0.0 && reset_rect.contains(p)));
+
+        if st.editing {
+            let edit_right = rect.right() - 6.0 - reset_w;
+            let edit_left = (edit_right - 78.0).max(rect.left() + 80.0);
+            let edit_rect = Rect::from_min_max(pos2(edit_left, rect.top() + 5.0), pos2(edit_right, rect.bottom() - 5.0));
+            let edit_id = state_id.with("edit");
+            let mut child = ui.new_child(egui::UiBuilder::new().max_rect(edit_rect).layout(egui::Layout::right_to_left(egui::Align::Center)));
+            let edit = child.add(
+                egui::TextEdit::singleline(&mut st.draft)
+                    .id(edit_id)
+                    .desired_width(edit_rect.width())
+                    .align(Align2::RIGHT_CENTER)
+                    .font(FontId::monospace(11.5)),
             );
-            resp.widget_info(|| WidgetInfo::slider(enabled, *value, label));
-
-            let knob_r = 7.5;
-            let track_left = rect.left() + knob_r;
-            let track_right = (rect.right() - knob_r).max(track_left + 1.0);
-            let span = (*range.end() - *range.start()).max(1e-9);
-            let pos_to_val = |x: f32| -> f64 {
-                let frac = ((x - track_left) / (track_right - track_left)).clamp(0.0, 1.0) as f64;
-                snap_clamp(*range.start() + frac * span, range.clone(), step)
-            };
-
-            if enabled && !st.editing {
-                let pointer_down = ui.input(|i| i.pointer.primary_down());
-                let pointer_pos = ui.input(|i| i.pointer.interact_pos());
-
-                if !st.dragging && (resp.drag_started() || resp.is_pointer_button_down_on()) {
-                    st.dragging = true;
-                    st.start_value = *value;
-                    if let Some(p) = pointer_pos {
-                        let next = pos_to_val(p.x);
-                        if (next - *value).abs() > 1e-12 {
-                            *value = next;
-                        }
-                        event = SliderEvent::Changing;
-                    }
-                } else if st.dragging {
-                    if ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) {
-                        *value = st.start_value;
-                        st.dragging = false;
-                        event = SliderEvent::None;
-                    } else if pointer_down {
-                        if let Some(p) = pointer_pos {
-                            *value = pos_to_val(p.x);
-                        }
-                        event = SliderEvent::Changing;
-                    } else {
-                        if let Some(p) = pointer_pos {
-                            *value = pos_to_val(p.x);
-                        }
-                        st.dragging = false;
-                        event = SliderEvent::Committed(*value);
-                    }
-                } else if resp.clicked()
-                    && let Some(p) = resp.interact_pointer_pos()
-                {
-                    *value = pos_to_val(p.x);
-                    event = SliderEvent::Committed(*value);
+            edit.widget_info(|| WidgetInfo::labeled(egui::Role::TextInput, true, format!("{label} value")));
+            if st.focus_requested {
+                edit.request_focus();
+                if let Some(mut te) = egui::TextEdit::load_state(child.ctx(), edit_id) {
+                    let all = egui::text::CCursorRange::two(egui::text::CCursor::new(0), egui::text::CCursor::new(st.draft.chars().count()));
+                    te.cursor.set_char_range(Some(all));
+                    te.store(child.ctx(), edit_id);
+                }
+                st.focus_requested = false;
+            }
+            if ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) {
+                *value = st.start_value;
+                st.editing = false;
+            } else if ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Enter)) || edit.lost_focus() {
+                st.editing = false;
+                if let Some(parsed) = parse_val(&st.draft) {
+                    let snapped = snap_clamp(parsed, range.clone(), step);
+                    *value = snapped;
+                    event = SliderEvent::Committed(snapped);
+                } else {
+                    *value = st.start_value;
                 }
             }
+        } else {
+            let vresp = ui.interact(value_rect, state_id.with("value"), if enabled { Sense::click() } else { Sense::hover() });
+            vresp.widget_info(|| {
+                let mut info = WidgetInfo::labeled(egui::Role::Button, enabled, format!("{label} value"));
+                info.current_text_value = Some(text.clone());
+                info
+            });
+            if enabled && vresp.double_clicked() {
+                st.editing = true;
+                st.dragging = false;
+                st.start_value = *value;
+                st.draft = text.trim_start_matches("Inherit · ").to_owned();
+                st.focus_requested = true;
+            }
+            if let Some(reset) = &look.reset {
+                let rresp = ui
+                    .interact(reset_rect, state_id.with("reset"), if enabled { Sense::click() } else { Sense::hover() })
+                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+                rresp.widget_info(|| WidgetInfo::labeled(egui::Role::Button, enabled, reset.as_str()));
+                if enabled && rresp.on_hover_text(reset.as_str()).clicked() {
+                    reset_clicked = true;
+                }
+            }
+        }
 
-            let frac = ((*value - *range.start()) / span).clamp(0.0, 1.0) as f32;
-            let knob_x = track_left + frac * (track_right - track_left);
-            let cy = rect.center().y;
-            let track_rect = Rect::from_min_max(pos2(rect.left(), cy - 2.0), pos2(rect.right(), cy + 2.0));
-            ui.painter().rect_filled(track_rect, 2.0, Color32::from_white_alpha(31));
+        if enabled && !st.editing {
+            let pointer_down = ui.input(|i| i.pointer.primary_down());
+            if st.cancelled && !pointer_down {
+                st.cancelled = false;
+            }
+            if st.cancelled {
+                // The press that was cancelled with Esc: no new drag, no click commit.
+            } else if !st.dragging && (resp.drag_started() || (resp.is_pointer_button_down_on() && !on_value)) {
+                st.dragging = true;
+                st.start_value = *value;
+                if let Some(p) = pointer {
+                    *value = pos_to_val(p.x);
+                }
+                event = SliderEvent::Changing;
+            } else if st.dragging {
+                if ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) {
+                    *value = st.start_value;
+                    st.dragging = false;
+                    st.cancelled = true;
+                    event = SliderEvent::None;
+                } else if pointer_down {
+                    if let Some(p) = pointer {
+                        *value = pos_to_val(p.x);
+                    }
+                    event = SliderEvent::Changing;
+                } else {
+                    if let Some(p) = pointer {
+                        *value = pos_to_val(p.x);
+                    }
+                    st.dragging = false;
+                    event = SliderEvent::Committed(*value);
+                }
+            } else if resp.clicked()
+                && !on_value
+                && let Some(p) = resp.interact_pointer_pos()
+            {
+                *value = pos_to_val(p.x);
+                event = SliderEvent::Committed(*value);
+            }
+            if st.dragging || (resp.hovered() && !on_value) {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+            }
+        }
 
-            let fill_color = if look.inherited {
-                Color32::from_white_alpha(70)
-            } else if enabled {
-                t.accent
-            } else {
-                Color32::from_rgba_unmultiplied(t.accent.r(), t.accent.g(), t.accent.b(), 90)
-            };
-            let fill_rect = Rect::from_min_max(pos2(rect.left(), cy - 2.0), pos2(knob_x, cy + 2.0));
-            ui.painter().rect_filled(fill_rect, 2.0, fill_color);
+        // Paint: bar, fill, value mark, label, value.
+        let p = ui.painter_at(rect);
+        let radius = CornerRadius::same(10);
+        let hovered = enabled && (resp.hovered() || st.dragging);
+        p.rect_filled(rect, radius, Color32::from_white_alpha(if hovered { 19 } else { 14 }));
+        let frac = ((*value - *range.start()) / span).clamp(0.0, 1.0) as f32;
+        let fill_w = frac * rect.width();
+        let fill = if !enabled {
+            Color32::from_white_alpha(12)
+        } else if st.dragging {
+            Color32::from_rgba_unmultiplied(t.accent.r(), t.accent.g(), t.accent.b(), 74)
+        } else if look.inherited {
+            Color32::from_white_alpha(15)
+        } else {
+            Color32::from_white_alpha(28)
+        };
+        if fill_w > 1.0 {
+            let right = (rect.left() + fill_w.max(14.0)).min(rect.right());
+            p.rect_filled(Rect::from_min_max(rect.min, pos2(right, rect.bottom())), radius, fill);
+        }
+        let edge_stroke = if st.dragging {
+            Stroke::new(1.0, Color32::from_rgba_unmultiplied(t.accent.r(), t.accent.g(), t.accent.b(), 140))
+        } else if hovered {
+            Stroke::new(0.5, Color32::from_white_alpha(28))
+        } else {
+            Stroke::NONE
+        };
+        if edge_stroke != Stroke::NONE {
+            p.rect_stroke(rect, radius, edge_stroke, egui::StrokeKind::Inside);
+        }
+        // Smooth indicator bar inside the fill edge with zero jump across small values.
+        let mark_x = (rect.left() + fill_w - 6.0).clamp(rect.left() + 6.0, rect.right() - 7.0);
+        let mark = if !enabled || look.inherited {
+            Color32::from_white_alpha(120)
+        } else if st.dragging {
+            Color32::WHITE
+        } else {
+            Color32::from_rgb(0xe8, 0xea, 0xed)
+        };
+        p.rect_filled(Rect::from_center_size(pos2(mark_x, rect.center().y), vec2(3.0, 18.0)), 1.5, mark);
+        let lfg = if enabled { t.text1 } else { t.text3 };
+        p.text(pos2(rect.left() + 13.0, rect.center().y), egui::Align2::LEFT_CENTER, label, FontId::proportional(12.5), lfg);
+        if !st.editing {
+            p.galley(pos2(value_rect.right() - 4.0 - g.size().x, rect.center().y - g.size().y / 2.0), g, vfg);
+            if look.reset.is_some() {
+                icons::paint(ui, Icon::Undo, reset_rect.shrink(3.0), 12.0, t.text3);
+            }
+        }
+    });
 
-            // Soft shadow + 15-px white knob (#e9eaec).
-            ui.painter().circle_filled(pos2(knob_x, cy + 1.2), knob_r, Color32::from_black_alpha(65));
-            let knob_fill = if enabled {
-                Color32::from_rgb(0xe9, 0xea, 0xec)
-            } else {
-                Color32::from_rgba_unmultiplied(0xc0, 0xc2, 0xc8, 170)
-            };
-            ui.painter().circle(
-                pos2(knob_x, cy),
-                knob_r,
-                knob_fill,
-                Stroke::new(0.5, Color32::from_black_alpha(60)),
-            );
-        });
-
+    if st.dragging || st.editing {
+        let frame = ui.ctx().cumulative_frame_nr();
+        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::unique(SLIDER_ACTIVE_KEY), frame));
+    }
     ui.data_mut(|d| d.insert_temp(state_id, st));
     (event, reset_clicked)
 }

@@ -82,3 +82,10 @@ Where this file and the plan differ, this file wins: it records the approved scr
 - Dragging a path point.
 - Follow Camera playback.
 - The joint card over a moving view (orbit while a joint is open).
+
+## Approved for the next UI pass (owner, 2026-11-26)
+Mockup: `.superpowers/brainstorm/65433-1795584607/content/m6-controls.html`.
+- **Approved:** fill-pill sliders in every floating panel (label inside left, value right, thin white value bar, accent fill while dragging, grey when inherited, double-click to type, one undo step per release).
+- **Approved:** timeline restyle: rounded clips in the brick colour, quiet camera and step clips, an orange time flag on the playhead, a name chip on hover, and expanded keyed parts showing diamond keys joined by a line in a soft flight band.
+- **On hold:** the radial colour ring. v1 and v2 both missed the owner's reference; leave it until the owner brings it back.
+- **Sliders everywhere they fit:** use the fill-pill slider for every bounded value in the app (floating panels, Build Settings, Snap Sound, Staging, viewbar look settings…). Unbounded numbers (a key's Position X/Y/Z, Rotation, Scale in the Keys panel) stay typed fields, since a slider needs a range.

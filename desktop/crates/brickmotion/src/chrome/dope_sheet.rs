@@ -72,11 +72,25 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, heads: Rect, lanes: Rect, obj
 
     let lo = lanes.left() - 18.0;
     let hi = lanes.right() + 18.0;
+    let playhead_frame = f64::from(app.transport.key_frame(&app.transport.key_scene));
+    let span_band = match (object.markers.first(), object.markers.last()) {
+        (Some(a), Some(b)) if b.frame > a.frame => {
+            let x0 = scale.x(&view, f64::from(a.frame));
+            let x1 = scale.x(&view, f64::from(b.frame));
+            Some((x0.min(x1), x0.max(x1)))
+        }
+        _ => None,
+    };
     for (i, ch) in KeyChannel::ALL.iter().enumerate() {
         let hr = Rect::from_min_size(pos2(heads.left(), heads.top() + i as f32 * LANE_H), vec2(heads.width(), LANE_H));
         let lr = Rect::from_min_size(pos2(lanes.left(), hr.top()), vec2(lanes.width(), LANE_H));
         if i % 2 == 0 {
             ui.painter().rect_filled(lr, 0.0, Color32::from_white_alpha(4));
+        }
+        // Soft flight band behind the channel's key span (m6-controls.html).
+        if let Some((bx0, bx1)) = span_band {
+            let band = Rect::from_min_max(pos2(bx0, lr.top() + 1.0), pos2(bx1, lr.bottom() - 1.0));
+            ui.painter_at(lr).rect_filled(band, 4.0, Color32::from_rgba_unmultiplied(0x4f, 0x8c, 0xff, 18));
         }
         let head = ui.interact(hr, ui.scope_id().with(("dope-head", id, i)), Sense::click());
         let current = app.keys.property == *ch;
@@ -86,8 +100,28 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, heads: Rect, lanes: Rect, obj
         }
         let fg = if current { t.text1 } else { t.text3 };
         ui.painter().text(pos2(hr.left() + 46.0, hr.center().y), Align2::LEFT_CENTER, ch.title(), FontId::proportional(11.5), fg);
+        // Live channel value at the playhead, right-aligned (m6-controls.html).
+        let live_v = app.doc.session().key_value(id.0, *ch, playhead_frame, id.1);
+        let val_txt = match ch {
+            KeyChannel::RotationX | KeyChannel::RotationY | KeyChannel::RotationZ => format!("{live_v:.0}°"),
+            _ => format!("{live_v:.1}"),
+        };
+        ui.painter().text(pos2(hr.right() - 10.0, hr.center().y), Align2::RIGHT_CENTER, val_txt, FontId::monospace(10.5), t.text2);
 
-        for k in object.keys.iter().filter(|k| k.channel == *ch) {
+        // Connect keys on this channel with a soft accent line behind the markers (m6-controls.html).
+        let ch_keys: Vec<&Keyframe> = object.keys.iter().filter(|k| k.channel == *ch).collect();
+        if ch_keys.len() >= 2 {
+            let x_min = ch_keys.iter().map(|k| scale.x(&view, at(k))).fold(f32::INFINITY, f32::min);
+            let x_max = ch_keys.iter().map(|k| scale.x(&view, at(k))).fold(f32::NEG_INFINITY, f32::max);
+            if x_max > x_min + 1.0 {
+                ui.painter_at(lr).line_segment(
+                    [pos2(x_min, lr.center().y), pos2(x_max, lr.center().y)],
+                    Stroke::new(1.5, Color32::from_rgba_unmultiplied(0x4f, 0x8c, 0xff, 145)),
+                );
+            }
+        }
+
+        for k in ch_keys {
             let dragged = preview.as_ref().is_some_and(|(p, _)| p.contains(&(k.channel, k.frame)));
             let x = scale.x(&view, at(k));
             if !dragged && (x < lo || x > hi) {
@@ -98,7 +132,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, heads: Rect, lanes: Rect, obj
             let c = pos2(x, lr.center().y);
             let resp = ui.interact(Rect::from_center_size(c, vec2(12.0, LANE_H)), ui.scope_id().with(("dope-key", id, i, k.frame)), Sense::click_and_drag());
             resp.widget_info(|| WidgetInfo::selected(egui::Role::Button, true, picked, format!("{} key at frame {}", ch.title(), k.frame)));
-            paint_key(ui, c, k.interpolation, if picked { PICKED } else { KEY });
+            paint_key(ui, &t, c, k.interpolation, picked);
             if picked {
                 ui.painter().circle_stroke(c, 7.0, Stroke::new(1.2, t.accent));
             }
@@ -130,15 +164,21 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, heads: Rect, lanes: Rect, obj
     }
 }
 
-fn paint_key(ui: &Ui, c: egui::Pos2, interpolation: Interpolation, fill: Color32) {
+fn paint_key(ui: &Ui, t: &crate::theme::Theme, c: egui::Pos2, interpolation: Interpolation, picked: bool) {
     let p = ui.painter();
+    let fill = if picked { PICKED } else { KEY };
     match interpolation {
         Interpolation::Smooth => {
-            let r = 5.0;
-            p.add(Shape::convex_polygon(vec![pos2(c.x, c.y - r), pos2(c.x + r, c.y), pos2(c.x, c.y + r), pos2(c.x - r, c.y)], fill, Stroke::NONE));
+            let r = 4.8;
+            let pts = vec![pos2(c.x, c.y - r), pos2(c.x + r, c.y), pos2(c.x, c.y + r), pos2(c.x - r, c.y)];
+            if picked {
+                p.add(Shape::convex_polygon(pts, PICKED, Stroke::NONE));
+            } else {
+                p.add(Shape::convex_polygon(pts, t.bg1, Stroke::new(1.5, t.accent)));
+            }
         }
         Interpolation::Linear => {
-            p.rect_filled(Rect::from_center_size(c, vec2(8.0, 8.0)), 1.0, fill);
+            p.rect_filled(Rect::from_center_size(c, vec2(7.5, 7.5)), 1.5, fill);
         }
         Interpolation::Hold => {
             p.rect_filled(Rect::from_center_size(c, vec2(5.5, 5.5)), 0.5, fill);
