@@ -37,6 +37,7 @@ pub enum Menu {
     File,
     Edit,
     View,
+    Window,
     None,
 }
 
@@ -265,7 +266,7 @@ static REGISTRY: &[Command] = &[
     Command { id: "video.mix", title: "Mix", icon: Icon::Sliders, keys: None, tip: "Open Snap Sound mix controls.", workspace: Workspace::Animate, tab: "Build Video", group: "Audio", when: When::Document, menu: Menu::None },
     Command { id: "output.export_movie", title: "Export Movie", icon: Icon::Vid, keys: None, tip: "Render the build video with the current look. — coming soon", workspace: Workspace::Animate, tab: "Output", group: "Output", when: When::Soon, menu: Menu::None },
     Command { id: "output.export_still", title: "Export Still", icon: Icon::Cam, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Output", group: "Output", when: When::Soon, menu: Menu::None },
-    Command { id: "output.render_queue", title: "Render Queue", icon: Icon::Queue, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Animate, tab: "Output", group: "Output", when: When::Soon, menu: Menu::None },
+    Command { id: "output.render_queue", title: "Render Queue", icon: Icon::Queue, keys: None, tip: "Show the exports waiting, rendering and finished.", workspace: Workspace::Animate, tab: "Output", group: "Output", when: When::Always, menu: Menu::Window },
     Command { id: "view.look", title: "Look…", icon: Icon::Sun, keys: None, tip: "Open Look: the scene, shading and detail every video is drawn with.", workspace: Workspace::Animate, tab: "Output", group: "View", when: When::Document, menu: Menu::View },
     Command { id: "file.export_ldraw", title: "Export LDraw…", icon: Icon::Up, keys: Some("⇧⌘E"), tip: "Export the model as an LDraw MPD, with its submodels and steps.", workspace: Workspace::Build, tab: "", group: "File", when: When::Document, menu: Menu::File },
     Command { id: "file.export_plan", title: "Export Plan…", icon: Icon::File, keys: None, tip: "Export the build plan as JSON.", workspace: Workspace::Build, tab: "", group: "File", when: When::Document, menu: Menu::File },

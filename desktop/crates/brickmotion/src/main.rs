@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: brickmotion [model]\n       brickmotion --snapshot <out.png> [--size WxH] <model>";
+const USAGE: &str = "usage: brickmotion [model]\n       brickmotion --snapshot <out.png> [--size WxH] <model>\n       brickmotion --render-editor-movie <project> --out <movie.mp4> [options]";
 
 /// What the command line asked for.
 enum Run {
@@ -31,6 +31,11 @@ fn parse(args: &[String]) -> Result<Run, String> {
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // The Render Queue's movie helper: film the project and exit before any window opens.
+    if args.first().is_some_and(|a| a == "--render-editor-movie") {
+        let code = bm::export::run_editor_movie(&args[1..]);
+        return ExitCode::from(u8::try_from(code).unwrap_or(1));
+    }
     match parse(&args) {
         Err(e) => {
             eprintln!("brickmotion: {e}\n{USAGE}");

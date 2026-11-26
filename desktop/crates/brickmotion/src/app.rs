@@ -169,6 +169,11 @@ pub struct BrickMotionApp {
     /// The Build Motion panel.
     pub motion: chrome::motion_panel::MotionPanel,
     pub look: chrome::look_panel::LookPanel,
+    /// Exports run one at a time by helper processes.
+    pub queue: crate::render_queue::RenderQueue,
+    pub queue_panel: chrome::queue_panel::QueuePanel,
+    /// The file Show in Finder revealed while dialogs are off (tests read it).
+    pub revealed: Option<PathBuf>,
     /// Joint markers, the open joint and its card.
     pub joints: chrome::joints::JointsView,
     pub(crate) camera_synced: Option<(u64, u64)>,
@@ -203,6 +208,7 @@ impl BrickMotionApp {
         let prefs = Prefs::load(&support);
         let recents = Recents::load(&support);
         let history = crate::history::History::load(&support);
+        let queue = crate::render_queue::RenderQueue::load(support.file("render-queue.json"), crate::render_queue::Helpers::locate());
         let mut app = BrickMotionApp {
             workspace: Workspace::Build,
             ribbon_tab: tabs(Workspace::Build)[0],
@@ -264,6 +270,9 @@ impl BrickMotionApp {
             joints: Default::default(),
             motion: Default::default(),
             look: Default::default(),
+            queue,
+            queue_panel: Default::default(),
+            revealed: None,
             camera_synced: None,
             timeline: chrome::timeline::TimelineState::default(),
             properties_page: chrome::properties::Page::Inspector,
@@ -767,6 +776,7 @@ impl BrickMotionApp {
             "file.export_plan" => self.export_bytes(crate::FileExport::Plan, None),
             "edit.copy_viewport" => self.copy_viewport_image(),
             "model.look" | "view.look" => chrome::look_panel::toggle(self),
+            "output.render_queue" => chrome::queue_panel::toggle(self),
             "motion.build" => {
                 self.ribbon_tab = "Motion";
                 if chrome::motion_panel::is_open(self) {
@@ -1202,6 +1212,10 @@ fn test_support() -> Support {
 }
 
 impl eframe::App for BrickMotionApp {
+    fn on_exit(&mut self) {
+        self.queue.stop_for_quit();
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.previews.frame_begin(ui.ctx());
         self.poll_loader();
@@ -1240,6 +1254,9 @@ impl eframe::App for BrickMotionApp {
         }
         if self.loader.loading().is_some() {
             ui.ctx().request_repaint_after(Duration::from_millis(50));
+        }
+        if self.queue.poll() {
+            ui.ctx().request_repaint_after(Duration::from_millis(100));
         }
         self.guard_close(ui.ctx());
         crate::menubar::poll(self);

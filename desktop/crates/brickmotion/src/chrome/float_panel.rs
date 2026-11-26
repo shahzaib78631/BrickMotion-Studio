@@ -23,6 +23,7 @@ pub enum PanelKind {
     Motion,
     Joint,
     Look,
+    Queue,
 }
 
 impl PanelKind {
@@ -34,6 +35,7 @@ impl PanelKind {
             PanelKind::Motion => "Build Motion",
             PanelKind::Joint => "Joint",
             PanelKind::Look => "Look",
+            PanelKind::Queue => "Render Queue",
         }
     }
 }

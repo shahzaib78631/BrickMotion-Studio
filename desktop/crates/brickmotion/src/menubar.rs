@@ -93,6 +93,9 @@ pub fn menu_model() -> Vec<MenuSection> {
                 S(SystemItem::Zoom),
                 Sep,
                 S(SystemItem::Fullscreen),
+                Sep,
+                C("output.render_queue"),
+                Sep,
                 S(SystemItem::BringAllToFront),
             ],
         },
@@ -289,6 +292,7 @@ mod tests {
         let m = menu_model();
         let titles: Vec<&str> = m.iter().map(|s| s.title).collect();
         assert_eq!(titles, ["BrickMotion", "File", "Edit", "View", "Window"]);
+        assert!(m[4].items.contains(&MenuEntry::Command("output.render_queue")), "Window › Render Queue");
         let edit = &m[2];
         assert_eq!(
             edit.items,
