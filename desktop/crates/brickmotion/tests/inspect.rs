@@ -156,3 +156,95 @@ fn last_refused_edit_shows_and_dismisses() {
     assert_eq!(h.state().last_refusal, None);
     assert!(h.query_by_label("Last Refused Edit").is_none());
 }
+
+fn piece_pos(s: &bm::Session, piece: u32) -> (f64, f64, f64) {
+    let line = s.copy(&[piece]);
+    let tokens: Vec<&str> = line.split_whitespace().collect();
+    assert!(tokens.len() >= 5, "unexpected LDraw line: {line:?}");
+    (
+        tokens[2].parse::<f64>().unwrap(),
+        tokens[3].parse::<f64>().unwrap(),
+        tokens[4].parse::<f64>().unwrap(),
+    )
+}
+
+#[test]
+fn seat_loose_seats_in_one_undo() {
+    let dir = temp("loose-seat");
+    let model = write_ldr(
+        &dir,
+        "loose.ldr",
+        "0 Loose\n\
+         1 1 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n\
+         1 4 3 -24 0 1 0 0 0 1 0 0 0 1 3001.dat\n\
+         1 14 200 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n",
+    );
+    let mut h = app_with(&model);
+    assert!(run(h.state_mut(), "model.seat_loose"));
+    step_until(&mut h, |h| h.query_by_label("Looking for loose pieces…").is_none() && h.state().loose.result.is_some());
+
+    assert!(h.query_by_label("Seat Red Brick 2 x 4").is_some(), "checkbox label matches colour + display name");
+    assert_eq!(h.state().loose.chosen, vec![1]);
+    assert!(h.query_by_label("1 of 1 selected").is_some());
+    assert!(h.query_by_label("Seat Piece").is_some());
+
+    h.get_by_label("Seat Piece").click();
+    h.run_steps(3);
+    assert!(!h.state().loose.open);
+
+    let (x, y, _z) = piece_pos(h.state().session(), 1);
+    assert!((x - 0.0).abs() < 1e-4, "expected x=0, got {x}");
+    assert!((y - (-24.0)).abs() < 1e-4, "expected y=-24, got {y}");
+
+    assert!(run(h.state_mut(), "edit.undo"));
+    h.run_steps(2);
+    let (ux, _uy, _uz) = piece_pos(h.state().session(), 1);
+    assert!((ux - 3.0).abs() < 1e-4, "expected x=3 after undo, got {ux}");
+}
+
+#[test]
+fn seat_loose_none() {
+    let dir = temp("loose-none");
+    let model = write_ldr(
+        &dir,
+        "seated.ldr",
+        "0 Seated\n\
+         1 1 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n\
+         1 4 0 -24 0 1 0 0 0 1 0 0 0 1 3001.dat\n",
+    );
+    let mut h = app_with(&model);
+    assert!(run(h.state_mut(), "model.seat_loose"));
+    step_until(&mut h, |h| h.query_by_label("Looking for loose pieces…").is_none() && h.state().loose.result.is_some());
+
+    assert!(h.query_by_label("Every Piece Is Seated").is_some());
+}
+
+#[test]
+fn seat_loose_refuses_stale() {
+    let dir = temp("loose-stale");
+    let model = write_ldr(
+        &dir,
+        "loose.ldr",
+        "0 Loose\n\
+         1 1 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n\
+         1 4 3 -24 0 1 0 0 0 1 0 0 0 1 3001.dat\n\
+         1 14 200 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n",
+    );
+    let mut h = app_with(&model);
+    assert!(run(h.state_mut(), "model.seat_loose"));
+    step_until(&mut h, |h| h.query_by_label("Seat Piece").is_some());
+
+    // Edit the document after the loose check finished.
+    let c = h.state().session().recolor(&[2], 4);
+    assert_eq!(c.refused, None);
+    let new_ver = h.state().session().version();
+
+    h.get_by_label("Seat Piece").click();
+    h.run_steps(2);
+
+    // Piece 1 did not move and the panel recomputes for the new version.
+    let (x, _, _) = piece_pos(h.state().session(), 1);
+    assert!((x - 3.0).abs() < 1e-4, "stale seat must not move piece, got x={x}");
+    assert!(!h.state().notices().is_empty(), "stale seat shows a notice");
+    step_until(&mut h, |h| h.state().loose.result.as_ref().is_some_and(|((_, v), _)| *v == new_ver));
+}

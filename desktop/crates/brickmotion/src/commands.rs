@@ -12,8 +12,12 @@ pub enum When {
     Document,
     /// The document has pieces.
     Pieces,
+    /// The document has more than one piece.
+    SeveralPieces,
     /// Something is selected.
     Selection,
+    /// Exactly one piece is selected.
+    OnePiece,
     /// A step is chosen in the Steps tab.
     Step,
     /// A step is chosen and at least one piece is selected.
@@ -161,7 +165,9 @@ pub fn enabled(c: &Command, ctx: &Ctx) -> bool {
         When::Always => true,
         When::Document => ctx.has_document,
         When::Pieces => ctx.pieces > 0,
+        When::SeveralPieces => ctx.pieces > 1,
         When::Selection => ctx.selected > 0,
+        When::OnePiece => ctx.selected == 1,
         When::Step => ctx.has_document && ctx.step.is_some_and(|i| i < ctx.steps),
         When::StepSelection => ctx.has_document && ctx.step.is_some_and(|i| i < ctx.steps) && ctx.selected > 0,
         When::StepHasNext => ctx.has_document && ctx.step.is_some_and(|i| i + 1 < ctx.steps),
@@ -182,7 +188,9 @@ pub fn why_disabled(c: &Command, ctx: &Ctx) -> Option<&'static str> {
     Some(match c.when {
         When::Document => "Needs a document",
         When::Pieces => "Needs a model with pieces",
+        When::SeveralPieces => "Needs at least two pieces",
         When::Selection => "Needs a selection",
+        When::OnePiece => "Select one piece first",
         When::Step => "Choose a step first",
         When::StepSelection => {
             if ctx.step.is_none_or(|i| i >= ctx.steps) { "Choose a step first" } else { "Needs a selection" }
@@ -250,8 +258,8 @@ static REGISTRY: &[Command] = &[
     Command { id: "model.submodel", title: "Submodel", icon: Icon::Group, keys: Some("⌥⌘G"), tip: "Turn the selection into a submodel used once. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Arrange", when: When::Soon, menu: Menu::None },
     Command { id: "model.extract", title: "Extract", icon: Icon::Extract, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Arrange", when: When::Soon, menu: Menu::None },
     Command { id: "model.to_step", title: "To Step", icon: Icon::Step, keys: None, tip: "Gather the selected pieces into the chosen build step.", workspace: Workspace::Build, tab: "Model", group: "Arrange", when: When::StepSelection, menu: Menu::None },
-    Command { id: "model.seat_loose", title: "Seat Loose", icon: Icon::Seat, keys: None, tip: "Find pieces that are not connected and seat them. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Fit", when: When::Soon, menu: Menu::None },
     Command { id: "inspect.model_checks", title: "Model Checks", icon: Icon::Checks, keys: None, tip: "Check the model for overlaps, unsupported parts, tipping groups and missing definitions.", workspace: Workspace::Build, tab: "Inspect", group: "Checks", when: When::Document, menu: Menu::None },
+    Command { id: "model.seat_loose", title: "Seat Loose", icon: Icon::Seat, keys: None, tip: "Find pieces placed a little off their connectors and seat them in one undo step.", workspace: Workspace::Build, tab: "Inspect", group: "Checks", when: When::SeveralPieces, menu: Menu::None },
     Command { id: "model.what_fits", title: "What Fits", icon: Icon::Search, keys: None, tip: "List parts builders usually put at this connection. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Fit", when: When::Soon, menu: Menu::None },
     Command { id: "model.look", title: "Look", icon: Icon::Sun, keys: None, tip: "Open Look: the scene, shading and detail every video is drawn with.", workspace: Workspace::Build, tab: "Model", group: "Configure", when: When::Document, menu: Menu::None },
     Command { id: "model.build_settings", title: "Build Settings", icon: Icon::Sliders, keys: None, tip: "Open Build Settings to adjust pacing, build order and flight paths.", workspace: Workspace::Build, tab: "Model", group: "Configure", when: When::Document, menu: Menu::None },

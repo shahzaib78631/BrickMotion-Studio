@@ -16,6 +16,7 @@ pub mod library;
 pub mod export_movie;
 pub mod export_still;
 pub mod look_panel;
+pub mod loose_panel;
 pub mod queue_panel;
 pub mod navigator;
 pub mod notices;
@@ -68,9 +69,10 @@ pub fn central(ui: &mut Ui, app: &mut BrickMotionApp) {
         browser::show(ui, app, below);
         // Floating editors take the top right under the navigator; Properties steps aside while one is open.
         let mut next_top = below.top() + navigator::CLEARANCE;
-        let editing = app.camera_selection.is_some() || app.panels.camera || keys_panel::is_open(app) || motion_panel::is_open(app) || joints::is_open(app) || look_panel::is_open(app) || queue_panel::is_open(app) || export_movie::is_open(app) || export_still::is_open(app) || checks_panel::is_open(app);
+        let editing = app.camera_selection.is_some() || app.panels.camera || keys_panel::is_open(app) || motion_panel::is_open(app) || joints::is_open(app) || look_panel::is_open(app) || queue_panel::is_open(app) || export_movie::is_open(app) || export_still::is_open(app) || checks_panel::is_open(app) || loose_panel::is_open(app);
         if editing {
             checks_panel::show(ui, app, below, &mut next_top);
+            loose_panel::show(ui, app, below, &mut next_top);
             joints::panel(ui, app, below, &mut next_top);
             export_movie::show(ui, app, below, &mut next_top);
             export_still::show(ui, app, below, &mut next_top);

@@ -150,6 +150,7 @@ fn tool_groups(ui: &mut Ui, app: &mut BrickMotionApp) {
                             || (c.id == "motion.build" && app.motion.target.is_some())
                             || (c.id == "view.joints" && app.joints.show)
                             || (c.id == "inspect.model_checks" && app.checks.open)
+                            || (c.id == "model.seat_loose" && app.loose.open)
                             || (c.id == "video.group" && app.keys.group_rows);
                         let resp = tool(ui, &t, c, on, active);
                         let resp = hover_card(resp, &t, c);
