@@ -632,6 +632,7 @@ fn queue_advances_without_drawing() {
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
     assert_eq!(h.state().queue.jobs().len(), 2);
+    assert!(h.state().queue.has_waker(), "the queue wakes the window instead of being polled");
 }
 
 /// The queue outlives documents: with none open, Window › Render Queue still shows it.

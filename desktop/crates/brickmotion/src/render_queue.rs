@@ -107,6 +107,9 @@ pub struct BatchMovie {
     pub summary: String,
 }
 
+/// Called from the render thread whenever it has news for `poll` (e.g. the window's repaint).
+pub type Waker = Arc<dyn Fn() + Send + Sync>;
+
 /// Runs on the staged file before it reaches the destination (e.g. the logo over a still).
 pub type Finish = Box<dyn FnOnce(&Path) -> Result<(), String> + Send>;
 
@@ -168,6 +171,7 @@ pub struct RenderQueue {
     jobs: Vec<Job>,
     pending: VecDeque<(String, Request)>,
     active: Option<Active>,
+    waker: Option<Waker>,
 }
 
 impl RenderQueue {
@@ -196,7 +200,7 @@ impl RenderQueue {
                 j
             })
             .collect();
-        let queue = RenderQueue { history, helpers, jobs, pending: VecDeque::new(), active: None };
+        let queue = RenderQueue { history, helpers, jobs, pending: VecDeque::new(), active: None, waker: None };
         // Before any new job stages beside the same destinations.
         remove_staging(&abandoned);
         remove_named_staging(&named);
@@ -204,6 +208,15 @@ impl RenderQueue {
             queue.save_history();
         }
         queue
+    }
+
+    /// Who to wake when the worker has news; jobs started from now on use it.
+    pub fn set_waker(&mut self, waker: Waker) {
+        self.waker = Some(waker);
+    }
+
+    pub fn has_waker(&self) -> bool {
+        self.waker.is_some()
     }
 
     pub fn jobs(&self) -> &[Job] {
@@ -375,11 +388,22 @@ impl RenderQueue {
         let (tx, rx) = channel();
         let executable = self.helpers.executable(request.op).to_path_buf();
         let worker = control.clone();
+        let news = News { tx, wake: self.waker.clone() };
         std::thread::Builder::new()
             .name("render-queue".into())
             .spawn(move || {
-                let outcome = render(request, &executable, &worker, &tx);
-                let _ = tx.send(Event::Done(outcome));
+                // Wakes the window when the thread ends, however it ends (a panic included).
+                struct WakeOnExit(Option<Waker>);
+                impl Drop for WakeOnExit {
+                    fn drop(&mut self) {
+                        if let Some(w) = &self.0 {
+                            w();
+                        }
+                    }
+                }
+                let _exit = WakeOnExit(news.wake.clone());
+                let outcome = render(request, &executable, &worker, &news);
+                let _ = news.tx.send(Event::Done(outcome));
             })
             .expect("a render thread");
         self.set(&id, JobStatus::Rendering { done: 0, total: 0 });
@@ -541,8 +565,23 @@ fn move_in(output: &Path, destination: &Path, expected: &Version) -> Result<(), 
     }
 }
 
+/// The worker's channel to `poll`, and who to wake for each message.
+struct News {
+    tx: Sender<Event>,
+    wake: Option<Waker>,
+}
+
+impl News {
+    fn send(&self, event: Event) {
+        let _ = self.tx.send(event);
+        if let Some(w) = &self.wake {
+            w();
+        }
+    }
+}
+
 /// Keeps the last four diagnostics (each at most 1200 characters) and reports progress.
-fn consume(bytes: &[u8], diagnostics: &mut VecDeque<String>, events: &Sender<Event>) {
+fn consume(bytes: &[u8], diagnostics: &mut VecDeque<String>, events: &News) {
     let text = String::from_utf8_lossy(bytes);
     let line = text.trim();
     let fields: Vec<&str> = line.split(' ').collect();
@@ -552,7 +591,7 @@ fn consume(bytes: &[u8], diagnostics: &mut VecDeque<String>, events: &Sender<Eve
         && d > 0
         && d <= t
     {
-        let _ = events.send(Event::Progress(d, t));
+        events.send(Event::Progress(d, t));
     } else if !line.is_empty() {
         diagnostics.push_back(line.chars().take(1200).collect());
         if diagnostics.len() > 4 {
@@ -561,7 +600,7 @@ fn consume(bytes: &[u8], diagnostics: &mut VecDeque<String>, events: &Sender<Eve
     }
 }
 
-fn render(request: Request, executable: &Path, control: &Mutex<Control>, events: &Sender<Event>) -> Outcome {
+fn render(request: Request, executable: &Path, control: &Mutex<Control>, events: &News) -> Outcome {
     let Request { project, op, options, library, destination, expected, finish, staging: staging_name } = request;
     if std::fs::metadata(executable).map(|m| !m.is_file() || m.mode() & 0o111 == 0).unwrap_or(true) {
         return Outcome::Failed(MISSING.to_owned());
@@ -688,9 +727,10 @@ mod tests {
     #[test]
     fn progress_lines() {
         let (tx, rx) = channel();
+        let news = News { tx, wake: None };
         let mut d = VecDeque::new();
         for line in ["frame 1 2", "frame 0 2", "frame 3 2", "x", "y", "z", "w", "v"] {
-            consume(line.as_bytes(), &mut d, &tx);
+            consume(line.as_bytes(), &mut d, &news);
         }
         assert!(matches!(rx.try_recv(), Ok(Event::Progress(1, 2))));
         assert!(rx.try_recv().is_err());

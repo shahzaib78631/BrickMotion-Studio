@@ -366,3 +366,20 @@ fn interrupted_job_sweeps_its_named_staging() {
     assert_eq!(q.jobs()[0].status, JobStatus::Interrupted);
     assert_eq!(staging_left(&out), [other], "another process's staging stays");
 }
+
+/// The worker wakes the window on each piece of news, so nothing polls while a render runs.
+#[test]
+fn worker_wakes_on_each_event() {
+    let dir = temp("waker");
+    let mut q = queue(&dir, OK);
+    let woken = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let w = woken.clone();
+    q.set_waker(Arc::new(move || {
+        w.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }));
+    assert!(q.has_waker());
+    enqueue(&mut q, &dir.join("a.png")).unwrap();
+    settle(&mut q);
+    // frame 1 2, frame 2 2, and Done.
+    assert!(woken.load(std::sync::atomic::Ordering::SeqCst) >= 3, "{woken:?}");
+}

@@ -1179,11 +1179,14 @@ impl BrickMotionApp {
     }
 
     /// Work that must go on whether or not the window is drawn: the Render Queue's progress and
-    /// its next job.
+    /// its next job. The queue's waker brings the next call when there is news.
     pub fn tick_background(&mut self, ctx: &egui::Context) {
-        if self.queue.poll() {
-            ctx.request_repaint_after(Duration::from_millis(100));
+        if !self.queue.has_waker() {
+            // The render thread wakes the window with its news; nothing polls while it works.
+            let ctx = ctx.clone();
+            self.queue.set_waker(std::sync::Arc::new(move || ctx.request_repaint()));
         }
+        self.queue.poll();
     }
 
     #[doc(hidden)]
