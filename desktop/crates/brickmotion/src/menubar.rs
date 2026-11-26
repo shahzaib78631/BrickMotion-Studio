@@ -50,7 +50,6 @@ pub fn menu_model() -> Vec<MenuSection> {
             items: vec![
                 S(SystemItem::About),
                 Sep,
-                C("app.settings"),
                 Sep,
                 S(SystemItem::Hide),
                 S(SystemItem::HideOthers),
@@ -169,7 +168,7 @@ impl MenuBar {
                 let _ = match e {
                     MenuEntry::Command(id) => {
                         let c = find(id).expect("menu commands are registered");
-                        let item = MenuItem::with_id(c.id, c.title, c.when != crate::commands::When::Soon, c.keys.and_then(accelerator));
+                        let item = MenuItem::with_id(c.id, c.title, true, c.keys.and_then(accelerator));
                         let r = sub.append(&item);
                         items.push((c, item, c.title.to_owned(), true));
                         r

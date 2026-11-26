@@ -210,8 +210,7 @@ pub fn float_frame(t: &Theme) -> Frame {
 
 /// A square icon button. Disabled buttons stay visible, dimmed, and keep their hover text.
 pub fn icon_button(ui: &mut Ui, t: &Theme, i: Icon, label: &str, enabled: bool, on: bool, size: f32) -> Response {
-    let tip = if enabled { label.to_owned() } else { format!("{label} — coming soon") };
-    icon_button_tip(ui, t, i, label, &tip, enabled, on, size)
+    icon_button_tip(ui, t, i, label, label, enabled, on, size)
 }
 
 /// An icon button with its own hover text, for buttons that are disabled for a reason other
@@ -241,17 +240,12 @@ pub fn icon_button_tip(ui: &mut Ui, t: &Theme, i: Icon, label: &str, tip: &str, 
 }
 
 /// The hover card of a ribbon tool: title, shortcut and what it does.
-/// The shortcut to advertise for `c`: none for a command that is not built yet, whose key does nothing.
-pub fn card_keys(c: &Command) -> Option<&'static str> {
-    if c.when == crate::When::Soon { None } else { c.keys }
-}
-
 pub fn hover_card(resp: Response, t: &Theme, c: &Command) -> Response {
     resp.on_hover_ui(|ui| {
         ui.set_max_width(260.0);
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new(c.title).strong().color(t.text1));
-            if let Some(k) = card_keys(c) {
+            if let Some(k) = c.keys {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| kbd(ui, t, k));
             }
         });
@@ -278,15 +272,3 @@ pub fn caption(s: &str, t: &Theme) -> egui::RichText {
     egui::RichText::new(s).size(SMALL).color(t.text3)
 }
 
-#[cfg(test)]
-mod card_tests {
-    use super::card_keys;
-
-    #[test]
-    fn soon_commands_show_no_keys() {
-        let sub = crate::find("model.submodel").unwrap();
-        assert_eq!(sub.keys, Some("⌥⌘G"));
-        assert_eq!(card_keys(sub), None);
-        assert_eq!(card_keys(crate::find("file.open").unwrap()), Some("⌘O"));
-    }
-}

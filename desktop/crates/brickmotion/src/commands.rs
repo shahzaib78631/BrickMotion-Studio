@@ -32,8 +32,6 @@ pub enum When {
     Animate,
     /// The model has a submodel to film on its own.
     Submodels,
-    /// Not built yet: shown dimmed with " — coming soon".
-    Soon,
 }
 
 /// The native menu a command sits in.
@@ -179,7 +177,6 @@ pub fn enabled(c: &Command, ctx: &Ctx) -> bool {
         When::CanRedo => ctx.can_redo,
         When::Animate => ctx.has_document && ctx.workspace == Workspace::Animate,
         When::Submodels => ctx.has_document && ctx.submodels > 0,
-        When::Soon => false,
     }
 }
 
@@ -281,8 +278,6 @@ static REGISTRY: &[Command] = &[
     Command { id: "model.move", title: "Move", icon: Icon::Move, keys: Some("M"), tip: "Drag the selection along the arrows; it snaps to studs and holes.", workspace: Workspace::Build, tab: "Model", group: "Modify", when: When::Document, menu: Menu::None },
     Command { id: "model.rotate", title: "Turn", icon: Icon::Rotate, keys: Some("R"), tip: "Turn the selection 90° clockwise around its centre.", workspace: Workspace::Build, tab: "Model", group: "Modify", when: When::Selection, menu: Menu::Edit },
     Command { id: "model.duplicate", title: "Duplicate", icon: Icon::Copy, keys: Some("⌘D"), tip: "Copy the selection and offset the copy by one stud.", workspace: Workspace::Build, tab: "Model", group: "Modify", when: When::Selection, menu: Menu::Edit },
-    Command { id: "model.submodel", title: "Submodel", icon: Icon::Group, keys: Some("⌥⌘G"), tip: "Turn the selection into a submodel used once. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Arrange", when: When::Soon, menu: Menu::None },
-    Command { id: "model.extract", title: "Extract", icon: Icon::Extract, keys: None, tip: "Opens its options in the Properties panel. — coming soon", workspace: Workspace::Build, tab: "Model", group: "Arrange", when: When::Soon, menu: Menu::None },
     Command { id: "model.to_step", title: "To Step", icon: Icon::Step, keys: None, tip: "Gather the selected pieces into the chosen build step.", workspace: Workspace::Build, tab: "Model", group: "Arrange", when: When::StepSelection, menu: Menu::None },
     Command { id: "inspect.model_checks", title: "Model Checks", icon: Icon::Checks, keys: None, tip: "Check the model for overlaps, unsupported parts, tipping groups and missing definitions.", workspace: Workspace::Build, tab: "Inspect", group: "Checks", when: When::Document, menu: Menu::None },
     Command { id: "model.seat_loose", title: "Seat Loose", icon: Icon::Seat, keys: None, tip: "Find pieces placed a little off their connectors and seat them in one undo step.", workspace: Workspace::Build, tab: "Inspect", group: "Checks", when: When::SeveralPieces, menu: Menu::None },
@@ -318,7 +313,6 @@ static REGISTRY: &[Command] = &[
     Command { id: "edit.copy_viewport", title: "Copy Viewport Image", icon: Icon::Copy, keys: None, tip: "Copy what the viewport shows as an image.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Document, menu: Menu::Edit },
     Command { id: "file.open", title: "Open…", icon: Icon::File, keys: Some("⌘O"), tip: "Open a BrickMotion project or an LDraw model.", workspace: Workspace::Build, tab: "", group: "File", when: When::Always, menu: Menu::File },
     Command { id: "file.import_inventory", title: "Import Parts Inventory…", icon: Icon::Inventory, keys: None, tip: "Import a Rebrickable CSV or Studio parts-bin file as pieces.", workspace: Workspace::Build, tab: "", group: "File", when: When::Document, menu: Menu::File },
-    Command { id: "app.settings", title: "Settings…", icon: Icon::Gear, keys: None, tip: "Autosave and backup settings. — coming soon", workspace: Workspace::Build, tab: "", group: "App", when: When::Soon, menu: Menu::App },
     Command { id: "app.quit", title: "Quit BrickMotion", icon: Icon::Close, keys: Some("⌘Q"), tip: "Quit, asking to save an edited document first.", workspace: Workspace::Build, tab: "", group: "App", when: When::Always, menu: Menu::App },
     Command { id: "file.new", title: "New", icon: Icon::Plus, keys: Some("⌘N"), tip: "Start an empty project.", workspace: Workspace::Build, tab: "", group: "File", when: When::Always, menu: Menu::File },
     Command { id: "file.save", title: "Save", icon: Icon::Down, keys: Some("⌘S"), tip: "Save the project as a .brickmotion file.", workspace: Workspace::Build, tab: "", group: "File", when: When::Document, menu: Menu::File },

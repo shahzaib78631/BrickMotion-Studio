@@ -256,7 +256,7 @@ fn popover_button(ui: &mut Ui, t: &crate::Theme, label: Option<&str>, i: Icon, n
         ui.painter().text(egui::pos2(r.left() + 30.0, y), Align2::LEFT_CENTER, l, egui::FontId::proportional(12.5), tint);
     }
     icons::paint(ui, Icon::Up, Rect::from_center_size(egui::pos2(r.right() - 12.0, y), vec2(12.0, 12.0)), 12.0, tint);
-    if enabled { resp.on_hover_text(name.to_owned()) } else { resp.on_hover_text(format!("{name} — coming soon")) }
+    resp.on_hover_text(name.to_owned())
 }
 
 /// While recording: "● m:ss" and a Stop button, bottom left of the view.

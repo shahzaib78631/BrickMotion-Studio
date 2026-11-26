@@ -1,7 +1,7 @@
 // The command registry, its single dispatcher, and keyboard shortcuts.
 use std::collections::HashSet;
 
-use brickmotion::commands::{Shortcut, When, enabled, find, registry, run, title};
+use brickmotion::commands::{Shortcut, enabled, find, registry, run, title};
 use brickmotion::BrickMotionApp;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
@@ -54,7 +54,7 @@ fn every_shortcut_parses_and_is_unique() {
 fn every_enabled_command_runs() {
     let mut app = heli_app();
     app.dialogs_off();
-    for c in registry().iter().filter(|c| c.when != When::Soon) {
+    for c in registry() {
         // Each command starts from the helicopter with one piece selected.
         let mut fresh = heli_app();
         fresh.dialogs_off();
@@ -144,9 +144,6 @@ fn palette_rank_subsequence() {
 fn palette_empty_query_lists_all() {
     let all = rank("", &Ctx::default());
     assert_eq!(all.len(), registry().len());
-    // Commands not built yet come after the rest.
-    let first_soon = all.iter().position(|c| c.when == When::Soon).unwrap();
-    assert!(all[first_soon..].iter().all(|c| c.when == When::Soon));
 }
 
 #[test]

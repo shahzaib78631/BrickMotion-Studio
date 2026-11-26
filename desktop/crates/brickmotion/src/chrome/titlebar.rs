@@ -44,8 +44,6 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
                 document_tab(ui, &t, &app.title(), edited, bar);
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     ui.spacing_mut().item_spacing.x = 4.0;
-                    icon_button(ui, &t, Icon::Help, "Help", false, false, 28.0);
-                    icon_button(ui, &t, Icon::Gear, "Preferences", false, false, 28.0);
                     ui.add_space(4.0);
                     plan_status(ui, app);
                 });

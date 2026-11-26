@@ -42,13 +42,6 @@ fn ribbon_comes_from_registry() {
 }
 
 #[test]
-fn disabled_commands_say_so() {
-    use brickmotion::commands::When;
-    assert!(registry().iter().filter(|c| c.when == When::Soon).all(|c| c.tip.ends_with(" — coming soon")));
-    assert!(registry().iter().filter(|c| c.when != When::Soon).all(|c| !c.tip.ends_with(" — coming soon")));
-}
-
-#[test]
 fn ribbon_tabs_switch_content() {
     let mut h = harness();
     h.get_by_role_and_label(Role::Button, "Animate").click();

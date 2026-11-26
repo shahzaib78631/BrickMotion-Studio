@@ -2,7 +2,7 @@
 //! place in the ribbon, its shortcut, and why it is disabled when it is.
 use egui::{Align2, Area, Frame, Id, Key, Margin, Order, RichText, Sense, Stroke, Ui, vec2};
 
-use crate::commands::{Command, Ctx, When, enabled, registry, title, why_disabled};
+use crate::commands::{Command, Ctx, enabled, registry, title, why_disabled};
 use crate::icons;
 use crate::{BrickMotionApp, Shortcut};
 
@@ -50,20 +50,20 @@ fn subsequence(hay: &str, needle: &str) -> Option<usize> {
 }
 
 /// Commands matching `query`: title prefixes first, then by where the match starts, then in
-/// registry order; commands not built yet after the rest. An empty query lists every command.
+/// registry order. An empty query lists every command.
 pub fn rank(query: &str, _ctx: &Ctx) -> Vec<&'static Command> {
     let q = query.trim();
-    let mut hits: Vec<(bool, bool, usize, usize, &'static Command)> = registry()
+    let mut hits: Vec<(bool, usize, usize, &'static Command)> = registry()
         .iter()
         .enumerate()
         .filter_map(|(order, c)| {
             let at = subsequence(c.title, q).or_else(|| subsequence(c.id, q).map(|i| i + 1000))?;
             let prefix = !q.is_empty() && c.title.to_lowercase().starts_with(&q.to_lowercase());
-            Some((c.when == When::Soon, !prefix, at, order, c))
+            Some((!prefix, at, order, c))
         })
         .collect();
-    hits.sort_by_key(|h| (h.0, h.1, h.2, h.3));
-    hits.into_iter().map(|h| h.4).collect()
+    hits.sort_by_key(|h| (h.0, h.1, h.2));
+    hits.into_iter().map(|h| h.3).collect()
 }
 
 /// "<tab> › <group>", or the id for commands not on the ribbon.
@@ -169,7 +169,7 @@ fn row(ui: &mut Ui, t: &crate::Theme, c: &Command, ctx: &Ctx, current: bool) -> 
     icons::paint(ui, c.icon, egui::Rect::from_center_size(egui::pos2(rect.left() + 18.0, y), vec2(16.0, 16.0)), 16.0, if on { t.text2 } else { t.text3 });
     ui.painter().text(egui::pos2(rect.left() + 36.0, y), Align2::LEFT_CENTER, title(c, ctx), egui::FontId::proportional(12.5), main);
     let mut right = rect.right() - 10.0;
-    if let Some(k) = crate::chrome::card_keys(c).and_then(Shortcut::parse) {
+    if let Some(k) = c.keys.and_then(Shortcut::parse) {
         let r = ui.painter().text(egui::pos2(right, y), Align2::RIGHT_CENTER, k.label(), egui::FontId::proportional(11.0), t.text3);
         right = r.left() - 12.0;
     }

@@ -515,3 +515,17 @@ fn view_presets_and_orthographic_run() {
     h.run_steps(2);
     assert!(!h.state_mut().doc.viewport().unwrap().camera().orthographic);
 }
+
+/// Nothing unbuilt ships: no "coming soon" command, tip or dead title-bar button.
+#[test]
+fn no_coming_soon_placeholders() {
+    for c in brickmotion::commands::registry() {
+        assert!(!c.tip.to_lowercase().contains("coming soon"), "{} still says coming soon", c.id);
+    }
+    for id in ["model.submodel", "model.extract", "app.settings"] {
+        assert!(brickmotion::commands::find(id).is_none(), "{id} is registered but not built");
+    }
+    let h = build_heli();
+    assert!(h.query_by_label("Preferences").is_none(), "disabled Preferences button");
+    assert!(h.query_by_label("Help").is_none(), "disabled Help button");
+}
