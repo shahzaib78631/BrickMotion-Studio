@@ -64,6 +64,42 @@ pub fn snap_recordings() -> PathBuf {
     PathBuf::from("public/sounds/snaps")
 }
 
+/// Locates the BrickNet habits table:
+/// `BM_HABITS`, then `BrickMotion.app/Contents/Resources/Suggest/habits.json`,
+/// then `public/data/suggest/habits.json` in the repo.
+pub fn habits_file() -> PathBuf {
+    habits_file_from(std::env::var_os("BM_HABITS").filter(|s| !s.is_empty()).map(PathBuf::from))
+}
+
+fn habits_file_from(env: Option<PathBuf>) -> PathBuf {
+    if let Some(p) = env {
+        return p;
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(mac_os) = exe.parent() {
+            let bundled = mac_os.join("../Resources/Suggest/habits.json");
+            if bundled.is_file() {
+                return bundled;
+            }
+        }
+        for anc in exe.ancestors() {
+            let candidate = anc.join("public/data/suggest/habits.json");
+            if candidate.is_file() {
+                return candidate;
+            }
+        }
+    }
+    if let Ok(cwd) = std::env::current_dir() {
+        for anc in cwd.ancestors() {
+            let candidate = anc.join("public/data/suggest/habits.json");
+            if candidate.is_file() {
+                return candidate;
+            }
+        }
+    }
+    PathBuf::from("public/data/suggest/habits.json")
+}
+
 fn default_true() -> bool {
     true
 }
@@ -264,5 +300,13 @@ mod tests {
         let left: Vec<_> = std::fs::read_dir(&ro).unwrap().collect();
         std::fs::set_permissions(&ro, std::fs::Permissions::from_mode(0o755)).unwrap();
         assert!(left.is_empty(), "left {left:?}");
+    }
+
+    #[test]
+    fn habits_file_prefers_env() {
+        let custom = PathBuf::from("/tmp/custom-habits.json");
+        assert_eq!(habits_file_from(Some(custom.clone())), custom);
+        let fallback = habits_file_from(None);
+        assert!(fallback.ends_with("habits.json"), "unexpected fallback {fallback:?}");
     }
 }

@@ -28,6 +28,7 @@ pub enum PanelKind {
     Still,
     Checks,
     Loose,
+    Fits,
 }
 
 impl PanelKind {
@@ -44,6 +45,7 @@ impl PanelKind {
             PanelKind::Still => "Export Still",
             PanelKind::Checks => "Model Checks",
             PanelKind::Loose => "Seat Loose Pieces",
+            PanelKind::Fits => "Compatible Parts",
         }
     }
 }

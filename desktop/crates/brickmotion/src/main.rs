@@ -30,6 +30,13 @@ fn parse(args: &[String]) -> Result<Run, String> {
 }
 
 fn main() -> ExitCode {
+    if std::env::var_os("BM_HABITS").is_none() {
+        let habits = brickmotion::support::habits_file();
+        if habits.is_file() {
+            // Set once on the main thread before any engine or worker thread starts.
+            unsafe { std::env::set_var("BM_HABITS", &habits) };
+        }
+    }
     let args: Vec<String> = std::env::args().skip(1).collect();
     // The Render Queue's movie helper: film the project and exit before any window opens.
     if args.first().is_some_and(|a| a == "--render-editor-movie") {

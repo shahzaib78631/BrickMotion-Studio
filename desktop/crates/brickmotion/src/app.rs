@@ -177,6 +177,7 @@ pub struct BrickMotionApp {
     /// Model Checks floating panel and last refused edit.
     pub checks: chrome::checks_panel::ChecksPanel,
     pub loose: chrome::loose_panel::LoosePanel,
+    pub fits: chrome::fits_panel::FitsPanel,
     pub last_refusal: Option<String>,
     /// View › Record Viewport.
     pub recording: crate::recording::RecordingState,
@@ -290,6 +291,7 @@ impl BrickMotionApp {
             still: Default::default(),
             checks: Default::default(),
             loose: Default::default(),
+            fits: Default::default(),
             last_refusal: None,
             recording: Default::default(),
             submodel_count: Default::default(),
@@ -422,6 +424,7 @@ impl BrickMotionApp {
         self.joints.reset();
         self.checks.reset();
         self.loose.reset();
+        self.fits.reset();
         self.last_refusal = None;
         // The old document (and its renderer) goes, off this thread; the widget sets the new one up.
         crate::loader::retire(std::mem::replace(&mut self.doc, doc));
@@ -822,6 +825,7 @@ impl BrickMotionApp {
             "model.look" | "view.look" => chrome::look_panel::toggle(self),
             "inspect.model_checks" => chrome::checks_panel::toggle(self),
             "model.seat_loose" => chrome::loose_panel::toggle(self),
+            "model.what_fits" => chrome::fits_panel::toggle(self),
             "output.render_queue" => chrome::queue_panel::toggle(self),
             "output.export_still" => chrome::export_still::toggle(self),
             "file.export_movie" => chrome::export_movie::open(self, Vec::new()),
@@ -990,16 +994,34 @@ impl BrickMotionApp {
         self.begin_placement_at(part, step, None);
     }
 
+    /// Starts placing a library part with the ghost starting at `at` (viewport pixels from the top
+    /// left) when given, else the viewport centre.
+    pub fn begin_placement_from(&mut self, part: bm::library::PartMatch, at: Option<bm::Vec2>) {
+        let step = self.edit.step;
+        self.begin_placement_with_point(part, step, None, at);
+    }
+
     /// Starts placing a library part targeting a specific `(step, before)` arrival slot.
     pub fn begin_placement_at(&mut self, part: bm::library::PartMatch, step: Option<usize>, before: Option<usize>) {
+        self.begin_placement_with_point(part, step, before, None);
+    }
+
+    fn begin_placement_with_point(
+        &mut self,
+        part: bm::library::PartMatch,
+        step: Option<usize>,
+        before: Option<usize>,
+        at: Option<bm::Vec2>,
+    ) {
         if !self.has_document {
             return;
         }
-        let at = self
-            .viewport
-            .last_rect
-            .map(|r| bm::Vec2::new((r.width() * 0.5) as f64, (r.height() * 0.5) as f64))
-            .unwrap_or_else(|| bm::Vec2::new(320.0, 240.0));
+        let at = at.unwrap_or_else(|| {
+            self.viewport
+                .last_rect
+                .map(|r| bm::Vec2::new((r.width() * 0.5) as f64, (r.height() * 0.5) as f64))
+                .unwrap_or_else(|| bm::Vec2::new(320.0, 240.0))
+        });
         let colour = self.edit.colour;
         let collision = self.edit.collision;
         let p = {
@@ -1077,6 +1099,7 @@ impl BrickMotionApp {
         self.joints.reset();
         self.checks.reset();
         self.loose.reset();
+        self.fits.reset();
         self.last_refusal = None;
         let mut s = bm::Session::new();
         match s.new_blank() {
@@ -1367,6 +1390,7 @@ impl eframe::App for BrickMotionApp {
             chrome::joints::sync(self, ui.ctx());
             chrome::checks_panel::sync(self, ui.ctx());
             chrome::loose_panel::sync(self, ui.ctx());
+            chrome::fits_panel::sync(self, ui.ctx());
             crate::flight_path::delete_key(self, ui.ctx());
             chrome::keys_track::delete_key(self, ui.ctx());
         }

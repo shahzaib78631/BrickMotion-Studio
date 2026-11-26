@@ -267,50 +267,56 @@ fn body(ui: &mut Ui, app: &mut BrickMotionApp) {
     let mut toggle_piece: Option<(u32, bool)> = None;
     let mut reveal: Option<[u32; 2]> = None;
 
-    inset_group(ui, |ui| {
-        for (i, r) in rows.iter().enumerate() {
-            if i > 0 {
-                hairline(ui);
-            }
-            Frame::NONE.inner_margin(Margin::symmetric(12, 8)).show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 8.0;
-                    if checkbox(ui, &t, &format!("Seat {}", r.name), r.checked, !r.waiting) {
-                        toggle_piece = Some((r.piece, !r.checked));
+    egui::ScrollArea::vertical()
+        .id_salt("loose-list")
+        .max_height(320.0)
+        .auto_shrink([false, true])
+        .show(ui, |ui| {
+            inset_group(ui, |ui| {
+                for (i, r) in rows.iter().enumerate() {
+                    if i > 0 {
+                        hairline(ui);
                     }
-                    let text_w = (ui.available_width() - 32.0).max(100.0);
-                    ui.vertical(|ui| {
-                        ui.set_max_width(text_w);
-                        ui.spacing_mut().item_spacing.y = 2.0;
-                        ui.label(
-                            RichText::new(&r.name)
-                                .size(12.0)
-                                .strong()
-                                .color(if r.waiting { t.text3 } else { t.text1 }),
-                        );
-                        let detail_color = if r.safe || r.waiting { t.text3 } else { t.playhead };
-                        ui.label(RichText::new(&r.subtitle).size(11.0).color(detail_color));
+                    Frame::NONE.inner_margin(Margin::symmetric(12, 8)).show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 8.0;
+                            if checkbox(ui, &t, &format!("Seat {}", r.name), r.checked, !r.waiting) {
+                                toggle_piece = Some((r.piece, !r.checked));
+                            }
+                            let text_w = (ui.available_width() - 32.0).max(100.0);
+                            ui.vertical(|ui| {
+                                ui.set_max_width(text_w);
+                                ui.spacing_mut().item_spacing.y = 2.0;
+                                ui.label(
+                                    RichText::new(&r.name)
+                                        .size(12.0)
+                                        .strong()
+                                        .color(if r.waiting { t.text3 } else { t.text1 }),
+                                );
+                                let detail_color = if r.safe || r.waiting { t.text3 } else { t.playhead };
+                                ui.label(RichText::new(&r.subtitle).size(11.0).color(detail_color));
+                            });
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                if icon_button_tip(
+                                    ui,
+                                    &t,
+                                    Icon::Fit,
+                                    &format!("Show {}", r.name),
+                                    "Select and frame it with what holds it",
+                                    true,
+                                    false,
+                                    24.0,
+                                )
+                                .clicked()
+                                {
+                                    reveal = Some([r.piece, r.onto]);
+                                }
+                            });
+                        });
                     });
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if icon_button_tip(
-                            ui,
-                            &t,
-                            Icon::Fit,
-                            &format!("Show {}", r.name),
-                            "Select and frame it with what holds it",
-                            true,
-                            false,
-                            24.0,
-                        )
-                        .clicked()
-                        {
-                            reveal = Some([r.piece, r.onto]);
-                        }
-                    });
-                });
+                }
             });
-        }
-    });
+        });
 
     if let Some((piece, on)) = toggle_piece {
         if on {

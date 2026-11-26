@@ -248,3 +248,120 @@ fn seat_loose_refuses_stale() {
     assert!(!h.state().notices().is_empty(), "stale seat shows a notice");
     step_until(&mut h, |h| h.state().loose.result.as_ref().is_some_and(|((_, v), _)| *v == new_ver));
 }
+
+static HABITS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+struct HabitsEnvGuard(Option<std::ffi::OsString>);
+impl HabitsEnvGuard {
+    fn set(val: &str) -> Self {
+        let prev = std::env::var_os("BM_HABITS");
+        unsafe { std::env::set_var("BM_HABITS", val) };
+        HabitsEnvGuard(prev)
+    }
+}
+impl Drop for HabitsEnvGuard {
+    fn drop(&mut self) {
+        match &self.0 {
+            Some(v) => unsafe { std::env::set_var("BM_HABITS", v) },
+            None => unsafe { std::env::remove_var("BM_HABITS") },
+        }
+    }
+}
+
+fn habits_lock() -> std::sync::MutexGuard<'static, ()> {
+    HABITS_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+fn panel_add_part<'a>(h: &'a Harness<'static, BrickMotionApp>) -> Option<egui_kittest::Node<'a>> {
+    h.query_all_by_label("Add Part").find(|n| n.rect().top() > 150.0)
+}
+
+#[test]
+fn fits_lists_builders_and_free_connections() {
+    let _guard = habits_lock();
+    let dir = temp("fits-list");
+    let model = write_ldr(&dir, "one.ldr", "0 One\n1 4 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n");
+    let mut h = app_with(&model);
+    // Disabled with no selection.
+    assert!(!run(h.state_mut(), "model.what_fits"));
+    h.state_mut().session().select(&[0], bm::SelectMode::Replace);
+    assert!(run(h.state_mut(), "model.what_fits"));
+    step_until(&mut h, |h| h.query_by_label("Checking free connections…").is_none() && h.state().fits.result.is_some());
+
+    assert!(h.query_by_label("What Builders Put Here").is_some());
+    assert!(h.query_by_label("Fits a Free Connection").is_some());
+    let (_, _, _, res) = h.state().fits.result.as_ref().unwrap();
+    assert!(!res.habits.is_empty() && res.habits.len() <= 8);
+    assert!(res.habits.iter().all(|f| f.why.starts_with("In ")));
+    assert!(!res.matches.is_empty());
+
+    // Typing "3003" hides the builders' section.
+    h.get_by_label("Search by part name or number").click();
+    h.run_steps(2);
+    h.get_by_label("Search by part name or number").type_text("3003");
+    h.run_steps(2);
+    std::thread::sleep(Duration::from_millis(160));
+    step_until(&mut h, |h| {
+        h.state().fits.result.as_ref().is_some_and(|(_, _, q, _)| q == "3003")
+            && h.query_by_label("Checking free connections…").is_none()
+    });
+    assert!(h.query_by_label("What Builders Put Here").is_none());
+    assert!(h.query_by_label("Fits a Free Connection").is_some());
+}
+
+#[test]
+fn fit_adds_part_at_pose() {
+    let _guard = habits_lock();
+    let dir = temp("fits-add");
+    let model = write_ldr(&dir, "one.ldr", "0 One\n1 4 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n");
+    let mut h = app_with(&model);
+    h.state_mut().session().select(&[0], bm::SelectMode::Replace);
+    assert!(run(h.state_mut(), "model.what_fits"));
+    step_until(&mut h, |h| h.state().fits.result.is_some() && panel_add_part(h).is_some());
+
+    let before = h.state().piece_count();
+    panel_add_part(&h).expect("panel Add Part button").click();
+    h.run_steps(3);
+    assert_eq!(h.state().piece_count(), before + 1);
+    assert!(!h.state().fits.open);
+
+    assert!(run(h.state_mut(), "edit.undo"));
+    h.run_steps(2);
+    assert_eq!(h.state().piece_count(), before);
+}
+
+#[test]
+fn fit_refuses_a_stale_revision() {
+    let _guard = habits_lock();
+    let dir = temp("fits-stale");
+    let model = write_ldr(&dir, "one.ldr", "0 One\n1 4 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n");
+    let mut h = app_with(&model);
+    h.state_mut().session().select(&[0], bm::SelectMode::Replace);
+    assert!(run(h.state_mut(), "model.what_fits"));
+    step_until(&mut h, |h| h.state().fits.result.is_some() && panel_add_part(h).is_some());
+
+    // Edit the document after fits were computed.
+    assert_eq!(h.state().session().recolor(&[0], 1).refused, None);
+    let before = h.state().piece_count();
+
+    panel_add_part(&h).expect("panel Add Part button").click();
+    h.run_steps(3);
+    assert_eq!(h.state().piece_count(), before, "stale Add Part must not add a piece");
+    assert!(!h.state().notices().is_empty(), "stale Add Part shows a notice");
+}
+
+#[test]
+fn fits_without_habits_table() {
+    let _guard = habits_lock();
+    let _env = HabitsEnvGuard::set("/nonexistent/brickmotion-missing-habits.json");
+    let dir = temp("fits-no-habits");
+    let model = write_ldr(&dir, "one.ldr", "0 One\n1 4 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n");
+    let mut h = app_with(&model);
+    h.state_mut().session().select(&[0], bm::SelectMode::Replace);
+    assert!(run(h.state_mut(), "model.what_fits"));
+    step_until(&mut h, |h| h.query_by_label("Checking free connections…").is_none() && h.state().fits.result.is_some());
+
+    assert!(h.query_by_label("What Builders Put Here").is_none());
+    assert!(h.query_by_label("Fits a Free Connection").is_some());
+    assert!(h.state().notices().is_empty(), "missing habits table must not produce a notice");
+}

@@ -18,6 +18,10 @@ cp scripts/Info.plist "$app/Contents/Info.plist"
 if [ -d "../public/sounds/snaps" ]; then
     cp -R "../public/sounds/snaps" "$app/Contents/Resources/SnapSounds"
 fi
+if [ -f "../public/data/suggest/habits.json" ]; then
+    mkdir -p "$app/Contents/Resources/Suggest"
+    cp "../public/data/suggest/habits.json" "$app/Contents/Resources/Suggest/habits.json"
+fi
 
 bin="$app/Contents/MacOS/brickmotion"
 # Load libbmffi from the bundle, never from the build tree.
