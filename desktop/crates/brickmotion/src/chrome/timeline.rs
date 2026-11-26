@@ -1499,42 +1499,44 @@ fn steps_lane(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
         let mut ctx_for_step = app.ctx();
         ctx_for_step.step = Some(step);
         resp.context_menu(|ui| {
-            if ui.button("Play Step").clicked() {
+            use super::menu;
+            menu::prepare(ui);
+            if menu::item(ui, &t, Some(Icon::Play), "Play Step", None, true) {
                 menu_action = Some((step, StepMenuAction::PlayStep));
-                ui.close();
             }
-            if ui.button("Play to End").clicked() {
+            if menu::item(ui, &t, Some(Icon::Next), "Play to End", None, true) {
                 menu_action = Some((step, StepMenuAction::PlayToEnd));
-                ui.close();
             }
-            if ui.button("Select Pieces").clicked() {
+            if menu::item(ui, &t, Some(Icon::Cursor), "Select Pieces", None, true) {
                 menu_action = Some((step, StepMenuAction::SelectPieces));
-                ui.close();
             }
-            if ui.button("Step Motion…").clicked() {
+            if menu::item(ui, &t, Some(Icon::Fly), "Step Motion…", None, true) {
                 menu_action = Some((step, StepMenuAction::Motion));
-                ui.close();
             }
-            ui.separator();
-            let entries: &[(&str, &str)] = &[
-                ("step.edit", "Edit Step…"),
-                ("step.insert_before", "Insert Step Before"),
-                ("step.insert_after", "Insert Step After"),
-                ("step.split", "Split at Selection"),
-                ("step.merge", "Merge with Next"),
-                ("model.to_step", "Gather Selection Here"),
-                ("step.move_up", "Move Step Up"),
-                ("step.move_down", "Move Step Down"),
-                ("step.delete", "Delete Step"),
+            menu::separator(ui, &t);
+            let entries: &[(&str, Icon, &str, bool)] = &[
+                ("step.edit", Icon::Sliders, "Edit Step…", false),
+                ("step.insert_before", Icon::Plus, "Insert Step Before", false),
+                ("step.insert_after", Icon::Plus, "Insert Step After", false),
+                ("step.split", Icon::Razor, "Split at Selection", false),
+                ("step.merge", Icon::Group, "Merge with Next", false),
+                ("model.to_step", Icon::Step, "Gather Selection Here", false),
+                ("step.move_up", Icon::Up, "Move Step Up", false),
+                ("step.move_down", Icon::Down, "Move Step Down", false),
+                ("step.delete", Icon::Close, "Delete Step", true),
             ];
-            for (k, &(cmd_id, label)) in entries.iter().enumerate() {
+            for (k, &(cmd_id, ic, label, destructive)) in entries.iter().enumerate() {
                 if matches!(k, 1 | 3 | 6 | 8) {
-                    ui.separator();
+                    menu::separator(ui, &t);
                 }
                 let on = find(cmd_id).is_some_and(|c| enabled(c, &ctx_for_step));
-                if ui.add_enabled(on, egui::Button::new(label)).clicked() {
+                let clicked = if destructive {
+                    menu::item_destructive(ui, &t, Some(ic), label, on)
+                } else {
+                    menu::item(ui, &t, Some(ic), label, None, on)
+                };
+                if clicked {
                     menu_action = Some((step, StepMenuAction::Command(cmd_id)));
-                    ui.close();
                 }
             }
         });

@@ -75,37 +75,36 @@ fn document_tab(ui: &mut Ui, t: &crate::Theme, title: &str, edited: bool, bar: e
 
 /// New, Open, Open Recent, Save and Save As, each with its shortcut and state.
 fn file_menu(ui: &mut Ui, app: &mut BrickMotionApp) {
+    use super::menu;
+    let t = app.theme;
     let ctx = app.ctx();
+    menu::prepare(ui);
     let item = |ui: &mut Ui, app: &mut BrickMotionApp, id: &'static str| {
         let c = find(id).expect("registered");
-        let b = egui::Button::new(title(c, &ctx)).shortcut_text(c.keys.unwrap_or(""));
-        if ui.add_enabled(enabled(c, &ctx), b).clicked() {
+        if menu::item(ui, &t, Some(c.icon), &title(c, &ctx), c.keys, enabled(c, &ctx)) {
             app.requested.push(c.id);
-            ui.close();
         }
     };
     item(ui, app, "file.new");
     item(ui, app, "file.open");
     let recent: Vec<std::path::PathBuf> = app.recents.existing().into_iter().map(|p| p.to_path_buf()).collect();
-    ui.menu_button("Open Recent", |ui| {
+    menu::submenu(ui, &t, Some(Icon::File), "Open Recent", |ui| {
         if recent.is_empty() {
-            ui.add_enabled(false, egui::Button::new("No recent files"));
+            menu::item(ui, &t, None, "No recent files", None, false);
         }
         for p in &recent {
             let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-            if ui.button(name).on_hover_text(p.display().to_string()).clicked() {
+            if menu::item_tip(ui, &t, Some(Icon::File), &name, &p.display().to_string(), true) {
                 app.open(p.clone());
-                ui.close();
             }
         }
-        ui.separator();
-        if ui.add_enabled(!app.recents.0.is_empty(), egui::Button::new("Clear Menu")).clicked() {
+        menu::separator(ui, &t);
+        if menu::item(ui, &t, Some(Icon::Close), "Clear Menu", None, !app.recents.0.is_empty()) {
             app.recents.clear();
             let _ = app.recents.save(&app.support);
-            ui.close();
         }
     });
-    ui.separator();
+    menu::separator(ui, &t);
     item(ui, app, "file.save");
     item(ui, app, "file.save_as");
 }

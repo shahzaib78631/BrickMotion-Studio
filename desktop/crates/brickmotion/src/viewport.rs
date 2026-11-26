@@ -2,7 +2,7 @@
 use bm::gizmo::{GizmoKind, GizmoShape, Handle};
 use egui::{Color32, ColorImage, Modifiers, Pos2, Rect, Sense, TextureHandle, TextureOptions, Ui, Vec2, pos2};
 
-use crate::edit::{EditState, Tool};
+use crate::edit::{EditState, PickScope, Tool};
 use crate::gizmo::{self, GizmoDrag};
 use crate::theme::Theme;
 
@@ -16,7 +16,8 @@ pub enum ViewOp {
     /// Frame the selected pieces.
     FrameSelection,
     Preset(bm::ViewPreset),
-    Pick(f64, f64, bm::SelectMode),
+    /// `(x, y, mode, alt_override)` — holding ⌥ flips whole-submodel vs single-piece picking.
+    Pick(f64, f64, bm::SelectMode, bool),
 }
 
 /// What a plain primary drag does; chosen in the view bar.
@@ -73,7 +74,7 @@ pub fn ops_for(g: &Gesture) -> Vec<ViewOp> {
         } else {
             bm::SelectMode::Replace
         };
-        ops.push(ViewOp::Pick(at.x as f64, at.y as f64, mode));
+        ops.push(ViewOp::Pick(at.x as f64, at.y as f64, mode, m.alt));
     }
     if g.double_click {
         ops.push(ViewOp::Fit);
@@ -576,6 +577,7 @@ impl ViewportWidget {
                 }
             } else if primary_pressed
                 && !modifiers.shift
+                && !modifiers.alt
                 && !modifiers.command
                 && !modifiers.mac_cmd
                 && let Some(pos) = latest_pos.filter(|p| rect.contains(*p))
@@ -590,7 +592,11 @@ impl ViewportWidget {
                         Tool::Rotate => false,
                     };
                     if allow {
-                        let pieces = if sel.contains(&piece) { sel.clone() } else { vec![piece] };
+                        let pieces = if sel.contains(&piece) {
+                            sel.clone()
+                        } else {
+                            pick_targets(doc.session(), piece, edit.pick_scope, modifiers.alt)
+                        };
                         self.pending_piece_drag = Some((pos, piece, pieces));
                     }
                 }
@@ -609,17 +615,18 @@ impl ViewportWidget {
         if let Some(piece) = self.waiting_menu_piece {
             let match_deg = doc.viewport().map_or(0.0, |vp| vp.waiting_turn_to_match(piece));
             resp.context_menu(|ui| {
-                if ui.button("Turn Waiting Part 90°").clicked() {
+                use crate::chrome::menu;
+                use crate::icons::Icon;
+                menu::prepare(ui);
+                if menu::item(ui, theme, Some(Icon::Rotate), "Turn Waiting Part 90°", None, true) {
                     waiting_turn = Some((piece, 90.0));
-                    ui.close();
                 }
-                if ui.button("Turn Waiting Part −90°").clicked() {
+                if menu::item(ui, theme, Some(Icon::Undo), "Turn Waiting Part −90°", None, true) {
                     waiting_turn = Some((piece, -90.0));
-                    ui.close();
                 }
-                if ui.add_enabled(match_deg.abs() > 1e-3, egui::Button::new("Turn to Match")).clicked() {
+                menu::separator(ui, theme);
+                if menu::item(ui, theme, Some(Icon::Target), "Turn to Match", None, match_deg.abs() > 1e-3) {
                     waiting_turn = Some((piece, match_deg));
-                    ui.close();
                 }
             });
         }
@@ -654,16 +661,29 @@ impl ViewportWidget {
                 double_click = true;
             }
         }
-        let gesture = ui.input(|i| Gesture {
-            primary_drag,
-            secondary_or_middle_drag,
-            scroll: if hovered { i.smooth_scroll_delta() } else { Vec2::ZERO },
-            pinch: if hovered { i.zoom_delta() - 1.0 } else { 0.0 },
-            click: click_at.map(|p| (p, i.modifiers)),
-            double_click,
-            origin: hover_pos.map(local).unwrap_or(rect.size().to_pos2() / 2.0),
-            modifiers,
-            mode: self.nav_mode.unwrap_or(self.mode),
+        let gesture = ui.input(|i| {
+            let click_mods = i
+                .events
+                .iter()
+                .rev()
+                .find_map(|ev| match ev {
+                    egui::Event::PointerButton { button: egui::PointerButton::Primary, pressed: false, modifiers, .. } => {
+                        Some(*modifiers)
+                    }
+                    _ => None,
+                })
+                .unwrap_or(i.modifiers);
+            Gesture {
+                primary_drag,
+                secondary_or_middle_drag,
+                scroll: if hovered { i.smooth_scroll_delta() } else { Vec2::ZERO },
+                pinch: if hovered { i.zoom_delta() - 1.0 } else { 0.0 },
+                click: click_at.map(|p| (p, click_mods)),
+                double_click,
+                origin: hover_pos.map(local).unwrap_or(rect.size().to_pos2() / 2.0),
+                modifiers,
+                mode: self.nav_mode.unwrap_or(self.mode),
+            }
         });
         let mut ops = std::mem::take(&mut self.queued);
         ops.extend(ops_for(&gesture));
@@ -680,13 +700,16 @@ impl ViewportWidget {
                     ViewOp::Fit => vp.fit_all(),
                     ViewOp::FrameSelection => vp.frame_selection(),
                     ViewOp::Preset(p) => vp.view(p),
-                    ViewOp::Pick(x, y, mode) => picks.push((vp.pick(x, y), mode)),
+                    ViewOp::Pick(x, y, mode, alt) => picks.push((vp.pick(x, y), mode, alt)),
                 }
             }
         }
-        for (hit, mode) in picks {
+        for (hit, mode, alt) in picks {
             match hit {
-                Some(p) => doc.session().select(&[p], mode),
+                Some(p) => {
+                    let targets = pick_targets(doc.session(), p, edit.pick_scope, alt);
+                    doc.session().select(&targets, mode);
+                }
                 // A plain click on empty space clears the selection.
                 None if mode == bm::SelectMode::Replace => doc.session().select(&[], mode),
                 None => {}
@@ -799,9 +822,10 @@ mod tests {
     fn click_picks_with_modifiers() {
         let at = Pos2::new(7.0, 8.0);
         let c = |m| Gesture { click: Some((at, m)), ..g() };
-        assert_eq!(ops_for(&c(Modifiers::NONE)), vec![ViewOp::Pick(7.0, 8.0, bm::SelectMode::Replace)]);
-        assert_eq!(ops_for(&c(Modifiers::SHIFT)), vec![ViewOp::Pick(7.0, 8.0, bm::SelectMode::Add)]);
-        assert_eq!(ops_for(&c(Modifiers::MAC_CMD)), vec![ViewOp::Pick(7.0, 8.0, bm::SelectMode::Toggle)]);
+        assert_eq!(ops_for(&c(Modifiers::NONE)), vec![ViewOp::Pick(7.0, 8.0, bm::SelectMode::Replace, false)]);
+        assert_eq!(ops_for(&c(Modifiers::SHIFT)), vec![ViewOp::Pick(7.0, 8.0, bm::SelectMode::Add, false)]);
+        assert_eq!(ops_for(&c(Modifiers::MAC_CMD)), vec![ViewOp::Pick(7.0, 8.0, bm::SelectMode::Toggle, false)]);
+        assert_eq!(ops_for(&c(Modifiers::ALT)), vec![ViewOp::Pick(7.0, 8.0, bm::SelectMode::Replace, true)]);
     }
 
     #[test]
@@ -825,6 +849,19 @@ mod tests {
         assert_eq!(target_size(Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0)), 2.0), Some((800, 600, 2.0)));
         assert_eq!(target_size(Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0)), 1.0), Some((400, 300, 1.0)));
     }
+}
+
+/// Expands a clicked piece to its whole submodel instance when picking submodels in a parent model,
+/// or keeps the single piece when inside the submodel itself or when holding ⌥ Option (web parity).
+fn pick_targets(session: &bm::Session, piece: u32, scope: PickScope, alt_override: bool) -> Vec<u32> {
+    let whole_submodel = (scope == PickScope::Submodels) ^ alt_override;
+    if whole_submodel {
+        let group = session.use_pieces(piece);
+        if !group.is_empty() {
+            return group;
+        }
+    }
+    vec![piece]
 }
 
 /// What the viewport says when the document has no viewport.

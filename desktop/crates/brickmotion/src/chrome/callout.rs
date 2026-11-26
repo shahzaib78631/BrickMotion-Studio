@@ -99,19 +99,18 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
                         let mode_active = current_mode.is_some();
                         let mode_btn = dropdown_button(ui, &t, mode_label, "Step Appearance", mode_active);
                         egui::Popup::from_toggle_button_response(&mode_btn).gap(6.0).show(|ui| {
-                            ui.set_min_width(210.0);
+                            use super::menu;
+                            menu::prepare_width(ui, 232.0);
                             for &(mode, _, menu_label, cmd) in APPEARANCES {
                                 let selected = current_mode == Some(mode);
-                                if ui.selectable_label(selected, menu_label).clicked() {
+                                if menu::item_check(ui, &t, menu_label, selected, true) {
                                     action = Some(CalloutAction::Command(cmd));
-                                    ui.close();
                                 }
                             }
-                            ui.separator();
+                            menu::separator(ui, &t);
                             let all_on = current_mode.is_none() && app.transport.state.at_rest;
-                            if ui.selectable_label(all_on, "Show All Steps").clicked() {
+                            if menu::item_check(ui, &t, "Show All Steps", all_on, true) {
                                 action = Some(CalloutAction::Command("step.show_all"));
-                                ui.close();
                             }
                         });
 

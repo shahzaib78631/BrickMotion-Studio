@@ -79,13 +79,8 @@ pub fn project_axes(cam: &bm::Camera, center: Pos2, radius: f32) -> [AxisEnd; 6]
 
 pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
     let t = app.theme;
-    let settings_open = app.properties_page.is_settings();
-    let right_margin = if settings_open {
-        super::properties::SETTINGS_WIDTH + 24.0
-    } else {
-        14.0
-    };
-    let origin = pos2(area.right() - right_margin - SIZE, area.top() + 10.0);
+    // Keep the Axis Navigator fixed in the top-right corner regardless of which panel is open.
+    let origin = pos2(area.right() - 14.0 - SIZE, area.top() + 10.0);
     let cam = app.doc.viewport().map(|vp| vp.camera()).unwrap_or(bm::Camera {
         yaw: 0.6,
         pitch: 0.45,

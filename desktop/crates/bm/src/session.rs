@@ -626,6 +626,18 @@ impl Session {
     pub fn set_snap_mix(&self, mix: &crate::settings::SnapMix) -> Changed {
         take_change(unsafe { sys::bm_session_set_snap_mix(self.raw, mix.to_raw()) })
     }
+
+    /// Every piece in the top-level submodel instance containing `piece` (relative to the currently
+    /// focused model), or `[piece]` if `piece` is a direct part of the focused model.
+    pub fn use_pieces(&self, piece: u32) -> Vec<u32> {
+        let n = unsafe { sys::bm_session_use_pieces(self.raw, piece, std::ptr::null_mut(), 0) };
+        let mut out = vec![0u32; n];
+        if n > 0 {
+            let got = unsafe { sys::bm_session_use_pieces(self.raw, piece, out.as_mut_ptr(), out.len()) };
+            out.truncate(got.min(n));
+        }
+        out
+    }
 }
 
 impl Drop for Session {

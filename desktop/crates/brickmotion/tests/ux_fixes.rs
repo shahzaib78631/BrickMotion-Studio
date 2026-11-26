@@ -328,9 +328,10 @@ fn animate_waiting_piece_click_selects_instead_of_swallowing() {
             let ly = vp_rect.height() * (gy as f32 / 12.0);
             let hit = h.state_mut().doc.viewport().unwrap().pick(lx as f64, ly as f64);
             if let Some(piece) = hit {
+                let want = h.state().session().use_pieces(piece);
                 let scr = pos2(vp_rect.left() + lx, vp_rect.top() + ly);
                 click_at(&mut h, scr);
-                assert_eq!(h.state().session().selection(), vec![piece], "clicking waiting piece should select it");
+                assert_eq!(h.state().session().selection(), want, "clicking waiting piece should select it");
                 picked = true;
                 break 'scan;
             }
@@ -338,6 +339,128 @@ fn animate_waiting_piece_click_selects_instead_of_swallowing() {
     }
     assert!(picked, "expected to find at least one visible piece on the floor at t=0");
 }
+
+#[test]
+fn submodel_selected_as_whole_in_main_and_by_piece_inside_or_with_alt() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = build_heli();
+    // Pieces 0..32 form `helicopter - underside` submodel in the main model.
+    let sub_group = h.state().session().use_pieces(0);
+    assert!(sub_group.len() > 1, "submodel piece 0 should expand to its whole submodel in main model");
+
+    // Frame the submodel in Bottom View so its bricks sit right at the viewport centre, then clear selection.
+    h.state_mut().doc.session().select(&sub_group, bm::SelectMode::Replace);
+    run(h.state_mut(), "view.frame_selection");
+    h.run_steps(4);
+    h.get_by_label("Bottom View").click();
+    h.run_steps(4);
+    h.state_mut().doc.session().select(&[], bm::SelectMode::Replace);
+    h.run_steps(2);
+    let vp_rect = h.state().viewport.last_rect().expect("viewport rect");
+    let mut sub_hit: Option<(Pos2, u32)> = None;
+    'find_sub: for gy in 3..=17 {
+        for gx in 3..=17 {
+            let lx = vp_rect.width() * (gx as f32 / 20.0);
+            let ly = vp_rect.height() * (gy as f32 / 20.0);
+            if let Some(p) = h.state_mut().doc.viewport().unwrap().pick(lx as f64, ly as f64)
+                && h.state().session().use_pieces(p).len() > 1
+            {
+                sub_hit = Some((pos2(vp_rect.left() + lx, vp_rect.top() + ly), p));
+                break 'find_sub;
+            }
+        }
+    }
+    let (pos, piece) = sub_hit.expect("expected to pick a framed submodel piece");
+    let whole = h.state().session().use_pieces(piece);
+    assert!(whole.len() > 1);
+
+    // 1. Plain click in main model selects the whole submodel.
+    click_at(&mut h, pos);
+    assert_eq!(h.state().session().selection(), whole, "plain click should select the entire submodel");
+
+    // 2. Option/Alt-click in main model selects the individual piece inside the submodel.
+    h.event(Event::PointerMoved(pos));
+    h.step();
+    h.event(Event::PointerButton { pos, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::ALT });
+    h.step();
+    h.event(Event::PointerButton { pos, button: PointerButton::Primary, pressed: false, modifiers: Modifiers::ALT });
+    h.run_steps(2);
+    assert_eq!(h.state().session().selection(), vec![piece], "Option/Alt-click should select single piece");
+
+    // 3. Inside the submodel itself, plain click selects individual pieces.
+    let rows = h.state().session().outline();
+    let sub = rows.iter().find(|r| !r.def.is_empty()).expect("submodel");
+    h.state_mut().focus_submodel(std::slice::from_ref(&sub.def));
+    h.run_steps(4);
+    assert_eq!(h.state().session().use_pieces(0), vec![0], "inside submodel, use_pieces returns single piece");
+}
+
+#[test]
+fn axis_navigator_stays_fixed_when_build_settings_opens() {
+    let mut h = build_heli();
+    let nav_before = h.get_by_label("Axis Navigator").rect();
+    run(h.state_mut(), "model.build_settings");
+    h.run_steps(3);
+    let nav_after = h.get_by_label("Axis Navigator").rect();
+    assert!(
+        (nav_before.left() - nav_after.left()).abs() < 1.0 && (nav_before.top() - nav_after.top()).abs() < 1.0,
+        "Axis Navigator must not jump when Build Settings opens: before={nav_before:?}, after={nav_after:?}"
+    );
+    // Unified panel header is used on Build Settings too (Move + Back + Collapse + Close).
+    assert!(h.query_by_label("Move Build Settings").is_some());
+    assert!(h.query_by_label("Back to Properties").is_some());
+    assert!(h.query_by_label("Collapse Properties").is_some());
+}
+
+#[test]
+fn browser_find_button_toggles_filter_bar() {
+    let mut h = build_heli();
+    assert!(h.state().browser.show_filter);
+    assert!(h.query_by_label("Filter models and parts").is_some());
+    // Clicking magnifying glass hides the filter bar visibly.
+    h.get_by_label("Find in Browser").click();
+    h.run_steps(3);
+    assert!(!h.state().browser.show_filter);
+    assert!(h.query_by_label("Filter models and parts").is_none());
+    // Clicking again re-opens and focuses it.
+    h.get_by_label("Find in Browser").click();
+    h.run_steps(3);
+    assert!(h.state().browser.show_filter);
+    assert!(h.query_by_label("Filter models and parts").is_some());
+}
+
+#[test]
+fn duplicate_mix_command_removed_from_audio_ribbon() {
+    let mut h = build_heli();
+    h.state_mut().set_workspace(Workspace::Animate);
+    h.run_steps(3);
+    assert!(h.query_by_label("Mix").is_none());
+    h.get_by_label("Sound").click();
+    h.run_steps(3);
+    assert!(h.query_by_label("Snap Sound").is_some());
+    assert!(h.query_by_label("Mix").is_none());
+}
+
+#[test]
+fn parts_lane_shows_labeled_pills_when_spaced_out() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = animate_heli();
+    let dur = h.state().transport.duration();
+    let step1_start = h.state().transport.lanes.as_ref().unwrap().runs[1].start;
+    // Moderate zoom (~12x) where consecutive parts have generous room (~55px pitch).
+    h.state_mut().timeline.view.zoom_by(12.0, step1_start, dur);
+    h.state_mut().timeline.view.reveal(step1_start, dur, true);
+    h.run_steps(3);
+    assert!(
+        h.state().timeline.parts_lane.zoomed_in,
+        "parts lane should switch to labeled pills when parts have ample spacing"
+    );
+}
+
 
 /// In Animate the view bar sits just above the timeline card and the selection chip stays clear
 /// of the Browser panel.
@@ -356,4 +479,39 @@ fn animate_view_bar_and_chip_sit_above_the_timeline() {
     assert!(bar.bottom() > timeline_top - 80.0, "view bar floats too high: {bar:?}");
     assert!(bar.bottom() < snaps.top(), "view bar overlaps the timeline: {bar:?}");
     assert!(!chip.intersects(models), "selection chip covers the Browser tabs: {chip:?}");
+}
+
+/// Every ribbon tab has at least one tool: none says "Nothing on this tab yet".
+#[test]
+fn every_ribbon_tab_has_tools() {
+    for w in [Workspace::Build, Workspace::Animate] {
+        for &tab in brickmotion::commands::tabs(w) {
+            let n = brickmotion::commands::registry().iter().filter(|c| c.workspace == w && c.tab == tab).count();
+            assert!(n > 0, "{w:?} › {tab} has no tools");
+        }
+    }
+    let mut h = build_heli();
+    for tab in ["Parts", "Steps", "View"] {
+        h.state_mut().ribbon_tab = tab;
+        h.run_steps(2);
+        assert!(h.query_by_label("Nothing on this tab yet").is_none(), "{tab} is empty");
+    }
+}
+
+/// View › Top turns the camera to the top preset; Orthographic toggles the projection.
+#[test]
+fn view_presets_and_orthographic_run() {
+    let mut h = build_heli();
+    assert!(run(h.state_mut(), "view.top"));
+    h.run_steps(2);
+    let cam = h.state_mut().doc.viewport().unwrap().camera();
+    assert!(cam.pitch.abs() > 1.4, "not looking down: pitch {}", cam.pitch);
+    assert!(!cam.orthographic);
+    assert!(run(h.state_mut(), "view.orthographic"));
+    h.run_steps(2);
+    assert!(h.state_mut().doc.viewport().unwrap().camera().orthographic);
+    assert_eq!(brickmotion::commands::title(brickmotion::commands::find("view.orthographic").unwrap(), &h.state().ctx()), "Orthographic");
+    assert!(run(h.state_mut(), "view.orthographic"));
+    h.run_steps(2);
+    assert!(!h.state_mut().doc.viewport().unwrap().camera().orthographic);
 }

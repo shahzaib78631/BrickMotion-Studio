@@ -331,4 +331,13 @@ BmString bm_session_focus_path(const BmSession* s) {
   });
 }
 
+size_t bm_session_use_pieces(const BmSession* s, uint32_t piece, uint32_t* out, size_t cap) {
+  if (!s) return 0;
+  return guard<size_t>(0, [&] {
+    const std::vector<uint32_t> p = s->s->usePieces(piece);
+    for (size_t i = 0; i < p.size() && i < cap && out; ++i) out[i] = p[i];
+    return p.size();
+  });
+}
+
 }  // extern "C"

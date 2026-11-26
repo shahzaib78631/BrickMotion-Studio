@@ -95,14 +95,21 @@ pub fn apply(ctx: &Context, t: &Theme) {
         .into();
         s.spacing.item_spacing = egui::vec2(t.grid, t.grid / 2.0);
         s.spacing.button_padding = egui::vec2(t.grid, 4.0);
+        s.spacing.menu_margin = egui::Margin::same(6);
         s.spacing.interact_size.y = 28.0;
         let v = &mut s.visuals;
         v.dark_mode = true;
         v.panel_fill = t.bg1;
-        v.window_fill = t.bg2;
-        v.window_stroke = Stroke::new(1.0, t.border2);
+        v.window_fill = Color32::from_rgba_unmultiplied(0x21, 0x23, 0x28, 252);
+        v.window_stroke = Stroke::new(1.0, Color32::from_rgb(0x3a, 0x3e, 0x47));
         v.window_corner_radius = CornerRadius::same(10);
-        v.menu_corner_radius = CornerRadius::same(9);
+        v.menu_corner_radius = CornerRadius::same(10);
+        v.popup_shadow = egui::Shadow {
+            offset: [0, 8],
+            blur: 24,
+            spread: 0,
+            color: Color32::from_black_alpha(120),
+        };
         v.extreme_bg_color = t.bg1;
         v.faint_bg_color = t.bg2;
         v.code_bg_color = t.bg2;

@@ -12,9 +12,21 @@ pub enum Tool {
 }
 
 /// Editing state owned by the app and lent to the viewport and chrome each frame.
+/// What a plain viewport click selects when a piece sits inside a submodel.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum PickScope {
+    /// Select the whole submodel instance in the focused model (individual pieces once inside
+    /// that submodel, or when holding ⌥ Option). Matches web behaviour.
+    #[default]
+    Submodels,
+    /// Always select the individual brick under the pointer (hold ⌥ Option for its submodel).
+    Pieces,
+}
+
 #[derive(Debug)]
 pub struct EditState {
     pub tool: Tool,
+    pub pick_scope: PickScope,
     pub local_axes: bool,
     pub collision: bool,
     /// Smart Joints: engage articulated joint rotation rings & limits when a jointed piece is selected.
@@ -33,6 +45,7 @@ impl Default for EditState {
     fn default() -> Self {
         Self {
             tool: Tool::Select,
+            pick_scope: PickScope::Submodels,
             local_axes: false,
             collision: true,
             smart_joints: false,

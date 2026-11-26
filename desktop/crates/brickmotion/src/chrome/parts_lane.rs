@@ -22,7 +22,7 @@ const DOT_LANE_H: f32 = 32.0;
 const CLIP_H: f32 = 20.0;
 const ROW_PITCH: f32 = 23.0;
 const LANE_INSET: f32 = 5.0;
-const MIN_CLIP_W: f32 = 52.0;
+const MIN_CLIP_W: f32 = 40.0;
 const MAX_CLIP_W: f32 = 124.0;
 
 #[derive(Clone, Debug)]
@@ -104,21 +104,35 @@ impl PartsLane {
         let lw = view.logical_width().max(1.0);
         let px_per_sec = lw / dur;
 
-        // Check typical flight pixel width to choose zoomed-out dots vs zoomed-in soft clips.
+        // Check both typical flight duration width AND consecutive seat spacing so labeled
+        // part pills appear as soon as there is clean room to show part names (not only at extreme zoom).
         let sample_n = timeline.flights.len().min(64);
-        let avg_dur = if let Some(step) = timeline.flights.len().checked_div(sample_n) {
+        let (avg_dur, avg_pitch) = if let Some(step) = timeline.flights.len().checked_div(sample_n) {
             let step = step.max(1);
-            let mut sum = 0.0;
-            let mut cnt = 0usize;
-            for f in timeline.flights.iter().step_by(step).take(sample_n) {
-                sum += (f.end - f.start).max(0.0);
-                cnt += 1;
+            let mut sum_dur = 0.0;
+            let mut cnt_dur = 0usize;
+            let mut sum_pitch = 0.0;
+            let mut cnt_pitch = 0usize;
+            for idx in (0..timeline.flights.len()).step_by(step).take(sample_n) {
+                let f = &timeline.flights[idx];
+                sum_dur += (f.end - f.start).max(0.0);
+                cnt_dur += 1;
+                if let Some(next) = timeline.flights.get(idx + 1) {
+                    let gap = (next.end - f.end).abs();
+                    if gap > 1e-4 {
+                        sum_pitch += gap;
+                        cnt_pitch += 1;
+                    }
+                }
             }
-            if cnt > 0 { sum / cnt as f64 } else { 0.0 }
+            (
+                if cnt_dur > 0 { sum_dur / cnt_dur as f64 } else { 0.0 },
+                if cnt_pitch > 0 { sum_pitch / cnt_pitch as f64 } else { 0.0 },
+            )
         } else {
-            0.0
+            (0.0, 0.0)
         };
-        let zoomed_in = avg_dur * px_per_sec >= MIN_CLIP_W as f64;
+        let zoomed_in = avg_dur * px_per_sec >= 32.0 || avg_pitch * px_per_sec >= 44.0;
 
         let mut clips: Vec<Clip> = Vec::with_capacity(timeline.flights.len());
         for (idx, f) in timeline.flights.iter().enumerate() {
@@ -127,7 +141,7 @@ impl PartsLane {
             let seat_x = (f.end * px_per_sec) as f32;
             let dur_w = ((f.end - f.start).max(0.0) * px_per_sec) as f32;
             let pin_extra = if pins.contains(&f.piece) { 12.0 } else { 0.0 };
-            let text_w = (label.len() as f32 * 6.2 + 24.0 + pin_extra).clamp(MIN_CLIP_W, MAX_CLIP_W);
+            let text_w = (label.len() as f32 * 6.4 + 18.0 + pin_extra).clamp(MIN_CLIP_W, MAX_CLIP_W);
             let width = dur_w.sub_clamped(3.0).max(text_w);
             let max_x = (lw as f32 - width).max(0.0);
             let x = start_x.clamp(0.0, max_x);
@@ -398,8 +412,8 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
                 continue;
             }
             last_plain_px = px;
-            let pill_w = (((clip.end - clip.start).max(0.0) as f32) * px_per_sec).clamp(5.0, 22.0);
-            let pill = Rect::from_center_size(center, vec2(pill_w, 14.0));
+            let pill_w = (((clip.end - clip.start).max(0.0) as f32) * px_per_sec).clamp(6.0, 30.0);
+            let pill = Rect::from_center_size(center, vec2(pill_w, 15.0));
             clip_p.rect_filled(pill, CornerRadius::same(4), clip_tint(color_of(clip.color), false, false));
             clip_p.rect_stroke(pill, CornerRadius::same(4), Stroke::new(0.8, Color32::from_rgba_unmultiplied(23, 24, 27, 190)), StrokeKind::Inside);
         }
@@ -491,9 +505,12 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
         }
     }
 
-    // Rich hover card anchored cleanly ABOVE the Parts lane so it never overlaps or blocks dragging.
+    // Rich hover card anchored cleanly ABOVE the Parts lane with a downward caret pointing at
+    // the hovered clip. Hidden immediately while pressing, dragging, or while any context menu is open.
+    let any_popup_open = egui::Popup::is_any_open(ui.ctx()) || app.timeline.parts_lane.menu_piece.is_some();
     if let Some((clip_idx, clip_rect)) = hovered_clip
         && !primary_down
+        && !any_popup_open
         && app.timeline.drag.is_none()
         && egui::DragAndDrop::payload::<LibraryDrag>(ui.ctx()).is_none()
     {
@@ -501,21 +518,30 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
         let part_name = clip.part_name(&timeline).to_owned();
         let total_steps = app.steps.len().max(1);
         let sw = color_of(clip.color);
-        let card_x = clip_rect.left().clamp(r.left() + 4.0, (r.right() - 228.0).max(r.left() + 4.0));
-        let card_bottom = (r.top() - 8.0).max(160.0);
-        egui::Area::new(egui::Id::unique("tl-part-hover-card"))
+        let card_w = 240.0;
+        let card_x = (clip_rect.center().x - card_w * 0.5).clamp(r.left() + 4.0, (r.right() - card_w - 4.0).max(r.left() + 4.0));
+        let card_bottom = (r.top() - 10.0).max(160.0);
+        let card_fill = Color32::from_rgba_unmultiplied(36, 38, 43, 252);
+        let card_stroke = Color32::from_rgba_unmultiplied(255, 255, 255, 32);
+        let area_resp = egui::Area::new(egui::Id::unique("tl-part-hover-card"))
             .order(egui::Order::Tooltip)
             .interactable(false)
             .pivot(Align2::LEFT_BOTTOM)
             .fixed_pos(pos2(card_x, card_bottom))
             .show(ui.ctx(), |ui| {
                 Frame::NONE
-                    .fill(Color32::from_rgba_unmultiplied(40, 42, 47, 250))
-                    .stroke(Stroke::new(0.5, Color32::from_rgba_unmultiplied(255, 255, 255, 26)))
+                    .fill(card_fill)
+                    .stroke(Stroke::new(0.75, card_stroke))
                     .corner_radius(CornerRadius::same(9))
                     .inner_margin(Margin::symmetric(12, 10))
+                    .shadow(egui::Shadow {
+                        offset: [0, 8],
+                        blur: 20,
+                        spread: 0,
+                        color: Color32::from_black_alpha(110),
+                    })
                     .show(ui, |ui| {
-                        ui.set_width(216.0);
+                        ui.set_width(card_w - 24.0);
                         ui.spacing_mut().item_spacing.y = 3.0;
                         ui.horizontal(|ui| {
                             let (dr, _) = ui.allocate_exact_size(vec2(9.0, 14.0), Sense::hover());
@@ -565,6 +591,17 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
                         );
                     });
             });
+        // Crisp downward caret tail pointing directly at the hovered pill.
+        let cr = area_resp.response.rect;
+        let tip_x = clip_rect.center().x.clamp(cr.left() + 14.0, cr.right() - 14.0);
+        let base_y = cr.bottom() - 0.5;
+        let tip = pos2(tip_x, base_y + 6.5);
+        let left_pt = pos2(tip_x - 6.0, base_y);
+        let right_pt = pos2(tip_x + 6.0, base_y);
+        let tp = ui.ctx().layer_painter(area_resp.response.layer_id);
+        tp.add(egui::Shape::convex_polygon(vec![left_pt, right_pt, tip], card_fill, Stroke::NONE));
+        tp.line_segment([left_pt, tip], Stroke::new(0.75, card_stroke));
+        tp.line_segment([tip, right_pt], Stroke::new(0.75, card_stroke));
     }
 
     // Apply click / double-click / context menu actions.
@@ -688,7 +725,10 @@ fn part_context_menu(
     let step_idx = usize::try_from(clip.step).ok();
 
     // Built only while the menu is open: this runs for every visible clip each frame.
+    let t = app.theme;
     resp.context_menu(|ui| {
+        use super::menu;
+        menu::prepare_width(ui, 240.0);
         let ids: Vec<u32> = if sel.contains(&clip.piece) {
             sel.to_vec()
         } else {
@@ -709,52 +749,44 @@ fn part_context_menu(
         } else {
             format!("{} Parts", ids.len())
         };
-        ui.label(RichText::new(header).strong().size(11.5).color(app.theme.text2));
-        if let Some(s) = step_idx {
-            let sub = if single && let Some(i) = item_index {
-                format!("Step {} · Arrival {} of {}", s + 1, i + 1, items.len())
+        let sub = step_idx.and_then(|s| {
+            if single && let Some(i) = item_index {
+                Some(format!("Step {} · Arrival {} of {}", s + 1, i + 1, items.len()))
             } else if same_step {
-                format!("Step {}", s + 1)
+                Some(format!("Step {}", s + 1))
             } else {
-                String::new()
-            };
-            if !sub.is_empty() {
-                ui.label(RichText::new(sub).size(11.0).color(app.theme.text3));
+                None
             }
-        }
-        ui.separator();
+        });
+        menu::header(ui, &t, &header, sub.as_deref());
+        menu::separator(ui, &t);
 
-        if ui.button("Frame in View").clicked() {
+        if menu::item(ui, &t, Some(Icon::LookAt), "Frame in View", None, true) {
             *out = Some(PartMenuAction::Frame { pieces: ids.clone(), end: clip.end });
-            ui.close();
         }
-        if ui.button("Motion…").clicked() {
+        if menu::item(ui, &t, Some(Icon::Fly), "Motion…", None, true) {
             *out = Some(PartMenuAction::Motion { pieces: ids.clone(), step: step_idx.unwrap_or(0) });
-            ui.close();
         }
         if single {
-            ui.separator();
-            ui.label(RichText::new("Flight").size(11.0).color(app.theme.text3));
-            if ui.button("Edit Flight as Keys").clicked() {
+            menu::separator(ui, &t);
+            menu::section(ui, &t, "Flight");
+            if menu::item(ui, &t, Some(Icon::Keys), "Edit Flight as Keys", None, true) {
                 *out = Some(PartMenuAction::EditFlight { piece: clip.piece, start: clip.start });
-                ui.close();
             }
             if session.has_editable_flight_keys(clip.piece) {
                 // Only a part of this model (not inside a submodel) can take a route back to Build.
-                if item_index.is_some() && ui.button("Use Edited Flight in Build").clicked() {
+                if item_index.is_some() && menu::item(ui, &t, Some(Icon::Plan), "Use Edited Flight in Build", None, true) {
                     *out = Some(PartMenuAction::UseEditedFlight { piece: clip.piece });
-                    ui.close();
                 }
-                if ui.button("Return Flight to Planner").clicked() {
+                if menu::item(ui, &t, Some(Icon::Undo), "Return Flight to Planner", None, true) {
                     *out = Some(PartMenuAction::ReturnFlight { piece: clip.piece });
-                    ui.close();
                 }
             }
         }
 
         if let (Some(step), Some(index)) = (step_idx, item_index) {
-            ui.separator();
-            ui.label(RichText::new("Order").size(11.0).color(app.theme.text3));
+            menu::separator(ui, &t);
+            menu::section(ui, &t, "Order");
             let pinned = if single {
                 clip_pinned
             } else {
@@ -767,13 +799,12 @@ fn part_context_menu(
             } else {
                 "Pin Selected Arrivals"
             };
-            if ui.button(pin_label).clicked() {
+            if menu::item(ui, &t, Some(Icon::Pin), pin_label, None, true) {
                 *out = Some(PartMenuAction::SetPinned { pieces: ids.clone(), pinned: !pinned });
-                ui.close();
             }
 
             if step_count > 1 {
-                ui.menu_button("Move to Step", |ui| {
+                menu::submenu(ui, &t, Some(Icon::Step), "Move to Step", |ui| {
                     for s in 0..step_count {
                         let title = app
                             .steps
@@ -787,74 +818,66 @@ fn part_context_menu(
                             })
                             .unwrap_or_else(|| format!("Step {}", s + 1));
                         let en = s != step || !same_step;
-                        if ui.add_enabled(en, egui::Button::new(title)).clicked() {
+                        if menu::item(ui, &t, None, &title, None, en) {
                             *out = Some(PartMenuAction::MoveToStep { pieces: ids.clone(), step: s });
-                            ui.close();
                         }
                     }
                 });
             }
 
-            ui.menu_button("Move to a New Step", |ui| {
+            menu::submenu(ui, &t, Some(Icon::Plus), "Move to a New Step", |ui| {
                 for (label, dest) in [
                     (format!("Before Step {}", step + 1), step),
                     (format!("After Step {}", step + 1), step + 1),
                 ] {
-                    if ui.button(label).clicked() {
+                    if menu::item(ui, &t, None, &label, None, true) {
                         *out = Some(PartMenuAction::MoveToNewStep { pieces: ids.clone(), index: dest });
-                        ui.close();
                     }
                 }
-                ui.separator();
+                menu::separator(ui, &t);
                 for (label, dest) in [("At the Start", 0), ("At the End", step_count)] {
-                    if ui.button(label).clicked() {
+                    if menu::item(ui, &t, None, label, None, true) {
                         *out = Some(PartMenuAction::MoveToNewStep { pieces: ids.clone(), index: dest });
-                        ui.close();
                     }
                 }
             });
 
             if single {
+                menu::separator(ui, &t);
                 let can_split = index > 0;
-                if ui.add_enabled(can_split, egui::Button::new("Split Step at This Part")).clicked() {
+                if menu::item(ui, &t, Some(Icon::Razor), "Split Step at This Part", None, can_split) {
                     let suffix: Vec<u32> = items[index..].iter().flat_map(|it| it.pieces.iter().copied()).collect();
                     *out = Some(PartMenuAction::SplitAtItem { step, pieces: suffix });
-                    ui.close();
                 }
                 let last = items.len().saturating_sub(1);
-                for (label, dest) in [
-                    ("Arrive Earlier", index.saturating_sub(1)),
-                    ("Arrive Later", (index + 1).min(last)),
-                    ("Arrive First", 0),
-                    ("Arrive Last", last),
+                for (ic, label, dest) in [
+                    (Icon::Back, "Arrive Earlier", index.saturating_sub(1)),
+                    (Icon::Chevron, "Arrive Later", (index + 1).min(last)),
+                    (Icon::Prev, "Arrive First", 0),
+                    (Icon::Next, "Arrive Last", last),
                 ] {
                     let en = dest < items.len() && dest != index;
-                    if ui.add_enabled(en, egui::Button::new(label)).clicked() {
+                    if menu::item(ui, &t, Some(ic), label, None, en) {
                         *out = Some(PartMenuAction::ReorderArrival { step, from: index, to: dest });
-                        ui.close();
                     }
                 }
             } else {
+                menu::separator(ui, &t);
                 let can_split = !same_step || ids.len() < own_step.len();
-                if ui
-                    .add_enabled(can_split, egui::Button::new("Split Selected Parts into New Step"))
-                    .clicked()
-                {
+                if menu::item(ui, &t, Some(Icon::Razor), "Split Selected Parts into New Step", None, can_split) {
                     *out = Some(PartMenuAction::SplitSelected { step, pieces: ids.clone(), same_step });
-                    ui.close();
                 }
             }
         }
 
-        ui.separator();
+        menu::separator(ui, &t);
         let del_label = if single {
             "Delete Part".to_owned()
         } else {
             format!("Delete {} Parts", ids.len())
         };
-        if ui.button(del_label).clicked() {
+        if menu::item_destructive(ui, &t, Some(Icon::Close), &del_label, true) {
             *out = Some(PartMenuAction::Delete { pieces: ids });
-            ui.close();
         }
     })
     .is_some()

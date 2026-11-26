@@ -103,38 +103,60 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
                             app.requested.push("view.home");
                         }
                         sep(ui, &t);
-                        let pieces = popover_button(ui, &t, Some("Pieces"), Icon::Brick, "Pieces", true);
+                        let scope_label = match app.edit.pick_scope {
+                            crate::edit::PickScope::Submodels => "Submodels",
+                            crate::edit::PickScope::Pieces => "Pieces",
+                        };
+                        let pieces = popover_button(ui, &t, Some(scope_label), Icon::Brick, "Click selects", true);
                         egui::Popup::from_toggle_button_response(&pieces).gap(8.0).show(|ui| {
-                            ui.set_min_width(180.0);
-                            ui.label(super::caption("Click selects", &t));
-                            let _ = ui.add(egui::Button::selectable(true, "Pieces"));
-                            for other in ["Submodels", "Whole step", "Connections"] {
-                                ui.add_enabled(false, egui::Button::selectable(false, other)).on_disabled_hover_text("Coming soon");
+                            use super::menu;
+                            use crate::edit::PickScope;
+                            menu::prepare_width(ui, 212.0);
+                            menu::section(ui, &t, "Click selects");
+                            if menu::item_check_note(
+                                ui,
+                                &t,
+                                "Submodels",
+                                (app.edit.pick_scope == PickScope::Pieces).then_some("⌥"),
+                                app.edit.pick_scope == PickScope::Submodels,
+                                true,
+                            ) {
+                                app.edit.pick_scope = PickScope::Submodels;
+                            }
+                            if menu::item_check_note(
+                                ui,
+                                &t,
+                                "Pieces",
+                                (app.edit.pick_scope == PickScope::Submodels).then_some("⌥"),
+                                app.edit.pick_scope == PickScope::Pieces,
+                                true,
+                            ) {
+                                app.edit.pick_scope = PickScope::Pieces;
+                            }
+                            menu::separator(ui, &t);
+                            for other in ["Whole step", "Connections"] {
+                                let _ = menu::item_check_note(ui, &t, other, Some("Soon"), false, false);
                             }
                         });
                         let disp = popover_button(ui, &t, None, Icon::Sliders, "Display", true);
                         egui::Popup::from_toggle_button_response(&disp).gap(8.0).show(|ui| {
-                            ui.set_min_width(196.0);
-                            ui.label(super::caption("Viewport & editing", &t));
-                            let mut local = app.edit.local_axes;
-                            if ui.checkbox(&mut local, "Local Axes (L)").changed() {
+                            use super::menu;
+                            menu::prepare_width(ui, 232.0);
+                            menu::section(ui, &t, "Viewport & editing");
+                            if menu::item_toggle(ui, &t, Some(Icon::Target), "Local Axes", Some("L"), app.edit.local_axes, true) {
                                 toggle_local = true;
                             }
-                            let mut coll = app.edit.collision;
-                            if ui.checkbox(&mut coll, "Collision Checks (K)").changed() {
+                            if menu::item_toggle(ui, &t, Some(Icon::Magnet), "Collision Checks", Some("K"), app.edit.collision, true) {
                                 toggle_collision = true;
                             }
-                            let mut smart = app.edit.smart_joints;
-                            if ui.checkbox(&mut smart, "Smart Joints").changed() {
+                            if menu::item_toggle(ui, &t, Some(Icon::Rotate), "Smart Joints", Some("J"), app.edit.smart_joints, true) {
                                 toggle_smart = true;
                             }
-                            let mut markers = app.joints.show;
-                            if ui.checkbox(&mut markers, "Show Joint Markers").changed() {
+                            if menu::item_toggle(ui, &t, Some(Icon::Eye), "Joint Markers", None, app.joints.show, true) {
                                 toggle_joints = true;
                             }
-                            ui.separator();
-                            let mut auto_plan = app.prefs.auto_plan;
-                            if ui.checkbox(&mut auto_plan, "Plan Automatically").changed() {
+                            menu::separator(ui, &t);
+                            if menu::item_toggle(ui, &t, Some(Icon::Plan), "Plan Automatically", None, app.prefs.auto_plan, true) {
                                 toggle_auto_plan = true;
                             }
                         });

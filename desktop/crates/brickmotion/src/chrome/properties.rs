@@ -4,7 +4,8 @@ use std::collections::BTreeMap;
 
 use egui::{Area, CollapsingHeader, Color32, CursorIcon, Frame, Id, Margin, Order, Rect, RichText, Sense, Stroke, Ui, Vec2, pos2, vec2};
 
-use super::{float_frame, icon_button_tip, panel_header};
+use super::float_panel::{HeaderSpec, draw_header};
+use super::{float_frame, menu};
 use crate::BrickMotionApp;
 use crate::icons::{self, Icon};
 
@@ -45,6 +46,21 @@ impl Page {
             Page::BuildSettings => "Build Settings",
             Page::Staging => "Build Staging",
             Page::SnapSound => "Snap Sound",
+        }
+    }
+
+    pub fn icon(self) -> Icon {
+        match self {
+            Page::Inspector | Page::BuildSettings => Icon::Sliders,
+            Page::Staging => Icon::Stage,
+            Page::SnapSound => Icon::Wave,
+        }
+    }
+
+    pub fn subtitle(self) -> &'static str {
+        match self {
+            Page::Inspector => "",
+            Page::BuildSettings | Page::Staging | Page::SnapSound => "Project",
         }
     }
 }
@@ -90,7 +106,8 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
     let max_w = (area.width() - 360.0).clamp(MIN_WIDTH, MAX_WIDTH);
     let default_w = if page.is_settings() { SETTINGS_WIDTH } else { INSPECTOR_WIDTH };
     let width = app.properties.width.unwrap_or(default_w).clamp(MIN_WIDTH, max_w);
-    let top = if page.is_settings() { area.top() + 10.0 } else { area.top() + super::navigator::CLEARANCE };
+    // Always align right-hand panels cleanly below the fixed Axis Navigator.
+    let top = area.top() + super::navigator::CLEARANCE;
     let anchor = pos2(area.right() - 10.0 - width, top);
     let pos = pos2(
         (anchor.x + app.properties.offset.x).clamp(area.left() + 4.0, (area.right() - width - 4.0).max(area.left() + 4.0)),
@@ -110,29 +127,46 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
         .fixed_pos(pos)
         .constrain_to(area)
         .show(ui.ctx(), |ui| {
-            let collapsed = !page.is_settings() && app.properties.collapsed;
-            let mut frame = float_frame(&t);
-            if page.is_settings() {
-                frame = frame.fill(Color32::from_rgba_unmultiplied(0x1c, 0x1d, 0x21, 251));
-            }
-            let frame_resp = frame.show(ui, |ui| {
+            let collapsed = app.properties.collapsed;
+            let frame_resp = float_frame(&t).show(ui, |ui| {
                 ui.set_width(width);
                 ui.set_max_height(max_h);
                 ui.spacing_mut().item_spacing.y = 0.0;
 
+                let fold_label = if collapsed { "Expand Properties" } else { "Collapse Properties" };
+                let (back_lbl, close_lbl) = if page == Page::Inspector {
+                    (None, Some("Hide Properties"))
+                } else {
+                    (Some("Back to Properties"), Some("Close"))
+                };
+                let head = draw_header(
+                    ui,
+                    &t,
+                    width,
+                    &HeaderSpec {
+                        id_salt: if page == Page::Inspector { "properties" } else { page.title() },
+                        icon: page.icon(),
+                        title: page.title(),
+                        subtitle: page.subtitle(),
+                        folded: collapsed,
+                        back_label: back_lbl,
+                        fold_label: Some(fold_label),
+                        close_label: close_lbl,
+                        extra_actions_w: 0.0,
+                    },
+                    |_| {},
+                );
+                moved = head.moved;
+                toggle_collapse = head.toggle_fold;
                 if page == Page::Inspector {
-                    let snap = app.snapshot();
-                    moved = panel_header(ui, &t, "properties", "Properties", !collapsed, |ui| {
-                        if icon_button_tip(ui, &t, Icon::Close, "Hide Properties", "Hide Properties", true, false, 24.0).clicked() {
-                            hide = true;
-                        }
-                        let fold_icon = if collapsed { Icon::Down } else { Icon::Up };
-                        let fold_label = if collapsed { "Expand Properties" } else { "Collapse Properties" };
-                        if icon_button_tip(ui, &t, fold_icon, fold_label, fold_label, true, false, 24.0).clicked() {
-                            toggle_collapse = true;
-                        }
-                    });
-                    if !collapsed {
+                    hide = head.close;
+                } else if head.back || head.close {
+                    go_back = true;
+                }
+
+                if !collapsed {
+                    if page == Page::Inspector {
+                        let snap = app.snapshot();
                         Frame::NONE.inner_margin(Margin::symmetric(14, 10)).show(ui, |ui| {
                             ui.spacing_mut().item_spacing.y = 4.0;
                             match snap.selected {
@@ -141,19 +175,14 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
                                 _ => many(ui, app, &snap),
                             }
                         });
-                    }
-                } else {
-                    let (back, delta) = page_header(ui, &t, page.title());
-                    if back {
-                        go_back = true;
-                    }
-                    moved = delta;
-                    let body_max_h = (max_h - 40.0).max(160.0);
-                    match page {
-                        Page::Inspector => {}
-                        Page::BuildSettings => super::build_settings::show(ui, app, body_max_h),
-                        Page::Staging => super::staging::show(ui, app, body_max_h),
-                        Page::SnapSound => super::sound::show(ui, app, body_max_h),
+                    } else {
+                        let body_max_h = (max_h - super::float_panel::HEADER_H).max(160.0);
+                        match page {
+                            Page::Inspector => {}
+                            Page::BuildSettings => super::build_settings::show(ui, app, body_max_h),
+                            Page::Staging => super::staging::show(ui, app, body_max_h),
+                            Page::SnapSound => super::sound::show(ui, app, body_max_h),
+                        }
                     }
                 }
             });
@@ -192,44 +221,6 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
     if let Some(id) = run {
         app.requested.push(id);
     }
-}
-
-fn page_header(ui: &mut Ui, t: &crate::Theme, title: &str) -> (bool, Vec2) {
-    let mut back = false;
-    let mut moved = Vec2::ZERO;
-    let resp = Frame::NONE
-        .inner_margin(Margin { left: 8, right: 8, top: 0, bottom: 0 })
-        .show(ui, |ui| {
-            ui.set_height(40.0);
-            ui.horizontal_centered(|ui| {
-                if icon_button_tip(ui, t, Icon::Back, "Back to Properties", "Back to Properties", true, false, 26.0)
-                    .clicked()
-                {
-                    back = true;
-                }
-                ui.add_space(2.0);
-                let title_r = ui.label(RichText::new(title).size(13.0).strong().color(t.text1));
-                let drag_r = Rect::from_min_max(
-                    pos2(title_r.rect.left(), ui.max_rect().top()),
-                    pos2((ui.max_rect().right() - 34.0).max(title_r.rect.right() + 8.0), ui.max_rect().bottom()),
-                );
-                let drag = ui.interact(drag_r, ui.scope_id().with("settings-page-drag"), Sense::drag());
-                if drag.dragged() {
-                    moved += drag.drag_delta();
-                }
-                if drag.hovered() || drag.dragged() {
-                    ui.ctx().set_cursor_icon(if drag.dragged() { CursorIcon::Grabbing } else { CursorIcon::Grab });
-                }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if icon_button_tip(ui, t, Icon::Close, "Close", "Return to Properties", true, false, 24.0).clicked() {
-                        back = true;
-                    }
-                });
-            });
-        });
-    let r = resp.response.rect;
-    ui.painter().hline(r.x_range(), r.bottom(), Stroke::new(0.5, Color32::from_white_alpha(18)));
-    (back, moved)
 }
 
 fn section(ui: &mut Ui, title: &str, body: impl FnOnce(&mut Ui)) {
@@ -390,17 +381,18 @@ fn arrives_row(ui: &mut Ui, app: &mut BrickMotionApp, t: &crate::Theme) {
         ui.label(RichText::new("Arrives").color(t.text3));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let r = ui.menu_button(RichText::new(label).color(t.text1), |ui| {
-                if ui.button("Automatic").clicked() {
+                menu::prepare(ui);
+                if menu::item_check(ui, t, "Automatic", label == "Automatic", true) {
                     pick = Some(Some(bm::Vec3::new(0.0, 0.0, 0.0)));
                 }
-                ui.separator();
+                menu::separator(ui, t);
                 for (name, a) in joints::AXES {
-                    if ui.button(name).clicked() {
+                    if menu::item_check(ui, t, name, label == name, true) {
                         pick = Some(Some(bm::Vec3::new(a[0], a[1], a[2])));
                     }
                 }
-                ui.separator();
-                if ui.button("From Current View").clicked() {
+                menu::separator(ui, t);
+                if menu::item(ui, t, Some(Icon::Cam), "From Current View", None, true) {
                     pick = Some(None);
                 }
             });

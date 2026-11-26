@@ -971,6 +971,7 @@ typedef struct {
 BMFFI_API BmChange bm_session_focus(BmSession* s, const char* const* path, size_t n);
 BMFFI_API BmString bm_session_focused(const BmSession* s);
 BMFFI_API BmString bm_session_focus_path(const BmSession* s);
+BMFFI_API size_t bm_session_use_pieces(const BmSession* s, uint32_t piece, uint32_t* out, size_t cap);
 BMFFI_API BmString bm_lanes_submodel_path(const BmLanes* l, size_t i);
 
 BMFFI_API BmJointInfoHandle* bm_inspection_joint_info(BmInspection* i, uint32_t fixed, uint32_t moving, bool collision);

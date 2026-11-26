@@ -2,7 +2,8 @@
 //! Supports dragging by the header grip, collapsing, header actions (Find, More), and resizing.
 use egui::{Area, CursorIcon, Frame, Id, Margin, Order, Rect, RichText, Sense, Stroke, Ui, Vec2, pos2, vec2};
 
-use super::{caption, float_frame, icon_button_tip, panel_header};
+use super::float_panel::{HeaderSpec, draw_header};
+use super::{caption, float_frame, icon_button_tip, menu};
 use crate::BrickMotionApp;
 use crate::icons::{self, Icon};
 
@@ -21,6 +22,8 @@ pub struct BrowserState {
     /// User-resized total height of the Browser panel, or `None` for automatic sizing.
     pub height: Option<f32>,
     pub collapsed: bool,
+    /// Whether the inline filter bar is visible (toggled by the header magnifying glass).
+    pub show_filter: bool,
 }
 
 impl Default for BrowserState {
@@ -30,6 +33,7 @@ impl Default for BrowserState {
             width: DEFAULT_WIDTH,
             height: None,
             collapsed: false,
+            show_filter: true,
         }
     }
 }
@@ -40,6 +44,7 @@ impl BrowserState {
         self.width = DEFAULT_WIDTH;
         self.height = None;
         self.collapsed = false;
+        self.show_filter = true;
     }
 }
 
@@ -66,7 +71,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
 
     let mut moved = Vec2::ZERO;
     let mut toggle_collapse = false;
-    let mut focus_find = false;
+    let mut toggle_find = false;
     let mut expand_all = false;
     let mut collapse_all = false;
     let mut clear_filter = false;
@@ -80,60 +85,68 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
         .constrain_to(area)
         .show(ui.ctx(), |ui| {
             let collapsed = app.browser.collapsed;
+            let show_filter = app.browser.show_filter;
             let frame_resp = float_frame(&t).show(ui, |ui| {
                 ui.set_width(width);
                 ui.spacing_mut().item_spacing.y = 0.0;
-                moved = panel_header(ui, &t, "browser", "Browser", !collapsed, |ui| {
-                    let fold_icon = if collapsed { Icon::Down } else { Icon::Up };
-                    let fold_label = if collapsed { "Expand Browser" } else { "Collapse Browser" };
-                    if icon_button_tip(ui, &t, fold_icon, fold_label, fold_label, true, false, 24.0).clicked() {
-                        toggle_collapse = true;
-                    }
-                    let more_btn = icon_button_tip(ui, &t, Icon::More, "Browser Options", "Browser options", true, false, 24.0);
-                    egui::Popup::from_toggle_button_response(&more_btn).gap(6.0).show(|ui| {
-                        ui.set_min_width(176.0);
-                        match app.browser_tab {
-                            0 => {
-                                if ui.button("Expand All").clicked() {
-                                    expand_all = true;
-                                    ui.close();
+                let fold_label = if collapsed { "Expand Browser" } else { "Collapse Browser" };
+                let head = draw_header(
+                    ui,
+                    &t,
+                    width,
+                    &HeaderSpec {
+                        id_salt: "browser",
+                        icon: Icon::Brick,
+                        title: "Browser",
+                        subtitle: "",
+                        folded: collapsed,
+                        back_label: None,
+                        fold_label: Some(fold_label),
+                        close_label: None,
+                        extra_actions_w: 54.0,
+                    },
+                    |ui| {
+                        let more_btn = icon_button_tip(ui, &t, Icon::More, "Browser Options", "Browser options", true, false, 24.0);
+                        egui::Popup::from_toggle_button_response(&more_btn).gap(6.0).show(|ui| {
+                            menu::prepare(ui);
+                            match app.browser_tab {
+                                0 => {
+                                    if menu::item(ui, &t, Some(Icon::Down), "Expand All", None, true) {
+                                        expand_all = true;
+                                    }
+                                    if menu::item(ui, &t, Some(Icon::Up), "Collapse All", None, true) {
+                                        collapse_all = true;
+                                    }
+                                    menu::separator(ui, &t);
                                 }
-                                if ui.button("Collapse All").clicked() {
-                                    collapse_all = true;
-                                    ui.close();
+                                1 => {
+                                    if menu::item(ui, &t, Some(Icon::Down), "Expand All Steps", None, true) {
+                                        expand_all = true;
+                                    }
+                                    if menu::item(ui, &t, Some(Icon::Up), "Collapse All Steps", None, true) {
+                                        collapse_all = true;
+                                    }
+                                    menu::separator(ui, &t);
                                 }
-                                ui.separator();
+                                _ => {}
                             }
-                            1 => {
-                                if ui.button("Expand All Steps").clicked() {
-                                    expand_all = true;
-                                    ui.close();
-                                }
-                                if ui.button("Collapse All Steps").clicked() {
-                                    collapse_all = true;
-                                    ui.close();
-                                }
-                                ui.separator();
+                            if menu::item(ui, &t, Some(Icon::Close), "Clear Filter", None, !app.filter.is_empty()) {
+                                clear_filter = true;
                             }
-                            _ => {}
+                            menu::separator(ui, &t);
+                            if menu::item(ui, &t, Some(Icon::Home), "Reset Position & Size", None, true) {
+                                reset_layout = true;
+                            }
+                        });
+                        let find_on = show_filter && !collapsed;
+                        let find_tip = if find_on { "Hide filter bar" } else { "Show and focus filter bar" };
+                        if icon_button_tip(ui, &t, Icon::Search, "Find in Browser", find_tip, true, find_on, 24.0).clicked() {
+                            toggle_find = true;
                         }
-                        if ui.add_enabled(!app.filter.is_empty(), egui::Button::new("Clear Filter")).clicked() {
-                            clear_filter = true;
-                            ui.close();
-                        }
-                        ui.separator();
-                        if ui.button("Reset Position & Size").clicked() {
-                            reset_layout = true;
-                            ui.close();
-                        }
-                    });
-                    let filtering = !app.filter.trim().is_empty();
-                    if icon_button_tip(ui, &t, Icon::Search, "Find in Browser", "Filter models, steps and parts", true, filtering, 24.0)
-                        .clicked()
-                    {
-                        focus_find = true;
-                    }
-                });
+                    },
+                );
+                moved = head.moved;
+                toggle_collapse = head.toggle_fold;
 
                 if collapsed {
                     return;
@@ -155,38 +168,48 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
                         }
                     });
                 });
-                Frame::NONE.inner_margin(Margin { left: 8, right: 8, top: 6, bottom: 2 }).show(ui, |ui| {
-                    Frame::NONE
-                        .fill(t.bg1)
-                        .stroke(Stroke::new(1.0, t.border))
-                        .corner_radius(6)
-                        .inner_margin(Margin { left: 9, right: 6, top: 0, bottom: 0 })
-                        .show(ui, |ui| {
-                            ui.set_height(26.0);
-                            ui.horizontal_centered(|ui| {
-                                icons::icon(ui, Icon::Search, 16.0, t.text3);
-                                let had_filter = !app.filter.is_empty();
-                                let field = ui.add(
-                                    egui::TextEdit::singleline(&mut app.filter)
-                                        .hint_text(RichText::new("Filter models and parts").color(t.text3))
-                                        .frame(egui::Frame::NONE)
-                                        .margin(Margin::ZERO)
-                                        .align(egui::Align2::LEFT_CENTER)
-                                        .desired_width((ui.available_width() - if had_filter { 22.0 } else { 4.0 }).max(40.0)),
-                                );
-                                field.widget_info(|| egui::WidgetInfo::labeled(egui::Role::TextInput, true, "Filter models and parts"));
-                                if app.focus_filter {
-                                    field.request_focus();
-                                    app.focus_filter = false;
-                                }
-                                if !app.filter.is_empty()
-                                    && icon_button_tip(ui, &t, Icon::Close, "Clear Filter", "Clear filter", true, false, 18.0).clicked()
-                                {
-                                    clear_filter = true;
-                                }
+                if show_filter {
+                    let filter_id = ui.make_persistent_id("browser-filter-input");
+                    let filter_focused = ui.memory(|m| m.has_focus(filter_id));
+                    Frame::NONE.inner_margin(Margin { left: 8, right: 8, top: 6, bottom: 2 }).show(ui, |ui| {
+                        let stroke = if filter_focused {
+                            Stroke::new(1.5, t.accent)
+                        } else {
+                            Stroke::new(1.0, t.border)
+                        };
+                        Frame::NONE
+                            .fill(t.bg1)
+                            .stroke(stroke)
+                            .corner_radius(6)
+                            .inner_margin(Margin { left: 9, right: 6, top: 0, bottom: 0 })
+                            .show(ui, |ui| {
+                                ui.set_height(26.0);
+                                ui.horizontal_centered(|ui| {
+                                    icons::icon(ui, Icon::Search, 16.0, if filter_focused { t.accent } else { t.text3 });
+                                    let had_filter = !app.filter.is_empty();
+                                    let field = ui.add(
+                                        egui::TextEdit::singleline(&mut app.filter)
+                                            .id(filter_id)
+                                            .hint_text(RichText::new("Filter models and parts").color(t.text3))
+                                            .frame(egui::Frame::NONE)
+                                            .margin(Margin::ZERO)
+                                            .align(egui::Align2::LEFT_CENTER)
+                                            .desired_width((ui.available_width() - if had_filter { 22.0 } else { 4.0 }).max(40.0)),
+                                    );
+                                    field.widget_info(|| egui::WidgetInfo::labeled(egui::Role::TextInput, true, "Filter models and parts"));
+                                    if app.focus_filter {
+                                        field.request_focus();
+                                        app.focus_filter = false;
+                                    }
+                                    if !app.filter.is_empty()
+                                        && icon_button_tip(ui, &t, Icon::Close, "Clear Filter", "Clear filter", true, false, 18.0).clicked()
+                                    {
+                                        clear_filter = true;
+                                    }
+                                });
                             });
-                        });
-                });
+                    });
+                }
                 Frame::NONE.inner_margin(Margin::same(6)).show(ui, |ui| {
                     if let Some(p) = app.opening() {
                         let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
@@ -268,9 +291,18 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
     if toggle_collapse {
         app.browser.collapsed = !app.browser.collapsed;
     }
-    if focus_find {
-        app.browser.collapsed = false;
-        app.focus_filter = true;
+    if toggle_find {
+        if app.browser.collapsed {
+            app.browser.collapsed = false;
+            app.browser.show_filter = true;
+            app.focus_filter = true;
+        } else if app.browser.show_filter {
+            app.browser.show_filter = false;
+            app.filter.clear();
+        } else {
+            app.browser.show_filter = true;
+            app.focus_filter = true;
+        }
     }
     if clear_filter {
         app.filter.clear();

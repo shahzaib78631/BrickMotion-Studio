@@ -651,6 +651,7 @@ impl BrickMotionApp {
             smart_joints: self.edit.smart_joints,
             recording: self.recording(),
             submodels: self.submodel_count(),
+            orthographic: self.doc.camera().is_some_and(|c| c.orthographic),
         }
     }
 
@@ -720,6 +721,18 @@ impl BrickMotionApp {
             }
             "view.fit" | "view.home" => self.viewport.queue(ViewOp::Fit),
             "view.frame_selection" => self.viewport.queue(ViewOp::FrameSelection),
+            "view.front" => self.viewport.queue(ViewOp::Preset(bm::ViewPreset::Front)),
+            "view.back" => self.viewport.queue(ViewOp::Preset(bm::ViewPreset::Back)),
+            "view.left" => self.viewport.queue(ViewOp::Preset(bm::ViewPreset::Left)),
+            "view.right" => self.viewport.queue(ViewOp::Preset(bm::ViewPreset::Right)),
+            "view.top" => self.viewport.queue(ViewOp::Preset(bm::ViewPreset::Top)),
+            "view.bottom" => self.viewport.queue(ViewOp::Preset(bm::ViewPreset::Bottom)),
+            "view.orthographic" => {
+                if let Some(vp) = self.doc.viewport() {
+                    let on = vp.camera().orthographic;
+                    vp.set_orthographic(!on);
+                }
+            }
             "view.palette" => self.palette.show_palette(),
             "tool.select" => {
                 self.edit.tool = crate::edit::Tool::Select;
@@ -1064,7 +1077,7 @@ impl BrickMotionApp {
                 self.edited(c);
                 self.staging.straighten = false;
             }
-            "video.snap_sound" | "video.mix" => {
+            "video.snap_sound" => {
                 self.close_floating_editors();
                 self.properties.hidden = false;
                 self.properties.collapsed = false;

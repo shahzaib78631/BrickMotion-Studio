@@ -18,6 +18,7 @@ pub mod export_still;
 pub mod fits_panel;
 pub mod look_panel;
 pub mod loose_panel;
+pub mod menu;
 pub mod queue_panel;
 pub mod navigator;
 pub mod notices;
@@ -275,45 +276,6 @@ pub fn text(ui: &Ui, pos: egui::Pos2, anchor: Align2, s: &str, size: f32, color:
 /// A small dimmed caption.
 pub fn caption(s: &str, t: &Theme) -> egui::RichText {
     egui::RichText::new(s).size(SMALL).color(t.text3)
-}
-
-/// The panel header: draggable grip + title on the left, then actions on the right.
-/// Returns the drag delta if the user dragged the header to move the panel.
-pub fn panel_header(ui: &mut Ui, t: &Theme, id_salt: &str, title: &str, draw_bottom_line: bool, actions: impl FnOnce(&mut Ui)) -> Vec2 {
-    let mut moved = Vec2::ZERO;
-    let resp = Frame::NONE.inner_margin(Margin { left: 10, right: 8, top: 0, bottom: 0 }).show(ui, |ui| {
-        ui.set_height(38.0);
-        ui.horizontal_centered(|ui| {
-            let grip_start = ui.cursor().min;
-            icons::icon(ui, Icon::Grip, 16.0, t.text3);
-            let title_resp = ui.label(egui::RichText::new(title).strong().color(t.text1));
-            let drag_r = Rect::from_min_max(
-                egui::pos2(grip_start.x - 4.0, ui.max_rect().top()),
-                egui::pos2((title_resp.rect.right() + 12.0).max(grip_start.x + 120.0), ui.max_rect().bottom()),
-            );
-            let drag = ui.interact(drag_r, ui.scope_id().with(("panel-drag", id_salt)), Sense::drag());
-            drag.widget_info(|| WidgetInfo::labeled(egui::Role::Button, true, format!("Move {title}")));
-            if drag.dragged() {
-                moved += drag.drag_delta();
-            }
-            if drag.hovered() || drag.dragged() {
-                ui.ctx().set_cursor_icon(if drag.dragged() {
-                    egui::CursorIcon::Grabbing
-                } else {
-                    egui::CursorIcon::Grab
-                });
-            }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.spacing_mut().item_spacing.x = 2.0;
-                actions(ui);
-            });
-        });
-    });
-    if draw_bottom_line {
-        let r = resp.response.rect;
-        ui.painter().hline(r.x_range(), r.bottom(), Stroke::new(1.0, t.border));
-    }
-    moved
 }
 
 #[cfg(test)]

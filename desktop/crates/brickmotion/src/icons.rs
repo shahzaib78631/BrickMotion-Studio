@@ -31,6 +31,8 @@ icons! {
     Cursor => "cursor", Razor => "razor", Magnet => "magnet", Marker => "marker", Prev => "prev",
     Next => "next", Play => "playf", Pause => "pause", Loop => "loop", Pin => "pin", Back => "back",
     ChevUpDown => "chev_ud", File => "file", Checks => "checks",
+    ViewFront => "view_front", ViewBack => "view_back", ViewLeft => "view_left", ViewRight => "view_right",
+    ViewTop => "view_top", ViewBottom => "view_bottom", Ortho => "ortho",
 }
 
 /// The SVG with its strokes in white, so `tint` gives the final colour.

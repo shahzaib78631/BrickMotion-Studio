@@ -232,17 +232,20 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, body_h: f32, pinned_h: bool) 
             let def = row.def.clone();
             if !def.is_empty() && row.pieces > 0 {
                 resp.context_menu(|ui| {
-                    if ui.button("Export Video…").clicked() {
+                    use super::menu;
+                    menu::prepare(ui);
+                    if menu::item(ui, &t, Some(Icon::Layers), "Open Submodel", None, !row.unused) {
+                        dbl_clicked = Some(i);
+                    }
+                    menu::separator(ui, &t);
+                    if menu::item(ui, &t, Some(Icon::Vid), "Export Video…", None, true) {
                         video = Some(row.id.clone());
-                        ui.close();
                     }
-                    if ui.button("Export Project…").clicked() {
+                    if menu::item(ui, &t, Some(Icon::File), "Export Project…", None, true) {
                         exported = Some((crate::FileExport::SubmodelProject, def.clone()));
-                        ui.close();
                     }
-                    if ui.button("Export LDraw…").clicked() {
+                    if menu::item(ui, &t, Some(Icon::Up), "Export LDraw…", None, true) {
                         exported = Some((crate::FileExport::SubmodelLdraw, def.clone()));
-                        ui.close();
                     }
                 });
             }

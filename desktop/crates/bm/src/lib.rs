@@ -91,6 +91,11 @@ impl Document {
         self.viewport.as_mut()
     }
 
+    /// The viewport camera, without needing the viewport mutably.
+    pub fn camera(&self) -> Option<Camera> {
+        self.viewport.as_ref().map(|v| v.camera())
+    }
+
     pub fn parts(&mut self) -> (&Session, Option<&mut Viewport>) {
         (&self.session, self.viewport.as_mut())
     }

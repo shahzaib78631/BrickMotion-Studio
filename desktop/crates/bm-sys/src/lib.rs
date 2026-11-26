@@ -1262,6 +1262,7 @@ unsafe extern "C" {
     pub fn bm_session_focus(s: *mut BmSession, path: *const *const c_char, n: usize) -> BmChange;
     pub fn bm_session_focused(s: *const BmSession) -> BmString;
     pub fn bm_session_focus_path(s: *const BmSession) -> BmString;
+    pub fn bm_session_use_pieces(s: *const BmSession, piece: u32, out: *mut u32, cap: usize) -> usize;
     pub fn bm_lanes_submodel_path(l: *const BmLanes, i: usize) -> BmString;
     pub fn bm_inspection_joint_info(i: *mut BmInspection, fixed: u32, moving: u32, collision: bool) -> *mut BmJointInfoHandle;
     pub fn bm_joint_info_data(h: *const BmJointInfoHandle) -> BmJointInfo;
@@ -1388,7 +1389,7 @@ pub const DECLARED: &[&str] = &[
     "bm_inventory_capture", "bm_inventory_prepare", "bm_inventory_report_error", "bm_inventory_report_pieces",
     "bm_inventory_report_spares", "bm_inventory_report_invalid_rows", "bm_inventory_report_missing_len",
     "bm_inventory_report_missing_at", "bm_inventory_report_free", "bm_session_import_inventory", "bm_inventory_free",
-    "bm_session_focus", "bm_session_focused", "bm_session_focus_path", "bm_lanes_submodel_path",
+    "bm_session_focus", "bm_session_focused", "bm_session_focus_path", "bm_session_use_pieces", "bm_lanes_submodel_path",
     "bm_inspection_joint_info", "bm_joint_info_data", "bm_joint_info_pieces", "bm_joint_info_min_blocker",
     "bm_joint_info_max_blocker", "bm_joint_info_error", "bm_joint_info_free", "bm_inspection_change_joint_ex",
 ];
