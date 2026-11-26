@@ -342,3 +342,19 @@ fn export_camera_popup() {
     h.run_steps(2);
     assert_eq!(h.state().session().export_camera(), "automatic");
 }
+
+/// A switch row is one 36-px row, not centred in whatever height is left in its panel.
+#[test]
+fn camera_panel_switch_row_stays_compact() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = planned();
+    assert!(run(h.state_mut(), "video.scene_cameras"));
+    h.run_steps(4);
+    // The ribbon has a Follow Camera button too; the panel's switch is the lower one.
+    let lowest = |label: &str| h.query_all_by_label(label).map(|n| n.rect()).max_by(|a, b| a.top().total_cmp(&b.top())).expect(label);
+    let style = lowest("Auto-Direct style");
+    let follow = lowest("Follow Camera");
+    assert!(follow.top() - style.bottom() < 30.0, "Follow Camera sits {} px below the row above", follow.top() - style.bottom());
+}

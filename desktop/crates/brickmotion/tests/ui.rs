@@ -400,3 +400,95 @@ fn command_line_open_waits_for_the_view_size() {
     }
     assert!(h.state().opened_warm(), "the first open did not know the view size");
 }
+
+/// Writes the milestone 5 pictures to desktop/docs when BM_M5_SCREENSHOTS is set: the Keys panel
+/// and dope sheet, the Camera Key panel, the Camera panel, Build Motion, a joint and a flight path.
+#[test]
+fn m5_screenshots() {
+    use brickmotion::transport::Clock;
+    use std::time::{Duration, Instant};
+    if std::env::var_os("BM_M5_SCREENSHOTS").is_none() || !bm::metal_available() {
+        return;
+    }
+    let docs = concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs");
+    let planned = || {
+        let mut h = heli_harness();
+        h.state_mut().set_workspace(Workspace::Animate);
+        let deadline = Instant::now() + Duration::from_secs(90);
+        loop {
+            h.step();
+            let ver = h.state().session().version();
+            let tr = &h.state().transport;
+            if tr.ready() && tr.version == Some(ver) && !tr.state.stale {
+                break;
+            }
+            assert!(Instant::now() < deadline, "plan timed out");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        h.run_steps(3);
+        h
+    };
+    let idle = |h: &mut Harness<'static, BrickMotionApp>| {
+        let deadline = Instant::now() + Duration::from_secs(60);
+        loop {
+            h.step();
+            let a = h.state();
+            if !a.bake.busy() && !a.audit.busy() && !a.joints.busy() {
+                break;
+            }
+            assert!(Instant::now() < deadline, "workers never finished");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        h.run_steps(4);
+    };
+    let clock = |h: &mut Harness<'static, BrickMotionApp>, c: Clock| {
+        let app = h.state_mut();
+        let vp = app.doc.viewport().expect("viewport");
+        app.transport.set_clock(vp, c);
+        h.run_steps(3);
+    };
+    let select = |h: &mut Harness<'static, BrickMotionApp>, p: &[u32]| {
+        h.state_mut().doc.session().select(p, bm::SelectMode::Replace);
+        h.run_steps(3);
+    };
+    let save = |h: &mut Harness<'static, BrickMotionApp>, name: &str| {
+        h.run_steps(6);
+        h.render().unwrap().save(format!("{docs}/{name}")).unwrap();
+    };
+
+    // Keys panel, dope sheet and the flight path of a baked part.
+    let mut h = planned();
+    select(&mut h, &[32]);
+    assert!(brickmotion::run(h.state_mut(), "video.bake_flight"));
+    idle(&mut h);
+    clock(&mut h, Clock::Keyframes);
+    h.state_mut().ribbon_tab = "Keyframes";
+    select(&mut h, &[32]);
+    save(&mut h, "m5-flight-path.png");
+    assert!(brickmotion::run(h.state_mut(), "video.group"));
+    save(&mut h, "m5-keyframes.png");
+
+    // Camera Key panel on the camera lane, then the Camera panel.
+    let mut h = planned();
+    h.state_mut().ribbon_tab = "Camera";
+    assert!(brickmotion::run(h.state_mut(), "video.camera_key"));
+    save(&mut h, "m5-camera.png");
+    h.state_mut().camera_selection = None;
+    assert!(brickmotion::run(h.state_mut(), "video.scene_cameras"));
+    save(&mut h, "m5-camera-page.png");
+
+    // Build Motion for one part.
+    let mut h = planned();
+    select(&mut h, &[32]);
+    assert!(brickmotion::run(h.state_mut(), "motion.build"));
+    save(&mut h, "m5-motion.png");
+
+    // A joint with its card and panel.
+    let mut h = planned();
+    assert!(brickmotion::run(h.state_mut(), "view.joints"));
+    idle(&mut h);
+    let j = h.state().joints.report.clone().unwrap().into_iter().filter(|j| j.kind.turns()).nth(3).unwrap();
+    brickmotion::chrome::joints::open(h.state_mut(), (j.a, j.b));
+    idle(&mut h);
+    save(&mut h, "m5-joint.png");
+}

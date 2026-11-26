@@ -254,8 +254,10 @@ pub fn pill_switch(ui: &mut Ui, t: &Theme, label: &str, on: &mut bool, enabled: 
 pub fn switch_row(ui: &mut Ui, t: &Theme, label: &str, on: &mut bool, enabled: bool) -> bool {
     let mut toggled = false;
     Frame::NONE.inner_margin(Margin::symmetric(12, 0)).show(ui, |ui| {
-        ui.set_min_height(36.0);
-        ui.horizontal_centered(|ui| {
+        // One 36-px row: `horizontal_centered` would centre in all the height left below.
+        let w = ui.available_width();
+        ui.allocate_ui_with_layout(vec2(w, 36.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
+            ui.set_min_size(vec2(w, 36.0));
             let fg = if enabled { t.text1 } else { t.text3 };
             ui.label(RichText::new(label).size(12.5).color(fg));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

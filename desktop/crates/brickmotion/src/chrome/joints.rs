@@ -518,15 +518,13 @@ pub fn panel(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect, next_top: &mut f
         });
         group_heading(ui, &t, "Show", "");
         inset_group(ui, |ui| {
-            // A fixed-height slot each: `switch_row` centres in whatever height it is given.
-            let w = ui.available_width();
             let mut all = app.joints.show;
-            if ui.allocate_ui(vec2(w, 36.0), |ui| switch_row(ui, &t, "All joints in step", &mut all, true)).inner {
+            if switch_row(ui, &t, "All joints in step", &mut all, true) {
                 app.joints.show = all;
             }
             hairline(ui);
             let mut geo = app.joints.check_geometry;
-            if ui.allocate_ui(vec2(w, 36.0), |ui| switch_row(ui, &t, "Check geometry", &mut geo, true)).inner {
+            if switch_row(ui, &t, "Check geometry", &mut geo, true) {
                 app.joints.check_geometry = geo;
             }
         });

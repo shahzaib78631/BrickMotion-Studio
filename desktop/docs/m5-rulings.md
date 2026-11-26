@@ -52,3 +52,33 @@ Where this file and the plan differ, this file wins: it records the approved scr
 
 ### Flight path (Task 10)
 - A 2-px accent line, 8-px dots at keys, an 11-px playhead dot in the playhead colour, and a hint: "Drag a point to reshape · double-click the line to add one · ⌫ deletes".
+
+## Milestone checks (Task 13, 2026-11-26)
+
+### Verification summary
+- Rust `cargo test --workspace`: all pass (36 test groups, 0 failures). `cargo clippy --workspace --all-targets -- -D warnings`: 0 warnings.
+- C++ `bmffi_tests`: 82 test cases, 1,678 assertions, all pass. `bmapp_tests`: 176 test cases, 48,317 assertions, all pass.
+- `nm -gU native/build-rust/bmffi/libbmffi.dylib | grep -vc ' _bm_'` = **0**.
+- Swift/app `ctest --test-dir native/build-app`: **649 tests, 0 failed** (floor 634). Core `ctest --test-dir native/build`: **463 tests, 0 failed** (floor 462).
+
+### Release benchmarks (`10294-1.mpd`, 9,720 flights)
+- `big_model_timeline_frame`: slowest timeline frame **452.4 µs** (budget < 16 ms: pass; M4 452.75 µs).
+- `big_model_parts_lane`: Fit layout **159.5 µs** / show **80.4 µs**; 64× layout **76.3 µs** / show **8.75 µs** / 157 clips visited (budgets < 50 ms / < 16 ms: pass).
+- `big_model_keys_track`: worst Keys frame **513.5 µs** (budget < 16 ms: pass).
+
+### Fix found by the screenshots
+- `switch_row` centred itself in all the height left in its panel, so the last switch in a floating panel (Camera › Follow Camera) floated mid-panel and pushed "Clear Camera Track" out of view. It is now one 36-px row (`tests/camera.rs::camera_panel_switch_row_stays_compact`).
+
+### Screenshots (`desktop/docs/m5-*.png`, `BM_M5_SCREENSHOTS=1 cargo test -p brickmotion --test ui m5_screenshots`)
+- `m5-flight-path.png`: piece 32's flight baked to keys on the Keyframes clock: the path in accent with its dots and hint, the Keys panel, the dope sheet.
+- `m5-keyframes.png`: the same with Group on.
+- `m5-camera.png`: Camera Key panel over the camera lane.
+- `m5-camera-page.png`: the Camera panel (scene cameras, export camera, camera track).
+- `m5-motion.png`: Build Motion for one part, the values inherited in grey.
+- `m5-joint.png`: Joint Markers on, a Turn and Slide joint open with its card and the Joint panel.
+
+### By hand, windowed (left to the owner)
+- Auto Key with a real trackpad.
+- Dragging a path point.
+- Follow Camera playback.
+- The joint card over a moving view (orbit while a joint is open).
