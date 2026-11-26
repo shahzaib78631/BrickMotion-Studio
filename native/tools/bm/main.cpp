@@ -20,6 +20,7 @@ const bm::cli::Command kCommands[] = {
     {"plan", "the build: an order and a flight for every piece, and what the certifier says of it", bm::cli::cmdPlan},
     {"film", "the camera: the shot list and how it films the build", bm::cli::cmdFilm},
     {"stability", "whether a model stands: load paths to the floor, and tipping", bm::cli::cmdStability},
+    {"physics", "rigid-body & multibody dynamics, breakable LEGO clutch, and structural stress", bm::cli::cmdPhysics},
     {"connectors", "list a part's connectors and where each comes from (diagnostic)", bm::cli::cmdConnectors},
     {"shape", "describe a part's collision shape (diagnostic)", bm::cli::cmdShape},
     {"audit", "load every model in a corpus manifest and write the scoreboard", bm::cli::cmdAudit},

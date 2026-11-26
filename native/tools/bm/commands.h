@@ -27,6 +27,7 @@ int cmdStability(const Args& args);
 int cmdConnectors(const Args& args);
 int cmdPlan(const Args& args);
 int cmdFilm(const Args& args);
+int cmdPhysics(const Args& args);
 
 }  // namespace bm::cli
 namespace bm::connect {
