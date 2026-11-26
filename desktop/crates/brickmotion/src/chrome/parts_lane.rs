@@ -319,6 +319,26 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
                 clip_p.rect_stroke(rect, r_clip, Stroke::new(0.5, Color32::from_black_alpha(60)), StrokeKind::Inside);
             }
 
+            // Hover chip: the part's name just above the clip (m6-controls.html).
+            if is_hov {
+                let name = clip.part_name(&timeline).to_owned();
+                egui::Area::new(ui.scope_id().with("tl-part-chip"))
+                    .order(egui::Order::Tooltip)
+                    .fixed_pos(pos2(rect.left(), rect.top() - 26.0))
+                    .interactable(false)
+                    .show(ui.ctx(), |ui| {
+                        egui::Frame::new()
+                            .fill(t.bg3)
+                            .stroke(Stroke::new(1.0, t.border2))
+                            .corner_radius(7)
+                            .inner_margin(egui::Margin::symmetric(8, 3))
+                            .show(ui, |ui| {
+                                ui.label(egui::RichText::new(&name).size(11.5).color(t.text1))
+                                    .widget_info(|| WidgetInfo::labeled(egui::Role::Label, true, format!("Part name {name}")));
+                            });
+                    });
+            }
+
             // Optional pin glyph on right.
             let text_right = if is_pin && rect.width() > 30.0 {
                 let pr = Rect::from_center_size(pos2(rect.right() - 10.0, rect.center().y), vec2(11.0, 11.0));

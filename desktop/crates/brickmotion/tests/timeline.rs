@@ -760,3 +760,38 @@ fn dot_menu_stays_open_when_the_pointer_leaves_the_dot() {
     h.run_steps(3);
     assert!(h.query_by_label("Frame in View").is_some(), "menu closed when the pointer left the dot");
 }
+
+#[test]
+fn playhead_flag_shows_timecode() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = animate_harness();
+    {
+        let app = h.state_mut();
+        let vp = app.doc.viewport().expect("viewport");
+        app.transport.seek(vp, 1.5);
+    }
+    h.run_steps(3);
+    let flag = h.get_by_label("Playhead 0:01.5");
+    let ruler = h.get_by_label("Timeline Ruler").rect();
+    assert!(flag.rect().top() < ruler.center().y, "the flag sits in the ruler");
+}
+
+#[test]
+fn clip_hover_shows_name_chip() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = animate_harness();
+    zoom_in_parts(&mut h);
+    let parts_r = h.state().timeline.last_parts_rect.expect("parts rect");
+    let view = h.state().timeline.view;
+    let vis = h.state().timeline.parts_lane.visible_range(&view);
+    let clip = h.state().timeline.parts_lane.clips[vis.start + 1].clone();
+    let name = clip.part_name(h.state().transport.timeline.as_ref().expect("timeline")).to_owned();
+    let center = clip.rect_in(parts_r, view.lead_inset, view.offset).center();
+    h.event(egui::Event::PointerMoved(center));
+    h.run_steps(3);
+    assert!(h.query_by_label(&format!("Part name {name}")).is_some(), "hover chip names {name}");
+}

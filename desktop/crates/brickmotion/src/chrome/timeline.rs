@@ -1309,7 +1309,10 @@ fn paint_playhead(ui: &Ui, app: &BrickMotionApp, lanes: Rect, dur: f64) {
         t.playhead,
         Stroke::NONE,
     ));
+    let spoken = format!("Playhead {}", g.text());
     p.galley(pos2(flag.center().x - g.size().x * 0.5, flag.center().y - g.size().y * 0.5), g, ink);
+    ui.interact(flag, ui.scope_id().with("playhead-flag"), egui::Sense::hover())
+        .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &spoken));
 }
 
 fn sequence_lane(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
