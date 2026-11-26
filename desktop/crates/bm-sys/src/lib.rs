@@ -688,6 +688,87 @@ pub struct BmJointRow {
     pub mate_count: usize,
 }
 
+// ---- Look, file exports, export options, recorder (export.cpp, recorder.mm) ----
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct BmRenderLook {
+    pub scene: *const c_char,
+    pub shading: i32,
+    pub edges: bool,
+    pub shadows: bool,
+    pub ambient_occlusion: bool,
+    pub floor: bool,
+    pub raytraced_glass: bool,
+    pub world_gi_occlusion: bool,
+    pub lights_follow_camera: bool,
+    pub path_samples: i32,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct BmScenePreset {
+    pub id: *const c_char,
+    pub label: *const c_char,
+    pub hint: *const c_char,
+    pub collection: i32,
+    pub background: BmVec3,
+    pub floor: bool,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct BmFrameSize {
+    pub width: i32,
+    pub height: i32,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct BmViewAngles {
+    pub present: bool,
+    pub yaw_deg: f64,
+    pub pitch_deg: f64,
+    pub fov_deg: f64,
+    pub orthographic: bool,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct BmMovieChoice {
+    pub source: i32,
+    pub shape: i32,
+    pub resolution: i32,
+    pub quality: i32,
+    pub fps: i32,
+    pub turntable_seconds: i32,
+    pub camera: i32,
+    pub scene_camera_id: *const c_char,
+    pub snap_audio: bool,
+    pub standard_preview: bool,
+    pub angles: BmViewAngles,
+    pub model_path: *const *const c_char,
+    pub model_path_len: usize,
+    pub logo: *const c_char,
+    pub logo_corner: i32,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct BmStillChoice {
+    pub shape: i32,
+    pub large: bool,
+    pub samples: i32,
+    pub viewport_angle: bool,
+    pub angles: BmViewAngles,
+}
+#[repr(C)]
+pub struct BmScenes {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct BmVideoTargets {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct BmRecorder {
+    _private: [u8; 0],
+}
+
 unsafe extern "C" {
     pub fn bm_string_free(s: BmString);
     pub fn bm_ldraw_directory() -> BmString;
@@ -1021,6 +1102,42 @@ unsafe extern "C" {
     pub fn bm_session_place_moved(s: *mut BmSession, pieces: *const u32, n: usize, anchor: u32, rotation: BmMat3, position: BmVec3, generation: u64, version: u64) -> BmChange;
     pub fn bm_session_insertion_direction(s: *const BmSession, piece: u32) -> BmVec3;
     pub fn bm_session_set_insertion_direction(s: *mut BmSession, pieces: *const u32, n: usize, direction: BmVec3) -> BmChange;
+    // Look, file exports, export options, recorder
+    pub fn bm_session_render_look(s: *const BmSession) -> BmRenderLook;
+    pub fn bm_session_set_render_look(s: *mut BmSession, look: BmRenderLook) -> BmChange;
+    pub fn bm_scenes() -> *mut BmScenes;
+    pub fn bm_scenes_len(s: *const BmScenes) -> usize;
+    pub fn bm_scenes_at(s: *const BmScenes, i: usize) -> BmScenePreset;
+    pub fn bm_scenes_free(s: *mut BmScenes);
+    pub fn bm_session_plan_bytes(s: *const BmSession) -> BmString;
+    pub fn bm_session_mpd_bytes(s: *const BmSession) -> BmString;
+    pub fn bm_session_submodel_mpd_bytes(s: *const BmSession, model: *const c_char) -> BmString;
+    pub fn bm_session_submodel_project_bytes(s: *const BmSession, model: *const c_char) -> BmString;
+    pub fn bm_movie_size(shape: i32, resolution: i32) -> BmFrameSize;
+    pub fn bm_still_size(shape: i32, large: bool) -> BmFrameSize;
+    pub fn bm_movie_bit_rate(width: i32, height: i32, fps: i32, quality: i32) -> i32;
+    pub fn bm_view_angles(camera: BmCamera) -> BmViewAngles;
+    pub fn bm_movie_arguments(choice: BmMovieChoice) -> *mut BmStrings;
+    pub fn bm_movie_summary(choice: BmMovieChoice) -> BmString;
+    pub fn bm_still_arguments(choice: BmStillChoice, look: BmRenderLook) -> *mut BmStrings;
+    pub fn bm_still_summary(choice: BmStillChoice, logo: bool) -> BmString;
+    pub fn bm_default_movie_camera(s: *const BmSession, batch: bool, has_angle: bool) -> i32;
+    pub fn bm_movie_allows_track(s: *const BmSession, choice: BmMovieChoice, batch: bool, focused_model_chosen: bool) -> bool;
+    pub fn bm_submodel_video_targets(s: *const BmSession, ids: *const *const c_char, n: usize, filter: bool) -> *mut BmVideoTargets;
+    pub fn bm_video_targets_len(t: *const BmVideoTargets) -> usize;
+    pub fn bm_video_targets_title(t: *const BmVideoTargets, i: usize) -> *const c_char;
+    pub fn bm_video_targets_path_len(t: *const BmVideoTargets, i: usize) -> usize;
+    pub fn bm_video_targets_path_at(t: *const BmVideoTargets, i: usize, j: usize) -> *const c_char;
+    pub fn bm_video_targets_free(t: *mut BmVideoTargets);
+    pub fn bm_safe_file_stem(name: *const c_char) -> BmString;
+    pub fn bm_stamp_logo(png: *const c_char, logo: *const c_char, corner: i32) -> BmString;
+    pub fn bm_run_editor_movie(args: *const *const c_char, n: usize) -> i32;
+    pub fn bm_recorder_start(path: *const c_char, width: i32, height: i32, error: *mut BmString) -> *mut BmRecorder;
+    pub fn bm_recorder_append(r: *mut BmRecorder, rgba: *const u8, len: usize, width: i32, height: i32, seconds: f64) -> bool;
+    pub fn bm_recorder_size(r: *const BmRecorder) -> BmFrameSize;
+    pub fn bm_recorder_finish(r: *mut BmRecorder) -> BmString;
+    pub fn bm_recorder_free(r: *mut BmRecorder);
+    pub fn bm_movie_frame_count(path: *const c_char) -> i64;
 }
 
 /// Every function declared above, for the header agreement test.
@@ -1117,4 +1234,12 @@ pub const DECLARED: &[&str] = &[
     "bm_inspection_change_joint", "bm_joint_edit_pieces", "bm_joint_edit_pivot", "bm_joint_edit_pose",
     "bm_joint_edit_error", "bm_joint_edit_free", "bm_inspection_free", "bm_session_place_moved",
     "bm_session_insertion_direction", "bm_session_set_insertion_direction",
+    "bm_session_render_look", "bm_session_set_render_look", "bm_scenes", "bm_scenes_len", "bm_scenes_at",
+    "bm_scenes_free", "bm_session_plan_bytes", "bm_session_mpd_bytes", "bm_session_submodel_mpd_bytes",
+    "bm_session_submodel_project_bytes", "bm_movie_size", "bm_still_size", "bm_movie_bit_rate", "bm_view_angles",
+    "bm_movie_arguments", "bm_movie_summary", "bm_still_arguments", "bm_still_summary", "bm_default_movie_camera",
+    "bm_movie_allows_track", "bm_submodel_video_targets", "bm_video_targets_len", "bm_video_targets_title",
+    "bm_video_targets_path_len", "bm_video_targets_path_at", "bm_video_targets_free", "bm_safe_file_stem",
+    "bm_stamp_logo", "bm_run_editor_movie", "bm_recorder_start", "bm_recorder_append", "bm_recorder_size",
+    "bm_recorder_finish", "bm_recorder_free", "bm_movie_frame_count",
 ];

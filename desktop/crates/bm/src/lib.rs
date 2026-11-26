@@ -2,6 +2,7 @@
 mod error;
 pub mod geom;
 pub mod camera;
+pub mod export;
 pub mod gizmo;
 pub mod keys;
 pub mod library;
@@ -9,6 +10,7 @@ pub mod motion;
 mod outline;
 pub mod placement;
 pub mod playback;
+pub mod recorder;
 mod session;
 pub mod settings;
 pub mod steps;

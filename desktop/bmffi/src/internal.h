@@ -16,6 +16,9 @@ struct BmSession {
 struct BmViewport {
   bmapp::Viewport* v;
 };
+struct BmStrings {
+  std::vector<std::string> items;
+};
 
 namespace bmffi {
 

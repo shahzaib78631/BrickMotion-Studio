@@ -787,6 +787,102 @@ BMFFI_API BmChange bm_session_place_moved(BmSession* s, const uint32_t* pieces, 
 BMFFI_API BmVec3 bm_session_insertion_direction(const BmSession* s, uint32_t piece);
 BMFFI_API BmChange bm_session_set_insertion_direction(BmSession* s, const uint32_t* pieces, size_t n, BmVec3 direction);
 
+// ---- Look, file exports, export options and the viewport recorder (export.cpp, recorder.mm) ----
+/// `scene` lives until the next bm_session_render_look call on this thread. `shading`: 0 standard,
+/// 1 studio, 2 neural, 3 hybrid RT, 4 screen-space GI, 5 path traced.
+typedef struct {
+  const char* scene;
+  int32_t shading;
+  bool edges, shadows, ambient_occlusion, floor, raytraced_glass, world_gi_occlusion, lights_follow_camera;
+  int32_t path_samples;
+} BmRenderLook;
+/// `collection`: 0 photo, 1 render, 2 classic. Strings live until bm_scenes_free.
+typedef struct {
+  const char *id, *label, *hint;
+  int32_t collection;
+  BmVec3 background;
+  bool floor;
+} BmScenePreset;
+typedef struct { int32_t width, height; } BmFrameSize;
+typedef struct {
+  bool present;
+  double yaw_deg, pitch_deg, fov_deg;
+  bool orthographic;
+} BmViewAngles;
+/// Enums as bmapp's, in order: source Build/Keyframes/Turntable; shape Landscape/Vertical/Portrait/
+/// Square; resolution Small/Standard/Large; quality Compact/Standard/High; camera Director/Track/
+/// Viewport/Saved; logo_corner TL/TR/BL/BR. NULL strings are empty.
+typedef struct {
+  int32_t source, shape, resolution, quality, fps, turntable_seconds, camera;
+  const char* scene_camera_id;
+  bool snap_audio, standard_preview;
+  BmViewAngles angles;
+  const char* const* model_path;
+  size_t model_path_len;
+  const char* logo;
+  int32_t logo_corner;
+} BmMovieChoice;
+/// `samples`: 32 draft, 128 standard, 512 final.
+typedef struct {
+  int32_t shape;
+  bool large;
+  int32_t samples;
+  bool viewport_angle;
+  BmViewAngles angles;
+} BmStillChoice;
+typedef struct BmScenes BmScenes;
+typedef struct BmVideoTargets BmVideoTargets;
+typedef struct BmRecorder BmRecorder;
+
+BMFFI_API BmRenderLook bm_session_render_look(const BmSession* s);
+BMFFI_API BmChange bm_session_set_render_look(BmSession* s, BmRenderLook look);
+BMFFI_API BmScenes* bm_scenes(void);
+BMFFI_API size_t bm_scenes_len(const BmScenes* s);
+BMFFI_API BmScenePreset bm_scenes_at(const BmScenes* s, size_t i);
+BMFFI_API void bm_scenes_free(BmScenes* s);
+BMFFI_API BmString bm_session_plan_bytes(const BmSession* s);
+BMFFI_API BmString bm_session_mpd_bytes(const BmSession* s);
+BMFFI_API BmString bm_session_submodel_mpd_bytes(const BmSession* s, const char* model);
+BMFFI_API BmString bm_session_submodel_project_bytes(const BmSession* s, const char* model);
+
+BMFFI_API BmFrameSize bm_movie_size(int32_t shape, int32_t resolution);
+BMFFI_API BmFrameSize bm_still_size(int32_t shape, bool large);
+BMFFI_API int32_t bm_movie_bit_rate(int32_t width, int32_t height, int32_t fps, int32_t quality);
+BMFFI_API BmViewAngles bm_view_angles(BmCamera camera);
+BMFFI_API BmStrings* bm_movie_arguments(BmMovieChoice choice);
+BMFFI_API BmString bm_movie_summary(BmMovieChoice choice);
+BMFFI_API BmStrings* bm_still_arguments(BmStillChoice choice, BmRenderLook look);
+BMFFI_API BmString bm_still_summary(BmStillChoice choice, bool logo);
+/// A MovieCamera: 0 director, 1 track, 2 viewport, 3 saved (the scene's active camera).
+BMFFI_API int32_t bm_default_movie_camera(const BmSession* s, bool batch, bool has_angle);
+BMFFI_API bool bm_movie_allows_track(const BmSession* s, BmMovieChoice choice, bool batch, bool focused_model_chosen);
+/// With `filter`, only the outline rows whose ids are in `ids`.
+BMFFI_API BmVideoTargets* bm_submodel_video_targets(const BmSession* s, const char* const* ids, size_t n, bool filter);
+BMFFI_API size_t bm_video_targets_len(const BmVideoTargets* t);
+BMFFI_API const char* bm_video_targets_title(const BmVideoTargets* t, size_t i);
+BMFFI_API size_t bm_video_targets_path_len(const BmVideoTargets* t, size_t i);
+BMFFI_API const char* bm_video_targets_path_at(const BmVideoTargets* t, size_t i, size_t j);
+BMFFI_API void bm_video_targets_free(BmVideoTargets* t);
+BMFFI_API BmString bm_safe_file_stem(const char* name);
+/// "" on success, else why.
+BMFFI_API BmString bm_stamp_logo(const char* png, const char* logo, int32_t corner);
+/// The movie helper (`project --out file options…`); prints why it failed to stderr; 0 on success.
+BMFFI_API int32_t bm_run_editor_movie(const char* const* args, size_t n);
+
+/// An H.264 movie of viewport frames at even dimensions (the longest side at most 3840). NULL
+/// with `error` set when it cannot start. A recorder may move to one other thread.
+BMFFI_API BmRecorder* bm_recorder_start(const char* path, int32_t width, int32_t height, BmString* error);
+/// Draws an RGBA frame (top row first) fitted into the movie at `seconds`; false when dropped.
+BMFFI_API bool bm_recorder_append(BmRecorder* r, const uint8_t* rgba, size_t len, int32_t width, int32_t height,
+                                  double seconds);
+BMFFI_API BmFrameSize bm_recorder_size(const BmRecorder* r);
+/// Finishes the file and frees the recorder; "" on success, else why.
+BMFFI_API BmString bm_recorder_finish(BmRecorder* r);
+/// Frees a recorder without finishing (the file is left incomplete).
+BMFFI_API void bm_recorder_free(BmRecorder* r);
+/// The video track's frame count, or -1 when the file has none.
+BMFFI_API int64_t bm_movie_frame_count(const char* path);
+
 #ifdef __cplusplus
 }
 #endif

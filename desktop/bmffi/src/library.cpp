@@ -14,10 +14,6 @@ struct BmParts {
   std::vector<bmapp::PartMatch> parts;
 };
 
-struct BmStrings {
-  std::vector<std::string> items;
-};
-
 struct BmPartPreview {
   bmapp::PartPreview* p;
 };

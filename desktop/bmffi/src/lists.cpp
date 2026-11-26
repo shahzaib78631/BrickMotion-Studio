@@ -102,6 +102,9 @@ size_t bm_struct_size(const char* name) {
       {"BmCameraClockInfo", sizeof(BmCameraClockInfo)},
       {"BmMotionFields", sizeof(BmMotionFields)}, {"BmFlightBakeResult", sizeof(BmFlightBakeResult)},
       {"BmMotionContact", sizeof(BmMotionContact)}, {"BmJointRow", sizeof(BmJointRow)},
+      {"BmRenderLook", sizeof(BmRenderLook)}, {"BmScenePreset", sizeof(BmScenePreset)},
+      {"BmFrameSize", sizeof(BmFrameSize)}, {"BmViewAngles", sizeof(BmViewAngles)},
+      {"BmMovieChoice", sizeof(BmMovieChoice)}, {"BmStillChoice", sizeof(BmStillChoice)},
   };
   for (const Entry& e : kSizes)
     if (std::strcmp(e.name, name) == 0) return e.size;
