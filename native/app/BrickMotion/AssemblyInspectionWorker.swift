@@ -87,17 +87,16 @@ extension AssemblyInspectionWorker {
     let pose: bmapp.PartPose
     let models, total: Int
     let joint: String
+    let why: String
     var id: String { "habit:" + part.id }
-    var why: String {
-      "In \(models.formatted()) of \(total.formatted()) BrickNet models" + (joint.isEmpty || joint == "stud" ? "" : " · \(joint)")
-    }
   }
 
   func suggestions(_ source: Source, piece: UInt32, limit: Int = 8) -> [Suggestion] {
     guard !Task.isCancelled else { return [] }
     return source.native.habitFits(piece, limit).map { fit in
       Suggestion(part: LibraryPart(id: String(fit.name), name: displayName(String(fit.description))), colour: Int32(fit.color),
-                 pose: fit.pose, models: Int(fit.models), total: Int(fit.total), joint: String(fit.joint))
+                 pose: fit.pose, models: Int(fit.models), total: Int(fit.total), joint: String(fit.joint),
+                 why: String(bmapp.habitWhy(fit)))
     }
   }
 }

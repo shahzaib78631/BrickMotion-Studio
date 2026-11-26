@@ -53,11 +53,7 @@ import SwiftUI
       let result = await worker.loosePieces(source)
       guard !Task.isCancelled else { return }
       found = result
-      chosen = Set(result.pieces.filter(\.safe).map(\.piece))
-      // A safe piece seated onto one that is not stays as it is too.
-      for row in result.pieces where !chosen.contains(row.piece) {
-        for dependent in result.pieces where dependent.onto == row.piece { uncheck(dependent.piece, result.pieces) }
-      }
+      chosen = Set(bmapp.initialLooseChoice(nativeRows(result.pieces)))
     }
   }
 
@@ -69,12 +65,17 @@ import SwiftUI
       ContentUnavailableView("Every Piece Is Seated", systemImage: "checkmark.circle",
                              description: Text("No piece sits off the connector that holds it."))
     } else {
-      let listed = Dictionary(found.pieces.map { ($0.piece, $0) }, uniquingKeysWith: { first, _ in first })
+      let rows = nativeRows(found.pieces)
+      let selected = nativeChosen()
       List(found.pieces, id: \.piece) { row in
-        let waiting = waitingOn(row, listed)
+        let waitingRaw = bmapp.looseWaitingOn(rows, row.piece, selected)
+        let waiting: UInt32? = waitingRaw == UInt32.max ? nil : waitingRaw
         HStack(spacing: 10) {
           Toggle(isOn: Binding(get: { chosen.contains(row.piece) },
-                               set: { on in if on { chosen.insert(row.piece) } else { uncheck(row.piece, found.pieces) } })) {
+                               set: { on in
+                                 if on { chosen.insert(row.piece) }
+                                 else { chosen = Set(bmapp.looseUncheck(rows, row.piece, nativeChosen())) }
+                               })) {
             EmptyView()
           }
           .toggleStyle(.checkbox)
@@ -84,7 +85,7 @@ import SwiftUI
           VStack(alignment: .leading, spacing: 2) {
             Text(name(row.piece)).font(.callout.weight(.medium)).lineLimit(1)
               .foregroundStyle(waiting == nil ? Color.primary : Color.secondary)
-            Text(waiting.map { "Seated onto \(name($0)): check it first" } ?? detail(row)).font(.caption)
+            Text(waiting.map { "Seated onto \(name($0)): check it first" } ?? String(bmapp.looseDetail(row, std.string(name(row.onto))))).font(.caption)
               .foregroundStyle(row.safe || waiting != nil ? Color.secondary : Color.orange)
               .lineLimit(2)
           }
@@ -104,26 +105,16 @@ import SwiftUI
     }
   }
 
-  /// A piece's seat is worked out with what holds it already seated: while a listed piece it
-  /// rests on (at any depth) is left as it is, it cannot be seated. That piece, or nil.
-  private func waitingOn(_ row: bmapp.LoosePiece, _ listed: [UInt32: bmapp.LoosePiece]) -> UInt32? {
-    var seen: Set<UInt32> = [row.piece]
-    var holder = row.onto
-    while let next = listed[holder], seen.insert(holder).inserted {
-      if !chosen.contains(holder) { return holder }
-      holder = next.onto
-    }
-    return nil
+  private func nativeRows(_ rows: [bmapp.LoosePiece]) -> bmapp.LoosePieceList {
+    var list = bmapp.LoosePieceList()
+    for row in rows { list.push_back(row) }
+    return list
   }
 
-  /// Leaves a piece as it is, and every listed piece seated onto it.
-  private func uncheck(_ piece: UInt32, _ rows: [bmapp.LoosePiece]) {
-    var pending = [piece], seen: Set<UInt32> = []
-    while let next = pending.popLast() {
-      guard seen.insert(next).inserted else { continue }
-      chosen.remove(next)
-      pending += rows.filter { $0.onto == next }.map(\.piece)
-    }
+  private func nativeChosen() -> bmapp.PieceList {
+    var list = bmapp.PieceList()
+    for piece in chosen { list.push_back(piece) }
+    return list
   }
 
   /// "Blue Brick 2 x 4": the colour tells apart pieces of one part.
@@ -133,16 +124,6 @@ import SwiftUI
     let part = displayName(String(match.description).isEmpty ? String(match.name) : String(match.description))
     guard let colour = model.colors[Int32(session.partColor(piece))] else { return part }
     return "\(String(colour.name)) \(part)"
-  }
-
-  private func detail(_ row: bmapp.LoosePiece) -> String {
-    var parts: [String] = []
-    if row.offset >= 0.05 { parts.append("\(row.offset.formatted(.number.precision(.fractionLength(1)))) LDU off") }
-    if row.angle >= 0.05 { parts.append("turned \(row.angle.formatted(.number.precision(.fractionLength(1))))°") }
-    parts.append("on \(name(row.onto))")
-    var text = parts.joined(separator: " · ")
-    if !row.safe { text += row.note.empty() ? " · would cross another part" : " · \(String(row.note))" }
-    return text
   }
 
   static func show(_ context: CommandContext) {

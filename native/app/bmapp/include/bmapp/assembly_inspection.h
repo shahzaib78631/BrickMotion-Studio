@@ -79,6 +79,19 @@ struct LoosePieces {
   std::vector<LoosePiece> pieces;
   std::string error;
 };
+using LoosePieceList = std::vector<LoosePiece>;
+
+/// Safe rows, minus every row that rests (at any depth) on a row that is not chosen.
+PieceList initialLooseChoice(const LoosePieceList& rows);
+/// The first listed holder up `piece`'s `onto` chain that is not in `chosen`, or UINT32_MAX.
+uint32_t looseWaitingOn(const LoosePieceList& rows, uint32_t piece, const PieceList& chosen);
+/// `chosen` without `piece` and every listed piece seated onto it, at any depth.
+PieceList looseUncheck(const LoosePieceList& rows, uint32_t piece, const PieceList& chosen);
+/// Row subtitle for a loose piece (offset, angle, holder, and safety note).
+std::string looseDetail(const LoosePiece& row, const std::string& ontoName);
+/// Row subtitle for a BrickNet habit suggestion ("In 1,234 of 67,185 BrickNet models").
+std::string habitWhy(const HabitFit& fit);
+
 struct JointEdit {
   PieceList pieces;
   uint32_t pivot = UINT32_MAX;

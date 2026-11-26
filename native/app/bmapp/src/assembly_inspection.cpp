@@ -1,9 +1,11 @@
 #include "bmapp/assembly_inspection.h"
 
 #include <cmath>
+#include <cstdio>
 #include <numbers>
 #include <set>
 #include <unordered_map>
+#include <unordered_set>
 #include "bm/collide/world.h"
 #include "bm/kin/system.h"
 #include "bm/plan/plan.h"
@@ -475,6 +477,95 @@ AssemblyReport AssemblyInspection::inspect(const PieceList& selection, bool show
   } catch (const std::exception& e) {
     out.error = e.what();
   }
+  return out;
+}
+
+PieceList looseUncheck(const LoosePieceList& rows, uint32_t piece, const PieceList& chosen) {
+  std::unordered_set<uint32_t> removed;
+  std::vector<uint32_t> pending{piece};
+  while (!pending.empty()) {
+    const uint32_t next = pending.back();
+    pending.pop_back();
+    if (!removed.insert(next).second) continue;
+    for (const auto& row : rows)
+      if (row.onto == next) pending.push_back(row.piece);
+  }
+  PieceList out;
+  out.reserve(chosen.size());
+  for (uint32_t p : chosen)
+    if (!removed.contains(p)) out.push_back(p);
+  return out;
+}
+
+PieceList initialLooseChoice(const LoosePieceList& rows) {
+  PieceList chosen;
+  std::unordered_set<uint32_t> chosenSet;
+  for (const auto& row : rows) {
+    if (row.safe && chosenSet.insert(row.piece).second) chosen.push_back(row.piece);
+  }
+  for (const auto& row : rows) {
+    if (chosenSet.contains(row.piece)) continue;
+    for (const auto& dependent : rows) {
+      if (dependent.onto != row.piece) continue;
+      chosen = looseUncheck(rows, dependent.piece, chosen);
+    }
+  }
+  return chosen;
+}
+
+uint32_t looseWaitingOn(const LoosePieceList& rows, uint32_t piece, const PieceList& chosen) {
+  std::unordered_map<uint32_t, const LoosePiece*> listed;
+  for (const auto& row : rows) listed.try_emplace(row.piece, &row);
+  const auto self = listed.find(piece);
+  if (self == listed.end()) return UINT32_MAX;
+  const std::unordered_set<uint32_t> chosenSet(chosen.begin(), chosen.end());
+  std::unordered_set<uint32_t> seen{piece};
+  uint32_t holder = self->second->onto;
+  while (true) {
+    const auto next = listed.find(holder);
+    if (next == listed.end() || !seen.insert(holder).second) break;
+    if (!chosenSet.contains(holder)) return holder;
+    holder = next->second->onto;
+  }
+  return UINT32_MAX;
+}
+
+std::string looseDetail(const LoosePiece& row, const std::string& ontoName) {
+  std::vector<std::string> parts;
+  char buf[64];
+  if (row.offset >= 0.05) {
+    std::snprintf(buf, sizeof(buf), "%.1f LDU off", row.offset);
+    parts.emplace_back(buf);
+  }
+  if (row.angle >= 0.05) {
+    std::snprintf(buf, sizeof(buf), "turned %.1f\xc2\xb0", row.angle);
+    parts.emplace_back(buf);
+  }
+  parts.push_back("on " + ontoName);
+  std::string text;
+  for (size_t i = 0; i < parts.size(); ++i) {
+    if (i > 0) text += " \xc2\xb7 ";
+    text += parts[i];
+  }
+  if (!row.safe) {
+    text += row.note.empty() ? " \xc2\xb7 would cross another part" : " \xc2\xb7 " + row.note;
+  }
+  return text;
+}
+
+std::string habitWhy(const HabitFit& fit) {
+  const auto grouped = [](uint32_t n) {
+    const std::string digits = std::to_string(n);
+    std::string out;
+    out.reserve(digits.size() + digits.size() / 3);
+    for (size_t i = 0; i < digits.size(); ++i) {
+      if (i > 0 && (digits.size() - i) % 3 == 0) out += ',';
+      out += digits[i];
+    }
+    return out;
+  };
+  std::string out = "In " + grouped(fit.models) + " of " + grouped(fit.total) + " BrickNet models";
+  if (!fit.joint.empty() && fit.joint != "stud") out += " \xc2\xb7 " + fit.joint;
   return out;
 }
 
