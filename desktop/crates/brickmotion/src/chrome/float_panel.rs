@@ -107,7 +107,7 @@ pub fn show(
 ) -> Outcome {
     let t = app.theme;
     let place = app.panels.places.get(&kind).copied().unwrap_or_default();
-    let anchor = pos2(area.right() - GAP - WIDTH, area.top() + 2.0);
+    let anchor = pos2(area.right() - GAP - WIDTH, area.top() + super::navigator::CLEARANCE);
     let pos = match place.offset {
         Some(off) => anchor + off,
         None => pos2(area.right() - GAP - WIDTH, *next_top),

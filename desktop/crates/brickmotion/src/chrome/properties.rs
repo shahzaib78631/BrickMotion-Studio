@@ -42,7 +42,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
     let t = app.theme;
     let page = app.properties_page;
     let width = if page.is_settings() { SETTINGS_WIDTH } else { INSPECTOR_WIDTH };
-    let top = if page.is_settings() { area.top() + 10.0 } else { area.top() + 122.0 };
+    let top = if page.is_settings() { area.top() + 10.0 } else { area.top() + super::navigator::CLEARANCE };
     let max_h = (area.bottom() - top - 12.0).max(200.0);
 
     let mut run: Option<&'static str> = None;

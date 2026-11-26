@@ -586,3 +586,23 @@ fn file_menu_opens_export_panels() {
     assert!(run(h.state_mut(), "file.export_still"));
     assert!(h.state().still.open, "the menu item never closes the panel");
 }
+
+/// The floating editors stack below the axis navigator in the top-right corner, never over it.
+#[test]
+fn floating_panels_clear_axis_navigator() {
+    for (cmd, panel) in [
+        ("output.export_movie", "Export Video panel"),
+        ("output.export_still", "Export Still panel"),
+        ("output.render_queue", "Render Queue panel"),
+        ("view.look", "Look panel"),
+    ] {
+        let mut h = app();
+        assert!(run(h.state_mut(), cmd), "{cmd}");
+        h.run_steps(3);
+        // The Top View disc's centre sits 11/64 of the 96-px navigator below its top.
+        let top_view = h.get_by_label("Top View").rect();
+        let navigator_bottom = top_view.center().y - 11.0 * 1.5 + 96.0;
+        let rect = h.get_by_label(panel).rect();
+        assert!(rect.top() >= navigator_bottom, "{panel} top {} overlaps the navigator (bottom {navigator_bottom})", rect.top());
+    }
+}

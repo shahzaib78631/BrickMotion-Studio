@@ -7,6 +7,8 @@ use crate::icons::Icon;
 use crate::viewport::ViewOp;
 
 const SIZE: f32 = 96.0;
+/// How far below the top of the view the panels in the right column start, clear of the navigator.
+pub const CLEARANCE: f32 = 122.0;
 
 pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
     let t = app.theme;
