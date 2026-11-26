@@ -133,15 +133,17 @@ This plan covers the part of milestone 7 whose engine work is done: model checks
 
 **Interfaces:**
 - Produces (namespace `bmapp`):
-  - `PieceList initialLooseChoice(const std::vector<LoosePiece>& rows)`: the safe rows, minus every row that rests (at any depth) on a row that is not chosen.
-  - `uint32_t looseWaitingOn(const std::vector<LoosePiece>& rows, uint32_t piece, const PieceList& chosen)`: the first listed holder up the `onto` chain that is not chosen, or `UINT32_MAX`. Stops on a cycle.
-  - `PieceList looseUncheck(const std::vector<LoosePiece>& rows, uint32_t piece, const PieceList& chosen)`: `chosen` without `piece` and every listed piece seated onto it, at any depth.
+  - `using LoosePieceList = std::vector<LoosePiece>;` (for clean Swift C++ interop alongside `PieceList`).
+  - `PieceList initialLooseChoice(const LoosePieceList& rows)`: the safe rows, minus every row that rests (at any depth) on a row that is not chosen.
+  - `uint32_t looseWaitingOn(const LoosePieceList& rows, uint32_t piece, const PieceList& chosen)`: the first listed holder up the `onto` chain that is not chosen, or `UINT32_MAX`. Stops on a cycle.
+  - `PieceList looseUncheck(const LoosePieceList& rows, uint32_t piece, const PieceList& chosen)`: `chosen` without `piece` and every listed piece seated onto it, at any depth.
   - `std::string looseDetail(const LoosePiece& row, const std::string& ontoName)`: Swift's `detail(_:)`.
-    - The parts are joined by " · ": "%.1f LDU off" when offset ≥ 0.05, "turned %.1f°" when angle ≥ 0.05, then "on NAME".
-    - An unsafe row appends " · would cross another part", or " · NOTE" when it has a note.
+    - The parts are joined by `" · "` (UTF-8 U+00B7): `"%.1f LDU off"` when offset ≥ 0.05, `"turned %.1f°"` (UTF-8 U+00B0) when angle ≥ 0.05, then `"on NAME"`.
+    - An unsafe row appends `" · would cross another part"`, or `" · NOTE"` when it has a note.
   - `std::string habitWhy(const HabitFit& fit)`:
-    - The text is "In M of T BrickNet models", with M and T grouped as in Swift's `formatted()`, e.g. "1,234".
-    - " · JOINT" is appended unless the joint is empty or "stud".
+    - The text is `"In M of T BrickNet models"`, with M and T comma-grouped as in Swift's en-US `formatted()`, e.g. `"1,234"`.
+    - `" · JOINT"` is appended unless the joint is empty or `"stud"`.
+  - Note: `native/app/bmapp/CMakeLists.txt` globs `tests/*_test.cpp` with `CONFIGURE_DEPENDS`, so `loose_choice_test.cpp` is picked up automatically. `AssemblyInspectionWorker.Suggestion` stores `let why: String` populated directly from `String(bmapp.habitWhy(fit))`.
 
 - [ ] **Step 1: Write `loose_choice_test.cpp`, TEST_CASE "loose_choice_rules" "[bmapp][correct]"** on hand-built rows (no session):
   - rows: A (safe, onto 9 unlisted), B (safe, onto A), C (unsafe, onto 9), D (safe, onto C).
@@ -164,32 +166,35 @@ This plan covers the part of milestone 7 whose engine work is done: model checks
 
 **Files:**
 - Create: `desktop/bmffi/src/inspection.cpp`, `desktop/bmffi/src/inventory.cpp`
-- Modify: `desktop/bmffi/include/bmffi.h`, `desktop/crates/bm-sys/src/lib.rs` (declarations + `DECLARED`)
-- Modify: `desktop/crates/bm/src/motion.rs`
+- Modify: `desktop/bmffi/src/internal.h` (move `struct BmInspection` from `motion.cpp` so `inspection.cpp` shares it), `desktop/bmffi/src/motion.cpp`, `desktop/bmffi/include/bmffi.h`, `desktop/crates/bm-sys/src/lib.rs` (declarations + `DECLARED`)
+- Modify: `desktop/crates/bm/src/motion.rs`, `desktop/crates/bm/src/lib.rs` (`pub mod inventory;`)
 - Create: `desktop/crates/bm/src/inventory.rs`
-- Modify: `desktop/crates/bm/src/session.rs`, `desktop/crates/bm/tests/render.rs` (the pinned count)
+- Modify: `desktop/crates/bm/src/session.rs`, `desktop/crates/bm/tests/render.rs` (the pinned count, from 350 to the new total)
 - Test: `desktop/bmffi/tests/inspection_test.cpp`, `desktop/crates/bm/tests/inspection.rs`
 
 **Interfaces:**
 - **C:** follows the joints pattern: an opaque result handle with `_len`, `_at`, string accessors and `_free`.
-  - `bm_inspection_check_model(BmInspection*) -> BmModelChecks*` returns rows `{int32_t kind; …}`. `kind` is 0..6, in `ModelCheckKind` order. Accessors return the title, detail and pieces.
-  - `bm_inspection_loose_pieces(BmInspection*) -> BmLoosePieces*` returns rows `{uint32_t piece, onto; BmMat3 rotation; BmVec3 position; double offset, angle; bool safe}`, plus `_note(i)`.
-  - `bm_loose_initial_choice`, `bm_loose_waiting_on`, `bm_loose_uncheck` and `bm_loose_detail` work over a `BmLoosePieces*`.
+  - `bm_session_show(BmSession*, const uint32_t* pieces, size_t n)`: unhides listed pieces (matching Swift `session.show(ids)` when revealing findings or loose pieces).
+  - `bm_session_part_at(const BmSession*, uint32_t piece, BmString* name, BmString* description, BmString* category)` and `bm_session_part_color(const BmSession*, uint32_t piece) -> int32_t`: exact piece part/colour lookup (used by Seat Loose naming and Compatible Parts target subtitle).
+  - `bm_inspection_check_model(BmInspection*) -> BmModelChecks*` returns rows `{int32_t kind; …}`. `kind` is 0..6, in `ModelCheckKind` order. Accessors return the error, title, detail and pieces.
+  - `bm_inspection_loose_pieces(BmInspection*) -> BmLoosePieces*` returns rows `{uint32_t piece, onto; BmMat3 rotation; BmVec3 position; double offset, angle; bool safe}`, plus `_note(i)` and `_error`.
+  - `bm_loose_initial_choice`, `bm_loose_waiting_on`, `bm_loose_uncheck` and `bm_loose_detail` work over a `const BmLoosePieces*`.
   - `bm_inspection_habit_fits(BmInspection*, uint32_t piece, size_t limit) -> BmHabitFits*` returns the color, pose, models, total and links per row, plus `_name`, `_description`, `_joint` and `_why`.
   - `bm_inspection_fitting_parts(BmInspection*, uint32_t piece, const char* const* candidates, size_t n, size_t limit) -> BmFittingParts*` returns the name and contact per row.
-  - `bm_session_seat_pieces(BmSession*, const BmPieceMove* moves, size_t n, uint64_t generation, uint64_t version) -> BmChanged`
+  - `bm_session_seat_pieces(BmSession*, const BmPieceMove* moves, size_t n, uint64_t generation, uint64_t version) -> BmChange` where `BmPieceMove` is `{uint32_t piece; BmMat3 rotation; BmVec3 position;}`.
   - `bm_inventory_capture(const BmSession*, int32_t step) -> BmInventory*`
-  - `bm_inventory_prepare(BmInventory*, const char* path) -> BmInventoryReport*` returns the error, pieces, spares, invalid rows and missing names.
-  - `bm_session_import_inventory(BmSession*, const BmInventory*) -> BmChanged`
+  - `bm_inventory_prepare(BmInventory*, const char* path) -> BmInventoryReport*` returns the error, pieces, spares, invalid rows and missing names (`_len` / `_at` / `_free`).
+  - `bm_session_import_inventory(BmSession*, const BmInventory*) -> BmChange`
   - `bm_inventory_free`
 - **Rust (`bm`):**
-  - `Inspection::check_model(&mut self) -> ModelChecks { findings: Vec<ModelCheck { kind: CheckKind, title, detail, pieces: Vec<u32> }>, error: String }`
-  - `Inspection::loose_pieces(&mut self) -> LoosePieces { rows: Vec<LoosePiece>, error }`. `LoosePieces` has the methods `initial_choice()`, `waiting_on(piece, &chosen) -> Option<u32>`, `uncheck(piece, &chosen) -> Vec<u32>` and `detail(i, onto_name) -> String`.
-  - `Inspection::habit_fits(&mut self, piece: u32, limit: usize) -> Vec<HabitFit { name, description, color: i32, pose: Pose, models, total, joint, why }>`
+  - `Session::show(&self, pieces: &[u32])`, `Session::part_at(&self, piece: u32) -> PartMatch`, `Session::part_color(&self, piece: u32) -> i32`.
+  - `Inspection::check_model(&mut self) -> ModelChecks { findings: Vec<ModelCheck { kind: CheckKind, title, detail, pieces: Vec<u32> }>, error: Option<String> }`
+  - `Inspection::loose_pieces(&mut self) -> LoosePieces` (`Send`, owns `*mut sys::BmLoosePieces` freed in `Drop` so rule methods call the engine directly without re-marshaling; exposes `pub rows: Vec<LoosePiece>`, `pub error: Option<String>`, and methods `initial_choice()`, `waiting_on(piece, &chosen) -> Option<u32>`, `uncheck(piece, &chosen) -> Vec<u32>` and `detail(i, onto_name) -> String`).
+  - `Inspection::habit_fits(&mut self, piece: u32, limit: usize) -> Vec<HabitFit { name, description, color: i32, pose: Pose, models, total, links, joint, why }>`
   - `Inspection::fitting_parts(&mut self, piece: u32, candidates: &[String], limit: usize) -> Vec<FittingPart { name, contact: Vec3 }>`
   - `Session::seat_pieces(&self, moves: &[(u32, Pose)], generation: u64, version: u64) -> Changed`
   - `inventory::Inventory::capture(&Session, step: Option<usize>) -> Option<Inventory>` (`Send`)
-  - `Inventory::prepare(&mut self, path: &Path) -> InventoryReport { error, pieces, spares, invalid_rows, missing: Vec<String> }`
+  - `Inventory::prepare(&mut self, path: &Path) -> InventoryReport { error: Option<String>, pieces, spares, invalid_rows, missing: Vec<String> }`
   - `Session::import_inventory(&self, &Inventory) -> Changed`
   - `CheckKind`: `Overlap`, `Unsupported`, `Tipping`, `SingleConnector`, `MissingDefinition`, `UnknownColour` and `SubmodelLoop`. Its `title()` gives Swift's section names: "Overlaps", "Unsupported Parts", "Unstable Groups", "Single-Connector Attachments", "Missing Definitions", "Unknown Colours", "Submodel Loops".
 
@@ -229,12 +234,12 @@ This plan covers the part of milestone 7 whose engine work is done: model checks
 - [ ] **Step 3: Implement.**
   - Wiring:
     - `inspect.model_checks` uses `When::Document`, the new icon `Icon::Checks` ("checks"), tab "Inspect" (or the Task 1 ruling) and group "Checks".
-    - Opening captures an `Inspection` and starts the job. A changed (generation, version) starts a new one.
+    - Opening captures an `Inspection` and starts the job. A changed (generation, version) starts a new one. Reset/close on `adopt()` and `new_document_now()`. Record `last_refusal` in `app.edited()` and `poll_placement` refusals. Highlight ribbon button while open.
   - Copy:
     - while checking: "Checking the model…";
     - on error: "Couldn’t Check the Model" plus the error;
     - section headings in `CheckKind` order.
-  - The frame button selects the finding's pieces and runs `view.frame_selection`.
+  - The frame button rests playback, unhides via `session.show(&pieces)`, selects the finding's pieces, and runs `view.frame_selection` (guarded on matching generation/version).
 - [ ] **Step 4: Run the tests to see them pass.** `cargo test -p brickmotion --test inspect`. Expected: pass.
 - [ ] **Step 5: Commit:** `feat(desktop): Model Checks`.
 
@@ -250,10 +255,10 @@ This plan covers the part of milestone 7 whose engine work is done: model checks
 - Produces: `pub struct LoosePanel { pub open: bool, pub chosen: Vec<u32>, … }`
 
 - [ ] **Step 1: Write the tests.**
-  - `seat_loose_seats_in_one_undo`: the three-brick model.
+  - `seat_loose_seats_in_one_undo`: the three-brick model (3001 at (0,0,0) colour 4, (3,-24,0) colour 1, (200,0,0) colour 14 — or colour 4 on piece 1 so its label is "Seat Red Brick 2 x 4").
     - The panel lists one row. Its accessible label is "Seat Red Brick 2 x 4" (colour name plus display name, as Swift's `name(_:)`) and it is checked.
     - The footer reads "1 of 1 selected". The button reads "Seat Piece".
-    - After clicking it, the piece is at y −24, x 0, and one `edit.undo` puts it back at x 3.
+    - After clicking it, the piece is at y −24, x 0 (verified via `session.copy(&[1])`), and one `edit.undo` puts it back at x 3.
   - `seat_loose_none`: a seated model shows "Every Piece Is Seated".
   - `seat_loose_refuses_stale`: compute, edit the document, then click Seat. Nothing moves and the panel recomputes.
 - [ ] **Step 2: Run them to see them fail.** `cargo test -p brickmotion --test inspect seat_loose`. Expected: fail.
@@ -262,8 +267,11 @@ This plan covers the part of milestone 7 whose engine work is done: model checks
     - header subtitle: "Pieces placed a little off their studs, pins or clips, set exactly in place.";
     - while working: "Looking for loose pieces…";
     - a waiting row reads "Seated onto NAME: check it first".
+  - Piece names come from `session.part_at(piece)`, `session.part_color(piece)`, `bm::export::display_name`, and `app.colors()`.
   - Row checkboxes call `uncheck` and `waiting_on`; the initial set is `initial_choice`.
-  - Seat runs `seat_pieces` with the poses of the chosen rows and the result's (generation, version), then closes the panel.
+  - While computing, a stale in-flight result is dropped and recomputed; once shown, edits leave the shown list until Seat is clicked (so stale Seat refuses via `seat_pieces`, pushes notice via `edited`, leaves pieces unmoved, and starts a fresh check). Reset/close on `adopt()` and `new_document_now()`.
+  - The reveal button guards `(generation, version)`, rests playback, calls `session.show(&[row.piece, row.onto])`, selects both, and runs `view.frame_selection`.
+  - Seat runs `seat_pieces` with the poses of the chosen rows and the result's (generation, version); on success closes the panel; on refusal recomputes.
 - [ ] **Step 4: Run the tests to see them pass.** Expected: pass.
 - [ ] **Step 5: Commit:** `feat(desktop): Seat Loose Pieces`.
 
@@ -293,19 +301,21 @@ This plan covers the part of milestone 7 whose engine work is done: model checks
     - Typing "3003" in "Search by part name or number" hides the builders' section.
   - `fit_adds_part_at_pose`: select the first builders' row and click "Add Part". The piece count goes up by one, one undo removes it, and the panel closes.
   - `fit_refuses_a_stale_revision`: compute, edit, then Add Part. The count is unchanged and a notice is shown.
-  - `fits_without_habits_table`: set `BM_HABITS` to a missing file before creating the app. The builders' section is absent, free connections are listed, and there is no notice.
-  - `habits_file_prefers_env`: a unit test in `support.rs`.
+  - `fits_without_habits_table`: set `BM_HABITS` to a missing file (serialized with a process-wide env-var mutex and restored on drop, since Rust 2024 `set_var` is `unsafe` and tests run in parallel) before creating the app. The builders' section is absent, free connections are listed, and there is no notice.
+  - `habits_file_prefers_env`: a unit test in `support.rs` (using a pure helper or mutex-guarded env var).
 - [ ] **Step 2: Run them to see them fail.** Expected: fail.
 - [ ] **Step 3: Implement.**
   - Copy:
-    - title: "Compatible Parts"; the subtitle is the target's display name;
+    - title: "Compatible Parts"; the subtitle is the target's display name (`bm::export::display_name` of `part_at(piece).description`, falling back to `name`);
     - while loading: "Checking free connections…";
     - empty: "No Matching Parts", with "Search the library for other parts." (no query) or "Try a different name or part number.".
   - Search:
     - It waits 140 ms after the last keystroke, then searches with `library_parts(query, "", 160)`, or `common_parts()` when the query is empty.
-    - The candidates are the result names; then call `fitting_parts(piece, &names, 160)`.
+    - The candidates are the result names; then call `fitting_parts(piece, &names, 30)` (matching Swift `AssemblyInspectionWorker.fitting`).
   - The default button is "Add Part" for a builders' row, else "Preview Placement".
-  - **Preview Placement** closes the panel and calls `begin_placement_from` with the part. `at` is the match's contact projected through the viewport camera when it lands inside the viewport, else `None`. (Swift `placement.begin(…, at:)`.)
+  - **Add Part** calls `session.place_part(name, color, &pose, step, None, result_gen, result_ver)` and `app.edited(c)`; closes the panel on success (a stale revision leaves count unchanged and shows a notice).
+  - **Preview Placement** checks `(generation, version)` matches (otherwise shows a notice), closes the panel, and calls `begin_placement_from` with the part. `at` is the match's contact projected through `bm::gizmo::project(&cam, view, contact)` (already top-left viewport pixels) when finite and inside `(0..view.x, 0..view.y)`, else `None`.
+  - `main.rs` sets `BM_HABITS` before creating the app when unset and `support::habits_file()` exists. Reset/close `FitsPanel` on `adopt()` and `new_document_now()`.
 - [ ] **Step 4: Bundle the table.** `bundle.sh` copies `public/data/suggest/habits.json` to `Contents/Resources/Suggest/habits.json`. Run `scripts/bundle.sh` and check the file is there.
 - [ ] **Step 5: Run the tests to see them pass.** Expected: pass.
 - [ ] **Step 6: Commit:** `feat(desktop): Compatible Parts with What Builders Put Here`.
@@ -314,11 +324,11 @@ This plan covers the part of milestone 7 whose engine work is done: model checks
 
 **Files:**
 - Create: `desktop/crates/brickmotion/src/inventory.rs`
-- Modify: `commands.rs` (`file.import_inventory` in `Menu::File` after the import items; `model.inventory` runs the same action), `app.rs` (run arm, `dialog_requests` kind "inventory", `finish_inventory(path)`, polling from `tick_background`), `menubar.rs` (pinned order test)
+- Modify: `commands.rs` (`file.import_inventory` in `Menu::File` after `Open Recent`, matching Swift File menu group 0; `model.inventory` runs the same action), `app.rs` (run arm, `dialog_requests` kind "inventory", `finish_inventory(path)`, polling from `tick_background`, cancel on `adopt()`/`new_document_now()`), `menubar.rs` (insert `file.import_inventory` after `Recent` and update pinned order test)
 - Test: `tests/inspect.rs`
 
 **Interfaces:**
-- Consumes: `inventory::Inventory`, `Session::import_inventory`, `view.frame_selection`.
+- Consumes: `inventory::Inventory`, `Session::import_inventory`, `bm::export::display_name`, `view.frame_selection`.
 - Produces: `app.finish_inventory(path: PathBuf)` (the open panel's answer, as `finish_export`); `app.inventory_pending() -> bool`.
 
 - [ ] **Step 1: Write the tests.**
@@ -330,11 +340,13 @@ This plan covers the part of milestone 7 whose engine work is done: model checks
   - The open panel's title is "Import Parts Inventory" and its message "Choose a Rebrickable CSV or a Studio parts-bin file." It accepts `csv` and `pbg`. Tests see `dialog_requests` kind "inventory".
 - [ ] **Step 2: Run them to see them fail.** Expected: fail.
 - [ ] **Step 3: Implement.**
-  - Capture the inventory with the selected step, prepare it on a thread, then commit on the UI thread if (generation, version) is unchanged.
-  - Errors:
-    - a stale revision gives the notice "Couldn’t Import Parts" with "The document changed while the file was read. Import it again.";
-    - an engine error gives "Couldn’t Import Parts" plus the error.
-  - Detail lines follow Swift's `Summary.details` exactly, with numbers grouped as in Task 2.
+  - Capture the inventory with the selected step (ignoring re-entry while `inventory_pending()`), prepare it on a thread (waking the window via `ctx_handle`), then commit on the UI thread if (generation, version) is unchanged.
+  - Errors & reports (matching Swift `InventoryImportSheet.swift`):
+    - an engine prepare error gives "Couldn’t Import Parts" plus the error;
+    - `pieces == 0` gives "No Parts to Import" with details (or "The file contains no part entries." if empty);
+    - a stale revision (generation/version changed while reading, or `import_inventory` refused) gives "Couldn’t Import Parts" with "The document changed while the file was read. Import it again.";
+    - successful import frames selection (`view.frame_selection`), and if `invalid_rows > 0 || !missing.is_empty()` shows "Imported 1 Part" / "Imported N Parts" with `details`.
+  - Detail lines follow Swift's `Summary.details` exactly, with missing names passed through `bm::export::display_name` (stripping `.dat`) and numbers comma-grouped as in Task 2.
 - [ ] **Step 4: Run the tests to see them pass.** Expected: pass.
 - [ ] **Step 5: Commit:** `feat(desktop): Import Parts Inventory`.
 
