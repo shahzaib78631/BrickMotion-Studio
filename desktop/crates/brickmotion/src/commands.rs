@@ -75,6 +75,8 @@ pub struct Ctx {
     pub steps: usize,
     pub workspace: Workspace,
     pub playing: bool,
+    /// View › Joint Markers is on.
+    pub joints: bool,
 }
 
 /// A key with its modifiers.
@@ -195,6 +197,7 @@ pub fn title(c: &Command, ctx: &Ctx) -> String {
         "view.local_axes" => if ctx.local_axes { "Local Axes" } else { "World Axes" }.to_owned(),
         "edit.collision" => if ctx.collision { "Collision Checks On" } else { "Collision Checks Off" }.to_owned(),
         "transport.play" => if ctx.playing { "Pause" } else { "Play" }.to_owned(),
+        "view.joints" => if ctx.joints { "Hide Joint Markers" } else { "Show Joint Markers" }.to_owned(),
         _ => c.title.to_owned(),
     }
 }
@@ -254,6 +257,8 @@ static REGISTRY: &[Command] = &[
     Command { id: "video.auto_direct", title: "Auto-Direct", icon: Icon::Wand, keys: None, tip: "Auto-Direct: write a camera track from the build, with keys and moves you can then change", workspace: Workspace::Animate, tab: "Camera", group: "Track", when: When::Pieces, menu: Menu::None },
     Command { id: "video.follow", title: "Follow Camera", icon: Icon::Target, keys: None, tip: "Play the Camera track in the viewport.", workspace: Workspace::Animate, tab: "Camera", group: "Track", when: When::Document, menu: Menu::None },
     Command { id: "motion.build", title: "Build Motion", icon: Icon::Fly, keys: None, tip: "Open Build Motion: flight duration, landing, hover and easing for the project, a step or the selected parts.", workspace: Workspace::Animate, tab: "Motion", group: "Motion", when: When::Document, menu: Menu::None },
+    Command { id: "view.joints", title: "Joint Markers", icon: Icon::Rotate, keys: None, tip: "Show a marker at every joint that moves; click one to turn or detach it.", workspace: Workspace::Animate, tab: "Motion", group: "Joints", when: When::Document, menu: Menu::View },
+    Command { id: "object.arrival_direction", title: "Insert Direction", icon: Icon::Down, keys: None, tip: "Make the selected parts arrive along the axis nearest the current view.", workspace: Workspace::Animate, tab: "Motion", group: "Joints", when: When::Selection, menu: Menu::None },
     Command { id: "video.scene_cameras", title: "Scene Cameras", icon: Icon::Vid, keys: None, tip: "Open the Camera panel: save views as cameras and look through them.", workspace: Workspace::Animate, tab: "Camera", group: "Views", when: When::Document, menu: Menu::None },
     Command { id: "video.export_camera", title: "Export Camera", icon: Icon::Cam, keys: None, tip: "Open the Camera panel at the camera a video records.", workspace: Workspace::Animate, tab: "Camera", group: "Views", when: When::Document, menu: Menu::None },
     Command { id: "video.snap_sound", title: "Snap Sound", icon: Icon::Wave, keys: None, tip: "Open Snap Sound settings to shape and preview brick snap audio.", workspace: Workspace::Animate, tab: "Build Video", group: "Audio", when: When::Document, menu: Menu::None },

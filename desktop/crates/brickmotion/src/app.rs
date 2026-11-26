@@ -163,6 +163,8 @@ pub struct BrickMotionApp {
     pub flights: crate::flights::Flights,
     /// The Build Motion panel.
     pub motion: chrome::motion_panel::MotionPanel,
+    /// Joint markers, the open joint and its card.
+    pub joints: chrome::joints::JointsView,
     pub(crate) camera_synced: Option<(u64, u64)>,
     /// Build timeline zoom, scroll, track disclosure and drag state.
     pub timeline: chrome::timeline::TimelineState,
@@ -251,6 +253,7 @@ impl BrickMotionApp {
             bake: Default::default(),
             audit: Default::default(),
             flights: Default::default(),
+            joints: Default::default(),
             motion: Default::default(),
             camera_synced: None,
             timeline: chrome::timeline::TimelineState::default(),
@@ -368,6 +371,7 @@ impl BrickMotionApp {
         self.audit.cancel();
         self.flights.reset();
         self.motion = Default::default();
+        self.joints.reset();
         // The old document (and its renderer) goes, off this thread; the widget sets the new one up.
         crate::loader::retire(std::mem::replace(&mut self.doc, doc));
         self.viewport.reset();
@@ -541,6 +545,7 @@ impl BrickMotionApp {
             steps: if self.has_document { s.steps().len() } else { 0 },
             workspace: self.workspace,
             playing: self.transport.state.playing || self.transport.state.waiting_to_play,
+            joints: self.joints.show,
         }
     }
 
@@ -750,6 +755,13 @@ impl BrickMotionApp {
                     chrome::motion_panel::open_for_selection(self);
                 }
             }
+            "view.joints" => {
+                self.joints.show = !self.joints.show;
+                if !self.joints.show {
+                    self.joints.markers.clear();
+                }
+            }
+            "object.arrival_direction" => chrome::joints::direction_from_view(self),
             "video.scene_cameras" | "video.export_camera" => {
                 self.ribbon_tab = "Camera";
                 self.panels.camera = !self.panels.camera;
@@ -956,6 +968,7 @@ impl BrickMotionApp {
         self.audit.cancel();
         self.flights.reset();
         self.motion = Default::default();
+        self.joints.reset();
         let mut s = bm::Session::new();
         match s.new_blank() {
             Ok(_) => {
@@ -1212,6 +1225,7 @@ impl eframe::App for BrickMotionApp {
         if self.has_document {
             self.keys.sync(self.doc.session());
             crate::flights::poll(self, ui.ctx());
+            chrome::joints::sync(self, ui.ctx());
             crate::flight_path::delete_key(self, ui.ctx());
             chrome::keys_track::delete_key(self, ui.ctx());
         }

@@ -7,6 +7,7 @@ pub mod callout;
 pub mod confirm;
 pub mod dope_sheet;
 pub mod float_panel;
+pub mod joints;
 pub mod keys_panel;
 pub mod motion_panel;
 pub mod keys_track;
@@ -51,17 +52,20 @@ pub fn central(ui: &mut Ui, app: &mut BrickMotionApp) {
                 key_submodel: app.keys.target().filter(|id| id.1).map(|id| id.0),
             }
         });
-        app.viewport.block_primary = crate::flight_path::handle_pointer(ui, app);
+        let path = crate::flight_path::handle_pointer(ui, app);
+        app.viewport.block_primary = path || joints::handle_pointer(ui, app);
         app.viewport.show(ui, &mut app.doc, &mut app.edit, &t, app.prefs.auto_plan, playing, planning);
         crate::flight_path::show(ui, app);
+        joints::show(ui, app);
         // The ribbon floats over the top of the view; the other panels start below it.
         ribbon::show(ui, app, rect);
         let below = egui::Rect::from_min_max(egui::pos2(rect.left(), rect.top() + ribbon::SPACE), rect.max);
         browser::show(ui, app, below);
         // Floating editors take the top right; Properties steps aside while one is open.
         let mut next_top = below.top() + 2.0;
-        let editing = app.camera_selection.is_some() || app.panels.camera || keys_panel::is_open(app) || motion_panel::is_open(app);
+        let editing = app.camera_selection.is_some() || app.panels.camera || keys_panel::is_open(app) || motion_panel::is_open(app) || joints::is_open(app);
         if editing {
+            joints::panel(ui, app, below, &mut next_top);
             motion_panel::show(ui, app, below, &mut next_top);
             keys_panel::show(ui, app, below, &mut next_top);
             camera_panel::show(ui, app, below, &mut next_top);

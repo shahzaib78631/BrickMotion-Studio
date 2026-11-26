@@ -195,6 +195,7 @@ fn piece(ui: &mut Ui, app: &mut BrickMotionApp, p: &bm::PieceInfo, run: &mut Opt
         row(ui, &t, "Step", &(p.step + 1).to_string());
         let place = if p.submodel_path.is_empty() { "Main model".to_owned() } else { p.submodel_path.replace('/', " › ") };
         row(ui, &t, "In", &place);
+        arrives_row(ui, app, &t);
         if p.in_shared_submodel {
             ui.add_space(4.0);
             ui.label(RichText::new("Shared submodel: edits change every use").color(t.text2).size(11.5));
@@ -245,6 +246,7 @@ fn many(ui: &mut Ui, app: &mut BrickMotionApp, snap: &bm::Snapshot) {
         if colour_button_row(ui, &t, swatch, color_label) {
             app.swatches.open(super::swatches::Target::Selection);
         }
+        arrives_row(ui, app, &t);
         ui.add_space(2.0);
         for (desc, n) in parts.iter().take(PART_ROWS) {
             ui.add(egui::Label::new(RichText::new(format!("{n} × {desc}")).color(t.text1)).truncate());
@@ -257,4 +259,44 @@ fn many(ui: &mut Ui, app: &mut BrickMotionApp, snap: &bm::Snapshot) {
             ui.label(RichText::new(format!("Showing the first {}", snap.described.len())).color(t.text3).size(11.5));
         }
     });
+}
+
+/// "Arrives": the selected parts' insertion direction (`ArrivalDirection.swift`).
+fn arrives_row(ui: &mut Ui, app: &mut BrickMotionApp, t: &crate::Theme) {
+    use super::joints;
+    let s = app.doc.session();
+    let pieces = s.selection();
+    let dirs: Vec<bm::Vec3> = pieces.iter().map(|&p| s.insertion_direction(p)).collect();
+    let label = match dirs.first() {
+        Some(d) if dirs.iter().all(|e| e == d) => joints::direction_label(*d),
+        Some(_) => "Mixed",
+        None => return,
+    };
+    let mut pick: Option<Option<bm::Vec3>> = None;
+    ui.horizontal(|ui| {
+        ui.label(RichText::new("Arrives").color(t.text3));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let r = ui.menu_button(RichText::new(label).color(t.text1), |ui| {
+                if ui.button("Automatic").clicked() {
+                    pick = Some(Some(bm::Vec3::new(0.0, 0.0, 0.0)));
+                }
+                ui.separator();
+                for (name, a) in joints::AXES {
+                    if ui.button(name).clicked() {
+                        pick = Some(Some(bm::Vec3::new(a[0], a[1], a[2])));
+                    }
+                }
+                ui.separator();
+                if ui.button("From Current View").clicked() {
+                    pick = Some(None);
+                }
+            });
+            r.response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, format!("Insertion direction, {label}")));
+        });
+    });
+    match pick {
+        Some(Some(d)) => joints::set_direction(app, d),
+        Some(None) => joints::direction_from_view(app),
+        None => {}
+    }
 }
