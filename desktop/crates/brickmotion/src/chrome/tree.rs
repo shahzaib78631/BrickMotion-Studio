@@ -133,6 +133,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
     let lines = shown.len() + first_unused.is_some() as usize;
     let mut clicked: Option<(usize, egui::Modifiers)> = None;
     let mut toggled: Option<usize> = None;
+    let mut exported: Option<(crate::FileExport, String)> = None;
     egui::ScrollArea::vertical().max_height(MAX_H).auto_shrink([false, true]).show_rows(ui, ROW_H, lines, |ui, range| {
         for line in range {
             let k = match first_unused {
@@ -187,6 +188,19 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
             if resp.clicked() {
                 clicked = Some((i, ui.input(|inp| inp.modifiers)));
             }
+            let def = row.def.clone();
+            if !def.is_empty() && row.pieces > 0 {
+                resp.context_menu(|ui| {
+                    if ui.button("Export Project…").clicked() {
+                        exported = Some((crate::FileExport::SubmodelProject, def.clone()));
+                        ui.close();
+                    }
+                    if ui.button("Export LDraw…").clicked() {
+                        exported = Some((crate::FileExport::SubmodelLdraw, def.clone()));
+                        ui.close();
+                    }
+                });
+            }
         }
     });
     if let Some(i) = toggled {
@@ -197,6 +211,9 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
     } else if let Some((i, m)) = clicked {
         let pieces = app.tree.pieces_of(app.doc.session(), i).to_vec();
         app.doc.session().select(&pieces, mode(m));
+    }
+    if let Some((kind, def)) = exported {
+        app.export_bytes(kind, Some(&def));
     }
     app.tree.last_show = t0.elapsed();
 }

@@ -59,7 +59,7 @@ pub fn menu_model() -> Vec<MenuSection> {
                 C("app.quit"),
             ],
         },
-        MenuSection { title: "File", items: vec![C("file.new"), C("file.open"), Recent, Sep, C("file.save"), C("file.save_as")] },
+        MenuSection { title: "File", items: vec![C("file.new"), C("file.open"), Recent, Sep, C("file.save"), C("file.save_as"), Sep, C("file.export_ldraw"), C("file.export_plan")] },
         MenuSection {
             title: "Edit",
             items: vec![
@@ -69,6 +69,7 @@ pub fn menu_model() -> Vec<MenuSection> {
                 C("edit.cut"),
                 C("edit.copy"),
                 C("edit.paste"),
+                C("edit.copy_viewport"),
                 C("edit.delete"),
                 Sep,
                 C("model.duplicate"),
@@ -298,6 +299,7 @@ mod tests {
                 MenuEntry::Command("edit.cut"),
                 MenuEntry::Command("edit.copy"),
                 MenuEntry::Command("edit.paste"),
+                MenuEntry::Command("edit.copy_viewport"),
                 MenuEntry::Command("edit.delete"),
                 MenuEntry::Separator,
                 MenuEntry::Command("model.duplicate"),
@@ -319,6 +321,9 @@ mod tests {
                 MenuEntry::Separator,
                 MenuEntry::Command("file.save"),
                 MenuEntry::Command("file.save_as"),
+                MenuEntry::Separator,
+                MenuEntry::Command("file.export_ldraw"),
+                MenuEntry::Command("file.export_plan"),
             ]
         );
     }

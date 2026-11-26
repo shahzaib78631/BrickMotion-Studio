@@ -142,6 +142,11 @@ pub struct BrickMotionApp {
     /// Test seam: the in-memory clipboard refuses writes, as a failing pasteboard would.
     #[doc(hidden)]
     pub clipboard_fails: bool,
+    /// Copy Viewport Image with dialogs off: (width, height, RGBA).
+    #[doc(hidden)]
+    pub clipboard_image: Option<(usize, usize, Vec<u8>)>,
+    /// A file export waiting for its save panel.
+    pub(crate) pending_export: Option<crate::export_files::PendingExport>,
     /// Build playback transport, planner status, and cached timeline/lanes.
     pub transport: crate::transport::Transport,
     /// The camera key or move shown in the Camera panel, with its clock.
@@ -244,6 +249,8 @@ impl BrickMotionApp {
             focus_filter: false,
             clipboard: String::new(),
             clipboard_fails: false,
+            clipboard_image: None,
+            pending_export: None,
             transport: crate::transport::Transport::default(),
             camera_selection: None,
             director: false,
@@ -756,6 +763,9 @@ impl BrickMotionApp {
                 self.keys.group_rows = !self.keys.group_rows;
                 self.keys.row_picks.clear();
             }
+            "file.export_ldraw" => self.export_bytes(crate::FileExport::Ldraw, None),
+            "file.export_plan" => self.export_bytes(crate::FileExport::Plan, None),
+            "edit.copy_viewport" => self.copy_viewport_image(),
             "model.look" | "view.look" => chrome::look_panel::toggle(self),
             "motion.build" => {
                 self.ribbon_tab = "Motion";

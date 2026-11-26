@@ -158,6 +158,11 @@ pub struct ViewportWidget {
 }
 
 impl ViewportWidget {
+    /// The last frame the viewport drew (empty before the first).
+    pub fn last_frame(&self) -> &bm::Frame {
+        &self.frame
+    }
+
     pub fn new(background: Color32) -> Self {
         let c = |v: u8| v as f64 / 255.0;
         ViewportWidget { background: [c(background.r()), c(background.g()), c(background.b())], ..Default::default() }

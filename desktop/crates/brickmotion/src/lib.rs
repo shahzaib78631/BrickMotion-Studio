@@ -5,6 +5,7 @@ pub mod chrome;
 pub mod commands;
 pub mod document;
 pub mod edit;
+pub mod export_files;
 pub mod flight_path;
 pub mod flights;
 pub mod gizmo;
@@ -26,6 +27,7 @@ pub mod viewport;
 pub mod workers;
 
 pub use app::{Answer, BrickMotionApp, DialogRequest, Pending, ReplaceOk, Workspace};
+pub use export_files::FileExport;
 pub use document::{DocState, save_to};
 pub use edit::{EditState, Tool};
 pub use loader::{Loaded, Loader, OPEN_EXTENSIONS, Warm, open_model};
