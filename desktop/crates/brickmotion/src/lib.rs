@@ -11,6 +11,7 @@ pub mod flights;
 pub mod gizmo;
 pub mod history;
 mod icons;
+pub mod inventory;
 pub mod loader;
 pub mod logo;
 pub mod menubar;

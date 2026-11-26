@@ -147,6 +147,8 @@ pub struct BrickMotionApp {
     pub clipboard_image: Option<(usize, usize, Vec<u8>)>,
     /// A file export waiting for its save panel.
     pub(crate) pending_export: Option<crate::export_files::PendingExport>,
+    /// A parts inventory preparing on its own thread.
+    pub(crate) pending_inventory: Option<crate::inventory::PendingInventory>,
     /// Build playback transport, planner status, and cached timeline/lanes.
     pub transport: crate::transport::Transport,
     /// The camera key or move shown in the Camera panel, with its clock.
@@ -272,6 +274,7 @@ impl BrickMotionApp {
             clipboard_fails: false,
             clipboard_image: None,
             pending_export: None,
+            pending_inventory: None,
             transport: crate::transport::Transport::default(),
             camera_selection: None,
             director: false,
@@ -425,6 +428,7 @@ impl BrickMotionApp {
         self.checks.reset();
         self.loose.reset();
         self.fits.reset();
+        self.pending_inventory = None;
         self.last_refusal = None;
         // The old document (and its renderer) goes, off this thread; the widget sets the new one up.
         crate::loader::retire(std::mem::replace(&mut self.doc, doc));
@@ -826,6 +830,7 @@ impl BrickMotionApp {
             "inspect.model_checks" => chrome::checks_panel::toggle(self),
             "model.seat_loose" => chrome::loose_panel::toggle(self),
             "model.what_fits" => chrome::fits_panel::toggle(self),
+            "model.inventory" | "file.import_inventory" => self.open_inventory_dialog(),
             "output.render_queue" => chrome::queue_panel::toggle(self),
             "output.export_still" => chrome::export_still::toggle(self),
             "file.export_movie" => chrome::export_movie::open(self, Vec::new()),
@@ -1100,6 +1105,7 @@ impl BrickMotionApp {
         self.checks.reset();
         self.loose.reset();
         self.fits.reset();
+        self.pending_inventory = None;
         self.last_refusal = None;
         let mut s = bm::Session::new();
         match s.new_blank() {
@@ -1254,6 +1260,7 @@ impl BrickMotionApp {
         }
         self.queue.poll();
         self.poll_logo();
+        self.poll_inventory();
     }
 
     /// The window's context once the app has run a frame (None in window-less tests).
@@ -1415,7 +1422,7 @@ impl eframe::App for BrickMotionApp {
         self.poll_placement(ui.ctx());
         self.previews.frame_end();
         self.autosave(std::time::Instant::now());
-        if self.autosaving.is_some() {
+        if self.autosaving.is_some() || self.inventory_pending() {
             ui.ctx().request_repaint_after(Duration::from_millis(50)); // to take its result
         }
         if self.quitting {

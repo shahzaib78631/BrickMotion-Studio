@@ -365,3 +365,99 @@ fn fits_without_habits_table() {
     assert!(h.query_by_label("Fits a Free Connection").is_some());
     assert!(h.state().notices().is_empty(), "missing habits table must not produce a notice");
 }
+
+#[test]
+fn inventory_imports_and_frames() {
+    let dir = temp("inv-clean");
+    let model = write_ldr(&dir, "one.ldr", "0 One\n1 4 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n");
+    let csv = dir.join("clean.csv");
+    std::fs::write(&csv, "Quantity,Color,Part,Is Spare\n2,4,3001,False\n").unwrap();
+
+    let mut h = app_with(&model);
+    assert!(run(h.state_mut(), "file.import_inventory"));
+    let req = h.state().dialog_requests.last().cloned().expect("an open panel request");
+    assert_eq!(req.kind, "inventory");
+
+    assert!(run(h.state_mut(), "model.inventory"));
+    assert_eq!(h.state().dialog_requests.last().map(|r| r.kind), Some("inventory"));
+
+    let before = h.state().piece_count();
+    let framed_before = h.state().viewport.queued_total;
+    h.state_mut().finish_inventory(csv);
+    assert!(h.state().inventory_pending());
+    step_until(&mut h, |h| !h.state().inventory_pending());
+
+    assert_eq!(h.state().piece_count(), before + 2);
+    assert!(h.state().viewport.queued_total > framed_before, "import frames the new pieces");
+    assert!(h.state().notices().is_empty(), "clean import shows no notice: {:?}", h.state().notices());
+
+    assert!(run(h.state_mut(), "edit.undo"));
+    h.run_steps(2);
+    assert_eq!(h.state().piece_count(), before);
+}
+
+#[test]
+fn inventory_reports_skipped_rows() {
+    let dir = temp("inv-mixed");
+    let model = write_ldr(&dir, "one.ldr", "0 One\n1 4 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n");
+    let csv = dir.join("mixed.csv");
+    std::fs::write(
+        &csv,
+        "\"Quantity\",Color,Part,Is Spare\n\
+         2,4,\"3001.DAT\",False\n\
+         5,7,3022,yes\n\
+         2,4,brickmotion_unknown_part,false\n\
+         x,1,3001,false\n",
+    )
+    .unwrap();
+
+    let mut h = app_with(&model);
+    let before = h.state().piece_count();
+    h.state_mut().finish_inventory(csv);
+    step_until(&mut h, |h| !h.state().inventory_pending());
+
+    assert_eq!(h.state().piece_count(), before + 2);
+    let notice = h.state().notices().last().expect("report notice");
+    assert_eq!(notice.title(), "Imported 2 Parts");
+    assert_eq!(
+        notice.detail(),
+        "Unreadable rows: 1\nSpare pieces skipped: 5\nMissing part files: brickmotion_unknown_part"
+    );
+}
+
+#[test]
+fn inventory_nothing_to_import() {
+    let dir = temp("inv-empty");
+    let model = write_ldr(&dir, "one.ldr", "0 One\n1 4 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n");
+    let csv = dir.join("spares.csv");
+    std::fs::write(&csv, "Quantity,Color,Part,Is Spare\n5,7,3022,yes\n").unwrap();
+
+    let mut h = app_with(&model);
+    let before = h.state().piece_count();
+    h.state_mut().finish_inventory(csv);
+    step_until(&mut h, |h| !h.state().inventory_pending());
+
+    assert_eq!(h.state().piece_count(), before);
+    let notice = h.state().notices().last().expect("empty notice");
+    assert_eq!(notice.title(), "No Parts to Import");
+}
+
+#[test]
+fn inventory_refuses_stale() {
+    let dir = temp("inv-stale");
+    let model = write_ldr(&dir, "one.ldr", "0 One\n1 4 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n");
+    let csv = dir.join("clean.csv");
+    std::fs::write(&csv, "Quantity,Color,Part,Is Spare\n2,4,3001,False\n").unwrap();
+
+    let mut h = app_with(&model);
+    let before = h.state().piece_count();
+    h.state_mut().finish_inventory(csv);
+    // Edit the document while the inventory is preparing.
+    assert_eq!(h.state().session().recolor(&[0], 1).refused, None);
+    step_until(&mut h, |h| !h.state().inventory_pending());
+
+    assert_eq!(h.state().piece_count(), before);
+    let notice = h.state().notices().last().expect("stale notice");
+    assert_eq!(notice.title(), "Couldn’t Import Parts");
+    assert_eq!(notice.detail(), "The document changed while the file was read. Import it again.");
+}
