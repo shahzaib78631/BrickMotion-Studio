@@ -107,6 +107,11 @@ impl KeysView {
         }
     }
 
+    /// Takes `selection` as seen without choosing objects from it (a Check Motion contact).
+    pub fn keep_chosen(&mut self, selection: Vec<u32>) {
+        self.selection_seen = selection;
+    }
+
     /// Swift's `syncObjects`: whole submodels first, then single pieces, then submodels touched.
     fn follow_selection(&mut self, pieces: &[u32]) {
         let chosen: HashSet<u32> = self.active.iter().filter_map(|id| self.object(*id)).flat_map(|o| o.members.iter().copied()).collect();

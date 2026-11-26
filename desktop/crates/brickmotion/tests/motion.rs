@@ -542,3 +542,136 @@ fn step_menu_opens_step_motion() {
     let target = h.state().motion.target.clone().expect("the panel opened");
     assert_eq!((target.scope, target.step), (MotionScope::Step, 1));
 }
+
+// ---- Final review fixes ----
+
+#[test]
+fn build_workspace_leaves_the_keyframes_clock() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = animate();
+    h.state_mut().keys.auto_key = true;
+    set_clock(&mut h, Clock::Keyframes);
+    assert!(h.state().viewport.auto_key.is_some(), "Auto Key on in Animate");
+    h.state_mut().set_workspace(Workspace::Build);
+    h.run_steps(3);
+    assert_eq!(h.state().transport.clock(), Clock::Build);
+    assert!(h.state().viewport.auto_key.is_none(), "a drag in Build moves parts and writes no keys");
+}
+
+#[test]
+fn camera_key_selection_clears_on_clock_switch() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = planned();
+    {
+        let app = h.state_mut();
+        let vp = app.doc.viewport().expect("viewport");
+        app.transport.seek(vp, 2.0);
+    }
+    h.run_steps(2);
+    assert!(run(h.state_mut(), "video.camera_key"));
+    h.run_steps(3);
+    assert!(h.state().camera_selection.is_some(), "the new Build key is selected");
+    set_clock(&mut h, Clock::Keyframes);
+    assert_eq!(h.state().camera_selection, None, "a Build key is not a Keyframes time");
+}
+
+#[test]
+fn dope_sheet_pick_takes_delete_from_path_point() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = planned();
+    path_open(&mut h);
+    let dots = h.state().flights.dots.clone();
+    let (lo, hi) = (dots.iter().map(|d| d.0).min().unwrap(), dots.iter().map(|d| d.0).max().unwrap());
+    let &(frame, at) = dots.iter().find(|(f, p)| *f != lo && *f != hi && open_view(&h, *p)).expect("a middle dot in view");
+    click(&mut h, at);
+    h.run_steps(2);
+    assert_eq!(h.state().flights.picked(), Some((PIECE, frame)));
+    // Now pick a different key in the dope sheet (baked keys sit a frame apart, so aim well clear).
+    let target = dots
+        .iter()
+        .map(|d| d.0)
+        .filter(|f| (*f - frame).abs() > 3)
+        .find_map(|f| h.query_by_label(&format!("Position X key at frame {f}")).map(|n| n.rect().center()))
+        .expect("a dope-sheet key on screen");
+    click(&mut h, target);
+    h.run_steps(2);
+    let picks: Vec<_> = h.state().keys.picks.iter().copied().collect();
+    assert_eq!(picks.len(), 1, "one dope-sheet key picked: {picks:?}");
+    let other = picks[0];
+    assert_ne!(other.1, frame);
+    let dots_before = h.state().flights.dots.len();
+    for pressed in [true, false] {
+        h.event(egui::Event::Key { key: egui::Key::Backspace, physical_key: None, pressed, repeat: false, modifiers: egui::Modifiers::NONE });
+    }
+    h.run_steps(3);
+    let keys = object_keys(&h, PIECE);
+    assert!(!keys.iter().any(|k| k.channel == other.0 && k.frame == other.1), "the dope-sheet key went");
+    assert!(keys.iter().any(|k| k.channel == bm::keys::KeyChannel::PositionX && k.frame == frame), "the path point stayed");
+    assert!(h.state().flights.dots.len() <= dots_before);
+}
+
+#[test]
+fn build_motion_from_ribbon_uses_the_parts_step() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = animate();
+    let (step, piece) = {
+        let s = h.state().session();
+        (1..s.steps().len())
+            .find_map(|st| s.step_items(st).into_iter().find(|i| !i.submodel && !i.pieces.is_empty()).map(|i| (st, i.pieces[0])))
+            .expect("a loose part after step 1")
+    };
+    h.state_mut().edit.step = Some(0);
+    select(&mut h, &[piece]);
+    assert!(run(h.state_mut(), "motion.build"));
+    h.run_steps(3);
+    let t = h.state().motion.target.clone().expect("open");
+    assert_eq!(t.scope, MotionScope::Parts);
+    assert_eq!(t.step, step, "the step that holds the part, not the chosen step");
+}
+
+#[test]
+fn build_motion_closes_when_its_parts_go() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = animate();
+    select(&mut h, &[33]);
+    assert!(run(h.state_mut(), "motion.build"));
+    h.run_steps(3);
+    assert!(h.state().motion.target.is_some());
+    assert!(h.state_mut().doc.session().remove(&[33]).refused.is_none());
+    h.run_steps(3);
+    assert!(h.state().motion.target.is_none(), "piece indices moved; the panel would edit other parts");
+}
+
+#[test]
+fn contact_click_keeps_the_keys_panel() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = planned();
+    path_open(&mut h);
+    assert!(h.query_by_label("Keys panel").is_some());
+    let first = h.state().session().key_scene().first;
+    let contact = bm::motion::MotionContact { a: PIECE, b: 33, first_frame: first, last_frame: first, part: "a".into(), blocker: "b".into() };
+    h.state_mut().flights.check = Some(brickmotion::flights::CheckResult {
+        text: "1 crossing.".into(),
+        warning: true,
+        contacts: vec![contact.clone()],
+        key: brickmotion::flights::doc_key(h.state()),
+    });
+    brickmotion::flights::show_contact(h.state_mut(), &contact);
+    h.run_steps(3);
+    let mut sel = h.state().session().selection();
+    sel.sort_unstable();
+    assert_eq!(sel, vec![PIECE, 33], "both parts shown");
+    assert!(h.query_by_label("Keys panel").is_some(), "the checked object's panel stays open");
+}

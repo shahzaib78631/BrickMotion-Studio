@@ -223,3 +223,16 @@ fn inspector_arrives_from_above() {
     assert_eq!((got.x, got.y, got.z), (0.0, -1.0, 0.0));
     assert!(h.query_by_label("Insertion direction, From Above").is_some());
 }
+
+#[test]
+fn no_joint_check_with_markers_off() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = heli();
+    h.state_mut().doc.session().select(&[33], bm::SelectMode::Replace);
+    h.run_steps(5);
+    assert!(!h.state().joints.show);
+    assert!(!h.state().joints.busy(), "no inspection runs while markers are off");
+    assert!(h.state().joints.report.is_none());
+}

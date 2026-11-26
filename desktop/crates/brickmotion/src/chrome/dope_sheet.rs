@@ -25,6 +25,7 @@ pub fn height() -> f32 {
 pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, heads: Rect, lanes: Rect, object: &KeyObject) {
     let t = app.theme;
     let id = (object.piece, object.submodel);
+    let picks_before = app.keys.picks.clone();
     let scale = FrameScale::new(app, lanes);
     let view = app.timeline.view;
     let preview = match &app.timeline.drag {
@@ -122,6 +123,10 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, heads: Rect, lanes: Rect, obj
             }
             resp.context_menu(|ui| key_menu(ui, app, id, pick));
         }
+    }
+    // The newest pick takes ⌫: a dope-sheet pick drops the picked path point.
+    if !app.keys.picks.is_empty() && app.keys.picks != picks_before {
+        app.flights.picked = None;
     }
 }
 

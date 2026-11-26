@@ -261,6 +261,9 @@ pub fn show_contact(app: &mut BrickMotionApp, contact: &MotionContact) {
         app.transport.seek_scene(vp, f64::from(contact.first_frame - scene.first) / f64::from(scene.fps.max(1)));
     }
     app.doc.session().select(&[contact.a, contact.b], bm::SelectMode::Replace);
+    // Both parts show selected; the Keys panel stays on the object that was checked.
+    let selection = app.doc.session().selection();
+    app.keys.keep_chosen(selection);
     app.viewport.queue(ViewOp::FrameSelection);
 }
 

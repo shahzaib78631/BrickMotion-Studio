@@ -272,6 +272,13 @@ impl BrickMotionApp {
         if self.workspace != w {
             self.workspace = w;
             self.ribbon_tab = tabs(w)[0];
+            // Keyframes (and Auto Key with it) live in Animate; Build edits parts, not keys.
+            if w != Workspace::Animate
+                && self.transport.clock() == crate::transport::Clock::Keyframes
+                && let Some(vp) = self.doc.viewport()
+            {
+                self.transport.set_clock(vp, crate::transport::Clock::Build);
+            }
             if w == Workspace::Animate
                 && self.has_document
                 && self.prefs.auto_plan

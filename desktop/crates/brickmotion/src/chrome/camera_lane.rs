@@ -88,6 +88,7 @@ pub fn add_key_from_view(app: &mut BrickMotionApp) {
         set_director(app, true);
     }
     app.camera_selection = Some((clock, CameraPick::Key(id)));
+    app.flights.picked = None;
 }
 
 /// Writes the clock's track in `style`, keeping hand-made keys; Follow Camera turns on.
@@ -117,6 +118,10 @@ pub fn auto_direct_reason(app: &BrickMotionApp, clock: CameraClock) -> &'static 
 
 /// Drops a selection whose key is gone, and Follow Camera with the document it was for.
 pub fn sync(app: &mut BrickMotionApp) {
+    // A key on the other clock is not a time on this one.
+    if app.camera_selection.as_ref().is_some_and(|(c, _)| *c != camera_clock(app.transport.clock())) {
+        app.camera_selection = None;
+    }
     let s = app.doc.session();
     let now = (s.generation(), s.version());
     if app.camera_synced == Some(now) {
@@ -207,6 +212,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64, clock: Clo
         let resp = resp.on_hover_text(format!("{label} · Click to edit the move"));
         if resp.clicked() {
             app.camera_selection = Some((cam, CameraPick::Move(from.id.clone())));
+            app.flights.picked = None;
         }
         resp.context_menu(|ui| preset_picker(ui, app, cam, &from.id, &from.preset));
     }
@@ -238,10 +244,12 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64, clock: Clo
         let resp = resp.on_hover_text(format!("Camera key at {when}{auto} · {} · Drag to move", aim_label(&k.target)));
         if resp.clicked() {
             app.camera_selection = Some((cam, CameraPick::Key(k.id.clone())));
+            app.flights.picked = None;
             seek(app, k.seconds);
         }
         if resp.drag_started() {
             app.camera_selection = Some((cam, CameraPick::Key(k.id.clone())));
+            app.flights.picked = None;
             let start_x = ui.input(|i| i.pointer.press_origin()).map_or(kx, |p| p.x);
             app.timeline.drag =
                 Some(TimelineDrag::CameraKey { clock: cam, id: k.id.clone(), start_x, original: k.seconds, seconds: k.seconds });

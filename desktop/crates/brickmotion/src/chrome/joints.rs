@@ -117,7 +117,7 @@ pub fn sync(app: &mut BrickMotionApp, ctx: &egui::Context) {
     let s = app.doc.session();
     let selection = s.selection();
     let j = &mut app.joints;
-    if !j.show && selection.is_empty() && j.open.is_none() && !j.change_job.busy() {
+    if !j.show && j.open.is_none() && !j.change_job.busy() {
         j.inspect.cancel();
         j.started = None;
         j.report = None;

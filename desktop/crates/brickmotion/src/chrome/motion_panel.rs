@@ -27,6 +27,8 @@ pub struct MotionPanel {
     pub target: Option<MotionTarget>,
     /// `set_motion_fields` calls made (tests read it).
     pub commits: usize,
+    /// The structure the target's piece indices were read in; a removal closes the panel.
+    pub structure: Option<u64>,
 }
 
 /// A slider row: label, own value, inherited value, range and format.
@@ -41,13 +43,19 @@ pub const PRESETS: [(&str, MotionFields); 3] = [
 /// Opens the panel on a scope.
 pub fn open(app: &mut BrickMotionApp, target: MotionTarget) {
     app.motion.target = Some(target);
+    app.motion.structure = Some(app.doc.session().structure_version());
     app.panels.unfold(PanelKind::Motion);
 }
 
 /// The Motion ribbon command: the selected parts, or else the project.
 pub fn open_for_selection(app: &mut BrickMotionApp) {
     let pieces = app.doc.session().selection();
-    let step = app.edit.step.unwrap_or(0);
+    // The parts' own step; the chosen step only when nothing is selected.
+    let s = app.doc.session();
+    let step = pieces
+        .first()
+        .and_then(|p| (0..s.steps().len()).find(|&st| s.step_items(st).iter().any(|i| i.pieces.contains(p))))
+        .unwrap_or_else(|| app.edit.step.unwrap_or(0));
     let scope = if pieces.is_empty() { MotionScope::Project } else { MotionScope::Parts };
     open(app, MotionTarget { scope, step, pieces });
 }
@@ -107,6 +115,10 @@ fn commit(app: &mut BrickMotionApp, t: &MotionTarget, fields: MotionFields) {
 }
 
 pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect, next_top: &mut f32) {
+    if app.motion.structure.is_some_and(|v| v != app.doc.session().structure_version()) {
+        app.motion.target = None;
+        app.motion.structure = None;
+    }
     let Some(target) = app.motion.target.clone() else { return };
     let subtitle = scope_name(&target);
     let out = float_panel::show(
