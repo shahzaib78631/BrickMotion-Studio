@@ -200,6 +200,10 @@ BmString bm_safe_file_stem(const char* name) {
   return guard<BmString>(make("Submodel"), [&] { return make(bmapp::safeFileStem(str(name))); });
 }
 
+BmString bm_display_name(const char* raw) {
+  return guard<BmString>(make(""), [&] { return make(bmapp::displayName(str(raw))); });
+}
+
 BmString bm_stamp_logo(const char* png, const char* logo, int32_t corner) {
   return guard<BmString>(make("The still could not be drawn."), [&] {
     return make(bmapp::stampLogo(str(png), str(logo), pick(corner, 4, bmapp::LogoCorner::BottomRight)));

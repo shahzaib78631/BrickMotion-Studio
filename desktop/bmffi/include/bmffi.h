@@ -864,6 +864,8 @@ BMFFI_API size_t bm_video_targets_path_len(const BmVideoTargets* t, size_t i);
 BMFFI_API const char* bm_video_targets_path_at(const BmVideoTargets* t, size_t i, size_t j);
 BMFFI_API void bm_video_targets_free(BmVideoTargets* t);
 BMFFI_API BmString bm_safe_file_stem(const char* name);
+/// A model's name as people read it: no .ldr/.dat/.mpd, runs of spaces made one.
+BMFFI_API BmString bm_display_name(const char* raw);
 /// "" on success, else why.
 BMFFI_API BmString bm_stamp_logo(const char* png, const char* logo, int32_t corner);
 /// The movie helper (`project --out file options…`); prints why it failed to stderr; 0 on success.

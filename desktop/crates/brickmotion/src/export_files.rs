@@ -25,11 +25,10 @@ pub struct PendingExport {
     generation: u64,
 }
 
-/// A name the save panel suggests: the display name without "/".
+/// A name the save panel suggests: the engine's display name, with "/" (not allowed in a file
+/// name) made a space.
 pub(crate) fn display_name(raw: &str) -> String {
-    let lower = raw.to_lowercase();
-    let stem = [".ldr", ".dat", ".mpd"].iter().find(|e| lower.ends_with(*e)).map_or(raw, |e| &raw[..raw.len() - e.len()]);
-    stem.split(' ').filter(|w| !w.is_empty()).collect::<Vec<_>>().join(" ").replace('/', " ")
+    bm::export::display_name(raw).replace('/', " ")
 }
 
 impl BrickMotionApp {
@@ -124,5 +123,7 @@ mod tests {
     fn names() {
         assert_eq!(display_name("wheel  pair.LDR"), "wheel pair");
         assert_eq!(display_name("a/b.mpd"), "a b");
+        // The engine's rules (bmapp displayName): each of .ldr, .dat, .mpd is taken off in turn.
+        assert_eq!(display_name("wing.dat.ldr"), "wing");
     }
 }

@@ -1130,6 +1130,7 @@ unsafe extern "C" {
     pub fn bm_video_targets_path_at(t: *const BmVideoTargets, i: usize, j: usize) -> *const c_char;
     pub fn bm_video_targets_free(t: *mut BmVideoTargets);
     pub fn bm_safe_file_stem(name: *const c_char) -> BmString;
+    pub fn bm_display_name(raw: *const c_char) -> BmString;
     pub fn bm_stamp_logo(png: *const c_char, logo: *const c_char, corner: i32) -> BmString;
     pub fn bm_run_editor_movie(args: *const *const c_char, n: usize) -> i32;
     pub fn bm_recorder_start(path: *const c_char, width: i32, height: i32, error: *mut BmString) -> *mut BmRecorder;
@@ -1240,7 +1241,7 @@ pub const DECLARED: &[&str] = &[
     "bm_session_submodel_project_bytes", "bm_movie_size", "bm_still_size", "bm_movie_bit_rate", "bm_view_angles",
     "bm_movie_arguments", "bm_movie_summary", "bm_still_arguments", "bm_still_summary", "bm_default_movie_camera",
     "bm_movie_allows_track", "bm_submodel_video_targets", "bm_video_targets_len", "bm_video_targets_title",
-    "bm_video_targets_path_len", "bm_video_targets_path_at", "bm_video_targets_free", "bm_safe_file_stem",
+    "bm_video_targets_path_len", "bm_video_targets_path_at", "bm_video_targets_free", "bm_safe_file_stem", "bm_display_name",
     "bm_stamp_logo", "bm_run_editor_movie", "bm_recorder_start", "bm_recorder_append", "bm_recorder_size",
     "bm_recorder_finish", "bm_recorder_free", "bm_movie_frame_count", "bm_movie_audio_seconds",
 ];

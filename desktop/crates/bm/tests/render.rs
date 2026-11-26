@@ -64,7 +64,7 @@ fn header_and_rust_decls_agree() {
     assert_eq!(signatures(sample, "\nBMFFI_API ", ';'), vec![("f".into(), 2), ("g".into(), 0)]);
     let header = signatures(include_str!("../../../bmffi/include/bmffi.h"), "\nBMFFI_API ", ';');
     let rust = signatures(include_str!("../../bm-sys/src/lib.rs"), "\n    pub fn ", ';');
-    assert_eq!(header.len(), 349);
+    assert_eq!(header.len(), 350);
     for (name, n) in &header {
         assert!(bm_sys::DECLARED.contains(&name.as_str()), "missing {name}");
         let r = rust.iter().find(|(r, _)| r == name).unwrap_or_else(|| panic!("no Rust fn {name}"));

@@ -94,6 +94,7 @@ TEST_CASE("export options match bmapp", "[export]") {
   CHECK(joined(bm_still_arguments(still, look)) == "--size 1920x1080 --samples 128 --no-denoise --lights-fixed");
   CHECK(take(bm_still_summary(still, false)) == "Still · 1920 × 1080 · Standard");
   CHECK(take(bm_safe_file_stem("a/b:c")) == "a b c");
+  CHECK(take(bm_display_name("wing  pair.dat.LDR")) == "wing pair");
   const BmViewAngles angles = bm_view_angles(BmCamera{0, 0, 100, {0, 0, 0}, true, 0.6});
   CHECK(angles.present);
   CHECK(angles.orthographic);

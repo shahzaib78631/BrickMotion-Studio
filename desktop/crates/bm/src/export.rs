@@ -524,6 +524,13 @@ pub fn safe_file_stem(name: &str) -> String {
     take_string(unsafe { sys::bm_safe_file_stem(n) })
 }
 
+/// A model's name as people read it (the engine's displayName).
+pub fn display_name(raw: &str) -> String {
+    let mut keep = Keep::default();
+    let r = keep.add(raw);
+    take_string(unsafe { sys::bm_display_name(r) })
+}
+
 /// Draws the logo over a PNG in place.
 pub fn stamp_logo(png: &Path, logo: &Path, corner: LogoCorner) -> Result<(), String> {
     let mut keep = Keep::default();
