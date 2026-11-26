@@ -78,3 +78,32 @@ TEST_CASE("metal is available exactly when a viewport can be made") {
   bm_viewport_free(v);
   bm_session_free(s);
 }
+
+TEST_CASE("focus a submodel and return to the main model") {
+  BmSession* s = bm_session_new();
+  BmOpenResult r = bm_session_open(s, kHeli);
+  REQUIRE(r.ok);
+  bm_open_result_free(r);
+  auto take = [](BmString str) {
+    std::string out = str.ptr ? std::string(str.ptr, str.len) : std::string();
+    bm_string_free(str);
+    return out;
+  };
+  CHECK(take(bm_session_focus_path(s)).empty());
+  const char* path[] = {"helicopter - underside 1.ldr"};
+  BmChange c = bm_session_focus(s, path, 1);
+  CHECK(c.refused.len == 0);
+  bm_change_free(c);
+  CHECK(take(bm_session_focused(s)) == "helicopter - underside 1.ldr");
+  CHECK(take(bm_session_focus_path(s)) == "helicopter - underside 1.ldr");
+  c = bm_session_focus(s, nullptr, 0);
+  CHECK(c.refused.len == 0);
+  bm_change_free(c);
+  CHECK(take(bm_session_focus_path(s)).empty());
+  // Unknown names are dropped: only the path's valid leading part is kept.
+  const char* unknown[] = {"helicopter - underside 1.ldr", "no such model"};
+  c = bm_session_focus(s, unknown, 2);
+  bm_change_free(c);
+  CHECK(take(bm_session_focus_path(s)) == "helicopter - underside 1.ldr");
+  bm_session_free(s);
+}

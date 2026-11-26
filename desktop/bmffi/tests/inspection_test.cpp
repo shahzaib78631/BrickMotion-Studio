@@ -174,3 +174,45 @@ TEST_CASE("inventory capture, prepare and import over bmffi", "[inspection]") {
   std::filesystem::remove(csv, ec);
   bm_session_free(s);
 }
+
+TEST_CASE("joint info and extended joint edits over bmffi", "[inspection][joints]") {
+  BmSession* s = blankSession();
+  place(s, "3937.dat", 4, {0, 0, 0});
+  place(s, "3938.dat", 14, {0, 0, 0});
+  place(s, "3001.dat", 1, {400, 0, 0});
+  BmInspection* insp = bm_inspection_capture(s);
+  REQUIRE(insp);
+
+  BmJointInfoHandle* info = bm_inspection_joint_info(insp, 0, 1, true);
+  REQUIRE(info);
+  CHECK(std::string(bm_joint_info_error(info)).empty());
+  const BmJointInfo d = bm_joint_info_data(info);
+  CHECK(d.can_turn);
+  CHECK_FALSE(d.can_slide);
+  CHECK(d.max_deg > 80);
+  CHECK(d.min_deg < 0);
+  uint32_t pieces[4] = {};
+  REQUIRE(bm_joint_info_pieces(info, pieces, 4) == 1);
+  CHECK(pieces[0] == 1);
+  CHECK_FALSE(std::string(bm_joint_info_max_blocker(info)).empty());
+  CHECK(bm_joint_info_min_blocker(info) != nullptr);
+  bm_joint_info_free(info);
+
+  BmJointInfoHandle* apart = bm_inspection_joint_info(insp, 0, 2, true);
+  CHECK(std::string(bm_joint_info_error(apart)) == "The two parts are no longer connected.");
+  bm_joint_info_free(apart);
+
+  BmJointEdit* turned = bm_inspection_change_joint_ex(insp, 0, 1, 120, 0, BmVec3{0, 0, 0}, false);
+  REQUIRE(turned);
+  CHECK(std::string(bm_joint_edit_error(turned)).empty());
+  REQUIRE(bm_joint_edit_pieces(turned, pieces, 4) == 1);
+  bm_joint_edit_free(turned);
+
+  BmJointEdit* slid = bm_inspection_change_joint_ex(insp, 0, 1, 0, 8, BmVec3{0, 0, 0}, false);
+  CHECK(std::string(bm_joint_edit_error(slid)) == "This connection cannot slide.");
+  bm_joint_edit_free(slid);
+
+  bm_joint_info_free(nullptr);
+  bm_inspection_free(insp);
+  bm_session_free(s);
+}
