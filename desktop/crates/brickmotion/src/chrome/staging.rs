@@ -184,6 +184,8 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, body_max_h: f32) {
     app.staging.sync(app.doc.session());
     let saved = app.doc.session().staging_settings();
     let adjusted = app.doc.session().moved_waiting_parts();
+    // "From Output": the frame shape last chosen for a movie.
+    let output_shape = bm::export::FrameShape::ALL.iter().copied().find(|s| s.title() == app.prefs.movie_frame_shape);
 
     let mut do_apply = false;
     let mut do_revert = false;
@@ -269,19 +271,28 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, body_max_h: f32) {
                     .iter()
                     .position(|&(_, a)| (a - st.draft.aspect).abs() < 0.02);
                 let mut fi = preset_match.unwrap_or(FRAME_PRESETS.len());
-                let frame_options: Vec<&str> = if preset_match.is_some() {
-                    FRAME_PRESETS.iter().map(|(l, _)| *l).collect()
-                } else {
-                    let mut opts: Vec<&str> = FRAME_PRESETS.iter().map(|(l, _)| *l).collect();
-                    opts.push("Project Frame Shape");
-                    opts
-                };
-                let cur_label = frame_options.get(fi).copied().unwrap_or("Project Frame Shape");
-                if popup_row(ui, &t, "st-frame", "Frame", cur_label, &frame_options, &mut fi, frame_on)
-                    && let Some(&(_, aspect)) = FRAME_PRESETS.get(fi)
-                {
-                    st.draft.aspect = aspect;
-                    st.dirty = true;
+                let mut frame_options: Vec<String> = FRAME_PRESETS.iter().map(|(l, _)| (*l).to_owned()).collect();
+                if preset_match.is_none() {
+                    frame_options.push("Project Frame Shape".to_owned());
+                }
+                let from_output = output_shape.map(|shape| {
+                    frame_options.push(format!("From Output · {}", shape.title()));
+                    (frame_options.len() - 1, shape)
+                });
+                let refs: Vec<&str> = frame_options.iter().map(String::as_str).collect();
+                let cur_label = refs.get(fi).copied().unwrap_or("Project Frame Shape");
+                if popup_row(ui, &t, "st-frame", "Frame", cur_label, &refs, &mut fi, frame_on) {
+                    let aspect = match from_output {
+                        Some((i, shape)) if i == fi => {
+                            let (w, h) = bm::export::movie_size(shape, bm::export::MovieResolution::Standard);
+                            Some(f64::from(w) / f64::from(h))
+                        }
+                        _ => FRAME_PRESETS.get(fi).map(|&(_, a)| a),
+                    };
+                    if let Some(aspect) = aspect {
+                        st.draft.aspect = aspect;
+                        st.dirty = true;
+                    }
                 }
             });
 

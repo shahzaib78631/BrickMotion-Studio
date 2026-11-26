@@ -432,13 +432,16 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, body_max_h: f32) {
             ui.add_space(12.0);
         });
 
-    // 6. Footer: Include in exports (disabled until M6) + Restore Defaults
+    // 6. Footer: Include in exports (the default for a video's Include Snap Sounds) + Restore Defaults
     page_footer(ui, &t, |ui| {
-        let mut inc = false;
+        let mut inc = app.sound_page.draft.enabled;
         ui.horizontal(|ui| {
-            let _ = pill_switch(ui, &t, "Include in exports", &mut inc, false);
-            ui.label(RichText::new("Include in exports").size(11.5).color(t.text3))
-                .on_hover_text("Export options come with Export Movie");
+            if pill_switch(ui, &t, "Include in exports", &mut inc, true) {
+                app.sound_page.draft.enabled = inc;
+                commit_mix = Some(app.sound_page.draft);
+            }
+            ui.label(RichText::new("Include in exports").size(11.5).color(t.text2))
+                .on_hover_text("New videos of the build include snap sounds");
         });
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let defaults = SnapMix { enabled: app.sound_page.draft.enabled, ..SnapMix::default() };

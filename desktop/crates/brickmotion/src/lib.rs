@@ -12,6 +12,7 @@ pub mod gizmo;
 pub mod history;
 mod icons;
 pub mod loader;
+pub mod logo;
 pub mod menubar;
 mod notices;
 pub mod palette;

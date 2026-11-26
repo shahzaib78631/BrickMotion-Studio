@@ -172,6 +172,7 @@ pub struct BrickMotionApp {
     /// Exports run one at a time by helper processes.
     pub queue: crate::render_queue::RenderQueue,
     pub queue_panel: chrome::queue_panel::QueuePanel,
+    pub movie: chrome::export_movie::MoviePanel,
     /// The file Show in Finder revealed while dialogs are off (tests read it).
     pub revealed: Option<PathBuf>,
     /// Joint markers, the open joint and its card.
@@ -272,6 +273,7 @@ impl BrickMotionApp {
             look: Default::default(),
             queue,
             queue_panel: Default::default(),
+            movie: Default::default(),
             revealed: None,
             camera_synced: None,
             timeline: chrome::timeline::TimelineState::default(),
@@ -777,6 +779,17 @@ impl BrickMotionApp {
             "edit.copy_viewport" => self.copy_viewport_image(),
             "model.look" | "view.look" => chrome::look_panel::toggle(self),
             "output.render_queue" => chrome::queue_panel::toggle(self),
+            "output.export_movie" => {
+                if self.movie.open && self.movie.targets.is_empty() {
+                    self.movie.open = false;
+                } else {
+                    chrome::export_movie::open(self, Vec::new());
+                }
+            }
+            "file.export_submodels" => {
+                let targets = bm::export::submodel_video_targets(self.doc.session(), None);
+                chrome::export_movie::open(self, targets);
+            }
             "motion.build" => {
                 self.ribbon_tab = "Motion";
                 if chrome::motion_panel::is_open(self) {

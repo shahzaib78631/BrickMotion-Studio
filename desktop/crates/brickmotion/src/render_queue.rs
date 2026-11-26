@@ -449,7 +449,7 @@ fn hex(b: &[u8]) -> String {
 }
 
 /// An uppercase version-4 UUID, as Swift's `UUID().uuidString`.
-fn uuid() -> String {
+pub(crate) fn uuid() -> String {
     let mut b = random_bytes();
     b[6] = (b[6] & 0x0f) | 0x40;
     b[8] = (b[8] & 0x3f) | 0x80;

@@ -134,6 +134,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
     let mut clicked: Option<(usize, egui::Modifiers)> = None;
     let mut toggled: Option<usize> = None;
     let mut exported: Option<(crate::FileExport, String)> = None;
+    let mut video: Option<String> = None;
     egui::ScrollArea::vertical().max_height(MAX_H).auto_shrink([false, true]).show_rows(ui, ROW_H, lines, |ui, range| {
         for line in range {
             let k = match first_unused {
@@ -199,6 +200,10 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
                         exported = Some((crate::FileExport::SubmodelLdraw, def.clone()));
                         ui.close();
                     }
+                    if ui.button("Export Submodel Video…").clicked() {
+                        video = Some(row.id.clone());
+                        ui.close();
+                    }
                 });
             }
         }
@@ -211,6 +216,12 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
     } else if let Some((i, m)) = clicked {
         let pieces = app.tree.pieces_of(app.doc.session(), i).to_vec();
         app.doc.session().select(&pieces, mode(m));
+    }
+    if let Some(id) = video {
+        let targets = bm::export::submodel_video_targets(app.doc.session(), Some(&[id]));
+        if !targets.is_empty() {
+            super::export_movie::open(app, targets);
+        }
     }
     if let Some((kind, def)) = exported {
         app.export_bytes(kind, Some(&def));

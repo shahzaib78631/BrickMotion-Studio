@@ -77,6 +77,21 @@ pub struct Prefs {
     pub auto_plan: bool,
     #[serde(default = "default_true")]
     pub play_snap_sounds: bool,
+    /// The video logo's copy in `<support>/Video Logos` ("" when there is none).
+    #[serde(default)]
+    pub video_logo_file: String,
+    #[serde(default)]
+    pub video_logo_enabled: bool,
+    /// "tl", "tr", "bl" or "br".
+    #[serde(default = "default_corner")]
+    pub video_logo_corner: String,
+    /// The frame shape last chosen for a movie ("" before the first), Staging's "From Output".
+    #[serde(default)]
+    pub movie_frame_shape: String,
+}
+
+fn default_corner() -> String {
+    "br".to_owned()
 }
 
 impl Default for Prefs {
@@ -86,6 +101,10 @@ impl Default for Prefs {
             backups_kept: 10,
             auto_plan: true,
             play_snap_sounds: true,
+            video_logo_file: String::new(),
+            video_logo_enabled: false,
+            video_logo_corner: default_corner(),
+            movie_frame_shape: String::new(),
         }
     }
 }
@@ -187,14 +206,14 @@ mod tests {
         assert_eq!(Prefs::load(&s), Prefs::default());
         assert_eq!(
             Prefs::default(),
-            Prefs { autosave_seconds: 30, backups_kept: 10, auto_plan: true, play_snap_sounds: true }
+            Prefs { autosave_seconds: 30, backups_kept: 10, auto_plan: true, play_snap_sounds: true, ..Prefs::default() }
         );
     }
 
     #[test]
     fn prefs_round_trip() {
         let s = Support::at(tmp("prefs-rt"));
-        let p = Prefs { autosave_seconds: 5, backups_kept: 3, auto_plan: false, play_snap_sounds: false };
+        let p = Prefs { autosave_seconds: 5, backups_kept: 3, auto_plan: false, play_snap_sounds: false, ..Prefs::default() };
         p.save(&s).unwrap();
         assert_eq!(Prefs::load(&s), p);
     }

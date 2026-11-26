@@ -26,7 +26,7 @@ pub struct PendingExport {
 }
 
 /// A name the save panel suggests: the display name without "/".
-fn display_name(raw: &str) -> String {
+pub(crate) fn display_name(raw: &str) -> String {
     let lower = raw.to_lowercase();
     let stem = [".ldr", ".dat", ".mpd"].iter().find(|e| lower.ends_with(*e)).map_or(raw, |e| &raw[..raw.len() - e.len()]);
     stem.split(' ').filter(|w| !w.is_empty()).collect::<Vec<_>>().join(" ").replace('/', " ")
