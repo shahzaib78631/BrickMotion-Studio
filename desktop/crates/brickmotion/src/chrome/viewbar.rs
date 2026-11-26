@@ -9,9 +9,15 @@ use crate::icons::{self, Icon};
 pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
     let t = app.theme;
     recording_chip(ui, app, area);
+    let selected = app.doc.session().selection_len();
+    let mut toggle_local = false;
+    let mut toggle_collision = false;
+    let mut toggle_joints = false;
+    let mut toggle_smart = false;
+    let mut toggle_auto_plan = false;
     Area::new(Id::unique("viewbar"))
         .order(Order::Middle)
-        .anchor(Align2::CENTER_BOTTOM, vec2(0.0, -12.0))
+        .anchor(Align2::CENTER_BOTTOM, vec2(0.0, -(ui.ctx().content_rect().bottom() - area.bottom()).max(0.0) - 12.0))
         .constrain_to(area)
         .show(ui.ctx(), |ui| {
             Frame::NONE
@@ -28,22 +34,71 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
                             (Icon::Move, "Move Tool", crate::Tool::Move, "model.move"),
                             (Icon::Rotate, "Rotate Tool", crate::Tool::Rotate, "model.rotate_tool"),
                         ] {
-                            let tip = if doc_on { label } else { "Open a model to edit" };
-                            if super::icon_button_tip(ui, &t, i, label, tip, doc_on, app.edit.tool == tool, 28.0).clicked() {
-                                app.requested.push(cmd);
+                            let active = app.edit.tool == tool && app.viewport.nav_mode.is_none();
+                            let tip = if !doc_on {
+                                "Open a model to edit"
+                            } else if active && tool != crate::Tool::Select {
+                                "Click again to unselect"
+                            } else {
+                                label
+                            };
+                            if super::icon_button_tip(ui, &t, i, label, tip, doc_on, active, 28.0).clicked() {
+                                app.viewport.nav_mode = None;
+                                if app.edit.tool == tool && tool != crate::Tool::Select {
+                                    app.edit.tool = crate::Tool::Select;
+                                } else {
+                                    app.requested.push(cmd);
+                                }
+                            }
+                        }
+                        // Smart Joints toggle pill (joint-based rotations in Build & Animate).
+                        {
+                            let on = app.edit.smart_joints;
+                            let tip = if !doc_on {
+                                "Open a model to use Smart Joints"
+                            } else if on {
+                                "Smart Joints ON: rotate articulated joints about their real axis (click to turn off)"
+                            } else {
+                                "Smart Joints OFF: click to enable joint-based rotation rings and limits"
+                            };
+                            let (r, resp) = ui.allocate_exact_size(vec2(54.0, 28.0), if doc_on { Sense::click() } else { Sense::hover() });
+                            resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, doc_on, on, "Joints Tool"));
+                            if on {
+                                ui.painter().rect_filled(r, t.radius, t.accent_bg());
+                            } else if doc_on && resp.hovered() {
+                                ui.painter().rect_filled(r, t.radius, t.bg3);
+                            }
+                            let fg = if on {
+                                t.accent
+                            } else if !doc_on {
+                                t.text3
+                            } else if resp.hovered() {
+                                t.text1
+                            } else {
+                                t.text2
+                            };
+                            ui.painter().text(r.center(), Align2::CENTER_CENTER, "Joints", egui::FontId::proportional(11.5), fg);
+                            if resp.on_hover_text(tip).clicked() && doc_on {
+                                toggle_smart = true;
                             }
                         }
                         sep(ui, &t);
                         for (i, label, mode) in [(Icon::Orbit, "Orbit", DragMode::Orbit), (Icon::Pan, "Pan", DragMode::Pan), (Icon::Search, "Zoom", DragMode::Zoom)] {
-                            if icon_button(ui, &t, i, label, true, app.viewport.mode == mode, 28.0).clicked() {
-                                app.viewport.mode = mode;
+                            let active = app.viewport.nav_mode == Some(mode);
+                            let tip = if active { format!("{label} — click again to unselect") } else { label.to_owned() };
+                            if super::icon_button_tip(ui, &t, i, label, &tip, true, active, 28.0).clicked() {
+                                app.viewport.nav_mode = if active { None } else { Some(mode) };
                             }
                         }
                         sep(ui, &t);
                         if icon_button(ui, &t, Icon::Fit, "Fit All", true, false, 28.0).clicked() {
                             app.requested.push("view.fit");
                         }
-                        icon_button(ui, &t, Icon::LookAt, "Look At Selection", false, false, 28.0);
+                        let can_look_at = selected > 0;
+                        let look_tip = if can_look_at { "Frame Selection (⌘F)" } else { "Select a piece to frame" };
+                        if super::icon_button_tip(ui, &t, Icon::LookAt, "Look At Selection", look_tip, can_look_at, false, 28.0).clicked() {
+                            app.requested.push("view.frame_selection");
+                        }
                         if icon_button(ui, &t, Icon::Home, "Home", true, false, 28.0).clicked() {
                             app.requested.push("view.home");
                         }
@@ -57,10 +112,53 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
                                 ui.add_enabled(false, egui::Button::selectable(false, other)).on_disabled_hover_text("Coming soon");
                             }
                         });
-                        popover_button(ui, &t, None, Icon::Sliders, "Display", false);
+                        let disp = popover_button(ui, &t, None, Icon::Sliders, "Display", true);
+                        egui::Popup::from_toggle_button_response(&disp).gap(8.0).show(|ui| {
+                            ui.set_min_width(196.0);
+                            ui.label(super::caption("Viewport & editing", &t));
+                            let mut local = app.edit.local_axes;
+                            if ui.checkbox(&mut local, "Local Axes (L)").changed() {
+                                toggle_local = true;
+                            }
+                            let mut coll = app.edit.collision;
+                            if ui.checkbox(&mut coll, "Collision Checks (K)").changed() {
+                                toggle_collision = true;
+                            }
+                            let mut smart = app.edit.smart_joints;
+                            if ui.checkbox(&mut smart, "Smart Joints").changed() {
+                                toggle_smart = true;
+                            }
+                            let mut markers = app.joints.show;
+                            if ui.checkbox(&mut markers, "Show Joint Markers").changed() {
+                                toggle_joints = true;
+                            }
+                            ui.separator();
+                            let mut auto_plan = app.prefs.auto_plan;
+                            if ui.checkbox(&mut auto_plan, "Plan Automatically").changed() {
+                                toggle_auto_plan = true;
+                            }
+                        });
                     });
                 });
         });
+    if toggle_local {
+        app.requested.push("view.local_axes");
+    }
+    if toggle_collision {
+        app.requested.push("edit.collision");
+    }
+    if toggle_joints {
+        app.requested.push("view.joints");
+    }
+    if toggle_smart {
+        app.requested.push("edit.smart_joints");
+    }
+    if toggle_auto_plan {
+        app.prefs.auto_plan = !app.prefs.auto_plan;
+        let _ = app.prefs.save(&app.support);
+        app.apply_viewport_prefs();
+    }
+    let bottom_pad = (ui.ctx().content_rect().bottom() - area.bottom()).max(0.0);
     if let Some(p) = &app.edit.placement {
         let short = super::library::short_name(&p.part.name);
         let status = p.status_text();
@@ -71,9 +169,14 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
             }
             _ => t.text1,
         };
+        let hint = if p.is_moving() {
+            "Release to drop · Alt free · R turn · Tab grip · Esc cancel"
+        } else {
+            "Click to place · Alt free · R turn · Tab grip · Esc cancel"
+        };
         Area::new(Id::unique("placement-hud"))
             .order(Order::Middle)
-            .anchor(Align2::LEFT_BOTTOM, vec2(12.0, -14.0))
+            .anchor(Align2::LEFT_BOTTOM, vec2(12.0, -bottom_pad - 14.0))
             .constrain_to(area)
             .show(ui.ctx(), |ui| {
                 Frame::NONE
@@ -86,36 +189,29 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
                             ui.spacing_mut().item_spacing.x = 8.0;
                             ui.label(RichText::new(short).strong().size(11.5).color(t.text1));
                             ui.label(RichText::new(status).strong().size(11.5).color(status_color));
-                            ui.label(
-                                RichText::new("Click to place · R turn · Tab grip · Esc cancel")
-                                    .size(11.0)
-                                    .color(t.text3),
-                            );
+                            ui.label(RichText::new(hint).size(11.0).color(t.text3));
                         });
                     });
             });
-    } else {
-        let selected = app.doc.session().selection().len();
-        if selected > 0 {
-            Area::new(Id::unique("selection-chip"))
-                .order(Order::Middle)
-                .anchor(Align2::LEFT_BOTTOM, vec2(12.0, -14.0))
-                .constrain_to(area)
-                .show(ui.ctx(), |ui| {
-                    Frame::NONE
-                        .fill(t.float_fill())
-                        .stroke(Stroke::new(1.0, t.border))
-                        .corner_radius(8)
-                        .inner_margin(Margin::symmetric(10, 5))
-                        .show(ui, |ui| {
-                            ui.horizontal(|ui| {
-                                let word = if selected == 1 { "piece" } else { "pieces" };
-                                ui.label(RichText::new(format!("{selected} {word}")).strong().size(11.5).color(t.text1));
-                                ui.label(RichText::new("selected").size(11.5).color(t.text2));
-                            });
+    } else if selected > 0 {
+        Area::new(Id::unique("selection-chip"))
+            .order(Order::Middle)
+            .anchor(Align2::LEFT_BOTTOM, vec2(12.0, -bottom_pad - 14.0))
+            .constrain_to(area)
+            .show(ui.ctx(), |ui| {
+                Frame::NONE
+                    .fill(t.float_fill())
+                    .stroke(Stroke::new(1.0, t.border))
+                    .corner_radius(8)
+                    .inner_margin(Margin::symmetric(10, 5))
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            let word = if selected == 1 { "piece" } else { "pieces" };
+                            ui.label(RichText::new(format!("{selected} {word}")).strong().size(11.5).color(t.text1));
+                            ui.label(RichText::new("selected").size(11.5).color(t.text2));
                         });
-                });
-        }
+                    });
+            });
     }
 }
 
@@ -146,10 +242,11 @@ fn popover_button(ui: &mut Ui, t: &crate::Theme, label: Option<&str>, i: Icon, n
 fn recording_chip(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
     let Some(seconds) = app.recording.active.as_ref().map(|r| r.seconds) else { return };
     let t = app.theme;
+    let bottom_pad = (ui.ctx().content_rect().bottom() - area.bottom()).max(0.0);
     let mut stop = false;
     Area::new(Id::unique("recording-chip"))
         .order(Order::Middle)
-        .anchor(Align2::LEFT_BOTTOM, vec2(12.0, -12.0))
+        .anchor(Align2::LEFT_BOTTOM, vec2(12.0, -bottom_pad - 12.0))
         .constrain_to(area)
         .show(ui.ctx(), |ui| {
             Frame::NONE

@@ -288,6 +288,29 @@ impl Session {
         unsafe { sys::bm_session_part_color(self.raw, piece) }
     }
 
+    /// Focuses the session on a submodel path (empty returns to the main model).
+    pub fn focus(&self, path: &[String]) -> Changed {
+        let cstrings: Vec<CString> = path.iter().filter_map(|s| CString::new(s.as_str()).ok()).collect();
+        let ptrs: Vec<*const std::ffi::c_char> = cstrings.iter().map(|s| s.as_ptr()).collect();
+        let ptr = if ptrs.is_empty() { std::ptr::null() } else { ptrs.as_ptr() };
+        take_change(unsafe { sys::bm_session_focus(self.raw, ptr, ptrs.len()) })
+    }
+
+    /// The currently focused submodel name, or empty string when editing the main model.
+    pub fn focused(&self) -> String {
+        take_string(unsafe { sys::bm_session_focused(self.raw) })
+    }
+
+    /// The focused submodel path (empty when at the main model).
+    pub fn focus_path(&self) -> Vec<String> {
+        let joined = take_string(unsafe { sys::bm_session_focus_path(self.raw) });
+        if joined.is_empty() {
+            Vec::new()
+        } else {
+            joined.split('\n').map(str::to_owned).collect()
+        }
+    }
+
     /// The pieces under an outline row.
     pub fn pieces_of_row(&self, id: &str) -> Vec<u32> {
         let Ok(c) = CString::new(id) else { return Vec::new() };

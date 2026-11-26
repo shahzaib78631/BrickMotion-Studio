@@ -238,8 +238,9 @@ impl Viewport {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum JointType {
+    #[default]
     Fixed,
     Hinge,
     Slider,
@@ -302,6 +303,25 @@ pub struct JointEdit {
     pub pieces: Vec<u32>,
     pub pivot: u32,
     pub pose: Pose,
+    pub error: Option<String>,
+}
+
+/// Kinematic branch and collision-free travel limits for one joint.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct JointInfo {
+    pub pieces: Vec<u32>,
+    pub kind: JointType,
+    pub pivot: Vec3,
+    pub axis: Vec3,
+    pub can_turn: bool,
+    pub can_slide: bool,
+    pub full_turn: bool,
+    pub min_deg: f64,
+    pub max_deg: f64,
+    pub min_slide: f64,
+    pub max_slide: f64,
+    pub min_blocker: String,
+    pub max_blocker: String,
     pub error: Option<String>,
 }
 
@@ -517,6 +537,87 @@ impl Inspection {
         let mut position = sys::BmVec3::default();
         unsafe { sys::bm_joint_edit_pose(h, &mut rotation, &mut position) };
         let error = borrowed(unsafe { sys::bm_joint_edit_error(h) });
+        let pivot = unsafe { sys::bm_joint_edit_pivot(h) };
+        unsafe { sys::bm_joint_edit_free(h) };
+        JointEdit {
+            pieces,
+            pivot,
+            pose: Pose { rotation: Mat3::from_raw(rotation), position: Vec3::from_raw(position) },
+            error: (!error.is_empty()).then_some(error),
+        }
+    }
+
+    /// Computes the articulated moving branch, resolved axis/pivot, and collision-free angular & slide travel.
+    pub fn joint_info(&mut self, fixed: u32, moving: u32, collision: bool) -> JointInfo {
+        let h = unsafe { sys::bm_inspection_joint_info(self.raw, fixed, moving, collision) };
+        if h.is_null() {
+            return JointInfo { error: Some("Couldn't inspect joint.".into()), ..Default::default() };
+        }
+        let d = unsafe { sys::bm_joint_info_data(h) };
+        let n = unsafe { sys::bm_joint_info_pieces(h, std::ptr::null_mut(), 0) };
+        let mut pieces = vec![0u32; n];
+        let got = unsafe { sys::bm_joint_info_pieces(h, pieces.as_mut_ptr(), pieces.len()) };
+        pieces.truncate(got.min(n));
+        let min_blocker = borrowed(unsafe { sys::bm_joint_info_min_blocker(h) });
+        let max_blocker = borrowed(unsafe { sys::bm_joint_info_max_blocker(h) });
+        let error = borrowed(unsafe { sys::bm_joint_info_error(h) });
+        unsafe { sys::bm_joint_info_free(h) };
+        JointInfo {
+            pieces,
+            kind: JointType::from_raw(d.kind),
+            pivot: Vec3::from_raw(d.pivot),
+            axis: Vec3::from_raw(d.axis),
+            can_turn: d.can_turn,
+            can_slide: d.can_slide,
+            full_turn: d.full_turn,
+            min_deg: d.min_deg,
+            max_deg: d.max_deg,
+            min_slide: d.min_slide,
+            max_slide: d.max_slide,
+            min_blocker,
+            max_blocker,
+            error: (!error.is_empty()).then_some(error),
+        }
+    }
+
+    /// Turns (`degrees`, up to ±360°) and/or slides (`slide_ldu`) the moving branch; `axis_override`
+    /// selects the axis for ball joints. Both zero detaches along release.
+    pub fn change_joint_ex(
+        &mut self,
+        fixed: u32,
+        moving: u32,
+        degrees: f64,
+        slide_ldu: f64,
+        axis_override: Vec3,
+        collision: bool,
+    ) -> JointEdit {
+        let h = unsafe {
+            sys::bm_inspection_change_joint_ex(
+                self.raw,
+                fixed,
+                moving,
+                degrees,
+                slide_ldu,
+                axis_override.to_raw(),
+                collision,
+            )
+        };
+        if h.is_null() {
+            return JointEdit {
+                pieces: Vec::new(),
+                pivot: sys::BM_NO_PIECE,
+                pose: Pose::default(),
+                error: Some("Couldn't move joint.".into()),
+            };
+        }
+        let error = borrowed(unsafe { sys::bm_joint_edit_error(h) });
+        let n = unsafe { sys::bm_joint_edit_pieces(h, std::ptr::null_mut(), 0) };
+        let mut pieces = vec![0u32; n];
+        let got = unsafe { sys::bm_joint_edit_pieces(h, pieces.as_mut_ptr(), pieces.len()) };
+        pieces.truncate(got.min(n));
+        let mut rotation = sys::BmMat3 { m: [0.0; 9] };
+        let mut position = sys::BmVec3 { x: 0.0, y: 0.0, z: 0.0 };
+        unsafe { sys::bm_joint_edit_pose(h, &mut rotation, &mut position) };
         let pivot = unsafe { sys::bm_joint_edit_pivot(h) };
         unsafe { sys::bm_joint_edit_free(h) };
         JointEdit {

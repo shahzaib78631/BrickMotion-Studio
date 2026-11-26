@@ -99,6 +99,18 @@ struct JointEdit {
   std::string error;
 };
 
+/// Kinematic branch, resolved axis/pivot, and collision-free angular & slide travel for one joint.
+struct JointInfo {
+  PieceList pieces;
+  JointType type = JointType::Fixed;
+  Vec3 pivot, axis;
+  bool canTurn = false, canSlide = false, fullTurn = false;
+  double minDeg = 0, maxDeg = 0;
+  double minSlide = 0, maxSlide = 0;
+  std::string minBlocker, maxBlocker;
+  std::string error;
+};
+
 /// Captured on the session's owner thread. Query it on a single background executor. Its
 /// captured model and library stay valid across document edits, reopens and closing windows.
 class AssemblyInspection {
@@ -117,6 +129,12 @@ class AssemblyInspection {
   LoosePieces loosePieces();
   /// Degrees signed about the joint axis. Zero separates the moving branch along its release.
   JointEdit changeJoint(uint32_t fixed, uint32_t moving, double degrees, bool collision);
+  /// Kinematic branch and collision-free angular / slide limits for `(fixed, moving)`.
+  JointInfo jointInfo(uint32_t fixed, uint32_t moving, bool collision);
+  /// Turns (`degrees`, up to ±360°) and/or slides (`slideLdu`) the moving branch; `axisOverride`
+  /// (when non-zero on a ball joint) chooses the rotation axis. Both zero detaches along release.
+  JointEdit changeJointEx(uint32_t fixed, uint32_t moving, double degrees, double slideLdu, Vec3 axisOverride,
+                          bool collision);
 
  private:
   friend void ::bmappRetainAssemblyInspection(bmapp::AssemblyInspection*);

@@ -84,6 +84,8 @@ pub struct Ctx {
     pub playing: bool,
     /// View › Joint Markers is on.
     pub joints: bool,
+    /// Smart Joints constraint mode is on.
+    pub smart_joints: bool,
     /// View › Record Viewport is recording.
     pub recording: bool,
     /// Submodels that can be filmed on their own.
@@ -215,6 +217,7 @@ pub fn title(c: &Command, ctx: &Ctx) -> String {
         "edit.collision" => if ctx.collision { "Collision Checks On" } else { "Collision Checks Off" }.to_owned(),
         "transport.play" => if ctx.playing { "Pause" } else { "Play" }.to_owned(),
         "view.joints" => if ctx.joints { "Hide Joint Markers" } else { "Show Joint Markers" }.to_owned(),
+        "edit.smart_joints" => if ctx.smart_joints { "Smart Joints On" } else { "Smart Joints Off" }.to_owned(),
         "view.record" => if ctx.recording { "Stop Recording Viewport" } else { "Record Viewport" }.to_owned(),
         _ => c.title.to_owned(),
     }
@@ -325,6 +328,7 @@ static REGISTRY: &[Command] = &[
     Command { id: "edit.cut", title: "Cut", icon: Icon::Razor, keys: Some("⌘X"), tip: "Copy the selected pieces to the clipboard and delete them.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Selection, menu: Menu::Edit },
     Command { id: "edit.paste", title: "Paste", icon: Icon::Plus, keys: Some("⌘V"), tip: "Paste pieces from the clipboard.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Document, menu: Menu::Edit },
     Command { id: "view.local_axes", title: "Local Axes", icon: Icon::Target, keys: Some("L"), tip: "Switch the gizmo between local and world axes.", workspace: Workspace::Build, tab: "", group: "View", when: When::Document, menu: Menu::None },
+    Command { id: "edit.smart_joints", title: "Smart Joints", icon: Icon::Rotate, keys: Some("J"), tip: "Rotate jointed parts about their real hinge, ball or slide axis with live collision limits.", workspace: Workspace::Build, tab: "Model", group: "Modify", when: When::Document, menu: Menu::None },
     Command { id: "edit.collision", title: "Collision Checks", icon: Icon::Magnet, keys: Some("K"), tip: "Turn collision checks on or off while placing parts.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Document, menu: Menu::None },
     Command { id: "step.edit", title: "Edit Step…", icon: Icon::Step, keys: None, tip: "Edit the chosen step's title, notes, pause and build order.", workspace: Workspace::Build, tab: "", group: "Steps", when: When::Step, menu: Menu::None },
     Command { id: "step.insert_before", title: "Insert Step Before", icon: Icon::Plus, keys: None, tip: "Insert an empty build step before the chosen step.", workspace: Workspace::Build, tab: "", group: "Steps", when: When::Step, menu: Menu::None },

@@ -116,6 +116,7 @@ pub struct LaneSubmodel {
     pub end: f64,
     pub attach: Option<f64>,
     pub name: String,
+    pub path: Vec<String>,
     pub pieces: Vec<u32>,
 }
 
@@ -178,6 +179,12 @@ impl BuildLanes {
                 let mut pieces = vec![0u32; sm.pieces];
                 let got = unsafe { sys::bm_lanes_submodel_pieces(raw, i, pieces.as_mut_ptr(), pieces.len()) };
                 pieces.truncate(got.min(sm.pieces));
+                let raw_path = crate::take_string(unsafe { sys::bm_lanes_submodel_path(raw, i) });
+                let path = if raw_path.is_empty() {
+                    Vec::new()
+                } else {
+                    raw_path.split('\n').map(str::to_owned).collect()
+                };
                 LaneSubmodel {
                     scheduled: sm.scheduled,
                     flight: sm.flight,
@@ -187,6 +194,7 @@ impl BuildLanes {
                     end: sm.end,
                     attach: sm.has_attach.then_some(sm.attach),
                     name: borrowed(sm.name),
+                    path,
                     pieces,
                 }
             })

@@ -13,8 +13,6 @@ use crate::previews::Preview;
 const TILE_W: f32 = 64.0;
 const TILE_H: f32 = 82.0;
 const GAP: f32 = 6.0;
-const COLS: usize = 4;
-const MAX_H: f32 = 380.0;
 const SEARCH_LIMIT: usize = 200;
 
 /// Drag-and-drop payload when dragging a part tile from the Library onto the Parts lane.
@@ -65,9 +63,11 @@ pub fn short_name(name: &str) -> &str {
     name.strip_suffix(".dat").unwrap_or(name)
 }
 
-pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
+pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, body_h: f32, pinned_h: bool) {
     let t0 = Instant::now();
     let t = app.theme;
+    let cols = (((ui.available_width() + GAP) / (TILE_W + GAP)).floor() as usize).max(3);
+    let list_h = (body_h - 36.0).max(160.0);
     let colour = app.edit.colour;
     let colors = app.colors();
     let color_info = colors.iter().find(|c| c.code == colour);
@@ -138,9 +138,9 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
 
         egui::ScrollArea::vertical()
             .id_salt("library-sections")
-            .min_scrolled_height(300.0)
-            .max_height(MAX_H)
-            .auto_shrink([false, true])
+            .min_scrolled_height(if pinned_h { list_h } else { list_h.min(340.0) })
+            .max_height(list_h)
+            .auto_shrink([false, !pinned_h])
             .show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = 6.0;
             for (heading, items) in [("Recent", recent.as_slice()), ("Frequent", frequent.as_slice()), ("Common", common.as_slice())] {
@@ -148,7 +148,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
                     continue;
                 }
                 ui.label(caption(heading, &t));
-                for chunk in items.chunks(COLS) {
+                for chunk in items.chunks(cols) {
                     if let Some(p) = tile_row(ui, app, chunk, colour) {
                         picked = Some(p);
                     }
@@ -166,17 +166,17 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
                 ui.label(caption("No matching parts", &t).size(12.0));
             });
         } else {
-            let row_count = results.len().div_ceil(COLS);
+            let row_count = results.len().div_ceil(cols);
             egui::ScrollArea::vertical()
                 .id_salt("library-grid")
-                .min_scrolled_height(300.0)
-                .max_height(MAX_H)
-                .auto_shrink([false, true])
+                .min_scrolled_height(if pinned_h { list_h } else { list_h.min(340.0) })
+                .max_height(list_h)
+                .auto_shrink([false, !pinned_h])
                 .show_rows(ui, TILE_H + GAP, row_count, |ui, range| {
                     ui.spacing_mut().item_spacing.y = GAP;
                     for row_idx in range {
-                        let start = row_idx * COLS;
-                        let end = (start + COLS).min(results.len());
+                        let start = row_idx * cols;
+                        let end = (start + cols).min(results.len());
                         if let Some(p) = tile_row(ui, app, &results[start..end], colour) {
                             picked = Some(p);
                         }

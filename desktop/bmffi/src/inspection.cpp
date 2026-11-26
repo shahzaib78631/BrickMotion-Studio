@@ -168,4 +168,44 @@ BmChange bm_session_seat_pieces(BmSession* s, const BmPieceMove* moves, size_t n
   });
 }
 
+struct BmJointInfoHandle {
+  bmapp::JointInfo info;
+};
+
+BmJointInfoHandle* bm_inspection_joint_info(BmInspection* i, uint32_t fixed, uint32_t moving, bool collision) {
+  if (!i || !i->inspection) return nullptr;
+  return guard<BmJointInfoHandle*>(nullptr, [&] {
+    return new BmJointInfoHandle{i->inspection->jointInfo(fixed, moving, collision)};
+  });
+}
+
+BmJointInfo bm_joint_info_data(const BmJointInfoHandle* h) {
+  if (!h) return BmJointInfo{};
+  const auto& d = h->info;
+  return BmJointInfo{
+    static_cast<int32_t>(d.type),
+    from_vec3(d.pivot),
+    from_vec3(d.axis),
+    d.canTurn,
+    d.canSlide,
+    d.fullTurn,
+    d.minDeg,
+    d.maxDeg,
+    d.minSlide,
+    d.maxSlide,
+  };
+}
+
+size_t bm_joint_info_pieces(const BmJointInfoHandle* h, uint32_t* out, size_t cap) {
+  if (!h) return 0;
+  const auto& p = h->info.pieces;
+  for (size_t i = 0; i < p.size() && i < cap && out; ++i) out[i] = p[i];
+  return p.size();
+}
+
+const char* bm_joint_info_min_blocker(const BmJointInfoHandle* h) { return h ? h->info.minBlocker.c_str() : ""; }
+const char* bm_joint_info_max_blocker(const BmJointInfoHandle* h) { return h ? h->info.maxBlocker.c_str() : ""; }
+const char* bm_joint_info_error(const BmJointInfoHandle* h) { return h ? h->info.error.c_str() : ""; }
+void bm_joint_info_free(BmJointInfoHandle* h) { delete h; }
+
 }  // extern "C"

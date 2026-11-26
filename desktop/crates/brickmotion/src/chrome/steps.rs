@@ -16,7 +16,6 @@ use crate::commands::{enabled, find};
 use crate::icons::{self, Icon};
 
 const ROW_H: f32 = 24.0;
-const MAX_H: f32 = 420.0;
 const COMMIT_INTERVAL: Duration = Duration::from_millis(300);
 
 #[derive(Debug)]
@@ -101,6 +100,14 @@ impl StepsState {
         self.rows.get(i)
     }
 
+    pub fn open_all(&mut self) {
+        self.open = (0..self.rows.len()).collect();
+    }
+
+    pub fn collapse_all(&mut self) {
+        self.open.clear();
+    }
+
     fn items_of(&mut self, s: &bm::Session, step: usize) -> &[ItemRow] {
         self.items.entry(step).or_insert_with(|| s.step_items(step))
     }
@@ -140,7 +147,7 @@ impl StepsState {
     }
 }
 
-pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
+pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, body_h: f32, pinned_h: bool) {
     let t0 = Instant::now();
     let t = app.theme;
     app.steps.sync(app.doc.session());
@@ -197,10 +204,13 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
     let mut clicked_item: Option<(Vec<u32>, egui::Modifiers)> = None;
     let mut menu_cmd: Option<(usize, &'static str)> = None;
 
+    let content_h = (lines.len() as f32 * ROW_H).max(ROW_H);
+    let scroll_h = if pinned_h { body_h } else { content_h.min(body_h) };
     egui::ScrollArea::vertical()
         .id_salt("steps-list")
-        .max_height(MAX_H)
-        .auto_shrink([false, true])
+        .min_scrolled_height(scroll_h)
+        .max_height(body_h)
+        .auto_shrink([false, !pinned_h])
         .show_rows(ui, ROW_H, lines.len(), |ui, range| {
             for idx in range {
                 match lines[idx] {

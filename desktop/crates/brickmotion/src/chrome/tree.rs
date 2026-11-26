@@ -11,7 +11,6 @@ use crate::icons::{self, Icon};
 
 const ROW_H: f32 = 24.0;
 const INDENT: f32 = 16.0;
-const MAX_H: f32 = 420.0;
 
 #[derive(Default)]
 pub struct Tree {
@@ -77,9 +76,15 @@ impl Tree {
         self.rows.is_empty()
     }
 
-    /// Opens every row (tests, and a future Expand All).
+    /// Opens every row (tests, and Expand All).
     pub fn open_all(&mut self) {
         self.open = self.rows.iter().map(|r| r.id.clone()).collect();
+    }
+
+    /// Collapses every submodel back to the root row.
+    pub fn collapse_all(&mut self) {
+        self.open.clear();
+        self.open.insert("root".into());
     }
 
     fn ancestors_open(&self, mut i: usize) -> bool {
@@ -146,7 +151,7 @@ fn selected_submodel_rows(app: &mut BrickMotionApp, selection: &HashSet<u32>) ->
     ids
 }
 
-pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
+pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, body_h: f32, pinned_h: bool) {
     let t0 = Instant::now();
     let t = app.theme;
     app.tree.sync(app.doc.session());
@@ -157,10 +162,18 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
     // One extra line for the "Not used" header.
     let lines = shown.len() + first_unused.is_some() as usize;
     let mut clicked: Option<(usize, egui::Modifiers)> = None;
+    let mut dbl_clicked: Option<usize> = None;
     let mut toggled: Option<usize> = None;
     let mut exported: Option<(crate::FileExport, String)> = None;
     let mut video: Option<String> = None;
-    egui::ScrollArea::vertical().max_height(MAX_H).auto_shrink([false, true]).show_rows(ui, ROW_H, lines, |ui, range| {
+    let content_h = (lines as f32 * ROW_H).max(ROW_H);
+    let scroll_h = if pinned_h { body_h } else { content_h.min(body_h) };
+    egui::ScrollArea::vertical()
+        .id_salt("tree-list")
+        .min_scrolled_height(scroll_h)
+        .max_height(body_h)
+        .auto_shrink([false, !pinned_h])
+        .show_rows(ui, ROW_H, lines, |ui, range| {
         for line in range {
             let k = match first_unused {
                 Some(u) if line == u => {
@@ -211,7 +224,9 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
             let text_rect = Rect::from_min_max(pos2(x + 38.0, rect.top()), pos2(right, rect.bottom()));
             let galley = ui.painter().layout(row.name.clone(), FontId::proportional(12.5), if dim { t.text3 } else { t.text1 }, f32::INFINITY);
             ui.painter().with_clip_rect(text_rect).galley(pos2(text_rect.left(), y - galley.size().y / 2.0), galley, t.text1);
-            if resp.clicked() {
+            if resp.double_clicked() && !row.def.is_empty() && !row.unused {
+                dbl_clicked = Some(i);
+            } else if resp.clicked() {
                 clicked = Some((i, ui.input(|inp| inp.modifiers)));
             }
             let def = row.def.clone();
@@ -233,7 +248,22 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
             }
         }
     });
-    if let Some(i) = toggled {
+    if let Some(i) = dbl_clicked {
+        // Walk ancestors up to root to build the submodel focus path.
+        let mut path = Vec::new();
+        let mut cur = Some(i);
+        while let Some(idx) = cur {
+            let r = &app.tree.rows[idx];
+            if !r.def.is_empty() {
+                path.push(r.def.clone());
+            }
+            cur = r.parent;
+        }
+        path.reverse();
+        if !path.is_empty() {
+            app.focus_submodel(&path);
+        }
+    } else if let Some(i) = toggled {
         let id = app.tree.rows[i].id.clone();
         if !app.tree.open.remove(&id) {
             app.tree.open.insert(id);

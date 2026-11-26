@@ -269,8 +269,13 @@ pub fn show(ui: &Ui, app: &mut BrickMotionApp) {
         painter.circle(p, 5.5, t.playhead, Stroke::new(1.5, Color32::WHITE));
     }
 
-    // The hint sits low in the view, above the floating view bar.
-    let at = pos2(rect.center().x, rect.bottom() - 66.0);
+    // The hint sits low in the view, above the floating view bar (and above the floating timeline in Animate).
+    let tl_clearance = if app.workspace == crate::Workspace::Animate {
+        app.timeline.height + 16.0
+    } else {
+        0.0
+    };
+    let at = pos2(rect.center().x, rect.bottom() - tl_clearance - 66.0);
     let galley = painter.layout_no_wrap(HINT.to_owned(), FontId::proportional(11.5), t.text2);
     let bg = Rect::from_center_size(at, galley.size() + vec2(22.0, 12.0));
     painter.rect(bg, 8.0, t.float_fill(), Stroke::new(1.0, t.border2), egui::StrokeKind::Inside);

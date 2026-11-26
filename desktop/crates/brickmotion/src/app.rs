@@ -88,6 +88,10 @@ pub struct BrickMotionApp {
     colors: Option<std::rc::Rc<Vec<bm::ColorInfo>>>,
     /// The Browser's model tree.
     pub tree: chrome::tree::Tree,
+    /// Floating Browser layout (position offset, size, collapsed).
+    pub browser: chrome::browser::BrowserState,
+    /// Floating Properties layout (hidden, collapsed, offset, width).
+    pub properties: chrome::properties::PropertiesState,
     /// The command palette.
     pub palette: crate::palette::Palette,
     /// Tests: file dialogs are recorded here instead of shown.
@@ -242,6 +246,8 @@ impl BrickMotionApp {
             text_focus: false,
             palette: Default::default(),
             tree: Default::default(),
+            browser: Default::default(),
+            properties: Default::default(),
             snap: None,
             colors: None,
             dialog_requests: Vec::new(),
@@ -329,10 +335,48 @@ impl BrickMotionApp {
                 && self.has_document
                 && self.prefs.auto_plan
                 && self.piece_count() > 0
-                && self.transport.state.plan == bm::playback::PlanState::Idle
+                && (self.transport.state.plan == bm::playback::PlanState::Idle || self.transport.state.stale)
                 && let Some(vp) = self.doc.viewport()
             {
                 self.transport.plan(vp);
+            }
+        }
+    }
+
+    /// Closes right-hand floating editors so Properties (or a Settings page) can take focus cleanly.
+    pub fn close_floating_editors(&mut self) {
+        self.look.open = false;
+        self.checks.open = false;
+        self.loose.open = false;
+        self.fits.open = false;
+        self.queue_panel.open = false;
+        self.movie.open = false;
+        self.still.open = false;
+        self.panels.camera = false;
+        self.panels.camera_focus = None;
+        self.camera_selection = None;
+        self.motion.target = None;
+        self.joints.open = None;
+    }
+
+    /// Focuses the viewport on a submodel path (empty returns to the main model), matching web's submodel view.
+    pub fn focus_submodel(&mut self, path: &[String]) {
+        self.cancel_placement();
+        let c = self.doc.session().focus(path);
+        let ok = c.refused.is_none();
+        self.edited(c);
+        if ok {
+            self.edit.step = None;
+            self.transport.focused_step = None;
+            self.transport.step_preview = None;
+            self.snap = None;
+            let has_pieces = self.piece_count() > 0;
+            if let Some(vp) = self.doc.viewport() {
+                vp.show_rest();
+                vp.fit_all();
+                if self.workspace == Workspace::Animate && self.prefs.auto_plan && has_pieces {
+                    self.transport.plan(vp);
+                }
             }
         }
     }
@@ -604,6 +648,7 @@ impl BrickMotionApp {
             workspace: self.workspace,
             playing: self.transport.state.playing || self.transport.state.waiting_to_play,
             joints: self.joints.show,
+            smart_joints: self.edit.smart_joints,
             recording: self.recording(),
             submodels: self.submodel_count(),
         }
@@ -676,13 +721,31 @@ impl BrickMotionApp {
             "view.fit" | "view.home" => self.viewport.queue(ViewOp::Fit),
             "view.frame_selection" => self.viewport.queue(ViewOp::FrameSelection),
             "view.palette" => self.palette.show_palette(),
-            "tool.select" => self.edit.tool = crate::edit::Tool::Select,
+            "tool.select" => {
+                self.edit.tool = crate::edit::Tool::Select;
+                self.viewport.nav_mode = None;
+            }
             "model.add_part" => {
+                self.browser.collapsed = false;
                 self.browser_tab = 3;
                 self.focus_filter = true;
             }
-            "model.move" => self.edit.tool = crate::edit::Tool::Move,
-            "model.rotate_tool" => self.edit.tool = crate::edit::Tool::Rotate,
+            "model.move" => {
+                self.viewport.nav_mode = None;
+                self.edit.tool = if self.edit.tool == crate::edit::Tool::Move {
+                    crate::edit::Tool::Select
+                } else {
+                    crate::edit::Tool::Move
+                };
+            }
+            "model.rotate_tool" => {
+                self.viewport.nav_mode = None;
+                self.edit.tool = if self.edit.tool == crate::edit::Tool::Rotate {
+                    crate::edit::Tool::Select
+                } else {
+                    crate::edit::Tool::Rotate
+                };
+            }
             "model.rotate" => crate::edit::turn(self, true),
             "model.rotate_back" => crate::edit::turn(self, false),
             "model.recolour" => self.swatches.open(chrome::swatches::Target::Selection),
@@ -701,6 +764,12 @@ impl BrickMotionApp {
             "edit.cut" => crate::edit::cut(self),
             "edit.paste" => crate::edit::paste(self),
             "view.local_axes" => self.edit.local_axes = !self.edit.local_axes,
+            "edit.smart_joints" => {
+                self.edit.smart_joints = !self.edit.smart_joints;
+                if !self.edit.smart_joints && !self.joints.show {
+                    self.joints.open = None;
+                }
+            }
             "edit.collision" => self.edit.collision = !self.edit.collision,
             "step.edit" => {
                 if let Some(i) = self.edit.step {
@@ -826,10 +895,30 @@ impl BrickMotionApp {
             "file.export_ldraw" => self.export_bytes(crate::FileExport::Ldraw, None),
             "file.export_plan" => self.export_bytes(crate::FileExport::Plan, None),
             "edit.copy_viewport" => self.copy_viewport_image(),
-            "model.look" | "view.look" => chrome::look_panel::toggle(self),
-            "inspect.model_checks" => chrome::checks_panel::toggle(self),
-            "model.seat_loose" => chrome::loose_panel::toggle(self),
-            "model.what_fits" => chrome::fits_panel::toggle(self),
+            "model.look" | "view.look" => {
+                if !self.look.open {
+                    self.properties_page = chrome::properties::Page::Inspector;
+                }
+                chrome::look_panel::toggle(self);
+            }
+            "inspect.model_checks" => {
+                if !self.checks.open {
+                    self.properties_page = chrome::properties::Page::Inspector;
+                }
+                chrome::checks_panel::toggle(self);
+            }
+            "model.seat_loose" => {
+                if !self.loose.open {
+                    self.properties_page = chrome::properties::Page::Inspector;
+                }
+                chrome::loose_panel::toggle(self);
+            }
+            "model.what_fits" => {
+                if !self.fits.open {
+                    self.properties_page = chrome::properties::Page::Inspector;
+                }
+                chrome::fits_panel::toggle(self);
+            }
             "model.inventory" | "file.import_inventory" => self.open_inventory_dialog(),
             "output.render_queue" => chrome::queue_panel::toggle(self),
             "output.export_still" => chrome::export_still::toggle(self),
@@ -952,13 +1041,22 @@ impl BrickMotionApp {
                 }
             }
             "model.build_settings" => {
+                self.close_floating_editors();
+                self.properties.hidden = false;
+                self.properties.collapsed = false;
                 self.properties_page = chrome::properties::Page::BuildSettings;
             }
             "video.flights" => {
+                self.close_floating_editors();
+                self.properties.hidden = false;
+                self.properties.collapsed = false;
                 self.properties_page = chrome::properties::Page::BuildSettings;
                 self.build_settings.scroll_to_flights = true;
             }
             "video.staging" => {
+                self.close_floating_editors();
+                self.properties.hidden = false;
+                self.properties.collapsed = false;
                 self.properties_page = chrome::properties::Page::Staging;
             }
             "video.straighten" => {
@@ -967,6 +1065,9 @@ impl BrickMotionApp {
                 self.staging.straighten = false;
             }
             "video.snap_sound" | "video.mix" => {
+                self.close_floating_editors();
+                self.properties.hidden = false;
+                self.properties.collapsed = false;
                 self.properties_page = chrome::properties::Page::SnapSound;
             }
             _ => return false,
@@ -1059,7 +1160,9 @@ impl BrickMotionApp {
         };
         match outcome {
             Some(crate::placement::Placed::Done) => {
-                if let Some(p) = self.edit.placement.take() {
+                if let Some(p) = self.edit.placement.take()
+                    && !p.is_moving()
+                {
                     self.history.record_part(&p.part.name, &p.part.description, &p.part.category);
                     let _ = self.history.save(&self.support);
                 }
@@ -1069,8 +1172,17 @@ impl BrickMotionApp {
                 ctx.request_repaint();
             }
             Some(crate::placement::Placed::Refused(why)) => {
+                let moving = self.edit.placement.as_ref().is_some_and(|p| p.is_moving());
+                if moving {
+                    self.cancel_placement();
+                }
                 self.last_refusal = Some(why.clone());
-                crate::notices::push(&mut self.notices, Notice::Warning { title: "Couldn't place part".into(), detail: why });
+                let title = if moving { "Couldn't move piece" } else { "Couldn't place part" };
+                crate::notices::push(&mut self.notices, Notice::Warning { title: title.into(), detail: why });
+            }
+            Some(crate::placement::Placed::Cancelled) => {
+                self.cancel_placement();
+                ctx.request_repaint();
             }
             None => {
                 ctx.request_repaint_after(Duration::from_millis(30));
@@ -1407,9 +1519,6 @@ impl eframe::App for BrickMotionApp {
             chrome::camera_lane::sync(self);
         }
         chrome::titlebar::show(ui, self);
-        if self.workspace == Workspace::Animate {
-            chrome::timeline::show(ui, self);
-        }
         chrome::central(ui, self);
         self.start_startup();
         crate::palette::show(ui, self);

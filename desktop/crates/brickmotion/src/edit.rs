@@ -17,11 +17,13 @@ pub struct EditState {
     pub tool: Tool,
     pub local_axes: bool,
     pub collision: bool,
+    /// Smart Joints: engage articulated joint rotation rings & limits when a jointed piece is selected.
+    pub smart_joints: bool,
     /// LDraw colour code for newly placed parts (default 71: Light Bluish Grey).
     pub colour: i32,
     /// Step chosen in the Steps tab (new parts go here, or into the last step when None).
     pub step: Option<usize>,
-    /// Live library part placement following the pointer, when active.
+    /// Live library part placement or mouse piece drag following the pointer, when active.
     pub placement: Option<crate::placement::Placement>,
     /// True while an ⌥-modified shortcut (e.g. ⌥E / ⌥Q) is being dispatched.
     pub(crate) alt_held: bool,
@@ -33,6 +35,7 @@ impl Default for EditState {
             tool: Tool::Select,
             local_axes: false,
             collision: true,
+            smart_joints: false,
             colour: 71,
             step: None,
             placement: None,

@@ -958,6 +958,31 @@ BMFFI_API void bm_fitting_parts_free(BmFittingParts* f);
 BMFFI_API BmChange bm_session_seat_pieces(BmSession* s, const BmPieceMove* moves, size_t n, uint64_t generation,
                                           uint64_t version);
 
+// ---- Submodel focus and extended joint kinematics ----
+typedef struct BmJointInfoHandle BmJointInfoHandle;
+typedef struct {
+  int32_t kind;
+  BmVec3 pivot, axis;
+  bool can_turn, can_slide, full_turn;
+  double min_deg, max_deg;
+  double min_slide, max_slide;
+} BmJointInfo;
+
+BMFFI_API BmChange bm_session_focus(BmSession* s, const char* const* path, size_t n);
+BMFFI_API BmString bm_session_focused(const BmSession* s);
+BMFFI_API BmString bm_session_focus_path(const BmSession* s);
+BMFFI_API BmString bm_lanes_submodel_path(const BmLanes* l, size_t i);
+
+BMFFI_API BmJointInfoHandle* bm_inspection_joint_info(BmInspection* i, uint32_t fixed, uint32_t moving, bool collision);
+BMFFI_API BmJointInfo bm_joint_info_data(const BmJointInfoHandle* h);
+BMFFI_API size_t bm_joint_info_pieces(const BmJointInfoHandle* h, uint32_t* out, size_t cap);
+BMFFI_API const char* bm_joint_info_min_blocker(const BmJointInfoHandle* h);
+BMFFI_API const char* bm_joint_info_max_blocker(const BmJointInfoHandle* h);
+BMFFI_API const char* bm_joint_info_error(const BmJointInfoHandle* h);
+BMFFI_API void bm_joint_info_free(BmJointInfoHandle* h);
+BMFFI_API BmJointEdit* bm_inspection_change_joint_ex(BmInspection* i, uint32_t fixed, uint32_t moving, double degrees,
+                                                     double slide_ldu, BmVec3 axis_override, bool collision);
+
 BMFFI_API BmInventory* bm_inventory_capture(const BmSession* s, int32_t step);
 BMFFI_API BmInventoryReport* bm_inventory_prepare(BmInventory* inv, const char* path);
 BMFFI_API const char* bm_inventory_report_error(const BmInventoryReport* r);

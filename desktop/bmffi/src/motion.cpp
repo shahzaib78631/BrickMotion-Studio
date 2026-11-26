@@ -179,6 +179,15 @@ BmJointEdit* bm_inspection_change_joint(BmInspection* i, uint32_t fixed, uint32_
   if (!i) return nullptr;
   return handle<BmJointEdit>([&] { return new BmJointEdit{i->inspection->changeJoint(fixed, moving, degrees, collision)}; });
 }
+BmJointEdit* bm_inspection_change_joint_ex(BmInspection* i, uint32_t fixed, uint32_t moving, double degrees,
+                                           double slide_ldu, BmVec3 axis_override, bool collision) {
+  if (!i) return nullptr;
+  return handle<BmJointEdit>([&] {
+    return new BmJointEdit{
+      i->inspection->changeJointEx(fixed, moving, degrees, slide_ldu, to_vec3(axis_override), collision),
+    };
+  });
+}
 size_t bm_joint_edit_pieces(const BmJointEdit* e, uint32_t* out, size_t cap) {
   if (!e) return 0;
   const auto& p = e->edit.pieces;

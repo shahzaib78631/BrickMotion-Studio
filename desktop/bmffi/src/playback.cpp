@@ -247,6 +247,19 @@ size_t bm_lanes_submodel_pieces(const BmLanes* l, size_t i, uint32_t* out, size_
   return copySlice(l->lanes.submodels[i].pieces, out, cap);
 }
 
+BmString bm_lanes_submodel_path(const BmLanes* l, size_t i) {
+  if (!l || i >= l->lanes.submodels.size()) return BmString{nullptr, 0};
+  return bmffi::guard(BmString{nullptr, 0}, [&] {
+    const auto& p = l->lanes.submodels[i].path;
+    std::string joined;
+    for (size_t k = 0; k < p.size(); ++k) {
+      if (k > 0) joined.push_back('\n');
+      joined += p[k];
+    }
+    return bmffi::make(joined);
+  });
+}
+
 size_t bm_lanes_diagnostics(const BmLanes* l, size_t* out, size_t cap) {
   if (!l) return 0;
   return copySlice(l->lanes.diagnostics, out, cap);

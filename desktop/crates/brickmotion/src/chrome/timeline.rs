@@ -7,7 +7,7 @@ use bm::playback::{PlanState, Segment};
 use bm::steps::StepFields;
 use bm::timeline::{TimelineView, tick_interval};
 use egui::{
-    Align, Align2, Color32, CornerRadius, CursorIcon, FontId, Frame, Id, Key, Layout, Margin, Order, Panel,
+    Align, Align2, Area, Color32, CornerRadius, CursorIcon, FontId, Id, Key, Layout, Margin, Order,
     Rect, RichText, Sense, Stroke, StrokeKind, Ui, UiBuilder, WidgetInfo, pos2, vec2,
 };
 
@@ -149,33 +149,39 @@ fn format_rate(r: f64) -> String {
     }
 }
 
-pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
+pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
     let frame_t0 = Instant::now();
     let t = app.theme;
 
-    Panel::bottom("timeline")
-        .exact_size(app.timeline.height + 14.0)
-        .resizable(false)
-        .show_separator_line(false)
-        .frame(Frame::NONE.fill(t.bg0).inner_margin(egui::Margin { left: 8, right: 8, top: 6, bottom: 8 }))
-        .show(ui, |ui| {
-            // A floating card, like the ribbon (m5-rulings.md).
-            let full = ui.max_rect();
+    let max_h = (area.height() - super::ribbon::SPACE - 120.0).clamp(180.0, 520.0);
+    let h = app.timeline.height.clamp(180.0, max_h);
+    let w = (area.width() - 16.0).max(320.0);
+    let card_pos = pos2(area.left() + 8.0, (area.bottom() - h - 8.0).max(area.top() + super::ribbon::SPACE + 8.0));
+
+    Area::new(Id::unique("timeline"))
+        .order(Order::Middle)
+        .fixed_pos(card_pos)
+        .constrain(false)
+        .show(ui.ctx(), |ui| {
+            let full = Rect::from_min_size(card_pos, vec2(w, h));
+            ui.set_min_size(full.size());
+            ui.set_max_size(full.size());
             let line = Stroke::new(1.0, t.border);
             let card = super::float_frame(&t);
-            ui.painter().rect(full, card.corner_radius, t.bg1, card.stroke, egui::StrokeKind::Outside);
+            ui.painter().add(card.shadow.as_shape(full, card.corner_radius));
+            ui.painter().rect(full, card.corner_radius, card.fill, card.stroke, StrokeKind::Inside);
 
             // Top-edge vertical resize grip.
-            let grip = Rect::from_min_size(full.min, vec2(full.width(), 5.0));
+            let grip = Rect::from_min_size(full.min, vec2(full.width(), 6.0));
             let grip_resp = ui
                 .interact(grip, ui.scope_id().with("tl-resize"), Sense::drag())
                 .on_hover_cursor(CursorIcon::ResizeVertical);
             if grip_resp.dragged() {
-                app.timeline.height = (app.timeline.height - grip_resp.drag_delta().y).clamp(180.0, 520.0);
+                app.timeline.height = (app.timeline.height - grip_resp.drag_delta().y).clamp(180.0, max_h);
             }
 
             let header = Rect::from_min_size(full.min, vec2(full.width(), HEADER_H));
-            ui.painter().hline(full.x_range(), header.bottom() - 0.5, line);
+            ui.painter().hline(full.x_range().shrink(1.0), header.bottom() - 0.5, line);
             header_row(ui, app, header);
 
             let body = Rect::from_min_max(pos2(full.left(), header.bottom()), full.max);
@@ -643,7 +649,7 @@ fn timeline_body(ui: &mut Ui, app: &mut BrickMotionApp, heads: Rect, lanes: Rect
 
                 // Build sub-lanes when open
                 if layout.build_open {
-                    let sub_bg = Color32::from_rgb(0x17, 0x18, 0x1b);
+                    let sub_bg = Color32::from_rgba_unmultiplied(0x17, 0x18, 0x1b, 200);
 
                     // 2a. Sequence
                     split_row(
@@ -1695,6 +1701,7 @@ fn submodels_lane(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64, dept
     let clip_p = ui.painter_at(r);
 
     let mut picked: Option<(Vec<u32>, f64)> = None;
+    let mut open_submodel: Option<Vec<String>> = None;
     for (idx, sm) in lanes.submodels.iter().enumerate() {
         if sm.depth != depth || sm.end < vis0 || sm.start > vis1 {
             continue;
@@ -1706,7 +1713,9 @@ fn submodels_lane(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64, dept
         if rect.right() < r.left() || rect.left() > r.right() {
             continue;
         }
-        let resp = ui.interact(rect.intersect(r), ui.scope_id().with(("tl-sub", idx)), Sense::click());
+        let resp = ui
+            .interact(rect.intersect(r), ui.scope_id().with(("tl-sub", idx)), Sense::click())
+            .on_hover_text(format!("{} — click to select · double-click to open submodel", sm.name));
         resp.widget_info(|| WidgetInfo::labeled(egui::Role::Button, true, &sm.name));
         clip_p.rect(
             rect,
@@ -1741,12 +1750,16 @@ fn submodels_lane(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64, dept
                 );
             }
         }
-        if resp.clicked() {
+        if resp.double_clicked() && !sm.path.is_empty() {
+            open_submodel = Some(sm.path.clone());
+        } else if resp.clicked() {
             picked = Some((sm.pieces.clone(), sm.end));
         }
     }
 
-    if let Some((pieces, end)) = picked {
+    if let Some(path) = open_submodel {
+        app.focus_submodel(&path);
+    } else if let Some((pieces, end)) = picked {
         app.doc.session().select(&pieces, bm::SelectMode::Replace);
         if let Some(vp) = app.doc.viewport() {
             app.transport.seek(vp, end);

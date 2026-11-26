@@ -61,16 +61,65 @@ pub fn central(ui: &mut Ui, app: &mut BrickMotionApp) {
         });
         let path = crate::flight_path::handle_pointer(ui, app);
         app.viewport.block_primary = path || joints::handle_pointer(ui, app);
+        app.viewport.suppress_rotate_gizmo = joints::owns_rotate_gizmo(app);
+        app.viewport.suppress_auto_plan = app.joints.dragging();
         app.viewport.show(ui, &mut app.doc, &mut app.edit, &t, app.prefs.auto_plan, playing, planning);
+        if let Some(piece) = app.viewport.double_clicked_piece.take() {
+            if app.workspace == crate::Workspace::Animate {
+                let start = app
+                    .transport
+                    .flights()
+                    .iter()
+                    .find(|f| f.piece == piece)
+                    .map_or(0.0, |f| f.start);
+                crate::flights::edit_flight(app, piece, start);
+            } else {
+                // In Build mode, double-clicking a piece inside a submodel opens that submodel.
+                let sub = {
+                    app.doc.session().select(&[piece], bm::SelectMode::Replace);
+                    let snap = app.snapshot();
+                    snap.described
+                        .first()
+                        .filter(|p| !p.submodel_path.is_empty())
+                        .map(|p| p.submodel_path.split('/').map(str::to_owned).collect::<Vec<_>>())
+                };
+                if let Some(path) = sub {
+                    app.focus_submodel(&path);
+                }
+            }
+        }
         crate::flight_path::show(ui, app);
         joints::show(ui, app);
         // The ribbon floats over the top of the view; the other panels start below it.
         ribbon::show(ui, app, rect);
-        let below = egui::Rect::from_min_max(egui::pos2(rect.left(), rect.top() + ribbon::SPACE), rect.max);
+        submodel_breadcrumb(ui, app, rect);
+        let tl_clearance = if app.workspace == crate::Workspace::Animate {
+            app.timeline.height + 16.0
+        } else {
+            0.0
+        };
+        let safe = Rect::from_min_max(
+            rect.min,
+            egui::pos2(rect.right(), (rect.bottom() - tl_clearance).max(rect.top() + ribbon::SPACE + 120.0)),
+        );
+        let below = Rect::from_min_max(egui::pos2(safe.left(), safe.top() + ribbon::SPACE), safe.max);
         browser::show(ui, app, below);
-        // Floating editors take the top right under the navigator; Properties steps aside while one is open.
+        // Floating editors take the top right under the navigator; Properties steps aside while one is open,
+        // except when an explicit Properties settings page (Build Settings, Staging, Snap Sound) is active.
         let mut next_top = below.top() + navigator::CLEARANCE;
-        let editing = app.camera_selection.is_some() || app.panels.camera || keys_panel::is_open(app) || motion_panel::is_open(app) || joints::is_open(app) || look_panel::is_open(app) || queue_panel::is_open(app) || export_movie::is_open(app) || export_still::is_open(app) || checks_panel::is_open(app) || loose_panel::is_open(app) || fits_panel::is_open(app);
+        let editing = !app.properties_page.is_settings()
+            && (app.camera_selection.is_some()
+                || app.panels.camera
+                || keys_panel::is_open(app)
+                || motion_panel::is_open(app)
+                || joints::is_open(app)
+                || look_panel::is_open(app)
+                || queue_panel::is_open(app)
+                || export_movie::is_open(app)
+                || export_still::is_open(app)
+                || checks_panel::is_open(app)
+                || loose_panel::is_open(app)
+                || fits_panel::is_open(app));
         if editing {
             checks_panel::show(ui, app, below, &mut next_top);
             loose_panel::show(ui, app, below, &mut next_top);
@@ -87,10 +136,66 @@ pub fn central(ui: &mut Ui, app: &mut BrickMotionApp) {
             properties::show(ui, app, below);
         }
         navigator::show(ui, app, below);
-        callout::show(ui, app, rect);
-        viewbar::show(ui, app, rect);
-        notices::show(ui, app, rect);
+        callout::show(ui, app, safe);
+        viewbar::show(ui, app, safe);
+        notices::show(ui, app, safe);
+        if app.workspace == crate::Workspace::Animate {
+            timeline::show(ui, app, rect);
+        }
     });
+}
+
+/// Floating breadcrumb chip shown at the top center when focused inside a submodel.
+fn submodel_breadcrumb(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
+    if !app.has_document {
+        return;
+    }
+    let path = app.doc.session().focus_path();
+    if path.is_empty() {
+        return;
+    }
+    let t = app.theme;
+    let mut target: Option<Vec<String>> = None;
+    egui::Area::new(egui::Id::unique("submodel-breadcrumb"))
+        .order(egui::Order::Middle)
+        .anchor(Align2::CENTER_TOP, egui::vec2(0.0, ribbon::SPACE + 10.0))
+        .constrain_to(area)
+        .show(ui.ctx(), |ui| {
+            float_frame(&t)
+                .corner_radius(CornerRadius::same(8))
+                .inner_margin(Margin::symmetric(10, 5))
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 6.0;
+                        let root_btn = ui
+                            .add(egui::Button::new(egui::RichText::new("Main model").size(12.0).color(t.accent)).frame(false))
+                            .on_hover_cursor(egui::CursorIcon::PointingHand);
+                        if root_btn.clicked() {
+                            target = Some(Vec::new());
+                        }
+                        for (idx, seg) in path.iter().enumerate() {
+                            ui.label(egui::RichText::new("›").size(12.0).color(t.text3));
+                            let is_last = idx + 1 == path.len();
+                            if is_last {
+                                ui.label(egui::RichText::new(seg).strong().size(12.0).color(t.text1));
+                            } else if ui
+                                .add(egui::Button::new(egui::RichText::new(seg).size(12.0).color(t.accent)).frame(false))
+                                .on_hover_cursor(egui::CursorIcon::PointingHand)
+                                .clicked()
+                            {
+                                target = Some(path[..=idx].to_vec());
+                            }
+                        }
+                        ui.add_space(4.0);
+                        if icon_button_tip(ui, &t, Icon::Close, "Exit Submodel", "Return to Main model", true, false, 20.0).clicked() {
+                            target = Some(Vec::new());
+                        }
+                    });
+                });
+        });
+    if let Some(p) = target {
+        app.focus_submodel(&p);
+    }
 }
 
 /// A floating panel over the viewport.
@@ -172,21 +277,43 @@ pub fn caption(s: &str, t: &Theme) -> egui::RichText {
     egui::RichText::new(s).size(SMALL).color(t.text3)
 }
 
-/// The panel header: grip, title, then actions on the right.
-pub fn panel_header(ui: &mut Ui, t: &Theme, title: &str, actions: impl FnOnce(&mut Ui)) {
-    Frame::NONE.inner_margin(Margin { left: 10, right: 8, top: 0, bottom: 0 }).show(ui, |ui| {
+/// The panel header: draggable grip + title on the left, then actions on the right.
+/// Returns the drag delta if the user dragged the header to move the panel.
+pub fn panel_header(ui: &mut Ui, t: &Theme, id_salt: &str, title: &str, draw_bottom_line: bool, actions: impl FnOnce(&mut Ui)) -> Vec2 {
+    let mut moved = Vec2::ZERO;
+    let resp = Frame::NONE.inner_margin(Margin { left: 10, right: 8, top: 0, bottom: 0 }).show(ui, |ui| {
         ui.set_height(38.0);
         ui.horizontal_centered(|ui| {
+            let grip_start = ui.cursor().min;
             icons::icon(ui, Icon::Grip, 16.0, t.text3);
-            ui.label(egui::RichText::new(title).strong().color(t.text1));
+            let title_resp = ui.label(egui::RichText::new(title).strong().color(t.text1));
+            let drag_r = Rect::from_min_max(
+                egui::pos2(grip_start.x - 4.0, ui.max_rect().top()),
+                egui::pos2((title_resp.rect.right() + 12.0).max(grip_start.x + 120.0), ui.max_rect().bottom()),
+            );
+            let drag = ui.interact(drag_r, ui.scope_id().with(("panel-drag", id_salt)), Sense::drag());
+            drag.widget_info(|| WidgetInfo::labeled(egui::Role::Button, true, format!("Move {title}")));
+            if drag.dragged() {
+                moved += drag.drag_delta();
+            }
+            if drag.hovered() || drag.dragged() {
+                ui.ctx().set_cursor_icon(if drag.dragged() {
+                    egui::CursorIcon::Grabbing
+                } else {
+                    egui::CursorIcon::Grab
+                });
+            }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.spacing_mut().item_spacing.x = 0.0;
+                ui.spacing_mut().item_spacing.x = 2.0;
                 actions(ui);
             });
         });
     });
-    let r = ui.min_rect();
-    ui.painter().hline(r.x_range(), ui.cursor().top(), Stroke::new(1.0, t.border));
+    if draw_bottom_line {
+        let r = resp.response.rect;
+        ui.painter().hline(r.x_range(), r.bottom(), Stroke::new(1.0, t.border));
+    }
+    moved
 }
 
 #[cfg(test)]

@@ -123,6 +123,9 @@ pub(crate) fn beep() {
 #[derive(Default)]
 pub struct ViewportWidget {
     pub mode: DragMode,
+    /// Explicitly chosen camera drag mode in the viewbar (`Orbit` / `Pan` / `Zoom`), or `None`
+    /// when unselected (default: drag pieces to move, drag empty space to orbit).
+    pub nav_mode: Option<DragMode>,
     /// Ops asked for by the chrome (Fit, presets), applied next frame.
     pub queued: Vec<ViewOp>,
     /// How many ops were ever queued through [`ViewportWidget::queue`] (tests read it).
@@ -140,10 +143,20 @@ pub struct ViewportWidget {
     pub(crate) last_rect: Option<Rect>,
     /// Set for one frame when an overlay owns the primary button (no pick, orbit or gizmo).
     pub block_primary: bool,
+    /// True while Smart Joints' 3D rotation ring is open and owns the Rotate gizmo.
+    pub suppress_rotate_gizmo: bool,
+    /// True while an external drag (e.g. joint angle/slide slider) wants auto-planning paused.
+    pub suppress_auto_plan: bool,
     /// The active move/rotate gizmo drawn over the viewport, when visible.
     pub(crate) gizmo: Option<GizmoShape>,
     hovered: Handle,
     drag: Option<GizmoDrag>,
+    /// A pointer press on a piece waiting to cross the drag threshold before starting live snap-move.
+    pending_piece_drag: Option<(Pos2, u32, Vec<u32>)>,
+    /// A pointer press on a waiting piece in Animate mode waiting to cross the drag threshold.
+    pending_waiting_drag: Option<(Pos2, u32)>,
+    /// Piece double-clicked in the viewport this frame (consumed by chrome to open flight path / submodel).
+    pub double_clicked_piece: Option<u32>,
     /// Set by the chrome each frame: on the Keyframes clock with Auto Key on, a gizmo drag keys
     /// the chosen object at this frame instead of moving pieces.
     pub auto_key: Option<AutoKey>,
@@ -174,6 +187,10 @@ impl ViewportWidget {
         self.queued_total += 1;
     }
 
+    pub fn last_rect(&self) -> Option<Rect> {
+        self.last_rect
+    }
+
     /// Forget the view's setup: the next frame sets up whatever document it is given.
     pub fn reset(&mut self) {
         self.generation = None;
@@ -181,6 +198,9 @@ impl ViewportWidget {
         self.gizmo = None;
         self.hovered = Handle::None;
         self.drag = None;
+        self.pending_piece_drag = None;
+        self.pending_waiting_drag = None;
+        self.double_clicked_piece = None;
         self.auto_drag = None;
         self.waiting_drag = None;
         self.waiting_menu_piece = None;
@@ -226,6 +246,13 @@ impl ViewportWidget {
             return;
         }
         let mut changed = false;
+        let is_dragging = self.drag.is_some()
+            || self.waiting_drag.is_some()
+            || self.pending_piece_drag.is_some()
+            || edit.placement.as_ref().is_some_and(|p| p.is_moving())
+            || self.block_primary
+            || self.suppress_auto_plan;
+        let effective_auto_plan = auto_plan && !is_dragging;
         {
             let vp = doc.viewport().unwrap();
             if fresh {
@@ -233,9 +260,12 @@ impl ViewportWidget {
                 self.last_size = None;
                 self.last_auto_plan = None;
             }
-            if self.last_auto_plan != Some(auto_plan) {
-                vp.set_preferences(bm::playback::ViewportPreferences { auto_plan, ..Default::default() });
-                self.last_auto_plan = Some(auto_plan);
+            if self.last_auto_plan != Some(effective_auto_plan) {
+                vp.set_preferences(bm::playback::ViewportPreferences {
+                    auto_plan: effective_auto_plan,
+                    ..Default::default()
+                });
+                self.last_auto_plan = Some(effective_auto_plan);
             }
             if self.last_size != Some(size) {
                 vp.resize(size.0, size.1, size.2);
@@ -259,7 +289,9 @@ impl ViewportWidget {
         } else {
             match edit.tool {
                 Tool::Move => Some(GizmoKind::Move),
-                Tool::Rotate => Some(GizmoKind::Rotate),
+                // When Smart Joints has an active joint ring open, it replaces the generic Rotate gizmo.
+                Tool::Rotate if !self.suppress_rotate_gizmo => Some(GizmoKind::Rotate),
+                Tool::Rotate => None,
                 Tool::Select => None,
             }
         };
@@ -270,7 +302,8 @@ impl ViewportWidget {
         if show_gizmo {
             let kind = gizmo_kind.unwrap();
             let (cam, origin, axes) = if let Some(d) = &self.drag {
-                (doc.viewport().unwrap().camera(), d.origin, d.axes)
+                let o = if kind == GizmoKind::Move { d.origin + d.moved() } else { d.origin };
+                (doc.viewport().unwrap().camera(), o, d.axes)
             } else {
                 let ax = gizmo::axes(doc.session(), edit);
                 let vp = doc.viewport().unwrap();
@@ -298,22 +331,48 @@ impl ViewportWidget {
             )
         });
 
-        // Handle live placement pointer moves and primary click to place.
-        // The flight path overlay took the press (see `flight_path::handle_pointer`).
+        // Handle live placement (new library part or mouse-dragged existing piece).
+        // The flight path / joint overlay took the press when `block_primary` was set.
         let mut gizmo_consumed_primary = std::mem::take(&mut self.block_primary);
+        let mut cancel_move_placement = false;
         if let Some(placement) = edit.placement.as_mut() {
             gizmo_consumed_primary = true;
             if let Some(vp) = doc.viewport() {
-                placement.set_colour(vp, edit.colour);
+                if !placement.is_moving() {
+                    placement.set_colour(vp, edit.colour);
+                }
                 placement.set_collision(vp, edit.collision);
-                if let Some(pos) = hover_pos.filter(|p| rect.contains(*p)) {
-                    placement.pointer(vp, to_bm(pos), modifiers.alt);
+                if placement.is_moving() {
+                    if primary_down {
+                        if let Some(pos) = latest_pos.filter(|p| rect.contains(*p)) {
+                            placement.pointer(vp, to_bm(pos), modifiers.alt);
+                        }
+                    } else if !placement.awaiting() {
+                        if let Some(pos) = latest_pos.filter(|p| rect.contains(*p)) {
+                            placement.pointer(vp, to_bm(pos), modifiers.alt);
+                            placement.accept();
+                        } else {
+                            cancel_move_placement = true;
+                        }
+                    }
+                } else {
+                    if let Some(pos) = hover_pos.filter(|p| rect.contains(*p)) {
+                        placement.pointer(vp, to_bm(pos), modifiers.alt);
+                    }
+                    if resp.clicked_by(egui::PointerButton::Primary) {
+                        placement.accept();
+                    }
                 }
             }
-            if resp.clicked_by(egui::PointerButton::Primary) {
-                placement.accept();
+        }
+        if cancel_move_placement {
+            edit.placement = None;
+            if let Some(vp) = doc.viewport() {
+                vp.clear_placement_preview();
             }
-        } else if let Some(kind) = gizmo_kind {
+        } else if edit.placement.is_none()
+            && let Some(kind) = gizmo_kind
+        {
             if self.drag.is_some() {
                 gizmo_consumed_primary = true;
                 if primary_down {
@@ -386,6 +445,14 @@ impl ViewportWidget {
                         let axes = gizmo::axes(doc.session(), edit);
                         let origin = doc.viewport().unwrap().selection_center();
                         doc.session().end_gesture();
+                        // Suppress auto-plan immediately before the first drag step mutates the session.
+                        if self.last_auto_plan != Some(false) {
+                            doc.viewport().unwrap().set_preferences(bm::playback::ViewportPreferences {
+                                auto_plan: false,
+                                ..Default::default()
+                            });
+                            self.last_auto_plan = Some(false);
+                        }
                         self.auto_drag = auto.map(|(piece, submodel, frame)| {
                             use bm::keys::KeyChannel as C;
                             let chans = if kind == GizmoKind::Move { [C::PositionX, C::PositionY, C::PositionZ] } else { [C::RotationX, C::RotationY, C::RotationZ] };
@@ -406,11 +473,13 @@ impl ViewportWidget {
             {
                 let _ = vp.end_waiting_drag();
             }
+            self.pending_waiting_drag = None;
             self.waiting_menu_piece = None;
         }
 
         // Handle waiting-part floor drag when paused mid-build (and not dragging a gizmo).
-        if !gizmo_consumed_primary && !placing && !playing {
+        // Only begin dragging after crossing 3.5 px so plain clicks still select waiting pieces!
+        if !gizmo_consumed_primary && !placing && !playing && self.nav_mode.is_none() {
             if let Some(piece) = self.waiting_drag {
                 gizmo_consumed_primary = true;
                 if primary_down {
@@ -429,6 +498,29 @@ impl ViewportWidget {
                         changed = true;
                     }
                 }
+            } else if let Some((start_pos, piece)) = self.pending_waiting_drag {
+                if primary_down {
+                    gizmo_consumed_primary = true;
+                    if let Some(curr) = latest_pos
+                        && curr.distance(start_pos) > 3.5
+                        && let Some(vp) = doc.viewport()
+                    {
+                        self.pending_waiting_drag = None;
+                        let st = to_bm(start_pos);
+                        let cur = to_bm(curr);
+                        if vp.begin_waiting_drag(piece, st.x, st.y) {
+                            vp.drag_waiting_part(cur.x, cur.y);
+                            self.waiting_drag = Some(piece);
+                            if doc.session().selection() != [piece] {
+                                doc.session().select(&[piece], bm::SelectMode::Replace);
+                            }
+                            changed = true;
+                        }
+                    }
+                } else {
+                    // Released without dragging: let normal click selection pick this piece.
+                    self.pending_waiting_drag = None;
+                }
             } else if primary_pressed
                 && let Some(pos) = latest_pos.filter(|p| rect.contains(*p))
                 && (resp.hovered() || resp.is_pointer_button_down_on())
@@ -438,10 +530,69 @@ impl ViewportWidget {
                 if let Some(piece) = vp.pick(pt.x, pt.y)
                     && vp.can_move_waiting_part(piece)
                 {
-                    vp.begin_waiting_drag(piece, pt.x, pt.y);
-                    self.waiting_drag = Some(piece);
+                    self.pending_waiting_drag = Some((pos, piece));
+                }
+            }
+        }
+
+        // Direct mouse piece dragging (web & Swift parity):
+        // - Move tool: drag any clicked piece to slide & snap onto studs/connectors under the pointer.
+        // - Select tool: drag an already-selected piece to slide & snap it.
+        // Suppressed when an explicit camera drag mode (Orbit/Pan/Zoom) is active in the viewbar.
+        if playing || edit.placement.is_some() || self.waiting_drag.is_some() || self.drag.is_some() || self.nav_mode.is_some() || self.auto_key.is_some() {
+            self.pending_piece_drag = None;
+        } else if !gizmo_consumed_primary && matches!(edit.tool, Tool::Select | Tool::Move) {
+            if let Some((start_pos, anchor, pieces)) = self.pending_piece_drag.clone() {
+                if primary_down {
+                    // Hold camera orbit off while deciding whether this press on a piece becomes a drag.
                     gizmo_consumed_primary = true;
-                    changed = true;
+                    if let Some(curr) = latest_pos
+                        && curr.distance(start_pos) > 3.5
+                    {
+                        self.pending_piece_drag = None;
+                        if doc.session().selection() != pieces {
+                            doc.session().select(&pieces, bm::SelectMode::Replace);
+                        }
+                        let (session, vp) = doc.parts();
+                        if let Some(vp) = vp
+                            && let Some(p) = crate::placement::Placement::begin_move(
+                                anchor,
+                                pieces,
+                                to_bm(start_pos),
+                                to_bm(curr),
+                                modifiers.alt,
+                                edit.collision,
+                                session,
+                                vp,
+                            )
+                        {
+                            edit.placement = Some(p);
+                            changed = true;
+                        }
+                    }
+                } else {
+                    // Released before drag threshold: let normal click selection handle it.
+                    self.pending_piece_drag = None;
+                }
+            } else if primary_pressed
+                && !modifiers.shift
+                && !modifiers.command
+                && !modifiers.mac_cmd
+                && let Some(pos) = latest_pos.filter(|p| rect.contains(*p))
+                && (resp.hovered() || resp.is_pointer_button_down_on())
+                && let Some(vp) = doc.viewport()
+            {
+                let pt = to_bm(pos);
+                if let Some(piece) = vp.pick(pt.x, pt.y) {
+                    let allow = match edit.tool {
+                        Tool::Move => true,
+                        Tool::Select => sel.contains(&piece),
+                        Tool::Rotate => false,
+                    };
+                    if allow {
+                        let pieces = if sel.contains(&piece) { sel.clone() } else { vec![piece] };
+                        self.pending_piece_drag = Some((pos, piece, pieces));
+                    }
                 }
             }
         }
@@ -491,7 +642,18 @@ impl ViewportWidget {
         } else {
             None
         };
-        let double_click = !gizmo_consumed_primary && resp.double_clicked();
+        self.double_clicked_piece = None;
+        let mut double_click = false;
+        if !gizmo_consumed_primary && resp.double_clicked() {
+            let hit = resp
+                .interact_pointer_pos()
+                .and_then(|pos| doc.viewport().and_then(|vp| vp.pick((pos.x - rect.left()) as f64, (pos.y - rect.top()) as f64)));
+            if let Some(piece) = hit {
+                self.double_clicked_piece = Some(piece);
+            } else {
+                double_click = true;
+            }
+        }
         let gesture = ui.input(|i| Gesture {
             primary_drag,
             secondary_or_middle_drag,
@@ -501,7 +663,7 @@ impl ViewportWidget {
             double_click,
             origin: hover_pos.map(local).unwrap_or(rect.size().to_pos2() / 2.0),
             modifiers,
-            mode: self.mode,
+            mode: self.nav_mode.unwrap_or(self.mode),
         });
         let mut ops = std::mem::take(&mut self.queued);
         ops.extend(ops_for(&gesture));
@@ -571,6 +733,7 @@ impl ViewportWidget {
                 None => gizmo::axes(doc.session(), edit),
             };
             let origin = match &self.drag {
+                Some(d) if kind == GizmoKind::Move => d.origin + d.moved(),
                 Some(d) => d.origin,
                 None => doc.viewport().unwrap().selection_center(),
             };

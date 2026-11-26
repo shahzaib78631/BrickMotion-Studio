@@ -7,6 +7,7 @@ use bm::{Session, Vec2, Viewport};
 pub enum Placed {
     Done,
     Refused(String),
+    Cancelled,
 }
 
 #[derive(Debug)]
@@ -73,6 +74,60 @@ impl Placement {
             grip_count: 0,
             auto_grip: 0,
         }
+    }
+
+    /// Starts dragging an existing piece (or multi-piece selection) with live stud/connector snapping.
+    #[allow(clippy::too_many_arguments)]
+    pub fn begin_move(
+        piece: u32,
+        selection: Vec<u32>,
+        grab: Vec2,
+        at: Vec2,
+        free: bool,
+        collision: bool,
+        session: &Session,
+        vp: &mut Viewport,
+    ) -> Option<Placement> {
+        let part = session.part_at(piece);
+        if part.name.is_empty() {
+            return None;
+        }
+        let color = session.part_color(piece);
+        vp.show_rest();
+        let input = PlacementInput {
+            part: part.name.clone(),
+            color,
+            snap: !free,
+            collision,
+            anchor: Some(piece),
+            grab,
+            selection,
+            ..Default::default()
+        };
+        let request = vp.preview_part(&input, at);
+        if request == 0 {
+            return None;
+        }
+        Some(Placement {
+            part,
+            input,
+            at,
+            request,
+            generation: session.generation(),
+            version: session.version(),
+            step: None,
+            before: None,
+            awaiting: false,
+            state: PlacementState::Preparing,
+            reason: String::new(),
+            grip_count: 0,
+            auto_grip: 0,
+        })
+    }
+
+    /// True when moving existing pieces in the model rather than inserting a new library part.
+    pub fn is_moving(&self) -> bool {
+        self.input.anchor.is_some()
     }
 
     pub fn pointer(&mut self, vp: &mut Viewport, at: Vec2, free: bool) {
@@ -150,15 +205,25 @@ impl Placement {
         if self.awaiting && preview.request == self.request {
             self.awaiting = false;
             if preview.state.is_placeable() {
-                let c = session.place_part(
-                    &self.input.part,
-                    self.input.color,
-                    &preview.pose,
-                    self.step,
-                    self.before,
-                    preview.generation,
-                    preview.version,
-                );
+                let c = if let Some(anchor) = self.input.anchor {
+                    session.place_moved(
+                        &self.input.selection,
+                        anchor,
+                        preview.pose,
+                        preview.generation,
+                        preview.version,
+                    )
+                } else {
+                    session.place_part(
+                        &self.input.part,
+                        self.input.color,
+                        &preview.pose,
+                        self.step,
+                        self.before,
+                        preview.generation,
+                        preview.version,
+                    )
+                };
                 return match c.refused {
                     None => Some(Placed::Done),
                     Some(why) => {
@@ -166,6 +231,12 @@ impl Placement {
                         self.reason = why.clone();
                         Some(Placed::Refused(why))
                     }
+                };
+            } else if self.is_moving() {
+                return if self.reason.is_empty() {
+                    Some(Placed::Cancelled)
+                } else {
+                    Some(Placed::Refused(self.reason.clone()))
                 };
             }
         }

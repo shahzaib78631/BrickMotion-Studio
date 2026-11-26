@@ -253,9 +253,158 @@ std::vector<HabitFit> AssemblyInspection::habitFits(uint32_t target, size_t limi
 }
 
 JointEdit AssemblyInspection::changeJoint(uint32_t fixed, uint32_t moving, double degrees, bool collision) {
+  return changeJointEx(fixed, moving, degrees, 0.0, {0, 0, 0}, collision);
+}
+
+JointInfo AssemblyInspection::jointInfo(uint32_t fixed, uint32_t moving, bool collision) {
+  JointInfo info;
   try {
     const auto& pieces = impl_->model.pieces();
-    if (fixed >= pieces.size() || moving >= pieces.size() || !std::isfinite(degrees) || std::abs(degrees) > 90)
+    if (fixed >= pieces.size() || moving >= pieces.size()) {
+      info.error = "Choose a connection first.";
+      return info;
+    }
+    const auto& graph = impl_->joints();
+    const auto pair = std::minmax(fixed, moving);
+    const auto edge = std::find_if(graph.connections.begin(), graph.connections.end(), [&](const auto& c) {
+      return c.a == pair.first && c.b == pair.second;
+    });
+    if (edge == graph.connections.end()) {
+      info.error = "The two parts are no longer connected.";
+      return info;
+    }
+    std::vector<bool> branch(pieces.size());
+    std::vector<std::vector<uint32_t>> neighbors(pieces.size());
+    for (const auto& connection : graph.connections) {
+      if (&connection == &*edge) continue;
+      neighbors[connection.a].push_back(connection.b);
+      neighbors[connection.b].push_back(connection.a);
+    }
+    info.pieces.push_back(moving);
+    branch[moving] = true;
+    for (size_t i = 0; i < info.pieces.size(); ++i) {
+      for (uint32_t p : neighbors[info.pieces[i]]) {
+        if (p == fixed) {
+          info.pieces.clear();
+          info.error = "Another connection holds this branch in place.";
+          return info;
+        }
+        if (branch[p]) continue;
+        branch[p] = true;
+        info.pieces.push_back(p);
+      }
+    }
+    std::sort(info.pieces.begin(), info.pieces.end());
+
+    if (!impl_->mechanism)
+      impl_->mechanism = bm::kin::buildSystem(impl_->model, graph, nullptr, nullptr, {.testTravel = false});
+    const auto bodies = std::minmax(impl_->mechanism->bodyOf[fixed], impl_->mechanism->bodyOf[moving]);
+    const auto& links = impl_->mechanism->links;
+    const auto link = std::find_if(links.begin(), links.end(), [&](const auto& l) {
+      return l.a == bodies.first && l.b == bodies.second;
+    });
+    if (link == links.end()) {
+      info.type = typeOf(edge->joint.kind);
+      info.pivot = vertex(edge->joint.point);
+      info.axis = vertex(edge->joint.axis);
+      info.error = "This connection is rigidly locked.";
+      return info;
+    }
+    info.type = typeOf(link->kind);
+    info.pivot = vertex(link->point);
+    bm::Vec3 axis = bm::normalized(link->axis);
+    if (bm::length(axis) < 0.5 && link->kind == bm::connect::JointKind::Spherical) axis = {0, 1, 0};
+    info.axis = vertex(axis);
+    info.canTurn = link->kind == bm::connect::JointKind::Revolute ||
+                   link->kind == bm::connect::JointKind::Cylindrical ||
+                   link->kind == bm::connect::JointKind::Spherical;
+    info.canSlide = link->kind == bm::connect::JointKind::Prismatic ||
+                    link->kind == bm::connect::JointKind::Cylindrical;
+
+    auto partTitle = [&](uint32_t piece) -> std::string {
+      if (piece >= pieces.size()) return "";
+      const auto* file = impl_->model.library().find(pieces[piece].part);
+      return file && !file->description.empty() ? file->description : pieces[piece].part;
+    };
+
+    if (info.canTurn && bm::length(axis) >= 0.5) {
+      if (!collision) {
+        info.minDeg = -180.0;
+        info.maxDeg = 180.0;
+        info.fullTurn = true;
+      } else {
+        std::vector<MovingPiece> dragged;
+        dragged.reserve(info.pieces.size());
+        for (uint32_t p : info.pieces) dragged.push_back({p, {}});
+        const auto& start = pieces[moving].world;
+        auto probe = [&](double deg, std::string& blocker) -> bool {
+          const auto next = rotated(axis, link->point, deg * std::numbers::pi / 180.0) * start;
+          const auto pose = impl_->solver().solve({.part = pieces[moving].part, .freePose = next,
+            .moving = info.pieces, .snap = false, .dragged = dragged, .anchor = moving});
+          if (!pose) return false;
+          if (const auto* blocked = std::get_if<PlacementBlocked>(&*pose)) {
+            blocker = partTitle(blocked->blocker);
+            return false;
+          }
+          return true;
+        };
+        auto sweep = [&](double sign, std::string& blocker) -> double {
+          double lastOk = 0.0;
+          constexpr double step = 6.0;
+          for (double a = step; a <= 180.0 + 1e-6; a += step) {
+            const double deg = sign * std::min(a, 180.0);
+            std::string hit;
+            if (probe(deg, hit)) {
+              lastOk = deg;
+            } else {
+              blocker = hit;
+              // Refine free limit to ~0.2° with binary search.
+              double lo = lastOk, hi = deg;
+              for (int it = 0; it < 5; ++it) {
+                const double mid = 0.5 * (lo + hi);
+                std::string midHit;
+                if (probe(mid, midHit)) lo = mid;
+                else { hi = mid; if (!midHit.empty()) blocker = midHit; }
+              }
+              return lo;
+            }
+          }
+          return sign * 180.0;
+        };
+        info.maxDeg = sweep(1.0, info.maxBlocker);
+        info.minDeg = sweep(-1.0, info.minBlocker);
+        info.fullTurn = info.maxDeg >= 179.5 && info.minDeg <= -179.5;
+      }
+    }
+
+    if (info.canSlide && bm::length(axis) >= 0.5) {
+      if (!collision) {
+        info.minSlide = -160.0;
+        info.maxSlide = 160.0;
+      } else {
+        const auto& world = impl_->geometry();
+        std::vector<bm::collide::Zone> zones;
+        for (size_t i = edge->firstZone; i < edge->firstZone + edge->zoneCount; i++) {
+          const auto& z = graph.zones[i];
+          zones.push_back({z.a, z.b, z.radius, fixed, moving});
+        }
+        info.maxSlide = world.clearTravel(info.pieces, axis, 160.0, nullptr, zones);
+        info.minSlide = -world.clearTravel(info.pieces, -axis, 160.0, nullptr, zones);
+      }
+    }
+    return info;
+  } catch (const std::exception& e) {
+    info.error = e.what();
+    return info;
+  }
+}
+
+JointEdit AssemblyInspection::changeJointEx(uint32_t fixed, uint32_t moving, double degrees, double slideLdu,
+                                            Vec3 axisOverride, bool collision) {
+  try {
+    const auto& pieces = impl_->model.pieces();
+    if (fixed >= pieces.size() || moving >= pieces.size() || !std::isfinite(degrees) || !std::isfinite(slideLdu) ||
+        std::abs(degrees) > 360.0 || std::abs(slideLdu) > 1000.0)
       return refused("Choose a connection first.");
     const auto& graph = impl_->joints();
     const auto pair = std::minmax(fixed, moving);
@@ -284,7 +433,7 @@ JointEdit AssemblyInspection::changeJoint(uint32_t fixed, uint32_t moving, doubl
     }
     std::sort(out.pieces.begin(), out.pieces.end());
     bm::Xform delta;
-    if (degrees == 0) {
+    if (degrees == 0 && slideLdu == 0) {
       const auto& world = impl_->geometry();
       const bm::plan::Context context(impl_->model, graph, world);
       const auto exits = bm::plan::leaveDirections(context, {out.pieces}, nullptr);
@@ -310,27 +459,44 @@ JointEdit AssemblyInspection::changeJoint(uint32_t fixed, uint32_t moving, doubl
       const auto bodies = std::minmax(impl_->mechanism->bodyOf[fixed], impl_->mechanism->bodyOf[moving]);
       const auto& links = impl_->mechanism->links;
       const auto link = std::find_if(links.begin(), links.end(), [&](const auto& l) { return l.a == bodies.first && l.b == bodies.second; });
-      if (link == links.end() || link->kind == bm::connect::JointKind::Prismatic)
-        return refused("This connection cannot turn.");
+      if (link == links.end()) return refused("This connection cannot move.");
+      const bool wantsTurn = std::abs(degrees) > 1e-9;
+      const bool wantsSlide = std::abs(slideLdu) > 1e-9;
+      if (wantsTurn && link->kind == bm::connect::JointKind::Prismatic)
+        return refused("This connection slides only and cannot turn.");
+      if (wantsSlide && link->kind != bm::connect::JointKind::Prismatic && link->kind != bm::connect::JointKind::Cylindrical)
+        return refused("This connection cannot slide.");
       bm::Vec3 axis = bm::normalized(link->axis);
-      if (bm::length(axis) < 0.5 && link->kind == bm::connect::JointKind::Spherical) axis = {0, 1, 0};
-      if (bm::length(axis) < 0.5) return refused("This connection has no rotation axis.");
-      const double radians = degrees * std::numbers::pi / 180;
-      delta = rotated(axis, link->point, radians);
+      const bm::Vec3 custom{axisOverride.x, axisOverride.y, axisOverride.z};
+      if (link->kind == bm::connect::JointKind::Spherical && bm::length(custom) > 0.5) {
+        axis = bm::normalized(custom);
+      } else if (bm::length(axis) < 0.5 && link->kind == bm::connect::JointKind::Spherical) {
+        axis = {0, 1, 0};
+      }
+      if (bm::length(axis) < 0.5) return refused("This connection has no motion axis.");
+      const double radians = degrees * std::numbers::pi / 180.0;
+      const auto makeDelta = [&](double frac) {
+        bm::Xform step = wantsTurn ? rotated(axis, link->point, radians * frac) : bm::Xform{};
+        if (wantsSlide) step.t = step.t + axis * (slideLdu * frac);
+        return step;
+      };
+      delta = makeDelta(1.0);
       if (collision) {
         std::vector<MovingPiece> dragged;
         for (uint32_t p : out.pieces) dragged.push_back({p, {}});
         const auto& start = pieces[moving].world;
         const auto& bounds = impl_->geometry().box(moving);
         const double radius = bounds.empty() ? 20 : bm::length(bounds.max - bounds.min);
-        const int intervals = std::clamp(static_cast<int>(std::ceil(std::abs(radians) * radius / 2)), 3, 72);
+        const int turnSteps = wantsTurn ? static_cast<int>(std::ceil(std::abs(radians) * radius / 2)) : 0;
+        const int slideSteps = wantsSlide ? static_cast<int>(std::ceil(std::abs(slideLdu) / 4.0)) : 0;
+        const int intervals = std::clamp(std::max(turnSteps, slideSteps), 3, 72);
         for (int i = 1; i <= intervals; i++) {
-          const auto next = rotated(axis, link->point, radians * i / intervals) * start;
+          const auto next = makeDelta(static_cast<double>(i) / intervals) * start;
           const auto pose = impl_->solver().solve({.part = pieces[moving].part, .freePose = next,
             .moving = out.pieces, .snap = false, .dragged = dragged, .anchor = moving});
           if (!pose) return refused("This part has no usable collision geometry.");
           if (const auto* blocked = std::get_if<PlacementBlocked>(&*pose))
-            return refused("Rotation is blocked by " + pieces[blocked->blocker].part + ".");
+            return refused("Motion is blocked by " + pieces[blocked->blocker].part + ".");
         }
       }
     }

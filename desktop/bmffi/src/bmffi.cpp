@@ -303,4 +303,32 @@ size_t bm_session_pieces_of_row(const BmSession* s, const char* id, uint32_t* ou
   });
 }
 
+BmChange bm_session_focus(BmSession* s, const char* const* path, size_t n) {
+  return change(s, [&] {
+    bmapp::StringList list;
+    list.reserve(path ? n : 0);
+    for (size_t i = 0; path && i < n; ++i)
+      if (path[i]) list.emplace_back(path[i]);
+    return s->s->focus(list);
+  });
+}
+
+BmString bm_session_focused(const BmSession* s) {
+  if (!s) return BmString{nullptr, 0};
+  return guard(BmString{nullptr, 0}, [&] { return make(s->s->focused()); });
+}
+
+BmString bm_session_focus_path(const BmSession* s) {
+  if (!s) return BmString{nullptr, 0};
+  return guard(BmString{nullptr, 0}, [&] {
+    const bmapp::StringList p = s->s->focusPath();
+    std::string joined;
+    for (size_t i = 0; i < p.size(); ++i) {
+      if (i > 0) joined.push_back('\n');
+      joined += p[i];
+    }
+    return make(joined);
+  });
+}
+
 }  // extern "C"

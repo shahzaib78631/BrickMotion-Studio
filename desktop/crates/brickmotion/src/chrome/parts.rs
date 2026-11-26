@@ -11,7 +11,6 @@ use crate::chrome::library::short_name;
 use crate::icons::{self, Icon};
 
 const ROW_H: f32 = 28.0;
-const MAX_H: f32 = 420.0;
 
 #[derive(Clone, Debug)]
 pub struct PartUsageRow {
@@ -88,7 +87,7 @@ impl PartsState {
     }
 }
 
-pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
+pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, body_h: f32, pinned_h: bool) {
     let t0 = Instant::now();
     let t = app.theme;
     app.parts.sync(app.doc.session());
@@ -123,10 +122,13 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp) {
     let colors = app.colors();
     let mut clicked: Option<(usize, egui::Modifiers)> = None;
 
+    let content_h = (shown.len() as f32 * ROW_H).max(ROW_H);
+    let scroll_h = if pinned_h { body_h } else { content_h.min(body_h) };
     egui::ScrollArea::vertical()
         .id_salt("parts-list")
-        .max_height(MAX_H)
-        .auto_shrink([false, true])
+        .min_scrolled_height(scroll_h)
+        .max_height(body_h)
+        .auto_shrink([false, !pinned_h])
         .show_rows(ui, ROW_H, shown.len(), |ui, range| {
             for k in range {
                 let i = shown[k];

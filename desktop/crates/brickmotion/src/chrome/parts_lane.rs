@@ -319,26 +319,6 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
                 clip_p.rect_stroke(rect, r_clip, Stroke::new(0.5, Color32::from_black_alpha(60)), StrokeKind::Inside);
             }
 
-            // Hover chip: the part's name just above the clip (m6-controls.html).
-            if is_hov {
-                let name = clip.part_name(&timeline).to_owned();
-                egui::Area::new(ui.scope_id().with("tl-part-chip"))
-                    .order(egui::Order::Tooltip)
-                    .fixed_pos(pos2(rect.left(), rect.top() - 26.0))
-                    .interactable(false)
-                    .show(ui.ctx(), |ui| {
-                        egui::Frame::new()
-                            .fill(t.bg3)
-                            .stroke(Stroke::new(1.0, t.border2))
-                            .corner_radius(7)
-                            .inner_margin(egui::Margin::symmetric(8, 3))
-                            .show(ui, |ui| {
-                                ui.label(egui::RichText::new(&name).size(11.5).color(t.text1))
-                                    .widget_info(|| WidgetInfo::labeled(egui::Role::Label, true, format!("Part name {name}")));
-                            });
-                    });
-            }
-
             // Optional pin glyph on right.
             let text_right = if is_pin && rect.width() > 30.0 {
                 let pr = Rect::from_center_size(pos2(rect.right() - 10.0, rect.center().y), vec2(11.0, 11.0));
@@ -376,7 +356,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
                 };
                 drag_started = Some((dragged, pos.x));
             } else if resp.double_clicked() {
-                dbl_clicked = Some((clip.piece, clip.end));
+                dbl_clicked = Some((clip.piece, clip.start));
             } else if resp.clicked() {
                 clicked = Some((clip_idx, clip.piece, clip.end, mods));
             }
@@ -469,7 +449,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
                 };
                 drag_started = Some((dragged, pos.x));
             } else if resp.double_clicked() {
-                dbl_clicked = Some((clip.piece, clip.end));
+                dbl_clicked = Some((clip.piece, clip.start));
             } else if resp.clicked() {
                 clicked = Some((clip_idx, clip.piece, clip.end, mods));
             }
@@ -511,22 +491,23 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
         }
     }
 
-    // Rich hover card (v3 `m4-rulings.md`) when hovering a clip/dot and not dragging.
+    // Rich hover card anchored cleanly ABOVE the Parts lane so it never overlaps or blocks dragging.
     if let Some((clip_idx, clip_rect)) = hovered_clip
+        && !primary_down
         && app.timeline.drag.is_none()
         && egui::DragAndDrop::payload::<LibraryDrag>(ui.ctx()).is_none()
     {
         let clip = app.timeline.parts_lane.clips[clip_idx].clone();
+        let part_name = clip.part_name(&timeline).to_owned();
         let total_steps = app.steps.len().max(1);
         let sw = color_of(clip.color);
-        let card_pos = pos2(
-            clip_rect.left().clamp(r.left() + 4.0, (r.right() - 228.0).max(r.left() + 4.0)),
-            (clip_rect.top() - 102.0).max(46.0),
-        );
+        let card_x = clip_rect.left().clamp(r.left() + 4.0, (r.right() - 228.0).max(r.left() + 4.0));
+        let card_bottom = (r.top() - 8.0).max(160.0);
         egui::Area::new(egui::Id::unique("tl-part-hover-card"))
             .order(egui::Order::Tooltip)
             .interactable(false)
-            .fixed_pos(card_pos)
+            .pivot(Align2::LEFT_BOTTOM)
+            .fixed_pos(pos2(card_x, card_bottom))
             .show(ui.ctx(), |ui| {
                 Frame::NONE
                     .fill(Color32::from_rgba_unmultiplied(40, 42, 47, 250))
@@ -534,7 +515,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
                     .corner_radius(CornerRadius::same(9))
                     .inner_margin(Margin::symmetric(12, 10))
                     .show(ui, |ui| {
-                        ui.set_width(204.0);
+                        ui.set_width(216.0);
                         ui.spacing_mut().item_spacing.y = 3.0;
                         ui.horizontal(|ui| {
                             let (dr, _) = ui.allocate_exact_size(vec2(9.0, 14.0), Sense::hover());
@@ -551,7 +532,8 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
                             .spacing(vec2(10.0, 2.0))
                             .show(ui, |ui| {
                                 ui.label(RichText::new("Part").size(11.0).color(t.text3));
-                                ui.label(RichText::new(clip.part_name(&timeline)).size(11.0).color(t.text2));
+                                ui.label(RichText::new(&part_name).size(11.0).color(t.text2))
+                                    .widget_info(|| WidgetInfo::labeled(egui::Role::Label, true, format!("Part name {part_name}")));
                                 ui.end_row();
                                 ui.label(RichText::new("Step").size(11.0).color(t.text3));
                                 ui.label(
@@ -577,7 +559,7 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
                         );
                         ui.add_space(4.0);
                         ui.label(
-                            RichText::new("Drag to retime · ⌥ drag to pin · Double-click to frame")
+                            RichText::new("Drag to retime · ⌥ drag to pin · Double-click to edit flight")
                                 .size(10.5)
                                 .color(t.text3),
                         );
@@ -586,12 +568,8 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
     }
 
     // Apply click / double-click / context menu actions.
-    if let Some((piece, end)) = dbl_clicked {
-        app.doc.session().select(&[piece], bm::SelectMode::Replace);
-        if let Some(vp) = app.doc.viewport() {
-            app.transport.seek(vp, end);
-        }
-        app.viewport.queue(ViewOp::FrameSelection);
+    if let Some((piece, start)) = dbl_clicked {
+        crate::flights::edit_flight(app, piece, start);
     } else if let Some((_idx, piece, end, m)) = clicked {
         if m.command || m.shift {
             app.doc.session().select(&[piece], bm::SelectMode::Toggle);

@@ -2,16 +2,27 @@
 //! one piece, or a summary of many.
 use std::collections::BTreeMap;
 
-use egui::{Area, CollapsingHeader, Color32, Frame, Id, Margin, Order, Rect, RichText, Sense, Stroke, Ui, vec2};
+use egui::{Area, CollapsingHeader, Color32, CursorIcon, Frame, Id, Margin, Order, Rect, RichText, Sense, Stroke, Ui, Vec2, pos2, vec2};
 
-use super::{float_frame, icon_button, icon_button_tip, panel_header};
+use super::{float_frame, icon_button_tip, panel_header};
 use crate::BrickMotionApp;
-use crate::icons::Icon;
+use crate::icons::{self, Icon};
 
 const INSPECTOR_WIDTH: f32 = 292.0;
 pub const SETTINGS_WIDTH: f32 = 344.0;
+const MIN_WIDTH: f32 = 260.0;
+const MAX_WIDTH: f32 = 520.0;
 /// Distinct parts listed for a many-piece selection.
 const PART_ROWS: usize = 8;
+
+/// Session layout state for the floating Properties panel.
+#[derive(Clone, Debug, Default)]
+pub struct PropertiesState {
+    pub hidden: bool,
+    pub collapsed: bool,
+    pub offset: Vec2,
+    pub width: Option<f32>,
+}
 
 /// Which page the right-hand Properties panel is currently showing.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -41,44 +52,102 @@ impl Page {
 pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
     let t = app.theme;
     let page = app.properties_page;
-    let width = if page.is_settings() { SETTINGS_WIDTH } else { INSPECTOR_WIDTH };
+
+    // When hidden on the Inspector page, show a compact reopen pill tucked neatly on the right edge.
+    if app.properties.hidden && !page.is_settings() {
+        let pill_top = area.top() + super::navigator::CLEARANCE;
+        let mut reopen = false;
+        Area::new(Id::unique("properties-reopen"))
+            .order(Order::Middle)
+            .fixed_pos(pos2(area.right() - 10.0 - 108.0, pill_top))
+            .constrain_to(area)
+            .show(ui.ctx(), |ui| {
+                float_frame(&t).corner_radius(8).inner_margin(Margin::symmetric(10, 6)).show(ui, |ui| {
+                    let (r, resp) = ui.allocate_exact_size(vec2(88.0, 20.0), Sense::click());
+                    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, "Show Properties"));
+                    if resp.hovered() {
+                        ui.painter().rect_filled(r.expand2(vec2(4.0, 2.0)), 6.0, t.bg3);
+                    }
+                    icons::paint(ui, Icon::Sliders, Rect::from_center_size(pos2(r.left() + 8.0, r.center().y), vec2(14.0, 14.0)), 14.0, t.text2);
+                    ui.painter().text(
+                        pos2(r.left() + 22.0, r.center().y),
+                        egui::Align2::LEFT_CENTER,
+                        "Properties",
+                        egui::FontId::proportional(12.0),
+                        if resp.hovered() { t.text1 } else { t.text2 },
+                    );
+                    if resp.on_hover_text("Show Properties panel").on_hover_cursor(CursorIcon::PointingHand).clicked() {
+                        reopen = true;
+                    }
+                });
+            });
+        if reopen {
+            app.properties.hidden = false;
+        }
+        return;
+    }
+
+    let max_w = (area.width() - 360.0).clamp(MIN_WIDTH, MAX_WIDTH);
+    let default_w = if page.is_settings() { SETTINGS_WIDTH } else { INSPECTOR_WIDTH };
+    let width = app.properties.width.unwrap_or(default_w).clamp(MIN_WIDTH, max_w);
     let top = if page.is_settings() { area.top() + 10.0 } else { area.top() + super::navigator::CLEARANCE };
-    let max_h = (area.bottom() - top - 12.0).max(200.0);
+    let anchor = pos2(area.right() - 10.0 - width, top);
+    let pos = pos2(
+        (anchor.x + app.properties.offset.x).clamp(area.left() + 4.0, (area.right() - width - 4.0).max(area.left() + 4.0)),
+        (anchor.y + app.properties.offset.y).clamp(area.top() + 4.0, (area.bottom() - 46.0).max(area.top() + 4.0)),
+    );
+    let max_h = (area.bottom() - pos.y - 12.0).max(200.0);
 
     let mut run: Option<&'static str> = None;
     let mut go_back = false;
+    let mut hide = false;
+    let mut toggle_collapse = false;
+    let mut moved = Vec2::ZERO;
+    let mut resize_dx = 0.0f32;
 
     Area::new(Id::unique("properties"))
         .order(Order::Middle)
-        .fixed_pos(egui::pos2(area.right() - 10.0 - width, top))
+        .fixed_pos(pos)
         .constrain_to(area)
         .show(ui.ctx(), |ui| {
+            let collapsed = !page.is_settings() && app.properties.collapsed;
             let mut frame = float_frame(&t);
             if page.is_settings() {
                 frame = frame.fill(Color32::from_rgba_unmultiplied(0x1c, 0x1d, 0x21, 251));
             }
-            frame.show(ui, |ui| {
+            let frame_resp = frame.show(ui, |ui| {
                 ui.set_width(width);
                 ui.set_max_height(max_h);
                 ui.spacing_mut().item_spacing.y = 0.0;
 
                 if page == Page::Inspector {
                     let snap = app.snapshot();
-                    panel_header(ui, &t, "Properties", |ui| {
-                        icon_button(ui, &t, Icon::Close, "Hide Properties", false, false, 24.0);
-                    });
-                    Frame::NONE.inner_margin(Margin::symmetric(14, 10)).show(ui, |ui| {
-                        ui.spacing_mut().item_spacing.y = 4.0;
-                        match snap.selected {
-                            0 => project(ui, app, &snap, &mut run),
-                            1 if !snap.described.is_empty() => piece(ui, app, &snap.described[0], &mut run),
-                            _ => many(ui, app, &snap),
+                    moved = panel_header(ui, &t, "properties", "Properties", !collapsed, |ui| {
+                        if icon_button_tip(ui, &t, Icon::Close, "Hide Properties", "Hide Properties", true, false, 24.0).clicked() {
+                            hide = true;
+                        }
+                        let fold_icon = if collapsed { Icon::Down } else { Icon::Up };
+                        let fold_label = if collapsed { "Expand Properties" } else { "Collapse Properties" };
+                        if icon_button_tip(ui, &t, fold_icon, fold_label, fold_label, true, false, 24.0).clicked() {
+                            toggle_collapse = true;
                         }
                     });
+                    if !collapsed {
+                        Frame::NONE.inner_margin(Margin::symmetric(14, 10)).show(ui, |ui| {
+                            ui.spacing_mut().item_spacing.y = 4.0;
+                            match snap.selected {
+                                0 => project(ui, app, &snap, &mut run),
+                                1 if !snap.described.is_empty() => piece(ui, app, &snap.described[0], &mut run),
+                                _ => many(ui, app, &snap),
+                            }
+                        });
+                    }
                 } else {
-                    if page_header(ui, &t, page.title()) {
+                    let (back, delta) = page_header(ui, &t, page.title());
+                    if back {
                         go_back = true;
                     }
+                    moved = delta;
                     let body_max_h = (max_h - 40.0).max(160.0);
                     match page {
                         Page::Inspector => {}
@@ -88,8 +157,35 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
                     }
                 }
             });
+
+            if !collapsed {
+                let r = frame_resp.response.rect;
+                let left_r = Rect::from_min_max(pos2(r.left() - 3.0, r.top() + 38.0), pos2(r.left() + 5.0, r.bottom() - 4.0));
+                let left_resp = ui
+                    .interact(left_r, Id::unique("properties-resize-w"), Sense::drag())
+                    .on_hover_cursor(CursorIcon::ResizeHorizontal);
+                if left_resp.dragged() {
+                    resize_dx -= left_resp.drag_delta().x;
+                }
+            }
         });
 
+    if moved != Vec2::ZERO {
+        let next = pos + moved - anchor;
+        app.properties.offset = vec2(
+            next.x.clamp(area.left() + 4.0 - anchor.x, (area.right() - width - 4.0 - anchor.x).max(0.0)),
+            next.y.clamp(area.top() + 4.0 - anchor.y, (area.bottom() - 46.0 - anchor.y).max(0.0)),
+        );
+    }
+    if resize_dx != 0.0 {
+        app.properties.width = Some((width + resize_dx).clamp(MIN_WIDTH, max_w));
+    }
+    if hide {
+        app.properties.hidden = true;
+    }
+    if toggle_collapse {
+        app.properties.collapsed = !app.properties.collapsed;
+    }
     if go_back {
         app.properties_page = Page::Inspector;
     }
@@ -98,10 +194,11 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
     }
 }
 
-fn page_header(ui: &mut Ui, t: &crate::Theme, title: &str) -> bool {
+fn page_header(ui: &mut Ui, t: &crate::Theme, title: &str) -> (bool, Vec2) {
     let mut back = false;
-    Frame::NONE
-        .inner_margin(Margin { left: 8, right: 10, top: 0, bottom: 0 })
+    let mut moved = Vec2::ZERO;
+    let resp = Frame::NONE
+        .inner_margin(Margin { left: 8, right: 8, top: 0, bottom: 0 })
         .show(ui, |ui| {
             ui.set_height(40.0);
             ui.horizontal_centered(|ui| {
@@ -111,12 +208,28 @@ fn page_header(ui: &mut Ui, t: &crate::Theme, title: &str) -> bool {
                     back = true;
                 }
                 ui.add_space(2.0);
-                ui.label(RichText::new(title).size(13.0).strong().color(t.text1));
+                let title_r = ui.label(RichText::new(title).size(13.0).strong().color(t.text1));
+                let drag_r = Rect::from_min_max(
+                    pos2(title_r.rect.left(), ui.max_rect().top()),
+                    pos2((ui.max_rect().right() - 34.0).max(title_r.rect.right() + 8.0), ui.max_rect().bottom()),
+                );
+                let drag = ui.interact(drag_r, ui.scope_id().with("settings-page-drag"), Sense::drag());
+                if drag.dragged() {
+                    moved += drag.drag_delta();
+                }
+                if drag.hovered() || drag.dragged() {
+                    ui.ctx().set_cursor_icon(if drag.dragged() { CursorIcon::Grabbing } else { CursorIcon::Grab });
+                }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if icon_button_tip(ui, t, Icon::Close, "Close", "Return to Properties", true, false, 24.0).clicked() {
+                        back = true;
+                    }
+                });
             });
         });
-    let r = ui.min_rect();
-    ui.painter().hline(r.x_range(), ui.cursor().top(), Stroke::new(0.5, Color32::from_white_alpha(18)));
-    back
+    let r = resp.response.rect;
+    ui.painter().hline(r.x_range(), r.bottom(), Stroke::new(0.5, Color32::from_white_alpha(18)));
+    (back, moved)
 }
 
 fn section(ui: &mut Ui, title: &str, body: impl FnOnce(&mut Ui)) {
