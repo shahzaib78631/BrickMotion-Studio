@@ -33,7 +33,7 @@ that opens the AI panel, and the Checks panel that has no rail button.
 
 | Feature | Web | Phase | Engine | Exceeds web by |
 |---|---|---|---|---|
-| New / open / import model or project (.brickmotion, .json, .ldr, .mpd, .dat, .io; Rebrickable .csv and .pbg in phase 9) | Toolbar.tsx:198-330 | 8/9 | Y | Native Open and Open Recent, project documents, and untitled documents for model imports. Import Parts Inventory adds Rebrickable CSV or Studio PBG into the edited model, reports skipped rows, and undoes as a single edit. Finder previews use Quick Look. |
+| New / open / import model or project (.brickmotion, .json, .ldr, .mpd, .dat, .io; Rebrickable .csv and .pbg in phase 9) | Toolbar.tsx:198-330 | 8/9 | Y | Native Open and Open Recent, project documents, and untitled documents for model imports. Import Parts Inventory adds Rebrickable CSV or Studio PBG into the edited model, reports skipped rows, and undoes as a single edit (Swift & Rust M7a). Finder previews use Quick Look. |
 | Save project (.brickmotion), download plan (.json), LDraw (.mpd) | Toolbar.tsx:304-377 | 8 | N (plan JSON only) | Save, Save As, Duplicate, Revert and Versions. Export Plan and Export LDraw use native save panels and atomic writes. |
 | Autosave status | Toolbar.tsx:324 | 8 | N | system autosave + versions; no "saves on this device" limit. **done (M2): autosave in place with Versions** |
 | Projects dialog (list/open/delete) | ProjectsDialog.tsx | 8 | — | Welcome uses system recents with rendered previews, keyboard opening and Reveal in Finder. File management uses Finder. |
@@ -53,7 +53,7 @@ that opens the AI panel, and the Checks panel that has no rail button.
 | Tree rows: open, show and fit, tags, counts | ModelsPanel.tsx:232-262 | 8 | P (submodel paths per piece) | Native outline with keyboard navigation, drag to reparent, counts, shared/unused marks and group tags. |
 | Row menu: play its build, lay out parts, view parts, export MP4/project/LDraw, import into, open another | ModelsPanel.tsx:165-191 | 8/9 | Y | Open, Play Build, Lay Out Parts, Show and Fit, View Parts, Import Into, and exports for video, standalone project and LDraw. The standalone project retains scoped authored animation. |
 | View parts dialog: steps tree, per-step show/hide, select, extract, move to step | PartsDialog.tsx | 8 | N | The Models sidebar has one scrolling browser with independent step disclosures, visible viewport visibility and submodel actions, part-and-colour groups with individual instances, and undoable extraction and moves. |
-| Assembly Corrector (Python engine) | ModelsPanel.tsx:266-292 | — | superseded? | native `--correct`; Step → Seat Loose Pieces (phase 9) lists and seats them as one undo step |
+| Assembly Corrector (Python engine) | ModelsPanel.tsx:266-292 | — | superseded? | native `--correct`; Seat Loose Pieces (Swift phase 9 & Rust M7a) lists and seats them as one undo step |
 | Batch export selected / all submodules | ModelsPanel.tsx:294-305 | 9 | Y | Selected Models rows and File → Export All Submodel Videos use a shared settings sheet and destination folder. The queue renders one movie per selected definition and reserves distinct names. |
 | Breadcrumb back to main model | App.tsx:306 | 8 | — | **done (M3a): glass breadcrumb over the viewport; ⌘↑ goes back a level** |
 
@@ -139,14 +139,14 @@ that opens the AI panel, and the Checks panel that has no rail button.
 | Capture: stills, clipboard, covers, transparent, path-traced final, COLLADA, turntable, record viewport | CapturePanel.tsx | P | Export Still path-traces a PNG in any of the four frame shapes (vertical, portrait and square serve as covers), at two sizes and three sample counts, from the viewport angle or automatic framing, optionally with the video logo, through the Render Queue. Turntable movies come from Export Video. Edit copies a PNG of the current Metal view. View → Record Viewport saves an H.264 movie of the view (2026-11-22). Transparent stills (path-tracer alpha) and COLLADA remain open. |
 | Sound: snap on/off, try it, presets, click/body/space | SoundPanel.tsx | P | Snap Sound saves the mix and default for Build export, offers physical, recorded and synthesised voices with the web's presets, and auditions three sample arrivals. Live transport sound plays the same track with the Build (2026-11-22). |
 | Mechanism lab: drive, gears, steering, sweeps, spatial workbench, transmission workshop, classifications, explorer | MechanismLabPanel.tsx | P (bm/kin) | |
-| Checks: refused edit, overlap/floating/weak/unknown/loop/spot with reasons | ChecksPanel.tsx | Y (collide, stable, joints) | Model Checks opens geometry and connection findings in the viewport and shows the last refusal. Assembly spot diagnostics remain open. |
+| Checks: refused edit, overlap/floating/weak/unknown/loop/spot with reasons | ChecksPanel.tsx | Y (collide, stable, joints) | Model Checks opens geometry and connection findings in the viewport and shows the last refusal (Swift & Rust M7a). Assembly spot diagnostics remain open. |
 | Settings: appearance, accent, surfaces, Claude key + model, selection bar, wireframe, auto-plan | SettingsPanel.tsx | — | macOS Settings window; system accent; key in Keychain (the Claude key and model move to the AI phase) |
 
 ## 9. Extras (spec phase 10)
 
 | Area | Web | Notes |
 |---|---|---|
-| Suggest: next pieces, open connections, techniques, calculators, viewport ghosts | SuggestPanel.tsx | Partial (Phase 10 slice 1, 2026-11-22): Find Compatible Parts lists "What Builders Put Here" from the BrickNet habits (bundled `Resources/Suggest/habits.json`): one row per part at the surveyed pose, mated to the target and clear of overlaps, colour by the web rule, explained by its model count; Add Part places it as one undo step. Open connections, ghosts, mirror/repeat, techniques and calculators remain. |
+| Suggest: next pieces, open connections, techniques, calculators, viewport ghosts | SuggestPanel.tsx | Partial (Phase 10 slice 1, Swift 2026-11-22 & Rust M7a 2026-11-26): Compatible Parts ("What Fits") lists "What Builders Put Here" from the BrickNet habits (bundled `Resources/Suggest/habits.json`): one row per part at the surveyed pose, mated to the target and clear of overlaps, colour by the web rule, explained by its model count; Add Part places it as one undo step, and Fits a Free Connection previews library placements at the projected contact. Open connections, ghosts, mirror/repeat, techniques and calculators remain (M7b). |
 | Generate: building/castle, from prompt, remix, Claude variant | GeneratePanel.tsx | Phase 10: building/castle, brickify, remix. From prompt and Claude variant: AI phase |
 | AI: generate, fix, paste, prompt | AiPanel.tsx | AI phase (separate, after Phase 10; owner 2026-11-22) |
 | Bricksafe finder | BricksafePanel.tsx | needs the web dev server; superseded? |

@@ -461,3 +461,62 @@ fn inventory_refuses_stale() {
     assert_eq!(notice.title(), "Couldn’t Import Parts");
     assert_eq!(notice.detail(), "The document changed while the file was read. Import it again.");
 }
+
+/// Writes `m7a-checks.png`, `m7a-loose.png` and `m7a-fits.png`:
+/// `M7A_SHOTS=<absolute dir> cargo test -p brickmotion --test inspect m7a_screenshots -- --ignored`.
+#[test]
+#[ignore = "writes screenshots for review"]
+fn m7a_screenshots() {
+    let _guard = habits_lock();
+    let out = PathBuf::from(std::env::var("M7A_SHOTS").unwrap_or_else(|_| "/tmp".into()));
+    let shot = |h: &mut Harness<'static, BrickMotionApp>, name: &str| {
+        h.run_steps(10);
+        h.render().expect("render").save(out.join(name)).unwrap();
+    };
+
+    let dir = temp("m7a-shots");
+    // 1. Model Checks with overlap, unsupported part and last refused edit.
+    let checks_model = write_ldr(
+        &dir,
+        "checks.ldr",
+        "0 Checks\n\
+         1 4 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n\
+         1 1 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n\
+         1 14 80 -80 0 1 0 0 0 1 0 0 0 1 3022.dat\n",
+    );
+    let mut h = app_with(&checks_model);
+    h.state_mut().ribbon_tab = "Inspect";
+    h.state_mut().last_refusal = Some("The model changed. Preview the move again.".into());
+    assert!(run(h.state_mut(), "inspect.model_checks"));
+    step_until(&mut h, |h| h.query_by_label("Checking the model…").is_none() && h.state().checks.result.is_some());
+    shot(&mut h, "m7a-checks.png");
+
+    // 2. Seat Loose Pieces on a three-brick model.
+    let loose_model = write_ldr(
+        &dir,
+        "loose.ldr",
+        "0 Loose\n\
+         1 1 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n\
+         1 4 3 -24 0 1 0 0 0 1 0 0 0 1 3001.dat\n\
+         1 14 200 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n",
+    );
+    let mut h = app_with(&loose_model);
+    h.state_mut().ribbon_tab = "Inspect";
+    assert!(run(h.state_mut(), "model.seat_loose"));
+    step_until(&mut h, |h| h.query_by_label("Looking for loose pieces…").is_none() && h.state().loose.result.is_some());
+    shot(&mut h, "m7a-loose.png");
+
+    // 3. Compatible Parts with What Builders Put Here & Fits a Free Connection.
+    let fits_model = write_ldr(&dir, "fits.ldr", "0 Fits\n1 4 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n");
+    let mut h = app_with(&fits_model);
+    h.state_mut().ribbon_tab = "Suggest";
+    h.state_mut().session().select(&[0], bm::SelectMode::Replace);
+    assert!(run(h.state_mut(), "model.what_fits"));
+    step_until(&mut h, |h| h.query_by_label("Checking free connections…").is_none() && h.state().fits.result.is_some());
+    // Let part preview thumbnails render.
+    for _ in 0..20 {
+        h.step();
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    shot(&mut h, "m7a-fits.png");
+}

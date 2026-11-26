@@ -226,18 +226,18 @@ pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect, next_top: &mut f3
     }
 }
 
-fn part_row(
-    ui: &mut Ui,
-    app: &mut BrickMotionApp,
-    part_name: &str,
+struct PartRow<'a> {
+    part_name: &'a str,
     color: i32,
-    title: &str,
-    detail: &str,
+    title: &'a str,
+    detail: &'a str,
     selected: bool,
-    id_salt: &str,
-) -> bool {
+    id_salt: &'a str,
+}
+
+fn part_row(ui: &mut Ui, app: &mut BrickMotionApp, row: &PartRow<'_>) -> bool {
     let t = app.theme;
-    let fill = if selected { t.accent_bg() } else { Color32::TRANSPARENT };
+    let fill = if row.selected { t.accent_bg() } else { Color32::TRANSPARENT };
     let inner = Frame::NONE
         .fill(fill)
         .inner_margin(Margin::symmetric(10, 6))
@@ -247,7 +247,7 @@ fn part_row(
                 ui.spacing_mut().item_spacing.x = 8.0;
                 let (thumb_rect, _) = ui.allocate_exact_size(vec2(36.0, 36.0), Sense::hover());
                 ui.painter().rect(thumb_rect, 6.0, t.bg1, Stroke::new(1.0, t.border), StrokeKind::Inside);
-                match app.previews.get(ui.ctx(), part_name, color) {
+                match app.previews.get(ui.ctx(), row.part_name, row.color) {
                     Preview::Ready(tex) => {
                         let uv = Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0));
                         ui.painter().image(tex.id(), thumb_rect.shrink(2.0), uv, Color32::WHITE);
@@ -261,14 +261,14 @@ fn part_row(
                 }
                 ui.vertical(|ui| {
                     ui.spacing_mut().item_spacing.y = 2.0;
-                    ui.label(RichText::new(title).size(12.0).strong().color(t.text1));
-                    ui.label(RichText::new(detail).size(11.0).color(t.text3));
+                    ui.label(RichText::new(row.title).size(12.0).strong().color(t.text1));
+                    ui.label(RichText::new(row.detail).size(11.0).color(t.text3));
                 });
             });
         });
-    let resp = ui.interact(inner.response.rect, ui.make_persistent_id(id_salt), Sense::click());
-    resp.widget_info(|| WidgetInfo::selected(egui::Role::Button, true, selected, format!("{title} — {detail}")));
-    if !selected && resp.hovered() {
+    let resp = ui.interact(inner.response.rect, ui.make_persistent_id(row.id_salt), Sense::click());
+    resp.widget_info(|| WidgetInfo::selected(egui::Role::Button, true, row.selected, format!("{} — {}", row.title, row.detail)));
+    if !row.selected && resp.hovered() {
         ui.painter().rect_filled(inner.response.rect, CornerRadius::ZERO, Color32::from_white_alpha(8));
     }
     resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked()
@@ -351,7 +351,19 @@ fn body(ui: &mut Ui, app: &mut BrickMotionApp) {
                         }
                         let title = bm::export::display_name(if h.description.is_empty() { &h.name } else { &h.description });
                         let is_sel = matches!(&next_sel, Some(FitSelection::Habit(n)) if n == &h.name);
-                        if part_row(ui, app, &h.name, h.color, &title, &h.why, is_sel, &format!("habit:{}", h.name)) {
+                        let id_salt = format!("habit:{}", h.name);
+                        if part_row(
+                            ui,
+                            app,
+                            &PartRow {
+                                part_name: &h.name,
+                                color: h.color,
+                                title: &title,
+                                detail: &h.why,
+                                selected: is_sel,
+                                id_salt: &id_salt,
+                            },
+                        ) {
                             next_sel = Some(FitSelection::Habit(h.name.clone()));
                         }
                     }
@@ -368,15 +380,18 @@ fn body(ui: &mut Ui, app: &mut BrickMotionApp) {
                         }
                         let title = bm::export::display_name(if m.part.description.is_empty() { &m.part.name } else { &m.part.description });
                         let is_sel = matches!(&next_sel, Some(FitSelection::Part(n)) if n == &m.part.name);
+                        let id_salt = format!("part:{}", m.part.name);
                         if part_row(
                             ui,
                             app,
-                            &m.part.name,
-                            PREVIEW_COLOUR,
-                            &title,
-                            short_name(&m.part.name),
-                            is_sel,
-                            &format!("part:{}", m.part.name),
+                            &PartRow {
+                                part_name: &m.part.name,
+                                color: PREVIEW_COLOUR,
+                                title: &title,
+                                detail: short_name(&m.part.name),
+                                selected: is_sel,
+                                id_salt: &id_salt,
+                            },
                         ) {
                             next_sel = Some(FitSelection::Part(m.part.name.clone()));
                         }
