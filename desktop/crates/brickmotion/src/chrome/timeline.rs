@@ -1410,6 +1410,10 @@ fn steps_lane(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
                 menu_action = Some((step, StepMenuAction::SelectPieces));
                 ui.close();
             }
+            if ui.button("Step Motion…").clicked() {
+                menu_action = Some((step, StepMenuAction::Motion));
+                ui.close();
+            }
             ui.separator();
             let entries: &[(&str, &str)] = &[
                 ("step.edit", "Edit Step…"),
@@ -1465,6 +1469,10 @@ fn steps_lane(ui: &mut Ui, app: &mut BrickMotionApp, r: Rect, dur: f64) {
                 let pieces = app.doc.session().pieces_of_step(step);
                 app.doc.session().select(&pieces, bm::SelectMode::Replace);
             }
+            StepMenuAction::Motion => {
+                let target = super::motion_panel::MotionTarget { scope: bm::motion::MotionScope::Step, step, pieces: Vec::new() };
+                super::motion_panel::open(app, target);
+            }
             StepMenuAction::Command(id) => {
                 app.requested.push(id);
             }
@@ -1476,6 +1484,7 @@ enum StepMenuAction {
     PlayStep,
     PlayToEnd,
     SelectPieces,
+    Motion,
     Command(&'static str),
 }
 

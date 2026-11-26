@@ -20,6 +20,7 @@ pub enum PanelKind {
     CameraKey,
     Camera,
     Keys,
+    Motion,
 }
 
 impl PanelKind {
@@ -28,6 +29,7 @@ impl PanelKind {
             PanelKind::CameraKey => "Camera Key",
             PanelKind::Camera => "Camera",
             PanelKind::Keys => "Keys",
+            PanelKind::Motion => "Build Motion",
         }
     }
 }
@@ -48,6 +50,13 @@ pub struct Panels {
 }
 
 impl Panels {
+    /// Opening a panel shows its contents again.
+    pub fn unfold(&mut self, kind: PanelKind) {
+        if let Some(p) = self.places.get_mut(&kind) {
+            p.folded = false;
+        }
+    }
+
     pub fn folded(&self, kind: PanelKind) -> bool {
         self.places.get(&kind).is_some_and(|p| p.folded)
     }
@@ -206,4 +215,19 @@ pub fn link(ui: &mut Ui, _t: &Theme, label: &str, color: Color32) -> egui::Respo
     let r = ui.add(egui::Label::new(egui::RichText::new(label).size(12.5).color(color)).sense(Sense::click()));
     r.widget_info(|| WidgetInfo::labeled(egui::Role::Button, true, label));
     r.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// A panel's footer: a grey note on the left and one action button on the right.
+pub fn footer(ui: &mut Ui, t: &Theme, note: &str, action: &str, on_click: impl FnOnce()) {
+    ui.add_space(10.0);
+    Frame::NONE.inner_margin(Margin::symmetric(16, 0)).show(ui, |ui| {
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new(note).size(11.5).color(t.text3));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if super::widgets::secondary_button(ui, t, action, true).clicked() {
+                    on_click();
+                }
+            });
+        });
+    });
 }

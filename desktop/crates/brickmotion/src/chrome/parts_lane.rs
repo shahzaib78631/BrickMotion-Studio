@@ -653,6 +653,7 @@ enum PartMenuAction {
     SplitSelected { step: usize, pieces: Vec<u32>, same_step: bool },
     Delete { pieces: Vec<u32> },
     EditFlight { piece: u32, start: f64 },
+    Motion { pieces: Vec<u32>, step: usize },
     UseEditedFlight { piece: u32 },
     ReturnFlight { piece: u32 },
 }
@@ -707,6 +708,10 @@ fn part_context_menu(
 
         if ui.button("Frame in View").clicked() {
             *out = Some(PartMenuAction::Frame { pieces: ids.clone(), end: clip.end });
+            ui.close();
+        }
+        if ui.button("Motion…").clicked() {
+            *out = Some(PartMenuAction::Motion { pieces: ids.clone(), step: step_idx.unwrap_or(0) });
             ui.close();
         }
         if single {
@@ -840,6 +845,10 @@ fn part_context_menu(
 fn apply_part_menu(app: &mut BrickMotionApp, action: PartMenuAction) {
     match action {
         PartMenuAction::EditFlight { piece, start } => crate::flights::edit_flight(app, piece, start),
+        PartMenuAction::Motion { pieces, step } => {
+            let target = super::motion_panel::MotionTarget { scope: bm::motion::MotionScope::Parts, step, pieces };
+            super::motion_panel::open(app, target);
+        }
         PartMenuAction::UseEditedFlight { piece } => crate::flights::use_edited_flight(app, piece),
         PartMenuAction::ReturnFlight { piece } => crate::flights::return_to_planner(app, piece),
         PartMenuAction::Frame { pieces, end } => {

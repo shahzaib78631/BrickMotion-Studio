@@ -360,3 +360,185 @@ fn check_motion_reports_and_shows_contacts() {
         assert_eq!(h.state().transport.key_frame(&scene), c.first_frame);
     }
 }
+
+// ---- Task 11: Build Motion panel ----
+
+use bm::motion::{MotionFields, MotionScope, effective_motion, flight_phases};
+use brickmotion::chrome::motion_panel::{self, MotionTarget};
+use egui_kittest::kittest::NodeT;
+
+/// The helicopter in Animate, no plan needed.
+fn animate() -> Harness<'static, BrickMotionApp> {
+    let mut h = Harness::builder().with_size([1440.0, 900.0]).build_eframe(|cc| {
+        let mut app = BrickMotionApp::new_for_test_cc(cc, Some(HELI.into()));
+        app.wait_loaded();
+        app.dialogs_off();
+        app.prefs.auto_plan = false;
+        app
+    });
+    h.run_steps(3);
+    h.state_mut().set_workspace(Workspace::Animate);
+    h.run_steps(2);
+    h
+}
+
+fn open_motion(h: &mut Harness<'static, BrickMotionApp>, scope: MotionScope, pieces: &[u32]) {
+    motion_panel::open(h.state_mut(), MotionTarget { scope, step: 0, pieces: pieces.to_vec() });
+    h.run_steps(3);
+}
+
+fn own(h: &Harness<'static, BrickMotionApp>, scope: MotionScope, pieces: &[u32]) -> MotionFields {
+    h.state().session().motion_fields(scope, 0, pieces)
+}
+
+/// Scrolls a panel widget into view and returns its centre.
+fn reveal(h: &mut Harness<'static, BrickMotionApp>, role: egui::accesskit::Role, label: &str) -> egui::Rect {
+    h.get_by_role_and_label(role, label).scroll_to_me();
+    h.run_steps(40);
+    h.get_by_role_and_label(role, label).rect()
+}
+
+fn tap(h: &mut Harness<'static, BrickMotionApp>, at: Pos2) {
+    click(h, at);
+    h.run_steps(2);
+}
+
+#[test]
+fn motion_slider_commits_once() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = animate();
+    open_motion(&mut h, MotionScope::Project, &[]);
+    let r = reveal(&mut h, egui::accesskit::Role::Slider, "Duration");
+    let commits = h.state().motion.commits;
+    let depth = h.state().session().undo_depth();
+    let from = egui::pos2(r.left() + 10.0, r.center().y);
+    h.event(egui::Event::PointerMoved(from));
+    h.step();
+    press(&mut h, from, egui::PointerButton::Primary, true);
+    for i in 1..=10 {
+        h.event(egui::Event::PointerMoved(from + vec2(r.width() * 0.6 * i as f32 / 10.0, 0.0)));
+        h.step();
+    }
+    assert_eq!(h.state().motion.commits, commits, "nothing commits while dragging");
+    press(&mut h, from + vec2(r.width() * 0.6, 0.0), egui::PointerButton::Primary, false);
+    h.run_steps(2);
+    assert_eq!(h.state().motion.commits, commits + 1, "one set_motion_fields call");
+    assert_eq!(h.state().session().undo_depth(), depth + 1, "one undo step");
+    assert!(own(&h, MotionScope::Project, &[]).time > 1.0);
+}
+
+#[test]
+fn inherited_values_show() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = animate();
+    let project = MotionFields { landing: 0.4, ..MotionFields::default() };
+    assert!(h.state_mut().doc.session().set_motion_fields(MotionScope::Project, 0, &[], project).refused.is_none());
+    open_motion(&mut h, MotionScope::Parts, &[PIECE]);
+    reveal(&mut h, egui::accesskit::Role::Button, "Landing value");
+    let shown = h.get_by_role_and_label(egui::accesskit::Role::Button, "Landing value").accesskit_node().value();
+    assert_eq!(shown.as_deref(), Some("Inherit · 40%"));
+    assert_eq!(own(&h, MotionScope::Parts, &[PIECE]).landing, -1.0, "its own field stays unset");
+}
+
+#[test]
+fn reset_to_inherited() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = animate();
+    let parts = MotionFields { landing: 0.3, ..MotionFields::default() };
+    assert!(h.state_mut().doc.session().set_motion_fields(MotionScope::Parts, 0, &[PIECE], parts).refused.is_none());
+    open_motion(&mut h, MotionScope::Parts, &[PIECE]);
+    let shown = h.get_by_role_and_label(egui::accesskit::Role::Button, "Landing value").accesskit_node().value();
+    assert_eq!(shown.as_deref(), Some("30%"));
+    let depth = h.state().session().undo_depth();
+    let r = reveal(&mut h, egui::accesskit::Role::Button, "Reset landing");
+    tap(&mut h, r.center());
+    assert_eq!(own(&h, MotionScope::Parts, &[PIECE]).landing, -1.0);
+    assert_eq!(h.state().session().undo_depth(), depth + 1);
+}
+
+#[test]
+fn flight_timing_bar_matches_phases() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = animate();
+    let project = MotionFields { time: 1.0, landing: 0.3, hover: 0.2, ease: 0 };
+    assert!(h.state_mut().doc.session().set_motion_fields(MotionScope::Project, 0, &[], project).refused.is_none());
+    open_motion(&mut h, MotionScope::Project, &[]);
+    let p = flight_phases(effective_motion(h.state().session(), MotionScope::Project, 0, project));
+    let pct = |v: f64| format!("{}%", (v * 100.0).round() as i64);
+    let want = format!("Travel {}, hover {}, landing {}", pct(p.travel), pct(p.hover), pct(p.landing));
+    assert_eq!(want, "Travel 50%, hover 20%, landing 30%");
+    let shown = h.get_by_label("Flight timing").accesskit_node().value();
+    assert_eq!(shown.as_deref(), Some(want.as_str()));
+}
+
+#[test]
+fn preset_sets_all_fields() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = animate();
+    open_motion(&mut h, MotionScope::Project, &[]);
+    let depth = h.state().session().undo_depth();
+    let r = reveal(&mut h, egui::accesskit::Role::Button, "Precise Seating");
+    tap(&mut h, r.center());
+    assert_eq!(own(&h, MotionScope::Project, &[]), MotionFields { time: 1.4, landing: 0.45, hover: 0.12, ease: 2 });
+    assert_eq!(h.state().session().undo_depth(), depth + 1, "one undo step");
+    let r = reveal(&mut h, egui::accesskit::Role::Button, "Reset All");
+    tap(&mut h, r.center());
+    assert_eq!(own(&h, MotionScope::Project, &[]), MotionFields::default());
+}
+
+#[test]
+fn clip_menu_opens_part_motion() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = planned();
+    let dur = h.state().transport.duration();
+    let clip = h.state().timeline.parts_lane.clips.iter().find(|c| c.piece == PIECE).expect("a clip").clone();
+    h.state_mut().timeline.view.zoom_by(32.0, clip.start, dur);
+    h.state_mut().timeline.view.reveal(clip.start, dur, true);
+    h.run_steps(3);
+    let parts = h.state().timeline.last_parts_rect.expect("parts rect");
+    let view = h.state().timeline.view;
+    let clip = h.state().timeline.parts_lane.clips.iter().find(|c| c.piece == PIECE).unwrap().clone();
+    let at = clip.rect_in(parts, view.lead_inset, view.offset).center();
+    h.event(egui::Event::PointerMoved(at));
+    h.step();
+    press(&mut h, at, egui::PointerButton::Secondary, true);
+    press(&mut h, at, egui::PointerButton::Secondary, false);
+    h.run_steps(2);
+    h.get_by_label("Motion…").click();
+    h.run_steps(3);
+    let target = h.state().motion.target.clone().expect("the panel opened");
+    assert_eq!(target.scope, MotionScope::Parts);
+    assert_eq!(target.pieces, vec![PIECE]);
+    assert_eq!(target.step, clip.step as usize);
+    assert!(h.query_by_label("Build Motion panel").is_some());
+}
+
+#[test]
+fn step_menu_opens_step_motion() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = planned();
+    let at = h.query_all_by_label("Step 2").next().expect("Step 2 run").rect().center();
+    h.event(egui::Event::PointerMoved(at));
+    h.step();
+    press(&mut h, at, egui::PointerButton::Secondary, true);
+    press(&mut h, at, egui::PointerButton::Secondary, false);
+    h.run_steps(2);
+    h.get_by_label("Step Motion…").click();
+    h.run_steps(3);
+    let target = h.state().motion.target.clone().expect("the panel opened");
+    assert_eq!((target.scope, target.step), (MotionScope::Step, 1));
+}

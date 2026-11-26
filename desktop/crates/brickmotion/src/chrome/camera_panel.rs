@@ -239,22 +239,8 @@ fn key_body(ui: &mut Ui, app: &mut BrickMotionApp, clock: CameraClock, id: &str)
         }
     });
 
-    footer(ui, &t, &format!("Key {} of {}", index + 1, keys.len()), "Remove Key", || {
+    super::float_panel::footer(ui, &t, &format!("Key {} of {}", index + 1, keys.len()), "Remove Key", || {
         camera_lane::delete_key(app, clock, id);
-    });
-}
-
-fn footer(ui: &mut Ui, t: &Theme, note: &str, action: &str, on_click: impl FnOnce()) {
-    ui.add_space(10.0);
-    Frame::NONE.inner_margin(Margin::symmetric(16, 0)).show(ui, |ui| {
-        ui.horizontal(|ui| {
-            ui.label(RichText::new(note).size(11.5).color(t.text3));
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if widgets::secondary_button(ui, t, action, true).clicked() {
-                    on_click();
-                }
-            });
-        });
     });
 }
 

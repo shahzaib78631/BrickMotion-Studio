@@ -144,6 +144,7 @@ fn tool_groups(ui: &mut Ui, app: &mut BrickMotionApp) {
                         let active = active
                             || (c.id == "video.follow" && app.director)
                             || (matches!(c.id, "video.scene_cameras" | "video.export_camera") && app.panels.camera)
+                            || (c.id == "motion.build" && app.motion.target.is_some())
                             || (c.id == "video.group" && app.keys.group_rows);
                         let resp = tool(ui, &t, c, on, active);
                         let resp = hover_card(resp, &t, c);

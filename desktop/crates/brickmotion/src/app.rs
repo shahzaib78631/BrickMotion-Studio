@@ -161,6 +161,8 @@ pub struct BrickMotionApp {
     pub audit: crate::workers::Job<crate::flights::DocKey, bm::motion::MotionReport>,
     /// The bake note, the rebake confirm, the check result and the flight path.
     pub flights: crate::flights::Flights,
+    /// The Build Motion panel.
+    pub motion: chrome::motion_panel::MotionPanel,
     pub(crate) camera_synced: Option<(u64, u64)>,
     /// Build timeline zoom, scroll, track disclosure and drag state.
     pub timeline: chrome::timeline::TimelineState,
@@ -249,6 +251,7 @@ impl BrickMotionApp {
             bake: Default::default(),
             audit: Default::default(),
             flights: Default::default(),
+            motion: Default::default(),
             camera_synced: None,
             timeline: chrome::timeline::TimelineState::default(),
             properties_page: chrome::properties::Page::Inspector,
@@ -364,6 +367,7 @@ impl BrickMotionApp {
         self.bake.cancel();
         self.audit.cancel();
         self.flights.reset();
+        self.motion = Default::default();
         // The old document (and its renderer) goes, off this thread; the widget sets the new one up.
         crate::loader::retire(std::mem::replace(&mut self.doc, doc));
         self.viewport.reset();
@@ -738,6 +742,14 @@ impl BrickMotionApp {
                 self.keys.group_rows = !self.keys.group_rows;
                 self.keys.row_picks.clear();
             }
+            "motion.build" => {
+                self.ribbon_tab = "Motion";
+                if chrome::motion_panel::is_open(self) {
+                    self.motion.target = None;
+                } else {
+                    chrome::motion_panel::open_for_selection(self);
+                }
+            }
             "video.scene_cameras" | "video.export_camera" => {
                 self.ribbon_tab = "Camera";
                 self.panels.camera = !self.panels.camera;
@@ -943,6 +955,7 @@ impl BrickMotionApp {
         self.bake.cancel();
         self.audit.cancel();
         self.flights.reset();
+        self.motion = Default::default();
         let mut s = bm::Session::new();
         match s.new_blank() {
             Ok(_) => {

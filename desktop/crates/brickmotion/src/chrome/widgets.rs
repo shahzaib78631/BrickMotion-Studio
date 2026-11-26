@@ -299,6 +299,34 @@ pub fn slider_row(
     parse_val: impl Fn(&str) -> Option<f64>,
     enabled: bool,
 ) -> SliderEvent {
+    slider_row_with(ui, t, id, label, value, range, step, format_val, parse_val, enabled, &SliderLook::default()).0
+}
+
+/// How a slider row reads when its value comes from somewhere else.
+#[derive(Default)]
+pub struct SliderLook {
+    /// The value is inherited: grey value text and a grey track fill.
+    pub inherited: bool,
+    /// A reset button before the value, with this accessible label ("Reset landing").
+    pub reset: Option<String>,
+}
+
+/// [`slider_row`] with a look; also returns whether the reset button was clicked.
+#[allow(clippy::too_many_arguments)]
+pub fn slider_row_with(
+    ui: &mut Ui,
+    t: &Theme,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    label: &str,
+    value: &mut f64,
+    range: std::ops::RangeInclusive<f64>,
+    step: f64,
+    format_val: impl Fn(f64) -> String,
+    parse_val: impl Fn(&str) -> Option<f64>,
+    enabled: bool,
+    look: &SliderLook,
+) -> (SliderEvent, bool) {
+    let mut reset_clicked = false;
     let state_id = ui.make_persistent_id(id);
     let mut st = ui.data_mut(|d| d.get_temp::<SliderState>(state_id).unwrap_or_default());
     let mut event = SliderEvent::None;
@@ -343,17 +371,32 @@ pub fn slider_row(
                         }
                     } else {
                         let text = format_val(*value);
-                        let vfg = if enabled { t.text2 } else { t.text3 };
+                        let vfg = if enabled && !look.inherited { t.text2 } else { t.text3 };
                         let g = ui.painter().layout_no_wrap(text.clone(), FontId::proportional(12.0), vfg);
                         let (r, resp) = ui.allocate_exact_size(
                             vec2(g.size().x + 8.0, 18.0),
                             if enabled { Sense::click() } else { Sense::hover() },
                         );
-                        resp.widget_info(|| WidgetInfo::labeled(egui::Role::Button, enabled, format!("{label} value")));
+                        resp.widget_info(|| {
+                            let mut info = WidgetInfo::labeled(egui::Role::Button, enabled, format!("{label} value"));
+                            info.current_text_value = Some(text.clone());
+                            info
+                        });
                         if enabled && resp.hovered() {
                             ui.painter().rect_filled(r, 4.0, Color32::from_white_alpha(14));
                         }
                         ui.painter().galley(pos2(r.right() - 4.0 - g.size().x, r.center().y - g.size().y / 2.0), g, vfg);
+                        if let Some(reset) = &look.reset {
+                            let (rr, rresp) = ui.allocate_exact_size(vec2(18.0, 18.0), if enabled { Sense::click() } else { Sense::hover() });
+                            rresp.widget_info(|| WidgetInfo::labeled(egui::Role::Button, enabled, reset.as_str()));
+                            if enabled && rresp.hovered() {
+                                ui.painter().rect_filled(rr, 4.0, Color32::from_white_alpha(14));
+                            }
+                            icons::paint(ui, Icon::Undo, rr.shrink(3.0), 12.0, t.text3);
+                            if enabled && rresp.on_hover_text(reset.as_str()).clicked() {
+                                reset_clicked = true;
+                            }
+                        }
                         if enabled && resp.double_clicked() {
                             st.editing = true;
                             st.start_value = *value;
@@ -425,7 +468,9 @@ pub fn slider_row(
             let track_rect = Rect::from_min_max(pos2(rect.left(), cy - 2.0), pos2(rect.right(), cy + 2.0));
             ui.painter().rect_filled(track_rect, 2.0, Color32::from_white_alpha(31));
 
-            let fill_color = if enabled {
+            let fill_color = if look.inherited {
+                Color32::from_white_alpha(70)
+            } else if enabled {
                 t.accent
             } else {
                 Color32::from_rgba_unmultiplied(t.accent.r(), t.accent.g(), t.accent.b(), 90)
@@ -449,7 +494,7 @@ pub fn slider_row(
         });
 
     ui.data_mut(|d| d.insert_temp(state_id, st));
-    event
+    (event, reset_clicked)
 }
 
 /// Helper to parse a numeric string with optional trailing unit (e.g. "0.45 s", "120%", "45°", "2000 Hz").
