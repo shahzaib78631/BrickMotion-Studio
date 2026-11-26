@@ -8,6 +8,7 @@ use crate::icons::{self, Icon};
 
 pub fn show(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
     let t = app.theme;
+    recording_chip(ui, app, area);
     Area::new(Id::unique("viewbar"))
         .order(Order::Middle)
         .anchor(Align2::CENTER_BOTTOM, vec2(0.0, -12.0))
@@ -139,4 +140,36 @@ fn popover_button(ui: &mut Ui, t: &crate::Theme, label: Option<&str>, i: Icon, n
     }
     icons::paint(ui, Icon::Up, Rect::from_center_size(egui::pos2(r.right() - 12.0, y), vec2(12.0, 12.0)), 12.0, tint);
     if enabled { resp.on_hover_text(name.to_owned()) } else { resp.on_hover_text(format!("{name} — coming soon")) }
+}
+
+/// While recording: "● m:ss" and a Stop button, bottom left of the view.
+fn recording_chip(ui: &mut Ui, app: &mut BrickMotionApp, area: Rect) {
+    let Some(seconds) = app.recording.active.as_ref().map(|r| r.seconds) else { return };
+    let t = app.theme;
+    let mut stop = false;
+    Area::new(Id::unique("recording-chip"))
+        .order(Order::Middle)
+        .anchor(Align2::LEFT_BOTTOM, vec2(12.0, -12.0))
+        .constrain_to(area)
+        .show(ui.ctx(), |ui| {
+            Frame::NONE
+                .fill(t.float_fill())
+                .stroke(Stroke::new(1.0, t.border))
+                .corner_radius(8)
+                .inner_margin(Margin::symmetric(10, 5))
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        let (dot, _) = ui.allocate_exact_size(vec2(8.0, 16.0), Sense::hover());
+                        ui.painter().circle_filled(dot.center(), 4.0, egui::Color32::from_rgb(255, 69, 58));
+                        let clock = crate::recording::clock(seconds);
+                        ui.label(RichText::new(&clock).monospace().size(11.5).color(t.text1));
+                        let r = ui.add(egui::Button::new(RichText::new("Stop").size(11.5).color(t.text1)).corner_radius(5));
+                        r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, "Stop recording"));
+                        stop = r.on_hover_text("Stop Recording Viewport").clicked();
+                    });
+                });
+        });
+    if stop {
+        app.requested.push("view.record");
+    }
 }

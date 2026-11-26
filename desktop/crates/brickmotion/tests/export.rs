@@ -437,3 +437,80 @@ fn still_helper_renders_a_png() {
     assert_eq!(q.jobs()[0].status, JobStatus::Complete);
     assert_eq!(image::open(&dest).unwrap().to_rgba8().dimensions(), (192, 108));
 }
+
+// ---- Record Viewport (Task 10) ----
+
+fn step_at(h: &mut Harness<'static, BrickMotionApp>, time: f64) {
+    h.input_mut().time = Some(time);
+    h.step();
+}
+
+fn record_title(h: &Harness<'static, BrickMotionApp>) -> String {
+    brickmotion::commands::title(brickmotion::find("view.record").unwrap(), &h.state().ctx())
+}
+
+#[test]
+fn record_viewport_writes_frames() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = app();
+    h.run_steps(5);
+    step_at(&mut h, 100.0);
+    assert!(run(h.state_mut(), "view.record"));
+    for i in 1..=20 {
+        step_at(&mut h, 100.0 + f64::from(i) / 30.0);
+    }
+    assert!(run(h.state_mut(), "view.record"), "the same command stops");
+    let req = h.state().dialog_requests.last().cloned().expect("a save panel");
+    assert_eq!(req.kind, "recording");
+    assert_eq!(req.suggested.as_deref(), Some("helicopter Viewport.mp4"));
+    let dest = temp("record").join("take.mp4");
+    h.state_mut().finish_recording(dest.clone());
+    let frames = bm::recorder::frame_count(&dest).expect("a movie");
+    assert!((18..=21).contains(&frames), "{frames} frames");
+}
+
+#[test]
+fn record_title_toggles() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = app();
+    h.run_steps(5);
+    assert_eq!(record_title(&h), "Record Viewport");
+    assert!(run(h.state_mut(), "view.record"));
+    h.run_steps(2);
+    assert_eq!(record_title(&h), "Stop Recording Viewport");
+    assert!(h.query_by_label("Stop recording").is_some(), "the recording chip");
+    h.get_by_label("Stop recording").click();
+    h.run_steps(2);
+    assert_eq!(record_title(&h), "Record Viewport");
+    assert!(h.query_by_label("Stop recording").is_none());
+    assert_eq!(h.state().dialog_requests.last().map(|r| r.kind), Some("recording"));
+}
+
+#[test]
+fn record_fits_frames_after_resize() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = app();
+    h.run_steps(5);
+    step_at(&mut h, 10.0);
+    assert!(run(h.state_mut(), "view.record"));
+    let size = h.state().recording_size().expect("recording");
+    for i in 1..=5 {
+        step_at(&mut h, 10.0 + f64::from(i) / 30.0);
+    }
+    h.set_size(egui::vec2(1200.0, 860.0));
+    for i in 6..=12 {
+        step_at(&mut h, 10.0 + f64::from(i) / 30.0);
+    }
+    assert_eq!(h.state().recording_size(), Some(size), "the movie keeps its first size");
+    assert_ne!((h.state().viewport_frame_size().0, h.state().viewport_frame_size().1), size, "the view did change");
+    assert!(run(h.state_mut(), "view.record"));
+    let dest = temp("record-resize").join("take.mp4");
+    h.state_mut().finish_recording(dest.clone());
+    assert!(bm::recorder::frame_count(&dest).is_some_and(|n| n >= 10));
+}

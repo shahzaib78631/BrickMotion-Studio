@@ -18,6 +18,7 @@ mod notices;
 pub mod palette;
 pub mod placement;
 pub mod previews;
+pub mod recording;
 pub mod render_queue;
 mod shortcuts;
 mod snapshot;

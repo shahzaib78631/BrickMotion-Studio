@@ -174,6 +174,10 @@ pub struct BrickMotionApp {
     pub queue_panel: chrome::queue_panel::QueuePanel,
     pub movie: chrome::export_movie::MoviePanel,
     pub still: chrome::export_still::StillPanel,
+    /// View › Record Viewport.
+    pub recording: crate::recording::RecordingState,
+    /// `input.time` of the last frame (commands run between frames use it).
+    now: f64,
     /// The file Show in Finder revealed while dialogs are off (tests read it).
     pub revealed: Option<PathBuf>,
     /// Joint markers, the open joint and its card.
@@ -276,6 +280,8 @@ impl BrickMotionApp {
             queue_panel: Default::default(),
             movie: Default::default(),
             still: Default::default(),
+            recording: Default::default(),
+            now: 0.0,
             revealed: None,
             camera_synced: None,
             timeline: chrome::timeline::TimelineState::default(),
@@ -575,6 +581,7 @@ impl BrickMotionApp {
             workspace: self.workspace,
             playing: self.transport.state.playing || self.transport.state.waiting_to_play,
             joints: self.joints.show,
+            recording: self.recording(),
         }
     }
 
@@ -782,6 +789,7 @@ impl BrickMotionApp {
             "model.look" | "view.look" => chrome::look_panel::toggle(self),
             "output.render_queue" => chrome::queue_panel::toggle(self),
             "output.export_still" => chrome::export_still::toggle(self),
+            "view.record" => self.toggle_recording(self.now),
             "output.export_movie" => {
                 if self.movie.open && self.movie.targets.is_empty() {
                     self.movie.open = false;
@@ -1230,6 +1238,7 @@ fn test_support() -> Support {
 impl eframe::App for BrickMotionApp {
     fn on_exit(&mut self) {
         self.queue.stop_for_quit();
+        self.discard_recording();
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
@@ -1344,6 +1353,12 @@ impl eframe::App for BrickMotionApp {
             // An edit, undo or redo: the engine's viewport catches up by itself, it only needs a frame.
             self.seen_version = self.doc.session().version();
             ui.ctx().request_repaint();
+        }
+        // After the viewport drew: its picture is this frame's.
+        self.now = ui.input(|i| i.time);
+        self.tick_recording(self.now);
+        if self.recording() {
+            ui.ctx().request_repaint_after(Duration::from_secs_f64(1.0 / crate::recording::FRAMES_PER_SECOND));
         }
     }
 }

@@ -84,7 +84,7 @@ pub fn menu_model() -> Vec<MenuSection> {
         },
         MenuSection {
             title: "View",
-            items: vec![C("view.fit"), C("view.home"), C("view.frame_selection"), Sep, C("view.look"), C("view.joints"), Sep, C("view.palette")],
+            items: vec![C("view.fit"), C("view.home"), C("view.frame_selection"), Sep, C("view.look"), C("view.joints"), Sep, C("view.record"), Sep, C("view.palette")],
         },
         MenuSection {
             title: "Window",

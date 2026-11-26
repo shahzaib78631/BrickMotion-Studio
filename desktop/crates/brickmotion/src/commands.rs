@@ -78,6 +78,8 @@ pub struct Ctx {
     pub playing: bool,
     /// View › Joint Markers is on.
     pub joints: bool,
+    /// View › Record Viewport is recording.
+    pub recording: bool,
 }
 
 /// A key with its modifiers.
@@ -199,6 +201,7 @@ pub fn title(c: &Command, ctx: &Ctx) -> String {
         "edit.collision" => if ctx.collision { "Collision Checks On" } else { "Collision Checks Off" }.to_owned(),
         "transport.play" => if ctx.playing { "Pause" } else { "Play" }.to_owned(),
         "view.joints" => if ctx.joints { "Hide Joint Markers" } else { "Show Joint Markers" }.to_owned(),
+        "view.record" => if ctx.recording { "Stop Recording Viewport" } else { "Record Viewport" }.to_owned(),
         _ => c.title.to_owned(),
     }
 }
@@ -287,6 +290,7 @@ static REGISTRY: &[Command] = &[
     Command { id: "edit.select_none", title: "Select None", icon: Icon::Cursor, keys: Some("Esc"), tip: "Clear the selection.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Selection, menu: Menu::Edit },
     Command { id: "edit.hide", title: "Hide Selection", icon: Icon::EyeOff, keys: None, tip: "Hide the selected pieces until Show All.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Selection, menu: Menu::Edit },
     Command { id: "edit.show_all", title: "Show All", icon: Icon::Eye, keys: None, tip: "Show every hidden piece.", workspace: Workspace::Build, tab: "", group: "Edit", when: When::Pieces, menu: Menu::Edit },
+    Command { id: "view.record", title: "Record Viewport", icon: Icon::Vid, keys: Some("⌥⇧⌘R"), tip: "Record what the viewport shows as a movie.", workspace: Workspace::Animate, tab: "", group: "View", when: When::Document, menu: Menu::View },
     Command { id: "view.frame_selection", title: "Frame Selection", icon: Icon::LookAt, keys: Some("⌘F"), tip: "Frame the selected pieces.", workspace: Workspace::Build, tab: "", group: "View", when: When::Selection, menu: Menu::View },
     Command { id: "view.palette", title: "Command Palette…", icon: Icon::Search, keys: Some("⌘K"), tip: "Find any command by name.", workspace: Workspace::Build, tab: "", group: "View", when: When::Always, menu: Menu::View },
     Command { id: "tool.select", title: "Select Tool", icon: Icon::Cursor, keys: Some("V"), tip: "Pick pieces in the viewport.", workspace: Workspace::Build, tab: "", group: "Tools", when: When::Document, menu: Menu::None },
