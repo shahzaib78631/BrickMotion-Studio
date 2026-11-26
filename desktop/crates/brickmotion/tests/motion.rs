@@ -37,6 +37,12 @@ fn planned() -> Harness<'static, BrickMotionApp> {
     h
 }
 
+/// The shortest timeline keeps the flight-path dots clear of the view bar above it.
+fn path_room(h: &mut Harness<'static, BrickMotionApp>) {
+    h.state_mut().timeline.height = 180.0;
+    h.run_steps(2);
+}
+
 fn select(h: &mut Harness<'static, BrickMotionApp>, pieces: &[u32]) {
     h.state_mut().doc.session().select(pieces, bm::SelectMode::Replace);
     h.run_steps(2);
@@ -183,6 +189,7 @@ fn path_point_drag_is_one_undo_step() {
         return;
     }
     let mut h = planned();
+    path_room(&mut h);
     bake(&mut h, PIECE);
     set_clock(&mut h, Clock::Keyframes);
     select(&mut h, &[PIECE]);
@@ -286,6 +293,7 @@ fn picked_path_point_deletes() {
         return;
     }
     let mut h = planned();
+    path_room(&mut h);
     path_open(&mut h);
     let dots = h.state().flights.dots.clone();
     let (lo, hi) = (dots.iter().map(|d| d.0).min().unwrap(), dots.iter().map(|d| d.0).max().unwrap());
@@ -309,6 +317,7 @@ fn double_click_line_adds_point() {
         return;
     }
     let mut h = planned();
+    path_room(&mut h);
     path_open(&mut h);
     // A bake keys every flight frame, so free a frame first: delete a middle dot clear of its
     // neighbours, then double-click the line where it was.
@@ -585,6 +594,7 @@ fn dope_sheet_pick_takes_delete_from_path_point() {
         return;
     }
     let mut h = planned();
+    path_room(&mut h);
     path_open(&mut h);
     let dots = h.state().flights.dots.clone();
     let (lo, hi) = (dots.iter().map(|d| d.0).min().unwrap(), dots.iter().map(|d| d.0).max().unwrap());
