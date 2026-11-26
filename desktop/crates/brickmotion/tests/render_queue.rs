@@ -383,3 +383,39 @@ fn worker_wakes_on_each_event() {
     // frame 1 2, frame 2 2, and Done.
     assert!(woken.load(std::sync::atomic::Ordering::SeqCst) >= 3, "{woken:?}");
 }
+
+/// Snap sounds through the Rust helper: the movie has an audio track as long as its video.
+#[test]
+fn movie_helper_mixes_snap_audio() {
+    if std::env::var("BM_SLOW").as_deref() != Ok("1") {
+        return;
+    }
+    let exe = PathBuf::from(env!("CARGO_BIN_EXE_brickmotion"));
+    let dir = temp("snap-audio");
+    let model = dir.join("three.ldr");
+    std::fs::write(
+        &model,
+        "0 Three\n1 4 0 0 0 1 0 0 0 1 0 0 0 1 3001.dat\n0 STEP\n1 1 0 -24 0 1 0 0 0 1 0 0 0 1 3001.dat\n0 STEP\n1 14 0 -48 0 1 0 0 0 1 0 0 0 1 3001.dat\n",
+    )
+    .unwrap();
+    let bytes = {
+        let mut s = bm::Session::new();
+        s.open(&model).expect("the model opens");
+        s.project_bytes()
+    };
+    let mut q = RenderQueue::load(dir.join("render-queue.json"), Helpers { still: exe.clone(), movie: exe });
+    let dest = dir.join("build.mp4");
+    let options = ["--size", "160x90", "--fps", "12", "--source", "build", "--snap-audio"].map(String::from).to_vec();
+    let library = bm::ldraw_directory().unwrap_or_default();
+    q.enqueue(bytes, Operation::Movie, options, &library, dest.clone(), "Build".into(), None).unwrap();
+    let start = Instant::now();
+    while q.poll() {
+        assert!(start.elapsed() < Duration::from_secs(300));
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    assert_eq!(q.jobs()[0].status, JobStatus::Complete, "{:?}", q.jobs());
+    let frames = bm::recorder::frame_count(&dest).expect("a video track");
+    let audio = bm::recorder::audio_seconds(&dest).expect("an audio track");
+    let video = f64::from(frames) / 12.0;
+    assert!((audio - video).abs() < 0.5, "audio {audio} s, video {video} s");
+}

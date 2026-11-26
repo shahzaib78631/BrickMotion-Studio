@@ -128,5 +128,6 @@ TEST_CASE("recorder writes the frames it is given", "[export]") {
   CHECK(take(bm_recorder_finish(r)).empty());
   CHECK(bm_movie_frame_count(file.c_str()) == 4);
   CHECK(bm_movie_frame_count("/nonexistent.mp4") == -1);
+  CHECK(bm_movie_audio_seconds(file.c_str()) == -1);  // a viewport recording has no sound
   std::filesystem::remove(file);
 }

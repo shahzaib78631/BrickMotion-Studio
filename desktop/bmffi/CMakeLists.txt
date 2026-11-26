@@ -11,9 +11,12 @@ set_target_properties(bmffi PROPERTIES INSTALL_NAME_DIR "@rpath" BUILD_WITH_INST
 # Only the C interface leaves the library; the engine's C++ symbols stay inside.
 target_link_options(bmffi PRIVATE "LINKER:-exported_symbol,_bm_*")
 
-file(GLOB BMFFI_TESTS CONFIGURE_DEPENDS tests/*_test.cpp)
+file(GLOB BMFFI_TESTS CONFIGURE_DEPENDS tests/*_test.cpp tests/*_test.mm)
 add_executable(bmffi_tests ${BMFFI_TESTS})
-target_link_libraries(bmffi_tests PRIVATE bmffi bm_warnings Catch2::Catch2WithMain)
+target_include_directories(bmffi_tests PRIVATE src)
+target_compile_options(bmffi_tests PRIVATE $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
+target_link_libraries(bmffi_tests PRIVATE bmffi bm_warnings Catch2::Catch2WithMain "-framework AVFoundation"
+  "-framework Foundation")
 set_target_properties(bmffi_tests PROPERTIES BUILD_RPATH "$<TARGET_FILE_DIR:bmffi>")
 target_compile_definitions(bmffi_tests PRIVATE BM_REPO="${CMAKE_SOURCE_DIR}/..")
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)

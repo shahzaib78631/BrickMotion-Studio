@@ -1138,6 +1138,7 @@ unsafe extern "C" {
     pub fn bm_recorder_finish(r: *mut BmRecorder) -> BmString;
     pub fn bm_recorder_free(r: *mut BmRecorder);
     pub fn bm_movie_frame_count(path: *const c_char) -> i64;
+    pub fn bm_movie_audio_seconds(path: *const c_char) -> f64;
 }
 
 /// Every function declared above, for the header agreement test.
@@ -1241,5 +1242,5 @@ pub const DECLARED: &[&str] = &[
     "bm_movie_allows_track", "bm_submodel_video_targets", "bm_video_targets_len", "bm_video_targets_title",
     "bm_video_targets_path_len", "bm_video_targets_path_at", "bm_video_targets_free", "bm_safe_file_stem",
     "bm_stamp_logo", "bm_run_editor_movie", "bm_recorder_start", "bm_recorder_append", "bm_recorder_size",
-    "bm_recorder_finish", "bm_recorder_free", "bm_movie_frame_count",
+    "bm_recorder_finish", "bm_recorder_free", "bm_movie_frame_count", "bm_movie_audio_seconds",
 ];

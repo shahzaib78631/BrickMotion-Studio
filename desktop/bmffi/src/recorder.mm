@@ -11,19 +11,13 @@
 
 #include "bmffi.h"
 #include "internal.h"
+#include "recorder_internal.h"
 
 // AVFoundation's synchronous track getters are deprecated for Swift concurrency; a recorder is
 // driven from one thread and waits where Swift would await.
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 
-struct BmRecorder {
-  AVAssetWriter* writer = nil;
-  AVAssetWriterInput* input = nil;
-  AVAssetWriterInputPixelBufferAdaptor* adaptor = nil;
-  int width = 0, height = 0;
-  double last = 0;
-};
 
 namespace {
 
@@ -131,6 +125,11 @@ BmString bm_recorder_finish(BmRecorder* r) {
   if (!r) return bmffi::make("Nothing was recorded.");
   std::string failure;
   @autoreleasepool {
+    // A writer that has stopped (failed or cancelled) raises if asked to finish: report it instead.
+    if (r->writer.status != AVAssetWriterStatusWriting) {
+      delete r;
+      return bmffi::make("The movie encoder stopped. Try a smaller window.");
+    }
     [r->input markAsFinished];
     [r->writer endSessionAtSourceTime:CMTimeMakeWithSeconds(r->last + 1.0 / kFramesPerSecond, 600)];
     dispatch_semaphore_t done = dispatch_semaphore_create(0);
@@ -172,6 +171,16 @@ int64_t bm_movie_frame_count(const char* path) {
       CFRelease(sample);
     }
     return frames;
+  }
+}
+
+double bm_movie_audio_seconds(const char* path) {
+  if (!path) return -1;
+  @autoreleasepool {
+    AVURLAsset* asset = [AVURLAsset URLAssetWithURL:[NSURL fileURLWithPath:[NSString stringWithUTF8String:path]] options:nil];
+    AVAssetTrack* track = [asset tracksWithMediaType:AVMediaTypeAudio].firstObject;
+    if (!track) return -1;
+    return CMTimeGetSeconds(track.timeRange.duration);
   }
 }
 

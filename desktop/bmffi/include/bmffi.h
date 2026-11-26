@@ -882,6 +882,8 @@ BMFFI_API BmString bm_recorder_finish(BmRecorder* r);
 BMFFI_API void bm_recorder_free(BmRecorder* r);
 /// The video track's frame count, or -1 when the file has none.
 BMFFI_API int64_t bm_movie_frame_count(const char* path);
+/// The audio track's length in seconds, or -1 when the file has none.
+BMFFI_API double bm_movie_audio_seconds(const char* path);
 
 #ifdef __cplusplus
 }

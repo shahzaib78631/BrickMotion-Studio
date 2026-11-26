@@ -104,6 +104,7 @@ fn recorder_writes_the_frames_it_is_given() {
     r.finish().expect("finish");
     assert_eq!(recorder::frame_count(&file), Some(4));
     assert_eq!(recorder::frame_count(Path::new("/nonexistent.mp4")), None);
+    assert_eq!(recorder::audio_seconds(&file), None, "a viewport recording has no sound");
     let _ = std::fs::remove_file(&file);
 }
 

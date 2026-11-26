@@ -64,3 +64,10 @@ pub fn frame_count(path: &Path) -> Option<u32> {
     let n = unsafe { sys::bm_movie_frame_count(p.as_ptr()) };
     (n >= 0).then_some(n as u32)
 }
+
+/// The audio track's length in seconds, read with AVFoundation; None when the file has none.
+pub fn audio_seconds(path: &Path) -> Option<f64> {
+    let p = c_path(path);
+    let s = unsafe { sys::bm_movie_audio_seconds(p.as_ptr()) };
+    (s >= 0.0).then_some(s)
+}
