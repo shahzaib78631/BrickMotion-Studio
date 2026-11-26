@@ -335,3 +335,105 @@ fn movie_screenshot() {
     let image = h.render().expect("render");
     image.save(std::env::var("MOVIE_SHOT").unwrap_or("/tmp/movie.png".into())).unwrap();
 }
+
+// ---- Export Still (Task 9) ----
+
+use bm::export::{still_arguments, still_summary};
+use brickmotion::chrome::export_still::{self, StillCamera};
+use brickmotion::render_queue::{JobStatus, Operation};
+
+#[test]
+fn export_still_queues_bmexport() {
+    let mut h = app();
+    let dir = temp("still");
+    script_queue(&mut h, &dir, "out=\"$4\"\nop=\"$1\"\nshift 4\n{ echo \"$op\"; printf '%s\\n' \"$@\"; } > \"$out\"");
+    assert!(run(h.state_mut(), "output.export_still"));
+    h.run_steps(3);
+    assert!(h.query_by_label("Export Still panel").is_some());
+    h.state_mut().still.quality = bm::export::StillQuality::Draft;
+    h.run_steps(2);
+    click_label(&mut h, "Continue…");
+    let req = h.state().dialog_requests.last().cloned().expect("a save panel");
+    assert_eq!(req.kind, "still");
+    assert_eq!(req.suggested.as_deref(), Some("helicopter – Landscape.png"));
+    let choice = export_still::choice(h.state());
+    let dest = dir.join("cover.png");
+    h.state_mut().finish_still(dest.clone());
+    h.run_steps(3);
+    assert!(h.query_by_label("Render Queue panel").is_some(), "queueing shows the queue");
+    assert!(h.query_by_label("Export Still panel").is_none());
+    settle_queue(&mut h);
+    let lines: Vec<String> = std::fs::read_to_string(&dest).unwrap().lines().map(str::to_owned).collect();
+    assert_eq!(lines[0], "still", "bmexport's still command");
+    assert_eq!(lines[1..], still_arguments(&choice, &h.state().session().render_look())[..]);
+    assert_eq!(h.state().queue.jobs()[0].summary, still_summary(&choice, false));
+    let _ = Operation::Still;
+}
+
+#[test]
+fn still_logo_stamps_before_move() {
+    let mut h = app();
+    let dir = temp("still-logo");
+    let white = dir.join("white.png");
+    image::RgbaImage::from_pixel(640, 360, image::Rgba([255, 255, 255, 255])).save(&white).unwrap();
+    let mark = dir.join("mark.png");
+    image::RgbaImage::from_pixel(64, 64, image::Rgba([255, 0, 0, 255])).save(&mark).unwrap();
+    h.state_mut().choose_logo(&mark).unwrap();
+    script_queue(&mut h, &dir, &format!("cp '{}' \"$4\"", white.display()));
+    assert!(run(h.state_mut(), "output.export_still"));
+    h.run_steps(3);
+    assert!(h.state().still.show_logo, "a chosen logo starts on");
+    let dest = dir.join("cover.png");
+    h.state_mut().finish_still(dest.clone());
+    settle_queue(&mut h);
+    assert_eq!(h.state().queue.jobs()[0].status, JobStatus::Complete);
+    assert!(h.state().queue.jobs()[0].summary.ends_with(" · Logo"));
+    let out = image::open(&dest).unwrap().to_rgba8();
+    assert_eq!(out.dimensions(), (640, 360));
+    assert!(out.pixels().any(|p| p[0] > 200 && p[1] < 80 && p[2] < 80), "the logo is drawn over the still");
+}
+
+#[test]
+fn automatic_framing_drops_angles() {
+    if !bm::metal_available() {
+        return;
+    }
+    let mut h = app();
+    h.run_steps(5);
+    assert!(run(h.state_mut(), "output.export_still"));
+    h.run_steps(3);
+    assert_eq!(h.state().still.camera, StillCamera::Viewport, "the viewport's angle is the default");
+    let look = h.state().session().render_look();
+    assert!(still_arguments(&export_still::choice(h.state()), &look).iter().any(|a| a == "--azimuth"));
+    h.state_mut().still.camera = StillCamera::Automatic;
+    let args = still_arguments(&export_still::choice(h.state()), &look);
+    assert!(!args.iter().any(|a| a == "--azimuth" || a == "--elevation" || a == "--fov"), "{args:?}");
+}
+
+/// The real still helper: `bmexport still` path traces a Draft picture.
+#[test]
+fn still_helper_renders_a_png() {
+    if std::env::var("BM_SLOW").as_deref() != Ok("1") {
+        return;
+    }
+    let dir = temp("still-real");
+    let helpers = Helpers::locate();
+    assert!(helpers.still.exists(), "build bmexport first: {}", helpers.still.display());
+    let mut s = bm::Session::new();
+    s.open(Path::new(HELI)).expect("the helicopter opens");
+    let choice = bm::export::StillChoice { quality: bm::export::StillQuality::Draft, ..Default::default() };
+    let mut args = still_arguments(&choice, &s.render_look());
+    let at = args.iter().position(|a| a == "--size").unwrap();
+    args[at + 1] = "192x108".into();
+    let mut q = RenderQueue::load(dir.join("queue.json"), helpers);
+    let dest = dir.join("still.png");
+    let library = bm::ldraw_directory().unwrap_or_default();
+    q.enqueue(s.project_bytes(), Operation::Still, args, &library, dest.clone(), "Still".into(), None).unwrap();
+    let start = std::time::Instant::now();
+    while q.poll() {
+        assert!(start.elapsed() < std::time::Duration::from_secs(300));
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    assert_eq!(q.jobs()[0].status, JobStatus::Complete);
+    assert_eq!(image::open(&dest).unwrap().to_rgba8().dimensions(), (192, 108));
+}

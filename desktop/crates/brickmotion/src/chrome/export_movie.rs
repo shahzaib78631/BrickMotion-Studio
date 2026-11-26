@@ -431,7 +431,7 @@ fn description(app: &BrickMotionApp) -> String {
 }
 
 /// One frame-shape tile: its outline at the shape's aspect, name and ratio.
-fn shape_tile(ui: &mut Ui, t: &Theme, shape: FrameShape, selected: bool, width: f32) -> egui::Response {
+pub(crate) fn shape_tile(ui: &mut Ui, t: &Theme, shape: FrameShape, selected: bool, width: f32) -> egui::Response {
     let (r, resp) = ui.allocate_exact_size(vec2(width, 66.0), Sense::click());
     let label = format!("{}, {}", shape.title(), shape.ratio());
     resp.widget_info(|| WidgetInfo::selected(egui::Role::Button, true, selected, &label));

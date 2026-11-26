@@ -25,6 +25,7 @@ pub enum PanelKind {
     Look,
     Queue,
     Movie,
+    Still,
 }
 
 impl PanelKind {
@@ -38,6 +39,7 @@ impl PanelKind {
             PanelKind::Look => "Look",
             PanelKind::Queue => "Render Queue",
             PanelKind::Movie => "Export Video",
+            PanelKind::Still => "Export Still",
         }
     }
 }
