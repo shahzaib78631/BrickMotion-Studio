@@ -21,9 +21,6 @@ struct BmMotionAudit {
 struct BmMotionReport {
   bmapp::MotionAuditResult result;
 };
-struct BmInspection {
-  bmapp::AssemblyInspection* inspection;
-};
 struct BmJoints {
   bmapp::AssemblyReport report;
 };

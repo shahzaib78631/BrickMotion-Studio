@@ -768,6 +768,58 @@ pub struct BmVideoTargets {
 pub struct BmRecorder {
     _private: [u8; 0],
 }
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct BmLoosePiece {
+    pub piece: u32,
+    pub onto: u32,
+    pub rotation: BmMat3,
+    pub position: BmVec3,
+    pub offset: f64,
+    pub angle: f64,
+    pub safe: bool,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct BmHabitFit {
+    pub color: i32,
+    pub rotation: BmMat3,
+    pub position: BmVec3,
+    pub models: u32,
+    pub total: u32,
+    pub links: u32,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct BmPieceMove {
+    pub piece: u32,
+    pub rotation: BmMat3,
+    pub position: BmVec3,
+}
+#[repr(C)]
+pub struct BmModelChecks {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct BmLoosePieces {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct BmHabitFits {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct BmFittingParts {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct BmInventory {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct BmInventoryReport {
+    _private: [u8; 0],
+}
 
 unsafe extern "C" {
     pub fn bm_string_free(s: BmString);
@@ -1140,6 +1192,53 @@ unsafe extern "C" {
     pub fn bm_recorder_free(r: *mut BmRecorder);
     pub fn bm_movie_frame_count(path: *const c_char) -> i64;
     pub fn bm_movie_audio_seconds(path: *const c_char) -> f64;
+    // Model checks, loose pieces, habit fits, fitting parts and inventory
+    pub fn bm_session_show(s: *mut BmSession, pieces: *const u32, n: usize);
+    pub fn bm_session_part_at(s: *const BmSession, piece: u32, name: *mut BmString, description: *mut BmString, category: *mut BmString);
+    pub fn bm_session_part_color(s: *const BmSession, piece: u32) -> i32;
+    pub fn bm_inspection_check_model(i: *mut BmInspection) -> *mut BmModelChecks;
+    pub fn bm_model_checks_len(c: *const BmModelChecks) -> usize;
+    pub fn bm_model_checks_kind(c: *const BmModelChecks, i: usize) -> i32;
+    pub fn bm_model_checks_title(c: *const BmModelChecks, i: usize) -> *const c_char;
+    pub fn bm_model_checks_detail(c: *const BmModelChecks, i: usize) -> *const c_char;
+    pub fn bm_model_checks_pieces(c: *const BmModelChecks, i: usize, out: *mut u32, cap: usize) -> usize;
+    pub fn bm_model_checks_error(c: *const BmModelChecks) -> *const c_char;
+    pub fn bm_model_checks_free(c: *mut BmModelChecks);
+    pub fn bm_inspection_loose_pieces(i: *mut BmInspection) -> *mut BmLoosePieces;
+    pub fn bm_loose_pieces_len(l: *const BmLoosePieces) -> usize;
+    pub fn bm_loose_pieces_at(l: *const BmLoosePieces, i: usize) -> BmLoosePiece;
+    pub fn bm_loose_pieces_note(l: *const BmLoosePieces, i: usize) -> *const c_char;
+    pub fn bm_loose_pieces_error(l: *const BmLoosePieces) -> *const c_char;
+    pub fn bm_loose_pieces_free(l: *mut BmLoosePieces);
+    pub fn bm_loose_initial_choice(l: *const BmLoosePieces, out: *mut u32, cap: usize) -> usize;
+    pub fn bm_loose_waiting_on(l: *const BmLoosePieces, piece: u32, chosen: *const u32, n: usize) -> u32;
+    pub fn bm_loose_uncheck(l: *const BmLoosePieces, piece: u32, chosen: *const u32, n: usize, out: *mut u32, cap: usize) -> usize;
+    pub fn bm_loose_detail(l: *const BmLoosePieces, i: usize, onto_name: *const c_char) -> BmString;
+    pub fn bm_inspection_habit_fits(i: *mut BmInspection, piece: u32, limit: usize) -> *mut BmHabitFits;
+    pub fn bm_habit_fits_len(h: *const BmHabitFits) -> usize;
+    pub fn bm_habit_fits_at(h: *const BmHabitFits, i: usize) -> BmHabitFit;
+    pub fn bm_habit_fits_name(h: *const BmHabitFits, i: usize) -> *const c_char;
+    pub fn bm_habit_fits_description(h: *const BmHabitFits, i: usize) -> *const c_char;
+    pub fn bm_habit_fits_joint(h: *const BmHabitFits, i: usize) -> *const c_char;
+    pub fn bm_habit_fits_why(h: *const BmHabitFits, i: usize) -> *const c_char;
+    pub fn bm_habit_fits_free(h: *mut BmHabitFits);
+    pub fn bm_inspection_fitting_parts(i: *mut BmInspection, piece: u32, candidates: *const *const c_char, n: usize, limit: usize) -> *mut BmFittingParts;
+    pub fn bm_fitting_parts_len(f: *const BmFittingParts) -> usize;
+    pub fn bm_fitting_parts_name(f: *const BmFittingParts, i: usize) -> *const c_char;
+    pub fn bm_fitting_parts_contact(f: *const BmFittingParts, i: usize) -> BmVec3;
+    pub fn bm_fitting_parts_free(f: *mut BmFittingParts);
+    pub fn bm_session_seat_pieces(s: *mut BmSession, moves: *const BmPieceMove, n: usize, generation: u64, version: u64) -> BmChange;
+    pub fn bm_inventory_capture(s: *const BmSession, step: i32) -> *mut BmInventory;
+    pub fn bm_inventory_prepare(inv: *mut BmInventory, path: *const c_char) -> *mut BmInventoryReport;
+    pub fn bm_inventory_report_error(r: *const BmInventoryReport) -> *const c_char;
+    pub fn bm_inventory_report_pieces(r: *const BmInventoryReport) -> usize;
+    pub fn bm_inventory_report_spares(r: *const BmInventoryReport) -> usize;
+    pub fn bm_inventory_report_invalid_rows(r: *const BmInventoryReport) -> usize;
+    pub fn bm_inventory_report_missing_len(r: *const BmInventoryReport) -> usize;
+    pub fn bm_inventory_report_missing_at(r: *const BmInventoryReport, i: usize) -> *const c_char;
+    pub fn bm_inventory_report_free(r: *mut BmInventoryReport);
+    pub fn bm_session_import_inventory(s: *mut BmSession, inv: *const BmInventory) -> BmChange;
+    pub fn bm_inventory_free(inv: *mut BmInventory);
 }
 
 /// Every function declared above, for the header agreement test.
@@ -1244,4 +1343,17 @@ pub const DECLARED: &[&str] = &[
     "bm_video_targets_path_len", "bm_video_targets_path_at", "bm_video_targets_free", "bm_safe_file_stem", "bm_display_name",
     "bm_stamp_logo", "bm_run_editor_movie", "bm_recorder_start", "bm_recorder_append", "bm_recorder_size",
     "bm_recorder_finish", "bm_recorder_free", "bm_movie_frame_count", "bm_movie_audio_seconds",
+    "bm_session_show", "bm_session_part_at", "bm_session_part_color",
+    "bm_inspection_check_model", "bm_model_checks_len", "bm_model_checks_kind", "bm_model_checks_title",
+    "bm_model_checks_detail", "bm_model_checks_pieces", "bm_model_checks_error", "bm_model_checks_free",
+    "bm_inspection_loose_pieces", "bm_loose_pieces_len", "bm_loose_pieces_at", "bm_loose_pieces_note",
+    "bm_loose_pieces_error", "bm_loose_pieces_free", "bm_loose_initial_choice", "bm_loose_waiting_on",
+    "bm_loose_uncheck", "bm_loose_detail",
+    "bm_inspection_habit_fits", "bm_habit_fits_len", "bm_habit_fits_at", "bm_habit_fits_name",
+    "bm_habit_fits_description", "bm_habit_fits_joint", "bm_habit_fits_why", "bm_habit_fits_free",
+    "bm_inspection_fitting_parts", "bm_fitting_parts_len", "bm_fitting_parts_name", "bm_fitting_parts_contact",
+    "bm_fitting_parts_free", "bm_session_seat_pieces",
+    "bm_inventory_capture", "bm_inventory_prepare", "bm_inventory_report_error", "bm_inventory_report_pieces",
+    "bm_inventory_report_spares", "bm_inventory_report_invalid_rows", "bm_inventory_report_missing_len",
+    "bm_inventory_report_missing_at", "bm_inventory_report_free", "bm_session_import_inventory", "bm_inventory_free",
 ];

@@ -101,6 +101,20 @@ impl Session {
     pub fn set_insertion_direction(&self, pieces: &[u32], direction: Vec3) -> Changed {
         take_change(unsafe { sys::bm_session_set_insertion_direction(self.raw, pieces_ptr(pieces), pieces.len(), direction.to_raw()) })
     }
+
+    /// Sets loose pieces at their seated poses as one undo step; refuses a stale revision.
+    pub fn seat_pieces(&self, moves: &[(u32, Pose)], generation: u64, version: u64) -> Changed {
+        let raw: Vec<sys::BmPieceMove> = moves
+            .iter()
+            .map(|&(piece, pose)| sys::BmPieceMove {
+                piece,
+                rotation: pose.rotation.to_raw(),
+                position: pose.position.to_raw(),
+            })
+            .collect();
+        let ptr = if raw.is_empty() { std::ptr::null() } else { raw.as_ptr() };
+        take_change(unsafe { sys::bm_session_seat_pieces(self.raw, ptr, raw.len(), generation, version) })
+    }
 }
 
 /// `fields` with every unset field taken from the enclosing scope, then the defaults.
@@ -291,6 +305,155 @@ pub struct JointEdit {
     pub error: Option<String>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum CheckKind {
+    Overlap,
+    Unsupported,
+    Tipping,
+    SingleConnector,
+    MissingDefinition,
+    UnknownColour,
+    SubmodelLoop,
+}
+
+impl CheckKind {
+    pub const ALL: [CheckKind; 7] = [
+        CheckKind::Overlap,
+        CheckKind::Unsupported,
+        CheckKind::Tipping,
+        CheckKind::SingleConnector,
+        CheckKind::MissingDefinition,
+        CheckKind::UnknownColour,
+        CheckKind::SubmodelLoop,
+    ];
+
+    fn from_raw(v: i32) -> CheckKind {
+        match v {
+            0 => CheckKind::Overlap,
+            1 => CheckKind::Unsupported,
+            2 => CheckKind::Tipping,
+            3 => CheckKind::SingleConnector,
+            4 => CheckKind::MissingDefinition,
+            5 => CheckKind::UnknownColour,
+            _ => CheckKind::SubmodelLoop,
+        }
+    }
+
+    /// Swift's Model Checks section titles.
+    pub fn title(self) -> &'static str {
+        match self {
+            CheckKind::Overlap => "Overlaps",
+            CheckKind::Unsupported => "Unsupported Parts",
+            CheckKind::Tipping => "Unstable Groups",
+            CheckKind::SingleConnector => "Single-Connector Attachments",
+            CheckKind::MissingDefinition => "Missing Definitions",
+            CheckKind::UnknownColour => "Unknown Colours",
+            CheckKind::SubmodelLoop => "Submodel Loops",
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ModelCheck {
+    pub kind: CheckKind,
+    pub title: String,
+    pub detail: String,
+    pub pieces: Vec<u32>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ModelChecks {
+    pub findings: Vec<ModelCheck>,
+    pub error: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct LoosePiece {
+    pub piece: u32,
+    pub onto: u32,
+    pub pose: Pose,
+    pub offset: f64,
+    pub angle: f64,
+    pub safe: bool,
+    pub note: String,
+}
+
+/// Loose-piece check result; keeps the engine handle so choice rules and detail formatting call `bmapp`.
+pub struct LoosePieces {
+    pub rows: Vec<LoosePiece>,
+    pub error: Option<String>,
+    raw: *mut sys::BmLoosePieces,
+}
+
+unsafe impl Send for LoosePieces {}
+
+impl LoosePieces {
+    pub fn initial_choice(&self) -> Vec<u32> {
+        if self.raw.is_null() {
+            return Vec::new();
+        }
+        let n = unsafe { sys::bm_loose_initial_choice(self.raw, std::ptr::null_mut(), 0) };
+        let mut out = vec![0u32; n];
+        let got = unsafe { sys::bm_loose_initial_choice(self.raw, out.as_mut_ptr(), out.len()) };
+        out.truncate(got.min(n));
+        out
+    }
+
+    pub fn waiting_on(&self, piece: u32, chosen: &[u32]) -> Option<u32> {
+        if self.raw.is_null() {
+            return None;
+        }
+        let w = unsafe { sys::bm_loose_waiting_on(self.raw, piece, pieces_ptr(chosen), chosen.len()) };
+        (w != sys::BM_NO_PIECE).then_some(w)
+    }
+
+    pub fn uncheck(&self, piece: u32, chosen: &[u32]) -> Vec<u32> {
+        if self.raw.is_null() {
+            return Vec::new();
+        }
+        let n = unsafe { sys::bm_loose_uncheck(self.raw, piece, pieces_ptr(chosen), chosen.len(), std::ptr::null_mut(), 0) };
+        let mut out = vec![0u32; n];
+        let got = unsafe { sys::bm_loose_uncheck(self.raw, piece, pieces_ptr(chosen), chosen.len(), out.as_mut_ptr(), out.len()) };
+        out.truncate(got.min(n));
+        out
+    }
+
+    pub fn detail(&self, index: usize, onto_name: &str) -> String {
+        if self.raw.is_null() {
+            return String::new();
+        }
+        let Ok(c) = std::ffi::CString::new(onto_name) else { return String::new() };
+        take_string(unsafe { sys::bm_loose_detail(self.raw, index, c.as_ptr()) })
+    }
+}
+
+impl Drop for LoosePieces {
+    fn drop(&mut self) {
+        if !self.raw.is_null() {
+            unsafe { sys::bm_loose_pieces_free(self.raw) };
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct HabitFit {
+    pub name: String,
+    pub description: String,
+    pub color: i32,
+    pub pose: Pose,
+    pub models: u32,
+    pub total: u32,
+    pub links: u32,
+    pub joint: String,
+    pub why: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct FittingPart {
+    pub name: String,
+    pub contact: Vec3,
+}
+
 /// A snapshot of the model for joint work.
 pub struct Inspection {
     raw: *mut sys::BmInspection,
@@ -362,6 +525,98 @@ impl Inspection {
             pose: Pose { rotation: Mat3::from_raw(rotation), position: Vec3::from_raw(position) },
             error: (!error.is_empty()).then_some(error),
         }
+    }
+
+    pub fn check_model(&mut self) -> ModelChecks {
+        let h = unsafe { sys::bm_inspection_check_model(self.raw) };
+        if h.is_null() {
+            return ModelChecks { findings: Vec::new(), error: Some("The model check failed.".into()) };
+        }
+        let n = unsafe { sys::bm_model_checks_len(h) };
+        let findings = (0..n)
+            .map(|i| {
+                let kind = CheckKind::from_raw(unsafe { sys::bm_model_checks_kind(h, i) });
+                let title = borrowed(unsafe { sys::bm_model_checks_title(h, i) });
+                let detail = borrowed(unsafe { sys::bm_model_checks_detail(h, i) });
+                let pn = unsafe { sys::bm_model_checks_pieces(h, i, std::ptr::null_mut(), 0) };
+                let mut pieces = vec![0u32; pn];
+                let got = unsafe { sys::bm_model_checks_pieces(h, i, pieces.as_mut_ptr(), pieces.len()) };
+                pieces.truncate(got.min(pn));
+                ModelCheck { kind, title, detail, pieces }
+            })
+            .collect();
+        let error = borrowed(unsafe { sys::bm_model_checks_error(h) });
+        unsafe { sys::bm_model_checks_free(h) };
+        ModelChecks { findings, error: (!error.is_empty()).then_some(error) }
+    }
+
+    pub fn loose_pieces(&mut self) -> LoosePieces {
+        let h = unsafe { sys::bm_inspection_loose_pieces(self.raw) };
+        if h.is_null() {
+            return LoosePieces { rows: Vec::new(), error: Some("Couldn't check for loose pieces.".into()), raw: std::ptr::null_mut() };
+        }
+        let n = unsafe { sys::bm_loose_pieces_len(h) };
+        let rows = (0..n)
+            .map(|i| {
+                let r = unsafe { sys::bm_loose_pieces_at(h, i) };
+                LoosePiece {
+                    piece: r.piece,
+                    onto: r.onto,
+                    pose: Pose { rotation: Mat3::from_raw(r.rotation), position: Vec3::from_raw(r.position) },
+                    offset: r.offset,
+                    angle: r.angle,
+                    safe: r.safe,
+                    note: borrowed(unsafe { sys::bm_loose_pieces_note(h, i) }),
+                }
+            })
+            .collect();
+        let error = borrowed(unsafe { sys::bm_loose_pieces_error(h) });
+        LoosePieces { rows, error: (!error.is_empty()).then_some(error), raw: h }
+    }
+
+    pub fn habit_fits(&mut self, piece: u32, limit: usize) -> Vec<HabitFit> {
+        let h = unsafe { sys::bm_inspection_habit_fits(self.raw, piece, limit) };
+        if h.is_null() {
+            return Vec::new();
+        }
+        let n = unsafe { sys::bm_habit_fits_len(h) };
+        let out = (0..n)
+            .map(|i| {
+                let r = unsafe { sys::bm_habit_fits_at(h, i) };
+                HabitFit {
+                    name: borrowed(unsafe { sys::bm_habit_fits_name(h, i) }),
+                    description: borrowed(unsafe { sys::bm_habit_fits_description(h, i) }),
+                    color: r.color,
+                    pose: Pose { rotation: Mat3::from_raw(r.rotation), position: Vec3::from_raw(r.position) },
+                    models: r.models,
+                    total: r.total,
+                    links: r.links,
+                    joint: borrowed(unsafe { sys::bm_habit_fits_joint(h, i) }),
+                    why: borrowed(unsafe { sys::bm_habit_fits_why(h, i) }),
+                }
+            })
+            .collect();
+        unsafe { sys::bm_habit_fits_free(h) };
+        out
+    }
+
+    pub fn fitting_parts(&mut self, piece: u32, candidates: &[String], limit: usize) -> Vec<FittingPart> {
+        let cstrings: Vec<std::ffi::CString> = candidates.iter().filter_map(|s| std::ffi::CString::new(s.as_str()).ok()).collect();
+        let ptrs: Vec<*const std::ffi::c_char> = cstrings.iter().map(|s| s.as_ptr()).collect();
+        let ptr = if ptrs.is_empty() { std::ptr::null() } else { ptrs.as_ptr() };
+        let h = unsafe { sys::bm_inspection_fitting_parts(self.raw, piece, ptr, ptrs.len(), limit) };
+        if h.is_null() {
+            return Vec::new();
+        }
+        let n = unsafe { sys::bm_fitting_parts_len(h) };
+        let out = (0..n)
+            .map(|i| FittingPart {
+                name: borrowed(unsafe { sys::bm_fitting_parts_name(h, i) }),
+                contact: Vec3::from_raw(unsafe { sys::bm_fitting_parts_contact(h, i) }),
+            })
+            .collect();
+        unsafe { sys::bm_fitting_parts_free(h) };
+        out
     }
 }
 

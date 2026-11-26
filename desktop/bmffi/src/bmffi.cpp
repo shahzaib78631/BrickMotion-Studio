@@ -272,8 +272,27 @@ void bm_session_select_none(BmSession* s) {
 void bm_session_hide(BmSession* s, const uint32_t* pieces, size_t n) {
   if (s) guardVoid([&] { s->s->hide(list(pieces, n)); });
 }
+void bm_session_show(BmSession* s, const uint32_t* pieces, size_t n) {
+  if (s) guardVoid([&] { s->s->show(list(pieces, n)); });
+}
 void bm_session_show_all(BmSession* s) {
   if (s) guardVoid([&] { s->s->showAll(); });
+}
+void bm_session_part_at(const BmSession* s, uint32_t piece, BmString* name, BmString* description, BmString* category) {
+  if (name) *name = BmString{nullptr, 0};
+  if (description) *description = BmString{nullptr, 0};
+  if (category) *category = BmString{nullptr, 0};
+  if (!s) return;
+  guardVoid([&] {
+    const bmapp::PartMatch m = s->s->partAt(piece);
+    if (name) *name = make(m.name);
+    if (description) *description = make(m.description);
+    if (category) *category = make(m.category);
+  });
+}
+int32_t bm_session_part_color(const BmSession* s, uint32_t piece) {
+  if (!s) return 16;
+  return guard<int32_t>(16, [&] { return static_cast<int32_t>(s->s->partColor(piece)); });
 }
 size_t bm_session_pieces_of_row(const BmSession* s, const char* id, uint32_t* out, size_t cap) {
   if (!s || !id) return 0;

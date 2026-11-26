@@ -261,8 +261,31 @@ impl Session {
         unsafe { sys::bm_session_hide(self.raw, pieces.as_ptr(), pieces.len()) }
     }
 
+    pub fn show(&self, pieces: &[u32]) {
+        if !pieces.is_empty() {
+            unsafe { sys::bm_session_show(self.raw, pieces.as_ptr(), pieces.len()) }
+        }
+    }
+
     pub fn show_all(&self) {
         unsafe { sys::bm_session_show_all(self.raw) }
+    }
+
+    /// The part name, description and category of `piece`.
+    pub fn part_at(&self, piece: u32) -> crate::library::PartMatch {
+        let mut name = sys::BmString { ptr: std::ptr::null_mut(), len: 0 };
+        let mut description = sys::BmString { ptr: std::ptr::null_mut(), len: 0 };
+        let mut category = sys::BmString { ptr: std::ptr::null_mut(), len: 0 };
+        unsafe { sys::bm_session_part_at(self.raw, piece, &mut name, &mut description, &mut category) };
+        crate::library::PartMatch {
+            name: take_string(name),
+            description: take_string(description),
+            category: take_string(category),
+        }
+    }
+
+    pub fn part_color(&self, piece: u32) -> i32 {
+        unsafe { sys::bm_session_part_color(self.raw, piece) }
     }
 
     /// The pieces under an outline row.

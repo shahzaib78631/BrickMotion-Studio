@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "bmffi.h"
+#include "bmapp/assembly_inspection.h"
 #include "bmapp/session.h"
 #include "bmapp/viewport.h"
 
@@ -15,6 +16,9 @@ struct BmSession {
 };
 struct BmViewport {
   bmapp::Viewport* v;
+};
+struct BmInspection {
+  bmapp::AssemblyInspection* inspection;
 };
 struct BmStrings {
   std::vector<std::string> items;

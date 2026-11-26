@@ -887,6 +887,89 @@ BMFFI_API int64_t bm_movie_frame_count(const char* path);
 /// The audio track's length in seconds, or -1 when the file has none.
 BMFFI_API double bm_movie_audio_seconds(const char* path);
 
+// ---- Model checks, loose pieces, habit fits, fitting parts and inventory (inspection.cpp, inventory.cpp) ----
+typedef struct {
+  uint32_t piece, onto;
+  BmMat3 rotation;
+  BmVec3 position;
+  double offset, angle;
+  bool safe;
+} BmLoosePiece;
+typedef struct {
+  int32_t color;
+  BmMat3 rotation;
+  BmVec3 position;
+  uint32_t models, total, links;
+} BmHabitFit;
+typedef struct {
+  uint32_t piece;
+  BmMat3 rotation;
+  BmVec3 position;
+} BmPieceMove;
+typedef struct BmModelChecks BmModelChecks;
+typedef struct BmLoosePieces BmLoosePieces;
+typedef struct BmHabitFits BmHabitFits;
+typedef struct BmFittingParts BmFittingParts;
+typedef struct BmInventory BmInventory;
+typedef struct BmInventoryReport BmInventoryReport;
+
+BMFFI_API void bm_session_show(BmSession* s, const uint32_t* pieces, size_t n);
+BMFFI_API void bm_session_part_at(const BmSession* s, uint32_t piece, BmString* name, BmString* description,
+                                  BmString* category);
+BMFFI_API int32_t bm_session_part_color(const BmSession* s, uint32_t piece);
+
+BMFFI_API BmModelChecks* bm_inspection_check_model(BmInspection* i);
+BMFFI_API size_t bm_model_checks_len(const BmModelChecks* c);
+BMFFI_API int32_t bm_model_checks_kind(const BmModelChecks* c, size_t i);
+BMFFI_API const char* bm_model_checks_title(const BmModelChecks* c, size_t i);
+BMFFI_API const char* bm_model_checks_detail(const BmModelChecks* c, size_t i);
+BMFFI_API size_t bm_model_checks_pieces(const BmModelChecks* c, size_t i, uint32_t* out, size_t cap);
+BMFFI_API const char* bm_model_checks_error(const BmModelChecks* c);
+BMFFI_API void bm_model_checks_free(BmModelChecks* c);
+
+BMFFI_API BmLoosePieces* bm_inspection_loose_pieces(BmInspection* i);
+BMFFI_API size_t bm_loose_pieces_len(const BmLoosePieces* l);
+BMFFI_API BmLoosePiece bm_loose_pieces_at(const BmLoosePieces* l, size_t i);
+BMFFI_API const char* bm_loose_pieces_note(const BmLoosePieces* l, size_t i);
+BMFFI_API const char* bm_loose_pieces_error(const BmLoosePieces* l);
+BMFFI_API void bm_loose_pieces_free(BmLoosePieces* l);
+BMFFI_API size_t bm_loose_initial_choice(const BmLoosePieces* l, uint32_t* out, size_t cap);
+BMFFI_API uint32_t bm_loose_waiting_on(const BmLoosePieces* l, uint32_t piece, const uint32_t* chosen, size_t n);
+BMFFI_API size_t bm_loose_uncheck(const BmLoosePieces* l, uint32_t piece, const uint32_t* chosen, size_t n,
+                                  uint32_t* out, size_t cap);
+BMFFI_API BmString bm_loose_detail(const BmLoosePieces* l, size_t i, const char* onto_name);
+
+BMFFI_API BmHabitFits* bm_inspection_habit_fits(BmInspection* i, uint32_t piece, size_t limit);
+BMFFI_API size_t bm_habit_fits_len(const BmHabitFits* h);
+BMFFI_API BmHabitFit bm_habit_fits_at(const BmHabitFits* h, size_t i);
+BMFFI_API const char* bm_habit_fits_name(const BmHabitFits* h, size_t i);
+BMFFI_API const char* bm_habit_fits_description(const BmHabitFits* h, size_t i);
+BMFFI_API const char* bm_habit_fits_joint(const BmHabitFits* h, size_t i);
+BMFFI_API const char* bm_habit_fits_why(const BmHabitFits* h, size_t i);
+BMFFI_API void bm_habit_fits_free(BmHabitFits* h);
+
+BMFFI_API BmFittingParts* bm_inspection_fitting_parts(BmInspection* i, uint32_t piece, const char* const* candidates,
+                                                      size_t n, size_t limit);
+BMFFI_API size_t bm_fitting_parts_len(const BmFittingParts* f);
+BMFFI_API const char* bm_fitting_parts_name(const BmFittingParts* f, size_t i);
+BMFFI_API BmVec3 bm_fitting_parts_contact(const BmFittingParts* f, size_t i);
+BMFFI_API void bm_fitting_parts_free(BmFittingParts* f);
+
+BMFFI_API BmChange bm_session_seat_pieces(BmSession* s, const BmPieceMove* moves, size_t n, uint64_t generation,
+                                          uint64_t version);
+
+BMFFI_API BmInventory* bm_inventory_capture(const BmSession* s, int32_t step);
+BMFFI_API BmInventoryReport* bm_inventory_prepare(BmInventory* inv, const char* path);
+BMFFI_API const char* bm_inventory_report_error(const BmInventoryReport* r);
+BMFFI_API size_t bm_inventory_report_pieces(const BmInventoryReport* r);
+BMFFI_API size_t bm_inventory_report_spares(const BmInventoryReport* r);
+BMFFI_API size_t bm_inventory_report_invalid_rows(const BmInventoryReport* r);
+BMFFI_API size_t bm_inventory_report_missing_len(const BmInventoryReport* r);
+BMFFI_API const char* bm_inventory_report_missing_at(const BmInventoryReport* r, size_t i);
+BMFFI_API void bm_inventory_report_free(BmInventoryReport* r);
+BMFFI_API BmChange bm_session_import_inventory(BmSession* s, const BmInventory* inv);
+BMFFI_API void bm_inventory_free(BmInventory* inv);
+
 #ifdef __cplusplus
 }
 #endif

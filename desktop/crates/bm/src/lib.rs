@@ -4,6 +4,7 @@ pub mod geom;
 pub mod camera;
 pub mod export;
 pub mod gizmo;
+pub mod inventory;
 pub mod keys;
 pub mod library;
 pub mod motion;
