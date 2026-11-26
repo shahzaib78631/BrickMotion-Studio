@@ -12,6 +12,7 @@ pub mod keys_panel;
 pub mod motion_panel;
 pub mod keys_track;
 pub mod library;
+pub mod look_panel;
 pub mod navigator;
 pub mod notices;
 pub mod parts;
@@ -63,9 +64,10 @@ pub fn central(ui: &mut Ui, app: &mut BrickMotionApp) {
         browser::show(ui, app, below);
         // Floating editors take the top right; Properties steps aside while one is open.
         let mut next_top = below.top() + 2.0;
-        let editing = app.camera_selection.is_some() || app.panels.camera || keys_panel::is_open(app) || motion_panel::is_open(app) || joints::is_open(app);
+        let editing = app.camera_selection.is_some() || app.panels.camera || keys_panel::is_open(app) || motion_panel::is_open(app) || joints::is_open(app) || look_panel::is_open(app);
         if editing {
             joints::panel(ui, app, below, &mut next_top);
+            look_panel::show(ui, app, below, &mut next_top);
             motion_panel::show(ui, app, below, &mut next_top);
             keys_panel::show(ui, app, below, &mut next_top);
             camera_panel::show(ui, app, below, &mut next_top);

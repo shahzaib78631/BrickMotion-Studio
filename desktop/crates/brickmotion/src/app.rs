@@ -163,6 +163,7 @@ pub struct BrickMotionApp {
     pub flights: crate::flights::Flights,
     /// The Build Motion panel.
     pub motion: chrome::motion_panel::MotionPanel,
+    pub look: chrome::look_panel::LookPanel,
     /// Joint markers, the open joint and its card.
     pub joints: chrome::joints::JointsView,
     pub(crate) camera_synced: Option<(u64, u64)>,
@@ -255,6 +256,7 @@ impl BrickMotionApp {
             flights: Default::default(),
             joints: Default::default(),
             motion: Default::default(),
+            look: Default::default(),
             camera_synced: None,
             timeline: chrome::timeline::TimelineState::default(),
             properties_page: chrome::properties::Page::Inspector,
@@ -754,6 +756,7 @@ impl BrickMotionApp {
                 self.keys.group_rows = !self.keys.group_rows;
                 self.keys.row_picks.clear();
             }
+            "model.look" | "view.look" => chrome::look_panel::toggle(self),
             "motion.build" => {
                 self.ribbon_tab = "Motion";
                 if chrome::motion_panel::is_open(self) {

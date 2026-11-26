@@ -22,6 +22,7 @@ pub enum PanelKind {
     Keys,
     Motion,
     Joint,
+    Look,
 }
 
 impl PanelKind {
@@ -32,6 +33,7 @@ impl PanelKind {
             PanelKind::Keys => "Keys",
             PanelKind::Motion => "Build Motion",
             PanelKind::Joint => "Joint",
+            PanelKind::Look => "Look",
         }
     }
 }
