@@ -1,0 +1,72 @@
+# M5 — rulings and deferred minors
+
+## Rulings I made
+- Ruling: run Task 1 (mockup gate) after Tasks 2–5, before Task 6 — inline execution blocks on the owner's answer; plan says 2–5 need no answer — cost if wrong: none, order only.
+- Task 2: Ruling: adjacentKeyFrame takes a FrameList (frames of the active objects) instead of KeyObject list — Swift's Object type is not bmapp's; same rule — cost if wrong: none
+- Task 3: Ruling: added bm_session_set_baked_keys (not in plan) — flight_path needs a baked track and Task 5's bake is not here yet; it also exists in bmapp — cost if wrong: one extra ABI call
+- Task 3: Ruling: header count literal is 234 (plan said raise by new lines; 35 functions added) — cost: none
+- Task 3: Ruling: flight path test uses set_baked_keys; the bake→path flow is tested in Task 5 — cost: none
+- Task 4: Ruling: camera_key_at is Session::camera_key_at(clock, now, fps) -> Option<String> going through bmapp::cameraKeyAt, not a Rust slice fn — keeps the half-frame rule in C++ — cost: none
+- Task 4: Ruling: save_scene_camera needs a caller-given id; Task 8 Save View assigns a UUID-like id and name 'Camera N' (first free N), as Inspector.swift — cost: none
+- Task 4: Ruling: capture_scene_camera/camera_track_view return owned strings freed by bm_scene_camera_free (added to ABI) — cost: none
+- Task 5: Ruling: flight paths and bakes use a local flown part — flightPath() is empty for pieces inside a submodel (Swift same); tests pick a local part — cost: none
+- Task 5: Ruling: joint test turns the first turning joint that change_joint accepts — the first can be locked ('Another connection holds this branch in place.') — cost: none
+- Task 1: Ruling: owner chose floating panels (SolidCraft style) for all M5 editors instead of Properties pages — recorded in m5-rulings.md — cost if wrong: panel shell rework in Tasks 7–12.
+- Task 1: Ruling: owner asked for the SolidCraft-style top bar (workspace card + ribbon card over the viewport); applied to both workspaces as a shell change — not in the plan; folded into Task 6 — cost if wrong: one shell layout change.
+- Task 1: Ruling: panel position/fold memory per session (owner did not answer) — cost if wrong: small.
+- Task 6: Ruling: the engine drops the viewport to rest when the first plan lands (restoreTime needs an earlier plan); Transport keeps scene_time and seeks back on the Keyframes clock — engine untouched — cost if wrong: one extra seek per plan.
+- Task 6: Ruling: Snaps track hidden on the Keyframes clock with Build (mockup shows Camera and Keys only) — cost if wrong: one row.
+- Task 7: Ruling: key drag starts from the press origin, not the pointer at drag_started — egui reports drag_started only after the threshold, so the old origin lost the first pixels — cost if wrong: a key nudged by a few px on very short drags
+- Task 8: Ruling: editors are floating panels (chrome/float_panel.rs + chrome/camera_panel.rs), not Page::Camera / camera_page.rs — m5-rulings.md wins over the plan — cost if wrong: move bodies into Properties pages
+- Task 8: Ruling: two panels — Camera Key (opens on a key/move selection; × or Esc clears the selection) and Camera (scene cameras, export camera, track; opened by new ribbon commands video.scene_cameras / video.export_camera); Properties steps aside while an editor floats — they share the top right — cost if wrong: overlap or a lost Properties view while editing
+- Task 8: Ruling: Video records Viewport|Camera Track|Scene Camera map to export camera buildView|track|automatic; Scene Camera shows a Camera picker (Automatic or a saved camera) — mockup labels over engine ids — cost if wrong: relabel three segments
+- Task 8: Ruling: commit message "Camera panels and scene cameras" instead of "Camera inspector page…" — no page exists — cost if wrong: none
+- Task 8: Ruling: the engine makes the first saved camera the video default, so scene_camera_save_and_recall walks Use Automatic → Make Default — engine behaviour unchanged — cost if wrong: none
+- Task 9: Ruling: Keys page is a floating Keys panel (chrome/keys_panel.rs; title = object, subtitle "frame N"), per m5-rulings.md; it lists Position X/Y/Z plus keyed channels with typed values (Return keys it), "not keyed · Add", an Add-property popup, Interpolation, Key scene (first/last/fps/length/Follow build/build start/speed) and Auto Key — cost if wrong: re-layout the panel
+- Task 9: Ruling: the Keys track lists keyed or chosen objects (or the filter's matches, at most 200 rows); one chosen object opens its dope sheet; several chosen show their rows (group tracks) — cost if wrong: a list of every piece on small models
+- Task 9: Ruling: on the Build clock the Keys row stays collapsed with "Keys play on the Keyframes clock" — keys are frame-based — cost if wrong: one hint
+- Task 9: Ruling: Group (video.group) picks a frame on every listed row that has it; ⇧←/→ travel uses the chosen objects' keys (all objects when none chosen) — Swift's adjacent uses active objects — cost if wrong: travel differs
+- Task 9: Ruling: Auto Key context is set on ViewportWidget each frame (field auto_key) instead of a new show() argument; a refused target beeps via AppKit NSBeep — cost if wrong: none
+- Task 9: Ruling: rows name loose pieces by part description from step_items (only when rows exist); KeyChannel gained Default in bm (wrapper only) — cost if wrong: a slower rebuild on keyed big models
+- Task 9: Ruling: tests key loose pieces 32/33 (0–31 form a submodel, so their keys belong to it) — engine behaviour — cost if wrong: none
+- Task 10: Ruling: the bake summary shows as a footnote in the Keys panel's Flights group (app.flights.note), not a toast — notices are Error/Warning only and Swift shows it as a toolbar indicator — cost if wrong: move the text
+- Task 10: Ruling: a bake whose document changed is dropped with the note "The animation changed while flights were being baked. Bake again to use it." (Swift had no stale check; the plan requires one) — cost if wrong: reword or silence one line
+- Task 10: Ruling: a path-dot drag calls set_flight_path_point with continuing=true on every move after end_gesture at the press (as Swift does); false-then-true made two undo steps — cost if wrong: none seen, test pins one step
+- Task 10: Ruling: "Keys page" is the Keys panel (m5-rulings): Flights group (Bake Flights to Keys, Bake All and Detach Build, Use in Build for local pieces, Return to Planner, "replaces N keys") and Check Motion group with an inline contact list; clicking a contact selects two pieces, so the one-object Keys panel closes (the result is kept) — cost if wrong: re-home the contact list
+- Task 10: Ruling: flight_path::handle_pointer(ui, app) uses last frame's viewport rect and blocks the viewport for the frame via ViewportWidget::block_primary; presses under a floating panel go to the panel — cost if wrong: signature tweak
+- Task 10: Ruling: tests use loose piece 32 (0–31 are a submodel); extra tests pin ⌫ on a picked dot, double-click add (after freeing a frame, since a bake keys every flight frame) and the check report/contact click; contact names show the engine's part strings as-is — cost if wrong: add display names
+- Task 10: Ruling: flight path playhead dot uses the playhead colour per m5-rulings (fix commit 11b1bd0, inside Task 11's range) — cost if wrong: none
+- Task 11: Ruling: Build Motion is a floating panel (app.motion.target, PanelKind::Motion), not Page::Motion, per m5-rulings; opens from a new Motion-tab command motion.build, the clip menu "Motion…" and the step menu "Step Motion…" — cost if wrong: re-home the panel
+- Task 11: Ruling: the timing bar shows Travel/Hover/Landing as percentages (Swift FlightTiming), not the mockup's seconds — base flight seconds come from the plan's pace (0.35–0.9 s) and no engine call exposes them — cost if wrong: add an engine call for flight seconds
+- Task 11: Ruling: inherited values read "Inherit · 40%" (percent per Swift/brief, format per rulings); slider_row_with adds the inherited look, a reset button and exposes the shown value to accessibility — cost if wrong: copy tweak
+- Task 11: Ruling: disk filled during the suite; target/debug was cleared with the owner's yes and rebuilt — cost if wrong: none
+- Task 12: Ruling: JointKey.hidden is the hidden-piece count, not a list — bm exposes only Snapshot.hidden — a hide/show swap with the same count would not re-inspect.
+- Task 12: Ruling: arrival labels follow ArrivalDirection.swift ("Automatic", six axes, "From Current View"), not the brief's "From Camera"/"Clear" — the brief says to use the Swift labels — a rename only.
+- Task 12: Ruling: View menu has no checkmarks, so view.joints reads "Show/Hide Joint Markers" — same as other toggles (Local/World Axes) — cosmetic.
+- Task 12: Ruling: picking one part auto-opens its joint only while Joint Markers is on — otherwise every pick swaps the Inspector for the Joint panel — users must turn markers on to see a joint from a pick.
+- Task 12: Ruling: the turn ring is drawn but not draggable; ±15° buttons turn — the brief names only the buttons — no free-angle drag yet.
+- Task 12: Ruling: Select Rigid Body runs synchronously (capture + body) — it is a lookup, not an edit — a hitch on very large models.
+- Task 12: Ruling: parts inside a submodel are named by the submodel file name on the card/panel — bm names only a step's own items — both parts may read the same name (shown once).
+- Task 12: Ruling: Joint panel clearance shown in mm (LDU × 0.4) — calm units — wrong if bm reports mm already.
+- Task 13: Ruling: fixed switch_row's vertical centring while taking screenshots (test camera_panel_switch_row_stays_compact RED→GREEN) — it hid Clear Camera Track — a shared widget changed in a docs task.
+- Final: Ruling: Build Motion panel closes on any structure change rather than following selection — it is opened on an explicit target like Swift's editor; following selection would retarget mid-edit — cost if wrong: the owner reopens it after adding/removing parts
+- Final: Ruling: camera key picks also clear the picked path point — same stale-⌫ class as the dope sheet — cost if wrong: none visible; ⌫ already belongs to the newest pick
+- Final: Ruling: Swift rewiring (declined to judge) — the desktop reads the same bm calls the Swift app does; the Swift suite stays green (ctest 649/463) — cost if wrong: a Swift-only behaviour drifts, caught by the Swift tests
+- Final: Ruling: Clearance shown in mm as release.travel ×0.4 — LDU→mm is 0.4; travel is the free play the engine reports — cost if wrong: a mislabelled number in the Joint panel
+- Final: Ruling: Auto Key rotation compose kept as the engine's auto_key_values — engine algorithms do not change — cost if wrong: a rotated drag keys a composed angle the owner did not expect
+- Final: Ruling: benchmark and screenshot numbers stand as measured (worst Keys frame 513µs, timeline 452µs) — taken on this machine with the suite — cost if wrong: slower on older hardware
+- Final: Ruling: typed entry in Keys panel and Add-property popup stays typed fields — unbounded values; owner approved sliders only where they fit — cost if wrong: owner asks for sliders there
+- Final: Ruling: Home/End do nothing on the Keyframes clock (app.rs:786, kept from the port; the Jump buttons only target the build) — a no-op is safe and the scene ends are one drag away — cost if wrong: the owner presses Home on the Keyframes clock and nothing happens; a two-line follow-up
+- Final: Ruling: ribbon and top-bar styling as built from the approved M5 mockups — owner approved the mockups — cost if wrong: a restyle pass
+
+## Deferred minors
+- Final: minor (deferred): bake confirm keys the job at answer time, not capture (flights.rs:139/156)
+- Final: minor (deferred): Esc mid-slider-drag closes the Camera Key panel and leaves `started` set
+- Final: minor (deferred): a joint marker press can take a gizmo handle press or placement click
+- Final: minor (deferred): part_name/pair_name/is_local scan every step's items each frame
+- Final: minor (deferred): flight-path playhead dot shows only on key frames
+- Final: minor (deferred): Bake links stay enabled with no plan
+- Final: minor (deferred): stale-bake note shows only in the Keys panel
+- Final: minor (deferred): JointReport.error ignored; a dropped joint change gives no message
+- Final: minor (deferred): a moved float panel's offset jumps when a panel above opens or closes
+- Final: minor (deferred): owner to confirm ruling 56 (timing bar in percent) and ruling 63 (joints open on pick only with markers on)
