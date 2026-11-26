@@ -323,3 +323,46 @@ fn movie_helper_renders_two_seconds() {
     assert_eq!(q.jobs()[0].status, JobStatus::Complete);
     assert_eq!(bm::recorder::frame_count(&dest), Some(24));
 }
+
+#[test]
+fn dead_worker_fails_its_job() {
+    let dir = temp("dead-worker");
+    let mut q = queue(&dir, "printf x > \"$4\"");
+    let boom: brickmotion::render_queue::Finish = Box::new(|_| panic!("finish blew up"));
+    q.enqueue(b"p".to_vec(), Operation::Still, vec![], Path::new("/lib"), dir.join("a.png"), "Still".into(), Some(boom)).unwrap();
+    enqueue(&mut q, &dir.join("b.png")).unwrap();
+    settle(&mut q);
+    assert_eq!(q.jobs()[1].status, JobStatus::Failed("The export stopped unexpectedly.".into()));
+    assert_eq!(q.jobs()[0].status, JobStatus::Complete, "the next job still runs");
+}
+
+#[test]
+fn running_job_records_its_staging() {
+    let dir = temp("records-staging");
+    let mut q = queue(&dir, "printf x > \"$4\"\nsleep 5");
+    enqueue(&mut q, &dir.join("a.png")).unwrap();
+    wait_for(&mut q, |_| !staging_left(&dir).is_empty());
+    let history = std::fs::read_to_string(dir.join("render-queue.json")).unwrap();
+    let staging = staging_left(&dir).remove(0);
+    assert!(history.contains(&format!("\"staging\":\"{staging}\"")), "{history}");
+    q.cancel(&q.jobs()[0].id.clone());
+    settle(&mut q);
+}
+
+#[test]
+fn interrupted_job_sweeps_its_named_staging() {
+    let dir = temp("interrupted-named");
+    let out = dir.join("films");
+    let mine = ".brickmotion-0F0E7B52-3B7C-4C59-9C2A-6D2A1E0B9F11";
+    let other = ".brickmotion-1F0E7B52-3B7C-4C59-9C2A-6D2A1E0B9F11";
+    std::fs::create_dir_all(out.join(mine)).unwrap();
+    std::fs::create_dir_all(out.join(other)).unwrap();
+    let record = format!(
+        r#"[{{"id":"00112233445566778899aabbccddeeff","destination":"{}","summary":"Build","status":{{"Rendering":{{"done":3,"total":9}}}},"staging":"{mine}"}}]"#,
+        out.join("Build.mp4").display()
+    );
+    std::fs::write(dir.join("render-queue.json"), record).unwrap();
+    let q = queue(&dir, OK);
+    assert_eq!(q.jobs()[0].status, JobStatus::Interrupted);
+    assert_eq!(staging_left(&out), [other], "another process's staging stays");
+}

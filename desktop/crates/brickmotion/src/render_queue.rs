@@ -15,7 +15,7 @@ use std::os::unix::fs::MetadataExt;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::mpsc::{Receiver, Sender, channel};
+use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
 use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
@@ -25,6 +25,7 @@ const CHANGED: &str = "A different version of the file is at the destination. Ch
 const MISSING: &str = "The render helper is missing from the app bundle.";
 const STAGING: &str = ".brickmotion-";
 const KEEP_FINISHED: usize = 40;
+const STOPPED: &str = "The export stopped unexpectedly.";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Operation {
@@ -92,6 +93,10 @@ pub struct Job {
     pub destination: PathBuf,
     pub summary: String,
     pub status: JobStatus,
+    /// Its staging folder's name beside the destination: the one a relaunch removes if the job
+    /// was cut short.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub staging: Option<String>,
 }
 
 /// One movie of a batch: its name (a file stem is made from it), helper options and summary.
@@ -129,6 +134,7 @@ struct Request {
     destination: PathBuf,
     expected: Version,
     finish: Option<Finish>,
+    staging: String,
 }
 
 enum Outcome {
@@ -169,8 +175,18 @@ impl RenderQueue {
     /// staging folders are removed.
     pub fn load(history: PathBuf, helpers: Helpers) -> Self {
         let records: Vec<Job> = std::fs::read(&history).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
-        let abandoned: HashSet<PathBuf> =
-            records.iter().filter(|j| !j.status.finished()).filter_map(|j| j.destination.parent().map(Path::to_path_buf)).collect();
+        let mut abandoned: HashSet<PathBuf> = HashSet::new();
+        let mut named: Vec<PathBuf> = Vec::new();
+        for j in records.iter().filter(|j| !j.status.finished()) {
+            let Some(folder) = j.destination.parent() else { continue };
+            match &j.staging {
+                Some(name) => named.push(folder.join(name)),
+                // A record from before staging names were kept: every staging folder there.
+                None => {
+                    abandoned.insert(folder.to_path_buf());
+                }
+            }
+        }
         let jobs = records
             .into_iter()
             .map(|mut j| {
@@ -183,7 +199,8 @@ impl RenderQueue {
         let queue = RenderQueue { history, helpers, jobs, pending: VecDeque::new(), active: None };
         // Before any new job stages beside the same destinations.
         remove_staging(&abandoned);
-        if !abandoned.is_empty() {
+        remove_named_staging(&named);
+        if !abandoned.is_empty() || !named.is_empty() {
             queue.save_history();
         }
         queue
@@ -213,7 +230,8 @@ impl RenderQueue {
             return Err(RESERVED.to_owned());
         }
         let expected = Version::read(&destination)?;
-        let request = Request { project, op, options, library: library.to_path_buf(), destination, expected, finish };
+        let staging = format!("{STAGING}{}", uuid());
+        let request = Request { project, op, options, library: library.to_path_buf(), destination, expected, finish, staging };
         let id = self.add(request, summary);
         self.save_history();
         self.start_next();
@@ -243,6 +261,7 @@ impl RenderQueue {
                 destination,
                 expected: Version::Missing,
                 finish: None,
+                staging: format!("{STAGING}{}", uuid()),
             };
             self.add(request, movie.summary);
         }
@@ -252,7 +271,13 @@ impl RenderQueue {
 
     fn add(&mut self, request: Request, summary: String) -> String {
         let id = hex(&random_bytes());
-        self.jobs.insert(0, Job { id: id.clone(), destination: request.destination.clone(), summary, status: JobStatus::Queued });
+        self.jobs.insert(0, Job {
+            id: id.clone(),
+            destination: request.destination.clone(),
+            summary,
+            status: JobStatus::Queued,
+            staging: Some(request.staging.clone()),
+        });
         self.pending.push_back((id.clone(), request));
         id
     }
@@ -298,10 +323,18 @@ impl RenderQueue {
         if let Some(a) = &self.active {
             let id = a.id.clone();
             let mut progress = Vec::new();
-            while let Ok(event) = a.events.try_recv() {
-                match event {
-                    Event::Progress(d, t) => progress.push((d, t)),
-                    Event::Done(outcome) => done = Some((id.clone(), outcome)),
+            loop {
+                match a.events.try_recv() {
+                    Ok(Event::Progress(d, t)) => progress.push((d, t)),
+                    Ok(Event::Done(outcome)) => done = Some((id.clone(), outcome)),
+                    Err(TryRecvError::Empty) => break,
+                    // The worker died (a panic) without reporting: its job ends here.
+                    Err(TryRecvError::Disconnected) => {
+                        if done.is_none() {
+                            done = Some((id.clone(), Outcome::Failed(STOPPED.to_owned())));
+                        }
+                        break;
+                    }
                 }
             }
             for (d, t) in progress {
@@ -426,6 +459,17 @@ fn remove_staging(folders: &HashSet<PathBuf>) {
     }
 }
 
+/// Removes these staging folders (each `.brickmotion-<UUID>`), unless a render here is using one.
+fn remove_named_staging(folders: &[PathBuf]) {
+    let live = LIVE.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    for folder in folders {
+        let Some(name) = folder.file_name().map(|n| n.to_string_lossy().into_owned()) else { continue };
+        if name.strip_prefix(STAGING).is_some_and(is_uuid) && !live.contains(&name) {
+            let _ = std::fs::remove_dir_all(folder);
+        }
+    }
+}
+
 fn is_uuid(s: &str) -> bool {
     s.len() == 36
         && s.char_indices().all(|(i, c)| if matches!(i, 8 | 13 | 18 | 23) { c == '-' } else { c.is_ascii_hexdigit() })
@@ -466,6 +510,37 @@ impl Drop for Remove {
     }
 }
 
+unsafe extern "C" {
+    fn renamex_np(from: *const std::ffi::c_char, to: *const std::ffi::c_char, flags: u32) -> i32;
+}
+const RENAME_EXCL: u32 = 0x4;
+
+/// Moves the staged file to the destination. Replacing an unchanged file is a plain rename; a
+/// new file is moved only if none appeared since the last check (Swift's `moveItem`).
+fn move_in(output: &Path, destination: &Path, expected: &Version) -> Result<(), String> {
+    if *expected != Version::Missing {
+        return std::fs::rename(output, destination).map_err(|e| e.to_string());
+    }
+    use std::os::unix::ffi::OsStrExt;
+    let c = |p: &Path| std::ffi::CString::new(p.as_os_str().as_bytes()).map_err(|e| e.to_string());
+    let (from, to) = (c(output)?, c(destination)?);
+    if unsafe { renamex_np(from.as_ptr(), to.as_ptr(), RENAME_EXCL) } == 0 {
+        return Ok(());
+    }
+    let error = std::io::Error::last_os_error();
+    match error.kind() {
+        std::io::ErrorKind::AlreadyExists => Err(CHANGED.to_owned()),
+        // A volume without exclusive rename: check, then move.
+        std::io::ErrorKind::Unsupported => {
+            if destination.symlink_metadata().is_ok() {
+                return Err(CHANGED.to_owned());
+            }
+            std::fs::rename(output, destination).map_err(|e| e.to_string())
+        }
+        _ => Err(error.to_string()),
+    }
+}
+
 /// Keeps the last four diagnostics (each at most 1200 characters) and reports progress.
 fn consume(bytes: &[u8], diagnostics: &mut VecDeque<String>, events: &Sender<Event>) {
     let text = String::from_utf8_lossy(bytes);
@@ -487,7 +562,7 @@ fn consume(bytes: &[u8], diagnostics: &mut VecDeque<String>, events: &Sender<Eve
 }
 
 fn render(request: Request, executable: &Path, control: &Mutex<Control>, events: &Sender<Event>) -> Outcome {
-    let Request { project, op, options, library, destination, expected, finish } = request;
+    let Request { project, op, options, library, destination, expected, finish, staging: staging_name } = request;
     if std::fs::metadata(executable).map(|m| !m.is_file() || m.mode() & 0o111 == 0).unwrap_or(true) {
         return Outcome::Failed(MISSING.to_owned());
     }
@@ -498,7 +573,6 @@ fn render(request: Request, executable: &Path, control: &Mutex<Control>, events:
         }
         let directory = std::env::temp_dir().join(format!("BrickMotion-{}", uuid()));
         let ext = destination.extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_default();
-        let staging_name = format!("{STAGING}{}", uuid());
         let staging = destination.parent().unwrap_or(Path::new(".")).join(&staging_name);
         let output = staging.join(if ext.is_empty() { "Render".to_owned() } else { format!("Render.{ext}") });
         std::fs::create_dir(&directory).map_err(|e| e.to_string())?;
@@ -576,8 +650,7 @@ fn render(request: Request, executable: &Path, control: &Mutex<Control>, events:
         if Version::read(&destination)? != expected {
             return Ok(Outcome::Failed(CHANGED.to_owned()));
         }
-        // A rename moves the staged file in, replacing an unchanged one in place.
-        std::fs::rename(&output, &destination).map_err(|e| e.to_string())?;
+        move_in(&output, &destination, &expected)?;
         Ok(Outcome::Rendered)
     })();
     result.unwrap_or_else(Outcome::Failed)
@@ -586,6 +659,22 @@ fn render(request: Request, executable: &Path, control: &Mutex<Control>, events:
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn exclusive_move_keeps_a_file_that_appeared() {
+        let dir = std::env::temp_dir().join(format!("bm-move-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (staged, dest) = (dir.join("staged.png"), dir.join("out.png"));
+        std::fs::write(&staged, "new").unwrap();
+        std::fs::write(&dest, "appeared").unwrap();
+        assert_eq!(move_in(&staged, &dest, &Version::Missing), Err(CHANGED.to_owned()));
+        assert_eq!(std::fs::read_to_string(&dest).unwrap(), "appeared");
+        std::fs::remove_file(&dest).unwrap();
+        assert_eq!(move_in(&staged, &dest, &Version::Missing), Ok(()));
+        assert_eq!(std::fs::read_to_string(&dest).unwrap(), "new");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn uuids() {
